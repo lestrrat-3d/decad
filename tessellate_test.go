@@ -168,13 +168,32 @@ func TestTessellatePayloadClasses(t *testing.T) {
 	})
 
 	t.Run("revolve", func(t *testing.T) {
+		s, p := solidSketch(t)
+		body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
+		require.NoError(t, err)
+		mesh, err := body.Tessellate(units.Millimeters(1))
+		require.NoError(t, err)
+		require.NotEmpty(t, mesh.Triangles())
+	})
+
+	t.Run("revolve with a circular generator stays staged", func(t *testing.T) {
 		doc := decad.New()
 		body := ballBody(t, doc, 5)
 		mesh, err := body.Tessellate(units.Millimeters(1))
 		require.Nil(t, mesh)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "revolvePayload")
-		require.ErrorContains(t, err, "supported payload classes are prism, cup, loft, and faceted")
+		require.ErrorContains(t, err, "circular generator")
+	})
+
+	t.Run("cap-loop chamfer stays staged", func(t *testing.T) {
+		_, box := capBlendBox(t)
+		chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
+		require.NoError(t, err)
+		mesh, err := chamfered.Tessellate(units.Millimeters(1))
+		require.Nil(t, mesh)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "capBlendPayload")
+		require.ErrorContains(t, err, "supported payload classes are prism, revolve, cup, loft, and faceted")
 	})
 }
 

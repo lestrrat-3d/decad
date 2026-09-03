@@ -54,12 +54,13 @@ const boolChordFactor = 2e-5
 // internal invariant break is BooleanEvaluatorFailure (wrapping
 // ErrBooleanFailed). errors.As(err, &be) reads the Code.
 // Every pair outside that analytic path tessellates both operands at a chord
-// tolerance derived from the pair's diameter, so an operand this evaluator
-// cannot tessellate — a revolve
-// body, which has no tessellator, or a Faceted operand whose own held Bound is
-// coarser than that pair tolerance (it cannot be re-tessellated finer than its
-// bound) — surfaces a plain ErrUnsupported before any contact is examined: a
-// capability limit, not a BooleanError. A valid operand whose boolean OUTPUT
+// tolerance derived from the pair's diameter, so an operand no boolean may
+// consume — a revolve body, whose mesh carries no proof yet of the volume it
+// and the body it stands for differ by, or a Faceted operand whose own held
+// Bound is coarser than that pair tolerance (it cannot be re-tessellated finer
+// than its bound) — surfaces a plain ErrUnsupported before any contact is
+// examined: a capability limit, not a BooleanError. A valid operand whose
+// boolean OUTPUT
 // cannot be chorded finely enough to tessellate surfaces the retryable
 // coarse-chording ErrDegenerate on that operand — a finer chord tolerance may
 // clear it — not a BooleanError.
@@ -294,9 +295,10 @@ func evaluateAnalyticIntersect(ctx context.Context, a, b *Body) (*Body, bool, er
 // BooleanUnsupportedContact — the model is real and the refusal is the
 // evaluator's contact reach, so the wrapped sentinel is ErrUnsupported, never
 // ErrDegenerate. A capability/staging limit reached BEFORE any contact is
-// examined — an operand this evaluator cannot tessellate (a revolve body, or a
-// Faceted operand coarser than the pair tolerance) — is NOT a contact refusal
-// and passes through unwrapped as a plain ErrUnsupported, not a BooleanError. A
+// examined — an operand no boolean may consume (a revolve body, whose mesh
+// proves no swept volume yet, or a Faceted operand coarser than the pair
+// tolerance) — is NOT a contact refusal and passes through unwrapped as a plain
+// ErrUnsupported, not a BooleanError. A
 // coarse-chording tessellation refusal is a retryable ErrDegenerate on a valid
 // operand and likewise passes through unwrapped. An ordinary ErrBooleanFailed
 // with no expected-outcome tag is an internal invariant break:
@@ -345,6 +347,17 @@ func evaluateBoolean(ctx context.Context, op OpKind, a, b *Body) (booleanEvaluat
 		return booleanEvaluation{}, err
 	}
 	if err := ctx.Err(); err != nil {
+		return booleanEvaluation{}, err
+	}
+	// A payload whose mesh cannot carry an occupied-volume proof is refused
+	// BEFORE it is meshed. operandSymDiff below is still the gate that decides
+	// it — this only asks the same question of the payload class, where the
+	// answer is already known, so a refusal costs a map lookup instead of a
+	// complete tessellation and its facet-pair audit.
+	if err := requireVolumeProvingPayload(a, 0); err != nil {
+		return booleanEvaluation{}, err
+	}
+	if err := requireVolumeProvingPayload(b, 1); err != nil {
 		return booleanEvaluation{}, err
 	}
 	ma, err := tessellateContext(ctx, a, units.Millimeters(tolMM))
@@ -552,6 +565,24 @@ func sourceIDs(ctx context.Context, m *Mesh, faceID map[*Face]int) ([]int, error
 // mesh serves export only: the boolean refuses the operand with ErrUnsupported,
 // a staging refusal reached before any contact is examined, so the caller routes
 // it through booleanExpectedStaging exactly as an untessellatable operand.
+// requireVolumeProvingPayload refuses an operand whose payload class publishes
+// no occupied-volume proof on its mesh, before that mesh is built.
+//
+// It is operandSymDiff's question asked one step earlier. A revolve mesh serves
+// export and carries symDiffOK false until docs/tessellation-design.md §13's
+// increment T4 proves its symmetric difference, so meshing one for a boolean
+// only to refuse it afterwards buys nothing and costs the whole tessellation
+// and its facet-pair audit — which the evaluator's own internal tolerance makes
+// the most expensive part of the call. Both this and operandSymDiff must name
+// the same payload classes, and T4 retires both arms together.
+func requireVolumeProvingPayload(b *Body, index int) error {
+	if _, ok := b.payload.(revolvePayload); !ok {
+		return nil
+	}
+	err := fmt.Errorf(`%w: a revolved body's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
+	return expectedBooleanForOperand(booleanExpectedStaging, index, err)
+}
+
 func operandSymDiff(m *Mesh) (float64, error) {
 	if !m.symDiffOK {
 		return 0, fmt.Errorf(`%w: this operand's tessellation carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)

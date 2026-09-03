@@ -551,9 +551,11 @@ func checkRevolveBody(t *testing.T, body *decad.Body, su setup, ap axisPlacement
 		}
 	}
 
-	// Invariant 2: a watertight, consistently-oriented mesh. Body.Tessellate is
-	// staged for revolve payloads today (ErrUnsupported); when it lands, this
-	// check activates automatically and never a moment before.
+	// Invariant 2: a watertight, consistently-oriented mesh. A revolve whose
+	// section carries only LINE generators meshes; a circular generator is
+	// staged (ErrUnsupported), and so is a tolerance the payload's own
+	// coordinate stages exhaust, so the check runs on whatever this fixture
+	// produced and demands an explicit staging refusal otherwise.
 	if mesh, err := body.Tessellate(units.Millimeters(su.scale / 20)); err == nil {
 		requireMeshWinding(t, mesh)
 	} else {

@@ -1365,36 +1365,78 @@ type revJunction struct {
 	lat    *Edge   // full: the latitude circle; nil on the axis
 }
 
-// buildRevolveLoop builds one loop's side faces with shared vertices and
-// edges, returning the faces, the two caps' coedges in walk order, and the
-// loop's side area.
-func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePayload, b revolveBasis, li int, loop LoopRecord, work *freeformWork) (revLoopParts, error) {
+// revolveWalks is one recorded loop resolved the way a revolve reads it: the
+// coalesced walks in AXIS coordinates, what each of them sweeps, the same
+// walks still in PLANE-local coordinates indexed by recorded segment, and
+// whether the loop is a single whole closed curve.
+//
+// plane is kept beside walks because the two answer different questions. A
+// build needs only the axis coordinates; a proof about how far a held sample
+// sits from the point the RECORD denotes needs the recorded plane coordinates
+// the axis re-expression consumed, since axisFrame.walk states no bound on the
+// axial coordinate it computes and snaps a near-axis radial one to zero
+// outright (docs/tessellation-design.md §8's deltaC).
+type revolveWalks struct {
+	walks        []sideWalk
+	kinds        []wallKind
+	plane        []segmentWalk
+	singleClosed bool
+}
+
+// revolveLoopWalks resolves one recorded loop into the walks a revolve reads,
+// so the builder and the tessellator consume the SAME resolution rather than
+// two copies of it (docs/tessellation-design.md §3: the mesh reads the
+// evaluator's payload, never live sketch input). what names the caller in the
+// free-form refusal.
+func revolveLoopWalks(ctx context.Context, rp revolvePayload, loop LoopRecord, work *freeformWork, what string) (revolveWalks, error) {
 	if err := ctx.Err(); err != nil {
-		return revLoopParts{}, err
+		return revolveWalks{}, err
 	}
 	if len(loop.Segments) == 0 {
-		return revLoopParts{}, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
+		return revolveWalks{}, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
 	raw := make([]sideWalk, len(loop.Segments))
+	plane := make([]segmentWalk, len(loop.Segments))
 	for i, seg := range loop.Segments {
 		if err := ctx.Err(); err != nil {
-			return revLoopParts{}, err
+			return revolveWalks{}, err
 		}
 		w, err := walkOf(seg, work)
 		if err != nil {
-			return revLoopParts{}, err
+			return revolveWalks{}, err
 		}
-		if err := requireAnalyticWalk(w, "the revolve wall build"); err != nil {
-			return revLoopParts{}, err
+		if err := requireAnalyticWalk(w, what); err != nil {
+			return revolveWalks{}, err
 		}
+		plane[i] = w
 		raw[i] = sideWalk{segmentWalk: rp.ax.walk(w), segs: []int{i}}
 	}
 	walks, err := coalesceWalksContext(ctx, raw)
 	if err != nil {
+		return revolveWalks{}, err
+	}
+	kinds := make([]wallKind, len(walks))
+	for i, w := range walks {
+		kinds[i] = rp.ax.classify(w.segmentWalk)
+	}
+	return revolveWalks{
+		walks:        walks,
+		kinds:        kinds,
+		plane:        plane,
+		singleClosed: len(walks) == 1 && walks[0].closed,
+	}, nil
+}
+
+// buildRevolveLoop builds one loop's side faces with shared vertices and
+// edges, returning the faces, the two caps' coedges in walk order, and the
+// loop's side area.
+func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePayload, b revolveBasis, li int, loop LoopRecord, work *freeformWork) (revLoopParts, error) {
+	resolved, err := revolveLoopWalks(ctx, rp, loop, work, "the revolve wall build")
+	if err != nil {
 		return revLoopParts{}, err
 	}
+	walks, kinds, singleClosed := resolved.walks, resolved.kinds, resolved.singleClosed
 	n := len(walks)
-	singleClosed := n == 1 && walks[0].closed
 	sweep := boundedRevolveSweep(rp.phi0, rp.phi1)
 	dphi := sweep.value
 	sweepSign := 1.0
@@ -1402,11 +1444,6 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePa
 		sweepSign = -1
 	}
 	wDir := rp.xform.ApplyDir(b.w)
-
-	kinds := make([]wallKind, n)
-	for i, w := range walks {
-		kinds[i] = rp.ax.classify(w.segmentWalk)
-	}
 
 	// Junction vertices and swept edges: junction i sits at walk i's start
 	// (== walk i−1's end). A single whole closed curve has none; a junction

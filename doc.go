@@ -90,7 +90,7 @@
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
 //	Union/Cut/Intersect  prism/loft/faceted, crossings        builds
 //	  faceted operand coarser than the pair tolerance         ErrUnsupported
-//	  revolve operand (no tessellator; booleans mesh)         ErrUnsupported
+//	  revolve operand (its mesh proves no swept volume yet)   ErrUnsupported
 //	  curved-surface tangent, facets never meet               ErrUnsupported
 //	  exact coplanar / face-on-face / point contact outside
 //	    the admitted analytic prism reduction                 ErrUnsupported
@@ -119,8 +119,10 @@
 //	Placed        any body this evaluator built               builds
 //	Verify        every body; surveys read prisms/revolves/cups/cap blends
 //	  a question the evaluator cannot decide                  Status Suspect
-//	Tessellate / STL / OBJ  prism, cup, loft, boolean body    builds
-//	  revolve payload                                         ErrUnsupported
+//	Tessellate / STL / OBJ  prism, revolve, cup, loft,
+//	                        boolean body                      builds
+//	  revolve section carrying a circular generator           ErrUnsupported
+//	  revolve whose tolerance its coordinate stages exhaust   ErrUnsupported
 //	  cap-loop chamfer result                                 ErrUnsupported
 //	  boolean body at a tolerance finer than its bound        ErrUnsupported
 //	  a chorded free-form wall past the fixed work budget     ErrUnsupported

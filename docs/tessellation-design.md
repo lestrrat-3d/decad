@@ -1030,3 +1030,30 @@ admissible only when it proves the same outward-rounded `Ecell` or `Icell` under
 the shared fixed subdivision budget; heuristic quadrature is not. Choose during
 the owning increment from measured complexity and proof tests, without changing
 the mesh or boolean contract.
+
+**T2's `Ecell` is complete sign decomposition, in closed form.** For a STRAIGHT
+generator both densities collapse and the decomposition needs no root isolation
+at all. Over the cell's common domain `(t, u)` in `[0,1]²`, with `t` along the
+meridian chord and `u` across one angular interval, `z(t)` and `rho(t)` are
+affine, so
+`dFtrue/dt x dFtrue/du = rho(t) * dphi * (rho' * w - z' * e)`, and `w` and `e`
+are orthogonal unit vectors:
+
+```text
+Jtrue(t, u) = L * dphi * rho(t),   L = sqrt(z'^2 + rho'^2)
+```
+
+which does not depend on `u`. The held facet is flat, so its own
+parameterization is affine and `Jheld` is the constant twice-area on each half
+of the domain the fixed diagonal cuts. Their difference is therefore LINEAR in
+`t` on each half, its single zero is an exact rational quotient, and each
+sign-fixed piece integrates through its own polynomial primitive. A pole fan is
+the same statement with the domain's pole edge collapsed: `Jtrue` and `Jheld`
+are both linear in `t` through the origin there. `cos dphi` and `sin dphi` enter
+only through the ideal triangle's own enclosed area, never inside a root
+isolation, so no widening can lose a sign on a thin cell — which is what made
+the alternative worth considering. One evaluation answers for every angular
+interval of a cell, because interval `l`'s ideal samples are the exact rotation
+of interval 0's about the axis and a rotation is an isometry.
+
+T3's circular-generator cells stay open and take certified subdivision.
