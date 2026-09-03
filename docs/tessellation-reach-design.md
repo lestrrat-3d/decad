@@ -26,9 +26,9 @@ Router (navigation, not authority):
 
 ## 1. Current state
 
-`tessellateContext` (`tessellate.go`) dispatches on exactly three payload types and refuses every other with
-`ErrUnsupported`. A free-form-walled `prismPayload` reaches the prism path and refuses inside `chordLoop` at
-`requireAnalyticWalk`.
+`tessellateContext` (`tessellate.go`) dispatches on `facetedPayload`, `cupPayload`, `prismPayload` and
+`loftPayload` (R1), and refuses every other with `ErrUnsupported`. A free-form-walled `prismPayload` reaches
+the prism path and refuses inside `chordLoop` at `requireAnalyticWalk`.
 
 `Mesh` carries tess §2's proof record complete, populated by all three of those paths (§3, R0):
 

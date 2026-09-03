@@ -136,7 +136,11 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // same way — a finer mesh, or a refusal, never a coarser mesh under a claim
 // this package cannot prove.
 //
-// Prism, cup and boolean-built bodies tessellate. A boolean-built body only
+// Prism, cup, loft and boolean-built bodies tessellate. A lofted body RESTATES
+// the flat triangle set its construction already built and audited: nothing is
+// chorded here, so tol binds nothing on that path and the returned Bound is the
+// payload's own facet departure, which can sit either side of tol.
+// A boolean-built body also only
 // RESTATES its held mesh, so tol must be at least the body's own Bound: a
 // finer tol is [ErrUnsupported], because the analytic identity is gone and no
 // finer mesh can be proven. A prism the analytic prism boolean assembled holds
@@ -185,11 +189,17 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 	if cp, ok := b.payload.(cupPayload); ok {
 		return tessellateCup(ctx, b, cp, chord)
 	}
+	if lp, ok := b.payload.(loftPayload); ok {
+		// The loft path is an exact restatement of the triangle set the payload
+		// already holds, so it takes no chord tolerance at all
+		// (tessellate_loft.go's own doc comment owns why).
+		return tessellateLoft(ctx, b, lp)
+	}
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
 		// Chording is per payload kind. Name both the staged kind and the
 		// implemented set so the refusal cannot misstate evaluator reach.
-		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, cup, and faceted`, ErrUnsupported, b.payload)
+		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, cup, loft, and faceted`, ErrUnsupported, b.payload)
 	}
 
 	// Every mesh vertex lands on the RECORDED section, which a payload carrying a

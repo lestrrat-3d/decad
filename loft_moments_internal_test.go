@@ -811,3 +811,72 @@ func TestLoftCapOffsetUnderivableRefuses(t *testing.T) {
 		require.Equal(t, loftChordedAllow{}, got, "a refused build publishes no leg at all")
 	})
 }
+
+// TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell pins
+// loftChordedAllow.twistAreaAllow (docs/tessellation-reach-design.md §4): the
+// wall's HELD-TO-BILINEAR area leg, summed over exactly the chorded cells the
+// other legs walk, through the same absSumUpper chain.
+//
+// Area's own bound never reads it — areaCorrection has already MOVED
+// Area.Value onto the bilinear patches, so charging the gap there would count
+// it twice — while the tessellation must, because the mesh holds the
+// uncorrected held triangles. That makes this field's own arithmetic the only
+// place the leg is checked, and the sum, not a maximum, is the correct shape:
+// a mesh's area error accumulates over cells where a single point's departure
+// does not.
+//
+// The gate is the same one every other per-cell leg uses, the cell's own
+// proven chord-to-curve half, never a segment kind: the zero subtest drives
+// matchedDelta to 0 on both cells with the geometry untouched, so a leg
+// accumulated outside that gate would show up as a positive sum on a build
+// that charges nothing else.
+func TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell(t *testing.T) {
+	// A genuinely twisted quad: wHi sits off the plane of the other three
+	// corners, so T = vLo - vHi - wLo + wHi is nonzero and each cell's own
+	// held-to-bilinear gap is positive rather than the exact zero a planar
+	// cell would give.
+	vLo := r3.NewVec(0, 0, 0)
+	vHi := r3.NewVec(1, 0, 0)
+	wLo := r3.NewVec(0, 1, 1)
+	wHi := r3.NewVec(1, 1, 1.3)
+	verts := []r3.Vec{vLo, vHi, wLo, wHi}
+	vIdx := [][]int{{0, 1}}
+	wIdx := [][]int{{2, 3}}
+	anchor := r3.NewVec(-1, -1, -1)
+	// Each side's arc-length claim must stay at or above the chord it
+	// subtends: |vHi-vLo| = 1 and |wHi-wLo| = sqrt(1.09) ~= 1.044.
+	arcUpperV := []float64{1.01, 1.01}
+	arcUpperW := []float64{1.1, 1.1}
+	pairsWith := func(matched []float64) []loftLoopPair {
+		return []loftLoopPair{{
+			v: make([]Point2, 2), w: make([]Point2, 2),
+			arcUpperV: arcUpperV, arcUpperW: arcUpperW,
+			matchedDelta:   matched,
+			tangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
+			tangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
+		}}
+	}
+
+	t.Run("sums both charged cells", func(t *testing.T) {
+		chorded, err := computeLoftChordedAllow(pairsWith([]float64{0.5, 0.5}), vIdx, wIdx, verts, anchor, 0.5, 0, 2.0, false)
+		require.NoError(t, err)
+
+		// The loop walks cell 0 as (v0, v1, w0, w1) and cell 1 as the wrap
+		// back, (v1, v0, w1, w0) — the same quad with its two ends swapped.
+		cell0 := cellTwistAreaAllow(vLo, vHi, wLo, wHi)
+		cell1 := cellTwistAreaAllow(vHi, vLo, wHi, wLo)
+		require.Positive(t, cell0, "the fixture's own twist must make each cell's leg positive")
+		require.Positive(t, cell1)
+		require.Equal(t, absSumUpper(absSumUpper(0, cell0), cell1), chorded.twistAreaAllow,
+			"twistAreaAllow is the per-cell sum through the same rounding chain, never a maximum")
+		require.Greater(t, chorded.twistAreaAllow, cell0,
+			"a two-cell build must publish more than either cell alone")
+	})
+
+	t.Run("charges nothing where no cell is chorded", func(t *testing.T) {
+		chorded, err := computeLoftChordedAllow(pairsWith([]float64{0, 0}), vIdx, wIdx, verts, anchor, 0, 0, 2.0, false)
+		require.NoError(t, err)
+		require.Zero(t, chorded.twistAreaAllow,
+			"a LineSeg-only build's held triangle pair IS its own boundary, so it charges no held-to-bilinear gap")
+	})
+}
