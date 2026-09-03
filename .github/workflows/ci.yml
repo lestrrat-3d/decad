@@ -45,7 +45,7 @@ jobs:
           - os: ubuntu-latest
             race: "-race"
             shard: "0"
-            packages: "./examples/ ./internal/cmd/genhero/"
+            packages: "./examples/"
           - os: ubuntu-latest
             race: "-race"
             shard: "1"

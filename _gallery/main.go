@@ -1,4 +1,8 @@
-// Command genhero renders decad's README hero image with SolidLens.
+// Command gallery renders decad's README hero image with SolidLens.
+//
+// It lives in its own module so that SolidLens stays out of the decad library's
+// dependency list. Run it from this directory with `go run .`; the image is
+// written to the repository's docs/images/hero.png.
 package main
 
 import (
@@ -7,6 +11,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
@@ -15,9 +20,22 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-const outputPath = "docs/images/hero.png"
+// outputRelPath is where the hero image lives, relative to the repository root.
+const outputRelPath = "docs/images/hero.png"
 
 const letterFilletRadius = 2.0
+
+// outputPath resolves outputRelPath against the repository root rather than the
+// working directory. This module lives at <repo>/_gallery, so the root is the
+// parent of this source file's own directory, and the image lands in the
+// repository no matter where the command was started from.
+func outputPath() (string, error) {
+	_, self, _, ok := runtime.Caller(0)
+	if !ok || !filepath.IsAbs(self) {
+		return "", fmt.Errorf("cannot locate this command's source file; build without -trimpath")
+	}
+	return filepath.Join(filepath.Dir(filepath.Dir(self)), filepath.FromSlash(outputRelPath)), nil
+}
 
 type point struct {
 	x, y float64
@@ -68,10 +86,14 @@ func run(ctx context.Context) error {
 		models = append(models, solidlens.Model{Mesh: mesh, Material: solidlens.Matte(accent.color)})
 	}
 
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+	out, err := outputPath()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return fmt.Errorf("create image directory: %w", err)
 	}
-	file, err := os.Create(outputPath) //nolint:gosec
+	file, err := os.Create(out) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("create output: %w", err)
 	}

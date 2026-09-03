@@ -63,7 +63,7 @@ consuming 3D-derived geometry only as first-class reference geometry it is
 A 2D question — does this profile close, is this sketch fully constrained — is
 `sketch`'s to answer, and decad consumes the answer rather than re-deriving it.
 
-Regenerate the hero image with `go run ./internal/cmd/genhero`.
+Regenerate the hero image with `cd _gallery && go run .`.
 
 ## License
 
