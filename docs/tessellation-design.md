@@ -102,11 +102,11 @@ boolean can retain only one sign.
 right signed volume while losing material outside one wall and gaining the same
 amount inside a hole. Cancellation is forbidden.
 
-The payload table is normative. The `prismPayload` row below is the
-ANALYTIC-walled case only: a section carrying a free-form (Tier A NURBS)
-wall builds through `Extrude` (`docs/spline-design.md` §10 P4b) but has no
-chording of its own yet, so it refuses at Tessellate — §12's refusal table
-carries its own row for it.
+The payload table is normative. Its `prismPayload` row covers an analytic and a
+free-form wall alike: a section carrying a free-form (Tier A NURBS) wall chords
+through `docs/spline-design.md` §10 P5's own dyadic station chain, whose sagitta,
+station rounding, area slack and occupied-volume terms enter the same columns an
+analytic walk's do (`docs/tessellation-reach-design.md` §5).
 
 | Payload | Geometry source | `sourceBound(face)` | `Bound` | `areaSlack` | `volSymDiff` |
 |---|---|---|---|---|---|
@@ -890,7 +890,7 @@ Refuse before returning any partial mesh:
 | invalid tolerance | core §12's kind/finite/sign sentinel; zero is `ErrDegenerate` |
 | canceled `TessellateContext` | `ctx.Err()` unchanged; no partial mesh |
 | payload class not implemented | `ErrUnsupported` |
-| `prismPayload` whose section carries a free-form (NURBS) wall | `ErrUnsupported`; chording lands at `docs/spline-design.md` §10 P5, not this document — `docs/tessellation-reach-design.md` §5 is that increment's design |
+| free-form section chording past the record's exact-rational work budget (`docs/spline-design.md` R7) or past one curve's chord cap (R8) | `ErrUnsupported`, before the station chain is emitted |
 | faceted request finer than the certified maximum face bound | `ErrUnsupported` |
 | prism request whose tolerance the payload's section displacement exhausts | `ErrUnsupported` |
 | meridian/angular, per-mesh facet, cumulative facet-work, cumulative pair-test, or certified-interval proof budget exceeded; integer size overflow | `ErrUnsupported`, before the refused allocation/audit starts |
@@ -915,7 +915,7 @@ sample to make an analytic mesh close. Refine or refuse.
 | **T2** | revolve line generators: cylinder/cone/plane cells, smallest-count correction, global angular sequence, partial caps, full-turn cycles, poles/apexes, axis-incidence + vertex-link manifold audits, meridian nesting/homotopy audit, construction/placement rounding proofs, two-sided bound, cut-stable area slack, STL/OBJ | circular generators; revolve booleans |
 | **T3** | circular meridian generators: sphere/torus cells, axis-to-axis minimum, circular meridian nesting/homotopy audit, non-adjacent-intersection refinement, cut-stable circular-cell area proof | revolve booleans |
 | **T4** | meridian first-moment allowance + certified per-cell angular homotopy integral; finite `volSymDiff`; revolve admitted to booleans | density improvements |
-| **T5** | deterministic local meridian refinement and global angular density improvements that preserve every earlier proof | free-form/NURBS REVOLVE generators. An extruded free-form prism's own chording is a DIFFERENT increment — it rides the existing prism tessellation path (`docs/spline-design.md` §10 P5, Table C), not this row |
+| **T5** | deterministic local meridian refinement and global angular density improvements that preserve every earlier proof | free-form/NURBS REVOLVE generators. An extruded free-form prism's own chording is a DIFFERENT increment, riding the existing prism tessellation path (`docs/spline-design.md` §10 P5, Table C) rather than this row |
 | **T6** | `loftPayload` exact restatement: source-face-preserving wall/cap triangle copy, a proof record carrying the payload's own facet departure `absSumUpper(matchedDelta, maxTwistOffsetUpper)` (zero only when both published terms are zero under loft §5.2's conditions), and mesh-boolean admission | loft surveys and analytic pair clearance |
 | **T7** | `capBlendPayload` export-only tessellation: `docs/tessellation-reach-design.md` §7 owns its cells, proof-record row and refusals | cap-blend mesh-boolean admission, until that document's occupied-volume proof lands |
 

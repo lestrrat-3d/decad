@@ -22,7 +22,6 @@ import (
 // TestConsecutiveCollapsedSpansPairAcrossTheWholeRun's own fixture
 // (spline_convexity_internal_test.go), which already pins the certificate's
 // own verdict on it (freeformConvexityPositive); this test pins the BUILD.
-// Tessellating it is P5, out of this increment's scope.
 func TestEvalPrismCollapsedSpanRunStillBuilds(t *testing.T) {
 	seg := NURBSSeg{
 		Degree: 1,

@@ -1,6 +1,7 @@
 package examples_test
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/lestrrat-3d/decad"
@@ -9,18 +10,21 @@ import (
 )
 
 // A Tier A free-form section — a spline, a closed spline, a fit spline, or a
-// unit-weight NURBS curve — now extrudes (docs/spline-design.md §10 P4b): the
-// side face it builds is opaque (KindNURBS), but its Volume is exact rational
-// area times the sweep height and its rim edges publish a proven arc-length
-// bracket, so the body is a fully measured solid.
+// unit-weight NURBS curve — extrudes like any other: the side face it builds
+// is opaque (KindNURBS), but its Volume is exact rational area times the sweep
+// height and its rim edges publish a proven arc-length bracket, so the body is
+// a fully measured solid.
+//
+// It also tessellates, and so exports to STL and OBJ. The free-form wall is
+// chorded by exact bisection of its own Bézier chain, at a proven sagitta the
+// requested tolerance caps, and the chording is shared with the caps that meet
+// it, so the mesh is watertight by construction. Mesh.Bound reports the whole
+// deviation the mesh took, chording included.
 //
 // A free-form curve must still meet its neighbours at shared endpoints, never
 // by crossing (docs/spline-design.md §2.1) — a caller cannot guess that from
 // the error alone, so join the endpoints in the sketch when a profile is
 // rejected as ErrUnrecordableProfile.
-//
-// What P4b does NOT buy: Tessellate (and so STL/OBJ export) still refuses a
-// free-form-walled body, staged for a later increment.
 func Example_decad_freeformExtrude() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -73,14 +77,31 @@ func Example_decad_freeformExtrude() {
 	}
 	fmt.Printf("free-form (NURBS) walls: %d\n", freeformFaces)
 
-	// Tessellate — and so STL/OBJ export — still refuses a free-form-walled
-	// body; that capability is staged for a later increment.
-	if _, err := body.Tessellate(units.Millimeters(0.1)); err != nil {
-		fmt.Printf("tessellate refuses: %s\n", err)
+	// Tessellate chords the free-form wall. The chord count follows from exact
+	// rational bisection, so it is the same on every platform; the bound itself
+	// is a float64 whose last bits are not, which is why the relation is
+	// printed rather than the number.
+	const tolerance = 0.1
+	mesh, err := body.Tessellate(units.Millimeters(tolerance))
+	if err != nil {
+		fmt.Printf("failed to tessellate: %s\n", err)
+		return
 	}
+	fmt.Printf("mesh triangles: %d\n", len(mesh.Triangles()))
+	fmt.Printf("chording within the requested tolerance: %t\n", mesh.Bound().Base() <= tolerance)
+
+	// STL export writes that same mesh.
+	var stl bytes.Buffer
+	if err := body.STL(&stl); err != nil {
+		fmt.Printf("failed to export STL: %s\n", err)
+		return
+	}
+	fmt.Printf("STL export is non-empty: %t\n", stl.Len() > 0)
 	// Output:
 	// volume: 150 mm^3 (Approximate)
 	// faces: 4
 	// free-form (NURBS) walls: 1
-	// tessellate refuses: decad: not supported by the current evaluator: chording a boundary loop does not support a free-form boundary segment
+	// mesh triangles: 24
+	// chording within the requested tolerance: true
+	// STL export is non-empty: true
 }

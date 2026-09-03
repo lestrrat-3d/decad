@@ -91,7 +91,6 @@
 //	Union/Cut/Intersect  prism/loft/faceted, crossings        builds
 //	  faceted operand coarser than the pair tolerance         ErrUnsupported
 //	  revolve operand (no tessellator; booleans mesh)         ErrUnsupported
-//	  free-form-walled operand (no tessellator yet)           ErrUnsupported
 //	  curved-surface tangent, facets never meet               ErrUnsupported
 //	  exact coplanar / face-on-face / point contact outside
 //	    the admitted analytic prism reduction                 ErrUnsupported
@@ -124,7 +123,7 @@
 //	  revolve payload                                         ErrUnsupported
 //	  cap-loop chamfer result                                 ErrUnsupported
 //	  boolean body at a tolerance finer than its bound        ErrUnsupported
-//	  free-form-walled prism (chording waits on §10 P5)       ErrUnsupported
+//	  a chorded free-form wall past the fixed work budget     ErrUnsupported
 //
 // Options: among the MODEL-CONSTRUCTION verbs, New, Revolve, Fillet and
 // Chamfer expose option groups that carry nothing today (they exist so options

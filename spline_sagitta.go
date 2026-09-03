@@ -322,6 +322,22 @@ func chargedRatSqrtUp(w *freeformWork, q *big.Rat) (float64, error) {
 	return ratSqrtUp(q), nil
 }
 
+// chargedRatSqrtDown is chargedRatSqrtUp's inward twin: the metered entry point
+// for ratSqrtDown (spline_length.go), for the one reading in this file that
+// owes a proven LOWER bound rather than an upper one — a chorded cell's own
+// chord length, which an arc-versus-chord deficit subtracts and so must never
+// read above the chord it stands for.
+//
+// The two roundings walk the same directed search over the same exact
+// comparison, so they cost the same and charge the same ratSqrtUpCost at the
+// radicand's own width, first.
+func chargedRatSqrtDown(w *freeformWork, q *big.Rat) (float64, error) {
+	if err := w.step(costMul(ratSqrtUpCost, widthUnits(ratBitWidth(q)))); err != nil {
+		return 0, err
+	}
+	return ratSqrtDown(q), nil
+}
+
 // ratPointAt reconstructs split value i's exact rational coordinate:
 // numerator / (den · 2^exp), the inverse of the factored form dyadicSpanOf
 // and split (spline_length.go) build it in. Every value that form holds is
@@ -641,7 +657,8 @@ func pairStations(spans0, spans1 []bezierSpan, target float64, work0, work1 *fre
 		}
 	}
 
-	gen := &sagittaStationWalk{target: target, work0: work0, work1: work1, frontier: len(spans0)}
+	reader := &pairMatchedDeltaReader{}
+	gen := newSagittaStationWalk(target, reader, len(spans0), work0, work1)
 	for i := range spans0 {
 		// The dyadicSpanOf conversion that opens the walk charges itself, like
 		// every step inside it: it runs its own exact big.Int arithmetic per
@@ -655,7 +672,7 @@ func pairStations(spans0, spans1 []bezierSpan, target float64, work0, work1 *fre
 		if err != nil {
 			return nil, nil, nil, 0, err
 		}
-		if err := gen.walkCell(cell0, cell1); err != nil {
+		if err := gen.walkCell([]dyadicSpan{cell0, cell1}); err != nil {
 			return nil, nil, nil, 0, err
 		}
 	}
@@ -687,9 +704,98 @@ func pairStations(spans0, spans1 []bezierSpan, target float64, work0, work1 *fre
 	if err != nil {
 		return nil, nil, nil, 0, err
 	}
-	gen.stations0 = append(gen.stations0, end0)
-	gen.stations1 = append(gen.stations1, end1)
-	return gen.stations0, gen.stations1, gen.matchedDelta, gen.sagittaUpper, nil
+	gen.stations[0] = append(gen.stations[0], end0)
+	gen.stations[1] = append(gen.stations[1], end1)
+	return gen.stations[0], gen.stations[1], reader.matchedDelta, gen.sagittaUpper, nil
+}
+
+// freeformChain is chainStations' answer: docs/spline-design.md §6.2.1's dyadic
+// station chain over ONE Tier A span chain, beside the per-cell readings an
+// extruded free-form wall's own area and occupied-volume proofs need
+// (docs/tessellation-reach-design.md §5).
+type freeformChain struct {
+	// stations are exact rational points ON the curve, one per cell boundary in
+	// chain order, the chain's START included and its END excluded. The end is
+	// carried separately because a consumer emitting one boundary sample per
+	// chord needs exactly this list forward, and needs the end only as the
+	// FIRST sample of a walk that runs the chain backwards.
+	stations []ratPoint
+	// end is the chain's own last cell boundary — the last span's last control
+	// point, which a Bézier interpolates exactly — copied so it aliases no
+	// input span (pairStations' own rule for the station it reads the same way).
+	end ratPoint
+	// sagitta is the MEASURED post-subdivision maximum over the accepted cells,
+	// never a sum: a curve point lies in exactly one cell, so the widest cell's
+	// own departure bounds the whole chain.
+	sagitta float64
+	// cellArcUpper is spanSpeedUpper of each accepted cell's own dyadic
+	// sub-span — a proven upper bound on that cell's arc length, since the
+	// sub-span carries its own [0, 1] parameter and its speed bounds the
+	// integrand over it.
+	cellArcUpper []float64
+	// cellChordLower is a proven LOWER bound on each accepted cell's own chord
+	// length, in the same order. The pair brackets the arc-versus-chord deficit
+	// a chorded wall's area slack owes from ABOVE: cellArcUpper[k] −
+	// cellChordLower[k] is never below the deficit the chord actually takes.
+	cellChordLower []float64
+}
+
+// chainStations chords ONE Tier A span chain at a target sagitta: measure each
+// dyadic cell's sagitta, bisect what misses, accept what fits
+// (docs/spline-design.md §6.2.1). It is pairStations' single-chain twin —
+// same walk, same cap, same charge discipline, same termination argument — and
+// the primitive docs/tessellation-reach-design.md §5 gives chordLoop's
+// free-form arm.
+//
+// Every guard pairStations states for a pair holds here for the one side: an
+// empty chain is ErrDegenerate, a chain of more spans than maxChordsPerWalk
+// admits already exceeds the chord count errTooManyChords names, and a span
+// with no control points at all has no chord to bisect. work is the RECORD's
+// own free-form counter; this function mints none and states no cost of its
+// own, so every unit spent is spent inside the primitive that does the work.
+func chainStations(spans []bezierSpan, target float64, work *freeformWork) (freeformChain, error) {
+	if len(spans) == 0 {
+		return freeformChain{}, fmt.Errorf(`%w: a free-form station chain needs at least one span`, ErrDegenerate)
+	}
+	if len(spans) > maxChordsPerWalk {
+		return freeformChain{}, errTooManyChords
+	}
+	for i := range spans {
+		if len(spans[i]) == 0 {
+			return freeformChain{}, fmt.Errorf(
+				`%w: a free-form span with no control points at index %d has no chord to bisect`,
+				ErrDegenerate, i,
+			)
+		}
+	}
+
+	reader := &chainArcChordReader{}
+	gen := newSagittaStationWalk(target, reader, len(spans), work)
+	for i := range spans {
+		cell, err := dyadicSpanOf(work, spans[i])
+		if err != nil {
+			return freeformChain{}, err
+		}
+		if err := gen.walkCell([]dyadicSpan{cell}); err != nil {
+			return freeformChain{}, err
+		}
+	}
+	// The chain's own final boundary, read off the ORIGINAL chain for the
+	// reason pairStations states: split's right half carries the last control
+	// point unchanged at every depth, so this IS the value the deepest
+	// recursion would have produced. Copied, never aliased.
+	last := spans[len(spans)-1][len(spans[len(spans)-1])-1]
+	end, err := ratPointCopy(work, last)
+	if err != nil {
+		return freeformChain{}, err
+	}
+	return freeformChain{
+		stations:       gen.stations[0],
+		end:            end,
+		sagitta:        gen.sagittaUpper,
+		cellArcUpper:   reader.arcUpper,
+		cellChordLower: reader.chordLower,
+	}, nil
 }
 
 // sagittaStationWalk accumulates one pairStations call's own state across its
@@ -701,33 +807,127 @@ func pairStations(spans0, spans1 []bezierSpan, target float64, work0, work1 *fre
 // it starts at one cell per span, holds steady when a cell is accepted, and
 // rises by one per split (pairStations' own doc comment).
 type sagittaStationWalk struct {
-	target               float64
-	work0, work1         *freeformWork
-	stations0, stations1 []ratPoint
-	matchedDelta         []float64
-	sagittaUpper         float64
-	chords               int
-	frontier             int
+	target float64
+	// works and stations are indexed BY SIDE, so the walk is written once for
+	// any number of sides and its two consumers differ only in how many they
+	// hand it: pairStations two, chainStations one. Every side is measured,
+	// accepted and bisected TOGETHER, which is what keeps a pair's two station
+	// lists on one shared set of dyadic cell boundaries.
+	works    []*freeformWork
+	stations [][]ratPoint
+	// reader records whatever ELSE each accepted cell owes its own consumer —
+	// the pair's matched-delta obligation, the chain's arc/chord bracket —
+	// which is the only place the two consumers' arithmetic differs.
+	reader       stationCellReader
+	sagittaUpper float64
+	chords       int
+	frontier     int
 }
 
-// walkCell measures one dyadic cell pair and either accepts it — appending
-// its own start station on each side, folding its measured sagitta into the
-// running maximum, and appending its own matchedDeltaUpper obligation
-// (bounds.go's cellChordCurveAreaUpper, F1's rule) to matchedDelta — or
-// bisects it on BOTH sides together and recurses left then right, in that
-// order, which is what makes the whole walk deterministic and left-to-right
-// (pairStations' own doc comment).
+// newSagittaStationWalk opens a walk over sides sides, one per counter, with
+// the frontier seeded at one cell per span: the sum chords+frontier is a proven
+// lower bound on the finished chain's own chord count from the first cell on
+// (this file's own cap argument).
+func newSagittaStationWalk(target float64, reader stationCellReader, spans int, works ...*freeformWork) *sagittaStationWalk {
+	return &sagittaStationWalk{
+		target:   target,
+		works:    works,
+		stations: make([][]ratPoint, len(works)),
+		reader:   reader,
+		frontier: spans,
+	}
+}
+
+// stationCellReader is the per-consumer half of the shared station walk. The
+// walk itself measures, accepts and bisects; the reader takes each ACCEPTED
+// cell's own reconstructed spans, one per side, and records the reading its
+// consumer owes for that cell — in the same left-to-right cell order the
+// station lists carry.
 //
-// The matched-delta reading is spanMatchedDeltaUpper of each side's OWN
-// accepted dyadic sub-span — a PARAMETER-MATCHED bound under the span-uniform
-// native fraction, never sag0/sag1's SET-distance sagitta: the two coincide
-// only for a line or a circular arc under its own uniform-angle
-// parametrization (bounds.go's own doc comment), neither of which this file
-// ever reaches (spanSagittaUpper/spanMatchedDeltaUpper are Tier A free-form
-// only). dyadicSpanSagittaUpperWithSpan reconstructs the accepted cell's own
-// control points exactly (dyadicSpan.ratPointAt, this file's own reading), so
-// the matched-delta measurement reads the SAME dyadic sub-span the sagitta
-// measurement above already split to, never a re-derived one.
+// It states no cost of its own either: every implementation below spends its
+// units inside the metered primitive that does the work.
+type stationCellReader interface {
+	acceptCell(spans []bezierSpan, works []*freeformWork) error
+}
+
+// pairMatchedDeltaReader is pairStations' reading: bounds.go's
+// cellChordCurveAreaUpper matchedDeltaUpper obligation (F1's rule), one entry
+// per accepted cell, the larger of the two sides' own PARAMETER-MATCHED bounds
+// under the span-uniform native fraction — never the SET-distance sagitta the
+// walk measured to decide the cell.
+type pairMatchedDeltaReader struct {
+	matchedDelta []float64
+}
+
+func (r *pairMatchedDeltaReader) acceptCell(spans []bezierSpan, works []*freeformWork) error {
+	md0, err := spanMatchedDeltaUpper(works[0], spans[0])
+	if err != nil {
+		return err
+	}
+	md1, err := spanMatchedDeltaUpper(works[1], spans[1])
+	if err != nil {
+		return err
+	}
+	r.matchedDelta = append(r.matchedDelta, math.Max(md0, md1))
+	return nil
+}
+
+// chainArcChordReader is chainStations' reading: each accepted cell's own
+// arc-length upper bound and chord-length lower bound, the pair
+// docs/tessellation-reach-design.md §5 turns into a chorded wall's area slack.
+// Both are proven in their own direction, so their difference never
+// understates the deficit the chord actually takes.
+//
+// A cell of fewer than two control points has no chord and no hodograph, so
+// both readings are 0 — spanSpeedUpper's own guard, restated for the chord.
+type chainArcChordReader struct {
+	arcUpper   []float64
+	chordLower []float64
+}
+
+func (r *chainArcChordReader) acceptCell(spans []bezierSpan, works []*freeformWork) error {
+	span, work := spans[0], works[0]
+	arc, err := spanSpeedUpper(work, span)
+	if err != nil {
+		return err
+	}
+	chord := 0.0
+	if len(span) >= 2 {
+		squared, err := spanChordSquared(work, span)
+		if err != nil {
+			return err
+		}
+		chord, err = chargedRatSqrtDown(work, squared)
+		if err != nil {
+			return err
+		}
+	}
+	r.arcUpper = append(r.arcUpper, arc)
+	r.chordLower = append(r.chordLower, chord)
+	return nil
+}
+
+// walkCell measures one dyadic cell — one sub-span per side — and either
+// accepts it, appending its own start station on each side, handing the
+// accepted cell's reconstructed spans to the reader, and folding its measured
+// sagitta into the running maximum, or bisects it on EVERY side together and
+// recurses left then right, in that order, which is what makes the whole walk
+// deterministic and left-to-right (pairStations' own doc comment).
+//
+// The cell is decided on the WIDEST side's sagitta, so a pair is bisected
+// whenever either side misses the target and the two sides keep the identical
+// set of dyadic cell boundaries. A one-sided walk (chainStations) reads that
+// same maximum over its single side.
+//
+// dyadicSpanSagittaUpperWithSpan reconstructs the accepted cell's own control
+// points exactly (dyadicSpan.ratPointAt, this file's own reading), so every
+// reading the reader takes measures the SAME dyadic sub-span the sagitta
+// measurement above already split to, never a re-derived one. That matters
+// most for the pair's matched-delta obligation, which is a PARAMETER-MATCHED
+// bound under the span-uniform native fraction and never the SET-distance
+// sagitta this walk decided the cell on: the two coincide only for a line or a
+// circular arc under its own uniform-angle parametrization (bounds.go's own
+// doc comment), neither of which this file ever reaches.
 //
 // Accepting moves this cell off the frontier and into the chord count, leaving
 // their sum unchanged; splitting raises it by one, which is why the cap is
@@ -739,57 +939,55 @@ type sagittaStationWalk struct {
 // NO CHARGE IS SPENT HERE. Every measurement, reconstruction and bisection below
 // charges its own counter from inside the primitive that performs it, so this
 // function never restates what any of them costs or how often it runs.
-func (g *sagittaStationWalk) walkCell(c0, c1 dyadicSpan) error {
-	sag0, span0, err := dyadicSpanSagittaUpperWithSpan(g.work0, c0)
-	if err != nil {
-		return err
+func (g *sagittaStationWalk) walkCell(cells []dyadicSpan) error {
+	spans := make([]bezierSpan, len(cells))
+	worst := 0.0
+	for i, cell := range cells {
+		sag, span, err := dyadicSpanSagittaUpperWithSpan(g.works[i], cell)
+		if err != nil {
+			return err
+		}
+		spans[i] = span
+		worst = math.Max(worst, sag)
 	}
-	sag1, span1, err := dyadicSpanSagittaUpperWithSpan(g.work1, c1)
-	if err != nil {
-		return err
-	}
-	if math.Max(sag0, sag1) <= g.target {
-		md0, err := spanMatchedDeltaUpper(g.work0, span0)
-		if err != nil {
+	if worst <= g.target {
+		if err := g.reader.acceptCell(spans, g.works); err != nil {
 			return err
 		}
-		md1, err := spanMatchedDeltaUpper(g.work1, span1)
-		if err != nil {
-			return err
-		}
-		start0, err := c0.ratPointAt(g.work0, 0)
-		if err != nil {
-			return err
-		}
-		start1, err := c1.ratPointAt(g.work1, 0)
-		if err != nil {
-			return err
+		starts := make([]ratPoint, len(cells))
+		for i, cell := range cells {
+			start, err := cell.ratPointAt(g.works[i], 0)
+			if err != nil {
+				return err
+			}
+			starts[i] = start
 		}
 		g.frontier--
 		g.chords++
-		g.stations0 = append(g.stations0, start0)
-		g.stations1 = append(g.stations1, start1)
-		g.matchedDelta = append(g.matchedDelta, math.Max(md0, md1))
-		g.sagittaUpper = math.Max(g.sagittaUpper, math.Max(sag0, sag1))
+		for i, start := range starts {
+			g.stations[i] = append(g.stations[i], start)
+		}
+		g.sagittaUpper = math.Max(g.sagittaUpper, worst)
 		return nil
 	}
 
 	if g.chords+g.frontier+1 > maxChordsPerWalk {
 		return errTooManyChords
 	}
-	left0, right0, err := c0.split(g.work0)
-	if err != nil {
-		return err
-	}
-	left1, right1, err := c1.split(g.work1)
-	if err != nil {
-		return err
+	lefts := make([]dyadicSpan, len(cells))
+	rights := make([]dyadicSpan, len(cells))
+	for i, cell := range cells {
+		left, right, err := cell.split(g.works[i])
+		if err != nil {
+			return err
+		}
+		lefts[i], rights[i] = left, right
 	}
 	g.frontier++
-	if err := g.walkCell(left0, left1); err != nil {
+	if err := g.walkCell(lefts); err != nil {
 		return err
 	}
-	return g.walkCell(right0, right1)
+	return g.walkCell(rights)
 }
 
 // This section is bounds.go's cellChordCurveAreaUpper's matchedDeltaUpper

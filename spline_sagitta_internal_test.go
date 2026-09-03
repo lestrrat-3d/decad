@@ -1507,3 +1507,141 @@ func TestHodographBoundsAreExactlyZeroOnCollapsedAndStraightUniformSpans(t *test
 	require.InEpsilon(t, chordLen, speedOf(t, straight), 1e-12,
 		"a straight uniformly-spaced span's speed bound must equal its own chord length exactly (d=0), never merely enclose it")
 }
+
+// --- chainStations: the one-sided twin (docs/tessellation-reach-design.md §5) ---
+
+// TestChainStationsIsOneSideOfThePairWalk pins the refactor's own contract: a
+// chain walked on its own must settle on exactly the cells the pair walk
+// settles on when both of its sides are that same chain, and must report the
+// same measured sagitta. The station lists differ in one documented way only —
+// chainStations EXCLUDES the chain's final boundary from stations and carries
+// it in end instead — so the pair's own list is reproduced by appending end.
+func TestChainStationsIsOneSideOfThePairWalk(t *testing.T) {
+	spans := quarterCircleFitSpans(t)
+	const target = 1e-4
+
+	paired, _, _, pairSag, err := pairStations(spans, spans, target, nil, nil)
+	require.NoError(t, err)
+
+	chain, err := chainStations(spans, target, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, pairSag, chain.sagitta, "the one-sided walk must measure the identical sagitta, bit for bit")
+	require.Len(t, chain.stations, len(paired)-1,
+		"the chain carries one station per CELL; the pair carries one per cell BOUNDARY, which is one more")
+	for i := range chain.stations {
+		require.Zero(t, paired[i].u.Cmp(chain.stations[i].u), "station %d U must be the pair walk's own", i)
+		require.Zero(t, paired[i].v.Cmp(chain.stations[i].v), "station %d V must be the pair walk's own", i)
+	}
+	last := paired[len(paired)-1]
+	require.Zero(t, last.u.Cmp(chain.end.u), "the chain's end must be the pair walk's own final station")
+	require.Zero(t, last.v.Cmp(chain.end.v))
+}
+
+// TestChainStationsHonorsItsTargetAndLoosensWithIt asserts the measured sagitta
+// stays at or under the target it was asked for, and that a strictly laxer
+// target settles on strictly fewer cells — the walk tracks its target rather
+// than a fixed depth.
+func TestChainStationsHonorsItsTargetAndLoosensWithIt(t *testing.T) {
+	spans := quarterCircleFitSpans(t)
+
+	fine, err := chainStations(spans, 1e-4, nil)
+	require.NoError(t, err)
+	require.LessOrEqual(t, fine.sagitta, 1e-4, "the measured sagitta must honor the target it was asked for")
+
+	coarse, err := chainStations(spans, 1e-2, nil)
+	require.NoError(t, err)
+	require.LessOrEqual(t, coarse.sagitta, 1e-2)
+	require.Less(t, len(coarse.stations), len(fine.stations),
+		"a laxer target must settle on strictly fewer cells")
+}
+
+// TestChainStationsBracketsEveryCellArcByItsChord pins the per-cell readings
+// the chorded wall's area slack subtracts: one arc-length upper bound and one
+// chord-length lower bound per accepted cell, parallel to the stations, with
+// the arc never below the chord. On a straight, uniformly-spaced span the two
+// converge on that span's own exact chord length from opposite sides, which is
+// what proves each is rounded in its own direction rather than both in one.
+func TestChainStationsBracketsEveryCellArcByItsChord(t *testing.T) {
+	curved, err := chainStations(quarterCircleFitSpans(t), 1e-3, nil)
+	require.NoError(t, err)
+	require.Len(t, curved.cellArcUpper, len(curved.stations), "one arc reading per accepted cell")
+	require.Len(t, curved.cellChordLower, len(curved.stations), "one chord reading per accepted cell")
+	summedChord, summedArc := 0.0, 0.0
+	for k := range curved.cellArcUpper {
+		require.Positive(t, curved.cellChordLower[k], "cell %d spans a positive chord", k)
+		require.GreaterOrEqual(t, curved.cellArcUpper[k], curved.cellChordLower[k],
+			"cell %d: a chord never exceeds the arc it subtends", k)
+		summedChord += curved.cellChordLower[k]
+		summedArc += curved.cellArcUpper[k]
+	}
+	// The fixture interpolates a quarter circle of radius 5, whose arc length
+	// is 5*pi/2. The inscribed chords of a chain this fine sit just under that
+	// figure and the speed bounds sit above it, so the true length is bracketed.
+	quarter := 5 * math.Pi / 2
+	require.Less(t, summedChord, quarter, "the inscribed chords never reach the arc they subtend")
+	require.Greater(t, summedChord, quarter*0.99, "a chain this fine loses well under a percent to chording")
+	require.Greater(t, summedArc, quarter, "the summed speed bounds must enclose the arc length")
+
+	// A collinear, uniformly spaced diagonal span: sagitta exactly 0, so it is
+	// accepted whole, and its exact chord length is sqrt(2), which no float64
+	// represents. That is what makes the two roundings distinguishable — each
+	// must land on its OWN side of the exact value, one ulp apart.
+	diagonal := ratSpan([][2]float64{{0, 0}, {0.5, 0.5}, {1, 1}})
+	straight, err := chainStations([]bezierSpan{diagonal}, 1, nil)
+	require.NoError(t, err)
+	require.Len(t, straight.stations, 1, "a collinear span carries sagitta 0 and is accepted whole")
+	require.Zero(t, straight.sagitta)
+	require.GreaterOrEqual(t, straight.cellArcUpper[0]*straight.cellArcUpper[0], 2.0,
+		"the arc reading must square to at least the exact squared chord length 2")
+	require.LessOrEqual(t, straight.cellChordLower[0]*straight.cellChordLower[0], 2.0,
+		"the chord reading must square to at most the exact squared chord length 2")
+	require.Greater(t, straight.cellArcUpper[0], straight.cellChordLower[0],
+		"the two readings must straddle the exact value, never both land on one side of it")
+	require.InDelta(t, math.Sqrt2, straight.cellChordLower[0], 1e-15)
+}
+
+// TestChainStationsRefusals pins every entry gate the one-sided walk inherits
+// from the pair walk: a chain with no span at all, a span carrying no control
+// point, a chain of more spans than the chord cap admits, and a target no
+// bisection this cap allows can reach.
+func TestChainStationsRefusals(t *testing.T) {
+	t.Run("no span", func(t *testing.T) {
+		_, err := chainStations(nil, 1, nil)
+		require.ErrorIs(t, err, ErrDegenerate)
+	})
+	t.Run("a span with no control point", func(t *testing.T) {
+		_, err := chainStations([]bezierSpan{{}}, 1, nil)
+		require.ErrorIs(t, err, ErrDegenerate)
+	})
+	t.Run("more spans than the cap admits", func(t *testing.T) {
+		spans := make([]bezierSpan, maxChordsPerWalk+1)
+		for i := range spans {
+			spans[i] = straightSpanFrom(float64(2 * i))
+		}
+		_, err := chainStations(spans, 1, nil)
+		require.ErrorIs(t, err, errTooManyChords)
+		require.ErrorIs(t, err, ErrUnsupported)
+	})
+	t.Run("a target past the cap's reach", func(t *testing.T) {
+		_, err := chainStations(quarterCircleFitSpans(t), 1e-20, nil)
+		require.ErrorIs(t, err, errTooManyChords)
+		require.ErrorIs(t, err, ErrUnsupported)
+	})
+}
+
+// TestChainStationsChargesTheCounterItIsHanded pins that the one-sided walk
+// meters itself on the caller's own record counter: an exhausted counter
+// refuses with Table R row R7's sentinel and the walk does no work at all.
+func TestChainStationsChargesTheCounterItIsHanded(t *testing.T) {
+	spans := quarterCircleFitSpans(t)
+
+	work := newFreeformWork()
+	_, err := chainStations(spans, 1e-3, work)
+	require.NoError(t, err)
+	require.Positive(t, work.spent, "the walk must charge the counter it was handed")
+
+	exhausted := &freeformWork{spent: freeformWorkLimit}
+	_, err = chainStations(spans, 1e-3, exhausted)
+	require.ErrorIs(t, err, ErrUnsupported)
+}
