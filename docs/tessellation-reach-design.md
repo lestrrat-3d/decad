@@ -30,7 +30,8 @@ Router (navigation, not authority):
 `loftPayload` (R1) and `revolvePayload` (§6, R3), and refuses every other with `ErrUnsupported`. A
 free-form-walled `prismPayload` reaches the prism path and chords there: `chordLoop` switches on `walkKind`
 and gives a `walkFreeform` walk its own dyadic station chain (§5, R2). A `revolvePayload` meshes through
-`tessellate_revolve.go` for LINE generators only; a circular meridian generator refuses (T3).
+`tessellate_revolve.go` for every ANALYTIC generator, line and circular alike (T2, T3); a free-form
+meridian generator refuses (T5).
 
 `Mesh` carries tess §2's proof record complete, populated by all five of those paths (§3, R0):
 

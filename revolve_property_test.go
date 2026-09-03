@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"errors"
 	"math"
 	"math/rand"
 	"testing"
@@ -551,15 +552,19 @@ func checkRevolveBody(t *testing.T, body *decad.Body, su setup, ap axisPlacement
 		}
 	}
 
-	// Invariant 2: a watertight, consistently-oriented mesh. A revolve whose
-	// section carries only LINE generators meshes; a circular generator is
-	// staged (ErrUnsupported), and so is a tolerance the payload's own
-	// coordinate stages exhaust, so the check runs on whatever this fixture
-	// produced and demands an explicit staging refusal otherwise.
+	// Invariant 2: a watertight, consistently-oriented mesh. Every analytic
+	// revolve generator meshes, line and circular alike; a tolerance the
+	// payload's own coordinate stages exhaust, or a chording no bounded
+	// refinement can prove, is an explicit refusal instead, so the check runs
+	// on whatever this fixture produced and demands one of the two typed
+	// refusals otherwise — never a cracked mesh
+	// (docs/tessellation-design.md §14).
 	if mesh, err := body.Tessellate(units.Millimeters(su.scale / 20)); err == nil {
 		requireMeshWinding(t, mesh)
 	} else {
-		require.ErrorIs(t, err, decad.ErrUnsupported, "revolve tessellation must stay explicitly staged")
+		require.True(t,
+			errors.Is(err, decad.ErrUnsupported) || errors.Is(err, decad.ErrDegenerate),
+			"revolve tessellation must refuse explicitly, got %v", err)
 	}
 
 	// Invariant 3: the walked-boundary convexity holds under this orientation.

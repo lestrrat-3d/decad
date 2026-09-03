@@ -651,7 +651,7 @@ func TestArcMatchedDeltaEqualsSagitta(t *testing.T) {
 				for _, target := range []float64{1e3, 1, 1e-2, 1e-5} {
 					w := circularWalk(0, 0, radius, 0, sweep, radius, sweep)
 					w.closed = sweep >= 2*math.Pi
-					n, _, err := chordCount(w, target)
+					n, _, err := chordCount(w, target, chordWalkMin(w))
 					require.NoError(t, err)
 					cell := sweep / float64(n)
 					require.LessOrEqualf(t, cell, math.Pi,

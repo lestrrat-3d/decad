@@ -142,15 +142,19 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // this package cannot prove.
 //
 // Prism, revolve, cup, loft, cap-loop chamfer and boolean-built bodies
-// tessellate. A revolved
-// body meshes its meridian section and one GLOBAL angular sequence, so every
-// generator face shares its whole latitude edge and a full turn closes with no
-// seam; its two coordinate stages — the construction that computes each sample
+// tessellate. A revolved body meshes its meridian section and one GLOBAL
+// angular sequence, so every generator face shares its whole latitude edge and
+// a full turn closes with no seam; its two coordinate stages — the construction that computes each sample
 // and the placement that moves it — are reserved from tol before any chord is
-// chosen, and a tol they exhaust is [ErrUnsupported]. A revolve whose section
-// carries a CIRCULAR generator (a sphere or a torus wall) is [ErrUnsupported]
-// here, and no revolve mesh may be a boolean operand yet: it carries no proof
-// of the volume it and the body it stands for differ by, so [Union], [Cut] and
+// chosen, and a tol they exhaust is [ErrUnsupported]. What tol then buys is
+// split between the meridian and the angles, so a CIRCULAR generator (a sphere
+// or a torus wall) is chorded along its meridian as well as around the axis. A
+// section a bounded number of refinements cannot prove simple, correctly
+// nested and free of non-adjacent facet contact is [ErrUnsupported] rather
+// than a mesh, and so is a positive-radius ring that collapses onto itself: a
+// revolve mesh is refined or refused, never snapped, welded or coarsened. No
+// revolve mesh may be a boolean operand yet either: it carries no proof of the
+// volume it and the body it stands for differ by, so [Union], [Cut] and
 // [Intersect] refuse it while export stays available.
 //
 // A cap-loop chamfer result meshes its trimmed side walls, its chamfer band and
@@ -663,7 +667,7 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 			areaSlack += absSumUpper(wall, segment, segment)
 			segmentArea = absSumUpper(segmentArea, segment)
 		case walkCircular:
-			n, sag, err := chordCount(w.segmentWalk, chord)
+			n, sag, err := chordCount(w.segmentWalk, chord, chordWalkMin(w.segmentWalk))
 			if err != nil {
 				return chordedLoop{}, err
 			}
@@ -1281,14 +1285,40 @@ func (m *Mesh) addTriangle(tri [3]int, src *Face) {
 	m.source = append(m.source, src)
 }
 
+// chordWalkMin is docs/tessellation-design.md §3's default walk minimum: a
+// whole closed curve needs at least three chords to bound a polygon, and every
+// other walk needs one. A revolve meridian has a third case of its own
+// (revolveMeridianMin), which is why the minimum is chordCount's parameter
+// rather than a property it reads off the walk.
+func chordWalkMin(w segmentWalk) int {
+	if w.closed {
+		return 3
+	}
+	return 1
+}
+
 // chordCount picks the number of chords for a circular walk so chordSagitta's
 // PROVEN bound on each chord's sagitta stays within tol, and returns that
 // bound. Every accept/reject below reads chordSagitta, never the true
-// sagitta r·(1 − cos(Δθ/2)) it encloses. A closed walk needs at least three
-// chords to bound a polygon; the per-chord angle never exceeds π, so
-// consecutive samples are always distinct.
-func chordCount(w segmentWalk, tol float64) (int, float64, error) {
+// sagitta r·(1 − cos(Δθ/2)) it encloses. The per-chord angle never exceeds π,
+// so consecutive samples are always distinct.
+//
+// nMin is the walk's own minimum count (chordWalkMin, or revolveMeridianMin for
+// a revolve meridian). docs/tessellation-design.md §3 asks for it to be tried
+// FIRST: when its own sagitta already fits the budget it is the answer, and the
+// inverse below — which is undefined for a budget at or above 2r — is never
+// evaluated at all.
+func chordCount(w segmentWalk, tol float64, nMin int) (int, float64, error) {
 	sweep := math.Abs(w.th1 - w.th0)
+	if nMin < 1 {
+		nMin = 1
+	}
+	if nMin > maxChordsPerWalk {
+		return 0, 0, errTooManyChords
+	}
+	if s := chordSagitta(w.radius, sweep, nMin); s <= tol {
+		return nMin, s, nil
+	}
 	maxD := math.Pi
 	if tol < w.radius {
 		// The TRUE sagitta 2r·sin²(Δθ/4) inverts to Δθ_max = 4·asin(√(tol/2r))
@@ -1305,10 +1335,7 @@ func chordCount(w segmentWalk, tol float64) (int, float64, error) {
 	if maxD == 0 || sweep/maxD > maxChordsPerWalk {
 		return 0, 0, errTooManyChords
 	}
-	n := max(int(math.Ceil(sweep/maxD)), 1)
-	if w.closed && n < 3 {
-		n = 3
-	}
+	n := max(int(math.Ceil(sweep/maxD)), nMin)
 	if n > maxChordsPerWalk {
 		return 0, 0, errTooManyChords
 	}
@@ -1465,26 +1492,10 @@ const maxChordsPerWalk = 1 << 14
 // tangent to the outline, or two holes touching — is a pinch this mesh
 // cannot prove it represents, and is refused.
 func requireLoopClearance(ctx context.Context, pts []Point2, loopIdx [][]int, loopSag []float64) error {
-	// Round-off floor, in two translation-honest parts: 1e-9 of the
-	// geometry's own span (coordinates carry ~1e-9-relative noise at their
-	// own scale, and a span is translation-invariant), plus a few ulps of
-	// the largest coordinate magnitude — the arithmetic's actual rounding,
-	// which grows with distance from the origin without ever inflating the
-	// floor by the position itself.
-	minU, maxU := math.Inf(1), math.Inf(-1)
-	minV, maxV := math.Inf(1), math.Inf(-1)
-	maxAbs := 0.0
-	budget := newWorkBudget(ctx)
-	for _, p := range pts {
-		if err := budget.step(); err != nil {
-			return err
-		}
-		minU, maxU = math.Min(minU, p.U), math.Max(maxU, p.U)
-		minV, maxV = math.Min(minV, p.V), math.Max(maxV, p.V)
-		maxAbs = math.Max(maxAbs, math.Max(math.Abs(p.U), math.Abs(p.V)))
+	floor, err := sectionClearanceFloor(ctx, pts)
+	if err != nil {
+		return err
 	}
-	span := math.Hypot(maxU-minU, maxV-minV)
-	floor := 1e-9*span + 4*(math.Nextafter(maxAbs, math.Inf(1))-maxAbs)
 	for i := range loopIdx {
 		for j := i + 1; j < len(loopIdx); j++ {
 			chordGate := loopSag[i] + loopSag[j]
@@ -1510,6 +1521,95 @@ func requireLoopClearance(ctx context.Context, pts []Point2, loopIdx [][]int, lo
 	return nil
 }
 
+// sectionClearanceFloor is the round-off floor both section clearance gates
+// read, in two translation-honest parts: 1e-9 of the geometry's own span
+// (coordinates carry ~1e-9-relative noise at their own scale, and a span is
+// translation-invariant), plus a few ulps of the largest coordinate magnitude —
+// the arithmetic's actual rounding, which grows with distance from the origin
+// without ever inflating the floor by the position itself.
+func sectionClearanceFloor(ctx context.Context, pts []Point2) (float64, error) {
+	minU, maxU := math.Inf(1), math.Inf(-1)
+	minV, maxV := math.Inf(1), math.Inf(-1)
+	maxAbs := 0.0
+	budget := newWorkBudget(ctx)
+	for _, p := range pts {
+		if err := budget.step(); err != nil {
+			return 0, err
+		}
+		minU, maxU = math.Min(minU, p.U), math.Max(maxU, p.U)
+		minV, maxV = math.Min(minV, p.V), math.Max(maxV, p.V)
+		maxAbs = math.Max(maxAbs, math.Max(math.Abs(p.U), math.Abs(p.V)))
+	}
+	span := math.Hypot(maxU-minU, maxV-minV)
+	return 1e-9*span + 4*(math.Nextafter(maxAbs, math.Inf(1))-maxAbs), nil
+}
+
+// requireWalkClearance is the INTRA-loop half of
+// docs/tessellation-design.md §9's meridian section proof, beside
+// requireLoopClearance's cross-loop half: every non-adjacent chord pair WITHIN
+// one loop must clear the two sagitta tubes its own two walks prove, plus the
+// same scale-anchored float floor.
+//
+// It is what carries the analytic-to-chord homotopy Hm for a curved generator.
+// Each moving point of a chorded walk stays inside that walk's own upward-
+// rounded sagitta tube, so two chords whose polylines clear the summed tubes
+// have disjoint tubes, and every intermediate section on the homotopy is
+// therefore as simple and as nested as the chorded one. A static polyline test
+// alone would not say that, which is why the gate is the summed tubes and not
+// the measured gap.
+//
+// Chords sharing a sample are ADJACENT and are skipped: they are required to
+// meet there, and the loop's own turn is what decides that junction. A straight
+// walk contributes a zero tube, so a section of straight generators alone
+// reduces to the endpoint clearance R3 already ran.
+//
+// sag is parallel to loopIdx: sag[i][k] is the proven sagitta of the chord
+// leaving sample loopIdx[i][k].
+func requireWalkClearance(ctx context.Context, pts []Point2, loopIdx [][]int, sag [][]float64) error {
+	floor, err := sectionClearanceFloor(ctx, pts)
+	if err != nil {
+		return err
+	}
+	budget := newWorkBudget(ctx)
+	for i, idx := range loopIdx {
+		m := len(idx)
+		if m < 4 {
+			continue
+		}
+		for a := range m {
+			for b := a + 2; b < m; b++ {
+				if err := budget.step(); err != nil {
+					return err
+				}
+				if a == 0 && b == m-1 {
+					continue
+				}
+				chordGate := sag[i][a] + sag[i][b]
+				gate := chordGate + floor
+				d := segSegDistance(
+					pts[idx[a]], pts[idx[(a+1)%m]],
+					pts[idx[b]], pts[idx[(b+1)%m]],
+				)
+				if d > gate {
+					continue
+				}
+				msg := fmt.Sprintf(
+					`chords %d and %d of section loop %d have measured distance %s; distance must exceed the required clearance gate %s`,
+					a, b, i, units.Millimeters(d), units.Millimeters(gate),
+				)
+				if d > floor && chordGate > 0 {
+					msg += `; retry with a finer chord tolerance to reduce the gate`
+				}
+				return &sectionClearanceError{
+					err:  &tessellationExpectedError{err: fmt.Errorf(`%w: %s`, ErrDegenerate, msg)},
+					loop: i, a: a, b: b,
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // loopPolylineDistance is the minimum distance between two closed sample
 // polylines.
 func loopPolylineDistance(ctx context.Context, pts []Point2, a, b []int) (float64, error) {
@@ -1527,6 +1627,19 @@ func loopPolylineDistance(ctx context.Context, pts []Point2, a, b []int) (float6
 	}
 	return best, nil
 }
+
+// sectionClearanceError names the two chords requireWalkClearance refused and
+// the loop they belong to, so a caller that can refine one of them knows which
+// one to refine (docs/tessellation-design.md §3: refinement is deterministic).
+// It wraps the ordinary tessellationExpectedError, so a caller that cannot
+// refine reads exactly the refusal it would have read without it.
+type sectionClearanceError struct {
+	err        error
+	loop, a, b int
+}
+
+func (e *sectionClearanceError) Error() string { return e.err.Error() }
+func (e *sectionClearanceError) Unwrap() error { return e.err }
 
 // tessellationExpectedError marks a valid operand whose requested chording
 // cannot prove its topology. Public Tessellate still exposes ErrDegenerate

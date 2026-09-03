@@ -232,12 +232,13 @@ one.
 
 | Path | Responsibility |
 |---|---|
-| `tessellate.go` | `Mesh` and `Body.Tessellate`: the proof record, the shared loop chording, and the prism, cup and faceted paths. See the file's own doc comment and `docs/tessellation-design.md`. |
-| `tessellate_revolve.go` | `tessellateRevolve`: the meridian samples, the one global angular sequence, and the rings, cells, poles and partial caps a line-generator revolve builds from them. See the file's own doc comment. |
-| `tessellate_revolve_proof.go` | The revolve mesh's proofs: certified angular trig, both coordinate stages, the tolerance split, the facet-pair and vertex-link audits, and `Ecell`. See the file's own doc comment. |
-| `tessellate_station.go` | `chordStationBound`: the proven enclosure gap of one interior chord station on a circular walk, the coordinate-construction half of the mesh proof record. See the file's own doc comment and `docs/tessellation-reach-design.md` §3. |
-| `tessellate_loft.go` | `tessellateLoft`: the exact restatement of a `loftPayload`'s held triangle set, its source faces and the payload's own proof record. See the file's own doc comments and `docs/tessellation-reach-design.md` §4. |
-| `tessellate_capblend.go` | `tessellateCapBlend`: the export-only cap-loop chamfer mesh — one chord count per wall walk shared three ways, the band cells and each patch's own proof terms. See the file's own doc comment and `docs/tessellation-reach-design.md` §7. |
+| `tessellate.go` | `Mesh` and `Body.Tessellate`: the proof record, the shared loop chording, and the dispatch to each payload path. See the file's own doc comment and `docs/tessellation-design.md`. |
+| `tessellate_revolve.go` | `tessellateRevolve`: the tolerance split, the meridian and angular chordings, and the rings, cells, poles and partial caps a revolve builds from them. See the file's own doc comment. |
+| `tessellate_revolve_proof.go` | The revolve mesh's proofs: certified angular trig, both coordinate stages, the facet-pair and vertex-link audits, and a straight cell's `Ecell`. See the file's own doc comment. |
+| `tessellate_revolve_arc.go` | What a CIRCULAR revolve generator needs: its meridian stations, its `Ecell` by certified subdivision, and its cap segment area. See the file's own doc comment. |
+| `tessellate_station.go` | `chordStationBound`: the proven enclosure gap of one interior chord station on a circular walk. See the file's own doc comment. |
+| `tessellate_loft.go` | `tessellateLoft`: the exact restatement of a `loftPayload`'s held triangle set, its source faces and the payload's own proof record. See the file's own doc comments. |
+| `tessellate_capblend.go` | `tessellateCapBlend`: the export-only cap-loop chamfer mesh, one chord count per wall walk shared three ways, its band cells and each patch's proof terms. See `docs/tessellation-reach-design.md` §7. |
 | `triangulate.go` | The cap triangulator behind `Tessellate`: hole bridging plus reflex-blocked ear clipping, correct for non-convex outlines with holes. See the file's own doc comment. |
 | `export.go` | `Body.STL`/`Body.OBJ`: deterministic writers over `Tessellate`, with `WithChordTolerance`'s documented default. See the file's own doc comment. |
 

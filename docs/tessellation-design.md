@@ -1056,4 +1056,40 @@ the alternative worth considering. One evaluation answers for every angular
 interval of a cell, because interval `l`'s ideal samples are the exact rotation
 of interval 0's about the axis and a rotation is an isometry.
 
-T3's circular-generator cells stay open and take certified subdivision.
+**T3's `Ecell` is certified interval subdivision.** A CIRCULAR generator has no
+closed-form sign decomposition to take, which is the whole reason the choice
+went the other way. Matching the arc to its chord by the shared parameter gives
+the arc a CONSTANT speed `r*abs(dTheta)`, so `Jtrue` keeps the straight case's
+independence from `u`:
+
+```text
+Jtrue(t, u) = r*abs(dTheta) * dphi * rho(t),
+rho(t)      = cV + r*sin(theta0 + t*dTheta)
+```
+
+`Jheld` is still the flat facet's constant twice-area on each half of the
+domain the fixed diagonal cuts (a pole fan's is linear in `t` through the
+origin, as in T2). Their difference is therefore a sinusoid against a constant,
+whose zeros are arcsines rather than rational quotients: isolating them exactly
+is not available, and every closed form for the sign-fixed pieces would have to
+call a trig function this package refuses to trust for a published bound.
+
+So the meridian direction of each half-domain is cut into a fixed number of
+equal pieces. Every NODE of that subdivision encloses `rho` through the
+certified radian sine enclosure, which never compares against pi. One piece is
+then charged the larger of its two nodes' magnitudes for `Jtrue - Jheld`, plus
+the proven second-order allowance `max(abs(f''))*h^2/8` that bounds how far a
+twice-differentiable integrand departs from the chord through its own
+endpoints, times the exact integral of its half's weight over the piece.
+Because the absolute value is taken inside each piece, nothing cancels between
+pieces and the sum is an upper bound at any depth: depth buys tightness, never
+soundness, which is what makes a fixed budget admissible here. An inner-torus cell whose Jacobian
+error changes sign is charged the sum of both lobes rather than their
+difference, so a later boolean retaining one lobe is still bounded.
+
+The model the subdivision integrates is the payload's own AXIS-coordinate
+circle, the same reading T2 takes when it measures a straight cell's meridian
+length from the held samples. Its departure from the exact axis image of the
+recorded curve is a coordinate-construction displacement bounded by `deltaC`;
+the `rho` enclosure is widened by it, and §10.2's per-triangle coordinate-stage
+allowance charges it again.

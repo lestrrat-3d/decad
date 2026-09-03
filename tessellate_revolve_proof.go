@@ -63,6 +63,22 @@ const revolveTrigGapPrior = 0x1p-50
 // budget this figure bought.
 const revolveEvalRoundUlps = 256
 
+// revolveStationRoundUlps is the a-priori ulp allowance, at the meridian's own
+// coordinate magnitude, for one CHORDED meridian station's stored (z, ρ) pair
+// (docs/tessellation-reach-design.md §6, R4). A station is stored as the float
+// NEAREST the certified enclosure of the point its record denotes
+// (revolveArcStation), so its gap is half an ulp plus that enclosure's own
+// width; eight ulps covers both with room to spare while staying far below any
+// tolerance a caller can state.
+//
+// It exists for revolveTrigGapPrior's reason one level down: §8 splits the
+// tolerance BEFORE the meridian counts are chosen, and how many stations there
+// are is exactly what the count decides, so the split needs a per-sample
+// ceiling that does not depend on it. Every station's real gap is MEASURED as
+// it is emitted and refused if it exceeds this, so the a-priori figure is held
+// to account rather than trusted.
+const revolveStationRoundUlps = 8
+
 // revolveAngular is the global angular sequence docs/tessellation-design.md §8
 // makes load-bearing: ONE chord count for the whole mesh, so adjacent generator
 // faces share their complete latitude edge, a full turn closes without a
@@ -192,14 +208,36 @@ type revolveBasis3Iv struct {
 // axis carries none.
 func revolveMeridianEnclosure(ax axisFrame, u, v float64, bound walkEndBound) (ratInterval, ratInterval, bool) {
 	ru, rv := floatRat(u), floatRat(v)
-	aU, aV := floatRat(ax.aU), floatRat(ax.aV)
-	dU, dV := floatRat(ax.dU), floatRat(ax.dV)
 	bu, bv := floatRat(math.Abs(bound.u)), floatRat(math.Abs(bound.v))
-	if ru == nil || rv == nil || aU == nil || aV == nil || dU == nil || dV == nil || bu == nil || bv == nil {
+	if ru == nil || rv == nil || bu == nil || bv == nil {
 		return ratInterval{}, ratInterval{}, false
 	}
-	du := intervalWiden(pointInterval(new(big.Rat).Sub(ru, aU)), bu)
-	dv := intervalWiden(pointInterval(new(big.Rat).Sub(rv, aV)), bv)
+	return axisCoordInterval(ax,
+		intervalWiden(pointInterval(ru), bu),
+		intervalWiden(pointInterval(rv), bv),
+	)
+}
+
+// axisCoordInterval carries an enclosed PLANE-local point into the axis
+// coordinates (z, ρ) through the payload's own axis frame, with no rounding
+// anywhere: aU/aV/dU/dV are float64 and therefore exact rationals, and the
+// whole map is two products and one sum per coordinate.
+//
+// The frame's own four numbers are read as exact leaves, which is what
+// axisFrame.toAxis itself denotes — the IDEAL sample docs/tessellation-design.md
+// §8 measures a stored vertex against is the exact evaluation on the payload's
+// held floats, not on the axis a longer derivation would call true. The
+// difference between those two axes is the frame's own recorded uncertainty
+// (axisFrame.toAxisRhoBound), which revolve's moments engine folds in
+// separately and no mesh coordinate re-charges here.
+func axisCoordInterval(ax axisFrame, u, v ratInterval) (ratInterval, ratInterval, bool) {
+	aU, aV := floatRat(ax.aU), floatRat(ax.aV)
+	dU, dV := floatRat(ax.dU), floatRat(ax.dV)
+	if aU == nil || aV == nil || dU == nil || dV == nil {
+		return ratInterval{}, ratInterval{}, false
+	}
+	du := intervalSub(u, pointInterval(aU))
+	dv := intervalSub(v, pointInterval(aV))
 	z := intervalAdd(intervalScale(du, dU), intervalScale(dv, dV))
 	rho := intervalSub(intervalScale(dv, dU), intervalScale(du, dV))
 	return z, rho, true
