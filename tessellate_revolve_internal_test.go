@@ -423,3 +423,49 @@ func TestRevolveMeshCarriesNoOccupiedVolumeProof(t *testing.T) {
 		require.LessOrEqual(t, d, mesh.bound)
 	}
 }
+
+// TestRevolveVertexIsolatedDecidesACapFanAgainstTheNextChordWall pins the pair
+// the edge-pair separating plane exists for, at the exact coordinates a
+// partial-sweep groove produced: facet 60, a wall triangle of one meridian
+// chord, against facet 167, a start-cap fan triangle, sharing vertex 42 alone.
+//
+// None of the four candidates built from ONE triangle's own normal decides it.
+// With the wall as a, the cap's two corners read mixed signs on all four. With
+// the cap as a, its own normal reads the wall's in-plane corner at −7.1e-15 —
+// that corner lies in the cap plane without being one of the cap triangle's own
+// vertices, so the reading is a numerical zero the perturbation allowance
+// cannot sign — and every rotation of that normal reads the wall's two corners
+// with opposite signs, because the off-plane corner's in-plane component is
+// −ρ(1−cos dφ)·e(φ0), whose sign is fixed. Refining the angular sequence
+// shrinks that component as dφ² and never flips it, so the whole refinement
+// chain fails identically and the mesh refuses however fine the chording.
+//
+// The edge-pair family decides it: g = eA × eB reads the two remaining corners
+// at +38.4 and −31.7, four hundred million times its own perturbation
+// allowance.
+func TestRevolveVertexIsolatedDecidesACapFanAgainstTheNextChordWall(t *testing.T) {
+	verts := make([]r3.Vec, 50)
+	verts[35] = r3.Vec{X: -22.861137887942604, Y: 3.1848000973097195, Z: -11.332206870439578}
+	verts[42] = r3.Vec{X: -21.72779063345132, Y: 2.943952572193523, Z: -10.587186732066304}
+	verts[43] = r3.Vec{X: -22.534312279222867, Y: 0.8079815808422071, Z: -9.77332215919684}
+	verts[7] = r3.Vec{X: -29.408326745936623, Y: 7.794809887107666, Z: -2.8190966120010716}
+	verts[49] = r3.Vec{X: -20.44213746589201, Y: 2.524200990919139, Z: -10.325570450153995}
+
+	const delta = 7.150045910436396e-15
+	triA := [3]int{35, 42, 43} // the wall triangle of one meridian chord
+	triB := [3]int{7, 49, 42}  // the start cap's fan triangle
+	a, ok := newRevolveAuditTri(verts, triA)
+	require.True(t, ok)
+	b, ok := newRevolveAuditTri(verts, triB)
+	require.True(t, ok)
+
+	require.True(t,
+		revolveVertexIsolated(a, triA, b, triB, 42, delta) ||
+			revolveVertexIsolated(b, triB, a, triA, 42, delta),
+		`the cap fan and the next chord's wall must be proven to meet only at the vertex they share`)
+
+	// The same pair inside the whole audit, which is where the refusal used to
+	// surface. Facet indices are the audit's own, so the two triangles are
+	// handed to it alone.
+	require.NoError(t, revolveContactAudit(newWorkBudget(t.Context()), verts, [][3]int{triA, triB}, delta))
+}

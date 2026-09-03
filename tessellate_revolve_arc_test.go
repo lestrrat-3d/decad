@@ -375,3 +375,59 @@ func TestRevolveTessellateCircularMeridianChordsWithTolerance(t *testing.T) {
 		require.LessOrEqual(t, revolveMeshBound(t, mesh), tol)
 	}
 }
+
+func TestRevolveTessellatePartialGrooveMeshes(t *testing.T) {
+	// The capability the edge-pair separating plane buys
+	// (revolveVertexIsolated): a PARTIAL sweep whose meridian carries a chorded
+	// arc. Its cap fan triangles meet the wall triangle of the next meridian
+	// chord at exactly one vertex, and no plane built from one triangle's own
+	// normal decides that pair — every rotation of it reads the wall's two
+	// corners with opposite signs, and refining the angular count shrinks the
+	// offending component without ever flipping it. Before that family existed
+	// this body refused at every tolerance.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a := s.CreatePoint(0, 4)
+	s.Fix(a)
+	b := s.CreatePoint(20, 4)
+	c := s.CreatePoint(20, 14)
+	right := s.CreatePoint(13, 14)
+	left := s.CreatePoint(7, 14)
+	d := s.CreatePoint(0, 14)
+	centre := s.CreatePoint(10, 14)
+	s.CreateLine(a, b)
+	s.CreateLine(b, c)
+	s.CreateLine(c, right)
+	s.CreateArc(centre, left, right) // dips inward to ρ = 11: a concave torus wall
+	s.CreateLine(left, d)
+	s.CreateLine(d, a)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis,
+		decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
+	require.NoError(t, err)
+
+	mesh, err := body.Tessellate(units.Millimeters(0.2))
+	require.NoError(t, err, `a partial sweep carrying a chorded arc must mesh`)
+	requireWatertight(t, mesh)
+	requireSourceFacesLive(t, body, mesh)
+	require.NotEmpty(t, mesh.Triangles())
+
+	analytic := analyticVolume(t, body)
+	got := meshVolume(mesh)
+	require.Positive(t, got)
+	require.Less(t, got, analytic)
+	require.Greater(t, got, analytic*0.9)
+
+	// The two partial caps are the faces the fan triangles belong to, and both
+	// are present: the pair the edge-pair family decides is a cap facet against
+	// a wall facet, so a mesh missing either side would not exercise it.
+	roles := map[string]int{}
+	for _, f := range mesh.SourceFaces() {
+		roles[f.Origins()[0].Role]++
+	}
+	require.Positive(t, roles[roleCapStart])
+	require.Positive(t, roles[roleCapEnd])
+}

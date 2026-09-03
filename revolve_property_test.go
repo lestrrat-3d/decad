@@ -441,51 +441,18 @@ func TestRevolvePropertyInvariants(t *testing.T) {
 
 	const perTemplate = 12
 	for _, factory := range factories {
-		quota := &meshQuota{}
-		name := ""
-		for i := range perTemplate {
+		for range perTemplate {
 			su := factory(rng)
-			name = su.name
 			ap := randAxisPlacement(rng)
 			sw := randSweep(rng)
-			quota.on = i < meshPerTemplate
 			t.Run(su.name, func(t *testing.T) {
-				runRevolveCase(t, rng, su, ap, sw, quota)
+				runRevolveCase(t, rng, su, ap, sw)
 			})
 		}
-		// The rationing may never leave a template checking no mesh at all: a
-		// prefix whose every instance refuses would run invariant 2 zero times
-		// and say nothing, which is exactly the silence meshPerTemplate must
-		// not buy.
-		require.Positive(t, quota.built,
-			"%s built no mesh in its first %d instances, so invariant 2 checked nothing for it",
-			name, meshPerTemplate)
 	}
 }
 
-// meshPerTemplate is how many of each template's twelve random instances also
-// build a mesh (invariant 2 in checkRevolveBody). The mesh leg is the only
-// invariant here whose cost is superlinear in the fixture — the tessellator's
-// facet-pair audit is O(F²) over exact rationals, and a section it cannot
-// prove pays for the whole bounded refinement chain before refusing — so it is
-// the one leg this test rations rather than running on all sixty bodies.
-//
-// FOUR is the smallest prefix under this file's fixed seed for which every
-// template, the concave-walled groove included, returns at least one MESH
-// rather than only typed refusals; meshQuota holds that to account instead of
-// leaving it a claim. Every other invariant still runs on all twelve instances
-// of every template.
-const meshPerTemplate = 4
-
-// meshQuota carries one template's mesh rationing: on says this instance runs
-// invariant 2, and built counts how many of that template's instances actually
-// returned a mesh rather than a typed refusal.
-type meshQuota struct {
-	on    bool
-	built int
-}
-
-func runRevolveCase(t *testing.T, rng *rand.Rand, su setup, ap axisPlacement, sw sweep, mesh *meshQuota) {
+func runRevolveCase(t *testing.T, rng *rand.Rand, su setup, ap axisPlacement, sw sweep) {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -516,7 +483,7 @@ func runRevolveCase(t *testing.T, rng *rand.Rand, su setup, ap axisPlacement, sw
 	// The unplaced body, then the same body under a random rigid motion. Both
 	// must satisfy every invariant, and the mass properties must agree.
 	id := r3.Identity()
-	checkRevolveBody(t, body, su, ap, id, sw, mesh)
+	checkRevolveBody(t, body, su, ap, id, sw)
 
 	vol0, err := body.Volume()
 	require.NoError(t, err)
@@ -528,7 +495,7 @@ func runRevolveCase(t *testing.T, rng *rand.Rand, su setup, ap axisPlacement, sw
 	xf := randPlacement(t, rng)
 	placed, err := body.Placed(xf)
 	require.NoError(t, err)
-	checkRevolveBody(t, placed, su, ap, xf, sw, mesh)
+	checkRevolveBody(t, placed, su, ap, xf, sw)
 
 	// Mass-property invariance under the rigid motion.
 	volP, err := placed.Volume()
@@ -558,7 +525,7 @@ func mmOf2(v units.Value) float64 {
 // checkRevolveBody runs the orientation-invariant invariants on one placed
 // body: outward normals against the independent oracle, watertight/manifold
 // topology, convexity of the round's edges, and a sound Verify.
-func checkRevolveBody(t *testing.T, body *decad.Body, su setup, ap axisPlacement, xf r3.Transform, sw sweep, mesh *meshQuota) {
+func checkRevolveBody(t *testing.T, body *decad.Body, su setup, ap axisPlacement, xf r3.Transform, sw sweep) {
 	require.True(t, body.IsSolid())
 	requireManifold(t, body)
 
@@ -585,35 +552,33 @@ func checkRevolveBody(t *testing.T, body *decad.Body, su setup, ap axisPlacement
 		}
 	}
 
-	// Invariant 2: a watertight, consistently-oriented mesh. Every analytic
-	// revolve generator meshes, line and circular alike; a tolerance the
-	// payload's own coordinate stages exhaust, or a chording no bounded
-	// refinement can prove, is an explicit refusal instead, so the check runs
-	// on whatever this fixture produced and demands one of the two typed
-	// refusals otherwise — never a cracked mesh
-	// (docs/tessellation-design.md §14).
-	//
-	// The tolerance is a COARSE fraction of the fixture's own scale, and
-	// deliberately so. What this invariant reads — every facet non-degenerate,
-	// every facet wound with its source face's outward normal, every edge
-	// bounding exactly two facets — is a property of the mesh's structure, not
-	// of its density, and a coarse mesh exercises it with fewer, larger cells
-	// rather than with more of them. A fine request instead spends the whole
-	// fixture inside the O(F²) facet-pair audit, and on a concave-walled
-	// section it spends it on refinement retries that end in the same typed
-	// refusal: at scale/20 this template's groove fixtures returned a mesh four
-	// times out of twenty-four, against ten at the tolerance below. Coarser is
-	// both faster and STRICTLY more mesh actually checked here.
-	if mesh.on {
-		if m, err := body.Tessellate(units.Millimeters(su.scale / 5)); err == nil {
-			mesh.built++
-			requireMeshWinding(t, m)
-		} else {
-			require.True(t,
-				errors.Is(err, decad.ErrUnsupported) || errors.Is(err, decad.ErrDegenerate),
-				"revolve tessellation must refuse explicitly, got %v", err)
-		}
+	// Invariant 2: a watertight, consistently-oriented mesh, which EVERY
+	// fixture here must produce, at a tolerance that is a COARSE fraction of
+	// the fixture's own scale. What the invariant reads — every facet
+	// non-degenerate, every facet wound with its source face's outward normal,
+	// every edge bounding exactly two facets — is a property of the mesh's
+	// structure rather than of its density, and a coarse mesh exercises it with
+	// fewer, larger cells rather than with more of them. The density is what
+	// buys FULL fixture coverage inside the suite's own time budget: at
+	// scale/20 these sixty bodies cost 215 s under -race and at scale/5 they
+	// cost 71 s, and every one of the hundred and twenty meshes is checked
+	// either way. Once revolveVertexIsolated carries the
+	// edge-pair family, a partial-sweep revolve whose meridian holds a chorded
+	// arc decides its cap-fan-against-next-wall-chord pairs, so no fixture in
+	// this file refuses any more and a refusal is a regression rather than an
+	// admissible outcome. Requiring the mesh is what keeps that honest: an
+	// invariant that ACCEPTS a refusal cannot tell "meshed" from "refused every
+	// time", and the systematic refusal this file used to hide was exactly that
+	// silence. A refusal is still checked to be typed — never a cracked mesh
+	// (docs/tessellation-design.md §14) — before the fixture fails.
+	mesh, err := body.Tessellate(units.Millimeters(su.scale / 5))
+	if err != nil {
+		require.True(t,
+			errors.Is(err, decad.ErrUnsupported) || errors.Is(err, decad.ErrDegenerate),
+			"revolve tessellation must refuse explicitly, got %v", err)
+		t.Fatalf("%s must mesh at scale/5 and refused instead: %v", su.name, err)
 	}
+	requireMeshWinding(t, mesh)
 
 	// Invariant 3: the walked-boundary convexity holds under this orientation.
 	checkConvexity(t, body, su, ap, xf, sw)

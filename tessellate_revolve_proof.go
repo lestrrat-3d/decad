@@ -882,6 +882,21 @@ func revolveRejectionAxis(d, u ratV3, dLen, uLen, delta float64) revolveSepAxis 
 //     candidate that answers a pair of exactly opposite sectors of one pole fan,
 //     where each triangle's own edge rays run straight into the other's.
 //
+// A fifth family is not built from a's plane at all: the EDGE-PAIR planes,
+// whose normal g = eA × eB takes one edge of EACH triangle at the shared
+// corner. Both of those edges read an identical zero on g — a determinant
+// repeating a vector, twice over — so the plane contains one whole edge of a
+// and one whole edge of b for every member of the displaced family, and only
+// the two remaining corners have to be signed. It is the family that answers a
+// partial cap's fan triangle against the wall triangle of the NEXT meridian
+// chord, a pair no plane through a's own normal decides: a's normal reads the
+// wall's in-plane corner at a numerical zero it cannot sign, and every rotation
+// of it reads the wall's two corners with opposite signs, because the off-plane
+// corner's in-plane component is fixed in sign and only shrinks as dφ² under
+// refinement. Without this family that pair is undecidable at every angular
+// count, so a partial-sweep revolve carrying a chorded arc refuses however fine
+// the chording.
+//
 // The mirror, with the roles swapped, is the caller's second call.
 func revolveVertexIsolated(a revolveAuditTri, triA [3]int, b revolveAuditTri, triB [3]int, shared int, delta float64) bool {
 	e := productUpper(2, delta)
@@ -930,7 +945,47 @@ func revolveVertexIsolated(a revolveAuditTri, triA [3]int, b revolveAuditTri, tr
 		}
 	}
 	chord := revolveOffsetOf(rvSub(aOff[0].v, aOff[1].v))
-	return try(revolveEdgeFanAxis(a, chord, delta), aOff[:])
+	if try(revolveEdgeFanAxis(a, chord, delta), aOff[:]) {
+		return true
+	}
+	// The edge-pair family. g = eA × eB zeroes both eA and eB identically, so
+	// the plane holds one edge of each triangle for the WHOLE family rather
+	// than at the stored coordinates alone. That leaves a with two corners on
+	// the plane and one strictly off it, and b likewise, so a sits in one
+	// closed half-space and b in the other and their intersection lies in the
+	// plane. A triangle with two corners on a plane and its third strictly off
+	// meets that plane in exactly the closed segment between the two, so the
+	// intersection is contained in eA ∩ eB — two segments from the shared
+	// corner that a non-zero g makes non-parallel, and which therefore meet
+	// only at that corner.
+	//
+	// g stays non-zero over the whole family without a separate test: a member
+	// whose g vanished would read zero on both remaining corners, and sideOf
+	// has already proven each of them strictly outside its own perturbation
+	// allowance, which bounds exactly how far that reading can move. length
+	// bounds |eA × eB| by the product of the two factor lengths and drift is
+	// perturbBilinearAllow over the two factors sliding by e, so the charge is
+	// the one every other candidate here makes. A reading inside its allowance
+	// stays UNDECIDED and the candidate is skipped, never admitted.
+	for k := range 2 {
+		for m := range 2 {
+			g := rvCross(aOff[k].v, bOff[m].v)
+			if rvIsZero(g) {
+				continue
+			}
+			ax := revolveSepAxis{
+				g:      g,
+				length: productUpper(aOff[k].length, bOff[m].length),
+				drift:  perturbBilinearAllow(aOff[k].length, bOff[m].length, e, e),
+			}
+			sa, okA := ax.sideOf(aOff[1-k].v, aOff[1-k].length, e)
+			sb, okB := ax.sideOf(bOff[1-m].v, bOff[1-m].length, e)
+			if okA && okB && sa != sb {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // revolveOffset is one corner offset from the pair's shared corner, beside the
