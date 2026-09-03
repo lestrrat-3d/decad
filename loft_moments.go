@@ -599,6 +599,18 @@ type loftChordedAllow struct {
 	// areaExcess is the wall's ruled and station-shift residuals summed over
 	// chorded cells. The held-to-bilinear step is in Area.Value above.
 	areaExcess float64
+	// twistAreaAllow is that SAME held-to-bilinear step read as a BOUND
+	// rather than as a correction: cellTwistAreaAllow summed over the same
+	// chorded cells the loop below walks
+	// (docs/tessellation-reach-design.md §4). area() never reads it, because
+	// areaCorrection has already MOVED Area.Value onto the bilinear patches
+	// and charging the gap again there would double-count it. The
+	// tessellation does read it: the mesh holds the UNCORRECTED held
+	// triangles, so the step areaCorrection performs is, for that triangle
+	// set, an outstanding area gap and the mesh's own areaSlack must carry it
+	// (docs/tessellation-design.md §2's loftPayload row). It stays exactly 0
+	// on a build with no chorded cell, the zero value's own standing.
+	twistAreaAllow float64
 	// capAreaExcess is capAreaAllow0 and capAreaAllow1 (each
 	// sectionDisplacementArea over its own cap's boundary) composed by
 	// absSumUpper: the SAME two per-cap area allowances capVolumeUpper folds
@@ -636,7 +648,9 @@ type loftChordedAllow struct {
 // A cell contributes to wallAreaUpper (cellChordCurveAreaUpper), the exact
 // volume/first-moment corrections, the unsigned twistVolumeUpper retained for
 // tessellation's occupied-volume proof, maxTwistOffsetUpper (the MAX,
-// never a sum, of cellTwistOffsetUpper) and seamPerimeterUpper's own running
+// never a sum, of cellTwistOffsetUpper), twistAreaAllow (the SUM of
+// cellTwistAreaAllow, retained for the tessellation's own area slack) and
+// seamPerimeterUpper's own running
 // total ONLY when its own CHORD-TO-CURVE departure is positive
 // (pairs[i].matchedDelta[j] > 0, the cell's own half of §5.2's matchedDelta
 // composition) — NEVER keyed on a segment kind (a10-plan.md Part 3 PR 9 Task
@@ -749,7 +763,7 @@ func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r
 	}
 
 	var wallAreaUpper, twistVolumeUpper, maxTwistOffsetUpper, seamPerimeterUpper float64
-	var perimeterUpperV, perimeterUpperW, areaExcess, bilinearAreaBound float64
+	var perimeterUpperV, perimeterUpperW, areaExcess, bilinearAreaBound, twistAreaAllow float64
 	var walksV, walksW int
 	twistVolumeCorrection := new(big.Rat)
 	var twistMomentCorrection ratV3
@@ -827,6 +841,7 @@ func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r
 				p.arcUpperV[j], p.arcUpperW[j], cellMatched, delta,
 			)
 			areaExcess = absSumUpper(areaExcess, ruledLeg, stationLeg)
+			twistAreaAllow = absSumUpper(twistAreaAllow, cellTwistAreaAllow(vLo, vHi, wLo, wHi))
 		}
 	}
 
@@ -884,6 +899,7 @@ func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r
 		areaCorrectionBound:   rationalFloatError(areaCorrection, areaCorrectionValue),
 		bilinearAreaBound:     bilinearAreaBound,
 		areaExcess:            areaExcess,
+		twistAreaAllow:        twistAreaAllow,
 		capAreaExcess:         absSumUpper(capAreaAllow0, capAreaAllow1),
 	}, nil
 }

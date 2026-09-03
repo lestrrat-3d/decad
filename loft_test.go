@@ -800,19 +800,6 @@ func TestLoftVerifyBoxDisjointPairIsSound(t *testing.T) {
 	require.Equal(t, decad.Suspect, diag.Status)
 }
 
-// --- Staged downstream (D1) ---
-
-func TestLoftTessellateStaged(t *testing.T) {
-	s0, p0, s1, p1 := loftSquares(t, 20, 10)
-	doc := decad.New()
-	body, err := doc.Loft(s0, p0, s1, p1)
-	require.NoError(t, err)
-
-	mesh, err := body.Tessellate(units.Millimeters(1))
-	require.Nil(t, mesh)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-}
-
 // --- Cancellation ---
 
 func TestLoftContextCancellation(t *testing.T) {

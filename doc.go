@@ -88,7 +88,7 @@
 //	  free-form work past the fixed budget (R7)               ErrUnsupported
 //	  WithTaper   nonzero taper angle                         ErrUnsupported
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
-//	Union/Cut/Intersect  prism/faceted operands, crossings    builds
+//	Union/Cut/Intersect  prism/loft/faceted, crossings        builds
 //	  faceted operand coarser than the pair tolerance         ErrUnsupported
 //	  revolve operand (no tessellator; booleans mesh)         ErrUnsupported
 //	  free-form-walled operand (no tessellator yet)           ErrUnsupported
@@ -120,7 +120,7 @@
 //	Placed        any body this evaluator built               builds
 //	Verify        every body; surveys read prisms/revolves/cups/cap blends
 //	  a question the evaluator cannot decide                  Status Suspect
-//	Tessellate / STL / OBJ  prism, cup, boolean body          builds
+//	Tessellate / STL / OBJ  prism, cup, loft, boolean body    builds
 //	  revolve payload                                         ErrUnsupported
 //	  cap-loop chamfer result                                 ErrUnsupported
 //	  boolean body at a tolerance finer than its bound        ErrUnsupported

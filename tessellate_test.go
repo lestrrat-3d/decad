@@ -174,7 +174,7 @@ func TestTessellatePayloadClasses(t *testing.T) {
 		require.Nil(t, mesh)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.ErrorContains(t, err, "revolvePayload")
-		require.ErrorContains(t, err, "supported payload classes are prism, cup, and faceted")
+		require.ErrorContains(t, err, "supported payload classes are prism, cup, loft, and faceted")
 	})
 }
 
