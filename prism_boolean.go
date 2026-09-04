@@ -143,12 +143,14 @@ func tryPrismBoolean(ctx context.Context, op OpKind, a, b *Body) (prismPayload, 
 		return prismPayload{}, false, nil
 	}
 
-	withinCap, err := prismSceneWithinWorkCap(budget, pa, pb)
+	segments, withinCap, err := prismSceneWithinWorkCap(budget, pa, pb)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
 	if !withinCap {
-		return prismPayload{}, false, fmt.Errorf(`%w: the analytic %s scene exceeds this evaluator's arrangement work cap`, ErrUnsupported, opKindNames[op])
+		return prismPayload{}, false, fmt.Errorf(
+			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1); combine the sections into one profile instead of applying this op once per feature, or accept the mesh path by making the pair non-coplanar`,
+			ErrUnsupported, opKindNames[op], segments, prismMaxArrangementSegments)
 	}
 
 	reexpress, err := newPrismReexpression(pa, pb)
@@ -216,12 +218,14 @@ func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *workBudge
 		return nil, prismPayload{}, prismPayload{}, nil, false, nil
 	}
 
-	withinCap, err := prismSceneWithinWorkCap(budget, pa, pb)
+	segments, withinCap, err := prismSceneWithinWorkCap(budget, pa, pb)
 	if err != nil {
 		return nil, prismPayload{}, prismPayload{}, nil, false, err
 	}
 	if !withinCap {
-		return nil, prismPayload{}, prismPayload{}, nil, false, fmt.Errorf(`%w: the analytic %s scene exceeds this evaluator's arrangement work cap`, ErrUnsupported, opKindNames[OpIntersect])
+		return nil, prismPayload{}, prismPayload{}, nil, false, fmt.Errorf(
+			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1); combine the sections into one profile instead of applying this op once per feature, or accept the mesh path by making the pair non-coplanar`,
+			ErrUnsupported, opKindNames[OpIntersect], segments, prismMaxArrangementSegments)
 	}
 
 	reexpress, err = newPrismReexpression(pa, pb)
@@ -347,17 +351,22 @@ func prismProfileIsAnalytic(budget *workBudget, p ProfileRecord) (bool, error) {
 // prismMaxArrangementSegments bounds the private sketch arrangement before
 // s.Profiles starts. The pinned sketch arranger densifies each line to one tiny
 // segment and each admitted circle or arc to no more than 256, then compares
-// every tiny-segment pair. Capping this upper bound keeps a canceled caller from
-// leaving an unbounded private arrangement behind.
-const prismMaxArrangementSegments = 1024
+// every tiny-segment pair in one O(n^2) pass. sketch.Sketch.Profiles takes no
+// context, so that pass is the longest stretch a cancelled caller must wait
+// through, and this cap is what bounds it (§10). The pass costs about
+// 8.3e-5 ms per segment squared, so this value bounds one arrangement at
+// roughly 1.4 seconds, and it admits a rectangular plate carrying fourteen
+// circular holes against one more circular tool. It bounds latency alone:
+// peak memory at twice this many segments is under 16 MB.
+const prismMaxArrangementSegments = 4096
 
-func prismSceneWithinWorkCap(budget *workBudget, pa, pb prismPayload) (bool, error) {
+func prismSceneWithinWorkCap(budget *workBudget, pa, pb prismPayload) (int, bool, error) {
 	segments := 0
 	for _, profile := range []ProfileRecord{pa.profile, pb.profile} {
 		for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
 			for _, seg := range loop.Segments {
 				if err := budget.step(); err != nil {
-					return false, err
+					return segments, false, err
 				}
 				switch seg.(type) {
 				case LineSeg:
@@ -365,15 +374,15 @@ func prismSceneWithinWorkCap(budget *workBudget, pa, pb prismPayload) (bool, err
 				case CircleSeg, ArcSeg:
 					segments += 256
 				default:
-					return false, nil // G4 already excluded this case.
+					return segments, false, nil // G4 already excluded this case.
 				}
 				if segments > prismMaxArrangementSegments {
-					return false, nil
+					return segments, false, nil
 				}
 			}
 		}
 	}
-	return true, nil
+	return segments, true, nil
 }
 
 // prismZShift is G5's re-expression of operand B's [z0, z1] onto operand A's

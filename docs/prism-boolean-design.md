@@ -209,7 +209,7 @@ silent fallback stops being available:
 1. **Entry gate (§3.1–3.2).** Cheap, pre-`sketch`, structural. A miss here is
    never an error — the unchanged mesh path runs exactly as it does today.
 2. **Bounded region resolution (§4).** Before `s.Profiles()` runs, the
-   code-owned `prismUnionMaxArrangementSegments` cap bounds the pinned
+   code-owned `prismMaxArrangementSegments` cap bounds the pinned
    arrangers' tiny-segment pair work. Exceeding it is an `ErrUnsupported`
    refusal (§9), never an unbounded private worker. A pair within the cap
    builds the private scene, arranges it, and attempts to resolve a unique
@@ -903,7 +903,7 @@ never performs.
 | RB4 | §6's S7-equivalent: a non-adjacent pair crosses, or contacts within the diameter-anchored noise floor | `ErrUnsupported` | No |
 | RB5 | §6's S9-equivalent, decidably broken (a hole proven outside the outer loop or nested wrong) | `ErrDegenerate` | No |
 | RB6 | §6's S9-equivalent, undecidable | `ErrUnsupported` | No |
-| RB7 | The bounded work budget (§10) exhausts, or the private scene exceeds `prismUnionMaxArrangementSegments`, before resolution or the audit completes | `ErrUnsupported` | No — a coarser/simpler input may clear it |
+| RB7 | The bounded work budget (§10) exhausts, or the private scene exceeds `prismMaxArrangementSegments`, before resolution or the audit completes | `ErrUnsupported` | No — a coarser/simpler input may clear it |
 | RB8 | `recordEdge`/`falsifyRange` rejects a surviving segment (`TExact` disproven on a merged edge — an internal `sketch` inconsistency, reported upstream per seam §3) | `ErrUnrecordableProfile` | No, but should not occur on a certified arrangement; a defensive check |
 | RB9 | The merged loop's recorded segments do not join (`falsifyLoopJoins`, seam §3) — a whole-to-whole junction the assembly restates as two segments' own defining coordinates, which the merge did not compute and so did not round to agreement. Not RB8's class: the mismatch is inherited from an operand's own record (typically one carrying `Partial` cut fragments), not an internal `sketch` inconsistency | `ErrUnrecordableProfile` | No — a differently-drawn operand may close |
 
@@ -921,10 +921,13 @@ construction (one charge per created entity), the §4.2 selection/merge walk
 (one charge per candidate edge/cell touched, matching `crossingAuditBudget`'s
 own per-pair charge shape), and §6's audit (its existing budget parameter,
 unchanged). Polled at phase boundaries and at least every 256 candidates,
-identical to the existing pattern. `prismUnionMaxArrangementSegments` is the
+identical to the existing pattern. `prismMaxArrangementSegments` is the
 single code-owned pre-`Profiles` cap: it bounds the private arrangers'
-tiny-segment pair work for the pinned line/circle/arc density. `sketch.Sketch.
-Profiles` is synchronous and has no context parameter, so a capped private
+tiny-segment pair work for the pinned line/circle/arc density. That pair work
+is one `O(n^2)` pass with no broadphase, so the cap bounds a single
+uninterruptible arrangement; the value in `prism_boolean.go` states what it
+costs and what it admits. `sketch.Sketch.Profiles` is synchronous and has no
+context parameter, so a capped private
 scene runs in one worker while the caller selects its result against
 `ctx.Done()`. On cancellation, the caller waits for that bounded arrangement
 worker to finish, discards its result, and then returns `ctx.Err()` before the
@@ -1182,7 +1185,7 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   with the document and recipe untouched, matching the existing modify-op
   contract.
 - Arrangement cap: two line-only prism records whose combined upper bound
-  exceeds `prismUnionMaxArrangementSegments` refuse with `ErrUnsupported`
+  exceeds `prismMaxArrangementSegments` refuse with `ErrUnsupported`
   before `s.Profiles()` runs.
 - Replay: encode a recipe whose `OpUnion` step is an admitted pair, decode
   and evaluate it fresh, and assert the replayed body's `Exactness`/`Bound`

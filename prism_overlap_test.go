@@ -342,7 +342,7 @@ func TestPublicBooleansUnchangedOnMultiRegionPair(t *testing.T) {
 // The rest of this file is the MULTIREGION-TASKS.md Task 3 fixture: a pair of
 // interleaved comb prisms sized to sit past the consumer's own real-scale
 // gear pair (gearScaleConsumerSegments), proving §4.5's reading answers
-// at that scale and recording what prismMaxArrangementSegments (1024,
+// at that scale and recording what prismMaxArrangementSegments (4096,
 // prism_boolean.go) does to a pair that crosses it. Task 1 and Task 2 already
 // shipped the production code this exercises; this file adds no new
 // capability, tests and measurement only.
@@ -475,7 +475,7 @@ func interleavedCombBodies(t *testing.T, doc *decad.Document, n int) (a, b *deca
 // headline (MULTIREGION-TASKS.md Task 3, observable test 1): an 8-tooth
 // interleaved-comb pair at gearScaleEightToothSegments combined segments —
 // above the consumer's own gearScaleConsumerSegments, and safely below
-// prismMaxArrangementSegments' 1024 cap — still reports one summed
+// prismMaxArrangementSegments' 4096 cap — still reports one summed
 // Interference row within a tiny bound. The wall-clock cost is logged for
 // comparison against the real gear pair's own measured ~16s Suspect
 // (MULTIREGION-TASKS.md's "already measured" note).
@@ -487,7 +487,7 @@ func TestVerifyGearScaleEightRegionOverlapReportsSummedVolume(t *testing.T) {
 		segs, gearScaleConsumerSegments)
 	require.Equal(t, gearScaleEightToothSegments, segs,
 		"premise: case 1 must stand at its stated combined segment count; gearScaleSubdiv or the comb's own point count moved the fixture off that scale")
-	require.LessOrEqual(t, segs, 1024, "premise: case 1's combined segment count stays at or under the 1024 arrangement cap")
+	require.LessOrEqual(t, segs, 4096, "premise: case 1's combined segment count stays at or under the 4096 arrangement cap")
 
 	doc := decad.New()
 	a, b := interleavedCombBodies(t, doc, n)
@@ -520,17 +520,15 @@ func TestVerifyGearScaleEightRegionOverlapReportsSummedVolume(t *testing.T) {
 }
 
 // TestVerifyGearScaleOverArrangementCapStaysSuspect is Task 3's observable
-// test 2: the same interleaved-comb fixture built one tooth larger — 9 teeth,
-// 1040 combined segments, over the 1024 arrangement cap — reports Suspect
+// test 2: the same interleaved-comb fixture built one tooth larger — 39 teeth,
+// 4160 combined segments, over the 4096 arrangement cap — reports Suspect
 // through the pipeline-unsupported diagnostic rather than an error or a
 // crash, pinning that the cap degrades §4.5's reading rather than breaking
-// it. Raising prismMaxArrangementSegments itself is out of scope for this PR
-// (MULTIREGION-TASKS.md Task 3's own authorisation note); this test only
-// measures what the cap already does.
+// it.
 func TestVerifyGearScaleOverArrangementCapStaysSuspect(t *testing.T) {
-	const n = 9
+	const n = 39
 	segs := gearScaleSegmentCount(n)
-	require.Greater(t, segs, 1024, "premise: case 2's combined segment count crosses the 1024 arrangement cap")
+	require.Greater(t, segs, 4096, "premise: case 2's combined segment count crosses the 4096 arrangement cap")
 
 	doc := decad.New()
 	a, b := interleavedCombBodies(t, doc, n)
