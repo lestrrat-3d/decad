@@ -8,7 +8,7 @@ require (
 	github.com/lestrrat-3d/decad v0.0.0-00010101000000-000000000000
 	github.com/lestrrat-3d/r3 v0.0.0-20260713000132-2e6d6464affc
 	github.com/lestrrat-3d/sketch v0.0.0-20260805014156-faabd98deada
-	github.com/lestrrat-3d/solidlens v0.0.0-20260831001230-67b9c9dbcb0a
+	github.com/lestrrat-3d/solidlens v0.0.0-20260901122545-ab42e298f5b6
 	github.com/lestrrat-3d/units v0.0.0-20260713004850-5816412456f9
 )
 

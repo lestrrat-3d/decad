@@ -94,7 +94,7 @@ table's Design documents section lists every companion design and what it owns.
     NEVER import from production code.
   - `github.com/lestrrat-3d/solidlens` — pure-Go headless raster renderer for
     triangle meshes. Required by the `_gallery` module ALONE, which is where the
-    README hero image is rendered. It is deliberately NOT a dependency of the
+    README images are rendered. It is deliberately NOT a dependency of the
     decad library: nothing under the root module imports it, and it appears in
     neither the root `go.mod` nor its `go.sum`.
 - **Correctness must be observable.** Every capability ships with a test
@@ -248,7 +248,7 @@ one.
 | Path | Responsibility |
 |---|---|
 | `examples/` | Executable Go examples (`Example_decad_…`, `go test`-verified `// Output:` blocks) that double as living documentation. Never `package main`. |
-| `_gallery/` | Own nested module, keeping SolidLens out of the library's dependencies: renders the README hero image to `docs/images/hero.png`. The `_` prefix hides it from every root-module tool. See its `main.go` doc comment. |
+| `_gallery/` | Own nested module, keeping SolidLens out of the library's dependencies: renders every README image under `docs/images`. The `_` prefix hides it from every root-module tool. See its `main.go` doc comment. |
 | `.github/workflows/` | `ci.yml` (lint → test/tidy/govulncheck), `codeql.yml`. |
 
 ## Cross-cutting notes

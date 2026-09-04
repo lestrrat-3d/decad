@@ -1,49 +1,27 @@
-// Command gallery renders decad's README hero image with SolidLens.
+// Command gallery renders decad's README images with SolidLens.
 //
 // It lives in its own module so that SolidLens stays out of the decad library's
-// dependency list. Run it from this directory with `go run .`; the image is
-// written to the repository's docs/images/hero.png.
+// dependency list. Run it from this directory with `go run .`; it writes the
+// hero image and every feature-table thumbnail under the repository's
+// docs/images.
 package main
 
 import (
 	"context"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"runtime"
 
-	"github.com/lestrrat-3d/decad"
-	"github.com/lestrrat-3d/r3"
-	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/solidlens"
-	"github.com/lestrrat-3d/units"
 )
 
-// outputRelPath is where the hero image lives, relative to the repository root.
-const outputRelPath = "docs/images/hero.png"
-
-const letterFilletRadius = 2.0
-
-// outputPath resolves outputRelPath against the repository root rather than the
-// working directory. This module lives at <repo>/_gallery, so the root is the
-// parent of this source file's own directory, and the image lands in the
-// repository no matter where the command was started from.
-func outputPath() (string, error) {
-	_, self, _, ok := runtime.Caller(0)
-	if !ok || !filepath.IsAbs(self) {
-		return "", fmt.Errorf("cannot locate this command's source file; build without -trimpath")
-	}
-	return filepath.Join(filepath.Dir(filepath.Dir(self)), filepath.FromSlash(outputRelPath)), nil
-}
-
-type point struct {
-	x, y float64
-}
-
-type letter struct {
-	color  solidlens.Color
-	shapes [][][]point
+// imageRender is one checked-in image: where it lives in the repository, how
+// large the raster is, and how to build the scene it holds.
+type imageRender struct {
+	rel      string
+	settings solidlens.Settings
+	scene    func(context.Context) (solidlens.Scene, error)
 }
 
 func main() {
@@ -53,40 +31,24 @@ func main() {
 	}
 }
 
+// run renders every image the README references: the hero wordmark first, then
+// one thumbnail per feature-table row.
 func run(ctx context.Context) error {
-	base, err := extrudeLoops(ctx, [][]point{rectangle(-151, -84, 151, 84)}, decad.Symmetric{D: units.Millimeters(3)})
+	renders := append([]imageRender{heroRender()}, featureRenders()...)
+	for _, render := range renders {
+		if err := render.write(ctx); err != nil {
+			return fmt.Errorf("render %s: %w", render.rel, err)
+		}
+	}
+	return nil
+}
+
+func (r imageRender) write(ctx context.Context) error {
+	scene, err := r.scene(ctx)
 	if err != nil {
-		return fmt.Errorf("build backing plate: %w", err)
+		return err
 	}
-	models := []solidlens.Model{{Mesh: base, Material: solidlens.Matte(solidlens.RGB(0.015, 0.06, 0.18))}}
-
-	for _, item := range decadLetters() {
-		for _, shape := range item.shapes {
-			mesh, err := extrudeLetterLoops(ctx, shape, decad.Distance{D: units.Millimeters(14), Dir: decad.Along})
-			if err != nil {
-				return fmt.Errorf("build letter: %w", err)
-			}
-			models = append(models, solidlens.Model{Mesh: mesh, Material: solidlens.Matte(item.color)})
-		}
-	}
-
-	for _, accent := range []struct {
-		x, y, radius float64
-		color        solidlens.Color
-	}{
-		{-126, -70, 4.5, solidlens.RGB(1, 0.58, 0.08)},
-		{126, -70, 4.5, solidlens.RGB(0.1, 0.78, 0.95)},
-	} {
-		mesh, err := extrudeLoops(ctx, [][]point{circle(accent.x, accent.y, accent.radius, 24)}, decad.Distance{
-			D: units.Millimeters(8), Dir: decad.Along,
-		})
-		if err != nil {
-			return fmt.Errorf("build accent: %w", err)
-		}
-		models = append(models, solidlens.Model{Mesh: mesh, Material: solidlens.Matte(accent.color)})
-	}
-
-	out, err := outputPath()
+	out, err := outputPath(r.rel)
 	if err != nil {
 		return err
 	}
@@ -97,34 +59,7 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create output: %w", err)
 	}
-	scene := solidlens.Scene{
-		Camera: solidlens.Camera{
-			Position: solidlens.Vec{X: 18, Y: -360, Z: 68},
-			Target:   solidlens.Vec{Z: 4},
-			Up:       solidlens.Vec{Z: 1},
-			FOV:      30,
-		},
-		Models: models,
-		DirectionalLights: []solidlens.DirectionalLight{
-			{
-				Direction: solidlens.Vec{X: -0.7, Y: 0.35, Z: -1},
-				Color:     solidlens.RGB(1, 1, 1),
-				Intensity: 1.25,
-			},
-			{
-				Direction: solidlens.Vec{X: 0.6, Y: -0.2, Z: -0.6},
-				Color:     solidlens.RGB(0.25, 0.55, 1),
-				Intensity: 0.4,
-			},
-		},
-		PointLights: []solidlens.PointLight{{
-			Position:  solidlens.Vec{X: -90, Y: -135, Z: 160},
-			Color:     solidlens.RGB(0.45, 0.75, 1),
-			Intensity: 1800,
-		}},
-		Background: solidlens.RGB(0.82, 0.86, 0.93),
-	}
-	err = solidlens.RenderPNG(ctx, file, scene, solidlens.Settings{Width: 1440, Height: 810})
+	err = solidlens.RenderPNG(ctx, file, scene, r.settings)
 	closeErr := file.Close()
 	if err != nil {
 		return fmt.Errorf("render: %w", err)
@@ -135,144 +70,14 @@ func run(ctx context.Context) error {
 	return nil
 }
 
-func decadLetters() []letter {
-	const (
-		width  = 45.0
-		height = 120.0
-		stroke = 9.0
-		gap    = 9.0
-	)
-	x := -130.0
-	placeLoops := func(loops [][]point) [][]point {
-		placed := make([][]point, len(loops))
-		for i, loop := range loops {
-			placed[i] = make([]point, len(loop))
-			for j, p := range loop {
-				placed[i][j] = point{x: p.x + x, y: p.y}
-			}
-		}
-		return placed
+// outputPath resolves rel against the repository root rather than the working
+// directory. This module lives at <repo>/_gallery, so the root is the parent of
+// this source file's own directory, and every image lands in the repository no
+// matter where the command was started from.
+func outputPath(rel string) (string, error) {
+	_, self, _, ok := runtime.Caller(0)
+	if !ok || !filepath.IsAbs(self) {
+		return "", fmt.Errorf("cannot locate this command's source file; build without -trimpath")
 	}
-	place := func(loops ...[]point) [][]point {
-		placed := placeLoops(loops)
-		x += width + gap
-		return placed
-	}
-	placeShapes := func(shapes ...[][]point) [][][]point {
-		placed := make([][][]point, len(shapes))
-		for i, shape := range shapes {
-			placed[i] = placeLoops(shape)
-		}
-		x += width + gap
-		return placed
-	}
-
-	dOuter := []point{
-		{0, -height / 2}, {width - stroke, -height / 2}, {width, -height/2 + stroke},
-		{width, height/2 - stroke}, {width - stroke, height / 2}, {0, height / 2},
-	}
-	dInner := []point{
-		{stroke, -height/2 + stroke}, {stroke, height/2 - stroke},
-		{width - 2*stroke, height/2 - stroke}, {width - 2*stroke, -height/2 + stroke},
-	}
-	e := []point{
-		{0, -height / 2}, {width, -height / 2}, {width, -height/2 + stroke},
-		{stroke, -height/2 + stroke}, {stroke, -stroke / 2}, {width - stroke, -stroke / 2},
-		{width - stroke, stroke / 2}, {stroke, stroke / 2}, {stroke, height/2 - stroke},
-		{width, height/2 - stroke}, {width, height / 2}, {0, height / 2},
-	}
-	c := []point{
-		{width, height / 2}, {stroke, height / 2}, {0, height/2 - stroke},
-		{0, -height/2 + stroke}, {stroke, -height / 2}, {width, -height / 2},
-		{width, -height/2 + stroke}, {2 * stroke, -height/2 + stroke},
-		{stroke, -height/2 + 2*stroke}, {stroke, height/2 - 2*stroke},
-		{2 * stroke, height/2 - stroke}, {width, height/2 - stroke},
-	}
-	aLeft := []point{{0, -height / 2}, {stroke, -height / 2}, {width/2 + stroke/2, height / 2}, {width/2 - stroke/2, height / 2}}
-	aRight := []point{{width - stroke, -height / 2}, {width, -height / 2}, {width/2 + stroke/2, height / 2}, {width/2 - stroke/2, height / 2}}
-	aBar := []point{{stroke, -stroke / 2}, {width - stroke, -stroke / 2}, {width - stroke, stroke / 2}, {stroke, stroke / 2}}
-
-	return []letter{
-		{color: solidlens.RGB(0.05, 0.85, 0.96), shapes: [][][]point{place(dOuter, dInner)}},
-		{color: solidlens.RGB(0.18, 0.47, 1), shapes: [][][]point{place(e)}},
-		{color: solidlens.RGB(0.58, 0.24, 1), shapes: [][][]point{place(c)}},
-		{color: solidlens.RGB(1, 0.25, 0.2), shapes: placeShapes([][]point{aLeft}, [][]point{aRight}, [][]point{aBar})},
-		{color: solidlens.RGB(1, 0.68, 0.08), shapes: [][][]point{place(dOuter, dInner)}},
-	}
-}
-
-func extrudeLoops(ctx context.Context, loops [][]point, extent decad.Extent) (*decad.Mesh, error) {
-	return extrudeLoopsWithFillet(ctx, loops, extent, 0)
-}
-
-func extrudeLetterLoops(ctx context.Context, loops [][]point, extent decad.Extent) (*decad.Mesh, error) {
-	return extrudeLoopsWithFillet(ctx, loops, extent, letterFilletRadius)
-}
-
-func extrudeLoopsWithFillet(ctx context.Context, loops [][]point, extent decad.Extent, filletRadius float64) (*decad.Mesh, error) {
-	w := sketch.NewWorld()
-	// XZ makes the wordmark face the camera; extrusion then gives each stroke
-	// depth along Y without relying on a steep viewing angle.
-	s, err := w.CreateSketch(w.XZ())
-	if err != nil {
-		return nil, err
-	}
-	for loopIndex, loop := range loops {
-		if len(loop) < 3 {
-			return nil, fmt.Errorf("loop %d has fewer than three points", loopIndex)
-		}
-		points := make([]*sketch.Point, len(loop))
-		for i, p := range loop {
-			points[i] = s.CreatePoint(p.x, p.y)
-		}
-		if loopIndex == 0 {
-			s.Fix(points[0])
-		}
-		for i := range points {
-			s.CreateLine(points[i], points[(i+1)%len(points)])
-		}
-	}
-	if _, err := s.Solve(ctx); err != nil {
-		return nil, err
-	}
-	var profile *sketch.Profile
-	for _, candidate := range s.Profiles() {
-		if len(candidate.Holes)+1 == len(loops) {
-			profile = candidate
-			break
-		}
-	}
-	if profile == nil {
-		return nil, fmt.Errorf("sketch produced no profile for %d loops", len(loops))
-	}
-	// Extrude has no context-aware variant; Solve above is the cancellable phase.
-	body, err := decad.New().Extrude(s, profile, extent) //nolint:contextcheck
-	if err != nil {
-		return nil, err
-	}
-	if filletRadius > 0 {
-		// Round the exposed outside corners while keeping the counters and
-		// interior cut-ins crisp for a legible wordmark.
-		body, err = body.FilletContext(ctx, decad.Edges(
-			decad.ParallelTo(r3.NewVec(0, 1, 0)),
-			decad.Convex(),
-		), units.Millimeters(filletRadius))
-		if err != nil {
-			return nil, fmt.Errorf("fillet extruded loops: %w", err)
-		}
-	}
-	return body.TessellateContext(ctx, units.Millimeters(0.4))
-}
-
-func rectangle(x0, y0, x1, y1 float64) []point {
-	return []point{{x0, y0}, {x1, y0}, {x1, y1}, {x0, y1}}
-}
-
-func circle(cx, cy, radius float64, segments int) []point {
-	points := make([]point, segments)
-	for i := range points {
-		angle := 2 * math.Pi * float64(i) / float64(segments)
-		points[i] = point{cx + radius*math.Cos(angle), cy + radius*math.Sin(angle)}
-	}
-	return points
+	return filepath.Join(filepath.Dir(filepath.Dir(self)), filepath.FromSlash(rel)), nil
 }
