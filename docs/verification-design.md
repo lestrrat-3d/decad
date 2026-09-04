@@ -218,8 +218,11 @@ const (
     // value to name, so — like DiagUndecidedClearance — it names no reading);
     // Observed and Required nil. Pair set. Contributes Suspect.
     DiagUndecidedInterference
-    // DiagUnsupportedPairPayload — one named operand uses a payload the
-    // read-only intersection cannot tessellate. Reading ReadingNone. Suspect.
+    // DiagUnsupportedPairPayload — one named operand could not enter the
+    // read-only intersection: either its mesh carries no occupied-volume
+    // proof, or its own tessellation refused at the chord tolerance the
+    // check derives from the pair. The message names which. Reading
+    // ReadingNone. Suspect.
     DiagUnsupportedPairPayload
     // DiagUnsupportedPairContact — the pair reaches a contact or near-contact
     // the exact boolean policy cannot classify. Reading ReadingNone. Suspect.

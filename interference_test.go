@@ -387,11 +387,11 @@ func TestVerifyUnsupportedOverlapStaysSuspectAndReadOnly(t *testing.T) {
 	require.Empty(t, report.Interferences)
 	requireDocumentUnchanged(t, doc, before)
 
-	// The two revolve balls overlap, but neither can be tessellated, so the
-	// read-only intersect stages the pair (booleanExpectedStaging). Per
-	// verification §1.1 a staged revolve operand is a
-	// DiagUnsupportedPairPayload — a capability limit — not a contact,
-	// in-pipeline, or unresolved-partition diagnostic.
+	// The two revolve balls overlap and both tessellate; at the chord tolerance
+	// this read-only check derives from the pair, the revolve mesh crosses its
+	// facet ceiling, so the pair stages (booleanExpectedStaging). Per
+	// verification §1.1 that is a DiagUnsupportedPairPayload — a capability
+	// limit — not a contact, in-pipeline, or unresolved-partition diagnostic.
 	requireDiagnosticInvariants(t, report)
 	d, ok := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairPayload)
 	require.True(t, ok, `a staged revolve operand emits its cause-specific code`)
@@ -400,7 +400,7 @@ func TestVerifyUnsupportedOverlapStaysSuspectAndReadOnly(t *testing.T) {
 	require.Nil(t, d.Body)
 	require.NotNil(t, d.Pair, `an unsupported pair names its pair`)
 	require.Contains(t, d.Message, `first operand`, `the message names the operand that failed tessellation`)
-	require.Contains(t, d.Message, `use a tessellatable body type`, `the message gives the payload-specific action`)
+	require.Contains(t, d.Message, "tessellation refused at the chord tolerance", "the message names the real cause")
 
 	_, undecided := findDiagnostic(report.Diagnostics, decad.DiagUndecidedPair)
 	require.False(t, undecided, `a staged revolve operand is not an undecided partition`)

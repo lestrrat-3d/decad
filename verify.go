@@ -188,8 +188,10 @@ const (
 	// Suspect. Reading ReadingNone, Observed and Required nil, Pair set.
 	// Contributes Suspect.
 	DiagUndecidedInterference
-	// DiagUnsupportedPairPayload — one named operand uses a payload the read-only
-	// intersection cannot tessellate. Reading ReadingNone. Contributes Suspect.
+	// DiagUnsupportedPairPayload — one named operand could not enter the read-only
+	// intersection: either its mesh carries no occupied-volume proof, or its own
+	// tessellation refused at the chord tolerance the check derives from the pair.
+	// The message names which. Reading ReadingNone. Contributes Suspect.
 	DiagUnsupportedPairPayload
 	// DiagUnsupportedPairContact — the pair reaches a contact or near-contact the
 	// exact boolean policy cannot classify. Reading ReadingNone. Contributes Suspect.
@@ -770,10 +772,16 @@ func undecidedPairDiag(a, b *Body, verdict pairVerdict, outcome interferenceOutc
 	switch {
 	case outcome == interferenceUnsupportedPayloadFirst:
 		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
-			fmt.Sprintf("the first operand (step %d) uses a payload the read-only intersection cannot tessellate; use a tessellatable body type or wait for payload support", a.originStep()))
+			fmt.Sprintf("the first operand (step %d) tessellates, but its tessellation refused at the chord tolerance this read-only check derives from the pair's own size, which no option sets; simplify that operand or reduce the pair's extent, or wait for wider tessellation reach", a.originStep()))
 	case outcome == interferenceUnsupportedPayloadSecond:
 		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
-			fmt.Sprintf("the second operand (step %d) uses a payload the read-only intersection cannot tessellate; use a tessellatable body type or wait for payload support", b.originStep()))
+			fmt.Sprintf("the second operand (step %d) tessellates, but its tessellation refused at the chord tolerance this read-only check derives from the pair's own size, which no option sets; simplify that operand or reduce the pair's extent, or wait for wider tessellation reach", b.originStep()))
+	case outcome == interferenceUnsupportedVolumeProofFirst:
+		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
+			fmt.Sprintf("the first operand (step %d) tessellates, but its mesh carries no proof of the volume it and the body it stands for differ by, so no read-only intersection may compose it; keep this body out of overlapping pairs, or wait for its occupied-volume proof", a.originStep()))
+	case outcome == interferenceUnsupportedVolumeProofSecond:
+		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
+			fmt.Sprintf("the second operand (step %d) tessellates, but its mesh carries no proof of the volume it and the body it stands for differ by, so no read-only intersection may compose it; keep this body out of overlapping pairs, or wait for its occupied-volume proof", b.originStep()))
 	case outcome == interferenceUnsupportedContact:
 		if sharesFacePlane(a, b) {
 			return pairDiagNone(a, b, DiagUnsupportedPairContact,
