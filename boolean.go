@@ -55,8 +55,8 @@ const boolChordFactor = 2e-5
 // ErrBooleanFailed). errors.As(err, &be) reads the Code.
 // Every pair outside that analytic path tessellates both operands at a chord
 // tolerance derived from the pair's diameter, so an operand no boolean may
-// consume — a revolve body, whose mesh carries no proof yet of the volume it
-// and the body it stands for differ by, or a Faceted operand whose own held
+// consume — a cap-loop chamfer body, whose mesh carries no proof yet of the
+// volume it and the body it stands for differ by, or a Faceted operand whose own held
 // Bound is coarser than that pair tolerance (it cannot be re-tessellated finer
 // than its bound) — surfaces a plain ErrUnsupported before any contact is
 // examined: a capability limit, not a BooleanError. A valid operand whose
@@ -131,9 +131,10 @@ const (
 	// is the evaluator's reach, so it too maps to BooleanUnsupportedContact.
 	booleanExpectedUnsupported
 	// booleanExpectedStaging is a capability/staging limit reached BEFORE any
-	// contact is examined: an operand this evaluator cannot tessellate at all (a
-	// revolve body, or a Faceted operand whose held bound is coarser than the pair
-	// tolerance). No contact was ever inspected, so it is NOT a contact refusal —
+	// contact is examined: an operand whose mesh carries no occupied-volume proof
+	// (a cap-loop chamfer body), or a Faceted operand whose held bound is coarser
+	// than the pair tolerance. No contact was ever inspected, so it is NOT a
+	// contact refusal —
 	// it passes through the public boundary as a plain ErrUnsupported, never a
 	// BooleanError.
 	booleanExpectedStaging
@@ -295,8 +296,8 @@ func evaluateAnalyticIntersect(ctx context.Context, a, b *Body) (*Body, bool, er
 // BooleanUnsupportedContact — the model is real and the refusal is the
 // evaluator's contact reach, so the wrapped sentinel is ErrUnsupported, never
 // ErrDegenerate. A capability/staging limit reached BEFORE any contact is
-// examined — an operand no boolean may consume (a revolve body, whose mesh
-// proves no swept volume yet, or a Faceted operand coarser than the pair
+// examined — an operand no boolean may consume (a cap-loop chamfer body, whose
+// mesh proves no swept volume yet, or a Faceted operand coarser than the pair
 // tolerance) — is NOT a contact refusal and passes through unwrapped as a plain
 // ErrUnsupported, not a BooleanError. A
 // coarse-chording tessellation refusal is a retryable ErrDegenerate on a valid
@@ -342,7 +343,7 @@ func evaluateBoolean(ctx context.Context, op OpKind, a, b *Body) (booleanEvaluat
 		return booleanEvaluation{}, err
 	}
 
-	tolMM, dPair, err := pairChordTolerance(a, b)
+	tolMM, dPair, err := pairChordTolerance(ctx, a, b)
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -568,21 +569,18 @@ func sourceIDs(ctx context.Context, m *Mesh, faceID map[*Face]int) ([]int, error
 // requireVolumeProvingPayload refuses an operand whose payload class publishes
 // no occupied-volume proof on its mesh, before that mesh is built.
 //
-// It is operandSymDiff's question asked one step earlier. A revolve mesh serves
-// export and carries symDiffOK false until docs/tessellation-design.md §13's
-// increment T4 proves its symmetric difference, and a cap-loop chamfer mesh
-// does the same until §13's increment T7 gains the occupied-volume proof
-// docs/tessellation-reach-design.md §9 states is still open. Meshing either one
-// for a boolean only to refuse it afterwards buys nothing and costs the whole
-// tessellation and its facet-pair audit — which the evaluator's own internal
-// tolerance makes the most expensive part of the call. Both this and
+// It is operandSymDiff's question asked one step earlier. A cap-loop chamfer
+// mesh serves export and carries symDiffOK false until
+// docs/tessellation-design.md §13's increment T7 gains the occupied-volume
+// proof docs/tessellation-reach-design.md §9 states is still open. Meshing such
+// an operand for a boolean only to refuse it afterwards buys nothing and costs
+// the whole tessellation and its facet-pair audit — which the evaluator's own
+// internal tolerance makes the most expensive part of the call. Both this and
 // operandSymDiff must name the same payload classes, and each proof retires
 // both arms of its own row together.
 func requireVolumeProvingPayload(b *Body, index int) error {
 	var err error
 	switch b.payload.(type) {
-	case revolvePayload:
-		err = fmt.Errorf(`%w: a revolved body's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
 	case capBlendPayload:
 		err = fmt.Errorf(`%w: a cap-loop chamfer's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
 	default:
@@ -1062,7 +1060,7 @@ func pointInTriangle(p r3.Vec, t [3]r3.Vec, n r3.Vec) bool {
 // pair diameter from the operands' own bounds boxes (inflated by their
 // proven bounds). All-planar operands chord nothing regardless, so the
 // tolerance only shapes curved boundaries.
-func pairChordTolerance(a, b *Body) (float64, float64, error) {
+func pairChordTolerance(ctx context.Context, a, b *Body) (float64, float64, error) {
 	boxA, err := a.Bounds()
 	if err != nil {
 		return 0, 0, err
@@ -1099,5 +1097,37 @@ func pairChordTolerance(a, b *Body) (float64, float64, error) {
 	tol := diag * boolChordFactor
 	tol = math.Max(tol, productUpper(2, sectionDisplacementOf(a)))
 	tol = math.Max(tol, productUpper(2, sectionDisplacementOf(b)))
+	// A revolve reserves both of its coordinate stages out of the tolerance
+	// before it chords anything (docs/tessellation-design.md §8), so a
+	// diameter-derived tolerance under that reservation refuses a body whose
+	// own geometry is perfectly ordinary — a small part modelled at a large
+	// coordinate is the case that reaches it. Raise past it for the same reason
+	// a section displacement raises it: the mesh reports the chording it
+	// actually took, and the reserved figure already dominates the bound it
+	// publishes.
+	tol = math.Max(tol, productUpper(2, coordDisplacementOf(ctx, a)))
+	tol = math.Max(tol, productUpper(2, coordDisplacementOf(ctx, b)))
 	return tol, diag, nil
+}
+
+// coordDisplacementOf is the count-INDEPENDENT coordinate reservation an
+// operand's own tessellation spends before it chords anything: for a revolve,
+// docs/tessellation-design.md §8's deltaC and deltaR ceilings composed
+// (resolveRevolve). Every other payload class answers zero, and so does a
+// revolve whose resolution fails — the tessellation that follows refuses it
+// with its own sentinel, and inventing a tolerance here would only hide which
+// one.
+func coordDisplacementOf(ctx context.Context, b *Body) float64 {
+	if b == nil {
+		return 0
+	}
+	rp, ok := b.payload.(revolvePayload)
+	if !ok {
+		return 0
+	}
+	res, err := resolveRevolve(ctx, rp)
+	if err != nil {
+		return 0
+	}
+	return absSumUpper(res.deltaCPrior, res.deltaRPrior)
 }

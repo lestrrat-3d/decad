@@ -88,10 +88,11 @@
 //	  free-form work past the fixed budget (R7)               ErrUnsupported
 //	  WithTaper   nonzero taper angle                         ErrUnsupported
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
-//	Union/Cut/Intersect  prism/loft/faceted, crossings        builds
+//	Union/Cut/Intersect  prism/revolve/loft/faceted,
+//	                     crossings                            builds
 //	  faceted operand coarser than the pair tolerance         ErrUnsupported
-//	  revolve operand (its mesh proves no swept volume yet)   ErrUnsupported
-//	  cap-loop chamfer operand (same missing proof)           ErrUnsupported
+//	  cap-loop chamfer operand (its mesh proves no swept
+//	    volume yet)                                           ErrUnsupported
 //	  curved-surface tangent, facets never meet               ErrUnsupported
 //	  exact coplanar / face-on-face / point contact outside
 //	    the admitted analytic prism reduction                 ErrUnsupported

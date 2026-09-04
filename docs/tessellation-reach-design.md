@@ -39,7 +39,7 @@ meridian generator refuses (T5).
 |---|---|---|
 | `sourceBound(face)` | `faceBound`, one entry per source face | `facesOfMesh` (`boolean.go`), for the hidden-tangency pre-pass |
 | `areaSlack` | yes, the analytic terms plus a per-facet coordinate allowance | boolean area composition |
-| `volSymDiff` + `symDiffOK` | yes; `symDiffOK` true for prism, cup, loft and faceted, and FALSE for revolve until T4 | `operandSymDiff` (`boolean.go`), which refuses a mesh carrying no proof |
+| `volSymDiff` + `symDiffOK` | yes; `symDiffOK` true for prism, cup, loft, revolve and faceted, and FALSE for the cap-loop chamfer | `operandSymDiff` (`boolean.go`), which refuses a mesh carrying no proof |
 | `deltaStore` (tess §5) | charged per vertex into `faceBound`, `areaSlack` and `volSymDiff` | — |
 
 Every restatement below publishes into that record, and no consumer infers a term the mesh did not state. A
@@ -370,9 +370,10 @@ composes both in one expression.
 | §3 ceilings | `revolvePreflightFacets`: facet count, cumulative facet work AND the pair audit's own `F·(F−1)/2`, all with checked unsigned arithmetic before any slice | charging the pair ceiling here rather than at the audit is strictly earlier than §3 asks; it is the binding one, so a revolve mesh carries at most 4000 facets |
 
 R3 refuses a section carrying any circular walk with `ErrUnsupported` ("circular meridian generators are
-T3"). `symDiffOK == false`; the boolean refuses a revolve operand through R0's `operandSymDiff`, and asks the
-same question of the payload class first (`requireVolumeProvingPayload`) so the refusal does not pay for a
-mesh no boolean may consume. R5 retires both arms together.
+T3"); R4 retires that refusal. Its mesh carries `symDiffOK == false`, so the boolean refuses a revolve
+operand through R0's `operandSymDiff` and asks the same question of the payload class first
+(`requireVolumeProvingPayload`) rather than paying for a mesh no boolean may consume; R5 retires both arms
+together, leaving the cap-loop chamfer as the only payload class on that list.
 `export.go`'s two doc comments that name a revolve as un-exportable are narrowed to the circular-generator
 case, and `doc.go`'s support map with them.
 
@@ -394,12 +395,19 @@ case, and `doc.go`'s support map with them.
 
 ### R5 (T4)
 
-- `Mmeridian = sweepAngle * Σ_c |∫_{S_c} ρ dA|`: the circular segment's first moment about the axis in closed
-  form, its `sin`/`cos` through `radSinCosSpan`, summed as absolute values.
-- `Icell` per straight-generator cell: the triple integral tess §11 states, by certified interval subdivision
-  under the shared budget; `Mconstruct`, `Mround` via `sweptVolumeAllow` over `perturbedAreaUpper`.
+`tessellate_revolve_volume.go` owns all four of tess §11's stages; tess §15 records the `Icell` choice and
+its derivation, and is the authority on both.
+
+- `Mmeridian = sweepAngle * Σ_c |∫_{S_c} ρ dA|`: each circular walk's slivers charged their own proven total
+  area (`chordSegmentArea`) times a proven upper bound on `ρ` over them, summed as absolute values.
+- `Icell` per cell: BM's meridian is already a polyline, so tess §11's straight-generator homotopy answers for
+  a sphere and a torus too. The integral separates into an exact rational meridian factor and one angular
+  factor that depends on `dφ` alone, proven ONCE per mesh by certified subdivision (tess §15).
+- `Mconstruct`, `Mround` via `sweptVolumeAllow` over `perturbedAreaUpper` at the composed displacement, which
+  covers every surface on both stages' paths.
 - `symDiffOK = true`; `pairChordTolerance` raises the pair's tolerance above `deltaC + deltaR` of either
-  revolve operand the way it raises it above a section displacement today.
+  revolve operand (`coordDisplacementOf` over `resolveRevolve`) the way it raises it above a section
+  displacement today.
 
 ### Refusal mapping (tess §12)
 
@@ -412,7 +420,7 @@ case, and `doc.go`'s support map with them.
 | meridian simplicity/nesting/clearance | `requireLoopClearance`, `requireWalkClearance` after refinement exhausts |
 | non-adjacent facets intersect; homotopy sign not fixed | `revolveContactAudit` |
 | directed-edge / link / zero area | `requireClosedMesh`, `requireVertexLinks` |
-| revolve in a boolean before R5 | `requireVolumeProvingPayload` before the mesh, `operandSymDiff` (R0) after it |
+| a payload class with no occupied-volume proof in a boolean | `requireVolumeProvingPayload` before the mesh, `operandSymDiff` (R0) after it |
 
 ### Tests
 
@@ -654,10 +662,14 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 
 20. **Files:** new `tessellate_revolve_volume.go`. **What:** `Mmeridian`, `Icell`, `Mconstruct`, `Mround`,
     `volSymDiff_revolve`; `symDiffOK = true`. **Depends on:** 19. **Tests:** R5's integrator and boolean
-    fixtures.
-21. **Files:** `boolean.go`. **What:** `pairChordTolerance` raises above `deltaC + deltaR` for a revolve
-    operand. **Depends on:** 20. **Tests:** a revolve×prism union at a tolerance below `deltaC + deltaR`
-    is raised, not refused.
+    fixtures. Every boolean fixture sweeps a QUARTER or HALF turn: a full turn's angular count makes its
+    facet-pair audit the most expensive thing in the suite, and the geometry it would add is already covered
+    by the export tests.
+21. **Files:** `boolean.go`, `tessellate_revolve.go`. **What:** extract `resolveRevolve` — the
+    count-independent half of `planRevolve` — so `pairChordTolerance` can read `deltaC + deltaR` for a
+    revolve operand without a tolerance to plan against, and raise above it. **Depends on:** 20.
+    **Tests:** a small revolve at a large coordinate is meshed at the raised tolerance and refused at the
+    diameter-derived one.
 22. **Files:** `docs/tessellation-design.md` §11's last paragraph and §12's last row (current state),
     `doc.go`. **Depends on:** 20.
 

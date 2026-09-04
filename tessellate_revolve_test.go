@@ -390,24 +390,6 @@ func TestRevolveTessellateRefusals(t *testing.T) {
 		_, err = body.Tessellate(units.Millimeters(0.05))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
-
-	t.Run("no revolve mesh may be a boolean operand", func(t *testing.T) {
-		s, p := solidSketch(t)
-		doc := decad.New()
-		body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
-		require.NoError(t, err)
-		w := sketch.NewWorld()
-		s2, err := w.CreateSketch(w.XY())
-		require.NoError(t, err)
-		rect := s2.CreateRectangle(2, 2, 6, 6)
-		s2.Fix(rect.A)
-		_, err = s2.Solve(t.Context())
-		require.NoError(t, err)
-		box, err := doc.Extrude(s2, s2.Profiles()[0], decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
-		require.NoError(t, err)
-		_, err = decad.Union(body, box)
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-	})
 }
 
 func TestRevolveTessellateExportIsByteIdentical(t *testing.T) {
