@@ -123,6 +123,12 @@ const (
 	// interferenceUnsupportedPipeline — both operands entered the pipeline, but
 	// later geometry exceeded its supported reach.
 	interferenceUnsupportedPipeline
+	// interferenceUnsupportedVolumeProofFirst — the first operand meshes, but its
+	// mesh carries no occupied-volume proof, so the read-only intersection cannot
+	// compose it.
+	interferenceUnsupportedVolumeProofFirst
+	// interferenceUnsupportedVolumeProofSecond — the same for the second operand.
+	interferenceUnsupportedVolumeProofSecond
 )
 
 // measuredInterference returns the pair's bounded overlap volume. Strict
@@ -223,6 +229,11 @@ func interferenceOutcomeForExpected(expected *booleanExpectedError) interference
 			return interferenceUnsupportedPayloadSecond
 		}
 		return interferenceUnsupportedPayloadFirst
+	case booleanExpectedVolumeProof:
+		if expected.operand == 1 {
+			return interferenceUnsupportedVolumeProofSecond
+		}
+		return interferenceUnsupportedVolumeProofFirst
 	default:
 		return interferenceUndecided
 	}

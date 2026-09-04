@@ -139,6 +139,13 @@ const (
 	// BooleanError.
 	booleanExpectedStaging
 	booleanExpectedCoarseTessellation
+	// booleanExpectedVolumeProof is booleanExpectedStaging's sibling for the one
+	// staging cause that is NOT a tessellation limit: the operand meshes, but its
+	// mesh carries no proof of the volume it and the body it stands for differ by
+	// (docs/tessellation-design.md §11), so no boolean may compose it. It maps to
+	// the same public error as booleanExpectedStaging; it exists so Verify can say
+	// which of the two happened.
+	booleanExpectedVolumeProof
 )
 
 // booleanExpectedError identifies an ordinary geometric non-result for the
@@ -312,7 +319,7 @@ func asBooleanError(op OpKind, inputs []StepRef, err error) error {
 			return newBooleanError(op, inputs, BooleanEmpty, ErrBooleanFailed, err)
 		case booleanExpectedContact, booleanExpectedUnsupported:
 			return newBooleanError(op, inputs, BooleanUnsupportedContact, ErrUnsupported, err)
-		case booleanExpectedStaging, booleanExpectedCoarseTessellation:
+		case booleanExpectedStaging, booleanExpectedVolumeProof, booleanExpectedCoarseTessellation:
 			return err
 		}
 	}
@@ -492,11 +499,11 @@ func evaluateBoolean(ctx context.Context, op OpKind, a, b *Body) (booleanEvaluat
 	}
 	symA, err := operandSymDiff(ma)
 	if err != nil {
-		return booleanEvaluation{}, expectedBooleanForOperand(booleanExpectedStaging, 0, err)
+		return booleanEvaluation{}, expectedBooleanForOperand(booleanExpectedVolumeProof, 0, err)
 	}
 	symB, err := operandSymDiff(mb)
 	if err != nil {
-		return booleanEvaluation{}, expectedBooleanForOperand(booleanExpectedStaging, 1, err)
+		return booleanEvaluation{}, expectedBooleanForOperand(booleanExpectedVolumeProof, 1, err)
 	}
 	// The final rounding's own volume error is what its vertex displacement
 	// sweeps out over the surface it acted on — the stitched surface BEFORE the
@@ -565,7 +572,8 @@ func sourceIDs(ctx context.Context, m *Mesh, faceID map[*Face]int) ([]int, error
 // whose occupied-volume proof has not landed publishes symDiffOK false, and its
 // mesh serves export only: the boolean refuses the operand with ErrUnsupported,
 // a staging refusal reached before any contact is examined, so the caller routes
-// it through booleanExpectedStaging exactly as an untessellatable operand.
+// it through booleanExpectedVolumeProof, which reaches the same public error as
+// an untessellatable operand and a distinct Verify diagnostic message.
 // requireVolumeProvingPayload refuses an operand whose payload class publishes
 // no occupied-volume proof on its mesh, before that mesh is built.
 //
@@ -586,7 +594,7 @@ func requireVolumeProvingPayload(b *Body, index int) error {
 	default:
 		return nil
 	}
-	return expectedBooleanForOperand(booleanExpectedStaging, index, err)
+	return expectedBooleanForOperand(booleanExpectedVolumeProof, index, err)
 }
 
 func operandSymDiff(m *Mesh) (float64, error) {

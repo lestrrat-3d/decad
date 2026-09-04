@@ -335,6 +335,10 @@ func TestCapBlendOverlapReadsSuspect(t *testing.T) {
 	require.Equal(t, decad.Suspect, report.Status)
 	require.True(t, hasDiagnostic(report, decad.DiagUnsupportedPairPayload),
 		`an overlapping cap-blend pair is undecided on its payload, never measured`)
+	d, ok := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairPayload)
+	require.True(t, ok)
+	require.Contains(t, d.Message, `no proof of the volume`,
+		`a cap-loop chamfer operand names its own cause, never a tessellation limit it does not have`)
 	require.Empty(t, report.Interferences,
 		`no overlap volume may be published for a pair the boolean refuses`)
 }
