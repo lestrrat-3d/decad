@@ -201,6 +201,21 @@ func bridgeHole(ctx context.Context, pts []Point2, merged, hole []int) ([]int, e
 		}
 	}
 
+	// The chosen bridge VERTEX is proven visible from M, but a vertex two
+	// earlier bridges already landed on appears at several positions in merged,
+	// and only one of them can take this bridge without crossing the channels
+	// already cut there. Pick that position by the wedge each occurrence owns.
+	occ, ok := bridgeOccurrence(pts, merged, bridge, m)
+	if !ok {
+		// No occurrence's interior wedge admits the bridge: the anchor is already
+		// so densely bridged that this hole's channel has nowhere consistent to
+		// go. That is a property of where the chords fell, the same class
+		// requireLoopClearance refuses — an expected undecided outcome, never a
+		// wrong mesh.
+		return nil, &tessellationExpectedError{err: fmt.Errorf(`%w: no occurrence of a hole's bridge anchor admits the bridge`, ErrDegenerate)}
+	}
+	bridge = occ
+
 	// Splice: …, bridge, M, the hole walked once around, M, bridge, … — the
 	// bridge edge appears twice, once in each direction, keeping the merged
 	// polygon weakly simple and counter-clockwise.
@@ -319,4 +334,59 @@ func earBlocked(ctx context.Context, pts []Point2, idx []int, i int) (bool, erro
 		}
 	}
 	return false, nil
+}
+
+// wedgeContains reports whether the direction from p to m lies strictly inside
+// the interior wedge the counter-clockwise corner (q, p, r) spans. q is the
+// corner's predecessor and r its successor, so the wedge runs counter-clockwise
+// from the direction of r round to the direction of q; a corner turning left
+// spans less than half a turn and a corner turning right spans more, which is
+// why the two branches differ.
+func wedgeContains(q, p, r, m Point2) bool {
+	ax, ay := q.U-p.U, q.V-p.V
+	bx, by := r.U-p.U, r.V-p.V
+	dx, dy := m.U-p.U, m.V-p.V
+	crossBA := bx*ay - by*ax
+	crossBD := bx*dy - by*dx
+	crossDA := dx*ay - dy*ax
+	if crossBA > 0 {
+		return crossBD > 0 && crossDA > 0
+	}
+	return crossBD > 0 || crossDA > 0
+}
+
+// bridgeOccurrence picks WHICH occurrence of the chosen bridge vertex the hole
+// splices into. A vertex two earlier bridges already landed on appears several
+// times in merged, each occurrence owning its own share of the interior
+// directions at that point; those shares are disjoint and cover the interior
+// between them, so the occurrence whose wedge holds the direction to m is the
+// only one that keeps the merged polygon from crossing itself there. Splicing
+// at any other occurrence leaves two bridge channels interleaved at the shared
+// point — a boundary earClip then, correctly, cannot reduce.
+//
+// A vertex that appears once is left exactly as the caller chose it: there is no
+// second occurrence to prefer, so this makes no judgement about it and cannot
+// refuse a bridge the construction already proved visible.
+func bridgeOccurrence(pts []Point2, merged []int, bridge int, m Point2) (int, bool) {
+	n := len(merged)
+	v := merged[bridge]
+	occurrences := 0
+	for k := range n {
+		if merged[k] == v {
+			occurrences++
+		}
+	}
+	if occurrences < 2 {
+		return bridge, true
+	}
+	for k := range n {
+		if merged[k] != v {
+			continue
+		}
+		q, p, r := pts[merged[(k-1+n)%n]], pts[merged[k]], pts[merged[(k+1)%n]]
+		if wedgeContains(q, p, r, m) {
+			return k, true
+		}
+	}
+	return 0, false
 }

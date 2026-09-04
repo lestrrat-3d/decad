@@ -106,3 +106,32 @@ func TestTriangulate2DBridgeCollinear(t *testing.T) {
 	boundary(outer)
 	boundary(hole)
 }
+
+// TestTriangulate2DHolesSharingOneBridgeAnchor is the shared-anchor case the
+// property generator cannot draw: an outer rectangle whose right edge carries NO
+// interior samples, and four holes in two v-bands. Every hole's +u visibility ray
+// reaches that one right edge, so two bridges land on the same outer corner, and
+// the splice must put each one in that corner's own angular order — otherwise the
+// merged polygon crosses itself there and ear clipping stalls.
+func TestTriangulate2DHolesSharingOneBridgeAnchor(t *testing.T) {
+	var pts []Point2
+	add := func(u, v float64) int { pts = append(pts, Point2{U: u, V: v}); return len(pts) - 1 }
+
+	outer := []int{add(0, 0), add(60, 0), add(60, 40), add(0, 40)}
+	// Each hole is walked clockwise, starting at its own maximum-u corner.
+	sq := func(u0, v0, u1, v1 float64) []int {
+		return []int{add(u1, v1), add(u1, v0), add(u0, v0), add(u0, v1)}
+	}
+	holes := [][]int{
+		sq(11, 9, 19, 15),
+		sq(41, 9, 49, 15),
+		sq(11, 25, 19, 31),
+		sq(41, 25, 49, 31),
+	}
+
+	require.Positive(t, loopSignedArea2(pts, outer))
+	for i, h := range holes {
+		require.Negative(t, loopSignedArea2(pts, h), `hole %d is clockwise`, i)
+	}
+	triAssert(t, pts, outer, holes)
+}

@@ -427,6 +427,12 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 	// length reading, charged over the sweep height — evalPrism's own composition
 	// (2·regionArea + perimeter·height), one dimension at a time. Every such term
 	// is zero for a payload a caller draws.
+	// The walls and caps close by construction; this proves the assembled mesh
+	// is watertight and refuses a cracked one rather than return it — the same
+	// safety net the cup path already carries (core §11, never a wrong mesh).
+	if err := requireClosedMesh(&mesh); err != nil {
+		return nil, err
+	}
 	if err := composeFaceBounds(&mesh, faceTrim, faceAxial, vertexStore, pp.sectionDelta); err != nil {
 		return nil, err
 	}
@@ -1175,7 +1181,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64) (
 
 // requireClosedMesh proves the mesh is a closed 2-manifold — every directed
 // edge is matched by its reverse — refusing a mesh the cap triangulator could
-// not close into a watertight band.
+// not close.
 func requireClosedMesh(m *Mesh) error {
 	directed := make(map[[2]int]int, 3*len(m.triangles))
 	for _, tri := range m.triangles {
@@ -1185,7 +1191,7 @@ func requireClosedMesh(m *Mesh) error {
 	}
 	for e := range directed {
 		if directed[e] != 1 || directed[[2]int{e[1], e[0]}] != 1 {
-			return fmt.Errorf(`%w: the chorded cup rim could not be triangulated into a watertight band`, ErrDegenerate)
+			return fmt.Errorf(`%w: the chorded boundary could not be triangulated into a watertight mesh`, ErrDegenerate)
 		}
 	}
 	return nil

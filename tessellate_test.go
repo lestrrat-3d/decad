@@ -650,3 +650,40 @@ func TestTessellateUnreservedAxialDisplacementCanExceedTolerance(t *testing.T) {
 		require.Equal(t, mesh.Bound().Mag(), wide.Bound().Mag())
 	})
 }
+
+// TestTessellateFourHoleBoltPatternPlate is the public-path pin for the shared
+// bridge anchor: a plate whose four circular holes sit in two rows, so two holes
+// bridge into the same outer corner. Every hole's chording is fine at every
+// tolerance, so a refusal here can only come from the bridge splice.
+func TestTessellateFourHoleBoltPatternPlate(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 60, 40)
+	s.Fix(rect.A)
+	for _, c := range [][2]float64{{15, 12}, {45, 12}, {15, 28}, {45, 28}} {
+		p := s.CreatePoint(c[0], c[1])
+		s.Fix(p)
+		s.CreateCircle(p, 4)
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Outer) == 4 && len(p.Holes) == 4 {
+			prof = p
+		}
+	}
+	require.NotNil(t, prof, `the plate section carries four holes`)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	require.NoError(t, err)
+
+	for _, tol := range []float64{1, 0.3, 0.05} {
+		mesh, err := body.Tessellate(units.Millimeters(tol))
+		require.NoErrorf(t, err, `a four-hole plate meshes at tolerance %v`, tol)
+		requireWatertight(t, mesh)
+	}
+}
