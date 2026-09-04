@@ -15,15 +15,14 @@ import (
 // assembles the mesh — the meridian samples, the one global angular sequence,
 // the rings, the cylinder/cone/plane/sphere/torus cells, the poles and apexes,
 // the partial caps and the full-turn cycles — while
-// tessellate_revolve_proof.go proves it and tessellate_revolve_arc.go owns
-// everything a CIRCULAR meridian generator needs that a straight one does not.
+// tessellate_revolve_proof.go proves it, tessellate_revolve_arc.go owns
+// everything a CIRCULAR meridian generator needs that a straight one does not,
+// and tessellate_revolve_volume.go proves §11's occupied-volume bound the mesh
+// boolean reads.
 //
 // A free-form (Tier A NURBS) revolve generator is still refused, by
 // revolveLoopWalks' own requireAnalyticWalk: those cells are §13's increment
-// T5. The occupied-volume proof (§11) is increment T4, so the mesh this file
-// returns serves EXPORT and carries symDiffOK false — the mesh boolean refuses
-// a revolve operand through operandSymDiff, which is the one gate that decides
-// it.
+// T5.
 //
 // Three structural facts shape everything below, and all three are
 // docs/tessellation-design.md §8's and §9's:
@@ -216,28 +215,33 @@ func (p *revolvePlan) refine(r revolveRefine) error {
 	return nil
 }
 
-// planRevolve resolves the payload once and spends docs/tessellation-design.md
-// §8's tolerance split in its stated order: both coordinate stages are reserved
-// against count-independent ceilings, the meridian takes half of what is left
-// and chords every circular walk, and the angular sequence takes the remainder.
-func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64) (*revolvePlan, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	byRole := map[string]*Face{}
-	for _, f := range b.Faces() {
-		for _, o := range f.Origins() {
-			byRole[o.Role] = f
-		}
-	}
-	faceOf := func(role string) (*Face, error) {
-		f, ok := byRole[role]
-		if !ok {
-			return nil, fmt.Errorf(`%w: the body carries no face for role %q`, ErrDegenerate, role)
-		}
-		return f, nil
-	}
+// revolveResolution is one revolve payload's COUNT-INDEPENDENT resolution: the
+// walks the body was built from, the coordinate envelope they span, and the two
+// a-priori coordinate ceilings docs/tessellation-design.md §8 reserves out of
+// the tolerance BEFORE any chord count exists.
+//
+// It is named apart from planRevolve because a second caller needs its last two
+// fields without a tolerance to plan against: pairChordTolerance (boolean.go)
+// must not hand a revolve operand a tolerance its own coordinate stages already
+// spend, exactly as it must not hand a prism one under its section displacement
+// (docs/tessellation-reach-design.md §6, R5).
+type revolveResolution struct {
+	basis       revolveBasis
+	ideal       revolveBasis3Iv
+	loops       []LoopRecord
+	resolved    []revolveWalks
+	junctions   [][]revMeridian
+	rhoMax      float64
+	coordMax    float64
+	samplePrior float64
+	deltaCPrior float64
+	deltaRPrior float64
+}
 
+// resolveRevolve reads the payload's loops through the SAME resolution the
+// builder used (revolveLoopWalks), then measures the count-independent
+// coordinate ceilings §8 spends before the split.
+func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveResolution, error) {
 	ideal, ok := revolveIdealBasis(rp)
 	if !ok {
 		return nil, fmt.Errorf(`%w: this revolve's axis basis holds a coordinate that cannot be enclosed, so the mesh can state no construction bound`, ErrUnsupported)
@@ -285,6 +289,42 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64)
 	}
 	deltaCPrior := revolveConstructionPrior(basis, samplePrior, rhoMax, coordMax)
 	deltaRPrior := rigidRoundAllow(absSumUpper(coordMax, deltaCPrior), vecMaxAbs(rp.xform.Translation()))
+	return &revolveResolution{
+		basis: basis, ideal: ideal, loops: loops, resolved: resolved, junctions: junctions,
+		rhoMax: rhoMax, coordMax: coordMax, samplePrior: samplePrior,
+		deltaCPrior: deltaCPrior, deltaRPrior: deltaRPrior,
+	}, nil
+}
+
+// planRevolve resolves the payload once and spends docs/tessellation-design.md
+// §8's tolerance split in its stated order: both coordinate stages are reserved
+// against count-independent ceilings, the meridian takes half of what is left
+// and chords every circular walk, and the angular sequence takes the remainder.
+func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64) (*revolvePlan, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	byRole := map[string]*Face{}
+	for _, f := range b.Faces() {
+		for _, o := range f.Origins() {
+			byRole[o.Role] = f
+		}
+	}
+	faceOf := func(role string) (*Face, error) {
+		f, ok := byRole[role]
+		if !ok {
+			return nil, fmt.Errorf(`%w: the body carries no face for role %q`, ErrDegenerate, role)
+		}
+		return f, nil
+	}
+
+	res, err := resolveRevolve(ctx, rp)
+	if err != nil {
+		return nil, err
+	}
+	ideal, loops, resolved := res.ideal, res.loops, res.resolved
+	basis, rhoMax, coordMax := res.basis, res.rhoMax, res.coordMax
+	deltaCPrior, deltaRPrior := res.deltaCPrior, res.deltaRPrior
 	available, err := revolveBudget(chord, deltaCPrior, deltaRPrior)
 	if err != nil {
 		return nil, err
@@ -327,10 +367,10 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64)
 
 	return &revolvePlan{
 		rp: rp, basis: basis, ideal: ideal, loops: loops, resolved: resolved,
-		junctions: junctions, faceOf: faceOf, work: &revolveWork{},
+		junctions: res.junctions, faceOf: faceOf, work: &revolveWork{},
 		counts: counts, sags: sags, nPhi: nPhi,
 		deltaM: deltaM, deltaPhi: deltaPhi,
-		deltaCPrior: deltaCPrior, deltaRPrior: deltaRPrior, samplePrior: samplePrior,
+		deltaCPrior: deltaCPrior, deltaRPrior: deltaRPrior, samplePrior: res.samplePrior,
 		rhoMax: rhoMax, coordMax: coordMax, sweep: sweep, chord: chord,
 	}, nil
 }
@@ -479,8 +519,16 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// Walls, cell by cell. Both rings off the axis give a planar quad on the
 	// fixed diagonal; exactly one on the axis gives a fan; both on the axis is
 	// a wall only an axis line may erase (docs/tessellation-design.md §9).
+	// docs/tessellation-design.md §11's angular homotopy factor, proven ONCE:
+	// rotating a cell about the axis is an isometry, so the same reading
+	// answers for every cell and every angular interval of it.
+	angularHomotopy, err := revolveAngularHomotopyFactor(angular.step)
+	if err != nil {
+		return nil, err
+	}
 	faceCells := map[*Face]revFaceExtent{}
 	cellSlack := 0.0
+	cellVolume := new(big.Rat)
 	for li := range loopMesh {
 		lm := loopMesh[li]
 		n := len(lm.samples)
@@ -510,8 +558,12 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 				return nil, err
 			}
 			cellSlack = absSumUpper(cellSlack, productUpper(float64(p.nPhi), slack))
+			cellVolume.Add(cellVolume, revolveCellSweptVolume(lo, hi, angularHomotopy))
 		}
 	}
+	// Σ_cells Icell: one meridian cell's reading answers for each of the nPhi
+	// angular intervals it spans.
+	cellVolume.Mul(cellVolume, new(big.Rat).SetInt64(int64(p.nPhi)))
 
 	// Partial caps: one shared triangulation of the meridian region in the
 	// (z, ρ) plane, mapped onto the wall vertices at φ0 and φ1. Pole vertices
@@ -556,7 +608,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		return nil, fmt.Errorf(`%w: this revolve's assembled cells do not enclose a positive volume`, ErrUnsupported)
 	}
 
-	if err := publishRevolveProof(mesh, faceCells, p, deltaC, deltaR, cellSlack); err != nil {
+	if err := publishRevolveProof(mesh, faceCells, p, deltaC, deltaR, cellSlack, cellVolume); err != nil {
 		return nil, err
 	}
 	return mesh, nil
@@ -1098,17 +1150,16 @@ var errRevolveCellSlack = fmt.Errorf(`%w: a revolve cell states no enclosure of 
 
 // publishRevolveProof writes docs/tessellation-design.md §2's proof record for
 // the assembled mesh: §10.1's per-face two-sided displacement, §10.2's area
-// slack, and the occupied-volume proof this increment does NOT have.
+// slack, and §11's occupied-volume bound.
 //
 // A wall face carries its own meridian and angular displacement, each computed
 // at the largest figure its own cells reach rather than at the mesh's, plus
 // both coordinate stages; a partial cap carries the mesh's meridian
 // displacement and the coordinate stages, since a cap's own trim is exact
-// wherever the meridian is straight. The occupied-volume proof is §13's
-// increment T4, so symDiffOK stays false and the mesh boolean refuses this
-// operand at operandSymDiff rather than substituting bound × area, which §11
-// forbids.
-func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolvePlan, deltaC, deltaR, cellSlack float64) error {
+// wherever the meridian is straight. volSymDiff composes §11's four stages
+// (tessellate_revolve_volume.go) rather than bound × held area, which §11
+// forbids outright, and only that composition sets symDiffOK.
+func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolvePlan, deltaC, deltaR, cellSlack float64, cellVolume *big.Rat) error {
 	coord := absSumUpper(deltaC, deltaR)
 	if upRound(absSumUpper(p.deltaM, p.deltaPhi, coord)) > p.chord {
 		// The chording component must stay inside the requested tolerance, and
@@ -1139,7 +1190,12 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 		return fmt.Errorf(`%w: this revolve mesh states no finite area slack`, ErrUnsupported)
 	}
 	m.areaSlack = slack
-	m.symDiffOK = false
+	sym, err := revolveSymDiff(m, p, cellVolume, deltaC, deltaR)
+	if err != nil {
+		return err
+	}
+	m.volSymDiff = sym
+	m.symDiffOK = true
 	return nil
 }
 

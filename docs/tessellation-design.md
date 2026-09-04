@@ -823,9 +823,10 @@ volSymDiff_revolve = upRound(
     Mmeridian + sum_cells Icell + Mconstruct + Mround + arithmeticSlack)
 ```
 
-Until every cell has this finite proof, revolve `Tessellate` may serve export,
-but the mesh boolean MUST reject the operand with `ErrUnsupported`. It MUST NOT
-fall back to `Mesh.Bound * held area`.
+Every cell carries this finite proof, so a revolve mesh is a boolean operand.
+A payload class whose own occupied-volume proof has not landed may still serve
+export, but the mesh boolean MUST reject that operand with `ErrUnsupported`. It
+MUST NOT fall back to `Mesh.Bound * held area`, for any payload class.
 
 Boolean composition then stays evaluator §9's:
 
@@ -902,7 +903,7 @@ Refuse before returning any partial mesh:
 | non-adjacent facets intersect after refinement | `ErrUnsupported` |
 | coordinate construction or placement rounding cannot prove positive facets and unchanged contact/component topology over its affine homotopy | `ErrUnsupported` |
 | directed-edge audit fails, a vertex link is not one connected cycle, or a triangle has zero area | `ErrUnsupported`; a missing/conflicting source role is `ErrDegenerate` because the body topology contradicts its payload |
-| revolve mesh has no finite construction/placement-homotopy allowance when used by a boolean | boolean call returns `ErrUnsupported`; export remains available when §§8–10 pass |
+| a mesh has no finite construction/placement-homotopy allowance when used by a boolean | boolean call returns `ErrUnsupported`; export remains available when the payload's own boundary proofs pass |
 
 NEVER snap, weld, drop a facet, round a near-axis ring onto the axis, or perturb a
 sample to make an analytic mesh close. Refine or refuse.
@@ -912,18 +913,18 @@ sample to make an analytic mesh close. Refine or refuse.
 | Increment | Lands | Stays staged |
 |---|---|---|
 | **T1** | common proof record + audits; prism/cup/faceted paths expressed by §§2–7 without changing their public API | revolve |
-| **T2** | revolve line generators: cylinder/cone/plane cells, smallest-count correction, global angular sequence, partial caps, full-turn cycles, poles/apexes, axis-incidence + vertex-link manifold audits, meridian nesting/homotopy audit, construction/placement rounding proofs, two-sided bound, cut-stable area slack, STL/OBJ | circular generators; revolve booleans |
-| **T3** | circular meridian generators: sphere/torus cells, axis-to-axis minimum, circular meridian nesting/homotopy audit, non-adjacent-intersection refinement, cut-stable circular-cell area proof | revolve booleans |
+| **T2** | revolve line generators: cylinder/cone/plane cells, smallest-count correction, global angular sequence, partial caps, full-turn cycles, poles/apexes, axis-incidence + vertex-link manifold audits, meridian nesting/homotopy audit, construction/placement rounding proofs, two-sided bound, cut-stable area slack, STL/OBJ | circular generators; the occupied-volume proof |
+| **T3** | circular meridian generators: sphere/torus cells, axis-to-axis minimum, circular meridian nesting/homotopy audit, non-adjacent-intersection refinement, cut-stable circular-cell area proof | the occupied-volume proof |
 | **T4** | meridian first-moment allowance + certified per-cell angular homotopy integral; finite `volSymDiff`; revolve admitted to booleans | density improvements |
 | **T5** | deterministic local meridian refinement and global angular density improvements that preserve every earlier proof | free-form/NURBS REVOLVE generators. An extruded free-form prism's own chording is a DIFFERENT increment, riding the existing prism tessellation path (`docs/spline-design.md` §10 P5, Table C) rather than this row |
 | **T6** | `loftPayload` exact restatement: source-face-preserving wall/cap triangle copy, a proof record carrying the payload's own facet departure `absSumUpper(matchedDelta, maxTwistOffsetUpper)` (zero only when both published terms are zero under loft §5.2's conditions), and mesh-boolean admission | loft surveys and analytic pair clearance |
 | **T7** | `capBlendPayload` export-only tessellation: `docs/tessellation-reach-design.md` §7 owns its cells, proof-record row and refusals | cap-blend mesh-boolean admission, until that document's occupied-volume proof lands |
 
-Each increment ships its computed geometry tests with it. T2/T3 may export a
-revolve because §§8–10 prove the mesh itself; they do not enter the boolean
-until T4 proves occupied-volume error. `docs/tessellation-reach-design.md`
-owns the implementation plan and order for T2–T4, T6, T7 and the P5 chording,
-and the completion of §2's proof record on `Mesh` they all publish into.
+Each increment ships its computed geometry tests with it. §§8–10 prove the
+revolve mesh itself, which is what T2/T3 export; T4's occupied-volume proof is
+what lets it enter the boolean. `docs/tessellation-reach-design.md` owns the
+implementation plan and order for T2–T4, T6, T7 and the P5 chording, and the
+completion of §2's proof record on `Mesh` they all publish into.
 
 ## 14. Test obligations
 
@@ -1093,3 +1094,43 @@ length from the held samples. Its departure from the exact axis image of the
 recorded curve is a coordinate-construction displacement bounded by `deltaC`;
 the `rho` enclosure is widened by it, and §10.2's per-triangle coordinate-stage
 allowance charges it again.
+
+**T4's `Icell` is certified interval subdivision, over one shared factor.** The
+triple integral separates exactly before any budget is spent, which is what
+makes the choice cheap. In the axis basis, with `e(phi)` the unit radial
+direction, `A(u) = e(phi0 + u*dphi)` the rotated point and `C(u)` the chord
+point between `e(phi0)` and `e(phi1)`, `dH/dlambda` and `dH/du` both lie in the
+`(e0, e1)` plane while `dH/dt = z'*w + rho'*E`, so the `rho'` term of the cross
+product points along `w` and the `dH/dlambda` dot kills it. What survives is
+
+```text
+dH/dlambda . (dH/dt x dH/du) = z' * rho(t)^2 * (Eu ^ (C - A))
+```
+
+with `^` the in-plane scalar cross product. `z` and `rho` are affine along the
+meridian chord, so the `t` direction integrates in closed form over the
+rationals as `abs(z1 - z0) * (rho0^2 + rho0*rho1 + rho1^2)/3`, and the remaining
+factor depends on `dphi` ALONE. A rotation about the axis is an isometry, so one
+reading of that factor answers for every cell of the mesh and for every angular
+interval of each of them — it is proven ONCE per mesh rather than once per cell,
+and a deeper cut costs nothing per facet.
+
+Inside that factor the `lambda` direction is closed form and exact: the
+integrand is a convex combination `(1-lambda)*P(u) + lambda*Q(u)`, so the
+triangle inequality gives `(abs(P) + abs(Q))/2` after integrating `lambda` out.
+The `u` direction has no closed form — `P` and `Q` are sinusoids against
+constants, whose zeros are arcsines — so it takes the same certified
+subdivision T3 does, with the same node-plus-second-order-allowance shape:
+every node encloses `P` and `Q` through the certified radian sine enclosure,
+which never compares against pi, and one piece is charged the larger of its two
+nodes' magnitudes plus a proven `max(abs(f''))*h^2/8` term. Reading the NODES
+rather than enclosing a whole piece is not an optimisation here but a
+correctness requirement: `P` is of order `dphi^3` while a piece-wide enclosure
+widens by the piece's own width, of order `dphi/N`, so a whole-piece reading
+stops converging.
+
+Because the absolute value is taken inside every piece, nothing cancels and the
+sum is an upper bound at any depth. `Mmeridian` is closed form beside it: the
+sliver between each meridian arc and its chord is charged its own proven total
+area times a proven upper bound on `rho` over it, and `chordSegmentArea` already
+states the first without a trig call.

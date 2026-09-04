@@ -132,9 +132,9 @@ var ErrResourceLimit = errors.New("decad: resource limit exceeded")
 // docs/evaluator-design.md §2. A public Union, Cut or Intersect wraps a valid
 // but unclassifiable contact or analytic prism-arrangement refusal in a
 // [BooleanError] carrying [BooleanUnsupportedContact], but an operand no
-// boolean may consume (a revolve body, whose mesh carries no proof yet of the
-// volume it and the body it stands for differ by, or a Faceted operand coarser
-// than the pair tolerance) is a capability limit reached before any contact —
+// boolean may consume (a cap-loop chamfer body, whose mesh carries no proof yet
+// of the volume it and the body it stands for differ by, or a Faceted operand
+// coarser than the pair tolerance) is a capability limit reached before any contact —
 // it passes through as a plain ErrUnsupported, not a [BooleanError].
 // errors.Is(err, ErrUnsupported) branches on both.
 var ErrUnsupported = errors.New("decad: not supported by the current evaluator")
@@ -215,7 +215,8 @@ const (
 // [ErrUnsupported], are [BooleanUnsupportedContact]. [ErrDegenerate] stays
 // reserved for a genuinely malformed operand and for the retryable coarse-chording
 // tessellation refusal; a whole-operand tessellation-staging [ErrUnsupported]
-// (a revolve operand, or a Faceted operand coarser than the pair tolerance)
+// (a cap-loop chamfer operand, or a Faceted operand coarser than the pair
+// tolerance)
 // passes through plain — none of these three is a BooleanError.
 type BooleanError struct {
 	Op     OpKind

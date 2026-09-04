@@ -391,10 +391,12 @@ func TestCheckedIntegerArithmeticRefusesOverflow(t *testing.T) {
 	require.Equal(t, uint64(0), product)
 }
 
-func TestRevolveMeshCarriesNoOccupiedVolumeProof(t *testing.T) {
-	// docs/tessellation-design.md §11: a revolve mesh serves export and stays
-	// out of the boolean until T4. Both gates say so — the payload-class
-	// pre-check that spares the mesh, and operandSymDiff on the mesh itself.
+func TestRevolveMeshCarriesItsOccupiedVolumeProof(t *testing.T) {
+	// docs/tessellation-design.md §11: a revolve mesh publishes the
+	// occupied-volume bound the mesh boolean reads, and both gates that once
+	// stood in its way now let it through — the payload-class pre-check and
+	// operandSymDiff on the mesh itself. What still refuses is the cap-loop
+	// chamfer, whose own proof is §13's increment T7.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -408,13 +410,15 @@ func TestRevolveMeshCarriesNoOccupiedVolumeProof(t *testing.T) {
 
 	mesh, err := body.Tessellate(units.Millimeters(0.2))
 	require.NoError(t, err)
-	require.False(t, mesh.symDiffOK)
-	_, err = operandSymDiff(mesh)
-	require.ErrorIs(t, err, ErrUnsupported)
-	require.ErrorIs(t, requireVolumeProvingPayload(body, 0), ErrUnsupported)
+	require.True(t, mesh.symDiffOK)
+	sym, err := operandSymDiff(mesh)
+	require.NoError(t, err)
+	require.Positive(t, sym)
+	require.Equal(t, mesh.volSymDiff, sym)
+	require.NoError(t, requireVolumeProvingPayload(body, 0))
 
-	// Every source face still publishes a positive displacement, so the mesh is
-	// a complete export operand even though no boolean may compose it.
+	// Every source face publishes a positive displacement beside it, so the
+	// mesh is a complete operand rather than an export-only one.
 	require.Positive(t, mesh.bound)
 	for _, f := range mesh.source {
 		d, ok := mesh.sourceBound(f)

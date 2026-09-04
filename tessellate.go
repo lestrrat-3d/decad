@@ -152,17 +152,17 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // section a bounded number of refinements cannot prove simple, correctly
 // nested and free of non-adjacent facet contact is [ErrUnsupported] rather
 // than a mesh, and so is a positive-radius ring that collapses onto itself: a
-// revolve mesh is refined or refused, never snapped, welded or coarsened. No
-// revolve mesh may be a boolean operand yet either: it carries no proof of the
-// volume it and the body it stands for differ by, so [Union], [Cut] and
-// [Intersect] refuse it while export stays available.
+// revolve mesh is refined or refused, never snapped, welded or coarsened. It
+// also proves the volume it and the body it stands for differ by, so [Union],
+// [Cut] and [Intersect] take a revolved body as an operand.
 //
 // A cap-loop chamfer result meshes its trimmed side walls, its chamfer band and
 // its two cap faces from ONE chord count per wall walk, shared by the side
 // wall's own rings, the band patch ruled off them and the cap contour the band
 // ends on, so no strip is sampled at two densities and the mesh is watertight
-// by construction. It carries the same missing volume proof a revolve does, so
-// it too serves export while [Union], [Cut] and [Intersect] refuse it.
+// by construction. It carries no proof of the volume it and the body it stands
+// for differ by, so it serves export while [Union], [Cut] and [Intersect]
+// refuse it.
 //
 // A lofted body RESTATES the flat triangle set its construction already built
 // and audited: nothing is chorded here, so tol binds nothing on that path and

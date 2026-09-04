@@ -858,25 +858,22 @@ func TestCurvedRimLengthRefuses(t *testing.T) {
 	require.Positive(t, straightAnswered, `the plate's own outline rims are straight`)
 }
 
-func TestUnionOfRevolveBodiesStagesNotContact(t *testing.T) {
-	// Two full-revolution cylinders are valid solids, but revolve tessellation
-	// is staged, so a boolean over them fails at tessellation BEFORE any contact
-	// is examined. That is a capability/staging limit, not a contact refusal: it
-	// must surface as a plain ErrUnsupported, never a *BooleanError with
-	// BooleanUnsupportedContact.
-	doc := decad.New()
-	s1, p1 := solidSketch(t)
-	a, err := doc.Revolve(s1, p1, uAxis, decad.FullRevolution{})
+func TestUnionOfCapBlendBodiesStagesNotContact(t *testing.T) {
+	// A cap-loop chamfer is a valid solid, but its mesh carries no
+	// occupied-volume proof yet, so a boolean over it is refused BEFORE any
+	// contact is examined. That is a capability/staging limit, not a contact
+	// refusal: it must surface as a plain ErrUnsupported, never a *BooleanError
+	// with BooleanUnsupportedContact.
+	doc, box := capBlendBox(t)
+	blended, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)
-	s2, p2 := solidSketch(t)
-	b, err := doc.Revolve(s2, p2, uAxis, decad.FullRevolution{})
-	require.NoError(t, err)
+	other := boxBody(t, doc, 200, 0, 210, 10, 10)
 
-	_, err = decad.Union(a, b)
+	_, err = decad.Union(blended, other)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	var be *decad.BooleanError
 	require.False(t, errors.As(err, &be),
-		`tessellation staging is a capability limit, not a BooleanUnsupportedContact`)
+		`operand staging is a capability limit, not a BooleanUnsupportedContact`)
 }
 
 func TestUnionRejectsVertexTangentContact(t *testing.T) {

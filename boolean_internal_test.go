@@ -535,7 +535,7 @@ func buildCircularWasherMeshes(t testing.TB) (*boolMesh, *boolMesh) {
 	doc := New()
 	target := internalDiscBody(t, doc, 15, 10)
 	tool := internalWasherBodySymmetric(t, doc, 8, 3, 11)
-	tolMM, _, err := pairChordTolerance(target, tool)
+	tolMM, _, err := pairChordTolerance(t.Context(), target, tool)
 	require.NoError(t, err)
 	ma, err := tessellateContext(t.Context(), target, units.Millimeters(tolMM))
 	require.NoError(t, err)
@@ -741,7 +741,7 @@ func TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs(t *testing.T) {
 	pin, err := disc.Placed(tr)
 	require.NoError(t, err)
 
-	tolMM, _, err := pairChordTolerance(plate, pin)
+	tolMM, _, err := pairChordTolerance(t.Context(), plate, pin)
 	require.NoError(t, err)
 	ma, err := tessellateContext(t.Context(), plate, units.Millimeters(tolMM))
 	require.NoError(t, err)
