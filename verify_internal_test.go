@@ -54,21 +54,37 @@ func requireCertifiedDiameter(t *testing.T, published float64, exactSquare *big.
 
 // The shared witness-maximum reader publishes a DOWNWARD-rounded pair maximum,
 // so an ordinary analytic body read through bodyGateDiameter's exact carrier
-// arm never reports a diameter above its own. A 6x6x7 box's farthest pair is
-// sqrt(6² + 6² + 7²) = sqrt(121) = 11 exactly, a representable value the float
-// norm of that same pair overshoots by an ulp.
+// arm never reports a diameter above its own. This test demonstrates the
+// hazard the reader guards against using naiveNorm (bounds_internal_test.go),
+// never r3.Vec.Len itself: naiveNorm's own comment explains why this file
+// states its reference arithmetic itself rather than asserting on r3's, so
+// the fixture below discriminates on every architecture regardless of r3's
+// own implementation. naiveNorm's sum is exact whenever it fits under
+// 2^53 — so a small box's farthest pair (its own squared distance well under
+// that bound) can never overshoot this way, however cleanly its distance
+// factors: an exhaustive search over box dimensions up to several hundred
+// found no overshoot at that scale. The fixture below instead scales the
+// primitive quadruple 4² + 8² + 19² = 21² (16 + 64 + 361 = 441) by
+// k = 23,726,573, landing each leg past 94,906,266 (~2^26.5) — the magnitude
+// at which squaring a float64 first loses bits — while the exact distance
+// stays 21k = 498,258,033, still exactly representable: naiveNorm of that
+// same farthest pair overshoots it once the intermediate squares round.
 func TestBodyGateDiameterExactCarrierArmNeverOverstates(t *testing.T) {
+	const (
+		bx, by, bh    = 94_906_292.0, 189_812_584.0, 450_804_887.0
+		exactDiameter = 498_258_033.0
+	)
 	doc := New()
-	body := internalBoxBody(t, doc, 0, 0, 6, 6, 7)
+	body := internalBoxBody(t, doc, 0, 0, bx, by, bh)
 
-	require.Greater(t, r3.NewVec(6, 6, 0).Sub(r3.NewVec(0, 0, 7)).Len(), 11.0,
-		`the float norm of the winning pair lands above the exact distance, which is why the reader may not publish it`)
+	require.Greater(t, naiveNorm(r3.NewVec(bx, by, 0).Sub(r3.NewVec(0, 0, bh))), exactDiameter,
+		`naiveNorm of the winning pair lands above the exact distance, which is why the reader may not publish it`)
 
 	d, ok, err := bodyGateDiameter(t.Context(), body)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, 11.0, d, `sqrt(121) is representable, so the certified reading is 11 exactly`)
-	requireCertifiedDiameter(t, d, big.NewRat(121, 1))
+	require.Equal(t, exactDiameter, d, `sqrt(248261067449029089) is representable, so the certified reading is 498258033 exactly`)
+	requireCertifiedDiameter(t, d, big.NewRat(248_261_067_449_029_089, 1))
 }
 
 // A prismPayload carrying BOTH displacements still earns a gate reference
@@ -77,17 +93,28 @@ func TestBodyGateDiameterExactCarrierArmNeverOverstates(t *testing.T) {
 // fallbackGateDiameter the body's own recorded section beside the displacement
 // each witness carries. This test pins what that arm proves — the charge is
 // twice the SUM of the section and axial displacements, and the value it is
-// subtracted from is the shared reader's exact-rational pair distance, not the
-// float scan's own norm.
+// subtracted from is the shared reader's exact-rational pair distance, not
+// naiveNorm's own scan.
 //
-// The same 6x6x7 box is the fixture, so the exact witness maximum is
-// sqrt(121) = 11 while the float norm of that pair reads 11.000000000000002.
-// Both displacements are 0.125, so twice their sum is 0.5 and the exact
-// shrunken value is exactly 10.5 — every quantity here is representable, and
-// the two routes land on opposite sides of it.
+// The same scaled 4-8-19-21 box (TestBodyGateDiameterExactCarrierArmNeverOverstates's
+// own comment derives it) is the fixture, so the exact witness maximum is
+// 498,258,033 while naiveNorm of that pair reads 498258033.0000000596 on
+// every architecture (see naiveNorm's own comment for why this file states
+// that arithmetic itself rather than asserting on r3's). Both displacements
+// are 0.125, so twice their sum is 0.5 and the exact shrunken value is exactly
+// 498,258,032.5 — every quantity here is representable, and the two routes
+// land on opposite sides of it. At this magnitude a float64's own spacing
+// near the shrunken value is around 6e-8, so the InDelta tolerance below is
+// loosened from a small-box fixture's 1e-12 to 1e-4 — still three orders of
+// magnitude tighter than the 0.125 gap a coarse envelope would leave, but
+// wide enough to clear that float spacing.
 func TestBodyGateDiameterDisplacedPrismShrinksByTwiceTheSum(t *testing.T) {
+	const (
+		bx, by, bh    = 94_906_292.0, 189_812_584.0, 450_804_887.0
+		exactDiameter = 498_258_033.0
+	)
 	doc := New()
-	pp, isPrism := internalBoxBody(t, doc, 0, 0, 6, 6, 7).payload.(prismPayload)
+	pp, isPrism := internalBoxBody(t, doc, 0, 0, bx, by, bh).payload.(prismPayload)
 	require.True(t, isPrism)
 
 	const delta = 0.125
@@ -105,21 +132,21 @@ func TestBodyGateDiameterDisplacedPrismShrinksByTwiceTheSum(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok, `Verify forms a tolerance-gate reference for a displaced prism`)
 
-	require.Less(t, d, 10.5,
-		`the reference sits at or below the exact 11 - 2*(sectionDelta + axialDelta), and downRound puts it strictly below`)
-	require.InDelta(t, 10.5, d, 1e-12,
+	require.Less(t, d, exactDiameter-2*(delta+delta),
+		`the reference sits at or below the exact 498258033 - 2*(sectionDelta + axialDelta), and downRound puts it strictly below`)
+	require.InDelta(t, exactDiameter-2*(delta+delta), d, 1e-4,
 		`the shrink is the two displacements themselves, not a coarse envelope`)
-	require.Less(t, d, 11-2*delta-delta,
-		`a shrink of twice the section term PLUS the axial term would leave the reference above 10.625`)
+	require.Less(t, d, exactDiameter-2*delta-delta,
+		`a shrink of twice the section term PLUS the axial term would leave the reference above 498258032.625`)
 
-	// The float scan's own norm would publish a reference at or above the exact
+	// naiveNorm's own scan would publish a reference at or above the exact
 	// shrunken value, which is the loosening direction §3 forbids. The
 	// published reading is proven below it.
-	scan := r3.NewVec(6, 6, 0).Sub(r3.NewVec(0, 0, 7)).Len()
-	require.Greater(t, scan, 11.0)
-	require.GreaterOrEqual(t, downRound(scan-2*displacement), 10.5)
+	scan := naiveNorm(r3.NewVec(bx, by, 0).Sub(r3.NewVec(0, 0, bh)))
+	require.Greater(t, scan, exactDiameter)
+	require.GreaterOrEqual(t, downRound(scan-2*displacement), exactDiameter-2*(delta+delta))
 	require.Less(t, d, downRound(scan-2*displacement),
-		`the shrink is applied to the exact-rational pair distance, never to the float scan's norm`)
+		`the shrink is applied to the exact-rational pair distance, never to naiveNorm's own scan`)
 }
 
 // This file pins docs/verification-design.md's free-form tolerance-gate
