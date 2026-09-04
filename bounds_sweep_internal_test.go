@@ -344,61 +344,107 @@ func TestCellAllowsOfMatchesThePerBoundHelpers(t *testing.T) {
 	})
 }
 
-// rawNormIsBelowExact reports whether r3.Vec.Len of a−b lands STRICTLY below
-// the exact |a−b|, decided by exact rational comparison of the raw reading's
-// own square against the exactly-rational squared norm (both operands are
-// float64 corners, hence exact rationals, so the lift introduces no rounding
-// of its own). It is what the two raw-norm regressions below use to prove
-// their fixture actually exercises the channel they pin, rather than
-// asserting it from a measured literal.
+// rawNormIsBelowExact reports whether naiveNorm (bounds_internal_test.go) of
+// a−b lands STRICTLY below the exact |a−b|, decided by exact rational
+// comparison of the raw reading's own square against the exactly-rational
+// squared norm (both operands are float64 corners, hence exact rationals, so
+// the lift introduces no rounding of its own). It is what the two raw-norm
+// regressions below use to prove their fixture actually exercises the channel
+// they pin, rather than asserting it from a measured literal. It reads
+// naiveNorm rather than r3.Vec.Len so the fixture's claim never depends on
+// r3's own implementation — see naiveNorm's own comment for why.
 func rawNormIsBelowExact(a, b r3.Vec) bool {
-	raw := ratOfFloat(a.Sub(b).Len())
+	raw := ratOfFloat(naiveNorm(a.Sub(b)))
 	d := rvSub(ratVec(a), ratVec(b))
 	return new(big.Rat).Mul(raw, raw).Cmp(rvDot(d, d)) < 0
 }
 
+// edgeProductRow is one corner set for the two raw-norm regressions below,
+// shared because both pin the identical channel over the identical corners.
+// rawChannelExpected is false for the original, ordinary-CAD-scale corners:
+// they sit well below rawNormShortfallFloor (bounds_internal_test.go), so
+// naiveNorm no longer misses the exact value there, and the row now exercises
+// only the property that must ALWAYS hold. The large-magnitude row carries the
+// raw-norm-channel proof instead, built past that floor.
+type edgeProductRow struct {
+	name               string
+	vLo, vHi, wLo, wHi r3.Vec
+	arcLenUpper        float64
+	rawChannelExpected bool
+}
+
+func edgeProductRows() []edgeProductRow {
+	return []edgeProductRow{
+		{
+			name: "ordinary CAD scale",
+			vLo:  r3.NewVec(-0.18407194718000197, -0.9670493813481006, 0.11756527611707068),
+			vHi:  r3.NewVec(-0.2543362139571195, 0.17121027904800257, 0.6486272299368296),
+			wLo:  r3.NewVec(-0.329681753490781, 0.20068938566549477, 0.2784442506567102),
+			wHi:  r3.NewVec(-0.7983173553857771, 0.456370350439145, 0.09559367959010823),
+			// Exactly-representable, above either side's own certified
+			// chord, so the premise gate admits and eA is this value with
+			// no rounding of its own.
+			arcLenUpper:        1.5,
+			rawChannelExpected: false,
+		},
+		{
+			// Every leg past the ~94.9e6 floor: all four corner separations
+			// the two tests below read (wLo-vLo, wHi-vHi, vHi-vLo, wHi-wLo)
+			// still miss their exact norm under naiveNorm.
+			name: "large-magnitude corners",
+			vLo:  r3.NewVec(-112_098_284, -165_490_037, -142_608_033),
+			vHi:  r3.NewVec(-146_282_602, -136_892_998, 230_590_387),
+			wLo:  r3.NewVec(-108_067_199, -136_487_260, -98_781_130),
+			wHi:  r3.NewVec(-211_405_993, 141_362_731, 137_754_614),
+			// Both chords are below 4e8 (the larger reads ~3.79e8); the
+			// literal stays clean rather than tight.
+			arcLenUpper:        4e8,
+			rawChannelExpected: true,
+		},
+	}
+}
+
 // TestCellChordCurveAreaUpperEnclosesTheExactEdgeProduct pins the RAW-NORM
 // channel on this helper's own eB term, the same channel
-// TestCellTwistBoundsEncloseTheirExactTerms pins one helper over: r3.Vec.Len
-// is nested math.Hypot, which carries no accuracy contract and sits several
-// ulp BELOW the exact norm for a large share of vectors, and neither
-// absSumUpper's nor productUpper's one-ulp outward nudge can recover a
-// multi-ulp shortfall. At matchedDeltaUpper=0 the eB term is eBBase alone, so
-// the published answer's own obligation is exactly eA·max(|wLo−vLo|,|wHi−vHi|)
-// and an understated eBBase puts the answer BELOW it — the unsound direction,
-// since chordedBoundaryVolumeAllow sums this reading over every wall cell for
-// its wallAreaUpper. The comparison is over exact rationals in SQUARED form
-// (the norms are irrational, their squares exactly rational), never against a
+// TestCellTwistBoundsEncloseTheirExactTerms pins one helper over: naiveNorm
+// carries no accuracy contract on its own, and past rawNormShortfallFloor it
+// can sit several ulp BELOW the exact norm, which neither absSumUpper's nor
+// productUpper's one-ulp outward nudge can recover.
+// At matchedDeltaUpper=0 the eB term is eBBase alone, so the published
+// answer's own obligation is exactly eA·max(|wLo−vLo|,|wHi−vHi|) and an
+// understated eBBase puts the answer BELOW it — the unsound direction, since
+// chordedBoundaryVolumeAllow sums this reading over every wall cell for its
+// wallAreaUpper. The comparison is over exact rationals in SQUARED form (the
+// norms are irrational, their squares exactly rational), never against a
 // float reference that shares the defect.
 func TestCellChordCurveAreaUpperEnclosesTheExactEdgeProduct(t *testing.T) {
-	vLo := r3.NewVec(-0.18407194718000197, -0.9670493813481006, 0.11756527611707068)
-	vHi := r3.NewVec(-0.2543362139571195, 0.17121027904800257, 0.6486272299368296)
-	wLo := r3.NewVec(-0.329681753490781, 0.20068938566549477, 0.2784442506567102)
-	wHi := r3.NewVec(-0.7983173553857771, 0.456370350439145, 0.09559367959010823)
+	for _, r := range edgeProductRows() {
+		t.Run(r.name, func(t *testing.T) {
+			if r.rawChannelExpected {
+				// eBBase maximises over these two corner separations, and
+				// BOTH read low under a raw norm, so no choice of maximum
+				// escapes the channel.
+				require.True(t, rawNormIsBelowExact(r.wLo, r.vLo), "the fixture must exercise the raw-norm channel on |wLo−vLo|")
+				require.True(t, rawNormIsBelowExact(r.wHi, r.vHi), "the fixture must exercise the raw-norm channel on |wHi−vHi|")
+			}
 
-	// eBBase maximises over these two corner separations, and BOTH of them
-	// read low under a raw norm, so no choice of maximum escapes the channel.
-	require.True(t, rawNormIsBelowExact(wLo, vLo), "the fixture must exercise the raw-norm channel on |wLo−vLo|")
-	require.True(t, rawNormIsBelowExact(wHi, vHi), "the fixture must exercise the raw-norm channel on |wHi−vHi|")
+			require.GreaterOrEqual(t, r.arcLenUpper, cellSpanUpper(r.vHi, r.vLo), "the fixture's arc-length claim must dominate side A's chord")
+			require.GreaterOrEqual(t, r.arcLenUpper, cellSpanUpper(r.wHi, r.wLo), "the fixture's arc-length claim must dominate side B's chord")
 
-	// An exactly-representable arc-length claim above either side's own
-	// certified chord, so the premise gate admits and eA is exactly this
-	// value with no rounding of its own.
-	const arcLenUpper = 1.5
-	require.GreaterOrEqual(t, arcLenUpper, cellSpanUpper(vHi, vLo), "the fixture's arc-length claim must dominate side A's chord")
-	require.GreaterOrEqual(t, arcLenUpper, cellSpanUpper(wHi, wLo), "the fixture's arc-length claim must dominate side B's chord")
+			got := cellChordCurveAreaUpper(r.vLo, r.vHi, r.wLo, r.wHi, r.arcLenUpper, r.arcLenUpper, 0)
+			require.False(t, math.IsInf(got, 1), "the fixture must be admitted, not refused")
 
-	got := cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenUpper, arcLenUpper, 0)
-	require.False(t, math.IsInf(got, 1), "the fixture must be admitted, not refused")
-
-	// exactCellTwistFactors' own second return IS eBBase's definition squared,
-	// max(|wLo−vLo|², |wHi−vHi|²), taken from the float corners with no
-	// rounding. got >= eA·eBBase holds iff got² >= eA²·eBBase².
-	_, eB2 := exactCellTwistFactors(vLo, vHi, wLo, wHi)
-	lhs := new(big.Rat).Mul(ratOfFloat(got), ratOfFloat(got))
-	rhs := new(big.Rat).Mul(new(big.Rat).Mul(ratOfFloat(arcLenUpper), ratOfFloat(arcLenUpper)), eB2)
-	require.GreaterOrEqual(t, lhs.Cmp(rhs), 0,
-		"cellChordCurveAreaUpper = %.20g sits BELOW the exact eA·eBBase it claims to dominate", got)
+			// exactCellTwistFactors' own second return IS eBBase's
+			// definition squared, max(|wLo−vLo|², |wHi−vHi|²), taken from
+			// the float corners with no rounding. got >= eA·eBBase holds
+			// iff got² >= eA²·eBBase².
+			_, eB2 := exactCellTwistFactors(r.vLo, r.vHi, r.wLo, r.wHi)
+			lhs := new(big.Rat).Mul(ratOfFloat(got), ratOfFloat(got))
+			rhs := new(big.Rat).Mul(new(big.Rat).Mul(ratOfFloat(r.arcLenUpper), ratOfFloat(r.arcLenUpper)), eB2)
+			require.GreaterOrEqual(t, lhs.Cmp(rhs), 0,
+				"cellChordCurveAreaUpper = %.20g sits BELOW the exact eA·eBBase it claims to dominate", got)
+		})
+	}
 }
 
 // TestCellChordCurveAreaUpperRefusesARawNormArcLengthClaim pins the same
@@ -409,25 +455,31 @@ func TestCellChordCurveAreaUpperEnclosesTheExactEdgeProduct(t *testing.T) {
 // below the true chord, and the helper then publishes a finite bound resting
 // on a falsified premise. The certified endpoint can only over-refuse by an
 // ulp, the reject-only-safe direction — pinned here by the certified pair
-// still being admitted, so the gate is not simply refusing everything.
+// still being admitted, so the gate is not simply refusing everything. rawA
+// and rawB read naiveNorm rather than r3.Vec.Len, for the same
+// architecture-portability reason rawNormIsBelowExact does.
 func TestCellChordCurveAreaUpperRefusesARawNormArcLengthClaim(t *testing.T) {
-	vLo := r3.NewVec(-0.18407194718000197, -0.9670493813481006, 0.11756527611707068)
-	vHi := r3.NewVec(-0.2543362139571195, 0.17121027904800257, 0.6486272299368296)
-	wLo := r3.NewVec(-0.329681753490781, 0.20068938566549477, 0.2784442506567102)
-	wHi := r3.NewVec(-0.7983173553857771, 0.456370350439145, 0.09559367959010823)
+	for _, r := range edgeProductRows() {
+		t.Run(r.name, func(t *testing.T) {
+			vLo, vHi, wLo, wHi := r.vLo, r.vHi, r.wLo, r.wHi
+			if r.rawChannelExpected {
+				require.True(t, rawNormIsBelowExact(vHi, vLo), "side A's raw norm must be provably below its own chord")
+				require.True(t, rawNormIsBelowExact(wHi, wLo), "side B's raw norm must be provably below its own chord")
+			}
 
-	require.True(t, rawNormIsBelowExact(vHi, vLo), "side A's raw norm must be provably below its own chord")
-	require.True(t, rawNormIsBelowExact(wHi, wLo), "side B's raw norm must be provably below its own chord")
+			rawA, rawB := naiveNorm(vHi.Sub(vLo)), naiveNorm(wHi.Sub(wLo))
+			certA, certB := cellSpanUpper(vHi, vLo), cellSpanUpper(wHi, wLo)
 
-	rawA, rawB := vHi.Sub(vLo).Len(), wHi.Sub(wLo).Len()
-	certA, certB := cellSpanUpper(vHi, vLo), cellSpanUpper(wHi, wLo)
-
-	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, rawA, certB, 0), 1),
-		"a raw-norm arcLenUpperA is provably below side A's own chord and must be refused")
-	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, certA, rawB, 0), 1),
-		"a raw-norm arcLenUpperB is provably below side B's own chord and must be refused")
-	require.False(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, certA, certB, 0), 1),
-		"the certified chord endpoints are a sound claim and must still be admitted")
+			gotRawA := math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, rawA, certB, 0), 1)
+			gotRawB := math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, certA, rawB, 0), 1)
+			if r.rawChannelExpected {
+				require.True(t, gotRawA, "a raw-norm arcLenUpperA is provably below side A's own chord and must be refused")
+				require.True(t, gotRawB, "a raw-norm arcLenUpperB is provably below side B's own chord and must be refused")
+			}
+			require.False(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, certA, certB, 0), 1),
+				"the certified chord endpoints are a sound claim and must still be admitted")
+		})
+	}
 }
 
 // TestCellChordCurveAreaUpperRefusesTheSagittaZigzag pins F1's own

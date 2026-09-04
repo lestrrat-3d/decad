@@ -724,31 +724,108 @@ type cellQuad struct {
 	floatShortfallExpected bool
 }
 
-// provenNormFixtures carries the cells the float-norm route provably
+// naiveNorm is the sum-of-squares norm with each square explicitly rounded to
+// float64 BEFORE the sum, so the result is identical on every architecture Go
+// supports. The Go language spec ("Floating-point operators",
+// https://go.dev/ref/spec) permits an implementation to fuse a multiply
+// straight into a following add — a fused multiply-add (FMA) — UNLESS the
+// product passes through an explicit floating-point type conversion first.
+// Its own worked examples state the boundary precisely: `t = x*y; r = t + z`
+// is FMA-ALLOWED (a bare assignment to a variable does not stop fusion, even
+// across statements — the spec says the rewrite may happen "possibly across
+// statements"), while `r = float64(x*y) + z` is FMA-DISALLOWED, because the
+// explicit conversion forces x*y's rounding before the add. That is why each
+// term below is wrapped in float64(...) rather than merely assigned to a
+// local: assignment alone is not the guarantee.
+//
+// r3.Vec.Len() now blocks the same fusion the same way, so it is
+// architecture-independent by construction rather than by the compiler
+// backend's choice. This file still computes naiveNorm as its own reference
+// arithmetic instead of asserting on r3.Vec.Len(): a test that wants a raw
+// float norm's error to demonstrate something states that arithmetic itself,
+// so its claims never depend on an upstream package's own rounding choices.
+func naiveNorm(v r3.Vec) float64 {
+	xx := float64(v.X * v.X)
+	yy := float64(v.Y * v.Y)
+	zz := float64(v.Z * v.Z)
+	return math.Sqrt(xx + yy + zz)
+}
+
+// rawNormShortfallFloor is why every fixture below that demonstrates a
+// naiveNorm shortfall needs a leg past this magnitude — the ONE place this
+// derivation is stated; every other fixture in this file or bounds_sweep_
+// internal_test.go that needs a large-magnitude case points back here rather
+// than restating it.
+//
+// naiveNorm's sum of three squares is exact whenever it fits under 2^53, so
+// naiveNorm is CORRECTLY ROUNDED there and cannot understate (or overstate)
+// the exact value — a fixture below that magnitude can no longer discriminate,
+// however it is built, on ANY architecture, since naiveNorm's explicit
+// per-term rounding admits no fusion for the compiler to vary by target.
+// Squaring a float64 first loses bits past 2^26.5 ≈ 94,906,265, so a fixture
+// needs some leg past that mark before naiveNorm can miss the exact value at
+// all.
+const rawNormShortfallFloor = 94_906_265.0
+
+// pastRawNormShortfallFloor reports whether x's magnitude clears
+// rawNormShortfallFloor, letting a large-magnitude fixture prove it actually
+// sits past the point where the naiveNorm channel can miss the exact value,
+// rather than resting on a comment alone.
+func pastRawNormShortfallFloor(x float64) bool { return math.Abs(x) > rawNormShortfallFloor }
+
+// TestProvenNormFixturesLargeMagnitudeCornersPastFloor pins the "large-
+// magnitude corners" fixture's own claim: every one of its twelve components
+// clears rawNormShortfallFloor, so the shortfall
+// TestCellTwistAreaLinearArmEnclosesTheExactProduct reads from it is provably
+// from magnitude, not from a comment nobody checked.
+func TestProvenNormFixturesLargeMagnitudeCornersPastFloor(t *testing.T) {
+	fixtures := provenNormFixtures()
+	c := fixtures[len(fixtures)-1]
+	require.Equal(t, "large-magnitude corners", c.name)
+	for _, v := range []r3.Vec{c.vLo, c.vHi, c.wLo, c.wHi} {
+		for _, comp := range []float64{v.X, v.Y, v.Z} {
+			require.True(t, pastRawNormShortfallFloor(comp), "%v must clear rawNormShortfallFloor", comp)
+		}
+	}
+}
+
+// provenNormFixtures carries the cells the naiveNorm route provably
 // understates. The first three are the reviewer's own corners, kept exactly as
-// reported; the fourth is the planar case the bound must answer zero for.
+// reported; the fourth is the planar case the bound must answer zero for. Two
+// of the reviewer's fixtures ("large-integer corners", "plain one-decimal
+// millimetres") sit well below rawNormShortfallFloor, so naiveNorm no longer
+// misses the exact value there: they stay exactly as reported and still
+// exercise the same code path, just with floatShortfallExpected now false. The
+// fifth entry, "large-magnitude corners", carries the shortfall proof instead,
+// built past the floor.
 func provenNormFixtures() []cellQuad {
 	return []cellQuad{
 		{
+			// Below rawNormShortfallFloor: kept as reported, but no longer
+			// expected to discriminate (see that constant's own comment).
 			name:                   "large-integer corners",
 			vLo:                    r3.NewVec(770749, 887007, 339646),
 			vHi:                    r3.NewVec(453885, 39861, 565228),
 			wLo:                    r3.NewVec(547783, 4864, 319470),
 			wHi:                    r3.NewVec(717918, 666858, 444888),
-			floatShortfallExpected: true,
+			floatShortfallExpected: false,
 		},
 		{
+			// Below rawNormShortfallFloor: kept as reported, but no longer
+			// expected to discriminate (see that constant's own comment).
 			name:                   "plain one-decimal millimetres",
 			vLo:                    r3.NewVec(16.6, 65.1, 173.7),
 			vHi:                    r3.NewVec(102.7, 169.5, 76.2),
 			wLo:                    r3.NewVec(50.3, 70.1, 192.2),
 			wHi:                    r3.NewVec(118.7, 187.3, 114.7),
-			floatShortfallExpected: true,
+			floatShortfallExpected: false,
 		},
 		{
-			// The twist vector vLo−vHi−wLo+wHi cancels here, so the float
+			// The twist vector vLo−vHi−wLo+wHi cancels here, so naiveNorm's
 			// evaluation of |T| carries a relative error no ulp of the
-			// published product can cover.
+			// published product can cover — this one discriminates by
+			// cancellation, not by magnitude, so it is unaffected by
+			// rawNormShortfallFloor and still fails at ordinary CAD scale.
 			name:                   "cancelling twist",
 			vLo:                    r3.NewVec(-84.36003204767742, 181.4494626808933, 664.7106105946635),
 			vHi:                    r3.NewVec(-773.0950741165469, -460.5310403373682, 631.9781962110208),
@@ -765,6 +842,21 @@ func provenNormFixtures() []cellQuad {
 			wLo:  r3.NewVec(0, 0, 7),
 			wHi:  r3.NewVec(3, 4, 7),
 		},
+		{
+			// Added past rawNormShortfallFloor to carry the shortfall proof
+			// the two reviewer fixtures above no longer can: every leg here
+			// sits at 1.2-2.4e8 mm, comfortably past the ~94.9e6 floor, and
+			// naiveNorm's product reads a ratio of 0.99999999999999998 against
+			// the exact one — an ulp-scale miss, the same mechanism
+			// verify_internal_test.go's bodyGateDiameter fixtures pin, not
+			// the "cancelling twist" row's proportional one.
+			name:                   "large-magnitude corners",
+			vLo:                    r3.NewVec(-119_517_970, 133_048_312, -145_410_237),
+			vHi:                    r3.NewVec(-145_514_262, -119_093_827, 180_975_874),
+			wLo:                    r3.NewVec(-237_850_693, -121_325_634, -161_676_442),
+			wHi:                    r3.NewVec(-227_154_576, -178_708_367, 105_391_895),
+			floatShortfallExpected: true,
+		},
 	}
 }
 
@@ -777,15 +869,20 @@ func refTwistAreaProduct(c cellQuad) *big.Float {
 	return refMul(refLen(twist), refAdd(eA, eB))
 }
 
-// floatTwistAreaProduct is the SAME product formed the way r3's own float
-// norms form it. It exists only to show the fixtures above genuinely
-// discriminate: a fixture on which this already encloses the exact product
-// would prove nothing about the repair.
+// floatTwistAreaProduct is the SAME product formed the way a naive float
+// implementation would form it — over naiveNorm, never r3.Vec.Len (this
+// function's whole job is to demonstrate a raw norm's error, and naiveNorm's
+// own comment explains why this file states that arithmetic itself rather
+// than asserting on r3's). It exists only to show the fixtures above
+// genuinely discriminate: a fixture on which this already encloses the exact
+// product would prove nothing about the repair. The vector Sub/Add chain
+// building t carries no multiply, so it has nothing for an FMA to fuse and
+// needs no naiveNorm treatment of its own.
 func floatTwistAreaProduct(c cellQuad) float64 {
 	t := c.vLo.Sub(c.vHi).Sub(c.wLo).Add(c.wHi)
-	eA := math.Max(c.vHi.Sub(c.vLo).Len(), c.wHi.Sub(c.wLo).Len())
-	eB := math.Max(c.wLo.Sub(c.vLo).Len(), c.wHi.Sub(c.vHi).Len())
-	return productUpper(t.Len(), absSumUpper(eA, eB))
+	eA := math.Max(naiveNorm(c.vHi.Sub(c.vLo)), naiveNorm(c.wHi.Sub(c.wLo)))
+	eB := math.Max(naiveNorm(c.wLo.Sub(c.vLo)), naiveNorm(c.wHi.Sub(c.vHi)))
+	return productUpper(naiveNorm(t), absSumUpper(eA, eB))
 }
 
 // TestCellTwistAreaLinearArmEnclosesTheExactProduct pins the fallback arm on
@@ -813,8 +910,10 @@ func TestCellTwistAreaLinearArmEnclosesTheExactProduct(t *testing.T) {
 
 // TestCellTwistAreaLinearArmEnclosesOrdinaryCells sweeps plain one-decimal-mm
 // coordinates, the reachable-by-an-end-user range: no adversarial input is
-// needed to drive the float-norm route below the exact product, so the swept
-// enclosure has to hold everywhere rather than on the named fixtures alone.
+// needed to drive naiveNorm below the exact product, so the swept enclosure
+// has to hold everywhere rather than on the named fixtures alone. naiveNorm's
+// forced per-term rounding (see its own comment) makes floatShort's count
+// identical on every architecture, independent of r3's own implementation.
 func TestCellTwistAreaLinearArmEnclosesOrdinaryCells(t *testing.T) {
 	rng := rand.New(rand.NewPCG(0x10f7c0de, 0x51de51de))
 	coord := func() float64 { return math.Round(rng.Float64()*2000) / 10 }
