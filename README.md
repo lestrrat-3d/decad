@@ -38,6 +38,21 @@ Only once the geometry is proven sound does the agent carry the plan into the
 CAD package. Same bet as `sketch`, one dimension up: **be wrong in the cheap
 place, not the expensive one.**
 
+## What it builds
+
+Every part below is a decad body, rendered from the triangle mesh decad itself
+tessellates.
+
+| | |
+|---|---|
+| <img src="docs/images/features/extrude.png" alt="An L-shaped angle bracket, one sketched section swept straight upward" width="320"><br>**Extrude** sweeps a solved 2D profile straight into a solid. | <img src="docs/images/features/revolve.png" alt="A flat ring, the solid swept by a circle offset from the axis" width="320"><br>**Revolve** spins a profile about an axis, so a curved generator gives a curved solid. |
+| <img src="docs/images/features/loft.png" alt="A transition duct narrowing from a large rectangle to a smaller offset one" width="320"><br>**Loft** rules a wall between two profiles on different planes. | <img src="docs/images/features/freeform.png" alt="A blade section whose curved front wall is a spline, extruded into a solid" width="320"><br>**Free-form profiles** carry spline walls, measured exactly rather than approximated. |
+| <img src="docs/images/features/fillet.png" alt="A rectangular plate whose four upright edges are rounded" width="320"><br>**Fillet** rounds selected edges into tangent arcs. | <img src="docs/images/features/chamfer.png" alt="A rectangular plate whose four upright edges are cut back to flat bevels" width="320"><br>**Chamfer** cuts selected edges back to a straight bevel. |
+| <img src="docs/images/features/cap-chamfer.png" alt="A rectangular plate whose whole top rim is bevelled" width="320"><br>**Cap-loop chamfer** bevels a whole rim, the lead-in a bore or a lid needs. | <img src="docs/images/features/shell.png" alt="An open tray: a block with its top face removed and its walls left one thickness" width="320"><br>**Shell** hollows a solid into a wall of one thickness. |
+| <img src="docs/images/features/boolean.png" alt="A flange plate with one large central bore and two smaller bolt holes drilled through it" width="320"><br>**Union, Cut and Intersect** combine two bodies explicitly, never folded into a feature. | <img src="docs/images/features/verify.png" alt="A round pin standing inside a larger bore, clearance visible all the way round" width="320"><br>**Verify** proves the gap between two bodies, so a fit is checked before anything is cut. |
+
+Regenerate every image on this page with `cd _gallery && go run .`.
+
 ## Layering
 
 ```
@@ -62,8 +77,6 @@ consuming 3D-derived geometry only as first-class reference geometry it is
 
 A 2D question — does this profile close, is this sketch fully constrained — is
 `sketch`'s to answer, and decad consumes the answer rather than re-deriving it.
-
-Regenerate the hero image with `cd _gallery && go run .`.
 
 ## License
 
