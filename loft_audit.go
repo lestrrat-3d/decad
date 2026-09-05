@@ -380,7 +380,7 @@ func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int, shortcuts l
 		return loftPairVertexCertificate, nil
 	}
 	contact, err := triTriClassifyWithProjections(ta, tb, xta, xtb, na, nb,
-		&data.projections[i], &data.projections[j], &signsA, &signsB)
+		&data.projections[i], &data.projections[j], &signsA, &signsB, true)
 	if err != nil {
 		return loftPairClassified, err
 	}
