@@ -184,4 +184,5 @@ to the byte budget.
 |---|---|
 | `examples/` | Executable Go examples (`Example_decad_…`, `go test`-verified `// Output:` blocks) that double as living documentation. Never `package main`. |
 | `_gallery/` | Own nested module, keeping SolidLens out of the library's dependencies: renders every README image under `docs/images`. The `_` prefix hides it from every root-module tool. See its `main.go` doc comment. |
-| `.github/workflows/` | `ci.yml` (lint → test/tidy/govulncheck), `codeql.yml`. |
+| `_shardgen/` | Own nested module, keeping tooling out of the library's: packs the root package's tests into cost-balanced race shards. The `_` prefix hides it from every root-module tool. See its `main.go` doc comment. |
+| `.github/workflows/` | `ci.yml` (lint → test/tidy/govulncheck), `codeql.yml`. `test-shards.txt` beside it records which shard runs each root test. |
