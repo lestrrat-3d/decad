@@ -1186,15 +1186,25 @@ func meshParityContext(ctx context.Context, p xpt, verts []r3.Vec, tris [][3]int
 		crossings := 0
 		ambiguous := false
 		onBoundary := false
+		// The query's projection depends only on the ray, so it is built once
+		// per nonempty scan rather than once per facet, and read-only from
+		// there — cross2xSign and cross2x never mutate an xp2, so one shared
+		// value classifies exactly as a per-facet copy did. Constructing it
+		// inside the loop, after the periodic cancellation check, is what
+		// keeps an empty subset paying nothing and a canceled context
+		// returning before the first conversion.
+		var pa xp2
 		for i, ti := range subset {
 			if i%256 == 0 {
 				if err := ctx.Err(); err != nil {
 					return false, false, err
 				}
 			}
+			if i == 0 {
+				pa = newXP2(ratCoordOf(p, ray.u), ratCoordOf(p, ray.v))
+			}
 			tri := tris[ti]
 			a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
-			pa := newXP2(ratCoordOf(p, ray.u), ratCoordOf(p, ray.v))
 			qa := newXP2(mustRatOf(coordOf(a, ray.u)), mustRatOf(coordOf(a, ray.v)))
 			qb := newXP2(mustRatOf(coordOf(b, ray.u)), mustRatOf(coordOf(b, ray.v)))
 			qc := newXP2(mustRatOf(coordOf(c, ray.u)), mustRatOf(coordOf(c, ray.v)))
