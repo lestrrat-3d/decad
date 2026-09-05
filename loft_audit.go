@@ -26,6 +26,14 @@ import (
 // proven self-contact or self-intersection (S7, ErrDegenerate); exhausting
 // the fixed facet-pair ceiling before every pair is decided is S8
 // (ErrUnsupported), refused before a single pair test runs.
+//
+// Two kinds of shortcut let a pair reach that verdict without the exact
+// classification, and loftAuditShortcuts switches each one separately so the
+// audit keeps a reference path the tests compare every verdict against. The
+// broad-phase in loftCrossingAuditWork is reject-only and runs for a pair
+// expected NOT to touch; auditLoftPairData's certificates are accept-only and
+// run for a pair expected to touch at a known entity. Each carries its proof
+// on its own doc comment, and each proof rests on exact rational signs alone.
 
 // triangleCollapsed reports whether a triangle's three recorded vertices are
 // exactly collinear (or coincident) — an exact zero cross product over the
@@ -165,10 +173,43 @@ func segMatchesRecordedEdge(c triContact, edgeA, edgeB xpt) bool {
 	return (k0 == ka && k1 == kb) || (k0 == kb && k1 == ka)
 }
 
-// loftBroadPhaseWork records what ONE loftCrossingAudit call's S7 pair loop
-// did: skips counts the zero-shared-vertex pairs a broad-phase tier proved
-// apart, and classifications counts the pairs that reached auditLoftPair's
-// exact classification. The two always sum to the pair count S8 admitted.
+// loftAuditShortcuts selects which of the S7 pair loop's shortcuts one audit
+// call may use. Its ZERO VALUE is the audit's independent reference path:
+// every pair S8 admits reaches auditLoftPairData, and inside it every pair
+// reaches triTriClassify's exact contact classification. Production runs with
+// every field true (loftCrossingAudit), and a shortcut may only ever change
+// how SOON a pair's verdict is reached, never which verdict it is — which is
+// what the reference path exists to test against.
+//
+// The two fields switch two structurally different things, and each is
+// switched separately so a test can isolate either one:
+//
+//   - broadPhase gates the two reject-only float tiers ahead of the exact
+//     classification (loftPlaneSeparated and the bounding-box test), which
+//     only ever prove a zero-shared-vertex pair APART.
+//   - certificates gates auditLoftPairData's own accept-only proofs, which
+//     only ever prove a shared-entity pair's contact IS the expected entity.
+type loftAuditShortcuts struct {
+	broadPhase   bool
+	certificates bool
+}
+
+// loftAuditWork records what ONE loftCrossingAudit call's S7 pair loop did,
+// one field per way a pair can be decided:
+//
+//   - skips: a zero-shared-vertex pair a broad-phase tier proved apart.
+//   - edgeCerts: a pair the noncoplanar shared-edge certificate admitted
+//     (auditLoftPairData's own doc comment carries its proof).
+//   - vertexCerts: a pair the isolated shared-vertex certificate admitted.
+//   - classifications: every other pair, which reached auditLoftPairData
+//     without a certificate deciding it.
+//
+// The four always sum to the pair count S8 admitted, on a call that ran to
+// completion. classifications counts the pairs the certificates are there to
+// remove, so it is the quantity a shortcut is measured by; it also carries the
+// handful of coplanar shared-edge pairs triTriCoplanarSharedEdge decides
+// without reaching triTriClassify, since that branch predates the certificates
+// and no shortcut switch changes it.
 //
 // It is per-call state, held in loftCrossingAuditWork's own frame and
 // returned by value — never a package-level counter. The audit runs on the
@@ -178,10 +219,30 @@ func segMatchesRecordedEdge(c triContact, edgeA, edgeB xpt) bool {
 // independent Documents may each be inside it at once, so a counter shared
 // across calls would both race and mis-count. Nothing outside the call frame
 // is written anywhere on this path.
-type loftBroadPhaseWork struct {
+type loftAuditWork struct {
 	skips           int
+	edgeCerts       int
+	vertexCerts     int
 	classifications int
 }
+
+// loftPairOutcome names which of auditLoftPairData's own decision paths
+// settled one pair, so loftCrossingAuditWork can count it without repeating
+// the classification. It says nothing about the verdict: a pair that returns
+// loftPairClassified may have been admitted or refused.
+type loftPairOutcome int
+
+const (
+	// loftPairClassified: the pair reached the exact contact classification
+	// (or the pre-existing coplanar shared-edge branch).
+	loftPairClassified loftPairOutcome = iota
+	// loftPairEdgeCertificate: the noncoplanar shared-edge certificate
+	// admitted the pair.
+	loftPairEdgeCertificate
+	// loftPairVertexCertificate: the isolated shared-vertex certificate
+	// admitted the pair.
+	loftPairVertexCertificate
+)
 
 // loftPlaneSeparated is the S7 broad-phase's second, still-float-only tier
 // for a zero-shared-vertex pair whose bounding boxes DO overlap: it
@@ -225,12 +286,70 @@ func loftPlaneSeparated(ta, tb [3]r3.Vec) bool {
 
 // auditLoftPair classifies one triangle pair against its recorded adjacency
 // (docs/loft-design.md §6) and returns S7 (ErrDegenerate) when the exact
-// contact is not the one that adjacency expects.
+// contact is not the one that adjacency expects. It is the tests' reference
+// entry point: it runs auditLoftPairData's zero-shortcut path, so every pair
+// it decides reaches the exact classification.
 func auditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error { //nolint:unparam // test helper keeps both pair indices aligned with production auditLoftPairData
-	return auditLoftPairData(newLoftAuditData(verts, tris), tris, i, j)
+	_, err := auditLoftPairData(newLoftAuditData(verts, tris), tris, i, j, loftAuditShortcuts{})
+	return err
 }
 
-func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int) error {
+// auditLoftPairData classifies pair (i, j) and reports which decision path
+// settled it. PRECONDITION: both triangles have three DISTINCT vertex indices
+// and are noncollapsed — S6 (triangleCollapsed, run over every triangle before
+// the S7 pair loop starts) is what establishes that for the production caller,
+// and the test-only auditLoftPair above is called with noncollapsed fixtures.
+//
+// # Certificate A — the noncoplanar shared edge
+//
+// A pair sharing exactly two vertex indices is admitted, without any contact
+// reconstruction at all, once one exact sign proves the two triangles are NOT
+// coplanar. The sign is the one this function already computed to choose
+// between the coplanar and the general branch, so the certificate costs
+// nothing beyond a branch.
+//
+// Write E for the shared pair's segment and L for the line through it. E's two
+// endpoints are distinct (the precondition), so L exists and is unique.
+//
+//  1. E is an edge of BOTH triangles: two shared INDICES into the audit's own
+//     vertex table are two distinct corners of each triangle.
+//  2. Both triangles' planes contain L, since each contains E's two distinct
+//     endpoints.
+//  3. The two planes are DISTINCT: the certificate fires only when triangle
+//     j's remaining corner has a nonzero exact signed distance from triangle
+//     i's plane, so that corner lies in plane(j) and not in plane(i).
+//  4. Two distinct planes sharing the line L meet in exactly L, so the pair's
+//     whole intersection lies on L.
+//  5. A closed triangle meets the line supporting one of its own edges in
+//     exactly that edge: within the triangle's plane the triangle lies in one
+//     closed half-plane of L, and its intersection with L's boundary line is
+//     the edge itself. So triangle i ∩ L = E and triangle j ∩ L = E.
+//  6. Therefore triangle i ∩ triangle j = E — precisely the contact this
+//     pair's recorded adjacency expects — and §6's shared-edge rule admits it.
+//
+// The sign is exact rational arithmetic (xdotSign), never a float tolerance,
+// so step 3 is a proof and not an estimate. A ZERO sign proves nothing about
+// step 3 and takes no shortcut: the coplanar branch below keeps deciding that
+// case through triTriCoplanarSharedEdge, which is what still refuses two
+// coplanar triangles that share an edge and overlap in area on one side of it.
+//
+// # Certificate B — the isolated shared vertex
+//
+// A pair sharing exactly one vertex index is admitted once one triangle's two
+// remaining vertices carry the SAME strict exact sign against the other
+// triangle's plane. isolatedSharedVertex owns that reading and its proof; both
+// orientations are tried, because either triangle may be the one whose plane
+// isolates the vertex. The signs are the very arrays this function hands
+// triTriClassifyWithProjections, so the certificate reads work the pair was
+// going to pay for anyway and adds none of its own.
+//
+// A zero sign, or two differing signs, proves nothing and takes no shortcut:
+// that pair falls through to the exact classification, which is what still
+// refuses a vertex-sharing pair whose triangles cross away from their shared
+// vertex. Sharing a vertex is not itself evidence — EVERY such pair has its
+// shared vertex on both planes, which is why the certificate reads the two
+// OTHER vertices and never that one.
+func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int, shortcuts loftAuditShortcuts) (loftPairOutcome, error) {
 	ta := data.corners[i]
 	tb := data.corners[j]
 	xta := data.xtris[i]
@@ -243,44 +362,96 @@ func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int) error {
 		apex := data.xverts[triangleApexIndex(tris[j], shared[0], shared[1])]
 		if xdotSign(na, xsub(apex, edgeA)) == 0 {
 			if triTriCoplanarSharedEdge(xta, xtb, na, edgeA, edgeB) {
-				return nil
+				return loftPairClassified, nil
 			}
-			return errLoftContact(i, j, "do not meet exactly along their recorded shared edge")
+			return loftPairClassified, errLoftContact(i, j, "do not meet exactly along their recorded shared edge")
+		}
+		if shortcuts.certificates {
+			return loftPairEdgeCertificate, nil
 		}
 	}
 
 	signsB := trianglePlaneSigns(xta, na, xtb)
+	if shortcuts.certificates && sharedCount == 1 && isolatedSharedVertex(tris[j], shared[0], signsB) {
+		return loftPairVertexCertificate, nil
+	}
 	signsA := trianglePlaneSigns(xtb, nb, xta)
+	if shortcuts.certificates && sharedCount == 1 && isolatedSharedVertex(tris[i], shared[0], signsA) {
+		return loftPairVertexCertificate, nil
+	}
 	contact, err := triTriClassifyWithProjections(ta, tb, xta, xtb, na, nb,
 		&data.projections[i], &data.projections[j], &signsA, &signsB)
 	if err != nil {
-		return err
+		return loftPairClassified, err
 	}
 
 	switch sharedCount {
 	case 0:
 		if contact.kind == contactNone {
-			return nil
+			return loftPairClassified, nil
 		}
-		return errLoftContact(i, j, "share no recorded vertex, but make contact")
+		return loftPairClassified, errLoftContact(i, j, "share no recorded vertex, but make contact")
 	case 1:
 		v := data.xverts[shared[0]]
 		if contact.kind == contactPoint && contact.p0.key() == v.key() {
-			return nil
+			return loftPairClassified, nil
 		}
-		return errLoftContact(i, j, "do not meet exactly at their recorded shared vertex")
+		return loftPairClassified, errLoftContact(i, j, "do not meet exactly at their recorded shared vertex")
 	case 2:
 		edgeA, edgeB := data.xverts[shared[0]], data.xverts[shared[1]]
 		if segMatchesRecordedEdge(contact, edgeA, edgeB) {
-			return nil
+			return loftPairClassified, nil
 		}
 		if contact.kind == contactRegion && triTriCoplanarSharedEdge(xta, xtb, na, edgeA, edgeB) {
-			return nil
+			return loftPairClassified, nil
 		}
-		return errLoftContact(i, j, "do not meet exactly along their recorded shared edge")
+		return loftPairClassified, errLoftContact(i, j, "do not meet exactly along their recorded shared edge")
 	default:
-		return errLoftContact(i, j, "share an unexpected vertex count")
+		return loftPairClassified, errLoftContact(i, j, "share an unexpected vertex count")
 	}
+}
+
+// isolatedSharedVertex is certificate B's own reading (docs/loft-design.md
+// §6): it reports whether the triangle tri meets a plane at sharedIndex's
+// vertex ALONE, given signs — the exact signs of tri's three vertices against
+// that plane, in tri's own index order, as trianglePlaneSigns returns them.
+//
+// Write f for the plane's affine signed-distance function, v for the shared
+// vertex, and q1, q2 for tri's two other vertices. The certificate fires only
+// when f(q1) and f(q2) are both strictly positive or both strictly negative.
+//
+//  1. f(v) = 0. v is a corner of the triangle whose plane this is, so it lies
+//     on that plane. The caller guarantees this by passing the index the two
+//     triangles SHARE; the reading never needs to test it.
+//  2. Every point of tri is p = αv + βq1 + γq2 with α + β + γ = 1 and all
+//     three coefficients at least zero, since a closed triangle is the convex
+//     hull of its corners.
+//  3. f is affine, so f(p) = β·f(q1) + γ·f(q2). With f(q1) and f(q2) sharing
+//     one strict sign, that sum is zero exactly when β = γ = 0, which is
+//     exactly p = v.
+//  4. So tri meets the plane only at v. The other triangle lies IN that plane,
+//     so the pair's whole intersection is contained in {v} — and v belongs to
+//     both triangles, so it IS {v}, the contact the pair's shared vertex
+//     expects.
+//
+// A zero among the two tested signs breaks step 3 and is never accepted, so
+// the reading is a proof and not an estimate. A collapsed triangle cannot
+// smuggle a verdict through either: its exact normal is the zero vector, every
+// sign against it is zero, and the certificate cannot fire.
+func isolatedSharedVertex(tri [3]int, sharedIndex int, signs [3]int) bool {
+	positive, negative := 0, 0
+	for k, vertex := range tri {
+		if vertex == sharedIndex {
+			continue
+		}
+		switch {
+		case signs[k] > 0:
+			positive++
+		case signs[k] < 0:
+			negative++
+		}
+	}
+	return positive == 2 || negative == 2
 }
 
 // trianglePlaneSigns returns the exact signs of other against tri's oriented
@@ -324,24 +495,24 @@ func triangleApexIndex(tri [3]int, edgeA, edgeB int) int {
 // step is called once per candidate (each triangle in S6, each pair in S7)
 // and err at every phase boundary, the end of S7 among them.
 //
-// This is the production entry point: the broad-phase always runs. Tests that
-// need the same audit with the short-circuit switched off, or need the pair
-// loop's own work counts, call loftCrossingAuditWork below directly.
+// This is the production entry point: every shortcut always runs. Tests that
+// need the same audit with a shortcut switched off, or need the pair loop's
+// own work counts, call loftCrossingAuditWork below directly.
 func loftCrossingAudit(budget *workBudget, verts []r3.Vec, tris [][3]int) error {
-	_, err := loftCrossingAuditWork(budget, verts, tris, true)
+	_, err := loftCrossingAuditWork(budget, verts, tris, loftAuditShortcuts{broadPhase: true, certificates: true})
 	return err
 }
 
-// loftCrossingAuditWork is loftCrossingAudit's body, with the S7 broad-phase
-// short-circuit under an explicit per-call switch and the pair loop's own
-// work counts returned to the caller. broadPhase false runs every admitted
-// pair through auditLoftPair's exact classification, which is the verdict the
-// broad-phase may only ever reach sooner, never change.
+// loftCrossingAuditWork is loftCrossingAudit's body, with each S7 shortcut
+// under its own explicit per-call switch (loftAuditShortcuts) and the pair
+// loop's own work counts returned to the caller. The zero shortcuts value
+// runs every admitted pair through triTriClassify's exact classification,
+// which is the verdict a shortcut may only ever reach sooner, never change.
 //
 // The returned counts are meaningful only when the audit completes: an early
 // return carries whatever the loop had reached when it stopped.
-func loftCrossingAuditWork(budget *workBudget, verts []r3.Vec, tris [][3]int, broadPhase bool) (loftBroadPhaseWork, error) {
-	var work loftBroadPhaseWork
+func loftCrossingAuditWork(budget *workBudget, verts []r3.Vec, tris [][3]int, shortcuts loftAuditShortcuts) (loftAuditWork, error) {
+	var work loftAuditWork
 	if err := budget.err(); err != nil {
 		return work, err
 	}
@@ -404,13 +575,18 @@ func loftCrossingAuditWork(budget *workBudget, verts []r3.Vec, tris [][3]int, br
 	// do overlap but whose planes still prove separation. Both are float-only
 	// and reject-only; neither ever answers "touching", so a pair either tier
 	// cannot decide always falls through to the full auditLoftPair.
+	//
+	// A pair sharing one or two vertices reaches auditLoftPairData, which
+	// owns the complementary accept-only certificates for exactly those two
+	// cases. The outcome it reports is what this loop counts, so the four
+	// work fields say which path decided every pair.
 	for i := range f {
 		for j := i + 1; j < f; j++ {
 			if err := budget.step(); err != nil {
 				return work, err
 			}
 			_, sharedCount := sharedVertexIndices(tris[i], tris[j])
-			if broadPhase && sharedCount == 0 {
+			if shortcuts.broadPhase && sharedCount == 0 {
 				if !boxesOverlap(boxes[i], boxes[j]) {
 					work.skips++
 					continue
@@ -420,8 +596,16 @@ func loftCrossingAuditWork(budget *workBudget, verts []r3.Vec, tris [][3]int, br
 					continue
 				}
 			}
-			work.classifications++
-			if err := auditLoftPairData(auditData, tris, i, j); err != nil {
+			outcome, err := auditLoftPairData(auditData, tris, i, j, shortcuts)
+			switch outcome {
+			case loftPairEdgeCertificate:
+				work.edgeCerts++
+			case loftPairVertexCertificate:
+				work.vertexCerts++
+			default:
+				work.classifications++
+			}
+			if err != nil {
 				return work, err
 			}
 		}

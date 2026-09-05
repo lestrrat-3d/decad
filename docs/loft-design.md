@@ -1192,6 +1192,41 @@ consulted for it. What the broad-phase prunes is the exact work per PAIR, not
 the pair ENUMERATION, which remains every pair among the assembled triangle
 set and stays bounded by the ceiling below.
 
+**A pair whose EXPECTED contact is already proven reaches its verdict early,
+through an accept-only certificate.** The broad-phase above is the reject side
+of the same idea and only ever fires for a pair Table C gives no shared entity;
+a certificate is the accept side and only ever fires for a pair Table C DOES
+give one. A certificate admits under the identical rule this section already
+states — the pair's whole intersection IS that expected entity — so it changes
+only how SOON that admission is reached, never which pairs are admitted. Two
+certificates are stated, each proven from exact rational signs alone, never
+from a float tolerance:
+
+- **The noncoplanar shared edge.** For a pair Table C gives a common edge, one
+  exact sign proving the two triangles' planes DISTINCT is enough: both planes
+  contain that edge's supporting line, so distinct planes meet in exactly that
+  line, and a closed nondegenerate triangle meets the line supporting one of
+  its own edges in exactly that edge. The intersection is therefore the
+  expected edge. A ZERO sign proves nothing and takes no shortcut — the
+  coplanar case keeps going to `triTriCoplanarSharedEdge`, which is what still
+  refuses two coplanar triangles overlapping in area on one side of their
+  shared edge.
+- **The isolated shared vertex.** For a pair Table C gives a common vertex and
+  no edge, it is enough that the OTHER triangle's two remaining vertices carry
+  the same strict exact sign against this triangle's plane: every point of that
+  triangle is then a convex combination whose signed distance vanishes only at
+  the shared vertex, so it meets the plane there alone, and the pair's whole
+  intersection is that vertex. Either triangle may play either role. A ZERO
+  sign, or two differing signs, proves nothing and takes no shortcut — that
+  pair still goes to the exact classification, which is what refuses a
+  vertex-sharing pair that crosses away from its vertex.
+
+Each certificate reads signs the audit computes anyway, so neither adds exact
+work to the pairs it cannot decide. The certificates are individually
+switchable so the audit keeps an independent reference path — no broad-phase
+and no certificate, every pair through the exact classification — for the
+required tests to compare every verdict against.
+
 **The work budget reuses tessellation design §3's own ceiling.** The
 predicate under test here is the same one tessellation's boolean pre-pass
 runs, so the audit charges every invocation against
