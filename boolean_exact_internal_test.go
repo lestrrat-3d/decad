@@ -1619,3 +1619,396 @@ func BenchmarkParityQueryProjection(b *testing.B) {
 		}
 	})
 }
+
+// parityScatterVerts is a closed tetrahedron skewed off every axis, so none of
+// its four facets projects onto a segment on any of the three planes the rays
+// leave. That matters: the axis-aligned fixtures the file already had make the
+// very first facet of a scan ambiguous, which ends the scan before a filter can
+// skip anything, so they say nothing about how much work the filter removes.
+// Every coordinate is a binary fraction and so exactly representable.
+func parityScatterVerts() []r3.Vec {
+	return []r3.Vec{
+		r3.NewVec(0, 0, 0),
+		r3.NewVec(1, 0.25, 0.125),
+		r3.NewVec(0.25, 1, 0.375),
+		r3.NewVec(0.375, 0.5, 1),
+	}
+}
+
+// parityScatterInterior is a point strictly inside the tetrahedron at the
+// scatter grid's origin.
+func parityScatterInterior() r3.Vec { return r3.NewVec(0.40625, 0.4375, 0.375) }
+
+// parityScatterMesh builds a side×side grid of those tetrahedra spread across
+// the plane axis 0 projects onto, so a query near one of them leaves most
+// facets provably outside their own projected box — the case the box filter is
+// for.
+func parityScatterMesh(side int) ([]r3.Vec, [][3]int) {
+	verts := make([]r3.Vec, 0, side*side*4)
+	tris := make([][3]int, 0, side*side*4)
+	for i := range side {
+		for j := range side {
+			base := 4 * (i*side + j)
+			for _, v := range parityScatterVerts() {
+				verts = append(verts, r3.NewVec(v.X, v.Y+float64(3*i), v.Z+float64(3*j)))
+			}
+			for _, t := range parityTetraTris() {
+				tris = append(tris, [3]int{t[0] + base, t[1] + base, t[2] + base})
+			}
+		}
+	}
+	return verts, tris
+}
+
+// parityProjectedCorners returns one facet's three projected corners as the
+// exact rational pairs the parity kernel classifies against, built the frozen
+// reference's way rather than through the cache under test.
+func parityProjectedCorners(verts []r3.Vec, tri [3]int, u, v int) [3]xp2 {
+	var out [3]xp2
+	for k, vi := range tri {
+		out[k] = newXP2(mustRatOf(coordOf(verts[vi], u)), mustRatOf(coordOf(verts[vi], v)))
+	}
+	return out
+}
+
+// parityFloatAreaAbstains recomputes buildFacetBox's float area filter, so a
+// case can assert that the float leg could NOT decide and the exact leg is what
+// answered.
+func parityFloatAreaAbstains(verts []r3.Vec, tri [3]int, u, v int) bool {
+	a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
+	au, av := coordOf(a, u), coordOf(a, v)
+	bu, bv := coordOf(b, u), coordOf(b, v)
+	cu, cv := coordOf(c, u), coordOf(c, v)
+	left, right := (bu-au)*(cv-av), (bv-av)*(cu-au)
+	bound := parityAreaErrCoef*(math.Abs(left)+math.Abs(right)) + parityAreaFloor
+	det := left - right
+	return !(det > bound || det < -bound)
+}
+
+// parityFixture names one vertex/triangle buffer.
+type parityFixture struct {
+	name  string
+	verts []r3.Vec
+	tris  [][3]int
+}
+
+// parityBoxFixtures are the meshes the box filter is asserted over: the
+// axis-aligned ones the file already used, plus the scattered tetrahedra that
+// actually make the filter fire.
+func parityBoxFixtures() []parityFixture {
+	scatterVerts, scatterTris := parityScatterMesh(4)
+	farVerts, farTris := parityScatterMesh(3)
+	for i, v := range farVerts {
+		farVerts[i] = r3.NewVec(v.X+parityFar, v.Y+parityFar, v.Z+parityFar)
+	}
+	return []parityFixture{
+		{`unit cube`, parityCubeVerts(r3.NewVec(0, 0, 0)), parityCubeTris(0)},
+		{`unit tetrahedron`, parityTetraVerts(), parityTetraTris()},
+		{`triangle soup sharing the origin`, paritySoupVerts(), paritySoupTris()},
+		{`scattered tetrahedra`, scatterVerts, scatterTris},
+		{`scattered tetrahedra far from the origin`, farVerts, farTris},
+	}
+}
+
+// TestParityFacetBoxStatesTheProjection pins what a box says about its facet:
+// the four bounds are the exact extremes of the projected triangle, and
+// nondegenerate is the EXACT area sign, not the float filter's guess.
+func TestParityFacetBoxStatesTheProjection(t *testing.T) {
+	t.Parallel()
+
+	t.Run(`bounds and area match the exact projection`, func(t *testing.T) {
+		for _, fx := range parityBoxFixtures() {
+			t.Run(fx.name, func(t *testing.T) {
+				pm := newParityMesh(fx.verts, fx.tris)
+				for _, ray := range axisRays {
+					for ti := range fx.tris {
+						box := pm.buildFacetBox(ray.axis, ray.u, ray.v, ti)
+						q := parityProjectedCorners(fx.verts, fx.tris[ti], ray.u, ray.v)
+						require.True(t, box.built, `a built box must say so`)
+						require.Equal(t, math.Min(q[0].fu, math.Min(q[1].fu, q[2].fu)), box.minU,
+							`axis %d facet %d: minU is the smallest projected u`, ray.axis, ti)
+						require.Equal(t, math.Max(q[0].fu, math.Max(q[1].fu, q[2].fu)), box.maxU,
+							`axis %d facet %d: maxU is the largest projected u`, ray.axis, ti)
+						require.Equal(t, math.Min(q[0].fv, math.Min(q[1].fv, q[2].fv)), box.minV,
+							`axis %d facet %d: minV is the smallest projected v`, ray.axis, ti)
+						require.Equal(t, math.Max(q[0].fv, math.Max(q[1].fv, q[2].fv)), box.maxV,
+							`axis %d facet %d: maxV is the largest projected v`, ray.axis, ti)
+						require.Equal(t, cross2xSign(q[0], q[1], q[2]) != 0, box.nondegenerate,
+							`axis %d facet %d: nondegenerate must be the exact area sign`, ray.axis, ti)
+					}
+				}
+			})
+		}
+	})
+
+	t.Run(`a projection with no area is never usable`, func(t *testing.T) {
+		for _, tc := range []struct {
+			name  string
+			verts []r3.Vec
+		}{
+			{`three collinear corners`, []r3.Vec{
+				r3.NewVec(0, 0, 0), r3.NewVec(0, 1, 2), r3.NewVec(0, 3, 6)}},
+			{`a repeated corner`, []r3.Vec{
+				r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 0), r3.NewVec(0, 1, 4)}},
+			{`a facet flat against the swept axis`, []r3.Vec{
+				r3.NewVec(0, 0, 5), r3.NewVec(1, 1, 5), r3.NewVec(2, 4, 5)}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				pm := newParityMesh(tc.verts, [][3]int{{0, 1, 2}})
+				box := pm.buildFacetBox(0, 1, 2, 0)
+				require.False(t, box.nondegenerate,
+					`a projection whose exact area is zero may never license a skip`)
+				require.False(t, box.rejects(-1e9, -1e9),
+					`an unusable box rejects nothing, however far away the query is`)
+			})
+		}
+	})
+
+	t.Run(`a non-finite coordinate leaves the box unusable`, func(t *testing.T) {
+		for _, bad := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+			verts := []r3.Vec{
+				r3.NewVec(0, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, bad)}
+			pm := newParityMesh(verts, [][3]int{{0, 1, 2}})
+			box := pm.buildFacetBox(0, 1, 2, 0)
+			require.False(t, box.nondegenerate,
+				`a box built over %v bounds nothing`, bad)
+			require.False(t, box.rejects(-1e9, -1e9))
+		}
+	})
+
+	t.Run(`the exact leg decides an area the float filter cannot`, func(t *testing.T) {
+		// The projected corners are (0, 0), (1, 1) and (2⁴⁰, 2⁴⁰+1): a true
+		// area of 1 against a permanent above 2⁴¹, which is three decades
+		// under the float filter's own threshold.
+		const big = 1 << 40
+		verts := []r3.Vec{
+			r3.NewVec(0, 0, 0), r3.NewVec(0, 1, 1), r3.NewVec(0, big, big+1)}
+		tri := [3]int{0, 1, 2}
+		require.True(t, parityFloatAreaAbstains(verts, tri, 1, 2),
+			`the case is only meaningful while the float filter abstains`)
+		q := parityProjectedCorners(verts, tri, 1, 2)
+		require.NotEqual(t, 0, cross2xSign(q[0], q[1], q[2]),
+			`and while the exact area is genuinely nonzero`)
+
+		pm := newParityMesh(verts, [][3]int{tri})
+		box := pm.buildFacetBox(0, 1, 2, 0)
+		require.True(t, box.nondegenerate,
+			`the exact leg must recover the area the float filter could not prove`)
+		require.True(t, box.rejects(-1, 0), `a query below minU is rejected`)
+		require.False(t, box.rejects(0, 0), `a query on the box boundary is not`)
+	})
+}
+
+// parityBoxQueries returns the query points the box filter is asserted over on
+// one fixture: the hand-built cube and tetrahedron cases, plus points placed
+// exactly at, one ulp inside and one ulp outside a real facet's own box bounds
+// on every axis — the boundary the filter's strict comparison decides.
+func parityBoxQueries(fx parityFixture) []parityCase {
+	out := append(parityCubeQueries(r3.NewVec(0, 0, 0)), parityTetraQueries()...)
+	pm := newParityMesh(fx.verts, fx.tris)
+	for _, ray := range axisRays {
+		box := pm.buildFacetBox(ray.axis, ray.u, ray.v, 0)
+		for _, edge := range []float64{box.minU, box.maxU} {
+			for _, at := range []float64{edge,
+				math.Nextafter(edge, math.Inf(-1)), math.Nextafter(edge, math.Inf(1))} {
+				c := make([]float64, 3)
+				c[ray.u] = at
+				c[ray.v] = box.minV
+				out = append(out, parityCase{
+					fmt.Sprintf(`axis %d facet 0 u-bound %v`, ray.axis, at),
+					xptOf(r3.NewVec(c[0], c[1], c[2])),
+				})
+				// The same place reached as an exact rational a hair off the
+				// bound, which is what a midpoint or centroid witness is.
+				out = append(out, parityCase{
+					fmt.Sprintf(`axis %d facet 0 u-bound %v minus 1/3 ulp`, ray.axis, at),
+					xptFromRat(
+						parityBoxOffsetRat(c[0], ray.u == 0, at),
+						parityBoxOffsetRat(c[1], ray.u == 1, at),
+						parityBoxOffsetRat(c[2], ray.u == 2, at)),
+				})
+			}
+		}
+	}
+	return out
+}
+
+// parityBoxOffsetRat is coordinate c exactly, except on the swept-plane axis
+// the caller marks, where it is the bound minus a third of the gap to the next
+// float below it — a value no float64 names, sitting inside the last ulp.
+func parityBoxOffsetRat(c float64, offset bool, at float64) *big.Rat {
+	r := mustRatOf(c)
+	if !offset {
+		return r
+	}
+	gap := new(big.Rat).Sub(mustRatOf(at), mustRatOf(math.Nextafter(at, math.Inf(-1))))
+	return new(big.Rat).Sub(r, new(big.Rat).Quo(gap, big.NewRat(3, 1)))
+}
+
+// TestParityBoxFilterOnlySkipsStrictlyOutsideFacets asserts the filter's whole
+// contract at facet granularity: every facet it skips is one the unfiltered
+// classification would have passed over as STRICTLY OUTSIDE. A skip that landed
+// on an ambiguous or a counted facet would change the answer, and this test
+// catches it on the offending facet rather than on a mesh-wide verdict that
+// happens to survive it.
+func TestParityBoxFilterOnlySkipsStrictlyOutsideFacets(t *testing.T) {
+	t.Parallel()
+	skips := 0
+	for _, fx := range parityBoxFixtures() {
+		t.Run(fx.name, func(t *testing.T) {
+			pm := newParityMesh(fx.verts, fx.tris)
+			for _, c := range parityBoxQueries(fx) {
+				for _, ray := range axisRays {
+					pa := newXP2(ratCoordOf(c.p, ray.u), ratCoordOf(c.p, ray.v))
+					if !pa.floatFinite {
+						continue
+					}
+					for ti := range fx.tris {
+						box := pm.buildFacetBox(ray.axis, ray.u, ray.v, ti)
+						if !box.rejects(pa.fu, pa.fv) {
+							continue
+						}
+						skips++
+						q := parityProjectedCorners(fx.verts, fx.tris[ti], ray.u, ray.v)
+						s1 := cross2xSign(q[0], q[1], pa)
+						s2 := cross2xSign(q[1], q[2], pa)
+						s3 := cross2xSign(q[2], q[0], pa)
+						neg := s1 < 0 || s2 < 0 || s3 < 0
+						pos := s1 > 0 || s2 > 0 || s3 > 0
+						require.True(t, neg && pos,
+							`%s: axis %d facet %d was skipped, but its exact signs (%d, %d, %d) are not the strictly-outside pattern`,
+							c.name, ray.axis, ti, s1, s2, s3)
+					}
+				}
+			}
+		})
+	}
+	require.Positive(t, skips,
+		`the fixtures must actually exercise the filter, or the property above is vacuous`)
+}
+
+// TestParityBoxFilterMatchesTheUnfilteredKernel is the end-to-end differential:
+// the same prepared mesh answered with the filter and with it switched off, and
+// the frozen pre-filter reference beside both, over hand-built and fixed-seed
+// random queries and over subsets of every shape the callers use.
+func TestParityBoxFilterMatchesTheUnfilteredKernel(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	verts, tris := parityScatterMesh(4)
+	n := len(tris)
+
+	rng := rand.New(rand.NewPCG(0x5ee1, 0xb0c5))
+	queries := append(parityBoxQueries(parityFixture{`scattered`, verts, tris}),
+		parityCubeQueries(r3.NewVec(0, 3, 3))...)
+	for range 64 {
+		queries = append(queries, parityCase{
+			fmt.Sprintf(`random %d`, len(queries)),
+			xptFromRat(
+				big.NewRat(rng.Int64N(4000)-500, 100),
+				big.NewRat(rng.Int64N(4000)-500, 100),
+				big.NewRat(rng.Int64N(4000)-500, 100)),
+		})
+	}
+	// A handful of queries placed exactly on a mesh vertex, which is where the
+	// unfiltered kernel reports ambiguity and a boundary.
+	for range 8 {
+		queries = append(queries, parityCase{
+			fmt.Sprintf(`vertex %d`, len(queries)),
+			xptOf(verts[rng.IntN(len(verts))]),
+		})
+	}
+
+	subsets := []parityNamedSubset{
+		{`identity`, parityIdentitySubset(n)},
+		{`empty`, nil},
+		{`singleton`, []int{n / 2}},
+		{`stride`, parityStrideSubset(n, 7)},
+	}
+	for k := range 4 {
+		shuffled := parityIdentitySubset(n)
+		rng.Shuffle(len(shuffled), func(i, j int) {
+			shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+		})
+		subsets = append(subsets, parityNamedSubset{
+			fmt.Sprintf(`shuffled prefix %d`, k), shuffled[:1+rng.IntN(n)]})
+	}
+
+	// ONE cache per arm across every query, so a box built for an earlier query
+	// is what a later one reads.
+	filtered := newParityMesh(verts, tris)
+	plain := newParityMesh(verts, tris)
+	plain.unfiltered = true
+
+	for _, subset := range subsets {
+		for _, c := range queries {
+			arm := subset.name + `/` + c.name
+			wantIn, wantBoundary, wantErr := referenceMeshParityContext(ctx, c.p, verts, tris, subset.facets)
+			want := parityOutcome{inside: wantIn, onBoundary: wantBoundary, err: wantErr}
+
+			plainIn, plainBoundary, plainErr := meshParityPreparedContext(ctx, c.p, plain, subset.facets)
+			requireParityOutcome(t, `unfiltered/`+arm, want,
+				parityOutcome{inside: plainIn, onBoundary: plainBoundary, err: plainErr})
+
+			gotIn, gotBoundary, gotErr := meshParityPreparedContext(ctx, c.p, filtered, subset.facets)
+			requireParityOutcome(t, `filtered/`+arm, want,
+				parityOutcome{inside: gotIn, onBoundary: gotBoundary, err: gotErr})
+		}
+	}
+}
+
+// TestParityBoxFilterLeavesAnEmptySubsetAlone pins that arming the filter costs
+// a query nothing until a facet is actually visited: an empty subset builds no
+// box slice, and a canceled context returns before the first one.
+func TestParityBoxFilterLeavesAnEmptySubsetAlone(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	verts, tris := parityScatterMesh(2)
+	p := xptOf(parityScatterInterior())
+
+	t.Run(`an empty subset builds no boxes`, func(t *testing.T) {
+		pm := newParityMesh(verts, tris)
+		_, _, err := meshParityPreparedContext(ctx, p, pm, nil)
+		require.NoError(t, err)
+		require.Equal(t, [3][]parityFacetBox{}, pm.boxes,
+			`no facet was visited, so no axis may hold a box slice`)
+	})
+
+	t.Run(`a canceled context returns before the first box`, func(t *testing.T) {
+		canceled, cancel := context.WithCancel(ctx)
+		cancel()
+		pm := newParityMesh(verts, tris)
+		_, _, err := meshParityPreparedContext(canceled, p, pm, parityIdentitySubset(len(tris)))
+		require.ErrorIs(t, err, context.Canceled)
+		require.Equal(t, [3][]parityFacetBox{}, pm.boxes,
+			`the context check runs before the first box`)
+	})
+}
+
+// BenchmarkParityBoxFilter measures the filter against the same kernel with it
+// switched off, on a mesh spread across the projection plane — the shape a real
+// operand has, and the one the axis-stacked BenchmarkParityQueryProjection mesh
+// deliberately does not.
+func BenchmarkParityBoxFilter(b *testing.B) {
+	verts, tris := parityScatterMesh(12)
+	subset := parityIdentitySubset(len(tris))
+	require.GreaterOrEqual(b, len(tris), 512, `the benchmark mesh must exercise at least 512 triangles`)
+	ctx := b.Context()
+	// Interior to the tetrahedron at the grid's origin, so the answer the
+	// benchmark checks is `inside` and both arms must agree on it.
+	p := xptOf(parityScatterInterior())
+
+	for _, arm := range []struct {
+		name       string
+		unfiltered bool
+	}{{`filtered`, false}, {`unfiltered`, true}} {
+		b.Run(arm.name, func(b *testing.B) {
+			prepared := newParityMesh(verts, tris)
+			prepared.unfiltered = arm.unfiltered
+			b.ReportAllocs()
+			for b.Loop() {
+				inside, onBoundary, err := meshParityPreparedContext(ctx, p, prepared, subset)
+				requireBenchInside(b, inside, onBoundary, err)
+			}
+		})
+	}
+}

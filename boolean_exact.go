@@ -1201,6 +1201,120 @@ type parityMesh struct {
 	// still unfilled: a materialized projection's coordinates are always
 	// non-nil rationals, an exact zero included, so the two states never alias.
 	projections [3][]xp2
+	// boxes[axis][ti] is facet ti's projected box on that same plane, filled
+	// on the facet's first visit for that axis and immutable from there. A
+	// slot stays nil until the axis is first swept, and parityFacetBox.built
+	// marks an individual entry filled.
+	boxes [3][]parityFacetBox
+	// unfiltered turns the projected-box rejection off, leaving every query to
+	// the exact sign tests alone. It exists so a differential test can run the
+	// same query both ways and require the same answer; nothing in production
+	// sets it.
+	unfiltered bool
+}
+
+// parityAreaErrCoef and parityAreaFloor bound projectedFacetBox's own float
+// evaluation of the projected area. The true forward error of a 2x2
+// determinant over float64 inputs is a few units in the last place of its
+// permanent, so the relative coefficient carries about three decades of
+// margin — enough to cover the rounding of the permanent and the threshold
+// themselves. The floor is one absolute term for the gradual-underflow crumbs
+// a relative bound cannot speak for: each is at most 2⁻¹⁰⁷⁵ and there are a
+// handful, so 2⁻¹⁰⁰⁰ dominates them together.
+const (
+	parityAreaErrCoef = 1e-12
+	parityAreaFloor   = 0x1p-1000
+)
+
+// parityFacetBox is one facet's projection onto the plane a ray sweeping some
+// axis leaves, reduced to a coordinate box plus the one fact that makes the box
+// usable as a rejection filter.
+//
+// The bounds are EXACT, not an outward enclosure. A parity mesh's vertices are
+// float64 coordinates and a projection just selects two of them, so each bound
+// IS one of the triangle's own coordinates with no rounding to widen. The query
+// side is what rounds: xp2 caches its rational coordinate's nearest float
+// (newXP2), and round-to-nearest is monotone — x ≤ y implies rn(x) ≤ rn(y) — so
+// rn(q) strictly past a bound proves q strictly past it exactly. The converse
+// never holds, which is why equality decides nothing and falls through to the
+// exact predicate.
+//
+// nondegenerate records that the projected triangle's area is provably nonzero,
+// and without it the box says nothing about the answer.
+// meshParityPreparedContext turns a strict separation into a `continue` only
+// because the three edge signs of a nondegenerate triangle cannot all be
+// non-positive — they sum to twice its signed area — so a point outside it
+// always shows the loop both a negative and a positive sign. A projection that
+// collapses to a segment sums to zero instead, and every point on that
+// segment's LINE, however far outside this box, makes all three signs vanish
+// and the ray AMBIGUOUS. Skipping such a facet would drop an ambiguity the
+// reference path reports, so a facet whose projected area cannot be proven
+// nonzero is never filtered.
+type parityFacetBox struct {
+	minU, maxU, minV, maxV float64
+	nondegenerate          bool
+	built                  bool
+}
+
+// rejects reports whether a query projected to (fu, fv) provably lies strictly
+// outside this facet's projection. The caller owes it a finite (fu, fv) —
+// meshParityPreparedContext checks the query's own floatFinite once per scan
+// rather than once per facet.
+func (b *parityFacetBox) rejects(fu, fv float64) bool {
+	return b.nondegenerate &&
+		(fu < b.minU || fu > b.maxU || fv < b.minV || fv > b.maxV)
+}
+
+// buildFacetBox builds facet ti's box on the (u, v) plane a ray sweeping axis
+// leaves. A non-finite coordinate leaves nondegenerate false: the box would not
+// bound anything, and an unusable box costs only the rejections it does not
+// make.
+//
+// The area is decided adaptively, the same discipline as orientSign: a float
+// determinant whose magnitude clears its own error bound proves the sign, and
+// anything inside that bound falls back to the exact 2D cross over the cached
+// projections. The exact leg is what a coarse tessellation needs — a thin
+// facet's float determinant can sit inside the bound while its true area is
+// plainly nonzero — and it is paid once per facet and axis, against the many
+// queries that then read the answer.
+func (pm *parityMesh) buildFacetBox(axis, u, v, ti int) parityFacetBox {
+	tri := pm.tris[ti]
+	a, b, c := pm.verts[tri[0]], pm.verts[tri[1]], pm.verts[tri[2]]
+	au, av := coordOf(a, u), coordOf(a, v)
+	bu, bv := coordOf(b, u), coordOf(b, v)
+	cu, cv := coordOf(c, u), coordOf(c, v)
+	box := parityFacetBox{
+		minU:  math.Min(au, math.Min(bu, cu)),
+		maxU:  math.Max(au, math.Max(bu, cu)),
+		minV:  math.Min(av, math.Min(bv, cv)),
+		maxV:  math.Max(av, math.Max(bv, cv)),
+		built: true,
+	}
+	if isNonFinite(box.minU) || isNonFinite(box.maxU) ||
+		isNonFinite(box.minV) || isNonFinite(box.maxV) {
+		return box
+	}
+	left, right := (bu-au)*(cv-av), (bv-av)*(cu-au)
+	bound := parityAreaErrCoef*(math.Abs(left)+math.Abs(right)) + parityAreaFloor
+	if det := left - right; det > bound || det < -bound {
+		box.nondegenerate = true
+		return box
+	}
+	qa := pm.vertexProjection(axis, u, v, tri[0])
+	qb := pm.vertexProjection(axis, u, v, tri[1])
+	qc := pm.vertexProjection(axis, u, v, tri[2])
+	box.nondegenerate = cross2xSign(qa, qb, qc) != 0
+	return box
+}
+
+// facetBoxes returns the per-facet projected-box slice for one swept axis,
+// allocating it on that axis's first sweep. Both rays of an axis project onto
+// the same plane (axisRays), so one slice serves both senses.
+func (pm *parityMesh) facetBoxes(axis int) []parityFacetBox {
+	if pm.boxes[axis] == nil {
+		pm.boxes[axis] = make([]parityFacetBox, len(pm.tris))
+	}
+	return pm.boxes[axis]
 }
 
 // newParityMesh prepares verts and tris for repeated parity queries. It stores
@@ -1258,6 +1372,11 @@ func meshParityPreparedContext(ctx context.Context, p xpt, prepared *parityMesh,
 		// keeps an empty subset paying nothing and a canceled context
 		// returning before the first conversion.
 		var pa xp2
+		// The projected-box rejection needs the query's own float coordinates,
+		// so it can only be armed once pa exists, and its per-facet boxes are
+		// allocated in the same place — an empty subset still pays nothing.
+		var boxes []parityFacetBox
+		boxFilter := false
 		for i, ti := range subset {
 			if i%256 == 0 {
 				if err := ctx.Err(); err != nil {
@@ -1266,9 +1385,28 @@ func meshParityPreparedContext(ctx context.Context, p xpt, prepared *parityMesh,
 			}
 			if i == 0 {
 				pa = newXP2(ratCoordOf(p, ray.u), ratCoordOf(p, ray.v))
+				boxFilter = !prepared.unfiltered && pa.floatFinite
+				if boxFilter {
+					boxes = prepared.facetBoxes(ray.axis)
+				}
+			}
+			if boxFilter {
+				// A facet whose projection provably has area and provably does
+				// not reach the query's projected coordinate classifies
+				// STRICTLY OUTSIDE below, whichever way its three signs fall
+				// (parityFacetBox). Skipping it therefore removes three exact
+				// sign tests and changes no answer, and because it is exactly
+				// the facets that would `continue` that go, the subset's order
+				// and the facet an ambiguity is first seen at are untouched.
+				box := &boxes[ti]
+				if !box.built {
+					*box = prepared.buildFacetBox(ray.axis, ray.u, ray.v, ti)
+				}
+				if box.rejects(pa.fu, pa.fv) {
+					continue
+				}
 			}
 			tri := prepared.tris[ti]
-			a, b, c := prepared.verts[tri[0]], prepared.verts[tri[1]], prepared.verts[tri[2]]
 			qa := prepared.vertexProjection(ray.axis, ray.u, ray.v, tri[0])
 			qb := prepared.vertexProjection(ray.axis, ray.u, ray.v, tri[1])
 			qc := prepared.vertexProjection(ray.axis, ray.u, ray.v, tri[2])
@@ -1288,6 +1426,7 @@ func meshParityPreparedContext(ctx context.Context, p xpt, prepared *parityMesh,
 			}
 			// Strictly inside the projection: the projected area is nonzero,
 			// so the plane normal's swept component cannot vanish.
+			a, b, c := prepared.verts[tri[0]], prepared.verts[tri[1]], prepared.verts[tri[2]]
 			xa, xb, xc := xptOf(a), xptOf(b), xptOf(c)
 			n := xcross(xsub(xb, xa), xsub(xc, xa))
 			nAxis := xIntCoordOf(n, ray.axis)
