@@ -224,7 +224,7 @@ overflows must be refused while it is still a float.
 ZERO-RADIUS arc consumes decides which row answers.** A recorded `ArcSeg`
 whose `Center`, `Start` and `End` are one point walks at radius zero, so
 every station on that side lands on the centre. **A zero SWEEP is not the
-trigger and cannot be one:** `extrude.go` folds an arc's `math.Mod` sweep
+trigger and cannot be one:** `segment_walk.go` folds an arc's `math.Mod` sweep
 into `(0, 2π]` by adding `2π` to a non-positive result, so coincident
 recorded endpoints walk a FULL turn rather than none, and `record.go`
 refuses `TStart == TEnd` outright. A zero-radius arc on exactly ONE side
@@ -338,7 +338,7 @@ cover every term that table lists, a term DERIVED from other rows included:
 
 **A DERIVED term answers `+Inf` on its OWN saturation as well as by
 inheriting one, and S14 reaches it either way.** `absSumUpper` accumulates
-through `upRound` (`moments.go`) and `bounds.go`'s product helpers round
+through `upRound` (`bounds.go`) and that file's product helpers round
 outward at every step, so a composition of finite rows can itself run past
 `float64`. S14's condition reads the term's PUBLISHED value and never its
 inputs', so such a term refuses in whichever arm above evaluates it rather
@@ -563,7 +563,7 @@ same chord-cell count, never the count of station points.
 
 **A CLOSED side holds `m` CYCLIC station points, not `m + 1`, and its final
 cell pairs the last station back to the first.** A `CircleSeg` recorded over
-a full turn walks closed (`extrude.go`), and the station loop appends exactly
+a full turn walks closed (`segment_walk.go`), and the station loop appends exactly
 one point per chord cell and never the terminal one (`tessellate.go`),
 because that point IS the walk's own first station. So a full-circle side has
 ONE station where an open side has two ends, and `m` stations carry `m`
@@ -610,7 +610,7 @@ chordTarget = loftChordFraction * max(profileCoordinateEnvelope(p0), profileCoor
 
 `loftChordFraction` is one unexported package constant (§14 records its
 calibration), and `profileCoordinateEnvelope` is the existing non-refusing
-section-coordinate magnitude-envelope reader (`extrude.go`). It reads each
+section-coordinate magnitude-envelope reader (`prism_payload.go`). It reads each
 walk's own `coordUpper`: analytic walks produce the same value
 `profileCoordinateUpper` would return, while a free-form walk supplies
 `freeformControlExtent` without passing through that reader's analytic-only
@@ -983,7 +983,7 @@ position provenance, not a guarantee that the recorded coordinate equals the
 point the record denotes at that parameter; the guaranteed-zero list below
 owns that separate claim.
 
-- an **untrimmed `ArcSeg` end**: `extrude.go`'s `arcWalkEnd` PINS the held
+- an **untrimmed `ArcSeg` end**: `segment_walk.go`'s `arcWalkEnd` PINS the held
   pair to the recorded `Start` / `End` verbatim at `t == 0` and `t == 1`
   ALONE, so that station IS a recorded coordinate;
 - an **untrimmed `LineSeg` end**: `lerp2` and `ratLerp` (`moments.go`) each
@@ -1006,7 +1006,7 @@ record denotes there IS `Start`.
 of its own, the ARC-END RADIAL RESIDUAL the table above names.** A recorded
 `ArcSeg` states three points, and the curve it denotes takes its radius from
 `Start` alone: `circularEndpointInterval` and `circularWalkEnclosures`
-(`moments.go`) both read `|Start − Center|`, so the denoted point at
+(`moments_circular.go`) both read `|Start − Center|`, so the denoted point at
 `t == 1` sits at THAT radius and `End`'s angle, which is `End` itself only
 when `|End − Center| == |Start − Center|` — the reading
 `docs/sketch-seam-design.md` states outright. Nothing in this evaluator
@@ -1404,7 +1404,7 @@ existing `moments.go` centroid publication pattern, extended from the
 plane-local two-coordinate result to this 3D triangulated boundary. A body
 whose `delta` is positive
 (§5.2) widens each coordinate's bound by the same quotient composition
-`moments.go`'s `boundedQuotient` states, using `sweptVolumeAllow` as the
+`bounded.go`'s `boundedQuotient` states, using `sweptVolumeAllow` as the
 denominator's own allowance and `sweptMomentAllow` as the numerator's. A body
 whose `sectionDelta` OR `matchedDelta` is positive first applies the exact
 bilinear-patch volume and first-moment corrections, then widens the quotient
@@ -2206,7 +2206,7 @@ published float and a new determinism obligation for replay (§10).
 **`loftStationCap`'s value is resolved.** §5.1 states the rule the cap obeys
 and everything an implementation needs to decide S15 from the record — the
 per-segment share, the `mMax` comparison, and the checked arithmetic — and the
-number itself is the unexported `loftStationCap` constant in `loft_build.go`,
+number itself is the unexported `loftStationCap` constant in `loft_stations.go`,
 whose own doc comment carries the derivation and is its ONE defining site.
 That derivation discharges the two constraints §5.1 states: a build whose
 `Σstations` reaches the cap assembles an `F` whose `F*(F-1)/2` is strictly

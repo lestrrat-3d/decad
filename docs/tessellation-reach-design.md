@@ -334,7 +334,7 @@ tess §§8–11 are the theory; this section maps each paragraph to code. No new
 
 ### Shared with the builder
 
-`buildRevolveLoop` (`revolve.go`) resolves each loop's walks (`walkOf` → `requireAnalyticWalk` →
+`buildRevolveLoop` (`revolve_build.go`) resolves each loop's walks (`walkOf` → `requireAnalyticWalk` →
 `rp.ax.walk` → `coalesceWalksContext` → `ax.classify`). Extract that prefix into
 `revolveLoopWalks(ctx, rp, loop, work, what) (revolveWalks, error)`, whose result carries the coalesced axis
 walks, their `wallKind`s, `singleClosed`, and the same walks still in PLANE-local coordinates indexed by
@@ -584,11 +584,11 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
    `chordStationBound(w segmentWalk, k, n int) walkEndBound` for a circular walk's interior sample —
    `circularWalkEndBound`'s mechanism at fraction `k/n` (`turnSinCosInterval` for `CircleSeg`,
    `radSinCosSpan` over `atan2Interval` for `ArcSeg`). **Pattern:**
-   `extrude.go`'s `circularWalkEndBound`, `moments.go`'s `circularEndpointInterval`. **Tests:** internal:
+   `segment_walk.go`'s `circularWalkEndBound`, `moments_circular.go`'s `circularEndpointInterval`. **Tests:** internal:
    a quarter-turn `CircleSeg` sample at `k/n = 1/2` publishes a bound within 4 ulps of `r`; an `ArcSeg` sample
    publishes a finite positive bound; a non-derivable enclosure answers `+Inf`.
 4. **Files:** `tessellate.go`. **What:** `deltaStore` for prism and cup — max over emitted vertices of
-   `walkEndBoundAllow(chordStationBound)` and `exactPrismPointRound` (`extrude.go`); per-face `faceBound`
+   `walkEndBoundAllow(chordStationBound)` and `exactPrismPointRound` (`prism_payload.go`); per-face `faceBound`
    per §3's table; `perturbedTriangleAreaAllow` per triangle into `areaSlack`. **Depends on:** 1, 3.
    **Tests:** `tessellate_test.go`: §3's plate/rotated-plate assertions; `Bound()` under identity axis-aligned
    placement is unchanged from today's value for `holedPlateBody`.
@@ -632,7 +632,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
 
 ### R3 — revolve line generators
 
-14. **Files:** `revolve.go`. **What:** extract `revolveLoopWalks` from `buildRevolveLoop`, returning the axis
+14. **Files:** `revolve_build.go`. **What:** extract `revolveLoopWalks` from `buildRevolveLoop`, returning the axis
     walks, their kinds, `singleClosed` and the plane-local walks the proof reads. **Tests:** existing revolve
     tests unchanged.
 15. **Files:** new `tessellate_revolve.go`. **What:** `revolveMeridianSamples`, `requireRevolveAxisIncidence`,

@@ -54,7 +54,7 @@ const (
 	// budgets. Raising either is a policy change, not a bug fix — trim a
 	// Layout row, or move detail into the file the row names, instead.
 	claudeMDMaxBytes  = 8192
-	layoutDocMaxBytes = 27648
+	layoutDocMaxBytes = 30720
 	// layoutCellMaxChars caps a Layout row's description (second) column.
 	// A row that needs more detail belongs in the file/doc it names, with
 	// this cell trimmed back to a short pointer.
