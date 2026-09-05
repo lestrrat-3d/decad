@@ -579,7 +579,7 @@ func chordedWedgeTriangles(t testing.TB, pts [][2]float64) ([]r3.Vec, [][3]int) 
 const loftBroadPhaseWorkDivisor = 4
 
 // TestLoftCrossingAuditBroadPhaseCutsClassificationWork is the evidence that
-// the broad-phase actually removes work: it assembles the F~230 hand-chorded
+// the shortcuts actually remove work: it assembles the F~230 hand-chorded
 // spline wedge's triangle set once (m=112 stations) and audits that ONE set
 // twice, with the short-circuit off and then on, comparing how many pairs each
 // run pushed through auditLoftPair's exact classification.
@@ -626,9 +626,9 @@ func TestLoftCrossingAuditBroadPhaseCutsClassificationWork(t *testing.T) {
 		"the broad-phase must still remove the bulk of the exact classification work")
 }
 
-// BenchmarkLoftCrossingAuditBroadPhase times the F~230 wedge audit with the
-// short-circuit off and on, over the SAME pre-assembled triangle set, so the
-// two arms differ in nothing but the broad-phase. It reports rather than
+// BenchmarkLoftCrossingAuditBroadPhase times the F~230 wedge audit under
+// three shortcut settings, over the SAME pre-assembled triangle set, so the
+// arms differ in nothing but which shortcuts run. It reports rather than
 // asserts: a benchmark has no pass/fail, so it can measure wall clock without
 // the host-dependent flakiness a timing assertion would carry, and it does not
 // run under a plain go test ./... at all.
@@ -637,24 +637,34 @@ func TestLoftCrossingAuditBroadPhaseCutsClassificationWork(t *testing.T) {
 //
 //	go test . -run '^$' -bench BenchmarkLoftCrossingAuditBroadPhase -benchtime 5x
 //
-// Each arm reports its own ns/op alongside classifications/op and skips/op, so
-// the two quantities the audit's speedup is spoken about in are visible side by
-// side. This is the defining site for what they came to. Three repeats of the
-// command above, on one otherwise idle development host (linux/amd64, AMD Ryzen
-// 9 7900X3D), measured:
+// Each arm reports its own ns/op alongside classifications/op, skips/op and
+// certificates/op, so the quantities the audit's speedup is spoken about in
+// are visible side by side. This is the defining site for what they came to.
+// Three repeats of the command above, on one otherwise idle development host
+// (linux/amd64, AMD Ryzen 9 7900X3D), measured:
 //
-//	off: 4.05s, 3.30s, 4.31s per audit — 101926 classifications, 0 skips
-//	on:  2.44s, 2.43s, 2.53s per audit —  15234 classifications, 86692 skips
+//	off:        1.54s, 1.53s, 1.55s per audit — 101926 classifications
+//	broadphase: 0.86s, 0.88s, 0.83s per audit —  15234 classifications, 86692 skips
+//	on:         0.78s, 0.78s, 0.73s per audit —  13104 classifications, 86692 skips, 2130 certificates
 //
 // So the broad-phase removes 6.7x of the exact classification work and buys
-// about 1.4x to 1.7x of wall clock for it on this host. Those are two different
-// numbers about two different things, and the smaller one is the runtime claim:
-// reading the 6.7x count as a runtime figure overstates the speedup by roughly
-// 5x. The absolute figures are host-specific and will not reproduce elsewhere;
-// the ratio is the portable part, and even it moves by a few tenths between
-// repeats on the same host, which is exactly why no test asserts on it. See
-// TestLoftCrossingAuditBroadPhaseCutsClassificationWork for the count the suite
-// does assert on.
+// about 1.8x of wall clock for it on this host, and the certificates remove a
+// further 14% of what it leaves for about 9% more wall clock. Those are
+// different numbers about different things, and the smaller one of each pair
+// is the runtime claim: reading a count reduction as a runtime figure
+// overstates the speedup.
+//
+// This wedge understates what the certificates do, and deliberately so. Its
+// two triangulated caps are large and planar, so most of the pairs the
+// broad-phase leaves behind are coplanar cap-to-cap pairs that no certificate
+// can decide. A wall-dominated loft — the bevel-gear tooth slab the gear
+// generator's own proofs build — leaves a far higher share of noncoplanar
+// shared-entity pairs, and the certificates take about a quarter of that
+// build's whole wall clock. The absolute figures are host-specific and will
+// not reproduce elsewhere; even the ratios move by a few tenths between
+// repeats on the same host, which is exactly why no test asserts on them. See
+// TestLoftCrossingAuditBroadPhaseCutsClassificationWork for the count the
+// suite does assert on.
 func BenchmarkLoftCrossingAuditBroadPhase(b *testing.B) {
 	const stations = 112
 	fs := wedgeFitSpline(b)

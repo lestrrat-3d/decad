@@ -59,8 +59,11 @@ import (
 //     three vertex fixtures in
 //     TestLoftCrossingAuditCertificatesAgreeUnderScaleAndTranslation went RED.
 //   - "count an on-plane vertex as one side": the strict sign test was
-//     relaxed to a non-strict one. sharedVertexOnPlaneFixture went RED
-//     through the same two tests — this is the leg that fixture exists for.
+//     relaxed to a non-strict one.
+//     TestLoftCrossingAuditVertexCertificateNeverDecidesACrossingPair went RED
+//     on sharedVertexOnPlaneFixture and on
+//     sharedVertexDuplicateCoordinateFixture, which are the two fixtures that
+//     leg exists for.
 //   - "read one orientation only": the second isolatedSharedVertex call was
 //     deleted. TestLoftCrossingAuditVertexCertificateIsSymmetric went RED on
 //     its swapped-order cases, which is why isolatedSharedVertexFixture is
@@ -166,6 +169,26 @@ func sharedVertexOnPlaneFixture() ([]r3.Vec, [][3]int) {
 		r3.NewVec(1, 0, 0),
 		r3.NewVec(0, 1, 0),
 		r3.NewVec(0.5, 0.2, 0),
+		r3.NewVec(0.3, 0.3, 1),
+	}
+	return verts, [][3]int{{0, 1, 2}, {0, 3, 4}}
+}
+
+// sharedVertexDuplicateCoordinateFixture is the fixture row for equal
+// coordinates held at different recorded indices, put to the certificate: the
+// two triangles share the vertex index 0, and triangle B's vertex 3 holds the
+// SAME coordinate (1,0,0) as triangle A's vertex 1 at a different index. The
+// audit reads adjacency off indices, so it expects a point contact — but the
+// pair really meets along A's whole (0,0,0)-(1,0,0) edge, and is refused for
+// it. The certificate must stay out of the way, and it does, because that
+// duplicated coordinate lies ON triangle A's plane and so carries a zero
+// sign.
+func sharedVertexDuplicateCoordinateFixture() ([]r3.Vec, [][3]int) {
+	verts := []r3.Vec{
+		r3.NewVec(0, 0, 0),
+		r3.NewVec(1, 0, 0),
+		r3.NewVec(0, 1, 0),
+		r3.NewVec(1, 0, 0),
 		r3.NewVec(0.3, 0.3, 1),
 	}
 	return verts, [][3]int{{0, 1, 2}, {0, 3, 4}}
@@ -343,6 +366,7 @@ func TestLoftCrossingAuditCertificatesAgreeUnderScaleAndTranslation(t *testing.T
 		{name: "vertex crossing away", fixture: vertexCrossesAwayFixture},
 		{name: "vertex crossing through the plane", fixture: sharedVertexCrossingFixture},
 		{name: "vertex with another vertex on the plane", fixture: sharedVertexOnPlaneFixture},
+		{name: "vertex with a duplicated coordinate elsewhere", fixture: sharedVertexDuplicateCoordinateFixture},
 		{name: "same-side apexes", fixture: sameSideApexesFixture},
 	}
 
@@ -409,6 +433,7 @@ func TestLoftCrossingAuditVertexCertificateNeverDecidesACrossingPair(t *testing.
 		{name: "coplanar, overlapping away from the vertex", fixture: vertexCrossesAwayFixture},
 		{name: "noncoplanar, crossing the plane away from the vertex", fixture: sharedVertexCrossingFixture},
 		{name: "noncoplanar, with one vertex lying on the plane", fixture: sharedVertexOnPlaneFixture},
+		{name: "a duplicated coordinate at a different index", fixture: sharedVertexDuplicateCoordinateFixture},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			verts, tris := tc.fixture()
