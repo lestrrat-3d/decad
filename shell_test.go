@@ -119,6 +119,7 @@ func (c *offsetPreprocessingCancelContext) Err() error {
 }
 
 func TestShellContextCancellationDuringOffsetLeavesReceiverLive(t *testing.T) {
+	t.Parallel()
 	doc, box := shellBox(t)
 	before := doc.Recipe()
 	ctx := &offsetPreprocessingCancelContext{Context: t.Context()}
@@ -133,6 +134,7 @@ func TestShellContextCancellationDuringOffsetLeavesReceiverLive(t *testing.T) {
 }
 
 func TestShellContextCancellationDuringOffsetSetupLeavesReceiverLive(t *testing.T) {
+	t.Parallel()
 	doc, box := shellBox(t)
 	before := doc.Recipe()
 	ctx := &operationCancelContext{Context: t.Context(), target: "prismCornerLoopsBudget"}
@@ -147,6 +149,7 @@ func TestShellContextCancellationDuringOffsetSetupLeavesReceiverLive(t *testing.
 }
 
 func TestShellContextCancellationDuringSectionSurveyLeavesReceiverLive(t *testing.T) {
+	t.Parallel()
 	doc, box := shellBox(t)
 	before := doc.Recipe()
 	ctx := &operationCancelContext{Context: t.Context(), target: "sectionInradius"}
@@ -161,6 +164,7 @@ func TestShellContextCancellationDuringSectionSurveyLeavesReceiverLive(t *testin
 }
 
 func TestShellContextCancellationDuringKernelSetupLeavesReceiverLive(t *testing.T) {
+	t.Parallel()
 	doc, box := shellBox(t)
 	before := doc.Recipe()
 	ctx := &operationCancelContext{Context: t.Context(), target: "newWallKernelBudget"}
@@ -175,6 +179,7 @@ func TestShellContextCancellationDuringKernelSetupLeavesReceiverLive(t *testing.
 }
 
 func TestShellContextCancellationDuringAuditPreservesError(t *testing.T) {
+	t.Parallel()
 	for _, cancelErr := range []error{context.Canceled, context.DeadlineExceeded} {
 		t.Run(cancelErr.Error(), func(t *testing.T) {
 			doc, box := manySidedPrism(t, 17)
@@ -202,6 +207,7 @@ func (s forwardingFaceSelector) SelectFaces(body *decad.Body) ([]*decad.Face, er
 }
 
 func TestShellSelectorAdmission(t *testing.T) {
+	t.Parallel()
 	t.Run("BuiltInQuery", func(t *testing.T) {
 		doc, box := shellBox(t)
 
@@ -256,6 +262,7 @@ func (o unknownShellOption) Ident() any {
 }
 
 func TestShellOptionDispatch(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		opts []decad.ShellOption
@@ -326,6 +333,7 @@ func TestShellOptionDispatch(t *testing.T) {
 }
 
 func TestShellTubeInwardBox(t *testing.T) {
+	t.Parallel()
 	const th = 5.0
 	h := shellBoxHeight
 	doc, box := shellBox(t)
@@ -383,6 +391,7 @@ func TestShellTubeInwardBox(t *testing.T) {
 }
 
 func TestShellTubeInwardCylinder(t *testing.T) {
+	t.Parallel()
 	const R, th = 20.0, 4.0
 	h := 12.0
 	w := sketch.NewWorld()
@@ -417,6 +426,7 @@ func TestShellTubeInwardCylinder(t *testing.T) {
 }
 
 func TestShellCupInwardBox(t *testing.T) {
+	t.Parallel()
 	const th = 5.0
 	h := shellBoxHeight
 	_, box := shellBox(t)
@@ -460,6 +470,7 @@ func TestShellCupInwardBox(t *testing.T) {
 // TestShellCupFloorCarriesThicknessConversion keeps a cup floor derived from
 // a non-millimetre thickness from claiming the rescaled level was recorded.
 func TestShellCupFloorCarriesThicknessConversion(t *testing.T) {
+	t.Parallel()
 	thickness := units.Inches(0.1)
 	floor, err := thickness.In(units.Millimeter)
 	require.NoError(t, err)
@@ -482,6 +493,7 @@ func TestShellCupFloorCarriesThicknessConversion(t *testing.T) {
 }
 
 func TestShellCupOutwardBox(t *testing.T) {
+	t.Parallel()
 	const th = 5.0
 	h := shellBoxHeight
 	_, box := shellBox(t)
@@ -508,6 +520,7 @@ func TestShellCupOutwardBox(t *testing.T) {
 }
 
 func TestShellCupPlacedComposes(t *testing.T) {
+	t.Parallel()
 	const th = 5.0
 	_, box := shellBox(t)
 	cup, err := box.Shell(topCap(box), units.Millimeters(th))
@@ -560,6 +573,7 @@ func circleHoledBox(t *testing.T, holes ...[3]float64) (*decad.Document, *decad.
 }
 
 func TestShellCupHoledInward(t *testing.T) {
+	t.Parallel()
 	const th, rh = 5.0, 8.0
 	h := shellBoxHeight
 	doc, box := circleHoledBox(t, [3]float64{50, 30, rh})
@@ -660,6 +674,7 @@ func rimByRole(t *testing.T, b *decad.Body, role string) *decad.Face {
 // both, the loop flagged IsOuter must head the slice, so any consumer taking
 // Loops()[0] as the outer contour reads it correctly.
 func TestShellCupHoledRimLoopOrder(t *testing.T) {
+	t.Parallel()
 	const th, rh = 5.0, 8.0
 	_, box := circleHoledBox(t, [3]float64{50, 30, rh})
 	body, err := box.Shell(topCap(box), units.Millimeters(th))
@@ -675,6 +690,7 @@ func TestShellCupHoledRimLoopOrder(t *testing.T) {
 }
 
 func TestShellCupHoledTwoPosts(t *testing.T) {
+	t.Parallel()
 	const th, rh = 5.0, 6.0
 	h := shellBoxHeight
 	doc, box := circleHoledBox(t, [3]float64{30, 30, rh}, [3]float64{70, 30, rh})
@@ -709,6 +725,7 @@ func TestShellCupHoledTwoPosts(t *testing.T) {
 }
 
 func TestShellCupHoledOutward(t *testing.T) {
+	t.Parallel()
 	const th, rh = 4.0, 12.0
 	h := shellBoxHeight
 	_, box := circleHoledBox(t, [3]float64{50, 30, rh})
@@ -738,6 +755,7 @@ func TestShellCupHoledOutward(t *testing.T) {
 }
 
 func TestShellCupHoledRectangularPost(t *testing.T) {
+	t.Parallel()
 	const th = 5.0
 	// A rectangular hole gives a rectangular post; its grown cavity hole rounds
 	// its corners (an inward-reflex corner offsets to an arc, §7), so the post
@@ -804,6 +822,7 @@ func TestShellCupHoledRectangularPost(t *testing.T) {
 }
 
 func TestShellRefusals(t *testing.T) {
+	t.Parallel()
 	t.Run("holed both caps is S12 unsupported", func(t *testing.T) {
 		w := sketch.NewWorld()
 		s, err := w.CreateSketch(w.XY())
@@ -913,6 +932,7 @@ func TestShellRefusals(t *testing.T) {
 }
 
 func TestShellInwardSectionWorkBudget(t *testing.T) {
+	t.Parallel()
 	const segments = 128
 	pts := make([][2]float64, segments)
 	for i := range pts {
@@ -939,6 +959,7 @@ func TestShellInwardSectionWorkBudget(t *testing.T) {
 }
 
 func TestShellCupDownstream(t *testing.T) {
+	t.Parallel()
 	const th = 5.0
 
 	t.Run("MinWallThickness is exact", func(t *testing.T) {
@@ -1052,6 +1073,7 @@ func requireCupWall(t *testing.T, doc *decad.Document, tool, want float64, statu
 }
 
 func TestShellCupWallContextCancellationDuringOffset(t *testing.T) {
+	t.Parallel()
 	doc, box := shellBox(t)
 	_, err := box.Shell(topCap(box), units.Millimeters(5))
 	require.NoError(t, err)
@@ -1065,6 +1087,7 @@ func TestShellCupWallContextCancellationDuringOffset(t *testing.T) {
 }
 
 func TestShellCupWallContextCancellationDuringFollowUpLeavesDocumentUnchanged(t *testing.T) {
+	t.Parallel()
 	doc, box := shellBox(t)
 	_, err := box.Shell(topCap(box), units.Millimeters(5))
 	require.NoError(t, err)
@@ -1082,6 +1105,7 @@ func TestShellCupWallContextCancellationDuringFollowUpLeavesDocumentUnchanged(t 
 }
 
 func TestShellCupWallThickness(t *testing.T) {
+	t.Parallel()
 	const th = 5.0
 
 	t.Run("inward box", func(t *testing.T) {
@@ -1139,6 +1163,7 @@ func TestShellCupWallThickness(t *testing.T) {
 }
 
 func TestShellCupWallToolVerdict(t *testing.T) {
+	t.Parallel()
 	const th = 5.0
 	doc, box := shellBox(t)
 	_, err := box.Shell(topCap(box), units.Millimeters(th))
@@ -1150,6 +1175,7 @@ func TestShellCupWallToolVerdict(t *testing.T) {
 }
 
 func TestShellCupWallQualifyingPinch(t *testing.T) {
+	t.Parallel()
 	// The narrow right triangle has a roughly 5.7 degree material corner.
 	// Under the default 15 degree allowance that junction admits spanning
 	// balls tending to zero, so the wall is exactly zero and every legal tool
@@ -1174,6 +1200,7 @@ func TestShellCupWallQualifyingPinch(t *testing.T) {
 }
 
 func TestShellCupWallOutwardCavityQualifyingPinch(t *testing.T) {
+	t.Parallel()
 	const th = 0.3
 	// The V-notch has a roughly 7.15 degree apex. An outward shell keeps that
 	// notch on the cavity boundary, where its material-side corner qualifies
@@ -1200,6 +1227,7 @@ func TestShellCupWallOutwardCavityQualifyingPinch(t *testing.T) {
 }
 
 func TestShellCupTessellateBox(t *testing.T) {
+	t.Parallel()
 	// A box cup is all planar: it triangulates exactly (bound zero), its mesh
 	// is watertight, and the enclosed volume is the cup's own — proof the three
 	// caps and both wall bands are wound outward and share their rings.
@@ -1246,6 +1274,7 @@ func TestShellCupTessellateBox(t *testing.T) {
 }
 
 func TestShellCupTessellateCylinder(t *testing.T) {
+	t.Parallel()
 	// A cylindrical cup: outer and cavity walls chord their circles, and the
 	// cap and rim share that chording. The mesh is watertight, its bound is a
 	// positive sagitta within tolerance, and its volume is exactly the chorded
@@ -1289,6 +1318,7 @@ func TestShellCupTessellateCylinder(t *testing.T) {
 }
 
 func TestShellCupTessellateReflected(t *testing.T) {
+	t.Parallel()
 	// A reflected placement flips handedness; the cup mesh must still come out
 	// wound outward, enclosing the same positive volume.
 	const th = 5.0
@@ -1315,6 +1345,7 @@ func TestShellCupTessellateReflected(t *testing.T) {
 }
 
 func TestShellCupTessellateOutwardBox(t *testing.T) {
+	t.Parallel()
 	// An outward box cup dilates its rectangular section, landing the rounded
 	// outer corners' tangent points on the cavity's own top and bottom edge
 	// lines — the bridge-collinear rim band. It is a normal 5 mm-wide frame
@@ -1342,6 +1373,7 @@ func TestShellCupTessellateOutwardBox(t *testing.T) {
 }
 
 func TestShellCupUndercutsBox(t *testing.T) {
+	t.Parallel()
 	const th = 5.0
 
 	// Pulled straight out of its open top, a box cup has no undercut: every
@@ -1389,6 +1421,7 @@ func TestShellCupUndercutsBox(t *testing.T) {
 }
 
 func TestShellCupMinRadius(t *testing.T) {
+	t.Parallel()
 	// A cylindrical cup's cavity wall curves away from the material: its radius
 	// R − th is the tightest concave one. The convex outer cylinder is not a
 	// concave feature and does not appear.
@@ -1456,6 +1489,7 @@ func diskHoledCup(t *testing.T, R, rh, h float64) (*decad.Document, *decad.Body)
 // volume equals the SAME A_O·h_o − A_C·h_c the build asserts, evaluated on the
 // chorded circles the mesh actually holds.
 func TestShellCupHoledTessellate(t *testing.T) {
+	t.Parallel()
 	const th, rh = 5.0, 8.0
 	h := shellBoxHeight
 	_, box := circleHoledBox(t, [3]float64{50, 30, rh})
@@ -1526,6 +1560,7 @@ func TestShellCupHoledTessellate(t *testing.T) {
 // are circular, so the rim bands close cleanly and the mesh is watertight with
 // the post present.
 func TestShellCupHoledTessellateOutward(t *testing.T) {
+	t.Parallel()
 	const R, rh, th = 30.0, 8.0, 4.0
 	h := shellBoxHeight
 	_, disk := diskHoledCup(t, R, rh, h)
@@ -1572,6 +1607,7 @@ func TestShellCupHoledTessellateOutward(t *testing.T) {
 // watertight mesh; the chorded features are the four outer corners plus the
 // tunnel and post circles.
 func TestShellCupHoledTessellateOutwardBox(t *testing.T) {
+	t.Parallel()
 	const th, rh = 5.0, 8.0
 	h := shellBoxHeight
 	_, box := circleHoledBox(t, [3]float64{50, 30, rh})
@@ -1600,6 +1636,7 @@ func TestShellCupHoledTessellateOutwardBox(t *testing.T) {
 // The post walls (side(i,j)/shellSide(i,j), i ≥ 1) are now walked, so a post
 // undercut is caught rather than dropped into a false all-clear.
 func TestShellCupHoledUndercuts(t *testing.T) {
+	t.Parallel()
 	const th, rh = 5.0, 8.0
 
 	// Pulled straight out of the open top, every wall is perpendicular (the
@@ -1649,6 +1686,7 @@ func TestShellCupHoledUndercuts(t *testing.T) {
 // rh, the one concave cylindrical face. The post's own outer cylinder curves
 // TOWARD the material and is not concave, so the reading is rh, exact.
 func TestShellCupHoledMinRadius(t *testing.T) {
+	t.Parallel()
 	const th, rh = 5.0, 8.0
 	doc, box := circleHoledBox(t, [3]float64{50, 30, rh})
 	_, err := box.Shell(topCap(box), units.Millimeters(th))
@@ -1667,6 +1705,7 @@ func TestShellCupHoledMinRadius(t *testing.T) {
 // TestShellCupSeparatesComputedOpenAndExactFloorBounds keeps an all-planar cup
 // from assigning its computed open end's displacement to the exact floor.
 func TestShellCupSeparatesComputedOpenAndExactFloorBounds(t *testing.T) {
+	t.Parallel()
 	const (
 		plateHeight = 1e12
 		shortBy     = 1e-3
@@ -1707,6 +1746,7 @@ func TestShellCupSeparatesComputedOpenAndExactFloorBounds(t *testing.T) {
 }
 
 func TestShellCupWallThicknessCarriesConversionDelta(t *testing.T) {
+	t.Parallel()
 	// A cup whose shell thickness is stated in a non-millimetre unit: the
 	// wall reading is exactly the shell theorem's own t, but that t's own
 	// unit conversion (magnitudeInBounded, shell.go) carries a displacement

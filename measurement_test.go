@@ -10,6 +10,7 @@ import (
 )
 
 func TestExactness(t *testing.T) {
+	t.Parallel()
 	// Exact is the zero value on purpose: an analytic result is the default
 	// state, and Approximate is the marked one.
 	var e decad.Exactness
@@ -21,6 +22,7 @@ func TestExactness(t *testing.T) {
 }
 
 func TestMeasurement(t *testing.T) {
+	t.Parallel()
 	// A v1 boolean-derived volume: the value and its error bound carry the
 	// same Kind — the error bound on a volume is a volume.
 	vol := decad.Measurement{
@@ -41,6 +43,7 @@ func TestMeasurement(t *testing.T) {
 }
 
 func TestVecMeasurement(t *testing.T) {
+	t.Parallel()
 	// A position: Value is millimetres by convention, Bound is a Length.
 	pos := decad.VecMeasurement{
 		Value:     r3.NewVec(10, 20, 30),
@@ -64,6 +67,7 @@ func TestVecMeasurement(t *testing.T) {
 }
 
 func TestBox(t *testing.T) {
+	t.Parallel()
 	box := decad.Box{
 		Min:       r3.NewVec(0, 0, 0),
 		Max:       r3.NewVec(100, 60, 10),

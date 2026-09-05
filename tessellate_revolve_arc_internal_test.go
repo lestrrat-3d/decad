@@ -47,6 +47,7 @@ func arcCellReference(cell revArcCell, scale, held float64, weight int) float64 
 }
 
 func TestRevolveArcCellSlackBoundsASignChangingJacobianGap(t *testing.T) {
+	t.Parallel()
 	// docs/tessellation-design.md §14's inner-torus cell: the meridian runs
 	// through the tube's innermost point, so ρ(t) dips and the Jacobian error
 	// against the flat facet's constant density changes sign TWICE inside one
@@ -93,6 +94,7 @@ func TestRevolveArcCellSlackBoundsASignChangingJacobianGap(t *testing.T) {
 }
 
 func TestRevolveArcCellSlackIsExactOnAFixedSignCell(t *testing.T) {
+	t.Parallel()
 	// A cell whose difference never changes sign: the certified subdivision
 	// must land close to the true integral, which is what says the fixed
 	// budget buys real tightness rather than a safe but useless figure.
@@ -115,6 +117,7 @@ func TestRevolveArcCellSlackIsExactOnAFixedSignCell(t *testing.T) {
 }
 
 func TestRevolveArcFanSlackBoundsAPoleCell(t *testing.T) {
+	t.Parallel()
 	// A sphere's polar cell: Jheld is linear in t through the pole, Jtrue keeps
 	// its sinusoidal ρ, and the fan integrates over the whole unit square.
 	const cV, radius = 0.0, 5.0
@@ -146,6 +149,7 @@ func TestRevolveArcFanSlackBoundsAPoleCell(t *testing.T) {
 }
 
 func TestRevolveArcCellSlackWidensWithTheModelSlack(t *testing.T) {
+	t.Parallel()
 	// The meridian model is the payload's own axis-coordinate circle, and the
 	// caller hands it the composed coordinate displacement to widen ρ by. A
 	// larger displacement must produce a larger allowance, never the same one.
@@ -163,6 +167,7 @@ func TestRevolveArcCellSlackWidensWithTheModelSlack(t *testing.T) {
 }
 
 func TestChordSegmentAreaBoundsTheTrueCircularSegments(t *testing.T) {
+	t.Parallel()
 	// The proven r²θ³/(12n²) must sit above the true Σ (r²/2)(φ − sin φ) and
 	// stay close to it, and it must never call a trig function to say so.
 	for _, tc := range []struct {
@@ -186,6 +191,7 @@ func TestChordSegmentAreaBoundsTheTrueCircularSegments(t *testing.T) {
 }
 
 func TestRevolveArcStationEnclosesTheRecordedPoint(t *testing.T) {
+	t.Parallel()
 	// The axis frame is the plane's own u axis, so (z, ρ) is (u, v) exactly and
 	// the station's stored pair can be checked against the recorded circle by
 	// hand.
@@ -216,6 +222,7 @@ func TestRevolveArcStationEnclosesTheRecordedPoint(t *testing.T) {
 }
 
 func TestChordCountHonoursTheWalkMinimum(t *testing.T) {
+	t.Parallel()
 	whole := segmentWalk{radius: 1, th0: 0, th1: 2 * math.Pi, closed: true}
 
 	t.Run("a budget at or above 2r takes the minimum with no inverse", func(t *testing.T) {
@@ -264,6 +271,7 @@ func TestChordCountHonoursTheWalkMinimum(t *testing.T) {
 }
 
 func TestRequireWalkClearanceGatesTheSagittaTubes(t *testing.T) {
+	t.Parallel()
 	// A flattened rectangle whose two long sides are 0.3 apart: with a 0.1
 	// tube on each the pair clears, and with a 0.2 tube on each it does not.
 	pts := []Point2{{U: 0, V: 0}, {U: 10, V: 0}, {U: 10, V: 0.3}, {U: 0, V: 0.3}}
@@ -282,6 +290,7 @@ func TestRequireWalkClearanceGatesTheSagittaTubes(t *testing.T) {
 }
 
 func TestRevolveCircularMeshAreaSlackCoversTheHeldAreaGap(t *testing.T) {
+	t.Parallel()
 	// docs/tessellation-design.md §14's "check areaSlack against high-precision
 	// local area differences", for the two circular generator classes: the
 	// published slack must cover the gap between the body's own analytic area

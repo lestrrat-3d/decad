@@ -295,6 +295,7 @@ func triAssert(t *testing.T, pts []Point2, outer []int, holes [][]int) {
 // TestTriangulate2DProperty samples the guaranteed-valid family at scale from a
 // fixed seed and asserts the full contract on every draw.
 func TestTriangulate2DProperty(t *testing.T) {
+	t.Parallel()
 	t.Logf("triPropSeed=%#x", triPropSeed)
 	rng := rand.New(rand.NewSource(triPropSeed))
 
@@ -325,6 +326,7 @@ func TestTriangulate2DProperty(t *testing.T) {
 // the degenerate alignment is present by construction; the comment on each states
 // how P4/P2 bite if the bridgeHole / earClip fix were reverted.
 func TestTriangulate2DBridgeCollinearFamily(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name  string
 		w, h  int
@@ -385,6 +387,7 @@ func TestTriangulate2DBridgeCollinearFamily(t *testing.T) {
 // test-only exact oracles (triSignedArea2, the P4/P5 edge multiset), never the
 // production cross2.
 func TestTriangulate2DHoleHoleCollinear(t *testing.T) {
+	t.Parallel()
 	pts, outer, holes, ok := triBuild(13, 13, []triRect{{2, 1, 3, 2}, {4, 2, 7, 3}})
 	require.True(t, ok, `the hole-hole shared-v-line repro builds a valid polygon`)
 	triAssert(t, pts, outer, holes)

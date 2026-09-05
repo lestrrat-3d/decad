@@ -277,6 +277,7 @@ func cellAllowFor(a, b ruledArc) float64 {
 // ruled patch and the bilinear chord patch. The reference shares no code with
 // the bound; its resolution is settled by convergedRuledGap's own criterion.
 func TestCellChordCurveAreaAllowEnclosesTwistedRuledGap(t *testing.T) {
+	t.Parallel()
 	cellSweeps := []float64{0.4, 0.1, 0.025}
 	for _, deg := range loftTwistSweepDegrees {
 		phi := deg * math.Pi / 180
@@ -332,6 +333,7 @@ func TestCellChordCurveAreaAllowEnclosesTwistedRuledGap(t *testing.T) {
 // A repair applied at any single one of those sites leaves the others
 // publishing 0.
 func TestCellChordCurveAreaAllowSurvivesAnUnderflowingScale(t *testing.T) {
+	t.Parallel()
 	const radius, dt = 1e-200, 0.4
 	for _, separation := range []float64{1e200, 1} {
 		lo, hi := twistedArcCellPair(0, 0, radius, separation, 0.3, dt)
@@ -374,6 +376,7 @@ func TestCellChordCurveAreaAllowSurvivesAnUnderflowingScale(t *testing.T) {
 // fixture that quietly stopped satisfying it would be caught here rather than
 // silently weakening every enclosure above.
 func TestCellChordCurveAreaAllowSagittaIsParameterMatched(t *testing.T) {
+	t.Parallel()
 	for _, dt := range []float64{0.4, 0.1, 0.025} {
 		lo, _ := twistedArcCellPair(0, 4, 1.5, 1, 0.3, dt)
 		chordStart, chord := lo.at(0), lo.at(1).Sub(lo.at(0))
@@ -391,6 +394,7 @@ func TestCellChordCurveAreaAllowSagittaIsParameterMatched(t *testing.T) {
 // energy reading against the quantity it claims to bound, integrated directly:
 // the mean square of |curve'(s) − chord| over the cell.
 func TestUniformSpeedTangentEnergyUpperEnclosesTheIntegratedEnergy(t *testing.T) {
+	t.Parallel()
 	for _, dt := range []float64{0.9, 0.4, 0.1, 0.025} {
 		lo, _ := twistedArcCellPair(0, 4, 1.5, 1, 0.3, dt)
 		chord := lo.at(1).Sub(lo.at(0))
@@ -414,6 +418,7 @@ func TestUniformSpeedTangentEnergyUpperEnclosesTheIntegratedEnergy(t *testing.T)
 // a non-finite or negative operand, or an arc-length claim below the chord it
 // is supposed to subtend, is a broken caller claim and never a small bound.
 func TestUniformSpeedTangentEnergyUpperRefusesBrokenClaims(t *testing.T) {
+	t.Parallel()
 	for name, args := range map[string][2]float64{
 		"non-finite arc": {math.Inf(1), 1},
 		"NaN chord":      {2, math.NaN()},
@@ -434,6 +439,7 @@ func TestUniformSpeedTangentEnergyUpperRefusesBrokenClaims(t *testing.T) {
 // densely. The sampled minimum is an upper bound on the true minimum, so a
 // published value above it would be a proven falsification.
 func TestCellChordPatchNormalLowerBoundsTheAreaElement(t *testing.T) {
+	t.Parallel()
 	for _, deg := range loftTwistSweepDegrees {
 		phi := deg * math.Pi / 180
 		lo, hi := twistedArcCellPair(phi, 4, 1.5, 3, 0.3, 0.4)
@@ -470,6 +476,7 @@ func TestCellChordPatchNormalLowerBoundsTheAreaElement(t *testing.T) {
 // than a number its own premise does not support. cellChordCurveAreaAllow then
 // falls back to its premise-free arm, which is what the next test checks.
 func TestCellChordPatchNormalLowerRefusesADegenerateCell(t *testing.T) {
+	t.Parallel()
 	// A cell whose rung reverses across the cell: wLo sits one way off the
 	// section chord and wHi the other, so the patch folds through zero area
 	// somewhere inside it.
@@ -489,6 +496,7 @@ func TestCellChordPatchNormalLowerRefusesADegenerateCell(t *testing.T) {
 // element to divide by, so the published bound is the premise-free ceiling
 // alone — and it must still enclose the directly integrated gap.
 func TestCellChordCurveAreaAllowFallsBackOnADegenerateCell(t *testing.T) {
+	t.Parallel()
 	// Two coplanar arcs whose rung reverses direction across the cell.
 	lo := ruledArc{centre: r3.NewVec(0, 0, 0), radius: 2, u: r3.NewVec(1, 0, 0), v: r3.NewVec(0, 1, 0), t0: 0.2, dt: 0.5}
 	hi := ruledArc{centre: r3.NewVec(0, 0, 0), radius: 2, u: r3.NewVec(1, 0, 0), v: r3.NewVec(0, 1, 0), t0: 0.2 + 0.9, dt: -1.4}
@@ -505,6 +513,7 @@ func TestCellChordCurveAreaAllowFallsBackOnADegenerateCell(t *testing.T) {
 // TestCellChordCurveAreaAllowRefusesBrokenClaims pins the +Inf answers of the
 // ruled leg itself: a broken caller claim must never publish a shrunken bound.
 func TestCellChordCurveAreaAllowRefusesBrokenClaims(t *testing.T) {
+	t.Parallel()
 	vLo, vHi := r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0)
 	wLo, wHi := r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 1)
 	bad := math.NaN()
@@ -540,6 +549,7 @@ func TestCellChordCurveAreaAllowRefusesBrokenClaims(t *testing.T) {
 // never exceed the true cell chord 2*R*sin(sweep/(2m)), which is what keeps
 // the energy it feeds from being understated.
 func TestLoftCertifiedChordLowerIsALowerBound(t *testing.T) {
+	t.Parallel()
 	const radius = 2.75
 	for _, turn := range []float64{0.01, 0.25, 0.5, 1} {
 		for _, m := range []int{1, 3, 64, 1024} {
@@ -593,6 +603,7 @@ func TestLoftCertifiedChordLowerIsALowerBound(t *testing.T) {
 // answers about 5592.1318893204816 against a true 5592.1318893050811 — roughly
 // 1.5e-8 too large, some four orders of magnitude past this record's own ulp.
 func TestLoftCertifiedChordLowerRefusesTheHeldWalkFloats(t *testing.T) {
+	t.Parallel()
 	seg := ArcSeg{
 		Center: Point2{U: 0, V: 0},
 		Start:  Point2{U: 20724598.671875, V: 50331168.203125},
@@ -707,6 +718,7 @@ func oppositeBulgeCellPair(radius, height, t0, dt, skew float64) (ruledArc, rule
 // directions the sharp arm's 2*md*(cMax+I) term carries most of the bound, and
 // removing it drops the published value below the directly integrated gap.
 func TestCellChordCurveAreaAllowEnclosesOppositeBulgeGap(t *testing.T) {
+	t.Parallel()
 	lo, hi := oppositeBulgeCellPair(15, 0.01, 0.3, 0.05, 1)
 	gap := math.Abs(convergedRuledGap(t, lo, hi))
 	allow := cellAllowFor(lo, hi)
@@ -773,6 +785,7 @@ func recomposeCellAllow(a, b ruledArc) (float64, float64, float64, float64, floa
 // enclosure fixture can bind it" — the searched cell count, the worst gap-to-
 // stripped-bound ratio, and the four subtests deleting the term does redden.
 func TestCellChordCurveAreaAllowComposesEveryTerm(t *testing.T) {
+	t.Parallel()
 	type row struct {
 		name    string
 		lo, hi  ruledArc
@@ -920,6 +933,7 @@ func convergedRotatedWedgeDenotedArea(t *testing.T, phi float64) float64 {
 // nonzero angle the circular cells' chords are genuinely non-parallel, so each
 // curved cell exercises the bilinear-area nominal value.
 func TestLoftRotatedWedgeAreaBoundEnclosesDenotedSurface(t *testing.T) {
+	t.Parallel()
 	for _, deg := range loftTwistSweepDegrees {
 		phi := deg * math.Pi / 180
 		w, base, top := wedgePlanesH(t, rotatedWedgeHeight)
@@ -1061,6 +1075,7 @@ func heldTrianglePairArea(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // direct numerical integral of the surfaces themselves, converged well below
 // the quantity it is differenced against, and shares no code with the bound.
 func TestDisplacedStationCellNeedsTheStationShiftLeg(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name           string
 		radius, height float64

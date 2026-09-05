@@ -61,6 +61,7 @@ func freeformWallFace(t *testing.T, body *decad.Body) *decad.Face {
 // POSITIVE bound — an arc length is never exact in any tier
 // (docs/spline-design.md §6.1), so a test pinning Exact here would pin a bug.
 func TestExtrudeFreeformAreaIsRegionPlusPerimeter(t *testing.T) {
+	t.Parallel()
 	s, p := fitSplineArchSketch(t)
 	record, _, err := decad.RecordProfile(s, p)
 	require.NoError(t, err)
@@ -101,6 +102,7 @@ func TestExtrudeFreeformAreaIsRegionPlusPerimeter(t *testing.T) {
 // two faces), and Face.Origins() carrying the side(0,j) role of the recorded
 // segment.
 func TestExtrudeFreeformTopology(t *testing.T) {
+	t.Parallel()
 	s, p := fitSplineArchSketch(t)
 	record, _, err := decad.RecordProfile(s, p)
 	require.NoError(t, err)
@@ -139,6 +141,7 @@ func TestExtrudeFreeformTopology(t *testing.T) {
 // — never Exact 0 mm, which topology.go's own doc comment warns a rim left
 // unset would silently publish.
 func TestExtrudeFreeformRimLengthPublished(t *testing.T) {
+	t.Parallel()
 	s, p := fitSplineArchSketch(t)
 	d := decad.New()
 	body, err := d.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -169,6 +172,7 @@ func TestExtrudeFreeformRimLengthPublished(t *testing.T) {
 // topology_internal_test.go's TestNormalAtRefusesNURBSSurface pins the same
 // fact against a bare *Face built directly.
 func TestExtrudeFreeformNormalAtRefuses(t *testing.T) {
+	t.Parallel()
 	s, p := fitSplineArchSketch(t)
 	d := decad.New()
 	body, err := d.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -216,6 +220,7 @@ func rectangleWithBulgeSketch(t *testing.T, bulgeOut bool) (*sketch.Sketch, *ske
 // and a test covering only one direction cannot tell the certificate from a
 // constant (docs/spline-design.md §6.5).
 func TestExtrudeFreeformConvexityBothDirections(t *testing.T) {
+	t.Parallel()
 	convexOf := func(bulgeOut bool) bool {
 		s, p := rectangleWithBulgeSketch(t, bulgeOut)
 		d := decad.New()
@@ -247,6 +252,7 @@ func TestExtrudeFreeformConvexityBothDirections(t *testing.T) {
 // straight-wall rule — rather than refusing, and it publishes a bool rather
 // than staying unresolved.
 func TestExtrudeFreeformStraightWalkBuilds(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -286,6 +292,7 @@ func TestExtrudeFreeformStraightWalkBuilds(t *testing.T) {
 // 0, since C” = 0 at degree 1), so the WHOLE chain's verdict is carried by
 // the single interior joint between them — a left turn, so convex.
 func TestExtrudeFreeformJointCarriesChainVerdict(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -344,6 +351,7 @@ func r19Fixture(t *testing.T, control [4][2]float64) (*sketch.Sketch, *sketch.Pr
 // miss (spline_convexity_internal_test.go pins all three at the certificate
 // level; this pins them as BUILD refusals through the public Extrude).
 func TestExtrudeFreeformR19RefusesTheBuild(t *testing.T) {
+	t.Parallel()
 	cases := map[string][4][2]float64{
 		"two curvature sign changes":    {{0, 0}, {1, 0}, {-4, 1}, {0.9, 0}},
 		"coincident first control pair": {{0, 0}, {0, 0}, {1.0 / 3, 0}, {1, 1}},
@@ -397,6 +405,7 @@ func TestExtrudeFreeformR19RefusesTheBuild(t *testing.T) {
 // Unsound, which is what a loop-less closed face would report
 // (verify.go's loop-less-face audit has no arm for KindNURBS).
 func TestExtrudeClosedSplineTwoLoopsAndSound(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -442,6 +451,7 @@ func TestExtrudeClosedSplineTwoLoopsAndSound(t *testing.T) {
 // tolerance-gate arm this increment depends on (#178) — no
 // DiagMeasurementBeyondTolerance at the default tolerance.
 func TestExtrudeFreeformVerifySound(t *testing.T) {
+	t.Parallel()
 	s, p := fitSplineArchSketch(t)
 	d := decad.New()
 	body, err := d.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -470,6 +480,7 @@ func TestExtrudeFreeformVerifySound(t *testing.T) {
 // OpExtrude step carrying a free-form ProfileRecord encodes and decodes
 // byte-stably and passes the recipe's own strict decode.
 func TestExtrudeFreeformRecipeRoundTrips(t *testing.T) {
+	t.Parallel()
 	s, p := fitSplineArchSketch(t)
 	d := decad.New()
 	_, err := d.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -497,6 +508,7 @@ func TestExtrudeFreeformRecipeRoundTrips(t *testing.T) {
 // budget — cheap for this fixture, but the reason a caller placing a large
 // free-form body many times pays for it every time.
 func TestExtrudeFreeformPlacementReproducesVolume(t *testing.T) {
+	t.Parallel()
 	s, p := fitSplineArchSketch(t)
 	d := decad.New()
 	body, err := d.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -534,6 +546,7 @@ func TestExtrudeFreeformPlacementReproducesVolume(t *testing.T) {
 // of the SAME evaluator building in the same test — so a caller can tell the
 // refusal is about the tier, not about free-form sections in general.
 func TestExtrudeFreeformTierBCRefusesWithTierACounterpart(t *testing.T) {
+	t.Parallel()
 	// Tier A counterpart: the fit-spline arch builds.
 	s, p := fitSplineArchSketch(t)
 	d := decad.New()
@@ -572,6 +585,7 @@ func TestExtrudeFreeformTierBCRefusesWithTierACounterpart(t *testing.T) {
 // three coincident points authenticates to zero live profiles, so the
 // degenerate net never becomes a candidate Extrude could even be offered.
 func TestExtrudeFreeformCollapsedControlNetRefusesR14(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -594,6 +608,7 @@ func TestExtrudeFreeformCollapsedControlNetRefusesR14(t *testing.T) {
 // gate. Every sampled point of the closed-spline fixture's own boundary must
 // sit inside the built body's published Bounds, widened by its Bound.
 func TestExtrudeFreeformFalsifierDenseSample(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -742,6 +757,7 @@ func segmentDistance(p, a, b [2]float64) float64 {
 // exactly measured volume from below — a chorded outline is inscribed, so it
 // can only lose area to the curve it stands in for, never gain it.
 func TestFreeformPrismTessellatesItsChordedWall(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	body := freeformArchBody(t, doc)
 
@@ -788,6 +804,7 @@ func TestFreeformPrismTessellatesItsChordedWall(t *testing.T) {
 // tighter than Bound — a station is an exact point ON the curve, so it may
 // only miss the reference polyline by that polyline's own sampling error.
 func TestFreeformPrismChordingEnclosesTheCurveBothWays(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	body := overshootNetBody(t, doc)
 
@@ -852,6 +869,7 @@ func TestFreeformPrismChordingEnclosesTheCurveBothWays(t *testing.T) {
 // before 2^14 chords are. Both are ErrUnsupported and both are §5's refusal
 // table, so the assertion is on the sentinel and on nothing being returned.
 func TestFreeformPrismChordCountTracksTheTolerance(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	body := freeformArchBody(t, doc)
 
@@ -877,6 +895,7 @@ func TestFreeformPrismChordCountTracksTheTolerance(t *testing.T) {
 // determinism contract) on the 15-point involute fit spline, the heaviest
 // free-form fixture this package builds.
 func TestFreeformPrismExportsDeterministically(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	s, p := involuteFlankSketch(t)
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
@@ -905,6 +924,7 @@ func TestFreeformPrismExportsDeterministically(t *testing.T) {
 // volume must land within its own published bound of the exact difference of
 // the two operands' volumes.
 func TestFreeformPrismCutsAnInteriorBox(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	body := freeformArchBody(t, doc)
 	prismVolume, err := body.Volume()
@@ -933,6 +953,7 @@ func TestFreeformPrismCutsAnInteriorBox(t *testing.T) {
 // DECIDED — a proven Interference row with a positive overlap volume and its
 // own bound — rather than left undecided under DiagUnsupportedPairPayload.
 func TestFreeformPrismInterferenceDecided(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	body := freeformArchBody(t, doc)
 	// Shifted in all three axes, so the pair overlaps in a genuine volume and
@@ -959,6 +980,7 @@ func TestFreeformPrismInterferenceDecided(t *testing.T) {
 // free-form pair: DiagUndecidedClearance, never a fabricated Gap and never a
 // silent Sound pass (clearance.go / verify.go).
 func TestFreeformPrismClearanceUndecided(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	freeformArchBody(t, doc)
 	boxBody(t, doc, 100, 100, 110, 110, 10)
@@ -975,6 +997,7 @@ func TestFreeformPrismClearanceUndecided(t *testing.T) {
 // nil BodyReport.MinWallThickness with DiagUndecidedWall, never a silent
 // pass (survey.go's errFreeformSection through survey.go's DiagUndecidedWall).
 func TestFreeformPrismMinWallThicknessUndecided(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	freeformArchBody(t, doc)
 
@@ -993,6 +1016,7 @@ func TestFreeformPrismMinWallThicknessUndecided(t *testing.T) {
 // (verify.go's BodyReport doc comment); here it must come with
 // DiagUndecidedUndercut and a non-Sound status, never read as a pass.
 func TestFreeformPrismUndercutsUndecided(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	freeformArchBody(t, doc)
 
@@ -1010,6 +1034,7 @@ func TestFreeformPrismUndercutsUndecided(t *testing.T) {
 // BodyReport.MinRadius with DiagUndecidedMinRadius, never a silent "no
 // concave feature" pass (survey.go).
 func TestFreeformPrismMinRadiusUndecided(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	freeformArchBody(t, doc)
 
@@ -1031,6 +1056,7 @@ func TestFreeformPrismMinRadiusUndecided(t *testing.T) {
 // must trip the SAME refusal — it is keyed on the recorded kind, not the
 // degree (docs/spline-design.md §5.1/§6.5).
 func TestFreeformPrismFilletChamferRefuse(t *testing.T) {
+	t.Parallel()
 	for _, fixture := range []struct {
 		name  string
 		build func(t *testing.T, doc *decad.Document) *decad.Body
@@ -1065,6 +1091,7 @@ func TestFreeformPrismFilletChamferRefuse(t *testing.T) {
 // shell_offset.go's own offset loop reversal), over both a curved and a
 // straight-walk (degree-1) free-form wall.
 func TestFreeformPrismShellRefuses(t *testing.T) {
+	t.Parallel()
 	for _, fixture := range []struct {
 		name  string
 		build func(t *testing.T, doc *decad.Document) *decad.Body
@@ -1090,6 +1117,7 @@ func TestFreeformPrismShellRefuses(t *testing.T) {
 // path (capblend_geom.go's oneLoopCornerLoop), reached by selecting every
 // edge of one cap rather than a single corner.
 func TestFreeformPrismCapLoopChamferRefuses(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	body := freeformArchBody(t, doc)
 
@@ -1104,6 +1132,7 @@ func TestFreeformPrismCapLoopChamferRefuses(t *testing.T) {
 // deciding circularity, so it refuses on the free-form span regardless of
 // where the axis sits relative to the profile.
 func TestFreeformPrismRevolveRefuses(t *testing.T) {
+	t.Parallel()
 	s, p := fitSplineArchSketch(t)
 	doc := decad.New()
 
@@ -1120,6 +1149,7 @@ func TestFreeformPrismRevolveRefuses(t *testing.T) {
 // AND its straight chord wall are all analytic Plane faces, so Exactly(3)
 // fails the moment the free-form wall's NURBSSurface leaks in too.
 func TestFreeformPrismSelectorNeverMatchesFace(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	body := freeformArchBody(t, doc)
 	require.Len(t, body.Faces(), 4, "two caps plus the spline wall plus the chord wall")
@@ -1137,6 +1167,7 @@ func TestFreeformPrismSelectorNeverMatchesFace(t *testing.T) {
 // never counts a free-form NURBSCurve rim: only the two analytic vertical
 // junction edges are Line3, so Exactly(2) fails the moment a rim leaks in.
 func TestFreeformPrismSelectorNeverMatchesEdge(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	body := freeformArchBody(t, doc)
 
@@ -1177,6 +1208,7 @@ func reversedArchSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
 // bound and the same vertex set — down to the last bit, since every station is
 // one rounding of the same exact rational.
 func TestFreeformPrismChordsBothWalkDirectionsIdentically(t *testing.T) {
+	t.Parallel()
 	const tol = 0.02
 	meshOf := func(build func(t *testing.T) (*sketch.Sketch, *sketch.Profile)) *decad.Mesh {
 		s, p := build(t)

@@ -73,6 +73,7 @@ func holedPlateBody(t *testing.T) *decad.Body {
 }
 
 func TestTessellatePlate(t *testing.T) {
+	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -195,6 +196,7 @@ func TestTessellatePayloadClasses(t *testing.T) {
 }
 
 func TestTessellatePlateWithHole(t *testing.T) {
+	t.Parallel()
 	body := holedPlateBody(t)
 	tol := 0.5
 	mesh, err := body.Tessellate(units.Millimeters(tol))
@@ -261,6 +263,7 @@ func TestTessellatePlateWithHole(t *testing.T) {
 }
 
 func TestTessellateContextMatchesCompatibilityWrapper(t *testing.T) {
+	t.Parallel()
 	body := holedPlateBody(t)
 	tol := units.Millimeters(0.5)
 
@@ -276,6 +279,7 @@ func TestTessellateContextMatchesCompatibilityWrapper(t *testing.T) {
 }
 
 func TestTessellateNonConvexOutline(t *testing.T) {
+	t.Parallel()
 	// An L-shaped plate: the cap triangulation must respect the reflex
 	// corner — a convex fan would spill outside the region.
 	w := sketch.NewWorld()
@@ -306,6 +310,7 @@ func TestTessellateNonConvexOutline(t *testing.T) {
 }
 
 func TestTessellateQuarterDisk(t *testing.T) {
+	t.Parallel()
 	// An arc-bounded profile: the wall and both caps must chord the arc at
 	// the same samples.
 	w := sketch.NewWorld()
@@ -341,6 +346,7 @@ func TestTessellateQuarterDisk(t *testing.T) {
 }
 
 func TestTessellatePlacedReflected(t *testing.T) {
+	t.Parallel()
 	// A reflected placement flips handedness; the mesh must come out wound
 	// outward all the same.
 	s, p := plateSketch(t)
@@ -363,6 +369,7 @@ func TestTessellatePlacedReflected(t *testing.T) {
 }
 
 func TestTessellateToleranceValidation(t *testing.T) {
+	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -388,6 +395,7 @@ func TestTessellateToleranceValidation(t *testing.T) {
 }
 
 func TestTessellateChordingBoundNeverExceedsTolerance(t *testing.T) {
+	t.Parallel()
 	// A threshold tolerance that used to land one chord short: the chording
 	// bound of an exact payload must never exceed what the caller asked for.
 	body := holedPlateBody(t)
@@ -399,6 +407,7 @@ func TestTessellateChordingBoundNeverExceedsTolerance(t *testing.T) {
 }
 
 func TestTessellateBoundIncludesComputedLevelDisplacement(t *testing.T) {
+	t.Parallel()
 	const (
 		plateHeight = 1e12
 		shortBy     = 1e-3
@@ -425,6 +434,7 @@ func TestTessellateBoundIncludesComputedLevelDisplacement(t *testing.T) {
 }
 
 func TestTessellateRejectsTangentHole(t *testing.T) {
+	t.Parallel()
 	testcases := []struct {
 		Name string
 		CX   float64
@@ -472,6 +482,7 @@ func testTangentHole(t *testing.T, cx, cy float64) {
 }
 
 func TestTessellateRejectsImpossiblyFineTolerance(t *testing.T) {
+	t.Parallel()
 	// acos(1 − tol/r) rounds to zero for tiny tolerances; the stable inverse
 	// must refuse the unbuildable ask rather than walk up forever.
 	body := holedPlateBody(t)
@@ -498,6 +509,7 @@ func TestTessellateRejectsImpossiblyFineTolerance(t *testing.T) {
 // TestTessellateUnreservedAxialDisplacementCanExceedTolerance covers the prism
 // that does carry one.
 func TestTessellateReservesSectionDisplacementFromTolerance(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		shift float64
@@ -556,6 +568,7 @@ func TestTessellateReservesSectionDisplacementFromTolerance(t *testing.T) {
 // has — the same count, the same bound, all of it within the tolerance asked
 // for.
 func TestTessellateUndisplacedPrismSpendsTheWholeTolerance(t *testing.T) {
+	t.Parallel()
 	body := holedPlateBody(t)
 	tol := 0.5
 	mesh, err := body.Tessellate(units.Millimeters(tol))
@@ -611,6 +624,7 @@ func inchPrismBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, inches flo
 // a level a ToFace stop computed; the second case below is the one no other
 // test reaches, carrying both displacements at once, one reserved and one not.
 func TestTessellateUnreservedAxialDisplacementCanExceedTolerance(t *testing.T) {
+	t.Parallel()
 	t.Run("axial displacement with no section displacement beside it", func(t *testing.T) {
 		body := inchPrismBody(t, decad.New(), 0, 0, 10, 10, 0.1)
 
@@ -656,6 +670,7 @@ func TestTessellateUnreservedAxialDisplacementCanExceedTolerance(t *testing.T) {
 // bridge into the same outer corner. Every hole's chording is fine at every
 // tolerance, so a refusal here can only come from the bridge splice.
 func TestTessellateFourHoleBoltPatternPlate(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)

@@ -24,6 +24,7 @@ func internalDiskRegion(t *testing.T, cx, cy, radius float64) region2 {
 }
 
 func TestTrimmedCircleCrossingRequiresRevolvedFaceAdmission(t *testing.T) {
+	t.Parallel()
 	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
 	wide := [2]r3.Vec{r3.NewVec(-20, -20, -20), r3.NewVec(20, 20, 20)}
 	k := testKernel()
@@ -102,6 +103,7 @@ func (c *internalCancelContext) Err() error {
 }
 
 func TestPointInBodyCancellationReachesTorusRootPath(t *testing.T) {
+	t.Parallel()
 	z := r3.NewVec(0, 0, 1)
 	torus := torFace(r3.Vec{}, z, 5, 1)
 	g := &bodyGeom{faces: []*cFace{torus}}
@@ -113,6 +115,7 @@ func TestPointInBodyCancellationReachesTorusRootPath(t *testing.T) {
 }
 
 func TestCertifiedRootRefinementCancellation(t *testing.T) {
+	t.Parallel()
 	p := ratPoly{big.NewRat(-2, 1), new(big.Rat), big.NewRat(1, 1)}
 	chain := mustSturmChainInt(t, p)
 	ivs, err := rpIsolateRootsContext(t.Context(), p, chain)
@@ -125,6 +128,7 @@ func TestCertifiedRootRefinementCancellation(t *testing.T) {
 }
 
 func TestFacetAdjacencyCancellationIsBounded(t *testing.T) {
+	t.Parallel()
 	tris := make([][3]int, 600)
 	for i := range tris {
 		tris[i] = [3]int{3 * i, 3*i + 1, 3*i + 2}
@@ -136,6 +140,7 @@ func TestFacetAdjacencyCancellationIsBounded(t *testing.T) {
 }
 
 func TestFacetCutCancellationIsBounded(t *testing.T) {
+	t.Parallel()
 	tri := [3]xpt{
 		xptOf(r3.NewVec(0, 0, 0)),
 		xptOf(r3.NewVec(10, 0, 0)),
@@ -173,6 +178,7 @@ func internalPolygonRegion(t *testing.T, cx, cy, radius float64, sides int) regi
 }
 
 func TestCoplanarRelationCancellationIsBounded(t *testing.T) {
+	t.Parallel()
 	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
 	f := &cFace{
 		kind: ckPlane, u: x, v: y, n: z,
@@ -202,6 +208,7 @@ func TestCoplanarRelationCancellationIsBounded(t *testing.T) {
 }
 
 func TestInterferencePairDiameterUsesAllFacetedPayloadVertices(t *testing.T) {
+	t.Parallel()
 	a := &Body{payload: facetedPayload{verts: []r3.Vec{
 		r3.NewVec(0, 0, 0),
 		r3.NewVec(100, 0, 0),
@@ -214,6 +221,7 @@ func TestInterferencePairDiameterUsesAllFacetedPayloadVertices(t *testing.T) {
 }
 
 func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
+	t.Parallel()
 	a := &Body{origin: FeatureRef{Step: 12}}
 	b := &Body{origin: FeatureRef{Step: 34}}
 
@@ -309,6 +317,7 @@ func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
 // crossing, not a coplanar tangency — resolves through the mesh path exactly
 // as it did before this design existed.
 func TestMeasuredInterferenceFallsBackToMeshWhenAnalyticNotAdmitted(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 	b := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
@@ -332,6 +341,7 @@ func TestMeasuredInterferenceFallsBackToMeshWhenAnalyticNotAdmitted(t *testing.T
 }
 
 func TestSharesFacePlane(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
 	b := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
@@ -362,6 +372,7 @@ func internalBoxBody(t *testing.T, doc *Document, x0, y0, x1, y1, h float64) *Bo
 }
 
 func TestMultiLumpFacetedBodyBypassesAnalyticContainment(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	outer := internalBoxBody(t, doc, 0, 0, 20, 20, 10)
 	a := internalBoxBody(t, doc, 2, 2, 4, 4, 2)
@@ -392,6 +403,7 @@ func TestMultiLumpFacetedBodyBypassesAnalyticContainment(t *testing.T) {
 // phase boundary.
 
 func TestHoleOrderingCancellationIsBounded(t *testing.T) {
+	t.Parallel()
 	pts := []Point2{{U: 0, V: 0}, {U: 100, V: 0}, {U: 100, V: 100}, {U: 0, V: 100}}
 	loops := [][]int{{0, 1, 2, 3}}
 	for h := range 8 {
@@ -413,6 +425,7 @@ func TestHoleOrderingCancellationIsBounded(t *testing.T) {
 }
 
 func TestHoleOrderingKeepsRightToLeftBridging(t *testing.T) {
+	t.Parallel()
 	// The same eight-hole region, uncancelled: the ordering refactor must still
 	// reduce it to triangles whose total area is the outer square less every
 	// hole. The holes are supplied left-to-right, so a triangulation this exact
@@ -444,6 +457,7 @@ func TestHoleOrderingKeepsRightToLeftBridging(t *testing.T) {
 }
 
 func TestConformCandidateScanCancellationIsBounded(t *testing.T) {
+	t.Parallel()
 	verts := []xpt{
 		xptOf(r3.NewVec(0, 0, 0)),
 		xptOf(r3.NewVec(1000, 0, 0)),
@@ -466,6 +480,7 @@ func TestConformCandidateScanCancellationIsBounded(t *testing.T) {
 }
 
 func TestConformCandidateScanFindsEdgeInteriorVertices(t *testing.T) {
+	t.Parallel()
 	verts := []xpt{
 		xptOf(r3.NewVec(0, 0, 0)),
 		xptOf(r3.NewVec(10, 0, 0)),
@@ -484,6 +499,7 @@ func TestConformCandidateScanFindsEdgeInteriorVertices(t *testing.T) {
 }
 
 func TestSortAlongEdgeCancellationIsBounded(t *testing.T) {
+	t.Parallel()
 	verts := []xpt{xptOf(r3.NewVec(0, 0, 0)), xptOf(r3.NewVec(1000, 0, 0))}
 	var hits []int
 	for i := range 300 {
@@ -499,6 +515,7 @@ func TestSortAlongEdgeCancellationIsBounded(t *testing.T) {
 }
 
 func TestSortAlongEdgeOrdersByExactParameter(t *testing.T) {
+	t.Parallel()
 	verts := []xpt{xptOf(r3.NewVec(0, 0, 0)), xptOf(r3.NewVec(10, 0, 0))}
 	for _, x := range []float64{7, 1, 4} {
 		verts = append(verts, xptOf(r3.NewVec(x, 0, 0)))
@@ -511,6 +528,7 @@ func TestSortAlongEdgeOrdersByExactParameter(t *testing.T) {
 }
 
 func TestAnalyticBodiesEqualCancellationIsBounded(t *testing.T) {
+	t.Parallel()
 	segs := make([]CurveSegment, 300)
 	for i := range segs {
 		segs[i] = LineSeg{Start: Point2{U: float64(i)}, End: Point2{U: float64(i + 1)}, TEnd: 1}
@@ -527,6 +545,7 @@ func TestAnalyticBodiesEqualCancellationIsBounded(t *testing.T) {
 }
 
 func TestAnalyticBodiesEqualMatchesPlainPrismSetIdentity(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
 	same := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
@@ -551,6 +570,7 @@ func TestAnalyticBodiesEqualMatchesPlainPrismSetIdentity(t *testing.T) {
 }
 
 func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	// A real prism, its recorded section swapped for a 300-sided polygon:
 	// resolving the carrier profile must poll before the carrier faces are built.
@@ -579,6 +599,7 @@ func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 }
 
 func TestAddRevolveFacesCancellationReachesRevolveLoops(t *testing.T) {
+	t.Parallel()
 	calls := 0
 	budget := &workBudget{
 		stepFn: func() error {
@@ -596,6 +617,7 @@ func TestAddRevolveFacesCancellationReachesRevolveLoops(t *testing.T) {
 }
 
 func TestAddRevolveFacesPreservesMeridianErrorMapping(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		seg  CurveSegment
@@ -635,6 +657,7 @@ func TestAddRevolveFacesPreservesMeridianErrorMapping(t *testing.T) {
 // Tessellate caller; they differ in whether a finer chording could ever change
 // the answer, which is what decides an undecided pair from a returned error.
 func TestChordingRefusalsSplitFromOperandDegeneracy(t *testing.T) {
+	t.Parallel()
 	t.Run("stalled ear clip is expected", func(t *testing.T) {
 		// A self-crossing chorded boundary: no corner is ever clippable.
 		pts := []Point2{{U: 0, V: 0}, {U: 10, V: 10}, {U: 10, V: 0}, {U: 0, V: 10}}

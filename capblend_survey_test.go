@@ -125,6 +125,7 @@ func (m miteredConePatch) trueNormalAt(t *testing.T, u, v float64) (r3.Vec, r3.V
 // whole patch, not merely at the point sampled to derive it. A zero bound
 // there asserts a direction the built surface does not have.
 func TestCapBlendMiteredPatchNormalCarriesItsOwnBound(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		r, h, d float64
@@ -170,6 +171,7 @@ func TestCapBlendMiteredPatchNormalCarriesItsOwnBound(t *testing.T) {
 // placed band, where it is orders larger). A whole turn (no corner trims it at
 // all) and a rectangular loop's flat patches are the shipped cases.
 func TestCapBlendUnmiteredPatchNormalCarriesNoWindowSkew(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		build func(t *testing.T) *decad.Body
@@ -216,6 +218,7 @@ func TestCapBlendUnmiteredPatchNormalCarriesNoWindowSkew(t *testing.T) {
 // mismeasured receiver walls exactly perpendicular and exactly antiparallel
 // to the pull.
 func TestUndercutCapBlendReceiverWallsBoundedLikePatches(t *testing.T) {
+	t.Parallel()
 	s, p := polygonSketch(t, [][2]float64{{0, 0}, {3, 9}, {-6, 12}, {-9, 3}})
 	doc := decad.New()
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -247,6 +250,7 @@ func TestUndercutCapBlendReceiverWallsBoundedLikePatches(t *testing.T) {
 }
 
 func TestCapBlendMiteredUndercutIsNotPassed(t *testing.T) {
+	t.Parallel()
 	const r, h, d = 10.0, 20.0, 4.0
 	m := chamferedQuarterDiskPatch(t, r, h, d)
 
@@ -276,6 +280,7 @@ func TestCapBlendMiteredUndercutIsNotPassed(t *testing.T) {
 // +x, but the final flat chamfer patch provably opposes it. The undecided
 // patch must not erase that listed violation.
 func TestCapBlendUndecidedPatchKeepsProvenUndercut(t *testing.T) {
+	t.Parallel()
 	m := chamferedQuarterDiskPatch(t, 100, 20, 0.5)
 	plane := faceWithRole(t, m.body, "chamferCap(end,0,2)")
 	require.Equal(t, decad.KindPlane, plane.Surface().Kind())
@@ -306,6 +311,7 @@ func TestCapBlendUndecidedPatchKeepsProvenUndercut(t *testing.T) {
 // with a positive claim — the proven all-clear or a listed violation — and be
 // right only by luck. It must be undecided instead.
 func TestCapBlendWholeTurnUndercutRespectsNormalBound(t *testing.T) {
+	t.Parallel()
 	body := circleProfile(t, 20, 10)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(2))
 	require.NoError(t, err)
@@ -355,6 +361,7 @@ func TestCapBlendWholeTurnUndercutRespectsNormalBound(t *testing.T) {
 // reading names leaves the patch's true component on neither proven side of
 // zero.
 func TestCapBlendFlatPatchUndercutRespectsNormalBound(t *testing.T) {
+	t.Parallel()
 	_, box := capBlendBox(t)
 	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)
@@ -422,6 +429,7 @@ func requireRoundingScaleNormalBound(t *testing.T, n decad.VecMeasurement) {
 // departure from its Cone is a fraction of a degree, nowhere near the reading
 // it would have to cross to leave the pull's clearance.
 func TestCapBlendUndercutStillDecidedOnOrdinaryBand(t *testing.T) {
+	t.Parallel()
 	m := chamferedQuarterDiskPatch(t, 100, 20, 0.5)
 	n, err := m.face.NormalAt(m.rulings[0][1])
 	require.NoError(t, err)
@@ -443,6 +451,7 @@ func TestCapBlendUndercutStillDecidedOnOrdinaryBand(t *testing.T) {
 // departure did, so the band is still a proven undercut rather than a body the
 // bound made undecidable.
 func TestCapBlendMiteredUndercutStillProven(t *testing.T) {
+	t.Parallel()
 	m := chamferedQuarterDiskPatch(t, 100, 20, 0.5)
 	report, err := m.body.Document().Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, -1)))
 	require.NoError(t, err)
@@ -461,6 +470,7 @@ func TestCapBlendMiteredUndercutStillProven(t *testing.T) {
 // carries curvature the receiver's section never sees. The survey reports that
 // as undecided rather than as the proven absence of a concave feature.
 func TestCapBlendMinRadiusUndecidedOnMiteredBand(t *testing.T) {
+	t.Parallel()
 	m := chamferedQuarterDiskPatch(t, 10, 20, 4)
 
 	atSide, _ := m.trueNormalAt(t, 0, 0)
@@ -481,6 +491,7 @@ func TestCapBlendMinRadiusUndecidedOnMiteredBand(t *testing.T) {
 // sine are never exact — so the patch is not proven to be the surface it
 // publishes even unplaced, and the survey refuses rather than answering.
 func TestCapBlendMinRadiusUndecidedOnCircularBand(t *testing.T) {
+	t.Parallel()
 	body := circleProfile(t, 20, 10)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(2))
 	require.NoError(t, err)
@@ -499,6 +510,7 @@ func TestCapBlendMinRadiusUndecidedOnCircularBand(t *testing.T) {
 // placement's own independent rounding of every emitted coordinate leaves
 // the built patch off its published tag by a proven, nonzero amount.
 func TestCapBlendMinRadiusUndecidedOnPlacedBand(t *testing.T) {
+	t.Parallel()
 	_, box := plateWithDiskHole(t, 50, 50, 10)
 	chamfered, err := box.Chamfer(decad.Edges(decad.CreatedBy(decad.CapEnd(box)), decad.LongerThan(units.Millimeters(50))), units.Millimeters(3))
 	require.NoError(t, err)
@@ -562,6 +574,7 @@ func hasDiagnostic(report *decad.Report, code decad.DiagnosticCode) bool {
 // way frees every patch, and the empty list is only correct while the apex
 // patch's normal really does point that way.
 func TestCapBlendReflexApexUndercutSurvey(t *testing.T) {
+	t.Parallel()
 	body := reflexLBody(t)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(3))
 	require.NoError(t, err)
@@ -611,6 +624,7 @@ func TestCapBlendReflexApexUndercutSurvey(t *testing.T) {
 // prismUndercuts already applies to an ordinary wall), while a straight-up
 // pull sees no undercut from them.
 func TestCapBlendUndercutSurvey(t *testing.T) {
+	t.Parallel()
 	_, box := capBlendBox(t)
 	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)
@@ -648,6 +662,7 @@ func TestCapBlendUndercutSurvey(t *testing.T) {
 // an answer the patch set does not support, while the receiver's own reading
 // is unaffected.
 func TestCapBlendMinRadiusMatchesUnchamferedSection(t *testing.T) {
+	t.Parallel()
 	_, box := plateWithDiskHole(t, 50, 50, 10)
 	doc := box.Document()
 	before, err := doc.Verify(t.Context(), decad.WithMinRadius())
@@ -672,6 +687,7 @@ func TestCapBlendMinRadiusMatchesUnchamferedSection(t *testing.T) {
 // exact zero unplaced — the survey still returns the receiver's own proven
 // absence of a concave feature with no refusal diagnostic.
 func TestCapBlendMinRadiusStillAnsweredOnPlaneOnlyBand(t *testing.T) {
+	t.Parallel()
 	_, box := capBlendBox(t)
 	doc := box.Document()
 	before, err := doc.Verify(t.Context(), decad.WithMinRadius())

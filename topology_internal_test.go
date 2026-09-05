@@ -16,6 +16,7 @@ import (
 // internal tests build a bare *Face elsewhere, to isolate the refusal from any
 // build machinery.
 func TestNormalAtRefusesNURBSSurface(t *testing.T) {
+	t.Parallel()
 	f := &Face{surface: NURBSSurface{}}
 	_, err := f.NormalAt(r3.NewVec(0, 0, 0))
 	require.ErrorIs(t, err, ErrUnsupported,

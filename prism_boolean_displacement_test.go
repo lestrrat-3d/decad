@@ -103,6 +103,7 @@ func placedFar(t *testing.T, b *decad.Body, shift float64) *decad.Body {
 // longer than operand B itself; at 2^55 the same pair reported 1700 mm³,
 // dropping material genuinely inside B.
 func TestPrismUnionFarPlacementReturnsTheTrueUnion(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		shift float64
@@ -172,6 +173,7 @@ func TestPrismUnionFarPlacementReturnsTheTrueUnion(t *testing.T) {
 // coordinates, so it is the volume the two records denote and not a second
 // float answer.
 func TestPrismUnionCutDisplacementBoundEnclosesTheError(t *testing.T) {
+	t.Parallel()
 	// The sweep height only scales the reading, so containment must hold at
 	// every one of them: 10 mm is the investigation's own fixture, 25 mm proves
 	// the charge is not a constant tuned to it.
@@ -229,6 +231,7 @@ func TestPrismUnionCutDisplacementBoundEnclosesTheError(t *testing.T) {
 // arrangement splits nothing, every survivor is a whole edge carrying the
 // entity's own recorded endpoints, and no cut parameter exists to charge.
 func TestPrismUnionWholeEdgeMergeStaysExact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 2, 2, 8, 8, 10)
@@ -255,6 +258,7 @@ func TestPrismUnionWholeEdgeMergeStaysExact(t *testing.T) {
 // ulp at that magnitude — which is what fails if a later change drops the
 // displacement term and leaves only the arithmetic bounds behind.
 func TestPrismUnionReExpressionDisplacementBoundEnclosesTheError(t *testing.T) {
+	t.Parallel()
 	shifts := []float64{1e3, 1e6, 1e9, 1e12}
 	bounds := make([]float64, len(shifts))
 	for i, shift := range shifts {
@@ -317,6 +321,7 @@ func TestPrismUnionReExpressionDisplacementBoundEnclosesTheError(t *testing.T) {
 // must be the DISPLACEMENT's — orders above anything the section's own
 // 10 mm-scale arithmetic can produce.
 func TestPrismUnionRoundedReExpressionStaysWithinItsBound(t *testing.T) {
+	t.Parallel()
 	const shift = 1e12
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
@@ -347,6 +352,7 @@ func TestPrismUnionRoundedReExpressionStaysWithinItsBound(t *testing.T) {
 // is operand B of a second nonidentity union. B's existing displacement passes
 // unchanged through the rigid map and the new coordinate rounding adds to it.
 func TestPrismUnionChainedSecondOperandReexpressionAccumulatesDisplacement(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	const firstShift = 1e8
 	inside := boxBody(t, doc, 2, 2, 8, 8, 10)
@@ -380,6 +386,7 @@ func TestPrismUnionChainedSecondOperandReexpressionAccumulatesDisplacement(t *te
 // its own to publish, so it refuses rather than returning a body whose bounds
 // speak only for the record.
 func TestPrismUnionDisplacedSectionRefusesTheSectionRewrites(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	const shift = 1e9
@@ -398,6 +405,7 @@ func TestPrismUnionDisplacedSectionRefusesTheSectionRewrites(t *testing.T) {
 // a bare reading and no bound to widen — leaves the question undecided rather
 // than measuring the recorded section as though it were the denoted one.
 func TestPrismUnionDisplacedSectionDownstreamReadings(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	const shift = 1e9
@@ -427,6 +435,7 @@ func TestPrismUnionDisplacedSectionDownstreamReadings(t *testing.T) {
 // tolerance is raised past it rather than refusing an operand this path exists
 // to serve.
 func TestPrismUnionDisplacedOperandStillReachesTheMeshBoolean(t *testing.T) {
+	t.Parallel()
 	const shift = 1e14
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)

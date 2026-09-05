@@ -53,6 +53,7 @@ func roleOf(t *testing.T, f *Face) string {
 }
 
 func TestPrismProofRecordChargesEveryFaceItsOwnDisplacement(t *testing.T) {
+	t.Parallel()
 	body := internalHoledPlateBody(t, New())
 	mesh, err := tessellateContext(t.Context(), body, units.Millimeters(1))
 	require.NoError(t, err)
@@ -109,6 +110,7 @@ func TestPrismProofRecordChargesEveryFaceItsOwnDisplacement(t *testing.T) {
 }
 
 func TestPlacedPrismChargesEveryFaceItsPlacementRounding(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	flat := internalHoledPlateBody(t, doc)
 	unplaced, err := tessellateContext(t.Context(), flat, units.Millimeters(1))
@@ -138,6 +140,7 @@ func TestPlacedPrismChargesEveryFaceItsPlacementRounding(t *testing.T) {
 }
 
 func TestWalkSegmentAreaIsTheCircularSegmentClosedForm(t *testing.T) {
+	t.Parallel()
 	// A quarter circle of radius 3, chorded n ways: the omitted area is
 	// r²/2 · (θ − n·sin(θ/n)), which is what the caps lose and the
 	// occupied-volume term multiplies by the sweep height.
@@ -177,6 +180,7 @@ func TestWalkSegmentAreaIsTheCircularSegmentClosedForm(t *testing.T) {
 }
 
 func TestPrismVolSymDiffBracketsTheCylindersOwnSegmentDeficit(t *testing.T) {
+	t.Parallel()
 	const r, h = 4.0, 6.0
 	doc := New()
 	disc := internalDiscBody(t, doc, r, h)
@@ -210,6 +214,7 @@ func TestPrismVolSymDiffBracketsTheCylindersOwnSegmentDeficit(t *testing.T) {
 }
 
 func TestCupProofRecordCoversEveryPatchItHolds(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	disc := internalDiscBody(t, doc, 8, 10)
 	capSel := Faces(FaceCreatedBy(FeatureRef{Step: disc.Origin().Step, Role: roleCapEnd}))
@@ -240,6 +245,7 @@ func TestCupProofRecordCoversEveryPatchItHolds(t *testing.T) {
 }
 
 func TestFacetedRestatementPublishesItsPayloadsOwnProofRecord(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	plate := internalBoxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := internalDiscBody(t, doc, 2, 30)
@@ -325,6 +331,7 @@ func meshHeldVolume(m *Mesh) float64 {
 // and volSymDiff must cover the volume it actually loses, both measured against
 // the body's own exactly integrated readings.
 func TestFreeformPrismProofRecordCoversItsOwnChording(t *testing.T) {
+	t.Parallel()
 	// Two heights, because the area the chording loses splits between terms
 	// that scale differently: the two caps' loss is fixed by the section, and
 	// the wall's loss grows with the sweep. A short prism is dominated by the

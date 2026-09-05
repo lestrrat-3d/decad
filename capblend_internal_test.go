@@ -38,6 +38,7 @@ import (
 // mechanism is unsound on its own, without needing two platforms to
 // disagree.
 func TestCapBandMomentCoordUpperCoversOffsetBoundary(t *testing.T) {
+	t.Parallel()
 	const rho, d, half = 0.01, 0.9, 0.5
 	loop := LoopRecord{Segments: []CurveSegment{
 		CircleSeg{Center: Point2{}, Radius: units.Millimeters(rho), CCW: false, TStart: 1, TEnd: 0},
@@ -122,6 +123,7 @@ func TestCapBandMomentCoordUpperCoversOffsetBoundary(t *testing.T) {
 // to R - t. A line moving away from a shrinking circle's centre separates
 // from it immediately once t > 0, so Δ0 = 0 but Δ1 = -4R != 0.
 func TestLineCircleLocusSpeedUpperRefusesMomentaryFold(t *testing.T) {
+	t.Parallel()
 	const radius = 1000.0
 	line := sideWalk{segmentWalk: segmentWalk{
 		startU: 0, startV: 0, endU: 10, endV: 0,
@@ -152,6 +154,7 @@ func TestLineCircleLocusSpeedUpperRefusesMomentaryFold(t *testing.T) {
 // so the two stay tangent — at (0, t) — for every offset amount, and the
 // locus is that same straight line, ridden at unit speed.
 func TestLineCircleLocusSpeedUpperExactAtPersistentTangency(t *testing.T) {
+	t.Parallel()
 	const radius = 1000.0
 	line := sideWalk{segmentWalk: segmentWalk{
 		startU: 0, startV: 0, endU: 10, endV: 0,
@@ -183,6 +186,7 @@ func TestLineCircleLocusSpeedUpperExactAtPersistentTangency(t *testing.T) {
 // and their own radial directions there are anti-parallel (still a zero
 // cross product, the same singular configuration a parallel pair is).
 func TestCircleCircleLocusSpeedUpperRefusesNearParallelCorner(t *testing.T) {
+	t.Parallel()
 	const radius = 1000.0
 	prev := sideWalk{segmentWalk: segmentWalk{
 		kind: walkCircular,
@@ -209,6 +213,7 @@ func TestCircleCircleLocusSpeedUpperRefusesNearParallelCorner(t *testing.T) {
 // outward direction independently before touching face.reversed, then flip it
 // so the function under test has real work to do.
 func TestFixPatchOrientation(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		// sample returns the point fixPatchOrientation is called with. The
@@ -301,6 +306,7 @@ func capBandCircle(t *testing.T, r, d, capZ float64) boundedScalar {
 // that disk and on the derived side level. Otherwise both helpers treat the
 // same computed cap as exact and can publish bounds for a different solid.
 func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
+	t.Parallel()
 	const capZ, d, capDelta = 1e12, 1e-3, 2.34375e-05
 	loop := synthRectLoop(0, 0, 1, 1)
 	for _, tc := range []struct {
@@ -345,6 +351,7 @@ func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
 // payload. Both cap senses derive the side level from that converted setback,
 // and a later ThroughAll stop reads the payload's axialDelta.
 func TestCapBlendSetbackConversionCarriesAllDerivedSideLevels(t *testing.T) {
+	t.Parallel()
 	d, dDelta, err := magnitudeInBounded(units.Inches(0.1), units.Length, units.Millimeter, "the chamfer setback")
 	require.NoError(t, err)
 	require.Positive(t, dDelta, "the fixture's inch-to-millimetre conversion rounds")
@@ -408,6 +415,7 @@ func TestCapBlendSetbackConversionCarriesAllDerivedSideLevels(t *testing.T) {
 // enclosure requirement rather than a preference: any pair of bounds whose
 // sum falls under that disagreement cannot both contain the true value.
 func TestCapBandVolumeBoundTracksTheFluxNotTheCancelledBand(t *testing.T) {
+	t.Parallel()
 	const R, d = 1e6, 1e-3
 	lo := capBandCircle(t, R, d, 10)
 	hi := capBandCircle(t, R, d, 1e5)
@@ -439,6 +447,7 @@ func TestCapBandVolumeBoundTracksTheFluxNotTheCancelledBand(t *testing.T) {
 // area is translation invariant, and the shift keeps 1e15-scale cancellation
 // out of the test's own arithmetic.
 func TestPatchAreaOfChargesTheSideLevelRounding(t *testing.T) {
+	t.Parallel()
 	const capZ, d = 1e15, 0.2
 	sideZ := capZ - d
 	levelDelta := addRoundError(capZ, -d, sideZ)
@@ -511,6 +520,7 @@ func TestPatchAreaOfChargesTheSideLevelRounding(t *testing.T) {
 // the returned bound of the frustum sector its own held radii, level
 // separation and true window describe.
 func TestPatchAreaOfEnclosesRoundedRadiusDifference(t *testing.T) {
+	t.Parallel()
 	const prec = 600
 	// π to 100 decimals: the reference window is the true 2π, which is what
 	// the patch's own capThAllow brackets the held fl(2π) against.
@@ -565,6 +575,7 @@ func TestPatchAreaOfEnclosesRoundedRadiusDifference(t *testing.T) {
 // conservativeValueError's old fallback is sound only where this still
 // holds.
 func TestConeFrustumAreaBracketEnclosesReference(t *testing.T) {
+	t.Parallel()
 	const prec = 512
 	ratOfFloat := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
 	bfRat := func(r *big.Rat) *big.Float { return new(big.Float).SetPrec(prec).SetRat(r) }
@@ -784,6 +795,7 @@ func placedFarMotion(t *testing.T) r3.Transform {
 // charging the departure twice covers the patch just as soundly, but chases
 // away the ~2x margin this test pins.
 func TestCapPatchNormalRangeChargesAFlatPatchsDepartureOnce(t *testing.T) {
+	t.Parallel()
 	motion := placedFarMotion(t)
 	pull, ok := r3.NewVec(1, 0.3, 0.2).Normalize()
 	require.True(t, ok)
@@ -806,6 +818,7 @@ func TestCapPatchNormalRangeChargesAFlatPatchsDepartureOnce(t *testing.T) {
 // its one sampled corner, must still bound Face.NormalAt's own published
 // bound everywhere else on the patch's quad — not only where it was sampled.
 func TestCapPatchNormalRangeCoversWhatAFlatPatchTakes(t *testing.T) {
+	t.Parallel()
 	motion := placedFarMotion(t)
 	pull, ok := r3.NewVec(1, 0.3, 0.2).Normalize()
 	require.True(t, ok)
@@ -880,6 +893,7 @@ func (b bandUnderTest) componentAt(t *testing.T, theta float64, pull r3.Vec) (fl
 // patch takes: each independently read component, widened by its own published
 // bound, must sit inside [lo-allow, hi+allow].
 func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
+	t.Parallel()
 	spin, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.NewVec(1000, 1000, 0))
@@ -987,6 +1001,7 @@ func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
 // lies OUTSIDE of. The enclosure must bracket c±R, and must place its own
 // reported ends outside every value the window actually takes.
 func TestHarmonicWindowRangeEnclosesInteriorExtremes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		a, b, c    *big.Rat

@@ -140,6 +140,7 @@ func volumeMM(t *testing.T, m decad.Measurement) float64 {
 }
 
 func TestBooleanContextMatchesCompatibilityWrappers(t *testing.T) {
+	t.Parallel()
 	testcases := []struct {
 		Name       string
 		Legacy     func(*decad.Body, *decad.Body) (*decad.Body, error)
@@ -181,6 +182,7 @@ func TestBooleanContextMatchesCompatibilityWrappers(t *testing.T) {
 }
 
 func TestBooleanContextCancellationLeavesDocumentUnchanged(t *testing.T) {
+	t.Parallel()
 	testcases := []struct {
 		Name string
 		Call func(context.Context, *decad.Body, *decad.Body) (*decad.Body, error)
@@ -225,6 +227,7 @@ func requireBodyWatertight(t *testing.T, b *decad.Body) {
 }
 
 func TestUnionOverlappingCubes(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 5, 5, 5)
@@ -258,6 +261,7 @@ func TestUnionOverlappingCubes(t *testing.T) {
 }
 
 func TestUnionDisjointCubes(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 20, 0, 30, 10, 10)
@@ -285,6 +289,7 @@ func TestUnionDisjointCubes(t *testing.T) {
 // every boundary whole, so only it reaches §7's Exact arm; a partial overlap
 // merges cut fragments and carries their cut-parameter displacement.
 func TestUnionCoplanarCapsBuildAnalyticPrismUnion(t *testing.T) {
+	t.Parallel()
 	t.Run("DisjointFootprints", func(t *testing.T) {
 		doc := decad.New()
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
@@ -338,6 +343,7 @@ func TestUnionCoplanarCapsBuildAnalyticPrismUnion(t *testing.T) {
 // but leaves its lateral faces coplanar. Their shared lateral area remains a
 // refused contact.
 func TestUnionIdenticalFootprintsShiftedAlongSweepRefusesCoplanarLateralFaces(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 0, 0, 5)
@@ -348,6 +354,7 @@ func TestUnionIdenticalFootprintsShiftedAlongSweepRefusesCoplanarLateralFaces(t 
 }
 
 func TestUnionSweepDisplacementChangesEnclosedSolid(t *testing.T) {
+	t.Parallel()
 	t.Run("IntoContainmentRemovesProtrusion", func(t *testing.T) {
 		beforeDoc := decad.New()
 		beforeA := boxBody(t, beforeDoc, 0, 0, 10, 10, 10)
@@ -408,6 +415,7 @@ func requireCoplanarFaceRefusal(t *testing.T, err error) {
 }
 
 func TestIntersectOverlappingCubes(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 5, 5, 5)
@@ -422,6 +430,7 @@ func TestIntersectOverlappingCubes(t *testing.T) {
 }
 
 func TestIntersectDisjointIsEmpty(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 20, 0, 30, 10, 10)
@@ -507,6 +516,7 @@ func TestCutDrillsHole(t *testing.T) {
 // returned a stale or mis-keyed contact for the second ask would change this
 // volume or break watertightness.
 func TestBooleanUnionRodThroughPlateGeometryUnchanged(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	rod := translated(t, diskBody(t, doc, 12, 10, 6), 0, 0, -6)
@@ -528,6 +538,7 @@ func TestBooleanUnionRodThroughPlateGeometryUnchanged(t *testing.T) {
 }
 
 func TestCutEmbeddedToolMakesVoid(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, boxBody(t, doc, 8, 8, 12, 12, 4), 0, 0, 2)
@@ -551,6 +562,7 @@ func TestCutEmbeddedToolMakesVoid(t *testing.T) {
 }
 
 func TestCutRemovingEverythingIsEmpty(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	// The target sits strictly inside the tool — no shared boundary plane.
 	target := translated(t, boxBody(t, doc, 5, 5, 8, 8, 3), 0, 0, 2)
@@ -567,6 +579,7 @@ func TestCutRemovingEverythingIsEmpty(t *testing.T) {
 }
 
 func TestCutDisjointKeepsTarget(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	target := boxBody(t, doc, 0, 0, 10, 10, 10)
 	tool := boxBody(t, doc, 20, 0, 30, 10, 10)
@@ -580,6 +593,7 @@ func TestCutDisjointKeepsTarget(t *testing.T) {
 }
 
 func TestBooleanRejections(t *testing.T) {
+	t.Parallel()
 	t.Run("NilOperand", func(t *testing.T) {
 		doc := decad.New()
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
@@ -702,6 +716,7 @@ func TestBooleanChainsWithinHeldBound(t *testing.T) {
 // classes, so a Shell-built cup is a first-class operand
 // (docs/modify-reach-design.md §11).
 func TestUnionCupOperand(t *testing.T) {
+	t.Parallel()
 	doc, box := shellBox(t)
 	cup, err := box.Shell(topCap(box), units.Millimeters(5))
 	require.NoError(t, err)
@@ -859,6 +874,7 @@ func TestCurvedRimLengthRefuses(t *testing.T) {
 }
 
 func TestUnionOfCapBlendBodiesStagesNotContact(t *testing.T) {
+	t.Parallel()
 	// A cap-loop chamfer is a valid solid, but its mesh carries no
 	// occupied-volume proof yet, so a boolean over it is refused BEFORE any
 	// contact is examined. That is a capability/staging limit, not a contact
@@ -877,6 +893,7 @@ func TestUnionOfCapBlendBodiesStagesNotContact(t *testing.T) {
 }
 
 func TestUnionRejectsVertexTangentContact(t *testing.T) {
+	t.Parallel()
 	// Two cubes sharing exactly one corner vertex pinch at a point: an
 	// isolated point contact no crossing chain owns, which the boolean refuses
 	// rather than stitching a non-manifold result. The model is valid, so the
@@ -892,6 +909,7 @@ func TestUnionRejectsVertexTangentContact(t *testing.T) {
 }
 
 func TestPlanarUnionAreaBoundIsTiny(t *testing.T) {
+	t.Parallel()
 	// The all-planar union keeps an Exact volume; the area always carries
 	// the ulp-scale float-summation bound — Approximate, but tiny against
 	// any real tolerance.
@@ -907,6 +925,7 @@ func TestPlanarUnionAreaBoundIsTiny(t *testing.T) {
 }
 
 func TestPlanarUnionCentroidBoundCoversRounding(t *testing.T) {
+	t.Parallel()
 	// A union whose exact centroid coordinates are non-binary rationals:
 	// all three coordinates round at once, and the reported 3D bound must
 	// cover the true distance between the exact and reported centroids.
@@ -943,6 +962,7 @@ func TestPlanarUnionCentroidBoundCoversRounding(t *testing.T) {
 }
 
 func TestUnionRejectsEdgeEdgePointTouch(t *testing.T) {
+	t.Parallel()
 	// Two knife-edged prisms crossing at right angles: one wedge opens toward
 	// +x and sweeps along z, the other opens toward −x and sweeps along y, so
 	// the solids meet at the origin and nowhere else. The touch sits in the
@@ -993,6 +1013,7 @@ func polyPrism(t *testing.T, doc *decad.Document, w *sketch.World, plane *sketch
 }
 
 func TestUnionRefusesTangentCylinder(t *testing.T) {
+	t.Parallel()
 	// A Ø20 cylinder whose TRUE surface is tangent to the plate's x = 20 face
 	// along a line. The chord polygon lies strictly inside the true cylinder,
 	// so the tangency vanishes from the tessellation and the mesh boolean would
@@ -1023,6 +1044,7 @@ func TestUnionRefusesTangentCylinder(t *testing.T) {
 }
 
 func TestUnionCrossingApexEdgeBuilds(t *testing.T) {
+	t.Parallel()
 	// A diamond-section prism driven through a plate, its two apex edges landing
 	// EXACTLY in the plate's top plane z = 2. Whether an in-plane edge grazes the
 	// other operand or crosses it is not a property of any facet pair — it is a
@@ -1059,6 +1081,7 @@ func TestUnionCrossingApexEdgeBuilds(t *testing.T) {
 }
 
 func TestUnionRejectsKnifeEdgeGraze(t *testing.T) {
+	t.Parallel()
 	// A wedge unioned into a wider wedge sharing the same knife-edge line. The
 	// inner wedge's two apex facets lie strictly on ONE side of the outer wedge's
 	// face: the boundary touches the plane and comes back. That is a true graze,
@@ -1155,6 +1178,7 @@ func TestBooleanAreaBoundsCoverShallowCrossing(t *testing.T) {
 }
 
 func TestFacetedPlacedFarFromOriginBoundHolds(t *testing.T) {
+	t.Parallel()
 	// An all-planar union built at x = 1e7, then rotated and translated back to
 	// the origin. The rounding a rigid motion commits happens at the magnitude of
 	// its INPUT, not of its result — a body charged at the result's magnitude is
@@ -1212,6 +1236,7 @@ func TestFacetedBoxBoundIsA3DRadius(t *testing.T) {
 }
 
 func TestFacetedEdgeLengthNeverClaimsExact(t *testing.T) {
+	t.Parallel()
 	// A boolean rim's held length is a float SUM of square roots. It is not
 	// exactly representable, so it may never report Exact with a zero bound —
 	// and its bound must cover the difference from the true chord length. The
@@ -1268,6 +1293,7 @@ func facetedEdgeLengths(t *testing.T, model string) {
 }
 
 func TestSecondGenerationPlanarRimsAnswer(t *testing.T) {
+	t.Parallel()
 	// A boolean of a boolean. Every face of both operands is genuinely planar,
 	// so every rim of the result is a straight line whose chord length is
 	// honest — and every one of them must ANSWER. A Faceted face IS its
@@ -1353,6 +1379,7 @@ func areaMM2(t *testing.T, m decad.Measurement) float64 {
 }
 
 func TestCutBlindTrenchSplitsCapIntoTwoFaces(t *testing.T) {
+	t.Parallel()
 	// A blind trench: the tool crosses the plate in x, spans y 8..12, and its
 	// floor STOPS inside the material at z = 5. The plate's top cap is cut
 	// clean through, leaving TWO disconnected patches of the SAME source face
@@ -1402,6 +1429,7 @@ func TestCutBlindTrenchSplitsCapIntoTwoFaces(t *testing.T) {
 }
 
 func TestCutThroughHoleKeepsInnerLoopNonOuter(t *testing.T) {
+	t.Parallel()
 	// The companion case the split must not break: a through-cut leaves the
 	// cap CONNECTED, with a genuine hole in it. One patch, two loops — and the
 	// hole is emphatically not an outer loop.
@@ -1468,6 +1496,7 @@ func loopPerimeterMM(t *testing.T, l *decad.Loop) float64 {
 }
 
 func TestCutStarHoleOuterLoopIsNotTheLongest(t *testing.T) {
+	t.Parallel()
 	// A star-shaped through-hole whose rim is LONGER than the square boundary
 	// it was cut into. The cap is one connected patch with a genuine hole, and
 	// which of its two loops bounds it from OUTSIDE is settled by the sense the
@@ -1551,6 +1580,7 @@ func TestCutStarHoleOuterLoopIsNotTheLongest(t *testing.T) {
 // prism_boolean_nesting_test.go's
 // TestPrismCutG6HoledToolFallsBackKeepingTheStandingPost.
 func TestBooleanCutWasherThroughDiscKeepsStandingPost(t *testing.T) {
+	t.Parallel()
 	const outerTarget, outerTool, innerTool, h, half = 15.0, 8.0, 3.0, 10.0, 11.0
 	doc := decad.New()
 	target := discBody(t, doc, 0, outerTarget, h)

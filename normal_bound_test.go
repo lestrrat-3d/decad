@@ -414,6 +414,7 @@ func coneDefectSq(t *testing.T, s decad.Cone, p, n r3.Vec) *big.Rat {
 }
 
 func TestNormalAtExactnessIsProven(t *testing.T) {
+	t.Parallel()
 	t.Run(`a rotated placement's cap normal is Approximate`, func(t *testing.T) {
 		s, p := plateSketch(t)
 		doc := decad.New()
@@ -511,6 +512,7 @@ func TestNormalAtExactnessIsProven(t *testing.T) {
 // ordinary caller reaches: it leaves two of the plate's six faces reading a
 // direction measurably off the exact cross of their own frame axes.
 func TestNormalAtPlaneArmCoversItsFrameCross(t *testing.T) {
+	t.Parallel()
 	s, p := plateSketch(t)
 	body, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
@@ -661,6 +663,7 @@ func holeWallBody(t *testing.T) *decad.Body {
 // that distance is an understatement, whatever exactness it publishes beside
 // it.
 func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
+	t.Parallel()
 	spin, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
 	// A cylinder point at a whole-number azimuth off the world axes, and a
@@ -937,6 +940,7 @@ func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
 // §13). A refusal is the honest answer; a direction read off one held facet
 // would be exact for the facet and wrong for the part it stands for.
 func TestNormalAtRefusesEveryUntaggedSurface(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
@@ -959,6 +963,7 @@ func TestNormalAtRefusesEveryUntaggedSurface(t *testing.T) {
 // the surface gives no direction at all is ErrDegenerate, never a bounded
 // reading of an arbitrary direction.
 func TestNormalAtArmDegeneraciesRefuse(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		at   func(t *testing.T) (*decad.Face, r3.Vec)

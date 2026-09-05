@@ -29,6 +29,7 @@ import (
 // and its published Volume encloses the closed-form quarter-cylinder wedge
 // volume (pi*r^2/4)*h.
 func TestLoftArcWedgeBuildsAndMatchesClosedForm(t *testing.T) {
+	t.Parallel()
 	w, base, top := wedgePlanes(t)
 	s0, p0 := wedgeArcSketch(t, w, base)
 	s1, p1 := wedgeArcSketch(t, w, top)
@@ -51,6 +52,7 @@ func TestLoftArcWedgeBuildsAndMatchesClosedForm(t *testing.T) {
 // INDEPENDENT evaluation path, and the two measurement intervals must
 // overlap.
 func TestLoftArcWedgeMatchesExtrudeOracle(t *testing.T) {
+	t.Parallel()
 	w, base, top := wedgePlanes(t)
 	s0, p0 := wedgeArcSketch(t, w, base)
 	s1, p1 := wedgeArcSketch(t, w, top)
@@ -134,6 +136,7 @@ func wedgeArcSketchR(t *testing.T, w *sketch.World, plane *sketch.Plane, radius 
 // still fail here). All three must overlap under computeLoftChordedAllow's
 // own capAreaExcess and widened areaExcess terms.
 func TestLoftArcWedgeAreaOracleAtGrowingRadius(t *testing.T) {
+	t.Parallel()
 	for _, radius := range []float64{5, 20, 50} {
 		t.Run(fmt.Sprintf("r=%g", radius), func(t *testing.T) {
 			w, base, top := wedgePlanes(t)
@@ -176,6 +179,7 @@ func TestLoftArcWedgeAreaOracleAtGrowingRadius(t *testing.T) {
 // share as Area.Value minus the two closed-form caps and both closed-form
 // spokes) before this fixture shipped.
 func TestLoftConeFrustumWallAreaEnclosed(t *testing.T) {
+	t.Parallel()
 	const r0, r1, h = 20.0, 2.0, wedgeHeight
 	w, base, top := wedgePlanes(t)
 	s0, p0 := wedgeArcSketchR(t, w, base, r0)
@@ -228,6 +232,7 @@ func triAreaFloat(a, b, c r3.Vec) float64 {
 // isolated "held arc-wall" against "true cone strip" before any cap
 // reasoning entered the picture.
 func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
+	t.Parallel()
 	const r0, r1, h = 20.0, 2.0, 10.0
 	const sweep = math.Pi / 2
 	const m = 65
@@ -360,6 +365,7 @@ func loftBodyBindingRatio(t *testing.T, ctx context.Context, body *Body) (float6
 // TestLoftArcWedgeVerifiesSound is the ask's own Verify line: Sound at the
 // default tolerance, with the achieved margin asserted numerically.
 func TestLoftArcWedgeVerifiesSound(t *testing.T) {
+	t.Parallel()
 	w, base, top := wedgePlanes(t)
 	s0, p0 := wedgeArcSketch(t, w, base)
 	s1, p1 := wedgeArcSketch(t, w, top)
@@ -390,6 +396,7 @@ func TestLoftArcWedgeVerifiesSound(t *testing.T) {
 // line: all four readings are Approximate with positive bounds; Volume is
 // never Exact when any pair is circular.
 func TestLoftArcWedgeReadingsApproximateWithPositiveBounds(t *testing.T) {
+	t.Parallel()
 	w, base, top := wedgePlanes(t)
 	s0, p0 := wedgeArcSketch(t, w, base)
 	s1, p1 := wedgeArcSketch(t, w, top)
@@ -449,6 +456,7 @@ func arcWedgeLoopStraddling(radius, halfSweep float64) LoopRecord {
 // bounds()'s Bound to bare delta and re-running this test, per the ask's
 // own instruction — that revert is not part of the shipped diff.
 func TestLoftArcWedgeBoxSoundness(t *testing.T) {
+	t.Parallel()
 	const radius = 5.0
 	const halfSweep = math.Pi / 6 // 30 degrees either side of angle 0: 60 degrees total
 	p := ProfileRecord{Outer: arcWedgeLoopStraddling(radius, halfSweep)}
@@ -496,6 +504,7 @@ func TestLoftArcWedgeBoxSoundness(t *testing.T) {
 // arc-to-fit-spline pair still refuses S3 — an ArcSeg and a FitSplineSeg are
 // never the same recorded segment type.
 func TestLoftArcToFitSplineStillRefusesS3(t *testing.T) {
+	t.Parallel()
 	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ArcSeg{
 		Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1,
 	})}
@@ -517,6 +526,7 @@ func TestLoftArcToFitSplineStillRefusesS3(t *testing.T) {
 // triangle built, and by the structural gate's own message; and it pins the
 // sentinel against ErrUnsupported, the opposite existence claim S3 carries.
 func TestLoftCircleSegOppositeCCWRefusesStructuralArmNotAudit(t *testing.T) {
+	t.Parallel()
 	ccw := CircleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: true, TStart: 0, TEnd: 1}
 	cw := CircleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: false, TStart: 1, TEnd: 0}
 	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccw)}
@@ -540,6 +550,7 @@ func TestLoftCircleSegOppositeCCWRefusesStructuralArmNotAudit(t *testing.T) {
 // disagreement, now that an ArcSeg can only ever be paired with another
 // ArcSeg (loftSameKindGate).
 func TestLoftArcSegOppositeCCWRefusesStructuralArmNotAudit(t *testing.T) {
+	t.Parallel()
 	ccwArc := ArcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
 	cwArc := ArcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 1, TEnd: 0}
 	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccwArc)}
@@ -568,6 +579,7 @@ func TestLoftArcSegOppositeCCWRefusesStructuralArmNotAudit(t *testing.T) {
 // CircleSeg loop, since seam.go's falsifyLoopJoins forces a lone ArcSeg loop
 // to close; at the record level it needs no full turn.
 func TestLoftArcSegAgainstCircleSegRefusesS3(t *testing.T) {
+	t.Parallel()
 	ccwArc := ArcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
 	ccwCircle := CircleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: true, TStart: 0, TEnd: 1}
 	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccwArc)}
@@ -647,6 +659,7 @@ func arcSquaredRadii(arc ArcSeg) (*big.Rat, *big.Rat) {
 // that equality over exact rationals before reading delta, so a reader can
 // see which premise the zero rests on.
 func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
+	t.Parallel()
 	// u = 5, v = 2^-10: both exact, and the half-sweep atan(v/u) is small
 	// enough that a single chord's sagitta is far under any target.
 	const u, v = 5.0, 1.0 / 1024
@@ -705,6 +718,7 @@ func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
 // which can only shrink the quotient, and delta is compared against it as a
 // rational.
 func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
+	t.Parallel()
 	const u, v = 5.0, 1.0 / 1024
 	const drift = 1.0 / (1 << 40) // 2^-40, exactly representable at u = 5
 
@@ -786,6 +800,7 @@ func smallSweepWedgeSketch(t *testing.T, w *sketch.World, plane *sketch.Plane) (
 // TestLoftPlacedArcWedgeCarriesBothDisplacements is the ask's own line: a
 // PLACED arc loft carries both delta and sectionDelta.
 func TestLoftPlacedArcWedgeCarriesBothDisplacements(t *testing.T) {
+	t.Parallel()
 	w, base, top := wedgePlanes(t)
 	s0, p0 := smallSweepWedgeSketch(t, w, base)
 	s1, p1 := smallSweepWedgeSketch(t, w, top)
@@ -808,6 +823,7 @@ func TestLoftPlacedArcWedgeCarriesBothDisplacements(t *testing.T) {
 // successive PlacedCopy motions leave sectionDelta UNCHANGED, proving it is
 // a record property and not an accumulating one.
 func TestLoftPlacedCopyTenTimesSectionDeltaUnchanged(t *testing.T) {
+	t.Parallel()
 	w, base, top := wedgePlanes(t)
 	s0, p0 := smallSweepWedgeSketch(t, w, base)
 	s1, p1 := smallSweepWedgeSketch(t, w, top)

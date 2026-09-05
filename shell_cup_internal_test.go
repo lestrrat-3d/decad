@@ -10,6 +10,7 @@ import (
 // shell senses. The top end is computed while the bottom is stated exactly, so
 // a floor derived from the latter must not inherit the former's displacement.
 func TestCupPayloadForTracksEachSourceEndDisplacement(t *testing.T) {
+	t.Parallel()
 	const (
 		thickness      = 0.1
 		thicknessDelta = 0.03125

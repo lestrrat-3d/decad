@@ -47,6 +47,7 @@ func chamferedSectionBody(t *testing.T, section func(*sketch.Sketch), d float64)
 // the tessellator charges the SAME number the band's vertices, edges and areas
 // were charged rather than deriving a second one.
 func TestCapBlendPayloadStoresEachBandsContourDisplacement(t *testing.T) {
+	t.Parallel()
 	chamfered, cbp := chamferedSectionBody(t, quarterDiskSection(10), 2)
 	require.Len(t, cbp.bandDelta, 1)
 	stored, ok := cbp.bandDelta[capBandKey{loop: 0, start: false}]
@@ -73,6 +74,7 @@ func TestCapBlendPayloadStoresEachBandsContourDisplacement(t *testing.T) {
 // which is the un-watertight mesh docs/modify-reach-design.md §12 row DX3
 // refuses to return.
 func TestCapBlendChordingSharesOneCountPerWalk(t *testing.T) {
+	t.Parallel()
 	t.Run("the side directrix asks for more", func(t *testing.T) {
 		// A convex outer arc offsets INWARD, so its cap directrix is both
 		// shorter-swept and smaller-radius: the wall's own arc sets the count.
@@ -151,6 +153,7 @@ func requireCapBlendSharedCount(t *testing.T, cbp capBlendPayload, li int, tol f
 // displacement must cover capRadius times that skew on top of the larger of the
 // two rings' sagitta.
 func TestCapBlendMeshChargesTheWindowSkew(t *testing.T) {
+	t.Parallel()
 	const tol = 0.05
 	chamfered, cbp := chamferedSectionBody(t, quarterDiskSection(10), 2)
 	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol)
@@ -193,6 +196,7 @@ func TestCapBlendMeshChargesTheWindowSkew(t *testing.T) {
 // locus at all, so its published displacement is its own chording plus the
 // band's level terms, and it must cover the coarser of its two rings.
 func TestCapBlendBandPatchBoundCoversItsOwnChording(t *testing.T) {
+	t.Parallel()
 	const tol = 0.25
 	chamfered, cbp := chamferedSectionBody(t, diskSection(0, 0, 10), 2)
 	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol)
@@ -221,6 +225,7 @@ func TestCapBlendBandPatchBoundCoversItsOwnChording(t *testing.T) {
 // line-line corner and every reflex foot are that case; a corner between a line
 // and a circle is not, and the ruling then stands for a conic the gap measures.
 func TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine(t *testing.T) {
+	t.Parallel()
 	t.Run("line-line miter charges nothing", func(t *testing.T) {
 		_, cbp := chamferedSectionBody(t, func(s *sketch.Sketch) {
 			rect := s.CreateRectangle(0, 0, 100, 60)
@@ -268,6 +273,7 @@ func capBlendCornerSetup(t *testing.T, cbp capBlendPayload) ([]sideWalk, []corne
 // and an angle this arithmetic cannot enclose refuses with +Inf rather than a
 // silently small number.
 func TestCapStationBoundEnclosesTheStationItDenotes(t *testing.T) {
+	t.Parallel()
 	const cU, cV, r = 3.0, -7.0, 8.0
 	theta := 0.9
 	held := Point2{U: cU + r*math.Cos(theta), V: cV + r*math.Sin(theta)}
@@ -289,6 +295,7 @@ func TestCapStationBoundEnclosesTheStationItDenotes(t *testing.T) {
 // but no occupied-volume allowance is published, so the boolean's own gate
 // refuses the operand (docs/tessellation-reach-design.md §7, §9).
 func TestCapBlendMeshPublishesNoVolumeProof(t *testing.T) {
+	t.Parallel()
 	chamfered, cbp := chamferedSectionBody(t, quarterDiskSection(10), 2)
 	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, 0.1)
 	require.NoError(t, err)

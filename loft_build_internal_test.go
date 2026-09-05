@@ -94,6 +94,7 @@ func evalLoftFixture(t *testing.T, pl loftPayload) *Body {
 // two faces, the roles exactly side(0,j,k) plus capStart/capEnd, and every
 // wall face's surface a Plane.
 func TestEvalLoftUnitBoxTopology(t *testing.T) {
+	t.Parallel()
 	body := evalLoftFixture(t, boxLoftPayload(t))
 
 	faces := body.Faces()
@@ -134,6 +135,7 @@ func TestEvalLoftUnitBoxTopology(t *testing.T) {
 // mints — the body's own origin and every face's role — carries the StepRef
 // evalLoft was actually called with, not a hardcoded one.
 func TestEvalLoftRolesUseTheGivenStepRef(t *testing.T) {
+	t.Parallel()
 	const ref = StepRef(7)
 	budget := newWorkBudget(t.Context())
 	body, err := evalLoft(t.Context(), New(), ref, boxLoftPayload(t), budget, newFreeformWork(), newFreeformWork())
@@ -153,6 +155,7 @@ func TestEvalLoftRolesUseTheGivenStepRef(t *testing.T) {
 // wall triangle's own area is exactly representable (0.5 mm² each) — the
 // summation loop's own slop still keeps the composed bound positive.
 func TestEvalLoftUnitBoxMeasurements(t *testing.T) {
+	t.Parallel()
 	body := evalLoftFixture(t, boxLoftPayload(t))
 
 	require.InDelta(t, 1.0, body.volume.Value.Base(), 1e-12)
@@ -179,6 +182,7 @@ func TestEvalLoftUnitBoxMeasurements(t *testing.T) {
 // regression shape (a face left with an unset area would silently overstate
 // the body's own coverage).
 func TestEvalLoftFaceAreasSumToBodyArea(t *testing.T) {
+	t.Parallel()
 	body := evalLoftFixture(t, boxLoftPayload(t))
 
 	sum := 0.0
@@ -196,6 +200,7 @@ func TestEvalLoftFaceAreasSumToBodyArea(t *testing.T) {
 // tetrahedron sum is negative before the flip, yet the published Volume is
 // still the correct positive 1 mm³ once the whole-shell flip has run.
 func TestEvalLoftWholeShellOrientationCorrectsSign(t *testing.T) {
+	t.Parallel()
 	body := evalLoftFixture(t, boxLoftPayloadOn(t, 1, 0))
 	require.InDelta(t, 1.0, body.volume.Value.Base(), 1e-12)
 	require.Equal(t, Exact, body.volume.Exactness)
@@ -214,6 +219,7 @@ func TestEvalLoftWholeShellOrientationCorrectsSign(t *testing.T) {
 // genuinely points away from the box centre, and the walk's Newell normal
 // agrees with it — decad's material-on-the-left convention.
 func TestEvalLoftLoopWalksFollowTheFaceNormal(t *testing.T) {
+	t.Parallel()
 	// The unit box occupies [0,1]^3 under either spelling, so this is its
 	// interior centre in both.
 	center := r3.NewVec(0.5, 0.5, 0.5)
@@ -276,6 +282,7 @@ func TestEvalLoftLoopWalksFollowTheFaceNormal(t *testing.T) {
 // edge"). Rim edges take the outer/hole rule: all four outer rims (both cap
 // boundaries) are convex.
 func TestEvalLoftJunctionConvexity(t *testing.T) {
+	t.Parallel()
 	body := evalLoftFixture(t, boxLoftPayload(t))
 
 	rungs, diagonals, rims := 0, 0, 0
@@ -307,6 +314,7 @@ func TestEvalLoftJunctionConvexity(t *testing.T) {
 // rim edges are concave while the outer rim's are convex, exactly as a
 // prism's already are (topology.go's Edge.IsConvex doc).
 func TestEvalLoftHoleRimIsConcave(t *testing.T) {
+	t.Parallel()
 	p := ProfileRecord{
 		Outer: squareLoop(0.5, 0.5, 0.5, true),
 		Holes: []LoopRecord{squareLoop(0.5, 0.5, 0.2, false)},
@@ -375,6 +383,7 @@ func resolveLoftLoopWalks(t *testing.T, p ProfileRecord) [][]segmentWalk {
 }
 
 func TestLoftPairingsDefaultOffsetIsZero(t *testing.T) {
+	t.Parallel()
 	p := unitSquareProfile()
 	offsets := []int{0}
 	walks := resolveLoftLoopWalks(t, p)
@@ -387,6 +396,7 @@ func TestLoftPairingsDefaultOffsetIsZero(t *testing.T) {
 }
 
 func TestLoftPairingsAlignmentRotatesCorrespondence(t *testing.T) {
+	t.Parallel()
 	p := unitSquareProfile()
 	offsets := []int{1}
 	walks := resolveLoftLoopWalks(t, p)
@@ -405,6 +415,7 @@ func TestLoftPairingsAlignmentRotatesCorrespondence(t *testing.T) {
 // p1's LARGE hole (also recorded at Holes[0]) — a nearest-size or
 // nearest-position matcher would pick the other correspondence.
 func TestLoftPairingsTwoHolesPairByPosition(t *testing.T) {
+	t.Parallel()
 	smallHole := squareLoop(0.2, 0.2, 0.05, false)
 	largeHole := squareLoop(0.8, 0.8, 0.15, false)
 
@@ -437,6 +448,7 @@ func TestLoftPairingsTwoHolesPairByPosition(t *testing.T) {
 // and refuses at S3 immediately after, so its counter reads exactly what one
 // segment's walk costs.
 func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
+	t.Parallel()
 	fit := FitSplineSeg{
 		Fit:    []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)},
 		TStart: 0, TEnd: 1,
@@ -497,6 +509,7 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 // disjoint squares, so a pairing that re-resolved from the one record it does
 // hold would publish p0's coordinates in w's place.
 func TestLoftPairingsConsumesTheGateResolvedWalks(t *testing.T) {
+	t.Parallel()
 	p0 := unitSquareProfile()                               // corners (0,0), (1,0), (1,1), (0,1)
 	p1 := ProfileRecord{Outer: squareLoop(10, 20, 2, true)} // corners (8,18), (12,18), (12,22), (8,22)
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
@@ -540,6 +553,7 @@ func TestLoftPairingsConsumesTheGateResolvedWalks(t *testing.T) {
 // Resolving a whole loop ahead of the S3 test — the shape this test guards
 // against — would let that later walkOf error surface first instead.
 func TestValidateLoftRecordsS3PrecedesAWalkOfErrorLaterInTheOtherProfile(t *testing.T) {
+	t.Parallel()
 	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ArcSeg{
 		Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1,
 	})}
@@ -564,6 +578,7 @@ func TestValidateLoftRecordsS3PrecedesAWalkOfErrorLaterInTheOtherProfile(t *test
 // §5's explicit exemption), and that the resulting flat rung and both flat
 // diagonals at the split report IsConvex() == false.
 func TestEvalLoftCollinearSplitKeepsTwoFacesPerCell(t *testing.T) {
+	t.Parallel()
 	// Outer loop: the unit square's bottom side (0,0)->(1,0) split into two
 	// collinear segments at u=0.5, followed by the square's other three
 	// sides — 5 segments total, still forming the same square boundary.
@@ -643,6 +658,7 @@ func TestEvalLoftCollinearSplitKeepsTwoFacesPerCell(t *testing.T) {
 // the InDelta comparison below is far too loose to see that: the reference
 // must equal the held vertex-set diameter EXACTLY, not merely to 1e-12.
 func TestLoftGateDiameterIsTheVertexDiameter(t *testing.T) {
+	t.Parallel()
 	body := evalLoftFixture(t, boxLoftPayload(t))
 	d, ok, err := bodyGateDiameter(t.Context(), body)
 	require.NoError(t, err)
@@ -664,6 +680,7 @@ func TestLoftGateDiameterIsTheVertexDiameter(t *testing.T) {
 // understating the reference tightens the tolerance gate rather than
 // loosening it.
 func TestLoftPlacedGateDiameterShrinksByTwiceDelta(t *testing.T) {
+	t.Parallel()
 	unplaced := evalLoftFixture(t, boxLoftPayload(t))
 	unplacedD, ok, err := bodyGateDiameter(t.Context(), unplaced)
 	require.NoError(t, err)
@@ -696,6 +713,7 @@ func TestLoftPlacedGateDiameterShrinksByTwiceDelta(t *testing.T) {
 // against the payload's OWN float d and delta taken exactly, so it judges the
 // rounding and nothing else.
 func TestLoftPlacedGateDiameterRoundsTheShrinkOutward(t *testing.T) {
+	t.Parallel()
 	for _, dx := range []float64{1 << 30, 1e6, 1e9, 1 << 36} {
 		t.Run(fmt.Sprintf("dx=%g", dx), func(t *testing.T) {
 			move, err := r3.Translation(r3.NewVec(dx, 0, 0))
@@ -736,6 +754,7 @@ func TestLoftPlacedGateDiameterRoundsTheShrinkOutward(t *testing.T) {
 // fixture that drifted out of that regime fails rather than passing on an
 // unrelated refusal.
 func TestLoftCollapsedGateDiameterIsRefusedFirst(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		half, height, dx float64
 	}{
@@ -776,6 +795,7 @@ func TestLoftCollapsedGateDiameterIsRefusedFirst(t *testing.T) {
 // TestEvalLoftCancellation proves a context cancelled before the build even
 // starts returns ctx.Err() rather than any evaluator sentinel.
 func TestEvalLoftCancellation(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	budget := newWorkBudget(ctx)
@@ -794,6 +814,7 @@ func validateLoftRecordsErr(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignmen
 }
 
 func TestValidateLoftRecordsHoleCountMismatch(t *testing.T) {
+	t.Parallel()
 	p0 := ProfileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []LoopRecord{squareLoop(0.5, 0.5, 0.1, false)}}
 	p1 := unitSquareProfile()
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
@@ -802,6 +823,7 @@ func TestValidateLoftRecordsHoleCountMismatch(t *testing.T) {
 }
 
 func TestValidateLoftRecordsSegmentCountMismatch(t *testing.T) {
+	t.Parallel()
 	p0 := unitSquareProfile()
 	p1 := ProfileRecord{Outer: triangleLoop()}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
@@ -816,6 +838,7 @@ func squareLoopWithFirstSegment(seg CurveSegment) LoopRecord {
 }
 
 func TestValidateLoftRecordsCurvedPairIsUnsupported(t *testing.T) {
+	t.Parallel()
 	p0 := unitSquareProfile()
 	p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(ArcSeg{
 		Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1,
@@ -832,6 +855,7 @@ func TestValidateLoftRecordsCurvedPairIsUnsupported(t *testing.T) {
 // structurally, whatever loft_stations_internal_test.go's own generator
 // later makes of the resulting station chain.
 func TestValidateLoftRecordsSameKindCircularPairIsAdmitted(t *testing.T) {
+	t.Parallel()
 	circle := func() CurveSegment {
 		return CircleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: true, TStart: 0, TEnd: 1}
 	}
@@ -843,6 +867,7 @@ func TestValidateLoftRecordsSameKindCircularPairIsAdmitted(t *testing.T) {
 }
 
 func TestValidateLoftRecordsMalformedAlignment(t *testing.T) {
+	t.Parallel()
 	p := unitSquareProfile()
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 
@@ -854,6 +879,7 @@ func TestValidateLoftRecordsMalformedAlignment(t *testing.T) {
 }
 
 func TestValidateLoftRecordsCoincidentPlanes(t *testing.T) {
+	t.Parallel()
 	p := unitSquareProfile()
 	pl0 := planeAt(r3.NewVec(0, 0, 0))
 
@@ -866,6 +892,7 @@ func TestValidateLoftRecordsCoincidentPlanes(t *testing.T) {
 }
 
 func TestValidateLoftRecordsDistinctPlanesPass(t *testing.T) {
+	t.Parallel()
 	p := unitSquareProfile()
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 	offsets, walks0, walks1, err := validateLoftRecords(p, p, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
@@ -883,6 +910,7 @@ func TestValidateLoftRecordsDistinctPlanesPass(t *testing.T) {
 // at the exact same world point — collapsing that corner's two incident wall
 // triangles to zero area.
 func TestEvalLoftCollapsedTriangleIsDegenerate(t *testing.T) {
+	t.Parallel()
 	p := unitSquareProfile()
 	pl0 := PlaneRecord{Origin: r3.NewVec(0, 0, 0), U: r3.NewVec(1, 0, 0), V: r3.NewVec(0, 1, 0)}
 	pl1 := PlaneRecord{Origin: r3.NewVec(0, 0, 0), U: r3.NewVec(0, 1, 0), V: r3.NewVec(0, 0, 1)}
@@ -903,6 +931,7 @@ func TestEvalLoftCollapsedTriangleIsDegenerate(t *testing.T) {
 // self-cross — docs/loft-design.md §13's own worked S7 fixture, restated
 // through the public payload rather than raw triangles.
 func TestEvalLoftOverTwistedCorrespondenceCrosses(t *testing.T) {
+	t.Parallel()
 	p := unitSquareProfile()
 	pl0 := planeAt(r3.NewVec(0, 0, 0))
 	pl1 := PlaneRecord{Origin: r3.NewVec(1, 0, 1), U: r3.NewVec(-1, 0, 0), V: r3.NewVec(0, 1, 0)}
@@ -936,6 +965,7 @@ func manyGonLoop(cx, cy, radius float64, n int) LoopRecord {
 // the audit's own facet-pair count exceeds the fixed ceiling refuses before
 // any pair result is trusted, wired end to end through evalLoft.
 func TestEvalLoftAuditRefusesOverBudget(t *testing.T) {
+	t.Parallel()
 	const n = 1200 // triangle count grows to roughly 4n-4, comfortably past 4001
 	p := ProfileRecord{Outer: manyGonLoop(0, 0, 10, n)}
 	pl0 := planeAt(r3.NewVec(0, 0, 0))
@@ -995,6 +1025,7 @@ func triangleAreaRat2D(pts []Point2, tri [3]int) *big.Rat {
 // rational EXACTLY — a big.Rat.Cmp, not a float comparison, since both sides
 // are genuinely the same rational here.
 func TestCapPolygonAreaRatMatchesMomentsOnUntrimmedLineSeg(t *testing.T) {
+	t.Parallel()
 	pl := boxLoftPayload(t)
 	a := assembleLoftFixture(t, pl)
 
@@ -1050,6 +1081,7 @@ func trimmedLineTriangleProfile() ProfileRecord {
 // instead of passing vacuously. The difference is logged and held to
 // rounding scale; neither rational is ever pinned as a literal.
 func TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg(t *testing.T) {
+	t.Parallel()
 	p := trimmedLineTriangleProfile()
 	pl0 := planeAt(r3.NewVec(0, 0, 0))
 	pl1 := planeAt(r3.NewVec(0, 0, 1))
@@ -1204,6 +1236,7 @@ func placedHoleLoftPayload(t *testing.T) loftPayload {
 // record's own endpoint verbatim, with no rounding on either side (this
 // file's trimmedLineTriangleProfile doc comment owns the trimmed case).
 func TestCapPolygonAreaRatNetsEveryLoop(t *testing.T) {
+	t.Parallel()
 	zero, up := r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)
 	for _, tc := range []struct {
 		name  string
@@ -1296,6 +1329,7 @@ func TestCapPolygonAreaRatNetsEveryLoop(t *testing.T) {
 }
 
 func TestCellBilinearAreaEnclosesDirectIntegral(t *testing.T) {
+	t.Parallel()
 	vLo := r3.NewVec(1, -2, 0.5)
 	vHi := r3.NewVec(4, 0, 1)
 	wLo := r3.NewVec(-0.5, 2, 6)
@@ -1310,6 +1344,7 @@ func TestCellBilinearAreaEnclosesDirectIntegral(t *testing.T) {
 }
 
 func TestCellTwistMomentsMatchRefinedBilinearSurface(t *testing.T) {
+	t.Parallel()
 	vLo := r3.NewVec(1, -2, 0.5)
 	vHi := r3.NewVec(4, 0, 1)
 	wLo := r3.NewVec(-0.5, 2, 6)
@@ -1336,6 +1371,7 @@ func TestCellTwistMomentsMatchRefinedBilinearSurface(t *testing.T) {
 }
 
 func TestComputeLoftChordedAllowReversesSignedCorrections(t *testing.T) {
+	t.Parallel()
 	verts := []r3.Vec{
 		r3.NewVec(1, -2, 0.5), r3.NewVec(4, 0, 1),
 		r3.NewVec(-0.5, 2, 6), r3.NewVec(3, 4, 7.5),

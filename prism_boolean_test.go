@@ -141,6 +141,7 @@ func overshootQuadBody(t *testing.T, doc *decad.Document, corners [][2]float64, 
 // (prism_boolean_internal_test.go) pins RB9's guard directly, on a synthetic
 // non-closing loop, for exactly that reason, and stays correct either way.
 func TestPrismUnionCutFragmentOperandRefusesNonClosingMerge(t *testing.T) {
+	t.Parallel()
 	corners := [][2]float64{{-9.317, -5.731}, {10.29, -6.113}, {8.877, 7.219}, {-7.331, 6.407}}
 	doc := decad.New()
 	a := overshootQuadBody(t, doc, corners, 0.13, 5)
@@ -174,6 +175,7 @@ func TestPrismUnionCutFragmentOperandRefusesNonClosingMerge(t *testing.T) {
 // parameters sketch computed for the surviving fragments; only a merge that
 // cuts nothing reaches the Exact arm.
 func TestPrismUnionTwoBoxesSharingCapPlaneBuildsAnalyticPrism(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 5, 5, 15, 15, 10)
@@ -211,6 +213,7 @@ func TestPrismUnionTwoBoxesSharingCapPlaneBuildsAnalyticPrism(t *testing.T) {
 // exactly) and reporting an Approximate volume within the closed-form
 // Pappus/Green's-theorem sum of the two prisms' own volumes.
 func TestPrismUnionGearToothOnHubSharedCarrier(t *testing.T) {
+	t.Parallel()
 	const r, r2, th1, th2, h = 20.0, 25.0, 0.0, 0.2, 10.0
 	doc := decad.New()
 	hub := hubBody(t, doc, r, h)
@@ -259,6 +262,7 @@ func TestPrismUnionGearToothOnHubSharedCarrier(t *testing.T) {
 // refusal it would have before this design existed (evaluator-design §9:
 // revolve has no tessellator yet) — no new error, no new text.
 func TestPrismUnionG1FallsBackWithUnchangedBehavior(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	ball := ballBody(t, doc, 5)
 	box := boxBody(t, doc, -20, -20, 20, 20, 20)
@@ -287,6 +291,7 @@ func TestPrismUnionG1FallsBackWithUnchangedBehavior(t *testing.T) {
 // exactly planar for the same n, k and clears G3. Its re-expression still
 // creates split boundaries, so §3.4 now routes it through the mesh path too.
 func TestPrismUnionRotatedToothFallback(t *testing.T) {
+	t.Parallel()
 	const r, r2, th1, th2, h = 20.0, 25.0, 0.0, 0.2, 10.0
 	const n, k = 17, 10
 	pivot := r3.Vec{}
@@ -341,6 +346,7 @@ func TestPrismUnionRotatedToothFallback(t *testing.T) {
 // and unconditional (§3.1's own decision), so the pair correctly declines to
 // risk admitting a residual.
 func TestPrismUnionIndependentlyConstructedCoplanarFrames(t *testing.T) {
+	t.Parallel()
 	theta := 2 * math.Pi * 2 / 17.0 // the r3 probe's own n=17,k=2 N()-inexact case
 	cos, sin := math.Cos(theta), math.Sin(theta)
 	rotated, err := r3.NewFrame(r3.Vec{}, r3.NewVec(cos, sin, 0), r3.NewVec(-sin, cos, 0))
@@ -375,6 +381,7 @@ func TestPrismUnionIndependentlyConstructedCoplanarFrames(t *testing.T) {
 // sliver overlap sketch's own arrangement flags as degenerate), refuses
 // explicitly rather than rerouting to an Approximate mesh result.
 func TestPrismUnionAdmittedThenInvalidRegionRefuses(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 9.9999999, 0, 20, 10, 10)
@@ -396,6 +403,7 @@ func TestPrismUnionAdmittedThenInvalidRegionRefuses(t *testing.T) {
 // ctx.Err() unchanged, with the document and recipe untouched — the same
 // contract every other modify-op audit honors.
 func TestPrismUnionCancellationLeavesDocumentUnchanged(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 5, 5, 15, 15, 10)
@@ -436,6 +444,7 @@ func TestPrismUnionCancellationLeavesDocumentUnchanged(t *testing.T) {
 // outside the admitted class). Reaching such a chain analytically needs a
 // displacement the cut can be proven not to amplify, which is separate work.
 func TestPrismUnionChainedBooleanCarriesNoAccumulatedBound(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 2, 2, 8, 8, 10)
@@ -477,6 +486,7 @@ func TestPrismUnionChainedBooleanCarriesNoAccumulatedBound(t *testing.T) {
 // displacement, so every reading that rewrites or measures that section
 // withholds rather than answer for the wrong one (§12).
 func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 2, 2, 8, 8, 10)
@@ -604,6 +614,7 @@ func twoCircleUnion(centerDist, bigR, smallR, h float64) twoCircleUnionClosedFor
 // construction, cross-checked independently against a direct run of the
 // evaluator before the fix landed (design A7 §1).
 func TestPrismUnionCoplanarCircleLensBounds(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name          string
 		bigR, smallR  float64

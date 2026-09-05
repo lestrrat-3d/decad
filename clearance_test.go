@@ -84,6 +84,7 @@ func requireExactGap(t *testing.T, report *decad.Report, mm float64) {
 }
 
 func TestClearanceCubesDiagonalOffset(t *testing.T) {
+	t.Parallel()
 	// The §7 worked pair: a 10 mm cube at the origin and one at x∈[13,23],
 	// y∈[12,22] — the facing-face plateaus are discarded (the trims clear in
 	// projection) and the minimum falls to two parallel vertical edges:
@@ -99,6 +100,7 @@ func TestClearanceCubesDiagonalOffset(t *testing.T) {
 }
 
 func TestClearanceStackedCubes(t *testing.T) {
+	t.Parallel()
 	// The same cubes stacked 2 mm apart: the facing caps' trims overlap in
 	// projection, so the face × face plateau carries the answer — 2 mm,
 	// Exact (§7's second worked row). The second cube arrives via Placed, so
@@ -117,6 +119,7 @@ func TestClearanceStackedCubes(t *testing.T) {
 }
 
 func TestClearanceStopBuiltStackTouching(t *testing.T) {
+	t.Parallel()
 	// A stack sharing its cap plane: coplanar caps with opposing normals and
 	// a positive-area trim overlap — the §6 coplanar Plane × Plane contact
 	// certificate. The gap is a measured Exact zero and passes the near-zero
@@ -143,6 +146,7 @@ func TestClearanceStopBuiltStackTouching(t *testing.T) {
 }
 
 func TestClearanceTangentSpheresSuspect(t *testing.T) {
+	t.Parallel()
 	// Two balls exactly tangent along a diagonal: the strict exterior branch
 	// fails at equality, which routes to §6 — and the Sphere × Sphere
 	// contact certificate is PR 3, so the touching pair yields NO row and
@@ -169,6 +173,7 @@ func TestClearanceTangentSpheresSuspect(t *testing.T) {
 }
 
 func TestClearanceBeyondBoxesInHole(t *testing.T) {
+	t.Parallel()
 	// A cube standing inside a ring's hole: the bounding boxes overlap, so
 	// box separation proves nothing — the always-on kernel proves the
 	// partition by boundary clearance plus the §2 nesting-exclusion casts.
@@ -204,6 +209,7 @@ func TestClearanceBeyondBoxesInHole(t *testing.T) {
 }
 
 func TestClearanceCoaxialPegInTube(t *testing.T) {
+	t.Parallel()
 	// The §4 worked containment numbers: two coaxial cylinders of radii 10
 	// and 5 have spine distance 0 and a genuine 5 mm gap — the peg-in-hole
 	// clearance a subtraction-only rule would misread as "carriers meet".
@@ -238,6 +244,7 @@ func TestClearanceCoaxialPegInTube(t *testing.T) {
 }
 
 func TestClearanceToriP8(t *testing.T) {
+	t.Parallel()
 	// The §7 worked torus pair: parallel axes 30 mm apart, major 10,
 	// minor 2 — tube to tube through the circle × circle P8 bracket, ⊕ the
 	// minor radii: 6 mm with a vanishing certified bound, Approximate, and
@@ -263,6 +270,7 @@ func TestClearanceToriP8(t *testing.T) {
 }
 
 func TestClearanceNonFinitePolynomialIsUndecided(t *testing.T) {
+	t.Parallel()
 	// Every input is finite, but the P4 squared-distance coefficients overflow.
 	// The kernel must refuse the gap instead of solving a zero-substituted
 	// polynomial and publishing a false Exact clearance.
@@ -320,6 +328,7 @@ func TestClearanceNonFinitePolynomialIsUndecided(t *testing.T) {
 }
 
 func TestClearanceConeCoarseRow(t *testing.T) {
+	t.Parallel()
 	// PR 1's cone staging (§8): cone-involved face pairs carry only a coarse
 	// enclosure interval. Far enough that even the coarse lower bound clears
 	// zero, the pair is proven disjoint with a wide honest row — and the §7
@@ -352,6 +361,7 @@ func TestClearanceConeCoarseRow(t *testing.T) {
 }
 
 func TestClearanceConeCoarseUndecided(t *testing.T) {
+	t.Parallel()
 	// The other half of the cone staging: with the face enclosures
 	// overlapping, the coarse lower bound cannot clear zero and the pair is
 	// undecided — Suspect unasked, and no fabricated row when asked.
@@ -383,6 +393,7 @@ func TestClearanceConeCoarseUndecided(t *testing.T) {
 }
 
 func TestClearanceNestedPairReportsContainedVolume(t *testing.T) {
+	t.Parallel()
 	// A ball wholly inside another: the boundaries never meet, so boundary
 	// clearance alone would prove the wrong thing (§2). One witness from the
 	// inner body's material lump proves strict full containment, so Verify
@@ -405,6 +416,7 @@ func TestClearanceNestedPairReportsContainedVolume(t *testing.T) {
 }
 
 func TestClearancePlacedRotatedCube(t *testing.T) {
+	t.Parallel()
 	// A pair with a genuinely rotated pose: cube B is rotated 45° about Z
 	// and translated, so its nearest feature to cube A is a vertical corner
 	// edge — edge × edge, closed form, Exact.
@@ -431,6 +443,7 @@ func TestClearancePlacedRotatedCube(t *testing.T) {
 }
 
 func TestClearanceSubTolOverlapNotCertified(t *testing.T) {
+	t.Parallel()
 	// Two boxes overlapping by 5e-9 mm: not a touching contact, and the
 	// exact coplanar certificate must NOT bless it — the pair is neither
 	// proven disjoint nor certified touching, so it reads Suspect.
@@ -448,6 +461,7 @@ func TestClearanceSubTolOverlapNotCertified(t *testing.T) {
 }
 
 func TestClearanceBallCenteredInHole(t *testing.T) {
+	t.Parallel()
 	// A radius-5 ball centered on the axis of a radius-10 through-hole: the
 	// point-spine d_sup branch is trivially constant against the hole wall,
 	// and the 5 mm ring gap is proven Exact.
@@ -484,6 +498,7 @@ func TestClearanceBallCenteredInHole(t *testing.T) {
 }
 
 func TestClearanceNearParallelPlateReadsTheCorner(t *testing.T) {
+	t.Parallel()
 	// A plate pair with the upper plate tilted DOWN by a tiny angle: the
 	// planes are near-parallel, and a tolerance-based plateau would bless
 	// the anchor height 1.0 as an Exact minimum — but the true minimum is
@@ -531,6 +546,7 @@ func rodBody(t *testing.T, doc *decad.Document, cx, cy, r, half float64) *decad.
 }
 
 func TestClearanceRodPiercingBallIsNeverSound(t *testing.T) {
+	t.Parallel()
 	// A rod of radius 1 on the axis (3, 0), running clear through a ball of
 	// radius 10 at the origin — roughly 60 mm³ of overlap, and no gap exists at
 	// all. The §4 nested branch reads a SUPREMUM over the inner spine, and a
@@ -552,6 +568,7 @@ func TestClearanceRodPiercingBallIsNeverSound(t *testing.T) {
 }
 
 func TestClearanceCoaxialToriReadTheRing(t *testing.T) {
+	t.Parallel()
 	// The certified constant-distance branch (§4), pinned: two EXACTLY coaxial
 	// full tori — spine radii 10 and 5, tubes 2 and 1 — have a constant spine
 	// distance of 5 and a 2 mm ring gap, Exact. Neither face carries an edge,
@@ -568,6 +585,7 @@ func TestClearanceCoaxialToriReadTheRing(t *testing.T) {
 }
 
 func TestClearanceNearCoaxialToriAreNotExact(t *testing.T) {
+	t.Parallel()
 	// The same pair with the inner torus 1e-12 mm off the shared axis: NOT
 	// coaxial, so the constant-distance closed form does not hold and its 2 mm
 	// answer is off by up to the offset. Two full tori have no edges and no
@@ -621,6 +639,7 @@ func (c *sturmBuildCancelContext) Err() error {
 // arithmetic in a clearance run, and a context cancelled there surfaces
 // context.Canceled from Verify with the document untouched.
 func TestVerifyClearanceCancellationInsideSturmChainBuild(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	torusBody(t, doc, 10, 2)
 	b := torusBody(t, doc, 10, 2)
@@ -660,6 +679,7 @@ func (c *vertexTierCancelContext) Err() error {
 }
 
 func TestVerifyClearanceCancellationInsideVertexTier(t *testing.T) {
+	t.Parallel()
 	const sides = 16
 	polygon := func(cx float64) [][2]float64 {
 		pts := make([][2]float64, sides)

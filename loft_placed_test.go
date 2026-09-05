@@ -37,6 +37,7 @@ func requireBitIdentical(t *testing.T, want, got r3.Vec) {
 // subnormal, a near-overflow magnitude, negative zero, and a non-terminating
 // binary fraction.
 func TestR3IdentityApplyIsBitIdentical(t *testing.T) {
+	t.Parallel()
 	id := r3.Identity()
 	for _, tc := range []struct {
 		name string
@@ -78,6 +79,7 @@ func TestR3IdentityApplyIsBitIdentical(t *testing.T) {
 // is built refuses a fresh Document.Loft (S9) while Duplicate/PlacedCopy/
 // Placed of that body still succeed and reproduce its volume.
 func TestLoftPlacementDoesNotRerunTheSeamGates(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20) // two 40x40 squares, h=10 -> 16000 mm3 box
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)
@@ -127,6 +129,7 @@ func TestLoftPlacementDoesNotRerunTheSeamGates(t *testing.T) {
 // every held vertex is bit-identical to the source's, the source stays
 // live, and the document gains a second body.
 func TestLoftDuplicateIsMeasurementIdentical(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20) // two 40x40 squares, h=10 -> 16000 mm3 box
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)
@@ -187,6 +190,7 @@ func TestLoftDuplicateIsMeasurementIdentical(t *testing.T) {
 // vertex is exact ONLY under the identity transform (§5), and Bounds still
 // published Exact with a zero bound over vertices a rotation rounded.
 func TestLoftPlacedRotationSoundness(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)
@@ -226,6 +230,7 @@ func TestLoftPlacedRotationSoundness(t *testing.T) {
 // Centroid by exactly the translation, keeps the volume value, publishes a
 // positive bound enclosing the true 16000 mm3, and leaves the source live.
 func TestLoftPlacedCopyTranslation(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)
@@ -273,6 +278,7 @@ func TestLoftPlacedCopyTranslation(t *testing.T) {
 // whole-shell orientation step re-decides the sign from the reflected
 // triangle set on its own, so no separate winding-flip case is needed.
 func TestLoftPlacedReflectionHerringbone(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)
@@ -340,6 +346,7 @@ func TestLoftPlacedReflectionHerringbone(t *testing.T) {
 // moving an already-placed mesh — never accumulating rounding across the
 // chain the way facetedPayload.placed's move-the-held-mesh path would.
 func TestLoftPlacedCopyChainDoesNotAccumulate(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)
@@ -371,6 +378,7 @@ func TestLoftPlacedCopyChainDoesNotAccumulate(t *testing.T) {
 // per-edge convexity (§5's junction rule reads the SAME geometric relation
 // under any rigid motion).
 func TestLoftPlacedTopologyAndRoles(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)
@@ -411,6 +419,7 @@ func TestLoftPlacedTopologyAndRoles(t *testing.T) {
 // forgot the perturbation term: the sum of every face's own Area() must
 // equal Body.Area().Value within the summed bounds.
 func TestLoftPlacedFaceAreaSumMatchesBodyArea(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)
@@ -446,6 +455,7 @@ func TestLoftPlacedFaceAreaSumMatchesBodyArea(t *testing.T) {
 // 40 and 10, both exactly representable, so an unplaced fixture cannot tell a
 // missing delta term from an exact square root; only the placed body can.
 func TestLoftPlacedAccessorExactness(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)
@@ -493,6 +503,7 @@ func TestLoftPlacedAccessorExactness(t *testing.T) {
 // (zero-value) transform, and an S12 fixture whose proven volume allowance
 // swamps its tiny held volume — leaves the recipe and document untouched.
 func TestLoftPlacedRetireAndLiveness(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)
@@ -528,6 +539,7 @@ func TestLoftPlacedRetireAndLiveness(t *testing.T) {
 // whose swept-volume term swamps its own tiny volume, leaving the
 // centroid's quotient allowance with no positive denominator to divide by.
 func TestLoftPlacedS12TinyBodyFarTranslation(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 1e-4, 1e-4)
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)
@@ -564,6 +576,7 @@ func TestLoftPlacedS12TinyBodyFarTranslation(t *testing.T) {
 // ErrNotFinite: every input here is finite, and only decad's own float
 // evaluation of the lift runs off the range.
 func TestLoftPlacedS13OverflowingCoordinate(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 5, 1e300)
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)
@@ -599,6 +612,7 @@ func TestLoftPlacedS13OverflowingCoordinate(t *testing.T) {
 // and the placement would fail only incidentally on the one reading that
 // publishes delta unconditionally.
 func TestLoftPlacedNearMaxFloatSectionRefusesUnsupported(t *testing.T) {
+	t.Parallel()
 	x := 0.75 * math.MaxFloat64
 	s0, p0, s1, p1 := loftSquaresAt(t, r3.NewVec(0, 0, x), 1, 1, 8e292)
 	doc := decad.New()
@@ -628,6 +642,7 @@ func TestLoftPlacedNearMaxFloatSectionRefusesUnsupported(t *testing.T) {
 // TestLoftPlacedContextCancellation proves a canceled context returns
 // ctx.Err() with the receiver still live and the recipe unchanged.
 func TestLoftPlacedContextCancellation(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)
@@ -650,6 +665,7 @@ func TestLoftPlacedContextCancellation(t *testing.T) {
 // TestLoftPlacedVerifySound proves a placed loft is Sound at the default
 // tolerance, and two lofts placed apart read box-disjoint Sound.
 func TestLoftPlacedVerifySound(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)

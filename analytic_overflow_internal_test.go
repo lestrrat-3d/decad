@@ -38,6 +38,7 @@ func overflowFrame(t *testing.T) r3.Frame {
 }
 
 func TestEvalPrismRejectsOverflowedMeasurements(t *testing.T) {
+	t.Parallel()
 	profile := overflowSquare(1e154)
 	body, err := evalPrism(New(), StepRef(0), prismPayload{
 		profile: profile,
@@ -50,6 +51,7 @@ func TestEvalPrismRejectsOverflowedMeasurements(t *testing.T) {
 }
 
 func TestEvalRevolveRejectsOverflowedMeasurements(t *testing.T) {
+	t.Parallel()
 	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
 		LineSeg{Start: Point2{U: 1e154}, End: Point2{U: 2e154}, TStart: 0, TEnd: 1},
 		LineSeg{Start: Point2{U: 2e154}, End: Point2{U: 2e154, V: 1}, TStart: 0, TEnd: 1},
@@ -71,6 +73,7 @@ func TestEvalRevolveRejectsOverflowedMeasurements(t *testing.T) {
 }
 
 func TestEvalCupRejectsOverflowedMeasurements(t *testing.T) {
+	t.Parallel()
 	body, err := evalCup(New(), StepRef(0), cupPayload{
 		outer:  overflowSquare(10),
 		cavity: overflowSquare(1),
@@ -84,6 +87,7 @@ func TestEvalCupRejectsOverflowedMeasurements(t *testing.T) {
 }
 
 func TestEvalCupIgnoresUnusedOverflowedSecondMoments(t *testing.T) {
+	t.Parallel()
 	const outerSide = 1e100
 	body, err := evalCup(New(), StepRef(0), cupPayload{
 		outer:  overflowSquare(outerSide),
@@ -107,6 +111,7 @@ func TestEvalCupIgnoresUnusedOverflowedSecondMoments(t *testing.T) {
 }
 
 func TestAnalyticCircularEdgesCarryLengthBounds(t *testing.T) {
+	t.Parallel()
 	circle := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
 		CircleSeg{
 			Center: Point2{},
@@ -176,6 +181,7 @@ func TestAnalyticCircularEdgesCarryLengthBounds(t *testing.T) {
 }
 
 func TestCoalescedAnalyticEdgesCarryLengthBounds(t *testing.T) {
+	t.Parallel()
 	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
 		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 1}, TStart: 0, TEnd: 1},
 		LineSeg{Start: Point2{U: 1, V: 1}, End: Point2{U: 2, V: 2}, TStart: 0, TEnd: 1},

@@ -388,6 +388,7 @@ func floatOfRatPoint(t *testing.T, p ratPoint) (float64, float64) {
 // --- 1. the overshooting net (docs/spline-design.md §6.2.1, §11) ---
 
 func TestSpanSagittaUpperEnclosesOvershootingChordSegment(t *testing.T) {
+	t.Parallel()
 	span := ratSpan([][2]float64{{0, 0}, {-3, 0.01}, {4, 0.01}, {1, 0}})
 
 	dense := denseChordSegmentDeviation(t, span, 200_000)
@@ -423,6 +424,7 @@ func TestSpanSagittaUpperEnclosesOvershootingChordSegment(t *testing.T) {
 // the line at an UNEVEN rate, so C(0.5) sits well short of L(0.5) = (0.5, 0)
 // even though both are on the same line and the sagitta is exactly 0.
 func TestSpanSagittaUpperDistinguishesFromParametricDeviation(t *testing.T) {
+	t.Parallel()
 	span := ratSpan([][2]float64{{0, 0}, {0.1, 0}, {0.1, 0}, {1, 0}})
 
 	bound := sagittaOf(t, span)
@@ -438,6 +440,7 @@ func TestSpanSagittaUpperDistinguishesFromParametricDeviation(t *testing.T) {
 // --- 3. a genuinely collapsed span reports sagitta exactly 0 ---
 
 func TestSpanSagittaUpperCollapsedSpanIsExactZero(t *testing.T) {
+	t.Parallel()
 	span := ratSpan([][2]float64{{2, 3}, {2, 3}, {2, 3}, {2, 3}})
 	require.Equal(t, 0.0, sagittaOf(t, span), "a span whose control points all coincide reports sagitta exactly 0, by exact float equality")
 }
@@ -445,6 +448,7 @@ func TestSpanSagittaUpperCollapsedSpanIsExactZero(t *testing.T) {
 // --- 4. station determinism ---
 
 func TestPairStationsStationDeterminism(t *testing.T) {
+	t.Parallel()
 	spans := quarterCircleFitSpans(t)
 	const target = 1e-4
 
@@ -467,6 +471,7 @@ func TestPairStationsStationDeterminism(t *testing.T) {
 // --- 5. sagitta vs level: strictly decreasing, and settling on the smallest ---
 
 func TestPairStationsSagittaStrictlyDecreasesWithLevel(t *testing.T) {
+	t.Parallel()
 	spans := quarterCircleFitSpans(t)
 	span := spans[0]
 
@@ -491,6 +496,7 @@ func TestPairStationsSagittaStrictlyDecreasesWithLevel(t *testing.T) {
 // STRICTLY FEWER leaves, proving the walk actually adapts to how fine the
 // target is rather than subdividing to some fixed amount regardless of it.
 func TestPairStationsSettlesOnSmallestLevelForTarget(t *testing.T) {
+	t.Parallel()
 	spans := quarterCircleFitSpans(t)
 	span := spans[0]
 
@@ -530,6 +536,7 @@ func TestPairStationsSettlesOnSmallestLevelForTarget(t *testing.T) {
 // --- 6. over-cap refuses errTooManyChords ---
 
 func TestPairStationsOverCapRefuses(t *testing.T) {
+	t.Parallel()
 	spans := quarterCircleFitSpans(t)
 	_, _, _, _, err := pairStations(spans, spans, 1e-20, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
 	require.Error(t, err)
@@ -582,6 +589,7 @@ func capDepth(t *testing.T) int {
 // cell VISITED rather than per chord ACCEPTED refuses this walk barely halfway
 // through it, at a chord count under half the one the message states.
 func TestPairStationsAcceptsTheStatedChordCap(t *testing.T) {
+	t.Parallel()
 	span := parabolaSpan()
 	chain := []bezierSpan{span}
 	target := levelSagitta(t, span, capDepth(t))
@@ -599,6 +607,7 @@ func TestPairStationsAcceptsTheStatedChordCap(t *testing.T) {
 // accepted whole at depth 0, so the chain needs maxChordsPerWalk+1 chords —
 // the first count the message's "more than" covers — and the walk refuses.
 func TestPairStationsRefusesOneChordPastTheStatedCap(t *testing.T) {
+	t.Parallel()
 	span := parabolaSpan()
 	chain := []bezierSpan{span, straightSpanFrom(2)}
 	target := levelSagitta(t, span, capDepth(t))
@@ -614,6 +623,7 @@ func TestPairStationsRefusesOneChordPastTheStatedCap(t *testing.T) {
 // message names, and refuses before a single cell is measured. The target here
 // is deliberately lax enough that every span would otherwise be accepted whole.
 func TestPairStationsSpanCountPastTheCapRefusesUpFront(t *testing.T) {
+	t.Parallel()
 	chain := make([]bezierSpan, maxChordsPerWalk+1)
 	for i := range chain {
 		chain[i] = straightSpanFrom(float64(2 * i))
@@ -627,6 +637,7 @@ func TestPairStationsSpanCountPastTheCapRefusesUpFront(t *testing.T) {
 // --- 7. over-budget refuses Table R row R7 ---
 
 func TestPairStationsOverBudgetRefusesR7(t *testing.T) {
+	t.Parallel()
 	spans := quarterCircleFitSpans(t)
 	exhausted := &freeformWork{spent: freeformWorkLimit}
 	_, _, _, _, err := pairStations(spans, spans, 1e-9, exhausted, newFreeformWork()) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
@@ -648,6 +659,7 @@ func TestPairStationsOverBudgetRefusesR7(t *testing.T) {
 // on both sides names the same parameter — a mismatched tree would break the
 // exact ratio at whatever index the trees first diverged.
 func TestPairStationsSharedStationSetAcrossDifferentScale(t *testing.T) {
+	t.Parallel()
 	base := quarterCircleFitSpans(t)
 	scaled := scaleSpans(base, 5)
 
@@ -676,6 +688,7 @@ func TestPairStationsSharedStationSetAcrossDifferentScale(t *testing.T) {
 // — proving the two counters are independent AND correctly attributed, not
 // merely both nonzero.
 func TestPairStationsChargesBothCountersSeparately(t *testing.T) {
+	t.Parallel()
 	small := ratSpan([][2]float64{{0, 0}, {1, 3}, {2, -3}, {3, 0}})
 	big8 := ratSpan([][2]float64{
 		{0, 0}, {0.4, 3}, {0.9, -2}, {1.3, 3},
@@ -702,6 +715,7 @@ func TestPairStationsChargesBothCountersSeparately(t *testing.T) {
 // the FIRST (bulging) cell's own large reading, not the LAST (flat) cell's
 // tiny one.
 func TestPairStationsSagittaUpperIsAMaximumNeverTheLastCell(t *testing.T) {
+	t.Parallel()
 	bulge := ratSpan([][2]float64{{0, 0}, {0, 5}, {1, 5}, {1, 0}})
 	flat := ratSpan([][2]float64{{0, 0}, {0.33, 0.0001}, {0.66, 0.0001}, {1, 0}})
 
@@ -720,6 +734,7 @@ func TestPairStationsSagittaUpperIsAMaximumNeverTheLastCell(t *testing.T) {
 // --- extra: pairStations refuses a span-count mismatch defensively ---
 
 func TestPairStationsSpanCountMismatchRefuses(t *testing.T) {
+	t.Parallel()
 	spans := quarterCircleFitSpans(t)
 	_, _, _, _, err := pairStations(spans, spans[:len(spans)-1], 1e-6, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
 	require.Error(t, err)
@@ -741,6 +756,7 @@ func TestPairStationsSpanCountMismatchRefuses(t *testing.T) {
 // too coarse (both round within a handful of ulps of the true root) to catch
 // on its own.
 func TestSpanSagittaUpperRoundsOutward(t *testing.T) {
+	t.Parallel()
 	// A degree-3 span whose chord (0,0)-(5,3) is NOT axis-aligned, so the
 	// clamped-projection distance genuinely mixes both coordinates rather
 	// than reducing to a single coordinate difference (which would square to
@@ -825,6 +841,7 @@ func independentMaxChordSquaredDistance(t *testing.T, span bezierSpan) *big.Rat 
 // FIRST and LAST points coincide; the interior two do not) whose farthest
 // control point sits exactly sqrt(26) from the shared chord point.
 func TestSpanSagittaUpperClosedLoopChordIsAPointNotZero(t *testing.T) {
+	t.Parallel()
 	span := ratSpan([][2]float64{{0, 0}, {1, 5}, {-1, 5}, {0, 0}})
 
 	exactMaxSq := independentMaxChordSquaredDistance(t, span)
@@ -853,6 +870,7 @@ func TestSpanSagittaUpperClosedLoopChordIsAPointNotZero(t *testing.T) {
 // test reading sag0 alone would accept the very first (unsplit) cell and
 // publish a returned sagittaUpper the target never actually bounds.
 func TestPairStationsAcceptTestRequiresBothSidesUnderTarget(t *testing.T) {
+	t.Parallel()
 	small := ratSpan([][2]float64{{0, 0}, {0.33, 0.0001}, {0.66, 0.0001}, {1, 0}})
 	large := ratSpan([][2]float64{{0, 0}, {0, 5}, {1, 5}, {1, 0}})
 
@@ -881,6 +899,7 @@ func TestPairStationsAcceptTestRequiresBothSidesUnderTarget(t *testing.T) {
 // the same mechanism the audit measured as a 1000x under-report on a scaled
 // pairing.
 func TestPairStationsSagittaUpperReflectsTheLargerSide(t *testing.T) {
+	t.Parallel()
 	small := ratSpan([][2]float64{{0, 0}, {0.33, 0.0001}, {0.66, 0.0001}, {1, 0}})
 	large := ratSpan([][2]float64{{0, 0}, {0, 5}, {1, 5}, {1, 0}})
 
@@ -911,6 +930,7 @@ func TestPairStationsSagittaUpperReflectsTheLargerSide(t *testing.T) {
 // would scramble the chain's own start into the middle of the list, which
 // this monotonicity check cannot survive.
 func TestPairStationsStationsAdvanceMonotonicallyAlongTheChain(t *testing.T) {
+	t.Parallel()
 	spans := quarterCircleFitSpans(t)
 	target := levelSagitta(t, spans[0], 3)
 
@@ -945,6 +965,7 @@ func TestPairStationsStationsAdvanceMonotonicallyAlongTheChain(t *testing.T) {
 // leftmost leaf's own end is an interior boundary, never the chain start
 // once genuinely subdivided) and duplicate its end.
 func TestPairStationsFirstAndLastStationAreTheChainEndpointsExactly(t *testing.T) {
+	t.Parallel()
 	spans := quarterCircleFitSpans(t)
 	target := levelSagitta(t, spans[0], 3)
 
@@ -974,6 +995,7 @@ func TestPairStationsFirstAndLastStationAreTheChainEndpointsExactly(t *testing.T
 // an upper bound into an under-report, so each term is pinned against its own
 // derivation and not against itself.
 func TestSagittaCostTermsMatchTheOperationsTheyName(t *testing.T) {
+	t.Parallel()
 	// ratPointAt: 1 big.Int.Lsh, then 2 big.Rat.SetFrac, each NORMALISING (a
 	// GCD plus a division of numerator and of denominator).
 	const ratPointAtOps = 1 + 3 + 3
@@ -1052,6 +1074,7 @@ func TestSagittaCostTermsMatchTheOperationsTheyName(t *testing.T) {
 // which makes it a §6.1 decision about freeformWorkLimit and not an accounting
 // repair (freeformBracketCost's own doc comment).
 func TestDyadicSplitOpsCountsEveryOperationOneBisectionRuns(t *testing.T) {
+	t.Parallel()
 	for _, n := range []uint64{2, 3, 4, 8, 32} {
 		blends := n * (n - 1) / 2
 		require.Equal(t, blends*dyadicMidpointOps+dyadicSplitBookkeepingOps*n, dyadicSplitOps(n), "n=%d", n)
@@ -1071,6 +1094,7 @@ func TestDyadicSplitOpsCountsEveryOperationOneBisectionRuns(t *testing.T) {
 // its first statement, at its own operand width, and an exhausted counter gets
 // Table R row R7 back with no bisection performed.
 func TestDyadicSplitChargesItselfAndRefusesBeforeSplitting(t *testing.T) {
+	t.Parallel()
 	cell, err := dyadicSpanOf(nil, ratSpan([][2]float64{{0, 0}, {1, 2}, {2, 2}, {3, 0}}))
 	require.NoError(t, err)
 
@@ -1092,6 +1116,7 @@ func TestDyadicSplitChargesItselfAndRefusesBeforeSplitting(t *testing.T) {
 // how one full spend of the ceiling could take a quarter of a second on one
 // walk and fifteen seconds on another.
 func TestChargesScaleWithOperandWidth(t *testing.T) {
+	t.Parallel()
 	require.Equal(t, uint64(1), widthUnits(0), "a value with no bits still pays its operation count once")
 	require.Equal(t, uint64(1), widthUnits(63))
 	require.Equal(t, uint64(2), widthUnits(64), "one more unit per 64-bit word")
@@ -1125,6 +1150,7 @@ func TestChargesScaleWithOperandWidth(t *testing.T) {
 // points — the two chord ends in ADDITION to its own loop's n — and a charge
 // stated at a caller as one rate times n cannot see the extra two at all.
 func TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths(t *testing.T) {
+	t.Parallel()
 	const n = 3
 	span := ratSpan([][2]float64{{0, 0}, {1, 1}, {2, 0}})
 	cell, err := dyadicSpanOf(nil, span)
@@ -1160,6 +1186,7 @@ func TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths(t *testing.T) {
 // chord frame, the accepted cell's own station read, or the final station's
 // copy — changes this number.
 func TestPairStationsChargesEveryPhaseOfAWalkThatNeverSplits(t *testing.T) {
+	t.Parallel()
 	// Two sides of deliberately different control counts, so a charge reading
 	// the wrong side's count is visible as well.
 	side0 := []bezierSpan{
@@ -1204,6 +1231,7 @@ func neverSplittingSpanCharge(n uint64) uint64 {
 // refuses. A charge that is dropped or narrowed lowers the binding point, so a
 // walk this fixture expects to refuse would instead succeed.
 func TestPairStationsBudgetBindsAtTheWholeChargedTotal(t *testing.T) {
+	t.Parallel()
 	span := ratSpan([][2]float64{{0, 0}, {1, 1}, {2, 0}})
 	total := neverSplittingSpanCharge(3) + 2 // the one span, plus the final-station copy
 
@@ -1228,6 +1256,7 @@ func TestPairStationsBudgetBindsAtTheWholeChargedTotal(t *testing.T) {
 // range on the empty points slice. pairStations must refuse this input
 // cleanly, on either side, before any cell is ever walked.
 func TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking(t *testing.T) {
+	t.Parallel()
 	empty := bezierSpan{}
 	line := ratSpan([][2]float64{{0, 0}, {1, 0}})
 
@@ -1252,6 +1281,7 @@ func TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking(t *testing.T) {
 // straight off the original chain's own last control point) must carry the
 // same guarantee.
 func TestPairStationsFinalStationDoesNotAliasTheInputSpan(t *testing.T) {
+	t.Parallel()
 	span := ratSpan([][2]float64{{0, 0}, {1, 0}})
 	spans := []bezierSpan{span}
 
@@ -1341,6 +1371,7 @@ func zigzagHuggingSpan() bezierSpan {
 // the unsoundness this function exists to prevent a downstream caller from
 // committing.
 func TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses(t *testing.T) {
+	t.Parallel()
 	span := zigzagHuggingSpan()
 
 	sagitta := sagittaOf(t, span)
@@ -1361,6 +1392,7 @@ func TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses(t *testing.T) {
 // bound holds — not merely on the decisive counterexample above — on an
 // ordinary curved chain.
 func TestSpanMatchedDeltaUpperEnclosesDenseSampleOnOrdinarySpans(t *testing.T) {
+	t.Parallel()
 	spans := quarterCircleFitSpans(t)
 	for i, span := range spans {
 		dense := denseMatchedDeviation(t, span, 20_000)
@@ -1415,6 +1447,7 @@ func nearMidpointQuadraticSpan(eps *big.Rat) bezierSpan {
 // asserted over the exact rationals, against eps/2 itself — a dense float
 // sample cannot even represent the deviations in this window.
 func TestSpanMatchedDeltaUpperNeverUnderflowsASubnormalGapToZero(t *testing.T) {
+	t.Parallel()
 	// eps must sit at or below 2^-1075 for the gap d = 2*eps to land in the
 	// window; 2^-1101 is the span the audit reproduced with.
 	for _, exp := range []uint{1075, 1101, 2000, 9000} {
@@ -1449,6 +1482,7 @@ func TestSpanMatchedDeltaUpperNeverUnderflowsASubnormalGapToZero(t *testing.T) {
 // matched delta reads exactly half the hodograph gap, so moving the halving
 // into the radicand costs an ordinary span nothing.
 func TestSpanMatchedDeltaUpperHalvesAnOrdinaryGapExactly(t *testing.T) {
+	t.Parallel()
 	// d = 2*eps = 1 exactly for eps = 1/2, and 1/2 is representable.
 	span := nearMidpointQuadraticSpan(big.NewRat(1, 2))
 	require.Equal(t, 1.0, hodographGapOf(t, span))
@@ -1469,6 +1503,7 @@ func TestSpanMatchedDeltaUpperHalvesAnOrdinaryGapExactly(t *testing.T) {
 // chord length — the floor cellChordCurveAreaUpper's own tangent-magnitude
 // argument depends on.
 func TestSpanSpeedUpperEnclosesDenseSampleAndNeverFallsBelowChordLength(t *testing.T) {
+	t.Parallel()
 	spans := quarterCircleFitSpans(t)
 	for i, span := range spans {
 		dense := denseSpeedSample(t, span, 2000)
@@ -1495,6 +1530,7 @@ func TestSpanSpeedUpperEnclosesDenseSampleAndNeverFallsBelowChordLength(t *testi
 // control point; the speed bound is NOT zero there — it reads exactly the
 // span's own chord length, since d=0 leaves nothing to widen it by.
 func TestHodographBoundsAreExactlyZeroOnCollapsedAndStraightUniformSpans(t *testing.T) {
+	t.Parallel()
 	collapsed := ratSpan([][2]float64{{2, 3}, {2, 3}, {2, 3}, {2, 3}})
 	require.Zero(t, hodographGapOf(t, collapsed))
 	require.Zero(t, matchedDeltaOf(t, collapsed))
@@ -1517,6 +1553,7 @@ func TestHodographBoundsAreExactlyZeroOnCollapsedAndStraightUniformSpans(t *test
 // chainStations EXCLUDES the chain's final boundary from stations and carries
 // it in end instead — so the pair's own list is reproduced by appending end.
 func TestChainStationsIsOneSideOfThePairWalk(t *testing.T) {
+	t.Parallel()
 	spans := quarterCircleFitSpans(t)
 	const target = 1e-4
 
@@ -1543,6 +1580,7 @@ func TestChainStationsIsOneSideOfThePairWalk(t *testing.T) {
 // target settles on strictly fewer cells — the walk tracks its target rather
 // than a fixed depth.
 func TestChainStationsHonorsItsTargetAndLoosensWithIt(t *testing.T) {
+	t.Parallel()
 	spans := quarterCircleFitSpans(t)
 
 	fine, err := chainStations(spans, 1e-4, nil)
@@ -1563,6 +1601,7 @@ func TestChainStationsHonorsItsTargetAndLoosensWithIt(t *testing.T) {
 // converge on that span's own exact chord length from opposite sides, which is
 // what proves each is rounded in its own direction rather than both in one.
 func TestChainStationsBracketsEveryCellArcByItsChord(t *testing.T) {
+	t.Parallel()
 	curved, err := chainStations(quarterCircleFitSpans(t), 1e-3, nil)
 	require.NoError(t, err)
 	require.Len(t, curved.cellArcUpper, len(curved.stations), "one arc reading per accepted cell")
@@ -1606,6 +1645,7 @@ func TestChainStationsBracketsEveryCellArcByItsChord(t *testing.T) {
 // point, a chain of more spans than the chord cap admits, and a target no
 // bisection this cap allows can reach.
 func TestChainStationsRefusals(t *testing.T) {
+	t.Parallel()
 	t.Run("no span", func(t *testing.T) {
 		_, err := chainStations(nil, 1, nil)
 		require.ErrorIs(t, err, ErrDegenerate)
@@ -1634,6 +1674,7 @@ func TestChainStationsRefusals(t *testing.T) {
 // meters itself on the caller's own record counter: an exhausted counter
 // refuses with Table R row R7's sentinel and the walk does no work at all.
 func TestChainStationsChargesTheCounterItIsHanded(t *testing.T) {
+	t.Parallel()
 	spans := quarterCircleFitSpans(t)
 
 	work := newFreeformWork()

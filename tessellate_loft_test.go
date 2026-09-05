@@ -36,6 +36,7 @@ func loftBoxAt(t *testing.T, doc *decad.Document, z0, height float64) *decad.Bod
 // for the restatement: the mesh IS the payload's triangle set, face for face
 // and vertex for vertex, with no chording of its own.
 func TestLoftTessellate(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	body := loftBoxAt(t, doc, 0, 10)
 
@@ -87,6 +88,7 @@ func TestLoftTessellate(t *testing.T) {
 // PINNED publishes a zero on all four §2 proofs, and the boolean admits it
 // through the all-planar zero-bound path.
 func TestLoftTessellatePinnedLineSegLoftIsExact(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	loft := loftBoxAt(t, doc, 2, 6)
 
@@ -118,6 +120,7 @@ func TestLoftTessellatePinnedLineSegLoftIsExact(t *testing.T) {
 // publishes that displacement and the boolean takes the ordinary
 // positive-bound path instead.
 func TestLoftTessellatePlacedLoftUsesThePositiveBoundPath(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	loft := loftBoxAt(t, doc, 2, 6)
 
@@ -164,6 +167,7 @@ func TestLoftTessellatePlacedLoftUsesThePositiveBoundPath(t *testing.T) {
 // Determinism row over the restatement path: the same payload and tolerance
 // must produce the same bytes.
 func TestLoftExportIsDeterministic(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	body := loftBoxAt(t, doc, 0, 10)
 

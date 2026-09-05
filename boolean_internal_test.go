@@ -40,6 +40,7 @@ func (c *internalBooleanBuildCancelContext) Err() error {
 }
 
 func TestBooleanContextCancelsFacetedBodyFinishing(t *testing.T) {
+	t.Parallel()
 	for _, target := range []string{"auditFacetedMesh", "meshVolumeMeasurement"} {
 		t.Run(target, func(t *testing.T) {
 			doc := New()
@@ -76,6 +77,7 @@ func classify(t *testing.T, ta, tb [3]r3.Vec) triContact {
 }
 
 func TestTriTriClassifyIsSymmetric(t *testing.T) {
+	t.Parallel()
 	// The pair below is the one the old branch grid dropped: two of A's vertices
 	// lie on B's plane, and B's vertex (0, 0, 0) sits strictly INSIDE the A edge
 	// they span. The old code, having entered the "two of A's vertices are on the
@@ -102,6 +104,7 @@ func TestTriTriClassifyIsSymmetric(t *testing.T) {
 }
 
 func TestTriTriClassifyNamesTheInPlaneEdge(t *testing.T) {
+	t.Parallel()
 	// A's edge 0 lies exactly in B's plane (z = 0) and crosses B's interior: the
 	// contact is a segment, and it runs ALONG that edge. The pair reports WHICH
 	// edge and stops there — whether the edge grazes B or crosses it is decided
@@ -147,6 +150,7 @@ func singleFacetBoolMesh(t *testing.T, tri [3]r3.Vec) *boolMesh {
 // production binds ma/mb once per evaluateBoolean call precisely so a stored
 // answer can never be read back for another operand pair.
 func TestContactMemoRepeatsTheClassifier(t *testing.T) {
+	t.Parallel()
 	// A facet held in the plane z = 0 and one held in the plane x = 0: the
 	// planes meet along the y axis, and each triangle's own chord along that
 	// axis overlaps the other's, so the pair meets in a positive-length
@@ -225,6 +229,7 @@ func inscribedFan(cx, r float64, n int) [][3]r3.Vec {
 // coplanar carrier pair, which together are why §11's PR4 must settle the
 // near-miss question before it removes the mesh pass's coplanar refusal.
 func TestCoplanarCarrierPairIsNotSettledByCoplanarityAlone(t *testing.T) {
+	t.Parallel()
 	t.Run("a positive-area coplanar overlap defers to the mesh pass", func(t *testing.T) {
 		// Two opposed facets sharing the plane z = 0 and overlapping over a
 		// positive area: what a cap-on-cap tangency looks like to the gate.
@@ -284,6 +289,7 @@ func TestCoplanarCarrierPairIsNotSettledByCoplanarityAlone(t *testing.T) {
 // provenDepthExceeds cannot certify — would clear the gate with no proof
 // behind it, its topology decided by where the chords fell.
 func TestNearMissKeepsACrossingTheDistanceRoutineMisreads(t *testing.T) {
+	t.Parallel()
 	// A needle piercing a plate's interior: tb runs from z = -0.5 to z = 0.5
 	// through the plane z = 0, strictly inside ta.
 	ta := [3]r3.Vec{{X: -5, Y: -5, Z: 0}, {X: 5, Y: -5, Z: 0}, {X: 0, Y: 5, Z: 0}}
@@ -370,6 +376,7 @@ func subUlpTetra() []keptFacet {
 }
 
 func TestStitchRefusesAWeldedAwayComponent(t *testing.T) {
+	t.Parallel()
 	// The whole tiny component rounds onto one float vertex, so every facet of
 	// it collapses and it disappears from the held mesh — a lump gone from the
 	// body, with its volume, its place in Lumps() and its reach in the bounds
@@ -387,6 +394,7 @@ func TestStitchRefusesAWeldedAwayComponent(t *testing.T) {
 }
 
 func TestStitchChargesTheFacetsTheWeldDrops(t *testing.T) {
+	t.Parallel()
 	// A collapse INSIDE a surviving component is not refused — it is an edge
 	// contraction, and the surface that remains is the tetra. But the two facets
 	// it drops were not zero-area before the weld, and both of the things they
@@ -417,6 +425,7 @@ func TestStitchChargesTheFacetsTheWeldDrops(t *testing.T) {
 // The expected numbers were captured from this same fixture on the
 // pre-rewrite math/big.Rat kernel before this change landed.
 func TestBooleanVolumesAreUnchangedByTheKernelRewrite(t *testing.T) {
+	t.Parallel()
 	type want struct {
 		volume           float64
 		cx, cy, cz       float64
@@ -467,6 +476,7 @@ func TestBooleanVolumesAreUnchangedByTheKernelRewrite(t *testing.T) {
 }
 
 func TestPrepRefusesACollapsedOperandFacet(t *testing.T) {
+	t.Parallel()
 	// A rigid placement's own rounding can collapse a facet of an already
 	// faceted body. A collapsed facet has no plane and no interior, so every
 	// contact predicate here is blind to it: a point or tangent contact made on
@@ -615,6 +625,9 @@ func TestTriTriClassifyFilterAgreesWithTheExactPath(t *testing.T) {
 	require.NotZero(t, nonNone, `a filter that rejected every real contact must not pass`)
 }
 
+// This test stays SERIAL: it flips the package-level triTriFilterEnabled to
+// compare the filtered path against the exact one, and a neighbour reading
+// that toggle mid-flip would be classified by the wrong path.
 // TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle is the risk section's
 // own named case (.tmp/followup-tasks/fu158-tasks.md §7): two facets sharing
 // an edge but meeting at a dihedral angle of about 1e-6 rad. dir = na × nb is
@@ -623,6 +636,10 @@ func TestTriTriClassifyFilterAgreesWithTheExactPath(t *testing.T) {
 // abstain rather than resolve. Sharing an edge keeps the contact itself
 // unambiguous (a positive-length segment along it), so the pair exercises the
 // near-parallel path while still landing on a real answer.
+//
+// This test stays SERIAL: it flips the package-level triTriFilterEnabled to
+// compare the filtered path against the exact one, and a neighbour reading
+// that toggle mid-flip would be classified by the wrong path.
 func TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle(t *testing.T) {
 	t.Cleanup(func() { triTriFilterEnabled = true })
 
@@ -674,6 +691,7 @@ func BenchmarkTriTriClassifyCircularPairs(b *testing.B) {
 }
 
 func TestFacetFaceIndicesMapsConsistentFaces(t *testing.T) {
+	t.Parallel()
 	f0, f1 := &Face{}, &Face{}
 	got, err := facetFaceIndices(t.Context(), []*Face{f0, f1}, []*Face{f1, f0, f1})
 	require.NoError(t, err)
@@ -682,6 +700,7 @@ func TestFacetFaceIndicesMapsConsistentFaces(t *testing.T) {
 }
 
 func TestFacetFaceIndicesRejectsUnmappedFacet(t *testing.T) {
+	t.Parallel()
 	f0, f1 := &Face{}, &Face{}
 	orphan := &Face{} // a face absent from the built body's Faces()
 	_, err := facetFaceIndices(t.Context(), []*Face{f0, f1}, []*Face{f0, orphan})
@@ -692,6 +711,7 @@ func TestFacetFaceIndicesRejectsUnmappedFacet(t *testing.T) {
 }
 
 func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	body, err := buildFacetedBody(t.Context(), doc, StepRef(0), facetedPayload{
 		verts: []r3.Vec{
@@ -733,6 +753,7 @@ func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 // proof, never from the `Mesh.Bound × held area` product
 // docs/tessellation-design.md §11 forbids.
 func TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	plate := internalBoxBody(t, doc, 0, 0, 20, 20, 10)
 	disc := internalDiscBody(t, doc, 4, 10)
@@ -775,6 +796,7 @@ func TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs(t *testing.T) {
 }
 
 func TestOperandSymDiffRefusesAMeshWithNoOccupiedVolumeProof(t *testing.T) {
+	t.Parallel()
 	// An export-only mesh — one whose payload class has no occupied-volume proof
 	// yet — is refused as a staging limit, never composed as a zero.
 	_, err := operandSymDiff(&Mesh{volSymDiff: 17, symDiffOK: false})
@@ -786,6 +808,7 @@ func TestOperandSymDiffRefusesAMeshWithNoOccupiedVolumeProof(t *testing.T) {
 }
 
 func TestFacesOfMeshReadsTheMeshProofRecord(t *testing.T) {
+	t.Parallel()
 	stated, omitted := &Face{}, &Face{}
 	m := &Mesh{
 		triangles: [][3]int{{0, 1, 2}, {0, 2, 3}},

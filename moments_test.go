@@ -166,6 +166,7 @@ func preciseGreenArcArea(t *testing.T, center, start, end decad.Point2) *big.Flo
 }
 
 func TestRegionAreaAndCentroidRectangle(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -188,6 +189,7 @@ func TestRegionAreaAndCentroidRectangle(t *testing.T) {
 }
 
 func TestRegionAreaAndCentroidWithHole(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -211,6 +213,7 @@ func TestRegionAreaAndCentroidWithHole(t *testing.T) {
 }
 
 func TestRegionAreaWholeCircle(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -242,6 +245,7 @@ func TestRegionAreaWholeCircle(t *testing.T) {
 }
 
 func TestRegionAreaMatchesSketchOnCertifiedFragments(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -269,6 +273,7 @@ func TestRegionAreaMatchesSketchOnCertifiedFragments(t *testing.T) {
 }
 
 func TestRegionMomentsRejectUnsupportedAndEmptyRecords(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -282,6 +287,7 @@ func TestRegionMomentsRejectUnsupportedAndEmptyRecords(t *testing.T) {
 }
 
 func TestCircleSegMomentRadiusErrorsUseDecadSentinels(t *testing.T) {
+	t.Parallel()
 	calls := []struct {
 		name string
 		call func(decad.ProfileRecord) error
@@ -375,6 +381,7 @@ func TestCircleSegMomentRadiusErrorsUseDecadSentinels(t *testing.T) {
 }
 
 func TestRegionMomentsPointerVariants(t *testing.T) {
+	t.Parallel()
 	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
 		&decad.LineSeg{Start: decad.Point2{}, End: decad.Point2{U: 4}, TStart: 0, TEnd: 1},
 		&decad.LineSeg{Start: decad.Point2{U: 4}, End: decad.Point2{U: 4, V: 4}, TStart: 0, TEnd: 1},
@@ -392,6 +399,7 @@ func TestRegionMomentsPointerVariants(t *testing.T) {
 }
 
 func TestRegionMomentsRejectMalformedFields(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		record decad.ProfileRecord
@@ -467,6 +475,7 @@ func TestRegionMomentsRejectMalformedFields(t *testing.T) {
 }
 
 func TestRegionMomentsRejectMalformedTopology(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		record decad.ProfileRecord
@@ -528,6 +537,7 @@ func TestRegionMomentsRejectMalformedTopology(t *testing.T) {
 }
 
 func TestRegionMomentsAcceptThinAnnulus(t *testing.T) {
+	t.Parallel()
 	const outerRadius = 10.0
 	const gap = 1e-10
 	holeRadius := outerRadius - gap
@@ -550,6 +560,7 @@ func TestRegionMomentsAcceptThinAnnulus(t *testing.T) {
 }
 
 func TestRegionMomentsAcceptSeparatedWholeCircleHoles(t *testing.T) {
+	t.Parallel()
 	record := decad.ProfileRecord{
 		Outer: momentWholeCircle(decad.Point2{}, 10, true),
 		Holes: []decad.LoopRecord{
@@ -570,6 +581,7 @@ func TestRegionMomentsAcceptSeparatedWholeCircleHoles(t *testing.T) {
 }
 
 func TestRegionMomentsRequestedOrderControlsOverflow(t *testing.T) {
+	t.Parallel()
 	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
 		decad.CircleSeg{
 			Center: decad.Point2{V: 1e200},
@@ -601,6 +613,7 @@ func TestRegionMomentsRequestedOrderControlsOverflow(t *testing.T) {
 // The polygon is LineSeg-only on purpose: the accumulator is shared with the
 // Tier A free-form path, and the defect was never specific to it.
 func TestOverflowingSecondMomentKeepsExactArea(t *testing.T) {
+	t.Parallel()
 	// 1e78 mm squares to a finite area and raises the second moment past
 	// float64's range. No plausible model reaches this scale; the guarantee is
 	// unconditional, so it is asserted where it is reachable at all.
@@ -638,6 +651,7 @@ func TestOverflowingSecondMomentKeepsExactArea(t *testing.T) {
 }
 
 func TestSecondMomentsRectangle(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -665,6 +679,7 @@ func TestSecondMomentsRectangle(t *testing.T) {
 }
 
 func TestSecondMomentsOffsetCircle(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -695,6 +710,7 @@ func TestSecondMomentsOffsetCircle(t *testing.T) {
 }
 
 func TestLineRationalRoundingIsBounded(t *testing.T) {
+	t.Parallel()
 	rec := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
 		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},
 		decad.LineSeg{Start: decad.Point2{U: 1, V: 0}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
@@ -731,6 +747,7 @@ func TestLineRationalRoundingIsBounded(t *testing.T) {
 // with the rounding that produced it as the bound — rather than a refusal for
 // enclosing no positive area.
 func TestUnderflowingLineRegionAreaPublishesBoundedZero(t *testing.T) {
+	t.Parallel()
 	const side = 1e-163
 	record := decad.ProfileRecord{Outer: momentSquare(0, 0, side, side, false)}
 
@@ -744,6 +761,7 @@ func TestUnderflowingLineRegionAreaPublishesBoundedZero(t *testing.T) {
 }
 
 func TestArcSegExactQuarterDisk(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -799,6 +817,7 @@ func TestArcSegExactQuarterDisk(t *testing.T) {
 }
 
 func TestRegionMomentsAcceptsGeneratedArcEndpointDrift(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -827,6 +846,7 @@ func TestRegionMomentsAcceptsGeneratedArcEndpointDrift(t *testing.T) {
 }
 
 func TestRegionAreaBoundContainsArcEndpointDriftGreenIntegral(t *testing.T) {
+	t.Parallel()
 	center := decad.Point2{U: 5, V: -3}
 	start := decad.Point2{U: 6, V: -3}
 	driftedRadius := math.Nextafter(1, math.Inf(1))

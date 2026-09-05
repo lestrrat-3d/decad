@@ -34,6 +34,7 @@ func (s stubExtent) extentAlong(r3.Vec) (float64, float64, float64, error) {
 // and one the displacement straddles the plane with refuses rather than guess a
 // dependency.
 func TestResolveThroughAllDecidesInPathOutsideDisplacement(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	doc := func(hi, bound float64) *Document {
 		return &Document{bodies: []*Body{{
@@ -67,6 +68,7 @@ func TestResolveThroughAllDecidesInPathOutsideDisplacement(t *testing.T) {
 // denoted geometry. It also refuses a competing interval with no finite upper
 // endpoint instead of publishing an unrepresentable stop bound.
 func TestResolveThroughAllComposesEveryFarEndInterval(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	profile := ProfileRecord{Outer: synthRectLoop(0, 0, 1, 1)}
 	stopBody := func(ref StepRef, z1, z1Delta float64) *Body {
@@ -116,6 +118,7 @@ func TestResolveThroughAllComposesEveryFarEndInterval(t *testing.T) {
 // so admitting them through the same default arm as Line3 would bless a claim
 // this audit never examined — the falsify-never-bless rule (repo CLAUDE.md).
 func TestRejectAxisCrossingRefusesUnprobableCurve(t *testing.T) {
+	t.Parallel()
 	st := angularStops{
 		a3: r3.NewVec(0, 0, 0),
 		w:  r3.NewVec(0, 0, 1),
@@ -152,6 +155,7 @@ func TestRejectAxisCrossingRefusesUnprobableCurve(t *testing.T) {
 // face is built directly, the pattern prism_boolean_internal_test.go already
 // uses for a shape nothing else can build.
 func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
+	t.Parallel()
 	// This frame's plane is the xz-plane, which contains the revolve axis, so
 	// the fixture is a valid radial stop face and both endpoints lie on it.
 	// r3.NewFrame(origin, u, v) takes u as the FIRST axis and derives
@@ -220,6 +224,7 @@ func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
 // that cap only. A later ToFace against the exact opposite cap must remain
 // exact, while selecting the computed cap must retain its bound.
 func TestResolveToFaceUsesSelectedCapAxialDelta(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	doc := &Document{}
 	host, err := evalPrism(doc, 1, prismPayload{

@@ -48,6 +48,7 @@ func circleProfile(t *testing.T, r, h float64) *decad.Body {
 }
 
 func TestCapBlendChamferPolygonLoop(t *testing.T) {
+	t.Parallel()
 	_, box := capBlendBox(t)
 	const d = 5.0
 	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
@@ -70,6 +71,7 @@ func TestCapBlendChamferPolygonLoop(t *testing.T) {
 }
 
 func TestCapBlendChamferCircularRim(t *testing.T) {
+	t.Parallel()
 	const R, H, d = 30.0, 20.0, 5.0
 	disk := circleProfile(t, R, H)
 	chamfered, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(d))
@@ -90,6 +92,7 @@ func TestCapBlendChamferCircularRim(t *testing.T) {
 }
 
 func TestCapBlendPartialLoopSelectionRefused(t *testing.T) {
+	t.Parallel()
 	_, box := capBlendBox(t)
 	// The 100x60 plate's end-cap loop has two edges parallel to X and two
 	// parallel to Y; selecting only the X-parallel pair is a proper,
@@ -104,6 +107,7 @@ func TestCapBlendPartialLoopSelectionRefused(t *testing.T) {
 }
 
 func TestCapBlendMixedCapAndLateralSelectionRefused(t *testing.T) {
+	t.Parallel()
 	_, box := capBlendBox(t)
 	verticalMatched, err := verticalEdges().SelectEdges(box)
 	require.NoError(t, err)
@@ -120,6 +124,7 @@ func TestCapBlendMixedCapAndLateralSelectionRefused(t *testing.T) {
 }
 
 func TestCapBlendLateralOnlySelectionUsesBasePath(t *testing.T) {
+	t.Parallel()
 	_, box := capBlendBox(t)
 	_, err := box.Chamfer(verticalEdges(), units.Millimeters(5))
 	require.NoError(t, err)
@@ -136,6 +141,7 @@ func bothCapLoops() *decad.EdgeQuery {
 }
 
 func TestCapBlendOppositeBandsMeetingRefused(t *testing.T) {
+	t.Parallel()
 	_, box := capBlendBox(t)
 	q := bothCapLoops()
 	edges, err := q.SelectEdges(box)
@@ -149,6 +155,7 @@ func TestCapBlendOppositeBandsMeetingRefused(t *testing.T) {
 }
 
 func TestCapBlendBothCapsBuildsWhenClear(t *testing.T) {
+	t.Parallel()
 	_, box := capBlendBox(t)
 	q := bothCapLoops()
 	chamfered, err := box.Chamfer(q, units.Millimeters(5))
@@ -171,6 +178,7 @@ func TestCapBlendBothCapsBuildsWhenClear(t *testing.T) {
 // other half — it still reads ErrUnsupported, which a global re-sentinelling
 // of errOffsetDrop would have broken.
 func TestCapBlendCarrierCollapseRefused(t *testing.T) {
+	t.Parallel()
 	for _, d := range []float64{4.0, 5.0} {
 		t.Run(fmt.Sprintf("d=%g", d), func(t *testing.T) {
 			const R, H = 4.0, 20.0
@@ -250,6 +258,7 @@ func apexPatchOf(t *testing.T, b *decad.Body, prefix string) *decad.Face {
 }
 
 func TestCapBlendReflexCornerBuilds(t *testing.T) {
+	t.Parallel()
 	// An L-shaped section has one reflex corner; its cap-loop chamfer needs
 	// a Cone-with-apex patch there.
 	body := reflexLBody(t)
@@ -272,6 +281,7 @@ func TestCapBlendReflexCornerBuilds(t *testing.T) {
 // role string. Every last-wins reader then collapses onto whichever face was
 // built second — facesByRole, FaceCreatedBy, and the survey's role lookup.
 func TestCapBlendReflexApexPatchRolesDistinct(t *testing.T) {
+	t.Parallel()
 	body := reflexLBody(t)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(3))
 	require.NoError(t, err)
@@ -297,6 +307,7 @@ func TestCapBlendReflexApexPatchRolesDistinct(t *testing.T) {
 // — never the counter-clockwise complement, which is the arc on the far side
 // of the corner and three times as long.
 func TestCapBlendReflexApexArcLength(t *testing.T) {
+	t.Parallel()
 	const d = 3.0
 	body := reflexLBody(t)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
@@ -323,6 +334,7 @@ func TestCapBlendReflexApexArcLength(t *testing.T) {
 }
 
 func TestCapBlendHoleLoopNestingPreserved(t *testing.T) {
+	t.Parallel()
 	_, box := plateWithDiskHole(t, 50, 50, 10)
 	// Chamfer only the outer loop's end cap, leaving the hole loop untouched.
 	q := decad.Edges(decad.CreatedBy(decad.CapEnd(box)), decad.LongerThan(units.Millimeters(50)))
@@ -342,6 +354,7 @@ func TestCapBlendHoleLoopNestingPreserved(t *testing.T) {
 // (deterministic selector resolution + closed-form gates), which is what
 // makes a replay reproduce the same seeds, expansion and result.
 func TestCapBlendRecipeRoundTrips(t *testing.T) {
+	t.Parallel()
 	const d = 5.0
 	doc, box := capBlendBox(t)
 	body, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
@@ -366,6 +379,7 @@ func TestCapBlendRecipeRoundTrips(t *testing.T) {
 }
 
 func TestCapBlendFailedCallLeavesReceiverLiveAndRecipeUnchanged(t *testing.T) {
+	t.Parallel()
 	doc, box := capBlendBox(t)
 	before := doc.Recipe()
 	q := decad.Edges(decad.CreatedBy(decad.CapStart(box)), decad.CreatedBy(decad.CapEnd(box)))
@@ -376,6 +390,7 @@ func TestCapBlendFailedCallLeavesReceiverLiveAndRecipeUnchanged(t *testing.T) {
 }
 
 func TestCapBlendSX10RefusesFurtherModify(t *testing.T) {
+	t.Parallel()
 	_, box := capBlendBox(t)
 	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)

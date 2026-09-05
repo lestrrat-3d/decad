@@ -91,6 +91,7 @@ func cylinderWall(t *testing.T, b *decad.Body) decad.Cylinder {
 // reach, which is zero here too since Cut keeps the target's own z0Delta/
 // z1Delta unchanged).
 func TestPrismCutCleanNestingBoreThroughHub(t *testing.T) {
+	t.Parallel()
 	const R, r, h = 20.0, 5.0, 10.0
 	doc := decad.New()
 	target := discBody(t, doc, 0, R, h)
@@ -146,6 +147,7 @@ func TestPrismCutCleanNestingBoreThroughHub(t *testing.T) {
 // pair §4.2 resolves correctly. The vertex must instead reach the result
 // unchanged, as §4.2's verbatim structural match states.
 func TestPrismCutCleanNestingKeepsAToolVertexTheFormulaMisses(t *testing.T) {
+	t.Parallel()
 	u0, u1 := 4.0/7.0, 10.0/3.0
 	require.NotEqual(t, u1, u0+1.0*(u1-u0),
 		`premise: evaluating the formula at t = 1 misses this tool vertex`)
@@ -194,6 +196,7 @@ func TestPrismCutCleanNestingKeepsAToolVertexTheFormulaMisses(t *testing.T) {
 // next segment states that same vertex from its own record, the scene would hold
 // two points for it and the resolved cut would refuse at RecordProfile.
 func TestPrismCutCleanNestingKeepsAToolArcEndTheAnglesMiss(t *testing.T) {
+	t.Parallel()
 	const plateSide, plateHeight = 30.0, 10.0
 	const cu, cv, r, rOuter = 10.3, 9.7, 4.7, 8.0
 	th0, th1 := 0.05, 0.75
@@ -271,6 +274,7 @@ func bodyVertexPositions(b *decad.Body) []r3.Vec {
 // geometry, verbatim, whichever order the caller passes the operands in
 // (§3.2's relation is symmetric).
 func TestPrismIntersectFullyNestedPairReturnsInnerOperand(t *testing.T) {
+	t.Parallel()
 	const R, r, h = 20.0, 5.0, 10.0
 	doc := decad.New()
 
@@ -315,6 +319,7 @@ func TestPrismIntersectFullyNestedPairReturnsInnerOperand(t *testing.T) {
 // itself instead of falling back to the mesh path's own unchanged
 // BooleanEmpty outcome.
 func TestPrismIntersectDisjointFootprintsFallsBack(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 20, 0, 30, 10, 10)
@@ -335,6 +340,7 @@ func TestPrismIntersectDisjointFootprintsFallsBack(t *testing.T) {
 // pair falls back to the mesh path's own unchanged "tool doesn't touch"
 // outcome — the target survives unchanged.
 func TestPrismCutDisjointFootprintFallsBack(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	target := boxBody(t, doc, 0, 0, 10, 10, 10)
 	tool := boxBody(t, doc, 20, 0, 30, 10, 10)
@@ -354,6 +360,7 @@ func TestPrismCutDisjointFootprintFallsBack(t *testing.T) {
 // a coincident cap plane is the mesh path's own separate, pre-existing
 // coplanar-contact limitation (§1), not what G5 is under test for here.
 func TestPrismCutG5FallsBackWhenToolDoesNotSpanTarget(t *testing.T) {
+	t.Parallel()
 	// half and toolHalf are the two footprints' own half-widths.
 	const half, toolHalf, h, reach = 10.0, 3.0, 10.0, 2.0
 	doc := decad.New()
@@ -379,6 +386,7 @@ func TestPrismCutG5FallsBackWhenToolDoesNotSpanTarget(t *testing.T) {
 // z = 0) rather than truly separated — this is the mesh path's own
 // pre-existing coplanar-cap contact limitation, unaffected by this design.
 func TestPrismIntersectG5FallsBackOnDisjointZIntervals(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, -5, -5, 5, 5, 10) // z: 0..10
 	w := sketch.NewWorld()
@@ -405,6 +413,7 @@ func TestPrismIntersectG5FallsBackOnDisjointZIntervals(t *testing.T) {
 // would have dropped, since its clean-nesting match describes the removed
 // tool as ONE new hole, sound only while the tool is hole-free (G6).
 func TestPrismCutG6HoledToolFallsBackKeepingTheStandingPost(t *testing.T) {
+	t.Parallel()
 	// half, outer and inner are the three footprints' own half-widths.
 	const half, outer, inner, h = 15.0, 8.0, 3.0, 10.0
 	doc := decad.New()
@@ -433,6 +442,7 @@ func TestPrismCutG6HoledToolFallsBackKeepingTheStandingPost(t *testing.T) {
 // anyway, with a bound many decades tighter than the mesh path's own chord
 // tolerance would report.
 func TestPrismCutCrossingToolResolvesAnalytically(t *testing.T) {
+	t.Parallel()
 	// half is the target's own footprint half-width.
 	const half, h = 10.0, 10.0
 	// The tool's own footprint straddles the target's wall at x = half: it
@@ -462,6 +472,7 @@ func TestPrismCutCrossingToolResolvesAnalytically(t *testing.T) {
 // returns ctx.Err() unchanged, with the document and recipe untouched,
 // matching the existing modify-op contract and PR1's own cancellation test.
 func TestPrismCutCancellationLeavesDocumentUnchanged(t *testing.T) {
+	t.Parallel()
 	const R, r, h = 20.0, 5.0, 10.0
 	doc := decad.New()
 	target := discBody(t, doc, 0, R, h)

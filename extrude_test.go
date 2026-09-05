@@ -34,6 +34,7 @@ func requireManifold(t *testing.T, b *decad.Body) {
 }
 
 func TestExtrudePlate(t *testing.T) {
+	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -94,6 +95,7 @@ func TestExtrudePlate(t *testing.T) {
 }
 
 func TestExtrudePlateWithHole(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -152,6 +154,7 @@ func TestExtrudePlateWithHole(t *testing.T) {
 }
 
 func TestExtrudeExtents(t *testing.T) {
+	t.Parallel()
 	s, p := plateSketch(t)
 
 	// Symmetric full-length 8: the sweep is [−4, 4].
@@ -194,6 +197,7 @@ func TestExtrudeExtents(t *testing.T) {
 }
 
 func TestExtrudeQuarterDiskPrism(t *testing.T) {
+	t.Parallel()
 	// An arc-bounded profile: the side face is a true cylinder patch and
 	// every measurement stays exact.
 	w := sketch.NewWorld()
@@ -236,6 +240,7 @@ func TestExtrudeQuarterDiskPrism(t *testing.T) {
 }
 
 func TestPlaced(t *testing.T) {
+	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -291,6 +296,7 @@ func TestPlaced(t *testing.T) {
 }
 
 func TestExtrudeRejections(t *testing.T) {
+	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 
@@ -322,6 +328,7 @@ func TestExtrudeRejections(t *testing.T) {
 }
 
 func TestFaceNormals(t *testing.T) {
+	t.Parallel()
 	// Outward normals: −z on the start cap, +z on the end cap, −y on the
 	// bottom side, and INTO a hole's void on its cylinder wall.
 	w := sketch.NewWorld()
@@ -385,6 +392,7 @@ func TestFaceNormals(t *testing.T) {
 }
 
 func TestWholeCircleEdgeSeamVertices(t *testing.T) {
+	t.Parallel()
 	// A full circle's edge closes on itself: start == end, non-nil.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -409,6 +417,7 @@ func TestWholeCircleEdgeSeamVertices(t *testing.T) {
 }
 
 func TestExtrudeRejectsUnknownDirection(t *testing.T) {
+	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Direction(99)})
@@ -417,6 +426,7 @@ func TestExtrudeRejectsUnknownDirection(t *testing.T) {
 }
 
 func TestRecipeIsAValue(t *testing.T) {
+	t.Parallel()
 	// Mutating a returned recipe never changes the document's own record.
 	s, p := plateSketch(t)
 	doc := decad.New()
@@ -434,6 +444,7 @@ func TestRecipeIsAValue(t *testing.T) {
 }
 
 func TestExtrudeCoalescesCollinearSides(t *testing.T) {
+	t.Parallel()
 	// A rectangle authored with a midpoint on its bottom edge: two collinear
 	// boundary segments coalesce into ONE side face carrying both roles
 	// (evaluator §3 canonicalization), so v1 counts match the analytic answer.
@@ -469,6 +480,7 @@ func TestExtrudeCoalescesCollinearSides(t *testing.T) {
 }
 
 func TestWholeCircleCylinderHasTwoLoops(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -490,6 +502,7 @@ func TestWholeCircleCylinderHasTwoLoops(t *testing.T) {
 }
 
 func TestArcEdgeAxisFollowsWalkSense(t *testing.T) {
+	t.Parallel()
 	// A hole circle is walked clockwise, so its cap edges are CCW about −z;
 	// the outer quarter-disk arc is walked CCW, so its edges are about +z.
 	w := sketch.NewWorld()
@@ -522,6 +535,7 @@ func TestArcEdgeAxisFollowsWalkSense(t *testing.T) {
 }
 
 func TestReflectedPlacementKeepsOutwardNormals(t *testing.T) {
+	t.Parallel()
 	// A mirrored body's plane normals must still point out of the material,
 	// and its centroid must map exactly.
 	s, p := plateSketch(t)
@@ -565,6 +579,7 @@ func TestReflectedPlacementKeepsOutwardNormals(t *testing.T) {
 }
 
 func TestExtrudeRejectsNonFiniteTaper(t *testing.T) {
+	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}, decad.WithTaper(units.Degrees(math.Inf(1))))
@@ -575,6 +590,7 @@ func TestExtrudeRejectsNonFiniteTaper(t *testing.T) {
 }
 
 func TestExtrudeRejectsNilOption(t *testing.T) {
+	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}, nil)
@@ -583,6 +599,7 @@ func TestExtrudeRejectsNilOption(t *testing.T) {
 }
 
 func TestRecordedExtentNeverAliasesCallerPointers(t *testing.T) {
+	t.Parallel()
 	// A nested pointer side is normalized to a value at the feature call, so
 	// mutating the caller's struct after the fact cannot rewrite the recipe.
 	s, p := plateSketch(t)
@@ -599,6 +616,7 @@ func TestRecordedExtentNeverAliasesCallerPointers(t *testing.T) {
 }
 
 func TestNilExtentPointersAreBranchable(t *testing.T) {
+	t.Parallel()
 	// A typed nil extent or side pointer follows the same branchable
 	// contract as an untyped nil: errors.Is(err, ErrDegenerate).
 	s, p := plateSketch(t)
@@ -650,6 +668,7 @@ func roundedPlateBody(t *testing.T, bite bool) *decad.Body {
 }
 
 func TestExtrudeConcaveRoundWall(t *testing.T) {
+	t.Parallel()
 	// A 100×60 plate whose top edge carries a semicircular BITE of radius 10
 	// centred at (50, 60): a concave round on the OUTER loop. The outer loop
 	// walks counter-clockwise, but that arc is walked CLOCKWISE about its own
@@ -740,6 +759,7 @@ func requireCircularRims(t *testing.T, body *decad.Body, convex bool) {
 // rim edges are concave exactly when the wall is WALKED CLOCKWISE — which the
 // loop's role gets right for a hole and wrong for a round on the outer loop.
 func TestCircularRimConvexity(t *testing.T) {
+	t.Parallel()
 	t.Run("Hole", func(t *testing.T) {
 		// Walked clockwise, on a hole loop: concave (the pinned case).
 		requireCircularRims(t, holePlateBody(t), false)
@@ -770,6 +790,7 @@ func TestCircularRimConvexity(t *testing.T) {
 // inch factor, so it rescales without rounding and stays Exact, while 0.1 in
 // and 3 in do not and do not.
 func TestExtrudeRescaledDistanceCarriesConversionRounding(t *testing.T) {
+	t.Parallel()
 	s, p := plateSketch(t)
 	for _, tc := range []struct {
 		name  string
@@ -898,6 +919,7 @@ func involuteFlankSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
 const involuteCompareTolerance = 1e-9
 
 func TestExtrudeInvoluteFlankBuildsAndVerifies(t *testing.T) {
+	t.Parallel()
 	s, p := involuteFlankSketch(t)
 
 	doc := decad.New()

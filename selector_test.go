@@ -24,6 +24,7 @@ var (
 )
 
 func TestSelectorCodec(t *testing.T) {
+	t.Parallel()
 	// Every selector variant, carrying every predicate the vocabulary
 	// defines, round-trips through a Step field for field.
 	ref := decad.FeatureRef{Step: 2, Role: roleCapStart}
@@ -70,6 +71,7 @@ func TestSelectorCodec(t *testing.T) {
 }
 
 func TestSelectorCodecRejections(t *testing.T) {
+	t.Parallel()
 	// The set is closed: unknown and missing tags are rejected, at the
 	// selector level and inside each predicate tier.
 	var step decad.Step
@@ -123,6 +125,7 @@ func TestSelectorCodecRejections(t *testing.T) {
 }
 
 func TestSelectorCodecRejectsUnknownNestedFields(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		data string
@@ -148,6 +151,7 @@ func TestSelectorCodecRejectsUnknownNestedFields(t *testing.T) {
 }
 
 func TestSelectorCodecRejectsOutOfRangeNegativeProvenanceSteps(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		data string
@@ -170,6 +174,7 @@ func TestSelectorCodecRejectsOutOfRangeNegativeProvenanceSteps(t *testing.T) {
 }
 
 func TestSelectorCodecRejectsNegativeProvenanceStepNumberForms(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		data string
@@ -208,6 +213,7 @@ func TestSelectorCodecRejectsNegativeProvenanceStepNumberForms(t *testing.T) {
 }
 
 func TestSelectorCodecAcceptsNegativeZeroProvenanceSteps(t *testing.T) {
+	t.Parallel()
 	ref := decad.FeatureRef{Step: 0, Role: roleCapStart}
 	for _, tc := range []struct {
 		name string
@@ -244,6 +250,7 @@ func TestSelectorCodecAcceptsNegativeZeroProvenanceSteps(t *testing.T) {
 }
 
 func TestNilSelectorPointersAreBranchable(t *testing.T) {
+	t.Parallel()
 	// A typed nil query pointer follows the same branchable contract as the
 	// other sealed sets: errors.Is(err, ErrDegenerate).
 	badEdge := validCodecStep(decad.OpFillet)
@@ -257,6 +264,7 @@ func TestNilSelectorPointersAreBranchable(t *testing.T) {
 }
 
 func TestSelectorResolutionRejectsNilInputs(t *testing.T) {
+	t.Parallel()
 	// A nil body has no topology to select from, and a typed nil query names
 	// no query: both are branchable ErrDegenerate, never a silent zero-match.
 	_, err := decad.Edges(decad.Convex()).SelectEdges(nil)
@@ -273,6 +281,7 @@ func TestSelectorResolutionRejectsNilInputs(t *testing.T) {
 }
 
 func TestSelectorConstructorsDoNotAliasCallerSlices(t *testing.T) {
+	t.Parallel()
 	// Edges/Faces copy the variadic predicate slice, so a caller mutating its
 	// own slice after the call cannot rewrite the query it handed out.
 	preds := []decad.EdgePredicate{decad.Convex()}
@@ -292,6 +301,7 @@ func outwardNormal(t *testing.T, f *decad.Face) r3.Vec {
 }
 
 func TestFacingPredicate(t *testing.T) {
+	t.Parallel()
 	body := holePlateBody(t) // 100×60×8 plate, hole; caps at z=0 (capStart) and z=8 (capEnd)
 
 	t.Run("PicksOneCapWhereNormalToPicksTwo", func(t *testing.T) {
@@ -370,6 +380,7 @@ func TestFacingPredicate(t *testing.T) {
 }
 
 func TestFacingCodec(t *testing.T) {
+	t.Parallel()
 	// A facing predicate round-trips through a Step field for field, and its
 	// dir payload is required — an absent dir is malformed, never a zero vector.
 	step := validCodecStep(decad.OpShell)
@@ -391,6 +402,7 @@ func TestFacingCodec(t *testing.T) {
 // name differ deliberately (normal_to -> normal-to), so this guards against the
 // raw tag leaking back into the message a caller reads.
 func TestMissingDirErrorWording(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		kind string
 		want string
@@ -413,6 +425,7 @@ func TestMissingDirErrorWording(t *testing.T) {
 // missing-dir message, it must render the display name, never the raw wire tag,
 // so NormalTo's established wording is unchanged.
 func TestMalformedDirErrorWording(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		kind string
 		want string
@@ -431,6 +444,7 @@ func TestMalformedDirErrorWording(t *testing.T) {
 }
 
 func TestCapHelpers(t *testing.T) {
+	t.Parallel()
 	body := holePlateBody(t)
 
 	t.Run("CapStartAndCapEndNameTheRightFaces", func(t *testing.T) {
@@ -471,6 +485,7 @@ func TestCapHelpers(t *testing.T) {
 // used to read cross <= eps*la*lb as finite <= +Inf and match everything, the
 // subnormal case used to underflow the reference length to 0 and match nothing.
 func TestParallelDirsExtremeDirections(t *testing.T) {
+	t.Parallel()
 	body := holePlateBody(t)
 
 	huge := math.MaxFloat64
@@ -579,6 +594,7 @@ func annularRevolveBody(t *testing.T) *decad.Body {
 }
 
 func TestSelectEdgesPredicates(t *testing.T) {
+	t.Parallel()
 	body := holePlateBody(t)
 
 	t.Run("NoPredicatesMatchesEverything", func(t *testing.T) {
@@ -654,6 +670,7 @@ func TestSelectEdgesPredicates(t *testing.T) {
 }
 
 func TestSelectFacesPredicates(t *testing.T) {
+	t.Parallel()
 	body := holePlateBody(t)
 
 	t.Run("NoPredicatesMatchesEverything", func(t *testing.T) {
@@ -699,6 +716,7 @@ func TestSelectFacesPredicates(t *testing.T) {
 }
 
 func TestSelectorResolutionOnRevolvedBody(t *testing.T) {
+	t.Parallel()
 	// Resolution reads only the public topology, so a revolved body's faces
 	// and edges select exactly like a prism's.
 	body := annularRevolveBody(t)
@@ -734,6 +752,7 @@ func TestSelectorResolutionOnRevolvedBody(t *testing.T) {
 }
 
 func TestSelectorCardinality(t *testing.T) {
+	t.Parallel()
 	body := holePlateBody(t)
 
 	t.Run("ExactlySucceeds", func(t *testing.T) {
@@ -774,6 +793,7 @@ func TestSelectorCardinality(t *testing.T) {
 }
 
 func TestSelectorResolutionIsDeterministic(t *testing.T) {
+	t.Parallel()
 	// The result keeps the topology accessors' order, so a recipe replay
 	// selects identically: two resolutions return the same entities in the
 	// same order.
@@ -791,6 +811,7 @@ func TestSelectorResolutionIsDeterministic(t *testing.T) {
 }
 
 func TestSelectorProvenanceSurvivesFaceMerge(t *testing.T) {
+	t.Parallel()
 	// A rectangle authored with a midpoint on its bottom edge: the two
 	// collinear side walls coalesce into ONE face carrying both roles, and
 	// FaceCreatedBy matches on ANY of them (core §6.1) — as does CreatedBy
@@ -835,6 +856,7 @@ func TestSelectorProvenanceSurvivesFaceMerge(t *testing.T) {
 }
 
 func TestSelectorPredicateParameterGates(t *testing.T) {
+	t.Parallel()
 	body := holePlateBody(t)
 
 	t.Run("ZeroDirection", func(t *testing.T) {
@@ -882,6 +904,7 @@ func TestSelectorPredicateParameterGates(t *testing.T) {
 }
 
 func TestSelectorRejectsNonPositiveCardinality(t *testing.T) {
+	t.Parallel()
 	body := holePlateBody(t)
 
 	// A zero or negative assertion would let "matches nothing" read as

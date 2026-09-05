@@ -59,6 +59,7 @@ var (
 )
 
 func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
+	t.Parallel()
 	raw, err := os.ReadFile(ciWorkflowPath)
 	require.NoError(t, err, "the CI workflow must be readable from the package directory")
 	workflow := string(raw)

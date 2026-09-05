@@ -9,6 +9,7 @@ import (
 )
 
 func TestChordStationBoundEnclosesACircleSegStation(t *testing.T) {
+	t.Parallel()
 	// A quarter turn of a radius-5 circle, chorded in two: the interior station
 	// sits at recorded parameter 1/8, whose turn is exactly rational, so the
 	// enclosure comes from turnSinCosInterval and the held pair sits a couple of
@@ -38,6 +39,7 @@ func TestChordStationBoundEnclosesACircleSegStation(t *testing.T) {
 }
 
 func TestChordStationBoundEnclosesAnArcSegStation(t *testing.T) {
+	t.Parallel()
 	// An arc states three pinned points and no angle at all, so its station goes
 	// through atan2Interval and radSinCosSpan. The enclosure is wider than a
 	// circle's, but it is finite and it is positive — never a silent zero.
@@ -64,6 +66,7 @@ func TestChordStationBoundEnclosesAnArcSegStation(t *testing.T) {
 }
 
 func TestChordStationBoundRefusesWhatItCannotEnclose(t *testing.T) {
+	t.Parallel()
 	circle := CircleSeg{Center: Point2{}, Radius: units.Millimeters(1), CCW: true, TStart: 0, TEnd: 1}
 	line := LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}, TStart: 0, TEnd: 1}
 
@@ -90,6 +93,7 @@ func TestChordStationBoundRefusesWhatItCannotEnclose(t *testing.T) {
 }
 
 func TestRequireDerivableStoreRefusesAnUnstatedDisplacement(t *testing.T) {
+	t.Parallel()
 	worst, err := requireDerivableStore([]float64{0, 3e-14, 1e-15})
 	require.NoError(t, err)
 	require.Equal(t, 3e-14, worst)

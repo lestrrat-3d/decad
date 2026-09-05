@@ -12,6 +12,7 @@ import (
 )
 
 func TestSTLPlate(t *testing.T) {
+	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -59,6 +60,7 @@ func TestSTLPlate(t *testing.T) {
 }
 
 func TestSTLChordTolerance(t *testing.T) {
+	t.Parallel()
 	body := holedPlateBody(t)
 
 	// The explicit tolerance drives the tessellation: same facet count as
@@ -154,6 +156,7 @@ func TestSTLDefaultChordTolerance(t *testing.T) {
 }
 
 func TestOBJPlate(t *testing.T) {
+	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -197,6 +200,7 @@ func TestOBJPlate(t *testing.T) {
 }
 
 func TestOBJChordTolerance(t *testing.T) {
+	t.Parallel()
 	body := holedPlateBody(t)
 	mesh, err := body.Tessellate(units.Millimeters(0.5))
 	require.NoError(t, err)

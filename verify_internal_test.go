@@ -11,6 +11,7 @@ import (
 )
 
 func TestBodyGateDiameterCancellation(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	// An analytic prism, not a faceted body: bodyGateDiameter builds its carrier
 	// model, which is the path that must observe cancellation.
@@ -70,6 +71,7 @@ func requireCertifiedDiameter(t *testing.T, published float64, exactSquare *big.
 // stays 21k = 498,258,033, still exactly representable: naiveNorm of that
 // same farthest pair overshoots it once the intermediate squares round.
 func TestBodyGateDiameterExactCarrierArmNeverOverstates(t *testing.T) {
+	t.Parallel()
 	const (
 		bx, by, bh    = 94_906_292.0, 189_812_584.0, 450_804_887.0
 		exactDiameter = 498_258_033.0
@@ -109,6 +111,7 @@ func TestBodyGateDiameterExactCarrierArmNeverOverstates(t *testing.T) {
 // magnitude tighter than the 0.125 gap a coarse envelope would leave, but
 // wide enough to clear that float spacing.
 func TestBodyGateDiameterDisplacedPrismShrinksByTwiceTheSum(t *testing.T) {
+	t.Parallel()
 	const (
 		bx, by, bh    = 94_906_292.0, 189_812_584.0, 450_804_887.0
 		exactDiameter = 498_258_033.0
@@ -236,6 +239,7 @@ func denseFreeformCapPoints(t *testing.T, pp prismPayload, samples int) []r3.Vec
 // (10,0,0), (10,0,10), and the farthest pair — (0,0,0) to (10,0,10), or its
 // mirror — is sqrt(200) apart.
 func TestBodyGateDiameterFreeformArmAnswersHandComputedMaximum(t *testing.T) {
+	t.Parallel()
 	pp := freeformTrianglePayload(t, 0, 10)
 	body := &Body{payload: pp}
 
@@ -257,6 +261,7 @@ func TestBodyGateDiameterFreeformArmAnswersHandComputedMaximum(t *testing.T) {
 // span endpoints, so a dense independent sample of the actual curve finds a
 // pair farther apart than the arm's own witness-only reading.
 func TestBodyGateDiameterFreeformArmUnderstatesNeverOverstates(t *testing.T) {
+	t.Parallel()
 	pp := prismPayload{profile: sCurveFreeformProfile(), frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity()}
 	body := &Body{payload: pp}
 
@@ -275,6 +280,7 @@ func TestBodyGateDiameterFreeformArmUnderstatesNeverOverstates(t *testing.T) {
 // reported diameter sits below the section's own computed bounding-box
 // diagonal (prismBoundsContext, P4a's already-landed free-form Box).
 func TestBodyGateDiameterFreeformArmBelowBoxDiagonal(t *testing.T) {
+	t.Parallel()
 	pp := prismPayload{profile: sCurveFreeformProfile(), frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity()}
 	body := &Body{payload: pp}
 
@@ -293,6 +299,7 @@ func TestBodyGateDiameterFreeformArmBelowBoxDiagonal(t *testing.T) {
 // so geom.NewFitInterpolant collapses them, keeping the first — reports the
 // identical diameter to the same section recorded without the duplicate.
 func TestBodyGateDiameterFreeformArmFitSplineReadsConvertedChain(t *testing.T) {
+	t.Parallel()
 	build := func(fit []Point2) prismPayload {
 		return prismPayload{
 			profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
@@ -319,6 +326,7 @@ func TestBodyGateDiameterFreeformArmFitSplineReadsConvertedChain(t *testing.T) {
 // 5. Displacement shrinks the reported diameter, and a shrink that collapses
 // to non-positive reports no diameter at all.
 func TestBodyGateDiameterFreeformArmDisplacementShrinksDiameter(t *testing.T) {
+	t.Parallel()
 	base := freeformTrianglePayload(t, 0, 10)
 	baseD, ok, err := bodyGateDiameter(t.Context(), &Body{payload: base})
 	require.NoError(t, err)
@@ -343,6 +351,7 @@ func TestBodyGateDiameterFreeformArmDisplacementShrinksDiameter(t *testing.T) {
 // revolve section must still report no diameter, exactly as before this arm
 // existed.
 func TestBodyGateDiameterFreeformArmDoesNotWidenRevolvePayload(t *testing.T) {
+	t.Parallel()
 	rp := revolvePayload{
 		profile: freeformTriangleProfile(),
 		frame:   identityFrame(t),
@@ -358,6 +367,7 @@ func TestBodyGateDiameterFreeformArmDoesNotWidenRevolvePayload(t *testing.T) {
 // Refusal: a curve this arm cannot certify — a free-form span whose control
 // net has collapsed to a single point, R14 — must never publish a diameter.
 func TestBodyGateDiameterFreeformArmDeclinesOnCollapsedSpan(t *testing.T) {
+	t.Parallel()
 	collapsed := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
 		SplineSeg{
 			Control: []Point2{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}},
@@ -376,6 +386,7 @@ func TestBodyGateDiameterFreeformArmDeclinesOnCollapsedSpan(t *testing.T) {
 // fallbackGateDiameter, which has no arm for a prismPayload whose sectionDelta
 // is zero, so the body ends with no gate diameter at all.
 func TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm(t *testing.T) {
+	t.Parallel()
 	collapsedSpan := prismPayload{
 		profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
 			SplineSeg{
@@ -419,6 +430,7 @@ func TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm(t *testing.T
 // underivable component reads +Inf, never a small number a build could
 // silently spend in its place.
 func TestWalkEndBoundAllowRefusesNonFiniteComponent(t *testing.T) {
+	t.Parallel()
 	require.Equal(t, math.Inf(1), walkEndBoundAllow(walkEndBound{u: math.Inf(1), v: 0}))
 	require.Equal(t, math.Inf(1), walkEndBoundAllow(walkEndBound{u: 0, v: math.Inf(1)}))
 
@@ -430,6 +442,7 @@ func TestWalkEndBoundAllowRefusesNonFiniteComponent(t *testing.T) {
 // the exact carrier model unchanged — the new arm's own prismPayload type
 // assertion is never reached when newBodyGeomBudget already answers ok=true.
 func TestBodyGateDiameterFreeformArmSkipsAnalyticPrism(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	body := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
 
@@ -445,6 +458,7 @@ func TestBodyGateDiameterFreeformArmSkipsAnalyticPrism(t *testing.T) {
 // free-form arm declines outright (no free-form segment present) and never
 // changes this reading.
 func TestBodyGateDiameterFreeformArmSkipsSectionDisplacedPrism(t *testing.T) {
+	t.Parallel()
 	analytic := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
 		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 1},
 		LineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 10, V: 10}, TStart: 0, TEnd: 1},
@@ -527,6 +541,7 @@ func (c *cancelAfterPolls) Err() error {
 // through a multi-million-pair scan — is reported AS an error, never folded
 // into the arm's structural "no arm" answer.
 func TestBodyGateDiameterFreeformArmCancelsDuringWitnessMaximum(t *testing.T) {
+	t.Parallel()
 	pp := prismPayload{
 		profile: freeformLargeProfile(800),
 		frame:   identityFrame(t),

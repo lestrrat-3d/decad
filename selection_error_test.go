@@ -37,6 +37,7 @@ func (wrappedEdgeSelector) SelectEdges(*decad.Body) ([]*decad.Edge, error) {
 var zAxis = r3.NewVec(0, 0, 1)
 
 func TestSelectorKindString(t *testing.T) {
+	t.Parallel()
 	// The error's kind field is singular, naming the entity — deliberately
 	// distinct from a query's plural prefix (core §9).
 	require.Equal(t, "edge", decad.EdgeSelectorKind.String())
@@ -44,6 +45,7 @@ func TestSelectorKindString(t *testing.T) {
 }
 
 func TestQueryStringRendering(t *testing.T) {
+	t.Parallel()
 	// A FeatureRef whose role itself holds parentheses and a comma: the role
 	// is quoted, so it stays unambiguous inside the created_by payload.
 	sideRef := decad.FeatureRef{Step: 2, Role: "side(0,1)"}
@@ -107,6 +109,7 @@ func TestQueryStringRendering(t *testing.T) {
 }
 
 func TestQueryStringNegativeZeroNormalized(t *testing.T) {
+	t.Parallel()
 	// -0.0 == 0.0, so two value-equal directions must render identically;
 	// FormatFloat would otherwise write a negative zero as "-0". The
 	// normalization is what makes "equal recorded queries render identically"
@@ -118,6 +121,7 @@ func TestQueryStringNegativeZeroNormalized(t *testing.T) {
 }
 
 func TestQueryStringNonFiniteIsTotal(t *testing.T) {
+	t.Parallel()
 	// Rendering is total: an unresolved query still prints, a non-finite
 	// component read as the formatter writes it (core §9).
 	q := decad.Edges(decad.ParallelTo(r3.NewVec(math.NaN(), math.Inf(1), math.Inf(-1))))
@@ -125,6 +129,7 @@ func TestQueryStringNonFiniteIsTotal(t *testing.T) {
 }
 
 func TestQueryStringDecodeRoundTrip(t *testing.T) {
+	t.Parallel()
 	// A query and its decoded round-trip render identically: the Recipe JSON
 	// codec is the round-trip channel (core §9/§6.2).
 	doc := decad.New()
@@ -148,6 +153,7 @@ func TestQueryStringDecodeRoundTrip(t *testing.T) {
 }
 
 func TestSelectionErrorUnassertedZero(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	box := boxBody(t, doc, 0, 0, 10, 10, 5)
 
@@ -169,6 +175,7 @@ func TestSelectionErrorUnassertedZero(t *testing.T) {
 }
 
 func TestSelectionErrorCardinalityMiss(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	box := boxBody(t, doc, 0, 0, 10, 10, 5)
 
@@ -186,6 +193,7 @@ func TestSelectionErrorCardinalityMiss(t *testing.T) {
 }
 
 func TestSelectionErrorResidualNamesEmptyingClause(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	box := boxBody(t, doc, 0, 0, 10, 10, 5)
 
@@ -204,6 +212,7 @@ func TestSelectionErrorResidualNamesEmptyingClause(t *testing.T) {
 }
 
 func TestSelectionErrorFaceQuery(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	box := boxBody(t, doc, 0, 0, 10, 10, 5)
 
@@ -218,6 +227,7 @@ func TestSelectionErrorFaceQuery(t *testing.T) {
 }
 
 func TestImplicitExactlyOneStopFailedAssertionPassesThrough(t *testing.T) {
+	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
 	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -236,6 +246,7 @@ func TestImplicitExactlyOneStopFailedAssertionPassesThrough(t *testing.T) {
 }
 
 func TestImplicitExactlyOneStopSuccessfulManyRewritten(t *testing.T) {
+	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
 	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -254,6 +265,7 @@ func TestImplicitExactlyOneStopSuccessfulManyRewritten(t *testing.T) {
 }
 
 func TestImplicitExactlyOneStopSatisfiedAssertionRewritten(t *testing.T) {
+	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
 	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -272,6 +284,7 @@ func TestImplicitExactlyOneStopSatisfiedAssertionRewritten(t *testing.T) {
 }
 
 func TestImplicitExactlyOneStopUnassertedZeroRewritten(t *testing.T) {
+	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
 	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -290,6 +303,7 @@ func TestImplicitExactlyOneStopUnassertedZeroRewritten(t *testing.T) {
 }
 
 func TestImplicitExactlyOneStopForeignSelectorRejected(t *testing.T) {
+	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
 	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -308,6 +322,7 @@ func TestImplicitExactlyOneStopForeignSelectorRejected(t *testing.T) {
 }
 
 func TestImplicitExactlyOneEdgeAxis(t *testing.T) {
+	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
 	es, ep := plateSketch(t)

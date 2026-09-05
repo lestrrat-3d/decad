@@ -68,6 +68,7 @@ var bigArithmeticMethods = map[string]struct{}{
 }
 
 func TestSplineSagittaRunsNoExactArithmeticOutsideAMeteredPrimitive(t *testing.T) {
+	t.Parallel()
 	const path = "spline_sagitta.go"
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)

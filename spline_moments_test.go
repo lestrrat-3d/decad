@@ -77,6 +77,7 @@ func densePolylineArea(t *testing.T, controls [][2]float64) float64 {
 // design §3 requires Approximate with a bound of ONE rounding — not a
 // quadrature-sized bound, and not a false Exact.
 func TestClosedSplineProfileMomentsRoundOnce(t *testing.T) {
+	t.Parallel()
 	record := recordClosedSplineFrom(t, closedSplineControls)
 
 	area, err := record.Area()
@@ -120,6 +121,7 @@ func TestClosedSplineProfileMomentsRoundOnce(t *testing.T) {
 // The Exact side of the same rule: 293/2 IS representable, so the single
 // rounding is no rounding at all and the bound is zero.
 func TestClosedSplineProfileAreaExactWhenRepresentable(t *testing.T) {
+	t.Parallel()
 	controls := scaledClosedSplineControls()
 	record := recordClosedSplineFrom(t, controls)
 
@@ -176,6 +178,7 @@ func nurbsEdge(a, b decad.Point2) decad.NURBSSeg {
 // off the correctly rounded area and report a bound wider than the rounding
 // they actually committed.
 func TestMultiSegmentFreeformRegionRoundsOnce(t *testing.T) {
+	t.Parallel()
 	polygon := []decad.Point2{{}, {U: 0.1}, {U: 0.3, V: 0.2}, {U: 0.05, V: 0.1}, {V: 0.4}}
 	segments := make([]decad.CurveSegment, len(polygon))
 	for i := range polygon {
@@ -209,6 +212,7 @@ func TestMultiSegmentFreeformRegionRoundsOnce(t *testing.T) {
 // ceiling could not fire until billions of operations had run. It must refuse
 // promptly instead.
 func TestDenseNURBSRecordRefusesWithinBudget(t *testing.T) {
+	t.Parallel()
 	const controls = 2000
 	const degree = 3
 	control := make([]decad.Point2, controls)
@@ -255,6 +259,7 @@ func TestDenseNURBSRecordRefusesWithinBudget(t *testing.T) {
 // evaluator's own limitation. Move one of those two points and the curve really
 // does break apart, so no such body exists.
 func TestBrokenNURBSKnotVectorRefuses(t *testing.T) {
+	t.Parallel()
 	third := 1.0 / 3
 	squareRecord := func(joint decad.Point2) decad.ProfileRecord {
 		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
@@ -324,6 +329,7 @@ func TestBrokenNURBSKnotVectorRefuses(t *testing.T) {
 // spans — and that is a limitation of the evaluator, not a claim that no such
 // body exists.
 func TestOverClampedNURBSRefusesAsUnsupported(t *testing.T) {
+	t.Parallel()
 	segment := decad.NURBSSeg{
 		Degree:  2,
 		Control: []decad.Point2{{U: 0, V: 0}, {U: 0, V: 0}, {U: 1, V: 2}, {U: 2, V: 0}},
@@ -352,6 +358,7 @@ func TestOverClampedNURBSRefusesAsUnsupported(t *testing.T) {
 // shoelace is NOT representable, so the honest reading is Approximate with the
 // single rounding as its bound.
 func TestFreeformAnchorSubtractsExactly(t *testing.T) {
+	t.Parallel()
 	corners := []decad.Point2{{U: 0.1, V: 0.1}, {U: 100.1, V: 0.1}, {U: 100.1, V: 1.1}, {U: 0.1, V: 1.1}}
 	segments := make([]decad.CurveSegment, len(corners))
 	for i := range corners {
@@ -546,6 +553,7 @@ func TestOverBudgetConversionRefusesBeforeLifting(t *testing.T) {
 // One hundred quarter arcs are 6400 chords, above the 5792-chord reconstruction
 // boundary, and refuse at the record-level preflight.
 func TestReconstructionIsChargedBeforeItRuns(t *testing.T) {
+	t.Parallel()
 	for _, n := range []int{4, 6} {
 		area, err := scallopedDiskRecord(n).Area()
 		require.NoError(t, err, "%d arcs are inside the reconstruction ceiling", n)
@@ -579,6 +587,7 @@ func TestReconstructionIsChargedBeforeItRuns(t *testing.T) {
 // The fixture's own topology is never reached, which is the point: the charge is
 // levied before sketch is asked anything.
 func TestCrossSourceChordsAreChargedOnTheWholeRecord(t *testing.T) {
+	t.Parallel()
 	segments := make([]decad.CurveSegment, 100)
 	for i := range segments {
 		control := make([]decad.Point2, 3)
@@ -607,6 +616,7 @@ func TestCrossSourceChordsAreChargedOnTheWholeRecord(t *testing.T) {
 // charge reading only the spline admits the record and then spends seconds
 // arranging all of it.
 func TestAnalyticChordsAreCharged(t *testing.T) {
+	t.Parallel()
 	segments := make([]decad.CurveSegment, 0, 101)
 	for i := range 100 {
 		center := decad.Point2{U: float64(i) * 10}
@@ -646,6 +656,10 @@ func TestAnalyticChordsAreCharged(t *testing.T) {
 // conversions. The converted spline chains are a fixed cost here — the ceiling
 // refuses this record at loop 0 segment 942, whatever its length past that — so
 // a per-segment plan allocation is the only term either measurement can grow by.
+//
+// This test stays SERIAL: it measures process-wide allocation, which any
+// test running alongside it would inflate. Adding t.Parallel here makes its
+// reading meaningless rather than making it fail loudly.
 func TestPlanStorageFollowsConvertedSegments(t *testing.T) {
 	// One recorded segment costs 16 bytes of normalized CurveSegment, which is
 	// the whole marginal cost the preflight owes. The slack covers the map
@@ -718,6 +732,7 @@ func TestPlanStorageFollowsConvertedSegments(t *testing.T) {
 // contributes through the existing exact-rational line formulas and the spline
 // through the Bézier integrals, into one region.
 func TestSplineAndChordProfileMoments(t *testing.T) {
+	t.Parallel()
 	record := recordSplineAndChord(t)
 
 	area, err := record.Area()
@@ -761,6 +776,7 @@ func TestSplineAndChordProfileMoments(t *testing.T) {
 // This fixture is a public one — recorded through RecordProfile — so it is the
 // end-to-end guard: a converter that re-derives the knots republishes the Exact.
 func TestOpenSplineAreaRoundsOverSketchKnots(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -815,6 +831,7 @@ func TestOpenSplineAreaRoundsOverSketchKnots(t *testing.T) {
 }
 
 func TestFreeformProfileRefusals(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		segment decad.CurveSegment
@@ -872,6 +889,9 @@ func closedSplineSegmentOf(controls int, radius float64) decad.ClosedSplineSeg {
 	return decad.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
 }
 
+// This test stays SERIAL: it measures process-wide allocation, which any
+// test running alongside it would inflate. Adding t.Parallel here makes its
+// reading meaningless rather than making it fail loudly.
 // A caller can hand a degree-1 NURBS segment millions of control points and no
 // knots at all. Whether the knot count can match the control count is an O(1)
 // question about SIZES, so it must be answered before the control array is
@@ -879,6 +899,10 @@ func closedSplineSegmentOf(controls int, radius float64) decad.ClosedSplineSeg {
 // be well formed at ANY content used to cost three allocations and about 90ns
 // per control point before its refusal — 12 million allocations on a
 // four-million-point record, and none of it charged against the work ceiling.
+//
+// This test stays SERIAL: it measures process-wide allocation, which any
+// test running alongside it would inflate. Adding t.Parallel here makes its
+// reading meaningless rather than making it fail loudly.
 func TestMalformedNURBSRefusesBeforeScanningControls(t *testing.T) {
 	const controls = 200000
 	control := make([]decad.Point2, controls)
@@ -905,6 +929,7 @@ func TestMalformedNURBSRefusesBeforeScanningControls(t *testing.T) {
 // a topology answer instead of refusing. The refusal names the SECOND segment,
 // which is the proof that the first segment's charge carried into it.
 func TestFreeformWorkBudgetBoundsTheWholeRecord(t *testing.T) {
+	t.Parallel()
 	const controls = 700
 	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
 		closedSplineSegmentOf(controls, 10),
@@ -929,6 +954,7 @@ func TestFreeformWorkBudgetBoundsTheWholeRecord(t *testing.T) {
 // prefix is what tells the two apart: validateMomentFields adds it to everything
 // the preflight refuses, and the moments pass adds nothing.
 func TestFreeformReanchoringChargeRefusesAtValidation(t *testing.T) {
+	t.Parallel()
 	record := closedSplineRecordOf(960)
 
 	start := time.Now()
@@ -948,6 +974,7 @@ func TestFreeformReanchoringChargeRefusesAtValidation(t *testing.T) {
 // tests, so a range test consulted first reads it as a trimmed range and
 // reports the staging sentinel ErrUnsupported instead.
 func TestNonFiniteFreeformRangeIsNotFinite(t *testing.T) {
+	t.Parallel()
 	control := []decad.Point2{{}, {U: 1, V: 1}, {U: 2, V: 1}, {U: 3}}
 	for _, tc := range []struct {
 		name    string
@@ -1004,6 +1031,7 @@ func TestNonFiniteFreeformRangeIsNotFinite(t *testing.T) {
 // it is Tier A (Table F) — so it reaches this same range check instead of
 // skipping it.
 func TestFreeformRecordedRangeRefusals(t *testing.T) {
+	t.Parallel()
 	spline := func(tStart, tEnd float64) decad.ProfileRecord {
 		record := recordSplineAndChord(t)
 		segments := slices.Clone(record.Outer.Segments)
@@ -1207,6 +1235,7 @@ func TestFreeformRecordedRangeRefusals(t *testing.T) {
 // it: without that, the unit square at weight 1e300 is refused as a region that
 // does not close while the identical curve at weight 1 measures exactly 1 mm².
 func TestEqualWeightNURBSMeasuresAtEveryMagnitude(t *testing.T) {
+	t.Parallel()
 	square := []decad.Point2{{}, {U: 1}, {U: 1, V: 1}, {V: 1}, {}}
 	for _, weight := range []float64{1, 1e150, 1e300, math.MaxFloat64} {
 		t.Run(strconv.FormatFloat(weight, 'g', -1, 64), func(t *testing.T) {
@@ -1242,6 +1271,7 @@ func TestEqualWeightNURBSMeasuresAtEveryMagnitude(t *testing.T) {
 // module already publishes a subnormal area one step above this scale, so a gate
 // reading the float accumulator refuses the very next step down.
 func TestUnderflowingSplineAreaPublishesBoundedZero(t *testing.T) {
+	t.Parallel()
 	const scale = 1e-200
 	controls := make([][2]float64, len(closedSplineControls))
 	for i, control := range closedSplineControls {
@@ -1272,6 +1302,7 @@ func TestUnderflowingSplineAreaPublishesBoundedZero(t *testing.T) {
 // Dividing the PUBLISHED floats instead reads a zero area with a subnormal bound
 // and refuses an answer already in hand.
 func TestUnderflowingSplineCentroidDividesExactly(t *testing.T) {
+	t.Parallel()
 	const scale = 1e-200
 	control := make([]decad.Point2, len(closedSplineControls))
 	for i, c := range closedSplineControls {
@@ -1307,6 +1338,7 @@ func TestUnderflowingSplineCentroidDividesExactly(t *testing.T) {
 // is not. A unit square's centroid is (1/2, 1/2) and representable; the
 // closed-spline section's v is 293·.../… and is not.
 func TestFreeformCentroidRoundsOnce(t *testing.T) {
+	t.Parallel()
 	square := []decad.Point2{{}, {U: 1}, {U: 1, V: 1}, {V: 1}}
 	segments := make([]decad.CurveSegment, len(square))
 	for i := range square {
@@ -1344,6 +1376,7 @@ func TestFreeformCentroidRoundsOnce(t *testing.T) {
 // boundary. It must refuse rather than integrate a zero-area region into a
 // centroid division.
 func TestDegenerateSplineRecordRefuses(t *testing.T) {
+	t.Parallel()
 	same := decad.Point2{U: 3, V: 3}
 	record := decad.ProfileRecord{
 		Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
@@ -1362,6 +1395,7 @@ func TestDegenerateSplineRecordRefuses(t *testing.T) {
 // the same exact area TestClosedSplineExactArea proves, composed through the
 // unchanged height arithmetic every straight-walled prism already uses.
 func TestExtrudeClosedSplineProfileBuilds(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -1395,6 +1429,9 @@ func TestExtrudeClosedSplineProfileBuilds(t *testing.T) {
 	require.Greater(t, volume.Bound.Mag(), 0.0, "the region area's own rounding is never zero here")
 }
 
+// This test stays SERIAL: it measures process-wide allocation, which any
+// test running alongside it would inflate. Adding t.Parallel here makes its
+// reading meaningless rather than making it fail loudly.
 // One public operation over one record spends ONE R7 work ceiling
 // (docs/spline-design.md §5.2). Extrude runs the record-wide moments preflight
 // for its area falsifier, the same preflight again inside the prism build, and
@@ -1417,6 +1454,10 @@ func TestExtrudeClosedSplineProfileBuilds(t *testing.T) {
 // refusing, so its elapsed time is real and scales with the machine running
 // it, never a signal a second ceiling was minted; the allocation bound is
 // the measure that still discriminates the two cases.
+//
+// This test stays SERIAL: it measures process-wide allocation, which any
+// test running alongside it would inflate. Adding t.Parallel here makes its
+// reading meaningless rather than making it fail loudly.
 func TestExtrudeSplineProfileSpendsOneWorkCeiling(t *testing.T) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
@@ -1504,6 +1545,7 @@ func scallopedDiskArea(n int) float64 {
 // is the ordinary shape of a recorded region, and counting the fragments
 // separately would square a chord total the arrangement never holds.
 func TestSharedAnalyticEntityIsChargedOnce(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -1574,6 +1616,7 @@ func recordPlateWithCircularHoles(t *testing.T, holes int) (decad.ProfileRecord,
 // bolt holes. Each whole circle contributes 256 chords, so eight holes exercise
 // the record-wide charge well beyond the former two-circle boundary.
 func TestAnalyticPlateWithCircularHolesArea(t *testing.T) {
+	t.Parallel()
 	for holes := 1; holes <= 8; holes++ {
 		t.Run(strconv.Itoa(holes), func(t *testing.T) {
 			record, want := recordPlateWithCircularHoles(t, holes)

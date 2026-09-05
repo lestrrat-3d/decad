@@ -30,6 +30,7 @@ import (
 // start cap than on the end cap (the two bands are not mirror images of the
 // SAME error), and the two volumes disagree.
 func TestCapBlendStartCapVolumeMatchesEndCap(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		build func(t *testing.T) *decad.Body
@@ -90,6 +91,7 @@ func quarterDiskBody(t *testing.T, r, h float64) *decad.Body {
 // a straight cylinder over the unchanged run and a widening frustum over the
 // band.
 func TestCapBlendHoleLoopChamferVolume(t *testing.T) {
+	t.Parallel()
 	const L, H, cx, cy, R, d = 100.0, 10.0, 50.0, 50.0, 10.0, 2.0
 	_, box := plateWithDiskHole(t, cx, cy, R)
 	q := decad.Edges(decad.CreatedBy(decad.CapEnd(box)), decad.Circular())
@@ -157,6 +159,7 @@ func plateWithRectHole(t *testing.T, side float64) *decad.Body {
 // radius h). Integrating each over [0, d] and adding the straight slab below
 // gives the whole volume in closed form.
 func TestCapBlendPolygonalHoleChamferVolume(t *testing.T) {
+	t.Parallel()
 	const L, H, side, d = 100.0, 10.0, 20.0, 2.0
 	box := plateWithRectHole(t, side)
 	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
@@ -191,6 +194,7 @@ func TestCapBlendPolygonalHoleChamferVolume(t *testing.T) {
 // silently and with no diagnostic — the sweep runs past a body that ends at
 // the sketch plane's own 20 mm.
 func TestCapBlendThroughAllStopsAtBuiltExtent(t *testing.T) {
+	t.Parallel()
 	const height, d = 20.0, 5.0
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
@@ -221,6 +225,7 @@ func TestCapBlendThroughAllStopsAtBuiltExtent(t *testing.T) {
 // stop at all rather than build a body in empty space and record a dependency
 // on a plate it never meets.
 func TestCapBlendThroughAllBehindPlaneRefused(t *testing.T) {
+	t.Parallel()
 	const height, d, drop = 20.0, 5.0, 24.0
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
@@ -247,6 +252,7 @@ func TestCapBlendThroughAllBehindPlaneRefused(t *testing.T) {
 }
 
 func TestCapBlendBooleanReceiverRefusedSX9(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 3, 3, 13, 7, 6)
@@ -270,6 +276,7 @@ func TestCapBlendBooleanReceiverRefusedSX9(t *testing.T) {
 // Box.Max are positions and Bound is the absolute error on them, so a box
 // widened outward by d has an error of d and may not report zero.
 func TestCapBlendBoundsAreAttainedNotPadded(t *testing.T) {
+	t.Parallel()
 	for _, d := range []float64{1, 5, 9} {
 		t.Run(fmt.Sprintf("d=%v", d), func(t *testing.T) {
 			_, box := capBlendBox(t)
@@ -310,6 +317,7 @@ func TestCapBlendBoundsAreAttainedNotPadded(t *testing.T) {
 // opposite existence claim to SX7/SX12's, so the refusal answers to
 // ErrDegenerate and not to ErrUnsupported.
 func TestCapBlendNestingRefusalKeepsDegenerate(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -345,6 +353,7 @@ func TestCapBlendNestingRefusalKeepsDegenerate(t *testing.T) {
 // reported sequence IS the payload's own patch order; a caller may diff or
 // golden-test Report.Bodies[i].Undercuts, so repeated calls must agree.
 func TestCapBlendUndercutOrderIsDeterministic(t *testing.T) {
+	t.Parallel()
 	_, box := capBlendBox(t)
 	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)
@@ -383,6 +392,7 @@ func TestCapBlendUndercutOrderIsDeterministic(t *testing.T) {
 // surface kind may move them: they are integrated from the patch's own recorded
 // radii rather than from its carrier surface, so both must stand unchanged.
 func TestCapBlendConePatchKeepsTaperAtHugeRadius(t *testing.T) {
+	t.Parallel()
 	const R, H, d = 1e12, 10.0, 1e-3
 	disk := circleProfile(t, R, H)
 	chamfered, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(d))
@@ -469,6 +479,7 @@ func exactChamferedDiskVolume(t *testing.T, r, h, d float64) *big.Float {
 // ratio to 1e4 and 1e8. The third is ordinary scale, where the same
 // composition must not have become loose.
 func TestCapBlendVolumeBoundEnclosesExactVolume(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		r, h, d float64
@@ -503,6 +514,7 @@ func TestCapBlendVolumeBoundEnclosesExactVolume(t *testing.T) {
 // taper is real, just finer than float64 names at that radius), so the sentinel
 // is ErrUnsupported, and the receiver and recipe are untouched.
 func TestCapBlendUnrepresentableRadialChangeRefused(t *testing.T) {
+	t.Parallel()
 	const R, H, d = 1e12, 10.0, 1e-9
 	require.Equal(t, R, R-d, `the premise: this setback is below the radius's own float64 spacing`)
 	disk := circleProfile(t, R, H)
@@ -538,6 +550,7 @@ func TestCapBlendUnrepresentableRadialChangeRefused(t *testing.T) {
 // setback so LARGE beside the sweep that the band passes the far end, while this
 // one is smaller than the sweep by twenty-one orders of magnitude.
 func TestCapBlendUnrepresentableAxialChangeRefused(t *testing.T) {
+	t.Parallel()
 	const H, d = 1e12, 1e-9
 	require.Equal(t, H, H-d, `the premise: this setback is below the sweep level's own float64 spacing`)
 
@@ -588,6 +601,7 @@ func TestCapBlendUnrepresentableAxialChangeRefused(t *testing.T) {
 // Approximate however exactly its Plane patches integrate — the win is confined
 // to all-Plane cap loops and must not leak past them.
 func TestCapBlendPlanePatchVolumeIsExact(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		d    float64
@@ -633,6 +647,7 @@ func TestCapBlendPlanePatchVolumeIsExact(t *testing.T) {
 // may claim Exact: a plane patch's area is a float cross product, a norm and a
 // sum, and a cone patch's carries a square root.
 func TestCapBlendPatchFacesReportTheirOwnArea(t *testing.T) {
+	t.Parallel()
 	const d = 5.0
 	_, box := capBlendBox(t)
 	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
@@ -705,6 +720,7 @@ func smallSkewSection(t *testing.T, h float64) *decad.Body {
 // TestCapBlendCentroidBoundEncloses checks the centroid bound for what a bound
 // IS — an enclosure of the TRUE centroid — rather than for a particular value.
 func TestCapBlendCentroidBoundEncloses(t *testing.T) {
+	t.Parallel()
 	const h, d = 1e-3, 1e-7
 	body := smallSkewSection(t, h)
 	// The receiver's own centroid stands in for the chamfered body's true one.
@@ -732,6 +748,7 @@ func TestCapBlendCentroidBoundEncloses(t *testing.T) {
 // always coincided); this pins the inequality directly now that the
 // closed-form formula bound usually wins it.
 func TestCapBlendCentroidNeverExceedsGeometryNet(t *testing.T) {
+	t.Parallel()
 	const R, H, d = 10.0, 8.0, 0.5
 	body := circleProfile(t, R, H)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
@@ -773,6 +790,7 @@ func TestCapBlendCentroidNeverExceedsGeometryNet(t *testing.T) {
 // height) is ALSO satisfied, and deciding it first would let the sweep height
 // alone pick the sentinel.
 func TestCapBlendBandReachRefusalKeepsSX6Degenerate(t *testing.T) {
+	t.Parallel()
 	for _, height := range []float64{4.0, 20.0} {
 		t.Run(fmt.Sprintf("H=%g", height), func(t *testing.T) {
 			disk := circleProfile(t, 4, height)
@@ -806,6 +824,7 @@ func TestCapBlendBandReachRefusalKeepsSX6Degenerate(t *testing.T) {
 // corner in the plane, and the apex sits one setback below it, so the slant is
 // d*sqrt(3).
 func TestCapBlendCapLevelEdgesReportFiniteLengths(t *testing.T) {
+	t.Parallel()
 	const d = 5.0
 	_, box := capBlendBox(t)
 	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
@@ -885,6 +904,7 @@ func rightTriangleBody(t *testing.T, h float64) *decad.Body {
 // never from a second float evaluation, so the assertion is about the denoted
 // contour and not about two roundings agreeing.
 func TestCapBlendCapContourVertexBoundEncloses(t *testing.T) {
+	t.Parallel()
 	const height = 20.0
 	for _, d := range []float64{0.1, 0.3, 0.7, 1.3, 2.5, 2.9} {
 		t.Run(fmt.Sprintf("d=%v", d), func(t *testing.T) {
@@ -938,6 +958,7 @@ func ratDistance2D(x, y float64, wantU, wantV *big.Rat) float64 {
 // at once; there the 45-degree band can carry the contour past the trimmed
 // straight level, and the box may not then claim its faces are exact.
 func TestCapBlendContourHeldExtentCarriesItsDisplacement(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -1053,6 +1074,7 @@ func exactWedgeChamferReadings(t *testing.T, a, b, h, d float64) (capArea, volum
 // never from how far that contour sits from the one the offset DENOTES —
 // fall short of the true residual against a 400-bit reference.
 func TestCapBlendWedgeAreaAndVolumeBoundsEncloseTrueError(t *testing.T) {
+	t.Parallel()
 	const a, b, h, d = 9e4, 3e6, 50000.0, 13500.0
 	body := rightTriangleBodyLegs(t, a, b, h)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
@@ -1083,6 +1105,7 @@ func TestCapBlendWedgeAreaAndVolumeBoundsEncloseTrueError(t *testing.T) {
 // cap-level feet keep their own, much smaller, offset-solve bound, so the two
 // levels are proven apart rather than by one blanket stamp.
 func TestCapBlendSideLevelCarriesSetbackRounding(t *testing.T) {
+	t.Parallel()
 	const (
 		height = 1e12
 		d      = 1e-3
@@ -1127,6 +1150,7 @@ func TestCapBlendSideLevelCarriesSetbackRounding(t *testing.T) {
 // TestCapBlendInheritsComputedCapLevelBound keeps a cap blend from laundering
 // the stop displacement of its chamfered end cap back into an exact level.
 func TestCapBlendInheritsComputedCapLevelBound(t *testing.T) {
+	t.Parallel()
 	const (
 		plateHeight = 1e12
 		shortBy     = 1e-3
@@ -1176,6 +1200,7 @@ func TestCapBlendInheritsComputedCapLevelBound(t *testing.T) {
 // and centroid bounds must enclose the solid at the stop level the operation
 // denotes rather than only the rounded level the build holds.
 func TestCapBlendComputedStopMassBounds(t *testing.T) {
+	t.Parallel()
 	const (
 		plateHeight = 1e12
 		shortBy     = 1e-3
@@ -1261,6 +1286,7 @@ func exactComputedStopSquareChamfer(t *testing.T, side, plateHeight, stopOffset,
 // TestCapBlendWholeCircleInheritsComputedCapLevelBound covers the cap seam
 // vertex that a whole-circle chamfer builds instead of corner vertices.
 func TestCapBlendWholeCircleInheritsComputedCapLevelBound(t *testing.T) {
+	t.Parallel()
 	const (
 		plateHeight = 1e12
 		shortBy     = 1e-3
@@ -1359,6 +1385,7 @@ func concentricDiskWithHole(t *testing.T, R, r, h float64) *decad.Body {
 // build must refuse too (SX15, docs/modify-reach-design.md §4) rather than
 // publish a hole patch whose outward side was never checked.
 func TestCapBlendFarPlacementOrientationRefusal(t *testing.T) {
+	t.Parallel()
 	const R, r, h, d = 4.0, 1.5, 6.0, 0.5
 	body := concentricDiskWithHole(t, R, r, h)
 	chamfered, err := body.Chamfer(capLoopEdgesOn(body, true), units.Millimeters(d))
@@ -1471,6 +1498,7 @@ func quarterDiskMiterLocusLength(r, h, d float64) float64 {
 // PRE-fix bound (2.66e-15 mm at d=3): a fix that merely widens the bound by
 // a small margin would still fail the case it was written for.
 func TestCapBlendMiterSlantEdgeEnclosesItsLocus(t *testing.T) {
+	t.Parallel()
 	const r, h = 10.0, 20.0
 	cases := []struct {
 		d       float64
@@ -1527,6 +1555,7 @@ func TestCapBlendMiterSlantEdgeEnclosesItsLocus(t *testing.T) {
 // in it too), so the excess term must stay exactly zero there — this is what
 // stops the fix from being a blanket widening of every slant edge's bound.
 func TestCapBlendStraightMiterSlantEdgeChargesNothingExtra(t *testing.T) {
+	t.Parallel()
 	const d = 5.0
 	_, box := capBlendBox(t)
 	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
@@ -1554,6 +1583,7 @@ func TestCapBlendStraightMiterSlantEdgeChargesNothingExtra(t *testing.T) {
 // offset amount regardless of that wall's kind and must keep the bound they
 // published before this fix, whatever kind of wall meets the reflex corner.
 func TestCapBlendReflexSlantEdgeChargesNothingExtra(t *testing.T) {
+	t.Parallel()
 	const d = 3.0
 	body := reflexLBody(t)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
@@ -1582,6 +1612,7 @@ func TestCapBlendReflexSlantEdgeChargesNothingExtra(t *testing.T) {
 // capBlendPayload.extentBoundedAlong takes cbp.xform.Apply and the payload's
 // own dir the same exact-leaf way the plain prism box did.
 func TestCapBlendBoundsEnclosesPlacedVertices(t *testing.T) {
+	t.Parallel()
 	const L, W, H, d = 10.0, 8.0, 5.0, 2.0
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())

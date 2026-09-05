@@ -49,6 +49,7 @@ func twistedArcWedgePayload(t *testing.T) loftPayload {
 // reduces matchedDelta to delta, and the chorded twisted one where the
 // parameter-matched chord departure and the facet twist both charge.
 func TestLoftMeshProofComposition(t *testing.T) {
+	t.Parallel()
 	t.Run("unplaced pinned LineSeg-only publishes zero", func(t *testing.T) {
 		body := evalLoftFixture(t, boxLoftPayload(t))
 		lp, proof := loftProofOf(t, body)
@@ -135,6 +136,7 @@ func TestLoftMeshProofComposition(t *testing.T) {
 // carries the payload's triangles, vertices and per-face proofs unchanged, in
 // fresh storage that does not alias the body's own boundary.
 func TestTessellateLoftRestatesTheHeldTriangleSet(t *testing.T) {
+	t.Parallel()
 	body := evalLoftFixture(t, twistedArcWedgePayload(t))
 	lp, proof := loftProofOf(t, body)
 
@@ -185,6 +187,7 @@ func TestTessellateLoftRestatesTheHeldTriangleSet(t *testing.T) {
 // and composes the proof beside them — so each is driven by handing
 // tessellateLoft a payload no evaluator wrote.
 func TestTessellateLoftRefusesAnUnrestatablePayload(t *testing.T) {
+	t.Parallel()
 	body := evalLoftFixture(t, boxLoftPayload(t))
 	base, _ := loftProofOf(t, body)
 

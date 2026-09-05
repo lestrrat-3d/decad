@@ -22,6 +22,7 @@ func (c *cancelAfterContext) Err() error {
 }
 
 func TestSideOriginsContextPollsEachSegment(t *testing.T) {
+	t.Parallel()
 	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 3}
 
 	origins, err := sideOriginsContext(ctx, StepRef(1), 2, []int{4, 5, 6})
@@ -32,6 +33,7 @@ func TestSideOriginsContextPollsEachSegment(t *testing.T) {
 }
 
 func TestFullRevolveShellsContextPollsEachLoop(t *testing.T) {
+	t.Parallel()
 	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 2}
 	perLoop := [][]*Face{{}, {{}}}
 
@@ -43,6 +45,7 @@ func TestFullRevolveShellsContextPollsEachLoop(t *testing.T) {
 }
 
 func TestAddBlendRolesContextPollsNestedMetadata(t *testing.T) {
+	t.Parallel()
 	ref := StepRef(1)
 	face := &Face{origins: []FeatureRef{{Step: ref, Role: "side(0,0)"}}}
 	body := &Body{lumps: []*Lump{{shells: []*Shell{{faces: []*Face{face}}}}}}
@@ -56,6 +59,7 @@ func TestAddBlendRolesContextPollsNestedMetadata(t *testing.T) {
 }
 
 func TestRenameCavityRolesContextPollsNestedMetadata(t *testing.T) {
+	t.Parallel()
 	ref := StepRef(1)
 	face := &Face{origins: []FeatureRef{{Step: ref, Role: "side(0,0)"}}}
 	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 3}

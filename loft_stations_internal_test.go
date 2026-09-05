@@ -74,6 +74,7 @@ func degenerateArcFixture(t *testing.T) (ArcSeg, segmentWalk) {
 // station by its own natural parameter and never by its kind — and the
 // trimmed-start fixture below asserts the same arm charging a positive term.
 func TestLoftLineCellStationsIsUnchanged(t *testing.T) {
+	t.Parallel()
 	w0 := segmentWalk{kind: walkLine, startU: 1, startV: 2}
 	w1 := segmentWalk{kind: walkLine, startU: 3, startV: 4}
 	stations0, stations1, sagitta, matchedDelta, stationRound, err := loftCellStations(w0, w1, LineSeg{}, LineSeg{}, 123.0, nil, nil)
@@ -222,6 +223,7 @@ func trimmedStartWalk(t *testing.T) segmentWalk {
 // station is segment 1's own recorded start, which segment 1's own cell
 // charges at its own zero bound.
 func TestLoftLineCellStationsChargesTrimmedStartBound(t *testing.T) {
+	t.Parallel()
 	seg := trimmedStartSegment()
 	w := trimmedStartWalk(t)
 
@@ -265,6 +267,7 @@ func TestLoftLineCellStationsChargesTrimmedStartBound(t *testing.T) {
 // proof and holds on every target; the assertions here read the value it
 // publishes.
 func TestEvalLoftTrimmedLineSegPublishesStationDisplacement(t *testing.T) {
+	t.Parallel()
 	p := trimmedStartSquareProfile()
 	stationRound := walkEndPlaneDelta(trimmedStartWalk(t).startBound)
 
@@ -329,6 +332,7 @@ func TestEvalLoftTrimmedLineSegPublishesStationDisplacement(t *testing.T) {
 // same reference wedge): a 90-degree radius-5 quarter arc, envelope read
 // through the real profileCoordinateUpper.
 func TestLoftCircularCellStationsHandDerivedStationCount(t *testing.T) {
+	t.Parallel()
 	envelope := wedgeArcEnvelope(t)
 	target := loftChordFraction * envelope
 
@@ -390,6 +394,7 @@ func handChordSagittaConservative(radius, sweep float64, n int) float64 {
 // loft_chord_calibration_internal_test.go's loftChordFractionPinM for the
 // margins measured at it.
 func TestLoftShippedFractionOnReferenceWedge(t *testing.T) {
+	t.Parallel()
 	envelope := wedgeArcEnvelope(t)
 	target := loftChordFraction * envelope
 	seg, w := wedgeArcRecord(t)
@@ -409,6 +414,7 @@ func TestLoftShippedFractionOnReferenceWedge(t *testing.T) {
 // sides' CERTIFIED sagittae clear the target. Neither side is ever walked at
 // its own smaller count.
 func TestLoftCircularCellStationsJointWalkUpSharesOneCount(t *testing.T) {
+	t.Parallel()
 	const target = 1e-3
 	seg0, w0 := arcFixture(t, 5, 0, math.Pi/2, 0, 1) // radius 5, 90 degrees
 	seg1, w1 := arcFixture(t, 2, 0, math.Pi/6, 0, 1) // radius 2, 30 degrees
@@ -467,6 +473,7 @@ func requireStationDelta(t *testing.T, w0, w1 segmentWalk, seg0, seg1 CurveSegme
 // max-of-seeds rule would stop at the seed and publish a bound the record does
 // not support; the joint walk-up increments until the certified reading clears.
 func TestLoftCircularCellStationsJointWalkUpOutrunsTheSeed(t *testing.T) {
+	t.Parallel()
 	const m = 3
 	seg, w, held, _ := shortfallArc(t, m)
 
@@ -500,6 +507,7 @@ func TestLoftCircularCellStationsJointWalkUpOutrunsTheSeed(t *testing.T) {
 // the held value bounds nothing there. Publishing the held value, the shape a
 // max-of-chordCount rule ships, fails both assertions.
 func TestLoftCircularSagittaIsCertifiedNotHeld(t *testing.T) {
+	t.Parallel()
 	const m = 3
 	seg, _, held, lower := shortfallArc(t, m)
 
@@ -519,6 +527,7 @@ func TestLoftCircularSagittaIsCertifiedNotHeld(t *testing.T) {
 // held float for the same walk and count. The two are distinct values, so
 // substituting the held one fails the equality.
 func TestLoftCircularCellStationsPublishesTheCertifiedReading(t *testing.T) {
+	t.Parallel()
 	const target = 1e-3
 	seg, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
 
@@ -589,6 +598,7 @@ func certifiedSagittaLower(t *testing.T, seg CurveSegment, m int) float64 {
 // A CircleSeg whose radius is not a length cannot state either, so the reading
 // answers +Inf and the arm refuses rather than substituting a finite value.
 func TestLoftCertifiedSagittaRefusesAnUnderivableRecord(t *testing.T) {
+	t.Parallel()
 	seg := CircleSeg{Center: pt(0, 0), Radius: units.Radians(1), TStart: 0, TEnd: 1, CCW: true}
 	require.True(t, isNonFinite(loftCertifiedSagittaUpper(seg, 8)))
 
@@ -613,6 +623,7 @@ func TestLoftCertifiedSagittaRefusesAnUnderivableRecord(t *testing.T) {
 // sweeps from 0.5 to 359.5 degrees, past the half turn no chord split ever
 // hands one cell — sampled, and so evidence rather than proof.
 func TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound(t *testing.T) {
+	t.Parallel()
 	const r = 5.0
 	const samples = 20_000
 	for degSweep := 0.5; degSweep <= 359.5; degSweep += 15 {
@@ -655,6 +666,7 @@ func TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound(t *testing.T) {
 // coarser side's sagitta is re-derived at m), a single-cell pairing, and a
 // degenerate radius-0 pair whose sagitta is exactly zero.
 func TestLoftCircularCellStationsMatchedDeltaIsItsSagitta(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct {
 		name           string
 		r0, sweep0     float64
@@ -715,6 +727,7 @@ func TestLoftCircularCellStationsMatchedDeltaIsItsSagitta(t *testing.T) {
 // (loft_audit.go), so this fixture is exactly the one the plan names: one
 // that would otherwise reach the audit ceiling.
 func TestLoftCellStationsStationCapFiresBeforeAuditCeiling(t *testing.T) {
+	t.Parallel()
 	seg, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
 	_, _, _, _, _, err := loftCellStations(w, w, seg, seg, 1e-12, nil, nil) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, errTooManyChords)
@@ -754,6 +767,7 @@ func quarterArcRingProfile(t *testing.T, n int) (ProfileRecord, [][]segmentWalk)
 // Σstations = 8 over H = 1 hole, and assembleLoft emits exactly
 // 4*8 + 4*1 - 4 = 32 triangles. A hole-free square gives 4*4 - 4 = 12.
 func TestLoftStationCapClearsTheAuditPairCeiling(t *testing.T) {
+	t.Parallel()
 	assembledTriangles := func(t *testing.T, p ProfileRecord) int {
 		t.Helper()
 		pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
@@ -811,6 +825,7 @@ func TestLoftStationCapClearsTheAuditPairCeiling(t *testing.T) {
 // and a loft has no such caller knob (§5.1: "The target is not a caller
 // option") — nor did any single curve here ask for 16384 of anything.
 func TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling(t *testing.T) {
+	t.Parallel()
 	const n = 16
 	p, walks := quarterArcRingProfile(t, n)
 
@@ -846,6 +861,7 @@ func TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling(t *testing.T) {
 // allocates it, are admitted. Without this the refusal above would prove only
 // that the gate refuses everything.
 func TestLoftStationCapAdmitsAPairInsideItsShare(t *testing.T) {
+	t.Parallel()
 	const n = 4
 	p, walks := quarterArcRingProfile(t, n)
 
@@ -862,6 +878,7 @@ func TestLoftStationCapAdmitsAPairInsideItsShare(t *testing.T) {
 // allocation arithmetic, including the two cases that paragraph carves out by
 // name.
 func TestLoftStationShareAllocatesTheCap(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct {
 		name    string
 		p, c    uint64
@@ -909,6 +926,7 @@ func TestLoftStationShareAllocatesTheCap(t *testing.T) {
 // loftChordTarget still reaches profileCoordinateUpper and refuses before that
 // free-form arm lands; the gate must answer nil without consulting either.
 func TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair(t *testing.T) {
+	t.Parallel()
 	p := unitSquareProfile()
 	walks := resolveLoftLoopWalks(t, p)
 	require.NoError(t, loftStationCapGate(p, p, make([]int, 1), walks, walks))
@@ -934,6 +952,7 @@ func TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair(t *testing.T) {
 // case) — so this fixture is built on the record directly, bypassing sketch
 // entirely, exactly as the plan's own fallback names.
 func TestLoftCircularCellStationsRefusesOneSidedCollapse(t *testing.T) {
+	t.Parallel()
 	degSeg, degWalk := degenerateArcFixture(t) // radius 0: every station is the same point
 	seg, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
 	_, _, _, _, _, err := loftCircularCellStations(degWalk, w, degSeg, seg, 1e-3) //nolint:dogsled // only the error matters here.
@@ -947,6 +966,7 @@ func TestLoftCircularCellStationsRefusesOneSidedCollapse(t *testing.T) {
 // bound is exactly zero: the record encloses the radius at exactly zero, which
 // zeroes the certified sagitta and every station's own displacement alike.
 func TestLoftCircularCellStationsSymmetricCollapseIsFine(t *testing.T) {
+	t.Parallel()
 	seg, w := degenerateArcFixture(t)
 	stations0, stations1, sagitta, _, _, err := loftCircularCellStations(w, w, seg, seg, 1e-3)
 	require.NoError(t, err)
@@ -1001,6 +1021,7 @@ func requireOneSidedCellRefusal(t *testing.T, err error, cell int) {
 // Side 0 repeats its first station, side 1 does not, so cell 0 collapses on
 // exactly one of the two sections.
 func TestLoftPairingsRefusesAOneSidedTerminalCell(t *testing.T) {
+	t.Parallel()
 	p0, walks0 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(0, 0), pt(1, 1)})
 	p1, walks1 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(2, 0), pt(1, 3)})
 
@@ -1014,6 +1035,7 @@ func TestLoftPairingsRefusesAOneSidedTerminalCell(t *testing.T) {
 // is invisible to any walk that stops at the end of the chain. Cells 0 and 1
 // here are sound on both sections; only the wrap collapses, and only on side 0.
 func TestLoftPairingsRefusesAOneSidedWrapCell(t *testing.T) {
+	t.Parallel()
 	p0, walks0 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(1, 1), pt(0, 0)})
 	p1, walks1 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(2, 0), pt(3, 3)})
 
@@ -1028,6 +1050,7 @@ func TestLoftPairingsRefusesAOneSidedWrapCell(t *testing.T) {
 // asserted, since the fixture proves nothing otherwise — with side 0's station
 // landing on the next segment's own start and side 1's not.
 func TestLoftPairingsRefusesAOneSidedCellAtOneChordCell(t *testing.T) {
+	t.Parallel()
 	const target = 1.0
 	arc0, w0 := arcFixture(t, 1e-9, 0, 0.1, 0, 1)
 	arc1, w1 := arcFixture(t, 1, 0, 0.1, 0, 1)
@@ -1054,6 +1077,7 @@ func TestLoftPairingsRefusesAOneSidedCellAtOneChordCell(t *testing.T) {
 // through for the audit to answer it. Without this the three refusals above
 // would prove only that the gate refuses every collapse.
 func TestLoftPairingsAdmitsABothSidedCollapsedCell(t *testing.T) {
+	t.Parallel()
 	p0, walks0 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(0, 0), pt(1, 1)})
 	p1, walks1 := lineStationLoopFixture(t, []Point2{pt(5, 5), pt(5, 5), pt(9, 9)})
 
@@ -1074,6 +1098,7 @@ func TestLoftPairingsAdmitsABothSidedCollapsedCell(t *testing.T) {
 // is what this test measures and refuses: the recomputed point is displaced,
 // while the reading that station carries says it is not.
 func TestCircularStationChainStartsAtThePinnedEnd(t *testing.T) {
+	t.Parallel()
 	seg, w := arcFixture(t, 5, 0.7, math.Pi/2, 0, 1)
 	require.Equal(t, seg.Start.U, w.startU, "walkOf must pin an untrimmed arc start to the recorded coordinate")
 	require.Equal(t, seg.Start.V, w.startV)
@@ -1105,6 +1130,7 @@ func TestCircularStationChainStartsAtThePinnedEnd(t *testing.T) {
 // segments share. The junction therefore carries exactly one station, and it
 // is a recorded coordinate.
 func TestCircularStationChainJunctionsMeetOnOneCoordinate(t *testing.T) {
+	t.Parallel()
 	first, wFirst := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
 	second, wSecond := arcFixture(t, 5, math.Pi/2, math.Pi/2, 0, 1)
 	require.Equal(t, first.End, second.Start, "the fixture's two arcs must share one recorded junction coordinate")
@@ -1133,6 +1159,7 @@ func TestCircularStationChainJunctionsMeetOnOneCoordinate(t *testing.T) {
 // ATTAINED, so it is a measurement of this build's own stations rather than a
 // constant large enough to cover anything.
 func TestCircularStationChainDeltaBoundsEveryGeneratedStation(t *testing.T) {
+	t.Parallel()
 	const m = 65
 	seg, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
 
@@ -1172,6 +1199,7 @@ func TestCircularStationChainDeltaBoundsEveryGeneratedStation(t *testing.T) {
 // loftCircularCellStations refuses on it rather than publishing the certified
 // sagitta as if it were the whole chord bound.
 func TestCircularStationChainRefusesAnUnenclosableRecord(t *testing.T) {
+	t.Parallel()
 	_, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
 
 	_, delta := circularStationChain(w, LineSeg{Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}, 4)
@@ -1189,6 +1217,7 @@ func TestCircularStationChainRefusesAnUnenclosableRecord(t *testing.T) {
 // reach a DIFFERENT certified sagitta at the shared target so the
 // max-versus-sum distinction is observable.
 func TestLoftPairingsSectionDeltaIsMaxNotSum(t *testing.T) {
+	t.Parallel()
 	const target = 1e-3
 
 	segA, wA := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
@@ -1227,6 +1256,7 @@ func TestLoftPairingsSectionDeltaIsMaxNotSum(t *testing.T) {
 // lineWalkEndBound is zero. The trimmed-start fixture earlier in this file
 // asserts the same pairing path carrying a positive term.
 func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
+	t.Parallel()
 	p := unitSquareProfile()
 	offsets := []int{0}
 	walks := resolveLoftLoopWalks(t, p)
@@ -1251,6 +1281,7 @@ func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
 // calls profileCoordinateUpper until that pairing arm lands, so it refuses the
 // same already-resolved walks.
 func TestLoftChordTargetUsesTheAnalyticEnvelope(t *testing.T) {
+	t.Parallel()
 	fit := FitSplineSeg{
 		Fit:    []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)},
 		TStart: 0, TEnd: 1,

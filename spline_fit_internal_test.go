@@ -50,6 +50,7 @@ func monomialFromBezierCubic(b0, b1, b2, b3 *big.Rat) [4]float64 {
 }
 
 func TestFitSplineBezierMatchesSpansToAFewULPs(t *testing.T) {
+	t.Parallel()
 	fit := []Point2{{U: 0, V: 0}, {U: 4, V: 3}, {U: 9, V: -1}, {U: 12, V: 2}, {U: 15, V: 0}}
 	seg := FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
 
@@ -125,10 +126,17 @@ func allocatedByFit(call func()) uint64 {
 	return after.TotalAlloc - before.TotalAlloc
 }
 
+// This test stays SERIAL: it measures process-wide allocation, which any
+// test running alongside it would inflate. Adding t.Parallel here makes its
+// reading meaningless rather than making it fail loudly.
 // fitInterpolantCost(n) = 64n has to be reserved BEFORE geom.NewFitInterpolant
 // runs its dedup pass, chord accumulation and tridiagonal solve, not after: a
 // record past the ceiling must refuse allocating on the order of its own Fit
 // slice, never on the order of the interpolant it would have solved.
+//
+// This test stays SERIAL: it measures process-wide allocation, which any
+// test running alongside it would inflate. Adding t.Parallel here makes its
+// reading meaningless rather than making it fail loudly.
 func TestFitInterpolantChargeRefusesBeforeSolving(t *testing.T) {
 	const points = 20000 // 64*20000 = 1,280,000 > 2^20
 	fit := make([]Point2, points)
@@ -156,6 +164,7 @@ func TestFitInterpolantChargeRefusesBeforeSolving(t *testing.T) {
 // fitInterpolantCost is linear (no quadratic term): unlike an open spline's
 // knot insertion, a natural cubic gives one span per interval directly.
 func TestFitInterpolantCostIsLinear(t *testing.T) {
+	t.Parallel()
 	require.Equal(t, uint64(0), fitInterpolantCost(0))
 	require.Equal(t, uint64(64*10), fitInterpolantCost(10))
 	require.Equal(t, uint64(64*1000), fitInterpolantCost(1000))
@@ -169,6 +178,7 @@ func TestFitInterpolantCostIsLinear(t *testing.T) {
 // ErrUnsupported and mentions the float64 range, never ErrNotFinite — every
 // input coordinate here is finite (Table R row R16).
 func TestFitInterpolantNonFiniteMapsToR16(t *testing.T) {
+	t.Parallel()
 	seg := FitSplineSeg{
 		Fit:    []Point2{{U: -1e308, V: 0}, {U: 1e308, V: 1}},
 		TStart: 0, TEnd: 1,
@@ -184,6 +194,7 @@ func TestFitInterpolantNonFiniteMapsToR16(t *testing.T) {
 // of any content read — the caller-built / decoded-record guard behind
 // record.go's own >= 2 floor.
 func TestFitSplineTooFewPointsRefuses(t *testing.T) {
+	t.Parallel()
 	seg := FitSplineSeg{Fit: []Point2{{U: 1}}, TStart: 0, TEnd: 1}
 	_, err := fitSplineBezierSpans(seg, &freeformWork{})
 	require.Error(t, err)
@@ -196,6 +207,7 @@ func TestFitSplineTooFewPointsRefuses(t *testing.T) {
 // freeformDegenerate), not here, but this pins that the conversion itself
 // returns the empty chain rather than erroring on its own.
 func TestFitSplineAllCoincidentReturnsNoSpans(t *testing.T) {
+	t.Parallel()
 	seg := FitSplineSeg{
 		Fit:    []Point2{{U: 3, V: 4}, {U: 3, V: 4}, {U: 3, V: 4}},
 		TStart: 0, TEnd: 1,
@@ -209,6 +221,7 @@ func TestFitSplineAllCoincidentReturnsNoSpans(t *testing.T) {
 // same "full domain" cause every other Tier A kind reports for a trimmed
 // range (spline design §2) — never the interpolant conversion's own reason.
 func TestFitSplineTrimmedRangeRefusesAtFullDomainGate(t *testing.T) {
+	t.Parallel()
 	seg := FitSplineSeg{
 		Fit:    []Point2{{U: 0}, {U: 1, V: 1}, {U: 2}},
 		TStart: 0.25, TEnd: 0.75,

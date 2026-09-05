@@ -24,6 +24,7 @@ func testKernel() *pairKernel {
 }
 
 func TestDegOracleIsThreeValued(t *testing.T) {
+	t.Parallel()
 	k := testKernel()
 	z := r3.NewVec(0, 0, 1)
 
@@ -84,6 +85,7 @@ func torFace(center, axis r3.Vec, major, minor float64) *cFace {
 }
 
 func TestDegSpineSupIsBoundedOnlyWhenProven(t *testing.T) {
+	t.Parallel()
 	k := testKernel()
 	z := r3.NewVec(0, 0, 1)
 
@@ -132,6 +134,7 @@ func TestDegSpineSupIsBoundedOnlyWhenProven(t *testing.T) {
 }
 
 func TestDegCertifiedContainment(t *testing.T) {
+	t.Parallel()
 	k := testKernel()
 	z := r3.NewVec(0, 0, 1)
 
@@ -164,6 +167,7 @@ func TestDegCertifiedContainment(t *testing.T) {
 }
 
 func TestDegPointCircleCritsNeverGuessAnAzimuth(t *testing.T) {
+	t.Parallel()
 	k := testKernel()
 	z := r3.NewVec(0, 0, 1)
 	center := r3.NewVec(0, 0, 0)
@@ -199,6 +203,7 @@ func TestDegPointCircleCritsNeverGuessAnAzimuth(t *testing.T) {
 }
 
 func TestDegCircleCircleCritsNeedExactCoaxiality(t *testing.T) {
+	t.Parallel()
 	k := testKernel()
 	z := r3.NewVec(0, 0, 1)
 	outer := torFace(r3.NewVec(0, 0, 0), z, 10, 2)
@@ -225,6 +230,7 @@ func TestDegCircleCircleCritsNeedExactCoaxiality(t *testing.T) {
 }
 
 func TestRatPolyOfRejectsNonFiniteCoefficient(t *testing.T) {
+	t.Parallel()
 	for _, coeff := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
 		p, ok := ratPolyOf(1, coeff, 2)
 		require.False(t, ok)
@@ -233,6 +239,7 @@ func TestRatPolyOfRejectsNonFiniteCoefficient(t *testing.T) {
 }
 
 func TestLineCircleBracketsRejectsNonFinitePolynomial(t *testing.T) {
+	t.Parallel()
 	cp := circleParam{
 		c: [3]float64{math.MaxFloat64, 0, 0},
 		u: [3]float64{1, 0, 0},
@@ -252,6 +259,7 @@ func TestLineCircleBracketsRejectsNonFinitePolynomial(t *testing.T) {
 }
 
 func TestLineCircleBracketsAcceptsFinitePolynomial(t *testing.T) {
+	t.Parallel()
 	cp := circleParam{
 		c: [3]float64{3, 0, 0},
 		u: [3]float64{1, 0, 0},
@@ -271,6 +279,7 @@ func TestLineCircleBracketsAcceptsFinitePolynomial(t *testing.T) {
 }
 
 func TestTorusCrossingsRejectsNonFinitePolynomial(t *testing.T) {
+	t.Parallel()
 	face := cFace{
 		kind:   ckTorus,
 		axis:   r3.NewVec(0, 0, 1),
@@ -348,6 +357,7 @@ func requireP8SpineFixtures(tb testing.TB) {
 // lineCircleBracketsContext and circleCircleBracketsContext would then be
 // measuring a different curve than their float references do.
 func TestP8SpineFixturesAreCircles(t *testing.T) {
+	t.Parallel()
 	requireP8SpineFixtures(t)
 
 	for _, cp := range []struct {
@@ -431,6 +441,7 @@ func p8SpineChain(t *testing.T) []ratPoly {
 // here, so the third poll lands mid-build, and the converted chain reports
 // the same refusal.
 func TestSturmChainBuildPollsPerMember(t *testing.T) {
+	t.Parallel()
 	p := p8SpinePoly(t)
 	require.Greater(t, len(mustSturmChain(t, p)), 3, "the fixture chain must outlast the poll budget below")
 
@@ -451,6 +462,7 @@ func TestSturmChainBuildPollsPerMember(t *testing.T) {
 // context reports cancellation only while sturmChainContext is on the stack,
 // so an error here cannot have come from an earlier phase boundary.
 func TestTorusCrossingsCancellationReachesTheChainBuild(t *testing.T) {
+	t.Parallel()
 	face := torFace(r3.Vec{}, r3.NewVec(0, 0, 1), 5, 1)
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "sturmChainContext"}
 
@@ -472,6 +484,7 @@ func TestTorusCrossingsCancellationReachesTheChainBuild(t *testing.T) {
 // sturmVarAt reports over the integer chain must match the count the old
 // rpEval-based algorithm would have computed from the very same signs.
 func TestSturmVarAtMatchesRationalHornerSigns(t *testing.T) {
+	t.Parallel()
 	rationalRoots := ratPoly{big.NewRat(-6, 1), big.NewRat(11, 1), big.NewRat(-6, 1), big.NewRat(1, 1)} // (x-1)(x-2)(x-3)
 	zeroCoeff := ratPoly{big.NewRat(6, 1), big.NewRat(-5, 1), new(big.Rat), big.NewRat(1, 1)}           // x^3 - 5x + 6, x^2 coefficient is zero
 	constLastMember := ratPoly{big.NewRat(2, 1), big.NewRat(3, 1)}                                      // 2 + 3x; its chain's last member is the constant 3
@@ -531,6 +544,7 @@ func TestSturmVarAtMatchesRationalHornerSigns(t *testing.T) {
 // admissible transformation the design permits (docs/clearance-design.md
 // §4's "cannot lie" guarantee).
 func TestClearDenomsIsAPositiveRescaling(t *testing.T) {
+	t.Parallel()
 	p := ratPoly{big.NewRat(1, 3), big.NewRat(-2, 7), big.NewRat(5, 1), big.NewRat(-11, 13)}
 	out := clearDenoms(p)
 	require.Len(t, out, len(p))
@@ -568,6 +582,7 @@ func TestClearDenomsIsAPositiveRescaling(t *testing.T) {
 // straddle (rpEval's sign flips low-to-high across the narrowed interval)
 // and the numeric answer (√2) the branch history must have produced.
 func TestRefineRootCachedVariationMatchesRecount(t *testing.T) {
+	t.Parallel()
 	p := ratPoly{big.NewRat(-2, 1), new(big.Rat), big.NewRat(1, 1)}
 	chain := mustSturmChainInt(t, p)
 	ivs, err := rpIsolateRootsContext(t.Context(), p, chain)
@@ -666,6 +681,7 @@ func tierSphereFace(x float64) *cFace {
 }
 
 func TestClearanceEnumerationCountsVertexTierFaces(t *testing.T) {
+	t.Parallel()
 	faces := make([]*cFace, workPollInterval+64)
 	for i := range faces {
 		faces[i] = tierSphereFace(100 + float64(i))
@@ -685,6 +701,7 @@ func TestClearanceEnumerationCountsVertexTierFaces(t *testing.T) {
 }
 
 func TestVertexTierCountsEdges(t *testing.T) {
+	t.Parallel()
 	edges := make([]*cEdge, workPollInterval+64)
 	for i := range edges {
 		y := 100 + float64(i)
@@ -704,6 +721,7 @@ func TestVertexTierCountsEdges(t *testing.T) {
 }
 
 func TestVertexFaceCountsBoundaryDistance(t *testing.T) {
+	t.Parallel()
 	region := internalPolygonRegion(t, 0, 0, 100, workPollInterval+64)
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "regionBoundaryDistBudget"}
 	k := &pairKernel{ctx: ctx, tol: region.tol()}
@@ -715,6 +733,7 @@ func TestVertexFaceCountsBoundaryDistance(t *testing.T) {
 }
 
 func TestVertexFaceCountsWindingScan(t *testing.T) {
+	t.Parallel()
 	region := internalPolygonRegion(t, 0, 0, 100, workPollInterval-16)
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "regionContainsBudget"}
 	k := &pairKernel{ctx: ctx, tol: region.tol()}
@@ -726,6 +745,7 @@ func TestVertexFaceCountsWindingScan(t *testing.T) {
 }
 
 func TestVertexTierPropagatesBudgetExhaustion(t *testing.T) {
+	t.Parallel()
 	exhausted := errors.New("work budget exhausted")
 	steps := 0
 	budget := &workBudget{
@@ -748,6 +768,7 @@ func TestVertexTierPropagatesBudgetExhaustion(t *testing.T) {
 }
 
 func TestVertexTierBudgetKeepsNormalResult(t *testing.T) {
+	t.Parallel()
 	region := internalPolygonRegion(t, 0, 1, 10, 4)
 	k := &pairKernel{ctx: t.Context(), tol: region.tol()}
 	sink := &cellSink{}

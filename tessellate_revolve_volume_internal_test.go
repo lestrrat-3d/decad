@@ -110,6 +110,7 @@ func tripleIntegralReference(z0, rho0, z1, rho1, dphi float64, n int) float64 {
 }
 
 func TestRevolveAngularHomotopyFactorEnclosesTheAngularIntegral(t *testing.T) {
+	t.Parallel()
 	// The angular factor alone is the triple integral of a cell whose meridian
 	// chord has |z'| = 1 and ρ ≡ 1, since ∫ρ² dt is then 1.
 	for _, dphi := range []float64{2 * math.Pi / 3, 2 * math.Pi / 8, 2 * math.Pi / 40, 1.0, 3.0, 5.5} {
@@ -124,6 +125,7 @@ func TestRevolveAngularHomotopyFactorEnclosesTheAngularIntegral(t *testing.T) {
 }
 
 func TestRevolveAngularHomotopyFactorFollowsTheCubeOfTheStep(t *testing.T) {
+	t.Parallel()
 	// A small angular step's factor is dφ³/12 to leading order — which is what
 	// makes Σ Icell reproduce a chorded cylinder's own volume deficit — so
 	// halving the step must divide the factor by very nearly eight.
@@ -149,6 +151,7 @@ func mustAngularFactor(t *testing.T, dphi float64) *big.Rat {
 }
 
 func TestRevolveAngularHomotopyFactorRefusesAnUnenclosableStep(t *testing.T) {
+	t.Parallel()
 	// A reversed enclosure states no angle at all, and §11's integral may not
 	// be answered from one: the mesh refuses rather than publishing a figure it
 	// cannot stand behind.
@@ -157,6 +160,7 @@ func TestRevolveAngularHomotopyFactorRefusesAnUnenclosableStep(t *testing.T) {
 }
 
 func TestRevolveCellSweptVolumeBoundsTheCellIntegral(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name               string
 		z0, rho0, z1, rho1 float64
@@ -184,6 +188,7 @@ func TestRevolveCellSweptVolumeBoundsTheCellIntegral(t *testing.T) {
 }
 
 func TestRevolveCellSweptVolumeIsZeroForAnAxisLevelCell(t *testing.T) {
+	t.Parallel()
 	// A planar cap's own meridian cell runs at a fixed z, so its angular
 	// homotopy moves nothing along the axis and sweeps no volume at all: |z'|
 	// is the factor that vanishes.
@@ -194,6 +199,7 @@ func TestRevolveCellSweptVolumeIsZeroForAnAxisLevelCell(t *testing.T) {
 }
 
 func TestRevolveMeshSymDiffBoundsTheCylinderVolumeDeficit(t *testing.T) {
+	t.Parallel()
 	// The falsifier for the whole §11 composition: a chorded cylinder is
 	// inscribed in the one it stands for, so the exact symmetric difference IS
 	// the analytic volume minus the mesh's own. volSymDiff must cover it.
@@ -219,6 +225,7 @@ func TestRevolveMeshSymDiffBoundsTheCylinderVolumeDeficit(t *testing.T) {
 }
 
 func TestRevolveMeshSymDiffFallsWithTolerance(t *testing.T) {
+	t.Parallel()
 	body := internalCylinderBody(t)
 
 	coarse, err := tessellateContext(t.Context(), body, units.Millimeters(0.2))
@@ -231,6 +238,7 @@ func TestRevolveMeshSymDiffFallsWithTolerance(t *testing.T) {
 }
 
 func TestRevolveMeridianMomentChargesACurvedGenerator(t *testing.T) {
+	t.Parallel()
 	// A sphere's generator is one circular walk, so B0 and BM genuinely differ
 	// and Mmeridian is the term that says by how much. A cylinder's is straight,
 	// so its slivers are empty and the term is exactly zero.
@@ -246,6 +254,7 @@ func TestRevolveMeridianMomentChargesACurvedGenerator(t *testing.T) {
 }
 
 func TestRevolveSweepUpperNeverUnderstatesAFullTurn(t *testing.T) {
+	t.Parallel()
 	body := internalCylinderBody(t)
 	plan, err := planRevolve(t.Context(), body, body.payload.(revolvePayload), 0.05)
 	require.NoError(t, err)
@@ -255,6 +264,7 @@ func TestRevolveSweepUpperNeverUnderstatesAFullTurn(t *testing.T) {
 }
 
 func TestPairChordToleranceClearsARevolveCoordinateReservation(t *testing.T) {
+	t.Parallel()
 	// A revolve reserves both coordinate stages out of its tolerance before it
 	// chords anything (docs/tessellation-design.md §8), so a small part modelled
 	// at a large coordinate needs more tolerance than the pair's own diameter
@@ -301,6 +311,7 @@ func TestPairChordToleranceClearsARevolveCoordinateReservation(t *testing.T) {
 }
 
 func TestAngularHomotopyBulgesBoundTheSecondDerivatives(t *testing.T) {
+	t.Parallel()
 	// The per-piece allowance rests on max|f''| for each of P and Q. Both bounds
 	// are elementary rather than derived, so the falsifier is a dense numeric
 	// second difference of the very functions revolveAngularHomotopyFactor
@@ -333,6 +344,7 @@ func TestAngularHomotopyBulgesBoundTheSecondDerivatives(t *testing.T) {
 }
 
 func TestRevolveSymDiffChargesEveryStageSeparately(t *testing.T) {
+	t.Parallel()
 	// docs/tessellation-design.md §11's four stages are ABSOLUTE swept volumes
 	// that may never cancel one another, so each of them must move the published
 	// figure on its own. Feeding the composition one stage at a time is the
@@ -376,6 +388,7 @@ func TestRevolveSymDiffChargesEveryStageSeparately(t *testing.T) {
 }
 
 func TestRevolveSymDiffRefusesAnAbsentAngularTerm(t *testing.T) {
+	t.Parallel()
 	mesh, err := tessellateContext(t.Context(), internalCylinderBody(t), units.Millimeters(0.05))
 	require.NoError(t, err)
 	body := internalCylinderBody(t)

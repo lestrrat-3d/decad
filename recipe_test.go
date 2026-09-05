@@ -127,6 +127,7 @@ func rejectStepMutationBothWays(
 }
 
 func TestStepOperationShapes(t *testing.T) {
+	t.Parallel()
 	ops := []decad.OpKind{
 		decad.OpExtrude,
 		decad.OpRevolve,
@@ -153,6 +154,7 @@ func TestStepOperationShapes(t *testing.T) {
 }
 
 func TestStepOperationShapeRejectsMissingAndExtraFields(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		op           decad.OpKind
 		missingStep  func(*decad.Step)
@@ -272,6 +274,7 @@ func TestStepOperationShapeRejectsMissingAndExtraFields(t *testing.T) {
 }
 
 func TestStepAndRecipeRejectUnknownOperationFields(t *testing.T) {
+	t.Parallel()
 	var step decad.Step
 	err := json.Unmarshal([]byte(`{"op":"union","inputs":[0,1],"unexpected":true}`), &step)
 	require.ErrorContains(t, err, `unknown field "unexpected"`)
@@ -283,6 +286,7 @@ func TestStepAndRecipeRejectUnknownOperationFields(t *testing.T) {
 }
 
 func TestStepAndRecipeRejectDuplicateJSONFields(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input string
@@ -312,6 +316,7 @@ func TestStepAndRecipeRejectDuplicateJSONFields(t *testing.T) {
 }
 
 func TestStepShapeGateRunsBeforeTypedPayloadDecoding(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		step string
@@ -378,6 +383,7 @@ func TestStepShapeGateRunsBeforeTypedPayloadDecoding(t *testing.T) {
 }
 
 func TestStepAndRecipeRejectCaseVariantOperationFields(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input string
@@ -408,6 +414,7 @@ func TestStepAndRecipeRejectCaseVariantOperationFields(t *testing.T) {
 }
 
 func TestStepAndRecipeRejectNullOperationElements(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input string
@@ -452,6 +459,7 @@ func TestStepAndRecipeRejectNullOperationElements(t *testing.T) {
 }
 
 func TestStepOperationShapeRejectsWrongCountsAndTypes(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		op         decad.OpKind
@@ -558,6 +566,7 @@ func TestStepOperationShapeRejectsWrongCountsAndTypes(t *testing.T) {
 }
 
 func TestRecipeRoundTrip(t *testing.T) {
+	t.Parallel()
 	// A real recorded profile makes the step's payload the genuine article.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -597,6 +606,7 @@ func TestRecipeRoundTrip(t *testing.T) {
 }
 
 func TestExtentCodec(t *testing.T) {
+	t.Parallel()
 	// Every extent variant round-trips through a step, nested sides included.
 	for _, e := range []decad.Extent{
 		decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
@@ -635,6 +645,7 @@ func TestExtentCodec(t *testing.T) {
 }
 
 func TestDirectionAndOpKindCodec(t *testing.T) {
+	t.Parallel()
 	// Directions and op kinds travel by name, so a renumbered constant can
 	// never silently reinterpret an old recipe.
 	buf, err := json.Marshal(decad.Step{Op: decad.OpCut, Inputs: []decad.StepRef{2, 5}})
@@ -653,6 +664,7 @@ func TestDirectionAndOpKindCodec(t *testing.T) {
 }
 
 func TestStepCodecRejectsInvalidUnionSliceShapes(t *testing.T) {
+	t.Parallel()
 	var nullStep decad.Step
 	require.Error(t, json.Unmarshal([]byte(`{"op":"union","inputs":null,"values":null}`), &nullStep))
 
@@ -661,6 +673,7 @@ func TestStepCodecRejectsInvalidUnionSliceShapes(t *testing.T) {
 }
 
 func TestStepOptsCodec(t *testing.T) {
+	t.Parallel()
 	step := validCodecStep(decad.OpExtrude)
 	step.Opts = decad.ExtrudeOpts{Taper: units.Degrees(-3)}
 	buf, err := json.Marshal(step)
@@ -676,6 +689,7 @@ func TestStepOptsCodec(t *testing.T) {
 }
 
 func TestStepModifyValuesRequirePositiveLengths(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		value units.Value
@@ -715,6 +729,7 @@ func TestStepModifyValuesRequirePositiveLengths(t *testing.T) {
 }
 
 func TestStepExtrudeTaperRequiresFiniteAngle(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		taper units.Value
@@ -750,6 +765,7 @@ func TestStepExtrudeTaperRequiresFiniteAngle(t *testing.T) {
 }
 
 func TestStepOptsCodecRequiresPayloadFields(t *testing.T) {
+	t.Parallel()
 	var step decad.Step
 	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","opts":{"kind":"extrude"}}`), &step),
 		`extrude options require taper`)
@@ -762,6 +778,7 @@ func TestStepOptsCodecRequiresPayloadFields(t *testing.T) {
 }
 
 func TestStepOptsCodecAcceptsPresentPayloadFields(t *testing.T) {
+	t.Parallel()
 	base := validCodecStep(decad.OpExtrude)
 	raw, err := json.Marshal(base)
 	require.NoError(t, err)
@@ -788,12 +805,14 @@ func TestStepOptsCodecAcceptsPresentPayloadFields(t *testing.T) {
 }
 
 func TestStepOptsCodecRejectsInvalidPayloadFields(t *testing.T) {
+	t.Parallel()
 	var step decad.Step
 	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","opts":{"kind":"extrude","taper":"not-a-value"}}`), &step))
 	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","opts":{"kind":"shell","sense":"sideways"}}`), &step))
 }
 
 func TestPlacementKeyingCodec(t *testing.T) {
+	t.Parallel()
 	// The Placement keying is presence-aware and bidirectional: the placing
 	// ops REQUIRE a nonzero placement, every other op FORBIDS the field.
 	motion, err := r3.Translation(r3.NewVec(0, 0, 25))
@@ -851,6 +870,7 @@ func TestPlacementKeyingCodec(t *testing.T) {
 }
 
 func TestPlacementCodecRejectsNonRigidBasis(t *testing.T) {
+	t.Parallel()
 	// Construct the malformed record in memory and generate its wire form so
 	// this regression does not preserve a hand-written malformed JSON example.
 	placement := decad.TransformRecord{
@@ -896,6 +916,7 @@ func TestPlacementCodecRejectsNonRigidBasis(t *testing.T) {
 }
 
 func TestRecipePointerForms(t *testing.T) {
+	t.Parallel()
 	// The sealed sets use value receivers, so pointer forms satisfy the
 	// interfaces; the codecs normalize them to values and reject nil.
 	step := validCodecStep(decad.OpExtrude)
@@ -966,6 +987,7 @@ func validRecipeJSON(t *testing.T, steps ...string) string {
 }
 
 func TestRecipeDecodeErrorPathIncludesProfilePosition(t *testing.T) {
+	t.Parallel()
 	profileWithBadHelix := validRecipeStepJSON(t, decad.OpExtrude, func(fields map[string]json.RawMessage) {
 		fields["profile"] = json.RawMessage(`{
 			"outer": {"segments": [{"kind": "line", "start": {"u": 0, "v": 0}, "end": {"u": 1, "v": 0}, "t_start": 0, "t_end": 1}]},
@@ -994,6 +1016,7 @@ func TestRecipeDecodeErrorPathIncludesProfilePosition(t *testing.T) {
 }
 
 func TestRecipeDecodeErrorPathIncludesSelectorPosition(t *testing.T) {
+	t.Parallel()
 	shellWithBadSelector := validRecipeStepJSON(t, decad.OpShell, func(fields map[string]json.RawMessage) {
 		fields["selectors"] = json.RawMessage(`[{"kind": "faces", "preds": [{"kind": "planar"}, {"kind": "warp"}]}]`)
 	})
@@ -1006,6 +1029,7 @@ func TestRecipeDecodeErrorPathIncludesSelectorPosition(t *testing.T) {
 }
 
 func TestRecipeDecodeErrorPathIncludesPredicateRefLeaf(t *testing.T) {
+	t.Parallel()
 	filletWithBadStepRef := validRecipeStepJSON(t, decad.OpFillet, func(fields map[string]json.RawMessage) {
 		fields["selectors"] = json.RawMessage(`[{"kind": "edges", "preds": [{"kind": "convex"}, {"kind": "created_by", "ref": {"step": 1.5, "role": "capStart"}}]}]`)
 	})
@@ -1018,6 +1042,7 @@ func TestRecipeDecodeErrorPathIncludesPredicateRefLeaf(t *testing.T) {
 }
 
 func TestRecipeDecodeErrorPathIncludesSemanticSegmentField(t *testing.T) {
+	t.Parallel()
 	profileWithDegenerateLine := validRecipeStepJSON(t, decad.OpExtrude, func(fields map[string]json.RawMessage) {
 		fields["profile"] = json.RawMessage(`{"outer":{"segments":[{"kind":"line","start":{"u":0,"v":0},"end":{"u":1,"v":0},"t_start":0.5,"t_end":0.5}]}}`)
 	})
@@ -1030,6 +1055,7 @@ func TestRecipeDecodeErrorPathIncludesSemanticSegmentField(t *testing.T) {
 }
 
 func TestRecipeDecodeErrorPathIncludesNestedClosedFields(t *testing.T) {
+	t.Parallel()
 	extrudeWithBadFaceSelector := validRecipeStepJSON(t, decad.OpExtrude, func(fields map[string]json.RawMessage) {
 		fields["extent"] = json.RawMessage(`{"kind":"two_sided","one":{"kind":"to_face","body":0,"face":{"kind":"faces","preds":[{"kind":"planar"},{"kind":"warp"}]},"offset":"0 mm"},"two":{"kind":"through_all_side"}}`)
 	})
@@ -1052,6 +1078,7 @@ func TestRecipeDecodeErrorPathIncludesNestedClosedFields(t *testing.T) {
 }
 
 func TestRecipeDecodeErrorPathIncludesEmptyExtentLeaf(t *testing.T) {
+	t.Parallel()
 	revolveWithUnexpectedAngularField := validRecipeStepJSON(t, decad.OpRevolve, func(fields map[string]json.RawMessage) {
 		fields["angular"] = json.RawMessage(`{"kind":"full_revolution","a":"90 deg"}`)
 	})
@@ -1064,6 +1091,7 @@ func TestRecipeDecodeErrorPathIncludesEmptyExtentLeaf(t *testing.T) {
 }
 
 func TestRecipeDecodeErrorPathIncludesPrimitiveArrayIndex(t *testing.T) {
+	t.Parallel()
 	unionWithBadInput := validRecipeStepJSON(t, decad.OpUnion, func(fields map[string]json.RawMessage) {
 		fields["inputs"] = json.RawMessage(`[0, "bad"]`)
 	})
@@ -1076,6 +1104,7 @@ func TestRecipeDecodeErrorPathIncludesPrimitiveArrayIndex(t *testing.T) {
 }
 
 func TestRecipeDecodeErrorPathIncludesCustomScalarAndInnerArray(t *testing.T) {
+	t.Parallel()
 	extrudeWithBadRadius := validRecipeStepJSON(t, decad.OpExtrude, func(fields map[string]json.RawMessage) {
 		fields["profile"] = json.RawMessage(`{"outer":{"segments":[{"kind":"circle","center":{"u":0,"v":0},"radius":"bad","ccw":true,"t_start":0,"t_end":1}]}}`)
 	})
@@ -1103,6 +1132,7 @@ func TestRecipeDecodeErrorPathIncludesCustomScalarAndInnerArray(t *testing.T) {
 }
 
 func TestRecipeDecodeErrorPathFollowsReturnedCustomFieldError(t *testing.T) {
+	t.Parallel()
 	extrudeWithBadCircleFields := validRecipeStepJSON(t, decad.OpExtrude, func(fields map[string]json.RawMessage) {
 		fields["profile"] = json.RawMessage(`{"outer":{"segments":[{"kind":"circle","ccw":"bad","center":{"u":0,"v":0},"radius":"bad","t_start":0,"t_end":1}]}}`)
 	})
@@ -1110,6 +1140,7 @@ func TestRecipeDecodeErrorPathFollowsReturnedCustomFieldError(t *testing.T) {
 }
 
 func TestRecipeDecodeErrorPathIncludesStepField(t *testing.T) {
+	t.Parallel()
 	requireRecipeDecodePath(t, validRecipeJSON(t,
 		validRecipeStepJSON(t, decad.OpUnion, nil),
 		`{"op":"warp"}`,
@@ -1123,6 +1154,7 @@ func TestRecipeDecodeErrorPathIncludesStepField(t *testing.T) {
 }
 
 func TestRecipeDecodeErrorPathUsesStepForForbiddenAxis(t *testing.T) {
+	t.Parallel()
 	requireRecipeDecodePath(t, `{
 		"steps": [{
 			"op": "extrude",
@@ -1133,6 +1165,7 @@ func TestRecipeDecodeErrorPathUsesStepForForbiddenAxis(t *testing.T) {
 }
 
 func TestRecipeDecodeErrorPreservesSpecificCause(t *testing.T) {
+	t.Parallel()
 	filletWithDegenerateSelector := validRecipeStepJSON(t, decad.OpFillet, func(fields map[string]json.RawMessage) {
 		fields["selectors"] = json.RawMessage(`[{"kind":"edges","preds":[],"exactly":0}]`)
 	})
@@ -1140,6 +1173,7 @@ func TestRecipeDecodeErrorPreservesSpecificCause(t *testing.T) {
 }
 
 func TestLoopRecordDecodeErrorIncludesSegmentIndex(t *testing.T) {
+	t.Parallel()
 	var loop decad.LoopRecord
 	err := json.Unmarshal([]byte(`{
 		"segments": [{"kind": "line", "start": {"u": 0, "v": 0}, "end": {"u": 1, "v": 0}, "t_start": 0, "t_end": 1}, {"kind": "helix"}]

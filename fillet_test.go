@@ -132,6 +132,7 @@ func (s retiringEdgeSelector) SelectEdges(body *decad.Body) ([]*decad.Edge, erro
 }
 
 func TestFilletContextCancellationAtCommitLeavesReceiverLive(t *testing.T) {
+	t.Parallel()
 	doc, box := filletBox(t)
 	before := doc.Recipe()
 	ctx := &commitBoundaryCancelContext{Context: t.Context()}
@@ -145,6 +146,7 @@ func TestFilletContextCancellationAtCommitLeavesReceiverLive(t *testing.T) {
 }
 
 func TestFilletContextCancellationDuringPreAuditLeavesReceiverLive(t *testing.T) {
+	t.Parallel()
 	doc, box := filletBox(t)
 	before := doc.Recipe()
 	ctx := &preAuditScanCancelContext{Context: t.Context()}
@@ -159,6 +161,7 @@ func TestFilletContextCancellationDuringPreAuditLeavesReceiverLive(t *testing.T)
 }
 
 func TestFilletContextCancellationDuringAuditPreservesError(t *testing.T) {
+	t.Parallel()
 	for _, cancelErr := range []error{context.Canceled, context.DeadlineExceeded} {
 		t.Run(cancelErr.Error(), func(t *testing.T) {
 			doc, box := manySidedPrism(t, 300)
@@ -177,6 +180,7 @@ func TestFilletContextCancellationDuringAuditPreservesError(t *testing.T) {
 }
 
 func TestFilletSelectorAdmission(t *testing.T) {
+	t.Parallel()
 	t.Run("BuiltInQuery", func(t *testing.T) {
 		doc, box := filletBox(t)
 
@@ -219,6 +223,7 @@ func TestFilletSelectorAdmission(t *testing.T) {
 }
 
 func TestFilletBoxAllConvexEdges(t *testing.T) {
+	t.Parallel()
 	const r = 10.0
 	h := filletBoxHeight
 	doc, box := filletBox(t)
@@ -303,6 +308,7 @@ func TestFilletBoxAllConvexEdges(t *testing.T) {
 }
 
 func TestFilletRecipeAndRetire(t *testing.T) {
+	t.Parallel()
 	const r = 8.0
 	doc, box := filletBox(t)
 	body, err := box.Fillet(verticalEdges(), units.Millimeters(r))
@@ -333,6 +339,7 @@ func TestFilletRecipeAndRetire(t *testing.T) {
 }
 
 func TestFilletSelectorIsRecordedUnresolved(t *testing.T) {
+	t.Parallel()
 	// The step stores a clone of the query, not the caller's, and never the
 	// edges it resolved to (core §9 / §11).
 	doc, box := filletBox(t)
@@ -348,6 +355,7 @@ func TestFilletSelectorIsRecordedUnresolved(t *testing.T) {
 }
 
 func TestFilletConcaveEdgeReadsMinRadius(t *testing.T) {
+	t.Parallel()
 	// An L-shaped section has one reflex (concave) lateral edge; rounding it
 	// fills material in with a concave arc, and the minimum-radius survey reads
 	// its radius (Table D, D3).
@@ -413,6 +421,7 @@ func TestFilletConcaveEdgeReadsMinRadius(t *testing.T) {
 }
 
 func TestFilletLineArcCorner(t *testing.T) {
+	t.Parallel()
 	// A quarter-disk prism: the corner where the flat wall meets the curved
 	// wall is a line/arc corner. Rounding it builds, exactly, adding one blend
 	// cylinder to the section's own quarter cylinder.
@@ -465,6 +474,7 @@ func TestFilletLineArcCorner(t *testing.T) {
 }
 
 func TestFilletArcArcCorner(t *testing.T) {
+	t.Parallel()
 	// A lens of two circular arcs: each of its two pointed corners is an
 	// arc/arc corner. Rounding both builds exactly, replacing each corner with
 	// a blend cylinder.
@@ -521,6 +531,7 @@ func TestFilletArcArcCorner(t *testing.T) {
 }
 
 func TestFilletRefusals(t *testing.T) {
+	t.Parallel()
 	_, box := filletBox(t)
 
 	// A zero radius is the body the caller already holds: S13.
@@ -549,6 +560,7 @@ func TestFilletRefusals(t *testing.T) {
 }
 
 func TestFilletTooLargeRadius(t *testing.T) {
+	t.Parallel()
 	// A radius larger than a circular carrier's own radius has no blend centre:
 	// its inward offset is empty (S5, ErrDegenerate). The caller is refused,
 	// never handed a clipped body.
@@ -580,6 +592,7 @@ func TestFilletTooLargeRadius(t *testing.T) {
 }
 
 func TestFilletOverLargeRadiusFlippingLoopIsUnsupported(t *testing.T) {
+	t.Parallel()
 	// The fillet analogue of the chamfer overrun: a radius whose tangent feet run
 	// past their adjacent walls' far ends is S6 (ErrUnsupported), even when the
 	// rewrite also turns the loop inside out. At r = 120 on the 100×60 box each
@@ -624,6 +637,7 @@ func plateWithSquareHole(t *testing.T, off float64) (*decad.Document, *decad.Bod
 }
 
 func TestFilletBoundaryContactRefused(t *testing.T) {
+	t.Parallel()
 	// A large fillet can bring the rewritten section's loops into BOUNDARY
 	// CONTACT — here the outer corner's blend arc passes exactly through the
 	// hole's corner (the hole sits at r·(1 − 1/√2) on the corner diagonal), a
@@ -650,6 +664,7 @@ func TestFilletBoundaryContactRefused(t *testing.T) {
 }
 
 func TestFilletClearOfHoleBuilds(t *testing.T) {
+	t.Parallel()
 	// The same plate-with-hole, but a radius whose blend arcs stay well clear of
 	// the hole: the rewritten loops are disjoint, so the fillet builds and the
 	// body is watertight and Sound — the widened audit does not over-reject.
@@ -700,6 +715,7 @@ func plateWithDiskHole(t *testing.T, cx, cy, rho float64) (*decad.Document, *dec
 }
 
 func TestFilletHoleOutsideRoundedLoopRefused(t *testing.T) {
+	t.Parallel()
 	// A large fillet can shrink the outer loop PAST a near-corner hole without the
 	// hole ever crossing or touching an outer segment: the (0,0) corner's r = 20
 	// blend arc has centre (20,20), and the hole at (3,3) r = 1 lies at distance
@@ -724,6 +740,7 @@ func TestFilletHoleOutsideRoundedLoopRefused(t *testing.T) {
 }
 
 func TestFilletHoleWellInsideRoundedLoopBuilds(t *testing.T) {
+	t.Parallel()
 	// The mirror of the refusal: a hole comfortably inside the rounded outer loop
 	// still builds and tessellates Sound. A small r = 5 fillet at (0,0) leaves the
 	// hole at the plate's centre untouched and well contained, so the containment
@@ -795,6 +812,7 @@ func scaledDiskInCornerFillet(t *testing.T, k, gapMult float64) error {
 }
 
 func TestFilletContactToleranceScaleInvariant(t *testing.T) {
+	t.Parallel()
 	// The boundary-contact test is anchored to the SECTION'S scale (δ = ε·D),
 	// not a fixed absolute band, so the SAME relative geometry decides the same
 	// way at any absolute size. Here a gap of 10× the noise floor — comfortably
@@ -847,6 +865,7 @@ func revolvedRing(t *testing.T) *decad.Body {
 }
 
 func TestFilletNonPrismReceiver(t *testing.T) {
+	t.Parallel()
 	// A revolve is not a prismPayload, so a fillet of it is staged: S3.
 	body := revolvedRing(t)
 	sel := decad.Edges(decad.Circular())
@@ -883,6 +902,7 @@ func requireReasonLeads(t *testing.T, err error, reason string) {
 }
 
 func TestModifyRefusalLeadsWithItsReason(t *testing.T) {
+	t.Parallel()
 	// A modify refusal states its sentinel and its reason first and appends the
 	// selector and the entities it matched, so the operative words are not buried
 	// behind a per-edge dump. errors.Is still branches on the sentinel.
@@ -928,6 +948,7 @@ func TestModifyRefusalLeadsWithItsReason(t *testing.T) {
 }
 
 func TestModifyRefusalRendersAClosedCircleAsClosed(t *testing.T) {
+	t.Parallel()
 	// A full circle's edge has coincident start and end vertices, so the from/to
 	// form renders it "from (p) to (p)" — correct, yet indistinguishable from a
 	// collapsed edge. A Circle3 says it is closed and reports its centre and

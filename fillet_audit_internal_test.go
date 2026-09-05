@@ -10,6 +10,7 @@ import (
 )
 
 func TestNestingAuditCancellationReachesSectionBBox(t *testing.T) {
+	t.Parallel()
 	loop := LoopRecord{Segments: []CurveSegment{
 		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TEnd: 1},
 		LineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 10, V: 10}, TEnd: 1},
@@ -41,6 +42,7 @@ func TestNestingAuditCancellationReachesSectionBBox(t *testing.T) {
 // chord. An arc bulges outside its endpoint box, so an endpoint-only D
 // understates the section diameter the doc claims.
 func TestContactFloorUsesTrueSectionBBox(t *testing.T) {
+	t.Parallel()
 	t.Run("a semicircle bulges outside its endpoint chord", func(t *testing.T) {
 		// A CCW semicircle from (10,0) to (−10,0) about the origin bulges to
 		// (0,10). Its endpoint box is 20 wide, 0 tall (diagonal 20); the TRUE box
@@ -97,6 +99,7 @@ func (c *cancelOnFirstPollContext) Err() error {
 }
 
 func TestRewriteLoopChargesEachWalkToBudget(t *testing.T) {
+	t.Parallel()
 	walks := make([]sideWalk, workPollInterval)
 	for i := range walks {
 		walks[i] = sideWalk{segmentWalk: segmentWalk{
@@ -119,6 +122,7 @@ func TestRewriteLoopChargesEachWalkToBudget(t *testing.T) {
 // ErrDegenerate — even though the loop genuinely inverted. The two-corner case
 // (both ends of one wall) is exercised end-to-end by TestChamferOverLargeSetbackRefused.
 func TestAuditRewriteSingleCornerOverrunIsUnsupported(t *testing.T) {
+	t.Parallel()
 	// A CCW 100×60 rectangle: positive signed area, four right-angle corners,
 	// corner 0 at the origin (arriving down the left wall, leaving along the
 	// bottom wall). Both walls at corner 0 are shorter than the setback below.
@@ -201,6 +205,7 @@ func sectionCornerLoops(t *testing.T, prof ProfileRecord) []cornerLoop {
 // section's loops into contact without ever crossing them, and an interior-only
 // test would pass that pinch (S7, ErrUnsupported).
 func TestCrossingAuditRejectsBoundaryContact(t *testing.T) {
+	t.Parallel()
 	v := 20 / math.Sqrt2 // a point on the quarter arc of radius 20 at 45°
 
 	t.Run("inter-loop crossing", func(t *testing.T) {
@@ -269,6 +274,7 @@ func TestCrossingAuditRejectsBoundaryContact(t *testing.T) {
 // false-reject: loops that stay properly apart pass, and the adjacent-endpoint
 // exemption still lets legitimately consecutive segments share their vertex.
 func TestCrossingAuditAcceptsDisjointLoops(t *testing.T) {
+	t.Parallel()
 	t.Run("two well-separated loops", func(t *testing.T) {
 		a := LoopRecord{Segments: []CurveSegment{
 			LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TEnd: 1},
@@ -304,6 +310,7 @@ func TestCrossingAuditAcceptsDisjointLoops(t *testing.T) {
 }
 
 func TestCrossingAuditCancellationIsBounded(t *testing.T) {
+	t.Parallel()
 	segs := make([]segEntry, 40)
 	for i := range segs {
 		y := 10 * float64(i)
@@ -323,6 +330,7 @@ func TestCrossingAuditCancellationIsBounded(t *testing.T) {
 }
 
 func TestNestingAuditCancellationReachesBoundaryScan(t *testing.T) {
+	t.Parallel()
 	segs := make([]segEntry, 0, 301)
 	for i := range 300 {
 		y := 1000 + float64(i)

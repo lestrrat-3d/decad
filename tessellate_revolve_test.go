@@ -99,6 +99,7 @@ func requireSourceFacesLive(t *testing.T, b *decad.Body, mesh *decad.Mesh) {
 }
 
 func TestRevolveTessellateFullCylinder(t *testing.T) {
+	t.Parallel()
 	s, p := solidSketch(t)
 	body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
@@ -155,6 +156,7 @@ func TestRevolveTessellateFullCylinder(t *testing.T) {
 }
 
 func TestRevolveTessellateConeApexIsOneInternedVertex(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -206,6 +208,7 @@ func TestRevolveTessellateConeApexIsOneInternedVertex(t *testing.T) {
 }
 
 func TestRevolveTessellatePartialAxisLineSharesOneCapEdge(t *testing.T) {
+	t.Parallel()
 	s, p := solidSketch(t)
 	body, err := decad.New().Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
@@ -244,6 +247,7 @@ func TestRevolveTessellatePartialAxisLineSharesOneCapEdge(t *testing.T) {
 }
 
 func TestRevolveTessellateAnnulusAndProfileHole(t *testing.T) {
+	t.Parallel()
 	t.Run("planar annulus walls", func(t *testing.T) {
 		s, p := annularSketch(t)
 		body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
@@ -301,6 +305,7 @@ func TestRevolveTessellateAnnulusAndProfileHole(t *testing.T) {
 }
 
 func TestRevolveTessellateReflectedPlacementKeepsOutwardWinding(t *testing.T) {
+	t.Parallel()
 	s, p := solidSketch(t)
 	doc := decad.New()
 	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(120), Dir: decad.Along})
@@ -320,6 +325,7 @@ func TestRevolveTessellateReflectedPlacementKeepsOutwardWinding(t *testing.T) {
 }
 
 func TestRevolveTessellateChargesPlacementRoundingSeparately(t *testing.T) {
+	t.Parallel()
 	// docs/tessellation-design.md §8's deltaR: an identity placement performs
 	// no coordinate operation and adds nothing, while a real motion rounds at
 	// its own magnitude and every source bound carries the difference.
@@ -360,6 +366,7 @@ func TestRevolveTessellateChargesPlacementRoundingSeparately(t *testing.T) {
 }
 
 func TestRevolveTessellateRefusals(t *testing.T) {
+	t.Parallel()
 	t.Run("a tolerance past the facet ceiling refuses", func(t *testing.T) {
 		s, p := solidSketch(t)
 		body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
@@ -393,6 +400,7 @@ func TestRevolveTessellateRefusals(t *testing.T) {
 }
 
 func TestRevolveTessellateExportIsByteIdentical(t *testing.T) {
+	t.Parallel()
 	s, p := solidSketch(t)
 	body, err := decad.New().Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(150), Dir: decad.Along})
 	require.NoError(t, err)
@@ -409,6 +417,7 @@ func TestRevolveTessellateExportIsByteIdentical(t *testing.T) {
 }
 
 func TestRevolveTessellateChordCountFollowsTolerance(t *testing.T) {
+	t.Parallel()
 	s, p := solidSketch(t)
 	body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)

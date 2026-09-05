@@ -81,6 +81,7 @@ func uAndBarBodies(t *testing.T, doc *decad.Document) (u, bar *decad.Body) {
 // regions, now reports one Interference row rather than falling to the mesh
 // path's coplanar refusal.
 func TestVerifyMultiRegionOverlapReportsSummedVolume(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	u, bar := uAndBarBodies(t, doc)
 	before := snapshotDocument(t, doc)
@@ -154,6 +155,7 @@ func exactRectOverlapArea(a, b [4]float64) *big.Rat {
 // the exact rational sum of each rectangle's own overlap with the bar,
 // computed over math/big.Rat from the fixture's own float coordinates.
 func TestVerifyMultiRegionOverlapSumMatchesIndependentRationalAnswer(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	uAndBarBodies(t, doc)
 
@@ -191,6 +193,7 @@ func TestVerifyMultiRegionOverlapSumMatchesIndependentRationalAnswer(t *testing.
 // tiny bound after this PR, which is what §5's normative order (the twin
 // runs first) requires.
 func TestVerifySingleRegionOverlapOrderIsNormative(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 5)
 	b := boxBody(t, doc, 5, 5, 15, 15, 5)
@@ -222,6 +225,7 @@ var combBarPts = [][2]float64{{-2, 4}, {18, 4}, {18, 6}, {-2, 6}}
 // overlaps in three disjoint regions of known area, so a two-region-only
 // implementation cannot pass this fixture by accident.
 func TestVerifyThreeRegionOverlapReportsSummedVolume(t *testing.T) {
+	t.Parallel()
 	const h = 3.0
 	doc := decad.New()
 	comb := polyPrismBody(t, doc, combTeethPts, h)
@@ -250,6 +254,7 @@ func TestVerifyThreeRegionOverlapReportsSummedVolume(t *testing.T) {
 // shared wall but enclose no common area report no Interference row — §4.5's
 // reading never turns a contact into a zero-volume row.
 func TestVerifyExactlyTangentPairStaysUndecided(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	boxBody(t, doc, 0, 0, 10, 10, 10)
 	boxBody(t, doc, 10, 0, 20, 10, 10)
@@ -268,6 +273,7 @@ func TestVerifyExactlyTangentPairStaysUndecided(t *testing.T) {
 // were forced through the mesh boolean reports exactly what it did before
 // this PR — no new row.
 func TestVerifyFacetedMultiRegionPairStaysAsBefore(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	u, bar := uAndBarBodies(t, doc)
 
@@ -304,6 +310,7 @@ func TestVerifyFacetedMultiRegionPairStaysAsBefore(t *testing.T) {
 // reading runs only from the read-only interference path, never from
 // performBoolean").
 func TestPublicBooleansUnchangedOnMultiRegionPair(t *testing.T) {
+	t.Parallel()
 	t.Run("intersect refuses through the mesh path", func(t *testing.T) {
 		doc := decad.New()
 		u, bar := uAndBarBodies(t, doc)
@@ -480,6 +487,7 @@ func interleavedCombBodies(t *testing.T, doc *decad.Document, n int) (a, b *deca
 // comparison against the real gear pair's own measured ~16s Suspect
 // (MULTIREGION-TASKS.md's "already measured" note).
 func TestVerifyGearScaleEightRegionOverlapReportsSummedVolume(t *testing.T) {
+	t.Parallel()
 	const n = 8
 	segs := gearScaleSegmentCount(n)
 	require.Greater(t, segs, gearScaleConsumerSegments,
@@ -526,6 +534,7 @@ func TestVerifyGearScaleEightRegionOverlapReportsSummedVolume(t *testing.T) {
 // crash, pinning that the cap degrades §4.5's reading rather than breaking
 // it.
 func TestVerifyGearScaleOverArrangementCapStaysSuspect(t *testing.T) {
+	t.Parallel()
 	const n = 39
 	segs := gearScaleSegmentCount(n)
 	require.Greater(t, segs, 4096, "premise: case 2's combined segment count crosses the 4096 arrangement cap")

@@ -105,6 +105,7 @@ func evalFloatBezierSpans(spans floatBezierSpans, at float64) (float64, float64)
 }
 
 func TestSplineBezierMatchesGeomEvaluator(t *testing.T) {
+	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
 	coords := make([][2]float64, len(control))
 	for i, point := range control {
@@ -200,6 +201,7 @@ func coxDeBoorExact(control []Point2, knots []*big.Rat, at *big.Rat) (*big.Rat, 
 // where n−3 is 3 and 6 — since the four- and five-control fixtures elsewhere have
 // n−3 a power of two and cannot see the difference.
 func TestSplineBezierSpansUseSketchFloatKnots(t *testing.T) {
+	t.Parallel()
 	// The offending values, stated once: 1/3 and the float geom actually holds.
 	require.NotEqual(t, 0, clampedUniformKnots(6)[4].Cmp(big.NewRat(1, 3)),
 		"geom's interior knot is the rounding of 1/3, not 1/3")
@@ -245,6 +247,7 @@ func TestSplineBezierSpansUseSketchFloatKnots(t *testing.T) {
 }
 
 func TestClosedSplineBezierMatchesGeomEvaluator(t *testing.T) {
+	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 4, V: 0}, {U: 5, V: 3}, {U: 2, V: 5}, {U: -1, V: 3}}
 	coords := make([][2]float64, len(control))
 	for i, point := range control {
@@ -269,6 +272,7 @@ func TestClosedSplineBezierMatchesGeomEvaluator(t *testing.T) {
 }
 
 func TestNURBSBezierMatchesGeomEvaluator(t *testing.T) {
+	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 3}, {U: 4, V: 3}, {U: 5, V: 0}, {U: 8, V: 2}}
 	coords := make([]*geom.Point, len(control))
 	for i, point := range control {
@@ -301,6 +305,7 @@ func TestNURBSBezierMatchesGeomEvaluator(t *testing.T) {
 }
 
 func TestFreeformBezierSpansRefusals(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		segment CurveSegment
@@ -358,6 +363,7 @@ func rationalNURBSFixture() NURBSSeg {
 }
 
 func TestFreeformWorkLimitRefuses(t *testing.T) {
+	t.Parallel()
 	work := &freeformWork{spent: freeformWorkLimit - 1}
 	err := work.step(4)
 	require.Error(t, err)
@@ -373,6 +379,7 @@ func TestFreeformWorkLimitRefuses(t *testing.T) {
 // scan placed ahead of every charge is unbounded and uncancellable. So the two
 // halves are asserted separately.
 func TestRationalNURBSReasonPrecedesTheConversionCharge(t *testing.T) {
+	t.Parallel()
 	// The fixture's lift charge is 2 controls + knots + weights = 20 units, and its
 	// conversion charge is a further 8. Leaving room for exactly the lift proves
 	// the tier is read before the conversion charge and not merely when the
@@ -480,6 +487,9 @@ func costOf(call func()) (time.Duration, uint64, uint64) {
 	return elapsed, after.Mallocs - before.Mallocs, after.TotalAlloc - before.TotalAlloc
 }
 
+// This test stays SERIAL: it measures process-wide allocation, which any
+// test running alongside it would inflate. Adding t.Parallel here makes its
+// reading meaningless rather than making it fail loudly.
 // What chargeRationalLift's invariant claims — that the preflight's element
 // visits are a fixed multiple of the units it charges — is backed HERE, by
 // MEASURED cost at the admission boundary, and deliberately not by a per-pass
@@ -496,6 +506,10 @@ func costOf(call func()) (time.Duration, uint64, uint64) {
 // array the charge does not count, or one allocation per element — misses them by
 // orders of magnitude, while ordinary machine-to-machine variation does not come
 // near them.
+//
+// This test stays SERIAL: it measures process-wide allocation, which any
+// test running alongside it would inflate. Adding t.Parallel here makes its
+// reading meaningless rather than making it fail loudly.
 func TestFreeformPreflightBoundaryCost(t *testing.T) {
 	const admitted = maxDegreeOneNURBSControls
 	worst := wellFormedDegreeOneNURBS(admitted)
@@ -531,6 +545,7 @@ func TestFreeformPreflightBoundaryCost(t *testing.T) {
 // and the open spline is the one free-form kind sampled per span rather than per
 // control point.
 func TestReconstructionChordsRestateSketchSampling(t *testing.T) {
+	t.Parallel()
 	point := func(u, v float64) Point2 { return Point2{U: u, V: v} }
 	controls := func(n int) []Point2 {
 		out := make([]Point2, n)
@@ -602,6 +617,7 @@ func TestReconstructionChordsRestateSketchSampling(t *testing.T) {
 // pair, which is most of them: two sources of 64 chords each arrange 16384
 // ordered pairs, where per-source squares see 8192.
 func TestReconstructionChargeSquaresTheRecordTotal(t *testing.T) {
+	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 4, V: 0}, {U: 2, V: 3}}
 	one := ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
 
@@ -640,6 +656,7 @@ func TestReconstructionChargeSquaresTheRecordTotal(t *testing.T) {
 // entity in the scene. Its fragment ranges differ, but each names the same
 // center and radius, so the reconstruction charge must add its chords once.
 func TestReconstructionChargeInternsSharedAnalyticEntity(t *testing.T) {
+	t.Parallel()
 	first := CircleSeg{
 		Center: Point2{U: 4, V: 5}, Radius: units.Millimeters(2), CCW: true,
 		TStart: 0, TEnd: 0.5,
@@ -663,6 +680,7 @@ func TestReconstructionChargeInternsSharedAnalyticEntity(t *testing.T) {
 // count — a charge that only counted insertions would let a hundred-thousand
 // control record run for hours inside the ceiling.
 func TestClampedConversionCostIsQuadratic(t *testing.T) {
+	t.Parallel()
 	cost := func(controls int) uint64 {
 		return clampedConversionCost(controls, controls+4, uniformKnotDemand(controls, 3))
 	}
@@ -688,6 +706,7 @@ func TestClampedConversionCostIsQuadratic(t *testing.T) {
 // allocates. The float scan and the restated uniform vector must therefore agree
 // with the rational walk the insertion pass itself runs.
 func TestKnotInsertionDemandMatchesRationalWalk(t *testing.T) {
+	t.Parallel()
 	rationalDemand := func(degree, n int, knots []*big.Rat) knotInsertionDemand {
 		_, runs, _ := interiorKnotRuns(degree, n, knots)
 		var demand knotInsertionDemand
@@ -727,6 +746,7 @@ func TestKnotInsertionDemandMatchesRationalWalk(t *testing.T) {
 // evaluator's inability to slice it is ErrUnsupported; different, and the curve
 // really does break apart, so no such body exists and it is ErrDegenerate.
 func TestBezierSliceCountSplitsBrokenFromUnsliceable(t *testing.T) {
+	t.Parallel()
 	third := 1.0 / 3
 	squareControls := func(joint Point2) []Point2 {
 		return []Point2{
@@ -797,6 +817,7 @@ func TestBezierSliceCountSplitsBrokenFromUnsliceable(t *testing.T) {
 // multiplicity — yet the loop still scans the whole knot vector once per target,
 // which is quadratic work a charge counting insertions alone reads as nothing.
 func TestUnchargedKnotProbesRefuse(t *testing.T) {
+	t.Parallel()
 	const controls = 3000
 	control := make([]Point2, controls)
 	weights := make([]float64, controls)
@@ -825,6 +846,7 @@ func TestUnchargedKnotProbesRefuse(t *testing.T) {
 // control points long, so a charge read off the control count alone admits an
 // arbitrarily wide span. The finding's degree-1024 span must be over budget.
 func TestFreeformSpanCostIsCubic(t *testing.T) {
+	t.Parallel()
 	require.Less(t, freeformSpanCost(4), freeformWorkLimit, "a cubic Bézier span is cheap")
 	require.Less(t, freeformSpanCost(2), freeformSpanCost(4))
 	require.Greater(t, freeformSpanCost(65), 20*freeformSpanCost(17),
@@ -840,6 +862,7 @@ func TestFreeformSpanCostIsCubic(t *testing.T) {
 // preflight — which owns every free-form charge — must refuse it before a single
 // Bernstein coefficient is expanded.
 func TestWideSpanIntegrationRefusesBeforeExpanding(t *testing.T) {
+	t.Parallel()
 	const degree = 1024
 	control := make([]Point2, degree+1)
 	knots := make([]float64, 0, 2*(degree+1))

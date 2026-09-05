@@ -40,6 +40,7 @@ func boxLoftTris() [][3]int {
 // vertex pair, every rung and diagonal edge pair, and every non-adjacent
 // disjoint pair, all classify as their recorded adjacency expects.
 func TestLoftCrossingAuditAdmitsUntwistedBox(t *testing.T) {
+	t.Parallel()
 	budget := newWorkBudget(t.Context())
 	err := loftCrossingAudit(budget, boxLoftVerts(), boxLoftTris())
 	require.NoError(t, err)
@@ -52,6 +53,7 @@ func TestLoftCrossingAuditAdmitsUntwistedBox(t *testing.T) {
 // helper does not change mesh-boolean contact classification
 // (docs/loft-design.md §6, required test).
 func TestLoftCrossingAuditAdmitsCoplanarSharedEdge(t *testing.T) {
+	t.Parallel()
 	verts := boxLoftVerts()
 	tris := boxLoftTris()
 	lower0, upper0 := tris[0], tris[1] // cell 0's own diagonal pair
@@ -94,6 +96,7 @@ func sameSideApexesFixture() ([]r3.Vec, [][3]int) {
 // TestLoftCrossingAuditRejectsSameSideApexes runs sameSideApexesFixture
 // through both auditLoftPair directly and the whole audit: S7 refuses.
 func TestLoftCrossingAuditRejectsSameSideApexes(t *testing.T) {
+	t.Parallel()
 	verts, tris := sameSideApexesFixture()
 
 	err := auditLoftPair(verts, tris, 0, 1)
@@ -128,6 +131,7 @@ func genuineCrossingFixture() ([]r3.Vec, [][3]int) {
 // through both auditLoftPair directly and the whole audit: S7 refuses,
 // naming the pair it found.
 func TestLoftCrossingAuditRejectsGenuineCrossing(t *testing.T) {
+	t.Parallel()
 	verts, tris := genuineCrossingFixture()
 
 	err := auditLoftPair(verts, tris, 0, 1)
@@ -160,6 +164,7 @@ func vertexCrossesAwayFixture() ([]r3.Vec, [][3]int) {
 // TestLoftCrossingAuditRejectsVertexPairThatCrossesAway runs
 // vertexCrossesAwayFixture through auditLoftPair: S7 refuses.
 func TestLoftCrossingAuditRejectsVertexPairThatCrossesAway(t *testing.T) {
+	t.Parallel()
 	verts, tris := vertexCrossesAwayFixture()
 
 	err := auditLoftPair(verts, tris, 0, 1)
@@ -170,6 +175,7 @@ func TestLoftCrossingAuditRejectsVertexPairThatCrossesAway(t *testing.T) {
 // recorded vertices are exactly collinear has no interior, so no such solid
 // exists — ErrDegenerate, before any pair is tested.
 func TestLoftCrossingAuditRejectsCollapsedTriangle(t *testing.T) {
+	t.Parallel()
 	verts := []r3.Vec{
 		r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(2, 0, 0),
 	}
@@ -205,6 +211,7 @@ func syntheticLoftTriangles(n int) ([]r3.Vec, [][3]int) {
 // step count after refusal equals exactly the triangle count (S6's own
 // per-triangle scan), never more — no pair test was ever trusted.
 func TestLoftCrossingAuditRefusesOverBudgetBeforeAnyPairTest(t *testing.T) {
+	t.Parallel()
 	// 4001*4000/2 = 8_002_000 > maxFacetPairTestsPerCall (8_000_000).
 	const n = 4001
 	verts, tris := syntheticLoftTriangles(n)
@@ -224,6 +231,7 @@ func TestLoftCrossingAuditRefusesOverBudgetBeforeAnyPairTest(t *testing.T) {
 // TestLoftCrossingAuditCancellation proves cancellation through the shared
 // budget returns ctx.Err() rather than a sentinel of the audit's own.
 func TestLoftCrossingAuditCancellation(t *testing.T) {
+	t.Parallel()
 	verts, tris := syntheticLoftTriangles(4)
 
 	calls := 0
@@ -250,6 +258,7 @@ func TestLoftCrossingAuditCancellation(t *testing.T) {
 // finish the whole audit without a single step poll landing. The trailing
 // budget.err() after S7 is the only thing that can return ctx.Err() here.
 func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
+	t.Parallel()
 	verts, tris := syntheticLoftTriangles(3)
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -415,6 +424,7 @@ func requireLoftCrossingAuditVerdictsMatch(t *testing.T, verts []r3.Vec, tris []
 // crosses off its edge) — must reach the identical verdict whether the
 // broad-phase runs or not.
 func TestLoftCrossingAuditBroadPhaseAgreesWithTheFullAudit(t *testing.T) {
+	t.Parallel()
 	t.Run("passes: untwisted box", func(t *testing.T) {
 		requireLoftCrossingAuditVerdictsMatch(t, boxLoftVerts(), boxLoftTris())
 	})
@@ -446,6 +456,7 @@ func TestLoftCrossingAuditBroadPhaseAgreesWithTheFullAudit(t *testing.T) {
 // equivalence test above is exercising the short-circuit and not vacuously
 // agreeing because it never ran.
 func TestLoftCrossingAuditBroadPhaseSkipsFarApartPairs(t *testing.T) {
+	t.Parallel()
 	verts, tris := syntheticLoftTriangles(40)
 
 	work, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditProduction)
@@ -461,6 +472,7 @@ func TestLoftCrossingAuditBroadPhaseSkipsFarApartPairs(t *testing.T) {
 // A package-level counter fails this test twice over — the race detector flags
 // the increments, and either goroutine's total absorbs the other's pairs.
 func TestLoftCrossingAuditWorkCountsAreIndependentPerCall(t *testing.T) {
+	t.Parallel()
 	verts, tris := syntheticLoftTriangles(40)
 
 	alone, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditProduction)
@@ -495,6 +507,7 @@ func TestLoftCrossingAuditWorkCountsAreIndependentPerCall(t *testing.T) {
 // gates both tiers behind len(shared) == 0 and neither fixture's pair has
 // zero shared vertices.
 func TestLoftCrossingAuditBroadPhaseNeverSkipsARequiredContactPair(t *testing.T) {
+	t.Parallel()
 	t.Run("one shared vertex", func(t *testing.T) {
 		verts, tris := vertexCrossesAwayFixture()
 		work, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditProduction)
@@ -518,6 +531,7 @@ func TestLoftCrossingAuditBroadPhaseNeverSkipsARequiredContactPair(t *testing.T)
 // broad-phase always runs, and asserts the refusal names the same triangle
 // pair auditLoftPair itself finds.
 func TestLoftCrossingAuditBroadPhaseStillCatchesACrossing(t *testing.T) {
+	t.Parallel()
 	verts, tris := sameSideApexesFixture()
 
 	want := auditLoftPair(verts, tris, 0, 1)
@@ -601,6 +615,7 @@ const loftAuditWorkDivisor = 4
 // follows from it. BenchmarkLoftCrossingAuditBroadPhase below measures both
 // quantities on one host and records what each came to.
 func TestLoftCrossingAuditBroadPhaseCutsClassificationWork(t *testing.T) {
+	t.Parallel()
 	const stations = 112
 	fs := wedgeFitSpline(t)
 	verts, tris := chordedWedgeTriangles(t, wedgeSplinePoints(fs, stations))
@@ -889,6 +904,7 @@ func convergedDenseArea(t *testing.T, botPtsAt, topPtsAt func(m int) [][2]float6
 // stands as a baseline sanity check and as the cap leg's own falsifier
 // (alongside the pre-existing TestLoftConeFrustumWallAreaEnclosed).
 func TestLoftArcWedgeAreaBoundEnclosesConvergedReference(t *testing.T) {
+	t.Parallel()
 	w, base, top := wedgePlanes(t)
 	s0, p0 := wedgeArcSketch(t, w, base)
 	s1, p1 := wedgeArcSketch(t, w, top)
@@ -941,6 +957,7 @@ func wedgePlanesH(t *testing.T, height float64) (*sketch.World, *sketch.Plane, *
 // frustum fixture (both of whose cap slack masks a zeroed wall term, this
 // file's own ledger).
 func TestLoftTallThinArcWedgeAreaBoundEnclosesConvergedReference(t *testing.T) {
+	t.Parallel()
 	const radius, height = 1.0, 60.0
 	w, base, top := wedgePlanesH(t, height)
 	s0, p0 := wedgeArcSketchR(t, w, base, radius)
@@ -992,6 +1009,7 @@ func wedgeArcSketchShiftedR(t *testing.T, w *sketch.World, plane *sketch.Plane, 
 // (cellTwistAreaAllow's own twist leg, a10-plan.md's own wording for this
 // task).
 func TestLoftShearedArcWedgeAreaBoundEnclosesConvergedReference(t *testing.T) {
+	t.Parallel()
 	const radius, height = 1.0, 60.0
 	const dx, dy = 3.0, -2.0
 	w, base, top := wedgePlanesH(t, height)

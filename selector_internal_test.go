@@ -15,6 +15,7 @@ import (
 // against. Everything reachable externally is tested in selector_test.go.
 
 func TestCloneStepIsolatesCallerHeldSelectors(t *testing.T) {
+	t.Parallel()
 	// A feature call records the caller's query by cloning the step; mutating
 	// the caller's query afterwards must not change the recorded step.
 	q := Edges(Convex()).Exactly(4)
@@ -34,6 +35,7 @@ func TestCloneStepIsolatesCallerHeldSelectors(t *testing.T) {
 }
 
 func TestRecipeSelectorsDoNotEscapeTheDocument(t *testing.T) {
+	t.Parallel()
 	// Mutating a returned Recipe's selector must not change the document's
 	// own record.
 	doc := &Document{steps: []Step{{

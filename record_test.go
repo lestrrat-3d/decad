@@ -13,6 +13,7 @@ import (
 )
 
 func TestProfileRecordRoundTrip(t *testing.T) {
+	t.Parallel()
 	// One profile exercising every variant of the sealed set: whole edges,
 	// a certified fragment range, and a reversed walk (TStart > TEnd).
 	rec := decad.ProfileRecord{
@@ -71,6 +72,7 @@ func TestProfileRecordRoundTrip(t *testing.T) {
 }
 
 func TestCurveSegmentTagging(t *testing.T) {
+	t.Parallel()
 	// Each variant encodes under its own kind tag: the codec is a tagged
 	// object, and the tag is the dispatch key.
 	buf, err := json.Marshal(decad.LoopRecord{Segments: []decad.CurveSegment{
@@ -96,6 +98,7 @@ func TestCurveSegmentTagging(t *testing.T) {
 }
 
 func TestCurveSegmentDecodeRejects(t *testing.T) {
+	t.Parallel()
 	// The variant set is closed: an unknown tag has no fallback.
 	var loop decad.LoopRecord
 	err := json.Unmarshal([]byte(`{"segments":[{"kind":"helix","t_start":0,"t_end":1}]}`), &loop)
@@ -108,6 +111,7 @@ func TestCurveSegmentDecodeRejects(t *testing.T) {
 }
 
 func TestCurveSegmentDecodeRequiresEveryField(t *testing.T) {
+	t.Parallel()
 	const (
 		startField   = "start"
 		endField     = "end"
@@ -205,6 +209,7 @@ func TestCurveSegmentDecodeRequiresEveryField(t *testing.T) {
 }
 
 func TestCurveSegmentDecodeRequiresNestedGeometry(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		segment string
@@ -248,6 +253,7 @@ func TestCurveSegmentDecodeRequiresNestedGeometry(t *testing.T) {
 }
 
 func TestCurveSegmentDecodeRejectsInvalidVariant(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		segment string
@@ -316,6 +322,7 @@ func TestCurveSegmentDecodeRejectsInvalidVariant(t *testing.T) {
 }
 
 func TestNURBSSegmentDecodeRejectsInvalidShape(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		segment string
@@ -377,6 +384,7 @@ func TestNURBSSegmentDecodeRejectsInvalidShape(t *testing.T) {
 // Both records here are the same shapes the case above rejects, with the one
 // control point that decides continuity moved onto its partner.
 func TestNURBSSegmentDecodeAdmitsContinuousMultiplicity(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name    string
 		segment string
@@ -404,6 +412,7 @@ func TestNURBSSegmentDecodeAdmitsContinuousMultiplicity(t *testing.T) {
 }
 
 func TestCurveSegmentEncodeRejects(t *testing.T) {
+	t.Parallel()
 	// The codec refuses to write what cannot be read back: a non-finite
 	// magnitude has no text form.
 	_, err := json.Marshal(decad.LoopRecord{Segments: []decad.CurveSegment{
@@ -422,6 +431,7 @@ func TestCurveSegmentEncodeRejects(t *testing.T) {
 }
 
 func TestCurveSegmentPointerVariants(t *testing.T) {
+	t.Parallel()
 	// The sealed methods use value receivers, so a pointer to a variant
 	// satisfies CurveSegment too; the codec accepts it and records the value
 	// it names, and decode hands back the value form.
@@ -439,6 +449,7 @@ func TestCurveSegmentPointerVariants(t *testing.T) {
 }
 
 func TestPlaneRecordRoundTrip(t *testing.T) {
+	t.Parallel()
 	rec := decad.PlaneRecord{
 		Origin: r3.NewVec(10, 20, 30),
 		U:      r3.NewVec(1, 0, 0),
@@ -453,6 +464,7 @@ func TestPlaneRecordRoundTrip(t *testing.T) {
 }
 
 func TestTransformRecordRoundTrip(t *testing.T) {
+	t.Parallel()
 	// A real placement: rotate about a skew axis, then translate.
 	rot, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(30))
 	require.NoError(t, err)
@@ -482,6 +494,7 @@ func TestTransformRecordRoundTrip(t *testing.T) {
 }
 
 func TestTransformRecordReflection(t *testing.T) {
+	t.Parallel()
 	// A reflection is a legal rigid placement (det = −1) and must survive the
 	// round trip as one — a reflected solid has inverted face normals, so
 	// losing the handedness would silently flip the part.
@@ -500,6 +513,7 @@ func TestTransformRecordReflection(t *testing.T) {
 }
 
 func TestTransformRecordRejects(t *testing.T) {
+	t.Parallel()
 	// The zero transform is invalid: it names no placement to record.
 	_, err := decad.RecordTransform(r3.Transform{})
 	require.ErrorIs(t, err, decad.ErrDegenerate)
@@ -538,6 +552,7 @@ func TestTransformRecordRejects(t *testing.T) {
 }
 
 func TestRecordProfileRectangle(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -593,6 +608,7 @@ func TestRecordProfileRectangle(t *testing.T) {
 }
 
 func TestRecordProfileCircleHole(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -629,6 +645,7 @@ func TestRecordProfileCircleHole(t *testing.T) {
 }
 
 func TestRecordProfileCertifiedFragments(t *testing.T) {
+	t.Parallel()
 	// A circle crossed by a rectangle: every cut is a line-involved
 	// line/circle crossing, which sketch's closed-form kernel certifies —
 	// the fragments record, each through the falsifier.
@@ -675,6 +692,7 @@ func TestRecordProfileCertifiedFragments(t *testing.T) {
 }
 
 func TestRecordProfileRejectsSampledCuts(t *testing.T) {
+	t.Parallel()
 	// A spline crossing a circle: free-form intersection has no closed form
 	// upstream (docs/spline-design.md §9 ask 3), so sketch reports the cut
 	// sampled (TExact false) and decad refuses to record the fragment — never
@@ -710,6 +728,7 @@ func TestRecordProfileRejectsSampledCuts(t *testing.T) {
 }
 
 func TestRecordProfileRejectsWholeSketchTExactWithholding(t *testing.T) {
+	t.Parallel()
 	// A distant spline withholds certification but leaves the analytic
 	// circle/circle fragments and their ranges unchanged.
 	newProfiles := func(withSpline bool) (*sketch.Sketch, []*sketch.Profile) {
@@ -752,6 +771,7 @@ func TestRecordProfileRejectsWholeSketchTExactWithholding(t *testing.T) {
 }
 
 func TestRecordProfileReportsOuterEdgeIndex(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -787,6 +807,7 @@ func TestRecordProfileReportsOuterEdgeIndex(t *testing.T) {
 }
 
 func TestRecordProfileReportsHoleAndEdgeIndices(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -822,6 +843,7 @@ func TestRecordProfileReportsHoleAndEdgeIndices(t *testing.T) {
 }
 
 func TestRecordProfileGates(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -859,6 +881,7 @@ func TestRecordProfileGates(t *testing.T) {
 }
 
 func TestRecordProfileRejectsForeignBoundaryEntity(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -886,6 +909,7 @@ func TestRecordProfileRejectsForeignBoundaryEntity(t *testing.T) {
 }
 
 func TestRecordProfileRejectsForeignHoleEntity(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -918,6 +942,7 @@ func TestRecordProfileRejectsForeignHoleEntity(t *testing.T) {
 }
 
 func TestRecordProfileRejectsChangedCurrentBoundary(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -937,6 +962,7 @@ func TestRecordProfileRejectsChangedCurrentBoundary(t *testing.T) {
 }
 
 func TestRecordProfileRejectsTypedNilBoundaryEntity(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -1001,6 +1027,7 @@ func uncutPartialLoop(t *testing.T, gap float64) (*sketch.Sketch, *sketch.Profil
 }
 
 func TestRecordProfileRejectsUnclosedLoop(t *testing.T) {
+	t.Parallel()
 	// A loop whose recorded segments do not meet bounds no region at all, so
 	// there is nothing for an Exact, zero-bound area to be exact ABOUT. sketch
 	// snapped the gap away and reports one valid region; decad records each
@@ -1034,6 +1061,7 @@ func TestRecordProfileRejectsUnclosedLoop(t *testing.T) {
 }
 
 func TestRecordProfileRejectsUnclosedConstrainedLoop(t *testing.T) {
+	t.Parallel()
 	// The same rule, reached the way a caller most likely reaches it: two
 	// distinct points driven together by a coincidence constraint. The solver
 	// converges to within its own residual, not to the same float, so the
@@ -1064,6 +1092,7 @@ func TestRecordProfileRejectsUnclosedConstrainedLoop(t *testing.T) {
 }
 
 func TestRecordProfileRejectsUnclosedLoopAtUncutPartialBound(t *testing.T) {
+	t.Parallel()
 	gap := math.Ldexp(1, -40)
 	s, profile := uncutPartialLoop(t, gap)
 	partial := 0
@@ -1084,6 +1113,7 @@ func TestRecordProfileRejectsUnclosedLoopAtUncutPartialBound(t *testing.T) {
 }
 
 func TestRecordProfileRecordsReversedUncutPartialBound(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -1134,6 +1164,7 @@ func TestRecordProfileRecordsReversedUncutPartialBound(t *testing.T) {
 }
 
 func TestRecordProfileRecordsSnapThresholdTrim(t *testing.T) {
+	t.Parallel()
 	// The same shape one order of magnitude further out: past sketch's snap
 	// threshold it TRIMS the two lines at their crossing instead, so the
 	// recorded loop closes on sketch's own cut and the region measures. This is
@@ -1165,6 +1196,7 @@ func TestRecordProfileRecordsSnapThresholdTrim(t *testing.T) {
 }
 
 func TestRecordProfileRecordsMixedWholeAndCertifiedPartialJoin(t *testing.T) {
+	t.Parallel()
 	// The arc and vertical line share top, but sketch trims the line where it
 	// crosses the base. The partial line's uncut top bound records its defining
 	// point, rather than sketch's rounded node, so the shared endpoint stays an
@@ -1210,6 +1242,7 @@ func TestRecordProfileRecordsMixedWholeAndCertifiedPartialJoin(t *testing.T) {
 }
 
 func TestProfileRecordAreaRejectsUnclosedLoop(t *testing.T) {
+	t.Parallel()
 	// A decoded or caller-built record reaches the same verdict through the
 	// moments validator: the reconstruction authenticates each candidate region
 	// through RecordProfile, which now refuses an open loop, so no candidate
@@ -1234,6 +1267,7 @@ func TestProfileRecordAreaRejectsUnclosedLoop(t *testing.T) {
 }
 
 func TestProfileRecordAreaRejectsUnclosedLoopAtUncutPartialBound(t *testing.T) {
+	t.Parallel()
 	gap := math.Ldexp(1, -40)
 	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
 		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 10, V: 0}, TEnd: 1},

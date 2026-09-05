@@ -154,6 +154,7 @@ func moveRecordedCorner(t *testing.T, step *decad.Step, i int, du, dv float64) {
 }
 
 func TestRecipeReplayAdmittedUnionStepMatchesOriginal(t *testing.T) {
+	t.Parallel()
 	doc, union := buildAdmittedUnionDocument(t)
 	original, err := union.Volume()
 	require.NoError(t, err)
@@ -195,6 +196,7 @@ func TestRecipeReplayAdmittedUnionStepMatchesOriginal(t *testing.T) {
 // 5x5 overlap with box B untouched, so the merged footprint is
 // 85 + 100 - 25 = 160 mm^2 and the union's volume 1600 mm^3.
 func TestRecipeReplayPerturbedUnionSectionChangesVolume(t *testing.T) {
+	t.Parallel()
 	doc, union := buildAdmittedUnionDocument(t)
 	original, err := union.Volume()
 	require.NoError(t, err)
@@ -227,6 +229,7 @@ func TestRecipeReplayPerturbedUnionSectionChangesVolume(t *testing.T) {
 // container and a (5,5)-(9,10) height 15 nested prism sharing its base plane,
 // overlapping over 4 x 5 x 10 = 200 mm^3.
 func TestRecipeReplayAdmittedInterferencePairMatchesOriginal(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	container := boxBody(t, doc, 0, 0, 20, 20, 10)
 	nested := boxBody(t, doc, 5, 5, 9, 10, 15)
