@@ -284,7 +284,15 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 	require.ErrorIs(t, ctx.Err(), context.Canceled)
 }
 
-// --- the broad-phase (loft_audit.go's loftCrossingAuditWork short-circuit) ---
+// --- the S7 shortcuts (loft_audit.go's loftAuditShortcuts) ---
+//
+// loftAuditReference is the audit's independent reference path: no
+// broad-phase tier and no certificate, so every pair S8 admits reaches
+// triTriClassify's exact contact classification. Every equivalence assertion
+// below is against THIS, never against production run through a second
+// wrapper. loftAuditProduction is exactly what loftCrossingAudit itself
+// passes, so an equivalence proven here is a statement about the shipped
+// path.
 //
 // FALSIFICATION LOG (docs/loft-design.md's own "prove the mechanism can
 // fail" discipline). Each leg below was actually broken in loft_audit.go,
@@ -334,6 +342,14 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 // section; leg 1 is the one argued redundant above, on a structural proof
 // rather than an untried fixture.
 
+// loftAuditReference and loftAuditProduction are the two shortcut settings
+// every equivalence assertion in this section is written against; the section
+// header above says what each one means.
+var (
+	loftAuditReference  = loftAuditShortcuts{}
+	loftAuditProduction = loftAuditShortcuts{broadPhase: true, certificates: true}
+)
+
 // boundaryTouchingFixture builds two triangles that share NO recorded vertex
 // INDEX (so S7 expects contactNone, same as genuineCrossingFixture) but whose
 // bounding boxes touch EXACTLY on a shared boundary plane (x=1) rather than
@@ -355,28 +371,40 @@ func boundaryTouchingFixture() ([]r3.Vec, [][3]int) {
 	return verts, tris
 }
 
-// requireLoftCrossingAuditVerdictsMatch runs loftCrossingAudit twice over the
-// same verts/tris — once with the S7 broad-phase short-circuit off, once with
-// it on — and asserts the two runs reach the IDENTICAL verdict: both nil, or
-// both an error with the exact same message (sentinel, wrapped text and the
-// specific triangle indices it names, all included, since Error() renders
-// every one of them). This is loft_audit.go's own soundness argument,
-// exercised rather than assumed: the broad-phase may only ever change WHETHER
-// a pair reaches the exact classification, never WHAT that classification
-// (or its absence) decides.
+// requireLoftCrossingAuditVerdictsMatch runs the audit over the same
+// verts/tris under the reference shortcuts and under each shortcut
+// combination production can reach, and asserts every run lands on the
+// IDENTICAL verdict: all nil, or all an error with the exact same message
+// (sentinel, wrapped text and the specific triangle indices it names, all
+// included, since Error() renders every one of them). This is loft_audit.go's
+// own soundness argument, exercised rather than assumed: a shortcut may only
+// ever change WHETHER a pair reaches the exact classification, never WHAT
+// that classification (or its absence) decides.
+//
+// Running the broad-phase and the certificates separately as well as together
+// is what keeps a failure attributable: an isolated arm names which of the two
+// mechanisms disagreed with the reference.
 func requireLoftCrossingAuditVerdictsMatch(t *testing.T, verts []r3.Vec, tris [][3]int) {
 	t.Helper()
 
-	_, offErr := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, false)
-	_, onErr := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, true)
-
-	if offErr == nil {
-		require.NoError(t, onErr, "the broad-phase must not turn a passing audit into a failing one")
-		return
+	_, refErr := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditReference)
+	for _, arm := range []struct {
+		name      string
+		shortcuts loftAuditShortcuts
+	}{
+		{name: "broad-phase only", shortcuts: loftAuditShortcuts{broadPhase: true}},
+		{name: "certificates only", shortcuts: loftAuditShortcuts{certificates: true}},
+		{name: "production", shortcuts: loftAuditProduction},
+	} {
+		_, gotErr := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, arm.shortcuts)
+		if refErr == nil {
+			require.NoError(t, gotErr, "%s must not turn a passing audit into a failing one", arm.name)
+			continue
+		}
+		require.Error(t, gotErr, "%s must not turn a failing audit into a passing one", arm.name)
+		require.Equal(t, refErr.Error(), gotErr.Error(),
+			"%s must reach the identical error, triangle indices included", arm.name)
 	}
-	require.Error(t, onErr, "the broad-phase must not turn a failing audit into a passing one")
-	require.Equal(t, offErr.Error(), onErr.Error(),
-		"the broad-phase must reach the identical error, triangle indices included")
 }
 
 // TestLoftCrossingAuditBroadPhaseAgreesWithTheFullAudit is the central
@@ -420,7 +448,7 @@ func TestLoftCrossingAuditBroadPhaseAgreesWithTheFullAudit(t *testing.T) {
 func TestLoftCrossingAuditBroadPhaseSkipsFarApartPairs(t *testing.T) {
 	verts, tris := syntheticLoftTriangles(40)
 
-	work, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, true)
+	work, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 	require.NoError(t, err)
 	require.Positive(t, work.skips,
 		"40 mutually far-apart triangles must exercise the short-circuit at least once")
@@ -435,18 +463,18 @@ func TestLoftCrossingAuditBroadPhaseSkipsFarApartPairs(t *testing.T) {
 func TestLoftCrossingAuditWorkCountsAreIndependentPerCall(t *testing.T) {
 	verts, tris := syntheticLoftTriangles(40)
 
-	alone, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, true)
+	alone, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 	require.NoError(t, err)
 	require.Positive(t, alone.skips)
-	require.Equal(t, 40*39/2, alone.skips+alone.classifications,
-		"every admitted pair is either skipped by a broad-phase tier or classified")
+	require.Equal(t, 40*39/2, alone.skips+alone.edgeCerts+alone.vertexCerts+alone.classifications,
+		"every admitted pair is skipped by a broad-phase tier, admitted by a certificate, or classified")
 
 	var wg sync.WaitGroup
-	got := make([]loftBroadPhaseWork, 2)
+	got := make([]loftAuditWork, 2)
 	errs := make([]error, 2)
 	for k := range got {
 		wg.Go(func() {
-			got[k], errs[k] = loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, true)
+			got[k], errs[k] = loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 		})
 	}
 	wg.Wait()
@@ -469,7 +497,7 @@ func TestLoftCrossingAuditWorkCountsAreIndependentPerCall(t *testing.T) {
 func TestLoftCrossingAuditBroadPhaseNeverSkipsARequiredContactPair(t *testing.T) {
 	t.Run("one shared vertex", func(t *testing.T) {
 		verts, tris := vertexCrossesAwayFixture()
-		work, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, true)
+		work, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 		require.ErrorIs(t, err, ErrDegenerate)
 		require.Zero(t, work.skips,
 			"a pair sharing one recorded vertex is required to touch there; the broad-phase must never decide it")
@@ -477,7 +505,7 @@ func TestLoftCrossingAuditBroadPhaseNeverSkipsARequiredContactPair(t *testing.T)
 
 	t.Run("two shared vertices", func(t *testing.T) {
 		verts, tris := sameSideApexesFixture()
-		work, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, true)
+		work, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 		require.ErrorIs(t, err, ErrDegenerate)
 		require.Zero(t, work.skips,
 			"a pair sharing two recorded vertices is required to touch along that edge; the broad-phase must never decide it")
@@ -578,18 +606,20 @@ func TestLoftCrossingAuditBroadPhaseCutsClassificationWork(t *testing.T) {
 	fs := wedgeFitSpline(t)
 	verts, tris := chordedWedgeTriangles(t, wedgeSplinePoints(fs, stations))
 
-	off, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, false)
+	off, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditReference)
 	require.NoError(t, err)
-	on, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, true)
+	on, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, loftAuditProduction)
 	require.NoError(t, err)
 
-	t.Logf("F~230 wedge: stations=%d triangles=%d classifications off=%d on=%d skips=%d",
-		stations, len(tris), off.classifications, on.classifications, on.skips)
+	t.Logf("F~230 wedge: stations=%d triangles=%d classifications off=%d on=%d skips=%d edgeCerts=%d vertexCerts=%d",
+		stations, len(tris), off.classifications, on.classifications, on.skips, on.edgeCerts, on.vertexCerts)
 
 	require.Zero(t, off.skips,
 		"with the short-circuit off, no pair may be skipped")
-	require.Equal(t, off.classifications, on.classifications+on.skips,
-		"the broad-phase only moves a pair from classified to skipped; the pair count is the same either way")
+	require.Zero(t, off.edgeCerts+off.vertexCerts,
+		"with the certificates off, no pair may be admitted by one")
+	require.Equal(t, off.classifications, on.classifications+on.skips+on.edgeCerts+on.vertexCerts,
+		"a shortcut only moves a pair out of the classified column; the pair count is the same either way")
 	require.Positive(t, on.classifications,
 		"the wedge's own adjacent and nearby pairs must still reach the exact classification")
 	require.Less(t, on.classifications, off.classifications/loftBroadPhaseWorkDivisor,
@@ -631,24 +661,26 @@ func BenchmarkLoftCrossingAuditBroadPhase(b *testing.B) {
 	verts, tris := chordedWedgeTriangles(b, wedgeSplinePoints(fs, stations))
 
 	for _, arm := range []struct {
-		name       string
-		broadPhase bool
+		name      string
+		shortcuts loftAuditShortcuts
 	}{
-		{name: "off", broadPhase: false},
-		{name: "on", broadPhase: true},
+		{name: "off", shortcuts: loftAuditReference},
+		{name: "broadphase", shortcuts: loftAuditShortcuts{broadPhase: true}},
+		{name: "on", shortcuts: loftAuditProduction},
 	} {
 		b.Run(arm.name, func(b *testing.B) {
 			budget := newWorkBudget(b.Context())
-			var work loftBroadPhaseWork
+			var work loftAuditWork
 			for b.Loop() {
 				var err error
-				work, err = loftCrossingAuditWork(budget, verts, tris, arm.broadPhase)
+				work, err = loftCrossingAuditWork(budget, verts, tris, arm.shortcuts)
 				if err != nil {
 					b.Fatal(err)
 				}
 			}
 			b.ReportMetric(float64(work.classifications), "classifications/op")
 			b.ReportMetric(float64(work.skips), "skips/op")
+			b.ReportMetric(float64(work.edgeCerts+work.vertexCerts), "certificates/op")
 		})
 	}
 }
