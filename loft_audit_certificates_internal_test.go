@@ -28,6 +28,44 @@ import (
 // ULP off the other triangle's plane, a shared vertex with a crossing
 // elsewhere — are ones no ordinary loft produces on demand.
 
+// FALSIFICATION LOG (docs/loft-design.md's own "prove the mechanism can fail"
+// discipline). Each leg below was actually broken in loft_audit.go, this
+// package re-run to confirm a RED failure, then reverted before this file was
+// committed. Every leg names the test that caught it.
+//
+// Certificate A:
+//
+//   - "admit every shared-edge pair": the accept was hoisted above the exact
+//     coplanarity sign, so a coplanar pair took it too.
+//     TestLoftCrossingAuditEdgeCertificateNeverDecidesACoplanarPair went RED
+//     on all three of its cases, and so did
+//     TestLoftCrossingAuditRejectsSameSideApexes and the shared-edge arm of
+//     TestLoftCrossingAuditBroadPhaseAgreesWithTheFullAudit — the certificate
+//     was admitting two coplanar triangles overlapping in area.
+//   - "widen the guard to one shared vertex": the shared-count test was
+//     relaxed from two to at least one.
+//     TestLoftCrossingAuditAdmitsUntwistedBox and
+//     TestLoftCrossingAuditBroadPhaseCutsClassificationWork went RED.
+//   - "never fire": the accept was made unreachable.
+//     TestLoftCrossingAuditEdgeCertificateAdmitsAFoldedSharedEdge and
+//     TestLoftCrossingAuditEdgeCertificateIsSymmetric went RED on their work
+//     counts, which is what stops an agreement assertion passing vacuously.
+//
+// Certificate B:
+//
+//   - "admit every shared-vertex pair": isolatedSharedVertex was made to
+//     return true unconditionally.
+//     TestLoftCrossingAuditVertexCertificateNeverDecidesACrossingPair and the
+//     three vertex fixtures in
+//     TestLoftCrossingAuditCertificatesAgreeUnderScaleAndTranslation went RED.
+//   - "count an on-plane vertex as one side": the strict sign test was
+//     relaxed to a non-strict one. sharedVertexOnPlaneFixture went RED
+//     through the same two tests — this is the leg that fixture exists for.
+//   - "read one orientation only": the second isolatedSharedVertex call was
+//     deleted. TestLoftCrossingAuditVertexCertificateIsSymmetric went RED on
+//     its swapped-order cases, which is why isolatedSharedVertexFixture is
+//     built so that only one orientation proves it.
+
 // foldedSharedEdgeVerts and foldedSharedEdgeTris are certificate A's own case:
 // two nondegenerate triangles sharing the vertex indices 0 and 1 — the segment
 // (0,0,0)-(1,0,0) — folded about it, so triangle B's apex (0,1,1) is off
@@ -75,18 +113,60 @@ func coplanarSameSideEdgeFixture() ([]r3.Vec, [][3]int) {
 	return verts, [][3]int{{0, 1, 2}, {0, 1, 3}}
 }
 
-// isolatedSharedVertexFixture is certificate B's own case: two nondegenerate
-// triangles sharing the vertex index 0 — the point (0,0,0) — where triangle
-// B's two other vertices both sit strictly ABOVE triangle A's z=0 plane, so
-// triangle B meets that plane only at the shared vertex and the pair's whole
-// intersection is that one point.
+// isolatedSharedVertexFixture is certificate B's own case, built ASYMMETRIC on
+// purpose: two nondegenerate triangles share the vertex index 0 — the point
+// (0,0,0) — and triangle B's two other vertices both sit strictly above
+// triangle A's z=0 plane, so B meets that plane only at the shared vertex and
+// the pair's whole intersection is that one point.
+//
+// Only ONE of the two orientations proves it. Triangle A's two other vertices
+// fall on OPPOSITE sides of triangle B's own plane (its exact normal is
+// (1,-1,0)), so reading A against B's plane decides nothing. A certificate
+// that tried a single orientation would therefore admit this pair in one
+// triangle order and miss it in the other.
 func isolatedSharedVertexFixture() ([]r3.Vec, [][3]int) {
 	verts := []r3.Vec{
 		r3.NewVec(0, 0, 0),
 		r3.NewVec(1, 0, 0),
 		r3.NewVec(0, 1, 0),
-		r3.NewVec(1, 0, 1),
-		r3.NewVec(0, 1, 2),
+		r3.NewVec(1, 1, 1),
+		r3.NewVec(2, 2, 3),
+	}
+	return verts, [][3]int{{0, 1, 2}, {0, 3, 4}}
+}
+
+// sharedVertexCrossingFixture is certificate B's own refusal: the two
+// triangles share the vertex index 0, but triangle B's other two vertices
+// straddle triangle A's z=0 plane, so B crosses that plane along a segment
+// running into A's interior instead of touching it at the shared vertex
+// alone. Neither orientation of the certificate can fire — A's own two other
+// vertices straddle B's plane in turn — so the pair reaches the exact
+// classification, which refuses it.
+func sharedVertexCrossingFixture() ([]r3.Vec, [][3]int) {
+	verts := []r3.Vec{
+		r3.NewVec(0, 0, 0),
+		r3.NewVec(1, 0, 0),
+		r3.NewVec(0, 1, 0),
+		r3.NewVec(0.3, 0.3, 1),
+		r3.NewVec(0.3, 0.3, -1),
+	}
+	return verts, [][3]int{{0, 1, 2}, {0, 3, 4}}
+}
+
+// sharedVertexOnPlaneFixture is the variant that separates a STRICT sign from
+// a merely non-negative one: triangle B shares the vertex index 0, its vertex
+// 3 lies exactly ON triangle A's z=0 plane and inside A, and its vertex 4 sits
+// strictly above. B therefore meets A along the whole segment from the shared
+// vertex to (0.5, 0.2, 0), which the pair's shared vertex does not expect. A
+// certificate that counted the on-plane vertex as being on the positive side
+// would admit this pair.
+func sharedVertexOnPlaneFixture() ([]r3.Vec, [][3]int) {
+	verts := []r3.Vec{
+		r3.NewVec(0, 0, 0),
+		r3.NewVec(1, 0, 0),
+		r3.NewVec(0, 1, 0),
+		r3.NewVec(0.5, 0.2, 0),
+		r3.NewVec(0.3, 0.3, 1),
 	}
 	return verts, [][3]int{{0, 1, 2}, {0, 3, 4}}
 }
@@ -261,6 +341,8 @@ func TestLoftCrossingAuditCertificatesAgreeUnderScaleAndTranslation(t *testing.T
 		{name: "coplanar same side", fixture: coplanarSameSideEdgeFixture},
 		{name: "isolated shared vertex", fixture: isolatedSharedVertexFixture},
 		{name: "vertex crossing away", fixture: vertexCrossesAwayFixture},
+		{name: "vertex crossing through the plane", fixture: sharedVertexCrossingFixture},
+		{name: "vertex with another vertex on the plane", fixture: sharedVertexOnPlaneFixture},
 		{name: "same-side apexes", fixture: sameSideApexesFixture},
 	}
 
@@ -273,6 +355,67 @@ func TestLoftCrossingAuditCertificatesAgreeUnderScaleAndTranslation(t *testing.T
 				})
 			}
 		}
+	}
+}
+
+// TestLoftCrossingAuditVertexCertificateAdmitsAnIsolatedSharedVertex is
+// certificate B's own execution-and-agreement test, the vertex twin of
+// certificate A's. The reference arm classifies the pair and admits it as a
+// point contact at the shared vertex; the certificate arm admits the same
+// pair without classifying it.
+func TestLoftCrossingAuditVertexCertificateAdmitsAnIsolatedSharedVertex(t *testing.T) {
+	verts, tris := isolatedSharedVertexFixture()
+
+	err := requireLoftAuditWork(t, verts, tris, loftAuditReference, loftAuditWork{classifications: 1})
+	require.NoError(t, err, "the pair meets only at its shared vertex, so the reference admits it")
+
+	err = requireLoftAuditWork(t, verts, tris, loftAuditProduction, loftAuditWork{vertexCerts: 1})
+	require.NoError(t, err, "certificate B must admit the identical pair")
+}
+
+// TestLoftCrossingAuditVertexCertificateIsSymmetric runs certificate B over
+// every permutation of triangle order and winding. Only ONE of the two
+// triangles isolates the shared vertex in this fixture, so a certificate that
+// tried a single orientation would fire on half these permutations and miss
+// the other half.
+func TestLoftCrossingAuditVertexCertificateIsSymmetric(t *testing.T) {
+	verts, base := isolatedSharedVertexFixture()
+	for _, tc := range []struct {
+		name string
+		tris [][3]int
+	}{
+		{name: "as built", tris: base},
+		{name: "pair order swapped", tris: swapPairOrder(base)},
+		{name: "winding reversed", tris: reverseWinding(base)},
+		{name: "both", tris: reverseWinding(swapPairOrder(base))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			requireLoftCrossingAuditVerdictsMatch(t, verts, tc.tris)
+			err := requireLoftAuditWork(t, verts, tc.tris, loftAuditProduction, loftAuditWork{vertexCerts: 1})
+			require.NoError(t, err)
+		})
+	}
+}
+
+// TestLoftCrossingAuditVertexCertificateNeverDecidesACrossingPair pins
+// certificate B's precondition from the other side. Both fixtures share one
+// vertex and both are refused, one crossing within a common plane and one
+// crossing through it, and neither may be admitted by a certificate.
+func TestLoftCrossingAuditVertexCertificateNeverDecidesACrossingPair(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		fixture func() ([]r3.Vec, [][3]int)
+	}{
+		{name: "coplanar, overlapping away from the vertex", fixture: vertexCrossesAwayFixture},
+		{name: "noncoplanar, crossing the plane away from the vertex", fixture: sharedVertexCrossingFixture},
+		{name: "noncoplanar, with one vertex lying on the plane", fixture: sharedVertexOnPlaneFixture},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			verts, tris := tc.fixture()
+			requireLoftCrossingAuditVerdictsMatch(t, verts, tris)
+			err := requireLoftAuditWork(t, verts, tris, loftAuditProduction, loftAuditWork{classifications: 1})
+			require.ErrorIs(t, err, ErrDegenerate)
+		})
 	}
 }
 

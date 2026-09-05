@@ -332,6 +332,23 @@ func auditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error { //nolint:unp
 // step 3 and takes no shortcut: the coplanar branch below keeps deciding that
 // case through triTriCoplanarSharedEdge, which is what still refuses two
 // coplanar triangles that share an edge and overlap in area on one side of it.
+//
+// # Certificate B — the isolated shared vertex
+//
+// A pair sharing exactly one vertex index is admitted once one triangle's two
+// remaining vertices carry the SAME strict exact sign against the other
+// triangle's plane. isolatedSharedVertex owns that reading and its proof; both
+// orientations are tried, because either triangle may be the one whose plane
+// isolates the vertex. The signs are the very arrays this function hands
+// triTriClassifyWithProjections, so the certificate reads work the pair was
+// going to pay for anyway and adds none of its own.
+//
+// A zero sign, or two differing signs, proves nothing and takes no shortcut:
+// that pair falls through to the exact classification, which is what still
+// refuses a vertex-sharing pair whose triangles cross away from their shared
+// vertex. Sharing a vertex is not itself evidence — EVERY such pair has its
+// shared vertex on both planes, which is why the certificate reads the two
+// OTHER vertices and never that one.
 func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int, shortcuts loftAuditShortcuts) (loftPairOutcome, error) {
 	ta := data.corners[i]
 	tb := data.corners[j]
@@ -355,7 +372,13 @@ func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int, shortcuts l
 	}
 
 	signsB := trianglePlaneSigns(xta, na, xtb)
+	if shortcuts.certificates && sharedCount == 1 && isolatedSharedVertex(tris[j], shared[0], signsB) {
+		return loftPairVertexCertificate, nil
+	}
 	signsA := trianglePlaneSigns(xtb, nb, xta)
+	if shortcuts.certificates && sharedCount == 1 && isolatedSharedVertex(tris[i], shared[0], signsA) {
+		return loftPairVertexCertificate, nil
+	}
 	contact, err := triTriClassifyWithProjections(ta, tb, xta, xtb, na, nb,
 		&data.projections[i], &data.projections[j], &signsA, &signsB)
 	if err != nil {
@@ -386,6 +409,49 @@ func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int, shortcuts l
 	default:
 		return loftPairClassified, errLoftContact(i, j, "share an unexpected vertex count")
 	}
+}
+
+// isolatedSharedVertex is certificate B's own reading (docs/loft-design.md
+// §6): it reports whether the triangle tri meets a plane at sharedIndex's
+// vertex ALONE, given signs — the exact signs of tri's three vertices against
+// that plane, in tri's own index order, as trianglePlaneSigns returns them.
+//
+// Write f for the plane's affine signed-distance function, v for the shared
+// vertex, and q1, q2 for tri's two other vertices. The certificate fires only
+// when f(q1) and f(q2) are both strictly positive or both strictly negative.
+//
+//  1. f(v) = 0. v is a corner of the triangle whose plane this is, so it lies
+//     on that plane. The caller guarantees this by passing the index the two
+//     triangles SHARE; the reading never needs to test it.
+//  2. Every point of tri is p = αv + βq1 + γq2 with α + β + γ = 1 and all
+//     three coefficients at least zero, since a closed triangle is the convex
+//     hull of its corners.
+//  3. f is affine, so f(p) = β·f(q1) + γ·f(q2). With f(q1) and f(q2) sharing
+//     one strict sign, that sum is zero exactly when β = γ = 0, which is
+//     exactly p = v.
+//  4. So tri meets the plane only at v. The other triangle lies IN that plane,
+//     so the pair's whole intersection is contained in {v} — and v belongs to
+//     both triangles, so it IS {v}, the contact the pair's shared vertex
+//     expects.
+//
+// A zero among the two tested signs breaks step 3 and is never accepted, so
+// the reading is a proof and not an estimate. A collapsed triangle cannot
+// smuggle a verdict through either: its exact normal is the zero vector, every
+// sign against it is zero, and the certificate cannot fire.
+func isolatedSharedVertex(tri [3]int, sharedIndex int, signs [3]int) bool {
+	positive, negative := 0, 0
+	for k, vertex := range tri {
+		if vertex == sharedIndex {
+			continue
+		}
+		switch {
+		case signs[k] > 0:
+			positive++
+		case signs[k] < 0:
+			negative++
+		}
+	}
+	return positive == 2 || negative == 2
 }
 
 // trianglePlaneSigns returns the exact signs of other against tri's oriented
