@@ -814,7 +814,7 @@ func deepWitnessInside(ctx context.Context, m *boolMesh, closeFacets []int, othe
 			if certifiedInteriorDepth(p, other) <= b {
 				continue
 			}
-			inside, onBoundary, err := meshParityContext(ctx, p, other.verts, other.tris, all)
+			inside, onBoundary, err := meshParityPreparedContext(ctx, p, other.parity, all)
 			if err != nil {
 				if ctxErr := ctx.Err(); ctxErr != nil {
 					return false, ctxErr

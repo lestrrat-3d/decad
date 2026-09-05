@@ -34,6 +34,12 @@ type boolMesh struct {
 	// it is a property of the edge's TWO adjacent facets, which no facet pair
 	// can see (docs/evaluator-design.md §9).
 	owner map[[2]int]int
+	// parity caches this operand's vertex projections for the exact ray-parity
+	// kernel, which every uncut-component seed, unanchored region probe and
+	// near-miss depth witness of one operation asks about THIS operand. The
+	// cache is empty until a query sweeps an axis, and it lives exactly as long
+	// as the prepared operand does.
+	parity *parityMesh
 }
 
 // twinFacet returns the facet across edge k of facet f — the neighbour a
@@ -89,6 +95,11 @@ func prepBoolMeshContext(ctx context.Context, m *Mesh, src []int) (*boolMesh, er
 			bm.owner[[2]int{tri[k], tri[(k+1)%3]}] = i
 		}
 	}
+	// The operand is now proven liftable, so its parity queries may share one
+	// projection cache. This allocates the holder alone: no vertex is projected
+	// until a query actually sweeps an axis, so an operand nothing probes pays
+	// nothing.
+	bm.parity = newParityMesh(bm.verts, bm.tris)
 	return bm, nil
 }
 
@@ -1044,7 +1055,7 @@ func keepSide(ctx context.Context, m, other *boolMesh, cuts map[int][]xseg, bloc
 		// operand outright if any facet collapsed.
 		seed := xtriCorners(m, members[0])
 		probe := xCentroid(seed[0], seed[1], seed[2])
-		inside, onBoundary, err := meshParityContext(ctx, probe, other.verts, other.tris, all)
+		inside, onBoundary, err := meshParityPreparedContext(ctx, probe, other.parity, all)
 		if err != nil {
 			return nil, err
 		}
@@ -1078,7 +1089,7 @@ func classifyRegion(ctx context.Context, reg cutRegion, other *boolMesh) (bool, 
 			return false, fmt.Errorf(`%w: a region probe landed on its contact plane`, ErrBooleanFailed)
 		}
 	}
-	inside, onBoundary, err := meshParityContext(ctx, reg.probe, other.verts, other.tris, allFacets(other))
+	inside, onBoundary, err := meshParityPreparedContext(ctx, reg.probe, other.parity, allFacets(other))
 	if err != nil {
 		return false, err
 	}

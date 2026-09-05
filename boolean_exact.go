@@ -1176,12 +1176,76 @@ func xIntCoordOf(p xpt, axis int) *big.Int {
 	}
 }
 
+// parityMesh is one mesh's vertex-projection cache for the parity kernel: the
+// mesh's own vertex and facet buffers, held by reference, plus one lazily
+// filled projection slice per swept axis.
+//
+// A cache belongs to ONE prepared operand within ONE operation. Every path that
+// holds one — keepSide, classifyRegion, and the near-miss depth witness scan —
+// runs serially on its caller's goroutine, so an entry is never read while
+// another goroutine writes it. There is deliberately no global, no pool and no
+// Document field: a cache outliving its operation would outlive the buffers it
+// projects.
+//
+// An entry is IMMUTABLE once initialized. cross2xSign and cross2x only read an
+// xp2's rationals — neither ever uses one as an arithmetic destination — so a
+// projection shared across every query of this mesh classifies exactly as the
+// fresh per-facet copy it replaces.
+type parityMesh struct {
+	verts []r3.Vec
+	tris  [][3]int
+	// projections[axis][vi] is vertex vi projected onto the plane a ray
+	// sweeping axis leaves. Both rays of an axis carry the same (u, v) pair
+	// (axisRays), so one slot per axis serves both senses. A slot stays nil
+	// until that axis is first swept, and within a slot a nil u marks an entry
+	// still unfilled: a materialized projection's coordinates are always
+	// non-nil rationals, an exact zero included, so the two states never alias.
+	projections [3][]xp2
+}
+
+// newParityMesh prepares verts and tris for repeated parity queries. It stores
+// the caller's buffers by reference and materializes no projection at all: an
+// axis slice is allocated on that axis's first sweep, and a vertex's projection
+// on its own first use.
+func newParityMesh(verts []r3.Vec, tris [][3]int) *parityMesh {
+	return &parityMesh{verts: verts, tris: tris}
+}
+
+// vertexProjection returns vertex vi projected onto the (u, v) plane a ray
+// sweeping axis leaves, constructing it on first use and caching it unchanged.
+// The returned xp2 is read-only: its rationals are the cache's own, so a caller
+// must never make one the destination of an arithmetic operation.
+func (pm *parityMesh) vertexProjection(axis, u, v, vi int) xp2 {
+	slot := pm.projections[axis]
+	if slot == nil {
+		slot = make([]xp2, len(pm.verts))
+		pm.projections[axis] = slot
+	}
+	if slot[vi].u == nil {
+		vert := pm.verts[vi]
+		slot[vi] = newXP2(mustRatOf(coordOf(vert, u)), mustRatOf(coordOf(vert, v)))
+	}
+	return slot[vi]
+}
+
 // meshParity reports, exactly, whether p lies inside the closed float-vertex
 // mesh restricted to the given facet subset: the crossing parity of an
 // axis-aligned ray. A ray the point's projection meets at a facet's projected
 // boundary is ambiguous and the next axis is tried; a p exactly ON a facet is
 // onBoundary. All six axes ambiguous is a genuine failure — never a guess.
+//
+// This is the raw-buffer entry point: it prepares a single-use projection cache
+// and answers one query through it. A caller holding an operand across many
+// queries wants meshParityPreparedContext with that operand's own cache.
 func meshParityContext(ctx context.Context, p xpt, verts []r3.Vec, tris [][3]int, subset []int) (bool, bool, error) {
+	return meshParityPreparedContext(ctx, p, newParityMesh(verts, tris), subset)
+}
+
+// meshParityPreparedContext is meshParityContext over a prepared mesh whose
+// vertex projections persist between queries. The classification is identical:
+// only where each projection's rationals come from changes, and the cache hands
+// back the same value the per-facet construction built.
+func meshParityPreparedContext(ctx context.Context, p xpt, prepared *parityMesh, subset []int) (bool, bool, error) {
 	for _, ray := range axisRays {
 		crossings := 0
 		ambiguous := false
@@ -1203,11 +1267,11 @@ func meshParityContext(ctx context.Context, p xpt, verts []r3.Vec, tris [][3]int
 			if i == 0 {
 				pa = newXP2(ratCoordOf(p, ray.u), ratCoordOf(p, ray.v))
 			}
-			tri := tris[ti]
-			a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
-			qa := newXP2(mustRatOf(coordOf(a, ray.u)), mustRatOf(coordOf(a, ray.v)))
-			qb := newXP2(mustRatOf(coordOf(b, ray.u)), mustRatOf(coordOf(b, ray.v)))
-			qc := newXP2(mustRatOf(coordOf(c, ray.u)), mustRatOf(coordOf(c, ray.v)))
+			tri := prepared.tris[ti]
+			a, b, c := prepared.verts[tri[0]], prepared.verts[tri[1]], prepared.verts[tri[2]]
+			qa := prepared.vertexProjection(ray.axis, ray.u, ray.v, tri[0])
+			qb := prepared.vertexProjection(ray.axis, ray.u, ray.v, tri[1])
+			qc := prepared.vertexProjection(ray.axis, ray.u, ray.v, tri[2])
 			s1 := cross2xSign(qa, qb, pa)
 			s2 := cross2xSign(qb, qc, pa)
 			s3 := cross2xSign(qc, qa, pa)

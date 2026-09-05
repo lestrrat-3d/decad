@@ -263,6 +263,10 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*face
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
+			// The raw-buffer entry point on purpose: these are the RESULT
+			// mesh's own vertices, freshly stitched, and no operand's prepared
+			// projection cache describes them. Reusing one here would project
+			// the wrong mesh.
 			inside, onBoundary, err := meshParityContext(ctx, probe, verts, tris, audit.members[outer])
 			if err != nil {
 				return nil, err
