@@ -915,7 +915,7 @@ a differently-authored model of the same intent can clear it.
 
 Reuses `budget.go`'s existing `workBudget` (`newWorkBudget(ctx)`), the same
 shared counter Fillet/Chamfer/Shell already thread through their own audits
-(CLAUDE.md's "Modify audit cancellation"). PR1 opens one counter per
+(`docs/modify-design.md` §5). PR1 opens one counter per
 `tryPrismUnion` attempt and threads it through: the G4 segment scan, scene
 construction (one charge per created entity), the §4.2 selection/merge walk
 (one charge per candidate edge/cell touched, matching `crossingAuditBudget`'s

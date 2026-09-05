@@ -12,15 +12,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Regression guard for CLAUDE.md's Layout table (see CLAUDE.md's own
-// "## Layout" section and ~/.claude/docs/agent-instructions.md's "prefer
-// mechanical doc/code checks over exhortations"): each feature PR tends to
-// append prose to a row's description cell instead of pointing elsewhere, so
-// this test fails the moment the file grows past its budget, a row's cell
-// grows past its own, or a row stops parsing as a row at all. A mechanical
-// comparison that can FAIL beats a comment asking authors to "keep it short".
+// Regression guard for the two agent docs CLAUDE.md and docs/layout.md (see
+// docs/layout.md's own "## Layout rows" section and
+// ~/.claude/docs/agent-instructions.md's "prefer mechanical doc/code checks
+// over exhortations"): each feature PR tends to append prose to a row's
+// description cell instead of pointing elsewhere, so this test fails the
+// moment either file grows past its budget, a row's cell grows past its own,
+// or a row stops parsing as a row at all. A mechanical comparison that can
+// FAIL beats a comment asking authors to "keep it short".
 //
-// The guard is only as strong as the parser's reach, so parseCLAUDEMD is a
+// The two files are measured under one scanner and two specs. docs/layout.md
+// holds the Layout table and is the only file whose "## Layout" heading is
+// admitted; CLAUDE.md declares its own non-Layout table and is refused a
+// Layout heading or table outright, since a second copy of the table is one
+// that nothing keeps in step with the first.
+//
+// The guard is only as strong as the parser's reach, so parseAgentDoc is a
 // TOTAL scanner: every line of the file passes through one classifier exactly
 // once, and a line the classifier reads as a heading or as part of a table
 // without being the one declared spelling is REFUSED wherever it sits — not
@@ -38,9 +45,16 @@ import (
 //     900 bytes. The byte budget is the backstop for that too.
 const (
 	claudeMDPath = "CLAUDE.md"
-	// claudeMDMaxBytes is the whole-file budget. Raising it is a policy
-	// change, not a bug fix — trim a Layout row instead.
-	claudeMDMaxBytes = 32768
+	// layoutDocPath holds the Layout table CLAUDE.md's "Read before you
+	// write" table points at. It carries the package's whole file index,
+	// which is why it is a pre-read rather than text loaded into every
+	// conversation.
+	layoutDocPath = designDocDir + "/layout.md"
+	// claudeMDMaxBytes and layoutDocMaxBytes are the two whole-file
+	// budgets. Raising either is a policy change, not a bug fix — trim a
+	// Layout row, or move detail into the file the row names, instead.
+	claudeMDMaxBytes  = 8192
+	layoutDocMaxBytes = 27648
 	// layoutCellMaxChars caps a Layout row's description (second) column.
 	// A row that needs more detail belongs in the file/doc it names, with
 	// this cell trimmed back to a short pointer.
@@ -94,12 +108,12 @@ var backtickPathRe = regexp.MustCompile("`([^`]+)`")
 // layoutRowRe is malformed rather than scaffolding.
 var layoutSeparatorRe = regexp.MustCompile(`^\|(?:\s*:?-+:?\s*\|)+$`)
 
-// layoutHeading is the one "##" heading CLAUDE.md's Layout tables live under.
-// The file may carry exactly one of it, spelled exactly this way: parseCLAUDEMD
-// binds its whole parse to that heading, so a second copy anywhere in the file
-// — before the real one as a decoy, after it as an annex, fenced off so it
-// renders invisibly — would silently decide which rows are measured and which
-// are never seen.
+// layoutHeading is the one "##" heading the Layout tables live under, in the
+// one file that holds them. That file may carry exactly one of it, spelled
+// exactly this way: parseAgentDoc binds its whole parse to that heading, so a
+// second copy anywhere — before the real one as a decoy, after it as an
+// annex, fenced off so it renders invisibly — would silently decide which
+// rows are measured and which are never seen.
 const layoutHeading = "## Layout"
 
 // layoutHeadingLookalikeRe matches every line a reader would take for the
@@ -118,17 +132,45 @@ const (
 	layoutTableSeparator = "|---|---|"
 )
 
-// nonLayoutTableHeaders declares every table CLAUDE.md carries OUTSIDE its
-// Layout section, spelled exactly, beside the heading it belongs under. The
-// scanner refuses every other table shape anywhere in the file, so adding a
-// table to CLAUDE.md means declaring it here first. That refuse-by-default is
-// the point: a table the guard does not know about holds cells nothing
+// tableDecl is one table a docSpec carries OUTSIDE any Layout section,
+// spelled exactly, beside the heading it belongs under.
+type tableDecl struct{ header, section string }
+
+// docSpec is one agent doc this guard measures: where it lives, what it may
+// weigh, whether it is the file that holds the Layout table, and every
+// non-Layout table it declares.
+//
+// The scanner refuses every table shape a spec does not declare, so adding a
+// table to either file means declaring it here first. That refuse-by-default
+// is the point: a table the guard does not know about holds cells nothing
 // measures. Declared rows are still cell-capped — see "every table cell is
 // within the cell budget" — so declaring a table bounds it rather than
 // exempting it.
-var nonLayoutTableHeaders = []struct{ header, section string }{
-	{"| Before writing | Read |", "## Read before you write"},
+type docSpec struct {
+	path            string
+	maxBytes        int
+	holdsLayout     bool
+	nonLayoutTables []tableDecl
 }
+
+// claudeMDSpec and layoutDocSpec are the two docs, and holdsLayout is what
+// separates them: exactly one file may carry the Layout table, so the other
+// is refused a Layout heading or table outright rather than being allowed a
+// second copy nothing keeps in step with the first.
+var (
+	claudeMDSpec = docSpec{
+		path:     claudeMDPath,
+		maxBytes: claudeMDMaxBytes,
+		nonLayoutTables: []tableDecl{
+			{"| Before writing | Read |", "## Read before you write"},
+		},
+	}
+	layoutDocSpec = docSpec{
+		path:        layoutDocPath,
+		maxBytes:    layoutDocMaxBytes,
+		holdsLayout: true,
+	}
+)
 
 var (
 	// atxHeadingRe is CommonMark's ATX heading: up to three spaces of
@@ -149,17 +191,31 @@ var (
 )
 
 // The fixtures below share four strings: the invented sub-heading every
-// fixture section opens its table under, the real "##" heading each fixture
-// closes its Layout section at, and the two refusal fragments the table and
-// heading branches are pinned by.
+// fixture section opens its table under, the invented "##" heading each
+// fixture closes its Layout section at, and the two refusal fragments the
+// table and heading branches are pinned by.
 const (
 	inventedSubHeading    = "### Invented sub-table"
-	conventionsHeading    = "## Conventions"
+	inventedNextHeading   = "## Invented next section"
 	wantStrayTable        = "outside any declared table"
 	wantMisspelledHeading = "not spelled that way"
 )
 
-// layoutRow is one parsed data row of CLAUDE.md's "## Layout" table.
+// fixtureSpec is the spec every fixture below parses under. It both holds the
+// Layout table and declares a non-Layout table, so ONE fixture set exercises
+// both branches of the scanner; the two real specs each use one branch only,
+// and neither could exercise the other. Its path and table are invented and
+// appear in no file in this repository.
+var fixtureSpec = docSpec{
+	path:        "invented-fixture.md",
+	maxBytes:    layoutDocMaxBytes,
+	holdsLayout: true,
+	nonLayoutTables: []tableDecl{
+		{"| Invented column | Another |", "## Invented declared table"},
+	},
+}
+
+// layoutRow is one parsed data row of the Layout table.
 type layoutRow struct {
 	line        int      // 1-based source line, for failure messages
 	paths       []string // one or two paths named in column 1
@@ -175,8 +231,8 @@ type tableCell struct {
 	text   string
 }
 
-// claudeMDTables is everything parseCLAUDEMD measured.
-type claudeMDTables struct {
+// agentDocTables is everything parseAgentDoc measured.
+type agentDocTables struct {
 	rows       []layoutRow // data rows of the Layout tables
 	otherCells []tableCell // cells of every declared non-Layout table
 }
@@ -261,10 +317,10 @@ func splitRowCells(s string, pipes []int) []string {
 	return cells
 }
 
-// declaredNonLayoutHeader returns the heading a declared non-Layout table
+// declaredNonLayoutHeader returns the heading a table this spec declares
 // belongs under, or "" if the line is not one of them.
-func declaredNonLayoutHeader(trimmed string) string {
-	for _, t := range nonLayoutTableHeaders {
+func (spec docSpec) declaredNonLayoutHeader(trimmed string) string {
+	for _, t := range spec.nonLayoutTables {
 		if trimmed == t.header {
 			return t.section
 		}
@@ -272,27 +328,33 @@ func declaredNonLayoutHeader(trimmed string) string {
 	return ""
 }
 
-// declaredHeaders renders every table header the file may carry, for the
-// refusal that names them.
-func declaredHeaders() string {
-	out := []string{layoutTableHeader}
-	for _, t := range nonLayoutTableHeaders {
+// declaredHeaders renders every table header this spec's file may carry, for
+// the refusal that names them.
+func (spec docSpec) declaredHeaders() string {
+	var out []string
+	if spec.holdsLayout {
+		out = append(out, layoutTableHeader)
+	}
+	for _, t := range spec.nonLayoutTables {
 		out = append(out, t.header)
+	}
+	if len(out) == 0 {
+		return "none"
 	}
 	return strings.Join(out, ", ")
 }
 
 // requireSeparator refuses a declared table header whose alignment row does
 // not follow it, since without one the lines beneath are not a table at all.
-func requireSeparator(lines []string, i int, header string) error {
+func (spec docSpec) requireSeparator(lines []string, i int, header string) error {
 	if i+1 >= len(lines) || !layoutSeparatorRe.MatchString(strings.TrimSpace(lines[i+1])) {
-		return fmt.Errorf("CLAUDE.md:%d: %q header is not followed by its %q separator, so the lines beneath it are not a table at all",
-			i+1, header, layoutTableSeparator)
+		return fmt.Errorf("%s:%d: %q header is not followed by its %q separator, so the lines beneath it are not a table at all",
+			spec.path, i+1, header, layoutTableSeparator)
 	}
 	return nil
 }
 
-// parseCLAUDEMD scans the WHOLE file once and extracts every data row of every
+// parseAgentDoc scans the WHOLE file once and extracts every data row of every
 // "## Layout" table, plus the cells of every declared non-Layout table.
 //
 // The checks those rows feed are only as good as the scanner's reach: text the
@@ -309,18 +371,20 @@ func requireSeparator(lines []string, i int, header string) error {
 // Section and table membership are DERIVED from that classification, under
 // five structural rules:
 //
-//  1. layoutHeading appears exactly once, spelled exactly. A second copy —
-//     earlier, later, or inside a code fence — would capture the parse and
-//     leave the rows it did not capture unmeasured. A line that READS as the
-//     Layout heading in any other spelling (a setext underline, a closing "##"
-//     sequence, extra or non-ASCII whitespace, different case) is refused for
-//     the same reason: it renders as a Layout section the scanner cannot bind
-//     to.
+//  1. layoutHeading appears exactly once in the spec that holds the Layout
+//     table, spelled exactly, and never at all in the spec that does not. A
+//     second copy — earlier, later, in the other file, or inside a code fence
+//     — would capture the parse and leave the rows it did not capture
+//     unmeasured. A line that READS as the Layout heading in any other
+//     spelling (a setext underline, a closing "##" sequence, extra or
+//     non-ASCII whitespace, different case) is refused for the same reason: it
+//     renders as a Layout section the scanner cannot bind to.
 //  2. Every table opens with a declared header — layoutTableHeader inside the
-//     Layout section, one of nonLayoutTableHeaders outside it — immediately
-//     followed by its separator row. Any other line the table syntax would
-//     read as part of a table is refused wherever it sits, whatever its header
-//     cells say and whether or not it carries leading pipes.
+//     Layout section, one of the spec's own nonLayoutTables outside it —
+//     immediately followed by its separator row. Any other line the table
+//     syntax would read as part of a table is refused wherever it sits,
+//     whatever its header cells say and whether or not it carries leading
+//     pipes.
 //  3. Inside the section, the only prose allowed is the section's own lead,
 //     ahead of the first table. Once a table has opened, loose prose is
 //     refused, since prose beside the rows reads as row text while escaping
@@ -350,9 +414,10 @@ func requireSeparator(lines []string, i int, header string) error {
 // un-fencing edit away from capturing the parse. An over-indented copy is not
 // refused, because under the format's own three-space rule it is not the
 // canonical spelling at all and can never be read as the anchor.
-func parseCLAUDEMD(content string) (*claudeMDTables, error) {
+func parseAgentDoc(spec docSpec, content string) (*agentDocTables, error) {
+	path := spec.path
 	var (
-		out       claudeMDTables
+		out       agentDocTables
 		headings  int    // "## Layout" headings seen so far
 		inSection bool   // inside the Layout section
 		inTable   bool   // inside an open table's row block
@@ -381,14 +446,14 @@ func parseCLAUDEMD(content string) (*claudeMDTables, error) {
 			case layoutHeading:
 				headings++
 				if headings > 1 {
-					return nil, fmt.Errorf("CLAUDE.md:%d: a second %q heading, this one inside a code fence — the file may carry exactly one, and a fenced copy is one un-fencing edit away from capturing the parse and leaving every row of the other section unmeasured: %q",
-						at, layoutHeading, trimmed)
+					return nil, fmt.Errorf("%s:%d: a second %q heading, this one inside a code fence — the file may carry exactly one, and a fenced copy is one un-fencing edit away from capturing the parse and leaving every row of the other section unmeasured: %q",
+						path, at, layoutHeading, trimmed)
 				}
-				return nil, fmt.Errorf("CLAUDE.md:%d: a %q heading inside a code fence — the file's one Layout heading may not be a fenced copy, which is one un-fencing edit away from capturing the parse: %q",
-					at, layoutHeading, trimmed)
+				return nil, fmt.Errorf("%s:%d: a %q heading inside a code fence — the file's one Layout heading may not be a fenced copy, which is one un-fencing edit away from capturing the parse: %q",
+					path, at, layoutHeading, trimmed)
 			case layoutTableHeader:
-				return nil, fmt.Errorf("CLAUDE.md:%d: a %q table header inside a code fence — it is one un-fencing edit away from opening a table whose rows this guard would have to measure: %q",
-					at, layoutTableHeader, trimmed)
+				return nil, fmt.Errorf("%s:%d: a %q table header inside a code fence — it is one un-fencing edit away from opening a table whose rows this guard would have to measure: %q",
+					path, at, layoutTableHeader, trimmed)
 			}
 			continue
 		}
@@ -411,21 +476,25 @@ func parseCLAUDEMD(content string) (*claudeMDTables, error) {
 		// then see.
 		if strings.HasPrefix(raw, "    ") || strings.HasPrefix(raw, "\t") {
 			if inTable && len(tablePipeIndices(raw)) > 0 {
-				return nil, fmt.Errorf("CLAUDE.md:%d: a table row indented four spaces or more — that indent ends the table the row appears to continue, leaving it measured by nothing: %q",
-					at, trimmed)
+				return nil, fmt.Errorf("%s:%d: a table row indented four spaces or more — that indent ends the table the row appears to continue, leaving it measured by nothing: %q",
+					path, at, trimmed)
 			}
 			continue
 		}
 
 		if layoutHeadingLookalikeRe.MatchString(raw) {
 			if raw != layoutHeading {
-				return nil, fmt.Errorf("CLAUDE.md:%d: a heading that reads as the %q heading but is not spelled that way — the guard binds to that one spelling, so this section renders as Layout while every row under it goes unmeasured: %q",
-					at, layoutHeading, raw)
+				return nil, fmt.Errorf("%s:%d: a heading that reads as the %q heading but is not spelled that way — the guard binds to that one spelling, so this section renders as Layout while every row under it goes unmeasured: %q",
+					path, at, layoutHeading, raw)
+			}
+			if !spec.holdsLayout {
+				return nil, fmt.Errorf("%s:%d: a %q heading in the file that does NOT hold the Layout table — %s owns it, and a second copy here is one nothing keeps in step with the first: %q",
+					path, at, layoutHeading, layoutDocPath, trimmed)
 			}
 			headings++
 			if headings > 1 {
-				return nil, fmt.Errorf("CLAUDE.md:%d: a second %q heading — the file may carry exactly one, since a duplicate captures the parse and leaves every row of the other section unmeasured: %q",
-					at, layoutHeading, trimmed)
+				return nil, fmt.Errorf("%s:%d: a second %q heading — the file may carry exactly one, since a duplicate captures the parse and leaves every row of the other section unmeasured: %q",
+					path, at, layoutHeading, trimmed)
 			}
 			inSection, inTable, sawTable, prevProse = true, false, false, false
 			continue
@@ -444,8 +513,8 @@ func parseCLAUDEMD(content string) (*claudeMDTables, error) {
 
 		if setextRuleRe.MatchString(raw) {
 			if prevProse {
-				return nil, fmt.Errorf("CLAUDE.md:%d: %q underlined with %q is a setext heading — CLAUDE.md's headings are ATX (%q), and a setext one read as prose opens a whole section this guard never measures",
-					at, strings.TrimSpace(lines[i-1]), trimmed, layoutHeading)
+				return nil, fmt.Errorf("%s:%d: %q underlined with %q is a setext heading — these files' headings are ATX (%q), and a setext one read as prose opens a whole section this guard never measures",
+					path, at, strings.TrimSpace(lines[i-1]), trimmed, layoutHeading)
 			}
 			inTable, prevProse = false, false // a thematic break
 			continue
@@ -455,10 +524,10 @@ func parseCLAUDEMD(content string) (*claudeMDTables, error) {
 			switch {
 			case trimmed == layoutTableHeader:
 				if !inSection {
-					return nil, fmt.Errorf("CLAUDE.md:%d: a %q table opens outside the %q section — every Layout table belongs under that heading, where its rows are measured: %q",
-						at, layoutTableHeader, layoutHeading, trimmed)
+					return nil, fmt.Errorf("%s:%d: a %q table opens outside the %q section — every Layout table belongs under that heading, where its rows are measured: %q",
+						path, at, layoutTableHeader, layoutHeading, trimmed)
 				}
-				if err := requireSeparator(lines, i, layoutTableHeader); err != nil {
+				if err := spec.requireSeparator(lines, i, layoutTableHeader); err != nil {
 					return nil, err
 				}
 				i++ // the separator belongs to this header and is not a data row
@@ -466,12 +535,12 @@ func parseCLAUDEMD(content string) (*claudeMDTables, error) {
 				prevProse = false
 				continue
 
-			case declaredNonLayoutHeader(trimmed) != "":
+			case spec.declaredNonLayoutHeader(trimmed) != "":
 				if inSection {
-					return nil, fmt.Errorf("CLAUDE.md:%d: a %q table inside the %q section — every table under that heading is a Layout table opening with %q, so its rows are measured as Layout rows: %q",
-						at, trimmed, layoutHeading, layoutTableHeader, trimmed)
+					return nil, fmt.Errorf("%s:%d: a %q table inside the %q section — every table under that heading is a Layout table opening with %q, so its rows are measured as Layout rows: %q",
+						path, at, trimmed, layoutHeading, layoutTableHeader, trimmed)
 				}
-				if err := requireSeparator(lines, i, trimmed); err != nil {
+				if err := spec.requireSeparator(lines, i, trimmed); err != nil {
 					return nil, err
 				}
 				i++
@@ -482,12 +551,12 @@ func parseCLAUDEMD(content string) (*claudeMDTables, error) {
 			case inTable && layoutTbl:
 				m := layoutRowRe.FindStringSubmatch(trimmed)
 				if m == nil {
-					return nil, fmt.Errorf("CLAUDE.md:%d: line starts with %q but is neither a %q header, a %q separator, nor a well-formed data row (%q) — it would be skipped, and a skipped row escapes the cell-length and path-existence checks: %q",
-						at, "|", layoutTableHeader, layoutTableSeparator, "| `path.go` | Description. |", trimmed)
+					return nil, fmt.Errorf("%s:%d: line starts with %q but is neither a %q header, a %q separator, nor a well-formed data row (%q) — it would be skipped, and a skipped row escapes the cell-length and path-existence checks: %q",
+						path, at, "|", layoutTableHeader, layoutTableSeparator, "| `path.go` | Description. |", trimmed)
 				}
 				paths := extractPaths(m[1])
 				if len(paths) == 0 {
-					return nil, fmt.Errorf("CLAUDE.md:%d: Layout row's first column has no backtick-quoted path: %q", at, m[1])
+					return nil, fmt.Errorf("%s:%d: Layout row's first column has no backtick-quoted path: %q", path, at, m[1])
 				}
 				out.rows = append(out.rows, layoutRow{line: at, paths: paths, description: strings.TrimSpace(m[2])})
 				prevProse = false
@@ -501,40 +570,44 @@ func parseCLAUDEMD(content string) (*claudeMDTables, error) {
 				continue
 
 			default:
-				return nil, fmt.Errorf("CLAUDE.md:%d: a line the Markdown table syntax reads as a table row, outside any declared table — every table opens with one of these headers (%s) followed by its %q separator, so a table spelled any other way, or placed anywhere else, holds cells no check measures: %q",
-					at, declaredHeaders(), layoutTableSeparator, trimmed)
+				return nil, fmt.Errorf("%s:%d: a line the Markdown table syntax reads as a table row, outside any declared table — every table opens with one of these headers (%s) followed by its %q separator, so a table spelled any other way, or placed anywhere else, holds cells no check measures: %q",
+					path, at, spec.declaredHeaders(), layoutTableSeparator, trimmed)
 			}
 		}
 
 		if htmlBlockRe.MatchString(raw) {
-			return nil, fmt.Errorf("CLAUDE.md:%d: an HTML block in CLAUDE.md — this guard reads Markdown structure only, so an HTML table or comment holds text that reads as documentation while escaping every row check: %q",
-				at, trimmed)
+			return nil, fmt.Errorf("%s:%d: an HTML block — this guard reads Markdown structure only, so an HTML table or comment holds text that reads as documentation while escaping every row check: %q",
+				path, at, trimmed)
 		}
 
 		if inSection && sawTable {
-			return nil, fmt.Errorf("CLAUDE.md:%d: prose inside the %q section after a table has opened — only the section's own lead prose, ahead of the first table, may sit here; anything later reads as row text while escaping the cell-length and path-existence checks: %q",
-				at, layoutHeading, trimmed)
+			return nil, fmt.Errorf("%s:%d: prose inside the %q section after a table has opened — only the section's own lead prose, ahead of the first table, may sit here; anything later reads as row text while escaping the cell-length and path-existence checks: %q",
+				path, at, layoutHeading, trimmed)
 		}
 
 		prevProse = true // the section's own lead prose, or prose outside it
 	}
 
 	if fence != "" {
-		return nil, fmt.Errorf("CLAUDE.md:%d: a code fence opened here is never closed, so every line beneath it is read as fenced content and measured by nothing", fenceAt)
+		return nil, fmt.Errorf("%s:%d: a code fence opened here is never closed, so every line beneath it is read as fenced content and measured by nothing", path, fenceAt)
+	}
+	if !spec.holdsLayout {
+		return &out, nil
 	}
 	if headings == 0 {
-		return nil, fmt.Errorf("no %q heading in CLAUDE.md — the section moved or was renamed; fix parseCLAUDEMD in this test", layoutHeading)
+		return nil, fmt.Errorf("no %q heading in %s — the section moved or was renamed; fix parseAgentDoc in this test", layoutHeading, path)
 	}
 	if len(out.rows) == 0 {
-		return nil, fmt.Errorf("parsed zero rows from CLAUDE.md's Layout table — the table moved or its format changed; fix parseCLAUDEMD in this test")
+		return nil, fmt.Errorf("parsed zero rows from %s's Layout table — the table moved or its format changed; fix parseAgentDoc in this test", path)
 	}
 	return &out, nil
 }
 
-// parseLayoutRows is parseCLAUDEMD's Layout-row half, the shape most fixtures
-// assert on.
+// parseLayoutRows is parseAgentDoc's Layout-row half, the shape most fixtures
+// assert on. Every fixture is content for the file that HOLDS the Layout
+// table, so it binds to that spec.
 func parseLayoutRows(content string) ([]layoutRow, error) {
-	parsed, err := parseCLAUDEMD(content)
+	parsed, err := parseAgentDoc(fixtureSpec, content)
 	if err != nil {
 		return nil, err
 	}
@@ -553,37 +626,56 @@ func extractPaths(col1 string) []string {
 // TestCLAUDEMDLayoutStaysCompact is the regression guard described above.
 // Each failure names the row or file to fix, so its output doubles as the
 // trim worklist.
+//
+// Both specs are parsed and both are cell-capped and size-capped. The
+// coverage and path checks read the Layout rows, which only layoutDocSpec
+// yields — CLAUDE.md is refused a Layout table outright, so its parse
+// contributes its declared non-Layout cells alone.
 func TestCLAUDEMDLayoutStaysCompact(t *testing.T) {
-	data, err := os.ReadFile(claudeMDPath)
-	require.NoErrorf(t, err, "could not read %s from the test's working directory (expected to be the repository root)", claudeMDPath)
-	content := string(data)
+	var rows []layoutRow
 
-	parsed, err := parseCLAUDEMD(content)
-	require.NoError(t, err, "CLAUDE.md's Layout table did not parse")
-	rows := parsed.rows
+	for _, spec := range []docSpec{claudeMDSpec, layoutDocSpec} {
+		data, err := os.ReadFile(spec.path)
+		require.NoErrorf(t, err, "could not read %s from the test's working directory (expected to be the repository root)", spec.path)
 
-	t.Run("file size budget", func(t *testing.T) {
-		require.LessOrEqualf(t, len(data), claudeMDMaxBytes,
-			"%s is %d bytes, over the %d byte budget — trim a Layout table row back to a short pointer instead of appending prose to it", claudeMDPath, len(data), claudeMDMaxBytes)
-	})
+		parsed, err := parseAgentDoc(spec, string(data))
+		require.NoErrorf(t, err, "%s did not parse", spec.path)
+		rows = append(rows, parsed.rows...)
 
-	t.Run("layout cell length budget", func(t *testing.T) {
-		for _, row := range rows {
-			t.Run(strings.Join(row.paths, " "), func(t *testing.T) {
-				n := utf8.RuneCountInString(row.description)
+		t.Run(spec.path+" file size budget", func(t *testing.T) {
+			require.LessOrEqualf(t, len(data), spec.maxBytes,
+				"%s is %d bytes, over the %d byte budget — trim a Layout table row back to a short pointer, or move the detail into the file the row names, instead of appending prose to it", spec.path, len(data), spec.maxBytes)
+		})
+
+		t.Run(spec.path+" layout cell length budget", func(t *testing.T) {
+			for _, row := range parsed.rows {
+				t.Run(strings.Join(row.paths, " "), func(t *testing.T) {
+					n := utf8.RuneCountInString(row.description)
+					require.LessOrEqualf(t, n, layoutCellMaxChars,
+						"%s:%d: Layout row for %v has a %d-character description cell, over the %d budget — trim it to a short pointer and move the detail into the file or doc it names", spec.path, row.line, row.paths, n, layoutCellMaxChars)
+				})
+			}
+		})
+
+		t.Run(spec.path+" every table cell is within the cell budget", func(t *testing.T) {
+			for _, cell := range parsed.otherCells {
+				n := utf8.RuneCountInString(cell.text)
 				require.LessOrEqualf(t, n, layoutCellMaxChars,
-					"CLAUDE.md:%d: Layout row for %v has a %d-character description cell, over the %d budget — trim it to a short pointer and move the detail into the file or doc it names", row.line, row.paths, n, layoutCellMaxChars)
-			})
-		}
-	})
+					"%s:%d: column %d of a %q row has a %d-character cell, over the %d budget — trim it to a short pointer", spec.path, cell.line, cell.column, cell.header, n, layoutCellMaxChars)
+			}
+		})
 
-	t.Run("every table cell is within the cell budget", func(t *testing.T) {
-		for _, cell := range parsed.otherCells {
-			n := utf8.RuneCountInString(cell.text)
-			require.LessOrEqualf(t, n, layoutCellMaxChars,
-				"CLAUDE.md:%d: column %d of a %q row has a %d-character cell, over the %d budget — trim it to a short pointer", cell.line, cell.column, cell.header, n, layoutCellMaxChars)
-		}
-	})
+		t.Run(spec.path+" every layout path exists", func(t *testing.T) {
+			for _, row := range parsed.rows {
+				for _, p := range row.paths {
+					t.Run(p, func(t *testing.T) {
+						_, err := os.Stat(p)
+						require.NoErrorf(t, err, "%s:%d: Layout row names %q, which does not exist on disk — update or remove the row", spec.path, row.line, p)
+					})
+				}
+			}
+		})
+	}
 
 	t.Run("every root go file has a layout row", func(t *testing.T) {
 		covered := coveredPaths(rows, ".go")
@@ -594,14 +686,14 @@ func TestCLAUDEMDLayoutStaysCompact(t *testing.T) {
 		for _, name := range names {
 			t.Run(name, func(t *testing.T) {
 				_, ok := covered[name]
-				require.Truef(t, ok, "%s has no row in CLAUDE.md's Layout table — add one describing its responsibility", name)
+				require.Truef(t, ok, "%s has no row in %s's Layout table — add one describing its responsibility", name, layoutDocPath)
 			})
 		}
 	})
 
-	// The mirror of the check above, in the other direction CLAUDE.md points:
-	// a design doc with no Layout row is one the file never names, so nothing
-	// tells a reader it exists or what it owns.
+	// The mirror of the check above, in the other direction the Layout table
+	// points: a design doc with no Layout row is one the table never names, so
+	// nothing tells a reader it exists or what it owns.
 	t.Run("every design doc has a layout row", func(t *testing.T) {
 		covered := coveredPaths(rows, designDocSuffix)
 
@@ -612,19 +704,8 @@ func TestCLAUDEMDLayoutStaysCompact(t *testing.T) {
 			path := filepath.ToSlash(filepath.Join(designDocDir, name))
 			t.Run(path, func(t *testing.T) {
 				_, ok := covered[path]
-				require.Truef(t, ok, "%s has no row in CLAUDE.md's Layout table — add one describing what it owns", path)
+				require.Truef(t, ok, "%s has no row in %s's Layout table — add one describing what it owns", path, layoutDocPath)
 			})
-		}
-	})
-
-	t.Run("every layout path exists", func(t *testing.T) {
-		for _, row := range rows {
-			for _, p := range row.paths {
-				t.Run(p, func(t *testing.T) {
-					_, err := os.Stat(p)
-					require.NoErrorf(t, err, "CLAUDE.md:%d: Layout row names %q, which does not exist on disk — update or remove the row", row.line, p)
-				})
-			}
 		}
 	})
 }
@@ -779,7 +860,7 @@ func TestParseLayoutRowsRejectsMalformedRows(t *testing.T) {
 	section := func(body ...string) string {
 		lines := []string{layoutHeading, "", inventedSubHeading, "", layoutTableHeader, layoutTableSeparator}
 		lines = append(lines, body...)
-		return strings.Join(append(lines, "", conventionsHeading, ""), "\n")
+		return strings.Join(append(lines, "", inventedNextHeading, ""), "\n")
 	}
 
 	const wellFormed = "| `doc.go` | An invented short pointer row. |"
@@ -854,7 +935,7 @@ func TestParseLayoutRowsRefusesTextItWouldNotReach(t *testing.T) {
 		return strings.Join(lines, "\n")
 	}
 	// other is any following section, so the Layout section really does end.
-	other := []string{conventionsHeading, "", "An invented sentence.", ""}
+	other := []string{inventedNextHeading, "", "An invented sentence.", ""}
 
 	for name, tc := range map[string]struct {
 		content string
@@ -879,7 +960,7 @@ func TestParseLayoutRowsRefusesTextItWouldNotReach(t *testing.T) {
 			want:    "a second",
 		},
 		"a Layout table outside the Layout section": {
-			content: join(layoutSection(wellFormed), []string{conventionsHeading, "", layoutTableHeader, layoutTableSeparator, oversized, ""}),
+			content: join(layoutSection(wellFormed), []string{inventedNextHeading, "", layoutTableHeader, layoutTableSeparator, oversized, ""}),
 			want:    "outside the",
 		},
 		"prose beside the rows": {
@@ -926,6 +1007,31 @@ func TestParseLayoutRowsRefusesTextItWouldNotReach(t *testing.T) {
 		require.NoError(t, err, "prose ahead of the first table is the one prose the section carries")
 		require.Len(t, rows, 1)
 	})
+
+	// Exactly one file holds the Layout table. A copy grown in the other one
+	// renders as the file index while nothing keeps the two in step, so the
+	// spec that does not hold it refuses both anchors outright — the heading
+	// before the table it would open, and the table on its own where no
+	// heading precedes it.
+	t.Run("the file that does not hold the Layout table is refused both anchors", func(t *testing.T) {
+		for name, tc := range map[string]struct{ content, want string }{
+			"a Layout heading": {
+				content: join(layoutSection(wellFormed)),
+				want:    "does NOT hold the Layout table",
+			},
+			"a Layout table with no heading above it": {
+				content: join([]string{layoutTableHeader, layoutTableSeparator, oversized, ""}),
+				want:    "outside the",
+			},
+		} {
+			t.Run(name, func(t *testing.T) {
+				parsed, err := parseAgentDoc(claudeMDSpec, tc.content)
+				require.Error(t, err, "a second copy of the Layout table must be refused, not measured twice")
+				require.Nil(t, parsed)
+				require.Contains(t, err.Error(), tc.want)
+			})
+		}
+	})
 }
 
 // TestParseCLAUDEMDRefusesEverySpellingOfTheAnchors is the root-cause
@@ -951,7 +1057,7 @@ func TestParseCLAUDEMDRefusesEverySpellingOfTheAnchors(t *testing.T) {
 		layoutTableHeader, layoutTableSeparator,
 		"| `doc.go` | An invented short pointer row. |", "",
 	}
-	other := []string{conventionsHeading, "", "An invented sentence.", ""}
+	other := []string{inventedNextHeading, "", "An invented sentence.", ""}
 	join := func(blocks ...[]string) string {
 		var lines []string
 		for _, block := range blocks {
@@ -1054,7 +1160,7 @@ func TestParseCLAUDEMDRefusesEverySpellingOfTheAnchors(t *testing.T) {
 			want:    wantStrayTable,
 		},
 		"a declared non-Layout table moved inside the Layout section": {
-			content: join([]string{layoutHeading, "", nonLayoutTableHeaders[0].header, layoutTableSeparator, "| An invented cell | Another. |", ""}, other),
+			content: join([]string{layoutHeading, "", fixtureSpec.nonLayoutTables[0].header, layoutTableSeparator, "| An invented cell | Another. |", ""}, other),
 			want:    "inside the",
 		},
 
@@ -1086,7 +1192,7 @@ func TestParseCLAUDEMDRefusesEverySpellingOfTheAnchors(t *testing.T) {
 // CLAUDE.md.
 func TestParseCLAUDEMDAcceptsTheShapesTheFormatMakesSafe(t *testing.T) {
 	const wellFormed = "| `doc.go` | An invented short pointer row. |"
-	other := []string{conventionsHeading, "", "An invented sentence.", ""}
+	other := []string{inventedNextHeading, "", "An invented sentence.", ""}
 	join := func(blocks ...[]string) string {
 		var lines []string
 		for _, block := range blocks {
@@ -1121,17 +1227,17 @@ func TestParseCLAUDEMDAcceptsTheShapesTheFormatMakesSafe(t *testing.T) {
 		"a thematic break outside the section": join(realSection, other, []string{"---", ""}),
 		// The HTML-block rule is LINE-LEVEL. htmlBlockRe only ever sees a
 		// line-start delimiter, so a `<` in the middle of a prose line is
-		// text this scanner never classifies. Rule 5 of parseCLAUDEMD states
+		// text this scanner never classifies. Rule 5 of parseAgentDoc states
 		// that reach, and this case with the standalone-comment refusal
 		// above are what hold it there.
 		"an HTML comment inside a prose line": join(realSection, []string{
-			conventionsHeading, "",
+			inventedNextHeading, "",
 			"An invented sentence with <!-- an invented aside --> inside it.", "",
 		}),
 		// The declared non-Layout table, where it belongs.
 		"a declared non-Layout table outside the section": join([]string{
-			nonLayoutTableHeaders[0].section, "",
-			nonLayoutTableHeaders[0].header, layoutTableSeparator,
+			fixtureSpec.nonLayoutTables[0].section, "",
+			fixtureSpec.nonLayoutTables[0].header, layoutTableSeparator,
 			"| An invented cell | Another. |", "",
 		}, realSection, other),
 	} {
@@ -1144,9 +1250,9 @@ func TestParseCLAUDEMDAcceptsTheShapesTheFormatMakesSafe(t *testing.T) {
 
 	t.Run("a declared non-Layout table's cells are still measured", func(t *testing.T) {
 		oversizedCell := strings.Repeat("X", layoutCellMaxChars+1)
-		parsed, err := parseCLAUDEMD(join([]string{
-			nonLayoutTableHeaders[0].section, "",
-			nonLayoutTableHeaders[0].header, layoutTableSeparator,
+		parsed, err := parseAgentDoc(fixtureSpec, join([]string{
+			fixtureSpec.nonLayoutTables[0].section, "",
+			fixtureSpec.nonLayoutTables[0].header, layoutTableSeparator,
 			"| An invented cell | " + oversizedCell + " |", "",
 		}, realSection, other))
 		require.NoError(t, err)

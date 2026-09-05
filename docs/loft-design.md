@@ -51,8 +51,8 @@ triangles over a chord chain built between the two recorded curves (§5.1) —
 the body is the resulting polyhedron, never a curved ruled surface, and the
 departure of that chord chain from the recorded arc or circle it approximates
 publishes as a section displacement (§5.2), the same discipline
-`docs/prism-boolean-design.md` §7 and `CLAUDE.md`'s "Section displacement"
-note already state for a prism's re-expressed section. A same-kind Tier A
+`docs/prism-boolean-design.md` §7 and its Implementation notes already state
+for a prism's re-expressed section. A same-kind Tier A
 free-form pair walls the identical way, over a chord chain built between
 stations placed at shared dyadic fractions of the span-index coordinate the
 two curves' own Bézier span decompositions define, rather than a circular
@@ -1073,8 +1073,8 @@ substituted for each other anywhere upstream of that composition.
 
 **`sectionDelta` is a maximum rather than a sum because a boundary point
 lies in exactly one cell** — the identical reasoning
-`docs/prism-boolean-design.md` §7 and `CLAUDE.md`'s "Section displacement"
-cross-cutting note already state for `prismPayload.sectionDelta`, which this
+`docs/prism-boolean-design.md` §7 and its Implementation notes already state
+for `prismPayload.sectionDelta`, which this
 field mirrors by name and by contract.
 
 **`delta` gains exactly one new term over the placement one, `stationRound`,
@@ -2233,7 +2233,7 @@ landing this file:
   longer a v1 non-goal; it is design-only until its PRs land (the same
   standing every other not-yet-shipped capability in this package already
   has, per `CLAUDE.md`'s own opening paragraph).
-- **`CLAUDE.md`'s Layout table** gains a row for this document.
+- **`docs/layout.md`'s Layout table** gains a row for this document.
 - **§6.2's `Step.Op` comment** lists `Loft` among the ops.
 - **§6.2's `Step.Profile` and `Step.Plane` comments** name Loft beside
   Extrude and Revolve, and say the recorded section is the **from** one (§10).

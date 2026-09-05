@@ -11,7 +11,7 @@ A **headless CAD engine** for Go: the 3D modeling layer above the
 > **Status: the public API is landing incrementally against an approved
 > design.** The API contract is
 > [`docs/api-design.md`](docs/api-design.md) — the core design. Companion
-> designs carry its deep ends; [`CLAUDE.md`](CLAUDE.md)'s Layout table lists
+> designs carry its deep ends; [`docs/layout.md`](docs/layout.md)'s Layout table lists
 > every design document. What the
 > package exports today is the leading edge of that surface; everything it does
 > not yet export remains design-only, and anything that lands must follow the
