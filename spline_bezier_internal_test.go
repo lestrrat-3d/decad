@@ -450,7 +450,13 @@ func wellFormedDegreeOneNURBS(controls int) NURBSSeg {
 // its vector. The smaller one still reports that content error, so the scan runs
 // when the charge admits it; the larger reports R7, which it can only do by
 // refusing before reading the knot.
+//
+// The elapsed bound above is a loose secondary guard, not the proof, so it
+// runs in parallel: it has orders of magnitude of headroom over what the
+// admitted path actually costs, and the assertions that carry the proof are
+// on error kinds, which no neighbour can affect.
 func TestNURBSLiftChargePrecedesTheContentScan(t *testing.T) {
+	t.Parallel()
 	const admitted = maxDegreeOneNURBSControls
 	require.LessOrEqual(t, rationalLiftCost(admitted, admitted+2, admitted), freeformWorkLimit,
 		"%d controls are the most the lift charge admits", admitted)
@@ -487,9 +493,6 @@ func costOf(call func()) (time.Duration, uint64, uint64) {
 	return elapsed, after.Mallocs - before.Mallocs, after.TotalAlloc - before.TotalAlloc
 }
 
-// This test stays SERIAL: it measures process-wide allocation, which any
-// test running alongside it would inflate. Adding t.Parallel here makes its
-// reading meaningless rather than making it fail loudly.
 // What chargeRationalLift's invariant claims — that the preflight's element
 // visits are a fixed multiple of the units it charges — is backed HERE, by
 // MEASURED cost at the admission boundary, and deliberately not by a per-pass

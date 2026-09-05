@@ -45,11 +45,26 @@ jobs:
           - os: ubuntu-latest
             race: "-race"
             shard: "0"
-            packages: "./examples/"
+            packages: ""
           - os: ubuntu-latest
             race: "-race"
             shard: "1"
             packages: ""
+          - os: ubuntu-latest
+            race: "-race"
+            shard: "2"
+            packages: ""
+          - os: ubuntu-latest
+            race: "-race"
+            shard: "3"
+            packages: ""
+          # The packages outside the root run on their own runner rather than
+          # riding along with a shard, so a shard's reported time is its own
+          # tests alone and nothing else has to be netted out of it.
+          - os: ubuntu-latest
+            race: "-race"
+            shard: ""
+            packages: "./examples/"
           - os: macos-latest
             race: ""
             shard: ""
@@ -77,21 +92,46 @@ jobs:
       # run zero tests in every other package while still reporting success.
       # -run gates Examples and Fuzz seed corpora as well as Test functions,
       # so the enumeration takes all three.
+      #
+      # Which shard a test belongs to is READ from .github/test-shards.txt, not
+      # computed from its position in the enumeration. A positional split moves
+      # half the suite between shards whenever a test is added, so a balance that
+      # held yesterday is re-rolled by the next commit; the recorded assignment
+      # is packed by measured cost and moves nothing when the suite grows.
+      # ci_workflow_test.go fails when a test on disk is in no shard.
       - name: Run root-package tests (Ubuntu shard)
         if: matrix.shard != ''
         shell: bash
         run: |
           tests="$(go test -list '.*' . | awk -v shard='${{ matrix.shard }}' '
+            NR == FNR {
+              if ($0 !~ /^#/ && NF == 3) {
+                pin[$3] = $1
+              }
+              next
+            }
             /^(Test|Fuzz|Example)/ {
-              if (count % 2 == shard) {
+              if ($0 in pin && pin[$0] == shard) {
                 printf "%s|", $0
               }
-              count++
             }
-          ')"
+          ' .github/test-shards.txt -)"
           tests="${tests%|}"
           test -n "$tests"
+          start=$SECONDS
           go test ${{ matrix.race }} -timeout 10m -run "^(${tests})$" .
+          elapsed=$(( SECONDS - start ))
+          echo "shard ${{ matrix.shard }} finished in ${elapsed}s"
+          # A soft budget, far below the -timeout above. The suite runs its tests
+          # in parallel, so a balanced shard finishes in a small fraction of this;
+          # crossing it means the recorded costs have drifted, and it says so HERE
+          # rather than months later when a shard finally hits the ceiling and
+          # fails as if a test had hung. Re-measure and regenerate the assignment;
+          # _shardgen/main.go carries the command.
+          if [ "$elapsed" -gt 300 ]; then
+            echo "::error::shard ${{ matrix.shard }} took ${elapsed}s, over the 300s budget; re-measure and regenerate .github/test-shards.txt (see _shardgen/main.go)"
+            exit 1
+          fi
 
       # Every package outside the root runs UNFILTERED on one shard, so the
       # shards together cover what an unsharded `go test ./...` covers.
@@ -101,8 +141,11 @@ jobs:
         shell: bash
         run: go test ${{ matrix.race }} -timeout 10m ${{ matrix.packages }}
 
+      # The whole-suite run is the non-Linux leg: no shard, and no package
+      # operand of its own. The examples runner has a `packages:` operand, so
+      # this must test BOTH fields or it would re-run the entire suite there.
       - name: Run tests
-        if: matrix.shard == ''
+        if: matrix.shard == '' && matrix.packages == ''
         run: go test ${{ matrix.race }} -timeout 10m ./...
 
   # Tier 2: verify the tree is tidy.

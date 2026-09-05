@@ -396,7 +396,13 @@ func TestFreeformAnchorSubtractsExactly(t *testing.T) {
 // control count and grows without any bound of its own: a degree-128 record
 // spent 235ms there before the ceiling refused it, and a degree-599 one over
 // thirteen seconds.
+//
+// The elapsed bound above is a loose secondary guard, not the proof, so it
+// runs in parallel: it has orders of magnitude of headroom over what the
+// admitted path actually costs, and the assertions that carry the proof are
+// on error kinds, which no neighbour can affect.
 func TestOverBudgetFreeformRefusesBeforeSketchSampling(t *testing.T) {
+	t.Parallel()
 	const controls = 600
 	const degree = controls - 1
 	control := make([]decad.Point2, controls)
@@ -496,6 +502,10 @@ func allocatedBy(call func()) uint64 {
 // 200,000 controls, against 16 us and no allocation at all one control point
 // past the point where the LIFT's own linear charge saturated. A refused record
 // must allocate on the order of the record itself.
+//
+// This test stays SERIAL: it measures process-wide allocation, which any
+// test running alongside it would inflate. Adding t.Parallel here makes its
+// reading meaningless rather than making it fail loudly.
 func TestOverBudgetConversionRefusesBeforeLifting(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
@@ -889,9 +899,6 @@ func closedSplineSegmentOf(controls int, radius float64) decad.ClosedSplineSeg {
 	return decad.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
 }
 
-// This test stays SERIAL: it measures process-wide allocation, which any
-// test running alongside it would inflate. Adding t.Parallel here makes its
-// reading meaningless rather than making it fail loudly.
 // A caller can hand a degree-1 NURBS segment millions of control points and no
 // knots at all. Whether the knot count can match the control count is an O(1)
 // question about SIZES, so it must be answered before the control array is
@@ -899,10 +906,14 @@ func closedSplineSegmentOf(controls int, radius float64) decad.ClosedSplineSeg {
 // be well formed at ANY content used to cost three allocations and about 90ns
 // per control point before its refusal — 12 million allocations on a
 // four-million-point record, and none of it charged against the work ceiling.
+// AllocsPerRun goes further and PANICS if any parallel test is in flight, so
+// this one could not be made parallel even if the reading were tolerant.
 //
 // This test stays SERIAL: it measures process-wide allocation, which any
 // test running alongside it would inflate. Adding t.Parallel here makes its
 // reading meaningless rather than making it fail loudly.
+// AllocsPerRun goes further and PANICS if any parallel test is in flight, so
+// this one could not be made parallel even if the reading were tolerant.
 func TestMalformedNURBSRefusesBeforeScanningControls(t *testing.T) {
 	const controls = 200000
 	control := make([]decad.Point2, controls)
@@ -1429,9 +1440,6 @@ func TestExtrudeClosedSplineProfileBuilds(t *testing.T) {
 	require.Greater(t, volume.Bound.Mag(), 0.0, "the region area's own rounding is never zero here")
 }
 
-// This test stays SERIAL: it measures process-wide allocation, which any
-// test running alongside it would inflate. Adding t.Parallel here makes its
-// reading meaningless rather than making it fail loudly.
 // One public operation over one record spends ONE R7 work ceiling
 // (docs/spline-design.md §5.2). Extrude runs the record-wide moments preflight
 // for its area falsifier, the same preflight again inside the prism build, and

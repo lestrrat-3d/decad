@@ -1,0 +1,2 @@
+# The packer is run with `go run`, never built in place.
+_shardgen

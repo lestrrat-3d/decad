@@ -99,6 +99,10 @@ it owns, and names what every other file in the package owns.
     README images are rendered. It is deliberately NOT a dependency of the
     decad library: nothing under the root module imports it, and it appears in
     neither the root `go.mod` nor its `go.sum`.
+- **Tooling lives in its own nested module.** `_gallery/` renders the README
+  images and `_shardgen/` packs the race shards. Both carry their own `go.mod`
+  and an `_` prefix, so the root module, its linter and `go list ./...` never
+  see them. A generator NEVER joins the library's module.
 - **Correctness must be observable.** Every capability ships with a test
   asserting on computed geometry (coordinates, volumes, residuals) — NEVER
   merely "it ran".

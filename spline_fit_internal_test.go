@@ -90,6 +90,7 @@ func TestFitSplineBezierMatchesSpansToAFewULPs(t *testing.T) {
 // which is NOT Fit[len(Fit)-1] whenever the last two recorded fit points
 // coincide within geom's absolute 1e-12 threshold.
 func TestFitSplineEndpointsAreFitZeroAndActiveLast(t *testing.T) {
+	t.Parallel()
 	fit := []Point2{
 		{U: 0, V: 0}, {U: 10, V: 0}, {U: 10, V: 10},
 		{U: 10 + 3e-13, V: 10}, // collapses into the point before it
@@ -126,9 +127,6 @@ func allocatedByFit(call func()) uint64 {
 	return after.TotalAlloc - before.TotalAlloc
 }
 
-// This test stays SERIAL: it measures process-wide allocation, which any
-// test running alongside it would inflate. Adding t.Parallel here makes its
-// reading meaningless rather than making it fail loudly.
 // fitInterpolantCost(n) = 64n has to be reserved BEFORE geom.NewFitInterpolant
 // runs its dedup pass, chord accumulation and tridiagonal solve, not after: a
 // record past the ceiling must refuse allocating on the order of its own Fit
