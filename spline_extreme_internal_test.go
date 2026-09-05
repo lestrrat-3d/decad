@@ -294,10 +294,14 @@ func TestBoundaryExtremesBoundedNonFiniteDirectionRefuses(t *testing.T) {
 // (§5.2: a charge is levied before the work allocates, so no rational may be
 // built before one). A gate that lifted the direction into big.Rat to decide
 // finiteness — ratOf allocates even on the float it rejects — would fail this.
+// AllocsPerRun goes further and PANICS if any parallel test is in flight, so
+// this one could not be made parallel even if the reading were tolerant.
 //
 // This test stays SERIAL: it measures process-wide allocation, which any
 // test running alongside it would inflate. Adding t.Parallel here makes its
 // reading meaningless rather than making it fail loudly.
+// AllocsPerRun goes further and PANICS if any parallel test is in flight, so
+// this one could not be made parallel even if the reading were tolerant.
 func TestRequireFiniteDirectionAllocatesNothing(t *testing.T) {
 	var gate error
 	allocs := testing.AllocsPerRun(100, func() { gate = requireFiniteDirection(1.5, -2.25) })
