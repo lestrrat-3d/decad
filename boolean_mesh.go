@@ -228,13 +228,6 @@ func (c *contactMemo) classify(i, j int) (triContact, error) {
 	return v, nil
 }
 
-// triTriFilterEnabled gates triTriMissesFilter inside triTriClassify's
-// non-coplanar arm. It exists solely so
-// TestTriTriClassifyFilterAgreesWithTheExactPath can run the classifier both
-// ways over the same corpus and compare; production code never assigns to
-// it, and no exported surface can reach it.
-var triTriFilterEnabled = true
-
 // triTriClassify computes the exact intersection of two CLOSED triangles: the
 // single symmetric entry point every contact question goes through. ta/tb are
 // float corners (the adaptive orient filter reads them), xta/xtb their exact
@@ -247,10 +240,19 @@ var triTriFilterEnabled = true
 // line; each triangle's intersection with the OTHER's plane is an interval on
 // that line, and the answer is the intervals' overlap. That is the whole rule.
 func triTriClassify(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt) (triContact, error) {
-	return triTriClassifyWithProjections(ta, tb, xta, xtb, na, nb, nil, nil, nil, nil)
+	return triTriClassifyWithProjections(ta, tb, xta, xtb, na, nb, nil, nil, nil, nil, true)
 }
 
-func triTriClassifyWithProjections(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, pa, pb *[3]xp2, sa, sb *[3]int) (triContact, error) {
+// useFilter says whether this call may take triTriMissesFilter's early exit in
+// the non-coplanar arm below. Every production caller passes true. Only the
+// tests proving the filter changes no verdict pass false, and what they
+// establish is that the two agree across their whole corpus.
+//
+// It is an argument rather than a package-level switch because the choice
+// belongs to one call. A switch a test flipped would decide the classification
+// of every other caller running at that moment, which is both a data race and a
+// wrong answer, and it is why those tests could not run in parallel.
+func triTriClassifyWithProjections(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, pa, pb *[3]xp2, sa, sb *[3]int, useFilter bool) (triContact, error) {
 	out := triContact{edgeA: -1, edgeB: -1}
 	var signsB, signsA [3]int
 	if sb != nil {
@@ -301,7 +303,7 @@ func triTriClassifyWithProjections(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt
 	// Non-coplanar: the planes are distinct and non-parallel (a parallel pair
 	// would leave every vertex strictly on one side, already returned), so they
 	// meet in exactly one line, and every point of the intersection lies on it.
-	if triTriFilterEnabled && triTriMissesFilter(ta, tb, na.vec(), nb.vec(), signsA, signsB) {
+	if useFilter && triTriMissesFilter(ta, tb, na.vec(), nb.vec(), signsA, signsB) {
 		return out, nil
 	}
 	ptsA := dedupePoints(planeCrossings(xta, xtb, signsA))

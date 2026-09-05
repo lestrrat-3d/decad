@@ -588,13 +588,21 @@ func requireSameTriContact(t *testing.T, exact, filtered triContact) {
 	require.Zero(t, exact.sin2.Cmp(filtered.sin2))
 }
 
+// classifyPair runs one facet pair through the classifier with the early miss
+// filter on or off, which is what the two equivalence tests below compare. The
+// choice travels as an argument, so these tests decide nothing for any other
+// test running beside them.
+func classifyPair(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, useFilter bool) (triContact, error) {
+	return triTriClassifyWithProjections(ta, tb, xta, xtb, na, nb, nil, nil, nil, nil, useFilter)
+}
+
 // TestTriTriClassifyFilterAgreesWithTheExactPath is fu158's own pin: every
 // AABB-surviving facet pair of the disc/washer fixture must classify
 // identically with triTriMissesFilter on and off. The filter changes no
 // verdict, so this is what stands between "faster" and "a different answer"
 // (.tmp/followup-tasks/fu158-tasks.md §6).
 func TestTriTriClassifyFilterAgreesWithTheExactPath(t *testing.T) {
-	t.Cleanup(func() { triTriFilterEnabled = true })
+	t.Parallel()
 
 	ma, mb := buildCircularWasherMeshes(t)
 	pairs, nonNone := 0, 0
@@ -608,11 +616,9 @@ func TestTriTriClassifyFilterAgreesWithTheExactPath(t *testing.T) {
 			xta, xtb := xtriCorners(ma, i), xtriCorners(mb, j)
 			na, nb := ma.norms[i], mb.norms[j]
 
-			triTriFilterEnabled = true
-			filtered, err := triTriClassify(ta, tb, xta, xtb, na, nb)
+			filtered, err := classifyPair(ta, tb, xta, xtb, na, nb, true)
 			require.NoError(t, err)
-			triTriFilterEnabled = false
-			exact, err := triTriClassify(ta, tb, xta, xtb, na, nb)
+			exact, err := classifyPair(ta, tb, xta, xtb, na, nb, false)
 			require.NoError(t, err)
 
 			requireSameTriContact(t, exact, filtered)
@@ -625,9 +631,6 @@ func TestTriTriClassifyFilterAgreesWithTheExactPath(t *testing.T) {
 	require.NotZero(t, nonNone, `a filter that rejected every real contact must not pass`)
 }
 
-// This test stays SERIAL: it flips the package-level triTriFilterEnabled to
-// compare the filtered path against the exact one, and a neighbour reading
-// that toggle mid-flip would be classified by the wrong path.
 // TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle is the risk section's
 // own named case (.tmp/followup-tasks/fu158-tasks.md §7): two facets sharing
 // an edge but meeting at a dihedral angle of about 1e-6 rad. dir = na × nb is
@@ -636,12 +639,8 @@ func TestTriTriClassifyFilterAgreesWithTheExactPath(t *testing.T) {
 // abstain rather than resolve. Sharing an edge keeps the contact itself
 // unambiguous (a positive-length segment along it), so the pair exercises the
 // near-parallel path while still landing on a real answer.
-//
-// This test stays SERIAL: it flips the package-level triTriFilterEnabled to
-// compare the filtered path against the exact one, and a neighbour reading
-// that toggle mid-flip would be classified by the wrong path.
 func TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle(t *testing.T) {
-	t.Cleanup(func() { triTriFilterEnabled = true })
+	t.Parallel()
 
 	a := [3]r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 10, Y: 0, Z: 0}, {X: 5, Y: 10, Z: 0}}
 	b := [3]r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 10, Y: 0, Z: 0}, {X: 5, Y: -10, Z: 1e-6}}
@@ -650,11 +649,9 @@ func TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle(t *testing.T) {
 	na := xcross(xsub(xta[1], xta[0]), xsub(xta[2], xta[0]))
 	nb := xcross(xsub(xtb[1], xtb[0]), xsub(xtb[2], xtb[0]))
 
-	triTriFilterEnabled = true
-	filtered, err := triTriClassify(a, b, xta, xtb, na, nb)
+	filtered, err := classifyPair(a, b, xta, xtb, na, nb, true)
 	require.NoError(t, err)
-	triTriFilterEnabled = false
-	exact, err := triTriClassify(a, b, xta, xtb, na, nb)
+	exact, err := classifyPair(a, b, xta, xtb, na, nb, false)
 	require.NoError(t, err)
 
 	require.Equal(t, contactSegment, exact.kind, `the shared edge is a real, unambiguous contact`)
