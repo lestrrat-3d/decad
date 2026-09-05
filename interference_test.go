@@ -58,6 +58,7 @@ func requireDocumentUnchanged(t *testing.T, doc *decad.Document, before document
 }
 
 func TestVerifyOffsetBoxesReportBoundedInterference(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 5, 5, 5)
@@ -94,6 +95,7 @@ func TestVerifyOffsetBoxesReportBoundedInterference(t *testing.T) {
 // verify_diagnostics_test.go pins the diagnostic side of this same
 // fixture).
 func TestVerifyAdmittedCoplanarPrismPairResolvesAnalytically(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	container := boxBody(t, doc, 0, 0, 20, 20, 10)
 	nested := boxBody(t, doc, 5, 5, 9, 10, 15)
@@ -128,6 +130,7 @@ func TestVerifyAdmittedCoplanarPrismPairResolvesAnalytically(t *testing.T) {
 // plane is the coplanar contact the mesh classifier refuses (§5.2), so a
 // published row can only have come from the analytic dispatch.
 func TestVerifyAdmittedDisplacedPrismPairCarriesItsOwnBound(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	const shift = 1e12
 	lo, hi := 2-shift, 8-shift
@@ -201,6 +204,7 @@ func TestVerifyAdmittedDisplacedPrismPairCarriesItsOwnBound(t *testing.T) {
 }
 
 func TestVerifyStrictContainmentReusesInnerVolume(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	outer := boxBody(t, doc, 0, 0, 10, 10, 10)
 	inner := translated(t, boxBody(t, doc, 2, 2, 4, 4, 2), 0, 0, 2)
@@ -255,6 +259,7 @@ func ringBody(t *testing.T, doc *decad.Document, u0, v0, u1, v1 float64, holes .
 // (§4) — reusing the contained body's volume would report the whole of A where
 // the true overlap is A minus B's cavity.
 func TestVerifyOuterVoidInsideInnerBodyDeniesContainment(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	// B: a tube carrying a closed toroidal cavity at radii 7..13, u 2..8.
 	b := ringBody(t, doc, 0, 5, 10, 15, [4]float64{2, 7, 8, 13})
@@ -297,6 +302,7 @@ func TestVerifyOuterVoidInsideInnerBodyDeniesContainment(t *testing.T) {
 }
 
 func TestVerifyCoincidentAnalyticBodiesUseStableFirstVolume(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 0, 0, 10, 10, 10)
@@ -314,6 +320,7 @@ func TestVerifyCoincidentAnalyticBodiesUseStableFirstVolume(t *testing.T) {
 }
 
 func TestVerifyInterferenceRowsKeepDocumentPairOrder(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 3, 3, 3)
@@ -336,6 +343,7 @@ func TestVerifyInterferenceRowsKeepDocumentPairOrder(t *testing.T) {
 }
 
 func TestVerifyTinyPositiveOverlapClearsItsBound(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	boxBody(t, doc, 0, 0, 10, 10, 10)
 	translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 1, 1, 10-1e-8)
@@ -349,6 +357,7 @@ func TestVerifyTinyPositiveOverlapClearsItsBound(t *testing.T) {
 }
 
 func TestVerifyTouchingAndDisjointPairsEmitNoInterference(t *testing.T) {
+	t.Parallel()
 	t.Run("touching", func(t *testing.T) {
 		doc := decad.New()
 		boxBody(t, doc, 0, 0, 10, 10, 10)
@@ -372,6 +381,7 @@ func TestVerifyTouchingAndDisjointPairsEmitNoInterference(t *testing.T) {
 }
 
 func TestVerifyUnsupportedOverlapStaysSuspectAndReadOnly(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	ballBody(t, doc, 10)
 	ball := ballBody(t, doc, 8)
@@ -416,6 +426,7 @@ func TestVerifyUnsupportedOverlapStaysSuspectAndReadOnly(t *testing.T) {
 }
 
 func TestVerifyCoarseBooleanTessellationStaysSuspect(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -449,6 +460,7 @@ func TestVerifyCoarseBooleanTessellationStaysSuspect(t *testing.T) {
 }
 
 func TestVerifyCancellationLeavesDocumentUnchanged(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	boxBody(t, doc, 0, 0, 10, 10, 10)
 	translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 5, 5, 5)
@@ -463,6 +475,7 @@ func TestVerifyCancellationLeavesDocumentUnchanged(t *testing.T) {
 }
 
 func TestVerifyCancellationInsideReadOnlyIntersection(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	boxBody(t, doc, 0, 0, 10, 10, 10)
 	translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 5, 5, 5)
@@ -569,6 +582,7 @@ func splitCellBody(t *testing.T, doc *decad.Document, h float64) *decad.Body {
 }
 
 func TestVerifyCrossingPairSeatedResolvesPlacedStaysUndecided(t *testing.T) {
+	t.Parallel()
 	t.Run("seated section resolves through the analytic reading", func(t *testing.T) {
 		doc := decad.New()
 		a, b := crossingBoxPairSeated(t, doc)
@@ -652,6 +666,7 @@ func TestVerifyCrossingPairSeatedResolvesPlacedStaysUndecided(t *testing.T) {
 // pinned white-box by TestPrismUnionTrimmedSourceSplitBoundaryFallsBack
 // (prism_boolean_internal_test.go), over the same split-cell section.
 func TestVerifySeatedWalkChargedPairStaysUndecided(t *testing.T) {
+	t.Parallel()
 	const h = 5.0
 	// [1,5]x[0,10] against [4,6]x[3,7]: one crossing region [4,5]x[3,7],
 	// 1 x 4 mm^2 over the shared 5 mm height.

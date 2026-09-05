@@ -11,6 +11,7 @@ import (
 )
 
 func TestDefaultRecipeDecodeLimits(t *testing.T) {
+	t.Parallel()
 	require.Equal(t, recipeDecodeLimits{
 		MaxBytes:            16 << 20,
 		MaxDepth:            32,
@@ -27,6 +28,7 @@ func TestDefaultRecipeDecodeLimits(t *testing.T) {
 }
 
 func TestRecipeDecodePreflightCollectionLimits(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		set       func(*recipeDecodeLimits)
@@ -115,6 +117,7 @@ func TestRecipeDecodePreflightCollectionLimits(t *testing.T) {
 }
 
 func TestRecipeDecodePreflightByteDepthAndStringLimits(t *testing.T) {
+	t.Parallel()
 	t.Run("bytes", func(t *testing.T) {
 		exact := []byte(`{"steps":[]}`)
 		limits := defaultRecipeDecodeLimits()
@@ -151,6 +154,7 @@ func TestRecipeDecodePreflightByteDepthAndStringLimits(t *testing.T) {
 }
 
 func TestRecipeUnmarshalStructuralCollectionLimits(t *testing.T) {
+	t.Parallel()
 	original := Recipe{Steps: []Step{{Op: OpUnion}}}
 
 	t.Run("inputs exact limit", func(t *testing.T) {
@@ -209,6 +213,7 @@ func TestRecipeUnmarshalStructuralCollectionLimits(t *testing.T) {
 }
 
 func TestStepCodecInputLimit(t *testing.T) {
+	t.Parallel()
 	inputs := strings.TrimSuffix(strings.Repeat("0,", maxRecipeInputsPerStep), ",") + ",0"
 	input := []byte(`{"op":"extrude","inputs":[` + inputs + `],"profile":{},"plane":{},"extent":{},"opts":{}}`)
 
@@ -254,6 +259,7 @@ func loftStepWireWithAlignment(t *testing.T, n int) []byte {
 // more is refused before the []int is allocated, and the destination step is
 // left untouched.
 func TestStepCodecAlignmentLimit(t *testing.T) {
+	t.Parallel()
 	t.Run("exact limit", func(t *testing.T) {
 		var step Step
 		require.NoError(t, json.Unmarshal(loftStepWireWithAlignment(t, maxRecipeAlignmentPerStep), &step))
@@ -272,6 +278,7 @@ func TestStepCodecAlignmentLimit(t *testing.T) {
 }
 
 func TestStepCodecArrayCountLimit(t *testing.T) {
+	t.Parallel()
 	elements := strings.TrimSuffix(strings.Repeat("0,", maxRecipeInputsPerStep), ",") + ",0"
 	tests := []struct {
 		name  string
@@ -300,6 +307,7 @@ func TestStepCodecArrayCountLimit(t *testing.T) {
 }
 
 func TestRecipeUnmarshalRejectsBeforeChangingDestination(t *testing.T) {
+	t.Parallel()
 	original := Recipe{Steps: []Step{{Op: OpUnion}}}
 
 	t.Run("preflight failure", func(t *testing.T) {
@@ -329,6 +337,7 @@ func TestRecipeUnmarshalRejectsBeforeChangingDestination(t *testing.T) {
 }
 
 func TestRecipeUnmarshalDefaultByteLimit(t *testing.T) {
+	t.Parallel()
 	limits := defaultRecipeDecodeLimits()
 	prefix := `{"steps":[],"padding":"`
 	suffix := `"}`

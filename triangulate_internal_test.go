@@ -30,6 +30,7 @@ func loopSignedArea2(pts []Point2, loop []int) float64 {
 // the whole band and keeps every boundary edge, rather than dropping a boundary
 // vertex into a cracked band.
 func TestTriangulate2DBridgeCollinear(t *testing.T) {
+	t.Parallel()
 	var pts []Point2
 	add := func(u, v float64) int { pts = append(pts, Point2{U: u, V: v}); return len(pts) - 1 }
 
@@ -114,6 +115,7 @@ func TestTriangulate2DBridgeCollinear(t *testing.T) {
 // the splice must put each one in that corner's own angular order — otherwise the
 // merged polygon crosses itself there and ear clipping stalls.
 func TestTriangulate2DHolesSharingOneBridgeAnchor(t *testing.T) {
+	t.Parallel()
 	var pts []Point2
 	add := func(u, v float64) int { pts = append(pts, Point2{U: u, V: v}); return len(pts) - 1 }
 

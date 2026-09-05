@@ -267,6 +267,7 @@ func requireLoftAuditWork(t *testing.T, verts []r3.Vec, tris [][3]int, shortcuts
 // pair through the exact classification and admits it; the certificate arm
 // admits the same pair without classifying it at all.
 func TestLoftCrossingAuditEdgeCertificateAdmitsAFoldedSharedEdge(t *testing.T) {
+	t.Parallel()
 	verts, tris := foldedSharedEdgeVerts(), foldedSharedEdgeTris()
 
 	err := requireLoftAuditWork(t, verts, tris, loftAuditReference, loftAuditWork{classifications: 1})
@@ -280,6 +281,7 @@ func TestLoftCrossingAuditEdgeCertificateAdmitsAFoldedSharedEdge(t *testing.T) {
 // every permutation of triangle order and winding: each one must still fire
 // exactly once and still admit.
 func TestLoftCrossingAuditEdgeCertificateIsSymmetric(t *testing.T) {
+	t.Parallel()
 	base := foldedSharedEdgeTris()
 	for _, tc := range []struct {
 		name string
@@ -304,6 +306,7 @@ func TestLoftCrossingAuditEdgeCertificateIsSymmetric(t *testing.T) {
 // pair — admitted or refused — must reach the classified column, because the
 // exact sign that proves two planes distinct is zero for it.
 func TestLoftCrossingAuditEdgeCertificateNeverDecidesACoplanarPair(t *testing.T) {
+	t.Parallel()
 	t.Run("apexes on opposite sides: admitted by the coplanar branch", func(t *testing.T) {
 		verts, tris := coplanarSharedEdgeFixture()
 		requireLoftCrossingAuditVerdictsMatch(t, verts, tris)
@@ -343,6 +346,7 @@ func TestLoftCrossingAuditEdgeCertificateNeverDecidesACoplanarPair(t *testing.T)
 // any float allowance would call the pair coplanar, and the certificate must
 // still reach the reference's verdict.
 func TestLoftCrossingAuditEdgeCertificateAgreesOnAOneULPFold(t *testing.T) {
+	t.Parallel()
 	verts, tris := nearlyCoplanarSharedEdgeFixture()
 
 	requireLoftCrossingAuditVerdictsMatch(t, verts, tris)
@@ -355,6 +359,7 @@ func TestLoftCrossingAuditEdgeCertificateAgreesOnAOneULPFold(t *testing.T) {
 // certificate arm must land on the reference arm's verdict at every
 // magnitude, since both read exact rational signs of the same coordinates.
 func TestLoftCrossingAuditCertificatesAgreeUnderScaleAndTranslation(t *testing.T) {
+	t.Parallel()
 	fixtures := []struct {
 		name    string
 		fixture func() ([]r3.Vec, [][3]int)
@@ -388,6 +393,7 @@ func TestLoftCrossingAuditCertificatesAgreeUnderScaleAndTranslation(t *testing.T
 // point contact at the shared vertex; the certificate arm admits the same
 // pair without classifying it.
 func TestLoftCrossingAuditVertexCertificateAdmitsAnIsolatedSharedVertex(t *testing.T) {
+	t.Parallel()
 	verts, tris := isolatedSharedVertexFixture()
 
 	err := requireLoftAuditWork(t, verts, tris, loftAuditReference, loftAuditWork{classifications: 1})
@@ -403,6 +409,7 @@ func TestLoftCrossingAuditVertexCertificateAdmitsAnIsolatedSharedVertex(t *testi
 // tried a single orientation would fire on half these permutations and miss
 // the other half.
 func TestLoftCrossingAuditVertexCertificateIsSymmetric(t *testing.T) {
+	t.Parallel()
 	verts, base := isolatedSharedVertexFixture()
 	for _, tc := range []struct {
 		name string
@@ -426,6 +433,7 @@ func TestLoftCrossingAuditVertexCertificateIsSymmetric(t *testing.T) {
 // vertex and both are refused, one crossing within a common plane and one
 // crossing through it, and neither may be admitted by a certificate.
 func TestLoftCrossingAuditVertexCertificateNeverDecidesACrossingPair(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		fixture func() ([]r3.Vec, [][3]int)
@@ -449,6 +457,7 @@ func TestLoftCrossingAuditVertexCertificateNeverDecidesACrossingPair(t *testing.
 // vertex indices is outside every shortcut's guard, so it reaches the
 // classified column and is refused there.
 func TestLoftCrossingAuditCertificatesNeverDecideAnUnexpectedSharedCount(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		fixture func() ([]r3.Vec, [][3]int)
@@ -470,6 +479,7 @@ func TestLoftCrossingAuditCertificatesNeverDecideAnUnexpectedSharedCount(t *test
 // already spent: cancellation still wins over any pair verdict, and it wins
 // identically with the certificates on and off.
 func TestLoftCrossingAuditCertificatesPreserveCancellationPrecedence(t *testing.T) {
+	t.Parallel()
 	verts, tris := coplanarSameSideEdgeFixture()
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()

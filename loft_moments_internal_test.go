@@ -37,6 +37,7 @@ func addBoxFaces(m *loftMassAccumulator, a, b, c float64) {
 // power of two, so every intermediate rational is exactly representable in
 // float64 (docs/loft-design.md §8, required test).
 func TestLoftMassAccumulatorBoxIsExact(t *testing.T) {
+	t.Parallel()
 	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 	addBoxFaces(m, 2, 2, 2)
 
@@ -64,6 +65,7 @@ func TestLoftMassAccumulatorBoxIsExact(t *testing.T) {
 // reproduces the exact volume and centroid, since every subtraction is
 // carried out over rationals (docs/loft-design.md §8's anchor discipline).
 func TestLoftMassAccumulatorBoxAnchoredElsewhereStillExact(t *testing.T) {
+	t.Parallel()
 	m := newLoftMassAccumulator(r3.NewVec(-4, 8, 0.5), 0, 0, 0)
 	addBoxFaces(m, 2, 2, 2)
 
@@ -83,6 +85,7 @@ func TestLoftMassAccumulatorBoxAnchoredElsewhereStillExact(t *testing.T) {
 // represent exactly — Approximate, with the proven single-rounding bound
 // (docs/loft-design.md §8).
 func TestLoftMassAccumulatorVolumeApproximate(t *testing.T) {
+	t.Parallel()
 	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 	m.add(r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1), false)
 
@@ -107,6 +110,7 @@ func TestLoftMassAccumulatorVolumeApproximate(t *testing.T) {
 // per-coordinate rounding, and Exact only when every coordinate rounds
 // exactly (docs/loft-design.md §8).
 func TestLoftMassAccumulatorCentroidApproximate(t *testing.T) {
+	t.Parallel()
 	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 	m.add(r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1), false)
 	m.add(r3.NewVec(1, 0, 0), r3.NewVec(-1, 2, 0), r3.NewVec(0, 0, 1), false)
@@ -144,6 +148,7 @@ func TestLoftMassAccumulatorCentroidApproximate(t *testing.T) {
 // volume has no centroid: two opposing tetrahedra of equal and opposite
 // signed volume cancel exactly.
 func TestLoftMassAccumulatorCentroidZeroVolumeDegenerate(t *testing.T) {
+	t.Parallel()
 	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 	m.add(r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1), false)
 	m.add(r3.NewVec(0, 1, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1), false) // reversed winding
@@ -159,6 +164,7 @@ func TestLoftMassAccumulatorCentroidZeroVolumeDegenerate(t *testing.T) {
 // merely asserting the bound is present (docs/loft-design.md §8, required
 // test).
 func TestLoftMassAccumulatorAreaApproximateBoundedByReference(t *testing.T) {
+	t.Parallel()
 	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 	m.add(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 1), true) // area sqrt(2)/2
 	m.add(r3.NewVec(0, 0, 0), r3.NewVec(2, 0, 0), r3.NewVec(0, 2, 3), true) // area sqrt(13)
@@ -217,6 +223,7 @@ func referenceTriangleArea(a, b, c r3.Vec, prec uint) *big.Float {
 // refuses a thin-but-valid triangle or caps coordinate magnitude — hence the
 // large-coordinate row too.
 func TestLoftMassAccumulatorAreaBoundEnclosesTrueError(t *testing.T) {
+	t.Parallel()
 	// Two orthonormal, non-axis-aligned directions: dir.perp is exactly 0 and
 	// both have unit length, so a row's aspect really is its offset over its
 	// base and no coordinate is a special case of the arithmetic.
@@ -288,6 +295,7 @@ func TestLoftMassAccumulatorAreaBoundEnclosesTrueError(t *testing.T) {
 // at the held total's scale does not cover this set either — the per-triangle
 // enclosure widths are what carry it.
 func TestLoftMassAccumulatorAreaBoundEnclosesSliverSum(t *testing.T) {
+	t.Parallel()
 	dir := r3.NewVec(0.6, 0.8, 0)
 	perp := r3.NewVec(-0.48, 0.36, 0.8)
 
@@ -355,6 +363,7 @@ func addLoftWalls(m *loftMassAccumulator, bottom, top []r3.Vec) {
 // under half an ulp of MaxFloat64. Their float sum saturates at MaxFloat64
 // while the true total runs past it.
 func TestLoftMassAccumulatorAreaBoundSurvivesSaturatedScale(t *testing.T) {
+	t.Parallel()
 	width := math.Ldexp(1, -27)
 	height := math.Ldexp(1, 27) - math.Ldexp(1, -26)
 	lift := math.Ldexp(1, 996)
@@ -436,6 +445,7 @@ func TestLoftMassAccumulatorAreaBoundSurvivesSaturatedScale(t *testing.T) {
 // TestLoftMassAccumulatorAreaBoundSurvivesSaturatedScale, which asserts the
 // same constant.
 func TestLoftMassAccumulatorAreaNeverExact(t *testing.T) {
+	t.Parallel()
 	// square is a unit square's corners on the plane z, in walk order.
 	square := func(z float64) []r3.Vec {
 		return []r3.Vec{
@@ -503,6 +513,7 @@ func TestLoftMassAccumulatorAreaNeverExact(t *testing.T) {
 // TestLoftMassAccumulatorBoundsEmpty proves bounds reports false before any
 // triangle has been added.
 func TestLoftMassAccumulatorBoundsEmpty(t *testing.T) {
+	t.Parallel()
 	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 	_, ok := m.bounds()
 	require.False(t, ok)
@@ -533,6 +544,7 @@ func TestLoftMassAccumulatorBoundsEmpty(t *testing.T) {
 // could never produce, so no bit-identical-arc-fixture reason lets a caller
 // swap them silently.
 func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *testing.T) {
+	t.Parallel()
 	// Two stations per side: station 0 is the one curved cell under test;
 	// station 1 stands in for the next segment's own first station — the
 	// same "closing, non-curved station" shape
@@ -645,6 +657,7 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 // order as the chord-to-curve half rather than the ulp-scale term a real build
 // carries, so no leg can absorb the missing charge as rounding.
 func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) {
+	t.Parallel()
 	// The same one-curved-cell shape
 	// TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta
 	// uses: station 1 stands in for the next segment's own first station, so
@@ -753,6 +766,7 @@ func underivableCapOffsetPairs(matched float64) []loftLoopPair {
 // bound: the fixture is built for this row and shares no assertion with the
 // calibrated wedges.
 func TestLoftCapOffsetUnderivableRefuses(t *testing.T) {
+	t.Parallel()
 	const matched = 0.5
 	anchor := r3.NewVec(0, 0, 0)
 	vIdx, wIdx := [][]int{{0, 1}}, [][]int{{2, 3}}
@@ -831,6 +845,7 @@ func TestLoftCapOffsetUnderivableRefuses(t *testing.T) {
 // accumulated outside that gate would show up as a positive sum on a build
 // that charges nothing else.
 func TestComputeLoftChordedAllowTwistAreaSumsEveryChordedCell(t *testing.T) {
+	t.Parallel()
 	// A genuinely twisted quad: wHi sits off the plane of the other three
 	// corners, so T = vLo - vHi - wLo + wHi is nonzero and each cell's own
 	// held-to-bilinear gap is positive rather than the exact zero a planar

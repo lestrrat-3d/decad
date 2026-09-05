@@ -52,6 +52,7 @@ func capStartFace(b *decad.Body) *decad.FaceQuery {
 }
 
 func TestExtrudeThroughAll(t *testing.T) {
+	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
 	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -89,6 +90,7 @@ func TestExtrudeThroughAll(t *testing.T) {
 }
 
 func TestExtrudeThroughAllRefusesDisplacedPrismExtentOnYZPlane(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	const shift = 1e9
@@ -128,6 +130,7 @@ func TestExtrudeThroughAllRefusesDisplacedPrismExtentOnYZPlane(t *testing.T) {
 }
 
 func TestExtrudeThroughAllStacked(t *testing.T) {
+	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
 	lower, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -157,6 +160,7 @@ func TestExtrudeThroughAllStacked(t *testing.T) {
 }
 
 func TestExtrudeThroughAllSides(t *testing.T) {
+	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
 	above, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -203,6 +207,7 @@ func TestExtrudeThroughAllSides(t *testing.T) {
 }
 
 func TestExtrudeToFace(t *testing.T) {
+	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
 	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -246,6 +251,7 @@ func TestExtrudeToFace(t *testing.T) {
 }
 
 func TestExtrudeToFaceAgainst(t *testing.T) {
+	t.Parallel()
 	// The target face below the sketch plane pulls the sweep Against: the
 	// sense comes from the face, not from a Direction.
 	s, plateProf, pinProf := plateAndPin(t)
@@ -260,6 +266,7 @@ func TestExtrudeToFaceAgainst(t *testing.T) {
 }
 
 func TestExtrudeToFaceSides(t *testing.T) {
+	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
 	above, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -301,6 +308,7 @@ func TestExtrudeToFaceSides(t *testing.T) {
 }
 
 func TestExtrudeToFaceGates(t *testing.T) {
+	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
 	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -449,6 +457,7 @@ func arcSegmentPlate(t *testing.T, doc *decad.Document) *decad.Body {
 // analytic arc-section prism still resolves, and the level it resolves carries
 // the arc apex's own proven displacement instead of claiming to be exact.
 func TestExtrudeThroughAllArcSectionCarriesRadiusBound(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	host := arcSegmentPlate(t, doc)
 	hostBox, err := host.Bounds()
@@ -487,6 +496,7 @@ func TestExtrudeThroughAllArcSectionCarriesRadiusBound(t *testing.T) {
 // displacement — never as an exact coordinate. A full revolution about an
 // axis-aligned frame reaches its ±8 amplitude exactly and stays Exact.
 func TestExtrudeThroughAllRevolveStopChargesSweepExtreme(t *testing.T) {
+	t.Parallel()
 	t.Run("partial sweep", func(t *testing.T) {
 		s, p := solidSketch(t)
 		doc := decad.New()
@@ -543,6 +553,7 @@ func TestExtrudeThroughAllRevolveStopChargesSweepExtreme(t *testing.T) {
 }
 
 func TestRevolveToFaceAngular(t *testing.T) {
+	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
 	host, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
@@ -577,6 +588,7 @@ func TestRevolveToFaceAngular(t *testing.T) {
 }
 
 func TestRevolveToFaceAngularNearerWay(t *testing.T) {
+	t.Parallel()
 	// The target face supplies the sense: a cap at 270° Along is nearer the
 	// other way, so a standalone ToFaceAngular sweeps Against to −90°.
 	s, p := annularSketch(t)
@@ -591,6 +603,7 @@ func TestRevolveToFaceAngularNearerWay(t *testing.T) {
 }
 
 func TestRevolveToFaceAngularSides(t *testing.T) {
+	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
 	host, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
@@ -629,6 +642,7 @@ func TestRevolveToFaceAngularSides(t *testing.T) {
 }
 
 func TestRevolveToFaceAngularHalfDiskCap(t *testing.T) {
+	t.Parallel()
 	// A partial sphere's cap is a half-disk: its straight edge lies ON the
 	// axis, so the face's off-axis material is witnessed only by its arc —
 	// still an exact, closed-form stop.
@@ -644,6 +658,7 @@ func TestRevolveToFaceAngularHalfDiskCap(t *testing.T) {
 }
 
 func TestRevolveToFaceAngularGates(t *testing.T) {
+	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
 	host, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
@@ -724,6 +739,7 @@ func TestRevolveToFaceAngularGates(t *testing.T) {
 }
 
 func TestBodyStopExtentKeying(t *testing.T) {
+	t.Parallel()
 	// The one-of contract of core §6.2, on both wire directions, for the new
 	// variants: a linear ToFace is keyed to extrude, an angular ToFaceAngular
 	// to revolve.
@@ -757,6 +773,7 @@ func TestBodyStopExtentKeying(t *testing.T) {
 }
 
 func TestBodyStopCodecGates(t *testing.T) {
+	t.Parallel()
 	t.Run("LiveBodyNeverEncodes", func(t *testing.T) {
 		s, plateProf, _ := plateAndPin(t)
 		doc := decad.New()
@@ -821,6 +838,7 @@ func TestBodyStopCodecGates(t *testing.T) {
 }
 
 func TestBodyStopRecipeRoundTrip(t *testing.T) {
+	t.Parallel()
 	// A whole recipe holding every stop shape — through-all, to-face with an
 	// offset, two-sided mixes, and the angular stop — survives the wire.
 	s, plateProf, pinProf := plateAndPin(t)
@@ -858,6 +876,7 @@ func TestBodyStopRecipeRoundTrip(t *testing.T) {
 // extentAlong (the cavity being interior), rather than refusing with
 // ErrUnsupported because the cup lacks a directional extent.
 func TestExtrudeThroughAllCupStop(t *testing.T) {
+	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
 	box, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
@@ -890,6 +909,7 @@ func TestExtrudeThroughAllCupStop(t *testing.T) {
 // TestExtrudeThroughAllSideCupStop is the ThroughAllSide sibling: a two-sided
 // sweep whose Along side runs through a live cup reads the same outer extent.
 func TestExtrudeThroughAllSideCupStop(t *testing.T) {
+	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
 	box, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
@@ -931,6 +951,7 @@ func sweepEdges(t *testing.T, b *decad.Body) []*decad.Edge {
 // denoted level is 999999999999.999 and the float sum lands on
 // 999999999999.9990234375, 2.34375e-05 mm away.
 func TestExtrudeToFaceComputedLevelIsBounded(t *testing.T) {
+	t.Parallel()
 	const (
 		plateHeight = 1e12
 		shortBy     = 0.001
@@ -1001,6 +1022,7 @@ func TestExtrudeToFaceComputedLevelIsBounded(t *testing.T) {
 // to be exact alike — the bound is MEASURED per level, never charged to every
 // stop.
 func TestExtrudeStatedLevelStaysExact(t *testing.T) {
+	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
 	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -1041,6 +1063,7 @@ func TestExtrudeStatedLevelStaysExact(t *testing.T) {
 // TestExtrudeToFaceInheritsCapBlendComputedLevelBound keeps a later stop from
 // treating a cap blend's inherited computed cap level as exact.
 func TestExtrudeToFaceInheritsCapBlendComputedLevelBound(t *testing.T) {
+	t.Parallel()
 	const (
 		plateHeight = 1e12
 		shortBy     = 1e-3
@@ -1087,6 +1110,7 @@ func TestExtrudeToFaceInheritsCapBlendComputedLevelBound(t *testing.T) {
 // TestExtrudeToFaceInheritsPlacedLoftBound keeps a stop against a placed
 // loft's planar cap from treating its held coordinates as exact.
 func TestExtrudeToFaceInheritsPlacedLoftBound(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	loft, err := doc.Loft(s0, p0, s1, p1)

@@ -26,6 +26,7 @@ func requireFilterAgreesWithExact(t *testing.T, a, b, p r3.Vec, tau2 float64) bo
 }
 
 func TestSegFilterKeepsWhatTheExactPredicateAccepts(t *testing.T) {
+	t.Parallel()
 	a, b := r3.NewVec(0, 0, 0), r3.NewVec(10, 4, -3)
 	tau2 := segAdmissionRadius2(0, 10)
 
@@ -122,6 +123,7 @@ func TestSegFilterKeepsWhatTheExactPredicateAccepts(t *testing.T) {
 // hand-built filter whose vv disagrees with its v, the only way to reach the
 // state at all.
 func TestSegFilterAbstainsOnEverySaturatedIntermediate(t *testing.T) {
+	t.Parallel()
 	a, b := r3.NewVec(0, 0, 0), r3.NewVec(100, 0, 0)
 	tau2 := segAdmissionRadius2(0, 100)
 
@@ -167,6 +169,7 @@ func TestSegFilterAbstainsOnEverySaturatedIntermediate(t *testing.T) {
 // itself: rational points constructed ON the segment, whose float roundings are
 // what the filter actually sees. Every one must survive.
 func TestSegFilterNeverRejectsAnExactHit(t *testing.T) {
+	t.Parallel()
 	rng := rand.New(rand.NewPCG(7, 11))
 	for range 4000 {
 		a := r3.NewVec(rng.Float64()*200-100, rng.Float64()*200-100, rng.Float64()*200-100)
@@ -211,6 +214,7 @@ func TestSegFilterNeverRejectsAnExactHit(t *testing.T) {
 // A case pinned to any one of those regimes says nothing about the others, so
 // the sweep asserts mechanically that it visited each.
 func TestSegFilterNeverRejectsAnExactHitAtEveryScale(t *testing.T) {
+	t.Parallel()
 	rng := rand.New(rand.NewPCG(19, 23))
 	// A coordinate is a random magnitude within one binade of the scale, so
 	// every component stays normal down to the bottom of the sweep and the
@@ -279,6 +283,7 @@ func TestSegFilterNeverRejectsAnExactHitAtEveryScale(t *testing.T) {
 // on a mesh-spanning edge nearly every vertex must be turned away before the
 // rational predicate ever runs.
 func TestSegFilterRejectsTheOverwhelmingMajority(t *testing.T) {
+	t.Parallel()
 	rng := rand.New(rand.NewPCG(3, 5))
 	a, b := r3.NewVec(-50, -50, -50), r3.NewVec(50, 50, 50)
 	f := newSegFilter(a, b, segAdmissionRadius2(0, 50))
@@ -295,6 +300,7 @@ func TestSegFilterRejectsTheOverwhelmingMajority(t *testing.T) {
 }
 
 func TestSegAdmissionRadiusCoversTheRoundingItMustCover(t *testing.T) {
+	t.Parallel()
 	t.Run(`the radius dominates the coordinate rounding it is derived from`, func(t *testing.T) {
 		// Two roundings of a 100 mm coordinate, read as a 3D distance, is the
 		// worst (1) allows; the published radius must exceed it.
@@ -417,6 +423,7 @@ func refLerp(a, b refPoint, t *big.Rat) refPoint {
 // refLerp-derived probes at t = 37/91 — the investigation's own check, which
 // passed on all 1024.
 func TestXHPAgreesWithTheRationalOrientSign(t *testing.T) {
+	t.Parallel()
 	a, b, c := r3.NewVec(0.1, 0.2, 0.3), r3.NewVec(1.7, 0.35, -0.9), r3.NewVec(-0.55, 2.25, 0.125)
 	ra, rb, rc := refPointOf(a), refPointOf(b), refPointOf(c)
 	ha, hb, hc := xhpOf(a), xhpOf(b), xhpOf(c)
@@ -446,6 +453,7 @@ func TestXHPAgreesWithTheRationalOrientSign(t *testing.T) {
 // rational it denotes (x/w, y/w, z/w) equals the coordinate an independent
 // math/big.Rat lerp computes for the identical t, and w is strictly positive.
 func TestXHPLerpDenotesTheSameCoordinate(t *testing.T) {
+	t.Parallel()
 	a := r3.NewVec(0.1, 0.2, 0.3)
 	ra, ha := refPointOf(a), xhpOf(a)
 	tRat := big.NewRat(37, 91)
@@ -476,6 +484,7 @@ func TestXHPLerpDenotesTheSameCoordinate(t *testing.T) {
 // sign must agree over the same probes, sign consumer and value consumer
 // alike.
 func TestOrientRatAgreesWithOrientSignExact(t *testing.T) {
+	t.Parallel()
 	a, b, c := r3.NewVec(0.1, 0.2, 0.3), r3.NewVec(1.7, 0.35, -0.9), r3.NewVec(-0.55, 2.25, 0.125)
 	xa, xb, xc := xptOf(a), xptOf(b), xptOf(c)
 	for _, px := range xhpGrid {
@@ -505,6 +514,7 @@ func xhpKeyOf(p xhp) string {
 // coordinate — and asserts both canonicalise to the same key, the same
 // four-tuple, and the same rational coordinate.
 func TestXHPCanonIsAUniqueIdentity(t *testing.T) {
+	t.Parallel()
 	a, b, c := xhpBenchTriangle()
 	tn, td := big.NewInt(37), big.NewInt(91)
 	depth1 := xhpLerp(a, b, tn, td)
@@ -541,6 +551,7 @@ func TestXHPCanonIsAUniqueIdentity(t *testing.T) {
 // after every lerp is what keeps it bounded — measured 462 bits at depth 6 —
 // without paying xhpCanon's full GCD.
 func TestXHPDenominatorStaysBounded(t *testing.T) {
+	t.Parallel()
 	p := xhpOf(r3.NewVec(0.1, 0.2, 0.3))
 	targets := []r3.Vec{
 		r3.NewVec(1.7, 0.35, -0.9),
@@ -644,6 +655,7 @@ func BenchmarkExactVertexKey(b *testing.B) {
 // operations and its contains/disjoint tests directly, on hand-picked values,
 // ahead of the randomized enclosure proof below.
 func TestFloatIntervalArithmeticSanity(t *testing.T) {
+	t.Parallel()
 	a := floatInterval{lo: 1, hi: 2}
 	b := floatInterval{lo: 3, hi: 4}
 
@@ -683,6 +695,7 @@ func TestFloatIntervalArithmeticSanity(t *testing.T) {
 // expression — checked as a big.Rat comparison, never a float one, so the
 // test cannot pass by the same rounding the filter has to survive.
 func TestTriTriIntervalEnclosesExact(t *testing.T) {
+	t.Parallel()
 	rng := rand.New(rand.NewPCG(1, 2))
 	sample := func() float64 { return (rng.Float64()*2 - 1) * 1000 }
 
@@ -715,6 +728,7 @@ func TestTriTriIntervalEnclosesExact(t *testing.T) {
 // cached homogeneous projection path returns the same exact orientation value
 // as the existing rational projection path on every coordinate-plane choice.
 func TestHomogeneousProjectedCrossMatchesRational(t *testing.T) {
+	t.Parallel()
 	points := [3]xpt{
 		xptOf(r3.NewVec(0.1, 2.0, -3.5)),
 		xptOf(r3.NewVec(4.25, -1.5, 0.75)),
@@ -1026,6 +1040,7 @@ func requireCubeQueriesMatch(ctx context.Context, t *testing.T, o r3.Vec, verts 
 }
 
 func TestParityQueryProjectionMatchesReference(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	origin := r3.NewVec(0, 0, 0)
 	farVec := r3.NewVec(parityFar, parityFar, parityFar)
@@ -1335,6 +1350,7 @@ func (c *parityCancelAfterErr) Err() error {
 }
 
 func TestPreparedParityProjectionReuse(t *testing.T) {
+	t.Parallel()
 	ctx := t.Context()
 	origin := r3.NewVec(0, 0, 0)
 

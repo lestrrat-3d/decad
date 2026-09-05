@@ -632,6 +632,7 @@ func extractPaths(col1 string) []string {
 // yields — CLAUDE.md is refused a Layout table outright, so its parse
 // contributes its declared non-Layout cells alone.
 func TestCLAUDEMDLayoutStaysCompact(t *testing.T) {
+	t.Parallel()
 	var rows []layoutRow
 
 	for _, spec := range []docSpec{claudeMDSpec, layoutDocSpec} {
@@ -784,6 +785,7 @@ func coveredPaths(rows []layoutRow, suffix string) map[string]struct{} {
 // Every fixture is invented and lives in a temporary directory: none of these
 // names appears in the repository.
 func TestCoverageTargetsRefusesAnEmptyEnumeration(t *testing.T) {
+	t.Parallel()
 	const inventedCause = "an invented cause this fixture names"
 
 	write := func(t *testing.T, path string) {
@@ -854,6 +856,7 @@ func TestCoverageTargetsRefusesAnEmptyEnumeration(t *testing.T) {
 // Every fixture below is invented — none of these lines appears in the real
 // CLAUDE.md, and none should ever be copied into it.
 func TestParseLayoutRowsRejectsMalformedRows(t *testing.T) {
+	t.Parallel()
 	// section wraps table body lines in the minimum structure the parser
 	// needs: the "## Layout" heading it starts at, a sub-heading and table
 	// scaffolding, and a following "##" heading it stops at.
@@ -917,6 +920,7 @@ func TestParseLayoutRowsRejectsMalformedRows(t *testing.T) {
 // names a file that does not exist, so a parse that reached it could not
 // possibly pass.
 func TestParseLayoutRowsRefusesTextItWouldNotReach(t *testing.T) {
+	t.Parallel()
 	const wellFormed = "| `doc.go` | An invented short pointer row. |"
 
 	oversized := "| `no_such_invented_file.go` | " + strings.Repeat("X", layoutCellMaxChars+1) + " |"
@@ -1047,6 +1051,7 @@ func TestParseLayoutRowsRefusesTextItWouldNotReach(t *testing.T) {
 // doubly-out-of-contract row: a cell one rune past layoutCellMaxChars naming a
 // file that does not exist, so any parse that reached it could not pass.
 func TestParseCLAUDEMDRefusesEverySpellingOfTheAnchors(t *testing.T) {
+	t.Parallel()
 	oversized := "| `no_such_invented_file.go` | " + strings.Repeat("X", layoutCellMaxChars+1) + " |"
 
 	// realSection is a complete, well-formed Layout section, so every fixture
@@ -1191,6 +1196,7 @@ func TestParseCLAUDEMDRefusesEverySpellingOfTheAnchors(t *testing.T) {
 // Every fixture is invented — none of these lines appears in the real
 // CLAUDE.md.
 func TestParseCLAUDEMDAcceptsTheShapesTheFormatMakesSafe(t *testing.T) {
+	t.Parallel()
 	const wellFormed = "| `doc.go` | An invented short pointer row. |"
 	other := []string{inventedNextHeading, "", "An invented sentence.", ""}
 	join := func(blocks ...[]string) string {

@@ -25,6 +25,7 @@ import (
 // through the mesh path, and their overlap is the exact 5x5 square the two
 // footprints share.
 func TestPrismIntersectCrossingBoxesResolvesAnalytically(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 5)
 	b := boxBody(t, doc, 5, 5, 15, 15, 5)
@@ -46,6 +47,7 @@ func TestPrismIntersectCrossingBoxesResolvesAnalytically(t *testing.T) {
 // required test: the target loses exactly the shared 5x5 square over its own
 // height.
 func TestPrismCutCrossingBoxesResolvesAnalytically(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	target := boxBody(t, doc, 0, 0, 10, 10, 5)
 	tool := boxBody(t, doc, 5, 5, 15, 15, 5)
@@ -68,6 +70,7 @@ func TestPrismCutCrossingBoxesResolvesAnalytically(t *testing.T) {
 // segments) times the shared height is what the analytic path must publish,
 // well inside the 1e-9 mm^3 bound that would betray a chorded mesh answer.
 func TestPrismIntersectCrossingCylindersMatchesClosedFormLens(t *testing.T) {
+	t.Parallel()
 	const r, d, h = 10.0, 8.0, 5.0
 	doc := decad.New()
 	a := discBody(t, doc, 0, r, h)
@@ -97,6 +100,7 @@ func TestPrismIntersectCrossingCylindersMatchesClosedFormLens(t *testing.T) {
 // (TestVerifyDiagnosticsUnsupportedPairStagedContact's sibling shape, but
 // sharing the extrusion base plane rather than a side face).
 func TestVerifyCrossingCoplanarBoxesReportsInterference(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 5)
 	b := boxBody(t, doc, 5, 5, 15, 15, 5)
@@ -125,6 +129,7 @@ func TestVerifyCrossingCoplanarBoxesReportsInterference(t *testing.T) {
 // and Intersect, exactly as it did before this increment — the crossing
 // classifier never runs on a pair the entry gate already excludes.
 func TestPrismCutIntersectNonCoplanarPairStillTakesMeshPath(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	target := boxBody(t, doc, 0, 0, 10, 10, 10)
 	toolSrc := boxBody(t, doc, 5, 5, 15, 15, 10)
@@ -154,6 +159,7 @@ func TestPrismCutIntersectNonCoplanarPairStillTakesMeshPath(t *testing.T) {
 // Intersect, unaffected by this increment — matching
 // TestPrismUnionRotatedToothFallback's own shape for Union.
 func TestPrismCutIntersectRotatedSectionStillTakesMeshPath(t *testing.T) {
+	t.Parallel()
 	const r, r2, th1, th2, h = 15.0, 19.0, 0.05, 0.25, 8.0
 	const n, k = 17, 10
 	angle := units.Radians(2 * math.Pi * float64(k) / float64(n))

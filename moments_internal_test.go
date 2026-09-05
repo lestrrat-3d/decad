@@ -16,6 +16,7 @@ import (
 // deny a measurement the accumulator already holds. Every non-positive region
 // must still refuse, on either arithmetic.
 func TestPositiveAreaGateConsultsExactRational(t *testing.T) {
+	t.Parallel()
 	withExact := func(area *big.Rat, held float64) *regionIntegrals {
 		ig := &regionIntegrals{area: held, exact: newExactMoments()}
 		ig.exact.area.Set(area)
@@ -67,6 +68,7 @@ func TestPositiveAreaGateConsultsExactRational(t *testing.T) {
 }
 
 func TestMomentValidationCancellationIsBounded(t *testing.T) {
+	t.Parallel()
 	segments := make([]CurveSegment, workPollInterval+64)
 	for i := range segments {
 		start := Point2{U: float64(i), V: 0}
@@ -100,6 +102,7 @@ func ratLerpGeneral(start, end, t float64) *big.Rat {
 // Cmp otherwise. This is what settles the claim, not a tolerance: a sampled
 // near-endpoint parameter belongs to the general path, never this one.
 func TestRatLerpEndpointsMatchTheGeneralPath(t *testing.T) {
+	t.Parallel()
 	negZero := math.Copysign(0, -1)
 	values := []float64{
 		0, negZero, 1, -1, 1e-300, 1e300,
@@ -145,6 +148,7 @@ func TestRatLerpEndpointsMatchTheGeneralPath(t *testing.T) {
 // exactLineMoments mutates its ratLerp results in place, so a cached or
 // shared rational at the endpoint case would corrupt the next call.
 func TestRatLerpEndpointReturnsAFreshRational(t *testing.T) {
+	t.Parallel()
 	a := ratLerp(2, 5, 0)
 	require.NotNil(t, a)
 	a.Sub(a, big.NewRat(1, 1))
@@ -205,6 +209,7 @@ func exactAtanSeries(x *big.Rat) ratInterval {
 // gap the grid's extra truncation opens up must stay far under float64
 // resolution.
 func TestAtanSmallIntervalContainsExactSeries(t *testing.T) {
+	t.Parallel()
 	rng := rand.New(rand.NewPCG(1, 2))
 
 	var args []*big.Rat
@@ -252,6 +257,7 @@ func TestAtanSmallIntervalContainsExactSeries(t *testing.T) {
 // UP past the true value), so every comparison here is a big.Rat Cmp against
 // a big.Rat slack built from math.Nextafter, never a float64 <=.
 func TestAtanSmallIntervalEnclosesMathAtan(t *testing.T) {
+	t.Parallel()
 	args := []float64{0, 0.5, -0.5, 1.0 / 3, 1.0 / 1024, math.Ldexp(1, -400)}
 	for i := 1; i <= 50; i++ {
 		args = append(args, float64(i)/100)
@@ -282,6 +288,7 @@ func TestAtanSmallIntervalEnclosesMathAtan(t *testing.T) {
 // fixed-point grid's outward rounding must never mishandle: an argument that
 // lands exactly on zero, and one so small it underflows the grid entirely.
 func TestAtanSmallIntervalDegenerateArguments(t *testing.T) {
+	t.Parallel()
 	t.Run("zero", func(t *testing.T) {
 		got := atanSmallInterval(new(big.Rat))
 		gridUnit := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), trigFixedBits))
@@ -379,6 +386,7 @@ var piIntervalSink [3]ratInterval
 // than float64 resolution, so the fixed-point series is not merely correct
 // but not the bottleneck of the bracket it serves.
 func TestTurnSinCosIntervalEnclosesMathSincos(t *testing.T) {
+	t.Parallel()
 	const widthCeiling = 1e-40 // trigFixedSeries's own margin measures in the 1e-58 range
 	const ulpSlack = 1e-15
 
@@ -436,6 +444,7 @@ func TestTurnSinCosIntervalEnclosesMathSincos(t *testing.T) {
 // not merely check turnSinCosInterval against the same libm call it is meant
 // to replace.
 func TestTurnSinCosIntervalMatchesKnownTurns(t *testing.T) {
+	t.Parallel()
 	sqrt2over2 := math.Sqrt2 / 2
 	sqrt3over2 := math.Sqrt(3) / 2
 	for _, tc := range []struct {

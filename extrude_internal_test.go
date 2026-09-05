@@ -23,6 +23,7 @@ import (
 // (spline_convexity_internal_test.go), which already pins the certificate's
 // own verdict on it (freeformConvexityPositive); this test pins the BUILD.
 func TestEvalPrismCollapsedSpanRunStillBuilds(t *testing.T) {
+	t.Parallel()
 	seg := NURBSSeg{
 		Degree: 1,
 		Control: []Point2{
@@ -75,6 +76,7 @@ func TestEvalPrismCollapsedSpanRunStillBuilds(t *testing.T) {
 // RecordProfile would then refuse the region the arrangement admits on its own
 // proximity threshold.
 func TestWholeSegmentWalkStatesTheRecordedEndpoints(t *testing.T) {
+	t.Parallel()
 	t.Run("line", func(t *testing.T) {
 		// 4/7 → 10/3 is a pair the chord formula does not round-trip: the
 		// difference needs a finer grid than its own exponent carries, so it
@@ -230,6 +232,7 @@ func oneSegmentProfile(seg CurveSegment) ProfileRecord {
 // contain the value the record denotes; a zero bound there is a false claim,
 // because the true endpoint sits outside the interval the scan reports.
 func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
+	t.Parallel()
 	// The trimmed quarter of a quarter-circle arc: the walk sweeps θ ∈
 	// [π/8, 3π/8], so along (1, 0) both extremes ARE endpoints — the interior
 	// apex at θ = 0 is not swept and contributes nothing.
@@ -323,6 +326,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 // candidate is exactly representable, the scan keeps the zero bound and the
 // section's box stays Exact.
 func TestBoundaryExtremesKeepAProvenZero(t *testing.T) {
+	t.Parallel()
 	square := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
 		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 2, V: 0}, TStart: 0, TEnd: 1},
 		LineSeg{Start: Point2{U: 2, V: 0}, End: Point2{U: 2, V: 2}, TStart: 0, TEnd: 1},
@@ -455,6 +459,7 @@ func involuteFitPrismPayload(t *testing.T) prismPayload {
 // TestResolveProfileWalksChargesSegmentOnce's 230,168, one occurrence of
 // which is common to both totals.
 func TestPrismWalkOnceInvoluteRecordFitsWorkBudget(t *testing.T) {
+	t.Parallel()
 	pp := involuteFitPrismPayload(t)
 	work := newFreeformWork()
 
@@ -490,6 +495,7 @@ func TestPrismWalkOnceInvoluteRecordFitsWorkBudget(t *testing.T) {
 // segment); the closing LineSeg is analytic and charges nothing
 // (walkOf's own doc comment: "An analytic segment charges nothing").
 func TestResolveProfileWalksChargesSegmentOnce(t *testing.T) {
+	t.Parallel()
 	work := newFreeformWork()
 	pw, err := resolveProfileWalks(involuteFitProfile(), work)
 	require.NoError(t, err)
@@ -507,6 +513,7 @@ func TestResolveProfileWalksChargesSegmentOnce(t *testing.T) {
 // fallback would hide behind a correct-looking answer, so every consumer
 // refuses instead.
 func TestProfileWalksMismatchRefuses(t *testing.T) {
+	t.Parallel()
 	// A 4-segment square, deliberately a different outer segment count than
 	// involuteFitProfile's 2 (a LineSeg and a FitSplineSeg).
 	square := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
@@ -556,6 +563,7 @@ func lineEndProfile(end Point2) ProfileRecord {
 // over the recorded segments themselves, exactly: the one-ulp subtest below
 // pins that it carries no tolerance and no "close enough" arm.
 func TestProfileWalksSegmentDataMismatchRefuses(t *testing.T) {
+	t.Parallel()
 	near := lineEndProfile(Point2{U: 1, V: 0})
 	far := lineEndProfile(Point2{U: 2, V: 0})
 	require.Len(t, far.Outer.Segments, len(near.Outer.Segments),
@@ -620,6 +628,7 @@ func TestProfileWalksSegmentDataMismatchRefuses(t *testing.T) {
 // hands each consumer is the walk walkOf itself resolves for that segment,
 // field for field. The refusal above must cost the matching path nothing.
 func TestProfileWalksReadBackMatchesFreshResolution(t *testing.T) {
+	t.Parallel()
 	profile := involuteFitProfile()
 	pw, err := resolveProfileWalks(profile, newFreeformWork())
 	require.NoError(t, err)
@@ -644,6 +653,7 @@ func TestProfileWalksReadBackMatchesFreshResolution(t *testing.T) {
 }
 
 func TestEvalPrismContinuesCallerFreeformWork(t *testing.T) {
+	t.Parallel()
 	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
 		SplineSeg{
 			Control: []Point2{{U: 2}, {U: 2, V: 2}, {V: 2}, {}},

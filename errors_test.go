@@ -12,6 +12,7 @@ import (
 )
 
 func TestErrorVocabulary(t *testing.T) {
+	t.Parallel()
 	sentinels := map[string]error{
 		"ErrNoMatch":             decad.ErrNoMatch,
 		"ErrCardinality":         decad.ErrCardinality,

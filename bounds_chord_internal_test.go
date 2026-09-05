@@ -419,6 +419,7 @@ var chordSweepTable = sync.OnceValue(func() []chordSweepRow {
 // and merely re-covers the untwisted enclosure an earlier, narrower fixture
 // already pinned.
 func TestChordedBoundaryVolumeAllowEnclosesTheMeasuredGap(t *testing.T) {
+	t.Parallel()
 	minRatio := math.Inf(1)
 	var minRow string
 	var minTwistDeg float64
@@ -452,6 +453,7 @@ func TestChordedBoundaryVolumeAllowEnclosesTheMeasuredGap(t *testing.T) {
 // degrees of twist at 64 stations and 90 degrees at 256 stations. Both must
 // enclose with room to spare.
 func TestChordedBoundaryVolumeAllowEnclosesTheRefutedCounterexamples(t *testing.T) {
+	t.Parallel()
 	const radius, sweepDeg, h = 10.0, 120.0, 25.0
 	sweepRad := sweepDeg * math.Pi / 180
 
@@ -513,6 +515,7 @@ func TestChordedBoundaryVolumeAllowEnclosesTheRefutedCounterexamples(t *testing.
 // still failing outright on a fixture that is NOT actually refining (a
 // constant-in-n quantity, as arcShare always was, would show a 1x "shrink").
 func TestChordedBoundaryVolumeAllowRemainsSoundUnderRefinement(t *testing.T) {
+	t.Parallel()
 	const radius, h = 10.0, 25.0
 	chordCounts := []int{8, 32, 64, 128, 256}
 
@@ -571,6 +574,7 @@ func TestChordedBoundaryVolumeAllowRemainsSoundUnderRefinement(t *testing.T) {
 // after F1/F2/F4's own fixes (the newly added seam leg can only ADD
 // coverage, never rescue a row this leg alone was carrying).
 func TestChordedBoundaryVolumeAllowTwistLegIsLoadBearing(t *testing.T) {
+	t.Parallel()
 	const radius, sweepDeg, h, twistDeg, n = 1.0, 30.0, 100.0, 90.0, 256
 	sweepRad := sweepDeg * math.Pi / 180
 	twistRad := twistDeg * math.Pi / 180
@@ -609,6 +613,7 @@ func TestChordedBoundaryVolumeAllowTwistLegIsLoadBearing(t *testing.T) {
 // h=4, area=6), and deleting the cap leg alone must drop the composed
 // answer to 0 — failing to cover a REAL, exactly-known volume displacement.
 func TestChordedBoundaryVolumeAllowCapLegIsLoadBearing(t *testing.T) {
+	t.Parallel()
 	const h, area = 4.0, 6.0
 	const knownExactVolumeDisplacement = h * area / 3 // == 8, capAreaVolumeAllow's own exact identity
 
@@ -730,6 +735,7 @@ func ringAllow(radius, twistRad, h float64, n int) (matchedDelta, wallAreaUpper,
 // correct and necessary as an AREA/VOLUME bound in its own right, whatever
 // this one composition's own redundancy happens to be).
 func TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing(t *testing.T) {
+	t.Parallel()
 	const radius, h, twistDeg, n = 10.0, 25.0, 20.0, 32
 	twistRad := twistDeg * math.Pi / 180
 
@@ -832,6 +838,7 @@ func TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing(t *test
 //     constant is not policed by anything in this suite, exactly the
 //     complaint this comment block exists to make impossible to miss.
 func TestChordedBoundaryVolumeAllowWallLegDeletionSearch(t *testing.T) {
+	t.Parallel()
 	minRatio := math.Inf(1)
 	var minRow string
 	rows := 0
@@ -871,6 +878,7 @@ func TestChordedBoundaryVolumeAllowWallLegDeletionSearch(t *testing.T) {
 // what would still need to happen before seam is either proven redundant or
 // caught by a genuine failing row.
 func TestChordedBoundaryVolumeAllowSeamLegDeletionSearch(t *testing.T) {
+	t.Parallel()
 	minRatio := math.Inf(1)
 	var minRow string
 	rows := 0

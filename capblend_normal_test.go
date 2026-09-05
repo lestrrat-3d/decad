@@ -14,6 +14,7 @@ import (
 // each band), the two cases must read opposite Z signs — the asymmetry a
 // naive "the Plane's own u x v is always outward" assumption misses.
 func TestCapBlendPlanePatchNormalOutwardBothCaps(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		end     bool
@@ -48,6 +49,7 @@ func TestCapBlendPlanePatchNormalOutwardBothCaps(t *testing.T) {
 // the Plane check: the cone chamfer patch's normal must tilt toward whichever
 // cap is chamfered, for both caps.
 func TestCapBlendConePatchNormalOutwardBothCaps(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		end     bool
@@ -98,6 +100,7 @@ func TestCapBlendConePatchNormalOutwardBothCaps(t *testing.T) {
 // perpendicular to the truth here and passes every sign test written against a
 // cone ruling.
 func TestCapBlendReflexApexNormalOutward(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		end  bool

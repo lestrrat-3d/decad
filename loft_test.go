@@ -76,6 +76,7 @@ func loftCircleProfile(t *testing.T, w *sketch.World, plane *sketch.Plane, r flo
 // --- Mass properties (§8) ---
 
 func TestLoftBuildsCongruentSquares(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)
@@ -111,6 +112,7 @@ func TestLoftBuildsCongruentSquares(t *testing.T) {
 }
 
 func TestLoftFrustumVolumeMatchesClosedForm(t *testing.T) {
+	t.Parallel()
 	// bottom side 40 (half 20), top side 20 (half 10), height 10: the
 	// pyramidal frustum V = (h/3)(A0 + A1 + sqrt(A0*A1)) = 28000/3 mm^3, not
 	// representable in binary, so Volume must be Approximate with a positive
@@ -161,6 +163,7 @@ func TestLoftFrustumVolumeMatchesClosedForm(t *testing.T) {
 // WithLoftAlignment(4) is the one offset that undoes the shift and recovers
 // the plain (untwisted) pentagonal prism.
 func TestLoftAlignmentSelectsTheCorrespondence(t *testing.T) {
+	t.Parallel()
 	const height = 10.0
 	pts := [5][2]float64{{0, 0}, {10, 0}, {14, 5}, {9, 11}, {1, 8}}
 	// Shoelace area of the pentagon above, positive (CCW): 110 mm^2.
@@ -269,6 +272,7 @@ func TestLoftAlignmentSelectsTheCorrespondence(t *testing.T) {
 // --- Seam gates (S9) ---
 
 func TestLoftSeamGates(t *testing.T) {
+	t.Parallel()
 	t.Run("ForeignProfileAtP0", func(t *testing.T) {
 		s0, _, s1, p1 := loftSquares(t, 20, 20)
 		w := sketch.NewWorld()
@@ -401,6 +405,7 @@ func TestLoftSeamGates(t *testing.T) {
 // --- Pre-gates: nil arguments (S10), options (S11, S4 arity) ---
 
 func TestLoftNilArguments(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	cases := []struct {
 		name string
@@ -442,6 +447,7 @@ func (o unknownLoftOption) Ident() any {
 }
 
 func TestLoftForeignOption(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 
 	t.Run("ForeignImplementation", func(t *testing.T) {
@@ -471,6 +477,7 @@ func TestLoftForeignOption(t *testing.T) {
 }
 
 func TestLoftDuplicateAlignmentOption(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1, decad.WithLoftAlignment(0), decad.WithLoftAlignment(0))
@@ -481,6 +488,7 @@ func TestLoftDuplicateAlignmentOption(t *testing.T) {
 }
 
 func TestLoftEmptyAlignmentPayload(t *testing.T) {
+	t.Parallel()
 	// A one-loop pair needs exactly one offset; WithLoftAlignment() with no
 	// arguments must reach validateLoftRecords as a non-nil, length-0 slice
 	// so it refuses as S4 (wrong length) rather than silently defaulting.
@@ -496,6 +504,7 @@ func TestLoftEmptyAlignmentPayload(t *testing.T) {
 // --- Shape gates (S3, S5) ---
 
 func TestLoftCoplanarSectionsRefuse(t *testing.T) {
+	t.Parallel()
 	t.Run("SameSketch", func(t *testing.T) {
 		s0, p0, _, _ := loftSquares(t, 20, 20)
 		doc := decad.New()
@@ -536,6 +545,7 @@ func TestLoftCoplanarSectionsRefuse(t *testing.T) {
 }
 
 func TestLoftCurvedPairRefuses(t *testing.T) {
+	t.Parallel()
 	// A mismatched segment count refuses at S2, before S3's own same-kind
 	// test ever runs (already pinned exactly by loft_build_internal_test.go's
 	// own S1-S8 tests) — unaffected by S3's arc form (a10-plan.md Part 3
@@ -575,6 +585,7 @@ func TestLoftCurvedPairRefuses(t *testing.T) {
 // env var, the same shape loft_chord_calibration_internal_test.go's own
 // DECAD_LOFT_CALIBRATION gate uses.
 func TestLoftSameKindCircleAgainstCircleAdmitted(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("DECAD_LOFT_FULL_CIRCLE") == "" {
 		t.Skip("set DECAD_LOFT_FULL_CIRCLE=1 to build a full circle-to-circle loft (several seconds, roughly 256 stations per side)")
 	}
@@ -593,6 +604,7 @@ func TestLoftSameKindCircleAgainstCircleAdmitted(t *testing.T) {
 // --- Recipe fidelity ---
 
 func TestLoftRecordsStep(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1, decad.WithLoftAlignment(0))
@@ -626,6 +638,7 @@ func TestLoftRecordsStep(t *testing.T) {
 }
 
 func TestLoftRecordsOmittedAlignmentAsNil(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	_, err := doc.Loft(s0, p0, s1, p1)
@@ -638,6 +651,7 @@ func TestLoftRecordsOmittedAlignmentAsNil(t *testing.T) {
 }
 
 func TestLoftRecipeDoesNotAliasTheDocument(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	offsets := []int{0}
@@ -667,6 +681,7 @@ func TestLoftRecipeDoesNotAliasTheDocument(t *testing.T) {
 }
 
 func TestLoftOptionAliasDoesNotReachTheDocument(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	opt := decad.WithLoftAlignment(0)
@@ -688,6 +703,7 @@ func TestLoftOptionAliasDoesNotReachTheDocument(t *testing.T) {
 }
 
 func TestLoftSharedOptionAcrossCallsDoesNotAliasSteps(t *testing.T) {
+	t.Parallel()
 	s0a, p0a, s1a, p1a := loftSquares(t, 20, 20)
 	s0b, p0b, s1b, p1b := loftSquares(t, 20, 20)
 	doc := decad.New()
@@ -710,6 +726,7 @@ func TestLoftSharedOptionAcrossCallsDoesNotAliasSteps(t *testing.T) {
 }
 
 func TestLoftRecipeRoundTrip(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	_, err := doc.Loft(s0, p0, s1, p1, decad.WithLoftAlignment(0))
@@ -726,6 +743,7 @@ func TestLoftRecipeRoundTrip(t *testing.T) {
 // --- Verify wiring (D6) ---
 
 func TestLoftVerifySound(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 10)
 	doc := decad.New()
 	_, err := doc.Loft(s0, p0, s1, p1)
@@ -750,6 +768,7 @@ func TestLoftVerifySound(t *testing.T) {
 }
 
 func TestLoftVerifySurveysStaySuspect(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		opt  decad.VerifyOption
@@ -777,6 +796,7 @@ func TestLoftVerifySurveysStaySuspect(t *testing.T) {
 }
 
 func TestLoftVerifyBoxDisjointPairIsSound(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 10, 10)
 	doc := decad.New()
 	_, err := doc.Loft(s0, p0, s1, p1)
@@ -803,6 +823,7 @@ func TestLoftVerifyBoxDisjointPairIsSound(t *testing.T) {
 // --- Cancellation ---
 
 func TestLoftContextCancellation(t *testing.T) {
+	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	ctx, cancel := context.WithCancel(t.Context())
@@ -852,6 +873,7 @@ func buildHelicalToothProfile(s *sketch.Sketch, rot float64) {
 // section's end-to-end twist. Its Volume bound is the binding reading at the
 // default relative tolerance.
 func TestLoftHelicalToothClearsDefaultTolerance(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("the production chord count makes the crossing audit exceed the two-second fixture budget")
 	}

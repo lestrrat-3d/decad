@@ -213,6 +213,7 @@ func unitWeightCubic(control []Point2) NURBSSeg {
 // strictly positive while its own curvature takes BOTH signs. A rule reading
 // the turns would publish convex for this wall.
 func TestSingleSignPolygonTurnsProveNoCurvatureSign(t *testing.T) {
+	t.Parallel()
 	seg := unitWeightCubic([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: -4, V: 1}, {U: 0.9, V: 0}})
 	require.NoError(t, validateSegment(seg), "record.go admits the net: no distinctness or convexity gate exists")
 
@@ -274,6 +275,7 @@ func TestSingleSignPolygonTurnsProveNoCurvatureSign(t *testing.T) {
 // regular, so the refusal below is provably the depth cap and not the
 // regularity precondition.
 func TestMixedCurvatureAtTheSubdivisionDepthCapRefusesR19(t *testing.T) {
+	t.Parallel()
 	seg := unitWeightCubic([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: -4, V: 1}, {U: 0.9, V: 0}})
 	spans, reversed, err := freeformBezierSpans(seg, newFreeformWork())
 	require.NoError(t, err)
@@ -297,6 +299,7 @@ func TestMixedCurvatureAtTheSubdivisionDepthCapRefusesR19(t *testing.T) {
 // children, so the fold alone reaches a strict '-' and publishes convex for an
 // edge that doubles back on itself. The speed is what refuses it.
 func TestInteriorCuspFoldsToAStrictSignWithoutRegularity(t *testing.T) {
+	t.Parallel()
 	seg := SplineSeg{
 		Control: []Point2{
 			{U: -1.0 / 8, V: 1.0 / 4}, {U: 1.0 / 8, V: -1.0 / 12},
@@ -362,6 +365,7 @@ func TestInteriorCuspFoldsToAStrictSignWithoutRegularity(t *testing.T) {
 // count reports nothing, while the curvature coefficients are one-signed with
 // strict entries and would publish convex outright.
 func TestEndpointCuspEscapesAHalfOpenRootCount(t *testing.T) {
+	t.Parallel()
 	seg := unitWeightCubic([]Point2{{U: 0, V: 0}, {U: 0, V: 0}, {U: 1.0 / 3, V: 0}, {U: 1, V: 1}})
 	require.NoError(t, validateSegment(seg), "record.go admits coincident adjacent controls")
 
@@ -393,6 +397,7 @@ func TestEndpointCuspEscapesAHalfOpenRootCount(t *testing.T) {
 // verdict that routes the wall edge to evaluator §3's loop-role rule instead
 // of to a sign or a refusal.
 func TestCollinearNetProvesTheZeroCurvatureNumerator(t *testing.T) {
+	t.Parallel()
 	seg := NURBSSeg{
 		Degree:  2,
 		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 2, V: 0}},
@@ -427,6 +432,7 @@ func TestCollinearNetProvesTheZeroCurvatureNumerator(t *testing.T) {
 // converted chain's own controls leave the recorded fit points' hull, so a
 // containment or convexity rule phrased over recorded points misses the curve.
 func TestFitPointsAreNeitherTheChainNorItsHull(t *testing.T) {
+	t.Parallel()
 	fit := []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 2, V: 1}, {U: 3, V: 0}}
 	seg := FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg))
@@ -511,6 +517,7 @@ func degreeOneNURBS(tStart, tEnd float64) NURBSSeg {
 // zero polynomial, that the regularity precondition closes on them, and that
 // the chain's whole verdict therefore comes from the JOINT between them.
 func TestDegreeOneSpansCarryAZeroCurvatureNumerator(t *testing.T) {
+	t.Parallel()
 	seg := degreeOneNURBS(0, 1)
 	require.NoError(t, validateSegment(seg), "record.go admits a degree-1 NURBS segment")
 
@@ -567,6 +574,7 @@ func TestDegreeOneSpansCarryAZeroCurvatureNumerator(t *testing.T) {
 // true one. The constant is 4*cross(dP0, dP1), which is 4 times the span's lone
 // control-polygon turn.
 func TestDegreeTwoCurvatureNumeratorIsAConstantAtTheStatedDegree(t *testing.T) {
+	t.Parallel()
 	seg := NURBSSeg{
 		Degree:  2,
 		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}},
@@ -611,6 +619,7 @@ func TestDegreeTwoCurvatureNumeratorIsAConstantAtTheStatedDegree(t *testing.T) {
 // neighbour with a span that has no direction at all; pairing across the whole
 // run is what leaves a turn to read.
 func TestConsecutiveCollapsedSpansPairAcrossTheWholeRun(t *testing.T) {
+	t.Parallel()
 	seg := NURBSSeg{
 		Degree: 1,
 		Control: []Point2{
@@ -660,6 +669,7 @@ func TestConsecutiveCollapsedSpansPairAcrossTheWholeRun(t *testing.T) {
 // K's own Bernstein coefficients differ by the positive factor 1/8 per level,
 // so both routes read the same signs.
 func TestMidpointSplitCreatesAKnownZeroJoint(t *testing.T) {
+	t.Parallel()
 	seg := unitWeightCubic([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: -4, V: 1}, {U: 0.9, V: 0}})
 	spans, reversed, err := freeformBezierSpans(seg, newFreeformWork())
 	require.NoError(t, err)
@@ -707,6 +717,7 @@ func TestMidpointSplitCreatesAKnownZeroJoint(t *testing.T) {
 // reports the reversal beside them, so every span verdict and every joint cross
 // is computed on the unreversed chain before the sign is flipped.
 func TestReversedRangeConvertsToTheIdenticalUnreversedChain(t *testing.T) {
+	t.Parallel()
 	forward := degreeOneNURBS(0, 1)
 	backward := degreeOneNURBS(1, 0)
 	require.NoError(t, validateSegment(backward), "record.go admits a reversed recorded range")
@@ -760,6 +771,7 @@ func TestReversedRangeConvertsToTheIdenticalUnreversedChain(t *testing.T) {
 // -1 the other way — a conflict an open fold never reads and a closed fold
 // must.
 func TestClosedChainAddsTheWrapJointAnOpenChainNeverReads(t *testing.T) {
+	t.Parallel()
 	spanA := ratSpan([][2]float64{{0, 0}, {1, 0}})
 	spanB := ratSpan([][2]float64{{1, 0}, {1, 1}})
 	spans := []bezierSpan{spanA, spanB}
@@ -806,6 +818,7 @@ func degreeTwoConvexityFixture(t *testing.T) ([]bezierSpan, bool) {
 // identical spans under a fresh counter must still certify, so the charge is
 // provably a budget gate and not a blanket refusal.
 func TestConvexityCertificateChargesTheRecordWorkCounter(t *testing.T) {
+	t.Parallel()
 	spans, reversed := degreeTwoConvexityFixture(t)
 
 	spent := newFreeformWork()
@@ -827,6 +840,7 @@ func TestConvexityCertificateChargesTheRecordWorkCounter(t *testing.T) {
 // no-op charge would still pass every verdict assertion above, so the work
 // counter's own delta is the only thing that catches it.
 func TestConvexityCertificateSpendIncreases(t *testing.T) {
+	t.Parallel()
 	spans, reversed := degreeTwoConvexityFixture(t)
 
 	work := newFreeformWork()
@@ -890,6 +904,7 @@ func involuteFitPoints() []Point2 {
 // own flagClear assertion below pins the regression this fixture would
 // otherwise reintroduce).
 func TestInvoluteFitSplineJointNoiseNeverRefusesUnanimousSpans(t *testing.T) {
+	t.Parallel()
 	fit := involuteFitPoints()
 	// TStart > TEnd: the measured real record's own reversed=true, reproduced
 	// directly rather than guessed (spline_fit_test.go:551 builds a reversed
@@ -950,6 +965,7 @@ func TestInvoluteFitSplineJointNoiseNeverRefusesUnanimousSpans(t *testing.T) {
 // zero, never merely close to it; this path is untouched by the fix, and its
 // own certificate carries no fitInterpolated carve-out to apply.
 func TestBoehmSplineJointsStayExactlyZeroOnTheSamePoints(t *testing.T) {
+	t.Parallel()
 	pts := involuteFitPoints()
 	seg := SplineSeg{Control: pts, TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg))
@@ -983,6 +999,7 @@ func TestBoehmSplineJointsStayExactlyZeroOnTheSamePoints(t *testing.T) {
 // is positive — which leaves the two spans' own opposite verdicts as the only
 // thing the fold has to reconcile, and it cannot.
 func TestFitInterpolatedFlagNeverMasksASpanConflict(t *testing.T) {
+	t.Parallel()
 	spanPos := ratSpan([][2]float64{{0, 0}, {1, 0}, {2, 1}})
 	spanNeg := ratSpan([][2]float64{{2, 1}, {3, 2}, {4, 2}})
 	spans := []bezierSpan{spanPos, spanNeg}
@@ -1029,6 +1046,7 @@ func TestFitInterpolatedFlagNeverMasksASpanConflict(t *testing.T) {
 // keeps one sign at the TOP Bernstein level: certified with no subdivision at
 // all, the full freeformLengthDepth levels clear of the cap.
 func TestFitSplineGenuineSpanConflictStillRefuses(t *testing.T) {
+	t.Parallel()
 	fit := []Point2{{U: 0, V: 0}, {U: 0, V: 8}, {U: 8, V: 8}, {U: 9, V: 8}, {U: 9, V: 9}}
 	seg := FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg))
@@ -1085,6 +1103,7 @@ func TestFitSplineGenuineSpanConflictStillRefuses(t *testing.T) {
 // spanConvexitySignContext, run per span before any joint verdict exists —
 // refuses both spans before the carve-out or the fold ever runs.
 func TestFitSplineVanishingSpeedStillRefusesRegularity(t *testing.T) {
+	t.Parallel()
 	fit := []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 0, V: 0}}
 	seg := FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg))
@@ -1108,6 +1127,7 @@ func TestFitSplineVanishingSpeedStillRefusesRegularity(t *testing.T) {
 // NURBSSeg walk calls it, with the flag read off the predicate rather than
 // hardcoded — still folds the joint by its own cross product.
 func TestDegreeOneNURBSCornerIsNotFitInterpolatedAndStillFolds(t *testing.T) {
+	t.Parallel()
 	seg := degreeOneNURBS(0, 1)
 	require.False(t, isFitSplineSeg(seg), "a NURBSSeg is never the FitSplineSeg carve-out's subject")
 
@@ -1138,6 +1158,7 @@ func TestDegreeOneNURBSCornerIsNotFitInterpolatedAndStillFolds(t *testing.T) {
 // corner like any other chain's — it must still fold by the cross product
 // even with fitInterpolated set.
 func TestClosedFitSplineChainStillFoldsItsClosingJointByTheCrossProduct(t *testing.T) {
+	t.Parallel()
 	fit := []Point2{{U: 0, V: 0}, {U: -4, V: -4}, {U: -4, V: -3}, {U: 1, V: 1}, {U: 0, V: 0}}
 	seg := FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
 	require.NoError(t, validateSegment(seg), "record.go admits Fit[0] == Fit[last]: no closure gate exists")

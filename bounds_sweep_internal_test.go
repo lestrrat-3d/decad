@@ -12,6 +12,7 @@ import (
 )
 
 func TestCellChordCurveAreaUpperEnclosesTheFlatTriangleCounterexample(t *testing.T) {
+	t.Parallel()
 	vLo := r3.NewVec(0, 0, 0)
 	vHi := r3.NewVec(1, 0, 0)
 	for _, h := range []float64{0.1, 0.01, 0.001} {
@@ -47,6 +48,7 @@ func TestCellChordCurveAreaUpperEnclosesTheFlatTriangleCounterexample(t *testing
 // shape an earlier cellRuledExcessUpper's subtraction step failed on even
 // after its own 2x looseness was corrected.
 func TestCellChordCurveAreaUpperEnclosesTheCrossedCellCounterexample(t *testing.T) {
+	t.Parallel()
 	const h = 0.01
 	vLo := r3.NewVec(-1, 0, 0)
 	vHi := r3.NewVec(1, 0, 0)
@@ -75,6 +77,7 @@ func TestCellChordCurveAreaUpperEnclosesTheCrossedCellCounterexample(t *testing.
 // certify their norms over the rationals (cellSpanUpper), so the two answers
 // agree on the quantity while each rounds outward on its own.
 func TestCellChordCurveAreaUpperReducesToTheTwistBoundAtZeroSectionDelta(t *testing.T) {
+	t.Parallel()
 	vLo := r3.NewVec(0, 0, 0)
 	vHi := r3.NewVec(1, 0, 0)
 	wLo := r3.NewVec(0, 0, 1)
@@ -106,6 +109,7 @@ func TestCellChordCurveAreaUpperReducesToTheTwistBoundAtZeroSectionDelta(t *test
 // subtends) must all answer +Inf, never a finite number computed past a
 // falsified premise.
 func TestCellChordCurveAreaUpperRefusesOnBrokenClaims(t *testing.T) {
+	t.Parallel()
 	vLo := r3.NewVec(0, 0, 0)
 	vHi := r3.NewVec(1, 0, 0)
 	wLo := r3.NewVec(0, 0, 1)
@@ -137,6 +141,7 @@ func TestCellChordCurveAreaUpperRefusesOnBrokenClaims(t *testing.T) {
 // exactly like 0, since `NaN > 0` is false either way. Every one of the four corners, in
 // isolation, must now trigger a genuine +Inf refusal.
 func TestCellChordCurveAreaUpperRefusesNonFiniteCorners(t *testing.T) {
+	t.Parallel()
 	vLo := r3.NewVec(0, 0, 0)
 	vHi := r3.NewVec(1, 0, 0)
 	wLo := r3.NewVec(0, 0, 1)
@@ -187,6 +192,7 @@ func ratTwistQuarterUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // across the exponent range (a subnormal against a large one, where the two
 // operands' own denominators differ by hundreds of bits), and exact zeros.
 func TestCellExactReadingsMatchTheRationalReference(t *testing.T) {
+	t.Parallel()
 	vecs := []r3.Vec{
 		r3.NewVec(0, 0, 0),
 		r3.NewVec(1, 0, 0),
@@ -262,6 +268,7 @@ func TestCellExactReadingsMatchTheRationalReference(t *testing.T) {
 // their own chords so both the admitting and the refusing side of the premise
 // gate are exercised.
 func TestCellAllowsOfMatchesThePerBoundHelpers(t *testing.T) {
+	t.Parallel()
 	check := func(t *testing.T, vLo, vHi, wLo, wHi r3.Vec, arcLenA, arcLenB, matchedDelta float64) {
 		t.Helper()
 		got := cellAllowsOf(vLo, vHi, wLo, wHi, arcLenA, arcLenB, matchedDelta)
@@ -418,6 +425,7 @@ func edgeProductRows() []edgeProductRow {
 // norms are irrational, their squares exactly rational), never against a
 // float reference that shares the defect.
 func TestCellChordCurveAreaUpperEnclosesTheExactEdgeProduct(t *testing.T) {
+	t.Parallel()
 	for _, r := range edgeProductRows() {
 		t.Run(r.name, func(t *testing.T) {
 			if r.rawChannelExpected {
@@ -459,6 +467,7 @@ func TestCellChordCurveAreaUpperEnclosesTheExactEdgeProduct(t *testing.T) {
 // and rawB read naiveNorm rather than r3.Vec.Len, for the same
 // architecture-portability reason rawNormIsBelowExact does.
 func TestCellChordCurveAreaUpperRefusesARawNormArcLengthClaim(t *testing.T) {
+	t.Parallel()
 	for _, r := range edgeProductRows() {
 		t.Run(r.name, func(t *testing.T) {
 			vLo, vHi, wLo, wHi := r.vLo, r.vHi, r.wLo, r.wHi
@@ -508,6 +517,7 @@ func TestCellChordCurveAreaUpperRefusesARawNormArcLengthClaim(t *testing.T) {
 // pass is +Inf — which is exactly what stops the 30x violation from ever
 // reaching the derivation: refusal, not a shrunken bound.
 func TestCellChordCurveAreaUpperRefusesTheSagittaZigzag(t *testing.T) {
+	t.Parallel()
 	vLo := r3.NewVec(0, 0, 0)
 	vHi := r3.NewVec(1, 0, 0)
 	wLo := r3.NewVec(0, 0, 0.001)
@@ -616,6 +626,7 @@ func ratUnitCirclePoints(ts []int64) [][2]*big.Rat {
 // TestLoftCircularCellStationsMatchedDeltaIsItsSagitta
 // (loft_stations_internal_test.go).
 func TestArcMatchedDeltaEqualsSagitta(t *testing.T) {
+	t.Parallel()
 	t.Run("the reduction to (1) is an exact identity", func(t *testing.T) {
 		// Both sides of (1) have degree 4 in (C,S), degree 4 in (ca,sa) and
 		// degree 2 in u, so their difference P vanishes identically once it
@@ -735,6 +746,7 @@ func TestArcMatchedDeltaEqualsSagitta(t *testing.T) {
 // zero: both sides collapsed to a point (zero arc length on both) leaves
 // nothing for a ruled surface to sweep.
 func TestCellChordCurveAreaUpperIsZeroForADegenerateCell(t *testing.T) {
+	t.Parallel()
 	p := r3.NewVec(1, 2, 3)
 	require.Equal(t, 0.0, cellChordCurveAreaUpper(p, p, p, p, 0, 0, 0))
 }
@@ -745,6 +757,7 @@ func TestCellChordCurveAreaUpperIsZeroForADegenerateCell(t *testing.T) {
 // the two sections' own rules run parallel) has a zero twist vector and
 // therefore contributes nothing.
 func TestCellTwistVolumeAllowIsZeroWithoutTwist(t *testing.T) {
+	t.Parallel()
 	vLo := r3.NewVec(1, 0, 0)
 	vHi := r3.NewVec(0, 1, 0)
 	wLo := vLo.Add(r3.NewVec(0, 0, 5))
@@ -756,6 +769,7 @@ func TestCellTwistVolumeAllowIsZeroWithoutTwist(t *testing.T) {
 // form against a hand-computed cell. Here a=(1,0,0), b=(0,0,1),
 // T=(-1,1,0), so |det(a,T,b)|/12 is exactly 1/12.
 func TestCellTwistVolumeAllowMatchesTheSweptMeasure(t *testing.T) {
+	t.Parallel()
 	vLo := r3.NewVec(0, 0, 0)
 	vHi := r3.NewVec(1, 0, 0)
 	wLo := r3.NewVec(0, 0, 1)
@@ -771,6 +785,7 @@ func TestCellTwistVolumeAllowMatchesTheSweptMeasure(t *testing.T) {
 // TestCellTwistOffsetUpperMatchesPointwiseDeviation pins the exact |T|/4
 // maximum against the same hand-computed cell as the swept-measure test.
 func TestCellTwistOffsetUpperMatchesPointwiseDeviation(t *testing.T) {
+	t.Parallel()
 	vLo := r3.NewVec(0, 0, 0)
 	vHi := r3.NewVec(1, 0, 0)
 	wLo := r3.NewVec(0, 0, 1)
@@ -787,6 +802,7 @@ func TestCellTwistOffsetUpperMatchesPointwiseDeviation(t *testing.T) {
 // TestCellTwistOffsetUpperIsZeroWithoutTwist mirrors
 // TestCellTwistVolumeAllowIsZeroWithoutTwist for the pointwise reading.
 func TestCellTwistOffsetUpperIsZeroWithoutTwist(t *testing.T) {
+	t.Parallel()
 	vLo := r3.NewVec(1, 0, 0)
 	vHi := r3.NewVec(0, 1, 0)
 	wLo := vLo.Add(r3.NewVec(0, 0, 5))
@@ -857,6 +873,7 @@ func exactCellTwistVolume(vLo, vHi, wLo, wHi r3.Vec) *big.Rat {
 //     product they feed and a single trailing one-ulp nudge cannot recover
 //     the shortfall.
 func TestCellTwistBoundsEncloseTheirExactTerms(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct {
 		name               string
 		vLo, vHi, wLo, wHi r3.Vec
@@ -912,6 +929,7 @@ func TestCellTwistBoundsEncloseTheirExactTerms(t *testing.T) {
 // the divergence-theorem identity Σvol6 = 2*h*Area gives, since
 // |ΔVolume| = |h|*|ΔArea|/3.
 func TestCapAreaVolumeAllowIsExactForAPlanarFace(t *testing.T) {
+	t.Parallel()
 	const h, area = 4.0, 6.0
 	want := h * area / 3
 	got := capAreaVolumeAllow(h, area)
@@ -926,6 +944,7 @@ func TestCapAreaVolumeAllowIsExactForAPlanarFace(t *testing.T) {
 // and a cap with a proven-zero area gap contributes nothing whatever its
 // own plane offset.
 func TestCapAreaVolumeAllowIsZeroAtZeroOffsetOrZeroAreaGap(t *testing.T) {
+	t.Parallel()
 	require.Equal(t, 0.0, capAreaVolumeAllow(0, 6.0))
 	require.Equal(t, 0.0, capAreaVolumeAllow(4.0, 0))
 }
@@ -934,6 +953,7 @@ func TestCapAreaVolumeAllowIsZeroAtZeroOffsetOrZeroAreaGap(t *testing.T) {
 // non-finite or negative planeOffsetUpper or capAreaAllow must answer +Inf,
 // never a finite number computed past a broken claim.
 func TestCapAreaVolumeAllowRefusesOnBrokenClaims(t *testing.T) {
+	t.Parallel()
 	require.True(t, math.IsInf(capAreaVolumeAllow(math.NaN(), 6.0), 1))
 	require.True(t, math.IsInf(capAreaVolumeAllow(4.0, math.NaN()), 1))
 	require.True(t, math.IsInf(capAreaVolumeAllow(math.Inf(1), 6.0), 1))
@@ -950,6 +970,7 @@ func TestCapAreaVolumeAllowRefusesOnBrokenClaims(t *testing.T) {
 // exactly that leg; with all four positive, the answer is at least as large
 // as any one leg alone.
 func TestChordedBoundaryVolumeAllowComposesAllFourLegs(t *testing.T) {
+	t.Parallel()
 	// absSumUpper rounds its outward-nudged sum away from an exact value by
 	// construction (upRound's own contract), so single-leg cases are checked
 	// as an enclosure — never pinned to a literal float this platform's own
@@ -985,6 +1006,7 @@ func TestChordedBoundaryVolumeAllowComposesAllFourLegs(t *testing.T) {
 // refusing. Every case here must answer +Inf, never a finite number computed
 // past a broken claim.
 func TestChordedBoundaryVolumeAllowRefusesOnBrokenClaims(t *testing.T) {
+	t.Parallel()
 	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(math.NaN(), 5.0, 3.5, 2.0, 1.5), 1), "NaN matchedDelta")
 	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(-1, 5.0, 3.5, 2.0, 1.5), 1), "negative matchedDelta")
 	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(1, math.NaN(), 3.5, 2.0, 1.5), 1), "matchedDelta>0 with NaN wallAreaUpper — F6's own scenario")
@@ -1008,6 +1030,7 @@ func TestChordedBoundaryVolumeAllowRefusesOnBrokenClaims(t *testing.T) {
 // finite number computed past a broken claim, and the three legitimate
 // zeros (any operand exactly 0) must publish exactly 0.
 func TestChordedBoundarySeamAllowRefusesOnBrokenClaims(t *testing.T) {
+	t.Parallel()
 	require.True(t, math.IsInf(chordedBoundarySeamAllow(math.NaN(), 5.0, 10.0), 1), "NaN matchedDelta")
 	require.True(t, math.IsInf(chordedBoundarySeamAllow(-1, 5.0, 10.0), 1), "negative matchedDelta")
 	require.True(t, math.IsInf(chordedBoundarySeamAllow(0.01, math.NaN(), 10.0), 1), "NaN posUpper")
@@ -1024,6 +1047,7 @@ func TestChordedBoundarySeamAllowRefusesOnBrokenClaims(t *testing.T) {
 // form directly: matchedDelta*posUpper*seamPerimeterUpper/3, rounded
 // outward.
 func TestChordedBoundarySeamAllowScalesWithItsThreeOperands(t *testing.T) {
+	t.Parallel()
 	const matchedDelta, posUpper, seamPerimeterUpper = 0.02, 12.0, 40.0
 	want := matchedDelta * posUpper * seamPerimeterUpper / 3
 	got := chordedBoundarySeamAllow(matchedDelta, posUpper, seamPerimeterUpper)
@@ -1036,6 +1060,7 @@ func TestChordedBoundarySeamAllowScalesWithItsThreeOperands(t *testing.T) {
 // the triangle-to-bilinear sweep at coordUpper. Planar cap and seam corrections
 // are signed-volume terms and do not enter this measure.
 func TestChordedBoundaryMomentAllowComposesTheTwoSweptMeasures(t *testing.T) {
+	t.Parallel()
 	matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow := 0.02, 7.5, 1.25, 0.5, 0.1
 	maxTwistOffsetUpper, coordUpper := 0.3, 3.0
 
@@ -1066,6 +1091,7 @@ func TestChordedBoundaryMomentAllowComposesTheTwoSweptMeasures(t *testing.T) {
 // chord-to-curve sweep can extend matchedDelta beyond the held envelope. The
 // twist sweep stays in the four corners' convex hull and needs no widening.
 func TestChordedBoundaryMomentAllowWidensTheWallMeasure(t *testing.T) {
+	t.Parallel()
 	const matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow = 0.02, 7.5, 1.25, 0.5, 0.1
 	const maxTwistOffsetUpper, coordUpper = 0.3, 3.0
 
@@ -1095,6 +1121,7 @@ func TestChordedBoundaryMomentAllowWidensTheWallMeasure(t *testing.T) {
 // claim — an earlier version of this bound guarded only isNonFinite(coordUpper)
 // and let a negative claim return 0 instead of +Inf.
 func TestChordedBoundaryMomentAllowRefusesOnBrokenClaims(t *testing.T) {
+	t.Parallel()
 	const matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow = 0.02, 7.5, 1.25, 0.5, 0.1
 	const maxTwistOffsetUpper, coordUpper = 0.3, 3.0
 
@@ -1175,6 +1202,7 @@ func exactTwistAreaLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // row cover it: every answer must dominate the independently computed exact
 // product, never merely approach it.
 func TestCellTwistAreaLinearArmDominatesTheExactProduct(t *testing.T) {
+	t.Parallel()
 	residueVHi := r3.NewVec(0.1, 0.2, 0.3)
 	residueWLo := r3.NewVec(0.7, 1.1, 1.3)
 
@@ -1265,6 +1293,7 @@ func TestCellTwistAreaLinearArmDominatesTheExactProduct(t *testing.T) {
 // triangle pair. The rows include the small-twist shape whose quadratic arm
 // is much tighter than the linear fallback.
 func TestCellTwistAreaAllowEnclosesTheBilinearGap(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name               string
 		vLo, vHi, wLo, wHi r3.Vec

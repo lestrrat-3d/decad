@@ -114,6 +114,7 @@ func requireBounds(t *testing.T, b *decad.Body, wantExact decad.Exactness, minX,
 }
 
 func TestRevolveFullAnnularCylinder(t *testing.T) {
+	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
 	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
@@ -181,6 +182,7 @@ func TestRevolveFullAnnularCylinder(t *testing.T) {
 }
 
 func TestRevolveSolidCylinderHasNoInnerFace(t *testing.T) {
+	t.Parallel()
 	s, p := solidSketch(t)
 	doc := decad.New()
 	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
@@ -209,6 +211,7 @@ func TestRevolveSolidCylinderHasNoInnerFace(t *testing.T) {
 }
 
 func TestRevolvePartialSweeps(t *testing.T) {
+	t.Parallel()
 	// Pappus by hand for the quarter turn: V = Δφ·∫ρ dA = (π/2)·1000.
 	s, p := annularSketch(t)
 	doc := decad.New()
@@ -264,6 +267,7 @@ func TestRevolvePartialSweeps(t *testing.T) {
 }
 
 func TestRevolveWedgeSharesAxisEdgeBetweenCaps(t *testing.T) {
+	t.Parallel()
 	// A solid section swept a quarter turn: the on-axis line emits no side
 	// face, and its single edge is shared by the two caps.
 	s, p := solidSketch(t)
@@ -293,6 +297,7 @@ func TestRevolveWedgeSharesAxisEdgeBetweenCaps(t *testing.T) {
 }
 
 func TestRevolveSphere(t *testing.T) {
+	t.Parallel()
 	s, p := semicircleSketch(t)
 	doc := decad.New()
 	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
@@ -340,6 +345,7 @@ func TestRevolveSphere(t *testing.T) {
 }
 
 func TestRevolveTorus(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -416,6 +422,7 @@ func TestRevolveTorus(t *testing.T) {
 }
 
 func TestRevolveCone(t *testing.T) {
+	t.Parallel()
 	// A right triangle: the base on the axis, the hypotenuse sweeping a
 	// cone with its apex on the axis at (10, 0).
 	w := sketch.NewWorld()
@@ -479,6 +486,7 @@ func TestRevolveCone(t *testing.T) {
 }
 
 func TestRevolveNegativeSideRegion(t *testing.T) {
+	t.Parallel()
 	// The region lies on the NEGATIVE side of the axis: the evaluator
 	// flips its internal frame, and the sweep senses must follow — Along a
 	// quarter turn still rotates right-handed about the axis as given, so
@@ -512,6 +520,7 @@ func TestRevolveNegativeSideRegion(t *testing.T) {
 }
 
 func TestRevolveExtents(t *testing.T) {
+	t.Parallel()
 	revolve := func(t *testing.T, a decad.AngularExtent) (*decad.Body, error) {
 		t.Helper()
 		s, p := annularSketch(t)
@@ -590,6 +599,7 @@ func TestRevolveExtents(t *testing.T) {
 }
 
 func TestRevolveAxisContactRejections(t *testing.T) {
+	t.Parallel()
 	t.Run("AxisThroughInterior", func(t *testing.T) {
 		w := sketch.NewWorld()
 		s, err := w.CreateSketch(w.XY())
@@ -641,6 +651,7 @@ func TestRevolveAxisContactRejections(t *testing.T) {
 }
 
 func TestRevolveAxisValidation(t *testing.T) {
+	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
 
@@ -706,6 +717,7 @@ func TestRevolveAxisValidation(t *testing.T) {
 }
 
 func TestRevolveAxisDerivedOverflow(t *testing.T) {
+	t.Parallel()
 	t.Run("SketchLineDelta", func(t *testing.T) {
 		s, p := annularSketch(t)
 		doc := decad.New()
@@ -788,6 +800,7 @@ func TestRevolveAxisDerivedOverflow(t *testing.T) {
 }
 
 func TestRevolveEdgeAxisGates(t *testing.T) {
+	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
 	es, ep := plateSketch(t)
@@ -883,6 +896,7 @@ func trianglePrismHost(t *testing.T, doc *decad.Document) *decad.Body {
 }
 
 func TestRevolveAboutEdgeAxis(t *testing.T) {
+	t.Parallel()
 	// End to end: select the host prism's bottom x-axis edge by provenance +
 	// direction, revolve the annular rectangle about it, and check the
 	// closed-form volume — the axis is the world x axis, so a full turn is
@@ -926,6 +940,7 @@ func TestRevolveAboutEdgeAxis(t *testing.T) {
 }
 
 func TestRevolveEdgeAxisDirectionSense(t *testing.T) {
+	t.Parallel()
 	// The axis runs from the resolved edge's start vertex toward its end
 	// vertex, and Along is right-handed about it: a 90° Along sweep of the
 	// +y-side region about the +x axis carries it toward +z, never −z.
@@ -948,6 +963,7 @@ func TestRevolveEdgeAxisDirectionSense(t *testing.T) {
 }
 
 func TestRevolveEdgeAxisMustBeCoplanar(t *testing.T) {
+	t.Parallel()
 	// The resolved edge is a real axis candidate, so the coplanarity gate
 	// still applies: a top-cap edge lies at z = 10, off the profile plane.
 	s, p := annularSketch(t)
@@ -963,6 +979,7 @@ func TestRevolveEdgeAxisMustBeCoplanar(t *testing.T) {
 }
 
 func TestRevolvePlacedRigidMotion(t *testing.T) {
+	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
 	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
@@ -1001,6 +1018,7 @@ func TestRevolvePlacedRigidMotion(t *testing.T) {
 }
 
 func TestRevolveReflectedPlacementKeepsOutwardNormals(t *testing.T) {
+	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
 	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
@@ -1063,6 +1081,7 @@ func TestRevolveReflectedPlacementKeepsOutwardNormals(t *testing.T) {
 }
 
 func TestRevolveReflectedSphereAndConeNormals(t *testing.T) {
+	t.Parallel()
 	// The curved-surface outwardness under a reflection, on the two kinds
 	// the wedge test does not cover.
 	s, p := semicircleSketch(t)
@@ -1090,6 +1109,7 @@ func TestRevolveReflectedSphereAndConeNormals(t *testing.T) {
 }
 
 func TestRevolveRecipeAxisCodec(t *testing.T) {
+	t.Parallel()
 	t.Run("AxisKeyedToRevolve", func(t *testing.T) {
 		step := validCodecStep(decad.OpExtrude)
 		step.Axis = uAxis
@@ -1171,6 +1191,7 @@ func holedSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
 }
 
 func TestRevolveFullTurnHoleIsVoidShell(t *testing.T) {
+	t.Parallel()
 	s, p := holedSketch(t)
 	doc := decad.New()
 	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
@@ -1210,6 +1231,7 @@ func TestRevolveFullTurnHoleIsVoidShell(t *testing.T) {
 }
 
 func TestRevolvePartialSweepWithHole(t *testing.T) {
+	t.Parallel()
 	s, p := holedSketch(t)
 	doc := decad.New()
 	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
@@ -1249,6 +1271,7 @@ func TestRevolvePartialSweepWithHole(t *testing.T) {
 }
 
 func TestRevolveVerifySound(t *testing.T) {
+	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
 	_, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(120), Dir: decad.Along})
@@ -1265,6 +1288,7 @@ func TestRevolveVerifySound(t *testing.T) {
 }
 
 func TestRevolveRejectsSpindleTorusArc(t *testing.T) {
+	t.Parallel()
 	// A boundary arc lying above the axis whose circle center sits BELOW it
 	// sweeps a spindle-branch torus: a valid solid the shipped Torus
 	// (non-negative Major) cannot represent, so the intent is refused as
@@ -1289,6 +1313,7 @@ func TestRevolveRejectsSpindleTorusArc(t *testing.T) {
 }
 
 func TestRevolveConcaveGrooveCapEdges(t *testing.T) {
+	t.Parallel()
 	// A meridian rectangle u∈[0,20], v∈[5,15] with a semicircular GROOVE of
 	// radius 3 centred at (10, 15) bitten out of its outer edge (the arc dips
 	// to (10, 12)). The outer loop walks counter-clockwise, but that arc is
@@ -1354,6 +1379,7 @@ func TestRevolveConcaveGrooveCapEdges(t *testing.T) {
 }
 
 func TestRevolveBoundsBoundEnclosesSweptExtreme(t *testing.T) {
+	t.Parallel()
 	// The 10×8 rectangle (one edge on the axis) revolved 1 radian about the
 	// sketch u axis: the extreme normal to the plane is 8·sin(1), which no
 	// float64 holds exactly — the box carries the proven bound its own
@@ -1382,6 +1408,7 @@ func TestRevolveBoundsBoundEnclosesSweptExtreme(t *testing.T) {
 const sinOneDigits = "0.841470984807896506652502321630298999622563060798371065672749"
 
 func TestRevolveBoundsBoundEnclosesOffsetAxisExtreme(t *testing.T) {
+	t.Parallel()
 	// The same 10×8 rectangle swept 1 radian, but about an axis PARALLEL to
 	// the sketch u axis and offset below the region. The swept radial
 	// coefficient multiplies the radial distance from the RESOLVED AXIS, so
@@ -1442,6 +1469,7 @@ func TestRevolveBoundsBoundEnclosesOffsetAxisExtreme(t *testing.T) {
 }
 
 func TestRevolveBoundsExactFullTurn(t *testing.T) {
+	t.Parallel()
 	// The same rectangle under a full revolution: every world axis's swept
 	// extreme is the exact ±8 amplitude of an axis-aligned frame, so the box
 	// is Exact — the test that stops a blanket Approximate. The section is all
@@ -1501,6 +1529,7 @@ func requireEnclosesApex(t *testing.T, box decad.Box, u, v float64) {
 }
 
 func TestRevolveBoundsBoundEnclosesArcRadius(t *testing.T) {
+	t.Parallel()
 	// A circular-segment section revolved about the sketch u axis. The swept
 	// solid reaches the arc's apex at radius √37, which math.Hypot(1, 6) rounds
 	// BELOW: a box that reads the walk's radius as an exact leaf publishes a
@@ -1542,6 +1571,7 @@ func TestRevolveBoundsBoundEnclosesArcRadius(t *testing.T) {
 // covers one section can miss the next — which is why the grid, not a case, is
 // the test.
 func TestRevolveBoundsSweepEnclosesArcApex(t *testing.T) {
+	t.Parallel()
 	for i := 1; i <= 12; i++ {
 		for j := 1; j <= 12; j++ {
 			u, v := 0.7*float64(i), 1.3*float64(j)
@@ -1602,6 +1632,7 @@ func requireEnclosesSweptApex(t *testing.T, box decad.Box, apex, sin *big.Float)
 // first is a worked case where they genuinely add, its residual against the
 // truth exceeding either term on its own.
 func TestRevolveBoundsComposesBoundaryAndSweepDisplacement(t *testing.T) {
+	t.Parallel()
 	const prec = 200
 	t.Run("circle section", func(t *testing.T) {
 		// A thin torus section far from the axis, swept through a partial
@@ -1668,6 +1699,7 @@ func TestRevolveBoundsComposesBoundaryAndSweepDisplacement(t *testing.T) {
 // The section is entirely straight, so the boundary-extreme scan's own
 // bracket contributes nothing; the whole displacement is the axis frame's.
 func TestRevolveBoundsEnclosesTiltedAxisFullTurn(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -1701,6 +1733,7 @@ func TestRevolveBoundsEnclosesTiltedAxisFullTurn(t *testing.T) {
 // and the box's own base + hi summation that produces Max.X still rounds,
 // missing the true 0.1 + 10 by 3.6e-16.
 func TestRevolveBoundsEnclosesTranslatedExtreme(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -1738,6 +1771,7 @@ func TestRevolveBoundsEnclosesTranslatedExtreme(t *testing.T) {
 // axis states its plane-local anchor directly, and a construction axis at the
 // frame origin projects to zero — so they hold the same reading either way.
 func TestRevolveBoundsExactOffsetAnchor(t *testing.T) {
+	t.Parallel()
 	revolved := func(t *testing.T, axis decad.Axis) *decad.Body {
 		t.Helper()
 		w := sketch.NewWorld()
@@ -1829,6 +1863,7 @@ func requireEnclosesExactDot(t *testing.T, coord, bound float64, terms ...[2]flo
 // coefficient is 0 or ±1 there, so nothing in the reading rounds and the box
 // stays Exact with a zero bound however far the section reaches.
 func TestRevolveBoundsEnclosesPlacedScanArithmetic(t *testing.T) {
+	t.Parallel()
 	revolved := func(t *testing.T) *decad.Body {
 		t.Helper()
 		w := sketch.NewWorld()

@@ -80,6 +80,7 @@ func synthDenseRectLoop(segmentsPerSide int) LoopRecord {
 }
 
 func TestPrismBooleanGateG1RequiresBothOperandsPrismPayload(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
 		profile: ProfileRecord{Outer: synthLineLoop()},
@@ -93,6 +94,7 @@ func TestPrismBooleanGateG1RequiresBothOperandsPrismPayload(t *testing.T) {
 }
 
 func TestPrismBooleanGateG2RejectsAReflectedOperand(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
 		profile: ProfileRecord{Outer: synthLineLoop()},
@@ -119,6 +121,7 @@ func TestPrismBooleanGateG2RejectsAReflectedOperand(t *testing.T) {
 }
 
 func TestPrismBooleanGateG3RequiresCoDirectionalCoplanarPlanes(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
 		profile: ProfileRecord{Outer: synthLineLoop()},
@@ -155,6 +158,7 @@ func TestPrismBooleanGateG3RequiresCoDirectionalCoplanarPlanes(t *testing.T) {
 }
 
 func TestPrismBooleanGateG4RefusesNonAnalyticSegment(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	linePP := prismPayload{
 		profile: ProfileRecord{Outer: synthLineLoop()},
@@ -181,6 +185,7 @@ func TestPrismBooleanGateG4RefusesNonAnalyticSegment(t *testing.T) {
 }
 
 func TestPrismBooleanGateG5RequiresMatchingZInterval(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pa := prismPayload{
 		profile: ProfileRecord{Outer: synthLineLoop()},
@@ -210,6 +215,7 @@ func TestPrismBooleanGateG5RequiresMatchingZInterval(t *testing.T) {
 }
 
 func TestPrismBooleanGateG6RestrictsUnionToHoleFreeOperands(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	holeFree := prismPayload{
 		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
@@ -240,6 +246,7 @@ func TestPrismBooleanGateG6RestrictsUnionToHoleFreeOperands(t *testing.T) {
 // A transverse cut can magnify the coordinate error by the crossing angle, so
 // the current analytic path must route this pair through the mesh evaluator.
 func TestPrismUnionReexpressedSplitFallsBack(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pa := prismPayload{
 		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
@@ -293,6 +300,7 @@ func TestPrismUnionReexpressedSplitFallsBack(t *testing.T) {
 // the second union must still fall back: moving the prior section can move the
 // new trim by that displacement divided by the crossing sine.
 func TestPrismUnionDisplacedSourceSplitFallsBack(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	inner := prismPayload{
 		profile: ProfileRecord{Outer: synthRectLoop(2, 2, 8, 8)},
@@ -344,6 +352,7 @@ func TestPrismUnionDisplacedSourceSplitFallsBack(t *testing.T) {
 // ops fall through unresolved (§4.4), not admitted, exactly like any other
 // topology this increment's resolution does not cover.
 func TestTryPrismBooleanSingleOpenSegmentIsUnresolvedForCutAndIntersect(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
 		profile: ProfileRecord{Outer: synthLineLoop()},
@@ -360,6 +369,7 @@ func TestTryPrismBooleanSingleOpenSegmentIsUnresolvedForCutAndIntersect(t *testi
 }
 
 func TestPrismUnionArrangementCapRejectsLargeLineOnlyScene(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
 		profile: ProfileRecord{Outer: synthDenseRectLoop(prismMaxArrangementSegments/8 + 1)},
@@ -374,6 +384,7 @@ func TestPrismUnionArrangementCapRejectsLargeLineOnlyScene(t *testing.T) {
 }
 
 func TestPrismUnionPreservesEndDisplacements(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pa := prismPayload{
 		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
@@ -397,6 +408,7 @@ func TestPrismUnionPreservesEndDisplacements(t *testing.T) {
 }
 
 func TestPrismProfilesContextWaitsForArrangementAfterCancellation(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(t.Context())
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -489,6 +501,7 @@ func synthGapRectLoop(u0, v0, u1, v1, gap float64) LoopRecord {
 // Partial fragments get built, so the refusal half stays correct whichever
 // PR lands first.
 func TestPrismUnionMergedLoopJunctionsClose(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	const gap = 1e-9
 	pa := prismPayload{
@@ -525,6 +538,7 @@ func TestPrismUnionMergedLoopJunctionsClose(t *testing.T) {
 // the live-reachable whole-edge shape) merge into a loop that closes
 // bit-exactly, with no error and no displacement.
 func TestPrismUnionCleanOperandsMergedLoopClosesExactly(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
 	b := internalBoxBody(t, doc, 5, 5, 15, 15, 5)
@@ -728,6 +742,7 @@ func prismBottomWallTEnd(t *testing.T, p ProfileRecord) float64 {
 // decision fails here rather than on whichever host makes that decision
 // differently.
 func TestPrismSplitLeftCellFixtureWalksHostIndependently(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	p := prismSplitLeftCellBody(t, doc).payload.(prismPayload).profile
 	for i, seg := range p.Outer.Segments {
@@ -747,6 +762,7 @@ func TestPrismSplitLeftCellFixtureWalksHostIndependently(t *testing.T) {
 // sectionDelta and volume bound rather than publish Exact/zero over a section
 // this union's own scene construction moved.
 func TestPrismUnionTrimmedSourceSegmentChargesItsWalkedEndpoint(t *testing.T) {
+	t.Parallel()
 	const h = 10.0
 	doc := New()
 	a := prismSplitLeftCellBody(t, doc)
@@ -795,6 +811,7 @@ func TestPrismUnionTrimmedSourceSegmentChargesItsWalkedEndpoint(t *testing.T) {
 // side of the max. A composition that also added a separate walk term outside
 // the max would publish about twice this value and fail here.
 func TestPrismUnionChargesEachWalkExactlyOnce(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	a := prismSplitLeftCellBody(t, doc)
 	pa := a.payload.(prismPayload)
@@ -838,6 +855,7 @@ func TestPrismUnionChargesEachWalkExactlyOnce(t *testing.T) {
 // reproduction: the clean-nesting path's own target carries the same Partial
 // bottom-wall fragment, and the tool is fully nested inside it.
 func TestPrismCutTrimmedTargetChargesItsWalkedEndpoint(t *testing.T) {
+	t.Parallel()
 	const h = 10.0
 	doc := New()
 	target := prismSplitLeftCellBody(t, doc)
@@ -866,6 +884,7 @@ func TestPrismCutTrimmedTargetChargesItsWalkedEndpoint(t *testing.T) {
 // Intersect reproduction: a big outer box fully contains the split-left-cell
 // fixture, so the nested operand's own walk charge must reach the result.
 func TestPrismIntersectTrimmedOperandChargesItsWalkedEndpoint(t *testing.T) {
+	t.Parallel()
 	const h = 10.0
 	doc := New()
 	outer := prismRectBody(t, doc, 0, -1, 12, 11)
@@ -893,6 +912,7 @@ func TestPrismIntersectTrimmedOperandChargesItsWalkedEndpoint(t *testing.T) {
 // from the outside, must publish a sectionDelta of exactly 0.0 on all three
 // ops.
 func TestPrismBooleanWholeSourceSegmentsChargeNothing(t *testing.T) {
+	t.Parallel()
 	t.Run("Union", func(t *testing.T) {
 		doc := New()
 		a := prismRectBody(t, doc, 0, 0, 10, 10)
@@ -935,6 +955,7 @@ func TestPrismBooleanWholeSourceSegmentsChargeNothing(t *testing.T) {
 // boolean they are unreachable, which
 // TestPrismCircularWalkChargeImpliesRefusal pins.
 func TestWalkChargeOf(t *testing.T) {
+	t.Parallel()
 	line := LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}}
 	arc := ArcSeg{
 		Center: Point2{U: 0, V: 0},
@@ -1007,6 +1028,7 @@ func TestWalkChargeOf(t *testing.T) {
 // circular carrier admitted into a scene always charges zero, and the two
 // answers cannot drift apart into a silently under-charged bound.
 func TestPrismCircularWalkChargeImpliesRefusal(t *testing.T) {
+	t.Parallel()
 	arc := ArcSeg{
 		Center: Point2{U: 0, V: 0},
 		Start:  Point2{U: 5, V: 0},
@@ -1156,6 +1178,7 @@ func prismLerpNaturalBound(start, end Point2, at float64) (Point2, bool) {
 // ever taken and no float rounding can flatter a bound that failed to contain
 // the true error.
 func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
+	t.Parallel()
 	// A parameter one ulp wide about the carrier's midpoint: the walked
 	// endpoints all but coincide with the plane origin while the carrier
 	// reaches ±1e12.
@@ -1301,6 +1324,7 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 // every other entry-gate miss uses — rather than publish an under-charged
 // bound for it.
 func TestPrismBooleanTrimmedCircularSourceFallsBack(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	trimmedArc := prismPayload{
 		profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
@@ -1335,6 +1359,7 @@ func TestPrismBooleanTrimmedCircularSourceFallsBack(t *testing.T) {
 // short of its natural bound walks as closed and is a trimmed carrier all the
 // same, so the refusal must fire for it.
 func TestPrismProfileHasTrimmedCircularSourceReadsTheRecordedRange(t *testing.T) {
+	t.Parallel()
 	circle := func(tStart, tEnd float64) CircleSeg {
 		return CircleSeg{
 			Center: Point2{U: 5, V: 5},
@@ -1394,6 +1419,7 @@ func TestPrismProfileHasTrimmedCircularSourceReadsTheRecordedRange(t *testing.T)
 // admitted analytically — so the fallback is caused by the trim itself and not
 // by some unrelated miss elsewhere in the gate chain.
 func TestPrismBooleanNearWholeCircleSourceFallsBack(t *testing.T) {
+	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	circleOperand := func(tEnd float64) prismPayload {
 		return prismPayload{
@@ -1435,6 +1461,7 @@ func TestPrismBooleanNearWholeCircleSourceFallsBack(t *testing.T) {
 // mesh path with no error rather than record a fragment whose crossing
 // A's own walk charge could amplify.
 func TestPrismUnionTrimmedSourceSplitBoundaryFallsBack(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	a := prismSplitLeftCellBody(t, doc)
 	pa := a.payload.(prismPayload)
@@ -1534,6 +1561,7 @@ func randomCrossingDiscPairFixtures(n int) []crossingDiscPairFixture {
 // "coplanar contact refuses outright" consequence, still standing for any
 // pair outside this design's admitted class).
 func TestPrismCrossingDiscPairsMatchMeshAnswer(t *testing.T) {
+	t.Parallel()
 	for i, fx := range randomCrossingDiscPairFixtures(8) {
 		for _, op := range []OpKind{OpIntersect, OpCut} {
 			doc := New()
@@ -1607,6 +1635,7 @@ func internalPolyPrismBody(t *testing.T, doc *Document, pts [][2]float64, h floa
 // resolved with an empty selected set — prismOverlapVolume's own contract is
 // the same either way: ok=false, err=nil.
 func TestPrismOverlapVolumeDeclinesExactlyTangentPair(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	frame := canonicalPrismFrame(t)
 	pa := prismPayload{
@@ -1631,6 +1660,7 @@ func TestPrismOverlapVolumeDeclinesExactlyTangentPair(t *testing.T) {
 // interferenceUnsupportedPipeline and Verify reports Suspect rather than
 // erroring.
 func TestPrismOverlapVolumeArrangementCapRefuses(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
@@ -1665,6 +1695,7 @@ var (
 // untouched — the reading never calls nextStepRef for a real step, appends a
 // Step, retires an operand, or registers a body (§12's Interference row).
 func TestPrismOverlapVolumeCancellationLeavesDocumentUntouched(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	u := internalPolyPrismBody(t, doc, crossUPts, 5)
 	bar := internalPolyPrismBody(t, doc, crossBarPts, 5)
@@ -1688,6 +1719,7 @@ func TestPrismOverlapVolumeCancellationLeavesDocumentUntouched(t *testing.T) {
 // admitPrismIntersectPair today — this reading shares that gate unchanged
 // (Task 1) rather than restating it.
 func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	frame := canonicalPrismFrame(t)
 	pa := prismPayload{
@@ -1749,6 +1781,7 @@ func TestPrismOverlapVolumeRegressionFallbacks(t *testing.T) {
 // conservative outward rounding a single-term sum still commits, never a
 // tighter one.
 func TestPrismOverlapVolumeMatchesEvalPrismOnASingleCell(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
 	b := internalBoxBody(t, doc, 5, 5, 15, 15, 5)
@@ -1774,6 +1807,7 @@ func TestPrismOverlapVolumeMatchesEvalPrismOnASingleCell(t *testing.T) {
 // independently over each tooth as a plain axis-aligned rectangle, never a
 // second float computation.
 func TestPrismOverlapVolumeSoundAgainstIndependentTriangleSum(t *testing.T) {
+	t.Parallel()
 	doc := New()
 	comb := [][2]float64{
 		{0, 0}, {16, 0}, {16, 2}, {15, 2}, {15, 10}, {13, 10}, {13, 2},

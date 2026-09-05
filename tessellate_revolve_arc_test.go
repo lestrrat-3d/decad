@@ -41,6 +41,7 @@ func analyticVolume(t *testing.T, b *decad.Body) float64 {
 }
 
 func TestRevolveTessellateFullSphere(t *testing.T) {
+	t.Parallel()
 	// semicircleSketch is the half disk of radius 5 about (5, 0): a full turn
 	// sweeps the sphere of radius 5 centred at (5, 0, 0).
 	s, p := semicircleSketch(t)
@@ -82,6 +83,7 @@ func TestRevolveTessellateFullSphere(t *testing.T) {
 }
 
 func TestRevolveTessellateSphericalBand(t *testing.T) {
+	t.Parallel()
 	// The zone of the radius-5 sphere about the origin between u = -3 and
 	// u = 3, closed by two planar disks: a circular generator whose two ends
 	// are both OFF the axis, so every cell is a quad and no pole exists.
@@ -131,6 +133,7 @@ func TestRevolveTessellateSphericalBand(t *testing.T) {
 }
 
 func TestRevolveTessellateRingTorus(t *testing.T) {
+	t.Parallel()
 	// A whole closed generator: the circle of radius 3 about (0, 10), which
 	// resolves as ONE closed circular walk and therefore has no junction at
 	// all — every meridian sample is a chord station.
@@ -172,6 +175,7 @@ func TestRevolveTessellateRingTorus(t *testing.T) {
 }
 
 func TestRevolveTessellateConcaveTorusWall(t *testing.T) {
+	t.Parallel()
 	// An arc bulging TOWARD the axis: the swept wall is concave, the case
 	// docs/tessellation-design.md §11 names when it says a torus's inner and
 	// outer walls move in opposite material senses.
@@ -220,6 +224,7 @@ func TestRevolveTessellateConcaveTorusWall(t *testing.T) {
 }
 
 func TestRevolveTessellateHemispherePoleAtOneEnd(t *testing.T) {
+	t.Parallel()
 	// A quarter disk: the axis line from (0,0) to (5,0), the arc up to (0,5),
 	// and the planar disk back down. The arc's own end at (5,0) is a pole a
 	// CIRCULAR generator makes, which is what separates this from R3's cone.
@@ -258,6 +263,7 @@ func TestRevolveTessellateHemispherePoleAtOneEnd(t *testing.T) {
 }
 
 func TestRevolveTessellateNarrowBulgeHoleClearance(t *testing.T) {
+	t.Parallel()
 	// docs/tessellation-design.md §14: a hole inside an outer loop, with the
 	// clearance set below and above the summed sagitta tubes. Above them the
 	// mesh is built; below them no bounded refinement can prove the section
@@ -316,6 +322,7 @@ func TestRevolveTessellateNarrowBulgeHoleClearance(t *testing.T) {
 }
 
 func TestRevolveTessellateTangentDiskIsRefusedBeforeTessellation(t *testing.T) {
+	t.Parallel()
 	// docs/tessellation-design.md §14: a disk tangent to the axis encoded as
 	// TWO semicircular arcs sharing the tangent endpoint. Splitting the circle
 	// does not turn that shared point into an admissible pole, and Revolve
@@ -340,6 +347,7 @@ func TestRevolveTessellateTangentDiskIsRefusedBeforeTessellation(t *testing.T) {
 }
 
 func TestRevolveTessellateCircularGeneratorExportIsByteIdentical(t *testing.T) {
+	t.Parallel()
 	s, p := semicircleSketch(t)
 	body, err := decad.New().Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(150), Dir: decad.Along})
 	require.NoError(t, err)
@@ -356,6 +364,7 @@ func TestRevolveTessellateCircularGeneratorExportIsByteIdentical(t *testing.T) {
 }
 
 func TestRevolveTessellateCircularMeridianChordsWithTolerance(t *testing.T) {
+	t.Parallel()
 	// A coarser tolerance may never ask for more facets, and the published
 	// bound must stay inside every tolerance that produced a mesh: the
 	// meridian and the angular sequence are both chorded against it.
@@ -377,6 +386,7 @@ func TestRevolveTessellateCircularMeridianChordsWithTolerance(t *testing.T) {
 }
 
 func TestRevolveTessellatePartialGrooveMeshes(t *testing.T) {
+	t.Parallel()
 	// The capability the edge-pair separating plane buys
 	// (revolveVertexIsolated): a PARTIAL sweep whose meridian carries a chorded
 	// arc. Its cap fan triangles meet the wall triangle of the next meridian

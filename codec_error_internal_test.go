@@ -14,6 +14,7 @@ type codecErrorArrayEntry struct {
 }
 
 func TestCodecFailurePathFollowsReturnedErrorInArray(t *testing.T) {
+	t.Parallel()
 	data := []byte(`[{"primitive":"bad","quantity":"bad"}]`)
 	var entries []codecErrorArrayEntry
 	err := json.Unmarshal(data, &entries)

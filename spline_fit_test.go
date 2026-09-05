@@ -28,6 +28,7 @@ import (
 // the same triangle recorded entirely in LineSegs, both Exact with a zero
 // bound (6 mm² is representable).
 func TestFitSplineTwoPointIsExactlyALineSegment(t *testing.T) {
+	t.Parallel()
 	a := decad.Point2{U: 0, V: 0}
 	b := decad.Point2{U: 4, V: 0}
 	c := decad.Point2{U: 2, V: 3}
@@ -74,6 +75,7 @@ func TestFitSplineTwoPointIsExactlyALineSegment(t *testing.T) {
 // joins exactly (its interior control points are the recorded points
 // themselves, at zero curvature).
 func TestFitSplineCollinearPointsMeasureAsTheLine(t *testing.T) {
+	t.Parallel()
 	for _, n := range []int{3, 5} {
 		t.Run("", func(t *testing.T) {
 			fit := make([]decad.Point2, n)
@@ -118,6 +120,7 @@ func TestFitSplineCollinearPointsMeasureAsTheLine(t *testing.T) {
 // hand-derivable from those control points via the shoelace / Green's
 // theorem formula over the two cubic spans.
 func TestFitSplineCurvedHandComputedArea(t *testing.T) {
+	t.Parallel()
 	fit := []decad.Point2{{U: 1, V: 0}, {U: 0, V: 1}, {U: -1, V: 0}}
 	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
 		decad.FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1},
@@ -219,6 +222,7 @@ func TestFitSplineCurvedHandComputedArea(t *testing.T) {
 // sketch entity AND against sketch's own independent Profile.Area. Both
 // disprove a wrong magnitude; neither is the proof itself.
 func TestFitSplineMatchesDenseSampleAndSketchArea(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -269,6 +273,7 @@ func TestFitSplineMatchesDenseSampleAndSketchArea(t *testing.T) {
 // duplicate. Walked (10,0)->(5,5)->(0,0) — rather than the reverse — so the
 // loop, closed by the chord (0,0)->(10,0), winds counter-clockwise.
 func TestFitSplineInteriorDuplicateFitPointIsTransparent(t *testing.T) {
+	t.Parallel()
 	plain := []decad.Point2{{U: 10}, {U: 5, V: 5}, {U: 0}}
 	duplicated := []decad.Point2{{U: 10}, {U: 5, V: 5}, {U: 5, V: 5 + 3e-13}, {U: 0}}
 
@@ -312,6 +317,7 @@ func TestFitSplineInteriorDuplicateFitPointIsTransparent(t *testing.T) {
 // Exact" and with the same standing an irrational-denominator closed-spline
 // area already has.
 func TestFitSplineAreaRoundingRuleBothSides(t *testing.T) {
+	t.Parallel()
 	exactRecord := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
 		decad.FitSplineSeg{Fit: []decad.Point2{{U: 0, V: 0}, {U: 4, V: 0}}, TStart: 0, TEnd: 1},
 		decad.LineSeg{Start: decad.Point2{U: 4}, End: decad.Point2{U: 2, V: 3}, TStart: 0, TEnd: 1},
@@ -345,6 +351,7 @@ func TestFitSplineAreaRoundingRuleBothSides(t *testing.T) {
 // boundary, on the same terms the length bracket refuses on
 // (spline_length.go's freeformArcLength / freeformDegenerate).
 func TestFitSplineAllCoincidentFitPointsRefuses(t *testing.T) {
+	t.Parallel()
 	fit := []decad.Point2{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}}
 	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
 		decad.FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1},
@@ -361,6 +368,7 @@ func TestFitSplineAllCoincidentFitPointsRefuses(t *testing.T) {
 // describe it), never ErrNotFinite (whose subject is a non-finite INPUT —
 // every coordinate here is finite).
 func TestFitSplineNonFiniteInterpolantIsUnsupported(t *testing.T) {
+	t.Parallel()
 	fit := []decad.Point2{{U: -1e308, V: 0}, {U: 1e308, V: 1}}
 	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
 		decad.FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1},
@@ -384,6 +392,7 @@ func TestFitSplineNonFiniteInterpolantIsUnsupported(t *testing.T) {
 // (ErrDegenerate from naturalSecondDerivs). All three shapes must now answer
 // ErrNotFinite, decided ahead of R16's row.
 func TestFitSplineNonFiniteFitPointIsErrNotFinite(t *testing.T) {
+	t.Parallel()
 	closeLoop := func(fit []decad.Point2) decad.ProfileRecord {
 		last := fit[len(fit)-1]
 		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
@@ -428,6 +437,7 @@ func TestFitSplineNonFiniteFitPointIsErrNotFinite(t *testing.T) {
 // proves, measured today as 15.000000000 mm² with bound 1.1102e-16 — so the
 // published Volume bound must stay under 1e-12 too.
 func TestExtrudeFitSplineProfileBuilds(t *testing.T) {
+	t.Parallel()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -465,6 +475,7 @@ func TestExtrudeFitSplineProfileBuilds(t *testing.T) {
 // fit points (1,280,000 units) exceeds the fixed 2^20 ceiling on its own,
 // entirely ahead of the reconstruction charge or the tridiagonal solve.
 func TestOverBudgetFitInterpolantRefusesBeforeSolving(t *testing.T) {
+	t.Parallel()
 	const points = 20000
 	fit := make([]decad.Point2, points)
 	for i := range fit {
@@ -496,6 +507,7 @@ func TestOverBudgetFitInterpolantRefusesBeforeSolving(t *testing.T) {
 // the SAME entity from the SAME Fit points and round-trips to the same near
 // miss.
 func TestFitSplineTerminalDedupRefusesUnclosedLoop(t *testing.T) {
+	t.Parallel()
 	p0 := decad.Point2{U: 0, V: 0}
 	p1 := decad.Point2{U: 10, V: 0}
 	p2 := decad.Point2{U: 10, V: 10}
@@ -519,6 +531,7 @@ func TestFitSplineTerminalDedupRefusesUnclosedLoop(t *testing.T) {
 // bit. The join check introduced for the finding above must not refuse a
 // record whose free-form segment actually closes.
 func TestFitSplineNonDegenerateTerminalStillCloses(t *testing.T) {
+	t.Parallel()
 	p0 := decad.Point2{U: 0, V: 0}
 	p1 := decad.Point2{U: 10, V: 0}
 	p2 := decad.Point2{U: 10, V: 10}
@@ -541,6 +554,7 @@ func TestFitSplineNonDegenerateTerminalStillCloses(t *testing.T) {
 // order for a reversed range. The preceding LineSeg still ends at the
 // recorded p3, so the same collapse still leaves the loop open.
 func TestFitSplineTerminalDedupRefusesUnclosedLoopReversed(t *testing.T) {
+	t.Parallel()
 	p0 := decad.Point2{U: 0, V: 0}
 	p1 := decad.Point2{U: 10, V: 0}
 	p2 := decad.Point2{U: 10, V: 10}

@@ -32,6 +32,7 @@ import (
 // placement's volume term would vanish from the very measurements it is
 // there to widen.
 func TestRigidRoundAllowIsAlwaysAFiniteBound(t *testing.T) {
+	t.Parallel()
 	// The largest scale whose ulp is still readable: 2·maxInputAbs +
 	// maxTransAbs sits one binade below MaxFloat64, so nothing saturates and
 	// the answer is the plain 16-ulp charge.
@@ -69,6 +70,7 @@ func TestRigidRoundAllowIsAlwaysAFiniteBound(t *testing.T) {
 // saturates, the helper's answer must still enclose the displacement an
 // actual rigid motion commits on that coordinate.
 func TestRigidRoundAllowEnclosesAPlacedCoordinate(t *testing.T) {
+	t.Parallel()
 	x := 0.75 * math.MaxFloat64
 	allow := rigidRoundAllow(x, 1)
 
@@ -135,6 +137,7 @@ func exactApply(move r3.Transform, p r3.Vec) [3]*big.Float {
 // proven against exact rational residuals over cancelling carriers in
 // prism_boolean_internal_test.go's TestWalkChargeOfCoversLerpCancellation.
 func TestWalkEndpointAllow(t *testing.T) {
+	t.Parallel()
 	t.Run("zero envelope gives zero", func(t *testing.T) {
 		require.Equal(t, 0.0, walkEndpointAllow(0))
 	})
@@ -181,6 +184,7 @@ func TestWalkEndpointAllow(t *testing.T) {
 // since a thin triangle is exactly where a naive bound scaled off the held
 // total stops enclosing anything.
 func TestPerturbedTriangleAreaAllowEnclosesBruteForceSweep(t *testing.T) {
+	t.Parallel()
 	triArea := func(a, b, c r3.Vec) float64 {
 		return b.Sub(a).Cross(c.Sub(a)).Len() / 2
 	}
@@ -262,6 +266,7 @@ func requireEnclosesSqrt(t *testing.T, q *big.Rat, got boundedScalar) {
 // perfect square of a float64, and a genuine directed-rounding bound when it is
 // not.
 func TestBoundedSqrtKeepsAZeroBoundOperandExact(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		in   float64
@@ -301,6 +306,7 @@ func TestBoundedSqrtKeepsAZeroBoundOperandExact(t *testing.T) {
 // without it the operand's own uncertainty would vanish and a perfect square
 // would read exact while the true operand is not one.
 func TestBoundedSqrtWidensABoundedOperand(t *testing.T) {
+	t.Parallel()
 	got := boundedSqrt(measuredScalar(1, 1e-17))
 	require.Equal(t, 1.0, got.value)
 	require.Greater(t, got.bound, 0.0)
@@ -325,6 +331,7 @@ func TestBoundedSqrtWidensABoundedOperand(t *testing.T) {
 // the enclosure's own ends and interior at 200 bits, so a term dropped from the
 // outward sum shows up as a case the answer fails to cover.
 func TestBoundedFloatErrorEnclosesEveryTruthTheScalarAdmits(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		bs   boundedScalar
@@ -374,6 +381,7 @@ func TestBoundedFloatErrorEnclosesEveryTruthTheScalarAdmits(t *testing.T) {
 // bound reads as +Inf and never as a small one: answering 0 here would publish
 // a saturated quantity as exactly known.
 func TestBoundedFloatErrorRefusesANonFiniteOperand(t *testing.T) {
+	t.Parallel()
 	inf := math.Inf(1)
 	require.True(t, math.IsInf(boundedFloatError(measuredScalar(inf, 1), 1), 1))
 	require.True(t, math.IsInf(boundedFloatError(measuredScalar(1, inf), 1), 1))
@@ -386,6 +394,7 @@ func TestBoundedFloatErrorRefusesANonFiniteOperand(t *testing.T) {
 // coordinate the assignment overwrote, wherever that coordinate's pre-snap
 // bound had already put it.
 func TestSnapToZeroAllowEnclosesTheOverwrittenCoordinate(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name       string
 		bound      float64
@@ -428,6 +437,7 @@ func TestSnapToZeroAllowEnclosesTheOverwrittenCoordinate(t *testing.T) {
 // factor overflows to +Inf at a large rung while its energy sum vanishes at a
 // small one, and the sharper arm then wins the final min with a bound of 0.
 func TestProductUpperRefusesRatherThanAnnihilatesARefusal(t *testing.T) {
+	t.Parallel()
 	for name, ab := range map[string][2]float64{
 		"refusal first":  {math.Inf(1), 0},
 		"refusal second": {0, math.Inf(1)},
@@ -486,6 +496,7 @@ func TestProductUpperRefusesRatherThanAnnihilatesARefusal(t *testing.T) {
 // honest 0 — widening it would convert every genuinely exact reading in the
 // package into Approximate.
 func TestOutwardRoundingNeverPublishesAFlushedZero(t *testing.T) {
+	t.Parallel()
 	const tiny = math.SmallestNonzeroFloat64
 
 	t.Run("product", func(t *testing.T) {
@@ -558,6 +569,7 @@ func TestOutwardRoundingNeverPublishesAFlushedZero(t *testing.T) {
 // bounds a quantity that is genuinely positive, so the published 0 each leg
 // used to return excluded the very displacement it was there to enclose.
 func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
+	t.Parallel()
 	const s = math.SmallestNonzeroFloat64
 
 	// A degenerate-in-magnitude but non-degenerate-in-shape cell: the four
@@ -779,6 +791,7 @@ func pastRawNormShortfallFloor(x float64) bool { return math.Abs(x) > rawNormSho
 // TestCellTwistAreaLinearArmEnclosesTheExactProduct reads from it is provably
 // from magnitude, not from a comment nobody checked.
 func TestProvenNormFixturesLargeMagnitudeCornersPastFloor(t *testing.T) {
+	t.Parallel()
 	fixtures := provenNormFixtures()
 	c := fixtures[len(fixtures)-1]
 	require.Equal(t, "large-magnitude corners", c.name)
@@ -888,6 +901,7 @@ func floatTwistAreaProduct(c cellQuad) float64 {
 // TestCellTwistAreaLinearArmEnclosesTheExactProduct pins the fallback arm on
 // every review fixture.
 func TestCellTwistAreaLinearArmEnclosesTheExactProduct(t *testing.T) {
+	t.Parallel()
 	for _, c := range provenNormFixtures() {
 		t.Run(c.name, func(t *testing.T) {
 			corners := cellCornersOf(c.vLo, c.vHi, c.wLo, c.wHi)
@@ -915,6 +929,7 @@ func TestCellTwistAreaLinearArmEnclosesTheExactProduct(t *testing.T) {
 // forced per-term rounding (see its own comment) makes floatShort's count
 // identical on every architecture, independent of r3's own implementation.
 func TestCellTwistAreaLinearArmEnclosesOrdinaryCells(t *testing.T) {
+	t.Parallel()
 	rng := rand.New(rand.NewPCG(0x10f7c0de, 0x51de51de))
 	coord := func() float64 { return math.Round(rng.Float64()*2000) / 10 }
 	vec := func() r3.Vec { return r3.NewVec(coord(), coord(), coord()) }
@@ -994,6 +1009,7 @@ func refChordCurveAreaAllow(c cellQuad, arcA, arcB, md, energyA, energyB float64
 // the one that discriminates: there the oscillation term reads |T| directly,
 // and a float |T| is short by a fraction of the term rather than an ulp of it.
 func TestCellChordCurveAreaAllowEnclosesItsExactTerms(t *testing.T) {
+	t.Parallel()
 	type row struct {
 		name             string
 		cell             cellQuad
@@ -1038,6 +1054,7 @@ func TestCellChordCurveAreaAllowEnclosesItsExactTerms(t *testing.T) {
 // chord by EXACT rational comparison, so a caller whose claim equals the true
 // chord is admitted rather than refused for the ulp the outward rounding adds.
 func TestCellChordCurveAreaAllowAdmitsAnExactlyTightArcClaim(t *testing.T) {
+	t.Parallel()
 	// A 3-4-5 side: the chord length is exactly 5, exactly representable, so
 	// an arcLenUpper of 5 is exactly tight rather than short.
 	vLo, vHi := r3.NewVec(0, 0, 0), r3.NewVec(3, 4, 0)
@@ -1052,6 +1069,7 @@ func TestCellChordCurveAreaAllowAdmitsAnExactlyTightArcClaim(t *testing.T) {
 // TestRvLenUpperEnclosesTheExactNorm is the primitive's own falsifier, and the
 // direct statement of why r3.Vec.Len cannot stand in for it.
 func TestRvLenUpperEnclosesTheExactNorm(t *testing.T) {
+	t.Parallel()
 	cases := map[string][2]r3.Vec{
 		"large integers":   {r3.NewVec(770749, 887007, 339646), r3.NewVec(453885, 39861, 565228)},
 		"one-decimal mm":   {r3.NewVec(16.6, 65.1, 173.7), r3.NewVec(102.7, 169.5, 76.2)},
@@ -1075,6 +1093,7 @@ func TestRvLenUpperEnclosesTheExactNorm(t *testing.T) {
 // it must admit a claim that is exactly tight and refuse one that is short by
 // a single ulp, neither decided by a rounded norm.
 func TestRatLenAtLeastDecidesExactly(t *testing.T) {
+	t.Parallel()
 	d := heldDelta(r3.NewVec(3, 4, 0), r3.NewVec(0, 0, 0))
 	require.True(t, ratLenAtLeast(5, d), "a claim equal to the exact norm is admitted")
 	require.True(t, ratLenAtLeast(math.Nextafter(5, math.Inf(1)), d), "a claim above the exact norm is admitted")

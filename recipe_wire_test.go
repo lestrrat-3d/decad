@@ -11,6 +11,7 @@ import (
 )
 
 func TestRecipeWireCanonicalEmptyEnvelope(t *testing.T) {
+	t.Parallel()
 	for _, recipe := range []decad.Recipe{
 		{},
 		{Steps: []decad.Step{}},
@@ -30,6 +31,7 @@ func TestRecipeWireCanonicalEmptyEnvelope(t *testing.T) {
 }
 
 func TestRecipeWireLegacyV1Compatibility(t *testing.T) {
+	t.Parallel()
 	for _, input := range []string{
 		`{"steps":[]}`,
 		`{"steps":null}`,
@@ -50,6 +52,7 @@ func TestRecipeWireLegacyV1Compatibility(t *testing.T) {
 }
 
 func TestRecipeWireRejectsUnknownAndDuplicateFields(t *testing.T) {
+	t.Parallel()
 	tests := []string{
 		`{"steps":[],"future_field":true}`,
 		`{"format":"decad.recipe","version":1,"steps":[],"future_field":true}`,
@@ -70,6 +73,7 @@ func TestRecipeWireRejectsUnknownAndDuplicateFields(t *testing.T) {
 }
 
 func TestRecipeWireRejectsInvalidEnvelopes(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		input     string
@@ -140,6 +144,7 @@ func validLoftStep() decad.Step {
 // Alignment, survives a full Recipe encode/decode round trip field for
 // field, and the envelope it round-trips through is canonical version 2.
 func TestLoftOptsRoundTripsThroughVersion2Envelope(t *testing.T) {
+	t.Parallel()
 	step := validLoftStep()
 	recipe := decad.Recipe{Steps: []decad.Step{step}}
 
@@ -170,6 +175,7 @@ func TestLoftOptsRoundTripsThroughVersion2Envelope(t *testing.T) {
 // fields, so a missing key and an explicit JSON null are both rejected —
 // neither ever decodes into a zero-value ProfileRecord/PlaneRecord.
 func TestLoftOptsRequiresProfile2AndPlane2(t *testing.T) {
+	t.Parallel()
 	step := validLoftStep()
 	buf, err := json.Marshal(step)
 	require.NoError(t, err)
@@ -224,6 +230,7 @@ func TestLoftOptsRequiresProfile2AndPlane2(t *testing.T) {
 // omitting WithLoftAlignment's payload means every loop's offset is 0, never
 // distinguished from an explicit all-zero list.
 func TestLoftOptsAlignmentAbsentMeansZeroOffsetPerLoop(t *testing.T) {
+	t.Parallel()
 	step := validLoftStep()
 	step.Opts = decad.LoftOpts{
 		Profile2: step.Opts.(decad.LoftOpts).Profile2,
@@ -245,6 +252,7 @@ func TestLoftOptsAlignmentAbsentMeansZeroOffsetPerLoop(t *testing.T) {
 // envelope carrying a "loft" step is invalid, never reinterpreted with
 // version-2 rules.
 func TestRecipeWireVersion1RejectsLoftStep(t *testing.T) {
+	t.Parallel()
 	step := validLoftStep()
 	stepWire, err := json.Marshal(step)
 	require.NoError(t, err)
@@ -275,6 +283,7 @@ func TestRecipeWireVersion1RejectsLoftStep(t *testing.T) {
 // (no profile/plane/opts, which would otherwise fail its own shape gate) so
 // a passing test proves the version check ran first.
 func TestRecipeWireUnsupportedVersionRejectsBeforeLoftDispatch(t *testing.T) {
+	t.Parallel()
 	input := `{"format":"decad.recipe","version":3,"steps":[{"op":"loft"}]}`
 	var recipe decad.Recipe
 	err := json.Unmarshal([]byte(input), &recipe)
@@ -286,6 +295,7 @@ func TestRecipeWireUnsupportedVersionRejectsBeforeLoftDispatch(t *testing.T) {
 // envelope admits a "loft" step; the same step decoded under legacy/version-1
 // rejects.
 func TestRecipeWireLoftRequiresVersion2(t *testing.T) {
+	t.Parallel()
 	step := validLoftStep()
 	recipe := decad.Recipe{Steps: []decad.Step{step}}
 	data, err := json.Marshal(recipe)

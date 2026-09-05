@@ -17,6 +17,7 @@ func coedgeBox(t *testing.T) *decad.Body {
 }
 
 func TestLoopCoEdgesMatchEdgesCompatibilityView(t *testing.T) {
+	t.Parallel()
 	body := coedgeBox(t)
 
 	for _, face := range body.Faces() {
@@ -33,6 +34,7 @@ func TestLoopCoEdgesMatchEdgesCompatibilityView(t *testing.T) {
 }
 
 func TestLoopCoEdgesFollowDirectedBoundary(t *testing.T) {
+	t.Parallel()
 	body := coedgeBox(t)
 	uses := make(map[*decad.Edge][]decad.CoEdge)
 	sawReverse := false
@@ -64,6 +66,7 @@ func TestLoopCoEdgesFollowDirectedBoundary(t *testing.T) {
 }
 
 func TestLoopCoEdgesReturnImmutableView(t *testing.T) {
+	t.Parallel()
 	loop := coedgeBox(t).Faces()[0].Loops()[0]
 	directed := loop.CoEdges()
 	undirected := loop.Edges()
@@ -88,6 +91,7 @@ func TestLoopCoEdgesReturnImmutableView(t *testing.T) {
 // NURBSSurface is a tagged, opaque Surface variant reporting the existing
 // KindNURBS discriminant, carrying no exported geometry of its own.
 func TestNURBSSurfaceReportsKindNURBS(t *testing.T) {
+	t.Parallel()
 	var s decad.Surface = decad.NURBSSurface{}
 	require.Equal(t, decad.KindNURBS, s.Kind())
 }
@@ -97,6 +101,7 @@ func TestNURBSSurfaceReportsKindNURBS(t *testing.T) {
 // alone and declares no Kind, so assigning a NURBSCurve to a Curve variable
 // is the whole of what the variant publishes.
 func TestNURBSCurveSealsIntoCurve(t *testing.T) {
+	t.Parallel()
 	var c decad.Curve = decad.NURBSCurve{}
 	require.NotNil(t, c)
 }

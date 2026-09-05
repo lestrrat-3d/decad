@@ -39,6 +39,7 @@ func regularNGonSketch(t *testing.T, n int, r float64) (*sketch.Sketch, *sketch.
 // is exactly the case lineWalkBounds' fallback bound covers. The exact area is
 // closed form: two regular-polygon caps plus n rectangular sides.
 func TestExtrudeNGonPrismBoundsTighten(t *testing.T) {
+	t.Parallel()
 	const r = 10.0
 	const h = 5.0
 	for _, n := range []int{3, 4, 5, 6, 8, 12, 32, 128} {
@@ -74,6 +75,7 @@ func TestExtrudeNGonPrismBoundsTighten(t *testing.T) {
 // certified to 76 decimal digits), so the bound shrinks to a few ulps and the
 // body reads Sound at the default tolerance.
 func TestExtrudeCirclePrismBoundsTighten(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -117,6 +119,7 @@ func TestExtrudeCirclePrismBoundsTighten(t *testing.T) {
 // bracket rather than the closed CircleSeg form circularAreaInterval already
 // had.
 func TestExtrudeArcSegPrismBoundsTighten(t *testing.T) {
+	t.Parallel()
 	const r = 20.0
 	const h = 5.0
 	w := sketch.NewWorld()
@@ -173,6 +176,7 @@ func TestExtrudeArcSegPrismBoundsTighten(t *testing.T) {
 // rounded decimal — so a mismatch here means the carrier swap moved a
 // published value or bound, not merely that a tolerance loosened.
 func TestExtrudeArcSegPrismReadingsBitIdenticalAcrossAtanCarrier(t *testing.T) {
+	t.Parallel()
 	const r = 20.0
 	const h = 5.0
 	w := sketch.NewWorld()
@@ -228,6 +232,7 @@ func TestExtrudeArcSegPrismReadingsBitIdenticalAcrossAtanCarrier(t *testing.T) {
 // float64, so tightening the bound must never make one report Exact — that
 // would be a false claim, not merely an imprecise one.
 func TestExtrudeCircularReadingsStayApproximate(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -296,6 +301,7 @@ func quarterDiscRecord(r float64) decad.ProfileRecord {
 // fractional-turn arm (moments_trig.go's turnSinCosInterval) now brackets a
 // trimmed CircleSeg the same way.
 func TestExtrudeTrimmedCircleSegPrismBoundsTighten(t *testing.T) {
+	t.Parallel()
 	const r = 10.0
 	rec := quarterDiscRecord(r)
 	wantArea := math.Pi * r * r / 4
@@ -323,6 +329,7 @@ func TestExtrudeTrimmedCircleSegPrismBoundsTighten(t *testing.T) {
 // square section's side lengths, area, volume and centroid are all exactly
 // representable, and none of the tightening above may disturb that.
 func TestExtrudeSquarePrismStaysExact(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -358,6 +365,7 @@ func TestExtrudeSquarePrismStaysExact(t *testing.T) {
 // like any other consumer: the box is Approximate and its interval contains the
 // apex the section actually reaches.
 func TestExtrudeArcSectionBoxEnclosesArcApex(t *testing.T) {
+	t.Parallel()
 	s, p := arcApexSketch(t, 1, 6)
 	body, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
@@ -376,6 +384,7 @@ func TestExtrudeArcSectionBoxEnclosesArcApex(t *testing.T) {
 // truly reaches. A single fixture cannot show this — the sign and size of the
 // hypot rounding change with the coordinates — so the grid is the test.
 func TestExtrudeBoundsSweepEnclosesArcApex(t *testing.T) {
+	t.Parallel()
 	for i := 1; i <= 12; i++ {
 		for j := 1; j <= 12; j++ {
 			u, v := 0.7*float64(i), 1.3*float64(j)
@@ -432,6 +441,7 @@ func exactApply(t *testing.T, xform r3.Transform, p r3.Vec) r3.Vec {
 // evaluation rounds for a non-axis-aligned rotation, and the box's own
 // published interval must contain the true corner it misses.
 func TestExtrudeBoxBoundsEnclosesPlacedCorners(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -507,6 +517,7 @@ func requireEnclosesExactSum(t *testing.T, coord, bound float64, terms ...float6
 // 3.6e-16. A box that charges only the coefficients publishes that miss as
 // Exact with a zero bound.
 func TestExtrudeBoxBoundsEnclosesTranslatedCorner(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)

@@ -15,6 +15,7 @@ import (
 )
 
 func TestChamferContextCancellationLeavesReceiverLive(t *testing.T) {
+	t.Parallel()
 	doc, box := filletBox(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -28,6 +29,7 @@ func TestChamferContextCancellationLeavesReceiverLive(t *testing.T) {
 }
 
 func TestChamferContextCancellationAtCommitLeavesReceiverLive(t *testing.T) {
+	t.Parallel()
 	doc, box := filletBox(t)
 	before := doc.Recipe()
 	ctx := &commitBoundaryCancelContext{Context: t.Context()}
@@ -41,6 +43,7 @@ func TestChamferContextCancellationAtCommitLeavesReceiverLive(t *testing.T) {
 }
 
 func TestChamferContextCancellationDuringPreprocessingLeavesReceiverLive(t *testing.T) {
+	t.Parallel()
 	doc, box := filletBox(t)
 	before := doc.Recipe()
 	ctx := &preAuditScanCancelContext{Context: t.Context()}
@@ -55,6 +58,7 @@ func TestChamferContextCancellationDuringPreprocessingLeavesReceiverLive(t *test
 }
 
 func TestChamferContextCancellationDuringAuditPreservesError(t *testing.T) {
+	t.Parallel()
 	for _, cancelErr := range []error{context.Canceled, context.DeadlineExceeded} {
 		t.Run(cancelErr.Error(), func(t *testing.T) {
 			doc, box := manySidedPrism(t, 300)
@@ -73,6 +77,7 @@ func TestChamferContextCancellationDuringAuditPreservesError(t *testing.T) {
 }
 
 func TestChamferSelectorAdmission(t *testing.T) {
+	t.Parallel()
 	t.Run("BuiltInQuery", func(t *testing.T) {
 		doc, box := filletBox(t)
 
@@ -115,6 +120,7 @@ func TestChamferSelectorAdmission(t *testing.T) {
 }
 
 func TestChamferBoxAllConvexEdges(t *testing.T) {
+	t.Parallel()
 	const d = 10.0
 	h := filletBoxHeight
 	doc, box := filletBox(t)
@@ -203,6 +209,7 @@ func TestChamferBoxAllConvexEdges(t *testing.T) {
 }
 
 func TestChamferRecipeAndRetire(t *testing.T) {
+	t.Parallel()
 	const d = 8.0
 	doc, box := filletBox(t)
 	body, err := box.Chamfer(verticalEdges(), units.Millimeters(d))
@@ -233,6 +240,7 @@ func TestChamferRecipeAndRetire(t *testing.T) {
 }
 
 func TestChamferSelectorIsRecordedUnresolved(t *testing.T) {
+	t.Parallel()
 	// The step stores a clone of the query, not the caller's, and never the
 	// edges it resolved to (core §9 / §11).
 	doc, box := filletBox(t)
@@ -248,6 +256,7 @@ func TestChamferSelectorIsRecordedUnresolved(t *testing.T) {
 }
 
 func TestChamferConcaveEdgeAddsWedge(t *testing.T) {
+	t.Parallel()
 	// An L-shaped section has one reflex (concave) lateral edge; chamfering it
 	// fills material in with a planar bevel, ADDING a right isosceles wedge of
 	// area d²/2 — the mirror of a convex corner, which removes one.
@@ -305,6 +314,7 @@ func TestChamferConcaveEdgeAddsWedge(t *testing.T) {
 }
 
 func TestChamferLineArcCorner(t *testing.T) {
+	t.Parallel()
 	// A quarter-disk prism has three convex corners: the right angle at the
 	// origin (line/line) and the two junctions at (20,0) and (0,20) where a flat
 	// wall meets the curved wall (line/arc). Bevelling all three builds, exactly —
@@ -368,6 +378,7 @@ func TestChamferLineArcCorner(t *testing.T) {
 }
 
 func TestChamferArcArcCorner(t *testing.T) {
+	t.Parallel()
 	// A lens of two circular arcs: each of its two pointed corners is an arc/arc
 	// corner. Bevelling both builds exactly, replacing each corner with a planar
 	// chord between the two arc feet.
@@ -431,6 +442,7 @@ func TestChamferArcArcCorner(t *testing.T) {
 }
 
 func TestChamferHasNoS5Path(t *testing.T) {
+	t.Parallel()
 	// A fillet of a circular carrier refuses when the radius exceeds the wall's
 	// own radius: its inward offset is empty (S5, ErrDegenerate). A chamfer has
 	// NO such refusal — a chord exists between any two distinct feet — so the same
@@ -466,6 +478,7 @@ func TestChamferHasNoS5Path(t *testing.T) {
 }
 
 func TestChamferOverLargeSetbackRefused(t *testing.T) {
+	t.Parallel()
 	// A setback so large its two feet run past the far end of a wall is S6: the
 	// wall is consumed by its own corners. The caller is refused (ErrUnsupported),
 	// never handed a clipped body. Here the 60 mm walls each carry two corners at
@@ -484,6 +497,7 @@ func TestChamferOverLargeSetbackRefused(t *testing.T) {
 }
 
 func TestChamferOverLargeSetbackFlippingLoopIsUnsupported(t *testing.T) {
+	t.Parallel()
 	// An over-large setback whose feet run past their adjacent walls' far ends is
 	// S6 (ErrUnsupported), even when the same overrun ALSO turns the rewritten
 	// loop inside out — Table S assigns the overrun to S6, so it must NOT be
@@ -499,6 +513,7 @@ func TestChamferOverLargeSetbackFlippingLoopIsUnsupported(t *testing.T) {
 }
 
 func TestChamferRefusals(t *testing.T) {
+	t.Parallel()
 	_, box := filletBox(t)
 
 	// A zero distance is the body the caller already holds: S13.
@@ -527,6 +542,7 @@ func TestChamferRefusals(t *testing.T) {
 }
 
 func TestChamferNonPrismReceiver(t *testing.T) {
+	t.Parallel()
 	// A revolve is not a prismPayload, so a chamfer of it is staged: S3.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -559,6 +575,7 @@ func TestChamferNonPrismReceiver(t *testing.T) {
 }
 
 func TestChamferNonPrismReceiverBooleanBuilt(t *testing.T) {
+	t.Parallel()
 	// A boolean union is not a prismPayload either, and its closed rim edges
 	// carry FacetedCurve rather than Circle3, so the centre-and-radius form
 	// above never fires for them. Closure still comes from the edge's own
@@ -584,6 +601,7 @@ func TestChamferNonPrismReceiverBooleanBuilt(t *testing.T) {
 }
 
 func TestChamferBreaksNestingRefused(t *testing.T) {
+	t.Parallel()
 	// A large corner chamfer can shrink the outer loop PAST a near-corner hole: the
 	// (0,0) corner's d = 20 chord runs from (0,20) to (20,0), and the hole at
 	// (3,3) r = 1 lies entirely inside the removed triangle — OUTSIDE the bevelled
@@ -607,6 +625,7 @@ func TestChamferBreaksNestingRefused(t *testing.T) {
 }
 
 func TestChamferClearOfHoleBuilds(t *testing.T) {
+	t.Parallel()
 	// The mirror of the refusal: a corner chamfer whose chord stays well clear of a
 	// central hole builds, tessellates and is Sound — the shared audit does not
 	// over-reject.

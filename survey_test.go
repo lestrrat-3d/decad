@@ -69,6 +69,7 @@ func requireWall(t *testing.T, br *decad.BodyReport, wantExact decad.Exactness, 
 }
 
 func TestWallThinPlateViolating(t *testing.T) {
+	t.Parallel()
 	// The 10×10×0.5 mm plate of verification §6's worked table: the two
 	// 10×10 skins oppose at 180°, the mid-plane ball spans them, and the
 	// proven interval [0.5, 0.5] sits below the 1 mm tool at any coarseness.
@@ -84,6 +85,7 @@ func TestWallThinPlateViolating(t *testing.T) {
 }
 
 func TestWallCubeSound(t *testing.T) {
+	t.Parallel()
 	// The 100 mm cube: its edges sit at 90°, past every legal allowance, so
 	// its only spanning ball is its center's — the 100 mm slab — and a 1 mm
 	// tool finds nothing to violate.
@@ -98,6 +100,7 @@ func TestWallCubeSound(t *testing.T) {
 }
 
 func TestWallWedgePrismNoWall(t *testing.T) {
+	t.Parallel()
 	// The equilateral wedge prism of verification §6: side pairs at 60°,
 	// caps at 90° to them, and the two parallel caps beyond any inscribed
 	// ball's reach (the cross-section's inradius is 8.66 mm, the caps 80 mm
@@ -117,6 +120,7 @@ func TestWallWedgePrismNoWall(t *testing.T) {
 }
 
 func TestWallConeNoWall(t *testing.T) {
+	t.Parallel()
 	// The revolved tetrahedron-analog: a solid cone whose apex angle is 60°
 	// and whose base meets the wall at 60° — every skin meets its neighbours
 	// past the allowance and opposes none. Proven no wall, Sound.
@@ -134,6 +138,7 @@ func TestWallConeNoWall(t *testing.T) {
 }
 
 func TestWallAnnularPrism(t *testing.T) {
+	t.Parallel()
 	// A hole-wall annulus: concentric R20/R15 circles extruded 30 mm. The
 	// ball between the hole wall and the outer wall reads the 5 mm ring
 	// thickness — met against a 1 mm tool, proven thin against a 6 mm one.
@@ -170,6 +175,7 @@ func TestWallAnnularPrism(t *testing.T) {
 }
 
 func TestWallDraftAllowanceBoundary(t *testing.T) {
+	t.Parallel()
 	// A wall drafted at exactly the allowance spans — within is inclusive
 	// (verification §6). A trapezoid blade 1 mm at the base whose skins
 	// lean 7.5° each (dihedral exactly 15°): at the default allowance the
@@ -198,6 +204,7 @@ func TestWallDraftAllowanceBoundary(t *testing.T) {
 }
 
 func TestWallKnifeEdgeExactZero(t *testing.T) {
+	t.Parallel()
 	// A circular-segment prism: the chord meets the arc at a 10° tangent-
 	// chord angle — a wedge within the allowance, a wall ground to nothing.
 	// The reading is a genuine Exact 0 on a proven solid, and [0, 0] sits
@@ -232,6 +239,7 @@ func TestWallKnifeEdgeExactZero(t *testing.T) {
 }
 
 func TestWallPartialRevolve(t *testing.T) {
+	t.Parallel()
 	// A quarter-turn annular ring: the caps sit 90° apart — far past the
 	// allowance — and the ring's own cross-section reads its 10 mm walls.
 	s, p := annularSketch(t)
@@ -245,6 +253,7 @@ func TestWallPartialRevolve(t *testing.T) {
 }
 
 func TestVerifyWallCancellationStopsCandidateWork(t *testing.T) {
+	t.Parallel()
 	const sides = 40
 	pts := make([][2]float64, sides)
 	for i := range pts {
@@ -266,6 +275,7 @@ func TestVerifyWallCancellationStopsCandidateWork(t *testing.T) {
 }
 
 func TestUndercutNearAntiparallelPull(t *testing.T) {
+	t.Parallel()
 	// The antiparallel carve-out is EXACT: a pull tilted by 1e-5 hooks
 	// under the base ever so slightly, so the base face opposes — along
 	// with the one side face leaning against the tilt — and the body is
@@ -288,6 +298,7 @@ func TestUndercutNearAntiparallelPull(t *testing.T) {
 // -0.99999999999999989 — neither of which is 0 or -1, but both fell inside
 // opposesPull's open interval. The exact answer is the empty proven all-clear.
 func TestUndercutExactlyPerpendicularWallIsNotOpposed(t *testing.T) {
+	t.Parallel()
 	s, p := polygonSketch(t, [][2]float64{{0, 0}, {3, 9}, {-6, 12}, {-9, 3}})
 	doc := decad.New()
 	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -353,6 +364,7 @@ func TestUndercutExactlyPerpendicularWallIsNotOpposed(t *testing.T) {
 // verdict is undecided — neither listed nor cleared — not the coarser claim
 // that nothing else in the body opposes.
 func TestUndercutUnseparablePullIsUndecided(t *testing.T) {
+	t.Parallel()
 	const r, th0, delta = 10.0, 0.91, 0.1
 	th1 := th0 + delta
 	ws := sketch.NewWorld()
@@ -394,6 +406,7 @@ func TestUndercutUnseparablePullIsUndecided(t *testing.T) {
 }
 
 func TestWallReflexSweep(t *testing.T) {
+	t.Parallel()
 	// A 270° sector of a length-7, radius-8 solid cylinder. The sweep is
 	// reflex, so a mid-sweep ball's clearance to each cap HALF-plane is its
 	// own axis distance (the perpendicular foot leaves the half-plane and
@@ -442,6 +455,7 @@ func requireWallBoundContains(t *testing.T, br *decad.BodyReport, truth, maxBoun
 }
 
 func TestWallSectorTooTightForItsFlats(t *testing.T) {
+	t.Parallel()
 	// The same sector one size longer (length 10, radius 8): the
 	// length-spanning ball of radius 5 needs meridian radius ≥ 5 to clear
 	// the caps but ≤ 3 to stay inside the skin — infeasible — and no other
@@ -458,6 +472,7 @@ func TestWallSectorTooTightForItsFlats(t *testing.T) {
 }
 
 func TestWallThinPieWedge(t *testing.T) {
+	t.Parallel()
 	// A 10° pie wedge of a solid cylinder: its two caps meet along the axis
 	// at the sweep angle itself — a dihedral within the allowance, a wall
 	// ground to zero at every size. Exact 0, Violating against any tool.
@@ -472,6 +487,7 @@ func TestWallThinPieWedge(t *testing.T) {
 }
 
 func TestUndercutsPrismClear(t *testing.T) {
+	t.Parallel()
 	// A straight prism under a +z pull: every side wall is exactly
 	// perpendicular — not opposed, the pull slides along it — and the caps
 	// separate. Undercuts is the empty PROVEN all-clear, an answer, and the
@@ -487,6 +503,7 @@ func TestUndercutsPrismClear(t *testing.T) {
 }
 
 func TestUndercutsTiltedPull(t *testing.T) {
+	t.Parallel()
 	// The same prism under a tilted pull: the side facing against the pull
 	// and the bottom cap both carry normals with a component against it —
 	// proven undercuts, Violating.
@@ -503,6 +520,7 @@ func TestUndercutsTiltedPull(t *testing.T) {
 }
 
 func TestUndercutsSphereListed(t *testing.T) {
+	t.Parallel()
 	// A revolved sphere under any pull: its single face sweeps every normal
 	// direction, so it provenly opposes past its equator and is listed —
 	// the doc's own spherical case. One face, Violating.
@@ -521,6 +539,7 @@ func TestUndercutsSphereListed(t *testing.T) {
 }
 
 func TestUndercutsVerticalHoleClear(t *testing.T) {
+	t.Parallel()
 	// A vertical hole wall under a +z pull carries only horizontal normals:
 	// exactly perpendicular everywhere, provenly clear.
 	doc := holePlate(t)
@@ -557,6 +576,7 @@ func holePlate(t *testing.T) *decad.Document {
 }
 
 func TestMinRadiusHolePlate(t *testing.T) {
+	t.Parallel()
 	// The hole wall is the plate's one concave face: MinRadius reads its
 	// 10 mm radius — a measurement, never compared to a spec, so the report
 	// stays Sound.
@@ -572,6 +592,7 @@ func TestMinRadiusHolePlate(t *testing.T) {
 }
 
 func TestMinRadiusPlainBlockNil(t *testing.T) {
+	t.Parallel()
 	// An all-convex block has no concave feature: nil is the proven best
 	// case for any endmill, and the report is Sound.
 	doc := rectPrism(t, 100, 60, 10)
@@ -584,6 +605,7 @@ func TestMinRadiusPlainBlockNil(t *testing.T) {
 }
 
 func TestMinRadiusDonutWaist(t *testing.T) {
+	t.Parallel()
 	// A solid torus: the tube itself is convex, but around the axis the
 	// donut's waist curves away from the material with radius M − m.
 	ws := sketch.NewWorld()
@@ -608,6 +630,7 @@ func TestMinRadiusDonutWaist(t *testing.T) {
 }
 
 func TestWallHolePlateReadsThickness(t *testing.T) {
+	t.Parallel()
 	// The plate-with-hole's thinnest wall is the 8 mm plate itself: the
 	// hole clears every side by 20 mm, so the parallel skins win.
 	doc := holePlate(t)
@@ -618,6 +641,7 @@ func TestWallHolePlateReadsThickness(t *testing.T) {
 }
 
 func TestSurveysAnsweredTogether(t *testing.T) {
+	t.Parallel()
 	// All three asked at once on a sound plate: every question is answered
 	// — the old always-Suspect staging is gone — and everything is in spec,
 	// so the report reads Sound and Trustworthy.
@@ -641,6 +665,7 @@ func TestSurveysAnsweredTogether(t *testing.T) {
 }
 
 func TestWallSolidCylinder(t *testing.T) {
+	t.Parallel()
 	// A solid cylinder R8 × 10 long (full revolve): the caps span across
 	// the axis at 10 mm; the 16 mm diametral ball is starved by them.
 	//
@@ -671,6 +696,7 @@ func TestWallSolidCylinder(t *testing.T) {
 // the parallel circle's radius is the recorded 5 mm: the survey publishes it
 // Exact with a zero bound.
 func TestMinRadiusAnnularRevolveStaysExact(t *testing.T) {
+	t.Parallel()
 	s, p := annularSketch(t)
 	doc := decad.New()
 	_, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
@@ -689,6 +715,7 @@ func TestMinRadiusAnnularRevolveStaysExact(t *testing.T) {
 }
 
 func TestWallNarrowConeTaperZero(t *testing.T) {
+	t.Parallel()
 	// A cone whose apex angle (10°) sits within the allowance is a tapered
 	// wall run out to nothing: the balls thin to the apex with contacts
 	// inside the allowance, and the closure reads a genuine Exact 0.
@@ -704,6 +731,7 @@ func TestWallNarrowConeTaperZero(t *testing.T) {
 }
 
 func TestWallPlacedBodyReadsThePart(t *testing.T) {
+	t.Parallel()
 	// The reading is the part's, not the pose's: a rotated, far-translated
 	// copy of the thin plate reads the same 0.5 mm wall.
 	doc := rectPrism(t, 10, 10, 0.5)
@@ -724,6 +752,7 @@ func TestWallPlacedBodyReadsThePart(t *testing.T) {
 }
 
 func TestSurveysSkippedOnUnaskedOptions(t *testing.T) {
+	t.Parallel()
 	// An option left off states no spec: no reading, no verdict.
 	doc := rectPrism(t, 100, 60, 10)
 	report, err := doc.Verify(t.Context())
@@ -736,6 +765,7 @@ func TestSurveysSkippedOnUnaskedOptions(t *testing.T) {
 }
 
 func TestWallReadingBoundEnclosesCurvedWeb(t *testing.T) {
+	t.Parallel()
 	// The 100×60×20 mm plate with two r=1 holes at (48.5, 28.5) and
 	// (51.5, 31.5): the web between them is hypot(3,3) − 2 = 3√2 − 2, which no
 	// float64 holds exactly. The reading carries the arcArcCands centerline
@@ -779,6 +809,7 @@ func TestWallReadingBoundEnclosesCurvedWeb(t *testing.T) {
 }
 
 func TestWallReadingBoundIsOnTheSpanningDiameter(t *testing.T) {
+	t.Parallel()
 	// The same curved-web reading as above, on a fixture whose candidate bound
 	// is large enough to tell a radius bound from a diameter one. The plate is
 	// 100 mm thick with two equal holes of radius 132665.06800135397 mm whose
@@ -852,6 +883,7 @@ func webGapTruth(cx, cy, r float64) float64 {
 }
 
 func TestWallReadingExactHeightArm(t *testing.T) {
+	t.Parallel()
 	// The 10×10×0.5 mm plate: the height arm's two axial displacements are
 	// both zero (a caller-stated sweep) and 0.5 is exactly representable, so
 	// the reading stays Exact with Bound exactly zero — the test that stops a
@@ -872,6 +904,7 @@ func TestWallReadingExactHeightArm(t *testing.T) {
 }
 
 func TestWallHeightCarriesAxialDelta(t *testing.T) {
+	t.Parallel()
 	// A 10×10 mm plate extruded units.Inches(0.1): the sweep level's own unit
 	// conversion carries a nonzero displacement (docs/evaluator-design.md §5),
 	// which prismWall's height arm composes into the reading instead of
@@ -901,6 +934,7 @@ func TestWallHeightCarriesAxialDelta(t *testing.T) {
 }
 
 func TestMinRadiusArcRadiusBound(t *testing.T) {
+	t.Parallel()
 	// A prism whose one concave feature is dSectionProfile's √2 ArcSeg hole,
 	// cut as a hole so the material-outside convention makes its arc concave.
 	// The published interval must contain the truth; a millimetre CircleSeg
@@ -1029,6 +1063,7 @@ func hypotTruth(a, b float64) *big.Rat {
 // that same radius for MinWallThickness. Both truths are carried at 200 bits,
 // because the whole error under test is far below a decimal literal's own.
 func TestSurveySweepEnclosesHalfDiscTruths(t *testing.T) {
+	t.Parallel()
 	const half = 20.0
 	for i := 1; i <= 12; i++ {
 		for j := 1; j <= 12; j++ {
@@ -1074,6 +1109,7 @@ func TestSurveySweepEnclosesHalfDiscTruths(t *testing.T) {
 // is the ordinary-numbers case — 20 − 0.03 is not representable, and a zero
 // bound publishes an interval that excludes the true ring thickness.
 func TestWallConcentricRingCarriesRadiusDifferenceBound(t *testing.T) {
+	t.Parallel()
 	ws := sketch.NewWorld()
 	s, err := ws.CreateSketch(ws.XY())
 	require.NoError(t, err)
@@ -1120,6 +1156,7 @@ func TestWallConcentricRingCarriesRadiusDifferenceBound(t *testing.T) {
 // math.Hypot evaluation, so it publishes the walk's bound on that radius
 // rather than claiming the record stated it.
 func TestRevolveMinRadiusArcRadiusBound(t *testing.T) {
+	t.Parallel()
 	s, prof := dSectionProfile(t)
 	doc := decad.New()
 	_, err := doc.Revolve(s, prof, uAxis, decad.FullRevolution{})
@@ -1216,6 +1253,7 @@ func requireMinRadius(t *testing.T, br *decad.BodyReport) (float64, float64) {
 // re-expression multiplies by 1 and 0 only and contributes nothing: every
 // millimetre of the gap belongs to the tangent.
 func TestRevolveMinRadiusChargesTheWalkTangent(t *testing.T) {
+	t.Parallel()
 	const (
 		u0   = 2.680472546443363
 		v0   = 14.702102074947762
@@ -1256,6 +1294,7 @@ func TestRevolveMinRadiusChargesTheWalkTangent(t *testing.T) {
 // near wall runs from (0, v0) to (10, 1) and whose far wall closes it at
 // u = 0; only v0 moves.
 func TestRevolveMinRadiusChargesTheAxisSnap(t *testing.T) {
+	t.Parallel()
 	axis := decad.ConstructionAxis{Origin: r3.NewVec(0, 0, 0), Dir: r3.NewVec(1, 0, 0)}
 	radiusOf := func(t *testing.T, v0 float64) (*decad.BodyReport, float64, float64) {
 		t.Helper()
@@ -1338,6 +1377,7 @@ func coneTangentSlack(u0, v0, u1, v1 float64) float64 {
 // No published interval may exclude the radius its own recorded meridian
 // denotes.
 func TestRevolveMinRadiusSweepEnclosesConeBoreTruths(t *testing.T) {
+	t.Parallel()
 	// Half of what the two half-ulp roundings reach together (2·2⁻⁵³), so the
 	// population is the near-worst tail rather than the average draw.
 	const worstSlack = 1.0e-16
@@ -1427,6 +1467,7 @@ func rivalRadiusPlate(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
 // arc's true radius. A winner-only reduction publishes the circle's Exact zero
 // bound and excludes that truth.
 func TestMinRadiusAggregatesLosingCandidate(t *testing.T) {
+	t.Parallel()
 	s, prof := rivalRadiusPlate(t)
 	doc := decad.New()
 	_, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
@@ -1455,6 +1496,7 @@ func TestMinRadiusAggregatesLosingCandidate(t *testing.T) {
 // representable, so the interval collapses onto the smaller radius and the
 // reading stays Exact with a zero bound.
 func TestMinRadiusExactCandidatesStayExact(t *testing.T) {
+	t.Parallel()
 	ws := sketch.NewWorld()
 	s, err := ws.CreateSketch(ws.XY())
 	require.NoError(t, err)
@@ -1523,6 +1565,7 @@ func rivalRadiusMeridian(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
 // bound, while the meridian arc's own interval reaches below it. Both arms feed
 // one aggregate, so the reading must reach down past the arc's true radius.
 func TestRevolveMinRadiusAggregatesLosingCandidate(t *testing.T) {
+	t.Parallel()
 	s, prof := rivalRadiusMeridian(t)
 	doc := decad.New()
 	_, err := doc.Revolve(s, prof, uAxis, decad.FullRevolution{})
@@ -1549,6 +1592,7 @@ func TestRevolveMinRadiusAggregatesLosingCandidate(t *testing.T) {
 // parallel-circle candidates, both read off recorded coordinates through an
 // exact unit tangent, so the aggregate publishes the tighter one Exact.
 func TestRevolveMinRadiusExactCandidatesStayExact(t *testing.T) {
+	t.Parallel()
 	s, p := polygonSketch(t, [][2]float64{{0, 5}, {10, 5}, {10, 8}, {20, 8}, {20, 20}, {0, 20}})
 	doc := decad.New()
 	_, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
@@ -1579,6 +1623,7 @@ func TestRevolveMinRadiusExactCandidatesStayExact(t *testing.T) {
 // own recorded coordinate. Keeping the winner alone publishes [2.54, 2.54]
 // with the true minimum outside it.
 func TestWallHeightArmAggregatesAgainstTheSectionSpan(t *testing.T) {
+	t.Parallel()
 	ws := sketch.NewWorld()
 	s, err := ws.CreateSketch(ws.XY())
 	require.NoError(t, err)

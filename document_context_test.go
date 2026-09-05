@@ -185,6 +185,7 @@ func TestPlacementContextChecksCancellationBeforeCommit(t *testing.T) {
 }
 
 func TestPlacementContextCancelsAnalyticRebuilds(t *testing.T) {
+	t.Parallel()
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
 
@@ -247,6 +248,7 @@ func TestPlacementContextCancelsAnalyticRebuilds(t *testing.T) {
 }
 
 func TestPlacementContextCancelsAnalyticAssembly(t *testing.T) {
+	t.Parallel()
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
 
@@ -312,6 +314,7 @@ func TestPlacementContextCancelsAnalyticAssembly(t *testing.T) {
 }
 
 func TestPlacementContextCancelsAnalyticProvenanceAssembly(t *testing.T) {
+	t.Parallel()
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
 
@@ -370,6 +373,7 @@ func TestPlacementContextCancelsAnalyticProvenanceAssembly(t *testing.T) {
 }
 
 func TestPlacementContextCancelsFullRevolveShellAssembly(t *testing.T) {
+	t.Parallel()
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
 	s, p := solidSketch(t)
@@ -397,6 +401,7 @@ func TestPlacementContextCancelsFullRevolveShellAssembly(t *testing.T) {
 }
 
 func TestPlacementContextCancelsAnalyticMetadataRewriting(t *testing.T) {
+	t.Parallel()
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
 
@@ -450,6 +455,7 @@ func TestPlacementContextCancelsAnalyticMetadataRewriting(t *testing.T) {
 }
 
 func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
+	t.Parallel()
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
 
@@ -564,6 +570,7 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 }
 
 func TestPlacementContextVariantsMatchCompatibilityWrappers(t *testing.T) {
+	t.Parallel()
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
 
@@ -642,6 +649,7 @@ func countRolePrefix(b *decad.Body, prefix string) int {
 }
 
 func TestDuplicate(t *testing.T) {
+	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -689,6 +697,7 @@ func TestDuplicate(t *testing.T) {
 }
 
 func TestPlacedCopy(t *testing.T) {
+	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -742,6 +751,7 @@ func TestPlacedCopy(t *testing.T) {
 }
 
 func TestPlacedCopyZeroTransformRejected(t *testing.T) {
+	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -763,6 +773,7 @@ func TestPlacedCopyZeroTransformRejected(t *testing.T) {
 }
 
 func TestDuplicatePreservesFilletRoles(t *testing.T) {
+	t.Parallel()
 	// A filleted prism's blend-role provenance is part of its re-evaluable
 	// record, so a Duplicate re-mints its own fillet(i,j) roles: the copy has
 	// the SAME count of fillet-role faces as the source (modify §9).
@@ -805,6 +816,7 @@ func TestDuplicatePreservesFilletRoles(t *testing.T) {
 }
 
 func TestPlacedCopyPreservesFilletRoles(t *testing.T) {
+	t.Parallel()
 	// The same guarantee under a non-identity placement: PlacedCopy re-evaluates
 	// the payload under the composed motion and re-mints the fillet roles.
 	_, box := filletBox(t)
@@ -823,6 +835,7 @@ func TestPlacedCopyPreservesFilletRoles(t *testing.T) {
 }
 
 func TestPlacedCopyPreservesChamferRoles(t *testing.T) {
+	t.Parallel()
 	// Chamfer shares the blend-descriptor machinery, so a copy re-mints its
 	// chamfer(i,j) roles the same way a fillet's are re-minted.
 	_, box := filletBox(t)
@@ -845,6 +858,7 @@ func TestPlacedCopyPreservesChamferRoles(t *testing.T) {
 }
 
 func TestDuplicatePlainExtrudeHasNoBlendRoles(t *testing.T) {
+	t.Parallel()
 	// A plain extrude carries no blend descriptors, so its copy gains no spurious
 	// fillet/chamfer roles — the empty descriptor path is a no-op.
 	s, p := plateSketch(t)

@@ -28,6 +28,7 @@ func denseSplineLength(t *testing.T, coords [][2]float64) float64 {
 }
 
 func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
+	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
 	coords := make([][2]float64, len(control))
 	for i, point := range control {
@@ -161,6 +162,7 @@ func denseBezierLength(control []Point2, samples int) float64 {
 }
 
 func TestFreeformArcLengthReportsPositiveBound(t *testing.T) {
+	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
 	spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeformWork{})
 	require.NoError(t, err)
@@ -180,6 +182,7 @@ func TestFreeformArcLengthReportsPositiveBound(t *testing.T) {
 // the same sentinel the moments path already gives the identical record, so the
 // two paths agree on what the record is.
 func TestFreeformCoincidentControlNetRefused(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		control []Point2
@@ -214,6 +217,7 @@ func TestFreeformCoincidentControlNetRefused(t *testing.T) {
 // of the unit-diagonal chord is irrational, so the lower bound must sit at or
 // below it and the upper at or above.
 func TestDirectedSqrtBracketsIrrationalLength(t *testing.T) {
+	t.Parallel()
 	a := ratPoint{u: mustRatOf(0), v: mustRatOf(0)}
 	b := ratPoint{u: mustRatOf(1), v: mustRatOf(1)}
 	squared := ratSquaredDistance(a, b)
@@ -233,6 +237,7 @@ func TestDirectedSqrtBracketsIrrationalLength(t *testing.T) {
 // the eight-step adjustment walk and the bound escapes to its outward extreme.
 // Both ends of the range must bracket, and both bounds must be finite.
 func TestDirectedSqrtBracketsAtExtremeScale(t *testing.T) {
+	t.Parallel()
 	for _, leg := range []float64{
 		math.SmallestNonzeroFloat64, // the exact bottom of the range
 		1e-320,                      // subnormal leg, subnormal square
@@ -336,6 +341,7 @@ func TestFreeformArcLengthNearDuplicateControlPair(t *testing.T) {
 // length — never ErrNotFinite, which would assert something false about an
 // input whose every coordinate is finite.
 func TestFreeformArcLengthAboveFloat64RangeRefused(t *testing.T) {
+	t.Parallel()
 	const m = math.MaxFloat64
 	seg := SplineSeg{
 		Control: []Point2{{U: -m, V: -m}, {U: -m, V: m}, {U: m, V: -m}, {U: m, V: m}},
@@ -361,6 +367,7 @@ func TestFreeformArcLengthAboveFloat64RangeRefused(t *testing.T) {
 // so its refusal covers the wall survey, the section audit and the clearance
 // trims at once.
 func TestFreeformWalkRefusedByAnalyticConsumers(t *testing.T) {
+	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
 	walk, err := walkOf(SplineSeg{Control: control, TStart: 0, TEnd: 1}, newFreeformWork())
 	require.NoError(t, err, "a Tier A segment resolves into a walk")
@@ -380,6 +387,7 @@ func TestFreeformWalkRefusedByAnalyticConsumers(t *testing.T) {
 // subdivision depth: one split blends every de Casteljau pair, so a charge that
 // counts leaves alone admits a span whose splits run for hours.
 func TestFreeformBracketCostGrowsWithDegree(t *testing.T) {
+	t.Parallel()
 	require.Less(t, freeformBracketCost(4), freeformWorkLimit, "a cubic span's bracket is affordable")
 	require.Greater(t, freeformBracketCost(8), 3*freeformBracketCost(4),
 		"doubling the degree more than triples the charge")
@@ -395,6 +403,7 @@ func TestFreeformBracketCostGrowsWithDegree(t *testing.T) {
 // first split — and public Extrude reaches this through walkOf, so the walk
 // must refuse it too rather than run the bracket at all.
 func TestWideSpanBracketRefusesBeforeSubdividing(t *testing.T) {
+	t.Parallel()
 	const degree = 1024
 	seg := oneSpanNURBS(degree)
 	require.NoError(t, validateNURBSSegment(seg), "the record itself is well formed")
@@ -457,6 +466,10 @@ func equalWeightNURBS(control []Point2) NURBSSeg {
 // The assertion MEASURES the second phase, because a second counter is invisible
 // to any unit count: both counters read well under the limit, and only the cost
 // tells them apart.
+//
+// This test stays SERIAL: it measures process-wide allocation, which any
+// test running alongside it would inflate. Adding t.Parallel here makes its
+// reading meaningless rather than making it fail loudly.
 func TestWalkSpendsTheRecordsRemainingCeiling(t *testing.T) {
 	seg := ringSplineSeg(120)
 	record := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{seg}}}
@@ -490,6 +503,7 @@ func TestWalkSpendsTheRecordsRemainingCeiling(t *testing.T) {
 // they were handed. A per-call counter spends the same units twice from zero,
 // which is exactly what leaves the ceiling unable to bound a whole record.
 func TestWalkChargesTheCounterItIsGiven(t *testing.T) {
+	t.Parallel()
 	seg := SplineSeg{
 		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}},
 		TStart:  0,
@@ -511,6 +525,7 @@ func TestWalkChargesTheCounterItIsGiven(t *testing.T) {
 // A free-form resolution handed no counter has no ceiling at all, so it refuses
 // rather than quietly open one — the silent mint is the defect this rule closes.
 func TestFreeformWalkWithoutCounterRefuses(t *testing.T) {
+	t.Parallel()
 	seg := SplineSeg{
 		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}},
 		TStart:  0,
@@ -543,6 +558,7 @@ func TestFreeformWalkWithoutCounterRefuses(t *testing.T) {
 // knot difference. Their odd denominators are the span's own, and the invariant
 // is that subdividing never adds to them.
 func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		seg  CurveSegment

@@ -21,6 +21,7 @@ func ratNear(t *testing.T, want float64, got *big.Rat) {
 }
 
 func TestAbsLinearIntegralMatchesTheClosedForm(t *testing.T) {
+	t.Parallel()
 	r := func(v float64) *big.Rat { return big.NewRat(0, 1).SetFloat64(v) }
 
 	t.Run("sign-fixed integrand", func(t *testing.T) {
@@ -72,6 +73,7 @@ func TestAbsLinearIntegralMatchesTheClosedForm(t *testing.T) {
 }
 
 func TestRevolveCellAreaSlackBracketsTheTrueJacobianGap(t *testing.T) {
+	t.Parallel()
 	// A cylinder cell: ρ constant at 4, the meridian chord 3 long, one angular
 	// interval of dφ = 2π/16. The true density is L·dφ·ρ throughout, and the
 	// held quad is a planar rectangle whose two halves each have twice-area
@@ -94,6 +96,7 @@ func TestRevolveCellAreaSlackBracketsTheTrueJacobianGap(t *testing.T) {
 }
 
 func TestRevolveFanAreaSlackIsHalfTheDensityGap(t *testing.T) {
+	t.Parallel()
 	// A pole fan: Jtrue = L·dφ·ρ·t and Jheld = 2A·t, so ∫₀¹|c·t| dt = |c|/2 and
 	// the pole's own end of the cell makes no difference to the magnitude.
 	const rho, meridianLen, n = 5.0, 2.0, 12
@@ -110,6 +113,7 @@ func TestRevolveFanAreaSlackIsHalfTheDensityGap(t *testing.T) {
 }
 
 func TestRevolveAngularSequenceEnclosesItsOwnStoredTrig(t *testing.T) {
+	t.Parallel()
 	t.Run("a full turn from zero uses exact rational turns", func(t *testing.T) {
 		seq, err := revolveAngularSequence(0, 2*math.Pi, true, 12)
 		require.NoError(t, err)
@@ -141,6 +145,7 @@ func TestRevolveAngularSequenceEnclosesItsOwnStoredTrig(t *testing.T) {
 }
 
 func TestRevolveBudgetReservesBothCoordinateStages(t *testing.T) {
+	t.Parallel()
 	available, err := revolveBudget(0.1, 1e-9, 2e-9)
 	require.NoError(t, err)
 	require.Less(t, available, 0.1)
@@ -153,6 +158,7 @@ func TestRevolveBudgetReservesBothCoordinateStages(t *testing.T) {
 }
 
 func TestExactRigidPointRoundIsZeroOnlyForAnExactPlacement(t *testing.T) {
+	t.Parallel()
 	p := r3.Vec{X: 3.25, Y: -1.5, Z: 7}
 	identity := r3.Identity()
 	require.Equal(t, 0.0, exactRigidPointRound(identity, p, identity.Apply(p)))
@@ -169,6 +175,7 @@ func TestExactRigidPointRoundIsZeroOnlyForAnExactPlacement(t *testing.T) {
 }
 
 func TestRevolveIdealPointMeasuresTheConstructionRounding(t *testing.T) {
+	t.Parallel()
 	// An axis-aligned basis with a power-of-two radius rounds nowhere, so the
 	// stored point equals the ideal one exactly.
 	b := revolveBasis3Iv{
@@ -194,6 +201,7 @@ func TestRevolveIdealPointMeasuresTheConstructionRounding(t *testing.T) {
 }
 
 func TestRequireVertexLinksRejectsAPinchedVertex(t *testing.T) {
+	t.Parallel()
 	// Two tetrahedral cones meeting at one apex: every directed edge is matched,
 	// yet the apex's link is two cycles rather than one.
 	verts := []r3.Vec{
@@ -217,6 +225,7 @@ func TestRequireVertexLinksRejectsAPinchedVertex(t *testing.T) {
 }
 
 func TestRevolveContactAuditRefusesACrossingPair(t *testing.T) {
+	t.Parallel()
 	budget := newWorkBudget(t.Context())
 	// Two triangles sharing nothing and crossing each other: no separating axis
 	// exists, so the audit refuses rather than admitting the pair.
@@ -237,6 +246,7 @@ func TestRevolveContactAuditRefusesACrossingPair(t *testing.T) {
 }
 
 func TestRevolveContactAuditRefusesAFacetThinnerThanItsOwnDisplacement(t *testing.T) {
+	t.Parallel()
 	verts := []r3.Vec{{X: 0}, {X: 1}, {X: 0.5, Y: 1e-12}}
 	tris := [][3]int{{0, 1, 2}}
 	require.NoError(t, revolveContactAudit(newWorkBudget(t.Context()), verts, tris, 0))
@@ -246,6 +256,7 @@ func TestRevolveContactAuditRefusesAFacetThinnerThanItsOwnDisplacement(t *testin
 }
 
 func TestRevolveCoordMaxCoversEveryIdealCoordinate(t *testing.T) {
+	t.Parallel()
 	b := revolveBasis{
 		a3: r3.Vec{X: 100, Y: -50, Z: 0},
 		w:  r3.Vec{X: 1},
@@ -272,6 +283,7 @@ func mustIvVec(v r3.Vec) ivVec3 {
 }
 
 func TestRevolveMeshAreaSlackCoversTheHeldAreaGap(t *testing.T) {
+	t.Parallel()
 	// docs/tessellation-design.md §14's "check areaSlack against high-precision
 	// local area differences": the published slack must cover the gap between
 	// the body's own analytic area and the area its facets actually hold.
@@ -339,6 +351,7 @@ func TestRevolveMeshAreaSlackCoversTheHeldAreaGap(t *testing.T) {
 }
 
 func TestRevolvePreflightFacetsChargesTheCeilingBeforeAllocating(t *testing.T) {
+	t.Parallel()
 	// One loop, four meridian samples, three of its four generators sweeping a
 	// wall: 6·n wall facets plus the two caps' four. Both §3 ceilings are
 	// charged here, before a single vertex is built.
@@ -374,6 +387,7 @@ func TestRevolvePreflightFacetsChargesTheCeilingBeforeAllocating(t *testing.T) {
 }
 
 func TestCheckedIntegerArithmeticRefusesOverflow(t *testing.T) {
+	t.Parallel()
 	sum, ok := addChecked(math.MaxUint64, 1)
 	require.False(t, ok)
 	require.Equal(t, uint64(0), sum)
@@ -392,6 +406,7 @@ func TestCheckedIntegerArithmeticRefusesOverflow(t *testing.T) {
 }
 
 func TestRevolveMeshCarriesItsOccupiedVolumeProof(t *testing.T) {
+	t.Parallel()
 	// docs/tessellation-design.md §11: a revolve mesh publishes the
 	// occupied-volume bound the mesh boolean reads, and both gates that once
 	// stood in its way now let it through — the payload-class pre-check and
@@ -448,6 +463,7 @@ func TestRevolveMeshCarriesItsOccupiedVolumeProof(t *testing.T) {
 // at +38.4 and −31.7, four hundred million times its own perturbation
 // allowance.
 func TestRevolveVertexIsolatedDecidesACapFanAgainstTheNextChordWall(t *testing.T) {
+	t.Parallel()
 	verts := make([]r3.Vec, 50)
 	verts[35] = r3.Vec{X: -22.861137887942604, Y: 3.1848000973097195, Z: -11.332206870439578}
 	verts[42] = r3.Vec{X: -21.72779063345132, Y: 2.943952572193523, Z: -10.587186732066304}

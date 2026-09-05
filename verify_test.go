@@ -23,6 +23,7 @@ func extrudePlate(t *testing.T) (*decad.Document, *decad.Body) {
 }
 
 func TestReportZeroValueIsUnverified(t *testing.T) {
+	t.Parallel()
 	var report decad.Report
 	require.Equal(t, decad.Unverified, report.Status)
 	require.Equal(t, "Unverified", report.Status.String())
@@ -33,6 +34,7 @@ func TestReportZeroValueIsUnverified(t *testing.T) {
 }
 
 func TestVerifySoundPlate(t *testing.T) {
+	t.Parallel()
 	doc, body := extrudePlate(t)
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
@@ -71,6 +73,7 @@ func TestVerifySoundPlate(t *testing.T) {
 }
 
 func TestVerifyEmptyDocument(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
@@ -81,6 +84,7 @@ func TestVerifyEmptyDocument(t *testing.T) {
 }
 
 func TestVerifyDisjointPairIsSound(t *testing.T) {
+	t.Parallel()
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
@@ -101,6 +105,7 @@ func TestVerifyDisjointPairIsSound(t *testing.T) {
 }
 
 func TestVerifyTouchingBoxesAreDisjoint(t *testing.T) {
+	t.Parallel()
 	// Boxes sharing only a face have disjoint interiors, and a body's
 	// interior lies within its box's interior: proven disjoint.
 	doc, body := extrudePlate(t)
@@ -119,6 +124,7 @@ func TestVerifyTouchingBoxesAreDisjoint(t *testing.T) {
 }
 
 func TestVerifyCoincidentPairIsInterfering(t *testing.T) {
+	t.Parallel()
 	doc, _ := extrudePlate(t)
 	s, p := plateSketch(t)
 	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -139,6 +145,7 @@ func TestVerifyCoincidentPairIsInterfering(t *testing.T) {
 }
 
 func TestVerifyAskedSurveysAreAnswered(t *testing.T) {
+	t.Parallel()
 	// The analytic surveys answer each asked question outright on this
 	// evaluator's bodies: the plate's wall is its 10 mm slab, no face
 	// opposes a +z pull, and no concave feature exists — every answer
@@ -189,6 +196,7 @@ func TestVerifyAskedSurveysAreAnswered(t *testing.T) {
 }
 
 func TestVerifyClearancesMeasureBoxProvenPair(t *testing.T) {
+	t.Parallel()
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
@@ -213,6 +221,7 @@ func TestVerifyClearancesMeasureBoxProvenPair(t *testing.T) {
 }
 
 func TestVerifyClearancesAskedWithNoPairIsSound(t *testing.T) {
+	t.Parallel()
 	// One body poses no pair, so the asked clearance list is answered in
 	// full by the empty list.
 	doc, _ := extrudePlate(t)
@@ -224,6 +233,7 @@ func TestVerifyClearancesAskedWithNoPairIsSound(t *testing.T) {
 }
 
 func TestVerifyOptionValidation(t *testing.T) {
+	t.Parallel()
 	doc, _ := extrudePlate(t)
 	testcases := []struct {
 		Name   string
@@ -254,6 +264,7 @@ func TestVerifyOptionValidation(t *testing.T) {
 }
 
 func TestVerifyZeroAllowanceIsLegal(t *testing.T) {
+	t.Parallel()
 	// A zero allowance is the strictest legal reading (verification §2):
 	// exact opposition only — which the plate's parallel skins are, so the
 	// 10 mm reading still stands and meets the 1 mm tool.
@@ -267,6 +278,7 @@ func TestVerifyZeroAllowanceIsLegal(t *testing.T) {
 }
 
 func TestVerifyIsNonMutating(t *testing.T) {
+	t.Parallel()
 	doc, _ := extrudePlate(t)
 	before := doc.Recipe()
 	_, err := doc.Verify(t.Context(), decad.WithMinRadius(), decad.WithClearances())
@@ -276,6 +288,7 @@ func TestVerifyIsNonMutating(t *testing.T) {
 }
 
 func TestVerifyCoversLiveBodiesOnly(t *testing.T) {
+	t.Parallel()
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
@@ -291,6 +304,7 @@ func TestVerifyCoversLiveBodiesOnly(t *testing.T) {
 }
 
 func TestVerifyContextCancellation(t *testing.T) {
+	t.Parallel()
 	doc, _ := extrudePlate(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -300,6 +314,7 @@ func TestVerifyContextCancellation(t *testing.T) {
 }
 
 func TestVerifyContextCancellationOnEmptyDocument(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -313,12 +328,14 @@ func TestVerifyContextCancellationOnEmptyDocument(t *testing.T) {
 }
 
 func TestVerifyNilDocument(t *testing.T) {
+	t.Parallel()
 	var doc *decad.Document
 	_, err := doc.Verify(t.Context())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
 
 func TestVerifyPlateWithHole(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -349,6 +366,7 @@ func TestVerifyPlateWithHole(t *testing.T) {
 }
 
 func TestStatusString(t *testing.T) {
+	t.Parallel()
 	require.Equal(t, "Sound", decad.Sound.String())
 	require.Equal(t, "Suspect", decad.Suspect.String())
 	require.Equal(t, "Violating", decad.Violating.String())
@@ -425,6 +443,7 @@ func requireDiagnosticInvariants(t *testing.T, report *decad.Report) {
 }
 
 func TestDiagnosticReadingKindTokens(t *testing.T) {
+	t.Parallel()
 	// The pinned lower-snake tokens (verification §1.1) — the identity a caller
 	// branches on, never the iota value.
 	require.Equal(t, "none", decad.ReadingNone.String())
@@ -441,6 +460,7 @@ func TestDiagnosticReadingKindTokens(t *testing.T) {
 }
 
 func TestDiagnosticCodeTokens(t *testing.T) {
+	t.Parallel()
 	require.Equal(t, "measurement_beyond_tolerance", decad.DiagMeasurementBeyondTolerance.String())
 	require.Equal(t, "undecided_validity", decad.DiagUndecidedValidity.String())
 	require.Equal(t, "invalid_body", decad.DiagInvalidBody.String())
@@ -463,6 +483,7 @@ func TestDiagnosticCodeTokens(t *testing.T) {
 }
 
 func TestVerifyDiagnosticsEmptyWhenSound(t *testing.T) {
+	t.Parallel()
 	doc, _ := extrudePlate(t)
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
@@ -483,6 +504,7 @@ func findDiagnostic(diags []decad.Diagnostic, code decad.DiagnosticCode) (decad.
 }
 
 func TestVerifyDiagnosticsWallTooThin(t *testing.T) {
+	t.Parallel()
 	// The 10×10×0.5 mm plate against a 1 mm tool: a proven-thin wall.
 	doc := rectPrism(t, 10, 10, 0.5)
 	tool := units.Millimeters(1)
@@ -505,6 +527,7 @@ func TestVerifyDiagnosticsWallTooThin(t *testing.T) {
 }
 
 func TestVerifyDiagnosticsUndercut(t *testing.T) {
+	t.Parallel()
 	// A prism under a tilted pull: two proven undercut faces, one DiagUndercut.
 	doc := rectPrism(t, 100, 60, 10)
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(1, 0, 1)))
@@ -522,6 +545,7 @@ func TestVerifyDiagnosticsUndercut(t *testing.T) {
 }
 
 func TestVerifyDiagnosticsUnsupportedFacetedSurveys(t *testing.T) {
+	t.Parallel()
 	doc, body := allPlanarBoolean(t, 1)
 	report, err := doc.Verify(t.Context(),
 		decad.WithMinWallThickness(units.Millimeters(1)),
@@ -546,6 +570,7 @@ func TestVerifyDiagnosticsUnsupportedFacetedSurveys(t *testing.T) {
 }
 
 func TestVerifyDiagnosticsInterference(t *testing.T) {
+	t.Parallel()
 	// Two coincident analytic plates overlap by an exact set-identity volume.
 	doc, _ := extrudePlate(t)
 	s, p := plateSketch(t)
@@ -570,6 +595,7 @@ func TestVerifyDiagnosticsInterference(t *testing.T) {
 }
 
 func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
+	t.Parallel()
 	// Two 10×10×10 boxes, the second translated to (0,5,5): they overlap with
 	// positive volume while sharing coplanar side faces. The read-only intersect
 	// stages the face-on-face contact (booleanExpectedContact). Per verification
@@ -637,6 +663,7 @@ func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
 // it resolves analytically, so neither contact diagnostic fires and the
 // report reads Interfering with a DiagInterference row instead.
 func TestVerifyDiagnosticsAdmittedCoplanarPrismPairHasNoContactDiagnostic(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	boxBody(t, doc, 0, 0, 20, 20, 10)
 	boxBody(t, doc, 5, 5, 9, 10, 15)
@@ -661,6 +688,7 @@ func TestVerifyDiagnosticsAdmittedCoplanarPrismPairHasNoContactDiagnostic(t *tes
 }
 
 func TestVerifyDiagnosticsProximityRefusalIsContact(t *testing.T) {
+	t.Parallel()
 	// The cylinder's analytic surface overlaps the plate's x = 20 face by only
 	// 0.0005 mm. The pre-tessellation proximity gate refuses the undecidable
 	// chord result, so Verify must retain the contact cause for its diagnostic.
@@ -692,6 +720,7 @@ func TestVerifyDiagnosticsProximityRefusalIsContact(t *testing.T) {
 }
 
 func TestVerifyDiagnosticsBeyondTolerance(t *testing.T) {
+	t.Parallel()
 	// A faceted union carries an Approximate reading; a tolerance just below the
 	// proven boundary pushes its bound past the gate.
 	doc, body := allPlanarBoolean(t, 0.3)
@@ -716,6 +745,7 @@ func TestVerifyDiagnosticsBeyondTolerance(t *testing.T) {
 }
 
 func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
+	t.Parallel()
 	// Two box-disjoint cups: the box test proves the pair apart, but the
 	// clearance kernel stages the cup payload, so the requested gap is
 	// unmeasured — DiagUndecidedClearance, never an unsupported-pair code.
@@ -771,6 +801,7 @@ func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 // twice the section displacement, which is the direction §3 requires:
 // understating tightens the gate, overstating loosens it.
 func TestVerifyDiagnosticsSectionDeltaPrismReadsItsOwnGateDiameter(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	const shift = 1e3
@@ -836,6 +867,7 @@ func allPlanarBoolean(t *testing.T, scale float64) (*decad.Document, *decad.Body
 }
 
 func TestVerifyAllPlanarBooleanGatesApproximateArea(t *testing.T) {
+	t.Parallel()
 	doc, body := allPlanarBoolean(t, 1)
 
 	volume, err := body.Volume()
@@ -859,6 +891,7 @@ func TestVerifyAllPlanarBooleanGatesApproximateArea(t *testing.T) {
 }
 
 func TestVerifyToleranceBoundaryIsInclusive(t *testing.T) {
+	t.Parallel()
 	doc, body := allPlanarBoolean(t, 0.3)
 	required := requiredBodyTolerance(t, body)
 	require.Positive(t, required)
@@ -876,6 +909,7 @@ func TestVerifyToleranceBoundaryIsInclusive(t *testing.T) {
 }
 
 func TestVerifyToleranceGateTracksScaleAndPlacement(t *testing.T) {
+	t.Parallel()
 	for _, scale := range []float64{1, 1000} {
 		t.Run(units.Scalar(scale).String(), func(t *testing.T) {
 			doc, body := allPlanarBoolean(t, scale)
@@ -900,6 +934,7 @@ func TestVerifyToleranceGateTracksScaleAndPlacement(t *testing.T) {
 }
 
 func TestVerifyExactBodyPassesZeroTolerance(t *testing.T) {
+	t.Parallel()
 	doc, _ := extrudePlate(t)
 	report, err := doc.Verify(t.Context(), decad.WithTolerance(units.Scalar(0)))
 	require.NoError(t, err)
@@ -1014,6 +1049,7 @@ func requireComputedToFaceDiameterThresholds(t *testing.T, doc *decad.Document, 
 }
 
 func TestVerifyComputedToFaceDiameterThreshold(t *testing.T) {
+	t.Parallel()
 	t.Run("prism", func(t *testing.T) {
 		doc, pin, heldDiameter := computedToFacePin(t)
 		requireComputedToFaceDiameterThresholds(t, doc, pin, heldDiameter)
@@ -1041,6 +1077,7 @@ func TestVerifyComputedToFaceDiameterThreshold(t *testing.T) {
 // figure sat. A cup whose readings are genuinely within tolerance must
 // verify Sound.
 func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
+	t.Parallel()
 	doc, box := shellBox(t)
 	cup, err := box.Shell(topCap(box), units.Millimeters(5))
 	require.NoError(t, err)
@@ -1079,6 +1116,7 @@ func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 // all-Plane band's centroid is exact rational end to end here — so all three
 // readings now pass and the body reads Sound.
 func TestVerifyCapBlendChamferAreaVolumeCentroidAllPass(t *testing.T) {
+	t.Parallel()
 	doc, box := capBlendBox(t)
 	_, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)

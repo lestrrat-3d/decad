@@ -46,6 +46,7 @@ func chamferedPlate(t *testing.T) *decad.Body {
 // so every face's published displacement is zero — the one configuration
 // docs/tessellation-design.md §2 lets a mesh claim exactness in.
 func TestTessellateCapBlendPlateIsExact(t *testing.T) {
+	t.Parallel()
 	const d = chamferedPlateSetback
 	chamfered := chamferedPlate(t)
 	mesh, err := chamfered.Tessellate(units.Millimeters(1))
@@ -69,6 +70,7 @@ func TestTessellateCapBlendPlateIsExact(t *testing.T) {
 // over the new payload class: repeated STL and OBJ output is byte identical
 // (docs/tessellation-design.md §14).
 func TestTessellateCapBlendPlateExportsDeterministically(t *testing.T) {
+	t.Parallel()
 	chamfered := chamferedPlate(t)
 	var stlA, stlB, objA, objB strings.Builder
 	require.NoError(t, chamfered.STL(&stlA))
@@ -86,6 +88,7 @@ func TestTessellateCapBlendPlateExportsDeterministically(t *testing.T) {
 // SAME window. Its cells are therefore planar quads, and the true frustum
 // between the two circles must lie within the published Bound of the mesh.
 func TestTessellateCapBlendDiskFrustum(t *testing.T) {
+	t.Parallel()
 	const (
 		r   = 10.0
 		h   = 20.0
@@ -149,6 +152,7 @@ func TestTessellateCapBlendDiskFrustum(t *testing.T) {
 // whose sagitta decides the shared count, and the true widened frustum must
 // still lie within the published Bound.
 func TestTessellateCapBlendHoleWidensWithTheSetback(t *testing.T) {
+	t.Parallel()
 	const (
 		r   = 10.0
 		h   = 8.0
@@ -186,6 +190,7 @@ func TestTessellateCapBlendHoleWidensWithTheSetback(t *testing.T) {
 // facets, and the published bound must exceed the pure chording a coincident
 // window would have cost.
 func TestTessellateCapBlendRoundedRectMiters(t *testing.T) {
+	t.Parallel()
 	const (
 		rho = 6.0
 		d   = 2.0
@@ -240,6 +245,7 @@ func chordSagittaOfRoundedCorner(radius, tol float64) float64 {
 // original corner point. Its facets must fan from ONE interned vertex, and the
 // mesh's own vertex links must stay single cycles there.
 func TestTessellateCapBlendReflexApexFan(t *testing.T) {
+	t.Parallel()
 	const d = 3.0
 	body := reflexLBody(t)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
@@ -277,6 +283,7 @@ func TestTessellateCapBlendReflexApexFan(t *testing.T) {
 // non-identity motion. Every coordinate is then computed, so the published
 // bound must be positive and the mesh must still close.
 func TestTessellateCapBlendPlacedStaysWatertight(t *testing.T) {
+	t.Parallel()
 	chamfered := chamferedPlate(t)
 	rot, err := r3.Rotation(r3.Vec{X: 1, Y: 2, Z: 3}, units.Radians(0.7))
 	require.NoError(t, err)
@@ -294,6 +301,7 @@ func TestTessellateCapBlendPlacedStaysWatertight(t *testing.T) {
 // it and the body it stands for differ by has been built
 // (docs/tessellation-reach-design.md §7, §9).
 func TestCapBlendMeshIsExportOnly(t *testing.T) {
+	t.Parallel()
 	chamfered := chamferedPlate(t)
 	mesh, err := chamfered.Tessellate(units.Millimeters(1))
 	require.NoError(t, err)
@@ -321,6 +329,7 @@ func TestCapBlendMeshIsExportOnly(t *testing.T) {
 // TestCapBlendOverlapReadsSuspect pins the Verify half of the same boundary: a
 // pair whose overlap cannot be measured is undecided, never silently sound.
 func TestCapBlendOverlapReadsSuspect(t *testing.T) {
+	t.Parallel()
 	_, box := capBlendBox(t)
 	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)

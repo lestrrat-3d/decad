@@ -38,6 +38,7 @@ func displacedUnionBody(t *testing.T, shift float64) *Body {
 // chording itself takes no sagitta at all and every millimetre of bound and
 // every square millimetre of slack the mesh reports is the displacement's own.
 func TestTessellateChargesSectionDisplacementToEveryProof(t *testing.T) {
+	t.Parallel()
 	got := displacedUnionBody(t, 1e14)
 	pp, ok := got.payload.(prismPayload)
 	require.True(t, ok, `the analytic reduction must own this pair`)
@@ -69,6 +70,7 @@ func TestTessellateChargesSectionDisplacementToEveryProof(t *testing.T) {
 }
 
 func TestRequireLoopClearanceOffersValidRetry(t *testing.T) {
+	t.Parallel()
 	pts := []Point2{
 		{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}, {U: 0, V: 1},
 		{U: 1.25, V: 0}, {U: 2.25, V: 0}, {U: 2.25, V: 1}, {U: 1.25, V: 1},
@@ -88,6 +90,7 @@ func TestRequireLoopClearanceOffersValidRetry(t *testing.T) {
 }
 
 func TestRequireLoopClearanceOmitsInvalidRetry(t *testing.T) {
+	t.Parallel()
 	pts := []Point2{
 		{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}, {U: 0, V: 1},
 		{U: 1, V: 0}, {U: 2, V: 0}, {U: 2, V: 1}, {U: 1, V: 1},
@@ -108,6 +111,7 @@ func TestRequireLoopClearanceOmitsInvalidRetry(t *testing.T) {
 }
 
 func TestTessellateContextReachesCapTriangulationCancellation(t *testing.T) {
+	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -177,6 +181,7 @@ func bigSagittaReference(radius, sweep float64, n int, prec uint) *big.Float {
 // off-the-grid row (radius=15.42, sweep=4.1657, n=57) whose radius, sweep
 // and count share no factor with the round table below it.
 func TestChordSagittaNeverUnderstatesTheHighPrecisionReference(t *testing.T) {
+	t.Parallel()
 	const prec = 300
 	type row struct {
 		radius, sweep float64
@@ -224,6 +229,7 @@ func TestChordSagittaNeverUnderstatesTheHighPrecisionReference(t *testing.T) {
 // docs/tessellation-design.md Sec 3, [Body.Tessellate] and chordSagitta
 // itself state for this worst case.
 func TestChordSagittaCoarsestClosedWalkStaysProven(t *testing.T) {
+	t.Parallel()
 	const prec = 300
 	const radius, sweep, n = 7.0, 2 * math.Pi, 3
 
@@ -254,6 +260,7 @@ func TestChordSagittaCoarsestClosedWalkStaysProven(t *testing.T) {
 // ErrUnsupported. The refusal is the whole point: the alternative is a mesh
 // whose published bound is not one this package can prove.
 func TestChordCountRefusesTheToleranceWindowAtTheMeshCap(t *testing.T) {
+	t.Parallel()
 	const prec = 300
 	const sweep = 2 * math.Pi
 
@@ -305,6 +312,7 @@ func TestChordCountRefusesTheToleranceWindowAtTheMeshCap(t *testing.T) {
 // there, so 0 remains a genuine (if unattained) upper bound and needs no
 // refusal.
 func TestChordSagittaRefusesRatherThanUnderstatesOnBrokenClaims(t *testing.T) {
+	t.Parallel()
 	require.True(t, math.IsInf(chordSagitta(5, -1, 8), 1), "negative sweep must refuse, not understate")
 	require.True(t, math.IsInf(chordSagitta(5, 1, -3), 1), "non-positive n must refuse, not understate")
 	require.True(t, math.IsInf(chordSagitta(5, 1, 0), 1), "n=0 must refuse, not understate")
@@ -320,6 +328,7 @@ func TestChordSagittaRefusesRatherThanUnderstatesOnBrokenClaims(t *testing.T) {
 // deviation it claims to dominate — chordCount hands it on as the walk's
 // proven sagitta, Mesh.Bound publishes it, and the walk-up loop exits on it.
 func TestChordSagittaNeverUnderflowsToZero(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct {
 		name          string
 		radius, sweep float64

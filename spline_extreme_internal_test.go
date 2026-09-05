@@ -69,6 +69,7 @@ func identityFrame(t *testing.T) r3.Frame {
 // would report — an endpoint-only reading understates the Box, the unsound
 // direction §6.2 names.
 func TestBoundaryExtremesBoundedInteriorMaximumBeatsEndpointOnly(t *testing.T) {
+	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 3}, {U: 3, V: 1}, {U: 4, V: 0}}
 	profile := splineProfile(control)
 
@@ -94,6 +95,7 @@ func TestBoundaryExtremesBoundedInteriorMaximumBeatsEndpointOnly(t *testing.T) {
 // positive, so U is monotone and P' has no root in [0, 1] at all — the
 // candidate set is the two exact endpoints and nothing else.
 func TestBoundaryExtremesBoundedEndpointExtremeIsExact(t *testing.T) {
+	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 3}, {U: 3, V: 1}, {U: 4, V: 0}}
 	profile := splineProfile(control)
 
@@ -109,6 +111,7 @@ func TestBoundaryExtremesBoundedEndpointExtremeIsExact(t *testing.T) {
 // bisection boundary without dividing by a zero span width, and the span's
 // own enclosure must still contain the exact interior maximum.
 func TestSpanExtremeEnclosureHandlesRootAtOneHalf(t *testing.T) {
+	t.Parallel()
 	// P(t) = Bernstein([0, 2, 0]) = 4t(1-t): P'(t) = 4 - 8t has its only root
 	// at the exact rational t = 1/2, where P(1/2) = 1.
 	span := ratSpan([][2]float64{{0, 0}, {2, 0}, {0, 0}})
@@ -139,6 +142,7 @@ func TestSpanExtremeEnclosureHandlesRootAtOneHalf(t *testing.T) {
 // ran. A free-form span's stationarity chain is built before any root is
 // isolated, and the caller must not wait it out.
 func TestSpanExtremeEnclosureCancelsInsideTheChainBuild(t *testing.T) {
+	t.Parallel()
 	span := ratSpan([][2]float64{{0, 0}, {1, 3}, {3, 1}, {4, 0}})
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "sturmChainContext"}
 
@@ -154,6 +158,7 @@ func TestSpanExtremeEnclosureCancelsInsideTheChainBuild(t *testing.T) {
 // endpoint candidates carry the constant either way), and both endpoints
 // report the same constant with a zero-width enclosure.
 func TestSpanExtremeEnclosureCollapsedSpanIsExact(t *testing.T) {
+	t.Parallel()
 	span := ratSpan([][2]float64{{5, -1}, {5, -1}, {5, -1}, {5, -1}})
 	gu, gv := 1.0, 1.0
 
@@ -172,6 +177,7 @@ func TestSpanExtremeEnclosureCollapsedSpanIsExact(t *testing.T) {
 // collapsed ("empty") span carrying no interior candidate. The region-level
 // fold must still enclose a dense-sample reference over the WHOLE walk.
 func TestBoundaryExtremesBoundedRepeatedInteriorKnot(t *testing.T) {
+	t.Parallel()
 	seg := NURBSSeg{
 		Degree: 2,
 		Control: []Point2{
@@ -214,6 +220,7 @@ func TestBoundaryExtremesBoundedRepeatedInteriorKnot(t *testing.T) {
 // so it sits behind that charge, and a drained counter therefore answers the
 // budget's ErrUnsupported rather than the lift's own ErrNotFinite.
 func TestSpanExtremeEnclosureRefusesOverBudget(t *testing.T) {
+	t.Parallel()
 	span := ratSpan([][2]float64{{0, 0}, {2, 0}, {0, 0}})
 	cost := freeformExtremeCost(len(span))
 	require.Positive(t, cost, "the fixture span must actually cost something to charge against")
@@ -239,6 +246,7 @@ func TestSpanExtremeEnclosureRefusesOverBudget(t *testing.T) {
 // reaching one span's enclosure still refuses ErrNotFinite and names the
 // component, so moving the lift behind the charge narrowed nothing.
 func TestSpanExtremeEnclosureNonFiniteDirectionRefuses(t *testing.T) {
+	t.Parallel()
 	span := ratSpan([][2]float64{{0, 0}, {2, 0}, {0, 0}})
 	for _, tc := range []struct {
 		name      string
@@ -262,6 +270,7 @@ func TestSpanExtremeEnclosureNonFiniteDirectionRefuses(t *testing.T) {
 // source of the refusal is the direction components themselves, checked
 // before the segment scan even starts.
 func TestBoundaryExtremesBoundedNonFiniteDirectionRefuses(t *testing.T) {
+	t.Parallel()
 	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
 		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},
 	}}}
@@ -285,6 +294,10 @@ func TestBoundaryExtremesBoundedNonFiniteDirectionRefuses(t *testing.T) {
 // (§5.2: a charge is levied before the work allocates, so no rational may be
 // built before one). A gate that lifted the direction into big.Rat to decide
 // finiteness — ratOf allocates even on the float it rejects — would fail this.
+//
+// This test stays SERIAL: it measures process-wide allocation, which any
+// test running alongside it would inflate. Adding t.Parallel here makes its
+// reading meaningless rather than making it fail loudly.
 func TestRequireFiniteDirectionAllocatesNothing(t *testing.T) {
 	var gate error
 	allocs := testing.AllocsPerRun(100, func() { gate = requireFiniteDirection(1.5, -2.25) })
@@ -300,6 +313,7 @@ func TestRequireFiniteDirectionAllocatesNothing(t *testing.T) {
 // readings key on the BRACKET's width and not on the section being free-form;
 // test 8b is the same two readings on a section whose bracket has none.
 func TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate(t *testing.T) {
+	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
 	pp := prismPayload{
 		profile: splineProfile(control),
@@ -330,6 +344,7 @@ func TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate(t *testing.T) 
 // Box is Exact with a zero bound, and its Min/Max are the recorded control
 // coordinates themselves.
 func TestPrismBoundsFreeformEndpointHeldExtremesStayExact(t *testing.T) {
+	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 1}, {U: 2, V: 2}, {U: 3, V: 3}}
 	pp := prismPayload{
 		profile: splineProfile(control),
@@ -359,6 +374,7 @@ func TestPrismBoundsFreeformEndpointHeldExtremesStayExact(t *testing.T) {
 // refusal now that the scan itself answers with a bound — and every existing
 // analytic prism's Box still reports Exact with a zero bound.
 func TestBoundaryExtremesContextRegression(t *testing.T) {
+	t.Parallel()
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
 	// V (not U) has an interior extreme on this fixture (see the comment on
 	// TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate).
@@ -391,6 +407,7 @@ func TestBoundaryExtremesContextRegression(t *testing.T) {
 // Every control coordinate here is finite, and the record, the seam and the
 // bracket all admit them; only gu*u + gv*v runs off the range.
 func TestBoundaryExtremesBoundedSaturatedEnclosureRefusesUnsupported(t *testing.T) {
+	t.Parallel()
 	control := []Point2{
 		{U: 1e308, V: 1e308},
 		{U: 1.2e308, V: 1e308},
@@ -442,6 +459,7 @@ func TestBoundaryExtremesBoundedSaturatedEnclosureRefusesUnsupported(t *testing.
 // not refuses too — the fold publishes a midpoint and a half width, so that
 // enclosure has no reading either.
 func TestFreeformExtremeFloatsRefusesUnrepresentableEnclosures(t *testing.T) {
+	t.Parallel()
 	lo, hi, err := freeformExtremeFloats(ratIv{lo: mustRatOf(-2.5), hi: mustRatOf(4)})
 	require.NoError(t, err)
 	require.Equal(t, -2.5, lo, "an exactly representable end comes back unchanged")
@@ -469,6 +487,7 @@ func TestFreeformExtremeFloatsRefusesUnrepresentableEnclosures(t *testing.T) {
 
 // 12. Cancellation: a cancelled context returns ctx.Err() from the scan.
 func TestBoundaryExtremesBoundedContextCancellation(t *testing.T) {
+	t.Parallel()
 	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
 		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},
 	}}}

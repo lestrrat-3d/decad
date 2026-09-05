@@ -24,6 +24,7 @@ import (
 // candidate underwrite a pass if a future geometry source produces one.
 
 func TestWallKernelFlagsOffJunctionSubTolerance(t *testing.T) {
+	t.Parallel()
 	// Two concentric full circles 2e-8 apart at scale 10: the web disk is
 	// under the candidate floor (4·1e-9·10) and no junction vertex is
 	// supplied, so the kernel must flag it rather than silently treat the
@@ -38,6 +39,7 @@ func TestWallKernelFlagsOffJunctionSubTolerance(t *testing.T) {
 }
 
 func TestWallKernelCleanProfileDoesNotFlag(t *testing.T) {
+	t.Parallel()
 	// A plain 100×60 rectangle produces no off-junction sub-tolerance
 	// candidates: the flag stays clear and the reading is decided.
 	pts := [][2]float64{{0, 0}, {100, 0}, {100, 60}, {0, 60}}
@@ -56,6 +58,7 @@ func TestWallKernelCleanProfileDoesNotFlag(t *testing.T) {
 }
 
 func TestWallKernelGenerateStreamsCandidates(t *testing.T) {
+	t.Parallel()
 	arc, ok := arcElem(0, 0, 10, 0, 2*math.Pi, true)
 	require.True(t, ok)
 	k := newWallKernel([]surveyElem{arc}, nil, math.Inf(1))
@@ -72,6 +75,7 @@ func TestWallKernelGenerateStreamsCandidates(t *testing.T) {
 }
 
 func TestWallKernelGenerateCancellationIsBounded(t *testing.T) {
+	t.Parallel()
 	arc, ok := arcElem(0, 0, 10, 0, 2*math.Pi, true)
 	require.True(t, ok)
 	elems := make([]surveyElem, workPollInterval+64)
@@ -93,6 +97,7 @@ func TestWallKernelGenerateCancellationIsBounded(t *testing.T) {
 }
 
 func TestWallKernelSetupCancellationIsBounded(t *testing.T) {
+	t.Parallel()
 	arc, ok := arcElem(0, 0, 10, 0, 2*math.Pi, true)
 	require.True(t, ok)
 	elems := make([]surveyElem, workPollInterval+64)
@@ -108,6 +113,7 @@ func TestWallKernelSetupCancellationIsBounded(t *testing.T) {
 }
 
 func TestWallKernelValidateCancellationIsBounded(t *testing.T) {
+	t.Parallel()
 	elems := make([]surveyElem, workPollInterval+64)
 	for i := range elems {
 		e, ok := lineElem(100, float64(i+1), 101, float64(i+1))
@@ -127,6 +133,7 @@ func TestWallKernelValidateCancellationIsBounded(t *testing.T) {
 }
 
 func TestWallKernelContainsCancellationIsBounded(t *testing.T) {
+	t.Parallel()
 	elems := make([]surveyElem, workPollInterval+64)
 	for i := range elems {
 		e, ok := arcElem(1000+float64(i), 1000, 1, 0, 2*math.Pi, true)
@@ -143,6 +150,7 @@ func TestWallKernelContainsCancellationIsBounded(t *testing.T) {
 }
 
 func TestWallKernelBudgetedRunKeepsNormalResult(t *testing.T) {
+	t.Parallel()
 	pts := [][2]float64{{0, 0}, {100, 0}, {100, 60}, {0, 60}}
 	elems := make([]surveyElem, 0, len(pts))
 	for i := range pts {
@@ -169,6 +177,7 @@ func TestWallKernelBudgetedRunKeepsNormalResult(t *testing.T) {
 // and asserts the kernel published exactly that — the factor of two, which no
 // consumer restates, and the aggregate, which no candidate decides alone.
 func TestWallKernelPublishesDiameterBounds(t *testing.T) {
+	t.Parallel()
 	// A 100×60 outline with two r=1 circular holes 3√2 apart: the web between
 	// them is the arcArcCands centreline candidate, whose division carries a
 	// nonzero radius bound.
@@ -245,6 +254,7 @@ func TestWallKernelPublishesDiameterBounds(t *testing.T) {
 // to 1e16, a full millimetre above the truth. A candidate that reported bound
 // zero there published a zero-width interval that excluded its own answer.
 func TestWallKernelConcentricSpanBoundsRadiusDifference(t *testing.T) {
+	t.Parallel()
 	outer, ok := arcElem(0, 0, 1e16, 0, 2*math.Pi, true)
 	require.True(t, ok)
 	inner, ok := arcElem(0, 0, 1, 2*math.Pi, 0, true)
@@ -281,6 +291,7 @@ func requireRatInInterval(t *testing.T, truth *big.Rat, value, bound float64) {
 // radius, so the walk's radius is a math.Hypot evaluation and the candidate
 // must publish the walk's bound on it rather than zero.
 func TestWholeArcCandidateCarriesArcRadiusBound(t *testing.T) {
+	t.Parallel()
 	// Centre (10, 9) one unit from start (9, 10) in each of u and v: the true
 	// radius is √2, which no float64 holds.
 	seg := ArcSeg{
@@ -330,6 +341,7 @@ func TestWholeArcCandidateCarriesArcRadiusBound(t *testing.T) {
 // bound zero over three rounded operations and so published an interval that
 // missed its own value.
 func TestWedgeCandidateCarriesCapSineBound(t *testing.T) {
+	t.Parallel()
 	sweep, err := units.Degrees(60).In(units.Radian)
 	require.NoError(t, err)
 	sinBS, _ := radianTrigBounds(sweep / 2)
@@ -368,6 +380,7 @@ func TestWedgeCandidateCarriesCapSineBound(t *testing.T) {
 // largest over every spanning candidate (wallSurveyOut.maxCandBound), so an
 // arc anywhere in the section keeps the reading Approximate.
 func TestWallCandidateExactChainsStayExact(t *testing.T) {
+	t.Parallel()
 	// Two r=1 hole walls whose centres sit a 3-4-5 distance apart: the web
 	// between them is 5 − 1 − 1 = 3, so the centreline candidate's radius is
 	// exactly 1.5. Reversed angle order keeps the material on each hole's left.
@@ -419,6 +432,7 @@ func holeAt(t *testing.T, qx, qy float64) surveyElem {
 // quotient runs, so a bound taken from the division alone can be an order of
 // magnitude short of the error it must cover.
 func TestSolve3LinearBoundCoversCramerArithmetic(t *testing.T) {
+	t.Parallel()
 	// A non-axis-aligned trapezoid: four line elements, so every triple of
 	// their tangency equations is three linears and lands in solve3Linear.
 	pts := [][2]float64{{0, 0}, {20.3, 1.7}, {16.1, 9.4}, {3.7, 7.9}}
@@ -519,6 +533,7 @@ func divisionOnlyRadiusBound(l []circEq) float64 {
 }
 
 func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {
+	t.Parallel()
 	// The prism path must apply the same rule as the revolve path: a
 	// near-concentric annular profile whose 2e-8 web sits under the kernel
 	// floor reads undecided — never a proven absence or a positive wall.
@@ -539,6 +554,7 @@ func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {
 }
 
 func TestCupWallRequiresExactMorphology(t *testing.T) {
+	t.Parallel()
 	line := func(u0, v0, u1, v1 float64) CurveSegment {
 		return LineSeg{
 			Start:  Point2{U: u0, V: v0},
@@ -650,6 +666,7 @@ func newFrameWorkBudget(target string) (*workBudget, *bool) {
 }
 
 func TestRecordLoopsCancellationIsBounded(t *testing.T) {
+	t.Parallel()
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "recordLoops"}
 	_, err := recordLoops(newWorkBudget(ctx), manySegmentProfile(workPollInterval+64))
 	require.ErrorIs(t, err, context.Canceled)
@@ -657,6 +674,7 @@ func TestRecordLoopsCancellationIsBounded(t *testing.T) {
 }
 
 func TestRevolveLoopsCancellationIsBounded(t *testing.T) {
+	t.Parallel()
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "revolveLoops"}
 	_, err := revolveLoops(newWorkBudget(ctx), revolvePayload{
 		profile: manySegmentProfile(workPollInterval + 64),
@@ -695,6 +713,7 @@ func TestCupWallCancellationCoversOffsetAuditAndReverse(t *testing.T) {
 }
 
 func TestCupWallCancellationDuringProfileIntegrals(t *testing.T) {
+	t.Parallel()
 	line := func(u0, v0, u1, v1 float64) CurveSegment {
 		return LineSeg{
 			Start:  Point2{U: u0, V: v0},
@@ -741,6 +760,7 @@ func TestCupWallCancellationDuringProfileIntegrals(t *testing.T) {
 // the second is held clear of contact by the same margin. Both really do sit
 // inside the interval their own arithmetic admits.
 func TestWallKernelValidateReadsTheCandidateInterval(t *testing.T) {
+	t.Parallel()
 	// A 40×10 rectangle walked counter-clockwise: material inside, the disk at
 	// its centre reaching 5 mm to the two long skins and 20 mm to the ends.
 	pts := [][2]float64{{0, 0}, {40, 0}, {40, 10}, {0, 10}}
@@ -783,6 +803,7 @@ func TestWallKernelValidateReadsTheCandidateInterval(t *testing.T) {
 // greatest of their upper ends — and a rival whose interval reaches ABOVE the
 // winning held value is exactly what a comparison of held values cannot see.
 func TestWallKernelInradiusAggregatesRivalCandidates(t *testing.T) {
+	t.Parallel()
 	// A 100×60 plate holding one r=22 circular hole: the trig-derived
 	// angle-limit candidates around the hole carry bounds far above the
 	// kernel's declared slack, so the population really does have rivals.
@@ -841,6 +862,7 @@ func TestWallKernelInradiusAggregatesRivalCandidates(t *testing.T) {
 // annulus's held 10 mm web. A held comparison finds the only spanning disk too
 // wide and reports the body wall-free.
 func TestWallKernelFitGateReadsTheCandidateInterval(t *testing.T) {
+	t.Parallel()
 	outer, ok := arcElem(0, 0, 20, 0, 2*math.Pi, true)
 	require.True(t, ok)
 	outer.rrBound = 2e-3
@@ -880,6 +902,7 @@ func TestWallKernelFitGateReadsTheCandidateInterval(t *testing.T) {
 // 3.4e+24 ± 4.8e+24 while the pair determinant is still admitted, which is
 // exactly that state.
 func TestWallKernelStraddledLeadingCoefficientStaysDecided(t *testing.T) {
+	t.Parallel()
 	elems := func() []surveyElem {
 		out := make([]surveyElem, 0, 3)
 		for _, c := range [][3]float64{
@@ -944,6 +967,7 @@ func TestWallKernelStraddledLeadingCoefficientStaysDecided(t *testing.T) {
 // still arrive, which is what makes this a local refusal rather than a missing
 // wall.
 func TestSolveTripleStraddledDeterminantDropsOnlyItsOwnCandidate(t *testing.T) {
+	t.Parallel()
 	l1 := circEq{a: exactScalar(1), b: exactScalar(0), e: exactScalar(-1), f: exactScalar(0)}
 	l2 := circEq{
 		a: exactScalar(-1),
@@ -990,6 +1014,7 @@ func TestSolveTripleStraddledDeterminantDropsOnlyItsOwnCandidate(t *testing.T) {
 // leaves it over six decades under k.tol, the weakest slack any of those
 // readings declares.
 func TestArcWalkRadiusBoundStaysUnderTheKernelSlack(t *testing.T) {
+	t.Parallel()
 	for _, scale := range []float64{1e-3, 1, 7.5, 1e3, 1e6} {
 		for _, d := range [][2]float64{
 			{1, 1}, {3, 4}, {0.5, 0.125}, {2, 9}, {1, 1e-3}, {6.7, 0.29}, {1e-2, 1},
@@ -1040,6 +1065,7 @@ func TestArcWalkRadiusBoundStaysUnderTheKernelSlack(t *testing.T) {
 // less than the ulp that hides it, and the interval a held comparison
 // publishes excludes it.
 func TestRevolveMinRadiusNumeratorIsIntervalMinimum(t *testing.T) {
+	t.Parallel()
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
 	require.NoError(t, err)
 	line, err := axisInPlane(SketchLine{
@@ -1118,6 +1144,7 @@ func freeformWallSection() ProfileRecord {
 // through Extrude (§10 P4b); this test still calls prismWall directly, as the
 // sub-tolerance-web test above does, to isolate the survey from the build.
 func TestPrismWallFreeformSectionReadsUndecided(t *testing.T) {
+	t.Parallel()
 	pp := prismPayload{profile: freeformWallSection(), z0: 0, z1: 10}
 	out, err := prismWall(newWorkBudget(t.Context()), pp, 15*math.Pi/180)
 	require.NoError(t, err, `a free-form section must not error out of Verify`)
@@ -1130,6 +1157,7 @@ func TestPrismWallFreeformSectionReadsUndecided(t *testing.T) {
 // cancelled ahead of the call must still surface as the context's own error,
 // not as an undecided reading.
 func TestPrismWallFreeformSectionPropagatesCancellation(t *testing.T) {
+	t.Parallel()
 	pp := prismPayload{profile: freeformWallSection(), z0: 0, z1: 10}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -1147,6 +1175,7 @@ func TestPrismWallFreeformSectionPropagatesCancellation(t *testing.T) {
 // any of them would report a proof that did not close where the survey never
 // looked at the section at all.
 func TestPrismWallPropagatesNonFreeformRefusals(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		seg     CurveSegment
@@ -1215,6 +1244,7 @@ func TestPrismWallPropagatesNonFreeformRefusals(t *testing.T) {
 // sentinel AND still the ErrUnsupported staging limit every other consumer of
 // the same decomposition branches on.
 func TestPrismWallFreeformRefusalKeepsItsSentinels(t *testing.T) {
+	t.Parallel()
 	_, err := recordLoops(newWorkBudget(t.Context()), freeformWallSection())
 	require.ErrorIs(t, err, errFreeformSection)
 	require.ErrorIs(t, err, ErrUnsupported)
@@ -1225,6 +1255,7 @@ func TestPrismWallFreeformRefusalKeepsItsSentinels(t *testing.T) {
 // wall reading is unchanged by PR 1's swallow: a 10x10x10 box still reports
 // its exact spanning diameter.
 func TestPrismWallAnalyticSectionRegression(t *testing.T) {
+	t.Parallel()
 	line := func(u0, v0, u1, v1 float64) CurveSegment {
 		return LineSeg{Start: Point2{U: u0, V: v0}, End: Point2{U: u1, V: v1}, TStart: 0, TEnd: 1}
 	}
@@ -1257,6 +1288,7 @@ func TestPrismWallAnalyticSectionRegression(t *testing.T) {
 // a table that includes both exact carve-outs (0 and -1) and the float
 // readings fu155's own repro produced.
 func TestDecidePullMatchesOpposesPullAtZeroAllowance(t *testing.T) {
+	t.Parallel()
 	pairs := [][2]float64{
 		{0, 0},
 		{-1, -1},
@@ -1409,6 +1441,7 @@ func exactWallComponentSquared(w sideWalk, m placedFrameMap, pull r3.Vec) (num, 
 // strictly inside (-1, 0) — asserted on the computed exact-rational ground
 // truth, not on which code path ran.
 func TestWallNormalDecisionEnclosesExactComponent(t *testing.T) {
+	t.Parallel()
 	fixtures := wallNormalDecisionFixtures(t)
 	pulls := []r3.Vec{
 		r3.NewVec(1, 0, 0),

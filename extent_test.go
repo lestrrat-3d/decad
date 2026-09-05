@@ -23,6 +23,7 @@ var (
 )
 
 func TestAngularExtentCodec(t *testing.T) {
+	t.Parallel()
 	// Every angular variant round-trips through a step, nested sides included.
 	for _, a := range []decad.AngularExtent{
 		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along},
@@ -69,6 +70,7 @@ func TestAngularExtentCodec(t *testing.T) {
 }
 
 func TestEmptyExtentVariantCodec(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name     string
 		step     decad.Step
@@ -116,6 +118,7 @@ func TestEmptyExtentVariantCodec(t *testing.T) {
 }
 
 func TestAngularExtentPointerForms(t *testing.T) {
+	t.Parallel()
 	// The sealed sets use value receivers, so pointer forms satisfy the
 	// interfaces; the codecs normalize them to values recursively — nested
 	// sides included — so no caller-owned pointer survives into a recorded
@@ -158,6 +161,7 @@ func TestAngularExtentPointerForms(t *testing.T) {
 }
 
 func TestStepExtentKeying(t *testing.T) {
+	t.Parallel()
 	// The core §6.2 one-of contract: at most one of extent and angular,
 	// each keyed to its op — enforced on both wire directions.
 	t.Run("both extents rejected on marshal", func(t *testing.T) {

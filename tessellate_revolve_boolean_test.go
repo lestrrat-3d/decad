@@ -62,6 +62,7 @@ func mm3(t *testing.T, b *decad.Body) (float64, float64) {
 }
 
 func TestRevolveUnionWithAPrismMeasuresTheAnalyticVolume(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	cyl := quarterCylinder(t, doc)
 	// x∈[2,6], y∈[6,12], z∈[1,5]: the box crosses the cylinder's curved wall,
@@ -92,6 +93,7 @@ func TestRevolveUnionWithAPrismMeasuresTheAnalyticVolume(t *testing.T) {
 }
 
 func TestRevolveCutByAPrismMeasuresTheAnalyticVolume(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	cyl := quarterCylinder(t, doc)
 	// The same crossing box, moved down in y so it takes a bite out of the
@@ -112,6 +114,7 @@ func TestRevolveCutByAPrismMeasuresTheAnalyticVolume(t *testing.T) {
 }
 
 func TestRevolveUnionWithAnotherRevolveObeysInclusionExclusion(t *testing.T) {
+	t.Parallel()
 	// Two quarter cylinders, the second moved clear of every plane the first's
 	// own caps lie in, so no face pair is coplanar. Their union and their
 	// intersection are computed by two INDEPENDENT boolean runs, and
@@ -146,6 +149,7 @@ func TestRevolveUnionWithAnotherRevolveObeysInclusionExclusion(t *testing.T) {
 }
 
 func TestRevolveBooleanRefusesAHiddenTangency(t *testing.T) {
+	t.Parallel()
 	// A half turn puts the cylinder's own tangent line at z = 8 well inside the
 	// swept wall. The box's floor sits exactly on it, so the TRUE surfaces touch
 	// along a line while the held facets — inscribed in the wall they chord —
@@ -166,6 +170,7 @@ func TestRevolveBooleanRefusesAHiddenTangency(t *testing.T) {
 }
 
 func TestRevolveBooleanRefusesAShallowCrossing(t *testing.T) {
+	t.Parallel()
 	// The quarter turn's start cap is an exact planar rectangle in the z = 0
 	// half plane, so the pair meets there with almost no face bound of its own
 	// and the crossing is decided. What is NOT decided is the RIM the boolean
@@ -198,6 +203,7 @@ func TestRevolveBooleanRefusesAShallowCrossing(t *testing.T) {
 }
 
 func TestRevolveBooleanChargesBothOperandVolumeProofs(t *testing.T) {
+	t.Parallel()
 	// The result's volume bound is the sum of the two operands' own
 	// occupied-volume proofs plus the final weld (§11 step 6). An ALL-PLANAR
 	// prism proves zero, so replacing the prism operand with a second revolve

@@ -298,6 +298,7 @@ func requireFeetMatchChordEnds(t *testing.T, feet [][2]float64, chorded [][2]flo
 // envelope would then be read off a different region than every other reading here
 // is measured on. It records profiles only and builds no loft, so it always runs.
 func TestLoftChordCalibrationTrueOutlineIsTheChordedTwin(t *testing.T) {
+	t.Parallel()
 	// radialFeet returns, for each straight segment of the recorded loop, the
 	// endpoint away from the origin — and fails the test outright on a straight
 	// segment that touches the origin at neither end, which is exactly the lens
@@ -754,6 +755,7 @@ func logWedgeMeasurement(t *testing.T, label string, m wedgeMeasurement) {
 // owns, and it always runs, so the contract holds even though the sweep itself is
 // opt-in behind DECAD_LOFT_CALIBRATION.
 func TestLoftChordCalibrationRowRecordsValueAndVerdict(t *testing.T) {
+	t.Parallel()
 	t.Run("a no-reference row reads differently for a pass and a fail", func(t *testing.T) {
 		require.Equal(t, "Sound", widenedGateRow{haveRef: true, sound: true}.verdict())
 		require.Equal(t, "Suspect", widenedGateRow{haveRef: true, sound: false}.verdict())
@@ -831,6 +833,7 @@ func TestLoftChordCalibrationRowRecordsValueAndVerdict(t *testing.T) {
 // and whose cost sits inside the budget §13's build cost model paragraph owns, and
 // it always runs, since the sweep it protects is opt-in.
 func TestLoftChordCalibrationCeilingCoversRuledExcess(t *testing.T) {
+	t.Parallel()
 	const m = 8
 	excess := arcChordExcess(t, m)
 	pts, sd := wedgeArcChords(t, m)
@@ -909,6 +912,7 @@ const decadLoftCalibrationEnv = "DECAD_LOFT_CALIBRATION"
 // DECAD_LOFT_CALIBRATION is set (and still honors -short on top of that).
 // TestLoftChordCalibrationPinsFraction below is the fast, always-run pin.
 func TestLoftChordCalibrationSweep(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("the calibration sweep builds loft fixtures up to m=128 stations (F>500, O(F^2) audit); run without -short to measure it")
 	}
@@ -1088,6 +1092,7 @@ func wedgeArcRecord(t *testing.T) (ArcSeg, segmentWalk) {
 // production count, which is what makes their two margins comparable readings
 // of one constant.
 func TestLoftChordCalibrationPinsFraction(t *testing.T) {
+	t.Parallel()
 	const wantVolume = math.Pi * 25 / 4 * wedgeHeight // 196.349540849...
 
 	m := wedgePinStations(t)

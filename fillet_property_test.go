@@ -472,6 +472,7 @@ func requireRecipeRoundTrip(t *testing.T, doc *decad.Document) {
 // tolerance is scale-anchored (δ = ε·D), so a fixed absolute band — which would
 // flip the verdict between these two scales — is exactly what this rejects.
 func TestFilletScaleInvariant(t *testing.T) {
+	t.Parallel()
 	rng := rand.New(rand.NewSource(filletPropertySeed ^ 0x5ca1e))
 	t.Logf("fillet scale-invariance seed = %#x", filletPropertySeed^0x5ca1e)
 

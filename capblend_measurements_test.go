@@ -73,6 +73,7 @@ func starPrismBody(t *testing.T, points int, ro, ri, h float64) *decad.Body {
 // exact to the closed form (a straight cylinder wall plus two disks plus a
 // frustum band), so only the bound was loose.
 func TestCapBlendCircularRimAreaBoundIsTight(t *testing.T) {
+	t.Parallel()
 	const R, H, d = 10.0, 8.0, 0.5
 	body := circleProfile(t, R, H)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
@@ -105,6 +106,7 @@ func TestCapBlendCircularRimAreaBoundIsTight(t *testing.T) {
 // term identically, since patchAreaOf reads capThAllow the same way in both
 // cases.
 func TestCapBlendApexPatchAreaBoundIsTight(t *testing.T) {
+	t.Parallel()
 	const ro, ri, h, d = 10.0, 6.0, 6.0, 0.5
 	body := starPrismBody(t, 6, ro, ri, h)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
@@ -153,6 +155,7 @@ func TestCapBlendApexPatchAreaBoundIsTight(t *testing.T) {
 // levels as separate, which they are — so the reading has to be honest about
 // the gap instead.
 func TestCapBlendConeAreaEnclosesTheDenotedPatch(t *testing.T) {
+	t.Parallel()
 	const R, H, d = 10.0, 1e15, 0.2
 	body := circleProfile(t, R, H)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
@@ -227,6 +230,7 @@ func tallPlateWithDiskHole(t *testing.T, r, h float64) *decad.Body {
 // this body. The tight claim is the one the arithmetic makes, and the
 // internal test judges that alone.
 func TestCapBlendConeAreaEnclosesRoundedRadiusDifference(t *testing.T) {
+	t.Parallel()
 	const R, d, h = 9.011281351443861, 16.500928618916209, 40.0
 	body := tallPlateWithDiskHole(t, R, h)
 	q := decad.Edges(decad.CreatedBy(decad.CapEnd(body)), decad.Circular())
@@ -303,6 +307,7 @@ func capBandPatch(t *testing.T, b *decad.Body) *decad.Face {
 // clear the gate the loose 165.84 mm^2 fallback used to fail (required
 // 1.112 mm^2 at rel=1e-3).
 func TestCapBlendCircularRimVerifyArea(t *testing.T) {
+	t.Parallel()
 	const R, H, d = 10.0, 8.0, 0.5
 	body := circleProfile(t, R, H)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
@@ -333,6 +338,7 @@ func TestCapBlendCircularRimVerifyArea(t *testing.T) {
 // this pins the corrected value AND checks Document.Verify now reads Sound
 // at the default tolerance, the ask's own acceptance criterion.
 func TestCapBlendCircularRimCentroidIsClosedForm(t *testing.T) {
+	t.Parallel()
 	const R, H, d = 10.0, 8.0, 0.5
 	body := circleProfile(t, R, H)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
@@ -374,6 +380,7 @@ func TestCapBlendCircularRimCentroidIsClosedForm(t *testing.T) {
 // coordinate moves, to a value derived independently from the linear-offset
 // family the plate's own volume test already uses.
 func TestCapBlendPlateCentroidIsExactRational(t *testing.T) {
+	t.Parallel()
 	_, box := capBlendBox(t)
 	const d = 5.0
 	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
@@ -399,6 +406,7 @@ func TestCapBlendPlateCentroidIsExactRational(t *testing.T) {
 // the void from subtracted to added, which volume alone already guards
 // against but centroid's own vector sign could still miss independently.
 func TestCapBlendHoleLoopCentroid(t *testing.T) {
+	t.Parallel()
 	const L, H, cx, cy, R, d = 100.0, 10.0, 50.0, 50.0, 10.0, 2.0
 	_, box := plateWithDiskHole(t, cx, cy, R)
 	q := decad.Edges(decad.CreatedBy(decad.CapEnd(box)), decad.Circular())
@@ -426,6 +434,7 @@ func TestCapBlendHoleLoopCentroid(t *testing.T) {
 // — the half no single-cap fixture can see (docs/modify-reach-design.md
 // §8.4's "Signs").
 func TestCapBlendStartCapCentroidMirrorsEndCap(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		build func(t *testing.T) *decad.Body
@@ -477,6 +486,7 @@ func TestCapBlendStartCapCentroidMirrorsEndCap(t *testing.T) {
 // improvement, never above the old figure (the math.Min ceiling), and it
 // must still ENCLOSE the true centroid.
 func TestCapBlendReflexCornerCentroidBoundIsTight(t *testing.T) {
+	t.Parallel()
 	const ro, ri, h, d = 10.0, 6.0, 6.0, 0.5
 	body := starPrismBody(t, 6, ro, ri, h)
 	// The receiver's own centroid is close to, but not exactly, the
@@ -740,6 +750,7 @@ func tangentBandMotions(t *testing.T) (r3.Transform, r3.Transform) {
 // published `Face.NormalAt` bound must enclose that departure at every corner
 // of every patch, under every placement.
 func TestCapBlendPlacedTangentBandNormalCarriesItsOwnBound(t *testing.T) {
+	t.Parallel()
 	spin, far := tangentBandMotions(t)
 	for _, tc := range []struct {
 		name   string
@@ -793,6 +804,7 @@ func flatCornerDefectSq(corners []r3.Vec, i int, published r3.Vec) *big.Rat {
 // bound must enclose the departure at every corner of every patch, under every
 // placement.
 func TestCapBlendPlacedFlatPatchNormalCarriesItsOwnBound(t *testing.T) {
+	t.Parallel()
 	spin, far := tangentBandMotions(t)
 	for _, tc := range []struct {
 		name   string
@@ -826,6 +838,7 @@ func TestCapBlendPlacedFlatPatchNormalCarriesItsOwnBound(t *testing.T) {
 // own `Plane` tag by orders more once the placement carries it far out. A bound
 // asserted from the plane-local offset alone would be zero in all three rows.
 func TestCapBlendPlacedFlatPatchDepartureGrowsWithPlacement(t *testing.T) {
+	t.Parallel()
 	spin, far := tangentBandMotions(t)
 	worst := func(motion *r3.Transform) (float64, float64) {
 		body := tangentFilletChamfer(t, motion)
@@ -867,6 +880,7 @@ func TestCapBlendPlacedFlatPatchDepartureGrowsWithPlacement(t *testing.T) {
 // generator through the same corner. A bound derived from the windows would be
 // unmoved across these three rows, and zero in all of them.
 func TestCapBlendPlacedTangentBandDepartureGrowsWithPlacement(t *testing.T) {
+	t.Parallel()
 	spin, far := tangentBandMotions(t)
 	worst := func(motion *r3.Transform) (float64, float64, float64) {
 		body := tangentFilletChamfer(t, motion)
@@ -929,6 +943,7 @@ func TestCapBlendPlacedTangentBandDepartureGrowsWithPlacement(t *testing.T) {
 // the trimmed cap-level sweep between the actual corner feet the edge runs
 // between, so the held length disagreed with the edge's own endpoints.
 func TestCapBlendCapLevelArcLengthMatchesGeometry(t *testing.T) {
+	t.Parallel()
 	const R, H, d = 60.0, 20.0, 4.0
 	body := quarterDiskBody(t, R, H)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
@@ -1106,6 +1121,7 @@ func circularSectorBody(t *testing.T, r, phi, h float64) *decad.Body {
 // family denotes (docs/modify-reach-design.md §8.3's own scope note,
 // capblend_moments.go); the published Bound must enclose it.
 func TestCapBlendErosionFamilyVolumeBoundEncloses(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		build   func(t *testing.T) *decad.Body
@@ -1176,6 +1192,7 @@ func TestCapBlendErosionFamilyVolumeBoundEncloses(t *testing.T) {
 // upper bound on the same area still bounds the same swept volume. This test
 // still fails if the term regresses to the under-scaled (pre-PR-122) reading.
 func TestCapBlendChordLocusVolumeAllowScalesSweptTermToFlux(t *testing.T) {
+	t.Parallel()
 	body := circularSectorBody(t, 10, 2.7, 4.953329)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(4.928686))
 	require.NoError(t, err)
@@ -1282,6 +1299,7 @@ func roundedRectHoleErosionVolume(plateL, side, rho, h, d float64) float64 {
 // TestCapBlendErosionFamilyVolumeBoundEncloses's miter cases show, never
 // merely a rounding-level one.
 func TestCapBlendTangentJunctionVolumeUnaffected(t *testing.T) {
+	t.Parallel()
 	t.Run(`rounded rectangle`, func(t *testing.T) {
 		const l, w, h, r, d = 100.0, 60.0, 20.0, 15.0, 4.0
 		body := roundedRectBody(t, l, w, h, r)
@@ -1322,6 +1340,7 @@ func TestCapBlendTangentJunctionVolumeUnaffected(t *testing.T) {
 // back to reading the absolute levels would publish (audited at
 // 28386.2821001117 and 1.450768679e-08 respectively).
 func TestCapBlendTangentJunctionAndWholeTurnBoundsStayTight(t *testing.T) {
+	t.Parallel()
 	t.Run(`tangent-fillet plate`, func(t *testing.T) {
 		const l, w, h, r, d = 100.0, 60.0, 20.0, 15.0, 4.0
 		body := roundedRectBody(t, l, w, h, r)
@@ -1408,6 +1427,7 @@ func dHoleBody(t *testing.T, cx, cy, r, phi0Deg, phi1Deg float64, minor bool) *d
 // floor of its own so a future change to either patch cannot silently
 // regress it unnoticed.
 func TestCapBlendDHoleLoopBoundStaysTight(t *testing.T) {
+	t.Parallel()
 	t.Run(`major-arc hole (branch-crossing repro)`, func(t *testing.T) {
 		body := dHoleBody(t, 50, 50, 10, 30, 150, false)
 		chamfered, err := body.Chamfer(decad.Edges(decad.CreatedBy(decad.CapEnd(body))), units.Millimeters(2))
