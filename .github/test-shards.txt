@@ -7,10 +7,10 @@
 # with the command in _shardgen/main.go's doc comment.
 #
 # Shard totals at the last measurement:
-#   shard 0:  176.62s over 234 tests
-#   shard 1:  176.61s over 770 tests
-#   shard 2:  176.62s over 235 tests
-#   shard 3:  176.62s over 234 tests
+#   shard 0:  177.67s over 235 tests
+#   shard 1:  177.51s over 771 tests
+#   shard 2:  176.65s over 236 tests
+#   shard 3:  176.62s over 235 tests
 #
 0	0.02	TestAnalyticBodiesEqualMatchesPlainPrismSetIdentity
 0	0.01	TestArcSegExactQuarterDisk
@@ -144,6 +144,7 @@
 0	1.72	TestPairChordToleranceClearsARevolveCoordinateReservation
 0	0.02	TestPairStationsAcceptTestRequiresBothSidesUnderTarget
 0	0.01	TestParallelDirsExtremeDirections
+0	1.05	TestParityBoxFilterOnlySkipsStrictlyOutsideFacets
 0	0.08	TestParityQueryProjectionMatchesReference
 0	0.01	TestPlacedCopyZeroTransformRejected
 0	3.32	TestPlacedReusesPublishedWalks
@@ -668,6 +669,7 @@
 1	0.08	TestPairStationsSharedStationSetAcrossDifferentScale
 1	0.00	TestPairStationsSpanCountMismatchRefuses
 1	0.06	TestPairStationsStationsAdvanceMonotonicallyAlongTheChain
+1	0.90	TestParityBoxFilterMatchesTheUnfilteredKernel
 1	0.00	TestParseCLAUDEMDAcceptsTheShapesTheFormatMakesSafe
 1	0.00	TestParseLayoutRowsRefusesTextItWouldNotReach
 1	0.00	TestParseLayoutRowsRejectsMalformedRows
@@ -1140,6 +1142,7 @@
 2	36.21	TestPairStationsOverCapRefuses
 2	0.08	TestPairStationsSpanCountPastTheCapRefusesUpFront
 2	0.77	TestPairStationsStationDeterminism
+2	0.03	TestParityFacetBoxStatesTheProjection
 2	0.01	TestPlaced
 2	0.02	TestPlacedPrismChargesEveryFaceItsPlacementRounding
 2	9.59	TestPlacedWalksReuseMatchesUncachedBuild
@@ -1383,6 +1386,7 @@
 3	8.96	TestPairStationsAcceptsTheStatedChordCap
 3	0.06	TestPairStationsFirstAndLastStationAreTheChainEndpointsExactly
 3	0.07	TestPairStationsSettlesOnSmallestLevelForTarget
+3	0.00	TestParityBoxFilterLeavesAnEmptySubsetAlone
 3	0.01	TestParseCLAUDEMDRefusesEverySpellingOfTheAnchors
 3	0.02	TestPlacedCopyPreservesChamferRoles
 3	0.01	TestPlacedRecipeIsUnchangedByTheEvaluatorsCache
