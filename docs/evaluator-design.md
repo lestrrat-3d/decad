@@ -411,6 +411,28 @@ rounding of its OWN recombination of the placed terms into a published
 coordinate, which a pure translation commits even where the isometry's float
 evaluation rounded nothing.
 
+A placement changes the MOTION and nothing else, so a prism's re-evaluation
+reuses the plane-local walk resolution the original build published rather than
+resolving the same section again. `prismPayload` carries a private
+`*profileWalks` for its own record; `evalPrismContext` publishes the set it
+resolved onto the body it just built, and `placed` — the one path that carries a
+payload forward unchanged but for `xform` — hands it back to the next build.
+What makes it sound is that a walk holds nothing placement-dependent: `walkOf`
+answers in the section's own (u, v), and the frame, the placement and the
+reflection's orientation and winding corrections are all applied by consumers
+DOWNSTREAM of it. So a reflected copy still runs every correction it always ran;
+only the arc-length bracketing under it is not repeated.
+
+Reuse is decided by the record, never by the caller. `profileWalks.reusable`
+admits a set only when it was resolved from a bit-identical `ProfileRecord`
+(`matches`, compared by float BITS) and measured its own work charge, and every
+other payload — a plain extrude, a modify op's rewritten section, a boolean
+result, a cup's derived region — carries none and resolves as before. A record
+that changed in any way, including a rescale or a gained hole, is a different
+record and resolves afresh. The re-evaluation is still CHARGED what the
+resolution cost (`docs/spline-design.md` §5.2), so the free-form work ceiling
+refuses the same records it always refused, with the same error.
+
 Replay tests cover every example model + every current `OpKind`. Same-evaluator
 replay reproduces live-body order and provenance roles. Measurements reproduce
 within each evaluator's own exactness/bounds; alternate evaluators may build a

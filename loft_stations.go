@@ -252,7 +252,10 @@ const loftChordFraction = 3.76491e-05
 // (outer at index 0, each hole at index i+1): wrapping them in a
 // *profileWalks view here, rather than passing nil and letting
 // profileCoordinateUpper resolve again, is what keeps this reading inside
-// Task 1's resolve-once rule.
+// Task 1's resolve-once rule. The two views are deliberately UNMETERED —
+// validateLoftRecords charged this work against its own counters, and a view
+// that restated the charge as its own would let a later replay levy it twice.
+// Neither leaves this function, so neither can reach a payload that replays it.
 func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]segmentWalk) (float64, error) {
 	pw0 := &profileWalks{profile: p0, outer: walks0[0], holes: walks0[1:]}
 	pw1 := &profileWalks{profile: p1, outer: walks1[0], holes: walks1[1:]}

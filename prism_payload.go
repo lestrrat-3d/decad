@@ -58,6 +58,15 @@ import (
 // height and the volume, wall area and centroid built on it, the box, the side
 // vertices and the vertical edge lengths. Being payload fields they re-evaluate
 // with the payload, so a placement or copy keeps them.
+//
+// walks is the plane-local walk resolution of THIS payload's own profile,
+// published by the evaluation that built the body and carried through every
+// rigid re-evaluation of it (placed). It is a pure cache: it holds nothing the
+// record does not already determine, nothing placement-dependent, and every
+// read of it is guarded by profileWalks.reusable, so a payload whose profile
+// differs by one float bit resolves afresh. A payload a caller draws directly —
+// a plain extrude, a modify rewrite, a boolean result — leaves it nil and
+// resolves as before. See docs/evaluator-design.md §8.
 type prismPayload struct {
 	profile      ProfileRecord
 	frame        r3.Frame
@@ -68,6 +77,7 @@ type prismPayload struct {
 	blendSegs    []map[int]struct{}
 	blendKind    string
 	sectionDelta float64
+	walks        *profileWalks
 }
 
 // z0Scalar and z1Scalar are the sweep levels as bounded readings — the recorded
@@ -270,6 +280,13 @@ func (pp prismPayload) transform() r3.Transform { return pp.xform }
 // placed re-evaluates the same record under the composed motion. It is a
 // re-evaluation path: no moments preflight has run on this record within the
 // call, so the build opens the record's one counter itself.
+//
+// The motion is the ONLY thing it changes. Everything the payload carries about
+// the section — the record, its displacement, the blend roles and the walk
+// resolution — travels unchanged, which is what lets the build read the walks
+// back instead of bracketing every free-form arc a second time. That counter is
+// still charged what the resolution cost, so a record near its ceiling refuses
+// here exactly as it did on the way in (docs/spline-design.md §5.2).
 func (pp prismPayload) placed(ctx context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
 	pp.xform = composed
 	return evalPrismContext(ctx, d, ref, pp, newFreeformWork())

@@ -216,10 +216,20 @@ func requireAnalyticWalk(w segmentWalk, what string) error {
 // once and let each consumer read it back.
 //
 // A nil *profileWalks means "resolve as before" everywhere below: revolve, the
-// cap-loop chamfer, the shell cup, Verify, and every re-evaluation path
-// (Placed/Duplicate/PlacedCopy) that has no preflight in hand pass nil and are
-// unaffected, since they run over a DIFFERENT profile (a cap contour, an
-// offset loop) or hold no single-evaluation resolution worth sharing.
+// cap-loop chamfer, the shell cup, Verify, and every re-evaluation path that
+// has no resolution in hand pass nil and are unaffected, since they run over a
+// DIFFERENT profile (a cap contour, an offset loop) or hold no resolution worth
+// sharing.
+//
+// A metered set outlives the evaluation that resolved it. evalPrismContext
+// publishes the one it resolved onto the body's own prismPayload, so a rigid
+// re-evaluation of that record — Placed, Duplicate, PlacedCopy — reads the
+// plane-local walks back instead of bracketing every free-form arc again. What
+// makes that sound is that a walk holds NOTHING placement-dependent: walkOf
+// answers in the section's own (u, v), and the frame, the placement and the
+// reflection correction are applied by consumers downstream of it. The reuse is
+// still guarded by matches on every read, so a record that differs by one float
+// bit resolves afresh (docs/evaluator-design.md §8, docs/spline-design.md §5.2).
 type profileWalks struct {
 	// profile is the record every walk below was resolved FROM, kept whole so
 	// that a read against another profile is caught by comparing the recorded
@@ -233,13 +243,28 @@ type profileWalks struct {
 	// append([]LoopRecord{profile.Outer}, profile.Holes...) indexing every
 	// consumer below already walks.
 	holes [][]segmentWalk
+	// spent and reconstructionSpent are what resolving this set CHARGED each of
+	// its counters when it ran, measured across the resolution rather than
+	// estimated. A later re-evaluation that reads these walks back replays the
+	// two figures onto its own counter (charge) so the record's ceilings bind it
+	// exactly as the work itself would have (docs/spline-design.md §5.2).
+	spent, reconstructionSpent uint64
+	// metered says the two figures above were MEASURED by resolveProfileWalks.
+	// A set assembled from walks resolved elsewhere — loft_stations.go builds
+	// one as a per-station view over walks its own pairing already charged —
+	// leaves it false, and charge refuses such a set rather than replaying a
+	// zero it never measured.
+	metered bool
 }
 
 // resolveProfileWalks resolves every segment of profile's outer loop and each
 // hole loop through walkOf exactly once, charging work the same single time
 // each segment's own conversion and length bracket cost (docs/spline-design.md
-// §5.2), rather than once per consumer.
+// §5.2), rather than once per consumer. The set it returns records what that
+// cost, so a later rigid re-evaluation can replay the charge instead of
+// re-running the work (charge).
 func resolveProfileWalks(profile ProfileRecord, work *freeformWork) (*profileWalks, error) {
+	before, beforeRecon := workSpent(work)
 	outer := make([]segmentWalk, len(profile.Outer.Segments))
 	for i, seg := range profile.Outer.Segments {
 		w, err := walkOf(seg, work)
@@ -260,7 +285,52 @@ func resolveProfileWalks(profile ProfileRecord, work *freeformWork) (*profileWal
 		}
 		holes[hi] = hw
 	}
-	return &profileWalks{profile: profile, outer: outer, holes: holes}, nil
+	after, afterRecon := workSpent(work)
+	return &profileWalks{
+		profile:             profile,
+		outer:               outer,
+		holes:               holes,
+		spent:               after - before,
+		reconstructionSpent: afterRecon - beforeRecon,
+		metered:             true,
+	}, nil
+}
+
+// reusable reports whether pw may stand in for resolving profile again: it was
+// resolved from exactly this record, and it knows what that resolution cost. A
+// set failing either test is not read, and the caller resolves as before.
+func (pw *profileWalks) reusable(profile ProfileRecord) bool {
+	return pw != nil && pw.metered && pw.matches(profile)
+}
+
+// charge replays onto work the exact free-form and reconstruction work this
+// resolution's own walkOf calls charged when they ran, so a re-evaluation that
+// reads the walks back is bound by the record's ceilings exactly as the work
+// itself would have bound it (docs/spline-design.md §5.2).
+//
+// The replay is one step per counter rather than the original per-segment
+// sequence, and that changes no verdict: every charge is non-negative, so the
+// running total is monotone and a sequence of steps refuses precisely when its
+// SUM exceeds what the counter has left — the same condition, returning the same
+// step error, as the one aggregate step. It cannot refuse EARLIER than the work
+// would have either, because every walk this set holds already resolved.
+func (pw *profileWalks) charge(work *freeformWork) error {
+	if pw == nil || !pw.metered {
+		return errUnmeteredWalksCharge
+	}
+	if err := work.step(pw.spent); err != nil {
+		return err
+	}
+	return work.reconstructionStep(pw.reconstructionSpent)
+}
+
+// workSpent reads both of a counter's totals. A nil counter has spent nothing,
+// which is what step and reconstructionStep already treat it as.
+func workSpent(work *freeformWork) (uint64, uint64) {
+	if work == nil {
+		return 0, 0
+	}
+	return work.spent, work.reconstructionSpent
 }
 
 // at returns the resolved walk for loop index loopIndex (0 the outer loop,
@@ -411,6 +481,14 @@ func identicalRecordValue(a, b reflect.Value) bool {
 // so reaching this error means a future edit broke that pairing, not that the
 // recorded geometry is at fault.
 var errResolvedWalksMismatch = fmt.Errorf(`%w: resolved walks do not match the profile they are read against`, ErrUnsupported)
+
+// errUnmeteredWalksCharge reports a charge replay asked of a walk set that
+// never measured its own cost — the same class of evaluator plumbing invariant
+// as errResolvedWalksMismatch, and unreachable for the same reason: reusable
+// gates every replay on metered, so only a future edit that read a set past
+// that gate can reach it. Refusing is the safe direction: a set that cannot
+// state its charge must never replay a zero in its place.
+var errUnmeteredWalksCharge = fmt.Errorf(`%w: resolved walks did not measure their own work charge`, ErrUnsupported)
 
 // walkOf resolves one recorded segment into its walk geometry.
 //
