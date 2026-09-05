@@ -915,7 +915,7 @@ a differently-authored model of the same intent can clear it.
 
 Reuses `budget.go`'s existing `workBudget` (`newWorkBudget(ctx)`), the same
 shared counter Fillet/Chamfer/Shell already thread through their own audits
-(CLAUDE.md's "Modify audit cancellation"). PR1 opens one counter per
+(`docs/modify-design.md` §5). PR1 opens one counter per
 `tryPrismUnion` attempt and threads it through: the G4 segment scan, scene
 construction (one charge per created entity), the §4.2 selection/merge walk
 (one charge per candidate edge/cell touched, matching `crossingAuditBudget`'s
@@ -1222,7 +1222,7 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
 ## Implementation notes
 
 Every `sectionDelta` consumer below is a no-op at the zero every caller-drawn
-payload carries. `extrude.go`'s `evalPrism` composition and `tessellate.go`'s
+payload carries. `prism_build.go`'s `evalPrism` composition and `tessellate.go`'s
 tolerance reservation, mesh-bound charge and area-slack charge are §7's own
 subject and are not repeated here.
 
@@ -1230,7 +1230,7 @@ subject and are not repeated here.
 only the call site each of its rows lands at. What the consumer does at
 `δ > 0` is that row's to state, and is deliberately not restated here:
 `survey.go`'s `prismWall` and `prismMinRadius` are §12's "Surveys
-(wall/undercut/min-radius)" row, `extrude.go`'s `extentAlong` is its
+(wall/undercut/min-radius)" row, `prism_extent.go`'s `extentAlong` is its
 "`ThroughAll` / `ThroughAllSide`" row, `clearance_geom.go`'s
 `addPrismFaces` is its "Clearance kernel" row, and `verify.go`'s
 `gateWitnessPrism` is its "`Verify`'s structural/tolerance gates" row.

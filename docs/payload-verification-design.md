@@ -679,7 +679,7 @@ lands, overlapping pairs remain `Suspect` by verification's pair-partition rule.
 | `topology.go` | faceted `NormalAt` through certificate; no public type change |
 | new `verify_mesh.go` | BVH feature scale + faceted validity |
 | new `survey_mesh.go` | faceted undercut/radius/wall kernels |
-| `verify.go` | loft construction validity + bounds-disjoint staging; validity-first presence; total tolerance gate; payload outcomes |
+| `verify.go` / `verify_tolerance.go` | loft construction validity + bounds-disjoint staging; validity-first presence; total tolerance gate; payload outcomes |
 
 ## 13. Stages
 

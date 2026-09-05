@@ -236,7 +236,10 @@ against another body's face, a magnitude rescaled from a non-base unit, a
 chamfered end's setback). It is the axial twin of the section displacement:
 the two are tracked apart and neither stands in for the other — one moves a
 coordinate IN the plane, the other moves a level ALONG the normal — while a
-reading both displace, a side vertex or `Bounds`, sums them. Every
+reading both displace, a side vertex or `Bounds`, sums them. The per-end pair
+is spelled `prismPayload.z0Delta`/`z1Delta`; `cupPayload.zDelta` is the cup's
+own spelling of it, and `capBlendPayload` preserves the pair and composes a
+selected end's setback rounding into it. Every
 level-derived reading takes it: `h` and the
 volume, wall area and centroid built on it, `Bounds`, the mesh bound, the side
 vertices and the vertical edge lengths. Extents: `Distance`,

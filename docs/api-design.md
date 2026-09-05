@@ -15,7 +15,7 @@ chording, proof bounds, and boolean handoff are specified in
 `docs/tessellation-design.md`; exact cup plus certificate-backed faceted
 proofs are specified in `docs/payload-verification-design.md`; and how
 verification proves overlap and bounds its volume without consuming either body
-is specified in `docs/interference-design.md`. `CLAUDE.md`
+is specified in `docs/interference-design.md`. `docs/layout.md`
 lists every current design document and its owner.
 
 ## 1. What decad is answerable for

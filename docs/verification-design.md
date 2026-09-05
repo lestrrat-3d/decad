@@ -303,11 +303,12 @@ For a staged pair cause, the slice carries both the deprecated broad
 Every shipped payload class forms its tolerance reference, so a reference-less
 `Suspect` is a degenerate reading rather than a payload the gate cannot judge:
 an analytic reading carries a zero `Bound` and short-circuits the gate before
-any reference is consulted (`verify.go:607-609,:624-626`), and a faceted body
+any reference is consulted (`verify_tolerance.go`'s `scalarToleranceRef` and
+`boundedToleranceRef`), and a faceted body
 always forms a usable reference — its `payload.diameter` is guaranteed at build
 (`boolean_body.go:300-304`) and an edge length is a finite chord sum
 (`boolean_body.go:757-778`). For the other shipped payloads `bodyGateDiameter`
-(`verify.go`) forms a body diameter too, through one of two carrier models. A
+(`verify_gate.go`) forms a body diameter too, through one of two carrier models. A
 `revolvePayload`, or an analytic-walled `prismPayload` whose two axial
 displacements are zero, reads it off the same analytic carrier the
 clearance kernel proves against (`newBodyGeomBudget`/`clearance_geom.go`) — a
@@ -323,7 +324,7 @@ minus `2*axialDelta`, rounded toward zero. That is a certified LOWER bound on
 the denoted body's diameter, so it can only tighten the gate.
 
 **Every arm publishes through one witness-maximum reader, and that reader
-rounds toward zero.** `pointSetDiameterWithBudget` (`verify.go`) is the single
+rounds toward zero.** `pointSetDiameterWithBudget` (`verify_gate.go`) is the single
 site each arm below — the exact carrier model, the `loftPayload` arm, the
 free-form arm, `fallbackGateDiameter`, and the cached `payload.diameter` a
 faceted build stores — hands its witness set to, and what it publishes is the
@@ -378,7 +379,7 @@ realized between two real body points, and the shared reader publishes that
 maximum rounded toward zero, so the reading can only UNDERSTATE the
 body's true diameter and never overstate it — the same construction
 `bodyGateDiameter` already runs over a `loftPayload`'s own held vertex set
-(`verify.go`), differing only in what the published displacement values earn
+(`verify_gate.go`), differing only in what the published displacement values earn
 (loft §12). A `LineSeg`-only loft whose published `delta == 0` has a
 polyhedral boundary, so its vertex maximum IS the true diameter. A chorded
 loft whose published `sectionDelta > 0` and `stationRound == 0` earns only a
@@ -398,7 +399,7 @@ ends with no tolerance reference at all and its bounded readings read
 `Suspect`. That is the sound direction to fail in — an absent reference
 tightens nothing and admits nothing — but it is a real outcome, not one this
 arm's existence rules out. `freeformSectionGateDiameter`'s own doc comment
-(`verify.go`) owns the complete list of the paths it withholds on; it is
+(`verify_gate.go`) owns the complete list of the paths it withholds on; it is
 deliberately not restated here.
 
 Those span endpoints are read off `docs/spline-design.md` §5.1's own
