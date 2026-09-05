@@ -568,15 +568,14 @@ func chordedWedgeTriangles(t testing.TB, pts [][2]float64) ([]r3.Vec, [][3]int) 
 	return a.verts, a.tris
 }
 
-// loftBroadPhaseWorkDivisor is how much of the S7 pair loop's exact
-// classification work the broad-phase must still be removing on the F~230
-// wedge below for the filter to count as doing its job: the broad-phase-on run
-// may reach auditLoftPair on at most one QUARTER of the pairs the
-// broad-phase-off run reaches it on. It is a floor with room under it, not a
-// measured residual — the wedge's real reduction is far larger, and this
-// divisor exists so an ordinary future change to the triangle set does not
-// have to re-pin a number.
-const loftBroadPhaseWorkDivisor = 4
+// loftAuditWorkDivisor is how much of the S7 pair loop's exact classification
+// work the shortcuts must still be removing on the F~230 wedge below for them
+// to count as doing their job: the production run may reach the exact
+// classification on at most one QUARTER of the pairs the reference run reaches
+// it on. It is a floor with room under it, not a measured residual — the
+// wedge's real reduction is far larger, and this divisor exists so an ordinary
+// future change to the triangle set does not have to re-pin a number.
+const loftAuditWorkDivisor = 4
 
 // TestLoftCrossingAuditBroadPhaseCutsClassificationWork is the evidence that
 // the shortcuts actually remove work: it assembles the F~230 hand-chorded
@@ -622,8 +621,8 @@ func TestLoftCrossingAuditBroadPhaseCutsClassificationWork(t *testing.T) {
 		"a shortcut only moves a pair out of the classified column; the pair count is the same either way")
 	require.Positive(t, on.classifications,
 		"the wedge's own adjacent and nearby pairs must still reach the exact classification")
-	require.Less(t, on.classifications, off.classifications/loftBroadPhaseWorkDivisor,
-		"the broad-phase must still remove the bulk of the exact classification work")
+	require.Less(t, on.classifications, off.classifications/loftAuditWorkDivisor,
+		"the shortcuts must still remove the bulk of the exact classification work")
 }
 
 // BenchmarkLoftCrossingAuditBroadPhase times the F~230 wedge audit under
