@@ -679,3 +679,431 @@ func TestEvalPrismContinuesCallerFreeformWork(t *testing.T) {
 	require.NotNil(t, body)
 	require.Greater(t, work.spent, spent)
 }
+
+// ------------------------------------------- reusing a published resolution
+
+// prismPayloadOf reads back the payload a prism build published on its body.
+func prismPayloadOf(t *testing.T, b *Body) prismPayload {
+	t.Helper()
+	pp, ok := b.payload.(prismPayload)
+	require.True(t, ok, "a prism build must publish a prismPayload")
+	return pp
+}
+
+// rebuiltUnder re-evaluates pp under motion on a counter the caller can read
+// afterwards. It is prismPayload.placed's own body with the counter lifted out:
+// placed mints one internally, which is the single thing about the placement
+// path a test cannot otherwise observe. The payload it carries over and the
+// build it runs are the same.
+func rebuiltUnder(t *testing.T, pp prismPayload, motion r3.Transform, work *freeformWork) *Body {
+	t.Helper()
+	pp.xform = motion
+	body, err := evalPrism(New(), 0, pp, work)
+	require.NoError(t, err, "the re-evaluation under the motion must build")
+	return body
+}
+
+// withoutWalks is the reuse switch this file tests against: the same payload
+// with its published resolution dropped, so the build resolves every walk
+// itself exactly as it did before a payload carried one.
+func withoutWalks(pp prismPayload) prismPayload {
+	pp.walks = nil
+	return pp
+}
+
+// placementMotions are the rigid motions the reuse must survive: a pure
+// translation, a rotation about the sweep axis, a reflection (which inverts
+// face orientation and arc sense downstream of the plane-local walk, and so is
+// the motion most likely to expose a walk that secretly carried placement), and
+// a composition of a rotation with a translation.
+func placementMotions(t *testing.T) []struct {
+	name   string
+	motion r3.Transform
+} {
+	t.Helper()
+	turn, err := r3.RotationAround(r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1), units.Radians(math.Pi/3))
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.NewVec(3, -4, 7))
+	require.NoError(t, err)
+	composed, err := turn.Then(shift)
+	require.NoError(t, err)
+	mirror, err := r3.Reflection(identityFrame(t))
+	require.NoError(t, err)
+	require.True(t, mirror.IsReflection(), "premise: the mirror must actually reverse orientation")
+	return []struct {
+		name   string
+		motion r3.Transform
+	}{
+		{name: "identity", motion: r3.Identity()},
+		{name: "translation", motion: shift},
+		{name: "rotation", motion: turn},
+		{name: "reflection", motion: mirror},
+		{name: "composed", motion: composed},
+	}
+}
+
+// requireSamePrismBuild asserts two prism builds published the same geometry:
+// every measurement with its own exactness and proven bound, every face's
+// surface, area and roles, and the same topology counts. It compares the
+// measurements as whole values rather than within a tolerance, because a reused
+// resolution that changed an answer AT ALL would have changed what the body
+// claims about itself.
+func requireSamePrismBuild(t *testing.T, want, got *Body) {
+	t.Helper()
+	require.Equal(t, want.solid, got.solid, "solidity")
+	require.Equal(t, want.volume, got.volume, "volume, its exactness and its bound")
+	require.Equal(t, want.area, got.area, "area, its exactness and its bound")
+	require.Equal(t, want.centroid, got.centroid, "centroid, its exactness and its bound")
+	require.Equal(t, want.bounds, got.bounds, "bounding box, its exactness and its bound")
+
+	wantFaces, gotFaces := want.Faces(), got.Faces()
+	require.Len(t, gotFaces, len(wantFaces), "face count")
+	for i := range wantFaces {
+		require.Equal(t, wantFaces[i].surface, gotFaces[i].surface, "face %d's surface", i)
+		require.Equal(t, wantFaces[i].area, gotFaces[i].area, "face %d's area", i)
+		require.Equal(t, wantFaces[i].areaBound, gotFaces[i].areaBound, "face %d's area bound", i)
+		require.Equal(t, wantFaces[i].origins, gotFaces[i].origins, "face %d's roles", i)
+		require.Equal(t, wantFaces[i].axialDelta, gotFaces[i].axialDelta, "face %d's axial displacement", i)
+	}
+	require.Len(t, got.Edges(), len(want.Edges()), "edge count")
+	require.Len(t, got.Vertices(), len(want.Vertices()), "vertex count")
+}
+
+// TestPrismBuildPublishesItsOwnResolution pins the publication half of the
+// reuse: a completed build hands its body the walk resolution it just made,
+// metered with what that resolution charged, and matching the record the body
+// was built from. Everything downstream reads it through that guard, so a build
+// that published an unmetered or mismatched set would simply resolve again —
+// which is why the assertions here are on the published set itself.
+func TestPrismBuildPublishesItsOwnResolution(t *testing.T) {
+	t.Parallel()
+	source := involuteFitPrismPayload(t)
+	require.Nil(t, source.walks, "premise: a payload a caller draws carries no resolution")
+
+	built, err := evalPrism(New(), 0, source, newFreeformWork())
+	require.NoError(t, err)
+
+	published := prismPayloadOf(t, built)
+	require.NotNil(t, published.walks, "a completed build must publish its own resolution")
+	require.True(t, published.walks.metered, "the published resolution must know what it cost")
+	require.True(t, published.walks.reusable(published.profile), "it must read back against its own record")
+	require.Equal(t, uint64(230168), published.walks.spent,
+		"the published charge is resolveProfileWalks' own single-resolution cost for this record")
+	require.Equal(t, source.profile, published.profile, "publishing a resolution must not disturb the record")
+}
+
+// TestPlacedReusesPublishedWalks is the optimization itself: a rigid
+// re-evaluation of a recorded section carries the SAME resolution rather than
+// bracketing every free-form arc a second time, and it is charged exactly what
+// that resolution cost, so the record's ceiling binds it as before.
+//
+// Pointer identity is the proof that the work was skipped, not merely that the
+// answer came out the same: resolveProfileWalks allocates a new set on every
+// call, so a placement that resolved again could not hand back this one.
+func TestPlacedReusesPublishedWalks(t *testing.T) {
+	t.Parallel()
+	cold := newFreeformWork()
+	built, err := evalPrism(New(), 0, involuteFitPrismPayload(t), cold)
+	require.NoError(t, err)
+	source := prismPayloadOf(t, built)
+
+	turn, err := r3.RotationAround(r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1), units.Radians(math.Pi/3))
+	require.NoError(t, err)
+
+	placed, err := source.placed(t.Context(), New(), 0, turn)
+	require.NoError(t, err)
+	require.Same(t, source.walks, prismPayloadOf(t, placed).walks,
+		"a rigid placement must carry the source's resolution, not allocate a second one")
+	require.Equal(t, turn, prismPayloadOf(t, placed).xform, "the motion is the only thing the placement changes")
+
+	// The charge is what it always was. The reused build and the resolve-again
+	// build levy the same total on their own counters, so a record sitting near
+	// the ceiling refuses in exactly the same place either way.
+	warm := newFreeformWork()
+	reused := rebuiltUnder(t, source, turn, warm)
+	require.Same(t, source.walks, prismPayloadOf(t, reused).walks)
+
+	uncached := newFreeformWork()
+	plain := rebuiltUnder(t, withoutWalks(source), turn, uncached)
+	require.NotSame(t, source.walks, prismPayloadOf(t, plain).walks,
+		"premise: without a published resolution the build must allocate its own")
+
+	require.Equal(t, uncached.spent, warm.spent,
+		"replaying the recorded charge must levy exactly what doing the work levies")
+	require.Equal(t, uncached.reconstructionSpent, warm.reconstructionSpent,
+		"the reconstruction counter is replayed on the same terms")
+	require.Equal(t, cold.spent, warm.spent,
+		"and that is the same figure the original build spent on this record")
+	require.Greater(t, warm.spent, published(t, source).spent,
+		"premise: the whole build charges more than the walk resolution alone")
+}
+
+// published is the resolution a payload carries, asserted present.
+func published(t *testing.T, pp prismPayload) *profileWalks {
+	t.Helper()
+	require.NotNil(t, pp.walks)
+	return pp.walks
+}
+
+// TestPlacedWalksReuseMatchesUncachedBuild is the regression matrix's first
+// row. For every rigid motion the payload admits, the body built from a reused
+// resolution and the body built by resolving afresh publish the same geometry —
+// the same measurements with the same exactness and the same proven bounds, the
+// same faces with the same surfaces and roles, and the same topology counts.
+//
+// The reflection row is the one that earns its place: a reflected placement
+// inverts face orientation and arc sense, and it does so downstream of the walk.
+// A walk that had secretly carried any placement would disagree here first.
+func TestPlacedWalksReuseMatchesUncachedBuild(t *testing.T) {
+	t.Parallel()
+	built, err := evalPrism(New(), 0, involuteFitPrismPayload(t), newFreeformWork())
+	require.NoError(t, err)
+	source := prismPayloadOf(t, built)
+
+	for _, tc := range placementMotions(t) {
+		t.Run(tc.name, func(t *testing.T) {
+			reused := rebuiltUnder(t, source, tc.motion, newFreeformWork())
+			plain := rebuiltUnder(t, withoutWalks(source), tc.motion, newFreeformWork())
+			requireSamePrismBuild(t, plain, reused)
+		})
+	}
+}
+
+// placementChain places pp ten times over, one pi/5 turn about the sweep axis
+// at a time, and returns the last body with the resolution each step carried.
+// drop clears the published resolution before every step, which is how the same
+// chain is run against the path that resolves its walks itself.
+func placementChain(t *testing.T, pp prismPayload, drop bool) (*Body, []*profileWalks) {
+	t.Helper()
+	step, err := r3.RotationAround(r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1), units.Radians(math.Pi/5))
+	require.NoError(t, err)
+
+	var carried []*profileWalks
+	var body *Body
+	for k := range 10 {
+		if drop {
+			pp = withoutWalks(pp)
+		}
+		composed, err := pp.xform.Then(step)
+		require.NoError(t, err, "composing placement %d", k+1)
+		body, err = pp.placed(t.Context(), New(), 0, composed)
+		require.NoError(t, err, "placement %d", k+1)
+		pp = prismPayloadOf(t, body)
+		carried = append(carried, pp.walks)
+	}
+	return body, carried
+}
+
+// TestRepeatedPlacementAccumulatesNoError is the matrix's second row: placing
+// the same section ten times over adds no error term and drops none. The chain
+// is run twice — once reusing the published resolution throughout, once
+// resolving afresh at every step — and the two must agree on every published
+// reading, including each measurement's own proven bound.
+//
+// The bounds are compared between the two CHAINS rather than against the
+// unplaced body, because a placement's rounding is a real term the centroid
+// bound is supposed to carry (docs/evaluator-design.md §8): it differs from the
+// unplaced body's by design. What must not differ is the reused chain from the
+// resolve-every-time chain, and that is what this asserts.
+func TestRepeatedPlacementAccumulatesNoError(t *testing.T) {
+	t.Parallel()
+	built, err := evalPrism(New(), 0, involuteFitPrismPayload(t), newFreeformWork())
+	require.NoError(t, err)
+	source := prismPayloadOf(t, built)
+
+	reused, carried := placementChain(t, source, false)
+	for k, walks := range carried {
+		require.Same(t, source.walks, walks, "placement %d must still carry the original resolution", k+1)
+	}
+
+	plain, resolved := placementChain(t, source, true)
+	for k, walks := range resolved {
+		require.NotSame(t, source.walks, walks, "premise: placement %d resolved its own walks", k+1)
+	}
+
+	requireSamePrismBuild(t, plain, reused)
+
+	// Rigid motion invariants the chain must also preserve outright, and the
+	// premise that the copies genuinely moved rather than composing back.
+	require.Equal(t, built.volume, reused.volume, "ten rotations about the sweep axis change no volume term")
+	require.Equal(t, built.area, reused.area, "nor any area term")
+	require.NotEqual(t, built.centroid.Value, reused.centroid.Value, "premise: the copies genuinely moved")
+}
+
+// TestChangedRecordRefusesPublishedWalks is the matrix's third and fourth rows
+// together: a resolution is read back only for the record it was resolved from,
+// and every other record — a differing coordinate, a differing segment count, a
+// new hole — resolves afresh. The guard is matches, which compares the recorded
+// segments by their bits, so there is no near-miss arm to fall through.
+func TestChangedRecordRefusesPublishedWalks(t *testing.T) {
+	t.Parallel()
+	built, err := evalPrism(New(), 0, involuteFitPrismPayload(t), newFreeformWork())
+	require.NoError(t, err)
+	source := prismPayloadOf(t, built)
+
+	nudged := involuteFitProfile()
+	line, ok := nudged.Outer.Segments[0].(LineSeg)
+	require.True(t, ok, "premise: this fixture's first segment is the closing line")
+	line.End.U = math.Nextafter(line.End.U, math.Inf(1))
+	nudged.Outer.Segments[0] = line
+
+	t.Run("one ulp of a coordinate", func(t *testing.T) {
+		require.False(t, source.walks.reusable(nudged), "one ulp of difference is a different record")
+		stale := source
+		stale.profile = nudged
+		rebuilt, err := evalPrism(New(), 0, stale, newFreeformWork())
+		require.NoError(t, err)
+		require.NotSame(t, source.walks, prismPayloadOf(t, rebuilt).walks,
+			"a changed record must resolve its own walks")
+		require.True(t, prismPayloadOf(t, rebuilt).walks.reusable(nudged),
+			"and publish them against the record it actually built")
+	})
+
+	t.Run("a new hole", func(t *testing.T) {
+		holed := source
+		holed.profile.Holes = []LoopRecord{lineEndProfile(Point2{U: 1, V: 1}).Outer}
+		require.False(t, source.walks.reusable(holed.profile), "a record that gained a hole is a different record")
+	})
+
+	t.Run("a rescaled record", func(t *testing.T) {
+		scaled := ProfileRecord{Outer: LoopRecord{Segments: make([]CurveSegment, 0, 1)}}
+		scaled.Outer.Segments = append(scaled.Outer.Segments,
+			LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 1})
+		require.False(t, source.walks.reusable(scaled),
+			"a record in different coordinates is a different record, whatever produced it")
+	})
+}
+
+// TestWalksChargeReplayRefusesAtTheCeiling is the matrix's last row: a record
+// near its work ceiling must refuse on the reused path exactly as it does on
+// the path that does the work, with the same error identity. Replaying the
+// recorded charge is what makes that true — a reuse that charged nothing would
+// have admitted a build the budget had already proved unaffordable.
+func TestWalksChargeReplayRefusesAtTheCeiling(t *testing.T) {
+	t.Parallel()
+	built, err := evalPrism(New(), 0, involuteFitPrismPayload(t), newFreeformWork())
+	require.NoError(t, err)
+	source := prismPayloadOf(t, built)
+
+	// Spend all but one unit less than this record's own build costs, so the
+	// build refuses whichever way it gets its walks.
+	whole := newFreeformWork()
+	_, err = evalPrism(New(), 0, withoutWalks(source), whole)
+	require.NoError(t, err)
+	require.Greater(t, whole.spent, uint64(0), "premise: this record charges real work")
+
+	starve := func() *freeformWork {
+		w := newFreeformWork()
+		require.NoError(t, w.step(freeformWorkLimit-whole.spent+1))
+		return w
+	}
+
+	reusedWork := starve()
+	_, reusedErr := evalPrism(New(), 0, source, reusedWork)
+	require.ErrorIs(t, reusedErr, ErrUnsupported, "the reused build must refuse at the ceiling")
+
+	plainWork := starve()
+	_, plainErr := evalPrism(New(), 0, withoutWalks(source), plainWork)
+	require.ErrorIs(t, plainErr, ErrUnsupported, "so must the build that does the work")
+	require.Equal(t, plainErr.Error(), reusedErr.Error(),
+		"and both must refuse with the same error, not merely the same class")
+}
+
+// TestUnmeteredWalksAreNeverReused pins the guard on a resolution that cannot
+// state its own charge. loft_stations.go builds such a view over walks its own
+// pairing already charged; a set like it must never be replayed, because
+// replaying a charge it never measured would hand the build free work.
+func TestUnmeteredWalksAreNeverReused(t *testing.T) {
+	t.Parallel()
+	profile := involuteFitProfile()
+	metered, err := resolveProfileWalks(profile, newFreeformWork())
+	require.NoError(t, err)
+
+	view := &profileWalks{profile: profile, outer: metered.outer, holes: metered.holes}
+	require.True(t, view.matches(profile), "premise: the view is over this very record")
+	require.False(t, view.reusable(profile), "an unmetered set is never read back")
+	require.ErrorIs(t, view.charge(newFreeformWork()), errUnmeteredWalksCharge)
+	require.ErrorIs(t, view.charge(newFreeformWork()), ErrUnsupported)
+
+	require.True(t, metered.reusable(profile), "the metered set it was built from still reads back")
+	require.NoError(t, metered.charge(newFreeformWork()))
+}
+
+// TestPublishedWalksAreReadOnlyAcrossGoroutines runs two independent
+// re-evaluations over one published resolution at the same time, in separate
+// documents. The resolution is shared read-only by construction — every walk in
+// it is plane-local and nothing downstream writes back through it — and this is
+// the test that says so under -race.
+func TestPublishedWalksAreReadOnlyAcrossGoroutines(t *testing.T) {
+	t.Parallel()
+	built, err := evalPrism(New(), 0, involuteFitPrismPayload(t), newFreeformWork())
+	require.NoError(t, err)
+	source := prismPayloadOf(t, built)
+
+	turn, err := r3.RotationAround(r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1), units.Radians(math.Pi/3))
+	require.NoError(t, err)
+
+	type outcome struct {
+		body *Body
+		err  error
+	}
+	shift, err := r3.Translation(r3.NewVec(1, 2, 3))
+	require.NoError(t, err)
+	results := make(chan outcome, 2)
+	for _, motion := range []r3.Transform{turn, shift} {
+		go func() {
+			pp := source
+			pp.xform = motion
+			body, err := evalPrismContext(t.Context(), New(), 0, pp, newFreeformWork())
+			results <- outcome{body: body, err: err}
+		}()
+	}
+	for range 2 {
+		got := <-results
+		require.NoError(t, got.err)
+		require.Same(t, source.walks, prismPayloadOf(t, got.body).walks,
+			"both concurrent builds read the one shared resolution")
+		require.Equal(t, built.volume, got.body.volume, "a rigid motion changes no volume term")
+	}
+}
+
+// benchInvoluteFitPayload is involuteFitPrismPayload built against *testing.B.
+func benchInvoluteFitPayload(b *testing.B) prismPayload {
+	b.Helper()
+	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(b, err)
+	return prismPayload{profile: involuteFitProfile(), frame: frame, z1: 5, xform: r3.Identity()}
+}
+
+// BenchmarkPlacedFreeformPrism measures the placement this reuse is for: a
+// rigid re-evaluation of an involute fit-spline section, once reading back the
+// resolution the original build published and once resolving every walk again.
+// The gap between the two arms is the arc-length bracketing the reuse skips,
+// and it is the only difference between them — both build the same body, and
+// both charge their counter the same total.
+func BenchmarkPlacedFreeformPrism(b *testing.B) {
+	built, err := evalPrism(New(), 0, benchInvoluteFitPayload(b), newFreeformWork())
+	require.NoError(b, err)
+	source, ok := built.payload.(prismPayload)
+	require.True(b, ok)
+	turn, err := r3.RotationAround(r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1), units.Radians(math.Pi/3))
+	require.NoError(b, err)
+
+	for _, arm := range []struct {
+		name    string
+		payload prismPayload
+	}{
+		{name: "reusing the published resolution", payload: source},
+		{name: "resolving every walk again", payload: withoutWalks(source)},
+	} {
+		b.Run(arm.name, func(b *testing.B) {
+			pp := arm.payload
+			pp.xform = turn
+			for b.Loop() {
+				if _, err := evalPrism(New(), 0, pp, newFreeformWork()); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}

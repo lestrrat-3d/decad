@@ -985,3 +985,52 @@ func TestExtrudeInvoluteFlankBuildsAndVerifies(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
 }
+
+// TestPlacedRecipeIsUnchangedByTheEvaluatorsCache pins the boundary between
+// what a body carries for its own re-evaluation and what it RECORDS. The
+// evaluator publishes a private walk resolution onto a prism body so a
+// placement need not resolve the same section twice; a recipe records steps,
+// and this asserts the two never meet — the extrude step and the placement step
+// encode exactly the fields they always did, and the recipe a placed document
+// hands back round-trips byte for byte.
+//
+// decad has no whole-recipe evaluator yet, so this is the reachable half of the
+// replay obligation: nothing about the cache can reach a recorded step, so a
+// future replay — which decodes into fresh records carrying no cache — has the
+// same steps to work from.
+func TestPlacedRecipeIsUnchangedByTheEvaluatorsCache(t *testing.T) {
+	t.Parallel()
+	s, p := plateSketch(t)
+	doc := decad.New()
+	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	extruded := doc.Recipe()
+
+	motion, err := r3.Translation(r3.NewVec(0, 0, 25))
+	require.NoError(t, err)
+	placed, err := body.Placed(motion)
+	require.NoError(t, err)
+
+	recipe := doc.Recipe()
+	require.Len(t, recipe.Steps, 2, "an extrude and a placement")
+	require.Equal(t, extruded.Steps[0], recipe.Steps[0],
+		"placing a body must not disturb the step that built it")
+	require.Equal(t, decad.OpPlaced, recipe.Steps[1].Op)
+	require.Equal(t, decad.ProfileRecord{}, recipe.Steps[1].Profile,
+		"a placement records a motion, never a section")
+
+	encoded, err := json.Marshal(recipe)
+	require.NoError(t, err, "the recorded recipe encodes")
+	var decoded decad.Recipe
+	require.NoError(t, json.Unmarshal(encoded, &decoded), "and decodes")
+	require.Equal(t, recipe, decoded, "the recipe round-trips field for field")
+
+	// And the placed body is the plate, moved: the reading the cache serves.
+	vol, err := placed.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, vol.Exactness)
+	require.True(t, vol.Value.Equal(units.CubicMillimeters(60000), 1e-9), `100×60×10 = 60000 mm³, got %s`, vol.Value)
+	c, err := placed.Centroid()
+	require.NoError(t, err)
+	require.InDelta(t, 30.0, c.Value.Z, 1e-9, "the plate's mid-height, lifted by 25 mm")
+}

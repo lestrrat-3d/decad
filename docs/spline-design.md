@@ -568,6 +568,25 @@ exactly one exact-rational counter for the record walk it is about to make. Neve
 one per segment, never one per loop, and never one inside the walk resolution
 itself: a resolution handed no counter has no ceiling at all and refuses.
 
+Such a pass may REPLAY a recorded charge in place of doing the work again, and
+only on those terms. A resolution that measured what it cost — `profileWalks`,
+which records the two counters' deltas across its own `walkOf` calls — can be
+read back by a later pass over a BIT-IDENTICAL record, and that pass charges its
+own fresh counter the recorded figures before reading a single walk. The ceiling
+therefore binds the replay exactly as the work bound the original: a record that
+refused still refuses, one that fit still fits with the same headroom left for
+the phases after it, and neither the aggregate nor the order of what is charged
+changes. What the replay skips is the arithmetic, never the accounting.
+
+The replay is ONE step per counter rather than the original per-segment
+sequence, and that is sound because a charge is never negative: the running
+total is monotone, so a sequence of steps refuses precisely when its SUM exceeds
+what the counter has left. That is the one aggregate step's own condition, and
+it returns the same error. A resolution that cannot state its own charge —
+`loft_stations.go` builds a per-station VIEW over walks its own pairing already
+charged — is never replayed; it refuses rather than levy a zero it never
+measured, which is the reject-only direction every other guard here takes.
+
 Charge EARLY as well as conservatively. The ceiling is fixed because the public
 `ProfileRecord` methods take no context and so cannot be cancelled, so every
 pass whose cost grows with the record must sit BEHIND a charge already levied —

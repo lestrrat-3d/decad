@@ -89,14 +89,29 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 		walks += len(loop.Segments)
 	}
 	// pw resolves every boundary segment's walk exactly ONCE for this whole
-	// build (this file's profileWalks doc comment): buildLoopSides below,
+	// build (segment_walk.go's profileWalks doc comment): buildLoopSides below,
 	// prismCentroidGeometryBound and prismBoundsContext's three per-axis
 	// extentBoundedAlong calls all read it back instead of each calling
 	// walkOf itself, which is what let one free-form segment's §5.2 charge be
 	// spent eight times over in a single evalPrismContext call.
-	pw, err := resolveProfileWalks(pp.profile, work)
-	if err != nil {
-		return nil, err
+	//
+	// A payload that already carries the resolution of THIS record hands it
+	// straight over — a rigid re-evaluation (placed) is the case, since a
+	// placement changes no plane-local walk — and this call is charged what
+	// that resolution cost rather than being handed it free. reusable is what
+	// decides, and it accepts only a set resolved from a bit-identical record
+	// that measured its own charge; anything else resolves here as before.
+	pw := pp.walks
+	if pw.reusable(pp.profile) {
+		if err := pw.charge(work); err != nil {
+			return nil, err
+		}
+	} else {
+		resolved, err := resolveProfileWalks(pp.profile, work)
+		if err != nil {
+			return nil, err
+		}
+		pw = resolved
 	}
 	for li, loop := range loops {
 		if err := ctx.Err(); err != nil {
@@ -191,6 +206,11 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	// The build succeeded, so pw is a resolution of a record this body now owns
+	// and every walk in it held. Publishing it onto the payload is what lets a
+	// later rigid re-evaluation read it back; the record itself is unchanged, so
+	// the payload the body carries denotes exactly what it did before.
+	pp.walks = pw
 	body.payload = pp
 	return body, nil
 }
