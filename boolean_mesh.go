@@ -639,12 +639,19 @@ func segTriOverlap2(a, b, ta, tb, tc xp2) bool {
 	// Clip the segment parameter interval [0, 1] against each closed edge
 	// half-plane of the triangle, in exact arithmetic; a positive-length
 	// remainder is an overlap.
+	//
+	// A clip parameter is only ever compared here — against the running bounds
+	// and, at the end, against each other — and never printed or combined into
+	// a further value. So the bounds stay UNNORMALISED fractions and compare by
+	// cross-multiplication (clipFrac): every comparison is exact, and none of
+	// them pays the GCD that reducing a big.Rat costs.
 	ccw := cross2xSign(ta, tb, tc)
 	if ccw == 0 {
 		return false
 	}
 	edges := [3][2]xp2{{ta, tb}, {tb, tc}, {tc, ta}}
-	lo, hi := new(big.Rat), new(big.Rat).SetInt64(1)
+	lo := clipFrac{num: big.NewInt(0), den: big.NewInt(1)}
+	hi := clipFrac{num: big.NewInt(1), den: big.NewInt(1)}
 	for _, e := range edges {
 		// Signs decide the two no-crossing cases without constructing rational
 		// values. Only an edge crossing the segment needs its exact clip point.
@@ -660,27 +667,41 @@ func segTriOverlap2(a, b, ta, tb, tc xp2) bool {
 			continue
 		case sa < 0 && sb < 0:
 			return false
-		default:
-			fa := cross2x(e[0], e[1], a)
-			fb := cross2x(e[0], e[1], b)
-			if ccw < 0 {
-				fa.Neg(fa)
-				fb.Neg(fb)
+		}
+		// Exactly one of the two signs is negative here, so fa ≠ fb and the
+		// clip point t = −fa/(fb − fa) is defined. Writing fa = na/wa and
+		// fb = nb/wb turns it into
+		//
+		//	t = −na·wb / (nb·wa − na·wb)
+		//
+		// whose denominator is nonzero for the same reason, and which needs no
+		// division at all. The ccw < 0 negation the sign test above applies is
+		// deliberately NOT applied to fa and fb: t does not move when both are
+		// multiplied by one nonzero constant, and −1 is such a constant.
+		fa, fb := edgeCross2Fracs(e[0], e[1], a, b)
+		naWb := new(big.Int).Mul(fa.num, fb.den)
+		t := clipFrac{
+			num: new(big.Int).Neg(naWb),
+			den: new(big.Int).Sub(new(big.Int).Mul(fb.num, fa.den), naWb),
+		}
+		if t.den.Sign() < 0 {
+			// cmpClipFrac's cross-multiplication keeps its direction only
+			// while both denominators are positive, so canonicalise the sign
+			// onto the numerator before this t is ever compared.
+			t.num.Neg(t.num)
+			t.den.Neg(t.den)
+		}
+		if sa < 0 {
+			if cmpClipFrac(t, lo) > 0 {
+				lo = t
 			}
-			diff := new(big.Rat).Sub(fb, fa)
-			t := new(big.Rat).Quo(new(big.Rat).Neg(fa), diff)
-			if sa < 0 {
-				if t.Cmp(lo) > 0 {
-					lo = t
-				}
-			} else {
-				if t.Cmp(hi) < 0 {
-					hi = t
-				}
-			}
+			continue
+		}
+		if cmpClipFrac(t, hi) < 0 {
+			hi = t
 		}
 	}
-	return lo.Cmp(hi) < 0
+	return cmpClipFrac(lo, hi) < 0
 }
 
 // coplanarOverlap reports whether two coplanar triangles share positive

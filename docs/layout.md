@@ -159,7 +159,7 @@ to the byte budget.
 | `prism_overlap.go` | `docs/prism-boolean-design.md` §4.5's overlap-area reading: measures a coplanar prism pair's overlap cell by cell and publishes the charged sum as a volume, with no assembled section and no body. Read-only, for `Verify`'s interference path alone. See the file's own doc comment. |
 | `boolean_mesh.go` | The exact-predicate mesh-boolean pipeline: contact classification, subdivision, stitching, and the closed-mesh audit. See the file's own doc comment and `docs/evaluator-design.md` §9. |
 | `boolean_cut.go` | Per-facet exact subdivision along contact segments into classified regions, in rational 2D on the facet's own plane. See the file's own doc comment. |
-| `boolean_exact.go` | The exact-arithmetic kernel behind the mesh boolean: adaptive orient3d, rational predicates, and the reject-only segment, facet-pair and parity projected-box pre-filters. Each filter's own doc comment carries its admission derivation. |
+| `boolean_exact.go` | The exact-arithmetic kernel behind the mesh boolean: adaptive orient3d, rational predicates, unnormalised `clipFrac` comparisons, and the reject-only segment, facet-pair and parity projected-box pre-filters. Each filter's own doc comment carries its admission derivation. |
 | `boolean_body.go` | Builds a `facetedPayload` into a `Body`: face/loop/edge topology from the stitched mesh, and measurements integrated exactly with composed proven bounds. See the file's own doc comment and `docs/evaluator-design.md` §9. |
 | `bounds.go` | The single owner of every proven error bound a faceted measurement reports, one helper per mechanism, including `docs/prism-boolean-design.md` §7's section-displacement terms. See the file's own doc comment. |
 
