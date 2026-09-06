@@ -9,8 +9,8 @@
 # Shard totals at the last measurement:
 #   shard 0:  177.67s over 235 tests
 #   shard 1:  177.51s over 771 tests
-#   shard 2:  176.65s over 236 tests
-#   shard 3:  176.62s over 235 tests
+#   shard 2:  176.73s over 239 tests
+#   shard 3:  178.12s over 236 tests
 #
 0	0.02	TestAnalyticBodiesEqualMatchesPlainPrismSetIdentity
 0	0.01	TestArcSegExactQuarterDisk
@@ -1074,12 +1074,14 @@
 2	1.08	TestClearanceOracleWellSeparatedSound
 2	0.02	TestClearancePlacedRotatedCube
 2	2.41	TestClearancePolyBracketContainsTruth
+2	0.00	TestClipFracComparesExactlyAcrossDenominators
 2	0.01	TestComputeLoftChordedAllowChargesTheHeldStationDisplacement
 2	0.01	TestCurveSegmentDecodeRequiresEveryField
 2	0.03	TestCutBlindTrenchSplitsCapIntoTwoFaces
 2	0.02	TestCutEmbeddedToolMakesVoid
 2	0.04	TestCutThroughHoleKeepsInnerLoopNonOuter
 2	0.01	TestDuplicate
+2	0.04	TestEdgeCross2FracsMatchesCross2xUpToOneSharedFactor
 2	0.01	TestEvalCupRejectsOverflowedMeasurements
 2	0.67	TestEvalLoftAuditRefusesOverBudget
 2	0.01	TestEvalLoftUnitBoxMeasurements
@@ -1202,6 +1204,7 @@
 2	8.76	TestRevolveUnionWithAnotherRevolveObeysInclusionExclusion
 2	0.86	TestSTLDefaultChordTolerance
 2	0.01	TestSecondMomentsOffsetCircle
+2	0.04	TestSegTriOverlap2MatchesReference
 2	0.01	TestSelectorCardinality
 2	0.01	TestSelectorResolutionIsDeterministic
 2	0.11	TestShellCupHoledMinRadius
@@ -1433,6 +1436,7 @@
 3	0.02	TestRevolveTorus
 3	0.01	TestSTLPlate
 3	0.78	TestSegFilterNeverRejectsAnExactHitAtEveryScale
+3	1.50	TestSegTriOverlap2MatchesReferenceRandomized
 3	0.01	TestSelectionErrorResidualNamesEmptyingClause
 3	0.01	TestSelectorRejectsNonPositiveCardinality
 3	0.05	TestShellContextCancellationDuringOffsetSetupLeavesReceiverLive
