@@ -912,6 +912,65 @@ func cross2x(a, b, c xp2) *big.Rat {
 	return new(big.Rat).Sub(new(big.Rat).Mul(bu, cv), new(big.Rat).Mul(bv, cu))
 }
 
+// clipFrac is an exact fraction kept UNNORMALISED: no common factor is ever
+// divided out of num and den, so building one costs no GCD. Two of them
+// compare through cmpClipFrac, which cross-multiplies instead of normalising.
+// The value is exact — nothing here rounds — it simply is not in lowest terms.
+//
+// Every clipFrac this package builds carries den > 0, which is what makes the
+// cross-multiplied comparison keep its direction.
+//
+// Neither field is ever used as an arithmetic destination: den commonly
+// ALIASES an xp2's own hw, and a projection cache shares one xp2 across every
+// query of its mesh, so mutating either field would corrupt the cache.
+type clipFrac struct{ num, den *big.Int }
+
+// cmpClipFrac compares x against y, both with positive denominators: x is
+// below y exactly when x.num·y.den is below y.num·x.den.
+func cmpClipFrac(x, y clipFrac) int {
+	left := new(big.Int).Mul(x.num, y.den)
+	right := new(big.Int).Mul(y.num, x.den)
+	return left.Cmp(right)
+}
+
+// edgeCross2Fracs is cross2x(e0, e1, a) and cross2x(e0, e1, b) as unnormalised
+// fractions, both scaled by ONE factor they share.
+//
+// Its caller (segTriOverlap2) reads only the ratio −fa/(fb − fa), and that
+// ratio does not move when fa and fb are both multiplied by the same nonzero
+// constant. So the homogeneous form's e0.hw²·e1.hw — the part of cross2x's
+// denominator that does not depend on the third point — is dropped rather than
+// carried, which keeps both integers small. Only the third point's own weight
+// survives, and it is the returned denominator.
+//
+// The homogeneous route needs all four points to carry homogeneous
+// coordinates, because the shared factor only cancels when both fractions are
+// really scaled by it. When any point lacks them, both fractions come from
+// cross2x's rational value, whose numerator and denominator are already the
+// pair (and whose denominator big.Rat keeps positive).
+//
+// The returned integers are read-only; see clipFrac.
+func edgeCross2Fracs(e0, e1, a, b xp2) (clipFrac, clipFrac) {
+	if e0.hu == nil || e1.hu == nil || a.hu == nil || b.hu == nil {
+		fa, fb := cross2x(e0, e1, a), cross2x(e0, e1, b)
+		return clipFrac{num: fa.Num(), den: fa.Denom()}, clipFrac{num: fb.Num(), den: fb.Denom()}
+	}
+	// The edge's own homogeneous difference, computed once for both points.
+	baU := new(big.Int).Sub(new(big.Int).Mul(e1.hu, e0.hw), new(big.Int).Mul(e0.hu, e1.hw))
+	baV := new(big.Int).Sub(new(big.Int).Mul(e1.hv, e0.hw), new(big.Int).Mul(e0.hv, e1.hw))
+	return homCross2Frac(e0, baU, baV, a), homCross2Frac(e0, baU, baV, b)
+}
+
+// homCross2Frac finishes edgeCross2Fracs for one point: the cross product's
+// homogeneous numerator over that point's own weight, the edge's shared factor
+// already dropped.
+func homCross2Frac(e0 xp2, baU, baV *big.Int, p xp2) clipFrac {
+	caU := new(big.Int).Sub(new(big.Int).Mul(p.hu, e0.hw), new(big.Int).Mul(e0.hu, p.hw))
+	caV := new(big.Int).Sub(new(big.Int).Mul(p.hv, e0.hw), new(big.Int).Mul(e0.hv, p.hw))
+	num := new(big.Int).Sub(new(big.Int).Mul(baU, caV), new(big.Int).Mul(baV, caU))
+	return clipFrac{num: num, den: p.hw}
+}
+
 // cross2xSign uses a conservative float filter for the common case and keeps
 // the exact rational predicate for values close enough to zero that rounding
 // could change the answer. The scale uses the original coordinates, not only
