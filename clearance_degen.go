@@ -2,7 +2,6 @@ package decad
 
 import (
 	"math"
-	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 )
@@ -58,41 +57,6 @@ func degAnd(a, b degState) degState {
 	}
 }
 
-// ratV3 is a vector of the payload's own floats taken EXACTLY — the only
-// arithmetic allowed to prove a degeneracy.
-type ratV3 [3]*big.Rat
-
-func ratVec(v r3.Vec) ratV3 { return ratV3{mustRatOf(v.X), mustRatOf(v.Y), mustRatOf(v.Z)} }
-
-func rvSub(a, b ratV3) ratV3 {
-	var out ratV3
-	for i := range out {
-		out[i] = new(big.Rat).Sub(a[i], b[i])
-	}
-	return out
-}
-
-func rvCross(a, b ratV3) ratV3 {
-	mul := func(x, y *big.Rat) *big.Rat { return new(big.Rat).Mul(x, y) }
-	return ratV3{
-		new(big.Rat).Sub(mul(a[1], b[2]), mul(a[2], b[1])),
-		new(big.Rat).Sub(mul(a[2], b[0]), mul(a[0], b[2])),
-		new(big.Rat).Sub(mul(a[0], b[1]), mul(a[1], b[0])),
-	}
-}
-
-func rvDot(a, b ratV3) *big.Rat {
-	out := new(big.Rat)
-	for i := range a {
-		out.Add(out, new(big.Rat).Mul(a[i], b[i]))
-	}
-	return out
-}
-
-func rvIsZero(a ratV3) bool {
-	return a[0].Sign() == 0 && a[1].Sign() == 0 && a[2].Sign() == 0
-}
-
 // finiteVec guards exact rational lifts and every float result used by a
 // certificate.
 func finiteVec(v r3.Vec) bool {
@@ -101,16 +65,16 @@ func finiteVec(v r3.Vec) bool {
 		!math.IsNaN(v.Z) && !math.IsInf(v.Z, 0)
 }
 
-// parallelRat decides a ∥ b from the vectors taken exactly (ra, rb) with their
+// parallelExact decides a ∥ b from the vectors taken exactly (ra, rb) with their
 // float forms (fa, fb) supplying the disproof threshold: an exactly zero cross
 // product proves parallelism outright, a cross clearly above the kernel's
 // angular noise disproves it, and the band between is undecided.
-func (k *pairKernel) parallelRat(ra, rb ratV3, fa, fb r3.Vec) degState {
+func (k *pairKernel) parallelExact(ra, rb dyV3, fa, fb r3.Vec) degState {
 	la, lb := fa.Len(), fb.Len()
 	if !finiteVec(fa) || !finiteVec(fb) || la == 0 || lb == 0 {
 		return degUnknown
 	}
-	if rvIsZero(rvCross(ra, rb)) {
+	if dvIsZero(dvCross(ra, rb)) {
 		return degYes
 	}
 	if fa.Cross(fb).Len() > clrAngTol*la*lb {
@@ -124,7 +88,7 @@ func (k *pairKernel) parallel(a, b r3.Vec) degState {
 	if !finiteVec(a) || !finiteVec(b) {
 		return degUnknown
 	}
-	return k.parallelRat(ratVec(a), ratVec(b), a, b)
+	return k.parallelExact(dyVec(a), dyVec(b), a, b)
 }
 
 // parallelSeg decides (b − a) ∥ d, with the difference taken exactly (a float
@@ -134,7 +98,7 @@ func (k *pairKernel) parallelSeg(a, b, d r3.Vec) degState {
 	if !finiteVec(a) || !finiteVec(b) || !finiteVec(d) {
 		return degUnknown
 	}
-	return k.parallelRat(rvSub(ratVec(b), ratVec(a)), ratVec(d), b.Sub(a), d)
+	return k.parallelExact(dvSub(dyVec(b), dyVec(a)), dyVec(d), b.Sub(a), d)
 }
 
 // parallelSegs decides (b1 − a1) ∥ (b2 − a2).
@@ -142,7 +106,7 @@ func (k *pairKernel) parallelSegs(a1, b1, a2, b2 r3.Vec) degState {
 	if !finiteVec(a1) || !finiteVec(b1) || !finiteVec(a2) || !finiteVec(b2) {
 		return degUnknown
 	}
-	return k.parallelRat(rvSub(ratVec(b1), ratVec(a1)), rvSub(ratVec(b2), ratVec(a2)),
+	return k.parallelExact(dvSub(dyVec(b1), dyVec(a1)), dvSub(dyVec(b2), dyVec(a2)),
 		b1.Sub(a1), b2.Sub(a2))
 }
 
@@ -157,8 +121,8 @@ func (k *pairKernel) perpendicularSeg(a, b, n r3.Vec) degState {
 	if !finiteVec(fRel) || !finiteVec(n) || lr == 0 || ln == 0 {
 		return degUnknown
 	}
-	rel := rvSub(ratVec(b), ratVec(a))
-	if rvDot(rel, ratVec(n)).Sign() == 0 {
+	rel := dvSub(dyVec(b), dyVec(a))
+	if dvDot(rel, dyVec(n)).sign() == 0 {
 		return degYes
 	}
 	if math.Abs(fRel.Dot(n)) > clrAngTol*lr*ln {
@@ -176,8 +140,8 @@ func (k *pairKernel) onAxis(p, anchor, axis r3.Vec) degState {
 	if !finiteVec(p) || !finiteVec(anchor) || !finiteVec(axis) {
 		return degUnknown
 	}
-	rel := rvSub(ratVec(p), ratVec(anchor))
-	if rvIsZero(rel) || rvIsZero(rvCross(rel, ratVec(axis))) {
+	rel := dvSub(dyVec(p), dyVec(anchor))
+	if dvIsZero(rel) || dvIsZero(dvCross(rel, dyVec(axis))) {
 		return degYes
 	}
 	fRel := p.Sub(anchor)
@@ -192,7 +156,7 @@ func (k *pairKernel) coincident(p, q r3.Vec) degState {
 	if !finiteVec(p) || !finiteVec(q) {
 		return degUnknown
 	}
-	if rvIsZero(rvSub(ratVec(p), ratVec(q))) {
+	if dvIsZero(dvSub(dyVec(p), dyVec(q))) {
 		return degYes
 	}
 	if p.Sub(q).Len() > k.tol {

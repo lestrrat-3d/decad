@@ -41,30 +41,30 @@ func normalFaceByRole(t *testing.T, b *decad.Body, role string) *decad.Face {
 	return nil
 }
 
-// ratVec is a held coordinate triple as exact rationals. A float64 IS a
+// dyVec is a held coordinate triple as exact rationals. A float64 IS a
 // rational, so a vector the body publishes enters here exactly and every
 // reading below stays exact — the arms work in float64 and what these
 // assertions measure is what that arithmetic committed, so a check that
 // rounded once itself could not tell the two apart.
-type ratVec [3]*big.Rat
+type dyVec [3]*big.Rat
 
-func ratVecOf(v r3.Vec) ratVec {
-	return ratVec{
+func dyVecOf(v r3.Vec) dyVec {
+	return dyVec{
 		new(big.Rat).SetFloat64(v.X),
 		new(big.Rat).SetFloat64(v.Y),
 		new(big.Rat).SetFloat64(v.Z),
 	}
 }
 
-func ratVecSub(a, b ratVec) ratVec {
-	var out ratVec
+func dyVecSub(a, b dyVec) dyVec {
+	var out dyVec
 	for i := range out {
 		out[i] = new(big.Rat).Sub(a[i], b[i])
 	}
 	return out
 }
 
-func ratVecDot(a, b ratVec) *big.Rat {
+func dyVecDot(a, b dyVec) *big.Rat {
 	sum := new(big.Rat)
 	for i := range a {
 		sum.Add(sum, new(big.Rat).Mul(a[i], b[i]))
@@ -72,22 +72,22 @@ func ratVecDot(a, b ratVec) *big.Rat {
 	return sum
 }
 
-func ratVecCross(a, b ratVec) ratVec {
+func dyVecCross(a, b dyVec) dyVec {
 	term := func(i, j int) *big.Rat {
 		return new(big.Rat).Sub(new(big.Rat).Mul(a[i], b[j]), new(big.Rat).Mul(a[j], b[i]))
 	}
-	return ratVec{term(1, 2), term(2, 0), term(0, 1)}
+	return dyVec{term(1, 2), term(2, 0), term(0, 1)}
 }
 
 // axialRadialOf is the exact vector from a surface's own axis to p,
 // perpendicular to that axis: rel − a·(rel·a)/(a·a). That is the UNIT-axis
 // spelling normal_bound.go states each arm is judged against, written so no
 // square root enters and the answer stays rational.
-func axialRadialOf(p, origin, axis r3.Vec) ratVec {
-	rel := ratVecSub(ratVecOf(p), ratVecOf(origin))
-	a := ratVecOf(axis)
-	share := new(big.Rat).Quo(ratVecDot(rel, a), ratVecDot(a, a))
-	var out ratVec
+func axialRadialOf(p, origin, axis r3.Vec) dyVec {
+	rel := dyVecSub(dyVecOf(p), dyVecOf(origin))
+	a := dyVecOf(axis)
+	share := new(big.Rat).Quo(dyVecDot(rel, a), dyVecDot(a, a))
+	var out dyVec
 	for i := range out {
 		out[i] = new(big.Rat).Sub(rel[i], new(big.Rat).Mul(a[i], share))
 	}
@@ -98,10 +98,10 @@ func axialRadialOf(p, origin, axis r3.Vec) ratVec {
 // reaches: |n × d|²/|d|². The surface's exact unit normal is a scaling of d, so
 // the whole of this sits inside the distance the reading's bound owes, and
 // comparing it squared keeps the check free of any square root.
-func perpDefectSq(n r3.Vec, d ratVec) *big.Rat {
-	nv := ratVecOf(n)
-	cross := ratVecCross(nv, d)
-	return new(big.Rat).Quo(ratVecDot(cross, cross), ratVecDot(d, d))
+func perpDefectSq(n r3.Vec, d dyVec) *big.Rat {
+	nv := dyVecOf(n)
+	cross := dyVecCross(nv, d)
+	return new(big.Rat).Quo(dyVecDot(cross, cross), dyVecDot(d, d))
 }
 
 // alongDefectSq is the same lower bound read the other way, for a surface
@@ -109,10 +109,10 @@ func perpDefectSq(n r3.Vec, d ratVec) *big.Rat {
 // PLANE does not: w is a direction the exact unit normal is exactly
 // perpendicular to, so whatever of the held reading lies along w is distance
 // the bound owes. |n·w|²/|w|².
-func alongDefectSq(n r3.Vec, w ratVec) *big.Rat {
-	nv := ratVecOf(n)
-	along := ratVecDot(nv, w)
-	return new(big.Rat).Quo(new(big.Rat).Mul(along, along), ratVecDot(w, w))
+func alongDefectSq(n r3.Vec, w dyVec) *big.Rat {
+	nv := dyVecOf(n)
+	along := dyVecDot(nv, w)
+	return new(big.Rat).Quo(new(big.Rat).Mul(along, along), dyVecDot(w, w))
 }
 
 // armDefectSq is a lower bound on how far one NormalAt reading sits from the
@@ -132,20 +132,20 @@ func armDefectSq(t *testing.T, f *decad.Face, p r3.Vec, n r3.Vec) *big.Rat {
 		// r3.Frame holds its two in-plane axes and derives the normal as their
 		// cross product on every call, so the exact direction is that cross
 		// taken over rationals and the arm's reading is its rounded image.
-		return perpDefectSq(n, ratVecCross(ratVecOf(s.Frame.U()), ratVecOf(s.Frame.V())))
+		return perpDefectSq(n, dyVecCross(dyVecOf(s.Frame.U()), dyVecOf(s.Frame.V())))
 	case decad.Cylinder:
 		return perpDefectSq(n, axialRadialOf(p, s.Origin, s.Axis))
 	case decad.Cone:
 		return coneDefectSq(t, s, p, n)
 	case decad.Sphere:
-		return perpDefectSq(n, ratVecSub(ratVecOf(p), ratVecOf(s.Center)))
+		return perpDefectSq(n, dyVecSub(dyVecOf(p), dyVecOf(s.Center)))
 	case decad.Torus:
 		// The exact normal runs from the tube centre at p's own azimuth to p,
 		// so it lies in the plane the axis and that azimuth span and is
 		// exactly perpendicular to their cross product — which the major
 		// radius, the one term needing a square root, never enters.
-		rel := ratVecSub(ratVecOf(p), ratVecOf(s.Center))
-		return alongDefectSq(n, ratVecCross(ratVecOf(s.Axis), rel))
+		rel := dyVecSub(dyVecOf(p), dyVecOf(s.Center))
+		return alongDefectSq(n, dyVecCross(dyVecOf(s.Axis), rel))
 	default:
 		require.FailNow(t, `no exact defect is written for this surface`, `%T`, s)
 		return nil
@@ -352,15 +352,15 @@ func ratSinCosIv(x *big.Rat) (sin, cos ratIv) {
 }
 
 // ratIvVec is a 3D vector of exact rational intervals, the interval sibling
-// of ratVec above.
+// of dyVec above.
 type ratIvVec [3]ratIv
 
 // ratIvUnit encloses the exact unit vector of v: v scaled by a verified
 // reciprocal-square-root enclosure of its own squared length. Fails loudly
 // through require rather than dividing by a degenerate length silently.
-func ratIvUnit(t *testing.T, v ratVec) ratIvVec {
+func ratIvUnit(t *testing.T, v dyVec) ratIvVec {
 	t.Helper()
-	normSq := ratVecDot(v, v)
+	normSq := dyVecDot(v, v)
 	require.Positive(t, normSq.Sign(), `ratIvUnit: a unit direction needs a nonzero vector`)
 	length := ratSqrtIv(t, normSq)
 	var out ratIvVec
@@ -396,7 +396,7 @@ func coneDefectSq(t *testing.T, s decad.Cone, p, n r3.Vec) *big.Rat {
 	t.Helper()
 	radial := axialRadialOf(p, s.Origin, s.Axis)
 	rhat := ratIvUnit(t, radial)
-	ahat := ratIvUnit(t, ratVecOf(s.Axis))
+	ahat := ratIvUnit(t, dyVecOf(s.Axis))
 
 	half, err := s.HalfAngle.In(units.Radian)
 	require.NoError(t, err, `a cone's half angle is an angle`)
@@ -405,7 +405,7 @@ func coneDefectSq(t *testing.T, s decad.Cone, p, n r3.Vec) *big.Rat {
 	sin, cos := ratSinCosIv(halfRat)
 
 	m := ratIvVecSub(ratIvVecScale(rhat, cos), ratIvVecScale(ahat, sin))
-	nv := ratVecOf(n)
+	nv := dyVecOf(n)
 	sum := ratIvPoint(new(big.Rat))
 	for i := range m {
 		sum = ratIvAdd(sum, ratIvSquare(ratIvSub(ratIvPoint(nv[i]), m[i])))

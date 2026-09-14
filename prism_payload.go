@@ -115,9 +115,9 @@ func vecMaxAbs(v r3.Vec) float64 {
 }
 
 func exactPrismPointRound(pp prismPayload, u, v, z float64, held r3.Vec) float64 {
-	ratVec := func(x, y, z *big.Rat) [3]*big.Rat { return [3]*big.Rat{x, y, z} }
+	dyVec := func(x, y, z *big.Rat) [3]*big.Rat { return [3]*big.Rat{x, y, z} }
 	ratOfVec := func(value r3.Vec) [3]*big.Rat {
-		return ratVec(floatRat(value.X), floatRat(value.Y), floatRat(value.Z))
+		return dyVec(floatRat(value.X), floatRat(value.Y), floatRat(value.Z))
 	}
 	origin := ratOfVec(pp.frame.Origin())
 	fu, fv, fn := ratOfVec(pp.frame.U()), ratOfVec(pp.frame.V()), ratOfVec(pp.frame.N())

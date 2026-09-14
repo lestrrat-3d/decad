@@ -805,12 +805,14 @@ func sincHalf(x float64) float64 {
 // bound, never abort, and its caller has a float evaluation to fall back on
 // that is no worse.
 func exactPlanePatchFlux(v0, v1, v2, v3 r3.Vec) (*big.Rat, bool) {
-	lift := func(v r3.Vec) (ratV3, bool) {
-		x, y, z := floatRat(v.X), floatRat(v.Y), floatRat(v.Z)
-		if x == nil || y == nil || z == nil {
-			return ratV3{}, false
+	lift := func(v r3.Vec) (dyV3, bool) {
+		x, okX := dyOf(v.X)
+		y, okY := dyOf(v.Y)
+		z, okZ := dyOf(v.Z)
+		if !okX || !okY || !okZ {
+			return dyV3{}, false
 		}
-		return ratV3{x, y, z}, true
+		return dyV3{x, y, z}, true
 	}
 	r0, ok0 := lift(v0)
 	r1, ok1 := lift(v1)
@@ -819,8 +821,10 @@ func exactPlanePatchFlux(v0, v1, v2, v3 r3.Vec) (*big.Rat, bool) {
 	if !ok0 || !ok1 || !ok2 || !ok3 {
 		return nil, false
 	}
-	sum := new(big.Rat).Add(rvDot(r0, rvCross(r1, r2)), rvDot(r0, rvCross(r2, r3v)))
-	return sum.Mul(sum, big.NewRat(1, 2)), true
+	// Halving is a shift, so the whole flux stays inside the dyadic set and
+	// converts once, at the caller's boundary (dyadic.go).
+	sum := dyAdd(dvDot(r0, dvCross(r1, r2)), dvDot(r0, dvCross(r2, r3v)))
+	return dyShift(sum, -1).rat(), true
 }
 
 // tripleProductUpper bounds |a·(b×c)| and every intermediate the float

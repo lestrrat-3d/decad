@@ -683,7 +683,7 @@ func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
 
 // This file is the falsifier for bounds.go's PROVEN-NORM rule: a bound whose
 // factors are vector lengths must form every one of them exactly and round it
-// OUTWARD (heldDelta into rvLenUpper), never read r3.Vec.Len.
+// OUTWARD (heldDelta into dvLenUpper), never read r3.Vec.Len.
 //
 // r3.Vec.Len is math.Hypot and r3.Vec.Sub is a float subtraction, both
 // round-to-NEAREST, so neither is an upper bound on anything. The composed
@@ -706,8 +706,8 @@ const refPrec = 600
 func refFloat(x float64) *big.Float { return new(big.Float).SetPrec(refPrec).SetFloat64(x) }
 
 // refLen is the EXACT length of an exactly-represented vector, to refPrec bits.
-func refLen(u ratV3) *big.Float {
-	return new(big.Float).SetPrec(refPrec).Sqrt(new(big.Float).SetPrec(refPrec).SetRat(rvDot(u, u)))
+func refLen(u dyV3) *big.Float {
+	return new(big.Float).SetPrec(refPrec).Sqrt(new(big.Float).SetPrec(refPrec).SetRat(dvDot(u, u).rat()))
 }
 
 func refAdd(a, b *big.Float) *big.Float { return new(big.Float).SetPrec(refPrec).Add(a, b) }
@@ -876,7 +876,7 @@ func provenNormFixtures() []cellQuad {
 // refTwistAreaProduct is |T|·(eA+eB) computed exactly from the cell's own
 // corners, the quantity the linear fallback arm publishes.
 func refTwistAreaProduct(c cellQuad) *big.Float {
-	twist := rvSub(heldDelta(c.vLo, c.vHi), heldDelta(c.wLo, c.wHi))
+	twist := dvSub(heldDelta(c.vLo, c.vHi), heldDelta(c.wLo, c.wHi))
 	eA := refMax(refLen(heldDelta(c.vHi, c.vLo)), refLen(heldDelta(c.wHi, c.wLo)))
 	eB := refMax(refLen(heldDelta(c.wLo, c.vLo)), refLen(heldDelta(c.wHi, c.vHi)))
 	return refMul(refLen(twist), refAdd(eA, eB))
@@ -993,8 +993,8 @@ func refChordCurveAreaAllow(c cellQuad, arcA, arcB, md, energyA, energyB float64
 		return free
 	}
 	nMinF := refFloat(nMin)
-	twist := rvSub(heldDelta(c.vLo, c.vHi), heldDelta(c.wLo, c.wHi))
-	pCrossT := refMax(refLen(rvCross(da, twist)), refLen(rvCross(db, twist)))
+	twist := dvSub(heldDelta(c.vLo, c.vHi), heldDelta(c.wLo, c.wHi))
+	pCrossT := refMax(refLen(dvCross(da, twist)), refLen(dvCross(db, twist)))
 	oscW := refAdd(refLen(twist), refQuo(refMul(eB, pCrossT), nMinF))
 	lin := refAdd(refMul(oscW, iMax), refMul(refMul(two, mdF), refAdd(cMax, iMax)))
 	quad := refQuo(
@@ -1037,8 +1037,8 @@ func TestCellChordCurveAreaAllowEnclosesItsExactTerms(t *testing.T) {
 			// Both arc-length claims are proven upper bounds: an outward
 			// chord length is itself one for a straight side, and the sweep
 			// factor keeps every fixture's claim above the chord it subtends.
-			arcA := upRound(1.25 * rvLenUpper(heldDelta(c.vHi, c.vLo)))
-			arcB := upRound(1.25 * rvLenUpper(heldDelta(c.wHi, c.wLo)))
+			arcA := upRound(1.25 * dvLenUpper(heldDelta(c.vHi, c.vLo)))
+			arcB := upRound(1.25 * dvLenUpper(heldDelta(c.wHi, c.wLo)))
 			got := cellChordCurveAreaAllow(c.vLo, c.vHi, c.wLo, c.wHi, arcA, arcB, r.md, r.energyA, r.energyB)
 			want := refChordCurveAreaAllow(c, arcA, arcB, r.md, r.energyA, r.energyB)
 			t.Logf("%s: published=%.17g exact=%s nMin=%.6e",
@@ -1059,7 +1059,7 @@ func TestCellChordCurveAreaAllowAdmitsAnExactlyTightArcClaim(t *testing.T) {
 	// an arcLenUpper of 5 is exactly tight rather than short.
 	vLo, vHi := r3.NewVec(0, 0, 0), r3.NewVec(3, 4, 0)
 	wLo, wHi := r3.NewVec(0, 0, 12), r3.NewVec(3, 4, 12)
-	require.Equal(t, 5.0, rvLenUpper(heldDelta(vHi, vLo)), "the fixture's chord must be exactly representable")
+	require.Equal(t, 5.0, dvLenUpper(heldDelta(vHi, vLo)), "the fixture's chord must be exactly representable")
 	require.Equal(t, 0.0, cellChordCurveAreaAllow(vLo, vHi, wLo, wHi, 5, 5, 0, 0, 0),
 		"an exactly-tight arc claim on a straight, untwisted cell is admitted and charges nothing")
 	require.True(t, math.IsInf(cellChordCurveAreaAllow(vLo, vHi, wLo, wHi, 4.999, 5, 0, 0, 0), 1),
@@ -1080,8 +1080,8 @@ func TestRvLenUpperEnclosesTheExactNorm(t *testing.T) {
 	for name, pair := range cases {
 		t.Run(name, func(t *testing.T) {
 			d := heldDelta(pair[1], pair[0])
-			got, want := rvLenUpper(d), refLen(d)
-			require.GreaterOrEqual(t, refFloat(got).Cmp(want), 0, "rvLenUpper must enclose the exact norm")
+			got, want := dvLenUpper(d), refLen(d)
+			require.GreaterOrEqual(t, refFloat(got).Cmp(want), 0, "dvLenUpper must enclose the exact norm")
 			if want.Sign() == 0 {
 				require.Equal(t, 0.0, got, "a zero difference has length exactly zero")
 			}
@@ -1095,9 +1095,9 @@ func TestRvLenUpperEnclosesTheExactNorm(t *testing.T) {
 func TestRatLenAtLeastDecidesExactly(t *testing.T) {
 	t.Parallel()
 	d := heldDelta(r3.NewVec(3, 4, 0), r3.NewVec(0, 0, 0))
-	require.True(t, ratLenAtLeast(5, d), "a claim equal to the exact norm is admitted")
-	require.True(t, ratLenAtLeast(math.Nextafter(5, math.Inf(1)), d), "a claim above the exact norm is admitted")
-	require.False(t, ratLenAtLeast(math.Nextafter(5, 0), d), "a claim one ulp short is refused")
-	require.False(t, ratLenAtLeast(-1, d), "a negative claim is refused")
-	require.False(t, ratLenAtLeast(math.NaN(), d), "a NaN claim is refused")
+	require.True(t, dvLenAtLeast(5, d), "a claim equal to the exact norm is admitted")
+	require.True(t, dvLenAtLeast(math.Nextafter(5, math.Inf(1)), d), "a claim above the exact norm is admitted")
+	require.False(t, dvLenAtLeast(math.Nextafter(5, 0), d), "a claim one ulp short is refused")
+	require.False(t, dvLenAtLeast(-1, d), "a negative claim is refused")
+	require.False(t, dvLenAtLeast(math.NaN(), d), "a NaN claim is refused")
 }

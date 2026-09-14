@@ -165,16 +165,16 @@ func TestCellChordCurveAreaUpperRefusesNonFiniteCorners(t *testing.T) {
 // representation only. They exist as REFERENCES for those tests and for
 // nothing else; no bound reads them.
 func ratSpanUpper(a, b r3.Vec) float64 {
-	d := rvSub(ratVec(a), ratVec(b))
-	return ratSqrtUp(rvDot(d, d))
+	d := dvSub(dyVec(a), dyVec(b))
+	return dySqrtUp(dvDot(d, d))
 }
 
 func ratTwistQuarterUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
-	t := rvSub(rvSub(ratVec(vLo), ratVec(vHi)), rvSub(ratVec(wLo), ratVec(wHi)))
-	if rvIsZero(t) {
+	t := dvSub(dvSub(dyVec(vLo), dyVec(vHi)), dvSub(dyVec(wLo), dyVec(wHi)))
+	if dvIsZero(t) {
 		return 0
 	}
-	return ratSqrtUp(new(big.Rat).Quo(rvDot(t, t), new(big.Rat).SetInt64(16)))
+	return dySqrtUp(dyShift(dvDot(t, t), -4))
 }
 
 // TestCellExactReadingsMatchTheRationalReference pins that carrying the two
@@ -362,8 +362,8 @@ func TestCellAllowsOfMatchesThePerBoundHelpers(t *testing.T) {
 // r3's own implementation — see naiveNorm's own comment for why.
 func rawNormIsBelowExact(a, b r3.Vec) bool {
 	raw := ratOfFloat(naiveNorm(a.Sub(b)))
-	d := rvSub(ratVec(a), ratVec(b))
-	return new(big.Rat).Mul(raw, raw).Cmp(rvDot(d, d)) < 0
+	d := dvSub(dyVec(a), dyVec(b))
+	return new(big.Rat).Mul(raw, raw).Cmp(dvDot(d, d).rat()) < 0
 }
 
 // edgeProductRow is one corner set for the two raw-norm regressions below,
@@ -848,9 +848,8 @@ func exactCellTwistFactors(vLo, vHi, wLo, wHi r3.Vec) (*big.Rat, *big.Rat) {
 func exactCellTwistVolume(vLo, vHi, wLo, wHi r3.Vec) *big.Rat {
 	a := heldDelta(vHi, vLo)
 	b := heldDelta(wLo, vLo)
-	twist := rvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
-	det := rvDot(a, rvCross(twist, b))
-	det.Abs(det)
+	twist := dvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	det := dyAbs(dvDot(a, dvCross(twist, b))).rat()
 	return det.Quo(det, big.NewRat(12, 1))
 }
 
