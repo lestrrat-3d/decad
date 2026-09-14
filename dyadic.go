@@ -94,14 +94,20 @@ func dyOf(f float64) (dyadic, bool) {
 	return dyadic{mant: big.NewInt(int64(frac * (1 << 53))), exp: exp - 53}.norm(), true
 }
 
-// mustDyOf is dyOf for a value the caller has already proven finite. A
-// non-finite value reaching it is a missing gate in the caller, and the zero it
-// returns would be a silently wrong proof, so it is never called on an
-// unchecked float.
+// mustDyOf is dyOf for a value the caller has already proven finite
+// (finiteVec), which every caller of it does.
+//
+// A non-finite value reaching it is a missing gate in the CALLER, and it panics
+// rather than answering. The alternative is worse than a crash: returning a
+// zero would feed an exact, confident, wrong number into a proof that then
+// publishes a bound it never established, and no test would see it. The panic
+// names the caller that built the bad value instead — the same contract
+// mustRatOf held, and the one ~/.claude/docs/go.md's nil-argument rule states
+// for a broken caller claim.
 func mustDyOf(f float64) dyadic {
 	d, ok := dyOf(f)
 	if !ok {
-		return dyadic{}
+		panic("decad: exact dyadic lift requires a finite float")
 	}
 	return d
 }

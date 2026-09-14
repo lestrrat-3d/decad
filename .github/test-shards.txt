@@ -214,6 +214,7 @@
 0	0.00	TestDyadicDirectedRoundingMatchesTheRationalOnes
 0	0.00	TestDyadicLiftsEveryFloatExactly
 0	0.00	TestDyadicOfRatAcceptsOnlyBinaryFractions
+0	0.00	TestMustDyOfPanicsOnANonFiniteFloat
 0	0.00	TestDyadicRefusesNonFiniteFloats
 0	0.00	TestDyadicShiftAndIntAreExact
 0	0.00	TestDyadicSplitChargesItselfAndRefusesBeforeSplitting
