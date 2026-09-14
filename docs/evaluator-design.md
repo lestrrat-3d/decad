@@ -423,15 +423,23 @@ reflection's orientation and winding corrections are all applied by consumers
 DOWNSTREAM of it. So a reflected copy still runs every correction it always ran;
 only the arc-length bracketing under it is not repeated.
 
+A tessellation reads the same published set. `tessellateContext`'s prism arm
+chords the very loops the build resolved, so it replays the recorded charge onto
+its own counter and hands the walks to `chordLoop`, which reads them exactly as
+`buildLoopSidesAs` does. It is where the resolution dominates: chording a
+free-form section would otherwise spend almost all of its time in the
+arc-length bracket under `walkOf`, while the chording itself — `chainStations`
+over the Bézier chain the walk already holds — is cheap.
+
 Reuse is decided by the record, never by the caller. `profileWalks.reusable`
 admits a set only when it was resolved from a bit-identical `ProfileRecord`
 (`matches`, compared by float BITS) and measured its own work charge, and every
 other payload — a plain extrude, a modify op's rewritten section, a boolean
 result, a cup's derived region — carries none and resolves as before. A record
 that changed in any way, including a rescale or a gained hole, is a different
-record and resolves afresh. The re-evaluation is still CHARGED what the
-resolution cost (`docs/spline-design.md` §5.2), so the free-form work ceiling
-refuses the same records it always refused, with the same error.
+record and resolves afresh. The reader is still CHARGED what the resolution
+cost (`docs/spline-design.md` §5.2), so the free-form work ceiling refuses the
+same records it always refused, with the same error.
 
 Replay tests cover every example model + every current `OpKind`. Same-evaluator
 replay reproduces live-body order and provenance roles. Measurements reproduce
