@@ -789,10 +789,10 @@ func TestCapBlendPlacedTangentBandNormalCarriesItsOwnBound(t *testing.T) {
 // plane through THREE of the four corners, so the corner normals are the one
 // reading that can see the fourth leave it.
 func flatCornerDefectSq(corners []r3.Vec, i int, published r3.Vec) *big.Rat {
-	at := ratVecOf(corners[i])
-	next := ratVecSub(ratVecOf(corners[(i+1)%len(corners)]), at)
-	prev := ratVecSub(ratVecOf(corners[(i+len(corners)-1)%len(corners)]), at)
-	return perpDefectSq(published, ratVecCross(next, prev))
+	at := dyVecOf(corners[i])
+	next := dyVecSub(dyVecOf(corners[(i+1)%len(corners)]), at)
+	prev := dyVecSub(dyVecOf(corners[(i+len(corners)-1)%len(corners)]), at)
+	return perpDefectSq(published, dyVecCross(next, prev))
 }
 
 // TestCapBlendPlacedFlatPatchNormalCarriesItsOwnBound is the tangent band's

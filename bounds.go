@@ -294,7 +294,7 @@ func radius3D(perCoord float64) float64 {
 // float64 coordinate is an exact rational, so the difference is exact and
 // carries none of the cancellation error the float subtraction commits. Every
 // proven bound in this file that needs the LENGTH of a corner difference must
-// form it this way and then take rvLenUpper of it — r3.Vec.Len is
+// form it this way and then take dvLenUpper of it — r3.Vec.Len is
 // math.Hypot, which rounds to NEAREST and so is not an upper bound on
 // anything (nor is Sub), and a final upRound of the product buys back only
 // ~1 ulp of the PRODUCT, never the norms' own inward error, which a
@@ -303,9 +303,9 @@ func radius3D(perCoord float64) float64 {
 //
 // Both corners must already be finite (finiteVec), which every caller here
 // checks before it lifts.
-func heldDelta(a, b r3.Vec) ratV3 { return rvSub(ratVec(a), ratVec(b)) }
+func heldDelta(a, b r3.Vec) dyV3 { return dvSub(dyVec(a), dyVec(b)) }
 
-// rvLenUpper is a PROVEN upper bound on |u| for an exactly-represented vector:
+// dvLenUpper is a PROVEN upper bound on |u| for an exactly-represented vector:
 // the squared length is exact rational arithmetic and ratSqrtUp brackets its
 // root by exact comparison (f·f ≥ u·u), so the published value encloses the
 // true norm whatever the platform's own sqrt does — the same mechanism
@@ -313,23 +313,22 @@ func heldDelta(a, b r3.Vec) ratV3 { return rvSub(ratVec(a), ratVec(b)) }
 // use. A zero vector answers exactly 0, so a bound that vanishes with its
 // vector still vanishes. A norm past the float64 range answers +Inf, a
 // refusal rather than a bound.
-func rvLenUpper(u ratV3) float64 { return ratSqrtUp(rvDot(u, u)) }
+func dvLenUpper(u dyV3) float64 { return dySqrtUp(dvDot(u, u)) }
 
-// ratLenAtLeast reports whether claim is PROVABLY at least |u|, decided by
+// dvLenAtLeast reports whether claim is PROVABLY at least |u|, decided by
 // exact comparison of claim² against u·u rather than against a rounded norm.
 // It is the falsifier form a "this claimed length cannot be below its own
 // chord" gate needs: exact in BOTH directions, so it neither admits a claim
 // that is genuinely short nor refuses one that is exactly tight.
-func ratLenAtLeast(claim float64, u ratV3) bool {
+func dvLenAtLeast(claim float64, u dyV3) bool {
 	if !(claim >= 0) {
 		return false
 	}
-	c, ok := ratOf(claim)
+	c, ok := dyOf(claim)
 	if !ok {
 		return false
 	}
-	c.Mul(c, c)
-	return c.Cmp(rvDot(u, u)) >= 0
+	return dyCmp(dyMul(c, c), dvDot(u, u)) >= 0
 }
 
 // sumSlop is a PROVEN bound on the rounding a NAIVE float64 summation of n
@@ -763,10 +762,20 @@ func cellTwistVolumeAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 func cellTwistVolume(vLo, vHi, wLo, wHi r3.Vec) *big.Rat {
 	a := heldDelta(vHi, vLo)
 	b := heldDelta(wLo, vLo)
-	twist := rvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
-	det := rvDot(a, rvCross(twist, b))
-	return new(big.Rat).Quo(det, big.NewRat(12, 1))
+	twist := dvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	det := dvDot(a, dvCross(twist, b))
+	return new(big.Rat).Quo(det.rat(), big.NewRat(12, 1))
 }
+
+// ratV3 is a triple of exact RATIONALS, for the one family of readings in this
+// package whose arithmetic genuinely leaves the dyadic set: the moment
+// integrals below divide by (i+1)(j+1) and by factorial denominators, and
+// neither is a power of two, so their results are fractions no binary exponent
+// can state (dyadic.go's own doc comment owns that boundary). Every OTHER exact
+// vector here is a dyV3 — the cross products, dots and determinants these
+// integrals are built FROM included, which is why the integrals take dyV3 and
+// return big.Rat.
+type ratV3 [3]*big.Rat
 
 // cellTwistMoment returns the exact correction to loftMassAccumulator's
 // first-moment numerators when one held wall-cell triangle pair is replaced
@@ -784,9 +793,9 @@ func cellTwistMoment(vLo, vHi, wLo, wHi, anchor r3.Vec) ratV3 {
 	qHi := heldDelta(vHi, anchor)
 	qWLo := heldDelta(wLo, anchor)
 	qWHi := heldDelta(wHi, anchor)
-	a := rvSub(qHi, qLo)
-	b := rvSub(qWLo, qLo)
-	twist := rvSub(rvSub(qLo, qHi), rvSub(qWLo, qWHi))
+	a := dvSub(qHi, qLo)
+	b := dvSub(qWLo, qLo)
+	twist := dvSub(dvSub(qLo, qHi), dvSub(qWLo, qWHi))
 
 	var out ratV3
 	for axis := range out {
@@ -822,20 +831,20 @@ func momentPolyMul(a, b momentPoly) momentPoly {
 	return out
 }
 
-func bilinearPatchMomentIntegral(q0, a, b, twist ratV3, axis int) *big.Rat {
+func bilinearPatchMomentIntegral(q0, a, b, twist dyV3, axis int) *big.Rat {
 	q := momentPoly{
-		{0, 0}: q0[axis],
-		{1, 0}: a[axis],
-		{0, 1}: b[axis],
-		{1, 1}: twist[axis],
+		{0, 0}: q0[axis].rat(),
+		{1, 0}: a[axis].rat(),
+		{0, 1}: b[axis].rat(),
+		{1, 1}: twist[axis].rat(),
 	}
-	n0 := rvCross(a, b)
-	ns := rvCross(a, twist)
-	nr := rvCross(twist, b)
+	n0 := dvCross(a, b)
+	ns := dvCross(a, twist)
+	nr := dvCross(twist, b)
 	n := momentPoly{
-		{0, 0}: n0[axis],
-		{1, 0}: ns[axis],
-		{0, 1}: nr[axis],
+		{0, 0}: n0[axis].rat(),
+		{1, 0}: ns[axis].rat(),
+		{0, 1}: nr[axis].rat(),
 	}
 	integrand := momentPolyMul(momentPolyMul(q, q), n)
 	out := new(big.Rat)
@@ -846,16 +855,16 @@ func bilinearPatchMomentIntegral(q0, a, b, twist ratV3, axis int) *big.Rat {
 	return out
 }
 
-func triangleMomentIntegral(q0, q1, q2 ratV3, axis int) *big.Rat {
-	e1 := rvSub(q1, q0)
-	e2 := rvSub(q2, q0)
+func triangleMomentIntegral(q0, q1, q2 dyV3, axis int) *big.Rat {
+	e1 := dvSub(q1, q0)
+	e2 := dvSub(q2, q0)
 	q := momentPoly{
-		{0, 0}: q0[axis],
-		{1, 0}: e1[axis],
-		{0, 1}: e2[axis],
+		{0, 0}: q0[axis].rat(),
+		{1, 0}: e1[axis].rat(),
+		{0, 1}: e2[axis].rat(),
 	}
 	q2Poly := momentPolyMul(q, q)
-	n := rvCross(e1, e2)[axis]
+	n := dvCross(e1, e2)[axis].rat()
 	out := new(big.Rat)
 	for degree, coefficient := range q2Poly {
 		// Integral over s>=0, r>=0, s+r<=1 of s^i*r^j is
@@ -1106,68 +1115,68 @@ func cellBilinearArea(vLo, vHi, wLo, wHi r3.Vec) (float64, float64) {
 	}
 	da := heldDelta(vHi, vLo)
 	g := heldDelta(wLo, vLo)
-	twist := rvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
-	n0 := rvCross(da, g)
-	a := rvCross(da, twist)
-	b := rvCross(twist, g)
+	twist := dvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	n0 := dvCross(da, g)
+	a := dvCross(da, twist)
+	b := dvCross(twist, g)
 
-	at := func(s, r *big.Rat) ratV3 {
-		var out ratV3
+	at := func(s, r dyadic) dyV3 {
+		var out dyV3
 		for k := range out {
-			out[k] = new(big.Rat).Set(n0[k])
-			out[k].Add(out[k], new(big.Rat).Mul(s, a[k]))
-			out[k].Add(out[k], new(big.Rat).Mul(r, b[k]))
+			out[k] = dyAdd(dyAdd(n0[k], dyMul(s, a[k])), dyMul(r, b[k]))
 		}
 		return out
 	}
-	normEnd := func(v ratV3, up bool) (*big.Rat, bool) {
-		f := ratSqrtDown(rvDot(v, v))
+	normEnd := func(v dyV3, up bool) (dyadic, bool) {
+		f := dySqrtDown(dvDot(v, v))
 		if up {
-			f = ratSqrtUp(rvDot(v, v))
+			f = dySqrtUp(dvDot(v, v))
 		}
-		return ratOf(f)
+		return dyOf(f)
 	}
 
-	integralLo := new(big.Rat)
-	integralHi := new(big.Rat)
-	den := int64(divisions)
+	// divisions is a power of two, so every quadrature node below — i/4,
+	// (2i+1)/8 — and every weight the sums are divided by are binary
+	// fractions, and the whole quadrature stays inside the dyadic set
+	// (dyadic.go's own doc comment). divShift is that power.
+	const divShift = 2 // divisions == 1 << divShift
+	integralLo := dyZero()
+	integralHi := dyZero()
 	for i := range divisions {
 		for j := range divisions {
-			sMid := big.NewRat(int64(2*i+1), 2*den)
-			rMid := big.NewRat(int64(2*j+1), 2*den)
+			sMid := dyShift(dyInt(int64(2*i+1)), -(divShift + 1))
+			rMid := dyShift(dyInt(int64(2*j+1)), -(divShift + 1))
 			lo, ok := normEnd(at(sMid, rMid), false)
 			if !ok {
 				return 0, math.Inf(1)
 			}
-			integralLo.Add(integralLo, lo)
+			integralLo = dyAdd(integralLo, lo)
 
 			for _, p := range [][2]int{{i, j}, {i + 1, j}, {i, j + 1}, {i + 1, j + 1}} {
-				hi, ok := normEnd(at(big.NewRat(int64(p[0]), den), big.NewRat(int64(p[1]), den)), true)
+				node := func(v int) dyadic { return dyShift(dyInt(int64(v)), -divShift) }
+				hi, ok := normEnd(at(node(p[0]), node(p[1])), true)
 				if !ok {
 					return 0, math.Inf(1)
 				}
-				integralHi.Add(integralHi, hi)
+				integralHi = dyAdd(integralHi, hi)
 			}
 		}
 	}
-	integralLo.Quo(integralLo, big.NewRat(int64(divisions*divisions), 1))
-	integralHi.Quo(integralHi, big.NewRat(int64(4*divisions*divisions), 1))
+	integralLo = dyShift(integralLo, -2*divShift)
+	integralHi = dyShift(integralHi, -(2*divShift + 2))
 
-	mid := new(big.Rat).Add(integralLo, integralHi)
-	mid.Quo(mid, big.NewRat(2, 1))
-	value, _ := mid.Float64()
-	valueRat, ok := ratOf(value)
+	mid := dyShift(dyAdd(integralLo, integralHi), -1)
+	value, _ := mid.float64()
+	valueDy, ok := dyOf(value)
 	if !ok {
 		return 0, math.Inf(1)
 	}
-	dLo := new(big.Rat).Sub(valueRat, integralLo)
-	dLo.Abs(dLo)
-	dHi := new(big.Rat).Sub(integralHi, valueRat)
-	dHi.Abs(dHi)
-	if dHi.Cmp(dLo) > 0 {
+	dLo := dyAbs(dySubScalar(valueDy, integralLo))
+	dHi := dyAbs(dySubScalar(integralHi, valueDy))
+	if dyCmp(dHi, dLo) > 0 {
 		dLo = dHi
 	}
-	return value, ratFloatUp(dLo)
+	return value, dyFloatUp(dLo)
 }
 
 // cellTwistAreaLinearFromSpans is the premise-free arm. On the two parameter
@@ -1217,31 +1226,32 @@ func cellTwistAreaLinearFromSpans(spans cellSpans, twistQuarterUpper float64) fl
 func cellTwistAreaQuadraticAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	da := heldDelta(vHi, vLo)
 	g := heldDelta(wLo, vLo)
-	twist := rvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
-	a := rvCross(da, twist)
-	b := rvCross(twist, g)
-	diff := rvSub(a, b)
+	twist := dvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	a := dvCross(da, twist)
+	b := dvCross(twist, g)
+	diff := dvSub(a, b)
 
-	numerator := new(big.Rat).Add(rvDot(a, a), rvDot(b, b))
-	numerator.Add(numerator, new(big.Rat).Mul(big.NewRat(3, 1), rvDot(diff, diff)))
-	if numerator.Sign() == 0 {
+	numerator := dyAdd(dvDot(a, a), dvDot(b, b))
+	numerator = dyAdd(numerator, dyMul(dyInt(3), dvDot(diff, diff)))
+	if numerator.isZero() {
 		return 0
 	}
 
-	n0 := rvCross(da, g)
-	var centerTwice ratV3
+	n0 := dvCross(da, g)
+	var centerTwice dyV3
 	for i := range centerTwice {
-		centerTwice[i] = new(big.Rat).Mul(big.NewRat(2, 1), n0[i])
-		centerTwice[i].Add(centerTwice[i], a[i])
-		centerTwice[i].Add(centerTwice[i], b[i])
+		centerTwice[i] = dyAdd(dyAdd(dyShift(n0[i], 1), a[i]), b[i])
 	}
-	centerLenLower := ratSqrtDown(rvDot(centerTwice, centerTwice))
+	centerLenLower := dySqrtDown(dvDot(centerTwice, centerTwice))
 	centerLenRat, ok := ratOf(centerLenLower)
 	if !ok || centerLenLower <= 0 {
 		return math.Inf(1)
 	}
+	// The quotient genuinely leaves the dyadic set — a division by twelve times
+	// a bracketed norm is no power of two — so this is where the exact vector
+	// arithmetic hands over to a general fraction (dyadic.go's own boundary).
 	denominator := new(big.Rat).Mul(big.NewRat(12, 1), centerLenRat)
-	return ratFloatUp(new(big.Rat).Quo(numerator, denominator))
+	return ratFloatUp(new(big.Rat).Quo(numerator.rat(), denominator))
 }
 
 // uniformSpeedTangentEnergyUpper is the per-side TANGENT-DEVIATION ENERGY
@@ -1325,7 +1335,7 @@ func uniformSpeedTangentEnergyUpper(arcLenUpper, chordLower float64) float64 {
 // m is taken as the direction of N00+N01+N10+N11, the choice that maximises the
 // smallest component for a tight cluster of corner normals and so refuses least
 // often. Every corner normal, their sum, and each of the four dot products is
-// formed EXACTLY over clearance_degen.go's own ratV3 kernel (a float64
+// formed EXACTLY over clearance_degen.go's own dyV3 kernel (a float64
 // coordinate is an exact rational, and
 // the differences and cross products above are exact rational arithmetic), so
 // the only rounding is the final division: the sum's own length is taken UP
@@ -1340,34 +1350,32 @@ func cellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
 		return 0
 	}
-	da := rvSub(ratVec(vHi), ratVec(vLo))
-	db := rvSub(ratVec(wHi), ratVec(wLo))
-	g := rvSub(ratVec(wLo), ratVec(vLo))
-	gp := rvSub(ratVec(wHi), ratVec(vHi))
-	corners := [4]ratV3{
-		rvCross(da, g), rvCross(da, gp),
-		rvCross(db, g), rvCross(db, gp),
+	da := dvSub(dyVec(vHi), dyVec(vLo))
+	db := dvSub(dyVec(wHi), dyVec(wLo))
+	g := dvSub(dyVec(wLo), dyVec(vLo))
+	gp := dvSub(dyVec(wHi), dyVec(vHi))
+	corners := [4]dyV3{
+		dvCross(da, g), dvCross(da, gp),
+		dvCross(db, g), dvCross(db, gp),
 	}
-	sum := ratV3{new(big.Rat), new(big.Rat), new(big.Rat)}
+	var sum dyV3
 	for _, c := range corners {
-		for i := range sum {
-			sum[i].Add(sum[i], c[i])
-		}
+		sum = dvAdd(sum, c)
 	}
-	sumLen2 := rvDot(sum, sum)
-	if sumLen2.Sign() <= 0 {
+	sumLen2 := dvDot(sum, sum)
+	if sumLen2.sign() <= 0 {
 		return 0
 	}
-	minDot := rvDot(corners[0], sum)
+	minDot := dvDot(corners[0], sum)
 	for _, c := range corners[1:] {
-		if d := rvDot(c, sum); d.Cmp(minDot) < 0 {
+		if d := dvDot(c, sum); dyCmp(d, minDot) < 0 {
 			minDot = d
 		}
 	}
-	if minDot.Sign() <= 0 {
+	if minDot.sign() <= 0 {
 		return 0
 	}
-	lenUp := ratSqrtUp(sumLen2)
+	lenUp := dySqrtUp(sumLen2)
 	if isNonFinite(lenUp) || lenUp <= 0 {
 		return 0
 	}
@@ -1375,7 +1383,9 @@ func cellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	if !ok {
 		return 0
 	}
-	lower := ratFloatDown(new(big.Rat).Quo(minDot, lenRat))
+	// Dividing by a bracketed norm leaves the dyadic set, so the quotient is
+	// taken as a general fraction (dyadic.go's own boundary).
+	lower := ratFloatDown(new(big.Rat).Quo(minDot.rat(), lenRat))
 	if isNonFinite(lower) || lower <= 0 {
 		return 0
 	}
@@ -1574,14 +1584,14 @@ func cellChordCurveAreaAllow(
 	// and rounded OUTWARD, cellTwistAreaAllow's own rule: a float64 Sub/Len
 	// pair rounds to NEAREST and so bounds nothing, and the twist vector in
 	// particular cancels. The arc-length-versus-chord gate is decided by exact
-	// comparison instead (ratLenAtLeast), so an outward-rounded chord can never
+	// comparison instead (dvLenAtLeast), so an outward-rounded chord can never
 	// refuse a caller whose claim is exactly tight.
 	da, db := heldDelta(vHi, vLo), heldDelta(wHi, wLo)
-	if !ratLenAtLeast(arcLenUpperA, da) || !ratLenAtLeast(arcLenUpperB, db) {
+	if !dvLenAtLeast(arcLenUpperA, da) || !dvLenAtLeast(arcLenUpperB, db) {
 		return math.Inf(1)
 	}
-	ca, cb := rvLenUpper(da), rvLenUpper(db)
-	eB := math.Max(rvLenUpper(heldDelta(wLo, vLo)), rvLenUpper(heldDelta(wHi, vHi)))
+	ca, cb := dvLenUpper(da), dvLenUpper(db)
+	eB := math.Max(dvLenUpper(heldDelta(wLo, vLo)), dvLenUpper(heldDelta(wHi, vHi)))
 	cMax := math.Max(ca, cb)
 	md := matchedDeltaUpper
 
@@ -1603,9 +1613,9 @@ func cellChordCurveAreaAllow(
 	if nMin <= 0 {
 		return free
 	}
-	twist := rvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
-	pCrossT := math.Max(rvLenUpper(rvCross(da, twist)), rvLenUpper(rvCross(db, twist)))
-	oscW := absSumUpper(rvLenUpper(twist), divUpper(productUpper(eB, pCrossT), nMin))
+	twist := dvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	pCrossT := math.Max(dvLenUpper(dvCross(da, twist)), dvLenUpper(dvCross(db, twist)))
+	oscW := absSumUpper(dvLenUpper(twist), divUpper(productUpper(eB, pCrossT), nMin))
 	lin := absSumUpper(
 		productUpper(oscW, iMax),
 		productUpper(productUpper(2, md), absSumUpper(cMax, iMax)),
@@ -1744,7 +1754,7 @@ func cellStationShiftAreaAllow(
 	// eB is formed EXACTLY and rounded OUTWARD, cellChordCurveAreaAllow's own
 	// rule for the identical reading: a float64 Sub/Len pair rounds to NEAREST
 	// and so bounds nothing.
-	eB := math.Max(rvLenUpper(heldDelta(wLo, vLo)), rvLenUpper(heldDelta(wHi, vHi)))
+	eB := math.Max(dvLenUpper(heldDelta(wLo, vLo)), dvLenUpper(heldDelta(wHi, vHi)))
 	rung := absSumUpper(eB, productUpper(2, matchedDeltaUpper))
 	span := divUpper(absSumUpper(arcLenUpperA, arcLenUpperB), 2)
 	return absSumUpper(

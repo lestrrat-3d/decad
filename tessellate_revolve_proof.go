@@ -325,21 +325,15 @@ func exactRigidPointRound(xform r3.Transform, unplaced, held r3.Vec) float64 {
 	if !finiteVec(basis.EX) || !finiteVec(basis.EY) || !finiteVec(basis.EZ) || !finiteVec(translation) {
 		return math.Inf(1)
 	}
-	p := ratVec(unplaced)
-	ex, ey, ez, t := ratVec(basis.EX), ratVec(basis.EY), ratVec(basis.EZ), ratVec(translation)
+	p := dyVec(unplaced)
+	ex, ey, ez, t := dyVec(basis.EX), dyVec(basis.EY), dyVec(basis.EZ), dyVec(translation)
 	perCoord := 0.0
 	for i := range 3 {
-		exact := new(big.Rat).Add(
-			new(big.Rat).Add(
-				new(big.Rat).Mul(ex[i], p[0]),
-				new(big.Rat).Mul(ey[i], p[1]),
-			),
-			new(big.Rat).Add(
-				new(big.Rat).Mul(ez[i], p[2]),
-				t[i],
-			),
+		exact := dyAdd(
+			dyAdd(dyMul(ex[i], p[0]), dyMul(ey[i], p[1])),
+			dyAdd(dyMul(ez[i], p[2]), t[i]),
 		)
-		perCoord = math.Max(perCoord, rationalFloatError(exact, vecComponent(held, i)))
+		perCoord = math.Max(perCoord, dyadicFloatError(exact, vecComponent(held, i)))
 	}
 	return radius3D(perCoord)
 }
@@ -542,8 +536,8 @@ func ivTwoTriangleArea(p0, p1, p2 ivVec3) (ratInterval, bool) {
 // Every predicate below reads these rather than rebuilding them per pair,
 // exactly as loft_audit.go's own audit data does.
 type revolveAuditTri struct {
-	p          [3]ratV3
-	u, v, w, n ratV3
+	p          [3]dyV3
+	u, v, w, n dyV3
 	lu, lv, lw float64
 	box        [2]r3.Vec
 	// off[k] holds the two corner offsets measured from corner k, in
@@ -557,19 +551,19 @@ func newRevolveAuditTri(verts []r3.Vec, tri [3]int) (revolveAuditTri, bool) {
 		if !finiteVec(verts[vi]) {
 			return out, false
 		}
-		out.p[k] = ratVec(verts[vi])
+		out.p[k] = dyVec(verts[vi])
 	}
-	out.u = rvSub(out.p[1], out.p[0])
-	out.v = rvSub(out.p[2], out.p[0])
-	out.w = rvSub(out.p[2], out.p[1])
-	out.n = rvCross(out.u, out.v)
-	out.lu = rvLenUpper(out.u)
-	out.lv = rvLenUpper(out.v)
-	out.lw = rvLenUpper(out.w)
+	out.u = dvSub(out.p[1], out.p[0])
+	out.v = dvSub(out.p[2], out.p[0])
+	out.w = dvSub(out.p[2], out.p[1])
+	out.n = dvCross(out.u, out.v)
+	out.lu = dvLenUpper(out.u)
+	out.lv = dvLenUpper(out.v)
+	out.lw = dvLenUpper(out.w)
 	out.box = triBox(verts, tri)
 	out.off[0] = [2]revolveOffset{{v: out.u, length: out.lu}, {v: out.v, length: out.lv}}
-	out.off[1] = [2]revolveOffset{revolveOffsetOf(rvSub(out.p[0], out.p[1])), {v: out.w, length: out.lw}}
-	out.off[2] = [2]revolveOffset{revolveOffsetOf(rvSub(out.p[0], out.p[2])), revolveOffsetOf(rvSub(out.p[1], out.p[2]))}
+	out.off[1] = [2]revolveOffset{revolveOffsetOf(dvSub(out.p[0], out.p[1])), {v: out.w, length: out.lw}}
+	out.off[2] = [2]revolveOffset{revolveOffsetOf(dvSub(out.p[0], out.p[2])), revolveOffsetOf(dvSub(out.p[1], out.p[2]))}
 	return out, true
 }
 
@@ -593,8 +587,8 @@ func revolveSeparated(a, b revolveAuditTri, delta float64) bool {
 	if isNonFinite(margin) {
 		return false
 	}
-	ea := [3]ratV3{a.u, a.v, a.w}
-	eb := [3]ratV3{b.u, b.v, b.w}
+	ea := [3]dyV3{a.u, a.v, a.w}
+	eb := [3]dyV3{b.u, b.v, b.w}
 	la := [3]float64{a.lu, a.lv, a.lw}
 	lb := [3]float64{b.lu, b.lv, b.lw}
 	lnA := productUpper(a.lu, a.lv)
@@ -602,7 +596,7 @@ func revolveSeparated(a, b revolveAuditTri, delta float64) bool {
 	// axis is one candidate, built only when the candidates before it have
 	// failed, beside a cheap proven upper bound on its length: |x × y| ≤ |x||y|.
 	type axis struct {
-		g     ratV3
+		g     dyV3
 		bound float64
 	}
 	next := func(gi int) axis {
@@ -613,54 +607,53 @@ func revolveSeparated(a, b revolveAuditTri, delta float64) bool {
 			return axis{b.n, lnB}
 		case gi < 11:
 			x, y := (gi-2)/3, (gi-2)%3
-			return axis{rvCross(ea[x], eb[y]), productUpper(la[x], lb[y])}
+			return axis{dvCross(ea[x], eb[y]), productUpper(la[x], lb[y])}
 		case gi < 14:
 			x := gi - 11
-			return axis{rvCross(a.n, ea[x]), productUpper(lnA, la[x])}
+			return axis{dvCross(a.n, ea[x]), productUpper(lnA, la[x])}
 		default:
 			y := gi - 14
-			return axis{rvCross(b.n, eb[y]), productUpper(lnB, lb[y])}
+			return axis{dvCross(b.n, eb[y]), productUpper(lnB, lb[y])}
 		}
 	}
 	for gi := range 17 {
 		ax := next(gi)
 		g := ax.g
-		if g[0].Sign() == 0 && g[1].Sign() == 0 && g[2].Sign() == 0 {
+		if dvIsZero(g) {
 			continue
 		}
-		aLo, aHi := rvProject(a.p, g)
-		bLo, bHi := rvProject(b.p, g)
-		gap := new(big.Rat).Sub(bLo, aHi)
-		if other := new(big.Rat).Sub(aLo, bHi); other.Cmp(gap) > 0 {
+		aLo, aHi := dvProject(a.p, g)
+		bLo, bHi := dvProject(b.p, g)
+		gap := dySubScalar(bLo, aHi)
+		if other := dySubScalar(aLo, bHi); dyCmp(other, gap) > 0 {
 			gap = other
 		}
-		if gap.Sign() <= 0 {
+		if gap.sign() <= 0 {
 			continue
 		}
 		// The cheap bound is at least the exact one, so a gap that clears it
 		// clears the exact one too; a gap that does not is retried exactly.
-		if cheap := floatRat(productUpper(margin, ax.bound)); cheap != nil && gap.Cmp(cheap) > 0 {
+		if cheap, ok := dyOf(productUpper(margin, ax.bound)); ok && dyCmp(gap, cheap) > 0 {
 			return true
 		}
-		need := floatRat(productUpper(margin, rvLenUpper(g)))
-		if need != nil && gap.Cmp(need) > 0 {
+		if need, ok := dyOf(productUpper(margin, dvLenUpper(g))); ok && dyCmp(gap, need) > 0 {
 			return true
 		}
 	}
 	return false
 }
 
-// rvProject is the exact projection range of a triangle's three corners onto
+// dvProject is the exact projection range of a triangle's three corners onto
 // one axis, before normalisation.
-func rvProject(p [3]ratV3, g ratV3) (*big.Rat, *big.Rat) {
-	lo := rvDot(p[0], g)
-	hi := new(big.Rat).Set(lo)
+func dvProject(p [3]dyV3, g dyV3) (dyadic, dyadic) {
+	lo := dvDot(p[0], g)
+	hi := lo
 	for _, q := range p[1:] {
-		d := rvDot(q, g)
-		if d.Cmp(lo) < 0 {
+		d := dvDot(q, g)
+		if dyCmp(d, lo) < 0 {
 			lo = d
 		}
-		if d.Cmp(hi) > 0 {
+		if dyCmp(d, hi) > 0 {
 			hi = d
 		}
 	}
@@ -768,7 +761,7 @@ func revolveContactAudit(budget *workBudget, verts []r3.Vec, tris [][3]int, delt
 // (docs/tessellation-design.md §5's own per-triangle area allowance, read here
 // as a gate rather than as a slack term).
 func requireRevolveFacetArea(t revolveAuditTri, i int, delta float64) error {
-	held := ratSqrtDown(rvDot(t.n, t.n))
+	held := dySqrtDown(dvDot(t.n, t.n))
 	allow := productUpper(2, absSumUpper(
 		productUpper(delta, absSumUpper(t.lu, t.lv)),
 		productUpper(productUpper(2, delta), delta),
@@ -826,7 +819,7 @@ func auditRevolvePair(data []revolveAuditTri, tris [][3]int, shared [3]int, coun
 // upper bound on its length, and a proven bound on how far that vector itself
 // moves when every corner it was built from slides by up to the audit's margin.
 type revolveSepAxis struct {
-	g      ratV3
+	g      dyV3
 	length float64
 	drift  float64
 }
@@ -834,20 +827,20 @@ type revolveSepAxis struct {
 // sideOf reads which side of the candidate plane an offset lies on, and whether
 // that reading survives the whole displaced family. The plane passes through the
 // shared feature, so the offset is measured from a shared corner.
-func (ax revolveSepAxis) sideOf(offset ratV3, offsetLen, offsetDrift float64) (int, bool) {
-	h := rvDot(ax.g, offset)
-	if h.Sign() == 0 {
+func (ax revolveSepAxis) sideOf(offset dyV3, offsetLen, offsetDrift float64) (int, bool) {
+	h := dvDot(ax.g, offset)
+	if h.isZero() {
 		return 0, false
 	}
 	allow := perturbBilinearAllow(ax.length, offsetLen, ax.drift, offsetDrift)
 	if isNonFinite(allow) {
 		return 0, false
 	}
-	bound := floatRat(allow)
-	if bound == nil || new(big.Rat).Abs(h).Cmp(bound) <= 0 {
+	bound, ok := dyOf(allow)
+	if !ok || dyCmp(dyAbs(h), bound) <= 0 {
 		return 0, false
 	}
-	return h.Sign(), true
+	return h.sign(), true
 }
 
 // perturbBilinearAllow bounds |a'∘b' − a∘b| for a dot or cross product when a
@@ -876,7 +869,7 @@ func revolveEdgeFanAxis(t revolveAuditTri, edge revolveOffset, delta float64) re
 	e := productUpper(2, delta)
 	normal := revolveNormalAxis(t, delta)
 	return revolveSepAxis{
-		g:      rvCross(normal.g, edge.v),
+		g:      dvCross(normal.g, edge.v),
 		length: productUpper(normal.length, edge.length),
 		drift:  perturbBilinearAllow(normal.length, edge.length, normal.drift, e),
 	}
@@ -889,13 +882,13 @@ func revolveEdgeFanAxis(t revolveAuditTri, edge revolveOffset, delta float64) re
 // |d|²|u|² − (d·u)², which Cauchy-Schwarz makes non-negative identically. So
 // that whole triangle sits in the closed half-space for the entire family with
 // nothing to charge, and only the other triangle's apex is read.
-func revolveRejectionAxis(d, u ratV3, dLen, uLen, delta float64) revolveSepAxis {
+func revolveRejectionAxis(d, u dyV3, dLen, uLen, delta float64) revolveSepAxis {
 	e := productUpper(2, delta)
-	cross := rvCross(d, u)
+	cross := dvCross(d, u)
 	crossLen := productUpper(dLen, uLen)
 	crossDrift := perturbBilinearAllow(dLen, uLen, e, e)
 	return revolveSepAxis{
-		g:      rvCross(cross, d),
+		g:      dvCross(cross, d),
 		length: productUpper(crossLen, dLen),
 		drift:  perturbBilinearAllow(crossLen, dLen, crossDrift, e),
 	}
@@ -977,7 +970,7 @@ func revolveVertexIsolated(a revolveAuditTri, triA [3]int, b revolveAuditTri, tr
 			return true
 		}
 	}
-	chord := revolveOffsetOf(rvSub(aOff[0].v, aOff[1].v))
+	chord := revolveOffsetOf(dvSub(aOff[0].v, aOff[1].v))
 	if try(revolveEdgeFanAxis(a, chord, delta), aOff[:]) {
 		return true
 	}
@@ -1002,8 +995,8 @@ func revolveVertexIsolated(a revolveAuditTri, triA [3]int, b revolveAuditTri, tr
 	// stays UNDECIDED and the candidate is skipped, never admitted.
 	for k := range 2 {
 		for m := range 2 {
-			g := rvCross(aOff[k].v, bOff[m].v)
-			if rvIsZero(g) {
+			g := dvCross(aOff[k].v, bOff[m].v)
+			if dvIsZero(g) {
 				continue
 			}
 			ax := revolveSepAxis{
@@ -1024,12 +1017,12 @@ func revolveVertexIsolated(a revolveAuditTri, triA [3]int, b revolveAuditTri, tr
 // revolveOffset is one corner offset from the pair's shared corner, beside the
 // proven upper bound on its length every perturbation allowance reads.
 type revolveOffset struct {
-	v      ratV3
+	v      dyV3
 	length float64
 }
 
-func revolveOffsetOf(v ratV3) revolveOffset {
-	return revolveOffset{v: v, length: rvLenUpper(v)}
+func revolveOffsetOf(v dyV3) revolveOffset {
+	return revolveOffset{v: v, length: dvLenUpper(v)}
 }
 
 // revolveCornerOffsets is a triangle's two corners other than the one at slot
@@ -1057,14 +1050,14 @@ func revolveEdgeIsolated(a revolveAuditTri, triA [3]int, b revolveAuditTri, triB
 	if bApex < 0 || aApex < 0 {
 		return false
 	}
-	offB := rvSub(b.p[bApex], a.p[p0])
-	lenB := rvLenUpper(offB)
+	offB := dvSub(b.p[bApex], a.p[p0])
+	lenB := dvLenUpper(offB)
 	if _, ok := revolveNormalAxis(a, delta).sideOf(offB, lenB, e); ok {
 		return true
 	}
-	d := rvSub(a.p[p1], a.p[p0])
-	u := rvSub(a.p[aApex], a.p[p0])
-	ax := revolveRejectionAxis(d, u, rvLenUpper(d), rvLenUpper(u), delta)
+	d := dvSub(a.p[p1], a.p[p0])
+	u := dvSub(a.p[aApex], a.p[p0])
+	ax := revolveRejectionAxis(d, u, dvLenUpper(d), dvLenUpper(u), delta)
 	side, ok := ax.sideOf(offB, lenB, e)
 	// a itself lies in the g ≥ 0 half-space identically (the Gram determinant),
 	// so the pair is isolated exactly when b's apex reads strictly negative.

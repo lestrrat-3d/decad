@@ -97,12 +97,14 @@ func planePatchMoment(g capPatchGeom) (mu, mv, mz boundedScalar) {
 // lift, mirroring exactPlanePatchFlux: a public measurement must refuse or
 // bound, never abort.
 func exactPlanePatchMoment(v0, v1, v2, v3 r3.Vec) (mx, my, mz *big.Rat, ok bool) {
-	lift := func(v r3.Vec) (ratV3, bool) {
-		x, y, z := floatRat(v.X), floatRat(v.Y), floatRat(v.Z)
-		if x == nil || y == nil || z == nil {
-			return ratV3{}, false
+	lift := func(v r3.Vec) (dyV3, bool) {
+		x, okX := dyOf(v.X)
+		y, okY := dyOf(v.Y)
+		z, okZ := dyOf(v.Z)
+		if !okX || !okY || !okZ {
+			return dyV3{}, false
 		}
-		return ratV3{x, y, z}, true
+		return dyV3{x, y, z}, true
 	}
 	r0, ok0 := lift(v0)
 	r1, ok1 := lift(v1)
@@ -111,15 +113,17 @@ func exactPlanePatchMoment(v0, v1, v2, v3 r3.Vec) (mx, my, mz *big.Rat, ok bool)
 	if !ok0 || !ok1 || !ok2 || !ok3 {
 		return nil, nil, nil, false
 	}
-	tri := func(a, b, c ratV3) [3]*big.Rat {
-		n := rvCross(rvSub(b, a), rvSub(c, a))
+	tri := func(a, b, c dyV3) [3]*big.Rat {
+		n := dvCross(dvSub(b, a), dvSub(c, a))
 		var out [3]*big.Rat
 		for i := range out {
-			sq := ratAdd(
-				ratMul(a[i], a[i]), ratMul(b[i], b[i]), ratMul(c[i], c[i]),
-				ratMul(a[i], b[i]), ratMul(b[i], c[i]), ratMul(c[i], a[i]),
+			sq := dyAdd(
+				dyAdd(dyAdd(dyMul(a[i], a[i]), dyMul(b[i], b[i])), dyMul(c[i], c[i])),
+				dyAdd(dyAdd(dyMul(a[i], b[i]), dyMul(b[i], c[i])), dyMul(c[i], a[i])),
 			)
-			out[i] = new(big.Rat).Quo(new(big.Rat).Mul(n[i], sq), big.NewRat(24, 1))
+			// The twenty-fourth is the one step that leaves the dyadic set, so
+			// the product converts here and nowhere earlier (dyadic.go).
+			out[i] = new(big.Rat).Quo(dyMul(n[i], sq).rat(), big.NewRat(24, 1))
 		}
 		return out
 	}
