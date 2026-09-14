@@ -1077,6 +1077,15 @@ func chargeFreeformShift(spans []bezierSpan, work *freeformWork) error {
 // Exact — would then speak for that curve instead of the recorded one.
 // Subtracting here is exact, because a float and the anchor are both exact
 // rationals.
+//
+// It writes through the caller's own slice, so the chain it is handed MUST be
+// one the caller owns. validateFreeformMomentSegment converts its own through
+// freeformBezierSpans and passes that, which is what makes this safe today. A
+// segmentWalk's spans are NOT such a chain: one profileWalks set is read by the
+// build, the tessellation, the extent readings and every rigid re-evaluation of
+// the record, and this write would reach all of them at once, past a cache
+// guard that only ever compares the record (segment_walk.go's spans field).
+// Hand it a copy, or a fresh conversion.
 func shiftFreeformSpans(spans []bezierSpan, anchor Point2) error {
 	u, okU := ratOf(anchor.U)
 	v, okV := ratOf(anchor.V)
