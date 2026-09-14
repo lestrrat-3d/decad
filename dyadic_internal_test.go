@@ -74,6 +74,22 @@ func TestDyadicRefusesNonFiniteFloats(t *testing.T) {
 	}
 }
 
+// TestMustDyOfPanicsOnANonFiniteFloat pins the contract that a broken CALLER
+// claim fails loudly. Answering a zero instead would put an exact, confident,
+// wrong number into a proof and let it publish a bound nothing established,
+// which is the one failure this package must never have; the panic names the
+// caller that built the bad value. Every caller gates with finiteVec first, so
+// nothing reaches this in normal operation.
+func TestMustDyOfPanicsOnANonFiniteFloat(t *testing.T) {
+	t.Parallel()
+	for _, f := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		require.Panics(t, func() { mustDyOf(f) }, "%v must not lift silently", f)
+	}
+	require.NotPanics(t, func() { mustDyOf(math.MaxFloat64) }, "a finite value still lifts")
+	require.Panics(t, func() { dyVec(r3.Vec{X: 1, Y: math.Inf(1), Z: 3}) },
+		"a vector carrying a non-finite component must not lift silently either")
+}
+
 // TestDyadicStaysReduced pins the canonical form the type promises: a non-zero
 // mantissa is odd, so two dyadics hold equal numbers exactly when their fields
 // agree. Without it a value would have unboundedly many representations and its
