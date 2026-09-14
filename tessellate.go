@@ -303,6 +303,24 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 	var segmentArea float64
 	// One free-form counter for the whole chorded record (see chordLoop).
 	work := newFreeformWork()
+	// The build that produced this body already resolved every boundary
+	// segment's walk and published the set onto the payload (prism_build.go,
+	// docs/evaluator-design.md §8). A tessellation is one of the passes
+	// docs/spline-design.md §5.2 names as free to REPLAY that recorded charge
+	// instead of doing the work again: chording reads the walks back and
+	// charges this fresh counter what resolving them cost, so the ceiling binds
+	// the chording exactly as resolving would have. A payload carrying no
+	// resolution of THIS record — a boolean result, a modify op's rewritten
+	// section, a body an older evaluator built — leaves pw nil and every loop
+	// resolves through walkOf as before.
+	pw := pp.walks
+	if pw.reusable(pp.profile) {
+		if err := pw.charge(work); err != nil {
+			return nil, err
+		}
+	} else {
+		pw = nil
+	}
 	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
 	// faceTrim/faceAxial accumulate each face's own trim and axial displacement
 	// as the walls are emitted; the two caps' are stated once below.
@@ -312,7 +330,7 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		cl, err := chordLoop(ctx, loop, budget, pp.z1-pp.z0, work, func(w sideWalk) (*Face, error) {
+		cl, err := chordLoop(ctx, loop, budget, pp.z1-pp.z0, work, pw, li, func(w sideWalk) (*Face, error) {
 			return faceOfRole(fmt.Sprintf("side(%d,%d)", li, w.segs[0]))
 		})
 		if err != nil {
@@ -591,7 +609,16 @@ type chordedLoop struct {
 // work is the free-form counter of the RECORD being chorded, opened once by the
 // caller and shared by every loop of it: chording holds no preflight counter, so
 // the ceiling starts at the tessellation entry rather than at each loop.
-func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work *freeformWork, wallFace func(w sideWalk) (*Face, error)) (chordedLoop, error) {
+//
+// resolved is a *profileWalks whose loop index roleLoop holds this loop's
+// pre-resolved walks, or nil to resolve each segment through walkOf as before —
+// buildLoopSidesAs' own parameter of the same name, read the same way. The
+// caller charges work what that resolution cost BEFORE the first read (the
+// tessellation entry does), so the counter binds a replaying chording exactly as
+// it binds a resolving one. A non-nil resolved whose loop at roleLoop was not
+// resolved from exactly this loop's recorded segments is a plumbing bug and
+// refuses rather than silently resolving anyway.
+func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work *freeformWork, resolved *profileWalks, roleLoop int, wallFace func(w sideWalk) (*Face, error)) (chordedLoop, error) {
 	if len(loop.Segments) == 0 {
 		return chordedLoop{}, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
@@ -599,6 +626,13 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 	// nested under it: a single walk emits many samples, and it is the SAMPLES
 	// that are the candidate operations §7.2 counts.
 	budget := newWorkBudget(ctx)
+	var loopWalks []segmentWalk
+	if resolved != nil {
+		if !resolved.loopMatches(roleLoop, loop) {
+			return chordedLoop{}, errResolvedWalksMismatch
+		}
+		loopWalks = resolved.loopWalks(roleLoop)
+	}
 	raw := make([]sideWalk, len(loop.Segments))
 	// The loop's analytic length, upper bound included: buildLoopSidesAs sums the
 	// same RAW walk lengths for the body's own perimeter, so both readings of one
@@ -608,9 +642,19 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 		if err := budget.step(); err != nil {
 			return chordedLoop{}, err
 		}
-		w, err := walkOf(seg, work)
-		if err != nil {
-			return chordedLoop{}, err
+		// A resolved walk was already through walkOf once
+		// (resolveProfileWalks), so it carries the same refusal that
+		// resolution would surface here, and it holds nothing
+		// placement-dependent to restate (docs/evaluator-design.md §8).
+		var w segmentWalk
+		if loopWalks != nil {
+			w = loopWalks[i]
+		} else {
+			var err error
+			w, err = walkOf(seg, work)
+			if err != nil {
+				return chordedLoop{}, err
+			}
 		}
 		perimeterUpper = absSumUpper(perimeterUpper, w.length, w.lengthBound)
 		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
@@ -883,7 +927,10 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64) (
 		sag     float64
 	}
 	chordRing := func(loop LoopRecord, h, lo, hi, loDelta, hiDelta float64, role string, area *float64) (ring, error) {
-		cl, err := chordLoop(ctx, loop, chord, h, work, func(w sideWalk) (*Face, error) {
+		// A cup chords the DERIVED region loops — an offset cavity, an outer
+		// contour — which no payload holds a resolution of, so each segment
+		// resolves through walkOf here as it always has.
+		cl, err := chordLoop(ctx, loop, chord, h, work, nil, 0, func(w sideWalk) (*Face, error) {
 			return faceOfRole(fmt.Sprintf(role, w.segs[0]))
 		})
 		if err != nil {

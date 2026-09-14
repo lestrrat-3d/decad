@@ -354,3 +354,88 @@ func TestChordSagittaNeverUnderflowsToZero(t *testing.T) {
 		})
 	}
 }
+
+// ------------------------------------- chording a published walk resolution
+
+// TestChordLoopReadsResolvedWalks is the observable half of the tessellation's
+// own reuse: handed the resolution the build published, chordLoop returns the
+// chording it produces from a fresh resolution, field for field, and it does
+// NOT spend the resolution's charge a second time. The two counters differ by
+// exactly resolveProfileWalks' own figure for this record, which proves the
+// arc-length bracketing was skipped rather than merely repeated more cheaply —
+// everything else the chording charges (chainStations over the same Bézier
+// chain) is spent by both runs alike.
+func TestChordLoopReadsResolvedWalks(t *testing.T) {
+	t.Parallel()
+	profile := involuteFitProfile()
+	pw, err := resolveProfileWalks(profile, newFreeformWork())
+	require.NoError(t, err)
+	require.Greater(t, pw.spent, uint64(0), "premise: resolving this record costs free-form work")
+
+	// One face for every wall, so the two chordings' faceOf slices compare as
+	// the same pointers and the comparison below is about the geometry.
+	face := &Face{}
+	wall := func(sideWalk) (*Face, error) { return face, nil }
+
+	direct := newFreeformWork()
+	want, err := chordLoop(t.Context(), profile.Outer, 0.2, 5, direct, nil, 0, wall)
+	require.NoError(t, err)
+	require.NotEmpty(t, want.samples)
+
+	replay := newFreeformWork()
+	got, err := chordLoop(t.Context(), profile.Outer, 0.2, 5, replay, pw, 0, wall)
+	require.NoError(t, err)
+
+	require.Equal(t, want, got, "reading the published walks must give the resolve-every-segment chording")
+	require.Equal(t, direct.spent-pw.spent, replay.spent,
+		"the chording that read the walks back must spend everything EXCEPT the resolution's own charge")
+	require.Equal(t, direct.reconstructionSpent, replay.reconstructionSpent,
+		"a walk resolution charges no reconstruction work, so both runs spend the same")
+}
+
+// TestChordLoopRefusesMismatchedResolvedWalks pins the guard on that read:
+// a resolution of another record is a plumbing bug, and chordLoop refuses it
+// rather than chording one section's geometry as another's — buildLoopSidesAs'
+// own refusal, on the same exact-comparison terms.
+func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {
+	t.Parallel()
+	pw, err := resolveProfileWalks(involuteFitProfile(), newFreeformWork())
+	require.NoError(t, err)
+
+	other := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+		LineSeg{Start: Point2{}, End: Point2{U: 1}, TStart: 0, TEnd: 1},
+		LineSeg{Start: Point2{U: 1}, End: Point2{U: 1, V: 1}, TStart: 0, TEnd: 1},
+		LineSeg{Start: Point2{U: 1, V: 1}, End: Point2{}, TStart: 0, TEnd: 1},
+	}}}
+	face := &Face{}
+	_, err = chordLoop(t.Context(), other.Outer, 0.2, 5, newFreeformWork(), pw, 0,
+		func(sideWalk) (*Face, error) { return face, nil })
+	require.ErrorIs(t, err, errResolvedWalksMismatch)
+	require.ErrorIs(t, err, ErrUnsupported)
+}
+
+// TestTessellatePrismReusesPublishedWalks is the reuse end to end: the mesh a
+// free-form prism tessellates to is the same mesh — every vertex, every
+// triangle, every published proof — whether the body's payload carries the walk
+// resolution its build published or has had it dropped. The record is the
+// involute fit section, whose walk resolution is by far the most expensive part
+// of chording it, so a reuse that changed any answer would change one here.
+func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
+	t.Parallel()
+	body, err := evalPrism(New(), 0, involuteFitPrismPayload(t), newFreeformWork())
+	require.NoError(t, err)
+	published := prismPayloadOf(t, body)
+	require.True(t, published.walks.reusable(published.profile),
+		"premise: the build published a resolution of this very record")
+
+	tol := units.Millimeters(0.2)
+	reused, err := body.TessellateContext(t.Context(), tol)
+	require.NoError(t, err)
+	require.NotEmpty(t, reused.triangles)
+
+	body.payload = withoutWalks(published)
+	resolvedAgain, err := body.TessellateContext(t.Context(), tol)
+	require.NoError(t, err)
+
+	require.Equal(t, resolvedAgain, reused, "the reused resolution must chord to the same mesh")
+}
