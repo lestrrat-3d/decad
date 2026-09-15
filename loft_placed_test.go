@@ -680,7 +680,7 @@ func TestLoftPlacedVerifySound(t *testing.T) {
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 
 	t0, tp0, t1, tp1 := loftSquaresAt(t, r3.NewVec(1000, 0, 0), 20, 20, 10)
 	other, err := doc.Loft(t0, tp0, t1, tp1)
@@ -694,6 +694,6 @@ func TestLoftPlacedVerifySound(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
 	require.Empty(t, report.Interferences)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 	_ = otherPlaced
 }

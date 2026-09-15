@@ -23,6 +23,12 @@ var ErrNoMatch = errors.New("decad: selector matched nothing")
 // assertion is ErrCardinality even when the selector matched nothing.
 var ErrCardinality = errors.New("decad: cardinality assertion failed")
 
+// ErrBodyReportNotFound is returned by [Report.ForBody] when the report
+// contains no entry for the requested body — including a body foreign to
+// the document the report was taken from. [ErrNoMatch] keeps its
+// selector-only meaning; ForBody never returns it.
+var ErrBodyReportNotFound = errors.New("decad: body is not represented in this report")
+
 // ErrForeignBody is returned when an operation is handed bodies owned by
 // different documents, or when an extent or axis names a body owned by a
 // document other than the one the feature is called on. Bodies from different

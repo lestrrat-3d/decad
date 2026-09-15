@@ -1483,7 +1483,7 @@ func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, [
 		}
 	}
 
-	if cfg.minRadius {
+	if cfg.concaveRadius {
 		results.RadiusAsked = true
 		out := radiusOutcome{}
 		ok := false

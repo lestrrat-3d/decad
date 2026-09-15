@@ -752,19 +752,15 @@ func TestLoftVerifySound(t *testing.T) {
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 	require.Empty(t, report.Diagnostics)
 	require.Len(t, report.Bodies, 1)
 
 	br := report.Bodies[0]
-	require.True(t, br.Solid)
-	require.True(t, br.Watertight)
-	require.True(t, br.Manifold)
-	require.False(t, br.SelfIntersecting)
-	require.Equal(t, 1, br.Lumps)
-	require.Equal(t, 0, br.Voids)
-	require.NotNil(t, br.Volume)
-	require.NotNil(t, br.Centroid)
+	require.Equal(t, decad.ValidityValid, br.Validity.Outcome)
+	require.Equal(t, 1, br.Topology.Lumps)
+	require.Equal(t, 0, br.Topology.Voids)
+	require.NotNil(t, br.Region)
 }
 
 // TestLoftVerifySurveysStaySuspect proves loft is a payload class the wall,
@@ -781,7 +777,7 @@ func TestLoftVerifySurveysStaySuspect(t *testing.T) {
 	}{
 		{"wall", decad.WithMinWallThickness(units.Millimeters(1)), decad.SurveyWall},
 		{"pull", decad.WithPullDirection(r3.NewVec(0, 0, 1)), decad.SurveyUndercut},
-		{"radius", decad.WithMinRadius(), decad.SurveyConcaveRadius},
+		{"radius", decad.WithConcaveRadius(), decad.SurveyConcaveRadius},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -917,5 +913,5 @@ func TestLoftHelicalToothClearsDefaultTolerance(t *testing.T) {
 
 	report, err := doc.Verify(ctx)
 	require.NoError(t, err)
-	require.True(t, report.Trustworthy(), "the m1 z17 tooth loft must be trustworthy: %v", report.Diagnostics)
+	require.True(t, report.Passed(), "the m1 z17 tooth loft must be trustworthy: %v", report.Diagnostics)
 }

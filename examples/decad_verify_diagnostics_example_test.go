@@ -40,7 +40,7 @@ func Example_decad_verify_diagnostics() {
 	}
 
 	fmt.Printf("report status: %s\n", report.Status)
-	fmt.Printf("trustworthy: %t\n", report.Trustworthy())
+	fmt.Printf("trustworthy: %t\n", report.Passed())
 	for _, d := range report.Diagnostics {
 		if d.Code != decad.DiagWallTooThin {
 			continue

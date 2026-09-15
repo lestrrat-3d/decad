@@ -108,7 +108,7 @@ func TestExtrudeCirclePrismBoundsTighten(t *testing.T) {
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 	require.Empty(t, report.Diagnostics)
 }
 

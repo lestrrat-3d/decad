@@ -13,8 +13,8 @@ import (
 // This file is the Verify of docs/evaluator-design.md §10/§11 and
 // docs/verification-design.md: one non-mutating call returning a rich report
 // with a Status at both levels, aggregated by a fixed severity precedence,
-// and one bit — Trustworthy() — an agent gates on. The wall, undercut and
-// minimum-radius questions are answered outright by the analytic surveys of
+// and one bit — Passed() — an agent gates on. The wall, undercut and
+// concave-radius questions are answered outright by the analytic surveys of
 // survey.go on the bodies this evaluator builds; the staging rule of
 // evaluator §11 still governs everything else — an option this evaluator
 // cannot ANSWER is accepted, its parameters validated, and the
@@ -48,7 +48,7 @@ func (wallOption) wallOption() {}
 type identTolerance struct{}
 type identMinWall struct{}
 type identPullDirection struct{}
-type identMinRadius struct{}
+type identConcaveRadius struct{}
 type identClearances struct{}
 type identDraftAllowance struct{}
 
@@ -71,14 +71,14 @@ func WithTolerance(rel units.Value) VerifyOption {
 	return verifyOption{option.New(identTolerance{}, rel)}
 }
 
-// WithMinWallThickness states the spec that no wall may be thinner than the
-// tool that has to cut it (verification §2). The tool is the spec, never the
-// probe: the reading is the infimum diameter over the body's spanning
+// WithMinWallThickness states the spec that no wall may be thinner than
+// minimum (verification §2), describing the comparison without assuming a
+// tool type. The reading is the infimum diameter over the body's spanning
 // inscribed balls — material between skins opposing within the draft
-// allowance — and the tool enters only where the interval rule decides the
+// allowance — and minimum enters only where the interval rule decides the
 // reading against it (verification §6). A wall proven thinner is Violating.
-func WithMinWallThickness(tool units.Value, opts ...WallOption) VerifyOption {
-	spec := wallSpec{tool: tool, allowance: units.Degrees(15)}
+func WithMinWallThickness(minimum units.Value, opts ...WallOption) VerifyOption {
+	spec := wallSpec{tool: minimum, allowance: units.Degrees(15)}
 	for _, o := range opts {
 		if o == nil {
 			// An option constructor has no error to return; Verify rejects
@@ -113,13 +113,14 @@ func WithPullDirection(v r3.Vec) VerifyOption {
 	return verifyOption{option.New(identPullDirection{}, v)}
 }
 
-// WithMinRadius asks for the tightest concave radius — a measurement, not a
-// verdict; the endmill spec lives with the caller (verification §2). On the
-// analytic faces convexity and curvature are exact facts, so the survey
-// answers outright: the tightest concave principal radius over every face,
-// or nil — the proven determination that no concave feature exists.
-func WithMinRadius() VerifyOption {
-	return verifyOption{option.New(identMinRadius{}, true)}
+// WithConcaveRadius asks for the tightest concave radius — a measurement,
+// not a verdict; Verify introduces no radius threshold or machining-access
+// assessment of its own (verification §2). On the analytic faces convexity
+// and curvature are exact facts, so the survey answers outright: the
+// tightest concave principal radius over every face, or nil — the proven
+// determination that no concave feature exists.
+func WithConcaveRadius() VerifyOption {
+	return verifyOption{option.New(identConcaveRadius{}, true)}
 }
 
 // WithClearances asks for the minimum gap between disjoint pairs — a
@@ -135,13 +136,13 @@ func WithClearances() VerifyOption {
 // verifyConfig is the folded option set. toolMM and allowRad carry the wall
 // spec resolved to the solver's base units (millimetres, radians).
 type verifyConfig struct {
-	rel        float64
-	wall       *wallSpec
-	toolMM     float64
-	allowRad   float64
-	pull       *r3.Vec
-	minRadius  bool
-	clearances bool
+	rel           float64
+	wall          *wallSpec
+	toolMM        float64
+	allowRad      float64
+	pull          *r3.Vec
+	concaveRadius bool
+	clearances    bool
 }
 
 // resolveVerifyOptions folds and validates the options. Every parameter
@@ -208,8 +209,8 @@ func resolveVerifyOptions(opts []VerifyOption) (verifyConfig, error) {
 				return verifyConfig{}, fmt.Errorf(`%w: a zero pull direction poses no direction at all`, ErrDegenerate)
 			}
 			cfg.pull = &v
-		case identMinRadius:
-			cfg.minRadius = true
+		case identConcaveRadius:
+			cfg.concaveRadius = true
 		case identClearances:
 			cfg.clearances = true
 		}
@@ -217,25 +218,25 @@ func resolveVerifyOptions(opts []VerifyOption) (verifyConfig, error) {
 	return cfg, nil
 }
 
-// effectiveVerifyRequest resolves cfg into the private effective-request
-// record (proposal §5): the validated settings this Verify call actually
-// used, canonicalized to millimetres and radians, recorded even for an empty
+// effectiveVerifyRequest resolves cfg into the effective-request record
+// (proposal §5): the validated settings this Verify call actually used,
+// canonicalized to millimetres and radians, recorded even for an empty
 // document. The pull vector is kept exactly as accepted — never normalized —
 // so the recorded request shows the actual input the survey consumed.
-func effectiveVerifyRequest(cfg verifyConfig) verifyRequest {
-	req := verifyRequest{
+func effectiveVerifyRequest(cfg verifyConfig) VerifyRequest {
+	req := VerifyRequest{
 		RelativeTolerance: units.Scalar(cfg.rel),
-		ConcaveRadius:     cfg.minRadius,
+		ConcaveRadius:     cfg.concaveRadius,
 		Clearances:        cfg.clearances,
 	}
 	if cfg.wall != nil {
-		req.Wall = &wallRequest{
+		req.Wall = &WallRequest{
 			Minimum:        units.Millimeters(cfg.toolMM),
 			DraftAllowance: units.Radians(cfg.allowRad),
 		}
 	}
 	if cfg.pull != nil {
-		req.Undercut = &undercutRequest{PullDirection: *cfg.pull}
+		req.Undercut = &UndercutRequest{PullDirection: *cfg.pull}
 	}
 	return req
 }
@@ -264,19 +265,20 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	if err != nil {
 		return nil, err
 	}
-	report := &Report{Status: Sound}
-	// Interferences is always computed — the Interfering rung reads it
-	// (verification §1). The read-only proof never consumes an operand or
-	// exposes a transient intersection through the document.
-	report.Interferences = []Interference{}
+	// The effective request is recorded once per call, even for an empty
+	// document (proposal §5), and every body's WallResult.Request /
+	// UndercutResult.Request shares these same pointers.
+	req := effectiveVerifyRequest(cfg)
+
+	// report accumulates the pieces publishReport assembles into the
+	// returned *Report at the very end; Interferences is always computed —
+	// the Interfering rung reads it (verification §1) — and the read-only
+	// proof never consumes an operand or exposes a transient intersection
+	// through the document.
+	report := &Report{Interferences: []Interference{}}
 	if cfg.clearances {
 		report.Clearances = []Clearance{}
 	}
-
-	// The effective request is recorded once per call, even for an empty
-	// document (proposal §5), and every body's wallResult.Request /
-	// undercutResult.Request shares these same pointers.
-	req := effectiveVerifyRequest(cfg)
 
 	undecided := false // some asked question or pair this evaluator cannot decide
 
@@ -285,16 +287,16 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		br, bodyDiags, err := verifyBody(ctx, b, cfg, req)
+		br, err := verifyBody(ctx, b, cfg, req)
 		if err != nil {
 			return nil, err
 		}
 		report.Bodies = append(report.Bodies, br)
-		report.Diagnostics = append(report.Diagnostics, bodyDiags...)
+		report.Diagnostics = append(report.Diagnostics, br.Diagnostics...)
 		if br.Status == Suspect {
 			undecided = true
 		}
-		if br.Status != Unsound && br.Solid {
+		if br.Status != Unsound && br.Validity.Outcome == ValidityValid {
 			solids = append(solids, br)
 		}
 	}
@@ -310,7 +312,7 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			boxProven := boxesDisjoint(solids[i].Bounds, solids[j].Bounds)
+			boxProven := boxesDisjoint(solids[i].Bounds.Box, solids[j].Bounds.Box)
 			if boxProven && !cfg.clearances {
 				continue
 			}
@@ -394,7 +396,7 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	}
 
 	report.Status = aggregateStatus(report, undecided)
-	return report, nil
+	return publishReport(req, report.Bodies, report.Interferences, report.Clearances, report.Diagnostics, report.Status), nil
 }
 
 func pairGapMeasurement(res pairResult) Measurement {
@@ -545,37 +547,21 @@ func sharesFacePlane(a, b *Body) bool {
 	return false
 }
 
-// verifyBody audits one body and assembles its report through evaluateBody,
-// then returns the still-exported legacy *BodyReport that assembler's bridge
-// projects (proposal §16's temporary bridge) alongside the diagnostics the
-// private bodyResult carries.
-func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequest) (*BodyReport, []Diagnostic, error) {
-	res, br, err := evaluateBody(ctx, b, cfg, req)
-	if err != nil {
-		return nil, nil, err
-	}
-	return br, res.Diagnostics, nil
-}
-
-// evaluateBody audits one body and assembles its private bodyResult through
-// verify_publish.go's publishBodyResult, alongside the legacy *BodyReport
-// projectLegacyBodyReport bridges it onto. A feature-built body is valid by
+// verifyBody audits one body and assembles its BodyReport through
+// verify_publish.go's publishBodyResult. A feature-built body is valid by
 // construction, and the proof is the construction (evaluator §10): the
 // structural audit is an invariant check, cheap, and its verdict is decided,
-// not sampled. Exposed at package scope (rather than folded into verifyBody)
-// so an in-package test can assert on the private result directly.
-func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequest) (*bodyResult, *BodyReport, error) {
-	br := &BodyReport{
-		Body:   b,
-		Status: Sound,
-		Area:   b.area,
-		Bounds: b.bounds,
-	}
+// not sampled. Exposed at package scope so an in-package test can construct
+// a body directly and assert on the returned BodyReport (task-list §4
+// item 4's validity fixtures).
+func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyRequest) (*BodyReport, error) {
+	area := b.area
+	bounds := b.bounds
 
 	// The held topology's lump and void counts (proposal §9): descriptive
 	// data every body carries, using the current count definitions,
 	// independent of the validity verdict decided below.
-	topology := heldTopology{Lumps: len(b.lumps)}
+	topology := HeldTopology{Lumps: len(b.lumps)}
 	for _, s := range b.Shells() {
 		if s.IsVoid() {
 			topology.Voids++
@@ -587,26 +573,27 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 	// This evaluator's boundary is exact, so a defect is proven — Unsound —
 	// and a clean audit on a feature-built body is proven validity.
 	// publishValidityResult (verify_publish.go) maps the three-way audit
-	// outcome onto validityResult and carries the one diagnostic that
+	// outcome onto ValidityResult and carries the one diagnostic that
 	// explains it (proposal §9).
 	clean := auditBoundary(b)
 	built := b.payload != nil
 	validity := publishValidityResult(b, clean, built, b.solid)
-	haveRegion := validity.Outcome == validityValid
+	haveRegion := validity.Outcome == ValidityValid
 
 	var vol Measurement
 	var cen VecMeasurement
+	status := Sound
 	switch validity.Outcome {
-	case validityInvalid:
-		br.Status = Unsound
-	case validityValid:
+	case ValidityInvalid:
+		status = Unsound
+	case ValidityValid:
 		vol = b.volume
 		cen = b.centroid
 	default:
 		// A body this evaluator did not build (unreachable through the
 		// public API) has a validity the audit alone cannot prove:
 		// undecided, Suspect — never a fabricated pass.
-		br.Status = Suspect
+		status = Suspect
 	}
 
 	// A proven-invalid body emits one DiagInvalidBody and no region-quantity
@@ -614,26 +601,23 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 	// still runs, discarded, to surface a cancellation observed while lazily
 	// loading a reference. Its area and bounds stay available as boundary
 	// data, but publishBodyResult never gates them — their Tolerance is
-	// toleranceNotEvaluated (proposal §9) since no Tolerance is passed here.
+	// ToleranceNotEvaluated (proposal §9) since no Tolerance is passed here.
 	// A requested survey on this body publishes Unavailable plus
 	// DiagSurveyPrerequisite; publishBodyResult decides that from Validity
 	// alone, without a Surveys record.
-	if validity.Outcome == validityInvalid {
-		if _, _, err := bodyReadingDiagnostics(ctx, b, bodyReadingSet{Area: br.Area, Bounds: br.Bounds}, cfg.rel); err != nil {
-			return nil, nil, err
+	if validity.Outcome == ValidityInvalid {
+		if _, _, err := bodyReadingDiagnostics(ctx, b, bodyReadingSet{Area: area, Bounds: bounds}, cfg.rel); err != nil {
+			return nil, err
 		}
-		res := publishBodyResult(bodyPublishInput{
+		return publishBodyResult(bodyPublishInput{
 			Body:     b,
-			Status:   br.Status,
+			Status:   status,
 			Validity: validity,
 			Topology: topology,
-			Area:     scalarReading{Measurement: br.Area},
-			Bounds:   boundsReading{Box: br.Bounds},
+			Area:     ScalarReading{Measurement: area},
+			Bounds:   BoundsReading{Box: bounds},
 			Request:  req,
-		})
-		projectLegacyBodyReport(res, br)
-		br.Exactness = bodyExactness(br)
-		return res, br, nil
+		}), nil
 	}
 
 	// The asked opt-in surveys (evaluator §10, verification §6): answered
@@ -647,12 +631,12 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 	// is Violating. Each non-Sound survey outcome names itself in the slice.
 	violating, suspect := false, false
 	var surveys surveyResults
-	if haveRegion && (cfg.wall != nil || cfg.pull != nil || cfg.minRadius) {
+	if haveRegion && (cfg.wall != nil || cfg.pull != nil || cfg.concaveRadius) {
 		var surveyDiags []Diagnostic
 		var err error
 		surveys, surveyDiags, err = runSurveys(newWorkBudget(ctx), b, cfg)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		for _, d := range surveyDiags {
 			switch d.Status {
@@ -680,8 +664,8 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 		volPtr, cenPtr = &vol, &cen
 	}
 	readings := bodyReadingSet{
-		Area:     br.Area,
-		Bounds:   br.Bounds,
+		Area:     area,
+		Bounds:   bounds,
 		Volume:   volPtr,
 		Centroid: cenPtr,
 		Wall:     wallReading,
@@ -689,7 +673,7 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 	}
 	verdicts, diagSet, err := bodyReadingDiagnostics(ctx, b, readings, cfg.rel)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if len(diagSet.Core) > 0 || diagSet.Wall != nil || diagSet.Radius != nil {
 		suspect = true
@@ -698,31 +682,31 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 	// Worst wins at the body level: Violating > Suspect > Sound
 	// (verification §6).
 	if suspect {
-		br.Status = Suspect
+		status = Suspect
 	}
 	if violating {
-		br.Status = Violating
+		status = Violating
 	}
 
 	// Region groups the two proven-solid quantities alongside their own
 	// tolerance verdicts (proposal §9); it stays nil on every other validity
 	// outcome, and publishBodyResult enforces that on its own regardless of
 	// what is passed here.
-	var region *regionReadings
+	var region *RegionReadings
 	if haveRegion {
-		region = &regionReadings{
-			Volume:   scalarReading{Measurement: vol, Tolerance: verdicts.Volume},
-			Centroid: vectorReading{VecMeasurement: cen, Tolerance: verdicts.Centroid},
+		region = &RegionReadings{
+			Volume:   ScalarReading{Measurement: vol, Tolerance: verdicts.Volume},
+			Centroid: VectorReading{VecMeasurement: cen, Tolerance: verdicts.Centroid},
 		}
 	}
 
-	res := publishBodyResult(bodyPublishInput{
+	return publishBodyResult(bodyPublishInput{
 		Body:                b,
-		Status:              br.Status,
+		Status:              status,
 		Validity:            validity,
 		Topology:            topology,
-		Area:                scalarReading{Measurement: br.Area, Tolerance: verdicts.Area},
-		Bounds:              boundsReading{Box: br.Bounds, Tolerance: verdicts.Bounds},
+		Area:                ScalarReading{Measurement: area, Tolerance: verdicts.Area},
+		Bounds:              BoundsReading{Box: bounds, Tolerance: verdicts.Bounds},
 		Region:              region,
 		Request:             req,
 		Surveys:             surveys,
@@ -731,10 +715,7 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 		RadiusTolerance:     verdicts.Radius,
 		RadiusToleranceDiag: diagSet.Radius,
 		CoreDiagnostics:     diagSet.Core,
-	})
-	projectLegacyBodyReport(res, br)
-	br.Exactness = bodyExactness(br)
-	return res, br, nil
+	}), nil
 }
 
 // auditBoundary checks the structural invariants of the held boundary:
@@ -771,25 +752,6 @@ func auditBoundary(b *Body) bool {
 		}
 	}
 	return true
-}
-
-// bodyExactness is the weakest link across the quantities the report
-// carries (verification §1).
-func bodyExactness(br *BodyReport) Exactness {
-	worst := max(br.Area.Exactness, br.Bounds.Exactness)
-	if br.Volume != nil {
-		worst = max(worst, br.Volume.Exactness)
-	}
-	if br.Centroid != nil {
-		worst = max(worst, br.Centroid.Exactness)
-	}
-	if br.MinWallThickness != nil {
-		worst = max(worst, br.MinWallThickness.Exactness)
-	}
-	if br.MinRadius != nil {
-		worst = max(worst, br.MinRadius.Exactness)
-	}
-	return worst
 }
 
 // boxesDisjoint reports whether the two bounds-inflated boxes have disjoint

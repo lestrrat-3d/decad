@@ -1533,4 +1533,9 @@
 0	0.00	TestDiagnosticSurveyKindTokens
 2	0.00	TestVerifyUnsupportedPairEmitsOneCause
 0	0.00	TestVerifyResultEnumTokens
-0	0.00	TestVerifyResultZeroValueIsUnverified
+0	0.00	TestVerifyReportForBody
+0	0.00	TestVerifyEffectiveRequestRecorded
+0	0.00	TestVerifyPassedIsNotCoverage
+0	0.00	TestVerifyPolicyRejectsUnrecognizedCode
+0	0.00	TestReportPassedRejectsZeroAndUnknownStatus
+0	0.00	TestVerifyDeterministicOrder

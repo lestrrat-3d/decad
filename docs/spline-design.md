@@ -986,17 +986,17 @@ rational span unchanged.
 | chord sagitta | the control points' distance to the chord SEGMENT `P_0 P_p`, MEASURED per subdivision level (§6.1) | the same distance on the span's own control points, MEASURED per level | `chordCount`, tessellation |
 | tangent/normal DIRECTION cone | hodograph control hull — a degree `p−1` Bézier with control points `p·ΔP_i` — a CONE only where that hull excludes the origin (§6.3) | the control hull of the numerator hodograph `(U′W − UW′, V′W − VW′)`, degree `≤ 2p−1` — the positive `W²` scales `C′` and never rotates it, so the direction cone is the numerator's, under the same origin-exclusion test (§6.3) | undercut survey |
 | speed, for a Lipschitz bound | that same hodograph hull's maximum norm | the numerator hodograph hull's maximum norm divided by the square of `W`'s proven positive LOWER bound | extreme-VALUE brackets |
-| curvature extreme | `2K′S − 3KS′ = 0` with `K = u′v″ − v′u″` and `S = u′² + v′²`, degree `≤ 4p−6` — PLUS both span endpoints; the bracket needs `S`'s proven positive floor, so a span without one is `Suspect` (§6.3) rather than a candidate list | the same stationarity over the rational derivative forms, the positive powers of `W` cleared before isolation — plus the same endpoint and speed-floor cases | `MinRadius` |
+| curvature extreme | `2K′S − 3KS′ = 0` with `K = u′v″ − v′u″` and `S = u′² + v′²`, degree `≤ 4p−6` — PLUS both span endpoints; the bracket needs `S`'s proven positive floor, so a span without one is `Suspect` (§6.3) rather than a candidate list | the same stationarity over the rational derivative forms, the positive powers of `W` cleared before isolation — plus the same endpoint and speed-floor cases | `ConcaveRadius` |
 
 `K` is the curvature NUMERATOR, so **`K`'s own roots are the inflections**
-(`κ = 0`, infinite radius) — the opposite end of the range `MinRadius` reports.
+(`κ = 0`, infinite radius) — the opposite end of the range `ConcaveRadius` reports.
 They are not the candidate set and NEVER stand in for one: a span can hold its
 tightest radius at a parameter where `K` is far from zero.
 
 An extreme VALUE bracket follows from the isolated parameter interval plus the
 row's own Lipschitz bound, exactly the pattern `clearance_poly.go` already uses
 for its critical values. Bracket EVERY isolated root and both span endpoints
-before reporting a `Box`, a through-all stop or a `MinRadius`: a candidate set
+before reporting a `Box`, a through-all stop or a `ConcaveRadius`: a candidate set
 that misses an interior root understates the reading, which is the direction that
 breaks the proof rather than merely widening it.
 
@@ -1136,7 +1136,7 @@ are floats taken exactly as rationals (§5.1):
   `1, 2` show the whole gap exactly: `H ≡ (2, 0)` gives `h_min = 4`, while
   `C(t) = 2t/(1+t)` has `|C′|² = 4/(1+t)⁴` and a true minimum of `1/4` at
   `t = 1` — `W_max⁴ = 16` times smaller. An inflated floor understates curvature,
-  which OVERSTATES the `MinRadius` Table C advertises as proven, so the error
+  which OVERSTATES the `ConcaveRadius` Table C advertises as proven, so the error
   runs in the unsafe direction. The mirror bound divides by its own power of `W`
   the same way — §6.2's speed row.
 - **origin exclusion.** Whether the origin lies in the convex hull of the
@@ -1160,8 +1160,8 @@ is accepted and reads `Suspect`:
 
 | Certificate | Fails when | Cost |
 |---|---|---|
-| speed floor `s_min > 0` | the tested polynomial — `S`, or a rational span's `S_num` — is identically zero (the collapsed span), or has a root on the span, or its bracketed minimum reaches `0` | `Undercuts` AND `MinRadius` read `Suspect` for that body |
-| origin exclusion on every subdivided hull | the turn is too wide to separate within the subdivision budget | `Undercuts` reads `Suspect` |
+| speed floor `s_min > 0` | the tested polynomial — `S`, or a rational span's `S_num` — is identically zero (the collapsed span), or has a root on the span, or its bracketed minimum reaches `0` | `Undercut` AND `ConcaveRadius` read `Suspect` for that body |
+| origin exclusion on every subdivided hull | the turn is too wide to separate within the subdivision budget | `Undercut` reads `Suspect` |
 
 **Neither failure refuses a BUILD.** Volume and area read no direction cone,
 so nothing in this section withholds a body — the readings that need a
@@ -1183,7 +1183,7 @@ unproven. That refusal is a build refusal, since evaluator §3 decides `convex`
 at build and a bool has no `Suspect`. So the cusp net above, and equally an
 ordinary spline whose first two control points coincide, reaches a build
 refusal through §6.5. It never reaches one through this section, whose own
-failures still cost `Undercuts` and `MinRadius` and nothing else. The
+failures still cost `Undercut` and `ConcaveRadius` and nothing else. The
 collapsed span keeps building because §6.5 skips it entirely: it carries no
 verdict and no joint of its own.
 
@@ -1646,9 +1646,9 @@ every walk of the section is itself exactly rational (§3).
 | `Tessellate`, `STL`, `OBJ` | an EXTRUDED free-form-walled body chords through §6.2.1's dyadic station chain, like every OTHER body `Extrude` builds; the fixed work budget (R7) and the per-curve chord cap (R8) are its only refusals. Loft follows `docs/loft-design.md` Table D row D1 | §6.2.1's sagitta over the single-chain station walk; rides the existing prism path, NOT tessellation T5 (`docs/tessellation-reach-design.md` §5) |
 | `Union`/`Cut`/`Intersect` | an EXTRUDED free-form-walled operand is admitted through its chorded mesh, `Faceted` output as always. Loft follows `docs/loft-design.md` Table D row D2 | the mesh boolean reads triangles, not kinds, so the chording is the whole reduction |
 | interference proof | an EXTRUDED free-form-walled body is decided through its chorded mesh. Loft follows `docs/loft-design.md` Table D row D3 | read-only mesh intersection over the same chording the export path builds |
-| `Undercuts` | proven where §6.3's certificates close, else `Suspect` | §6.2 normal cones; an enclosure decides a face only while it is a proper cone (§6.3) |
-| `MinRadius` | proven interval under §6.3's speed floor, else `Suspect` | §6.2 curvature extremes; a measurement, never a verdict |
-| `MinWallThickness` | proven interval, else `Suspect` | §8.1 |
+| `Undercut` | proven where §6.3's certificates close, else `Suspect` | §6.2 normal cones; an enclosure decides a face only while it is a proper cone (§6.3) |
+| `ConcaveRadius` | proven interval under §6.3's speed floor, else `Suspect` | §6.2 curvature extremes; a measurement, never a verdict |
+| `Wall` | proven interval, else `Suspect` | §8.1 |
 | `Clearance` rows | `Suspect` until a free-form cell lands | box-disjoint pairs still read `Sound` |
 | `Revolve` | Tier A section; surfaces of revolution per §7 | lateral `Area` by Pappus over §6.1.1's radial first moment, `Volume` and cap areas from §5's exact rational; meshing waits on tessellation T2–T5 |
 | `Fillet`/`Chamfer`/`Shell` | refused per R3–R5, except the §4.1 analytic-corner slice | §4.1, with the free-form audit and its R11 refusal in §6.4 |
@@ -1661,7 +1661,7 @@ capabilities — land early, before revolve and before the surveys.
 
 ### 8.1 Wall thickness is the one capability with no complete candidate set
 
-`survey2d.go` answers `MinWallThickness` from a CLOSED-FORM candidate set of
+`survey2d.go` answers `Wall` from a CLOSED-FORM candidate set of
 critical inscribed disks, and the set is COMPLETE for the attained infimum over
 line/arc boundaries. Completeness is what makes the answer exact.
 
@@ -1712,8 +1712,8 @@ half-silent. These stages do not consume a global evaluator increment number.
 | **P4a** | §6.2 row 1's directional-extreme bracket, wired into the prism bounds reading and into §6.4's straddle-narrowed through-all stop gate | none on its own — the bracket's reach through the public surface waits on P4b, below; the stop charges a met body's bracket to the level it resolves and R11 refuses only a straddling one, `extentAlongWork`'s wider refusal serving the clearance short-circuit alone, and R18 is live on the enclosure-to-float64 conversion the bracket publishes through |
 | **P4b** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, `NormalAt` refusal, §6.5's wall-edge convexity proof and its R19 refusal | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4b is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11; a wall edge whose curvature sign the chain does not prove is R19 |
 | **P5** | extruded free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof for extruded free-form walls. Wall reading explicitly `Suspect` |
-| **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercuts` and `MinRadius` each answer where the certificates that reading needs close, and read `Suspect` per §6.3's cost table where they do not |
-| **P7** | certified branch-and-bound inscribed-disk interval | `MinWallThickness` answered, with its own convergence evidence |
+| **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercut` and `ConcaveRadius` each answer where the certificates that reading needs close, and read `Suspect` per §6.3's cost table where they do not |
+| **P7** | certified branch-and-bound inscribed-disk interval | `Wall` answered, with its own convergence evidence |
 | **P8** | free-form surfaces of revolution, §6.1.1's radial first-moment bracket | `Revolve` builds for a Tier A section |
 | **P9** | Tier B formulas; Tier C certified quadrature | Tier B/C moment readings answer, and the builds Table C stages on them follow — R10 retires |
 | **P10** | the §4.1 analytic-corner modify slice over §6.4's free-form crossing and contact tests | fillet/chamfer on analytic corners of a mixed section |
@@ -1765,7 +1765,7 @@ rules).
   Lipschitz bound still holds; a true tangent direction outside the cone that
   same hull reports, so the undercut survey's enclosure still holds every normal;
   and a curvature extreme at a parameter that is not a root of the polynomial
-  stationarity `2K′S − 3KS′`, so `MinRadius` is not overstated. The chord-sagitta
+  stationarity `2K′S − 3KS′`, so `ConcaveRadius` is not overstated. The chord-sagitta
   row is EXCLUDED and needs no rational fixture: both its columns measure the
   same control-point distance to the chord per subdivision level, so it carries
   no rational-specific identity a fixture could falsify.
@@ -1776,7 +1776,7 @@ rules).
   a rational span whose control points all lie on their linear interpolant while
   the curve does not, so a bound built from the parametric deviation `|C − L|` is
   distinguished from the sagitta the chord actually commits.
-- Assert `MinRadius` on a span carrying an INFLECTION: the reported interval
+- Assert `ConcaveRadius` on a span carrying an INFLECTION: the reported interval
   encloses the tightest radius, which is attained where `K ≠ 0`, so a candidate
   set built from `K`'s roots alone fails the test (§6.2).
 - Assert the §6.1.1 radial bracket on the reading a length bracket cannot make:
@@ -1809,10 +1809,10 @@ rules).
   proper cone. On a walk carrying ONE collapsed span — four coincident controls
   inside a longer clamped net, so `S` is the zero polynomial there while the
   walk's own length stays positive, and §6.5 skips the span rather than
-  refusing the body — the speed floor must FAIL, `Undercuts` and `MinRadius`
+  refusing the body — the speed floor must FAIL, `Undercut` and `ConcaveRadius`
   must read `Suspect`, and the body must still build and report its `Volume`.
   A survey that instead
-  returns an empty `Undercuts` list on that
+  returns an empty `Undercut.Faces` list on that
   body is the silent pass §8.1 forbids, and must fail the test, and a
   certificate that reads the isolated root count alone reports a floor on that
   collapsed span and passes silently, so it must fail this test too.
@@ -1822,7 +1822,7 @@ rules).
   the minimal falsifier: the numerator floor is `4` while the true squared-speed
   minimum is `1/4`, so a reported floor above a dense-sampled minimum of `|C′|²`
   fails the test. Assert the consequence on a CURVED rational span too — the
-  reported `MinRadius` interval must enclose the dense-sample tightest radius,
+  reported `ConcaveRadius` interval must enclose the dense-sample tightest radius,
   which a floor inflated by `W_max⁴` overstates.
 - Assert R9's OTHER branch — a reading whose proven bracket straddles its
   threshold, not a §6.3 certificate failure. A free-form section whose §8.1 wall
@@ -1916,7 +1916,7 @@ rules).
   against a dense-sample reference, or refuses `ErrUnsupported` (R13), never
   `ErrDegenerate`. Assert the dead control point moves no reading: displacing
   `P_0` alone changes no area, no length enclosure and no `Box`.
-- Assert `Undercuts` on a free-form face whose certified cone is proper: a face
+- Assert `Undercut` on a free-form face whose certified cone is proper: a face
   whose cone puts every point provenly opposing the pull is listed, and a face
   whose cone clears at every point is not.
 - §10 P5's chording: assert directed-edge

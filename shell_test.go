@@ -367,15 +367,15 @@ func TestShellTubeInwardBox(t *testing.T) {
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 
 	// The wall survey reads the uniform wall thickness exactly.
 	report, err = doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinWallThickness)
-	require.True(t, br.MinWallThickness.Value.Equal(units.Millimeters(th), 1e-9),
-		`the tube wall is the shell thickness, got %s`, br.MinWallThickness.Value)
+	require.NotNil(t, br.Wall.Minimum)
+	require.True(t, br.Wall.Minimum.Value.Equal(units.Millimeters(th), 1e-9),
+		`the tube wall is the shell thickness, got %s`, br.Wall.Minimum.Value)
 
 	// The recipe records the shell intent and round-trips.
 	recipe := doc.Recipe()
@@ -650,7 +650,7 @@ func TestShellCupHoledInward(t *testing.T) {
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 }
 
 // rimByRole returns the body's face carrying the given rim role.
@@ -971,7 +971,7 @@ func TestShellCupDownstream(t *testing.T) {
 		br := report.Bodies[0]
 		requireWall(t, br, decad.Exact, th)
 		require.Equal(t, decad.Sound, br.Status)
-		require.True(t, report.Trustworthy())
+		require.True(t, report.Passed())
 	})
 
 	t.Run("a lone cup verifies Sound", func(t *testing.T) {
@@ -981,7 +981,7 @@ func TestShellCupDownstream(t *testing.T) {
 		report, err := doc.Verify(t.Context())
 		require.NoError(t, err)
 		require.Equal(t, decad.Sound, report.Status)
-		require.True(t, report.Trustworthy())
+		require.True(t, report.Passed())
 	})
 
 	t.Run("a box-disjoint cup pair is Sound, but WithClearances invokes the kernel and reads Suspect", func(t *testing.T) {
@@ -1012,7 +1012,7 @@ func TestShellCupDownstream(t *testing.T) {
 		report, err = doc.Verify(t.Context(), decad.WithClearances())
 		require.NoError(t, err)
 		require.Equal(t, decad.Suspect, report.Status, `an invoked cup pair is staged`)
-		require.False(t, report.Trustworthy())
+		require.False(t, report.Passed())
 	})
 }
 
@@ -1386,10 +1386,10 @@ func TestShellCupUndercutsBox(t *testing.T) {
 		report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
 		require.NoError(t, err)
 		br := report.Bodies[0]
-		require.NotNil(t, br.Undercuts)
-		require.Empty(t, br.Undercuts, `an axial pull frees the whole cup`)
+		require.NotNil(t, br.Undercut.Faces)
+		require.Empty(t, br.Undercut.Faces, `an axial pull frees the whole cup`)
 		require.Equal(t, decad.Sound, br.Status)
-		require.True(t, report.Trustworthy())
+		require.True(t, report.Passed())
 	})
 
 	// Tilt the pull and three faces hook against it: the outer wall facing the
@@ -1401,14 +1401,14 @@ func TestShellCupUndercutsBox(t *testing.T) {
 		report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(1, 0, 1)))
 		require.NoError(t, err)
 		br := report.Bodies[0]
-		require.Len(t, br.Undercuts, 3)
-		for _, f := range br.Undercuts {
+		require.Len(t, br.Undercut.Faces, 3)
+		for _, f := range br.Undercut.Faces {
 			require.Equal(t, decad.KindPlane, f.Surface().Kind())
 		}
 		// The kept outer floor (capStart) is one of them.
 		capStartRef := decad.FeatureRef{Step: cup.Origin().Step, Role: roleCapStart}
 		found := false
-		for _, f := range br.Undercuts {
+		for _, f := range br.Undercut.Faces {
 			for _, o := range f.Origins() {
 				if o == capStartRef {
 					found = true
@@ -1428,15 +1428,15 @@ func TestShellCupMinRadius(t *testing.T) {
 	t.Run("cylindrical cavity reads its radius", func(t *testing.T) {
 		const R, h, th = 20.0, 12.0, 4.0
 		doc, _ := cylinderCup(t, R, h, th)
-		report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+		report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 		require.NoError(t, err)
 		br := report.Bodies[0]
-		require.NotNil(t, br.MinRadius)
-		require.Equal(t, decad.Exact, br.MinRadius.Exactness)
-		require.True(t, br.MinRadius.Value.Equal(units.Millimeters(R-th), 1e-9),
-			`the cavity cylinder is the cup's one concave face, got %s`, br.MinRadius.Value)
+		require.NotNil(t, br.ConcaveRadius.Minimum)
+		require.Equal(t, decad.Exact, br.ConcaveRadius.Minimum.Exactness)
+		require.True(t, br.ConcaveRadius.Minimum.Value.Equal(units.Millimeters(R-th), 1e-9),
+			`the cavity cylinder is the cup's one concave face, got %s`, br.ConcaveRadius.Minimum.Value)
 		require.Equal(t, decad.Sound, br.Status)
-		require.True(t, report.Trustworthy())
+		require.True(t, report.Passed())
 	})
 
 	// A box cup has no curved face — its concave wall/floor edges carry no
@@ -1446,12 +1446,12 @@ func TestShellCupMinRadius(t *testing.T) {
 		doc, box := shellBox(t)
 		_, err := box.Shell(topCap(box), units.Millimeters(th))
 		require.NoError(t, err)
-		report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+		report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 		require.NoError(t, err)
 		br := report.Bodies[0]
-		require.Nil(t, br.MinRadius, `a box cup has no concave curvature`)
+		require.Nil(t, br.ConcaveRadius.Minimum, `a box cup has no concave curvature`)
 		require.Equal(t, decad.Sound, br.Status)
-		require.True(t, report.Trustworthy())
+		require.True(t, report.Passed())
 	})
 }
 
@@ -1649,10 +1649,10 @@ func TestShellCupHoledUndercuts(t *testing.T) {
 		report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
 		require.NoError(t, err)
 		br := report.Bodies[0]
-		require.NotNil(t, br.Undercuts)
-		require.Empty(t, br.Undercuts, `an axial pull frees the whole holed cup`)
+		require.NotNil(t, br.Undercut.Faces)
+		require.Empty(t, br.Undercut.Faces, `an axial pull frees the whole holed cup`)
 		require.Equal(t, decad.Sound, br.Status)
-		require.True(t, report.Trustworthy())
+		require.True(t, report.Passed())
 	})
 
 	// Tilt the pull and the post cylinder hooks against it — a full cylinder
@@ -1669,7 +1669,7 @@ func TestShellCupHoledUndercuts(t *testing.T) {
 
 		postRef := decad.FeatureRef{Step: cup.Origin().Step, Role: "shellSide(1,0)"}
 		var post *decad.Face
-		for _, f := range br.Undercuts {
+		for _, f := range br.Undercut.Faces {
 			for _, o := range f.Origins() {
 				if o == postRef {
 					post = f
@@ -1691,15 +1691,15 @@ func TestShellCupHoledMinRadius(t *testing.T) {
 	doc, box := circleHoledBox(t, [3]float64{50, 30, rh})
 	_, err := box.Shell(topCap(box), units.Millimeters(th))
 	require.NoError(t, err)
-	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinRadius, `the tunnel is a concave cylindrical face`)
-	require.Equal(t, decad.Exact, br.MinRadius.Exactness)
-	require.True(t, br.MinRadius.Value.Equal(units.Millimeters(rh), 1e-9),
-		`the tunnel wall the post wraps is the tightest concave radius, got %s`, br.MinRadius.Value)
+	require.NotNil(t, br.ConcaveRadius.Minimum, `the tunnel is a concave cylindrical face`)
+	require.Equal(t, decad.Exact, br.ConcaveRadius.Minimum.Exactness)
+	require.True(t, br.ConcaveRadius.Minimum.Value.Equal(units.Millimeters(rh), 1e-9),
+		`the tunnel wall the post wraps is the tightest concave radius, got %s`, br.ConcaveRadius.Minimum.Value)
 	require.Equal(t, decad.Sound, br.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 }
 
 // TestShellCupSeparatesComputedOpenAndExactFloorBounds keeps an all-planar cup
@@ -1769,11 +1769,11 @@ func TestShellCupWallThicknessCarriesConversionDelta(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinWallThickness)
-	require.Equal(t, decad.Approximate, br.MinWallThickness.Exactness)
-	value, err := br.MinWallThickness.Value.In(units.Millimeter)
+	require.NotNil(t, br.Wall.Minimum)
+	require.Equal(t, decad.Approximate, br.Wall.Minimum.Exactness)
+	value, err := br.Wall.Minimum.Value.In(units.Millimeter)
 	require.NoError(t, err)
-	bound, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	bound, err := br.Wall.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	require.Greater(t, bound, 0.0)
 	const denoted = 0.2 * 25.4 // 0.2 inch in millimetres

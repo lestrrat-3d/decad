@@ -13,7 +13,7 @@ import (
 )
 
 // Verify is the product: one non-mutating call over the live model, a
-// verdict per body and for the document, and one bit — Trustworthy() — an
+// verdict per body and for the document, and one bit — Passed() — an
 // agent gates on. A question the evaluator cannot decide reads Suspect,
 // never a silent pass: here two far-apart plates are provenly disjoint and
 // the report is Sound, while two overlapping plates are a pair this
@@ -75,11 +75,10 @@ func Example_decad_verify() {
 		fmt.Printf("failed to verify: %s\n", err)
 		return
 	}
-	fmt.Printf("apart: %s, trustworthy: %v\n", report.Status, report.Trustworthy())
+	fmt.Printf("apart: %s, trustworthy: %v\n", report.Status, report.Passed())
 	body := report.Bodies[0]
-	fmt.Printf("body: %s, solid: %v, watertight: %v, manifold: %v\n",
-		body.Status, body.Solid, body.Watertight, body.Manifold)
-	fmt.Printf("volume: %s (%s)\n", body.Volume.Value, body.Volume.Exactness)
+	fmt.Printf("body: %s, validity: %s\n", body.Status, body.Validity.Outcome)
+	fmt.Printf("volume: %s (%s)\n", body.Region.Volume.Value, body.Region.Volume.Exactness)
 
 	// A third plate coincident with the second: the boxes overlap, and this
 	// evaluator can prove the pair neither overlapping nor disjoint — the
@@ -97,10 +96,10 @@ func Example_decad_verify() {
 		fmt.Printf("failed to verify: %s\n", err)
 		return
 	}
-	fmt.Printf("overlapping: %s, trustworthy: %v\n", report.Status, report.Trustworthy())
+	fmt.Printf("overlapping: %s, trustworthy: %v\n", report.Status, report.Passed())
 	// Output:
 	// apart: Sound, trustworthy: true
-	// body: Sound, solid: true, watertight: true, manifold: true
+	// body: Sound, validity: valid
 	// volume: 60000 mm^3 (Exact)
 	// overlapping: Interfering, trustworthy: false
 }

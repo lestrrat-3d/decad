@@ -367,7 +367,7 @@ func TestCapBlendCircularRimCentroidIsClosedForm(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status,
 		`the cylinder document must read Sound at the default tolerance: %+v`, report.Diagnostics)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 }
 
 // TestCapBlendPlateCentroidIsExactRational is the 100x60 plate h20 chamfer 5

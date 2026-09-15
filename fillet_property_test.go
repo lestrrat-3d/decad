@@ -384,11 +384,11 @@ func runFilletCase(t *testing.T, fc filletCase, plan filletPlan, r float64) bool
 	// A concave rectilinear fillet is the section's only concave curved feature,
 	// so the min-radius survey reads exactly the fillet radius.
 	if plan.survey {
-		mr, err := doc.Verify(t.Context(), decad.WithMinRadius())
+		mr, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 		require.NoError(t, err)
 		require.Len(t, mr.Bodies, 1)
-		require.NotNilf(t, mr.Bodies[0].MinRadius, "%s/%s a concave fillet is a concave feature", fc.name, plan.name)
-		got, err := mr.Bodies[0].MinRadius.Value.In(units.Millimeter)
+		require.NotNilf(t, mr.Bodies[0].ConcaveRadius.Minimum, "%s/%s a concave fillet is a concave feature", fc.name, plan.name)
+		got, err := mr.Bodies[0].ConcaveRadius.Minimum.Value.In(units.Millimeter)
 		require.NoError(t, err)
 		require.InDeltaf(t, r, got, 1e-6*math.Max(1, r), "%s/%s the survey reads the fillet radius", fc.name, plan.name)
 	}

@@ -796,20 +796,18 @@ func TestBooleanVerifyUsesProvenToleranceBound(t *testing.T) {
 	require.Same(t, got, br.Body)
 	// Exactness remains honest metadata, while the default tolerance accepts
 	// every proven bound carried by this faceted result.
-	require.True(t, br.Solid)
-	require.True(t, br.Watertight)
-	require.True(t, br.Manifold)
-	require.NotNil(t, br.Volume)
-	require.Equal(t, decad.Approximate, br.Exactness)
+	require.Equal(t, decad.ValidityValid, br.Validity.Outcome)
+	require.NotNil(t, br.Region)
+	require.Equal(t, decad.Approximate, br.Area.Exactness)
 	require.Equal(t, decad.Sound, br.Status)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 
 	strict, err := doc.Verify(t.Context(), decad.WithTolerance(units.Scalar(0)))
 	require.NoError(t, err)
 	require.Equal(t, decad.Suspect, strict.Bodies[0].Status)
 	require.Equal(t, decad.Suspect, strict.Status)
-	require.False(t, strict.Trustworthy())
+	require.False(t, strict.Passed())
 }
 
 func TestFacetedTessellateAndExport(t *testing.T) {

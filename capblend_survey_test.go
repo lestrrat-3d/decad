@@ -230,9 +230,9 @@ func TestUndercutCapBlendReceiverWallsBoundedLikePatches(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
 	br := report.Bodies[0]
-	require.Len(t, br.Undercuts, 1, "only the chamfer patch, not either receiver wall")
+	require.Len(t, br.Undercut.Faces, 1, "only the chamfer patch, not either receiver wall")
 
-	f := br.Undercuts[0]
+	f := br.Undercut.Faces[0]
 	n, err := f.NormalAt(f.Loops()[0].CoEdges()[0].Start().Position().Value)
 	require.NoError(t, err)
 	require.InDelta(t, math.Sqrt2/2, n.Value.Z, 1e-12, "the listed face is the 45-degree chamfer patch")
@@ -268,7 +268,7 @@ func TestCapBlendMiteredUndercutIsNotPassed(t *testing.T) {
 	report, err := m.body.Document().Verify(t.Context(), decad.WithPullDirection(pull))
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
-	require.NotContains(t, report.Bodies[0].Undercuts, m.face,
+	require.NotContains(t, report.Bodies[0].Undercut.Faces, m.face,
 		"the straddling Cone patch is not itself a proven undercut")
 	require.True(t, hasDiagnostic(report, decad.DiagUndercut))
 	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
@@ -293,7 +293,7 @@ func TestCapBlendUndecidedPatchKeepsProvenUndercut(t *testing.T) {
 	report, err := m.body.Document().Verify(t.Context(), decad.WithPullDirection(r3.NewVec(1, 0, 0)))
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
-	require.Contains(t, report.Bodies[0].Undercuts, plane)
+	require.Contains(t, report.Bodies[0].Undercut.Faces, plane)
 	require.True(t, hasDiagnostic(report, decad.DiagUndercut))
 	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
 	require.Equal(t, decad.Violating, report.Bodies[0].Status)
@@ -349,7 +349,7 @@ func TestCapBlendWholeTurnUndercutRespectsNormalBound(t *testing.T) {
 	report, err := chamfered.Document().Verify(t.Context(), decad.WithPullDirection(pull))
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
-	require.NotContains(t, report.Bodies[0].Undercuts, cone,
+	require.NotContains(t, report.Bodies[0].Undercut.Faces, cone,
 		"a tangent the reading cannot resolve is not a proven violation")
 	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut),
 		"nor is it a proven all-clear")
@@ -384,7 +384,7 @@ func TestCapBlendFlatPatchUndercutRespectsNormalBound(t *testing.T) {
 	report, err := chamfered.Document().Verify(t.Context(), decad.WithPullDirection(pull))
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
-	require.NotContains(t, report.Bodies[0].Undercuts, patch)
+	require.NotContains(t, report.Bodies[0].Undercut.Faces, patch)
 	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
 }
 
@@ -440,8 +440,8 @@ func TestCapBlendUndercutStillDecidedOnOrdinaryBand(t *testing.T) {
 	report, err := m.body.Document().Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
-	require.NotNil(t, report.Bodies[0].Undercuts, "the band is still decided")
-	require.Empty(t, report.Bodies[0].Undercuts, "and pulling toward the chamfered cap frees it")
+	require.NotNil(t, report.Bodies[0].Undercut.Faces, "the band is still decided")
+	require.Empty(t, report.Bodies[0].Undercut.Faces, "and pulling toward the chamfered cap frees it")
 	require.False(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
 }
 
@@ -456,7 +456,7 @@ func TestCapBlendMiteredUndercutStillProven(t *testing.T) {
 	report, err := m.body.Document().Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, -1)))
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
-	require.Contains(t, report.Bodies[0].Undercuts, m.face,
+	require.Contains(t, report.Bodies[0].Undercut.Faces, m.face,
 		"pulling away from the chamfered cap catches the band patch itself")
 	require.Equal(t, decad.Violating, report.Bodies[0].Status)
 	require.False(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
@@ -478,10 +478,11 @@ func TestCapBlendMinRadiusUndecidedOnMiteredBand(t *testing.T) {
 	require.Less(t, atSide.Dot(atCap), 1-1e-6,
 		"the normal turns along one straight ruling, which no cone's does")
 
-	report, err := m.body.Document().Verify(t.Context(), decad.WithMinRadius())
+	report, err := m.body.Document().Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
-	require.Nil(t, report.Bodies[0].MinRadius)
+	require.Equal(t, decad.ScalarUndecided, report.Bodies[0].ConcaveRadius.Outcome)
+	require.Nil(t, report.Bodies[0].ConcaveRadius.Minimum)
 	require.True(t, hasDiagnostic(report, decad.DiagUndecidedMinRadius))
 }
 
@@ -495,10 +496,11 @@ func TestCapBlendMinRadiusUndecidedOnCircularBand(t *testing.T) {
 	body := circleProfile(t, 20, 10)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(2))
 	require.NoError(t, err)
-	report, err := chamfered.Document().Verify(t.Context(), decad.WithMinRadius())
+	report, err := chamfered.Document().Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
-	require.Nil(t, report.Bodies[0].MinRadius)
+	require.Equal(t, decad.ScalarUndecided, report.Bodies[0].ConcaveRadius.Outcome)
+	require.Nil(t, report.Bodies[0].ConcaveRadius.Minimum)
 	require.True(t, hasDiagnostic(report, decad.DiagUndecidedMinRadius))
 	require.Equal(t, decad.Suspect, report.Bodies[0].Status)
 }
@@ -524,10 +526,11 @@ func TestCapBlendMinRadiusUndecidedOnPlacedBand(t *testing.T) {
 	placed, err := chamfered.Placed(motion)
 	require.NoError(t, err)
 
-	report, err := placed.Document().Verify(t.Context(), decad.WithMinRadius())
+	report, err := placed.Document().Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
-	require.Nil(t, report.Bodies[0].MinRadius)
+	require.Equal(t, decad.ScalarUndecided, report.Bodies[0].ConcaveRadius.Outcome)
+	require.Nil(t, report.Bodies[0].ConcaveRadius.Minimum)
 	require.True(t, hasDiagnostic(report, decad.DiagUndecidedMinRadius))
 	require.Equal(t, decad.Suspect, report.Bodies[0].Status)
 
@@ -589,7 +592,7 @@ func TestCapBlendReflexApexUndercutSurvey(t *testing.T) {
 	require.Len(t, opposing.Bodies, 1)
 	var patches []*decad.Face
 	apexReported := false
-	for _, f := range opposing.Bodies[0].Undercuts {
+	for _, f := range opposing.Bodies[0].Undercut.Faces {
 		for _, o := range f.Origins() {
 			if strings.HasPrefix(o.Role, "chamferCap(") {
 				patches = append(patches, f)
@@ -606,7 +609,7 @@ func TestCapBlendReflexApexUndercutSurvey(t *testing.T) {
 	// Pulling toward the chamfered end frees the whole band, apex included.
 	free, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
 	require.NoError(t, err)
-	for _, f := range free.Bodies[0].Undercuts {
+	for _, f := range free.Bodies[0].Undercut.Faces {
 		for _, o := range f.Origins() {
 			require.False(t, strings.HasPrefix(o.Role, "chamferCap("), "role %s", o.Role)
 		}
@@ -633,8 +636,8 @@ func TestCapBlendUndercutSurvey(t *testing.T) {
 	down, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, -1)))
 	require.NoError(t, err)
 	require.Len(t, down.Bodies, 1)
-	require.NotEmpty(t, down.Bodies[0].Undercuts, "pulling away from the chamfered end catches its bevels")
-	for _, f := range down.Bodies[0].Undercuts {
+	require.NotEmpty(t, down.Bodies[0].Undercut.Faces, "pulling away from the chamfered end catches its bevels")
+	for _, f := range down.Bodies[0].Undercut.Faces {
 		found := false
 		for _, o := range f.Origins() {
 			if strings.HasPrefix(o.Role, "chamferCap(") {
@@ -647,7 +650,7 @@ func TestCapBlendUndercutSurvey(t *testing.T) {
 	up, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
 	require.NoError(t, err)
 	require.Len(t, up.Bodies, 1)
-	for _, f := range up.Bodies[0].Undercuts {
+	for _, f := range up.Bodies[0].Undercut.Faces {
 		for _, o := range f.Origins() {
 			require.False(t, strings.HasPrefix(o.Role, "chamferCap("), "pulling toward the chamfered end frees its bevels")
 		}
@@ -665,17 +668,18 @@ func TestCapBlendMinRadiusMatchesUnchamferedSection(t *testing.T) {
 	t.Parallel()
 	_, box := plateWithDiskHole(t, 50, 50, 10)
 	doc := box.Document()
-	before, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	before, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	require.Len(t, before.Bodies, 1)
-	require.NotNil(t, before.Bodies[0].MinRadius)
+	require.NotNil(t, before.Bodies[0].ConcaveRadius.Minimum)
 
 	chamfered, err := box.Chamfer(decad.Edges(decad.CreatedBy(decad.CapEnd(box)), decad.LongerThan(units.Millimeters(50))), units.Millimeters(3))
 	require.NoError(t, err)
-	after, err := chamfered.Document().Verify(t.Context(), decad.WithMinRadius())
+	after, err := chamfered.Document().Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	require.Len(t, after.Bodies, 1)
-	require.Nil(t, after.Bodies[0].MinRadius)
+	require.Equal(t, decad.ScalarUndecided, after.Bodies[0].ConcaveRadius.Outcome)
+	require.Nil(t, after.Bodies[0].ConcaveRadius.Minimum)
 	require.True(t, hasDiagnostic(after, decad.DiagUndecidedMinRadius))
 	require.Equal(t, decad.Suspect, after.Bodies[0].Status)
 }
@@ -690,17 +694,19 @@ func TestCapBlendMinRadiusStillAnsweredOnPlaneOnlyBand(t *testing.T) {
 	t.Parallel()
 	_, box := capBlendBox(t)
 	doc := box.Document()
-	before, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	before, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	require.Len(t, before.Bodies, 1)
-	require.Nil(t, before.Bodies[0].MinRadius, "a plain rectangle has no concave feature")
+	require.Equal(t, decad.ScalarAbsent, before.Bodies[0].ConcaveRadius.Outcome, "a plain rectangle has no concave feature")
+	require.Nil(t, before.Bodies[0].ConcaveRadius.Minimum, "a plain rectangle has no concave feature")
 
 	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)
-	after, err := chamfered.Document().Verify(t.Context(), decad.WithMinRadius())
+	after, err := chamfered.Document().Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	require.Len(t, after.Bodies, 1)
-	require.Nil(t, after.Bodies[0].MinRadius, "a proven absence, not a refusal")
+	require.Equal(t, decad.ScalarAbsent, after.Bodies[0].ConcaveRadius.Outcome, "a proven absence, not a refusal")
+	require.Nil(t, after.Bodies[0].ConcaveRadius.Minimum, "a proven absence, not a refusal")
 	require.False(t, hasDiagnostic(after, decad.DiagUndecidedMinRadius))
 	require.Equal(t, decad.Sound, after.Bodies[0].Status)
 }

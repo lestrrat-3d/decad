@@ -18,12 +18,12 @@ implementation order, and required tests. It changes no public signature.
 answers stay `Suspect` until their stage lands. NEVER turn a missing payload
 case into nil, an empty list, or `Sound`.
 
-| Payload | Validity | Pair clearance | `MinWallThickness` | `Undercuts` | `MinRadius` |
+| Payload | Validity | Pair clearance | `Wall` | `Undercut` | `ConcaveRadius` |
 |---|---|---|---|---|---|
 | `prismPayload` | exact construction proof | analytic kernel | exact 2D reduction | exact normal range | exact curvature |
 | `revolvePayload` | exact construction proof | analytic kernel | exact meridian reduction | exact normal range | exact curvature |
 | `cupPayload` | exact construction proof | exact analytic adapter (§3) | exact shell theorem (§4) | existing exact cup walk | existing exact cup walk |
-| `loftPayload` | exact construction audit | bounds-disjoint shortcut over each body's own `Bounds` and the bound it carries; `WithClearances` stays `Suspect` until an analytic adapter lands; mesh path staged | `Suspect` | `Suspect` | `Suspect` |
+| `loftPayload` | exact construction audit | bounds-disjoint shortcut over each body's own `Bounds` and the bound it carries; `WithClearances` stays `Suspect` until an analytic adapter lands; mesh path staged | `Unavailable` | `Unavailable` | `Unavailable` |
 | `facetedPayload` | bounded boundary proof (§6) | bounded triangle adapter (§7) | bounded medial survey (§10) | certified normal patches (§8) | certified curvature patches (§9) |
 
 The `prismPayload` row's own four right-hand columns are the ANALYTIC-walled
@@ -178,15 +178,15 @@ Cup/cup, cup/prism, and cup/revolve pairs run normal analytic enumeration.
 
 For accepted cup shell thickness `t` and draft allowance `alpha`:
 
-- any material junction with dihedral `<= alpha` → `MinWallThickness = Exact 0`;
-- otherwise → `MinWallThickness = t`, `Exact` only when converting the shell
+- any material junction with dihedral `<= alpha` → `Wall.Minimum = Exact 0`;
+- otherwise → `Wall.Minimum = t`, `Exact` only when converting the shell
   thickness to millimetres was itself exact, and otherwise carrying that
   conversion's own proven displacement as its bound.
 
-A cup always has a wall. `MinWallThickness` is never nil for a cup whose exact
-morphology recheck succeeds. The theorem itself — which value the wall reading
-takes — is unchanged; only the number `t`'s own exactness depends on the unit
-conversion that produced it.
+A cup always has a wall. `Wall.Outcome` is never `ScalarAbsent` for a cup
+whose exact morphology recheck succeeds — it is `ScalarMeasured`. The
+theorem itself — which value the wall reading takes — is unchanged; only the
+number `t`'s own exactness depends on the unit conversion that produced it.
 
 ### 4.2 Proof
 
@@ -241,8 +241,8 @@ Do not count:
 
 - tangent offset joins — material angle is `pi`, not a pinch;
 - vertical-horizontal cap/rim junctions — `90 degrees > alpha`;
-- sharp concave floor edges in `MinRadius` — radius survey reads face curvature,
-  not edge radius.
+- sharp concave floor edges in `ConcaveRadius` — radius survey reads face
+  curvature, not edge radius.
 
 ## 5. Faceted boundary certificate
 
@@ -370,8 +370,9 @@ Audit held mesh exactly:
 - shell containment is decided by exact parity;
 - face loop topology is consistent.
 
-These fields describe held data exactly: `Solid`, `Watertight`, `Manifold`,
-`SelfIntersecting`, `Lumps`, `Voids`.
+This audit is exactly what `Validity.Outcome == ValidityValid` entails —
+watertightness, manifoldness and no self-intersection for that proof — and
+`Topology.Lumps`/`Topology.Voids` describe the held data exactly.
 
 ### 6.2 Local vs. remote
 
@@ -582,7 +583,7 @@ are exact the interval collapses, and an inexact rival that does not reach the
 extremum moves neither end.
 
 Do not infer radius from faceted hinge angle or fit circles to vertices. Boolean
-rim edges add no radius: `MinRadius` reads face principal curvature.
+rim edges add no radius: `ConcaveRadius` reads face principal curvature.
 
 ## 10. Faceted wall thickness
 
@@ -709,7 +710,7 @@ numbers.
 |---|---|
 | validity | accepted loft construction is valid; the tolerance gate judges its volume, area, centroid, and bounds without a fabricated payload-specific reading |
 | pair staging | a bounds-disjoint loft pair is proven disjoint; `WithClearances` has no `Clearance` row and remains `Suspect` for that pair until the analytic adapter lands; a pair that needs the mesh path is `Suspect` before that path lands |
-| surveys | Each requested `MinWallThickness`, `Undercuts`, and `MinRadius` survey is `Suspect`, never absent or silently exact |
+| surveys | Each requested `Wall`, `Undercut`, and `ConcaveRadius` survey reports `Unavailable` (`Coverage`'s equivalent for `Undercut`) through `DiagUnsupportedSurveyPayload`, still `Suspect`, never absent or silently exact |
 
 ### 14.2 Cup
 

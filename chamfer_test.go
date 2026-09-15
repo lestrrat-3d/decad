@@ -201,11 +201,11 @@ func TestChamferBoxAllConvexEdges(t *testing.T) {
 
 	// A planar bevel has no concave principal radius, so the minimum-radius
 	// survey rightly reports nothing (Table D, D3) — unlike a concave fillet.
-	rep, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	rep, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	require.Len(t, rep.Bodies, 1)
-	require.Nil(t, rep.Bodies[0].MinRadius, `a planar chamfer bevel is not a concave radius`)
-	require.True(t, rep.Trustworthy(), `the irrational bevel length's certified square-root bracket keeps the bound within default tolerance`)
+	require.Nil(t, rep.Bodies[0].ConcaveRadius.Minimum, `a planar chamfer bevel is not a concave radius`)
+	require.True(t, rep.Passed(), `the irrational bevel length's certified square-root bracket keeps the bound within default tolerance`)
 }
 
 func TestChamferRecipeAndRetire(t *testing.T) {
@@ -307,10 +307,10 @@ func TestChamferConcaveEdgeAddsWedge(t *testing.T) {
 		_, isCyl := f.Surface().(decad.Cylinder)
 		require.False(t, isCyl, `a concave chamfer is a plane, never a cylinder`)
 	}
-	rep, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	rep, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	require.Len(t, rep.Bodies, 1)
-	require.Nil(t, rep.Bodies[0].MinRadius, `a planar chamfer bevel has no concave radius`)
+	require.Nil(t, rep.Bodies[0].ConcaveRadius.Minimum, `a planar chamfer bevel has no concave radius`)
 }
 
 func TestChamferLineArcCorner(t *testing.T) {
@@ -642,5 +642,5 @@ func TestChamferClearOfHoleBuilds(t *testing.T) {
 
 	rep, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.True(t, rep.Trustworthy(), `the certified square-root length bracket keeps the bound within default tolerance`)
+	require.True(t, rep.Passed(), `the certified square-root length bracket keeps the bound within default tolerance`)
 }

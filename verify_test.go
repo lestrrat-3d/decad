@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"testing"
 
@@ -27,10 +28,173 @@ func TestReportZeroValueIsUnverified(t *testing.T) {
 	var report decad.Report
 	require.Equal(t, decad.Unverified, report.Status)
 	require.Equal(t, "Unverified", report.Status.String())
-	require.False(t, report.Trustworthy())
+	require.False(t, report.Passed())
 
 	var bodyReport decad.BodyReport
 	require.Equal(t, decad.Unverified, bodyReport.Status)
+}
+
+// TestVerifyResultEnumTokens pins every result enum's stable lower-snake
+// String() token, in constant order, plus its unknown-value rendering
+// (proposal §3, task-list §4 item 1's report-vocabulary precedent).
+func TestVerifyResultEnumTokens(t *testing.T) {
+	t.Parallel()
+
+	require.Equal(t, "not_evaluated", decad.ScalarNotEvaluated.String())
+	require.Equal(t, "not_requested", decad.ScalarNotRequested.String())
+	require.Equal(t, "unavailable", decad.ScalarUnavailable.String())
+	require.Equal(t, "undecided", decad.ScalarUndecided.String())
+	require.Equal(t, "absent", decad.ScalarAbsent.String())
+	require.Equal(t, "measured", decad.ScalarMeasured.String())
+	require.Equal(t, "scalar_outcome(7)", decad.ScalarOutcome(7).String())
+
+	require.Equal(t, "not_evaluated", decad.CoverageNotEvaluated.String())
+	require.Equal(t, "not_requested", decad.CoverageNotRequested.String())
+	require.Equal(t, "unavailable", decad.CoverageUnavailable.String())
+	require.Equal(t, "undecided", decad.CoverageUndecided.String())
+	require.Equal(t, "partial", decad.CoveragePartial.String())
+	require.Equal(t, "complete", decad.CoverageComplete.String())
+	require.Equal(t, "coverage(7)", decad.Coverage(7).String())
+
+	require.Equal(t, "not_evaluated", decad.AssessmentNotEvaluated.String())
+	require.Equal(t, "met", decad.AssessmentMet.String())
+	require.Equal(t, "violated", decad.AssessmentViolated.String())
+	require.Equal(t, "undecided", decad.AssessmentUndecided.String())
+	require.Equal(t, "assessment(7)", decad.Assessment(7).String())
+
+	require.Equal(t, "not_evaluated", decad.ToleranceNotEvaluated.String())
+	require.Equal(t, "satisfied", decad.ToleranceSatisfied.String())
+	require.Equal(t, "exceeded", decad.ToleranceExceeded.String())
+	require.Equal(t, "undecided", decad.ToleranceUndecided.String())
+	require.Equal(t, "tolerance_state(7)", decad.ToleranceState(7).String())
+
+	require.Equal(t, "not_evaluated", decad.ValidityNotEvaluated.String())
+	require.Equal(t, "valid", decad.ValidityValid.String())
+	require.Equal(t, "invalid", decad.ValidityInvalid.String())
+	require.Equal(t, "undecided", decad.ValidityUndecided.String())
+	require.Equal(t, "validity_outcome(7)", decad.ValidityOutcome(7).String())
+}
+
+// TestVerifyReportForBody proves ForBody's exact-identity lookup (proposal
+// §11, §16 "Report lookup failure"): a successful lookup returns the same
+// pointer report.Bodies holds, a foreign body from a SECOND document returns
+// ErrBodyReportNotFound under errors.Is, nil receiver and nil body both
+// return ErrDegenerate, and a body retired after the call still resolves.
+func TestVerifyReportForBody(t *testing.T) {
+	t.Parallel()
+	doc, body := extrudePlate(t)
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+
+	br, err := report.ForBody(body)
+	require.NoError(t, err)
+	require.Same(t, report.Bodies[0], br)
+
+	_, foreignBody := extrudePlate(t)
+	_, err = report.ForBody(foreignBody)
+	require.ErrorIs(t, err, decad.ErrBodyReportNotFound)
+
+	var nilReport *decad.Report
+	_, err = nilReport.ForBody(body)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = report.ForBody(nil)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+
+	// Placed retires the receiver (doc.go); the historical report still
+	// resolves the retired pointer, consulting neither current document
+	// membership nor liveness.
+	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
+	require.NoError(t, err)
+	_, err = body.Placed(shift)
+	require.NoError(t, err)
+	stillResolves, err := report.ForBody(body)
+	require.NoError(t, err)
+	require.Same(t, br, stillResolves)
+}
+
+// TestVerifyEffectiveRequestRecorded drives real Verify calls with defaults,
+// duplicate options and an empty document, asserting Report.Request records
+// the effective values and that WallResult.Request / UndercutResult.Request
+// reference those same records, nil exactly for an unrequested survey
+// (proposal §5, §16 "Effective settings").
+func TestVerifyEffectiveRequestRecorded(t *testing.T) {
+	t.Parallel()
+
+	doc, _ := extrudePlate(t)
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.True(t, report.Request.RelativeTolerance.Equal(units.Scalar(1e-3), 1e-12))
+	require.Nil(t, report.Request.Wall)
+	require.Nil(t, report.Bodies[0].Wall.Request)
+
+	doc2, _ := extrudePlate(t)
+	report2, err := doc2.Verify(t.Context(),
+		decad.WithMinWallThickness(units.Millimeters(1)),
+		decad.WithMinWallThickness(units.Millimeters(2)))
+	require.NoError(t, err)
+	require.NotNil(t, report2.Request.Wall)
+	require.True(t, report2.Request.Wall.Minimum.Equal(units.Millimeters(2), 1e-9), "the later option wins")
+	require.Same(t, report2.Request.Wall, report2.Bodies[0].Wall.Request)
+
+	empty := decad.New()
+	emptyReport, err := empty.Verify(t.Context())
+	require.NoError(t, err)
+	require.True(t, emptyReport.Request.RelativeTolerance.Equal(units.Scalar(1e-3), 1e-12),
+		"the effective request is recorded even for an empty document")
+}
+
+// TestVerifyPassedIsNotCoverage proves proposal §1/§4: Passed() means the
+// report is Sound for the effective request, and does not imply that every
+// optional survey ran.
+func TestVerifyPassedIsNotCoverage(t *testing.T) {
+	t.Parallel()
+	doc, _ := extrudePlate(t)
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.True(t, report.Passed())
+	require.Equal(t, decad.ScalarNotRequested, report.Bodies[0].Wall.Outcome)
+}
+
+// TestVerifyPolicyRejectsUnrecognizedCode is a pure policy test supplementing
+// Example_decad_verify_exception: proposal §12's documented positive-match
+// exception rejects an unrecognized DiagnosticCode, never treating "not a
+// known failure" as an implicit pass.
+func TestVerifyPolicyRejectsUnrecognizedCode(t *testing.T) {
+	t.Parallel()
+	diagnostics := []decad.Diagnostic{
+		{Code: decad.DiagnosticCode(9999), Status: decad.Suspect, Message: "an unrecognized future reason"},
+	}
+	accept := func(diags []decad.Diagnostic) error {
+		for _, d := range diags {
+			if d.Code == decad.DiagWallTooThin {
+				continue
+			}
+			return fmt.Errorf("verification %s: %s", d.Code, d.Message)
+		}
+		return nil
+	}
+	err := accept(diagnostics)
+	require.Error(t, err, "an unrecognized code must never be treated as an implicit pass")
+}
+
+// TestReportPassedRejectsZeroAndUnknownStatus proves proposal §16 "Zero and
+// unknown enums": a zero Report and an unknown Status both fail Passed();
+// Passed() does not validate arbitrary nested enums in a caller-built report.
+func TestReportPassedRejectsZeroAndUnknownStatus(t *testing.T) {
+	t.Parallel()
+	var zero decad.Report
+	require.False(t, zero.Passed())
+
+	unknown := decad.Report{Status: decad.Status(99)}
+	require.False(t, unknown.Passed())
+
+	// Passed() is a pure Status check: an unrecognized nested enum on an
+	// otherwise caller-assigned Sound report never overrides it.
+	soundDespiteUnknownNested := decad.Report{
+		Status: decad.Sound,
+		Bodies: []*decad.BodyReport{{Wall: decad.WallResult{Outcome: decad.ScalarOutcome(99)}}},
+	}
+	require.True(t, soundDespiteUnknownNested.Passed())
 }
 
 func TestVerifySoundPlate(t *testing.T) {
@@ -41,7 +205,7 @@ func TestVerifySoundPlate(t *testing.T) {
 
 	require.NotEqual(t, decad.Unverified, report.Status)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 	require.Empty(t, report.Interferences)
 	require.Nil(t, report.Clearances, `clearances were not asked for`)
 	require.Len(t, report.Bodies, 1)
@@ -50,26 +214,26 @@ func TestVerifySoundPlate(t *testing.T) {
 	require.Same(t, body, br.Body)
 	require.NotEqual(t, decad.Unverified, br.Status)
 	require.Equal(t, decad.Sound, br.Status)
-	require.True(t, br.Solid)
-	require.True(t, br.Watertight)
-	require.True(t, br.Manifold)
-	require.False(t, br.SelfIntersecting)
-	require.Equal(t, 1, br.Lumps)
-	require.Equal(t, 0, br.Voids)
-	require.Equal(t, decad.Exact, br.Exactness)
+	require.Equal(t, decad.ValidityValid, br.Validity.Outcome)
+	require.Equal(t, 1, br.Topology.Lumps)
+	require.Equal(t, 0, br.Topology.Voids)
+	require.Equal(t, decad.Exact, br.Area.Exactness)
+	require.Equal(t, decad.Exact, br.Bounds.Exactness)
 
-	require.NotNil(t, br.Volume)
-	require.True(t, br.Volume.Value.Equal(units.CubicMillimeters(60000), 1e-9))
-	require.Equal(t, decad.Exact, br.Volume.Exactness)
-	require.NotNil(t, br.Centroid)
-	require.InDelta(t, 50.0, br.Centroid.Value.X, 1e-9)
-	require.InDelta(t, 30.0, br.Centroid.Value.Y, 1e-9)
-	require.InDelta(t, 5.0, br.Centroid.Value.Z, 1e-9)
+	require.NotNil(t, br.Region)
+	require.True(t, br.Region.Volume.Value.Equal(units.CubicMillimeters(60000), 1e-9))
+	require.Equal(t, decad.Exact, br.Region.Volume.Exactness)
+	require.InDelta(t, 50.0, br.Region.Centroid.Value.X, 1e-9)
+	require.InDelta(t, 30.0, br.Region.Centroid.Value.Y, 1e-9)
+	require.InDelta(t, 5.0, br.Region.Centroid.Value.Z, 1e-9)
 	require.True(t, br.Area.Value.Equal(units.SquareMillimeters(15200), 1e-9))
 
-	require.Nil(t, br.MinWallThickness)
-	require.Nil(t, br.Undercuts)
-	require.Nil(t, br.MinRadius)
+	require.Equal(t, decad.ScalarNotRequested, br.Wall.Outcome)
+	require.Nil(t, br.Wall.Minimum)
+	require.Equal(t, decad.CoverageNotRequested, br.Undercut.Coverage)
+	require.Nil(t, br.Undercut.Faces)
+	require.Equal(t, decad.ScalarNotRequested, br.ConcaveRadius.Outcome)
+	require.Nil(t, br.ConcaveRadius.Minimum)
 }
 
 func TestVerifyEmptyDocument(t *testing.T) {
@@ -79,7 +243,7 @@ func TestVerifyEmptyDocument(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEqual(t, decad.Unverified, report.Status)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 	require.Empty(t, report.Bodies)
 }
 
@@ -101,7 +265,7 @@ func TestVerifyDisjointPairIsSound(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 2)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 }
 
 func TestVerifyTouchingBoxesAreDisjoint(t *testing.T) {
@@ -136,7 +300,7 @@ func TestVerifyCoincidentPairIsInterfering(t *testing.T) {
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.Interfering, report.Status)
-	require.False(t, report.Trustworthy())
+	require.False(t, report.Passed())
 	require.Len(t, report.Interferences, 1)
 	require.Equal(t, 60000.0, report.Interferences[0].Volume.Value.Base())
 	for _, br := range report.Bodies {
@@ -160,23 +324,26 @@ func TestVerifyAskedSurveysAreAnswered(t *testing.T) {
 			Name:   "min wall thickness",
 			Option: decad.WithMinWallThickness(units.Millimeters(1)),
 			Check: func(t *testing.T, br *decad.BodyReport) {
-				require.NotNil(t, br.MinWallThickness)
-				require.True(t, br.MinWallThickness.Value.Equal(units.Millimeters(10), 1e-9))
+				require.Equal(t, decad.ScalarMeasured, br.Wall.Outcome)
+				require.NotNil(t, br.Wall.Minimum)
+				require.True(t, br.Wall.Minimum.Value.Equal(units.Millimeters(10), 1e-9))
 			},
 		},
 		{
 			Name:   "pull direction",
 			Option: decad.WithPullDirection(r3.NewVec(0, 0, 1)),
 			Check: func(t *testing.T, br *decad.BodyReport) {
-				require.NotNil(t, br.Undercuts)
-				require.Empty(t, br.Undercuts)
+				require.Equal(t, decad.CoverageComplete, br.Undercut.Coverage)
+				require.NotNil(t, br.Undercut.Faces)
+				require.Empty(t, br.Undercut.Faces)
 			},
 		},
 		{
 			Name:   "min radius",
-			Option: decad.WithMinRadius(),
+			Option: decad.WithConcaveRadius(),
 			Check: func(t *testing.T, br *decad.BodyReport) {
-				require.Nil(t, br.MinRadius, `an all-convex plate has no concave feature`)
+				require.Equal(t, decad.ScalarAbsent, br.ConcaveRadius.Outcome, `an all-convex plate has no concave feature`)
+				require.Nil(t, br.ConcaveRadius.Minimum, `an all-convex plate has no concave feature`)
 			},
 		},
 	}
@@ -186,10 +353,10 @@ func TestVerifyAskedSurveysAreAnswered(t *testing.T) {
 			report, err := doc.Verify(t.Context(), tc.Option)
 			require.NoError(t, err)
 			require.Equal(t, decad.Sound, report.Status)
-			require.True(t, report.Trustworthy())
+			require.True(t, report.Passed())
 			br := report.Bodies[0]
 			require.Equal(t, decad.Sound, br.Status)
-			require.True(t, br.Solid, `validity is decided before any survey is read`)
+			require.Equal(t, decad.ValidityValid, br.Validity.Outcome, `validity is decided before any survey is read`)
 			tc.Check(t, br)
 		})
 	}
@@ -212,7 +379,7 @@ func TestVerifyClearancesMeasureBoxProvenPair(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 	require.Len(t, report.Clearances, 1)
 	row := report.Clearances[0]
 	require.Equal(t, decad.Exact, row.Gap.Exactness)
@@ -273,18 +440,117 @@ func TestVerifyZeroAllowanceIsLegal(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinWallThickness)
-	require.True(t, br.MinWallThickness.Value.Equal(units.Millimeters(10), 1e-9))
+	require.NotNil(t, br.Wall.Minimum)
+	require.True(t, br.Wall.Minimum.Value.Equal(units.Millimeters(10), 1e-9))
 }
 
+// TestVerifyIsNonMutating extends to proposal §16's "Mutation safety" row:
+// the document's recipe and body count are compared before and after a real
+// success, undecided, cancellation and validation-error call, and every one
+// leaves both unchanged.
 func TestVerifyIsNonMutating(t *testing.T) {
 	t.Parallel()
-	doc, _ := extrudePlate(t)
-	before := doc.Recipe()
-	_, err := doc.Verify(t.Context(), decad.WithMinRadius(), decad.WithClearances())
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+		doc, _ := extrudePlate(t)
+		before := doc.Recipe()
+		_, err := doc.Verify(t.Context(), decad.WithConcaveRadius(), decad.WithClearances())
+		require.NoError(t, err)
+		require.Equal(t, before, doc.Recipe())
+		require.Len(t, doc.Bodies(), 1)
+	})
+
+	t.Run("undecided", func(t *testing.T) {
+		t.Parallel()
+		doc := decad.New()
+		freeformArchBody(t, doc)
+		before := doc.Recipe()
+		beforeLen := len(doc.Bodies())
+
+		report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
+		require.NoError(t, err)
+		require.NotEqual(t, decad.Sound, report.Status, "the free-form wall survey cannot decide")
+		require.Equal(t, before, doc.Recipe())
+		require.Len(t, doc.Bodies(), beforeLen)
+	})
+
+	t.Run("cancellation", func(t *testing.T) {
+		t.Parallel()
+		doc, _ := extrudePlate(t)
+		before := doc.Recipe()
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		_, err := doc.Verify(ctx)
+		require.ErrorIs(t, err, context.Canceled)
+		require.Equal(t, before, doc.Recipe())
+		require.Len(t, doc.Bodies(), 1)
+	})
+
+	t.Run("error", func(t *testing.T) {
+		t.Parallel()
+		doc, _ := extrudePlate(t)
+		before := doc.Recipe()
+		_, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Degrees(1)))
+		require.ErrorIs(t, err, decad.ErrUnitKind)
+		require.Equal(t, before, doc.Recipe())
+		require.Len(t, doc.Bodies(), 1)
+	})
+}
+
+// TestVerifyDeterministicOrder drives three real, box-disjoint bodies and a
+// tilted-pull undercut through Verify twice, asserting proposal §11's
+// ordering guarantees: Bodies follows Document.Bodies() order, Clearance
+// rows follow the i < j walk, confirmed undercut faces follow the body's own
+// Faces() order, the diagnostic inventory order is stable across repeated
+// calls, and ForBody resolves every body (proposal §16 "Deterministic
+// order").
+func TestVerifyDeterministicOrder(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	b := boxBody(t, doc, 100, 0, 110, 10, 10)
+	c := boxBody(t, doc, 200, 0, 210, 10, 10)
+
+	run := func() *decad.Report {
+		report, err := doc.Verify(t.Context(), decad.WithClearances(), decad.WithPullDirection(r3.NewVec(1, 0, 1)))
+		require.NoError(t, err)
+		return report
+	}
+
+	first := run()
+	require.Len(t, first.Bodies, 3)
+	require.Equal(t, doc.Bodies(), []*decad.Body{first.Bodies[0].Body, first.Bodies[1].Body, first.Bodies[2].Body})
+
+	require.Len(t, first.Clearances, 3, "three box-disjoint pairs over three bodies")
+	wantPairs := [][2]*decad.Body{{a, b}, {a, c}, {b, c}}
+	for i, row := range first.Clearances {
+		require.Same(t, wantPairs[i][0], row.A, "pair %d follows the i < j walk", i)
+		require.Same(t, wantPairs[i][1], row.B, "pair %d follows the i < j walk", i)
+	}
+
+	abr, err := first.ForBody(a)
 	require.NoError(t, err)
-	require.Equal(t, before, doc.Recipe())
-	require.Len(t, doc.Bodies(), 1)
+	require.Len(t, abr.Undercut.Faces, 2, "the tilted pull confirms two of the cube's six faces")
+	var wantOrder []*decad.Face
+	for _, f := range a.Faces() {
+		for _, listed := range abr.Undercut.Faces {
+			if f == listed {
+				wantOrder = append(wantOrder, f)
+			}
+		}
+	}
+	require.Equal(t, wantOrder, abr.Undercut.Faces, "confirmed faces follow the body's own Faces() order")
+
+	for _, body := range []*decad.Body{a, b, c} {
+		br, err := first.ForBody(body)
+		require.NoError(t, err)
+		require.Same(t, body, br.Body)
+	}
+
+	second := run()
+	require.Equal(t, first.Diagnostics, second.Diagnostics,
+		"repeated verification with the same document and options reproduces the same diagnostic order")
 }
 
 func TestVerifyCoversLiveBodiesOnly(t *testing.T) {
@@ -323,7 +589,7 @@ func TestVerifyContextCancellationOnEmptyDocument(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, report)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 	require.Empty(t, report.Bodies)
 }
 
@@ -360,9 +626,9 @@ func TestVerifyPlateWithHole(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
 	br := report.Bodies[0]
-	require.True(t, br.Solid)
-	require.Equal(t, 1, br.Lumps)
-	require.Equal(t, 0, br.Voids, `a through hole opens to the outside; it walls off no cavity`)
+	require.Equal(t, decad.ValidityValid, br.Validity.Outcome)
+	require.Equal(t, 1, br.Topology.Lumps)
+	require.Equal(t, 0, br.Topology.Voids, `a through hole opens to the outside; it walls off no cavity`)
 }
 
 func TestStatusString(t *testing.T) {
@@ -555,7 +821,7 @@ func TestVerifyDiagnosticsUndercut(t *testing.T) {
 	require.Equal(t, decad.Violating, d.Status)
 	require.Equal(t, decad.ReadingNone, d.Reading, `an undercut is a predicate, not a scalar`)
 	require.Same(t, report.Bodies[0].Body, d.Body)
-	require.NotEmpty(t, report.Bodies[0].Undercuts, `the faces are listed on the BodyReport`)
+	require.NotEmpty(t, report.Bodies[0].Undercut.Faces, `the faces are listed on the BodyReport`)
 }
 
 func TestVerifyDiagnosticsUnsupportedFacetedSurveys(t *testing.T) {
@@ -564,7 +830,7 @@ func TestVerifyDiagnosticsUnsupportedFacetedSurveys(t *testing.T) {
 	report, err := doc.Verify(t.Context(),
 		decad.WithMinWallThickness(units.Millimeters(1)),
 		decad.WithPullDirection(r3.NewVec(0, 0, 1)),
-		decad.WithMinRadius())
+		decad.WithConcaveRadius())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.Suspect, report.Status)
@@ -941,14 +1207,14 @@ func TestVerifyAllPlanarBooleanGatesApproximateArea(t *testing.T) {
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Approximate, report.Bodies[0].Exactness)
+	require.Equal(t, decad.Approximate, report.Bodies[0].Area.Exactness)
 	require.Equal(t, decad.Sound, report.Bodies[0].Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 
 	zero, err := doc.Verify(t.Context(), decad.WithTolerance(units.Scalar(0)))
 	require.NoError(t, err)
 	require.Equal(t, decad.Suspect, zero.Bodies[0].Status)
-	require.False(t, zero.Trustworthy())
+	require.False(t, zero.Passed())
 }
 
 func TestVerifyToleranceBoundaryIsInclusive(t *testing.T) {
@@ -960,13 +1226,13 @@ func TestVerifyToleranceBoundaryIsInclusive(t *testing.T) {
 	atBoundary, err := doc.Verify(t.Context(), decad.WithTolerance(units.Scalar(required)))
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, atBoundary.Status)
-	require.True(t, atBoundary.Trustworthy())
+	require.True(t, atBoundary.Passed())
 
 	below := math.Nextafter(required, 0)
 	tooStrict, err := doc.Verify(t.Context(), decad.WithTolerance(units.Scalar(below)))
 	require.NoError(t, err)
 	require.Equal(t, decad.Suspect, tooStrict.Status)
-	require.False(t, tooStrict.Trustworthy())
+	require.False(t, tooStrict.Passed())
 }
 
 func TestVerifyToleranceGateTracksScaleAndPlacement(t *testing.T) {
@@ -987,9 +1253,9 @@ func TestVerifyToleranceGateTracksScaleAndPlacement(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, report.Bodies, 1)
 			require.Same(t, placed, report.Bodies[0].Body)
-			require.Equal(t, decad.Approximate, report.Bodies[0].Exactness)
+			require.Equal(t, decad.Approximate, report.Bodies[0].Area.Exactness)
 			require.Equal(t, decad.Sound, report.Status)
-			require.True(t, report.Trustworthy())
+			require.True(t, report.Passed())
 		})
 	}
 }
@@ -999,9 +1265,9 @@ func TestVerifyExactBodyPassesZeroTolerance(t *testing.T) {
 	doc, _ := extrudePlate(t)
 	report, err := doc.Verify(t.Context(), decad.WithTolerance(units.Scalar(0)))
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, report.Bodies[0].Exactness)
+	require.Equal(t, decad.Exact, report.Bodies[0].Area.Exactness)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 }
 
 // computedToFacePin builds a short, offset-plane fixture where resolving a
@@ -1077,7 +1343,7 @@ func requireComputedToFaceDiameterGate(t *testing.T, doc *decad.Document, body *
 	}
 	require.NotNil(t, bodyReport)
 	require.Equal(t, decad.Suspect, bodyReport.Status)
-	require.False(t, report.Trustworthy())
+	require.False(t, report.Passed())
 
 	for _, diagnostic := range report.Diagnostics {
 		if diagnostic.Body == body && diagnostic.Reading == reading {
@@ -1153,13 +1419,13 @@ func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 	// bound, unlike the cup's Exact area and volume, so this body exercises
 	// bodyGateDiameter's cup fallback rather than passing on a zero Bound
 	// that needs no reference at all.
-	require.NotNil(t, report.Bodies[0].Centroid)
-	require.Equal(t, decad.Approximate, report.Bodies[0].Centroid.Exactness)
-	require.Positive(t, report.Bodies[0].Centroid.Bound.Base())
+	require.NotNil(t, report.Bodies[0].Region)
+	require.Equal(t, decad.Approximate, report.Bodies[0].Region.Centroid.Exactness)
+	require.Positive(t, report.Bodies[0].Region.Centroid.Bound.Base())
 
 	require.Equal(t, decad.Sound, report.Bodies[0].Status)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 }
 
 // TestVerifyCapBlendChamferAreaVolumeCentroidAllPass is the cap-blend
@@ -1190,7 +1456,7 @@ func TestVerifyCapBlendChamferAreaVolumeCentroidAllPass(t *testing.T) {
 	br := report.Bodies[0]
 	require.Equal(t, decad.Sound, br.Status)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 	require.Empty(t, report.Diagnostics)
 }
 

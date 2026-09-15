@@ -14,8 +14,8 @@ import (
 // pair of proven-disjoint bodies gets a Clearance row whose Gap the analytic
 // kernel proves — here the facing side faces of two plates, an Exact 400 mm.
 // The gap is a measurement, not a verdict: the caller compares it against
-// their own clearance spec, and the report is Trustworthy because every
-// answer, the gap included, is proven to the asked figures.
+// their own clearance spec, and the report passes because every answer, the
+// gap included, is proven to the asked figures.
 func Example_decad_verify_clearances() {
 	buildPlate := func(doc *decad.Document) (*decad.Body, error) {
 		w := sketch.NewWorld()
@@ -56,7 +56,7 @@ func Example_decad_verify_clearances() {
 		fmt.Printf("failed to verify: %s\n", err)
 		return
 	}
-	fmt.Printf("status: %s, trustworthy: %v\n", report.Status, report.Trustworthy())
+	fmt.Printf("status: %s, trustworthy: %v\n", report.Status, report.Passed())
 	for _, c := range report.Clearances {
 		fmt.Printf("gap: %s (%s)\n", c.Gap.Value, c.Gap.Exactness)
 	}

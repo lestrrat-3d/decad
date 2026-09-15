@@ -62,10 +62,10 @@ func polygonSketch(t *testing.T, pts [][2]float64) (*sketch.Sketch, *sketch.Prof
 // exactness its own geometry proves, never a blanket assumption.
 func requireWall(t *testing.T, br *decad.BodyReport, wantExact decad.Exactness, want float64) {
 	t.Helper()
-	require.NotNil(t, br.MinWallThickness)
-	require.Equal(t, wantExact, br.MinWallThickness.Exactness)
-	require.True(t, br.MinWallThickness.Value.Equal(units.Millimeters(want), 1e-9),
-		`want %v mm, got %s`, want, br.MinWallThickness.Value)
+	require.NotNil(t, br.Wall.Minimum)
+	require.Equal(t, wantExact, br.Wall.Minimum.Exactness)
+	require.True(t, br.Wall.Minimum.Value.Equal(units.Millimeters(want), 1e-9),
+		`want %v mm, got %s`, want, br.Wall.Minimum.Value)
 }
 
 func TestWallThinPlateViolating(t *testing.T) {
@@ -81,7 +81,7 @@ func TestWallThinPlateViolating(t *testing.T) {
 	requireWall(t, br, decad.Exact, 0.5)
 	require.Equal(t, decad.Violating, br.Status)
 	require.Equal(t, decad.Violating, report.Status)
-	require.False(t, report.Trustworthy())
+	require.False(t, report.Passed())
 }
 
 func TestWallCubeSound(t *testing.T) {
@@ -96,7 +96,7 @@ func TestWallCubeSound(t *testing.T) {
 	br := report.Bodies[0]
 	requireWall(t, br, decad.Exact, 100)
 	require.Equal(t, decad.Sound, br.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 }
 
 func TestWallWedgePrismNoWall(t *testing.T) {
@@ -114,9 +114,10 @@ func TestWallWedgePrismNoWall(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.Nil(t, br.MinWallThickness)
+	require.Equal(t, decad.ScalarAbsent, br.Wall.Outcome)
+	require.Nil(t, br.Wall.Minimum)
 	require.Equal(t, decad.Sound, br.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 }
 
 func TestWallConeNoWall(t *testing.T) {
@@ -132,9 +133,9 @@ func TestWallConeNoWall(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.Nil(t, br.MinWallThickness)
+	require.Nil(t, br.Wall.Minimum)
 	require.Equal(t, decad.Suspect, br.Status)
-	require.False(t, report.Trustworthy())
+	require.False(t, report.Passed())
 }
 
 func TestWallAnnularPrism(t *testing.T) {
@@ -199,7 +200,8 @@ func TestWallDraftAllowanceBoundary(t *testing.T) {
 	report, err = doc.Verify(t.Context(),
 		decad.WithMinWallThickness(units.Millimeters(1.2), decad.WithDraftAllowance(units.Degrees(14))))
 	require.NoError(t, err)
-	require.Nil(t, report.Bodies[0].MinWallThickness)
+	require.Equal(t, decad.ScalarAbsent, report.Bodies[0].Wall.Outcome)
+	require.Nil(t, report.Bodies[0].Wall.Minimum)
 	require.Equal(t, decad.Sound, report.Status)
 }
 
@@ -235,7 +237,7 @@ func TestWallKnifeEdgeExactZero(t *testing.T) {
 	br := report.Bodies[0]
 	requireWall(t, br, decad.Exact, 0)
 	require.Equal(t, decad.Violating, br.Status)
-	require.False(t, report.Trustworthy())
+	require.False(t, report.Passed())
 }
 
 func TestWallPartialRevolve(t *testing.T) {
@@ -284,7 +286,7 @@ func TestUndercutNearAntiparallelPull(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(1e-5, 0, 1)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.Len(t, br.Undercuts, 2)
+	require.Len(t, br.Undercut.Faces, 2)
 	require.Equal(t, decad.Violating, br.Status)
 }
 
@@ -306,8 +308,8 @@ func TestUndercutExactlyPerpendicularWallIsNotOpposed(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(3, 9, 0)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.Undercuts)
-	require.Empty(t, br.Undercuts)
+	require.NotNil(t, br.Undercut.Faces)
+	require.Empty(t, br.Undercut.Faces)
 	require.Equal(t, decad.Sound, br.Status)
 
 	unit, ok := r3.NewVec(3, 9, 0).Normalize()
@@ -401,7 +403,7 @@ func TestUndercutUnseparablePullIsUndecided(t *testing.T) {
 	require.Len(t, report.Bodies, 1)
 	br := report.Bodies[0]
 
-	require.NotContains(t, br.Undercuts, arc, "the arc's own component is genuinely undecided, not a proven undercut")
+	require.NotContains(t, br.Undercut.Faces, arc, "the arc's own component is genuinely undecided, not a proven undercut")
 	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
 }
 
@@ -443,10 +445,10 @@ func TestWallReflexSweep(t *testing.T) {
 // value is exactly the defect this guard exists for.
 func requireWallBoundContains(t *testing.T, br *decad.BodyReport, truth, maxBound float64) {
 	t.Helper()
-	require.NotNil(t, br.MinWallThickness)
-	value, err := br.MinWallThickness.Value.In(units.Millimeter)
+	require.NotNil(t, br.Wall.Minimum)
+	value, err := br.Wall.Minimum.Value.In(units.Millimeter)
 	require.NoError(t, err)
-	bound, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	bound, err := br.Wall.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	require.Greater(t, bound, 0.0)
 	require.LessOrEqual(t, bound, maxBound)
@@ -467,7 +469,7 @@ func TestWallSectorTooTightForItsFlats(t *testing.T) {
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	require.Nil(t, report.Bodies[0].MinWallThickness)
+	require.Nil(t, report.Bodies[0].Wall.Minimum)
 	require.Equal(t, decad.Suspect, report.Status)
 }
 
@@ -496,10 +498,10 @@ func TestUndercutsPrismClear(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.Undercuts)
-	require.Empty(t, br.Undercuts)
+	require.NotNil(t, br.Undercut.Faces)
+	require.Empty(t, br.Undercut.Faces)
 	require.Equal(t, decad.Sound, br.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 }
 
 func TestUndercutsTiltedPull(t *testing.T) {
@@ -511,12 +513,12 @@ func TestUndercutsTiltedPull(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(1, 0, 1)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.Len(t, br.Undercuts, 2)
-	for _, f := range br.Undercuts {
+	require.Len(t, br.Undercut.Faces, 2)
+	for _, f := range br.Undercut.Faces {
 		require.Equal(t, decad.KindPlane, f.Surface().Kind())
 	}
 	require.Equal(t, decad.Violating, br.Status)
-	require.False(t, report.Trustworthy())
+	require.False(t, report.Passed())
 }
 
 func TestUndercutsSphereListed(t *testing.T) {
@@ -532,9 +534,9 @@ func TestUndercutsSphereListed(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.Len(t, br.Undercuts, 1)
-	require.Equal(t, decad.KindSphere, br.Undercuts[0].Surface().Kind())
-	require.Same(t, body.Faces()[0], br.Undercuts[0])
+	require.Len(t, br.Undercut.Faces, 1)
+	require.Equal(t, decad.KindSphere, br.Undercut.Faces[0].Surface().Kind())
+	require.Same(t, body.Faces()[0], br.Undercut.Faces[0])
 	require.Equal(t, decad.Violating, br.Status)
 }
 
@@ -546,8 +548,8 @@ func TestUndercutsVerticalHoleClear(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.Undercuts)
-	require.Empty(t, br.Undercuts)
+	require.NotNil(t, br.Undercut.Faces)
+	require.Empty(t, br.Undercut.Faces)
 	require.Equal(t, decad.Sound, br.Status)
 }
 
@@ -581,14 +583,14 @@ func TestMinRadiusHolePlate(t *testing.T) {
 	// 10 mm radius — a measurement, never compared to a spec, so the report
 	// stays Sound.
 	doc := holePlate(t)
-	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinRadius)
-	require.Equal(t, decad.Exact, br.MinRadius.Exactness)
-	require.True(t, br.MinRadius.Value.Equal(units.Millimeters(10), 1e-9))
+	require.NotNil(t, br.ConcaveRadius.Minimum)
+	require.Equal(t, decad.Exact, br.ConcaveRadius.Minimum.Exactness)
+	require.True(t, br.ConcaveRadius.Minimum.Value.Equal(units.Millimeters(10), 1e-9))
 	require.Equal(t, decad.Sound, br.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 }
 
 func TestMinRadiusPlainBlockNil(t *testing.T) {
@@ -596,12 +598,13 @@ func TestMinRadiusPlainBlockNil(t *testing.T) {
 	// An all-convex block has no concave feature: nil is the proven best
 	// case for any endmill, and the report is Sound.
 	doc := rectPrism(t, 100, 60, 10)
-	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.Nil(t, br.MinRadius)
+	require.Equal(t, decad.ScalarAbsent, br.ConcaveRadius.Outcome)
+	require.Nil(t, br.ConcaveRadius.Minimum)
 	require.Equal(t, decad.Sound, br.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 }
 
 func TestMinRadiusDonutWaist(t *testing.T) {
@@ -621,11 +624,11 @@ func TestMinRadiusDonutWaist(t *testing.T) {
 	_, err = doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
-	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinRadius)
-	require.True(t, br.MinRadius.Value.Equal(units.Millimeters(25), 1e-9))
+	require.NotNil(t, br.ConcaveRadius.Minimum)
+	require.True(t, br.ConcaveRadius.Minimum.Value.Equal(units.Millimeters(25), 1e-9))
 	require.Equal(t, decad.Suspect, br.Status)
 }
 
@@ -644,23 +647,29 @@ func TestSurveysAnsweredTogether(t *testing.T) {
 	t.Parallel()
 	// All three asked at once on a sound plate: every question is answered
 	// — the old always-Suspect staging is gone — and everything is in spec,
-	// so the report reads Sound and Trustworthy.
+	// so the report reads Sound and Passed.
 	doc := rectPrism(t, 100, 60, 10)
 	report, err := doc.Verify(t.Context(),
 		decad.WithMinWallThickness(units.Millimeters(1)),
 		decad.WithPullDirection(r3.NewVec(0, 0, 1)),
-		decad.WithMinRadius())
+		decad.WithConcaveRadius())
 	require.NoError(t, err)
 
 	br := report.Bodies[0]
 	requireWall(t, br, decad.Exact, 10)
-	require.NotNil(t, br.Undercuts)
-	require.Empty(t, br.Undercuts)
-	require.Nil(t, br.MinRadius)
-	require.Equal(t, decad.Exact, br.Exactness)
+	require.Equal(t, decad.CoverageComplete, br.Undercut.Coverage)
+	require.NotNil(t, br.Undercut.Faces)
+	require.Empty(t, br.Undercut.Faces)
+	require.Equal(t, decad.ScalarAbsent, br.ConcaveRadius.Outcome)
+	require.Nil(t, br.ConcaveRadius.Minimum)
+	require.Equal(t, decad.Exact, br.Area.Exactness)
+	require.Equal(t, decad.Exact, br.Bounds.Exactness)
+	require.NotNil(t, br.Region)
+	require.Equal(t, decad.Exact, br.Region.Volume.Exactness)
+	require.Equal(t, decad.Exact, br.Region.Centroid.Exactness)
 	require.Equal(t, decad.Sound, br.Status)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 	require.Empty(t, report.Diagnostics, `supported analytic surveys emit no refusal diagnostic`)
 }
 
@@ -680,7 +689,7 @@ func TestWallSolidCylinder(t *testing.T) {
 	require.NoError(t, err)
 	br := report.Bodies[0]
 	requireWall(t, br, decad.Exact, 10)
-	bound, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	bound, err := br.Wall.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	require.Equal(t, 0.0, bound)
 	// The report still reads Suspect, and not for the wall: the full
@@ -702,14 +711,14 @@ func TestMinRadiusAnnularRevolveStaysExact(t *testing.T) {
 	_, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
-	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinRadius)
-	require.Equal(t, decad.Exact, br.MinRadius.Exactness)
-	require.True(t, br.MinRadius.Value.Equal(units.Millimeters(5), 1e-9),
-		`want 5 mm, got %s`, br.MinRadius.Value)
-	bound, err := br.MinRadius.Bound.In(units.Millimeter)
+	require.NotNil(t, br.ConcaveRadius.Minimum)
+	require.Equal(t, decad.Exact, br.ConcaveRadius.Minimum.Exactness)
+	require.True(t, br.ConcaveRadius.Minimum.Value.Equal(units.Millimeters(5), 1e-9),
+		`want 5 mm, got %s`, br.ConcaveRadius.Minimum.Value)
+	bound, err := br.ConcaveRadius.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	require.Equal(t, 0.0, bound)
 }
@@ -758,9 +767,12 @@ func TestSurveysSkippedOnUnaskedOptions(t *testing.T) {
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.Nil(t, br.MinWallThickness)
-	require.Nil(t, br.Undercuts)
-	require.Nil(t, br.MinRadius)
+	require.Equal(t, decad.ScalarNotRequested, br.Wall.Outcome)
+	require.Nil(t, br.Wall.Minimum)
+	require.Equal(t, decad.CoverageNotRequested, br.Undercut.Coverage)
+	require.Nil(t, br.Undercut.Faces)
+	require.Equal(t, decad.ScalarNotRequested, br.ConcaveRadius.Outcome)
+	require.Nil(t, br.ConcaveRadius.Minimum)
 	require.Equal(t, decad.Sound, report.Status)
 }
 
@@ -794,18 +806,18 @@ func TestWallReadingBoundEnclosesCurvedWeb(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinWallThickness)
-	require.Equal(t, decad.Approximate, br.MinWallThickness.Exactness)
-	value, err := br.MinWallThickness.Value.In(units.Millimeter)
+	require.NotNil(t, br.Wall.Minimum)
+	require.Equal(t, decad.Approximate, br.Wall.Minimum.Exactness)
+	value, err := br.Wall.Minimum.Value.In(units.Millimeter)
 	require.NoError(t, err)
-	bound, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	bound, err := br.Wall.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	require.Greater(t, bound, 0.0)
 	require.LessOrEqual(t, bound, 1e-9)
 	const truth = 2.2426406871192851464 // 3√2 − 2
 	require.LessOrEqual(t, value-bound, truth)
 	require.GreaterOrEqual(t, value+bound, truth)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 }
 
 func TestWallReadingBoundIsOnTheSpanningDiameter(t *testing.T) {
@@ -850,11 +862,11 @@ func TestWallReadingBoundIsOnTheSpanningDiameter(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinWallThickness)
-	require.Equal(t, decad.Approximate, br.MinWallThickness.Exactness)
-	value, err := br.MinWallThickness.Value.In(units.Millimeter)
+	require.NotNil(t, br.Wall.Minimum)
+	require.Equal(t, decad.Approximate, br.Wall.Minimum.Exactness)
+	value, err := br.Wall.Minimum.Value.In(units.Millimeter)
 	require.NoError(t, err)
-	bound, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	bound, err := br.Wall.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	require.Greater(t, bound, 0.0)
 
@@ -892,12 +904,12 @@ func TestWallReadingExactHeightArm(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinWallThickness)
-	require.Equal(t, decad.Exact, br.MinWallThickness.Exactness)
-	boundMM, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	require.NotNil(t, br.Wall.Minimum)
+	require.Equal(t, decad.Exact, br.Wall.Minimum.Exactness)
+	boundMM, err := br.Wall.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	require.Equal(t, 0.0, boundMM)
-	value, err := br.MinWallThickness.Value.In(units.Millimeter)
+	value, err := br.Wall.Minimum.Value.In(units.Millimeter)
 	require.NoError(t, err)
 	require.Equal(t, 0.5, value)
 	require.Equal(t, decad.Violating, br.Status)
@@ -924,11 +936,11 @@ func TestWallHeightCarriesAxialDelta(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinWallThickness)
-	require.Equal(t, decad.Approximate, br.MinWallThickness.Exactness)
-	value, err := br.MinWallThickness.Value.In(units.Millimeter)
+	require.NotNil(t, br.Wall.Minimum)
+	require.Equal(t, decad.Approximate, br.Wall.Minimum.Exactness)
+	value, err := br.Wall.Minimum.Value.In(units.Millimeter)
 	require.NoError(t, err)
-	bound, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	bound, err := br.Wall.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, value+bound, 2.5400000000000001410)
 }
@@ -944,25 +956,25 @@ func TestMinRadiusArcRadiusBound(t *testing.T) {
 	_, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
-	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinRadius)
-	require.Equal(t, decad.Approximate, br.MinRadius.Exactness)
-	value, err := br.MinRadius.Value.In(units.Millimeter)
+	require.NotNil(t, br.ConcaveRadius.Minimum)
+	require.Equal(t, decad.Approximate, br.ConcaveRadius.Minimum.Exactness)
+	value, err := br.ConcaveRadius.Minimum.Value.In(units.Millimeter)
 	require.NoError(t, err)
-	bound, err := br.MinRadius.Bound.In(units.Millimeter)
+	bound, err := br.ConcaveRadius.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	const truth = 1.4142135623730950488 // √2
 	require.LessOrEqual(t, value-bound, truth)
 	require.GreaterOrEqual(t, value+bound, truth)
 
-	holeReport, err := holePlate(t).Verify(t.Context(), decad.WithMinRadius())
+	holeReport, err := holePlate(t).Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	holeBR := holeReport.Bodies[0]
-	require.NotNil(t, holeBR.MinRadius)
-	require.Equal(t, decad.Exact, holeBR.MinRadius.Exactness)
-	holeBoundMM, err := holeBR.MinRadius.Bound.In(units.Millimeter)
+	require.NotNil(t, holeBR.ConcaveRadius.Minimum)
+	require.Equal(t, decad.Exact, holeBR.ConcaveRadius.Minimum.Exactness)
+	holeBoundMM, err := holeBR.ConcaveRadius.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	require.Equal(t, 0.0, holeBoundMM)
 }
@@ -1077,24 +1089,24 @@ func TestSurveySweepEnclosesHalfDiscTruths(t *testing.T) {
 				require.NoError(t, err)
 				report, err := doc.Verify(t.Context(),
 					decad.WithMinWallThickness(units.Millimeters(0.001)),
-					decad.WithMinRadius(),
+					decad.WithConcaveRadius(),
 				)
 				require.NoError(t, err)
 				br := report.Bodies[0]
 
 				radius := hypotTruth(au, av)
-				require.NotNil(t, br.MinRadius, `the half-disc hole is a concave feature`)
-				value, err := br.MinRadius.Value.In(units.Millimeter)
+				require.NotNil(t, br.ConcaveRadius.Minimum, `the half-disc hole is a concave feature`)
+				value, err := br.ConcaveRadius.Minimum.Value.In(units.Millimeter)
 				require.NoError(t, err)
-				bound, err := br.MinRadius.Bound.In(units.Millimeter)
+				bound, err := br.ConcaveRadius.Minimum.Bound.In(units.Millimeter)
 				require.NoError(t, err)
 				requireContains(t, radius, value, bound)
 
 				wall := new(big.Rat).Sub(new(big.Rat).SetFloat64(half), radius)
-				require.NotNil(t, br.MinWallThickness, `the plate has a proven wall`)
-				value, err = br.MinWallThickness.Value.In(units.Millimeter)
+				require.NotNil(t, br.Wall.Minimum, `the plate has a proven wall`)
+				value, err = br.Wall.Minimum.Value.In(units.Millimeter)
 				require.NoError(t, err)
-				bound, err = br.MinWallThickness.Bound.In(units.Millimeter)
+				bound, err = br.Wall.Minimum.Bound.In(units.Millimeter)
 				require.NoError(t, err)
 				requireContains(t, wall, value, bound)
 			})
@@ -1134,10 +1146,10 @@ func TestWallConcentricRingCarriesRadiusDifferenceBound(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinWallThickness)
-	value, err := br.MinWallThickness.Value.In(units.Millimeter)
+	require.NotNil(t, br.Wall.Minimum)
+	value, err := br.Wall.Minimum.Value.In(units.Millimeter)
 	require.NoError(t, err)
-	bound, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	bound, err := br.Wall.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 
 	// The truth is the exact difference of the two RECORDED radii, formed over
@@ -1145,7 +1157,7 @@ func TestWallConcentricRingCarriesRadiusDifferenceBound(t *testing.T) {
 	truth := new(big.Rat).Sub(new(big.Rat).SetFloat64(20), new(big.Rat).SetFloat64(0.03))
 	require.NotEqual(t, 0, new(big.Rat).SetFloat64(value).Cmp(truth),
 		`the held difference must miss the truth, or this fixture proves nothing`)
-	require.Equal(t, decad.Approximate, br.MinWallThickness.Exactness)
+	require.Equal(t, decad.Approximate, br.Wall.Minimum.Exactness)
 	require.Greater(t, bound, 0.0)
 	requireContains(t, truth, value, bound)
 }
@@ -1162,14 +1174,14 @@ func TestRevolveMinRadiusArcRadiusBound(t *testing.T) {
 	_, err := doc.Revolve(s, prof, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
-	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinRadius)
-	require.Equal(t, decad.Approximate, br.MinRadius.Exactness)
-	value, err := br.MinRadius.Value.In(units.Millimeter)
+	require.NotNil(t, br.ConcaveRadius.Minimum)
+	require.Equal(t, decad.Approximate, br.ConcaveRadius.Minimum.Exactness)
+	value, err := br.ConcaveRadius.Minimum.Value.In(units.Millimeter)
 	require.NoError(t, err)
-	bound, err := br.MinRadius.Bound.In(units.Millimeter)
+	bound, err := br.ConcaveRadius.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	require.Greater(t, bound, 0.0)
 
@@ -1232,10 +1244,10 @@ func requireRoundedDifference(t *testing.T, a, b float64) {
 // requireMinRadius reads a body report's MinRadius in millimetres.
 func requireMinRadius(t *testing.T, br *decad.BodyReport) (float64, float64) {
 	t.Helper()
-	require.NotNil(t, br.MinRadius)
-	value, err := br.MinRadius.Value.In(units.Millimeter)
+	require.NotNil(t, br.ConcaveRadius.Minimum)
+	value, err := br.ConcaveRadius.Minimum.Value.In(units.Millimeter)
 	require.NoError(t, err)
-	bound, err := br.MinRadius.Bound.In(units.Millimeter)
+	bound, err := br.ConcaveRadius.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	return value, bound
 }
@@ -1264,16 +1276,16 @@ func TestRevolveMinRadiusChargesTheWalkTangent(t *testing.T) {
 	requireRoundedDifference(t, u0, u1)
 	requireRoundedDifference(t, v0, v1)
 
-	report, err := coneBore(t, u0, v0, u1, v1, vTop).Verify(t.Context(), decad.WithMinRadius())
+	report, err := coneBore(t, u0, v0, u1, v1, vTop).Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	br := report.Bodies[0]
 	value, bound := requireMinRadius(t, br)
 
 	truth := coneBoreTruth(u0, v0, u1, v1)
 	t.Logf("min radius %.20g ± %.20g (%s); truth %s",
-		value, bound, br.MinRadius.Exactness,
+		value, bound, br.ConcaveRadius.Minimum.Exactness,
 		new(big.Float).SetPrec(300).SetRat(truth).Text('g', 21))
-	require.Equal(t, decad.Approximate, br.MinRadius.Exactness)
+	require.Equal(t, decad.Approximate, br.ConcaveRadius.Minimum.Exactness)
 	requireContains(t, truth, value, bound)
 }
 
@@ -1302,7 +1314,7 @@ func TestRevolveMinRadiusChargesTheAxisSnap(t *testing.T) {
 		doc := decad.New()
 		_, err := doc.Revolve(s, p, axis, decad.FullRevolution{})
 		require.NoError(t, err)
-		report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+		report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 		require.NoError(t, err)
 		br := report.Bodies[0]
 		value, bound := requireMinRadius(t, br)
@@ -1319,7 +1331,7 @@ func TestRevolveMinRadiusChargesTheAxisSnap(t *testing.T) {
 		br, value, bound := radiusOf(t, v0)
 		require.Equal(t, 0.0, value,
 			`the snap itself must be unmoved: the held reading is still the assigned zero`)
-		require.NotEqual(t, decad.Exact, br.MinRadius.Exactness,
+		require.NotEqual(t, decad.Exact, br.ConcaveRadius.Minimum.Exactness,
 			`an assigned zero states no exact radius`)
 		requireContains(t, coneBoreTruth(0, v0, 10, 1), value, bound)
 		require.Less(t, bound, 1e-9,
@@ -1331,7 +1343,7 @@ func TestRevolveMinRadiusChargesTheAxisSnap(t *testing.T) {
 		// snap discards nothing, so the cone apex's own zero radius stays the
 		// exact zero it is.
 		br, value, bound := radiusOf(t, 0)
-		require.Equal(t, decad.Exact, br.MinRadius.Exactness)
+		require.Equal(t, decad.Exact, br.ConcaveRadius.Minimum.Exactness)
 		require.Equal(t, 0.0, value)
 		require.Equal(t, 0.0, bound)
 	})
@@ -1343,7 +1355,7 @@ func TestRevolveMinRadiusChargesTheAxisSnap(t *testing.T) {
 		const v0 = 0.5
 		br, value, bound := radiusOf(t, v0)
 		truth := coneBoreTruth(0, v0, 10, 1)
-		require.Equal(t, decad.Approximate, br.MinRadius.Exactness)
+		require.Equal(t, decad.Approximate, br.ConcaveRadius.Minimum.Exactness)
 		require.InEpsilon(t, 0.5006246098625197, value, 1e-15)
 		require.Less(t, bound, 1e-15)
 		requireContains(t, truth, value, bound)
@@ -1396,7 +1408,7 @@ func TestRevolveMinRadiusSweepEnclosesConeBoreTruths(t *testing.T) {
 		}
 		kept++
 		t.Run(fmt.Sprintf("case=%d", kept), func(t *testing.T) {
-			report, err := coneBore(t, u0, v0, u1, v1, vTop).Verify(t.Context(), decad.WithMinRadius())
+			report, err := coneBore(t, u0, v0, u1, v1, vTop).Verify(t.Context(), decad.WithConcaveRadius())
 			require.NoError(t, err)
 			br := report.Bodies[0]
 			value, bound := requireMinRadius(t, br)
@@ -1473,21 +1485,21 @@ func TestMinRadiusAggregatesLosingCandidate(t *testing.T) {
 	_, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
-	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinRadius)
-	value, err := br.MinRadius.Value.In(units.Millimeter)
+	require.NotNil(t, br.ConcaveRadius.Minimum)
+	value, err := br.ConcaveRadius.Minimum.Value.In(units.Millimeter)
 	require.NoError(t, err)
-	bound, err := br.MinRadius.Bound.In(units.Millimeter)
+	bound, err := br.ConcaveRadius.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	truth := rivalRadiusTruth()
 	t.Logf("min radius %.20g ± %.20g (%s); truth %s",
-		value, bound, br.MinRadius.Exactness, new(big.Float).SetPrec(200).SetRat(truth).Text('g', 21))
+		value, bound, br.ConcaveRadius.Minimum.Exactness, new(big.Float).SetPrec(200).SetRat(truth).Text('g', 21))
 	require.Less(t, new(big.Float).SetPrec(200).SetRat(truth).Cmp(big.NewFloat(rivalCircleR)), 0,
 		`the arc's truth must sit below the circle's recorded radius, or this fixture proves nothing`)
 	requireContains(t, truth, value, bound)
-	require.Equal(t, decad.Approximate, br.MinRadius.Exactness,
+	require.Equal(t, decad.Approximate, br.ConcaveRadius.Minimum.Exactness,
 		`an interval reaching past an inexact rival is not an exact reading`)
 }
 
@@ -1517,18 +1529,18 @@ func TestMinRadiusExactCandidatesStayExact(t *testing.T) {
 	doc := decad.New()
 	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
-	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinRadius)
-	value, err := br.MinRadius.Value.In(units.Millimeter)
+	require.NotNil(t, br.ConcaveRadius.Minimum)
+	value, err := br.ConcaveRadius.Minimum.Value.In(units.Millimeter)
 	require.NoError(t, err)
-	bound, err := br.MinRadius.Bound.In(units.Millimeter)
+	bound, err := br.ConcaveRadius.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
-	t.Logf("min radius %.20g ± %.20g (%s)", value, bound, br.MinRadius.Exactness)
+	t.Logf("min radius %.20g ± %.20g (%s)", value, bound, br.ConcaveRadius.Minimum.Exactness)
 	require.Equal(t, 7.0, value, `the tighter hole is the reading`)
 	require.Equal(t, 0.0, bound)
-	require.Equal(t, decad.Exact, br.MinRadius.Exactness)
+	require.Equal(t, decad.Exact, br.ConcaveRadius.Minimum.Exactness)
 }
 
 // rivalRadiusMeridian is the revolve twin of rivalRadiusPlate: a meridian
@@ -1571,19 +1583,19 @@ func TestRevolveMinRadiusAggregatesLosingCandidate(t *testing.T) {
 	_, err := doc.Revolve(s, prof, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
-	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinRadius)
-	value, err := br.MinRadius.Value.In(units.Millimeter)
+	require.NotNil(t, br.ConcaveRadius.Minimum)
+	value, err := br.ConcaveRadius.Minimum.Value.In(units.Millimeter)
 	require.NoError(t, err)
-	bound, err := br.MinRadius.Bound.In(units.Millimeter)
+	bound, err := br.ConcaveRadius.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	truth := rivalRadiusTruth()
 	t.Logf("min radius %.20g ± %.20g (%s); truth %s",
-		value, bound, br.MinRadius.Exactness, new(big.Float).SetPrec(200).SetRat(truth).Text('g', 21))
+		value, bound, br.ConcaveRadius.Minimum.Exactness, new(big.Float).SetPrec(200).SetRat(truth).Text('g', 21))
 	requireContains(t, truth, value, bound)
-	require.Equal(t, decad.Approximate, br.MinRadius.Exactness,
+	require.Equal(t, decad.Approximate, br.ConcaveRadius.Minimum.Exactness,
 		`an interval reaching past an inexact rival is not an exact reading`)
 }
 
@@ -1598,18 +1610,18 @@ func TestRevolveMinRadiusExactCandidatesStayExact(t *testing.T) {
 	_, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
-	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinRadius)
-	value, err := br.MinRadius.Value.In(units.Millimeter)
+	require.NotNil(t, br.ConcaveRadius.Minimum)
+	value, err := br.ConcaveRadius.Minimum.Value.In(units.Millimeter)
 	require.NoError(t, err)
-	bound, err := br.MinRadius.Bound.In(units.Millimeter)
+	bound, err := br.ConcaveRadius.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
-	t.Logf("min radius %.20g ± %.20g (%s)", value, bound, br.MinRadius.Exactness)
+	t.Logf("min radius %.20g ± %.20g (%s)", value, bound, br.ConcaveRadius.Minimum.Exactness)
 	require.Equal(t, 5.0, value, `the tighter bore step is the reading`)
 	require.Equal(t, 0.0, bound)
-	require.Equal(t, decad.Exact, br.MinRadius.Exactness)
+	require.Equal(t, decad.Exact, br.ConcaveRadius.Minimum.Exactness)
 }
 
 // TestWallHeightArmAggregatesAgainstTheSectionSpan pins prismWall's two
@@ -1639,12 +1651,12 @@ func TestWallHeightArmAggregatesAgainstTheSectionSpan(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.NotNil(t, br.MinWallThickness)
-	value, err := br.MinWallThickness.Value.In(units.Millimeter)
+	require.NotNil(t, br.Wall.Minimum)
+	value, err := br.Wall.Minimum.Value.In(units.Millimeter)
 	require.NoError(t, err)
-	bound, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	bound, err := br.Wall.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
-	t.Logf("wall %.20g ± %.20g (%s)", value, bound, br.MinWallThickness.Exactness)
+	t.Logf("wall %.20g ± %.20g (%s)", value, bound, br.Wall.Minimum.Exactness)
 
 	// 0.1 inch is exactly 127/50 mm. The section's own 2.54 literal is the
 	// float above it, so the fixture only proves something while the two hold
@@ -1655,7 +1667,7 @@ func TestWallHeightArmAggregatesAgainstTheSectionSpan(t *testing.T) {
 	require.Greater(t, new(big.Rat).SetFloat64(2.54).Cmp(truth), 0,
 		`the truth must sit below the section's recorded coordinate`)
 	requireContains(t, truth, value, bound)
-	require.Equal(t, decad.Approximate, br.MinWallThickness.Exactness,
+	require.Equal(t, decad.Approximate, br.Wall.Minimum.Exactness,
 		`an interval reaching past a converted sweep height is not an exact reading`)
 	require.Equal(t, decad.Sound, br.Status)
 }

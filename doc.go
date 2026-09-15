@@ -21,7 +21,7 @@
 //
 // The canonical loop is sketch → model → verify → gate. Build and solve a 2D
 // profile in [sketch], turn it into a body with a feature verb, then gate the
-// live document on [Report.Trustworthy]:
+// live document on [Report.Passed]:
 //
 //	w := sketch.NewWorld()
 //	s, err := w.CreateSketch(w.XY())
@@ -44,12 +44,12 @@
 //	}
 //
 //	// Verify can fail (a cancelled context) and return a NIL report, so gate
-//	// only after checking err — report.Trustworthy() would panic otherwise.
+//	// only after checking err — report.Passed() would panic otherwise.
 //	report, err := doc.Verify(context.Background())
 //	if err != nil {
 //		return err
 //	}
-//	if !report.Trustworthy() {
+//	if !report.Passed() {
 //		// Something is not proven right: report.Status says how severe,
 //		// and each report.Bodies entry carries that body's verdict.
 //	}
@@ -136,8 +136,8 @@
 // unchanged. WithLoftAlignment picks a loft's per-loop correspondence rotation
 // and is accepted at most once; a repeat is [ErrDegenerate]. Separately,
 // Verify's options (WithTolerance, WithMinWallThickness, WithPullDirection,
-// WithMinRadius, WithClearances) and the STL/OBJ WithChordTolerance also take
-// effect.
+// WithConcaveRadius, WithClearances) and the STL/OBJ WithChordTolerance also
+// take effect.
 //
 // # Layering
 //

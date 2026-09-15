@@ -25,68 +25,188 @@ of `sketch.Verify`, deliberately mirroring `sketch.VerificationReport` /
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, error)
 
 type Report struct {
+    Request       VerifyRequest  // the validated effective settings this call used, including defaults
     Bodies        []*BodyReport
     Interferences []Interference // proven pairwise overlap, with the overlap VOLUME; always computed
     Clearances    []Clearance    // WithClearances(): minimum gap between disjoint pairs
-    Diagnostics   []Diagnostic   // branchable entries per reason; staged pair causes also carry the deprecated compatibility entry (§1.1)
+    Diagnostics   []Diagnostic   // the flattened, canonical inventory: body diagnostics in body order,
+                                 // then pair diagnostics in pair order, each finding once (§1.1, §6)
     Status        Status         // Unverified on a zero value; Verify always returns a decided status
 }
 
-func (r *Report) Trustworthy() bool // the single bit to gate on
+func (r *Report) Passed() bool                              // Sound for the effective request; not survey coverage
+func (r *Report) ForBody(body *Body) (*BodyReport, error)   // exact-identity lookup (§1.1)
 
 type BodyReport struct {
-    Body              *Body
-    Status            Status       // Verify sets Sound / Suspect / Violating / Unsound — this body only
+    Body     *Body
+    Status   Status         // Verify sets Sound / Suspect / Violating / Unsound — this body only
 
-    // Validity readings — facts of the boundary the evaluator holds, which is
-    // exact as data; what they prove about the PART is Status's to say,
-    // decided against the boundary's own proven bound (§6):
-    Solid             bool
-    Watertight        bool
-    Manifold          bool         // every edge bounds exactly 2 faces
-    SelfIntersecting  bool
-    Lumps             int          // > 1 == disconnected pieces
-    Voids             int          // internal cavities (Shell.IsVoid)
+    // Validity — the held boundary's audit verdict, decided against its own
+    // proven bound (§6). ValidityValid entails watertightness, manifoldness
+    // and no self-intersection FOR THAT PROOF; the other outcomes establish
+    // no independent per-property verdict.
+    Validity ValidityResult // { Outcome ValidityOutcome; Diagnostics []Diagnostic }
+    Topology HeldTopology   // { Lumps int; Voids int } — descriptive counts of the held topology
 
     // Boundary quantities — properties of the boundary the evaluator holds,
     // which every body has; always present:
-    Area              Measurement
-    Bounds            Box
+    Area   ScalarReading // embeds Measurement, plus its own ToleranceResult
+    Bounds BoundsReading // embeds Box, plus its own ToleranceResult
 
-    // Region quantities — properties of the enclosed region, which only a
-    // valid solid has; non-nil exactly when the body is a proven solid (§6):
-    Volume            *Measurement
-    Centroid          *VecMeasurement // a computed coordinate, so it is bounded (core §5.3)
+    // Region — the enclosed region's quantities, non-nil EXACTLY when
+    // Validity.Outcome is ValidityValid (§6, §9):
+    Region *RegionReadings // { Volume ScalarReading; Centroid VectorReading }
 
-    Exactness         Exactness      // the weakest link across the quantities this report carries
+    // The three opt-in surveys. Every successful Verify fills Wall.Outcome,
+    // Undercut.Coverage and ConcaveRadius.Outcome nonzero — NotRequested for
+    // an omitted survey — though this guarantee does not reach the
+    // Assessment or Tolerance fields inside them (§6, §7).
+    Wall          WallResult
+    Undercut      UndercutResult
+    ConcaveRadius ConcaveRadiusResult
 
-    // Opt-in, expensive; nil unless the option asks AND the body is a proven
-    // solid. MinWallThickness and MinRadius add a third leg: the feature must
-    // exist (below):
-    MinWallThickness  *Measurement   // WithMinWallThickness(tool, ...) — the thinnest wall: material
-                                     // between skins opposing within the draft allowance (§6); nil when
-                                     // no wall exists (below); decided against the tool (§6)
-    Undercuts         []*Face        // WithPullDirection(v) — every entry a proven undercut: non-empty
-                                     // is Violating; empty claims none exist, held to proof (§6)
-    MinRadius         *Measurement   // WithMinRadius() — the tightest concave radius; nil when no
-                                     // concave feature exists (below); the caller compares (§2)
+    // Diagnostics is the deterministic flattening of Validity's, the core
+    // readings', Wall's, Undercut's, and ConcaveRadius's own local
+    // diagnostics, in that order, each finding present exactly once (§1.1).
+    Diagnostics []Diagnostic
 }
 ```
 
 `Status` reserves its zero value as `Unverified`. A zero `Report` or
 `BodyReport` therefore carries no verification verdict, and
-`(&Report{}).Trustworthy()` is false. `Verify` explicitly initializes the
+`(&Report{}).Passed()` is false. `Verify` explicitly initializes the
 document report and every body report to `Sound` before applying worse
 outcomes; a successful `Verify` never returns `Unverified`.
 
+### 1.0 The result vocabulary
+
+Every opt-in survey answers with the same shape: an explicit primary outcome,
+naming whether the question was asked and, if so, what the evidence proved,
+plus a typed reading and (where the survey states a requirement) an
+`Assessment` against it.
+
+```go
+type ScalarOutcome int // Wall.Outcome, ConcaveRadius.Outcome
+// NotEvaluated | NotRequested | Unavailable | Undecided | Absent | Measured
+
+type Coverage int // Undercut.Coverage
+// NotEvaluated | NotRequested | Unavailable | Undecided | Partial | Complete
+
+type Assessment int // Wall.Assessment, Undercut.Assessment
+// NotEvaluated | Met | Violated | Undecided
+
+type ValidityOutcome int // Validity.Outcome
+// NotEvaluated | Valid | Invalid | Undecided
+
+type ToleranceState int // every reading's own Tolerance.State
+// NotEvaluated | Satisfied | Exceeded | Undecided
+
+type WallRequest struct {
+    Minimum        units.Value // canonicalized to millimetres
+    DraftAllowance units.Value // canonicalized to radians
+}
+
+type UndercutRequest struct {
+    PullDirection r3.Vec // the exact accepted vector, unnormalized
+}
+
+type VerifyRequest struct {
+    RelativeTolerance units.Value      // always present; default units.Scalar(1e-3)
+    Wall              *WallRequest     // non-nil exactly when WithMinWallThickness was requested
+    Undercut          *UndercutRequest // non-nil exactly when WithPullDirection was requested
+    ConcaveRadius     bool
+    Clearances        bool
+}
+
+type ToleranceResult struct {
+    State ToleranceState
+    Limit *units.Value // nil for the zero-bound short circuit and for Undecided; else rel*ref
+}
+
+type ScalarReading struct {
+    Measurement            // .Value, .Exactness, .Bound read directly
+    Tolerance ToleranceResult
+}
+
+type VectorReading struct {
+    VecMeasurement
+    Tolerance ToleranceResult
+}
+
+type BoundsReading struct {
+    Box
+    Tolerance ToleranceResult
+}
+
+type WallResult struct {
+    Request     *WallRequest // shares the pointer VerifyRequest.Wall carries
+    Outcome     ScalarOutcome
+    Minimum     *ScalarReading
+    Assessment  Assessment
+    Diagnostics []Diagnostic // this result's own local findings
+}
+
+type UndercutResult struct {
+    Request     *UndercutRequest
+    Coverage    Coverage
+    Faces       []*Face // every entry CONFIRMED to oppose the pull; no uncertain face appears
+    Assessment  Assessment
+    Diagnostics []Diagnostic
+}
+
+type ConcaveRadiusResult struct {
+    Outcome     ScalarOutcome // no Assessment field: Verify accepts no radius requirement
+    Minimum     *ScalarReading
+    Diagnostics []Diagnostic
+}
+
+type ValidityResult struct {
+    Outcome     ValidityOutcome
+    Diagnostics []Diagnostic // at most one: the body's single underlying validity finding
+}
+
+type HeldTopology struct {
+    Lumps int
+    Voids int
+}
+
+type RegionReadings struct {
+    Volume   ScalarReading
+    Centroid VectorReading
+}
+```
+
+`Report.Request` records the validated settings a call actually used,
+including defaults, even for an empty document. `WallResult.Request` and
+`UndercutResult.Request` reference the SAME per-call record `Report.Request`
+carries, and are nil exactly for an unrequested survey. Duplicate options
+keep the current last-occurrence-wins behavior; validation still applies as
+options are processed.
+
+§6 and §7 below give each survey's outcome table in full. In outline: `Wall`
+and `ConcaveRadius` share `ScalarOutcome` because both answer a whole-body
+minimum over a defined feature class — `Unavailable` when the solid
+prerequisite or payload blocks the survey, `Undecided` when the survey could
+not certify the whole minimum or its absence, `Absent` when no feature in the
+class exists, `Measured` when a certified interval encloses the actual
+minimum. `Undercut` answers with `Coverage` instead, because a nonempty
+`Faces` list is meaningful on its own even when coverage is only `Partial`:
+every listed face is a proven opposing face regardless of whether every other
+face was decided.
+
+`Region` groups the two region quantities because they share one validity
+prerequisite: it is non-nil exactly when `Validity.Outcome == ValidityValid`.
+`Area` and `Bounds` are unconditional — every returned body carries them,
+proven or not.
+
 ### 1.1 Diagnostics — the structured reason a report is not `Sound`
 
-`Status` and `Trustworthy()` say a report cannot be trusted; `Report.Diagnostics`
+`Status` and `Passed()` say a report cannot be trusted; `Report.Diagnostics`
 says **why**, in a form an agent branches on to choose its next edit. The gate is
 a gate, but the north-star user (core §1) is a program that must revise a
 program: a bare `Suspect` cannot tell it whether to loosen `WithTolerance`,
 change geometry, avoid a staged pair, or report an evaluator limit. `Diagnostics`
-is the itemized answer. Every existing field and `Trustworthy()` are unchanged;
+is the itemized answer, alongside the survey outcomes §1.0 already carries;
 the slice is **additive detail**, never a second verdict.
 
 ```go
@@ -101,9 +221,9 @@ type Diagnostic struct {
     Survey      SurveyKind      // which optional body survey this concerns; SurveyNone for a core or pair reason
     Reading     ReadingKind     // which quantity the Observed* form carries; ReadingNone when the reason
                                 // names no bounded reading. It keys which of the three Observed* fields is set.
-    Observed    *Measurement    // a SCALAR reading — Area, Volume, MinWallThickness, MinRadius, a pair's
-                                // overlap volume or gap — its own Bound and Exactness riding with it. nil
-                                // unless Reading names a scalar quantity.
+    Observed    *Measurement    // a SCALAR reading — Area, Volume, the wall or concave-radius reading, a
+                                // pair's overlap volume or gap — its own Bound and Exactness riding with
+                                // it. nil unless Reading names a scalar quantity.
     ObservedVec *VecMeasurement // a VECTOR reading — a Centroid (core §5.3). nil unless Reading == ReadingCentroid.
     ObservedBox *Box            // a BOX reading — a Bounds box (§1). nil unless Reading == ReadingBounds.
     Required    *units.Value    // the threshold the reading was judged against, same Kind as the reading's own
@@ -130,7 +250,7 @@ const (
     SurveyWall
     // SurveyUndercut — the pull-direction survey (WithPullDirection).
     SurveyUndercut
-    // SurveyConcaveRadius — the concave-radius survey (WithMinRadius).
+    // SurveyConcaveRadius — the concave-radius survey (WithConcaveRadius).
     SurveyConcaveRadius
 )
 
@@ -155,9 +275,9 @@ const (
     ReadingVolume
     // ReadingCentroid — a body's Centroid (ObservedVec).
     ReadingCentroid
-    // ReadingWall — a body's MinWallThickness (Observed).
+    // ReadingWall — a body's Wall.Minimum (Observed).
     ReadingWall
-    // ReadingMinRadius — a body's MinRadius (Observed).
+    // ReadingMinRadius — a body's ConcaveRadius.Minimum (Observed).
     ReadingMinRadius
     // ReadingOverlapVolume — a pair's proven overlap volume (Observed).
     ReadingOverlapVolume
@@ -173,11 +293,13 @@ type DiagnosticCode int
 const (
     // DiagMeasurementBeyondTolerance — a bounded reading's Bound exceeds
     // rel*Ref (§2). Reading names the quantity and its matching Observed* form
-    // carries it — Area / Volume / MinWallThickness / MinRadius on a body ride
-    // Observed, a Centroid rides ObservedVec, a Bounds box rides ObservedBox,
-    // and on a pair the overlap volume or the gap rides Observed. Required is
-    // rel*Ref, the largest Bound that would have passed. On a body Body is set;
-    // on a pair Pair is. Contributes Suspect.
+    // carries it — Area / Volume / the wall or concave-radius reading on a
+    // body ride Observed, a Centroid rides ObservedVec, a Bounds box rides
+    // ObservedBox, and on a pair the overlap volume or the gap rides
+    // Observed. Required is rel*Ref, the largest Bound that would have
+    // passed. On a body Body is set; on a pair Pair is. Contributes Suspect.
+    // A known reference that rejects the bound is this code; a nonzero bound
+    // with no usable reference is DiagToleranceReferenceUnavailable instead.
     DiagMeasurementBeyondTolerance DiagnosticCode = iota
     // DiagUndecidedValidity — the held boundary is not decisive beyond its own
     // proven bound (§6): a sub-bound gap, pinch, graze, or an undecided count.
@@ -186,7 +308,7 @@ const (
     // DiagInvalidBody — the held boundary is proven not a valid solid (§6).
     // Reading ReadingNone. Contributes Unsound.
     DiagInvalidBody
-    // DiagWallTooThin — MinWallThickness's proven interval is below the tool
+    // DiagWallTooThin — the wall reading's proven interval is below the tool
     // (§6). Reading ReadingWall, Observed the wall reading; Required the tool.
     // Violating.
     DiagWallTooThin
@@ -594,42 +716,44 @@ features of a solid — so each is computed only when its option asks for it
 Two legs — the option asked, the body a proven solid — are the whole rule
 exactly when the quantity's existence is already the precondition's: a
 boundary always has an area and a box, and a region always has a volume and a
-centroid. `Undercuts` carries its
-further question — do any exist? — in the slice itself: asked on a proven
-solid it is non-nil, every face it lists is a **proven** undercut, and
-**empty** is the answer *no face is an undercut* — an answer and not an
-absence, and an answer §6 holds to proof like any other, marking the body
-`Suspect` when the evaluator cannot give one.
-`MinWallThickness` and `MinRadius` each measure a feature a valid solid may
-simply not have. A wall is material between **opposing skins** — two boundary
-patches facing each other across it, within the draft allowance (§6),
-read by the ball that spans them, skin to skin — and a body that is all
-edge — a tetrahedron, whose skins everywhere meet at the body's own 70.5°
-dihedral, past any allowance short of it (§6), and nowhere oppose — has no
-wall at all, not a thick one. A concave radius is a feature an all-convex body — a plain
-block — does not have. For neither can a `Measurement` honestly stand for
-*none*. Zero is core §4's sentinel reintroduced: a real wall pinches to a
-genuine `Exact` zero where its skins meet at tangency — a knife edge, a
-cusp — on a body that is still a proven solid (§6 decides it thin against any
-real tool), and a real concave radius can be arbitrarily tight, so zero is a
-value each quantity itself approaches. (That zero is always a wall's, never a
-body's: a body flat through and through encloses nothing, is no proven solid,
-and carries no reading at all — the second leg already said so.) And an
-infinity is not a measurement of anything the body has, and turns the §2 gate
-vacuous. So both carry the existence leg the way the pair results below carry
-their preconditions — in existence: each is non-nil exactly when the option
-asks **and** the body is a proven solid **and** the feature exists. Nil with
-the option asked on a proven solid is not a question left unanswered; it is
-the determination *this body has no wall* — nothing exists for the tool to be
-thinner than — or *this body has no concave feature* — the best possible
-answer to the endmill question — and §6 holds the
-evaluator to proving it, marking the body `Suspect` when it cannot. Nor do the
-causes of a nil ever blur where a nil is read as an answer: which options were
-passed is the caller's own knowledge, `Status` carries validity — proven,
-refuted or undecided (§6) — and carries the survey §6 lets no evaluator
-silently fail, as `Suspect`; inside a `Sound` report what remains is the
-determination, and a report that is not `Sound` is not one to read answers out
-of (§6).
+centroid. The three opt-in surveys carry a further question — how completely
+was it answered, and what did it find? — as an explicit outcome rather than
+folding it into presence or absence of a value (§6, §7). `Undercut.Coverage`
+states how completely face membership against the pull was decided:
+`CoverageComplete` when every face was decided, `CoveragePartial` when some
+confirmed opposing faces exist alongside undecided membership elsewhere, and
+`CoverageUndecided` when the producer confirms neither a complete list nor any
+opposing face. `Undercut.Faces` lists every face the producer has **proven**
+to oppose the pull, in `Faces()` order; a face never appears there on
+suspicion, so a nonempty `Faces` is trustworthy even under `CoveragePartial`.
+Only `CoverageComplete` with an empty `Faces` proves the pull clears every
+face; `CoverageUndecided`'s empty `Faces` proves nothing.
+
+`Wall` and `ConcaveRadius` each measure a feature a valid solid may simply not
+have, and share `ScalarOutcome` (§6) for the same reason `Undercut` needs its
+own `Coverage`: presence and completeness are different questions. A wall is
+material between **opposing skins** — two boundary patches facing each other
+across it, within the draft allowance (§6), read by the ball that spans them,
+skin to skin — and a body that is all edge — a tetrahedron, whose skins
+everywhere meet at the body's own 70.5° dihedral, past any allowance short of
+it (§6), and nowhere oppose — has no wall at all, not a thick one. A concave
+radius is a feature an all-convex body — a plain block — does not have.
+`ScalarAbsent` is that proven absence; `ScalarMeasured` is a certified
+interval enclosing the actual whole-body minimum, and it carries the interval
+even at a genuine `Exact` zero — a knife edge or cusp pinches a real wall to
+zero while the body stays a proven solid (§6 decides it thin against any real
+tool), so zero is a value `ScalarMeasured` itself reaches, never the trigger
+for `ScalarAbsent`. `ScalarUnavailable` marks a solid prerequisite failure or
+an unimplemented survey on this payload; `ScalarUndecided` marks an attempted
+but inconclusive proof. `ScalarNotRequested` is the outcome an omitted option
+leaves behind — every successful `Verify` call fills `Wall.Outcome` and
+`ConcaveRadius.Outcome` with one of these five nonzero values, never the
+reserved zero `ScalarNotEvaluated` (§4). Which options were passed is the
+caller's own knowledge, `Validity` carries the body's own proof — proven,
+refuted or undecided (§6) — and `Status` carries the survey outcome §6 lets no
+evaluator silently fail, as `Suspect`; inside a `Sound` report what remains is
+the determination, and a report that is not `Sound` is not one to read answers
+out of (§6).
 
 `Interference` and `Clearance` are the pairwise result types of core §6.2: each
 names its two bodies and carries its quantity as a `Measurement`, so each
@@ -712,24 +836,25 @@ progress API.
 
 ## 2. Tolerance — what "beyond the caller's tolerance" means
 
-`Suspect` — and through it `Trustworthy()` — turns on an approximation being
+`Suspect` — and through it `Passed()` — turns on an approximation being
 *coarser than the caller will accept*, so the caller must be able to say what
 they accept:
 
 ```go
 func WithTolerance(rel units.Value) VerifyOption // Dimensionless; default units.Scalar(1e-3)
-func WithMinWallThickness(tool units.Value, opts ...WallOption) VerifyOption
+func WithMinWallThickness(minimum units.Value, opts ...WallOption) VerifyOption
 func WithDraftAllowance(a units.Value) WallOption // Angle; default units.Degrees(15)
 func WithPullDirection(v r3.Vec) VerifyOption
-func WithMinRadius() VerifyOption
+func WithConcaveRadius() VerifyOption
 func WithClearances() VerifyOption
 ```
 
 `WithTolerance` sets the gate this section defines; each of the other four
 `VerifyOption`s switches on one quantity, and each lands in a named place in
-the report: `WithMinWallThickness` fills `BodyReport.MinWallThickness`,
-`WithPullDirection` fills `Undercuts`, `WithMinRadius` fills `MinRadius`, and
-`WithClearances` fills `Report.Clearances`. `WithDraftAllowance` is no fifth
+the report: `WithMinWallThickness` fills `BodyReport.Wall`,
+`WithPullDirection` fills `BodyReport.Undercut`, `WithConcaveRadius` fills
+`BodyReport.ConcaveRadius`, and `WithClearances` fills `Report.Clearances`.
+`WithDraftAllowance` is no fifth
 switch: it is the wall question's second parameter (below), it travels inside
 `WithMinWallThickness` — a `WallOption`, the nesting core §8.1's
 functional-options house style gives an option's own parameters — and it
@@ -751,11 +876,12 @@ direction, so `WithPullDirection` takes it — a zero direction poses no
 direction at all, and is `ErrDegenerate` (core §12). The wall question states
 two, because it is one spec in two parts: *no wall thinner than the tool that
 has to cut it* — core §1's own words — *a wall being skins that oppose within
-the draft allowance*. `WithMinWallThickness` takes the tool, and the tool is
-the **spec, never the probe**: the reading needs no probe, because a wall
-carries its own — a wall is material between opposing skins, read by the ball
-that spans it, skin to skin (§6) — so `MinWallThickness` is a fact of the
-body alone, and the tool enters only where §6 decides the reading against it:
+the draft allowance*. `WithMinWallThickness` takes the minimum, describing the
+comparison without assuming a tool type, and it is the **spec, never the
+probe**: the reading needs no probe, because a wall carries its own — a wall
+is material between opposing skins, read by the ball that spans it, skin to
+skin (§6) — so the wall reading is a fact of the
+body alone, and the minimum enters only where §6 decides the reading against it:
 a wall proven thinner makes its body `Violating`. `WithDraftAllowance` takes
 the allowance, and the allowance is spec for the reason §6 works through: no
 line intrinsic to the geometry separates a drafted wall from a shallow
@@ -776,8 +902,8 @@ corner would count as facing each other and every block's every edge would
 read as a zero-thickness wall (§6) — a question no longer about walls, and
 `ErrDegenerate` on the zero tool's own grounds. The legal range is
 `[0°, 90°)`. A minimum radius and a
-minimum gap are well-posed bare, so `WithMinRadius` and `WithClearances` take
-nothing — and the wall *reading* is well-posed with no tool at all, so the
+minimum gap are well-posed bare, so `WithConcaveRadius` and `WithClearances`
+take nothing — and the wall *reading* is well-posed with no tool at all, so the
 tool is not what makes it posable; the reading's own parameter is the
 allowance, defaulted above, and the tool is the spec core §1's question
 states — only a stated spec earns a verdict (below).
@@ -786,19 +912,20 @@ states — only a stated spec earns a verdict (below).
 option the report answers and an option the report merely fills runs exactly
 where the parameters are, and it is drawn once, here. `WithTolerance` states
 how many figures the caller will accept, and the `Suspect` rung enforces it;
-`WithMinWallThickness` states the tool no wall may be thinner than — the
+`WithMinWallThickness` states the minimum no wall may be thinner than — the
 allowance inside it stating what counts as a wall at all —
 `WithPullDirection` the direction the part must pull along, and the `Violating`
-rung of §6 enforces both. `WithMinRadius` and `WithClearances` take nothing, so
-they state nothing, and `MinRadius` and `Clearance.Gap` are **measurements, not
-verdicts**: the tightest concave radius and the smallest gap, gated for
-trustworthiness like every bounded result but compared against no threshold,
-because the endmill and the clearance spec live with the caller, who was never
-asked to name them. A nil `MinRadius` on a proven solid is the comparison's
-best case, not a missing answer: §1 makes it the determination that no concave
-feature exists — no radius for any endmill to be too large for. The report
-never invents a spec the caller did not state, and never withholds a verdict
-on one they did.
+rung of §6 enforces both. `WithConcaveRadius` and `WithClearances` take
+nothing, so they state nothing, and `ConcaveRadius.Minimum` and
+`Clearance.Gap` are **measurements, not verdicts**: the tightest concave
+radius and the smallest gap, gated for trustworthiness like every bounded
+result but compared against no threshold, because the endmill and the
+clearance spec live with the caller, who was never asked to name them. A
+`ConcaveRadius.Outcome` of `ScalarAbsent` on a proven solid is the
+comparison's best case, not a missing answer: §6 makes it the determination
+that no concave feature exists — no radius for any endmill to be too large
+for. The report never invents a spec the caller did not state, and never
+withholds a verdict on one they did.
 
 **The tolerance is relative, and it is one number for every kind.** `rel` is the
 largest error the caller will accept **as a fraction of the quantity being
@@ -813,7 +940,7 @@ measurement kinds have been validated; `Mag()` or a display-unit magnitude MUST
 NOT enter the gate. `Exactness` is metadata, not a second gate: `Exact` requires a
 zero `Bound` and therefore passes, while an `Approximate` result passes whenever
 its proven `Bound` satisfies this same comparison. `Approximate` alone MUST NOT
-make a body or report `Suspect`, and `BodyReport.Exactness` may therefore remain
+make a body or report `Suspect`, and a body's own readings may therefore remain
 `Approximate` while `BodyReport.Status` and `Report.Status` are `Sound`.
 
 One comparison, one number, no exponentiation. It is scale-invariant — a 1mm part
@@ -880,10 +1007,10 @@ table. Every scalar in the table is its non-negative base-unit magnitude:
 |---|---|---|
 | `BodyReport.Area` | body | `max(abs(Area.Value.Base()), δ × L)` |
 | `BodyReport.Bounds` | body | `D` |
-| `BodyReport.Volume`, when present | body | `max(abs(Volume.Value.Base()), δ × A)` |
-| `BodyReport.Centroid`, when present | body | `D` |
-| `BodyReport.MinWallThickness`, when present | body | `max(abs(Value.Base()), δ)` |
-| `BodyReport.MinRadius`, when present | body | `max(abs(Value.Base()), δ)` |
+| `BodyReport.Region.Volume`, when `Region` non-nil | body | `max(abs(Volume.Value.Base()), δ × A)` |
+| `BodyReport.Region.Centroid`, when `Region` non-nil | body | `D` |
+| `BodyReport.Wall.Minimum`, when non-nil | body | `max(abs(Value.Base()), δ)` |
+| `BodyReport.ConcaveRadius.Minimum`, when non-nil | body | `max(abs(Value.Base()), δ)` |
 | `Interference.Volume` | pair | `max(abs(Volume.Value.Base()), δ × (A_A + A_B))` |
 | `Clearance.Gap` | pair | `max(abs(Gap.Value.Base()), δ)` |
 
@@ -895,17 +1022,18 @@ each returned edge once. MUST NOT sum face loops or coedges, which would count
 each manifold edge twice; MUST NOT use only one face's loops. On a faceted body,
 use the length of the held chord chain even when `Edge.Length()` cannot bound the
 unknown true curved rim: `L` describes the held surface whose area noise floor is
-being formed, not a public measurement of the true rim. `Undercuts` and the
-validity fields are proven predicates/counts, not bounded numeric results, so
+being formed, not a public measurement of the true rim. `Undercut.Faces` and
+`Validity` are proven predicates/counts, not bounded numeric results, so
 they have no tolerance reference; their proof rules remain §6's.
 
 `D` is a **diameter**: the greatest distance between two points of the geometry
 the result belongs to. **Every reference is anchored to the thing the result
 belongs to**, and ownership, not convenience, decides whose geometry that is:
 
-- a result on a `BodyReport` — `Volume`, `Area`, `Centroid`, `Bounds`,
-  `MinWallThickness`, `MinRadius`, and every vertex position and face normal of that
-  body — belongs to **one body**: `D` is **that body's own** diameter — the
+- a result on a `BodyReport` — `Region.Volume`, `Area`, `Region.Centroid`,
+  `Bounds`, `Wall.Minimum`, `ConcaveRadius.Minimum`, and every vertex position
+  and face normal of that body — belongs to **one body**: `D` is **that
+  body's own** diameter — the
   distance between its two farthest points — and the boundary measures below are
   that body's own surface and edges. A body's answers are judged against the
   body they are answers about;
@@ -1143,15 +1271,16 @@ The gate has nothing to miss, because **every one of the three shapes carries a
 `Bound`** (core §5.3):
 
 - a `Measurement`, a `VecMeasurement` or a `Box` on a `BodyReport` that is beyond
-  tolerance — `Volume`, `Area`, `Centroid`, `Bounds`, `MinWallThickness`,
-  `MinRadius`, each when the report carries it (§1) — makes that `BodyReport`
-  `Suspect`;
+  tolerance — `Region.Volume`, `Area`, `Region.Centroid`, `Bounds`,
+  `Wall.Minimum`, `ConcaveRadius.Minimum`, each when the report carries it (§1) —
+  gives that reading's own `Tolerance.State` a value other than `ToleranceSatisfied`
+  and makes that `BodyReport` `Suspect` (unless a worse status already wins);
 - an `Interference.Volume` or a `Clearance.Gap` beyond tolerance makes the `Report`
   `Suspect` directly — those two are properties of a *pair*, so there is no
   `BodyReport` for them to travel through, and a gap known to only one significant
   figure is not an answer the caller said they would accept.
 
-Either path makes `Trustworthy()` false. `Exact` answers have a zero `Bound` and
+Either path makes `Passed()` false. `Exact` answers have a zero `Bound` and
 can never trip it, at any tolerance. An `Approximate` answer is not a failure: it
 passes when its proven bound is within the inclusive gate of §2. **Nothing in the
 report is exempt**, and the `VecMeasurement` of core §5.3 is what makes that
@@ -1160,27 +1289,32 @@ boolean that puts the centroid off by more than `rel` of the body's own size
 cannot hide inside a `Sound` body — while a boolean whose bound proves the figures
 the caller asked for can be `Sound` without pretending to be `Exact`.
 
-The body flow is normative and MUST NOT short-circuit on `Exactness`:
+The body flow is normative:
 
 1. Decide validity and populate unconditional boundary readings; populate region
    readings only for a proven solid (§1).
-2. Run every requested optional survey and populate its reading, absence or
-   predicate result before the numeric gate. Decide each stated spec from its
-   proven interval or predicate proof.
-3. Set `BodyReport.Exactness` to the weakest exactness among the bounded results
-   the report actually carries. This is summary metadata only; MUST NOT assign
-   `Suspect` from this field.
-4. Apply §3's table to every present bounded result. One failed comparison makes
-   the body `Suspect` unless a worse proven status wins.
-5. Combine validity, spec, undecided-answer and gate outcomes using the severity
-   order below.
+2. Run every requested optional survey and populate its outcome, reading and
+   assessment before the numeric gate. Decide each stated spec from its
+   proven interval or coverage proof (§6, §7).
+3. Apply §3's table to every present bounded result, recording each reading's
+   own `ToleranceResult`. One failed comparison makes the body `Suspect` unless
+   a worse proven status wins.
+4. Combine validity, spec, undecided-answer and gate outcomes using the severity
+   order below, and flatten every local diagnostic into `BodyReport.Diagnostics`
+   in §1.1's fixed order.
+
+Exactness is never a summary field on `BodyReport`: each present reading
+carries its own `Exactness`, read directly off its embedded bounded value,
+and no step above may assign `Suspect` from an exactness comparison.
 
 The order keeps the wall rule independent from the trust gate. A wall interval
-proven below the tool is `Violating` even when its bound is coarse; a wall proven
-to meet the tool but measured beyond tolerance is `Suspect`; an interval that
-straddles the tool is `Suspect` even when its bound passes the gate. `Undercuts`
-remain predicate results: a proven member is `Violating`, an unproven all-clear
-is `Suspect`, and no scalar gate is invented for the slice.
+proven below the minimum is `Violating` (`AssessmentViolated`) even when its
+bound is coarse; a wall proven to meet the minimum but measured beyond
+tolerance is `Suspect`; an interval that straddles the minimum is `Suspect`
+(`AssessmentUndecided`) even when its bound passes the gate. `Undercut`
+remains a predicate result: a confirmed opposing face is `Violating`
+(`AssessmentViolated`), an unproven all-clear is `Suspect`
+(`AssessmentUndecided`), and no scalar gate is invented for `Faces`.
 
 Every nonzero-bound body result needs a usable finite, non-negative body diameter
 to construct its reference. If the evaluator cannot obtain one, the body is
@@ -1206,54 +1340,59 @@ of the `BodyReport.Status` bullet below.
 
 A quantity the report does not carry is absent only where §1 permits it: a
 region quantity of a body that is not a proven solid, an opt-in quantity that
-was not asked for, or an absence the standard itself governs. The first exists
-only on a body whose validity has already spoken in `Status` — proven invalid,
-`Unsound`, the worst verdict in the precedence below; undecided, `Suspect`
-under this same standard — so the absence never outruns the verdict that
-explains it. The second is a quantity the evaluator never computed, so there
-is no answer, trustworthy or otherwise, for the report to be silent about —
-and no verdict owed either: an option is where a spec is stated (§2), so an
-option left off poses no question for the report to fail. Everything else the
-report says by absence or emptiness is an **answer** — a decided answer, never
-an approximation of one — and the report gives four answers this way:
+was not requested (`ScalarNotRequested` / `CoverageNotRequested`), or an
+absence the standard itself governs. The first exists only on a body whose
+validity has already spoken in `Status` — proven invalid, `Unsound`, the worst
+verdict in the precedence below; undecided, `Suspect` under this same
+standard — so the absence never outruns the verdict that explains it. The
+second is a quantity the evaluator never computed, so there is no answer,
+trustworthy or otherwise, for the report to be silent about — and no verdict
+owed either: an option is where a spec is stated (§2), so an option left off
+poses no question for the report to fail. Everything else the report answers
+by an explicit outcome rather than a raw absence, and the report gives four
+answers this way:
 
-- **A nil `MinWallThickness` on a proven solid** is the determination *no wall
-  exists* — nowhere do two of the body's skins oppose within the allowance
-  (the wall rule below),
-  so nothing exists for the tool to be thinner than. On analytic faces the
-  proof exists: which face pairs oppose within the allowance across material,
-  and whether any meeting inside it pinches a wall to zero, are closed-form
-  facts of the surfaces, and
-  the spanning survey over them (below) is that proof. A faceted survey needs
-  more than held facets: its source-normal certificates, boundary-displacement
-  bound, and complete medial-family enclosure must exclude every possible wall.
-  When they do, nil is proven; otherwise the asked question is undecided and the
-  body reads `Suspect` with `MinWallThickness` nil (payload verification §10).
-  Modify reach DX9 makes the same deliberate result for exact
-  `capBlendPayload` and `stackedPrismPayload`: their solids are exact, but the
-  shipped constant-section spanning proof does not cover them. Exact geometry
-  does not turn an incomplete survey into a decided absence.
-- **A nil `MinRadius` on a proven solid** is the determination *no concave
-  feature exists*. On analytic faces the proof exists: convexity and curvature
-  are exact facts there, and a survey over them is that proof. A faceted source
-  certificate can also prove every represented patch has no concave principal
-  curvature. Missing, mixed-sign, or unknown certificates leave the question
-  undecided and the body `Suspect` with `MinRadius` nil (payload verification
-  §9).
-- **An empty `Undercuts`** is the claim *no face is an undercut* — the same
-  rule for the same reason, because the claim quantifies over the part, not
-  over the survey. On an analytic face whose geometry is its tag, every point's
-  normal is an exact fact with a closed-form range over the face, and the
-  survey of those ranges (the membership rule below) is the proof that no
-  region of any face opposes the pull. The range a survey READS is that fact
-  only to within the bound of whatever computed it: a range read through
-  `Face.NormalAt` carries that evaluation's own proven bound (§2), so a pull
-  the reading cannot separate from a face's own tangent leaves the question
-  undecided even where the geometry is its tag. A tagged analytic variant that
-  is a bounded stand-in carries its own normal departure
-  (`docs/modify-reach-design.md` §8.3) on top of that. A faceted survey proves the same absence only when
-  every true patch's source-normal range clears. A missing or straddling range
-  leaves `Undercuts` empty and the body `Suspect` (payload verification §8).
+- **`Wall.Outcome == ScalarAbsent` on a proven solid** is the determination *no
+  wall exists* — nowhere do two of the body's skins oppose within the allowance
+  (the wall rule below), so nothing exists for the given minimum to be thinner
+  than. On analytic faces the proof exists: which face pairs oppose within the
+  allowance across material, and whether any meeting inside it pinches a wall
+  to zero, are closed-form facts of the surfaces, and the spanning survey over
+  them (below) is that proof. A faceted survey needs more than held facets:
+  its source-normal certificates, boundary-displacement bound, and complete
+  medial-family enclosure must exclude every possible wall. When they do,
+  `ScalarAbsent` is proven; otherwise the asked question is `ScalarUndecided`
+  and the body reads `Suspect` (payload verification §10). Modify reach DX9
+  makes the same deliberate result for exact `capBlendPayload` and
+  `stackedPrismPayload`: their solids are exact, but the shipped
+  constant-section spanning proof does not cover them, so the outcome is
+  `ScalarUnavailable`, an explicit unsupported-payload dispatch rather than a
+  generic undecided result. Exact geometry does not turn an incomplete survey
+  into a decided absence.
+- **`ConcaveRadius.Outcome == ScalarAbsent` on a proven solid** is the
+  determination *no concave feature exists*. On analytic faces the proof
+  exists: convexity and curvature are exact facts there, and a survey over
+  them is that proof. A faceted source certificate can also prove every
+  represented patch has no concave principal curvature. Missing, mixed-sign,
+  or unknown certificates leave the outcome `ScalarUndecided` and the body
+  `Suspect` (payload verification §9).
+- **`Undercut.Coverage == CoverageComplete` with an empty `Faces`** is the
+  claim *no face is an undercut* — the same rule for the same reason, because
+  the claim quantifies over the part, not over the survey. On an analytic face
+  whose geometry is its tag, every point's normal is an exact fact with a
+  closed-form range over the face, and the survey of those ranges (the
+  membership rule below) is the proof that no region of any face opposes the
+  pull. The range a survey READS is that fact only to within the bound of
+  whatever computed it: a range read through `Face.NormalAt` carries that
+  evaluation's own proven bound (§2), so a pull the reading cannot separate
+  from a face's own tangent leaves the outcome `CoverageUndecided` even where
+  the geometry is its tag. A tagged analytic variant that is a bounded
+  stand-in carries its own normal departure (`docs/modify-reach-design.md`
+  §8.3) on top of that. A faceted survey proves the same all-clear only when
+  every true patch's source-normal range clears. A missing or straddling
+  range leaves `Coverage` at `CoverageUndecided` (or `CoveragePartial` when
+  some other face is confirmed) and the body `Suspect` (payload verification
+  §8).
 - **A pair with no `Interference` row** is the answer *these two bodies do not
   overlap* only inside a `Sound` report. The proof may be bounds separation,
   analytic boundary clearance plus nesting exclusion, or a certified touching
@@ -1269,17 +1408,19 @@ an approximation of one — and the report gives four answers this way:
   are `docs/interference-design.md`.
 
 What the standard buys is the only reading that matters: inside a
-`Trustworthy()` report, a nil `MinWallThickness` is a **proven** *no wall*, a
-nil `MinRadius` a **proven** absence, an empty
-`Undercuts` a **proven** all-clear, a pair with no `Interference` row a
-**proven** disjointness — and every body a **proven** solid (the validity rule
-below) — each as good as any `Exact` answer, because an unprovable answer
-never reaches the caller inside a `Sound` report. (On a
-`Suspect` report any of the five could be either the proven answer or the
-survey that could not decide, and for the verdict nothing turns on which:
-`Suspect` already says this report is not one to gate on.) **Which one it is,
-`Diagnostics` (§1.1) says outright.** A nil `MinWallThickness`, a nil
-`MinRadius`, an empty `Undercuts`, or a pair with no `Interference` row is a
+`Passed()` report, `Wall.Outcome == ScalarAbsent` is a **proven** *no wall*,
+`ConcaveRadius.Outcome == ScalarAbsent` a **proven** absence,
+`Undercut.Coverage == CoverageComplete` with empty `Faces` a **proven**
+all-clear, a pair with no `Interference` row a **proven** disjointness — and
+every body a **proven** solid (the validity rule below) — each as good as any
+`Exact` answer, because an unprovable answer never reaches the caller inside a
+`Sound` report. (On a `Suspect` report an outcome other than the proven
+positive answer names exactly which survey could not decide, so nothing turns
+on inspecting a raw absence: `Suspect` already says this report is not one to
+gate on.) **Which one it is, `Diagnostics` (§1.1) says outright**, alongside
+the outcome itself. `Wall.Outcome == ScalarAbsent`,
+`ConcaveRadius.Outcome == ScalarAbsent`, `Undercut.Coverage == CoverageComplete`
+with empty `Faces`, or a pair with no `Interference` row is a
 **proven** absence exactly when no diagnostic names it — the per-survey
 `DiagUndecidedWall` / `DiagUndecidedUndercut` / `DiagUndecidedMinRadius` for that
 body-and-survey, `DiagUnsupportedSurveyPayload` — with `Survey` naming which
@@ -1347,14 +1488,18 @@ verification results.
   `Approximate` with a `Bound` beyond the tolerance of §2, a stated spec
   straddled — the interval rule below — an asked absence left unproven, the
   standard above: `WithMinWallThickness` asked and the evaluator could
-  neither decide the wall against the tool nor prove the body has no wall,
-  `WithMinRadius` asked and the evaluator could neither
-  measure a concave radius nor prove the body has none, or `WithPullDirection`
-  asked and the evaluator could neither prove an undercut nor prove there is
-  none — or the body's own validity left undecided, the rule just below),
-  `Violating` (a proven solid, but a spec a §2 option stated is proven to
-  fail: `MinWallThickness` decided below the tool, or `Undercuts` non-empty),
-  or `Unsound` (**proven** not a valid solid). Validity is decided first,
+  neither decide the wall against the minimum nor prove the body has no wall
+  (`Wall.Outcome == ScalarUndecided`, or `ScalarUnavailable` when the payload
+  never implemented the survey), `WithConcaveRadius` asked and the evaluator
+  could neither measure a concave radius nor prove the body has none
+  (`ConcaveRadius.Outcome` likewise `ScalarUndecided` / `ScalarUnavailable`),
+  or `WithPullDirection` asked and the evaluator could neither prove an
+  undercut nor prove there is none (`Undercut.Coverage == CoverageUndecided`,
+  or `CoveragePartial` when some other face is confirmed) — or the body's own
+  validity left undecided, the rule just below), `Violating` (a proven solid,
+  but a spec a §2 option stated is proven to fail: `Wall.Assessment ==
+  AssessmentViolated`, or `Undercut.Assessment == AssessmentViolated`), or
+  `Unsound` (**proven** not a valid solid). Validity is decided first,
   before any quantity is read, which is what lets §1 key a region quantity's
   presence on it with no circularity: only a proven solid's quantities exist
   to decide `Sound` against `Violating` and `Suspect`. A body is never
@@ -1367,10 +1512,11 @@ verification results.
   stands for (core §6.1), never what it is — so whether the held skin closes,
   pinches or crosses itself is a fact of data the evaluator possesses in
   full, a decided answer (core §6). But *this body is a valid solid*
-  quantifies over the part that boundary stands for, exactly as `MinRadius`'s
-  nil quantifies over the part and not the survey: a sub-bound pinhole, pinch
-  or graze is absent from the held boundary precisely the way a sub-chord
-  dimple is absent from the `MinRadius` survey. The instrument that decides
+  quantifies over the part that boundary stands for, exactly as
+  `ConcaveRadius`'s `ScalarAbsent` quantifies over the part and not the
+  survey: a sub-bound pinhole, pinch or graze is absent from the held boundary
+  precisely the way a sub-chord dimple is absent from the concave-radius
+  survey. The instrument that decides
   it is one the report already owns — the proof the undecided pair above
   reads, turned inward. The held boundary approximates the true one within a
   **proven** bound (the bound every vertex and facet reports, core §5.3: a
@@ -1428,7 +1574,7 @@ verification results.
 
 **A wall is material between opposing skins, the allowance says how much
 draft opposition tolerates, and the reading needs no probe.**
-`MinWallThickness` reads the body's maximal inscribed balls — every
+`Wall.Minimum` reads the body's maximal inscribed balls — every
 ball that fits the material and can grow no further — and fit alone is not a
 wall: no ball of positive radius fits a sharp convex edge, so a bare infimum
 over fits reads zero on any body with one, and §6 would faithfully find a
@@ -1477,7 +1623,7 @@ at every legal allowance; its only spanning ball is its center's, touching
 two opposite faces 50 mm out each way: its reading is its own 100 mm slab,
 and a 1 mm tool finds nothing to violate.
 
-`MinWallThickness` is the infimum of the diameter over spanning balls,
+`Wall.Minimum` is the infimum of the diameter over spanning balls,
 closed under limits: a family of balls whose contacts approach within-α
 opposition contributes the diameter it converges to. On the drafted wall
 the infimum is the base-tangent spanning ball, pinned by the two skins and
@@ -1503,8 +1649,8 @@ arccos(−1/3) ≈ 109.5° apart — the body's own 70.5° dihedral, read in
 contacts — so nothing spans at the default, or at any allowance short of
 that dihedral, and no family closes a limit: every skin meets its
 neighbours and opposes none. The infimum is over nothing, and §1 carries
-that answer in presence: `MinWallThickness` nil, the determination *no
-wall exists*, held to proof by the absence standard above. Bulk changes
+that answer as an explicit outcome: `Wall.Outcome == ScalarAbsent`, the
+determination *no wall exists*, held to proof by the absence standard above. Bulk changes
 nothing: an equilateral wedge prism 30 mm on a side and 80 mm long has its
 side pairs at 60°, its caps at 90° to them, and its two parallel caps
 beyond any inscribed ball's reach — no ball exceeds the cross-section's
@@ -1553,7 +1699,7 @@ either way. And where dismissing the undecidable pair would leave no wall
 at all, the two answers are a reading and an absence, no interval spans
 them, and the absence standard above already holds: *no wall* is a claim
 the survey cannot prove, and the body reads `Suspect` with
-`MinWallThickness` nil.
+`Wall.Outcome == ScalarUndecided`.
 
 **A spec is decided on the proven interval, never on the bare `Value`.** A
 `Measurement` proves its truth lies in `[Value − Bound, Value + Bound]` (core
@@ -1578,7 +1724,7 @@ the survey cannot prove, and the body reads `Suspect` with
 Worked, at the default `rel = 1e-3`, against a 1 mm tool, on a body whose
 every other answer is sound and in tolerance:
 
-| `MinWallThickness` | interval | the spec | the gate | body reads |
+| `Wall.Minimum` | interval | the spec | the gate | body reads |
 |---|---|---|---|---|
 | 0.5 mm, `Exact` | [0.5, 0.5] | decided thin | passes — `Exact` | **`Violating`** |
 | 0.2 ± 0.3 mm | [−0.1, 0.5] | decided thin | fails — 0.3 ≫ 2e-4 | **`Violating`** — a ±150% bound, and still a proven violation |
@@ -1636,7 +1782,8 @@ the violation, universally for the all-clear, the proof always on the claim:
 - **a face with a provenly opposing point is a proven undercut.** One point
   is enough, and by the surface's continuity it never comes alone: around it
   lies a region facing against the pull, material the pull cannot clear. The
-  face is listed, and a non-empty `Undercuts` makes its body `Violating`
+  face is listed in `Undercut.Faces`, and a nonempty listing sets
+  `Undercut.Assessment` to `AssessmentViolated`, making its body `Violating`
   exactly as a non-empty `Interferences` makes the report `Interfering` — at
   any coarseness, for the same reason a proven-thin wall does, because a
   proven interval on the wrong side of a spec is a proven violation. Listing
@@ -1677,11 +1824,13 @@ positive minimum draft — not mere clearance — is stating a spec
 `WithPullDirection` does not pose, and no option states, so no verdict
 enforces it (§2): the draft *allowance* is no such spec — it says which
 skins the wall reading counts as opposing (above), and demands nothing of
-the pull. And an **empty** `Undercuts` claims more than every held
-face settled — it is the absence answer of the standard above, quantifying
-over the part and not the survey. Exact analytic ranges prove it directly;
-complete faceted source ranges can also prove it. A missing or undecided range
-leaves the body `Suspect` with `Undercuts` empty.
+the pull. And `Undercut.Coverage == CoverageComplete` with an **empty**
+`Faces` claims more than every held face settled — it is the absence answer
+of the standard above, quantifying over the part and not the survey. Exact
+analytic ranges prove it directly; complete faceted source ranges can also
+prove it. A missing or undecided range leaves `Coverage` at
+`CoverageUndecided` (or `CoveragePartial` when some other face is confirmed)
+and the body `Suspect`.
 
 Aggregation is by **severity precedence — worst wins**:
 
@@ -1721,7 +1870,7 @@ lands. Together with the `Suspect` rung above it, the
 gate covers **every `Measurement`, every `VecMeasurement` and every `Box` the report
 carries** — and per core §5.3 those are all of them.
 
-`Report.Trustworthy()` is true **only** at `Report.Status == Sound`;
+`Report.Passed()` is true **only** at `Report.Status == Sound`;
 `Unverified` is false. A body
 proven invalid, a validity left undecided, an unresolved interference, a
 stated spec proven to fail or left undecided, an asked absence left unproven,

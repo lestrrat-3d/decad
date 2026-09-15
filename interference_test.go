@@ -67,7 +67,7 @@ func TestVerifyOffsetBoxesReportBoundedInterference(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
 	require.Equal(t, decad.Interfering, report.Status)
-	require.False(t, report.Trustworthy())
+	require.False(t, report.Passed())
 	require.Len(t, report.Interferences, 1)
 	require.Empty(t, report.Clearances, `an overlapping pair cannot also carry a clearance row`)
 	row := report.Interferences[0]
@@ -188,7 +188,7 @@ func TestVerifyAdmittedDisplacedPrismPairCarriesItsOwnBound(t *testing.T) {
 
 	// A bound this coarse cannot pass the tolerance gate, so the report says
 	// so rather than presenting the row as trustworthy.
-	require.False(t, report.Trustworthy())
+	require.False(t, report.Passed())
 	var overlap *decad.Diagnostic
 	for i, d := range report.Diagnostics {
 		if d.Code == decad.DiagMeasurementBeyondTolerance && d.Reading == decad.ReadingOverlapVolume {

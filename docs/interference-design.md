@@ -526,7 +526,7 @@ is uncertain; the operand skins are the proof reference.
 
 The gate affects the pair's trust finding, but status precedence remains
 `Interfering > Suspect`. A caller can inspect the row's `Exactness` and `Bound`
-even though `Trustworthy()` is already false because the bodies overlap.
+even though `Passed()` is already false because the bodies overlap.
 
 ## 9. Coverage and refusal
 
