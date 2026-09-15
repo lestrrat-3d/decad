@@ -642,3 +642,141 @@ func TestVerifyPublishDiagnosticFlattening(t *testing.T) {
 		}
 	}
 }
+
+// TestVerifyPublishValidBodyRegion replays the real 100x60x10 mm plate: a
+// proven solid publishes both its Region readings and its held topology
+// counts (proposal §9).
+func TestVerifyPublishValidBodyRegion(t *testing.T) {
+	t.Parallel()
+	body := rectangularPrism(t, 100, 60, 10)
+	res := publishBody(t, body)
+
+	require.Equal(t, validityValid, res.Validity.Outcome)
+	require.Empty(t, res.Validity.Diagnostics)
+	require.NotNil(t, res.Region)
+	require.True(t, res.Region.Volume.Value.Equal(units.CubicMillimeters(60000), 1e-9))
+	require.Equal(t, Exact, res.Region.Volume.Exactness)
+	require.Equal(t, r3.NewVec(50, 30, 5), res.Region.Centroid.Value)
+	require.Equal(t, 1, res.Topology.Lumps)
+	require.Equal(t, 0, res.Topology.Voids)
+}
+
+// TestVerifyPublishPlateWithHoleTopology replays the through-hole plate
+// behind TestVerifyPlateWithHole (verify_test.go): a through hole opens to
+// the outside, so it walls off no cavity — one lump, no void (proposal §9).
+func TestVerifyPublishPlateWithHoleTopology(t *testing.T) {
+	t.Parallel()
+	body := holePlateBody(t)
+	res := publishBody(t, body)
+	require.Equal(t, 1, res.Topology.Lumps)
+	require.Equal(t, 0, res.Topology.Voids)
+}
+
+// TestVerifyPublishRevolveVoid replays TestRevolveFullTurnHoleIsVoidShell
+// (revolve_test.go): a full-turn revolve of an annular rectangle with a
+// circular hole closes the hole into a toroidal void shell — one void
+// (proposal §9).
+func TestVerifyPublishRevolveVoid(t *testing.T) {
+	t.Parallel()
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 5, 10, 15)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(5, 10), 2)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			prof = p
+		}
+	}
+	require.NotNil(t, prof)
+	doc := New()
+	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
+	body, err := doc.Revolve(s, prof, axis, FullRevolution{})
+	require.NoError(t, err)
+
+	res := publishBody(t, body)
+	require.Equal(t, 1, res.Topology.Voids)
+}
+
+// requireSurveysBlockedByValidity asserts §9's blocking contract on a body
+// whose validity is not validityValid: every requested survey publishes its
+// Unavailable outcome plus exactly one local DiagSurveyPrerequisite naming
+// its own survey, and the body's underlying validity diagnostic
+// (validityCode) appears exactly once in the flattened inventory.
+func requireSurveysBlockedByValidity(t *testing.T, res *bodyResult, validityCode DiagnosticCode) {
+	t.Helper()
+	require.Nil(t, res.Region)
+
+	require.Equal(t, scalarUnavailable, res.Wall.Outcome)
+	require.Len(t, res.Wall.Diagnostics, 1)
+	require.Equal(t, DiagSurveyPrerequisite, res.Wall.Diagnostics[0].Code)
+	require.Equal(t, SurveyWall, res.Wall.Diagnostics[0].Survey)
+
+	require.Equal(t, coverageUnavailable, res.Undercut.Coverage)
+	require.Len(t, res.Undercut.Diagnostics, 1)
+	require.Equal(t, DiagSurveyPrerequisite, res.Undercut.Diagnostics[0].Code)
+	require.Equal(t, SurveyUndercut, res.Undercut.Diagnostics[0].Survey)
+
+	require.Equal(t, scalarUnavailable, res.ConcaveRadius.Outcome)
+	require.Len(t, res.ConcaveRadius.Diagnostics, 1)
+	require.Equal(t, DiagSurveyPrerequisite, res.ConcaveRadius.Diagnostics[0].Code)
+	require.Equal(t, SurveyConcaveRadius, res.ConcaveRadius.Diagnostics[0].Survey)
+
+	count := 0
+	for _, d := range res.Diagnostics {
+		if d.Code == validityCode {
+			count++
+		}
+	}
+	require.Equal(t, 1, count, "the underlying validity diagnostic appears exactly once")
+}
+
+// TestVerifyPublishInvalidValidityBlocksSurveys is private-mapping coverage
+// of publishBodyResult's validity gate, not an end-to-end public path:
+// verifyBody's invalid branch is unreachable through a live document body
+// (task-list §4 item 4), so this constructs &Body{} directly — no faces, so
+// auditBoundary refuses it outright (proposal §16 "Validity
+// invalid/undecided").
+func TestVerifyPublishInvalidValidityBlocksSurveys(t *testing.T) {
+	t.Parallel()
+	body := &Body{}
+	res := publishBody(t, body,
+		WithMinWallThickness(units.Millimeters(1)),
+		WithPullDirection(r3.NewVec(0, 0, 1)),
+		WithMinRadius(),
+	)
+
+	require.Equal(t, Unsound, res.Status)
+	require.Equal(t, validityInvalid, res.Validity.Outcome)
+	require.Equal(t, toleranceNotEvaluated, res.Area.Tolerance.State)
+	require.Equal(t, toleranceNotEvaluated, res.Bounds.Tolerance.State)
+	requireSurveysBlockedByValidity(t, res, DiagInvalidBody)
+}
+
+// TestVerifyPublishUndecidedValidityBlocksSurveys is private-mapping
+// coverage of publishBodyResult's validity gate, not an end-to-end public
+// path: verifyBody's undecided branch is unreachable through a live
+// document body (task-list §4 item 4), so this copies a real extruded
+// body's struct value and clears its payload, which keeps a clean boundary
+// but no build proof (proposal §16 "Validity invalid/undecided").
+func TestVerifyPublishUndecidedValidityBlocksSurveys(t *testing.T) {
+	t.Parallel()
+	built := rectangularPrism(t, 100, 60, 10)
+	shadow := *built
+	shadow.payload = nil
+	body := &shadow
+
+	res := publishBody(t, body,
+		WithMinWallThickness(units.Millimeters(1)),
+		WithPullDirection(r3.NewVec(0, 0, 1)),
+		WithMinRadius(),
+	)
+
+	require.Equal(t, Suspect, res.Status)
+	require.Equal(t, validityUndecided, res.Validity.Outcome)
+	requireSurveysBlockedByValidity(t, res, DiagUndecidedValidity)
+}
