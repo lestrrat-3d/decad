@@ -1175,7 +1175,7 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   displaced first result, then assert that `tryPrismUnion` returns
   `ok == false` without an analytic-resolution error.
 - Downstream chaining: fillet a corner of an analytically-unioned body and
-  read `MinWallThickness` on the result — both refuse today (SX9, all three
+  read `Wall.Minimum` on the result — both refuse today (SX9, all three
   surveys) on a mesh-path union of the same model, and both succeed here.
 - A second boolean consuming the first's result as operand B under a
   nonidentity re-expression carries B's prior displacement plus its new

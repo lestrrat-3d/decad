@@ -90,9 +90,9 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 		return undercutOutcome{}
 	}
 	// Non-nil from the start: an EMPTY listing is this survey's proven
-	// all-clear and a nil one is the undecided answer (BodyReport.Undercuts,
-	// verify.go), so the two shapes must stay distinguishable — the same
-	// distinction prismUndercuts already keeps.
+	// all-clear and a nil one is the undecided answer (BodyReport.Undercut.Faces,
+	// verify_publish.go), so the two shapes must stay distinguishable — the
+	// same distinction prismUndercuts already keeps.
 	faces := []*Face{}
 	undecided := false
 	for li, loop := range loops {
@@ -123,8 +123,9 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 
 	// The new patches: read each one's OWN built Face.NormalAt, walked in the
 	// payload's own deterministic patch order (Table BX row BX3), so the faces
-	// this survey reports — public output through Report.Bodies[i].Undercuts —
-	// come back in the same sequence on every call.
+	// this survey reports — public output through
+	// Report.Bodies[i].Undercut.Faces — come back in the same sequence on
+	// every call.
 	for _, patch := range cbp.patches {
 		f := roles[patch.role]
 		if f == nil {

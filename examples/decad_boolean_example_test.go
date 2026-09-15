@@ -99,7 +99,7 @@ func Example_decad_cut() {
 	// exact integral lands inside the proven bound of it.
 	fmt.Printf("faces: %d, lumps: %d\n", len(drilled.Faces()), len(drilled.Lumps()))
 	fmt.Printf("volume: %.2f mm^3 (%s, bound %.3f mm^3)\n", volMM, vol.Exactness, boundMM)
-	fmt.Printf("status: %s, trustworthy: %v\n", report.Status, report.Trustworthy())
+	fmt.Printf("status: %s, trustworthy: %v\n", report.Status, report.Passed())
 	fmt.Printf("recipe steps: %d\n", len(doc.Recipe().Steps))
 	// Output:
 	// faces: 7, lumps: 1

@@ -44,7 +44,7 @@ func Example_decad_quickstart() {
 		return
 	}
 
-	// 3. Verify and gate: Trustworthy() is true only for a Sound report —
+	// 3. Verify and gate: Passed() is true only for a Sound report —
 	// every body a proven solid and nothing left undecided.
 	report, err := doc.Verify(context.Background())
 	if err != nil {
@@ -58,7 +58,7 @@ func Example_decad_quickstart() {
 		return
 	}
 	fmt.Printf("volume: %s (%s)\n", vol.Value, vol.Exactness)
-	fmt.Printf("status: %s, trustworthy: %v\n", report.Status, report.Trustworthy())
+	fmt.Printf("status: %s, trustworthy: %v\n", report.Status, report.Passed())
 	// Output:
 	// volume: 60000 mm^3 (Exact)
 	// status: Sound, trustworthy: true

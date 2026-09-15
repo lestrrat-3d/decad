@@ -300,11 +300,11 @@ func TestFilletBoxAllConvexEdges(t *testing.T) {
 
 	// A convex fillet adds a convex cylinder — not a concave feature — so the
 	// minimum-radius survey rightly does not report it (Table D, D3).
-	rep, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	rep, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	require.Len(t, rep.Bodies, 1)
-	require.Nil(t, rep.Bodies[0].MinRadius, `a convex fillet is not a concave feature`)
-	require.True(t, rep.Trustworthy(), `the certified circular moment bracket keeps the bound within default tolerance`)
+	require.Nil(t, rep.Bodies[0].ConcaveRadius.Minimum, `a convex fillet is not a concave feature`)
+	require.True(t, rep.Passed(), `the certified circular moment bracket keeps the bound within default tolerance`)
 }
 
 func TestFilletRecipeAndRetire(t *testing.T) {
@@ -411,11 +411,11 @@ func TestFilletConcaveEdgeReadsMinRadius(t *testing.T) {
 	}
 	require.Equal(t, 1, cylinders)
 
-	rep, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	rep, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	require.Len(t, rep.Bodies, 1)
-	require.NotNil(t, rep.Bodies[0].MinRadius, `a concave fillet is a concave feature`)
-	got, err := rep.Bodies[0].MinRadius.Value.In(units.Millimeter)
+	require.NotNil(t, rep.Bodies[0].ConcaveRadius.Minimum, `a concave fillet is a concave feature`)
+	got, err := rep.Bodies[0].ConcaveRadius.Minimum.Value.In(units.Millimeter)
 	require.NoError(t, err)
 	require.InDelta(t, r, got, 1e-9, `the survey sees the fillet's radius`)
 }
@@ -682,7 +682,7 @@ func TestFilletClearOfHoleBuilds(t *testing.T) {
 
 	rep, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.True(t, rep.Trustworthy(), `the certified circular moment bracket keeps the bound within default tolerance`)
+	require.True(t, rep.Passed(), `the certified circular moment bracket keeps the bound within default tolerance`)
 }
 
 // plateWithDiskHole extrudes a 100×100 plate with a circular hole of radius rho
@@ -758,7 +758,7 @@ func TestFilletHoleWellInsideRoundedLoopBuilds(t *testing.T) {
 
 	rep, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.True(t, rep.Trustworthy(), `the certified circular moment bracket keeps the bound within default tolerance`)
+	require.True(t, rep.Passed(), `the certified circular moment bracket keeps the bound within default tolerance`)
 }
 
 // scaledDiskInCornerFillet builds a k-scaled plate whose (0,0) outer corner is

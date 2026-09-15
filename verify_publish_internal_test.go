@@ -11,19 +11,21 @@ import (
 )
 
 // This file tests verify_publish.go's assembler directly, in-package,
-// because bodyResult and its fields are unexported (task-list §PR-1). Every
-// fixture below is a real body built through the public Document/Body API —
-// no hand-assembled result stands in for a producer's own output.
+// because it drives verifyBody with a private verifyConfig — a fresh body
+// (task-list §4 item 4's fixtures) that never reaches the public Document.
+// Every other fixture below is a real body built through the public
+// Document/Body API — no hand-assembled result stands in for a producer's
+// own output.
 
 // publishBody folds opts through the real option resolver and effective
-// request, then runs evaluateBody on body — the same path Document.Verify
-// takes for one body — and returns the private bodyResult it publishes.
-func publishBody(t *testing.T, body *Body, opts ...VerifyOption) *bodyResult {
+// request, then runs verifyBody on body — the same path Document.Verify
+// takes for one body — and returns the BodyReport it publishes.
+func publishBody(t *testing.T, body *Body, opts ...VerifyOption) *BodyReport {
 	t.Helper()
 	cfg, err := resolveVerifyOptions(opts)
 	require.NoError(t, err)
 	req := effectiveVerifyRequest(cfg)
-	res, _, err := evaluateBody(t.Context(), body, cfg, req)
+	res, err := verifyBody(t.Context(), body, cfg, req)
 	require.NoError(t, err)
 	return res
 }
@@ -58,17 +60,17 @@ func TestVerifyPublishRectangularPrismPath(t *testing.T) {
 	require.True(t, res.Area.Value.Equal(units.SquareMillimeters(15200), 1e-9))
 	require.Equal(t, r3.NewVec(0, 0, 0), res.Bounds.Min)
 	require.Equal(t, r3.NewVec(100, 60, 10), res.Bounds.Max)
-	require.Equal(t, scalarNotRequested, res.Wall.Outcome)
+	require.Equal(t, ScalarNotRequested, res.Wall.Outcome)
 	require.Nil(t, res.Wall.Request)
-	require.Equal(t, assessmentNotEvaluated, res.Wall.Assessment)
-	require.Equal(t, scalarNotRequested, res.ConcaveRadius.Outcome)
+	require.Equal(t, AssessmentNotEvaluated, res.Wall.Assessment)
+	require.Equal(t, ScalarNotRequested, res.ConcaveRadius.Outcome)
 	require.Nil(t, res.ConcaveRadius.Minimum)
 
 	// Both core readings are exact on this evaluator's plate, so their
 	// zero bound passes without a computed Limit.
-	require.Equal(t, toleranceSatisfied, res.Area.Tolerance.State)
+	require.Equal(t, ToleranceSatisfied, res.Area.Tolerance.State)
 	require.Nil(t, res.Area.Tolerance.Limit)
-	require.Equal(t, toleranceSatisfied, res.Bounds.Tolerance.State)
+	require.Equal(t, ToleranceSatisfied, res.Bounds.Tolerance.State)
 	require.Nil(t, res.Bounds.Tolerance.Limit)
 }
 
@@ -81,16 +83,16 @@ func TestVerifyPublishMeasuredWall(t *testing.T) {
 	body := rectangularPrism(t, 100, 100, 100)
 
 	res := publishBody(t, body, WithMinWallThickness(units.Millimeters(1)))
-	require.Equal(t, scalarMeasured, res.Wall.Outcome)
+	require.Equal(t, ScalarMeasured, res.Wall.Outcome)
 	require.NotNil(t, res.Wall.Minimum)
 	require.True(t, res.Wall.Minimum.Value.Equal(units.Millimeters(100), 1e-9))
 	require.Equal(t, Exact, res.Wall.Minimum.Exactness)
-	require.Equal(t, assessmentMet, res.Wall.Assessment)
+	require.Equal(t, AssessmentMet, res.Wall.Assessment)
 	require.NotNil(t, res.Wall.Request)
 	require.True(t, res.Wall.Request.Minimum.Equal(units.Millimeters(1), 1e-9))
 
 	equality := publishBody(t, body, WithMinWallThickness(units.Millimeters(100)))
-	require.Equal(t, assessmentMet, equality.Wall.Assessment, "L >= T including equality is Met")
+	require.Equal(t, AssessmentMet, equality.Wall.Assessment, "L >= T including equality is Met")
 }
 
 // TestVerifyPublishViolatedWall replays TestWallThinPlateViolating's
@@ -100,10 +102,10 @@ func TestVerifyPublishViolatedWall(t *testing.T) {
 	t.Parallel()
 	body := rectangularPrism(t, 10, 10, 0.5)
 	res := publishBody(t, body, WithMinWallThickness(units.Millimeters(1)))
-	require.Equal(t, scalarMeasured, res.Wall.Outcome)
+	require.Equal(t, ScalarMeasured, res.Wall.Outcome)
 	require.NotNil(t, res.Wall.Minimum)
 	require.True(t, res.Wall.Minimum.Value.Equal(units.Millimeters(0.5), 1e-9))
-	require.Equal(t, assessmentViolated, res.Wall.Assessment)
+	require.Equal(t, AssessmentViolated, res.Wall.Assessment)
 }
 
 // TestVerifyPublishExactZeroWall replays TestWallKnifeEdgeExactZero's pinch
@@ -135,11 +137,11 @@ func TestVerifyPublishExactZeroWall(t *testing.T) {
 
 	for _, minimum := range []float64{1, 0.001} {
 		res := publishBody(t, body, WithMinWallThickness(units.Millimeters(minimum)))
-		require.Equal(t, scalarMeasured, res.Wall.Outcome)
+		require.Equal(t, ScalarMeasured, res.Wall.Outcome)
 		require.NotNil(t, res.Wall.Minimum)
 		require.Equal(t, 0.0, res.Wall.Minimum.Value.Base())
 		require.Equal(t, Exact, res.Wall.Minimum.Exactness)
-		require.Equal(t, assessmentViolated, res.Wall.Assessment, "minimum=%v mm", minimum)
+		require.Equal(t, AssessmentViolated, res.Wall.Assessment, "minimum=%v mm", minimum)
 	}
 }
 
@@ -176,9 +178,9 @@ func TestVerifyPublishAbsentWall(t *testing.T) {
 	t.Parallel()
 	body := wedgePrismBody(t)
 	res := publishBody(t, body, WithMinWallThickness(units.Millimeters(1)))
-	require.Equal(t, scalarAbsent, res.Wall.Outcome)
+	require.Equal(t, ScalarAbsent, res.Wall.Outcome)
 	require.Nil(t, res.Wall.Minimum)
-	require.Equal(t, assessmentMet, res.Wall.Assessment)
+	require.Equal(t, AssessmentMet, res.Wall.Assessment)
 	require.Equal(t, Sound, res.Status)
 }
 
@@ -188,8 +190,8 @@ func TestVerifyPublishAbsentWall(t *testing.T) {
 func TestVerifyPublishAbsentConcaveRadius(t *testing.T) {
 	t.Parallel()
 	body := rectangularPrism(t, 100, 60, 10)
-	res := publishBody(t, body, WithMinRadius())
-	require.Equal(t, scalarAbsent, res.ConcaveRadius.Outcome)
+	res := publishBody(t, body, WithConcaveRadius())
+	require.Equal(t, ScalarAbsent, res.ConcaveRadius.Outcome)
 	require.Nil(t, res.ConcaveRadius.Minimum)
 	require.Equal(t, Sound, res.Status)
 }
@@ -225,8 +227,8 @@ func holePlateBody(t *testing.T) *Body {
 func TestVerifyPublishMeasuredConcaveRadius(t *testing.T) {
 	t.Parallel()
 	body := holePlateBody(t)
-	res := publishBody(t, body, WithMinRadius())
-	require.Equal(t, scalarMeasured, res.ConcaveRadius.Outcome)
+	res := publishBody(t, body, WithConcaveRadius())
+	require.Equal(t, ScalarMeasured, res.ConcaveRadius.Outcome)
 	require.NotNil(t, res.ConcaveRadius.Minimum)
 	require.Equal(t, Exact, res.ConcaveRadius.Minimum.Exactness)
 	lo := res.ConcaveRadius.Minimum.Value.Base() - res.ConcaveRadius.Minimum.Bound.Base()
@@ -272,15 +274,15 @@ func TestVerifyPublishThresholdStraddle(t *testing.T) {
 	t.Parallel()
 	body := curvedWebPlateBody(t)
 	probe := publishBody(t, body, WithMinWallThickness(units.Millimeters(1)))
-	require.Equal(t, scalarMeasured, probe.Wall.Outcome)
+	require.Equal(t, ScalarMeasured, probe.Wall.Outcome)
 	require.NotNil(t, probe.Wall.Minimum)
 	require.Equal(t, Approximate, probe.Wall.Minimum.Exactness)
 	require.Positive(t, probe.Wall.Minimum.Bound.Base())
 	threshold := probe.Wall.Minimum.Value.Base()
 
 	res := publishBody(t, body, WithMinWallThickness(units.Millimeters(threshold)))
-	require.Equal(t, scalarMeasured, res.Wall.Outcome)
-	require.Equal(t, assessmentUndecided, res.Wall.Assessment)
+	require.Equal(t, ScalarMeasured, res.Wall.Outcome)
+	require.Equal(t, AssessmentUndecided, res.Wall.Assessment)
 }
 
 // axisBoxBody extrudes an axis-aligned x0,y0 to x1,y1 rectangle into doc.
@@ -338,7 +340,7 @@ func TestVerifyPublishCoarseReadingKeepsGeometry(t *testing.T) {
 	require.True(t, res.Area.Value.Equal(area.Value, 1e-9),
 		"the published geometry is the one Area() computed, regardless of tolerance")
 	require.Equal(t, area.Bound.Base(), res.Area.Bound.Base())
-	require.Equal(t, toleranceExceeded, res.Area.Tolerance.State)
+	require.Equal(t, ToleranceExceeded, res.Area.Tolerance.State)
 	require.NotNil(t, res.Area.Tolerance.Limit)
 }
 
@@ -402,9 +404,9 @@ func TestVerifyPublishUndercutCompleteAbsence(t *testing.T) {
 	t.Parallel()
 	for _, body := range []*Body{rectangularPrism(t, 100, 60, 10), holePlateBody(t)} {
 		res := publishBody(t, body, WithPullDirection(r3.NewVec(0, 0, 1)))
-		require.Equal(t, coverageComplete, res.Undercut.Coverage)
+		require.Equal(t, CoverageComplete, res.Undercut.Coverage)
 		require.Empty(t, res.Undercut.Faces)
-		require.Equal(t, assessmentMet, res.Undercut.Assessment)
+		require.Equal(t, AssessmentMet, res.Undercut.Assessment)
 		require.NotNil(t, res.Undercut.Request)
 	}
 }
@@ -415,9 +417,9 @@ func TestVerifyPublishUndercutCompleteViolation(t *testing.T) {
 	t.Parallel()
 	body := rectangularPrism(t, 100, 60, 10)
 	res := publishBody(t, body, WithPullDirection(r3.NewVec(1, 0, 1)))
-	require.Equal(t, coverageComplete, res.Undercut.Coverage)
+	require.Equal(t, CoverageComplete, res.Undercut.Coverage)
 	require.Len(t, res.Undercut.Faces, 2)
-	require.Equal(t, assessmentViolated, res.Undercut.Assessment)
+	require.Equal(t, AssessmentViolated, res.Undercut.Assessment)
 }
 
 // chamferedQuarterDiskBody replays capblend_survey_test.go's
@@ -474,9 +476,9 @@ func TestVerifyPublishUndercutPartialCoverage(t *testing.T) {
 	require.Equal(t, KindPlane, plane.Surface().Kind())
 
 	res := publishBody(t, body, WithPullDirection(r3.NewVec(1, 0, 0)))
-	require.Equal(t, coveragePartial, res.Undercut.Coverage)
+	require.Equal(t, CoveragePartial, res.Undercut.Coverage)
 	require.Contains(t, res.Undercut.Faces, plane)
-	require.Equal(t, assessmentViolated, res.Undercut.Assessment)
+	require.Equal(t, AssessmentViolated, res.Undercut.Assessment)
 
 	var violating, undecided bool
 	for _, d := range res.Undercut.Diagnostics {
@@ -528,9 +530,9 @@ func TestVerifyPublishUndercutUndecided(t *testing.T) {
 	t.Parallel()
 	body := freeformArchProfileBody(t)
 	res := publishBody(t, body, WithPullDirection(r3.NewVec(0, 0, 1)))
-	require.Equal(t, coverageUndecided, res.Undercut.Coverage)
+	require.Equal(t, CoverageUndecided, res.Undercut.Coverage)
 	require.Empty(t, res.Undercut.Faces)
-	require.Equal(t, assessmentUndecided, res.Undercut.Assessment)
+	require.Equal(t, AssessmentUndecided, res.Undercut.Assessment)
 }
 
 // TestVerifyPublishUndercutUnavailable replays planarBooleanBody's
@@ -540,9 +542,9 @@ func TestVerifyPublishUndercutUnavailable(t *testing.T) {
 	t.Parallel()
 	body := planarBooleanBody(t)
 	res := publishBody(t, body, WithPullDirection(r3.NewVec(0, 0, 1)))
-	require.Equal(t, coverageUnavailable, res.Undercut.Coverage)
+	require.Equal(t, CoverageUnavailable, res.Undercut.Coverage)
 	require.Empty(t, res.Undercut.Faces)
-	require.Equal(t, assessmentUndecided, res.Undercut.Assessment)
+	require.Equal(t, AssessmentUndecided, res.Undercut.Assessment)
 }
 
 // capBlendPlateBody extrudes a 100×60 plate by 20 mm and chamfers its whole
@@ -569,9 +571,9 @@ func TestVerifyPublishCapBlendWallStaged(t *testing.T) {
 	t.Parallel()
 	body := capBlendPlateBody(t)
 	res := publishBody(t, body, WithMinWallThickness(units.Millimeters(1)))
-	require.Equal(t, scalarUnavailable, res.Wall.Outcome)
+	require.Equal(t, ScalarUnavailable, res.Wall.Outcome)
 	require.Nil(t, res.Wall.Minimum)
-	require.Equal(t, assessmentUndecided, res.Wall.Assessment)
+	require.Equal(t, AssessmentUndecided, res.Wall.Assessment)
 
 	require.Len(t, res.Wall.Diagnostics, 1)
 	diag := res.Wall.Diagnostics[0]
@@ -595,7 +597,7 @@ func TestVerifyPublishToleranceReferenceUnavailable(t *testing.T) {
 	body := rectangularPrism(t, 10, 10, 10)
 
 	tr, diag := scalarToleranceVerdict(ReadingWall, SurveyWall, body, m, 1e-3, in.lengthReference)
-	require.Equal(t, toleranceUndecided, tr.State)
+	require.Equal(t, ToleranceUndecided, tr.State)
 	require.Nil(t, tr.Limit)
 	require.NotNil(t, diag)
 	require.Equal(t, DiagToleranceReferenceUnavailable, diag.Code)
@@ -651,7 +653,7 @@ func TestVerifyPublishValidBodyRegion(t *testing.T) {
 	body := rectangularPrism(t, 100, 60, 10)
 	res := publishBody(t, body)
 
-	require.Equal(t, validityValid, res.Validity.Outcome)
+	require.Equal(t, ValidityValid, res.Validity.Outcome)
 	require.Empty(t, res.Validity.Diagnostics)
 	require.NotNil(t, res.Region)
 	require.True(t, res.Region.Volume.Value.Equal(units.CubicMillimeters(60000), 1e-9))
@@ -703,25 +705,25 @@ func TestVerifyPublishRevolveVoid(t *testing.T) {
 }
 
 // requireSurveysBlockedByValidity asserts §9's blocking contract on a body
-// whose validity is not validityValid: every requested survey publishes its
+// whose validity is not ValidityValid: every requested survey publishes its
 // Unavailable outcome plus exactly one local DiagSurveyPrerequisite naming
 // its own survey, and the body's underlying validity diagnostic
 // (validityCode) appears exactly once in the flattened inventory.
-func requireSurveysBlockedByValidity(t *testing.T, res *bodyResult, validityCode DiagnosticCode) {
+func requireSurveysBlockedByValidity(t *testing.T, res *BodyReport, validityCode DiagnosticCode) {
 	t.Helper()
 	require.Nil(t, res.Region)
 
-	require.Equal(t, scalarUnavailable, res.Wall.Outcome)
+	require.Equal(t, ScalarUnavailable, res.Wall.Outcome)
 	require.Len(t, res.Wall.Diagnostics, 1)
 	require.Equal(t, DiagSurveyPrerequisite, res.Wall.Diagnostics[0].Code)
 	require.Equal(t, SurveyWall, res.Wall.Diagnostics[0].Survey)
 
-	require.Equal(t, coverageUnavailable, res.Undercut.Coverage)
+	require.Equal(t, CoverageUnavailable, res.Undercut.Coverage)
 	require.Len(t, res.Undercut.Diagnostics, 1)
 	require.Equal(t, DiagSurveyPrerequisite, res.Undercut.Diagnostics[0].Code)
 	require.Equal(t, SurveyUndercut, res.Undercut.Diagnostics[0].Survey)
 
-	require.Equal(t, scalarUnavailable, res.ConcaveRadius.Outcome)
+	require.Equal(t, ScalarUnavailable, res.ConcaveRadius.Outcome)
 	require.Len(t, res.ConcaveRadius.Diagnostics, 1)
 	require.Equal(t, DiagSurveyPrerequisite, res.ConcaveRadius.Diagnostics[0].Code)
 	require.Equal(t, SurveyConcaveRadius, res.ConcaveRadius.Diagnostics[0].Survey)
@@ -747,13 +749,13 @@ func TestVerifyPublishInvalidValidityBlocksSurveys(t *testing.T) {
 	res := publishBody(t, body,
 		WithMinWallThickness(units.Millimeters(1)),
 		WithPullDirection(r3.NewVec(0, 0, 1)),
-		WithMinRadius(),
+		WithConcaveRadius(),
 	)
 
 	require.Equal(t, Unsound, res.Status)
-	require.Equal(t, validityInvalid, res.Validity.Outcome)
-	require.Equal(t, toleranceNotEvaluated, res.Area.Tolerance.State)
-	require.Equal(t, toleranceNotEvaluated, res.Bounds.Tolerance.State)
+	require.Equal(t, ValidityInvalid, res.Validity.Outcome)
+	require.Equal(t, ToleranceNotEvaluated, res.Area.Tolerance.State)
+	require.Equal(t, ToleranceNotEvaluated, res.Bounds.Tolerance.State)
 	requireSurveysBlockedByValidity(t, res, DiagInvalidBody)
 }
 
@@ -773,10 +775,10 @@ func TestVerifyPublishUndecidedValidityBlocksSurveys(t *testing.T) {
 	res := publishBody(t, body,
 		WithMinWallThickness(units.Millimeters(1)),
 		WithPullDirection(r3.NewVec(0, 0, 1)),
-		WithMinRadius(),
+		WithConcaveRadius(),
 	)
 
 	require.Equal(t, Suspect, res.Status)
-	require.Equal(t, validityUndecided, res.Validity.Outcome)
+	require.Equal(t, ValidityUndecided, res.Validity.Outcome)
 	requireSurveysBlockedByValidity(t, res, DiagUndecidedValidity)
 }

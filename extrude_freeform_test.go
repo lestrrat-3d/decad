@@ -437,19 +437,15 @@ func TestExtrudeClosedSplineTwoLoopsAndSound(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
 	br := report.Bodies[0]
-	require.True(t, br.Solid)
-	require.True(t, br.Watertight)
-	require.True(t, br.Manifold)
-	require.False(t, br.SelfIntersecting)
+	require.Equal(t, decad.ValidityValid, br.Validity.Outcome)
 	require.NotEqual(t, decad.Unsound, br.Status,
 		"a loop-less closed NURBSSurface face would report Unsound; this body has two loops")
 }
 
 // TestExtrudeFreeformVerifySound asserts observable test 13: Verify on the
-// built fit-spline prism reports Solid/Watertight/Manifold, not
-// SelfIntersecting, a Volume matching the direct build, and — with the
-// tolerance-gate arm this increment depends on (#178) — no
-// DiagMeasurementBeyondTolerance at the default tolerance.
+// built fit-spline prism reports a valid body, a Region.Volume matching the
+// direct build, and — with the tolerance-gate arm this increment depends on
+// (#178) — no DiagMeasurementBeyondTolerance at the default tolerance.
 func TestExtrudeFreeformVerifySound(t *testing.T) {
 	t.Parallel()
 	s, p := fitSplineArchSketch(t)
@@ -463,12 +459,9 @@ func TestExtrudeFreeformVerifySound(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
 	br := report.Bodies[0]
-	require.True(t, br.Solid)
-	require.True(t, br.Watertight)
-	require.True(t, br.Manifold)
-	require.False(t, br.SelfIntersecting)
-	require.NotNil(t, br.Volume)
-	require.InDelta(t, directVolume.Value.Mag(), br.Volume.Value.Mag(), 1e-9)
+	require.Equal(t, decad.ValidityValid, br.Validity.Outcome)
+	require.NotNil(t, br.Region)
+	require.InDelta(t, directVolume.Value.Mag(), br.Region.Volume.Value.Mag(), 1e-9)
 
 	for _, diag := range report.Diagnostics {
 		require.NotEqual(t, decad.DiagMeasurementBeyondTolerance, diag.Code,
@@ -993,8 +986,8 @@ func TestFreeformPrismClearanceUndecided(t *testing.T) {
 	require.NotEqual(t, decad.Sound, report.Status)
 }
 
-// TestFreeformPrismMinWallThicknessUndecided pins WithMinWallThickness: a
-// nil BodyReport.MinWallThickness with DiagUndecidedWall, never a silent
+// TestFreeformPrismMinWallThicknessUndecided pins WithMinWallThickness: an
+// Undecided BodyReport.Wall.Outcome with DiagUndecidedWall, never a silent
 // pass (survey.go's errFreeformSection through survey.go's DiagUndecidedWall).
 func TestFreeformPrismMinWallThicknessUndecided(t *testing.T) {
 	t.Parallel()
@@ -1006,14 +999,16 @@ func TestFreeformPrismMinWallThicknessUndecided(t *testing.T) {
 	require.Len(t, report.Bodies, 1)
 
 	br := report.Bodies[0]
-	require.Nil(t, br.MinWallThickness)
+	require.Equal(t, decad.ScalarUndecided, br.Wall.Outcome)
+	require.Nil(t, br.Wall.Minimum)
 	require.NotEqual(t, decad.Sound, br.Status)
 	require.True(t, hasDiagnostic(report, decad.DiagUndecidedWall))
 }
 
-// TestFreeformPrismUndercutsUndecided pins WithPullDirection: an EMPTY
-// BodyReport.Undercuts is the proven all-clear only inside a Sound report
-// (verify.go's BodyReport doc comment); here it must come with
+// TestFreeformPrismUndercutsUndecided pins WithPullDirection: an Undecided
+// BodyReport.Undercut.Coverage with an EMPTY Faces list — never Complete,
+// which would read as a proven all-clear the producer never certified
+// (verify_result.go's BodyReport doc comment); here it must come with
 // DiagUndecidedUndercut and a non-Sound status, never read as a pass.
 func TestFreeformPrismUndercutsUndecided(t *testing.T) {
 	t.Parallel()
@@ -1025,25 +1020,27 @@ func TestFreeformPrismUndercutsUndecided(t *testing.T) {
 	require.Len(t, report.Bodies, 1)
 
 	br := report.Bodies[0]
-	require.Empty(t, br.Undercuts)
+	require.Equal(t, decad.CoverageUndecided, br.Undercut.Coverage)
+	require.Empty(t, br.Undercut.Faces)
 	require.NotEqual(t, decad.Sound, br.Status)
 	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
 }
 
-// TestFreeformPrismMinRadiusUndecided pins WithMinRadius: a nil
-// BodyReport.MinRadius with DiagUndecidedMinRadius, never a silent "no
-// concave feature" pass (survey.go).
+// TestFreeformPrismMinRadiusUndecided pins WithConcaveRadius: an Undecided
+// BodyReport.ConcaveRadius.Outcome with DiagUndecidedMinRadius, never a
+// silent "no concave feature" pass (survey.go).
 func TestFreeformPrismMinRadiusUndecided(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	freeformArchBody(t, doc)
 
-	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	report, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
 
 	br := report.Bodies[0]
-	require.Nil(t, br.MinRadius)
+	require.Equal(t, decad.ScalarUndecided, br.ConcaveRadius.Outcome)
+	require.Nil(t, br.ConcaveRadius.Minimum)
 	require.NotEqual(t, decad.Sound, br.Status)
 	require.True(t, hasDiagnostic(report, decad.DiagUndecidedMinRadius))
 }

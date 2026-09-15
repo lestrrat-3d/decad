@@ -1688,17 +1688,20 @@ precedence; and one bit an agent gates on. Deliberately mirrors
 ```go
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, error)
 
-func (r *Report) Trustworthy() bool // the single bit to gate on
+func (r *Report) Passed() bool                            // the single bit to gate on
+func (r *Report) ForBody(body *Body) (*BodyReport, error) // exact-identity lookup
 ```
 
-The report vocabulary — `Report`, `BodyReport`, `Status` and its severity
-precedence, and the `VerifyOption` set including `WithTolerance` — and the
-tolerance gate that judges every `Exactness` and `Bound` the report carries are
-specified in `docs/verification-design.md`. Its §1.2 also owns `Verify`'s
-public cost warning and caller-deadline guidance. The non-mutating proof and
-bounded volume behind every `Interference` row are specified in
+The report vocabulary — `Report`, `BodyReport`, the per-survey result records
+(`WallResult`, `UndercutResult`, `ConcaveRadiusResult`, `ValidityResult`,
+`RegionReadings`), `Status` and its severity precedence, and the
+`VerifyOption` set including `WithTolerance` — and the tolerance gate that
+judges every `Exactness` and `Bound` the report carries are specified in
+`docs/verification-design.md`. Its §1.2 also owns `Verify`'s public cost
+warning and caller-deadline guidance. The non-mutating proof and bounded
+volume behind every `Interference` row are specified in
 `docs/interference-design.md`. `Status` reserves zero as `Unverified`, so a
-zero-value `Report` fails `Trustworthy`; every report and body report returned
+zero-value `Report` fails `Passed`; every report and body report returned
 by `Verify` is explicitly initialized to a decided status. What the core
 contract pins down:
 
@@ -1713,8 +1716,8 @@ contract pins down:
 - **Every bounded result the report carries is judged.** A `Measurement`, a
   `VecMeasurement` or a `Box` (§5.3) whose `Bound` is beyond the caller's
   tolerance makes the report `Suspect` — on a body or on a pair, nothing is
-  exempt — and `Report.Trustworthy()` is true only when the whole report is
-  `Sound`.
+  exempt — and `Report.Passed()` is true only when the whole report is
+  `Sound`; it does not imply that every optional survey ran.
 - **`Verify` returns structured diagnostics.** On a report returned by
   `Verify`, `Report.Diagnostics` is one
   branchable `Diagnostic` per reason the report is not `Sound` — a reading
@@ -1726,13 +1729,14 @@ contract pins down:
   `SurveyUndercut` / `SurveyConcaveRadius`), set even when the reason names no
   bounded reading, so a caller distinguishes which survey failed without
   parsing `Message` text; every core or pair reason carries `SurveyNone`. The
-  slice is empty exactly when the report is `Sound`, so an agent reads the
-  reasons instead of reconstructing them. Every existing field and
-  `Trustworthy()` are unchanged; the slice is additive.
+  slice is empty exactly when the report is `Sound`, and the same equivalence
+  holds per body for `BodyReport.Diagnostics`, so an agent reads the reasons
+  instead of reconstructing them.
   `docs/verification-design.md` §1.1 owns its shape.
 
-Fusion answers **none** of `Watertight` (with diagnostics), `Manifold`,
-`SelfIntersecting`, `MinWallThickness` (B-rep), `Undercuts`, or `MinRadius`. That
+Fusion answers **none** of a single validity verdict (with diagnostics), an
+explicit wall-survey outcome and interval (B-rep), a confirmed-undercut list
+with its own coverage state, or a concave-radius outcome and interval. That
 gap is decad's mandate.
 
 
@@ -1776,7 +1780,10 @@ to make that mechanical.
   current state — `Profile.IsStale`, §7), `ErrRetiredBody` (an
   operation, or an extent, was handed a body the document has retired, §6),
   `ErrUnresolvedBody` (a `StepRef` was passed as a `BodyRef` to a feature call,
-  where a live `*Body` is required, §6.2), `ErrNegativeMagnitude` (a magnitude was
+  where a live `*Body` is required, §6.2), `ErrBodyReportNotFound`
+  (`Report.ForBody` found no entry for the requested body, including a body
+  foreign to the report's own document; `docs/verification-design.md`),
+  `ErrNegativeMagnitude` (a magnitude was
   given as a negative value; magnitudes are non-negative and sense is enumerated,
   §8.1), `ErrUnrecordableProfile` (a feature was handed a profile whose boundary
   contains a `Partial` fragment `sketch` could not certify — `TExact == false`,

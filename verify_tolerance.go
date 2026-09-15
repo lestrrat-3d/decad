@@ -82,26 +82,26 @@ func requiredThreshold(relRef float64, sample units.Value) *units.Value {
 // accepted a nonzero bound against a usable reference, Exceeded with that
 // Limit when the gate compared and rejected it, and Undecided with a nil
 // Limit when a nonzero bound had no usable reference.
-func judgeTolerance(pass, haveRef bool, rel, ref float64, sample units.Value) toleranceResult {
+func judgeTolerance(pass, haveRef bool, rel, ref float64, sample units.Value) ToleranceResult {
 	if !haveRef {
 		if pass {
-			return toleranceResult{State: toleranceSatisfied}
+			return ToleranceResult{State: ToleranceSatisfied}
 		}
-		return toleranceResult{State: toleranceUndecided}
+		return ToleranceResult{State: ToleranceUndecided}
 	}
 	limit := requiredThreshold(rel*ref, sample)
 	if pass {
-		return toleranceResult{State: toleranceSatisfied, Limit: limit}
+		return ToleranceResult{State: ToleranceSatisfied, Limit: limit}
 	}
-	return toleranceResult{State: toleranceExceeded, Limit: limit}
+	return ToleranceResult{State: ToleranceExceeded, Limit: limit}
 }
 
 // toleranceDiagnostic picks DiagMeasurementBeyondTolerance for an Exceeded
 // verdict — a known reference rejected the bound — or
 // DiagToleranceReferenceUnavailable for an Undecided one — a nonzero bound
 // had no usable reference (proposal §10). Both contribute Suspect.
-func toleranceDiagnostic(tr toleranceResult) DiagnosticCode {
-	if tr.State == toleranceUndecided {
+func toleranceDiagnostic(tr ToleranceResult) DiagnosticCode {
+	if tr.State == ToleranceUndecided {
 		return DiagToleranceReferenceUnavailable
 	}
 	return DiagMeasurementBeyondTolerance
@@ -111,7 +111,7 @@ func toleranceDiagnostic(tr toleranceResult) DiagnosticCode {
 // tolerance gate (proposal §8), returning the diagnostic to emit when its
 // state is not Satisfied, nil otherwise. Survey identifies which optional
 // body survey this reading belongs to — SurveyNone for a core reading.
-func scalarToleranceVerdict(reading ReadingKind, survey SurveyKind, body *Body, m Measurement, rel float64, reference measurementReference) (toleranceResult, *Diagnostic) {
+func scalarToleranceVerdict(reading ReadingKind, survey SurveyKind, body *Body, m Measurement, rel float64, reference measurementReference) (ToleranceResult, *Diagnostic) {
 	pass, ref, haveRef := scalarToleranceRef(m, rel, reference)
 	tr := judgeTolerance(pass, haveRef, rel, ref, m.Value)
 	if pass {
@@ -137,7 +137,7 @@ func scalarToleranceVerdict(reading ReadingKind, survey SurveyKind, body *Body, 
 
 // boundsToleranceVerdict is scalarToleranceVerdict's ObservedBox counterpart,
 // for the Bounds reading (always SurveyNone: bounds is a core reading).
-func boundsToleranceVerdict(body *Body, box Box, rel float64, reference func() (float64, bool)) (toleranceResult, *Diagnostic) {
+func boundsToleranceVerdict(body *Body, box Box, rel float64, reference func() (float64, bool)) (ToleranceResult, *Diagnostic) {
 	pass, ref, haveRef := boundedToleranceRef(box.Bound.Base(), rel, reference)
 	tr := judgeTolerance(pass, haveRef, rel, ref, box.Bound)
 	if pass {
@@ -163,7 +163,7 @@ func boundsToleranceVerdict(body *Body, box Box, rel float64, reference func() (
 // centroidToleranceVerdict is scalarToleranceVerdict's ObservedVec
 // counterpart, for the Centroid reading (always SurveyNone: centroid is a
 // core reading).
-func centroidToleranceVerdict(body *Body, cen VecMeasurement, rel float64, reference func() (float64, bool)) (toleranceResult, *Diagnostic) {
+func centroidToleranceVerdict(body *Body, cen VecMeasurement, rel float64, reference func() (float64, bool)) (ToleranceResult, *Diagnostic) {
 	pass, ref, haveRef := boundedToleranceRef(cen.Bound.Base(), rel, reference)
 	tr := judgeTolerance(pass, haveRef, rel, ref, cen.Bound)
 	if pass {
@@ -303,15 +303,15 @@ type bodyReadingSet struct {
 }
 
 // bodyReadingVerdicts is bodyReadingDiagnostics' per-reading tolerance
-// verdict (proposal §8): the zero value's toleranceNotEvaluated stands for a
+// verdict (proposal §8): the zero value's ToleranceNotEvaluated stands for a
 // reading bodyReadingSet did not carry.
 type bodyReadingVerdicts struct {
-	Area     toleranceResult
-	Bounds   toleranceResult
-	Volume   toleranceResult
-	Centroid toleranceResult
-	Wall     toleranceResult
-	Radius   toleranceResult
+	Area     ToleranceResult
+	Bounds   ToleranceResult
+	Volume   ToleranceResult
+	Centroid ToleranceResult
+	Wall     ToleranceResult
+	Radius   ToleranceResult
 }
 
 // bodyReadingDiagSet is bodyReadingDiagnostics' diagnostics, split by which
@@ -348,7 +348,7 @@ func (in *bodyToleranceInputs) readingDiagnostics(r bodyReadingSet, rel float64)
 	var out bodyReadingDiagSet
 	var verdicts bodyReadingVerdicts
 
-	scalar := func(reading ReadingKind, survey SurveyKind, m Measurement, reference measurementReference) (toleranceResult, *Diagnostic) {
+	scalar := func(reading ReadingKind, survey SurveyKind, m Measurement, reference measurementReference) (ToleranceResult, *Diagnostic) {
 		return scalarToleranceVerdict(reading, survey, in.body, m, rel, reference)
 	}
 

@@ -351,7 +351,7 @@ func TestCapBlendNestingRefusalKeepsDegenerate(t *testing.T) {
 // "deterministic patch order" survives into the DX7 survey's public output. A
 // straight-down pull catches all four end-cap bevels of the plate, so the
 // reported sequence IS the payload's own patch order; a caller may diff or
-// golden-test Report.Bodies[i].Undercuts, so repeated calls must agree.
+// golden-test Report.Bodies[i].Undercut.Faces, so repeated calls must agree.
 func TestCapBlendUndercutOrderIsDeterministic(t *testing.T) {
 	t.Parallel()
 	_, box := capBlendBox(t)
@@ -369,8 +369,8 @@ func TestCapBlendUndercutOrderIsDeterministic(t *testing.T) {
 		rep, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, -1)))
 		require.NoError(t, err)
 		require.Len(t, rep.Bodies, 1)
-		got := make([]string, 0, len(rep.Bodies[0].Undercuts))
-		for _, f := range rep.Bodies[0].Undercuts {
+		got := make([]string, 0, len(rep.Bodies[0].Undercut.Faces))
+		for _, f := range rep.Bodies[0].Undercut.Faces {
 			require.Len(t, f.Origins(), 1)
 			got = append(got, f.Origins()[0].Role)
 		}
@@ -429,7 +429,7 @@ func TestCapBlendConePatchKeepsTaperAtHugeRadius(t *testing.T) {
 	rep, err := chamfered.Document().Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, -1)))
 	require.NoError(t, err)
 	require.Len(t, rep.Bodies, 1)
-	require.Equal(t, []*decad.Face{patch}, rep.Bodies[0].Undercuts,
+	require.Equal(t, []*decad.Face{patch}, rep.Bodies[0].Undercut.Faces,
 		`the tapered band opposes a pull away from the chamfered end`)
 }
 

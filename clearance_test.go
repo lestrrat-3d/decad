@@ -95,7 +95,7 @@ func TestClearanceCubesDiagonalOffset(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 	requireExactGap(t, report, math.Sqrt(13))
 }
 
@@ -141,7 +141,7 @@ func TestClearanceStopBuiltStackTouching(t *testing.T) {
 	report, err = doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 	requireExactGap(t, report, 0)
 }
 
@@ -563,7 +563,7 @@ func TestClearanceRodPiercingBallIsNeverSound(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
 	require.Equal(t, decad.Suspect, report.Status, `an interpenetrating pair is never Sound`)
-	require.False(t, report.Trustworthy())
+	require.False(t, report.Passed())
 	require.Empty(t, report.Clearances, `no gap exists, so no row may claim one`)
 }
 

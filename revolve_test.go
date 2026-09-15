@@ -341,7 +341,7 @@ func TestRevolveSphere(t *testing.T) {
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.Suspect, report.Status)
-	require.False(t, report.Trustworthy())
+	require.False(t, report.Passed())
 }
 
 func TestRevolveTorus(t *testing.T) {
@@ -1227,7 +1227,7 @@ func TestRevolveFullTurnHoleIsVoidShell(t *testing.T) {
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.Suspect, report.Status)
-	require.Equal(t, 1, report.Bodies[0].Voids)
+	require.Equal(t, 1, report.Bodies[0].Topology.Voids)
 }
 
 func TestRevolvePartialSweepWithHole(t *testing.T) {
@@ -1280,11 +1280,10 @@ func TestRevolveVerifySound(t *testing.T) {
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.Suspect, report.Status)
-	require.False(t, report.Trustworthy())
+	require.False(t, report.Passed())
 	require.Len(t, report.Bodies, 1)
-	require.True(t, report.Bodies[0].Watertight)
-	require.True(t, report.Bodies[0].Manifold)
-	require.Equal(t, decad.Approximate, report.Bodies[0].Exactness)
+	require.Equal(t, decad.ValidityValid, report.Bodies[0].Validity.Outcome)
+	require.Equal(t, decad.Approximate, report.Bodies[0].Area.Exactness)
 }
 
 func TestRevolveRejectsSpindleTorusArc(t *testing.T) {

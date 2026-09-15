@@ -211,7 +211,7 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 	if s > 0 {
 		// The section limit: P ⊖ t is non-empty exactly when t is strictly less
 		// than the section's inradius, which survey2d.go computes exactly
-		// (docs/modify-design.md §8, the same reading MinWallThickness answers).
+		// (docs/modify-design.md §8, the same reading Wall.Minimum answers).
 		inradius, err := sectionInradius(offsetBudget, pp.profile)
 		if err != nil {
 			return nil, err
@@ -359,7 +359,7 @@ func classifyRemovedCaps(b *Body, removed []*Face) (start, end bool, err error) 
 
 // sectionInradius is the largest inscribed disk of a recorded section — the
 // 2D inradius survey2d.go computes as part of the wall survey
-// (docs/modify-design.md §8, the reading that answers MinWallThickness). S18
+// (docs/modify-design.md §8, the reading that answers Wall.Minimum). S18
 // checks the candidate-family count before entering the kernel and shares one
 // fixed work budget across its streamed generation and validation. An
 // undecided or over-budget build-time gate is ErrUnsupported: it has no

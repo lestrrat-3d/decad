@@ -76,7 +76,7 @@ document holds, and a refused call produced none. The staging split of
 evaluator §11 is exactly this: an intent the evaluator cannot **build** is an
 error at the call; only a question it cannot **answer** on a body it did build
 reads `Suspect`. Table D (§12) names the remaining staged cup question: its
-clearance against another body (D6). The exact `MinWallThickness` theorem (D1)
+clearance against another body (D6). The exact wall-thickness theorem (D1)
 is implemented. The clearance proof and implementation order live in payload
 verification §3; until that row lands, the existing `Suspect` staging remains.
 
@@ -562,7 +562,7 @@ because each needs the one before it to have passed.**
   - the **section** limit: `P ⊖ t` is non-empty exactly when `t` is strictly less
     than the section's **inradius** — the radius of its largest inscribed disk,
     which `survey2d.go` already computes **exactly** as part of the wall survey.
-    The reading that refuses is the same one that answers `MinWallThickness`;
+    The reading that refuses is the same one that answers `Wall.Minimum`;
   - the **height** limit: the wall behind a **kept** cap is a floor `t` thick, so
     the cavity is swept over `[z0 + t, z1]` (B5) and is non-empty exactly when `t`
     is strictly less than the sweep's height `h`. A wide, shallow section clears
@@ -780,7 +780,7 @@ payload class.
 
 | D | Consumer | Reads | B1 — filleted / chamfered | B2 / B3 — a tube | B5 / B6 — a cup |
 |---|---|---|---|---|---|
-| **D1** | `prismWall` + `survey2d` (`MinWallThickness`) | the payload only | works unchanged: the rewritten section is a section, the height is the receiver's; the reading is `Exact` only where it is proven exactly representable — a material pinch or a sweep height with no axial displacement — and otherwise carries the proven bound `survey2d`'s own candidate arithmetic derives | works unchanged: a tube **is** a prism over an annular section | payload verification §4's morphology recheck returns a reading: zero for an allowance-qualified material pinch, otherwise the shell thickness `t` — `Exact` only when converting `t` to millimetres was itself exact, otherwise carrying that conversion's own proven displacement; a failed recheck reads `Suspect` |
+| **D1** | `prismWall` + `survey2d` (`Wall`) | the payload only | works unchanged: the rewritten section is a section, the height is the receiver's; the reading is `Exact` only where it is proven exactly representable — a material pinch or a sweep height with no axial displacement — and otherwise carries the proven bound `survey2d`'s own candidate arithmetic derives | works unchanged: a tube **is** a prism over an annular section | payload verification §4's morphology recheck returns a reading: zero for an allowance-qualified material pinch, otherwise the shell thickness `t` — `Exact` only when converting `t` to millimetres was itself exact, otherwise carrying that conversion's own proven displacement; a failed recheck reads `Suspect` |
 | **D2** | `prismUndercuts` | the payload **and the roles** — it looks each payload walk's face up by `side(i,j)` on the body's own step | works unchanged (§11): every wall of the result, blends included, carries its `side(i,j)` role in the result's index space | works unchanged | a cup reading lands with the cup payload: the same per-face exact normal ranges over the faces of B5/B6, mapped by their roles |
 | **D3** | `prismMinRadius` | the payload only | works unchanged: a fillet of a **concave** edge is a concave arc of the section, and its radius is read; a fillet of a convex edge adds a convex cylinder, which is not a concave feature and rightly does not appear | works unchanged: the cavity loop's walls are read like any hole wall | a cup reading lands with the payload: the same walk over the outer and the cavity section. The sharp concave edge where the wall meets the floor carries no radius — the survey reads faces' principal radii, and a spec about the *edges* is one no option states (verification §2) |
 | **D4** | `Tessellate` → `STL` / `OBJ` | the payload **and the roles** — `docs/tessellation-design.md` owns the chording, source-face map, and proof bounds | works by tessellation design §§3–5: blend cylinders are ordinary circular section walks | works by the same prism path | works by tessellation design §6: every outer/cavity loop is shared by its walls, floors, and rim band |

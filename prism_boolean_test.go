@@ -502,7 +502,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
-	require.NotNil(t, report.Bodies[0].MinWallThickness)
+	require.NotNil(t, report.Bodies[0].Wall.Minimum)
 
 	// A cut-bearing merge of the same two shapes carries §7's displacement, and
 	// both readings withhold. The refusal names the displacement rather than
@@ -521,7 +521,8 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	cutReport, err := cutDoc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	require.Len(t, cutReport.Bodies, 1)
-	require.Nil(t, cutReport.Bodies[0].MinWallThickness)
+	require.Equal(t, decad.ScalarUndecided, cutReport.Bodies[0].Wall.Outcome)
+	require.Nil(t, cutReport.Bodies[0].Wall.Minimum)
 
 	// Contrast: a mesh-path union — two boxes with disjoint z ranges, so the
 	// boolean itself succeeds as a 2-lump facetedPayload — refuses both
@@ -543,7 +544,8 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	meshReport, err := meshDoc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	require.Len(t, meshReport.Bodies, 1)
-	require.Nil(t, meshReport.Bodies[0].MinWallThickness)
+	require.Equal(t, decad.ScalarUnavailable, meshReport.Bodies[0].Wall.Outcome)
+	require.Nil(t, meshReport.Bodies[0].Wall.Minimum)
 }
 
 // This file is design A7's own acceptance fixture: the analytic prism
@@ -664,7 +666,7 @@ func TestPrismUnionCoplanarCircleLensBounds(t *testing.T) {
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)
 			require.Equal(t, decad.Sound, report.Status)
-			require.True(t, report.Trustworthy())
+			require.True(t, report.Passed())
 			require.Empty(t, report.Diagnostics)
 		})
 	}

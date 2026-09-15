@@ -332,7 +332,7 @@ func TestClearanceOracleOverlapNeverSound(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEqualf(t, decad.Sound, report.Status,
 			"%s: an interpenetrating pair reported Sound", tag)
-		require.Falsef(t, report.Trustworthy(), "%s: an overlapping pair is Trustworthy", tag)
+		require.Falsef(t, report.Passed(), "%s: an overlapping pair passed verification", tag)
 		require.Emptyf(t, report.Clearances, "%s: an overlapping pair fabricated a clearance row", tag)
 	}
 
@@ -395,7 +395,7 @@ func TestClearanceOracleWellSeparatedSound(t *testing.T) {
 		report, err := doc.Verify(t.Context(), decad.WithClearances())
 		require.NoError(t, err)
 		require.Contains(t, []decad.Status{decad.Sound, decad.Suspect}, report.Status)
-		require.Equal(t, report.Status == decad.Sound, report.Trustworthy())
+		require.Equal(t, report.Status == decad.Sound, report.Passed())
 		require.Len(t, report.Clearances, 1)
 		lo, _ := clearanceInterval(report.Clearances[0])
 		require.Greater(t, lo, 0.0, "a well-separated pair must prove a positive gap")

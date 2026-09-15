@@ -83,7 +83,7 @@ func TestExtrudeThroughAll(t *testing.T) {
 	// stop-built bodies are ordinary analytic prisms.
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.True(t, report.Trustworthy())
+	require.True(t, report.Passed())
 	for _, br := range report.Bodies {
 		require.Equal(t, decad.Sound, br.Status)
 	}

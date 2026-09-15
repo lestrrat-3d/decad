@@ -589,7 +589,7 @@ func checkRevolveBody(t *testing.T, body *decad.Body, su setup, ap axisPlacement
 	report, err := body.Document().Verify(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.Suspect, report.Status, "%s has bounded mass results", su.name)
-	require.False(t, report.Trustworthy())
+	require.False(t, report.Passed())
 }
 
 // requireOutward asserts f's outward normal at `at` points out of the solid: a

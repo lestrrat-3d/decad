@@ -47,7 +47,7 @@ func Example_decad_verify_surveys() {
 		return
 	}
 	plate := report.Bodies[0]
-	fmt.Printf("plate: %s, wall %s (%s)\n", plate.Status, plate.MinWallThickness.Value, plate.MinWallThickness.Exactness)
+	fmt.Printf("plate: %s, wall %s (%s)\n", plate.Status, plate.Wall.Minimum.Value, plate.Wall.Minimum.Exactness)
 
 	// A 100 mm cube: its edges sit at 90°, past every legal draft
 	// allowance, so its only spanning ball is its center's 100 mm slab.
@@ -62,7 +62,7 @@ func Example_decad_verify_surveys() {
 		return
 	}
 	block := report.Bodies[0]
-	fmt.Printf("cube: %s, wall %s, trustworthy %v\n", block.Status, block.MinWallThickness.Value, report.Trustworthy())
+	fmt.Printf("cube: %s, wall %s, trustworthy %v\n", block.Status, block.Wall.Minimum.Value, report.Passed())
 
 	// The cube under a +z pull has no undercut: every wall is exactly
 	// perpendicular — the pull slides along it — and the empty listing is a
@@ -73,14 +73,14 @@ func Example_decad_verify_surveys() {
 		fmt.Printf("failed to verify: %s\n", err)
 		return
 	}
-	fmt.Printf("pull +z: %s, undercuts %d\n", report.Status, len(report.Bodies[0].Undercuts))
+	fmt.Printf("pull +z: %s, undercuts %d\n", report.Status, len(report.Bodies[0].Undercut.Faces))
 
 	report, err = cube.Verify(context.Background(), decad.WithPullDirection(r3.NewVec(1, 0, 1)))
 	if err != nil {
 		fmt.Printf("failed to verify: %s\n", err)
 		return
 	}
-	fmt.Printf("pull tilted: %s, undercuts %d\n", report.Status, len(report.Bodies[0].Undercuts))
+	fmt.Printf("pull tilted: %s, undercuts %d\n", report.Status, len(report.Bodies[0].Undercut.Faces))
 
 	// A 100×60×20 mm plate with two r=1 mm holes close enough together that
 	// the web between them — hypot(3,3) − 2 = 3√2 − 2 mm — is the tightest
@@ -120,19 +120,19 @@ func Example_decad_verify_surveys() {
 		return
 	}
 	web := report.Bodies[0]
-	value, err := web.MinWallThickness.Value.In(units.Millimeter)
+	value, err := web.Wall.Minimum.Value.In(units.Millimeter)
 	if err != nil {
 		fmt.Printf("failed to read the wall value: %s\n", err)
 		return
 	}
-	bound, err := web.MinWallThickness.Bound.In(units.Millimeter)
+	bound, err := web.Wall.Minimum.Bound.In(units.Millimeter)
 	if err != nil {
 		fmt.Printf("failed to read the wall bound: %s\n", err)
 		return
 	}
 	truth := 3*math.Sqrt(2) - 2
 	encloses := value-bound <= truth && truth <= value+bound
-	fmt.Printf("web: %s, exactness %s, interval encloses the truth %v\n", web.Status, web.MinWallThickness.Exactness, encloses)
+	fmt.Printf("web: %s, exactness %s, interval encloses the truth %v\n", web.Status, web.Wall.Minimum.Exactness, encloses)
 	// Output:
 	// plate: Violating, wall 0.5 mm (Exact)
 	// cube: Sound, wall 100 mm, trustworthy true

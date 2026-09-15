@@ -6,11 +6,13 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the vocabulary Document.Verify's report is written in:
-// the three enumerations a reading is judged by (Status, ReadingKind,
-// DiagnosticCode), the Diagnostic a failed judgement records, and the
-// Report/BodyReport shapes the whole verification returns. It holds the
-// TYPES alone; verify.go builds them, and every statement about how a
+// This file is the vocabulary Document.Verify's report is written in: the
+// core enumerations a reading is judged by (Status, ReadingKind,
+// DiagnosticCode, SurveyKind), the pair identity DiagnosticPair, the
+// Diagnostic a failed judgement records, and the Interference/Clearance pair
+// rows. Report and BodyReport themselves, and the result vocabulary they are
+// built from, live in verify_result.go. It holds the TYPES alone; verify.go
+// and verify_publish.go build them, and every statement about how a
 // judgement is reached lives there and in docs/verification-design.md §1-§3.
 //
 // Each enumeration's String method spells its own constants, so a constant
@@ -25,7 +27,7 @@ type Status int
 
 const (
 	// Unverified: no verification produced this value. It is reserved so a
-	// zero or partially decoded Report fails Trustworthy.
+	// zero or partially decoded Report fails Passed.
 	Unverified Status = iota
 	// Sound: every body a proven solid, every stated spec met, every asked
 	// absence proven, nothing approximate beyond tolerance.
@@ -135,7 +137,7 @@ const (
 	SurveyWall
 	// SurveyUndercut — the pull-direction survey (WithPullDirection).
 	SurveyUndercut
-	// SurveyConcaveRadius — the concave-radius survey (WithMinRadius).
+	// SurveyConcaveRadius — the concave-radius survey (WithConcaveRadius).
 	SurveyConcaveRadius
 )
 
@@ -341,62 +343,4 @@ type Interference struct {
 type Clearance struct {
 	A, B *Body
 	Gap  Measurement
-}
-
-// Report is what Verify returns: the 3D counterpart of
-// sketch.VerificationReport (core §10, verification §1).
-type Report struct {
-	Bodies        []*BodyReport
-	Interferences []Interference
-	Clearances    []Clearance
-	// Diagnostics contains structured, branchable entries for every reason a
-	// report returned by Verify is not Sound (verification §1.1). Staged pair
-	// causes also carry the deprecated broad compatibility entry. On such a
-	// report it is empty EXACTLY when Status == Sound, and Status is the worst
-	// Diagnostic.Status in it — the §6 aggregate, itemized. The zero Report is
-	// Unverified and carries no verdict.
-	Diagnostics []Diagnostic
-	Status      Status
-}
-
-// Trustworthy is the single bit to gate on: true only when the whole report
-// is Sound (verification §6). A zero Report is Unverified and returns false.
-func (r *Report) Trustworthy() bool { return r.Status == Sound }
-
-// BodyReport is one live body's verdict and readings (verification §1).
-//
-// The validity predicates report the boundary the evaluator holds — exact as
-// data; what they prove about the PART is Status's to say. A quantity a body
-// does not have is absent — nil, never zero: Area and Bounds are boundary
-// properties every body has, so they are unconditional; Volume and Centroid
-// are region properties only a proven solid has, so both are non-nil exactly
-// when the body is one. The opt-in fields are nil unless their option asks
-// AND the body is a proven solid AND (for the two feature measures) the
-// feature exists: on this evaluator's analytic bodies the surveys decide
-// them outright (survey.go), so a nil MinWallThickness or MinRadius on a
-// proven solid inside a Sound report is the PROVEN determination that no
-// wall / no concave feature exists, and an empty Undercuts the proven
-// all-clear (verification §1/§6).
-type BodyReport struct {
-	Body   *Body
-	Status Status
-
-	Solid            bool
-	Watertight       bool
-	Manifold         bool
-	SelfIntersecting bool
-	Lumps            int
-	Voids            int
-
-	Area   Measurement
-	Bounds Box
-
-	Volume   *Measurement
-	Centroid *VecMeasurement
-
-	Exactness Exactness
-
-	MinWallThickness *Measurement
-	Undercuts        []*Face
-	MinRadius        *Measurement
 }
