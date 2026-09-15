@@ -674,9 +674,6 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 		if err != nil {
 			return nil, nil, err
 		}
-		if surveys.UndercutAsked && surveys.Undercut.ok {
-			br.Undercuts = surveys.Undercut.faces
-		}
 		for _, d := range surveyDiags {
 			switch d.Status {
 			case Violating:

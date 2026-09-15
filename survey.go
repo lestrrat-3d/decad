@@ -1305,12 +1305,19 @@ func cupMinRadius(cp cupPayload) (radiusOutcome, bool) {
 // each optional body survey, alongside whether cfg asked for it. It carries
 // no legacy BodyReport reference, so runSurveys' geometry stays independent
 // of the report shape verify_publish.go assembles from it.
+//
+// UndercutDiagnostics is the exact subset of runSurveys' returned diagnostics
+// the pull survey itself emitted (the same Diagnostic values, never
+// recomputed): verify_publish.go routes it onto undercutResult.Diagnostics
+// (proposal §7) so a partial or violated coverage carries its own findings
+// without re-deriving them from the flat per-body list.
 type surveyResults struct {
 	WallAsked bool
 	Wall      wallOutcome
 
-	UndercutAsked bool
-	Undercut      undercutOutcome
+	UndercutAsked       bool
+	Undercut            undercutOutcome
+	UndercutDiagnostics []Diagnostic
 
 	RadiusAsked bool
 	Radius      radiusOutcome
@@ -1417,12 +1424,13 @@ func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, [
 			out.reason = surveyFacetedUnsupported
 		}
 		results.Undercut = out
+		var undercutDiags []Diagnostic
 		if out.ok {
 			if len(out.faces) > 0 {
 				// An undercut is a predicate, not a scalar; the outcome's own
 				// face list already names them, so the pair emits one
 				// DiagUndercut naming the body.
-				diags = append(diags, Diagnostic{
+				undercutDiags = append(undercutDiags, Diagnostic{
 					Code:    DiagUndercut,
 					Status:  Violating,
 					Body:    b,
@@ -1432,7 +1440,7 @@ func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, [
 			}
 		}
 		if !out.ok || out.undecided {
-			diags = append(diags, surveyRefusalDiagnostic(
+			undercutDiags = append(undercutDiags, surveyRefusalDiagnostic(
 				b,
 				out.reason,
 				DiagUndecidedUndercut,
@@ -1440,6 +1448,8 @@ func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, [
 				"facetedPayload pull survey support is not implemented; use an analytic body or wait for faceted undercut support",
 			))
 		}
+		results.UndercutDiagnostics = undercutDiags
+		diags = append(diags, undercutDiags...)
 		if err := wallBudgetErr(budget); err != nil {
 			return surveyResults{}, nil, err
 		}

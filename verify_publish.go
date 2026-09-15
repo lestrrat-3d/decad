@@ -3,12 +3,12 @@ package decad
 // This file is Verify's publication assembler: it turns the private survey
 // outcomes (survey.go) and certified readings verifyBody has already decided
 // into the result records verify_result.go declares, and it is the
-// publication code the final Verify uses — never a stand-in for it. This PR
-// fills Body, Status, Area, Bounds, Wall, ConcaveRadius and Diagnostics on
-// the returned bodyResult; Validity, Topology, Region and Undercut stay
-// their zero value until PRs 2 and 4 extend it. projectLegacyBodyReport is
-// the temporary bridge proposal §16 allows while the exported shapes still
-// compile: PR 5 deletes it and nothing else of this assembler.
+// publication code the final Verify uses — never a stand-in for it. It fills
+// Body, Status, Area, Bounds, Wall, Undercut, ConcaveRadius and Diagnostics
+// on the returned bodyResult; Validity, Topology and Region stay their zero
+// value until PR 4 extends it. projectLegacyBodyReport is the temporary
+// bridge proposal §16 allows while the exported shapes still compile: PR 5
+// deletes it and nothing else of this assembler.
 
 // bodyPublishInput bundles publishBodyResult's inputs: the per-body facts
 // verifyBody has already computed — the certified core readings, the raw
@@ -39,6 +39,7 @@ func publishBodyResult(in bodyPublishInput) *bodyResult {
 		Area:          in.Area,
 		Bounds:        in.Bounds,
 		Wall:          publishWallResult(in.Surveys, in.Request, in.WallTolerance),
+		Undercut:      publishUndercutResult(in.Surveys, in.Request),
 		ConcaveRadius: publishConcaveRadiusResult(in.Surveys, in.Request, in.RadiusTolerance),
 		Diagnostics:   in.Diagnostics,
 	}
@@ -81,6 +82,53 @@ func publishWallResult(surveys surveyResults, req verifyRequest, tolerance toler
 			res.Assessment = assessmentMet
 		default:
 			res.Assessment = assessmentUndecided
+		}
+	}
+	return res
+}
+
+// publishUndercutResult maps one body's undercut survey outcome onto the
+// private result vocabulary (proposal §7's coverage table): the effective
+// request alone decides CoverageNotRequested; otherwise the producer's own
+// ok/reason/undecided decide Unavailable, Undecided, Partial or Complete.
+// Faces carries the producer's own face list unchanged — every face in it is
+// CONFIRMED to oppose the pull, and its nil-versus-empty shape is exactly the
+// producer's own (nil for an unrecoverable or entirely undecided survey,
+// otherwise the producer's own listing) so CoverageUndecided is published
+// rather than a claimed Partial when no face is confirmed. Diagnostics is
+// the pull survey's own subset of runSurveys' findings (surveys.go), routed
+// here rather than recomputed.
+func publishUndercutResult(surveys surveyResults, req verifyRequest) undercutResult {
+	if req.Undercut == nil {
+		return undercutResult{Coverage: coverageNotRequested, Assessment: assessmentNotEvaluated}
+	}
+	out := surveys.Undercut
+	res := undercutResult{
+		Request:     req.Undercut,
+		Faces:       out.faces,
+		Diagnostics: surveys.UndercutDiagnostics,
+	}
+	switch {
+	case !out.ok:
+		res.Assessment = assessmentUndecided
+		if out.reason == surveyFacetedUnsupported {
+			res.Coverage = coverageUnavailable
+		} else {
+			res.Coverage = coverageUndecided
+		}
+	case out.undecided:
+		if len(out.faces) > 0 {
+			res.Coverage = coveragePartial
+			res.Assessment = assessmentViolated
+		} else {
+			res.Coverage = coverageUndecided
+			res.Assessment = assessmentUndecided
+		}
+	default:
+		res.Coverage = coverageComplete
+		res.Assessment = assessmentMet
+		if len(out.faces) > 0 {
+			res.Assessment = assessmentViolated
 		}
 	}
 	return res
@@ -130,4 +178,5 @@ func projectLegacyBodyReport(res *bodyResult, br *BodyReport) {
 		m := res.ConcaveRadius.Minimum.Measurement
 		br.MinRadius = &m
 	}
+	br.Undercuts = res.Undercut.Faces
 }
