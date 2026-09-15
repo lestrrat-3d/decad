@@ -135,8 +135,8 @@ the design decisions:
 taken by `r3`. `B.Kind()` is Length for a position and Dimensionless for a direction; the kit
 reads it from the measurement, prints it, and compares `B.Base()` against a millimetre
 distance for a position or a unit-vector deviation for a direction. Default `s` is
-`1e-12 × |W|₂`; `Within` takes a Length for a position and a `units.Scalar` for a direction,
-and the Kind check catches the wrong one. `Exactly()` applies as above.
+`1e-12 × |W|₂`; `Within` takes a Length for a position and a Dimensionless `units.Value`
+(`units.Scalar`) for a direction, and the Kind check catches the wrong one. `Exactly()` applies as above.
 
 ### 3.3 Boxes
 
@@ -220,6 +220,10 @@ message opens with. Options are `lestrrat-go/option/v3` values of type `decadtes
 | `Prism(tb, doc *decad.Document, s *sketch.Sketch, p *sketch.Profile, height units.Value) *decad.Body` | `doc.Extrude` by `Distance{D: height, Dir: Along}` with the error handled. |
 | `Block(tb, doc *decad.Document, x0, y0, x1, y1 float64, height units.Value) *decad.Body` | Rectangle on XY (coordinates in mm, the §5.2 carve-out) extruded by `height`: the fixture most tests start from. |
 
+`Block`'s four coordinates are millimetres under `docs/api-design.md` §5.2's coordinate
+carve-out, and the rectangle is grounded at corner A (`x0, y0`) so the sketch it builds
+solves fully constrained.
+
 That is 27 helpers and 3 options.
 
 ### Deliberately uncovered in v1
@@ -260,7 +264,7 @@ tooth volume: reading 26.3140891 mm^3 ± 0 mm^3 (Exact) does not enclose expecte
 Kind mismatch (a millimetre slack handed to a volume):
 
 ```
-bored Gear Body volume: Within slack is a Length (mm) but the reading is a Volume (mm^3)
+bored Gear Body volume: Within slack is a length (mm) but the reading is a volume (mm^3)
 ```
 
 Sound failing, with the bodies named:
