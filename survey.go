@@ -1301,24 +1301,43 @@ func cupMinRadius(cp cupPayload) (radiusOutcome, bool) {
 	return prismMinRadius(prismPayload{profile: profile})
 }
 
+// surveyResults is runSurveys' return record: the raw private outcome for
+// each optional body survey, alongside whether cfg asked for it. It carries
+// no legacy BodyReport reference, so runSurveys' geometry stays independent
+// of the report shape verify_publish.go assembles from it.
+type surveyResults struct {
+	WallAsked bool
+	Wall      wallOutcome
+
+	UndercutAsked bool
+	Undercut      undercutOutcome
+
+	RadiusAsked bool
+	Radius      radiusOutcome
+}
+
 // runSurveys answers the asked opt-in questions on one proven-solid body,
-// filling the report fields and returning one diagnostic per non-Sound
-// outcome: DiagWallTooThin / DiagUndercut (Violating) when a stated spec is
-// proven to fail, and the per-survey DiagUndecided* (Suspect) when an asked
-// question is undecided or a stated spec is straddled (verification §1.1/§6).
-// A Sound survey emits nothing. Scalar readings are closed-form, each Exact
-// only where its own arm proved a zero bound — a pinch reading or a sweep
-// height with no axial displacement — and Approximate with the bound its own
-// arithmetic derived otherwise; a cap-blend undercut survey can instead use a
-// bounded normal range and leave an individual patch undecided.
-func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnostic, error) {
+// returning the raw private outcome for each survey and one diagnostic per
+// non-Sound outcome: DiagWallTooThin / DiagUndercut (Violating) when a stated
+// spec is proven to fail, and the per-survey DiagUndecided* (Suspect) when an
+// asked question is undecided or a stated spec is straddled (verification
+// §1.1/§6). A Sound survey emits nothing. Scalar readings are closed-form,
+// each Exact only where its own arm proved a zero bound — a pinch reading or
+// a sweep height with no axial displacement — and Approximate with the bound
+// its own arithmetic derived otherwise; a cap-blend undercut survey can
+// instead use a bounded normal range and leave an individual patch
+// undecided. verify_publish.go's assembler maps the returned outcomes onto
+// the private result vocabulary; this function never builds that vocabulary
+// itself.
+func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, []Diagnostic, error) {
 	if err := wallBudgetErr(budget); err != nil {
-		return nil, err
+		return surveyResults{}, nil, err
 	}
 	var diags []Diagnostic
-	b := br.Body
+	var results surveyResults
 
 	if cfg.wall != nil {
+		results.WallAsked = true
 		out := wallOutcome{}
 		var err error
 		switch pl := b.payload.(type) {
@@ -1337,8 +1356,9 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 			out.reason = surveyFacetedUnsupported
 		}
 		if err != nil {
-			return nil, err
+			return surveyResults{}, nil, err
 		}
+		results.Wall = out
 		switch {
 		case !out.ok:
 			diags = append(diags, surveyRefusalDiagnostic(
@@ -1350,7 +1370,6 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 			))
 		case out.reading != nil:
 			m := lengthMeasurement(*out.reading, out.bound)
-			br.MinWallThickness = &m
 			tool := cfg.wall.tool
 			switch intervalVerdict(*out.reading, out.bound, cfg.toolMM) {
 			case -1:
@@ -1378,11 +1397,12 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 			}
 		}
 		if err := wallBudgetErr(budget); err != nil {
-			return nil, err
+			return surveyResults{}, nil, err
 		}
 	}
 
 	if cfg.pull != nil {
+		results.UndercutAsked = true
 		out := undercutOutcome{}
 		switch pl := b.payload.(type) {
 		case prismPayload:
@@ -1396,12 +1416,12 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		}
+		results.Undercut = out
 		if out.ok {
-			br.Undercuts = out.faces
 			if len(out.faces) > 0 {
-				// An undercut is a predicate, not a scalar; the report's
-				// Undercuts slice already lists the faces, so the pair emits
-				// one DiagUndercut naming the body.
+				// An undercut is a predicate, not a scalar; the outcome's own
+				// face list already names them, so the pair emits one
+				// DiagUndercut naming the body.
 				diags = append(diags, Diagnostic{
 					Code:    DiagUndercut,
 					Status:  Violating,
@@ -1421,11 +1441,12 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 			))
 		}
 		if err := wallBudgetErr(budget); err != nil {
-			return nil, err
+			return surveyResults{}, nil, err
 		}
 	}
 
 	if cfg.minRadius {
+		results.RadiusAsked = true
 		out := radiusOutcome{}
 		ok := false
 		switch pl := b.payload.(type) {
@@ -1440,8 +1461,8 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		}
-		switch {
-		case !ok || !out.ok:
+		results.Radius = out
+		if !ok || !out.ok {
 			diags = append(diags, surveyRefusalDiagnostic(
 				b,
 				out.reason,
@@ -1449,16 +1470,13 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 				"the concave-radius survey could neither measure nor exclude a concave feature",
 				"facetedPayload concave-radius survey support is not implemented; use an analytic body or wait for faceted radius support",
 			))
-		case out.reading != nil:
-			m := lengthMeasurement(*out.reading, out.bound)
-			br.MinRadius = &m
 		}
 		if err := wallBudgetErr(budget); err != nil {
-			return nil, err
+			return surveyResults{}, nil, err
 		}
 	}
 
-	return diags, nil
+	return results, diags, nil
 }
 
 func surveyRefusalDiagnostic(

@@ -667,8 +667,7 @@ func measureWedgeReadings(t *testing.T, pts [][2]float64, sectionDelta float64, 
 	bounds, err := body.Bounds()
 	require.NoError(t, err)
 
-	br := &BodyReport{Body: body, Area: area}
-	in := &bodyToleranceInputs{ctx: t.Context(), report: br}
+	in := &bodyToleranceInputs{ctx: t.Context(), body: body, area: area}
 
 	areaUpper := math.Abs(area.Value.Base()) + area.Bound.Base() + excess.total()
 

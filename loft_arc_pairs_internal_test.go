@@ -332,8 +332,7 @@ func loftBodyBindingRatio(t *testing.T, ctx context.Context, body *Body) (float6
 	cen, err := body.Centroid()
 	require.NoError(t, err)
 
-	br := &BodyReport{Body: body, Area: area, Bounds: bounds, Volume: &vol, Centroid: &cen}
-	in := &bodyToleranceInputs{ctx: ctx, report: br}
+	in := &bodyToleranceInputs{ctx: ctx, body: body, area: area}
 
 	type row struct {
 		name  string
