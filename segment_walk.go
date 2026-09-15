@@ -132,6 +132,28 @@ type segmentWalk struct {
 	// spans is the converted Bézier chain of a walkFreeform walk, in the
 	// curve's natural direction; reversed says the walk runs against it. Both
 	// are zero for every other kind.
+	//
+	// The chain is SHARED and MUST NOT be mutated in place. A segmentWalk
+	// copies only the slice header, so every reader of one profileWalks set
+	// holds the same ratPoints: the build (buildLoopSidesAs), the tessellation
+	// (chordLoop), the extent readings, and a rigid re-evaluation that reads
+	// the published set back. Writing through any of them writes through all
+	// of them.
+	//
+	// The guard cannot catch such a write. profileWalks.reusable decides on
+	// matches, which compares the RECORD by float bits and never inspects the
+	// walks, so a mutated set still reads back as the resolution of its own
+	// record. The corruption would also be quiet rather than loud: a
+	// re-anchoring subtracts a constant from every control point, which leaves
+	// a valid curve sitting somewhere else, so the lengths and areas built from
+	// it stay plausible and the build and the tessellation still agree with
+	// each other, both being wrong in the same way.
+	//
+	// shiftFreeformSpans (spline_bezier.go) is exactly this write. It is safe
+	// where it stands because validateFreeformMomentSegment converts its own
+	// chain through freeformBezierSpans and hands it that private copy, never a
+	// walk. A caller that hands it one of THESE chains instead has no test that
+	// would fail. Re-anchor a copy, or convert afresh.
 	spans    []bezierSpan
 	reversed bool
 	// fitInterpolated is set only for a walkFreeform walk whose chain came
