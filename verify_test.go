@@ -478,8 +478,22 @@ func TestDiagnosticCodeTokens(t *testing.T) {
 	require.Equal(t, "unsupported_pair_contact", decad.DiagUnsupportedPairContact.String())
 	require.Equal(t, "unsupported_pair_pipeline", decad.DiagUnsupportedPairPipeline.String())
 	require.Equal(t, "unsupported_survey_payload", decad.DiagUnsupportedSurveyPayload.String())
+	require.Equal(t, "survey_prerequisite", decad.DiagSurveyPrerequisite.String())
+	require.Equal(t, "tolerance_reference_unavailable", decad.DiagToleranceReferenceUnavailable.String())
 	// An out-of-range value renders diagnostic(<n>), never a panic.
 	require.Equal(t, "diagnostic(99)", decad.DiagnosticCode(99).String())
+}
+
+// TestDiagnosticSurveyKindTokens is TestDiagnosticReadingKindTokens'
+// counterpart for the survey-identity enum (proposal §3, §4 item 1).
+func TestDiagnosticSurveyKindTokens(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, "none", decad.SurveyNone.String())
+	require.Equal(t, "wall", decad.SurveyWall.String())
+	require.Equal(t, "undercut", decad.SurveyUndercut.String())
+	require.Equal(t, "concave_radius", decad.SurveyConcaveRadius.String())
+	// An out-of-range value renders survey_kind(<n>), never a panic.
+	require.Equal(t, "survey_kind(42)", decad.SurveyKind(42).String())
 }
 
 func TestVerifyDiagnosticsEmptyWhenSound(t *testing.T) {
@@ -564,9 +578,14 @@ func TestVerifyDiagnosticsUnsupportedFacetedSurveys(t *testing.T) {
 		require.Contains(t, diagnostic.Message, "facetedPayload")
 		require.Contains(t, diagnostic.Message, "use an analytic body")
 	}
-	require.Contains(t, report.Diagnostics[0].Message, "wall survey")
-	require.Contains(t, report.Diagnostics[1].Message, "pull survey")
-	require.Contains(t, report.Diagnostics[2].Message, "concave-radius survey")
+	// Wall, undercut, and concave-radius are distinguished by structured
+	// Survey identity rather than by parsing Message text (proposal §10);
+	// runSurveys' fixed emission order — wall, then pull, then radius —
+	// survives §10's flattening because these are the only diagnostics on
+	// this body.
+	require.Equal(t, decad.SurveyWall, report.Diagnostics[0].Survey)
+	require.Equal(t, decad.SurveyUndercut, report.Diagnostics[1].Survey)
+	require.Equal(t, decad.SurveyConcaveRadius, report.Diagnostics[2].Survey)
 }
 
 func TestVerifyDiagnosticsInterference(t *testing.T) {
@@ -594,14 +613,12 @@ func TestVerifyDiagnosticsInterference(t *testing.T) {
 	require.Len(t, report.Interferences, 1, `the diagnostic mirrors the Interference row`)
 }
 
-func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
-	t.Parallel()
-	// Two 10×10×10 boxes, the second translated to (0,5,5): they overlap with
-	// positive volume while sharing coplanar side faces. The read-only intersect
-	// stages the face-on-face contact (booleanExpectedContact). Per verification
-	// §1.1 a staged boolean contact is a DiagUnsupportedPairContact, not a
-	// payload, pipeline, or undecided-partition diagnostic; the Status stays
-	// Suspect.
+// coplanarContactPairDocument builds two 10×10×10 boxes, the second
+// translated to (0,5,5): they overlap with positive volume while sharing
+// coplanar side faces, so the read-only intersect stages the face-on-face
+// contact (booleanExpectedContact).
+func coplanarContactPairDocument(t *testing.T) *decad.Document {
+	t.Helper()
 	ws := sketch.NewWorld()
 	s, err := ws.CreateSketch(ws.XY())
 	require.NoError(t, err)
@@ -621,6 +638,15 @@ func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
 	require.NoError(t, err)
 	_, err = box2.Placed(shift)
 	require.NoError(t, err)
+	return doc
+}
+
+func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
+	t.Parallel()
+	// Per verification §1.1 a staged boolean contact is a
+	// DiagUnsupportedPairContact, not a payload, pipeline, or
+	// undecided-partition diagnostic; the Status stays Suspect.
+	doc := coplanarContactPairDocument(t)
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
@@ -641,15 +667,50 @@ func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
 
 	_, undecided := findDiagnostic(report.Diagnostics, decad.DiagUndecidedPair)
 	require.False(t, undecided, `a staged contact is not an undecided partition`)
-	legacy, broad := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
-	require.True(t, broad, `a staged contact preserves the broad compatibility code`)
-	require.Equal(t, decad.Suspect, legacy.Status)
-	require.Equal(t, decad.ReadingNone, legacy.Reading)
-	require.NotNil(t, legacy.Pair)
+	_, broad := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
+	require.False(t, broad, `a staged contact no longer emits the deprecated broad compatibility code`)
 	_, payload := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairPayload)
 	require.False(t, payload, `a contact refusal is not a payload capability limit`)
 	_, pipeline := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairPipeline)
 	require.False(t, pipeline, `a contact refusal is not an in-pipeline reach`)
+}
+
+// TestVerifyUnsupportedPairEmitsOneCause is proposal §16's "Unsupported pair
+// reasons" acceptance case, on the real coplanar-contact fixture also used by
+// TestVerifyDiagnosticsUnsupportedPairStagedContact: an unsupported pair
+// emits its specific cause once, the deprecated broad DiagUnsupportedPair
+// never appears, and a waiver matching that one cause and that exact pair
+// accepts nothing else in the report.
+func TestVerifyUnsupportedPairEmitsOneCause(t *testing.T) {
+	t.Parallel()
+	doc := coplanarContactPairDocument(t)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, report.Status)
+	requireDiagnosticInvariants(t, report)
+
+	count := 0
+	var cause decad.Diagnostic
+	for _, d := range report.Diagnostics {
+		if d.Code == decad.DiagUnsupportedPairContact {
+			count++
+			cause = d
+		}
+	}
+	require.Equal(t, 1, count, `the cause-specific entry appears exactly once`)
+	_, broad := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
+	require.False(t, broad, `the deprecated broad entry is never emitted`)
+
+	// A waiver matching this one cause and this exact pair accepts every
+	// other entry in the report — there is none, so nothing remains unwaived.
+	for _, reason := range report.Diagnostics {
+		if reason.Code == decad.DiagUnsupportedPairContact &&
+			reason.Pair.A == cause.Pair.A && reason.Pair.B == cause.Pair.B {
+			continue
+		}
+		t.Fatalf("an unwaived reason remains: %s", reason.Code)
+	}
 }
 
 // TestVerifyDiagnosticsAdmittedCoplanarPrismPairHasNoContactDiagnostic is the

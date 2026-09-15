@@ -414,11 +414,8 @@ func TestVerifyUnsupportedOverlapStaysSuspectAndReadOnly(t *testing.T) {
 
 	_, undecided := findDiagnostic(report.Diagnostics, decad.DiagUndecidedPair)
 	require.False(t, undecided, `a staged revolve operand is not an undecided partition`)
-	legacy, broad := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
-	require.True(t, broad, `an overlapping revolve pair preserves the broad compatibility code`)
-	require.Equal(t, decad.Suspect, legacy.Status)
-	require.Equal(t, decad.ReadingNone, legacy.Reading)
-	require.NotNil(t, legacy.Pair)
+	_, broad := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
+	require.False(t, broad, `an overlapping revolve pair no longer emits the deprecated broad compatibility code`)
 	_, contact := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairContact)
 	require.False(t, contact, `payload staging is not a contact refusal`)
 	_, pipeline := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairPipeline)
@@ -622,7 +619,7 @@ func TestVerifyCrossingPairSeatedResolvesPlacedStaysUndecided(t *testing.T) {
 		require.NotNil(t, d.Pair)
 
 		_, broad := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
-		require.True(t, broad, "the placed pair keeps the broad compatibility code the seated pair clears")
+		require.False(t, broad, "the placed pair no longer emits the deprecated broad compatibility code")
 		requireDocumentUnchanged(t, doc, before)
 	})
 

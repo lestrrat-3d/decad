@@ -767,16 +767,21 @@ func TestLoftVerifySound(t *testing.T) {
 	require.NotNil(t, br.Centroid)
 }
 
+// TestLoftVerifySurveysStaySuspect proves loft is a payload class the wall,
+// undercut, and concave-radius type switches in survey.go do not name at
+// all (task-list §4 item 3): every asked survey reports the explicit
+// DiagUnsupportedSurveyPayload refusal, still Suspect, distinguished by its
+// structured Survey identity rather than by its DiagnosticCode alone.
 func TestLoftVerifySurveysStaySuspect(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name string
-		opt  decad.VerifyOption
-		code decad.DiagnosticCode
+		name   string
+		opt    decad.VerifyOption
+		survey decad.SurveyKind
 	}{
-		{"wall", decad.WithMinWallThickness(units.Millimeters(1)), decad.DiagUndecidedWall},
-		{"pull", decad.WithPullDirection(r3.NewVec(0, 0, 1)), decad.DiagUndecidedUndercut},
-		{"radius", decad.WithMinRadius(), decad.DiagUndecidedMinRadius},
+		{"wall", decad.WithMinWallThickness(units.Millimeters(1)), decad.SurveyWall},
+		{"pull", decad.WithPullDirection(r3.NewVec(0, 0, 1)), decad.SurveyUndercut},
+		{"radius", decad.WithMinRadius(), decad.SurveyConcaveRadius},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -788,9 +793,10 @@ func TestLoftVerifySurveysStaySuspect(t *testing.T) {
 			report, err := doc.Verify(t.Context(), tc.opt)
 			require.NoError(t, err)
 			require.Equal(t, decad.Suspect, report.Status)
-			diag, ok := findDiagnostic(report.Diagnostics, tc.code)
-			require.True(t, ok, "expected diagnostic %s", tc.code)
+			diag, ok := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedSurveyPayload)
+			require.True(t, ok, "expected diagnostic %s", decad.DiagUnsupportedSurveyPayload)
 			require.Equal(t, decad.Suspect, diag.Status)
+			require.Equal(t, tc.survey, diag.Survey)
 		})
 	}
 }

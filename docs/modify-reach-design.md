@@ -952,12 +952,14 @@ reaches only the analytic bodies at the start of a chain.
 | **DX6** | clearance | existing revolve boundary reader | add trimmed patch faces to boundary model; undecidable cells stay `Suspect`; staged for the cap-loop chamfer, whose pairs read `Suspect` unless boxes already decide them | union exposed slab faces; never include cancelled interfaces |
 | **DX7** | undercut | existing revolve survey | bounded normal ranges per patch, each widened by the whole distance its own `Face.NormalAt` readings can sit from the patch's exactly enclosed normal model and by that patch's own proven departure from the surface it publishes (§8.3), a circular patch's window read through a proven enclosure rather than a float evaluation; a proven opposing point lists its patch, and a remaining straddle is undecided without removing another proven listing. The receiver's own unchanged walls and caps are not patches, and are read through the SAME three-valued rule, with the same undecided outcome — no reader may treat the receiver half as exempt | exact normal ranges per exposed face |
 | **DX8** | minimum radius | existing meridian survey | minimum concave principal radius over sphere/torus/cylinder/cone patches; undecided unless every patch is proven to be exactly the surface it publishes (zero departure, §8.3) — a mitered ruled patch is one case of that | section arcs + exposed rim geometry |
-| **DX9** | minimum wall thickness | existing revolve rewrite survey | staged: asked reading is `Suspect` | staged: asked reading is `Suspect` |
+| **DX9** | minimum wall thickness | existing revolve rewrite survey | staged: `DiagUnsupportedSurveyPayload`, `Survey` `SurveyWall`, `Suspect` | staged: `DiagUnsupportedSurveyPayload`, `Survey` `SurveyWall`, `Suspect` |
 
 DX9 is a deliberate evaluator limit. A cap blend and a stacked shell are not
 one constant section at one height. The existing 2D spanning-disk proof does
-not decide them. The modify call still builds an exact solid; only an explicitly
-asked wall survey is undecided. No open implementation claim remains.
+not decide them. The modify call still builds an exact solid; only an
+explicitly asked wall survey reports the staged refusal, published as an
+explicit unsupported-payload dispatch rather than a generic undecided result
+(verification design §1.1). No open implementation claim remains.
 
 Clearance may also return undecided for surface cells its certified kernel does
 not solve. This is the existing `Verify` contract, not a modify-build refusal.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -31,12 +32,18 @@ import (
 
 // surveyReason retains why a survey was not decided. The zero reason is a
 // numerical or geometric undecided result; surveyFacetedUnsupported records
-// the known payload capability gap before runSurveys maps it to a diagnostic.
+// the known faceted-payload capability gap, and surveyPayloadStaged records
+// every other explicit unsupported-payload dispatch — the deliberate
+// cap-blend wall limit (DX9) and any payload class the wall, undercut, or
+// concave-radius type switch does not name at all (today, a loft) — before
+// runSurveys maps either into DiagUnsupportedSurveyPayload rather than a
+// generic undecided result (proposal §16).
 type surveyReason int
 
 const (
 	surveyUndecided surveyReason = iota
 	surveyFacetedUnsupported
+	surveyPayloadStaged
 )
 
 // wallOutcome is one body's wall reading: ok=false is an undecided survey;
@@ -1306,21 +1313,24 @@ func cupMinRadius(cp cupPayload) (radiusOutcome, bool) {
 // no legacy BodyReport reference, so runSurveys' geometry stays independent
 // of the report shape verify_publish.go assembles from it.
 //
-// UndercutDiagnostics is the exact subset of runSurveys' returned diagnostics
-// the pull survey itself emitted (the same Diagnostic values, never
-// recomputed): verify_publish.go routes it onto undercutResult.Diagnostics
-// (proposal §7) so a partial or violated coverage carries its own findings
-// without re-deriving them from the flat per-body list.
+// WallDiagnostics, UndercutDiagnostics, and RadiusDiagnostics are the exact
+// subset of runSurveys' returned diagnostics that survey itself emitted (the
+// same Diagnostic values, never recomputed): verify_publish.go routes each
+// onto its own result's Diagnostics (proposal §7, §10) so a body's wall,
+// undercut, or concave-radius result carries its own findings without
+// re-deriving them from the flat per-body list.
 type surveyResults struct {
-	WallAsked bool
-	Wall      wallOutcome
+	WallAsked       bool
+	Wall            wallOutcome
+	WallDiagnostics []Diagnostic
 
 	UndercutAsked       bool
 	Undercut            undercutOutcome
 	UndercutDiagnostics []Diagnostic
 
-	RadiusAsked bool
-	Radius      radiusOutcome
+	RadiusAsked       bool
+	Radius            radiusOutcome
+	RadiusDiagnostics []Diagnostic
 }
 
 // runSurveys answers the asked opt-in questions on one proven-solid body,
@@ -1358,22 +1368,31 @@ func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, [
 			// DX9 (docs/modify-reach-design.md Table DX): a cap blend is not
 			// one constant section at one height, so the existing 2D
 			// spanning-disk proof does not decide it. A deliberate evaluator
-			// limit — the asked reading is Suspect, never fabricated.
+			// limit, published as an explicit unsupported-payload dispatch
+			// rather than a generic undecided result (proposal §16).
+			out.reason = surveyPayloadStaged
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
+		default:
+			// Any payload class this switch does not name — a loft today —
+			// has no implemented wall survey either.
+			out.reason = surveyPayloadStaged
 		}
 		if err != nil {
 			return surveyResults{}, nil, err
 		}
 		results.Wall = out
+		var wallDiags []Diagnostic
 		switch {
 		case !out.ok:
-			diags = append(diags, surveyRefusalDiagnostic(
+			wallDiags = append(wallDiags, surveyRefusalDiagnostic(
 				b,
+				SurveyWall,
 				out.reason,
 				DiagUndecidedWall,
 				"the wall survey could neither answer nor prove no wall exists",
 				"facetedPayload wall survey support is not implemented; use an analytic body or wait for faceted wall support",
+				"wall",
 			))
 		case out.reading != nil:
 			m := lengthMeasurement(*out.reading, out.bound)
@@ -1381,10 +1400,11 @@ func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, [
 			switch intervalVerdict(*out.reading, out.bound, cfg.toolMM) {
 			case -1:
 				obs := m
-				diags = append(diags, Diagnostic{
+				wallDiags = append(wallDiags, Diagnostic{
 					Code:     DiagWallTooThin,
 					Status:   Violating,
 					Body:     b,
+					Survey:   SurveyWall,
 					Reading:  ReadingWall,
 					Observed: &obs,
 					Required: &tool,
@@ -1392,10 +1412,11 @@ func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, [
 				})
 			case 0:
 				obs := m
-				diags = append(diags, Diagnostic{
+				wallDiags = append(wallDiags, Diagnostic{
 					Code:     DiagUndecidedWall,
 					Status:   Suspect,
 					Body:     b,
+					Survey:   SurveyWall,
 					Reading:  ReadingWall,
 					Observed: &obs,
 					Required: &tool,
@@ -1403,6 +1424,8 @@ func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, [
 				})
 			}
 		}
+		results.WallDiagnostics = wallDiags
+		diags = append(diags, wallDiags...)
 		if err := wallBudgetErr(budget); err != nil {
 			return surveyResults{}, nil, err
 		}
@@ -1422,6 +1445,8 @@ func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, [
 			out = capBlendUndercuts(b, pl, *cfg.pull)
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
+		default:
+			out.reason = surveyPayloadStaged
 		}
 		results.Undercut = out
 		var undercutDiags []Diagnostic
@@ -1434,6 +1459,7 @@ func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, [
 					Code:    DiagUndercut,
 					Status:  Violating,
 					Body:    b,
+					Survey:  SurveyUndercut,
 					Reading: ReadingNone,
 					Message: "a face is a proven undercut against the pull",
 				})
@@ -1442,10 +1468,12 @@ func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, [
 		if !out.ok || out.undecided {
 			undercutDiags = append(undercutDiags, surveyRefusalDiagnostic(
 				b,
+				SurveyUndercut,
 				out.reason,
 				DiagUndecidedUndercut,
 				"the pull survey could neither prove nor exclude an undercut",
 				"facetedPayload pull survey support is not implemented; use an analytic body or wait for faceted undercut support",
+				"pull",
 			))
 		}
 		results.UndercutDiagnostics = undercutDiags
@@ -1470,17 +1498,24 @@ func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, [
 			out, ok = capBlendMinRadius(b, pl)
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
+		default:
+			out.reason = surveyPayloadStaged
 		}
 		results.Radius = out
+		var radiusDiags []Diagnostic
 		if !ok || !out.ok {
-			diags = append(diags, surveyRefusalDiagnostic(
+			radiusDiags = append(radiusDiags, surveyRefusalDiagnostic(
 				b,
+				SurveyConcaveRadius,
 				out.reason,
 				DiagUndecidedMinRadius,
 				"the concave-radius survey could neither measure nor exclude a concave feature",
 				"facetedPayload concave-radius survey support is not implemented; use an analytic body or wait for faceted radius support",
+				"concave-radius",
 			))
 		}
+		results.RadiusDiagnostics = radiusDiags
+		diags = append(diags, radiusDiags...)
 		if err := wallBudgetErr(budget); err != nil {
 			return surveyResults{}, nil, err
 		}
@@ -1489,24 +1524,52 @@ func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, [
 	return results, diags, nil
 }
 
+// surveyRefusalDiagnostic builds the one diagnostic an asked survey emits
+// when it cannot answer at all (verification §1.1): undecidedCode/Message for
+// a numerically or geometrically undecided proof, DiagUnsupportedSurveyPayload
+// for a known payload capability gap — facetedMessage for a facetedPayload
+// operand, or a message this function derives from the body's own payload
+// type and surveyNoun (e.g. "wall", "pull", "concave-radius") for any other
+// explicit unsupported-payload dispatch (proposal §16).
 func surveyRefusalDiagnostic(
 	body *Body,
+	survey SurveyKind,
 	reason surveyReason,
 	undecidedCode DiagnosticCode,
 	undecidedMessage string,
-	unsupportedMessage string,
+	facetedMessage string,
+	surveyNoun string,
 ) Diagnostic {
 	code, message := undecidedCode, undecidedMessage
-	if reason == surveyFacetedUnsupported {
-		code, message = DiagUnsupportedSurveyPayload, unsupportedMessage
+	switch reason {
+	case surveyFacetedUnsupported:
+		code, message = DiagUnsupportedSurveyPayload, facetedMessage
+	case surveyPayloadStaged:
+		class := payloadClassName(body.payload)
+		code = DiagUnsupportedSurveyPayload
+		message = fmt.Sprintf(
+			"%s %s survey support is not implemented; use an analytic body or wait for wider %s survey support",
+			class, surveyNoun, class)
 	}
 	return Diagnostic{
 		Code:    code,
 		Status:  Suspect,
 		Body:    body,
+		Survey:  survey,
 		Reading: ReadingNone,
 		Message: message,
 	}
+}
+
+// payloadClassName names payload's Go type without its package qualifier —
+// the bare shape ("facetedPayload", "loftPayload") an unsupported-survey
+// diagnostic message already uses.
+func payloadClassName(payload any) string {
+	name := fmt.Sprintf("%T", payload)
+	if i := strings.LastIndexByte(name, '.'); i >= 0 {
+		return name[i+1:]
+	}
+	return name
 }
 
 // lengthMeasurement wraps a survey reading with the PROVEN bound its own arm

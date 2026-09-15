@@ -544,3 +544,101 @@ func TestVerifyPublishUndercutUnavailable(t *testing.T) {
 	require.Empty(t, res.Undercut.Faces)
 	require.Equal(t, assessmentUndecided, res.Undercut.Assessment)
 }
+
+// capBlendPlateBody extrudes a 100×60 plate by 20 mm and chamfers its whole
+// end-cap loop by 5 mm — the same cap-blend construction capblend_test.go's
+// capBlendBox drives, reached here through the public Body API alone since
+// that helper lives in the external decad_test package.
+func capBlendPlateBody(t *testing.T) *Body {
+	t.Helper()
+	doc := New()
+	body := axisBoxBody(t, doc, 0, 0, 100, 60, 20)
+	chamfered, err := body.Chamfer(Edges(CreatedBy(CapEnd(body))), units.Millimeters(5))
+	require.NoError(t, err)
+	return chamfered
+}
+
+// TestVerifyPublishCapBlendWallStaged proves DX9's deliberate cap-blend wall
+// limit (survey.go, docs/modify-reach-design.md Table DX) is published as an
+// explicit unsupported-payload dispatch rather than a generic undecided
+// result (task-list §4 item 3): the real cap-blend body's wall survey
+// reports Unavailable through DiagUnsupportedSurveyPayload, never
+// DiagUndecidedWall — the same treatment a staged loft payload gets
+// (TestLoftVerifySurveysStaySuspect).
+func TestVerifyPublishCapBlendWallStaged(t *testing.T) {
+	t.Parallel()
+	body := capBlendPlateBody(t)
+	res := publishBody(t, body, WithMinWallThickness(units.Millimeters(1)))
+	require.Equal(t, scalarUnavailable, res.Wall.Outcome)
+	require.Nil(t, res.Wall.Minimum)
+	require.Equal(t, assessmentUndecided, res.Wall.Assessment)
+
+	require.Len(t, res.Wall.Diagnostics, 1)
+	diag := res.Wall.Diagnostics[0]
+	require.Equal(t, DiagUnsupportedSurveyPayload, diag.Code)
+	require.Equal(t, SurveyWall, diag.Survey)
+	require.Equal(t, Suspect, diag.Status)
+	require.Contains(t, diag.Message, "capBlendPayload")
+	require.Contains(t, diag.Message, "wall survey")
+}
+
+// TestVerifyPublishToleranceReferenceUnavailable is proposal §16's "Missing
+// reference" acceptance case: private-gate coverage of the tolerance verdict
+// itself, not an end-to-end public path, since every shipped payload class
+// forms a usable reference (requireDiagnosticInvariants, verify_test.go). A
+// nil body gives bodyGateDiameter no usable diameter, so a nonzero-bound
+// reading has no usable tolerance reference.
+func TestVerifyPublishToleranceReferenceUnavailable(t *testing.T) {
+	t.Parallel()
+	in := &bodyToleranceInputs{ctx: t.Context(), body: nil, area: Measurement{Value: units.SquareMillimeters(100), Exactness: Exact}}
+	m := Measurement{Value: units.Millimeters(5), Exactness: Approximate, Bound: units.Millimeters(0.001)}
+	body := rectangularPrism(t, 10, 10, 10)
+
+	tr, diag := scalarToleranceVerdict(ReadingWall, SurveyWall, body, m, 1e-3, in.lengthReference)
+	require.Equal(t, toleranceUndecided, tr.State)
+	require.Nil(t, tr.Limit)
+	require.NotNil(t, diag)
+	require.Equal(t, DiagToleranceReferenceUnavailable, diag.Code)
+	require.Equal(t, Suspect, diag.Status)
+	require.Equal(t, SurveyWall, diag.Survey)
+	require.Same(t, body, diag.Body)
+	require.Nil(t, diag.Required)
+}
+
+// TestVerifyPublishDiagnosticFlattening drives planarBooleanBody's real
+// facetedPayload union under a zero tolerance and a requested wall survey —
+// a body that produces both a core reading diagnostic (Area's coarse
+// measurement) and a survey diagnostic (the staged faceted wall refusal) at
+// once — and asserts proposal §10's order: every core reading diagnostic
+// (SurveyNone) precedes every wall diagnostic, and no finding repeats.
+func TestVerifyPublishDiagnosticFlattening(t *testing.T) {
+	t.Parallel()
+	body := planarBooleanBody(t)
+	res := publishBody(t, body, WithTolerance(units.Scalar(0)), WithMinWallThickness(units.Millimeters(1)))
+	require.NotEmpty(t, res.Diagnostics)
+
+	lastCoreIdx, firstWallIdx := -1, -1
+	for i, d := range res.Diagnostics {
+		switch d.Survey {
+		case SurveyNone:
+			lastCoreIdx = i
+		case SurveyWall:
+			if firstWallIdx == -1 {
+				firstWallIdx = i
+			}
+		}
+	}
+	require.GreaterOrEqual(t, lastCoreIdx, 0, "the coarse Area reading emits a core diagnostic")
+	require.GreaterOrEqual(t, firstWallIdx, 0, "the staged faceted wall refusal is present")
+	require.Less(t, lastCoreIdx, firstWallIdx,
+		"every core reading diagnostic precedes every wall diagnostic (proposal §10)")
+
+	for i := range res.Diagnostics {
+		for j := range res.Diagnostics {
+			if i != j {
+				require.NotEqual(t, res.Diagnostics[i], res.Diagnostics[j],
+					"each finding appears exactly once in the flattened inventory (proposal §10)")
+			}
+		}
+	}
+}
