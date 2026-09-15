@@ -393,3 +393,154 @@ func TestVerifyPublishEffectiveRequest(t *testing.T) {
 	require.True(t, emptyReq.RelativeTolerance.Equal(units.Scalar(1e-3), 1e-12),
 		"the effective request is recorded even for an empty document")
 }
+
+// TestVerifyPublishUndercutCompleteAbsence replays TestUndercutsPrismClear
+// and TestUndercutsVerticalHoleClear: every face is decided and none
+// opposes, the proven all-clear (proposal §7, §16 "Complete undercut
+// absence").
+func TestVerifyPublishUndercutCompleteAbsence(t *testing.T) {
+	t.Parallel()
+	for _, body := range []*Body{rectangularPrism(t, 100, 60, 10), holePlateBody(t)} {
+		res := publishBody(t, body, WithPullDirection(r3.NewVec(0, 0, 1)))
+		require.Equal(t, coverageComplete, res.Undercut.Coverage)
+		require.Empty(t, res.Undercut.Faces)
+		require.Equal(t, assessmentMet, res.Undercut.Assessment)
+		require.NotNil(t, res.Undercut.Request)
+	}
+}
+
+// TestVerifyPublishUndercutCompleteViolation replays TestUndercutsTiltedPull:
+// every face is decided and two confirmed faces oppose the tilted pull.
+func TestVerifyPublishUndercutCompleteViolation(t *testing.T) {
+	t.Parallel()
+	body := rectangularPrism(t, 100, 60, 10)
+	res := publishBody(t, body, WithPullDirection(r3.NewVec(1, 0, 1)))
+	require.Equal(t, coverageComplete, res.Undercut.Coverage)
+	require.Len(t, res.Undercut.Faces, 2)
+	require.Equal(t, assessmentViolated, res.Undercut.Assessment)
+}
+
+// chamferedQuarterDiskBody replays capblend_survey_test.go's
+// chamferedQuarterDiskPatch: a quarter disk (0,0)->(r,0), a CCW arc to
+// (0,r), and back to the origin, extruded by h and then chamfered by d on
+// its end cap loop — the same real cap-blend construction reached through
+// the public Body API alone, since chamferedQuarterDiskPatch itself lives in
+// the external decad_test package and is unreachable from this in-package
+// test.
+func chamferedQuarterDiskBody(t *testing.T, r, h, d float64) *Body {
+	t.Helper()
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	o := s.CreatePoint(0, 0)
+	s.Fix(o)
+	px := s.CreatePoint(r, 0)
+	py := s.CreatePoint(0, r)
+	s.CreateLine(o, px)
+	s.CreateLine(py, o)
+	s.CreateArc(o, px, py)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+
+	doc := New()
+	body, err := doc.Extrude(s, profiles[0], Distance{D: units.Millimeters(h), Dir: Along})
+	require.NoError(t, err)
+	chamfered, err := body.Chamfer(Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
+	require.NoError(t, err)
+	return chamfered
+}
+
+// TestVerifyPublishUndercutPartialCoverage replays
+// TestCapBlendUndecidedPatchKeepsProvenUndercut, the real mixed cap-blend
+// case: the circular chamfer patch's bounded range is undecided against a
+// +x pull while the flat chamfer patch at the origin corner provenly
+// opposes it. Coverage is Partial, carrying the confirmed face plus both the
+// violation and the incomplete-survey diagnostic (proposal §7, §16 "Mixed
+// undercuts").
+func TestVerifyPublishUndercutPartialCoverage(t *testing.T) {
+	t.Parallel()
+	body := chamferedQuarterDiskBody(t, 100, 20, 0.5)
+	var plane *Face
+	for _, f := range body.Faces() {
+		for _, o := range f.Origins() {
+			if o.Role == "chamferCap(end,0,2)" {
+				plane = f
+			}
+		}
+	}
+	require.NotNil(t, plane, "the origin-corner flat chamfer patch")
+	require.Equal(t, KindPlane, plane.Surface().Kind())
+
+	res := publishBody(t, body, WithPullDirection(r3.NewVec(1, 0, 0)))
+	require.Equal(t, coveragePartial, res.Undercut.Coverage)
+	require.Contains(t, res.Undercut.Faces, plane)
+	require.Equal(t, assessmentViolated, res.Undercut.Assessment)
+
+	var violating, undecided bool
+	for _, d := range res.Undercut.Diagnostics {
+		switch d.Code {
+		case DiagUndercut:
+			violating = true
+		case DiagUndecidedUndercut:
+			undecided = true
+		}
+	}
+	require.True(t, violating, "the confirmed face's own DiagUndercut is carried")
+	require.True(t, undecided, "the straddling patch's own DiagUndecidedUndercut is carried")
+}
+
+// freeformArchProfileBody extrudes a rectangle whose bottom edge is recorded
+// as a degree-1 unit-weight NURBSSeg — the same free-form-recorded-kind
+// refusal TestFreeformPrismUndercutsUndecided's freeformArchBody trips
+// (survey.go's errFreeformSection), reached here through the public
+// sketch/Body API alone since that fixture's own helpers live in the
+// external decad_test package.
+func freeformArchProfileBody(t *testing.T) *Body {
+	t.Helper()
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	p0 := s.CreatePoint(0, 0)
+	p1 := s.CreatePoint(10, 0)
+	_, err = s.CreateNURBS(1, []*sketch.Point{p0, p1}, []float64{1, 1}, []float64{0, 0, 1, 1})
+	require.NoError(t, err)
+	p2 := s.CreatePoint(10, 10)
+	p3 := s.CreatePoint(0, 10)
+	s.CreateLine(p1, p2)
+	s.CreateLine(p2, p3)
+	s.CreateLine(p3, p0)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	doc := New()
+	body, err := doc.Extrude(s, profiles[0], Distance{D: units.Millimeters(5), Dir: Along})
+	require.NoError(t, err)
+	return body
+}
+
+// TestVerifyPublishUndercutUndecided replays
+// TestFreeformPrismUndercutsUndecided: the free-form-recorded wall refuses
+// the survey outright, so coverage is Undecided with an empty face list —
+// never Complete, which would read as a proven absence the producer never
+// certified (proposal §7, §16 "Undecided analytic survey").
+func TestVerifyPublishUndercutUndecided(t *testing.T) {
+	t.Parallel()
+	body := freeformArchProfileBody(t)
+	res := publishBody(t, body, WithPullDirection(r3.NewVec(0, 0, 1)))
+	require.Equal(t, coverageUndecided, res.Undercut.Coverage)
+	require.Empty(t, res.Undercut.Faces)
+	require.Equal(t, assessmentUndecided, res.Undercut.Assessment)
+}
+
+// TestVerifyPublishUndercutUnavailable replays planarBooleanBody's
+// facetedPayload: the pull survey has no implemented reader for a faceted
+// body, so it is Unavailable rather than Undecided.
+func TestVerifyPublishUndercutUnavailable(t *testing.T) {
+	t.Parallel()
+	body := planarBooleanBody(t)
+	res := publishBody(t, body, WithPullDirection(r3.NewVec(0, 0, 1)))
+	require.Equal(t, coverageUnavailable, res.Undercut.Coverage)
+	require.Empty(t, res.Undercut.Faces)
+	require.Equal(t, assessmentUndecided, res.Undercut.Assessment)
+}
