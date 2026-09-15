@@ -16,32 +16,58 @@ package decad
 // verdict — so the assembler itself only maps them onto the result
 // vocabulary (proposal §3/§6/§8). Data flows one way into it: a real private
 // survey outcome and a real certified reading, never a value read back off
-// an already-built legacy BodyReport.
+// an already-built legacy BodyReport. ValidityDiagnostics and CoreDiagnostics
+// are the two flattening groups (proposal §10) the assembler does not derive
+// from a survey outcome: ValidityDiagnostics is the body's own validity
+// finding (DiagInvalidBody or DiagUndecidedValidity, at most one); Core is
+// the area/bounds/volume/centroid tolerance findings, always SurveyNone.
+// WallToleranceDiag and RadiusToleranceDiag are that survey's own reading's
+// precision finding, kept apart from Core because §10 flattens each with its
+// OWN survey's diagnostics rather than with the core group.
 type bodyPublishInput struct {
-	Body            *Body
-	Status          Status
-	Area            scalarReading
-	Bounds          boundsReading
-	Request         verifyRequest
-	Surveys         surveyResults
-	WallTolerance   toleranceResult
-	RadiusTolerance toleranceResult
-	Diagnostics     []Diagnostic
+	Body                *Body
+	Status              Status
+	Area                scalarReading
+	Bounds              boundsReading
+	Request             verifyRequest
+	Surveys             surveyResults
+	WallTolerance       toleranceResult
+	WallToleranceDiag   *Diagnostic
+	RadiusTolerance     toleranceResult
+	RadiusToleranceDiag *Diagnostic
+	ValidityDiagnostics []Diagnostic
+	CoreDiagnostics     []Diagnostic
 }
 
 // publishBodyResult builds one bodyResult from in (proposal §16: the
 // publication assembler consuming actual private survey outcomes and
-// certified readings).
+// certified readings). bodyResult.Diagnostics is the deterministic
+// flattening proposal §10 requires: validity diagnostics, core reading
+// diagnostics, wall diagnostics, undercut diagnostics, and concave-radius
+// diagnostics, in that order, each finding assembled exactly once here even
+// though the same finding is also reachable through its own result's local
+// Diagnostics slice.
 func publishBodyResult(in bodyPublishInput) *bodyResult {
+	wall := publishWallResult(in.Surveys, in.Request, in.WallTolerance, in.WallToleranceDiag)
+	undercut := publishUndercutResult(in.Surveys, in.Request)
+	radius := publishConcaveRadiusResult(in.Surveys, in.Request, in.RadiusTolerance, in.RadiusToleranceDiag)
+
+	var diags []Diagnostic
+	diags = append(diags, in.ValidityDiagnostics...)
+	diags = append(diags, in.CoreDiagnostics...)
+	diags = append(diags, wall.Diagnostics...)
+	diags = append(diags, undercut.Diagnostics...)
+	diags = append(diags, radius.Diagnostics...)
+
 	return &bodyResult{
 		Body:          in.Body,
 		Status:        in.Status,
 		Area:          in.Area,
 		Bounds:        in.Bounds,
-		Wall:          publishWallResult(in.Surveys, in.Request, in.WallTolerance),
-		Undercut:      publishUndercutResult(in.Surveys, in.Request),
-		ConcaveRadius: publishConcaveRadiusResult(in.Surveys, in.Request, in.RadiusTolerance),
-		Diagnostics:   in.Diagnostics,
+		Wall:          wall,
+		Undercut:      undercut,
+		ConcaveRadius: radius,
+		Diagnostics:   diags,
 	}
 }
 
@@ -52,8 +78,10 @@ func publishBodyResult(in bodyPublishInput) *bodyResult {
 // non-nil reading is Measured — its assessment taken from the SAME interval
 // comparison (intervalVerdict) the survey diagnostic itself used, so a
 // straddling proven interval and a met/violated one agree with the
-// diagnostic that already fired for it.
-func publishWallResult(surveys surveyResults, req verifyRequest, tolerance toleranceResult) wallResult {
+// diagnostic that already fired for it. Diagnostics is the wall group of
+// proposal §10's flattening: the survey's own findings, plus the wall
+// reading's own precision finding when it fired, in that order.
+func publishWallResult(surveys surveyResults, req verifyRequest, tolerance toleranceResult, toleranceDiag *Diagnostic) wallResult {
 	if req.Wall == nil {
 		return wallResult{Outcome: scalarNotRequested, Assessment: assessmentNotEvaluated}
 	}
@@ -62,11 +90,7 @@ func publishWallResult(surveys surveyResults, req verifyRequest, tolerance toler
 	switch {
 	case !out.ok:
 		res.Assessment = assessmentUndecided
-		if out.reason == surveyFacetedUnsupported {
-			res.Outcome = scalarUnavailable
-		} else {
-			res.Outcome = scalarUndecided
-		}
+		res.Outcome = unavailableOrUndecided(out.reason)
 	case out.reading == nil:
 		// No wall exists below the requested minimum (proposal §6).
 		res.Outcome = scalarAbsent
@@ -84,7 +108,46 @@ func publishWallResult(surveys surveyResults, req verifyRequest, tolerance toler
 			res.Assessment = assessmentUndecided
 		}
 	}
+	res.Diagnostics = appendToleranceDiag(surveys.WallDiagnostics, toleranceDiag)
 	return res
+}
+
+// unavailableOrUndecided maps a survey's own !ok reason onto ScalarUnavailable
+// or ScalarUndecided (proposal §6's ScalarUnavailable row, §16's "Map an
+// explicit unsupported payload dispatch to Unavailable"): a payload with no
+// implemented survey — faceted, or a payload class the dispatch does not name
+// at all — is Unavailable; every other unresolved proof stays Undecided.
+func unavailableOrUndecided(reason surveyReason) scalarOutcome {
+	switch reason {
+	case surveyFacetedUnsupported, surveyPayloadStaged:
+		return scalarUnavailable
+	default:
+		return scalarUndecided
+	}
+}
+
+// unavailableOrUndecidedCoverage is unavailableOrUndecided's coverageState
+// counterpart, for the undercut survey.
+func unavailableOrUndecidedCoverage(reason surveyReason) coverageState {
+	switch reason {
+	case surveyFacetedUnsupported, surveyPayloadStaged:
+		return coverageUnavailable
+	default:
+		return coverageUndecided
+	}
+}
+
+// appendToleranceDiag builds one result's Diagnostics: the survey's own
+// findings, plus its reading's own precision finding when one fired,
+// appended last (proposal §10). It always returns a fresh slice so no
+// result's Diagnostics aliases surveyResults' own slice.
+func appendToleranceDiag(survey []Diagnostic, toleranceDiag *Diagnostic) []Diagnostic {
+	var diags []Diagnostic
+	diags = append(diags, survey...)
+	if toleranceDiag != nil {
+		diags = append(diags, *toleranceDiag)
+	}
+	return diags
 }
 
 // publishUndercutResult maps one body's undercut survey outcome onto the
@@ -111,11 +174,7 @@ func publishUndercutResult(surveys surveyResults, req verifyRequest) undercutRes
 	switch {
 	case !out.ok:
 		res.Assessment = assessmentUndecided
-		if out.reason == surveyFacetedUnsupported {
-			res.Coverage = coverageUnavailable
-		} else {
-			res.Coverage = coverageUndecided
-		}
+		res.Coverage = unavailableOrUndecidedCoverage(out.reason)
 	case out.undecided:
 		if len(out.faces) > 0 {
 			res.Coverage = coveragePartial
@@ -137,8 +196,10 @@ func publishUndercutResult(surveys surveyResults, req verifyRequest) undercutRes
 // publishConcaveRadiusResult maps one body's concave-radius survey outcome
 // onto the private result vocabulary (proposal §6): ScalarNotRequested,
 // Unavailable, Undecided, Absent, or Measured with its tolerance verdict. It
-// carries no assessment — Verify accepts no radius requirement.
-func publishConcaveRadiusResult(surveys surveyResults, req verifyRequest, tolerance toleranceResult) concaveRadiusResult {
+// carries no assessment — Verify accepts no radius requirement. Diagnostics
+// is the concave-radius group of proposal §10's flattening: the survey's own
+// findings, plus the radius reading's own precision finding when it fired.
+func publishConcaveRadiusResult(surveys surveyResults, req verifyRequest, tolerance toleranceResult, toleranceDiag *Diagnostic) concaveRadiusResult {
 	if !req.ConcaveRadius {
 		return concaveRadiusResult{Outcome: scalarNotRequested}
 	}
@@ -146,11 +207,7 @@ func publishConcaveRadiusResult(surveys surveyResults, req verifyRequest, tolera
 	var res concaveRadiusResult
 	switch {
 	case !out.ok:
-		if out.reason == surveyFacetedUnsupported {
-			res.Outcome = scalarUnavailable
-		} else {
-			res.Outcome = scalarUndecided
-		}
+		res.Outcome = unavailableOrUndecided(out.reason)
 	case out.reading == nil:
 		res.Outcome = scalarAbsent
 	default:
@@ -158,6 +215,7 @@ func publishConcaveRadiusResult(surveys surveyResults, req verifyRequest, tolera
 		m := lengthMeasurement(*out.reading, out.bound)
 		res.Minimum = &scalarReading{Measurement: m, Tolerance: tolerance}
 	}
+	res.Diagnostics = appendToleranceDiag(surveys.RadiusDiagnostics, toleranceDiag)
 	return res
 }
 

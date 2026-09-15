@@ -98,6 +98,7 @@ type Diagnostic struct {
     Status      Status          // the rung this reason contributes: Suspect / Violating / Interfering / Unsound
     Body        *Body           // the body it concerns; nil for a pair diagnostic
     Pair        *DiagnosticPair // the pair it concerns; nil for a body diagnostic
+    Survey      SurveyKind      // which optional body survey this concerns; SurveyNone for a core or pair reason
     Reading     ReadingKind     // which quantity the Observed* form carries; ReadingNone when the reason
                                 // names no bounded reading. It keys which of the three Observed* fields is set.
     Observed    *Measurement    // a SCALAR reading — Area, Volume, MinWallThickness, MinRadius, a pair's
@@ -113,6 +114,25 @@ type Diagnostic struct {
 // DiagnosticPair names the two bodies of a pair diagnostic, in the report's
 // own stable pair order (interference design §2).
 type DiagnosticPair struct{ A, B *Body }
+
+// SurveyKind identifies which optional body survey a Diagnostic concerns. Its
+// zero value SurveyNone means no optional body survey applies — every core
+// reading and every pair diagnostic carries it — and is NOT an unevaluated
+// marker: it is the permanent, correct value for those reasons. Set even when
+// Reading is ReadingNone, so an unsupported wall, undercut, or concave-radius
+// refusal is distinguished without inspecting Message text.
+type SurveyKind int
+
+const (
+    // SurveyNone — no optional body survey applies.
+    SurveyNone SurveyKind = iota
+    // SurveyWall — the wall-thickness survey (WithMinWallThickness).
+    SurveyWall
+    // SurveyUndercut — the pull-direction survey (WithPullDirection).
+    SurveyUndercut
+    // SurveyConcaveRadius — the concave-radius survey (WithMinRadius).
+    SurveyConcaveRadius
+)
 
 // ReadingKind names which measured quantity a diagnostic's Observed* form
 // carries — a named-text enum with a stable String(), like every other closed
@@ -195,8 +215,10 @@ const (
     // neither way (§1). Reading ReadingNone, Observed* and Required nil.
     // Contributes Suspect.
     DiagUndecidedPair
-    // DiagUnsupportedPair — broad compatibility code for a staged pair.
-    // Verify emits this alongside one of the three cause-specific codes below.
+    // DiagUnsupportedPair — the deprecated broad compatibility code for a
+    // staged pair. The constant stays declared for existing callers that
+    // still branch on it, but Verify no longer emits it into a returned
+    // report — only the matching cause-specific code below.
     // Deprecated: branch on the cause-specific code for detail.
     DiagUnsupportedPair
     // DiagUndecidedClearance — a pair whose partition IS proven disjoint (by box
@@ -234,15 +256,33 @@ const (
     // Suspect.
     DiagUnsupportedPairPipeline
     // DiagUnsupportedSurveyPayload — an asked body survey cannot run because
-    // its payload class is staged. Reading ReadingNone, Observed* and Required
-    // nil. Body set. Contributes Suspect.
+    // its payload class is staged. Survey names the blocked question. Reading
+    // ReadingNone, Observed* and Required nil. Body set. Contributes Suspect.
     DiagUnsupportedSurveyPayload
+    // DiagSurveyPrerequisite — a requested survey needs a proven solid, and
+    // this body's validity is invalid or undecided. Survey names the blocked
+    // question. Reading ReadingNone. Contributes Suspect.
+    DiagSurveyPrerequisite
+    // DiagToleranceReferenceUnavailable — a nonzero-bound reading has no
+    // usable tolerance reference, so the gate could not judge it. Reading
+    // names the quantity; Required nil. Contributes Suspect.
+    DiagToleranceReferenceUnavailable
 )
 ```
 
-**Both enums pin their stable `String()` tokens**, in the lower-snake style of
+**All three enums pin their stable `String()` tokens**, in the lower-snake style of
 the other closed sets decad owns (`OpKind`, the query predicates): the token,
 never the iota value, is the identity a caller branches on and a log prints.
+
+`SurveyKind.String()`:
+
+- `SurveyNone` → `"none"`
+- `SurveyWall` → `"wall"`
+- `SurveyUndercut` → `"undercut"`
+- `SurveyConcaveRadius` → `"concave_radius"`
+
+The zero value is `SurveyNone`, so it renders `"none"`; an out-of-range value
+renders `"survey_kind(<n>)"` with `<n>` the integer, never a panic.
 
 `ReadingKind.String()`:
 
@@ -278,6 +318,8 @@ renders `"reading(<n>)"` with `<n>` the integer, never a panic.
 - `DiagUndecidedClearance` → `"undecided_clearance"`
 - `DiagUndecidedInterference` → `"undecided_interference"`
 - `DiagUnsupportedSurveyPayload` → `"unsupported_survey_payload"`
+- `DiagSurveyPrerequisite` → `"survey_prerequisite"`
+- `DiagToleranceReferenceUnavailable` → `"tolerance_reference_unavailable"`
 
 The zero value is `DiagMeasurementBeyondTolerance`, so it renders
 `"measurement_beyond_tolerance"`; an out-of-range value renders
@@ -297,12 +339,27 @@ and the matching `Observed*` form; a proven-invalid body emits one
 `DiagInvalidBody` and no region-quantity diagnostics, because §1 gives it no
 region quantity to gate.
 
-For a staged pair cause, the slice carries both the deprecated broad
-`DiagUnsupportedPair` compatibility entry and the cause-specific entry.
+**Each body's own contribution to the slice is itself ordered and complete.**
+Within `Report.Diagnostics`, one body's reasons stay together and appear in a
+fixed order: its validity finding first, then its boundary/region reading
+findings (`Area`, `Bounds`, `Volume`, `Centroid`), then its wall findings,
+then its undercut findings, then its concave-radius findings — each finding
+appearing exactly once even though a survey's own violation and its
+incomplete-survey finding can both be present. That per-body segment is empty
+**exactly** when the body's own `Status == Sound`, the same completeness
+`Report.Diagnostics` holds as a whole. Bodies appear in `Document.Bodies()`
+order, and the pair diagnostics that follow every body's segment keep their
+own stable pair order (§1, interference design §2).
 
-Every shipped payload class forms its tolerance reference, so a reference-less
-`Suspect` is a degenerate reading rather than a payload the gate cannot judge:
-an analytic reading carries a zero `Bound` and short-circuits the gate before
+For a staged pair cause, the slice carries only the cause-specific entry; the
+deprecated `DiagUnsupportedPair` constant stays declared for existing callers
+that still branch on it, but Verify no longer emits it into a returned report.
+
+Every shipped payload class forms its tolerance reference, so `Suspect` from
+`DiagToleranceReferenceUnavailable` — a reading with no usable reference,
+distinct from `DiagMeasurementBeyondTolerance`'s known reference rejecting the
+bound — never fires on a shipped path today: an analytic reading carries a
+zero `Bound` and short-circuits the gate before
 any reference is consulted (`verify_tolerance.go`'s `scalarToleranceRef` and
 `boundedToleranceRef`), and a faceted body
 always forms a usable reference — its `payload.diameter` is guaranteed at build
@@ -502,9 +559,9 @@ already carried by `DiagMeasurementBeyondTolerance`, so the "empty
 **The undecided pair is now RECORDED.** Where §6 folds a pair the evaluator
 could not decide into the report's `Suspect` rung, a `DiagUndecidedPair` or
 one of `DiagUnsupportedPairPayload`, `DiagUnsupportedPairContact`, or
-`DiagUnsupportedPairPipeline` naming the exact staged cause is emitted. For
-those three staged causes, the deprecated broad `DiagUnsupportedPair`
-compatibility signal is emitted alongside it,
+`DiagUnsupportedPairPipeline` naming the exact staged cause is emitted — that
+one cause-specific entry alone; the deprecated broad `DiagUnsupportedPair`
+constant is not emitted into a returned report —
 a pair proven apart whose asked gap the kernel could not measure emits a
 `DiagUndecidedClearance` instead, and a pair proven to overlap whose overlap
 volume the evaluator could not bound emits a `DiagUndecidedInterference` —
@@ -1225,9 +1282,9 @@ survey that could not decide, and for the verdict nothing turns on which:
 `MinRadius`, an empty `Undercuts`, or a pair with no `Interference` row is a
 **proven** absence exactly when no diagnostic names it — the per-survey
 `DiagUndecidedWall` / `DiagUndecidedUndercut` / `DiagUndecidedMinRadius` for that
-body-and-survey, `DiagUnsupportedSurveyPayload` when the requested survey's
-payload implementation is staged, and `DiagUndecidedPair`, the compatibility
-`DiagUnsupportedPair` plus its cause-specific unsupported-pair code, or
+body-and-survey, `DiagUnsupportedSurveyPayload` — with `Survey` naming which
+question — when the requested survey's payload implementation is staged, and
+`DiagUndecidedPair`, its cause-specific unsupported-pair code, or
 `DiagUndecidedInterference` for that
 pair (a `DiagUndecidedClearance` proves the
 pair disjoint, so it leaves the missing `Interference` row a proven non-overlap

@@ -547,18 +547,14 @@ func TestVerifyGearScaleOverArrangementCapStaysSuspect(t *testing.T) {
 	require.Equal(t, decad.Suspect, report.Status)
 	require.Empty(t, report.Interferences)
 
-	var sawPipeline, sawLegacy bool
+	var sawPipeline bool
 	for _, d := range report.Diagnostics {
 		if d.Pair == nil || d.Pair.A != a || d.Pair.B != b {
 			continue
 		}
-		switch d.Code {
-		case decad.DiagUnsupportedPairPipeline:
+		if d.Code == decad.DiagUnsupportedPairPipeline {
 			sawPipeline = true
-		case decad.DiagUnsupportedPair:
-			sawLegacy = true
 		}
 	}
 	require.True(t, sawPipeline, "the arrangement cap must report the pipeline-unsupported cause code")
-	require.True(t, sawLegacy, "the deprecated broad unsupported-pair code must still accompany it")
 }

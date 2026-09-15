@@ -96,31 +96,47 @@ func judgeTolerance(pass, haveRef bool, rel, ref float64, sample units.Value) to
 	return toleranceResult{State: toleranceExceeded, Limit: limit}
 }
 
+// toleranceDiagnostic picks DiagMeasurementBeyondTolerance for an Exceeded
+// verdict — a known reference rejected the bound — or
+// DiagToleranceReferenceUnavailable for an Undecided one — a nonzero bound
+// had no usable reference (proposal §10). Both contribute Suspect.
+func toleranceDiagnostic(tr toleranceResult) DiagnosticCode {
+	if tr.State == toleranceUndecided {
+		return DiagToleranceReferenceUnavailable
+	}
+	return DiagMeasurementBeyondTolerance
+}
+
 // scalarToleranceVerdict judges one scalar reading against the relative
 // tolerance gate (proposal §8), returning the diagnostic to emit when its
-// state is not Satisfied, nil otherwise. The diagnostic stays
-// DiagMeasurementBeyondTolerance even for an Undecided verdict in this PR;
-// PR 3 swaps that case for DiagToleranceReferenceUnavailable.
-func scalarToleranceVerdict(reading ReadingKind, body *Body, m Measurement, rel float64, reference measurementReference) (toleranceResult, *Diagnostic) {
+// state is not Satisfied, nil otherwise. Survey identifies which optional
+// body survey this reading belongs to — SurveyNone for a core reading.
+func scalarToleranceVerdict(reading ReadingKind, survey SurveyKind, body *Body, m Measurement, rel float64, reference measurementReference) (toleranceResult, *Diagnostic) {
 	pass, ref, haveRef := scalarToleranceRef(m, rel, reference)
 	tr := judgeTolerance(pass, haveRef, rel, ref, m.Value)
 	if pass {
 		return tr, nil
 	}
 	obs := m
+	code := toleranceDiagnostic(tr)
+	message := fmt.Sprintf("the %s reading's bound %s is beyond the relative tolerance", reading, m.Bound)
+	if code == DiagToleranceReferenceUnavailable {
+		message = fmt.Sprintf("the %s reading has no usable tolerance reference", reading)
+	}
 	return tr, &Diagnostic{
-		Code:     DiagMeasurementBeyondTolerance,
+		Code:     code,
 		Status:   Suspect,
 		Body:     body,
+		Survey:   survey,
 		Reading:  reading,
 		Observed: &obs,
 		Required: tr.Limit,
-		Message:  fmt.Sprintf("the %s reading's bound %s is beyond the relative tolerance", reading, m.Bound),
+		Message:  message,
 	}
 }
 
 // boundsToleranceVerdict is scalarToleranceVerdict's ObservedBox counterpart,
-// for the Bounds reading.
+// for the Bounds reading (always SurveyNone: bounds is a core reading).
 func boundsToleranceVerdict(body *Body, box Box, rel float64, reference func() (float64, bool)) (toleranceResult, *Diagnostic) {
 	pass, ref, haveRef := boundedToleranceRef(box.Bound.Base(), rel, reference)
 	tr := judgeTolerance(pass, haveRef, rel, ref, box.Bound)
@@ -128,19 +144,25 @@ func boundsToleranceVerdict(body *Body, box Box, rel float64, reference func() (
 		return tr, nil
 	}
 	observed := box
+	code := toleranceDiagnostic(tr)
+	message := fmt.Sprintf("the bounds reading's bound %s is beyond the relative tolerance", box.Bound)
+	if code == DiagToleranceReferenceUnavailable {
+		message = "the bounds reading has no usable tolerance reference"
+	}
 	return tr, &Diagnostic{
-		Code:        DiagMeasurementBeyondTolerance,
+		Code:        code,
 		Status:      Suspect,
 		Body:        body,
 		Reading:     ReadingBounds,
 		ObservedBox: &observed,
 		Required:    tr.Limit,
-		Message:     fmt.Sprintf("the bounds reading's bound %s is beyond the relative tolerance", box.Bound),
+		Message:     message,
 	}
 }
 
 // centroidToleranceVerdict is scalarToleranceVerdict's ObservedVec
-// counterpart, for the Centroid reading.
+// counterpart, for the Centroid reading (always SurveyNone: centroid is a
+// core reading).
 func centroidToleranceVerdict(body *Body, cen VecMeasurement, rel float64, reference func() (float64, bool)) (toleranceResult, *Diagnostic) {
 	pass, ref, haveRef := boundedToleranceRef(cen.Bound.Base(), rel, reference)
 	tr := judgeTolerance(pass, haveRef, rel, ref, cen.Bound)
@@ -148,14 +170,19 @@ func centroidToleranceVerdict(body *Body, cen VecMeasurement, rel float64, refer
 		return tr, nil
 	}
 	observed := cen
+	code := toleranceDiagnostic(tr)
+	message := fmt.Sprintf("the centroid reading's bound %s is beyond the relative tolerance", cen.Bound)
+	if code == DiagToleranceReferenceUnavailable {
+		message = "the centroid reading has no usable tolerance reference"
+	}
 	return tr, &Diagnostic{
-		Code:        DiagMeasurementBeyondTolerance,
+		Code:        code,
 		Status:      Suspect,
 		Body:        body,
 		Reading:     ReadingCentroid,
 		ObservedVec: &observed,
 		Required:    tr.Limit,
-		Message:     fmt.Sprintf("the centroid reading's bound %s is beyond the relative tolerance", cen.Bound),
+		Message:     message,
 	}
 }
 
@@ -287,63 +314,78 @@ type bodyReadingVerdicts struct {
 	Radius   toleranceResult
 }
 
+// bodyReadingDiagSet is bodyReadingDiagnostics' diagnostics, split by which
+// group of proposal §10's flattening they belong to: Core is the
+// area/bounds/volume/centroid group (always SurveyNone); Wall and Radius are
+// that survey's own precision finding, kept apart from Core so
+// publishBodyResult can flatten each with its OWN survey's findings rather
+// than with the core group.
+type bodyReadingDiagSet struct {
+	Core   []Diagnostic
+	Wall   *Diagnostic
+	Radius *Diagnostic
+}
+
 // bodyReadingDiagnostics applies verification §3's complete body-field table,
-// emitting one DiagMeasurementBeyondTolerance per present reading that fails —
-// never short-circuiting, so a body beyond tolerance on two readings emits two
+// emitting one diagnostic per present reading that fails — never
+// short-circuiting, so a body beyond tolerance on two readings emits two
 // (verification §1.1) — and returns every present reading's tolerance
 // verdict beside them. Body.Edges already deduplicates topology edges, and
 // edgeLength reads each held geometric chain directly even when public
 // Edge.Length must refuse a curved boolean rim.
-func bodyReadingDiagnostics(ctx context.Context, body *Body, readings bodyReadingSet, rel float64) (bodyReadingVerdicts, []Diagnostic, error) {
+func bodyReadingDiagnostics(ctx context.Context, body *Body, readings bodyReadingSet, rel float64) (bodyReadingVerdicts, bodyReadingDiagSet, error) {
 	in := &bodyToleranceInputs{ctx: ctx, body: body, area: readings.Area}
-	verdicts, diags := in.readingDiagnostics(readings, rel)
+	verdicts, diagSet := in.readingDiagnostics(readings, rel)
 	// A cancellation observed while a reference lazily built its geometry is
 	// reported to the caller rather than folded into a Suspect verdict.
 	if in.err != nil {
-		return bodyReadingVerdicts{}, nil, in.err
+		return bodyReadingVerdicts{}, bodyReadingDiagSet{}, in.err
 	}
-	return verdicts, diags, nil
+	return verdicts, diagSet, nil
 }
 
-func (in *bodyToleranceInputs) readingDiagnostics(r bodyReadingSet, rel float64) (bodyReadingVerdicts, []Diagnostic) {
-	var diags []Diagnostic
+func (in *bodyToleranceInputs) readingDiagnostics(r bodyReadingSet, rel float64) (bodyReadingVerdicts, bodyReadingDiagSet) {
+	var out bodyReadingDiagSet
 	var verdicts bodyReadingVerdicts
 
-	scalar := func(reading ReadingKind, m Measurement, reference measurementReference) toleranceResult {
-		tr, diag := scalarToleranceVerdict(reading, in.body, m, rel, reference)
-		if diag != nil {
-			diags = append(diags, *diag)
-		}
-		return tr
+	scalar := func(reading ReadingKind, survey SurveyKind, m Measurement, reference measurementReference) (toleranceResult, *Diagnostic) {
+		return scalarToleranceVerdict(reading, survey, in.body, m, rel, reference)
 	}
 
-	verdicts.Area = scalar(ReadingArea, r.Area, in.areaReference)
+	var diag *Diagnostic
+	verdicts.Area, diag = scalar(ReadingArea, SurveyNone, r.Area, in.areaReference)
+	if diag != nil {
+		out.Core = append(out.Core, *diag)
+	}
 
 	boundsTr, boundsDiag := boundsToleranceVerdict(in.body, r.Bounds, rel, in.diameterReference)
 	verdicts.Bounds = boundsTr
 	if boundsDiag != nil {
-		diags = append(diags, *boundsDiag)
+		out.Core = append(out.Core, *boundsDiag)
 	}
 
 	if r.Volume != nil {
-		verdicts.Volume = scalar(ReadingVolume, *r.Volume, in.volumeReference)
+		verdicts.Volume, diag = scalar(ReadingVolume, SurveyNone, *r.Volume, in.volumeReference)
+		if diag != nil {
+			out.Core = append(out.Core, *diag)
+		}
 	}
 
 	if r.Centroid != nil {
 		cenTr, cenDiag := centroidToleranceVerdict(in.body, *r.Centroid, rel, in.diameterReference)
 		verdicts.Centroid = cenTr
 		if cenDiag != nil {
-			diags = append(diags, *cenDiag)
+			out.Core = append(out.Core, *cenDiag)
 		}
 	}
 
 	if r.Wall != nil {
-		verdicts.Wall = scalar(ReadingWall, *r.Wall, in.lengthReference)
+		verdicts.Wall, out.Wall = scalar(ReadingWall, SurveyWall, *r.Wall, in.lengthReference)
 	}
 	if r.Radius != nil {
-		verdicts.Radius = scalar(ReadingMinRadius, *r.Radius, in.lengthReference)
+		verdicts.Radius, out.Radius = scalar(ReadingMinRadius, SurveyConcaveRadius, *r.Radius, in.lengthReference)
 	}
-	return verdicts, diags
+	return verdicts, out
 }
 
 // pairToleranceInputs owns pair-relative references. Clearance uses the

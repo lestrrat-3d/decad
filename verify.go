@@ -355,9 +355,6 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 			}
 			if outcome != interferenceMeasured {
 				diag := undecidedPairDiag(a, b, res.verdict, outcome)
-				if legacy, ok := legacyUnsupportedPairDiag(a, b, diag.Code); ok {
-					report.Diagnostics = append(report.Diagnostics, legacy)
-				}
 				report.Diagnostics = append(report.Diagnostics, diag)
 				undecided = true
 				continue
@@ -450,25 +447,14 @@ func pairDiagNone(a, b *Body, code DiagnosticCode, msg string) Diagnostic {
 	}
 }
 
-// legacyUnsupportedPairDiag preserves the deprecated broad pair signal for
-// callers that still branch on it. The cause-specific diagnostic remains the
-// actionable entry and is appended separately by Verify.
-func legacyUnsupportedPairDiag(a, b *Body, cause DiagnosticCode) (Diagnostic, bool) {
-	switch cause {
-	case DiagUnsupportedPairPayload, DiagUnsupportedPairContact, DiagUnsupportedPairPipeline:
-		return pairDiagNone(a, b, DiagUnsupportedPair,
-			"the pair cannot be decided because a read-only intersection stage is unsupported; inspect the accompanying cause-specific diagnostic for details"), true
-	default:
-		return Diagnostic{}, false
-	}
-}
-
 // undecidedPairDiag picks the diagnostic for a pair whose overlap volume the
 // evaluator could not measure (verification §1.1): payload, contact, and
 // in-pipeline limits each keep their own code and action; only an overlap with
 // an otherwise undecided measurement is DiagUndecidedInterference; an
-// unresolved partition is DiagUndecidedPair. Verify adds the deprecated broad
-// compatibility code alongside the three cause-specific outcomes.
+// unresolved partition is DiagUndecidedPair. Verify emits only this
+// cause-specific diagnostic — the deprecated broad DiagUnsupportedPair
+// constant stays declared for existing callers that still branch on it, but
+// no longer appears in a returned report (proposal §10).
 func undecidedPairDiag(a, b *Body, verdict pairVerdict, outcome interferenceOutcome) Diagnostic {
 	switch {
 	case outcome == interferenceUnsupportedPayloadFirst:
@@ -617,8 +603,6 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 		br.Status = Suspect
 	}
 
-	var diags []Diagnostic
-
 	// A proven-invalid body emits one DiagInvalidBody and no region-quantity
 	// diagnostics, because §1 gives it no region quantity to gate. The gate
 	// still runs, discarded, to surface a cancellation observed while lazily
@@ -628,20 +612,20 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 		if _, _, err := bodyReadingDiagnostics(ctx, b, bodyReadingSet{Area: br.Area, Bounds: br.Bounds}, cfg.rel); err != nil {
 			return nil, nil, err
 		}
-		diags = append(diags, Diagnostic{
+		invalidDiag := Diagnostic{
 			Code:    DiagInvalidBody,
 			Status:  Unsound,
 			Body:    b,
 			Reading: ReadingNone,
 			Message: "the held boundary is proven not a valid solid",
-		})
+		}
 		res := publishBodyResult(bodyPublishInput{
-			Body:        b,
-			Status:      br.Status,
-			Area:        scalarReading{Measurement: br.Area},
-			Bounds:      boundsReading{Box: br.Bounds},
-			Request:     req,
-			Diagnostics: diags,
+			Body:                b,
+			Status:              br.Status,
+			Area:                scalarReading{Measurement: br.Area},
+			Bounds:              boundsReading{Box: br.Bounds},
+			Request:             req,
+			ValidityDiagnostics: []Diagnostic{invalidDiag},
 		})
 		projectLegacyBodyReport(res, br)
 		return res, br, nil
@@ -649,8 +633,9 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 
 	// An undecided validity (a body this evaluator did not build, unreachable
 	// through the public API) is Suspect, and names itself in the slice.
+	var validityDiags []Diagnostic
 	if br.Status == Suspect {
-		diags = append(diags, Diagnostic{
+		validityDiags = append(validityDiags, Diagnostic{
 			Code:    DiagUndecidedValidity,
 			Status:  Suspect,
 			Body:    b,
@@ -682,7 +667,6 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 				suspect = true
 			}
 		}
-		diags = append(diags, surveyDiags...)
 	}
 
 	var wallReading, radiusReading *Measurement
@@ -703,7 +687,9 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 	// Exactness is summary metadata only. The total tolerance gate runs after
 	// every requested survey and judges each present bounded result by its own
 	// inclusive Bound <= rel*Ref comparison (verification §2/§3/§6); each
-	// reading beyond tolerance emits its own DiagMeasurementBeyondTolerance.
+	// reading beyond tolerance emits its own diagnostic (DiagMeasurementBeyond-
+	// Tolerance, or DiagToleranceReferenceUnavailable when no reference was
+	// usable).
 	br.Exactness = bodyExactness(br)
 	readings := bodyReadingSet{
 		Area:     br.Area,
@@ -713,13 +699,12 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 		Wall:     wallReading,
 		Radius:   radiusReading,
 	}
-	verdicts, toleranceDiags, err := bodyReadingDiagnostics(ctx, b, readings, cfg.rel)
+	verdicts, diagSet, err := bodyReadingDiagnostics(ctx, b, readings, cfg.rel)
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(toleranceDiags) > 0 {
+	if len(diagSet.Core) > 0 || diagSet.Wall != nil || diagSet.Radius != nil {
 		suspect = true
-		diags = append(diags, toleranceDiags...)
 	}
 
 	// Worst wins at the body level: Violating > Suspect > Sound
@@ -732,15 +717,18 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 	}
 
 	res := publishBodyResult(bodyPublishInput{
-		Body:            b,
-		Status:          br.Status,
-		Area:            scalarReading{Measurement: br.Area, Tolerance: verdicts.Area},
-		Bounds:          boundsReading{Box: br.Bounds, Tolerance: verdicts.Bounds},
-		Request:         req,
-		Surveys:         surveys,
-		WallTolerance:   verdicts.Wall,
-		RadiusTolerance: verdicts.Radius,
-		Diagnostics:     diags,
+		Body:                b,
+		Status:              br.Status,
+		Area:                scalarReading{Measurement: br.Area, Tolerance: verdicts.Area},
+		Bounds:              boundsReading{Box: br.Bounds, Tolerance: verdicts.Bounds},
+		Request:             req,
+		Surveys:             surveys,
+		WallTolerance:       verdicts.Wall,
+		WallToleranceDiag:   diagSet.Wall,
+		RadiusTolerance:     verdicts.Radius,
+		RadiusToleranceDiag: diagSet.Radius,
+		ValidityDiagnostics: validityDiags,
+		CoreDiagnostics:     diagSet.Core,
 	})
 	projectLegacyBodyReport(res, br)
 	return res, br, nil

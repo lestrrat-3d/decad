@@ -1718,12 +1718,18 @@ contract pins down:
 - **`Verify` returns structured diagnostics.** On a report returned by
   `Verify`, `Report.Diagnostics` is one
   branchable `Diagnostic` per reason the report is not `Sound` — a reading
-  beyond tolerance, an undecided validity, an undecided or staged pair, an
-  undecided survey (named per survey) or clearance, a proven wall or undercut
-  violation, an interference. The slice is empty exactly when
-  the report is `Sound`, so an agent reads the reasons instead of reconstructing
-  them. Every existing field and `Trustworthy()` are unchanged; the slice is
-  additive. `docs/verification-design.md` §1.1 owns its shape.
+  beyond tolerance, a reading with no usable tolerance reference, an undecided
+  validity, an undecided or staged pair, an undecided or unsupported survey, a
+  survey blocked on a body's own invalid or undecided validity, an undecided
+  clearance, a proven wall or undercut violation, an interference. Every
+  optional-body-survey reason carries `Diagnostic.Survey` (`SurveyWall` /
+  `SurveyUndercut` / `SurveyConcaveRadius`), set even when the reason names no
+  bounded reading, so a caller distinguishes which survey failed without
+  parsing `Message` text; every core or pair reason carries `SurveyNone`. The
+  slice is empty exactly when the report is `Sound`, so an agent reads the
+  reasons instead of reconstructing them. Every existing field and
+  `Trustworthy()` are unchanged; the slice is additive.
+  `docs/verification-design.md` §1.1 owns its shape.
 
 Fusion answers **none** of `Watertight` (with diagnostics), `Manifold`,
 `SelfIntersecting`, `MinWallThickness` (B-rep), `Undercuts`, or `MinRadius`. That

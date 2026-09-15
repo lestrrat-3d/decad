@@ -120,6 +120,42 @@ func (k ReadingKind) String() string {
 	}
 }
 
+// SurveyKind identifies which optional body survey a Diagnostic concerns
+// (verification §1.1). SurveyNone means no optional body survey applies — as
+// for a core reading or a pair diagnostic — and is NOT an unevaluated marker:
+// it is the correct, permanent value for every diagnostic outside the three
+// opt-in surveys.
+type SurveyKind int
+
+const (
+	// SurveyNone — no optional body survey applies; every core or pair
+	// diagnostic carries this.
+	SurveyNone SurveyKind = iota
+	// SurveyWall — the wall-thickness survey (WithMinWallThickness).
+	SurveyWall
+	// SurveyUndercut — the pull-direction survey (WithPullDirection).
+	SurveyUndercut
+	// SurveyConcaveRadius — the concave-radius survey (WithMinRadius).
+	SurveyConcaveRadius
+)
+
+// String renders the pinned lower-snake token. An out-of-range value renders
+// "survey_kind(<n>)", never a panic (verification §1.1).
+func (k SurveyKind) String() string {
+	switch k {
+	case SurveyNone:
+		return "none"
+	case SurveyWall:
+		return "wall"
+	case SurveyUndercut:
+		return "undercut"
+	case SurveyConcaveRadius:
+		return "concave_radius"
+	default:
+		return fmt.Sprintf("survey_kind(%d)", int(k))
+	}
+}
+
 // DiagnosticCode is the stable, branchable reason code (verification §1.1) — a
 // named-text enum whose stable String() token, never the iota value, is the
 // identity a caller and a log share.
@@ -201,6 +237,14 @@ const (
 	// DiagUnsupportedSurveyPayload — an asked body survey cannot run because
 	// its payload class is staged. Reading ReadingNone. Contributes Suspect.
 	DiagUnsupportedSurveyPayload
+	// DiagSurveyPrerequisite — a requested survey needs a proven solid, and
+	// this body's validity is invalid or undecided. Survey names the blocked
+	// question, Reading ReadingNone. Contributes Suspect.
+	DiagSurveyPrerequisite
+	// DiagToleranceReferenceUnavailable — a nonzero-bound reading has no
+	// usable tolerance reference, so the gate could not judge it. Reading
+	// names the quantity, Required nil. Contributes Suspect.
+	DiagToleranceReferenceUnavailable
 )
 
 // String renders the pinned lower-snake token — the identity a caller branches
@@ -242,6 +286,10 @@ func (c DiagnosticCode) String() string {
 		return "unsupported_pair_pipeline"
 	case DiagUnsupportedSurveyPayload:
 		return "unsupported_survey_payload"
+	case DiagSurveyPrerequisite:
+		return "survey_prerequisite"
+	case DiagToleranceReferenceUnavailable:
+		return "tolerance_reference_unavailable"
 	default:
 		return fmt.Sprintf("diagnostic(%d)", int(c))
 	}
@@ -255,12 +303,17 @@ type DiagnosticPair struct{ A, B *Body }
 // (verification §1.1). It never decides the verdict — Status is still §6's
 // worst-wins aggregate — it explains it. Exactly one of Observed / ObservedVec
 // / ObservedBox is non-nil, keyed by Reading (all three nil when
-// Reading == ReadingNone).
+// Reading == ReadingNone). Survey identifies which optional body survey the
+// reason concerns — SurveyNone for every core reading and every pair
+// diagnostic — set even when Reading is ReadingNone, so an unsupported wall,
+// undercut, or concave-radius refusal is distinguished without inspecting
+// Message text.
 type Diagnostic struct {
 	Code        DiagnosticCode  // the stable branch key
 	Status      Status          // the rung this reason contributes
 	Body        *Body           // the body it concerns; nil for a pair diagnostic
 	Pair        *DiagnosticPair // the pair it concerns; nil for a body diagnostic
+	Survey      SurveyKind      // which optional body survey this concerns; SurveyNone for core/pair reasons
 	Reading     ReadingKind     // which quantity the Observed* form carries; ReadingNone names none
 	Observed    *Measurement    // a scalar reading; nil unless Reading names a scalar quantity
 	ObservedVec *VecMeasurement // a vector reading (a Centroid); nil unless Reading == ReadingCentroid
