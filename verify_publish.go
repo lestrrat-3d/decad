@@ -254,6 +254,29 @@ func appendToleranceDiag(survey []Diagnostic, toleranceDiag *Diagnostic) []Diagn
 	return diags
 }
 
+// orderFacesConfirmed reorders confirmed — every face is already CONFIRMED
+// to oppose the pull, and each appears in it once — into body.Faces() order
+// (proposal §11), without touching which faces are confirmed or how the
+// producer proved them. confirmed's own nil-versus-empty shape survives
+// unchanged: nil comes back nil, an empty non-nil listing comes back empty
+// non-nil.
+func orderFacesConfirmed(body *Body, confirmed []*Face) []*Face {
+	if confirmed == nil {
+		return nil
+	}
+	want := make(map[*Face]struct{}, len(confirmed))
+	for _, f := range confirmed {
+		want[f] = struct{}{}
+	}
+	ordered := make([]*Face, 0, len(confirmed))
+	for _, f := range body.Faces() {
+		if _, ok := want[f]; ok {
+			ordered = append(ordered, f)
+		}
+	}
+	return ordered
+}
+
 // publishUndercutResult maps one body's undercut survey outcome onto the
 // public result vocabulary (proposal §7's coverage table): the effective
 // request alone decides CoverageNotRequested; a non-valid validity decides
@@ -261,14 +284,15 @@ func appendToleranceDiag(survey []Diagnostic, toleranceDiag *Diagnostic) []Diagn
 // §9), since the pull survey never runs on a body that did not prove a
 // solid; otherwise the producer's own ok/reason/undecided decide
 // Unavailable, Undecided, Partial or Complete. Faces carries the producer's
-// own face list unchanged — every face in it is CONFIRMED to oppose the
-// pull, and its nil-versus-empty shape is exactly the producer's own (nil
-// for an unrecoverable or entirely undecided survey, otherwise the
-// producer's own listing) so CoverageUndecided is published rather than a
-// claimed Partial when no face is confirmed. Diagnostics is the pull
-// survey's own subset of runSurveys' findings (surveys.go), routed here
-// rather than recomputed — or the single prerequisite finding when validity
-// blocked the survey from running at all.
+// own confirmed faces reordered into body.Faces() order (proposal §11) —
+// every face in it is CONFIRMED to oppose the pull, and its nil-versus-empty
+// shape is exactly the producer's own (nil for an unrecoverable or entirely
+// undecided survey, otherwise the producer's own listing) so
+// CoverageUndecided is published rather than a claimed Partial when no face
+// is confirmed. Diagnostics is the pull survey's own subset of runSurveys'
+// findings (surveys.go), routed here rather than recomputed — or the single
+// prerequisite finding when validity blocked the survey from running at
+// all.
 func publishUndercutResult(body *Body, surveys surveyResults, req VerifyRequest, validity ValidityOutcome) UndercutResult {
 	if req.Undercut == nil {
 		return UndercutResult{Coverage: CoverageNotRequested, Assessment: AssessmentNotEvaluated}
@@ -284,7 +308,7 @@ func publishUndercutResult(body *Body, surveys surveyResults, req VerifyRequest,
 	out := surveys.Undercut
 	res := UndercutResult{
 		Request:     req.Undercut,
-		Faces:       out.faces,
+		Faces:       orderFacesConfirmed(body, out.faces),
 		Diagnostics: surveys.UndercutDiagnostics,
 	}
 	switch {

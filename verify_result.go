@@ -157,8 +157,11 @@ func (a Assessment) String() string {
 type ToleranceState int
 
 const (
-	// ToleranceNotEvaluated — no precision decision was made: the reading
-	// does not exist, as for an invalid body's boundary data.
+	// ToleranceNotEvaluated — no precision decision was made. Two cases
+	// share this state: the reading does not exist at all, and the reading
+	// exists but its precision was deliberately not judged, as for an
+	// invalid body's area and bounds, which are published as boundary data
+	// with the tolerance check skipped.
 	ToleranceNotEvaluated ToleranceState = iota
 	// ToleranceSatisfied — the gate accepted the bound.
 	ToleranceSatisfied
@@ -294,7 +297,8 @@ type WallResult struct {
 
 // UndercutResult is one body's undercut survey result (proposal §7): every
 // face in Faces is a CONFIRMED opposing face against the requested pull; no
-// uncertain face appears.
+// uncertain face appears. Faces appear once each, in their body's Faces()
+// order.
 type UndercutResult struct {
 	Request     *UndercutRequest
 	Coverage    Coverage

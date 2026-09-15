@@ -203,8 +203,9 @@ const (
 	// neither way (§1). Reading ReadingNone. Contributes Suspect.
 	DiagUndecidedPair
 	// DiagUnsupportedPair is the broad compatibility code for a staged pair.
-	// Verify emits this alongside one of the cause-specific codes below.
-	// Reading ReadingNone. Contributes Suspect.
+	// Verify no longer emits it; every unsupported pair gets one of the
+	// cause-specific codes below instead. Reading ReadingNone. Contributes
+	// Suspect.
 	//
 	// Deprecated: branch on DiagUnsupportedPairPayload,
 	// DiagUnsupportedPairContact, or DiagUnsupportedPairPipeline.
