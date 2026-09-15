@@ -271,8 +271,8 @@ type regionReadings struct {
 
 // bodyResult is one live body's verdict and readings — the private shape
 // verify_publish.go assembles and projectLegacyBodyReport bridges onto the
-// still-exported BodyReport. Undercut, Validity, Topology and Region stay
-// their zero value until PRs 2 and 4 extend the assembler that fills them.
+// still-exported BodyReport. PR 5 renames it to the exported BodyReport with
+// no shape change.
 type bodyResult struct {
 	Body          *Body
 	Status        Status

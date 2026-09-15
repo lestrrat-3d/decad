@@ -570,11 +570,15 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 		Status: Sound,
 		Area:   b.area,
 		Bounds: b.bounds,
-		Lumps:  len(b.lumps),
 	}
+
+	// The held topology's lump and void counts (proposal §9): descriptive
+	// data every body carries, using the current count definitions,
+	// independent of the validity verdict decided below.
+	topology := heldTopology{Lumps: len(b.lumps)}
 	for _, s := range b.Shells() {
 		if s.IsVoid() {
-			br.Voids++
+			topology.Voids++
 		}
 	}
 
@@ -582,20 +586,22 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 	// faces, every face carries at least one loop of at least one edge.
 	// This evaluator's boundary is exact, so a defect is proven — Unsound —
 	// and a clean audit on a feature-built body is proven validity.
+	// publishValidityResult (verify_publish.go) maps the three-way audit
+	// outcome onto validityResult and carries the one diagnostic that
+	// explains it (proposal §9).
 	clean := auditBoundary(b)
 	built := b.payload != nil
-	switch {
-	case !clean:
+	validity := publishValidityResult(b, clean, built, b.solid)
+	haveRegion := validity.Outcome == validityValid
+
+	var vol Measurement
+	var cen VecMeasurement
+	switch validity.Outcome {
+	case validityInvalid:
 		br.Status = Unsound
-	case built && b.solid:
-		br.Solid = true
-		br.Watertight = true
-		br.Manifold = true
-		br.SelfIntersecting = false
-		vol := b.volume
-		cen := b.centroid
-		br.Volume = &vol
-		br.Centroid = &cen
+	case validityValid:
+		vol = b.volume
+		cen = b.centroid
 	default:
 		// A body this evaluator did not build (unreachable through the
 		// public API) has a validity the audit alone cannot prove:
@@ -606,53 +612,42 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 	// A proven-invalid body emits one DiagInvalidBody and no region-quantity
 	// diagnostics, because §1 gives it no region quantity to gate. The gate
 	// still runs, discarded, to surface a cancellation observed while lazily
-	// loading a reference.
-	if br.Status == Unsound {
-		br.Exactness = bodyExactness(br)
+	// loading a reference. Its area and bounds stay available as boundary
+	// data, but publishBodyResult never gates them — their Tolerance is
+	// toleranceNotEvaluated (proposal §9) since no Tolerance is passed here.
+	// A requested survey on this body publishes Unavailable plus
+	// DiagSurveyPrerequisite; publishBodyResult decides that from Validity
+	// alone, without a Surveys record.
+	if validity.Outcome == validityInvalid {
 		if _, _, err := bodyReadingDiagnostics(ctx, b, bodyReadingSet{Area: br.Area, Bounds: br.Bounds}, cfg.rel); err != nil {
 			return nil, nil, err
 		}
-		invalidDiag := Diagnostic{
-			Code:    DiagInvalidBody,
-			Status:  Unsound,
-			Body:    b,
-			Reading: ReadingNone,
-			Message: "the held boundary is proven not a valid solid",
-		}
 		res := publishBodyResult(bodyPublishInput{
-			Body:                b,
-			Status:              br.Status,
-			Area:                scalarReading{Measurement: br.Area},
-			Bounds:              boundsReading{Box: br.Bounds},
-			Request:             req,
-			ValidityDiagnostics: []Diagnostic{invalidDiag},
+			Body:     b,
+			Status:   br.Status,
+			Validity: validity,
+			Topology: topology,
+			Area:     scalarReading{Measurement: br.Area},
+			Bounds:   boundsReading{Box: br.Bounds},
+			Request:  req,
 		})
 		projectLegacyBodyReport(res, br)
+		br.Exactness = bodyExactness(br)
 		return res, br, nil
-	}
-
-	// An undecided validity (a body this evaluator did not build, unreachable
-	// through the public API) is Suspect, and names itself in the slice.
-	var validityDiags []Diagnostic
-	if br.Status == Suspect {
-		validityDiags = append(validityDiags, Diagnostic{
-			Code:    DiagUndecidedValidity,
-			Status:  Suspect,
-			Body:    b,
-			Reading: ReadingNone,
-			Message: "the held boundary's validity is not decisive beyond its own proven bound",
-		})
 	}
 
 	// The asked opt-in surveys (evaluator §10, verification §6): answered
 	// outright on this evaluator's analytic bodies — validity is decided
-	// first, so only a proven solid carries the readings. A survey that
-	// cannot decide (a payload no shipped feature builds) leaves the asked
-	// question undecided, and a stated spec proven to fail is Violating. Each
-	// non-Sound survey outcome names itself in the slice.
+	// first, so only a proven solid carries the readings. A survey requested
+	// on an undecided-validity body never reaches runSurveys at all;
+	// publishBodyResult publishes its Unavailable outcome and
+	// DiagSurveyPrerequisite from Validity alone (proposal §9). A survey
+	// runSurveys itself cannot decide (a payload no shipped feature builds)
+	// leaves the asked question undecided, and a stated spec proven to fail
+	// is Violating. Each non-Sound survey outcome names itself in the slice.
 	violating, suspect := false, false
 	var surveys surveyResults
-	if br.Solid && (cfg.wall != nil || cfg.pull != nil || cfg.minRadius) {
+	if haveRegion && (cfg.wall != nil || cfg.pull != nil || cfg.minRadius) {
 		var surveyDiags []Diagnostic
 		var err error
 		surveys, surveyDiags, err = runSurveys(newWorkBudget(ctx), b, cfg)
@@ -678,24 +673,17 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 		m := lengthMeasurement(*surveys.Radius.reading, surveys.Radius.bound)
 		radiusReading = &m
 	}
-	// bodyExactness folds these two readings in below, so they must be set
-	// before it runs — projectLegacyBodyReport repeats the same assignment
-	// afterward, harmlessly, once the assembler has wrapped them.
-	br.MinWallThickness = wallReading
-	br.MinRadius = radiusReading
 
-	// Exactness is summary metadata only. The total tolerance gate runs after
-	// every requested survey and judges each present bounded result by its own
-	// inclusive Bound <= rel*Ref comparison (verification §2/§3/§6); each
-	// reading beyond tolerance emits its own diagnostic (DiagMeasurementBeyond-
-	// Tolerance, or DiagToleranceReferenceUnavailable when no reference was
-	// usable).
-	br.Exactness = bodyExactness(br)
+	var volPtr *Measurement
+	var cenPtr *VecMeasurement
+	if haveRegion {
+		volPtr, cenPtr = &vol, &cen
+	}
 	readings := bodyReadingSet{
 		Area:     br.Area,
 		Bounds:   br.Bounds,
-		Volume:   br.Volume,
-		Centroid: br.Centroid,
+		Volume:   volPtr,
+		Centroid: cenPtr,
 		Wall:     wallReading,
 		Radius:   radiusReading,
 	}
@@ -716,21 +704,36 @@ func evaluateBody(ctx context.Context, b *Body, cfg verifyConfig, req verifyRequ
 		br.Status = Violating
 	}
 
+	// Region groups the two proven-solid quantities alongside their own
+	// tolerance verdicts (proposal §9); it stays nil on every other validity
+	// outcome, and publishBodyResult enforces that on its own regardless of
+	// what is passed here.
+	var region *regionReadings
+	if haveRegion {
+		region = &regionReadings{
+			Volume:   scalarReading{Measurement: vol, Tolerance: verdicts.Volume},
+			Centroid: vectorReading{VecMeasurement: cen, Tolerance: verdicts.Centroid},
+		}
+	}
+
 	res := publishBodyResult(bodyPublishInput{
 		Body:                b,
 		Status:              br.Status,
+		Validity:            validity,
+		Topology:            topology,
 		Area:                scalarReading{Measurement: br.Area, Tolerance: verdicts.Area},
 		Bounds:              boundsReading{Box: br.Bounds, Tolerance: verdicts.Bounds},
+		Region:              region,
 		Request:             req,
 		Surveys:             surveys,
 		WallTolerance:       verdicts.Wall,
 		WallToleranceDiag:   diagSet.Wall,
 		RadiusTolerance:     verdicts.Radius,
 		RadiusToleranceDiag: diagSet.Radius,
-		ValidityDiagnostics: validityDiags,
 		CoreDiagnostics:     diagSet.Core,
 	})
 	projectLegacyBodyReport(res, br)
+	br.Exactness = bodyExactness(br)
 	return res, br, nil
 }
 
