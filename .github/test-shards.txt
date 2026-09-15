@@ -1507,3 +1507,15 @@
 3	0.05	TestWallThinPlateViolating
 3	0.01	TestWideSpanIntegrationRefusesBeforeExpanding
 3	0.04	TestXHPLerpDenotesTheSameCoordinate
+0	0.00	TestVerifyPublishRectangularPrismPath
+0	0.00	TestVerifyPublishMeasuredWall
+0	0.00	TestVerifyPublishViolatedWall
+0	0.00	TestVerifyPublishExactZeroWall
+0	0.00	TestVerifyPublishAbsentWall
+0	0.00	TestVerifyPublishAbsentConcaveRadius
+0	0.00	TestVerifyPublishMeasuredConcaveRadius
+0	0.00	TestVerifyPublishThresholdStraddle
+0	0.00	TestVerifyPublishCoarseReadingKeepsGeometry
+0	0.00	TestVerifyPublishEffectiveRequest
+0	0.00	TestVerifyResultEnumTokens
+0	0.00	TestVerifyResultZeroValueIsUnverified
