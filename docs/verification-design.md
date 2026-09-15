@@ -149,7 +149,7 @@ type WallResult struct {
 type UndercutResult struct {
     Request     *UndercutRequest
     Coverage    Coverage
-    Faces       []*Face // every entry CONFIRMED to oppose the pull; no uncertain face appears
+    Faces       []*Face // every entry CONFIRMED to oppose the pull, in Faces() order; no uncertain face appears
     Assessment  Assessment
     Diagnostics []Diagnostic
 }

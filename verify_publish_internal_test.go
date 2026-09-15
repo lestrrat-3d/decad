@@ -2,6 +2,7 @@ package decad
 
 import (
 	"math"
+	"sort"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -558,6 +559,33 @@ func capBlendPlateBody(t *testing.T) *Body {
 	chamfered, err := body.Chamfer(Edges(CreatedBy(CapEnd(body))), units.Millimeters(5))
 	require.NoError(t, err)
 	return chamfered
+}
+
+// TestVerifyPublishUndercutFacesOrderedByBody proves proposal §11's ordering
+// guarantee: against a pull tilted off every face normal, the cap-blend
+// chamfer's own producer confirms three faces out of its own build order, but
+// publication must return them in the body's Faces() order regardless. The
+// assertion is on computed order, not a pinned index triple, so it stays
+// meaningful if the chamfer's build order ever changes.
+func TestVerifyPublishUndercutFacesOrderedByBody(t *testing.T) {
+	t.Parallel()
+	body := capBlendPlateBody(t)
+	res := publishBody(t, body, WithPullDirection(r3.NewVec(1, 0, 0.2)))
+	require.Equal(t, CoverageComplete, res.Undercut.Coverage)
+	require.Equal(t, AssessmentViolated, res.Undercut.Assessment)
+	require.Len(t, res.Undercut.Faces, 3, "the chamfer's own producer confirms three opposing faces")
+
+	indices := make(map[*Face]int, len(body.Faces()))
+	for i, f := range body.Faces() {
+		indices[f] = i
+	}
+	got := make([]int, len(res.Undercut.Faces))
+	for i, f := range res.Undercut.Faces {
+		idx, ok := indices[f]
+		require.True(t, ok, "every confirmed face belongs to the body")
+		got[i] = idx
+	}
+	require.True(t, sort.IntsAreSorted(got), "Faces come back in body.Faces() order, got indices %v", got)
 }
 
 // TestVerifyPublishCapBlendWallStaged proves DX9's deliberate cap-blend wall

@@ -1522,6 +1522,7 @@
 0	0.00	TestVerifyPublishUndercutPartialCoverage
 0	0.00	TestVerifyPublishUndercutUndecided
 0	0.00	TestVerifyPublishUndercutUnavailable
+0	0.00	TestVerifyPublishUndercutFacesOrderedByBody
 0	0.00	TestVerifyPublishCapBlendWallStaged
 0	0.00	TestVerifyPublishToleranceReferenceUnavailable
 0	0.00	TestVerifyPublishDiagnosticFlattening
