@@ -45,6 +45,7 @@ to the byte budget.
 | `docs/loft-design.md` | The count-free `Loft` design in four normative tables (pairing, refusals, result, consumers), its exact-rational mass properties, and the wall-crossing audit. |
 | `docs/prism-boolean-design.md` | The analytic reduction for `Union`/`Cut`/`Intersect` over co-directional coplanar prisms: the reject-only entry gate, the private `sketch` scene, and section/axial displacement bounds. |
 | `docs/tessellation-reach-design.md` | The tessellation reach plan: the loft restatement, free-form prism chording, revolve T2–T4 and the cap-loop chamfer tessellator, each with its cells, proof terms, refusals and tests. |
+| `docs/decadtest-design.md` | The `decadtest` test kit: where the package lives, the interval rule every reading comparison applies, the helper surface over readings, bodies, reports, surveys and fixtures, and what it takes over from the gear generator's proof helpers. |
 
 ### Seam, records and recipes
 
