@@ -8,15 +8,7 @@ A **headless CAD engine** for Go: the 3D modeling layer above the
 [sketch](https://github.com/lestrrat-3d/sketch) 2D constraint engine and the
 [r3](https://github.com/lestrrat-3d/r3) coordinate-math layer.
 
-> **Status: the public API is landing incrementally against an approved
-> design.** The API contract is
-> [`docs/api-design.md`](docs/api-design.md) — the core design. Companion
-> designs carry its deep ends; [`docs/layout.md`](docs/layout.md)'s Layout table lists
-> every design document. What the
-> package exports today is the leading edge of that surface; everything it does
-> not yet export remains design-only, and anything that lands must follow the
-> contract. Every capability the contract consumes from its dependencies exists
-> today; there are no open dependency gaps.
+> **Work in progress.** The API and supported capabilities may change.
 
 ## Why this exists
 
