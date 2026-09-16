@@ -392,6 +392,22 @@ type revLoopParts struct {
 	area    boundedScalar // the loop's side-face area
 }
 
+// junctionRadiusInterval encloses a junction's radial coordinate ρ as
+// [ρ−ρBound, ρ+ρBound], the rational-interval twin of the proven float bound
+// axisFrame.walk already composed into startV/startVBound: ρ is a walk's own
+// startV (a junction sits at walk i's start), and ρBound is startVBound, the
+// PROVEN error between it and the axis-re-expressed value the walk's true
+// (unrounded) axis direction and anchor would give. ok is false wherever
+// either cannot be stated as an exact rational — a non-finite ρBound is the
+// refusal shape every consumer below already turns into its own envelope.
+func junctionRadiusInterval(rho, rhoBound float64) (ratInterval, bool) {
+	r, b := floatRat(rho), floatRat(math.Abs(rhoBound))
+	if r == nil || b == nil {
+		return ratInterval{}, false
+	}
+	return intervalWiden(pointInterval(r), b), true
+}
+
 // revJunction is one junction between consecutive walks: the shared point in
 // axis coordinates and what it sweeps to — nothing on the axis, a full
 // latitude circle for a full revolution, an arc between the two caps for a
@@ -506,13 +522,18 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePa
 			case rp.full && !j.onAxis:
 				seam := &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(productUpper(j.rho, rp.phi0Delta()))}
 				latitudeLength := 2 * math.Pi * j.rho
+				latitudeBound := conservativeValueError(latitudeLength, productUpper(w.axisRadiusUpper, twoPiUpper()))
+				if rhoEnc, ok := junctionRadiusInterval(j.rho, w.startVBound); ok {
+					enc := intervalMul(twoPiInterval(), rhoEnc)
+					latitudeBound = math.Min(latitudeBound, intervalFloatError(enc, latitudeLength))
+				}
 				j.lat = &Edge{
 					curve:       Circle3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
 					start:       seam,
 					end:         seam,
 					convex:      turn > 0,
 					length:      latitudeLength,
-					lengthBound: conservativeValueError(latitudeLength, productUpper(w.axisRadiusUpper, twoPiUpper())),
+					lengthBound: latitudeBound,
 				}
 			case !rp.full:
 				j.v0 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(productUpper(j.rho, rp.phi0Delta()))}
@@ -521,13 +542,20 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePa
 					j.v1 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi1), bound: units.Millimeters(productUpper(j.rho, rp.phi1Delta()))}
 					arcLength := j.rho * dphi
 					dphiUpper := absSumUpper(math.Abs(dphi), sweep.bound)
+					arcBound := conservativeValueError(arcLength, productUpper(w.axisRadiusUpper, dphiUpper))
+					if rhoEnc, ok := junctionRadiusInterval(j.rho, w.startVBound); ok {
+						if widthEnc, ok := rp.den.widthInterval(); ok {
+							enc := intervalMul(rhoEnc, widthEnc)
+							arcBound = math.Min(arcBound, intervalFloatError(enc, arcLength))
+						}
+					}
 					j.arc = &Edge{
 						curve:       Arc3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
 						start:       j.v0,
 						end:         j.v1,
 						convex:      turn > 0,
 						length:      arcLength,
-						lengthBound: conservativeValueError(arcLength, productUpper(w.axisRadiusUpper, dphiUpper)),
+						lengthBound: arcBound,
 					}
 				}
 			}
@@ -807,17 +835,26 @@ func (rp revolvePayload) wallSurface(b revolveBasis, w segmentWalk, kind wallKin
 // a straight walk's is its length times its mean radius (ρ is linear along
 // it), a circular walk's is the closed-form antiderivative over its angular
 // range, and an on-axis walk sweeps nothing.
+//
+// The straight arm's bound is composed bounded arithmetic over w's own
+// proven inputs — w.length with w.lengthBound (the sqrt bracket), w.startV/
+// w.endV with w.startVBound/w.endVBound (axisFrame.walk's re-expressed
+// radial coordinates) — so math.Min against the magnitude envelope can only
+// shrink the published bound, never widen it, following bounded.go's own
+// convention. The circular arm still floors with math.Max: it has no
+// composed bound of its own yet, so the envelope is the only proof standing
+// for it.
 func walkAxisMoment(w segmentWalk, kind wallKind) boundedScalar {
 	if kind == wallAxis {
 		return boundedScalar{}
 	}
 	if !w.isCircular() {
 		meanRadius := boundedDiv(
-			boundedAdd(exactScalar(w.startV), exactScalar(w.endV)),
+			boundedAdd(measuredScalar(w.startV, w.startVBound), measuredScalar(w.endV, w.endVBound)),
 			exactScalar(2),
 		)
 		result := boundedMul(measuredScalar(w.length, w.lengthBound), meanRadius)
-		result.bound = math.Max(result.bound, conservativeValueError(result.value, w.axisMomentUpper))
+		result.bound = math.Min(result.bound, conservativeValueError(result.value, w.axisMomentUpper))
 		return result
 	}
 	lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)

@@ -302,3 +302,139 @@ func TestRevolvePartialCentroidBoundTightens(t *testing.T) {
 		})
 	}
 }
+
+// widthBracketFor returns the widthBracket of the named case in
+// annularSweepCases, for a test that needs the reference pi bracket without
+// duplicating the case table.
+func widthBracketFor(t *testing.T, name string) (lo, hi *big.Rat) {
+	t.Helper()
+	for _, c := range annularSweepCases() {
+		if c.name == name {
+			return c.widthBracket()
+		}
+	}
+	t.Fatalf("decad_test: no annularSweepCases entry named %q", name)
+	return nil, nil
+}
+
+// TestRevolveStraightWallAreaTightens is design §11 test 5: walkAxisMoment's
+// straight arm, the latitude-circle length and the junction-arc length all
+// replace their old |Δφ|+2π-scaled magnitude envelope with composed bounded
+// arithmetic over the walk's own already-proven inputs (segmentWalk.length
+// with lengthBound, startV/endV with startVBound/endVBound). It proves this
+// on annularSketch's full turn, whose corners sweep latitude circles
+// (checked against 2*pi*rho), and its 37-degree sweep, whose corners sweep
+// junction arcs (checked against rho*D) — D the sweep's own reference pi
+// bracket, independent of decad.
+func TestRevolveStraightWallAreaTightens(t *testing.T) {
+	t.Parallel()
+
+	t.Run("full turn / latitude circles", func(t *testing.T) {
+		t.Parallel()
+		s, p := annularSketch(t)
+		doc := decad.New()
+		body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+		require.NoError(t, err)
+
+		area, err := body.Area()
+		require.NoError(t, err)
+		require.LessOrEqual(t, area.Bound.Base(), 1e-9*area.Value.Base(),
+			`walkAxisMoment's straight arm must replace the old magnitude envelope`)
+		for _, f := range body.Faces() {
+			fa, err := f.Area()
+			require.NoError(t, err)
+			require.LessOrEqual(t, fa.Bound.Base(), 1e-9*fa.Value.Base())
+		}
+
+		twoPiLo := new(big.Rat).Mul(big.NewRat(2, 1), piRefLo)
+		twoPiHi := new(big.Rat).Mul(big.NewRat(2, 1), piRefHi)
+		sawLatitude := false
+		for _, e := range body.Edges() {
+			l, err := e.Length()
+			require.NoError(t, err)
+			value, bound := l.Value.Base(), l.Bound.Base()
+			require.LessOrEqual(t, bound, 1e-9*math.Max(value, 1))
+
+			circle, ok := e.Curve().(decad.Circle3)
+			if !ok {
+				continue
+			}
+			sawLatitude = true
+			rho := new(big.Rat).SetFloat64(circle.Radius.Base())
+			require.NotNil(t, rho)
+			trueLo, _ := new(big.Rat).Mul(twoPiLo, rho).Float64()
+			trueHi, _ := new(big.Rat).Mul(twoPiHi, rho).Float64()
+			require.LessOrEqual(t, value-bound, trueLo,
+				`the published interval must not exclude 2*pi*rho's lower end`)
+			require.GreaterOrEqual(t, value+bound, trueHi,
+				`the published interval must not exclude 2*pi*rho's upper end`)
+		}
+		require.True(t, sawLatitude, `a full annular revolve's junctions are latitude circles`)
+	})
+
+	t.Run("37deg / junction arcs", func(t *testing.T) {
+		t.Parallel()
+		s, p := annularSketch(t)
+		doc := decad.New()
+		body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(37), Dir: decad.Along})
+		require.NoError(t, err)
+
+		area, err := body.Area()
+		require.NoError(t, err)
+		require.LessOrEqual(t, area.Bound.Base(), 1e-9*area.Value.Base(),
+			`walkAxisMoment's straight arm must replace the old magnitude envelope`)
+		for _, f := range body.Faces() {
+			fa, err := f.Area()
+			require.NoError(t, err)
+			require.LessOrEqual(t, fa.Bound.Base(), 1e-9*fa.Value.Base())
+		}
+
+		widthLo, widthHi := widthBracketFor(t, "37deg")
+		sawArc := false
+		for _, e := range body.Edges() {
+			l, err := e.Length()
+			require.NoError(t, err)
+			value, bound := l.Value.Base(), l.Bound.Base()
+			require.LessOrEqual(t, bound, 1e-9*math.Max(value, 1))
+
+			arc, ok := e.Curve().(decad.Arc3)
+			if !ok {
+				continue
+			}
+			sawArc = true
+			rho := new(big.Rat).SetFloat64(arc.Radius.Base())
+			require.NotNil(t, rho)
+			trueLo, _ := new(big.Rat).Mul(rho, widthLo).Float64()
+			trueHi, _ := new(big.Rat).Mul(rho, widthHi).Float64()
+			require.LessOrEqual(t, value-bound, trueLo,
+				`the published interval must not exclude rho*D's lower end`)
+			require.GreaterOrEqual(t, value+bound, trueHi,
+				`the published interval must not exclude rho*D's upper end`)
+		}
+		require.True(t, sawArc, `a partial annular revolve's junctions are swept arcs`)
+	})
+}
+
+// TestRevolveVerifySoundAnnular is design §11 test 6: with PRs 1-3 all
+// landed, annularSketch verifies Sound with no diagnostics for both a full
+// turn and an awkward 37-degree sweep — every reading the revolve publishes
+// (box, volume, area, centroid, edge lengths) now contains the value its own
+// record denotes within the default tolerance.
+func TestRevolveVerifySoundAnnular(t *testing.T) {
+	t.Parallel()
+
+	for _, ext := range []decad.AngularExtent{
+		decad.FullRevolution{},
+		decad.AngleExtent{A: units.Degrees(37), Dir: decad.Along},
+	} {
+		t.Run(fmt.Sprintf("%T", ext), func(t *testing.T) {
+			t.Parallel()
+			s, p := annularSketch(t)
+			doc := decad.New()
+			_, err := doc.Revolve(s, p, uAxis, ext)
+			require.NoError(t, err)
+
+			decadtest.IsSound(t, doc)
+		})
+	}
+}
