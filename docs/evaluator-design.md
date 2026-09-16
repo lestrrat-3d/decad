@@ -299,6 +299,30 @@ neither endpoint reaches the axis). The free-form segment kinds emit
 `NURBSSurface` faces; `docs/spline-design.md` §7 owns the variant and its
 exactness, Table C the revolve reach, Table R the refusals, and §10 the revolve
 increment.
+Each END of the sweep interval carries its own proven **angular
+displacement** — how far the angle held there sits from the angle the
+recorded `AngularExtent` denotes — the angular twin of the axial displacement
+§5 states for extrude's swept levels. An angle the caller stated in radians
+denotes itself exactly and carries zero; one stated in degrees denotes an
+exact fraction of a turn, never the float `math.Pi/180` recovers, since
+`units.Degree`'s own factor is a rounded approximation of that fraction; a
+`FullRevolution` or a snapped-to-full `AngleExtent` denotes exactly what the
+caller's own record states, whether or not that coincides with the held
+`2π` the resolver snapped to; and a `ToFaceAngular` stop's resolved angle has
+no better claim than itself, since the record names a target face rather
+than an angle, so its displacement is unbounded and every reading it feeds
+keeps the magnitude envelope it always has. The pair is spelled
+`revolvePayload.phi0`/`phi1` beside `den`, their `angleDenotation` twin
+(`revolve_denotation.go`), and the per-end displacement is
+`phi0Delta`/`phi1Delta` (`angularDelta` for whichever a reading cannot
+attribute to one end). Every reading that folds a held sweep angle into a
+published measurement takes it: `Bounds`, the partial-sweep cap vertices and
+cap-copy seam vertices, the cap faces' own `Plane` normal, the mesh's angular
+sampling, the wall survey's cap wedge, and the tolerance gate's reference
+diameter. Clearance and interference stay on the prism's own precedent:
+neither reads the axial displacement there, and neither reads the angular
+one here.
+
 Partial sweeps get two planar cap faces. Volume by Pappus on the §4 first moments; the solid centroid from the §4
 second and mixed moments (`∫u² dA`, `∫uv dA`) — a full revolution's centroid
 lies on the axis with its axial position from the mixed moment, and a partial

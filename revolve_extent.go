@@ -251,7 +251,7 @@ func (rp revolvePayload) sweepBoundAlong(c0, c1, mlo, mhi float64, work *freefor
 	if isNonFinite(rhoUpper) {
 		return 0, 0, fmt.Errorf(`%w: the revolved region's radial distance from its own axis has no finite proven bound, so no sweep-extreme bound can be composed`, ErrNotFinite)
 	}
-	loBound, hiBound := sweepExtremeBounds(c0, c1, rp.phi0, rp.phi1, mlo, mhi, rp.full)
+	loBound, hiBound := sweepExtremeBounds(c0, c1, rp.phi0, rp.phi1, rp.den, mlo, mhi, rp.full)
 	return directionalPerturbationAllow(loBound, rhoUpper),
 		directionalPerturbationAllow(hiBound, rhoUpper),
 		nil
@@ -334,28 +334,46 @@ func sweepExtremes(c0, c1, phi0, phi1 float64, full bool) (float64, float64) {
 }
 
 // sweepExtremeBounds proves how far sweepExtremes' held (heldLo, heldHi) can
-// sit from the TRUE min/max of m(φ) = c0·cos φ + c1·sin φ over [phi0, phi1],
-// without ever trusting math.Sin/Cos/Atan2/Hypot's accuracy: c0, c1,
-// phi0 and phi1 are read as exact rationals (their own float64 bit patterns —
-// the same convention sweepExtremes' own callers already take for a sweep
-// angle), sin/cos of the endpoints are enclosed by radSinCosInterval
-// (normal_bound.go, the Cone normal's own bracket), and the amplitude
-// √(c0²+c1²) by the rational square-root brackets circularLengthInterval
-// reads an ArcSeg's radius through (ratSqrtDown/ratSqrtUp).
+// sit from the TRUE min/max of m(φ) = c0·cos φ + c1·sin φ over the sweep the
+// record DENOTES (docs/evaluator-design.md §6), without ever trusting
+// math.Sin/Cos/Atan2/Hypot's accuracy: c0 and c1 are read as exact rationals
+// (their own float64 bit patterns — the same convention sweepExtremes' own
+// callers already take), each endpoint's own denoted angle is enclosed by
+// den.phi0/den.phi1 (revolve_denotation.go) — falling back to the HELD
+// phi0/phi1 read as exact rationals wherever the denotation cannot state one,
+// which reproduces today's reading exactly — sin/cos of each denoted angle by
+// angleDenotation.sinCosFor, which reads a pure-turn end (a degree-stated
+// extent) through turnSinCosInterval, EXACT at every eighth-turn boundary and
+// never comparing against π, rather than through the radian-space bracket
+// (normal_bound.go's radSinCosInterval, the Cone normal's own primitive) that
+// a detour through π would otherwise force even at a quarter turn, and the
+// amplitude √(c0²+c1²) by the rational square-root brackets
+// circularLengthInterval reads an ArcSeg's radius through (ratSqrtDown/
+// ratSqrtUp).
 //
-// The true extreme over [phi0, phi1] always sits at phi0, at phi1, or at an
-// interior critical angle where m′(φ) = −c0·sin φ + c1·cos φ = 0. m′ is
+// The true extreme over the denoted sweep always sits at phi0, at phi1, or at
+// an interior critical angle where m′(φ) = −c0·sin φ + c1·cos φ = 0. m′ is
 // itself a sinusoid whose zeros are spaced exactly π apart, so an interval
 // shorter than π contains AT MOST one: if m′ is proven the same sign at both
 // endpoints (a certified sign, from the same enclosures — never a float
 // comparison) and the interval's own width is proven under π, no interior
-// critical angle can exist and the extreme is provably an endpoint. Where
-// that cannot be certified, the enclosure is widened to the global amplitude
-// bound (valid for ANY φ, critical or not — a stationary point's own
-// contribution is at most second-order past the endpoint reading, so the
-// widening this admits stays small whenever an interior critical angle truly
-// is close by).
-func sweepExtremeBounds(c0, c1, phi0, phi1, heldLo, heldHi float64, full bool) (float64, float64) {
+// critical angle can exist and the extreme is provably an endpoint.
+//
+// Where that cannot be certified but the interval's width is proven under 2π
+// and m′ is proven STRICTLY opposite signs at the two endpoints, the
+// π-spacing of m′'s zeros still decides it: a sign change over a span under
+// 2π can only cross an ODD number of the (at most two) zeros that fit, so
+// exactly ONE interior zero exists, and it is a maximum where m′ runs + to −
+// (a minimum where it runs − to +). A critical value of this sinusoid is
+// always exactly ±amp, so the true max (min) is provably the amplitude
+// itself — the enclosure narrows to [ampLo, ampHi] ([−ampHi, −ampLo]) — and
+// with the interval's one critical point already accounted for, the OTHER
+// extreme cannot be interior and needs no widening at all.
+//
+// Only where neither arm certifies — a straddling endpoint, or a width not
+// proven under 2π — does the enclosure widen to the global amplitude bound on
+// both ends (valid for ANY φ, critical or not).
+func sweepExtremeBounds(c0, c1, phi0, phi1 float64, den sweepDenotation, heldLo, heldHi float64, full bool) (float64, float64) {
 	c0R, c1R := floatRat(c0), floatRat(c1)
 	if c0R == nil || c1R == nil {
 		return math.Inf(1), math.Inf(1)
@@ -374,13 +392,14 @@ func sweepExtremeBounds(c0, c1, phi0, phi1, heldLo, heldHi float64, full bool) (
 		loIv := interval(new(big.Rat).Neg(ampHiR), new(big.Rat).Neg(ampLoR))
 		return intervalFloatError(loIv, heldLo), intervalFloatError(hiIv, heldHi)
 	}
-	p0R, p1R := floatRat(phi0), floatRat(phi1)
-	if p0R == nil || p1R == nil {
+	enc0, ok0 := den.phi0.enclosureFor(phi0)
+	enc1, ok1 := den.phi1.enclosureFor(phi1)
+	if !ok0 || !ok1 {
 		return math.Inf(1), math.Inf(1)
 	}
-	sin0, cos0, ok0 := radSinCosInterval(p0R)
-	sin1, cos1, ok1 := radSinCosInterval(p1R)
-	if !ok0 || !ok1 {
+	sin0, cos0, ok0t := den.phi0.sinCosFor(phi0)
+	sin1, cos1, ok1t := den.phi1.sinCosFor(phi1)
+	if !ok0t || !ok1t {
 		return math.Inf(1), math.Inf(1)
 	}
 	m0 := intervalAdd(intervalScale(cos0, c0R), intervalScale(sin0, c1R))
@@ -401,7 +420,8 @@ func sweepExtremeBounds(c0, c1, phi0, phi1, heldLo, heldHi float64, full bool) (
 	// always a candidate), so the lower end of its enclosure never needs
 	// widening; likewise the true min's upper end. Only the "far" end of
 	// each — where an unexcluded interior critical angle could push it —
-	// widens, and only in the non-monotonic branch below.
+	// widens, and only in the arms below that cannot certify a tighter
+	// answer.
 	hiLo := maxRat(m0.lo, m1.lo)
 	hiHi := maxRat(m0.hi, m1.hi)
 	loHi := minRat(m0.hi, m1.hi)
@@ -418,12 +438,24 @@ func sweepExtremeBounds(c0, c1, phi0, phi1, heldLo, heldHi float64, full bool) (
 	negC0R := new(big.Rat).Neg(c0R)
 	mp0 := intervalAdd(intervalScale(sin0, negC0R), intervalScale(cos0, c1R))
 	mp1 := intervalAdd(intervalScale(sin1, negC0R), intervalScale(cos1, c1R))
-	width := new(big.Rat).Sub(p1R, p0R)
-	widthLessThanPi := width.Cmp(piLower) < 0
+	widthIv := intervalSub(enc1, enc0)
+	widthLessThanPi := widthIv.hi.Cmp(piLower) < 0
 	sameNonPos := mp0.hi.Sign() <= 0 && mp1.hi.Sign() <= 0
 	sameNonNeg := mp0.lo.Sign() >= 0 && mp1.lo.Sign() >= 0
 	monotonic := widthLessThanPi && (sameNonPos || sameNonNeg)
-	if !monotonic {
+	switch {
+	case monotonic:
+		// No interior critical angle at all: both endpoint enclosures stand
+		// as they are.
+	case widthIv.hi.Cmp(twoPiInterval().lo) < 0 && mp0.lo.Sign() > 0 && mp1.hi.Sign() < 0:
+		// m′ runs strictly + to strictly −: exactly one interior zero, a
+		// maximum. The true max IS the amplitude, and the min cannot be
+		// interior, so it keeps its endpoint-only enclosure.
+		hiLo, hiHi = ampLoR, ampHiR
+	case widthIv.hi.Cmp(twoPiInterval().lo) < 0 && mp0.hi.Sign() < 0 && mp1.lo.Sign() > 0:
+		// The mirror case: a minimum.
+		loLo, loHi = new(big.Rat).Neg(ampHiR), new(big.Rat).Neg(ampLoR)
+	default:
 		hiHi = maxRat(hiHi, ampHiR)
 		loLo = minRat(loLo, new(big.Rat).Neg(ampHiR))
 	}

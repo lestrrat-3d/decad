@@ -115,7 +115,7 @@ func TestRevolveFanAreaSlackIsHalfTheDensityGap(t *testing.T) {
 func TestRevolveAngularSequenceEnclosesItsOwnStoredTrig(t *testing.T) {
 	t.Parallel()
 	t.Run("a full turn from zero uses exact rational turns", func(t *testing.T) {
-		seq, err := revolveAngularSequence(0, 2*math.Pi, true, 12)
+		seq, err := revolveAngularSequence(revolvePayload{phi0: 0, phi1: 2 * math.Pi, full: true}, 12)
 		require.NoError(t, err)
 		require.Len(t, seq.cos, 12, `a full turn stores no seam sample`)
 		require.LessOrEqual(t, seq.gap, revolveTrigGapPrior)
@@ -130,7 +130,7 @@ func TestRevolveAngularSequenceEnclosesItsOwnStoredTrig(t *testing.T) {
 	})
 
 	t.Run("a partial sweep includes both ends", func(t *testing.T) {
-		seq, err := revolveAngularSequence(0.25, 1.5, false, 5)
+		seq, err := revolveAngularSequence(revolvePayload{phi0: 0.25, phi1: 1.5}, 5)
 		require.NoError(t, err)
 		require.Len(t, seq.cos, 6)
 		require.InDelta(t, math.Cos(0.25), seq.cos[0], 1e-12)
@@ -139,7 +139,7 @@ func TestRevolveAngularSequenceEnclosesItsOwnStoredTrig(t *testing.T) {
 	})
 
 	t.Run("a non-finite sweep refuses", func(t *testing.T) {
-		_, err := revolveAngularSequence(0, math.Inf(1), false, 4)
+		_, err := revolveAngularSequence(revolvePayload{phi0: 0, phi1: math.Inf(1)}, 4)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 }

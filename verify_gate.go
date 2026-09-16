@@ -50,7 +50,11 @@ import (
 // therefore overstate the denoted body's diameter by twice that displacement.
 // This function shrinks it toward zero before using it as a reference, so the
 // result can only tighten the gate. fallbackGateDiameter applies the same
-// correction to the prisms it reads, over each one's own displacement.
+// correction to the prisms it reads, over each one's own displacement. A
+// revolve takes the same shrink over its own angular displacement
+// (revolvePayload.angularDelta, docs/evaluator-design.md §6), scaled by the
+// radial envelope every witness can carry it at, since a held cap witness
+// moves along a circle of that radius rather than along a straight axis.
 //
 // A loftPayload reads its OWN held vertex-set diameter (pointSetDiameterContext),
 // never an envelope: the boundary is a polyhedron, and a convex-hull diameter
@@ -144,6 +148,14 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		}
 		if payload, isPrism := body.payload.(prismPayload); isPrism {
 			d, ok = lowerDiameterForDisplacement(d, payload.axialDelta())
+		}
+		if payload, isRevolve := body.payload.(revolvePayload); isRevolve {
+			coordUpper, err := profileCoordinateUpper(payload.profile, newFreeformWork(), nil)
+			if err != nil {
+				return 0, false, err
+			}
+			rhoUpper := payload.ax.radialUpper(coordUpper)
+			d, ok = lowerDiameterForDisplacement(d, productUpper(rhoUpper, payload.angularDelta()))
 		}
 		return d, ok, nil
 	}

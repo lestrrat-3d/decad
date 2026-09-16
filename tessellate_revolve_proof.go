@@ -100,21 +100,35 @@ type revolveAngular struct {
 	step ratInterval
 }
 
-// revolveAngularSequence builds the angular sequence for n chords.
-//
-// A partial sweep's angle φ0 + l·(φ1 − φ0)/n is an exact rational in the
-// payload's own two floats, so radSinCosInterval encloses it directly. A full
-// turn starting at zero is l/n of a TURN, which turnSinCosInterval encloses
-// without π entering at all; a full turn starting elsewhere falls back to the
-// same radian enclosure over φ0 + 2π·l/n, widened by the 2π enclosure's own
-// (sub-2⁻²⁴⁰) width.
-func revolveAngularSequence(phi0, phi1 float64, full bool, n int) (revolveAngular, error) {
+// revolveAngularSequence builds the angular sequence for n chords, over the
+// payload's own denotation (docs/evaluator-design.md §6): sample l's angle is
+// enclosed as enc(phi0) + (l/n)·(enc(phi1) − enc(phi0)), so the stored
+// cosine/sine is checked against the angle the RECORD denotes, not merely the
+// held float the resolver rounded to. Wherever the payload's denotation
+// cannot state an end exactly (den.phi0/den.phi1 invalid — a ToFaceAngular
+// stop, a payload literal with none, or an angle unit this evaluator does not
+// denote), this falls back to the prior reading over the held floats alone,
+// which reproduces today's construction exactly: a partial sweep's angle
+// φ0 + l·(φ1 − φ0)/n as an exact rational in the payload's own two floats
+// (radSinCosInterval), a full turn starting at zero as l/n of a TURN
+// (turnSinCosInterval, no π entering at all), and a full turn starting
+// elsewhere as the same radian enclosure over φ0 + 2π·l/n, widened by the 2π
+// enclosure's own (sub-2⁻²⁴⁰) width.
+func revolveAngularSequence(rp revolvePayload, n int) (revolveAngular, error) {
 	if n <= 0 {
 		return revolveAngular{}, fmt.Errorf(`%w: a revolve mesh needs at least one angular chord`, ErrDegenerate)
 	}
+	phi0, phi1, full := rp.phi0, rp.phi1, rp.full
 	r0, r1 := floatRat(phi0), floatRat(phi1)
 	if r0 == nil || r1 == nil {
 		return revolveAngular{}, fmt.Errorf(`%w: the sweep interval is not finite, so no angular sample can be enclosed`, ErrUnsupported)
+	}
+	enc0, ok0 := rp.den.phi0.enclosure()
+	enc1, ok1 := rp.den.phi1.enclosure()
+	haveDen := ok0 && ok1
+	var diff ratInterval
+	if haveDen {
+		diff = intervalSub(enc1, enc0)
 	}
 	out := revolveAngular{n: n, samples: n + 1}
 	if full {
@@ -130,6 +144,13 @@ func revolveAngularSequence(phi0, phi1 float64, full bool, n int) (revolveAngula
 		frac := new(big.Rat).SetFrac64(int64(l), int64(n))
 		var cosIv, sinIv ratInterval
 		switch {
+		case haveDen:
+			angle := intervalAdd(enc0, intervalScale(diff, frac))
+			var ok bool
+			sinIv, cosIv, ok = radSinCosSpan(angle)
+			if !ok {
+				return revolveAngular{}, errRevolveAngleEnclosure
+			}
 		case full && r0.Sign() == 0:
 			sinIv, cosIv = turnSinCosInterval(frac)
 		case full:
