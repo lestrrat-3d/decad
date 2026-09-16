@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -141,13 +142,7 @@ func TestChamferBoxAllConvexEdges(t *testing.T) {
 	// loses 4·(d²/2), hand-derived and exact.
 	capArea := 100.0*60.0 - 4*(d*d/2)
 	wantVol := capArea * h
-	vol, err := body.Volume()
-	require.NoError(t, err)
-	require.Equal(t, decad.Exact, vol.Exactness)
-	require.True(t, vol.Bound.Equal(units.CubicMillimeters(0), 1e-12), `a chamfer introduces no bound`)
-	gotVol, err := vol.Value.In(units.CubicMillimeter)
-	require.NoError(t, err)
-	require.InDelta(t, wantVol, gotVol, 1e-9)
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(wantVol), decadtest.Exactly())
 
 	// Area: each corner replaces a right angle by trimming d off two walls and
 	// adding a chord of length d√2, so the perimeter loses 8d and gains 4d√2.
@@ -157,9 +152,7 @@ func TestChamferBoxAllConvexEdges(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.Approximate, area.Exactness)
 	require.Positive(t, area.Bound.Base())
-	gotArea, err := area.Value.In(units.SquareMillimeter)
-	require.NoError(t, err)
-	require.InDelta(t, wantArea, gotArea, 1e-9)
+	decadtest.Measures(t, "chamfered box area", area, units.SquareMillimeters(wantArea))
 
 	// Topology: four straight walls + four planar bevels + two caps — every one
 	// a Plane, no cylinder anywhere (the bevel is a chord, not a rolling ball).
@@ -201,11 +194,11 @@ func TestChamferBoxAllConvexEdges(t *testing.T) {
 
 	// A planar bevel has no concave principal radius, so the minimum-radius
 	// survey rightly reports nothing (Table D, D3) — unlike a concave fillet.
-	rep, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
-	require.NoError(t, err)
+	// The irrational bevel length's certified square-root bracket keeps the
+	// bound within default tolerance, so the whole report is Sound.
+	rep := decadtest.IsSound(t, doc, decad.WithConcaveRadius())
 	require.Len(t, rep.Bodies, 1)
 	require.Nil(t, rep.Bodies[0].ConcaveRadius.Minimum, `a planar chamfer bevel is not a concave radius`)
-	require.True(t, rep.Passed(), `the irrational bevel length's certified square-root bracket keeps the bound within default tolerance`)
 }
 
 func TestChamferRecipeAndRetire(t *testing.T) {
@@ -294,12 +287,7 @@ func TestChamferConcaveEdgeAddsWedge(t *testing.T) {
 	// The reflex chamfer ADDS material: a d²/2 wedge for the one corner.
 	lArea := 40.0*40.0 - 20.0*20.0
 	wantVol := (lArea + d*d/2) * 10
-	vol, err := chamfered.Volume()
-	require.NoError(t, err)
-	require.Equal(t, decad.Exact, vol.Exactness)
-	gotVol, err := vol.Value.In(units.CubicMillimeter)
-	require.NoError(t, err)
-	require.InDelta(t, wantVol, gotVol, 1e-9)
+	decadtest.MeasuresVolume(t, chamfered, units.CubicMillimeters(wantVol), decadtest.Exactly())
 
 	// The bevel is a plane, not a cylinder — even at a concave corner — so the
 	// minimum-radius survey reports nothing (a sharp concave edge has no radius).
@@ -307,8 +295,7 @@ func TestChamferConcaveEdgeAddsWedge(t *testing.T) {
 		_, isCyl := f.Surface().(decad.Cylinder)
 		require.False(t, isCyl, `a concave chamfer is a plane, never a cylinder`)
 	}
-	rep, err := doc.Verify(t.Context(), decad.WithConcaveRadius())
-	require.NoError(t, err)
+	rep := decadtest.Verify(t, doc, decad.WithConcaveRadius())
 	require.Len(t, rep.Bodies, 1)
 	require.Nil(t, rep.Bodies[0].ConcaveRadius.Minimum, `a planar chamfer bevel has no concave radius`)
 }
@@ -640,7 +627,7 @@ func TestChamferClearOfHoleBuilds(t *testing.T) {
 	require.NoError(t, err, `a well-nested chamfered section tessellates`)
 	require.NotEmpty(t, mesh.Triangles())
 
-	rep, err := doc.Verify(t.Context())
-	require.NoError(t, err)
-	require.True(t, rep.Passed(), `the certified square-root length bracket keeps the bound within default tolerance`)
+	// The certified square-root length bracket keeps the bound within
+	// default tolerance.
+	decadtest.IsSound(t, doc)
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -155,12 +156,8 @@ func TestPrismUnionCutFragmentOperandRefusesNonClosingMerge(t *testing.T) {
 	require.Equal(t, beforeRecipe, doc.Recipe())
 	require.Equal(t, beforeBodies, doc.Bodies())
 
-	av, err := a.Volume()
-	require.NoError(t, err)
-	require.InDelta(t, 1139.952075, volumeMM(t, av), 1e-9)
-	bv, err := b.Volume()
-	require.NoError(t, err)
-	require.InDelta(t, 20.0, volumeMM(t, bv), 1e-9)
+	decadtest.MeasuresVolume(t, a, units.CubicMillimeters(1139.952075))
+	decadtest.MeasuresVolume(t, b, units.CubicMillimeters(20.0))
 }
 
 // --- Core PR1 capability tests (§14) ---
@@ -187,7 +184,8 @@ func TestPrismUnionTwoBoxesSharingCapPlaneBuildsAnalyticPrism(t *testing.T) {
 	require.Equal(t, decad.Approximate, vol.Exactness)
 	require.Positive(t, vol.Bound.Base())
 	require.Less(t, vol.Bound.Base(), 1e-9)
-	require.InDelta(t, 1750.0, volumeMM(t, vol), 1e-9) // 100 + 100 - 25 (the 5x5 overlap), times h=10
+	// 100 + 100 - 25 (the 5x5 overlap), times h=10.
+	decadtest.Measures(t, "union volume", vol, units.CubicMillimeters(1750.0))
 
 	// The result is a first-class prismPayload: every face is analytic
 	// (Plane/Cylinder), never Faceted — the mesh boolean never ran.
@@ -230,9 +228,8 @@ func TestPrismUnionGearToothOnHubSharedCarrier(t *testing.T) {
 	vol, err := got.Volume()
 	require.NoError(t, err)
 	require.Equal(t, decad.Approximate, vol.Exactness)
-	bound := boundMM3(t, vol)
-	require.Greater(t, bound, 0.0)
-	require.InDelta(t, closedForm, volumeMM(t, vol), bound)
+	require.Positive(t, vol.Bound.Base())
+	decadtest.Measures(t, "gear union volume", vol, units.CubicMillimeters(closedForm))
 
 	// Region set: exactly one surviving Cylinder wall (the hub's own circle
 	// minus the tooth's span), three surviving planar tooth walls, and two
@@ -450,9 +447,8 @@ func TestPrismUnionChainedBooleanCarriesNoAccumulatedBound(t *testing.T) {
 	b := boxBody(t, doc, 2, 2, 8, 8, 10)
 	first, err := decad.Union(a, b)
 	require.NoError(t, err)
-	firstVol, err := first.Volume()
-	require.NoError(t, err)
-	require.Equal(t, decad.Exact, firstVol.Exactness)
+	// b sits strictly inside a, so the union is exactly a's own volume.
+	decadtest.MeasuresVolume(t, first, units.CubicMillimeters(1000), decadtest.Exactly())
 
 	c := boxBody(t, doc, 8, 4, 18, 14, 10)
 	second, err := decad.Union(first, c)
@@ -460,7 +456,7 @@ func TestPrismUnionChainedBooleanCarriesNoAccumulatedBound(t *testing.T) {
 	require.False(t, anyFaceIsFaceted(second), "the chained union must stay analytic")
 	secondVol, err := second.Volume()
 	require.NoError(t, err)
-	require.InDelta(t, 1880.0, volumeMM(t, secondVol), 1e-9)
+	decadtest.Measures(t, "chained union volume", secondVol, units.CubicMillimeters(1880.0))
 	// An ordinary moments-engine bound is many orders of magnitude below the
 	// coarsest meshBound a chained mesh boolean could ever report (the
 	// boolean chord tolerance floor alone is diameter * 2e-5).
@@ -663,10 +659,7 @@ func TestPrismUnionCoplanarCircleLensBounds(t *testing.T) {
 			// gate falls back to the body's own recorded section for the
 			// reference it anchors each reading against (verification design
 			// §3). Bounds this far below their own values then pass that gate.
-			report, err := doc.Verify(t.Context())
-			require.NoError(t, err)
-			require.Equal(t, decad.Sound, report.Status)
-			require.True(t, report.Passed())
+			report := decadtest.IsSound(t, doc)
 			require.Empty(t, report.Diagnostics)
 		})
 	}

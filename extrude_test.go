@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -41,30 +42,10 @@ func TestExtrudePlate(t *testing.T) {
 	require.NoError(t, err)
 
 	require.True(t, body.IsSolid())
-	vol, err := body.Volume()
-	require.NoError(t, err)
-	require.Equal(t, decad.Exact, vol.Exactness)
-	require.True(t, vol.Value.Equal(units.CubicMillimeters(60000), 1e-9), `100×60×10 = 60000 mm³, got %s`, vol.Value)
-
-	area, err := body.Area()
-	require.NoError(t, err)
-	require.True(t, area.Value.Equal(units.SquareMillimeters(2*6000+320*10), 1e-9), `caps + sides, got %s`, area.Value)
-
-	c, err := body.Centroid()
-	require.NoError(t, err)
-	require.InDelta(t, 50.0, c.Value.X, 1e-9)
-	require.InDelta(t, 30.0, c.Value.Y, 1e-9)
-	require.InDelta(t, 5.0, c.Value.Z, 1e-9)
-
-	bounds, err := body.Bounds()
-	require.NoError(t, err)
-	require.Equal(t, decad.Exact, bounds.Exactness)
-	require.InDelta(t, 0.0, bounds.Min.X, 1e-9)
-	require.InDelta(t, 0.0, bounds.Min.Y, 1e-9)
-	require.InDelta(t, 0.0, bounds.Min.Z, 1e-9)
-	require.InDelta(t, 100.0, bounds.Max.X, 1e-9)
-	require.InDelta(t, 60.0, bounds.Max.Y, 1e-9)
-	require.InDelta(t, 10.0, bounds.Max.Z, 1e-9)
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(60000), decadtest.Exactly())
+	decadtest.MeasuresArea(t, body, units.SquareMillimeters(2*6000+320*10))
+	decadtest.MeasuresCentroid(t, body, r3.NewVec(50, 30, 5))
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, 0, 0), r3.NewVec(100, 60, 10), decadtest.Exactly())
 
 	// Topology: four planar sides + two caps, all edges manifold, and the
 	// side faces' provenance roles are stable.
@@ -116,19 +97,12 @@ func TestExtrudePlateWithHole(t *testing.T) {
 	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
 
-	vol, err := body.Volume()
-	require.NoError(t, err)
 	wantVol := (6000 - math.Pi*100) * 8
-	got, err := vol.Value.In(units.CubicMillimeter)
-	require.NoError(t, err)
-	require.InDelta(t, wantVol, got, 1e-9)
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(wantVol))
 
-	area, err := body.Area()
-	require.NoError(t, err)
+	// The hole's inner cylinder counts toward the boundary.
 	wantArea := 2*(6000-math.Pi*100) + 320*8 + 2*math.Pi*10*8
-	gotA, err := area.Value.In(units.SquareMillimeter)
-	require.NoError(t, err)
-	require.InDelta(t, wantArea, gotA, 1e-9, `the hole's inner cylinder counts toward the boundary`)
+	decadtest.MeasuresArea(t, body, units.SquareMillimeters(wantArea))
 
 	// Topology: 4 outer sides + 1 hole cylinder + 2 caps.
 	faces := body.Faces()
@@ -157,30 +131,22 @@ func TestExtrudeExtents(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 
-	// Symmetric full-length 8: the sweep is [−4, 4].
+	// Symmetric full-length 8: the sweep is [−4, 4]. The full box is checked,
+	// not just Z, since the plate's own X/Y footprint is unchanged.
 	doc := decad.New()
 	body, err := doc.Extrude(s, p, decad.Symmetric{D: units.Millimeters(8), FullLength: true})
 	require.NoError(t, err)
-	bounds, err := body.Bounds()
-	require.NoError(t, err)
-	require.InDelta(t, -4.0, bounds.Min.Z, 1e-9)
-	require.InDelta(t, 4.0, bounds.Max.Z, 1e-9)
-	c, err := body.Centroid()
-	require.NoError(t, err)
-	require.InDelta(t, 0.0, c.Value.Z, 1e-9)
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, 0, -4), r3.NewVec(100, 60, 4))
+	decadtest.MeasuresCentroid(t, body, r3.NewVec(50, 30, 0))
 
-	// Against: the sweep is [−10, 0].
+	// Against: the sweep is [−10, 0]; an Against sweep never reads negative
+	// volume.
 	doc2 := decad.New()
 	p2 := s.Profiles()[0]
 	body2, err := doc2.Extrude(s, p2, decad.Distance{D: units.Millimeters(10), Dir: decad.Against})
 	require.NoError(t, err)
-	b2, err := body2.Bounds()
-	require.NoError(t, err)
-	require.InDelta(t, -10.0, b2.Min.Z, 1e-9)
-	require.InDelta(t, 0.0, b2.Max.Z, 1e-9)
-	vol2, err := body2.Volume()
-	require.NoError(t, err)
-	require.True(t, vol2.Value.Equal(units.CubicMillimeters(60000), 1e-9), `an Against sweep never reads negative`)
+	decadtest.MeasuresBounds(t, body2, r3.NewVec(0, 0, -10), r3.NewVec(100, 60, 0))
+	decadtest.MeasuresVolume(t, body2, units.CubicMillimeters(60000))
 
 	// TwoSided distance sides: One along 7, Two against 3 → [−3, 7].
 	doc3 := decad.New()
@@ -190,10 +156,7 @@ func TestExtrudeExtents(t *testing.T) {
 		Two: decad.DistanceSide{D: units.Millimeters(3)},
 	})
 	require.NoError(t, err)
-	b3, err := body3.Bounds()
-	require.NoError(t, err)
-	require.InDelta(t, -3.0, b3.Min.Z, 1e-9)
-	require.InDelta(t, 7.0, b3.Max.Z, 1e-9)
+	decadtest.MeasuresBounds(t, body3, r3.NewVec(0, 0, -3), r3.NewVec(100, 60, 7))
 }
 
 func TestExtrudeQuarterDiskPrism(t *testing.T) {
@@ -217,17 +180,10 @@ func TestExtrudeQuarterDiskPrism(t *testing.T) {
 	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
-	vol, err := body.Volume()
-	require.NoError(t, err)
-	got, err := vol.Value.In(units.CubicMillimeter)
-	require.NoError(t, err)
-	require.InDelta(t, math.Pi*400/4*5, got, 1e-9)
-
-	bounds, err := body.Bounds()
-	require.NoError(t, err)
-	require.InDelta(t, 0.0, bounds.Min.X, 1e-9)
-	require.InDelta(t, 20.0, bounds.Max.X, 1e-9)
-	require.InDelta(t, 20.0, bounds.Max.Y, 1e-9)
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(math.Pi*400/4*5))
+	// The full box is checked, not just the two corners the original test
+	// pinned: the quarter disk's own footprint is x,y ∈ [0, 20], z ∈ [0, 5].
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, 0, 0), r3.NewVec(20, 20, 5))
 	requireManifold(t, body)
 
 	cylinders := 0
@@ -257,29 +213,20 @@ func TestPlaced(t *testing.T) {
 	require.NoError(t, err)
 
 	// The motion is rigid: volume and area are untouched, the centroid maps
-	// exactly, and the bounds are the rotated prism's own.
-	vol, err := placed.Volume()
-	require.NoError(t, err)
-	require.True(t, vol.Value.Equal(units.CubicMillimeters(60000), 1e-9))
-	c, err := placed.Centroid()
-	require.NoError(t, err)
+	// exactly, and the bounds are the rotated prism's own. A 90° turn maps
+	// the 60-wide side across x: [140, 200]; z is untouched by a rotation
+	// about the Z axis plus a shift along X, so the full box is checked.
+	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(60000))
 	want := motion.Apply(r3.NewVec(50, 30, 5))
-	require.InDelta(t, want.X, c.Value.X, 1e-9)
-	require.InDelta(t, want.Y, c.Value.Y, 1e-9)
-	require.InDelta(t, want.Z, c.Value.Z, 1e-9)
-	bounds, err := placed.Bounds()
-	require.NoError(t, err)
-	require.InDelta(t, 140.0, bounds.Min.X, 1e-9, `a 90° turn maps the 60-wide side across x: [140, 200]`)
-	require.InDelta(t, 200.0, bounds.Max.X, 1e-9)
-	require.InDelta(t, 0.0, bounds.Min.Y, 1e-9)
-	require.InDelta(t, 100.0, bounds.Max.Y, 1e-9)
+	decadtest.MeasuresCentroid(t, placed, want)
+	decadtest.MeasuresBounds(t, placed, r3.NewVec(140, 0, 0), r3.NewVec(200, 100, 10))
 	requireManifold(t, placed)
 
 	// The receiver is retired but readable; retired bodies take no ops.
 	require.Equal(t, []*decad.Body{placed}, doc.Bodies())
-	origVol, err := body.Volume()
+	_, err = body.Volume()
 	require.NoError(t, err, `a retired body remains readable`)
-	require.True(t, origVol.Value.Equal(units.CubicMillimeters(60000), 1e-9))
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(60000))
 	_, err = body.Placed(motion)
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 
@@ -554,9 +501,7 @@ func TestReflectedPlacementKeepsOutwardNormals(t *testing.T) {
 	c, err := placed.Centroid()
 	require.NoError(t, err)
 	wantC := refl.Apply(r3.NewVec(50, 30, 5))
-	require.InDelta(t, wantC.X, c.Value.X, 1e-9)
-	require.InDelta(t, wantC.Y, c.Value.Y, 1e-9)
-	require.InDelta(t, wantC.Z, c.Value.Z, 1e-9)
+	decadtest.MeasuresVec(t, "reflected centroid", c, wantC)
 
 	// Outwardness, checked face by face: the plane's normal at a point on
 	// the face points away from the body's centroid.
@@ -573,9 +518,8 @@ func TestReflectedPlacementKeepsOutwardNormals(t *testing.T) {
 	}
 	requireManifold(t, placed)
 
-	vol, err := placed.Volume()
-	require.NoError(t, err)
-	require.True(t, vol.Value.Equal(units.CubicMillimeters(60000), 1e-9), `a reflection preserves volume`)
+	// A reflection preserves volume.
+	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(60000))
 }
 
 func TestExtrudeRejectsNonFiniteTaper(t *testing.T) {
@@ -1026,11 +970,7 @@ func TestPlacedRecipeIsUnchangedByTheEvaluatorsCache(t *testing.T) {
 	require.Equal(t, recipe, decoded, "the recipe round-trips field for field")
 
 	// And the placed body is the plate, moved: the reading the cache serves.
-	vol, err := placed.Volume()
-	require.NoError(t, err)
-	require.Equal(t, decad.Exact, vol.Exactness)
-	require.True(t, vol.Value.Equal(units.CubicMillimeters(60000), 1e-9), `100×60×10 = 60000 mm³, got %s`, vol.Value)
-	c, err := placed.Centroid()
-	require.NoError(t, err)
-	require.InDelta(t, 30.0, c.Value.Z, 1e-9, "the plate's mid-height, lifted by 25 mm")
+	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(60000), decadtest.Exactly())
+	// The plate's mid-height, lifted by 25 mm.
+	decadtest.MeasuresCentroid(t, placed, r3.NewVec(50, 30, 30))
 }
