@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -60,8 +61,8 @@ func TestExtrudeThroughAll(t *testing.T) {
 
 	pin, err := doc.Extrude(s, pinProf, decad.ThroughAll{Dir: decad.Along})
 	require.NoError(t, err)
-	requireVolume(t, pin, 4000)
-	requireBounds(t, pin, decad.Exact, 120, 0, 0, 140, 20, 10)
+	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(4000))
+	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, 10), decadtest.Exactly())
 	requireManifold(t, pin)
 
 	// The stop body is a dependency, not an operand: it stays live, and its
@@ -147,8 +148,8 @@ func TestExtrudeThroughAllStacked(t *testing.T) {
 	// bodies are recorded, in stop order along the sweep.
 	pin, err := doc.Extrude(s, pinProf, decad.ThroughAll{Dir: decad.Along})
 	require.NoError(t, err)
-	requireVolume(t, pin, 400*35)
-	requireBounds(t, pin, decad.Exact, 120, 0, 0, 140, 20, 35)
+	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(400*35))
+	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, 35), decadtest.Exactly())
 	steps := doc.Recipe().Steps
 	require.Equal(t, []decad.StepRef{lower.Origin().Step, upper.Origin().Step}, steps[len(steps)-1].Inputs)
 
@@ -176,8 +177,8 @@ func TestExtrudeThroughAllSides(t *testing.T) {
 		Two: decad.DistanceSide{D: units.Millimeters(3)},
 	})
 	require.NoError(t, err)
-	requireVolume(t, pin, 400*13)
-	requireBounds(t, pin, decad.Exact, 120, 0, -3, 140, 20, 10)
+	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(400*13))
+	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, -3), r3.NewVec(140, 20, 10), decadtest.Exactly())
 	steps := doc.Recipe().Steps
 	require.Equal(t, []decad.StepRef{above.Origin().Step}, steps[len(steps)-1].Inputs)
 
@@ -193,7 +194,7 @@ func TestExtrudeThroughAllSides(t *testing.T) {
 		Two: decad.ThroughAllSide{},
 	})
 	require.NoError(t, err)
-	requireBounds(t, pin2, decad.Exact, 120, 0, -6, 140, 20, 10)
+	decadtest.MeasuresBounds(t, pin2, r3.NewVec(120, 0, -6), r3.NewVec(140, 20, 10), decadtest.Exactly())
 	steps = doc2.Recipe().Steps
 	last := steps[len(steps)-1]
 	require.Equal(t, []decad.StepRef{above2.Origin().Step, below2.Origin().Step}, last.Inputs)
@@ -218,8 +219,8 @@ func TestExtrudeToFace(t *testing.T) {
 	q := capEndFace(plate)
 	pin, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: q})
 	require.NoError(t, err)
-	requireVolume(t, pin, 4000)
-	requireBounds(t, pin, decad.Exact, 120, 0, 0, 140, 20, 10)
+	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(4000))
+	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, 10), decadtest.Exactly())
 	requireManifold(t, pin)
 	require.Contains(t, doc.Bodies(), plate, `a stop body is depended on, never retired`)
 
@@ -244,10 +245,10 @@ func TestExtrudeToFace(t *testing.T) {
 	// it (core §8.1).
 	over, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate), Offset: units.Millimeters(2)})
 	require.NoError(t, err)
-	requireBounds(t, over, decad.Exact, 120, 0, 0, 140, 20, 12)
+	decadtest.MeasuresBounds(t, over, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, 12), decadtest.Exactly())
 	short, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate), Offset: units.Millimeters(-3)})
 	require.NoError(t, err)
-	requireBounds(t, short, decad.Exact, 120, 0, 0, 140, 20, 7)
+	decadtest.MeasuresBounds(t, short, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, 7), decadtest.Exactly())
 }
 
 func TestExtrudeToFaceAgainst(t *testing.T) {
@@ -261,8 +262,8 @@ func TestExtrudeToFaceAgainst(t *testing.T) {
 
 	pin, err := doc.Extrude(s, pinProf, decad.ToFace{Body: below, Face: capStartFace(below)})
 	require.NoError(t, err)
-	requireVolume(t, pin, 400*6)
-	requireBounds(t, pin, decad.Exact, 120, 0, -6, 140, 20, 0)
+	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(400*6))
+	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, -6), r3.NewVec(140, 20, 0), decadtest.Exactly())
 }
 
 func TestExtrudeToFaceSides(t *testing.T) {
@@ -281,8 +282,8 @@ func TestExtrudeToFaceSides(t *testing.T) {
 		Two: decad.ToFace{Body: below, Face: capStartFace(below)},
 	})
 	require.NoError(t, err)
-	requireVolume(t, pin, 400*16)
-	requireBounds(t, pin, decad.Exact, 120, 0, -6, 140, 20, 10)
+	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(400*16))
+	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, -6), r3.NewVec(140, 20, 10), decadtest.Exactly())
 	steps := doc.Recipe().Steps
 	last := steps[len(steps)-1]
 	require.Equal(t, []decad.StepRef{above.Origin().Step, below.Origin().Step}, last.Inputs)
@@ -473,8 +474,8 @@ func TestExtrudeThroughAllArcSectionCarriesRadiusBound(t *testing.T) {
 	// The sweep runs from the sketch plane to the apex the host HOLDS, so the
 	// 4×4 footprint's volume is that height's, and the level's own bracket is
 	// what the pin's box publishes.
-	requireVolume(t, pin, 16*math.Sqrt(37))
-	requireBounds(t, pin, decad.Approximate, 20, 0, 0, 24, 4, math.Sqrt(37))
+	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(16*math.Sqrt(37)))
+	decadtest.MeasuresBounds(t, pin, r3.NewVec(20, 0, 0), r3.NewVec(24, 4, math.Sqrt(37)))
 	pinBox, err := pin.Bounds()
 	require.NoError(t, err)
 	require.Positive(t, pinBox.Bound.Base(),
@@ -517,8 +518,8 @@ func TestExtrudeThroughAllRevolveStopChargesSweepExtreme(t *testing.T) {
 
 		// The sweep stops at the host's own held far side, and the 4×4
 		// footprint swept [0, 8·sin(1)] has that height's volume.
-		requireVolume(t, pin, 16*8*math.Sin(1))
-		requireBounds(t, pin, decad.Approximate, 20, 0, 0, 24, 4, 8*math.Sin(1))
+		decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(16*8*math.Sin(1)))
+		decadtest.MeasuresBounds(t, pin, r3.NewVec(20, 0, 0), r3.NewVec(24, 4, 8*math.Sin(1)))
 
 		// The level is held, not denoted: the pin's own box carries a
 		// displacement at least as wide as the host's extent bracket.
@@ -544,8 +545,8 @@ func TestExtrudeThroughAllRevolveStopChargesSweepExtreme(t *testing.T) {
 
 		// The revolved solid spans z ∈ [−8, 8] exactly, so the stop is 8 and
 		// the 4×4 footprint swept [0, 8] is 128 mm³.
-		requireVolume(t, pin, 128)
-		requireBounds(t, pin, decad.Exact, 20, 0, 0, 24, 4, 8)
+		decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(128))
+		decadtest.MeasuresBounds(t, pin, r3.NewVec(20, 0, 0), r3.NewVec(24, 4, 8), decadtest.Exactly())
 		require.Contains(t, doc.Bodies(), host)
 		steps := doc.Recipe().Steps
 		require.Equal(t, []decad.StepRef{host.Origin().Step}, steps[len(steps)-1].Inputs)
@@ -564,8 +565,8 @@ func TestRevolveToFaceAngular(t *testing.T) {
 	// exactly [0, π/2].
 	body, err := doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capEndFace(host)})
 	require.NoError(t, err)
-	requireVolume(t, body, 500*math.Pi)
-	requireBounds(t, body, decad.Approximate, 0, 0, 0, 10, 15, 15)
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(500*math.Pi))
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, 0, 0), r3.NewVec(10, 15, 15))
 	require.Contains(t, doc.Bodies(), host, `a stop body is depended on, never retired`)
 
 	// The step depends on the host, and the recorded extent carries the
@@ -598,8 +599,8 @@ func TestRevolveToFaceAngularNearerWay(t *testing.T) {
 
 	body, err := doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capEndFace(host)})
 	require.NoError(t, err)
-	requireVolume(t, body, 500*math.Pi)
-	requireBounds(t, body, decad.Approximate, 0, 0, -15, 10, 15, 0)
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(500*math.Pi))
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, 0, -15), r3.NewVec(10, 15, 0))
 }
 
 func TestRevolveToFaceAngularSides(t *testing.T) {
@@ -615,7 +616,7 @@ func TestRevolveToFaceAngularSides(t *testing.T) {
 		Two: decad.AngleSide{A: units.Degrees(45)},
 	})
 	require.NoError(t, err)
-	requireVolume(t, body, 750*math.Pi)
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(750*math.Pi))
 	steps := doc.Recipe().Steps
 	require.Equal(t, []decad.StepRef{host.Origin().Step}, steps[len(steps)-1].Inputs)
 
@@ -626,7 +627,7 @@ func TestRevolveToFaceAngularSides(t *testing.T) {
 		Two: decad.ToFaceAngular{Body: host, Face: capEndFace(host)},
 	})
 	require.NoError(t, err)
-	requireVolume(t, long, 1750*math.Pi)
+	decadtest.MeasuresVolume(t, long, units.CubicMillimeters(1750*math.Pi))
 
 	// The recorded sides carry StepRefs and round-trip.
 	steps = doc.Recipe().Steps
@@ -654,7 +655,7 @@ func TestRevolveToFaceAngularHalfDiskCap(t *testing.T) {
 	s, p := annularSketch(t)
 	body, err := doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capEndFace(host)})
 	require.NoError(t, err)
-	requireVolume(t, body, 500*math.Pi)
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(500*math.Pi))
 }
 
 func TestRevolveToFaceAngularGates(t *testing.T) {
@@ -895,8 +896,8 @@ func TestExtrudeThroughAllCupStop(t *testing.T) {
 
 	// The sweep read the cup's outer extent (20): the 20×20 pin swept [0, 20]
 	// is 8000 mm³, bounded z ∈ [0, 20]. The cavity did not lower the stop.
-	requireVolume(t, pin, 400*20)
-	requireBounds(t, pin, decad.Exact, 120, 0, 0, 140, 20, 20)
+	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(400*20))
+	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, 20), decadtest.Exactly())
 	requireManifold(t, pin)
 
 	// The cup is a recorded dependency of the stop step, not an operand: it
@@ -927,8 +928,8 @@ func TestExtrudeThroughAllSideCupStop(t *testing.T) {
 	// The Along side (One) stops at the cup's outer extent (20), the Against
 	// side (Two) at 3: the pin spans z ∈ [-3, 20], a 20×20 footprint →
 	// 23·400 = 9200 mm³.
-	requireVolume(t, pin, 400*23)
-	requireBounds(t, pin, decad.Exact, 120, 0, -3, 140, 20, 20)
+	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(400*23))
+	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, -3), r3.NewVec(140, 20, 20), decadtest.Exactly())
 	require.Contains(t, doc.Bodies(), cup)
 }
 

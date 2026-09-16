@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -480,7 +481,7 @@ func runRevolveCase(t *testing.T, su setup, ap axisPlacement, sw sweep, xf r3.Tr
 		dphi = 2 * math.Pi
 	}
 	wantVol := su.q * dphi
-	requireVolume(t, body, wantVol)
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(wantVol))
 
 	// The unplaced body, then the same body under a random rigid motion. Both
 	// must satisfy every invariant, and the mass properties must agree.
