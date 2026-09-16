@@ -239,7 +239,7 @@ func TestClearanceCoaxialPegInTube(t *testing.T) {
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status)
+	require.Equal(t, decad.Sound, report.Status)
 	requireExactGap(t, report, 5)
 }
 

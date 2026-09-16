@@ -1279,10 +1279,7 @@ func TestRevolveVerifySound(t *testing.T) {
 	_, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(120), Dir: decad.Along})
 	require.NoError(t, err)
 
-	report, err := doc.Verify(t.Context())
-	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status)
-	require.False(t, report.Passed())
+	report := decadtest.IsSound(t, doc)
 	require.Len(t, report.Bodies, 1)
 	require.Equal(t, decad.ValidityValid, report.Bodies[0].Validity.Outcome)
 	require.Equal(t, decad.Approximate, report.Bodies[0].Area.Exactness)

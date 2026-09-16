@@ -135,8 +135,8 @@ func TestWallConeNoWall(t *testing.T) {
 	require.NoError(t, err)
 	br := report.Bodies[0]
 	require.Nil(t, br.Wall.Minimum)
-	require.Equal(t, decad.Suspect, br.Status)
-	require.False(t, report.Passed())
+	require.Equal(t, decad.Sound, br.Status)
+	require.True(t, report.Passed())
 }
 
 func TestWallAnnularPrism(t *testing.T) {
@@ -252,7 +252,8 @@ func TestWallPartialRevolve(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	decadtest.MeasuresWallMinimum(t, report.Bodies[0], units.Millimeters(10), decadtest.Exactly())
-	require.Equal(t, decad.Suspect, report.Status)
+	require.Equal(t, decad.Sound, report.Status)
+	require.True(t, report.Passed())
 }
 
 func TestVerifyWallCancellationStopsCandidateWork(t *testing.T) {
@@ -693,10 +694,8 @@ func TestWallSolidCylinder(t *testing.T) {
 	bound, err := br.Wall.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	require.Equal(t, 0.0, bound)
-	// The report still reads Suspect, and not for the wall: the full
-	// revolve's own volume and area bounds are beyond the relative
-	// tolerance, which is a separate reading from this one.
-	require.Equal(t, decad.Suspect, report.Status)
+	require.Equal(t, decad.Sound, report.Status)
+	require.True(t, report.Passed())
 }
 
 // TestMinRadiusAnnularRevolveStaysExact pins the other public reading whose
