@@ -10,13 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestBlockBuildsTheMeasuredPlate proves Block by asserting on the computed
-// geometry of the body it builds, not merely that it ran.
-func TestBlockBuildsTheMeasuredPlate(t *testing.T) {
+// TestNewBlockBuildsTheMeasuredPlate proves NewBlock by asserting on the
+// computed geometry of the body it builds, not merely that it ran.
+func TestNewBlockBuildsTheMeasuredPlate(t *testing.T) {
 	t.Parallel()
 
 	doc := decad.New()
-	body := decadtest.Block(t, doc, 0, 0, 100, 60, units.Millimeters(10))
+	body := decadtest.NewBlock(t, doc, 0, 0, 100, 60, units.Millimeters(10))
 
 	vol, err := body.Volume()
 	require.NoError(t, err)
@@ -45,26 +45,26 @@ func TestBlockBuildsTheMeasuredPlate(t *testing.T) {
 	require.Equal(t, map[decad.SurfaceKind]int{decad.KindPlane: 6}, kinds)
 }
 
-// TestBlockRecordsOneExtrudeStep proves the fixture end to end: the real
+// TestNewBlockRecordsOneExtrudeStep proves the fixture end to end: the real
 // producer's recipe passes through the real consumer.
-func TestBlockRecordsOneExtrudeStep(t *testing.T) {
+func TestNewBlockRecordsOneExtrudeStep(t *testing.T) {
 	t.Parallel()
 
 	doc := decad.New()
-	decadtest.Block(t, doc, 0, 0, 10, 10, units.Millimeters(2))
+	decadtest.NewBlock(t, doc, 0, 0, 10, 10, units.Millimeters(2))
 
 	steps := doc.Recipe().Steps
 	require.Len(t, steps, 1)
 	require.Equal(t, decad.OpExtrude, steps[0].Op)
 }
 
-// TestBlockIsSoundUnderVerify proves Block's body clears decad's own
+// TestNewBlockIsSoundUnderVerify proves NewBlock's body clears decad's own
 // verifier.
-func TestBlockIsSoundUnderVerify(t *testing.T) {
+func TestNewBlockIsSoundUnderVerify(t *testing.T) {
 	t.Parallel()
 
 	doc := decad.New()
-	decadtest.Block(t, doc, 0, 0, 10, 10, units.Millimeters(2))
+	decadtest.NewBlock(t, doc, 0, 0, 10, 10, units.Millimeters(2))
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
@@ -72,105 +72,106 @@ func TestBlockIsSoundUnderVerify(t *testing.T) {
 	require.Equal(t, decad.Sound, report.Status)
 }
 
-// TestPrismExtrudesTheSolvedRegion exercises Sketch, Region and Prism
-// directly rather than through Block.
-func TestPrismExtrudesTheSolvedRegion(t *testing.T) {
+// TestNewPrismExtrudesTheSolvedRegion exercises NewSketch, SolveRegion and
+// NewPrism directly rather than through NewBlock.
+func TestNewPrismExtrudesTheSolvedRegion(t *testing.T) {
 	t.Parallel()
 
 	doc := decad.New()
-	s := decadtest.Sketch(t)
+	s := decadtest.NewSketch(t)
 	rect := s.CreateRectangle(0, 0, 4, 5)
 	s.Fix(rect.A)
 
-	p := decadtest.Region(t, s)
+	p := decadtest.SolveRegion(t, s)
 	require.True(t, p.Valid)
 	require.Greater(t, p.Area, 0.0)
 
-	body := decadtest.Prism(t, doc, s, p, units.Millimeters(3))
+	body := decadtest.NewPrism(t, doc, s, p, units.Millimeters(3))
 	vol, err := body.Volume()
 	require.NoError(t, err)
 	require.True(t, vol.Value.Equal(units.CubicMillimeters(p.Area*3), 0))
 }
 
-// TestRegionRejectsNilSketch shows Region fail when s is nil.
-func TestRegionRejectsNilSketch(t *testing.T) {
+// TestSolveRegionRejectsNilSketch shows SolveRegion fail when s is nil.
+func TestSolveRegionRejectsNilSketch(t *testing.T) {
 	t.Parallel()
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Region(tb, nil)
+		decadtest.SolveRegion(tb, nil)
 	})
 	require.Contains(t, out, "s must not be nil")
 }
 
-// TestRegionRejectsTwoRegions shows Region fail when the sketch holds more
-// than one valid region.
-func TestRegionRejectsTwoRegions(t *testing.T) {
+// TestSolveRegionRejectsTwoRegions shows SolveRegion fail when the sketch
+// holds more than one valid region.
+func TestSolveRegionRejectsTwoRegions(t *testing.T) {
 	t.Parallel()
 
 	out := captureFailure(t, func(tb testing.TB) {
-		s := decadtest.Sketch(tb)
+		s := decadtest.NewSketch(tb)
 		r1 := s.CreateRectangle(0, 0, 2, 2)
 		r2 := s.CreateRectangle(10, 10, 12, 12)
 		s.Fix(r1.A)
 		s.Fix(r2.A)
-		decadtest.Region(tb, s)
+		decadtest.SolveRegion(tb, s)
 	})
 	require.Contains(t, out, "valid region(s), want exactly 1")
 }
 
-// TestRegionRejectsNoRegion shows Region fail when the sketch holds no
-// entities at all.
-func TestRegionRejectsNoRegion(t *testing.T) {
+// TestSolveRegionRejectsNoRegion shows SolveRegion fail when the sketch
+// holds no entities at all.
+func TestSolveRegionRejectsNoRegion(t *testing.T) {
 	t.Parallel()
 
 	out := captureFailure(t, func(tb testing.TB) {
-		s := decadtest.Sketch(tb)
-		decadtest.Region(tb, s)
+		s := decadtest.NewSketch(tb)
+		decadtest.SolveRegion(tb, s)
 	})
 	require.Contains(t, out, "valid region(s), want exactly 1")
 }
 
-// TestPrismRejectsNilDocument shows Prism fail when doc is nil.
-func TestPrismRejectsNilDocument(t *testing.T) {
+// TestNewPrismRejectsNilDocument shows NewPrism fail when doc is nil.
+func TestNewPrismRejectsNilDocument(t *testing.T) {
 	t.Parallel()
 
-	s := decadtest.Sketch(t)
+	s := decadtest.NewSketch(t)
 	rect := s.CreateRectangle(0, 0, 2, 2)
 	s.Fix(rect.A)
-	p := decadtest.Region(t, s)
+	p := decadtest.SolveRegion(t, s)
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Prism(tb, nil, s, p, units.Millimeters(1))
+		decadtest.NewPrism(tb, nil, s, p, units.Millimeters(1))
 	})
 	require.Contains(t, out, "doc must not be nil")
 }
 
-// TestPrismRejectsNilProfile shows Prism fail when p is nil.
-func TestPrismRejectsNilProfile(t *testing.T) {
+// TestNewPrismRejectsNilProfile shows NewPrism fail when p is nil.
+func TestNewPrismRejectsNilProfile(t *testing.T) {
 	t.Parallel()
 
 	doc := decad.New()
-	s := decadtest.Sketch(t)
+	s := decadtest.NewSketch(t)
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Prism(tb, doc, s, nil, units.Millimeters(1))
+		decadtest.NewPrism(tb, doc, s, nil, units.Millimeters(1))
 	})
 	require.Contains(t, out, "p must not be nil")
 }
 
-// TestPrismReportsAWrongKindHeight shows Prism fail when height is not a
-// Length, surfacing decad's own ErrUnitKind through the Fatalf message.
-func TestPrismReportsAWrongKindHeight(t *testing.T) {
+// TestNewPrismReportsAWrongKindHeight shows NewPrism fail when height is
+// not a Length, surfacing decad's own ErrUnitKind through the Fatalf
+// message.
+func TestNewPrismReportsAWrongKindHeight(t *testing.T) {
 	t.Parallel()
 
 	doc := decad.New()
-	s := decadtest.Sketch(t)
+	s := decadtest.NewSketch(t)
 	rect := s.CreateRectangle(0, 0, 2, 2)
 	s.Fix(rect.A)
-	p := decadtest.Region(t, s)
+	p := decadtest.SolveRegion(t, s)
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Prism(tb, doc, s, p, units.Degrees(10))
+		decadtest.NewPrism(tb, doc, s, p, units.Degrees(10))
 	})
 	require.Contains(t, out, "extruding by")
 }
