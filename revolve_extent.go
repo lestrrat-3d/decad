@@ -370,6 +370,19 @@ func sweepExtremes(c0, c1, phi0, phi1 float64, full bool) (float64, float64) {
 // with the interval's one critical point already accounted for, the OTHER
 // extreme cannot be interior and needs no widening at all.
 //
+// A width proven at LEAST a half turn (den.halfTurnExcessFor, checked in the
+// default arm below) decides both extremes by the endpoints' own certified
+// slope signs, with no interior angle to locate: a closed interval of width
+// ≥ π always contains at least one critical angle, so for every direction at
+// least one of {max, min} is exactly the amplitude, and which one is a fact
+// about the SIGN of m′ at whichever endpoint is strict. A strictly positive
+// slope at phi0 (or strictly negative at phi1) certifies the max is the
+// amplitude; the mirrored sign certifies the min; an endpoint whose slope is
+// exactly zero is itself a critical angle, so its own value is one extreme
+// and the opposite kind's critical angle sits exactly π further inside the
+// interval — both extremes are the amplitude. An extreme none of this
+// certifies keeps the global widening, which is sound for any φ.
+//
 // Only where neither arm certifies — a straddling endpoint, or a width not
 // proven under 2π — does the enclosure widen to the global amplitude bound on
 // both ends (valid for ANY φ, critical or not).
@@ -456,8 +469,37 @@ func sweepExtremeBounds(c0, c1, phi0, phi1 float64, den sweepDenotation, heldLo,
 		// The mirror case: a minimum.
 		loLo, loHi = new(big.Rat).Neg(ampHiR), new(big.Rat).Neg(ampLoR)
 	default:
-		hiHi = maxRat(hiHi, ampHiR)
-		loLo = minRat(loLo, new(big.Rat).Neg(ampHiR))
+		// The reflex arm: a sweep proven at least a half turn wide contains
+		// at least one zero of m′ in its CLOSED interval, and each endpoint's
+		// own certified slope says which. With α the angular distance from
+		// the maximum's direction to phi0, m′(phi0) = −amp·sin α: a strictly
+		// positive slope at phi0 puts α in (π, 2π), so the maximum lies
+		// within 2π − α < π ≤ width AFTER phi0; a strictly negative one puts
+		// α in (0, π), so the minimum lies within π − α < π ≤ width after
+		// phi0. Mirrored at phi1 (the extreme lies BEFORE it): a strictly
+		// negative slope there certifies the maximum, a strictly positive one
+		// the minimum. An endpoint whose slope is exactly zero IS one
+		// critical point, so its own value is one extreme and the opposite
+		// extreme's critical point sits exactly π further in, inside a
+		// width of at least π: both extremes are ±amp. A certified extreme
+		// takes the amplitude bracket; an uncertified one keeps the global
+		// widening below, which is sound for any φ.
+		excess, okExcess := den.halfTurnExcessFor(phi0, phi1)
+		atLeastHalfTurn := okExcess && excess.lo.Sign() >= 0
+		crit0 := mp0.lo.Sign() == 0 && mp0.hi.Sign() == 0
+		crit1 := mp1.lo.Sign() == 0 && mp1.hi.Sign() == 0
+		maxIsAmp := atLeastHalfTurn && (crit0 || crit1 || mp0.lo.Sign() > 0 || mp1.hi.Sign() < 0)
+		minIsAmp := atLeastHalfTurn && (crit0 || crit1 || mp0.hi.Sign() < 0 || mp1.lo.Sign() > 0)
+		if maxIsAmp {
+			hiLo, hiHi = ampLoR, ampHiR
+		} else {
+			hiHi = maxRat(hiHi, ampHiR)
+		}
+		if minIsAmp {
+			loLo, loHi = new(big.Rat).Neg(ampHiR), new(big.Rat).Neg(ampLoR)
+		} else {
+			loLo = minRat(loLo, new(big.Rat).Neg(ampHiR))
+		}
 	}
 	hiIv := interval(hiLo, hiHi)
 	loIv := interval(loLo, loHi)

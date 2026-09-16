@@ -206,6 +206,31 @@ func (sd sweepDenotation) widthInterval() (ratInterval, bool) {
 	return intervalSub(enc1, enc0), true
 }
 
+// halfTurnExcessFor encloses the denoted sweep's width MINUS a half turn,
+// (phi1 − phi0) − π: the quantity whose certified sign decides whether the
+// sweep is at least a half turn wide (sweepExtremeBounds' reflex arm,
+// revolve_extent.go). It is built from each end's own rad/turn form rather
+// than by subtracting π's enclosure from widthInterval's, so that a half
+// turn stated in degrees — a turn difference of exactly 1/2 — answers the
+// POINT interval [0, 0] and certifies the half turn exactly, where the
+// subtraction would straddle zero. An end the denotation cannot state falls
+// back to the HELD float exactly as enclosureFor does, against π's own
+// enclosure; ok is false only where a held float is not finite.
+func (sd sweepDenotation) halfTurnExcessFor(phi0, phi1 float64) (ratInterval, bool) {
+	if sd.phi0.valid() && sd.phi1.valid() {
+		rad := new(big.Rat).Sub(sd.phi1.rad, sd.phi0.rad)
+		turn := new(big.Rat).Sub(sd.phi1.turn, sd.phi0.turn)
+		turn.Sub(turn, big.NewRat(1, 2))
+		return intervalAdd(pointInterval(rad), intervalScale(twoPiInterval(), turn)), true
+	}
+	enc0, ok0 := sd.phi0.enclosureFor(phi0)
+	enc1, ok1 := sd.phi1.enclosureFor(phi1)
+	if !ok0 || !ok1 {
+		return ratInterval{}, false
+	}
+	return intervalSub(intervalSub(enc1, enc0), interval(piLower, piUpper)), true
+}
+
 // sweep is the proven bound on the sweep width every mass and edge reading
 // multiplies into its own quantity: the held float64 subtraction stays the
 // published value exactly as it always has, and the bound is the smaller of

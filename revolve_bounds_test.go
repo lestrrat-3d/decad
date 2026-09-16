@@ -586,3 +586,241 @@ func TestRevolveTiltedAxisBoundsTighten(t *testing.T) {
 			`axisDirectionSqrtBracket must replace the old envelope in the area's own axis-moment reads`)
 	})
 }
+
+// The tests below prove the reflex-sweep box bound: sweepExtremeBounds'
+// default arm (revolve_extent.go) certifies both extremes are the amplitude
+// once den.halfTurnExcessFor proves the sweep is at least a half turn wide,
+// replacing the old widen-to-amplitude-on-both-ends fallback that published
+// up to 50 mm of slack on annularSketch (rho_upper 15 mm). Every assertion is
+// a RELATION, never a bound literal.
+
+// annularHandBox is an independent oracle for annularSketch's (and
+// holedSketch's, whose outer boundary is identical) axis-aligned box over
+// [phi0, phi1] radians about uAxis: it walks the endpoint angles and every
+// interior multiple of pi/2 inside the interval, using only ordinary
+// math.Sin/Cos — never decad's own rational interval machinery — the same
+// convention TestRevolvePartialCentroidBoundTightens already takes for its
+// own reference trig. u ranges [0, 10] independent of the sweep; rho_upper is
+// 15, the section's own greatest distance from the u axis (v in [5, 15]).
+func annularHandBox(phi0, phi1 float64) (lo, hi r3.Vec) {
+	const rhoUpper = 15.0
+	yLo, yHi := math.Inf(1), math.Inf(-1)
+	zLo, zHi := math.Inf(1), math.Inf(-1)
+	consider := func(phi float64) {
+		sin, cos := math.Sincos(phi)
+		y, z := rhoUpper*cos, rhoUpper*sin
+		yLo, yHi = math.Min(yLo, y), math.Max(yHi, y)
+		zLo, zHi = math.Min(zLo, z), math.Max(zHi, z)
+	}
+	consider(phi0)
+	consider(phi1)
+	for k := -4.0; k <= 4; k++ {
+		for _, cand := range []float64{k * math.Pi, math.Pi/2 + k*math.Pi} {
+			if cand >= phi0 && cand <= phi1 {
+				consider(cand)
+			}
+		}
+	}
+	return r3.NewVec(0, yLo, zLo), r3.NewVec(10, yHi, zHi)
+}
+
+// reflexSweepCase names one sweep TestRevolveReflexSweepBoundsTighten and
+// TestRevolveVerifySoundReflex check: the AngularExtent to revolve with, and
+// the same interval's own radian endpoints computed independently (never
+// read back from decad), for annularHandBox to evaluate.
+type reflexSweepCase struct {
+	name       string
+	ext        decad.AngularExtent
+	phi0, phi1 float64
+}
+
+func reflexSweepCases() []reflexSweepCase {
+	deg := func(d float64) float64 { return d * math.Pi / 180 }
+	return []reflexSweepCase{
+		{"Along200", decad.AngleExtent{A: units.Degrees(200), Dir: decad.Along}, 0, deg(200)},
+		{"Along270", decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along}, 0, deg(270)},
+		{"Along300", decad.AngleExtent{A: units.Degrees(300), Dir: decad.Along}, 0, deg(300)},
+		{"Along359", decad.AngleExtent{A: units.Degrees(359), Dir: decad.Along}, 0, deg(359)},
+		{"Against270", decad.AngleExtent{A: units.Degrees(270), Dir: decad.Against}, -deg(270), 0},
+		{"Symmetric135", decad.SymmetricAngle{A: units.Degrees(135)}, -deg(135), deg(135)},
+		{
+			"TwoSided200_70",
+			decad.TwoSidedAngle{One: decad.AngleSide{A: units.Degrees(200)}, Two: decad.AngleSide{A: units.Degrees(70)}},
+			-deg(70), deg(200),
+		},
+		{
+			"TwoSided90_180",
+			decad.TwoSidedAngle{One: decad.AngleSide{A: units.Degrees(90)}, Two: decad.AngleSide{A: units.Degrees(180)}},
+			-deg(180), deg(90),
+		},
+		{
+			"TwoSided2rad_100deg",
+			decad.TwoSidedAngle{One: decad.AngleSide{A: units.Radians(2)}, Two: decad.AngleSide{A: units.Degrees(100)}},
+			-deg(100), 2,
+		},
+		{"Radians5", decad.AngleExtent{A: units.Radians(5), Dir: decad.Along}, 0, 5},
+	}
+}
+
+// TestRevolveReflexSweepBoundsTighten is the reflex-box design's test 3: the
+// annular and holed sections both, over every sweep in reflexSweepCases,
+// publish a box that both CONTAINS annularHandBox's independently computed
+// extremes (decadtest.MeasuresBounds) and is TIGHT to a tiny fraction of its
+// own diagonal (decadtest.HasBoundAtMost). Fails on main by the measured
+// 1.5-50 mm this file's own commit fixes.
+func TestRevolveReflexSweepBoundsTighten(t *testing.T) {
+	t.Parallel()
+
+	sections := []struct {
+		name string
+		fix  func(t *testing.T) (*sketch.Sketch, *sketch.Profile)
+	}{
+		{"annular", annularSketch},
+		{"holed", holedSketch},
+	}
+
+	for _, sec := range sections {
+		t.Run(sec.name, func(t *testing.T) {
+			t.Parallel()
+			for _, c := range reflexSweepCases() {
+				t.Run(c.name, func(t *testing.T) {
+					t.Parallel()
+					s, p := sec.fix(t)
+					doc := decad.New()
+					body, err := doc.Revolve(s, p, uAxis, c.ext)
+					require.NoError(t, err)
+
+					lo, hi := annularHandBox(c.phi0, c.phi1)
+					decadtest.MeasuresBounds(t, body, lo, hi)
+
+					box, err := body.Bounds()
+					require.NoError(t, err)
+					diameter := box.Max.Sub(box.Min).Len()
+					decadtest.HasBoundAtMost(t, sec.name+" "+c.name+" box", box.Bound, units.Millimeters(1e-9*diameter))
+				})
+			}
+		})
+	}
+}
+
+// TestRevolveReflexSweepBoundsTightenTiltedAxis is the reflex-box design's
+// test 4: the same tightening on tiltedAxis, whose axis-frame rounding floor
+// (measured 1.007e-12 mm) is what the ceiling below leaves room for; no hand
+// box is checked here since the axis-frame terms are a separate mechanism
+// (TestRevolveTiltedAxisBoundsTighten above). Fails on main at 45 mm (Along
+// 270) and 23.7 mm (two-sided +200/-70).
+func TestRevolveReflexSweepBoundsTightenTiltedAxis(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Along270", func(t *testing.T) {
+		t.Parallel()
+		s, p := annularSketch(t)
+		doc := decad.New()
+		body, err := doc.Revolve(s, p, tiltedAxis, decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
+		require.NoError(t, err)
+
+		box, err := body.Bounds()
+		require.NoError(t, err)
+		diameter := box.Max.Sub(box.Min).Len()
+		decadtest.HasBoundAtMost(t, "tilted Along270 box", box.Bound, units.Millimeters(1e-9*diameter))
+	})
+
+	t.Run("TwoSided200_70", func(t *testing.T) {
+		t.Parallel()
+		s, p := annularSketch(t)
+		doc := decad.New()
+		ext := decad.TwoSidedAngle{
+			One: decad.AngleSide{A: units.Degrees(200)},
+			Two: decad.AngleSide{A: units.Degrees(70)},
+		}
+		body, err := doc.Revolve(s, p, tiltedAxis, ext)
+		require.NoError(t, err)
+
+		box, err := body.Bounds()
+		require.NoError(t, err)
+		diameter := box.Max.Sub(box.Min).Len()
+		decadtest.HasBoundAtMost(t, "tilted two-sided box", box.Bound, units.Millimeters(1e-9*diameter))
+	})
+}
+
+// TestRevolveReflexSweepBoundsBoundaryStayTight is the reflex-box design's
+// test 5: the boundary around a half turn never widens. Exactly 180 degrees
+// and the radian-stated math.Pi (proven strictly UNDER a half turn, since
+// fl(math.Pi) sits below true pi) both already published a tight box before
+// this change, and must keep doing so; 180.01 degrees crosses into the new
+// arm's own certified regime. Each box must both stay tight and enclose the
+// independently computed extreme.
+func TestRevolveReflexSweepBoundsBoundaryStayTight(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		ext  decad.AngularExtent
+		phi1 float64
+	}{
+		{"180deg", decad.AngleExtent{A: units.Degrees(180), Dir: decad.Along}, math.Pi},
+		{"piRadians", decad.AngleExtent{A: units.Radians(math.Pi), Dir: decad.Along}, math.Pi},
+		{"180.01deg", decad.AngleExtent{A: units.Degrees(180.01), Dir: decad.Along}, 180.01 * math.Pi / 180},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			s, p := annularSketch(t)
+			doc := decad.New()
+			body, err := doc.Revolve(s, p, uAxis, c.ext)
+			require.NoError(t, err)
+
+			box, err := body.Bounds()
+			require.NoError(t, err)
+			diameter := box.Max.Sub(box.Min).Len()
+			decadtest.HasBoundAtMost(t, c.name+" box", box.Bound, units.Millimeters(1e-9*diameter))
+
+			// The minimum Z the section's own extreme radius (15 mm) reaches
+			// over [0, phi1]: 0 at exactly 180 degrees (sin never goes
+			// negative before the endpoint), 15*sin(phi1) just past it.
+			sin, _ := math.Sincos(c.phi1)
+			wantZ := 15.0 * math.Min(0, sin)
+			decadtest.Encloses(t, c.name+" box", box, r3.NewVec(box.Min.X, -15, wantZ))
+		})
+	}
+}
+
+// TestRevolveVerifySoundReflex is the reflex-box design's test 6: with the
+// reflex arm landed, annularSketch verifies Sound at both Along 270 and
+// Symmetric 135, and the holed 270 body's own only tolerance diagnostic
+// names ReadingCentroid (the second-moment envelope, out of this design's
+// scope) and never ReadingBounds.
+func TestRevolveVerifySoundReflex(t *testing.T) {
+	t.Parallel()
+
+	for _, ext := range []decad.AngularExtent{
+		decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along},
+		decad.SymmetricAngle{A: units.Degrees(135)},
+	} {
+		t.Run(fmt.Sprintf("%T", ext), func(t *testing.T) {
+			t.Parallel()
+			s, p := annularSketch(t)
+			doc := decad.New()
+			_, err := doc.Revolve(s, p, uAxis, ext)
+			require.NoError(t, err)
+
+			decadtest.IsSound(t, doc)
+		})
+	}
+
+	t.Run("holed270", func(t *testing.T) {
+		t.Parallel()
+		s, p := holedSketch(t)
+		doc := decad.New()
+		_, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
+		require.NoError(t, err)
+
+		report := decadtest.Verify(t, doc)
+		decadtest.HasOnlyDiagnostics(t, report, decad.DiagMeasurementBeyondTolerance)
+		for _, d := range decadtest.FindDiagnostics(t, report, decad.DiagMeasurementBeyondTolerance) {
+			require.Equal(t, decad.ReadingCentroid, d.Reading,
+				`the holed body's only tolerance diagnostic must name the centroid's own second-moment envelope, never the box`)
+		}
+	})
+}
