@@ -584,12 +584,40 @@ func checkRevolveBody(t *testing.T, body *decad.Body, su setup, ap axisPlacement
 	// Invariant 3: the walked-boundary convexity holds under this orientation.
 	checkConvexity(t, body, su, ap, xf, sw)
 
-	// Invariant 4 (structural half): topology remains valid while bounded mass
-	// properties make zero-tolerance verification Suspect.
+	// Invariant 4 (structural half): topology remains valid while mass
+	// properties stay proven-bounded rather than proven-exact. The
+	// certified brackets this suite exercises (the axis direction among
+	// them) can now compose tight enough that a straight-section fixture
+	// whose sweep sits in one quadrant of the placed axes passes every
+	// gate, so the document's whole Status is no longer a body-independent
+	// invariant; the volume reading's own tolerance verdict is still always
+	// EVALUATED for a valid solid (never ToleranceNotEvaluated, the state
+	// reserved for an invalid body's boundary-only readings), whichever of
+	// Satisfied, Exceeded or Undecided that verdict lands on.
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, vol.Exactness, "%s has an exactly-proven volume", su.name)
+
 	report, err := body.Document().Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status, "%s has bounded mass results", su.name)
-	require.False(t, report.Passed())
+	br := findBodyReport(t, report, body)
+	require.NotNil(t, br.Region, "%s has no region readings", su.name)
+	require.NotEqual(t, decad.ToleranceNotEvaluated, br.Region.Volume.Tolerance.State,
+		"%s volume tolerance was never evaluated", su.name)
+}
+
+// findBodyReport returns the BodyReport belonging to body, identified by
+// pointer since a placed body shares its document with the one it was
+// placed from, so Report.Bodies can hold more than one entry.
+func findBodyReport(t *testing.T, report *decad.Report, body *decad.Body) *decad.BodyReport {
+	t.Helper()
+	for _, br := range report.Bodies {
+		if br.Body == body {
+			return br
+		}
+	}
+	t.Fatalf("no BodyReport for the given body")
+	return nil
 }
 
 // requireOutward asserts f's outward normal at `at` points out of the solid: a

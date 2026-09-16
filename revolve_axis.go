@@ -142,7 +142,27 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 			exactFrameLocalRound(frame, a.Origin, frame.V(), local.Y),
 			conservativeValueError(local.Y, anchorUpper),
 		)
-		dUBound, dVBound := conservativeValueError(dU, 1), conservativeValueError(dV, 1)
+		// The bracket needs the axis direction's raw, PRE-normalize exact
+		// rational dot products against the frame's in-plane axes: rawDU,
+		// rawDV = a.Dir·frame.U(), a.Dir·frame.V(). dU/dV above take TWO
+		// normalize steps — a.Dir.Normalize() in 3D, then Hypot(du,dv)
+		// re-normalizes the projected pair to unit length within the plane
+		// — and algebraically the two steps' magnitudes cancel:
+		// du = rawDU/|a.Dir|, dv = rawDV/|a.Dir|, so
+		// l = Hypot(du,dv) = sqrt(rawDU²+rawDV²)/|a.Dir|, and dU = du/l =
+		// rawDU/sqrt(rawDU²+rawDV²) with |a.Dir| gone. The exact closed
+		// form these two steps compute is exactly the du/dv shape the
+		// SketchLine arm bounds, whatever frame.N() component a.Dir
+		// carries — the coplanarity gate above rejects a direction the
+		// N component makes materially non-planar, but the bracket below
+		// needs no such assumption to be sound.
+		rawDU, rawDV := ratVecDot(a.Dir, frame.U()), ratVecDot(a.Dir, frame.V())
+		var dUBound, dVBound float64
+		if rawDU == nil || rawDV == nil {
+			dUBound, dVBound = conservativeValueError(dU, 1), conservativeValueError(dV, 1)
+		} else {
+			dUBound, dVBound = axisDirectionSqrtBracket(rawDU, rawDV, dU, dV)
+		}
 		if (dU == 0 || math.Abs(dU) == 1) &&
 			(dV == 0 || math.Abs(dV) == 1) &&
 			dU*dU+dV*dV == 1 {
@@ -163,31 +183,90 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 	}
 }
 
+// ratVecDot is the exact rational dot product of two r3.Vec, each component
+// read as the exact rational value its own float64 bit pattern denotes
+// (floatRat). It returns nil only for a non-finite component; every caller
+// here has already validated its vectors finite.
+func ratVecDot(a, b r3.Vec) *big.Rat {
+	ax, ay, az := floatRat(a.X), floatRat(a.Y), floatRat(a.Z)
+	bx, by, bz := floatRat(b.X), floatRat(b.Y), floatRat(b.Z)
+	if ax == nil || ay == nil || az == nil || bx == nil || by == nil || bz == nil {
+		return nil
+	}
+	sum := new(big.Rat).Mul(ax, bx)
+	sum.Add(sum, new(big.Rat).Mul(ay, by))
+	sum.Add(sum, new(big.Rat).Mul(az, bz))
+	return sum
+}
+
 func sketchAxisDirectionBounds(a SketchLine, heldLength, heldU, heldV float64) (float64, float64) {
 	u0, v0 := floatRat(a.Start.U), floatRat(a.Start.V)
 	u1, v1 := floatRat(a.End.U), floatRat(a.End.V)
-	length := floatRat(heldLength)
-	if u0 == nil || v0 == nil || u1 == nil || v1 == nil || length == nil || length.Sign() == 0 {
+	if u0 == nil || v0 == nil || u1 == nil || v1 == nil {
 		return conservativeValueError(heldU, 1), conservativeValueError(heldV, 1)
 	}
 	du := new(big.Rat).Sub(u1, u0)
 	dv := new(big.Rat).Sub(v1, v0)
+	fallbackU, fallbackV := axisDirectionSqrtBracket(du, dv, heldU, heldV)
+	length := floatRat(heldLength)
+	if length == nil || length.Sign() == 0 {
+		return fallbackU, fallbackV
+	}
 	lengthSquared := new(big.Rat).Add(
 		new(big.Rat).Mul(du, du),
 		new(big.Rat).Mul(dv, dv),
 	)
 	if new(big.Rat).Mul(length, length).Cmp(lengthSquared) != 0 {
-		return conservativeValueError(heldU, 1), conservativeValueError(heldV, 1)
+		return fallbackU, fallbackV
 	}
-	componentBound := func(delta *big.Rat, held float64) float64 {
+	// The held length already proves an exact rational quotient for each
+	// component: a Pythagorean or axis-aligned length that lands exactly
+	// keeps a zero bound even where the sqrt bracket above cannot collapse
+	// to a point (its own float division still rounds).
+	exactComponent := func(delta *big.Rat, held, fallback float64) float64 {
 		exact := new(big.Rat).Quo(delta, length)
 		heldRat := floatRat(held)
 		if heldRat != nil && exact.Cmp(heldRat) == 0 {
 			return 0
 		}
-		return conservativeValueError(held, 1)
+		return fallback
 	}
-	return componentBound(du, heldU), componentBound(dv, heldV)
+	return exactComponent(du, heldU, fallbackU), exactComponent(dv, heldV, fallbackV)
+}
+
+// axisDirectionSqrtBracket proves how far the held unit-direction components
+// heldU, heldV — each dU = du/L, dV = dv/L with L = sqrt(du²+dv²) — can sit
+// from the axis's own exact direction, through the same sqrt bracket the
+// straight-prism campaign proved (segment_walk.go's lineWalkBounds /
+// sqrtIntervalError): L² = du²+dv² is exact rational arithmetic, and
+// ratSqrtDown/ratSqrtUp (spline_length.go) bracket its root by exact
+// comparison, without assuming any libm accuracy from the division that
+// produced the held float. du and dv are the axis's own exact-rational
+// leaves — a SketchLine's endpoint coordinate differences, or a
+// ConstructionAxis's exact rational dot products of its held direction
+// against the frame's in-plane axes. A degenerate direction, or a component
+// the bracket cannot confirm sits as tightly as this proof can show, keeps
+// conservativeValueError's magnitude envelope: math.Min only ever shrinks
+// it, never replaces it with a wider answer.
+func axisDirectionSqrtBracket(du, dv *big.Rat, heldU, heldV float64) (float64, float64) {
+	fallbackU, fallbackV := conservativeValueError(heldU, 1), conservativeValueError(heldV, 1)
+	lengthSquared := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
+	if lengthSquared.Sign() == 0 {
+		return fallbackU, fallbackV
+	}
+	sqrtIv, ok := intervalSqrt(pointInterval(lengthSquared))
+	if !ok {
+		return fallbackU, fallbackV
+	}
+	uBound := fallbackU
+	if enc, ok := intervalQuo(pointInterval(du), sqrtIv); ok {
+		uBound = math.Min(fallbackU, intervalFloatError(enc, heldU))
+	}
+	vBound := fallbackV
+	if enc, ok := intervalQuo(pointInterval(dv), sqrtIv); ok {
+		vBound = math.Min(fallbackV, intervalFloatError(enc, heldV))
+	}
+	return uBound, vBound
 }
 
 // axisFrame is the revolve axis as a proper plane-local frame with the

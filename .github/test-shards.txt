@@ -1079,6 +1079,7 @@
 1	0.04	TestWholeSegmentWalkStatesTheRecordedEndpoints
 1	0.00	TestXHPCanonIsAUniqueIdentity
 1	0.00	TestXHPDenominatorStaysBounded
+1	0.00	TestRevolveTiltedAxisBoundsTighten
 2	0.03	FuzzFillet
 2	0.03	TestAbsLinearIntegralMatchesTheClosedForm
 2	0.01	TestAngularExtentCodec

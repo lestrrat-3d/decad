@@ -512,3 +512,77 @@ func TestRevolveVerifySoundAnnular(t *testing.T) {
 		})
 	}
 }
+
+// tiltedAxis is a SketchLine axis on direction (3,4)/5 through (0,-20): the
+// annularSketch rectangle (u in [0,10], v in [5,15]) lies wholly on its +
+// side. 3-4-5 is a Pythagorean triple, so the axis's own held length is
+// exactly representable and squares back to the exact rational 25 — the
+// condition axisDirectionSqrtBracket's sqrt bracket is checked against below
+// — while the unit direction 3/5, 4/5 it divides out is NOT itself an
+// exact float64, so the direction bound is not the zero-charge case
+// TestRevolveRadianSweepStaysExact's sibling would be.
+var tiltedAxis = decad.SketchLine{Start: decad.Point2{U: 0, V: -20}, End: decad.Point2{U: 3, V: -16}}
+
+// TestRevolveTiltedAxisBoundsTighten is design §11 test 8: the axis
+// direction's own sqrt bracket (axisDirectionSqrtBracket, the transfer of
+// the straight-prism campaign's lineWalkBounds/sqrtIntervalError) replaces
+// sketchAxisDirectionBounds's old conservativeValueError(dU, 1) envelope —
+// measured ratio ~4.07 before this change on tiltedAxis, for both a full
+// turn and a 1-radian sweep — so the tilted-axis volume and area bounds
+// shrink to the same tiny fraction of their values every axis-aligned
+// bracket already reaches. The volume is checked against an independent
+// hand computation: rho, the perpendicular distance from annularSketch's
+// area centroid (5, 10) to tiltedAxis, is linear in (u, v), so
+// integral(rho dA) over the region equals rho at the centroid times the
+// region's own area (100 mm^2) — q' = 14 * 100 = 1400 mm^3 — and Pappus
+// gives Volume = q' * sweep width.
+func TestRevolveTiltedAxisBoundsTighten(t *testing.T) {
+	t.Parallel()
+
+	t.Run("full turn", func(t *testing.T) {
+		t.Parallel()
+		s, p := annularSketch(t)
+		doc := decad.New()
+		body, err := doc.Revolve(s, p, tiltedAxis, decad.FullRevolution{})
+		require.NoError(t, err)
+
+		vol, err := body.Volume()
+		require.NoError(t, err)
+		value, bound := vol.Value.Base(), vol.Bound.Base()
+		require.LessOrEqual(t, bound, 1e-9*value,
+			`axisDirectionSqrtBracket must replace sketchAxisDirectionBounds's old envelope`)
+
+		qPrime := big.NewRat(1400, 1)
+		trueLo, _ := new(big.Rat).Mul(qPrime, new(big.Rat).Mul(big.NewRat(2, 1), piRefLo)).Float64()
+		trueHi, _ := new(big.Rat).Mul(qPrime, new(big.Rat).Mul(big.NewRat(2, 1), piRefHi)).Float64()
+		require.LessOrEqual(t, value-bound, trueLo,
+			`the published interval must not exclude q'*2*pi's lower end`)
+		require.GreaterOrEqual(t, value+bound, trueHi,
+			`the published interval must not exclude q'*2*pi's upper end`)
+
+		area, err := body.Area()
+		require.NoError(t, err)
+		require.LessOrEqual(t, area.Bound.Base(), 1e-9*area.Value.Base(),
+			`axisDirectionSqrtBracket must replace the old envelope in the area's own axis-moment reads`)
+	})
+
+	t.Run("1 rad", func(t *testing.T) {
+		t.Parallel()
+		s, p := annularSketch(t)
+		doc := decad.New()
+		body, err := doc.Revolve(s, p, tiltedAxis, decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
+		require.NoError(t, err)
+
+		vol, err := body.Volume()
+		require.NoError(t, err)
+		value, bound := vol.Value.Base(), vol.Bound.Base()
+		require.LessOrEqual(t, bound, 1e-9*value,
+			`axisDirectionSqrtBracket must replace sketchAxisDirectionBounds's old envelope`)
+		require.Equal(t, 1400.0, value, `q' * a 1-radian sweep is exactly q'`)
+
+		area, err := body.Area()
+		require.NoError(t, err)
+		require.LessOrEqual(t, area.Bound.Base(), 1e-9*area.Value.Base(),
+			`axisDirectionSqrtBracket must replace the old envelope in the area's own axis-moment reads`)
+	})
+}
