@@ -8,12 +8,14 @@ import (
 )
 
 // This file integrates a recorded circular segment — an arc or a whole
-// circle — in exact rational interval arithmetic, for the Green's-theorem
-// boundary sums moments.go accumulates.
+// circle — in exact rational interval arithmetic: for the Green's-theorem
+// boundary sums moments.go accumulates, and for the per-wall axis moment
+// revolve_build.go's walkAxisMoment reads Pappus's first theorem's area from
+// (circularAxisMomentInterval).
 //
 // Each reader returns an enclosure and a flag, and the flag is false whenever
 // the segment's own record does not determine the answer exactly. A false
-// flag withholds the exact term and leaves moments.go to fall back on its
+// flag withholds the exact term and leaves the caller to fall back on its
 // float accumulation with that fallback's own bound, never a rational term
 // standing in for one the record could not state.
 
@@ -356,6 +358,137 @@ func quarterTurnSinCos(t *big.Rat) (ratInterval, ratInterval) {
 	default: // 3
 		return pointInterval(minusOne), pointInterval(zero)
 	}
+}
+
+// axisComponentInterval encloses one axis-frame scalar — the anchor's aU/aV
+// or the outward normal's nU/nV (nU = −dV, nV = dU, axisMoments' own pairing,
+// revolve_build.go) — as an interval centred on its held float and widened by
+// its own proven bound: junctionRadiusInterval's construction
+// (revolve_build.go), generalized from a junction's radial coordinate to the
+// axis's own anchor and direction. A component this evaluator cannot state as
+// a finite rational — a +Inf bound, the sqrt bracket a tilted axis's
+// direction does not yet carry — answers ok == false, and
+// circularAxisMomentInterval refuses with it.
+func axisComponentInterval(value, bound float64) (ratInterval, bool) {
+	v, b := floatRat(value), floatRat(math.Abs(bound))
+	if v == nil || b == nil {
+		return ratInterval{}, false
+	}
+	return intervalWiden(pointInterval(v), b), true
+}
+
+// circularAxisMomentInterval brackets one recorded circular segment's exact
+// first moment about the revolve axis, M = ∫ρ ds, where ρ = nU·(u−aU) +
+// nV·(v−aV) is the axis's own radial coordinate (axisFrame.toAxis) expressed
+// in the RECORD's plane-local frame rather than the axis-re-expressed one:
+// nU = −dV, nV = dU is the axis's outward normal and aU, aV its anchor
+// (axisFrame's own dU/dV/aU/aV, each widened by its proven bound through
+// axisComponentInterval — sound for a tilted axis too, narrower only once a
+// later sqrt bracket tightens dUBound/dVBound toward zero).
+//
+// Writing the segment's own arc as (cU + r·cosθ, cV + r·sinθ), ds = r·dθ:
+//
+//	∫(u−aU) ds = r·[(cU−aU)·Δθ + r·(sin(hi) − sin(lo))]
+//	∫(v−aV) ds = r·[(cV−aV)·Δθ + r·(cos(lo) − cos(hi))]
+//	M = nU·∫(u−aU) ds + nV·∫(v−aV) ds
+//
+// lo, hi are the segment's own two angles in ascending order and Δθ = hi−lo
+// is UNSIGNED, mirroring walkAxisMoment's pre-existing axis-frame arm
+// (lo, hi := min(w.th0, w.th1), max(...)): M sums an unsigned arc-length
+// element, never a signed area, so it takes no direction sign the way
+// circularAreaInterval's shoelace form does. Ascending T order decides lo/hi
+// exactly as it decides w.th0 < w.th1 after axisFrame.walk's constant angular
+// shift by β = atan2(dV, dU) (a shift preserves order), so this needs neither
+// β nor the walk's own re-expressed th0/th1 — both math.Atan2 results with no
+// enclosure — to agree with them.
+//
+// r and Δθ are circularWalkEnclosures' own brackets; a CircleSeg's endpoint
+// sin/cos come from turnSinCosInterval, with an exact zero-width fast path
+// when the recorded range spans a whole number of turns (the sine/cosine
+// difference terms above vanish exactly, leaving Pappus's own r·Δθ·ρ_centre
+// form — the torus/whole-circle case); an ArcSeg's come from radSinCosSpan of
+// the atan2Interval endpoint enclosure, exactly as circularEndpointInterval
+// evaluates them, and — like circularAreaInterval and
+// circularFirstMomentInterval — only over its own full recorded range
+// (forward or reverse), never a trimmed fragment, whose actual endpoint the
+// record alone does not state.
+func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (ratInterval, bool) {
+	r, dtheta, ok := circularWalkEnclosures(seg)
+	if !ok {
+		return ratInterval{}, false
+	}
+	var cU, cV *big.Rat
+	var sinDiff, cosDiff ratInterval // sin(hi)-sin(lo), cos(lo)-cos(hi)
+	switch seg := seg.(type) {
+	case CircleSeg:
+		cU, cV = floatRat(seg.Center.U), floatRat(seg.Center.V)
+		t0, t1 := floatRat(seg.TStart), floatRat(seg.TEnd)
+		if cU == nil || cV == nil || t0 == nil || t1 == nil {
+			return ratInterval{}, false
+		}
+		dt := new(big.Rat).Sub(t1, t0)
+		switch {
+		case dt.IsInt():
+			zero := new(big.Rat)
+			sinDiff, cosDiff = pointInterval(zero), pointInterval(zero)
+		default:
+			loT, hiT := t0, t1
+			if loT.Cmp(hiT) > 0 {
+				loT, hiT = hiT, loT
+			}
+			sinLo, cosLo := turnSinCosInterval(loT)
+			sinHi, cosHi := turnSinCosInterval(hiT)
+			sinDiff = intervalSub(sinHi, sinLo)
+			cosDiff = intervalSub(cosLo, cosHi)
+		}
+	case ArcSeg:
+		forward := seg.TStart == 0 && seg.TEnd == 1
+		reverse := seg.TStart == 1 && seg.TEnd == 0
+		if !forward && !reverse {
+			return ratInterval{}, false
+		}
+		cU, cV = floatRat(seg.Center.U), floatRat(seg.Center.V)
+		if cU == nil || cV == nil {
+			return ratInterval{}, false
+		}
+		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
+		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
+		heldDY0 := seg.Start.V - seg.Center.V
+		a0 := atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
+		a1 := intervalAdd(a0, dtheta)
+		sinLo, cosLo, ok0 := radSinCosSpan(a0)
+		sinHi, cosHi, ok1 := radSinCosSpan(a1)
+		if !ok0 || !ok1 {
+			return ratInterval{}, false
+		}
+		sinDiff = intervalSub(sinHi, sinLo)
+		cosDiff = intervalSub(cosLo, cosHi)
+	default:
+		return ratInterval{}, false
+	}
+
+	anchorU, ok := axisComponentInterval(ax.aU, ax.aUBound)
+	if !ok {
+		return ratInterval{}, false
+	}
+	anchorV, ok := axisComponentInterval(ax.aV, ax.aVBound)
+	if !ok {
+		return ratInterval{}, false
+	}
+	nU, ok := axisComponentInterval(-ax.dV, ax.dVBound)
+	if !ok {
+		return ratInterval{}, false
+	}
+	nV, ok := axisComponentInterval(ax.dU, ax.dUBound)
+	if !ok {
+		return ratInterval{}, false
+	}
+
+	duU := intervalSub(pointInterval(cU), anchorU)
+	duV := intervalSub(pointInterval(cV), anchorV)
+	intU := intervalMul(r, intervalAdd(intervalMul(duU, dtheta), intervalMul(r, sinDiff)))
+	intV := intervalMul(r, intervalAdd(intervalMul(duV, dtheta), intervalMul(r, cosDiff)))
+	return intervalAdd(intervalMul(nU, intU), intervalMul(nV, intV)), true
 }
 
 // circularFirstMomentInterval brackets one circular walk's exact first-moment

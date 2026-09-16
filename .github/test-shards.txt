@@ -850,6 +850,7 @@
 1	0.00	TestRevolveBudgetReservesBothCoordinateStages
 1	0.00	TestRevolveCellAreaSlackBracketsTheTrueJacobianGap
 1	1.14	TestRevolveCircularMeshAreaSlackCoversTheHeldAreaGap
+1	0.01	TestRevolveCircularWallAreaTightens
 1	0.01	TestRevolveCone
 1	0.00	TestRevolveContactAuditRefusesACrossingPair
 1	0.00	TestRevolveContactAuditRefusesAFacetThinnerThanItsOwnDisplacement
