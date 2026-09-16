@@ -64,7 +64,7 @@ jobs:
           - os: ubuntu-latest
             race: "-race"
             shard: ""
-            packages: "./examples/"
+            packages: "./examples/ ./decadtest/"
           - os: macos-latest
             race: ""
             shard: ""
