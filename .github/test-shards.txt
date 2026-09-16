@@ -868,10 +868,15 @@
 1	0.02	TestRevolvePartialSweepWithHole
 1	0.00	TestRevolvePreflightFacetsChargesTheCeilingBeforeAllocating
 1	0.02	TestRevolveReflectedSphereAndConeNormals
+1	0.00	TestRevolveReflexSweepBoundsBoundaryStayTight
+1	0.00	TestRevolveReflexSweepBoundsTighten
+1	0.00	TestRevolveReflexSweepBoundsTightenTiltedAxis
 1	0.00	TestRevolveRejectsSpindleTorusArc
 1	0.01	TestRevolveSolidCylinderHasNoInnerFace
 1	0.00	TestRevolveStraightWallAreaTightens
 1	0.00	TestRevolveSweepBoundTightens
+1	0.00	TestSweepDenotationHalfTurnExcess
+1	9.64	TestSweepExtremeBoundsReflexArm
 1	1.04	TestRevolveSymDiffChargesEveryStageSeparately
 1	1.59	TestRevolveTessellateCircularGeneratorExportIsByteIdentical
 1	0.36	TestRevolveTessellateExportIsByteIdentical
@@ -1489,6 +1494,7 @@
 3	0.04	TestRevolveToFaceAngularGates
 3	0.01	TestRevolveVerifySound
 3	0.00	TestRevolveVerifySoundAnnular
+3	0.00	TestRevolveVerifySoundReflex
 3	0.03	TestSTLChordTolerance
 3	0.08	TestSecondGenerationPlanarRimsAnswer
 3	0.10	TestSegFilterNeverRejectsAnExactHit

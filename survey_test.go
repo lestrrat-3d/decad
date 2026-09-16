@@ -438,7 +438,7 @@ func TestWallReflexSweep(t *testing.T) {
 	require.NoError(t, err)
 	requireWall(t, report.Bodies[0], decad.Approximate, 7)
 	requireWallBoundContains(t, report.Bodies[0], 7, 1e-9)
-	require.Equal(t, decad.Suspect, report.Status)
+	decadtest.HasStatus(t, report, decad.Sound)
 }
 
 // requireWallBoundContains asserts that a wall reading's published interval is
@@ -472,7 +472,7 @@ func TestWallSectorTooTightForItsFlats(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	require.Nil(t, report.Bodies[0].Wall.Minimum)
-	require.Equal(t, decad.Suspect, report.Status)
+	decadtest.HasStatus(t, report, decad.Sound)
 }
 
 func TestWallThinPieWedge(t *testing.T) {
