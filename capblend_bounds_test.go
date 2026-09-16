@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -214,8 +215,8 @@ func TestCapBlendThroughAllStopsAtBuiltExtent(t *testing.T) {
 
 	pin, err := doc.Extrude(s, pinProf, decad.ThroughAll{Dir: decad.Along})
 	require.NoError(t, err)
-	requireVolume(t, pin, 20*20*height)
-	requireBounds(t, pin, decad.Exact, 120, 0, 0, 140, 20, height)
+	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(20*20*height))
+	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, height), decadtest.Exactly())
 }
 
 // TestCapBlendThroughAllBehindPlaneRefused is the same reading's other half:

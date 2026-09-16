@@ -89,38 +89,6 @@ func faceByRole(t *testing.T, b *decad.Body, role string) *decad.Face {
 	return nil
 }
 
-// requireVolume and requireBounds still have callers outside this file
-// (capblend_bounds_test.go, stops_test.go, revolve_property_test.go), so
-// they stay defined here even though every call site in THIS file now goes
-// through decadtest.
-
-func requireVolume(t *testing.T, b *decad.Body, want float64) {
-	t.Helper()
-	vol, err := b.Volume()
-	require.NoError(t, err)
-	got, err := vol.Value.In(units.CubicMillimeter)
-	require.NoError(t, err)
-	require.InDelta(t, want, got, 1e-9*math.Max(1, want))
-}
-
-// requireBounds asserts a body's Bounds() against the caller's expected
-// values and its PROVEN exactness: each call site states the
-// exactness its own geometry proves, never a blanket assumption.
-//
-//nolint:unparam // minY is 0 at every remaining call site (outside this file); the general signature stays for those callers.
-func requireBounds(t *testing.T, b *decad.Body, wantExact decad.Exactness, minX, minY, minZ, maxX, maxY, maxZ float64) {
-	t.Helper()
-	bounds, err := b.Bounds()
-	require.NoError(t, err)
-	require.Equal(t, wantExact, bounds.Exactness)
-	require.InDelta(t, minX, bounds.Min.X, 1e-9)
-	require.InDelta(t, minY, bounds.Min.Y, 1e-9)
-	require.InDelta(t, minZ, bounds.Min.Z, 1e-9)
-	require.InDelta(t, maxX, bounds.Max.X, 1e-9)
-	require.InDelta(t, maxY, bounds.Max.Y, 1e-9)
-	require.InDelta(t, maxZ, bounds.Max.Z, 1e-9)
-}
-
 func TestRevolveFullAnnularCylinder(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
