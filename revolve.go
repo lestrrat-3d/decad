@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -321,15 +322,17 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 	}
 	// The angular extent resolves in the caller's frame — a ToFaceAngular
 	// stop needs the resolved axis, which is why the axis gates run first.
-	phi0, phi1, full, extRefs, err := d.resolveAngularExtent(a, d.angularStopCtx(frame, line, ax))
+	phi0, phi1, full, den, extRefs, err := d.resolveAngularExtent(a, d.angularStopCtx(frame, line, ax))
 	if err != nil {
 		return nil, err
 	}
 	if side < 0 {
 		// The axis frame was flipped to put the region on its non-negative
 		// side; a rotation by φ about the given axis is a rotation by −φ
-		// about the flipped one, so the interval flips with it.
+		// about the flipped one, so the interval flips with it — and so does
+		// what it denotes, exactly: negate and swap both ends.
 		phi0, phi1 = -phi1, -phi0
+		den.phi0, den.phi1 = den.phi1.neg(), den.phi0.neg()
 	}
 
 	step := Step{
@@ -348,6 +351,7 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 		phi0:    phi0,
 		phi1:    phi1,
 		full:    full,
+		den:     den,
 		xform:   r3.Identity(),
 	})
 	if err != nil {
@@ -435,66 +439,86 @@ const angFullEps = 1e-12
 
 // resolveAngularExtent turns an angular extent into the signed sweep
 // interval [phi0, phi1] about the axis, radians, Along positive
-// (docs/evaluator-design.md §6), and reports whether the sweep is a full
-// revolution, plus the StepRefs of the bodies the extent's stops resolved
-// against — in extent order, deduplicated with the axis ref by the caller
-// (core §6.2). Magnitudes are validated per core §8.1/§12; a zero-angle
-// sweep is ErrDegenerate, as is one past a full turn.
-func (d *Document) resolveAngularExtent(a AngularExtent, st angularStops) (float64, float64, bool, []StepRef, error) {
+// (docs/evaluator-design.md §6), reports whether the sweep is a full
+// revolution, and returns the exact angle each end DENOTES (§6, the angular
+// twin of extrude's axial displacement) beside the StepRefs of the bodies the
+// extent's stops resolved against — in extent order, deduplicated with the
+// axis ref by the caller (core §6.2). The full-turn snap below never touches
+// the denotation: the record still states what the caller said, and the
+// displacement between the two is what every consumer charges, never a
+// reinterpretation of the record. Magnitudes are validated per core §8.1/§12;
+// a zero-angle sweep is ErrDegenerate, as is one past a full turn.
+func (d *Document) resolveAngularExtent(a AngularExtent, st angularStops) (float64, float64, bool, sweepDenotation, []StepRef, error) {
 	var phi0, phi1 float64
+	var den sweepDenotation
 	var refs []StepRef
 	full := false
 	switch a := a.(type) {
 	case AngleExtent:
 		m, err := magnitudeIn(a.A, units.Angle, units.Radian, "the extent angle")
 		if err != nil {
-			return 0, 0, false, nil, err
+			return 0, 0, false, sweepDenotation{}, nil, err
 		}
 		if m == 0 {
-			return 0, 0, false, nil, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
+			return 0, 0, false, sweepDenotation{}, nil, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
 		}
+		stated := angleDenotationFromValue(a.A)
 		// An unknown Direction is malformed input, never silently Along.
 		switch a.Dir {
 		case Along:
 			phi0, phi1 = 0, m
+			den = sweepDenotation{phi0: zeroAngleDenotation(), phi1: stated}
 		case Against:
 			phi0, phi1 = -m, 0
+			den = sweepDenotation{phi0: stated.neg(), phi1: zeroAngleDenotation()}
 		default:
-			return 0, 0, false, nil, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(a.Dir))
+			return 0, 0, false, sweepDenotation{}, nil, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(a.Dir))
 		}
 	case FullRevolution:
-		return 0, 2 * math.Pi, true, nil, nil
+		fullDen := sweepDenotation{phi0: zeroAngleDenotation(), phi1: angleDenotation{rad: new(big.Rat), turn: big.NewRat(1, 1)}}
+		return 0, 2 * math.Pi, true, fullDen, nil, nil
 	case SymmetricAngle:
 		m, err := magnitudeIn(a.A, units.Angle, units.Radian, "the symmetric angle")
 		if err != nil {
-			return 0, 0, false, nil, err
+			return 0, 0, false, sweepDenotation{}, nil, err
 		}
 		if m == 0 {
-			return 0, 0, false, nil, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
+			return 0, 0, false, sweepDenotation{}, nil, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
 		}
 		half := m
+		stated := angleDenotationFromValue(a.A)
 		if a.FullLength {
 			half = m / 2
+			stated = stated.scale(big.NewRat(1, 2))
 		}
 		phi0, phi1 = -half, half
+		den = sweepDenotation{phi0: stated.neg(), phi1: stated}
 	case TwoSidedAngle:
-		along, oneRefs, err := d.resolveAngleSide(a.One, st, 1, "the along side")
+		along, alongDen, oneRefs, err := d.resolveAngleSide(a.One, st, 1, "the along side")
 		if err != nil {
-			return 0, 0, false, nil, err
+			return 0, 0, false, sweepDenotation{}, nil, err
 		}
-		against, twoRefs, err := d.resolveAngleSide(a.Two, st, -1, "the against side")
+		against, againstDen, twoRefs, err := d.resolveAngleSide(a.Two, st, -1, "the against side")
 		if err != nil {
-			return 0, 0, false, nil, err
+			return 0, 0, false, sweepDenotation{}, nil, err
 		}
 		if along == 0 && against == 0 {
-			return 0, 0, false, nil, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
+			return 0, 0, false, sweepDenotation{}, nil, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
 		}
 		phi0, phi1 = against, along
+		// Each side denotes its own end independently; a side this evaluator
+		// cannot denote exactly (a ToFaceAngular stop) leaves the WHOLE
+		// sweep's denotation nil, never half of it — a nil end mixed with a
+		// stated one would let one end's zero charge stand for a sweep whose
+		// other end the resolver cannot prove at all.
+		if againstDen.valid() && alongDen.valid() {
+			den = sweepDenotation{phi0: againstDen, phi1: alongDen}
+		}
 		refs = append(oneRefs, twoRefs...)
 	case ToFaceAngular:
 		stop, ref, err := st.resolveToFaceAngular(a, 0, "a to-face extent")
 		if err != nil {
-			return 0, 0, false, nil, err
+			return 0, 0, false, sweepDenotation{}, nil, err
 		}
 		refs = []StepRef{ref}
 		if stop > 0 {
@@ -503,44 +527,50 @@ func (d *Document) resolveAngularExtent(a AngularExtent, st angularStops) (float
 			phi0, phi1 = stop, 0
 		}
 	case nil:
-		return 0, 0, false, nil, fmt.Errorf(`%w: a nil extent sweeps nothing`, ErrDegenerate)
+		return 0, 0, false, sweepDenotation{}, nil, fmt.Errorf(`%w: a nil extent sweeps nothing`, ErrDegenerate)
 	default:
-		return 0, 0, false, nil, fmt.Errorf(`%w: angular extent %T is not supported by this evaluator`, ErrUnsupported, a)
+		return 0, 0, false, sweepDenotation{}, nil, fmt.Errorf(`%w: angular extent %T is not supported by this evaluator`, ErrUnsupported, a)
 	}
 	total := phi1 - phi0
 	if total > 2*math.Pi+angFullEps {
-		return 0, 0, false, nil, fmt.Errorf(`%w: a sweep past a full turn overlaps itself`, ErrDegenerate)
+		return 0, 0, false, sweepDenotation{}, nil, fmt.Errorf(`%w: a sweep past a full turn overlaps itself`, ErrDegenerate)
 	}
 	if total >= 2*math.Pi-angFullEps {
 		full = true
 		phi1 = phi0 + 2*math.Pi
 	}
-	return phi0, phi1, full, refs, nil
+	return phi0, phi1, full, den, refs, nil
 }
 
 // resolveAngleSide resolves one side of a TwoSidedAngle to its signed
-// boundary angle; travel is +1 for the along side, −1 for the against side.
-func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float64, what string) (float64, []StepRef, error) {
+// boundary angle and the exact angle it denotes (§6); travel is +1 for the
+// along side, −1 for the against side, and the denotation is scaled by the
+// same sign — exact, since travel is always ±1.
+func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float64, what string) (float64, angleDenotation, []StepRef, error) {
 	s, err := normalizeSideAngular(s)
 	if err != nil {
-		return 0, nil, err
+		return 0, angleDenotation{}, nil, err
 	}
 	switch s := s.(type) {
 	case AngleSide:
 		m, err := magnitudeIn(s.A, units.Angle, units.Radian, what)
 		if err != nil {
-			return 0, nil, err
+			return 0, angleDenotation{}, nil, err
 		}
-		return travel * m, nil, nil
+		travelR := big.NewRat(1, 1)
+		if travel < 0 {
+			travelR = big.NewRat(-1, 1)
+		}
+		return travel * m, angleDenotationFromValue(s.A).scale(travelR), nil, nil
 	case ToFaceAngular:
 		stop, ref, err := st.resolveToFaceAngular(s, travel, what)
 		if err != nil {
-			return 0, nil, err
+			return 0, angleDenotation{}, nil, err
 		}
-		return stop, []StepRef{ref}, nil
+		return stop, angleDenotation{}, []StepRef{ref}, nil
 	case nil:
-		return 0, nil, fmt.Errorf(`%w: a two-sided extent requires both sides`, ErrDegenerate)
+		return 0, angleDenotation{}, nil, fmt.Errorf(`%w: a two-sided extent requires both sides`, ErrDegenerate)
 	default:
-		return 0, nil, fmt.Errorf(`%w: side angular %T is not supported by this evaluator`, ErrUnsupported, s)
+		return 0, angleDenotation{}, nil, fmt.Errorf(`%w: side angular %T is not supported by this evaluator`, ErrUnsupported, s)
 	}
 }

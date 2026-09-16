@@ -1149,7 +1149,13 @@ func capWitnesses(f *cFace) []r3.Vec {
 	return out
 }
 
-// addRevolveFaces builds the revolved body's faces from its own payload.
+// addRevolveFaces builds the revolved body's faces from its own payload. Its
+// cap planes, angWindow and witnesses all read rp.phi0/rp.phi1 as the held
+// sweep angle rather than the angle the record denotes, and this arm does NOT
+// charge rp.angularDelta() into any of them — the same limit the prism carries
+// (no clearance*.go reads prismPayload.z0Delta/z1Delta either): the clearance
+// and interference kernel is not yet part of this design's soundness claim
+// (docs/evaluator-design.md §6).
 func (g *bodyGeom) addRevolveFaces(budget *workBudget, rp revolvePayload) (bool, error) {
 	loops, err := revolveLoops(budget, rp)
 	if err != nil {

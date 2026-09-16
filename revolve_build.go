@@ -27,12 +27,27 @@ import (
 // whole topology derive from it, which is what makes Placed exact: it
 // re-evaluates the same payload under the composed motion
 // (docs/evaluator-design.md §8).
+//
+// den is the ANGULAR twin of prismPayload's z0Delta/z1Delta: the exact angle
+// each end of phi0/phi1 denotes, per revolve_denotation.go. phi0/phi1 are
+// what the resolver HELD — a float64 the extent's own resolution rounded to
+// (docs/evaluator-design.md §6's "held sweep angle") — and den is what the
+// recorded AngularExtent itself DENOTES, exactly, wherever this evaluator can
+// state it. A reading that folds phi0 or phi1 into a published measurement
+// takes the per-end displacement den proves (phi0Delta/phi1Delta,
+// angularDelta) rather than reading the held float as the truth; den's own
+// zero value is the invalid denotation, so a payload literal built without it
+// (a test fixture, or an extent this evaluator cannot yet denote exactly)
+// falls back to the same magnitude envelope every consumer published before
+// this field existed. Being a payload field it re-evaluates with the
+// payload, so Placed and Duplicate carry it unchanged.
 type revolvePayload struct {
 	profile    ProfileRecord
 	frame      r3.Frame
 	ax         axisFrame
 	phi0, phi1 float64
 	full       bool
+	den        sweepDenotation
 	xform      r3.Transform
 }
 
@@ -214,19 +229,25 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref StepRef, rp re
 		if err != nil {
 			return nil, err
 		}
+		// normalBound is the cap plane's own dimensionless tilt: the frame's
+		// unit normal rotates about the axis at unit rate in φ, so the angle
+		// this cap's own end denotes charges its plane's normal by exactly
+		// that end's proven displacement (docs/evaluator-design.md §6).
 		capStart = &Face{
-			surface:   Plane{Frame: startFrame},
-			origins:   []FeatureRef{{Step: ref, Role: roleCapStart}},
-			body:      body,
-			area:      ig.area,
-			areaBound: ig.areaBound,
+			surface:     Plane{Frame: startFrame},
+			origins:     []FeatureRef{{Step: ref, Role: roleCapStart}},
+			body:        body,
+			area:        ig.area,
+			areaBound:   ig.areaBound,
+			normalBound: rp.phi0Delta(),
 		}
 		capEnd = &Face{
-			surface:   Plane{Frame: endFrame},
-			origins:   []FeatureRef{{Step: ref, Role: roleCapEnd}},
-			body:      body,
-			area:      ig.area,
-			areaBound: ig.areaBound,
+			surface:     Plane{Frame: endFrame},
+			origins:     []FeatureRef{{Step: ref, Role: roleCapEnd}},
+			body:        body,
+			area:        ig.area,
+			areaBound:   ig.areaBound,
+			normalBound: rp.phi1Delta(),
 		}
 	}
 
@@ -491,7 +512,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePa
 			center := rp.point(b, j.z, 0, 0)
 			switch {
 			case rp.full && !j.onAxis:
-				seam := &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(0)}
+				seam := &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(productUpper(j.rho, rp.phi0Delta()))}
 				latitudeLength := 2 * math.Pi * j.rho
 				j.lat = &Edge{
 					curve:       Circle3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
@@ -502,10 +523,10 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePa
 					lengthBound: conservativeValueError(latitudeLength, productUpper(w.axisRadiusUpper, twoPiUpper())),
 				}
 			case !rp.full:
-				j.v0 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(0)}
+				j.v0 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(productUpper(j.rho, rp.phi0Delta()))}
 				j.v1 = j.v0
 				if !j.onAxis {
-					j.v1 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi1), bound: units.Millimeters(0)}
+					j.v1 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi1), bound: units.Millimeters(productUpper(j.rho, rp.phi1Delta()))}
 					arcLength := j.rho * dphi
 					dphiUpper := absSumUpper(math.Abs(dphi), sweep.bound)
 					j.arc = &Edge{
@@ -553,8 +574,8 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePa
 				vs0, ve0 = js[i].v0, js[(i+1)%n].v0
 				vs1, ve1 = js[i].v1, js[(i+1)%n].v1
 			}
-			cap0[i] = rp.capEdge(b, w.segmentWalk, singleClosed, vs0, ve0, rp.phi0, holeLoop)
-			cap1[i] = rp.capEdge(b, w.segmentWalk, singleClosed, vs1, ve1, rp.phi1, holeLoop)
+			cap0[i] = rp.capEdge(b, w.segmentWalk, singleClosed, vs0, ve0, rp.phi0, rp.phi0Delta(), holeLoop)
+			cap1[i] = rp.capEdge(b, w.segmentWalk, singleClosed, vs1, ve1, rp.phi1, rp.phi1Delta(), holeLoop)
 		}
 	}
 
@@ -677,8 +698,11 @@ func fullRevLoops(j0, j1 revJunction, kind wallKind) []*Loop {
 // material outside the sphere/torus it sweeps, exactly as wallSurface reads
 // it, so its cap edge is concave — a hole's arc and a concave bite in the
 // outer boundary alike), while a STRAIGHT walk has no sense of its own and
-// takes the loop's: outer convex, hole concave.
-func (rp revolvePayload) capEdge(b revolveBasis, w segmentWalk, closed bool, vs, ve *Vertex, phi float64, holeLoop bool) *Edge {
+// takes the loop's: outer convex, hole concave. delta is the proven angular
+// displacement of THIS end (rp.phi0Delta() or rp.phi1Delta(), matching
+// whichever of phi0/phi1 phi is), charged into a closed walk's own seam
+// vertex the same way every other cap vertex is (docs/evaluator-design.md §6).
+func (rp revolvePayload) capEdge(b revolveBasis, w segmentWalk, closed bool, vs, ve *Vertex, phi, delta float64, holeLoop bool) *Edge {
 	convex := !holeLoop
 	if w.isCircular() {
 		convex = w.th0 < w.th1
@@ -706,7 +730,7 @@ func (rp revolvePayload) capEdge(b revolveBasis, w segmentWalk, closed bool, vs,
 	center := rp.point(b, w.cU, w.cV, phi)
 	radius := units.Millimeters(w.radius)
 	if closed {
-		seam := &Vertex{position: rp.point(b, w.startU, w.startV, phi), bound: units.Millimeters(0)}
+		seam := &Vertex{position: rp.point(b, w.startU, w.startV, phi), bound: units.Millimeters(productUpper(w.startV, delta))}
 		e.curve = Circle3{Center: center, Axis: axis, Radius: radius}
 		e.start, e.end = seam, seam
 		return e

@@ -608,6 +608,7 @@
 0	0.97	TestRevolveBooleanRefusesAShallowCrossing
 0	0.04	TestRevolveBoundsBoundEnclosesOffsetAxisExtreme
 0	0.01	TestRevolveBoundsBoundEnclosesSweptExtreme
+0	0.01	TestRevolveBoundsEnclosesDenotedExtreme
 0	0.02	TestRevolveBoundsEnclosesPlacedScanArithmetic
 0	0.03	TestRevolveBoundsExactOffsetAnchor
 0	3.14	TestRevolveBoundsSweepEnclosesArcApex

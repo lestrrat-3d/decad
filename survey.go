@@ -410,12 +410,15 @@ func revolveWall(budget *workBudget, rp revolvePayload, alpha float64) (wallOutc
 	if err := wallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err
 	}
-	// The sweep, with the subtraction's OWN rounding as its bound — the two
-	// recorded angles are exact leaves, so that rounding is the whole error.
-	// A survey bound may never be floored at some coarse magnitude ceiling the
-	// way a mere size estimate can be: a bound wider than the value would
-	// refuse every wedge candidate below.
+	// The sweep, with the subtraction's OWN rounding plus the proven angular
+	// displacement (docs/evaluator-design.md §6) as its bound — the two
+	// recorded angles are held floats, not the angle the record denotes, so
+	// the displacement between the two is part of the error too. A survey
+	// bound may never be floored at some coarse magnitude ceiling the way a
+	// mere size estimate can be: a bound wider than the value would refuse
+	// every wedge candidate below.
 	dphiBS := boundedSub(exactScalar(rp.phi1), exactScalar(rp.phi0))
+	dphiBS.bound = absSumUpper(dphiBS.bound, rp.angularDelta())
 	dphi := dphiBS.value
 	var elems, containOnly []surveyElem
 	var verts [][2]float64

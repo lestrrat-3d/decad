@@ -431,7 +431,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	if err := revolvePreflightFacets(loopMesh, p.nPhi, rp.full, p.work); err != nil {
 		return nil, err
 	}
-	angular, err := revolveAngularSequence(rp.phi0, rp.phi1, rp.full, p.nPhi)
+	angular, err := revolveAngularSequence(rp, p.nPhi)
 	if err != nil {
 		return nil, err
 	}
