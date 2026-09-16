@@ -167,12 +167,6 @@ func axisMoments(ig regionIntegrals, ax axisFrame) (boundedScalar, boundedScalar
 	return q, mzr, mrr
 }
 
-func boundedRevolveSweep(phi0, phi1 float64) boundedScalar {
-	sweep := boundedSub(exactScalar(phi1), exactScalar(phi0))
-	sweep.bound = math.Max(sweep.bound, conservativeValueError(sweep.value, twoPiUpper()))
-	return sweep
-}
-
 // evalRevolve builds the analytic revolved body from the payload: side
 // surfaces of revolution per boundary segment, caps only for a partial
 // sweep, shared edges and vertices, and bounded mass measurements
@@ -205,7 +199,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref StepRef, rp re
 	if ig.area <= 0 {
 		return nil, fmt.Errorf(`%w: the recorded region encloses no area`, ErrDegenerate)
 	}
-	sweep := boundedRevolveSweep(rp.phi0, rp.phi1)
+	sweep := rp.sweep()
 	dphi := sweep.value
 	if dphi <= 0 {
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
@@ -319,10 +313,8 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref StepRef, rp re
 		// The in-plane term is the swept radial direction integrated over
 		// the interval — closed form in the sweep angle; a full turn's is
 		// identically zero, which is what puts its centroid on the axis.
-		sin1 := boundedSin(exactScalar(rp.phi1))
-		cos1 := boundedCos(exactScalar(rp.phi1))
-		sin0 := boundedSin(exactScalar(rp.phi0))
-		cos0 := boundedCos(exactScalar(rp.phi0))
+		sin1, cos1 := endSinCos(rp.den.phi1, rp.phi1)
+		sin0, cos0 := endSinCos(rp.den.phi0, rp.phi0)
 		rx := boundedSub(sin1, sin0)
 		ry := boundedSub(cos0, cos1)
 		radial := b.e0.Scale(rx.value).Add(b.e1.Scale(ry.value))
@@ -484,7 +476,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePa
 	}
 	walks, kinds, singleClosed := resolved.walks, resolved.kinds, resolved.singleClosed
 	n := len(walks)
-	sweep := boundedRevolveSweep(rp.phi0, rp.phi1)
+	sweep := rp.sweep()
 	dphi := sweep.value
 	sweepSign := 1.0
 	if rp.reflected() {
