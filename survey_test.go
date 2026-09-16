@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -78,7 +79,7 @@ func TestWallThinPlateViolating(t *testing.T) {
 	require.NoError(t, err)
 
 	br := report.Bodies[0]
-	requireWall(t, br, decad.Exact, 0.5)
+	decadtest.MeasuresWallMinimum(t, br, units.Millimeters(0.5), decadtest.Exactly())
 	require.Equal(t, decad.Violating, br.Status)
 	require.Equal(t, decad.Violating, report.Status)
 	require.False(t, report.Passed())
@@ -94,7 +95,7 @@ func TestWallCubeSound(t *testing.T) {
 	require.NoError(t, err)
 
 	br := report.Bodies[0]
-	requireWall(t, br, decad.Exact, 100)
+	decadtest.MeasuresWallMinimum(t, br, units.Millimeters(100), decadtest.Exactly())
 	require.Equal(t, decad.Sound, br.Status)
 	require.True(t, report.Passed())
 }
@@ -166,12 +167,12 @@ func TestWallAnnularPrism(t *testing.T) {
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], decad.Exact, 5)
+	decadtest.MeasuresWallMinimum(t, report.Bodies[0], units.Millimeters(5), decadtest.Exactly())
 	require.Equal(t, decad.Sound, report.Status)
 
 	report, err = doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(6)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], decad.Exact, 5)
+	decadtest.MeasuresWallMinimum(t, report.Bodies[0], units.Millimeters(5), decadtest.Exactly())
 	require.Equal(t, decad.Violating, report.Status)
 }
 
@@ -194,7 +195,7 @@ func TestWallDraftAllowanceBoundary(t *testing.T) {
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1.2)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], decad.Approximate, math.Cos(beta)/(1-math.Sin(beta)))
+	decadtest.MeasuresWallMinimum(t, report.Bodies[0], units.Millimeters(math.Cos(beta)/(1-math.Sin(beta))))
 	require.Equal(t, decad.Violating, report.Status)
 
 	report, err = doc.Verify(t.Context(),
@@ -235,7 +236,7 @@ func TestWallKnifeEdgeExactZero(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(0.001)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	requireWall(t, br, decad.Exact, 0)
+	decadtest.MeasuresWallMinimum(t, br, units.Millimeters(0), decadtest.Exactly())
 	require.Equal(t, decad.Violating, br.Status)
 	require.False(t, report.Passed())
 }
@@ -250,7 +251,7 @@ func TestWallPartialRevolve(t *testing.T) {
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], decad.Exact, 10)
+	decadtest.MeasuresWallMinimum(t, report.Bodies[0], units.Millimeters(10), decadtest.Exactly())
 	require.Equal(t, decad.Suspect, report.Status)
 }
 
@@ -484,7 +485,7 @@ func TestWallThinPieWedge(t *testing.T) {
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], decad.Exact, 0)
+	decadtest.MeasuresWallMinimum(t, report.Bodies[0], units.Millimeters(0), decadtest.Exactly())
 	require.Equal(t, decad.Violating, report.Status)
 }
 
@@ -639,7 +640,7 @@ func TestWallHolePlateReadsThickness(t *testing.T) {
 	doc := holePlate(t)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], decad.Exact, 8)
+	decadtest.MeasuresWallMinimum(t, report.Bodies[0], units.Millimeters(8), decadtest.Exactly())
 	require.Equal(t, decad.Sound, report.Status)
 }
 
@@ -656,7 +657,7 @@ func TestSurveysAnsweredTogether(t *testing.T) {
 	require.NoError(t, err)
 
 	br := report.Bodies[0]
-	requireWall(t, br, decad.Exact, 10)
+	decadtest.MeasuresWallMinimum(t, br, units.Millimeters(10), decadtest.Exactly())
 	require.Equal(t, decad.CoverageComplete, br.Undercut.Coverage)
 	require.NotNil(t, br.Undercut.Faces)
 	require.Empty(t, br.Undercut.Faces)
@@ -688,7 +689,7 @@ func TestWallSolidCylinder(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	requireWall(t, br, decad.Exact, 10)
+	decadtest.MeasuresWallMinimum(t, br, units.Millimeters(10), decadtest.Exactly())
 	bound, err := br.Wall.Minimum.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	require.Equal(t, 0.0, bound)
@@ -735,7 +736,7 @@ func TestWallNarrowConeTaperZero(t *testing.T) {
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], decad.Exact, 0)
+	decadtest.MeasuresWallMinimum(t, report.Bodies[0], units.Millimeters(0), decadtest.Exactly())
 	require.Equal(t, decad.Violating, report.Status)
 }
 
@@ -756,7 +757,7 @@ func TestWallPlacedBodyReadsThePart(t *testing.T) {
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], decad.Exact, 0.5)
+	decadtest.MeasuresWallMinimum(t, report.Bodies[0], units.Millimeters(0.5), decadtest.Exactly())
 	require.Equal(t, decad.Violating, report.Status)
 }
 

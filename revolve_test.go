@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -134,7 +135,7 @@ func TestRevolveFullAnnularCylinder(t *testing.T) {
 	require.InDelta(t, 0.0, c.Value.Y, 1e-9)
 	require.InDelta(t, 0.0, c.Value.Z, 1e-9)
 
-	requireBounds(t, body, decad.Exact, 0, -15, -15, 10, 15, 15)
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, -15, -15), r3.NewVec(10, 15, 15), decadtest.Exactly())
 
 	// Topology: two cylinder walls + two planar annuli, no caps and no seam
 	// edges — every junction sweeps to a whole latitude circle with a seam
@@ -207,7 +208,7 @@ func TestRevolveSolidCylinderHasNoInnerFace(t *testing.T) {
 			require.Len(t, f.Loops(), 1, `a disk reaching the axis has no inner loop`)
 		}
 	}
-	requireBounds(t, body, decad.Exact, 0, -8, -8, 10, 8, 8)
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, -8, -8), r3.NewVec(10, 8, 8), decadtest.Exactly())
 }
 
 func TestRevolvePartialSweeps(t *testing.T) {
@@ -325,7 +326,7 @@ func TestRevolveSphere(t *testing.T) {
 	require.InDelta(t, 5.0, c.Value.X, 1e-9)
 	require.InDelta(t, 0.0, c.Value.Y, 1e-9)
 	require.InDelta(t, 0.0, c.Value.Z, 1e-9)
-	requireBounds(t, body, decad.Exact, 0, -5, -5, 10, 5, 5)
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, -5, -5), r3.NewVec(10, 5, 5), decadtest.Exactly())
 
 	n, err := body.Faces()[0].NormalAt(r3.NewVec(5, 5, 0))
 	require.NoError(t, err)
@@ -359,7 +360,8 @@ func TestRevolveTorus(t *testing.T) {
 	body, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
-	requireVolume(t, body, 2*math.Pi*10*math.Pi*9) // Pappus: 2π·R·(πr²)
+	// Pappus: 2π·R·(πr²).
+	requireVolume(t, body, 2*math.Pi*10*math.Pi*9)
 	area, err := body.Area()
 	require.NoError(t, err)
 	require.True(t, area.Value.Equal(units.SquareMillimeters(2*math.Pi*10*2*math.Pi*3), 1e-9), `got %s`, area.Value)
@@ -377,7 +379,7 @@ func TestRevolveTorus(t *testing.T) {
 	require.InDelta(t, 0.0, c.Value.X, 1e-9)
 	require.InDelta(t, 0.0, c.Value.Y, 1e-9)
 	require.InDelta(t, 0.0, c.Value.Z, 1e-9)
-	requireBounds(t, body, decad.Exact, -3, -13, -13, 3, 13, 13)
+	decadtest.MeasuresBounds(t, body, r3.NewVec(-3, -13, -13), r3.NewVec(3, 13, 13), decadtest.Exactly())
 
 	// Outward normals on the outer and inner equators.
 	f := body.Faces()[0]
@@ -482,7 +484,7 @@ func TestRevolveCone(t *testing.T) {
 	_, err = wall.NormalAt(r3.NewVec(10, 0, 0))
 	require.ErrorIs(t, err, decad.ErrDegenerate, `the apex has no normal`)
 
-	requireBounds(t, body, decad.Exact, 0, -5, -5, 10, 5, 5)
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, -5, -5), r3.NewVec(10, 5, 5), decadtest.Exactly())
 }
 
 func TestRevolveNegativeSideRegion(t *testing.T) {
@@ -503,7 +505,7 @@ func TestRevolveNegativeSideRegion(t *testing.T) {
 	full, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	requireVolume(t, full, 2000*math.Pi)
-	requireBounds(t, full, decad.Exact, 0, -15, -15, 10, 15, 15)
+	decadtest.MeasuresBounds(t, full, r3.NewVec(0, -15, -15), r3.NewVec(10, 15, 15), decadtest.Exactly())
 	requireManifold(t, full)
 
 	s2, err := w.CreateSketch(w.XY())
@@ -915,7 +917,7 @@ func TestRevolveAboutEdgeAxis(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	requireVolume(t, body, 2000*math.Pi)
-	requireBounds(t, body, decad.Exact, 0, -15, -15, 10, 15, 15)
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, -15, -15), r3.NewVec(10, 15, 15), decadtest.Exactly())
 
 	// The host is a dependency, not an operand: it stays live.
 	require.Contains(t, doc.Bodies(), host)
@@ -1477,7 +1479,7 @@ func TestRevolveBoundsExactFullTurn(t *testing.T) {
 	doc := decad.New()
 	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
-	requireBounds(t, body, decad.Exact, 0, -8, -8, 10, 8, 8)
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, -8, -8), r3.NewVec(10, 8, 8), decadtest.Exactly())
 }
 
 // arcApexSketch builds a solved circular-segment region: the arc is centred on
@@ -1810,7 +1812,7 @@ func TestRevolveBoundsExactOffsetAnchor(t *testing.T) {
 			boundMM, err := bounds.Bound.In(units.Millimeter)
 			require.NoError(t, err)
 			require.Equal(t, 0.0, boundMM)
-			requireBounds(t, body, decad.Exact, 0, -10, -10, 10, 10, 10)
+			decadtest.MeasuresBounds(t, body, r3.NewVec(0, -10, -10), r3.NewVec(10, 10, 10), decadtest.Exactly())
 		})
 	}
 }
@@ -1908,6 +1910,6 @@ func TestRevolveBoundsEnclosesPlacedScanArithmetic(t *testing.T) {
 		boundMM, err := bounds.Bound.In(units.Millimeter)
 		require.NoError(t, err)
 		require.Equal(t, 0.0, boundMM)
-		requireBounds(t, body, decad.Exact, 0, -3, -2, 1e6, 1, 2)
+		decadtest.MeasuresBounds(t, body, r3.NewVec(0, -3, -2), r3.NewVec(1e6, 1, 2), decadtest.Exactly())
 	})
 }

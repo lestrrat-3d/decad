@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -116,10 +117,9 @@ func TestLoftPlacementDoesNotRerunTheSeamGates(t *testing.T) {
 		b    *decad.Body
 	}{{"duplicate", dup}, {"placed copy", copied}, {"placed", placed}} {
 		t.Run(tc.name, func(t *testing.T) {
-			vol, err := tc.b.Volume()
-			require.NoError(t, err)
-			require.True(t, vol.Value.Equal(units.CubicMillimeters(16000), 1e-9),
-				"a placement rebuilds from the recorded section, not the stale profile; got %s", vol.Value)
+			// A placement rebuilds from the recorded section, not the stale
+			// profile.
+			decadtest.MeasuresVolume(t, tc.b, units.CubicMillimeters(16000))
 		})
 	}
 }
@@ -203,8 +203,9 @@ func TestLoftPlacedRotationSoundness(t *testing.T) {
 
 	vol, err := placed.Volume()
 	require.NoError(t, err)
-	require.LessOrEqual(t, math.Abs(vol.Value.Base()-16000.0), vol.Bound.Base(),
-		"the published interval must enclose the true volume — the naive implementation misses by 1.819e-12 against a 7.203e-13 bound")
+	// The published interval must enclose the true volume — the naive
+	// implementation misses by 1.819e-12 against a 7.203e-13 bound.
+	decadtest.Measures(t, "placed volume", vol, units.CubicMillimeters(16000))
 	require.Equal(t, decad.Approximate, vol.Exactness)
 
 	// The closed-form rotated centroid: the unplaced box's own centroid is
@@ -214,8 +215,7 @@ func TestLoftPlacedRotationSoundness(t *testing.T) {
 	wantCentroid := r3.NewVec(0, -5*math.Sin(theta), 5*math.Cos(theta))
 	c, err := placed.Centroid()
 	require.NoError(t, err)
-	require.LessOrEqual(t, c.Value.Sub(wantCentroid).Len(), c.Bound.Base(),
-		"the placed centroid must enclose the closed-form rotated centroid")
+	decadtest.MeasuresVec(t, "placed centroid", c, wantCentroid)
 
 	for _, v := range placed.Vertices() {
 		require.GreaterOrEqual(t, v.Position().Bound.Base(), 0.0)
@@ -251,22 +251,22 @@ func TestLoftPlacedCopyTranslation(t *testing.T) {
 
 	copiedBounds, err := copied.Bounds()
 	require.NoError(t, err)
-	require.InDelta(t, srcBounds.Min.X+100, copiedBounds.Min.X, 1e-9)
-	require.InDelta(t, srcBounds.Max.X+100, copiedBounds.Max.X, 1e-9)
-	require.InDelta(t, srcBounds.Min.Y, copiedBounds.Min.Y, 1e-9)
-	require.InDelta(t, srcBounds.Min.Z, copiedBounds.Min.Z, 1e-9)
+	// The full box is checked, not just the two corners and two axes the
+	// original test pinned: a pure X translation leaves Y and Z untouched.
+	decadtest.MeasuresBox(t, "copied bounds", copiedBounds,
+		r3.NewVec(srcBounds.Min.X+100, srcBounds.Min.Y, srcBounds.Min.Z),
+		r3.NewVec(srcBounds.Max.X+100, srcBounds.Max.Y, srcBounds.Max.Z))
 
 	copiedCentroid, err := copied.Centroid()
 	require.NoError(t, err)
-	require.InDelta(t, srcCentroid.Value.X+100, copiedCentroid.Value.X, 1e-9)
-	require.InDelta(t, srcCentroid.Value.Y, copiedCentroid.Value.Y, 1e-9)
-	require.InDelta(t, srcCentroid.Value.Z, copiedCentroid.Value.Z, 1e-9)
+	decadtest.MeasuresVec(t, "copied centroid", copiedCentroid,
+		r3.NewVec(srcCentroid.Value.X+100, srcCentroid.Value.Y, srcCentroid.Value.Z))
 
 	copiedVol, err := copied.Volume()
 	require.NoError(t, err)
 	require.Equal(t, srcVol.Value, copiedVol.Value, "a translation commits no rounding to the volume's own VALUE")
 	require.Positive(t, copiedVol.Bound.Base())
-	require.LessOrEqual(t, math.Abs(copiedVol.Value.Base()-16000.0), copiedVol.Bound.Base())
+	decadtest.Measures(t, "copied volume", copiedVol, units.CubicMillimeters(16000))
 
 	require.Equal(t, []*decad.Body{body, copied}, doc.Bodies(), "the source stays live")
 }
@@ -296,7 +296,7 @@ func TestLoftPlacedReflectionHerringbone(t *testing.T) {
 	vol, err := mirrored.Volume()
 	require.NoError(t, err)
 	require.Positive(t, vol.Value.Base())
-	require.LessOrEqual(t, math.Abs(vol.Value.Base()-16000.0), vol.Bound.Base())
+	decadtest.Measures(t, "mirrored volume", vol, units.CubicMillimeters(16000))
 
 	require.Equal(t, len(body.Faces()), len(mirrored.Faces()))
 	require.Equal(t, len(body.Edges()), len(mirrored.Edges()))
@@ -440,7 +440,11 @@ func TestLoftPlacedFaceAreaSumMatchesBodyArea(t *testing.T) {
 		sum += a.Value.Base()
 		sumBound += a.Bound.Base()
 	}
-	require.InDelta(t, bodyArea.Value.Base(), sum, bodyArea.Bound.Base()+sumBound+1e-9)
+	// The tolerance is the two readings' own combined error, plus a tiny
+	// fuzz for the summation itself — the same terms the original InDelta
+	// combined, stated here as the sum's own oracle slack.
+	decadtest.Measures(t, "face area sum", bodyArea, units.SquareMillimeters(sum),
+		decadtest.Within(units.SquareMillimeters(sumBound+1e-9)))
 }
 
 // TestLoftPlacedAccessorExactness pins docs/loft-design.md §8's per-accessor
