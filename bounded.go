@@ -239,11 +239,6 @@ func admitMagnitudeAbove(q boundedScalar, t float64) survAdmission {
 	}
 }
 
-func boundedSin(x boundedScalar) boundedScalar {
-	value := math.Sin(x.value)
-	return measuredScalar(value, conservativeValueError(value, 1))
-}
-
 func boundedCos(x boundedScalar) boundedScalar {
 	value := math.Cos(x.value)
 	return measuredScalar(value, conservativeValueError(value, 1))

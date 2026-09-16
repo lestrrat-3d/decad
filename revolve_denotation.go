@@ -190,3 +190,66 @@ func (rp revolvePayload) phi1Delta() float64 { return rp.den.phi1.delta(rp.phi1)
 // reading that cannot attribute its error to one particular end takes,
 // mirroring prismPayload.axialDelta().
 func (rp revolvePayload) angularDelta() float64 { return math.Max(rp.phi0Delta(), rp.phi1Delta()) }
+
+// widthInterval is the denoted sweep's own width phi1 − phi0, exact: the
+// rational-interval twin of the held float64 subtraction sweep (below) takes
+// alone, built from each end's own enclosure. ok is false wherever either
+// end's denotation cannot state one, which is the sound answer — a width
+// built from only one certified end would publish a claim the other end
+// never proved.
+func (sd sweepDenotation) widthInterval() (ratInterval, bool) {
+	enc0, ok0 := sd.phi0.enclosure()
+	enc1, ok1 := sd.phi1.enclosure()
+	if !ok0 || !ok1 {
+		return ratInterval{}, false
+	}
+	return intervalSub(enc1, enc0), true
+}
+
+// sweep is the proven bound on the sweep width every mass and edge reading
+// multiplies into its own quantity: the held float64 subtraction stays the
+// published value exactly as it always has, and the bound is the smaller of
+// the magnitude envelope conservativeValueError has always published here
+// (bounded.go's own documented fallback, sound for any legal sweep since a
+// legal sweep never exceeds a full turn) and the proven displacement between
+// that held value and the sweep the record DENOTES (den.widthInterval,
+// above), wherever a denotation exists for both ends. math.Min follows
+// bounded.go's own convention for a reading a certified bracket admits — it
+// can only shrink the published bound, never widen it — so a ToFaceAngular
+// sweep or any other denotation this file cannot state keeps exactly the
+// envelope it always published.
+func (rp revolvePayload) sweep() boundedScalar {
+	held := boundedSub(exactScalar(rp.phi1), exactScalar(rp.phi0))
+	fallback := conservativeValueError(held.value, twoPiUpper())
+	enc, ok := rp.den.widthInterval()
+	if !ok {
+		return measuredScalar(held.value, fallback)
+	}
+	return measuredScalar(held.value, math.Min(fallback, intervalFloatError(enc, held.value)))
+}
+
+// endSinCos encloses sin(held)/cos(held) for one sweep endpoint: the
+// published value is always math.Sincos(held), the twin the partial-sweep
+// centroid used to compose from boundedSin/boundedCos alone (boundedCos
+// survives in bounded.go for walkAxisMoment's circular arm, which this
+// change does not touch). The bound is the smaller of the existing ≥1
+// magnitude envelope and the denoted angle's own certified enclosure
+// (angleDenotation.sinCosFor), gated on d.valid() rather than sinCosFor's own
+// wider ok — sinCosFor's fallback branch encloses the HELD float exactly
+// wherever d is invalid, which is the right answer for a reading
+// (sweepExtremeBounds, revolve_extent.go) that already trusted the held
+// float as the truth, but is a tighter claim than the centroid may take: a
+// ToFaceAngular endpoint's true angle carries no proven relation to the held
+// float here, so its trig keeps the envelope, per docs/evaluator-design.md
+// §6's "every reading it feeds keeps the magnitude envelope it always has".
+func endSinCos(d angleDenotation, held float64) (sin, cos boundedScalar) {
+	sinValue, cosValue := math.Sincos(held)
+	sinBound, cosBound := conservativeValueError(sinValue, 1), conservativeValueError(cosValue, 1)
+	if d.valid() {
+		if sinEnc, cosEnc, ok := d.sinCosFor(held); ok {
+			sinBound = math.Min(sinBound, intervalFloatError(sinEnc, sinValue))
+			cosBound = math.Min(cosBound, intervalFloatError(cosEnc, cosValue))
+		}
+	}
+	return measuredScalar(sinValue, sinBound), measuredScalar(cosValue, cosBound)
+}

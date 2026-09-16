@@ -1,7 +1,9 @@
 package decad_test
 
 import (
+	"fmt"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -108,4 +110,195 @@ func TestRevolveBoundsEnclosesDenotedExtreme(t *testing.T) {
 		// that same tiny scale rather than widening it to the old envelope.
 		decadtest.HasBoundAtMost(t, "radian-stated cap normal", radNormal.Bound, units.Scalar(1e-9))
 	})
+}
+
+// The tests below prove rp.sweep()'s own tightening (revolve_denotation.go):
+// it replaces the old |h|+2π magnitude-envelope fallback with the denoted
+// sweep width's own certified bracket wherever the denotation admits one,
+// and the partial-sweep centroid's endpoint sin/cos (endSinCos) takes the
+// matching tightening. Every assertion is a RELATION — a ratio ceiling or an
+// independently computed containment — never a bound literal, since the
+// bound differs between amd64 and arm64 through FMA.
+
+// piRefLo and piRefHi bracket pi to 60 decimal digits: a REFERENCE these
+// tests compute their own expected answer from, never a bound production
+// code trusts (that proof lives in rat_interval.go's own piLower/piUpper,
+// unreachable from this external package). Checking both ends against the
+// published interval is what proves the tightened bound still sound, not
+// merely narrow.
+var (
+	piRefLo = mustTestDecimal("3.14159265358979323846264338327950288419716939937510582097494")
+	piRefHi = mustTestDecimal("3.14159265358979323846264338327950288419716939937510582097495")
+)
+
+func mustTestDecimal(s string) *big.Rat {
+	r, ok := new(big.Rat).SetString(s)
+	if !ok {
+		panic("decad_test: invalid decimal constant " + s)
+	}
+	return r
+}
+
+// sweepWidthCase names one sweep this file checks: the extent to revolve
+// with, and the denoted width's own bracket in radians (lo, hi), built from
+// the record's own exact rational content independently of decad — turn is a
+// fraction of a full turn (0 for a radian-stated sweep) and rad is an exact
+// radian addend (the whole width for a radian-stated sweep).
+type sweepWidthCase struct {
+	name string
+	ext  decad.AngularExtent
+	turn *big.Rat
+	rad  *big.Rat
+}
+
+func (c sweepWidthCase) widthBracket() (lo, hi *big.Rat) {
+	lo = new(big.Rat).Add(c.rad, new(big.Rat).Mul(new(big.Rat).Mul(big.NewRat(2, 1), piRefLo), c.turn))
+	hi = new(big.Rat).Add(c.rad, new(big.Rat).Mul(new(big.Rat).Mul(big.NewRat(2, 1), piRefHi), c.turn))
+	return lo, hi
+}
+
+// annularSweepCases is the sweep list TestRevolveSweepBoundTightens checks: a
+// full turn, a half turn, a quarter turn, an awkward 37 degrees, a
+// radian-stated sweep, a symmetric 50-degrees-each-way extent and an uneven
+// two-sided 30/70 extent — every AngularExtent variant the denotation covers.
+func annularSweepCases() []sweepWidthCase {
+	zero := new(big.Rat)
+	return []sweepWidthCase{
+		{"full", decad.FullRevolution{}, big.NewRat(1, 1), zero},
+		{"180deg", decad.AngleExtent{A: units.Degrees(180), Dir: decad.Along}, big.NewRat(1, 2), zero},
+		{"90deg", decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}, big.NewRat(1, 4), zero},
+		{"37deg", decad.AngleExtent{A: units.Degrees(37), Dir: decad.Along}, big.NewRat(37, 360), zero},
+		{"1rad", decad.AngleExtent{A: units.Radians(1), Dir: decad.Along}, zero, big.NewRat(1, 1)},
+		{
+			"symmetric50deg", decad.SymmetricAngle{A: units.Degrees(50)},
+			big.NewRat(100, 360), zero, // 50 deg each way: 100 deg total
+		},
+		{
+			"twoSided30_70", decad.TwoSidedAngle{
+				One: decad.AngleSide{A: units.Degrees(30)},
+				Two: decad.AngleSide{A: units.Degrees(70)},
+			},
+			big.NewRat(100, 360), zero, // 30 + 70 deg total, split unevenly
+		},
+	}
+}
+
+// TestRevolveSweepBoundTightens proves the volume bound for every sweep in
+// annularSweepCases shrinks from the old |h|+2π envelope (measured ratio 2 to
+// 10.7 before this change) to a fraction of the value, and that the
+// published interval [Value−Bound, Value+Bound] contains q·D for BOTH ends
+// of the independently computed pi bracket.
+func TestRevolveSweepBoundTightens(t *testing.T) {
+	t.Parallel()
+
+	// q = ∫ρ dA = 1000 mm³ exactly for annularSketch (A = 100 mm², mean
+	// radius 10 mm; revolve_test.go's own comment on annularSketch).
+	q := big.NewRat(1000, 1)
+
+	for _, c := range annularSweepCases() {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			s, p := annularSketch(t)
+			doc := decad.New()
+			body, err := doc.Revolve(s, p, uAxis, c.ext)
+			require.NoError(t, err)
+
+			vol, err := body.Volume()
+			require.NoError(t, err)
+			value, bound := vol.Value.Base(), vol.Bound.Base()
+
+			require.LessOrEqual(t, bound, 1e-9*value,
+				`the sweep's own certified bracket must replace the old |h|+2pi envelope`)
+
+			lo, hi := c.widthBracket()
+			trueLo, _ := new(big.Rat).Mul(q, lo).Float64()
+			trueHi, _ := new(big.Rat).Mul(q, hi).Float64()
+			require.LessOrEqual(t, value-bound, trueLo,
+				`the published interval must not exclude the pi bracket's lower end`)
+			require.GreaterOrEqual(t, value+bound, trueHi,
+				`the published interval must not exclude the pi bracket's upper end`)
+		})
+	}
+}
+
+// TestRevolveRadianSweepStaysExact proves a radian-stated sweep denotes
+// itself exactly (rad has no rounding to charge), so its volume publishes
+// Exact with a zero bound and the value Pappus by hand gives: q·1 = 1000.
+func TestRevolveRadianSweepStaysExact(t *testing.T) {
+	t.Parallel()
+	s, p := annularSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
+	require.NoError(t, err)
+
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, vol.Exactness)
+	require.Zero(t, vol.Bound.Base())
+	require.Equal(t, 1000.0, vol.Value.Base())
+}
+
+// TestRevolveFullTurnStaysApproximate is the negative guard beside
+// TestRevolveRadianSweepStaysExact: a full turn's own denoted width is
+// 2*pi, which no float64 holds exactly, so its volume must stay Approximate
+// with a nonzero bound even after the tightening — never Exact, which would
+// mean the turn component was read as though it denoted a radian value
+// instead of a fraction of pi.
+func TestRevolveFullTurnStaysApproximate(t *testing.T) {
+	t.Parallel()
+	s, p := annularSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Positive(t, vol.Bound.Base())
+}
+
+// TestRevolvePartialCentroidBoundTightens proves the partial-sweep
+// centroid's bound shrinks from the old per-endpoint sin/cos's ≥1 envelope
+// (measured 460-469 mm before this change) to a fraction of the centroid's
+// own distance from the origin, and that the closed-form centroid
+// revolve_test.go's TestRevolvePartialSweeps derives from the moments by
+// hand lies inside the published interval.
+func TestRevolvePartialCentroidBoundTightens(t *testing.T) {
+	t.Parallel()
+
+	// mzr = ∫zp dA = 5000, mrr = ∫p^2 dA = 32500/3 for annularSketch (u in
+	// [0,10], v in [5,15]); q = 1000. axial = mzr/q = 5 is sweep-independent.
+	const (
+		mzr = 5000.0
+		mrr = 32500.0 / 3
+		q   = 1000.0
+	)
+
+	for _, degrees := range []float64{90, 37} {
+		t.Run(fmt.Sprintf("%gdeg", degrees), func(t *testing.T) {
+			t.Parallel()
+			s, p := annularSketch(t)
+			doc := decad.New()
+			body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(degrees), Dir: decad.Along})
+			require.NoError(t, err)
+
+			cen, err := body.Centroid()
+			require.NoError(t, err)
+			value, bound := cen.Value, cen.Bound.Base()
+
+			require.LessOrEqual(t, bound, 1e-9*value.Len(),
+				`the endpoint trig's own certified enclosure must replace the old ge-1 envelope`)
+
+			sweep := degrees * math.Pi / 180
+			sin, cos := math.Sincos(sweep)
+			radialScale := mrr / (sweep * q)
+			wantX := mzr / q
+			wantY := radialScale * sin
+			wantZ := radialScale * (1 - cos)
+
+			require.InDelta(t, wantX, value.X, bound+1e-9)
+			require.InDelta(t, wantY, value.Y, bound+1e-9)
+			require.InDelta(t, wantZ, value.Z, bound+1e-9)
+		})
+	}
 }
