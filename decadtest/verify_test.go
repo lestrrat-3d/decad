@@ -15,7 +15,7 @@ func soundPlateDoc(t *testing.T) (*decad.Document, *decad.Body) {
 	t.Helper()
 
 	doc := decad.New()
-	plate := decadtest.Block(t, doc, 0, 0, 100, 60, units.Millimeters(10))
+	plate := decadtest.NewBlock(t, doc, 0, 0, 100, 60, units.Millimeters(10))
 	return doc, plate
 }
 
@@ -26,8 +26,8 @@ func interferingPairDoc(t *testing.T) (*decad.Document, *decad.Body, *decad.Body
 	t.Helper()
 
 	doc := decad.New()
-	a := decadtest.Block(t, doc, 0, 0, 10, 10, units.Millimeters(10))
-	b := decadtest.Block(t, doc, 5, 5, 20, 20, units.Millimeters(10))
+	a := decadtest.NewBlock(t, doc, 0, 0, 10, 10, units.Millimeters(10))
+	b := decadtest.NewBlock(t, doc, 5, 5, 20, 20, units.Millimeters(10))
 	return doc, a, b
 }
 
@@ -37,8 +37,8 @@ func clearancePairDoc(t *testing.T) (*decad.Document, *decad.Body, *decad.Body) 
 	t.Helper()
 
 	doc := decad.New()
-	a := decadtest.Block(t, doc, 0, 0, 10, 10, units.Millimeters(10))
-	b := decadtest.Block(t, doc, 30, 30, 40, 40, units.Millimeters(10))
+	a := decadtest.NewBlock(t, doc, 0, 0, 10, 10, units.Millimeters(10))
+	b := decadtest.NewBlock(t, doc, 30, 30, 40, 40, units.Millimeters(10))
 	return doc, a, b
 }
 
@@ -50,8 +50,8 @@ func suspectUnionDoc(t *testing.T) (*decad.Document, *decad.Body) {
 	t.Helper()
 
 	doc := decad.New()
-	a := decadtest.Block(t, doc, 0, 0, 10, 10, units.Millimeters(10))
-	b := decadtest.Block(t, doc, 5, 5, 20, 20, units.Millimeters(10))
+	a := decadtest.NewBlock(t, doc, 0, 0, 10, 10, units.Millimeters(10))
+	b := decadtest.NewBlock(t, doc, 5, 5, 20, 20, units.Millimeters(10))
 	u, err := decad.Union(a, b)
 	require.NoError(t, err)
 	return doc, u
@@ -68,41 +68,41 @@ func TestVerifyReturnsTheReport(t *testing.T) {
 	require.Equal(t, plate, report.Bodies[0].Body)
 }
 
-func TestSoundAcceptsThePlate(t *testing.T) {
+func TestIsSoundAcceptsThePlate(t *testing.T) {
 	t.Parallel()
 
 	doc, _ := soundPlateDoc(t)
-	report := decadtest.Sound(t, doc)
+	report := decadtest.IsSound(t, doc)
 	require.True(t, report.Passed())
 }
 
-func TestStatusAcceptsInterfering(t *testing.T) {
+func TestHasStatusAcceptsInterfering(t *testing.T) {
 	t.Parallel()
 
 	doc, _, _ := interferingPairDoc(t)
 	report := decadtest.Verify(t, doc)
-	decadtest.Status(t, report, decad.Interfering)
+	decadtest.HasStatus(t, report, decad.Interfering)
 }
 
-func TestBodyReportResolvesTheBody(t *testing.T) {
+func TestFindBodyReportResolvesTheBody(t *testing.T) {
 	t.Parallel()
 
 	doc, plate := soundPlateDoc(t)
 	report := decadtest.Verify(t, doc)
-	br := decadtest.BodyReport(t, report, plate)
+	br := decadtest.FindBodyReport(t, report, plate)
 	require.Equal(t, plate, br.Body)
 }
 
-func TestValidAcceptsThePlate(t *testing.T) {
+func TestIsValidAcceptsThePlate(t *testing.T) {
 	t.Parallel()
 
 	doc, plate := soundPlateDoc(t)
 	report := decadtest.Verify(t, doc)
-	br := decadtest.Valid(t, report, plate)
+	br := decadtest.IsValid(t, report, plate)
 	require.Equal(t, decad.ValidityValid, br.Validity.Outcome)
 }
 
-func TestValidIgnoresToleranceDiagnostics(t *testing.T) {
+func TestIsValidIgnoresToleranceDiagnostics(t *testing.T) {
 	t.Parallel()
 
 	doc, u := suspectUnionDoc(t)
@@ -110,17 +110,17 @@ func TestValidIgnoresToleranceDiagnostics(t *testing.T) {
 	require.Equal(t, decad.Suspect, report.Status)
 	require.NotEmpty(t, report.Diagnostics)
 
-	br := decadtest.Valid(t, report, u)
+	br := decadtest.IsValid(t, report, u)
 	require.Equal(t, decad.ValidityValid, br.Validity.Outcome)
 }
 
-func TestDiagnosedReturnsTheMatchingDiagnostics(t *testing.T) {
+func TestFindDiagnosticsReturnsTheMatchingDiagnostics(t *testing.T) {
 	t.Parallel()
 
 	doc, _ := suspectUnionDoc(t)
 	report := decadtest.Verify(t, doc, decad.WithTolerance(units.Scalar(1e-30)))
 
-	ds := decadtest.Diagnosed(t, report, decad.DiagMeasurementBeyondTolerance)
+	ds := decadtest.FindDiagnostics(t, report, decad.DiagMeasurementBeyondTolerance)
 	require.Len(t, ds, 4)
 
 	readings := map[decad.ReadingKind]struct{}{}
@@ -135,45 +135,45 @@ func TestDiagnosedReturnsTheMatchingDiagnostics(t *testing.T) {
 	}, readings)
 }
 
-func TestOnlyDiagnosticsAcceptsTheAllowedCode(t *testing.T) {
+func TestHasOnlyDiagnosticsAcceptsTheAllowedCode(t *testing.T) {
 	t.Parallel()
 
 	doc, _ := suspectUnionDoc(t)
 	report := decadtest.Verify(t, doc, decad.WithTolerance(units.Scalar(1e-30)))
-	decadtest.OnlyDiagnostics(t, report, decad.DiagMeasurementBeyondTolerance)
+	decadtest.HasOnlyDiagnostics(t, report, decad.DiagMeasurementBeyondTolerance)
 }
 
-func TestOnlyDiagnosticsAcceptsACleanReport(t *testing.T) {
+func TestHasOnlyDiagnosticsAcceptsACleanReport(t *testing.T) {
 	t.Parallel()
 
 	doc, _ := soundPlateDoc(t)
 	report := decadtest.Verify(t, doc)
 	require.Empty(t, report.Diagnostics)
-	decadtest.OnlyDiagnostics(t, report)
+	decadtest.HasOnlyDiagnostics(t, report)
 }
 
-func TestClearanceMeasuresTheGap(t *testing.T) {
+func TestMeasuresClearanceMeasuresTheGap(t *testing.T) {
 	t.Parallel()
 
 	doc, a, b := clearancePairDoc(t)
 	report := decadtest.Verify(t, doc, decad.WithClearances())
-	decadtest.Clearance(t, report, a, b, units.Millimeters(28.284271247461902), decadtest.WithinRel(units.Scalar(1e-12)))
+	decadtest.MeasuresClearance(t, report, a, b, units.Millimeters(28.284271247461902), decadtest.WithinRel(units.Scalar(1e-12)))
 }
 
-func TestClearanceFindsThePairInEitherOrder(t *testing.T) {
+func TestMeasuresClearanceFindsThePairInEitherOrder(t *testing.T) {
 	t.Parallel()
 
 	doc, a, b := clearancePairDoc(t)
 	report := decadtest.Verify(t, doc, decad.WithClearances())
-	decadtest.Clearance(t, report, b, a, units.Millimeters(28.284271247461902), decadtest.WithinRel(units.Scalar(1e-12)))
+	decadtest.MeasuresClearance(t, report, b, a, units.Millimeters(28.284271247461902), decadtest.WithinRel(units.Scalar(1e-12)))
 }
 
-func TestInterferenceMeasuresTheOverlap(t *testing.T) {
+func TestMeasuresInterferenceMeasuresTheOverlap(t *testing.T) {
 	t.Parallel()
 
 	doc, a, b := interferingPairDoc(t)
 	report := decadtest.Verify(t, doc)
-	decadtest.Interference(t, report, a, b, units.CubicMillimeters(250))
+	decadtest.MeasuresInterference(t, report, a, b, units.CubicMillimeters(250))
 }
 
 func TestVerifyRejectsANilDocument(t *testing.T) {
@@ -185,88 +185,88 @@ func TestVerifyRejectsANilDocument(t *testing.T) {
 	require.Contains(t, out, "doc must not be nil")
 }
 
-func TestSoundReportsASuspectReport(t *testing.T) {
+func TestIsSoundReportsASuspectReport(t *testing.T) {
 	t.Parallel()
 
 	doc, _ := suspectUnionDoc(t)
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Sound(tb, doc, decad.WithTolerance(units.Scalar(1e-30)))
+		decadtest.IsSound(tb, doc, decad.WithTolerance(units.Scalar(1e-30)))
 	})
 	require.Contains(t, out, "report is Suspect, want Sound")
 }
 
-func TestSoundPrintsEveryDiagnostic(t *testing.T) {
+func TestIsSoundPrintsEveryDiagnostic(t *testing.T) {
 	t.Parallel()
 
 	doc, _ := suspectUnionDoc(t)
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Sound(tb, doc, decad.WithTolerance(units.Scalar(1e-30)))
+		decadtest.IsSound(tb, doc, decad.WithTolerance(units.Scalar(1e-30)))
 	})
 	require.Contains(t, out, "measurement_beyond_tolerance")
 	require.Contains(t, out, "4 diagnostic(s):")
 }
 
-func TestSoundNamesTheBodyByStepAndOp(t *testing.T) {
+func TestIsSoundNamesTheBodyByStepAndOp(t *testing.T) {
 	t.Parallel()
 
 	doc, _ := suspectUnionDoc(t)
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Sound(tb, doc, decad.WithTolerance(units.Scalar(1e-30)))
+		decadtest.IsSound(tb, doc, decad.WithTolerance(units.Scalar(1e-30)))
 	})
 	require.Contains(t, out, "body[0] (step 2 union)")
 }
 
-func TestStatusReportsAMismatch(t *testing.T) {
+func TestHasStatusReportsAMismatch(t *testing.T) {
 	t.Parallel()
 
 	doc, _, _ := interferingPairDoc(t)
 	report := decadtest.Verify(t, doc)
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Status(tb, report, decad.Sound)
+		decadtest.HasStatus(tb, report, decad.Sound)
 	})
 	require.Contains(t, out, "report is Interfering, want Sound")
 }
 
-func TestBodyReportRejectsAForeignBody(t *testing.T) {
+func TestFindBodyReportRejectsAForeignBody(t *testing.T) {
 	t.Parallel()
 
 	doc, plate := soundPlateDoc(t)
 	report := decadtest.Verify(t, doc)
 
 	foreignDoc := decad.New()
-	foreign := decadtest.Block(t, foreignDoc, 0, 0, 10, 10, units.Millimeters(10))
+	foreign := decadtest.NewBlock(t, foreignDoc, 0, 0, 10, 10, units.Millimeters(10))
 	_ = plate
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.BodyReport(tb, report, foreign)
+		decadtest.FindBodyReport(tb, report, foreign)
 	})
 	require.Contains(t, out, "the report holds no record of this body")
 }
 
-func TestBodyReportRejectsANilReport(t *testing.T) {
+func TestFindBodyReportRejectsANilReport(t *testing.T) {
 	t.Parallel()
 
 	_, plate := soundPlateDoc(t)
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.BodyReport(tb, nil, plate)
+		decadtest.FindBodyReport(tb, nil, plate)
 	})
 	require.Contains(t, out, "report must not be nil")
 }
 
-// TestValidReportsAnUndecidedValidity uses a hand-built *decad.BodyReport:
+// TestIsValidReportsAnUndecidedValidity uses a hand-built *decad.BodyReport:
 // no public decad operation returns one whose Validity.Outcome is not
 // decad.ValidityValid, because every one of decad's six builders sets the
 // body solid and assigns a payload on every success path — the invalid and
 // undecided branches of publishBodyResult are proven unreachable through a
 // live document body (verify_publish_internal_test.go). This record is one
 // decad itself would never emit; the literal is the only way to reach
-// Valid's validity-mismatch branch, and the point here is Valid's own
+// IsValid's validity-mismatch branch, and the point here is IsValid's own
 // dispatch, never decad's geometry.
-func TestValidReportsAnUndecidedValidity(t *testing.T) {
+func TestIsValidReportsAnUndecidedValidity(t *testing.T) {
 	t.Parallel()
 
 	doc := decad.New()
-	plate := decadtest.Block(t, doc, 0, 0, 100, 60, units.Millimeters(10))
+	plate := decadtest.NewBlock(t, doc, 0, 0, 100, 60, units.Millimeters(10))
 
 	fake := &decad.BodyReport{
 		Body: plate,
@@ -284,62 +284,62 @@ func TestValidReportsAnUndecidedValidity(t *testing.T) {
 	report := &decad.Report{Bodies: []*decad.BodyReport{fake}}
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Valid(tb, report, plate)
+		decadtest.IsValid(tb, report, plate)
 	})
 	require.Contains(t, out, "want valid")
 }
 
-func TestDiagnosedReportsAnAbsentCode(t *testing.T) {
+func TestFindDiagnosticsReportsAnAbsentCode(t *testing.T) {
 	t.Parallel()
 
 	doc, _ := soundPlateDoc(t)
 	report := decadtest.Verify(t, doc)
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Diagnosed(tb, report, decad.DiagUndercut)
+		decadtest.FindDiagnostics(tb, report, decad.DiagUndercut)
 	})
 	require.Contains(t, out, "no diagnostic carries")
 }
 
-func TestOnlyDiagnosticsReportsADisallowedCode(t *testing.T) {
+func TestHasOnlyDiagnosticsReportsADisallowedCode(t *testing.T) {
 	t.Parallel()
 
 	doc, _ := suspectUnionDoc(t)
 	report := decadtest.Verify(t, doc, decad.WithTolerance(units.Scalar(1e-30)))
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.OnlyDiagnostics(tb, report)
+		decadtest.HasOnlyDiagnostics(tb, report)
 	})
 	require.Contains(t, out, "is not among the allowed diagnostic codes")
 }
 
-func TestClearanceReportsAMissingRow(t *testing.T) {
+func TestMeasuresClearanceReportsAMissingRow(t *testing.T) {
 	t.Parallel()
 
 	doc, a, b := clearancePairDoc(t)
 	report := decadtest.Verify(t, doc) // no decad.WithClearances()
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Clearance(tb, report, a, b, units.Millimeters(1))
+		decadtest.MeasuresClearance(tb, report, a, b, units.Millimeters(1))
 	})
 	require.Contains(t, out, "no clearance row for the pair")
 }
 
-func TestClearanceReportsAGapMiss(t *testing.T) {
+func TestMeasuresClearanceReportsAGapMiss(t *testing.T) {
 	t.Parallel()
 
 	doc, a, b := clearancePairDoc(t)
 	report := decadtest.Verify(t, doc, decad.WithClearances())
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Clearance(tb, report, a, b, units.Millimeters(1))
+		decadtest.MeasuresClearance(tb, report, a, b, units.Millimeters(1))
 	})
 	require.Contains(t, out, "does not enclose")
 }
 
-func TestInterferenceReportsAMissingRow(t *testing.T) {
+func TestMeasuresInterferenceReportsAMissingRow(t *testing.T) {
 	t.Parallel()
 
 	doc, a, b := clearancePairDoc(t)
 	report := decadtest.Verify(t, doc)
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Interference(tb, report, a, b, units.CubicMillimeters(1))
+		decadtest.MeasuresInterference(tb, report, a, b, units.CubicMillimeters(1))
 	})
 	require.Contains(t, out, "no interference row for the pair")
 }

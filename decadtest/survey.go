@@ -17,13 +17,13 @@ import (
 // for every other outcome, so each helper checks Outcome first and never
 // dereferences Minimum on any other branch.
 
-// WallMinimum fails tb unless the wall survey measured a minimum matching
-// want. br MUST NOT be nil.
-func WallMinimum(tb testing.TB, br *decad.BodyReport, want units.Value, opts ...Option) {
+// MeasuresWallMinimum fails tb unless the wall survey measured a minimum
+// matching want. br MUST NOT be nil.
+func MeasuresWallMinimum(tb testing.TB, br *decad.BodyReport, want units.Value, opts ...Option) {
 	tb.Helper()
 
 	if br == nil {
-		tb.Fatalf("decadtest.WallMinimum: br must not be nil")
+		tb.Fatalf("decadtest.MeasuresWallMinimum: br must not be nil")
 		return
 	}
 
@@ -40,15 +40,15 @@ func WallMinimum(tb testing.TB, br *decad.BodyReport, want units.Value, opts ...
 	Measures(tb, bodyName(br.Body)+" wall minimum", br.Wall.Minimum.Measurement, want, opts...)
 }
 
-// ConcaveRadius fails tb unless the concave-radius survey measured a
-// minimum matching want. br MUST NOT be nil. decad.ConcaveRadiusResult has
-// no Assessment field — Verify accepts no radius requirement — so this
+// MeasuresConcaveRadius fails tb unless the concave-radius survey measured
+// a minimum matching want. br MUST NOT be nil. decad.ConcaveRadiusResult
+// has no Assessment field — Verify accepts no radius requirement — so this
 // helper looks for none.
-func ConcaveRadius(tb testing.TB, br *decad.BodyReport, want units.Value, opts ...Option) {
+func MeasuresConcaveRadius(tb testing.TB, br *decad.BodyReport, want units.Value, opts ...Option) {
 	tb.Helper()
 
 	if br == nil {
-		tb.Fatalf("decadtest.ConcaveRadius: br must not be nil")
+		tb.Fatalf("decadtest.MeasuresConcaveRadius: br must not be nil")
 		return
 	}
 
@@ -65,19 +65,19 @@ func ConcaveRadius(tb testing.TB, br *decad.BodyReport, want units.Value, opts .
 	Measures(tb, bodyName(br.Body)+" concave radius", br.ConcaveRadius.Minimum.Measurement, want, opts...)
 }
 
-// UndercutFaces fails tb unless the undercut survey decided every face
+// FindUndercutFaces fails tb unless the undercut survey decided every face
 // (br.Undercut.Coverage == decad.CoverageComplete) and found exactly n
 // confirmed opposing faces, and returns them, in the body's own Faces()
-// order. Every face UndercutFaces returns is a CONFIRMED opposing face
+// order. Every face FindUndercutFaces returns is a CONFIRMED opposing face
 // against the requested pull; no uncertain face appears. The survey runs
 // only when decad.WithPullDirection was passed to Verify; without it
 // Coverage reads not_requested and this helper fails, which is the correct
 // outcome for a test that forgot the option. br MUST NOT be nil.
-func UndercutFaces(tb testing.TB, br *decad.BodyReport, n int) []*decad.Face {
+func FindUndercutFaces(tb testing.TB, br *decad.BodyReport, n int) []*decad.Face {
 	tb.Helper()
 
 	if br == nil {
-		tb.Fatalf("decadtest.UndercutFaces: br must not be nil")
+		tb.Fatalf("decadtest.FindUndercutFaces: br must not be nil")
 		return nil
 	}
 

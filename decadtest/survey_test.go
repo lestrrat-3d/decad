@@ -59,107 +59,107 @@ func holePlateReport(t *testing.T) (*decad.Report, *decad.Body) {
 	return report, body
 }
 
-func TestWallMinimumMeasuresThePlate(t *testing.T) {
+func TestMeasuresWallMinimumMeasuresThePlate(t *testing.T) {
 	t.Parallel()
 
 	report, plate := soundPlateWithSurveysReport(t)
-	br := decadtest.BodyReport(t, report, plate)
-	decadtest.WallMinimum(t, br, units.Millimeters(10), decadtest.Exactly())
+	br := decadtest.FindBodyReport(t, report, plate)
+	decadtest.MeasuresWallMinimum(t, br, units.Millimeters(10), decadtest.Exactly())
 }
 
-func TestUndercutFacesAcceptsAPlateWithNoUndercut(t *testing.T) {
+func TestFindUndercutFacesAcceptsAPlateWithNoUndercut(t *testing.T) {
 	t.Parallel()
 
 	report, plate := soundPlateWithSurveysReport(t)
-	br := decadtest.BodyReport(t, report, plate)
-	faces := decadtest.UndercutFaces(t, br, 0)
+	br := decadtest.FindBodyReport(t, report, plate)
+	faces := decadtest.FindUndercutFaces(t, br, 0)
 	require.Empty(t, faces)
 }
 
-func TestConcaveRadiusMeasuresAConcaveBody(t *testing.T) {
+func TestMeasuresConcaveRadiusMeasuresAConcaveBody(t *testing.T) {
 	t.Parallel()
 
 	report, body := holePlateReport(t)
-	br := decadtest.BodyReport(t, report, body)
-	decadtest.ConcaveRadius(t, br, units.Millimeters(10), decadtest.Exactly())
+	br := decadtest.FindBodyReport(t, report, body)
+	decadtest.MeasuresConcaveRadius(t, br, units.Millimeters(10), decadtest.Exactly())
 }
 
-func TestWallMinimumRejectsANilBodyReport(t *testing.T) {
+func TestMeasuresWallMinimumRejectsANilBodyReport(t *testing.T) {
 	t.Parallel()
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.WallMinimum(tb, nil, units.Millimeters(1))
+		decadtest.MeasuresWallMinimum(tb, nil, units.Millimeters(1))
 	})
 	require.Contains(t, out, "br must not be nil")
 }
 
-func TestWallMinimumReportsAnUnrequestedSurvey(t *testing.T) {
+func TestMeasuresWallMinimumReportsAnUnrequestedSurvey(t *testing.T) {
 	t.Parallel()
 
 	doc, plate := soundPlateDoc(t)
 	report := decadtest.Verify(t, doc) // no decad.WithMinWallThickness
-	br := decadtest.BodyReport(t, report, plate)
+	br := decadtest.FindBodyReport(t, report, plate)
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.WallMinimum(tb, br, units.Millimeters(1))
+		decadtest.MeasuresWallMinimum(tb, br, units.Millimeters(1))
 	})
 	require.Contains(t, out, "want measured")
 }
 
-func TestWallMinimumReportsAMiss(t *testing.T) {
+func TestMeasuresWallMinimumReportsAMiss(t *testing.T) {
 	t.Parallel()
 
 	report, plate := soundPlateWithSurveysReport(t)
-	br := decadtest.BodyReport(t, report, plate)
+	br := decadtest.FindBodyReport(t, report, plate)
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.WallMinimum(tb, br, units.Millimeters(5))
+		decadtest.MeasuresWallMinimum(tb, br, units.Millimeters(5))
 	})
 	require.Contains(t, out, "does not enclose")
 }
 
-func TestConcaveRadiusReportsAnAbsentSurvey(t *testing.T) {
+func TestMeasuresConcaveRadiusReportsAnAbsentSurvey(t *testing.T) {
 	t.Parallel()
 
 	report, plate := soundPlateWithSurveysReport(t)
-	br := decadtest.BodyReport(t, report, plate)
+	br := decadtest.FindBodyReport(t, report, plate)
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.ConcaveRadius(tb, br, units.Millimeters(1))
+		decadtest.MeasuresConcaveRadius(tb, br, units.Millimeters(1))
 	})
 	require.Contains(t, out, "want measured")
 }
 
-func TestUndercutFacesRejectsANilBodyReport(t *testing.T) {
+func TestFindUndercutFacesRejectsANilBodyReport(t *testing.T) {
 	t.Parallel()
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.UndercutFaces(tb, nil, 0)
+		decadtest.FindUndercutFaces(tb, nil, 0)
 	})
 	require.Contains(t, out, "br must not be nil")
 }
 
-func TestUndercutFacesReportsAnUnrequestedSurvey(t *testing.T) {
+func TestFindUndercutFacesReportsAnUnrequestedSurvey(t *testing.T) {
 	t.Parallel()
 
 	doc, plate := soundPlateDoc(t)
 	report := decadtest.Verify(t, doc) // no decad.WithPullDirection
-	br := decadtest.BodyReport(t, report, plate)
+	br := decadtest.FindBodyReport(t, report, plate)
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.UndercutFaces(tb, br, 0)
+		decadtest.FindUndercutFaces(tb, br, 0)
 	})
 	require.Contains(t, out, "want complete")
 }
 
-func TestUndercutFacesReportsAWrongCount(t *testing.T) {
+func TestFindUndercutFacesReportsAWrongCount(t *testing.T) {
 	t.Parallel()
 
 	report, plate := soundPlateWithSurveysReport(t)
-	br := decadtest.BodyReport(t, report, plate)
+	br := decadtest.FindBodyReport(t, report, plate)
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.UndercutFaces(tb, br, 2)
+		decadtest.FindUndercutFaces(tb, br, 2)
 	})
 	require.Contains(t, out, "opposing face(s), want 2")
 }

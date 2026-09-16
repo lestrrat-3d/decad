@@ -11,10 +11,10 @@ import (
 // This file is the verification helpers: running decad.Document.Verify for
 // the test, judging the whole report, looking up one body's record, judging
 // a body's proven solidity, and asserting on the report's diagnostic and
-// pair inventories. Clearance and Interference are the two calls here whose
-// comparison terminates in readings.go's Measures; every other helper
-// compares only decided answers — an outcome, a count, a pointer identity —
-// with ==.
+// pair inventories. MeasuresClearance and MeasuresInterference are the two
+// calls here whose comparison terminates in readings.go's Measures; every
+// other helper compares only decided answers — an outcome, a count, a
+// pointer identity — with ==.
 
 // Verify runs doc.Verify under the test's own context and fails tb if it
 // errors. doc MUST NOT be nil. The options are decad.VerifyOption, not
@@ -37,13 +37,13 @@ func Verify(tb testing.TB, doc *decad.Document, opts ...decad.VerifyOption) *dec
 	return report
 }
 
-// Sound runs Verify and fails tb unless the whole report passed
+// IsSound runs Verify and fails tb unless the whole report passed
 // (decad.Report.Passed, true only for decad.Sound). A Sound report does NOT
 // imply that every optional survey ran: Wall, Undercut and ConcaveRadius
 // each read NotRequested on a Sound report unless the matching
 // decad.VerifyOption was passed to opts. On failure, every diagnostic in
 // the report is printed.
-func Sound(tb testing.TB, doc *decad.Document, opts ...decad.VerifyOption) *decad.Report {
+func IsSound(tb testing.TB, doc *decad.Document, opts ...decad.VerifyOption) *decad.Report {
 	tb.Helper()
 
 	report := Verify(tb, doc, opts...)
@@ -58,13 +58,13 @@ func Sound(tb testing.TB, doc *decad.Document, opts ...decad.VerifyOption) *deca
 	return nil
 }
 
-// Status fails tb unless report's own Status is want. report MUST NOT be
+// HasStatus fails tb unless report's own Status is want. report MUST NOT be
 // nil. On mismatch, every diagnostic in the report is printed.
-func Status(tb testing.TB, report *decad.Report, want decad.Status) {
+func HasStatus(tb testing.TB, report *decad.Report, want decad.Status) {
 	tb.Helper()
 
 	if report == nil {
-		tb.Fatalf("decadtest.Status: report must not be nil")
+		tb.Fatalf("decadtest.HasStatus: report must not be nil")
 		return
 	}
 	if report.Status == want {
@@ -74,21 +74,21 @@ func Status(tb testing.TB, report *decad.Report, want decad.Status) {
 	tb.Fatalf("verify: report is %s, want %s; %s", report.Status, want, diagnosticBlock(report, report.Diagnostics))
 }
 
-// BodyReport looks body up in report and fails tb when the report holds no
-// record of it. report and body MUST NOT be nil. decad.Report.ForBody
-// matches by exact pointer identity and consults only the report's own
-// recorded bodies, never current document membership, so a body later
-// retired by a boolean is still resolvable here if the report was taken
-// while it was live.
-func BodyReport(tb testing.TB, report *decad.Report, body *decad.Body) *decad.BodyReport {
+// FindBodyReport looks body up in report and fails tb when the report
+// holds no record of it. report and body MUST NOT be nil.
+// decad.Report.ForBody matches by exact pointer identity and consults only
+// the report's own recorded bodies, never current document membership, so
+// a body later retired by a boolean is still resolvable here if the report
+// was taken while it was live.
+func FindBodyReport(tb testing.TB, report *decad.Report, body *decad.Body) *decad.BodyReport {
 	tb.Helper()
 
 	if report == nil {
-		tb.Fatalf("decadtest.BodyReport: report must not be nil")
+		tb.Fatalf("decadtest.FindBodyReport: report must not be nil")
 		return nil
 	}
 	if body == nil {
-		tb.Fatalf("decadtest.BodyReport: body must not be nil")
+		tb.Fatalf("decadtest.FindBodyReport: body must not be nil")
 		return nil
 	}
 
@@ -100,17 +100,17 @@ func BodyReport(tb testing.TB, report *decad.Report, body *decad.Body) *decad.Bo
 	return br
 }
 
-// Valid fails tb unless the body is a proven solid with exactly one lump
+// IsValid fails tb unless the body is a proven solid with exactly one lump
 // and no voids: br.Validity.Outcome == decad.ValidityValid,
 // br.Topology.Lumps == 1, br.Topology.Voids == 0. It reads ONLY Validity and
 // Topology — NEVER br.Status or br.Diagnostics — because a tolerance
 // diagnostic (an area or centroid reading beyond the caller's relative
 // tolerance) does not make a body invalid; a caller who also wants that
-// precision judgement should use Sound or Status.
-func Valid(tb testing.TB, report *decad.Report, body *decad.Body) *decad.BodyReport {
+// precision judgement should use IsSound or HasStatus.
+func IsValid(tb testing.TB, report *decad.Report, body *decad.Body) *decad.BodyReport {
 	tb.Helper()
 
-	br := BodyReport(tb, report, body)
+	br := FindBodyReport(tb, report, body)
 	if br == nil {
 		return nil
 	}
@@ -131,20 +131,20 @@ func Valid(tb testing.TB, report *decad.Report, body *decad.Body) *decad.BodyRep
 	return br
 }
 
-// Diagnosed fails tb unless at least one diagnostic in report.Diagnostics
-// carries code, and returns every diagnostic that does, for field checks by
-// the caller. report MUST NOT be nil.
+// FindDiagnostics fails tb unless at least one diagnostic in
+// report.Diagnostics carries code, and returns every diagnostic that does,
+// for field checks by the caller. report MUST NOT be nil.
 //
 // report.Diagnostics is the canonical inventory for the whole call: body
 // diagnostics in body order, then pair diagnostics in pair order, each
 // finding present exactly once. The same finding is also reachable through
 // its own result's local Diagnostics slice, so a caller must not add the
 // two together.
-func Diagnosed(tb testing.TB, report *decad.Report, code decad.DiagnosticCode) []decad.Diagnostic {
+func FindDiagnostics(tb testing.TB, report *decad.Report, code decad.DiagnosticCode) []decad.Diagnostic {
 	tb.Helper()
 
 	if report == nil {
-		tb.Fatalf("decadtest.Diagnosed: report must not be nil")
+		tb.Fatalf("decadtest.FindDiagnostics: report must not be nil")
 		return nil
 	}
 
@@ -161,14 +161,14 @@ func Diagnosed(tb testing.TB, report *decad.Report, code decad.DiagnosticCode) [
 	return found
 }
 
-// OnlyDiagnostics fails tb when the report carries a diagnostic whose code
-// is not among allowed. Passing no code at all requires an empty report.
-// report MUST NOT be nil.
-func OnlyDiagnostics(tb testing.TB, report *decad.Report, allowed ...decad.DiagnosticCode) {
+// HasOnlyDiagnostics fails tb when the report carries a diagnostic whose
+// code is not among allowed. Passing no code at all requires an empty
+// report. report MUST NOT be nil.
+func HasOnlyDiagnostics(tb testing.TB, report *decad.Report, allowed ...decad.DiagnosticCode) {
 	tb.Helper()
 
 	if report == nil {
-		tb.Fatalf("decadtest.OnlyDiagnostics: report must not be nil")
+		tb.Fatalf("decadtest.HasOnlyDiagnostics: report must not be nil")
 		return
 	}
 
@@ -191,26 +191,26 @@ func OnlyDiagnostics(tb testing.TB, report *decad.Report, allowed ...decad.Diagn
 		len(bad), allowed, diagnosticBlock(report, bad))
 }
 
-// Clearance fails tb unless the report holds a decad.Clearance row for the
-// pair, in either order, whose Gap Measures want. A row exists only for a
-// pair PROVEN disjoint with a measured gap, and only when
+// MeasuresClearance fails tb unless the report holds a decad.Clearance row
+// for the pair, in either order, whose Gap Measures want. A row exists
+// only for a pair PROVEN disjoint with a measured gap, and only when
 // decad.WithClearances() was passed to Verify; a pair whose gap the kernel
 // cannot prove yields no row and the report reads Suspect. Gap is a
 // decad.Measurement, so readings.go's whole interval rule applies to it
 // unchanged. report, a and b MUST NOT be nil.
-func Clearance(tb testing.TB, report *decad.Report, a, b *decad.Body, want units.Value, opts ...Option) {
+func MeasuresClearance(tb testing.TB, report *decad.Report, a, b *decad.Body, want units.Value, opts ...Option) {
 	tb.Helper()
 
 	if report == nil {
-		tb.Fatalf("decadtest.Clearance: report must not be nil")
+		tb.Fatalf("decadtest.MeasuresClearance: report must not be nil")
 		return
 	}
 	if a == nil {
-		tb.Fatalf("decadtest.Clearance: a must not be nil")
+		tb.Fatalf("decadtest.MeasuresClearance: a must not be nil")
 		return
 	}
 	if b == nil {
-		tb.Fatalf("decadtest.Clearance: b must not be nil")
+		tb.Fatalf("decadtest.MeasuresClearance: b must not be nil")
 		return
 	}
 
@@ -226,24 +226,24 @@ func Clearance(tb testing.TB, report *decad.Report, a, b *decad.Body, want units
 		reportBodyName(report, a), reportBodyName(report, b), len(report.Clearances))
 }
 
-// Interference fails tb unless the report holds a decad.Interference row
-// for the pair, in either order, whose Volume Measures want.
-// decad.Document.Verify checks interference even when no options are
-// passed, so no decad.VerifyOption is needed to obtain one. report, a and b
-// MUST NOT be nil.
-func Interference(tb testing.TB, report *decad.Report, a, b *decad.Body, want units.Value, opts ...Option) {
+// MeasuresInterference fails tb unless the report holds a
+// decad.Interference row for the pair, in either order, whose Volume
+// Measures want. decad.Document.Verify checks interference even when no
+// options are passed, so no decad.VerifyOption is needed to obtain one.
+// report, a and b MUST NOT be nil.
+func MeasuresInterference(tb testing.TB, report *decad.Report, a, b *decad.Body, want units.Value, opts ...Option) {
 	tb.Helper()
 
 	if report == nil {
-		tb.Fatalf("decadtest.Interference: report must not be nil")
+		tb.Fatalf("decadtest.MeasuresInterference: report must not be nil")
 		return
 	}
 	if a == nil {
-		tb.Fatalf("decadtest.Interference: a must not be nil")
+		tb.Fatalf("decadtest.MeasuresInterference: a must not be nil")
 		return
 	}
 	if b == nil {
-		tb.Fatalf("decadtest.Interference: b must not be nil")
+		tb.Fatalf("decadtest.MeasuresInterference: b must not be nil")
 		return
 	}
 
