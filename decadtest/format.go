@@ -50,7 +50,13 @@ func bodyName(b *decad.Body) string {
 			break
 		}
 	}
+	return bodyStepName(b, idxPart)
+}
 
+// bodyStepName appends the recipe step and op that produced b to idxPart —
+// the shared tail of bodyName and reportBodyName. A step index out of range
+// for the recipe renders without an op.
+func bodyStepName(b *decad.Body, idxPart string) string {
 	origin := b.Origin()
 	step := int(origin.Step)
 	steps := b.Document().Recipe().Steps
@@ -58,6 +64,97 @@ func bodyName(b *decad.Body) string {
 		return fmt.Sprintf("%s (step %d)", idxPart, step)
 	}
 	return fmt.Sprintf("%s (step %d %s)", idxPart, step, steps[step].Op)
+}
+
+// reportBodyName names a body by its position in the report's OWN body list
+// — Report.Bodies order at the call — "body[0] (step 3 union)". A nil
+// report, or a body the report does not hold, falls back to bodyName's
+// Document.Bodies() order; that fallback is what lets diagnosticBlock be
+// called with a nil report from survey.go, where no report is in scope. A
+// nil b renders "<nil body>".
+func reportBodyName(report *decad.Report, b *decad.Body) string {
+	if b == nil {
+		return "<nil body>"
+	}
+	if report == nil {
+		return bodyName(b)
+	}
+
+	for i, br := range report.Bodies {
+		if br.Body == b {
+			return bodyStepName(b, fmt.Sprintf("body[%d]", i))
+		}
+	}
+	return bodyName(b)
+}
+
+// diagnosticLine renders one decad.Diagnostic as a numbered message line:
+//
+//	[1] body[0] (step 3 union) measurement_beyond_tolerance area: 1256.63706 mm^2 ± 0.0213 mm^2 (Approximate), required bound ≤ 0.00125664 mm^2
+//	[2] pair (body[0] (step 3 union), body[1] (step 4 extrude)) undecided_pair: the partition proof resolved neither way
+//
+// The subject is reportBodyName(report, d.Body) for a body diagnostic, or
+// "pair (A, B)" for a pair diagnostic, empty for neither. d.Code follows,
+// printed through its String() — the stable token, never the iota value.
+// When d.Reading is not decad.ReadingNone, the reading's name and its
+// observed form follow: ReadingCentroid reads d.ObservedVec, ReadingBounds
+// reads d.ObservedBox, every other named reading reads d.Observed — exactly
+// one of the three is meant to be non-nil, keyed by d.Reading, but a nil one
+// renders nothing after the colon rather than panicking. d.Required, when
+// non-nil, appends the required bound. Finally, when d.Reading is
+// decad.ReadingNone and d.Message is non-empty, the message is appended.
+func diagnosticLine(report *decad.Report, n int, d decad.Diagnostic) string {
+	var subject string
+	switch {
+	case d.Body != nil:
+		subject = reportBodyName(report, d.Body)
+	case d.Pair != nil:
+		subject = fmt.Sprintf("pair (%s, %s)", reportBodyName(report, d.Pair.A), reportBodyName(report, d.Pair.B))
+	}
+
+	line := fmt.Sprintf("  [%d] ", n)
+	if subject != "" {
+		line += subject + " "
+	}
+	line += d.Code.String()
+
+	if d.Reading != decad.ReadingNone {
+		line += fmt.Sprintf(" %s: ", d.Reading)
+		switch d.Reading {
+		case decad.ReadingCentroid:
+			if d.ObservedVec != nil {
+				line += vecMeasurementText(*d.ObservedVec)
+			}
+		case decad.ReadingBounds:
+			if d.ObservedBox != nil {
+				line += boxText(*d.ObservedBox)
+			}
+		default:
+			if d.Observed != nil {
+				line += measurementText(*d.Observed)
+			}
+		}
+	}
+
+	if d.Required != nil {
+		line += fmt.Sprintf(", required bound ≤ %s", d.Required)
+	}
+
+	if d.Reading == decad.ReadingNone && d.Message != "" {
+		line += ": " + d.Message
+	}
+
+	return line
+}
+
+// diagnosticBlock renders every diagnostic in ds, one numbered line each,
+// prefixed by its own count. report may be nil (see reportBodyName).
+func diagnosticBlock(report *decad.Report, ds []decad.Diagnostic) string {
+	lines := make([]string, 0, len(ds))
+	for i, d := range ds {
+		lines = append(lines, diagnosticLine(report, i+1, d))
+	}
+	return fmt.Sprintf("%d diagnostic(s):\n", len(ds)) + strings.Join(lines, "\n")
 }
 
 // measurementText renders a scalar reading as "60000 mm^3 ± 0 mm^3 (Exact)".

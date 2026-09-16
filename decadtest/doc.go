@@ -18,6 +18,11 @@
 // that no test built on this kit grows a dependency on triangle structure
 // (docs/api-design.md §3 invariant 1).
 //
+// It also runs decad.Document.Verify for the test and asserts on the
+// returned report: its own status, its per-body records, its diagnostic and
+// pair inventories, and the three per-body surveys (wall, undercut,
+// concave radius).
+//
 // This file states the whole contract; there is no separate design document
 // for callers to read.
 //
