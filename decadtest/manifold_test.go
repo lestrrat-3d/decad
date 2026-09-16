@@ -14,13 +14,13 @@ import (
 // torus fixture below.
 var manifoldUAxis = decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
 
-// TestManifoldAcceptsBlock proves Manifold accepts the easy case: a plain
+// TestIsManifoldAcceptsBlock proves IsManifold accepts the easy case: a plain
 // extruded block, six planar faces each with one loop of four edges.
-func TestManifoldAcceptsBlock(t *testing.T) {
+func TestIsManifoldAcceptsBlock(t *testing.T) {
 	t.Parallel()
 
 	doc := decad.New()
-	body := decadtest.Block(t, doc, 0, 0, 10, 6, units.Millimeters(2))
+	body := decadtest.NewBlock(t, doc, 0, 0, 10, 6, units.Millimeters(2))
 
 	kinds := map[decad.SurfaceKind]int{}
 	for _, f := range body.Faces() {
@@ -28,15 +28,15 @@ func TestManifoldAcceptsBlock(t *testing.T) {
 	}
 	require.Equal(t, map[decad.SurfaceKind]int{decad.KindPlane: 6}, kinds)
 
-	decadtest.Manifold(t, body)
+	decadtest.IsManifold(t, body)
 }
 
-// TestManifoldAcceptsHolePlate proves Manifold accepts a plate with a
+// TestIsManifoldAcceptsHolePlate proves IsManifold accepts a plate with a
 // circular through hole. The hole's wall is one seamless cylindrical face
 // carrying TWO loops (the top and bottom circle rims), not the "exactly one
 // outer loop" an earlier, wrong design draft would have required. This is
 // one of the two awkward cases the wrong rule would have rejected.
-func TestManifoldAcceptsHolePlate(t *testing.T) {
+func TestIsManifoldAcceptsHolePlate(t *testing.T) {
 	t.Parallel()
 
 	ws := sketch.NewWorld()
@@ -69,14 +69,14 @@ func TestManifoldAcceptsHolePlate(t *testing.T) {
 	require.NotNil(t, wall)
 	require.Len(t, wall.Loops(), 2)
 
-	decadtest.Manifold(t, body)
+	decadtest.IsManifold(t, body)
 }
 
-// TestManifoldAcceptsTorus proves Manifold accepts a full-revolve torus: one
-// toroidal face with NO loops at all, since a closed surface of revolution
-// needs no boundary. This is the second of the two awkward cases the wrong
-// "exactly one outer loop" rule would have rejected.
-func TestManifoldAcceptsTorus(t *testing.T) {
+// TestIsManifoldAcceptsTorus proves IsManifold accepts a full-revolve
+// torus: one toroidal face with NO loops at all, since a closed surface of
+// revolution needs no boundary. This is the second of the two awkward
+// cases the wrong "exactly one outer loop" rule would have rejected.
+func TestIsManifoldAcceptsTorus(t *testing.T) {
 	t.Parallel()
 
 	w := sketch.NewWorld()
@@ -98,15 +98,15 @@ func TestManifoldAcceptsTorus(t *testing.T) {
 	require.Empty(t, body.Faces()[0].Loops())
 	require.True(t, torus.Major.Equal(units.Millimeters(10), 1e-9))
 
-	decadtest.Manifold(t, body)
+	decadtest.IsManifold(t, body)
 }
 
-// TestManifoldRejectsNilBody shows Manifold fail when body is nil.
-func TestManifoldRejectsNilBody(t *testing.T) {
+// TestIsManifoldRejectsNilBody shows IsManifold fail when body is nil.
+func TestIsManifoldRejectsNilBody(t *testing.T) {
 	t.Parallel()
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Manifold(tb, nil)
+		decadtest.IsManifold(tb, nil)
 	})
 	require.Contains(t, out, "body must not be nil")
 }
