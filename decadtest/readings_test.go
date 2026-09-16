@@ -16,7 +16,7 @@ func newPlate(t *testing.T) *decad.Body {
 	t.Helper()
 
 	doc := decad.New()
-	return decadtest.Block(t, doc, 0, 0, 100, 60, units.Millimeters(10))
+	return decadtest.NewBlock(t, doc, 0, 0, 100, 60, units.Millimeters(10))
 }
 
 // newUnion builds the "Approximate union" fixture: two overlapping 10 mm
@@ -27,8 +27,8 @@ func newUnion(t *testing.T) *decad.Body {
 	t.Helper()
 
 	doc := decad.New()
-	b1 := decadtest.Block(t, doc, 0, 0, 10, 10, units.Millimeters(10))
-	b2 := decadtest.Block(t, doc, 5, 5, 20, 20, units.Millimeters(10))
+	b1 := decadtest.NewBlock(t, doc, 0, 0, 10, 10, units.Millimeters(10))
+	b2 := decadtest.NewBlock(t, doc, 5, 5, 20, 20, units.Millimeters(10))
 	u, err := decad.Union(b1, b2)
 	require.NoError(t, err)
 	return u
@@ -75,14 +75,14 @@ func TestMeasuresVecAcceptsTheCentroid(t *testing.T) {
 	decadtest.MeasuresVec(t, "plate centroid", c, r3.NewVec(50, 30, 5), decadtest.Exactly())
 }
 
-func TestBoundsAreAcceptsThePlateBox(t *testing.T) {
+func TestMeasuresBoxAcceptsThePlateBox(t *testing.T) {
 	t.Parallel()
 
 	plate := newPlate(t)
 	bx, err := plate.Bounds()
 	require.NoError(t, err)
 
-	decadtest.BoundsAre(t, "plate bounds", bx, r3.NewVec(0, 0, 0), r3.NewVec(100, 60, 10), decadtest.Exactly())
+	decadtest.MeasuresBox(t, "plate bounds", bx, r3.NewVec(0, 0, 0), r3.NewVec(100, 60, 10), decadtest.Exactly())
 }
 
 func TestEnclosesAcceptsAnInteriorPoint(t *testing.T) {
@@ -108,14 +108,14 @@ func TestAgreeAcceptsTwoMeasurementsOfOneShape(t *testing.T) {
 	decadtest.Agree(t, "the two plates", volA, volB)
 }
 
-func TestBoundAtMostAcceptsAGenerousCeiling(t *testing.T) {
+func TestHasBoundAtMostAcceptsAGenerousCeiling(t *testing.T) {
 	t.Parallel()
 
 	u := newUnion(t)
 	vol, err := u.Volume()
 	require.NoError(t, err)
 
-	decadtest.BoundAtMost(t, "union volume bound", vol.Bound, units.CubicMillimeters(1e-3))
+	decadtest.HasBoundAtMost(t, "union volume bound", vol.Bound, units.CubicMillimeters(1e-3))
 }
 
 func TestMeasuresReportsAMiss(t *testing.T) {
@@ -227,7 +227,7 @@ func TestMeasuresVecReportsAMiss(t *testing.T) {
 	require.Contains(t, out, "does not enclose")
 }
 
-func TestBoundsAreNamesTheOffendingCoordinate(t *testing.T) {
+func TestMeasuresBoxNamesTheOffendingCoordinate(t *testing.T) {
 	t.Parallel()
 
 	plate := newPlate(t)
@@ -235,7 +235,7 @@ func TestBoundsAreNamesTheOffendingCoordinate(t *testing.T) {
 	require.NoError(t, err)
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.BoundsAre(tb, "plate bounds", bx, r3.NewVec(0, 0, 0), r3.NewVec(100, 60, 9.5))
+		decadtest.MeasuresBox(tb, "plate bounds", bx, r3.NewVec(0, 0, 0), r3.NewVec(100, 60, 9.5))
 	})
 	require.Contains(t, out, "max.Z off by")
 }
@@ -270,21 +270,21 @@ func TestAgreeReportsADisagreement(t *testing.T) {
 	require.Contains(t, out, "readings do not agree")
 }
 
-// TestBoundAtMostReportsABoundOverTheCeiling is one of the three
+// TestHasBoundAtMostReportsABoundOverTheCeiling is one of the three
 // constructed-Measurement bound literals this package allows: it exercises
 // the comparison, never decad's geometry.
-func TestBoundAtMostReportsABoundOverTheCeiling(t *testing.T) {
+func TestHasBoundAtMostReportsABoundOverTheCeiling(t *testing.T) {
 	t.Parallel()
 
 	m := decad.Measurement{Bound: units.CubicMillimeters(1)}
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.BoundAtMost(tb, "bad bound", m.Bound, units.CubicMillimeters(1e-9))
+		decadtest.HasBoundAtMost(tb, "bad bound", m.Bound, units.CubicMillimeters(1e-9))
 	})
 	require.Contains(t, out, "exceeds the stated ceiling")
 }
 
-func TestBoundAtMostReportsAWrongKindCeiling(t *testing.T) {
+func TestHasBoundAtMostReportsAWrongKindCeiling(t *testing.T) {
 	t.Parallel()
 
 	plate := newPlate(t)
@@ -292,7 +292,7 @@ func TestBoundAtMostReportsAWrongKindCeiling(t *testing.T) {
 	require.NoError(t, err)
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.BoundAtMost(tb, "plate volume bound", vol.Bound, units.Millimeters(1))
+		decadtest.HasBoundAtMost(tb, "plate volume bound", vol.Bound, units.Millimeters(1))
 	})
 	require.Contains(t, out, "is a length (mm) but the reading is a volume (mm^3)")
 }

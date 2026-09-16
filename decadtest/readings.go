@@ -110,12 +110,12 @@ func MeasuresVec(tb testing.TB, what string, got decad.VecMeasurement, want r3.V
 	tb.Fatalf("%s", msg)
 }
 
-// BoundsAre fails tb unless every one of the box's six corner coordinates is
-// within B + s of the expected one. The default relative slack scales off
-// the EXPECTED box's own diagonal length (hi.Sub(lo).Len()), never the
+// MeasuresBox fails tb unless every one of the box's six corner coordinates
+// is within B + s of the expected one. The default relative slack scales
+// off the EXPECTED box's own diagonal length (hi.Sub(lo).Len()), never the
 // reading's own diagonal: s is about the author's oracle, never about
 // decad's box (see Within).
-func BoundsAre(tb testing.TB, what string, got decad.Box, lo, hi r3.Vec, opts ...Option) {
+func MeasuresBox(tb testing.TB, what string, got decad.Box, lo, hi r3.Vec, opts ...Option) {
 	tb.Helper()
 
 	cfg := resolveOptions(opts)
@@ -255,16 +255,16 @@ func Agree(tb testing.TB, what string, a, b decad.Measurement, opts ...Option) {
 		what, measurementText(a), measurementText(b), offBy, a.Bound, b.Bound, slackVal, tolVal)
 }
 
-// BoundAtMost fails tb unless bound is at or under the stated ceiling.
+// HasBoundAtMost fails tb unless bound is at or under the stated ceiling.
 //
 // Leave orders of magnitude between the ceiling and any bound actually
 // observed: a bound differs between amd64 and arm64 through FMA, so a
 // ceiling set just above an observed value is an architecture-specific
-// test. BoundAtMost offers no relative form: the verifier's gate anchors a
-// relative bound on a per-body reference with a noise floor this kit cannot
-// derive, and a test that wants that judgement should ask
+// test. HasBoundAtMost offers no relative form: the verifier's gate anchors
+// a relative bound on a per-body reference with a noise floor this kit
+// cannot derive, and a test that wants that judgement should ask
 // decad.Document.Verify with decad.WithTolerance instead.
-func BoundAtMost(tb testing.TB, what string, bound, limit units.Value) {
+func HasBoundAtMost(tb testing.TB, what string, bound, limit units.Value) {
 	tb.Helper()
 
 	if bound.Kind() != limit.Kind() {

@@ -10,50 +10,51 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestVolumeMeasuresThePlate(t *testing.T) {
+func TestMeasuresVolumeMeasuresThePlate(t *testing.T) {
 	t.Parallel()
 
 	plate := newPlate(t)
-	decadtest.Volume(t, plate, units.CubicMillimeters(60000), decadtest.Exactly())
+	decadtest.MeasuresVolume(t, plate, units.CubicMillimeters(60000), decadtest.Exactly())
 }
 
-func TestAreaMeasuresThePlate(t *testing.T) {
+func TestMeasuresAreaMeasuresThePlate(t *testing.T) {
 	t.Parallel()
 
 	plate := newPlate(t)
-	decadtest.Area(t, plate, units.SquareMillimeters(15200), decadtest.Exactly())
+	decadtest.MeasuresArea(t, plate, units.SquareMillimeters(15200), decadtest.Exactly())
 }
 
-func TestCentroidMeasuresThePlate(t *testing.T) {
+func TestMeasuresCentroidMeasuresThePlate(t *testing.T) {
 	t.Parallel()
 
 	plate := newPlate(t)
-	decadtest.Centroid(t, plate, r3.NewVec(50, 30, 5), decadtest.Exactly())
+	decadtest.MeasuresCentroid(t, plate, r3.NewVec(50, 30, 5), decadtest.Exactly())
 }
 
-func TestBoundsMeasureThePlate(t *testing.T) {
+func TestMeasuresBoundsMeasureThePlate(t *testing.T) {
 	t.Parallel()
 
 	plate := newPlate(t)
-	decadtest.Bounds(t, plate, r3.NewVec(0, 0, 0), r3.NewVec(100, 60, 10), decadtest.Exactly())
+	decadtest.MeasuresBounds(t, plate, r3.NewVec(0, 0, 0), r3.NewVec(100, 60, 10), decadtest.Exactly())
 }
 
-func TestSurfaceKindsCountsThePlate(t *testing.T) {
+func TestHasSurfaceKindsCountsThePlate(t *testing.T) {
 	t.Parallel()
 
 	plate := newPlate(t)
-	decadtest.SurfaceKinds(t, plate, map[decad.SurfaceKind]int{decad.KindPlane: 6})
+	decadtest.HasSurfaceKinds(t, plate, map[decad.SurfaceKind]int{decad.KindPlane: 6})
 }
 
-func TestVolumeMeasuresTheApproximateUnion(t *testing.T) {
+func TestMeasuresVolumeMeasuresTheApproximateUnion(t *testing.T) {
 	t.Parallel()
 
 	u := newUnion(t)
-	decadtest.Volume(t, u, units.CubicMillimeters(3000))
+	decadtest.MeasuresVolume(t, u, units.CubicMillimeters(3000))
 }
 
-// TestBodyNameCarriesTheStepAndOp provokes a Volume miss on a body whose
-// step is a decad.Union and checks the message names that step and op.
+// TestBodyNameCarriesTheStepAndOp provokes a MeasuresVolume miss on a body
+// whose step is a decad.Union and checks the message names that step and
+// op.
 func TestBodyNameCarriesTheStepAndOp(t *testing.T) {
 	t.Parallel()
 
@@ -63,85 +64,85 @@ func TestBodyNameCarriesTheStepAndOp(t *testing.T) {
 	require.Equal(t, decad.OpUnion, steps[u.Origin().Step].Op)
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Volume(tb, u, units.CubicMillimeters(3001))
+		decadtest.MeasuresVolume(tb, u, units.CubicMillimeters(3001))
 	})
 	require.Contains(t, out, "(step 2 union)")
 }
 
-func TestVolumeRejectsANilBody(t *testing.T) {
+func TestMeasuresVolumeRejectsANilBody(t *testing.T) {
 	t.Parallel()
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Volume(tb, nil, units.CubicMillimeters(1))
+		decadtest.MeasuresVolume(tb, nil, units.CubicMillimeters(1))
 	})
 	require.Contains(t, out, "body must not be nil")
 }
 
-func TestAreaRejectsANilBody(t *testing.T) {
+func TestMeasuresAreaRejectsANilBody(t *testing.T) {
 	t.Parallel()
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Area(tb, nil, units.SquareMillimeters(1))
+		decadtest.MeasuresArea(tb, nil, units.SquareMillimeters(1))
 	})
 	require.Contains(t, out, "body must not be nil")
 }
 
-func TestCentroidRejectsANilBody(t *testing.T) {
+func TestMeasuresCentroidRejectsANilBody(t *testing.T) {
 	t.Parallel()
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Centroid(tb, nil, r3.NewVec(0, 0, 0))
+		decadtest.MeasuresCentroid(tb, nil, r3.NewVec(0, 0, 0))
 	})
 	require.Contains(t, out, "body must not be nil")
 }
 
-func TestBoundsRejectANilBody(t *testing.T) {
+func TestMeasuresBoundsRejectANilBody(t *testing.T) {
 	t.Parallel()
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Bounds(tb, nil, r3.NewVec(0, 0, 0), r3.NewVec(1, 1, 1))
+		decadtest.MeasuresBounds(tb, nil, r3.NewVec(0, 0, 0), r3.NewVec(1, 1, 1))
 	})
 	require.Contains(t, out, "body must not be nil")
 }
 
-func TestSurfaceKindsRejectsANilBody(t *testing.T) {
+func TestHasSurfaceKindsRejectsANilBody(t *testing.T) {
 	t.Parallel()
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.SurfaceKinds(tb, nil, nil)
+		decadtest.HasSurfaceKinds(tb, nil, nil)
 	})
 	require.Contains(t, out, "body must not be nil")
 }
 
-func TestVolumeReportsAMissWithTheBodyNamed(t *testing.T) {
+func TestMeasuresVolumeReportsAMissWithTheBodyNamed(t *testing.T) {
 	t.Parallel()
 
 	plate := newPlate(t)
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.Volume(tb, plate, units.CubicMillimeters(60001))
+		decadtest.MeasuresVolume(tb, plate, units.CubicMillimeters(60001))
 	})
 	require.Contains(t, out, "body[0] (step 0 extrude)")
 }
 
-func TestSurfaceKindsReportsAMissingKind(t *testing.T) {
+func TestHasSurfaceKindsReportsAMissingKind(t *testing.T) {
 	t.Parallel()
 
 	plate := newPlate(t)
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.SurfaceKinds(tb, plate, map[decad.SurfaceKind]int{decad.KindPlane: 5})
+		decadtest.HasSurfaceKinds(tb, plate, map[decad.SurfaceKind]int{decad.KindPlane: 5})
 	})
 	require.Contains(t, out, "surface kind counts are")
 }
 
-func TestSurfaceKindsReportsAnUnexpectedKind(t *testing.T) {
+func TestHasSurfaceKindsReportsAnUnexpectedKind(t *testing.T) {
 	t.Parallel()
 
 	plate := newPlate(t)
 
 	out := captureFailure(t, func(tb testing.TB) {
-		decadtest.SurfaceKinds(tb, plate, map[decad.SurfaceKind]int{})
+		decadtest.HasSurfaceKinds(tb, plate, map[decad.SurfaceKind]int{})
 	})
 	require.Contains(t, out, "surface kind counts are")
 }
