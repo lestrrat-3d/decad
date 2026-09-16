@@ -89,6 +89,11 @@ func faceByRole(t *testing.T, b *decad.Body, role string) *decad.Face {
 	return nil
 }
 
+// requireVolume and requireBounds still have callers outside this file
+// (capblend_bounds_test.go, stops_test.go, revolve_property_test.go), so
+// they stay defined here even though every call site in THIS file now goes
+// through decadtest.
+
 func requireVolume(t *testing.T, b *decad.Body, want float64) {
 	t.Helper()
 	vol, err := b.Volume()
@@ -101,6 +106,8 @@ func requireVolume(t *testing.T, b *decad.Body, want float64) {
 // requireBounds asserts a body's Bounds() against the caller's expected
 // values and its PROVEN exactness: each call site states the
 // exactness its own geometry proves, never a blanket assumption.
+//
+//nolint:unparam // minY is 0 at every remaining call site (outside this file); the general signature stays for those callers.
 func requireBounds(t *testing.T, b *decad.Body, wantExact decad.Exactness, minX, minY, minZ, maxX, maxY, maxZ float64) {
 	t.Helper()
 	bounds, err := b.Bounds()
@@ -122,7 +129,7 @@ func TestRevolveFullAnnularCylinder(t *testing.T) {
 	require.NoError(t, err)
 
 	require.True(t, body.IsSolid())
-	requireVolume(t, body, 2000*math.Pi)
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(2000*math.Pi))
 
 	area, err := body.Area()
 	require.NoError(t, err)
@@ -189,7 +196,7 @@ func TestRevolveSolidCylinderHasNoInnerFace(t *testing.T) {
 	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
-	requireVolume(t, body, 640*math.Pi) // π·8²·10
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(640*math.Pi)) // π·8²·10
 
 	area, err := body.Area()
 	require.NoError(t, err)
@@ -219,10 +226,10 @@ func TestRevolvePartialSweeps(t *testing.T) {
 	quarter, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 
-	requireVolume(t, quarter, 500*math.Pi)
+	decadtest.MeasuresVolume(t, quarter, units.CubicMillimeters(500*math.Pi))
 	require.Len(t, quarter.Faces(), 6, `four side faces and two caps`)
 	requireManifold(t, quarter)
-	requireBounds(t, quarter, decad.Approximate, 0, 0, 0, 10, 15, 15)
+	decadtest.MeasuresBounds(t, quarter, r3.NewVec(0, 0, 0), r3.NewVec(10, 15, 15))
 
 	area, err := quarter.Area()
 	require.NoError(t, err)
@@ -258,7 +265,7 @@ func TestRevolvePartialSweeps(t *testing.T) {
 	s2, p2 := annularSketch(t)
 	half, err := decad.New().Revolve(s2, p2, uAxis, decad.AngleExtent{A: units.Degrees(180), Dir: decad.Along})
 	require.NoError(t, err)
-	requireVolume(t, half, 1000*math.Pi)
+	decadtest.MeasuresVolume(t, half, units.CubicMillimeters(1000*math.Pi))
 	c, err = half.Centroid()
 	require.NoError(t, err)
 	require.InDelta(t, 5.0, c.Value.X, 1e-9)
@@ -276,7 +283,7 @@ func TestRevolveWedgeSharesAxisEdgeBetweenCaps(t *testing.T) {
 	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 
-	requireVolume(t, body, 160*math.Pi)
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(160*math.Pi))
 	require.Len(t, body.Faces(), 5, `wall, two pie sectors, two caps`)
 	requireManifold(t, body)
 
@@ -304,7 +311,7 @@ func TestRevolveSphere(t *testing.T) {
 	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
-	requireVolume(t, body, 4.0/3*math.Pi*125) // (4/3)πr³, r = 5
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(4.0/3*math.Pi*125)) // (4/3)πr³, r = 5
 
 	area, err := body.Area()
 	require.NoError(t, err)
@@ -361,7 +368,7 @@ func TestRevolveTorus(t *testing.T) {
 	require.NoError(t, err)
 
 	// Pappus: 2π·R·(πr²).
-	requireVolume(t, body, 2*math.Pi*10*math.Pi*9)
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(2*math.Pi*10*math.Pi*9))
 	area, err := body.Area()
 	require.NoError(t, err)
 	require.True(t, area.Value.Equal(units.SquareMillimeters(2*math.Pi*10*2*math.Pi*3), 1e-9), `got %s`, area.Value)
@@ -406,7 +413,7 @@ func TestRevolveTorus(t *testing.T) {
 	require.NoError(t, err)
 	part, err := decad.New().Revolve(s2, s2.Profiles()[0], uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
-	requireVolume(t, part, math.Pi/2*10*math.Pi*9)
+	decadtest.MeasuresVolume(t, part, units.CubicMillimeters(math.Pi/2*10*math.Pi*9))
 	require.Len(t, part.Faces(), 3)
 	requireManifold(t, part)
 	for _, f := range part.Faces() {
@@ -444,7 +451,7 @@ func TestRevolveCone(t *testing.T) {
 	body, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
-	requireVolume(t, body, math.Pi*25*10/3) // (1/3)πr²h
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(math.Pi*25*10/3)) // (1/3)πr²h
 
 	area, err := body.Area()
 	require.NoError(t, err)
@@ -504,7 +511,7 @@ func TestRevolveNegativeSideRegion(t *testing.T) {
 	doc := decad.New()
 	full, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
-	requireVolume(t, full, 2000*math.Pi)
+	decadtest.MeasuresVolume(t, full, units.CubicMillimeters(2000*math.Pi))
 	decadtest.MeasuresBounds(t, full, r3.NewVec(0, -15, -15), r3.NewVec(10, 15, 15), decadtest.Exactly())
 	requireManifold(t, full)
 
@@ -516,8 +523,8 @@ func TestRevolveNegativeSideRegion(t *testing.T) {
 	require.NoError(t, err)
 	quarter, err := decad.New().Revolve(s2, s2.Profiles()[0], uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
-	requireVolume(t, quarter, 500*math.Pi)
-	requireBounds(t, quarter, decad.Approximate, 0, -15, -15, 10, 0, 0)
+	decadtest.MeasuresVolume(t, quarter, units.CubicMillimeters(500*math.Pi))
+	decadtest.MeasuresBounds(t, quarter, r3.NewVec(0, -15, -15), r3.NewVec(10, 0, 0))
 	requireManifold(t, quarter)
 }
 
@@ -532,35 +539,36 @@ func TestRevolveExtents(t *testing.T) {
 	t.Run("Against", func(t *testing.T) {
 		body, err := revolve(t, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Against})
 		require.NoError(t, err)
-		requireVolume(t, body, 500*math.Pi)
-		requireBounds(t, body, decad.Approximate, 0, 0, -15, 10, 15, 0)
+		decadtest.MeasuresVolume(t, body, units.CubicMillimeters(500*math.Pi))
+		decadtest.MeasuresBounds(t, body, r3.NewVec(0, 0, -15), r3.NewVec(10, 15, 0))
 	})
 	t.Run("Symmetric", func(t *testing.T) {
 		body, err := revolve(t, decad.SymmetricAngle{A: units.Degrees(90)})
 		require.NoError(t, err)
-		requireVolume(t, body, 1000*math.Pi)
-		requireBounds(t, body, decad.Approximate, 0, 0, -15, 10, 15, 15)
+		decadtest.MeasuresVolume(t, body, units.CubicMillimeters(1000*math.Pi))
+		decadtest.MeasuresBounds(t, body, r3.NewVec(0, 0, -15), r3.NewVec(10, 15, 15))
 	})
 	t.Run("SymmetricFullLength", func(t *testing.T) {
 		body, err := revolve(t, decad.SymmetricAngle{A: units.Degrees(90), FullLength: true})
 		require.NoError(t, err)
-		requireVolume(t, body, 500*math.Pi)
+		decadtest.MeasuresVolume(t, body, units.CubicMillimeters(500*math.Pi))
 	})
 	t.Run("TwoSided", func(t *testing.T) {
 		body, err := revolve(t, decad.TwoSidedAngle{One: decad.AngleSide{A: units.Degrees(30)}, Two: decad.AngleSide{A: units.Degrees(60)}})
 		require.NoError(t, err)
-		requireVolume(t, body, 500*math.Pi)
+		decadtest.MeasuresVolume(t, body, units.CubicMillimeters(500*math.Pi))
 		// The sweep spans φ ∈ [−60°, +30°]: the y minimum is the INNER
 		// wall at the −60° cap (cos never reaches zero on the interval),
 		// the z extremes the outer wall at each cap.
-		requireBounds(t, body, decad.Approximate, 0, 5*math.Cos(math.Pi/3), -15*math.Sin(math.Pi/3), 10, 15, 15*math.Sin(math.Pi/6))
+		decadtest.MeasuresBounds(t, body, r3.NewVec(0, 5*math.Cos(math.Pi/3), -15*math.Sin(math.Pi/3)),
+			r3.NewVec(10, 15, 15*math.Sin(math.Pi/6)))
 	})
 	t.Run("FullTurnAsAngle", func(t *testing.T) {
 		// 360° stated as an angle IS a full revolution: the caps would
 		// coincide, so none are built.
 		body, err := revolve(t, decad.AngleExtent{A: units.Degrees(360), Dir: decad.Along})
 		require.NoError(t, err)
-		requireVolume(t, body, 2000*math.Pi)
+		decadtest.MeasuresVolume(t, body, units.CubicMillimeters(2000*math.Pi))
 		require.Len(t, body.Faces(), 4, `a full turn has no caps`)
 		requireManifold(t, body)
 	})
@@ -678,7 +686,7 @@ func TestRevolveAxisValidation(t *testing.T) {
 		axis := decad.ConstructionAxis{Origin: r3.NewVec(0, 0, 0), Dir: r3.NewVec(1, 0, 0)}
 		body, err := decad.New().Revolve(s2, p2, axis, decad.FullRevolution{})
 		require.NoError(t, err)
-		requireVolume(t, body, 2000*math.Pi)
+		decadtest.MeasuresVolume(t, body, units.CubicMillimeters(2000*math.Pi))
 	})
 	t.Run("ConstructionAxisZeroDir", func(t *testing.T) {
 		_, err := doc.Revolve(s, p, decad.ConstructionAxis{Origin: r3.NewVec(0, 0, 0)}, decad.FullRevolution{})
@@ -752,7 +760,7 @@ func TestRevolveAxisDerivedOverflow(t *testing.T) {
 		body, err := doc.Revolve(s, p, axis, decad.FullRevolution{})
 		require.NoError(t, err)
 		require.True(t, body.IsSolid())
-		requireVolume(t, body, 2000*math.Pi*math.Sqrt2)
+		decadtest.MeasuresVolume(t, body, units.CubicMillimeters(2000*math.Pi*math.Sqrt2))
 		require.Len(t, doc.Bodies(), 1)
 		require.Len(t, doc.Recipe().Steps, 1)
 	})
@@ -916,7 +924,7 @@ func TestRevolveAboutEdgeAxis(t *testing.T) {
 	body, err := doc.Revolve(s, p, axis, decad.FullRevolution{})
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
-	requireVolume(t, body, 2000*math.Pi)
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(2000*math.Pi))
 	decadtest.MeasuresBounds(t, body, r3.NewVec(0, -15, -15), r3.NewVec(10, 15, 15), decadtest.Exactly())
 
 	// The host is a dependency, not an operand: it stays live.
@@ -957,7 +965,7 @@ func TestRevolveEdgeAxisDirectionSense(t *testing.T) {
 
 	body, err := doc.Revolve(s, p, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
-	requireVolume(t, body, 500*math.Pi)
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(500*math.Pi))
 	bounds, err := body.Bounds()
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, bounds.Min.Z, -1e-9, `an Along sweep about start→end never reaches −z`)
@@ -998,7 +1006,7 @@ func TestRevolvePlacedRigidMotion(t *testing.T) {
 
 	placed, err := body.Placed(xf)
 	require.NoError(t, err)
-	requireVolume(t, placed, 500*math.Pi)
+	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(500*math.Pi))
 	require.Len(t, placed.Faces(), 6)
 	requireManifold(t, placed)
 
@@ -1034,7 +1042,7 @@ func TestRevolveReflectedPlacementKeepsOutwardNormals(t *testing.T) {
 
 	placed, err := body.Placed(refl)
 	require.NoError(t, err)
-	requireVolume(t, placed, 500*math.Pi)
+	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(500*math.Pi))
 	requireManifold(t, placed)
 
 	c, err := placed.Centroid()
@@ -1096,7 +1104,7 @@ func TestRevolveReflectedSphereAndConeNormals(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := sphere.Placed(refl)
 	require.NoError(t, err)
-	requireVolume(t, placed, 4.0/3*math.Pi*125)
+	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(4.0/3*math.Pi*125))
 	c, err := placed.Centroid()
 	require.NoError(t, err)
 	require.InDelta(t, -5.0, c.Value.X, 1e-9)
@@ -1199,7 +1207,7 @@ func TestRevolveFullTurnHoleIsVoidShell(t *testing.T) {
 	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
-	requireVolume(t, body, 2*math.Pi*(1000-40*math.Pi))
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(2*math.Pi*(1000-40*math.Pi)))
 	require.Len(t, body.Faces(), 5, `four outer walls and the void torus`)
 	requireManifold(t, body)
 
@@ -1239,7 +1247,7 @@ func TestRevolvePartialSweepWithHole(t *testing.T) {
 	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 
-	requireVolume(t, body, math.Pi/2*(1000-40*math.Pi))
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(math.Pi/2*(1000-40*math.Pi)))
 	require.Len(t, body.Faces(), 7, `four outer walls, the hole's torus wall, two caps`)
 	requireManifold(t, body)
 	require.Len(t, body.Shells(), 1, `the caps connect the hole wall to the outer boundary`)
