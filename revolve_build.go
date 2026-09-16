@@ -619,7 +619,11 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePa
 		if err != nil {
 			return revLoopParts{}, err
 		}
-		faceArea := boundedMul(walkAxisMoment(w.segmentWalk, kinds[i]), sweep)
+		segs := make([]CurveSegment, len(w.segs))
+		for j, si := range w.segs {
+			segs[j] = loop.Segments[si]
+		}
+		faceArea := boundedMul(walkAxisMoment(w.segmentWalk, kinds[i], segs, rp.ax), sweep)
 		face := &Face{
 			surface:   surf,
 			origins:   origins,
@@ -841,10 +845,20 @@ func (rp revolvePayload) wallSurface(b revolveBasis, w segmentWalk, kind wallKin
 // w.endV with w.startVBound/w.endVBound (axisFrame.walk's re-expressed
 // radial coordinates) — so math.Min against the magnitude envelope can only
 // shrink the published bound, never widen it, following bounded.go's own
-// convention. The circular arm still floors with math.Max: it has no
-// composed bound of its own yet, so the envelope is the only proof standing
-// for it.
-func walkAxisMoment(w segmentWalk, kind wallKind) boundedScalar {
+// convention.
+//
+// The circular arm's held value is still the axis-frame closed form (w.th0/
+// w.th1, math.Atan2 results with no enclosure of their own), but its bound
+// now takes math.Min against circularAxisMomentInterval's rational-interval
+// closed form over the wall's own RECORDED segments (segs, moments_circular.go),
+// summed additively — a coalesced wall covers exactly one recorded segment
+// today (coalesceWalks never merges a circular kind), but the sum is written
+// for whatever a future coalescing rule hands it. A segment
+// circularAxisMomentInterval cannot bracket (a trimmed ArcSeg fragment, an
+// axis whose direction carries a non-finite bound) withholds the whole sum,
+// leaving the envelope as the only proof standing, exactly as before this
+// change.
+func walkAxisMoment(w segmentWalk, kind wallKind, segs []CurveSegment, ax axisFrame) boundedScalar {
 	if kind == wallAxis {
 		return boundedScalar{}
 	}
@@ -867,6 +881,33 @@ func walkAxisMoment(w segmentWalk, kind wallKind) boundedScalar {
 			boundedMul(exactScalar(w.radius), cosDelta),
 		),
 	)
-	result.bound = math.Max(result.bound, conservativeValueError(result.value, w.axisMomentUpper))
+	result.bound = conservativeValueError(result.value, w.axisMomentUpper)
+	if enc, ok := circularAxisMomentTotal(segs, ax); ok {
+		result.bound = math.Min(result.bound, intervalFloatError(enc, result.value))
+	}
 	return result
+}
+
+// circularAxisMomentTotal sums circularAxisMomentInterval over every recorded
+// segment a coalesced circular wall covers: the integral ∫ρ ds is additive
+// over the walk's own segments, so the wall's total moment enclosure is their
+// enclosures' sum. ok is false wherever any one segment's own bracket refuses
+// — a partial sum standing in for a segment the record cannot bracket would
+// publish a claim that segment never proved.
+func circularAxisMomentTotal(segs []CurveSegment, ax axisFrame) (ratInterval, bool) {
+	if len(segs) == 0 {
+		return ratInterval{}, false
+	}
+	total, ok := circularAxisMomentInterval(segs[0], ax)
+	if !ok {
+		return ratInterval{}, false
+	}
+	for _, seg := range segs[1:] {
+		enc, ok := circularAxisMomentInterval(seg, ax)
+		if !ok {
+			return ratInterval{}, false
+		}
+		total = intervalAdd(total, enc)
+	}
+	return total, true
 }

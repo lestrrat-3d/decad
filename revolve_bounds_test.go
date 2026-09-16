@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/decadtest"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -412,6 +413,79 @@ func TestRevolveStraightWallAreaTightens(t *testing.T) {
 				`the published interval must not exclude rho*D's upper end`)
 		}
 		require.True(t, sawArc, `a partial annular revolve's junctions are swept arcs`)
+	})
+}
+
+// TestRevolveCircularWallAreaTightens is design §11 test 7:
+// circularAxisMomentInterval (moments_circular.go) replaces walkAxisMoment's
+// circular arm's old |Δφ|+2π-scaled magnitude envelope with a
+// rational-interval closed form over the wall's own recorded segment. It
+// proves this on a full-turn torus (a whole CircleSeg wall, checked against
+// 4*pi^2*R*r) and the grooved partial sweep (an ArcSeg wall,
+// revolve_test.go's grooveSketch) — the same envelope walkAxisMoment's
+// straight arm carried before TestRevolveStraightWallAreaTightens.
+func TestRevolveCircularWallAreaTightens(t *testing.T) {
+	t.Parallel()
+
+	t.Run("torus / whole circle", func(t *testing.T) {
+		t.Parallel()
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		center := s.CreatePoint(0, 10)
+		s.Fix(center)
+		s.CreateCircle(center, 3)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+
+		doc := decad.New()
+		body, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+		require.NoError(t, err)
+
+		area, err := body.Area()
+		require.NoError(t, err)
+		value, bound := area.Value.Base(), area.Bound.Base()
+		require.LessOrEqual(t, bound, 1e-9*value,
+			`circularAxisMomentInterval must replace walkAxisMoment's old circular-arm envelope`)
+
+		// Pappus: a torus's area is its generating circle's circumference
+		// (2*pi*r) times the distance its centroid travels (2*pi*R) — 4*pi^2*R*r
+		// with R = 10 (the circle's centre distance from the axis) and r = 3.
+		fourPiSqLo := new(big.Rat).Mul(new(big.Rat).Mul(big.NewRat(4, 1), piRefLo), piRefLo)
+		fourPiSqHi := new(big.Rat).Mul(new(big.Rat).Mul(big.NewRat(4, 1), piRefHi), piRefHi)
+		rr := big.NewRat(30, 1) // R*r = 10*3
+		trueLo, _ := new(big.Rat).Mul(fourPiSqLo, rr).Float64()
+		trueHi, _ := new(big.Rat).Mul(fourPiSqHi, rr).Float64()
+		require.LessOrEqual(t, value-bound, trueLo,
+			`the published interval must not exclude 4*pi^2*R*r's lower end`)
+		require.GreaterOrEqual(t, value+bound, trueHi,
+			`the published interval must not exclude 4*pi^2*R*r's upper end`)
+	})
+
+	t.Run("groove / arc wall", func(t *testing.T) {
+		t.Parallel()
+		s, p := grooveSketch(t)
+		doc := decad.New()
+		body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Radians(math.Pi / 2), Dir: decad.Along})
+		require.NoError(t, err)
+
+		area, err := body.Area()
+		require.NoError(t, err)
+		require.LessOrEqual(t, area.Bound.Base(), 1e-9*area.Value.Base(),
+			`circularAxisMomentInterval must replace walkAxisMoment's old circular-arm envelope`)
+
+		sawTorus := false
+		for _, f := range body.Faces() {
+			if _, ok := f.Surface().(decad.Torus); !ok {
+				continue
+			}
+			sawTorus = true
+			fa, err := f.Area()
+			require.NoError(t, err)
+			require.LessOrEqual(t, fa.Bound.Base(), 1e-9*fa.Value.Base(),
+				`the groove wall's own face area must carry the tightened bound`)
+		}
+		require.True(t, sawTorus, `the groove's wall is the body's one torus`)
 	})
 }
 

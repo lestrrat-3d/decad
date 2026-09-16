@@ -1310,14 +1310,14 @@ func TestRevolveRejectsSpindleTorusArc(t *testing.T) {
 	require.Empty(t, doc.Recipe().Steps, `a refused revolve leaves the document untouched`)
 }
 
-func TestRevolveConcaveGrooveCapEdges(t *testing.T) {
-	t.Parallel()
-	// A meridian rectangle u∈[0,20], v∈[5,15] with a semicircular GROOVE of
-	// radius 3 centred at (10, 15) bitten out of its outer edge (the arc dips
-	// to (10, 12)). The outer loop walks counter-clockwise, but that arc is
-	// walked CLOCKWISE about its own centre, so the swept torus wall keeps the
-	// material OUTSIDE its tube — a hole's wall in every way but its loop's
-	// role. Its cap edges must be concave, exactly as a hole's would be.
+// grooveSketch builds a meridian rectangle u∈[0,20], v∈[5,15] with a
+// semicircular GROOVE of radius 3 centred at (10, 15) bitten out of its outer
+// edge (the arc dips to (10, 12)). The outer loop walks counter-clockwise,
+// but that arc is walked CLOCKWISE about its own centre, so the swept torus
+// wall keeps the material OUTSIDE its tube — a hole's wall in every way but
+// its loop's role.
+func grooveSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -1338,9 +1338,16 @@ func TestRevolveConcaveGrooveCapEdges(t *testing.T) {
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Len(t, s.Profiles(), 1)
+	return s, s.Profiles()[0]
+}
+
+func TestRevolveConcaveGrooveCapEdges(t *testing.T) {
+	t.Parallel()
+	// Its cap edges must be concave, exactly as a hole's would be.
+	s, p := grooveSketch(t)
 
 	doc := decad.New()
-	body, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.AngleExtent{A: units.Radians(math.Pi / 2), Dir: decad.Along})
+	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Radians(math.Pi / 2), Dir: decad.Along})
 	require.NoError(t, err)
 
 	// Pappus by hand: the section is the rectangle minus the half disc, and
