@@ -124,7 +124,8 @@ func TestSweepArcBuildsGeneralAngleWithRationalCenter(t *testing.T) {
 	require.NoError(t, err)
 	theta := math.Pi + math.Atan(3.0/4.0)
 	wantVolume := 230000 * theta
-	require.LessOrEqual(t, math.Abs(volume.Value.Base()-wantVolume), volume.Bound.Base())
+	volumeReferenceRound := math.Nextafter(wantVolume, math.Inf(1)) - wantVolume
+	require.LessOrEqual(t, math.Abs(volume.Value.Base()-wantVolume), volume.Bound.Base()+volumeReferenceRound)
 	require.Equal(t, decad.Approximate, volume.Exactness)
 	require.True(t, volume.Bound.Base() > 0)
 	area, err := body.Area()
