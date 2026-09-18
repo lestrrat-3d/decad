@@ -224,7 +224,7 @@ func (c *contactMemo) store(i, j int, v triContact) {
 // classify returns the exact classification of facet i of ma against facet j
 // of mb, computing it on the first ask and replaying the stored answer on
 // every later one. An error is never stored, so a later ask still retries.
-func (c *contactMemo) classify(i, j int) (triContact, error) {
+func (c *contactMemo) classify(i, j int) (triContact, error) { //nolint:unparam // tests exercise both memo key dimensions.
 	if v, ok := c.lookup(i, j); ok {
 		return v, nil
 	}

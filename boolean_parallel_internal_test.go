@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -21,7 +22,7 @@ func TestContactBatchMergesOutOfOrderCompletionsInInputOrder(t *testing.T) {
 	e.limit = 4
 	e.run = func(_ context.Context, _ *boolMesh, _ *boolMesh, pairs []contactPair, _ int) ([]contactBatchResult, error) {
 		results := make([]contactBatchResult, len(pairs))
-		for i := len(pairs) - 1; i >= 0; i-- {
+		for i := range slices.Backward(pairs) {
 			// Completion order is reverse input order. Results retain their
 			// indexed slots, as production workers do.
 			results[i] = contactBatchResult{contact: triContact{kind: contactPoint, p0: xpt{}}}

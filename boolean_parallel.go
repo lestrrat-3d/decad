@@ -53,7 +53,7 @@ type contactBatchRunner func(context.Context, *boolMesh, *boolMesh, []contactPai
 // flush after all worker results are complete. Workers therefore only read
 // immutable meshes and write their own result slot.
 type contactBatchExecutor struct {
-	ctx     context.Context
+	ctx     context.Context //nolint:containedctx // one call-scoped cancellation source for this short-lived executor.
 	ma      *boolMesh
 	mb      *boolMesh
 	memo    *contactMemo
