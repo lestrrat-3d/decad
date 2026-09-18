@@ -160,6 +160,9 @@
 0	0.08	TestPublicBooleansUnchangedOnMultiRegionPair
 0	1.50	TestPublishedWalksAreReadOnlyAcrossGoroutines
 0	0.01	TestQueryStringDecodeRoundTrip
+0	0.01	TestRatIntervalArithmeticOwnsFreshEndpoints
+0	0.01	TestRatIntervalCachedPiCopiesRemainIndependent
+0	0.01	TestRatIntervalConstructorsCopyBorrowedEndpoints
 0	13.59	TestRatLerpEndpointsMatchTheGeneralPath
 0	0.07	TestRecipeReplayAdmittedInterferencePairMatchesOriginal
 0	0.03	TestRecipeReplayAdmittedUnionStepMatchesOriginal
