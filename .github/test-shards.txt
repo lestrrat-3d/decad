@@ -394,6 +394,7 @@
 1	0.00	TestConformCandidateScanFindsEdgeInteriorVertices
 1	0.00	TestConsecutiveCollapsedSpansPairAcrossTheWholeRun
 1	0.00	TestContactBatchMergesOutOfOrderCompletionsInInputOrder
+1	0.00	TestContactBatchPreparedNormalsAgreeWithStandalone
 1	0.00	TestContactBatchReturnsEarliestOrderedError
 1	0.00	TestContactBatchSchedulesOnlyMemoMisses
 1	0.00	TestContactBatchStopsOnCancellationDuringMerge
