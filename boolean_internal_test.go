@@ -207,6 +207,26 @@ func TestContactMemoRepeatsTheClassifier(t *testing.T) {
 	require.Len(t, missMemo.m, 1, `the pair keeps one entry, under the one key`)
 }
 
+func TestContactBatchPreparedNormalsAgreeWithStandalone(t *testing.T) {
+	t.Parallel()
+	a := [3]r3.Vec{{X: -5, Y: -5}, {X: 5, Y: -5}, {Y: 5}}
+	b := [3]r3.Vec{{Y: -3, Z: -3}, {Y: -3, Z: 3}, {Y: 3}}
+	miss := [3]r3.Vec{{X: 100}, {X: 101}, {X: 100, Y: 1}}
+
+	bmA := singleFacetBoolMesh(t, a)
+	for _, bmB := range []*boolMesh{singleFacetBoolMesh(t, b), singleFacetBoolMesh(t, miss)} {
+		standalone, err := triTriClassify(triCorners(bmA, 0), triCorners(bmB, 0), xtriCorners(bmA, 0), xtriCorners(bmB, 0),
+			bmA.norms[0], bmB.norms[0])
+		require.NoError(t, err)
+		results, err := runContactBatch(t.Context(), bmA, bmB, []contactPair{{}}, 1)
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+		require.True(t, bmA.fnormsReady[0])
+		require.True(t, bmB.fnormsReady[0])
+		requireSameTriContact(t, standalone, results[0].contact)
+	}
+}
+
 // inscribedFan is the held outline of a circle of radius r centred at (cx, 0)
 // in the plane z = 0: the inscribed n-gon, fan-triangulated. The vertices sit
 // at the half-step angles, so an EDGE — not a vertex — faces the y axis at both

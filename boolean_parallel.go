@@ -50,8 +50,9 @@ type contactBatchRunner func(context.Context, *boolMesh, *boolMesh, []contactPai
 
 // contactBatchExecutor collects one ordered batch of candidate pairs. Memo
 // reads happen while the producer adds candidates, and memo writes happen in
-// flush after all worker results are complete. Workers therefore only read
-// immutable meshes and write their own result slot.
+// flush after all worker results are complete. The production runner prepares
+// cached float normals before starting workers. Workers therefore only read
+// immutable mesh data and write their own result slot.
 type contactBatchExecutor struct {
 	ctx     context.Context //nolint:containedctx // one call-scoped cancellation source for this short-lived executor.
 	ma      *boolMesh
@@ -185,6 +186,15 @@ func runContactBatch(ctx context.Context, ma, mb *boolMesh, pairs []contactPair,
 	if len(pairs) == 0 {
 		return results, ctx.Err()
 	}
+	for i, pair := range pairs {
+		if i%64 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
+		ma.prepareFloatNormal(pair.i)
+		mb.prepareFloatNormal(pair.j)
+	}
 	if workers > len(pairs) {
 		workers = len(pairs)
 	}
@@ -212,12 +222,13 @@ func runContactBatch(ctx context.Context, ma, mb *boolMesh, pairs []contactPair,
 					if err := ctx.Err(); err != nil {
 						return
 					}
-					contact, err := triTriClassify(
+					contact, err := triTriClassifyPrepared(
 						triCorners(ma, next.pair.i),
 						triCorners(mb, next.pair.j),
 						xtriCorners(ma, next.pair.i),
 						xtriCorners(mb, next.pair.j),
 						ma.norms[next.pair.i], mb.norms[next.pair.j],
+						ma.fnorms[next.pair.i], mb.fnorms[next.pair.j],
 					)
 					results[next.slot] = contactBatchResult{contact: contact, err: err}
 				}
