@@ -57,8 +57,8 @@
 //
 // A runnable version of this loop is Example_decad_quickstart in this package's
 // test files. The examples directory holds fuller, feature-specific cases —
-// selectors, revolve, the modify ops, booleans, verification, recipe
-// serialization and error recovery — each an executable test with a verified
+// selectors, revolve, the modify ops, booleans, verification, and error
+// recovery — each an executable test with a verified
 // output block.
 //
 // # Units and coordinates
@@ -76,9 +76,9 @@
 //
 // # Evaluator support
 //
-// The recipe records intent under a stable design; this evaluator builds a
-// subset of it and refuses the rest explicitly (never a wrong-but-confident
-// result). The current map, and the sentinel a refused combination returns:
+// The evaluator builds a documented subset of modeling operations and refuses
+// the rest explicitly (never a wrong-but-confident result). The current map,
+// and the sentinel a refused combination returns:
 //
 //	Extrude       line/circle/arc/Tier A free-form segments   builds
 //	  Tier B/C free-form segment (conic, ellipse, unequal-
@@ -132,8 +132,8 @@
 // Chamfer expose option groups that carry nothing today (they exist so options
 // can be added without a signature change); WithShellSense picks a shell's wall
 // sense, and WithTaper names an extrude taper — but a nonzero taper is
-// [ErrUnsupported], returned before any step is recorded, so the recipe is left
-// unchanged. WithLoftAlignment picks a loft's per-loop correspondence rotation
+// [ErrUnsupported], returned before the document changes. WithLoftAlignment
+// picks a loft's per-loop correspondence rotation
 // and is accepted at most once; a repeat is [ErrDegenerate]. Separately,
 // Verify's options (WithTolerance, WithMinWallThickness, WithPullDirection,
 // WithConcaveRadius, WithClearances) and the STL/OBJ WithChordTolerance also

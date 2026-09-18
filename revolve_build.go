@@ -55,7 +55,7 @@ type revolvePayload struct {
 func (rp revolvePayload) transform() r3.Transform { return rp.xform }
 
 // placed re-evaluates the same record under the composed motion.
-func (rp revolvePayload) placed(ctx context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
+func (rp revolvePayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	rp.xform = composed
 	return evalRevolveContext(ctx, d, ref, rp)
 }
@@ -173,22 +173,22 @@ func axisMoments(ig regionIntegrals, ax axisFrame) (boundedScalar, boundedScalar
 // (docs/evaluator-design.md §6). The payload's segment kinds are line, circle
 // and arc; anything else has already been rejected by the mass-property
 // integrals it runs first.
-func evalRevolve(d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
+func evalRevolve(d *Document, ref producerID, rp revolvePayload) (*Body, error) {
 	return evalRevolveWork(d, ref, newFreeformWork(), rp)
 }
 
 // evalRevolveWork is the build an operation that already holds this record's
 // free-form work counter runs: the preflight below and every walkOf under it
 // continue that counter rather than open a second ceiling on the same record.
-func evalRevolveWork(d *Document, ref StepRef, work *freeformWork, rp revolvePayload) (*Body, error) {
+func evalRevolveWork(d *Document, ref producerID, work *freeformWork, rp revolvePayload) (*Body, error) {
 	return evalRevolveContextWork(context.Background(), d, ref, rp, work)
 }
 
-func evalRevolveContext(ctx context.Context, d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
+func evalRevolveContext(ctx context.Context, d *Document, ref producerID, rp revolvePayload) (*Body, error) {
 	return evalRevolveContextWork(ctx, d, ref, rp, newFreeformWork())
 }
 
-func evalRevolveContextWork(ctx context.Context, d *Document, ref StepRef, rp revolvePayload, work *freeformWork) (*Body, error) {
+func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp revolvePayload, work *freeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -210,7 +210,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref StepRef, rp re
 	}
 
 	b := rp.basis()
-	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: roleBody}, solid: true}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
 
 	// Partial sweeps get two planar cap faces; a full revolution has none.
 	var capStart, capEnd *Face
@@ -229,7 +229,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref StepRef, rp re
 		// that end's proven displacement (docs/evaluator-design.md §6).
 		capStart = &Face{
 			surface:     Plane{Frame: startFrame},
-			origins:     []FeatureRef{{Step: ref, Role: roleCapStart}},
+			origins:     []FeatureRef{{producer: ref, Role: roleCapStart}},
 			body:        body,
 			area:        ig.area,
 			areaBound:   ig.areaBound,
@@ -237,7 +237,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref StepRef, rp re
 		}
 		capEnd = &Face{
 			surface:     Plane{Frame: endFrame},
-			origins:     []FeatureRef{{Step: ref, Role: roleCapEnd}},
+			origins:     []FeatureRef{{producer: ref, Role: roleCapEnd}},
 			body:        body,
 			area:        ig.area,
 			areaBound:   ig.areaBound,
@@ -485,7 +485,7 @@ func revolveLoopWalks(ctx context.Context, rp revolvePayload, loop LoopRecord, w
 // buildRevolveLoop builds one loop's side faces with shared vertices and
 // edges, returning the faces, the two caps' coedges in walk order, and the
 // loop's side area.
-func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePayload, b revolveBasis, li int, loop LoopRecord, work *freeformWork) (revLoopParts, error) {
+func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolvePayload, b revolveBasis, li int, loop LoopRecord, work *freeformWork) (revLoopParts, error) {
 	resolved, err := revolveLoopWalks(ctx, rp, loop, work, "the revolve wall build")
 	if err != nil {
 		return revLoopParts{}, err

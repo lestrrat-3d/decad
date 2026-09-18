@@ -50,14 +50,14 @@ func TestBooleanContextCancelsFacetedBodyFinishing(t *testing.T) {
 			require.NoError(t, err)
 			b, err = b.Placed(tr)
 			require.NoError(t, err)
-			beforeRecipe := doc.Recipe()
+			beforeProducer := doc.nextProducer
 			beforeBodies := doc.Bodies()
 			ctx := &internalBooleanBuildCancelContext{Context: t.Context(), target: target}
 
 			_, err = UnionContext(ctx, a, b)
 			require.ErrorIs(t, err, context.Canceled)
 			require.True(t, ctx.entered)
-			require.Equal(t, beforeRecipe, doc.Recipe())
+			require.Equal(t, beforeProducer, doc.nextProducer)
 			require.Equal(t, beforeBodies, doc.Bodies())
 		})
 	}
@@ -710,7 +710,7 @@ func TestFacetFaceIndicesRejectsUnmappedFacet(t *testing.T) {
 func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 	t.Parallel()
 	doc := New()
-	body, err := buildFacetedBody(t.Context(), doc, StepRef(0), facetedPayload{
+	body, err := buildFacetedBody(t.Context(), doc, producerID(0), facetedPayload{
 		verts: []r3.Vec{
 			r3.NewVec(0, 0, 0),
 			r3.NewVec(3, 0, 0),
@@ -735,7 +735,7 @@ func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 	placement, err := rotation.Then(translation)
 	require.NoError(t, err)
 
-	placed, err := before.placed(t.Context(), doc, StepRef(1), placement)
+	placed, err := before.placed(t.Context(), doc, producerID(1), placement)
 	require.NoError(t, err)
 	after := placed.payload.(facetedPayload)
 	want, ok := pointSetDiameter(after.verts)
@@ -780,7 +780,7 @@ func TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs(t *testing.T) {
 	substituted := mb.bound * meshAreaUpper(mb.vertices, mb.triangles)
 	require.Greater(t, substituted, symB)
 
-	eval, err := evaluateBoolean(t.Context(), OpUnion, plate, pin)
+	eval, err := evaluateBoolean(t.Context(), opUnion, plate, pin)
 	require.NoError(t, err)
 	// Step 6 of docs/tessellation-design.md §11: the operands' own bounds plus
 	// the final weld's swept volume, which is non-negative and nothing else.

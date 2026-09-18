@@ -2,7 +2,6 @@ package decad_test
 
 import (
 	"context"
-	"encoding/json"
 	"math"
 	"strings"
 	"testing"
@@ -32,21 +31,18 @@ func TestChamferContextCancellationLeavesReceiverLive(t *testing.T) {
 func TestChamferContextCancellationAtCommitLeavesReceiverLive(t *testing.T) {
 	t.Parallel()
 	doc, box := filletBox(t)
-	before := doc.Recipe()
 	ctx := &commitBoundaryCancelContext{Context: t.Context()}
 
 	body, err := box.ChamferContext(ctx, verticalEdges(), units.Millimeters(10))
 
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
-	require.Equal(t, before, doc.Recipe())
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
 }
 
 func TestChamferContextCancellationDuringPreprocessingLeavesReceiverLive(t *testing.T) {
 	t.Parallel()
 	doc, box := filletBox(t)
-	before := doc.Recipe()
 	ctx := &preAuditScanCancelContext{Context: t.Context()}
 
 	body, err := box.ChamferContext(ctx, verticalEdges(), units.Millimeters(10))
@@ -54,7 +50,6 @@ func TestChamferContextCancellationDuringPreprocessingLeavesReceiverLive(t *test
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
-	require.Equal(t, before, doc.Recipe())
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
 }
 
@@ -63,7 +58,6 @@ func TestChamferContextCancellationDuringAuditPreservesError(t *testing.T) {
 	for _, cancelErr := range []error{context.Canceled, context.DeadlineExceeded} {
 		t.Run(cancelErr.Error(), func(t *testing.T) {
 			doc, box := manySidedPrism(t, 300)
-			before := doc.Recipe()
 			ctx := &auditScanCancelContext{Context: t.Context(), cancelErr: cancelErr}
 
 			body, err := box.ChamferContext(ctx, verticalEdges(), units.Millimeters(10))
@@ -71,7 +65,6 @@ func TestChamferContextCancellationDuringAuditPreservesError(t *testing.T) {
 			require.Nil(t, body)
 			require.Equal(t, cancelErr, err)
 			require.True(t, ctx.entered)
-			require.Equal(t, before, doc.Recipe())
 			require.Equal(t, []*decad.Body{box}, doc.Bodies())
 		})
 	}
@@ -80,18 +73,14 @@ func TestChamferContextCancellationDuringAuditPreservesError(t *testing.T) {
 func TestChamferSelectorAdmission(t *testing.T) {
 	t.Parallel()
 	t.Run("BuiltInQuery", func(t *testing.T) {
-		doc, box := filletBox(t)
+		_, box := filletBox(t)
 
 		_, err := box.Chamfer(verticalEdges(), units.Millimeters(5))
-		require.NoError(t, err)
-		require.Len(t, doc.Recipe().Steps, 2)
-		_, err = json.Marshal(doc.Recipe())
 		require.NoError(t, err)
 	})
 
 	t.Run("ForeignRetiringImplementation", func(t *testing.T) {
 		doc, box := filletBox(t)
-		before := doc.Recipe()
 		calls := 0
 		foreign := retiringEdgeSelector{
 			EdgeQuery: verticalEdges(),
@@ -101,21 +90,16 @@ func TestChamferSelectorAdmission(t *testing.T) {
 		_, err := box.Chamfer(foreign, units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Zero(t, calls, `Chamfer rejects a foreign selector before it can retire the receiver`)
-		require.Equal(t, before, doc.Recipe(), `a rejected selector records no step`)
 		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a rejected selector leaves the receiver live`)
-		_, err = json.Marshal(doc.Recipe())
-		require.NoError(t, err)
 	})
 
 	t.Run("TypedNilQuery", func(t *testing.T) {
 		doc, box := filletBox(t)
-		before := doc.Recipe()
 		var query *decad.EdgeQuery
 		var selector decad.EdgeSelector = query
 
 		_, err := box.Chamfer(selector, units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
-		require.Equal(t, before, doc.Recipe(), `a typed nil selector records no step`)
 		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a typed nil selector leaves the receiver live`)
 	})
 }
@@ -199,53 +183,6 @@ func TestChamferBoxAllConvexEdges(t *testing.T) {
 	rep := decadtest.IsSound(t, doc, decad.WithConcaveRadius())
 	require.Len(t, rep.Bodies, 1)
 	require.Nil(t, rep.Bodies[0].ConcaveRadius.Minimum, `a planar chamfer bevel is not a concave radius`)
-}
-
-func TestChamferRecipeAndRetire(t *testing.T) {
-	t.Parallel()
-	const d = 8.0
-	doc, box := filletBox(t)
-	body, err := box.Chamfer(verticalEdges(), units.Millimeters(d))
-	require.NoError(t, err)
-
-	// The receiver is retired; the document holds the chamfered body.
-	require.Equal(t, []*decad.Body{body}, doc.Bodies())
-	_, err = box.Chamfer(verticalEdges(), units.Millimeters(d))
-	require.ErrorIs(t, err, decad.ErrRetiredBody)
-
-	// The step records the op, the receiver as its input, the unresolved
-	// selector, the distance value, and no options — and it round-trips.
-	recipe := doc.Recipe()
-	require.Len(t, recipe.Steps, 2)
-	chamfer := recipe.Steps[1]
-	require.Equal(t, decad.OpChamfer, chamfer.Op)
-	require.Equal(t, []decad.StepRef{0}, chamfer.Inputs)
-	require.Len(t, chamfer.Selectors, 1)
-	require.Len(t, chamfer.Values, 1)
-	require.True(t, chamfer.Values[0].Equal(units.Millimeters(d), 1e-12))
-	require.Nil(t, chamfer.Opts, `a chamfer Step takes no options this increment`)
-
-	buf, err := json.Marshal(recipe)
-	require.NoError(t, err)
-	var got decad.Recipe
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, recipe, got, `the recorded chamfer recipe round-trips`)
-}
-
-func TestChamferSelectorIsRecordedUnresolved(t *testing.T) {
-	t.Parallel()
-	// The step stores a clone of the query, not the caller's, and never the
-	// edges it resolved to (core §9 / §11).
-	doc, box := filletBox(t)
-	q := verticalEdges()
-	_, err := box.Chamfer(q, units.Millimeters(5))
-	require.NoError(t, err)
-
-	sel := doc.Recipe().Steps[1].Selectors[0]
-	require.NotSame(t, decad.Selector(q), sel, `the recorded selector is a deep copy`)
-	buf, err := json.Marshal(doc.Recipe())
-	require.NoError(t, err)
-	require.Contains(t, string(buf), "parallel_to", `the query's predicate is recorded, unresolved`)
 }
 
 func TestChamferConcaveEdgeAddsWedge(t *testing.T) {

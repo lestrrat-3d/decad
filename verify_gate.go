@@ -260,8 +260,7 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 // segment, and the witness maximum polls it through pointSetDiameterContext,
 // the same reader the loftPayload arm above uses. That second poll is the one
 // that matters for cost — the witness count grows with the profile's segment
-// count (four points per segment, bounded only by recipe_decode.go's own
-// MaxSegments ceiling), and the maximum is quadratic in it, so an unpolled scan is by
+// count (four points per segment), and the maximum is quadratic in it, so an unpolled scan is by
 // far the longest thing a cancelled Verify could be left waiting on here. The
 // resulting error is returned AS an error: cancellation is never folded into
 // this arm's structural (0, false, nil) answer, which states only that the

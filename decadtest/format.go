@@ -32,12 +32,8 @@ func kindMismatch(what, subject string, got, want units.Kind) string {
 	return fmt.Sprintf("%s: %s is a %s but the reading is a %s", what, subject, kindPhrase(got), kindPhrase(want))
 }
 
-// bodyName names a body the way every failure message does: its index in
-// its document's live body list, the recipe step that produced it, and that
-// step's op — "body[2] (step 3 union)". It degrades rather than panics: a
-// nil body renders "<nil body>"; a body retired from its document's live
-// list (consumed by a boolean, say) renders without an index; a step index
-// out of range for the recipe renders without an op.
+// bodyName names a body by its index in the document's live body list. A
+// retired body renders without an index, and a nil body renders "<nil body>".
 func bodyName(b *decad.Body) string {
 	if b == nil {
 		return "<nil body>"
@@ -50,24 +46,11 @@ func bodyName(b *decad.Body) string {
 			break
 		}
 	}
-	return bodyStepName(b, idxPart)
-}
-
-// bodyStepName appends the recipe step and op that produced b to idxPart —
-// the shared tail of bodyName and reportBodyName. A step index out of range
-// for the recipe renders without an op.
-func bodyStepName(b *decad.Body, idxPart string) string {
-	origin := b.Origin()
-	step := int(origin.Step)
-	steps := b.Document().Recipe().Steps
-	if step < 0 || step >= len(steps) {
-		return fmt.Sprintf("%s (step %d)", idxPart, step)
-	}
-	return fmt.Sprintf("%s (step %d %s)", idxPart, step, steps[step].Op)
+	return idxPart
 }
 
 // reportBodyName names a body by its position in the report's OWN body list
-// — Report.Bodies order at the call — "body[0] (step 3 union)". A nil
+// — Report.Bodies order at the call — "body[0]". A nil
 // report, or a body the report does not hold, falls back to bodyName's
 // Document.Bodies() order; that fallback is what lets diagnosticBlock be
 // called with a nil report from survey.go, where no report is in scope. A
@@ -82,7 +65,7 @@ func reportBodyName(report *decad.Report, b *decad.Body) string {
 
 	for i, br := range report.Bodies {
 		if br.Body == b {
-			return bodyStepName(b, fmt.Sprintf("body[%d]", i))
+			return fmt.Sprintf("body[%d]", i)
 		}
 	}
 	return bodyName(b)
@@ -90,8 +73,8 @@ func reportBodyName(report *decad.Report, b *decad.Body) string {
 
 // diagnosticLine renders one decad.Diagnostic as a numbered message line:
 //
-//	[1] body[0] (step 3 union) measurement_beyond_tolerance area: 1256.63706 mm^2 ± 0.0213 mm^2 (Approximate), required bound ≤ 0.00125664 mm^2
-//	[2] pair (body[0] (step 3 union), body[1] (step 4 extrude)) undecided_pair: the partition proof resolved neither way
+//	[1] body[0] measurement_beyond_tolerance area: 1256.63706 mm^2 ± 0.0213 mm^2 (Approximate), required bound ≤ 0.00125664 mm^2
+//	[2] pair (body[0], body[1]) undecided_pair: the partition proof resolved neither way
 //
 // The subject is reportBodyName(report, d.Body) for a body diagnostic, or
 // "pair (A, B)" for a pair diagnostic, empty for neither. d.Code follows,

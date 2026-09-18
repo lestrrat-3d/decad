@@ -9,8 +9,8 @@ import (
 )
 
 // RecordProfile is the sketch seam: it converts a solved, closed profile into
-// the structural records a Recipe Step carries — the region in decad's own
-// plane-local types, and the sketch plane as three vectors. sketch has already
+// structural records — the region in decad's own plane-local types, and the
+// sketch plane as three vectors. sketch has already
 // proven the region closes; decad records the entities' own defining data and
 // rejects anything it cannot record exactly.
 func Example_decad_recordProfile() {

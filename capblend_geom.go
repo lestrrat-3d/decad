@@ -287,7 +287,7 @@ type capPatchGeom struct {
 // cap-level coedges that replace the loop's boundary in the cap face. The
 // side-level boundary reuses the trimmed side wall's own near-cap coedges
 // (sideCo, from buildLoopSidesAs) — shared, never re-derived.
-func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayload, li int, loop LoopRecord, capZ float64, matSign float64, sideCo []coedge, work *freeformWork) (capBandResult, error) {
+func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendPayload, li int, loop LoopRecord, capZ float64, matSign float64, sideCo []coedge, work *freeformWork) (capBandResult, error) {
 	if err := ctx.Err(); err != nil {
 		return capBandResult{}, err
 	}
@@ -510,7 +510,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		// triangle-like boundary each coedge's end matching the next's start.
 		face := &Face{
 			surface: surf,
-			origins: []FeatureRef{{Step: ref, Role: role}},
+			origins: []FeatureRef{{producer: ref, Role: role}},
 			body:    body,
 			loops: []*Loop{{coedges: []coedge{
 				{edge: arc, forward: true},
@@ -665,7 +665,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		role := fmt.Sprintf("chamferCap(%s,%d,%d)", capName, li, len(patches))
 		face := &Face{
 			surface: surf,
-			origins: []FeatureRef{{Step: ref, Role: role}},
+			origins: []FeatureRef{{producer: ref, Role: role}},
 			body:    body,
 			loops: []*Loop{{coedges: []coedge{
 				{edge: side, forward: true},
@@ -1041,14 +1041,14 @@ func capPatchWindowSkew(g capPatchGeom) float64 {
 // original wall's own sense (a hole/clockwise wall's material lies outside
 // its cylinder, so its chamfer cone's geometric normal needs reversing too —
 // extrude.go's same rule for a clockwise circular wall).
-func buildConePatch(pl prismPayload, body *Body, ref StepRef, li, patchIdx int, cu, cv, sideRadius, capRadius, sideZ, capZ float64, matSign float64, reversed bool, sideEdge, capEdge *Edge) *Face {
+func buildConePatch(pl prismPayload, body *Body, ref producerID, li, patchIdx int, cu, cv, sideRadius, capRadius, sideZ, capZ float64, matSign float64, reversed bool, sideEdge, capEdge *Edge) *Face {
 	role := fmt.Sprintf("chamferCap(%s,%d,%d)", capNameOf(matSign), li, patchIdx)
 	surf := coneSurface(pl, cu, cv, sideRadius, capRadius, sideZ, capZ)
 	loops := []*Loop{
 		{coedges: []coedge{{edge: sideEdge, forward: true}}, outer: true},
 		{coedges: []coedge{{edge: capEdge, forward: false}}, outer: true},
 	}
-	face := &Face{surface: surf, origins: []FeatureRef{{Step: ref, Role: role}}, body: body, reversed: reversed, loops: loops}
+	face := &Face{surface: surf, origins: []FeatureRef{{producer: ref, Role: role}}, body: body, reversed: reversed, loops: loops}
 	sideEdge.faces = append(sideEdge.faces, face)
 	capEdge.faces = append(capEdge.faces, face)
 	return face

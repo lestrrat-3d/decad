@@ -222,8 +222,8 @@ func TestInterferencePairDiameterUsesAllFacetedPayloadVertices(t *testing.T) {
 
 func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
 	t.Parallel()
-	a := &Body{origin: FeatureRef{Step: 12}}
-	b := &Body{origin: FeatureRef{Step: 34}}
+	a := &Body{origin: FeatureRef{producer: 12}}
+	b := &Body{origin: FeatureRef{producer: 34}}
 
 	for _, tc := range []struct {
 		name        string
@@ -237,28 +237,28 @@ func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
 			expected:    &booleanExpectedError{kind: booleanExpectedStaging, operand: 0},
 			wantOutcome: interferenceUnsupportedPayloadFirst,
 			wantCode:    DiagUnsupportedPairPayload,
-			wantMessage: []string{"first operand", "step 12", "tessellation refused at the chord tolerance"},
+			wantMessage: []string{"first operand", "tessellation refused at the chord tolerance"},
 		},
 		{
 			name:        "second payload",
 			expected:    &booleanExpectedError{kind: booleanExpectedStaging, operand: 1},
 			wantOutcome: interferenceUnsupportedPayloadSecond,
 			wantCode:    DiagUnsupportedPairPayload,
-			wantMessage: []string{"second operand", "step 34", "tessellation refused at the chord tolerance"},
+			wantMessage: []string{"second operand", "tessellation refused at the chord tolerance"},
 		},
 		{
 			name:        "first operand volume proof",
 			expected:    &booleanExpectedError{kind: booleanExpectedVolumeProof, operand: 0},
 			wantOutcome: interferenceUnsupportedVolumeProofFirst,
 			wantCode:    DiagUnsupportedPairPayload,
-			wantMessage: []string{"first operand", "step 12", "no proof of the volume"},
+			wantMessage: []string{"first operand", "no proof of the volume"},
 		},
 		{
 			name:        "second operand volume proof",
 			expected:    &booleanExpectedError{kind: booleanExpectedVolumeProof, operand: 1},
 			wantOutcome: interferenceUnsupportedVolumeProofSecond,
 			wantCode:    DiagUnsupportedPairPayload,
-			wantMessage: []string{"second operand", "step 34", "no proof of the volume"},
+			wantMessage: []string{"second operand", "no proof of the volume"},
 		},
 		{
 			name:        "contact policy",
@@ -287,6 +287,7 @@ func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
 			for _, want := range tc.wantMessage {
 				require.Contains(t, diag.Message, want)
 			}
+			require.NotContains(t, diag.Message, "step ", "private producer identities stay out of diagnostics")
 		})
 	}
 
@@ -321,7 +322,7 @@ func TestMeasuredInterferenceFallsBackToMeshWhenAnalyticNotAdmitted(t *testing.T
 	require.NoError(t, err)
 	require.False(t, ok, `an out-of-plane pair must not be admitted by the analytic dispatch`)
 
-	want, err := evaluateBoolean(t.Context(), OpIntersect, a, b)
+	want, err := evaluateBoolean(t.Context(), opIntersect, a, b)
 	require.NoError(t, err)
 
 	volume, outcome, err := measuredInterference(t.Context(), a, b, pairResult{})

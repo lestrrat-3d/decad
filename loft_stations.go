@@ -138,7 +138,7 @@ func loftPairCounts(loops0 []LoopRecord, offsets []int, walks0, walks1 [][]segme
 // computes. Refusing it here instead would refuse a mixed build while
 // admitting an all-LineSeg build of the identical triangle count.
 func loftStationShare(p, c uint64) int {
-	q := max(int64(0), (int64(loftStationCap)-int64(p))/int64(c)) //nolint:gosec // p and c are paired-segment counts wallCheckedAdd already proved do not overflow, and a record large enough to pass int64 cannot be built from a decoded recipe's own resource limits.
+	q := max(int64(0), (int64(loftStationCap)-int64(p))/int64(c)) //nolint:gosec // p and c are paired-segment counts wallCheckedAdd already proved do not overflow, and a record large enough to pass int64 cannot be built from the process's memory limits.
 	return 1 + int(q)
 }
 
@@ -232,7 +232,7 @@ func loftStationCapGate(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]
 // outcome, not a wrong answer.
 //
 // It is NOT a caller option: a loft's chording is topology, and nothing is
-// added to the recipe wire format for it (a10-plan.md Q2).
+// added to the public API for it (a10-plan.md Q2).
 const loftChordFraction = 3.76491e-05
 
 // loftChordTarget is one loft build's own chord target (a10-plan.md Q2): the

@@ -55,8 +55,8 @@ func Example_decad_boolean_error() {
 	}
 
 	// Output:
-	// union: BooleanUnsupportedContact, operands 2, is-unsupported true, is-degenerate false
-	// intersect: BooleanEmpty, operands 2, is-boolean-failed true
+	// union: BooleanUnsupportedContact, is-unsupported true, is-degenerate false
+	// intersect: BooleanEmpty, is-boolean-failed true
 }
 
 // reportBooleanError branches on the typed *decad.BooleanError, printing only
@@ -69,14 +69,14 @@ func reportBooleanError(what string, err error) {
 	}
 	switch be.Code {
 	case decad.BooleanUnsupportedContact:
-		fmt.Printf("%s: BooleanUnsupportedContact, operands %d, is-unsupported %v, is-degenerate %v\n",
-			what, len(be.Inputs),
+		fmt.Printf("%s: BooleanUnsupportedContact, is-unsupported %v, is-degenerate %v\n",
+			what,
 			errors.Is(err, decad.ErrUnsupported), errors.Is(err, decad.ErrDegenerate))
 	case decad.BooleanEmpty:
-		fmt.Printf("%s: BooleanEmpty, operands %d, is-boolean-failed %v\n",
-			what, len(be.Inputs), errors.Is(err, decad.ErrBooleanFailed))
+		fmt.Printf("%s: BooleanEmpty, is-boolean-failed %v\n",
+			what, errors.Is(err, decad.ErrBooleanFailed))
 	case decad.BooleanEvaluatorFailure:
-		fmt.Printf("%s: BooleanEvaluatorFailure (a bug to file), operands %d\n", what, len(be.Inputs))
+		fmt.Printf("%s: BooleanEvaluatorFailure (a bug to file)\n", what)
 	}
 }
 

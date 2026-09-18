@@ -14,9 +14,9 @@ import (
 // Chamfer bevels the convex lateral edges of a straight prism. Like the fillet,
 // the reduction is a rewrite of the recorded 2D section — but each corner is cut
 // off by a straight chord between the two setback feet, so the bevel walls are
-// planes, not cylinders, and irrational lengths carry proven bounds. The step records the
-// unresolved edge query and setback distance, retiring the receiver, so the
-// recipe replays deterministically.
+// planes, not cylinders, and irrational lengths carry proven bounds. The call
+// resolves the edge query and setback distance before retiring the receiver, so
+// repeated construction is deterministic.
 func Example_decad_chamfer() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -71,10 +71,10 @@ func Example_decad_chamfer() {
 	fmt.Printf("solid: %v, faces: %d\n", body.IsSolid(), len(body.Faces()))
 	fmt.Printf("bevel planes: %d\n", bevels)
 	fmt.Printf("volume: %.3f mm^3 (%s)\n", mm3, vol.Exactness)
-	fmt.Printf("recipe steps: %d\n", len(doc.Recipe().Steps))
+	fmt.Printf("live bodies: %d\n", len(doc.Bodies()))
 	// Output:
 	// solid: true, faces: 10
 	// bevel planes: 4
 	// volume: 116000.000 mm^3 (Exact)
-	// recipe steps: 2
+	// live bodies: 1
 }

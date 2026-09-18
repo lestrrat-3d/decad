@@ -66,10 +66,10 @@ func Example_decad_shell() {
 	fmt.Printf("solid: %v, faces: %d\n", tube.IsSolid(), len(tube.Faces()))
 	fmt.Printf("volume: %.3f mm^3 (%s)\n", mm3, vol.Exactness)
 	fmt.Printf("trustworthy: %v\n", report.Passed())
-	fmt.Printf("recipe steps: %d\n", len(doc.Recipe().Steps))
+	fmt.Printf("live bodies: %d\n", len(doc.Bodies()))
 	// Output:
 	// solid: true, faces: 10
 	// volume: 30000.000 mm^3 (Exact)
 	// trustworthy: true
-	// recipe steps: 2
+	// live bodies: 1
 }

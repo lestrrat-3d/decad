@@ -40,7 +40,7 @@ import (
 // selected loops are chamfered per below), the plane frame, sweep interval,
 // accumulated placement, the single equal setback d, and which loop indices
 // (into append(profile.Outer, profile.Holes...)) are chamfered on which cap.
-// It is evaluator-private: the recipe records only the selector and d, never
+// It is evaluator-private: the public call supplies only the selector and d, never
 // the rewritten geometry (modify §11's role rule — a role indexes the record
 // it labels, so a result's roles are minted from the result's own record,
 // never inherited).
@@ -97,7 +97,7 @@ func (cbp capBlendPayload) transform() r3.Transform { return cbp.xform }
 // placed re-evaluates the same record under the composed motion (evaluator
 // §8): every gate this PR enforces is a closed-form fact of the RECORD, so a
 // placed body re-derives the identical chamfer.
-func (cbp capBlendPayload) placed(ctx context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
+func (cbp capBlendPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	cbp.xform = composed
 	return evalCapBlendContext(ctx, d, ref, cbp)
 }
@@ -432,7 +432,7 @@ func classifyChamferSelection(ctx context.Context, pp prismPayload, b *Body, sel
 // is the shared entry ChamferContext calls once a clean cap-loop selection is
 // classified. SX13's radial half is decided per circular wall as the band is
 // constructed, in capblend_geom.go's capBandRadius.
-func buildCapBlend(ctx context.Context, doc *Document, ref StepRef, pp prismPayload, d, dDelta float64, startLoops, endLoops map[int]bool) (*Body, error) {
+func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismPayload, d, dDelta float64, startLoops, endLoops map[int]bool) (*Body, error) {
 	height := pp.z1 - pp.z0
 	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
 

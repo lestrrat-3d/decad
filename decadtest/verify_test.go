@@ -206,14 +206,14 @@ func TestIsSoundPrintsEveryDiagnostic(t *testing.T) {
 	require.Contains(t, out, "4 diagnostic(s):")
 }
 
-func TestIsSoundNamesTheBodyByStepAndOp(t *testing.T) {
+func TestIsSoundNamesTheBodyByReportPosition(t *testing.T) {
 	t.Parallel()
 
 	doc, _ := suspectUnionDoc(t)
 	out := captureFailure(t, func(tb testing.TB) {
 		decadtest.IsSound(tb, doc, decad.WithTolerance(units.Scalar(1e-30)))
 	})
-	require.Contains(t, out, "body[0] (step 2 union)")
+	require.Contains(t, out, "body[0]")
 }
 
 func TestHasStatusReportsAMismatch(t *testing.T) {

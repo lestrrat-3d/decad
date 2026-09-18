@@ -393,7 +393,7 @@ const (
 ```
 
 **All three enums pin their stable `String()` tokens**, in the lower-snake style of
-the other closed sets decad owns (`OpKind`, the query predicates): the token,
+the query predicates: the token,
 never the iota value, is the identity a caller branches on and a log prints.
 
 `SurveyKind.String()`:
@@ -786,9 +786,9 @@ How that partition is proved is specified once in
 touching, overlapping, undecided — and `Verify` may settle one through any proof
 path that document specifies: the analytic clearance kernel, a strict
 full-containment or analytic equality certificate, the read-only analytic
-`OpIntersect` dispatch, or the read-only mesh intersection.
+intersection dispatch, or the read-only mesh intersection.
 `Verify` NEVER calls the consuming public `Intersect`; report construction does
-not append a recipe step, retire an operand, or register a transient body.
+not advance provenance, retire an operand, or register a transient body.
 
 ### 1.2 Cost and caller deadlines
 

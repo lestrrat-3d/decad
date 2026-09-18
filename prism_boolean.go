@@ -73,8 +73,8 @@ import (
 // G1-G4 (admitPrismPairBudget) and the work cap are shared, unchanged, by
 // every op; G5 and G6 (§3.1) and the resolution path (§4.2) are op-specific,
 // per §3.2's table.
-func tryPrismBoolean(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bool, error) {
-	if op == OpIntersect {
+func tryPrismBoolean(ctx context.Context, op operationKind, a, b *Body) (prismPayload, bool, error) {
+	if op == opIntersect {
 		// admitPrismIntersectPair is Intersect's own preamble (G1-G4, the
 		// trimmed-circular refusal, G6, G5, the arrangement cap, the
 		// re-expression) factored out so §4.5's overlap-area reading
@@ -123,14 +123,14 @@ func tryPrismBoolean(ctx context.Context, op OpKind, a, b *Body) (prismPayload, 
 	}
 
 	switch op {
-	case OpUnion:
+	case opUnion:
 		if len(pa.profile.Holes) != 0 || len(pb.profile.Holes) != 0 { // G6: both hole-free
 			return prismPayload{}, false, nil
 		}
 		if !prismUnionZIntervalMatches(pa, pb) { // G5, §3.2's Union row
 			return prismPayload{}, false, nil
 		}
-	case OpCut:
+	case opCut:
 		if len(pb.profile.Holes) != 0 { // G6: the TOOL must be hole-free; the target's own holes carry through
 			return prismPayload{}, false, nil
 		}
@@ -139,7 +139,7 @@ func tryPrismBoolean(ctx context.Context, op OpKind, a, b *Body) (prismPayload, 
 		}
 	default:
 		// No other op reaches this evaluator through performBoolean's dispatch
-		// (OpIntersect is handled above, before this shared preamble runs).
+		// (opIntersect is handled above, before this shared preamble runs).
 		return prismPayload{}, false, nil
 	}
 
@@ -150,7 +150,7 @@ func tryPrismBoolean(ctx context.Context, op OpKind, a, b *Body) (prismPayload, 
 	if !withinCap {
 		return prismPayload{}, false, fmt.Errorf(
 			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1); combine the sections into one profile instead of applying this op once per feature, or accept the mesh path by making the pair non-coplanar`,
-			ErrUnsupported, opKindNames[op], segments, prismMaxArrangementSegments)
+			ErrUnsupported, op, segments, prismMaxArrangementSegments)
 	}
 
 	reexpress, err := newPrismReexpression(pa, pb)
@@ -159,9 +159,9 @@ func tryPrismBoolean(ctx context.Context, op OpKind, a, b *Body) (prismPayload, 
 	}
 
 	switch op {
-	case OpUnion:
+	case opUnion:
 		return resolveAndBuildPrismUnion(ctx, budget, pa, pb, reexpress)
-	default: // OpCut
+	default: // opCut
 		return resolveAndBuildPrismCut(ctx, budget, pa, pb, reexpress)
 	}
 }
@@ -172,10 +172,10 @@ func tryPrismBoolean(ctx context.Context, op OpKind, a, b *Body) (prismPayload, 
 // hole-free arms, G5's Intersect z-interval overlap
 // (prismIntersectZIntervalOverlaps), the arrangement work cap
 // (prismSceneWithinWorkCap), and the operand re-expression
-// (newPrismReexpression) — factored out of tryPrismBoolean's OpIntersect arm
+// (newPrismReexpression) — factored out of tryPrismBoolean's opIntersect arm
 // (docs/prism-boolean-design.md §4.5's "Entry" paragraph) so a second caller
 // can share it unchanged rather than duplicate it: tryPrismBoolean's own
-// OpIntersect case above, and §4.5's overlap-area reading
+// opIntersect case above, and §4.5's overlap-area reading
 // (prismOverlapVolume, prism_overlap.go). This task adds no capability and
 // changes no behaviour — every gate below runs in the exact order and shape
 // it always has.
@@ -225,7 +225,7 @@ func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *workBudge
 	if !withinCap {
 		return nil, prismPayload{}, prismPayload{}, nil, false, fmt.Errorf(
 			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d (each circle or arc costs 256, each line 1); combine the sections into one profile instead of applying this op once per feature, or accept the mesh path by making the pair non-coplanar`,
-			ErrUnsupported, opKindNames[OpIntersect], segments, prismMaxArrangementSegments)
+			ErrUnsupported, opIntersect, segments, prismMaxArrangementSegments)
 	}
 
 	reexpress, err = newPrismReexpression(pa, pb)

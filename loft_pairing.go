@@ -37,7 +37,7 @@ import (
 // must still report that refusal even when p1 carries a later segment
 // walkOf itself cannot resolve at all (a malformed CircleSeg, say), a
 // combination sketch's own authentication never produces but a decoded
-// recipe can (docs/recipe-replay-design.md).
+// evaluator can.
 //
 // S3's admission test is a SAME-KIND test over the two RECORDED SEGMENT
 // TYPES, exactly the three-way enumeration docs/loft-design.md §1 and Table P
@@ -204,7 +204,7 @@ const (
 )
 
 // loftPairTypeOf classifies one recorded segment into loftPairType. A segment
-// normalizeSegment itself refuses — a nil typed pointer a decoded recipe can
+// normalizeSegment itself refuses — a nil typed pointer can
 // carry — reads loftPairUnadmitted rather than panicking; walkOf resolves
 // each side ahead of this gate and reports that refusal first
 // (validateLoftRecords' own precedence note), so the value is never the one a

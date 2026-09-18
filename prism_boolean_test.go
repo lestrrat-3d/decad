@@ -147,13 +147,11 @@ func TestPrismUnionCutFragmentOperandRefusesNonClosingMerge(t *testing.T) {
 	doc := decad.New()
 	a := overshootQuadBody(t, doc, corners, 0.13, 5)
 	b := boxBody(t, doc, -1, -1, 1, 1, 5)
-	beforeRecipe := doc.Recipe()
 	beforeBodies := doc.Bodies()
 
 	_, err := decad.Union(a, b)
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
-	require.Equal(t, beforeRecipe, doc.Recipe())
 	require.Equal(t, beforeBodies, doc.Bodies())
 
 	decadtest.MeasuresVolume(t, a, units.CubicMillimeters(1139.952075))
@@ -382,7 +380,6 @@ func TestPrismUnionAdmittedThenInvalidRegionRefuses(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 9.9999999, 0, 20, 10, 10)
-	beforeRecipe := doc.Recipe()
 	beforeBodies := doc.Bodies()
 
 	_, err := decad.Union(a, b)
@@ -391,27 +388,24 @@ func TestPrismUnionAdmittedThenInvalidRegionRefuses(t *testing.T) {
 	var booleanErr *decad.BooleanError
 	require.ErrorAs(t, err, &booleanErr)
 	require.Equal(t, decad.BooleanUnsupportedContact, booleanErr.Code)
-	require.Equal(t, beforeRecipe, doc.Recipe())
 	require.Equal(t, beforeBodies, doc.Bodies())
 }
 
 // TestPrismUnionCancellationLeavesDocumentUnchanged is §10/§15's
 // cancellation obligation: a context canceled before the call returns
-// ctx.Err() unchanged, with the document and recipe untouched — the same
+// ctx.Err() unchanged, with the document untouched — the same
 // contract every other modify-op audit honors.
 func TestPrismUnionCancellationLeavesDocumentUnchanged(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 5, 5, 15, 15, 10)
-	beforeRecipe := doc.Recipe()
 	beforeBodies := doc.Bodies()
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	_, err := decad.UnionContext(ctx, a, b)
 	require.ErrorIs(t, err, context.Canceled)
-	require.Equal(t, beforeRecipe, doc.Recipe())
 	require.Equal(t, beforeBodies, doc.Bodies())
 }
 

@@ -120,7 +120,7 @@ func prismOverlapVolume(ctx context.Context, a, b *Body) (Measurement, bool, err
 			sectionDelta: sectionDelta,
 		}
 
-		body, err := evalPrismContext(ctx, d, d.nextStepRef(), pp, newFreeformWork())
+		body, err := evalPrismContext(ctx, d, d.nextProducerID(), pp, newFreeformWork())
 		if err != nil {
 			if errors.Is(err, ErrDegenerate) || errors.Is(err, ErrUnsupported) {
 				// The region integrals refuse this cell's own section as

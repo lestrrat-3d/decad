@@ -389,13 +389,6 @@ func TestLoftPlacedTopologyAndRoles(t *testing.T) {
 	placed, err := body.Placed(move)
 	require.NoError(t, err)
 
-	newStep := placed.Origin().Step
-	for _, f := range placed.Faces() {
-		for _, o := range f.Origins() {
-			require.Equal(t, newStep, o.Step)
-		}
-	}
-
 	faces, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(placed))).SelectFaces(placed)
 	require.NoError(t, err)
 	require.Len(t, faces, 1)
@@ -505,7 +498,7 @@ func TestLoftPlacedAccessorExactness(t *testing.T) {
 // TestLoftPlacedRetireAndLiveness proves Placed retires the receiver while
 // Duplicate/PlacedCopy leave it live, and a refused placement — an invalid
 // (zero-value) transform, and an S12 fixture whose proven volume allowance
-// swamps its tiny held volume — leaves the recipe and document untouched.
+// swamps its tiny held volume — leaves the document untouched.
 func TestLoftPlacedRetireAndLiveness(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
@@ -528,13 +521,11 @@ func TestLoftPlacedRetireAndLiveness(t *testing.T) {
 	require.Equal(t, []*decad.Body{placed, dup, copied}, doc.Bodies(), "PlacedCopy leaves the receiver live")
 
 	bodiesBefore := doc.Bodies()
-	stepsBefore := doc.Recipe().Steps
 
 	invalid, err := copied.Placed(r3.Transform{})
 	require.Nil(t, invalid)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Equal(t, bodiesBefore, doc.Bodies())
-	require.Equal(t, stepsBefore, doc.Recipe().Steps)
 }
 
 // TestLoftPlacedS12TinyBodyFarTranslation refuses a placement whose proven
@@ -552,8 +543,6 @@ func TestLoftPlacedS12TinyBodyFarTranslation(t *testing.T) {
 	vol, err := body.Volume()
 	require.NoError(t, err)
 	require.Positive(t, vol.Value.Base())
-
-	stepsBefore := doc.Recipe().Steps
 	bodiesBefore := doc.Bodies()
 
 	far, err := r3.Translation(r3.NewVec(1e10, 0, 0))
@@ -563,7 +552,6 @@ func TestLoftPlacedS12TinyBodyFarTranslation(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
 	require.Equal(t, bodiesBefore, doc.Bodies(), "a refused S12 placement leaves the document untouched")
-	require.Equal(t, stepsBefore, doc.Recipe().Steps, "a refused S12 placement leaves the recipe untouched")
 }
 
 // TestLoftPlacedS13OverflowingCoordinate refuses a placement whose composed
@@ -585,8 +573,6 @@ func TestLoftPlacedS13OverflowingCoordinate(t *testing.T) {
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)
 	require.NoError(t, err, "the unplaced far-plane loft builds")
-
-	stepsBefore := doc.Recipe().Steps
 	bodiesBefore := doc.Bodies()
 
 	far, err := r3.Translation(r3.NewVec(0, 0, math.MaxFloat64))
@@ -598,7 +584,6 @@ func TestLoftPlacedS13OverflowingCoordinate(t *testing.T) {
 	require.Contains(t, err.Error(), "representable float64 range")
 
 	require.Equal(t, bodiesBefore, doc.Bodies(), "a refused S13 placement leaves the document untouched")
-	require.Equal(t, stepsBefore, doc.Recipe().Steps, "a refused S13 placement leaves the recipe untouched")
 }
 
 // TestLoftPlacedNearMaxFloatSectionRefusesUnsupported pins the refusal a
@@ -627,8 +612,6 @@ func TestLoftPlacedNearMaxFloatSectionRefusesUnsupported(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.Exact, vol.Exactness, "the unplaced body's volume is still exact")
 	require.Positive(t, vol.Value.Base())
-
-	stepsBefore := doc.Recipe().Steps
 	bodiesBefore := doc.Bodies()
 
 	move, err := r3.Translation(r3.NewVec(0, 1, 0))
@@ -640,19 +623,16 @@ func TestLoftPlacedNearMaxFloatSectionRefusesUnsupported(t *testing.T) {
 		"a saturated displacement scale is decad's own evaluation leaving the range, not a non-finite measurement")
 
 	require.Equal(t, bodiesBefore, doc.Bodies(), "a refused placement leaves the document untouched")
-	require.Equal(t, stepsBefore, doc.Recipe().Steps, "a refused placement leaves the recipe untouched")
 }
 
 // TestLoftPlacedContextCancellation proves a canceled context returns
-// ctx.Err() with the receiver still live and the recipe unchanged.
+// ctx.Err() with the receiver still live and the document unchanged.
 func TestLoftPlacedContextCancellation(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
 	body, err := doc.Loft(s0, p0, s1, p1)
 	require.NoError(t, err)
-
-	stepsBefore := doc.Recipe().Steps
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -663,7 +643,6 @@ func TestLoftPlacedContextCancellation(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 
 	require.Equal(t, []*decad.Body{body}, doc.Bodies(), "the receiver stays live")
-	require.Equal(t, stepsBefore, doc.Recipe().Steps)
 }
 
 // TestLoftPlacedVerifySound proves a placed loft is Sound at the default

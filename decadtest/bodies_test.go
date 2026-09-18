@@ -52,21 +52,14 @@ func TestMeasuresVolumeMeasuresTheApproximateUnion(t *testing.T) {
 	decadtest.MeasuresVolume(t, u, units.CubicMillimeters(3000))
 }
 
-// TestBodyNameCarriesTheStepAndOp provokes a MeasuresVolume miss on a body
-// whose step is a decad.Union and checks the message names that step and
-// op.
-func TestBodyNameCarriesTheStepAndOp(t *testing.T) {
+func TestBodyNameCarriesTheLiveIndex(t *testing.T) {
 	t.Parallel()
 
 	u := newUnion(t)
-	steps := u.Document().Recipe().Steps
-	require.Len(t, steps, 3)
-	require.Equal(t, decad.OpUnion, steps[u.Origin().Step].Op)
-
 	out := captureFailure(t, func(tb testing.TB) {
 		decadtest.MeasuresVolume(tb, u, units.CubicMillimeters(3001))
 	})
-	require.Contains(t, out, "(step 2 union)")
+	require.Contains(t, out, "body[0]")
 }
 
 func TestMeasuresVolumeRejectsANilBody(t *testing.T) {
@@ -122,7 +115,7 @@ func TestMeasuresVolumeReportsAMissWithTheBodyNamed(t *testing.T) {
 	out := captureFailure(t, func(tb testing.TB) {
 		decadtest.MeasuresVolume(tb, plate, units.CubicMillimeters(60001))
 	})
-	require.Contains(t, out, "body[0] (step 0 extrude)")
+	require.Contains(t, out, "body[0]")
 }
 
 func TestHasSurfaceKindsReportsAMissingKind(t *testing.T) {

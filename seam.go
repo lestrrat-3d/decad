@@ -11,12 +11,12 @@ import (
 )
 
 // This file is the seam conversion of docs/sketch-seam-design.md: the one
-// place a live sketch profile becomes the structural records a Recipe Step
+// place a live sketch profile becomes the structural records the evaluator
 // carries. sketch answers every 2D question and decad consumes the answers —
 // nothing here re-derives a trim, projects a point, or fits a curve.
 
 // RecordProfile converts a sketch profile into the structural records a
-// Recipe Step carries: the region as a [ProfileRecord] — the entity's own
+// the evaluator carries: the region as a [ProfileRecord] — the entity's own
 // defining data per boundary edge, plus the recorded range — and the sketch
 // plane, read through s.Plane().Frame(), as the [PlaneRecord] that lifts the
 // plane-local region into world space. The feature calls run exactly this

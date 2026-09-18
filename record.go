@@ -1,23 +1,20 @@
 package decad
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the recording IR of docs/sketch-seam-design.md §2: the
-// structural, plane-local types a Recipe Step records a profile in. A Step
-// holds no *sketch.Profile and no r3.Frame — decad converts, it does not
-// reference — so a Recipe stays a value after the sketch has moved on, and
-// every type here is encodable and decodable (docs/api-design.md §6.2).
+// This file defines the evaluator's structural, plane-local profile records.
+// They hold no live sketch profile or frame: decad converts the source geometry
+// into values before evaluation.
 
-// PlaneRecord is the sketch plane, as three vectors: it survives encoding,
-// which an r3.Frame does not. Orthonormal, right-handed; the plane normal is
+// PlaneRecord is the sketch plane as three vectors. It is orthonormal and
+// right-handed; the plane normal is
 // U × V, and that normal is the sense Direction.Along means for a linear
 // extent. Origin is a position in millimetres (docs/api-design.md §5.2); U
 // and V are the in-plane axes the (u, v) of a Point2 is expressed in.
@@ -34,46 +31,7 @@ type Point2 struct {
 	V float64 `json:"v"`
 }
 
-// TransformRecord is a rigid placement, as four vectors: it survives encoding,
-// which an r3.Transform does not (its fields are unexported, so a Step that
-// stored one would silently drop the motion — docs/api-design.md §6.2). EX,
-// EY, EZ are the transformed world basis (r3.Transform.Basis), dimensionless
-// directions; T is the translation, millimetres (§5.2). RecordTransform
-// converts a live transform in, and TransformRecord.Transform rebuilds one —
-// through r3.FromBasis, which snaps encoding drift straight and rejects
-// anything that is not an isometry.
-type TransformRecord struct {
-	EX r3.Vec `json:"ex"`
-	EY r3.Vec `json:"ey"`
-	EZ r3.Vec `json:"ez"`
-	T  r3.Vec `json:"t"`
-}
-
-// RecordTransform converts a rigid motion into its record form. The zero
-// r3.Transform is invalid and is [ErrDegenerate], exactly as Body.Placed
-// treats it (docs/api-design.md §8) — an invalid transform names no placement
-// to record.
-func RecordTransform(t r3.Transform) (TransformRecord, error) {
-	if !t.IsValid() {
-		return TransformRecord{}, fmt.Errorf(`%w: an invalid transform names no placement to record`, ErrDegenerate)
-	}
-	b := t.Basis()
-	return TransformRecord{EX: b.EX, EY: b.EY, EZ: b.EZ, T: t.Translation()}, nil
-}
-
-// Transform rebuilds the recorded rigid motion through r3.FromBasis, which
-// snaps encoding drift straight and rejects a record that is not an isometry —
-// a decoded placement is a real rigid motion or an error, never a silent
-// distortion. An invalid record is [ErrDegenerate].
-func (r TransformRecord) Transform() (r3.Transform, error) {
-	t, err := r3.FromBasis(r3.Basis{EX: r.EX, EY: r.EY, EZ: r.EZ}, r.T)
-	if err != nil {
-		return r3.Transform{}, fmt.Errorf(`%w: the recorded placement is not a rigid motion: %v`, ErrDegenerate, err)
-	}
-	return t, nil
-}
-
-// ProfileRecord is the region a Step extrudes or revolves: one outer loop and
+// ProfileRecord is a structural plane-local region: one outer loop and
 // its holes, structural and plane-local. Not a sample, not a pointer, not a
 // sketch.
 type ProfileRecord struct {
@@ -88,6 +46,42 @@ type ProfileRecord struct {
 // run counter-clockwise in (u, v), holes clockwise.
 type LoopRecord struct {
 	Segments []CurveSegment
+}
+
+func cloneLoopRecord(l LoopRecord) LoopRecord {
+	if l.Segments == nil {
+		return LoopRecord{}
+	}
+	out := LoopRecord{Segments: make([]CurveSegment, len(l.Segments))}
+	for i, segment := range l.Segments {
+		out.Segments[i] = cloneSegment(segment)
+	}
+	return out
+}
+
+func cloneSegment(segment CurveSegment) CurveSegment {
+	normalized, err := normalizeSegment(segment)
+	if err != nil {
+		return segment
+	}
+	switch segment := normalized.(type) {
+	case SplineSeg:
+		segment.Control = slices.Clone(segment.Control)
+		return segment
+	case NURBSSeg:
+		segment.Control = slices.Clone(segment.Control)
+		segment.Knots = slices.Clone(segment.Knots)
+		segment.Weights = slices.Clone(segment.Weights)
+		return segment
+	case ClosedSplineSeg:
+		segment.Control = slices.Clone(segment.Control)
+		return segment
+	case FitSplineSeg:
+		segment.Fit = slices.Clone(segment.Fit)
+		return segment
+	default:
+		return normalized
+	}
 }
 
 // CurveSegment is one curve of a loop, recorded structurally — never as a
@@ -248,12 +242,6 @@ func (ClosedSplineSeg) curveSegment()  {}
 func (FitSplineSeg) curveSegment()     {}
 func (ConicSeg) curveSegment()         {}
 
-// CurveSegment is a closed variant set decad owns, so decad ships its codec
-// (docs/api-design.md §6.2): each variant encodes as a tagged object —
-// {"kind": "<tag>", ...the variant's fields} — and decoding dispatches on the
-// tag. A units.Value field round-trips through its own text form ("5 mm"); a
-// curve parameter is a plain dimensionless float.
-
 const (
 	segKindLine          = "line"
 	segKindCircle        = "circle"
@@ -268,313 +256,6 @@ const (
 	segmentFieldStart    = "start"
 	segmentFieldEnd      = "end"
 )
-
-// segmentKind returns the tag a variant encodes under. The switch is total
-// over the sealed set.
-func segmentKind(s CurveSegment) (string, error) {
-	switch s.(type) {
-	case LineSeg:
-		return segKindLine, nil
-	case CircleSeg:
-		return segKindCircle, nil
-	case ArcSeg:
-		return segKindArc, nil
-	case EllipseSeg:
-		return segKindEllipse, nil
-	case EllipticalArcSeg:
-		return segKindEllipticalArc, nil
-	case SplineSeg:
-		return segKindSpline, nil
-	case NURBSSeg:
-		return segKindNURBS, nil
-	case ClosedSplineSeg:
-		return segKindClosedSpline, nil
-	case FitSplineSeg:
-		return segKindFitSpline, nil
-	case ConicSeg:
-		return segKindConic, nil
-	default:
-		return "", fmt.Errorf(`decad: unencodable curve segment type %T`, s)
-	}
-}
-
-// marshalSegment encodes one variant as its tagged object: the variant's own
-// fields, with the kind tag spliced in front.
-func marshalSegment(s CurveSegment) ([]byte, error) {
-	s, err := normalizeSegment(s)
-	if err != nil {
-		return nil, err
-	}
-	kind, err := segmentKind(s)
-	if err != nil {
-		return nil, err
-	}
-	return marshalTagged(kind, s)
-}
-
-// marshalTagged encodes v's own fields with the kind tag spliced in front —
-// {"kind":"<kind>", ...v's fields} — the one tagged-object encoder every
-// closed variant set's codec shares (core §6.2).
-func marshalTagged(kind string, v any) ([]byte, error) {
-	body, err := json.Marshal(v)
-	if err != nil {
-		return nil, fmt.Errorf(`decad: failed to encode %s: %w`, kind, err)
-	}
-	tag, err := json.Marshal(struct {
-		Kind string `json:"kind"`
-	}{Kind: kind})
-	if err != nil {
-		return nil, fmt.Errorf(`decad: failed to encode %s tag: %w`, kind, err)
-	}
-	if string(body) == "{}" {
-		return tag, nil
-	}
-	// Splice: {"kind":"..."} + {...fields} -> {"kind":"...",...fields}
-	out := append(tag[:len(tag)-1], ',')
-	out = append(out, body[1:]...)
-	return out, nil
-}
-
-// segmentWire is the presence-aware form of every CurveSegment variant. Raw
-// fields distinguish an omitted or null required field from a valid zero
-// coordinate, parameter or boolean.
-type segmentWire struct {
-	Kind     *string         `json:"kind"`
-	Start    json.RawMessage `json:"start"`
-	End      json.RawMessage `json:"end"`
-	Center   json.RawMessage `json:"center"`
-	Apex     json.RawMessage `json:"apex"`
-	Radius   json.RawMessage `json:"radius"`
-	Rx       json.RawMessage `json:"rx"`
-	Ry       json.RawMessage `json:"ry"`
-	Rotation json.RawMessage `json:"rotation"`
-	CCW      json.RawMessage `json:"ccw"`
-	Control  json.RawMessage `json:"control"`
-	Degree   json.RawMessage `json:"degree"`
-	Knots    json.RawMessage `json:"knots"`
-	Weights  json.RawMessage `json:"weights"`
-	Fit      json.RawMessage `json:"fit"`
-	Rho      json.RawMessage `json:"rho"`
-	TStart   json.RawMessage `json:"t_start"`
-	TEnd     json.RawMessage `json:"t_end"`
-}
-
-type namedSegmentWireField struct {
-	name string
-	raw  json.RawMessage
-}
-
-func presentSegmentWireField(raw json.RawMessage) bool {
-	return len(raw) != 0 && !bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
-}
-
-func requireSegmentWireFields(kind string, fields ...namedSegmentWireField) error {
-	for _, field := range fields {
-		if !presentSegmentWireField(field.raw) {
-			return prependCodecPath(fmt.Errorf(`%w: %s segment is missing required field %q`, ErrDegenerate, kind, field.name), field.name)
-		}
-	}
-	return nil
-}
-
-func requirePointWire(kind, field string, raw json.RawMessage) error {
-	var point struct {
-		U *float64 `json:"u"`
-		V *float64 `json:"v"`
-	}
-	if err := json.Unmarshal(raw, &point); err != nil {
-		return prependCodecPath(
-			codecJSONErrorAt(raw, &point, fmt.Errorf(`decad: failed to decode %s segment field %q: %w`, kind, field, err)),
-			field,
-		)
-	}
-	if point.U == nil {
-		return prependCodecPath(fmt.Errorf(`%w: %s segment field %q is missing required coordinate "u"`, ErrDegenerate, kind, field), field+".u")
-	}
-	if point.V == nil {
-		return prependCodecPath(fmt.Errorf(`%w: %s segment field %q is missing required coordinate "v"`, ErrDegenerate, kind, field), field+".v")
-	}
-	return nil
-}
-
-func requirePointArrayWire(kind, field string, raw json.RawMessage) error {
-	var points []json.RawMessage
-	if err := json.Unmarshal(raw, &points); err != nil {
-		return prependCodecPath(fmt.Errorf(`decad: failed to decode %s segment field %q: %w`, kind, field, err), field)
-	}
-	for i, point := range points {
-		if !presentSegmentWireField(point) {
-			return prependCodecPath(fmt.Errorf(`%w: %s segment field %q has a null point at index %d`, ErrDegenerate, kind, field, i), fmt.Sprintf(`%s[%d]`, field, i))
-		}
-		if err := requirePointWire(kind, fmt.Sprintf(`%s[%d]`, field, i), point); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func requireNumberArrayWire(kind, field string, raw json.RawMessage) error {
-	var numbers []json.RawMessage
-	if err := json.Unmarshal(raw, &numbers); err != nil {
-		return prependCodecPath(fmt.Errorf(`decad: failed to decode %s segment field %q: %w`, kind, field, err), field)
-	}
-	for i, number := range numbers {
-		if !presentSegmentWireField(number) {
-			return prependCodecPath(fmt.Errorf(`%w: %s segment field %q has a null value at index %d`, ErrDegenerate, kind, field, i), fmt.Sprintf(`%s[%d]`, field, i))
-		}
-	}
-	return nil
-}
-
-// validateSegmentWire checks required top-level and nested fields before the
-// concrete variant is built. Unknown fields remain the root recipe codec's
-// responsibility; this layer owns only CurveSegment requiredness.
-func validateSegmentWire(kind string, wire segmentWire) error {
-	f := func(name string, raw json.RawMessage) namedSegmentWireField {
-		return namedSegmentWireField{name: name, raw: raw}
-	}
-
-	var required []namedSegmentWireField
-	var points, pointArrays, numberArrays []namedSegmentWireField
-	switch kind {
-	case segKindLine:
-		required = []namedSegmentWireField{
-			f(segmentFieldStart, wire.Start), f(segmentFieldEnd, wire.End), f("t_start", wire.TStart), f("t_end", wire.TEnd),
-		}
-		points = required[:2]
-	case segKindCircle:
-		required = []namedSegmentWireField{
-			f("center", wire.Center), f("radius", wire.Radius), f("ccw", wire.CCW),
-			f("t_start", wire.TStart), f("t_end", wire.TEnd),
-		}
-		points = required[:1]
-	case segKindArc:
-		required = []namedSegmentWireField{
-			f("center", wire.Center), f(segmentFieldStart, wire.Start), f(segmentFieldEnd, wire.End),
-			f("t_start", wire.TStart), f("t_end", wire.TEnd),
-		}
-		points = required[:3]
-	case segKindEllipse:
-		required = []namedSegmentWireField{
-			f("center", wire.Center), f("rx", wire.Rx), f("ry", wire.Ry), f("rotation", wire.Rotation),
-			f("ccw", wire.CCW), f("t_start", wire.TStart), f("t_end", wire.TEnd),
-		}
-		points = required[:1]
-	case segKindEllipticalArc:
-		required = []namedSegmentWireField{
-			f("center", wire.Center), f(segmentFieldStart, wire.Start), f(segmentFieldEnd, wire.End),
-			f("rx", wire.Rx), f("ry", wire.Ry), f("rotation", wire.Rotation),
-			f("t_start", wire.TStart), f("t_end", wire.TEnd),
-		}
-		points = required[:3]
-	case segKindSpline:
-		required = []namedSegmentWireField{
-			f("control", wire.Control), f("t_start", wire.TStart), f("t_end", wire.TEnd),
-		}
-		pointArrays = required[:1]
-	case segKindNURBS:
-		required = []namedSegmentWireField{
-			f("degree", wire.Degree), f("control", wire.Control), f("knots", wire.Knots), f("weights", wire.Weights),
-			f("t_start", wire.TStart), f("t_end", wire.TEnd),
-		}
-		pointArrays = required[1:2]
-		numberArrays = required[2:4]
-	case segKindClosedSpline:
-		required = []namedSegmentWireField{
-			f("control", wire.Control), f("ccw", wire.CCW), f("t_start", wire.TStart), f("t_end", wire.TEnd),
-		}
-		pointArrays = required[:1]
-	case segKindFitSpline:
-		required = []namedSegmentWireField{
-			f("fit", wire.Fit), f("t_start", wire.TStart), f("t_end", wire.TEnd),
-		}
-		pointArrays = required[:1]
-	case segKindConic:
-		required = []namedSegmentWireField{
-			f(segmentFieldStart, wire.Start), f("apex", wire.Apex), f(segmentFieldEnd, wire.End), f("rho", wire.Rho),
-			f("t_start", wire.TStart), f("t_end", wire.TEnd),
-		}
-		points = required[:3]
-	default:
-		return prependCodecPath(fmt.Errorf(`decad: unknown curve segment kind %q`, kind), "kind")
-	}
-
-	if err := requireSegmentWireFields(kind, required...); err != nil {
-		return err
-	}
-	for _, field := range points {
-		if err := requirePointWire(kind, field.name, field.raw); err != nil {
-			return err
-		}
-	}
-	for _, field := range pointArrays {
-		if err := requirePointArrayWire(kind, field.name, field.raw); err != nil {
-			return err
-		}
-	}
-	for _, field := range numberArrays {
-		if err := requireNumberArrayWire(kind, field.name, field.raw); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// unmarshalSegment dispatches on the kind tag and decodes the matching
-// variant. A missing or unknown tag is an error: the set is closed, and there
-// is no fallback. Every required field is present and every segment invariant
-// holds before the decoded geometry is returned.
-func unmarshalSegment(data []byte) (CurveSegment, error) {
-	var wire segmentWire
-	if err := json.Unmarshal(data, &wire); err != nil {
-		return nil, codecJSONErrorAt(data, &wire, fmt.Errorf(`decad: failed to decode curve segment tag: %w`, err))
-	}
-	if wire.Kind == nil {
-		return nil, prependCodecPath(fmt.Errorf(`decad: curve segment is missing its kind tag`), "kind")
-	}
-	kind := *wire.Kind
-	if kind == "" {
-		return nil, prependCodecPath(fmt.Errorf(`decad: curve segment is missing its kind tag`), "kind")
-	}
-	if err := validateSegmentWire(kind, wire); err != nil {
-		return nil, err
-	}
-
-	var seg CurveSegment
-	switch kind {
-	case segKindLine:
-		seg = &LineSeg{}
-	case segKindCircle:
-		seg = &CircleSeg{}
-	case segKindArc:
-		seg = &ArcSeg{}
-	case segKindEllipse:
-		seg = &EllipseSeg{}
-	case segKindEllipticalArc:
-		seg = &EllipticalArcSeg{}
-	case segKindSpline:
-		seg = &SplineSeg{}
-	case segKindNURBS:
-		seg = &NURBSSeg{}
-	case segKindClosedSpline:
-		seg = &ClosedSplineSeg{}
-	case segKindFitSpline:
-		seg = &FitSplineSeg{}
-	case segKindConic:
-		seg = &ConicSeg{}
-	}
-	if err := json.Unmarshal(data, seg); err != nil {
-		return nil, codecJSONErrorAt(data, seg, fmt.Errorf(`decad: failed to decode %s segment: %w`, kind, err))
-	}
-	seg, err := normalizeSegment(seg)
-	if err != nil {
-		return nil, err
-	}
-	if err := validateSegment(seg); err != nil {
-		return nil, err
-	}
-	return seg, nil
-}
 
 func finiteSegmentValue(v float64) bool {
 	return !math.IsNaN(v) && !math.IsInf(v, 0)
@@ -837,7 +518,7 @@ func validateNURBSKnotRun(seg NURBSSeg, start, run int) error {
 	)
 }
 
-// validateSegment enforces the CurveSegment checks from recipe replay §3.1:
+// validateSegment enforces the CurveSegment structural checks:
 // finite values, physical unit kinds, non-negative magnitudes, normalized
 // non-empty ranges, closed-curve winding, spline field counts, and the complete
 // clamped NURBS shape.
@@ -1024,40 +705,4 @@ func normalizeSegment(s CurveSegment) (CurveSegment, error) {
 	default:
 		return s, nil
 	}
-}
-
-// MarshalJSON encodes the loop as {"segments": [tagged objects...]}.
-func (l LoopRecord) MarshalJSON() ([]byte, error) {
-	segs := make([]json.RawMessage, 0, len(l.Segments))
-	for _, s := range l.Segments {
-		b, err := marshalSegment(s)
-		if err != nil {
-			return nil, err
-		}
-		segs = append(segs, b)
-	}
-	return json.Marshal(struct {
-		Segments []json.RawMessage `json:"segments"`
-	}{Segments: segs})
-}
-
-// UnmarshalJSON decodes {"segments": [...]}, dispatching each segment on its
-// kind tag.
-func (l *LoopRecord) UnmarshalJSON(data []byte) error {
-	var raw struct {
-		Segments []json.RawMessage `json:"segments"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return codecJSONError(fmt.Errorf(`decad: failed to decode loop record: %w`, err))
-	}
-	segs := make([]CurveSegment, 0, len(raw.Segments))
-	for i, b := range raw.Segments {
-		s, err := unmarshalSegment(b)
-		if err != nil {
-			return prependCodecPath(err, fmt.Sprintf(`segments[%d]`, i))
-		}
-		segs = append(segs, s)
-	}
-	l.Segments = segs
-	return nil
 }

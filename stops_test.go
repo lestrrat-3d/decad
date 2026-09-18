@@ -1,9 +1,7 @@
 package decad_test
 
 import (
-	"encoding/json"
 	"math"
-	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -44,12 +42,12 @@ func plateAndPin(t *testing.T) (*sketch.Sketch, *sketch.Profile, *sketch.Profile
 
 // capEndFace selects a body's end cap by provenance.
 func capEndFace(b *decad.Body) *decad.FaceQuery {
-	return decad.Faces(decad.FaceCreatedBy(decad.FeatureRef{Step: b.Origin().Step, Role: roleCapEnd}))
+	return decad.Faces(decad.FaceCreatedBy(decad.CapEnd(b)))
 }
 
 // capStartFace selects a body's start cap by provenance.
 func capStartFace(b *decad.Body) *decad.FaceQuery {
-	return decad.Faces(decad.FaceCreatedBy(decad.FeatureRef{Step: b.Origin().Step, Role: roleCapStart}))
+	return decad.Faces(decad.FaceCreatedBy(decad.CapStart(b)))
 }
 
 func TestExtrudeThroughAll(t *testing.T) {
@@ -65,20 +63,8 @@ func TestExtrudeThroughAll(t *testing.T) {
 	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, 10), decadtest.Exactly())
 	requireManifold(t, pin)
 
-	// The stop body is a dependency, not an operand: it stays live, and its
-	// StepRef is recorded in the step's Inputs (core §6.2).
+	// The stop body is a dependency, not an operand, so it stays live.
 	require.Contains(t, doc.Bodies(), plate)
-	steps := doc.Recipe().Steps
-	require.Len(t, steps, 2)
-	require.Equal(t, []decad.StepRef{plate.Origin().Step}, steps[1].Inputs)
-	require.Equal(t, decad.ThroughAll{Dir: decad.Along}, steps[1].Extent)
-
-	// The recorded step round-trips through the wire codec.
-	buf, err := json.Marshal(steps[1])
-	require.NoError(t, err)
-	var got decad.Step
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, steps[1], got)
 
 	// The two bodies are box-disjoint, so Verify proves the model Sound —
 	// stop-built bodies are ordinary analytic prisms.
@@ -134,13 +120,13 @@ func TestExtrudeThroughAllStacked(t *testing.T) {
 	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	lower, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	second, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(0, 0, 25))
 	require.NoError(t, err)
-	upper, err := second.Placed(move)
+	_, err = second.Placed(move)
 	require.NoError(t, err)
 
 	// The sweep runs through the far side of EVERY live body it meets:
@@ -150,8 +136,6 @@ func TestExtrudeThroughAllStacked(t *testing.T) {
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(400*35))
 	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, 35), decadtest.Exactly())
-	steps := doc.Recipe().Steps
-	require.Equal(t, []decad.StepRef{lower.Origin().Step, upper.Origin().Step}, steps[len(steps)-1].Inputs)
 
 	// Nothing lies below the sketch plane, so an Against through-all has no
 	// stop at all.
@@ -164,7 +148,7 @@ func TestExtrudeThroughAllSides(t *testing.T) {
 	t.Parallel()
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()
-	above, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	_, err = doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(6), Dir: decad.Against})
 	require.NoError(t, err)
@@ -179,15 +163,13 @@ func TestExtrudeThroughAllSides(t *testing.T) {
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(400*13))
 	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, -3), r3.NewVec(140, 20, 10), decadtest.Exactly())
-	steps := doc.Recipe().Steps
-	require.Equal(t, []decad.StepRef{above.Origin().Step}, steps[len(steps)-1].Inputs)
 
 	// Both sides through-all: [−6, 10], one stop body per side, along side
 	// first. A fresh document, so the earlier pin is not itself a stop body.
 	doc2 := decad.New()
-	above2, err := doc2.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	_, err = doc2.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
-	below2, err := doc2.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(6), Dir: decad.Against})
+	_, err = doc2.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(6), Dir: decad.Against})
 	require.NoError(t, err)
 	pin2, err := doc2.Extrude(s, pinProf, decad.TwoSided{
 		One: decad.ThroughAllSide{},
@@ -195,16 +177,6 @@ func TestExtrudeThroughAllSides(t *testing.T) {
 	})
 	require.NoError(t, err)
 	decadtest.MeasuresBounds(t, pin2, r3.NewVec(120, 0, -6), r3.NewVec(140, 20, 10), decadtest.Exactly())
-	steps = doc2.Recipe().Steps
-	last := steps[len(steps)-1]
-	require.Equal(t, []decad.StepRef{above2.Origin().Step, below2.Origin().Step}, last.Inputs)
-
-	// The recorded two-sided extent round-trips.
-	buf, err := json.Marshal(last)
-	require.NoError(t, err)
-	var got decad.Step
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, last, got)
 }
 
 func TestExtrudeToFace(t *testing.T) {
@@ -223,23 +195,6 @@ func TestExtrudeToFace(t *testing.T) {
 	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, 10), decadtest.Exactly())
 	requireManifold(t, pin)
 	require.Contains(t, doc.Bodies(), plate, `a stop body is depended on, never retired`)
-
-	// The step records the extent with the body as its producing StepRef and
-	// a deep-copied selector, and depends on the body (core §6.2).
-	steps := doc.Recipe().Steps
-	require.Len(t, steps, 2)
-	require.Equal(t, []decad.StepRef{plate.Origin().Step}, steps[1].Inputs)
-	tf, ok := steps[1].Extent.(decad.ToFace)
-	require.True(t, ok, `the recorded extent stays a ToFace, never the resolved interval`)
-	require.Equal(t, plate.Origin().Step, tf.Body)
-	require.NotSame(t, q, tf.Face.(*decad.FaceQuery), `the recorded query never aliases the caller's`)
-
-	// The recorded step round-trips through the wire codec.
-	buf, err := json.Marshal(steps[1])
-	require.NoError(t, err)
-	var got decad.Step
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, steps[1], got)
 
 	// A positive offset overshoots the face, a negative one stops short of
 	// it (core §8.1).
@@ -284,20 +239,6 @@ func TestExtrudeToFaceSides(t *testing.T) {
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(400*16))
 	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, -6), r3.NewVec(140, 20, 10), decadtest.Exactly())
-	steps := doc.Recipe().Steps
-	last := steps[len(steps)-1]
-	require.Equal(t, []decad.StepRef{above.Origin().Step, below.Origin().Step}, last.Inputs)
-
-	// The recorded sides carry StepRefs and round-trip.
-	ts, ok := last.Extent.(decad.TwoSided)
-	require.True(t, ok)
-	require.Equal(t, above.Origin().Step, ts.One.(decad.ToFace).Body)
-	require.Equal(t, below.Origin().Step, ts.Two.(decad.ToFace).Body)
-	buf, err := json.Marshal(last)
-	require.NoError(t, err)
-	var got decad.Step
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, last, got)
 
 	// A side's face must lie on the side's own sense: the against side
 	// cannot stop at a face above the sketch plane.
@@ -315,15 +256,10 @@ func TestExtrudeToFaceGates(t *testing.T) {
 	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	liveBodies := len(doc.Bodies())
-	liveSteps := len(doc.Recipe().Steps)
 
 	t.Run("NilBody", func(t *testing.T) {
 		_, err := doc.Extrude(s, pinProf, decad.ToFace{Face: capEndFace(plate)})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
-	})
-	t.Run("StepRefBody", func(t *testing.T) {
-		_, err := doc.Extrude(s, pinProf, decad.ToFace{Body: decad.StepRef(0), Face: capEndFace(plate)})
-		require.ErrorIs(t, err, decad.ErrUnresolvedBody)
 	})
 	t.Run("ForeignBody", func(t *testing.T) {
 		other := decad.New()
@@ -406,9 +342,8 @@ func TestExtrudeToFaceGates(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 
-	// Every rejection left the recipe and the document untouched.
+	// Every rejection left the document untouched.
 	require.Len(t, doc.Bodies(), liveBodies)
-	require.Len(t, doc.Recipe().Steps, liveSteps)
 }
 
 // pinFootprint builds a solved 4×4 sketch square beside the revolve profiles
@@ -483,8 +418,6 @@ func TestExtrudeThroughAllArcSectionCarriesRadiusBound(t *testing.T) {
 	require.Less(t, pinBox.Bound.Base(), 1e-9,
 		`that displacement is the radius bracket's own width, not a blunder`)
 
-	steps := doc.Recipe().Steps
-	require.Equal(t, []decad.StepRef{host.Origin().Step}, steps[len(steps)-1].Inputs)
 	require.Contains(t, doc.Bodies(), host, `a stop body is depended on, never retired`)
 }
 
@@ -529,8 +462,6 @@ func TestExtrudeThroughAllRevolveStopChargesSweepExtreme(t *testing.T) {
 			`a stop level held by a bracket publishes that bracket as its own displacement`)
 		require.Less(t, pinBox.Bound.Base(), 1e-9,
 			`that displacement is the sweep extreme's own bracket, not a blunder`)
-		steps := doc.Recipe().Steps
-		require.Equal(t, []decad.StepRef{host.Origin().Step}, steps[len(steps)-1].Inputs)
 	})
 
 	t.Run("full revolution", func(t *testing.T) {
@@ -548,8 +479,6 @@ func TestExtrudeThroughAllRevolveStopChargesSweepExtreme(t *testing.T) {
 		decadtest.MeasuresVolume(t, pin, units.CubicMillimeters(128))
 		decadtest.MeasuresBounds(t, pin, r3.NewVec(20, 0, 0), r3.NewVec(24, 4, 8), decadtest.Exactly())
 		require.Contains(t, doc.Bodies(), host)
-		steps := doc.Recipe().Steps
-		require.Equal(t, []decad.StepRef{host.Origin().Step}, steps[len(steps)-1].Inputs)
 	})
 }
 
@@ -568,20 +497,6 @@ func TestRevolveToFaceAngular(t *testing.T) {
 	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(500*math.Pi))
 	decadtest.MeasuresBounds(t, body, r3.NewVec(0, 0, 0), r3.NewVec(10, 15, 15))
 	require.Contains(t, doc.Bodies(), host, `a stop body is depended on, never retired`)
-
-	// The step depends on the host, and the recorded extent carries the
-	// StepRef (core §6.2); it round-trips through the wire codec.
-	steps := doc.Recipe().Steps
-	require.Len(t, steps, 2)
-	require.Equal(t, []decad.StepRef{host.Origin().Step}, steps[1].Inputs)
-	tfa, ok := steps[1].Angular.(decad.ToFaceAngular)
-	require.True(t, ok, `the recorded extent stays a ToFaceAngular, never the resolved interval`)
-	require.Equal(t, host.Origin().Step, tfa.Body)
-	buf, err := json.Marshal(steps[1])
-	require.NoError(t, err)
-	var got decad.Step
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, steps[1], got)
 
 	// The start cap lies in the profile's own half-plane: a zero sweep.
 	_, err = doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capStartFace(host)})
@@ -617,8 +532,6 @@ func TestRevolveToFaceAngularSides(t *testing.T) {
 	})
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(750*math.Pi))
-	steps := doc.Recipe().Steps
-	require.Equal(t, []decad.StepRef{host.Origin().Step}, steps[len(steps)-1].Inputs)
 
 	// As the against side the side supplies the sense, so the same face is
 	// reached the long way around: [−3π/2, π/4].
@@ -628,18 +541,6 @@ func TestRevolveToFaceAngularSides(t *testing.T) {
 	})
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, long, units.CubicMillimeters(1750*math.Pi))
-
-	// The recorded sides carry StepRefs and round-trip.
-	steps = doc.Recipe().Steps
-	last := steps[len(steps)-1]
-	tsa, ok := last.Angular.(decad.TwoSidedAngle)
-	require.True(t, ok)
-	require.Equal(t, host.Origin().Step, tsa.Two.(decad.ToFaceAngular).Body)
-	buf, err := json.Marshal(last)
-	require.NoError(t, err)
-	var got decad.Step
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, last, got)
 }
 
 func TestRevolveToFaceAngularHalfDiskCap(t *testing.T) {
@@ -669,7 +570,6 @@ func TestRevolveToFaceAngularGates(t *testing.T) {
 	require.NoError(t, err)
 	prism := trianglePrismHost(t, doc)
 	liveBodies := len(doc.Bodies())
-	liveSteps := len(doc.Recipe().Steps)
 
 	t.Run("NonPlanarStopFace", func(t *testing.T) {
 		cs, cp := solidSketch(t)
@@ -707,10 +607,6 @@ func TestRevolveToFaceAngularGates(t *testing.T) {
 		_, err = doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: straddle, Face: capStartFace(straddle)})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
-	t.Run("StepRefBody", func(t *testing.T) {
-		_, err := doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: decad.StepRef(0), Face: capEndFace(host)})
-		require.ErrorIs(t, err, decad.ErrUnresolvedBody)
-	})
 	t.Run("NilBody", func(t *testing.T) {
 		_, err := doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Face: capEndFace(host)})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
@@ -736,140 +632,6 @@ func TestRevolveToFaceAngularGates(t *testing.T) {
 	// their own hosts append their own steps to doc first, so the counts are
 	// taken against the final successful state).
 	require.Len(t, doc.Bodies(), liveBodies+1)
-	require.Len(t, doc.Recipe().Steps, liveSteps+1)
-}
-
-func TestBodyStopExtentKeying(t *testing.T) {
-	t.Parallel()
-	// The one-of contract of core §6.2, on both wire directions, for the new
-	// variants: a linear ToFace is keyed to extrude, an angular ToFaceAngular
-	// to revolve.
-	linear := decad.ToFace{Body: decad.StepRef(0), Face: decad.Faces(decad.Planar()), Offset: units.Millimeters(0)}
-	angular := decad.ToFaceAngular{Body: decad.StepRef(0), Face: decad.Faces(decad.Planar())}
-
-	wrongRevolve := validCodecStep(decad.OpRevolve)
-	wrongRevolve.Extent = linear
-	_, err := json.Marshal(wrongRevolve)
-	require.Error(t, err, `a linear to-face under revolve does not encode`)
-	wrongExtrude := validCodecStep(decad.OpExtrude)
-	wrongExtrude.Angular = angular
-	_, err = json.Marshal(wrongExtrude)
-	require.Error(t, err, `an angular to-face under extrude does not encode`)
-
-	// Decode direction: swap the ops in otherwise-valid wire steps.
-	extrude := validCodecStep(decad.OpExtrude)
-	extrude.Extent = linear
-	extrudeStep, err := json.Marshal(extrude)
-	require.NoError(t, err)
-	var tampered decad.Step
-	swapped := strings.Replace(string(extrudeStep), `"op":"extrude"`, `"op":"revolve"`, 1)
-	require.Error(t, json.Unmarshal([]byte(swapped), &tampered))
-
-	revolve := validCodecStep(decad.OpRevolve)
-	revolve.Angular = angular
-	revolveStep, err := json.Marshal(revolve)
-	require.NoError(t, err)
-	swapped = strings.Replace(string(revolveStep), `"op":"revolve"`, `"op":"extrude"`, 1)
-	require.Error(t, json.Unmarshal([]byte(swapped), &tampered))
-}
-
-func TestBodyStopCodecGates(t *testing.T) {
-	t.Parallel()
-	t.Run("LiveBodyNeverEncodes", func(t *testing.T) {
-		s, plateProf, _ := plateAndPin(t)
-		doc := decad.New()
-		plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
-		require.NoError(t, err)
-		step := validCodecStep(decad.OpExtrude)
-		step.Extent = decad.ToFace{Body: plate, Face: capEndFace(plate)}
-		_, err = json.Marshal(step)
-		require.Error(t, err, `a recorded step holds a StepRef, never a live body`)
-	})
-	t.Run("MissingFields", func(t *testing.T) {
-		for _, raw := range []string{
-			`{"kind":"to_face"}`,
-			`{"kind":"to_face","body":0,"face":{"kind":"faces","preds":[]}}`,
-			`{"kind":"to_face","body":0,"offset":"0 mm"}`,
-		} {
-			var step decad.Step
-			require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","extent":`+raw+`}`), &step), raw)
-		}
-		var step decad.Step
-		require.Error(t, json.Unmarshal([]byte(`{"op":"revolve","angular":{"kind":"to_face_angular","body":0}}`), &step))
-	})
-	t.Run("PointerFormsNormalize", func(t *testing.T) {
-		tf := &decad.ToFace{Body: decad.StepRef(0), Face: decad.Faces(decad.Planar()), Offset: units.Millimeters(1)}
-		extrude := validCodecStep(decad.OpExtrude)
-		extrude.Extent = tf
-		buf, err := json.Marshal(extrude)
-		require.NoError(t, err)
-		var got decad.Step
-		require.NoError(t, json.Unmarshal(buf, &got))
-		require.Equal(t, *tf, got.Extent, `the pointer form records the value it names`)
-
-		tfa := &decad.ToFaceAngular{Body: decad.StepRef(0), Face: decad.Faces(decad.Planar())}
-		revolve := validCodecStep(decad.OpRevolve)
-		revolve.Angular = tfa
-		buf, err = json.Marshal(revolve)
-		require.NoError(t, err)
-		require.NoError(t, json.Unmarshal(buf, &got))
-		require.Equal(t, *tfa, got.Angular)
-	})
-	t.Run("NilPointersAreBranchable", func(t *testing.T) {
-		extrude := validCodecStep(decad.OpExtrude)
-		extrude.Extent = (*decad.ToFace)(nil)
-		_, err := json.Marshal(extrude)
-		require.Error(t, err)
-		revolve := validCodecStep(decad.OpRevolve)
-		revolve.Angular = (*decad.ToFaceAngular)(nil)
-		_, err = json.Marshal(revolve)
-		require.Error(t, err)
-	})
-	t.Run("ZeroOffsetNormalizes", func(t *testing.T) {
-		// A zero-value Offset means no displacement; the wire always carries
-		// an explicit length.
-		step := validCodecStep(decad.OpExtrude)
-		step.Extent = decad.ToFace{Body: decad.StepRef(0), Face: decad.Faces(decad.Planar())}
-		buf, err := json.Marshal(step)
-		require.NoError(t, err)
-		var got decad.Step
-		require.NoError(t, json.Unmarshal(buf, &got))
-		require.Equal(t, units.Millimeters(0), got.Extent.(decad.ToFace).Offset)
-	})
-}
-
-func TestBodyStopRecipeRoundTrip(t *testing.T) {
-	t.Parallel()
-	// A whole recipe holding every stop shape — through-all, to-face with an
-	// offset, two-sided mixes, and the angular stop — survives the wire.
-	s, plateProf, pinProf := plateAndPin(t)
-	doc := decad.New()
-	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
-	require.NoError(t, err)
-	_, err = doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(6), Dir: decad.Against})
-	require.NoError(t, err)
-	_, err = doc.Extrude(s, pinProf, decad.ThroughAll{Dir: decad.Along})
-	require.NoError(t, err)
-	_, err = doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate), Offset: units.Millimeters(-2)})
-	require.NoError(t, err)
-	_, err = doc.Extrude(s, pinProf, decad.TwoSided{
-		One: decad.ToFace{Body: plate, Face: capEndFace(plate)},
-		Two: decad.ThroughAllSide{},
-	})
-	require.NoError(t, err)
-
-	rs, rp := annularSketch(t)
-	host, err := doc.Revolve(rs, rp, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
-	require.NoError(t, err)
-	_, err = doc.Revolve(rs, rp, uAxis, decad.ToFaceAngular{Body: host, Face: capEndFace(host)})
-	require.NoError(t, err)
-
-	recipe := doc.Recipe()
-	buf, err := json.Marshal(recipe)
-	require.NoError(t, err)
-	var got decad.Recipe
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, recipe, got)
 }
 
 // TestExtrudeThroughAllCupStop proves docs/modify-design.md Table D, D5: a
@@ -900,11 +662,8 @@ func TestExtrudeThroughAllCupStop(t *testing.T) {
 	decadtest.MeasuresBounds(t, pin, r3.NewVec(120, 0, 0), r3.NewVec(140, 20, 20), decadtest.Exactly())
 	requireManifold(t, pin)
 
-	// The cup is a recorded dependency of the stop step, not an operand: it
-	// stays live and its StepRef is the step's Inputs (core §6.2).
+	// The cup is a dependency of the stop, not an operand, so it stays live.
 	require.Contains(t, doc.Bodies(), cup)
-	steps := doc.Recipe().Steps
-	require.Equal(t, []decad.StepRef{cup.Origin().Step}, steps[len(steps)-1].Inputs)
 }
 
 // TestExtrudeThroughAllSideCupStop is the ThroughAllSide sibling: a two-sided

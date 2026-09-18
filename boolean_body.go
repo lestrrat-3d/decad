@@ -77,7 +77,7 @@ func (fp facetedPayload) transform() r3.Transform { return fp.xform }
 // move through the delta motion (float rounding is folded into the proven
 // bounds — the geometry is never silently trusted), a reflection flips the
 // windings, and the topology and measurements rebuild from the moved mesh.
-func (fp facetedPayload) placed(ctx context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
+func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	budget := newWorkBudget(ctx)
 	if err := budget.err(); err != nil {
 		return nil, err
@@ -318,7 +318,7 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*face
 // buildFacetedBody assembles the Faceted body from the payload: exact
 // component/void analysis, per-source-face topology, and measurements with
 // the composed proven bounds.
-func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedPayload) (*Body, error) {
+func buildFacetedBody(ctx context.Context, d *Document, ref producerID, pp facetedPayload) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -342,7 +342,7 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 	xverts, comp, adj := audit.xverts, audit.comp, audit.adj
 	members, compVol, contains := audit.members, audit.compVol, audit.contains
 
-	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: roleBody}, solid: true}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
 	boundMM := units.Millimeters(pp.meshBound)
 
 	for _, s := range pp.src {

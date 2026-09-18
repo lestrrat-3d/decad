@@ -43,6 +43,14 @@ const boolPropSeed = 0x0DECAD
 // abox is an axis-aligned box in world space, lo < hi on every axis.
 type abox struct{ lo, hi r3.Vec }
 
+type boolOp int
+
+const (
+	boolUnion boolOp = iota
+	boolIntersect
+	boolCut
+)
+
 func (a abox) volume() float64 {
 	return (a.hi.X - a.lo.X) * (a.hi.Y - a.lo.Y) * (a.hi.Z - a.lo.Z)
 }
@@ -54,7 +62,7 @@ func (a abox) center() r3.Vec {
 // abConfig bundles a boolean op with its two operand boxes for failure
 // messages: a require failure prints the exact configuration that hit it.
 type abConfig struct {
-	op   decad.OpKind
+	op   boolOp
 	a, b abox
 }
 
@@ -70,22 +78,22 @@ func overlap(a, b abox) (abox, float64) {
 // boolean of two axis-aligned boxes. Exact in closed form by inclusion-
 // exclusion over axis-aligned boxes; the shared boundary is a zero-measure set,
 // so a touching contact contributes nothing.
-func trueBoolean(op decad.OpKind, a, b abox) (float64, r3.Vec) {
+func trueBoolean(op boolOp, a, b abox) (float64, r3.Vec) {
 	o, ov := overlap(a, b)
 	va, vb := a.volume(), b.volume()
 	var vol float64
 	var cen r3.Vec
 	switch op {
-	case decad.OpUnion:
+	case boolUnion:
 		vol = va + vb - ov
 		if vol > 1e-12 {
 			m := a.center().Scale(va).Add(b.center().Scale(vb)).Sub(o.center().Scale(ov))
 			cen = m.Scale(1 / vol)
 		}
-	case decad.OpIntersect:
+	case boolIntersect:
 		vol = ov
 		cen = o.center()
-	case decad.OpCut:
+	case boolCut:
 		vol = va - ov
 		if vol > 1e-12 {
 			m := a.center().Scale(va).Sub(o.center().Scale(ov))
@@ -107,11 +115,11 @@ func makeBox(t *testing.T, doc *decad.Document, a abox) *decad.Body {
 }
 
 // runBool dispatches the op over two live bodies.
-func runBool(op decad.OpKind, a, b *decad.Body) (*decad.Body, error) {
+func runBool(op boolOp, a, b *decad.Body) (*decad.Body, error) {
 	switch op {
-	case decad.OpUnion:
+	case boolUnion:
 		return decad.Union(a, b)
-	case decad.OpIntersect:
+	case boolIntersect:
 		return decad.Intersect(a, b)
 	default:
 		return decad.Cut(a, b)
@@ -198,7 +206,7 @@ func TestBooleanBoundSoundnessAxisAligned(t *testing.T) {
 	t.Parallel()
 	t.Logf("boolPropSeed=%#x", boolPropSeed)
 	rng := rand.New(rand.NewSource(boolPropSeed))
-	ops := []decad.OpKind{decad.OpUnion, decad.OpIntersect, decad.OpCut}
+	ops := []boolOp{boolUnion, boolIntersect, boolCut}
 
 	// Axis-aligned geometry is the hard case for the boolean's axis-ray parity
 	// classifier: an axis ray from a seed point can graze the coplanar faces of
@@ -233,7 +241,7 @@ func TestBooleanBoundSoundnessAxisAligned(t *testing.T) {
 			// The intersection of two axis-aligned boxes is itself an axis-
 			// aligned box, so its true surface area is closed form too — an
 			// independent area oracle.
-			if op == decad.OpIntersect {
+			if op == boolIntersect {
 				o, _ := overlap(a, b)
 				dx, dy, dz := o.hi.X-o.lo.X, o.hi.Y-o.lo.Y, o.hi.Z-o.lo.Z
 				trueArea := 2 * (dx*dy + dy*dz + dz*dx)
@@ -251,7 +259,7 @@ func TestBooleanBoundSoundnessRotated(t *testing.T) {
 	t.Parallel()
 	t.Logf("boolPropSeed=%#x", boolPropSeed)
 	rng := rand.New(rand.NewSource(boolPropSeed + 1))
-	ops := []decad.OpKind{decad.OpUnion, decad.OpIntersect, decad.OpCut}
+	ops := []boolOp{boolUnion, boolIntersect, boolCut}
 
 	for iter := range 40 {
 		a, b := cleanTransversalPair(rng)
@@ -405,7 +413,7 @@ func TestBooleanDegenerateClusterSoundness(t *testing.T) {
 	t.Parallel()
 	t.Logf("boolPropSeed=%#x", boolPropSeed)
 	rng := rand.New(rand.NewSource(boolPropSeed + 3))
-	ops := []decad.OpKind{decad.OpUnion, decad.OpIntersect, decad.OpCut}
+	ops := []boolOp{boolUnion, boolIntersect, boolCut}
 
 	// Every coordinate is drawn from {0,3,6,9}, so coincident faces, shared
 	// edges, corner/edge kisses, nesting and disjoint-touching all arise. For
@@ -670,7 +678,7 @@ func FuzzBoolean(f *testing.F) {
 		if !okA || !okB {
 			return
 		}
-		ops := []decad.OpKind{decad.OpUnion, decad.OpIntersect, decad.OpCut}
+		ops := []boolOp{boolUnion, boolIntersect, boolCut}
 		op := ops[int(data[12])%len(ops)]
 		cfg := abConfig{op, a, b}
 

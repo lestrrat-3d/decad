@@ -3,7 +3,6 @@ package decad_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"math"
 	"runtime"
 	"strings"
@@ -63,11 +62,11 @@ func holedBox(t *testing.T, x0, y0, x1, y1 float64) *decad.Body {
 
 // topCap selects a prism's end cap by its role.
 func topCap(b *decad.Body) *decad.FaceQuery {
-	return decad.Faces(decad.FaceCreatedBy(decad.FeatureRef{Step: b.Origin().Step, Role: roleCapEnd}))
+	return decad.Faces(decad.FaceCreatedBy(decad.CapEnd(b)))
 }
 
 // forwardingFaceSelector is a foreign selector implementation that embeds the
-// built-in query to promote Selector's sealed marker, then overrides resolution.
+// built-in query to promote selector's sealed marker, then overrides resolution.
 type forwardingFaceSelector struct {
 	*decad.FaceQuery
 	calls *int
@@ -121,7 +120,6 @@ func (c *offsetPreprocessingCancelContext) Err() error {
 func TestShellContextCancellationDuringOffsetLeavesReceiverLive(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)
-	before := doc.Recipe()
 	ctx := &offsetPreprocessingCancelContext{Context: t.Context()}
 
 	body, err := box.ShellContext(ctx, topCap(box), units.Millimeters(5))
@@ -129,14 +127,12 @@ func TestShellContextCancellationDuringOffsetLeavesReceiverLive(t *testing.T) {
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
-	require.Equal(t, before, doc.Recipe())
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
 }
 
 func TestShellContextCancellationDuringOffsetSetupLeavesReceiverLive(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)
-	before := doc.Recipe()
 	ctx := &operationCancelContext{Context: t.Context(), target: "prismCornerLoopsBudget"}
 
 	body, err := box.ShellContext(ctx, topCap(box), units.Millimeters(5))
@@ -144,14 +140,12 @@ func TestShellContextCancellationDuringOffsetSetupLeavesReceiverLive(t *testing.
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
-	require.Equal(t, before, doc.Recipe())
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
 }
 
 func TestShellContextCancellationDuringSectionSurveyLeavesReceiverLive(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)
-	before := doc.Recipe()
 	ctx := &operationCancelContext{Context: t.Context(), target: "sectionInradius"}
 
 	body, err := box.ShellContext(ctx, topCap(box), units.Millimeters(5))
@@ -159,14 +153,12 @@ func TestShellContextCancellationDuringSectionSurveyLeavesReceiverLive(t *testin
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
-	require.Equal(t, before, doc.Recipe())
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
 }
 
 func TestShellContextCancellationDuringKernelSetupLeavesReceiverLive(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)
-	before := doc.Recipe()
 	ctx := &operationCancelContext{Context: t.Context(), target: "newWallKernelBudget"}
 
 	body, err := box.ShellContext(ctx, topCap(box), units.Millimeters(5))
@@ -174,7 +166,6 @@ func TestShellContextCancellationDuringKernelSetupLeavesReceiverLive(t *testing.
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
-	require.Equal(t, before, doc.Recipe())
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
 }
 
@@ -183,7 +174,6 @@ func TestShellContextCancellationDuringAuditPreservesError(t *testing.T) {
 	for _, cancelErr := range []error{context.Canceled, context.DeadlineExceeded} {
 		t.Run(cancelErr.Error(), func(t *testing.T) {
 			doc, box := manySidedPrism(t, 17)
-			before := doc.Recipe()
 			ctx := &operationCancelContext{
 				Context:   t.Context(),
 				target:    "auditOffsetSectionBudget",
@@ -195,7 +185,6 @@ func TestShellContextCancellationDuringAuditPreservesError(t *testing.T) {
 			require.Nil(t, body)
 			require.True(t, err == cancelErr, "ShellContext must return the exact context error")
 			require.True(t, ctx.entered)
-			require.Equal(t, before, doc.Recipe())
 			require.Equal(t, []*decad.Body{box}, doc.Bodies())
 		})
 	}
@@ -209,18 +198,14 @@ func (s forwardingFaceSelector) SelectFaces(body *decad.Body) ([]*decad.Face, er
 func TestShellSelectorAdmission(t *testing.T) {
 	t.Parallel()
 	t.Run("BuiltInQuery", func(t *testing.T) {
-		doc, box := shellBox(t)
+		_, box := shellBox(t)
 
 		_, err := box.Shell(bothCaps(), units.Millimeters(5))
-		require.NoError(t, err)
-		require.Len(t, doc.Recipe().Steps, 2)
-		_, err = json.Marshal(doc.Recipe())
 		require.NoError(t, err)
 	})
 
 	t.Run("ForeignImplementation", func(t *testing.T) {
 		doc, box := shellBox(t)
-		before := doc.Recipe()
 		calls := 0
 		foreign := forwardingFaceSelector{
 			FaceQuery: bothCaps(),
@@ -230,21 +215,16 @@ func TestShellSelectorAdmission(t *testing.T) {
 		_, err := box.Shell(foreign, units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Zero(t, calls, `Shell rejects a foreign selector before invoking its callback`)
-		require.Equal(t, before, doc.Recipe(), `a rejected selector records no step`)
 		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a rejected selector does not retire the receiver`)
-		_, err = json.Marshal(doc.Recipe())
-		require.NoError(t, err)
 	})
 
 	t.Run("TypedNilQuery", func(t *testing.T) {
 		doc, box := shellBox(t)
-		before := doc.Recipe()
 		var query *decad.FaceQuery
 		var selector decad.FaceSelector = query
 
 		_, err := box.Shell(selector, units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
-		require.Equal(t, before, doc.Recipe(), `a typed nil selector records no step`)
 		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a typed nil selector does not retire the receiver`)
 	})
 }
@@ -266,27 +246,22 @@ func TestShellOptionDispatch(t *testing.T) {
 	tests := []struct {
 		name string
 		opts []decad.ShellOption
-		want decad.ShellSense
 	}{
-		{name: "default", want: decad.Inward},
-		{name: "inward", opts: []decad.ShellOption{decad.WithShellSense(decad.Inward)}, want: decad.Inward},
-		{name: "outward", opts: []decad.ShellOption{decad.WithShellSense(decad.Outward)}, want: decad.Outward},
+		{name: "default"},
+		{name: "inward", opts: []decad.ShellOption{decad.WithShellSense(decad.Inward)}},
+		{name: "outward", opts: []decad.ShellOption{decad.WithShellSense(decad.Outward)}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			doc, box := shellBox(t)
+			_, box := shellBox(t)
 			body, err := box.Shell(topCap(box), units.Millimeters(5), tc.opts...)
 			require.NoError(t, err)
 			require.NotNil(t, body)
-			recipe := doc.Recipe()
-			require.Len(t, recipe.Steps, 2)
-			require.Equal(t, decad.ShellOpts{Sense: tc.want}, recipe.Steps[1].Opts)
 		})
 	}
 
 	t.Run("ForeignImplementation", func(t *testing.T) {
 		doc, box := shellBox(t)
-		before := doc.Recipe()
 		calls := 0
 		opt := unknownShellOption{
 			ShellOption: decad.WithShellSense(decad.Outward),
@@ -298,13 +273,11 @@ func TestShellOptionDispatch(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "not a decad shell option")
 		require.Zero(t, calls, `Shell rejects a foreign option before invoking its callback`)
-		require.Equal(t, before, doc.Recipe())
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	})
 
 	t.Run("TypedNilImplementation", func(t *testing.T) {
 		doc, box := shellBox(t)
-		before := doc.Recipe()
 		var opt *unknownShellOption
 		var body *decad.Body
 		var err error
@@ -315,19 +288,16 @@ func TestShellOptionDispatch(t *testing.T) {
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "not a decad shell option")
-		require.Equal(t, before, doc.Recipe())
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	})
 
 	t.Run("UnknownSense", func(t *testing.T) {
 		doc, box := shellBox(t)
-		before := doc.Recipe()
 
 		body, err := box.Shell(topCap(box), units.Millimeters(5), decad.WithShellSense(decad.ShellSense(2)))
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "unknown shell sense 2")
-		require.Equal(t, before, doc.Recipe())
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	})
 }
@@ -376,18 +346,6 @@ func TestShellTubeInwardBox(t *testing.T) {
 	require.NotNil(t, br.Wall.Minimum)
 	require.True(t, br.Wall.Minimum.Value.Equal(units.Millimeters(th), 1e-9),
 		`the tube wall is the shell thickness, got %s`, br.Wall.Minimum.Value)
-
-	// The recipe records the shell intent and round-trips.
-	recipe := doc.Recipe()
-	require.Len(t, recipe.Steps, 2)
-	require.Equal(t, decad.OpShell, recipe.Steps[1].Op)
-	require.Equal(t, decad.ShellOpts{Sense: decad.Inward}, recipe.Steps[1].Opts)
-	require.Len(t, recipe.Steps[1].Selectors, 1)
-	buf, err := json.Marshal(recipe)
-	require.NoError(t, err)
-	var got decad.Recipe
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, recipe, got, `the recorded shell recipe round-trips`)
 }
 
 func TestShellTubeInwardCylinder(t *testing.T) {
@@ -913,7 +871,7 @@ func TestShellRefusals(t *testing.T) {
 
 	t.Run("removing a side wall is S2 unsupported", func(t *testing.T) {
 		_, box := shellBox(t)
-		wall := decad.Faces(decad.FaceCreatedBy(decad.FeatureRef{Step: box.Origin().Step, Role: "side(0,0)"}))
+		wall := decad.Faces(decad.FaceCreatedBy(featureRefWithRole(t, box, "side(0,0)")))
 		_, err := box.Shell(wall, units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
@@ -951,9 +909,6 @@ func TestShellInwardSectionWorkBudget(t *testing.T) {
 	require.Contains(t, err.Error(), "work budget")
 	require.Contains(t, err.Error(), "candidate-family visits")
 	require.Equal(t, before.bodies, doc.Bodies(), `a refused shell must preserve live body membership and order`)
-	recipe, marshalErr := json.Marshal(doc.Recipe())
-	require.NoError(t, marshalErr)
-	require.Equal(t, before.recipe, recipe, `a refused shell must not append a recipe step`)
 	_, err = box.Duplicate()
 	require.NoError(t, err, `the receiver must remain live after a work-budget refusal`)
 }
@@ -1091,7 +1046,6 @@ func TestShellCupWallContextCancellationDuringFollowUpLeavesDocumentUnchanged(t 
 	doc, box := shellBox(t)
 	_, err := box.Shell(topCap(box), units.Millimeters(5))
 	require.NoError(t, err)
-	before := doc.Recipe()
 	bodies := doc.Bodies()
 	ctx := &operationCancelContext{Context: t.Context(), target: "recordLoopsBudget"}
 
@@ -1100,7 +1054,6 @@ func TestShellCupWallContextCancellationDuringFollowUpLeavesDocumentUnchanged(t 
 	require.Nil(t, report)
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
-	require.Equal(t, before, doc.Recipe())
 	require.Equal(t, bodies, doc.Bodies())
 }
 
@@ -1406,7 +1359,7 @@ func TestShellCupUndercutsBox(t *testing.T) {
 			require.Equal(t, decad.KindPlane, f.Surface().Kind())
 		}
 		// The kept outer floor (capStart) is one of them.
-		capStartRef := decad.FeatureRef{Step: cup.Origin().Step, Role: roleCapStart}
+		capStartRef := decad.CapStart(cup)
 		found := false
 		for _, f := range br.Undercut.Faces {
 			for _, o := range f.Origins() {
@@ -1667,7 +1620,7 @@ func TestShellCupHoledUndercuts(t *testing.T) {
 		br := report.Bodies[0]
 		require.Equal(t, decad.Violating, br.Status)
 
-		postRef := decad.FeatureRef{Step: cup.Origin().Step, Role: "shellSide(1,0)"}
+		postRef := featureRefWithRole(t, cup, "shellSide(1,0)")
 		var post *decad.Face
 		for _, f := range br.Undercut.Faces {
 			for _, o := range f.Origins() {

@@ -135,7 +135,7 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 		return nil, err
 	}
 	if !lateral {
-		ref := doc.nextStepRef()
+		ref := doc.nextProducerID()
 		body, err := buildCapBlend(ctx, doc, ref, pp, dmm, dDelta, startLoops, endLoops)
 		if err != nil {
 			return nil, err
@@ -146,13 +146,7 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		step := Step{
-			Op:        OpChamfer,
-			Inputs:    []StepRef{b.originStep()},
-			Selectors: cloneSelectors([]Selector{q}),
-			Values:    []units.Value{d},
-		}
-		doc.commit(step, body, b)
+		doc.commit(body, b)
 		return body, nil
 	}
 
@@ -212,13 +206,7 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 
 	// Build through evalPrism (§2): same frame, interval and placement, only
 	// the section changed.
-	step := Step{
-		Op:        OpChamfer,
-		Inputs:    []StepRef{b.originStep()},
-		Selectors: cloneSelectors([]Selector{q}),
-		Values:    []units.Value{d},
-	}
-	ref := doc.nextStepRef()
+	ref := doc.nextProducerID()
 	// The blend descriptors ride on the payload so a re-evaluation (a copy or a
 	// placement) re-mints its own chamfer(i,j) roles; evalPrism applies them.
 	// The rewritten section is a NEW record no preflight has seen, so the build
@@ -239,14 +227,14 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 	if err != nil {
 		return nil, err
 	}
-	// Keep the consumed input aligned with recipe liveness at the commit edge.
+	// Keep the consumed input aligned with document liveness at the commit edge.
 	if err := doc.requireLive(b); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	doc.commit(step, body, b)
+	doc.commit(body, b)
 	return body, nil
 }
 

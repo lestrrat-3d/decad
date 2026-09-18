@@ -287,7 +287,7 @@ func (pp prismPayload) transform() r3.Transform { return pp.xform }
 // back instead of bracketing every free-form arc a second time. That counter is
 // still charged what the resolution cost, so a record near its ceiling refuses
 // here exactly as it did on the way in (docs/spline-design.md §5.2).
-func (pp prismPayload) placed(ctx context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
+func (pp prismPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	pp.xform = composed
 	return evalPrismContext(ctx, d, ref, pp, newFreeformWork())
 }

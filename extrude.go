@@ -11,11 +11,10 @@ import (
 )
 
 // This file is the extrude of docs/evaluator-design.md §5: the feature call
-// gates its live inputs, records the step, evaluates FROM the record, and
-// commits atomically. The body-relative stops
+// gates its live inputs, converts the profile to structural records, evaluates
+// from those records, and commits atomically. The body-relative stops
 // (ThroughAll/ThroughAllSide/ToFace) resolve through stops.go: the stop
-// bodies are resolved at the call and recorded as StepRefs in the step's
-// Inputs (core §6.2).
+// bodies are resolved at the call and tracked by private producer identities.
 //
 // The evaluation this call drives is spread over three sibling files, each
 // with its own doc comment: prism_payload.go holds the record and the
@@ -40,10 +39,10 @@ type identTaper struct{}
 
 // WithTaper sets the extrude taper: a SIGNED displacement angle — which way
 // the wall leans. A nonzero taper is [ErrUnsupported]
-// (docs/evaluator-design.md §5), returned before any step is recorded, so the
-// recipe is left unchanged — because a tapered extrude of a general region is
+// (docs/evaluator-design.md §5), returned before commit, so the
+// document is unchanged — because a tapered extrude of a general region is
 // an offset problem, and a wrong-but-confident prism is the failure decad
-// exists to prevent. Only a zero taper reaches the step's ExtrudeOpts.
+// exists to prevent. Only a zero taper reaches evaluation.
 func WithTaper(a units.Value) ExtrudeOption {
 	return extrudeOption{option.New(identTaper{}, a)}
 }
@@ -67,9 +66,8 @@ func WithTaper(a units.Value) ExtrudeOption {
 // must meet its neighbours at shared endpoints, never by crossing
 // (docs/spline-design.md §2.1) — join the endpoints in the sketch, or the
 // profile is rejected as ErrUnrecordableProfile before this ever runs. The
-// step records the profile, the plane, the extent and the options; evaluation
-// runs from that record, and a failed evaluation leaves the recipe and the
-// document untouched.
+// evaluator converts the profile and plane to structural records; a failed
+// evaluation leaves the document untouched.
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
@@ -109,7 +107,7 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 		return nil, fmt.Errorf(`%w: the taper is not representable: %s`, ErrNotFinite, err)
 	}
 	if taper.Mag() != 0 {
-		// Refused before the step is built: staging is explicit
+		// Refused before commit: staging is explicit
 		// (docs/evaluator-design.md §2/§5), never a silent untapered prism.
 		return nil, fmt.Errorf(`%w: this evaluator extrudes straight (untapered) prisms only; omit WithTaper or pass a zero angle`, ErrUnsupported)
 	}
@@ -128,15 +126,7 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 		return nil, err
 	}
 
-	step := Step{
-		Op:      OpExtrude,
-		Inputs:  sweep.inputs,
-		Profile: profile,
-		Plane:   plane,
-		Extent:  recordExtent(e),
-		Opts:    ExtrudeOpts{Taper: taper},
-	}
-	ref := d.nextStepRef()
+	ref := d.nextProducerID()
 	body, err := evalPrism(d, ref, prismPayload{
 		profile: profile,
 		frame:   frame,
@@ -149,7 +139,7 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 	if err != nil {
 		return nil, err
 	}
-	d.commit(step, body)
+	d.commit(body)
 	return body, nil
 }
 
@@ -174,7 +164,7 @@ func falsifyRecordedArea(profile ProfileRecord, sketchArea float64, work *freefo
 
 // linearSweep is a resolved linear extent: the signed sweep interval [z0, z1]
 // along the plane normal, each end's own proven axial displacement, and the
-// StepRefs of the bodies the extent's stops resolved against. A level the
+// private producer identities of the bodies the extent's stops resolved against. A level the
 // caller stated denotes itself and reports a zero displacement; a level the
 // resolution COMPUTED reports the rounding that computation committed, which is
 // what the prism payload carries into every level-derived reading.
@@ -182,13 +172,13 @@ type linearSweep struct {
 	z0, z1  float64
 	z0Delta float64
 	z1Delta float64
-	inputs  []StepRef
+	inputs  []producerID
 }
 
 // resolveLinearExtent turns a linear extent into that sweep
 // (docs/evaluator-design.md §5). The refs are ordered named-extent refs in
 // extent order first, through-all stop bodies after them in stop order along
-// the sweep, deduplicated (core §6.2). Magnitudes are validated per core
+// the sweep, deduplicated. Magnitudes are validated per core
 // §8.1/§12; a zero-thickness sweep is ErrDegenerate.
 func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, error) {
 	switch e := e.(type) {
@@ -239,7 +229,7 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 		if one.z == 0 && two.z == 0 {
 			return linearSweep{}, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
 		}
-		named := append(append([]StepRef(nil), one.named...), two.named...)
+		named := append(append([]producerID(nil), one.named...), two.named...)
 		refs := dedupRefs(append(append(named, one.through...), two.through...))
 		return linearSweep{z0: two.z, z1: one.z, z0Delta: two.delta, z1Delta: one.delta, inputs: refs}, nil
 	case ThroughAll:
@@ -267,9 +257,9 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 			return linearSweep{}, err
 		}
 		if stop > 0 {
-			return linearSweep{z1: stop, z1Delta: delta, inputs: []StepRef{ref}}, nil
+			return linearSweep{z1: stop, z1Delta: delta, inputs: []producerID{ref}}, nil
 		}
-		return linearSweep{z0: stop, z0Delta: delta, inputs: []StepRef{ref}}, nil
+		return linearSweep{z0: stop, z0Delta: delta, inputs: []producerID{ref}}, nil
 	case nil:
 		return linearSweep{}, fmt.Errorf(`%w: a nil extent sweeps nothing`, ErrDegenerate)
 	default:
@@ -280,12 +270,12 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, e
 // linearSide is one resolved side of a TwoSided: its signed boundary
 // coordinate along the plane normal, that coordinate's own axial displacement,
 // and the stop refs it resolved — named-extent and through-all kept apart so
-// the enclosing extent can order them per core §6.2.
+// the enclosing extent can order them deterministically.
 type linearSide struct {
 	z       float64
 	delta   float64
-	named   []StepRef
-	through []StepRef
+	named   []producerID
+	through []producerID
 }
 
 // resolveLinearSide resolves one side of a TwoSided; travel is +1 for the
@@ -315,7 +305,7 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 		if err != nil {
 			return linearSide{}, err
 		}
-		return linearSide{z: stop, delta: delta, named: []StepRef{ref}}, nil
+		return linearSide{z: stop, delta: delta, named: []producerID{ref}}, nil
 	case nil:
 		return linearSide{}, fmt.Errorf(`%w: a two-sided extent requires both sides`, ErrDegenerate)
 	default:

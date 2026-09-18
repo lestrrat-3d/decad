@@ -9,7 +9,7 @@ Companion to `docs/verification-design.md`, which owns what an
 `Interference` row means and how its `Volume` is judged; to
 `docs/clearance-design.md`, which owns analytic pair classification; and to
 `docs/evaluator-design.md`, which owns the mesh boolean and its proven bounds.
-Nothing here adds a public API or a recipe operation. Nothing here changes a
+Nothing here adds a public API or modeling operation. Nothing here changes a
 public boolean's consuming semantics.
 
 ## 1. Pair relation
@@ -71,12 +71,12 @@ For each pair:
    undecided for aggregation.
 
 `Verify` MUST NOT call public `Intersect`. Public `Intersect` retires both
-operands, appends a recipe step, and registers a result. Verification is
-non-mutating and must leave all three unchanged:
+operands, advances provenance, and registers a result. Verification is
+non-mutating and must leave all model state unchanged:
 
 - `Document.Bodies()` membership and order;
 - every body's live/retired state;
-- `Document.Recipe()` contents.
+- the next private producer identity.
 
 ## 3. Proof paths
 
@@ -241,13 +241,13 @@ Factor the mesh boolean into geometry evaluation and document commit:
 ```go
 func evaluateBoolean(
     ctx context.Context,
-    op OpKind,
+    op operationKind,
     a, b *Body,
 ) (booleanEvaluation, error) // no document write
 
 func performBoolean(
     ctx context.Context,
-    op OpKind,
+    op operationKind,
     a, b *Body,
 ) (*Body, error) // public commit path
 ```
@@ -266,7 +266,7 @@ Names are illustrative; the split is normative.
 8. compose chord and rounding bounds;
 9. integrate held volume in exact rational arithmetic.
 
-It MUST NOT call `nextStepRef`, append a `Step`, retire an operand, register a
+It MUST NOT call `nextProducerID`, advance provenance, retire an operand, register a
 body, or expose a transient result through the document. Its result contains
 the held facets and every bound input needed by either caller.
 
@@ -289,8 +289,8 @@ neither admits. It consumes only the volume result from whichever path
 answers.
 
 The twin reaches its own answer by building the admitted analytic payload, so
-it reads `nextStepRef` to name that body, but it never commits: no `Step` is
-appended, no operand retired, no body registered, and the built body never
+it reads `nextProducerID` to name that body, but it never commits: provenance
+does not advance, no operand retires, no body registers, and the built body never
 leaves the evaluator. The overlap-area reading builds one such payload per
 measured arrangement cell and keeps the same promise for every one of them.
 None of the three paths builds or registers a transient `Body` in the
@@ -571,7 +571,7 @@ Every increment asserts geometry and report state, not only successful return.
 
 ### 10.1 Non-mutation and order
 
-- Snapshot recipe encoding, live body pointers/order, and retired state before
+- Snapshot the next producer identity, live body pointers/order, and retired state before
   `Verify`; assert exact equality afterward on overlap, disjoint, undecided,
   error, and cancellation paths.
 - Build at least three bodies; assert `Interferences` and `Clearances` follow
@@ -641,9 +641,9 @@ Each row is a PR-sized stage. An unanswered verification question reads
 ## 12. Decisions
 
 - Keep the existing public `Interference{A, B, Volume}` shape. Add no option,
-  witness, selector, or recipe step.
+  witness, selector, or modeling operation.
 - Keep public booleans consuming. Share only their read-only geometry
-  evaluation — the mesh `evaluateBoolean` and the analytic `OpIntersect` twin
+  evaluation — the mesh `evaluateBoolean` and the analytic intersection twin
   `evaluateAnalyticIntersect` (§5, §5.2) — never their commit.
 - Let a proof path answer with a volume alone where a body is not needed.
   `docs/prism-boolean-design.md` §4.5's overlap-area reading measures a

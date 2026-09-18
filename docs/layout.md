@@ -30,9 +30,8 @@ to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `docs/api-design.md` | The core public API contract: recipe/evaluator split, forward-compat invariants, and the feature, selector and verification surface. Points at every companion design. |
+| `docs/api-design.md` | The core public API contract: immediate-mode modeling, forward-compat invariants, and the feature, selector and verification surface. Points at every companion design. |
 | `docs/sketch-seam-design.md` | The recording contract at the `sketch` seam: the trim contract (`TExact`), the `CurveSegment` recording IR, and `ErrUnrecordableProfile`. |
-| `docs/recipe-replay-design.md` | The stored-recipe contract: strict versioned encoding, validation and liveness, error precedence, resource limits, and whole-recipe atomic evaluation. |
 | `docs/verification-design.md` | How `Verify` judges every bounded result: the report and its statuses, interference cost and deadlines, `WithTolerance`, and the diameter-anchored noise floor. |
 | `docs/payload-verification-design.md` | How `Verify` covers each evaluator payload: per-payload proofs, boundary certificates, bounded validity/clearance/survey algorithms, and required tests. |
 | `docs/evaluator-design.md` | The v1 evaluator: the evaluate-from-the-record rule, topology and provenance roles, mass properties, per-feature build tables, staging via `ErrUnsupported`, and the mesh boolean. |
@@ -46,21 +45,20 @@ to the byte budget.
 | `docs/prism-boolean-design.md` | The analytic reduction for `Union`/`Cut`/`Intersect` over co-directional coplanar prisms: the reject-only entry gate, the private `sketch` scene, and section/axial displacement bounds. |
 | `docs/tessellation-reach-design.md` | The tessellation reach plan: the loft restatement, free-form prism chording, revolve T2–T4 and the cap-loop chamfer tessellator, each with its cells, proof terms, refusals and tests. |
 
-### Seam, records and recipes
+### Seam and records
 
 | Path | Responsibility |
 |---|---|
 | `doc.go` | Package doc: scope, the evaluator support-and-refusal map, and the layering contract (`decad -> sketch -> r3 -> units`). |
-| `errors.go` | The core §12 sentinel error vocabulary, plus the H2 typed `BooleanError` (`Op`/`Inputs`/`Code`) whose `BooleanErrorCode` set wraps `ErrBooleanFailed` or `ErrUnsupported`. See `docs/api-design.md` §12, §8. |
+| `errors.go` | The core §12 sentinel error vocabulary, plus the H2 typed `BooleanError` whose public `Code` classifies failures wrapping `ErrBooleanFailed` or `ErrUnsupported`. See `docs/api-design.md` §12, §8. |
 | `measurement.go` | The bounded-result shapes: `Exactness`, `Measurement`, `VecMeasurement`, `Box`. See `docs/api-design.md` §5.3, §6. |
-| `record.go` | The recording IR: `PlaneRecord`, `ProfileRecord`, `LoopRecord`, and the ten sealed `CurveSegment` variants with their tagged codec. NURBS validation rules are documented on their own functions. See `docs/sketch-seam-design.md` §2. |
+| `identity.go` | Private document-local producer identities, the boolean evaluator's operation kind, and the shared zero-vector predicate. |
+| `record.go` | The profile-analysis records: `PlaneRecord`, `ProfileRecord`, `LoopRecord`, and the ten sealed `CurveSegment` variants. NURBS validation rules are documented on their own functions. See `docs/sketch-seam-design.md` §2. |
 | `seam.go` | The seam conversion `RecordProfile(s, p)`: admits, authenticates and records a profile, then applies the `TExact` admission gate and the reject-only range and loop-closure falsifiers. See `docs/sketch-seam-design.md` §1, §7. |
-| `extent.go` | The extent vocabulary: the sealed linear `Extent`/`SideExtent` and angular `AngularExtent`/`SideAngular` tiers, deliberately disjoint, each with a tagged codec. `ToFace`/`ToFaceAngular` record their body as a `StepRef`. See `docs/api-design.md` §8.1. |
-| `recipe.go` / `recipe_wire.go` | The Recipe IR, Step's wire codec, and the strict/versioned root codec returning a path-aware `RecipeError`. Placement and per-op field presence are enforced on both wire directions. See `docs/recipe-replay-design.md` §2, §3.2, §6. |
-| `recipe_decode.go` | The bounded JSON preflight scanner behind `Recipe`'s decoder: charges every array element and string byte against the fixed resource-limit ceilings before typed allocation. See `docs/recipe-replay-design.md` §7. |
-| `selector.go` | The selector vocabulary: `EdgeQuery`/`FaceQuery`, predicate conjunction plus `Exactly`/`AtLeast` cardinality, and their tagged codec. Resolution is a filter pipeline over live topology; a failing resolution returns a `SelectionError`. See `docs/api-design.md` §9. |
+| `extent.go` | The extent vocabulary: the sealed linear `Extent`/`SideExtent` and angular `AngularExtent`/`SideAngular` tiers, deliberately disjoint. `ToFace`/`ToFaceAngular` name live bodies directly. See `docs/api-design.md` §8.1. |
+| `selector.go` | The selector vocabulary: `EdgeQuery`/`FaceQuery`, predicate conjunction plus `Exactly`/`AtLeast` cardinality. Resolution is a filter pipeline over live topology; a failing resolution returns a `SelectionError`. See `docs/api-design.md` §9. |
 | `selection_error.go` | `SelectionError` (wraps `ErrNoMatch`/`ErrCardinality`) and the canonical `*Query.String()` rendering it and a verification `Diagnostic` both reuse. See `docs/api-design.md` §9. |
-| `codec_error.go` | The path-aware codec error machinery behind every recorded-step decode: builds the JSON-style path a `RecipeError` reports. See `docs/recipe-replay-design.md` §6. |
+| `codec_error.go` | Internal path-aware validation errors for structural curve records. |
 
 ### Mass properties and free-form curves
 
@@ -86,18 +84,18 @@ to the byte budget.
 |---|---|
 | `topology.go` | The topology model (evaluator §3): `Body`→`Lump`→`Shell`→`Face`→`Loop`→`CoEdge`→`Edge`→`Vertex`, plus sealed `Surface`/`Curve` variant sets. Convexity, exactness rules and immutability are on the types' own doc comments; see `docs/evaluator-design.md` §3. |
 | `normal_bound.go` | The proof behind the bound every `Face.NormalAt` arm publishes: rational-interval enclosures of each arm's own exact unit normal, and the radian sine/cosine enclosure the `Cone` arm needs. See the file's own doc comment. |
-| `document.go` | `Document` (`New`/`Bodies`/`Recipe`), its atomic commit tail, and retire/liveness gates. `Body.Placed`/`Duplicate`/`PlacedCopy` re-evaluate the payload under a composed motion; see their doc comments and `docs/evaluator-design.md` §8. |
+| `document.go` | `Document` (`New`/`Bodies`), its atomic commit tail, private provenance identities, and retire/liveness gates. `Body.Placed`/`Duplicate`/`PlacedCopy` rebuild the payload under a composed motion; see their doc comments and evaluator §8. |
 | `extrude.go` | `Document.Extrude` (evaluator §5): the public entry point, `WithTaper`, and linear-extent resolution into a `linearSweep`. The payload, the build and the extent readings each have their own `prism_*.go` file. See `docs/evaluator-design.md` §5. |
 | `prism_payload.go` | `prismPayload` and the coordinate readings taken off it: a world point, its proven bound, and the profile coordinate envelopes later bounds are charged against. See `docs/evaluator-design.md` §5, `docs/prism-boolean-design.md` §7. |
 | `prism_build.go` | Builds a straight extrude's body from its payload: `evalPrismContext`, the caps, and `buildLoopSidesAs`'s per-loop side walk. Each face carries the displacement its own surface was built from. See `docs/evaluator-design.md` §5. |
 | `segment_walk.go` | The package's profile-boundary walk: `segmentWalk`, `profileWalks`, and the per-kind builders extrude, revolve and loft all read a recorded `CurveSegment` through. A kind with no stated bound refuses. See the file's own doc comment. |
 | `prism_extent.go` | The extent readings asked of a finished prism: reach along a direction, and the containing box. Every answer is a bounded interval charging the frame, section and axial terms. See `docs/evaluator-design.md` §5. |
-| `revolve.go` | `Document.Revolve` (evaluator §6): the sealed `Axis` vocabulary with its codec, `EdgeAxis` resolution, and angular-extent resolution. The axis frame, the build and the extent readings each have their own `revolve_*.go` file. See `docs/evaluator-design.md` §6. |
+| `revolve.go` | `Document.Revolve` (evaluator §6): the sealed `Axis` vocabulary, `EdgeAxis` resolution, and angular-extent resolution. The axis frame, build, and extent readings each have their own `revolve_*.go` file. See evaluator §6. |
 | `revolve_axis.go` | Resolves the axis into the sketch plane and decides what the profile may do around it: `axisLine2`, `axisFrame`, `wallKind` classification, and the contact gates. See `docs/evaluator-design.md` §6. |
 | `revolve_build.go` | Builds a revolve's body: the wall surface each segment sweeps, the caps a partial sweep closes with, the poles and seams a full sweep joins, and the measurements published. See `docs/evaluator-design.md` §6. |
 | `revolve_extent.go` | The extent readings asked of a finished revolve. An extreme is a swept extreme, bracketed by `sweepExtremeBounds` rather than read off a boundary vertex. See `docs/evaluator-design.md` §6. |
 | `revolve_denotation.go` | `angleDenotation`/`sweepDenotation`: the exact angle each sweep end denotes, the proven per-end displacement from it, and the sweep width and centroid trig bounds built on it. See `docs/evaluator-design.md` §6. |
-| `stops.go` | Body-relative stop resolution for `ToFace`/`ToFaceAngular`/`ThroughAll`/`ThroughAllSide` (evaluator §5/§6/§11, core §8.1/§6.2): each stop body resolves at the call and records as a `StepRef`, never consumed. See doc comments on `resolveToFace`/`resolveThroughAll`/`resolveToFaceAngular`. |
+| `stops.go` | Body-relative stop resolution for `ToFace`/`ToFaceAngular`/`ThroughAll`/`ThroughAllSide` (evaluator §5/§6/§11, core §8.1): each stop body resolves at the call and remains live. See doc comments on `resolveToFace`/`resolveThroughAll`/`resolveToFaceAngular`. |
 | `loft.go` | `docs/loft-design.md` PR 1b: `Document.Loft`/`LoftContext`, the public entry point over `loft_build.go`'s evaluator. Owns gates S9–S11 and S4's arity half; the step commits only after `evalLoft` succeeds. See doc comments; `docs/loft-design.md` §2/§4/§10. |
 | `loft_build.go` | `docs/loft-design.md` PR 1a/2a: `loftPayload`, `loftMeshProof`, `evalLoft` and `placed` — the gates it owns, the placement re-lift and its `delta`, and the four measurements. Pairing, stations and topology each have their own `loft_*.go` file. See `docs/loft-design.md` §5, §8, §12. |
 | `loft_pairing.go` | `docs/loft-design.md` Table P: which from-segment walls to which to-segment. A pair the table does not decide is refused outright, never matched to the nearest one. See §5, §5.1. |

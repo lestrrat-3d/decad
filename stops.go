@@ -13,15 +13,12 @@ import (
 )
 
 // This file is the body-relative stop resolution
-// (docs/evaluator-design.md §5/§6/§11, core §8.1/§6.2): ToFace and
+// (docs/evaluator-design.md §5/§6/§11, core §8.1): ToFace and
 // ToFaceAngular stops at a selected face of a named body, and the
 // ThroughAll/ThroughAllSide stops at the far side of every live body the
-// sweep meets. Every stop is resolved at the feature call — the dependency
-// is ambient at the CALL but never in the RECORD — and each stop body's
-// StepRef is recorded in the step's Inputs: named-extent refs in extent
-// order first, through-all stop bodies after them in stop order along the
-// sweep, the axis ref last, deduplicated (core §6.2). A stop body is
-// depended on, never consumed and never retired.
+// sweep meets. Every stop is resolved at the feature call. The evaluator tracks
+// named extents first, through-all bodies in stop order, and the axis last,
+// deduplicated. A stop body is depended on, never consumed or retired.
 
 // directionalExtent is what a through-all stop needs from a body's payload:
 // the body's extent interval along an arbitrary world direction — the
@@ -153,23 +150,15 @@ func displacementIn(v units.Value, kind units.Kind, unit units.Unit, what string
 }
 
 // resolveStopBody runs the body gates every body-relative stop shares with
-// EdgeAxis (core §8.1): the named body must be a live *Body of this document
-// — a StepRef is ErrUnresolvedBody, another document's body ErrForeignBody,
-// a retired one ErrRetiredBody, and nothing at all ErrDegenerate.
-func (d *Document) resolveStopBody(ref BodyRef, what string) (*Body, error) {
-	switch b := ref.(type) {
-	case nil:
+// EdgeAxis (core §8.1): the named body must be live in this document.
+func (d *Document) resolveStopBody(b *Body, what string) (*Body, error) {
+	if b == nil {
 		return nil, fmt.Errorf(`%w: %s names no body to resolve against`, ErrDegenerate, what)
-	case StepRef:
-		return nil, ErrUnresolvedBody
-	case *Body:
-		if err := d.requireLive(b); err != nil {
-			return nil, err
-		}
-		return b, nil
-	default:
-		return nil, fmt.Errorf(`%w: %s cannot resolve against a %T`, ErrDegenerate, what, b)
 	}
+	if err := d.requireLive(b); err != nil {
+		return nil, err
+	}
+	return b, nil
 }
 
 // selectStopFace resolves the stop's face selector against the named body
@@ -244,7 +233,7 @@ func selectStopFace(body *Body, sel FaceSelector) (*Face, error) {
 // for a TwoSided side, whose face must lie on that side. The signed Offset
 // displaces the stop along the travel: positive overshoots the face,
 // negative stops short of it (core §8.1).
-func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what string) (float64, float64, StepRef, error) {
+func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what string) (float64, float64, producerID, error) {
 	body, err := d.resolveStopBody(tf.Body, what)
 	if err != nil {
 		return 0, 0, 0, err
@@ -295,7 +284,7 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 		offsetDelta,
 		selectedFaceAxialDelta(body, face),
 	)
-	return stop, delta, body.originStep(), nil
+	return stop, delta, body.originProducer(), nil
 }
 
 // resolveThroughAll resolves a through-all stop: the sweep runs from the
@@ -314,17 +303,17 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 // guess a dependency. It returns the signed stop coordinate along the plane
 // normal, that coordinate's own proven axial displacement — which carries the
 // winning body's extent displacement, so a level held to a bracket never
-// publishes itself as the level it denotes — and the met bodies' StepRefs in
+// publishes itself as the level it denotes — and the met bodies' private producer identities in
 // stop order along the sweep, nearest far side first. No live body in the path
 // is ErrDegenerate: the sweep has no stop at all.
-func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, float64, []StepRef, error) {
+func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, float64, []producerID, error) {
 	dir := frame.N().Scale(travel)
 	base := frame.Origin().Dot(dir)
 	type stopAt struct {
 		far   float64
 		hi    float64
 		delta float64
-		ref   StepRef
+		ref   producerID
 	}
 	var stops []stopAt
 	for _, b := range d.bodies {
@@ -361,7 +350,7 @@ func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, f
 			// decides neither test above, so both land here.
 			return 0, 0, nil, fmt.Errorf(`%w: a through-all sweep cannot decide whether a body is in its path: its far side sits %v mm beyond the sketch plane, known only to a displacement of %v mm`, ErrUnsupported, far, delta)
 		}
-		stops = append(stops, stopAt{far: far, hi: hi, delta: delta, ref: b.originStep()})
+		stops = append(stops, stopAt{far: far, hi: hi, delta: delta, ref: b.originProducer()})
 	}
 	if len(stops) == 0 {
 		return 0, 0, nil, fmt.Errorf(`%w: a through-all sweep found no live body in its path`, ErrDegenerate)
@@ -370,7 +359,7 @@ func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, f
 	// first. A tie keeps the live-body order, so the record is
 	// deterministic.
 	slices.SortStableFunc(stops, func(a, b stopAt) int { return cmp.Compare(a.far, b.far) })
-	refs := make([]StepRef, len(stops))
+	refs := make([]producerID, len(stops))
 	for i, s := range stops {
 		refs[i] = s.ref
 	}
@@ -402,14 +391,14 @@ func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, f
 }
 
 // dedupRefs deduplicates recorded stop refs preserving first occurrence
-// (core §6.2), returning nil for none so a step with no dependencies records
+// returning nil when there are no dependencies
 // no Inputs at all.
-func dedupRefs(refs []StepRef) []StepRef {
+func dedupRefs(refs []producerID) []producerID {
 	if len(refs) == 0 {
 		return nil
 	}
-	seen := make(map[StepRef]struct{}, len(refs))
-	out := make([]StepRef, 0, len(refs))
+	seen := make(map[producerID]struct{}, len(refs))
+	out := make([]producerID, 0, len(refs))
 	for _, r := range refs {
 		if _, ok := seen[r]; ok {
 			continue
@@ -418,74 +407,6 @@ func dedupRefs(refs []StepRef) []StepRef {
 		out = append(out, r)
 	}
 	return out
-}
-
-// recordExtent returns the recordable form of a resolved linear extent: a
-// ToFace's body substituted by its producing StepRef and its selector
-// deep-copied, so what the Recipe carries is only ever values (core §6.2).
-// The extent was normalized and resolved already, so a ToFace's body is a
-// live *Body here.
-func recordExtent(e Extent) Extent {
-	switch e := e.(type) {
-	case ToFace:
-		return recordToFace(e)
-	case TwoSided:
-		e.One = recordSideExtent(e.One)
-		e.Two = recordSideExtent(e.Two)
-		return e
-	default:
-		return e
-	}
-}
-
-// recordSideExtent is recordExtent's side-tier analog.
-func recordSideExtent(s SideExtent) SideExtent {
-	if tf, ok := s.(ToFace); ok {
-		return recordToFace(tf)
-	}
-	return s
-}
-
-// recordToFace substitutes the StepRef for the live *Body the caller passed
-// and deep-copies the selector; the zero-value offset records as an explicit
-// zero length.
-func recordToFace(tf ToFace) ToFace {
-	if b, ok := tf.Body.(*Body); ok {
-		tf.Body = b.originStep()
-	}
-	tf.Offset = normalizeStopOffset(tf.Offset)
-	return cloneToFace(tf)
-}
-
-// recordAngularExtent is recordExtent's angular analog.
-func recordAngularExtent(a AngularExtent) AngularExtent {
-	switch a := a.(type) {
-	case ToFaceAngular:
-		return recordToFaceAngular(a)
-	case TwoSidedAngle:
-		a.One = recordSideAngular(a.One)
-		a.Two = recordSideAngular(a.Two)
-		return a
-	default:
-		return a
-	}
-}
-
-// recordSideAngular is recordAngularExtent's side-tier analog.
-func recordSideAngular(s SideAngular) SideAngular {
-	if tfa, ok := s.(ToFaceAngular); ok {
-		return recordToFaceAngular(tfa)
-	}
-	return s
-}
-
-// recordToFaceAngular substitutes the StepRef for the live *Body the caller
-// passed and deep-copies the selector.
-func recordToFaceAngular(tfa ToFaceAngular) ToFaceAngular {
-	if b, ok := tfa.Body.(*Body); ok {
-		tfa.Body = b.originStep()
-	}
-	return cloneToFaceAngular(tfa)
 }
 
 // angularStops is what a ToFaceAngular resolution needs of the revolve's
@@ -531,7 +452,7 @@ const angTol = 1e-9
 // sense (core §8.1), and both senses reach a radial plane, so the sweep
 // takes the nearer way around (Along on the exact half-turn tie) — and ±1
 // for a TwoSidedAngle side.
-func (st angularStops) resolveToFaceAngular(tfa ToFaceAngular, travel float64, what string) (float64, StepRef, error) {
+func (st angularStops) resolveToFaceAngular(tfa ToFaceAngular, travel float64, what string) (float64, producerID, error) {
 	body, err := st.d.resolveStopBody(tfa.Body, what)
 	if err != nil {
 		return 0, 0, err
@@ -565,13 +486,13 @@ func (st angularStops) resolveToFaceAngular(tfa ToFaceAngular, travel float64, w
 	}
 	switch {
 	case travel > 0:
-		return phi, body.originStep(), nil
+		return phi, body.originProducer(), nil
 	case travel < 0:
-		return phi - 2*math.Pi, body.originStep(), nil
+		return phi - 2*math.Pi, body.originProducer(), nil
 	case phi <= math.Pi:
-		return phi, body.originStep(), nil
+		return phi, body.originProducer(), nil
 	default:
-		return phi - 2*math.Pi, body.originStep(), nil
+		return phi - 2*math.Pi, body.originProducer(), nil
 	}
 }
 

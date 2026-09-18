@@ -84,7 +84,7 @@ func boxLoftPayload(t *testing.T) loftPayload {
 func evalLoftFixture(t *testing.T, pl loftPayload) *Body {
 	t.Helper()
 	budget := newWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), StepRef(0), pl, budget, newFreeformWork(), newFreeformWork())
+	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.NoError(t, err)
 	return body
 }
@@ -131,20 +131,20 @@ func TestEvalLoftUnitBoxTopology(t *testing.T) {
 	require.ElementsMatch(t, wantWallRoles, wallRoles)
 }
 
-// TestEvalLoftRolesUseTheGivenStepRef proves every role FeatureRef the build
-// mints — the body's own origin and every face's role — carries the StepRef
+// TestEvalLoftRolesUseTheGivenProducerID proves every role FeatureRef the build
+// mints — the body's own origin and every face's role — carries the producerID
 // evalLoft was actually called with, not a hardcoded one.
-func TestEvalLoftRolesUseTheGivenStepRef(t *testing.T) {
+func TestEvalLoftRolesUseTheGivenProducerID(t *testing.T) {
 	t.Parallel()
-	const ref = StepRef(7)
+	const ref = producerID(7)
 	budget := newWorkBudget(t.Context())
 	body, err := evalLoft(t.Context(), New(), ref, boxLoftPayload(t), budget, newFreeformWork(), newFreeformWork())
 	require.NoError(t, err)
 
-	require.Equal(t, ref, body.Origin().Step)
+	require.Equal(t, ref, body.Origin().producer)
 	for _, f := range body.Faces() {
 		for _, o := range f.Origins() {
-			require.Equal(t, ref, o.Step)
+			require.Equal(t, ref, o.producer)
 		}
 	}
 }
@@ -549,7 +549,7 @@ func TestLoftPairingsConsumesTheGateResolvedWalks(t *testing.T) {
 // segment must therefore report that refusal even when the SECOND profile
 // carries a later segment walkOf itself cannot resolve at all (a malformed
 // CircleSeg here, ErrDegenerate) — a combination sketch's own authentication
-// never produces but a decoded recipe can (docs/recipe-replay-design.md).
+// never produces but a decoded evaluator can.
 // Resolving a whole loop ahead of the S3 test — the shape this test guards
 // against — would let that later walkOf error surface first instead.
 func TestValidateLoftRecordsS3PrecedesAWalkOfErrorLaterInTheOtherProfile(t *testing.T) {
@@ -690,7 +690,7 @@ func TestLoftPlacedGateDiameterShrinksByTwiceDelta(t *testing.T) {
 	rot, err := r3.Rotation(r3.NewVec(1, 1, 1), units.Degrees(29))
 	require.NoError(t, err)
 
-	placedBody, err := pl.placed(t.Context(), New(), StepRef(1), rot)
+	placedBody, err := pl.placed(t.Context(), New(), producerID(1), rot)
 	require.NoError(t, err)
 	placedPl := placedBody.payload.(loftPayload)
 	require.Greater(t, placedPl.delta, 0.0)
@@ -719,7 +719,7 @@ func TestLoftPlacedGateDiameterRoundsTheShrinkOutward(t *testing.T) {
 			move, err := r3.Translation(r3.NewVec(dx, 0, 0))
 			require.NoError(t, err)
 
-			placedBody, err := boxLoftPayloadOn(t, 0, 3).placed(t.Context(), New(), StepRef(1), move)
+			placedBody, err := boxLoftPayloadOn(t, 0, 3).placed(t.Context(), New(), producerID(1), move)
 			require.NoError(t, err)
 			placedPl := placedBody.payload.(loftPayload)
 			require.Greater(t, placedPl.delta, 0.0)
@@ -786,7 +786,7 @@ func TestLoftCollapsedGateDiameterIsRefusedFirst(t *testing.T) {
 			require.GreaterOrEqual(t, 2*delta, d,
 				"the fixture must sit in the collapse regime the doc's antecedence claim covers")
 
-			_, err = pl.placed(t.Context(), New(), StepRef(1), move)
+			_, err = pl.placed(t.Context(), New(), producerID(1), move)
 			require.ErrorIs(t, err, ErrUnsupported)
 		})
 	}
@@ -799,7 +799,7 @@ func TestEvalLoftCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	budget := newWorkBudget(ctx)
-	_, err := evalLoft(ctx, New(), StepRef(0), boxLoftPayload(t), budget, newFreeformWork(), newFreeformWork())
+	_, err := evalLoft(ctx, New(), producerID(0), boxLoftPayload(t), budget, newFreeformWork(), newFreeformWork())
 	require.ErrorIs(t, err, context.Canceled)
 }
 
@@ -921,7 +921,7 @@ func TestEvalLoftCollapsedTriangleIsDegenerate(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	budget := newWorkBudget(t.Context())
-	_, err := evalLoft(t.Context(), New(), StepRef(0), pl, budget, newFreeformWork(), newFreeformWork())
+	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate, "S6: a corner shared by both profiles collapses its incident wall triangles")
 }
 
@@ -942,7 +942,7 @@ func TestEvalLoftOverTwistedCorrespondenceCrosses(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	budget := newWorkBudget(t.Context())
-	_, err := evalLoft(t.Context(), New(), StepRef(0), pl, budget, newFreeformWork(), newFreeformWork())
+	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate, "S7: a mirrored correspondence self-crosses")
 }
 
@@ -977,7 +977,7 @@ func TestEvalLoftAuditRefusesOverBudget(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	budget := newWorkBudget(t.Context())
-	_, err := evalLoft(t.Context(), New(), StepRef(0), pl, budget, newFreeformWork(), newFreeformWork())
+	_, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported, "S8: the facet-pair ceiling")
 }
 

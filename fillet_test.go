@@ -2,7 +2,6 @@ package decad_test
 
 import (
 	"context"
-	"encoding/json"
 	"math"
 	"runtime"
 	"strings"
@@ -114,7 +113,7 @@ func (c *commitBoundaryCancelContext) Err() error {
 }
 
 // retiringEdgeSelector is a foreign selector implementation that embeds the
-// built-in query to promote Selector's sealed marker, then overrides resolution
+// built-in query to promote selector's sealed marker, then overrides resolution
 // with a callback that would retire the receiver.
 type retiringEdgeSelector struct {
 	*decad.EdgeQuery
@@ -134,21 +133,18 @@ func (s retiringEdgeSelector) SelectEdges(body *decad.Body) ([]*decad.Edge, erro
 func TestFilletContextCancellationAtCommitLeavesReceiverLive(t *testing.T) {
 	t.Parallel()
 	doc, box := filletBox(t)
-	before := doc.Recipe()
 	ctx := &commitBoundaryCancelContext{Context: t.Context()}
 
 	body, err := box.FilletContext(ctx, verticalEdges(), units.Millimeters(10))
 
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
-	require.Equal(t, before, doc.Recipe())
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
 }
 
 func TestFilletContextCancellationDuringPreAuditLeavesReceiverLive(t *testing.T) {
 	t.Parallel()
 	doc, box := filletBox(t)
-	before := doc.Recipe()
 	ctx := &preAuditScanCancelContext{Context: t.Context()}
 
 	body, err := box.FilletContext(ctx, verticalEdges(), units.Millimeters(10))
@@ -156,7 +152,6 @@ func TestFilletContextCancellationDuringPreAuditLeavesReceiverLive(t *testing.T)
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
-	require.Equal(t, before, doc.Recipe())
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
 }
 
@@ -165,7 +160,6 @@ func TestFilletContextCancellationDuringAuditPreservesError(t *testing.T) {
 	for _, cancelErr := range []error{context.Canceled, context.DeadlineExceeded} {
 		t.Run(cancelErr.Error(), func(t *testing.T) {
 			doc, box := manySidedPrism(t, 300)
-			before := doc.Recipe()
 			ctx := &auditScanCancelContext{Context: t.Context(), cancelErr: cancelErr}
 
 			body, err := box.FilletContext(ctx, verticalEdges(), units.Millimeters(10))
@@ -173,7 +167,6 @@ func TestFilletContextCancellationDuringAuditPreservesError(t *testing.T) {
 			require.Nil(t, body)
 			require.Equal(t, cancelErr, err)
 			require.True(t, ctx.entered)
-			require.Equal(t, before, doc.Recipe())
 			require.Equal(t, []*decad.Body{box}, doc.Bodies())
 		})
 	}
@@ -182,18 +175,14 @@ func TestFilletContextCancellationDuringAuditPreservesError(t *testing.T) {
 func TestFilletSelectorAdmission(t *testing.T) {
 	t.Parallel()
 	t.Run("BuiltInQuery", func(t *testing.T) {
-		doc, box := filletBox(t)
+		_, box := filletBox(t)
 
 		_, err := box.Fillet(verticalEdges(), units.Millimeters(5))
-		require.NoError(t, err)
-		require.Len(t, doc.Recipe().Steps, 2)
-		_, err = json.Marshal(doc.Recipe())
 		require.NoError(t, err)
 	})
 
 	t.Run("ForeignRetiringImplementation", func(t *testing.T) {
 		doc, box := filletBox(t)
-		before := doc.Recipe()
 		calls := 0
 		foreign := retiringEdgeSelector{
 			EdgeQuery: verticalEdges(),
@@ -203,21 +192,16 @@ func TestFilletSelectorAdmission(t *testing.T) {
 		_, err := box.Fillet(foreign, units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Zero(t, calls, `Fillet rejects a foreign selector before it can retire the receiver`)
-		require.Equal(t, before, doc.Recipe(), `a rejected selector records no step`)
 		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a rejected selector leaves the receiver live`)
-		_, err = json.Marshal(doc.Recipe())
-		require.NoError(t, err)
 	})
 
 	t.Run("TypedNilQuery", func(t *testing.T) {
 		doc, box := filletBox(t)
-		before := doc.Recipe()
 		var query *decad.EdgeQuery
 		var selector decad.EdgeSelector = query
 
 		_, err := box.Fillet(selector, units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
-		require.Equal(t, before, doc.Recipe(), `a typed nil selector records no step`)
 		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a typed nil selector leaves the receiver live`)
 	})
 }
@@ -305,53 +289,6 @@ func TestFilletBoxAllConvexEdges(t *testing.T) {
 	require.Len(t, rep.Bodies, 1)
 	require.Nil(t, rep.Bodies[0].ConcaveRadius.Minimum, `a convex fillet is not a concave feature`)
 	require.True(t, rep.Passed(), `the certified circular moment bracket keeps the bound within default tolerance`)
-}
-
-func TestFilletRecipeAndRetire(t *testing.T) {
-	t.Parallel()
-	const r = 8.0
-	doc, box := filletBox(t)
-	body, err := box.Fillet(verticalEdges(), units.Millimeters(r))
-	require.NoError(t, err)
-
-	// The receiver is retired; the document holds the filleted body.
-	require.Equal(t, []*decad.Body{body}, doc.Bodies())
-	_, err = box.Fillet(verticalEdges(), units.Millimeters(r))
-	require.ErrorIs(t, err, decad.ErrRetiredBody)
-
-	// The step records the op, the receiver as its input, the unresolved
-	// selector, the radius value, and no options — and it round-trips.
-	recipe := doc.Recipe()
-	require.Len(t, recipe.Steps, 2)
-	fillet := recipe.Steps[1]
-	require.Equal(t, decad.OpFillet, fillet.Op)
-	require.Equal(t, []decad.StepRef{0}, fillet.Inputs)
-	require.Len(t, fillet.Selectors, 1)
-	require.Len(t, fillet.Values, 1)
-	require.True(t, fillet.Values[0].Equal(units.Millimeters(r), 1e-12))
-	require.Nil(t, fillet.Opts, `a fillet Step takes no options this increment`)
-
-	buf, err := json.Marshal(recipe)
-	require.NoError(t, err)
-	var got decad.Recipe
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, recipe, got, `the recorded fillet recipe round-trips`)
-}
-
-func TestFilletSelectorIsRecordedUnresolved(t *testing.T) {
-	t.Parallel()
-	// The step stores a clone of the query, not the caller's, and never the
-	// edges it resolved to (core §9 / §11).
-	doc, box := filletBox(t)
-	q := verticalEdges()
-	_, err := box.Fillet(q, units.Millimeters(5))
-	require.NoError(t, err)
-
-	sel := doc.Recipe().Steps[1].Selectors[0]
-	require.NotSame(t, decad.Selector(q), sel, `the recorded selector is a deep copy`)
-	buf, err := json.Marshal(doc.Recipe())
-	require.NoError(t, err)
-	require.Contains(t, string(buf), "parallel_to", `the query's predicate is recorded, unresolved`)
 }
 
 func TestFilletConcaveEdgeReadsMinRadius(t *testing.T) {

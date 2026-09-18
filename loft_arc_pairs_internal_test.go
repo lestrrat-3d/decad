@@ -467,7 +467,7 @@ func TestLoftArcWedgeBoxSoundness(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	budget := newWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), StepRef(0), pl, budget, newFreeformWork(), newFreeformWork())
+	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.NoError(t, err)
 
 	bnd, err := body.Bounds()
@@ -678,7 +678,7 @@ func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	budget := newWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), StepRef(0), pl, budget, newFreeformWork(), newFreeformWork())
+	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.NoError(t, err)
 
 	loaded, ok := body.payload.(loftPayload)
@@ -751,7 +751,7 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	budget := newWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), StepRef(0), pl, budget, newFreeformWork(), newFreeformWork())
+	body, err := evalLoft(t.Context(), New(), producerID(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.NoError(t, err)
 
 	loaded, ok := body.payload.(loftPayload)

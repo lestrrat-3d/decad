@@ -937,8 +937,8 @@ surface. Exhaustion is RB7 (§9), not silent truncation.
 
 ## 11. Topology, provenance, and roles
 
-The result is built by `evalPrism` over the merged record, under the boolean
-step's own `StepRef` — identical to how Fillet/Chamfer/Shell already build, and
+The result is built by `evalPrism` over the merged record, under the boolean's
+own private producer identity — identical to how Fillet/Chamfer/Shell build, and
 the topology it builds is untouched by §7's added displacement term. Faces
 therefore get **fresh** roles
 (`side(i,j)`/`capStart`/`capEnd`) minted from the merged record's own segment
@@ -965,11 +965,11 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
 | Tessellation | The result is an ordinary `prismPayload` and `docs/tessellation-design.md` §5's prism contract applies, with §7's section displacement as a term of its own there: it displaces the analytic boundary a mesh approximates, so it does not ride in that contract's stored-coordinate rounding term, while the per-end axial displacement still does. Tessellation §5 reserves the section displacement from the requested tolerance before chording, refuses a tolerance it exhausts, and charges it to every face bound and to `areaSlack`, so chording plus that displacement stays within `tol`. The reservation covers no other term: the per-end axial displacement rides on top of it and can lift the published `Bound` above `tol`, which tessellation §1's Tolerance row allows. A mesh of an assembled body is `Exact`-trimmed only where every one of those displacements is zero. |
 | `ThroughAll` / `ThroughAllSide` | The extent reading states its interval over the RECORDED section and does not carry §7's section displacement, so at `δ > 0` the stop returns `ErrUnsupported`: it has no stated displacement to charge to the level it resolves. At `δ == 0` it reads the extent as before, beside whatever displacement that reading publishes on its own account. |
 | Clearance kernel | Unchanged where `δ == 0` — dispatches on payload class; `prismPayload` already has full analytic support (`clearance.go`'s coplanar `Plane`×`Plane` certificate, `offsetPair`, etc.). Where `δ > 0` the kernel builds no model for the body and the pair reads `Suspect`: every certificate it emits is an exact statement about the carriers it read, and a carrier the payload holds only within `δ` of the one it denotes cannot support one. Widening the kernel's own candidate intervals by `δ` is a separate piece of work, not this design's. |
-| Interference (`Verify`) | **Wired to the analytic path (PR4), over two read-only entry points tried in order.** After its containment and represented-set-equality certificates, `interference.go`'s `measuredInterference` calls `evaluateAnalyticIntersect` (`boolean.go`) — a read-only twin of `performBoolean`'s analytic dispatch that runs `tryPrismBoolean`/`evalPrismContext` under a self-minted `StepRef` and never commits, so it consumes neither operand — and publishes the built payload's own volume. A pair that twin does not admit (`ok == false`) next reaches §4.5's overlap-area reading (PR5), which measures a selection covering any number of disjoint regions and publishes a volume with no body at all; the two-step order is what keeps every pair the twin already answers byte-identical. A pair neither admits falls back unchanged to `evaluateBoolean`'s read-only mesh intersection, exactly as before this design existed. Both analytic answers are still subject to §6's positive-volume gate (`docs/interference-design.md` §6). "Admitted" covers `Union`'s select-all path, `Cut`/`Intersect`'s clean-nesting sub-case, the crossing sub-case (PR3), and since PR5 a multi-region coplanar overlap. `docs/interference-design.md` §5.2 records the boundary this closes. |
+| Interference (`Verify`) | **Wired to the analytic path (PR4), over two read-only entry points tried in order.** After its containment and represented-set-equality certificates, `interference.go`'s `measuredInterference` calls `evaluateAnalyticIntersect` (`boolean.go`) — a read-only twin of `performBoolean`'s analytic dispatch that runs `tryPrismBoolean`/`evalPrismContext` under a temporary producer identity and never commits, so it consumes neither operand — and publishes the built payload's own volume. A pair that twin does not admit (`ok == false`) next reaches §4.5's overlap-area reading (PR5), which measures a selection covering any number of disjoint regions and publishes a volume with no body at all; the two-stage order keeps every pair the twin already answers byte-identical. A pair neither admits falls back unchanged to `evaluateBoolean`'s read-only mesh intersection. Both analytic answers are still subject to §6's positive-volume gate (`docs/interference-design.md` §6). "Admitted" covers `Union`'s select-all path, `Cut`/`Intersect`'s clean-nesting sub-case, the crossing sub-case (PR3), and since PR5 a multi-region coplanar overlap. `docs/interference-design.md` §5.2 records the boundary this closes. |
 | Surveys (wall/undercut/min-radius) | No new code — they dispatch on payload class, and support is immediate where `δ == 0`. The undercut reading is a normal-direction membership and is unaffected at any `δ`. The wall and min-radius readings publish the bound their own arithmetic proves at `δ == 0` — a candidate's own division or square root, never the section displacement — and are staged at `δ > 0`, answering undecided (`Suspect`, never a silent pass): `δ` is not a term either reading may absorb into that bound, because the wall reading is not a quantity a displacement widens by a fixed amount — its allowance-angle contact families (verification §6) can change membership under a boundary perturbation, so a proven displaced reading needs the survey's own theory extended, not a term added to a bound. |
 | `Verify`'s structural/tolerance gates | Structurally unchanged — `prismPayload` is valid by construction as always. The TOLERANCE gate anchors each reading against a reference the body's own geometry supplies, and at `δ > 0` it cannot read that geometry through the clearance kernel's model, which the row above declines to build. It reads the body's OWN recorded section instead (`gateWitnessPrism`), whose witnesses go to the same shared reader every arm publishes through: `pointSetDiameterWithBudget` states the winning pair's own distance computed over exact rationals and rounded toward zero, never the float scan's norm. The gate then shrinks that witness maximum by twice the SUM of `δ` and the axial displacement, rounding the shrunken value toward zero as well (`lowerDiameterForDisplacement`), which verification design §3 proves a lower bound on the denoted body's own diameter. A displaced body is therefore judged on the same terms as any other: a reading passes when its bound meets the tolerance and reports `Suspect` with a stated `Required` threshold when it does not. |
 | Export (STL/OBJ) | Reads `Tessellate`'s output. Its size-derived default tolerance is raised past `δ`, which tessellation reserves from the tolerance before chording, so a default export of an assembled body still writes its mesh rather than refusing. |
-| Recipe/replay | **No wire change.** The step still records the existing `OpUnion`/`OpCut`/`OpIntersect` + `Inputs` (`[a, b]` or `[target, tool]`), unmodified — recipe-replay-design §8's own contract already allows this: "A later evaluator MUST reproduce ... one produced body per step ... measurements valid under its own `Exactness`/`Bound`. It need not reproduce v1's internal payload." A replayed recipe simply builds via the analytic path wherever it now qualifies; nothing in §2 (wire envelope), §3 (validation), or §4 (references/liveness) changes. |
+| Immediate calls | Public `Union`/`Cut`/`Intersect` signatures and consuming behavior stay unchanged. Qualified pairs use the analytic path internally; other pairs keep the mesh path. |
 
 ## 13. Decisions the user may want to overturn
 
@@ -1069,12 +1069,10 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    mesh-path fallback, not a refusal), and G6's `Union` arm still excludes a
    holed operand (its `Cut` tool arm stands regardless, §13) — a holed hub
    unions with a tooth correctly once that lands.
-4. **PR4 — replay/interference wiring + docs.** A stored
-   `OpUnion`/`OpCut`/`OpIntersect` step builds via the analytic path
-   post-upgrade with no wire change (recipe-replay-design §8's contract,
-   §12 above), pinned by a round-trip/replay test on an admitted coplanar
-   `Union` step. `interference.go`'s `measuredInterference` reaches the same
-   read-only analytic `OpIntersect` dispatch `performBoolean` uses
+4. **PR4 — interference wiring + docs.** Public boolean calls use the analytic
+   path when a pair qualifies, pinned by direct construction tests on admitted
+   coplanar pairs. `interference.go`'s `measuredInterference` reaches the same
+   read-only analytic intersection dispatch `performBoolean` uses
    (`evaluateAnalyticIntersect`, `boolean.go`) after its containment and
    represented-set-equality certificates, falling back unchanged to the mesh
    path when the analytic path does not admit the pair; a test asserts an
@@ -1182,14 +1180,13 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   allowance — assert `Exactness`/`Bound` on the second result follow §7,
   not accumulated tessellation tolerance.
 - Cancellation: a canceled `ctx` mid-resolution returns `ctx.Err()` unchanged
-  with the document and recipe untouched, matching the existing modify-op
+  with the document untouched, matching the existing modify-op
   contract.
 - Arrangement cap: two line-only prism records whose combined upper bound
   exceeds `prismMaxArrangementSegments` refuse with `ErrUnsupported`
   before `s.Profiles()` runs.
-- Replay: encode a recipe whose `OpUnion` step is an admitted pair, decode
-  and evaluate it fresh, and assert the replayed body's `Exactness`/`Bound`
-  match direct construction (recipe-replay-design §10.3's shape).
+- Repeated direct construction of an admitted union produces matching
+  `Exactness`, `Bound`, topology roles, and measurements.
 - §4.5's multi-region reading, on a U-shaped prism crossed by a bar whose two
   operands' outlines overlap in exactly two disjoint 12 mm² regions over a
   5 mm sweep: `Verify` reports one `Interference` row whose volume is

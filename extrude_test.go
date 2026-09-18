@@ -1,7 +1,6 @@
 package decad_test
 
 import (
-	"encoding/json"
 	"math"
 	"testing"
 
@@ -63,16 +62,8 @@ func TestExtrudePlate(t *testing.T) {
 		require.True(t, e.IsConvex(), `every edge of a convex plate is convex`)
 	}
 
-	// The document holds the body, and the recipe records the step exactly.
+	// The document holds the body.
 	require.Equal(t, []*decad.Body{body}, doc.Bodies())
-	recipe := doc.Recipe()
-	require.Len(t, recipe.Steps, 1)
-	require.Equal(t, decad.OpExtrude, recipe.Steps[0].Op)
-	buf, err := json.Marshal(recipe)
-	require.NoError(t, err)
-	var got decad.Recipe
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, recipe, got, `the recorded recipe round-trips`)
 }
 
 func TestExtrudePlateWithHole(t *testing.T) {
@@ -229,17 +220,6 @@ func TestPlaced(t *testing.T) {
 	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(60000))
 	_, err = body.Placed(motion)
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
-
-	// The recipe holds both steps; the placed step depends on the extrude.
-	recipe := doc.Recipe()
-	require.Len(t, recipe.Steps, 2)
-	require.Equal(t, decad.OpPlaced, recipe.Steps[1].Op)
-	require.Equal(t, []decad.StepRef{0}, recipe.Steps[1].Inputs)
-	buf, err := json.Marshal(recipe)
-	require.NoError(t, err)
-	var got decad.Recipe
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, recipe, got)
 }
 
 func TestExtrudeRejections(t *testing.T) {
@@ -262,9 +242,9 @@ func TestExtrudeRejections(t *testing.T) {
 	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithTaper(units.Millimeters(3)))
 	require.ErrorIs(t, err, decad.ErrUnitKind, `a taper must be an angle`)
 
-	// Every rejection left the recipe and the document untouched.
+	// Every rejection left the document untouched.
 	require.Empty(t, doc.Bodies())
-	require.Empty(t, doc.Recipe().Steps)
+	require.Empty(t, doc.Bodies())
 
 	// A stale profile is sketch's answer, consumed at the gate.
 	s.AddConstraint(sketch.NewDistance(s.Points()[0], s.Points()[1], 55))
@@ -369,25 +349,7 @@ func TestExtrudeRejectsUnknownDirection(t *testing.T) {
 	doc := decad.New()
 	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Direction(99)})
 	require.ErrorIs(t, err, decad.ErrDegenerate, `an unknown direction is malformed, never silently Along`)
-	require.Empty(t, doc.Recipe().Steps)
-}
-
-func TestRecipeIsAValue(t *testing.T) {
-	t.Parallel()
-	// Mutating a returned recipe never changes the document's own record.
-	s, p := plateSketch(t)
-	doc := decad.New()
-	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
-	require.NoError(t, err)
-
-	stolen := doc.Recipe()
-	stolen.Steps[0].Profile.Outer.Segments[0] = decad.LineSeg{TStart: 0.5, TEnd: 0.5}
-	stolen.Steps[0].Inputs = append(stolen.Steps[0].Inputs, 42)
-
-	fresh := doc.Recipe()
-	require.NotEqual(t, stolen.Steps[0].Profile.Outer.Segments[0], fresh.Steps[0].Profile.Outer.Segments[0],
-		`the document's record is isolated from caller mutation`)
-	require.Empty(t, fresh.Steps[0].Inputs)
+	require.Empty(t, doc.Bodies())
 }
 
 func TestExtrudeCoalescesCollinearSides(t *testing.T) {
@@ -530,7 +492,7 @@ func TestExtrudeRejectsNonFiniteTaper(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNotFinite)
 	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}, decad.WithTaper(units.Degrees(math.NaN())))
 	require.ErrorIs(t, err, decad.ErrNotFinite)
-	require.Empty(t, doc.Recipe().Steps)
+	require.Empty(t, doc.Bodies())
 }
 
 func TestExtrudeRejectsNilOption(t *testing.T) {
@@ -539,24 +501,7 @@ func TestExtrudeRejectsNilOption(t *testing.T) {
 	doc := decad.New()
 	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}, nil)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	require.Empty(t, doc.Recipe().Steps)
-}
-
-func TestRecordedExtentNeverAliasesCallerPointers(t *testing.T) {
-	t.Parallel()
-	// A nested pointer side is normalized to a value at the feature call, so
-	// mutating the caller's struct after the fact cannot rewrite the recipe.
-	s, p := plateSketch(t)
-	doc := decad.New()
-	side := &decad.DistanceSide{D: units.Millimeters(7)}
-	_, err := doc.Extrude(s, p, decad.TwoSided{One: side, Two: decad.DistanceSide{D: units.Millimeters(3)}})
-	require.NoError(t, err)
-
-	side.D = units.Millimeters(999)
-	got := doc.Recipe().Steps[0].Extent.(decad.TwoSided)
-	one, ok := got.One.(decad.DistanceSide)
-	require.True(t, ok, `the recorded side is a value, not the caller's pointer`)
-	require.True(t, one.D.Equal(units.Millimeters(7), 1e-12), `the recorded magnitude is the one given at the call`)
+	require.Empty(t, doc.Bodies())
 }
 
 func TestNilExtentPointersAreBranchable(t *testing.T) {
@@ -569,7 +514,7 @@ func TestNilExtentPointersAreBranchable(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	_, err = doc.Extrude(s, p, decad.TwoSided{One: (*decad.DistanceSide)(nil), Two: decad.DistanceSide{D: units.Millimeters(1)}})
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	require.Empty(t, doc.Recipe().Steps)
+	require.Empty(t, doc.Bodies())
 }
 
 // roundedPlateBody extrudes a 100×60 plate by 5 mm whose top edge carries a
@@ -930,47 +875,16 @@ func TestExtrudeInvoluteFlankBuildsAndVerifies(t *testing.T) {
 	require.Equal(t, decad.Sound, report.Status)
 }
 
-// TestPlacedRecipeIsUnchangedByTheEvaluatorsCache pins the boundary between
-// what a body carries for its own re-evaluation and what it RECORDS. The
-// evaluator publishes a private walk resolution onto a prism body so a
-// placement need not resolve the same section twice; a recipe records steps,
-// and this asserts the two never meet — the extrude step and the placement step
-// encode exactly the fields they always did, and the recipe a placed document
-// hands back round-trips byte for byte.
-//
-// decad has no whole-recipe evaluator yet, so this is the reachable half of the
-// replay obligation: nothing about the cache can reach a recorded step, so a
-// future replay — which decodes into fresh records carrying no cache — has the
-// same steps to work from.
-func TestPlacedRecipeIsUnchangedByTheEvaluatorsCache(t *testing.T) {
+func TestPlacedUsesEvaluatorCache(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
-	extruded := doc.Recipe()
-
 	motion, err := r3.Translation(r3.NewVec(0, 0, 25))
 	require.NoError(t, err)
 	placed, err := body.Placed(motion)
 	require.NoError(t, err)
-
-	recipe := doc.Recipe()
-	require.Len(t, recipe.Steps, 2, "an extrude and a placement")
-	require.Equal(t, extruded.Steps[0], recipe.Steps[0],
-		"placing a body must not disturb the step that built it")
-	require.Equal(t, decad.OpPlaced, recipe.Steps[1].Op)
-	require.Equal(t, decad.ProfileRecord{}, recipe.Steps[1].Profile,
-		"a placement records a motion, never a section")
-
-	encoded, err := json.Marshal(recipe)
-	require.NoError(t, err, "the recorded recipe encodes")
-	var decoded decad.Recipe
-	require.NoError(t, json.Unmarshal(encoded, &decoded), "and decodes")
-	require.Equal(t, recipe, decoded, "the recipe round-trips field for field")
-
-	// And the placed body is the plate, moved: the reading the cache serves.
 	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(60000), decadtest.Exactly())
-	// The plate's mid-height, lifted by 25 mm.
 	decadtest.MeasuresCentroid(t, placed, r3.NewVec(50, 30, 30))
 }

@@ -191,7 +191,7 @@ func (pl loftPayload) axialDelta() float64 { return pl.delta }
 // orientation step re-decides the sign from the placed triangle set on its
 // own, so a mirror flips `reversed` with no separate winding-flip case
 // needed here.
-func (pl loftPayload) placed(ctx context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
+func (pl loftPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	next := pl
 	next.xform = composed
 	next.verts, next.tris, next.walls = nil, nil, 0
@@ -247,7 +247,7 @@ func validateLoftBodyMeasurements(body *Body) error {
 // kind, so nothing here charges them yet — but the counters are still
 // threaded through so a future free-form correspondence does not silently
 // open a second ceiling per record.
-func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, budget *workBudget, work0, work1 *freeformWork) (*Body, error) {
+func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, budget *workBudget, work0, work1 *freeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -282,7 +282,7 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 	cap0Rat := capPolygonAreaRat(a.pts0, a.loopIdx0)
 	cap1Rat := capPolygonAreaRat(a.pts1, a.loopIdx1)
 
-	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: roleBody}, solid: true}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
 
 	capStart, capEnd, walls, err := buildLoftTopology(ctx, body, ref, a, cap0Rat, cap1Rat)
 	if err != nil {

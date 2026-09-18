@@ -96,7 +96,7 @@ func NewPrism(tb testing.TB, doc *decad.Document, s *sketch.Sketch, p *sketch.Pr
 // is a scalar quantity, so §5.1 admits no bare float for it and it stays a
 // units.Value. NewBlock delegates to NewSketch, SolveRegion and NewPrism and
 // performs no nil check of its own — NewPrism owns the doc check. The
-// result is a straight prism recorded as one decad.OpExtrude step, the
+// result is a straight prism recorded as one decad.opExtrude step, the
 // fixture most tests start from.
 func NewBlock(tb testing.TB, doc *decad.Document, x0, y0, x1, y1 float64, height units.Value) *decad.Body {
 	tb.Helper()

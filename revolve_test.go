@@ -1,7 +1,6 @@
 package decad_test
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"math/big"
@@ -139,22 +138,6 @@ func TestRevolveFullAnnularCylinder(t *testing.T) {
 		require.True(t, loops[0].IsOuter())
 		require.False(t, loops[1].IsOuter())
 	}
-
-	// The recorded step: the axis and the extent, exactly as given.
-	recipe := doc.Recipe()
-	require.Len(t, recipe.Steps, 1)
-	step := recipe.Steps[0]
-	require.Equal(t, decad.OpRevolve, step.Op)
-	require.Equal(t, uAxis, step.Axis)
-	require.Equal(t, decad.FullRevolution{}, step.Angular)
-	require.Nil(t, step.Extent)
-	require.Empty(t, step.Inputs)
-
-	buf, err := json.Marshal(recipe)
-	require.NoError(t, err)
-	var got decad.Recipe
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, recipe, got, `the recorded recipe round-trips`)
 }
 
 func TestRevolveSolidCylinderHasNoInnerFace(t *testing.T) {
@@ -707,7 +690,6 @@ func TestRevolveAxisDerivedOverflow(t *testing.T) {
 		_, err := doc.Revolve(s, p, axis, decad.FullRevolution{})
 		require.ErrorIs(t, err, decad.ErrNotFinite)
 		require.Empty(t, doc.Bodies())
-		require.Empty(t, doc.Recipe().Steps)
 	})
 
 	t.Run("SketchLineFiniteOverflowingMagnitude", func(t *testing.T) {
@@ -730,7 +712,6 @@ func TestRevolveAxisDerivedOverflow(t *testing.T) {
 		require.True(t, body.IsSolid())
 		decadtest.MeasuresVolume(t, body, units.CubicMillimeters(2000*math.Pi*math.Sqrt2))
 		require.Len(t, doc.Bodies(), 1)
-		require.Len(t, doc.Recipe().Steps, 1)
 	})
 
 	t.Run("ConstructionAxisFrameConversion", func(t *testing.T) {
@@ -759,7 +740,6 @@ func TestRevolveAxisDerivedOverflow(t *testing.T) {
 		_, err = doc.Revolve(s, p, axis, decad.FullRevolution{})
 		require.ErrorIs(t, err, decad.ErrNotFinite)
 		require.Empty(t, doc.Bodies())
-		require.Empty(t, doc.Recipe().Steps)
 	})
 
 	t.Run("ConstructionAxisLocalLength", func(t *testing.T) {
@@ -773,7 +753,6 @@ func TestRevolveAxisDerivedOverflow(t *testing.T) {
 		_, err := doc.Revolve(s, p, axis, decad.FullRevolution{})
 		require.ErrorIs(t, err, decad.ErrNotFinite)
 		require.Empty(t, doc.Bodies())
-		require.Empty(t, doc.Recipe().Steps)
 	})
 }
 
@@ -801,22 +780,16 @@ func TestRevolveEdgeAxisGates(t *testing.T) {
 	t.Run("CircularEdgeIsErrDegenerate", func(t *testing.T) {
 		// A non-linear edge named as a revolve axis spins about no line.
 		holed := holePlateBody(t)
-		ref := decad.FeatureRef{Step: holed.Origin().Step, Role: roleCapStart}
+		ref := decad.CapStart(holed)
 		axis := decad.EdgeAxis{Body: holed, Edge: decad.Edges(decad.Circular(), decad.CreatedBy(ref)).Exactly(1)}
 		_, err := holed.Document().Revolve(s, p, axis, decad.FullRevolution{})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 	t.Run("RejectionLeavesDocumentUntouched", func(t *testing.T) {
-		steps := len(doc.Recipe().Steps)
 		bodies := len(doc.Bodies())
 		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges()}, decad.FullRevolution{})
 		require.ErrorIs(t, err, decad.ErrCardinality)
-		require.Len(t, doc.Recipe().Steps, steps)
 		require.Len(t, doc.Bodies(), bodies)
-	})
-	t.Run("StepRefBody", func(t *testing.T) {
-		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: decad.StepRef(0), Edge: decad.Edges().Exactly(1)}, decad.FullRevolution{})
-		require.ErrorIs(t, err, decad.ErrUnresolvedBody)
 	})
 	t.Run("NilBody", func(t *testing.T) {
 		_, err := doc.Revolve(s, p, decad.EdgeAxis{Edge: decad.Edges().Exactly(1)}, decad.FullRevolution{})
@@ -883,7 +856,7 @@ func TestRevolveAboutEdgeAxis(t *testing.T) {
 	s, p := annularSketch(t)
 	doc := decad.New()
 	host := trianglePrismHost(t, doc)
-	capStart := decad.FeatureRef{Step: host.Origin().Step, Role: roleCapStart}
+	capStart := decad.CapStart(host)
 	axis := decad.EdgeAxis{
 		Body: host,
 		Edge: decad.Edges(decad.CreatedBy(capStart), decad.ParallelTo(r3.NewVec(1, 0, 0))).Exactly(1),
@@ -897,24 +870,6 @@ func TestRevolveAboutEdgeAxis(t *testing.T) {
 
 	// The host is a dependency, not an operand: it stays live.
 	require.Contains(t, doc.Bodies(), host)
-
-	// The recorded step depends on the host's producing step, and the axis
-	// records the query with the body as that StepRef (core §6.2).
-	steps := doc.Recipe().Steps
-	require.Len(t, steps, 2)
-	step := steps[1]
-	require.Equal(t, decad.OpRevolve, step.Op)
-	require.Equal(t, []decad.StepRef{host.Origin().Step}, step.Inputs)
-	ea, ok := step.Axis.(decad.EdgeAxis)
-	require.True(t, ok, `the recorded axis stays an EdgeAxis, never the resolved line`)
-	require.Equal(t, host.Origin().Step, ea.Body)
-
-	// The recorded step round-trips through the wire codec.
-	buf, err := json.Marshal(step)
-	require.NoError(t, err)
-	var got decad.Step
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, step, got)
 }
 
 func TestRevolveEdgeAxisDirectionSense(t *testing.T) {
@@ -925,7 +880,7 @@ func TestRevolveEdgeAxisDirectionSense(t *testing.T) {
 	s, p := annularSketch(t)
 	doc := decad.New()
 	host := trianglePrismHost(t, doc)
-	capStart := decad.FeatureRef{Step: host.Origin().Step, Role: roleCapStart}
+	capStart := decad.CapStart(host)
 	axis := decad.EdgeAxis{
 		Body: host,
 		Edge: decad.Edges(decad.CreatedBy(capStart), decad.ParallelTo(r3.NewVec(1, 0, 0))).Exactly(1),
@@ -947,7 +902,7 @@ func TestRevolveEdgeAxisMustBeCoplanar(t *testing.T) {
 	s, p := annularSketch(t)
 	doc := decad.New()
 	host := trianglePrismHost(t, doc)
-	capEnd := decad.FeatureRef{Step: host.Origin().Step, Role: roleCapEnd}
+	capEnd := decad.CapEnd(host)
 	axis := decad.EdgeAxis{
 		Body: host,
 		Edge: decad.Edges(decad.CreatedBy(capEnd), decad.ParallelTo(r3.NewVec(1, 0, 0))).Exactly(1),
@@ -1084,66 +1039,6 @@ func TestRevolveReflectedSphereAndConeNormals(t *testing.T) {
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, decad.Suspect, report.Status)
-}
-
-func TestRevolveRecipeAxisCodec(t *testing.T) {
-	t.Parallel()
-	t.Run("AxisKeyedToRevolve", func(t *testing.T) {
-		step := validCodecStep(decad.OpExtrude)
-		step.Axis = uAxis
-		_, err := json.Marshal(step)
-		require.Error(t, err, `an axis on a non-revolve step neither encodes nor decodes`)
-		var s decad.Step
-		err = json.Unmarshal([]byte(`{"op":"extrude","axis":{"kind":"sketch_line","start":{"u":0,"v":0},"end":{"u":1,"v":0}}}`), &s)
-		require.Error(t, err)
-	})
-	t.Run("SketchLineRoundTrip", func(t *testing.T) {
-		step := validCodecStep(decad.OpRevolve)
-		step.Angular = decad.FullRevolution{}
-		step.Axis = uAxis
-		buf, err := json.Marshal(step)
-		require.NoError(t, err)
-		var got decad.Step
-		require.NoError(t, json.Unmarshal(buf, &got))
-		require.Equal(t, step, got)
-	})
-	t.Run("ConstructionAxisRoundTrip", func(t *testing.T) {
-		step := validCodecStep(decad.OpRevolve)
-		step.Angular = decad.SymmetricAngle{A: units.Degrees(45)}
-		step.Axis = decad.ConstructionAxis{Origin: r3.NewVec(1, 2, 3), Dir: r3.NewVec(0, 1, 0)}
-		buf, err := json.Marshal(step)
-		require.NoError(t, err)
-		var got decad.Step
-		require.NoError(t, json.Unmarshal(buf, &got))
-		require.Equal(t, step, got)
-	})
-	t.Run("EdgeAxisRoundTrip", func(t *testing.T) {
-		step := validCodecStep(decad.OpRevolve)
-		step.Inputs = []decad.StepRef{2}
-		step.Angular = decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}
-		step.Axis = decad.EdgeAxis{Body: decad.StepRef(2), Edge: decad.Edges(decad.Circular()).Exactly(1)}
-		buf, err := json.Marshal(step)
-		require.NoError(t, err)
-		var got decad.Step
-		require.NoError(t, json.Unmarshal(buf, &got))
-		require.Equal(t, step, got)
-	})
-	t.Run("LiveBodyDoesNotEncode", func(t *testing.T) {
-		es, ep := plateSketch(t)
-		doc := decad.New()
-		host, err := doc.Extrude(es, ep, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
-		require.NoError(t, err)
-		step := validCodecStep(decad.OpRevolve)
-		step.Angular = decad.FullRevolution{}
-		step.Axis = decad.EdgeAxis{Body: host, Edge: decad.Edges().Exactly(1)}
-		_, err = json.Marshal(step)
-		require.Error(t, err, `a live body is a handle, not a record`)
-	})
-	t.Run("UnknownAxisKind", func(t *testing.T) {
-		var s decad.Step
-		err := json.Unmarshal([]byte(`{"op":"revolve","axis":{"kind":"quaternion"}}`), &s)
-		require.Error(t, err)
-	})
 }
 
 // holedSketch builds the annular rectangle with a circular hole at (5, 10),
@@ -1283,7 +1178,7 @@ func TestRevolveRejectsSpindleTorusArc(t *testing.T) {
 	doc := decad.New()
 	_, err = doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Empty(t, doc.Recipe().Steps, `a refused revolve leaves the document untouched`)
+	require.Empty(t, doc.Bodies(), `a refused revolve leaves the document untouched`)
 }
 
 // grooveSketch builds a meridian rectangle u∈[0,20], v∈[5,15] with a

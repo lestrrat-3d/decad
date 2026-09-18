@@ -571,11 +571,11 @@ func revolveWall(budget *workBudget, rp revolvePayload, alpha float64) (wallOutc
 
 // facesByRole indexes a body's faces by their own-step feature role.
 func facesByRole(b *Body) map[string]*Face {
-	step := b.origin.Step
+	step := b.origin.producer
 	m := make(map[string]*Face)
 	for _, f := range b.Faces() {
 		for _, o := range f.origins {
-			if o.Step == step {
+			if o.producer == step {
 				m[o.Role] = f
 			}
 		}
@@ -1030,7 +1030,7 @@ func cupWalksBudget(budget *workBudget, loop LoopRecord) ([]sideWalk, error) {
 // exactly zero. The thickness reading carries the payload's own
 // millimetre-conversion displacement as its bound and is Exact only when that
 // displacement is zero; the pinch reading is always Exact zero. The theorem
-// consumes the payload's morphology, not the recipe value: it rebuilds and
+// consumes the payload's morphology, not caller input: it rebuilds and
 // audits the offset relation before trusting it.
 func cupWall(budget *workBudget, cp cupPayload, alpha float64) (wallOutcome, error) {
 	finite := func(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }

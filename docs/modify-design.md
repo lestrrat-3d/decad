@@ -23,7 +23,7 @@ Around the tables: what a modify op owes and how it refuses (§1), the reduction
 that keeps the analytic shape and propagates bounded mass results, with
 Exactness only when the proven bound is zero (§2, §10), where the 2D work is
 allowed to live (§5), the fillet (§6), the chamfer (§7), the shell (§8), the
-recipe, the provenance and the replay (§11), the increment plan (§13) and the
+commit and provenance rules (§11), the increment plan (§13) and the
 reach decisions (§14).
 
 Companion to `docs/api-design.md`, which owns the three operation signatures
@@ -68,8 +68,8 @@ early on a body that *does* exist would hand the caller `ErrUnsupported` for a
 body that does not. No other section picks a sentinel or an order; they cite an
 S row.
 
-Both sentinels are returned from the call, before anything is recorded: a
-failed evaluation leaves the recipe and the document untouched (evaluator §8),
+Both sentinels are returned from the call before commit: a failed evaluation
+leaves the document untouched (evaluator §8),
 so a refused modify op retires nothing and the caller still holds a live body.
 Neither is ever deferred into a `Verify` reading — `Verify` judges bodies the
 document holds, and a refused call produced none. The staging split of
@@ -124,14 +124,10 @@ That is the whole design, and everything else follows from it:
   drift: a filleted prism, a chamfered prism and a tube are all one payload
   class, so what accepts one accepts all three.
 
-**The reduction is the evaluator's, never the recipe's.** The `Step` records
-"fillet these edges at 2 mm" — a selector and a radius (core §6.2) — and never
-the rewritten section. An exact kernel replays the same step and builds the
-blend as a true rolling-ball surface against the true faces; it produces the
-same body by a different route, which is precisely what core §2 promises a
-second evaluator will do. A recipe that recorded the rewritten section would
-have recorded this evaluator's *method* as the caller's *intent*, and vN would
-inherit a 2D reduction it does not need.
+**The reduction is private evaluator data.** The public call states "fillet
+these edges at 2 mm" with a selector and radius; it never exposes the rewritten
+section. A later exact kernel can build the same intent as a true rolling-ball
+surface without inheriting this evaluator's 2D reduction.
 
 The one thing the reduction cannot express is a result in **more than one
 piece**: a `ProfileRecord` is one outer loop and its holes, so a `prismPayload`
@@ -272,8 +268,8 @@ walks, segment-pair crossing/contact tests, hole-pair tests, and each
 ray-boundary containment scan. Shell also shares it through exact offset
 construction before that audit. The budget polls at phase boundaries and after
 at most `workPollInterval` candidate operations. A cancelled operation returns
-`ctx.Err()` before commit, leaving the receiver live and the recipe and
-document unchanged. The original `Fillet`, `Chamfer`, and `Shell` methods
+`ctx.Err()` before commit, leaving the receiver live and the document
+unchanged. The original `Fillet`, `Chamfer`, and `Shell` methods
 remain source-compatible wrappers using `context.Background()`. The `cupWall`
 morphology recheck shares its budget across profile validation and integration,
 offset construction, and the same audit through `Document.Verify`'s context.
@@ -699,49 +695,23 @@ extrude places. The represented *shape* remains analytic. Measurement `Exact`
 means the reported binary number is proved exactly representable; otherwise its
 floating-point evaluation is `Approximate` with a proven outward bound.
 
-## 11. The recipe, provenance, and replay
+## 11. Commit and provenance
 
-**The `Step`.** Each op appends one step (core §6.2), and each depends on and
-**consumes** the receiver — the receiver is retired from the document and the
-result registered, by the uniform rule of core §6:
+Each operation consumes the receiver: it resolves its selector against the
+live body, builds and audits the result, then atomically retires the receiver
+and registers the result. No caller-owned selector pointer survives the call,
+and resolved topology pointers are never exposed as durable identity.
 
-| Field | Fillet | Chamfer | Shell |
-|---|---|---|---|
-| `Op` | `OpFillet` | `OpChamfer` | `OpShell` |
-| `Inputs` | `[the receiver's StepRef]` | same | same |
-| `Selectors` | `[the edge query]` | `[the edge query]` | `[the face query]` |
-| `Values` | `[r]` | `[d]` | `[thickness]` |
-| `Opts` | nil | nil | `ShellOpts{Sense}` |
-
-Everything else — `Profile`, `Plane`, `Extent`, `Angular`, `Axis`, `Placement`
-— is absent, and the wire codec omits it, exactly as the shipped `Step` codec
-omits the fields an op does not key.
-
-**The selector is recorded unresolved, and deep-copied.** The query is a value
-(core §9), and the step stores a **clone** of it — the same discipline
-`extent.go` and `selector.go` already keep: no caller-owned pointer survives into
-a recorded step, and none escapes `Recipe()`. The step never records the edges
-or faces the query resolved to; that would be the topology index invariant #3
-forbids, one level down.
-
-**Replay is deterministic because resolution is.** Selector resolution is a
-filter over `Body.Edges()` / `Body.Faces()` in the body's own deterministic
-order (evaluator §7), the body being resolved against is itself rebuilt from its
-own step, and every gate in §3–§9 is a closed-form test on that geometry. A
-replay therefore selects the same edges, computes the same tangent feet, and
-builds the same body — which is what makes a recipe the deliverable core §2 says
-it is.
-
-**A role is an index into the record, so the result's roles index the result's
-record.** `FeatureRef` is a producing `StepRef` plus a role, and the role of a
+**A role is an index into the payload, so the result's roles index the result's
+payload.** `FeatureRef` carries a private producer identity plus a role, and the role of a
 side face is `side(i, j)` — loop `i`, segment `j` **of the payload the body
 holds** (evaluator §3). A modify op rewrites the section: segments are trimmed,
 inserted and renumbered, so a role inherited from the receiver would name a
 segment of a record this body no longer has. This increment therefore does what
 the shipped evaluator already does when it re-evaluates a payload: **every face
-of the result carries roles of the modify step alone**, in the result's own index
+of the result carries roles of the modify operation alone**, in the result's own index
 space, and Table B lists them. There is no re-parenting problem because there is
-no inheritance: a role is minted from the record it labels.
+no inheritance: a role is minted from the payload it labels.
 
 Two consequences, both load-bearing, and neither is a workaround:
 

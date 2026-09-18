@@ -84,7 +84,7 @@ const (
 
 // pathCell matches a Layout row's first column, which holds one of: a
 // single file ("`doc.go`"), two files joined by " / "
-// ("`recipe.go` / `recipe_wire.go`"), a directory ("`examples/`",
+// ("`boolean.go` / `boolean_mesh.go`"), a directory ("`examples/`",
 // "`.github/workflows/`"), or a docs file ("`docs/api-design.md`") — one or
 // two backtick-quoted tokens, never containing "|".
 const pathCell = "`[^`]+`(?:\\s*/\\s*`[^`]+`)?"

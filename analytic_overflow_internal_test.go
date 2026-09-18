@@ -40,7 +40,7 @@ func overflowFrame(t *testing.T) r3.Frame {
 func TestEvalPrismRejectsOverflowedMeasurements(t *testing.T) {
 	t.Parallel()
 	profile := overflowSquare(1e154)
-	body, err := evalPrism(New(), StepRef(0), prismPayload{
+	body, err := evalPrism(New(), producerID(0), prismPayload{
 		profile: profile,
 		frame:   overflowFrame(t),
 		z1:      100,
@@ -58,7 +58,7 @@ func TestEvalRevolveRejectsOverflowedMeasurements(t *testing.T) {
 		LineSeg{Start: Point2{U: 2e154, V: 1}, End: Point2{U: 1e154, V: 1}, TStart: 0, TEnd: 1},
 		LineSeg{Start: Point2{U: 1e154, V: 1}, End: Point2{U: 1e154}, TStart: 0, TEnd: 1},
 	}}}
-	body, err := evalRevolve(New(), StepRef(0), revolvePayload{
+	body, err := evalRevolve(New(), producerID(0), revolvePayload{
 		profile: profile,
 		frame:   overflowFrame(t),
 		ax: axisFrame{
@@ -74,7 +74,7 @@ func TestEvalRevolveRejectsOverflowedMeasurements(t *testing.T) {
 
 func TestEvalCupRejectsOverflowedMeasurements(t *testing.T) {
 	t.Parallel()
-	body, err := evalCup(New(), StepRef(0), cupPayload{
+	body, err := evalCup(New(), producerID(0), cupPayload{
 		outer:  overflowSquare(10),
 		cavity: overflowSquare(1),
 		frame:  overflowFrame(t),
@@ -89,7 +89,7 @@ func TestEvalCupRejectsOverflowedMeasurements(t *testing.T) {
 func TestEvalCupIgnoresUnusedOverflowedSecondMoments(t *testing.T) {
 	t.Parallel()
 	const outerSide = 1e100
-	body, err := evalCup(New(), StepRef(0), cupPayload{
+	body, err := evalCup(New(), producerID(0), cupPayload{
 		outer:  overflowSquare(outerSide),
 		cavity: overflowSquare(outerSide / 2),
 		frame:  overflowFrame(t),
@@ -121,7 +121,7 @@ func TestAnalyticCircularEdgesCarryLengthBounds(t *testing.T) {
 			CCW:    true,
 		},
 	}}}
-	prism, err := evalPrism(New(), StepRef(0), prismPayload{
+	prism, err := evalPrism(New(), producerID(0), prismPayload{
 		profile: circle,
 		frame:   overflowFrame(t),
 		z1:      2,
@@ -155,7 +155,7 @@ func TestAnalyticCircularEdgesCarryLengthBounds(t *testing.T) {
 		full:    true,
 		xform:   r3.Identity(),
 	}
-	full, err := evalRevolve(New(), StepRef(0), rp)
+	full, err := evalRevolve(New(), producerID(0), rp)
 	require.NoError(t, err)
 	for _, edge := range full.Edges() {
 		if _, ok := edge.Curve().(Circle3); !ok {
@@ -168,7 +168,7 @@ func TestAnalyticCircularEdgesCarryLengthBounds(t *testing.T) {
 
 	rp.phi1 = math.Pi / 2
 	rp.full = false
-	partial, err := evalRevolve(New(), StepRef(0), rp)
+	partial, err := evalRevolve(New(), producerID(0), rp)
 	require.NoError(t, err)
 	for _, edge := range partial.Edges() {
 		if _, ok := edge.Curve().(Arc3); !ok {
@@ -189,7 +189,7 @@ func TestCoalescedAnalyticEdgesCarryLengthBounds(t *testing.T) {
 		LineSeg{Start: Point2{U: 1, V: 3}, End: Point2{U: 0, V: 2}, TStart: 0, TEnd: 1},
 		LineSeg{Start: Point2{U: 0, V: 2}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
-	body, err := evalPrism(New(), StepRef(0), prismPayload{
+	body, err := evalPrism(New(), producerID(0), prismPayload{
 		profile: profile,
 		frame:   overflowFrame(t),
 		z1:      1,

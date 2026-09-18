@@ -198,11 +198,8 @@ func TestClearanceBeyondBoxesInHole(t *testing.T) {
 	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 	boxBody(t, doc, -2.5, -2.5, 2.5, 2.5, 5)
-
-	before := doc.Recipe()
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
-	require.Equal(t, before, doc.Recipe(), `Verify never mutates the document`)
 	require.Len(t, doc.Bodies(), 2)
 	require.Equal(t, decad.Sound, report.Status)
 	requireExactGap(t, report, 10-2.5*math.Sqrt2)

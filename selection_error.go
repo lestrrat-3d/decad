@@ -248,11 +248,11 @@ func renderCoord(c float64) string {
 	return strconv.FormatFloat(c, 'g', -1, 64)
 }
 
-// renderRef renders a FeatureRef as <step>:<role> — the StepRef in decimal and
+// renderRef renders a FeatureRef as <producer>:<role> — the private ID in decimal and
 // the role quoted, so a role that itself holds parentheses or commas stays
 // unambiguous: 3:"capStart", 2:"side(0,1)".
 func renderRef(f FeatureRef) string {
-	return strconv.Itoa(int(f.Step)) + ":" + strconv.Quote(f.Role)
+	return strconv.Itoa(int(f.producer)) + ":" + strconv.Quote(f.Role)
 }
 
 // selectionError builds the SelectionError an edge query's failing resolution

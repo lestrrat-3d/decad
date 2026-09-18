@@ -25,7 +25,7 @@ func TestSideOriginsContextPollsEachSegment(t *testing.T) {
 	t.Parallel()
 	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 3}
 
-	origins, err := sideOriginsContext(ctx, StepRef(1), 2, []int{4, 5, 6})
+	origins, err := sideOriginsContext(ctx, producerID(1), 2, []int{4, 5, 6})
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, origins)
@@ -46,8 +46,8 @@ func TestFullRevolveShellsContextPollsEachLoop(t *testing.T) {
 
 func TestAddBlendRolesContextPollsNestedMetadata(t *testing.T) {
 	t.Parallel()
-	ref := StepRef(1)
-	face := &Face{origins: []FeatureRef{{Step: ref, Role: "side(0,0)"}}}
+	ref := producerID(1)
+	face := &Face{origins: []FeatureRef{{producer: ref, Role: "side(0,0)"}}}
 	body := &Body{lumps: []*Lump{{shells: []*Shell{{faces: []*Face{face}}}}}}
 	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 5}
 
@@ -55,18 +55,18 @@ func TestAddBlendRolesContextPollsNestedMetadata(t *testing.T) {
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, 5, ctx.calls)
-	require.Equal(t, []FeatureRef{{Step: ref, Role: "side(0,0)"}}, face.origins)
+	require.Equal(t, []FeatureRef{{producer: ref, Role: "side(0,0)"}}, face.origins)
 }
 
 func TestRenameCavityRolesContextPollsNestedMetadata(t *testing.T) {
 	t.Parallel()
-	ref := StepRef(1)
-	face := &Face{origins: []FeatureRef{{Step: ref, Role: "side(0,0)"}}}
+	ref := producerID(1)
+	face := &Face{origins: []FeatureRef{{producer: ref, Role: "side(0,0)"}}}
 	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 3}
 
 	err := renameCavityRoles(ctx, []*Face{face}, ref)
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, 3, ctx.calls)
-	require.Equal(t, []FeatureRef{{Step: ref, Role: "side(0,0)"}}, face.origins)
+	require.Equal(t, []FeatureRef{{producer: ref, Role: "side(0,0)"}}, face.origins)
 }

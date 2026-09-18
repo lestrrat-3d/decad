@@ -68,7 +68,7 @@ even when they are mathematically close. A successful lookup returns the
 stored mesh pointer, while the mesh accessors continue to return fresh slices.
 
 The cache pointer is mutable implementation state only. It does not change the
-body's logical geometry, topology, measurements, payload, or recorded recipe,
+body's logical geometry, topology, measurements, or payload,
 and a cached mesh remains read-only through the public API. `Placed`,
 `Duplicate`, and `PlacedCopy` construct new bodies with independent cache state;
 their face pointers differ, so they never inherit the source body's entry.

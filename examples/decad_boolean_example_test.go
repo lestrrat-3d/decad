@@ -100,10 +100,10 @@ func Example_decad_cut() {
 	fmt.Printf("faces: %d, lumps: %d\n", len(drilled.Faces()), len(drilled.Lumps()))
 	fmt.Printf("volume: %.2f mm^3 (%s, bound %.3f mm^3)\n", volMM, vol.Exactness, boundMM)
 	fmt.Printf("status: %s, trustworthy: %v\n", report.Status, report.Passed())
-	fmt.Printf("recipe steps: %d\n", len(doc.Recipe().Steps))
+	fmt.Printf("live bodies: %d\n", len(doc.Bodies()))
 	// Output:
 	// faces: 7, lumps: 1
 	// volume: 3099.51 mm^3 (Approximate, bound 0.115 mm^3)
 	// status: Sound, trustworthy: true
-	// recipe steps: 4
+	// live bodies: 1
 }

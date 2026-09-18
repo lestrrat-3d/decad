@@ -216,9 +216,9 @@ Boundary limit:
   radius zero.
 - Closure-under-limits rule makes reading genuine `Exact 0`.
 
-The theorem depends on exact morphology, not recorded user intent. `Verify` MUST
-recheck certificate facts it consumes. It MUST NOT return `t` from recipe value
-alone.
+The theorem depends on exact morphology, not the requested shell thickness.
+`Verify` MUST recheck certificate facts it consumes. It MUST NOT return `t`
+from the input value alone.
 
 ### 4.3 Algorithm
 
@@ -774,7 +774,7 @@ Property tests compare:
 ## 15. Rejected shortcuts
 
 - NEVER tessellate cup verification. Use exact cup payload adapter.
-- NEVER return recipe shell thickness without morphology recheck. Use §4 proof.
+- NEVER return the requested shell thickness without morphology recheck. Use §4 proof.
 - NEVER derive normal/curvature bounds from positional `Delta`. Carry source
   certificates.
 - NEVER mark every `Approximate` body `Suspect`. Run total tolerance gate.

@@ -28,7 +28,7 @@ func thinPlateBody(doc *decad.Document, x float64) (*decad.Body, error) {
 }
 
 // acceptExceptDesignatedThinWall is proposal §12's positive-match exception
-// recipe, verbatim: a diagnostic is waived only by matching its exact Code
+// rule, verbatim: a diagnostic is waived only by matching its exact Code
 // AND its exact Body, every other reason is fatal, and the report itself is
 // never mutated by the caller's acceptance — a waived DiagWallTooThin stays
 // in Diagnostics for whoever reads the report next.
