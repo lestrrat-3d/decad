@@ -157,6 +157,7 @@ to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `boolean.go` | Public `Union`/`Cut`/`Intersect` surface over the mesh-boolean evaluator and the typed `BooleanError` mapping; tries the prism-boolean analytic reduction first, and owns `Verify`'s read-only `OpIntersect` twin of it. See `Union`'s doc comment and `docs/evaluator-design.md` §9. |
+| `boolean_parallel.go` | The bounded ordered contact-classification batches shared by `facesNearMiss` and `meshBoolean`; workers classify uncached facet pairs into indexed slots, while memo access and aggregation stay serial. |
 | `prism_boolean.go` | The analytic Union/Cut/Intersect reduction over co-directional coplanar prisms: shared G1-G4 admission, work-budget cap, scene construction, and the shared merge/chain machinery, dispatched ahead of the mesh path. See the file's own doc comment and `docs/prism-boolean-design.md`. |
 | `prism_boolean_nesting.go` | Cut/Intersect's clean-nesting structural match (§4.2's "clean" sub-case): the whole-loop tag-map search resolving a clean bore/nested pair, falling to the crossing sub-case when unresolved. See the file's own doc comment and `docs/prism-boolean-design.md`. |
 | `prism_boolean_crossing.go` | Cut/Intersect's crossing sub-case (§4.2): edge-orientation propagation classifies each arrangement cell per operand; `mergePrismCells` assembles the selected set. See the file's own doc comment and `docs/prism-boolean-design.md`. |

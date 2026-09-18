@@ -212,19 +212,27 @@ func newContactMemo(ma, mb *boolMesh) *contactMemo {
 	return &contactMemo{ma: ma, mb: mb, m: map[[2]int32]triContact{}}
 }
 
+func (c *contactMemo) lookup(i, j int) (triContact, bool) {
+	v, ok := c.m[[2]int32{int32(i), int32(j)}]
+	return v, ok
+}
+
+func (c *contactMemo) store(i, j int, v triContact) {
+	c.m[[2]int32{int32(i), int32(j)}] = v
+}
+
 // classify returns the exact classification of facet i of ma against facet j
 // of mb, computing it on the first ask and replaying the stored answer on
 // every later one. An error is never stored, so a later ask still retries.
-func (c *contactMemo) classify(i, j int) (triContact, error) {
-	key := [2]int32{int32(i), int32(j)}
-	if v, ok := c.m[key]; ok {
+func (c *contactMemo) classify(i, j int) (triContact, error) { //nolint:unparam // tests exercise both memo key dimensions.
+	if v, ok := c.lookup(i, j); ok {
 		return v, nil
 	}
 	v, err := triTriClassify(triCorners(c.ma, i), triCorners(c.mb, j), xtriCorners(c.ma, i), xtriCorners(c.mb, j), c.ma.norms[i], c.mb.norms[j])
 	if err != nil {
 		return triContact{}, err
 	}
-	c.m[key] = v
+	c.store(i, j, v)
 	return v, nil
 }
 
@@ -773,6 +781,42 @@ func meshBoolean(ctx context.Context, op OpKind, ma, mb *boolMesh, memo *contact
 	var inPlane []pairContact
 	var minSin2 *big.Rat
 	work := 0
+	contacts := newContactBatchExecutor(ctx, ma, mb, memo, contactWorkers(ctx), func(pair contactPair, c triContact) error {
+		i, j := pair.i, pair.j
+		ta := triCorners(ma, i)
+		tb := triCorners(mb, j)
+		if c.kind == contactRegion {
+			return errUnclassifiableContact(`two operand facets overlap in one plane`)
+		}
+		if c.kind == contactNone {
+			return nil
+		}
+		if c.sin2 != nil && (minSin2 == nil || c.sin2.Cmp(minSin2) < 0) {
+			minSin2 = c.sin2
+		}
+		if c.kind == contactPoint {
+			pointTouches = append(pointTouches, c.p0)
+			return nil
+		}
+		segEnds = append(segEnds, c.p0, c.p1)
+		if c.edgeA >= 0 || c.edgeB >= 0 {
+			// The segment runs ALONG a facet edge. Graze or crossing is not
+			// decidable here — hold it for the mesh-level call below.
+			inPlane = append(inPlane, pairContact{i: i, j: j, ta: ta, tb: tb, c: c})
+			return nil
+		}
+		cutsA[i] = append(cutsA[i], xseg{
+			a: c.p0, b: c.p1,
+			aOnEdge: c.p0OnA, bOnEdge: c.p1OnA,
+			partner: tb,
+		})
+		cutsB[j] = append(cutsB[j], xseg{
+			a: c.p0, b: c.p1,
+			aOnEdge: c.p0OnB, bOnEdge: c.p1OnB,
+			partner: ta,
+		})
+		return nil
+	})
 	for i := range ma.tris {
 		for j := range mb.tris {
 			work++
@@ -784,43 +828,13 @@ func meshBoolean(ctx context.Context, op OpKind, ma, mb *boolMesh, memo *contact
 			if !boxesOverlap(ma.boxes[i], mb.boxes[j]) {
 				continue
 			}
-			ta := triCorners(ma, i)
-			tb := triCorners(mb, j)
-			c, err := memo.classify(i, j)
-			if err != nil {
+			if err := contacts.add(i, j); err != nil {
 				return nil, 0, err
 			}
-			if c.kind == contactRegion {
-				return nil, 0, errUnclassifiableContact(`two operand facets overlap in one plane`)
-			}
-			if c.kind == contactNone {
-				continue
-			}
-			if c.sin2 != nil && (minSin2 == nil || c.sin2.Cmp(minSin2) < 0) {
-				minSin2 = c.sin2
-			}
-			if c.kind == contactPoint {
-				pointTouches = append(pointTouches, c.p0)
-				continue
-			}
-			segEnds = append(segEnds, c.p0, c.p1)
-			if c.edgeA >= 0 || c.edgeB >= 0 {
-				// The segment runs ALONG a facet edge. Graze or crossing is not
-				// decidable here — hold it for the mesh-level call below.
-				inPlane = append(inPlane, pairContact{i: i, j: j, ta: ta, tb: tb, c: c})
-				continue
-			}
-			cutsA[i] = append(cutsA[i], xseg{
-				a: c.p0, b: c.p1,
-				aOnEdge: c.p0OnA, bOnEdge: c.p1OnA,
-				partner: tb,
-			})
-			cutsB[j] = append(cutsB[j], xseg{
-				a: c.p0, b: c.p1,
-				aOnEdge: c.p0OnB, bOnEdge: c.p1OnB,
-				partner: ta,
-			})
 		}
+	}
+	if err := contacts.done(); err != nil {
+		return nil, 0, err
 	}
 
 	// The graze-or-crossing call, made once, OUTSIDE the pair loop: an in-plane
