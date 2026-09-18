@@ -19,15 +19,18 @@ import (
 // failure is an error, never a wrong mesh.
 
 // boolMesh is one operand's tessellation prepared for exact work: float
-// vertices lifted to rationals, exact facet normals, facet boxes for pair
-// pruning, and the global source-face id each facet remembers.
+// vertices lifted to rationals, exact facet normals and their lazy rounded-
+// float cache, facet boxes for pair pruning, and the global source-face id
+// each facet remembers.
 type boolMesh struct {
-	verts  []r3.Vec
-	xverts []xpt
-	tris   [][3]int
-	norms  []xpt
-	boxes  [][2]r3.Vec
-	src    []int
+	verts       []r3.Vec
+	xverts      []xpt
+	tris        [][3]int
+	norms       []xpt
+	fnorms      []r3.Vec
+	fnormsReady []bool
+	boxes       [][2]r3.Vec
+	src         []int
 	// owner maps each directed mesh edge to the facet that walks it, so the
 	// twin across a facet edge is one lookup. The graze-or-crossing call
 	// needs it: whether an in-plane edge grazes the other operand or crosses
@@ -76,6 +79,8 @@ func prepBoolMeshContext(ctx context.Context, m *Mesh, src []int) (*boolMesh, er
 		bm.xverts[i] = xptOf(v)
 	}
 	bm.norms = make([]xpt, len(m.triangles))
+	bm.fnorms = make([]r3.Vec, len(m.triangles))
+	bm.fnormsReady = make([]bool, len(m.triangles))
 	bm.boxes = make([][2]r3.Vec, len(m.triangles))
 	bm.owner = make(map[[2]int]int, 3*len(m.triangles))
 	for i, tri := range m.triangles {
@@ -101,6 +106,17 @@ func prepBoolMeshContext(ctx context.Context, m *Mesh, src []int) (*boolMesh, er
 	// nothing.
 	bm.parity = newParityMesh(bm.verts, bm.tris)
 	return bm, nil
+}
+
+// prepareFloatNormal computes the correctly rounded float value of one exact
+// facet normal. runContactBatch calls it before starting workers, so workers
+// only read the cache; contactMemo's serial path does the same before use.
+func (bm *boolMesh) prepareFloatNormal(i int) {
+	if bm.fnormsReady[i] {
+		return
+	}
+	bm.fnorms[i] = bm.norms[i].vec()
+	bm.fnormsReady[i] = true
 }
 
 func isNonFinite(f float64) bool { return math.IsNaN(f) || math.IsInf(f, 0) }
@@ -228,7 +244,10 @@ func (c *contactMemo) classify(i, j int) (triContact, error) { //nolint:unparam 
 	if v, ok := c.lookup(i, j); ok {
 		return v, nil
 	}
-	v, err := triTriClassify(triCorners(c.ma, i), triCorners(c.mb, j), xtriCorners(c.ma, i), xtriCorners(c.mb, j), c.ma.norms[i], c.mb.norms[j])
+	c.ma.prepareFloatNormal(i)
+	c.mb.prepareFloatNormal(j)
+	v, err := triTriClassifyPrepared(triCorners(c.ma, i), triCorners(c.mb, j), xtriCorners(c.ma, i), xtriCorners(c.mb, j),
+		c.ma.norms[i], c.mb.norms[j], c.ma.fnorms[i], c.mb.fnorms[j])
 	if err != nil {
 		return triContact{}, err
 	}
@@ -248,7 +267,14 @@ func (c *contactMemo) classify(i, j int) (triContact, error) { //nolint:unparam 
 // line; each triangle's intersection with the OTHER's plane is an interval on
 // that line, and the answer is the intervals' overlap. That is the whole rule.
 func triTriClassify(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt) (triContact, error) {
-	return triTriClassifyWithProjections(ta, tb, xta, xtb, na, nb, nil, nil, nil, nil, true)
+	return triTriClassifyCore(ta, tb, xta, xtb, na, nb, nil, nil, nil, nil, true, r3.Vec{}, r3.Vec{}, false)
+}
+
+// triTriClassifyPrepared is triTriClassify for prepared boolean operands.
+// fna and fnb are the correctly rounded float values of na and nb, computed
+// once per facet rather than once per candidate pair.
+func triTriClassifyPrepared(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, fna, fnb r3.Vec) (triContact, error) {
+	return triTriClassifyCore(ta, tb, xta, xtb, na, nb, nil, nil, nil, nil, true, fna, fnb, true)
 }
 
 // useFilter says whether this call may take triTriMissesFilter's early exit in
@@ -261,6 +287,12 @@ func triTriClassify(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt) (triContact, 
 // of every other caller running at that moment, which is both a data race and a
 // wrong answer, and it is why those tests could not run in parallel.
 func triTriClassifyWithProjections(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, pa, pb *[3]xp2, sa, sb *[3]int, useFilter bool) (triContact, error) {
+	return triTriClassifyCore(ta, tb, xta, xtb, na, nb, pa, pb, sa, sb, useFilter, r3.Vec{}, r3.Vec{}, false)
+}
+
+func triTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, pa, pb *[3]xp2, sa, sb *[3]int,
+	useFilter bool, fna, fnb r3.Vec, normalsPrepared bool,
+) (triContact, error) {
 	out := triContact{edgeA: -1, edgeB: -1}
 	var signsB, signsA [3]int
 	if sb != nil {
@@ -311,8 +343,13 @@ func triTriClassifyWithProjections(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt
 	// Non-coplanar: the planes are distinct and non-parallel (a parallel pair
 	// would leave every vertex strictly on one side, already returned), so they
 	// meet in exactly one line, and every point of the intersection lies on it.
-	if useFilter && triTriMissesFilter(ta, tb, na.vec(), nb.vec(), signsA, signsB) {
-		return out, nil
+	if useFilter {
+		if !normalsPrepared {
+			fna, fnb = na.vec(), nb.vec()
+		}
+		if triTriMissesFilter(ta, tb, fna, fnb, signsA, signsB) {
+			return out, nil
+		}
 	}
 	ptsA := dedupePoints(planeCrossings(xta, xtb, signsA))
 	ptsB := dedupePoints(planeCrossings(xtb, xta, signsB))
