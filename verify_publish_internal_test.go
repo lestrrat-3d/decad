@@ -790,15 +790,23 @@ func TestVerifyPublishInvalidValidityBlocksSurveys(t *testing.T) {
 // TestVerifyPublishUndecidedValidityBlocksSurveys is private-mapping
 // coverage of publishBodyResult's validity gate, not an end-to-end public
 // path: verifyBody's undecided branch is unreachable through a live
-// document body (task-list §4 item 4), so this copies a real extruded
-// body's struct value and clears its payload, which keeps a clean boundary
-// but no build proof (proposal §16 "Validity invalid/undecided").
+// document body (task-list §4 item 4), so this builds a second body over the
+// same held topology and measurements without an evaluator payload, which
+// keeps a clean boundary but no build proof (proposal §16 "Validity
+// invalid/undecided").
 func TestVerifyPublishUndecidedValidityBlocksSurveys(t *testing.T) {
 	t.Parallel()
 	built := rectangularPrism(t, 100, 60, 10)
-	shadow := *built
-	shadow.payload = nil
-	body := &shadow
+	body := &Body{
+		doc:      built.doc,
+		origin:   built.origin,
+		lumps:    built.lumps,
+		volume:   built.volume,
+		area:     built.area,
+		centroid: built.centroid,
+		bounds:   built.bounds,
+		solid:    built.solid,
+	}
 
 	res := publishBody(t, body,
 		WithMinWallThickness(units.Millimeters(1)),

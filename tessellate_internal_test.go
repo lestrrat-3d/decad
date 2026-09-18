@@ -417,7 +417,8 @@ func TestChordLoopRefusesMismatchedResolvedWalks(t *testing.T) {
 // TestTessellatePrismReusesPublishedWalks is the reuse end to end: the mesh a
 // free-form prism tessellates to is the same mesh — every vertex, every
 // triangle, every published proof — whether the body's payload carries the walk
-// resolution its build published or has had it dropped. The record is the
+// resolution its build published or a second body carries the same payload with
+// that resolution dropped. The record is the
 // involute fit section, whose walk resolution is by far the most expensive part
 // of chording it, so a reuse that changed any answer would change one here.
 func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
@@ -433,8 +434,18 @@ func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, reused.triangles)
 
-	body.payload = withoutWalks(published)
-	resolvedAgain, err := body.TessellateContext(t.Context(), tol)
+	withoutResolution := &Body{
+		doc:      body.doc,
+		origin:   body.origin,
+		lumps:    body.lumps,
+		volume:   body.volume,
+		area:     body.area,
+		centroid: body.centroid,
+		bounds:   body.bounds,
+		solid:    body.solid,
+		payload:  withoutWalks(published),
+	}
+	resolvedAgain, err := withoutResolution.TessellateContext(t.Context(), tol)
 	require.NoError(t, err)
 
 	require.Equal(t, resolvedAgain, reused, "the reused resolution must chord to the same mesh")

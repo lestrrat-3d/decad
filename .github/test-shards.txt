@@ -1555,3 +1555,9 @@
 3	0.02	TestWallWedgePrismNoWall
 3	0.01	TestWideSpanIntegrationRefusesBeforeExpanding
 3	0.12	TestXHPAgreesWithTheRationalOrientSign
+3	0.00	TestTessellationCacheConcurrentColdAndHit
+3	0.00	TestTessellationCacheCopiesDoNotInheritEntries
+3	0.00	TestTessellationCacheErrorsCancellationAndAccessorCopies
+3	0.00	TestTessellationCacheKeysAndReplacement
+3	0.00	TestTessellationCachePayloadClasses
+3	0.00	TestTessellationCacheRetainedMemory

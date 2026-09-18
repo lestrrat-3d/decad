@@ -54,6 +54,11 @@ type Mesh struct {
 	symDiffOK  bool
 }
 
+type tessellationCacheEntry struct {
+	chordBits uint64
+	mesh      *Mesh
+}
+
 // sourceBound reads docs/tessellation-design.md §2's sourceBound(face) for one
 // of the mesh's own source faces. A face the record does not carry is an
 // evaluator invariant failure — the caller's own sentinel decides how loud —
@@ -204,6 +209,25 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 	if b.payload == nil {
 		return nil, fmt.Errorf(`%w: this evaluator cannot tessellate a body it did not build`, ErrUnsupported)
 	}
+	key := math.Float64bits(chord)
+	if cached := b.tessellationCache.Load(); cached != nil && cached.chordBits == key {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return cached.mesh, nil
+	}
+	mesh, err := tessellateBodyContext(ctx, b, chord)
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	b.tessellationCache.Store(&tessellationCacheEntry{chordBits: key, mesh: mesh})
+	return mesh, nil
+}
+
+func tessellateBodyContext(ctx context.Context, b *Body, chord float64) (*Mesh, error) {
 	if fp, ok := b.payload.(facetedPayload); ok {
 		return tessellateFaceted(ctx, b, fp, chord)
 	}
