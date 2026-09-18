@@ -3,6 +3,7 @@ package decad
 import (
 	"fmt"
 	"math"
+	"sync/atomic"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -619,6 +620,8 @@ type Body struct {
 	// (docs/evaluator-design.md §8). Nil for a body this evaluator did not
 	// build.
 	payload featurePayload
+
+	tessellationCache atomic.Pointer[tessellationCacheEntry]
 }
 
 // bodyRef seals *Body into BodyRef: a live body is what a caller passes at a

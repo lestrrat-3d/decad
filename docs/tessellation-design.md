@@ -58,6 +58,32 @@ replacement for shared sampling.
 A retired body remains readable, so it may be tessellated. A nil body or a body
 with no evaluator payload is rejected before dispatch.
 
+### 1.1 One-entry tessellation cache
+
+Each immutable `Body` may retain one complete successful tessellation. The
+cache is bounded to one entry. Its key is the exact `math.Float64bits` value
+of the validated tolerance after conversion to millimetres; unit spellings
+that normalize to different represented millimetre values are different keys,
+even when they are mathematically close. A successful lookup returns the
+stored mesh pointer, while the mesh accessors continue to return fresh slices.
+
+The cache pointer is mutable implementation state only. It does not change the
+body's logical geometry, topology, measurements, payload, or recorded recipe,
+and a cached mesh remains read-only through the public API. `Placed`,
+`Duplicate`, and `PlacedCopy` construct new bodies with independent cache state;
+their face pointers differ, so they never inherit the source body's entry.
+
+Validation of context, body, tolerance, and payload precedes cache lookup. A
+cache hit still checks cancellation immediately before returning. Errors,
+refusals, cancellation, and partial work never populate or evict an entry. A
+successful build performs one final cancellation check before publication.
+
+Concurrent cold calls do not coordinate: each caller may independently build a
+mesh for the same missing key. Each complete success may replace the one entry,
+and the last completed success wins. A caller that loses that race still
+returns its own complete mesh; later hits return whichever success was stored
+last. Cache operations are race-safe and do not mutate payload or mesh data.
+
 ## 2. Private proof record
 
 The public surface exposes only `Bound`; the evaluator also keeps private proof
