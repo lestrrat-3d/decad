@@ -442,6 +442,8 @@
 1	0.00	TestDirectionAndOpKindCodec
 1	0.01	TestDuplicate
 1	0.00	TestDyadicDirectedRoundingMatchesTheRationalOnes
+1	0.00	TestDyadicFastPathsPreserveInputs
+1	0.00	TestDyadicFastPathsRandomizedMatchesBigRat
 1	0.00	TestDyadicLiftsEveryFloatExactly
 1	0.00	TestDyadicOfRatAcceptsOnlyBinaryFractions
 1	0.00	TestDyadicRefusesNonFiniteFloats
