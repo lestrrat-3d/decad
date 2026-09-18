@@ -13,10 +13,9 @@ document's Table W follows, "spline §N"), `docs/tessellation-design.md`
 `docs/evaluator-design.md` ("replay §N"), and `docs/interference-design.md`
 / `docs/clearance-design.md` (the staged-consumer precedent Table D follows).
 
-**This document changes an existing decision.** `docs/api-design.md` §8 and
-§13 currently defer loft. This document un-defers it for the scope stated in
-§1 below and records the minimal companion edits that keep the tree
-consistent (§15).
+`docs/api-design.md` §8 includes Loft in the feature vocabulary and points here
+for its scope. §15 records the companion contracts that keep the tree
+consistent.
 
 Four tables are normative, in the discipline `docs/modify-design.md`
 established:
@@ -2197,19 +2196,14 @@ Every design variable this document depends on is resolved above, and §12's
 PR 4 and PR 5 rows are future implementation work rather than open questions
 of this design.
 
-## 15. Companion edits
+## 15. Companion contracts
 
-This document changes `docs/api-design.md`'s current decision, so it makes
-the following edits, in `docs/api-design.md` and `CLAUDE.md`, alongside
-landing this file:
+The following sites point to this design:
 
-- **§8's vocabulary line**: `Sweep and Loft are deferred.` becomes `Sweep is
-  deferred.`, and `Loft` joins the vocabulary list.
-- **§13's non-goals list**: `sweep and loft` becomes `sweep` — loft is no
-  longer a v1 non-goal; it is design-only until its PRs land (the same
-  standing every other not-yet-shipped capability in this package already
-  has, per `CLAUDE.md`'s own opening paragraph).
-- **`docs/layout.md`'s Layout table** gains a row for this document.
+- **`docs/api-design.md` §8** lists `Loft` in the feature vocabulary and
+  delegates its correspondence and staged reach here.
+- **`docs/api-design.md` §13** does not list Loft as a non-goal.
+- **`docs/layout.md`'s Layout table** lists this document.
 - **§6.2's `Step.Op` comment** lists `Loft` among the ops.
 - **§6.2's `Step.Profile` and `Step.Plane` comments** name Loft beside
   Extrude and Revolve, and say the recorded section is the **from** one (§10).

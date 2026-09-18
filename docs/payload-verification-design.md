@@ -1,7 +1,7 @@
 # Payload Verification Design
 
-How `Verify` answers every question for `cupPayload`, `loftPayload`, and
-`facetedPayload`.
+How `Verify` answers every question for `cupPayload`, `loftPayload`,
+`sweepPayload`, and `facetedPayload`.
 Companion to:
 
 - `docs/verification-design.md` — report meaning, tolerance, absence, status;
@@ -24,6 +24,7 @@ case into nil, an empty list, or `Sound`.
 | `revolvePayload` | exact construction proof | analytic kernel | exact meridian reduction | exact normal range | exact curvature |
 | `cupPayload` | exact construction proof | exact analytic adapter (§3) | exact shell theorem (§4) | existing exact cup walk | existing exact cup walk |
 | `loftPayload` | exact construction audit | bounds-disjoint shortcut over each body's own `Bounds` and the bound it carries; `WithClearances` stays `Suspect` until an analytic adapter lands; mesh path staged | `Unavailable` | `Unavailable` | `Unavailable` |
+| `sweepPayload` | exact construction audit | bounds-disjoint shortcut; all other pair and requested-clearance proofs are staged | `Unavailable` | `Unavailable` | `Unavailable` |
 | `facetedPayload` | bounded boundary proof (§6) | bounded triangle adapter (§7) | bounded medial survey (§10) | certified normal patches (§8) | certified curvature patches (§9) |
 
 The `prismPayload` row's own four right-hand columns are the ANALYTIC-walled
@@ -33,7 +34,7 @@ case. A free-form (Tier A NURBS) wall answers `Suspect` in all four instead —
 arm and loop-less-face audit already cover a free-form-walled body
 (`docs/verification-design.md` §3, `docs/spline-design.md` §10 P4b).
 
-Three payload classes require different treatment:
+Four payload classes require different treatment:
 
 - `cupPayload` is exact analytic data. Adapt its two recorded regions and three
   axial planes. NEVER tessellate it for verification.
@@ -51,6 +52,10 @@ Three payload classes require different treatment:
   requested clearance remains `Suspect` until an analytic adapter lands; a pair
   requiring the mesh path remains `Suspect` until that path lands, and every
   survey remains `Suspect` until it gains a non-constant-section proof.
+- `sweepPayload` carries the construction and global audit promised by
+  `docs/sweep-design.md`. Structural validity and all four body readings are
+  available immediately; its pair adapters and surveys remain staged by that
+  design's Table D.
 
 ## 2. Shared proof rules
 

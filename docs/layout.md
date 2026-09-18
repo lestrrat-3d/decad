@@ -42,6 +42,7 @@ to the byte budget.
 | `docs/spline-design.md` | The free-form kinds: per-kind exactness tiers, refusals and their sentinels, exact rational Tier A moments and their work budget, proven brackets, and reach per capability. |
 | `docs/modify-reach-design.md` | The approved modify extension: tangent-chain expansion, asymmetric chamfers, cap-loop blends, allowed shells, proof gates, payload topology and staging. |
 | `docs/loft-design.md` | The count-free `Loft` design in four normative tables (pairing, refusals, result, consumers), its exact-rational mass properties, and the wall-crossing audit. |
+| `docs/sweep-design.md` | The spatial `Path` and `Sweep` contract: rotation-minimizing transport, refusals, topology, measurements, 3D-sketch boundary, and staged downstream reach. |
 | `docs/prism-boolean-design.md` | The analytic reduction for `Union`/`Cut`/`Intersect` over co-directional coplanar prisms: the reject-only entry gate, the private `sketch` scene, and section/axial displacement bounds. |
 | `docs/tessellation-reach-design.md` | The tessellation reach plan: the loft restatement, free-form prism chording, revolve T2–T4 and the cap-loop chamfer tessellator, each with its cells, proof terms, refusals and tests. |
 
@@ -55,6 +56,7 @@ to the byte budget.
 | `identity.go` | Private document-local producer identities, the boolean evaluator's operation kind, and the shared zero-vector predicate. |
 | `record.go` | The profile-analysis records: `PlaneRecord`, `ProfileRecord`, `LoopRecord`, and the ten sealed `CurveSegment` variants. NURBS validation rules are documented on their own functions. See `docs/sketch-seam-design.md` §2. |
 | `seam.go` | The seam conversion `RecordProfile(s, p)`: admits, authenticates and records a profile, then applies the `TExact` admission gate and the reject-only range and loop-closure falsifiers. See `docs/sketch-seam-design.md` §1, §7. |
+| `path.go` | The immutable spatial `Path` and its sealed `LineTo` / `ArcThrough` segment vocabulary. See `docs/sweep-design.md` §2–§3. |
 | `extent.go` | The extent vocabulary: the sealed linear `Extent`/`SideExtent` and angular `AngularExtent`/`SideAngular` tiers, deliberately disjoint. `ToFace`/`ToFaceAngular` name live bodies directly. See `docs/api-design.md` §8.1. |
 | `selector.go` | The selector vocabulary: `EdgeQuery`/`FaceQuery`, predicate conjunction plus `Exactly`/`AtLeast` cardinality. Resolution is a filter pipeline over live topology; a failing resolution returns a `SelectionError`. See `docs/api-design.md` §9. |
 | `selection_error.go` | `SelectionError` (wraps `ErrNoMatch`/`ErrCardinality`) and the canonical `*Query.String()` rendering it and a verification `Diagnostic` both reuse. See `docs/api-design.md` §9. |
@@ -86,6 +88,8 @@ to the byte budget.
 | `normal_bound.go` | The proof behind the bound every `Face.NormalAt` arm publishes: rational-interval enclosures of each arm's own exact unit normal, and the radian sine/cosine enclosure the `Cone` arm needs. See the file's own doc comment. |
 | `document.go` | `Document` (`New`/`Bodies`), its atomic commit tail, private provenance identities, and retire/liveness gates. `Body.Placed`/`Duplicate`/`PlacedCopy` rebuild the payload under a composed motion; see their doc comments and evaluator §8. |
 | `extrude.go` | `Document.Extrude` (evaluator §5): the public entry point, `WithTaper`, and linear-extent resolution into a `linearSweep`. The payload, the build and the extent readings each have their own `prism_*.go` file. See `docs/evaluator-design.md` §5. |
+| `sweep.go` | `Document.Sweep` / `SweepContext`, common path gates, and the distinct replayable payload for one zero-twist line or arc span. See `docs/sweep-design.md` PR 1–3. |
+| `sweep_arc.go` | The one-span `ArcThrough` reduction: exact circumcircle and tangent gates, bounded axis/angle publication, Revolve reuse, and Sweep role restoration. See `docs/sweep-design.md` PR 3. |
 | `prism_payload.go` | `prismPayload` and the coordinate readings taken off it: a world point, its proven bound, and the profile coordinate envelopes later bounds are charged against. See `docs/evaluator-design.md` §5, `docs/prism-boolean-design.md` §7. |
 | `prism_build.go` | Builds a straight extrude's body from its payload: `evalPrismContext`, the caps, and `buildLoopSidesAs`'s per-loop side walk. Each face carries the displacement its own surface was built from. See `docs/evaluator-design.md` §5. |
 | `segment_walk.go` | The package's profile-boundary walk: `segmentWalk`, `profileWalks`, and the per-kind builders extrude, revolve and loft all read a recorded `CurveSegment` through. A kind with no stated bound refuses. See the file's own doc comment. |
@@ -94,7 +98,7 @@ to the byte budget.
 | `revolve_axis.go` | Resolves the axis into the sketch plane and decides what the profile may do around it: `axisLine2`, `axisFrame`, `wallKind` classification, and the contact gates. See `docs/evaluator-design.md` §6. |
 | `revolve_build.go` | Builds a revolve's body: the wall surface each segment sweeps, the caps a partial sweep closes with, the poles and seams a full sweep joins, and the measurements published. See `docs/evaluator-design.md` §6. |
 | `revolve_extent.go` | The extent readings asked of a finished revolve. An extreme is a swept extreme, bracketed by `sweepExtremeBounds` rather than read off a boundary vertex. See `docs/evaluator-design.md` §6. |
-| `revolve_denotation.go` | `angleDenotation`/`sweepDenotation`: the exact angle each sweep end denotes, the proven per-end displacement from it, and the sweep width and centroid trig bounds built on it. See `docs/evaluator-design.md` §6. |
+| `revolve_denotation.go` | `angleDenotation`/`sweepDenotation`: exact stated angles or certified derived-angle intervals, their endpoint displacement, and dependent sweep/trig bounds. See `docs/evaluator-design.md` §6 and `docs/sweep-design.md` §3. |
 | `stops.go` | Body-relative stop resolution for `ToFace`/`ToFaceAngular`/`ThroughAll`/`ThroughAllSide` (evaluator §5/§6/§11, core §8.1): each stop body resolves at the call and remains live. See doc comments on `resolveToFace`/`resolveThroughAll`/`resolveToFaceAngular`. |
 | `loft.go` | `docs/loft-design.md` PR 1b: `Document.Loft`/`LoftContext`, the public entry point over `loft_build.go`'s evaluator. Owns gates S9–S11 and S4's arity half; the step commits only after `evalLoft` succeeds. See doc comments; `docs/loft-design.md` §2/§4/§10. |
 | `loft_build.go` | `docs/loft-design.md` PR 1a/2a: `loftPayload`, `loftMeshProof`, `evalLoft` and `placed` — the gates it owns, the placement re-lift and its `delta`, and the four measurements. Pairing, stations and topology each have their own `loft_*.go` file. See `docs/loft-design.md` §5, §8, §12. |

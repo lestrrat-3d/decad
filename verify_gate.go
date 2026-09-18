@@ -511,6 +511,11 @@ func gateWitnessPrism(payload featurePayload) (prismPayload, float64, bool) {
 		witness := pl
 		witness.sectionDelta = 0
 		return witness, displacement, true
+	case sweepPayload:
+		witness := pl.prism
+		displacement := absSumUpper(witness.sectionDelta, witness.axialDelta())
+		witness.sectionDelta = 0
+		return witness, displacement, true
 	default:
 		return prismPayload{}, 0, false
 	}
