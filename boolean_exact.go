@@ -634,13 +634,13 @@ func (f segFilter) tooFar(p r3.Vec) bool {
 //
 // ROUNDING. Each arithmetic method computes its result with plain float64
 // operations (round-to-nearest) and then widens the low end down and the high
-// end up by exactly one ulp with math.Nextafter. Round-to-nearest error is at
+// end up by exactly one representable value. Round-to-nearest error is at
 // most half an ulp of the computed value, so a full ulp of outward widening
 // covers it with room to spare — the same margin segAdmissionRadius2's
 // derivation leans on. A binary operation with two interval operands has up
-// to four sign combinations at its corners (mul, div); the result takes the
-// min/max of all of them before the same one-ulp widening, which is the
-// textbook outward-rounded interval evaluation.
+// to four products or quotients at its corners. The result selects their
+// extrema before the same one-ulp widening; multiplication uses each
+// operand's sign to skip corners that cannot attain an endpoint.
 //
 // NON-FINITE INPUTS AND OUTPUTS ABSTAIN, NEVER PROPAGATE. Every method checks
 // every intermediate it forms for finiteness before trusting it, and returns
@@ -653,6 +653,34 @@ type floatInterval struct{ lo, hi float64 }
 
 // fivAbstain is the everywhere-abstaining interval.
 var fivAbstain = floatInterval{lo: math.Inf(-1), hi: math.Inf(1)}
+
+// fivNextDown and fivNextUp implement Nextafter for finite inputs. Every
+// caller rejects non-finite values before widening them.
+func fivNextDown(x float64) float64 {
+	if x == 0 {
+		return -math.SmallestNonzeroFloat64
+	}
+	bits := math.Float64bits(x)
+	if x > 0 {
+		bits--
+	} else {
+		bits++
+	}
+	return math.Float64frombits(bits)
+}
+
+func fivNextUp(x float64) float64 {
+	if x == 0 {
+		return math.SmallestNonzeroFloat64
+	}
+	bits := math.Float64bits(x)
+	if x > 0 {
+		bits++
+	} else {
+		bits--
+	}
+	return math.Float64frombits(bits)
+}
 
 // abstains reports whether iv is the abstain sentinel.
 func (a floatInterval) abstains() bool { return a == fivAbstain }
@@ -686,7 +714,7 @@ func fivRounded(x float64) floatInterval {
 	if isNonFinite(x) {
 		return fivAbstain
 	}
-	return floatInterval{lo: math.Nextafter(x, math.Inf(-1)), hi: math.Nextafter(x, math.Inf(1))}
+	return floatInterval{lo: fivNextDown(x), hi: fivNextUp(x)}
 }
 
 func (a floatInterval) add(b floatInterval) floatInterval {
@@ -694,7 +722,7 @@ func (a floatInterval) add(b floatInterval) floatInterval {
 	if isNonFinite(lo) || isNonFinite(hi) {
 		return fivAbstain
 	}
-	return floatInterval{lo: math.Nextafter(lo, math.Inf(-1)), hi: math.Nextafter(hi, math.Inf(1))}
+	return floatInterval{lo: fivNextDown(lo), hi: fivNextUp(hi)}
 }
 
 func (a floatInterval) sub(b floatInterval) floatInterval {
@@ -702,17 +730,38 @@ func (a floatInterval) sub(b floatInterval) floatInterval {
 	if isNonFinite(lo) || isNonFinite(hi) {
 		return fivAbstain
 	}
-	return floatInterval{lo: math.Nextafter(lo, math.Inf(-1)), hi: math.Nextafter(hi, math.Inf(1))}
+	return floatInterval{lo: fivNextDown(lo), hi: fivNextUp(hi)}
 }
 
 func (a floatInterval) mul(b floatInterval) floatInterval {
-	p0, p1, p2, p3 := a.lo*b.lo, a.lo*b.hi, a.hi*b.lo, a.hi*b.hi
-	if isNonFinite(p0) || isNonFinite(p1) || isNonFinite(p2) || isNonFinite(p3) {
+	var lo, hi float64
+	// On sign-definite intervals multiplication is monotone, so only the two
+	// corners that attain the range endpoints need to be evaluated.
+	switch {
+	case a.lo >= 0 && b.lo >= 0:
+		lo, hi = a.lo*b.lo, a.hi*b.hi
+	case a.lo >= 0 && b.hi <= 0:
+		lo, hi = a.hi*b.lo, a.lo*b.hi
+	case a.lo >= 0:
+		lo, hi = a.hi*b.lo, a.hi*b.hi
+	case a.hi <= 0 && b.lo >= 0:
+		lo, hi = a.lo*b.hi, a.hi*b.lo
+	case a.hi <= 0 && b.hi <= 0:
+		lo, hi = a.hi*b.hi, a.lo*b.lo
+	case a.hi <= 0:
+		lo, hi = a.lo*b.hi, a.lo*b.lo
+	case b.lo >= 0:
+		lo, hi = a.lo*b.hi, a.hi*b.hi
+	case b.hi <= 0:
+		lo, hi = a.hi*b.lo, a.lo*b.lo
+	default:
+		lo = math.Min(a.lo*b.hi, a.hi*b.lo)
+		hi = math.Max(a.lo*b.lo, a.hi*b.hi)
+	}
+	if isNonFinite(lo) || isNonFinite(hi) {
 		return fivAbstain
 	}
-	lo := math.Min(math.Min(p0, p1), math.Min(p2, p3))
-	hi := math.Max(math.Max(p0, p1), math.Max(p2, p3))
-	return floatInterval{lo: math.Nextafter(lo, math.Inf(-1)), hi: math.Nextafter(hi, math.Inf(1))}
+	return floatInterval{lo: fivNextDown(lo), hi: fivNextUp(hi)}
 }
 
 // div guards the one case the other three operations do not have: a
@@ -733,7 +782,7 @@ func (a floatInterval) div(b floatInterval) floatInterval {
 	}
 	lo := math.Min(math.Min(q0, q1), math.Min(q2, q3))
 	hi := math.Max(math.Max(q0, q1), math.Max(q2, q3))
-	return floatInterval{lo: math.Nextafter(lo, math.Inf(-1)), hi: math.Nextafter(hi, math.Inf(1))}
+	return floatInterval{lo: fivNextDown(lo), hi: fivNextUp(hi)}
 }
 
 // fivVec is a 3-vector of floatIntervals: the interval mirror of xpt, over
@@ -752,13 +801,6 @@ func fivCross(a, b fivVec) fivVec {
 		a.z.mul(b.x).sub(a.x.mul(b.z)),
 		a.x.mul(b.y).sub(a.y.mul(b.x)),
 	}
-}
-
-// fivOrient is orientVal's interval mirror: the proven enclosure of
-// det[b−a, c−a, d−a], the same expression planeCrossings' val(i) evaluates
-// exactly for the crossing parameter t = vi/(vi − vj).
-func fivOrient(a, b, c, d fivVec) floatInterval {
-	return fivDot(fivCross(fivSub(b, a), fivSub(c, a)), fivSub(d, a))
 }
 
 // triSpanOnLine is triTriMissesFilter's per-triangle half: a proven [lo, hi]
@@ -784,6 +826,16 @@ func fivOrient(a, b, c, d fivVec) floatInterval {
 func triSpanOnLine(t, o [3]fivVec, signs [3]int, dir fivVec) (floatInterval, bool) {
 	lo, hi := math.Inf(1), math.Inf(-1)
 	found := false
+	planeNormal := fivCross(fivSub(o[1], o[0]), fivSub(o[2], o[0]))
+	values := [3]floatInterval{}
+	valueSet := [3]bool{}
+	value := func(i int) floatInterval {
+		if !valueSet[i] {
+			values[i] = fivDot(planeNormal, fivSub(t[i], o[0]))
+			valueSet[i] = true
+		}
+		return values[i]
+	}
 	widen := func(p fivVec) bool {
 		proj := fivDot(p, dir)
 		if proj.abstains() {
@@ -802,8 +854,8 @@ func triSpanOnLine(t, o [3]fivVec, signs [3]int, dir fivVec) (floatInterval, boo
 		if signs[i]*signs[j] >= 0 {
 			continue
 		}
-		vi := fivOrient(o[0], o[1], o[2], t[i])
-		vj := fivOrient(o[0], o[1], o[2], t[j])
+		vi := value(i)
+		vj := value(j)
 		frac := vi.div(vi.sub(vj))
 		if frac.abstains() {
 			return floatInterval{}, false
