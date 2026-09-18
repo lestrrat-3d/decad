@@ -339,7 +339,8 @@ func TestSweepContextCancellationLeavesDocumentUnchanged(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 	require.Empty(t, doc.Bodies())
 
-	_, err = doc.SweepContext(nil, s, profile, path)
+	var nilContext context.Context
+	_, err = doc.SweepContext(nilContext, s, profile, path)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
 }

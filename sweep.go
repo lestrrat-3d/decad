@@ -304,8 +304,8 @@ func finishStraightSweepBody(body *Body, payload sweepPayload) {
 	}
 	for _, face := range body.Faces() {
 		for i, origin := range face.origins {
-			if strings.HasPrefix(origin.Role, "side(") {
-				origin.Role = "side(0," + strings.TrimPrefix(origin.Role, "side(")
+			if suffix, ok := strings.CutPrefix(origin.Role, "side("); ok {
+				origin.Role = "side(0," + suffix
 				face.origins[i] = origin
 			}
 		}

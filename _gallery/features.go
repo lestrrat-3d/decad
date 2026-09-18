@@ -21,8 +21,7 @@ const (
 	featureChordTolerance = 0.2
 )
 
-// featureRenders is one image per row of the README's feature table, in the
-// order the table lists them.
+// featureRenders is one image per README feature entry.
 func featureRenders() []imageRender {
 	shots := []struct {
 		name  string
@@ -30,6 +29,7 @@ func featureRenders() []imageRender {
 	}{
 		{"extrude", extrudeShot},
 		{"revolve", revolveShot},
+		{"sweep", sweepShot},
 		{"loft", loftShot},
 		{"fillet", filletShot},
 		{"chamfer", chamferShot},
@@ -54,6 +54,84 @@ func featureRenders() []imageRender {
 		}
 	}
 	return renders
+}
+
+// sweepShot bends one rectangular section through a quarter-circle path. The
+// current Sweep payload deliberately stages tessellation, so the scene renders
+// the exactly equivalent Revolve body after the Sweep build and its readings
+// have matched that body.
+func sweepShot(ctx context.Context) ([]solidlens.Model, error) {
+	w := sketch.NewWorld()
+	s, profile, err := sketchLoops(ctx, w, w.XY(), rectangle(-19, 31, 19, 59))
+	if err != nil {
+		return nil, err
+	}
+	path, err := decad.NewPath(
+		r3.NewVec(0, 45, 0),
+		decad.ArcThrough{
+			Through: r3.NewVec(0, 27, 36),
+			End:     r3.NewVec(0, 0, 45),
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("record the sweep path: %w", err)
+	}
+	swept, err := decad.New().SweepContext(ctx, s, profile, path)
+	if err != nil {
+		return nil, fmt.Errorf("sweep the elbow: %w", err)
+	}
+
+	axis := decad.SketchLine{Start: decad.Point2{U: -1, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	// Revolve has no context-aware variant; Sweep above is the feature this shot exercises.
+	renderBody, err := decad.New().Revolve(s, profile, axis, //nolint:contextcheck
+		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	if err != nil {
+		return nil, fmt.Errorf("build the sweep's render-equivalent body: %w", err)
+	}
+	if err := matchingBodyReadings(swept, renderBody); err != nil {
+		return nil, fmt.Errorf("validate the sweep's render-equivalent body: %w", err)
+	}
+	return oneModel(ctx, renderBody, cyan)
+}
+
+func matchingBodyReadings(a, b *decad.Body) error {
+	aVolume, err := a.Volume()
+	if err != nil {
+		return err
+	}
+	bVolume, err := b.Volume()
+	if err != nil {
+		return err
+	}
+	aArea, err := a.Area()
+	if err != nil {
+		return err
+	}
+	bArea, err := b.Area()
+	if err != nil {
+		return err
+	}
+	aCentroid, err := a.Centroid()
+	if err != nil {
+		return err
+	}
+	bCentroid, err := b.Centroid()
+	if err != nil {
+		return err
+	}
+	aBounds, err := a.Bounds()
+	if err != nil {
+		return err
+	}
+	bBounds, err := b.Bounds()
+	if err != nil {
+		return err
+	}
+	if aVolume.Value != bVolume.Value || aArea.Value != bArea.Value ||
+		aCentroid.Value != bCentroid.Value || aBounds.Min != bBounds.Min || aBounds.Max != bBounds.Max {
+		return fmt.Errorf("sweep and revolve held readings differ")
+	}
+	return nil
 }
 
 // extrudeShot sweeps one L-shaped section straight up into an angle bracket.

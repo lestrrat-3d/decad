@@ -35,6 +35,12 @@ place, not the expensive one.**
 Every part below is a decad body, rendered from the triangle mesh decad itself
 tessellates.
 
+<p align="center">
+  <img src="docs/images/features/sweep.png" alt="A rectangular beam bent through a quarter-circle spatial path" width="640"><br>
+  <strong>Sweep</strong> moves one solved profile along a spatial line or circular
+  arc; this path bends a rectangular section into an elbow.
+</p>
+
 | | |
 |---|---|
 | <img src="docs/images/features/extrude.png" alt="An L-shaped angle bracket, one sketched section swept straight upward" width="320"><br>**Extrude** sweeps a solved 2D profile straight into a solid. | <img src="docs/images/features/revolve.png" alt="A flat ring, the solid swept by a circle offset from the axis" width="320"><br>**Revolve** spins a profile about an axis, so a curved generator gives a curved solid. |

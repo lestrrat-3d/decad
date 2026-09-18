@@ -457,8 +457,7 @@ func (ax axisFrame) classify(w segmentWalk) wallKind {
 // and the bound is the scan's own last-ulp figure, so an ordinary section is
 // decided with eight orders of magnitude to spare; reaching the refusal means
 // the region genuinely sits on the axis to within its own arithmetic.
-func resolveAxisSide(profile ProfileRecord, line axisLine2, work *freeformWork) (axisFrame, float64, error) {
-	ctx := context.Background()
+func resolveAxisSide(ctx context.Context, profile ProfileRecord, line axisLine2, work *freeformWork) (axisFrame, float64, error) {
 	nU, nV := -line.dV, line.dU
 	rlo, rhi, rBound, err := boundaryExtremesBoundedContext(ctx, profile, nU, nV, work, nil)
 	if err != nil {

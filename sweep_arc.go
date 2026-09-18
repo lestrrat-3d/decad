@@ -48,7 +48,7 @@ func evalArcSweepContext(
 	if err != nil {
 		return nil, err
 	}
-	ax, side, err := resolveAxisSide(profile, geometry.line, work)
+	ax, side, err := resolveAxisSide(ctx, profile, geometry.line, work)
 	if err != nil {
 		return nil, err
 	}
