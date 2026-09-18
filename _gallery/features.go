@@ -56,82 +56,96 @@ func featureRenders() []imageRender {
 	return renders
 }
 
-// sweepShot bends one rectangular section through a quarter-circle path. The
+// sweepShot carries a square section through two orthogonal bend planes. The
 // current Sweep payload deliberately stages tessellation, so the scene renders
-// the exactly equivalent Revolve body after the Sweep build and its readings
-// have matched that body.
+// the same two Revolve spans and intervening Extrude after the real composite
+// Sweep has passed its topology, measurement, and contact audits.
 func sweepShot(ctx context.Context) ([]solidlens.Model, error) {
 	w := sketch.NewWorld()
-	s, profile, err := sketchLoops(ctx, w, w.XY(), rectangle(-19, 31, 19, 59))
+	s, profile, err := sketchLoops(ctx, w, w.XY(), rectangle(-46, -6, -34, 6))
 	if err != nil {
 		return nil, err
 	}
 	path, err := decad.NewPath(
-		r3.NewVec(0, 45, 0),
+		r3.NewVec(-40, 0, 0),
 		decad.ArcThrough{
-			Through: r3.NewVec(0, 27, 36),
-			End:     r3.NewVec(0, 0, 45),
+			Through: r3.NewVec(-32, 0, 16),
+			End:     r3.NewVec(-20, 0, 20),
+		},
+		decad.LineTo{End: r3.NewVec(20, 0, 20)},
+		decad.ArcThrough{
+			Through: r3.NewVec(36, 8, 20),
+			End:     r3.NewVec(40, 20, 20),
 		},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("record the sweep path: %w", err)
 	}
-	swept, err := decad.New().SweepContext(ctx, s, profile, path)
-	if err != nil {
-		return nil, fmt.Errorf("sweep the elbow: %w", err)
+	if _, err := decad.New().SweepContext(ctx, s, profile, path); err != nil {
+		return nil, fmt.Errorf("sweep the spatial path: %w", err)
 	}
 
-	axis := decad.SketchLine{Start: decad.Point2{U: -1, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	// Revolve has no context-aware variant; Sweep above is the feature this shot exercises.
-	renderBody, err := decad.New().Revolve(s, profile, axis, //nolint:contextcheck
+	first, err := decad.New().Revolve(s, profile, //nolint:contextcheck // Sweep and sketch solve above are cancellable.
+		decad.SketchLine{Start: decad.Point2{U: -20, V: -1}, End: decad.Point2{U: -20, V: 1}},
 		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	if err != nil {
-		return nil, fmt.Errorf("build the sweep's render-equivalent body: %w", err)
+		return nil, fmt.Errorf("build the first render span: %w", err)
 	}
-	if err := matchingBodyReadings(swept, renderBody); err != nil {
-		return nil, fmt.Errorf("validate the sweep's render-equivalent body: %w", err)
-	}
-	return oneModel(ctx, renderBody, cyan)
-}
 
-func matchingBodyReadings(a, b *decad.Body) error {
-	aVolume, err := a.Volume()
+	middleFrame, err := r3.NewFrame(
+		r3.NewVec(-20, 0, -20),
+		r3.NewVec(0, 0, -1),
+		r3.NewVec(0, 1, 0),
+	)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	bVolume, err := b.Volume()
+	middlePlane, err := w.CreatePlaneFromFrame(middleFrame)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	aArea, err := a.Area()
+	middleSketch, middleProfile, err := sketchLoops(ctx, w, middlePlane, rectangle(-46, -6, -34, 6))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	bArea, err := b.Area()
+	middle, err := decad.New().Extrude(middleSketch, middleProfile, //nolint:contextcheck // Sweep and sketch solve above are cancellable.
+		decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("build the straight render span: %w", err)
 	}
-	aCentroid, err := a.Centroid()
+
+	lastFrame, err := r3.NewFrame(
+		r3.NewVec(20, 0, -20),
+		r3.NewVec(0, 0, -1),
+		r3.NewVec(0, 1, 0),
+	)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	bCentroid, err := b.Centroid()
+	lastPlane, err := w.CreatePlaneFromFrame(lastFrame)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	aBounds, err := a.Bounds()
+	lastSketch, lastProfile, err := sketchLoops(ctx, w, lastPlane, rectangle(-46, -6, -34, 6))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	bBounds, err := b.Bounds()
+	last, err := decad.New().Revolve(lastSketch, lastProfile, //nolint:contextcheck // Sweep and sketch solve above are cancellable.
+		decad.SketchLine{Start: decad.Point2{U: -39, V: 20}, End: decad.Point2{U: -41, V: 20}},
+		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("build the second render span: %w", err)
 	}
-	if aVolume.Value != bVolume.Value || aArea.Value != bArea.Value ||
-		aCentroid.Value != bCentroid.Value || aBounds.Min != bBounds.Min || aBounds.Max != bBounds.Max {
-		return fmt.Errorf("sweep and revolve held readings differ")
+
+	models := make([]solidlens.Model, 0, 3)
+	for _, body := range []*decad.Body{first, middle, last} {
+		spanModels, modelErr := oneModel(ctx, body, cyan)
+		if modelErr != nil {
+			return nil, modelErr
+		}
+		models = append(models, spanModels...)
 	}
-	return nil
+	return models, nil
 }
 
 // extrudeShot sweeps one L-shaped section straight up into an angle bracket.

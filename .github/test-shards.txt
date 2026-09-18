@@ -1467,6 +1467,17 @@
 3	0.10	TestWallSolidCylinder
 3	0.03	TestWallThinPieWedge
 3	0.01	TestWideSpanBracketRefusesBeforeSubdividing
+0	0.00	TestSweepAuditAcceptsSeparatedStraightSpans
+1	0.00	TestSweepAuditRejectsUncertifiedAdjacentAndRemotePairs
+2	0.00	TestSweepAuditBoxesRequireStrictBoundedSeparation
+3	0.00	TestSweepAuditEndpointSupportStopsAtHalfTurn
+0	0.00	TestSweepAuditHonorsCanceledContext
+1	0.00	TestTransportSweepFramesAcrossOrthogonalBends
+2	0.00	TestTransportSweepFramesRejectsNonTangentJoin
+3	0.00	TestTransportSweepFramesRejectsReversedTangentJoin
+0	0.00	TestSweepCompositeArcLineArcMeasurementsReplay
+1	0.00	TestSweepCompositePlacedCopyKeepsSourceReplay
+2	0.00	TestSweepSpatialPathTurnsThroughOrthogonalPlanes
 3	0.00	TestNewPathRejectsInvalidGeometry
 0	0.00	TestNewPathUsesExactArcCollinearity
 1	0.00	TestPathRecordsOwnedSegments
@@ -1482,3 +1493,5 @@
 3	0.00	TestSweepLineGatesLeaveDocumentUnchanged
 0	0.00	TestSweepLineStagesTessellation
 1	0.00	TestSweepLineTiltedFrameCarriesEndpointGap
+2	0.00	TestSweepCompositeSpanBudgetRejectsBeforeCommit
+3	0.00	TestSweepSpatialPathPreservesProfileHole

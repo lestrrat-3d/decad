@@ -87,8 +87,10 @@
 //	    its spans and joints (spline design §6.5, R19)        ErrUnsupported
 //	  free-form work past the fixed budget (R7)               ErrUnsupported
 //	  WithTaper   nonzero taper angle                         ErrUnsupported
-//	Sweep         one LineTo or ArcThrough span, zero twist    builds
-//	  composite or closed path                                ErrUnsupported
+//	Sweep         zero-twist LineTo / ArcThrough paths         builds
+//	  composite path without exact transported frames or
+//	    certified span separation                             ErrUnsupported
+//	  closed path                                             ErrUnsupported
 //	  WithSweepTwist nonzero twist                            ErrUnsupported
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
 //	Union/Cut/Intersect  prism/revolve/loft/faceted,

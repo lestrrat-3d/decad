@@ -212,12 +212,6 @@ func TestSweepLineGatesLeaveDocumentUnchanged(t *testing.T) {
 		decad.LineTo{End: r3.NewVec(1, 0, 10)},
 	)
 	require.NoError(t, err)
-	composite, err := decad.NewPath(
-		r3.NewVec(0, 0, 0),
-		decad.LineTo{End: r3.NewVec(0, 0, 5)},
-		decad.LineTo{End: r3.NewVec(0, 0, 10)},
-	)
-	require.NoError(t, err)
 	offPlaneComposite, err := decad.NewPath(
 		r3.NewVec(0, 0, 1),
 		decad.LineTo{End: r3.NewVec(0, 0, 6)},
@@ -238,6 +232,7 @@ func TestSweepLineGatesLeaveDocumentUnchanged(t *testing.T) {
 	require.NoError(t, err)
 
 	var nilOption decad.SweepOption
+	emptyPath := &decad.Path{}
 	tests := []struct {
 		name    string
 		sketch  *sketch.Sketch
@@ -249,6 +244,7 @@ func TestSweepLineGatesLeaveDocumentUnchanged(t *testing.T) {
 		{name: "nil sketch", profile: profile, path: validPath, want: decad.ErrDegenerate},
 		{name: "nil profile", sketch: s, path: validPath, want: decad.ErrDegenerate},
 		{name: "nil path", sketch: s, profile: profile, want: decad.ErrDegenerate},
+		{name: "empty path", sketch: s, profile: profile, path: emptyPath, want: decad.ErrDegenerate},
 		{name: "nil option", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{nilOption}, want: decad.ErrDegenerate},
 		{name: "foreign option", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{foreignSweepOption{}}, want: decad.ErrDegenerate},
 		{name: "wrong twist unit", sketch: s, profile: profile, path: validPath, opts: []decad.SweepOption{decad.WithSweepTwist(units.Millimeters(1))}, want: decad.ErrUnitKind},
@@ -281,7 +277,6 @@ func TestSweepLineGatesLeaveDocumentUnchanged(t *testing.T) {
 		{name: "skew tangent", sketch: s, profile: profile, path: skew, want: decad.ErrDegenerate},
 		{name: "off-plane composite", sketch: s, profile: profile, path: offPlaneComposite, want: decad.ErrDegenerate},
 		{name: "corner composite", sketch: s, profile: profile, path: cornerComposite, want: decad.ErrUnsupported},
-		{name: "composite is staged", sketch: s, profile: profile, path: composite, want: decad.ErrUnsupported},
 		{name: "closed is staged", sketch: s, profile: profile, path: closed, want: decad.ErrUnsupported},
 	}
 

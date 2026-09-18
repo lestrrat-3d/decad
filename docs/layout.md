@@ -88,8 +88,12 @@ to the byte budget.
 | `normal_bound.go` | The proof behind the bound every `Face.NormalAt` arm publishes: rational-interval enclosures of each arm's own exact unit normal, and the radian sine/cosine enclosure the `Cone` arm needs. See the file's own doc comment. |
 | `document.go` | `Document` (`New`/`Bodies`), its atomic commit tail, private provenance identities, and retire/liveness gates. `Body.Placed`/`Duplicate`/`PlacedCopy` rebuild the payload under a composed motion; see their doc comments and evaluator §8. |
 | `extrude.go` | `Document.Extrude` (evaluator §5): the public entry point, `WithTaper`, and linear-extent resolution into a `linearSweep`. The payload, the build and the extent readings each have their own `prism_*.go` file. See `docs/evaluator-design.md` §5. |
-| `sweep.go` | `Document.Sweep` / `SweepContext`, common path gates, and the distinct replayable payload for one zero-twist line or arc span. See `docs/sweep-design.md` PR 1–3. |
+| `sweep.go` | `Document.Sweep` / `SweepContext`, common path gates, and the distinct replayable payload for zero-twist line and arc spans. See `docs/sweep-design.md` PR 1–4. |
 | `sweep_arc.go` | The one-span `ArcThrough` reduction: exact circumcircle and tangent gates, bounded axis/angle publication, Revolve reuse, and Sweep role restoration. See `docs/sweep-design.md` PR 3. |
+| `sweep_composite.go` | Composite Sweep section transport and shared join topology. See `docs/sweep-design.md` PR 4. |
+| `sweep_composite_measure.go` | Composite Sweep span replay and combined body measurements. See `docs/sweep-design.md` PR 4. |
+| `sweep_audit.go` | Composite Sweep adjacent-span and remote-span separation proofs. See `docs/sweep-design.md` §7. |
+| `sweep_transport.go` | Rotation-minimizing endpoint-frame transport over exact path records, with rational enclosures of each held frame. See `docs/sweep-design.md` §3.2. |
 | `prism_payload.go` | `prismPayload` and the coordinate readings taken off it: a world point, its proven bound, and the profile coordinate envelopes later bounds are charged against. See `docs/evaluator-design.md` §5, `docs/prism-boolean-design.md` §7. |
 | `prism_build.go` | Builds a straight extrude's body from its payload: `evalPrismContext`, the caps, and `buildLoopSidesAs`'s per-loop side walk. Each face carries the displacement its own surface was built from. See `docs/evaluator-design.md` §5. |
 | `segment_walk.go` | The package's profile-boundary walk: `segmentWalk`, `profileWalks`, and the per-kind builders extrude, revolve and loft all read a recorded `CurveSegment` through. A kind with no stated bound refuses. See the file's own doc comment. |

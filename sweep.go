@@ -12,11 +12,11 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// This file is the first executable increment of docs/sweep-design.md. It
-// admits one zero-twist line or circular-arc span and reduces that span to
-// the existing analytic prism or revolve evaluator. The distinct
-// sweepPayload preserves the operation's downstream staging and replays the
-// same reduction for placement.
+// This file routes a zero-twist line or circular-arc path through the existing
+// analytic prism and revolve evaluators. Composite paths are admitted when
+// their transported frames and separation certificates close. The distinct
+// sweepPayload preserves the operation's downstream staging and replays every
+// reduction for placement.
 
 // SweepOption configures Sweep.
 type SweepOption interface {
@@ -43,11 +43,12 @@ func (d *Document) Sweep(s *sketch.Sketch, p *sketch.Profile, path *Path, opts .
 }
 
 // SweepContext moves p along path, registers the resulting solid, and returns
-// it. This increment admits one LineTo or ArcThrough span whose
-// start lies in the profile plane and whose initial tangent is exactly
-// codirectional with the plane's positive normal. Composite paths, closed
-// paths, and nonzero twist are staged as ErrUnsupported. Every failure and
-// cancellation leaves the document unchanged.
+// it. The path must start in the profile plane and its initial tangent must be
+// exactly codirectional with the plane's positive normal. Composite paths also
+// require tangent joins, exactly representable transported frames, and a
+// certified absence of unintended span contact. Closed paths and nonzero twist
+// remain staged as ErrUnsupported. Every failure and cancellation leaves the
+// document unchanged.
 func (d *Document) SweepContext(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
@@ -77,6 +78,9 @@ func (d *Document) SweepContext(ctx context.Context, s *sketch.Sketch, p *sketch
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if len(path.records) == 0 || len(path.segments) == 0 {
+		return nil, fmt.Errorf(`%w: a sweep path must contain at least one span`, ErrDegenerate)
+	}
 
 	frame, err := r3.NewFrame(plane.Origin, plane.U, plane.V)
 	if err != nil {
@@ -94,32 +98,33 @@ func (d *Document) SweepContext(ctx context.Context, s *sketch.Sketch, p *sketch
 		return nil, fmt.Errorf(`%w: closed sweep paths are not implemented`, ErrUnsupported)
 	}
 	segments := path.Segments()
-	if len(segments) != 1 {
-		return nil, fmt.Errorf(`%w: this evaluator sweeps one path span only`, ErrUnsupported)
-	}
 
 	var body *Body
-	switch segment := segments[0].(type) {
-	case LineTo:
-		height, heightBound, err := validateStraightSweepPath(path, frame)
-		if err != nil {
-			return nil, err
+	if len(segments) > 1 {
+		body, err = evalCompositeSweepContext(ctx, d, ref, profile, plane, frame, path, work)
+	} else {
+		switch segment := segments[0].(type) {
+		case LineTo:
+			height, heightBound, lineErr := validateStraightSweepPath(path, frame)
+			if lineErr != nil {
+				return nil, lineErr
+			}
+			prism := prismPayload{
+				profile: profile,
+				frame:   frame,
+				z1:      height,
+				z1Delta: heightBound,
+				xform:   r3.Identity(),
+			}
+			body, err = evalPrismContext(ctx, d, ref, prism, work)
+			if err == nil {
+				finishStraightSweepBody(body, sweepPayload{prism: prism, path: path})
+			}
+		case ArcThrough:
+			body, err = evalArcSweepContext(ctx, d, ref, profile, plane, frame, path, path.records[0], work)
+		default:
+			err = fmt.Errorf(`%w: sweep path span %T is not supported`, ErrUnsupported, segment)
 		}
-		prism := prismPayload{
-			profile: profile,
-			frame:   frame,
-			z1:      height,
-			z1Delta: heightBound,
-			xform:   r3.Identity(),
-		}
-		body, err = evalPrismContext(ctx, d, ref, prism, work)
-		if err == nil {
-			finishStraightSweepBody(body, sweepPayload{prism: prism, path: path})
-		}
-	case ArcThrough:
-		body, err = evalArcSweepContext(ctx, d, ref, profile, plane, frame, path, path.records[0], work)
-	default:
-		err = fmt.Errorf(`%w: sweep path span %T is not supported`, ErrUnsupported, segment)
 	}
 	if err != nil {
 		return nil, err
@@ -268,10 +273,14 @@ type sweepPayload struct {
 	revolve        revolvePayload
 	arc            bool
 	reverseArcCaps bool
+	spans          []sweepSpanPayload
 	path           *Path
 }
 
 func (sp sweepPayload) transform() r3.Transform {
+	if len(sp.spans) != 0 {
+		return sp.spans[0].transform()
+	}
 	if sp.arc {
 		return sp.revolve.xform
 	}
@@ -279,6 +288,15 @@ func (sp sweepPayload) transform() r3.Transform {
 }
 
 func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+	if len(sp.spans) != 0 {
+		sp.spans = append([]sweepSpanPayload(nil), sp.spans...)
+		sp.prism.xform = composed
+		for i := range sp.spans {
+			sp.spans[i].prism.xform = composed
+			sp.spans[i].revolve.xform = composed
+		}
+		return replayCompositeSweep(ctx, d, ref, sp)
+	}
 	if sp.arc {
 		sp.revolve.xform = composed
 		sp.prism.xform = composed

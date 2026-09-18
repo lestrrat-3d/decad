@@ -298,22 +298,17 @@ Local span validity does not prove a composite sweep valid. A path can return
 near an earlier span, and a large section can make two remote swept regions
 overlap while the centerline remains simple.
 
-The build therefore creates an ephemeral certified facet cover of every
-lateral patch and both endpoint caps. It reuses the tessellation design's
-shared boundary stations, source bounds, exact triangle predicates, fixed work
-counters, and homotopy sign tests. This cover is an audit input, not the body
-representation.
+The current composite evaluator uses a conservative separation audit. Adjacent
+spans must have certified support on opposite sides of their shared section
+plane. Every non-neighbour pair must have a strict separating gap between its
+bound-inflated axis-aligned boxes. A pair without either certificate returns
+`ErrUnsupported`; the evaluator never infers disjointness from samples.
 
-The audit classifies every facet pair:
-
-- adjacent cells may meet only on their recorded shared edge or vertex;
-- the two cells on opposite sides of an internal path section may meet on that
-  section boundary only;
-- all other pairs must have a separating certificate wider than the sum of
-  their true-to-held displacement bounds;
-- a proven extra contact is S9 `ErrDegenerate`;
-- a pair inside the undecidable displacement band refines deterministically;
-- exhausted refinement is S9 or S14 `ErrUnsupported`.
+The shared-grid tessellation increment will replace this conservative subset
+with an ephemeral certified facet cover of every lateral patch and both
+endpoint caps. That audit will reuse shared boundary stations, source bounds,
+exact triangle predicates, fixed work counters, and homotopy sign tests. It
+will distinguish proven extra contact from an undecidable displacement band.
 
 The final topology also runs the ordinary directed-edge, vertex-link, positive
 face-area, outward-orientation, and positive-volume audits.
@@ -427,8 +422,10 @@ candidate counts before any large allocation or audit.
 
 ## 12. Increments
 
-The current evaluator implements the first three increments. Later rows remain
-staged and return `ErrUnsupported` at the public boundary.
+The current evaluator implements the first four increments, with composite
+paths admitted when every transported frame is exact and the conservative §7
+separation audit closes. Other composite paths remain staged as
+`ErrUnsupported`.
 
 | PR | Lands | Still staged |
 |---|---|---|
