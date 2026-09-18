@@ -58,26 +58,32 @@ func interval(lo, hi *big.Rat) ratInterval {
 	return ratInterval{lo: new(big.Rat).Set(lo), hi: new(big.Rat).Set(hi)}
 }
 
+// intervalOwned takes ownership of two freshly allocated endpoints. Callers
+// must not pass endpoints that alias an input interval or a cached value.
+func intervalOwned(lo, hi *big.Rat) ratInterval {
+	return ratInterval{lo: lo, hi: hi}
+}
+
 func intervalAdd(a, b ratInterval) ratInterval {
-	return interval(new(big.Rat).Add(a.lo, b.lo), new(big.Rat).Add(a.hi, b.hi))
+	return intervalOwned(new(big.Rat).Add(a.lo, b.lo), new(big.Rat).Add(a.hi, b.hi))
 }
 
 func intervalNeg(a ratInterval) ratInterval {
-	return interval(new(big.Rat).Neg(a.hi), new(big.Rat).Neg(a.lo))
+	return intervalOwned(new(big.Rat).Neg(a.hi), new(big.Rat).Neg(a.lo))
 }
 
 func intervalSub(a, b ratInterval) ratInterval {
-	return intervalAdd(a, intervalNeg(b))
+	return intervalOwned(new(big.Rat).Sub(a.lo, b.hi), new(big.Rat).Sub(a.hi, b.lo))
 }
 
 func intervalScale(a ratInterval, scale *big.Rat) ratInterval {
 	if scale.Sign() < 0 {
-		return interval(
+		return intervalOwned(
 			new(big.Rat).Mul(a.hi, scale),
 			new(big.Rat).Mul(a.lo, scale),
 		)
 	}
-	return interval(
+	return intervalOwned(
 		new(big.Rat).Mul(a.lo, scale),
 		new(big.Rat).Mul(a.hi, scale),
 	)
@@ -107,7 +113,7 @@ func intervalMul(a, b ratInterval) ratInterval {
 			hi = c
 		}
 	}
-	return interval(lo, hi)
+	return intervalOwned(lo, hi)
 }
 
 func intervalFloatError(a ratInterval, held float64) float64 {
