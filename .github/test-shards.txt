@@ -1294,6 +1294,7 @@
 3	0.03	TestClearanceToriP8
 3	0.02	TestClosedFitSplineChainStillFoldsItsClosingJointByTheCrossProduct
 3	0.20	TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap
+3	0.00	TestContactMemoPromotesDenseWithoutChangingEntries
 3	0.04	TestCoplanarCarrierPairIsNotSettledByCoplanarityAlone
 3	4.03	TestCupWallCancellationCoversOffsetAuditAndReverse
 3	0.55	TestCurvedRimLengthRefuses

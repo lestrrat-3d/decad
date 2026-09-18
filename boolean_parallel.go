@@ -43,10 +43,10 @@ type contactBatchResult struct {
 }
 
 // contactBatchRunner is injectable so internal tests can force arbitrary
-// completion order without changing the production executor. The returned
-// slice MUST use the input order; the production runner writes by slot while
-// workers finish in any order.
-type contactBatchRunner func(context.Context, *boolMesh, *boolMesh, []contactPair, int) ([]contactBatchResult, error)
+// completion order without changing the production executor. The runner must
+// fill every result slot in input order; the production runner writes by slot
+// while workers finish in any order.
+type contactBatchRunner func(context.Context, *boolMesh, *boolMesh, []contactPair, []contactBatchResult, int) error
 
 // contactBatchExecutor collects one ordered batch of candidate pairs. Memo
 // reads happen while the producer adds candidates, and memo writes happen in
@@ -63,6 +63,8 @@ type contactBatchExecutor struct {
 	run     contactBatchRunner
 	consume func(contactPair, triContact) error
 	batch   []contactBatchEntry
+	misses  []contactPair
+	results []contactBatchResult
 }
 
 type contactBatchEntry struct {
@@ -85,6 +87,8 @@ func newContactBatchExecutor(ctx context.Context, ma, mb *boolMesh, memo *contac
 		run:     runContactBatch,
 		consume: consume,
 		batch:   make([]contactBatchEntry, 0, contactBatchSize),
+		misses:  make([]contactPair, 0, contactBatchSize),
+		results: make([]contactBatchResult, 0, contactBatchSize),
 	}
 }
 
@@ -117,14 +121,18 @@ func (e *contactBatchExecutor) flush() error {
 	if len(e.batch) == 0 {
 		return nil
 	}
-	misses := make([]contactPair, 0, len(e.batch))
+	e.misses = e.misses[:0]
 	for _, entry := range e.batch {
 		if entry.miss {
-			misses = append(misses, entry.pair)
+			e.misses = append(e.misses, entry.pair)
 		}
 	}
-	results, err := e.run(e.ctx, e.ma, e.mb, misses, e.workers)
-	if err != nil {
+	if cap(e.results) < len(e.misses) {
+		e.results = make([]contactBatchResult, len(e.misses))
+	} else {
+		e.results = e.results[:len(e.misses)]
+	}
+	if err := e.run(e.ctx, e.ma, e.mb, e.misses, e.results, e.workers); err != nil {
 		e.batch = e.batch[:0]
 		return err
 	}
@@ -136,7 +144,7 @@ func (e *contactBatchExecutor) flush() error {
 		}
 		contact := entry.contact
 		if entry.miss {
-			result := results[miss]
+			result := e.results[miss]
 			miss++
 			if result.err != nil {
 				e.batch = e.batch[:0]
@@ -181,15 +189,14 @@ func defaultContactWorkers() int {
 // runContactBatch executes one bounded batch. The producer never submits a
 // second batch until this function returns, and each worker writes only its
 // indexed result slot. The caller merges those slots in input order.
-func runContactBatch(ctx context.Context, ma, mb *boolMesh, pairs []contactPair, workers int) ([]contactBatchResult, error) {
-	results := make([]contactBatchResult, len(pairs))
+func runContactBatch(ctx context.Context, ma, mb *boolMesh, pairs []contactPair, results []contactBatchResult, workers int) error {
 	if len(pairs) == 0 {
-		return results, ctx.Err()
+		return ctx.Err()
 	}
 	for i, pair := range pairs {
 		if i%64 == 0 {
 			if err := ctx.Err(); err != nil {
-				return nil, err
+				return err
 			}
 		}
 		ma.prepareFloatNormal(pair.i)
@@ -240,14 +247,14 @@ func runContactBatch(ctx context.Context, ma, mb *boolMesh, pairs []contactPair,
 		case <-ctx.Done():
 			close(jobs)
 			wg.Wait()
-			return nil, ctx.Err()
+			return ctx.Err()
 		case jobs <- job{slot: slot, pair: pair}:
 		}
 	}
 	close(jobs)
 	wg.Wait()
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return err
 	}
-	return results, nil
+	return nil
 }

@@ -190,7 +190,6 @@ func TestContactMemoRepeatsTheClassifier(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, contactSegment, second.kind, `the second ask was served from the store: a recompute would report the swapped operand's miss`)
 	requireSameContact(first, second)
-	require.Len(t, memo.m, 1, `the pair keeps one entry, under the one key`)
 
 	// A pair that misses is stored too, so a repeat of a non-contact does not
 	// reclassify either. The swap runs the other way round here: the second ask
@@ -204,7 +203,31 @@ func TestContactMemoRepeatsTheClassifier(t *testing.T) {
 	second, err = missMemo.classify(0, 0)
 	require.NoError(t, err)
 	require.Equal(t, contactNone, second.kind, `the stored miss was served: a recompute would report the swapped operand's segment`)
-	require.Len(t, missMemo.m, 1, `the pair keeps one entry, under the one key`)
+}
+
+func TestContactMemoPromotesDenseWithoutChangingEntries(t *testing.T) {
+	t.Parallel()
+	const side = 64
+	ma := &boolMesh{tris: make([][3]int, side)}
+	mb := &boolMesh{tris: make([][3]int, side)}
+	memo := newContactMemo(ma, mb)
+	contacts := make([]triContact, side)
+	for i := range side {
+		contacts[i] = triContact{kind: contactSegment, edgeA: i % 3, edgeB: (i + 1) % 3}
+		if i%2 == 0 {
+			contacts[i] = triContact{edgeA: -1, edgeB: -1}
+		}
+		memo.store(i, i, contacts[i])
+	}
+	require.Nil(t, memo.sparse)
+	require.Len(t, memo.dense, side*side)
+	for i, want := range contacts {
+		got, ok := memo.lookup(i, i)
+		require.True(t, ok)
+		require.Equal(t, want, got)
+	}
+	_, ok := memo.lookup(0, 1)
+	require.False(t, ok)
 }
 
 func TestContactBatchPreparedNormalsAgreeWithStandalone(t *testing.T) {
@@ -218,7 +241,8 @@ func TestContactBatchPreparedNormalsAgreeWithStandalone(t *testing.T) {
 		standalone, err := triTriClassify(triCorners(bmA, 0), triCorners(bmB, 0), xtriCorners(bmA, 0), xtriCorners(bmB, 0),
 			bmA.norms[0], bmB.norms[0])
 		require.NoError(t, err)
-		results, err := runContactBatch(t.Context(), bmA, bmB, []contactPair{{}}, 1)
+		results := make([]contactBatchResult, 1)
+		err = runContactBatch(t.Context(), bmA, bmB, []contactPair{{}}, results, 1)
 		require.NoError(t, err)
 		require.Len(t, results, 1)
 		require.True(t, bmA.fnormsReady[0])

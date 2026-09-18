@@ -20,14 +20,13 @@ func TestContactBatchMergesOutOfOrderCompletionsInInputOrder(t *testing.T) {
 		return nil
 	})
 	e.limit = 4
-	e.run = func(_ context.Context, _ *boolMesh, _ *boolMesh, pairs []contactPair, _ int) ([]contactBatchResult, error) {
-		results := make([]contactBatchResult, len(pairs))
+	e.run = func(_ context.Context, _ *boolMesh, _ *boolMesh, pairs []contactPair, results []contactBatchResult, _ int) error {
 		for i := range slices.Backward(pairs) {
 			// Completion order is reverse input order. Results retain their
 			// indexed slots, as production workers do.
 			results[i] = contactBatchResult{contact: triContact{kind: contactPoint, p0: xpt{}}}
 		}
-		return results, nil
+		return nil
 	}
 	for i := range 4 {
 		require.NoError(t, e.add(i, i+1))
@@ -44,11 +43,10 @@ func TestContactBatchReturnsEarliestOrderedError(t *testing.T) {
 	later := errors.New("later ordered error")
 	e := newContactBatchExecutor(ctx, ma, mb, memo, 8, nil)
 	e.limit = 3
-	e.run = func(_ context.Context, _ *boolMesh, _ *boolMesh, pairs []contactPair, _ int) ([]contactBatchResult, error) {
-		results := make([]contactBatchResult, len(pairs))
+	e.run = func(_ context.Context, _ *boolMesh, _ *boolMesh, _ []contactPair, results []contactBatchResult, _ int) error {
 		results[2] = contactBatchResult{err: later}
 		results[1] = contactBatchResult{err: first}
-		return results, nil
+		return nil
 	}
 	require.NoError(t, e.add(0, 0))
 	require.NoError(t, e.add(1, 1))
@@ -64,13 +62,12 @@ func TestContactBatchSchedulesOnlyMemoMisses(t *testing.T) {
 	var scheduled []contactPair
 	e := newContactBatchExecutor(ctx, ma, mb, memo, 2, nil)
 	e.limit = 3
-	e.run = func(_ context.Context, _ *boolMesh, _ *boolMesh, pairs []contactPair, _ int) ([]contactBatchResult, error) {
+	e.run = func(_ context.Context, _ *boolMesh, _ *boolMesh, pairs []contactPair, results []contactBatchResult, _ int) error {
 		scheduled = append(scheduled, pairs...)
-		results := make([]contactBatchResult, len(pairs))
 		for i := range results {
 			results[i].contact = triContact{kind: contactPoint}
 		}
-		return results, nil
+		return nil
 	}
 	require.NoError(t, e.add(0, 0))
 	require.NoError(t, e.add(1, 1))
@@ -94,12 +91,11 @@ func TestContactBatchStopsOnCancellationDuringMerge(t *testing.T) {
 		return nil
 	})
 	e.limit = 2
-	e.run = func(_ context.Context, _ *boolMesh, _ *boolMesh, pairs []contactPair, _ int) ([]contactBatchResult, error) {
-		results := make([]contactBatchResult, len(pairs))
+	e.run = func(_ context.Context, _ *boolMesh, _ *boolMesh, _ []contactPair, results []contactBatchResult, _ int) error {
 		for i := range results {
 			results[i].contact = triContact{kind: contactPoint}
 		}
-		return results, nil
+		return nil
 	}
 	require.NoError(t, e.add(0, 0))
 	require.ErrorIs(t, e.add(1, 1), context.Canceled)
