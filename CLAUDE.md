@@ -118,6 +118,12 @@ it owns, and names what every other file in the package owns.
 
 ## Verification
 
+- **ALWAYS update `.github/test-shards.txt` after adding, renaming, or removing a
+  root-package test, fuzz target, or example.**
+- **ALWAYS run
+  `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'` before pushing
+  any root-package test-name change.**
+
 ```
 go test ./...      # must pass
 go vet ./...       # must pass
