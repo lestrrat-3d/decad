@@ -542,10 +542,9 @@ func TestOrientRatAgreesWithOrientSignExact(t *testing.T) {
 	}
 }
 
-// xhpKeyOf is the four canonical integers joined the same way xpt.key joins
-// them (both route the exact welding identity through xhpCanon) — kept local
-// to this test file so the xhp differential tests need nothing from
-// production's own key().
+// xhpKeyOf is a decimal rendering of the four canonical integers. It stays
+// local so the differential tests compare canonical tuples independently of
+// production's packed key encoding.
 func xhpKeyOf(p xhp) string {
 	return p.x.String() + `|` + p.y.String() + `|` + p.z.String() + `|` + p.w.String()
 }
@@ -575,6 +574,8 @@ func TestXHPCanonIsAUniqueIdentity(t *testing.T) {
 	canonA, canonB := xhpCanon(depth2), xhpCanon(scaled)
 	require.Equal(t, xhpKeyOf(canonA), xhpKeyOf(canonB),
 		`two spellings of one point must canonicalise to the same key`)
+	require.Equal(t, xpt(depth2).key(), xpt(scaled).key(),
+		`the packed production key must canonicalise both spellings identically`)
 	require.Equal(t, canonA.x.String(), canonB.x.String())
 	require.Equal(t, canonA.y.String(), canonB.y.String())
 	require.Equal(t, canonA.z.String(), canonB.z.String())
@@ -585,6 +586,25 @@ func TestXHPCanonIsAUniqueIdentity(t *testing.T) {
 	require.Zero(t, rx.Cmp(crx), `canonicalising must not change the denoted x`)
 	require.Zero(t, ry.Cmp(cry), `canonicalising must not change the denoted y`)
 	require.Zero(t, rz.Cmp(crz), `canonicalising must not change the denoted z`)
+}
+
+func TestXPTKeyDistinguishesCoordinates(t *testing.T) {
+	t.Parallel()
+	points := []xpt{
+		xptOf(r3.NewVec(0, 0, 0)),
+		xptOf(r3.NewVec(1, 23, 4)),
+		xptOf(r3.NewVec(12, 3, 4)),
+		xptOf(r3.NewVec(-1, 23, 4)),
+		xptOf(r3.NewVec(1, -23, 4)),
+		xptOf(r3.NewVec(1, 23, -4)),
+		xptOf(r3.NewVec(0.5, 23, 4)),
+	}
+	seen := make(map[string]struct{}, len(points))
+	for _, p := range points {
+		key := p.key()
+		require.NotContains(t, seen, key)
+		seen[key] = struct{}{}
+	}
 }
 
 // TestXHPDenominatorStaysBounded is the guard against the one way this
@@ -683,7 +703,7 @@ func BenchmarkExactVertexKey(b *testing.B) {
 	p2 := xhpStripTwosOwned(xhpLerp(p1, tc, tn, td))
 	b.ResetTimer()
 	for b.Loop() {
-		_ = xhpKeyOf(xhpCanon(p2))
+		_ = xpt(p2).key()
 	}
 }
 
