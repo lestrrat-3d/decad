@@ -445,19 +445,17 @@ func TestVerifyZeroAllowanceIsLegal(t *testing.T) {
 }
 
 // TestVerifyIsNonMutating extends to proposal §16's "Mutation safety" row:
-// the document's recipe and body count are compared before and after a real
-// success, undecided, cancellation and validation-error call, and every one
-// leaves both unchanged.
+// the document's body count is compared before and after a real success,
+// undecided, cancellation and validation-error call, and every one leaves it
+// unchanged.
 func TestVerifyIsNonMutating(t *testing.T) {
 	t.Parallel()
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 		doc, _ := extrudePlate(t)
-		before := doc.Recipe()
 		_, err := doc.Verify(t.Context(), decad.WithConcaveRadius(), decad.WithClearances())
 		require.NoError(t, err)
-		require.Equal(t, before, doc.Recipe())
 		require.Len(t, doc.Bodies(), 1)
 	})
 
@@ -465,35 +463,29 @@ func TestVerifyIsNonMutating(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		freeformArchBody(t, doc)
-		before := doc.Recipe()
 		beforeLen := len(doc.Bodies())
 
 		report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 		require.NoError(t, err)
 		require.NotEqual(t, decad.Sound, report.Status, "the free-form wall survey cannot decide")
-		require.Equal(t, before, doc.Recipe())
 		require.Len(t, doc.Bodies(), beforeLen)
 	})
 
 	t.Run("cancellation", func(t *testing.T) {
 		t.Parallel()
 		doc, _ := extrudePlate(t)
-		before := doc.Recipe()
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 		_, err := doc.Verify(ctx)
 		require.ErrorIs(t, err, context.Canceled)
-		require.Equal(t, before, doc.Recipe())
 		require.Len(t, doc.Bodies(), 1)
 	})
 
 	t.Run("error", func(t *testing.T) {
 		t.Parallel()
 		doc, _ := extrudePlate(t)
-		before := doc.Recipe()
 		_, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Degrees(1)))
 		require.ErrorIs(t, err, decad.ErrUnitKind)
-		require.Equal(t, before, doc.Recipe())
 		require.Len(t, doc.Bodies(), 1)
 	})
 }
@@ -986,7 +978,7 @@ func TestVerifyUnsupportedPairEmitsOneCause(t *testing.T) {
 // sharing the container's own coplanar base plane. Before
 // docs/prism-boolean-design.md §14 PR4 this exact pair staged a boolean
 // contact (DiagUnsupportedPairContact / DiagUnsupportedPair, Suspect) because
-// measuredInterference never reached the analytic OpIntersect dispatch. Now
+// measuredInterference never reached the analytic opIntersect dispatch. Now
 // it resolves analytically, so neither contact diagnostic fires and the
 // report reads Interfering with a DiagInterference row instead.
 func TestVerifyDiagnosticsAdmittedCoplanarPrismPairHasNoContactDiagnostic(t *testing.T) {

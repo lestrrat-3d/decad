@@ -56,11 +56,6 @@ var ErrStaleProfile = errors.New("decad: profile is stale")
 // but it is no longer part of the model: no operation takes one.
 var ErrRetiredBody = errors.New("decad: body has been retired from its document")
 
-// ErrUnresolvedBody is returned when a StepRef is passed as a BodyRef to a
-// feature call, where a live body is required. A StepRef names a step of a
-// recorded Recipe; a feature call resolves selectors against live geometry.
-var ErrUnresolvedBody = errors.New("decad: a live body is required, not a step reference")
-
 // ErrNegativeMagnitude is returned when a magnitude is given as a negative
 // value. Magnitudes — extent distances and angles, fillet and chamfer sizes,
 // shell thicknesses, predicate lengths, tolerances and tool sizes — are
@@ -74,10 +69,10 @@ var ErrNegativeMagnitude = errors.New("decad: negative magnitude")
 // whose boundary decad cannot record exactly: a Partial fragment sketch could
 // not certify (BoundaryEdge.TExact == false), one whose
 // certified range the seam's one-sided falsifier disproves, or a loop whose
-// source-aware junction check finds a contradiction. A Step that
-// recorded a loop its own segments do not bound, the whole curve where the
+// source-aware junction check finds a contradiction. A structural record that
+// held a loop its own segments do not bound, the whole curve where the
 // caller drew a piece of it, or an
-// uncertified range as an exact trim, would be a lossy record of intent, so
+// uncertified range as an exact trim, would misstate the input geometry, so
 // decad rejects — it never repairs, projects, fits or solves for a point.
 // Full semantics in docs/sketch-seam-design.md.
 var ErrUnrecordableProfile = errors.New("decad: profile boundary cannot be recorded exactly")
@@ -127,14 +122,10 @@ var ErrUnitKind = errors.New("decad: wrong unit kind")
 // turn it inside out.
 var ErrNotFinite = errors.New("decad: non-finite value")
 
-// ErrResourceLimit is returned when recipe decoding crosses a fixed
-// wire-admission ceiling before typed decoding.
-var ErrResourceLimit = errors.New("decad: resource limit exceeded")
-
-// ErrUnsupported is returned when the recipe records the intent exactly but
-// the current evaluator does not build it. Evaluator staging is explicit
-// and rejected at the call — never silently approximated or narrowed — and a
-// rejected operation leaves the recipe and the document untouched. See
+// ErrUnsupported is returned when the current evaluator does not build the
+// requested intent. Evaluator staging is explicit and rejected at the call —
+// never silently approximated or narrowed — and a rejected operation leaves
+// the document untouched. See
 // docs/evaluator-design.md §2. A public Union, Cut or Intersect wraps a valid
 // but unclassifiable contact or analytic prism-arrangement refusal in a
 // [BooleanError] carrying [BooleanUnsupportedContact], but an operand no
@@ -144,17 +135,6 @@ var ErrResourceLimit = errors.New("decad: resource limit exceeded")
 // it passes through as a plain ErrUnsupported, not a [BooleanError].
 // errors.Is(err, ErrUnsupported) branches on both.
 var ErrUnsupported = errors.New("decad: not supported by the current evaluator")
-
-// ErrInvalidRecipe is returned when stored recipe data violates the recipe
-// wire contract. It covers malformed envelopes, unknown or duplicate fields,
-// and invalid recipe content. A [RecipeError] carries the failing path and
-// preserves this identity for errors.Is.
-var ErrInvalidRecipe = errors.New("decad: invalid recipe")
-
-// ErrUnsupportedRecipeVersion is returned when a complete recipe envelope
-// names a version this package cannot interpret. The decoder never ignores
-// fields from a newer version.
-var ErrUnsupportedRecipeVersion = errors.New("decad: unsupported recipe version")
 
 // BooleanErrorCode is the branchable fine reason a public boolean operation
 // failed, read from a [BooleanError] with errors.As. It draws the line the
@@ -209,8 +189,7 @@ const (
 
 // BooleanError is the typed failure of [Union], [Cut] or [Intersect]
 // (docs/api-design.md §8 / H2). It names the operation, the operands as the
-// recorded Step would list them (Inputs; [target, tool] for Cut), and a
-// branchable Code. It wraps the §12 sentinel errors.Is already branches on, so
+// operation and a branchable Code. It wraps the §12 sentinel errors.Is already branches on, so
 // compatibility holds: errors.Is(err, [ErrBooleanFailed]) holds for
 // [BooleanEmpty] and [BooleanEvaluatorFailure], and errors.Is(err,
 // [ErrUnsupported]) for [BooleanUnsupportedContact]. errors.As(err, &be) then
@@ -225,16 +204,15 @@ const (
 // tolerance)
 // passes through plain — none of these three is a BooleanError.
 type BooleanError struct {
-	Op     OpKind
-	Inputs []StepRef
-	Code   BooleanErrorCode
-	msg    string
-	err    error
+	op   operationKind
+	Code BooleanErrorCode
+	msg  string
+	err  error
 }
 
 // Error reports the operation and the underlying human-readable reason.
 func (e *BooleanError) Error() string {
-	return fmt.Sprintf("decad: %s boolean: %s", e.Op, e.msg)
+	return fmt.Sprintf("decad: %s boolean: %s", e.op, e.msg)
 }
 
 // Unwrap returns the wrapped §12 sentinel so errors.Is keeps branching on it.

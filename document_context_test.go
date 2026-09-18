@@ -2,7 +2,6 @@ package decad_test
 
 import (
 	"context"
-	"encoding/json"
 	"runtime"
 	"strings"
 	"testing"
@@ -109,7 +108,6 @@ func TestPlacementContextVariantsCancelFacetedRebuild(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			beforeBodies := doc.Bodies()
-			beforeRecipe := doc.Recipe()
 			ctx := newCancelAfterContext(t.Context(), 3)
 
 			got, err := test.run(ctx, body)
@@ -119,8 +117,6 @@ func TestPlacementContextVariantsCancelFacetedRebuild(t *testing.T) {
 				`cancellation must reach the faceted payload rebuild`)
 			require.Equal(t, beforeBodies, doc.Bodies(),
 				`a canceled rebuild must not change live bodies`)
-			require.Equal(t, beforeRecipe, doc.Recipe(),
-				`a canceled rebuild must not append a recipe step`)
 		})
 	}
 }
@@ -165,7 +161,6 @@ func TestPlacementContextChecksCancellationBeforeCommit(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			beforeBodies := doc.Bodies()
-			beforeRecipe := doc.Recipe()
 			ctx := &cancelOnSecondDirectCallContext{
 				Context: t.Context(),
 				target:  test.target,
@@ -176,8 +171,6 @@ func TestPlacementContextChecksCancellationBeforeCommit(t *testing.T) {
 			require.Nil(t, got)
 			require.Equal(t, beforeBodies, doc.Bodies(),
 				`cancellation after rebuild must not change live bodies`)
-			require.Equal(t, beforeRecipe, doc.Recipe(),
-				`cancellation after rebuild must not append a recipe step`)
 			require.Equal(t, 2, ctx.targetCalls,
 				`the second direct gate must observe cancellation before commit`)
 		})
@@ -231,7 +224,6 @@ func TestPlacementContextCancelsAnalyticRebuilds(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			doc, body := test.build(t)
 			beforeBodies := doc.Bodies()
-			beforeRecipe := doc.Recipe()
 			ctx := newCancelAfterContext(t.Context(), 3)
 
 			got, err := body.PlacedContext(ctx, shift)
@@ -241,8 +233,6 @@ func TestPlacementContextCancelsAnalyticRebuilds(t *testing.T) {
 				`cancellation must reach the analytic payload rebuild`)
 			require.Equal(t, beforeBodies, doc.Bodies(),
 				`a canceled analytic rebuild must not change live bodies`)
-			require.Equal(t, beforeRecipe, doc.Recipe(),
-				`a canceled analytic rebuild must not append a recipe step`)
 		})
 	}
 }
@@ -294,7 +284,6 @@ func TestPlacementContextCancelsAnalyticAssembly(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			doc, body := test.build(t)
 			beforeBodies := doc.Bodies()
-			beforeRecipe := doc.Recipe()
 			ctx := &cancelOnSecondDirectCallContext{
 				Context: t.Context(),
 				target:  "attachFaceLoopsContext",
@@ -307,8 +296,6 @@ func TestPlacementContextCancelsAnalyticAssembly(t *testing.T) {
 				`cancellation must be observed inside final face assembly`)
 			require.Equal(t, beforeBodies, doc.Bodies(),
 				`a canceled assembly must not change live bodies`)
-			require.Equal(t, beforeRecipe, doc.Recipe(),
-				`a canceled assembly must not append a recipe step`)
 		})
 	}
 }
@@ -354,7 +341,6 @@ func TestPlacementContextCancelsAnalyticProvenanceAssembly(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			doc, body := test.build(t)
 			beforeBodies := doc.Bodies()
-			beforeRecipe := doc.Recipe()
 			ctx := &cancelWhenInFrameContext{
 				Context: t.Context(),
 				target:  test.target,
@@ -367,7 +353,6 @@ func TestPlacementContextCancelsAnalyticProvenanceAssembly(t *testing.T) {
 			require.Nil(t, got)
 			require.True(t, ctx.entered)
 			require.Equal(t, beforeBodies, doc.Bodies())
-			require.Equal(t, beforeRecipe, doc.Recipe())
 		})
 	}
 }
@@ -384,7 +369,6 @@ func TestPlacementContextCancelsFullRevolveShellAssembly(t *testing.T) {
 	}, decad.FullRevolution{})
 	require.NoError(t, err)
 	beforeBodies := doc.Bodies()
-	beforeRecipe := doc.Recipe()
 	ctx := &cancelWhenInFrameContext{
 		Context: t.Context(),
 		target:  "fullRevolveShellsContext",
@@ -397,7 +381,6 @@ func TestPlacementContextCancelsFullRevolveShellAssembly(t *testing.T) {
 	require.Nil(t, got)
 	require.True(t, ctx.entered)
 	require.Equal(t, beforeBodies, doc.Bodies())
-	require.Equal(t, beforeRecipe, doc.Recipe())
 }
 
 func TestPlacementContextCancelsAnalyticMetadataRewriting(t *testing.T) {
@@ -436,7 +419,6 @@ func TestPlacementContextCancelsAnalyticMetadataRewriting(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			doc, body := test.build(t)
 			beforeBodies := doc.Bodies()
-			beforeRecipe := doc.Recipe()
 			ctx := &cancelWhenInFrameContext{
 				Context: t.Context(),
 				target:  test.target,
@@ -449,7 +431,6 @@ func TestPlacementContextCancelsAnalyticMetadataRewriting(t *testing.T) {
 			require.Nil(t, got)
 			require.True(t, ctx.entered)
 			require.Equal(t, beforeBodies, doc.Bodies())
-			require.Equal(t, beforeRecipe, doc.Recipe())
 		})
 	}
 }
@@ -550,7 +531,6 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			doc, body := test.build(t)
 			beforeBodies := doc.Bodies()
-			beforeRecipe := doc.Recipe()
 			ctx := &cancelWhenInFrameContext{
 				Context: t.Context(),
 				target:  test.target,
@@ -564,7 +544,6 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 			require.GreaterOrEqual(t, ctx.targetCalls, ctx.limit,
 				`%s must poll while processing recorded segments`, test.target)
 			require.Equal(t, beforeBodies, doc.Bodies())
-			require.Equal(t, beforeRecipe, doc.Recipe())
 		})
 	}
 }
@@ -627,7 +606,6 @@ func TestPlacementContextVariantsMatchCompatibilityWrappers(t *testing.T) {
 			newCentroid, err := newBody.Centroid()
 			require.NoError(t, err)
 			require.Equal(t, oldCentroid, newCentroid)
-			require.Equal(t, oldDoc.Recipe(), newDoc.Recipe())
 			require.Len(t, newDoc.Bodies(), len(oldDoc.Bodies()))
 		})
 	}
@@ -680,20 +658,7 @@ func TestDuplicate(t *testing.T) {
 	require.NoError(t, err, `the source takes further ops — it was never retired`)
 	require.NotNil(t, again)
 
-	// The inst's own step is its origin; the inst step depends on the source.
-	require.Equal(t, decad.StepRef(1), inst.Origin().Step)
-	recipe := doc.Recipe()
-	require.Equal(t, decad.OpDuplicate, recipe.Steps[1].Op)
-	require.Equal(t, []decad.StepRef{0}, recipe.Steps[1].Inputs)
-	// A duplicate records no motion: its Placement is the zero record (absent).
-	require.Equal(t, decad.TransformRecord{}, recipe.Steps[1].Placement)
-
-	// The recipe round-trips through JSON with the new op.
-	buf, err := json.Marshal(recipe)
-	require.NoError(t, err)
-	var got decad.Recipe
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, recipe, got)
+	require.NotEqual(t, body.Origin(), inst.Origin(), `a duplicate has fresh provenance`)
 }
 
 func TestPlacedCopy(t *testing.T) {
@@ -737,17 +702,7 @@ func TestPlacedCopy(t *testing.T) {
 	require.NoError(t, err)
 	require.InDelta(t, -150.0, c2.Value.X, 1e-9)
 
-	// The placed-inst step records its motion in Placement and depends on the
-	// source; the recipe round-trips through JSON.
-	recipe := doc.Recipe()
-	require.Equal(t, decad.OpPlacedCopy, recipe.Steps[1].Op)
-	require.Equal(t, []decad.StepRef{0}, recipe.Steps[1].Inputs)
-	require.NotEqual(t, decad.TransformRecord{}, recipe.Steps[1].Placement, `a placed inst records its motion`)
-	buf, err := json.Marshal(recipe)
-	require.NoError(t, err)
-	var got decad.Recipe
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, recipe, got)
+	require.NotEqual(t, body.Origin(), inst.Origin(), `a placed copy has fresh provenance`)
 }
 
 func TestPlacedCopyZeroTransformRejected(t *testing.T) {
@@ -767,8 +722,7 @@ func TestPlacedCopyZeroTransformRejected(t *testing.T) {
 	require.NoError(t, err)
 	require.InDelta(t, 50.0, c.Value.X, 1e-9)
 
-	// The rejection left the source live and the recipe untouched save the
-	// one valid identity inst.
+	// The rejection left the source live and registered only the valid identity copy.
 	require.Equal(t, []*decad.Body{body, inst}, doc.Bodies())
 }
 
@@ -787,16 +741,6 @@ func TestDuplicatePreservesFilletRoles(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, srcFillets, countRolePrefix(inst, "fillet("),
 		`the duplicate re-mints the same fillet roles from its own record`)
-
-	// The re-minted roles index the COPY's own step, never the source's — a
-	// prism-derived body's roles are built from its own record (modify §9).
-	for _, f := range inst.Faces() {
-		for _, o := range f.Origins() {
-			if strings.HasPrefix(o.Role, "fillet(") || strings.HasPrefix(o.Role, "side(") {
-				require.Equal(t, inst.Origin().Step, o.Step, `a copy's roles index its own record`)
-			}
-		}
-	}
 
 	// FaceCreatedBy over one of the copy's own fillet refs still selects a
 	// blend wall — provenance is queryable on the duplicate.
@@ -894,8 +838,7 @@ func TestDuplicatePreservesFacetedProvenance(t *testing.T) {
 
 	inst, err := cut.Duplicate()
 	require.NoError(t, err)
-	// The inst's OWN step is its Body.Origin(), keyed to the inst step.
-	require.Equal(t, decad.FeatureRef{Step: inst.Origin().Step, Role: "body"}, inst.Origin())
+	require.Equal(t, "body", inst.Origin().Role)
 
 	// The inst carries EXACTLY the same upstream origins — verbatim, not
 	// re-keyed to the inst's own step: a faceted inst preserves provenance.

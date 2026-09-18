@@ -28,11 +28,11 @@ import (
 // work is the record's ONE free-form work counter: the preflight this build runs
 // and every walkOf under it charge the same ceiling, and a caller that already
 // spent part of it on this record passes it in rather than opening a second one.
-func evalPrism(d *Document, ref StepRef, pp prismPayload, work *freeformWork) (*Body, error) {
+func evalPrism(d *Document, ref producerID, pp prismPayload, work *freeformWork) (*Body, error) {
 	return evalPrismContext(context.Background(), d, ref, pp, work)
 }
 
-func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPayload, work *freeformWork) (*Body, error) {
+func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prismPayload, work *freeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: roleBody}, solid: true}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
 
 	// Topology: one shell over every loop's side faces plus the two caps.
 	var faces []*Face
@@ -65,7 +65,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 	}
 	capStart := &Face{
 		surface:       Plane{Frame: startFrame},
-		origins:       []FeatureRef{{Step: ref, Role: roleCapStart}},
+		origins:       []FeatureRef{{producer: ref, Role: roleCapStart}},
 		body:          body,
 		area:          ig.area,
 		areaBound:     ig.areaBound,
@@ -74,7 +74,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 	}
 	capEnd := &Face{
 		surface:       Plane{Frame: endFrame},
-		origins:       []FeatureRef{{Step: ref, Role: roleCapEnd}},
+		origins:       []FeatureRef{{producer: ref, Role: roleCapEnd}},
 		body:          body,
 		area:          ig.area,
 		areaBound:     ig.areaBound,
@@ -286,7 +286,7 @@ func freeformVertexAllow(w segmentWalk, bound walkEndBound) float64 {
 // append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) order a
 // *profileWalks was resolved from — so it is passed straight through as
 // buildLoopSidesAs's roleLoop, which resolved is read against.
-func buildLoopSides(ctx context.Context, body *Body, ref StepRef, pp prismPayload, li int, loop LoopRecord, work *freeformWork, resolved *profileWalks) ([]*Face, []coedge, []coedge, boundedScalar, error) {
+func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPayload, li int, loop LoopRecord, work *freeformWork, resolved *profileWalks) ([]*Face, []coedge, []coedge, boundedScalar, error) {
 	return buildLoopSidesAs(ctx, body, ref, pp, li, li != 0, loop, work, resolved)
 }
 
@@ -306,7 +306,7 @@ func buildLoopSides(ctx context.Context, body *Body, ref StepRef, pp prismPayloa
 // silently resolving anyway — the only caller that ever passes non-nil is
 // buildLoopSides from evalPrismContext, where roleLoop already IS the loop
 // index the *profileWalks was resolved at.
-func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord, work *freeformWork, resolved *profileWalks) ([]*Face, []coedge, []coedge, boundedScalar, error) {
+func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord, work *freeformWork, resolved *profileWalks) ([]*Face, []coedge, []coedge, boundedScalar, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, nil, boundedScalar{}, err
 	}
@@ -613,13 +613,13 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 	return faces, bottomCo, topCo, total, nil
 }
 
-func sideOriginsContext(ctx context.Context, ref StepRef, roleLoop int, segs []int) ([]FeatureRef, error) {
+func sideOriginsContext(ctx context.Context, ref producerID, roleLoop int, segs []int) ([]FeatureRef, error) {
 	origins := make([]FeatureRef, len(segs))
 	for oi, si := range segs {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		origins[oi] = FeatureRef{Step: ref, Role: fmt.Sprintf("side(%d,%d)", roleLoop, si)}
+		origins[oi] = FeatureRef{producer: ref, Role: fmt.Sprintf("side(%d,%d)", roleLoop, si)}
 	}
 	return origins, nil
 }

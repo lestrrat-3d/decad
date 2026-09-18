@@ -45,17 +45,13 @@ func TestNewBlockBuildsTheMeasuredPlate(t *testing.T) {
 	require.Equal(t, map[decad.SurfaceKind]int{decad.KindPlane: 6}, kinds)
 }
 
-// TestNewBlockRecordsOneExtrudeStep proves the fixture end to end: the real
-// producer's recipe passes through the real consumer.
-func TestNewBlockRecordsOneExtrudeStep(t *testing.T) {
+func TestNewBlockAddsOneBody(t *testing.T) {
 	t.Parallel()
 
 	doc := decad.New()
 	decadtest.NewBlock(t, doc, 0, 0, 10, 10, units.Millimeters(2))
 
-	steps := doc.Recipe().Steps
-	require.Len(t, steps, 1)
-	require.Equal(t, decad.OpExtrude, steps[0].Op)
+	require.Len(t, doc.Bodies(), 1)
 }
 
 // TestNewBlockIsSoundUnderVerify proves NewBlock's body clears decad's own

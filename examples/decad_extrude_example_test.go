@@ -10,8 +10,8 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Extrude records the sketch profile as a Recipe step and evaluates the prism
-// it defines: an analytic B-rep body whose mass properties are closed-form.
+// Extrude converts the sketch profile to structural records and evaluates the
+// prism it defines: an analytic B-rep body whose mass properties are closed-form.
 // Every measurement carries its exactness — the evaluator never hands back a
 // number it cannot vouch for.
 func Example_decad_extrude() {
@@ -57,17 +57,17 @@ func Example_decad_extrude() {
 	fmt.Printf("volume: %s (%s)\n", vol.Value, vol.Exactness)
 	fmt.Printf("area: %s\n", area.Value)
 	fmt.Printf("centroid: %v\n", c.Value)
-	fmt.Printf("recipe steps: %d\n", len(doc.Recipe().Steps))
+	fmt.Printf("live bodies: %d\n", len(doc.Bodies()))
 	// Output:
 	// solid: true, faces: 6
 	// volume: 60000 mm^3 (Exact)
 	// area: 15200 mm^2
 	// centroid: {50 30 5}
-	// recipe steps: 1
+	// live bodies: 1
 }
 
-// Placed applies a rigid motion to a body: the motion is recorded as its own
-// Recipe step, the moved body is a new body, and the original is retired —
+// Placed applies a rigid motion to a body: the moved body is a new body with
+// fresh provenance, and the original is retired —
 // it stays readable, but takes no further operations.
 func Example_decad_placed() {
 	w := sketch.NewWorld()
@@ -115,7 +115,7 @@ func Example_decad_placed() {
 
 	fmt.Printf("centroid: %v\n", c.Value)
 	fmt.Printf("bounds: %v .. %v\n", bounds.Min, bounds.Max)
-	fmt.Printf("live bodies: %d, recipe steps: %d\n", len(doc.Bodies()), len(doc.Recipe().Steps))
+	fmt.Printf("live bodies: %d\n", len(doc.Bodies()))
 
 	// The original was consumed by the placement.
 	if _, err := body.Placed(motion); err != nil {
@@ -124,6 +124,6 @@ func Example_decad_placed() {
 	// Output:
 	// centroid: {250 30 30}
 	// bounds: {200 0 25} .. {300 60 35}
-	// live bodies: 1, recipe steps: 2
+	// live bodies: 1
 	// moving the original again: decad: body has been retired from its document
 }

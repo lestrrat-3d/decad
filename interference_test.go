@@ -2,7 +2,6 @@ package decad_test
 
 import (
 	"context"
-	"encoding/json"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -17,7 +16,6 @@ import (
 
 type documentSnapshot struct {
 	bodies []*decad.Body
-	recipe []byte
 }
 
 type cancelAfterContext struct {
@@ -44,17 +42,12 @@ func (c *cancelAfterContext) Err() error {
 
 func snapshotDocument(t *testing.T, doc *decad.Document) documentSnapshot {
 	t.Helper()
-	recipe, err := json.Marshal(doc.Recipe())
-	require.NoError(t, err)
-	return documentSnapshot{bodies: doc.Bodies(), recipe: recipe}
+	return documentSnapshot{bodies: doc.Bodies()}
 }
 
 func requireDocumentUnchanged(t *testing.T, doc *decad.Document, before documentSnapshot) {
 	t.Helper()
 	require.Equal(t, before.bodies, doc.Bodies(), `Verify must preserve live body membership and order`)
-	recipe, err := json.Marshal(doc.Recipe())
-	require.NoError(t, err)
-	require.Equal(t, before.recipe, recipe, `Verify must not append an intersection step`)
 }
 
 func TestVerifyOffsetBoxesReportBoundedInterference(t *testing.T) {
@@ -81,7 +74,7 @@ func TestVerifyOffsetBoxesReportBoundedInterference(t *testing.T) {
 // TestVerifyAdmittedCoplanarPrismPairResolvesAnalytically confirms
 // docs/prism-boolean-design.md §14 PR4: an admitted coplanar, co-directional
 // prism pair now resolves its interference volume through the same
-// read-only analytic OpIntersect dispatch performBoolean uses
+// read-only analytic opIntersect dispatch performBoolean uses
 // (evaluateAnalyticIntersect), rather than always falling to the read-only
 // mesh path. The container (0,0)-(20,20) height 10 and the nested prism
 // (5,5)-(9,10) height 15 share the container's own coplanar base plane, so

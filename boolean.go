@@ -85,12 +85,12 @@ func Union(a, b *Body) (*Body, error) {
 // UnionContext is [Union] with cancellation. It returns ctx.Err() unchanged
 // when ctx is canceled before the document commit.
 func UnionContext(ctx context.Context, a, b *Body) (*Body, error) {
-	return performBoolean(ctx, OpUnion, a, b)
+	return performBoolean(ctx, opUnion, a, b)
 }
 
 // Cut returns target minus tool, retiring both operands from their document
-// (core §8). The recorded step's Inputs order is [target, tool] — the two
-// roles are asymmetric. A cut that removes everything is ErrBooleanFailed;
+// (core §8). The target and tool roles are asymmetric. A cut that removes
+// everything is ErrBooleanFailed;
 // the other gates match Union's.
 func Cut(target, tool *Body) (*Body, error) {
 	return CutContext(context.Background(), target, tool)
@@ -99,7 +99,7 @@ func Cut(target, tool *Body) (*Body, error) {
 // CutContext is [Cut] with cancellation. It returns ctx.Err() unchanged when
 // ctx is canceled before the document commit.
 func CutContext(ctx context.Context, target, tool *Body) (*Body, error) {
-	return performBoolean(ctx, OpCut, target, tool)
+	return performBoolean(ctx, opCut, target, tool)
 }
 
 // Intersect returns the volume common to a and b, retiring both operands
@@ -112,7 +112,7 @@ func Intersect(a, b *Body) (*Body, error) {
 // IntersectContext is [Intersect] with cancellation. It returns ctx.Err()
 // unchanged when ctx is canceled before the document commit.
 func IntersectContext(ctx context.Context, a, b *Body) (*Body, error) {
-	return performBoolean(ctx, OpIntersect, a, b)
+	return performBoolean(ctx, opIntersect, a, b)
 }
 
 type booleanExpectedKind int
@@ -181,7 +181,7 @@ func asExpectedBoolean(err error) (*booleanExpectedError, bool) {
 }
 
 // booleanEvaluation is the geometry-only result shared by public booleans and
-// interference verification. It contains no document reference or recipe
+// interference verification. It contains no document reference or public model
 // state and cannot make the transient result live.
 type booleanEvaluation struct {
 	payload facetedPayload
@@ -190,8 +190,8 @@ type booleanEvaluation struct {
 
 // performBoolean gates the operands, runs the read-only geometry evaluator,
 // then builds and commits the public result atomically. A failure before the
-// commit leaves the recipe, live-body set, and operands unchanged.
-func performBoolean(ctx context.Context, op OpKind, a, b *Body) (*Body, error) {
+// commit leaves the live-body set, and operands unchanged.
+func performBoolean(ctx context.Context, op operationKind, a, b *Body) (*Body, error) {
 	if a == nil || a.doc == nil {
 		return nil, fmt.Errorf(`%w: the first operand belongs to no document`, ErrDegenerate)
 	}
@@ -205,8 +205,6 @@ func performBoolean(ctx context.Context, op OpKind, a, b *Body) (*Body, error) {
 	if a == b {
 		return nil, fmt.Errorf(`%w: a boolean needs two distinct bodies`, ErrDegenerate)
 	}
-	inputs := []StepRef{a.originStep(), b.originStep()}
-
 	// docs/prism-boolean-design.md: a reject-only analytic reduction for a
 	// co-directional coplanar prism pair, dispatched ahead of the mesh path
 	// for Union's select-all/merge/chain path (§4.2) and Cut/Intersect's
@@ -220,12 +218,11 @@ func performBoolean(ctx context.Context, op OpKind, a, b *Body) (*Body, error) {
 	// unwrapped, keeping their own documented sentinels.
 	if pp, ok, err := tryPrismBoolean(ctx, op, a, b); err != nil {
 		if errors.Is(err, ErrUnsupported) {
-			return nil, asBooleanError(op, inputs, expectedBoolean(booleanExpectedUnsupported, err))
+			return nil, asBooleanError(op, expectedBoolean(booleanExpectedUnsupported, err))
 		}
 		return nil, err
 	} else if ok {
-		step := Step{Op: op, Inputs: inputs}
-		ref := d.nextStepRef()
+		ref := d.nextProducerID()
 		body, err := evalPrismContext(ctx, d, ref, pp, newFreeformWork())
 		if err != nil {
 			return nil, err
@@ -233,39 +230,35 @@ func performBoolean(ctx context.Context, op OpKind, a, b *Body) (*Body, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		d.commit(step, body, a, b)
+		d.commit(body, a, b)
 		return body, nil
 	}
 
 	eval, err := evaluateBoolean(ctx, op, a, b)
 	if err != nil {
-		return nil, asBooleanError(op, inputs, err)
+		return nil, asBooleanError(op, err)
 	}
 
-	step := Step{
-		Op:     op,
-		Inputs: inputs,
-	}
-	ref := d.nextStepRef()
+	ref := d.nextProducerID()
 	body, err := buildFacetedBody(ctx, d, ref, eval.payload)
 	if err != nil {
-		return nil, asBooleanError(op, inputs, err)
+		return nil, asBooleanError(op, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(step, body, a, b)
+	d.commit(body, a, b)
 	return body, nil
 }
 
 // evaluateAnalyticIntersect is measuredInterference's read-only twin of
 // performBoolean's analytic dispatch (docs/prism-boolean-design.md §14 PR4;
 // docs/interference-design.md §5.2, §12): it runs the same admission and
-// resolution an OpIntersect performBoolean call would — tryPrismBoolean, then
-// evalPrismContext over the admitted payload — under a StepRef it mints for
+// resolution an opIntersect performBoolean call would — tryPrismBoolean, then
+// evalPrismContext over the admitted payload — under a producerID it mints for
 // itself, but it never calls Document.commit, so it writes nothing to the
 // document and consumes neither operand (docs/interference-design.md §5:
-// "MUST NOT call nextStepRef, append a Step, retire an operand, register a
+// "MUST NOT call nextProducerID, append a Step, retire an operand, register a
 // body, or expose a transient result through the document" governs
 // evaluateBoolean's mesh path; this analytic twin keeps the same promise by
 // simply never reaching a commit). ok=false (err always nil in that case)
@@ -275,7 +268,7 @@ func performBoolean(ctx context.Context, op OpKind, a, b *Body) (*Body, error) {
 // analytic-resolution refusal, returned as a *booleanExpectedError so the
 // caller can share evaluateBoolean's own expected-outcome classification.
 func evaluateAnalyticIntersect(ctx context.Context, a, b *Body) (*Body, bool, error) {
-	pp, ok, err := tryPrismBoolean(ctx, OpIntersect, a, b)
+	pp, ok, err := tryPrismBoolean(ctx, opIntersect, a, b)
 	if err != nil {
 		if errors.Is(err, ErrUnsupported) {
 			return nil, false, expectedBoolean(booleanExpectedUnsupported, err)
@@ -286,7 +279,7 @@ func evaluateAnalyticIntersect(ctx context.Context, a, b *Body) (*Body, bool, er
 		return nil, false, nil
 	}
 	d := a.doc
-	body, err := evalPrismContext(ctx, d, d.nextStepRef(), pp, newFreeformWork())
+	body, err := evalPrismContext(ctx, d, d.nextProducerID(), pp, newFreeformWork())
 	if err != nil {
 		return nil, false, err
 	}
@@ -312,40 +305,39 @@ func evaluateAnalyticIntersect(ctx context.Context, a, b *Body) (*Body, bool, er
 // with no expected-outcome tag is an internal invariant break:
 // BooleanEvaluatorFailure. Anything else — a nil, self, or extent-less operand,
 // a cancelled context — passes through unchanged.
-func asBooleanError(op OpKind, inputs []StepRef, err error) error {
+func asBooleanError(op operationKind, err error) error {
 	if expected, ok := asExpectedBoolean(err); ok {
 		switch expected.kind {
 		case booleanExpectedEmpty:
-			return newBooleanError(op, inputs, BooleanEmpty, ErrBooleanFailed, err)
+			return newBooleanError(op, BooleanEmpty, ErrBooleanFailed, err)
 		case booleanExpectedContact, booleanExpectedUnsupported:
-			return newBooleanError(op, inputs, BooleanUnsupportedContact, ErrUnsupported, err)
+			return newBooleanError(op, BooleanUnsupportedContact, ErrUnsupported, err)
 		case booleanExpectedStaging, booleanExpectedVolumeProof, booleanExpectedCoarseTessellation:
 			return err
 		}
 	}
 	if errors.Is(err, ErrBooleanFailed) {
-		return newBooleanError(op, inputs, BooleanEvaluatorFailure, ErrBooleanFailed, err)
+		return newBooleanError(op, BooleanEvaluatorFailure, ErrBooleanFailed, err)
 	}
 	return err
 }
 
-// newBooleanError builds a *BooleanError carrying a private copy of the operand
-// refs, the branchable Code, and the human text of the underlying error (its
+// newBooleanError builds a *BooleanError carrying the operation, branchable
+// Code, and the human text of the underlying error (its
 // "decad: " sentinel prefix trimmed so BooleanError.Error does not repeat it).
-func newBooleanError(op OpKind, inputs []StepRef, code BooleanErrorCode, sentinel, orig error) error {
+func newBooleanError(op operationKind, code BooleanErrorCode, sentinel, orig error) error {
 	return &BooleanError{
-		Op:     op,
-		Inputs: append([]StepRef(nil), inputs...),
-		Code:   code,
-		msg:    strings.TrimPrefix(orig.Error(), "decad: "),
-		err:    sentinel,
+		op:   op,
+		Code: code,
+		msg:  strings.TrimPrefix(orig.Error(), "decad: "),
+		err:  sentinel,
 	}
 }
 
 // evaluateBoolean runs the complete geometry pipeline without writing the
-// document. It deliberately does not gate liveness or mint a StepRef: the
+// document. It deliberately does not gate liveness or mint a producerID: the
 // public wrapper owns those actions, while Verify already walks live bodies.
-func evaluateBoolean(ctx context.Context, op OpKind, a, b *Body) (booleanEvaluation, error) {
+func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (booleanEvaluation, error) {
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}

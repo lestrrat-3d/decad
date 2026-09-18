@@ -2019,8 +2019,8 @@ rules).
   `n−3` is a power of two cannot see a re-derived knot vector, and a tolerance
   cannot see it either — the divergence is smaller than an ulp of the reading and
   still turns an `Approximate` into a false `Exact`.
-- Assert recipe replay of every free-form step reproduces body order, provenance
-  roles, and measurements within the evaluator's own exactness.
+- Assert repeated construction of every free-form feature reproduces body order,
+  provenance roles, and measurements within the evaluator's own exactness.
 - **§5.1.2's fit-spline obligations.** A two-point `FitSplineSeg` reports the
   identical `Area`/`Centroid`/`SecondMoments` a `LineSeg`-recorded triangle
   does, bit for bit, both `Exact`

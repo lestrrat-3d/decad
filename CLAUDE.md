@@ -27,7 +27,6 @@ it owns, and names what every other file in the package owns.
 |---|---|
 | Any file, to find what owns what | `docs/layout.md` — one row per root `.go` file and per design doc |
 | Any public type | `docs/api-design.md`, and every companion design `docs/layout.md`'s "Design documents" table lists |
-| Recipe codecs or evaluation entry points | `docs/recipe-replay-design.md` |
 | Evaluator, topology or feature code | `docs/evaluator-design.md` |
 | Tessellation, export or mesh-boolean operand code | `docs/tessellation-design.md` |
 | Free-form geometry or per-segment-kind dispatch | `docs/spline-design.md` |
@@ -87,7 +86,7 @@ it owns, and names what every other file in the package owns.
   - `github.com/lestrrat-3d/r3` — 3D coordinate math (`Vec`, `Frame`,
     `Transform`).
   - `github.com/lestrrat-3d/units` — typed quantities (`Value`, `Kind`).
-    Direct: decad's `Measurement` and `Recipe` quantities are `units.Value`.
+    Direct: decad's model inputs and `Measurement` quantities are `units.Value`.
     It is the same module `sketch` uses for its dimensions (`sketch` has no
     in-tree units package), so there is no parallel unit system to reconcile.
   - `github.com/lestrrat-go/option/v3` — functional options (house library). Used

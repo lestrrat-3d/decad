@@ -245,11 +245,9 @@ func TestCapBlendThroughAllBehindPlaneRefused(t *testing.T) {
 	}
 	require.InDelta(t, height-drop, zHi, 1e-9, "the whole body sits behind the sketch plane")
 
-	before := doc.Recipe()
 	_, err = doc.Extrude(s, pinProf, decad.ThroughAll{Dir: decad.Along})
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	require.Equal(t, before, doc.Recipe())
 }
 
 func TestCapBlendBooleanReceiverRefusedSX9(t *testing.T) {
@@ -339,13 +337,11 @@ func TestCapBlendNestingRefusalKeepsDegenerate(t *testing.T) {
 	doc := decad.New()
 	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
 	require.NoError(t, err)
-	before := doc.Recipe()
 
 	_, err = body.Chamfer(capLoopEdges(body), units.Millimeters(12))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrDegenerate, `an S9 nesting refusal keeps its own sentinel`)
 	require.NotErrorIs(t, err, decad.ErrUnsupported)
-	require.Equal(t, before, doc.Recipe())
 }
 
 // TestCapBlendUndercutOrderIsDeterministic checks that Table BX row BX3's
@@ -513,20 +509,18 @@ func TestCapBlendVolumeBoundEnclosesExactVolume(t *testing.T) {
 // and the band's patch really is a cylinder — a different solid from the one the
 // caller asked for. The call refuses rather than return it: the body exists (its
 // taper is real, just finer than float64 names at that radius), so the sentinel
-// is ErrUnsupported, and the receiver and recipe are untouched.
+// is ErrUnsupported, and the receiver and document are untouched.
 func TestCapBlendUnrepresentableRadialChangeRefused(t *testing.T) {
 	t.Parallel()
 	const R, H, d = 1e12, 10.0, 1e-9
 	require.Equal(t, R, R-d, `the premise: this setback is below the radius's own float64 spacing`)
 	disk := circleProfile(t, R, H)
 	doc := disk.Document()
-	before := doc.Recipe()
 
 	_, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(d))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.NotErrorIs(t, err, decad.ErrDegenerate)
-	require.Equal(t, before, doc.Recipe())
 	require.Equal(t, []*decad.Body{disk}, doc.Bodies())
 }
 
@@ -545,7 +539,7 @@ func TestCapBlendUnrepresentableRadialChangeRefused(t *testing.T) {
 // flat faces asserts the chamfer's 45-degree taper as a fact about geometry that
 // has none, and the DX7 undercut survey reads that assertion straight off the
 // surface. The requested body exists, so the sentinel is ErrUnsupported and never
-// ErrDegenerate, and the receiver and recipe are untouched.
+// ErrDegenerate, and the receiver and document are untouched.
 //
 // SX7's band-reach gate cannot catch this and is not meant to: it refuses a
 // setback so LARGE beside the sweep that the band passes the far end, while this
@@ -567,13 +561,11 @@ func TestCapBlendUnrepresentableAxialChangeRefused(t *testing.T) {
 	doc := decad.New()
 	tower, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(H), Dir: decad.Along})
 	require.NoError(t, err)
-	before := doc.Recipe()
 
 	_, err = tower.Chamfer(capLoopEdges(tower), units.Millimeters(d))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.NotErrorIs(t, err, decad.ErrDegenerate)
-	require.Equal(t, before, doc.Recipe())
 	require.Equal(t, []*decad.Body{tower}, doc.Bodies())
 
 	// The same tower with a setback the level can name still builds, so the gate

@@ -742,13 +742,13 @@ func coplanarOverlapProjected(a2, b2 [3]xp2) bool {
 // booleanKeep is the classification table of §9: which side of the other
 // solid each operand's boundary keeps, and whether the kept B side flips
 // orientation (a cut turns the tool's skin inside out).
-func booleanKeep(op OpKind) (bool, bool, bool, error) {
+func booleanKeep(op operationKind) (bool, bool, bool, error) {
 	switch op {
-	case OpUnion:
+	case opUnion:
 		return false, false, false, nil
-	case OpIntersect:
+	case opIntersect:
 		return true, true, false, nil
-	case OpCut:
+	case opCut:
 		return false, true, true, nil
 	default:
 		return false, false, false, fmt.Errorf(`%w: %q is not a boolean op`, ErrBooleanFailed, op)
@@ -767,7 +767,7 @@ type pairContact struct {
 // tessellations. It returns the kept, still-exact facets and a proven LOWER
 // bound on the sine of the crossing angle of every contact it used — the
 // number the rim's displacement bound divides by (bounds.go, rimDelta).
-func meshBoolean(ctx context.Context, op OpKind, ma, mb *boolMesh, memo *contactMemo) ([]keptFacet, float64, error) {
+func meshBoolean(ctx context.Context, op operationKind, ma, mb *boolMesh, memo *contactMemo) ([]keptFacet, float64, error) {
 	wantA, wantB, flipB, err := booleanKeep(op)
 	if err != nil {
 		return nil, 0, err

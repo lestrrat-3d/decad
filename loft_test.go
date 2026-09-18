@@ -2,7 +2,6 @@ package decad_test
 
 import (
 	"context"
-	"encoding/json"
 	"math"
 	"os"
 	"testing"
@@ -11,7 +10,6 @@ import (
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
-	"github.com/lestrrat-go/option/v3"
 	"github.com/stretchr/testify/require"
 )
 
@@ -288,7 +286,7 @@ func TestLoftSeamGates(t *testing.T) {
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrForeignProfile)
 		require.Empty(t, doc.Bodies())
-		require.Empty(t, doc.Recipe().Steps)
+		require.Empty(t, doc.Bodies())
 	})
 
 	t.Run("ForeignProfileAtP1", func(t *testing.T) {
@@ -306,7 +304,7 @@ func TestLoftSeamGates(t *testing.T) {
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrForeignProfile)
 		require.Empty(t, doc.Bodies())
-		require.Empty(t, doc.Recipe().Steps)
+		require.Empty(t, doc.Bodies())
 	})
 
 	t.Run("StaleProfileAtP0", func(t *testing.T) {
@@ -321,7 +319,7 @@ func TestLoftSeamGates(t *testing.T) {
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrStaleProfile)
 		require.Empty(t, doc.Bodies())
-		require.Empty(t, doc.Recipe().Steps)
+		require.Empty(t, doc.Bodies())
 	})
 
 	t.Run("StaleProfileAtP1", func(t *testing.T) {
@@ -336,7 +334,7 @@ func TestLoftSeamGates(t *testing.T) {
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrStaleProfile)
 		require.Empty(t, doc.Bodies())
-		require.Empty(t, doc.Recipe().Steps)
+		require.Empty(t, doc.Bodies())
 	})
 
 	t.Run("InvalidProfileAtP0", func(t *testing.T) {
@@ -367,7 +365,7 @@ func TestLoftSeamGates(t *testing.T) {
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrInvalidProfile)
 		require.Empty(t, doc.Bodies())
-		require.Empty(t, doc.Recipe().Steps)
+		require.Empty(t, doc.Bodies())
 	})
 
 	t.Run("InvalidProfileAtP1", func(t *testing.T) {
@@ -398,7 +396,7 @@ func TestLoftSeamGates(t *testing.T) {
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrInvalidProfile)
 		require.Empty(t, doc.Bodies())
-		require.Empty(t, doc.Recipe().Steps)
+		require.Empty(t, doc.Bodies())
 	})
 }
 
@@ -426,7 +424,7 @@ func TestLoftNilArguments(t *testing.T) {
 			require.Nil(t, body)
 			require.ErrorIs(t, err, decad.ErrDegenerate)
 			require.Empty(t, doc.Bodies())
-			require.Empty(t, doc.Recipe().Steps)
+			require.Empty(t, doc.Bodies())
 		})
 	}
 }
@@ -463,7 +461,7 @@ func TestLoftForeignOption(t *testing.T) {
 		require.ErrorContains(t, err, "not a decad loft option")
 		require.Zero(t, calls, "Loft rejects a foreign option before invoking its callback")
 		require.Empty(t, doc.Bodies())
-		require.Empty(t, doc.Recipe().Steps)
+		require.Empty(t, doc.Bodies())
 	})
 
 	t.Run("NilElement", func(t *testing.T) {
@@ -472,7 +470,7 @@ func TestLoftForeignOption(t *testing.T) {
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Empty(t, doc.Bodies())
-		require.Empty(t, doc.Recipe().Steps)
+		require.Empty(t, doc.Bodies())
 	})
 }
 
@@ -484,7 +482,7 @@ func TestLoftDuplicateAlignmentOption(t *testing.T) {
 	require.Nil(t, body)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
-	require.Empty(t, doc.Recipe().Steps)
+	require.Empty(t, doc.Bodies())
 }
 
 func TestLoftEmptyAlignmentPayload(t *testing.T) {
@@ -498,7 +496,7 @@ func TestLoftEmptyAlignmentPayload(t *testing.T) {
 	require.Nil(t, body)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
-	require.Empty(t, doc.Recipe().Steps)
+	require.Empty(t, doc.Bodies())
 }
 
 // --- Shape gates (S3, S5) ---
@@ -512,7 +510,7 @@ func TestLoftCoplanarSectionsRefuse(t *testing.T) {
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Empty(t, doc.Bodies())
-		require.Empty(t, doc.Recipe().Steps)
+		require.Empty(t, doc.Bodies())
 	})
 
 	t.Run("RotatedBasisSamePlane", func(t *testing.T) {
@@ -540,7 +538,7 @@ func TestLoftCoplanarSectionsRefuse(t *testing.T) {
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Empty(t, doc.Bodies())
-		require.Empty(t, doc.Recipe().Steps)
+		require.Empty(t, doc.Bodies())
 	})
 }
 
@@ -568,7 +566,7 @@ func TestLoftCurvedPairRefuses(t *testing.T) {
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Empty(t, doc.Bodies())
-		require.Empty(t, doc.Recipe().Steps)
+		require.Empty(t, doc.Bodies())
 	})
 }
 
@@ -599,145 +597,6 @@ func TestLoftSameKindCircleAgainstCircleAdmitted(t *testing.T) {
 	body, err := doc.Loft(s0, p0, s1, p1)
 	require.NoError(t, err)
 	require.NotNil(t, body)
-}
-
-// --- Recipe fidelity ---
-
-func TestLoftRecordsStep(t *testing.T) {
-	t.Parallel()
-	s0, p0, s1, p1 := loftSquares(t, 20, 20)
-	doc := decad.New()
-	body, err := doc.Loft(s0, p0, s1, p1, decad.WithLoftAlignment(0))
-	require.NoError(t, err)
-	require.NotNil(t, body)
-
-	wantProfile0, wantPlane0, err := decad.RecordProfile(s0, p0)
-	require.NoError(t, err)
-	wantProfile1, wantPlane1, err := decad.RecordProfile(s1, p1)
-	require.NoError(t, err)
-
-	recipe := doc.Recipe()
-	require.Len(t, recipe.Steps, 1)
-	step := recipe.Steps[0]
-	require.Equal(t, decad.OpLoft, step.Op)
-	require.Empty(t, step.Inputs)
-	require.Nil(t, step.Extent)
-	require.Nil(t, step.Angular)
-	require.Nil(t, step.Axis)
-	require.Empty(t, step.Selectors)
-	require.Empty(t, step.Values)
-	require.Equal(t, decad.TransformRecord{}, step.Placement)
-	require.Equal(t, wantProfile0, step.Profile)
-	require.Equal(t, wantPlane0, step.Plane)
-
-	opts, ok := step.Opts.(decad.LoftOpts)
-	require.True(t, ok)
-	require.Equal(t, wantProfile1, opts.Profile2)
-	require.Equal(t, wantPlane1, opts.Plane2)
-	require.Equal(t, []int{0}, opts.Alignment)
-}
-
-func TestLoftRecordsOmittedAlignmentAsNil(t *testing.T) {
-	t.Parallel()
-	s0, p0, s1, p1 := loftSquares(t, 20, 20)
-	doc := decad.New()
-	_, err := doc.Loft(s0, p0, s1, p1)
-	require.NoError(t, err)
-
-	step := doc.Recipe().Steps[0]
-	opts, ok := step.Opts.(decad.LoftOpts)
-	require.True(t, ok)
-	require.Nil(t, opts.Alignment, "an omitted WithLoftAlignment records no offsets, never an explicit all-zero list")
-}
-
-func TestLoftRecipeDoesNotAliasTheDocument(t *testing.T) {
-	t.Parallel()
-	s0, p0, s1, p1 := loftSquares(t, 20, 20)
-	doc := decad.New()
-	offsets := []int{0}
-	_, err := doc.Loft(s0, p0, s1, p1, decad.WithLoftAlignment(offsets...))
-	require.NoError(t, err)
-
-	// (a) mutating the caller's own slice after the call must not reach the
-	// document — WithLoftAlignment copies it at the call.
-	offsets[0] = 99
-	recipe := doc.Recipe()
-	opts := recipe.Steps[0].Opts.(decad.LoftOpts)
-	require.Equal(t, []int{0}, opts.Alignment)
-
-	// (b) mutating a value handed out by Recipe() must not reach a second
-	// Recipe() call — cloneStepOpts' fix.
-	opts.Alignment[0] = 42
-	opts.Profile2.Outer.Segments[0] = decad.LineSeg{
-		Start: decad.Point2{U: 999, V: 999}, End: decad.Point2{U: 999, V: 999}, TStart: 0, TEnd: 1,
-	}
-
-	recipe2 := doc.Recipe()
-	opts2 := recipe2.Steps[0].Opts.(decad.LoftOpts)
-	require.Equal(t, []int{0}, opts2.Alignment, "the document's own recorded alignment must not alias a caller-visible slice")
-	seg, ok := opts2.Profile2.Outer.Segments[0].(decad.LineSeg)
-	require.True(t, ok)
-	require.NotEqual(t, decad.Point2{U: 999, V: 999}, seg.Start, "the document's own recorded section must not alias a caller-visible slice")
-}
-
-func TestLoftOptionAliasDoesNotReachTheDocument(t *testing.T) {
-	t.Parallel()
-	s0, p0, s1, p1 := loftSquares(t, 20, 20)
-	doc := decad.New()
-	opt := decad.WithLoftAlignment(0)
-	_, err := doc.Loft(s0, p0, s1, p1, opt)
-	require.NoError(t, err)
-
-	// option.Get is a plain type assertion (option/v3's Get: "v, ok :=
-	// opt.value().(T)") — it hands back the option's own stored slice
-	// header, not a copy. A caller who keeps the LoftOption and reads its
-	// payload back this way (or through Option[[]int].Value()) must not be
-	// able to reach the document's own recorded step through it.
-	v, ok := option.Get[[]int](opt)
-	require.True(t, ok)
-	v[0] = 3
-
-	recipe := doc.Recipe()
-	opts := recipe.Steps[0].Opts.(decad.LoftOpts)
-	require.Equal(t, []int{0}, opts.Alignment, "the recorded step must not alias the caller's retained option payload")
-}
-
-func TestLoftSharedOptionAcrossCallsDoesNotAliasSteps(t *testing.T) {
-	t.Parallel()
-	s0a, p0a, s1a, p1a := loftSquares(t, 20, 20)
-	s0b, p0b, s1b, p1b := loftSquares(t, 20, 20)
-	doc := decad.New()
-	shared := decad.WithLoftAlignment(0)
-
-	_, err := doc.Loft(s0a, p0a, s1a, p1a, shared)
-	require.NoError(t, err)
-	_, err = doc.Loft(s0b, p0b, s1b, p1b, shared)
-	require.NoError(t, err)
-
-	v, ok := option.Get[[]int](shared)
-	require.True(t, ok)
-	v[0] = 7
-
-	recipe := doc.Recipe()
-	opts0 := recipe.Steps[0].Opts.(decad.LoftOpts)
-	opts1 := recipe.Steps[1].Opts.(decad.LoftOpts)
-	require.Equal(t, []int{0}, opts0.Alignment, "one shared LoftOption's payload must not alias the first recorded step")
-	require.Equal(t, []int{0}, opts1.Alignment, "one shared LoftOption's payload must not alias the second recorded step")
-}
-
-func TestLoftRecipeRoundTrip(t *testing.T) {
-	t.Parallel()
-	s0, p0, s1, p1 := loftSquares(t, 20, 20)
-	doc := decad.New()
-	_, err := doc.Loft(s0, p0, s1, p1, decad.WithLoftAlignment(0))
-	require.NoError(t, err)
-
-	recipe := doc.Recipe()
-	buf, err := json.Marshal(recipe)
-	require.NoError(t, err)
-	var got decad.Recipe
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, recipe, got, "the recorded recipe, including a non-zero Alignment, round-trips exactly")
 }
 
 // --- Verify wiring (D6) ---
@@ -835,7 +694,7 @@ func TestLoftContextCancellation(t *testing.T) {
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Empty(t, doc.Bodies())
-	require.Empty(t, doc.Recipe().Steps)
+	require.Empty(t, doc.Bodies())
 }
 
 const (

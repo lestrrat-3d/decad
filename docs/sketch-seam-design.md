@@ -1,11 +1,11 @@
 # Sketch Seam Design
 
 The recording contract at the seam between decad and `sketch`: what `sketch`
-certifies about a profile's boundary (§1), the structural IR a `Recipe` `Step`
-records a profile in (§2), and the one rejection the seam returns,
+certifies about a profile's boundary (§1), the structural profile records (§2),
+and the one rejection the seam returns,
 `ErrUnrecordableProfile` (§3). Companion to `docs/api-design.md` — the core
-design, which owns the recipe/evaluator architecture, the completeness rule,
-and the feature calls that consume a profile. References of the form "core §N"
+design, which owns the immediate-mode evaluator and the feature calls that
+consume a profile. References of the form "core §N"
 are to that document.
 
 Every capability this contract consumes exists in `sketch` today — there is no
@@ -200,22 +200,20 @@ upstream question about the arrangement, not an API question here.
 
 ## 2. The recording IR
 
-A `Step` records the region an `Extrude` or `Revolve` sweeps in decad's own
-types — a `ProfileRecord`, and the `PlaneRecord` that lifts it into world
-space — because a `Recipe` is a value and a live profile is not (core §2,
-core §6.2):
+A feature converts the region it sweeps into decad's own `ProfileRecord` and
+`PlaneRecord` values before evaluation. A live profile is unsuitable as the
+evaluator's structural input:
 
 - A `*sketch.Profile` is a pointer into a live, mutable `*sketch.Sketch` — a
-  *handle*, and core §2 says the recipe is a value. Its `Entities` and its
+  *handle*. Its `Entities` and its
   `BoundaryEdge.Entity` are `sketch.Entity`, an interface with unexported methods,
-  which no decoder can reconstruct. And its `BoundaryEdge.Polyline` is a **densified
-  sample** — a tessellation, which core §2 says a `Recipe` never names. (Its first and
+  which decad does not retain. And its `BoundaryEdge.Polyline` is a **densified
+  sample**, not structural geometry. (Its first and
   last points are the edge's start and end. They are the one thing decad reads from
   it, and only to check — they are what §1's falsifier tests the recorded range
   against — never to record; see below.)
-- `r3.Frame`'s fields are unexported: it marshals to `{}`, so a `Step` that stored
-  one would silently drop the plane — the single field without which the step is
-  incomplete.
+- `r3.Frame`'s fields are unexported, so `PlaneRecord` carries the coordinates
+  the evaluator needs explicitly.
 
 So decad **converts, it does not reference**:
 
@@ -465,25 +463,20 @@ the observations §1's falsifier tests the certified range against. A loop-
 closure check also uses a `Polyline` endpoint only for a genuinely cut bound;
 an uncut `TStart == 0` or `TEnd == 1` bound uses the record's own endpoint.
 They are read on the fragments that record and on the ones the falsifier rejects
-alike, to check and never to record.** They never enter a `Step`: every recorded
-value is the entity's own defining data and the certified range, so no sampled
-content reaches a `Recipe` through them, which is why core §2's "a `Recipe`
-never names a tessellation" holds without qualification. On a fragment the flag
+alike, to check and never to record.** Every recorded value is the entity's own
+defining data and the certified range, so no sampled content reaches the
+structural record. On a fragment the flag
 already rejects — `TExact == false` — the `Polyline` is not read at all; on a
 whole edge the entity's own data is the record and the `Polyline` is never read
 either. No interior point of a `Polyline` is ever read, and no `Polyline`
-content ever enters a `Step`.
+content ever enters a `ProfileRecord`.
 
-`CurveSegment` is one of the closed variant sets decad owns, so decad ships its
-codec under core §6.2's serializability rule: each variant encodes as a tagged
-object and decoding dispatches on the tag — exactly what no codec can do for
-`sketch.Entity`, which is why the entity itself never enters a `Step`. Every
-value a segment carries encodes: a `units.Value` field — a radius, a semi-axis,
-a frame rotation — round-trips through its own text form (core §6.2), and a
-curve parameter — a range, a knot, a weight, a `Rho` — is a plain dimensionless
-float (core §5.2).
+`CurveSegment` is one of the closed variant sets decad owns. Every value a
+segment carries is structural geometry: a `units.Value` field for a radius,
+semi-axis, or frame rotation, and plain dimensionless floats for curve
+parameters such as ranges, knots, weights, and `Rho` (core §5.2).
 
-### 2.1 Decoded records
+### 2.1 Record admission
 
 `RecordProfile` admits a live profile only after consuming these `sketch`
 answers:
@@ -499,30 +492,11 @@ answers:
   relative threshold, so the loops close;
 - whole entities were recorded from their defining data.
 
-Serialization preserves the admitted geometry, not those answers. The original
-live `sketch.Profile`, `BoundaryEdge.TExact`, and source arrangement are absent,
-so a decoded or caller-built `ProfileRecord` is untrusted input, not an
-exactness certificate.
-
-`Recipe.Validate` independently re-proves the stored region. It reconstructs
-the recorded entity definitions in a private sketch, asks `sketch` to build the
-arrangement, and accepts only one valid arranged profile that exactly matches
-the stored outer/hole walks, entity fields, ranges, order, and sense. That match
-proves closure, loop simplicity, hole nesting/disjointness, and winding. Every
-matched partial fragment MUST report `TExact == true` and pass §1's reject-only
-range falsifier. No match, an ambiguous match, or any unproved property rejects;
-a small residual never admits a trim.
-
-Format version 1 carries no duplicated validity flag, certificate, hash, or
-sampled polyline. A flag supplied by the same untrusted JSON would add no
-evidence; the private arrangement is derived independently from the stored
-analytic entities. The evaluator receives only the validated record and never
-reads the private or original sketch.
-
-`DecodeRecipe` protects resource use and wire meaning; it is not an
-authenticity check. Applications that need to know who produced a recipe sign
-or authenticate the complete encoded artifact outside decad. Full loading and
-evaluation rules are in `docs/recipe-replay-design.md`.
+The original live `sketch.Profile`, `BoundaryEdge.TExact`, and source arrangement
+are absent from the records. `RecordProfile` is therefore the public admission
+path: it returns structural values only after the source profile and every
+recorded fragment pass the checks above. The evaluator then reads those values,
+not the original sketch.
 
 ## 3. `ErrUnrecordableProfile`
 

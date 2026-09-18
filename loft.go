@@ -83,7 +83,7 @@ func (d *Document) Loft(s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch
 // representable float64 range is [ErrUnsupported] (S13) — the body exists,
 // and this evaluator cannot hold its vertex table.
 //
-// A failed call leaves the recipe and the document untouched.
+// A failed call leaves the document untouched.
 func (d *Document) LoftContext(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
@@ -168,23 +168,7 @@ func (d *Document) LoftContext(ctx context.Context, s0 *sketch.Sketch, p0 *sketc
 		return nil, fmt.Errorf(`%w: the second recorded plane is degenerate: %s`, ErrDegenerate, err)
 	}
 
-	// The recorded step (§10): Profile/Plane carry the FROM section exactly
-	// as Extrude/Revolve record theirs; the TO section and the alignment ride
-	// in LoftOpts. Alignment records the caller's supplied payload verbatim
-	// (nil when the option was omitted) — never the normalized offsets
-	// validateLoftRecords resolves inside evalLoft — since the decoder
-	// restores an absent Alignment to the same all-zero intent (§10).
-	step := Step{
-		Op:      OpLoft,
-		Profile: profile0,
-		Plane:   plane0,
-		Opts: LoftOpts{
-			Profile2:  profile1,
-			Plane2:    plane1,
-			Alignment: alignment,
-		},
-	}
-	ref := d.nextStepRef()
+	ref := d.nextProducerID()
 
 	body, err := evalLoft(ctx, d, ref, loftPayload{
 		profile0: profile0, profile1: profile1,
@@ -199,6 +183,6 @@ func (d *Document) LoftContext(ctx context.Context, s0 *sketch.Sketch, p0 *sketc
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(step, body)
+	d.commit(body)
 	return body, nil
 }

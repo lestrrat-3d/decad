@@ -26,13 +26,13 @@ import (
 // of the rewritten record (Table B, B1).
 //
 // Fillet rounds lateral edges — line/line, line/arc and arc/arc corners,
-// convex and concave — with B1's roles and the Step wiring (modify §13). A
+// convex and concave — with B1's roles and atomic commit (modify §13). A
 // cap-edge selector is S1 (ErrUnsupported, the vertex blend §6); a non-prism
 // receiver is S3 (ErrUnsupported).
 
-// FilletOption configures Fillet. No options are currently supported: a fillet
-// Step's Opts is nil (§6), and the option group exists so a variable-radius or
-// setback option can be added without changing the signature.
+// FilletOption configures Fillet. No options are currently supported; the
+// option group exists so a variable-radius or setback option can be added
+// without changing the signature.
 type FilletOption interface {
 	option.Interface
 	filletOption()
@@ -170,13 +170,7 @@ func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Valu
 
 	// Build through evalPrism (§2): same frame, interval and placement, only
 	// the section changed.
-	step := Step{
-		Op:        OpFillet,
-		Inputs:    []StepRef{b.originStep()},
-		Selectors: cloneSelectors([]Selector{q}),
-		Values:    []units.Value{r},
-	}
-	ref := d.nextStepRef()
+	ref := d.nextProducerID()
 	// The blend descriptors ride on the payload so a re-evaluation (a copy or a
 	// placement) re-mints its own fillet(i,j) roles; evalPrism applies them.
 	// The rewritten section is a NEW record no preflight has seen, so the build
@@ -197,14 +191,14 @@ func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Valu
 	if err != nil {
 		return nil, err
 	}
-	// Keep the consumed input aligned with recipe liveness at the commit edge.
+	// Keep the consumed input aligned with document liveness at the commit edge.
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(step, body, b)
+	d.commit(body, b)
 	return body, nil
 }
 
@@ -740,7 +734,7 @@ func arcSegment(center, start, end Point2, ccw bool) CurveSegment {
 // wall built from a blend connector already carries side(i,j); the second role —
 // "fillet" for Fillet, "chamfer" for Chamfer — names the same (loop, segment) of
 // the rewritten record.
-func addBlendRoles(ctx context.Context, body *Body, ref StepRef, blendSegs []map[int]struct{}, kind string) error {
+func addBlendRoles(ctx context.Context, body *Body, ref producerID, blendSegs []map[int]struct{}, kind string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -762,8 +756,8 @@ func addBlendRoles(ctx context.Context, body *Body, ref StepRef, blendSegs []map
 					if err := ctx.Err(); err != nil {
 						return err
 					}
-					if o.Step == ref && o.Role == side {
-						f.origins = append(f.origins, FeatureRef{Step: ref, Role: blend})
+					if o.producer == ref && o.Role == side {
+						f.origins = append(f.origins, FeatureRef{producer: ref, Role: blend})
 						break
 					}
 				}

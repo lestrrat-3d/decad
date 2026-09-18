@@ -164,7 +164,6 @@ func TestBooleanContextMatchesCompatibilityWrappers(t *testing.T) {
 			got, err := tc.Contextual(t.Context(), contextA, contextB)
 			require.NoError(t, err)
 
-			require.Equal(t, legacyDoc.Recipe(), contextDoc.Recipe())
 			wantVolume, err := want.Volume()
 			require.NoError(t, err)
 			gotVolume, err := got.Volume()
@@ -196,14 +195,12 @@ func TestBooleanContextCancellationLeavesDocumentUnchanged(t *testing.T) {
 			doc := decad.New()
 			a := boxBody(t, doc, 0, 0, 10, 10, 10)
 			b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 5, 5, 5)
-			beforeRecipe := doc.Recipe()
 			beforeBodies := doc.Bodies()
 			ctx, cancel := context.WithCancel(t.Context())
 			cancel()
 
 			_, err := tc.Call(ctx, a, b)
 			require.ErrorIs(t, err, context.Canceled)
-			require.Equal(t, beforeRecipe, doc.Recipe())
 			require.Equal(t, beforeBodies, doc.Bodies())
 		})
 	}
@@ -252,12 +249,6 @@ func TestUnionOverlappingCubes(t *testing.T) {
 	require.Equal(t, []*decad.Body{got}, doc.Bodies())
 	_, err = a.Volume()
 	require.NoError(t, err, `a retired body stays readable`)
-
-	// The step records the op with both operands as StepRefs.
-	steps := doc.Recipe().Steps
-	require.Len(t, steps, 4) // two extrudes, then placed, then union
-	require.Equal(t, decad.OpUnion, steps[3].Op)
-	require.Equal(t, []decad.StepRef{0, 2}, steps[3].Inputs)
 }
 
 func TestUnionDisjointCubes(t *testing.T) {
@@ -442,13 +433,11 @@ func TestIntersectDisjointIsEmpty(t *testing.T) {
 	// ErrBooleanFailed.
 	var be *decad.BooleanError
 	require.ErrorAs(t, err, &be)
-	require.Equal(t, decad.OpIntersect, be.Op)
 	require.Equal(t, decad.BooleanEmpty, be.Code)
 
 	// A failed boolean leaves the document untouched: both operands live,
 	// no step recorded.
 	require.Len(t, doc.Bodies(), 2)
-	require.Len(t, doc.Recipe().Steps, 2)
 }
 
 func TestCutDrillsHole(t *testing.T) {
@@ -458,6 +447,12 @@ func TestCutDrillsHole(t *testing.T) {
 	// An off-center hole so the tool circle lands wholly inside one cap
 	// facet — the closed-loop subdivision path.
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
+	toolOrigins := make(map[decad.FeatureRef]struct{})
+	for _, f := range tool.Faces() {
+		for _, origin := range f.Origins() {
+			toolOrigins[origin] = struct{}{}
+		}
+	}
 
 	got, err := decad.Cut(plate, tool)
 	require.NoError(t, err)
@@ -487,25 +482,17 @@ func TestCutDrillsHole(t *testing.T) {
 	require.Equal(t, 3, twoLoops, `both caps carry a hole loop, and the hole wall its two rim loops`)
 	requireBodyWatertight(t, got)
 
-	// Provenance survives the boolean: the hole wall remembers the tool's
-	// producing step (the placement that positioned it — Placed re-evaluates
-	// under its own ref), so FaceCreatedBy can still find it.
-	toolStep := decad.StepRef(2)
+	// Provenance survives the boolean: at least one result face remembers a
+	// face role from the placed tool, so FaceCreatedBy can still find it.
 	found := false
 	for _, f := range got.Faces() {
 		for _, o := range f.Origins() {
-			if o.Step == toolStep {
+			if _, ok := toolOrigins[o]; ok {
 				found = true
 			}
 		}
 	}
 	require.True(t, found, `some face traces back to the tool's extrude`)
-
-	// Cut's Inputs order is [target, tool] (core §6.2).
-	steps := doc.Recipe().Steps
-	last := steps[len(steps)-1]
-	require.Equal(t, decad.OpCut, last.Op)
-	require.Equal(t, []decad.StepRef{0, 2}, last.Inputs)
 }
 
 // TestBooleanUnionRodThroughPlateGeometryUnchanged is the memo's pinning
@@ -572,9 +559,7 @@ func TestCutRemovingEverythingIsEmpty(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrBooleanFailed)
 	var be *decad.BooleanError
 	require.ErrorAs(t, err, &be)
-	require.Equal(t, decad.OpCut, be.Op)
 	require.Equal(t, decad.BooleanEmpty, be.Code)
-	require.Len(t, be.Inputs, 2, `[target, tool]`)
 	require.Len(t, doc.Bodies(), 2)
 }
 
@@ -640,9 +625,7 @@ func TestBooleanRejections(t *testing.T) {
 		require.NotErrorIs(t, err, decad.ErrDegenerate)
 		var be *decad.BooleanError
 		require.ErrorAs(t, err, &be)
-		require.Equal(t, decad.OpUnion, be.Op)
 		require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
-		require.Len(t, be.Inputs, 2, `the operands as the recorded step would list them`)
 		require.Len(t, doc.Bodies(), 2)
 	})
 }
@@ -762,23 +745,6 @@ func TestFacetedPlaced(t *testing.T) {
 	require.NoError(t, err)
 	require.InDelta(t, cb.Value.X+100, ca.Value.X, 1e-6)
 	require.Equal(t, []*decad.Body{moved}, doc.Bodies())
-}
-
-func TestBooleanRecipeRoundTrip(t *testing.T) {
-	t.Parallel()
-	doc := decad.New()
-	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
-	tool := translated(t, diskBody(t, doc, 14, 6, 3), 0, 0, -6)
-	_, err := decad.Cut(plate, tool)
-	require.NoError(t, err)
-
-	recipe := doc.Recipe()
-	data, err := recipe.Steps[len(recipe.Steps)-1].MarshalJSON()
-	require.NoError(t, err)
-	var got decad.Step
-	require.NoError(t, got.UnmarshalJSON(data))
-	require.Equal(t, decad.OpCut, got.Op)
-	require.Equal(t, []decad.StepRef{0, 2}, got.Inputs)
 }
 
 func TestBooleanVerifyUsesProvenToleranceBound(t *testing.T) {

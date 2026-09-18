@@ -6,9 +6,9 @@ add-in). This document is the contract. No public API lands that contradicts it.
 
 Companion designs carry the deep ends of this contract: the recording
 contract at the sketch seam — the trim contract, the recording IR, and
-`ErrUnrecordableProfile` — is specified in `docs/sketch-seam-design.md`; strict
-recipe decoding, validation, versioning, resource limits, and atomic evaluation
-are specified in `docs/recipe-replay-design.md`; how verification judges every
+`ErrUnrecordableProfile` — is specified in `docs/sketch-seam-design.md`; feature
+evaluation, topology construction, and atomic commits are specified in
+`docs/evaluator-design.md`; how verification judges every
 bounded result — the report, the tolerance gate, and the noise floor — is
 specified in `docs/verification-design.md`; the mesh contract, per-payload
 chording, proof bounds, and boolean handoff are specified in
@@ -38,43 +38,11 @@ one that never asked.
 
 **Every answer decad gives states how much it can be trusted.**
 
-## 2. Architecture: recipe, evaluator, result
+## 2. Architecture: modeling program, evaluator, result
 
-Three layers. The split is what makes an exact-kernel future reachable.
+The caller's Go function is the feature tree. `Document` owns only the live body set and private provenance identities used by selectors. Each feature validates its inputs, evaluates geometry, and commits its result atomically. A rejected operation changes neither live-body membership nor provenance numbering.
 
-```
-Recipe      declarative, exact, kernel-independent, serializable
-            analytic profiles + planes + features + operands + selectors + options + quantities
-   |
-   v
-Evaluator   swappable
-            v1: analytic where free, tessellation-backed booleans, exactness flagged
-            vN: full analytic B-rep
-   |
-   v
-Result      Body -> Lump -> Shell -> Face -> Loop -> CoEdge -> Edge -> Vertex
-            every measurement carries Exactness
-```
-
-**The recipe is never approximate.** "Extrude this closed profile 10mm, then
-fillet the convex vertical edges at 2mm" is an exact statement of intent and stays
-true forever. Approximation lives only in the evaluator — the one thing we intend
-to replace.
-
-So vN is **not a migration**. It is a second evaluator over the same recipe.
-Existing models re-evaluate and get better answers.
-
-The recipe is also **the thing that translates into Fusion code** — it is the
-library's actual deliverable, so it is a first-class inspectable value.
-
-Stored recipes are executable model input, not JSON-shaped documentation.
-`EncodeRecipe` writes one canonical envelope after bounded full validation,
-`DecodeRecipe` strictly decodes one versioned envelope, `Recipe.Validate`
-independently proves every stored profile and checks the operation/reference
-graph without building a body, and `Evaluate` runs a bounded private snapshot
-through a package-owned evaluator into a new `Document`. Whole-recipe failure
-exposes no partial document. The complete contract is
-`docs/recipe-replay-design.md`.
+Bodies are immutable values owned by one document. Features retire consumed bodies and return new bodies; read-only measurements remain available on retired bodies. The evaluator may improve without adding a second public model representation or persistence language.
 
 ### 2.1 Why the boolean is the only place exactness dies
 
@@ -108,7 +76,7 @@ These are cheap now and expensive to retrofit. They are the upgrade path.
 |---|---|---|
 | 1 | **NEVER expose triangles as the representation.** `Tessellate(tol)` is an output; the public vocabulary is `Body → Face → Edge → Vertex` even while the backing is approximate. | A public `Triangles()` is a one-way door; callers depend on it and vN can never remove it. |
 | 2 | **Every measurement carries `Exactness`, from the first commit.** | Makes the upgrade **monotonic, not breaking**: callers already branch on `Approximate`; in vN that branch stops being taken and nobody's code changes. A bare `float64` today means adding exactness later breaks every call site. |
-| 3 | **Selectors, never topology indices.** `Body.Faces()` / `Edges()` / `Vertices()` exist for **traversal and inspection only**; no feature, selector, or recipe ever names a face, an edge or a vertex by index or by a bare topology pointer. (A `Recipe`'s `StepRef` (§6.2) is not one: it indexes the recipe's own steps, which no evaluator reorders.) | An exact kernel produces a different (more correct) face/edge decomposition. If `Edges()[3]` is the API, index order becomes a de facto contract and vN breaks every model. |
+| 3 | **Selectors, never topology indices.** `Body.Faces()` / `Edges()` / `Vertices()` exist for **traversal and inspection only**; no feature or selector names a face, an edge or a vertex by index or by a bare topology pointer. | An exact kernel produces a different (more correct) face/edge decomposition. If `Edges()[3]` is the API, index order becomes a de facto contract and vN breaks every model. |
 | 4 | **Booleans never mutate their operands, and take no target-out parameter.** `Union(a, b) (*Body, error)` — never Fusion's in-place `booleanOperation(target, tool, type) -> bool`. | A signature free of in-place mutation lets the implementation be swapped with zero API churn. |
 | 5 | **Imported meshes are a separate type.** A `MeshBody` never claims to be a solid B-rep. | For imported triangle soup, no future kernel can recover exactness. Keeping it separate stops approximate-forever geometry from contaminating the type we promise to make exact. |
 
@@ -289,23 +257,12 @@ type Document struct{ /* ... */ }
 
 func New(opts ...DocumentOption) *Document
 
-func EncodeRecipe(w io.Writer, r Recipe, opts ...EncodeRecipeOption) error
-func DecodeRecipe(r io.Reader, opts ...DecodeRecipeOption) (Recipe, error)
-func (r Recipe) Validate(opts ...ValidateRecipeOption) error
-func Evaluate(ctx context.Context, r Recipe, opts ...EvaluateOption) (*Document, error)
-
 func (d *Document) Bodies() []*Body            // live bodies
-func (d *Document) Recipe() Recipe             // the exact record of intent
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, error)
 ```
 
 `Body` is **immutable**; every operation returns a new one, and the input body is
 retired from the document.
-
-`Evaluate` always owns a new document. It never appends into a caller's
-document, and any failure returns a nil document. Evaluator selection is an
-option on `Evaluate`; evaluator identity never enters `Recipe`. See
-`docs/recipe-replay-design.md` §§1/5.
 
 **A `*Body` carries its owning `*Document`.** This is what lets a boolean keep the
 signature invariant #4 demands — no target-out parameter, no operand mutated —
@@ -321,14 +278,13 @@ remains readable, but it is gone from `Document.Bodies()` and
 `Document.Verify()` never reports on it. The two copies of §8 —
 `Body.Duplicate` and `Body.PlacedCopy` — are the deliberate exception: they
 **depend on** the source without consuming it, exactly as an `Extrude` depends
-on the body a `ToFace` names (§6.2), so the source stays live and the copy is a
+on the body a `ToFace` names (§8.1), so the source stays live and the copy is a
 new body beside it.
 
 **A retired body is no longer part of the model, so no operation takes one.** It is
 readable — its measurements still answer — but handing it to a boolean, to a modify
 op, or to an extent that names a body (`ToFace`, §8.1) is `ErrRetiredBody` (§12).
-A recipe that stopped an extrude at the face of a body the model no longer contains
-would not re-evaluate, and §11's emission would have no face to name.
+Using such a body as a stop would resolve topology outside the live model.
 
 It follows that **bodies from different documents cannot be combined**.
 `Union(a, b)` where `a` and `b` have different owners has no defined result — which
@@ -526,259 +482,11 @@ A `switch` on `Surface` MUST carry a `default` — vN adds variants.
 The rest of the vocabulary the signatures above and below name. Shapes given here
 are load-bearing; the rest are deferred, not undecided.
 
-**`Recipe`** — the exact record of intent, and per §2 the library's actual
-deliverable, so it is **a real value, not a handle**: it holds no pointer into a
-live `*Document` and none into a live `*sketch.Sketch`, and it stays true after
-either has moved on. An ordered, immutable list of steps; each step is an exact
-statement of intent — the feature kind, the bodies it depends on, its profile and
-the plane that profile lies in, its extent, its options, its quantities, and the
-*selectors* (never resolved pointers, never topology indices) it was given. It is
-declarative and kernel-independent: nothing in a `Recipe` names a face, an edge, a
-tessellation or an evaluator, which is what lets a second evaluator re-run it and
-what makes emitting Fusion code from it mechanical (§11).
+**Profile records and provenance.** `RecordProfile` converts a live sketch profile and plane into structural, plane-local `ProfileRecord` and `PlaneRecord` values. The evaluator uses those records internally for analytic construction and measurement. They are geometry snapshots, not a serialized model or replay format.
 
-**The completeness rule, and it is a rule, not a hope.** A `Recipe` MUST be
-sufficient to (a) re-evaluate the model from scratch under any evaluator, and
-(b) emit equivalent CAD code. Every input an operation takes — its operands, **every
-body its extent or its axis names**, its profile, **the plane that profile lies
-in**, its extent, its selectors, its options, its quantities — MUST be recordable in
-its `Step`. **An operation whose inputs a `Step` cannot record does not ship**, and
-an *input* a `Step` cannot record is **rejected at the call**, never recorded
-approximately — that is what `ErrUnrecordableProfile` (§12) is. This is what §2's
-"the exact record of intent" costs: a `Recipe` that
-re-evaluates to a *different* model than the one it was recorded from is not the
-deliverable §2 claims — it would make vN a silently different model rather than a
-better answer to the same one, and would make the mechanical Fusion emission of
-§11 emit the wrong feature.
+`FeatureRef` is an opaque provenance value returned by bodies and topology. Its `Role` field is public for inspection; the document-local producer identity is private. Callers pass returned references to `CreatedBy` or `FaceCreatedBy` instead of constructing or persisting producer numbers. `CapStart` and `CapEnd` provide the common cap references.
 
-```go
-type Recipe struct {
-    Steps []Step // ordered, immutable; the model, exactly as meant
-}
-
-// StepRef refers to the Step that produced a body. It is NOT a topology index.
-type StepRef int
-
-type Step struct {
-    Op        OpKind          // Extrude / Revolve / Loft / Union / Cut / Intersect / Fillet / Chamfer / Shell / Placed / Duplicate / PlacedCopy
-    Inputs    []StepRef       // the bodies this step depends on. Cut is [target, tool].
-    Profile   ProfileRecord   // Extrude / Revolve / Loft ("from" section) — decad's own analytic 2D record of the region
-    Plane     PlaneRecord     // Extrude / Revolve / Loft ("from" section) — the sketch plane; lifts Profile into world space
-    Extent    Extent          // Extrude
-    Angular   AngularExtent   // Revolve
-    Axis      Axis            // Revolve
-    Placement TransformRecord // Placed / PlacedCopy — the rigid motion, recorded as vectors; zero for Duplicate
-    Selectors []Selector      // Fillet / Chamfer / Shell — the edge / face queries, unresolved
-    Opts      StepOpts        // per-op options; nil when the op takes none
-    Values    []units.Value   // radii, distances, thicknesses
-}
-
-type OpKind int
-```
-
-**The `Recipe` owns its geometry.** A `Step` holds no `*sketch.Profile` and no
-`r3.Frame`: it records the region **structurally**, in decad's own plane-local
-types, at the moment the feature is called — a live profile is a handle into a
-mutable sketch, and §2 says the recipe is a value. `ProfileRecord` and
-`PlaneRecord` — the structural record of the region and of the sketch plane
-that lifts it into world space — are specified, with the `CurveSegment`
-vocabulary they are built from (one variant per `sketch` entity kind, whole
-and trimmed alike) and the whole-versus-`Partial` recording rules, in
-`docs/sketch-seam-design.md`.
-
-A placement is recorded on the same terms. `r3.Transform`'s fields are
-unexported, so a `Step` that stored one would silently drop the motion; decad
-converts, it does not reference:
-
-```go
-// TransformRecord is a rigid placement, as four vectors: it survives encoding,
-// which an r3.Transform does not. EX, EY, EZ are the transformed world basis
-// (r3.Transform.Basis()), T the translation. r3.FromBasis rebuilds the
-// transform, snapping encoding drift straight and rejecting anything that is
-// not an isometry.
-type TransformRecord struct {
-    EX, EY, EZ r3.Vec // the images of the world axes — dimensionless directions
-    T          r3.Vec // the translation, millimetres (§5.2)
-}
-```
-
-**Serializability is a rule, not an aspiration.** Every type reachable from a
-`Recipe` MUST be encodable and decodable: exported fields only; no foreign
-interface; no foreign type whose fields decad cannot see. decad's own sealed
-interfaces — `Extent`, `AngularExtent`, `SideExtent`, `SideAngular`, `Axis`,
-`Selector`, `StepOpts`, `CurveSegment` — are **closed variant sets decad owns**, so
-decad ships their codec: each encodes as a tagged object and decoding dispatches on
-the tag. That is precisely what decad cannot do for `sketch.Entity`, which is why
-the entity never enters a `Step`. The rule is transitive, so it reaches the query
-types too (§9): an `EdgeQuery` / `FaceQuery` is recorded content — its predicates
-and its cardinality assertion — and a predicate that cannot be encoded does not
-ship, exactly as an option that cannot be recorded does not. `units.Value`
-carries its own text form — `"10 mm"`, the magnitude and the unit's registered
-symbol, an exact bit-for-bit round trip — and refuses to write what cannot be
-read back: an unnamed or overflowed kind, a non-finite magnitude. Every quantity
-a `Step` records therefore encodes.
-
-**The root wire format is versioned and strict.** Canonical JSON is
-`{"format":"decad.recipe","version":2,"steps":[...]}`. Unversioned and
-version-1 input are accepted under the version-1 grammar and re-encode as
-canonical version 2. A version-1-only decoder rejects a version-2 envelope
-with `ErrUnsupportedRecipeVersion` before step dispatch. `json.Marshal` runs
-full recipe validation under default limits; `EncodeRecipe` runs the same
-encoder under explicit limits for trusted larger recipes. Invalid Unicode,
-unknown versions, unknown fields, duplicate keys, trailing values, malformed
-operation shapes, invalid references and configured resource-limit overruns
-reject. The in-memory `Recipe` keeps no version field: format metadata is not
-design intent.
-`docs/recipe-replay-design.md` §§2–7 is normative.
-
-**A recipe is evaluable, not merely encodable.** `Recipe.Validate` checks every
-operation's required/forbidden fields, independently proves every stored
-profile through a private `sketch` arrangement, checks every reachable value,
-and checks every backward reference + the body-liveness state machine.
-`Evaluate` applies selected recipe limits while deep-copying + normalizing the
-recipe, validates it, then walks steps in order through the selected
-package-owned evaluator. Immediate feature calls and replay share the same
-recorded-step helpers; a second implementation is forbidden. A valid intent
-beyond the selected evaluator's reach remains `ErrUnsupported`.
-
-**A `Step` holds no `*Body` either.** A body reference in a `Step` is a `StepRef` —
-the step that produced the body — and that is what makes `Inputs` a graph. The
-extents and the axis that name a body (`ToFace`, `ToFaceAngular`, `EdgeAxis`, §8.1)
-hold a `BodyRef`, which is either form; recording a step substitutes the `StepRef`
-for the `*Body` the caller passed, so what a `Recipe` carries is only ever values:
-
-```go
-// BodyRef names the body a selector resolves against. A live *Body is one, which
-// is what a caller passes; a StepRef is one, which is what a recorded — or a
-// decoded — Recipe holds. One field, and the codec maps between them.
-type BodyRef interface{ bodyRef() }
-
-func (*Body) bodyRef()
-func (StepRef) bodyRef()
-```
-
-A `StepRef` handed to a *feature call*, where a live body is required, is
-`ErrUnresolvedBody` (§12).
-
-**`Plane` is what makes an `Extrude` step complete.** A `sketch.Profile` is
-plane-local 2D — its boundary is `(u, v)` in the frame of the sketch plane, and it
-back-references no plane of its own. A `Step` that recorded only the profile would
-therefore record the same bytes for the same rectangle extruded on XY and on XZ, and
-re-evaluating it could not know which solid was meant. Recording the sketch plane is
-what the completeness rule demands, and it is why §8's `Extrude` and `Revolve` take
-the sketch (§7).
-
-**Every `Step` produces exactly one body**, so a `StepRef` names it without
-ambiguity, and `Inputs` is what makes the recipe a graph rather than a list of
-unrelated features. `Inputs` records every body a step **depends on**, which is not
-always a body it consumes:
-
-- `Fillet`, `Chamfer`, `Shell` and `Placed` depend on one — the body they modify
-  or place, which they consume;
-- `Duplicate` and `PlacedCopy` (§8) depend on one — the source they copy — and
-  consume **none**: the source's `StepRef` is recorded in `Inputs`, the source
-  stays live, and the copy is a new body. This is the same depend-without-consume
-  the `ToFace` extrude below uses, applied to a body-to-body copy;
-- the booleans depend on two, and consume both. **`Cut`'s `Inputs` order is
-  `[target, tool]`** — the two roles are asymmetric and order is the only thing that
-  distinguishes them;
-- `Extrude` and `Revolve` consume no body, and leave `Inputs` empty **only when
-  their extent and their axis name none**. A `ToFace`, a `ToFaceAngular` or an
-  `EdgeAxis` names one (§8.1), and the extrude genuinely depends on it — the solid
-  it produces is a function of that body's geometry — so **that body's `StepRef` is
-  recorded in `Inputs`**, in extent order first and axis second, deduplicated. A
-  `TwoSided{One: ToFace{Body: a…}, Two: ToFace{Body: b…}}` records both. Without
-  this the recipe would not be a complete graph: a second evaluator would reach the
-  extrude with no way to know which body's face it stops at.
-- `Loft` depends on and consumes no body. Its increment-1 form has no
-  body-relative stop, so its `Inputs` is empty.
-- **`ThroughAll` and `ThroughAllSide` depend on bodies they do not name.** Their
-  stops are the far sides of the live bodies the sweep meets, so the dependency is
-  ambient at the CALL but must never be ambient in the RECORD: the feature call
-  resolves which bodies actually bound the stops and records **each stop body's
-  `StepRef` in `Inputs`**, in stop order along the sweep (after any named-extent
-  refs, deduplicated like the rest). Replay then reaches the same stops explicitly
-  — a recipe whose through-all depended on "whatever happened to be live" would
-  re-evaluate to a different model in a different document state, which the
-  completeness rule forbids.
-
-Depending on a body is **not** consuming it: `Extrude`, `Revolve`, and `Loft`
-retire nothing, and the body a `ToFace` names stays live in `Document.Bodies()`.
-§6's retire rule is unchanged, and lists exactly the operations it covers.
-
-**A `StepRef` is not the index invariant #3 forbids.** Invariant #3 forbids indices
-as *topology* selectors — `Edges()[3]` — because an exact kernel decomposes a body
-into different faces and edges. A `StepRef` names a *step in this recipe*, and the
-step list is the recipe's own content, not the evaluator's output: step 2 is step 2
-under every evaluator, forever. Step references are stable by construction;
-topology indices are not. That is the whole of the distinction.
-
-`Extent` and `Angular` are the two disjoint extent sets of §8.1, and **at most one
-of them is non-nil, keyed to `Op`**: `Extrude` sets `Extent` and leaves `Angular`
-nil; `Revolve` sets `Angular` and leaves `Extent` nil; every other `Op` leaves both
-nil. That is what lets a `Recipe` encode a revolve at all — an `AngularExtent` is
-not assignable to an `Extent` field, by design.
-
-**Parameterisation is the caller's Go function, and there is no parameter
-sublanguage.** `Step.Values` holds literal quantities, and a `Recipe` binds no
-names. §6 already settles this: the agent's Go function *is* the feature tree, and
-re-running `MakeBracket(height)` with a new height *is* the rebuild — it emits a
-new `Recipe` with new values. decad does not build an interpreter for a language
-the agent already has.
-
-**`StepOpts`** — the feature options a `Step` carries, sealed and typed, one struct
-per `OpKind` that has options. Not `[]any`, not a stringly key/value map: §4 rejects
-`core.Base`-as-anything, and a recipe is the last place to smuggle it back in.
-
-```go
-type StepOpts interface{ stepOpts() } // sealed
-
-type ExtrudeOpts struct { Taper units.Value; /* ... */ }
-type RevolveOpts struct { /* ... */ }
-type FilletOpts  struct { TangentChain bool }
-type AsymmetricChamferOpts struct {
-    Reference FaceSelector
-    Other     units.Value
-}
-type ChamferOpts struct {
-    TangentChain bool
-    Asymmetric  *AsymmetricChamferOpts
-}
-type ShellOpts struct {
-    Sense      ShellSense
-    NoOpenings bool
-}
-type LoftOpts struct {
-    Profile2  ProfileRecord // the "to" section
-    Plane2    PlaneRecord   // the "to" section's plane
-    Alignment []int         // per-loop segment-rotation offset; absent means every offset is 0
-}
-```
-
-`docs/recipe-replay-design.md` §3.2 owns required `StepOpts` wire payload
-fields and their absent/null rules. The decoder reads required fields through
-presence-aware pointer wire fields, then constructs the value-form variant.
-Feature-call defaults are materialized in the recorded `StepOpts`, so canonical
-output always carries the required field.
-
-The completeness rule applied to options: **every `ExtrudeOption`,
-`RevolveOption`, `FilletOption`, `ChamferOption`, `ShellOption`, and
-`LoftOption` MUST be representable in the corresponding `…Opts` struct.** An
-option with nowhere to land in the recipe does not ship — a tapered extrude that
-round-tripped as an untapered one would be exactly the lossy record the
-completeness rule forbids.
-
-`Selector` is the sealed root of the selector vocabulary, so a `Step` never holds
-an `any` — Fusion's `core.Base`-as-anything is rejected in §4, and `Recipe` is the
-last place to reintroduce it:
-
-```go
-// Selector is what a Step may carry: an unresolved edge or face query.
-type Selector interface{ selector() }
-```
-
-Every `EdgeSelector` and `FaceSelector` implementation is a `Selector`; in
-particular `*EdgeQuery` and `*FaceQuery` (§9) satisfy all three.
+The public selector roots are `EdgeSelector` and `FaceSelector`. There is no exported common selector interface because feature signatures already state which topology family they accept.
 
 **`Axis`** — sealed; what a revolve may spin about.
 
@@ -789,14 +497,14 @@ type SketchLine   struct{ /* ... */ } // a line in the source sketch
 type ConstructionAxis struct{ /* ... */ } // an explicit axis in the document
 // EdgeAxis is a linear edge, selected — never a pointer. Body is what Edge
 // resolves against: a Revolve is handed no body, so the axis must name its own.
-type EdgeAxis struct{ Body BodyRef; Edge EdgeSelector }
+type EdgeAxis struct{ Body *Body; Edge EdgeSelector }
 ```
 
 `EdgeAxis.Edge` MUST resolve to **exactly one** linear edge of `Body`
 (`EdgeQuery.Exactly(1)`); zero or many is `ErrCardinality` (§12), and a non-linear
 edge is `ErrDegenerate`. `Body` MUST be a live body of the same `Document` the
 `Revolve` is called on — another document's is `ErrForeignBody`, a retired one is
-`ErrRetiredBody` — and its `StepRef` is recorded in the step's `Inputs`.
+`ErrRetiredBody`. Resolving the axis does not consume its body.
 
 **`Interference` / `Clearance`** — the pairwise results of §10. Both name the two
 bodies and carry their quantity as a `Measurement`, so both report their own
@@ -976,8 +684,8 @@ boundary entity is `ErrForeignProfile`, a stale one is `ErrStaleProfile`, and a
 snapshot that does not match a fresh `s.Profiles()` result is
 `ErrInvalidProfile` (§7/§12). decad
 reads the plane through `s.Plane()` and its frame through `s.Plane().Frame()`, and
-records the plane — as a `PlaneRecord`, and the profile as a `ProfileRecord` — in
-the `Step` (§6.2), so the recipe stays complete and holds no live sketch.
+records the plane and profile as `PlaneRecord` and `ProfileRecord` values before
+building the feature, so later evaluation does not retain live sketch state.
 
 Booleans are **explicit** — not folded into every feature with an ambient,
 implicitly-chosen target — and they never mutate an operand or take a target-out
@@ -1002,22 +710,19 @@ Operands owned by different documents are `ErrForeignBody`.
 **Context variants cancel the complete Boolean before its atomic commit.**
 They pass `ctx` through operand tessellation, exact-predicate classification,
 cutting, stitching, mesh audit, and exact volume calculation. Cancellation
-returns `ctx.Err()` unchanged and leaves both operands, the live-body set, and
-the recipe unchanged. `Union` / `Cut` / `Intersect` are compatibility wrappers
-over their `Context` variants with `context.Background()`; success keeps the
-same consuming behavior and recorded step.
+returns `ctx.Err()` unchanged and leaves both operands and the live-body set
+unchanged. `Union` / `Cut` / `Intersect` are compatibility wrappers over their
+`Context` variants with `context.Background()`; success keeps the same consuming
+behavior.
 
 **A boolean failure is typed, because its three failures are three different
 caller actions.** A boolean that produces no body, reaches a valid-model limit
 this evaluator cannot handle, or breaks an internal invariant returns a
-`BooleanError` — the operation, its operand `StepRef`s, and a branchable `Code`
-— wrapping the sentinel `errors.Is` already branches on, so compatibility
-holds:
+`BooleanError` with a branchable `Code`, wrapping the sentinel `errors.Is`
+already branches on:
 
 ```go
 type BooleanError struct {
-    Op     OpKind            // Union / Cut / Intersect
-    Inputs []StepRef         // the operands, as the Step would record them; [target, tool] for Cut
     Code   BooleanErrorCode
     // Error()/Message carry the human text; Unwrap() returns the wrapped sentinel.
 }
@@ -1032,7 +737,6 @@ const (
     // a limit: a curved-surface tangency or near-contact, a coplanar
     // face-on-face overlap, a grazing edge, an isolated-point pinch, or a
     // analytic prism-arrangement refusal wrapping ErrUnsupported.
-    // Recipe-recordable, evaluator-staged.
     // Wraps ErrUnsupported.
     BooleanUnsupportedContact
     // BooleanEvaluatorFailure is an internal invariant break: the stitched
@@ -1154,10 +858,10 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, thickness uni
 The `Context` forms bound cancellation latency in their cancellable construction
 and audit paths, including Shell's shared offset-construction, crossing, and
 nesting audit. Cancellation returns `ctx.Err()` before commit, so the receiver
-stays live and the recipe and document remain unchanged. The original methods
+stays live and the document remains unchanged. The original methods
 delegate with `context.Background()` and keep their existing behavior.
 
-Modify reach options are recordable intent, not evaluator switches:
+Modify reach options state modeling intent, not evaluator switches:
 
 ```go
 type FilletChamferOption interface {
@@ -1175,7 +879,7 @@ continuations. `WithAsymmetricChamfer` applies positional `d` on `reference`
 and `otherDistance` on the other adjacent face. `WithNoOpenings` is the only
 shell form that accepts `sel == nil`; it conflicts with a non-nil selector.
 `docs/modify-reach-design.md` owns exact receiver/target limits, refusal order,
-payloads, and recipe encoding.
+payloads, and validation.
 
 Placement is a body operation on the same terms — it retires the receiver and
 registers the placed body:
@@ -1188,8 +892,7 @@ func (b *Body) Placed(t r3.Transform) (*Body, error)
 This is the whole of the "explicit transforms" story: a body is positioned by an
 argument the caller states — an `r3.Transform`, a rigid motion (§5.2) — never by
 an ambient assembly context (§4). The zero `Transform{}` is invalid
-(`Transform.IsValid`) and is `ErrDegenerate` (§12). The step records the motion
-as a `TransformRecord` (§6.2). `PlacedContext` checks `ctx` through any
+(`Transform.IsValid`) and is `ErrDegenerate` (§12). `PlacedContext` checks `ctx` through any
 faceted-payload rebuild and returns its error without changing the document.
 `Placed` is the compatibility wrapper using `context.Background()`.
 
@@ -1208,13 +911,13 @@ func (b *Body) PlacedCopy(t r3.Transform) (*Body, error)
 
 Each returns a NEW live body and leaves the receiver **live**: the source is
 depended on, never consumed. `Duplicate` re-registers the receiver's immutable
-payload under a new step — identical, independent geometry, a fresh body
+payload under a new producer identity — identical, independent geometry, a fresh body
 identity. `PlacedCopy(t)` re-evaluates the payload under the composed rigid
 motion exactly as `Placed` does, so `Duplicate` is `PlacedCopy` with no motion;
 the zero `Transform{}` is `ErrDegenerate` as in `Placed`, and `r3.Identity()` is
 a valid no-op motion. A body this evaluator did not build is `ErrUnsupported`, as
 `Placed`'s is. The context-taking variants check `ctx` throughout a faceted
-rebuild and leave the source, live-body set, and recipe unchanged on
+rebuild and leave the source and live-body set unchanged on
 cancellation. `Duplicate` and `PlacedCopy` are compatibility wrappers using
 `context.Background()`.
 
@@ -1230,44 +933,24 @@ source's, reproduced from the same record:
   `FeatureRef` origins verbatim — they ride in the payload itself, so a boolean's
   preserved provenance survives the copy unchanged, and `FaceCreatedBy(ref)`
   matches a cut result's copy exactly as it matches the cut result. A carried
-  upstream `FeatureRef` is a `FaceCreatedBy` provenance origin, not an own-step
-  reference: a boolean's faces already carry the operands' upstream origins, not
-  a role keyed to the boolean's own step (§9), so keeping it verbatim is outside
-  the never-inherited rule — that rule governs the own-step references a copy DOES
+  upstream `FeatureRef` is a `FaceCreatedBy` provenance origin, not a reference
+  to the copy: a boolean's faces already carry the operands' upstream origins, not
+  a role keyed to the boolean itself (§9), so keeping it verbatim is outside
+  the never-inherited rule — that rule governs the new references a copy DOES
   re-derive from its own record, `Body.Origin()` (the `body` role, below) and the
   analytic/modified feature roles;
 - an **analytic** or **modified** copy (a prism, revolve, cup, tube) carries no
   separate upstream provenance — a prism cap is created by the prism step itself
   — so re-evaluation reproduces the body's own fixed roles (`capStart`, `capEnd`,
-  `side(i, j)`, …) from the same record, keyed to the copy's own producing step
-  (§6.1's rule that roles derive from the recorded step), and the copy's own
+  `side(i, j)`, …) from the same record, keyed to the copy's own private producer
+  identity, and the copy's own
   `CapStart` / `CapEnd` / `FaceCreatedBy` resolve against it;
-- the `body` role — `Body.Origin()` — is the copy's own step in every case.
+- the `body` role — `Body.Origin()` — uses the copy's own private producer
+  identity in every case.
 
-Two new `OpKind`s — `OpDuplicate` and `OpPlacedCopy` — record the source's
-`StepRef` in `Inputs` on the same terms `ToFace` and `EdgeAxis` record a
-depended-on body (§6.2): the source's `StepRef` in `Inputs`, the source **not**
-in the consumed set, so §6's retire rule never touches it. Each is a closed-set
-member with its own named-text wire token in the `OpKind` codec — `OpDuplicate`
-is `"duplicate"`, `OpPlacedCopy` is `"placed_copy"` — beside `"placed"` and the
-rest (§6.2), so the constant order is never a serialization concern. A recipe
-replay reproduces every copy deterministically — the copies are steps like any
-other, and the source stays live for each.
-
-**`Step.Placement` is keyed to the two placing ops.** `OpPlacedCopy` records its
-motion as a `TransformRecord` in `Placement`, exactly as `OpPlaced` does, so
-`Placement` is present (nonzero, valid) for both; `OpDuplicate` records no
-motion, so its `Placement` is absent (the zero value), the same field-keying
-discipline the extent/angular one-of already enforces (§6.2). `Placement` is
-therefore present exactly for `OpPlaced` and `OpPlacedCopy` and forbidden on
-every other op — the same required/forbidden-field discipline
-`docs/recipe-replay-design.md` §3.2 states for `OpPlaced`. The stored-recipe
-contract carries the copy ops in full: `docs/recipe-replay-design.md` holds the
-`OpDuplicate` / `OpPlacedCopy` §3.2 shape rows (each `Inputs: 1`,
-`consumed inputs: 0`, and the `Placement` present/absent rule above), their §4
-liveness handling (the source `StepRef` depended on, never retired) and §5.1
-replay dispatch — this API contract fixes the copy ops' shape, the replay design
-fixes their schema.
+Copies do not consume their source. Each successful copy gets a fresh private
+producer identity so callers can use its returned provenance values without
+persisting or constructing internal identifiers.
 
 ### 8.1 Extent — illegal states unrepresentable
 
@@ -1293,7 +976,7 @@ type TwoSided   struct { One, Two SideExtent }            // Extent ONLY
 // ToFace stops the sweep at a face of Body. Extent AND SideExtent; Offset is SIGNED.
 // Body is what Face resolves against: an Extrude is handed no body, so the extent
 // must name its own.
-type ToFace struct { Body BodyRef; Face FaceSelector; Offset units.Value }
+type ToFace struct { Body *Body; Face FaceSelector; Offset units.Value }
 
 // SideExtent — one side of a TwoSided. The SIDE supplies the sense, so a side
 // variant never carries a Direction.
@@ -1317,7 +1000,7 @@ type SymmetricAngle struct { A units.Value; FullLength bool } // AngularExtent O
 type TwoSidedAngle  struct { One, Two SideAngular }           // AngularExtent ONLY
 
 // ToFaceAngular stops the revolve at a face of Body. AngularExtent AND SideAngular.
-type ToFaceAngular struct { Body BodyRef; Face FaceSelector }
+type ToFaceAngular struct { Body *Body; Face FaceSelector }
 
 type AngleSide struct { A units.Value }                       // SideAngular ONLY
 ```
@@ -1386,8 +1069,8 @@ The two sets are **deliberately disjoint**: no linear extent satisfies
 **A selector needs a body to resolve against, and the feature does not supply one.**
 `FaceSelector.SelectFaces` takes a `*Body` (§9), but `Extrude` and `Revolve` take a
 sketch and a profile — no body at all. So the extent names its own: `ToFace.Body`,
-`ToFaceAngular.Body`, and `EdgeAxis.Body` (§6.2). At a feature call that `BodyRef`
-is a live `*Body` — a `StepRef` there is `ErrUnresolvedBody` (§6.2) — and `Face` is
+`ToFaceAngular.Body`, and `EdgeAxis.Body`. At a feature call that body must be a
+live `*Body`, and `Face` is
 resolved as `Face.SelectFaces(Body)` and nothing else. The rules are the same
 everywhere:
 
@@ -1398,15 +1081,12 @@ everywhere:
   Another document's body is `ErrForeignBody` (§12) — a face in another document's
   coordinates would stop the sweep somewhere the caller never named — and a body the
   document has retired is `ErrRetiredBody` (§6);
-- the step **depends on** that body, so its `StepRef` is recorded in the step's
-  `Inputs` (§6.2). It is not consumed and not retired.
+- the feature **depends on** that body. It is not consumed or retired.
 
 Options carry the rest (`WithTaper(units.Degrees(3))`), via
 `github.com/lestrrat-go/option/v3` — the house functional-options library, and an
-approved dependency. **Every option MUST be representable in the corresponding
-`…Opts` struct a `Step` records (§6.2).** An option a `Recipe` cannot round-trip
-would make the recipe a lossy record of intent, which §2 does not permit; such an
-option does not ship.
+approved dependency. Every option must have one clear, validated effect on the
+feature call and must leave the document unchanged when validation fails.
 
 ## 9. Selectors — intent, not identity
 
@@ -1419,17 +1099,15 @@ stable. Its `isTangentChain` flag is the workaround; we take the lesson properly
 
 Features accept the **interfaces**; the constructors return the **concrete query
 types** that implement them and that carry the cardinality assertions. Both
-interfaces embed the sealed `Selector` root (§6.2), so every selector a feature
-accepts is a value a `Recipe` can record.
+interfaces are sealed independently, so features accept only package-defined
+selector values.
 
 ```go
 type EdgeSelector interface {
-    Selector
     SelectEdges(*Body) ([]*Edge, error)
 }
 
 type FaceSelector interface {
-    Selector
     SelectFaces(*Body) ([]*Face, error)
 }
 
@@ -1447,10 +1125,6 @@ type FaceQuery struct{ /* ... */ }
 func (q *FaceQuery) SelectFaces(*Body) ([]*Face, error)
 func (q *FaceQuery) Exactly(n int) *FaceQuery
 func (q *FaceQuery) AtLeast(n int) *FaceQuery
-
-// Both queries seal into Selector (§6.2), which is what a Recipe Step stores.
-func (q *EdgeQuery) selector()
-func (q *FaceQuery) selector()
 
 // Predicates compose.
 func Convex() EdgePredicate
@@ -1478,9 +1152,7 @@ only. `Facing(v)` matches only the face whose OUTWARD (material-leaving) normal
 points along `v` — parallel to `v` **and** the same sense, a positive projection —
 so `Faces(Planar(), Facing(z))` picks the single top cap that
 `Faces(NormalTo(z))` returns as a pair. A zero or non-finite `v` is rejected at
-resolve, as `NormalTo`'s is (§12). `Facing` is a closed-set variant like every
-predicate, so it ships its own tagged codec entry (kind `"facing"`, a `dir`
-payload decoded through a pointer wire field like `normal_to`) — recipe-stable.
+resolve, as `NormalTo`'s is (§12).
 
 **Typed role helpers keep the fixed roles out of string literals.** A provenance
 selector names a `FeatureRef` (§6.1), and the roles a feature mints — `capStart`,
@@ -1488,28 +1160,28 @@ selector names a `FeatureRef` (§6.1), and the roles a feature mints — `capSta
 invites a typo the compiler cannot catch. The fixed roles get typed constructors:
 
 ```go
-func CapStart(b *Body) FeatureRef // the start-cap role of b's producing step
-func CapEnd(b *Body) FeatureRef   // the end-cap role of b's producing step
+func CapStart(b *Body) FeatureRef // the start-cap role of b's producing operation
+func CapEnd(b *Body) FeatureRef   // the end-cap role of b's producing operation
 ```
 
 `FaceCreatedBy(CapStart(body))` selects the start cap without the caller writing
-the string; each helper reads `b.Origin().Step` (§6) and pairs it with its fixed
-role — `FeatureRef{Step: b.Origin().Step, Role: "capStart"}`. The body-role
-reference is already `Body.Origin()`, so no helper duplicates it.
+the string; each helper pairs the body's private producer identity with its
+fixed role. The body-role reference is already `Body.Origin()`, so no helper
+duplicates it.
 
-**The cap roles exist only where the producing step mints them.** `CapStart(b)` /
-`CapEnd(b)` name `b`'s OWN producing step, so they resolve to a face only when
-that step actually mints the fixed cap role: an extrude, a partial revolve, a
+**The cap roles exist only where the producing operation mints them.** `CapStart(b)` /
+`CapEnd(b)` name `b`'s own producer, so they resolve to a face only when
+that operation actually mints the fixed cap role: an extrude, a partial revolve, a
 shell that built a tube — the analytic prisms and partial revolves whose
 evaluator emits `capStart` / `capEnd` — an admitted analytic `Union`, which
-rebuilds an analytic prism with fresh roles under its own step, and a `Placed` /
+rebuilds an analytic prism with fresh roles under its own identity, and a `Placed` /
 `PlacedCopy` / `Duplicate` of one, which re-mints those roles under the copy's
-own step (the copy-provenance rule above). On a body whose step mints no such
+own identity (the copy-provenance rule above). On a body whose producer mints no such
 role the helper still returns a well-formed `FeatureRef` — it just matches
 nothing, an ordinary `ErrNoMatch` at resolve (or `ErrCardinality` under an
 implicit exactly-one). That covers a mesh-path `Union` / `Cut` / `Intersect`
 result (its faces carry the operands' UPSTREAM origins, not a cap role keyed to
-the boolean's own step), a full revolution (no caps at all), and `CapEnd` on a
+the boolean's own identity), a full revolution (no caps at all), and `CapEnd` on a
 cup (a cup mints `capStart` and a `shellCap` pocket floor, no `capEnd`). To name
 a cap that a mesh boolean's operand contributed, select
 `FaceCreatedBy(CapStart(originalBody))` against the upstream body whose
@@ -1617,16 +1289,14 @@ func (q *EdgeQuery) String() string
 func (q *FaceQuery) String() string
 ```
 
-The rendering is a canonical, deterministic function of the query's recorded
-content, built from the codec's own tagged vocabulary (§6.2): equal recorded
-queries render identically, and a query and its decoded round-trip render
-identically. It is an identity for diagnostics and equality, not a parseable
-format — the `Recipe` JSON codec is the round-trip channel.
+The rendering is a canonical, deterministic function of the query's content:
+equal query values render identically. It exists for diagnostics, not as a
+parseable or persistent format.
 
 `q.String()` is `<kind>(<pred>, <pred>, …)<cardinality>`:
 
-- **kind** is `edges` for an `EdgeQuery`, `faces` for a `FaceQuery` — the codec's
-  own selector tokens. (`SelectionError.Kind`'s `SelectorKind.String()` is the
+- **kind** is `edges` for an `EdgeQuery`, `faces` for a `FaceQuery`.
+  (`SelectionError.Kind`'s `SelectorKind.String()` is the
   singular `edge` / `face`, naming the entity; the query prefix is plural and the
   error's kind field singular, deliberately distinct.)
 - **preds** are the clauses in query order, `, `-separated; no clause renders
@@ -1664,8 +1334,8 @@ with these payload forms:
 - **`<value>`** is the `units.Value`'s own canonical text form — magnitude plus
   registered unit symbol, `"10 mm"` (§6.2) — so `longer_than(10 mm)` states kind
   and unit explicitly and round-trips.
-- **`<ref>`** is a `FeatureRef` as `<step>:<role>` — the `StepRef` in decimal and
-  the role QUOTED with `strconv.Quote`, so a role that itself holds parentheses or
+- **`<ref>`** is a `FeatureRef` as `<producer>:<role>` — an opaque document-local
+  producer number and the role QUOTED with `strconv.Quote`, so a role that itself holds parentheses or
   commas stays unambiguous: `created_by(3:"capStart")`, `created_by(2:"side(0,1)")`.
 - a zero-value, kind-less predicate — which the constructors never produce, but a
   half-decoded query might carry — renders `<invalid>` rather than panicking.
@@ -1761,10 +1431,8 @@ triangulation, mesh audits, and faceted restatement. Cancellation returns
 `ctx.Err()` unchanged. `Tessellate` is its compatibility wrapper with
 `context.Background()`.
 
-**Fusion codegen is out of scope for v1.** `Document.Recipe()` exposes the exact
-record of intent as inspectable data; emitting a Fusion add-in from it is a
-follow-up (and possibly the agent's job, not the library's). The recipe is designed
-to make that mechanical.
+**Fusion codegen is out of scope for v1.** Callers model in ordinary Go and use
+the resulting bodies, measurements, and verification reports directly.
 
 ## 12. Errors and concurrency
 
@@ -1779,8 +1447,7 @@ to make that mechanical.
   `ErrStaleProfile` (a feature was handed a profile built before the sketch's
   current state — `Profile.IsStale`, §7), `ErrRetiredBody` (an
   operation, or an extent, was handed a body the document has retired, §6),
-  `ErrUnresolvedBody` (a `StepRef` was passed as a `BodyRef` to a feature call,
-  where a live `*Body` is required, §6.2), `ErrBodyReportNotFound`
+  `ErrBodyReportNotFound`
   (`Report.ForBody` found no entry for the requested body, including a body
   foreign to the report's own document; `docs/verification-design.md`),
   `ErrNegativeMagnitude` (a magnitude was
@@ -1801,18 +1468,9 @@ to make that mechanical.
   measurement or bound derived by an analytic evaluator — `units` construction
   admits a non-finite value and only its operations reject one, so the call
   must; option semantics in `docs/verification-design.md`),
-  `ErrUnsupported` (the recipe records the intent exactly, but the current
-  evaluator cannot yet build it — evaluator staging is explicit and rejected
-  at the call, never silently approximated or narrowed;
-  `docs/evaluator-design.md` §2), `ErrInvalidRecipe` (stored IR violates its
-  profile/operation/reference contract), `ErrUnsupportedRecipeVersion` (the
-  envelope names a format version this package cannot interpret), and
-  `ErrResourceLimit` (recipe encoding, decoding, validation, or evaluation crossed
-  an explicit ceiling). `RecipeError`
-  carries root/step + field path and matches both `ErrInvalidRecipe` and its
-  specific cause; `EvaluationError` carries step + op and unwraps evaluator or
-  context failures. Full precedence is in `docs/recipe-replay-design.md` §6.
-  `BooleanError` carries the op, the operand `StepRef`s and a `Code`
+  `ErrUnsupported` (the current evaluator cannot yet build the requested intent;
+  staging is explicit and rejected at the call, never silently approximated or
+  narrowed; `docs/evaluator-design.md` §2). `BooleanError` carries a `Code`
   (empty / unsupported-contact / evaluator-failure), wrapping `ErrBooleanFailed`
   (empty, evaluator-failure) or `ErrUnsupported` (unsupported-contact); a valid
   tangent or coplanar contact this evaluator cannot classify is
@@ -1840,7 +1498,7 @@ to make that mechanical.
   assertion is `ErrCardinality` **even when the selector matched nothing** — and
   that covers both the explicit assertions, `Exactly(n)` / `AtLeast(n)` (§9), and
   the *implicit* exactly-one of `ToFace` / `ToFaceAngular` (§8.1) and of `EdgeAxis`
-  (§6.2). `ErrNoMatch` is
+  (§8.1). `ErrNoMatch` is
   reserved for the one remaining case: a selector that asserts no cardinality at
   all and resolves to zero entities.
 - `Body` is immutable → safe to read from many goroutines.

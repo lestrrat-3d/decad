@@ -115,10 +115,10 @@ func TestMeshBooleanWorkerCountsProduceIdenticalResults(t *testing.T) {
 	placed, err := b.Placed(tr)
 	require.NoError(t, err)
 
-	serial, err := evaluateBoolean(withContactWorkers(t.Context(), 1), OpUnion, a, placed)
+	serial, err := evaluateBoolean(withContactWorkers(t.Context(), 1), opUnion, a, placed)
 	require.NoError(t, err)
 	for _, workers := range []int{2, 4, 8, 12} {
-		parallel, err := evaluateBoolean(withContactWorkers(t.Context(), workers), OpUnion, a, placed)
+		parallel, err := evaluateBoolean(withContactWorkers(t.Context(), workers), opUnion, a, placed)
 		require.NoError(t, err)
 		require.Equal(t, serial.payload, parallel.payload, "worker count %d changed held geometry", workers)
 		require.Equal(t, serial.volume, parallel.volume, "worker count %d changed volume", workers)

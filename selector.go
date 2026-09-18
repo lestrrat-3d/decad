@@ -1,8 +1,6 @@
 package decad
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -12,40 +10,43 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
+// selector seals the two query families inside this package.
+type selector interface{ selector() }
+
+const (
+	selKindEdges = "edges"
+	selKindFaces = "faces"
+)
+
 // This file is the selector vocabulary of docs/api-design.md §9: intent, not
 // identity. A feature is given a query, never a pointer — handles do not
 // survive an edit and index order is not stable, so an edge or face is named
 // by geometric predicate and provenance instead. Features accept the
 // interfaces (EdgeSelector/FaceSelector); the constructors return the
 // concrete query types that implement them and carry the cardinality
-// assertions. Both interfaces embed the sealed Selector root (recipe.go), so
-// every selector a feature accepts is a value a Recipe can record, and the
-// serializability rule of core §6.2 reaches the query types: a query is
-// recorded content — its predicates and its cardinality assertion — and it
-// ships with its tagged codec below.
+// assertions. Both interfaces embed a private root so callers cannot add
+// selector variants that features do not understand.
 //
 // Resolution is a filter pipeline over the body's live topology
 // (docs/evaluator-design.md §7): gather (Body.Edges()/Faces()), apply each
 // predicate as a pure function of the analytic data, then enforce the
 // cardinality assertion. Matching is decided on what an entity IS — a
 // predicate that needs analytic identity an entity does not have simply does
-// not match it — and the result keeps the topology accessors' order, so a
-// recipe replay selects identically.
+// not match it — and the result keeps the topology accessors' order.
 
 // EdgeSelector is what an edge-consuming feature (fillet, chamfer) accepts:
-// an unresolved edge query. It embeds the sealed Selector root, so every
-// selector a feature accepts is recordable (core §9/§6.2).
+// an unresolved edge query.
 type EdgeSelector interface {
-	Selector
+	selector
 	// SelectEdges resolves the query against a live body's topology.
 	SelectEdges(*Body) ([]*Edge, error)
 }
 
 // FaceSelector is what a face-consuming feature (shell) accepts: an
-// unresolved face query. It embeds the sealed Selector root, so every
+// unresolved face query. It embeds the sealed selector root, so every
 // selector a feature accepts is recordable (core §9/§6.2).
 type FaceSelector interface {
-	Selector
+	selector
 	// SelectFaces resolves the query against a live body's topology.
 	SelectFaces(*Body) ([]*Face, error)
 }
@@ -70,16 +71,14 @@ type cardinality struct {
 }
 
 // EdgeQuery is the concrete edge selector: a conjunction of edge predicates
-// plus an optional cardinality assertion. Build one with Edges; it is an
-// EdgeSelector, and — sealed into Selector — what a Recipe Step stores.
+// plus an optional cardinality assertion. Build one with Edges.
 type EdgeQuery struct {
 	preds []EdgePredicate
 	card  cardinality
 }
 
 // FaceQuery is the concrete face selector: a conjunction of face predicates
-// plus an optional cardinality assertion. Build one with Faces; it is a
-// FaceSelector, and — sealed into Selector — what a Recipe Step stores.
+// plus an optional cardinality assertion. Build one with Faces.
 type FaceQuery struct {
 	preds []FacePredicate
 	card  cardinality
@@ -251,15 +250,14 @@ func (q *FaceQuery) AtLeast(n int) *FaceQuery {
 	return q
 }
 
-// The queries seal into Selector (core §6.2), which is what a Recipe Step
-// stores.
+// The queries seal into the private selector root.
 func (q *EdgeQuery) selector() {}
 func (q *FaceQuery) selector() {}
 
-// EdgePredicate is one clause of an EdgeQuery (core §6.2). Predicates come
+// EdgePredicate is one clause of an EdgeQuery. Predicates come
 // only from the package constructors — Convex, Concave, ParallelTo,
 // LongerThan, CreatedBy, Circular — and compose by conjunction; the zero
-// value names no predicate and refuses to encode.
+// value names no predicate and is rejected at resolve.
 type EdgePredicate struct {
 	kind   string
 	dir    r3.Vec
@@ -267,19 +265,17 @@ type EdgePredicate struct {
 	ref    FeatureRef
 }
 
-// FacePredicate is one clause of a FaceQuery (core §6.2). Predicates come
+// FacePredicate is one clause of a FaceQuery. Predicates come
 // only from the package constructors — Planar, Cylindrical, NormalTo,
 // Facing, FaceCreatedBy — and compose by conjunction; the zero value names no
-// predicate and refuses to encode.
+// predicate and is rejected at resolve.
 type FacePredicate struct {
 	kind string
 	dir  r3.Vec
 	ref  FeatureRef
 }
 
-// The wire vocabulary of the two predicate tiers. Like the two extent tiers,
-// the names are distinct even where the meaning is parallel ("created_by" /
-// "face_created_by"), so a tagged object reads unambiguously on its own.
+// Stable predicate names are shared by query rendering and resolution.
 const (
 	predKindConvex        = "convex"
 	predKindConcave       = "concave"
@@ -321,8 +317,8 @@ func LongerThan(l units.Value) EdgePredicate {
 }
 
 // CreatedBy matches edges by provenance: edges created by the feature role f
-// names. Provenance is structural, so it survives re-evaluation
-// (docs/evaluator-design.md §3). A negative step or empty role is rejected at
+// names. Provenance is structural, so it survives body rebuilds
+// (docs/evaluator-design.md §3). A negative producer identity or empty role is rejected at
 // resolve as ErrDegenerate.
 func CreatedBy(f FeatureRef) EdgePredicate {
 	return EdgePredicate{kind: predKindCreatedBy, ref: f}
@@ -359,30 +355,30 @@ func Facing(v r3.Vec) FacePredicate {
 // FaceCreatedBy matches faces by provenance — the face analog of CreatedBy.
 // A canonicalization merge unions the merged faces' roles and this matches
 // on any of them, so provenance survives the merge
-// (docs/evaluator-design.md §3). A negative step or empty role is rejected at
+// (docs/evaluator-design.md §3). A negative producer identity or empty role is rejected at
 // resolve as ErrDegenerate.
 func FaceCreatedBy(f FeatureRef) FacePredicate {
 	return FacePredicate{kind: predKindFaceCreatedBy, ref: f}
 }
 
-// CapStart names the start-cap role of b's own producing step, so
+// CapStart names the start-cap role of b's own producing feature, so
 // FaceCreatedBy(CapStart(b)) selects that cap without a "capStart" string
-// literal a typo could break. It reads b.Origin().Step (§6) and pairs it with
-// the fixed role. The role exists only where the step mints it — an extrude, a
+// literal a typo could break. It reads b.Origin().producer (§6) and pairs it with
+// the fixed role. The role exists only where the feature mints it — an extrude, a
 // partial revolve, a shell that built a tube, or a Placed/PlacedCopy/Duplicate
 // of one; on any other body the ref is still well-formed and simply matches
 // nothing (an ordinary ErrNoMatch at resolve). To name a cap a boolean's
 // operand contributed, use FaceCreatedBy(CapStart(originalBody)) against the
 // upstream body, never CapStart of the boolean result.
 func CapStart(b *Body) FeatureRef {
-	return FeatureRef{Step: b.Origin().Step, Role: roleCapStart}
+	return FeatureRef{producer: b.Origin().producer, Role: roleCapStart}
 }
 
-// CapEnd names the end-cap role of b's own producing step — the sibling of
-// CapStart. A body whose step mints no end cap (a cup, a full revolution) still
+// CapEnd names the end-cap role of b's own producing feature — the sibling of
+// CapStart. A body whose feature mints no end cap (a cup, a full revolution) still
 // gets a well-formed ref that matches nothing.
 func CapEnd(b *Body) FeatureRef {
-	return FeatureRef{Step: b.Origin().Step, Role: roleCapEnd}
+	return FeatureRef{producer: b.Origin().producer, Role: roleCapEnd}
 }
 
 // parallelEps decides "parallel": two directions are parallel when the
@@ -447,8 +443,8 @@ func validateDirection(v r3.Vec, what string) error {
 
 // validatePredicateRef rejects provenance that cannot name a feature role.
 func validatePredicateRef(ref FeatureRef, what string) error {
-	if ref.Step < 0 {
-		return fmt.Errorf(`%w: a %s predicate cannot reference negative step %d`, ErrDegenerate, what, ref.Step)
+	if ref.producer < 0 {
+		return fmt.Errorf(`%w: a %s predicate cannot reference negative producer %d`, ErrDegenerate, what, ref.producer)
 	}
 	if ref.Role == "" {
 		return fmt.Errorf(`%w: a %s predicate requires a non-empty provenance role`, ErrDegenerate, what)
@@ -629,410 +625,5 @@ func (p FacePredicate) matches(f *Face) bool {
 	}
 }
 
-// Selector is a closed variant set decad owns, so decad ships its codec
-// (core §6.2): tagged objects, dispatch on the tag, no fallback. The variants
-// seal in with pointer receivers, so — unlike the value-receiver sets — there
-// is no value form to normalize to; instead the codec and the clone helpers
-// guarantee that no caller-owned pointer survives into a recorded step and
-// no recorded pointer escapes through Recipe().
-
-const (
-	selKindEdges = "edges"
-	selKindFaces = "faces"
-)
-
-// errNilSelector rejects a nil variant pointer: it names no query to record.
-// It wraps ErrDegenerate so a typed nil pointer is branchable exactly like
-// any other degenerate input.
+// errNilSelector rejects a nil query.
 var errNilSelector = fmt.Errorf(`%w: nil selector`, ErrDegenerate)
-
-// jsonQuery is a query's wire shape: the kind tag, the predicate list as
-// tagged objects, and at most one cardinality assertion.
-type jsonQuery struct {
-	Kind    string            `json:"kind"`
-	Preds   []json.RawMessage `json:"preds"`
-	Exactly *int              `json:"exactly,omitempty"`
-	AtLeast *int              `json:"at_least,omitempty"`
-}
-
-// marshalSelector encodes one query as its tagged object.
-func marshalSelector(sel Selector) ([]byte, error) {
-	switch q := sel.(type) {
-	case *EdgeQuery:
-		if q == nil {
-			return nil, errNilSelector
-		}
-		preds := make([]json.RawMessage, 0, len(q.preds))
-		for _, p := range q.preds {
-			b, err := marshalEdgePredicate(p)
-			if err != nil {
-				return nil, err
-			}
-			preds = append(preds, b)
-		}
-		return marshalQuery(selKindEdges, preds, q.card)
-	case *FaceQuery:
-		if q == nil {
-			return nil, errNilSelector
-		}
-		preds := make([]json.RawMessage, 0, len(q.preds))
-		for _, p := range q.preds {
-			b, err := marshalFacePredicate(p)
-			if err != nil {
-				return nil, err
-			}
-			preds = append(preds, b)
-		}
-		return marshalQuery(selKindFaces, preds, q.card)
-	default:
-		return nil, fmt.Errorf(`decad: unencodable selector type %T`, sel)
-	}
-}
-
-// marshalQuery assembles the wire shape shared by the two query kinds.
-func marshalQuery(kind string, preds []json.RawMessage, card cardinality) ([]byte, error) {
-	out := jsonQuery{Kind: kind, Preds: preds}
-	if card.kind != cardNone && card.n <= 0 {
-		return nil, fmt.Errorf(`%w: a cardinality assertion needs a positive count, got %d`, ErrDegenerate, card.n)
-	}
-	switch card.kind {
-	case cardNone:
-		// no assertion recorded
-	case cardExactly:
-		n := card.n
-		out.Exactly = &n
-	case cardAtLeast:
-		n := card.n
-		out.AtLeast = &n
-	default:
-		return nil, fmt.Errorf(`decad: unencodable cardinality kind %d`, int(card.kind))
-	}
-	return json.Marshal(out)
-}
-
-// unmarshalSelector dispatches on the kind tag; an unknown or missing tag is
-// an error — the set is closed. The wire struct uses pointer fields, so an
-// absent predicate list is malformed, never silently a match-all query.
-func unmarshalSelector(data []byte) (Selector, error) {
-	var probe struct {
-		Kind string `json:"kind"`
-	}
-	if err := json.Unmarshal(data, &probe); err != nil {
-		return nil, codecJSONErrorAt(data, &probe, fmt.Errorf(`decad: failed to decode selector tag: %w`, err))
-	}
-	switch probe.Kind {
-	case selKindEdges, selKindFaces:
-	case "":
-		return nil, prependCodecPath(fmt.Errorf(`decad: selector is missing its kind tag`), "kind")
-	default:
-		return nil, prependCodecPath(fmt.Errorf(`decad: unknown selector kind %q`, probe.Kind), "kind")
-	}
-	var raw struct {
-		Kind    string             `json:"kind"`
-		Preds   *[]json.RawMessage `json:"preds"`
-		Exactly *int               `json:"exactly"`
-		AtLeast *int               `json:"at_least"`
-	}
-	if err := decodeStrictJSON(data, &raw, fmt.Sprintf(`%s query`, probe.Kind)); err != nil {
-		return nil, err
-	}
-	if raw.Preds == nil {
-		return nil, prependCodecPath(fmt.Errorf(`decad: a %s query requires preds`, probe.Kind), "preds")
-	}
-	if raw.Exactly != nil && raw.AtLeast != nil {
-		return nil, prependCodecPath(fmt.Errorf(`decad: a %s query carries at most one cardinality assertion`, probe.Kind), "exactly")
-	}
-	var card cardinality
-	if raw.Exactly != nil {
-		if *raw.Exactly <= 0 {
-			return nil, prependCodecPath(fmt.Errorf(`%w: a %s query's exactly assertion needs a positive count, got %d`, ErrDegenerate, probe.Kind, *raw.Exactly), "exactly")
-		}
-		card = cardinality{kind: cardExactly, n: *raw.Exactly}
-	}
-	if raw.AtLeast != nil {
-		if *raw.AtLeast <= 0 {
-			return nil, prependCodecPath(fmt.Errorf(`%w: a %s query's at_least assertion needs a positive count, got %d`, ErrDegenerate, probe.Kind, *raw.AtLeast), "at_least")
-		}
-		card = cardinality{kind: cardAtLeast, n: *raw.AtLeast}
-	}
-	if probe.Kind == selKindEdges {
-		q := &EdgeQuery{card: card}
-		if len(*raw.Preds) > 0 {
-			q.preds = make([]EdgePredicate, 0, len(*raw.Preds))
-			for i, b := range *raw.Preds {
-				p, err := unmarshalEdgePredicate(b)
-				if err != nil {
-					return nil, prependCodecPath(err, fmt.Sprintf(`preds[%d]`, i))
-				}
-				q.preds = append(q.preds, p)
-			}
-		}
-		return q, nil
-	}
-	q := &FaceQuery{card: card}
-	if len(*raw.Preds) > 0 {
-		q.preds = make([]FacePredicate, 0, len(*raw.Preds))
-		for i, b := range *raw.Preds {
-			p, err := unmarshalFacePredicate(b)
-			if err != nil {
-				return nil, prependCodecPath(err, fmt.Sprintf(`preds[%d]`, i))
-			}
-			q.preds = append(q.preds, p)
-		}
-	}
-	return q, nil
-}
-
-// marshalEdgePredicate encodes one clause as its tagged object. A zero-value
-// predicate has no kind and refuses to encode — it came from nothing the
-// constructors return.
-func marshalEdgePredicate(p EdgePredicate) ([]byte, error) {
-	switch p.kind {
-	case predKindConvex, predKindConcave, predKindCircular:
-		return marshalTagged(p.kind, struct{}{})
-	case predKindParallelTo:
-		return marshalTagged(p.kind, struct {
-			Dir r3.Vec `json:"dir"`
-		}{Dir: p.dir})
-	case predKindLongerThan:
-		return marshalTagged(p.kind, struct {
-			L units.Value `json:"l"`
-		}{L: p.length})
-	case predKindCreatedBy:
-		return marshalTagged(p.kind, struct {
-			Ref FeatureRef `json:"ref"`
-		}{Ref: p.ref})
-	case "":
-		return nil, fmt.Errorf(`decad: edge predicate is missing its kind; use the package constructors`)
-	default:
-		return nil, fmt.Errorf(`decad: unencodable edge predicate kind %q`, p.kind)
-	}
-}
-
-// marshalFacePredicate encodes one clause as its tagged object. A zero-value
-// predicate has no kind and refuses to encode — it came from nothing the
-// constructors return.
-func marshalFacePredicate(p FacePredicate) ([]byte, error) {
-	switch p.kind {
-	case predKindPlanar, predKindCylindrical:
-		return marshalTagged(p.kind, struct{}{})
-	case predKindNormalTo, predKindFacing:
-		return marshalTagged(p.kind, struct {
-			Dir r3.Vec `json:"dir"`
-		}{Dir: p.dir})
-	case predKindFaceCreatedBy:
-		return marshalTagged(p.kind, struct {
-			Ref FeatureRef `json:"ref"`
-		}{Ref: p.ref})
-	case "":
-		return nil, fmt.Errorf(`decad: face predicate is missing its kind; use the package constructors`)
-	default:
-		return nil, fmt.Errorf(`decad: unencodable face predicate kind %q`, p.kind)
-	}
-}
-
-// unmarshalEdgePredicate dispatches one clause on its kind tag. The payload
-// wire structs use pointer fields, so an absent payload is malformed, never
-// silently a zero direction, length or provenance.
-func unmarshalEdgePredicate(data []byte) (EdgePredicate, error) {
-	var probe struct {
-		Kind string `json:"kind"`
-	}
-	if err := json.Unmarshal(data, &probe); err != nil {
-		return EdgePredicate{}, codecJSONErrorAt(data, &probe, fmt.Errorf(`decad: failed to decode edge predicate tag: %w`, err))
-	}
-	switch probe.Kind {
-	case predKindConvex, predKindConcave, predKindCircular:
-		var raw struct {
-			Kind string `json:"kind"`
-		}
-		if err := decodeStrictJSON(data, &raw, "edge predicate"); err != nil {
-			return EdgePredicate{}, err
-		}
-		return EdgePredicate{kind: probe.Kind}, nil
-	case predKindParallelTo:
-		var raw struct {
-			Kind string  `json:"kind"`
-			Dir  *r3.Vec `json:"dir"`
-		}
-		if err := decodeStrictJSON(data, &raw, "parallel-to predicate"); err != nil {
-			return EdgePredicate{}, err
-		}
-		if raw.Dir == nil {
-			return EdgePredicate{}, prependCodecPath(fmt.Errorf(`decad: a parallel-to predicate requires dir`), "dir")
-		}
-		return EdgePredicate{kind: probe.Kind, dir: *raw.Dir}, nil
-	case predKindLongerThan:
-		var raw struct {
-			Kind string       `json:"kind"`
-			L    *units.Value `json:"l"`
-		}
-		if err := decodeStrictJSON(data, &raw, "longer-than predicate"); err != nil {
-			return EdgePredicate{}, err
-		}
-		if raw.L == nil {
-			return EdgePredicate{}, prependCodecPath(fmt.Errorf(`decad: a longer-than predicate requires l`), "l")
-		}
-		return EdgePredicate{kind: probe.Kind, length: *raw.L}, nil
-	case predKindCreatedBy:
-		ref, err := unmarshalPredicateRef(data, "created-by")
-		if err != nil {
-			return EdgePredicate{}, err
-		}
-		return EdgePredicate{kind: probe.Kind, ref: ref}, nil
-	case "":
-		return EdgePredicate{}, prependCodecPath(fmt.Errorf(`decad: edge predicate is missing its kind tag`), "kind")
-	default:
-		return EdgePredicate{}, prependCodecPath(fmt.Errorf(`decad: unknown edge predicate kind %q`, probe.Kind), "kind")
-	}
-}
-
-// unmarshalFacePredicate dispatches one clause on its kind tag. The payload
-// wire structs use pointer fields, so an absent payload is malformed, never
-// silently a zero direction or provenance.
-func unmarshalFacePredicate(data []byte) (FacePredicate, error) {
-	var probe struct {
-		Kind string `json:"kind"`
-	}
-	if err := json.Unmarshal(data, &probe); err != nil {
-		return FacePredicate{}, codecJSONErrorAt(data, &probe, fmt.Errorf(`decad: failed to decode face predicate tag: %w`, err))
-	}
-	switch probe.Kind {
-	case predKindPlanar, predKindCylindrical:
-		var raw struct {
-			Kind string `json:"kind"`
-		}
-		if err := decodeStrictJSON(data, &raw, "face predicate"); err != nil {
-			return FacePredicate{}, err
-		}
-		return FacePredicate{kind: probe.Kind}, nil
-	case predKindNormalTo, predKindFacing:
-		var raw struct {
-			Kind string  `json:"kind"`
-			Dir  *r3.Vec `json:"dir"`
-		}
-		if err := decodeStrictJSON(data, &raw, fmt.Sprintf(`%s predicate`, facePredicateDisplayName(probe.Kind))); err != nil {
-			return FacePredicate{}, err
-		}
-		if raw.Dir == nil {
-			return FacePredicate{}, prependCodecPath(fmt.Errorf(`decad: a %s predicate requires dir`, facePredicateDisplayName(probe.Kind)), "dir")
-		}
-		return FacePredicate{kind: probe.Kind, dir: *raw.Dir}, nil
-	case predKindFaceCreatedBy:
-		ref, err := unmarshalPredicateRef(data, "face-created-by")
-		if err != nil {
-			return FacePredicate{}, err
-		}
-		return FacePredicate{kind: probe.Kind, ref: ref}, nil
-	case "":
-		return FacePredicate{}, prependCodecPath(fmt.Errorf(`decad: face predicate is missing its kind tag`), "kind")
-	default:
-		return FacePredicate{}, prependCodecPath(fmt.Errorf(`decad: unknown face predicate kind %q`, probe.Kind), "kind")
-	}
-}
-
-// facePredicateDisplayName maps a direction-bearing face-predicate kind tag to
-// its established human-readable name for error messages. The wire token and
-// the display name differ deliberately (normal_to -> normal-to), so a missing
-// dir reports the name a caller sees in the API, not the raw tag.
-func facePredicateDisplayName(kind string) string {
-	switch kind {
-	case predKindFacing:
-		return "facing"
-	default:
-		return "normal-to"
-	}
-}
-
-// unmarshalPredicateRef decodes a provenance predicate's payload with pointer
-// fields: an absent ref, step or role is malformed, never silently step 0 or
-// an empty role.
-func unmarshalPredicateRef(data []byte, what string) (FeatureRef, error) {
-	var raw struct {
-		Kind string `json:"kind"`
-		Ref  *struct {
-			Step *json.RawMessage `json:"step"`
-			Role *string          `json:"role"`
-		} `json:"ref"`
-	}
-	if err := decodeStrictJSON(data, &raw, fmt.Sprintf(`%s predicate`, what)); err != nil {
-		return FeatureRef{}, err
-	}
-	if raw.Ref == nil {
-		return FeatureRef{}, prependCodecPath(fmt.Errorf(`decad: a %s predicate requires ref with step and role`, what), "ref")
-	}
-	if raw.Ref.Step == nil {
-		return FeatureRef{}, prependCodecPath(fmt.Errorf(`decad: a %s predicate requires ref with step and role`, what), "ref.step")
-	}
-	if raw.Ref.Role == nil {
-		return FeatureRef{}, prependCodecPath(fmt.Errorf(`decad: a %s predicate requires ref with step and role`, what), "ref.role")
-	}
-	stepToken := bytes.TrimSpace(*raw.Ref.Step)
-	if len(stepToken) > 0 && stepToken[0] == '-' {
-		if negativeJSONNumberIsNonzero(stepToken) {
-			return FeatureRef{}, prependCodecPath(
-				fmt.Errorf(`%w: a %s predicate cannot reference negative step %s`, ErrDegenerate, what, stepToken),
-				"ref.step",
-			)
-		}
-		stepToken = []byte("0")
-	}
-	var step StepRef
-	if err := json.Unmarshal(stepToken, &step); err != nil {
-		return FeatureRef{}, prependCodecPath(
-			fmt.Errorf(`decad: failed to decode %s predicate: %w`, what, err),
-			"ref.step",
-		)
-	}
-	ref := FeatureRef{Step: step, Role: *raw.Ref.Role}
-	if err := validatePredicateRef(ref, what); err != nil {
-		return FeatureRef{}, prependCodecPath(err, "ref.role")
-	}
-	return ref, nil
-}
-
-// negativeJSONNumberIsNonzero reports whether a negative JSON number's
-// significand contains a nonzero digit. The exponent never changes zero, so
-// this classifies very large exponents without allocating a large number.
-func negativeJSONNumberIsNonzero(token []byte) bool {
-	significand := token[1:]
-	if i := bytes.IndexAny(significand, "eE"); i >= 0 {
-		significand = significand[:i]
-	}
-	return bytes.ContainsAny(significand, "123456789")
-}
-
-// cloneSelectors deep-copies a step's recorded queries: the selector variants
-// seal in with pointer receivers, so keeping Recipe a value (core §6.2) means
-// a fresh query per clone — no caller-owned pointer survives into a recorded
-// step, and no recorded pointer escapes through Recipe().
-func cloneSelectors(sels []Selector) []Selector {
-	if sels == nil {
-		return nil
-	}
-	out := make([]Selector, len(sels))
-	for i, sel := range sels {
-		out[i] = cloneSelector(sel)
-	}
-	return out
-}
-
-// cloneSelector deep-copies one query. The predicates hold only value fields,
-// so cloning the slice is a deep copy. A malformed nil pointer stays as-is —
-// the codec rejects it at its own gate.
-func cloneSelector(sel Selector) Selector {
-	switch q := sel.(type) {
-	case *EdgeQuery:
-		if q == nil {
-			return sel
-		}
-		return &EdgeQuery{preds: slices.Clone(q.preds), card: q.card}
-	case *FaceQuery:
-		if q == nil {
-			return sel
-		}
-		return &FaceQuery{preds: slices.Clone(q.preds), card: q.card}
-	default:
-		return sel
-	}
-}

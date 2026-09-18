@@ -42,10 +42,9 @@ Each excluded body exists. Table SX stages it with `ErrUnsupported` at the
 modify call. No excluded shape is approximated, clipped, or deferred into
 `Verify`.
 
-## 2. Public options + recipe
+## 2. Public options
 
-The three method signatures stay unchanged. The extension fills the option
-records already reserved by core §6.2.
+The three method signatures stay unchanged. The extension adds these options:
 
 ```go
 // FilletChamferOption is accepted by both Fillet and Chamfer.
@@ -69,40 +68,9 @@ func WithAsymmetricChamfer(
 func WithNoOpenings() ShellOption
 ```
 
-The recorded option values are:
-
-```go
-type FilletOpts struct {
-    TangentChain bool `json:"tangent_chain,omitempty"`
-}
-
-type AsymmetricChamferOpts struct {
-    Reference FaceSelector `json:"reference"`
-    Other     units.Value  `json:"other"`
-}
-
-type ChamferOpts struct {
-    TangentChain bool                     `json:"tangent_chain,omitempty"`
-    Asymmetric  *AsymmetricChamferOpts    `json:"asymmetric,omitempty"`
-}
-
-type ShellOpts struct {
-    Sense      ShellSense `json:"sense"`
-    NoOpenings bool       `json:"no_openings,omitempty"`
-}
-```
-
-`AsymmetricChamferOpts.Reference` is encoded through the existing sealed
-selector codec and deep-copied on call, `Recipe()`, marshal, and unmarshal.
-It resolves against the receiver during evaluation. It never records resolved
-faces or topology indices.
-
-Step fields remain:
-
-| Op | `Selectors` | `Values` | `Opts` |
-|---|---|---|---|
-| Fillet | seed edge query | radius | `FilletOpts` |
-| Chamfer | seed edge query | positional distance | `ChamferOpts` |
+The option constructors copy their selector inputs at the call boundary. The
+selectors resolve against the receiver during evaluation; resolved faces and
+topology indices are never retained.
 | Shell with openings | removed-face query | thickness | `ShellOpts` |
 | Shell with no openings | empty | thickness | `ShellOpts{NoOpenings:true}` |
 
@@ -360,8 +328,8 @@ material-side offset loops
 analytic patch records + trim domains
 ```
 
-It is evaluator data, never recipe data. Recipe records only selector, values,
-and options.
+It is private evaluator data. Public calls state only selectors, values, and
+options.
 
 Each selected cap loop is offset on the material side by the cap-face setback.
 Use the existing exact line/arc offset construction and profile audit. Unselected
@@ -776,7 +744,7 @@ from the slab-region bounds. Tessellation chords a section curve once per
 shared carrier and triangulates exposed planar differences.
 
 Existing `cupPayload` migrates to this payload before RX1 side/no-opening shell
-lands. The migration changes evaluator storage only, not recipe or public
+lands. The migration changes evaluator storage only, not public
 topology. A cup over a section with `k` holes becomes one floor slab containing
 `P` inward or `Q` outward, plus one wall slab containing the outer band and `k`
 hole-lining bands as separate regions. Every wall region has positive-area
@@ -912,8 +880,8 @@ A build-time question has no `Suspect`. Any proof the builder cannot finish is
 
 `facetedPayload` stays excluded even when `meshBound == 0`. Its groups retain
 provenance + a planar flag, not analytic carrier/trim intent. Modifying its held
-polygons would record one evaluator's decomposition as the meaning of a recipe
-whose exact-kernel replay modifies a different B-rep. SX9 is therefore a
+polygons would make one evaluator's decomposition part of the operation's
+meaning, while an exact kernel would modify a different B-rep. SX9 is therefore a
 permanent limit of this evaluator reach, not an unfinished zero-bound shortcut.
 
 **What SX9 leaves a caller proving.** Because SX9 never lifts, a caller whose
@@ -990,14 +958,14 @@ the geometry does not have.
 
 Every implementation PR MUST add geometry assertions, not run-only coverage.
 
-### Options + recipe
+### Options
 
 - option nil/duplicate/conflict gates;
 - `WithNoOpenings` nil-selector exception and non-nil conflict;
 - tangent-chain seed cardinality before expansion;
-- asymmetric nested selector deep-copy + JSON round trip;
-- recipe replay selects same seeds, expansion, reference faces, and result;
-- failed call leaves body live and recipe unchanged.
+- asymmetric nested selector deep-copy;
+- repeated calls select the same seeds, expansion, reference faces, and result;
+- failed call leaves the body live and the document unchanged.
 
 ### Tangent chain
 
@@ -1016,7 +984,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 - one reference face per edge over multi-edge selection;
 - missing/dual/extra reference → SX3;
 - independent overrun on either side → base S6;
-- recipe encodes reference + other distance exactly.
+- the option preserves the reference selector and other distance exactly.
 
 ### Revolve
 
@@ -1101,7 +1069,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
   the origin is undecided;
 - a chamfer band under a sweep whose height dwarfs `d` still separates its two
   levels; a side level identical to its own cap level → SX13, and the receiver
-  and recipe stay untouched;
+  and document stay untouched;
 - every topology edge has exactly two adjacent faces;
 - every patch `Face` reports its own area, and no float-computed one is `Exact`;
 - an all-`Plane` cap-loop band whose true volume is a float64 reports it `Exact`
@@ -1137,7 +1105,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 
 - positive-bound boolean receiver → SX9;
 - zero-bound all-planar boolean receiver → SX9;
-- refusal leaves operands live and recipe unchanged.
+- refusal leaves operands live and the document unchanged.
 
 ## 14. Implementation order
 
@@ -1149,8 +1117,8 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 | **D** | full/partial allowed revolve shell | cap loops |
 | **E** | `capBlendPayload`; complete cap-loop chamfer; analytic integrals | complete cap-loop fillet; DX4 mesh-boolean admission; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
 
-Each PR lands its result payload, structural topology, measurement path, recipe
-round trip, and tests together. A PR may leave a DX question staged only where
+Each PR lands its result payload, structural topology, measurement path, and
+tests together. A PR may leave a DX question staged only where
 Table DX explicitly says `Suspect` or `ErrUnsupported`.
 
 No implementation PR changes SX9. Supporting boolean receivers requires a

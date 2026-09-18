@@ -1,7 +1,6 @@
 package decad_test
 
 import (
-	"encoding/json"
 	"errors"
 	"math"
 	"math/rand"
@@ -37,8 +36,6 @@ import (
 //     and leaves the document untouched — never a silently-wrong body.
 //  4. Scale invariance: the same relative geometry decides the same way at 1 mm
 //     and 1e6 mm, because the contact tolerance is scale-anchored (δ = ε·D).
-//  5. Recipe round-trip: a built body's Recipe marshals and unmarshals to itself.
-//
 // All randomness is drawn from a fixed, logged seed, so any failure is
 // replayable. Every generated section is axis-aligned (right-angle corners only),
 // which is exactly what makes the (1 − π/4)r² area oracle exact.
@@ -392,8 +389,6 @@ func runFilletCase(t *testing.T, fc filletCase, plan filletPlan, r float64) bool
 		require.NoError(t, err)
 		require.InDeltaf(t, r, got, 1e-6*math.Max(1, r), "%s/%s the survey reads the fillet radius", fc.name, plan.name)
 	}
-
-	requireRecipeRoundTrip(t, doc)
 	return true
 }
 
@@ -450,19 +445,6 @@ func requireBlendCylinders(t *testing.T, body *decad.Body, count int, r float64)
 			"a blend wall is a cylinder of the fillet radius, got %s", cyl.Radius)
 	}
 	require.Equalf(t, count, blends, "one blend cylinder per rounded corner")
-}
-
-// requireRecipeRoundTrip asserts the recorded recipe marshals and unmarshals back
-// to itself — the fillet Step (op, input, unresolved selector, radius) survives
-// the wire codec.
-func requireRecipeRoundTrip(t *testing.T, doc *decad.Document) {
-	t.Helper()
-	recipe := doc.Recipe()
-	buf, err := json.Marshal(recipe)
-	require.NoError(t, err)
-	var got decad.Recipe
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, recipe, got, "the recorded fillet recipe round-trips")
 }
 
 // TestFilletScaleInvariant proves the verdict tracks the RELATIVE geometry, not

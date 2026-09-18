@@ -15,8 +15,8 @@ import (
 // into the material at the cap, the original loop holds its shape one
 // setback further in, and the band between them is a ruled patch per wall —
 // a Plane for a straight one. The rewrite is exact and bounded, never a
-// tessellated guess, and the step still records the unresolved edge query
-// and the single setback distance, so the recipe replays deterministically.
+// tessellated guess. The call resolves the edge query and single setback
+// distance, so repeated construction is deterministic.
 func Example_decad_capblend_chamfer() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -72,10 +72,10 @@ func Example_decad_capblend_chamfer() {
 	fmt.Printf("solid: %v, faces: %d\n", body.IsSolid(), len(body.Faces()))
 	fmt.Printf("cap-blend patches: %d\n", patches)
 	fmt.Printf("volume: %.4f mm^3 (%s)\n", mm3, vol.Exactness)
-	fmt.Printf("recipe steps: %d\n", len(doc.Recipe().Steps))
+	fmt.Printf("live bodies: %d\n", len(doc.Bodies()))
 	// Output:
 	// solid: true, faces: 10
 	// cap-blend patches: 4
 	// volume: 116166.6667 mm^3 (Approximate)
-	// recipe steps: 2
+	// live bodies: 1
 }

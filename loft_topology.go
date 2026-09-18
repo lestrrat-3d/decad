@@ -369,7 +369,7 @@ func planeFromTriangle(verts []r3.Vec, tri [3]int) (Plane, error) {
 // §12 PR 2a) widens that bracket by bounds.go's perturbedTriangleAreaAllow,
 // the same per-triangle correction the mass accumulator sums into Area's own
 // bound.
-func buildLoftWallFace(body *Body, ref StepRef, verts []r3.Vec, tri [3]int, i, j, side int, delta float64) (*Face, error) {
+func buildLoftWallFace(body *Body, ref producerID, verts []r3.Vec, tri [3]int, i, j, side int, delta float64) (*Face, error) {
 	surf, err := planeFromTriangle(verts, tri)
 	if err != nil {
 		return nil, err
@@ -384,7 +384,7 @@ func buildLoftWallFace(body *Body, ref StepRef, verts []r3.Vec, tri [3]int, i, j
 	}
 	return &Face{
 		surface:   surf,
-		origins:   []FeatureRef{{Step: ref, Role: fmt.Sprintf("side(%d,%d,%d)", i, j, side)}},
+		origins:   []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(%d,%d,%d)", i, j, side)}},
 		body:      body,
 		area:      lo,
 		areaBound: areaBound,
@@ -428,7 +428,7 @@ func loftLoopCoedges(co []coedge, reversed bool) []coedge {
 // whole-shell reversal into the directed boundary each face publishes. A walk
 // emitted without it agrees with its face's Plane on one axial spelling of a
 // section pair and opposes it on the mirror.
-func buildLoftTopology(ctx context.Context, body *Body, ref StepRef, a loftAssembly, cap0Rat, cap1Rat *big.Rat) (*Face, *Face, []*Face, error) {
+func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAssembly, cap0Rat, cap1Rat *big.Rat) (*Face, *Face, []*Face, error) {
 	vertexObjs := make([]*Vertex, len(a.verts))
 	for i, p := range a.verts {
 		vertexObjs[i] = loftVertex(p, a.delta)
@@ -533,7 +533,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref StepRef, a loftAssem
 	capStart := &Face{
 		surface:       capStartSurf,
 		loops:         capStartLoops,
-		origins:       []FeatureRef{{Step: ref, Role: roleCapStart}},
+		origins:       []FeatureRef{{producer: ref, Role: roleCapStart}},
 		body:          body,
 		area:          cap0Val,
 		areaBound:     capStartBound,
@@ -543,7 +543,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref StepRef, a loftAssem
 	capEnd := &Face{
 		surface:       capEndSurf,
 		loops:         capEndLoops,
-		origins:       []FeatureRef{{Step: ref, Role: roleCapEnd}},
+		origins:       []FeatureRef{{producer: ref, Role: roleCapEnd}},
 		body:          body,
 		area:          cap1Val,
 		areaBound:     capEndBound,

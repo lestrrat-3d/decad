@@ -43,7 +43,7 @@ import (
 // the shared prism build stamps.
 //
 // thicknessDelta is the shell thickness's OWN conversion displacement — the
-// bound magnitudeInBounded proved when it converted the recipe's stated
+// bound magnitudeInBounded proved when it converted the caller's stated
 // thickness into millimetres (shell.go). It is distinct from zOuterDelta and
 // zCavDelta: those cover the derived FLOOR LEVEL's own float-sum rounding
 // (which already folds thicknessDelta in — cupPayloadFor's step closure), and
@@ -88,7 +88,7 @@ func (cp cupPayload) cavityScalar() boundedScalar {
 }
 
 // placed re-evaluates the same cup under the composed motion (evaluator §8).
-func (cp cupPayload) placed(ctx context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
+func (cp cupPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	cp.xform = composed
 	return evalCupContext(ctx, d, ref, cp)
 }
@@ -199,11 +199,11 @@ func cupPayloadFor(pp prismPayload, offset ProfileRecord, s, t, tDelta float64, 
 // void's outer boundary is walked as a hole in the solid (its wall's material
 // lies outside it) and each of the void's own holes as a solid post (material
 // inside) — the pairing buildLoopSidesAs's explicit holeLoop expresses.
-func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
+func evalCup(d *Document, ref producerID, cp cupPayload) (*Body, error) {
 	return evalCupContext(context.Background(), d, ref, cp)
 }
 
-func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload) (*Body, error) {
+func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayload) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 	}
 	openIsMax := cp.zOpen > cp.zOuter
 
-	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: roleBody}, solid: true}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
 
 	// floorOpen splits a wall's (bottom, top) cap coedges into the floor-side
 	// set (kept cap / pocket floor) and the open-side set (the rim).
@@ -328,7 +328,7 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 	// post through the pocket floor).
 	capStart := &Face{
 		surface:       Plane{Frame: capStartFrame},
-		origins:       []FeatureRef{{Step: ref, Role: roleCapStart}},
+		origins:       []FeatureRef{{producer: ref, Role: roleCapStart}},
 		body:          body,
 		area:          igO.area,
 		areaBound:     igO.areaBound,
@@ -337,7 +337,7 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 	}
 	shellCap := &Face{
 		surface:       Plane{Frame: shellCapFrame},
-		origins:       []FeatureRef{{Step: ref, Role: "shellCap"}},
+		origins:       []FeatureRef{{producer: ref, Role: "shellCap"}},
 		body:          body,
 		area:          igC.area,
 		areaBound:     igC.areaBound,
@@ -381,7 +381,7 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 		rimArea := boundedAbs(boundedSub(aO, aC))
 		rims[i] = &Face{
 			surface:       Plane{Frame: rimFrame},
-			origins:       []FeatureRef{{Step: ref, Role: fmt.Sprintf("rim(%d)", i)}},
+			origins:       []FeatureRef{{producer: ref, Role: fmt.Sprintf("rim(%d)", i)}},
 			body:          body,
 			area:          rimArea.value,
 			areaBound:     rimArea.bound,
@@ -509,7 +509,7 @@ func exactWeightedPointRound(a r3.Vec, wa float64, b r3.Vec, wb float64, held r3
 // (B5/B6) gives a cavity wall, indexing loop i of the cavity region Q in the
 // result's own record (§11). The cavity walls are built with roleLoop equal to
 // their Q loop index, so the rename keeps the index and only swaps the tag.
-func renameCavityRoles(ctx context.Context, faces []*Face, ref StepRef) error {
+func renameCavityRoles(ctx context.Context, faces []*Face, ref producerID) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -521,12 +521,12 @@ func renameCavityRoles(ctx context.Context, faces []*Face, ref StepRef) error {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if o.Step != ref {
+			if o.producer != ref {
 				continue
 			}
 			var li, j int
 			if n, _ := fmt.Sscanf(o.Role, "side(%d,%d)", &li, &j); n == 2 {
-				f.origins[i] = FeatureRef{Step: ref, Role: fmt.Sprintf("shellSide(%d,%d)", li, j)}
+				f.origins[i] = FeatureRef{producer: ref, Role: fmt.Sprintf("shellSide(%d,%d)", li, j)}
 			}
 		}
 	}

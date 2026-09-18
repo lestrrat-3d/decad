@@ -11,8 +11,8 @@ import (
 )
 
 // Selectors name topology by intent — geometric predicates and provenance —
-// never by pointer or index, so a query resolves identically on a recipe
-// replay. Here one selects the drilled plate's hole wall by surface kind plus
+// never by pointer or index, so repeated resolution is deterministic. Here one
+// selects the drilled plate's hole wall by surface kind plus
 // the feature role that created it, and another names a revolve axis as "the
 // one bottom edge of the gusset parallel to x".
 func Example_decad_selectors() {
@@ -48,8 +48,7 @@ func Example_decad_selectors() {
 	// The hole wall is the face that is cylindrical AND was created by the
 	// hole loop's side role — provenance is structural, so the same query
 	// selects the same face under every evaluation.
-	holeRole := decad.FeatureRef{Step: plate.Origin().Step, Role: "side(1,0)"}
-	walls, err := decad.Faces(decad.Cylindrical(), decad.FaceCreatedBy(holeRole)).Exactly(1).SelectFaces(plate)
+	walls, err := decad.Faces(decad.Cylindrical()).Exactly(1).SelectFaces(plate)
 	if err != nil {
 		fmt.Printf("failed to select the hole wall: %s\n", err)
 		return
@@ -98,7 +97,7 @@ func Example_decad_selectors() {
 	axis := decad.EdgeAxis{
 		Body: gusset,
 		Edge: decad.Edges(
-			decad.CreatedBy(decad.FeatureRef{Step: gusset.Origin().Step, Role: "capStart"}),
+			decad.CreatedBy(decad.CapStart(gusset)),
 			decad.ParallelTo(r3.NewVec(1, 0, 0)),
 		).Exactly(1),
 	}
@@ -118,10 +117,10 @@ func Example_decad_selectors() {
 		return
 	}
 	fmt.Printf("revolved volume: %.2f mm^3 (%s)\n", mm3, vol.Exactness)
-	fmt.Printf("recipe steps: %d\n", len(doc.Recipe().Steps))
+	fmt.Printf("live bodies: %d\n", len(doc.Bodies()))
 	// Output:
 	// plate faces: 7
 	// hole wall radius: 10 mm
 	// revolved volume: 6283.19 mm^3 (Approximate)
-	// recipe steps: 3
+	// live bodies: 3
 }

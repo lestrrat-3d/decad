@@ -55,13 +55,13 @@ import (
 // boundary; every other loop and every unchamfered cap keeps the ordinary
 // prism construction. One shell, one lump, watertight by the same argument
 // evalPrism's is (every edge bounds exactly two faces).
-func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capBlendPayload) (*Body, error) {
+func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp capBlendPayload) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	work := newFreeformWork()
 	loops := cbp.loops()
-	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: roleBody}, solid: true}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
 
 	var faces []*Face
 	startLoopObjs := make([]*Loop, len(loops))
@@ -275,7 +275,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 	}
 	capStart := &Face{
 		surface:       Plane{Frame: startFrame},
-		origins:       []FeatureRef{{Step: ref, Role: roleCapStart}},
+		origins:       []FeatureRef{{producer: ref, Role: roleCapStart}},
 		body:          body,
 		loops:         startLoopObjs,
 		area:          startArea.value,
@@ -285,7 +285,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 	}
 	capEnd := &Face{
 		surface:       Plane{Frame: endFrame},
-		origins:       []FeatureRef{{Step: ref, Role: roleCapEnd}},
+		origins:       []FeatureRef{{producer: ref, Role: roleCapEnd}},
 		body:          body,
 		loops:         endLoopObjs,
 		area:          endArea.value,

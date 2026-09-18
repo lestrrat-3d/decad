@@ -2,7 +2,6 @@ package decad_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"math"
 	"testing"
@@ -365,7 +364,7 @@ func TestExtrudeFreeformR19RefusesTheBuild(t *testing.T) {
 			require.Nil(t, body)
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.Empty(t, d.Bodies(), "a refused extrude registers no body")
-			require.Empty(t, d.Recipe().Steps, "a refused extrude records no step")
+			require.Empty(t, d.Bodies())
 		})
 	}
 
@@ -393,7 +392,7 @@ func TestExtrudeFreeformR19RefusesTheBuild(t *testing.T) {
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Empty(t, d.Bodies())
-		require.Empty(t, d.Recipe().Steps)
+		require.Empty(t, d.Bodies())
 	})
 }
 
@@ -467,31 +466,6 @@ func TestExtrudeFreeformVerifySound(t *testing.T) {
 		require.NotEqual(t, decad.DiagMeasurementBeyondTolerance, diag.Code,
 			"the free-form diameter-gate arm (#178) must give this body a reference")
 	}
-}
-
-// TestExtrudeFreeformRecipeRoundTrips asserts observable test 14: the
-// OpExtrude step carrying a free-form ProfileRecord encodes and decodes
-// byte-stably and passes the recipe's own strict decode.
-func TestExtrudeFreeformRecipeRoundTrips(t *testing.T) {
-	t.Parallel()
-	s, p := fitSplineArchSketch(t)
-	d := decad.New()
-	_, err := d.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
-	require.NoError(t, err)
-
-	recipe := d.Recipe()
-	require.Len(t, recipe.Steps, 1)
-	require.Equal(t, decad.OpExtrude, recipe.Steps[0].Op)
-
-	buf, err := json.Marshal(recipe)
-	require.NoError(t, err)
-	var got decad.Recipe
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, recipe, got, "the recorded recipe round-trips")
-
-	buf2, err := json.Marshal(got)
-	require.NoError(t, err)
-	require.Equal(t, buf, buf2, "the round-tripped recipe re-encodes byte-stably")
 }
 
 // TestExtrudeFreeformPlacementReproducesVolume asserts observable test 15:

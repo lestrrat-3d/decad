@@ -1,7 +1,6 @@
 package decad_test
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -346,46 +345,14 @@ func TestCapBlendHoleLoopNestingPreserved(t *testing.T) {
 	require.Greater(t, vol.Value.Mag(), 0.0)
 }
 
-// TestCapBlendRecipeRoundTrips checks the cap-loop chamfer records the same
-// Step shape a lateral chamfer does (op, receiver input, unresolved selector,
-// distance, no options) and that it JSON round-trips exactly — the same
-// check TestChamferRecipeAndRetire runs for the base path. The evaluator
-// re-derives the same classification and geometry from that Step alone
-// (deterministic selector resolution + closed-form gates), which is what
-// makes a replay reproduce the same seeds, expansion and result.
-func TestCapBlendRecipeRoundTrips(t *testing.T) {
-	t.Parallel()
-	const d = 5.0
-	doc, box := capBlendBox(t)
-	body, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
-	require.NoError(t, err)
-	require.Equal(t, []*decad.Body{body}, doc.Bodies())
-
-	recipe := doc.Recipe()
-	require.Len(t, recipe.Steps, 2)
-	step := recipe.Steps[1]
-	require.Equal(t, decad.OpChamfer, step.Op)
-	require.Equal(t, []decad.StepRef{0}, step.Inputs)
-	require.Len(t, step.Selectors, 1)
-	require.Len(t, step.Values, 1)
-	require.True(t, step.Values[0].Equal(units.Millimeters(d), 1e-12))
-	require.Nil(t, step.Opts, `a cap-loop chamfer Step takes no options this increment`)
-
-	buf, err := json.Marshal(recipe)
-	require.NoError(t, err)
-	var got decad.Recipe
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Equal(t, recipe, got, `the recorded cap-loop chamfer recipe round-trips`)
-}
-
-func TestCapBlendFailedCallLeavesReceiverLiveAndRecipeUnchanged(t *testing.T) {
+// TestCapBlendFailedCallLeavesReceiverLiveAndDocumentUnchanged checks the
+// cap-loop refusal does not commit partial model state.
+func TestCapBlendFailedCallLeavesReceiverLiveAndDocumentUnchanged(t *testing.T) {
 	t.Parallel()
 	doc, box := capBlendBox(t)
-	before := doc.Recipe()
 	q := decad.Edges(decad.CreatedBy(decad.CapStart(box)), decad.CreatedBy(decad.CapEnd(box)))
 	_, err := box.Chamfer(q, units.Millimeters(10)) // reaches SX7
 	require.Error(t, err)
-	require.Equal(t, before, doc.Recipe())
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
 }
 

@@ -25,16 +25,14 @@ const (
 	roleBody = "body"
 )
 
-// FeatureRef identifies the feature role that created a body, a face or an
-// edge: the producing StepRef plus a stable role within that step. Roles
-// derive from the recorded step, so re-evaluation reproduces them
-// (docs/evaluator-design.md §3).
+// FeatureRef identifies the stable role that created a body, face, or edge.
+// The producing operation is tracked privately so callers cannot forge or
+// depend on document-local operation identities.
 type FeatureRef struct {
-	// Step is the recipe step that produced the entity.
-	Step StepRef `json:"step"`
-	// Role names the entity within the step: "side(i,j)" (loop i, segment
+	producer producerID
+	// Role names the entity within the producing feature: "side(i,j)" (loop i, segment
 	// j), "capStart", "capEnd", "body".
-	Role string `json:"role"`
+	Role string
 }
 
 // Surface is the sealed face-geometry set (core §6.1): a tagged variant, not
@@ -47,7 +45,7 @@ type Surface interface {
 }
 
 // SurfaceKind is the discriminant a Surface reports; the constants are
-// Kind-prefixed because the unprefixed names are the variant types (core §6.2).
+// Kind-prefixed because the unprefixed names are the variant types.
 type SurfaceKind int
 
 const (
@@ -623,10 +621,6 @@ type Body struct {
 
 	tessellationCache atomic.Pointer[tessellationCacheEntry]
 }
-
-// bodyRef seals *Body into BodyRef: a live body is what a caller passes at a
-// feature call.
-func (*Body) bodyRef() {}
 
 // Document returns the document that owns (or owned) this body.
 func (b *Body) Document() *Document { return b.doc }

@@ -1,7 +1,6 @@
 package decad_test
 
 import (
-	"encoding/json"
 	"math"
 	"testing"
 
@@ -48,8 +47,8 @@ func TestQueryStringRendering(t *testing.T) {
 	t.Parallel()
 	// A FeatureRef whose role itself holds parentheses and a comma: the role
 	// is quoted, so it stays unambiguous inside the created_by payload.
-	sideRef := decad.FeatureRef{Step: 2, Role: "side(0,1)"}
-	capRef := decad.FeatureRef{Step: 3, Role: roleCapStart}
+	sideRef := decad.FeatureRef{Role: "side(0,1)"}
+	capRef := decad.FeatureRef{Role: roleCapStart}
 
 	cases := []struct {
 		name string
@@ -93,12 +92,12 @@ func TestQueryStringRendering(t *testing.T) {
 		{
 			"CreatedByQuotedRole",
 			decad.Edges(decad.CreatedBy(sideRef)).String(),
-			`edges(created_by(2:"side(0,1)"))`,
+			`edges(created_by(0:"side(0,1)"))`,
 		},
 		{
 			"FaceCreatedByRole",
 			decad.Faces(decad.FaceCreatedBy(capRef)).String(),
-			`faces(face_created_by(3:"capStart"))`,
+			`faces(face_created_by(0:"capStart"))`,
 		},
 	}
 	for _, c := range cases {
@@ -126,30 +125,6 @@ func TestQueryStringNonFiniteIsTotal(t *testing.T) {
 	// component read as the formatter writes it (core §9).
 	q := decad.Edges(decad.ParallelTo(r3.NewVec(math.NaN(), math.Inf(1), math.Inf(-1))))
 	require.Equal(t, "edges(parallel_to(NaN,+Inf,-Inf))", q.String())
-}
-
-func TestQueryStringDecodeRoundTrip(t *testing.T) {
-	t.Parallel()
-	// A query and its decoded round-trip render identically: the Recipe JSON
-	// codec is the round-trip channel (core §9/§6.2).
-	doc := decad.New()
-	box := boxBody(t, doc, 0, 0, 10, 10, 5)
-	sel := decad.Edges(decad.Convex(), decad.ParallelTo(zAxis)).Exactly(4)
-	before := sel.String()
-
-	_, err := box.Fillet(sel, units.Millimeters(1))
-	require.NoError(t, err)
-
-	steps := doc.Recipe().Steps
-	step := steps[len(steps)-1]
-	buf, err := json.Marshal(step)
-	require.NoError(t, err)
-	var got decad.Step
-	require.NoError(t, json.Unmarshal(buf, &got))
-	require.Len(t, got.Selectors, 1)
-	q, ok := got.Selectors[0].(*decad.EdgeQuery)
-	require.True(t, ok)
-	require.Equal(t, before, q.String())
 }
 
 func TestSelectionErrorUnassertedZero(t *testing.T) {

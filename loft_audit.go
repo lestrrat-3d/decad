@@ -620,7 +620,7 @@ func loftCrossingAuditWork(budget *workBudget, verts []r3.Vec, tris [][3]int, sh
 	// Cancellation is answered in two places, and this is only one of them.
 	// The audit kernel polls its own loops, which is what bounds the time
 	// spent inside a single expensive phase; the caller-facing contract — a
-	// cancelled operation leaves the receiver live and the recipe and document
+	// cancelled operation leaves the receiver live and the document
 	// unchanged — is discharged at the commit edge by the entry point, the way
 	// fillet.go, chamfer.go and shell.go each check ctx.Err() immediately
 	// before Document.commit. Loft's own commit-edge check belongs to

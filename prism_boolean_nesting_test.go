@@ -323,16 +323,13 @@ func TestPrismIntersectDisjointFootprintsFallsBack(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 20, 0, 30, 10, 10)
-	beforeRecipe := doc.Recipe()
 
 	_, err := decad.Intersect(a, b)
 	require.ErrorIs(t, err, decad.ErrBooleanFailed)
 	var be *decad.BooleanError
 	require.ErrorAs(t, err, &be)
-	require.Equal(t, decad.OpIntersect, be.Op)
 	require.Equal(t, decad.BooleanEmpty, be.Code,
 		`the unchanged mesh-path outcome for a genuinely empty intersection`)
-	require.Equal(t, beforeRecipe, doc.Recipe(), `a refused boolean records no step`)
 }
 
 // TestPrismCutDisjointFootprintFallsBack is the disjoint trap's Cut arm: the
@@ -469,7 +466,7 @@ func TestPrismCutCrossingToolResolvesAnalytically(t *testing.T) {
 
 // TestPrismCutCancellationLeavesDocumentUnchanged is §15's cancellation
 // requirement, on the F1 clean-nesting shape: a canceled ctx mid-resolution
-// returns ctx.Err() unchanged, with the document and recipe untouched,
+// returns ctx.Err() unchanged, with the document untouched,
 // matching the existing modify-op contract and PR1's own cancellation test.
 func TestPrismCutCancellationLeavesDocumentUnchanged(t *testing.T) {
 	t.Parallel()
@@ -477,13 +474,11 @@ func TestPrismCutCancellationLeavesDocumentUnchanged(t *testing.T) {
 	doc := decad.New()
 	target := discBody(t, doc, 0, R, h)
 	tool := discBody(t, doc, 0, r, 3*h)
-	beforeRecipe := doc.Recipe()
 	beforeBodies := doc.Bodies()
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	_, err := decad.CutContext(ctx, target, tool)
 	require.ErrorIs(t, err, context.Canceled)
-	require.Equal(t, beforeRecipe, doc.Recipe())
 	require.Equal(t, beforeBodies, doc.Bodies())
 }

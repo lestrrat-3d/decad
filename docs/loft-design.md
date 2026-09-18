@@ -10,7 +10,7 @@ discipline and the build-time simplicity-audit pattern this document reuses,
 "modify §N"), `docs/spline-design.md` (the exactness-tier reasoning this
 document's Table W follows, "spline §N"), `docs/tessellation-design.md`
 ("tessellation §N"), `docs/verification-design.md` ("verification §N"),
-`docs/recipe-replay-design.md` ("replay §N"), and `docs/interference-design.md`
+`docs/evaluator-design.md` ("replay §N"), and `docs/interference-design.md`
 / `docs/clearance-design.md` (the staged-consumer precedent Table D follows).
 
 **This document changes an existing decision.** `docs/api-design.md` §8 and
@@ -252,8 +252,8 @@ inputs, so the RECORDED arm covers live cases rather than hypothetical
 ones.** `record.go`'s `validateSegment` checks a segment's points for
 finiteness alone and `validateSegmentRange` refuses only an empty or
 out-of-range span, so a `LineSeg` whose `Start` equals its `End` over
-`[0, 1]`, and an arc whose three points coincide, each clear every gate a
-decoded recipe runs; on the recording path `seam.go`'s `segmentOf` copies
+`[0, 1]`, and an arc whose three points coincide, each clear structural record
+validation; on the recording path `seam.go`'s `segmentOf` copies
 the endpoints verbatim, adding no length check of its own.
 
 **A same-kind Tier A free-form pair reaches S6 too, through the computed
@@ -1240,7 +1240,7 @@ states.
 `LoftContext` threads a shared `workBudget` (`budget.go`) through the audit,
 polling at `workPollInterval` exactly as `FilletContext` / `ChamferContext`
 / `ShellContext` already do (modify §5). Cancellation returns `ctx.Err()`
-before commit; the document and recipe stay unchanged. `Loft` is the
+before commit; the document stays unchanged. `Loft` is the
 `context.Background()` compatibility wrapper.
 
 **This audit is unchanged in kind for a chorded pair.** It still tests every
@@ -1638,72 +1638,16 @@ measure-and-radius product; §8's `Centroid` paragraph states its radius.
 | **D6** | `Verify` — structural audit + tolerance gate | topology + measurements | valid by construction once §6's audit has passed (modify §1's standard; §4's gate-order paragraph owns where that audit sits); the tolerance gate judges `Volume`/`Area`/`Centroid`/`Bounds` on the terms §8 derives, and wherever the payload's `delta` is positive all four carry it |
 | **D7** | `Placed` / `Duplicate` / `PlacedCopy` | the payload | landed (§12 PR 2a): `Placed` retires the receiver; `Duplicate`/`PlacedCopy` leave it live. No geometry-specific payload case is needed (§7) — every reading composes the payload's own proven displacement `delta` (§5, §8). |
 
-## 10. Recipe, provenance, and replay
+## 10. Provenance and deterministic evaluation
 
-**The `Step`.** A loft step reuses the existing `Profile` / `Plane` fields
-for the **from** section (their doc comments extend to name Loft alongside
-Extrude/Revolve, §15) and carries the **to** section and the alignment
-inside a new sealed `StepOpts` variant — the established mechanism for
-adding op-specific recorded data without widening `Step`'s own field list
-(`ShellOpts` landed the same way for `modify-design.md`):
+A loft call converts both live profiles and planes to structural records before
+pairing. The evaluator reads only those records and the copied alignment
+options, never either live sketch. Pairing (Table P), construction (§5), and
+audit (§6) are deterministic functions of those values.
 
-```go
-type LoftOpts struct {
-    Profile2  ProfileRecord // required — the "to" section
-    Plane2    PlaneRecord   // required — the "to" section's plane
-    Alignment []int         `json:"alignment,omitempty"` // per-loop rotation offset; absent means every offset is 0
-}
-```
-
-| Field | Value |
-|---|---|
-| `Op` | `OpLoft` (wire token `"loft"`) |
-| `Inputs` | `[]` (empty) |
-| `Profile` / `Plane` | the **from** section, exactly as Extrude/Revolve record theirs |
-| `Extent` / `Angular` / `Axis` | absent — `OpLoft` falls under core §6.2's "every other Op leaves both nil" |
-| `Selectors` / `Values` | empty |
-| `Opts` | `LoftOpts{Profile2, Plane2, Alignment}` |
-| `Placement` | absent |
-
-`Profile2` and `Plane2` are REQUIRED wire content, exactly as
-`ExtrudeOpts.Taper` and `ShellOpts.Sense` are required today (core §6.2): a
-missing or explicit-null `LoftOpts`, or one missing either field, rejects.
-`Alignment` is the one optional field, `omitempty`, decoding to "every
-offset 0" when absent — never distinguished from an explicit all-zero list,
-since the two mean the same intent.
-
-`OpLoft`, `Profile2`, and `Plane2` are version-2 wire content. Replay §2.1
-owns the version-1/version-2 decode, canonical encode, and migration rules.
-
-**Recipe validation (replay §3) independently re-proves BOTH profiles**,
-exactly as it already re-proves the one profile an Extrude or Revolve step
-carries — reconstructing each in a private `sketch` arrangement and matching
-it exactly to the stored record (replay §3.1). It additionally checks Table
-P's own shape (P2, P3) and Table S's own malformed-alignment gate (S4)
-structurally, with no geometry construction needed for any of them —
-they are checks on recorded slice lengths and integers, the same class of
-check replay §3.1 already runs for every other closed-set field.
-
-**Replay is deterministic for the same reason every other feature's is**
-(evaluator §1, modify §11): the evaluator reads only the two validated
-records, never a live sketch. The pairing (Table P), the construction (§5),
-and the audit (§6) are closed-form functions of that recorded data, over
-either of §5.1's two station arms — the determinism claim rests on what is
-actually true of each, not on a single shared mechanism: a same-kind
-circular pair's station chain is a closed-form walk-up over the two records'
-own certified radius and sweep enclosures (§5.2); a same-kind Tier A
-free-form pair's station chain is instead a measure-then-bisect walk over
-the two records' own Bézier span decompositions (§5.1's free-form arm),
-which is deterministic for the reason §5.1 states — the bisection is applied
-to the CELL rather than to one side, so the same two records settle the
-identical dyadic station set every time, with no external input to the
-loop. Both arms are evaluated
-against the fixed `loftChordFraction` constant (§5.1, §14) — so for either
-kind of pair, the same two
-records and the same constant always produce the same station count and the
-same station coordinates, with no live sketch consulted and no caller input
-threaded through the wire (§10). A replay reproduces the same triangles, the
-same roles, and the same measurements every time.
+The result receives a fresh private producer identity. Its roles index the
+result payload's loops, segments, and wall cells, so `FaceCreatedBy` remains
+stable without exposing or persisting the producer number.
 
 ## 11. Cancellation and work budget
 
@@ -1718,7 +1662,7 @@ global evaluator increment.
 
 | PR | Lands | Still refused after it |
 |---|---|---|
-| 1 | `OpLoft` wire/recipe plumbing (`LoftOpts` codec, `Op` token, `Step.Profile`/`Plane` reuse), Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6's RECORDED arm, S7's audit arm, S8), `Document.Loft` / `LoftContext`, `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Placed`/`Duplicate`/`PlacedCopy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
+| 1 | `Document.Loft` / `LoftContext`, structural profile conversion and alignment options, Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6's RECORDED arm, S7's audit arm, S8), `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Placed`/`Duplicate`/`PlacedCopy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
 | 2a | `Placed` / `Duplicate` / `PlacedCopy` (D7): the payload's own proven displacement term `delta` (§5), composed into every vertex, edge length, face area, and all four body measurements; Table S gains S12 and S13 | D1/D2 (`Tessellate`/`STL`/`OBJ`, mesh-boolean admission); D3/D4's analytic-kernel case; D5 |
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2). **This row is landed.** | D3/D4's analytic-kernel case, D5 |
 | 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the exact bilinear-patch volume and first-moment corrections with three residual volume terms (§8.1), and the wall's certified bilinear-area reading with two residual area legs beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | same-kind Tier A free-form evaluator integration, until PR 4 lands it; mixed-kind correspondence, permanently (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
@@ -2057,7 +2001,7 @@ against this budget.
   exactness only from the remaining published terms and rational-publication
   checks in §8, never from the fact that the pair used the chorded arm.
   Actual non-finite or underivable values still assert S14 and leave the
-  document and recipe unchanged. **Every build-and-measure assertion that
+  document unchanged. **Every build-and-measure assertion that
   follows lands with §12 PR 4's free-form arm** (§8.1), and is stated here so
   that increment carries it rather than writes it fresh. The A10b wedge —
   two `LineSeg`s and one 5-point `FitSplineSeg` through a radius-5 quarter
@@ -2086,7 +2030,7 @@ against this budget.
   (`absSumUpper(delta, sectionDelta)`) CONTAINS a dense sample of both true
   recorded curves lifted through their planes — a box that did not widen
   fails it. Refusals, each asserted on the sentinel AND that the document
-  and recipe are unchanged: a mixed-kind `LineSeg`/`FitSplineSeg` pair gives
+  is unchanged: a mixed-kind `LineSeg`/`FitSplineSeg` pair gives
   S3, and specifically NOT S17; a same-kind `SplineSeg`/`FitSplineSeg` pair
   (same-family, different kind) gives S3 too; a same-kind pair with
   different span counts gives S17; a `ConicSeg` pair recorded on identical
@@ -2135,12 +2079,9 @@ against this budget.
   requested check; a box-disjoint pair with `WithClearances` reads `Suspect`
   until the analytic kernel adds loft; each requested D5 survey reads
   `Suspect`, never absent or a silently wrong number.
-- **Recipe/replay**: round-trip a `LoftOpts` payload including a non-zero
-  `Alignment` through a version-2 envelope; a missing `Profile2`/`Plane2` on
-  the wire rejects; a version-1-only decoder rejects that complete version-2
-  envelope before it dispatches `"loft"`; replay reproduces the same triangles,
-  roles, and measurements as the immediate call; a failed call leaves the
-  document and recipe unchanged.
+- **Determinism**: a non-zero alignment produces the same triangles, roles,
+  and measurements on repeated direct construction; a failed call leaves the
+  document unchanged.
 - **Placement (§12 PR 2a)**: `r3.Identity().Apply(v)` is bit-identical for a
   subnormal, `1e308` and `1/3`, and moves a `-0.0` coordinate by exactly
   zero while not preserving its sign bit (identity's own zero-cross terms
@@ -2166,17 +2107,17 @@ against this budget.
   bound. Ten successive `PlacedCopy` motions keep the volume bound within a
   small constant factor of one placement's own, proving the re-lift-from-record
   path charges `delta` once rather than accumulating it. The placed body's
-  faces carry `side(i,j,k)`/`capStart`/`capEnd` under the NEW `StepRef`;
+  faces carry `side(i,j,k)`/`capStart`/`capEnd` under the new private producer identity;
   `FaceCreatedBy(CapStart(b2))` selects exactly one face; manifoldness and
   per-edge `IsConvex` match the source. The sum of `Face.Area()` equals
   `Body.Area().Value` within the summed bounds, catching a per-face bound that
   forgot the perturbation term. `Placed` retires the receiver; `Duplicate`/
   `PlacedCopy` do not; a refused placement (an invalid transform, an S12
   fixture, and an S13 fixture whose composed translation carries a far-plane
-  section past `MaxFloat64`) leaves the recipe and document untouched, and the
+  section past `MaxFloat64`) leaves the document untouched, and the
   S13 fixture returns `ErrUnsupported` rather than panicking inside the exact
   lift. A canceled
-  `PlacedContext` returns `ctx.Err()` with the receiver live and the recipe
+  `PlacedContext` returns `ctx.Err()` with the receiver live and the document
   unchanged. A placed loft is `Sound` at the default tolerance under `Verify`;
   two lofts placed apart read box-disjoint `Sound`; an internal test asserts
   `bodyGateDiameter` shrinks by `2*delta`, and a second asserts that shrink is

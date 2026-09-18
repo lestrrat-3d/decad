@@ -601,7 +601,7 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 
 	out, err = cupWall(newWorkBudget(t.Context()), bad, 15*math.Pi/180)
 	require.NoError(t, err)
-	require.False(t, out.ok, `a malformed offset relation must not return the recipe thickness`)
+	require.False(t, out.ok, `a malformed offset relation must not return the requested thickness`)
 
 	body := &Body{payload: bad}
 	results, diags, err := runSurveys(newWorkBudget(t.Context()), body, verifyConfig{

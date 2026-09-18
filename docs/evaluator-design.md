@@ -1,14 +1,12 @@
 # Evaluator Design (v1)
 
-How the v1 evaluator turns a `Recipe` step's exact inputs into a `Body` — the
+How the v1 evaluator turns validated feature inputs into a `Body` — the
 topology it builds, the measurements it computes and the bounds it proves, how
 selectors resolve against it, how the tessellation-backed boolean works, and
 how `Verify`'s checks are implemented. Companion to `docs/api-design.md` (the
 core contract this evaluator implements — references of the form "core §N"),
 `docs/sketch-seam-design.md` (the profile records it consumes),
-`docs/verification-design.md` (how its answers are judged), and
-`docs/recipe-replay-design.md` (strict loading, graph validation,
-whole-recipe atomicity, and the package-owned evaluator boundary). Nothing here
+`docs/verification-design.md` (how its answers are judged). Nothing here
 changes those contracts. `docs/tessellation-design.md` owns the tessellation
 contract and the private operand proofs the boolean consumes. The
 payload-specific proofs and implementation order live in
@@ -17,17 +15,12 @@ read-only use of this evaluator's intersection volume inside `Verify`. Where
 this document stages a capability, the staging is explicit and rejected loudly,
 never silently approximated.
 
-## 1. Two sources of truth, one direction
+## 1. One-way feature evaluation
 
-**The evaluator consumes the `Step`'s own records, never the live inputs.** A
-feature call gates its live inputs (core §7), records them — the profile as
-`ProfileRecord` via the seam conversion, the plane as `PlaneRecord`, a
-placement as `TransformRecord`, quantities as `units.Value` — and then
-evaluates **from the record**. The live `*sketch.Profile` is never read after
-recording. This is what makes core §2's promise mechanical: re-evaluating a
-`Recipe` re-runs exactly the same inputs, so a re-evaluated model is the same
-model, and a second evaluator answers the same question better rather than a
-different question.
+**The evaluator consumes structural profile records, never live sketch geometry.**
+A feature call gates its live inputs (core §7), converts the profile and plane
+to `ProfileRecord` and `PlaneRecord`, and evaluates from those values. The live
+`*sketch.Profile` is never read after conversion.
 
 The one thing the evaluator reads from the live profile, at feature-call time
 only, is a **falsifier input**: `Profile.Area` (sketch's own area answer) is
@@ -63,12 +56,9 @@ like any other one**, so a volume, an area, a centroid and a `Box` can all reach
 a zero bound. `docs/prism-boolean-design.md` §7 owns when each of them does; this
 document does not restate its rule.
 
-**Staging is explicit.** v1 lands in increments (§11), and an intent the
-recipe can record but this evaluator cannot yet build is **rejected at the
-call** with the sentinel `ErrUnsupported` (core §12) — never built
-approximately, never silently narrowed. The recipe/evaluator split is exactly
-what makes this honest: the *vocabulary* is complete from the start, and
-`ErrUnsupported` names the evaluator's reach, not the API's.
+**Staging is explicit.** v1 lands in increments (§11), and an intent this
+evaluator cannot yet build is **rejected at the call** with the sentinel
+`ErrUnsupported` (core §12) — never built approximately or silently narrowed.
 
 ## 3. The topology model
 
@@ -91,15 +81,14 @@ Rules:
 
 - **A `Body` is immutable after construction.** Every operation builds a new
   body; concurrency safety (core §12) falls out.
-- **Provenance is structural.** `FeatureRef` identifies the producing
-  `StepRef` plus a stable role within it — `side(i, j)` (loop `i`, segment
+- **Provenance is structural.** `FeatureRef` identifies a private document-local
+  producer plus a stable role within it — `side(i, j)` (loop `i`, segment
   `j`) for a swept wall; `side(i, j, k)` for a Loft wall triangle;
   `capStart`, `capEnd`, and the revolve/boolean analogs. This bullet owns the
   role MECHANISM, not every grammar it carries: `docs/loft-design.md` §7 owns
   what `i`, `j` and `k` index for a Loft, and the `side(i, j)` gloss above is
   the swept-wall grammar alone, which no Loft role reads. Roles derive from
-  the recorded step, so
-  re-evaluation reproduces them, and the provenance predicates — `CreatedBy`
+  the evaluated feature, and the provenance predicates — `CreatedBy`
   for edges, `FaceCreatedBy` for faces (core §9) — select the same entities
   under every run.
 - **Canonicalize at build.** Adjacent coplanar side faces merge, except no
@@ -265,10 +254,9 @@ coordinate IN the plane and the extent reading does not carry it, so the stop
 has no stated displacement to charge. A through-all
 dependency is ambient at the CALL but never in the RECORD: core §6.2's depends-on rule covers this
 case explicitly — the feature call resolves which live bodies actually bound
-the stops and records each one's `StepRef` in the step's `Inputs`, in stop
-order — so re-evaluation reaches the same stops with no ambient body-set
-dependency. (`ToFaceAngular` is the revolve analog and lands there, §6/§11.) A nonzero
-`WithTaper` is recorded exactly and is `ErrUnsupported` in v1: a tapered
+the stops from live bodies without consuming them. (`ToFaceAngular` is the
+revolve analog and lands there, §6/§11.) A nonzero
+`WithTaper` is `ErrUnsupported` in v1: a tapered
 extrude of a general region is an offset problem (self-intersecting offsets),
 and a wrong-but-confident prism is the failure decad exists to prevent.
 
@@ -390,36 +378,11 @@ it approximates. Queries and predicates are recordable values (core §6.2);
 resolution happens at feature-call time and at re-evaluation identically,
 because provenance roles are stable (§3).
 
-## 8. Document, recipe, and re-evaluation
+## 8. Document state and re-evaluation
 
-`Document` owns the live body set and the step list. Every feature call:
-validate live inputs (gates of core §7/§8) → build the `Step` record as a
-value (records + `StepRef` substitution for body references), NOT yet
-appended → evaluate from that record (§1) → only on success, commit
-atomically: append the step, retire consumed bodies, register the result. A
-failed evaluation — `ErrUnsupported` included — leaves the recipe and the
-document untouched: a rejected operation is not intent, and a recipe holding
-it would re-reject on every re-evaluation.
+`Document` owns the live body set and a private monotonic producer identity used for topology provenance. Every feature call validates live inputs, evaluates geometry without mutation, and commits only after success. Commit retires consumed bodies, registers the result, and advances the producer identity. Cancellation and every other failure leave the document unchanged.
 
-Immediate calls and stored-recipe evaluation share one recorded-step helper per
-operation. The helper consumes the step's records + already-built input bodies,
-returns one body + consumed-body list, and never commits. One package-owned
-commit tail serves both paths. A separate replay implementation is forbidden.
-
-`Body.PlacedContext`, `Body.DuplicateContext`, and `Body.PlacedCopyContext`
-pass the caller's context through payload placement. Faceted placement polls
-that context while transforming vertices, auditing and rebuilding topology, and
-recomputing measurements. Cancellation returns before the document commits.
-`Placed`, `Duplicate`, and `PlacedCopy` remain compatibility wrappers using
-`context.Background()`.
-
-Whole-recipe `Evaluate` applies selected recipe limits while taking its deep
-normalized snapshot, before any private slice can grow past a ceiling. It then
-validates the complete graph and walks it in a private document. It checks
-context + work budget in every long loop. Geometry-dependent dependencies such
-as `ThroughAll` are recomputed against replayed live bodies and MUST equal
-recorded `Inputs`. Failure returns no document.
-`docs/recipe-replay-design.md` §§4–7 is normative.
+`Body.PlacedContext`, `Body.DuplicateContext`, and `Body.PlacedCopyContext` pass the caller's context through payload re-evaluation. Faceted placement polls that context while transforming vertices, auditing and rebuilding topology, and recomputing measurements. `Placed`, `Duplicate`, and `PlacedCopy` use `context.Background()`.
 
 `Body.Placed` transforms analytic geometry exactly in EXACT arithmetic — every
 v1 surface variant maps to itself under an isometry (plane→plane,
@@ -465,10 +428,9 @@ record and resolves afresh. The reader is still CHARGED what the resolution
 cost (`docs/spline-design.md` §5.2), so the free-form work ceiling refuses the
 same records it always refused, with the same error.
 
-Replay tests cover every example model + every current `OpKind`. Same-evaluator
-replay reproduces live-body order and provenance roles. Measurements reproduce
-within each evaluator's own exactness/bounds; alternate evaluators may build a
-different topology split but MUST preserve role/query meaning.
+Feature tests cover every example model and operation. Repeated construction
+preserves live-body order and provenance roles. Later evaluators may build a
+different topology split but must preserve role/query meaning.
 
 ## 9. The boolean — where exactness dies, and how
 
@@ -478,7 +440,7 @@ Increment 4, the deep end. Strategy:
 `performBoolean` dispatches, ahead of the tessellation path below, for
 co-directional coplanar prism pairs: `Union`'s select-all/merge/chain path and
 `Cut`/`Intersect`'s clean-nesting structural match. `Verify`'s own interference
-evaluation (below) dispatches that same reduction for `OpIntersect` through
+evaluation (below) dispatches that same reduction for intersection through
 `evaluateAnalyticIntersect`, a read-only twin that builds the admitted payload
 and never commits, so it consumes neither operand. `evaluateBoolean` remains
 this section's mesh path: a pair neither dispatch admits falls back to it
@@ -488,12 +450,12 @@ unchanged, as does every other operation.
 a wrapper.** Interference PR 1 (`docs/interference-design.md` §11) factors one
 internal `evaluateBoolean(ctx, op, a, b)` over tessellation, exact-predicate
 classification, cutting, stitching, bound composition, and the rational volume
-integral. It never appends a step, retires an operand, registers a body, or
-mints a recipe reference. `UnionContext` / `CutContext` / `IntersectContext`
+integral. It never advances provenance, retires an operand, or registers a body.
+`UnionContext` / `CutContext` / `IntersectContext`
 gate their operands, pass the caller context through evaluation and faceted-body
 construction, then commit the step atomically. `Union` / `Cut` / `Intersect`
 call those variants with `context.Background()` for compatibility. `Verify`
-passes its own context to the read-only analytic `OpIntersect` twin first, and
+passes its own context to the read-only analytic intersection twin first, and
 to this same mesh evaluator for a pair that twin does not admit; it consumes
 only a bounded intersection volume from whichever path answers, never calls
 public `Intersect`, and never builds a transient document body
@@ -767,12 +729,12 @@ silent pass.
 
 | # | Lands |
 |---|---|
-| 1 | topology model, `Document`/`Recipe`/`Step` wiring, `Extrude` for line/circle/arc profiles with `Distance`/`Symmetric`/`TwoSided`-of-distance-sides extents, mass properties (§4), `Placed`, structural `Verify` (validity by construction, quantities, tolerance gate; every pair undecided → `Suspect` unless box-proven disjoint) |
+| 1 | topology model, `Document` and private provenance wiring, `Extrude` for line/circle/arc profiles with `Distance`/`Symmetric`/`TwoSided`-of-distance-sides extents, mass properties (§4), `Placed`, structural `Verify` (validity by construction, quantities, tolerance gate; every pair undecided → `Suspect` unless box-proven disjoint) |
 | 2 | `Revolve` (angular extents), selector vocabulary + resolution, the body-relative stops (`ToFace`/`ToFaceAngular`/`EdgeAxis`, `ThroughAll`/`ThroughAllSide`) |
 | 3 | analytic clearance proofs and `WithClearances` (box-disjointness proofs already run from increment 1, §10/§11 row 1) |
 | 4 | tessellation per `docs/tessellation-design.md` + the exact-predicate mesh boolean, `Faceted` bodies, faceted `Verify`, `Tessellate`/`STL`/`OBJ`; supplies the geometry and bounds shared by public booleans and read-only interference evaluation |
 | 5 | fillet/chamfer on analytic prism edges, shell |
-| 6 | bounded canonical recipe encode, strict versioned decode, full operation/reference validation with deterministic error precedence, resource budgets, shared recorded-step dispatch, atomic public `Evaluate`, replay/property/fuzz suite |
+| 6 | broader evaluator coverage, property tests, and fuzz tests for structural record validation |
 | 7 | tapered extrude if a sound offset story exists |
 
 Free-form support is `docs/spline-design.md`'s own increment plan (§10 there).

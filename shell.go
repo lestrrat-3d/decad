@@ -24,8 +24,7 @@ import (
 // topology-changing offset is S11, a both-caps shell of a HOLED section is S12
 // (a prismPayload holds one region), each ErrUnsupported.
 
-// ShellOption configures Shell. ShellOpts is the StepOpts variant a shell
-// fills — its Sense (§8) — so the option group is not empty.
+// ShellOption configures Shell, including its wall sense.
 type ShellOption interface {
 	option.Interface
 	shellOption()
@@ -59,34 +58,6 @@ func (s ShellSense) String() string {
 	default:
 		return fmt.Sprintf("ShellSense(%d)", int(s))
 	}
-}
-
-// MarshalText encodes the sense by name, so a recorded step stays readable and
-// a renumbered constant could never silently reinterpret an old recipe. An
-// unknown value refuses to encode.
-func (s ShellSense) MarshalText() ([]byte, error) {
-	switch s {
-	case Inward:
-		return []byte("inward"), nil
-	case Outward:
-		return []byte("outward"), nil
-	default:
-		return nil, fmt.Errorf(`decad: unknown shell sense %d`, int(s))
-	}
-}
-
-// UnmarshalText decodes the sense by name; an unknown name is an error, never a
-// default.
-func (s *ShellSense) UnmarshalText(text []byte) error {
-	switch string(text) {
-	case "inward":
-		*s = Inward
-	case "outward":
-		*s = Outward
-	default:
-		return fmt.Errorf(`decad: unknown shell sense %q`, string(text))
-	}
-	return nil
 }
 
 type identShellSense struct{}
@@ -273,18 +244,7 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 		return nil, err
 	}
 
-	// Build. The recipe records the shell intent — OpShell, the deep-copied face
-	// query, the thickness and the sense — never the offset section (§11): the
-	// reduction is the evaluator's, so a second evaluator replays the same step
-	// against the true faces (§2).
-	step := Step{
-		Op:        OpShell,
-		Inputs:    []StepRef{b.originStep()},
-		Selectors: cloneSelectors([]Selector{q}),
-		Values:    []units.Value{t},
-		Opts:      ShellOpts{Sense: sense},
-	}
-	ref := d.nextStepRef()
+	ref := d.nextProducerID()
 
 	var body *Body
 	switch {
@@ -306,14 +266,14 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 	if err != nil {
 		return nil, err
 	}
-	// Keep the consumed input aligned with recipe liveness at the commit edge.
+	// Keep the consumed input aligned with document liveness at the commit edge.
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	d.commit(step, body, b)
+	d.commit(body, b)
 	return body, nil
 }
 
@@ -335,7 +295,7 @@ func classifyRemovedCaps(b *Body, removed []*Face) (start, end bool, err error) 
 	caps := map[*Face]string{}
 	for _, f := range b.Faces() {
 		for _, o := range f.origins {
-			if o.Step == b.origin.Step && (o.Role == roleCapStart || o.Role == roleCapEnd) {
+			if o.producer == b.origin.producer && (o.Role == roleCapStart || o.Role == roleCapEnd) {
 				caps[f] = o.Role
 			}
 		}
@@ -441,7 +401,7 @@ func sectionInradius(budget *workBudget, profile ProfileRecord) (float64, error)
 // Hole: reverse(P)} outward — so it IS a prismPayload, admitted as a receiver
 // (R1) and first-class downstream (§12). The inner loop is walked as a hole
 // (reversed sense), which is what makes its wall's material lie outside it.
-func evalTubeContext(ctx context.Context, d *Document, ref StepRef, pp prismPayload, offset ProfileRecord, s float64) (*Body, error) {
+func evalTubeContext(ctx context.Context, d *Document, ref producerID, pp prismPayload, offset ProfileRecord, s float64) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

@@ -11,9 +11,8 @@ import (
 
 // A through-all extrude has no distance of its own: the sweep runs through
 // the far side of every live body it meets. The stop is resolved at the
-// call, and each stop body's StepRef is recorded in the step's Inputs — the
-// recipe stays a complete graph, with no ambient body-set dependency. The
-// stop body is depended on, never consumed: it stays live.
+// call from the document's live bodies. The stop body is depended on, never
+// consumed, so it stays live.
 func Example_decad_extrude_through_all() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -65,14 +64,11 @@ func Example_decad_extrude_through_all() {
 		return
 	}
 
-	step := doc.Recipe().Steps[1]
 	fmt.Printf("volume: %s (%s)\n", vol.Value, vol.Exactness)
 	fmt.Printf("pin spans z: %v .. %v\n", bounds.Min.Z, bounds.Max.Z)
-	fmt.Printf("recorded inputs: %v\n", step.Inputs)
 	fmt.Printf("live bodies: %d\n", len(doc.Bodies()))
 	// Output:
 	// volume: 4000 mm^3 (Exact)
 	// pin spans z: 0 .. 10
-	// recorded inputs: [0]
 	// live bodies: 2
 }

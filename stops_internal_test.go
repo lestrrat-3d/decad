@@ -18,7 +18,7 @@ type stubExtent struct{ hi, bound float64 }
 
 func (stubExtent) transform() r3.Transform { return r3.Identity() }
 
-func (stubExtent) placed(context.Context, *Document, StepRef, r3.Transform) (*Body, error) {
+func (stubExtent) placed(context.Context, *Document, producerID, r3.Transform) (*Body, error) {
 	return nil, ErrUnsupported
 }
 
@@ -38,7 +38,7 @@ func TestResolveThroughAllDecidesInPathOutsideDisplacement(t *testing.T) {
 	frame := canonicalPrismFrame(t)
 	doc := func(hi, bound float64) *Document {
 		return &Document{bodies: []*Body{{
-			origin:  FeatureRef{Step: 1},
+			origin:  FeatureRef{producer: 1},
 			payload: stubExtent{hi: hi, bound: bound},
 		}}}
 	}
@@ -47,7 +47,7 @@ func TestResolveThroughAllDecidesInPathOutsideDisplacement(t *testing.T) {
 		stop, delta, refs, err := doc(10, 1).resolveThroughAll(frame, 1)
 		require.NoError(t, err)
 		require.Equal(t, 10.0, stop, "the sweep stops at the held far side")
-		require.Equal(t, []StepRef{1}, refs)
+		require.Equal(t, []producerID{1}, refs)
 		require.GreaterOrEqual(t, delta, 1.0, "the level carries the extent's own displacement")
 	})
 
@@ -71,9 +71,9 @@ func TestResolveThroughAllComposesEveryFarEndInterval(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	profile := ProfileRecord{Outer: synthRectLoop(0, 0, 1, 1)}
-	stopBody := func(ref StepRef, z1, z1Delta float64) *Body {
+	stopBody := func(ref producerID, z1, z1Delta float64) *Body {
 		return &Body{
-			origin: FeatureRef{Step: ref},
+			origin: FeatureRef{producer: ref},
 			payload: prismPayload{
 				profile: profile,
 				frame:   frame,
@@ -93,7 +93,7 @@ func TestResolveThroughAllComposesEveryFarEndInterval(t *testing.T) {
 		stop, bound, refs, err := doc.resolveThroughAll(frame, 1)
 		require.NoError(t, err)
 		require.Equal(t, 10.0, stop, "the held farthest endpoint remains the stop")
-		require.Equal(t, []StepRef{1, 2}, refs, "the dependency order remains nearest-first")
+		require.Equal(t, []producerID{1, 2}, refs, "the dependency order remains nearest-first")
 		require.GreaterOrEqual(t, bound, 0.25, "the lower held endpoint can be 0.25 mm farther")
 	})
 
@@ -250,7 +250,7 @@ func TestResolveToFaceUsesSelectedCapAxialDelta(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			stop, delta, _, err := doc.resolveToFace(ToFace{
 				Body: host,
-				Face: Faces(FaceCreatedBy(FeatureRef{Step: 1, Role: tc.role})),
+				Face: Faces(FaceCreatedBy(FeatureRef{producer: 1, Role: tc.role})),
 			}, frame, 1, "a to-face extent")
 			require.NoError(t, err)
 			require.Equal(t, tc.stop, stop)
