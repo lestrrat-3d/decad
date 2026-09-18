@@ -38,7 +38,7 @@ type xpt struct{ x, y, z, w *big.Int }
 
 // xptOf lifts a finite float vertex into exact homogeneous coordinates. A
 // float64 is an exact rational, so no information is lost.
-func xptOf(v r3.Vec) xpt { return xpt(xhpStripTwos(xhpOf(v))) }
+func xptOf(v r3.Vec) xpt { return xpt(xhpStripTwosOwned(xhpOf(v))) }
 
 // vec rounds the exact point to the nearest float64 coordinates.
 func (p xpt) vec() r3.Vec { return xhpVec(xhp(p)) }
@@ -56,10 +56,10 @@ func (p xpt) key() string {
 
 // xsub is a − b, exact, with the common power of two stripped on return (the
 // growth control every construction pays — see xhpStripTwos).
-func xsub(a, b xpt) xpt { return xpt(xhpStripTwos(xhpSub(xhp(a), xhp(b)))) }
+func xsub(a, b xpt) xpt { return xpt(xhpStripTwosOwned(xhpSub(xhp(a), xhp(b)))) }
 
 // xcross is a × b, exact, stripped the same way as xsub.
-func xcross(a, b xpt) xpt { return xpt(xhpStripTwos(xhpCross(xhp(a), xhp(b)))) }
+func xcross(a, b xpt) xpt { return xpt(xhpStripTwosOwned(xhpCross(xhp(a), xhp(b)))) }
 
 // xdotNum is the raw numerator of a·b over the positive denominator a.w·b.w —
 // the value a sign-only consumer reads directly, and the value a
@@ -83,7 +83,9 @@ func xdotRat(a, b xpt) *big.Rat {
 // stripped on return — the growth control that keeps a chain of lerps from
 // growing its denominator multiplicatively at every link (measured: 14113
 // bits unreduced at lerp depth 6, 462 bits stripped after every step).
-func xlerp(a, b xpt, tn, td *big.Int) xpt { return xpt(xhpStripTwos(xhpLerp(xhp(a), xhp(b), tn, td))) }
+func xlerp(a, b xpt, tn, td *big.Int) xpt {
+	return xpt(xhpStripTwosOwned(xhpLerp(xhp(a), xhp(b), tn, td)))
+}
 
 // orientNum is the exact value of det[b−a, c−a, d−a] as an integer numerator
 // over a positive denominator, formed without ever materialising a big.Rat:
@@ -182,10 +184,15 @@ func xhpOf(v r3.Vec) xhp {
 // xhpSub is p − q, exact: a homogeneous vector over the positive denominator
 // p.w·q.w.
 func xhpSub(p, q xhp) xhp {
+	var term big.Int
+	axis := func(pn, qn *big.Int) *big.Int {
+		out := new(big.Int).Mul(pn, q.w)
+		return out.Sub(out, term.Mul(qn, p.w))
+	}
 	return xhp{
-		x: new(big.Int).Sub(new(big.Int).Mul(p.x, q.w), new(big.Int).Mul(q.x, p.w)),
-		y: new(big.Int).Sub(new(big.Int).Mul(p.y, q.w), new(big.Int).Mul(q.y, p.w)),
-		z: new(big.Int).Sub(new(big.Int).Mul(p.z, q.w), new(big.Int).Mul(q.z, p.w)),
+		x: axis(p.x, q.x),
+		y: axis(p.y, q.y),
+		z: axis(p.z, q.z),
 		w: new(big.Int).Mul(p.w, q.w),
 	}
 }
@@ -193,10 +200,15 @@ func xhpSub(p, q xhp) xhp {
 // xhpCross is a × b, exact: its numerators over the positive denominator
 // a.w·b.w.
 func xhpCross(a, b xhp) xhp {
+	var term big.Int
+	axis := func(a0, b0, a1, b1 *big.Int) *big.Int {
+		out := new(big.Int).Mul(a0, b0)
+		return out.Sub(out, term.Mul(a1, b1))
+	}
 	return xhp{
-		x: new(big.Int).Sub(new(big.Int).Mul(a.y, b.z), new(big.Int).Mul(a.z, b.y)),
-		y: new(big.Int).Sub(new(big.Int).Mul(a.z, b.x), new(big.Int).Mul(a.x, b.z)),
-		z: new(big.Int).Sub(new(big.Int).Mul(a.x, b.y), new(big.Int).Mul(a.y, b.x)),
+		x: axis(a.y, b.z, a.z, b.y),
+		y: axis(a.z, b.x, a.x, b.z),
+		z: axis(a.x, b.y, a.y, b.x),
 		w: new(big.Int).Mul(a.w, b.w),
 	}
 }
@@ -207,8 +219,9 @@ func xhpCross(a, b xhp) xhp {
 // actually published (xhpRat).
 func xhpDotNum(a, b xhp) *big.Int {
 	s := new(big.Int).Mul(a.x, b.x)
-	s.Add(s, new(big.Int).Mul(a.y, b.y))
-	s.Add(s, new(big.Int).Mul(a.z, b.z))
+	var term big.Int
+	s.Add(s, term.Mul(a.y, b.y))
+	s.Add(s, term.Mul(a.z, b.z))
 	return s
 }
 
@@ -254,18 +267,20 @@ func xhpRat(p xhp) (x, y, z *big.Rat) {
 
 // xhpVec rounds p to the nearest float64 coordinates.
 func xhpVec(p xhp) r3.Vec {
-	x, y, z := xhpRat(p)
-	fx, _ := x.Float64()
-	fy, _ := y.Float64()
-	fz, _ := z.Float64()
+	var r big.Rat
+	fx, _ := r.SetFrac(p.x, p.w).Float64()
+	fy, _ := r.SetFrac(p.y, p.w).Float64()
+	fz, _ := r.SetFrac(p.z, p.w).Float64()
 	return r3.Vec{X: fx, Y: fy, Z: fz}
 }
 
-// xhpStripTwos divides all four integers by their largest common power of
-// two — the growth control. It costs no GCD (TrailingZeroBits and Rsh only),
-// which is what makes it cheap enough to run on every construction; the full
-// GCD xhpCanon runs is not (its own doc comment).
-func xhpStripTwos(p xhp) xhp {
+// xhpStripTwosOwned takes ownership of p and divides all four integers by
+// their largest common power of two — the growth control. It costs no GCD
+// (TrailingZeroBits and Rsh only), which is what makes it cheap enough to run
+// on every fresh construction; the full GCD xhpCanon runs is not (its own doc
+// comment). Callers must pass only a freshly constructed xhp whose limbs do
+// not belong to another point.
+func xhpStripTwosOwned(p xhp) xhp {
 	tz := p.w.TrailingZeroBits()
 	for _, v := range [3]*big.Int{p.x, p.y, p.z} {
 		if v.Sign() == 0 {
@@ -278,12 +293,11 @@ func xhpStripTwos(p xhp) xhp {
 	if tz == 0 {
 		return p
 	}
-	return xhp{
-		x: new(big.Int).Rsh(p.x, tz),
-		y: new(big.Int).Rsh(p.y, tz),
-		z: new(big.Int).Rsh(p.z, tz),
-		w: new(big.Int).Rsh(p.w, tz),
-	}
+	p.x.Rsh(p.x, tz)
+	p.y.Rsh(p.y, tz)
+	p.z.Rsh(p.z, tz)
+	p.w.Rsh(p.w, tz)
+	return p
 }
 
 // xhpCanon reduces p to its unique canonical spelling: every one of the four
