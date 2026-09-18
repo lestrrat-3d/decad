@@ -218,23 +218,79 @@ type triContact struct {
 // today only reads them, so this is safe, but no consumer may mutate one in
 // place. contactMemo is not safe for concurrent use; nothing today shares one
 // across goroutines.
+//
+// The sparse store records a compact status instead of copying triContact into
+// every map bucket. Status 1 means contactNone; status n+2 indexes values[n].
+// Zero remains the dense table's absent marker. Once at least one of every 64
+// possible pairs has been classified, a table of at most two million pairs is
+// promoted to direct indexing. The table therefore occupies at most 8 MB,
+// while larger or sparser operand products keep the compact map.
 type contactMemo struct {
 	ma, mb *boolMesh
-	m      map[[2]int32]triContact
+	cols   int
+	dense  []uint32
+	values []triContact
+	sparse map[[2]int32]uint64
 }
+
+const (
+	contactMemoDensePairLimit    = 2_000_000
+	contactMemoDensePromoteRatio = 64
+)
 
 // newContactMemo builds a memo scoped to one evaluateBoolean call over ma/mb.
 func newContactMemo(ma, mb *boolMesh) *contactMemo {
-	return &contactMemo{ma: ma, mb: mb, m: map[[2]int32]triContact{}}
+	return &contactMemo{ma: ma, mb: mb, cols: len(mb.tris), sparse: map[[2]int32]uint64{}}
 }
 
 func (c *contactMemo) lookup(i, j int) (triContact, bool) {
-	v, ok := c.m[[2]int32{int32(i), int32(j)}]
-	return v, ok
+	var status uint64
+	var ok bool
+	if c.dense != nil {
+		status = uint64(c.dense[i*c.cols+j])
+		ok = status != 0
+	} else {
+		status, ok = c.sparse[[2]int32{int32(i), int32(j)}]
+	}
+	if !ok {
+		return triContact{}, false
+	}
+	if status == 1 {
+		return triContact{edgeA: -1, edgeB: -1}, true
+	}
+	return c.values[status-2], true
 }
 
 func (c *contactMemo) store(i, j int, v triContact) {
-	c.m[[2]int32{int32(i), int32(j)}] = v
+	status := uint64(1)
+	if v.kind != contactNone {
+		c.values = append(c.values, v)
+		status = uint64(len(c.values) + 1)
+	}
+	if c.dense != nil {
+		index := i*c.cols + j
+		c.dense[index] = uint32(status)
+		return
+	}
+	key := [2]int32{int32(i), int32(j)}
+	c.sparse[key] = status
+	c.promoteDense()
+}
+
+func (c *contactMemo) promoteDense() {
+	rows := len(c.ma.tris)
+	if rows == 0 || c.cols == 0 || rows > contactMemoDensePairLimit/c.cols {
+		return
+	}
+	pairs := rows * c.cols
+	if len(c.sparse)*contactMemoDensePromoteRatio < pairs {
+		return
+	}
+	c.dense = make([]uint32, pairs)
+	for key, status := range c.sparse {
+		c.dense[int(key[0])*c.cols+int(key[1])] = uint32(status)
+	}
+	c.sparse = nil
 }
 
 // classify returns the exact classification of facet i of ma against facet j
