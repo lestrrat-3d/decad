@@ -739,6 +739,28 @@ func TestFloatIntervalArithmeticSanity(t *testing.T) {
 	prod := a.mul(b)
 	require.LessOrEqual(t, prod.lo, 3.0)
 	require.GreaterOrEqual(t, prod.hi, 8.0)
+	for _, tc := range []struct {
+		name     string
+		a, b     floatInterval
+		wantLo   float64
+		wantHigh float64
+	}{
+		{name: "positive-positive", a: floatInterval{1, 2}, b: floatInterval{3, 4}, wantLo: 3, wantHigh: 8},
+		{name: "positive-negative", a: floatInterval{1, 2}, b: floatInterval{-4, -3}, wantLo: -8, wantHigh: -3},
+		{name: "positive-spanning", a: floatInterval{1, 2}, b: floatInterval{-4, 3}, wantLo: -8, wantHigh: 6},
+		{name: "negative-positive", a: floatInterval{-2, -1}, b: floatInterval{3, 4}, wantLo: -8, wantHigh: -3},
+		{name: "negative-negative", a: floatInterval{-2, -1}, b: floatInterval{-4, -3}, wantLo: 3, wantHigh: 8},
+		{name: "negative-spanning", a: floatInterval{-2, -1}, b: floatInterval{-4, 3}, wantLo: -6, wantHigh: 8},
+		{name: "spanning-positive", a: floatInterval{-2, 1}, b: floatInterval{3, 4}, wantLo: -8, wantHigh: 4},
+		{name: "spanning-negative", a: floatInterval{-2, 1}, b: floatInterval{-4, -3}, wantLo: -4, wantHigh: 8},
+		{name: "spanning-spanning", a: floatInterval{-2, 1}, b: floatInterval{-4, 3}, wantLo: -6, wantHigh: 8},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.a.mul(tc.b)
+			require.LessOrEqual(t, got.lo, tc.wantLo)
+			require.GreaterOrEqual(t, got.hi, tc.wantHigh)
+		})
+	}
 
 	quot := b.div(a)
 	require.LessOrEqual(t, quot.lo, 1.5)
@@ -751,6 +773,34 @@ func TestFloatIntervalArithmeticSanity(t *testing.T) {
 	require.True(t, fivPoint(math.NaN()).abstains())
 	require.True(t, fivPoint(math.Inf(1)).abstains())
 	require.True(t, floatInterval{lo: math.Inf(1), hi: math.Inf(1)}.add(a).abstains())
+}
+
+func TestFloatIntervalNextMatchesMath(t *testing.T) {
+	t.Parallel()
+	values := []float64{
+		-math.MaxFloat64,
+		-1,
+		-math.SmallestNonzeroFloat64,
+		math.Copysign(0, -1),
+		0,
+		math.SmallestNonzeroFloat64,
+		1,
+		math.MaxFloat64,
+	}
+	rng := rand.New(rand.NewPCG(3, 4))
+	for len(values) < 10_000 {
+		bits := rng.Uint64()
+		if bits&(uint64(0x7ff)<<52) == uint64(0x7ff)<<52 {
+			continue
+		}
+		values = append(values, math.Float64frombits(bits))
+	}
+	for _, value := range values {
+		wantDown := math.Float64bits(math.Nextafter(value, math.Inf(-1)))
+		wantUp := math.Float64bits(math.Nextafter(value, math.Inf(1)))
+		require.Equal(t, wantDown, math.Float64bits(fivNextDown(value)))
+		require.Equal(t, wantUp, math.Float64bits(fivNextUp(value)))
+	}
 }
 
 // TestTriTriIntervalEnclosesExact is fu158 task 1's proof obligation: for a
