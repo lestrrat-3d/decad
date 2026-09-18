@@ -8,7 +8,7 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:  125.48s over 227 tests
-#   shard 1:  125.48s over 771 tests
+#   shard 1:  125.48s over 772 tests
 #   shard 2:  125.49s over 228 tests
 #   shard 3:  125.48s over 228 tests
 #
@@ -514,6 +514,7 @@
 1	0.00	TestFitSplineTrimmedRangeRefusesAtFullDomainGate
 1	0.00	TestFitSplineVanishingSpeedStillRefusesRegularity
 1	0.00	TestFloatIntervalArithmeticSanity
+1	0.00	TestFloatIntervalNextMatchesMath
 1	0.16	TestFreeformArcLengthAboveFloat64RangeRefused
 1	1.60	TestFreeformArcLengthBracketsAtExtremeScale
 1	0.00	TestFreeformBezierSpansRefusals
