@@ -13,6 +13,11 @@
 #   shard 3:  123.58s over 234 tests
 #
 0	0.06	FuzzBoolean
+0	0.00	TestContactBatchMergesOutOfOrderCompletionsInInputOrder
+0	0.00	TestContactBatchReturnsEarliestOrderedError
+0	0.00	TestContactBatchSchedulesOnlyMemoMisses
+0	0.00	TestContactBatchStopsOnCancellationDuringMerge
+0	0.00	TestMeshBooleanWorkerCountsProduceIdenticalResults
 0	0.01	TestAnalyticCircularEdgesCarryLengthBounds
 0	0.57	TestAnalyticPlateWithCircularHolesArea
 0	0.02	TestArcMatchedDeltaEqualsSagitta
@@ -770,6 +775,9 @@
 1	0.00	TestQueryStringNonFiniteIsTotal
 1	0.00	TestQueryStringRendering
 1	0.00	TestR3IdentityApplyIsBitIdentical
+1	0.00	TestRatIntervalArithmeticOwnsFreshEndpoints
+1	0.00	TestRatIntervalCachedPiCopiesRemainIndependent
+1	0.00	TestRatIntervalConstructorsCopyBorrowedEndpoints
 1	0.00	TestRatLenAtLeastDecidesExactly
 1	0.00	TestRatLerpEndpointReturnsAFreshRational
 1	0.00	TestRatPolyOfRejectsNonFiniteCoefficient

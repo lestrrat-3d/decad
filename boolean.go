@@ -697,6 +697,24 @@ func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh,
 	seenA := map[int]bool{}
 	seenB := map[int]bool{}
 	work := 0
+	contacts := newContactBatchExecutor(ctx, bmA, bmB, memo, contactWorkers(ctx), func(pair contactPair, c triContact) error {
+		i, j := pair.i, pair.j
+		if c.kind == contactRegion {
+			return errContactBatchStop
+		}
+		if c.kind == contactNone && triTriDistance(triCorners(bmA, i), triCorners(bmB, j)) > slack {
+			return nil
+		}
+		if !seenA[i] {
+			seenA[i] = true
+			closeA = append(closeA, i)
+		}
+		if !seenB[j] {
+			seenB[j] = true
+			closeB = append(closeB, j)
+		}
+		return nil
+	})
 	for _, i := range fis {
 		for _, j := range fjs {
 			work++
@@ -708,35 +726,19 @@ func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh,
 			if !boxesWithin(bmA.boxes[i], bmB.boxes[j], slack) {
 				continue
 			}
-			ta := triCorners(bmA, i)
-			tb := triCorners(bmB, j)
-			c, err := memo.classify(i, j)
-			if err != nil {
+			if err := contacts.add(i, j); err != nil {
+				if err == errContactBatchStop {
+					return false, nil
+				}
 				return false, err
 			}
-			if c.kind == contactRegion {
-				// A coplanar face-on-face overlap is a tangency the exact mesh
-				// pass refuses as an unclassifiable contact
-				// (BooleanUnsupportedContact / ErrUnsupported); leave that verdict
-				// to it.
-				return false, nil
-			}
-			// triTriDistance is only meaningful on a pair the exact classifier
-			// has already proven disjoint (contactNone); asking it about a
-			// crossing pair reads a distance its candidate set never attains.
-			// So classify first, and consult the distance only as an ADDITIONAL
-			// admit for a pair that provably does not meet.
-			if c.kind != contactNone || triTriDistance(ta, tb) <= slack {
-				if !seenA[i] {
-					seenA[i] = true
-					closeA = append(closeA, i)
-				}
-				if !seenB[j] {
-					seenB[j] = true
-					closeB = append(closeB, j)
-				}
-			}
 		}
+	}
+	if err := contacts.done(); err != nil {
+		if err == errContactBatchStop {
+			return false, nil
+		}
+		return false, err
 	}
 	if len(closeA) == 0 {
 		return false, nil // the facets stay clear of each other: nothing hides
