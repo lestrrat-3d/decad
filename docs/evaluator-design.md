@@ -750,6 +750,13 @@ non-constant-section wall survey.
 Every unlanded Loft `Verify` question remains `Suspect`; a call this evaluator
 cannot yet build returns `ErrUnsupported`.
 
+Sweep follows `docs/sweep-design.md` §12's count-free delivery plan. The current
+build reduces line spans to Extrude and circular spans to Revolve, then joins
+composite tangent paths when exact frame transport and the conservative contact
+audit close. Tessellation, free-form profiles, twist, clearance, and surveys
+remain staged exactly as its Table D states. An unlanded Sweep build returns
+`ErrUnsupported`; an unlanded verification question reads `Suspect`.
+
 Payload verification §13 gives count-free stages for the cup adapter and
 faceted validity/clearance/survey work. Every later question stays `Suspect`
 until its stage lands. These stages do not consume global evaluator increment

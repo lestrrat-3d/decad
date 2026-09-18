@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -170,7 +171,7 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 	if err != nil {
 		return nil, err
 	}
-	ax, side, err := resolveAxisSide(profile, line, work)
+	ax, side, err := resolveAxisSide(context.Background(), profile, line, work)
 	if err != nil {
 		return nil, err
 	}

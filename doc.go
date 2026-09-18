@@ -87,6 +87,11 @@
 //	    its spans and joints (spline design §6.5, R19)        ErrUnsupported
 //	  free-form work past the fixed budget (R7)               ErrUnsupported
 //	  WithTaper   nonzero taper angle                         ErrUnsupported
+//	Sweep         zero-twist LineTo / ArcThrough paths         builds
+//	  composite path without exact transported frames or
+//	    certified span separation                             ErrUnsupported
+//	  closed path                                             ErrUnsupported
+//	  WithSweepTwist nonzero twist                            ErrUnsupported
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
 //	Union/Cut/Intersect  prism/revolve/loft/faceted,
 //	                     crossings                            builds
@@ -132,7 +137,9 @@
 // Chamfer expose option groups that carry nothing today (they exist so options
 // can be added without a signature change); WithShellSense picks a shell's wall
 // sense, and WithTaper names an extrude taper — but a nonzero taper is
-// [ErrUnsupported], returned before the document changes. WithLoftAlignment
+// [ErrUnsupported], returned before the document changes. WithSweepTwist names
+// a sweep's distributed twist, with nonzero twist staged as [ErrUnsupported].
+// WithLoftAlignment
 // picks a loft's per-loop correspondence rotation
 // and is accepted at most once; a repeat is [ErrDegenerate]. Separately,
 // Verify's options (WithTolerance, WithMinWallThickness, WithPullDirection,

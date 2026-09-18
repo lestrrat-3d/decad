@@ -20,22 +20,25 @@ import (
 // revolvePayload.z0Delta/z1Delta already does for extrude's axial extent
 // (docs/evaluator-design.md §6).
 //
-// angleDenotation carries that exact angle as rad + 2π·turn, both exact
-// big.Rat: a radian-stated extent lands entirely in rad with turn zero; a
-// degree-stated one lands entirely in turn (mag/360) with rad zero, since
-// units.Degree's own factor is a ROUNDED π/180 and multiplying by it would
-// recover an approximation of the denoted angle rather than the angle
-// itself (units' own value.go:629 warns that 180×factor and math.Pi are
-// different quantities). Every other angle unit, and any extent this
-// evaluator cannot yet enclose (ToFaceAngular), denotes no exact angle here:
-// rad and turn are both nil, and every reading below reads that as an
-// infinite displacement — the sound answer when nothing proves a tighter
-// one — falling back to whatever it published before this file existed.
+// angleDenotation carries a stated angle as rad + 2π·turn, both exact
+// big.Rat. A radian-stated extent uses rad with turn zero. A degree-stated one
+// uses turn (mag/360) with rad zero because units.Degree's factor is a rounded
+// π/180. An atan2-derived Sweep angle instead carries a rational interval in
+// radians. Every other angle unit, and an extent this evaluator cannot
+// enclose (ToFaceAngular), leaves all three forms nil. Readings then use their
+// existing magnitude envelope.
 
-// angleDenotation is the angle an extent's own record denotes: rad + 2π·turn,
-// both exact rationals. A nil pair means the resolver could not state one,
-// and every reading falls back to the magnitude envelope it uses today.
-type angleDenotation struct{ rad, turn *big.Rat }
+// angleDenotation encloses the angle a feature record denotes. Stated Revolve
+// angles use rad + 2π·turn. A derived Sweep arc uses span. A zero value makes
+// each reading use its existing magnitude envelope.
+type angleDenotation struct {
+	rad, turn *big.Rat
+	// span is an exact rational enclosure for an angle whose denotation is
+	// transcendental, such as ArcThrough's atan2-derived directed angle. It is
+	// disjoint from the rad+2π·turn form so stated Revolve angles retain their
+	// exact quarter-turn fast paths.
+	span *ratInterval
+}
 
 // zeroAngleDenotation is the exact angle zero: what the end of an extent the
 // caller did not displace (the sketch-plane end of an Along/Against
@@ -44,36 +47,46 @@ func zeroAngleDenotation() angleDenotation {
 	return angleDenotation{rad: new(big.Rat), turn: new(big.Rat)}
 }
 
-// valid reports whether d states an exact angle at all.
-func (d angleDenotation) valid() bool { return d.rad != nil && d.turn != nil }
+// valid reports whether d encloses an angle.
+func (d angleDenotation) valid() bool {
+	return d.span != nil || (d.rad != nil && d.turn != nil)
+}
 
-// neg is the denoted angle's own negation, exact: negating a rational is
-// never a rounding.
+// neg encloses the denoted angle's negation.
 func (d angleDenotation) neg() angleDenotation {
 	if !d.valid() {
 		return angleDenotation{}
 	}
+	if d.span != nil {
+		negated := intervalNeg(*d.span)
+		return angleDenotation{span: &negated}
+	}
 	return angleDenotation{rad: new(big.Rat).Neg(d.rad), turn: new(big.Rat).Neg(d.turn)}
 }
 
-// scale multiplies the denoted angle by an exact rational, exact: every
-// caller here scales by ±1 (a side's travel sign) or 1/2 (a symmetric
-// extent's half-angle), none of which round.
+// scale encloses the denoted angle multiplied by k. Every caller scales by
+// ±1 (a side's travel sign) or 1/2 (a symmetric extent's half-angle).
 func (d angleDenotation) scale(k *big.Rat) angleDenotation {
 	if !d.valid() {
 		return angleDenotation{}
+	}
+	if d.span != nil {
+		scaled := intervalScale(*d.span, k)
+		return angleDenotation{span: &scaled}
 	}
 	return angleDenotation{rad: new(big.Rat).Mul(d.rad, k), turn: new(big.Rat).Mul(d.turn, k)}
 }
 
 // enclosure returns the rational interval the denoted angle is proven to lie
-// in: a point interval for a radian-stated angle (turn is exactly zero, so
-// intervalScale contributes [0,0]), and an interval no narrower than 2π's own
-// enclosure for a degree-stated one, since 2π itself is only ever bracketed,
-// never exact. ok is false for an invalid denotation.
+// in. A radian-stated angle produces a point interval. A degree-stated angle
+// includes 2π's enclosure. A derived span is copied unchanged. ok is false
+// for an invalid denotation.
 func (d angleDenotation) enclosure() (ratInterval, bool) {
 	if !d.valid() {
 		return ratInterval{}, false
+	}
+	if d.span != nil {
+		return interval(d.span.lo, d.span.hi), true
 	}
 	return intervalAdd(pointInterval(d.rad), intervalScale(twoPiInterval(), d.turn)), true
 }
@@ -96,21 +109,14 @@ func (d angleDenotation) enclosureFor(held float64) (ratInterval, bool) {
 
 // sinCosFor encloses sin/cos of the angle d denotes, falling back to the HELD
 // float exactly as enclosureFor does. Every end this design resolves is
-// either pure-turn (rad exactly zero — a degree-stated end, or the exact
-// zero of an end the caller did not displace) or pure-radian (turn exactly
-// zero), never both, so this dispatches to whichever certified primitive
-// needs no detour through the other: turnSinCosInterval for a pure turn,
-// which never compares against π and is EXACT at every eighth-turn boundary
-// (a quarter, half or three-quarter turn's sin/cos is a zero-width
-// enclosure) — the fact enclosure()'s own 2π-multiplication would otherwise
-// lose, since 2π itself is only ever bracketed; radSinCosInterval for a pure
-// radian, which is what enclosure() already reduces to when rad alone is
-// nonzero. A denotation this design cannot yet resolve into one pure case —
-// invalid, or a future mixed one — falls back through enclosureFor and
-// radSinCosInterval over the HELD float, exactly like every other reading
-// this file cannot denote exactly.
+// either pure-turn, pure-radian, or an atan2-derived radian span. This method
+// routes each form to its certified trigonometric enclosure. An invalid or
+// future mixed form falls back to the held float, matching readings that have
+// no denotation.
 func (d angleDenotation) sinCosFor(held float64) (sin, cos ratInterval, ok bool) {
 	switch {
+	case d.span != nil:
+		return radSinCosSpan(*d.span)
 	case d.valid() && d.turn.Sign() == 0:
 		// Pure radian, the exact angle zero included: radSinCosInterval
 		// already answers sin=0, cos=1 exactly at zero, with no series
@@ -217,7 +223,7 @@ func (sd sweepDenotation) widthInterval() (ratInterval, bool) {
 // back to the HELD float exactly as enclosureFor does, against π's own
 // enclosure; ok is false only where a held float is not finite.
 func (sd sweepDenotation) halfTurnExcessFor(phi0, phi1 float64) (ratInterval, bool) {
-	if sd.phi0.valid() && sd.phi1.valid() {
+	if sd.phi0.valid() && sd.phi1.valid() && sd.phi0.span == nil && sd.phi1.span == nil {
 		rad := new(big.Rat).Sub(sd.phi1.rad, sd.phi0.rad)
 		turn := new(big.Rat).Sub(sd.phi1.turn, sd.phi0.turn)
 		turn.Sub(turn, big.NewRat(1, 2))

@@ -16,7 +16,9 @@ chording, proof bounds, and boolean handoff are specified in
 proofs are specified in `docs/payload-verification-design.md`; and how
 verification proves overlap and bounds its volume without consuming either body
 is specified in `docs/interference-design.md`. `docs/layout.md`
-lists every current design document and its owner.
+lists every current design document and its owner. Spatial-path recording,
+rotation-minimizing frame transport, and the staged `Sweep` evaluator are
+specified in `docs/sweep-design.md`.
 
 ## 1. What decad is answerable for
 
@@ -668,13 +670,16 @@ before extruding. decad never re-derives it.
 ## 8. Features
 
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
-Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy, Loft**. Sweep is
-deferred. `docs/loft-design.md` owns `Loft`'s signature, its two-profile
-correspondence rule, and its increment-1 scope.
+Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy, Loft, Sweep**.
+`docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
+rule, and its increment-1 scope. `docs/sweep-design.md` owns `Sweep`'s
+signature, spatial `Path`, frame transport, refusals, and staged reach.
 
 ```go
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
 func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
+func (d *Document) Sweep(s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error)
+func (d *Document) SweepContext(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error)
 ```
 
 Both take the **sketch** as well as the profile, because a `sketch.Profile`'s
@@ -1508,7 +1513,7 @@ the resulting bodies, measurements, and verification reports directly.
 ## 13. Non-goals for v1
 
 Assemblies (`Component`/`Occurrence` instancing and the DAG that comes with it), a
-feature tree / timeline / rollback, sweep, STEP, sheet metal, mesh import,
+feature tree / timeline / rollback, STEP, sheet metal, mesh import,
 GUI or view state of any kind, and Fusion code generation.
 
 The assemblies non-goal rests on a capability in hand, not on an instancing
