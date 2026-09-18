@@ -112,41 +112,44 @@ func mustDyOf(f float64) dyadic {
 	return d
 }
 
-// dyAlign restates a and b over one common exponent — the smaller of the two,
-// so neither mantissa loses a bit — and returns the two restated mantissas
-// beside the exponent they now share.
-func dyAlign(a, b dyadic) (*big.Int, *big.Int, int) {
-	am, bm := a.mant, b.mant
-	if am == nil {
-		am = new(big.Int)
-	}
-	if bm == nil {
-		bm = new(big.Int)
-	}
-	switch {
-	case a.isZero():
-		return new(big.Int), new(big.Int).Set(bm), b.exp
-	case b.isZero():
-		return new(big.Int).Set(am), new(big.Int), a.exp
-	case a.exp == b.exp:
-		return new(big.Int).Set(am), new(big.Int).Set(bm), a.exp
-	case a.exp > b.exp:
-		return new(big.Int).Lsh(am, uint(a.exp-b.exp)), new(big.Int).Set(bm), b.exp
-	default:
-		return new(big.Int).Set(am), new(big.Int).Lsh(bm, uint(b.exp-a.exp)), a.exp
-	}
-}
-
 // dyAdd returns a + b exactly.
 func dyAdd(a, b dyadic) dyadic {
-	am, bm, exp := dyAlign(a, b)
-	return dyadic{mant: am.Add(am, bm), exp: exp}.norm()
+	switch {
+	case a.isZero() && b.isZero():
+		return dyadic{}
+	case a.isZero():
+		return dyadic{mant: new(big.Int).Set(b.mant), exp: b.exp}
+	case b.isZero():
+		return dyadic{mant: new(big.Int).Set(a.mant), exp: a.exp}
+	case a.exp == b.exp:
+		return dyadic{mant: new(big.Int).Add(a.mant, b.mant), exp: a.exp}.norm()
+	case a.exp > b.exp:
+		out := new(big.Int).Lsh(a.mant, uint(a.exp-b.exp))
+		return dyadic{mant: out.Add(out, b.mant), exp: b.exp}.norm()
+	default:
+		out := new(big.Int).Lsh(b.mant, uint(b.exp-a.exp))
+		return dyadic{mant: out.Add(a.mant, out), exp: a.exp}.norm()
+	}
 }
 
 // dySubScalar returns a − b exactly.
 func dySubScalar(a, b dyadic) dyadic {
-	am, bm, exp := dyAlign(a, b)
-	return dyadic{mant: am.Sub(am, bm), exp: exp}.norm()
+	switch {
+	case a.isZero() && b.isZero():
+		return dyadic{}
+	case a.isZero():
+		return dyadic{mant: new(big.Int).Neg(b.mant), exp: b.exp}
+	case b.isZero():
+		return dyadic{mant: new(big.Int).Set(a.mant), exp: a.exp}
+	case a.exp == b.exp:
+		return dyadic{mant: new(big.Int).Sub(a.mant, b.mant), exp: a.exp}.norm()
+	case a.exp > b.exp:
+		out := new(big.Int).Lsh(a.mant, uint(a.exp-b.exp))
+		return dyadic{mant: out.Sub(out, b.mant), exp: b.exp}.norm()
+	default:
+		out := new(big.Int).Lsh(b.mant, uint(b.exp-a.exp))
+		return dyadic{mant: out.Sub(a.mant, out), exp: a.exp}.norm()
+	}
 }
 
 // dyMul returns a × b exactly. Exponents add, so no alignment is needed and the
@@ -160,8 +163,18 @@ func dyMul(a, b dyadic) dyadic {
 
 // dyCmp compares a against b, returning -1, 0 or +1 the way big.Rat.Cmp does.
 func dyCmp(a, b dyadic) int {
-	am, bm, _ := dyAlign(a, b)
-	return am.Cmp(bm)
+	switch {
+	case a.isZero():
+		return -b.sign()
+	case b.isZero():
+		return a.sign()
+	case a.exp == b.exp:
+		return a.mant.Cmp(b.mant)
+	case a.exp > b.exp:
+		return new(big.Int).Lsh(a.mant, uint(a.exp-b.exp)).Cmp(b.mant)
+	default:
+		return a.mant.Cmp(new(big.Int).Lsh(b.mant, uint(b.exp-a.exp)))
+	}
 }
 
 // dyAbs returns |d|.

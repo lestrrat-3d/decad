@@ -246,6 +246,7 @@
 0	0.10	TestWallReadingBoundIsOnTheSpanningDiameter
 0	0.01	TestWholeCircleCylinderHasTwoLoops
 0	0.04	TestXHPLerpDenotesTheSameCoordinate
+0	0.00	TestXHPArithmeticKeepsBorrowedOperands
 1	0.00	Example_decad_quickstart
 1	0.00	FuzzTriangulate2D
 1	0.00	TestAddBlendRolesContextPollsNestedMetadata

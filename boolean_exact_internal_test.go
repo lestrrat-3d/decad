@@ -479,6 +479,50 @@ func TestXHPLerpDenotesTheSameCoordinate(t *testing.T) {
 	}
 }
 
+// TestXHPArithmeticKeepsBorrowedOperands verifies that the exact arithmetic
+// helpers borrow their inputs without sharing result limbs back into them.
+// The rational values are checked independently so an aliasing optimization
+// cannot preserve a wrong answer by mutating both sides of the comparison.
+func TestXHPArithmeticKeepsBorrowedOperands(t *testing.T) {
+	t.Parallel()
+	a := xhpOf(r3.NewVec(0.1, -2.25, 3.5))
+	b := xhpOf(r3.NewVec(-1.75, 0.375, 4.125))
+	aBefore, bBefore := xhpKeyOf(a), xhpKeyOf(b)
+	ra, rb := refPointOf(r3.NewVec(0.1, -2.25, 3.5)), refPointOf(r3.NewVec(-1.75, 0.375, 4.125))
+
+	gotSub := xhpSub(a, b)
+	wantSub := refSub(ra, rb)
+	assertXHPRatEqual(t, gotSub, wantSub)
+	gotCross := xhpCross(a, b)
+	wantCross := refCross(ra, rb)
+	assertXHPRatEqual(t, gotCross, wantCross)
+	gotDot := new(big.Rat).SetFrac(xhpDotNum(a, b), new(big.Int).Mul(a.w, b.w))
+	require.Zero(t, gotDot.Cmp(refDot(ra, rb)))
+
+	for _, got := range []xhp{gotSub, gotCross} {
+		for _, limb := range []*big.Int{got.x, got.y, got.z, got.w} {
+			require.NotSame(t, limb, a.x)
+			require.NotSame(t, limb, a.y)
+			require.NotSame(t, limb, a.z)
+			require.NotSame(t, limb, a.w)
+			require.NotSame(t, limb, b.x)
+			require.NotSame(t, limb, b.y)
+			require.NotSame(t, limb, b.z)
+			require.NotSame(t, limb, b.w)
+		}
+	}
+	require.Equal(t, aBefore, xhpKeyOf(a))
+	require.Equal(t, bBefore, xhpKeyOf(b))
+}
+
+func assertXHPRatEqual(t *testing.T, got xhp, want refPoint) {
+	t.Helper()
+	x, y, z := xhpRat(got)
+	require.Zero(t, x.Cmp(want.x))
+	require.Zero(t, y.Cmp(want.y))
+	require.Zero(t, z.Cmp(want.z))
+}
+
 // TestOrientRatAgreesWithOrientSignExact checks the split orientVal was cut
 // into: orientRat's materialised value and orientSignExact's plain integer
 // sign must agree over the same probes, sign consumer and value consumer
@@ -563,7 +607,7 @@ func TestXHPDenominatorStaysBounded(t *testing.T) {
 	}
 	tn, td := big.NewInt(37), big.NewInt(91)
 	for _, target := range targets {
-		p = xhpStripTwos(xhpLerp(p, xhpOf(target), tn, td))
+		p = xhpStripTwosOwned(xhpLerp(p, xhpOf(target), tn, td))
 	}
 	require.Less(t, p.w.BitLen(), 4096,
 		`the stripped denominator must stay far below the unreduced 14113-bit growth at the same depth`)
@@ -603,8 +647,8 @@ func BenchmarkPlaneCrossingChain(b *testing.B) {
 	tn, td := big.NewInt(37), big.NewInt(91)
 	b.ResetTimer()
 	for b.Loop() {
-		p1 := xhpStripTwos(xhpLerp(ta, tb, tn, td))
-		p2 := xhpStripTwos(xhpLerp(tb, tc, tn, td))
+		p1 := xhpStripTwosOwned(xhpLerp(ta, tb, tn, td))
+		p2 := xhpStripTwosOwned(xhpLerp(tb, tc, tn, td))
 		xhpOrientSign(ta, p1, p2, tc)
 	}
 }
@@ -619,9 +663,9 @@ func BenchmarkLerpDepth3Orient(b *testing.B) {
 	tn, td := big.NewInt(37), big.NewInt(91)
 	b.ResetTimer()
 	for b.Loop() {
-		p := xhpStripTwos(xhpLerp(ta, tb, tn, td))
-		p = xhpStripTwos(xhpLerp(p, tc, tn, td))
-		p = xhpStripTwos(xhpLerp(p, ta, tn, td))
+		p := xhpStripTwosOwned(xhpLerp(ta, tb, tn, td))
+		p = xhpStripTwosOwned(xhpLerp(p, tc, tn, td))
+		p = xhpStripTwosOwned(xhpLerp(p, ta, tn, td))
 		xhpOrientSign(ta, tb, tc, p)
 	}
 }
@@ -635,8 +679,8 @@ func BenchmarkLerpDepth3Orient(b *testing.B) {
 func BenchmarkExactVertexKey(b *testing.B) {
 	ta, tb, tc := xhpBenchTriangle()
 	tn, td := big.NewInt(37), big.NewInt(91)
-	p1 := xhpStripTwos(xhpLerp(ta, tb, tn, td))
-	p2 := xhpStripTwos(xhpLerp(p1, tc, tn, td))
+	p1 := xhpStripTwosOwned(xhpLerp(ta, tb, tn, td))
+	p2 := xhpStripTwosOwned(xhpLerp(p1, tc, tn, td))
 	b.ResetTimer()
 	for b.Loop() {
 		_ = xhpKeyOf(xhpCanon(p2))

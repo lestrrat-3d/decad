@@ -1176,7 +1176,7 @@ func xCentroid(a, b, c xpt) xpt {
 	}
 	w := new(big.Int).Mul(awbw, c.w)
 	w.Mul(w, big.NewInt(3))
-	return xpt(xhpStripTwos(xhp{
+	return xpt(xhpStripTwosOwned(xhp{
 		x: axis(a.x, b.x, c.x),
 		y: axis(a.y, b.y, c.y),
 		z: axis(a.z, b.z, c.z),
