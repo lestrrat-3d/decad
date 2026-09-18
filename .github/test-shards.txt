@@ -8,7 +8,7 @@
 #
 # Shard totals at the last measurement:
 #   shard 0:  123.58s over 234 tests
-#   shard 1:  123.57s over 831 tests
+#   shard 1:  123.57s over 832 tests
 #   shard 2:  123.58s over 234 tests
 #   shard 3:  123.58s over 234 tests
 #
@@ -1095,6 +1095,7 @@
 1	0.04	TestWholeSegmentWalkStatesTheRecordedEndpoints
 1	0.00	TestXHPCanonIsAUniqueIdentity
 1	0.00	TestXHPDenominatorStaysBounded
+1	0.00	TestXPTKeyDistinguishesCoordinates
 1	0.00	TestRevolveTiltedAxisBoundsTighten
 2	0.03	FuzzFillet
 2	0.03	TestAbsLinearIntegralMatchesTheClosedForm

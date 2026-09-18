@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"math/big"
@@ -51,7 +52,26 @@ func (p xpt) vec() r3.Vec { return xhpVec(xhp(p)) }
 // before the key is built.
 func (p xpt) key() string {
 	c := xhpCanon(xhp(p))
-	return c.x.String() + "|" + c.y.String() + "|" + c.z.String() + "|" + c.w.String()
+	return exactIntsKey(c.x, c.y, c.z, c.w)
+}
+
+// exactIntsKey encodes signed integers without decimal conversion. Each value
+// carries its sign and byte length, so adjacent magnitudes cannot collide.
+func exactIntsKey(values ...*big.Int) string {
+	size := 9 * len(values)
+	for _, v := range values {
+		size += (v.BitLen() + 7) / 8
+	}
+	buf := make([]byte, 0, size)
+	for _, v := range values {
+		buf = append(buf, byte(v.Sign()+1))
+		n := (v.BitLen() + 7) / 8
+		buf = binary.LittleEndian.AppendUint64(buf, uint64(n))
+		start := len(buf)
+		buf = buf[:start+n]
+		v.FillBytes(buf[start:])
+	}
+	return string(buf)
 }
 
 // xsub is a − b, exact, with the common power of two stripped on return (the

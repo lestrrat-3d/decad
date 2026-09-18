@@ -1233,8 +1233,16 @@ func stitchFacetsContext(ctx context.Context, kept []keptFacet) (*stitchedMesh, 
 	}
 	var xverts []xpt
 	index := map[string]int{}
+	// Exact vertices are immutable after construction. Reuse the canonical key
+	// when another incident facet carries the same four integer pointers.
+	keyByRaw := map[[4]*big.Int]string{}
 	addVert := func(p xpt) int {
-		k := p.key()
+		raw := [4]*big.Int{p.x, p.y, p.z, p.w}
+		k, ok := keyByRaw[raw]
+		if !ok {
+			k = p.key()
+			keyByRaw[raw] = k
+		}
 		if i, ok := index[k]; ok {
 			return i
 		}
