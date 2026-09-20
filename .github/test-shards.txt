@@ -248,6 +248,7 @@
 0	0.01	TestBodyPatchClosesASheetsLastFreeEdgeStaysASheet
 0	0.01	TestBodyPatchContextCancellationLeavesDocumentUnchanged
 0	0.01	TestBodyPatchDoublesAFlatSheetWithANegatedNormal
+0	0.01	TestBodyPatchFillsAHoleWithTheSameNormal
 0	0.01	TestBodyPatchFillsASingleClosedCircularRim
 0	0.01	TestBodyPatchRejectsAReceiverWithNoPayload
 0	0.01	TestBodyPatchReproducesThroughPlacement

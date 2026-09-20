@@ -459,6 +459,16 @@ assembly `Stitch`'s own orientation derivation refuses as non-orientable
 before it is ever assembled (R7), and so a shape no builder in this package
 can hand `Body.Patch` — that disagreement is `ErrDegenerate` (R18).
 
+**Filling a HOLE loop is one of this operation's own cases, and it keeps the
+holed face's normal rather than negating it.** A hole loop is walked
+clockwise (moments.go's own "outer counter-clockwise, holes clockwise"
+convention), so the opposite sense the patch takes reads counter-clockwise —
+the same rotation an outer boundary's own fill reads — and the right-hand
+rule sends that back to the SAME side the hole already faced. Filling a
+face's own OUTER boundary instead (T15, §15 — doubling a flat sheet into a
+two-sided plate) reverses an already-counter-clockwise loop into a clockwise
+walk instead, landing on the opposite side. T19 (§15) is the hole-loop case.
+
 `Body.Patch` admits a sheet or a solid receiver, and admits it only when this
 evaluator built it (`b`'s own evaluator payload is not `nil`): a body reads
 its topology regardless of payload, but this operation's own re-evaluation
@@ -1227,6 +1237,7 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T16 | `Body.Patch` filling a single closed circular rim (a `Document.Patch` circle's own sole free edge) | which the original one-chain wording would have refused (§5.2); two faces, `Edges(Free())` matches nothing |
 | T17 | `Body.Patch` capping BOTH rims of a surface-extruded tube's `Edges(Free()).Exactly(8)` in one call | this contract's own flagship case; two new 6000 mm² faces, `Exact`; `Edges(Free())` matches nothing |
 | T18 | `Body.Patch` closing a stitched-but-still-open sheet's own last free edge | `Kind() == BodySheet` still, `IsSolid() == false`; `Edges(Free())` matches nothing |
+| T19 | `Body.Patch` filling a `rectWithHoleSketch` `Document.Patch` sheet's own HOLE loop (`Edges(Free(), Concave())`) | two faces; the hole's own edge now bounds both; the four outer edges stay free; every face's normal equals the holed face's own, unlike T15 — a hole loop is walked clockwise, so the opposite sense the patch takes reads counter-clockwise and lands on the SAME side; `Area` returns to the rectangle's full 6000 mm², `Approximate` |
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'`

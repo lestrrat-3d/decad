@@ -120,6 +120,58 @@ func TestBodyPatchFillsASingleClosedCircularRim(t *testing.T) {
 	require.Len(t, doubled.Faces(), 2)
 }
 
+// TestBodyPatchFillsAHoleWithTheSameNormal is §5.2's own hole-filling case,
+// the mirror image of TestBodyPatchDoublesAFlatSheetWithANegatedNormal: the
+// holed face traverses the hole's rim CLOCKWISE (moments.go's own "holes
+// clockwise" convention), and the patch must traverse the SAME edge
+// counter-clockwise (the opposite sense), which the right-hand rule sends
+// back to the SAME side rather than the opposite one — filling a hole keeps
+// the normal; filling a face's own outer boundary negates it. No other test
+// in this file exercises this branch: every other fixture fills an outer
+// (or whole-circle) boundary.
+func TestBodyPatchFillsAHoleWithTheSameNormal(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	s, p := rectWithHoleSketch(t)
+	sheet, err := doc.Patch(s, p)
+	require.NoError(t, err)
+
+	faces, err := decad.Faces(decad.Planar()).Exactly(1).SelectFaces(sheet)
+	require.NoError(t, err)
+	holeNormal, err := faces[0].NormalAt(r3.NewVec(10, 10, 0))
+	require.NoError(t, err)
+
+	_, err = decad.Edges(decad.Free()).Exactly(5).SelectEdges(sheet)
+	require.NoError(t, err)
+
+	filled, err := sheet.Patch(decad.Edges(decad.Free(), decad.Concave()).Exactly(1))
+	require.NoError(t, err)
+
+	require.Equal(t, decad.BodySheet, filled.Kind())
+	require.Len(t, filled.Faces(), 2)
+
+	_, err = decad.Edges(decad.Free()).Exactly(4).SelectEdges(filled)
+	require.NoError(t, err)
+
+	circ, err := decad.Edges(decad.Circular()).Exactly(1).SelectEdges(filled)
+	require.NoError(t, err)
+	require.Len(t, circ[0].Faces(), 2, "the hole's own edge now bounds both faces")
+
+	for _, f := range filled.Faces() {
+		n, err := f.NormalAt(r3.NewVec(10, 10, 0))
+		require.NoError(t, err)
+		got := r3.NewVec(n.Value.X, n.Value.Y, n.Value.Z)
+		require.InDeltaf(t, 0, got.Sub(holeNormal.Value).Len(), 1e-9,
+			"filling a hole keeps every face's normal on the holed face's own side")
+	}
+
+	// The value cancels back to the rectangle's full 6000 mm² exactly (the
+	// hole's own subtraction and the fill's own addition are the same
+	// magnitude), but the bound composed from two circular integrations is
+	// nonzero, so the reading is Approximate rather than Exact.
+	decadtest.MeasuresArea(t, filled, units.SquareMillimeters(6000), decadtest.WithinRel(units.Scalar(1e-9)))
+}
+
 // TestBodyPatchCapsBothRimsOfATubeInOneCall is the contract change's own
 // flagship case: a surface-extruded tube's 8 free edges resolve as ONE
 // selection (Edges(Free()).Exactly(8)) — no predicate separates its two
