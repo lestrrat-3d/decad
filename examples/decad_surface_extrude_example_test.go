@@ -52,15 +52,27 @@ func Example_decad_surfaceExtrude() {
 	}
 	_, err = sheet.Volume()
 
+	// A sheet's own boundary can be proven sound even though it encloses no
+	// region: Verify's sheet validity audit (docs/surface-design.md §9.1)
+	// decides this from the recorded topology, not from a triangulated
+	// chord mesh.
+	report, err2 := doc.Verify(context.Background())
+	if err2 != nil {
+		fmt.Printf("failed to verify: %s\n", err2)
+		return
+	}
+
 	fmt.Printf("is sheet: %v\n", sheet.Kind() == decad.BodySheet)
 	fmt.Printf("faces: %d\n", len(sheet.Faces()))
 	fmt.Printf("free edges: %d\n", len(free))
 	fmt.Printf("area: %s\n", area.Value)
 	fmt.Printf("volume error: %v\n", err)
+	fmt.Printf("verify status: %s\n", report.Status)
 	// Output:
 	// is sheet: true
 	// faces: 4
 	// free edges: 8
 	// area: 3200 mm^2
 	// volume error: decad: body is not a solid
+	// verify status: Sound
 }

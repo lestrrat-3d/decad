@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -573,4 +575,145 @@ func TestBodyGateDiameterFreeformArmCancelsDuringWitnessMaximum(t *testing.T) {
 	_, ok, err = bodyGateDiameter(cancelled, &Body{payload: pp})
 	require.ErrorIs(t, err, context.Canceled)
 	require.False(t, ok)
+}
+
+// internalSheetBody surface-extrudes an axis-aligned rectangle into doc, the
+// in-package counterpart of interference_internal_test.go's internalBoxBody.
+func internalSheetBody(t *testing.T, doc *Document, x0, y0, x1, y1, h float64) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(x0, y0, x1, y1)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along}, WithSurfaceResult())
+	require.NoError(t, err)
+	return body
+}
+
+// firstInteriorEdge returns b's first edge adjacent to two faces — the shared
+// vertical edge between two consecutive walls of a surface-extruded rectangle.
+func firstInteriorEdge(t *testing.T, b *Body) *Edge {
+	t.Helper()
+	for _, e := range b.Edges() {
+		if len(e.faces) == 2 {
+			return e
+		}
+	}
+	t.Fatal("expected an interior edge adjacent to two faces")
+	return nil
+}
+
+// backwardCoedgeSite locates e's own backward coedge use and returns the loop
+// that holds it and its index within that loop's coedges, so the caller can
+// mutate that one slot in place.
+func backwardCoedgeSite(t *testing.T, b *Body, e *Edge) (*Loop, int) {
+	t.Helper()
+	for _, f := range b.Faces() {
+		for _, l := range f.loops {
+			for i, ce := range l.coedges {
+				if ce.edge == e && !ce.forward {
+					return l, i
+				}
+			}
+		}
+	}
+	t.Fatal("expected a backward coedge over the interior edge")
+	return nil, 0
+}
+
+// requireSheetAuditViolated hand-builds one of Table V's three structural
+// leg violations onto a real surface-extruded sheet's own topology — never a
+// synthetic body — and asserts auditSheetBoundary proves it violated, and that
+// doc.Verify publishes ValidityInvalid with exactly one DiagInvalidBody
+// (docs/surface-design.md §9.1). corrupt receives the built sheet and its
+// owning document to mutate in place.
+func requireSheetAuditViolated(t *testing.T, corrupt func(t *testing.T, doc *Document, b *Body)) {
+	t.Helper()
+	doc := New()
+	b := internalSheetBody(t, doc, 0, 0, 10, 6, 4)
+	corrupt(t, doc, b)
+
+	require.Equal(t, sheetAuditViolated, auditSheetBoundary(b))
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	br, err := report.ForBody(b)
+	require.NoError(t, err)
+	require.Equal(t, ValidityInvalid, br.Validity.Outcome)
+	require.Len(t, br.Validity.Diagnostics, 1)
+	require.Equal(t, DiagInvalidBody, br.Validity.Diagnostics[0].Code)
+}
+
+// TestAuditSheetBoundaryStructuralViolations is docs/surface-design.md
+// §9.1's three structural legs, each broken in isolation on a real
+// surface-extruded sheet's own topology so the other two legs stay provably
+// unaffected: a third face fabricated onto an interior edge (leg 2, the
+// one-or-two adjacent-face rule); an interior edge's backward coedge flipped
+// to forward, so both its uses walk the same way (leg 3, the
+// one-forward-one-backward rule); and an empty loop appended to a face (leg
+// 1, the every-loop-has-a-coedge rule).
+func TestAuditSheetBoundaryStructuralViolations(t *testing.T) {
+	t.Parallel()
+
+	t.Run("third face on an interior edge", func(t *testing.T) {
+		t.Parallel()
+		requireSheetAuditViolated(t, func(t *testing.T, doc *Document, b *Body) {
+			e := firstInteriorEdge(t, b)
+			require.Len(t, e.faces, 2)
+			extra := &Face{
+				body:  b,
+				loops: []*Loop{{coedges: []coedge{{edge: e, forward: true}}}},
+			}
+			shell := b.lumps[0].shells[0]
+			shell.faces = append(shell.faces, extra)
+			e.faces = append(e.faces, extra)
+		})
+	})
+
+	t.Run("two forward coedges over one interior edge", func(t *testing.T) {
+		t.Parallel()
+		requireSheetAuditViolated(t, func(t *testing.T, doc *Document, b *Body) {
+			e := firstInteriorEdge(t, b)
+			l, i := backwardCoedgeSite(t, b, e)
+			l.coedges[i].forward = true
+		})
+	})
+
+	t.Run("an empty loop", func(t *testing.T) {
+		t.Parallel()
+		requireSheetAuditViolated(t, func(t *testing.T, doc *Document, b *Body) {
+			f := b.Faces()[0]
+			f.loops = append(f.loops, &Loop{})
+		})
+	})
+}
+
+// TestAuditSheetBoundaryUndecidedPayload is docs/surface-design.md §9.1's
+// fourth leg: with every structural leg intact, a nil payload and a
+// nonzero-sectionDelta payload both leave non-self-intersection unadmitted,
+// so the audit reads undecided rather than proven.
+func TestAuditSheetBoundaryUndecidedPayload(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil payload", func(t *testing.T) {
+		t.Parallel()
+		doc := New()
+		b := internalSheetBody(t, doc, 0, 0, 10, 6, 4)
+		b.payload = nil
+		require.Equal(t, sheetAuditUndecided, auditSheetBoundary(b))
+	})
+
+	t.Run("nonzero sectionDelta", func(t *testing.T) {
+		t.Parallel()
+		doc := New()
+		b := internalSheetBody(t, doc, 0, 0, 10, 6, 4)
+		pp, ok := b.payload.(prismPayload)
+		require.True(t, ok)
+		pp.sectionDelta = 1e-6
+		b.payload = pp
+		require.Equal(t, sheetAuditUndecided, auditSheetBoundary(b))
+	})
 }

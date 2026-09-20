@@ -532,6 +532,12 @@ design. A curved face's flux term is not a tetrahedron sum, and a per-surface
 closed-form flux integral over an arbitrary trimmed analytic patch is its own
 piece of work. §14's increment 3 takes it up.
 
+**This audit governs the all-planar STITCH closure alone.** It is not §9.1's
+sheet validity audit: a stitched solid's triangulated, exactly welded face set
+is exactly this audit's input, but a surface-extruded sheet's curved walls
+are not, and §9.1 reads their recorded topology directly rather than
+chording them into one.
+
 ### 6.5 `Unstitch`
 
 `b.Unstitch()` returns one single-face sheet body per face of `b`, in
@@ -631,7 +637,7 @@ sheet payload withholds the gate.
 
 | `BodyReport` field | Sheet body |
 |---|---|
-| `Validity.Outcome` | `ValidityValid` when the sheet audit proves the boundary manifold-with-boundary, consistently oriented and free of self-intersection; `ValidityInvalid` on a proven violation; `ValidityUndecided` otherwise |
+| `Validity.Outcome` | `ValidityValid` when the sheet audit's three structural legs hold and non-self-intersection is admitted by construction; `ValidityInvalid` on a proven structural violation; `ValidityUndecided` otherwise |
 | `Topology.Lumps` | the connected-piece count, as on a solid |
 | `Topology.Voids` | `0` — a sheet bounds no cavity |
 | `Area`, `Bounds` | present and gated, as on every body |
@@ -641,12 +647,35 @@ sheet payload withholds the gate.
 | `ConcaveRadius` | `ScalarNotRequested` when omitted; `ScalarUnavailable` with a `DiagSurveyPrerequisite` when requested |
 | pair rows | §9.3 |
 
-**The sheet validity audit is the closure audit of §6.4 with closure not
-required.** Manifoldness, orientation consistency and non-self-intersection
-are the three properties `loftCrossingAudit` already proves; a sheet asks for
-those three and not for the fourth. A free edge, which on a closed body would
-be the watertightness failure, is the expected shape here and is counted
-rather than faulted.
+**The sheet validity audit reads the recorded topology directly; it is not
+§6.4's closure audit with closure dropped.** `loftCrossingAudit` proves its
+three properties over a triangulated, all-planar face set sharing one exact
+vertex table (§6.4) — an input a surface-extruded wall cannot supply. Its
+`Plane`, `Cylinder` or `NURBSSurface` geometry, rimmed by `Arc3`, `Circle3` or
+`NURBSCurve` segments, would first have to be chorded into triangles, and
+admitting a sheet because its CHORD MESH audits clean is an admission gate
+resting on an approximation — the very thing `CLAUDE.md`'s reject-only rule
+forbids. No chording, and no reuse of `loftCrossingAudit`, reaches a curved
+wall soundly.
+
+The sheet audit instead runs three structural legs over the held
+`Body`→`Lump`→`Shell`→`Face`→`Loop`→`CoEdge`→`Edge` chain — every face has at
+least one loop of at least one coedge; every edge is adjacent to one or two
+faces (three or more is non-manifold); and every two-face edge is traversed by
+exactly one forward and one backward coedge, with a coedge-use count that
+disagrees with the edge's own adjacent-face count also a violation — plus a
+fourth leg, non-self-intersection, admitted by construction alone and never by
+a residual or a chord test. A surface-extruded sheet earns the fourth leg
+because `sketch` already proved the recorded section a simple closed planar
+region, `evalPrismContext` already refuses a non-positive sweep height, a
+simple planar region crossed with a positive interval cannot self-intersect,
+and the rigid placement that follows preserves that. Any other construction —
+or a section admitted only to within a nonzero displacement of what it
+denotes, which breaks the transfer of simplicity — earns no such proof: the
+fourth leg has nothing to stand on, which is undecided, not a violation. A
+free edge, which on a closed body would be the watertightness failure, is the
+expected shape here and is counted by the structural legs rather than
+faulted.
 
 **`Region` is nil for a sheet even when `Validity.Outcome` is
 `ValidityValid`.** `docs/verification-design.md` §1 currently states the
@@ -668,7 +697,8 @@ positive side.
 **A document holding only sheets verifies fully and reads `Sound`, provided no
 survey was requested.** Nothing about a sheet makes a report `Suspect` on its
 own: its boundary quantities are gated like any other, its validity is decided
-by an audit that runs at build, and an omitted survey reads its
+in `Verify` — exactly where every other body kind's is, so a sheet's audit is
+not a special build-time step — and an omitted survey reads its
 `NotRequested` outcome as everywhere.
 
 Two things do cost a sheet a `Suspect`, and both are the caller asking a
@@ -696,6 +726,13 @@ project exists to prevent.
 That keeps the noise where the question is live. A model with a sheet parked
 away from every solid verifies clean; a sheet that might be cutting through
 one says so.
+
+**A sheet whose own validity is undecided or invalid does not take this box
+rule.** It inherits the existing filter that only a proven-valid body enters
+pair work at all (`docs/interference-design.md` §2), so it never reaches
+either bullet above. No report reads falsely `Sound` for it: such a sheet
+already contributes its own `Suspect` or `Unsound` through `Validity`, with no
+help needed from the pair rule.
 
 **`DiagUnsupportedPairSheet` is a new code in the existing
 `DiagUnsupportedPair*` family**, stable token `"unsupported_pair_sheet"`,

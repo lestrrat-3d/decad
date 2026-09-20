@@ -247,8 +247,10 @@ func effectiveVerifyRequest(cfg verifyConfig) VerifyRequest {
 // (verification §1/§6). It mirrors sketch.Verify (core §10).
 //
 // Verify checks interference even when no options are passed. For each pair of
-// proven solids that cheaper proofs do not settle, its mesh fallback checks
-// every pair of operand facet boxes before pruning exact predicates. One pair's
+// proven-valid bodies that cheaper proofs do not settle, its mesh fallback
+// checks every pair of operand facet boxes before pruning exact predicates. A
+// pair holding a sheet operand never reaches that fallback: it is decided by
+// box separation alone (docs/surface-design.md §9.3). One pair's
 // work can therefore grow with the two facet counts multiplied together, and
 // total work also grows with the number of unresolved body pairs. Large-model
 // callers should pass a context with a deadline chosen from representative
@@ -282,7 +284,12 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 
 	undecided := false // some asked question or pair this evaluator cannot decide
 
-	var solids []*BodyReport
+	// pairBodies holds every proven-valid body — solid or sheet alike — in
+	// Document.Bodies() order (interference design §2): a body whose own
+	// validity is undecided or invalid never reaches pair work at all, which
+	// is what keeps §9.3's sheet pair rule from ever running on a sheet that
+	// is not itself proven sound.
+	var pairBodies []*BodyReport
 	for _, b := range d.bodies {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -297,26 +304,48 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 			undecided = true
 		}
 		if br.Status != Unsound && br.Validity.Outcome == ValidityValid {
-			solids = append(solids, br)
+			pairBodies = append(pairBodies, br)
 		}
 	}
 
-	// The stable pair partition over proven solids (interference design §2):
-	// box separation first, then the analytic relation, strict containment or
-	// equality, and finally read-only intersection measurement. Only a proven
-	// positive bounded volume emits an Interference row. Expected empty,
-	// contact, staging, or coarse outcomes stay Suspect and name themselves in
-	// the slice; invariant failures return from Verify.
-	for i := range solids {
-		for j := i + 1; j < len(solids); j++ {
+	// The stable pair partition over proven-valid bodies (interference design
+	// §2): box separation first, then the analytic relation, strict
+	// containment or equality, and finally read-only intersection
+	// measurement. Only a proven positive bounded volume emits an
+	// Interference row. Expected empty, contact, staging, or coarse outcomes
+	// stay Suspect and name themselves in the slice; invariant failures
+	// return from Verify. A pair holding a sheet operand takes none of this —
+	// see the first arm below and docs/surface-design.md §9.3.
+	for i := range pairBodies {
+		for j := i + 1; j < len(pairBodies); j++ {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			boxProven := boxesDisjoint(solids[i].Bounds.Box, solids[j].Bounds.Box)
+			a, b := pairBodies[i].Body, pairBodies[j].Body
+			boxProven := boxesDisjoint(pairBodies[i].Bounds.Box, pairBodies[j].Bounds.Box)
+
+			// A sheet operand encloses no region, so the interference
+			// relation §1 decides is not the question for this pair
+			// (docs/surface-design.md §9.3): it is resolved by box
+			// separation alone, reusing the same boxesDisjoint proof —
+			// §3.1 owns the only box separation there is, so no second
+			// test is added. Separated boxes contribute nothing, even
+			// under WithClearances(); boxes that meet emit one
+			// DiagUnsupportedPairSheet and mark the pair undecided.
+			if a.Kind() == BodySheet || b.Kind() == BodySheet {
+				if boxProven {
+					continue
+				}
+				report.Diagnostics = append(report.Diagnostics,
+					pairDiagNone(a, b, DiagUnsupportedPairSheet,
+						"one or both operands is a sheet body, which encloses no region, so no interference or clearance relation is decided for this pair"))
+				undecided = true
+				continue
+			}
+
 			if boxProven && !cfg.clearances {
 				continue
 			}
-			a, b := solids[i].Body, solids[j].Body
 			res, err := clearancePair(ctx, a, b, boxProven)
 			if err != nil {
 				return nil, err
@@ -456,7 +485,10 @@ func pairDiagNone(a, b *Body, code DiagnosticCode, msg string) Diagnostic {
 // unresolved partition is DiagUndecidedPair. Verify emits only this
 // cause-specific diagnostic — the deprecated broad DiagUnsupportedPair
 // constant stays declared for existing callers that still branch on it, but
-// no longer appears in a returned report (proposal §10).
+// no longer appears in a returned report (proposal §10). A pair holding a
+// sheet operand never reaches this function at all: it is resolved earlier,
+// by box separation alone, and takes DiagUnsupportedPairSheet instead
+// (docs/surface-design.md §9.3).
 func undecidedPairDiag(a, b *Body, verdict pairVerdict, outcome interferenceOutcome) Diagnostic {
 	switch {
 	case outcome == interferenceUnsupportedPayloadFirst:
@@ -568,17 +600,25 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 		}
 	}
 
-	// The held boundary's structural audit: every edge bounds exactly two
-	// faces, every face carries at least one loop of at least one edge.
-	// This evaluator's boundary is exact, so a defect is proven — Unsound —
-	// and a clean audit on a feature-built body is proven validity.
-	// publishValidityResult (verify_publish.go) maps the three-way audit
-	// outcome onto ValidityResult and carries the one diagnostic that
+	// The held boundary's structural audit. A BodySolid runs auditBoundary:
+	// every edge bounds exactly two faces, every face carries at least one
+	// loop of at least one edge. A BodySheet runs auditSheetBoundary instead
+	// (docs/surface-design.md §9.1). This evaluator's boundary is exact, so a
+	// defect is proven — Unsound — and a clean audit on a feature-built body
+	// is proven validity. publishValidityResult (verify_publish.go) maps the
+	// evidence onto ValidityResult and carries the one diagnostic that
 	// explains it (proposal §9).
-	clean := auditBoundary(b)
-	built := b.payload != nil
-	validity := publishValidityResult(b, b.Kind(), clean, built, b.solid)
-	haveRegion := validity.Outcome == ValidityValid
+	evidence := validityEvidence{Kind: b.Kind()}
+	switch b.Kind() {
+	case BodySheet:
+		evidence.Sheet = auditSheetBoundary(b)
+	default:
+		evidence.Clean = auditBoundary(b)
+		evidence.Built = b.payload != nil
+		evidence.Solid = b.solid
+	}
+	validity := publishValidityResult(b, evidence)
+	haveRegion := validity.Outcome == ValidityValid && b.Kind() == BodySolid
 
 	var vol Measurement
 	var cen VecMeasurement
@@ -629,9 +669,11 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	// runSurveys itself cannot decide (a payload no shipped feature builds)
 	// leaves the asked question undecided, and a stated spec proven to fail
 	// is Violating. Each non-Sound survey outcome names itself in the slice.
+	surveysAsked := cfg.wall != nil || cfg.pull != nil || cfg.concaveRadius
 	violating, suspect := false, false
 	var surveys surveyResults
-	if haveRegion && (cfg.wall != nil || cfg.pull != nil || cfg.concaveRadius) {
+	switch {
+	case haveRegion && surveysAsked:
 		var surveyDiags []Diagnostic
 		var err error
 		surveys, surveyDiags, err = runSurveys(newWorkBudget(ctx), b, cfg)
@@ -646,6 +688,15 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 				suspect = true
 			}
 		}
+	case validity.Outcome == ValidityValid && surveysAsked:
+		// haveRegion is false here only because the body's kind is not
+		// BodySolid — a sound sheet, proven valid but with no material for
+		// the requested survey to be about (docs/surface-design.md §9.1).
+		// runSurveys never runs; publishWallResult, publishUndercutResult
+		// and publishConcaveRadiusResult each publish Unavailable plus
+		// their own DiagSurveyPrerequisite from validity and kind alone, so
+		// this body's Status must already carry that Suspect verdict.
+		suspect = true
 	}
 
 	var wallReading, radiusReading *Measurement
@@ -752,6 +803,111 @@ func auditBoundary(b *Body) bool {
 		}
 	}
 	return true
+}
+
+// sheetAuditOutcome is auditSheetBoundary's three-way verdict.
+type sheetAuditOutcome int
+
+const (
+	// sheetAuditProven — every structural leg holds and non-self-intersection
+	// is admitted by construction.
+	sheetAuditProven sheetAuditOutcome = iota
+	// sheetAuditViolated — a structural leg is proven to fail.
+	sheetAuditViolated
+	// sheetAuditUndecided — every structural leg holds, but this payload does
+	// not admit non-self-intersection by construction.
+	sheetAuditUndecided
+)
+
+// auditSheetBoundary decides Table V's sheet validity audit
+// (docs/surface-design.md §9.1): three structural legs read off the recorded
+// topology, plus non-self-intersection admitted BY CONSTRUCTION alone. It is
+// deliberately NOT §6.4's closure audit (`loftCrossingAudit`) with closure
+// dropped: that audit runs over a triangulated, all-planar face set sharing
+// one exact vertex table, which a surface-extruded wall's `Plane`,
+// `Cylinder` or `NURBSSurface` geometry — rimmed by `Arc3`, `Circle3` or
+// `NURBSCurve` segments — cannot supply without first being chorded. Admitting
+// a sheet because its chord mesh audits clean would be an admission gate
+// resting on an approximation, which CLAUDE.md's reject-only rule forbids
+// outright.
+//
+// Leg 1 — every face has at least one loop, and every loop has at least one
+// coedge. Unlike auditBoundary's closed-solid audit, there is NO sphere/torus
+// exemption: that allowance is a fact about a closed surface of revolution
+// bounding a solid, and does not carry to a sheet, whose free edges are
+// already the expected shape (docs/surface-design.md §2.2).
+//
+// Leg 2 — every edge is adjacent to one or two faces. Three or more is
+// non-manifold, a defect on either body kind.
+//
+// Leg 3 — every edge adjacent to two faces is traversed by exactly one
+// forward and one backward coedge, counted over every face's every loop's
+// every coedge use. A coedge-use count that disagrees with the edge's own
+// adjacent-face count is also a violation: it means some face's loop walks an
+// edge Faces() does not know about, or fails to walk one it does.
+//
+// Leg 4 — non-self-intersection, admitted only when the body's payload is a
+// prismPayload with surfaceResult true and sectionDelta zero. The proof:
+// `sketch` already decided the recorded segments form the stated simple
+// closed planar region; evalPrismContext already refuses a non-positive
+// height; a simple planar curve crossed with a positive interval does not
+// self-intersect; and pp.xform is rigid, so it preserves that. A nonzero
+// sectionDelta denotes a set the record is only WITHIN that displacement
+// of, so simplicity does not transfer and the answer is undecided; any other
+// payload, or a nil one, is undecided too.
+func auditSheetBoundary(b *Body) sheetAuditOutcome {
+	faces := b.Faces()
+	if len(faces) == 0 {
+		return sheetAuditViolated
+	}
+	for _, f := range faces {
+		loops := f.Loops()
+		if len(loops) == 0 {
+			return sheetAuditViolated
+		}
+		for _, l := range loops {
+			if len(l.Edges()) == 0 {
+				return sheetAuditViolated
+			}
+		}
+	}
+
+	for _, e := range b.Edges() {
+		if len(e.faces) == 0 || len(e.faces) > 2 {
+			return sheetAuditViolated
+		}
+	}
+
+	uses := map[*Edge]int{}
+	forward := map[*Edge]int{}
+	backward := map[*Edge]int{}
+	for _, f := range faces {
+		for _, l := range f.Loops() {
+			for _, ce := range l.CoEdges() {
+				e := ce.Edge()
+				uses[e]++
+				if ce.IsForward() {
+					forward[e]++
+				} else {
+					backward[e]++
+				}
+			}
+		}
+	}
+	for _, e := range b.Edges() {
+		if uses[e] != len(e.faces) {
+			return sheetAuditViolated
+		}
+		if len(e.faces) == 2 && (forward[e] != 1 || backward[e] != 1) {
+			return sheetAuditViolated
+		}
+	}
+
+	pp, ok := b.payload.(prismPayload)
+	if !ok || !pp.surfaceResult || pp.sectionDelta != 0 {
+		return sheetAuditUndecided
+	}
+	return sheetAuditProven
 }
 
 // boxesDisjoint reports whether the two bounds-inflated boxes have disjoint
