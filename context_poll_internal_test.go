@@ -37,7 +37,7 @@ func TestFullRevolveShellsContextPollsEachLoop(t *testing.T) {
 	ctx := &cancelAfterContext{Context: t.Context(), cancelAt: 2}
 	perLoop := [][]*Face{{}, {{}}}
 
-	shells, err := fullRevolveShellsContext(ctx, perLoop)
+	shells, err := fullRevolveShellsContext(ctx, perLoop, false)
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, shells)

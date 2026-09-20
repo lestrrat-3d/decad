@@ -624,8 +624,11 @@ func (s *Shell) IsVoid() bool { return s.void }
 
 // IsOpen reports whether the shell has at least one free edge
 // (docs/surface-design.md §2.2). IsOpen and IsVoid are independent questions
-// and neither implies the other. A surface-result feature's shell sets this
-// true (prism_build.go); every other builder leaves it false.
+// and neither implies the other. A solid's shell is never open; a
+// surface-result feature's sheet shell reports true wherever its build
+// omitted a closing face and left a rim with no second face to pair it with
+// (extrude.go, revolve_build.go), and false for a closed sheet that mints no
+// such rim — a full revolution (docs/surface-design.md Table W).
 func (s *Shell) IsOpen() bool { return s.open }
 
 // Faces returns the shell's faces.

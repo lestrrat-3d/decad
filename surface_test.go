@@ -13,8 +13,9 @@ import (
 )
 
 // This file is docs/surface-design.md's T1/T9/T13-shaped public-surface tests
-// for WithSurfaceResult() on Extrude, its Table R row R1 refusal on Revolve,
-// Sweep and Loft, and Table X's sheet-operand refusals. Every fixture reuses
+// for WithSurfaceResult() on Extrude, its Table R row R1 refusal on Sweep and
+// Loft, and Table X's sheet-operand refusals. WithSurfaceResult() on Revolve
+// has its own file, surface_revolve_test.go. Every fixture reuses
 // plateSketch/regularNGonSketch (extrude_test.go/extrude_bounds_test.go) and
 // annularSketch/uAxis/loftSquares (revolve_test.go/loft_test.go).
 
@@ -222,21 +223,12 @@ func TestSurfaceExtrudeStaysASheetThroughPlacement(t *testing.T) {
 	requireSheetWithFreeEdges(t, copied, 8)
 }
 
-// TestSurfaceResultRefusedByRevolveSweepAndLoft is Table R row R1: each
-// feature this evaluator does not yet build as a surface refuses
-// WithSurfaceResult() outright, and the document is unchanged.
-func TestSurfaceResultRefusedByRevolveSweepAndLoft(t *testing.T) {
+// TestSurfaceResultRefusedBySweepAndLoft is Table R row R1: each feature this
+// evaluator does not yet build as a surface refuses WithSurfaceResult()
+// outright, and the document is unchanged. Revolve moved off this test when
+// it gained its own surface-result build (surface_revolve_test.go).
+func TestSurfaceResultRefusedBySweepAndLoft(t *testing.T) {
 	t.Parallel()
-
-	t.Run("revolve", func(t *testing.T) {
-		t.Parallel()
-		s, p := annularSketch(t)
-		doc := decad.New()
-		before := doc.Bodies()
-		_, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.Equal(t, before, doc.Bodies())
-	})
 
 	t.Run("sweep", func(t *testing.T) {
 		t.Parallel()
@@ -386,6 +378,31 @@ func TestSurfaceExtrudeShellOpenAgreesWithFreeEdgeDerivation(t *testing.T) {
 	}
 	require.Equal(t, hasFree, shells[0].IsOpen())
 	require.True(t, shells[0].IsOpen(), "a surface extrude's rim edges must be free")
+}
+
+// TestSurfaceExtrudeHoledProfileReportsDisconnectedLumps is decision A
+// (docs/surface-design.md §2.2): a holed profile's surface extrude has an
+// outer wall tube and a hole wall tube that touch nowhere once their shared
+// caps are omitted, so Body.Lumps() must report both rather than the one a
+// single hardcoded shell used to. The solid built from the same profile keeps
+// its one lump: its cap faces join both tubes into one connected shell.
+func TestSurfaceExtrudeHoledProfileReportsDisconnectedLumps(t *testing.T) {
+	t.Parallel()
+	s, p := rectWithHoleSketch(t)
+	doc := decad.New()
+	sheet, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	require.Len(t, sheet.Lumps(), 2)
+	for _, l := range sheet.Lumps() {
+		require.Len(t, l.Shells(), 1)
+		require.True(t, l.Shells()[0].IsOpen())
+	}
+
+	s2, p2 := rectWithHoleSketch(t)
+	solidDoc := decad.New()
+	solid, err := solidDoc.Extrude(s2, p2, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	require.NoError(t, err)
+	require.Len(t, solid.Lumps(), 1)
 }
 
 // TestSurfaceExtrudeSheetVerifiesValid is docs/surface-design.md's sheet

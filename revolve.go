@@ -18,7 +18,8 @@ import (
 // gates, angular-extent resolution to a sweep interval (the body-relative
 // ToFaceAngular stop resolves through stops.go and leaves its body live), and the analytic revolve
 // evaluator — Cylinder, Cone, planar-annulus, Sphere and Torus side faces
-// per boundary segment kind, caps only on partial sweeps, and Pappus
+// per boundary segment kind, caps on partial sweeps (both closing the solid
+// and, under WithSurfaceResult, omitted from a sheet), and Pappus
 // measurements with proven float-evaluation bounds.
 //
 // That evaluator is spread over three sibling files, each with its own doc
@@ -102,9 +103,13 @@ func normalizeAxis(a Axis) (Axis, error) {
 	}
 }
 
-// RevolveOption configures Revolve. No options are currently supported: the
-// option group exists so options can be added without changing the signature —
-// every such option must have one clear, validated effect on the call.
+// RevolveOption configures Revolve. WithSurfaceResult (docs/surface-design.md
+// §4) is the one option today: it omits the two caps a partial sweep would
+// otherwise close with and publishes a sheet instead of a solid. A full
+// revolution mints no closing face to omit, so there the option changes no
+// face and returns a CLOSED sheet with no free edge — §2.1's closed-sheet
+// rule, not a refusal (Table W). A repeated WithSurfaceResult() is
+// idempotent, never an error.
 type RevolveOption interface {
 	option.Interface
 	revolveOption()
@@ -121,6 +126,10 @@ type RevolveOption interface {
 // a whole line segment lying along it; anything else is ErrDegenerate
 // (docs/evaluator-design.md §6). The evaluator converts the profile and plane
 // to structural records; a failed evaluation leaves the document untouched.
+// WithSurfaceResult() omits the two caps a partial sweep closes with and
+// publishes a sheet instead of a solid; a full revolution already closes with
+// no cap to omit, so the option there yields a closed sheet rather than a
+// refusal (docs/surface-design.md §4, Table W).
 func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
@@ -137,12 +146,18 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 	if err := falsifyRecordedArea(profile, profileArea, work); err != nil {
 		return nil, err
 	}
+	surfaceResult := false
 	for _, o := range opts {
 		if o == nil {
 			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
-		if err := refuseSurfaceResult(o, "Revolve"); err != nil {
-			return nil, err
+		// RevolveOption carries exactly one variant today, so this is an if
+		// rather than a type switch on o.Ident() — gocritic's singleCaseSwitch
+		// flags a single-case switch, and a second RevolveOption is when this
+		// grows one. A repeated WithSurfaceResult() is idempotent, the same
+		// tolerance Extrude gives its own repeat (extrude.go).
+		if _, ok := o.Ident().(identSurfaceResult); ok {
+			surfaceResult = true
 		}
 	}
 
@@ -195,14 +210,15 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 
 	ref := d.nextProducerID()
 	body, err := evalRevolveWork(d, ref, work, revolvePayload{
-		profile: profile,
-		frame:   frame,
-		ax:      ax,
-		phi0:    phi0,
-		phi1:    phi1,
-		full:    full,
-		den:     den,
-		xform:   r3.Identity(),
+		profile:       profile,
+		frame:         frame,
+		ax:            ax,
+		phi0:          phi0,
+		phi1:          phi1,
+		full:          full,
+		den:           den,
+		xform:         r3.Identity(),
+		surfaceResult: surfaceResult,
 	})
 	if err != nil {
 		return nil, err

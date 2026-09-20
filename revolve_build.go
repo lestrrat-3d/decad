@@ -41,14 +41,26 @@ import (
 // falls back to the same magnitude envelope every consumer published before
 // this field existed. Being a payload field it re-evaluates with the
 // payload, so Placed and Duplicate carry it unchanged.
+//
+// surfaceResult is WithSurfaceResult's own flag (docs/surface-design.md §4):
+// true when the build must publish a sheet instead of a solid. A full
+// revolution mints no closing face at all, so the flag changes the face set
+// only when full is false — a partial sweep omits its two caps — while it
+// changes Kind() and every measurement derived from solid vs. sheet in every
+// case, full sweep included (Table W). It is part of the re-evaluable record
+// for the same reason prismPayload.surfaceResult is, so Placed, Duplicate and
+// PlacedCopy reproduce the sheet with no further code; a plain revolve leaves
+// it false. sweep_arc.go and sweep_composite_measure.go also build a
+// revolvePayload literal and leave this field at its zero value.
 type revolvePayload struct {
-	profile    ProfileRecord
-	frame      r3.Frame
-	ax         axisFrame
-	phi0, phi1 float64
-	full       bool
-	den        sweepDenotation
-	xform      r3.Transform
+	profile       ProfileRecord
+	frame         r3.Frame
+	ax            axisFrame
+	phi0, phi1    float64
+	full          bool
+	den           sweepDenotation
+	xform         r3.Transform
+	surfaceResult bool
 }
 
 // transform is the accumulated rigid placement.
@@ -210,7 +222,15 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	}
 
 	b := rp.basis()
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
+	// A surface result publishes a sheet, never a solid: solid false is what
+	// makes Volume() and Centroid() answer ErrNotSolid through their existing
+	// guards, and kind BodySheet is what Kind() reports
+	// (docs/surface-design.md §4.3).
+	kind := BodySolid
+	if rp.surfaceResult {
+		kind = BodySheet
+	}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: !rp.surfaceResult, kind: kind}
 
 	// Partial sweeps get two planar cap faces; a full revolution has none.
 	var capStart, capEnd *Face
@@ -266,32 +286,74 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 
 	// Shells: a partial sweep's caps connect every loop's walls into one
 	// boundary, but a full revolution encloses each profile hole as its own
-	// toroidal void — a separate shell, and a void one (evaluator §3).
-	var shells []*Shell
+	// toroidal void — a separate shell, and a void one (evaluator §3). A
+	// surface result never claims that void (decision B,
+	// docs/surface-design.md §2.2): its hole loop's own closed surface
+	// touches the outer one nowhere, so it is a wholly separate piece of the
+	// body's boundary and gets its own Lump rather than a second shell of the
+	// solid's one (decision A).
+	var lumps []*Lump
 	if rp.full {
-		var err error
-		shells, err = fullRevolveShellsContext(ctx, perLoop)
+		shells, err := fullRevolveShellsContext(ctx, perLoop, rp.surfaceResult)
 		if err != nil {
 			return nil, err
+		}
+		if rp.surfaceResult {
+			lumps = make([]*Lump, len(shells))
+			for i, sh := range shells {
+				lumps[i] = &Lump{shells: []*Shell{sh}}
+			}
+		} else {
+			lumps = []*Lump{{shells: shells}}
 		}
 	} else {
 		var faces []*Face
 		for _, group := range perLoop {
 			faces = append(faces, group...)
 		}
-		faces = append(faces, capStart, capEnd)
-		if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
-			return nil, err
+		// A surface result omits both caps from the shell (Table W,
+		// docs/surface-design.md §4.1-§4.2): capStart/capEnd stay constructed
+		// above so the area accumulation below can still read their area
+		// fields, but neither joins faces nor gets its loops attached, which
+		// is what leaves each rim edge with only its wall face — both
+		// cap-plane rims of every wall become free edges with no
+		// rim-specific code.
+		if !rp.surfaceResult {
+			faces = append(faces, capStart, capEnd)
+			if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
+				return nil, err
+			}
 		}
-		shells = []*Shell{{faces: faces}}
+		if rp.surfaceResult {
+			// sheetLumps splits by connectivity (decision A): a holed
+			// profile's loops touch nowhere once their caps are omitted, so
+			// each becomes its own Lump instead of one shell regardless.
+			lumps = sheetLumps(faces)
+		} else {
+			lumps = []*Lump{{shells: []*Shell{{faces: faces, open: shellIsOpen(faces)}}}}
+		}
 	}
-	body.lumps = []*Lump{{shells: shells}}
+	body.lumps = lumps
 
 	// Measurements — Pappus with the profile and float-evaluation bounds
 	// carried through (docs/evaluator-design.md §6).
 	area := sideArea
 	if !rp.full {
 		area = boundedAdd(area, boundedMul(exactScalar(2), measuredScalar(ig.area, ig.areaBound)))
+		if rp.surfaceResult {
+			// §4.3: a surface result's area is the solid's area minus the two
+			// omitted caps'. Each cap's area and bound are read back from the
+			// Face fields the construction above stamped, and the
+			// subtraction runs here — as the LAST thing that touches area,
+			// since revolve carries no per-cap bound re-stamp the way the
+			// prism's evalPrismContext does, so nothing after this point may
+			// still widen capStart's or capEnd's own bound out from under a
+			// value already composed from them. Collapsing this to sideArea
+			// alone would hold the same value but a smaller, uncomposed
+			// bound than §4.3's composed sum requires.
+			area = boundedSub(area, measuredScalar(capStart.area, capStart.areaBound))
+			area = boundedSub(area, measuredScalar(capEnd.area, capEnd.areaBound))
+		}
 	}
 	volume := boundedMul(q, sweep)
 	body.volume = Measurement{
@@ -578,6 +640,13 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 				return revLoopParts{}, err
 			}
 			if kinds[i] == wallAxis {
+				// This edge is appended only to cap0/cap1 below, never to any
+				// wall face's own loop — a LineSeg on the axis emits no wall
+				// face at all (evaluator §6). A solid's attached caps are
+				// what give it its two faces; a surface result never attaches
+				// them, so nothing else references this edge and Body.Edges()
+				// never reaches it — Table W row 3's on-axis-edge omission
+				// delivered by omission, not a special case to "fix" here.
 				shared := &Edge{
 					curve:       Line3{},
 					start:       js[i].v0,
@@ -670,7 +739,15 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 	return parts, nil
 }
 
-func fullRevolveShellsContext(ctx context.Context, perLoop [][]*Face) ([]*Shell, error) {
+// fullRevolveShellsContext builds one shell per non-empty loop group. sheet is
+// rp.surfaceResult: a full revolution's wall set already closes on itself, so
+// every shell built here is closed regardless of kind, but shellIsOpen still
+// runs rather than assuming it — the same discipline every other shell in
+// this build follows (docs/surface-design.md §2.2). void is li != 0 on a
+// solid, whose hole loop bounds its own toroidal cavity (evaluator §3); a
+// sheet bounds no cavity at all (decision B, §2.2), so it is always false
+// there.
+func fullRevolveShellsContext(ctx context.Context, perLoop [][]*Face, sheet bool) ([]*Shell, error) {
 	var shells []*Shell
 	for li, group := range perLoop {
 		if err := ctx.Err(); err != nil {
@@ -679,7 +756,7 @@ func fullRevolveShellsContext(ctx context.Context, perLoop [][]*Face) ([]*Shell,
 		if len(group) == 0 {
 			continue
 		}
-		shells = append(shells, &Shell{faces: group, void: li != 0})
+		shells = append(shells, &Shell{faces: group, open: shellIsOpen(group), void: li != 0 && !sheet})
 	}
 	return shells, nil
 }

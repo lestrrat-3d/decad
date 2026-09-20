@@ -147,8 +147,15 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		}
 	}
 
-	shell := &Shell{faces: faces, open: pp.surfaceResult}
-	body.lumps = []*Lump{{shells: []*Shell{shell}}}
+	// sheetLumps derives IsOpen from the faces' own edge adjacency rather than
+	// the option that built them, and splits the face set by connectivity
+	// rather than assuming one shell holds the whole body regardless of it
+	// (docs/surface-design.md §2.2). A solid's faces are always one connected
+	// piece — its caps join every loop's wall tube to every other's — so this
+	// reproduces the previous single-shell, single-lump body for a solid
+	// unchanged; a surface result's holed profile, whose loops touch nowhere
+	// once their caps are omitted, is what actually needs more than one.
+	body.lumps = sheetLumps(faces)
 
 	// Measurements carry the closed forms' proven float bounds
 	// (docs/evaluator-design.md §5), plus — where the payload carries one — the
@@ -348,7 +355,12 @@ func rimConvexity(ctx context.Context, w sideWalk, holeLoop bool, work *freeform
 			// role — the same expression the default arm below uses.
 			return !holeLoop, nil
 		}
-		return !holeLoop, nil
+		// The three verdicts above are exhaustive today, so this is
+		// unreachable — but a future fourth verdict silently falling through
+		// to !holeLoop would be a straight-wall answer for a wall this
+		// evaluator never proved straight, exactly the quiet wrong answer
+		// this project exists to prevent. Refuse explicitly rather than guess.
+		return false, fmt.Errorf(`%w: free-form wall convexity verdict %d is not handled by this evaluator`, ErrUnsupported, verdict)
 	default:
 		// A straight wall has no turn of its own to disagree with the
 		// loop's: which side its material lies on is decided by the sense
