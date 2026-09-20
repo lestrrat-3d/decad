@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -786,4 +788,74 @@ func TestVertexTierBudgetKeepsNormalResult(t *testing.T) {
 	require.Equal(t, 5.0, sink.contribs[0].hi)
 	require.True(t, sink.contribs[0].exact)
 	require.False(t, math.IsInf(sink.contribs[0].lo, 0))
+}
+
+// TestAddPrismFacesOmitsCapsForSurfaceResult is docs/surface-design.md §4.1's
+// boundary-model obligation for the clearance kernel: a surface-result
+// prism's walls ARE its whole boundary, so the kernel model must hold the
+// wall count and nothing else — never the two capped-solid faces the solid
+// version carries. A rectangle's 4 straight sides give 4 planar walls and,
+// with no caps present, every one of their normals runs ACROSS the sweep
+// direction rather than along it (a cap's normal is the sweep direction
+// itself), which is the geometric fact that distinguishes a wall from a cap.
+func TestAddPrismFacesOmitsCapsForSurfaceResult(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	doc := New()
+	sheet, err := doc.Extrude(s, s.Profiles()[0],
+		Distance{D: units.Millimeters(10), Dir: Along}, WithSurfaceResult())
+	require.NoError(t, err)
+
+	pp, ok := sheet.payload.(prismPayload)
+	require.True(t, ok)
+	require.True(t, pp.surfaceResult)
+	sweepDir := pp.dir(0, 0, 1)
+
+	g, ok := newBodyGeom(sheet)
+	require.True(t, ok, `a surface-result prism must still admit a kernel model`)
+	require.Len(t, g.faces, 4, `a rectangle's 4 straight walls, no caps`)
+	for _, f := range g.faces {
+		require.Equal(t, ckPlane, f.kind)
+		require.InDelta(t, 0, f.n.Dot(sweepDir), 1e-9,
+			`a wall's normal runs across the sweep direction; a cap's would run along it`)
+	}
+}
+
+// TestNewBodyGeomRefusesSurfaceResultRevolve is docs/surface-design.md §4.2
+// Table W's partial-sweep row for the clearance kernel: addRevolveFaces
+// builds the two cap faces of a partial sweep unconditionally, which is a
+// closed model a surface-result revolve's walls do not have. No caller
+// reaches this today (§9.3 stops a sheet on box separation first), so the
+// kernel refuses a model outright rather than handing back the wrong one.
+func TestNewBodyGeomRefusesSurfaceResultRevolve(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 5, 10, 15) // clear of the u axis
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	doc := New()
+	axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
+	extent := AngleExtent{A: units.Degrees(90), Dir: Along}
+	sheet, err := doc.Revolve(s, s.Profiles()[0], axis, extent, WithSurfaceResult())
+	require.NoError(t, err)
+
+	rp, ok := sheet.payload.(revolvePayload)
+	require.True(t, ok)
+	require.True(t, rp.surfaceResult)
+	require.False(t, rp.full)
+
+	_, ok = newBodyGeom(sheet)
+	require.False(t, ok,
+		`a partial-sweep surface-result revolve must be refused a model, not handed a closed one`)
 }

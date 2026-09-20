@@ -127,6 +127,7 @@
 0	0.01	TestMinRadiusAnnularRevolveStaysExact
 0	0.01	TestMultiSegmentFreeformRegionRoundsOnce
 0	0.03	TestNewBodyGeomCancellationIsBounded
+0	0.00	TestNewBodyGeomRefusesSurfaceResultRevolve
 0	0.02	TestNormalAtExactnessIsProven
 0	0.01	TestPairStationsAcceptTestRequiresBothSidesUnderTarget
 0	0.09	TestPairStationsSharedStationSetAcrossDifferentScale
@@ -246,6 +247,7 @@
 1	0.06	FuzzBoolean
 1	0.00	FuzzTriangulate2D
 1	0.00	TestAddBlendRolesContextPollsNestedMetadata
+1	0.00	TestAddPrismFacesOmitsCapsForSurfaceResult
 1	0.00	TestAddRevolveFacesCancellationReachesRevolveLoops
 1	0.00	TestAddRevolveFacesPreservesMeridianErrorMapping
 1	0.00	TestAnalyticBodiesEqualCancellationIsBounded
