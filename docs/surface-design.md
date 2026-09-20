@@ -134,11 +134,16 @@ A sheet body uses `docs/api-design.md` §6.1's chain unchanged —
 Three things it holds differently, and nothing else changes:
 
 - **A `Lump` is a connected piece of a body, not a connected *solid* piece.**
-  A sheet lump holds exactly one shell. `Body.Lumps()` returning more than one
-  still means the body is disconnected, on a sheet exactly as on a solid. The
-  alternative — hanging a sheet's shells off the body directly — would give
-  `Body.Shells()` two traversal paths and break the 1:1 map onto Fusion's own
-  `BRepBody.lumps` that `docs/api-design.md` §4 keeps deliberately.
+  A sheet lump holds one shell, one per CONNECTED piece of boundary — never
+  the whole face set regardless of whether it is actually connected. A holed
+  profile built as a surface loses the caps that would otherwise join its
+  outer wall tube to its hole wall tube, so the two become genuinely separate
+  pieces and the body reports one lump per piece, exactly as a disconnected
+  solid does. `Body.Lumps()` returning more than one still means the body is
+  disconnected, on a sheet exactly as on a solid. The alternative — hanging a
+  sheet's shells off the body directly — would give `Body.Shells()` two
+  traversal paths and break the 1:1 map onto Fusion's own `BRepBody.lumps`
+  that `docs/api-design.md` §4 keeps deliberately.
 - **A shell may be open**, and says so:
 
   ```go
@@ -750,10 +755,19 @@ kernel could not settle.
 ## 10. Tessellation and export
 
 **A sheet body tessellates, with the closed-mesh audit replaced by the
-manifold-with-boundary audit.** `docs/tessellation-design.md` §1.2 owns that
-audit's three requirements, the fact that every other row of its §1 contract
-binds a sheet mesh unchanged, why a sheet mesh reaches no boolean, and what
-`STL` and `OBJ` write. §12 records the amendment that added it.
+manifold-with-boundary audit** — the eventual shape, and where increment 2 or
+3 lands it. `docs/tessellation-design.md` §1.2 owns that audit's three
+requirements, the fact that every other row of its §1 contract binds a sheet
+mesh unchanged, why a sheet mesh reaches no boolean, and what `STL` and `OBJ`
+write. §12 records the amendment that adds it.
+
+**Today, tessellating or exporting a sheet is `ErrUnsupported`.** The audit
+above is not built yet, and `Tessellate`/`STL`/`OBJ` refuse at the dispatch
+that would otherwise look up a role a surface result's own build never
+attached (§4.2) — a clean statement of this evaluator's own reach, never the
+`ErrDegenerate` a missing face role would otherwise report, since the body's
+geometry is not the problem. A later PR replaces the refusal with the real
+path Table D stages it against.
 
 Two consequences this design leans on, stated here as claims and derived there.
 A sheet mesh is never a boolean operand, which is what Table X's boolean row
@@ -771,7 +785,7 @@ rather than after.
 | `Fillet` / `Chamfer` | `ErrUnsupported` | `docs/modify-design.md`'s reduction rewrites a prism's **section**; a sheet's free boundary is not a section, and blending to a free edge is its own design |
 | `Shell` | `ErrUnsupported` | offsets a section into a wall of thickness `t`; a sheet has no section, and the offset is Thicken's own open question (§1.2) |
 | `Placed` / `PlacedCopy` / `Duplicate` | admitted, unchanged | a rigid motion of a payload; nothing in it reads solidity |
-| `Tessellate` / `STL` / `OBJ` | admitted (§10) | — |
+| `Tessellate` / `STL` / `OBJ` | `ErrUnsupported`, staged (§10) | the manifold-with-boundary audit §10 describes is not built yet |
 | `ToFace` / `ToFaceAngular` naming a **planar** face of a live sheet | admitted | the stop reads the face's plane and nothing about material, so `stops.go`'s resolution is unchanged |
 | `ToFace` naming a curved face of a sheet | as for a solid | this design changes no curved-stop reach |
 | `EdgeAxis` naming a linear edge of a live sheet | admitted | the axis reads the edge's line; `docs/api-design.md` §6.2's exactly-one and liveness rules apply unchanged |
@@ -848,7 +862,7 @@ ANSWER is accepted and reads `Suspect`.
 
 | # | Lands |
 |---|---|
-| 1 | `BodyKind` and `Kind()`, `Shell.IsOpen`, `Edge.IsFree`, `Free()`; `WithSurfaceResult()` on `Extrude` and `Revolve`; `Document.Patch`; the sheet validity audit, sheet tessellation and export; `DiagUnsupportedPairSheet` and §9.3's box rule; every Table A amendment |
+| 1 | `BodyKind` and `Kind()`, `Shell.IsOpen`, `Edge.IsFree`, `Free()`; `WithSurfaceResult()` on `Extrude` and `Revolve`; `Document.Patch`; the sheet validity audit; `DiagUnsupportedPairSheet` and §9.3's box rule; every Table A amendment. Sheet tessellation and export are staged, not delivered: both refuse `ErrUnsupported` until a later increment builds the manifold-with-boundary audit (§10) |
 | 2 | `Stitch` and `Unstitch` over exact all-planar boundaries (Table J with J5, Table C's first two rows); `Body.Patch`; the sheet-against-solid containment cast and clearance gap of §9.3, narrowing when `DiagUnsupportedPairSheet` fires |
 | 3 | `WithSurfaceResult()` on `Sweep` and `Loft`; the shared-denotation certificate, which lifts J5 for bounded edges and §5.2 gate 3's bounded-chain half of R6 together; the per-surface flux integral that lifts Table C's curved-closure refusal (R8); the undercut survey over a sheet's positive side |
 
@@ -875,7 +889,7 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T7 | a surface-extruded profile and a solid whose boxes overlap | `Verify` reads `Suspect` with exactly one `DiagUnsupportedPairSheet` naming the pair, and no `Interference` or `Clearance` row |
 | T8 | the same pair moved until the boxes separate | `Verify` reads `Sound`, with no diagnostic |
 | T9 | a sheet handed to `Union`, `Fillet`, `Chamfer` and `Shell` | each is `ErrUnsupported`; the receiver and every operand stay live, and `Document.Bodies()` is unchanged |
-| T10 | a sheet tessellated | the manifold-with-boundary audit passes; every mesh free edge lies on a body free edge; `Bound` is the payload's own; the STL round-trips its triangle count |
+| T10 | a sheet tessellated | deferred to the increment that builds the manifold-with-boundary audit (§10, Table D); today, `Tessellate`/`STL`/`OBJ` on a sheet is `ErrUnsupported` and that refusal is T9-shaped, not T10's |
 | T11 | a three-face assembly welded into a Möbius orientation | `Stitch` is `ErrDegenerate` (R7), and the document is unchanged |
 | T12 | `Body.Patch` on a non-planar four-edge chain | `ErrUnsupported` (R6); and on a bounded-but-planar chain, `ErrUnsupported` on the same row |
 | T13 | every Table R row | the stated sentinel, with `errors.Is` holding, and no document change |

@@ -241,6 +241,16 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64) (*Mesh, 
 		return tessellateLoft(ctx, b, lp)
 	}
 	if rp, ok := b.payload.(revolvePayload); ok {
+		if rp.surfaceResult {
+			// Tessellating (and so exporting, export.go) a sheet is staged
+			// for a later increment (docs/surface-design.md §10): the
+			// manifold-with-boundary mesh audit T10 asks for is not built
+			// yet. Refusing here, before any face-role lookup, is a clean
+			// ErrUnsupported rather than the ErrDegenerate a missing
+			// capStart/capEnd role would otherwise report — this evaluator's
+			// own reach, not a claim the body's geometry is bad.
+			return nil, fmt.Errorf(`%w: tessellating a sheet body is staged for a later increment`, ErrUnsupported)
+		}
 		return tessellateRevolve(ctx, b, rp, chord)
 	}
 	if cbp, ok := b.payload.(capBlendPayload); ok {
@@ -251,6 +261,16 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64) (*Mesh, 
 		// Chording is per payload kind. Name both the staged kind and the
 		// implemented set so the refusal cannot misstate evaluator reach.
 		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, revolve, cup, loft, cap-loop chamfer, and faceted`, ErrUnsupported, b.payload)
+	}
+	if pp.surfaceResult {
+		// Tessellating (and so exporting, export.go) a sheet is staged for a
+		// later increment (docs/surface-design.md §10): the
+		// manifold-with-boundary mesh audit T10 asks for is not built yet.
+		// Refusing here, before any face-role lookup, is a clean
+		// ErrUnsupported rather than the ErrDegenerate a missing
+		// capStart/capEnd role would otherwise report — this evaluator's own
+		// reach, not a claim the body's geometry is bad.
+		return nil, fmt.Errorf(`%w: tessellating a sheet body is staged for a later increment`, ErrUnsupported)
 	}
 
 	// Every mesh vertex lands on the RECORDED section, which a payload carrying a
