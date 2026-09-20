@@ -735,6 +735,7 @@ func TestDiagnosticCodeTokens(t *testing.T) {
 	require.Equal(t, "unsupported_pair_payload", decad.DiagUnsupportedPairPayload.String())
 	require.Equal(t, "unsupported_pair_contact", decad.DiagUnsupportedPairContact.String())
 	require.Equal(t, "unsupported_pair_pipeline", decad.DiagUnsupportedPairPipeline.String())
+	require.Equal(t, "unsupported_pair_sheet", decad.DiagUnsupportedPairSheet.String())
 	require.Equal(t, "unsupported_survey_payload", decad.DiagUnsupportedSurveyPayload.String())
 	require.Equal(t, "survey_prerequisite", decad.DiagSurveyPrerequisite.String())
 	require.Equal(t, "tolerance_reference_unavailable", decad.DiagToleranceReferenceUnavailable.String())

@@ -237,12 +237,23 @@ const (
 	// geometry exceeds the pipeline's supported reach. Reading ReadingNone.
 	// Contributes Suspect.
 	DiagUnsupportedPairPipeline
+	// DiagUnsupportedPairSheet — one or both operands is a sheet body, which
+	// encloses no region, so the interference relation (§1) is not the
+	// question the caller means, and no Interference or Clearance row is
+	// emitted. It fires only when the pair's bounds-inflated boxes MEET: a
+	// sheet parked away from every solid is decidedly apart and emits
+	// nothing, so a model that merely holds a sheet still reads Sound
+	// (docs/surface-design.md §9.3). Reading ReadingNone, Observed* and
+	// Required nil, Pair set. Contributes Suspect.
+	DiagUnsupportedPairSheet
 	// DiagUnsupportedSurveyPayload — an asked body survey cannot run because
 	// its payload class is staged. Reading ReadingNone. Contributes Suspect.
 	DiagUnsupportedSurveyPayload
 	// DiagSurveyPrerequisite — a requested survey needs a proven solid, and
-	// this body's validity is invalid or undecided. Survey names the blocked
-	// question, Reading ReadingNone. Contributes Suspect.
+	// this body does not supply one: its validity is invalid or undecided, OR
+	// it is a sheet body, which has no material for a wall, pull or concave
+	// question to be about (docs/surface-design.md §9.1). Survey names the
+	// blocked question, Reading ReadingNone. Contributes Suspect.
 	DiagSurveyPrerequisite
 	// DiagToleranceReferenceUnavailable — a nonzero-bound reading has no
 	// usable tolerance reference, so the gate could not judge it. Reading
@@ -287,6 +298,8 @@ func (c DiagnosticCode) String() string {
 		return "unsupported_pair_contact"
 	case DiagUnsupportedPairPipeline:
 		return "unsupported_pair_pipeline"
+	case DiagUnsupportedPairSheet:
+		return "unsupported_pair_sheet"
 	case DiagUnsupportedSurveyPayload:
 		return "unsupported_survey_payload"
 	case DiagSurveyPrerequisite:

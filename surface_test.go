@@ -388,11 +388,14 @@ func TestSurfaceExtrudeShellOpenAgreesWithFreeEdgeDerivation(t *testing.T) {
 	require.True(t, shells[0].IsOpen(), "a surface extrude's rim edges must be free")
 }
 
-// TestSurfaceExtrudeSheetVerifiesUndecided is the verify.go holding fix
-// (docs/surface-design.md §9.1, §14): the manifold-with-boundary audit lands
-// later, so a sheet reads ValidityUndecided rather than proven invalid, and
-// carries no Region and no DiagInvalidBody.
-func TestSurfaceExtrudeSheetVerifiesUndecided(t *testing.T) {
+// TestSurfaceExtrudeSheetVerifiesValid is docs/surface-design.md's sheet
+// validity audit (§9.1): a surface-extruded rectangle's boundary reads clean
+// under all three structural legs, and its payload — a prismPayload with
+// surfaceResult true and a zero sectionDelta — admits the fourth,
+// non-self-intersection, by construction. The sheet reads ValidityValid
+// outright, with no Region (a sheet encloses none) and both the body and the
+// whole report Sound with no diagnostics.
+func TestSurfaceExtrudeSheetVerifiesValid(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
@@ -402,11 +405,120 @@ func TestSurfaceExtrudeSheetVerifiesUndecided(t *testing.T) {
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	br := decadtest.FindBodyReport(t, report, sheet)
-	require.Equal(t, decad.ValidityUndecided, br.Validity.Outcome)
+	require.Equal(t, decad.ValidityValid, br.Validity.Outcome)
+	require.Empty(t, br.Validity.Diagnostics)
 	require.Nil(t, br.Region)
-	require.Len(t, br.Validity.Diagnostics, 1)
-	require.Equal(t, decad.DiagUndecidedValidity, br.Validity.Diagnostics[0].Code)
-	for _, d := range br.Diagnostics {
-		require.NotEqual(t, decad.DiagInvalidBody, d.Code)
+	require.Equal(t, 1, br.Topology.Lumps)
+	require.Equal(t, 0, br.Topology.Voids)
+	require.Equal(t, decad.Sound, br.Status)
+	require.Empty(t, br.Diagnostics)
+	require.Equal(t, decad.Sound, report.Status)
+	require.Empty(t, report.Diagnostics)
+}
+
+// TestSheetSurveysReadUnavailableWithPrerequisite is docs/surface-design.md
+// §9.1's survey row: a sound sheet has no material for a wall, pull or
+// concave question, so every requested survey reads Unavailable with its own
+// DiagSurveyPrerequisite naming the blocked survey, and the report reads
+// Suspect purely on their account.
+func TestSheetSurveysReadUnavailableWithPrerequisite(t *testing.T) {
+	t.Parallel()
+	s, p := plateSketch(t)
+	doc := decad.New()
+	sheet, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(),
+		decad.WithMinWallThickness(units.Millimeters(1)),
+		decad.WithPullDirection(r3.NewVec(0, 0, 1)),
+		decad.WithConcaveRadius(),
+	)
+	require.NoError(t, err)
+	br := decadtest.FindBodyReport(t, report, sheet)
+
+	require.Equal(t, decad.ScalarUnavailable, br.Wall.Outcome)
+	require.Equal(t, decad.CoverageUnavailable, br.Undercut.Coverage)
+	require.Equal(t, decad.ScalarUnavailable, br.ConcaveRadius.Outcome)
+
+	requireOnePrerequisite := func(diags []decad.Diagnostic, survey decad.SurveyKind) {
+		t.Helper()
+		require.Len(t, diags, 1)
+		require.Equal(t, decad.DiagSurveyPrerequisite, diags[0].Code)
+		require.Equal(t, survey, diags[0].Survey)
+	}
+	requireOnePrerequisite(br.Wall.Diagnostics, decad.SurveyWall)
+	requireOnePrerequisite(br.Undercut.Diagnostics, decad.SurveyUndercut)
+	requireOnePrerequisite(br.ConcaveRadius.Diagnostics, decad.SurveyConcaveRadius)
+
+	require.Len(t, br.Diagnostics, 3)
+	require.Equal(t, decad.Suspect, report.Status)
+}
+
+// sheetBoxBody surface-extrudes an axis-aligned rectangle into doc, the sheet
+// counterpart of clearance_test.go's boxBody.
+func sheetBoxBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, h float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(x0, y0, x1, y1)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	return body
+}
+
+// TestSheetSolidPairOverlappingBoxesAreUnsupported is docs/surface-design.md's
+// T7: a surface-extruded sheet and a solid whose bounds-inflated boxes meet
+// take §9.3's pair rule — one DiagUnsupportedPairSheet naming the pair in
+// document order, no Interference or Clearance row — under the default call
+// and under WithClearances() alike.
+func TestSheetSolidPairOverlappingBoxesAreUnsupported(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	sheet := sheetBoxBody(t, doc, 0, 0, 10, 10, 5)
+	solid := boxBody(t, doc, 5, 5, 15, 15, 5)
+
+	for _, opts := range [][]decad.VerifyOption{nil, {decad.WithClearances()}} {
+		report, err := doc.Verify(t.Context(), opts...)
+		require.NoError(t, err)
+		require.Equal(t, decad.Suspect, report.Status)
+
+		diags := decadtest.FindDiagnostics(t, report, decad.DiagUnsupportedPairSheet)
+		require.Len(t, diags, 1)
+		d := diags[0]
+		require.NotNil(t, d.Pair)
+		require.Same(t, sheet, d.Pair.A)
+		require.Same(t, solid, d.Pair.B)
+		require.Equal(t, decad.ReadingNone, d.Reading)
+		require.Nil(t, d.Observed)
+		require.Nil(t, d.ObservedVec)
+		require.Nil(t, d.ObservedBox)
+		require.Nil(t, d.Required)
+		require.Nil(t, d.Body)
+
+		require.Empty(t, report.Interferences)
+		require.Empty(t, report.Clearances)
+	}
+}
+
+// TestSheetSolidPairSeparatedBoxesVerifySound is docs/surface-design.md's T8:
+// the same pair, moved apart until the boxes separate, contributes nothing
+// and reads Sound, under the default call and under WithClearances() alike.
+func TestSheetSolidPairSeparatedBoxesVerifySound(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	sheetBoxBody(t, doc, 0, 0, 10, 10, 5)
+	boxBody(t, doc, 100, 100, 110, 110, 5)
+
+	for _, opts := range [][]decad.VerifyOption{nil, {decad.WithClearances()}} {
+		report, err := doc.Verify(t.Context(), opts...)
+		require.NoError(t, err)
+		require.Equal(t, decad.Sound, report.Status)
+		require.Empty(t, report.Diagnostics)
+		require.Empty(t, report.Interferences)
+		require.Empty(t, report.Clearances)
 	}
 }
