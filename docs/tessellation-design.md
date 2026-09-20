@@ -39,7 +39,7 @@ Every successful mesh MUST satisfy all rows:
 
 | Property | Requirement |
 |---|---|
-| **Geometry** | `Triangles` index `Vertices`; every triangle has positive area; every connected boundary component is a closed, consistently outward-oriented 2-manifold |
+| **Geometry** | `Triangles` index `Vertices`; every triangle has positive area; on a `BodySolid`, every connected boundary component is a closed, consistently outward-oriented 2-manifold; on a `BodySheet`, every component is a consistently oriented 2-manifold WITH BOUNDARY (§1.2) |
 | **Deviation** | `Bound` is a two-sided boundary bound: every point of the analytic boundary is within `Bound` of the mesh, and every point of the mesh is within `Bound` of the analytic boundary |
 | **Tolerance** | The chording component is `<= tol`; `Bound` also includes inherited payload displacement, so it can exceed `tol` |
 | **Provenance** | `len(SourceFaces()) == len(Triangles())`; entry `i` is the live body face whose patch triangle `i` approximates |
@@ -47,7 +47,8 @@ Every successful mesh MUST satisfy all rows:
 | **Determinism** | Equal payload + equal tolerance → equal vertex order, triangle order, source-face order, and export bytes |
 | **Immutability** | Accessors return copies; callers cannot change the held mesh or its proof data |
 
-The closed-mesh audit is mandatory for every payload. It counts directed edges:
+The closed-mesh audit is mandatory for every `BodySolid` payload. It counts
+directed edges:
 each directed edge occurs once and its reverse occurs once. A payload with
 several shells or lumps may produce several closed components; the audit is per
 whole mesh and permits that. The audit is a safety net after construction, not a
@@ -83,6 +84,29 @@ mesh for the same missing key. Each complete success may replace the one entry,
 and the last completed success wins. A caller that loses that race still
 returns its own complete mesh; later hits return whichever success was stored
 last. Cache operations are race-safe and do not mutate payload or mesh data.
+
+### 1.2 The sheet audit
+
+**A `BodySheet` payload runs the manifold-with-boundary audit in the
+closed-mesh audit's place**, over the same directed-edge count and with the
+same safety-net role:
+
+| Requirement | Statement |
+|---|---|
+| directed edges | each directed edge occurs at most once; an interior edge's reverse occurs exactly once; a free boundary edge has no reverse |
+| orientation | consistent across every interior edge, matching the shell's own positive side (`docs/surface-design.md` §2.3) |
+| free boundary | every mesh free edge lies on a body free edge, and every body free edge is covered by mesh free edges |
+
+Every other row of §1's table binds a sheet mesh unchanged, and so does §1.1's
+one-entry cache.
+
+**A sheet mesh carries no occupied-volume proof, so §11 never admits it to a
+boolean.** That follows from §11's own rule rather than adding one: admission
+is on the occupied-volume proof, and a body that encloses no region has no
+occupied volume to prove. `Body.STL` and `Body.OBJ` still write a sheet mesh —
+both formats are triangle lists and neither requires closure — and `STL`'s doc
+comment states that an open body produces a file that is **not** a solid, so a
+caller learns it before handing the file to a slicer rather than after.
 
 ## 2. Private proof record
 
