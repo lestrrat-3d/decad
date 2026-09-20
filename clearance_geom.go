@@ -873,6 +873,18 @@ func newBodyGeomBudget(budget *workBudget, b *Body) (*bodyGeom, bool, error) {
 	case prismPayload:
 		ok, err = g.addPrismFaces(budget, pl)
 	case revolvePayload:
+		if pl.surfaceResult {
+			// A revolve sheet reaches no pair today (§9.3 stops it on box
+			// separation before clearancePair ever sees one), but
+			// addRevolveFaces still hands back a closed model for a partial
+			// sweep: it unconditionally builds the two cap faces
+			// Table W says a surface-result revolve omits. Building that
+			// wrong model now would bless a future caller's clearance against
+			// caps the body does not have, so this arm refuses one outright —
+			// the reject-only answer (CLAUDE.md) where building a model is
+			// not. Only a plain, solid revolve reaches addRevolveFaces.
+			return nil, false, nil
+		}
 		ok, err = g.addRevolveFaces(budget, pl)
 	default:
 		return nil, false, nil
@@ -1005,6 +1017,15 @@ func shellWitness(sh *Shell) (r3.Vec, bool) {
 
 // addPrismFaces builds the prism's faces from its own payload, mirroring the
 // walk decomposition the evaluator built the topology from.
+//
+// A surface-result payload (docs/surface-design.md §4.1) omits both cap
+// faces, unconditionally and with no caller flag: a surface-result prism's
+// walls ARE its whole boundary, so a cap face in the model is geometry the
+// body does not have, and no caller ever wants a sheet modelled as the closed
+// solid it is not. The walk validity gate (walkElem, below) still runs for
+// every wall regardless — it is not cap-only construction, it is the shared
+// check that a wall's own segment kind is one this kernel can model at all —
+// only the cap-only region built from its result is skipped.
 func (g *bodyGeom) addPrismFaces(budget *workBudget, pp prismPayload) (bool, error) {
 	if pp.sectionDelta != 0 {
 		// The kernel's certificates are exact statements about the carriers it
@@ -1037,7 +1058,9 @@ func (g *bodyGeom) addPrismFaces(budget *workBudget, pp prismPayload) (bool, err
 			if !ok {
 				return false, nil
 			}
-			capElems = append(capElems, el)
+			if !pp.surfaceResult {
+				capElems = append(capElems, el)
+			}
 
 			if w.isCircular() {
 				f := &cFace{
@@ -1097,22 +1120,24 @@ func (g *bodyGeom) addPrismFaces(budget *workBudget, pp prismPayload) (bool, err
 		}
 	}
 
-	region := newRegion2(capElems)
-	for _, cap := range []struct {
-		z    float64
-		sign float64
-	}{{z: pp.z0, sign: -1}, {z: pp.z1, sign: 1}} {
-		f := &cFace{
-			kind:   ckPlane,
-			o:      pp.point(0, 0, cap.z),
-			u:      pp.dir(1, 0, 0),
-			v:      pp.dir(0, 1, 0),
-			n:      nDir.Scale(cap.sign),
-			region: region,
+	if !pp.surfaceResult {
+		region := newRegion2(capElems)
+		for _, cap := range []struct {
+			z    float64
+			sign float64
+		}{{z: pp.z0, sign: -1}, {z: pp.z1, sign: 1}} {
+			f := &cFace{
+				kind:   ckPlane,
+				o:      pp.point(0, 0, cap.z),
+				u:      pp.dir(1, 0, 0),
+				v:      pp.dir(0, 1, 0),
+				n:      nDir.Scale(cap.sign),
+				region: region,
+			}
+			f.box = capBox(f)
+			f.wit = capWitnesses(f)
+			g.faces = append(g.faces, f)
 		}
-		f.box = capBox(f)
-		f.wit = capWitnesses(f)
-		g.faces = append(g.faces, f)
 	}
 	return true, nil
 }

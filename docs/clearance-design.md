@@ -113,6 +113,11 @@ lands and reads that term.
 Payload verification §3/§7 owns the cup/faceted
 adapters and their tests; §13/§14.1 own the loft staging and tests.
 
+A surface-result prism's model holds its walls alone, since a cap face is
+geometry the body does not have (`docs/surface-design.md` §4.1), while a
+surface-result revolve is refused a model outright rather than the closed one
+its own builder would otherwise hand back.
+
 ## 3. The candidate enumeration
 
 The distance over a compact face pair attains its minimum at some `(p, q)`,
