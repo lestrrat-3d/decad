@@ -49,7 +49,12 @@ type Mesh struct {
 	// a payload class whose occupied-volume proof has not landed publishes a
 	// mesh for export with symDiffOK false, and the mesh boolean refuses that
 	// operand rather than substituting bound × held area, which
-	// docs/tessellation-design.md §11 forbids outright.
+	// docs/tessellation-design.md §11 forbids outright. A [BodySheet] mesh is a
+	// DIFFERENT reason for the same false: it is a body KIND that encloses no
+	// region, not a staged payload class waiting on a proof — there is no
+	// occupied volume for any future increment to bound
+	// (docs/surface-design.md §10), so symDiffOK stays false permanently and
+	// volSymDiff stays zero.
 	volSymDiff float64
 	symDiffOK  bool
 }
@@ -92,8 +97,12 @@ func (m *Mesh) setFaceBound(f *Face, delta float64) {
 func (m *Mesh) Vertices() []r3.Vec { return append([]r3.Vec(nil), m.vertices...) }
 
 // Triangles returns the facets as index triples into Vertices, wound
-// counter-clockwise seen from outside the body. The indices describe the
-// mesh's own connectivity; they are not selectors (core §3 invariant #3).
+// counter-clockwise seen from outside the body. On a [BodySheet] there is no
+// "outside": the winding is counter-clockwise seen from the shell's own
+// positive side (docs/surface-design.md §2.3) — the same side [Face.NormalAt]
+// answers on for a wall the solid the sheet came from would have carried. The
+// indices describe the mesh's own connectivity; they are not selectors
+// (core §3 invariant #3).
 func (m *Mesh) Triangles() [][3]int { return append([][3]int(nil), m.triangles...) }
 
 // SourceFaces returns, parallel to Triangles, the analytic face each facet
@@ -180,6 +189,18 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // (docs/prism-boolean-design.md §7); that displacement is reserved from tol
 // before any chord is chosen, so a tol it exhausts is [ErrUnsupported] too.
 // A body this evaluator did not build at all is also [ErrUnsupported].
+//
+// A [BodySheet] built by a surface-result prism (`WithSurfaceResult`) meshes
+// its walls exactly as the solid the same record would have built, and omits
+// both caps: no cap triangulation runs and no cap face appears in
+// SourceFaces. The mandatory audit runs docs/tessellation-design.md §1.2's
+// manifold-with-boundary check in place of the closed-mesh audit a solid
+// takes, over the same directed-edge structure. A sheet's areaSlack drops
+// the cap terms it no longer carries, and it publishes no occupied-volume
+// proof at all — [Union], [Cut] and [Intersect] refuse a sheet operand
+// outright (docs/surface-design.md Table X), so the absence costs nothing a
+// caller reaches through this method. Export still succeeds: [Body.STL] and
+// [Body.OBJ] write a sheet's mesh exactly as they write a solid's.
 func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 	return b.TessellateContext(context.Background(), tol)
 }
@@ -262,16 +283,12 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64) (*Mesh, 
 		// implemented set so the refusal cannot misstate evaluator reach.
 		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, revolve, cup, loft, cap-loop chamfer, and faceted`, ErrUnsupported, b.payload)
 	}
-	if pp.surfaceResult {
-		// Tessellating (and so exporting, export.go) a sheet is staged for a
-		// later increment (docs/surface-design.md §10): the
-		// manifold-with-boundary mesh audit T10 asks for is not built yet.
-		// Refusing here, before any face-role lookup, is a clean
-		// ErrUnsupported rather than the ErrDegenerate a missing
-		// capStart/capEnd role would otherwise report — this evaluator's own
-		// reach, not a claim the body's geometry is bad.
-		return nil, fmt.Errorf(`%w: tessellating a sheet body is staged for a later increment`, ErrUnsupported)
-	}
+	// sheet is docs/surface-design.md §4.1's own flag, read once: a surface
+	// result omits both caps from its wall build (prism_build.go), and every
+	// arm below that would otherwise touch a cap face, a cap triangulation or
+	// a cap's own area/volume term reads it to skip that half of the work
+	// rather than fault a role the build never minted.
+	sheet := pp.surfaceResult
 
 	// Every mesh vertex lands on the RECORDED section, which a payload carrying a
 	// section displacement holds only within that displacement of the section its
@@ -315,13 +332,21 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64) (*Mesh, 
 		}
 		return f, nil
 	}
-	capStart, err := faceOfRole(roleCapStart)
-	if err != nil {
-		return nil, err
-	}
-	capEnd, err := faceOfRole(roleCapEnd)
-	if err != nil {
-		return nil, err
+	// A sheet's build never attaches capStart/capEnd to the shell
+	// (prism_build.go), so byRole carries no such role for one: leave both
+	// nil and skip every cap-only step below rather than fault a role this
+	// evaluator's own reach never minted.
+	var capStart, capEnd *Face
+	if !sheet {
+		var err error
+		capStart, err = faceOfRole(roleCapStart)
+		if err != nil {
+			return nil, err
+		}
+		capEnd, err = faceOfRole(roleCapEnd)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// One boundary polyline per loop: sample j is walk j's own start (the
@@ -381,7 +406,14 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64) (*Mesh, 
 			return nil, err
 		}
 		capTrim = math.Max(capTrim, cl.maxSag)
-		mesh.areaSlack += cl.areaSlack
+		// A sheet carries no cap, so its areaSlack drops the cap half of this
+		// loop's chord-versus-arc deficit entirely; a solid charges it twice,
+		// once per cap it triangulates (chordedLoop's own doc comment).
+		if sheet {
+			mesh.areaSlack = absSumUpper(mesh.areaSlack, cl.wallSlack)
+		} else {
+			mesh.areaSlack = absSumUpper(mesh.areaSlack, cl.wallSlack, cl.capSlack, cl.capSlack)
+		}
 		segmentArea = absSumUpper(segmentArea, cl.segmentArea)
 		walks += cl.walks
 		perimeterUpper = absSumUpper(perimeterUpper, cl.perimeterUpper)
@@ -411,10 +443,12 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64) (*Mesh, 
 			faceAxial[f] = pp.axialDelta()
 		}
 	}
-	faceTrim[capStart] = capTrim
-	faceTrim[capEnd] = capTrim
-	faceAxial[capStart] = pp.z0Delta
-	faceAxial[capEnd] = pp.z1Delta
+	if !sheet {
+		faceTrim[capStart] = capTrim
+		faceTrim[capEnd] = capTrim
+		faceAxial[capStart] = pp.z0Delta
+		faceAxial[capEnd] = pp.z1Delta
+	}
 
 	// The mesh vertices: bottom and top of every boundary sample, placed
 	// through the payload — exactly on the analytic boundary.
@@ -454,16 +488,29 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64) (*Mesh, 
 		return nil, err
 	}
 
-	// Caps: both share one 2D triangulation of the chorded region — the same
-	// non-convex, hole-carrying polygon — mapped to the top vertices as-is
-	// (outward +N) and to the bottom vertices reversed (outward −N).
-	capTris, err := triangulate2DContext(ctx, pts2, loopIdx)
-	if err != nil {
-		return nil, err
-	}
-	for _, tri := range capTris {
-		mesh.addTriangle([3]int{meshTop(tri[0]), meshTop(tri[1]), meshTop(tri[2])}, capEnd)
-		mesh.addTriangle([3]int{meshBottom(tri[0]), meshBottom(tri[2]), meshBottom(tri[1])}, capStart)
+	if sheet {
+		// A sheet has no cap to triangulate and so never calls
+		// triangulate2DContext, but the minimum it would have refused on
+		// still binds the wall loop this build chords: a loop of fewer than
+		// three samples cannot bound a polygon (triangulate2DContext's own
+		// guard), so a wall built from one would be degenerate however few
+		// caps it carries.
+		if len(loopIdx) == 0 || len(loopIdx[0]) < 3 {
+			return nil, fmt.Errorf(`%w: a surface-result wall loop needs at least three boundary samples`, ErrDegenerate)
+		}
+	} else {
+		// Caps: both share one 2D triangulation of the chorded region — the
+		// same non-convex, hole-carrying polygon — mapped to the top
+		// vertices as-is (outward +N) and to the bottom vertices reversed
+		// (outward −N).
+		capTris, err := triangulate2DContext(ctx, pts2, loopIdx)
+		if err != nil {
+			return nil, err
+		}
+		for _, tri := range capTris {
+			mesh.addTriangle([3]int{meshTop(tri[0]), meshTop(tri[1]), meshTop(tri[2])}, capEnd)
+			mesh.addTriangle([3]int{meshBottom(tri[0]), meshBottom(tri[2]), meshBottom(tri[1])}, capStart)
+		}
 	}
 
 	// A reflected placement flips handedness, turning every counter-clockwise
@@ -489,24 +536,41 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64) (*Mesh, 
 	// length reading, charged over the sweep height — evalPrism's own composition
 	// (2·regionArea + perimeter·height), one dimension at a time. Every such term
 	// is zero for a payload a caller draws.
-	// The walls and caps close by construction; this proves the assembled mesh
-	// is watertight and refuses a cracked one rather than return it — the same
+	// The walls and, on a solid, its caps close by construction; this proves
+	// the assembled mesh is watertight (or, on a sheet, manifold-with-
+	// boundary) and refuses a cracked one rather than return it — the same
 	// safety net the cup path already carries (core §11, never a wrong mesh).
-	if err := requireClosedMesh(&mesh); err != nil {
+	if err := requireMeshAudit(ctx, sheet, b, &mesh); err != nil {
 		return nil, err
 	}
 	if err := composeFaceBounds(&mesh, faceTrim, faceAxial, vertexStore, pp.sectionDelta); err != nil {
 		return nil, err
 	}
 	if pp.sectionDelta > 0 {
-		capMove := sectionDisplacementArea(pp.sectionDelta, walks, perimeterUpper)
 		wallMove := productUpper(sectionDisplacementLength(pp.sectionDelta, walks), math.Abs(pp.z1-pp.z0))
-		mesh.areaSlack = absSumUpper(mesh.areaSlack, capMove, capMove, wallMove)
+		if sheet {
+			// A sheet carries no cap, so its section-displacement area charge
+			// drops both cap terms and keeps the wall's own alone.
+			mesh.areaSlack = absSumUpper(mesh.areaSlack, wallMove)
+		} else {
+			capMove := sectionDisplacementArea(pp.sectionDelta, walks, perimeterUpper)
+			mesh.areaSlack = absSumUpper(mesh.areaSlack, capMove, capMove, wallMove)
+		}
 	}
 	// Every coordinate the build itself computed can move each facet's own area
 	// (docs/tessellation-design.md §5's per-triangle allowance), so the slack
 	// carries one such term per facet beside the analytic ones above.
 	mesh.areaSlack = absSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, vertexStore))
+
+	if sheet {
+		// A sheet encloses no region, so there is no occupied volume to
+		// prove: the mesh publishes NO volSymDiff and leaves symDiffOK
+		// false (docs/surface-design.md §10). That omission IS the proof's
+		// absence, not a placeholder for one still to come — operandSymDiff
+		// (boolean.go) is the consumer that reads symDiffOK and refuses a
+		// boolean that reaches this operand.
+		return &mesh, nil
+	}
 
 	// Occupied volume (docs/tessellation-reach-design.md §3). The chorded section
 	// differs from the section it denotes by the circular segments it omits or
@@ -528,6 +592,17 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64) (*Mesh, 
 		return nil, err
 	}
 	return &mesh, nil
+}
+
+// requireMeshAudit dispatches docs/tessellation-design.md §1's mandatory
+// mesh audit by body kind: a BodySolid keeps §1's closed-mesh audit
+// (requireClosedMesh) verbatim, and a BodySheet runs §1.2's manifold-with-
+// boundary audit in its place (requireSheetMesh, tessellate_sheet.go).
+func requireMeshAudit(ctx context.Context, sheet bool, b *Body, m *Mesh) error {
+	if sheet {
+		return requireSheetMesh(ctx, b, m)
+	}
+	return requireClosedMesh(m)
 }
 
 // requireDerivableStore folds the per-vertex store displacements into the
@@ -616,9 +691,11 @@ func publishSymDiff(m *Mesh, terms []float64) error {
 
 // chordedLoop is one boundary loop's chording, as chordLoop returns it: the 2D
 // samples, the wall face of the chord LEAVING each sample, the largest sagitta
-// the chording took, the chord-versus-arc area slack over the sweep height, and
-// the loop's own coalesced walk count with a proven upper bound on its analytic
-// length — the two figures a section displacement's area charge reads
+// the chording took, the chord-versus-arc area slack over the sweep height —
+// split into its wall and per-cap halves so a sheet, which carries no cap, can
+// decline the cap half (docs/surface-design.md §10) — and the loop's own
+// coalesced walk count with a proven upper bound on its analytic length — the
+// two figures a section displacement's area charge reads
 // (docs/tessellation-design.md §5). Beside those it carries the three readings
 // the proof record composes per FACE rather than per mesh: each sample's own
 // outgoing sagitta and enclosure gap, and the loop's summed circular-segment
@@ -636,9 +713,22 @@ type chordedLoop struct {
 	// junction reads the walk's own recorded endpoint bound; an interior
 	// circular station reads chordStationBound. A component the record cannot
 	// enclose reads +Inf, and the tessellation refuses on it.
-	boundOf        []walkEndBound
-	maxSag         float64
-	areaSlack      float64
+	boundOf []walkEndBound
+	maxSag  float64
+	// wallSlack is the WALL half of the chord-versus-arc area slack this
+	// loop's curved walks contribute over the sweep height: the deficit
+	// between arc length and chord length, times height, summed across every
+	// curved walk. It binds a sheet mesh exactly as it does a solid's — a
+	// sheet keeps every wall.
+	wallSlack float64
+	// capSlack is ONE CAP's own share of the same loop's chord-versus-arc
+	// area slack: the circular or free-form segment area between one curved
+	// walk's chord and its arc, summed across every curved walk of the loop.
+	// A solid charges it TWICE — once per cap it triangulates — and a sheet,
+	// which triangulates no cap, charges it zero times; the caller composes
+	// the two into the mesh's published areaSlack rather than this type ever
+	// doubling it itself.
+	capSlack       float64
 	segmentArea    float64
 	walks          int
 	perimeterUpper float64
@@ -712,7 +802,7 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 	var faceOf []*Face
 	var sagOf []float64
 	var boundOf []walkEndBound
-	var maxSag, areaSlack, segmentArea float64
+	var maxSag, wallSlack, capSlack, segmentArea float64
 	for _, w := range walks {
 		if err := budget.step(); err != nil {
 			return chordedLoop{}, err
@@ -755,10 +845,12 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 			maxSag = math.Max(maxSag, chain.sagitta)
 			wall, segment := freeformChordAreas(chain, height)
 			// The wall loses (arc − chord) over the sweep height and each cap
-			// gains or loses the region between curve and chord, one term per
-			// cap — the same two halves walkAreaSlack composes for a circular
-			// walk.
-			areaSlack += absSumUpper(wall, segment, segment)
+			// gains or loses the region between curve and chord — the same
+			// two halves the circular arm below keeps apart, so the caller
+			// can decline the cap half for a sheet (docs/surface-design.md
+			// §10).
+			wallSlack = absSumUpper(wallSlack, wall)
+			capSlack = absSumUpper(capSlack, segment)
 			segmentArea = absSumUpper(segmentArea, segment)
 		case walkCircular:
 			n, sag, err := chordCount(w.segmentWalk, chord, chordWalkMin(w.segmentWalk))
@@ -766,7 +858,14 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 				return chordedLoop{}, err
 			}
 			maxSag = math.Max(maxSag, sag)
-			areaSlack += walkAreaSlack(w.segmentWalk, n, height)
+			// walkAreaSlack's own pad — proven area terms padded a hair so
+			// float rounding never understates them — is applied here, at
+			// the point each term is summed into the loop's running wall/cap
+			// totals, rather than after the two are combined: that is what
+			// lets the caller decline the cap half for a sheet without
+			// losing the pad on the half it keeps.
+			wallSlack = absSumUpper(wallSlack, productUpper(walkWallSlack(w.segmentWalk, n, height), 1+1e-9))
+			capSlack = absSumUpper(capSlack, productUpper(walkSegmentArea(w.segmentWalk, n), 1+1e-9))
 			segmentArea = absSumUpper(segmentArea, walkSegmentArea(w.segmentWalk, n))
 			// A circular walk never coalesces (coalesceWalks), so it covers
 			// exactly one recorded segment and every station on it is that
@@ -801,7 +900,8 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 		sagOf:          sagOf,
 		boundOf:        boundOf,
 		maxSag:         maxSag,
-		areaSlack:      areaSlack,
+		wallSlack:      wallSlack,
+		capSlack:       capSlack,
 		segmentArea:    segmentArea,
 		walks:          len(walks),
 		perimeterUpper: perimeterUpper,
@@ -981,7 +1081,11 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64) (
 			return ring{}, err
 		}
 		samples := cl.samples
-		mesh.areaSlack += cl.areaSlack
+		// A cup always triangulates two planar patches off this ring (its
+		// kept cap or pocket floor, plus a rim band), so it keeps both cap
+		// halves of the loop's slack, the same total chordedLoop's own
+		// combined areaSlack used to carry before it split.
+		mesh.areaSlack = absSumUpper(mesh.areaSlack, cl.wallSlack, cl.capSlack, cl.capSlack)
 		*area = absSumUpper(*area, cl.segmentArea)
 		r := ring{samples: samples, faces: cl.faceOf, sag: cl.maxSag}
 		r.loV = make([]int, len(samples))
@@ -1289,9 +1393,13 @@ func requireClosedMesh(m *Mesh) error {
 }
 
 // walkAreaSlack is the proven chord-versus-arc area slack one circular walk
-// contributes: the wall loses (arc − chord) × height, and each cap gains or
-// loses the circular segments between arc and chords — both closed form, both
-// padded a hair so float rounding never understates them.
+// contributes ACROSS TWO CAPS — a solid's own composition: the wall loses
+// (arc − chord) × height, and each of the two caps gains or loses the
+// circular segment between arc and chords — both closed form, both padded a
+// hair so float rounding never understates them. It states the two-cap case
+// only; chordLoop keeps the wall and one cap's own share apart
+// (chordedLoop.wallSlack/capSlack) so a sheet mesh, which triangulates no
+// cap, can decline the cap half entirely (docs/surface-design.md §10).
 func walkAreaSlack(w segmentWalk, n int, h float64) float64 {
 	return (walkWallSlack(w, n, h) + 2*walkSegmentArea(w, n)) * (1 + 1e-9)
 }

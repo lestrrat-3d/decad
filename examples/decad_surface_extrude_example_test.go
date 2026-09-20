@@ -1,6 +1,7 @@
 package examples_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -50,7 +51,7 @@ func Example_decad_surfaceExtrude() {
 		fmt.Printf("failed to measure area: %s\n", err)
 		return
 	}
-	_, err = sheet.Volume()
+	_, volErr := sheet.Volume()
 
 	// A sheet's own boundary can be proven sound even though it encloses no
 	// region: Verify's sheet validity audit (docs/surface-design.md §9.1)
@@ -62,12 +63,34 @@ func Example_decad_surfaceExtrude() {
 		return
 	}
 
+	// A sheet tessellates its walls alone, at the manifold-with-boundary
+	// audit docs/tessellation-design.md §1.2 runs in the closed-mesh audit's
+	// place: 8 triangles against the 12 a solid extrude of the same plate
+	// would carry, since the two caps are never chorded.
+	mesh, err := sheet.Tessellate(units.Millimeters(0.1))
+	if err != nil {
+		fmt.Printf("failed to tessellate: %s\n", err)
+		return
+	}
+
+	// STL and OBJ still write a sheet's mesh — both formats are triangle
+	// lists and neither requires closure — but Body.STL's own doc comment
+	// says the file is NOT a solid despite carrying the format's
+	// solid/endsolid keywords.
+	var stl bytes.Buffer
+	if err := sheet.STL(&stl); err != nil {
+		fmt.Printf("failed to write STL: %s\n", err)
+		return
+	}
+
 	fmt.Printf("is sheet: %v\n", sheet.Kind() == decad.BodySheet)
 	fmt.Printf("faces: %d\n", len(sheet.Faces()))
 	fmt.Printf("free edges: %d\n", len(free))
 	fmt.Printf("area: %s\n", area.Value)
-	fmt.Printf("volume error: %v\n", err)
+	fmt.Printf("volume error: %v\n", volErr)
 	fmt.Printf("verify status: %s\n", report.Status)
+	fmt.Printf("mesh triangles: %d\n", len(mesh.Triangles()))
+	fmt.Printf("stl is solid keyword present: %v\n", bytes.Contains(stl.Bytes(), []byte("solid decad")))
 	// Output:
 	// is sheet: true
 	// faces: 4
@@ -75,4 +98,6 @@ func Example_decad_surfaceExtrude() {
 	// area: 3200 mm^2
 	// volume error: decad: body is not a solid
 	// verify status: Sound
+	// mesh triangles: 8
+	// stl is solid keyword present: true
 }

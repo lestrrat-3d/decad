@@ -755,19 +755,21 @@ kernel could not settle.
 ## 10. Tessellation and export
 
 **A sheet body tessellates, with the closed-mesh audit replaced by the
-manifold-with-boundary audit** — the eventual shape, and where increment 2 or
-3 lands it. `docs/tessellation-design.md` §1.2 owns that audit's three
-requirements, the fact that every other row of its §1 contract binds a sheet
-mesh unchanged, why a sheet mesh reaches no boolean, and what `STL` and `OBJ`
-write. §12 records the amendment that adds it.
+manifold-with-boundary audit.** `docs/tessellation-design.md` §1.2 owns that
+audit's three requirements, the fact that every other row of its §1 contract
+binds a sheet mesh unchanged, why a sheet mesh reaches no boolean, and what
+`STL` and `OBJ` write. §12 records the amendment that added it.
 
-**Today, tessellating or exporting a sheet is `ErrUnsupported`.** The audit
-above is not built yet, and `Tessellate`/`STL`/`OBJ` refuse at the dispatch
-that would otherwise look up a role a surface result's own build never
-attached (§4.2) — a clean statement of this evaluator's own reach, never the
-`ErrDegenerate` a missing face role would otherwise report, since the body's
-geometry is not the problem. A later PR replaces the refusal with the real
-path Table D stages it against.
+A surface-result **prism** (`Extrude`) sheet tessellates and exports: its
+walls chord exactly as the solid the same record would build, both caps are
+omitted from the mesh exactly as they are from the body, and the
+manifold-with-boundary audit runs in the closed-mesh audit's place. A
+surface-result **revolve** sheet does not yet: `Tessellate`/`STL`/`OBJ` refuse
+it with `ErrUnsupported` at the dispatch that would otherwise look up a role a
+surface result's own build never attached (§4.2) — this evaluator's own
+reach, never the `ErrDegenerate` a missing face role would otherwise report,
+since the body's geometry is not the problem. A later increment takes up the
+revolve path.
 
 Two consequences this design leans on, stated here as claims and derived there.
 A sheet mesh is never a boolean operand, which is what Table X's boolean row
