@@ -675,6 +675,39 @@ composed transform every time, exactly as `stitchPayload.placed` replays
 `*Face`, `*Edge` or `*Vertex`, so a retired receiver stays readable and
 unmodified for any caller still holding it.
 
+**Each result's own `Bounds` is a tight box exactly when its face is bounded
+entirely by straight (`Line3`) edges on a `Plane` surface, and the sound
+whole-receiver box otherwise.** A straight-edged planar face's enclosed
+region is the polygon its own held vertices describe: the extreme along any
+world axis is always attained at a vertex, so `faceBounds`
+(`unstitch.go`) reads that box directly off the already-placed copy's own
+vertex coordinates — no integration, no new proof, the same vertex-derived
+reading every other planar measurement already publishes. A box's T3 worked
+example is exactly this case: each of the six unstitched sheets reports its
+own flat slab (the bottom `(0,0,0)`–`(100,60,0)`, the top
+`(0,0,10)`–`(100,60,10)`, each wall its own thin rectangle) rather than the
+whole box, and the six boxes' union still spans the original.
+
+Every other face falls back to the receiver's own whole box
+(`unstitchBounds`, `unstitch.go`) — sound, because a face's extent is always
+a subset of the body it came from, but not proven tight. This covers a
+CURVED surface (a cylinder wall bulges past the two seam vertices its own
+loop holds) and, less obviously, a PLANAR surface with any non-`Line3` edge:
+a disk's circular cap is flat, but its rim bulges past the single vertex a
+full circle's own loop holds, exactly as a curved surface's rim does. `Box`
+has no field that distinguishes "sound, not proven tight" from "proven
+exactly representable" — `Exactness`/`Bound` state only whether further
+NUMERICAL rounding remains, not whether the published extent is the
+tightest one this evaluator could in principle prove. So an unplaced curved
+face's box still reads `Exact` with a zero bound whenever the unplaced
+receiver's own box did: that claims no further widening is needed to stay
+sound, never that the box is this one face's tightest possible reading. A
+future increment that wants to say "sound but not tight" for a `Box` needs a
+new field to say it with. This is the one place in this design where `Exact`
+does not imply tight, and it is a limit of `Box`'s own shape, not of this
+evaluator: recorded here rather than left for a reader to discover by
+surprise.
+
 ## 7. Table R — refusals and their sentinels
 
 Every refusal is at the call, before any commit; the document and every

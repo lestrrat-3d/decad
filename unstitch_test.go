@@ -3,9 +3,11 @@ package decad_test
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
@@ -251,4 +253,131 @@ func TestUnstitchAtomicCommitLeavesDocumentUnchanged(t *testing.T) {
 	require.Len(t, doc.Bodies(), 1)
 	require.Same(t, box, doc.Bodies()[0])
 	require.True(t, doc.Bodies()[0].IsSolid())
+}
+
+// TestUnstitchBoxFacesReportOwnTightBounds is docs/surface-design.md's T3 box
+// again, this time asserting each of the six straight-edged, planar result
+// sheets reports its OWN tight box rather than the whole receiver's: a wall
+// is a flat slab across the two axes its rectangle spans and zero-thick
+// across the third, the bottom sheet is z=0's rectangle, the top is z=10's —
+// in [Body.Faces] order, matching stitchBoxSheets' own wall/bottom/top
+// construction (four wall faces, then the bottom patch, then the top patch).
+// Every box is Exact with a zero bound: an unplaced, all-straight-edged
+// planar face's held vertices are exact, and the extreme along any axis is
+// always attained at one of them.
+func TestUnstitchBoxFacesReportOwnTightBounds(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	box := unstitchBox(t, doc)
+
+	results, err := box.Unstitch()
+	require.NoError(t, err)
+	require.Len(t, results, 6)
+
+	wantBoxes := []struct {
+		min, max r3.Vec
+	}{
+		{r3.NewVec(0, 0, 0), r3.NewVec(100, 0, 10)},    // wall y=0
+		{r3.NewVec(100, 0, 0), r3.NewVec(100, 60, 10)}, // wall x=100
+		{r3.NewVec(0, 60, 0), r3.NewVec(100, 60, 10)},  // wall y=60
+		{r3.NewVec(0, 0, 0), r3.NewVec(0, 60, 10)},     // wall x=0
+		{r3.NewVec(0, 0, 0), r3.NewVec(100, 60, 0)},    // bottom, z=0
+		{r3.NewVec(0, 0, 10), r3.NewVec(100, 60, 10)},  // top, z=10
+	}
+	require.Len(t, wantBoxes, len(results))
+
+	for i, r := range results {
+		got, err := r.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, wantBoxes[i].min, got.Min, "result %d min", i)
+		require.Equal(t, wantBoxes[i].max, got.Max, "result %d max", i)
+		require.Equal(t, decad.Exact, got.Exactness, "result %d exactness", i)
+		require.Zero(t, got.Bound.Base(), "result %d bound", i)
+	}
+}
+
+// TestUnstitchBoxFacesBoundsUnionSpansOriginal proves the six per-face tight
+// boxes TestUnstitchBoxFacesReportOwnTightBounds asserts individually lose
+// nothing together: their componentwise union reproduces the original box's
+// own Bounds, read before Unstitch retires the receiver.
+func TestUnstitchBoxFacesBoundsUnionSpansOriginal(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	box := unstitchBox(t, doc)
+	want, err := box.Bounds()
+	require.NoError(t, err)
+
+	results, err := box.Unstitch()
+	require.NoError(t, err)
+	require.Len(t, results, 6)
+
+	have := false
+	var lo, hi r3.Vec
+	for _, r := range results {
+		b, err := r.Bounds()
+		require.NoError(t, err)
+		if !have {
+			lo, hi = b.Min, b.Max
+			have = true
+			continue
+		}
+		lo = r3.NewVec(math.Min(lo.X, b.Min.X), math.Min(lo.Y, b.Min.Y), math.Min(lo.Z, b.Min.Z))
+		hi = r3.NewVec(math.Max(hi.X, b.Max.X), math.Max(hi.Y, b.Max.Y), math.Max(hi.Z, b.Max.Z))
+	}
+	require.Equal(t, want.Min, lo, "the union of the six mins reproduces the original min")
+	require.Equal(t, want.Max, hi, "the union of the six maxes reproduces the original max")
+}
+
+// TestUnstitchCylinderWallBoundsAreSoundButWholeReceiver covers a CURVED
+// face: unstitching a disc (a cylindrical wall between two circular planar
+// caps) must NOT take the wall's own two seam vertices as its box — a
+// cylinder bulges past them — and must not take a circular cap's own single
+// rim vertex as ITS box either, since a planar surface with a curved edge
+// bulges past its vertices exactly as a curved surface does. Every one of
+// the three results instead reports the sound whole-receiver box: it
+// contains both the seam vertices AND the wall's true radius extent, and it
+// is Exact with a zero bound because the unplaced receiver's own box already
+// was — not because any of these three boxes is proven the tightest one its
+// own face could in principle earn (docs/surface-design.md §6.5).
+func TestUnstitchCylinderWallBoundsAreSoundButWholeReceiver(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	disk := diskBody(t, doc, 0, 0, 10)
+	want, err := disk.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, r3.NewVec(-10, -10, 0), want.Min)
+	require.Equal(t, r3.NewVec(10, 10, 20), want.Max)
+	require.Equal(t, decad.Exact, want.Exactness)
+	require.Zero(t, want.Bound.Base())
+
+	results, err := disk.Unstitch()
+	require.NoError(t, err)
+	require.Len(t, results, 3)
+
+	for i, r := range results {
+		got, err := r.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, want, got, "result %d reuses the receiver's whole sound box", i)
+
+		// Sound: every held vertex of this face lies within the box.
+		for _, v := range r.Vertices() {
+			p := v.Position().Value
+			require.GreaterOrEqual(t, p.X, got.Min.X)
+			require.GreaterOrEqual(t, p.Y, got.Min.Y)
+			require.GreaterOrEqual(t, p.Z, got.Min.Z)
+			require.LessOrEqual(t, p.X, got.Max.X)
+			require.LessOrEqual(t, p.Y, got.Max.Y)
+			require.LessOrEqual(t, p.Z, got.Max.Z)
+		}
+
+		// Sound over the wall's true radius extent too: the box reaches
+		// all the way to the cylinder's radius on every side, which no
+		// vertex-only reading of this face could ever prove (the wall
+		// holds only its two seam vertices at x=10,y=0; a cap holds only
+		// its one rim vertex).
+		require.Equal(t, -10.0, got.Min.X, "result %d", i)
+		require.Equal(t, -10.0, got.Min.Y, "result %d", i)
+		require.Equal(t, 10.0, got.Max.X, "result %d", i)
+		require.Equal(t, 10.0, got.Max.Y, "result %d", i)
+	}
 }

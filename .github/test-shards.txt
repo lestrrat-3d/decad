@@ -1564,3 +1564,6 @@
 1	0.00	TestUnstitchTableR
 2	0.00	TestUnstitchAtomicCommitLeavesDocumentUnchanged
 3	0.00	TestUnstitchNoPayloadIsDegenerate
+0	0.00	TestUnstitchBoxFacesReportOwnTightBounds
+1	0.00	TestUnstitchBoxFacesBoundsUnionSpansOriginal
+2	0.00	TestUnstitchCylinderWallBoundsAreSoundButWholeReceiver
