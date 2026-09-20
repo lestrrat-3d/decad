@@ -136,6 +136,22 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok = lowerDiameterForDisplacement(d, payload.delta)
 		return d, ok, nil
 	}
+	if payload, ok := body.payload.(stitchPayload); ok {
+		// Modelled on the loft arm immediately above: a stitched body's
+		// boundary is a polyhedron over its own shared vertex table exactly
+		// as a loft's is, so the same held-vertex-set diameter is a
+		// certified LOWER bound on the body's true diameter, tightened by
+		// the placement's own proven displacement.
+		d, ok, err := pointSetDiameterContext(ctx, payload.verts)
+		if err != nil || !ok {
+			return d, ok, err
+		}
+		if payload.delta == 0 {
+			return d, true, nil
+		}
+		d, ok = lowerDiameterForDisplacement(d, payload.delta)
+		return d, ok, nil
+	}
 	if _, ok := body.payload.(patchPayload); ok {
 		// A patch has no exact carrier model of its own (it is a single flat
 		// face, not a prism or a revolve), and no witness set gateWitnessPrism

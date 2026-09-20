@@ -846,15 +846,21 @@ const (
 // adjacent-face count is also a violation: it means some face's loop walks an
 // edge Faces() does not know about, or fails to walk one it does.
 //
-// Leg 4 — non-self-intersection, admitted only when the body's payload is a
-// prismPayload with surfaceResult true and sectionDelta zero. The proof:
-// `sketch` already decided the recorded segments form the stated simple
-// closed planar region; evalPrismContext already refuses a non-positive
-// height; a simple planar curve crossed with a positive interval does not
-// self-intersect; and pp.xform is rigid, so it preserves that. A nonzero
-// sectionDelta denotes a set the record is only WITHIN that displacement
-// of, so simplicity does not transfer and the answer is undecided; any other
-// payload, or a nil one, is undecided too.
+// Leg 4 — non-self-intersection, admitted for either of two payloads. A
+// prismPayload with surfaceResult true and sectionDelta zero is proven by
+// construction: `sketch` already decided the recorded segments form the
+// stated simple closed planar region; evalPrismContext already refuses a
+// non-positive height; a simple planar curve crossed with a positive
+// interval does not self-intersect; and pp.xform is rigid, so it preserves
+// that. A nonzero sectionDelta denotes a set the record is only WITHIN that
+// displacement of, so simplicity does not transfer and the answer is
+// undecided. A stitchPayload is proven instead by an explicit build-time
+// audit: Stitch runs docs/loft-design.md §6's crossing audit on the OPEN
+// case too (docs/surface-design.md §6.3's open-case decision), so a
+// stitchPayload whose audit ran and passed (auditClean) admits leg 4 the
+// same as a proven-simple prism does, letting a clean stitched sheet read
+// ValidityValid instead of being permanently Suspect. Any other payload, or
+// a nil one, is undecided.
 func auditSheetBoundary(b *Body) sheetAuditOutcome {
 	faces := b.Faces()
 	if len(faces) == 0 {
@@ -903,11 +909,17 @@ func auditSheetBoundary(b *Body) sheetAuditOutcome {
 		}
 	}
 
-	pp, ok := b.payload.(prismPayload)
-	if !ok || !pp.surfaceResult || pp.sectionDelta != 0 {
-		return sheetAuditUndecided
+	switch pp := b.payload.(type) {
+	case prismPayload:
+		if pp.surfaceResult && pp.sectionDelta == 0 {
+			return sheetAuditProven
+		}
+	case stitchPayload:
+		if pp.auditClean {
+			return sheetAuditProven
+		}
 	}
-	return sheetAuditProven
+	return sheetAuditUndecided
 }
 
 // boxesDisjoint reports whether the two bounds-inflated boxes have disjoint

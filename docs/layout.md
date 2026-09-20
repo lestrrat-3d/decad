@@ -90,6 +90,8 @@ to the byte budget.
 | `document.go` | `Document` (`New`/`Bodies`), its atomic commit tail, private provenance identities, and retire/liveness gates. `Body.Placed`/`Duplicate`/`PlacedCopy` rebuild the payload under a composed motion; see their doc comments and evaluator §8. |
 | `surface.go` | `WithSurfaceResult`, the two refusal helpers (`refuseSurfaceResult`, `refuseSheetOperand`), and the shared shell/lump helpers (`shellIsOpen`, `sheetLumps`) prism and revolve builds share. See `docs/surface-design.md` §2.2-§4, §7, §11. |
 | `patch.go` | `Document.Patch`: a single planar face from a recorded profile, reusing `buildLoopSidesAs`'s per-kind curve construction. See `docs/surface-design.md` §5.1. |
+| `stitch_weld.go` | Table J's admission: the shared vertex table and which free edge pairs weld. See `docs/surface-design.md` §6.2. |
+| `stitch.go` | `Stitch`/`StitchContext`: rebuilds fresh topology over the weld plan, derives orientation, and decides Table C's outcome and measurements. See `docs/surface-design.md` §6. |
 | `extrude.go` | `Document.Extrude` (evaluator §5): the public entry point, `WithTaper`, and linear-extent resolution into a `linearSweep`. The payload, the build and the extent readings each have their own `prism_*.go` file. See `docs/evaluator-design.md` §5. |
 | `sweep.go` | `Document.Sweep` / `SweepContext`, common path gates, and the distinct replayable payload for zero-twist line and arc spans. See `docs/sweep-design.md` PR 1–4. |
 | `sweep_arc.go` | The one-span `ArcThrough` reduction: exact circumcircle and tangent gates, bounded axis/angle publication, Revolve reuse, and Sweep role restoration. See `docs/sweep-design.md` PR 3. |
