@@ -168,6 +168,16 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok := lowerDiameterForDisplacement(d, box.Bound.Base())
 		return d, ok, nil
 	}
+	if _, ok := body.payload.(bodyPatchPayload); ok {
+		// Body.Patch's own payload reuses the patchPayload arm immediately
+		// above verbatim: its Bounds is the rebuilt receiver's own box
+		// (docs/surface-design.md §5.2), so the same box-based lower bound
+		// applies for the same reason.
+		box := body.bounds
+		d := math.Max(box.Max.X-box.Min.X, math.Max(box.Max.Y-box.Min.Y, box.Max.Z-box.Min.Z))
+		d, ok := lowerDiameterForDisplacement(d, box.Bound.Base())
+		return d, ok, nil
+	}
 	budget := newWorkBudget(ctx)
 	geom, ok, err := newBodyGeomBudget(budget, body)
 	if err != nil {

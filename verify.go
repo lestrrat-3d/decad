@@ -914,8 +914,12 @@ const (
 // case too (docs/surface-design.md §6.3's open-case decision), so a
 // stitchPayload whose audit ran and passed (auditClean) admits leg 4 the
 // same as a proven-simple prism does, letting a clean stitched sheet read
-// ValidityValid instead of being permanently Suspect. Any other payload, or
-// a nil one, is undecided.
+// ValidityValid instead of being permanently Suspect. A bodyPatchPayload
+// reads undecided on the same terms as any other payload this leg does not
+// name: Body.Patch proves its own chains simple in their own plane (gate 4,
+// docs/surface-design.md §5.2), never the whole assembled boundary's
+// non-self-intersection, so it earns no admission here either. Any other
+// payload, or a nil one, is undecided.
 func auditSheetBoundary(b *Body) sheetAuditOutcome {
 	faces := b.Faces()
 	if len(faces) == 0 {

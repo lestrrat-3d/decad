@@ -379,25 +379,55 @@ boundary, and the free-form tiers of `docs/spline-design.md` §5 where the
 boundary carries them. Nothing is integrated twice and nothing new is proven.
 `Bounds` is the recorded boundary's box, lifted through the plane frame.
 
-### 5.2 `Body.Patch` — a planar fill of a free-edge chain
+### 5.2 `Body.Patch` — a planar fill of one or more free-edge chains
 
 `b.Patch(sel)` resolves `sel` against `b`, requires the result to be a set of
-**free** edges of `b` forming exactly one closed chain, proves that chain
-planar and simple, and returns a new body carrying `b`'s faces plus one new
-planar face. `b` is retired.
+**free** edges of `b` that partitions into one or more closed chains, proves
+each chain planar and simple **independently**, and returns a new body
+carrying `b`'s faces plus one new planar face per chain. `b` is retired.
+
+**This is a one-time amendment to the original one-chain design: the
+selection must partition into one or more closed chains, each proven planar
+and simple on its own, rather than being exactly one closed chain.** A
+one-chain rule makes the operation nearly unreachable on the sheets it was
+written for: a surface-extruded plate's eight free edges are two congruent
+rims, and no edge predicate separates them — `Free`, `Convex`, `Concave`,
+`LongerThan` and `ParallelTo` match both identically, and `CreatedBy` keys on
+the wall a rim bounds and so returns that wall's bottom and top edge together
+— so `Edges(Free())` always resolves to both rims, and a one-chain rule
+always refuses it, leaving capping a tube impossible even though that is
+what the operation is for. There is no soundness cost to admitting more than
+one chain: every chain is proven exactly as one would have been, on its own
+edges alone, with no chain's proof reading another's.
 
 Four gates, in this order, and each is reject-only:
 
 1. **Every selected edge is free.** A shared or absent edge is `ErrDegenerate`
    (Table R, R4).
-2. **The selection is exactly one closed chain.** Each selected edge's two
-   vertices are shared with exactly two other selected edges, and the chain
-   visits every selected edge once. Several chains, or an open chain, is
-   `ErrDegenerate` (R5).
-3. **The chain is planar, proven exactly.** Every chain vertex lies on one
+2. **The selection partitions into one or more closed chains.** Decided by
+   vertex degree, counted over every selected edge's own use of it (an edge
+   whose two ends coincide, a whole `Circle3`, uses its one vertex TWICE):
+   every vertex the selection reaches must have degree exactly 2. A
+   2-regular (multi)graph is a disjoint union of cycles, so this single
+   condition is what proves the partition exists, not merely a necessary
+   symptom of it. It corrects two things the original one-chain wording got
+   wrong: a single CLOSED edge is a complete chain on its own and is the
+   commonest thing anyone patches, which "shared with exactly two other
+   selected edges" wrongly refused (a whole circle shares its vertex with no
+   OTHER selected edge at all); and a two-edge chain of two arcs over one
+   vertex pair gives each of the two vertices ONE other edge, which the
+   degree-over-all-uses reading admits and the "two other edges" reading did
+   not. Any vertex at a degree other than 2 is `ErrDegenerate` (R5).
+3. **Each chain is planar, proven exactly.** Every chain vertex lies on one
    plane, decided over the exact rational lift of `dyadic.go` — a zero
-   determinant, never a residual against a fitted plane. A curved edge is
-   planar only when its own carrier plane is that plane, which its recorded
+   determinant, never a residual against a fitted plane. Three or more chain
+   vertices that are not all collinear give the plane a determinant to take
+   directly; under three independent vertices — a lone closed circular edge
+   has exactly one, a two-edge chain of two arcs has exactly two — there is
+   no such determinant, and the plane instead comes from a curved edge's own
+   carrier plane (its `Center` and `Axis`), which is the only plane its whole
+   curve, not just its two endpoints, can lie in. A curved edge is planar
+   only when its own carrier plane is the chain's, which its recorded
    surface states. A vertex or a curve carrying a **nonzero bound** is not
    proven planar and is refused: the chain's true position is only known
    within that bound, and a plane fitted to it would be exactly the fitted
@@ -405,22 +435,63 @@ Four gates, in this order, and each is reject-only:
    a later increment with a shared-denotation certificate may admit it (§6.2).
    A chain proven **non-planar** is `ErrUnsupported` too: a non-planar patch
    needs a fitted free-form surface, which §1.2 stages.
-4. **The chain is simple in that plane.** The plane-local walk does not cross
+4. **Each chain is simple in that plane.** The plane-local walk does not cross
    or touch itself, decided by `fillet_audit.go`'s existing §5 section audit —
    the same orientation, self-consuming-trim, crossing and nesting checks a
-   modify op's rewritten section passes. A crossing walk is `ErrDegenerate`
-   (R5).
+   modify op's rewritten section passes. That audit's own refusal is
+   `ErrUnsupported` (an evaluator-reach reading, §5's own convention), which
+   is remapped to `ErrDegenerate` at this gate's own boundary
+   (`patchRemapCrossingError`, `patch_body.go`): a self-crossing chain is bad
+   input this evaluator will never admit under a finer tolerance, not a
+   capability this evaluator merely has not reached yet. `ErrDegenerate` (R5).
 
-The new face's orientation is the one that agrees with the faces across the
-chain: each selected edge is traversed by its one adjacent face in some sense,
-and the patch traverses it in the opposite sense. That is a combinatorial
-choice with one answer, and it needs no geometry. Where the chain's adjacent
-faces do not themselves agree — which `Stitch` alone can produce, and Table R
-R7 refuses there — no patch is built.
+Each new face's orientation is the one that agrees with the face already
+adjacent to its chain's edges: each selected edge is traversed by its one
+adjacent face in some sense, and the patch traverses it in the opposite
+sense. That is a combinatorial choice with one answer, and it needs no
+geometry beyond deciding which of the two possible plane frames makes the
+resulting loop read as its own outer (counter-clockwise) boundary
+(`patchChainOrientedNormal`, `patch_body.go`) — never by trying a candidate
+frame and correcting its sign from a computed area, which would silently
+accept either sign and could never surface a dropped reversal. Where a
+chain's own adjacent faces do not agree among themselves on that sense — an
+assembly `Stitch`'s own orientation derivation refuses as non-orientable
+before it is ever assembled (R7), and so a shape no builder in this package
+can hand `Body.Patch` — that disagreement is `ErrDegenerate` (R18).
 
-`Body.Patch` admits a sheet or a solid receiver. On a solid every edge is
+`Body.Patch` admits a sheet or a solid receiver, and admits it only when this
+evaluator built it (`b`'s own evaluator payload is not `nil`): a body reads
+its topology regardless of payload, but this operation's own re-evaluation
+contract — a placed copy re-derives each chain's orientation and re-runs its
+simplicity audit rather than re-proving its planarity, on the same terms
+every other rebuilding operation (`Placed`, `PlacedCopy`, `Duplicate`)
+already states — needs the payload every one of those already requires. A
+receiver with no payload is `ErrUnsupported` (R19). On a solid every edge is
 shared, so gate 1 refuses every selection, which is the correct answer: a
 solid has no hole to fill.
+
+**The rebuild, never a mutation.** The result is built by rebuilding the
+receiver from its own face set, never by attaching the new face to the
+receiver's own topology in place: a retired body stays readable, and a
+caller may still hold it, so mutating its edges would corrupt what they
+read. This is `unstitch.go`'s own held-B-rep-under-a-rigid-motion mechanism
+— record the receiver's own faces, never a built topology, and replay under
+a composed motion — widened from one face to a whole face set, plus the
+faces the patch mints on top of it; gate 3's own proof is never replayed,
+for the same reason `Stitch`'s Table J admission never is (§6.4): a rigid
+motion preserves planarity exactly, so re-proving it would only make a
+placement refuse for no soundness gain. `Kind`, lumps and shells come from
+the existing `sheetLumps`, run only after every face — the receiver's own
+copies and every new one — is attached. A patch that closes a sheet's last
+free edge leaves a **closed sheet** reporting `BodySheet` with `IsSolid()`
+`false`: `Stitch` alone makes the material claim (§2.1). `Bounds` is the
+rebuilt receiver's own box (`unstitchBounds`, reused verbatim): each new
+face's boundary is already receiver geometry, and a bounded planar region
+lies inside its own boundary's box, so the receiver's own box already
+bounds the patched result too. `Area` is the receiver's own faces' area plus
+each new face's, composed through `boundedAdd` — the same sum `Stitch`
+already runs over its own constituent faces (§6.4/§8), reused here for one
+operand's own face set plus the faces this call adds to it.
 
 ## 6. Stitch and Unstitch
 
@@ -724,7 +795,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R2 | `Document.Patch` handed a profile that fails `docs/api-design.md` §7's seam gates | as the seam states: `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` |
 | R3 | `Document.Patch` handed a profile whose recorded boundary carries a free-form segment this evaluator cannot integrate | `ErrUnsupported` |
 | R4 | `Body.Patch` selection holds an edge that is not free | `ErrDegenerate` |
-| R5 | `Body.Patch` selection is not exactly one closed chain, or its plane-local walk crosses or touches itself | `ErrDegenerate` |
+| R5 | `Body.Patch` selection does not partition into closed chains, or a chain's plane-local walk crosses or touches itself | `ErrDegenerate` |
 | R6 | `Body.Patch` chain is proven non-planar, or carries a nonzero bound so planarity is not proven | `ErrUnsupported` |
 | R7 | `Stitch`'s welded set cannot be consistently oriented | `ErrDegenerate` |
 | R8 | `Stitch` closes a boundary holding a curved face | `ErrUnsupported` |
@@ -737,6 +808,8 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R15 | a sheet handed to an operation Table X refuses | `ErrUnsupported` |
 | R16 | `Body.Patch`'s selector resolves to nothing, or fails its own cardinality assertion | `SelectionError` wrapping `ErrNoMatch` / `ErrCardinality`, unchanged |
 | R17 | `Stitch` handed a `BodySolid` operand | `ErrUnsupported` |
+| R18 | `Body.Patch` chain's adjacent faces cannot be brought into agreement on the new face's orientation | `ErrDegenerate` |
+| R19 | `Body.Patch` handed a receiver with no evaluator payload | `ErrUnsupported` |
 
 R6, R8 and R10 are `ErrUnsupported` rather than `ErrDegenerate` on
 `docs/api-design.md` §8's own distinction: the input names real geometry and
@@ -745,7 +818,10 @@ R7 and R9 are `ErrDegenerate` because the geometry itself is the problem and
 no later evaluator admits it. R11, R15 and R17 are `ErrUnsupported` for
 permanent boundaries rather than staged ones, which is the same use
 `docs/modify-reach-design.md` already makes of the sentinel: the caller's move
-is a different operation, not a later version.
+is a different operation, not a later version. R18 joins R5, R7 and R9 for the
+same reason: an inconsistent assembly is the problem, not this evaluator's
+reach. R19 joins R11, R15 and R17: a body this evaluator did not build is a
+different operation's receiver, not a later version of this one.
 
 ## 8. Measurements
 
@@ -1147,6 +1223,10 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T12 | `Body.Patch` on a non-planar four-edge chain | `ErrUnsupported` (R6); and on a bounded-but-planar chain, `ErrUnsupported` on the same row |
 | T13 | every Table R row | the stated sentinel, with `errors.Is` holding, and no document change |
 | T14 | a wall extruded 5 inches `Along` (a nonzero-bound top rim, `document.go`'s unit-conversion rounding) against a patch built directly at the identical millimetre level (zero bound) | the stitch returns a **sheet**, not an error; `Edges(Free()).Exactly(12)` resolves — none of the four bit-identical rim/patch corner pairs join, because Table J's J5 refuses a nonzero-bound held value even where J4's coordinates match |
+| T15 | `Body.Patch` filling a `Document.Patch` sheet's own sole 4-edge boundary | two faces; `Area` doubles to 12000 mm², `Exact`; `Edges(Free())` matches nothing; the new face's normal is the exact negation of the original face's |
+| T16 | `Body.Patch` filling a single closed circular rim (a `Document.Patch` circle's own sole free edge) | which the original one-chain wording would have refused (§5.2); two faces, `Edges(Free())` matches nothing |
+| T17 | `Body.Patch` capping BOTH rims of a surface-extruded tube's `Edges(Free()).Exactly(8)` in one call | this contract's own flagship case; two new 6000 mm² faces, `Exact`; `Edges(Free())` matches nothing |
+| T18 | `Body.Patch` closing a stitched-but-still-open sheet's own last free edge | `Kind() == BodySheet` still, `IsSolid() == false`; `Edges(Free())` matches nothing |
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'`
