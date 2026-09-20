@@ -60,6 +60,14 @@ func WithChordTolerance(tol units.Value) STLOBJOption {
 // the [ErrUnsupported] a body whose own payload displacement exhausts the
 // requested tolerance returns, which cannot be meshed and so cannot be
 // exported.
+//
+// STL writes a [BodySheet] exactly as it writes a solid's mesh — both formats
+// are triangle lists and neither format requires closure — but the file it
+// produces is NOT a solid despite carrying STL's own `solid`/`endsolid`
+// keywords: a slicer or any other consumer that reads those keywords as a
+// claim of closure will not treat it as one. A caller learns this here,
+// before handing the file onward, rather than discovering it from a
+// downstream tool's own diagnosis of a non-manifold mesh.
 func (b *Body) STL(w io.Writer, opts ...STLOption) error {
 	folded := make([]option.Interface, len(opts))
 	for i, o := range opts {

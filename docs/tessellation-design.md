@@ -94,8 +94,18 @@ same safety-net role:
 | Requirement | Statement |
 |---|---|
 | directed edges | each directed edge occurs at most once; an interior edge's reverse occurs exactly once; a free boundary edge has no reverse |
-| orientation | consistent across every interior edge, matching the shell's own positive side (`docs/surface-design.md` §2.3) |
+| orientation | every interior edge's exactly-one-reverse is proven by the count above, which is the whole of what this audit decides about orientation |
 | free boundary | every mesh free edge lies on a body free edge, and every body free edge is covered by mesh free edges |
+
+The orientation row's OTHER half — that the shared winding matches the
+shell's own positive side (`docs/surface-design.md` §2.3) — is never audited
+here. It holds by CONSTRUCTION: the mesh is built from the walls with the
+payload's own winding, so a facet and its neighbor already traverse their
+shared edge in opposite senses before any audit runs. A per-triangle sign
+test against a bounded `Face.NormalAt` would add a geometric admission gate
+where construction already proves the answer, which `CLAUDE.md`'s
+reject-only rule forbids, so the tests assert it directly instead of this
+audit re-deriving it.
 
 Every other row of §1's table binds a sheet mesh unchanged, and so does §1.1's
 one-entry cache.

@@ -1531,3 +1531,12 @@
 2	0.00	TestSheetSolidPairOverlappingBoxesAreUnsupported
 3	0.00	TestPatchRejections
 3	0.00	TestSheetSolidPairSeparatedBoxesVerifySound
+0	0.00	TestSurfaceExtrudeSheetTessellates
+1	0.00	TestSurfaceExtrudeSheetBoundMatchesSolid
+2	0.00	TestSurfaceExtrudeSheetDeterminism
+3	0.00	TestSurfaceExtrudeHoledSheetMultiLumpTessellates
+0	0.00	TestSheetMeshPublishesNoOccupiedVolumeProof
+1	0.00	TestSheetMeshFaceBoundCoversWallsOnly
+2	0.00	TestSheetAreaSlackIsBelowTheSolidsOnTheHoledFixture
+3	0.00	TestRequireSheetMeshRejectsBrokenFreeEdgeAttribution
+0	0.00	TestRequireSheetMeshCatchesADuplicatedDirectedEdge

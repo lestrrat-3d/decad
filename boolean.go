@@ -588,13 +588,27 @@ func sourceIDs(ctx context.Context, m *Mesh, faceID map[*Face]int) ([]int, error
 // internal tolerance makes the most expensive part of the call. Both this and
 // operandSymDiff must name the same payload classes, and each proof retires
 // both arms of its own row together.
+//
+// A sheet operand refuses HERE too, ahead of the payload-class switch below:
+// docs/surface-design.md §10 states that a sheet mesh carries no
+// occupied-volume proof, on the same terms as a cap-loop chamfer's. This is
+// defence in depth rather than dead code — performBoolean's own
+// refuseSheetOperand already fires first in the ordinary call path (Table X),
+// so this arm exists to keep this function's own stated invariant, that it
+// and operandSymDiff name the same set of payload classes, true even for a
+// caller that reaches this function by some other path.
 func requireVolumeProvingPayload(b *Body, index int) error {
 	var err error
-	switch b.payload.(type) {
-	case capBlendPayload:
-		err = fmt.Errorf(`%w: a cap-loop chamfer's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
+	switch {
+	case b.Kind() == BodySheet:
+		err = fmt.Errorf(`%w: a sheet's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
 	default:
-		return nil
+		switch b.payload.(type) {
+		case capBlendPayload:
+			err = fmt.Errorf(`%w: a cap-loop chamfer's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
+		default:
+			return nil
+		}
 	}
 	return expectedBooleanForOperand(booleanExpectedVolumeProof, index, err)
 }
