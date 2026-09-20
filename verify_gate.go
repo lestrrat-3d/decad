@@ -136,6 +136,22 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok = lowerDiameterForDisplacement(d, payload.delta)
 		return d, ok, nil
 	}
+	if _, ok := body.payload.(patchPayload); ok {
+		// A patch has no exact carrier model of its own (it is a single flat
+		// face, not a prism or a revolve), and no witness set gateWitnessPrism
+		// reads either. Its own box is a proven LOWER bound on its diameter
+		// instead: the largest single-axis extent of the body's own box is at
+		// or below the true diameter (a diameter realizes as SOME pair's
+		// distance, whose spread along at least one axis cannot exceed that
+		// axis's own box extent), and lowerDiameterForDisplacement shrinks it
+		// by the box's own proven Bound so the box's uncertainty can only
+		// tighten the gate, never loosen it (docs/surface-design.md §5.1,
+		// verification §3).
+		box := body.bounds
+		d := math.Max(box.Max.X-box.Min.X, math.Max(box.Max.Y-box.Min.Y, box.Max.Z-box.Min.Z))
+		d, ok := lowerDiameterForDisplacement(d, box.Bound.Base())
+		return d, ok, nil
+	}
 	budget := newWorkBudget(ctx)
 	geom, ok, err := newBodyGeomBudget(budget, body)
 	if err != nil {
