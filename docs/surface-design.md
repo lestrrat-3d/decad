@@ -665,6 +665,16 @@ not admit, and re-stitching them returns a sheet. That is the same reach limit
 J5 and R8 state, not a separate one, and the closing case is a required test
 (§15).
 
+**`unstitchPayload` (`unstitch.go`) is the held-B-rep-under-a-rigid-motion
+mechanism restricted to one face**, `stitchPayload`'s own idea narrowed from a
+whole welded set to a single held `*Face`: it records that face and the
+retiring receiver's own already-proven `Bounds`, never a built topology, and
+`placed()` deep-copies fresh surface, loop, edge and vertex geometry under the
+composed transform every time, exactly as `stitchPayload.placed` replays
+`evalStitchContext`. Nothing in either result aliases the receiver's own
+`*Face`, `*Edge` or `*Vertex`, so a retired receiver stays readable and
+unmodified for any caller still holding it.
+
 ## 7. Table R — refusals and their sentinels
 
 Every refusal is at the call, before any commit; the document and every

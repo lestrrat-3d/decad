@@ -52,6 +52,24 @@ func (d *Document) commit(produced *Body, consumed ...*Body) {
 	d.bodies = append(d.bodies, produced)
 }
 
+// commitMany is commit's N-producer variant (docs/surface-design.md §6.5):
+// Unstitch produces many bodies from one receiver, and registering them one
+// commit at a time would leave the document in a partial state — the
+// receiver retired but fewer than len(produced) results live — if a later
+// one somehow failed between calls. Every produced body must already be
+// fully built by the time this runs (evalUnstitchFaceContext's own errors
+// surface before commitMany is ever called), so this function's own job is
+// only to make the retirement and every registration one atomic step from
+// [Document.Bodies]'s point of view, exactly as commit already is for one
+// producer.
+func (d *Document) commitMany(produced []*Body, consumed ...*Body) {
+	d.nextProducer += producerID(len(produced))
+	for _, c := range consumed {
+		d.retire(c)
+	}
+	d.bodies = append(d.bodies, produced...)
+}
+
 // retire removes a body from the live set. The body itself is untouched —
 // retiring is a change of document membership, not of the body (core §6).
 func (d *Document) retire(b *Body) {
