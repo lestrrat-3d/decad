@@ -487,12 +487,16 @@ func sheetBoxBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, h float64) 
 	return body
 }
 
-// TestSheetSolidPairOverlappingBoxesAreUnsupported is docs/surface-design.md's
-// T7: a surface-extruded sheet and a solid whose bounds-inflated boxes meet
-// take §9.3's pair rule — one DiagUnsupportedPairSheet naming the pair in
-// document order, no Interference or Clearance row — under the default call
-// and under WithClearances() alike.
-func TestSheetSolidPairOverlappingBoxesAreUnsupported(t *testing.T) {
+// TestSheetSolidPairCrossingBoxesReadInterfering is docs/surface-design.md's
+// T7, rewritten for increment 2's decision procedure: the sheet's wall at
+// x=10 (y∈[0,10], z∈[0,5]) and the solid's face at y=5 (x∈[5,15], z∈[0,5])
+// are transversal planes whose intersection line — x=10, y=5, z∈[0,5] — sits
+// inside both faces' trims, an admitted crossing the candidate enumeration
+// proves. Increment 1 read this same fixture as DiagUnsupportedPairSheet and
+// Suspect (the box rule alone, with no decision procedure behind it yet);
+// increment 2 decides it as a proven crossing instead, so this test is
+// rewritten in place rather than repointed to new geometry.
+func TestSheetSolidPairCrossingBoxesReadInterfering(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	sheet := sheetBoxBody(t, doc, 0, 0, 10, 10, 5)
@@ -501,14 +505,16 @@ func TestSheetSolidPairOverlappingBoxesAreUnsupported(t *testing.T) {
 	for _, opts := range [][]decad.VerifyOption{nil, {decad.WithClearances()}} {
 		report, err := doc.Verify(t.Context(), opts...)
 		require.NoError(t, err)
-		require.Equal(t, decad.Suspect, report.Status)
+		require.Equal(t, decad.Interfering, report.Status)
+		require.False(t, report.Passed())
 
-		diags := decadtest.FindDiagnostics(t, report, decad.DiagUnsupportedPairSheet)
+		diags := decadtest.FindDiagnostics(t, report, decad.DiagSheetSolidCrossing)
 		require.Len(t, diags, 1)
 		d := diags[0]
 		require.NotNil(t, d.Pair)
 		require.Same(t, sheet, d.Pair.A)
 		require.Same(t, solid, d.Pair.B)
+		require.Equal(t, decad.Interfering, d.Status)
 		require.Equal(t, decad.ReadingNone, d.Reading)
 		require.Nil(t, d.Observed)
 		require.Nil(t, d.ObservedVec)
@@ -516,8 +522,13 @@ func TestSheetSolidPairOverlappingBoxesAreUnsupported(t *testing.T) {
 		require.Nil(t, d.Required)
 		require.Nil(t, d.Body)
 
+		// A sheet encloses no region: the crossing is proven, but there is
+		// no overlap volume to report, so no Interference row is ever
+		// emitted for it — that absence is not a proven non-overlap here
+		// (docs/surface-design.md §9.3).
 		require.Empty(t, report.Interferences)
 		require.Empty(t, report.Clearances)
+		require.Len(t, doc.Bodies(), 2)
 	}
 }
 
@@ -538,4 +549,169 @@ func TestSheetSolidPairSeparatedBoxesVerifySound(t *testing.T) {
 		require.Empty(t, report.Interferences)
 		require.Empty(t, report.Clearances)
 	}
+	require.Len(t, doc.Bodies(), 2)
+}
+
+// TestSheetSolidPairOutsideProvenSound is docs/surface-design.md §9.3's
+// increment-2 decision procedure, outside branch: the sheet is a 10×10 mm
+// wall frame (walls only, no caps) around a 4×4 mm solid centered inside it,
+// both spanning z∈[0,5]. Their bounds-inflated boxes MEET (the solid's box
+// sits wholly inside the sheet's), so box separation alone cannot settle the
+// pair, but the sheet's material never comes closer than the frame-to-block
+// gap of 3 mm on every side — a closed-form Plane×Plane reading, Exact. The
+// deterministic witness (a sheet corner) casts outside the solid, proving the
+// sheet lies wholly outside it: Sound, with the gap row under
+// WithClearances() and no diagnostic.
+func TestSheetSolidPairOutsideProvenSound(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	sheet := sheetBoxBody(t, doc, 0, 0, 10, 10, 5)
+	solid := boxBody(t, doc, 3, 3, 7, 7, 5)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	require.Empty(t, report.Diagnostics)
+	require.Empty(t, report.Interferences)
+	require.Empty(t, report.Clearances, "no gap row without WithClearances()")
+
+	report, err = doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	require.Empty(t, report.Diagnostics)
+	require.Empty(t, report.Interferences)
+	requireExactGap(t, report, 3)
+	require.Same(t, sheet, report.Clearances[0].A)
+	require.Same(t, solid, report.Clearances[0].B)
+
+	require.Len(t, doc.Bodies(), 2)
+}
+
+// TestSheetSolidPairContainedProvenSound is docs/surface-design.md §9.3's
+// increment-2 decision procedure, containment branch: a 10×10×10 mm sheet
+// box sits centered 5 mm inside a 20×20×20 mm solid cube on every side. The
+// boxes meet (the sheet's box sits wholly inside the solid's), the boundary
+// distance is a closed-form 5 mm on every side, Exact, and the deterministic
+// witness casts inside the solid, proving containment: Sound, with the SAME
+// shape of gap row under WithClearances() as the outside case — one
+// consequence of the decision procedure is that this row never asserts which
+// side the sheet is on (docs/api-design.md §6.2) — and no diagnostic.
+func TestSheetSolidPairContainedProvenSound(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	solid := boxBody(t, doc, 0, 0, 20, 20, 20)
+	raw := sheetBoxBody(t, doc, 5, 5, 15, 15, 10)
+	shift, err := r3.Translation(r3.NewVec(0, 0, 5))
+	require.NoError(t, err)
+	sheet, err := raw.Placed(shift)
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	require.Empty(t, report.Diagnostics)
+	require.Empty(t, report.Interferences)
+	require.Empty(t, report.Clearances, "no gap row without WithClearances()")
+
+	report, err = doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	require.Empty(t, report.Diagnostics)
+	require.Empty(t, report.Interferences)
+	requireExactGap(t, report, 5)
+	require.Same(t, solid, report.Clearances[0].A)
+	require.Same(t, sheet, report.Clearances[0].B)
+
+	require.Len(t, doc.Bodies(), 2)
+}
+
+// TestSheetSolidPairKernelCannotSettleStaysSuspect exercises the "missing
+// body model" leg of docs/surface-design.md §9.3's decision procedure: a
+// surface-extruded fit-spline arch is ValidityValid — the sheet audit's
+// fourth leg is proven by construction for ANY surface-result prism with no
+// section displacement, regardless of wall kind (verify.go's
+// auditSheetBoundary) — but its one free-form wall has no analytic carrier
+// face the clearance kernel can build (walkElem, clearance_geom.go), the same
+// gap extrude_freeform_test.go already pins for the wall/undercut/
+// concave-radius surveys on the solid built from the same profile. With no
+// model to decide against, the pair stays undecided even though its boxes
+// MEET: DiagUnsupportedPairSheet, Suspect — its message now names the
+// kernel's own failure to settle the pair, not an unsupported sheet operand.
+func TestSheetSolidPairKernelCannotSettleStaysSuspect(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	solid := boxBody(t, doc, 2, 0, 6, 2, 10)
+	s, p := fitSplineArchSketch(t)
+	sheet, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, report.Status)
+
+	diags := decadtest.FindDiagnostics(t, report, decad.DiagUnsupportedPairSheet)
+	require.Len(t, diags, 1)
+	d := diags[0]
+	require.NotNil(t, d.Pair)
+	require.Same(t, solid, d.Pair.A)
+	require.Same(t, sheet, d.Pair.B)
+	require.Contains(t, d.Message, "could not settle")
+	require.NotContains(t, d.Message, "unsupported",
+		"the message must name the kernel's own failure to settle the pair, not an unsupported sheet operand")
+
+	require.Empty(t, report.Interferences)
+	require.Empty(t, report.Clearances)
+	require.Len(t, doc.Bodies(), 2)
+}
+
+// TestSheetSheetPairStaysUndecided is docs/surface-design.md §9.3's
+// sheet-sheet rule: neither operand offers a closed boundary to cast the
+// other against, so the decision procedure never runs at all — the pair
+// keeps DiagUnsupportedPairSheet and Suspect regardless of whether the true
+// geometry would have crossed, exactly as the fixture in
+// TestSheetSolidPairCrossingBoxesReadInterfering would have, had either
+// operand been a solid.
+func TestSheetSheetPairStaysUndecided(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	sheet1 := sheetBoxBody(t, doc, 0, 0, 10, 10, 5)
+	sheet2 := sheetBoxBody(t, doc, 5, 5, 15, 15, 5)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, report.Status)
+
+	diags := decadtest.FindDiagnostics(t, report, decad.DiagUnsupportedPairSheet)
+	require.Len(t, diags, 1)
+	d := diags[0]
+	require.NotNil(t, d.Pair)
+	require.Same(t, sheet1, d.Pair.A)
+	require.Same(t, sheet2, d.Pair.B)
+
+	require.Empty(t, report.Interferences)
+	require.Empty(t, report.Clearances)
+	require.Len(t, doc.Bodies(), 2)
+}
+
+// TestSheetSolidPairDiagnosticFollowsDocumentOrder proves the crossing
+// diagnostic's Pair fields follow Document.Bodies() order rather than
+// "sheet always first": the solid is created before the sheet here, the
+// reverse of TestSheetSolidPairCrossingBoxesReadInterfering, and the
+// diagnostic's Pair.A/B swap to match.
+func TestSheetSolidPairDiagnosticFollowsDocumentOrder(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	solid := boxBody(t, doc, 5, 5, 15, 15, 5)
+	sheet := sheetBoxBody(t, doc, 0, 0, 10, 10, 5)
+	require.Equal(t, []*decad.Body{solid, sheet}, doc.Bodies())
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Interfering, report.Status)
+
+	diags := decadtest.FindDiagnostics(t, report, decad.DiagSheetSolidCrossing)
+	require.Len(t, diags, 1)
+	require.Same(t, solid, diags[0].Pair.A)
+	require.Same(t, sheet, diags[0].Pair.B)
+	require.Len(t, doc.Bodies(), 2)
 }

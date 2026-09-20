@@ -118,6 +118,16 @@ geometry the body does not have (`docs/surface-design.md` §4.1), while a
 surface-result revolve is refused a model outright rather than the closed one
 its own builder would otherwise hand back.
 
+**A sheet-against-solid pair (`sheetSolidPair`, `clearance.go`) reuses this
+carrier model and §3's candidate enumeration unchanged, over the sheet's own
+walls-alone or refused-outright model above.** One check does NOT apply: the
+§6 coplanar contact certificate is never run for this pair shape. That
+certificate proves each body's material lies wholly on its own side of a
+shared plane, which is a claim about material a sheet does not have, so it
+could never fire honestly here — it is skipped outright rather than run for
+an answer it cannot give. `docs/surface-design.md` §9.3 owns the full
+procedure and report vocabulary this pair shape reaches.
+
 ## 3. The candidate enumeration
 
 The distance over a compact face pair attains its minimum at some `(p, q)`,
@@ -174,6 +184,22 @@ minimum falls to the edge and vertex tiers (the worked cubes of §7). A
 **bracketed** candidate whose foot straddles a trim edge within its bracket is
 kept for the lower bound and never counted toward exactness — admission doubt
 may widen the interval, never unsound it.
+
+**`sheetSolidPair` runs this enumeration unchanged over a sheet operand's
+faces against a solid's.** A trim-admitted transversal crossing between a
+sheet face and a solid face proves the sheet crosses the solid's boundary —
+the same `sink.overlap` this enumeration already sets — and every other
+outcome (an unsure candidate, an unresolved upper bound, a lower bound at or
+below tolerance) leaves the pair undecided exactly as it does for a
+solid-solid pair. What changes is what happens next: a proven POSITIVE lower
+bound is settled by ONE deterministic witness cast — a sheet vertex, cast
+through the solid's own `pointInBody` (§2's three-outcome cast) — rather than
+the two-directional nesting relation §2 runs for a solid pair. §2 states why
+one witness suffices: the sheet's boundary misses the solid's boundary
+entirely once the distance is proven positive, and a one-shell sheet has no
+void shells of its own for the outer body's boundary to be cut apart by, so
+the reverse direction has nothing to prove. `docs/surface-design.md` §9.3
+owns the full procedure.
 
 ## 4. The face-pair table
 

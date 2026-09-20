@@ -551,6 +551,13 @@ type Clearance struct {
 }
 ```
 
+For a pair holding a sheet operand, `Clearance` carries a narrower claim
+(`docs/surface-design.md` §9.3): a sheet has no volume to be disjoint FROM, so
+`Gap` states the proven distance between the sheet and the solid's boundary,
+whether the sheet lies wholly inside or wholly outside it, WITHOUT asserting
+which side. A solid-solid row's meaning — the two bodies do not overlap, and
+how close they come — is unchanged.
+
 The rest are deferred:
 
 ```go

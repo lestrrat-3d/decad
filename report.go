@@ -237,15 +237,25 @@ const (
 	// geometry exceeds the pipeline's supported reach. Reading ReadingNone.
 	// Contributes Suspect.
 	DiagUnsupportedPairPipeline
-	// DiagUnsupportedPairSheet — one or both operands is a sheet body, which
-	// encloses no region, so the interference relation (§1) is not the
-	// question the caller means, and no Interference or Clearance row is
-	// emitted. It fires only when the pair's bounds-inflated boxes MEET: a
-	// sheet parked away from every solid is decidedly apart and emits
-	// nothing, so a model that merely holds a sheet still reads Sound
-	// (docs/surface-design.md §9.3). Reading ReadingNone, Observed* and
-	// Required nil, Pair set. Contributes Suspect.
+	// DiagUnsupportedPairSheet — a pair holding a sheet operand that the
+	// sheet decision procedure could not settle (docs/surface-design.md
+	// §9.3): a sheet-sheet pair, since neither operand offers a closed
+	// boundary to cast the other against, or a sheet-against-solid pair
+	// whose body model is missing, whose candidate enumeration could not
+	// decide the boundary distance, or whose witness cast failed. It fires
+	// only when the pair's bounds-inflated boxes MEET: a sheet parked away
+	// from every solid is decidedly apart and emits nothing, so a model that
+	// merely holds a sheet still reads Sound. Reading ReadingNone, Observed*
+	// and Required nil, Pair set. Contributes Suspect.
 	DiagUnsupportedPairSheet
+	// DiagSheetSolidCrossing — a sheet operand proven to cross a solid
+	// operand's boundary, by an admitted transversal crossing between a
+	// sheet face and a solid face (docs/surface-design.md §9.3). A sheet
+	// encloses no region, so no Interference row is emitted for it — that
+	// absence is NOT a proven non-overlap here, only the fact that a sheet
+	// has no overlap volume to report. Reading ReadingNone, every Observed*,
+	// Required and Body nil, Pair set. Contributes Interfering.
+	DiagSheetSolidCrossing
 	// DiagUnsupportedSurveyPayload — an asked body survey cannot run because
 	// its payload class is staged. Reading ReadingNone. Contributes Suspect.
 	DiagUnsupportedSurveyPayload
@@ -300,6 +310,8 @@ func (c DiagnosticCode) String() string {
 		return "unsupported_pair_pipeline"
 	case DiagUnsupportedPairSheet:
 		return "unsupported_pair_sheet"
+	case DiagSheetSolidCrossing:
+		return "sheet_solid_crossing"
 	case DiagUnsupportedSurveyPayload:
 		return "unsupported_survey_payload"
 	case DiagSurveyPrerequisite:
@@ -354,6 +366,12 @@ type Interference struct {
 // touching pair's zero is a measured Exact zero carried by a certified
 // contact; a pair whose gap the kernel cannot prove yields no row and reads
 // Suspect under WithClearances.
+//
+// For a pair holding a sheet operand, the row means something narrower
+// (docs/surface-design.md §9.3): a sheet has no volume to be disjoint FROM,
+// so Gap states the proven distance between the sheet and the solid's
+// boundary, whether the sheet lies wholly inside or wholly outside it, WITHOUT
+// asserting which side. A solid-solid row's meaning is unchanged.
 type Clearance struct {
 	A, B *Body
 	Gap  Measurement
