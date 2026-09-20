@@ -824,23 +824,29 @@ sheets and only asks the core questions.
 
 ### 9.3 Pairs
 
-`docs/interference-design.md` §2 already keeps **only proven solids** for pair
-work, so a pair with a sheet operand reaches no relation today. Silence is the
-wrong answer: a caller whose sheet passes straight through a solid would get
-no row and a `Sound` report, which is the confidently-wrong outcome the
-project exists to prevent.
+`docs/interference-design.md` §2 keeps **only proven solids** for its own four
+relations (§1 there), so a pair with a sheet operand needs a different
+question answered. Silence is the wrong answer: a caller whose sheet passes
+straight through a solid would get no row and a `Sound` report, which is the
+confidently-wrong outcome the project exists to prevent.
 
 **The rule turns on box separation, which §3.1 of that design already runs:**
 
-- **bounds-inflated boxes separated** → nothing is emitted, and the pair
-  contributes nothing. The two bodies cannot meet, and `WithClearances()`
-  emits no row for them in this increment (§14 lands the sheet gap).
-- **boxes meet** → no row, one `DiagUnsupportedPairSheet` naming the pair, and
-  the report reads `Suspect`.
+- **bounds-inflated boxes separated** → nothing is emitted under the default
+  call. A sheet-sheet pair stays silent regardless of `WithClearances()`,
+  since neither operand offers a closed boundary to measure a gap against. A
+  sheet-against-solid pair honors `WithClearances()` exactly as a solid-solid
+  pair does (`docs/interference-design.md` §3.1: box separation does not
+  measure the true gap, and the analytic kernel still runs when a gap is
+  asked for): the decision procedure below still runs, with the box
+  separation already excluding crossing and containment, and reports the
+  measured gap like any other pair.
+- **boxes meet** → the decision procedure below always runs, whether or not a
+  gap was asked for — a crossing must be checked either way.
 
 That keeps the noise where the question is live. A model with a sheet parked
 away from every solid verifies clean; a sheet that might be cutting through
-one says so.
+one is decided.
 
 **A sheet whose own validity is undecided or invalid does not take this box
 rule.** It inherits the existing filter that only a proven-valid body enters
@@ -849,18 +855,91 @@ either bullet above. No report reads falsely `Sound` for it: such a sheet
 already contributes its own `Suspect` or `Unsound` through `Validity`, with no
 help needed from the pair rule.
 
-**`DiagUnsupportedPairSheet` is a new code in the existing
+**A sheet-sheet pair takes none of the decision procedure below.** Neither
+operand offers a closed boundary to cast the other against — the procedure's
+last step needs a solid's boundary to cast a witness through — so a
+sheet-sheet pair whose boxes meet goes straight to `DiagUnsupportedPairSheet`,
+`Suspect`, exactly as increment 1 left it.
+
+**The decision procedure, for a sheet operand against a proven solid whose
+boxes meet OR whose separated boxes were asked for a gap
+(`sheetSolidPair`, `clearance.go`):**
+
+1. Build the clearance kernel's own carrier model (`docs/clearance-design.md`
+   §2) for both operands. Either one missing — a revolve sheet is refused a
+   model outright, or an operand is multi-lump or faceted — leaves the pair
+   **undecided**.
+2. Run the existing candidate enumeration (§3 of that design) over the two
+   models UNCHANGED, with one omission: the §6 coplanar contact certificate is
+   never run. That certificate proves each body's material lies wholly on its
+   own side of a shared plane, which is a claim about material a sheet does
+   not have, so it could never fire honestly here.
+3. An admitted transversal crossing between a sheet face and a solid face
+   proves the sheet **crosses** the solid's boundary. Box separation already
+   excludes this outcome — a box that does not even meet the solid's own box
+   cannot admit a crossing — so this step never fires when the boxes were
+   separated.
+4. Absent a crossing, an unsure candidate, an infinite proven upper bound, or
+   a proven lower bound at or below the tolerance leaves the pair
+   **undecided** — the same standard the solid-solid path already holds a
+   small residual to.
+5. A proven POSITIVE lower bound means the sheet's boundary misses the
+   solid's boundary entirely. **When the boxes were already proven
+   separated, that alone decides outside** — a box that does not meet the
+   solid's own box cannot admit containment either, so the witness cast below
+   would only confirm a settled answer, and is skipped, exactly as
+   `clearancePair`'s own `nestingExcluded` parameter skips its
+   two-directional cast for a box-proven solid pair. Otherwise, one
+   deterministic sheet vertex — the same witness `docs/clearance-design.md`
+   §2's per-shell casts already use — is cast through the solid's existing
+   three-outcome containment cast (`bodyGeom.pointInBody`,
+   `clearance_geom.go`): inside proves the sheet **contained**, outside
+   proves it **outside** with the measured gap, and a failed cast leaves the
+   pair undecided.
+
+**Why one witness decides the whole sheet.** Once the boundary distance is
+proven positive, the sheet's boundary misses the solid's boundary entirely.
+Being one connected shell, the sheet then lies wholly within one connected
+component of space minus that boundary, so one point's membership answers for
+the whole shell. The premise is asserted, not assumed: §2.2 gives a sheet lump
+exactly one shell, and the clearance kernel already refuses any body with more
+than one lump a model at all, so a sheet that reaches this step always has
+exactly one witness to cast. The two-directional cast the solid-solid path
+runs (`docs/clearance-design.md` §2) exists for a different reason — an inner
+body's several shells can be cut apart by the outer body's void shells, so the
+outer's own witnesses must be checked too — and a one-shell sheet has no void
+shells of its own for anything to cut apart, so the reverse cast is not merely
+skipped as an optimization: it has nothing left to prove.
+
+**The report each outcome produces:**
+
+- **Crossing** → the pair reads `Interfering` and carries exactly one new
+  diagnostic, `DiagSheetSolidCrossing` — stable token
+  `"sheet_solid_crossing"`, `Reading` `ReadingNone`, every `Observed*`,
+  `Required` and `Body` nil, `Pair` set. No `Interference` row is emitted: a
+  sheet encloses no region, so there is no overlap volume to report, and that
+  absent row is **not** a proven non-overlap here — it is the ordinary shape
+  of a sheet pair report, crossing or not.
+- **Contained**, or **outside** → the pair reads `Sound`, no diagnostic.
+  Under `WithClearances()` it carries a `Clearance` row with the SAME proven
+  gap interval either way: `docs/api-design.md` §6.2 states the consequence
+  that follows.
+- **Undecided** (missing model, unsure candidate, or a failed witness cast)
+  while the boxes MEET → the pair keeps `DiagUnsupportedPairSheet`,
+  `Suspect`. Its message now names the kernel's own failure to settle the
+  pair, not an unsupported sheet operand — a sheet body is fully supported;
+  some of its pairs are not yet decidable. The same undecided answer while
+  the boxes are SEPARATED is `DiagUndecidedClearance` instead, `Suspect`: box
+  separation already proves the sheet outside the solid, so only the
+  requested gap itself is unmeasured — the same code and the same reasoning
+  a box-proven solid-solid pair uses when its own kernel cannot measure the
+  gap (`docs/verification-design.md` §1.1).
+
+**`DiagUnsupportedPairSheet` is the existing code in the
 `DiagUnsupportedPair*` family**, stable token `"unsupported_pair_sheet"`,
 `Reading` `ReadingNone`, every `Observed*` and `Required` nil, `Pair` set,
-contributing `Suspect`. §12 adds it.
-
-§14's increment 2 narrows when it fires: a sheet-against-solid pair is decided
-by a containment cast from a sheet vertex against the solid's closed boundary
-— the same three-outcome cast `clearance_geom.go` already runs, which the
-solid's closure makes available unchanged — plus the boundary distance the
-clearance kernel already measures. Crossing, containment and a measured gap
-each become a decided answer, and the diagnostic falls back to the pairs the
-kernel could not settle.
+contributing `Suspect`. `DiagSheetSolidCrossing` is the new sibling code the
+decision procedure adds. §12 records both.
 
 ## 10. Tessellation and export
 
@@ -929,9 +1008,14 @@ reverses a decision already taken.
 | `docs/evaluator-design.md` §3 | the `Lump` row states "connected piece"; the topology-model rules gain the free-edge reading |
 | `docs/evaluator-design.md` §11 | the increment table gains Table D's rows |
 | `docs/verification-design.md` §1 | `Region`'s biconditional becomes validity **and** `Kind() == BodySolid` (§9.1) |
-| `docs/verification-design.md` §1.1 | `DiagUnsupportedPairSheet` is added, with its stable token; `DiagSurveyPrerequisite`'s stated cause widens to include a sheet; the `ScalarUnavailable` prose states that a sheet is a solid prerequisite failure by category, and the pair-partition prose states §9.3's box rule |
+| `docs/verification-design.md` §1.1 | `DiagUnsupportedPairSheet` is added, with its stable token, and its stated cause widens to the decision procedure's own undecided leg (§9.3); `DiagSheetSolidCrossing` is added, with its stable token; `DiagSurveyPrerequisite`'s stated cause widens to include a sheet; the `ScalarUnavailable` prose states that a sheet is a solid prerequisite failure by category |
 | `docs/verification-design.md` §5 | the flat-body paragraph is scoped to a body built as a **solid**, so its `Unsound` verdict does not read as covering a sheet |
-| `docs/interference-design.md` §2 | the report walk states §9.3's box rule for a pair holding a sheet, in place of dropping it |
+| `docs/verification-design.md` §6 | `aggregateStatus` gains the volume-less `Interfering` rung: a diagnostic whose own `Status` is `Interfering` (`DiagSheetSolidCrossing`) makes the report `Interfering` with no `Interference` row at all (§9.3) |
+| `docs/interference-design.md` §1 | the four-relation table is scoped to a pair of proven solids; a sheet operand takes §9.3's decision procedure instead |
+| `docs/interference-design.md` §2 | the report walk states §9.3's decision procedure for a pair holding a sheet, in place of the box rule alone |
+| `docs/clearance-design.md` §2 | states that `sheetSolidPair` reuses the carrier model and candidate enumeration, skipping the §6 coplanar certificate, which a sheet's missing material could never satisfy |
+| `docs/clearance-design.md` §3 | states that a sheet-against-solid pair settles a proven positive lower bound with ONE witness cast, never the two-directional nesting relation a solid pair needs, and why (§9.3) |
+| `docs/api-design.md` §6.2 | `Clearance`'s doc comment states the one consequence: for a sheet-solid pair the row states the distance to the solid's boundary without asserting which side the sheet is on; a solid-solid row's meaning is unchanged |
 | `docs/tessellation-design.md` §1 | the Geometry row and the mandatory closed-mesh audit become kind-conditional (§10) |
 | `docs/layout.md` | a row for this document, and one per `.go` file each increment adds |
 | `CLAUDE.md` | a "Read before you write" row pointing here for sheet-body, surface-feature, patch and stitch code |
@@ -1017,8 +1101,13 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T4 | T3's operands with one patch displaced 1e-9 mm | the stitch returns a **sheet**, not an error; `Edges(Free()).Exactly(8)` resolves — the displaced patch's four edges and the four wall rims they failed to meet — while the other patch's four welded |
 | T5 | T3's solid, unstitched then re-stitched | 6 sheets out; the re-stitched body's `Volume` equals T3's to the bit |
 | T6 | a half-disc revolved a full turn about its diameter, as a surface | a closed sheet: `Kind() == BodySheet`, `Edges(Free())` matches nothing, `Volume()` is `ErrNotSolid`; stitching it alone is `ErrUnsupported` (R8) in increment 2 |
-| T7 | a surface-extruded profile and a solid whose boxes overlap | `Verify` reads `Suspect` with exactly one `DiagUnsupportedPairSheet` naming the pair, and no `Interference` or `Clearance` row |
-| T8 | the same pair moved until the boxes separate | `Verify` reads `Sound`, with no diagnostic |
+| T7 | a surface-extruded profile and a solid whose boxes meet, with an admitted transversal crossing between them | `Verify` reads `Interfering` with exactly one `DiagSheetSolidCrossing` naming the pair, and no `Interference` or `Clearance` row; `Passed()` is false |
+| T8 | the same pair moved until the boxes separate | `Verify` reads `Sound`, with no diagnostic; under `WithClearances()`, a `Clearance` row carries the measured gap, `Exact` |
+| T7a | a sheet frame around a smaller solid, boxes meeting but the frame's material never touching it | `Verify` reads `Sound`; under `WithClearances()` a `Clearance` row carries the closed-form gap, `Exact`, and no diagnostic |
+| T7b | a sheet nested wholly inside a solid, boxes meeting | `Verify` reads `Sound`; under `WithClearances()` the SAME shape of `Clearance` row as T7a, `Exact`, and no diagnostic |
+| T7c | a sheet whose one free-form wall the clearance kernel cannot model, against a solid whose boxes meet | `Verify` keeps `DiagUnsupportedPairSheet`, `Suspect`, message naming the kernel's failure to settle the pair rather than an unsupported sheet operand |
+| T7d | two sheets whose boxes meet, in a fixture that would cross if either were a solid | `Verify` keeps `DiagUnsupportedPairSheet`, `Suspect`: neither operand offers a closed boundary to cast against |
+| T7e | T7's fixture with the two bodies created in the opposite order | the `DiagSheetSolidCrossing` diagnostic's `Pair.A`/`Pair.B` follow `Document.Bodies()` order, not "sheet first" |
 | T9 | a sheet handed to `Union`, `Fillet`, `Chamfer` and `Shell` | each is `ErrUnsupported`; the receiver and every operand stay live, and `Document.Bodies()` is unchanged |
 | T10 | a sheet tessellated | deferred to the increment that builds the manifold-with-boundary audit (§10, Table D); today, `Tessellate`/`STL`/`OBJ` on a sheet is `ErrUnsupported` and that refusal is T9-shaped, not T10's |
 | T11 | a three-face assembly welded into a Möbius orientation | `Stitch` is `ErrDegenerate` (R7), and the document is unchanged |

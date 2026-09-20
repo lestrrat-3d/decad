@@ -14,7 +14,12 @@ public boolean's consuming semantics.
 
 ## 1. Pair relation
 
-Every unordered pair of proven solids has one evaluator relation:
+Every unordered pair of proven solids has one evaluator relation. A pair
+holding a `BodySheet` operand takes none of it: a sheet encloses no region, so
+the interior relation below is not the question for it at all, and
+`docs/surface-design.md` §9.3 states its own decision procedure and report
+vocabulary (crossing, contained, outside, undecided) in its place. §2 states
+where that procedure sits in the report walk.
 
 | Relation | Proven claim | Report effect |
 |---|---|---|
@@ -56,11 +61,13 @@ reorder rows.
 **A pair holding a `BodySheet` operand is reported, not dropped.** A sheet
 encloses no region, so §1's interior relation is not the question, and dropping
 the pair silently would let a sheet passing straight through a solid leave a
-`Sound` report. The pair runs §3.1's box separation and nothing further:
-separated boxes emit nothing, and boxes that MEET emit a
-`DiagUnsupportedPairSheet` naming the pair and no row.
-`docs/surface-design.md` §9.3 owns the rule and the containment cast that
-later narrows when it fires.
+`Sound` report. The pair runs §3.1's box separation first: separated boxes
+emit nothing. Boxes that MEET run `docs/surface-design.md` §9.3's own decision
+procedure, which owns the full report vocabulary that follows — a proven
+crossing (`Interfering`, no row), a proven containment or separation with a
+measured gap (`Sound`, a `Clearance` row under `WithClearances()`), or
+`DiagUnsupportedPairSheet` naming the pair and no row when the procedure
+cannot settle it, including every sheet-sheet pair.
 
 For each pair:
 

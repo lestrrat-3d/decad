@@ -7,15 +7,17 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is the pair kernel of docs/clearance-design.md §1/§2/§5/§6/§7.
-// One non-mutating pass proves one of four outcomes: pairDisjoint,
-// pairTouching, pairOverlapping, or pairUndecided. Admitted non-coplanar
-// transversal crossings and strict containment produce pairOverlapping;
-// unsupported contact stays pairUndecided. When asked, the kernel measures
-// the gap as a proven interval [lo, hi]. Exactness belongs to the interval,
-// not the winning candidate: Exact requires a closed-form winner and every
-// bracketed rival proven to sit at or above it. Cone-involved pairs may read
-// a coarse enclosure interval rather than a fabricated verdict.
+// This file is the pair kernel of docs/clearance-design.md §1/§2/§5/§6/§7,
+// and, since PR increment 2, docs/surface-design.md §9.3's sheet-against-solid
+// decision procedure (sheetSolidPair, below). One non-mutating pass proves one
+// of four outcomes: pairDisjoint, pairTouching, pairOverlapping, or
+// pairUndecided. Admitted non-coplanar transversal crossings and strict
+// containment produce pairOverlapping; unsupported contact stays
+// pairUndecided. When asked, the kernel measures the gap as a proven interval
+// [lo, hi]. Exactness belongs to the interval, not the winning candidate:
+// Exact requires a closed-form winner and every bracketed rival proven to sit
+// at or above it. Cone-involved pairs may read a coarse enclosure interval
+// rather than a fabricated verdict.
 
 // pairVerdict is the kernel's partition answer for one pair.
 type pairVerdict int
@@ -332,4 +334,182 @@ func (k *pairKernel) pairDiameter() (float64, error) {
 		}
 	}
 	return best, k.ctx.Err()
+}
+
+// sheetSolidVerdict is docs/surface-design.md §9.3's pair decision procedure's
+// answer for a pair holding exactly one sheet operand against a proven solid.
+// A sheet encloses no region, so §1's four interior relations do not apply to
+// this pair shape at all; these four answers replace them.
+type sheetSolidVerdict int
+
+const (
+	// sheetSolidUndecided — a body model was missing, the candidate
+	// enumeration could not decide the boundary distance, or the witness
+	// cast failed. Neither Interfering, Sound, nor a Clearance row follows.
+	sheetSolidUndecided sheetSolidVerdict = iota
+	// sheetSolidCrossing — an admitted transversal crossing between a sheet
+	// face and a solid face proves the sheet crosses the solid's boundary.
+	sheetSolidCrossing
+	// sheetSolidContained — the boundary distance is proven positive, and the
+	// witness vertex is proven inside the solid.
+	sheetSolidContained
+	// sheetSolidOutside — the same proof, with the witness proven outside.
+	sheetSolidOutside
+)
+
+// sheetSolidResult is one sheet-against-solid pair's decision. lo, hi, exact
+// and diam are populated only for sheetSolidContained and sheetSolidOutside,
+// and they carry the SAME boundary-distance interval regardless of which side
+// the witness landed on (docs/api-design.md §6.2): the interval is proven
+// before the witness cast ever runs, so containment and separation share one
+// Clearance row that states the distance to the solid's boundary without
+// asserting which side the sheet is on.
+type sheetSolidResult struct {
+	verdict sheetSolidVerdict
+	lo, hi  float64
+	exact   bool
+	diam    float64
+}
+
+// sheetSolidPair decides docs/surface-design.md §9.3's pair procedure for a
+// sheet operand against a proven solid: run when their bounds-inflated boxes
+// meet, and also when they are separated but a gap was requested — the same
+// two occasions clearancePair itself runs for a solid pair. boxDisjoint is
+// true in that second case: the caller already proved the boxes separated,
+// so the answer here can only be sheetSolidOutside or sheetSolidUndecided,
+// never crossing or contained, and the witness cast below is skipped as
+// redundant, exactly as clearancePair's own nestingExcluded parameter skips
+// its two-directional cast for the same reason. It reuses clearancePair's own
+// carrier model and candidate enumeration (§3) unchanged, with two departures
+// a sheet's missing material forces:
+//
+//   - the §6 coplanar contact certificate is skipped outright. That
+//     certificate proves each body's material lies wholly on its own side of
+//     a shared plane, which is a claim about material a sheet does not
+//     have — it could never fire honestly here, so it is dropped rather than
+//     run for nothing.
+//   - a proven positive lower bound on the boundary distance is settled by
+//     ONE deterministic witness cast, rather than the two-directional nesting
+//     relation clearancePair runs for a solid pair — skipped outright when
+//     boxDisjoint already answers it.
+//
+// WHY ONE WITNESS DECIDES THE WHOLE SHEET: once the boundary distance is
+// proven positive, the sheet's boundary misses the solid's boundary entirely.
+// The sheet is one connected shell — asserted below, not merely assumed, from
+// docs/surface-design.md §2.2's rule that a sheet lump holds exactly one
+// shell, together with newBodyGeomBudget's existing single-lump gate — so it
+// lies wholly within one connected component of space minus the solid's
+// boundary, and one point's membership answers for the whole shell. The
+// two-directional cast a solid pair needs exists because an INNER body's
+// several shells can be cut apart by the OUTER body's void shells, so the
+// outer's own witnesses must be checked too, in the other direction; a sheet
+// with a single shell has no void shells of its own for anything to cut
+// apart, so the reverse cast is not merely skipped as an optimization — it
+// has nothing left to prove. Box separation proves the same conclusion an
+// easier way: a box that does not even meet the solid's own box cannot admit
+// a crossing or a containment either.
+func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool) (sheetSolidResult, error) {
+	if err := ctx.Err(); err != nil {
+		return sheetSolidResult{}, err
+	}
+	budget := newWorkBudget(ctx)
+	gs, oks, err := newBodyGeomBudget(budget, sheet)
+	if err != nil {
+		return sheetSolidResult{}, err
+	}
+	gb, okb, err := newBodyGeomBudget(budget, solid)
+	if err != nil {
+		return sheetSolidResult{}, err
+	}
+	if !oks || !okb {
+		// Either operand's carrier model is missing — a revolve sheet is
+		// refused a model outright, and a multi-lump or faceted operand
+		// bypasses this analytic kernel entirely (docs/clearance-design.md
+		// §2). The pair stays undecided rather than guessing a side.
+		return sheetSolidResult{verdict: sheetSolidUndecided}, nil
+	}
+	scale := 1.0
+	for _, bb := range [][2]r3.Vec{{sheet.bounds.Min, sheet.bounds.Max}, {solid.bounds.Min, solid.bounds.Max}} {
+		for _, p := range bb {
+			for _, c := range []float64{p.X, p.Y, p.Z} {
+				if v := math.Abs(c); v > scale {
+					scale = v
+				}
+			}
+		}
+	}
+	k := &pairKernel{a: gs, b: gb, scale: scale, tol: 1e-9 * scale, slack: 1e-9 * scale, ctx: ctx}
+	diam, err := k.pairDiameter()
+	if err != nil {
+		return sheetSolidResult{}, err
+	}
+
+	// No coplanarContactCertified call here — see the doc comment above.
+	sink, err := k.enumerate()
+	if err != nil {
+		return sheetSolidResult{}, err
+	}
+	if sink.overlap {
+		return sheetSolidResult{verdict: sheetSolidCrossing, diam: diam}, nil
+	}
+	if sink.unsure {
+		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
+	}
+	hi := math.Inf(1)
+	for _, c := range sink.contribs {
+		if c.hi < hi {
+			hi = c.hi
+		}
+	}
+	if math.IsInf(hi, 1) {
+		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
+	}
+	lo := hi
+	exact := false
+	for _, c := range sink.contribs {
+		if c.lo >= hi {
+			continue // §5 pruning: a bound at or above the best upper bound cannot hold the minimum
+		}
+		if c.lo < lo {
+			lo = c.lo
+		}
+	}
+	for _, c := range sink.contribs {
+		if c.exact && c.lo == hi && c.hi == hi {
+			exact = true
+		}
+	}
+	exact = exact && lo == hi
+	if lo <= k.tol {
+		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
+	}
+
+	if boxDisjoint {
+		// Box separation already proves the sheet lies wholly outside the
+		// solid (docs/surface-design.md §9.3): the witness cast below would
+		// only confirm what a non-overlapping bounding box already decided,
+		// the same shortcut clearancePair takes via nestingExcluded.
+		return sheetSolidResult{verdict: sheetSolidOutside, lo: lo, hi: hi, exact: exact, diam: diam}, nil
+	}
+
+	// The one-shell premise the doc comment above states, asserted rather
+	// than assumed: newBodyGeomBudget already refuses any body with more
+	// than one lump, and a sheet lump holds exactly one shell
+	// (docs/surface-design.md §2.2), so gs.shellWit carries exactly one
+	// witness here. A future sheet construction that broke that premise
+	// would land here undecided rather than pick a witness arbitrarily.
+	if len(gs.shellWit) != 1 {
+		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
+	}
+	inside, ok, err := gb.pointInBody(ctx, gs.shellWit[0], k.tol)
+	if err != nil {
+		return sheetSolidResult{}, err
+	}
+	if !ok {
+		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
+	}
+	if inside {
+		return sheetSolidResult{verdict: sheetSolidContained, lo: lo, hi: hi, exact: exact, diam: diam}, nil
+	}
+	return sheetSolidResult{verdict: sheetSolidOutside, lo: lo, hi: hi, exact: exact, diam: diam}, nil
 }

@@ -250,7 +250,8 @@ func effectiveVerifyRequest(cfg verifyConfig) VerifyRequest {
 // proven-valid bodies that cheaper proofs do not settle, its mesh fallback
 // checks every pair of operand facet boxes before pruning exact predicates. A
 // pair holding a sheet operand never reaches that fallback: it is decided by
-// box separation alone (docs/surface-design.md §9.3). One pair's
+// box separation, or, when the boxes meet, the sheet decision procedure of
+// docs/surface-design.md §9.3. One pair's
 // work can therefore grow with the two facet counts multiplied together, and
 // total work also grows with the number of unresolved body pairs. Large-model
 // callers should pass a context with a deadline chosen from representative
@@ -326,20 +327,73 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 
 			// A sheet operand encloses no region, so the interference
 			// relation §1 decides is not the question for this pair
-			// (docs/surface-design.md §9.3): it is resolved by box
-			// separation alone, reusing the same boxesDisjoint proof —
-			// §3.1 owns the only box separation there is, so no second
-			// test is added. Separated boxes contribute nothing, even
-			// under WithClearances(); boxes that meet emit one
-			// DiagUnsupportedPairSheet and mark the pair undecided.
+			// (docs/surface-design.md §9.3). A sheet-sheet pair offers no
+			// closed boundary to cast against, so it takes only box
+			// separation: separated boxes contribute nothing, and boxes that
+			// meet stay DiagUnsupportedPairSheet regardless of
+			// WithClearances(). A sheet-against-solid pair is decided by
+			// sheetSolidPair (clearance.go) into a proven crossing, a proven
+			// containment or separation with a measured gap, or the
+			// undecided code when the kernel cannot settle it — run
+			// whenever the boxes meet (crossing must always be checked,
+			// asked or not), and also when the boxes are separated but a
+			// gap was requested, exactly as the solid-solid path below runs
+			// clearancePair in that same second case.
 			if a.Kind() == BodySheet || b.Kind() == BodySheet {
-				if boxProven {
+				if a.Kind() == BodySheet && b.Kind() == BodySheet {
+					if boxProven {
+						continue
+					}
+					report.Diagnostics = append(report.Diagnostics,
+						pairDiagNone(a, b, DiagUnsupportedPairSheet,
+							"both operands are sheet bodies, and neither offers a closed boundary to cast the other against"))
+					undecided = true
 					continue
 				}
-				report.Diagnostics = append(report.Diagnostics,
-					pairDiagNone(a, b, DiagUnsupportedPairSheet,
-						"one or both operands is a sheet body, which encloses no region, so no interference or clearance relation is decided for this pair"))
-				undecided = true
+				if boxProven && !cfg.clearances {
+					continue
+				}
+				sheet, solid := a, b
+				if b.Kind() == BodySheet {
+					sheet, solid = b, a
+				}
+				sres, err := sheetSolidPair(ctx, sheet, solid, boxProven)
+				if err != nil {
+					return nil, err
+				}
+				switch sres.verdict {
+				case sheetSolidCrossing:
+					report.Diagnostics = append(report.Diagnostics, Diagnostic{
+						Code:    DiagSheetSolidCrossing,
+						Status:  Interfering,
+						Pair:    &DiagnosticPair{A: a, B: b},
+						Reading: ReadingNone,
+						Message: "the sheet crosses the solid's boundary; no Interference row is emitted because a sheet encloses no region and there is no overlap volume to report",
+					})
+				case sheetSolidContained, sheetSolidOutside:
+					if cfg.clearances {
+						pr := pairResult{lo: sres.lo, hi: sres.hi, exact: sres.exact, diam: sres.diam}
+						if d := appendClearance(report, a, b, pr, cfg.rel); d != nil {
+							report.Diagnostics = append(report.Diagnostics, *d)
+							undecided = true
+						}
+					}
+				case sheetSolidUndecided:
+					if boxProven {
+						// Box separation already proves the sheet lies
+						// outside the solid; only the requested gap itself
+						// is unmeasured, the same shape of gap as an
+						// unmeasured solid-solid clearance below.
+						report.Diagnostics = append(report.Diagnostics,
+							pairDiagNone(a, b, DiagUndecidedClearance,
+								"the pair is proven disjoint but the requested clearance gap is unmeasured"))
+					} else {
+						report.Diagnostics = append(report.Diagnostics,
+							pairDiagNone(a, b, DiagUnsupportedPairSheet,
+								"the clearance kernel could not settle this sheet-against-solid pair"))
+					}
+					undecided = true
+				}
 				continue
 			}
 
@@ -487,8 +541,9 @@ func pairDiagNone(a, b *Body, code DiagnosticCode, msg string) Diagnostic {
 // constant stays declared for existing callers that still branch on it, but
 // no longer appears in a returned report (proposal §10). A pair holding a
 // sheet operand never reaches this function at all: it is resolved earlier,
-// by box separation alone, and takes DiagUnsupportedPairSheet instead
-// (docs/surface-design.md §9.3).
+// by box separation or the sheet decision procedure (sheetSolidPair,
+// clearance.go), and takes DiagUnsupportedPairSheet or DiagSheetSolidCrossing
+// instead (docs/surface-design.md §9.3).
 func undecidedPairDiag(a, b *Body, verdict pairVerdict, outcome interferenceOutcome) Diagnostic {
 	switch {
 	case outcome == interferenceUnsupportedPayloadFirst:
@@ -944,6 +999,18 @@ func aggregateStatus(r *Report, undecided bool) Status {
 	}
 	if len(r.Interferences) > 0 {
 		return Interfering
+	}
+	// A sheet proven to cross a solid's boundary (DiagSheetSolidCrossing,
+	// docs/surface-design.md §9.3) contributes the Interfering rung with no
+	// Interference row at all: a sheet encloses no region, so there is no
+	// overlap volume to report. The scan keeps the invariant that the
+	// report's Status is the worst Diagnostic.Status in the slice even for
+	// this volume-less case, immediately after the volume-bearing check
+	// above so worst-wins order is unchanged.
+	for _, d := range r.Diagnostics {
+		if d.Status == Interfering {
+			return Interfering
+		}
 	}
 	for _, br := range r.Bodies {
 		if br.Status == Violating {

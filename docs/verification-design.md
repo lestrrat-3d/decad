@@ -383,14 +383,25 @@ const (
     // boolean geometry exceeds the pipeline's reach. Reading ReadingNone.
     // Suspect.
     DiagUnsupportedPairPipeline
-    // DiagUnsupportedPairSheet — one or both operands is a sheet body, which
-    // encloses no region, so §1's interior relation is not the question the
-    // caller means, and no Interference or Clearance row is emitted. It fires
-    // only when the pair's bounds-inflated boxes MEET: a sheet parked away
-    // from every solid is decidedly apart and emits nothing, so a model that
-    // merely holds a sheet still reads Sound (docs/surface-design.md §9.3).
-    // Reading ReadingNone, Observed* and Required nil, Pair set. Suspect.
+    // DiagUnsupportedPairSheet — a pair holding a sheet operand that the sheet
+    // decision procedure could not settle (docs/surface-design.md §9.3): a
+    // sheet-sheet pair, since neither operand offers a closed boundary to
+    // cast the other against, or a sheet-against-solid pair whose body model
+    // is missing, whose candidate enumeration could not decide the boundary
+    // distance, or whose witness cast failed. It fires only when the pair's
+    // bounds-inflated boxes MEET: a sheet parked away from every solid is
+    // decidedly apart and emits nothing, so a model that merely holds a sheet
+    // still reads Sound. Reading ReadingNone, Observed* and Required nil,
+    // Pair set. Suspect.
     DiagUnsupportedPairSheet
+    // DiagSheetSolidCrossing — a sheet operand proven to cross a solid
+    // operand's boundary, by an admitted transversal crossing between a
+    // sheet face and a solid face (docs/surface-design.md §9.3). A sheet
+    // encloses no region, so no Interference row is emitted for it — that
+    // absence is NOT a proven non-overlap here, only the fact that a sheet
+    // has no overlap volume to report. Reading ReadingNone, every Observed*,
+    // Required and Body nil, Pair set. Interfering.
+    DiagSheetSolidCrossing
     // DiagUnsupportedSurveyPayload — an asked body survey cannot run because
     // its payload class is staged. Survey names the blocked question. Reading
     // ReadingNone, Observed* and Required nil. Body set. Contributes Suspect.
@@ -454,6 +465,7 @@ renders `"reading(<n>)"` with `<n>` the integer, never a panic.
 - `DiagUnsupportedPairContact` → `"unsupported_pair_contact"`
 - `DiagUnsupportedPairPipeline` → `"unsupported_pair_pipeline"`
 - `DiagUnsupportedPairSheet` → `"unsupported_pair_sheet"`
+- `DiagSheetSolidCrossing` → `"sheet_solid_crossing"`
 - `DiagUndecidedClearance` → `"undecided_clearance"`
 - `DiagUndecidedInterference` → `"undecided_interference"`
 - `DiagUnsupportedSurveyPayload` → `"unsupported_survey_payload"`
@@ -1437,7 +1449,13 @@ answers this way:
   partition or complete overlap volume
   remains undecided emits no fabricated row and makes the `Report` `Suspect`
   directly. Full proof order, expected refusal handling, and stable pair order
-  are `docs/interference-design.md`.
+  are `docs/interference-design.md`. This bullet's whole reading is scoped to
+  a pair of proven solids: a sheet operand proven to cross a solid's boundary
+  (`DiagSheetSolidCrossing`, docs/surface-design.md §9.3) also emits no
+  `Interference` row — a sheet encloses no region, so there is no overlap
+  volume to report — but the pair still reads `Interfering`, never `Sound`,
+  because the diagnostic itself carries that status. The absence of a row is
+  a proven non-overlap only where no diagnostic contradicts it.
 
 What the standard buys is the only reading that matters: inside a
 `Passed()` report, `Wall.Outcome == ScalarAbsent` is a **proven** *no wall*,
@@ -1602,7 +1620,16 @@ verification results.
   Payload verification §5/§6 defines the required local correspondence, the
   remote-feature set, the `2*delta` guard, and the exact held-mesh audit.
 - **`Report.Status`** is the document-level aggregate — over the bodies *and* over
-  the pairwise results, which belong to no body.
+  the pairwise results, which belong to no body. `Interfering` normally
+  follows from a non-empty `Interferences` slice, and the two agree only
+  because every interfering diagnostic today ships beside a row. A sheet
+  proven to cross a solid's boundary breaks that coincidence: it is
+  `Interfering` with `Interferences` left empty, since a sheet has no overlap
+  volume for a row to carry. `aggregateStatus` scans `Report.Diagnostics` for
+  any diagnostic whose own `Status` is `Interfering`, immediately after the
+  `Interferences`-slice check, so worst-wins order is unchanged and the
+  invariant that `Report.Status` is the worst `Diagnostic.Status` in the
+  slice stays true even for this volume-less case.
 
 **A wall is material between opposing skins, the allowance says how much
 draft opposition tolerates, and the reading needs no probe.**

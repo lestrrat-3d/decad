@@ -1530,9 +1530,14 @@
 1	0.00	TestSheetSurveysReadUnavailableWithPrerequisite
 2	0.00	TestPatchIsAPlanarSheet
 2	0.00	TestPatchWithHoleNetArea
-2	0.00	TestSheetSolidPairOverlappingBoxesAreUnsupported
+2	0.00	TestSheetSolidPairCrossingBoxesReadInterfering
 3	0.00	TestPatchRejections
 3	0.00	TestSheetSolidPairSeparatedBoxesVerifySound
+0	0.00	TestSheetSolidPairOutsideProvenSound
+1	0.00	TestSheetSolidPairContainedProvenSound
+2	0.00	TestSheetSolidPairKernelCannotSettleStaysSuspect
+3	0.00	TestSheetSheetPairStaysUndecided
+0	0.00	TestSheetSolidPairDiagnosticFollowsDocumentOrder
 0	0.00	TestSurfaceExtrudeSheetTessellates
 1	0.00	TestSurfaceExtrudeSheetBoundMatchesSolid
 2	0.00	TestSurfaceExtrudeSheetDeterminism
