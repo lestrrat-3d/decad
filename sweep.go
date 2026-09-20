@@ -143,6 +143,12 @@ func validateSweepOptions(opts []SweepOption) error {
 		if raw == nil {
 			return fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
+		// Checked before the sweepOption assertion below: a surfaceResultOption
+		// is not a sweepOption, so falling through to that assertion would
+		// answer ErrDegenerate and contradict Table R row R1's ErrUnsupported.
+		if err := refuseSurfaceResult(raw, "Sweep"); err != nil {
+			return err
+		}
 		o, ok := raw.(sweepOption)
 		if !ok {
 			return fmt.Errorf(`%w: the sweep option is not a decad sweep option (%T)`, ErrDegenerate, raw)

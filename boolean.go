@@ -205,6 +205,16 @@ func performBoolean(ctx context.Context, op operationKind, a, b *Body) (*Body, e
 	if a == b {
 		return nil, fmt.Errorf(`%w: a boolean needs two distinct bodies`, ErrDegenerate)
 	}
+	// Table X (docs/surface-design.md §11): a sheet operand in either position
+	// is a plain ErrUnsupported, never a BooleanError — without this a sheet
+	// falls through to tryPrismBoolean below, which type-asserts prismPayload
+	// and a sheet still carries one, producing a confidently-wrong solid.
+	if err := refuseSheetOperand(a, op.String()); err != nil {
+		return nil, err
+	}
+	if err := refuseSheetOperand(b, op.String()); err != nil {
+		return nil, err
+	}
 	// docs/prism-boolean-design.md: a reject-only analytic reduction for a
 	// co-directional coplanar prism pair, dispatched ahead of the mesh path
 	// for Union's select-all/merge/chain path (§4.2) and Cut/Intersect's

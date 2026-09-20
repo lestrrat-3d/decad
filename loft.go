@@ -106,6 +106,12 @@ func (d *Document) LoftContext(ctx context.Context, s0 *sketch.Sketch, p0 *sketc
 		if raw == nil {
 			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
+		// Checked before the loftOption assertion below: a surfaceResultOption
+		// is not a loftOption, so falling through to that assertion would
+		// answer ErrDegenerate and contradict Table R row R1's ErrUnsupported.
+		if err := refuseSurfaceResult(raw, "Loft"); err != nil {
+			return nil, err
+		}
 		o, ok := raw.(loftOption)
 		if !ok {
 			return nil, fmt.Errorf(`%w: the loft option is not a decad loft option (%T)`, ErrDegenerate, raw)

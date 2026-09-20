@@ -32,6 +32,12 @@ import (
 // record so a copy or placement re-mints its own blend roles from its own record
 // (the modify §9 role rule) — a plain extrude leaves them empty (no-op).
 //
+// surfaceResult is WithSurfaceResult's own flag (docs/surface-design.md §4):
+// true when the build must omit its closing caps and publish a sheet instead
+// of a solid. It is part of the re-evaluable record for the same reason the
+// blend descriptors are, so Placed, Duplicate and PlacedCopy reproduce the
+// sheet with no further code — a plain solid extrude leaves it false.
+//
 // sectionDelta is the proven upper bound on how far any recorded boundary
 // coordinate of the section sits from the section this payload's construction
 // DENOTES (docs/prism-boolean-design.md §7). It is zero for every payload a
@@ -68,16 +74,17 @@ import (
 // a plain extrude, a modify rewrite, a boolean result — leaves it nil and
 // resolves as before. See docs/evaluator-design.md §8.
 type prismPayload struct {
-	profile      ProfileRecord
-	frame        r3.Frame
-	z0, z1       float64
-	z0Delta      float64
-	z1Delta      float64
-	xform        r3.Transform
-	blendSegs    []map[int]struct{}
-	blendKind    string
-	sectionDelta float64
-	walks        *profileWalks
+	profile       ProfileRecord
+	frame         r3.Frame
+	z0, z1        float64
+	z0Delta       float64
+	z1Delta       float64
+	xform         r3.Transform
+	blendSegs     []map[int]struct{}
+	blendKind     string
+	sectionDelta  float64
+	walks         *profileWalks
+	surfaceResult bool
 }
 
 // z0Scalar and z1Scalar are the sweep levels as bounded readings — the recorded

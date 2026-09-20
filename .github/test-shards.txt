@@ -1500,3 +1500,12 @@
 1	0.00	TestSweepLineTiltedFrameCarriesEndpointGap
 2	0.00	TestSweepCompositeSpanBudgetRejectsBeforeCommit
 3	0.00	TestSweepSpatialPathPreservesProfileHole
+0	0.00	TestSheetRefusedByBooleanAndModifyOperations
+1	0.00	TestSurfaceExtrudeAreaComposesCapSubtraction
+2	0.00	TestSurfaceExtrudePlateIsASheet
+3	0.00	TestSurfaceExtrudeRolesResolveThroughFaceCreatedBy
+0	0.00	TestSurfaceExtrudeSheetVerifiesUndecided
+1	0.00	TestSurfaceExtrudeShellOpenAgreesWithFreeEdgeDerivation
+2	0.00	TestSurfaceExtrudeStaysASheetThroughPlacement
+3	0.00	TestSurfaceResultRefusedByRevolveSweepAndLoft
+0	0.00	TestThroughAllIgnoresASheetBody

@@ -577,7 +577,7 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	// explains it (proposal §9).
 	clean := auditBoundary(b)
 	built := b.payload != nil
-	validity := publishValidityResult(b, clean, built, b.solid)
+	validity := publishValidityResult(b, b.Kind(), clean, built, b.solid)
 	haveRegion := validity.Outcome == ValidityValid
 
 	var vol Measurement

@@ -67,7 +67,8 @@ func WithTaper(a units.Value) ExtrudeOption {
 // (docs/spline-design.md §2.1) — join the endpoints in the sketch, or the
 // profile is rejected as ErrUnrecordableProfile before this ever runs. The
 // evaluator converts the profile and plane to structural records; a failed
-// evaluation leaves the document untouched.
+// evaluation leaves the document untouched. WithSurfaceResult() omits the two
+// caps and publishes a sheet body instead of a solid (docs/surface-design.md §4).
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
@@ -87,6 +88,7 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 	}
 
 	taper := units.Degrees(0)
+	surfaceResult := false
 	for _, o := range opts {
 		if o == nil {
 			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
@@ -98,6 +100,11 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 				return nil, fmt.Errorf(`%w: WithTaper carries no angle`, ErrDegenerate)
 			}
 			taper = v
+		case identSurfaceResult:
+			// A repeated WithSurfaceResult() is idempotent, matching
+			// WithTaper's last-wins tolerance rather than Loft's
+			// repeat-is-ErrDegenerate rule.
+			surfaceResult = true
 		}
 	}
 	if taper.Kind() != units.Angle {
@@ -128,13 +135,14 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 
 	ref := d.nextProducerID()
 	body, err := evalPrism(d, ref, prismPayload{
-		profile: profile,
-		frame:   frame,
-		z0:      sweep.z0,
-		z1:      sweep.z1,
-		z0Delta: sweep.z0Delta,
-		z1Delta: sweep.z1Delta,
-		xform:   r3.Identity(),
+		profile:       profile,
+		frame:         frame,
+		z0:            sweep.z0,
+		z1:            sweep.z1,
+		z0Delta:       sweep.z0Delta,
+		z1Delta:       sweep.z1Delta,
+		xform:         r3.Identity(),
+		surfaceResult: surfaceResult,
 	}, work)
 	if err != nil {
 		return nil, err
