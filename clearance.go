@@ -372,11 +372,16 @@ type sheetSolidResult struct {
 }
 
 // sheetSolidPair decides docs/surface-design.md §9.3's pair procedure for a
-// sheet operand against a proven solid, run when their bounds-inflated boxes
-// meet (surface-design §9.3 keeps the box-separated case as it already was:
-// nothing is emitted). It reuses clearancePair's own carrier model and
-// candidate enumeration (§3) unchanged, with two departures a sheet's missing
-// material forces:
+// sheet operand against a proven solid: run when their bounds-inflated boxes
+// meet, and also when they are separated but a gap was requested — the same
+// two occasions clearancePair itself runs for a solid pair. boxDisjoint is
+// true in that second case: the caller already proved the boxes separated,
+// so the answer here can only be sheetSolidOutside or sheetSolidUndecided,
+// never crossing or contained, and the witness cast below is skipped as
+// redundant, exactly as clearancePair's own nestingExcluded parameter skips
+// its two-directional cast for the same reason. It reuses clearancePair's own
+// carrier model and candidate enumeration (§3) unchanged, with two departures
+// a sheet's missing material forces:
 //
 //   - the §6 coplanar contact certificate is skipped outright. That
 //     certificate proves each body's material lies wholly on its own side of
@@ -385,7 +390,8 @@ type sheetSolidResult struct {
 //     run for nothing.
 //   - a proven positive lower bound on the boundary distance is settled by
 //     ONE deterministic witness cast, rather than the two-directional nesting
-//     relation clearancePair runs for a solid pair.
+//     relation clearancePair runs for a solid pair — skipped outright when
+//     boxDisjoint already answers it.
 //
 // WHY ONE WITNESS DECIDES THE WHOLE SHEET: once the boundary distance is
 // proven positive, the sheet's boundary misses the solid's boundary entirely.
@@ -399,8 +405,10 @@ type sheetSolidResult struct {
 // outer's own witnesses must be checked too, in the other direction; a sheet
 // with a single shell has no void shells of its own for anything to cut
 // apart, so the reverse cast is not merely skipped as an optimization — it
-// has nothing left to prove.
-func sheetSolidPair(ctx context.Context, sheet, solid *Body) (sheetSolidResult, error) {
+// has nothing left to prove. Box separation proves the same conclusion an
+// easier way: a box that does not even meet the solid's own box cannot admit
+// a crossing or a containment either.
+func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool) (sheetSolidResult, error) {
 	if err := ctx.Err(); err != nil {
 		return sheetSolidResult{}, err
 	}
@@ -474,6 +482,14 @@ func sheetSolidPair(ctx context.Context, sheet, solid *Body) (sheetSolidResult, 
 	exact = exact && lo == hi
 	if lo <= k.tol {
 		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
+	}
+
+	if boxDisjoint {
+		// Box separation already proves the sheet lies wholly outside the
+		// solid (docs/surface-design.md §9.3): the witness cast below would
+		// only confirm what a non-overlapping bounding box already decided,
+		// the same shortcut clearancePair takes via nestingExcluded.
+		return sheetSolidResult{verdict: sheetSolidOutside, lo: lo, hi: hi, exact: exact, diam: diam}, nil
 	}
 
 	// The one-shell premise the doc comment above states, asserted rather

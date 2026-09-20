@@ -327,34 +327,37 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 
 			// A sheet operand encloses no region, so the interference
 			// relation §1 decides is not the question for this pair
-			// (docs/surface-design.md §9.3). Box separation alone still
-			// settles it when the boxes are apart, reusing the same
-			// boxesDisjoint proof — §3.1 owns the only box separation there
-			// is, so no second test is added, and separated boxes
-			// contribute nothing even under WithClearances(). Boxes that
-			// MEET run the sheet decision procedure: a sheet-sheet pair
-			// offers no closed boundary to cast against and stays
-			// DiagUnsupportedPairSheet; a sheet-against-solid pair is
-			// decided by sheetSolidPair (clearance.go) into a proven
-			// crossing, a proven containment or separation with a measured
-			// gap, or the same undecided code when the kernel cannot settle
-			// it.
+			// (docs/surface-design.md §9.3). A sheet-sheet pair offers no
+			// closed boundary to cast against, so it takes only box
+			// separation: separated boxes contribute nothing, and boxes that
+			// meet stay DiagUnsupportedPairSheet regardless of
+			// WithClearances(). A sheet-against-solid pair is decided by
+			// sheetSolidPair (clearance.go) into a proven crossing, a proven
+			// containment or separation with a measured gap, or the
+			// undecided code when the kernel cannot settle it — run
+			// whenever the boxes meet (crossing must always be checked,
+			// asked or not), and also when the boxes are separated but a
+			// gap was requested, exactly as the solid-solid path below runs
+			// clearancePair in that same second case.
 			if a.Kind() == BodySheet || b.Kind() == BodySheet {
-				if boxProven {
-					continue
-				}
 				if a.Kind() == BodySheet && b.Kind() == BodySheet {
+					if boxProven {
+						continue
+					}
 					report.Diagnostics = append(report.Diagnostics,
 						pairDiagNone(a, b, DiagUnsupportedPairSheet,
 							"both operands are sheet bodies, and neither offers a closed boundary to cast the other against"))
 					undecided = true
 					continue
 				}
+				if boxProven && !cfg.clearances {
+					continue
+				}
 				sheet, solid := a, b
 				if b.Kind() == BodySheet {
 					sheet, solid = b, a
 				}
-				sres, err := sheetSolidPair(ctx, sheet, solid)
+				sres, err := sheetSolidPair(ctx, sheet, solid, boxProven)
 				if err != nil {
 					return nil, err
 				}
@@ -375,10 +378,20 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 							undecided = true
 						}
 					}
-				default: // sheetSolidUndecided
-					report.Diagnostics = append(report.Diagnostics,
-						pairDiagNone(a, b, DiagUnsupportedPairSheet,
-							"the clearance kernel could not settle this sheet-against-solid pair"))
+				case sheetSolidUndecided:
+					if boxProven {
+						// Box separation already proves the sheet lies
+						// outside the solid; only the requested gap itself
+						// is unmeasured, the same shape of gap as an
+						// unmeasured solid-solid clearance below.
+						report.Diagnostics = append(report.Diagnostics,
+							pairDiagNone(a, b, DiagUndecidedClearance,
+								"the pair is proven disjoint but the requested clearance gap is unmeasured"))
+					} else {
+						report.Diagnostics = append(report.Diagnostics,
+							pairDiagNone(a, b, DiagUnsupportedPairSheet,
+								"the clearance kernel could not settle this sheet-against-solid pair"))
+					}
 					undecided = true
 				}
 				continue

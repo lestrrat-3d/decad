@@ -534,21 +534,34 @@ func TestSheetSolidPairCrossingBoxesReadInterfering(t *testing.T) {
 
 // TestSheetSolidPairSeparatedBoxesVerifySound is docs/surface-design.md's T8:
 // the same pair, moved apart until the boxes separate, contributes nothing
-// and reads Sound, under the default call and under WithClearances() alike.
+// under the default call. Under WithClearances() the kernel still measures
+// the gap, exactly as it does for a box-separated solid-solid pair
+// (docs/interference-design.md §3.1: box separation does not measure the
+// true gap, and the analytic kernel still runs when a gap is asked for) — a
+// sheet-solid pair honours the same rule rather than staying silent for the
+// same question the solid path answers.
 func TestSheetSolidPairSeparatedBoxesVerifySound(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
-	sheetBoxBody(t, doc, 0, 0, 10, 10, 5)
-	boxBody(t, doc, 100, 100, 110, 110, 5)
+	sheet := sheetBoxBody(t, doc, 0, 0, 10, 10, 5)
+	solid := boxBody(t, doc, 100, 100, 110, 110, 5)
 
-	for _, opts := range [][]decad.VerifyOption{nil, {decad.WithClearances()}} {
-		report, err := doc.Verify(t.Context(), opts...)
-		require.NoError(t, err)
-		require.Equal(t, decad.Sound, report.Status)
-		require.Empty(t, report.Diagnostics)
-		require.Empty(t, report.Interferences)
-		require.Empty(t, report.Clearances)
-	}
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	require.Empty(t, report.Diagnostics)
+	require.Empty(t, report.Interferences)
+	require.Empty(t, report.Clearances, "no gap row without WithClearances()")
+
+	report, err = doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	require.Empty(t, report.Diagnostics)
+	require.Empty(t, report.Interferences)
+	requireExactGap(t, report, 90*math.Sqrt(2))
+	require.Same(t, sheet, report.Clearances[0].A)
+	require.Same(t, solid, report.Clearances[0].B)
+
 	require.Len(t, doc.Bodies(), 2)
 }
 

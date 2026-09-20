@@ -198,8 +198,13 @@ the two-directional nesting relation §2 runs for a solid pair. §2 states why
 one witness suffices: the sheet's boundary misses the solid's boundary
 entirely once the distance is proven positive, and a one-shell sheet has no
 void shells of its own for the outer body's boundary to be cut apart by, so
-the reverse direction has nothing to prove. `docs/surface-design.md` §9.3
-owns the full procedure.
+the reverse direction has nothing to prove. `sheetSolidPair` also runs — this
+same enumeration, still minus the coplanar certificate — when the boxes are
+already proven SEPARATED but `WithClearances` asked for the gap, exactly as
+`clearancePair` runs its own enumeration in that case (§1); there the witness
+cast is skipped outright, box separation having already excluded both
+crossing and containment, the same shortcut `nestingExcluded` gives a
+box-proven solid pair. `docs/surface-design.md` §9.3 owns the full procedure.
 
 ## 4. The face-pair table
 
