@@ -357,7 +357,10 @@ relaxation — and builds a **single planar face** on `s.Plane().Frame()`,
 carrying the profile's outer loop and every hole loop.
 
 The result is a one-face sheet body: `Kind() == BodySheet`, one lump, one open
-shell, and one free edge per recorded boundary segment.
+shell, and one free edge per coalesced boundary walk — `coalesceWalksContext`
+merges adjacent collinear line segments, so a rectangle drawn as eight
+collinear halves yields four edges, matching what `Extrude` already does for
+its rims.
 
 Its positive side is the sketch plane's normal, which is the sense
 `Direction.Along` names for that plane (`docs/api-design.md` §7). The outer

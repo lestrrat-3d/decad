@@ -305,6 +305,59 @@ func freeformVertexAllow(w segmentWalk, bound walkEndBound) float64 {
 	return walkEndBoundAllow(bound)
 }
 
+// rimConvexity decides one walk's rim-edge convexity — evaluator §3's
+// walked-boundary rule (topology.go's Edge.IsConvex doc comment) —
+// independently of the curve, surface and faceReversed construction
+// buildLoopSidesAs still runs for its own kind right after it. holeLoop is
+// the loop's material side; a walk with no turn of its own (a straight wall,
+// or a free-form chain §6.5 proves straight) reads it, and a walk that DOES
+// turn — circular or genuinely curved free-form — decides convexity from its
+// own turn instead, exactly as buildLoopSidesAs's per-kind switch did before
+// this was pulled out of it.
+func rimConvexity(ctx context.Context, w sideWalk, holeLoop bool, work *freeformWork) (bool, error) {
+	switch w.kind {
+	case walkCircular:
+		// A clockwise walk's material lies outside its circle, so the
+		// boundary turns into the metal there and the rim is concave — a
+		// hole's rim (clockwise) and a concave outer bite's (also
+		// clockwise) alike, while a counter-clockwise round keeps its
+		// convex rim. The loop's role decides nothing here.
+		return w.th1 >= w.th0, nil
+	case walkFreeform:
+		// §6.5's wall-edge convexity certificate (docs/spline-design.md
+		// §6.5, Table R R19). It applies the one reversal negation
+		// internally and states its verdict in the LOOP'S OWN WALK
+		// direction, so the mapping below reads it verbatim — a
+		// counter-clockwise turn convex, clockwise concave, the identical
+		// convention the circular case above fixes. NEVER negate again for
+		// a hole loop: a hole rim's concavity falls out of the clockwise
+		// walk itself, exactly as it does for a circular hole wall.
+		verdict, err := freeformWallConvexityContext(ctx, w.spans, w.closed, w.reversed, w.fitInterpolated, work)
+		if err != nil {
+			return false, err
+		}
+		switch verdict {
+		case freeformConvexityPositive:
+			return true, nil
+		case freeformConvexityNegative:
+			return false, nil
+		case freeformConvexityStraight:
+			// Every live span lies on one line and no joint turns off it
+			// (§6.5's Table K): the chain has no turn of its own, so
+			// evaluator §3's straight-wall rule decides it by its loop's
+			// role — the same expression the default arm below uses.
+			return !holeLoop, nil
+		}
+		return !holeLoop, nil
+	default:
+		// A straight wall has no turn of its own to disagree with the
+		// loop's: which side its material lies on is decided by the sense
+		// the whole loop is walked, and that sense IS the loop's role —
+		// the outer loop counter-clockwise, holes clockwise (moments.go).
+		return !holeLoop, nil
+	}
+}
+
 // buildLoopSides builds one loop's side faces with shared vertices and
 // edges, returning the faces, the bottom and top cap coedges in walk order,
 // and the loop's perimeter length. A loop's index is both its role index and,
@@ -494,6 +547,10 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		var bottomEdge, topEdge *Edge
 		var surf Surface
 		faceReversed := false
+		convex, err := rimConvexity(ctx, w, holeLoop, work)
+		if err != nil {
+			return nil, nil, nil, boundedScalar{}, err
+		}
 		switch w.kind {
 		case walkCircular:
 			axis := pp.dir(0, 0, 1)
@@ -536,10 +593,10 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			// there and the rim is concave — a hole's rim (clockwise) and a
 			// concave outer bite's (also clockwise) alike, while a
 			// counter-clockwise round keeps its convex rim. The loop's role
-			// decides nothing here.
-			capConvex := !clockwise
-			bottomEdge = &Edge{curve: curve0, start: bStart, end: bEnd, convex: capConvex, length: w.length, lengthBound: w.lengthBound}
-			topEdge = &Edge{curve: curve1, start: tStart, end: tEnd, convex: capConvex, length: w.length, lengthBound: w.lengthBound}
+			// decides nothing here. convex is rimConvexity's own answer for
+			// this walk, computed once above the switch.
+			bottomEdge = &Edge{curve: curve0, start: bStart, end: bEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
+			topEdge = &Edge{curve: curve1, start: tStart, end: tEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
 			surf = Cylinder{Origin: center0, Axis: axis, Radius: radius}
 			// A clockwise-walked wall has its material OUTSIDE the cylinder,
 			// so its outward normal is the radial direction negated.
@@ -553,25 +610,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			// the identical convention the circular wall's own turn test
 			// fixes above. NEVER negate again for a hole loop: a hole rim's
 			// concavity falls out of the clockwise walk itself, exactly as it
-			// does for a circular hole wall. An error is R19: propagate it so
-			// the build refuses and no step commits.
-			verdict, err := freeformWallConvexityContext(ctx, w.spans, w.closed, w.reversed, w.fitInterpolated, work)
-			if err != nil {
-				return nil, nil, nil, boundedScalar{}, err
-			}
-			var convex bool
-			switch verdict {
-			case freeformConvexityPositive:
-				convex = true
-			case freeformConvexityNegative:
-				convex = false
-			case freeformConvexityStraight:
-				// Every live span lies on one line and no joint turns off it
-				// (§6.5's Table K): the chain has no turn of its own, so
-				// evaluator §3's straight-wall rule decides it by its loop's
-				// role — the same expression the walkLine arm below uses.
-				convex = !holeLoop
-			}
+			// does for a circular hole wall. An R19 refusal already returned
+			// from rimConvexity above, before this switch ever ran.
 			bottomEdge = &Edge{curve: NURBSCurve{}, start: bStart, end: bEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
 			topEdge = &Edge{curve: NURBSCurve{}, start: tStart, end: tEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
 			surf = NURBSSurface{}
@@ -584,8 +624,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			// loop's: which side its material lies on is decided by the sense
 			// the whole loop is walked, and that sense IS the loop's role —
 			// the outer loop counter-clockwise, holes clockwise (moments.go).
-			bottomEdge = &Edge{curve: Line3{}, start: bStart, end: bEnd, convex: !holeLoop, length: w.length, lengthBound: w.lengthBound}
-			topEdge = &Edge{curve: Line3{}, start: tStart, end: tEnd, convex: !holeLoop, length: w.length, lengthBound: w.lengthBound}
+			bottomEdge = &Edge{curve: Line3{}, start: bStart, end: bEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
+			topEdge = &Edge{curve: Line3{}, start: tStart, end: tEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
 			mid := pp.point((w.startU+w.endU)/2, (w.startV+w.endV)/2, pp.z0)
 			// tangent × N is the outward normal for a CCW outer walk (and a
 			// CW hole walk); a reflection flips the cross product, so the

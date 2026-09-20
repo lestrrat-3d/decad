@@ -20,6 +20,11 @@ import (
 const (
 	roleCapStart = "capStart"
 	roleCapEnd   = "capEnd"
+	// rolePatch is a Patch face's own Origin() role (docs/surface-design.md
+	// §5.1). It stays internal this increment: a one-face body is already
+	// selected by Faces(Planar()), and no public FeatureRef helper names it
+	// yet — Stitch is what decides the right shape for one.
+	rolePatch = "patch"
 	// roleBody is the body's own Origin() role, minted by every evaluator
 	// build.
 	roleBody = "body"
