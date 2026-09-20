@@ -768,8 +768,10 @@ surface-result **revolve** sheet does not yet: `Tessellate`/`STL`/`OBJ` refuse
 it with `ErrUnsupported` at the dispatch that would otherwise look up a role a
 surface result's own build never attached (§4.2) — this evaluator's own
 reach, never the `ErrDegenerate` a missing face role would otherwise report,
-since the body's geometry is not the problem. A later increment takes up the
-revolve path.
+since the body's geometry is not the problem. Increment 4 takes up the revolve
+path, and it is where a CLOSED sheet's mesh is settled: a full revolution's
+surface result has no free edge at all, and no earlier increment produces one
+(§14).
 
 Two consequences this design leans on, stated here as claims and derived there.
 A sheet mesh is never a boolean operand, which is what Table X's boolean row
@@ -864,9 +866,25 @@ ANSWER is accepted and reads `Suspect`.
 
 | # | Lands |
 |---|---|
-| 1 | `BodyKind` and `Kind()`, `Shell.IsOpen`, `Edge.IsFree`, `Free()`; `WithSurfaceResult()` on `Extrude` and `Revolve`; `Document.Patch`; the sheet validity audit; `DiagUnsupportedPairSheet` and §9.3's box rule; every Table A amendment. Sheet tessellation and export are staged, not delivered: both refuse `ErrUnsupported` until a later increment builds the manifold-with-boundary audit (§10) |
+| 1 | `BodyKind` and `Kind()`, `Shell.IsOpen`, `Edge.IsFree`, `Free()`; `WithSurfaceResult()` on `Extrude` and `Revolve`; `Document.Patch`; the sheet validity audit; `DiagUnsupportedPairSheet` and §9.3's box rule; every Table A amendment; prism sheet tessellation and export with the manifold-with-boundary audit. The revolve sheet mesh is staged to increment 4 (§10) |
 | 2 | `Stitch` and `Unstitch` over exact all-planar boundaries (Table J with J5, Table C's first two rows); `Body.Patch`; the sheet-against-solid containment cast and clearance gap of §9.3, narrowing when `DiagUnsupportedPairSheet` fires |
 | 3 | `WithSurfaceResult()` on `Sweep` and `Loft`; the shared-denotation certificate, which lifts J5 for bounded edges and §5.2 gate 3's bounded-chain half of R6 together; the per-surface flux integral that lifts Table C's curved-closure refusal (R8); the undercut survey over a sheet's positive side |
+| 4 | The revolve sheet mesh (§10): the meridian and angular chordings a surface result keeps, the caps and poles it omits, the cap terms its area slack drops, and the manifold-with-boundary audit in the closed-mesh audit's place. It also settles which audit a CLOSED sheet runs |
+
+**Increment 4 depends on neither 2 nor 3, and they do not depend on it.** It
+takes up the one path increment 1 left staged, and it is numbered after them
+only so that no reference to increments 2 and 3 has to move. Any order is
+admissible.
+
+**A closed sheet is increment 4's own question, and no earlier increment meets
+one.** `Extrude` never closes its wall set, so every prism sheet has free
+edges, while a full revolution's does close (§4.1, Table W) and carries none.
+The two mesh audits agree there — with no free edge, every directed edge has
+its reverse, which is exactly what the closed-mesh audit counts — so
+`docs/tessellation-design.md` §1.2's manifold-with-boundary audit is the one a
+closed sheet runs, and it passes for
+the same reason the closed-mesh audit would. Increment 4 states that in
+`docs/tessellation-design.md` §1.2 rather than leaving it to coincidence.
 
 Staged past increment 3, each with the gap §1.2 names: Thicken, Trim, Extend,
 surface Offset, Ruled, Boundary Fill, Reverse Normal, and a sheet operand in
