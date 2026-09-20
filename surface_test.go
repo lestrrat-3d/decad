@@ -404,6 +404,8 @@ func TestSurfaceExtrudeSheetVerifiesUndecided(t *testing.T) {
 	br := decadtest.FindBodyReport(t, report, sheet)
 	require.Equal(t, decad.ValidityUndecided, br.Validity.Outcome)
 	require.Nil(t, br.Region)
+	require.Len(t, br.Validity.Diagnostics, 1)
+	require.Equal(t, decad.DiagUndecidedValidity, br.Validity.Diagnostics[0].Code)
 	for _, d := range br.Diagnostics {
 		require.NotEqual(t, decad.DiagInvalidBody, d.Code)
 	}

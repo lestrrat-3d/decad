@@ -576,18 +576,8 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	// outcome onto ValidityResult and carries the one diagnostic that
 	// explains it (proposal §9).
 	clean := auditBoundary(b)
-	if b.Kind() == BodySheet {
-		// Holding fix (docs/surface-design.md §9.1, §14): the manifold-with-
-		// boundary audit that admits a sheet's own free edges lands in a later
-		// increment. auditBoundary's closed-body audit faults every free edge
-		// — a sheet's ordinary shape, not a defect — so until that audit
-		// lands, a sheet reads undecided rather than proven invalid; solid is
-		// always false for a sheet, so publishValidityResult's default arm
-		// below is what it reaches.
-		clean = true
-	}
 	built := b.payload != nil
-	validity := publishValidityResult(b, clean, built, b.solid)
+	validity := publishValidityResult(b, b.Kind(), clean, built, b.solid)
 	haveRegion := validity.Outcome == ValidityValid
 
 	var vol Measurement

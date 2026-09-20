@@ -110,16 +110,39 @@ func publishReport(req VerifyRequest, bodies []*BodyReport, interferences []Inte
 }
 
 // publishValidityResult maps the held-boundary audit's three-way outcome —
-// clean is auditBoundary's own verdict, built is whether an evaluator
-// feature produced the body, solid is the body's own proven-solid bit — onto
-// ValidityResult (proposal §9): a failed audit is a concrete invalid-solid
-// proof, a built and proven-solid body is the entailed positive conclusion
-// of watertightness, manifoldness and no self-intersection for that proof,
-// and every other combination is undecided — the current evidence cannot
-// decide validity. It carries the body's one underlying validity diagnostic,
-// at most one, so publishBodyResult's flattening never repeats it.
-func publishValidityResult(body *Body, clean, built, solid bool) ValidityResult {
+// kind is the body's own BodyKind, clean is auditBoundary's own verdict,
+// built is whether an evaluator feature produced the body, solid is the
+// body's own proven-solid bit — onto ValidityResult (proposal §9): a failed
+// audit is a concrete invalid-solid proof, a built and proven-solid body is
+// the entailed positive conclusion of watertightness, manifoldness and no
+// self-intersection for that proof, and every other combination is
+// undecided — the current evidence cannot decide validity. It carries the
+// body's one underlying validity diagnostic, at most one, so
+// publishBodyResult's flattening never repeats it.
+//
+// A BodySheet body takes its own first arm, decided on kind alone and
+// BEFORE clean is read at all: auditBoundary's closed-body audit — every
+// edge bounds exactly two faces — does not apply to a sheet, whose free
+// edges are its ordinary shape, not the watertightness failure they would be
+// on a solid, so clean's verdict on a sheet says nothing this function may
+// act on. This is docs/surface-design.md §9.1's holding fix: the
+// manifold-with-boundary audit that DOES apply to a sheet lands in a later
+// increment and replaces this arm outright; until then, a sheet reads
+// ValidityUndecided rather than proven invalid, on the same diagnostic the
+// default arm below publishes for an undecided solid.
+func publishValidityResult(body *Body, kind BodyKind, clean, built, solid bool) ValidityResult {
 	switch {
+	case kind == BodySheet:
+		return ValidityResult{
+			Outcome: ValidityUndecided,
+			Diagnostics: []Diagnostic{{
+				Code:    DiagUndecidedValidity,
+				Status:  Suspect,
+				Body:    body,
+				Reading: ReadingNone,
+				Message: "the held boundary's validity is not decisive beyond its own proven bound",
+			}},
+		}
 	case !clean:
 		return ValidityResult{
 			Outcome: ValidityInvalid,
