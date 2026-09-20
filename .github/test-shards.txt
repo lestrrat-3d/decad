@@ -1540,3 +1540,13 @@
 2	0.00	TestSheetAreaSlackIsBelowTheSolidsOnTheHoledFixture
 3	0.00	TestRequireSheetMeshRejectsBrokenFreeEdgeAttribution
 0	0.00	TestRequireSheetMeshCatchesADuplicatedDirectedEdge
+0	0.00	TestStitchClosesBoxFromThreeSheets
+1	0.00	TestStitchDisplacedPatchStaysASheet
+2	0.00	TestStitchClosedCurvedSheetIsUnsupported
+3	0.00	TestStitchPlacedBoxIsApproximateSolid
+0	0.00	TestStitchTableR
+1	0.00	TestStitchSolidDoesNotYetTessellate
+2	0.00	TestStitchSolidDoesNotYetReachAPairRelation
+3	0.00	TestStitchOrientationRefusesMobiusAssembly
+0	0.00	TestStitchClosureRefusesNonManifoldEdge
+1	0.00	TestStitchAuditRefusesOverlappingAssembly

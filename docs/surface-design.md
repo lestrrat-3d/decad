@@ -459,6 +459,31 @@ join, and both edges stay free — it is not an error (§6.3).
 | J4 | Both endpoint vertices' positions are bit-identical held `float64` coordinates, matched as an unordered pair. | exact comparison |
 | J5 | Every one of those held values carries a **zero bound**. | `Vertex`'s own bound and the edge's `Curve` |
 
+**Table J amendment — J5 is undecidable for every variant but `Line3`.**
+`Circle3` and `Arc3` carry `Center`, `Axis` and `Radius` with no bound field
+at all, so there is no held value on the variant itself to ask "does this
+carry a zero bound" of — J5 cannot be answered either way for them, and an
+undecidable row admits nothing (`CLAUDE.md`'s reject-only rule). `Line3`
+alone answers it, and answers it **vacuously**: a straight edge's whole
+geometry lives in its two vertices, which J4 already compares, so J3 states
+nothing further about the variant itself to prove, and J5's vertex half is
+exactly what `stitchVertexTable`'s own merge rule enforces (`stitch_weld.go`)
+— two vertices merge into one table class only when both carry a zero bound,
+so a shared class already proves J4 and J5's vertex half together. A free
+edge whose `Curve` is `Circle3`, `Arc3`, `NURBSCurve` or `FacetedCurve`
+therefore declines outright at J2/J5 and stays free — Table C's first row,
+and never an error — until a later increment states a bound for the
+variant's own parameters.
+
+**A weld key claimed by three or more free edges joins none of them.** Table
+J's admission is pairwise, but a caller can hand `Stitch` more than two
+sheets whose free edges share one weld key (the same unordered pair of
+vertex-table classes). Welding an arbitrary two of three would be a silent
+choice among equally-claimed edges, and welding all three is non-manifold
+(three faces on one edge, Table R row R7). So every edge in a group of three
+or more stays free, and the result's own residual free edges name the
+ambiguity exactly as they name any other unjoined pair (§6.3).
+
 Orientation is **not** a join condition. J1–J5 decide the welding, and the
 consistent orientation is derived afterwards over the welded graph (§6.3); a set
 that admits no consistent choice is refused there as a whole (R7) rather than
@@ -512,25 +537,61 @@ not already say better.
 
 ### 6.4 The closure audit, and the volume it earns
 
-**The audit is `docs/loft-design.md` §6's crossing audit, reused unchanged.**
-That audit already proves an assembled triangle set manifold, watertight and
-free of self-intersection over a **shared vertex table**, deciding every facet
-pair by exact rational signs, with a reject-only broad phase and no bracket
-engine of its own (`loft_audit.go`). A stitched all-planar face set is exactly
-the input it takes:
+**The reused audit is `docs/loft-design.md` §6's crossing audit alone, and it
+does not by itself prove the assembled set manifold or watertight.** That
+audit decides CONTACT between triangle pairs — the collapsed-triangle leg,
+the fixed facet-pair ceiling, and the pairwise contact classification against
+each pair's own expected shared entity — and nothing else. Three triangles
+sharing one edge pass every pairwise test it runs: each pair sees the edge it
+expects and nothing more, so the audit alone would admit a self-touching,
+non-manifold assembly. For a loft, closure is a property of the construction
+itself (`docs/loft-design.md` §5's own paired-station walk can never leave a
+gap or a triple junction), so the loft audit's own doc comment never needed
+to claim more than contact. `Stitch` builds its triangle set by welding
+independently-authored faces, where closure is exactly the open question, so
+it runs its own explicit **directed-edge parity leg** (`stitch.go`'s
+`checkStitchClosure`) beside the reused audit: every edge must be adjacent to
+one or two faces, and a two-face edge must be traversed by exactly one
+forward and one backward coedge, with a coedge-use count that disagrees with
+the edge's own adjacent-face count also a violation (`ErrDegenerate`, Table
+R row R7). One adjacent face is an open boundary — Table C's first row, and
+never an error. Together the two legs are what proves the assembled set
+manifold, watertight (when closed) and free of self-intersection:
 
-- every face is planar and every vertex is exact (J5), so triangulating each
-  face by `triangulate.go`'s existing cap triangulator introduces no
-  coordinate that is not already held;
+- every face is planar and every welded vertex carries a zero bound (J5), so
+  triangulating each face by `triangulate.go`'s existing cap triangulator
+  introduces no coordinate that is not already held;
 - welding on proven-coincident vertices (J4, J5) gives two faces sharing a
   vertex the same **index** in the shared table — the exact, free fact the
-  audit is built on, read off structure rather than from a distance test.
+  reused audit's contact classification is built on;
+- the directed-edge parity leg is what proves adjacency itself is correct —
+  never more than two faces per edge, and a consistent forward/backward use
+  at every two-face edge — which the reused audit's own contact test does
+  not ask.
 
-**The volume is `loft_moments.go`'s exact-rational tetrahedron sum over that
-same triangle set.** Every vertex is exact, so every tetrahedron term is
-exact, so the sum is exact and its bound is zero. A stitched solid's
-`Volume`, `Centroid`, `Area` and `Bounds` are all `Exact`, and they pass the
-verification gate at any tolerance (`docs/verification-design.md` §6).
+**`Area` is the sum of the constituent faces' own `area`/`areaBound`, through
+`boundedAdd` — never a triangle-sum reading.** A general planar triangle's
+own area is a square root of a rational and is therefore never `Exact` the
+way `spline_length.go`'s outward brackets state for `docs/loft-design.md`
+§8's wall reading; each stitched face's own area, by contrast, already comes
+from the closed-form region integral (`moments.go`) or the surface-result
+subtraction (§4.3) that built it, and is `Exact` wherever that integral is.
+Summing those already-proven readings is what §8 already prescribes for a
+sheet, and `Stitch` reuses it unchanged for a solid: the box worked example
+sums to 15200 mm² at a zero bound, the four walls' 3200 mm² (T1) plus the two
+patches' 6000 mm² apiece (T2).
+
+**The volume is `loft_moments.go`'s exact-rational tetrahedron sum over the
+assembled triangle set**, and its bound is zero only when that exact
+rational is itself representable in `units.Value`'s `float64` magnitude —
+never unconditionally. Every held vertex is exact, so every tetrahedron term
+and their sum are exact rationals, and the one rounding `Volume` ever
+carries is that single publication step: `Exact` exactly when the published
+number IS the sum (the box's 60000 mm³, a small integer, always is),
+`Approximate` with a proven bound otherwise (a body a third of a millimetre
+wide, whose exact volume is rarely representable in cubic millimetres to the
+last bit). `Centroid` and `Bounds` follow the identical rule over their own
+publication rounding.
 
 That is why Table C admits closure only for an all-planar face set in this
 design. A curved face's flux term is not a tetrahedron sum, and a per-surface
@@ -541,7 +602,46 @@ piece of work. §14's increment 3 takes it up.
 sheet validity audit: a stitched solid's triangulated, exactly welded face set
 is exactly this audit's input, but a surface-extruded sheet's curved walls
 are not, and §9.1 reads their recorded topology directly rather than
-chording them into one.
+chording them into one. §9.1 does gain one new admission, though: a
+`stitchPayload` whose own crossing audit ran and passed — closed or open
+alike — admits leg 4 the same way a proven-simple surface-result prism does,
+which is the open-case decision two paragraphs below.
+
+**The crossing audit runs on the OPEN case too, not on the closed case
+alone.** A clean stitched sheet — every welded edge proven contact-clean —
+can then read `ValidityValid` under §9.1's audit instead of being
+permanently `Suspect`, the same way a surface-result prism's own leg 4 is
+proven rather than assumed. The two outcomes stay asymmetric on purpose:
+closed plus a refusing audit is `ErrDegenerate` (R9) — a caller asked for a
+solid and the geometry cannot be one — while open plus a refusing audit
+stays a sheet with leg 4 undecided and **no error**, preserving §6.3's rule
+that a residual free edge is never an error. `Stitch` never re-wraps the
+reused audit's own sentinel for the closed case: R9 and R10 are its
+`ErrDegenerate`/`ErrUnsupported` surfaced unchanged.
+
+**Placing a stitched body replays the recorded weld; it never re-derives
+it.** `stitchPayload` records the operand faces and Table J's own admission
+(`stitch_weld.go`'s `stitchWeldPlan`) — never a built topology — and
+`Placed`/`Duplicate`/`PlacedCopy` re-evaluate from those same two values
+under the composed transform. A rigid motion rounds every coordinate, so
+re-running Table J against the PLACED, rounded values would admit nothing —
+a placed box would come back a sheet with 24 free edges, since no two placed
+corners are bit-identical any more. So the motion is applied ONCE, to the
+single held shared vertex table, never per operand, and every downstream
+step — the fresh topology rebuild, the derived orientation, the closure
+leg — replays over that one placed table exactly as it does unplaced. The
+rounding itself is charged as `bounds.go`'s `rigidRoundAllow`, folded into a
+`delta` exactly as a placed loft's is (`docs/loft-design.md` §5/§12): zero
+only when the transform is the identity, an exact struct comparison. Two
+things ARE re-decided fresh on every placement, never replayed, because a
+rigid motion can change either one: the crossing audit runs again on the
+placed table, since rounding can bring two placed triangles into contact
+that the unplaced ones were proven clear of; and the whole-assembly
+orientation sign is re-decided from the placed triangle set's own signed
+volume, since an improper motion (a reflection) flips it. A placed stitched
+solid therefore publishes `Approximate` — `Volume`, `Area`, `Bounds` and
+`Centroid` all carry `delta`, on the same terms `docs/loft-design.md` §8
+states for a placed loft.
 
 ### 6.5 `Unstitch`
 
@@ -867,14 +967,15 @@ ANSWER is accepted and reads `Suspect`.
 | # | Lands |
 |---|---|
 | 1 | `BodyKind` and `Kind()`, `Shell.IsOpen`, `Edge.IsFree`, `Free()`; `WithSurfaceResult()` on `Extrude` and `Revolve`; `Document.Patch`; the sheet validity audit; `DiagUnsupportedPairSheet` and §9.3's box rule; every Table A amendment; prism sheet tessellation and export with the manifold-with-boundary audit. The revolve sheet mesh is staged to increment 4 (§10) |
-| 2 | `Stitch` and `Unstitch` over exact all-planar boundaries (Table J with J5, Table C's first two rows); `Body.Patch`; the sheet-against-solid containment cast and clearance gap of §9.3, narrowing when `DiagUnsupportedPairSheet` fires |
+| 2 | `Stitch` over exact all-planar boundaries (Table J with J5, Table C's first two rows), including its own directed-edge parity leg, derived orientation, and the recorded-weld replay a placement reuses; `Body.Patch`; the sheet-against-solid containment cast and clearance gap of §9.3, narrowing when `DiagUnsupportedPairSheet` fires. `Unstitch` is a separate follow-up: it needs no new proof this increment does not already carry, but it is its own PR |
 | 3 | `WithSurfaceResult()` on `Sweep` and `Loft`; the shared-denotation certificate, which lifts J5 for bounded edges and §5.2 gate 3's bounded-chain half of R6 together; the per-surface flux integral that lifts Table C's curved-closure refusal (R8); the undercut survey over a sheet's positive side |
 | 4 | The revolve sheet mesh (§10): the meridian and angular chordings a surface result keeps, the caps and poles it omits, the cap terms its area slack drops, and the manifold-with-boundary audit in the closed-mesh audit's place. It also settles which audit a CLOSED sheet runs |
+| 5 | A stitched solid's own mesh: the manifold-with-boundary/closed-mesh audit reads a `stitchPayload`'s already-triangulated face set directly rather than chording one. A stitched solid's own clearance-kernel carrier model: `newBodyGeomBudget` (`docs/clearance-design.md` §2) gains a `stitchPayload` arm, which is what lets a stitched solid reach a proven pair relation at all — until it lands, `Tessellate`/`STL`/`OBJ` and every pair question read `ErrUnsupported`/undecided exactly as they do for any other payload this evaluator has not wired an arm for |
 
-**Increment 4 depends on neither 2 nor 3, and they do not depend on it.** It
-takes up the one path increment 1 left staged, and it is numbered after them
-only so that no reference to increments 2 and 3 has to move. Any order is
-admissible.
+**Increment 4 depends on neither 2 nor 3, and they do not depend on it.**
+Increment 5 depends only on increment 2, which is what gives it a triangle
+set and a topology to read; it is numbered after 3 and 4 only so that no
+reference to them has to move. Any order among 3, 4 and 5 is admissible.
 
 **A closed sheet is increment 4's own question, and no earlier increment meets
 one.** `Extrude` never closes its wall set, so every prism sheet has free
