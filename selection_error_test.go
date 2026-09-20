@@ -80,6 +80,11 @@ func TestQueryStringRendering(t *testing.T) {
 			"edges(concave).at_least(1)",
 		},
 		{
+			"FreeCardinalityExactly",
+			decad.Edges(decad.Free()).Exactly(8).String(),
+			"edges(free).exactly(8)",
+		},
+		{
 			"CircularCircularCylindrical",
 			decad.Faces(decad.Cylindrical()).String(),
 			"faces(cylindrical)",

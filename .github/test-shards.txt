@@ -92,6 +92,8 @@
 0	6.63	TestFilletPropertyInvariants
 0	0.01	TestFitSplineCollinearPointsMeasureAsTheLine
 0	0.01	TestFitSplineTwoPointIsExactlyALineSegment
+0	0.00	TestFreeEdgeAndOpenShellReadTheirOwnState
+0	0.00	TestFreePredicateMatchesNothingOnASolid
 0	0.70	TestFreeformArcLengthBracketEnclosesAndNarrows
 0	0.22	TestFreeformPrismCapLoopChamferRefuses
 0	1.33	TestFreeformPrismExportsDeterministically
@@ -193,6 +195,7 @@
 0	0.05	TestShellCupWallContextCancellationDuringOffset
 0	0.31	TestShellCupWallThickness
 0	0.01	TestShellCupWallThicknessCarriesConversionDelta
+0	0.00	TestSolidBodiesReportSolidKindAndNoFreeBoundary
 0	0.03	TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses
 0	0.04	TestSplineBezierSpansUseSketchFloatKnots
 0	0.02	TestSturmChainBuildPollsPerMember

@@ -66,6 +66,22 @@ const (
 	KindFaceted
 )
 
+// BodyKind states what a body IS: whether its boundary encloses a material
+// region. It is decided by the operation that built the body, never inferred
+// from the boundary afterwards (docs/surface-design.md §2.1, core §6).
+type BodyKind int
+
+const (
+	// BodySolid is a body that encloses a material region. Its region
+	// quantities are the question; Volume and Centroid answer once validity
+	// proves the boundary closed.
+	BodySolid BodyKind = iota
+	// BodySheet is a body that encloses no material region. It is a boundary
+	// on its own, and Volume and Centroid are ErrNotSolid for every sheet,
+	// proven sound or not.
+	BodySheet
+)
+
 // Plane is a planar face's geometry: the face lies in the frame's UV plane.
 type Plane struct {
 	Frame r3.Frame
@@ -315,9 +331,12 @@ func (e *Edge) Start() *Vertex { return e.start }
 // End returns the edge's end vertex.
 func (e *Edge) End() *Vertex { return e.end }
 
-// Faces returns the faces adjacent to this edge. On a closed manifold body
-// every edge bounds exactly two faces; len != 2 is precisely how non-manifold
-// topology is observable (core §6.1).
+// Faces returns the faces adjacent to this edge. What len(Faces()) means is
+// read per body kind (docs/surface-design.md §2.2, core §6.1): on a
+// BodySolid, one adjacent face is non-manifold; on a BodySheet, one adjacent
+// face is a FREE edge — the boundary of the sheet, and the expected shape —
+// which IsFree reports and the Free() predicate selects. Two is an interior
+// edge on either kind; three or more is non-manifold on either.
 func (e *Edge) Faces() []*Face { return append([]*Face(nil), e.faces...) }
 
 // IsConvex reports the edge's convexity under decad's WALKED-BOUNDARY
@@ -348,6 +367,13 @@ func (e *Edge) Faces() []*Face { return append([]*Face(nil), e.faces...) }
 // here is the walk's answer, not the wedge's: Concave() picks a hole's rim,
 // Convex() never does.
 func (e *Edge) IsConvex() bool { return e.convex }
+
+// IsFree reports whether exactly one face is adjacent to this edge — a
+// sheet's boundary, and the expected shape there (docs/surface-design.md
+// §2.2). On a BodySolid the same count of one is non-manifold rather than
+// free; IsFree only names the count Faces reports, and Faces's own doc comment
+// states the per-kind reading in full.
+func (e *Edge) IsFree() bool { return len(e.faces) == 1 }
 
 // Length returns the edge's length: Exact only when the analytic result is
 // proved exactly representable, otherwise Approximate with its evaluation
@@ -582,10 +608,20 @@ func (f *Face) Origins() []FeatureRef { return append([]FeatureRef(nil), f.origi
 type Shell struct {
 	faces []*Face
 	void  bool
+	open  bool
 }
 
-// IsVoid reports whether the shell bounds an internal cavity.
+// IsVoid reports whether the shell bounds an internal cavity. IsVoid and
+// IsOpen are independent questions and neither implies the other
+// (docs/surface-design.md §2.2): a void solid shell and an open sheet shell
+// are both ordinary states, and nothing rules out either combination.
 func (s *Shell) IsVoid() bool { return s.void }
+
+// IsOpen reports whether the shell has at least one free edge
+// (docs/surface-design.md §2.2). IsOpen and IsVoid are independent questions
+// and neither implies the other. No builder in this package sets a shell open
+// yet, so every shell reports false until a surface-result feature lands.
+func (s *Shell) IsOpen() bool { return s.open }
 
 // Faces returns the shell's faces.
 func (s *Shell) Faces() []*Face { return append([]*Face(nil), s.faces...) }
@@ -612,6 +648,7 @@ type Body struct {
 	centroid VecMeasurement
 	bounds   Box
 	solid    bool
+	kind     BodyKind
 
 	// payload is the evaluator's own record of how this body was built —
 	// what Placed re-evaluates under a composed motion
@@ -684,6 +721,12 @@ func (b *Body) Vertices() []*Vertex {
 	}
 	return out
 }
+
+// Kind reports what the body IS: BodySolid or BodySheet
+// (docs/surface-design.md §2.1). Kind says what the body is; IsSolid says
+// whether it is sound. A BodySheet with IsSolid() == true is never produced —
+// a sheet encloses no material region, so no evaluator may prove one a solid.
+func (b *Body) Kind() BodyKind { return b.kind }
 
 // IsSolid reports whether the body is a valid solid — a decided answer
 // (core §6).
