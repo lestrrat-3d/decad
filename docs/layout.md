@@ -72,10 +72,10 @@ to the byte budget.
 | `bounded.go` | The bounded-scalar vocabulary: a float64 carried beside a proven bound on its own error, its arithmetic, and the three-valued admission readers. Every operation charges its own rounding on top of the operand bounds. See the file's own doc comment. |
 | `dyadic.go` | The exact BINARY-SCALED arithmetic every proof over held float64 coordinates is carried in: `dyadic`, a mantissa times a power of two, and `dyV3`, its vector. A reading that genuinely divides converts to `big.Rat` at that point. See the file's own doc comment. |
 | `rat_interval.go` | The exact rational interval arithmetic every certified reading is proven in, plus the `atan`/`atan2` and π enclosures no single rational can state. See the file's own doc comment. |
-| `moments_circular.go` | Integrates a recorded arc or circle in exact rational intervals for `moments.go`'s boundary sums and for `revolve_build.go`'s per-wall axis moment. A record that does not determine the term exactly withholds it rather than approximating it. See the file's own doc comment. |
+| `moments_circular.go` | Exact rational arc/circle integration for `moments.go`'s boundary sums and `revolve_build.go`'s axis moment. See the file's own doc comment. |
 | `spline_bezier.go` | The exact reduction of `docs/spline-design.md` §5.1: converts a recorded free-form curve to piecewise polynomial Bézier control points over `big.Rat`, with no rounding. Owns the §5.2 work-budget charges. |
 | `spline_length.go` | `docs/spline-design.md` §6.1: brackets a free-form curve's arc length between its chord and control polygon, narrowed by exact dyadic de Casteljau bisection to a fixed depth. |
-| `spline_extreme.go` | `docs/spline-design.md` §6.2: brackets a Tier A free-form span's directional extreme over `gu·u + gv·v`, reducing to `clearance_poly.go`'s certified root engine via the Bernstein convex-hull property. Owns Table R row R18's refusal. See the file's own doc comment. |
+| `spline_extreme.go` | `docs/spline-design.md` §6.2's Tier A directional-extreme bracket, reducing to `clearance_poly.go`'s root engine. See the file's own doc comment. |
 | `spline_fit.go` | `docs/spline-design.md` §5.1.2's fit-spline reduction: converts a recorded `FitSplineSeg` into the same `bezierSpan` chain the other Tier A kinds produce, over its own closed form rather than knot insertion. See the file's own doc comment. |
 | `spline_moments.go` | The exact integration of `docs/spline-design.md` §5.1 over Bézier spans, reusing `clearance_poly.go`'s `ratPoly`. `addFreeform` feeds `moments.go`'s region-level rational accumulator. |
 | `spline_sagitta.go` | `docs/spline-design.md` §6.2.1's chord-sagitta bounds and the shared dyadic station generator built on them. Each bound's derivation, refusal and work charge lives on its own function's doc comment. See the file's own doc comments. |
@@ -92,6 +92,7 @@ to the byte budget.
 | `patch.go` | `Document.Patch`: a single planar face from a recorded profile, reusing `buildLoopSidesAs`'s per-kind curve construction. See `docs/surface-design.md` §5.1. |
 | `stitch_weld.go` | Table J's admission: the shared vertex table and which free edge pairs weld. See `docs/surface-design.md` §6.2. |
 | `stitch.go` | `Stitch`/`StitchContext`: rebuilds fresh topology over the weld plan, derives orientation, and decides Table C's outcome and measurements. See `docs/surface-design.md` §6. |
+| `unstitch.go` | `Unstitch`/`UnstitchContext`: splits a body into one free single-face sheet per face, reusing `stitch.go`'s placement machinery per face. See `docs/surface-design.md` §6.5. |
 | `extrude.go` | `Document.Extrude` (evaluator §5): the public entry point, `WithTaper`, and linear-extent resolution into a `linearSweep`. The payload, the build and the extent readings each have their own `prism_*.go` file. See `docs/evaluator-design.md` §5. |
 | `sweep.go` | `Document.Sweep` / `SweepContext`, common path gates, and the distinct replayable payload for zero-twist line and arc spans. See `docs/sweep-design.md` PR 1–4. |
 | `sweep_arc.go` | The one-span `ArcThrough` reduction: exact circumcircle and tangent gates, bounded axis/angle publication, Revolve reuse, and Sweep role restoration. See `docs/sweep-design.md` PR 3. |
@@ -175,7 +176,7 @@ to the byte budget.
 | `prism_overlap.go` | `docs/prism-boolean-design.md` §4.5's overlap-area reading: measures a coplanar prism pair's overlap cell by cell and publishes the charged sum as a volume, with no assembled section and no body. Read-only, for `Verify`'s interference path alone. See the file's own doc comment. |
 | `boolean_mesh.go` | The exact-predicate mesh-boolean pipeline: contact classification, subdivision, stitching, and the closed-mesh audit. See the file's own doc comment and `docs/evaluator-design.md` §9. |
 | `boolean_cut.go` | Per-facet exact subdivision along contact segments into classified regions, in rational 2D on the facet's own plane. See the file's own doc comment. |
-| `boolean_exact.go` | The exact-arithmetic kernel behind the mesh boolean: adaptive orient3d, rational predicates, unnormalised `clipFrac` comparisons, and the reject-only segment, facet-pair and parity projected-box pre-filters. Each filter's own doc comment carries its admission derivation. |
+| `boolean_exact.go` | The exact-arithmetic kernel behind the mesh boolean: adaptive orient3d, rational predicates, and the reject-only pre-filters. See each filter's own doc comment. |
 | `boolean_body.go` | Builds a `facetedPayload` into a `Body`: face/loop/edge topology from the stitched mesh, and measurements integrated exactly with composed proven bounds. See the file's own doc comment and `docs/evaluator-design.md` §9. |
 | `bounds.go` | The single owner of every proven error bound a faceted measurement reports, one helper per mechanism, including `docs/prism-boolean-design.md` §7's section-displacement terms. See the file's own doc comment. |
 
