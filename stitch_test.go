@@ -109,6 +109,79 @@ func TestStitchDisplacedPatchStaysASheet(t *testing.T) {
 	decadtest.IsSound(t, doc)
 }
 
+// TestStitchNonzeroBoundRimStaysFreeAgainstExactPatch is docs/surface-design.md
+// §6.2's Table J row J5, watched directly rather than through J4
+// (TestStitchDisplacedPatchStaysASheet already covers J4's bit-identical
+// coordinate match with two zero-bound patches). A wall extruded 5 inches
+// Along carries a top rim computed from that unit conversion
+// (document.go's magnitudeInBounded): 5 inches does not convert to
+// millimetres exactly, so the rim's z coordinate holds a nonzero bound even
+// though the held float64 value prints as the round number 127. A patch
+// built directly at z = 127 mm — a stated, recorded coordinate — carries a
+// zero bound at the identical coordinate. J4 (bit-identical held
+// coordinates, matched unordered) holds for all four corner pairs; only J5
+// (every held value's bound is zero) tells the pairs apart, and J5 alone is
+// why the rim and the patch stay unwelded — welding them would claim a
+// meeting the wall's own unit-conversion rounding never proved. Removing
+// J5's zero-bound condition from stitch_weld.go's classOf collapses the
+// free-edge count below from 12 to 4, because the four rim/patch pairs then
+// wrongly join.
+func TestStitchNonzeroBoundRimStaysFreeAgainstExactPatch(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	ws, wp := plateSketch(t)
+	wall, err := doc.Extrude(ws, wp, decad.Distance{D: units.Inches(5), Dir: decad.Along}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+
+	w := sketch.NewWorld()
+	topPlane, err := w.CreateOffsetPlane(w.XY(), 127)
+	require.NoError(t, err)
+	ts, err := w.CreateSketch(topPlane)
+	require.NoError(t, err)
+	rect := ts.CreateRectangle(0, 0, 100, 60)
+	ts.Fix(rect.A)
+	_, err = ts.Solve(t.Context())
+	require.NoError(t, err)
+	patch, err := doc.Patch(ts, ts.Profiles()[0])
+	require.NoError(t, err)
+
+	// The fixture's premise, proven rather than assumed: the wall's rim at
+	// z=127 is Approximate with a nonzero bound, and the patch's boundary
+	// at the same z=127 is Exact with a zero bound.
+	var rimApproxAt127, patchExactAt127 bool
+	for _, v := range wall.Vertices() {
+		pos := v.Position()
+		if pos.Value.Z == 127 && pos.Exactness == decad.Approximate && pos.Bound.Mag() > 0 {
+			rimApproxAt127 = true
+		}
+	}
+	for _, v := range patch.Vertices() {
+		pos := v.Position()
+		if pos.Value.Z == 127 && pos.Exactness == decad.Exact && pos.Bound.Mag() == 0 {
+			patchExactAt127 = true
+		}
+	}
+	require.True(t, rimApproxAt127, "the wall's top rim must be Approximate with a nonzero bound at z=127")
+	require.True(t, patchExactAt127, "the patch's boundary must be Exact with a zero bound at z=127")
+
+	sheet, err := decad.Stitch(wall, patch)
+	require.NoError(t, err)
+
+	require.Equal(t, decad.BodySheet, sheet.Kind())
+	require.False(t, sheet.IsSolid())
+
+	// Nothing welds: the wall's own 8 rim edges (bottom and top) plus the
+	// patch's 4 boundary edges all stay free.
+	free, err := decad.Edges(decad.Free()).Exactly(12).SelectEdges(sheet)
+	require.NoError(t, err)
+	require.Len(t, free, 12)
+
+	// The stitched result absorbs both live operands; the document holds
+	// only it.
+	require.Len(t, doc.Bodies(), 1)
+	require.Same(t, sheet, doc.Bodies()[0])
+}
+
 // TestStitchClosedCurvedSheetIsUnsupported is docs/surface-design.md's T6
 // second half: a half-disc revolved a full turn about its diameter, as a
 // surface, is a closed sheet with no free edge (proven first, so this test

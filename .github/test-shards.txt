@@ -1544,6 +1544,7 @@
 0	0.00	TestRequireSheetMeshCatchesADuplicatedDirectedEdge
 0	0.00	TestStitchClosesBoxFromThreeSheets
 1	0.00	TestStitchDisplacedPatchStaysASheet
+2	0.00	TestStitchNonzeroBoundRimStaysFreeAgainstExactPatch
 2	0.00	TestStitchClosedCurvedSheetIsUnsupported
 3	0.00	TestStitchPlacedBoxIsApproximateSolid
 0	0.00	TestStitchTableR
