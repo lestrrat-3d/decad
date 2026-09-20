@@ -101,13 +101,16 @@ type unstitchPayload struct {
 	// never mutated or aliased into a live body's topology (evalUnstitchFaceContext
 	// always mints a fresh copy from it).
 	face *Face
-	// bounds is the retired receiver's own proven, UNPLACED Bounds — reused
-	// rather than re-derived into a tighter per-face box, which would
-	// understate a curved face's true extent exactly as stitchBounds's own
-	// doc comment states for a curved Stitch operand (stitch.go). A single
-	// face's true box is always a subset of the whole receiver's, so this
-	// stays sound even though it is not the tightest box this one face could
-	// in principle earn.
+	// bounds is the retired receiver's own proven, UNPLACED Bounds, read by
+	// unstitchBounds (faceBounds's fallback) for every face that is not
+	// straight-edged and planar — reused rather than re-derived into a
+	// tighter per-face box, which would understate a curved face's true
+	// extent exactly as stitchBounds's own doc comment states for a curved
+	// Stitch operand (stitch.go). A single face's true box is always a
+	// subset of the whole receiver's, so this stays sound even though it is
+	// not the tightest box this one face could in principle earn. A
+	// straight-edged planar face never reads this field: faceBounds computes
+	// its own tight box off the placed face's held vertices instead.
 	bounds Box
 }
 
@@ -162,7 +165,7 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 		Bound:     units.SquareMillimeters(nf.areaBound),
 	}
 
-	bounds, err := unstitchBounds(srcBounds, xform, delta)
+	bounds, err := faceBounds(srcFace, nf, srcBounds, xform, delta)
 	if err != nil {
 		return nil, err
 	}
@@ -281,13 +284,103 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 	return nf, nil
 }
 
+// faceBounds is Unstitch's own per-face box dispatch. A face bounded
+// entirely by straight (Line3) edges on a PLANAR surface has a tight box for
+// free: the enclosed region is exactly the polygon its own vertices
+// describe, so the axis-aligned extreme along any world axis is always
+// attained AT a vertex (a straight edge's interior points are convex
+// combinations of its two endpoints, so they never project further than
+// either one does) — true of every polygon, convex or not, with or without
+// holes. facePolygonBounds computes that box directly off the already-placed
+// copy's own held vertex coordinates: no integration, no new proof, just the
+// same vertex-derived reading every other planar measurement already
+// publishes.
+//
+// Every other face — a curved surface (Cylinder/Cone/Sphere/Torus/NURBS), or
+// a PLANAR surface with any non-Line3 edge (a disk's circular cap is flat but
+// its rim bulges past the one vertex a full circle holds) — falls back to
+// unstitchBounds, the retiring receiver's own whole-body box. That box is
+// sound (a face's own extent is always a subset of the body it came from)
+// but not proven tight, and Box has no field that says "sound, not proven
+// tight" separately from Exactness/Bound: Exactness here still reads Exact
+// whenever xform is the identity and the receiver's own box was, because no
+// further numerical rounding was introduced beyond the published numbers —
+// not because the box is the tightest one this face could in principle earn.
+// docs/surface-design.md §6.5 records that limit.
+func faceBounds(srcFace, nf *Face, srcBounds Box, xform r3.Transform, delta float64) (Box, error) {
+	if srcFace.isPlanar() && faceIsStraightEdged(srcFace) {
+		return facePolygonBounds(nf)
+	}
+	return unstitchBounds(srcBounds, xform, delta)
+}
+
+// faceIsStraightEdged reports whether every edge bounding f, across every
+// loop, is a Line3 — the one Curve variant a straight-line polygon's own
+// bounding box needs (see faceBounds).
+func faceIsStraightEdged(f *Face) bool {
+	for _, l := range f.loops {
+		for _, ce := range l.coedges {
+			if _, ok := ce.edge.curve.(Line3); !ok {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// facePolygonBounds computes a straight-edged planar face's own tight box
+// directly off its already-placed vertex set: the componentwise extreme over
+// every held coordinate, with Bound the loosest bound any contributing
+// vertex itself carries (each vertex's own bound is an isotropic ball, so it
+// covers that vertex's contribution to every axis alike). Every vertex
+// nf holds was already placed and delta-widened by copyFaceUnderContext, so
+// this needs no separate transform or delta step of its own: an unplaced,
+// all-exact face therefore reads Exact with a zero bound, and a placed one
+// carries exactly the placement's own rounding — never more.
+func facePolygonBounds(nf *Face) (Box, error) {
+	have := false
+	var lo, hi r3.Vec
+	maxBound := 0.0
+	fold := func(v *Vertex) error {
+		if !finiteVec(v.position) {
+			return fmt.Errorf(`%w: a placed unstitch vertex is not representable`, ErrUnsupported)
+		}
+		if !have {
+			lo, hi = v.position, v.position
+			have = true
+		} else {
+			lo = r3.Vec{X: math.Min(lo.X, v.position.X), Y: math.Min(lo.Y, v.position.Y), Z: math.Min(lo.Z, v.position.Z)}
+			hi = r3.Vec{X: math.Max(hi.X, v.position.X), Y: math.Max(hi.Y, v.position.Y), Z: math.Max(hi.Z, v.position.Z)}
+		}
+		maxBound = max(maxBound, v.bound.Base())
+		return nil
+	}
+	for _, l := range nf.loops {
+		for _, ce := range l.coedges {
+			if err := fold(ce.edge.start); err != nil {
+				return Box{}, err
+			}
+			if err := fold(ce.edge.end); err != nil {
+				return Box{}, err
+			}
+		}
+	}
+	if !have {
+		return Box{}, fmt.Errorf(`%w: a straight-edged face has no vertex to bound`, ErrDegenerate)
+	}
+	return Box{Min: lo, Max: hi, Exactness: exactnessOf(maxBound), Bound: units.Millimeters(maxBound)}, nil
+}
+
 // unstitchBounds publishes one unstitched face's box as the retiring
 // receiver's own already-proven Bounds, inflated by its own Bound and then
 // carried through xform by its 8 corners (stitch.go's stitchBoxCorners) —
 // the same reasoning stitchBounds already states for a curved Stitch
 // operand, applied here to a single face of the body being split rather
 // than to a whole operand body. The published Bound is exactly delta, on
-// the same terms stitchBounds publishes for a placed stitched body.
+// the same terms stitchBounds publishes for a placed stitched body. It is
+// faceBounds's fallback for every face that is not straight-edged and
+// planar (see faceBounds's own doc comment for why the box it returns is
+// sound but not necessarily tight).
 func unstitchBounds(srcBounds Box, xform r3.Transform, delta float64) (Box, error) {
 	inflate := srcBounds.Bound.Base()
 	have := false
