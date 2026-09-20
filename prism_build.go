@@ -49,7 +49,15 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
+	// A surface result publishes a sheet, never a solid: solid false is what
+	// makes Volume() and Centroid() answer ErrNotSolid through their existing
+	// guards, and kind BodySheet is what Kind() reports
+	// (docs/surface-design.md §4.3).
+	kind := BodySolid
+	if pp.surfaceResult {
+		kind = BodySheet
+	}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: !pp.surfaceResult, kind: kind}
 
 	// Topology: one shell over every loop's side faces plus the two caps.
 	var faces []*Face
@@ -126,12 +134,20 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		capStart.loops = append(capStart.loops, &Loop{coedges: bottom, outer: li == 0})
 		capEnd.loops = append(capEnd.loops, &Loop{coedges: top, outer: li == 0})
 	}
-	faces = append(faces, capStart, capEnd)
-	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
-		return nil, err
+	// A surface result omits both caps from the shell (Table W,
+	// docs/surface-design.md §4.1-§4.2): capStart/capEnd stay constructed above
+	// so the area accumulation below can still read their area fields, but
+	// neither joins faces nor gets its loops attached, which is what leaves
+	// each rim edge with only its wall face — both rims of every loop become
+	// free edges with no rim-specific code.
+	if !pp.surfaceResult {
+		faces = append(faces, capStart, capEnd)
+		if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
+			return nil, err
+		}
 	}
 
-	shell := &Shell{faces: faces}
+	shell := &Shell{faces: faces, open: pp.surfaceResult}
 	body.lumps = []*Lump{{shells: []*Shell{shell}}}
 
 	// Measurements carry the closed forms' proven float bounds
@@ -153,6 +169,21 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	caps := boundedMul(exactScalar(2), regionArea)
 	sides := boundedMul(perimeter, height)
 	area := boundedAdd(caps, sides)
+	if pp.surfaceResult {
+		// §4.3: a surface result's area is the solid's area minus the two
+		// omitted caps'. Each cap's area and bound are read back from the Face
+		// fields rather than assumed to equal regionArea's, and the
+		// subtraction runs here — after capStart/capEnd.areaBound were
+		// re-stamped from regionArea.bound just above — so it composes the
+		// POST-displacement bound rather than the one the caps carried before
+		// that re-stamp.
+		area = boundedSub(area, measuredScalar(capStart.area, capStart.areaBound))
+		area = boundedSub(area, measuredScalar(capEnd.area, capEnd.areaBound))
+	}
+	// volume and centroid are always computed and stored — a sheet needs them
+	// finite for validateAnalyticBodyMeasurements below — but Body.Volume and
+	// Body.Centroid gate on solid and answer ErrNotSolid for a sheet, so these
+	// two stay held and unpublished then (docs/surface-design.md §8).
 	body.volume = Measurement{
 		Value:     units.CubicMillimeters(volume.value),
 		Exactness: exactnessOf(volume.bound),

@@ -141,6 +141,9 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 		if o == nil {
 			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
+		if err := refuseSurfaceResult(o, "Revolve"); err != nil {
+			return nil, err
+		}
 	}
 
 	axis, err = normalizeAxis(axis)

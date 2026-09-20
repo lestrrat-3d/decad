@@ -92,6 +92,11 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
+	// Table X (docs/surface-design.md §11): refused ahead of the selector gate
+	// so the answer does not depend on what the selector matched.
+	if err := refuseSheetOperand(b, "Shell"); err != nil {
+		return nil, err
+	}
 	sense := Inward
 	for _, raw := range opts {
 		if raw == nil {

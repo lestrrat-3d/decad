@@ -82,6 +82,11 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 	if err := doc.requireLive(b); err != nil {
 		return nil, err
 	}
+	// Table X (docs/surface-design.md §11): refused ahead of the selector gate
+	// so the answer does not depend on what the selector matched.
+	if err := refuseSheetOperand(b, "Chamfer"); err != nil {
+		return nil, err
+	}
 	for _, o := range opts {
 		if o == nil {
 			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)

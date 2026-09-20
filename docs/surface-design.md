@@ -735,6 +735,7 @@ rather than after.
 | `ToFace` / `ToFaceAngular` naming a **planar** face of a live sheet | admitted | the stop reads the face's plane and nothing about material, so `stops.go`'s resolution is unchanged |
 | `ToFace` naming a curved face of a sheet | as for a solid | this design changes no curved-stop reach |
 | `EdgeAxis` naming a linear edge of a live sheet | admitted | the axis reads the edge's line; `docs/api-design.md` §6.2's exactly-one and liveness rules apply unchanged |
+| `ThroughAll` / `ThroughAllSide` resolving its stops over a document holding a sheet | the sheet is skipped, not refused | a sheet encloses no material to stop against, and refusing would stop any document holding one sheet from using `ThroughAll` at all |
 | `Body.Faces` / `Edges` / `Vertices` / `Lumps` / `Shells` | admitted, unchanged | traversal and inspection, as on every body |
 | every selector predicate | admitted, unchanged | a sheet's faces and edges answer `Planar()`, `Convex()`, `CreatedBy()` and the rest on the same terms |
 
