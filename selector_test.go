@@ -371,6 +371,41 @@ func TestSelectEdgesPredicates(t *testing.T) {
 	})
 }
 
+// TestFreePredicateMatchesNothingOnASolid pins docs/surface-design.md §3.1:
+// on a solid, Free() matches nothing — an ordinary ErrNoMatch when unasserted,
+// ErrCardinality (never ErrNoMatch) once a cardinality assertion is added —
+// and the SelectionError's Query rendering is what catches a missing render()
+// arm for predKindFree.
+func TestFreePredicateMatchesNothingOnASolid(t *testing.T) {
+	t.Parallel()
+	body := holePlateBody(t)
+
+	t.Run("UnassertedIsErrNoMatch", func(t *testing.T) {
+		_, err := decad.Edges(decad.Free()).SelectEdges(body)
+		require.ErrorIs(t, err, decad.ErrNoMatch)
+		var se *decad.SelectionError
+		require.ErrorAs(t, err, &se)
+		require.Equal(t, decad.EdgeSelectorKind, se.Kind)
+		require.Equal(t, "edges(free)", se.Query)
+		require.Equal(t, "any", se.Expected)
+		require.Equal(t, 0, se.Actual)
+		require.Len(t, se.Residuals, 1)
+		require.Equal(t, "free", se.Residuals[0].Predicate)
+		require.Equal(t, 0, se.Residuals[0].Remaining)
+	})
+
+	t.Run("AssertedIsErrCardinalityNotErrNoMatch", func(t *testing.T) {
+		_, err := decad.Edges(decad.Free()).Exactly(8).SelectEdges(body)
+		require.ErrorIs(t, err, decad.ErrCardinality)
+		require.NotErrorIs(t, err, decad.ErrNoMatch)
+		var se *decad.SelectionError
+		require.ErrorAs(t, err, &se)
+		require.Equal(t, "edges(free).exactly(8)", se.Query)
+		require.Equal(t, "exactly 8", se.Expected)
+		require.Equal(t, 0, se.Actual)
+	})
+}
+
 func TestSelectFacesPredicates(t *testing.T) {
 	t.Parallel()
 	body := holePlateBody(t)

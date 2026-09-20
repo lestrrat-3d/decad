@@ -199,7 +199,7 @@ func renderQuery(kind string, preds []string, card cardinality) string {
 // than panicking.
 func (p EdgePredicate) render() string {
 	switch p.kind {
-	case predKindConvex, predKindConcave, predKindCircular:
+	case predKindConvex, predKindConcave, predKindCircular, predKindFree:
 		return p.kind
 	case predKindParallelTo:
 		return p.kind + "(" + renderVec(p.dir) + ")"

@@ -256,7 +256,7 @@ func (q *FaceQuery) selector() {}
 
 // EdgePredicate is one clause of an EdgeQuery. Predicates come
 // only from the package constructors — Convex, Concave, ParallelTo,
-// LongerThan, CreatedBy, Circular — and compose by conjunction; the zero
+// LongerThan, CreatedBy, Circular, Free — and compose by conjunction; the zero
 // value names no predicate and is rejected at resolve.
 type EdgePredicate struct {
 	kind   string
@@ -288,6 +288,7 @@ const (
 	predKindNormalTo      = "normal_to"
 	predKindFacing        = "facing"
 	predKindFaceCreatedBy = "face_created_by"
+	predKindFree          = "free"
 )
 
 // Convex matches edges Edge.IsConvex reports convex — the walked-boundary
@@ -326,6 +327,15 @@ func CreatedBy(f FeatureRef) EdgePredicate {
 
 // Circular matches edges whose curve is a full circle or a circular arc.
 func Circular() EdgePredicate { return EdgePredicate{kind: predKindCircular} }
+
+// Free matches edges Edge.IsFree reports free — exactly one adjacent face, a
+// sheet's boundary (docs/surface-design.md §2.2, §3.1). It composes with
+// every other clause: Edges(Free(), Circular()) picks the circular free
+// edges, Edges(Free()).Exactly(8) asserts a surface extrude's rim count. On a
+// body with no free edge — every solid, and a closed sheet — it matches
+// nothing, an ordinary ErrNoMatch at resolve or ErrCardinality under an
+// assertion, never an error in itself.
+func Free() EdgePredicate { return EdgePredicate{kind: predKindFree} }
 
 // Planar matches faces whose surface is a plane.
 func Planar() FacePredicate { return FacePredicate{kind: predKindPlanar} }
@@ -458,7 +468,7 @@ func validatePredicateRef(ref FeatureRef, what string) error {
 // is examined. A kind the constructors never produce is malformed input.
 func (p EdgePredicate) validate() error {
 	switch p.kind {
-	case predKindConvex, predKindConcave, predKindCircular:
+	case predKindConvex, predKindConcave, predKindCircular, predKindFree:
 		return nil
 	case predKindCreatedBy:
 		return validatePredicateRef(p.ref, "created-by")
@@ -528,13 +538,17 @@ func faceMatchesAll(f *Face, preds []FacePredicate) bool {
 //     edge is created by the role that created a face it bounds, so it
 //     matches when ANY adjacent face's Origins() carries the ref;
 //   - circular matches an edge whose curve is a full circle or a circular
-//     arc.
+//     arc;
+//   - free matches an edge Edge.IsFree reports free — exactly one adjacent
+//     face.
 func (p EdgePredicate) matches(e *Edge) bool {
 	switch p.kind {
 	case predKindConvex:
 		return e.convex
 	case predKindConcave:
 		return !e.convex
+	case predKindFree:
+		return e.IsFree()
 	case predKindParallelTo:
 		if _, ok := e.curve.(Line3); !ok {
 			return false
