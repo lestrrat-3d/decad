@@ -18,7 +18,9 @@ verification proves overlap and bounds its volume without consuming either body
 is specified in `docs/interference-design.md`. `docs/layout.md`
 lists every current design document and its owner. Spatial-path recording,
 rotation-minimizing frame transport, and the staged `Sweep` evaluator are
-specified in `docs/sweep-design.md`.
+specified in `docs/sweep-design.md`. The sheet body — a body that encloses no
+material region — and the operations that build, fill and close one are
+specified in `docs/surface-design.md`.
 
 ## 1. What decad is answerable for
 
@@ -298,11 +300,12 @@ type Body struct{ /* ... */ }
 func (b *Body) Document() *Document // the document that owns this body
 
 func (b *Body) Lumps() []*Lump    // disjoint pieces; len > 1 means disconnected
-func (b *Body) Shells() []*Shell  // Shell.IsVoid() marks an internal cavity
+func (b *Body) Shells() []*Shell  // Shell.IsVoid() marks an internal cavity, IsOpen() a free boundary
 func (b *Body) Faces() []*Face
 func (b *Body) Edges() []*Edge
 func (b *Body) Vertices() []*Vertex
 
+func (b *Body) Kind() BodyKind  // BodySolid or BodySheet — what the body IS (docs/surface-design.md §2.1)
 func (b *Body) IsSolid() bool
 func (b *Body) Bounds() (Box, error)
 func (b *Body) Volume() (Measurement, error)   // error when not a solid — never 0
@@ -335,8 +338,20 @@ implementation has to guess where it falls:
   position produced by a v1 tessellation-backed boolean is approximated exactly as
   its volume is, and says by how much.
 - **Only a predicate the evaluator *decides* is exempt** — `Body.IsSolid`,
-  `Edge.IsConvex`, `Loop.IsOuter`, `Shell.IsVoid`. These are answers, not
-  approximations of answers, so they stay bare bools.
+  `Edge.IsConvex`, `Loop.IsOuter`, `Shell.IsVoid`, `Shell.IsOpen`,
+  `Edge.IsFree`. These are answers, not approximations of answers, so they stay
+  bare bools. `Body.Kind` joins them as a bare enum on the same terms: it is
+  decided by the operation that built the body, and it measures nothing.
+
+**`Body.Kind` says what the body IS; `IsSolid` says whether it is sound.** A
+`BodySheet` encloses no material region — it is a boundary on its own — so
+`Volume` and `Centroid` are `ErrNotSolid` for every sheet, sound or not, and
+that refusal reports a CATEGORY. The same error on a `BodySolid` body reports a
+DEFECT: a body built as a solid whose boundary did not prove closed. Without
+`Kind`, `IsSolid() == false` would mean both, which is exactly the
+"`volume == 0` means both empty and not-a-solid" sloppiness §4 rejects in
+Fusion. `docs/surface-design.md` §2.1 owns the kind, and §2 there owns what a
+sheet holds; a sheet body uses every accessor above unchanged.
 
 The §5.2 carve-out is a carve-out from the **units** rule (§5.1) only: it says an
 `r3.Vec` coordinate is a length in millimetres rather than a `units.Value`. It says
@@ -375,11 +390,19 @@ type Edge struct{ /* ... */ }
 
 func (e *Edge) Curve() Curve
 func (e *Edge) Faces() []*Face     // len != 2 on a closed body means NON-MANIFOLD
+func (e *Edge) IsFree() bool       // exactly one adjacent face — a sheet's boundary
 func (e *Edge) Start() *Vertex
 func (e *Edge) End() *Vertex
 func (e *Edge) Length() (Measurement, error)
 func (e *Edge) IsConvex() bool
 ```
+
+**What `len(Edge.Faces())` means is read per body kind.** On a `BodySolid`,
+one adjacent face is non-manifold, as the gloss above says. On a `BodySheet`,
+one adjacent face is a **free edge** — the boundary of the sheet, and the
+expected shape — which `Edge.IsFree` reports and the `Free()` predicate (§9)
+selects. Two is an interior edge on either kind; three or more is non-manifold
+on either. `docs/surface-design.md` §2.2 owns the reading.
 
 **A `CoEdge` is one directed use of a shared `Edge` by one `Loop`.**
 `CoEdge.Start()` and `End()` follow the loop walk. `CoEdge.IsForward()` is true
@@ -555,6 +578,20 @@ const (
 )
 ```
 
+**`BodyKind`** — what a `Body` is. §6 draws the line between it and `IsSolid`,
+and `docs/surface-design.md` §2.1 owns it in full. Its constants are
+`Body`-prefixed, in the style of `BooleanErrorCode`'s `Boolean*`, because a bare
+`Solid` or `Sheet` at package scope names no type it belongs to:
+
+```go
+type BodyKind int
+
+const (
+    BodySolid BodyKind = iota // encloses a material region
+    BodySheet                 // encloses none — a boundary on its own
+)
+```
+
 `Direction` — the enumerated sense a standalone extent carries — is *not* deferred:
 it is specified in full in §8.1, and declared there.
 
@@ -562,13 +599,15 @@ The remaining topology of §2's chain, each deferred but for the one method that
 carries its weight:
 
 ```go
-// Lump is a connected solid piece of a body. Body.Lumps() returning more than one
-// means the body is disconnected.
+// Lump is a connected piece of a body — solid or sheet. Body.Lumps() returning
+// more than one means the body is disconnected. A sheet lump holds exactly one
+// shell (docs/surface-design.md §2.2).
 type Lump struct{ /* ... */ }
 
 // Shell is a connected set of faces.
 type Shell struct{ /* ... */ }
 func (s *Shell) IsVoid() bool // true when the shell bounds an internal cavity
+func (s *Shell) IsOpen() bool // true when the shell has at least one free edge
 
 // Vertex is a topological point.
 type Vertex struct{ /* ... */ }
@@ -670,10 +709,15 @@ before extruding. decad never re-derives it.
 ## 8. Features
 
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
-Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy, Loft, Sweep**.
+Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy, Loft, Sweep, Patch,
+Stitch, Unstitch**.
 `docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
 rule, and its increment-1 scope. `docs/sweep-design.md` owns `Sweep`'s
 signature, spatial `Path`, frame transport, refusals, and staged reach.
+`docs/surface-design.md` owns the three sheet-body operations — `Patch`,
+`Stitch` and `Unstitch` — together with `WithSurfaceResult()`, the option that
+makes `Extrude`, `Revolve`, `Sweep` and `Loft` return their wall set as a
+sheet instead of closing it into a solid.
 
 ```go
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
@@ -885,6 +929,43 @@ and `otherDistance` on the other adjacent face. `WithNoOpenings` is the only
 shell form that accepts `sel == nil`; it conflicts with a non-nil selector.
 `docs/modify-reach-design.md` owns exact receiver/target limits, refusal order,
 payloads, and validation.
+
+Surface operations build and close a **sheet body** — a body that encloses no
+material region (§6, `BodyKind`). They take the same shapes every other
+operation does, and `docs/surface-design.md` is normative for all of them:
+
+```go
+type SurfaceResultOption interface {
+    ExtrudeOption
+    RevolveOption
+    SweepOption
+    LoftOption
+}
+
+func WithSurfaceResult() SurfaceResultOption
+
+func (d *Document) Patch(s *sketch.Sketch, p *sketch.Profile) (*Body, error)
+func (d *Document) PatchContext(ctx context.Context, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
+func (b *Body) Patch(sel EdgeSelector) (*Body, error)
+func (b *Body) PatchContext(ctx context.Context, sel EdgeSelector) (*Body, error)
+
+func Stitch(bodies ...*Body) (*Body, error)
+func StitchContext(ctx context.Context, bodies ...*Body) (*Body, error)
+func (b *Body) Unstitch() ([]*Body, error)
+func (b *Body) UnstitchContext(ctx context.Context) ([]*Body, error)
+```
+
+`WithSurfaceResult()` omits the faces that exist only to close the solid and
+changes nothing else — a wall keeps its surface, its role and every bound.
+`Document.Patch` builds a planar face from a recorded profile and consumes
+nothing; `Body.Patch` fills a closed chain of the receiver's free edges and
+retires it. `Stitch` retires every operand and `Unstitch` its receiver, on §6's
+uniform terms, and neither takes a `*Document` because a `*Body` carries its
+own. **`Stitch` is the only operation that turns a boundary into a solid**, and
+it joins two free edges only where coincidence is proven, never within a
+tolerance — Fusion's tolerant stitch is the `isTolerant` topology §2.1 rejects.
+An edge it cannot join stays free, which is a result rather than an error, so
+the caller reads `Edges(Free())` to see what did not close.
 
 Placement is a body operation on the same terms — it retires the receiver and
 registers the placed body:
@@ -1138,6 +1219,7 @@ func ParallelTo(v r3.Vec) EdgePredicate
 func LongerThan(l units.Value) EdgePredicate
 func CreatedBy(f FeatureRef) EdgePredicate   // provenance
 func Circular() EdgePredicate
+func Free() EdgePredicate                    // exactly one adjacent face — a sheet's boundary
 
 func Planar() FacePredicate
 func Cylindrical() FacePredicate
@@ -1149,6 +1231,12 @@ func FaceCreatedBy(f FeatureRef) FacePredicate // provenance, the face analog of
 `Convex()` and `Concave()` read `Edge.IsConvex` (§6.1): the walked-boundary
 convexity, not the material angle across the edge. A hole's rim edges are
 concave, so a fillet meant for them asks for `Concave()`.
+
+`Free()` reads `Edge.IsFree` (§6.1) and composes with every other clause, so
+`Edges(Free()).Exactly(8)` asserts a surface extrude's rim count and
+`Edges(Free(), Circular())` picks the circular ones. On a solid, and on a
+closed sheet, it matches nothing — an ordinary `ErrNoMatch`, or
+`ErrCardinality` under an assertion, never an error in itself.
 
 **`Facing(v)` is the signed one-face predicate.** `NormalTo(v)` matches a planar
 face on either normal sense, so a slab's two parallel caps both match `NormalTo(z)`
@@ -1316,6 +1404,7 @@ Each predicate renders by its codec kind token and payload:
 | Predicate | Rendering |
 |---|---|
 | `Convex()` / `Concave()` / `Circular()` | `convex` / `concave` / `circular` |
+| `Free()` | `free` |
 | `Planar()` / `Cylindrical()` | `planar` / `cylindrical` |
 | `ParallelTo(v)` | `parallel_to(<vec>)` |
 | `NormalTo(v)` / `Facing(v)` | `normal_to(<vec>)` / `facing(<vec>)` |
@@ -1515,6 +1604,13 @@ the resulting bodies, measurements, and verification reports directly.
 Assemblies (`Component`/`Occurrence` instancing and the DAG that comes with it), a
 feature tree / timeline / rollback, STEP, sheet metal, mesh import,
 GUI or view state of any kind, and Fusion code generation.
+
+Sheet bodies themselves are **not** a non-goal — `docs/surface-design.md` owns
+them — but the Fusion surface commands that need surface-surface intersection
+or a rejecting offset are staged there rather than here: Thicken, Trim, Extend,
+surface Offset, Ruled, Boundary Fill, Reverse Normal, and a sheet operand in any
+boolean. Each refuses at the call with `ErrUnsupported` until its own design
+lands.
 
 The assemblies non-goal rests on a capability in hand, not on an instancing
 graph: interference and clearance (§10) are computed between

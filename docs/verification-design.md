@@ -54,7 +54,9 @@ type BodyReport struct {
     Bounds BoundsReading // embeds Box, plus its own ToleranceResult
 
     // Region — the enclosed region's quantities, non-nil EXACTLY when
-    // Validity.Outcome is ValidityValid (§6, §9):
+    // Validity.Outcome is ValidityValid AND Body.Kind() is BodySolid (§6, §9).
+    // A sheet body encloses no region, so a SOUND sheet carries no Region
+    // either (docs/surface-design.md §9.1):
     Region *RegionReadings // { Volume ScalarReading; Centroid VectorReading }
 
     // The three opt-in surveys. Every successful Verify fills Wall.Outcome,
@@ -194,10 +196,14 @@ minimum. `Undercut` answers with `Coverage` instead, because a nonempty
 every listed face is a proven opposing face regardless of whether every other
 face was decided.
 
-`Region` groups the two region quantities because they share one validity
-prerequisite: it is non-nil exactly when `Validity.Outcome == ValidityValid`.
-`Area` and `Bounds` are unconditional — every returned body carries them,
-proven or not.
+`Region` groups the two region quantities because they share one prerequisite:
+it is non-nil exactly when `Validity.Outcome == ValidityValid` **and**
+`Body.Kind() == BodySolid`. The kind conjunct is what keeps a sound sheet from
+claiming a region it does not have: a sheet's boundary can be proven manifold,
+oriented and free of self-intersection — which is the whole of what
+`ValidityValid` asserts for it — while the body still encloses nothing
+(`docs/surface-design.md` §9.1). `Area` and `Bounds` are unconditional — every
+returned body carries them, proven or not.
 
 ### 1.1 Diagnostics — the structured reason a report is not `Sound`
 
@@ -377,13 +383,23 @@ const (
     // boolean geometry exceeds the pipeline's reach. Reading ReadingNone.
     // Suspect.
     DiagUnsupportedPairPipeline
+    // DiagUnsupportedPairSheet — one or both operands is a sheet body, which
+    // encloses no region, so §1's interior relation is not the question the
+    // caller means, and no Interference or Clearance row is emitted. It fires
+    // only when the pair's bounds-inflated boxes MEET: a sheet parked away
+    // from every solid is decidedly apart and emits nothing, so a model that
+    // merely holds a sheet still reads Sound (docs/surface-design.md §9.3).
+    // Reading ReadingNone, Observed* and Required nil, Pair set. Suspect.
+    DiagUnsupportedPairSheet
     // DiagUnsupportedSurveyPayload — an asked body survey cannot run because
     // its payload class is staged. Survey names the blocked question. Reading
     // ReadingNone, Observed* and Required nil. Body set. Contributes Suspect.
     DiagUnsupportedSurveyPayload
     // DiagSurveyPrerequisite — a requested survey needs a proven solid, and
-    // this body's validity is invalid or undecided. Survey names the blocked
-    // question. Reading ReadingNone. Contributes Suspect.
+    // this body does not supply one: its validity is invalid or undecided, OR
+    // it is a sheet body, which has no material for a wall, pull or concave
+    // question to be about (docs/surface-design.md §9.1). Survey names the
+    // blocked question. Reading ReadingNone. Contributes Suspect.
     DiagSurveyPrerequisite
     // DiagToleranceReferenceUnavailable — a nonzero-bound reading has no
     // usable tolerance reference, so the gate could not judge it. Reading
@@ -437,6 +453,7 @@ renders `"reading(<n>)"` with `<n>` the integer, never a panic.
 - `DiagUnsupportedPairPayload` → `"unsupported_pair_payload"`
 - `DiagUnsupportedPairContact` → `"unsupported_pair_contact"`
 - `DiagUnsupportedPairPipeline` → `"unsupported_pair_pipeline"`
+- `DiagUnsupportedPairSheet` → `"unsupported_pair_sheet"`
 - `DiagUndecidedClearance` → `"undecided_clearance"`
 - `DiagUndecidedInterference` → `"undecided_interference"`
 - `DiagUnsupportedSurveyPayload` → `"unsupported_survey_payload"`
@@ -680,7 +697,8 @@ already carried by `DiagMeasurementBeyondTolerance`, so the "empty
 
 **The undecided pair is now RECORDED.** Where §6 folds a pair the evaluator
 could not decide into the report's `Suspect` rung, a `DiagUndecidedPair` or
-one of `DiagUnsupportedPairPayload`, `DiagUnsupportedPairContact`, or
+one of `DiagUnsupportedPairPayload`, `DiagUnsupportedPairSheet`,
+`DiagUnsupportedPairContact`, or
 `DiagUnsupportedPairPipeline` naming the exact staged cause is emitted — that
 one cause-specific entry alone; the deprecated broad `DiagUnsupportedPair`
 constant is not emitted into a returned report —
@@ -745,7 +763,11 @@ zero while the body stays a proven solid (§6 decides it thin against any real
 tool), so zero is a value `ScalarMeasured` itself reaches, never the trigger
 for `ScalarAbsent`. `ScalarUnavailable` marks a solid prerequisite failure or
 an unimplemented survey on this payload; `ScalarUndecided` marks an attempted
-but inconclusive proof. `ScalarNotRequested` is the outcome an omitted option
+but inconclusive proof. **A sheet body is a solid prerequisite failure by
+category**, so every requested survey on one reads `ScalarUnavailable`, or
+`CoverageUnavailable` for the undercut, with `DiagSurveyPrerequisite`: each
+of the three asks about material and a sheet has none
+(`docs/surface-design.md` §9.1). `ScalarNotRequested` is the outcome an omitted option
 leaves behind — every successful `Verify` call fills `Wall.Outcome` and
 `ConcaveRadius.Outcome` with one of these five nonzero values, never the
 reserved zero `ScalarNotEvaluated` (§4). Which options were passed is the
@@ -768,7 +790,11 @@ already said there is one — two disjoint interiors have a minimum distance,
 and for a touching pair it is genuinely zero, gated at the noise floor like
 every near-zero answer (§5): an `Approximate` zero must earn trust with a
 vanishingly tight bound, an `Exact` zero passes on its own terms. Pairs are
-drawn from the document's **proven solids** only. The partition is a statement
+drawn from the document's **proven solids** only, so a pair holding a sheet
+body sits outside the partition altogether; silence there would read as safety,
+so such a pair is reported rather than skipped — where the two
+bounds-inflated boxes MEET it emits `DiagUnsupportedPairSheet` and no row, and
+where they are apart it emits nothing (`docs/surface-design.md` §9.3). The partition is a statement
 about interiors — a pair either shares volume or has a gap between disjoint
 interiors — and it is answered to proof like everything else: a pair the
 evaluator can prove neither way joins neither list and makes the report
@@ -1193,11 +1219,17 @@ Three things follow, and all three are rules:
   passes at the floor as it does everywhere else. That is the intent: a zero
   clearance reported as `0 ± 5mm` is untrustworthy and must be `Suspect`; a zero
   clearance known to `1e-12 mm` is not. The flat limit keeps a real floor. A
-  genuinely flat body — a 100×100 mm sheet of zero thickness — never brings a
+  genuinely flat body — a 100×100 mm slab of zero thickness, built as a SOLID —
+  never brings a
   volume to this gate: it encloses no region, and an evaluator proves as much —
   a skin whose two faces coincide is decisively no solid's — so §1 carries the
   answer in presence: `Unsound`, `Volume` nil, the boundary quantities only,
-  its `2×10⁴ mm²` of area gated relatively as everywhere. The floor's work at
+  its `2×10⁴ mm²` of area gated relatively as everywhere. **That `Unsound`
+  belongs to the degenerate SOLID, and reaches no sheet body.** A
+  `BodySheet` is flat by category rather than by defect: it carries no
+  `Volume` because §1's `Region` conjunct excludes it, its own validity
+  question is the sheet one, and a sound sheet reads `Sound` with its area
+  gated exactly as this slab's is (`docs/surface-design.md` §9.1). The floor's work at
   that limit is done just above it, on the thinnest body that is still a body.
   A 100×100 mm plate `1e-7 mm` thick is a real solid, and it is thinner than
   the coordinate noise — §4's sharp condition, the only place the floor

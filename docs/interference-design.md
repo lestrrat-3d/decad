@@ -53,6 +53,15 @@ solids for pair work, and enumerates `i < j`. Both pair lists preserve that
 order. No spatial index, worker completion order, or proof-path order may
 reorder rows.
 
+**A pair holding a `BodySheet` operand is reported, not dropped.** A sheet
+encloses no region, so §1's interior relation is not the question, and dropping
+the pair silently would let a sheet passing straight through a solid leave a
+`Sound` report. The pair runs §3.1's box separation and nothing further:
+separated boxes emit nothing, and boxes that MEET emit a
+`DiagUnsupportedPairSheet` naming the pair and no row.
+`docs/surface-design.md` §9.3 owns the rule and the containment cast that
+later narrows when it fires.
+
 For each pair:
 
 1. Check `ctx`.

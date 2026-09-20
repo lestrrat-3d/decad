@@ -45,6 +45,7 @@ to the byte budget.
 | `docs/sweep-design.md` | The spatial `Path` and `Sweep` contract: rotation-minimizing transport, refusals, topology, measurements, 3D-sketch boundary, and staged downstream reach. |
 | `docs/prism-boolean-design.md` | The analytic reduction for `Union`/`Cut`/`Intersect` over co-directional coplanar prisms: the reject-only entry gate, the private `sketch` scene, and section/axial displacement bounds. |
 | `docs/tessellation-reach-design.md` | The tessellation reach plan: the loft restatement, free-form prism chording, revolve T2–T4 and the cap-loop chamfer tessellator, each with its cells, proof terms, refusals and tests. |
+| `docs/surface-design.md` | The sheet body and the operations over one: `BodyKind`, `WithSurfaceResult`, `Patch`, `Stitch`/`Unstitch`, the proven-coincidence join rule, and what every reading, `Verify` question and export says about a body that encloses no region. |
 
 ### Seam and records
 

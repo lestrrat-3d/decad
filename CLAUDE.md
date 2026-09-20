@@ -32,6 +32,7 @@ it owns, and names what every other file in the package owns.
 | Free-form geometry or per-segment-kind dispatch | `docs/spline-design.md` |
 | `evaluateBoolean` dispatch, `Union`/`Cut`/`Intersect`, or any code combining two recorded sections through a private `sketch` scene | `docs/prism-boolean-design.md` |
 | Any modify op, option codec or modify payload | `docs/modify-design.md`, `docs/modify-reach-design.md` |
+| Sheet-body, surface-result, patch or stitch code | `docs/surface-design.md` |
 | Anything the surrounding `.go` file already documents | that file's own doc comments |
 
 ## Hard rules

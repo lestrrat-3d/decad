@@ -68,19 +68,26 @@ index (core §3 invariant #3).
 
 | Type | Holds |
 |---|---|
-| `Body` | owning `*Document`, origin `FeatureRef`, `[]*Lump`, cached measurements (computed at build, immutable after) |
-| `Lump` | `[]*Shell` |
-| `Shell` | `[]*Face`, `void bool` |
+| `Body` | owning `*Document`, origin `FeatureRef`, `BodyKind`, `[]*Lump`, cached measurements (computed at build, immutable after) |
+| `Lump` | `[]*Shell` — a connected piece of a body, solid or sheet; a sheet lump holds exactly one shell (`docs/surface-design.md` §2.2) |
+| `Shell` | `[]*Face`, `void bool`, `open bool` — `open` is true when the shell has a free edge (`docs/surface-design.md` §2.2) |
 | `Face` | tagged `Surface`, `[]*Loop` (first outer), origin roles (≥1 `FeatureRef`s, exposed as `Face.Origins()` — a canonicalization merge UNIONS the merged faces' roles, and `FaceCreatedBy` matches on ANY of them, so provenance survives the merge) , back-ref to its body |
 | `Loop` | ordered `[]CoEdge` (directed edge uses in boundary-walk order), `outer bool` |
 | `CoEdge` | shared `*Edge` plus walk sense; public `Edge`/`Start`/`End`/`IsForward` accessors |
-| `Edge` | tagged `Curve`, `Start`/`End` `*Vertex`, ALL adjacent faces (exactly 2 on a closed manifold body; `Edge.Faces()` reports the actual count, which is precisely how `len != 2` surfaces non-manifold topology — core §6.1), `convex bool` |
+| `Edge` | tagged `Curve`, `Start`/`End` `*Vertex`, ALL adjacent faces (exactly 2 on a closed manifold body; `Edge.Faces()` reports the actual count, which is precisely how `len != 2` surfaces non-manifold topology — core §6.1; exactly 1 is a FREE edge on a sheet body, `docs/surface-design.md` §2.2), `convex bool` |
 | `Vertex` | position (mm), the proven bound on it |
 
 Rules:
 
 - **A `Body` is immutable after construction.** Every operation builds a new
   body; concurrency safety (core §12) falls out.
+- **`BodyKind` is stamped by the operation that built the body, never inferred
+  from the boundary afterwards.** A feature that closes its wall set into a
+  solid stamps `BodySolid`; a surface-result feature, a patch, and a stitch
+  that left a free edge stamp `BodySheet`. A closed boundary is not by itself a
+  solid: a full revolution built as a surface closes and is still a sheet, and
+  `Stitch` is the one operation that makes the material claim.
+  `docs/surface-design.md` §2.1 owns the kind and §6 owns that claim.
 - **Provenance is structural.** `FeatureRef` identifies a private document-local
   producer plus a stable role within it — `side(i, j)` (loop `i`, segment
   `j`) for a swept wall; `side(i, j, k)` for a Loft wall triangle;
@@ -756,6 +763,15 @@ composite tangent paths when exact frame transport and the conservative contact
 audit close. Tessellation, free-form profiles, twist, clearance, and surveys
 remain staged exactly as its Table D states. An unlanded Sweep build returns
 `ErrUnsupported`; an unlanded verification question reads `Suspect`.
+
+Sheet bodies and the surface operations follow `docs/surface-design.md` §14's
+count-free three-increment plan: the body kind with `WithSurfaceResult()` on
+Extrude and Revolve and `Document.Patch`; then `Stitch`/`Unstitch` over exact
+all-planar boundaries with `Body.Patch` and the sheet-against-solid pair
+proofs; then the remaining surface-result features, the shared-denotation join
+certificate and curved closure. An unlanded surface build returns
+`ErrUnsupported`; an unlanded pair question reads `Suspect`. These stages do
+not consume a global evaluator increment number.
 
 Payload verification §13 gives count-free stages for the cup adapter and
 faceted validity/clearance/survey work. Every later question stays `Suspect`
