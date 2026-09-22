@@ -243,7 +243,8 @@
 0	0.02	TestWallWedgePrismNoWall
 0	0.01	TestWholeCircleCylinderHasTwoLoops
 0	0.04	TestXHPLerpDenotesTheSameCoordinate
-0	0.01	TestBodyPatchBoundedChainIsUnsupported
+0	0.01	TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne
+0	0.01	TestBodyPatchCapsBothBoundedRimsOfASymmetricSurfaceExtrudedWall
 0	0.01	TestBodyPatchCapsBothRimsOfATubeInOneCall
 0	0.01	TestBodyPatchClosesASheetsLastFreeEdgeStaysASheet
 0	0.01	TestBodyPatchContextCancellationLeavesDocumentUnchanged
@@ -253,9 +254,13 @@
 0	0.01	TestBodyPatchRejectsAReceiverWithNoPayload
 0	0.01	TestBodyPatchReproducesThroughPlacement
 0	0.01	TestBodyPatchTableR
+0	0.01	TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta
 0	0.01	TestBuildPatchFaceRemapsACrossingChainToErrDegenerate
 0	0.01	TestOrientPatchChainRejectsDisagreeingAdjacentFaces
 0	0.01	TestProvePatchChainPlaneAcceptsAPlanarChain
+0	0.01	TestProvePatchChainPlaneAdmitsABoundedCoLevelChain
+0	0.01	TestProvePatchChainPlaneRefusesABoundedChainWithNoLevelToken
+0	0.01	TestProvePatchChainPlaneRefusesIdenticalBoundedVerticesUnderDifferentLevels
 0	0.01	TestProvePatchChainPlaneRejectsANonPlanarChain
 1	0.00	Example_decad_quickstart
 1	0.06	FuzzBoolean

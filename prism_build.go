@@ -59,6 +59,19 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	}
 	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: !pp.surfaceResult, kind: kind}
 
+	// The LEVEL half of the shared-denotation certificate (denotation.go):
+	// minted only when this payload's own section is drawn straight from its
+	// record — a section the analytic prism boolean re-expresses sets
+	// sectionDelta nonzero and mints neither — so every vertex and rim edge
+	// this build places at z0/z1 can later prove Body.Patch's bounded-chain
+	// gate coplanar by shared identity alone, never by comparing a
+	// coordinate (docs/surface-design.md §5.2).
+	var levelZ0, levelZ1 levelID
+	if pp.sectionDelta == 0 {
+		levelZ0 = d.mintLevel()
+		levelZ1 = d.mintLevel()
+	}
+
 	// Topology: one shell over every loop's side faces plus the two caps.
 	var faces []*Face
 	// The start cap faces −N (its outward normal leaves the material at the
@@ -125,7 +138,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		sideFaces, bottom, top, loopLen, err := buildLoopSides(ctx, body, ref, pp, li, loop, work, pw)
+		sideFaces, bottom, top, loopLen, err := buildLoopSides(ctx, body, ref, pp, li, loop, work, pw, levelZ0, levelZ1)
 		if err != nil {
 			return nil, err
 		}
@@ -382,8 +395,8 @@ func rimConvexity(ctx context.Context, w sideWalk, holeLoop bool, work *freeform
 // append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) order a
 // *profileWalks was resolved from — so it is passed straight through as
 // buildLoopSidesAs's roleLoop, which resolved is read against.
-func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPayload, li int, loop LoopRecord, work *freeformWork, resolved *profileWalks) ([]*Face, []coedge, []coedge, boundedScalar, error) {
-	return buildLoopSidesAs(ctx, body, ref, pp, li, li != 0, loop, work, resolved)
+func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPayload, li int, loop LoopRecord, work *freeformWork, resolved *profileWalks, levelZ0, levelZ1 levelID) ([]*Face, []coedge, []coedge, boundedScalar, error) {
+	return buildLoopSidesAs(ctx, body, ref, pp, li, li != 0, loop, work, resolved, levelZ0, levelZ1)
 }
 
 // buildLoopSidesAs is buildLoopSides with the role index and the orientation
@@ -402,7 +415,14 @@ func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPay
 // silently resolving anyway — the only caller that ever passes non-nil is
 // buildLoopSides from evalPrismContext, where roleLoop already IS the loop
 // index the *profileWalks was resolved at.
-func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord, work *freeformWork, resolved *profileWalks) ([]*Face, []coedge, []coedge, boundedScalar, error) {
+//
+// levelZ0 and levelZ1 are the LEVEL half of the shared-denotation certificate
+// (denotation.go), minted once per build by the caller's own evalPrismContext
+// and stamped here onto every vertex and rim edge this loop places at its
+// respective end — the zero value declines for every OTHER caller of this
+// function (shell_cup.go, capblend_moments.go), which mint neither and so
+// leave every certificate check refusing by default.
+func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord, work *freeformWork, resolved *profileWalks, levelZ0, levelZ1 levelID) ([]*Face, []coedge, []coedge, boundedScalar, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, nil, boundedScalar{}, err
 	}
@@ -494,8 +514,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	if singleClosed {
 		w := walks[0]
 		extra := math.Max(freeformVertexAllow(w.segmentWalk, w.startBound), freeformVertexAllow(w.segmentWalk, w.endBound))
-		seamBottom = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(absSumUpper(bottomBoundBase, extra))}
-		seamTop = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(absSumUpper(topBoundBase, extra))}
+		seamBottom = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(absSumUpper(bottomBoundBase, extra)), level: levelZ0}
+		seamTop = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(absSumUpper(topBoundBase, extra)), level: levelZ1}
 	} else {
 		bottomV = make([]*Vertex, n)
 		topV = make([]*Vertex, n)
@@ -505,8 +525,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			}
 			prev := walks[(i+n-1)%n]
 			extra := math.Max(freeformVertexAllow(w.segmentWalk, w.startBound), freeformVertexAllow(prev.segmentWalk, prev.endBound))
-			bottomV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(absSumUpper(bottomBoundBase, extra))}
-			topV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(absSumUpper(topBoundBase, extra))}
+			bottomV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(absSumUpper(bottomBoundBase, extra)), level: levelZ0}
+			topV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(absSumUpper(topBoundBase, extra)), level: levelZ1}
 		}
 	}
 
@@ -652,6 +672,11 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			}
 			surf = Plane{Frame: f}
 		}
+		// The LEVEL certificate travels uniformly, whatever curve kind this
+		// rim edge carries: every rim edge at one end is stamped by the SAME
+		// evalPrismContext call over the SAME recorded frame and level.
+		bottomEdge.level = levelZ0
+		topEdge.level = levelZ1
 
 		origins, err := sideOriginsContext(ctx, ref, roleLoop, w.segs)
 		if err != nil {

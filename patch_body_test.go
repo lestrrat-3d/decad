@@ -283,27 +283,86 @@ func TestBodyPatchReproducesThroughPlacement(t *testing.T) {
 	decadtest.MeasuresBounds(t, copied, r3.NewVec(50, 50, 0), r3.NewVec(150, 110, 10), decadtest.WithinRel(units.Scalar(1e-6)))
 }
 
-// TestBodyPatchBoundedChainIsUnsupported is half of docs/surface-design.md's
-// T12-shaped test: a chain whose vertices carry a nonzero bound is
-// ErrUnsupported (Table R row R6), the same row a proven-non-planar chain
-// reads (patch_body_internal_test.go's own fixture, which decad's public
-// seam cannot author — every builder leaves free-edge chains planar by
-// construction). This fixture reuses T14's own shape (a 5-inch extrude's
-// rim carries the unit conversion's rounding), selecting BOTH rims of the
-// tube in one call: the bottom rim's vertices are recorded directly and
-// carry a zero bound, but the top rim's are computed through the inch
-// conversion and do not, so gate 3 refuses the whole selection.
-func TestBodyPatchBoundedChainIsUnsupported(t *testing.T) {
+// TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne is
+// docs/surface-design.md §15's T30: the LEVEL certificate's single-bounded-
+// end shape. This fixture reuses T14's own shape (a 5-inch extrude's rim
+// carries the unit conversion's rounding), selecting BOTH rims of the tube
+// in one call: the bottom rim's vertices are recorded directly and carry a
+// zero bound, so its chain passes gate 3's first (exact) arm unchanged; the
+// top rim's are computed through the inch conversion and do not, but every
+// one of them shares the SAME level token prism_build.go stamped for that
+// end, so its chain now passes the second (LEVEL) arm in the very same
+// call — a shape this evaluator refused before this certificate existed.
+func TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := plateSketch(t)
 	tube, err := doc.Extrude(s, p, decad.Distance{D: units.Inches(5), Dir: decad.Along}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
-	before := doc.Bodies()
-	_, err = tube.Patch(decad.Edges(decad.Free()).Exactly(8))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Equal(t, before, doc.Bodies())
+	// No predicate tells the two congruent rims apart (docs/surface-design.md
+	// §5.2), so the premise is proved over the whole free-edge set: one rim's
+	// vertices read Exact (recorded directly), the other's read Approximate
+	// (computed through the inch conversion).
+	rim, err := decad.Edges(decad.Free()).Exactly(8).SelectEdges(tube)
+	require.NoError(t, err)
+	var sawExact, sawApproximate bool
+	for _, e := range rim {
+		switch e.Start().Position().Exactness {
+		case decad.Exact:
+			sawExact = true
+		case decad.Approximate:
+			sawApproximate = true
+		}
+	}
+	require.True(t, sawExact, "the bottom rim is recorded directly, at zero bound")
+	require.True(t, sawApproximate, "the top rim is computed through the inch conversion")
+
+	capped, err := tube.Patch(decad.Edges(decad.Free()).Exactly(8))
+	require.NoError(t, err)
+
+	require.Equal(t, decad.BodySheet, capped.Kind())
+	require.Len(t, capped.Faces(), 6)
+	_, err = decad.Edges(decad.Free()).SelectEdges(capped)
+	require.ErrorIs(t, err, decad.ErrNoMatch)
+}
+
+// TestBodyPatchCapsBothBoundedRimsOfASymmetricSurfaceExtrudedWall is
+// docs/surface-design.md §15's T26 — the LEVEL certificate's own flagship:
+// BOTH rims of a Symmetric extrude are computed through the same inch
+// conversion (docs/evaluator-design.md's own resolveLinearExtent), so both
+// carry a nonzero bound and neither reaches gate 3's exact arm at all. Each
+// rim still shares its own one level token across its four vertices and
+// edges, so both chains close through the second (LEVEL) arm in one call.
+func TestBodyPatchCapsBothBoundedRimsOfASymmetricSurfaceExtrudedWall(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	s, p := plateSketch(t)
+	wall, err := doc.Extrude(s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+
+	rim, err := decad.Edges(decad.Free()).Exactly(8).SelectEdges(wall)
+	require.NoError(t, err)
+	rv := rim[0].Start().Position()
+	require.Equal(t, decad.Approximate, rv.Exactness, "both rims are computed through the inch conversion")
+	require.Greater(t, rv.Bound.Mag(), 0.0)
+
+	capped, err := wall.Patch(decad.Edges(decad.Free()).Exactly(8))
+	require.NoError(t, err)
+
+	require.Equal(t, decad.BodySheet, capped.Kind())
+	require.False(t, capped.IsSolid())
+	require.Len(t, capped.Faces(), 6)
+	_, err = decad.Edges(decad.Free()).SelectEdges(capped)
+	require.ErrorIs(t, err, decad.ErrNoMatch)
+
+	area, err := capped.Area()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Greater(t, area.Bound.Base(), 0.0)
+	// The wall's perimeter is 320 mm (T1's own 100x60 rectangle) and its
+	// height is 5 inches (127 mm) total; the two new caps are 6000 mm² apiece.
+	decadtest.MeasuresArea(t, capped, units.SquareMillimeters(320*127+2*6000), decadtest.WithinRel(units.Scalar(1e-6)))
 }
 
 // TestBodyPatchTableR is docs/surface-design.md's T13-shaped test for

@@ -90,7 +90,8 @@ to the byte budget.
 | `document.go` | `Document` (`New`/`Bodies`), its atomic commit tail, private provenance identities, and retire/liveness gates. `Body.Placed`/`Duplicate`/`PlacedCopy` rebuild the payload under a composed motion; see their doc comments and evaluator §8. |
 | `surface.go` | `WithSurfaceResult`, the `refuseSheetOperand` refusal helper, and the shared shell/lump helpers (`shellIsOpen`, `sheetLumps`) prism, revolve, sweep and loft builds share. See `docs/surface-design.md` §2.2-§4, §7, §11. |
 | `patch.go` | `Document.Patch`: a single planar face from a recorded profile, reusing `buildLoopSidesAs`'s per-kind curve construction. See `docs/surface-design.md` §5.1. |
-| `patch_body.go` | `Body.Patch`: partitions a free-edge selection into closed chains, proves each planar via `dyadic.go`, and fills each with its own face. See `docs/surface-design.md` §5.2. |
+| `patch_body.go` | `Body.Patch`: partitions a free-edge selection into closed chains, proves each planar via `dyadic.go` or a shared level token, and fills each with its own face. See `docs/surface-design.md` §5.2. |
+| `denotation.go` | The LEVEL half of the shared-denotation certificate: a minted plane identity a copy path carries, never a coordinate comparison. See `docs/surface-design.md` §5.2. |
 | `stitch_weld.go` | Table J's admission: the shared vertex table and which free edge pairs weld. See `docs/surface-design.md` §6.2. |
 | `stitch.go` | `Stitch`/`StitchContext`: rebuilds fresh topology over the weld plan, derives orientation, and decides Table C's outcome and measurements. See `docs/surface-design.md` §6. |
 | `unstitch.go` | `Unstitch`/`UnstitchContext`: splits a body into one free single-face sheet per face, reusing `stitch.go`'s placement machinery per face. See `docs/surface-design.md` §6.5. |

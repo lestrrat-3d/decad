@@ -157,6 +157,14 @@ func (b *Body) PatchContext(ctx context.Context, sel EdgeSelector) (*Body, error
 // (patchChainOrientedNormal), never from a value gate 3 computed.
 type bodyPatchChain struct {
 	edges []*Edge
+	// axialBound and hasAxialBound are the proven axial displacement gate 3's
+	// LEVEL arm (provePatchChainPlaneLevel) admitted this chain under —
+	// stamped onto the new face's own axialDelta exactly as prism_build.go
+	// stamps a prism cap's (buildPatchFace, docs/surface-design.md §5.2).
+	// hasAxialBound stays false, and axialBound zero, whenever gate 3 instead
+	// admitted the chain through its existing exact (zero-bound) arm.
+	axialBound    float64
+	hasAxialBound bool
 }
 
 // bodyPatchPayload is Body.Patch's own record: the retiring receiver's own
@@ -211,10 +219,11 @@ func buildPatchChains(edges []*Edge) ([]bodyPatchChain, error) {
 	}
 	chains := make([]bodyPatchChain, len(groups))
 	for i, g := range groups {
-		if err := provePatchChainPlane(g); err != nil {
+		axialBound, hasAxialBound, err := provePatchChainPlane(g)
+		if err != nil {
 			return nil, err
 		}
-		chains[i] = bodyPatchChain{edges: g}
+		chains[i] = bodyPatchChain{edges: g, axialBound: axialBound, hasAxialBound: hasAxialBound}
 	}
 	return chains, nil
 }
@@ -302,14 +311,75 @@ func renderCoord3(p r3.Vec) string {
 }
 
 // provePatchChainPlane is gate 3: proves one chain's edges lie in a single
-// plane, decided over dyadic.go's exact rational lift as a zero determinant,
-// never a residual against a fitted plane (docs/surface-design.md §5.2).
+// plane. The first, exact arm (provePatchChainPlaneExact) is tried first and
+// is the whole of what earlier increments proved; a second, LEVEL arm
+// (provePatchChainPlaneLevel) is tried only when the first refuses on a
+// nonzero bound, and never reads a coordinate, a residual or a bound
+// magnitude (docs/surface-design.md §5.2's own two-arm amendment). Its
+// return states what the level arm admitted: axialBound and hasAxialBound
+// are what buildPatchFace stamps onto the new face's own axialDelta,
+// mirroring what a prism cap already carries; a chain the exact arm admits
+// instead publishes a zero axialBound, unchanged.
+func provePatchChainPlane(edges []*Edge) (float64, bool, error) {
+	exactErr := provePatchChainPlaneExact(edges)
+	if exactErr == nil {
+		return 0, false, nil
+	}
+	if !errors.Is(exactErr, ErrUnsupported) {
+		return 0, false, exactErr
+	}
+	if bound, ok := provePatchChainPlaneLevel(edges); ok {
+		return bound, true, nil
+	}
+	return 0, false, exactErr
+}
+
+// provePatchChainPlaneLevel is gate 3's second arm: it requires every chain
+// vertex, and every chain edge, to carry the SAME non-zero levelID
+// (denotation.go) — an identity comparison alone, never a coordinate, a
+// residual or a bound magnitude. A shared level proves the chain's true
+// vertices lie on one plane by shared construction (docs/surface-design.md
+// §5.2), so nothing here reads a position or a bound to decide admission;
+// the returned bound is read back off the chain's own vertices only to state
+// what the new face's own axialDelta must publish, never to decide whether
+// this arm admits. ok is false whenever the chain holds no vertex, any
+// vertex or edge carries no level (the zero value, "no certificate"), or not
+// every one of them shares the same one.
+func provePatchChainPlaneLevel(edges []*Edge) (float64, bool) {
+	verts := patchChainVertices(edges)
+	if len(verts) == 0 {
+		return 0, false
+	}
+	lvl := verts[0].level
+	if lvl == 0 {
+		return 0, false
+	}
+	bound := 0.0
+	for _, v := range verts {
+		if !sameLevel(v.level, lvl) {
+			return 0, false
+		}
+		bound = math.Max(bound, v.bound.Base())
+	}
+	for _, e := range edges {
+		if !sameLevel(e.level, lvl) {
+			return 0, false
+		}
+	}
+	return bound, true
+}
+
+// provePatchChainPlaneExact is gate 3's first, exact arm: proves one chain's
+// edges lie in a single plane, decided over dyadic.go's exact rational lift
+// as a zero determinant, never a residual against a fitted plane
+// (docs/surface-design.md §5.2).
 //
 // Every chain vertex must carry a zero bound, and every chain edge's own
 // geometry must be exact (patchEdgeGeometryExact) — a bounded vertex or edge
 // is only known to lie within its own bound, and fitting a plane to it would
 // be exactly the fitted geometry §1.3 refuses. Both are [ErrUnsupported]
-// (Table R row R6).
+// (Table R row R6), which provePatchChainPlane's own second arm then gets a
+// chance to admit instead.
 //
 // Three or more vertices that are not all collinear give the plane a
 // determinant to take: patchPlaneFromVertices searches for two vertex
@@ -330,7 +400,7 @@ func renderCoord3(p r3.Vec) string {
 // endpoints. Any failure is a chain proven NON-planar, also
 // [ErrUnsupported] (R6): decad's reject-only rule treats "not proven
 // planar" and "proven non-planar" alike, since neither admits the chain.
-func provePatchChainPlane(edges []*Edge) error {
+func provePatchChainPlaneExact(edges []*Edge) error {
 	verts := patchChainVertices(edges)
 	for _, v := range verts {
 		if !finiteVec(v.position) || v.bound.Base() != 0 {
@@ -799,6 +869,12 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 		loops:     []*Loop{{coedges: coedges, outer: true}},
 		area:      ig.area,
 		areaBound: ig.areaBound,
+		// A chain gate 3's level arm admitted has a proven-bounded plane
+		// origin, never a zero one: the same fields prism_build.go already
+		// sets on a prism's own caps (docs/surface-design.md §5.2). A chain
+		// the exact arm admitted instead carries a zero, unset bound here.
+		axialDelta:    chain.axialBound,
+		hasAxialDelta: chain.hasAxialBound,
 	}, nil
 }
 

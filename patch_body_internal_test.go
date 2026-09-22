@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -33,8 +34,9 @@ func TestProvePatchChainPlaneRejectsANonPlanarChain(t *testing.T) {
 		{curve: Line3{}, start: v2, end: v3},
 		{curve: Line3{}, start: v3, end: v0},
 	}
-	err := provePatchChainPlane(edges)
+	_, hasAxialBound, err := provePatchChainPlane(edges)
 	require.ErrorIs(t, err, ErrUnsupported)
+	require.False(t, hasAxialBound)
 }
 
 // TestProvePatchChainPlaneAcceptsAPlanarChain is
@@ -54,7 +56,127 @@ func TestProvePatchChainPlaneAcceptsAPlanarChain(t *testing.T) {
 		{curve: Line3{}, start: v2, end: v3},
 		{curve: Line3{}, start: v3, end: v0},
 	}
-	require.NoError(t, provePatchChainPlane(edges))
+	_, hasAxialBound, err := provePatchChainPlane(edges)
+	require.NoError(t, err)
+	require.False(t, hasAxialBound, "the exact arm admitted this chain, so it publishes no axial bound")
+}
+
+// boundedSquareChain builds a 4-edge square chain at z = 10 with every vertex
+// and every edge stamped lvl, and every vertex carrying bound — the shape a
+// straight prism's own rim carries once gate 3's first (exact) arm has
+// already been shown to refuse it. lvl == 0 reproduces what an untouched
+// builder (a revolve seam, a cap-loop chamfer, a one-cap shell's open rim)
+// leaves behind: a bounded chain with no certificate.
+func boundedSquareChain(lvl levelID, bound units.Value) []*Edge {
+	v0 := &Vertex{position: r3.NewVec(0, 0, 10), bound: bound, level: lvl}
+	v1 := &Vertex{position: r3.NewVec(1, 0, 10), bound: bound, level: lvl}
+	v2 := &Vertex{position: r3.NewVec(1, 1, 10), bound: bound, level: lvl}
+	v3 := &Vertex{position: r3.NewVec(0, 1, 10), bound: bound, level: lvl}
+	return []*Edge{
+		{curve: Line3{}, start: v0, end: v1, level: lvl},
+		{curve: Line3{}, start: v1, end: v2, level: lvl},
+		{curve: Line3{}, start: v2, end: v3, level: lvl},
+		{curve: Line3{}, start: v3, end: v0, level: lvl},
+	}
+}
+
+// TestProvePatchChainPlaneAdmitsABoundedCoLevelChain is
+// docs/surface-design.md §15's T27: gate 3's second (LEVEL) arm admits a
+// bounded chain whose every vertex and edge shares one non-zero levelID —
+// the shape a straight prism build (prism_build.go) stamps onto a rim at one
+// swept end.
+func TestProvePatchChainPlaneAdmitsABoundedCoLevelChain(t *testing.T) {
+	t.Parallel()
+	const lvl levelID = 1
+	edges := boundedSquareChain(lvl, units.Millimeters(0.002))
+
+	bound, hasAxialBound, err := provePatchChainPlane(edges)
+	require.NoError(t, err)
+	require.True(t, hasAxialBound, "the level arm admitted this chain, so it publishes the chain's own axial bound")
+	require.Equal(t, 0.002, bound)
+}
+
+// TestProvePatchChainPlaneRefusesABoundedChainWithNoLevelToken is
+// docs/surface-design.md §15's T27 mirror: the identical bounded shape with
+// no level token at all — levelID's own zero value, "no certificate" — stays
+// refused on gate 3's existing row, exactly as it was before this
+// certificate existed. This is what pins T12's own "a bounded chain that
+// carries no shared level token" half: a real revolve seam or a one-cap
+// shell's open rim never carries a level token, since neither builder mints
+// one, and neither is reachable through decad's public seam as a Body.Patch
+// fixture without changing an untouched file.
+func TestProvePatchChainPlaneRefusesABoundedChainWithNoLevelToken(t *testing.T) {
+	t.Parallel()
+	edges := boundedSquareChain(0, units.Millimeters(0.002))
+
+	bound, hasAxialBound, err := provePatchChainPlane(edges)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.False(t, hasAxialBound)
+	require.Zero(t, bound)
+}
+
+// TestProvePatchChainPlaneRefusesIdenticalBoundedVerticesUnderDifferentLevels
+// is docs/surface-design.md §15's T28, and the proof this certificate is an
+// IDENTITY, never a tolerance: v1 and v1Twin hold bit-identical coordinates
+// and bit-identical, nonzero bounds — exactly what two independently built
+// prisms' matching rim corners would hold, sweeping the same profile to the
+// same extent — yet v1Twin was minted under a different levelID. Splicing it
+// into an otherwise single-level chain still refuses: nothing here ever
+// compares the coordinate or the bound, only the identity, so bit-identical
+// held data is not what admits a chain.
+//
+// This shape is not reachable through Body.Patch's own public seam: a chain
+// requires two consecutive edges to SHARE a vertex POINTER, which only one
+// evaluator's own build or a zero-bound weld creates, and Table J refuses a
+// zero-bound weld of a bounded pair (docs/surface-design.md §6.2) — so no
+// selector over any two live bodies can ever hand Body.Patch one chain
+// spanning two independently minted levels. Pinning it here, directly
+// against provePatchChainPlane, is what the brief's own fallback asks for.
+func TestProvePatchChainPlaneRefusesIdenticalBoundedVerticesUnderDifferentLevels(t *testing.T) {
+	t.Parallel()
+	const levelA, levelB levelID = 1, 2
+	bound := units.Millimeters(0.002)
+
+	v1 := &Vertex{position: r3.NewVec(1, 0, 10), bound: bound}
+	v1Twin := &Vertex{position: r3.NewVec(1, 0, 10), bound: bound, level: levelB}
+	require.Equal(t, v1.position, v1Twin.position, "the two vertices' held coordinates are bit-identical")
+	require.Equal(t, v1.bound, v1Twin.bound, "the two vertices' held bounds are bit-identical")
+
+	v0 := &Vertex{position: r3.NewVec(0, 0, 10), bound: bound, level: levelA}
+	v2 := &Vertex{position: r3.NewVec(1, 1, 10), bound: bound, level: levelA}
+	v3 := &Vertex{position: r3.NewVec(0, 1, 10), bound: bound, level: levelA}
+	edges := []*Edge{
+		{curve: Line3{}, start: v0, end: v1Twin, level: levelA},
+		{curve: Line3{}, start: v1Twin, end: v2, level: levelA},
+		{curve: Line3{}, start: v2, end: v3, level: levelA},
+		{curve: Line3{}, start: v3, end: v0, level: levelA},
+	}
+
+	_, hasAxialBound, err := provePatchChainPlane(edges)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.False(t, hasAxialBound)
+}
+
+// TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta is
+// docs/surface-design.md §15's T29: buildPatchFace over a chain gate 3's
+// level arm admitted sets the new face's own axialDelta/hasAxialDelta from
+// the chain's proven bound — the same fields a prism cap already carries
+// (prism_build.go) — rather than leaving them at their zero value.
+func TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta(t *testing.T) {
+	t.Parallel()
+	edges := boundedSquareChain(1, units.Millimeters(0.002))
+	edgeCopy := map[*Edge]*Edge{}
+	for _, e := range edges {
+		f := &Face{loops: []*Loop{{coedges: []coedge{{edge: e, forward: true}}, outer: true}}}
+		e.faces = []*Face{f}
+		edgeCopy[e] = e
+	}
+
+	chain := bodyPatchChain{edges: edges, axialBound: 0.002, hasAxialBound: true}
+	face, err := buildPatchFace(context.Background(), 0, chain, edgeCopy)
+	require.NoError(t, err)
+	require.True(t, face.hasAxialDelta, "the new face carries the level arm's own axial bound")
+	require.Equal(t, 0.002, face.axialDelta)
 }
 
 // TestOrientPatchChainRejectsDisagreeingAdjacentFaces is Table R row R18: two
