@@ -365,25 +365,25 @@ func TestRevolvePreflightFacetsChargesTheCeilingBeforeAllocating(t *testing.T) {
 	// The facet-pair ceiling is the binding one: F·(F−1)/2 stays inside
 	// maxFacetPairTestsPerCall only up to 4000 facets, which this shape reaches
 	// at n = 666 exactly. One angular step more refuses.
-	require.NoError(t, revolvePreflightFacets([]revLoopMesh{loop}, 666, false, &revolveWork{}))
-	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 667, false, &revolveWork{}), ErrUnsupported)
-	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 10923, false, &revolveWork{}), ErrUnsupported)
+	require.NoError(t, revolvePreflightFacets([]revLoopMesh{loop}, 666, false, false, &revolveWork{}))
+	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 667, false, false, &revolveWork{}), ErrUnsupported)
+	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 10923, false, false, &revolveWork{}), ErrUnsupported)
 
 	// A pole ring fans rather than quads, so its own cell costs half as many
 	// facets per angular step and the same walks admit a finer count.
 	poled := loop
 	poled.samples = []revMeridian{{walk: 0, onAxis: true}, {walk: 1}, {walk: 2}, {walk: 3}}
-	require.NoError(t, revolvePreflightFacets([]revLoopMesh{poled}, 799, false, &revolveWork{}))
-	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{poled}, 800, false, &revolveWork{}), ErrUnsupported)
+	require.NoError(t, revolvePreflightFacets([]revLoopMesh{poled}, 799, false, false, &revolveWork{}))
+	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{poled}, 800, false, false, &revolveWork{}), ErrUnsupported)
 
 	// A refinement retry never resets the cumulative counters
 	// (docs/tessellation-design.md §3): the same shape that fits on its own is
 	// refused once an earlier attempt has already spent most of the ceiling.
 	work := &revolveWork{}
-	require.NoError(t, revolvePreflightFacets([]revLoopMesh{loop}, 600, false, work))
+	require.NoError(t, revolvePreflightFacets([]revLoopMesh{loop}, 600, false, false, work))
 	require.Positive(t, work.facets)
 	require.Positive(t, work.pairs)
-	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 600, false, work), ErrUnsupported)
+	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 600, false, false, work), ErrUnsupported)
 }
 
 func TestCheckedIntegerArithmeticRefusesOverflow(t *testing.T) {

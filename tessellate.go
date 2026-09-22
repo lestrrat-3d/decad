@@ -190,16 +190,23 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // before any chord is chosen, so a tol it exhausts is [ErrUnsupported] too.
 // A body this evaluator did not build at all is also [ErrUnsupported].
 //
-// A [BodySheet] built by a surface-result prism (`WithSurfaceResult`) meshes
-// its walls exactly as the solid the same record would have built, and omits
-// both caps: no cap triangulation runs and no cap face appears in
-// SourceFaces. The mandatory audit runs docs/tessellation-design.md §1.2's
+// A [BodySheet] built by a surface-result prism or revolve
+// (`WithSurfaceResult`) meshes its walls exactly as the solid the same
+// record would have built. A prism sheet, and a partial-sweep revolve
+// sheet, omit both caps: no cap triangulation runs and no cap face appears
+// in SourceFaces. A full-turn revolve mints no cap in either kind, so its
+// sheet mesh is bit-identical to the solid's and carries no free edge at
+// all. The mandatory audit runs docs/tessellation-design.md §1.2's
 // manifold-with-boundary check in place of the closed-mesh audit a solid
-// takes, over the same directed-edge structure. A sheet's areaSlack drops
-// the cap terms it no longer carries, and it publishes no occupied-volume
-// proof at all — [Union], [Cut] and [Intersect] refuse a sheet operand
-// outright (docs/surface-design.md Table X), so the absence costs nothing a
-// caller reaches through this method. Export still succeeds: [Body.STL] and
+// takes, over the same directed-edge structure — with no free edge, the two
+// audits agree with no arm of their own. The signed-volume orientation
+// check runs only when the mesh is closed — a solid, or a full-turn sheet —
+// and never on an open partial-sweep sheet, where that sum is
+// anchor-dependent and decides nothing. A sheet's areaSlack drops the cap
+// terms it no longer carries, and it publishes no occupied-volume proof at
+// all — [Union], [Cut] and [Intersect] refuse a sheet operand outright
+// (docs/surface-design.md Table X), so the absence costs nothing a caller
+// reaches through this method. Export still succeeds: [Body.STL] and
 // [Body.OBJ] write a sheet's mesh exactly as they write a solid's.
 func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 	return b.TessellateContext(context.Background(), tol)
@@ -273,16 +280,6 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64) (*Mesh, 
 		return tessellateLoft(ctx, b, lp)
 	}
 	if rp, ok := b.payload.(revolvePayload); ok {
-		if rp.surfaceResult {
-			// Tessellating (and so exporting, export.go) a sheet is staged
-			// for a later increment (docs/surface-design.md §10): the
-			// manifold-with-boundary mesh audit T10 asks for is not built
-			// yet. Refusing here, before any face-role lookup, is a clean
-			// ErrUnsupported rather than the ErrDegenerate a missing
-			// capStart/capEnd role would otherwise report — this evaluator's
-			// own reach, not a claim the body's geometry is bad.
-			return nil, fmt.Errorf(`%w: tessellating a sheet body is staged for a later increment`, ErrUnsupported)
-		}
 		return tessellateRevolve(ctx, b, rp, chord)
 	}
 	if cbp, ok := b.payload.(capBlendPayload); ok {

@@ -131,6 +131,7 @@ func (e *revolveRefineError) Unwrap() error { return e.err }
 // once; the counts and the two chording displacements below them are what a
 // refinement moves.
 type revolvePlan struct {
+	body      *Body
 	rp        revolvePayload
 	basis     revolveBasis
 	ideal     revolveBasis3Iv
@@ -366,7 +367,7 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64)
 	}
 
 	return &revolvePlan{
-		rp: rp, basis: basis, ideal: ideal, loops: loops, resolved: resolved,
+		body: b, rp: rp, basis: basis, ideal: ideal, loops: loops, resolved: resolved,
 		junctions: res.junctions, faceOf: faceOf, work: &revolveWork{},
 		counts: counts, sags: sags, nPhi: nPhi,
 		deltaM: deltaM, deltaPhi: deltaPhi,
@@ -397,6 +398,17 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		return nil, err
 	}
 	rp := p.rp
+	// sheet is docs/surface-design.md §4.1's own flag, read once: a surface
+	// result omits both caps from a partial sweep's wall build
+	// (revolve_build.go), and every arm below that would otherwise emit a
+	// cap, charge a cap-only facet or a cap-only slack term, publish an
+	// occupied-volume proof, or run the orientation check that decides
+	// nothing on an open mesh reads it to skip that half of the work rather
+	// than fault a role this evaluator's own reach never minted. A full
+	// revolution mints no cap in either kind for a solid either, so most
+	// arms below key on rp.full alone; sheet is its own separate condition
+	// wherever a solid's full-turn behavior and a sheet's differ.
+	sheet := rp.surfaceResult
 	mesh := &Mesh{}
 	loopMesh := make([]revLoopMesh, len(p.resolved))
 	sampleGap := 0.0
@@ -428,7 +440,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		return nil, revolveSectionRetry(loopMesh, err)
 	}
 
-	if err := revolvePreflightFacets(loopMesh, p.nPhi, rp.full, p.work); err != nil {
+	if err := revolvePreflightFacets(loopMesh, p.nPhi, rp.full, sheet, p.work); err != nil {
 		return nil, err
 	}
 	angular, err := revolveAngularSequence(rp, p.nPhi)
@@ -521,10 +533,17 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// a wall only an axis line may erase (docs/tessellation-design.md §9).
 	// docs/tessellation-design.md §11's angular homotopy factor, proven ONCE:
 	// rotating a cell about the axis is an isometry, so the same reading
-	// answers for every cell and every angular interval of it.
-	angularHomotopy, err := revolveAngularHomotopyFactor(angular.step)
-	if err != nil {
-		return nil, err
+	// answers for every cell and every angular interval of it. A sheet
+	// publishes no occupied-volume proof at all (docs/surface-design.md §10),
+	// so it skips this factor and the per-cell swept volume below rather than
+	// prove a figure publishRevolveProof will never read.
+	var angularHomotopy *big.Rat
+	if !sheet {
+		var err error
+		angularHomotopy, err = revolveAngularHomotopyFactor(angular.step)
+		if err != nil {
+			return nil, err
+		}
 	}
 	faceCells := map[*Face]revFaceExtent{}
 	cellSlack := 0.0
@@ -558,18 +577,42 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 				return nil, err
 			}
 			cellSlack = absSumUpper(cellSlack, productUpper(float64(p.nPhi), slack))
-			cellVolume.Add(cellVolume, revolveCellSweptVolume(lo, hi, angularHomotopy))
+			if !sheet {
+				cellVolume.Add(cellVolume, revolveCellSweptVolume(lo, hi, angularHomotopy))
+			}
 		}
 	}
 	// Σ_cells Icell: one meridian cell's reading answers for each of the nPhi
 	// angular intervals it spans.
-	cellVolume.Mul(cellVolume, new(big.Rat).SetInt64(int64(p.nPhi)))
+	if !sheet {
+		cellVolume.Mul(cellVolume, new(big.Rat).SetInt64(int64(p.nPhi)))
+	}
 
 	// Partial caps: one shared triangulation of the meridian region in the
 	// (z, ρ) plane, mapped onto the wall vertices at φ0 and φ1. Pole vertices
 	// are ordinary samples there, so an on-axis line's edge is shared by both.
-	// Their curved trim omits one circular segment per meridian chord, per cap.
-	if !rp.full {
+	// Their curved trim omits one circular segment per meridian chord, per
+	// cap. A surface-result sheet omits both caps (docs/surface-design.md
+	// Table W) and so drops this whole term rather than triangulating one:
+	// every per-cell wall term above survives, and this cap-only addition is
+	// the only term a sheet's area slack drops — the mirror of the prism
+	// sheet's own cap slack drop (tessellate.go). A full revolution mints no
+	// cap in either kind: the walls already close.
+	switch {
+	case rp.full:
+		// no cap in either kind.
+	case sheet:
+		// emitRevolveCaps' own triangulate2DContext call is what would
+		// otherwise refuse a loop chording to fewer than three meridian
+		// samples ("a cap needs at least three boundary samples",
+		// triangulate.go); a sheet mints no cap to carry that refusal, so it
+		// is restated here directly. requireWalkClearance's own `m < 4`
+		// branch (tessellate.go) SKIPS, rather than refuses, a small loop,
+		// so it is not a substitute for this check.
+		if len(sectionLoops) == 0 || len(sectionLoops[0]) < 3 {
+			return nil, fmt.Errorf(`%w: a surface-result revolve wall loop needs at least three meridian samples`, ErrDegenerate)
+		}
+	default:
 		if err := emitRevolveCaps(ctx, mesh, loopMesh, sectionPts, sectionLoops, angular.samples-1, p.faceOf); err != nil {
 			return nil, err
 		}
@@ -587,11 +630,25 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		}
 	}
 
-	if err := requireClosedMesh(mesh); err != nil {
-		return nil, fmt.Errorf(`%w: this revolve's cells do not close into a watertight boundary`, ErrUnsupported)
-	}
-	if err := requireVertexLinks(ctx, mesh); err != nil {
-		return nil, err
+	// A BodySolid keeps the closed-mesh audit plus its own pole-vertex safety
+	// net (requireVertexLinks, §9); a BodySheet runs
+	// docs/tessellation-design.md §1.2's manifold-with-boundary audit plus
+	// its own cycle-or-path vertex-link safety net in their place
+	// (requireMeshAudit, tessellate.go — the same dispatch the prism sheet
+	// path already reaches). A full revolution's sheet carries no free edge
+	// at all, so requireSheetMesh agrees with requireClosedMesh with no arm
+	// of its own (docs/surface-design.md §14).
+	if sheet {
+		if err := requireMeshAudit(ctx, sheet, p.body, mesh); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := requireClosedMesh(mesh); err != nil {
+			return nil, fmt.Errorf(`%w: this revolve's cells do not close into a watertight boundary`, ErrUnsupported)
+		}
+		if err := requireVertexLinks(ctx, mesh); err != nil {
+			return nil, err
+		}
 	}
 	if err := revolveContactAudit(newWorkBudget(ctx), mesh.vertices, mesh.triangles, coord); err != nil {
 		// A crossing or an undecided contact is the one failure a finer
@@ -603,9 +660,16 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		}
 		return nil, &revolveRefineError{err: err, retry: revolveRefine{loop: -1}}
 	}
-	anchor := rp.xform.Apply(p.basis.a3)
-	if !finiteVec(anchor) || meshOrientationSign(mesh.vertices, mesh.triangles, anchor) <= 0 {
-		return nil, fmt.Errorf(`%w: this revolve's assembled cells do not enclose a positive volume`, ErrUnsupported)
+	// The signed-volume orientation check decides nothing on an open mesh:
+	// the sum is anchor-dependent when nothing pins where the missing
+	// material would have been (docs/tessellation-design.md §1.2). A
+	// partial-sweep sheet is open and skips it; a solid, or a full-turn
+	// sheet — which carries no free edge at all — is closed and keeps it.
+	if !sheet || rp.full {
+		anchor := rp.xform.Apply(p.basis.a3)
+		if !finiteVec(anchor) || meshOrientationSign(mesh.vertices, mesh.triangles, anchor) <= 0 {
+			return nil, fmt.Errorf(`%w: this revolve's assembled cells do not enclose a positive volume`, ErrUnsupported)
+		}
 	}
 
 	if err := publishRevolveProof(mesh, faceCells, p, deltaC, deltaR, cellSlack, cellVolume); err != nil {
@@ -900,7 +964,13 @@ func revolveCapSegmentArea(p *revolvePlan) float64 {
 // The cumulative counters live on the call's revolveWork and are never reset by
 // a refinement retry, so a sequence of attempts is charged the sum of what each
 // of them asked for.
-func revolvePreflightFacets(loops []revLoopMesh, nPhi int, full bool, work *revolveWork) error {
+//
+// sheet omits the cap charge for a PARTIAL sweep, docs/surface-design.md
+// §4.1's own build never triangulates one: charging it anyway would refuse a
+// sheet at a finer tolerance than its own mesh actually needs. A full
+// revolution already charges no cap for a solid, so sheet changes nothing
+// there.
+func revolvePreflightFacets(loops []revLoopMesh, nPhi int, full, sheet bool, work *revolveWork) error {
 	var walls, samples uint64
 	for _, lm := range loops {
 		n := len(lm.samples)
@@ -927,9 +997,10 @@ func revolvePreflightFacets(loops []revLoopMesh, nPhi int, full bool, work *revo
 			return errRevolveFacetCeiling
 		}
 	}
-	// A full revolution emits no cap at all; a partial sweep emits both.
+	// A full revolution emits no cap at all; a partial sweep emits both,
+	// unless it is a sheet, which emits neither.
 	caps := uint64(0)
-	if !full && samples+2*uint64(len(loops)) >= 4 {
+	if !full && !sheet && samples+2*uint64(len(loops)) >= 4 {
 		caps = 2 * (samples + 2*uint64(len(loops)) - 4)
 	}
 	total, ok := addChecked(walls, caps)
@@ -1159,6 +1230,14 @@ var errRevolveCellSlack = fmt.Errorf(`%w: a revolve cell states no enclosure of 
 // wherever the meridian is straight. volSymDiff composes §11's four stages
 // (tessellate_revolve_volume.go) rather than bound × held area, which §11
 // forbids outright, and only that composition sets symDiffOK.
+//
+// A [BodySheet] encloses no region, so there is no occupied volume to prove
+// (docs/surface-design.md §10): it publishes the face bounds and area slack
+// above, unchanged, and then returns before touching volSymDiff or
+// symDiffOK at all, leaving both their permanent zero/false values — the
+// same permanent absence the prism sheet path documents (tessellate.go).
+// cellVolume stays whatever buildRevolveMesh left it at, the zero *big.Rat
+// it never added a term to, and is never read.
 func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolvePlan, deltaC, deltaR, cellSlack float64, cellVolume *big.Rat) error {
 	coord := absSumUpper(deltaC, deltaR)
 	if upRound(absSumUpper(p.deltaM, p.deltaPhi, coord)) > p.chord {
@@ -1190,6 +1269,9 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 		return fmt.Errorf(`%w: this revolve mesh states no finite area slack`, ErrUnsupported)
 	}
 	m.areaSlack = slack
+	if p.rp.surfaceResult {
+		return nil
+	}
 	sym, err := revolveSymDiff(m, p, cellVolume, deltaC, deltaR)
 	if err != nil {
 		return err
