@@ -1565,7 +1565,12 @@
 1	0.00	TestAuditSheetBoundaryUndecidedPayload
 1	0.00	TestPatchContextCancellationLeavesDocumentUnchanged
 1	0.00	TestPatchVerifiesUndecided
-1	0.00	TestSheetSurveysReadUnavailableWithPrerequisite
+1	0.00	TestSheetWallAndConcaveRadiusKeepTheSurveyPrerequisiteRefusal
+1	0.00	TestSheetUndercutsListTheWallThatOpposesThePull
+1	0.00	TestSheetUndercutsProveTheAllClearUnderAnAxialPull
+1	0.00	TestSheetUndercutsReadUnavailableOnALoftSheet
+1	0.00	TestSheetUndercutsRefusedOnARevolveSheet
+1	0.00	TestVerifyPublishUndercutRunsOnAProvenSheet
 2	0.00	TestPatchIsAPlanarSheet
 2	0.00	TestPatchWithHoleNetArea
 2	0.00	TestSheetSolidPairCrossingBoxesReadInterfering

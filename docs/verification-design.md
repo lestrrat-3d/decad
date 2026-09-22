@@ -408,9 +408,13 @@ const (
     DiagUnsupportedSurveyPayload
     // DiagSurveyPrerequisite — a requested survey needs a proven solid, and
     // this body does not supply one: its validity is invalid or undecided, OR
-    // it is a sheet body, which has no material for a wall, pull or concave
-    // question to be about (docs/surface-design.md §9.1). Survey names the
-    // blocked question. Reading ReadingNone. Contributes Suspect.
+    // it is a sheet body asking a wall or concave-radius question, neither of
+    // which has any material on a sheet to be about (docs/surface-design.md
+    // §9.1). An undercut question is not blocked this way on a proven-valid
+    // surface-extruded prism sheet, which answers it over the sheet's own
+    // positive side; every other sheet family reads DiagUnsupportedSurveyPayload
+    // for it instead. Survey names the blocked question. Reading ReadingNone.
+    // Contributes Suspect.
     DiagSurveyPrerequisite
     // DiagToleranceReferenceUnavailable — a nonzero-bound reading has no
     // usable tolerance reference, so the gate could not judge it. Reading
@@ -1890,6 +1894,23 @@ analytic ranges prove it directly; complete faceted source ranges can also
 prove it. A missing or undecided range leaves `Coverage` at
 `CoverageUndecided` (or `CoveragePartial` when some other face is confirmed)
 and the body `Suspect`.
+
+**On a proven-valid surface-extruded prism sheet, the membership rule above
+reads the face's positive side (`docs/surface-design.md` §2.3) in place of
+outward-from-material, and nothing else about it changes.** A surface
+result's positive side is the same vector a solid's outward normal would
+have been, produced by the same code, so the pointwise opposes/clears/
+undecided test, the exactly-perpendicular carve-out and the
+exactly-antiparallel carve-out all transfer unmodified. `Coverage`
+quantifies over the sheet's own published faces, which are its walls — a
+surface result publishes no cap face at all, so there is no face missing
+from that quantification for the sheet to be silently short on. A face's
+proven opposing point still makes the body `Violating`: §6's `Violating`
+rung is "a stated spec is proven to fail," and the spec `WithPullDirection`
+states is about the geometric predicate — a face's positive side facing
+against the pull — never about the presence of material behind it, so a
+sheet's proven listing contributes exactly the rung a solid's does, through
+the same `DiagUndercut`.
 
 Aggregation is by **severity precedence — worst wins**:
 

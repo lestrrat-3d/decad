@@ -410,20 +410,29 @@ func TestSurfaceExtrudeSheetVerifiesValid(t *testing.T) {
 	require.Empty(t, report.Diagnostics)
 }
 
-// TestSheetSurveysReadUnavailableWithPrerequisite is docs/surface-design.md
-// §9.1's survey row: a sound sheet has no material for a wall, pull or
-// concave question, so every requested survey reads Unavailable with its own
-// DiagSurveyPrerequisite naming the blocked survey, and the report reads
-// Suspect purely on their account.
-func TestSheetSurveysReadUnavailableWithPrerequisite(t *testing.T) {
+// TestSheetWallAndConcaveRadiusKeepTheSurveyPrerequisiteRefusal is
+// docs/surface-design.md §9.1's survey row: a sound sheet has no material for
+// a wall or a concave question, so each reads Unavailable with its own
+// DiagSurveyPrerequisite naming the blocked survey and dropping "pull" from
+// its message (§9.1's undercut clause is not this survey's cause any more).
+// The pull requested alongside them is axial — every wall is exactly
+// perpendicular to it — so Undercut reads a real CoverageComplete with an
+// empty Faces rather than a third prerequisite refusal, and the report's
+// Suspect comes from the wall and concave-radius refusals alone.
+func TestSheetWallAndConcaveRadiusKeepTheSurveyPrerequisiteRefusal(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
 	sheet, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
+	// The tool (50 mm) exceeds the plate's own 10 mm spanning wall on
+	// purpose: publishWallResult's kind gate must refuse before that
+	// reading is ever consulted, so an unguarded wall survey run on the
+	// sheet would otherwise surface a DiagWallTooThin the published result
+	// must never carry.
 	report, err := doc.Verify(t.Context(),
-		decad.WithMinWallThickness(units.Millimeters(1)),
+		decad.WithMinWallThickness(units.Millimeters(50)),
 		decad.WithPullDirection(r3.NewVec(0, 0, 1)),
 		decad.WithConcaveRadius(),
 	)
@@ -431,7 +440,9 @@ func TestSheetSurveysReadUnavailableWithPrerequisite(t *testing.T) {
 	br := decadtest.FindBodyReport(t, report, sheet)
 
 	require.Equal(t, decad.ScalarUnavailable, br.Wall.Outcome)
-	require.Equal(t, decad.CoverageUnavailable, br.Undercut.Coverage)
+	require.Equal(t, decad.CoverageComplete, br.Undercut.Coverage)
+	require.NotNil(t, br.Undercut.Faces)
+	require.Empty(t, br.Undercut.Faces)
 	require.Equal(t, decad.ScalarUnavailable, br.ConcaveRadius.Outcome)
 
 	requireOnePrerequisite := func(diags []decad.Diagnostic, survey decad.SurveyKind) {
@@ -439,13 +450,127 @@ func TestSheetSurveysReadUnavailableWithPrerequisite(t *testing.T) {
 		require.Len(t, diags, 1)
 		require.Equal(t, decad.DiagSurveyPrerequisite, diags[0].Code)
 		require.Equal(t, survey, diags[0].Survey)
+		require.NotContains(t, diags[0].Message, "pull")
 	}
 	requireOnePrerequisite(br.Wall.Diagnostics, decad.SurveyWall)
-	requireOnePrerequisite(br.Undercut.Diagnostics, decad.SurveyUndercut)
 	requireOnePrerequisite(br.ConcaveRadius.Diagnostics, decad.SurveyConcaveRadius)
+	require.Empty(t, br.Undercut.Diagnostics)
 
-	require.Len(t, br.Diagnostics, 3)
+	require.Len(t, br.Diagnostics, 2)
 	require.Equal(t, decad.Suspect, report.Status)
+}
+
+// TestSheetUndercutsListTheWallThatOpposesThePull is
+// TestUndercutsTiltedPull's own fixture (survey_test.go) with
+// WithSurfaceResult() added, which is what makes the comparison legible: the
+// solid lists two faces, the −X wall and the bottom cap, and the sheet —
+// which builds no cap face at all — must list exactly the one wall.
+func TestSheetUndercutsListTheWallThatOpposesThePull(t *testing.T) {
+	t.Parallel()
+	s, p := plateSketch(t)
+	doc := decad.New()
+	sheet, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(1, 0, 1)))
+	require.NoError(t, err)
+	br := decadtest.FindBodyReport(t, report, sheet)
+
+	require.Equal(t, decad.CoverageComplete, br.Undercut.Coverage)
+	require.Len(t, br.Undercut.Faces, 1)
+	f := br.Undercut.Faces[0]
+	pt := f.Loops()[0].CoEdges()[0].Start().Position().Value
+	n, err := f.NormalAt(pt)
+	require.NoError(t, err)
+	require.Equal(t, r3.NewVec(-1, 0, 0), n.Value)
+	bound, err := n.Bound.In(units.One)
+	require.NoError(t, err)
+	require.Equal(t, 0.0, bound)
+	require.Equal(t, decad.AssessmentViolated, br.Undercut.Assessment)
+	require.Equal(t, decad.Violating, br.Status)
+	require.Len(t, br.Undercut.Diagnostics, 1)
+	require.Equal(t, decad.DiagUndercut, br.Undercut.Diagnostics[0].Code)
+	require.Equal(t, decad.SurveyUndercut, br.Undercut.Diagnostics[0].Survey)
+	require.False(t, report.Passed())
+
+	require.Nil(t, br.Region)
+	_, err = sheet.Volume()
+	require.ErrorIs(t, err, decad.ErrNotSolid)
+}
+
+// TestSheetUndercutsProveTheAllClearUnderAnAxialPull is the same sheet under
+// the axial pull TestUndercutsPrismClear uses for the equivalent solid:
+// every wall is exactly perpendicular, the proven all-clear §6 carves out,
+// and the report reaches Sound with an empty (not nil) Faces.
+func TestSheetUndercutsProveTheAllClearUnderAnAxialPull(t *testing.T) {
+	t.Parallel()
+	s, p := plateSketch(t)
+	doc := decad.New()
+	sheet, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
+	require.NoError(t, err)
+	br := decadtest.FindBodyReport(t, report, sheet)
+
+	require.Equal(t, decad.CoverageComplete, br.Undercut.Coverage)
+	require.NotNil(t, br.Undercut.Faces)
+	require.Empty(t, br.Undercut.Faces)
+	require.Equal(t, decad.AssessmentMet, br.Undercut.Assessment)
+	require.Equal(t, decad.Sound, br.Status)
+	require.Empty(t, br.Diagnostics)
+	require.Equal(t, decad.Sound, report.Status)
+	require.True(t, report.Passed())
+}
+
+// TestSheetUndercutsReadUnavailableOnALoftSheet is the family this increment
+// leaves closed: a surface-result Loft sheet's own ValidityValid
+// (surface_loft_test.go's TestSurfaceLoftSheetVerifiesSound) does not by
+// itself admit the undercut survey, because runSurveys names no loftPayload
+// arm, so the refusal moves from DiagSurveyPrerequisite to
+// DiagUnsupportedSurveyPayload rather than being lifted.
+func TestSheetUndercutsReadUnavailableOnALoftSheet(t *testing.T) {
+	t.Parallel()
+	s0, p0, s1, p1 := loftSquares(t, 20, 10)
+	doc := decad.New()
+	sheet, err := doc.Loft(s0, p0, s1, p1, decad.WithSurfaceResult())
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
+	require.NoError(t, err)
+	br := decadtest.FindBodyReport(t, report, sheet)
+
+	require.Equal(t, decad.CoverageUnavailable, br.Undercut.Coverage)
+	require.Len(t, br.Undercut.Diagnostics, 1)
+	require.Equal(t, decad.DiagUnsupportedSurveyPayload, br.Undercut.Diagnostics[0].Code)
+	require.Equal(t, decad.SurveyUndercut, br.Undercut.Diagnostics[0].Survey)
+	require.Contains(t, br.Undercut.Diagnostics[0].Message, "loftPayload")
+	require.Equal(t, decad.AssessmentUndecided, br.Undercut.Assessment)
+	require.Equal(t, decad.Suspect, br.Status)
+}
+
+// TestSheetUndercutsRefusedOnARevolveSheet pins the survey-aware message
+// split: a surface-result Revolve sheet's own fourth leg is undecided
+// (surface_revolve_test.go's TestSurfaceRevolveSheetVerifiesUndecided), so
+// the undercut refusal is DiagSurveyPrerequisite as before, but its message
+// must now name the validity cause rather than the sheet cause — the
+// undercut publisher's kind gate no longer fires for this body at all.
+func TestSheetUndercutsRefusedOnARevolveSheet(t *testing.T) {
+	t.Parallel()
+	s, p := annularSketch(t)
+	doc := decad.New()
+	sheet, err := doc.Revolve(s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
+	require.NoError(t, err)
+	br := decadtest.FindBodyReport(t, report, sheet)
+
+	require.Equal(t, decad.CoverageUnavailable, br.Undercut.Coverage)
+	require.Len(t, br.Undercut.Diagnostics, 1)
+	require.Equal(t, decad.DiagSurveyPrerequisite, br.Undercut.Diagnostics[0].Code)
+	require.Contains(t, br.Undercut.Diagnostics[0].Message, "validity")
+	require.NotContains(t, br.Undercut.Diagnostics[0].Message, "sheet")
 }
 
 // sheetBoxBody surface-extrudes an axis-aligned rectangle into doc, the sheet

@@ -877,7 +877,7 @@ sheet payload withholds the gate.
 | `Area`, `Bounds` | present and gated, as on every body |
 | `Region` | **nil, always** |
 | `Wall` | `ScalarNotRequested` when omitted; `ScalarUnavailable` with a `DiagSurveyPrerequisite` when requested |
-| `Undercut` | `CoverageNotRequested` when omitted; `CoverageUnavailable` with a `DiagSurveyPrerequisite` when requested |
+| `Undercut` | `CoverageNotRequested` when omitted; when requested, **only a surface-extruded prism sheet answers**: `CoverageComplete` / `CoveragePartial` / `CoverageUndecided` exactly as a solid's own three-valued reading (§9.1 below); every other sheet family — loft, stitch, one-span sweep, revolve, arc/composite sweep, `Patch`, `Unstitch`, or a prism/loft sheet with a nonzero section displacement — reads `CoverageUnavailable`, with `DiagUnsupportedSurveyPayload` when its payload class is one the survey dispatch does not name, or `DiagSurveyPrerequisite` when its own validity is not `ValidityValid` |
 | `ConcaveRadius` | `ScalarNotRequested` when omitted; `ScalarUnavailable` with a `DiagSurveyPrerequisite` when requested |
 | pair rows | §9.3 |
 
@@ -926,14 +926,20 @@ biconditional over validity alone; §12 amends it to validity **and** kind. A
 sound sheet is a sound *boundary*, which is the whole of what the caller
 asked to be true about it.
 
-**The three surveys need a solid**, and say so. Each asks a question about
-material — how thin a wall is, whether a face opposes the pull, how tight a
-concave feature is — and a sheet has none. `DiagSurveyPrerequisite` is the
-existing code for "a requested survey needs a proven solid"; §12 widens its
-stated cause to include a sheet, so a caller branching on it already handles
-this. Draft analysis on an oriented sheet is a real question — Fusion answers
-it — and §14's increment 3 takes up the undercut survey over a sheet's
-positive side.
+**The wall and concave-radius surveys need a solid**, and say so. Each asks a
+question about material — how thin a wall is, how tight a concave feature is
+— and a sheet has none. `DiagSurveyPrerequisite` is the existing code for "a
+requested survey needs a proven solid"; §12 widens its stated cause to
+include a sheet asking either one, so a caller branching on it already
+handles this. The undercut survey is different: draft analysis on an
+oriented sheet is a real question — Fusion answers it — and §14's increment 3
+takes it up over a surface-extruded prism sheet's positive side, the one
+sheet family whose walls carry every input the existing reader needs
+(§9.1's Table V row above). A sheet whose family the survey cannot yet
+answer reads `CoverageUnavailable` through `DiagUnsupportedSurveyPayload`
+rather than `DiagSurveyPrerequisite` — it is not blocked on having no
+material, it is blocked on this evaluator not yet proving one over that
+family's geometry.
 
 ### 9.2 What a sound sheet costs
 
@@ -948,10 +954,15 @@ not a special build-time step — and an omitted survey reads its
 `NotRequested` outcome as everywhere.
 
 Two things do cost a PROVEN sheet a `Suspect`, and both are the caller asking a
-question a sheet cannot answer: a **requested** survey, which reads
-`Unavailable` with a `DiagSurveyPrerequisite` (§9.1); and §9.3's pair rule,
-where a sheet's box meets a solid's. Neither fires on a model that only holds
-proven sheets and only asks the core questions.
+question a sheet cannot answer: a **requested** wall or concave-radius
+survey, which reads `Unavailable` with a `DiagSurveyPrerequisite` (§9.1); and
+§9.3's pair rule, where a sheet's box meets a solid's. Neither fires on a
+model that only holds proven sheets and only asks the core questions. A
+**requested undercut survey is not one of these two** on a surface-extruded
+prism sheet at a zero section displacement: it answers over the sheet's own
+positive side (§9.1) exactly as it would on the equivalent solid, so a
+document holding only such a sheet and asking `WithPullDirection` can still
+read `Sound` when every wall provenly clears.
 
 **A sheet whose family has no such proof reads `Suspect` regardless of what
 the caller asks.** A revolve sheet's fourth leg is undecided today — its own
@@ -1215,7 +1226,7 @@ ANSWER is accepted and reads `Suspect`.
 |---|---|
 | 1 | `BodyKind` and `Kind()`, `Shell.IsOpen`, `Edge.IsFree`, `Free()`; `WithSurfaceResult()` on `Extrude` and `Revolve`; `Document.Patch`; the sheet validity audit; `DiagUnsupportedPairSheet` and §9.3's box rule; every Table A amendment; prism sheet tessellation and export with the manifold-with-boundary audit. The revolve sheet mesh is staged to increment 4 (§10) |
 | 2 | `Stitch` over exact all-planar boundaries (Table J with J5, Table C's first two rows), including its own directed-edge parity leg, derived orientation, and the recorded-weld replay a placement reuses; `Body.Patch`; the sheet-against-solid containment cast and clearance gap of §9.3, narrowing when `DiagUnsupportedPairSheet` fires. `Unstitch` is a separate follow-up: it needs no new proof this increment does not already carry, but it is its own PR |
-| 3 | `WithSurfaceResult()` on `Sweep` and `Loft`; the shared-denotation certificate, which lifts J5 for bounded edges and §5.2 gate 3's bounded-chain half of R6 together; the per-surface flux integral that lifts Table C's curved-closure refusal (R8); the undercut survey over a sheet's positive side |
+| 3 | `WithSurfaceResult()` on `Sweep` and `Loft`; the shared-denotation certificate, which lifts J5 for bounded edges and §5.2 gate 3's bounded-chain half of R6 together; the per-surface flux integral that lifts Table C's curved-closure refusal (R8); the undercut survey over a surface-extruded prism sheet's positive side — the only sheet family this increment opens it on; a loft, stitch or one-span-sweep sheet moves from `DiagSurveyPrerequisite` to `DiagUnsupportedSurveyPayload` for it instead, and stays there until its own proof lands |
 | 4 | The revolve sheet mesh (§10): the meridian and angular chordings a surface result keeps, the caps it omits — and, where the profile meets the axis, the on-axis edge between two poles that only the caps carried (Table W) — the cap terms its area slack drops, and the manifold-with-boundary audit in the closed-mesh audit's place. It also settles which audit a CLOSED sheet runs |
 | 5 | A stitched solid's own mesh: the manifold-with-boundary/closed-mesh audit reads a `stitchPayload`'s already-triangulated face set directly rather than chording one. A stitched solid's own clearance-kernel carrier model: `newBodyGeomBudget` (`docs/clearance-design.md` §2) gains a `stitchPayload` arm, which is what lets a stitched solid reach a proven pair relation at all — until it lands, `Tessellate`/`STL`/`OBJ` and every pair question read `ErrUnsupported`/undecided exactly as they do for any other payload this evaluator has not wired an arm for |
 
@@ -1272,6 +1283,12 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T17 | `Body.Patch` capping BOTH rims of a surface-extruded tube's `Edges(Free()).Exactly(8)` in one call | this contract's own flagship case; two new 6000 mm² faces, `Exact`; `Edges(Free())` matches nothing |
 | T18 | `Body.Patch` closing a stitched-but-still-open sheet's own last free edge | `Kind() == BodySheet` still, `IsSolid() == false`; `Edges(Free())` matches nothing |
 | T19 | `Body.Patch` filling a `rectWithHoleSketch` `Document.Patch` sheet's own HOLE loop (`Edges(Free(), Concave())`) | two faces; the hole's own edge now bounds both; the four outer edges stay free; every face's normal equals the holed face's own, unlike T15 — a hole loop is walked clockwise, so the opposite sense the patch takes reads counter-clockwise and lands on the SAME side; `Area` returns to the rectangle's full 6000 mm², `Approximate` |
+| T20 | a 100×60 rectangle surface-extruded 10 mm `Along`, verified with `WithPullDirection(r3.NewVec(1, 0, 1))` — the solid counterpart's own tilted-pull fixture | `Coverage == CoverageComplete`; exactly one face listed, and it is the −X wall (`f.NormalAt(p)` equals `r3.NewVec(-1, 0, 0)` exactly, zero `Bound`), never the bottom cap the solid also lists; `Assessment == AssessmentViolated`; `Status == Violating`; exactly one `DiagUndercut` with `Survey == SurveyUndercut`; `Passed() == false`; `Region == nil` and `Volume()` is still `ErrNotSolid` |
+| T21 | the same sheet verified with `WithPullDirection(r3.NewVec(0, 0, 1))` — every wall exactly perpendicular | `Coverage == CoverageComplete`; `Faces` non-nil and empty, the proven all-clear; `Assessment == AssessmentMet`; `Status == Sound`; no diagnostics; the whole report `Sound` and `Passed()` |
+| T22 | a surface-result `Loft` sheet (`ValidityValid`), any pull requested | `Coverage == CoverageUnavailable`; exactly one `DiagUnsupportedSurveyPayload` naming `SurveyUndercut` and naming `loftPayload` in its message; `Assessment == AssessmentUndecided`; `Status == Suspect` |
+| T23 | the same surface-extruded plate as T20/T21, verified with `WithMinWallThickness`, `WithPullDirection(r3.NewVec(0, 0, 1))` and `WithConcaveRadius` together | `Wall.Outcome` and `ConcaveRadius.Outcome` both `ScalarUnavailable`, each with its own `DiagSurveyPrerequisite` naming its own survey and no mention of "pull" in either message; `Undercut` carries no `DiagSurveyPrerequisite` and reads a real `CoverageComplete` with empty `Faces`; `br.Diagnostics` has length 2, not 3; `Status == Suspect` on the wall and radius refusals alone |
+| T24 | a surface-result `Revolve` sheet whose fourth leg is undecided (`ValidityUndecided`), any pull requested | `Coverage == CoverageUnavailable` with one `DiagSurveyPrerequisite` whose message names the undecided-validity cause, never a sheet-material cause |
+| T25 | `publishUndercutResult` driven directly (internal) on a `BodySheet` body with `ValidityValid` and a populated `undercutOutcome` | the survey outcome is published as given, not replaced by the prerequisite refusal |
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'`

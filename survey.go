@@ -15,7 +15,12 @@ import (
 // This file is the analytic survey layer of
 // docs/evaluator-design.md §10 and docs/verification-design.md §6: the wall,
 // undercut and minimum-radius questions answered outright on the analytic
-// prism, revolve and cup bodies. Each survey reads the evaluator's own payload —
+// prism, revolve and cup bodies. The wall and concave-radius surveys still
+// need a proven solid; the undercut survey also answers on a proven-valid
+// surface-extruded prism sheet, reading each wall's positive side in place
+// of a solid's outward normal (docs/surface-design.md §2.3, §9.1) — its own
+// cap loop is skipped, since a surface result publishes no cap face. Each
+// survey reads the evaluator's own payload —
 // the recorded 2D region a prism lifts or a revolve sweeps — because the
 // spanning-ball and curvature readings are closed-form facts of that section:
 // a prism's inscribed balls are its profile's inscribed disks with the height
@@ -634,6 +639,18 @@ func trigRange(a, b, lo, hi float64) (float64, float64) {
 // normal each, cylindrical sides sweep their walk's exact angular range. A
 // straddling face sets undecided without discarding a face already proven to
 // oppose (docs/verification-design.md §6).
+//
+// A surface result (pp.surfaceResult) publishes no cap face at all
+// (prism_build.go), so the cap loop below is skipped for one rather than
+// probed and refused on a nil role lookup: on a SOLID a nil roleCapStart or
+// roleCapEnd is a real build defect and the existing total refusal must
+// still catch it, so the guard reads pp.surfaceResult, never f == nil. Every
+// wall input this function reads — the placed frame's exact directions, the
+// walk's plane-local tangent or circular range, the caller's pull — is
+// unchanged on a sheet, because §2.3 gives a surface result's walls the
+// orientation the solid would have had: the identical outward normal, from
+// the identical code. The survey therefore quantifies over exactly the
+// sheet's own published faces, which are its walls.
 func prismUndercuts(b *Body, pp prismPayload, pull r3.Vec) undercutOutcome {
 	if _, ok := pull.Normalize(); !ok {
 		return undercutOutcome{}
@@ -661,17 +678,19 @@ func prismUndercuts(b *Body, pp prismPayload, pull r3.Vec) undercutOutcome {
 			}
 		}
 	}
-	for _, cap := range []struct {
-		role string
-		sign float64
-	}{{role: roleCapStart, sign: -1}, {role: roleCapEnd, sign: 1}} {
-		f := roles[cap.role]
-		if f == nil {
-			return undercutOutcome{}
-		}
-		verdict, ok := capNormalDecision(m, pull, cap.sign)
-		if !listVerdict(&faces, &undecided, f, verdict, ok) {
-			return undercutOutcome{}
+	if !pp.surfaceResult {
+		for _, cap := range []struct {
+			role string
+			sign float64
+		}{{role: roleCapStart, sign: -1}, {role: roleCapEnd, sign: 1}} {
+			f := roles[cap.role]
+			if f == nil {
+				return undercutOutcome{}
+			}
+			verdict, ok := capNormalDecision(m, pull, cap.sign)
+			if !listVerdict(&faces, &undecided, f, verdict, ok) {
+				return undercutOutcome{}
+			}
 		}
 	}
 	if undecided && len(faces) == 0 {
@@ -1336,8 +1355,13 @@ type surveyResults struct {
 	RadiusDiagnostics []Diagnostic
 }
 
-// runSurveys answers the asked opt-in questions on one proven-solid body,
-// returning the raw private outcome for each survey and one diagnostic per
+// runSurveys answers the asked opt-in questions on one proven-solid body, or
+// the undercut question alone on a proven-valid surface-extruded prism
+// sheet (docs/surface-design.md §2.3, §9.1): the wall and concave-radius
+// blocks below run only on a BodySolid, so a sheet leaves WallAsked and
+// RadiusAsked false and their own prerequisite refusal to
+// publishWallResult/publishConcaveRadiusResult. It returns the raw private
+// outcome for each survey and one diagnostic per
 // non-Sound outcome: DiagWallTooThin / DiagUndercut (Violating) when a stated
 // spec is proven to fail, and the per-survey DiagUndecided* (Suspect) when an
 // asked question is undecided or a stated spec is straddled (verification
@@ -1356,7 +1380,7 @@ func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, [
 	var diags []Diagnostic
 	var results surveyResults
 
-	if cfg.wall != nil {
+	if cfg.wall != nil && b.Kind() == BodySolid {
 		results.WallAsked = true
 		out := wallOutcome{}
 		var err error
@@ -1486,7 +1510,7 @@ func runSurveys(budget *workBudget, b *Body, cfg verifyConfig) (surveyResults, [
 		}
 	}
 
-	if cfg.concaveRadius {
+	if cfg.concaveRadius && b.Kind() == BodySolid {
 		results.RadiusAsked = true
 		out := radiusOutcome{}
 		ok := false

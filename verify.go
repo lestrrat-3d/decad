@@ -108,7 +108,11 @@ func WithDraftAllowance(a units.Value) WallOption {
 // per face from its normal range: a face with a provenly opposing point is
 // listed, exactly perpendicular is not opposed (the vertical wall clears),
 // and a non-empty listing is Violating. A bounded analytic stand-in widens
-// its range by its own proven departure before this comparison.
+// its range by its own proven departure before this comparison. It also
+// answers on a proven-valid surface-extruded prism sheet, reading each
+// wall's positive side in place of a solid's outward normal
+// (docs/surface-design.md §2.3, §9.1); every other sheet family reads
+// CoverageUnavailable.
 func WithPullDirection(v r3.Vec) VerifyOption {
 	return verifyOption{option.New(identPullDirection{}, v)}
 }
@@ -717,18 +721,25 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 
 	// The asked opt-in surveys (evaluator §10, verification §6): answered
 	// outright on this evaluator's analytic bodies — validity is decided
-	// first, so only a proven solid carries the readings. A survey requested
-	// on an undecided-validity body never reaches runSurveys at all;
-	// publishBodyResult publishes its Unavailable outcome and
-	// DiagSurveyPrerequisite from Validity alone (proposal §9). A survey
+	// first, so only a proven solid or a proven, pull-asked sheet reaches
+	// runSurveys at all. A survey requested on an undecided-validity body
+	// never reaches it; publishBodyResult publishes its Unavailable outcome
+	// and DiagSurveyPrerequisite from Validity alone (proposal §9). A survey
 	// runSurveys itself cannot decide (a payload no shipped feature builds)
 	// leaves the asked question undecided, and a stated spec proven to fail
 	// is Violating. Each non-Sound survey outcome names itself in the slice.
 	surveysAsked := cfg.wall != nil || cfg.pull != nil || cfg.concaveRadius
+	// surveysRunnable widens haveRegion by exactly one case: a proven sheet
+	// with a pull requested. The undercut survey answers over a sheet's own
+	// walls (docs/surface-design.md §2.3, §9.1), and runSurveys itself
+	// gates the wall and concave-radius blocks back down to a solid, so
+	// admitting a sheet here never lets those two surveys run on one.
+	surveysRunnable := haveRegion ||
+		(validity.Outcome == ValidityValid && b.Kind() == BodySheet && cfg.pull != nil)
 	violating, suspect := false, false
 	var surveys surveyResults
 	switch {
-	case haveRegion && surveysAsked:
+	case surveysRunnable && surveysAsked:
 		var surveyDiags []Diagnostic
 		var err error
 		surveys, surveyDiags, err = runSurveys(newWorkBudget(ctx), b, cfg)
@@ -743,14 +754,21 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 				suspect = true
 			}
 		}
+		// The wall and concave-radius prerequisite refusals are emitted by
+		// publishWallResult/publishConcaveRadiusResult, not by runSurveys, so
+		// they never appear in surveyDiags above; a sheet that asked either
+		// one still owes this body a Suspect for it.
+		if b.Kind() == BodySheet && (cfg.wall != nil || cfg.concaveRadius) {
+			suspect = true
+		}
 	case validity.Outcome == ValidityValid && surveysAsked:
-		// haveRegion is false here only because the body's kind is not
-		// BodySolid — a sound sheet, proven valid but with no material for
-		// the requested survey to be about (docs/surface-design.md §9.1).
-		// runSurveys never runs; publishWallResult, publishUndercutResult
-		// and publishConcaveRadiusResult each publish Unavailable plus
-		// their own DiagSurveyPrerequisite from validity and kind alone, so
-		// this body's Status must already carry that Suspect verdict.
+		// surveysRunnable is false here only because the body is a proven
+		// sheet that asked no pull — a wall and/or concave-radius question
+		// with no material to be about (docs/surface-design.md §9.1).
+		// runSurveys never runs; publishWallResult and
+		// publishConcaveRadiusResult each publish Unavailable plus their own
+		// DiagSurveyPrerequisite from validity and kind alone, so this
+		// body's Status must already carry that Suspect verdict.
 		suspect = true
 	}
 
