@@ -65,11 +65,16 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 	// sectionDelta nonzero and mints neither — so every vertex and rim edge
 	// this build places at z0/z1 can later prove Body.Patch's bounded-chain
 	// gate coplanar by shared identity alone, never by comparing a
-	// coordinate (docs/surface-design.md §5.2).
-	var levelZ0, levelZ1 levelID
+	// coordinate (docs/surface-design.md §5.2). The token's own origin/normal
+	// are read off the SAME frame-derived construction capFrame uses below
+	// for the solid's own caps (pp.point/pp.dir), never fitted to held vertex
+	// coordinates — the two ends share one normal (a prism does not tilt
+	// between them), so it is computed once.
+	var levelZ0, levelZ1 levelToken
 	if pp.sectionDelta == 0 {
-		levelZ0 = d.mintLevel()
-		levelZ1 = d.mintLevel()
+		levelNormal := pp.dir(0, 0, 1)
+		levelZ0 = d.mintLevel(pp.point(0, 0, pp.z0), levelNormal)
+		levelZ1 = d.mintLevel(pp.point(0, 0, pp.z1), levelNormal)
 	}
 
 	// Topology: one shell over every loop's side faces plus the two caps.
@@ -395,7 +400,7 @@ func rimConvexity(ctx context.Context, w sideWalk, holeLoop bool, work *freeform
 // append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) order a
 // *profileWalks was resolved from — so it is passed straight through as
 // buildLoopSidesAs's roleLoop, which resolved is read against.
-func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPayload, li int, loop LoopRecord, work *freeformWork, resolved *profileWalks, levelZ0, levelZ1 levelID) ([]*Face, []coedge, []coedge, boundedScalar, error) {
+func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPayload, li int, loop LoopRecord, work *freeformWork, resolved *profileWalks, levelZ0, levelZ1 levelToken) ([]*Face, []coedge, []coedge, boundedScalar, error) {
 	return buildLoopSidesAs(ctx, body, ref, pp, li, li != 0, loop, work, resolved, levelZ0, levelZ1)
 }
 
@@ -422,7 +427,7 @@ func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPay
 // respective end — the zero value declines for every OTHER caller of this
 // function (shell_cup.go, capblend_moments.go), which mint neither and so
 // leave every certificate check refusing by default.
-func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord, work *freeformWork, resolved *profileWalks, levelZ0, levelZ1 levelID) ([]*Face, []coedge, []coedge, boundedScalar, error) {
+func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord, work *freeformWork, resolved *profileWalks, levelZ0, levelZ1 levelToken) ([]*Face, []coedge, []coedge, boundedScalar, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, nil, boundedScalar{}, err
 	}

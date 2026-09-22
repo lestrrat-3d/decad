@@ -435,36 +435,60 @@ Four gates, in this order, and each is reject-only:
    arm admits it.
 
    **A second arm — the LEVEL half of the shared-denotation certificate — is
-   tried only when this first, exact arm refuses on a nonzero bound**, and it
-   never reads a coordinate, a residual or a bound magnitude. It requires
-   every chain vertex, and every chain edge, to carry the SAME non-zero
-   `levelID` (`denotation.go`): a minted identity a straight prism build
-   (`prism_build.go`) stamps once per swept end, only when its own record is
-   drawn straight from the profile (`sectionDelta == 0`) and its frame axes
-   are RECORDED rather than computed, so the only displacement in play is
-   axial. A shared level proves the chain's true vertices lie on ONE plane —
-   `frame.Origin + u·U + v·V + L·N` for one denoted level `L` — whatever
-   bound each one's own held coordinate carries, because every one of them
-   was stamped by the SAME evaluator call over the SAME recorded frame and
-   level: a coplanarity proof by shared construction, never by comparison.
-   Two independently built prisms whose bounded rims happen to hold
-   bit-identical coordinates and bit-identical bounds still refuse — their
-   level tokens were minted by two separate calls and are never equal, and
-   nothing about this arm ever compares the coordinates or the bounds
-   themselves. A revolve's own seam is excluded on purpose: its half-plane's
-   normal is itself bounded, not merely its offset, so `revolve_build.go`
-   mints no level token, and a revolve seam chain stays on the first (exact)
-   arm alone — still `ErrUnsupported` (R6). A chain admitted by neither arm
-   is `ErrUnsupported` (R6): decad's reject-only rule treats "not proven
-   planar by either arm" the same whether the failure was a proven
-   non-planar chain or an undecided bounded one.
+   tried only when this first, exact arm refuses on a nonzero bound**, and its
+   ADMISSION decision never reads a coordinate, a residual or a bound
+   magnitude. It requires every chain vertex, and every chain edge, to carry
+   a `levelToken` (`denotation.go`) with the SAME non-zero id: a minted
+   identity a straight prism build (`prism_build.go`) stamps once per swept
+   end, only when its own record is drawn straight from the profile
+   (`sectionDelta == 0`) and its frame axes are RECORDED rather than
+   computed, so the only displacement in play is axial. A shared id proves
+   the chain's true vertices lie on ONE plane — `frame.Origin + u·U + v·V +
+   L·N` for one denoted level `L` — whatever bound each one's own held
+   coordinate carries, because every one of them was stamped by the SAME
+   evaluator call over the SAME recorded frame and level: a coplanarity
+   proof by shared construction, never by comparison. Two independently
+   built prisms whose bounded rims happen to hold bit-identical coordinates
+   and bit-identical bounds still refuse — their level tokens were minted by
+   two separate calls and are never equal, and nothing about admission ever
+   compares the coordinates or the bounds themselves. A revolve's own seam
+   is excluded on purpose: its half-plane's normal is itself bounded, not
+   merely its offset, so `revolve_build.go` mints no level token, and a
+   revolve seam chain stays on the first (exact) arm alone — still
+   `ErrUnsupported` (R6). A chain admitted by neither arm is `ErrUnsupported`
+   (R6): decad's reject-only rule treats "not proven planar by either arm"
+   the same whether the failure was a proven non-planar chain or an
+   undecided bounded one.
 
-   When the level arm admits a chain, the new face's plane ORIGIN is still
-   bounded — the axial displacement the token itself proves, never zero —
-   so `buildPatchFace` sets the new face's `axialDelta`/`hasAxialDelta` from
-   it, the same fields `prism_build.go` already sets on a prism's own caps
-   (no new field on `Face`). A chain the first, exact arm admits keeps
-   publishing a zero `axialDelta`, unchanged.
+   **The published plane itself, once a chain is admitted this way, comes
+   from the token — never from fitting one to the chain's own held vertex
+   coordinates.** Held vertices at one recorded level are only
+   APPROXIMATELY coplanar in float64: `frame.ToWorldUV(u, v)` rounds
+   differently for each distinct `(u, v)`, so two vertices sharing one level
+   generally do not land on bit-identical planes even though their true
+   (unrounded) positions do — trivially zero for an axis-aligned sketch
+   plane, where every cross term is an exact multiplication by 0 or 1, but
+   not in general. A normal FITTED to that data (`patchChainOrientedNormal`'s
+   Newell sum, which the exact arm's own admitted chains use safely, because
+   gate 3 there already proved those SAME coordinates bit-for-bit coplanar)
+   would tilt the published plane away from the true one by that same
+   rounding, with no term in `axialDelta` to cover a TILT — `axialDelta` only
+   ever states an OFFSET along an already-exact normal, on the same terms a
+   prism cap's own `axialDelta` does. So a chain the level arm admits instead
+   takes its plane's origin and normal from the token directly (`origin`,
+   `normal`, transformed by this evaluation's own placement) — the same
+   frame-derived construction `prism_build.go`'s own `capFrame` already uses
+   for a solid prism's caps, needing no fitting argument at all.
+   `patchChainOrientedNormal`'s fit still runs for such a chain, but only to
+   settle which of the token's two normal directions matches the chain's own
+   walk sense (`patchChainLevelNormal`): its magnitude, and any tilt fitting
+   approximately-coplanar data would carry, are discarded, never published.
+   `buildPatchFace` then sets the new face's `axialDelta`/`hasAxialDelta`
+   from the token's own bound (folded with any placement rounding), the same
+   fields `prism_build.go` already sets on a prism's own caps (no new field
+   on `Face`). A chain the first, exact arm admits keeps its existing plane
+   (fitted from its own proven-exact vertices) and a zero `axialDelta`,
+   unchanged.
 4. **Each chain is simple in that plane.** The plane-local walk does not cross
    or touch itself, decided by `fillet_audit.go`'s existing §5 section audit —
    the same orientation, self-consuming-trim, crossing and nesting checks a

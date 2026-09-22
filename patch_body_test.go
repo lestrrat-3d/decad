@@ -365,6 +365,78 @@ func TestBodyPatchCapsBothBoundedRimsOfASymmetricSurfaceExtrudedWall(t *testing.
 	decadtest.MeasuresArea(t, capped, units.SquareMillimeters(320*127+2*6000), decadtest.WithinRel(units.Scalar(1e-6)))
 }
 
+// TestBodyPatchCapsBothBoundedRimsOnARotatedSketchPlane is T26's own
+// rotated-frame regression: held vertex coordinates at one recorded level
+// are only APPROXIMATELY coplanar in float64 once the sketch plane is not
+// axis-aligned (frame.ToWorldUV(u, v) rounds differently per (u, v) —
+// denotation.go's own doc comment), so a normal FITTED to them would be
+// tilted by that rounding, with no term in axialDelta to cover it. Every
+// other fixture in this file sits on the XY plane, where that rounding is
+// always exactly zero (u*U+v*V never touches a nonzero cross term) and so
+// never exercises this at all. This one does not: the plane's axis is
+// (1, 2, 3) normalized, nowhere near a coordinate axis.
+func TestBodyPatchCapsBothBoundedRimsOnARotatedSketchPlane(t *testing.T) {
+	t.Parallel()
+	axis, ok := r3.NewVec(1, 2, 3).Normalize()
+	require.True(t, ok)
+	ref := r3.NewVec(1, 0, 0)
+	u, ok := ref.Sub(axis.Scale(ref.Dot(axis))).Normalize()
+	require.True(t, ok)
+	frame, err := r3.NewFrame(r3.NewVec(7, -3, 11), u, axis.Cross(u))
+	require.NoError(t, err)
+
+	w := sketch.NewWorld()
+	plane, err := w.CreatePlaneFromFrame(frame)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	doc := decad.New()
+	wall, err := doc.Extrude(s, s.Profiles()[0], decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+
+	rim, err := decad.Edges(decad.Free()).Exactly(8).SelectEdges(wall)
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, rim[0].Start().Position().Exactness)
+
+	capped, err := wall.Patch(decad.Edges(decad.Free()).Exactly(8))
+	require.NoError(t, err)
+
+	require.Equal(t, decad.BodySheet, capped.Kind())
+	require.Len(t, capped.Faces(), 6)
+	_, err = decad.Edges(decad.Free()).SelectEdges(capped)
+	require.ErrorIs(t, err, decad.ErrNoMatch)
+	decadtest.MeasuresArea(t, capped, units.SquareMillimeters(320*127+2*6000), decadtest.WithinRel(units.Scalar(1e-6)))
+
+	// The published normal must be the recorded axis (either sign, since
+	// which cap this one is stays unasserted here) to well within any float64
+	// rounding a fit to held vertices could introduce — never off by
+	// anywhere near the scale that fitting error would actually reach for
+	// this deliberately non-axis-aligned frame.
+	faces, err := decad.Faces(decad.Planar()).SelectFaces(capped)
+	require.NoError(t, err)
+	var sawCap bool
+	for _, f := range faces {
+		origins := f.Origins()
+		if len(origins) != 1 || origins[0].Role != "patch" {
+			continue
+		}
+		sawCap = true
+		// Plane's own NormalAt reads only the frame, never p.
+		n, err := f.NormalAt(r3.Vec{})
+		require.NoError(t, err)
+		got := r3.NewVec(n.Value.X, n.Value.Y, n.Value.Z)
+		dPos := got.Sub(axis).Len()
+		dNeg := got.Sub(axis.Scale(-1)).Len()
+		require.Less(t, min(dPos, dNeg), 1e-9, "the cap's published normal must track the sketch plane's own axis")
+	}
+	require.True(t, sawCap, "at least one new cap face was found")
+}
+
 // TestBodyPatchTableR is docs/surface-design.md's T13-shaped test for
 // Body.Patch: every reachable Table R row through the public seam, with
 // errors.Is and the document left unchanged. R6 (non-planar/bounded chain)

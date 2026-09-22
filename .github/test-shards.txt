@@ -245,6 +245,7 @@
 0	0.04	TestXHPLerpDenotesTheSameCoordinate
 0	0.01	TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne
 0	0.01	TestBodyPatchCapsBothBoundedRimsOfASymmetricSurfaceExtrudedWall
+0	0.01	TestBodyPatchCapsBothBoundedRimsOnARotatedSketchPlane
 0	0.01	TestBodyPatchCapsBothRimsOfATubeInOneCall
 0	0.01	TestBodyPatchClosesASheetsLastFreeEdgeStaysASheet
 0	0.01	TestBodyPatchContextCancellationLeavesDocumentUnchanged
@@ -255,6 +256,7 @@
 0	0.01	TestBodyPatchReproducesThroughPlacement
 0	0.01	TestBodyPatchTableR
 0	0.01	TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta
+0	0.01	TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame
 0	0.01	TestBuildPatchFaceRemapsACrossingChainToErrDegenerate
 0	0.01	TestOrientPatchChainRejectsDisagreeingAdjacentFaces
 0	0.01	TestProvePatchChainPlaneAcceptsAPlanarChain

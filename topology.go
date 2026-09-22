@@ -238,7 +238,7 @@ type Vertex struct {
 	// (denotation.go): non-zero only for a vertex a builder stamped at one
 	// denoted sweep level, and zero ("no certificate") for every vertex no
 	// builder in this package mints one for.
-	level levelID
+	level levelToken
 }
 
 // Position returns the vertex position in millimetres — a computed
@@ -334,7 +334,7 @@ type Edge struct {
 	// (denotation.go): non-zero only for a rim edge a builder stamped at one
 	// denoted sweep level, and zero ("no certificate") for every edge no
 	// builder in this package mints one for.
-	level levelID
+	level levelToken
 }
 
 // Curve returns the edge's tagged geometry.
