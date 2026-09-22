@@ -67,10 +67,10 @@ to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `moments.go` / `moments_validate.go` | The mass-property engine (evaluator §4): closed-form Green's-theorem boundary integrals for `Area`, `Centroid`, `SecondMoments`, accumulated per region; Tier A free-form terms route through one record-level work preflight. See `docs/spline-design.md` §5.2. |
+| `moments.go` / `moments_validate.go` | The mass-property engine (evaluator §4): closed-form Green's-theorem boundary integrals for `Area`, `Centroid`, `SecondMoments`, accumulated per region. See `docs/spline-design.md` §5.2. |
 | `moments_trig.go` | `moments.go`'s certified sine/cosine primitive: `turnSinCosInterval` proves an enclosure of sin/cos of an exact rational turn without ever comparing against π. See this file's own doc comment. |
-| `bounded.go` | The bounded-scalar vocabulary: a float64 carried beside a proven bound on its own error, its arithmetic, and the three-valued admission readers. Every operation charges its own rounding on top of the operand bounds. See the file's own doc comment. |
-| `dyadic.go` | The exact BINARY-SCALED arithmetic every proof over held float64 coordinates is carried in: `dyadic`, a mantissa times a power of two, and `dyV3`, its vector. A reading that genuinely divides converts to `big.Rat` at that point. See the file's own doc comment. |
+| `bounded.go` | The bounded-scalar vocabulary: a float64 carried beside a proven bound on its own error, its arithmetic, and the three-valued admission readers. See the file's own doc comment. |
+| `dyadic.go` | The exact BINARY-SCALED arithmetic every proof over held float64 coordinates is carried in: `dyadic`, a mantissa times a power of two, and `dyV3`, its vector. See the file's own doc comment. |
 | `rat_interval.go` | The exact rational interval arithmetic every certified reading is proven in, plus the `atan`/`atan2` and π enclosures no single rational can state. See the file's own doc comment. |
 | `moments_circular.go` | Exact rational arc/circle integration for `moments.go`'s boundary sums and `revolve_build.go`'s axis moment. See the file's own doc comment. |
 | `spline_bezier.go` | The exact reduction of `docs/spline-design.md` §5.1: converts a recorded free-form curve to piecewise polynomial Bézier control points over `big.Rat`, with no rounding. Owns the §5.2 work-budget charges. |
@@ -85,7 +85,7 @@ to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `topology.go` | The topology model (evaluator §3): `Body`→`Lump`→`Shell`→`Face`→`Loop`→`CoEdge`→`Edge`→`Vertex`, plus sealed `Surface`/`Curve` variant sets. Convexity, exactness rules and immutability are on the types' own doc comments; see `docs/evaluator-design.md` §3. |
+| `topology.go` | The topology model (evaluator §3): `Body`→`Lump`→`Shell`→`Face`→`Loop`→`CoEdge`→`Edge`→`Vertex`, plus sealed `Surface`/`Curve` variant sets. See the types' own doc comments and `docs/evaluator-design.md` §3. |
 | `normal_bound.go` | The proof behind the bound every `Face.NormalAt` arm publishes: rational-interval enclosures of each arm's own exact unit normal, and the radian sine/cosine enclosure the `Cone` arm needs. See the file's own doc comment. |
 | `document.go` | `Document` (`New`/`Bodies`), its atomic commit tail, private provenance identities, and retire/liveness gates. `Body.Placed`/`Duplicate`/`PlacedCopy` rebuild the payload under a composed motion; see their doc comments and evaluator §8. |
 | `surface.go` | `WithSurfaceResult`, the two refusal helpers (`refuseSurfaceResult`, `refuseSheetOperand`), and the shared shell/lump helpers (`shellIsOpen`, `sheetLumps`) prism and revolve builds share. See `docs/surface-design.md` §2.2-§4, §7, §11. |
@@ -94,7 +94,7 @@ to the byte budget.
 | `stitch_weld.go` | Table J's admission: the shared vertex table and which free edge pairs weld. See `docs/surface-design.md` §6.2. |
 | `stitch.go` | `Stitch`/`StitchContext`: rebuilds fresh topology over the weld plan, derives orientation, and decides Table C's outcome and measurements. See `docs/surface-design.md` §6. |
 | `unstitch.go` | `Unstitch`/`UnstitchContext`: splits a body into one free single-face sheet per face, reusing `stitch.go`'s placement machinery per face. See `docs/surface-design.md` §6.5. |
-| `extrude.go` | `Document.Extrude` (evaluator §5): the public entry point, `WithTaper`, and linear-extent resolution into a `linearSweep`. The payload, the build and the extent readings each have their own `prism_*.go` file. See `docs/evaluator-design.md` §5. |
+| `extrude.go` | `Document.Extrude` (evaluator §5): the public entry point, `WithTaper`, and linear-extent resolution into a `linearSweep`. See `docs/evaluator-design.md` §5 and the file's own doc comment. |
 | `sweep.go` | `Document.Sweep` / `SweepContext`, common path gates, and the distinct replayable payload for zero-twist line and arc spans. See `docs/sweep-design.md` PR 1–4. |
 | `sweep_arc.go` | The one-span `ArcThrough` reduction: exact circumcircle and tangent gates, bounded axis/angle publication, Revolve reuse, and Sweep role restoration. See `docs/sweep-design.md` PR 3. |
 | `sweep_composite.go` | Composite Sweep section transport and shared join topology. See `docs/sweep-design.md` PR 4. |
@@ -115,8 +115,8 @@ to the byte budget.
 | `loft_build.go` | `loftPayload`, `loftMeshProof`, `evalLoft` and `placed`. Pairing, stations and topology each have their own `loft_*.go` file. See `docs/loft-design.md` §5, §8, §12. |
 | `loft_pairing.go` | `docs/loft-design.md` Table P: which from-segment walls to which to-segment. A pair the table does not decide is refused outright, never matched to the nearest one. See §5, §5.1. |
 | `loft_stations.go` | Places the stations a loft's wall chords run between and proves each chain's departure from the curve it approximates, under one shared chord target and a station cap. See `docs/loft-design.md` §5.2. |
-| `loft_topology.go` | Assembles the paired stations into the flat-triangle solid the payload holds, and builds the `Body` topology over it. The triangles are what is built; the curved solid is reached through the proven displacement. See `docs/loft-design.md` §5.1, §7. |
-| `loft_audit.go` | The build-time crossing audit of `docs/loft-design.md` §6: `loftCrossingAudit` proves the assembled triangle set manifold and watertight, reusing `boolean_exact.go` and `boolean_mesh.go`'s `triTriClassify` unchanged. Gate order is S6, S8, S7. |
+| `loft_topology.go` | Assembles the paired stations into the flat-triangle solid the payload holds, and builds the `Body` topology over it. See `docs/loft-design.md` §5.1, §7 and the file's own doc comment. |
+| `loft_audit.go` | The build-time crossing audit of `docs/loft-design.md` §6: `loftCrossingAudit` proves the assembled triangle set manifold and watertight, reusing `boolean_exact.go` and `boolean_mesh.go`'s `triTriClassify` unchanged. |
 | `loft_moments.go` | `docs/loft-design.md` §8's mass-property engine: `loftMassAccumulator`, an exact-rational tetrahedron sum over the assembled triangle set, publishing Volume/Centroid/Bounds/Area under the payload's own placement displacement. See §8, §12. |
 
 ### Modify
@@ -147,34 +147,34 @@ to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `verify.go` | Implements `Document.Verify`: resolves the options, verifies each body via `verify_publish.go`, and partitions body pairs into disjoint, overlapping, or undecided. The report vocabulary, the tolerance gate and the gate diameter each have their own file. See `docs/verification-design.md` §1-§3. |
+| `verify.go` | Implements `Document.Verify`: resolves the options, verifies each body via `verify_publish.go`, and partitions body pairs for interference. See `docs/verification-design.md` §1-§3 and the file's own doc comment. |
 | `report.go` | The core vocabulary `Verify`'s report is written in: `Status`, `ReadingKind`, `DiagnosticCode`, `SurveyKind`, `DiagnosticPair`, `Diagnostic`, `Interference`, `Clearance`. Types only. See `docs/verification-design.md` §1-§3. |
 | `verify_tolerance.go` | `Verify`'s tolerance gate: which readings satisfy the caller's relative tolerance, and a `Diagnostic` for each that does not. Every comparison is against a reference the body supplies. See `docs/verification-design.md` §2-§3. |
 | `verify_gate.go` | Proves the reference diameter the tolerance gate is anchored on, per payload. A payload with no provable diameter withholds the gate rather than anchoring it on a guess. See `docs/verification-design.md` §3. |
 | `verify_result.go` | The result vocabulary `Verify`'s report is written in: `Report`, `BodyReport`, and every per-survey result record. Types and `Passed`/`ForBody` only; `verify_publish.go` builds the values. |
 | `verify_publish.go` | `Verify`'s publication assembler: turns private survey outcomes and certified readings into `Report`/`BodyReport`, deciding each survey's outcome, assessment and tolerance state. |
-| `clearance.go` | The pair kernel: `clearancePair` proves one pair's four-way relation and, when disjoint, a proven gap interval. The coplanar-plane certificate runs first and short-circuits later checks. `sheetSolidPair` decides a sheet pair too, minus that certificate. See `docs/clearance-design.md` §1-§3/§6. |
-| `clearance_degen.go` | The degeneracy oracle every cell asks before emitting a constant/`Exact` candidate: three-valued `degYes`/`degNo`/`degUnknown`, `degYes` only from the exact arithmetic of `dyadic.go`, never a tolerance. See `docs/clearance-design.md` §4/§5. |
+| `clearance.go` | The pair kernel: `clearancePair` proves one pair's four-way relation and, when disjoint, a proven gap interval. `sheetSolidPair` decides a sheet pair too. See `docs/clearance-design.md` §1-§3/§6. |
+| `clearance_degen.go` | The degeneracy oracle every cell asks before emitting a constant/`Exact` candidate, decided three-valued over exact arithmetic only, never a tolerance. See `docs/clearance-design.md` §4/§5 and the file's own doc comment. |
 | `clearance_cells.go` | The §3 candidate sink and §4 face-interior table: enumerates stationarity tiers per face pair, folds admission into contributions, and reduces offset-surface pairs to spine-pair criticals. See `docs/clearance-design.md` §3/§4. |
 | `clearance_tiers.go` | The curve and vertex tiers of §3: face-edge, edge-edge, and vertex cells over §4's curve-tier table. Constant-distance families emit only on the degeneracy oracle's `degYes`. See `docs/clearance-design.md` §3/§4. |
 | `clearance_geom.go` | The kernel's boundary model: builds trimmed carrier faces, edges and vertices from a body's payload and runs the §2 nesting ray casts, closed form except a Sturm-certified torus quartic. See `docs/clearance-design.md` §2/§3. |
 | `clearance_poly.go` | The certified-bracket machinery of §4/§5: isolates stationarity polynomials by Sturm sequences over exact rationals, then brackets each critical value by a proven Lipschitz bound. See `docs/clearance-design.md` §4/§5. |
 | `survey.go` | The analytic wall, undercut, and min-radius surveys on prism, revolve, and cup payloads. An undecided answer reads `Suspect`, never a silent pass. See `docs/verification-design.md` §6. |
-| `survey_undercut.go` | The exact three-valued receiver-face undercut reader `prismUndercuts`/`cupUndercuts`/`capBlendUndercuts` share: `decidePull`, `wallNormalDecision` and `capNormalDecision`, decided over the rationals with no float allowance. `revolveUndercuts` is not converted. |
+| `survey_undercut.go` | The exact three-valued receiver-face undercut reader `prismUndercuts`/`cupUndercuts`/`capBlendUndercuts` share, decided over the rationals with no float allowance. See the file's own doc comment. |
 | `survey2d.go` | The 2D closed-form inscribed-disk kernel behind the wall survey, shared with the modify section audit via `elemOf`. Its candidate set is exact for line/arc boundaries. See `docs/verification-design.md` §6. |
 | `budget.go` | `workBudget`, the shared bounded work counter read-only and pre-commit audit phases poll via `step`/`err`. It holds closures, never a stored `context.Context`. See `docs/interference-design.md` §7.2. |
-| `interference.go` | The pairwise overlap measurement behind `Verify`: containment and equality certificates reuse an operand's volume; every other supported pair runs read-only `OpIntersect` under the positive-volume gate. See `docs/interference-design.md` §4-§8. |
+| `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's own doc comment. |
 
 ### Booleans
 
 | Path | Responsibility |
 |---|---|
-| `boolean.go` | Public `Union`/`Cut`/`Intersect` surface over the mesh-boolean evaluator and the typed `BooleanError` mapping; tries the prism-boolean analytic reduction first, and owns `Verify`'s read-only `OpIntersect` twin of it. See `Union`'s doc comment and `docs/evaluator-design.md` §9. |
+| `boolean.go` | Public `Union`/`Cut`/`Intersect` surface over the mesh-boolean evaluator and the typed `BooleanError` mapping. See the file's own doc comment and `docs/evaluator-design.md` §9. |
 | `boolean_parallel.go` | The bounded ordered contact-classification batches shared by `facesNearMiss` and `meshBoolean`; workers classify uncached facet pairs into indexed slots, while memo access and aggregation stay serial. |
-| `prism_boolean.go` | The analytic Union/Cut/Intersect reduction over co-directional coplanar prisms: shared G1-G4 admission, work-budget cap, scene construction, and the shared merge/chain machinery, dispatched ahead of the mesh path. See the file's own doc comment and `docs/prism-boolean-design.md`. |
-| `prism_boolean_nesting.go` | Cut/Intersect's clean-nesting structural match (§4.2's "clean" sub-case): the whole-loop tag-map search resolving a clean bore/nested pair, falling to the crossing sub-case when unresolved. See the file's own doc comment and `docs/prism-boolean-design.md`. |
+| `prism_boolean.go` | The analytic Union/Cut/Intersect reduction over co-directional coplanar prisms, dispatched ahead of the mesh path. See the file's own doc comment and `docs/prism-boolean-design.md`. |
+| `prism_boolean_nesting.go` | Cut/Intersect's clean-nesting structural match (§4.2's "clean" sub-case): the whole-loop tag-map search resolving a clean bore/nested pair. See the file's own doc comment and `docs/prism-boolean-design.md`. |
 | `prism_boolean_crossing.go` | Cut/Intersect's crossing sub-case (§4.2): edge-orientation propagation classifies each arrangement cell per operand; `mergePrismCells` assembles the selected set. See the file's own doc comment and `docs/prism-boolean-design.md`. |
-| `prism_overlap.go` | `docs/prism-boolean-design.md` §4.5's overlap-area reading: measures a coplanar prism pair's overlap cell by cell and publishes the charged sum as a volume, with no assembled section and no body. Read-only, for `Verify`'s interference path alone. See the file's own doc comment. |
+| `prism_overlap.go` | `docs/prism-boolean-design.md` §4.5's overlap-area reading, read-only for `Verify`'s interference path alone. See the file's own doc comment. |
 | `boolean_mesh.go` | The exact-predicate mesh-boolean pipeline: contact classification, subdivision, stitching, and the closed-mesh audit. See the file's own doc comment and `docs/evaluator-design.md` §9. |
 | `boolean_cut.go` | Per-facet exact subdivision along contact segments into classified regions, in rational 2D on the facet's own plane. See the file's own doc comment. |
 | `boolean_exact.go` | The exact-arithmetic kernel behind the mesh boolean: adaptive orient3d, rational predicates, and the reject-only pre-filters. See each filter's own doc comment. |
