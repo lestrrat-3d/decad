@@ -429,12 +429,66 @@ Four gates, in this order, and each is reject-only:
    curve, not just its two endpoints, can lie in. A curved edge is planar
    only when its own carrier plane is the chain's, which its recorded
    surface states. A vertex or a curve carrying a **nonzero bound** is not
-   proven planar and is refused: the chain's true position is only known
-   within that bound, and a plane fitted to it would be exactly the fitted
-   geometry §1.3 refuses. `ErrUnsupported` (R6) — the chain may be planar, and
-   a later increment with a shared-denotation certificate may admit it (§6.2).
-   A chain proven **non-planar** is `ErrUnsupported` too: a non-planar patch
-   needs a fitted free-form surface, which §1.2 stages.
+   proven planar by this arm and falls to the second arm below. A chain
+   proven **non-planar** is `ErrUnsupported` (R6) outright: a non-planar
+   patch needs a fitted free-form surface, which §1.2 stages, and no later
+   arm admits it.
+
+   **A second arm — the LEVEL half of the shared-denotation certificate — is
+   tried only when this first, exact arm refuses on a nonzero bound**, and its
+   ADMISSION decision never reads a coordinate, a residual or a bound
+   magnitude. It requires every chain vertex, and every chain edge, to carry
+   a `levelToken` (`denotation.go`) with the SAME non-zero id: a minted
+   identity a straight prism build (`prism_build.go`) stamps once per swept
+   end, only when its own record is drawn straight from the profile
+   (`sectionDelta == 0`) and its frame axes are RECORDED rather than
+   computed, so the only displacement in play is axial. A shared id proves
+   the chain's true vertices lie on ONE plane — `frame.Origin + u·U + v·V +
+   L·N` for one denoted level `L` — whatever bound each one's own held
+   coordinate carries, because every one of them was stamped by the SAME
+   evaluator call over the SAME recorded frame and level: a coplanarity
+   proof by shared construction, never by comparison. Two independently
+   built prisms whose bounded rims happen to hold bit-identical coordinates
+   and bit-identical bounds still refuse — their level tokens were minted by
+   two separate calls and are never equal, and nothing about admission ever
+   compares the coordinates or the bounds themselves. A revolve's own seam
+   is excluded on purpose: its half-plane's normal is itself bounded, not
+   merely its offset, so `revolve_build.go` mints no level token, and a
+   revolve seam chain stays on the first (exact) arm alone — still
+   `ErrUnsupported` (R6). A chain admitted by neither arm is `ErrUnsupported`
+   (R6): decad's reject-only rule treats "not proven planar by either arm"
+   the same whether the failure was a proven non-planar chain or an
+   undecided bounded one.
+
+   **The published plane itself, once a chain is admitted this way, comes
+   from the token — never from fitting one to the chain's own held vertex
+   coordinates.** Held vertices at one recorded level are only
+   APPROXIMATELY coplanar in float64: `frame.ToWorldUV(u, v)` rounds
+   differently for each distinct `(u, v)`, so two vertices sharing one level
+   generally do not land on bit-identical planes even though their true
+   (unrounded) positions do — trivially zero for an axis-aligned sketch
+   plane, where every cross term is an exact multiplication by 0 or 1, but
+   not in general. A normal FITTED to that data (`patchChainOrientedNormal`'s
+   Newell sum, which the exact arm's own admitted chains use safely, because
+   gate 3 there already proved those SAME coordinates bit-for-bit coplanar)
+   would tilt the published plane away from the true one by that same
+   rounding, with no term in `axialDelta` to cover a TILT — `axialDelta` only
+   ever states an OFFSET along an already-exact normal, on the same terms a
+   prism cap's own `axialDelta` does. So a chain the level arm admits instead
+   takes its plane's origin and normal from the token directly (`origin`,
+   `normal`, transformed by this evaluation's own placement) — the same
+   frame-derived construction `prism_build.go`'s own `capFrame` already uses
+   for a solid prism's caps, needing no fitting argument at all.
+   `patchChainOrientedNormal`'s fit still runs for such a chain, but only to
+   settle which of the token's two normal directions matches the chain's own
+   walk sense (`patchChainLevelNormal`): its magnitude, and any tilt fitting
+   approximately-coplanar data would carry, are discarded, never published.
+   `buildPatchFace` then sets the new face's `axialDelta`/`hasAxialDelta`
+   from the token's own bound (folded with any placement rounding), the same
+   fields `prism_build.go` already sets on a prism's own caps (no new field
+   on `Face`). A chain the first, exact arm admits keeps its existing plane
+   (fitted from its own proven-exact vertices) and a zero `axialDelta`,
+   unchanged.
 4. **Each chain is simple in that plane.** The plane-local walk does not cross
    or touch itself, decided by `fillet_audit.go`'s existing §5 section audit —
    the same orientation, self-consuming-trim, crossing and nesting checks a
@@ -1248,7 +1302,7 @@ ANSWER is accepted and reads `Suspect`.
 |---|---|
 | 1 | `BodyKind` and `Kind()`, `Shell.IsOpen`, `Edge.IsFree`, `Free()`; `WithSurfaceResult()` on `Extrude` and `Revolve`; `Document.Patch`; the sheet validity audit; `DiagUnsupportedPairSheet` and §9.3's box rule; every Table A amendment; prism sheet tessellation and export with the manifold-with-boundary audit. The revolve sheet mesh is staged to increment 4 (§10) |
 | 2 | `Stitch` over exact all-planar boundaries (Table J with J5, Table C's first two rows), including its own directed-edge parity leg, derived orientation, and the recorded-weld replay a placement reuses; `Body.Patch`; the sheet-against-solid containment cast and clearance gap of §9.3, narrowing when `DiagUnsupportedPairSheet` fires. `Unstitch` is a separate follow-up: it needs no new proof this increment does not already carry, but it is its own PR |
-| 3 | `WithSurfaceResult()` on `Sweep` and `Loft`; the shared-denotation certificate, which lifts J5 for bounded edges and §5.2 gate 3's bounded-chain half of R6 together; the per-surface flux integral that lifts Table C's curved-closure refusal (R8); the undercut survey over a surface-extruded prism sheet's positive side — the only sheet family this increment opens it on; a loft, stitch or one-span-sweep sheet moves from `DiagSurveyPrerequisite` to `DiagUnsupportedSurveyPayload` for it instead, and stays there until its own proof lands |
+| 3 | `WithSurfaceResult()` on `Sweep` and `Loft`; the shared-denotation certificate — two distinct proofs sharing one name, never one lifted "together": a LEVEL token proving N chain vertices coplanar by shared construction, which lifts §5.2 gate 3's bounded-chain half of R6 for a straight prism's own rim (landed); a separate CURVE token proving two edges denote one curve, which lifts Table J's J5, lands in a later increment, and does not follow from the level token proving anything — coplanarity and coincidence are different proofs over different code paths; the per-surface flux integral that lifts Table C's curved-closure refusal (R8); the undercut survey over a surface-extruded prism sheet's positive side — the only sheet family this increment opens it on; a loft, stitch or one-span-sweep sheet moves from `DiagSurveyPrerequisite` to `DiagUnsupportedSurveyPayload` for it instead, and stays there until its own proof lands |
 | 4 | The revolve sheet mesh (§10): the meridian and angular chordings a surface result keeps, the caps it omits — and, where the profile meets the axis, the on-axis edge between two poles that only the caps carried (Table W) — the cap terms its area slack drops, and the manifold-with-boundary audit in the closed-mesh audit's place. It also settles which audit a CLOSED sheet runs |
 | 5 | A stitched solid's own mesh: the manifold-with-boundary/closed-mesh audit reads a `stitchPayload`'s already-triangulated face set directly rather than chording one. A stitched solid's own clearance-kernel carrier model: `newBodyGeomBudget` (`docs/clearance-design.md` §2) gains a `stitchPayload` arm, which is what lets a stitched solid reach a proven pair relation at all — until it lands, `Tessellate`/`STL`/`OBJ` and every pair question read `ErrUnsupported`/undecided exactly as they do for any other payload this evaluator has not wired an arm for |
 
@@ -1297,7 +1351,7 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T9 | a sheet handed to `Union`, `Fillet`, `Chamfer` and `Shell` | each is `ErrUnsupported`; the receiver and every operand stay live, and `Document.Bodies()` is unchanged |
 | T10 | a sheet tessellated | a prism sheet tessellates and exports through the manifold-with-boundary audit (§10, Table D; `tessellate_sheet_test.go`); a revolve sheet does the same, over every Table W row and the design's T6 (`tessellate_revolve_sheet_test.go`); a loft sheet still refuses with `ErrUnsupported`, deferred to a later increment |
 | T11 | a three-face assembly welded into a Möbius orientation | `Stitch` is `ErrDegenerate` (R7), and the document is unchanged |
-| T12 | `Body.Patch` on a non-planar four-edge chain | `ErrUnsupported` (R6); and on a bounded-but-planar chain, `ErrUnsupported` on the same row |
+| T12 | `Body.Patch` on a non-planar four-edge chain | `ErrUnsupported` (R6); and on a bounded chain that carries no shared level token — a revolve seam, or any other chain no builder stamped one onto — `ErrUnsupported` on the same row. A bounded chain that DOES share one level token is T26's own admission, gate 3's second arm |
 | T13 | every Table R row | the stated sentinel, with `errors.Is` holding, and no document change |
 | T14 | a wall extruded 5 inches `Along` (a nonzero-bound top rim, `document.go`'s unit-conversion rounding) against a patch built directly at the identical millimetre level (zero bound) | the stitch returns a **sheet**, not an error; `Edges(Free()).Exactly(12)` resolves — none of the four bit-identical rim/patch corner pairs join, because Table J's J5 refuses a nonzero-bound held value even where J4's coordinates match |
 | T15 | `Body.Patch` filling a `Document.Patch` sheet's own sole 4-edge boundary | two faces; `Area` doubles to 12000 mm², `Exact`; `Edges(Free())` matches nothing; the new face's normal is the exact negation of the original face's |
@@ -1311,6 +1365,11 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T23 | the same surface-extruded plate as T20/T21, verified with `WithMinWallThickness`, `WithPullDirection(r3.NewVec(0, 0, 1))` and `WithConcaveRadius` together | `Wall.Outcome` and `ConcaveRadius.Outcome` both `ScalarUnavailable`, each with its own `DiagSurveyPrerequisite` naming its own survey and no mention of "pull" in either message; `Undercut` carries no `DiagSurveyPrerequisite` and reads a real `CoverageComplete` with empty `Faces`; `br.Diagnostics` has length 2, not 3; `Status == Suspect` on the wall and radius refusals alone |
 | T24 | a surface-result `Revolve` sheet whose fourth leg is undecided (`ValidityUndecided`), any pull requested | `Coverage == CoverageUnavailable` with one `DiagSurveyPrerequisite` whose message names the undecided-validity cause, never a sheet-material cause |
 | T25 | `publishUndercutResult` driven directly (internal) on a `BodySheet` body with `ValidityValid` and a populated `undercutOutcome` | the survey outcome is published as given, not replaced by the prerequisite refusal |
+| T26 | `Body.Patch` capping BOTH rims of a `Symmetric` (both ends unit-converted, so both bounded) surface-extruded wall in ONE call — the LEVEL certificate's own flagship | no error, where the same chain carried no level token would be R6; `Kind() == BodySheet`; 6 faces; `Edges(Free())` matches nothing; `Area` is `Approximate` with `Bound.Base() > 0` |
+| T27 | gate 3's level arm admits a chain whose vertices and edges all carry one shared, non-zero `levelID`, and refuses the same shape carrying no level token at all | direct unit coverage of `provePatchChainPlane`'s two arms (`patch_body_internal_test.go`), since a real body's own free-edge chain always carries a level token when its build minted one |
+| T28 | two vertices whose held coordinates and held bounds are bit-identical, minted under two different `levelID`s | `Body.Patch`'s own public seam cannot construct one chain spanning two independently built bodies — a chain requires two edges to SHARE a vertex pointer, which only one evaluator's own build or a zero-bound weld creates, and Table J refuses a zero-bound weld of a bounded pair — so this is pinned directly against `provePatchChainPlane`: still `ErrUnsupported`, proving the certificate is an identity check, never a tolerance |
+| T29 | `buildPatchFace` over a chain the level arm admitted | the new face's `axialDelta`/`hasAxialDelta` carry the chain's own proven axial bound, the same fields a prism cap already publishes |
+| T30 | `Body.Patch` capping both rims of a `Distance` (one end recorded, one end unit-converted) surface-extruded wall in one call — the single-bounded-end case | no error: the recorded end's chain passes gate 3's first (exact) arm, the computed end's chain passes the second (level) arm, in the same call |
 | T39 | `annularSketch` revolved a full turn as a surface | `Verify` reads `Validity.Outcome == ValidityValid` with no `Validity.Diagnostics`, admitted by construction: `payloadProvesSimple`'s `revolvePayload` arm holds because the sweep is exactly one full turn and the radial minimum is proven clear of the axis |
 | T40 | `annularSketch` revolved a quarter turn as a surface | `Verify` stays `Validity.Outcome == ValidityUndecided` with one `DiagUndecidedValidity`: a partial turn earns no construction admission |
 

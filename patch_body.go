@@ -151,12 +151,31 @@ func (b *Body) PatchContext(ctx context.Context, sel EdgeSelector) (*Body, error
 // read-only) edges. Gate 3's proof (provePatchChainPlane) is a pure yes/no
 // decision over these same edges' own held data, never re-run once passed —
 // a rigid motion preserves planarity exactly, so nothing about the proof
-// changes across a placement — and it publishes no value this type needs to
-// carry: the new face's actual plane frame is derived fresh, every
+// changes across a placement. A chain the EXACT arm admitted publishes no
+// value gate 3 computed: the new face's plane is derived fresh, every
 // evaluation, from the chain's own (placed) oriented geometry
-// (patchChainOrientedNormal), never from a value gate 3 computed.
+// (patchChainOrientedNormal). A chain the LEVEL arm admitted instead
+// publishes ITS OWN token, below, which buildPatchFace reads for the
+// plane's origin and normal directly — never a value fitted to held vertex
+// coordinates, which are only approximately coplanar for a chain admitted
+// this way (denotation.go's own doc comment states why).
 type bodyPatchChain struct {
 	edges []*Edge
+	// axialBound and hasAxialBound are the proven axial displacement gate 3's
+	// LEVEL arm (provePatchChainPlaneLevel) admitted this chain under —
+	// stamped onto the new face's own axialDelta exactly as prism_build.go
+	// stamps a prism cap's (buildPatchFace, docs/surface-design.md §5.2).
+	// hasAxialBound stays false, and axialBound zero, whenever gate 3 instead
+	// admitted the chain through its existing exact (zero-bound) arm.
+	axialBound    float64
+	hasAxialBound bool
+	// level is the token the LEVEL arm admitted this chain under — the zero
+	// value whenever hasAxialBound is false. buildPatchFace reads its own
+	// origin/normal, transformed by this evaluation's own placement, as the
+	// published plane: never patchChainOrientedNormal's fitted vector, which
+	// this token's own doc comment (denotation.go) states is unsound for a
+	// chain admitted by identity rather than by proven-exact coplanarity.
+	level levelToken
 }
 
 // bodyPatchPayload is Body.Patch's own record: the retiring receiver's own
@@ -211,10 +230,11 @@ func buildPatchChains(edges []*Edge) ([]bodyPatchChain, error) {
 	}
 	chains := make([]bodyPatchChain, len(groups))
 	for i, g := range groups {
-		if err := provePatchChainPlane(g); err != nil {
+		lvl, axialBound, hasAxialBound, err := provePatchChainPlane(g)
+		if err != nil {
 			return nil, err
 		}
-		chains[i] = bodyPatchChain{edges: g}
+		chains[i] = bodyPatchChain{edges: g, axialBound: axialBound, hasAxialBound: hasAxialBound, level: lvl}
 	}
 	return chains, nil
 }
@@ -302,14 +322,76 @@ func renderCoord3(p r3.Vec) string {
 }
 
 // provePatchChainPlane is gate 3: proves one chain's edges lie in a single
-// plane, decided over dyadic.go's exact rational lift as a zero determinant,
-// never a residual against a fitted plane (docs/surface-design.md §5.2).
+// plane. The first, exact arm (provePatchChainPlaneExact) is tried first and
+// is the whole of what earlier increments proved; a second, LEVEL arm
+// (provePatchChainPlaneLevel) is tried only when the first refuses on a
+// nonzero bound, and never reads a coordinate, a residual or a bound
+// magnitude (docs/surface-design.md §5.2's own two-arm amendment). Its
+// return states what the level arm admitted: the levelToken and axialBound
+// are what buildPatchFace reads for the new face's own plane and axialDelta,
+// mirroring what a prism cap already carries; a chain the exact arm admits
+// instead publishes the zero token and a zero axialBound, unchanged.
+func provePatchChainPlane(edges []*Edge) (levelToken, float64, bool, error) {
+	exactErr := provePatchChainPlaneExact(edges)
+	if exactErr == nil {
+		return levelToken{}, 0, false, nil
+	}
+	if !errors.Is(exactErr, ErrUnsupported) {
+		return levelToken{}, 0, false, exactErr
+	}
+	if lvl, bound, ok := provePatchChainPlaneLevel(edges); ok {
+		return lvl, bound, true, nil
+	}
+	return levelToken{}, 0, false, exactErr
+}
+
+// provePatchChainPlaneLevel is gate 3's second arm: it requires every chain
+// vertex, and every chain edge, to carry a levelToken with the SAME
+// non-zero id (denotation.go) — an identity comparison alone, never a
+// coordinate, a residual or a bound magnitude. A shared level proves the
+// chain's true vertices lie on one plane by shared construction
+// (docs/surface-design.md §5.2), so nothing here reads a position or a
+// bound to decide admission; the returned token and bound are read back off
+// the chain's own vertices only to state what the new face's own plane and
+// axialDelta must publish, never to decide whether this arm admits. ok is
+// false whenever the chain holds no vertex, any vertex or edge carries no
+// level (the zero value, "no certificate"), or not every one of them shares
+// the same id.
+func provePatchChainPlaneLevel(edges []*Edge) (levelToken, float64, bool) {
+	verts := patchChainVertices(edges)
+	if len(verts) == 0 {
+		return levelToken{}, 0, false
+	}
+	lvl := verts[0].level
+	if lvl.id == 0 {
+		return levelToken{}, 0, false
+	}
+	bound := 0.0
+	for _, v := range verts {
+		if !sameLevel(v.level, lvl) {
+			return levelToken{}, 0, false
+		}
+		bound = math.Max(bound, v.bound.Base())
+	}
+	for _, e := range edges {
+		if !sameLevel(e.level, lvl) {
+			return levelToken{}, 0, false
+		}
+	}
+	return lvl, bound, true
+}
+
+// provePatchChainPlaneExact is gate 3's first, exact arm: proves one chain's
+// edges lie in a single plane, decided over dyadic.go's exact rational lift
+// as a zero determinant, never a residual against a fitted plane
+// (docs/surface-design.md §5.2).
 //
 // Every chain vertex must carry a zero bound, and every chain edge's own
 // geometry must be exact (patchEdgeGeometryExact) — a bounded vertex or edge
 // is only known to lie within its own bound, and fitting a plane to it would
 // be exactly the fitted geometry §1.3 refuses. Both are [ErrUnsupported]
-// (Table R row R6).
+// (Table R row R6), which provePatchChainPlane's own second arm then gets a
+// chance to admit instead.
 //
 // Three or more vertices that are not all collinear give the plane a
 // determinant to take: patchPlaneFromVertices searches for two vertex
@@ -330,7 +412,7 @@ func renderCoord3(p r3.Vec) string {
 // endpoints. Any failure is a chain proven NON-planar, also
 // [ErrUnsupported] (R6): decad's reject-only rule treats "not proven
 // planar" and "proven non-planar" alike, since neither admits the chain.
-func provePatchChainPlane(edges []*Edge) error {
+func provePatchChainPlaneExact(edges []*Edge) error {
 	verts := patchChainVertices(edges)
 	for _, v := range verts {
 		if !finiteVec(v.position) || v.bound.Base() != 0 {
@@ -586,7 +668,7 @@ func evalBodyPatchContext(ctx context.Context, d *Document, ref producerID, srcF
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		pf, err := buildPatchFace(ctx, ref, chain, edgeCopy)
+		pf, err := buildPatchFace(ctx, ref, chain, edgeCopy, xform, delta)
 		if err != nil {
 			return nil, err
 		}
@@ -749,24 +831,60 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 }
 
 // buildPatchFace builds one chain's new face: it derives the chain's
-// orientation (orientPatchChain), derives the plane frame's normal
+// orientation (orientPatchChain) and its plane.
+//
+// A chain the EXACT arm admitted derives the plane frame's normal and origin
 // DETERMINISTICALLY from that same oriented, placed geometry
-// (patchChainOrientedNormal) — never by trying a candidate and correcting
-// its sign from a computed area, which would silently absorb a wrong
-// orientation instead of surfacing it — re-runs gate 4's crossing audit, and
-// reads the face's area from the same moments engine Document.Patch's own
-// single planar face uses.
-func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, edgeCopy map[*Edge]*Edge) (*Face, error) {
+// (patchChainOrientedNormal, patchChainWalkOrigin) — never by trying a
+// candidate and correcting its sign from a computed area, which would
+// silently absorb a wrong orientation instead of surfacing it. This is
+// sound because gate 3's exact arm already proved these SAME held vertex
+// coordinates bit-for-bit coplanar (dyadic.go's exact rational lift), so
+// fitting a normal to them fits one to data that genuinely, exactly, is
+// coplanar.
+//
+// A chain the LEVEL arm admitted instead reads the plane's normal and
+// origin from the chain's own levelToken, transformed by this evaluation's
+// own placement (xform) — never fitted to held vertex coordinates, which
+// gate 3's level arm never proved exactly coplanar (denotation.go's own doc
+// comment states why a fit would be unsound here). patchChainOrientedNormal
+// still runs for such a chain, but only to settle which of the token's two
+// normal directions (±) matches the chain's own walk sense
+// (patchChainLevelNormal) — its MAGNITUDE, and any tilt a fit to
+// approximately-coplanar data would carry, are discarded.
+//
+// Either way this re-runs gate 4's crossing audit, and reads the face's area
+// from the same moments engine Document.Patch's own single planar face uses.
+func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, edgeCopy map[*Edge]*Edge, xform r3.Transform, delta float64) (*Face, error) {
 	ordered, err := orientPatchChain(chain)
 	if err != nil {
 		return nil, err
 	}
 
-	normal, err := patchChainOrientedNormal(ordered, edgeCopy)
+	fitted, err := patchChainOrientedNormal(ordered, edgeCopy)
 	if err != nil {
 		return nil, err
 	}
-	frame, segs, err := patchChainFrameAndSegments(ordered, edgeCopy, normal)
+
+	normal := fitted
+	origin := patchChainWalkOrigin(ordered, edgeCopy)
+	axialDelta := chain.axialBound
+	if chain.hasAxialBound {
+		normal, err = patchChainLevelNormal(fitted, xform.ApplyDir(chain.level.normal))
+		if err != nil {
+			return nil, err
+		}
+		origin = xform.Apply(chain.level.origin)
+		// A placement's own rounding (rigidRoundAllow) displaces the token's
+		// origin exactly as it displaces every other placed coordinate this
+		// evaluator publishes (copyPatchFacesUnder's own vertex/edge
+		// widening), so it folds into the SAME axialDelta the token's own
+		// bound already states.
+		if delta > 0 {
+			axialDelta = absSumUpper(axialDelta, delta)
+		}
+	}
+	frame, segs, err := patchChainFrameAndSegments(ordered, edgeCopy, origin, normal)
 	if err != nil {
 		return nil, err
 	}
@@ -799,6 +917,12 @@ func buildPatchFace(ctx context.Context, ref producerID, chain bodyPatchChain, e
 		loops:     []*Loop{{coedges: coedges, outer: true}},
 		area:      ig.area,
 		areaBound: ig.areaBound,
+		// A chain gate 3's level arm admitted has a proven-bounded plane
+		// origin, never a zero one: the same fields prism_build.go already
+		// sets on a prism's own caps (docs/surface-design.md §5.2). A chain
+		// the exact arm admitted instead carries a zero, unset bound here.
+		axialDelta:    axialDelta,
+		hasAxialDelta: chain.hasAxialBound,
 	}, nil
 }
 
@@ -828,12 +952,18 @@ func patchRemapCrossingError(err error) error {
 	return err
 }
 
-// patchChainOrientedNormal derives the new face's plane normal
-// DETERMINISTICALLY from the chain's already-oriented, already-placed
-// geometry — never by trying one of the two candidate signs and correcting
-// it from a computed area, which would silently accept either sign and so
-// could never surface a wrong orientPatchChain answer (a dropped sense
-// reversal there would still read a valid, merely mirror-image, loop).
+// patchChainOrientedNormal derives a normal DETERMINISTICALLY from the
+// chain's already-oriented, already-placed geometry — never by trying one of
+// the two candidate signs and correcting it from a computed area, which
+// would silently accept either sign and so could never surface a wrong
+// orientPatchChain answer (a dropped sense reversal there would still read a
+// valid, merely mirror-image, loop). For a chain the EXACT arm admitted,
+// buildPatchFace publishes this vector as the face's own normal outright.
+// For a chain the LEVEL arm admitted, buildPatchFace instead uses it only to
+// pick which of the level token's own two normal directions matches this
+// walk's sense (patchChainLevelNormal): the fit below is over held vertex
+// coordinates gate 3's level arm never proved exactly coplanar, so its
+// MAGNITUDE and any tilt away from the true plane are never published.
 //
 // A curved (Circle3 or Arc3) edge's own effective axis — its Axis when
 // walked forward, negated when walked backward, since walking a curve
@@ -884,11 +1014,52 @@ func patchChainOrientedNormal(ordered []patchOrientedEdge, edgeCopy map[*Edge]*E
 	return sum, nil
 }
 
-// patchChainFrameAndSegments builds the new face's plane frame — origin at
-// the chain's own first (already placed) vertex, normal as given — and the
-// chain's plane-local segment record: one CurveSegment per oriented edge, in
-// walk order, so the record is a valid connected LoopRecord for
-// fillet_audit.go's crossing audit and moments.go's region integral alike.
+// patchChainWalkOrigin is the exact arm's own plane origin: the chain's
+// first (already placed) vertex in walk order. A chain the exact arm
+// admitted has this vertex bit-for-bit coplanar with every other chain
+// vertex (gate 3's own dyadic proof), so using it as the plane's origin
+// introduces no coordinate this evaluator has not already verified.
+func patchChainWalkOrigin(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge) r3.Vec {
+	first := edgeCopy[ordered[0].old]
+	if !ordered[0].forward {
+		return first.end.position
+	}
+	return first.start.position
+}
+
+// patchChainLevelNormal resolves the sign ambiguity between fitted —
+// patchChainOrientedNormal's own vector, fit to held vertex coordinates
+// gate 3's level arm never proved exactly coplanar — and tokenNormal, the
+// level token's own frame-derived normal (denotation.go), already
+// transformed by this evaluation's own placement. fitted decides ONLY which
+// of ±tokenNormal matches the chain's own walk sense: its dot product with
+// tokenNormal is, up to ordinary floating rounding, the polygon's own
+// signed area times |tokenNormal|² — a magnitude many orders above the
+// fitting error a rotated frame's rounding could ever introduce
+// (docs/surface-design.md §5.2), so that rounding can never flip its sign.
+// The PUBLISHED direction is tokenNormal itself, sign-corrected — never
+// fitted — so the returned vector is exactly the recorded frame's own
+// normal under this evaluation's placement, with no fitting argument
+// needed for it at all.
+func patchChainLevelNormal(fitted, tokenNormal r3.Vec) (r3.Vec, error) {
+	sign := fitted.Dot(tokenNormal)
+	if sign == 0 {
+		return r3.Vec{}, fmt.Errorf(`%w: a Body.Patch chain's orientation is degenerate against its own level`, ErrDegenerate)
+	}
+	if sign < 0 {
+		return tokenNormal.Scale(-1), nil
+	}
+	return tokenNormal, nil
+}
+
+// patchChainFrameAndSegments builds the new face's plane frame — at origin,
+// with normal as given — and the chain's plane-local segment record: one
+// CurveSegment per oriented edge, in walk order, so the record is a valid
+// connected LoopRecord for fillet_audit.go's crossing audit and moments.go's
+// region integral alike. origin and normal come from patchChainWalkOrigin
+// and patchChainOrientedNormal for a chain the exact arm admitted, or from
+// the chain's own levelToken for one the level arm admitted
+// (buildPatchFace's own dispatch).
 //
 // A curved edge's own effective sweep sense — CCW about +Axis when walked
 // forward, CCW about -Axis (so CW about +Axis) when walked backward — may or
@@ -907,12 +1078,7 @@ func patchChainOrientedNormal(ordered []patchOrientedEdge, edgeCopy map[*Edge]*E
 // sign. Swapping the Start/End FIELDS themselves would instead describe the
 // same arc read backwards, not the complementary one, which is why the
 // fields swap together with the range rather than the range alone.
-func patchChainFrameAndSegments(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge, normal r3.Vec) (r3.Frame, []CurveSegment, error) {
-	first := edgeCopy[ordered[0].old]
-	origin := first.start.position
-	if !ordered[0].forward {
-		origin = first.end.position
-	}
+func patchChainFrameAndSegments(ordered []patchOrientedEdge, edgeCopy map[*Edge]*Edge, origin, normal r3.Vec) (r3.Frame, []CurveSegment, error) {
 	frame, err := planeFrameFromNormal(origin, normal)
 	if err != nil {
 		return r3.Frame{}, nil, err

@@ -20,6 +20,9 @@ import (
 type Document struct {
 	bodies       []*Body
 	nextProducer producerID
+	// nextLevel is denotation.go's own counter behind mintLevel: the LEVEL
+	// half of the shared-denotation certificate.
+	nextLevel levelID
 }
 
 // DocumentOption configures New. No options are currently supported: the

@@ -234,6 +234,11 @@ func (FacetedCurve) curve() {}
 type Vertex struct {
 	position r3.Vec
 	bound    units.Value
+	// level is the LEVEL half of the shared-denotation certificate
+	// (denotation.go): non-zero only for a vertex a builder stamped at one
+	// denoted sweep level, and zero ("no certificate") for every vertex no
+	// builder in this package mints one for.
+	level levelToken
 }
 
 // Position returns the vertex position in millimetres — a computed
@@ -325,6 +330,11 @@ type Edge struct {
 	// adjacent to a circular wall whose corner-foot locus this evaluator
 	// cannot enclose (docs/modify-reach-design.md §8.3).
 	lengthUnbounded bool
+	// level is the LEVEL half of the shared-denotation certificate
+	// (denotation.go): non-zero only for a rim edge a builder stamped at one
+	// denoted sweep level, and zero ("no certificate") for every edge no
+	// builder in this package mints one for.
+	level levelToken
 }
 
 // Curve returns the edge's tagged geometry.
