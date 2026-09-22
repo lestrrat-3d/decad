@@ -597,10 +597,17 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64) (*Mesh, 
 // requireMeshAudit dispatches docs/tessellation-design.md §1's mandatory
 // mesh audit by body kind: a BodySolid keeps §1's closed-mesh audit
 // (requireClosedMesh) verbatim, and a BodySheet runs §1.2's manifold-with-
-// boundary audit in its place (requireSheetMesh, tessellate_sheet.go).
+// boundary audit (requireSheetMesh) plus its own vertex-link safety net
+// (requireSheetVertexLinks) in its place — both in tessellate_sheet.go. This
+// is the one place a surface-result build reaches either sheet audit, so the
+// prism sheet path today and the revolve sheet path once it lands both get
+// them from here.
 func requireMeshAudit(ctx context.Context, sheet bool, b *Body, m *Mesh) error {
 	if sheet {
-		return requireSheetMesh(ctx, b, m)
+		if err := requireSheetMesh(ctx, b, m); err != nil {
+			return err
+		}
+		return requireSheetVertexLinks(ctx, m)
 	}
 	return requireClosedMesh(m)
 }

@@ -535,6 +535,7 @@
 1	0.00	TestFitSplineVanishingSpeedStillRefusesRegularity
 1	0.00	TestFloatIntervalArithmeticSanity
 1	0.00	TestFloatIntervalNextMatchesMath
+1	0.00	TestFreeChainCountsByFaceCountsConnectedComponentsNotEdges
 1	0.16	TestFreeformArcLengthAboveFloat64RangeRefused
 1	1.60	TestFreeformArcLengthBracketsAtExtremeScale
 1	0.00	TestFreeformBezierSpansRefusals
@@ -800,6 +801,10 @@
 1	0.00	TestRequireFiniteDirectionAllocatesNothing
 1	0.00	TestRequireLoopClearanceOffersValidRetry
 1	0.00	TestRequireLoopClearanceOmitsInvalidRetry
+1	0.00	TestRequireSheetMeshAndVertexLinksAdmitAClosedSheet
+1	0.00	TestRequireSheetVertexLinksAdmitsAnOpenPathFan
+1	0.00	TestRequireSheetVertexLinksRefusesAForkedLink
+1	0.00	TestRequireSheetVertexLinksRefusesTwoConesSharingAnApex
 1	0.00	TestRequireVertexLinksRejectsAPinchedVertex
 1	0.00	TestRequireWalkClearanceGatesTheSagittaTubes
 1	0.00	TestResolveThroughAllComposesEveryFarEndInterval
