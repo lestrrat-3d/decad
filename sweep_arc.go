@@ -40,6 +40,7 @@ func evalArcSweepContext(
 	path *Path,
 	pathRecord pathSegmentRecord,
 	work *freeformWork,
+	surfaceResult bool,
 ) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -61,14 +62,21 @@ func evalArcSweepContext(
 		den.phi0, den.phi1 = den.phi1.neg(), den.phi0.neg()
 		reverseCaps = true
 	}
+	// The flag rides the REDUCED revolvePayload, not just the finishing
+	// sweepPayload literal below: revolve_build.go's evalRevolveContextWork
+	// reads rp.surfaceResult to decide Kind()/solid, cap omission, sheetLumps
+	// and the area subtraction — including Table W's profile-meets-axis row —
+	// which is what gives the arc reduction the whole sheet behaviour for free
+	// (docs/surface-design.md §4).
 	revolve := revolvePayload{
-		profile: profile,
-		frame:   frame,
-		ax:      ax,
-		phi0:    phi0,
-		phi1:    phi1,
-		den:     den,
-		xform:   r3.Identity(),
+		profile:       profile,
+		frame:         frame,
+		ax:            ax,
+		phi0:          phi0,
+		phi1:          phi1,
+		den:           den,
+		xform:         r3.Identity(),
+		surfaceResult: surfaceResult,
 	}
 	body, err := evalRevolveContextWork(ctx, d, ref, revolve, work)
 	if err != nil {
@@ -77,7 +85,8 @@ func evalArcSweepContext(
 
 	// Verify's Sweep diameter arm reads this zero-height start-section witness.
 	// Every one of its points lies on the real start cap, so its point-set
-	// diameter is a sound lower bound on the swept body's diameter.
+	// diameter is a sound lower bound on the swept body's diameter. It is not
+	// itself built, so its own surfaceResult stays at its zero value.
 	witness := prismPayload{
 		profile: profile,
 		frame:   frame,
@@ -89,6 +98,7 @@ func evalArcSweepContext(
 		arc:            true,
 		reverseArcCaps: reverseCaps,
 		path:           path,
+		surfaceResult:  surfaceResult,
 	}
 	finishArcSweepBody(body, payload)
 	return body, nil

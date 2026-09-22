@@ -8,12 +8,14 @@ import (
 
 // This file is the shared surface-result vocabulary of docs/surface-design.md
 // §3-§4: the one option every wall-building feature accepts,
-// WithSurfaceResult, and the two refusal helpers that keep a sheet body out
-// of an operation Table X or Table R does not admit it to. Extrude, Revolve
-// and Loft each wire the option into their own build (extrude.go,
-// revolve_build.go, loft_build.go); Sweep refuses it outright (sweep.go);
-// boolean.go, fillet.go, chamfer.go, shell.go and stops.go consume
-// refuseSheetOperand at their own gates.
+// WithSurfaceResult, and the refusal helper that keeps a sheet body out of an
+// operation Table X does not admit it to. Extrude, Revolve, Sweep and Loft
+// each wire the option into their own build (extrude.go, revolve_build.go,
+// sweep.go/sweep_arc.go/sweep_composite.go, loft_build.go) — Sweep is the
+// last of the four to take it, so Table R row R1 now names no feature this
+// evaluator still refuses outright; the row stays in the design as the stated
+// rule for one added later. boolean.go, fillet.go, chamfer.go, shell.go and
+// stops.go consume refuseSheetOperand at their own gates.
 //
 // It also holds the two topology helpers every surface-result build shares
 // (docs/surface-design.md §2.2): shellIsOpen, which reads a shell's open
@@ -48,18 +50,6 @@ type identSurfaceResult struct{}
 // WithSurfaceResult() is idempotent, never an error.
 func WithSurfaceResult() SurfaceResultOption {
 	return surfaceResultOption{option.New(identSurfaceResult{}, struct{}{})}
-}
-
-// refuseSurfaceResult reports [ErrUnsupported] when o is a
-// WithSurfaceResult() option, for a feature Table R row R1 stages as a
-// permanent or not-yet-built refusal. It asserts on the concrete type alone
-// and never calls Ident(): the payload is never read, so the type itself is
-// the whole check.
-func refuseSurfaceResult(o any, feature string) error {
-	if _, ok := o.(surfaceResultOption); ok {
-		return fmt.Errorf(`%w: %s does not build a surface result (docs/surface-design.md Table R row R1)`, ErrUnsupported, feature)
-	}
-	return nil
 }
 
 // refuseSheetOperand reports [ErrUnsupported] when b is live and a sheet

@@ -107,6 +107,12 @@ type SweepOption interface { /* sealed */ }
 // WithSweepTwist applies total signed rotation about the transported tangent.
 // Twist is distributed in proportion to path arc length. Zero is the default.
 func WithSweepTwist(angle units.Value) SweepOption
+
+// WithSurfaceResult omits the two section caps and publishes a sheet body
+// instead of a solid (docs/surface-design.md §4). Unlike every other sealed
+// SweepOption, a repeated WithSurfaceResult() is idempotent rather than S12's
+// stated ErrDegenerate: it carries no payload for a repeat to disagree with.
+func WithSurfaceResult() SurfaceResultOption
 ```
 
 ```go
@@ -249,7 +255,7 @@ The existing existence rule applies: a requested solid that does not exist is
 | **S9** | remote patches contact, or neighbours contact beyond their shared boundary | proved contact: `ErrDegenerate`; undecided budget: `ErrUnsupported` | contact is permanent; budget is not |
 | **S10** | profile kind is unsupported by one of the path-span builders | `ErrUnsupported` | follows spline reach |
 | **S11** | nonzero `WithSweepTwist` before the faceted-twist increment | `ErrUnsupported` | no |
-| **S12** | option repeated, or a foreign type embeds the sealed marker | `ErrDegenerate` | yes |
+| **S12** | option repeated, or a foreign type embeds the sealed marker | `ErrDegenerate` | yes; `WithSurfaceResult()` is exempt — a repeat is idempotent (docs/surface-design.md §4.1) |
 | **S13** | a computed frame, vertex, measurement, or proof bound is non-finite | `ErrUnsupported` | no; numeric ceiling |
 | **S14** | fixed facet, station, exact-predicate, or work budget is exhausted | `ErrUnsupported` | no; resource ceiling |
 | **S15** | a constructed face, edge, or shell collapses from computed-coordinate rounding while the structural input is nondegenerate | `ErrUnsupported` | no; precision ceiling |
@@ -345,6 +351,14 @@ The body has one lump and one outer shell. Profile holes become void passages
 through the sweep; they do not create extra lumps. S9 rejects any mapping that
 would change those claims.
 
+**This is the solid's own shape alone.** `WithSurfaceResult()`
+(docs/surface-design.md §2.2, §4) omits the two section caps that join a
+holed profile's outer wall tube to its hole wall tube, so a surface-result
+sweep's holed profile reports one `Lump` per tube instead — the identical
+carve-out `docs/surface-design.md` §2.2 already states for the surface-result
+prism and revolve builds, and Table D's own composite increment reuses it
+unchanged rather than inventing a second rule.
+
 ## 9. Measurements and bounds
 
 Each zero-twist span reuses the corresponding Extrude or Revolve closed forms,
@@ -381,7 +395,7 @@ withholds the reference and prevents a false `Sound` report.
 
 | D | Consumer | Status |
 |---|---|---|
-| **D1** | structural `Verify` + tolerance gate | lands with Sweep. The construction and global audit prove validity; all four readings are judged |
+| **D1** | structural `Verify` + tolerance gate | lands with Sweep. For a solid, the construction and global audit prove validity and all four readings are judged. For a `WithSurfaceResult()` sheet, only the one-span straight reduction carries an equivalent construction proof (it IS a prismPayload build, docs/surface-design.md §9.1); the arc reduction and every composite sheet read `Suspect` — the arc build runs no crossing audit of its own, and the composite build's own boundary/vertex-link audit proves assembled topology, not geometric non-self-intersection |
 | **D2** | `Tessellate` / STL / OBJ | staged until the shared-span tessellator publishes complete source, area, and boundary proofs |
 | **D3** | mesh booleans | staged until D2 also publishes `volSymDiff` with `symDiffOK == true` |
 | **D4** | interference | bounds-disjoint pairs work immediately. Other pairs stay `Suspect` until D3 or a sweep analytic adapter lands |

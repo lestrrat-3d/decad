@@ -44,11 +44,31 @@ func compositeSpanPartOf(body *Body) (compositeSpanPart, error) {
 // rim edge and its endpoint vertices at each path join. The two cap loops are
 // paired by their recorded loop and coedge order; no coordinate search or
 // proximity weld participates in the pairing.
+//
+// surfaceResult additionally omits the first span's start cap and the last
+// span's end cap from the published face set (docs/surface-design.md §4):
+// every span still builds and sews solid (compositeSweepSpanPayload never
+// carries the flag, docs/surface-design.md's own span-pairing requirement —
+// both cap roles must exist for compositeSpanPartOf and sewCompositeSweepJoin
+// above to run), so this is the ONLY place the flag is consumed. The two
+// outer caps are simply never appended to faces and their body back-pointer
+// is never reassigned to body: the live-face filter a few lines down keys on
+// that back-pointer, so leaving it pointing at the temporary per-span body is
+// what drops each outer rim edge to its one surviving wall face with no
+// rim-specific code at all.
+//
+// Ordering matters and getting it wrong is silent: lumps must be set once
+// with the provisional single shell so body.Edges()/body.Faces() traversal
+// works, then the live-face filter runs, and only THEN may sheetLumps run,
+// because it reads the adjacency the filter produces. Running it earlier
+// would have every shell wrongly report open — shellIsOpen would see every
+// discarded per-span face still on each edge's face list.
 func assembleCompositeSweepBody(
 	ctx context.Context,
 	d *Document,
 	ref producerID,
 	parts []compositeSpanPart,
+	surfaceResult bool,
 ) (*Body, error) {
 	if len(parts) < 2 {
 		return nil, fmt.Errorf(`%w: a composite sweep requires at least two spans`, ErrDegenerate)
@@ -77,12 +97,20 @@ func assembleCompositeSweepBody(
 		}
 	}
 
+	kind := BodySolid
+	if surfaceResult {
+		kind = BodySheet
+	}
 	body := &Body{
 		doc:    d,
 		origin: FeatureRef{producer: ref, Role: roleBody},
-		solid:  true,
+		solid:  !surfaceResult,
+		kind:   kind,
 	}
-	faces := []*Face{parts[0].startCap}
+	var faces []*Face
+	if !surfaceResult {
+		faces = append(faces, parts[0].startCap)
+	}
 	for k, part := range parts {
 		for _, face := range part.body.Faces() {
 			if err := ctx.Err(); err != nil {
@@ -96,13 +124,23 @@ func assembleCompositeSweepBody(
 			faces = append(faces, face)
 		}
 	}
-	parts[0].startCap.body = body
-	parts[len(parts)-1].endCap.body = body
-	faces = append(faces, parts[len(parts)-1].endCap)
+	if !surfaceResult {
+		parts[0].startCap.body = body
+		parts[len(parts)-1].endCap.body = body
+		faces = append(faces, parts[len(parts)-1].endCap)
+	}
 	body.lumps = []*Lump{{shells: []*Shell{{faces: faces}}}}
 
 	for _, edge := range body.Edges() {
 		edge.faces = liveCompositeFaces(edge.faces, body)
+	}
+	if surfaceResult {
+		// sheetLumps splits by connectivity (docs/surface-design.md §2.2): a
+		// holed profile's outer and hole wall tubes touch nowhere once the two
+		// outer caps that used to bridge them are gone, so each becomes its own
+		// Lump. It must run after the live-face filter above, per this
+		// function's own doc comment.
+		body.lumps = sheetLumps(faces)
 	}
 	if err := auditCompositeBoundary(ctx, body, sewnEdges); err != nil {
 		return nil, err
@@ -237,8 +275,16 @@ type compositeCoedgeUse struct {
 
 // auditCompositeBoundary proves the topology facts introduced by sewing. The
 // analytic span builders already prove each face and its outward sense; this
-// audit checks that removing caps preserved positive faces, paired every edge
-// in opposite directions, and left one cyclic fan around every vertex.
+// audit checks that removing caps preserved positive faces, paired every
+// two-face edge in opposite directions, and left every vertex's face fan a
+// single cycle (a closed solid) or a single path (a surface result's two
+// outer rims) — the same manifold-with-boundary invariant
+// docs/surface-design.md §9.1 states for the sheet validity audit, restated
+// here because this audit runs on the ASSEMBLED composite body rather than
+// its recorded topology. A solid's every edge has exactly two incident faces
+// by construction, so the relaxation below to "one or two" changes nothing a
+// solid can ever exercise; it only admits the free edges a surface result's
+// two omitted outer caps leave behind.
 func auditCompositeBoundary(ctx context.Context, body *Body, sewn map[*Edge]struct{}) error {
 	if body == nil {
 		return fmt.Errorf(`%w: a nil composite sweep body has no boundary`, ErrDegenerate)
@@ -281,8 +327,15 @@ func auditCompositeBoundary(ctx context.Context, body *Body, sewn map[*Edge]stru
 		if err := budget.step(); err != nil {
 			return err
 		}
-		if len(edgeUses) != 2 || len(edge.faces) != 2 {
-			return fmt.Errorf(`%w: a sewn sweep edge does not have exactly two incident faces`, ErrUnsupported)
+		// An edge may have one or two incident faces (a surface result's own
+		// free rim edge, or an interior edge on either kind), but never zero or
+		// three or more, and the use count read off every face's own loops must
+		// agree with Edge.Faces()'s own adjacency exactly either way.
+		if len(edge.faces) < 1 || len(edge.faces) > 2 || len(edgeUses) != len(edge.faces) {
+			return fmt.Errorf(`%w: a composite sweep edge does not have one or two incident faces`, ErrUnsupported)
+		}
+		if len(edgeUses) != 2 {
+			continue
 		}
 		if edgeUses[0].face == edgeUses[1].face {
 			return fmt.Errorf(`%w: a composite sweep edge is used twice by one face`, ErrUnsupported)
@@ -297,28 +350,53 @@ func auditCompositeBoundary(ctx context.Context, body *Body, sewn map[*Edge]stru
 	return budget.err()
 }
 
+// auditCompositeVertexLinks proves the manifold-with-boundary invariant at
+// every vertex: the faces touching it, linked by the two-face edges also
+// touching it, form one connected component whose own face degrees (how many
+// such link edges reach that face) are all 1 or all-but-two 2. Two degree-1
+// faces make it a PATH — a rim vertex, where exactly two of the incident
+// edges are free and end the fan instead of continuing it. Zero degree-1
+// faces make it a CYCLE — an interior vertex, exactly the shape the pre-sheet
+// audit already proved. A free (one-face) edge contributes its lone face to
+// the vertex's link as a node with no link edge of its own, since it has no
+// second face to link that face to there.
 func auditCompositeVertexLinks(
 	budget *workBudget,
 	body *Body,
 	uses map[*Edge][]compositeCoedgeUse,
 ) error {
 	type vertexLink struct {
+		faces     map[*Face]struct{}
 		degree    map[*Face]int
 		neighbors map[*Face]map[*Face]struct{}
 	}
 	links := make(map[*Vertex]*vertexLink)
+	linkFor := func(vertex *Vertex) *vertexLink {
+		link := links[vertex]
+		if link == nil {
+			link = &vertexLink{
+				faces:     make(map[*Face]struct{}),
+				degree:    make(map[*Face]int),
+				neighbors: make(map[*Face]map[*Face]struct{}),
+			}
+			links[vertex] = link
+		}
+		return link
+	}
 	for edge, edgeUses := range uses {
-		if edge.start == nil || edge.end == nil || len(edgeUses) != 2 {
-			return fmt.Errorf(`%w: a sewn sweep edge has incomplete endpoint topology`, ErrUnsupported)
+		if edge.start == nil || edge.end == nil || len(edgeUses) < 1 || len(edgeUses) > 2 {
+			return fmt.Errorf(`%w: a composite sweep edge has incomplete endpoint topology`, ErrUnsupported)
 		}
 		for _, vertex := range []*Vertex{edge.start, edge.end} {
 			if err := budget.step(); err != nil {
 				return err
 			}
-			link := links[vertex]
-			if link == nil {
-				link = &vertexLink{degree: make(map[*Face]int), neighbors: make(map[*Face]map[*Face]struct{})}
-				links[vertex] = link
+			link := linkFor(vertex)
+			for _, use := range edgeUses {
+				link.faces[use.face] = struct{}{}
+			}
+			if len(edgeUses) != 2 {
+				continue
 			}
 			a, b := edgeUses[0].face, edgeUses[1].face
 			link.degree[a]++
@@ -340,13 +418,29 @@ func auditCompositeVertexLinks(
 		if err := budget.step(); err != nil {
 			return err
 		}
-		for _, degree := range link.degree {
-			if degree != 2 {
-				return fmt.Errorf(`%w: a composite sweep vertex link is not a cycle`, ErrUnsupported)
+		ends := 0
+		for face := range link.faces {
+			switch d := link.degree[face]; {
+			case d == 1:
+				ends++
+			case d == 2:
+			case d == 0 && len(link.faces) == 1:
+				// A whole Circle3 rim uses its one vertex TWICE
+				// (docs/surface-design.md §5.2): a hole wall's own full-circle
+				// free rim closes back on itself there with no OTHER face ever
+				// sharing that vertex, so this face has no two-face edge to
+				// link it to anything — a lone node, trivially its own single
+				// connected component, is exactly what a self-closing free
+				// boundary through one point looks like.
+			default:
+				return fmt.Errorf(`%w: a composite sweep vertex link face has degree outside one or two`, ErrUnsupported)
 			}
 		}
+		if len(link.faces) > 1 && ends != 0 && ends != 2 {
+			return fmt.Errorf(`%w: a composite sweep vertex link is neither a cycle nor a path`, ErrUnsupported)
+		}
 		var seed *Face
-		for face := range link.degree {
+		for face := range link.faces {
 			seed = face
 			break
 		}
@@ -364,8 +458,8 @@ func auditCompositeVertexLinks(
 				stack = append(stack, neighbor)
 			}
 		}
-		if len(seen) != len(link.degree) {
-			return fmt.Errorf(`%w: a composite sweep vertex link has more than one cycle`, ErrUnsupported)
+		if len(seen) != len(link.faces) {
+			return fmt.Errorf(`%w: a composite sweep vertex link has more than one connected component`, ErrUnsupported)
 		}
 	}
 	return nil
