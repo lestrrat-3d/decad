@@ -1111,18 +1111,41 @@ func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
 // the identical scan already succeeded once at build time over the same
 // profile) is read as un-proven rather than as an error: this leg only ever
 // admits, so withholding admission is always the safe outcome.
+//
+// boundaryExtremesBoundedContext reads the raw functional nU*u+nV*v over the
+// profile boundary and charges every rounding IT commits into rBound. It does
+// NOT charge the axis anchor's own offset, roff = nU*aU+nV*aV, which this leg
+// still has to subtract to reach the axis-relative ρ axisFrame's own doc
+// comment defines: uAxis (this arm's own fixtures) happens to anchor at the
+// origin, where aU and aV are both exactly zero and the shift is a no-op, but
+// an axis anchored elsewhere makes roff genuinely nonzero, and the multiplies,
+// the add and the subtraction that compute it each commit their OWN
+// round-to-nearest error on top of whatever aU/aV/dU/dV's own proven bounds
+// already are. A bare `rlo -= roff` would leave that error unaccounted, so
+// the strict-zero comparison below could read a NEGATIVE true radial minimum
+// as non-negative by exactly the rounding it dropped — the identical fault
+// this leg exists to close in resolveAxisSide's build-time tolerance, only
+// smaller. boundedMul/boundedAdd/boundedSub charge both the operands' own
+// proven bounds and this arithmetic's own commissioned rounding (the same
+// vocabulary axisFrame.toAxisRhoBound already uses for the identical ρ
+// formula at a single point), so the bound handed to admitBelow below
+// provably covers every operation between the extremes call and the
+// comparison — never a number the accompanying bound does not cover.
 func revolvePayloadProvesSimple(ctx context.Context, rp revolvePayload) bool {
 	if !rp.full {
 		return false
 	}
 	nU, nV := -rp.ax.dV, rp.ax.dU
-	rlo, _, rBound, err := boundaryExtremesBoundedContext(ctx, rp.profile, nU, nV, newFreeformWork(), nil)
+	rawLo, _, rawBound, err := boundaryExtremesBoundedContext(ctx, rp.profile, nU, nV, newFreeformWork(), nil)
 	if err != nil {
 		return false
 	}
-	roff := nU*rp.ax.aU + nV*rp.ax.aV
-	rlo -= roff
-	return admitBelow(measuredScalar(rlo, rBound), 0) == survReject
+	offset := boundedAdd(
+		boundedMul(measuredScalar(nU, rp.ax.dVBound), measuredScalar(rp.ax.aU, rp.ax.aUBound)),
+		boundedMul(measuredScalar(nV, rp.ax.dUBound), measuredScalar(rp.ax.aV, rp.ax.aVBound)),
+	)
+	rlo := boundedSub(measuredScalar(rawLo, rawBound), offset)
+	return admitBelow(rlo, 0) == survReject
 }
 
 // boxesDisjoint reports whether the two bounds-inflated boxes have disjoint

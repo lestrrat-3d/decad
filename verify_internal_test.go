@@ -766,3 +766,38 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
 	})
 }
+
+// TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift is the fixture
+// every earlier test above could not exercise: axis (dU=1, dV=0) passes
+// through the origin, so aU and aV are both exactly zero and the axis-offset
+// shift roff = nU*aU+nV*aV this arm subtracts is trivially zero and exact.
+// Here the axis is anchored away from the origin (aV = 1e10) with a direction
+// (dU=0.8, dV=0.6) whose components are not exactly representable, so
+// computing roff commits real floating-point rounding of its own — the fault
+// this test pins is that a BARE `rlo -= roff` leaves that rounding
+// unaccounted, so the strict-zero comparison can read a profile whose TRUE
+// radial minimum is negative as non-negative.
+//
+// The profile's single boundary segment sits at v = aV − 1e-7 (u held at 0,
+// so the axis direction's u-component never enters): the exact mathematical
+// radial coordinate there is nV·(v−aV) = 0.8·(−1e-7) = −8e-8, negative, so
+// this profile must never be admitted. Rounding of the two independent
+// nV·aV products — one inside the extremes scan, one in this arm's own
+// offset — very nearly cancels in float64: the naive central value lands on
+// exactly 0.0, which a bare subtraction (bound 0, since this profile's own
+// vertices are exact) reads as PROVEN non-negative and wrongly admits. The
+// fix's own composed bound (~4.4e-7, from boundedMul/boundedAdd charging the
+// offset multiplication's rounding) safely exceeds that cancellation, so the
+// interval straddles zero and the leg correctly refuses.
+func TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift(t *testing.T) {
+	t.Parallel()
+	const aV = 1e10
+	const eps = 1e-7
+	ax := axisFrame{dU: 0.8, dV: 0.6, aU: 0, aV: aV}
+	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+		LineSeg{Start: Point2{U: 0, V: aV - eps}, End: Point2{U: 0, V: aV - eps + 5}, TStart: 0, TEnd: 1},
+	}}}
+	rp := revolvePayload{profile: profile, ax: ax, full: true}
+	require.False(t, revolvePayloadProvesSimple(t.Context(), rp),
+		"the true radial minimum here is negative (-8e-8); the offset shift's own rounding must not admit it")
+}
