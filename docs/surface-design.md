@@ -913,12 +913,30 @@ superset with no further proof needed. A positive section displacement (that
 loft's own `sectionDelta`) means the body denotes a curved surface the held
 chords are only within that displacement of, so simplicity of the chord mesh
 does not transfer to the surface it stands for, and the fourth leg is
-undecided rather than violated there too. Any other construction — a revolve
-sheet included, whose own build runs no crossing audit over its triangle set
-at all — earns no such proof: the fourth leg has nothing to stand on, which
-is undecided, not a violation. A free edge, which on a closed body would be
-the watertightness failure, is the expected shape here and is counted by the
-structural legs rather than faulted.
+undecided rather than violated there too. A revolve sheet earns the fourth
+leg on a different argument, since its own build runs no crossing audit over
+a triangle set at all: it admits when the sweep is exactly one full turn
+(`full == true`) AND the recorded profile's radial minimum about the resolved
+axis is proven non-negative. Every boundary stretch lying on the axis is
+classified `wallAxis` and emits no face, so the face set is the revolution of
+the boundary's off-axis part alone; two distinct off-axis generating points
+map to the same 3D point only by sharing the same radius and axial position,
+which a simple closed planar region's boundary — `sketch`'s own proof — does
+not repeat, so that face set is injective off the axis, and `full` makes the
+angular fibre traverse it exactly once, so no off-axis point is covered
+twice. The radial condition is deliberately stricter than `resolveAxisSide`'s
+own build-time gate, which admits down to a `-tol` band rather than proving
+the minimum clear of zero — an admission gate resting on a tolerance is what
+CLAUDE.md's reject-only rule forbids, so this leg re-decides the question at
+zero instead of inheriting the build's tolerance. A revolve profile can never
+carry a free-form segment reaching this leg either: `resolveAxisSide` refuses
+one before this leg is ever reached, so no separate free-form gate is needed
+here. A partial-turn revolve sheet, or one whose radial minimum is not proven
+clear of the axis, earns no such proof: the fourth leg has nothing to stand
+on, which is undecided, not a violation. Any other construction earns no
+proof either, for the same reason. A free edge, which on a closed body would
+be the watertightness failure, is the expected shape here and is counted by
+the structural legs rather than faulted.
 
 **`Region` is nil for a sheet even when `Validity.Outcome` is
 `ValidityValid`.** `docs/verification-design.md` §1 currently states the
@@ -965,13 +983,17 @@ document holding only such a sheet and asking `WithPullDirection` can still
 read `Sound` when every wall provenly clears.
 
 **A sheet whose family has no such proof reads `Suspect` regardless of what
-the caller asks.** A revolve sheet's fourth leg is undecided today — its own
-build runs no crossing audit over its triangle set at all — so a document
-holding one, even alone and with no survey requested, already reads `Suspect`
-through `Validity.Outcome == ValidityUndecided` and its `DiagUndecidedValidity`
-diagnostic. The arc-reduced and composite sweep sheets a later increment adds
-inherit the same undecided leg for the identical reason: neither construction
-has a crossing-audit proof for `Verify`'s switch (§9.1) to read.
+the caller asks.** A PARTIAL-turn revolve sheet's fourth leg is undecided —
+its own build runs no crossing audit over its triangle set at all, and §9.1's
+construction argument needs a full turn — so a document holding one, even
+alone and with no survey requested, already reads `Suspect` through
+`Validity.Outcome == ValidityUndecided` and its `DiagUndecidedValidity`
+diagnostic. A full-turn revolve sheet whose radial minimum is proven clear of
+the axis instead earns the fourth leg by construction (§9.1) and can read
+`ValidityValid`. The arc-reduced and composite sweep sheets a later increment
+adds inherit the partial-turn sheet's undecided leg for the identical reason:
+neither construction has a crossing-audit proof, nor §9.1's full-turn
+argument, for `Verify`'s switch to read.
 
 ### 9.3 Pairs
 
@@ -1289,6 +1311,8 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T23 | the same surface-extruded plate as T20/T21, verified with `WithMinWallThickness`, `WithPullDirection(r3.NewVec(0, 0, 1))` and `WithConcaveRadius` together | `Wall.Outcome` and `ConcaveRadius.Outcome` both `ScalarUnavailable`, each with its own `DiagSurveyPrerequisite` naming its own survey and no mention of "pull" in either message; `Undercut` carries no `DiagSurveyPrerequisite` and reads a real `CoverageComplete` with empty `Faces`; `br.Diagnostics` has length 2, not 3; `Status == Suspect` on the wall and radius refusals alone |
 | T24 | a surface-result `Revolve` sheet whose fourth leg is undecided (`ValidityUndecided`), any pull requested | `Coverage == CoverageUnavailable` with one `DiagSurveyPrerequisite` whose message names the undecided-validity cause, never a sheet-material cause |
 | T25 | `publishUndercutResult` driven directly (internal) on a `BodySheet` body with `ValidityValid` and a populated `undercutOutcome` | the survey outcome is published as given, not replaced by the prerequisite refusal |
+| T39 | `annularSketch` revolved a full turn as a surface | `Verify` reads `Validity.Outcome == ValidityValid` with no `Validity.Diagnostics`, admitted by construction: `payloadProvesSimple`'s `revolvePayload` arm holds because the sweep is exactly one full turn and the radial minimum is proven clear of the axis |
+| T40 | `annularSketch` revolved a quarter turn as a surface | `Verify` stays `Validity.Outcome == ValidityUndecided` with one `DiagUndecidedValidity`: a partial turn earns no construction admission |
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'`

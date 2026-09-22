@@ -636,7 +636,7 @@ func requireSheetAuditViolated(t *testing.T, corrupt func(t *testing.T, doc *Doc
 	b := internalSheetBody(t, doc, 0, 0, 10, 6, 4)
 	corrupt(t, doc, b)
 
-	require.Equal(t, sheetAuditViolated, auditSheetBoundary(b))
+	require.Equal(t, sheetAuditViolated, auditSheetBoundary(t.Context(), b))
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
@@ -703,7 +703,7 @@ func TestAuditSheetBoundaryUndecidedPayload(t *testing.T) {
 		doc := New()
 		b := internalSheetBody(t, doc, 0, 0, 10, 6, 4)
 		b.payload = nil
-		require.Equal(t, sheetAuditUndecided, auditSheetBoundary(b))
+		require.Equal(t, sheetAuditUndecided, auditSheetBoundary(t.Context(), b))
 	})
 
 	t.Run("nonzero sectionDelta", func(t *testing.T) {
@@ -714,6 +714,55 @@ func TestAuditSheetBoundaryUndecidedPayload(t *testing.T) {
 		require.True(t, ok)
 		pp.sectionDelta = 1e-6
 		b.payload = pp
-		require.Equal(t, sheetAuditUndecided, auditSheetBoundary(b))
+		require.Equal(t, sheetAuditUndecided, auditSheetBoundary(t.Context(), b))
+	})
+}
+
+// rectangleProfile is a straight-edged rectangle in plane-local (u, v)
+// coordinates, u running [0, 10] and v running [vlo, vhi], closed by four
+// LineSeg segments. Every vertex sits at an exact recorded coordinate, so a
+// radial extreme taken against it carries a zero bound.
+func rectangleProfile(vlo, vhi float64) ProfileRecord {
+	return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+		LineSeg{Start: Point2{U: 0, V: vlo}, End: Point2{U: 10, V: vlo}, TStart: 0, TEnd: 1},
+		LineSeg{Start: Point2{U: 10, V: vlo}, End: Point2{U: 10, V: vhi}, TStart: 0, TEnd: 1},
+		LineSeg{Start: Point2{U: 10, V: vhi}, End: Point2{U: 0, V: vhi}, TStart: 0, TEnd: 1},
+		LineSeg{Start: Point2{U: 0, V: vhi}, End: Point2{U: 0, V: vlo}, TStart: 0, TEnd: 1},
+	}}}
+}
+
+// TestRevolvePayloadProvesSimple drives payloadProvesSimple's revolvePayload
+// arm directly against hand-built payloads, isolating each half of its
+// admission condition — full == true, and a radial minimum PROVEN
+// non-negative — from resolveAxisSide's own build-time gate, which admits
+// down to a −tol band rather than proving the minimum clear of zero
+// (docs/surface-design.md §9.1). axis is aligned with plane-local u, so the
+// rectangle's v range IS the radial range this arm reads.
+func TestRevolvePayloadProvesSimple(t *testing.T) {
+	t.Parallel()
+	axis := axisFrame{dU: 1, dV: 0}
+
+	t.Run("full turn clear of the axis admits", func(t *testing.T) {
+		t.Parallel()
+		rp := revolvePayload{profile: rectangleProfile(5, 15), ax: axis, full: true}
+		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
+	})
+
+	t.Run("partial turn never admits, however clear of the axis", func(t *testing.T) {
+		t.Parallel()
+		rp := revolvePayload{profile: rectangleProfile(5, 15), ax: axis, full: false}
+		require.False(t, revolvePayloadProvesSimple(t.Context(), rp))
+	})
+
+	t.Run("a proven-negative radial minimum never admits, full turn or not", func(t *testing.T) {
+		t.Parallel()
+		rp := revolvePayload{profile: rectangleProfile(-1, 9), ax: axis, full: true}
+		require.False(t, revolvePayloadProvesSimple(t.Context(), rp))
+	})
+
+	t.Run("a radial minimum proven exactly zero admits", func(t *testing.T) {
+		t.Parallel()
+		rp := revolvePayload{profile: rectangleProfile(0, 8), ax: axis, full: true}
+		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
 	})
 }

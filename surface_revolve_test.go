@@ -447,10 +447,12 @@ func TestSurfaceRevolveRolesResolveThroughFaceCreatedBy(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 }
 
-// TestSurfaceRevolveSheetVerifiesUndecided mirrors extrude's holding fix
-// (docs/surface-design.md §9.1, §14) for Revolve: the manifold-with-boundary
-// audit lands later, so a sheet reads ValidityUndecided rather than proven
-// invalid.
+// TestSurfaceRevolveSheetVerifiesUndecided is docs/surface-design.md §15's
+// T40: a quarter-turn revolve sheet stays Suspect with DiagUndecidedValidity,
+// because payloadProvesSimple's revolvePayload arm requires full == true and
+// a partial turn never has it — the manifold-with-boundary audit this
+// evaluator would otherwise need lands later, so a sheet reads
+// ValidityUndecided rather than proven invalid.
 func TestSurfaceRevolveSheetVerifiesUndecided(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
@@ -465,9 +467,64 @@ func TestSurfaceRevolveSheetVerifiesUndecided(t *testing.T) {
 	require.Nil(t, br.Region)
 	require.Len(t, br.Validity.Diagnostics, 1)
 	require.Equal(t, decad.DiagUndecidedValidity, br.Validity.Diagnostics[0].Code)
+	require.Equal(t, decad.Suspect, br.Status)
+	require.Equal(t, decad.Suspect, report.Status)
 	for _, d := range br.Diagnostics {
 		require.NotEqual(t, decad.DiagInvalidBody, d.Code)
 	}
+}
+
+// TestSurfaceRevolveFullTurnSheetVerifiesValid is docs/surface-design.md
+// §15's T39: a full-revolution surface sheet reads ValidityValid, admitted
+// by construction — payloadProvesSimple's revolvePayload arm holds because
+// the sweep is exactly one full turn and annularSketch's radial minimum
+// (5 mm) is proven clear of the axis. This is the widening PR 0 makes: the
+// same fixture read ValidityUndecided before this arm existed. The body's
+// overall Status still reads Suspect here, on a DiagToleranceReferenceUnavailable
+// unrelated to validity: a revolve sheet has no gate-diameter arm
+// (newBodyGeomBudget's revolvePayload case refuses every surfaceResult
+// revolve outright, verify_gate.go), a pre-existing gap this leg does not
+// touch, so the Approximate area this curved fixture publishes has no
+// reference to gate against. The assertion below is deliberately scoped to
+// what this leg changes: Validity alone.
+func TestSurfaceRevolveFullTurnSheetVerifiesValid(t *testing.T) {
+	t.Parallel()
+	s, p := annularSketch(t)
+	doc := decad.New()
+	sheet, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	br := decadtest.FindBodyReport(t, report, sheet)
+	require.Equal(t, decad.ValidityValid, br.Validity.Outcome)
+	require.Empty(t, br.Validity.Diagnostics)
+	require.Nil(t, br.Region)
+	for _, d := range br.Diagnostics {
+		require.NotEqual(t, decad.DiagInvalidBody, d.Code)
+		require.NotEqual(t, decad.DiagUndecidedValidity, d.Code)
+	}
+}
+
+// TestSurfaceRevolveAxisStraddlingProfileNeverReachesTheAudit confirms the
+// premise payloadProvesSimple's revolvePayload arm rests on: a profile whose
+// boundary straddles the revolve axis is refused by resolveAxisSide at
+// build, before a body exists at all, so it never reaches auditSheetBoundary
+// with a claim the arm would have to decide.
+func TestSurfaceRevolveAxisStraddlingProfileNeverReachesTheAudit(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, -5, 10, 15)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	doc := decad.New()
+	_, err = doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	require.ErrorIs(t, err, decad.ErrDegenerate, `a region straddling the axis is rejected at build`)
+	require.Empty(t, doc.Bodies())
 }
 
 // TestSurfaceRevolveHoledProfileReportsDisconnectedLumps is decision A: a
