@@ -636,7 +636,7 @@ func requireSheetAuditViolated(t *testing.T, corrupt func(t *testing.T, doc *Doc
 	b := internalSheetBody(t, doc, 0, 0, 10, 6, 4)
 	corrupt(t, doc, b)
 
-	require.Equal(t, sheetAuditViolated, auditSheetBoundary(b))
+	require.Equal(t, sheetAuditViolated, auditSheetBoundary(t.Context(), b))
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
@@ -703,7 +703,7 @@ func TestAuditSheetBoundaryUndecidedPayload(t *testing.T) {
 		doc := New()
 		b := internalSheetBody(t, doc, 0, 0, 10, 6, 4)
 		b.payload = nil
-		require.Equal(t, sheetAuditUndecided, auditSheetBoundary(b))
+		require.Equal(t, sheetAuditUndecided, auditSheetBoundary(t.Context(), b))
 	})
 
 	t.Run("nonzero sectionDelta", func(t *testing.T) {
@@ -714,6 +714,90 @@ func TestAuditSheetBoundaryUndecidedPayload(t *testing.T) {
 		require.True(t, ok)
 		pp.sectionDelta = 1e-6
 		b.payload = pp
-		require.Equal(t, sheetAuditUndecided, auditSheetBoundary(b))
+		require.Equal(t, sheetAuditUndecided, auditSheetBoundary(t.Context(), b))
 	})
+}
+
+// rectangleProfile is a straight-edged rectangle in plane-local (u, v)
+// coordinates, u running [0, 10] and v running [vlo, vhi], closed by four
+// LineSeg segments. Every vertex sits at an exact recorded coordinate, so a
+// radial extreme taken against it carries a zero bound.
+func rectangleProfile(vlo, vhi float64) ProfileRecord {
+	return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+		LineSeg{Start: Point2{U: 0, V: vlo}, End: Point2{U: 10, V: vlo}, TStart: 0, TEnd: 1},
+		LineSeg{Start: Point2{U: 10, V: vlo}, End: Point2{U: 10, V: vhi}, TStart: 0, TEnd: 1},
+		LineSeg{Start: Point2{U: 10, V: vhi}, End: Point2{U: 0, V: vhi}, TStart: 0, TEnd: 1},
+		LineSeg{Start: Point2{U: 0, V: vhi}, End: Point2{U: 0, V: vlo}, TStart: 0, TEnd: 1},
+	}}}
+}
+
+// TestRevolvePayloadProvesSimple drives payloadProvesSimple's revolvePayload
+// arm directly against hand-built payloads, isolating each half of its
+// admission condition — full == true, and a radial minimum PROVEN
+// non-negative — from resolveAxisSide's own build-time gate, which admits
+// down to a −tol band rather than proving the minimum clear of zero
+// (docs/surface-design.md §9.1). axis is aligned with plane-local u, so the
+// rectangle's v range IS the radial range this arm reads.
+func TestRevolvePayloadProvesSimple(t *testing.T) {
+	t.Parallel()
+	axis := axisFrame{dU: 1, dV: 0}
+
+	t.Run("full turn clear of the axis admits", func(t *testing.T) {
+		t.Parallel()
+		rp := revolvePayload{profile: rectangleProfile(5, 15), ax: axis, full: true}
+		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
+	})
+
+	t.Run("partial turn never admits, however clear of the axis", func(t *testing.T) {
+		t.Parallel()
+		rp := revolvePayload{profile: rectangleProfile(5, 15), ax: axis, full: false}
+		require.False(t, revolvePayloadProvesSimple(t.Context(), rp))
+	})
+
+	t.Run("a proven-negative radial minimum never admits, full turn or not", func(t *testing.T) {
+		t.Parallel()
+		rp := revolvePayload{profile: rectangleProfile(-1, 9), ax: axis, full: true}
+		require.False(t, revolvePayloadProvesSimple(t.Context(), rp))
+	})
+
+	t.Run("a radial minimum proven exactly zero admits", func(t *testing.T) {
+		t.Parallel()
+		rp := revolvePayload{profile: rectangleProfile(0, 8), ax: axis, full: true}
+		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
+	})
+}
+
+// TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift is the fixture
+// every earlier test above could not exercise: axis (dU=1, dV=0) passes
+// through the origin, so aU and aV are both exactly zero and the axis-offset
+// shift roff = nU*aU+nV*aV this arm subtracts is trivially zero and exact.
+// Here the axis is anchored away from the origin (aV = 1e10) with a direction
+// (dU=0.8, dV=0.6) whose components are not exactly representable, so
+// computing roff commits real floating-point rounding of its own — the fault
+// this test pins is that a BARE `rlo -= roff` leaves that rounding
+// unaccounted, so the strict-zero comparison can read a profile whose TRUE
+// radial minimum is negative as non-negative.
+//
+// The profile's single boundary segment sits at v = aV − 1e-7 (u held at 0,
+// so the axis direction's u-component never enters): the exact mathematical
+// radial coordinate there is nV·(v−aV) = 0.8·(−1e-7) = −8e-8, negative, so
+// this profile must never be admitted. Rounding of the two independent
+// nV·aV products — one inside the extremes scan, one in this arm's own
+// offset — very nearly cancels in float64: the naive central value lands on
+// exactly 0.0, which a bare subtraction (bound 0, since this profile's own
+// vertices are exact) reads as PROVEN non-negative and wrongly admits. The
+// fix's own composed bound (~4.4e-7, from boundedMul/boundedAdd charging the
+// offset multiplication's rounding) safely exceeds that cancellation, so the
+// interval straddles zero and the leg correctly refuses.
+func TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift(t *testing.T) {
+	t.Parallel()
+	const aV = 1e10
+	const eps = 1e-7
+	ax := axisFrame{dU: 0.8, dV: 0.6, aU: 0, aV: aV}
+	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+		LineSeg{Start: Point2{U: 0, V: aV - eps}, End: Point2{U: 0, V: aV - eps + 5}, TStart: 0, TEnd: 1},
+	}}}
+	rp := revolvePayload{profile: profile, ax: ax, full: true}
+	require.False(t, revolvePayloadProvesSimple(t.Context(), rp),
+		"the true radial minimum here is negative (-8e-8); the offset shift's own rounding must not admit it")
 }
