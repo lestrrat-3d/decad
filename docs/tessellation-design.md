@@ -96,6 +96,7 @@ same safety-net role:
 | directed edges | each directed edge occurs at most once; an interior edge's reverse occurs exactly once; a free boundary edge has no reverse |
 | orientation | every interior edge's exactly-one-reverse is proven by the count above, which is the whole of what this audit decides about orientation |
 | free boundary | every mesh free edge lies on a body free edge, and every body free edge is covered by mesh free edges |
+| vertex links | every stored vertex's combinatorial link is ONE connected component that is either a cycle, every link vertex at degree two, or a path, exactly two link vertices at degree one and the rest at degree two |
 
 The orientation row's OTHER half — that the shared winding matches the
 shell's own positive side (`docs/surface-design.md` §2.3) — is never audited
@@ -106,6 +107,34 @@ test against a bounded `Face.NormalAt` would add a geometric admission gate
 where construction already proves the answer, which `CLAUDE.md`'s
 reject-only rule forbids, so the tests assert it directly instead of this
 audit re-deriving it.
+
+The signed-volume orientation audit §4 runs after the directed-edge closure
+audit applies to a CLOSED mesh only and never runs here: on an open mesh that
+sum is anchor-dependent, since nothing pins where the missing material would
+have been, and it decides nothing.
+
+The free-boundary row's chain count, on both sides, is a CONNECTED-COMPONENT
+count, never an edge count. A face's free boundary can carry several free
+Edge objects that are nonetheless one connected chain — two rims sharing an
+interned vertex, which a revolve wall meeting the axis produces, are one
+chain, not two — and the mesh side's own free directed edges are grouped the
+same way, by connected component over vertex indices. Counting free Edge
+objects, or free directed edges, instead of components would disagree with
+the other side on exactly that case.
+
+A sheet vertex's link needs its own rule because a closed mesh's link, one
+cycle at every degree-two vertex (§9), is not what a boundary vertex has: a
+free edge's two endpoints each have a link that is an open PATH, terminated
+by the two free edges meeting there, not a cycle. The vertex-links row above
+admits either shape, one connected component that is a cycle or a path, and
+refuses anything else — more than one component, or a fork — with
+`ErrUnsupported`.
+
+A sheet with no free edge is CLOSED: every directed edge then has its
+reverse, so the free-boundary row holds vacuously and this manifold-with-
+boundary audit is what a closed sheet runs. It passes for the same reason
+the closed-mesh audit would, since the two audits agree completely once there
+is no free edge to tell them apart.
 
 Every other row of §1's table binds a sheet mesh unchanged, and so does §1.1's
 one-entry cache.

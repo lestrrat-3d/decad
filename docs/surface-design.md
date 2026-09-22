@@ -1097,7 +1097,7 @@ rather than after.
 | `Fillet` / `Chamfer` | `ErrUnsupported` | `docs/modify-design.md`'s reduction rewrites a prism's **section**; a sheet's free boundary is not a section, and blending to a free edge is its own design |
 | `Shell` | `ErrUnsupported` | offsets a section into a wall of thickness `t`; a sheet has no section, and the offset is Thicken's own open question (§1.2) |
 | `Placed` / `PlacedCopy` / `Duplicate` | admitted, unchanged | a rigid motion of a payload; nothing in it reads solidity |
-| `Tessellate` / `STL` / `OBJ` | `ErrUnsupported`, staged (§10) | the manifold-with-boundary audit §10 describes is not built yet |
+| `Tessellate` / `STL` / `OBJ` | a prism sheet tessellates and exports; a revolve sheet is `ErrUnsupported`, staged (§10) | the manifold-with-boundary audit §10 describes is built and runs on the prism path; the revolve path awaits increment 4 |
 | `ToFace` / `ToFaceAngular` naming a **planar** face of a live sheet | admitted | the stop reads the face's plane and nothing about material, so `stops.go`'s resolution is unchanged |
 | `ToFace` naming a curved face of a sheet | as for a solid | this design changes no curved-stop reach |
 | `EdgeAxis` naming a linear edge of a live sheet | admitted | the axis reads the edge's line; `docs/api-design.md` §6.2's exactly-one and liveness rules apply unchanged |
@@ -1228,7 +1228,7 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T7d | two sheets whose boxes meet, in a fixture that would cross if either were a solid | `Verify` keeps `DiagUnsupportedPairSheet`, `Suspect`: neither operand offers a closed boundary to cast against |
 | T7e | T7's fixture with the two bodies created in the opposite order | the `DiagSheetSolidCrossing` diagnostic's `Pair.A`/`Pair.B` follow `Document.Bodies()` order, not "sheet first" |
 | T9 | a sheet handed to `Union`, `Fillet`, `Chamfer` and `Shell` | each is `ErrUnsupported`; the receiver and every operand stay live, and `Document.Bodies()` is unchanged |
-| T10 | a sheet tessellated | deferred to the increment that builds the manifold-with-boundary audit (§10, Table D); today, `Tessellate`/`STL`/`OBJ` on a sheet is `ErrUnsupported` and that refusal is T9-shaped, not T10's |
+| T10 | a sheet tessellated | a prism sheet tessellates and exports through the manifold-with-boundary audit (§10, Table D; `tessellate_sheet_test.go`); a revolve sheet still refuses with `ErrUnsupported`, deferred to increment 4 |
 | T11 | a three-face assembly welded into a Möbius orientation | `Stitch` is `ErrDegenerate` (R7), and the document is unchanged |
 | T12 | `Body.Patch` on a non-planar four-edge chain | `ErrUnsupported` (R6); and on a bounded-but-planar chain, `ErrUnsupported` on the same row |
 | T13 | every Table R row | the stated sentinel, with `errors.Is` holding, and no document change |

@@ -191,7 +191,7 @@ to the byte budget.
 | `tessellate_revolve_arc.go` | What a CIRCULAR revolve generator needs: its meridian stations, its `Ecell` by certified subdivision, and its cap segment area. See the file's own doc comment. |
 | `tessellate_revolve_volume.go` | The revolve mesh's occupied-volume proof: the meridian first-moment allowance, the per-cell angular homotopy integral and the two coordinate-stage allowances. See the file's own doc comment. |
 | `tessellate_station.go` | `chordStationBound`: the proven enclosure gap of one interior chord station on a circular walk. See the file's own doc comment. |
-| `tessellate_sheet.go` | `requireSheetMesh`: the prism sheet path's manifold-with-boundary audit. See `docs/tessellation-design.md` §1.2. |
+| `tessellate_sheet.go` | `requireSheetMesh` and `requireSheetVertexLinks`: the sheet mesh's manifold-with-boundary and vertex-link audits. See `docs/tessellation-design.md` §1.2. |
 | `tessellate_loft.go` | `tessellateLoft`: the exact restatement of a `loftPayload`'s held triangle set and proof record. See the file's own doc comments. |
 | `tessellate_capblend.go` | `tessellateCapBlend`: the export-only cap-loop chamfer mesh, one chord count per wall walk shared three ways. See `docs/tessellation-reach-design.md` §7. |
 | `triangulate.go` | The cap triangulator behind `Tessellate`: hole bridging plus reflex-blocked ear clipping, correct for non-convex outlines with holes. See the file's own doc comment. |
