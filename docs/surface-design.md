@@ -903,13 +903,22 @@ a residual or a chord test. A surface-extruded sheet earns the fourth leg
 because `sketch` already proved the recorded section a simple closed planar
 region, `evalPrismContext` already refuses a non-positive sweep height, a
 simple planar region crossed with a positive interval cannot self-intersect,
-and the rigid placement that follows preserves that. Any other construction —
-or a section admitted only to within a nonzero displacement of what it
-denotes, which breaks the transfer of simplicity — earns no such proof: the
-fourth leg has nothing to stand on, which is undecided, not a violation. A
-free edge, which on a closed body would be the watertightness failure, is the
-expected shape here and is counted by the structural legs rather than
-faulted.
+and the rigid placement that follows preserves that. A surface-result loft
+earns it on a STRONGER argument: the evaluator cannot return a loft body at
+all unless `docs/loft-design.md` §6's crossing audit already passed over the
+COMPLETE held triangle set — walls and both caps together — so
+non-self-intersection of the walls alone, the sheet's own published faces
+once the caps are omitted, follows from non-self-intersection of that
+superset with no further proof needed. A positive section displacement (that
+loft's own `sectionDelta`) means the body denotes a curved surface the held
+chords are only within that displacement of, so simplicity of the chord mesh
+does not transfer to the surface it stands for, and the fourth leg is
+undecided rather than violated there too. Any other construction — a revolve
+sheet included, whose own build runs no crossing audit over its triangle set
+at all — earns no such proof: the fourth leg has nothing to stand on, which
+is undecided, not a violation. A free edge, which on a closed body would be
+the watertightness failure, is the expected shape here and is counted by the
+structural legs rather than faulted.
 
 **`Region` is nil for a sheet even when `Validity.Outcome` is
 `ValidityValid`.** `docs/verification-design.md` §1 currently states the
@@ -928,18 +937,30 @@ positive side.
 
 ### 9.2 What a sound sheet costs
 
-**A document holding only sheets verifies fully and reads `Sound`, provided no
-survey was requested.** Nothing about a sheet makes a report `Suspect` on its
+**This is true only for a family whose construction proves §9.1's fourth
+leg** — today the surface-extruded prism and the surface-result loft, each at
+a zero displacement (sectionDelta for the loft). **A document holding only
+sheets from such a family verifies fully and reads `Sound`, provided no survey
+was requested.** Nothing about a PROVEN sheet makes a report `Suspect` on its
 own: its boundary quantities are gated like any other, its validity is decided
 in `Verify` — exactly where every other body kind's is, so a sheet's audit is
 not a special build-time step — and an omitted survey reads its
 `NotRequested` outcome as everywhere.
 
-Two things do cost a sheet a `Suspect`, and both are the caller asking a
+Two things do cost a PROVEN sheet a `Suspect`, and both are the caller asking a
 question a sheet cannot answer: a **requested** survey, which reads
 `Unavailable` with a `DiagSurveyPrerequisite` (§9.1); and §9.3's pair rule,
 where a sheet's box meets a solid's. Neither fires on a model that only holds
-sheets and only asks the core questions.
+proven sheets and only asks the core questions.
+
+**A sheet whose family has no such proof reads `Suspect` regardless of what
+the caller asks.** A revolve sheet's fourth leg is undecided today — its own
+build runs no crossing audit over its triangle set at all — so a document
+holding one, even alone and with no survey requested, already reads `Suspect`
+through `Validity.Outcome == ValidityUndecided` and its `DiagUndecidedValidity`
+diagnostic. The arc-reduced and composite sweep sheets a later increment adds
+inherit the same undecided leg for the identical reason: neither construction
+has a crossing-audit proof for `Verify`'s switch (§9.1) to read.
 
 ### 9.3 Pairs
 
@@ -1072,11 +1093,16 @@ A surface-result **prism** (`Extrude`) sheet tessellates and exports: its
 walls chord exactly as the solid the same record would build, both caps are
 omitted from the mesh exactly as they are from the body, and the
 manifold-with-boundary audit runs in the closed-mesh audit's place. A
-surface-result **revolve** sheet does not yet: `Tessellate`/`STL`/`OBJ` refuse
-it with `ErrUnsupported` at the dispatch that would otherwise look up a role a
-surface result's own build never attached (§4.2) — this evaluator's own
-reach, never the `ErrDegenerate` a missing face role would otherwise report,
-since the body's geometry is not the problem. Increment 4 takes up the revolve
+surface-result **revolve** or **loft** sheet does not yet: `Tessellate`/
+`STL`/`OBJ` refuse it with `ErrUnsupported` at the dispatch that would
+otherwise look up a role a surface result's own build never attached (§4.2)
+— this evaluator's own reach, never the `ErrDegenerate` a missing face role
+would otherwise report, since the body's geometry is not the problem. A
+loft sheet's own refusal sits ahead of `tessellateLoft`'s exact restatement
+(`docs/loft-design.md` §9 Table D row D1), which — unlike the revolve
+path — already holds the complete triangle set including both omitted
+caps; the refusal is what keeps that set from being restated as a solid
+mesh for a body with no material. Increment 4 takes up the revolve
 path, and it is where a CLOSED sheet's mesh is settled: a full revolution's
 surface result has no free edge at all, and no earlier increment produces one
 (§14).
@@ -1097,7 +1123,7 @@ rather than after.
 | `Fillet` / `Chamfer` | `ErrUnsupported` | `docs/modify-design.md`'s reduction rewrites a prism's **section**; a sheet's free boundary is not a section, and blending to a free edge is its own design |
 | `Shell` | `ErrUnsupported` | offsets a section into a wall of thickness `t`; a sheet has no section, and the offset is Thicken's own open question (§1.2) |
 | `Placed` / `PlacedCopy` / `Duplicate` | admitted, unchanged | a rigid motion of a payload; nothing in it reads solidity |
-| `Tessellate` / `STL` / `OBJ` | a prism sheet tessellates and exports; a revolve sheet is `ErrUnsupported`, staged (§10) | the manifold-with-boundary audit §10 describes is built and runs on the prism path; the revolve path awaits increment 4 |
+| `Tessellate` / `STL` / `OBJ` | a prism sheet tessellates and exports; a revolve or loft sheet is `ErrUnsupported`, staged (§10) | the manifold-with-boundary audit §10 describes is built and runs on the prism path; the revolve and loft paths await a later increment |
 | `ToFace` / `ToFaceAngular` naming a **planar** face of a live sheet | admitted | the stop reads the face's plane and nothing about material, so `stops.go`'s resolution is unchanged |
 | `ToFace` naming a curved face of a sheet | as for a solid | this design changes no curved-stop reach |
 | `EdgeAxis` naming a linear edge of a live sheet | admitted | the axis reads the edge's line; `docs/api-design.md` §6.2's exactly-one and liveness rules apply unchanged |
@@ -1228,7 +1254,7 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T7d | two sheets whose boxes meet, in a fixture that would cross if either were a solid | `Verify` keeps `DiagUnsupportedPairSheet`, `Suspect`: neither operand offers a closed boundary to cast against |
 | T7e | T7's fixture with the two bodies created in the opposite order | the `DiagSheetSolidCrossing` diagnostic's `Pair.A`/`Pair.B` follow `Document.Bodies()` order, not "sheet first" |
 | T9 | a sheet handed to `Union`, `Fillet`, `Chamfer` and `Shell` | each is `ErrUnsupported`; the receiver and every operand stay live, and `Document.Bodies()` is unchanged |
-| T10 | a sheet tessellated | a prism sheet tessellates and exports through the manifold-with-boundary audit (§10, Table D; `tessellate_sheet_test.go`); a revolve sheet still refuses with `ErrUnsupported`, deferred to increment 4 |
+| T10 | a sheet tessellated | a prism sheet tessellates and exports through the manifold-with-boundary audit (§10, Table D; `tessellate_sheet_test.go`); a revolve or loft sheet still refuses with `ErrUnsupported`, deferred to a later increment |
 | T11 | a three-face assembly welded into a Möbius orientation | `Stitch` is `ErrDegenerate` (R7), and the document is unchanged |
 | T12 | `Body.Patch` on a non-planar four-edge chain | `ErrUnsupported` (R6); and on a bounded-but-planar chain, `ErrUnsupported` on the same row |
 | T13 | every Table R row | the stated sentinel, with `errors.Is` holding, and no document change |

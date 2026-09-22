@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 // This file is docs/loft-design.md PR 1a: the evaluator half of Loft — the
@@ -44,6 +45,15 @@ type loftPayload struct {
 	frame0, frame1     r3.Frame
 	alignment          []int
 	xform              r3.Transform
+
+	// surfaceResult is WithSurfaceResult's own flag (docs/surface-design.md
+	// §4): true when the build must omit both section caps and publish a
+	// sheet instead of a solid. It is part of the re-evaluable record for the
+	// same reason prismPayload's and revolvePayload's own copies are
+	// (prism_payload.go, revolve_build.go), so Placed, Duplicate and
+	// PlacedCopy reproduce the sheet with no further code — a plain solid
+	// loft leaves it false.
+	surfaceResult bool
 
 	// delta is the proven displacement of every held vertex from the exact
 	// point the record denotes for it (docs/loft-design.md §5, §12 PR 2a,
@@ -190,7 +200,10 @@ func (pl loftPayload) axialDelta() float64 { return pl.delta }
 // as prismPayload.placed opens its own (extrude.go). §5's whole-shell
 // orientation step re-decides the sign from the placed triangle set on its
 // own, so a mirror flips `reversed` with no separate winding-flip case
-// needed here.
+// needed here. next := pl carries surfaceResult over unchanged — only the
+// triangle set and the proof composed from it are cleared below — so a
+// placed, duplicated or placed-copied sheet reproduces the sheet with no
+// further code (docs/surface-design.md §4.2).
 func (pl loftPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	next := pl
 	next.xform = composed
@@ -282,7 +295,17 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	cap0Rat := capPolygonAreaRat(a.pts0, a.loopIdx0)
 	cap1Rat := capPolygonAreaRat(a.pts1, a.loopIdx1)
 
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: true}
+	// A surface result publishes a sheet, never a solid: solid false is what
+	// makes Volume() and Centroid() answer ErrNotSolid through their existing
+	// guards, and kind BodySheet is what Kind() reports
+	// (docs/surface-design.md §4.3), the same rule prismPayload's and
+	// revolvePayload's own builds already follow (prism_build.go,
+	// revolve_build.go).
+	kind := BodySolid
+	if pl.surfaceResult {
+		kind = BodySheet
+	}
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: !pl.surfaceResult, kind: kind}
 
 	capStart, capEnd, walls, err := buildLoftTopology(ctx, body, ref, a, cap0Rat, cap1Rat)
 	if err != nil {
@@ -292,12 +315,28 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		return nil, err
 	}
 
-	faces := append([]*Face{capStart, capEnd}, walls...)
-	if err := attachFaceLoopsContext(ctx, faces); err != nil {
-		return nil, err
+	// A surface result omits both caps from the shell (Table W,
+	// docs/surface-design.md §4.1-§4.2): capStart/capEnd stay constructed above
+	// so the area accumulation below can still read their area fields, but
+	// neither joins the attached or published face set, which is what leaves
+	// each section-plane rim edge with only its wall face free. sheetLumps
+	// splits the walls by connectivity — a holed loft's outer and hole wall
+	// tubes touch nowhere once their shared cap is gone — and MUST run after
+	// attachFaceLoopsContext has registered every wall face on its own edges
+	// (surface.go's shellIsOpen/sheetLumps doc comments); a solid loft keeps
+	// the single-shell, single-lump body PR 1 already published, unchanged.
+	if pl.surfaceResult {
+		if err := attachFaceLoopsContext(ctx, walls); err != nil {
+			return nil, err
+		}
+		body.lumps = sheetLumps(walls)
+	} else {
+		faces := append([]*Face{capStart, capEnd}, walls...)
+		if err := attachFaceLoopsContext(ctx, faces); err != nil {
+			return nil, err
+		}
+		body.lumps = []*Lump{{shells: []*Shell{{faces: faces}}}}
 	}
-
-	body.lumps = []*Lump{{shells: []*Shell{{faces: faces}}}}
 
 	anchor := pl.xform.Apply(pl.plane0.Origin)
 	// docs/loft-design.md §5.2's matchedDelta row, composed here and nowhere
@@ -358,6 +397,37 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 	}
 	body.bounds = bounds
 	body.area = mass.area(cap0Rat, cap1Rat)
+	if pl.surfaceResult {
+		// §4.3: a surface result's area is the solid's area minus the two
+		// omitted caps'. Each cap's area and bound are read back from the
+		// Face fields buildLoftTopology stamped, which already compose the
+		// cap's own placement allowance (capTriangleAreaAllow) — never
+		// re-derived here — and the subtraction runs LAST, after the mass
+		// accumulator's own area (walls plus both caps) has been read, so
+		// nothing after this point still widens capStart's or capEnd's own
+		// bound out from under a value already composed from them.
+		// Collapsing this to the wall triangles' own sum instead (mass.area()
+		// called with no cap terms) would hold the same VALUE — the two caps
+		// cancel exactly, since they are the identical terms mass.area()
+		// added in — but a SMALLER, uncomposed bound: the wall sum alone
+		// carries none of the two caps' own rounding, which §4.3 requires
+		// the sheet's bound to include.
+		areaScalar := boundedSub(
+			boundedSub(measurementScalar(body.area), measuredScalar(capStart.area, capStart.areaBound)),
+			measuredScalar(capEnd.area, capEnd.areaBound),
+		)
+		// Published Approximate EXPLICITLY, never derived from the composed
+		// bound: the solid loft's own mass.area() always publishes
+		// Approximate (loft_moments.go — a triangle's area is a square root,
+		// never exactly representable), and a sheet built from the SAME wall
+		// triangles must never claim more exactness than the body it came
+		// from, whatever its own composed bound happens to round to.
+		body.area = Measurement{
+			Value:     units.SquareMillimeters(areaScalar.value),
+			Exactness: Approximate,
+			Bound:     units.SquareMillimeters(areaScalar.bound),
+		}
+	}
 
 	if err := validateLoftBodyMeasurements(body); err != nil {
 		return nil, err

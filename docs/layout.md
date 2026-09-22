@@ -88,7 +88,7 @@ to the byte budget.
 | `topology.go` | The topology model (evaluator §3): `Body`→`Lump`→`Shell`→`Face`→`Loop`→`CoEdge`→`Edge`→`Vertex`, plus sealed `Surface`/`Curve` variant sets. See the types' own doc comments and `docs/evaluator-design.md` §3. |
 | `normal_bound.go` | The proof behind the bound every `Face.NormalAt` arm publishes: rational-interval enclosures of each arm's own exact unit normal, and the radian sine/cosine enclosure the `Cone` arm needs. See the file's own doc comment. |
 | `document.go` | `Document` (`New`/`Bodies`), its atomic commit tail, private provenance identities, and retire/liveness gates. `Body.Placed`/`Duplicate`/`PlacedCopy` rebuild the payload under a composed motion; see their doc comments and evaluator §8. |
-| `surface.go` | `WithSurfaceResult`, the two refusal helpers (`refuseSurfaceResult`, `refuseSheetOperand`), and the shared shell/lump helpers (`shellIsOpen`, `sheetLumps`) prism and revolve builds share. See `docs/surface-design.md` §2.2-§4, §7, §11. |
+| `surface.go` | `WithSurfaceResult`, the two refusal helpers (`refuseSurfaceResult`, `refuseSheetOperand`), and the shared shell/lump helpers (`shellIsOpen`, `sheetLumps`) prism, revolve and loft builds share. See `docs/surface-design.md` §2.2-§4, §7, §11. |
 | `patch.go` | `Document.Patch`: a single planar face from a recorded profile, reusing `buildLoopSidesAs`'s per-kind curve construction. See `docs/surface-design.md` §5.1. |
 | `patch_body.go` | `Body.Patch`: partitions a free-edge selection into closed chains, proves each planar via `dyadic.go`, and fills each with its own face. See `docs/surface-design.md` §5.2. |
 | `stitch_weld.go` | Table J's admission: the shared vertex table and which free edge pairs weld. See `docs/surface-design.md` §6.2. |
@@ -111,8 +111,8 @@ to the byte budget.
 | `revolve_extent.go` | The extent readings asked of a finished revolve. An extreme is a swept extreme, bracketed by `sweepExtremeBounds` rather than read off a boundary vertex. See `docs/evaluator-design.md` §6. |
 | `revolve_denotation.go` | `angleDenotation`/`sweepDenotation`: exact stated angles or certified derived-angle intervals, their endpoint displacement, and dependent sweep/trig bounds. See `docs/evaluator-design.md` §6 and `docs/sweep-design.md` §3. |
 | `stops.go` | Body-relative stop resolution for `ToFace`/`ToFaceAngular`/`ThroughAll`/`ThroughAllSide`. See evaluator §5/§6/§11 and the file's own doc comments. |
-| `loft.go` | `Document.Loft`/`LoftContext`, the public entry point over `loft_build.go`'s evaluator. See the file's own doc comment and `docs/loft-design.md` §2/§4/§10. |
-| `loft_build.go` | `loftPayload`, `loftMeshProof`, `evalLoft` and `placed`. Pairing, stations and topology each have their own `loft_*.go` file. See `docs/loft-design.md` §5, §8, §12. |
+| `loft.go` | `Document.Loft`/`LoftContext`, the public entry point over `loft_build.go`'s evaluator, and `WithSurfaceResult` parsing. See the file's own doc comment and `docs/loft-design.md` §2/§4/§10. |
+| `loft_build.go` | `loftPayload`, `loftMeshProof`, `evalLoft` and `placed`, including the `WithSurfaceResult` sheet build. Pairing, stations and topology each have their own `loft_*.go` file. See `docs/loft-design.md` §5, §8, §12 and `docs/surface-design.md` §4. |
 | `loft_pairing.go` | `docs/loft-design.md` Table P: which from-segment walls to which to-segment. A pair the table does not decide is refused outright, never matched to the nearest one. See §5, §5.1. |
 | `loft_stations.go` | Places the stations a loft's wall chords run between and proves each chain's departure from the curve it approximates, under one shared chord target and a station cap. See `docs/loft-design.md` §5.2. |
 | `loft_topology.go` | Assembles the paired stations into the flat-triangle solid the payload holds, and builds the `Body` topology over it. See `docs/loft-design.md` §5.1, §7 and the file's own doc comment. |
