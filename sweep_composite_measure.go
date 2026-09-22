@@ -99,15 +99,11 @@ func replayCompositeSweepWork(
 			return nil, fmt.Errorf(`sweep path span %d: %w`, i, err)
 		}
 	}
-	body, err := assembleCompositeSweepBody(ctx, d, ref, parts)
+	body, err := assembleCompositeSweepBody(ctx, d, ref, parts, payload.surfaceResult)
 	if err != nil {
 		return nil, err
 	}
-	spanBodies := make([]*Body, len(parts))
-	for i := range parts {
-		spanBodies[i] = parts[i].body
-	}
-	if err := aggregateCompositeSweepMeasurements(ctx, body, spanBodies); err != nil {
+	if err := aggregateCompositeSweepMeasurements(ctx, body, parts, payload.surfaceResult); err != nil {
 		return nil, err
 	}
 	body.payload = payload
@@ -123,6 +119,7 @@ func evalCompositeSweepContext(
 	frame r3.Frame,
 	path *Path,
 	work *freeformWork,
+	surfaceResult bool,
 ) (*Body, error) {
 	if err := preflightCompositeSweep(profile, len(path.records)); err != nil {
 		return nil, err
@@ -137,14 +134,21 @@ func evalCompositeSweepContext(
 		}
 	}
 
+	// Every span below stays solid regardless of surfaceResult (compositeLine/
+	// ArcSweepSpan take no such flag): the span pairing below needs both cap
+	// roles, and sewing pairs cap loops face to face. The flag is consumed by
+	// assembleCompositeSweepBody alone, which omits only the outer two caps
+	// from the published face set after every span has built solid
+	// (docs/surface-design.md §4).
 	payload := sweepPayload{
 		prism: prismPayload{
 			profile: profile,
 			frame:   frame,
 			xform:   r3.Identity(),
 		},
-		spans: make([]sweepSpanPayload, len(path.records)),
-		path:  path,
+		spans:         make([]sweepSpanPayload, len(path.records)),
+		path:          path,
+		surfaceResult: surfaceResult,
 	}
 	for i, record := range path.records {
 		if err := ctx.Err(); err != nil {
@@ -305,11 +309,22 @@ func restoreSweepArcCapRoles(body *Body, reverse bool) {
 
 // aggregateCompositeSweepMeasurements publishes the union readings after the
 // caller has proved that span interiors are disjoint and has assembled their
-// shared sections into body. Volume and first moments add over the spans;
-// surface area comes from the assembled faces, so removed internal caps are
-// not counted; bounds are the componentwise union of the span boxes.
-func aggregateCompositeSweepMeasurements(ctx context.Context, body *Body, spans []*Body) error {
-	if body == nil || len(spans) == 0 {
+// shared sections into body. Volume and first moments add over the spans,
+// each of which stays a solid regardless of surfaceResult (sweep_composite.go
+// keeps every span's own two cap roles for the pairing and sewing that
+// already ran); bounds are the componentwise union of the span boxes.
+//
+// Area is a plain sum over body's own published faces, which already excludes
+// every internal cap and, for a surface result, the two outer caps too. For a
+// surface result, collapsing to that sum alone would hold the right VALUE but
+// an uncomposed bound — §4.3 requires a sheet's area to be the full
+// (cap-inclusive) sum minus the two omitted caps, each already-computed
+// quantity contributing its own bound. So the two omitted caps are summed
+// into the running total and then subtracted back out, exactly as
+// prism_build.go/revolve_build.go compose theirs, rather than being left out
+// of the sum from the start.
+func aggregateCompositeSweepMeasurements(ctx context.Context, body *Body, parts []compositeSpanPart, surfaceResult bool) error {
+	if body == nil || len(parts) == 0 {
 		return fmt.Errorf(`%w: a composite sweep requires at least one built span`, ErrDegenerate)
 	}
 	budget := newWorkBudget(ctx)
@@ -317,10 +332,11 @@ func aggregateCompositeSweepMeasurements(ctx context.Context, body *Body, spans 
 	volume := exactScalar(0)
 	momentX, momentY, momentZ := exactScalar(0), exactScalar(0), exactScalar(0)
 	var minX, minY, minZ, maxX, maxY, maxZ boundedScalar
-	for i, span := range spans {
+	for i, part := range parts {
 		if err := budget.step(); err != nil {
 			return err
 		}
+		span := part.body
 		if span == nil || !span.solid {
 			return fmt.Errorf(`%w: composite sweep span %d is not a solid`, ErrDegenerate, i)
 		}
@@ -370,6 +386,14 @@ func aggregateCompositeSweepMeasurements(ctx context.Context, body *Body, spans 
 			return err
 		}
 		area = boundedAdd(area, measuredScalar(face.area, face.areaBound))
+	}
+	if surfaceResult {
+		startCap := measuredScalar(parts[0].startCap.area, parts[0].startCap.areaBound)
+		endCap := measuredScalar(parts[len(parts)-1].endCap.area, parts[len(parts)-1].endCap.areaBound)
+		area = boundedAdd(area, startCap)
+		area = boundedAdd(area, endCap)
+		area = boundedSub(area, startCap)
+		area = boundedSub(area, endCap)
 	}
 
 	body.volume = scalarMeasurement(volume, units.CubicMillimeter)

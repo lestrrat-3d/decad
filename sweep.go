@@ -17,6 +17,23 @@ import (
 // their transported frames and separation certificates close. The distinct
 // sweepPayload preserves the operation's downstream staging and replays every
 // reduction for placement.
+//
+// WithSurfaceResult() (docs/surface-design.md §4, docs/sweep-design.md §14
+// increment 3) reaches every one of Sweep's three build paths, but not through
+// one shared mechanism: a one-span straight or arc path sets the flag on its
+// reduced prismPayload/revolvePayload and gets the whole sheet behaviour for
+// free from prism_build.go/revolve_build.go, while a composite path's spans
+// stay solid (sweepSpanPayload never carries the flag) and
+// assembleCompositeSweepBody (sweep_composite.go) consumes sweepPayload's own
+// flag to omit the two outer caps after every span has built solid.
+//
+// A Sweep never has a fully closed wall set the way a full Revolve does: a
+// closed path is refused outright (S7, samePathPoint below) and ArcThrough's
+// own three-point form cannot even STATE a full turn — its End coincides with
+// Start, which the same closed-path refusal already catches before an angle is
+// derived. So every admitted Sweep — one span or composite — mints exactly two
+// section caps, and §4.1's closed-sheet carve-out (a build that mints no
+// closing face at all) stays reachable through Revolve alone.
 
 // SweepOption configures Sweep.
 type SweepOption interface {
@@ -63,7 +80,8 @@ func (d *Document) SweepContext(ctx context.Context, s *sketch.Sketch, p *sketch
 		return nil, err
 	}
 
-	if err := validateSweepOptions(opts); err != nil {
+	surfaceResult, err := validateSweepOptions(opts)
+	if err != nil {
 		return nil, err
 	}
 
@@ -101,7 +119,7 @@ func (d *Document) SweepContext(ctx context.Context, s *sketch.Sketch, p *sketch
 
 	var body *Body
 	if len(segments) > 1 {
-		body, err = evalCompositeSweepContext(ctx, d, ref, profile, plane, frame, path, work)
+		body, err = evalCompositeSweepContext(ctx, d, ref, profile, plane, frame, path, work, surfaceResult)
 	} else {
 		switch segment := segments[0].(type) {
 		case LineTo:
@@ -109,19 +127,25 @@ func (d *Document) SweepContext(ctx context.Context, s *sketch.Sketch, p *sketch
 			if lineErr != nil {
 				return nil, lineErr
 			}
+			// The flag rides the REDUCED prismPayload, not just the finishing
+			// sweepPayload literal below: prism_build.go's evalPrismContext reads
+			// pp.surfaceResult to decide Kind()/solid, cap omission, sheetLumps and
+			// the area subtraction, which is what gives the line reduction the
+			// whole sheet behaviour for free (docs/surface-design.md §4).
 			prism := prismPayload{
-				profile: profile,
-				frame:   frame,
-				z1:      height,
-				z1Delta: heightBound,
-				xform:   r3.Identity(),
+				profile:       profile,
+				frame:         frame,
+				z1:            height,
+				z1Delta:       heightBound,
+				xform:         r3.Identity(),
+				surfaceResult: surfaceResult,
 			}
 			body, err = evalPrismContext(ctx, d, ref, prism, work)
 			if err == nil {
-				finishStraightSweepBody(body, sweepPayload{prism: prism, path: path})
+				finishStraightSweepBody(body, sweepPayload{prism: prism, path: path, surfaceResult: surfaceResult})
 			}
 		case ArcThrough:
-			body, err = evalArcSweepContext(ctx, d, ref, profile, plane, frame, path, path.records[0], work)
+			body, err = evalArcSweepContext(ctx, d, ref, profile, plane, frame, path, path.records[0], work, surfaceResult)
 		default:
 			err = fmt.Errorf(`%w: sweep path span %T is not supported`, ErrUnsupported, segment)
 		}
@@ -136,51 +160,57 @@ func (d *Document) SweepContext(ctx context.Context, s *sketch.Sketch, p *sketch
 	return body, nil
 }
 
-func validateSweepOptions(opts []SweepOption) error {
+// validateSweepOptions resolves opts into the WithSweepTwist gate and the
+// WithSurfaceResult flag. A surfaceResultOption is not a sweepOption, so it is
+// matched and consumed before the sweepOption assertion below runs — falling
+// through to that assertion would wrongly answer ErrDegenerate instead of
+// setting the flag (docs/surface-design.md §4). A repeated WithSurfaceResult()
+// is idempotent (surface.go's own doc comment), unlike WithSweepTwist's own
+// repeat-is-ErrDegenerate rule below.
+func validateSweepOptions(opts []SweepOption) (bool, error) {
 	haveTwist := false
+	surfaceResult := false
 	var twist sweepOption
 	for _, raw := range opts {
 		if raw == nil {
-			return fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+			return false, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
-		// Checked before the sweepOption assertion below: a surfaceResultOption
-		// is not a sweepOption, so falling through to that assertion would
-		// answer ErrDegenerate and contradict Table R row R1's ErrUnsupported.
-		if err := refuseSurfaceResult(raw, "Sweep"); err != nil {
-			return err
+		if _, ok := raw.(surfaceResultOption); ok {
+			surfaceResult = true
+			continue
 		}
 		o, ok := raw.(sweepOption)
 		if !ok {
-			return fmt.Errorf(`%w: the sweep option is not a decad sweep option (%T)`, ErrDegenerate, raw)
+			return false, fmt.Errorf(`%w: the sweep option is not a decad sweep option (%T)`, ErrDegenerate, raw)
 		}
 		switch ident := o.Ident().(type) {
 		case identSweepTwist:
 			if haveTwist {
-				return fmt.Errorf(`%w: WithSweepTwist was passed more than once`, ErrDegenerate)
+				return false, fmt.Errorf(`%w: WithSweepTwist was passed more than once`, ErrDegenerate)
 			}
 			twist = o
 			haveTwist = true
 		default:
-			return fmt.Errorf(`%w: unknown sweep option identifier %T`, ErrDegenerate, ident)
+			return false, fmt.Errorf(`%w: unknown sweep option identifier %T`, ErrDegenerate, ident)
 		}
 	}
 	if !haveTwist {
-		return nil
+		return surfaceResult, nil
 	}
 	angle, ok := option.Get[units.Value](twist)
 	if !ok {
-		return fmt.Errorf(`%w: WithSweepTwist carries no angle`, ErrDegenerate)
+		return false, fmt.Errorf(`%w: WithSweepTwist carries no angle`, ErrDegenerate)
 	}
 	if angle.Kind() != units.Angle {
-		return fmt.Errorf(`%w: sweep twist must be an angle, got %s`, ErrUnitKind, angle.Kind())
+		return false, fmt.Errorf(`%w: sweep twist must be an angle, got %s`, ErrUnitKind, angle.Kind())
 	}
 	if _, err := angle.In(units.Radian); err != nil {
-		return fmt.Errorf(`%w: the sweep twist is not representable: %s`, ErrNotFinite, err)
+		return false, fmt.Errorf(`%w: the sweep twist is not representable: %s`, ErrNotFinite, err)
 	}
 	if angle.Mag() != 0 {
-		return fmt.Errorf(`%w: nonzero sweep twist is not implemented`, ErrUnsupported)
+		return false, fmt.Errorf(`%w: nonzero sweep twist is not implemented`, ErrUnsupported)
 	}
-	return nil
+	return surfaceResult, nil
 }
 
 func validateSweepPathGeometry(path *Path, plane PlaneRecord) error {
@@ -274,6 +304,18 @@ func samePathPoint(a, b r3.Vec) bool {
 // revolvePayload. Downstream consumers whose Sweep proof has not landed must
 // dispatch on this payload and refuse instead of treating the analytic
 // reduction as proof for the original operation.
+//
+// surfaceResult is WithSurfaceResult's own flag, held here too rather than
+// read only off prism/revolve: every finishing step below overwrites the
+// built body's payload with this struct, so a flag that rode only the reduced
+// prism/revolve payload would still reach Kind()/solid correctly on first
+// build (evalPrismContext/evalRevolveContextWork read it there) but would give
+// a later consumer — auditSheetBoundary's own sweepPayload case
+// (verify.go) — no uniform field to read across all three build paths. For
+// the composite path it is the ONLY place the flag lives at all: every span
+// stays solid (sweepSpanPayload carries no such field), and
+// assembleCompositeSweepBody reads this field alone to decide which two caps
+// to omit from the published face set.
 type sweepPayload struct {
 	prism          prismPayload
 	revolve        revolvePayload
@@ -281,6 +323,7 @@ type sweepPayload struct {
 	reverseArcCaps bool
 	spans          []sweepSpanPayload
 	path           *Path
+	surfaceResult  bool
 }
 
 func (sp sweepPayload) transform() r3.Transform {

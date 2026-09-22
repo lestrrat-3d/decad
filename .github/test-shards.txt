@@ -1539,7 +1539,6 @@
 2	0.00	TestSurfaceLoftStaysASheetThroughPlacement
 3	0.00	TestSurfaceLoftTessellationRefused
 0	0.00	TestSurfaceLoftWithSurfaceResultIsIdempotent
-3	0.00	TestSurfaceResultRefusedBySweep
 3	0.00	TestSurfaceRevolveCapBoundsComposeOnInexactFixture
 0	0.00	TestSurfaceRevolveFullTurnClearOfAxisIsClosed
 1	0.00	TestSurfaceRevolveHalfDiscFullTurnIsClosedSphereSheet
@@ -1550,6 +1549,16 @@
 2	0.00	TestSurfaceRevolveSheetVerifiesUndecided
 3	0.00	TestSurfaceRevolveShellOpenAgreesWithFreeEdgeDerivation
 0	0.00	TestSurfaceRevolveStaysASheetThroughPlacement
+1	0.00	TestSurfaceSweepArcAndCompositeSheetsVerifyUndecided
+2	0.00	TestSurfaceSweepArcIsASheet
+3	0.00	TestSurfaceSweepCompositeHoledProfileReportsDisconnectedLumps
+0	0.00	TestSurfaceSweepCompositeIsASheet
+1	0.00	TestSurfaceSweepCompositeRolesResolveThroughFaceCreatedBy
+2	0.00	TestSurfaceSweepLineIsASheet
+3	0.00	TestSurfaceSweepLineSheetVerifiesSound
+0	0.00	TestSurfaceSweepShellOpenAgreesWithFreeEdgeDerivation
+1	0.00	TestSurfaceSweepStaysASheetThroughPlacement
+2	0.00	TestSurfaceSweepTessellationRefused
 0	0.00	TestThroughAllIgnoresASheetBody
 0	0.00	TestAuditSheetBoundaryStructuralViolations
 0	0.00	TestPatchReproducesThroughPlacement

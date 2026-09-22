@@ -13,10 +13,10 @@ import (
 )
 
 // This file is docs/surface-design.md's T1/T9/T13-shaped public-surface tests
-// for WithSurfaceResult() on Extrude, its Table R row R1 refusal on Sweep,
-// and Table X's sheet-operand refusals. WithSurfaceResult() on Revolve and
-// Loft each have their own file, surface_revolve_test.go and
-// surface_loft_test.go. Every fixture reuses plateSketch/regularNGonSketch
+// for WithSurfaceResult() on Extrude and Table X's sheet-operand refusals.
+// WithSurfaceResult() on Revolve, Sweep and Loft each have their own file,
+// surface_revolve_test.go, surface_sweep_test.go and surface_loft_test.go.
+// Every fixture reuses plateSketch/regularNGonSketch
 // (extrude_test.go/extrude_bounds_test.go) and annularSketch/uAxis/
 // loftSquares (revolve_test.go/loft_test.go).
 
@@ -228,23 +228,6 @@ func TestSurfaceExtrudeStaysASheetThroughPlacement(t *testing.T) {
 	copied, err := dup.PlacedCopy(copyMotion)
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, copied)
-}
-
-// TestSurfaceResultRefusedBySweep is Table R row R1: a feature this evaluator
-// does not yet build as a surface refuses WithSurfaceResult() outright, and
-// the document is unchanged. Revolve moved off this test when it gained its
-// own surface-result build (surface_revolve_test.go); Loft moved off when it
-// gained its own (surface_loft_test.go).
-func TestSurfaceResultRefusedBySweep(t *testing.T) {
-	t.Parallel()
-	s, p := plateSketch(t)
-	path, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: r3.NewVec(0, 0, 10)})
-	require.NoError(t, err)
-	doc := decad.New()
-	before := doc.Bodies()
-	_, err = doc.Sweep(s, p, path, decad.WithSurfaceResult())
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Equal(t, before, doc.Bodies())
 }
 
 // newSheetAndSolid builds a document holding one sheet and one solid, both

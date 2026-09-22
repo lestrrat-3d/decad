@@ -938,6 +938,24 @@ const (
 // over its own triangle set at all, so it has no analogous proof to lean on
 // (docs/surface-design.md §9.2). Any other payload, or a nil one, is
 // undecided.
+//
+// A sweepPayload admits leg 4 for the ONE-SPAN STRAIGHT reduction alone
+// (len(spans) == 0, arc false), on exactly the prismPayload argument above,
+// which transfers verbatim: the line reduction IS a prismPayload build. The
+// arc-reduced and composite sheets read undecided instead, and deliberately —
+// this is not an oversight to lift later without a new proof:
+//
+//   - the arc reduction is a revolvePayload build, which (see the paragraph
+//     above) carries no construction proof anywhere in this evaluator;
+//   - the composite build's own auditCompositeBoundary/auditCompositeVertexLinks
+//     (sweep_composite.go) prove a closed two-manifold-with-boundary TOPOLOGY —
+//     every edge's face count matches its use count, every vertex link is one
+//     cycle or path — which is a combinatorial fact about how the spans sew
+//     together, never a geometric claim that the swept walls do not fold back
+//     and cross themselves in space. That geometric claim is precisely what
+//     this leg (non-self-intersection) asks, and it is exactly the audit this
+//     increment relaxes to admit a sheet's free rims in the first place, so it
+//     cannot also be read as proving the thing it was relaxed away from.
 func auditSheetBoundary(b *Body) sheetAuditOutcome {
 	faces := b.Faces()
 	if len(faces) == 0 {
@@ -997,6 +1015,10 @@ func auditSheetBoundary(b *Body) sheetAuditOutcome {
 		}
 	case stitchPayload:
 		if pp.auditClean {
+			return sheetAuditProven
+		}
+	case sweepPayload:
+		if len(pp.spans) == 0 && !pp.arc && pp.prism.surfaceResult && pp.prism.sectionDelta == 0 {
 			return sheetAuditProven
 		}
 	}
