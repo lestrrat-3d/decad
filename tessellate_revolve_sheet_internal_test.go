@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -47,6 +48,33 @@ func internalOffAxisArcBody(t *testing.T, surfaceResult bool) *Body {
 	return body
 }
 
+// internalOffAxisArcFullTurnBody builds internalOffAxisArcBody's own
+// profile revolved a FULL turn instead of a quarter: a full turn mints no
+// cap in either kind, so its sheet carries no free edge at all — CLOSED,
+// unlike the quarter-turn sheet above.
+func internalOffAxisArcFullTurnBody(t *testing.T, surfaceResult bool) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	o := s.CreatePoint(0, 10)
+	s.Fix(o)
+	end := s.CreatePoint(10, 10)
+	c := s.CreatePoint(5, 10)
+	s.CreateLine(o, end)
+	s.CreateArc(c, end, o)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	var opts []RevolveOption
+	if surfaceResult {
+		opts = append(opts, WithSurfaceResult())
+	}
+	body, err := New().Revolve(s, s.Profiles()[0], revolveAxisU, FullRevolution{}, opts...)
+	require.NoError(t, err)
+	return body
+}
+
 // TestRevolveSheetPublishesNoOccupiedVolumeProof is CLAUDE.md's own
 // permanent absence (docs/surface-design.md §10): a revolve sheet mesh
 // leaves symDiffOK false and volSymDiff at its zero value, the same shape
@@ -86,4 +114,39 @@ func TestRevolveSheetAreaSlackBelowSolidOnCircularMeridian(t *testing.T) {
 	// architecture-specific FMA rounding that confound is made of.
 	gap := solidMesh.areaSlack - sheetMesh.areaSlack
 	require.Greater(t, gap, 1e-6, `the dropped cap term must dominate any coordinate-rounding confound`)
+}
+
+// TestRevolveSheetOrientationSignIsAnchorDependent is the falsifier for the
+// signed-volume orientation guard (tessellate_revolve.go's `!sheet ||
+// rp.full` arm around meshOrientationSign). No Table W fixture's own
+// default anchor (rp.xform.Apply(p.basis.a3)) happens to flip sign when
+// that guard is dropped, so a test built from that call alone would never
+// catch its removal — the guard cannot be justified by any fixture's
+// default anchor. What justifies it is that the sum is ANCHOR-DEPENDENT at
+// all on an open mesh, which is what this test asserts directly: the same
+// open (quarter-turn) sheet mesh reads a DIFFERENT sign at two anchors, so
+// the sum is not a property of the geometry alone and the guard may never
+// run it there. A CLOSED (full-turn) sheet mesh is the contrasting case the
+// guard does not need to cover: with no free edge, the sum is the true
+// enclosed volume regardless of anchor, so it reads the SAME sign at both.
+func TestRevolveSheetOrientationSignIsAnchorDependent(t *testing.T) {
+	t.Parallel()
+	anchorA := r3.NewVec(0, 0, 0)
+	anchorB := r3.NewVec(0, 1000, 0)
+
+	open := internalOffAxisArcBody(t, true)
+	openMesh, err := open.Tessellate(units.Millimeters(0.5))
+	require.NoError(t, err)
+	openSignA := meshOrientationSign(openMesh.vertices, openMesh.triangles, anchorA)
+	openSignB := meshOrientationSign(openMesh.vertices, openMesh.triangles, anchorB)
+	require.NotEqual(t, openSignA, openSignB,
+		`an open sheet mesh's signed-volume sum must be anchor-dependent, or the orientation guard protects against nothing`)
+
+	closed := internalOffAxisArcFullTurnBody(t, true)
+	closedMesh, err := closed.Tessellate(units.Millimeters(0.5))
+	require.NoError(t, err)
+	closedSignA := meshOrientationSign(closedMesh.vertices, closedMesh.triangles, anchorA)
+	closedSignB := meshOrientationSign(closedMesh.vertices, closedMesh.triangles, anchorB)
+	require.Equal(t, closedSignA, closedSignB,
+		`a closed sheet mesh's signed-volume sum must agree at every anchor, since it is the true enclosed volume`)
 }
