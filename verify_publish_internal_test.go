@@ -818,3 +818,25 @@ func TestVerifyPublishUndecidedValidityBlocksSurveys(t *testing.T) {
 	require.Equal(t, ValidityUndecided, res.Validity.Outcome)
 	requireSurveysBlockedByValidity(t, res, DiagUndecidedValidity)
 }
+
+// TestVerifyPublishUndercutRunsOnAProvenSheet drives publishUndercutResult
+// directly on a BodySheet body at ValidityValid with a populated undercut
+// outcome (docs/surface-design.md §2.3, §9.1): the outcome is published as
+// given, not replaced by the DiagSurveyPrerequisite refusal
+// requireSurveysBlockedByValidity pins for a non-valid body above — the
+// widened kind gate is publishUndercutResult's own, so this drives it
+// without the rest of verifyBody's plumbing.
+func TestVerifyPublishUndercutRunsOnAProvenSheet(t *testing.T) {
+	t.Parallel()
+	body := &Body{kind: BodySheet}
+	req := VerifyRequest{Undercut: &UndercutRequest{PullDirection: r3.NewVec(0, 0, 1)}}
+	surveys := surveyResults{Undercut: undercutOutcome{ok: true, faces: []*Face{}}}
+
+	res := publishUndercutResult(body, surveys, req, ValidityValid)
+
+	require.Equal(t, CoverageComplete, res.Coverage)
+	require.NotNil(t, res.Faces)
+	require.Empty(t, res.Faces)
+	require.Equal(t, AssessmentMet, res.Assessment)
+	require.Empty(t, res.Diagnostics)
+}

@@ -261,8 +261,12 @@ const (
 	DiagUnsupportedSurveyPayload
 	// DiagSurveyPrerequisite — a requested survey needs a proven solid, and
 	// this body does not supply one: its validity is invalid or undecided, OR
-	// it is a sheet body, which has no material for a wall, pull or concave
-	// question to be about (docs/surface-design.md §9.1). Survey names the
+	// it is a sheet body asking a wall or concave-radius question, neither of
+	// which has any material on a sheet to be about
+	// (docs/surface-design.md §9.1). An undercut question is not blocked this
+	// way on a proven-valid surface-extruded prism sheet, which answers it
+	// over the sheet's own positive side; every other sheet family still
+	// reads DiagUnsupportedSurveyPayload for it instead. Survey names the
 	// blocked question, Reading ReadingNone. Contributes Suspect.
 	DiagSurveyPrerequisite
 	// DiagToleranceReferenceUnavailable — a nonzero-bound reading has no

@@ -50,11 +50,16 @@ type bodyPublishInput struct {
 // when in.Validity.Outcome is ValidityValid AND in.Body.Kind() is BodySolid
 // (proposal §9, docs/surface-design.md §9.1) — rather than trusting
 // in.Region's own zero-or-not state, so a caller cannot publish a region
-// reading beside a non-valid verdict or a sheet. Wall, Undercut and
-// ConcaveRadius likewise block on a non-valid in.Validity.Outcome or a
-// non-solid kind before looking at in.Surveys at all, publishing Unavailable
-// plus DiagSurveyPrerequisite for a requested survey the body does not permit
-// running. BodyReport.Diagnostics is the
+// reading beside a non-valid verdict or a sheet. Wall and ConcaveRadius
+// likewise block on a non-valid in.Validity.Outcome or a non-solid kind
+// before looking at in.Surveys at all, publishing Unavailable plus
+// DiagSurveyPrerequisite for a requested survey the body does not permit
+// running. Undercut blocks the same way on validity alone: its kind gate
+// admits BOTH BodySolid and BodySheet, because a proven-valid
+// surface-extruded prism sheet answers the pull question too
+// (docs/surface-design.md §2.3, §9.1); every other sheet family still reads
+// Unavailable, through its own DiagUnsupportedSurveyPayload rather than this
+// prerequisite. BodyReport.Diagnostics is the
 // deterministic flattening proposal §10 requires: validity diagnostics,
 // core reading diagnostics, wall diagnostics, undercut diagnostics, and
 // concave-radius diagnostics, in that order, each finding assembled exactly
@@ -201,15 +206,22 @@ func publishValidityResult(body *Body, ev validityEvidence) ValidityResult {
 
 // surveyPrerequisiteDiagnostic builds the one local diagnostic a requested
 // survey publishes when the body cannot supply the survey's prerequisite
-// (proposal §9, docs/surface-design.md §9.1): a non-solid validity, or a
-// sheet body, which has no material for a wall, pull or concave question to
-// be about even when its own boundary is proven sound. The message names
-// which cause applies; it never repeats the body's own underlying validity
-// diagnostic, which stays in ValidityResult.Diagnostics alone.
+// (proposal §9, docs/surface-design.md §9.1): a non-valid validity on any
+// kind, or a sheet body's wall or concave-radius question, which has no
+// material to be about even when its own boundary is proven sound. The
+// undercut survey no longer blocks on kind alone — publishUndercutResult
+// admits a proven-valid sheet — so this function is reached for
+// SurveyUndercut only when validity itself is not ValidityValid, and the
+// validity message is the only one it can ever carry. The message never
+// repeats the body's own underlying validity diagnostic, which stays in
+// ValidityResult.Diagnostics alone.
 func surveyPrerequisiteDiagnostic(body *Body, survey SurveyKind) Diagnostic {
 	msg := "the requested survey needs a proven solid, and this body's validity is not valid"
-	if body.Kind() == BodySheet {
-		msg = "the requested survey needs a proven solid, and this body is a sheet with no material for a wall, pull or concave question"
+	switch {
+	case survey == SurveyWall && body.Kind() == BodySheet:
+		msg = "the requested survey needs a proven solid, and this body is a sheet with no material for a wall question"
+	case survey == SurveyConcaveRadius && body.Kind() == BodySheet:
+		msg = "the requested survey needs a proven solid, and this body is a sheet with no material for a concave question"
 	}
 	return Diagnostic{
 		Code:    DiagSurveyPrerequisite,
@@ -339,13 +351,20 @@ func orderFacesConfirmed(body *Body, confirmed []*Face) []*Face {
 
 // publishUndercutResult maps one body's undercut survey outcome onto the
 // public result vocabulary (proposal §7's coverage table): the effective
-// request alone decides CoverageNotRequested; a non-valid validity, or a
-// non-solid kind, decides CoverageUnavailable before the survey outcome is
-// even consulted (proposal §9, docs/surface-design.md §9.1), since the pull
-// survey never runs on a body that did not prove a solid; otherwise the
-// producer's own ok/reason/undecided decide
-// Unavailable, Undecided, Partial or Complete. Faces carries the producer's
-// own confirmed faces reordered into body.Faces() order (proposal §11) —
+// request alone decides CoverageNotRequested; a non-valid validity decides
+// CoverageUnavailable before the survey outcome is even consulted (proposal
+// §9, docs/surface-design.md §9.1). Unlike publishWallResult and
+// publishConcaveRadiusResult, the kind gate here admits BOTH BodySolid and
+// BodySheet — BodyKind has exactly two values (topology.go), so this reads
+// as a kind-total test rather than "solid or not" — because runSurveys
+// itself already answers the pull question on a proven-valid
+// surface-extruded prism sheet (survey.go's prismUndercuts) and on no other
+// sheet family; a loft, stitch or one-span-sweep sheet still reads
+// Unavailable, through its own DiagUnsupportedSurveyPayload rather than this
+// prerequisite gate. Below this gate the producer's own ok/reason/undecided
+// decide Unavailable, Undecided, Partial or Complete, on either kind alike.
+// Faces carries the producer's own confirmed faces reordered into
+// body.Faces() order (proposal §11) —
 // every face in it is CONFIRMED to oppose the pull, and its nil-versus-empty
 // shape is exactly the producer's own (nil for an unrecoverable or entirely
 // undecided survey, otherwise the producer's own listing) so
@@ -358,7 +377,7 @@ func publishUndercutResult(body *Body, surveys surveyResults, req VerifyRequest,
 	if req.Undercut == nil {
 		return UndercutResult{Coverage: CoverageNotRequested, Assessment: AssessmentNotEvaluated}
 	}
-	if validity != ValidityValid || body.Kind() != BodySolid {
+	if validity != ValidityValid || (body.Kind() != BodySolid && body.Kind() != BodySheet) {
 		return UndercutResult{
 			Request:     req.Undercut,
 			Coverage:    CoverageUnavailable,
