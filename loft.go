@@ -81,7 +81,9 @@ func (d *Document) Loft(s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch
 // Exhausting the audit's fixed pair-test budget is
 // [ErrUnsupported] (S8). A section point whose world coordinate runs past the
 // representable float64 range is [ErrUnsupported] (S13) — the body exists,
-// and this evaluator cannot hold its vertex table.
+// and this evaluator cannot hold its vertex table. WithSurfaceResult() omits
+// both section caps and publishes a sheet body instead of a solid
+// (docs/surface-design.md §4).
 //
 // A failed call leaves the document untouched.
 func (d *Document) LoftContext(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error) {
@@ -102,15 +104,25 @@ func (d *Document) LoftContext(ctx context.Context, s0 *sketch.Sketch, p0 *sketc
 	// promote the sealed marker — is rejected before its Ident() ever runs.
 	var alignment []int
 	haveAlignment := false
+	surfaceResult := false
 	for _, raw := range opts {
 		if raw == nil {
 			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
 		// Checked before the loftOption assertion below: a surfaceResultOption
 		// is not a loftOption, so falling through to that assertion would
-		// answer ErrDegenerate and contradict Table R row R1's ErrUnsupported.
-		if err := refuseSurfaceResult(raw, "Loft"); err != nil {
-			return nil, err
+		// answer ErrDegenerate rather than setting the flag
+		// (docs/surface-design.md §4). A repeated WithSurfaceResult() is
+		// idempotent (surface.go's own doc comment) — deliberately unlike
+		// WithLoftAlignment's own repeat-is-ErrDegenerate rule below: an
+		// alignment payload names one of several possible correspondences, so
+		// two occurrences name two candidates with no way to prefer one, while
+		// a surface result is a single yes/no flag with nothing to disagree
+		// about on a repeat, the same tolerance WithTaper's own last-wins rule
+		// gives Extrude (extrude.go).
+		if _, ok := raw.(surfaceResultOption); ok {
+			surfaceResult = true
+			continue
 		}
 		o, ok := raw.(loftOption)
 		if !ok {
@@ -180,8 +192,9 @@ func (d *Document) LoftContext(ctx context.Context, s0 *sketch.Sketch, p0 *sketc
 		profile0: profile0, profile1: profile1,
 		plane0: plane0, plane1: plane1,
 		frame0: frame0, frame1: frame1,
-		alignment: alignment,
-		xform:     r3.Identity(),
+		alignment:     alignment,
+		xform:         r3.Identity(),
+		surfaceResult: surfaceResult,
 	}, newWorkBudget(ctx), work0, work1)
 	if err != nil {
 		return nil, err

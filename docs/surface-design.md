@@ -903,13 +903,22 @@ a residual or a chord test. A surface-extruded sheet earns the fourth leg
 because `sketch` already proved the recorded section a simple closed planar
 region, `evalPrismContext` already refuses a non-positive sweep height, a
 simple planar region crossed with a positive interval cannot self-intersect,
-and the rigid placement that follows preserves that. Any other construction —
-or a section admitted only to within a nonzero displacement of what it
-denotes, which breaks the transfer of simplicity — earns no such proof: the
-fourth leg has nothing to stand on, which is undecided, not a violation. A
-free edge, which on a closed body would be the watertightness failure, is the
-expected shape here and is counted by the structural legs rather than
-faulted.
+and the rigid placement that follows preserves that. A surface-result loft
+earns it on a STRONGER argument: the evaluator cannot return a loft body at
+all unless `docs/loft-design.md` §6's crossing audit already passed over the
+COMPLETE held triangle set — walls and both caps together — so
+non-self-intersection of the walls alone, the sheet's own published faces
+once the caps are omitted, follows from non-self-intersection of that
+superset with no further proof needed. A positive section displacement (that
+loft's own `sectionDelta`) means the body denotes a curved surface the held
+chords are only within that displacement of, so simplicity of the chord mesh
+does not transfer to the surface it stands for, and the fourth leg is
+undecided rather than violated there too. Any other construction — a revolve
+sheet included, whose own build runs no crossing audit over its triangle set
+at all — earns no such proof: the fourth leg has nothing to stand on, which
+is undecided, not a violation. A free edge, which on a closed body would be
+the watertightness failure, is the expected shape here and is counted by the
+structural legs rather than faulted.
 
 **`Region` is nil for a sheet even when `Validity.Outcome` is
 `ValidityValid`.** `docs/verification-design.md` §1 currently states the
@@ -928,18 +937,30 @@ positive side.
 
 ### 9.2 What a sound sheet costs
 
-**A document holding only sheets verifies fully and reads `Sound`, provided no
-survey was requested.** Nothing about a sheet makes a report `Suspect` on its
+**This is true only for a family whose construction proves §9.1's fourth
+leg** — today the surface-extruded prism and the surface-result loft, each at
+a zero displacement (sectionDelta for the loft). **A document holding only
+sheets from such a family verifies fully and reads `Sound`, provided no survey
+was requested.** Nothing about a PROVEN sheet makes a report `Suspect` on its
 own: its boundary quantities are gated like any other, its validity is decided
 in `Verify` — exactly where every other body kind's is, so a sheet's audit is
 not a special build-time step — and an omitted survey reads its
 `NotRequested` outcome as everywhere.
 
-Two things do cost a sheet a `Suspect`, and both are the caller asking a
+Two things do cost a PROVEN sheet a `Suspect`, and both are the caller asking a
 question a sheet cannot answer: a **requested** survey, which reads
 `Unavailable` with a `DiagSurveyPrerequisite` (§9.1); and §9.3's pair rule,
 where a sheet's box meets a solid's. Neither fires on a model that only holds
-sheets and only asks the core questions.
+proven sheets and only asks the core questions.
+
+**A sheet whose family has no such proof reads `Suspect` regardless of what
+the caller asks.** A revolve sheet's fourth leg is undecided today — its own
+build runs no crossing audit over its triangle set at all — so a document
+holding one, even alone and with no survey requested, already reads `Suspect`
+through `Validity.Outcome == ValidityUndecided` and its `DiagUndecidedValidity`
+diagnostic. The arc-reduced and composite sweep sheets a later increment adds
+inherit the same undecided leg for the identical reason: neither construction
+has a crossing-audit proof for `Verify`'s switch (§9.1) to read.
 
 ### 9.3 Pairs
 

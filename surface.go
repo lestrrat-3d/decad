@@ -9,10 +9,11 @@ import (
 // This file is the shared surface-result vocabulary of docs/surface-design.md
 // §3-§4: the one option every wall-building feature accepts,
 // WithSurfaceResult, and the two refusal helpers that keep a sheet body out
-// of an operation Table X or Table R does not admit it to. Each feature's own
-// file wires the option into its build (extrude.go, revolve_build.go) or
-// refuses it outright (sweep.go, loft.go); boolean.go, fillet.go, chamfer.go,
-// shell.go and stops.go consume refuseSheetOperand at their own gates.
+// of an operation Table X or Table R does not admit it to. Extrude, Revolve
+// and Loft each wire the option into their own build (extrude.go,
+// revolve_build.go, loft_build.go); Sweep refuses it outright (sweep.go);
+// boolean.go, fillet.go, chamfer.go, shell.go and stops.go consume
+// refuseSheetOperand at their own gates.
 //
 // It also holds the two topology helpers every surface-result build shares
 // (docs/surface-design.md §2.2): shellIsOpen, which reads a shell's open

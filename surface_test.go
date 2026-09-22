@@ -13,11 +13,12 @@ import (
 )
 
 // This file is docs/surface-design.md's T1/T9/T13-shaped public-surface tests
-// for WithSurfaceResult() on Extrude, its Table R row R1 refusal on Sweep and
-// Loft, and Table X's sheet-operand refusals. WithSurfaceResult() on Revolve
-// has its own file, surface_revolve_test.go. Every fixture reuses
-// plateSketch/regularNGonSketch (extrude_test.go/extrude_bounds_test.go) and
-// annularSketch/uAxis/loftSquares (revolve_test.go/loft_test.go).
+// for WithSurfaceResult() on Extrude, its Table R row R1 refusal on Sweep,
+// and Table X's sheet-operand refusals. WithSurfaceResult() on Revolve and
+// Loft each have their own file, surface_revolve_test.go and
+// surface_loft_test.go. Every fixture reuses plateSketch/regularNGonSketch
+// (extrude_test.go/extrude_bounds_test.go) and annularSketch/uAxis/
+// loftSquares (revolve_test.go/loft_test.go).
 
 // rectWithHoleSketch builds a solved 100x60 rectangle with a circular hole,
 // same fixture TestExtrudePlateWithHole (extrude_test.go) builds inline.
@@ -42,8 +43,14 @@ func rectWithHoleSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
 }
 
 // requireSheetWithFreeEdges asserts b is a sheet with exactly n free edges.
-func requireSheetWithFreeEdges(t *testing.T, b *decad.Body, n int) {
+// Every call site across the package's surface-result placement tests wants
+// the same 8-edge shape (a rectangular profile's two rims), so n is a
+// literal at the call rather than a threaded parameter, and adding a call
+// with a different shape is exactly what would earn this back its own
+// argument.
+func requireSheetWithFreeEdges(t *testing.T, b *decad.Body) {
 	t.Helper()
+	const n = 8
 	require.Equal(t, decad.BodySheet, b.Kind())
 	free, err := decad.Edges(decad.Free()).Exactly(n).SelectEdges(b)
 	require.NoError(t, err)
@@ -206,7 +213,7 @@ func TestSurfaceExtrudeStaysASheetThroughPlacement(t *testing.T) {
 
 	placed, err := sheet.Placed(motion)
 	require.NoError(t, err)
-	requireSheetWithFreeEdges(t, placed, 8)
+	requireSheetWithFreeEdges(t, placed)
 	placedBox, err := placed.Bounds()
 	require.NoError(t, err)
 	require.Equal(t, sheetBox.Min.Add(offset), placedBox.Min)
@@ -214,43 +221,30 @@ func TestSurfaceExtrudeStaysASheetThroughPlacement(t *testing.T) {
 
 	dup, err := placed.Duplicate()
 	require.NoError(t, err)
-	requireSheetWithFreeEdges(t, dup, 8)
+	requireSheetWithFreeEdges(t, dup)
 
 	copyMotion, err := r3.Translation(r3.NewVec(0, 50, 0))
 	require.NoError(t, err)
 	copied, err := dup.PlacedCopy(copyMotion)
 	require.NoError(t, err)
-	requireSheetWithFreeEdges(t, copied, 8)
+	requireSheetWithFreeEdges(t, copied)
 }
 
-// TestSurfaceResultRefusedBySweepAndLoft is Table R row R1: each feature this
-// evaluator does not yet build as a surface refuses WithSurfaceResult()
-// outright, and the document is unchanged. Revolve moved off this test when
-// it gained its own surface-result build (surface_revolve_test.go).
-func TestSurfaceResultRefusedBySweepAndLoft(t *testing.T) {
+// TestSurfaceResultRefusedBySweep is Table R row R1: a feature this evaluator
+// does not yet build as a surface refuses WithSurfaceResult() outright, and
+// the document is unchanged. Revolve moved off this test when it gained its
+// own surface-result build (surface_revolve_test.go); Loft moved off when it
+// gained its own (surface_loft_test.go).
+func TestSurfaceResultRefusedBySweep(t *testing.T) {
 	t.Parallel()
-
-	t.Run("sweep", func(t *testing.T) {
-		t.Parallel()
-		s, p := plateSketch(t)
-		path, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: r3.NewVec(0, 0, 10)})
-		require.NoError(t, err)
-		doc := decad.New()
-		before := doc.Bodies()
-		_, err = doc.Sweep(s, p, path, decad.WithSurfaceResult())
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.Equal(t, before, doc.Bodies())
-	})
-
-	t.Run("loft", func(t *testing.T) {
-		t.Parallel()
-		s0, p0, s1, p1 := loftSquares(t, 20, 20)
-		doc := decad.New()
-		before := doc.Bodies()
-		_, err := doc.Loft(s0, p0, s1, p1, decad.WithSurfaceResult())
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.Equal(t, before, doc.Bodies())
-	})
+	s, p := plateSketch(t)
+	path, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: r3.NewVec(0, 0, 10)})
+	require.NoError(t, err)
+	doc := decad.New()
+	before := doc.Bodies()
+	_, err = doc.Sweep(s, p, path, decad.WithSurfaceResult())
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Equal(t, before, doc.Bodies())
 }
 
 // newSheetAndSolid builds a document holding one sheet and one solid, both
