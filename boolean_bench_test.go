@@ -48,7 +48,7 @@ func benchRodBody(b *testing.B, doc *decad.Document, cx, cy, r float64) *decad.B
 	require.NoError(b, err)
 	tr, err := r3.Translation(r3.Vec{X: 0, Y: 0, Z: -6})
 	require.NoError(b, err)
-	moved, err := body.Placed(tr)
+	moved, err := body.Placed(b.Context(), tr)
 	require.NoError(b, err)
 	return moved
 }
@@ -88,7 +88,7 @@ func BenchmarkBooleanUnionCrossedRods(b *testing.B) {
 		require.NoError(b, err)
 		xf, err := rot.Then(tr)
 		require.NoError(b, err)
-		c, err = c.Placed(xf)
+		c, err = c.Placed(b.Context(), xf)
 		require.NoError(b, err)
 		b.StartTimer()
 		got, err := decad.Union(a, c)

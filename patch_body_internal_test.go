@@ -326,7 +326,7 @@ func TestBodyPatchRejectsAReceiverWithNoPayload(t *testing.T) {
 	b := &Body{doc: d, origin: FeatureRef{Role: roleBody}, kind: BodySheet}
 	d.bodies = append(d.bodies, b)
 
-	_, err := b.Patch(Edges(Free()))
+	_, err := b.Patch(t.Context(), Edges(Free()))
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 

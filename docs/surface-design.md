@@ -215,28 +215,24 @@ type SurfaceResultOption interface {
 func WithSurfaceResult() SurfaceResultOption
 
 // A planar face on its own.
-func (d *Document) Patch(s *sketch.Sketch, p *sketch.Profile) (*Body, error)
-func (d *Document) PatchContext(ctx context.Context, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
+func (d *Document) Patch(ctx context.Context, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
 
 // A planar fill of a closed chain of the receiver's free edges.
-func (b *Body) Patch(sel EdgeSelector) (*Body, error)
-func (b *Body) PatchContext(ctx context.Context, sel EdgeSelector) (*Body, error)
+func (b *Body) Patch(ctx context.Context, sel EdgeSelector) (*Body, error)
 
 // Joining sheets, and taking a body apart.
 func Stitch(bodies ...*Body) (*Body, error)
 func StitchContext(ctx context.Context, bodies ...*Body) (*Body, error)
-func (b *Body) Unstitch() ([]*Body, error)
-func (b *Body) UnstitchContext(ctx context.Context) ([]*Body, error)
+func (b *Body) Unstitch(ctx context.Context) ([]*Body, error)
 
 // The free-edge selector predicate.
 func Free() EdgePredicate
 ```
 
-Every `Context` form bounds cancellation in its own construction and audit
+Every one of these bounds cancellation in its own construction and audit
 paths, returns `ctx.Err()` unchanged before commit, and leaves the document
-and every operand unchanged. The plain form is the compatibility wrapper with
-`context.Background()`, exactly as `docs/api-design.md` §8 states for every
-other operation.
+and every operand unchanged, exactly as `docs/api-design.md` §8 states for
+every other operation. `Stitch` keeps its own `Context` form.
 
 `Stitch` and `Unstitch` consume their operands and register their results, on
 `docs/api-design.md` §6's uniform terms: `Stitch` retires every body handed
@@ -254,9 +250,9 @@ Worked, end to end — a closed box from three sheets:
 walls, err := doc.Extrude(s, prof,
     decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
     decad.WithSurfaceResult())                    // 4 walls, 8 free edges
-bottom, err := doc.Patch(s, prof)                 // 1 face at z = 0
+bottom, err := doc.Patch(ctx, s, prof)            // 1 face at z = 0
 // topSketch draws the same profile on the z = 10 plane.
-top, err := doc.Patch(topSketch, topProf)         // 1 face at z = 10
+top, err := doc.Patch(ctx, topSketch, topProf)    // 1 face at z = 10
 
 box, err := decad.Stitch(walls, bottom, top)      // Kind() == BodySolid
 vol, err := box.Volume()                          // 60000 mm³, Exact
@@ -362,7 +358,7 @@ normal, area, edge lengths, vertex positions and every bound on them.
 
 ### 5.1 `Document.Patch` — a planar face from a profile
 
-`Document.Patch(s, p)` records `p` through the seam exactly as `Extrude` does
+`Document.Patch(ctx, s, p)` records `p` through the seam exactly as `Extrude` does
 — the same authentication, staleness, foreign-entity and `TExact` admission
 gates of `docs/api-design.md` §7 and `docs/sketch-seam-design.md`, with no
 relaxation — and builds a **single planar face** on `s.Plane().Frame()`,
@@ -388,7 +384,7 @@ boundary carries them. Nothing is integrated twice and nothing new is proven.
 
 ### 5.2 `Body.Patch` — a planar fill of one or more free-edge chains
 
-`b.Patch(sel)` resolves `sel` against `b`, requires the result to be a set of
+`b.Patch(ctx, sel)` resolves `sel` against `b`, requires the result to be a set of
 **free** edges of `b` that partitions into one or more closed chains, proves
 each chain planar and simple **independently**, and returns a new body
 carrying `b`'s faces plus one new planar face per chain. `b` is retired.
@@ -1187,7 +1183,7 @@ answer.
 
 ### 6.5 `Unstitch`
 
-`b.Unstitch()` returns one single-face sheet body per face of `b`, in
+`b.Unstitch(ctx)` returns one single-face sheet body per face of `b`, in
 `b.Faces()` order, retiring `b`. Each result carries that face's own surface,
 loops and readings; every edge of every result is free.
 
@@ -1238,7 +1234,7 @@ geometry of its own — so `normalBound` (how far that surface departs from
 that tag) and `axialDelta` (that same tag's own displacement along that same
 normal) stay exactly as true of the copy as they were of the source.
 `hasAxialDelta` and `normalBound` copy verbatim; `Body.Unstitch`'s public
-call always places under the identity transform (`UnstitchContext`), so a
+call always places under the identity transform (`Unstitch`), so a
 verbatim copy is correct for every call the public API makes today.
 `unstitchPayload.placed`'s own replay under a composed, non-identity
 transform additionally widens `axialDelta` by `absSumUpper` against the
@@ -1749,7 +1745,7 @@ reverses a decision already taken.
 |---|---|
 | `docs/api-design.md` §6 | `Body` gains `Kind()`; `Volume`/`Centroid`'s `ErrNotSolid` gains the by-kind reading (§8); `Lump`'s gloss becomes "a connected piece of a body"; `Shell` gains `IsOpen`; `Edge` gains `IsFree` |
 | `docs/api-design.md` §6.1 | `Edge.Faces()`'s `len != 2` gloss gains the per-kind reading (§2.2) |
-| `docs/api-design.md` §8 | the v1 feature vocabulary gains `Patch`, `Stitch`, `Unstitch` and `WithSurfaceResult`; the signatures and the `Context` forms land beside the existing ones |
+| `docs/api-design.md` §8 | the v1 feature vocabulary gains `Patch`, `Stitch`, `Unstitch` and `WithSurfaceResult`; the signatures land beside the existing ones |
 | `docs/api-design.md` §9 | the predicate list gains `Free()`, and the rendering table gains its `free` token |
 | `docs/api-design.md` §13 | the v1 non-goal list keeps sheet-metal, and gains the §1.2 staged commands so the list stays the whole of what is out |
 | `docs/evaluator-design.md` §3 | the `Lump` row states "connected piece"; the topology-model rules gain the free-edge reading |

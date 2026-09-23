@@ -285,9 +285,9 @@ func TestBooleanBoundSoundnessRotated(t *testing.T) {
 		for _, op := range ops {
 			cfg := abConfig{op, a, b}
 			doc := decad.New()
-			ba, err := makeBox(t, doc, a).Placed(xform)
+			ba, err := makeBox(t, doc, a).Placed(t.Context(), xform)
 			require.NoError(t, err)
-			bb, err := makeBox(t, doc, b).Placed(xform)
+			bb, err := makeBox(t, doc, b).Placed(t.Context(), xform)
 			require.NoError(t, err)
 
 			got, err := runBool(op, ba, bb)
@@ -596,7 +596,7 @@ func TestBooleanRefusalConcaveHoleSpuriousContact(t *testing.T) {
 		require.NoError(t, err)
 		xform, err := rot.Then(tr)
 		require.NoError(t, err)
-		moved, err := body.Placed(xform)
+		moved, err := body.Placed(t.Context(), xform)
 		require.NoError(t, err)
 		return moved
 	}

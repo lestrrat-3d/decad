@@ -103,5 +103,5 @@ func boolErrCube(doc *decad.Document, offset r3.Vec) (*decad.Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	return body.Placed(move)
+	return body.Placed(context.Background(), move)
 }

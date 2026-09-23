@@ -167,7 +167,7 @@ func TestStitchCurvedVolumeBoundWidensWhenPlaced(t *testing.T) {
 	composed, err := motion.Then(rot)
 	require.NoError(t, err)
 
-	placed, err := unplaced.Placed(composed)
+	placed, err := unplaced.Placed(t.Context(), composed)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, placed.Kind())
 
@@ -210,7 +210,7 @@ func TestStitchPatchCappedTubeClosesToASolid(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, free, 2)
 
-	patched, err := sheet.Patch(decad.Edges(decad.Free()).Exactly(2))
+	patched, err := sheet.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(2))
 	require.NoError(t, err)
 	_, err = decad.Edges(decad.Free()).SelectEdges(patched)
 	require.ErrorIs(t, err, decad.ErrNoMatch, "Body.Patch itself closes the tube")

@@ -35,7 +35,7 @@ const chamferedPlateSetback = 5.0
 func chamferedPlate(t *testing.T) *decad.Body {
 	t.Helper()
 	_, box := capBlendBox(t)
-	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(chamferedPlateSetback))
+	chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(chamferedPlateSetback))
 	require.NoError(t, err)
 	return chamfered
 }
@@ -49,7 +49,7 @@ func TestTessellateCapBlendPlateIsExact(t *testing.T) {
 	t.Parallel()
 	const d = chamferedPlateSetback
 	chamfered := chamferedPlate(t)
-	mesh, err := chamfered.Tessellate(units.Millimeters(1))
+	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	require.Len(t, mesh.SourceFaces(), len(mesh.Triangles()))
@@ -96,9 +96,9 @@ func TestTessellateCapBlendDiskFrustum(t *testing.T) {
 		tol = 0.25
 	)
 	body := circleProfile(t, r, h)
-	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
 	require.NoError(t, err)
-	mesh, err := chamfered.Tessellate(units.Millimeters(tol))
+	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(tol))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	bound := mesh.Bound().Mag()
@@ -160,9 +160,9 @@ func TestTessellateCapBlendHoleWidensWithTheSetback(t *testing.T) {
 		tol = 0.2
 	)
 	body := holedPlateBody(t)
-	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
 	require.NoError(t, err)
-	mesh, err := chamfered.Tessellate(units.Millimeters(tol))
+	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(tol))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	bound := mesh.Bound().Mag()
@@ -197,9 +197,9 @@ func TestTessellateCapBlendRoundedRectMiters(t *testing.T) {
 		tol = 0.4
 	)
 	body := roundedRectBody(t, 40, 30, 20, rho)
-	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
 	require.NoError(t, err)
-	mesh, err := chamfered.Tessellate(units.Millimeters(tol))
+	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(tol))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 
@@ -248,9 +248,9 @@ func TestTessellateCapBlendReflexApexFan(t *testing.T) {
 	t.Parallel()
 	const d = 3.0
 	body := reflexLBody(t)
-	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
 	require.NoError(t, err)
-	mesh, err := chamfered.Tessellate(units.Millimeters(0.02))
+	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(0.02))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 
@@ -287,9 +287,9 @@ func TestTessellateCapBlendPlacedStaysWatertight(t *testing.T) {
 	chamfered := chamferedPlate(t)
 	rot, err := r3.Rotation(r3.Vec{X: 1, Y: 2, Z: 3}, units.Radians(0.7))
 	require.NoError(t, err)
-	moved, err := chamfered.Placed(rot)
+	moved, err := chamfered.Placed(t.Context(), rot)
 	require.NoError(t, err)
-	mesh, err := moved.Tessellate(units.Millimeters(1))
+	mesh, err := moved.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	require.Positive(t, mesh.Bound().Mag(),
@@ -303,7 +303,7 @@ func TestTessellateCapBlendPlacedStaysWatertight(t *testing.T) {
 func TestCapBlendMeshIsExportOnly(t *testing.T) {
 	t.Parallel()
 	chamfered := chamferedPlate(t)
-	mesh, err := chamfered.Tessellate(units.Millimeters(1))
+	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)
 	require.NotEmpty(t, mesh.Triangles())
 
@@ -331,11 +331,11 @@ func TestCapBlendMeshIsExportOnly(t *testing.T) {
 func TestCapBlendOverlapReadsSuspect(t *testing.T) {
 	t.Parallel()
 	_, box := capBlendBox(t)
-	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
+	chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.Vec{X: 20, Y: 10, Z: 0})
 	require.NoError(t, err)
-	overlapping, err := chamfered.PlacedCopy(shift)
+	overlapping, err := chamfered.PlacedCopy(t.Context(), shift)
 	require.NoError(t, err)
 	require.NotNil(t, overlapping)
 

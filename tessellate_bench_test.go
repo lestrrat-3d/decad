@@ -78,7 +78,7 @@ func benchLoft() *decad.Body {
 	tr := s1.CreateRectangle(-10, -10, 10, 10)
 	s1.Fix(tr.A)
 	must(s1.Solve(context.Background()))
-	return must(decad.New().Loft(s0, s0.Profiles()[0], s1, s1.Profiles()[0]))
+	return must(decad.New().Loft(context.Background(), s0, s0.Profiles()[0], s1, s1.Profiles()[0]))
 }
 
 func benchCut() *decad.Body {
@@ -104,7 +104,7 @@ func runTess(b *testing.B, body *decad.Body) {
 	refused := 0.0
 	var tris float64
 	for b.Loop() {
-		m, err := body.Tessellate(units.Millimeters(benchTol))
+		m, err := body.Tessellate(b.Context(), units.Millimeters(benchTol))
 		if err != nil {
 			if errors.Is(err, decad.ErrUnsupported) || errors.Is(err, decad.ErrDegenerate) {
 				refused = 1
@@ -121,20 +121,20 @@ func runTess(b *testing.B, body *decad.Body) {
 func BenchmarkTessPrismBox(b *testing.B) { runTess(b, benchBox()) }
 
 func BenchmarkTessPrismFillet(b *testing.B) {
-	body := must(benchBox().Fillet(decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(6)))
+	body := must(benchBox().Fillet(b.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(6)))
 	runTess(b, body)
 }
 
 func BenchmarkTessPrismFreeform(b *testing.B) { runTess(b, benchFreeformPrism()) }
 
 func BenchmarkTessCup(b *testing.B) {
-	body := must(benchBox().Shell(decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(4)))
+	body := must(benchBox().Shell(b.Context(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(4)))
 	runTess(b, body)
 }
 
 func BenchmarkTessCapBlend(b *testing.B) {
 	box := benchBox()
-	body := must(box.Chamfer(decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(3)))
+	body := must(box.Chamfer(b.Context(), decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(3)))
 	runTess(b, body)
 }
 

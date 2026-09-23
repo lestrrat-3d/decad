@@ -402,7 +402,7 @@ because provenance roles are stable (§3).
 
 `Document` owns the live body set and a private monotonic producer identity used for topology provenance. Every feature call validates live inputs, evaluates geometry without mutation, and commits only after success. Commit retires consumed bodies, registers the result, and advances the producer identity. Cancellation and every other failure leave the document unchanged.
 
-`Body.PlacedContext`, `Body.DuplicateContext`, and `Body.PlacedCopyContext` pass the caller's context through payload re-evaluation. Faceted placement polls that context while transforming vertices, auditing and rebuilding topology, and recomputing measurements. `Placed`, `Duplicate`, and `PlacedCopy` use `context.Background()`.
+`Body.Placed`, `Body.Duplicate`, and `Body.PlacedCopy` pass the caller's context through payload re-evaluation. Faceted placement polls that context while transforming vertices, auditing and rebuilding topology, and recomputing measurements.
 
 `Body.Placed` transforms analytic geometry exactly in EXACT arithmetic — every
 v1 surface variant maps to itself under an isometry (plane→plane,

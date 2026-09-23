@@ -551,7 +551,7 @@ func runRevolveCase(t *testing.T, su setup, ap axisPlacement, sw sweep, xf r3.Tr
 	cen0, err := body.Centroid()
 	require.NoError(t, err)
 
-	placed, err := body.Placed(xf)
+	placed, err := body.Placed(t.Context(), xf)
 	require.NoError(t, err)
 	checkRevolveBody(t, placed, su, ap, xf, sw)
 
@@ -630,7 +630,7 @@ func checkRevolveBody(t *testing.T, body *decad.Body, su setup, ap axisPlacement
 	// time", and the systematic refusal this file used to hide was exactly that
 	// silence. A refusal is still checked to be typed — never a cracked mesh
 	// (docs/tessellation-design.md §14) — before the fixture fails.
-	mesh, err := body.Tessellate(units.Millimeters(su.scale / 5))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(su.scale/5))
 	if err != nil {
 		require.True(t,
 			errors.Is(err, decad.ErrUnsupported) || errors.Is(err, decad.ErrDegenerate),

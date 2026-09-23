@@ -42,7 +42,7 @@ func Example_decad_chamfer() {
 
 	// Bevel all four lateral edges (straight, parallel to the z sweep) with a
 	// 10 mm setback.
-	body, err := box.Chamfer(decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(10))
+	body, err := box.Chamfer(context.Background(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(10))
 	if err != nil {
 		fmt.Printf("failed to chamfer: %s\n", err)
 		return

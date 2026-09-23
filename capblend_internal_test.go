@@ -668,10 +668,10 @@ func chamferedCircularBand(t *testing.T, section func(*sketch.Sketch), h, d floa
 	doc := New()
 	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
-	chamfered, err := body.Chamfer(Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
+	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
 	require.NoError(t, err)
 	if motion != nil {
-		chamfered, err = chamfered.Placed(*motion)
+		chamfered, err = chamfered.Placed(t.Context(), *motion)
 		require.NoError(t, err)
 	}
 
@@ -748,9 +748,9 @@ func chamferedRectFlatPatches(t *testing.T, motion r3.Transform) []bandUnderTest
 	doc := New()
 	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
 	require.NoError(t, err)
-	chamfered, err := body.Chamfer(Edges(CreatedBy(CapEnd(body))), units.Millimeters(3))
+	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(3))
 	require.NoError(t, err)
-	placed, err := chamfered.Placed(motion)
+	placed, err := chamfered.Placed(t.Context(), motion)
 	require.NoError(t, err)
 
 	cbp, ok := placed.payload.(capBlendPayload)

@@ -322,7 +322,7 @@ func TestRevolveMeshAreaSlackCoversTheHeldAreaGap(t *testing.T) {
 			axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
 			body, err := New().Revolve(s, p, axis, FullRevolution{})
 			require.NoError(t, err)
-			mesh, err := body.Tessellate(units.Millimeters(0.1))
+			mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
 			require.NoError(t, err)
 
 			held := 0.0
@@ -423,7 +423,7 @@ func TestRevolveMeshCarriesItsOccupiedVolumeProof(t *testing.T) {
 	body, err := New().Revolve(s, s.Profiles()[0], axis, FullRevolution{})
 	require.NoError(t, err)
 
-	mesh, err := body.Tessellate(units.Millimeters(0.2))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.2))
 	require.NoError(t, err)
 	require.True(t, mesh.symDiffOK)
 	sym, err := operandSymDiff(mesh)

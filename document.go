@@ -123,12 +123,7 @@ type featurePayload interface {
 	placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error)
 }
 
-// Placed calls [Body.PlacedContext] with [context.Background].
-func (b *Body) Placed(t r3.Transform) (*Body, error) {
-	return b.PlacedContext(context.Background(), t)
-}
-
-// PlacedContext returns a new body carrying the receiver's geometry under the
+// Placed returns a new body carrying the receiver's geometry under the
 // rigid motion t, retiring the receiver (core §8). The zero transform is
 // invalid and is ErrDegenerate. A canceled context stops the rebuild before
 // the document changes. The motion composes onto the placement this body already carries,
@@ -139,7 +134,7 @@ func (b *Body) Placed(t r3.Transform) (*Body, error) {
 // the partner's own placement leave it available. Seating both sections in one
 // sketch clears that cause alone — a section displacement or a walk charge on
 // either operand reroutes the pair however it was placed.
-func (b *Body) PlacedContext(ctx context.Context, t r3.Transform) (*Body, error) {
+func (b *Body) Placed(ctx context.Context, t r3.Transform) (*Body, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -173,34 +168,24 @@ func (b *Body) PlacedContext(ctx context.Context, t r3.Transform) (*Body, error)
 	return placed, nil
 }
 
-// Duplicate calls [Body.DuplicateContext] with [context.Background].
-func (b *Body) Duplicate() (*Body, error) {
-	return b.DuplicateContext(context.Background())
-}
-
-// DuplicateContext returns a new live body carrying the receiver's geometry
+// Duplicate returns a new live body carrying the receiver's geometry
 // unchanged, leaving the receiver LIVE (core §8): the source is depended on,
 // never consumed. It is PlacedCopy with no motion — the identity placement —
 // so the copy is identical, independent geometry at a fresh body identity. A
 // body this evaluator did not build is ErrUnsupported. A canceled context
 // stops the rebuild before the document changes.
-func (b *Body) DuplicateContext(ctx context.Context) (*Body, error) {
+func (b *Body) Duplicate(ctx context.Context) (*Body, error) {
 	return b.copyUnder(ctx, r3.Identity())
 }
 
-// PlacedCopy calls [Body.PlacedCopyContext] with [context.Background].
-func (b *Body) PlacedCopy(t r3.Transform) (*Body, error) {
-	return b.PlacedCopyContext(context.Background(), t)
-}
-
-// PlacedCopyContext returns a new live body carrying the receiver's geometry
+// PlacedCopy returns a new live body carrying the receiver's geometry
 // under the rigid motion t, leaving the receiver LIVE (core §8): the source is
 // depended on, never consumed. The payload re-evaluates under the composed
 // motion exactly as Placed does, so the centroid moves by t; the zero transform
 // is invalid and is ErrDegenerate, and r3.Identity() is a valid no-op. A body
 // this evaluator did not build is ErrUnsupported. A canceled context stops the
 // rebuild before the document changes.
-func (b *Body) PlacedCopyContext(ctx context.Context, t r3.Transform) (*Body, error) {
+func (b *Body) PlacedCopy(ctx context.Context, t r3.Transform) (*Body, error) {
 	return b.copyUnder(ctx, t)
 }
 

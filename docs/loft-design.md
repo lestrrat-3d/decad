@@ -105,8 +105,7 @@ between two full-circle loops is not reachable by this construction.
 ## 2. Public signature and options
 
 ```go
-func (d *Document) Loft(s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error)
-func (d *Document) LoftContext(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error)
+func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error)
 
 type LoftOption interface{ /* ... */ }
 
@@ -120,8 +119,8 @@ func WithLoftAlignment(offsets ...int) LoftOption
 ```
 
 **Every `LoftOption` value MUST be non-nil and use decad's owned concrete
-implementation.** A foreign type can embed the sealed marker, so `Loft` and
-`LoftContext` check the concrete option before invoking any option callback.
+implementation.** A foreign type can embed the sealed marker, so `Loft`
+checks the concrete option before invoking any option callback.
 They reject a nil or foreign value with `ErrDegenerate`, without changing the
 document (Table S row S11).
 
@@ -131,7 +130,7 @@ than a compile-time one: zero occurrences mean every offset is 0, exactly one
 supplies the whole per-loop payload, and two or more are `ErrDegenerate`
 (Table S row S4) — never resolved by a last-wins or a merge rule.
 
-**`Loft` and `LoftContext` also accept `WithSurfaceResult()`
+**`Loft` also accepts `WithSurfaceResult()`
 (`docs/surface-design.md` §3-§4).** It builds the wall triangles alone and
 omits both section caps, publishing `Kind() == BodySheet` in place of a solid
 loft, exactly as it does for `Extrude` and `Revolve` (Table W). Unlike
@@ -1247,11 +1246,10 @@ checked arithmetic and refuse before allocation if it would exceed the
 ceiling — the same preflight-before-allocation discipline tessellation §3
 states.
 
-`LoftContext` threads a shared `workBudget` (`budget.go`) through the audit,
-polling at `workPollInterval` exactly as `FilletContext` / `ChamferContext`
-/ `ShellContext` already do (modify §5). Cancellation returns `ctx.Err()`
-before commit; the document stays unchanged. `Loft` is the
-`context.Background()` compatibility wrapper.
+`Loft` threads a shared `workBudget` (`budget.go`) through the audit,
+polling at `workPollInterval` exactly as `Fillet` / `Chamfer`
+/ `Shell` already do (modify §5). Cancellation returns `ctx.Err()`
+before commit; the document stays unchanged.
 
 **This audit is unchanged in kind for a chorded pair.** It still tests every
 pair among the assembled triangle set exactly as stated above; only the
@@ -1672,7 +1670,7 @@ global evaluator increment.
 
 | PR | Lands | Still refused after it |
 |---|---|---|
-| 1 | `Document.Loft` / `LoftContext`, structural profile conversion and alignment options, Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6's RECORDED arm, S7's audit arm, S8), `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Placed`/`Duplicate`/`PlacedCopy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
+| 1 | `Document.Loft`, structural profile conversion and alignment options, Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6's RECORDED arm, S7's audit arm, S8), `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Placed`/`Duplicate`/`PlacedCopy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
 | 2a | `Placed` / `Duplicate` / `PlacedCopy` (D7): the payload's own proven displacement term `delta` (§5), composed into every vertex, edge length, face area, and all four body measurements; Table S gains S12 and S13 | D1/D2 (`Tessellate`/`STL`/`OBJ`, mesh-boolean admission); D3/D4's analytic-kernel case; D5 |
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2). **This row is landed.** | D3/D4's analytic-kernel case, D5 |
 | 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the exact bilinear-patch volume and first-moment corrections with three residual volume terms (§8.1), and the wall's certified bilinear-area reading with two residual area legs beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | same-kind Tier A free-form evaluator integration, until PR 4 lands it; mixed-kind correspondence, permanently (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
@@ -2127,7 +2125,7 @@ against this budget.
   section past `MaxFloat64`) leaves the document untouched, and the
   S13 fixture returns `ErrUnsupported` rather than panicking inside the exact
   lift. A canceled
-  `PlacedContext` returns `ctx.Err()` with the receiver live and the document
+  `Placed` returns `ctx.Err()` with the receiver live and the document
   unchanged. A placed loft is `Sound` at the default tolerance under `Verify`;
   two lofts placed apart read box-disjoint `Sound`; an internal test asserts
   `bodyGateDiameter` shrinks by `2*delta`, and a second asserts that shrink is

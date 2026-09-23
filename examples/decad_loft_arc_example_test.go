@@ -61,7 +61,7 @@ func Example_decad_loft_arc() {
 	}
 
 	doc := decad.New()
-	body, err := doc.Loft(s0, s0.Profiles()[0], s1, s1.Profiles()[0])
+	body, err := doc.Loft(context.Background(), s0, s0.Profiles()[0], s1, s1.Profiles()[0])
 	if err != nil {
 		fmt.Printf("failed to loft: %s\n", err)
 		return

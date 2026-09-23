@@ -46,7 +46,7 @@ func Example_decad_tessellate() {
 
 	// Chord the hole at a 0.5 mm tolerance. The context reaches every
 	// chording and triangulation phase.
-	mesh, err := body.TessellateContext(context.Background(), units.Millimeters(0.5))
+	mesh, err := body.Tessellate(context.Background(), units.Millimeters(0.5))
 	if err != nil {
 		fmt.Printf("failed to tessellate: %s\n", err)
 		return

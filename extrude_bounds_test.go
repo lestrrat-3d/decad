@@ -456,7 +456,7 @@ func TestExtrudeBoxBoundsEnclosesPlacedCorners(t *testing.T) {
 
 	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := body.Placed(rot)
+	placed, err := body.Placed(t.Context(), rot)
 	require.NoError(t, err)
 
 	bounds, err := placed.Bounds()
@@ -532,7 +532,7 @@ func TestExtrudeBoxBoundsEnclosesTranslatedCorner(t *testing.T) {
 
 	shift, err := r3.Translation(r3.NewVec(0.1, 0, 0))
 	require.NoError(t, err)
-	placed, err := body.Placed(shift)
+	placed, err := body.Placed(t.Context(), shift)
 	require.NoError(t, err)
 
 	bounds, err := placed.Bounds()

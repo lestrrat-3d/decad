@@ -398,17 +398,17 @@ func TestSurfaceRevolveStaysASheetThroughPlacement(t *testing.T) {
 	motion, err := r3.Translation(offset)
 	require.NoError(t, err)
 
-	placed, err := sheet.Placed(motion)
+	placed, err := sheet.Placed(t.Context(), motion)
 	require.NoError(t, err)
 	requireRevolveSheetWithFreeEdges(t, placed, 8)
 
-	dup, err := placed.Duplicate()
+	dup, err := placed.Duplicate(t.Context())
 	require.NoError(t, err)
 	requireRevolveSheetWithFreeEdges(t, dup, 8)
 
 	copyMotion, err := r3.Translation(r3.NewVec(0, 50, 0))
 	require.NoError(t, err)
-	copied, err := dup.PlacedCopy(copyMotion)
+	copied, err := dup.PlacedCopy(t.Context(), copyMotion)
 	require.NoError(t, err)
 	requireRevolveSheetWithFreeEdges(t, copied, 8)
 }

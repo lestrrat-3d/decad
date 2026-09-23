@@ -86,7 +86,7 @@ func placedFar(t *testing.T, b *decad.Body, shift float64) *decad.Body {
 	t.Helper()
 	m, err := r3.Translation(r3.NewVec(shift, 0, 0))
 	require.NoError(t, err)
-	out, err := b.Placed(m)
+	out, err := b.Placed(t.Context(), m)
 	require.NoError(t, err)
 	return out
 }
@@ -376,7 +376,7 @@ func TestPrismUnionChainedSecondOperandReexpressionAccumulatesDisplacement(t *te
 	require.Greater(t, volume.Bound.Base(), firstVolume.Bound.Base(),
 		"B's existing displacement and its new re-expression allowance must both reach the result")
 
-	_, err = chained.Fillet(decad.Edges().AtLeast(1), units.Millimeters(1))
+	_, err = chained.Fillet(t.Context(), decad.Edges().AtLeast(1), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -394,7 +394,7 @@ func TestPrismUnionDisplacedSectionRefusesTheSectionRewrites(t *testing.T) {
 	got, err := decad.Union(a, b)
 	require.NoError(t, err)
 
-	_, err = got.Fillet(verticalConvexEdge(), units.Millimeters(1))
+	_, err = got.Fillet(t.Context(), verticalConvexEdge(), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "proven displacement")
 }
@@ -417,7 +417,7 @@ func TestPrismUnionDisplacedSectionDownstreamReadings(t *testing.T) {
 	displacement := box.Bound.Base()
 	require.Positive(t, displacement)
 
-	mesh, err := got.Tessellate(units.Millimeters(1))
+	mesh, err := got.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, mesh.Bound().Base(), displacement,
 		"the mesh vertices sit on the recorded section, so its displacement is in the mesh's own bound")

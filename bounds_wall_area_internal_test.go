@@ -940,7 +940,7 @@ func TestLoftRotatedWedgeAreaBoundEnclosesDenotedSurface(t *testing.T) {
 		s0, p0 := rotatedWedgeSketch(t, w, base, 0)
 		s1, p1 := rotatedWedgeSketch(t, w, top, phi)
 		doc := New()
-		body, err := doc.Loft(s0, p0, s1, p1)
+		body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
 		require.NoError(t, err, "the rotated wedge must build at %.1f deg", deg)
 		area, err := body.Area()
 		require.NoError(t, err)

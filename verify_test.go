@@ -105,7 +105,7 @@ func TestVerifyReportForBody(t *testing.T) {
 	// membership nor liveness.
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	_, err = body.Placed(shift)
+	_, err = body.Placed(t.Context(), shift)
 	require.NoError(t, err)
 	stillResolves, err := report.ForBody(body)
 	require.NoError(t, err)
@@ -252,7 +252,7 @@ func TestVerifyDisjointPairIsSound(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	_, err = body.Placed(shift)
+	_, err = body.Placed(t.Context(), shift)
 	require.NoError(t, err)
 
 	s, p := plateSketch(t)
@@ -275,7 +275,7 @@ func TestVerifyTouchingBoxesAreDisjoint(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
-	_, err = body.Placed(shift)
+	_, err = body.Placed(t.Context(), shift)
 	require.NoError(t, err)
 
 	s, p := plateSketch(t)
@@ -367,7 +367,7 @@ func TestVerifyClearancesMeasureBoxProvenPair(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	_, err = body.Placed(shift)
+	_, err = body.Placed(t.Context(), shift)
 	require.NoError(t, err)
 	s, p := plateSketch(t)
 	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -548,7 +548,7 @@ func TestVerifyCoversLiveBodiesOnly(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	placed, err := body.Placed(shift)
+	placed, err := body.Placed(t.Context(), shift)
 	require.NoError(t, err)
 
 	// The original was retired by the placement: it stays readable but it
@@ -893,7 +893,7 @@ func coplanarContactPairDocument(t *testing.T) *decad.Document {
 
 	shift, err := r3.Translation(r3.NewVec(0, 5, 5))
 	require.NoError(t, err)
-	_, err = box2.Placed(shift)
+	_, err = box2.Placed(t.Context(), shift)
 	require.NoError(t, err)
 	return doc
 }
@@ -1068,16 +1068,16 @@ func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 	// clearance kernel stages the cup payload, so the requested gap is
 	// unmeasured — DiagUndecidedClearance, never an unsupported-pair code.
 	doc, box1 := shellBox(t)
-	cup1, err := box1.Shell(topCap(box1), units.Millimeters(5))
+	cup1, err := box1.Shell(t.Context(), topCap(box1), units.Millimeters(5))
 	require.NoError(t, err)
 	far, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
-	_, err = cup1.Placed(far)
+	_, err = cup1.Placed(t.Context(), far)
 	require.NoError(t, err)
 	s2, p2 := plateSketch(t)
 	box2, err := doc.Extrude(s2, p2, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
 	require.NoError(t, err)
-	_, err = box2.Shell(topCap(box2), units.Millimeters(5))
+	_, err = box2.Shell(t.Context(), topCap(box2), units.Millimeters(5))
 	require.NoError(t, err)
 
 	// No clearance asked: the box test alone proves the pair apart, so neither
@@ -1237,7 +1237,7 @@ func TestVerifyToleranceGateTracksScaleAndPlacement(t *testing.T) {
 			require.NoError(t, err)
 			placement, err := rotation.Then(translation)
 			require.NoError(t, err)
-			placed, err := body.Placed(placement)
+			placed, err := body.Placed(t.Context(), placement)
 			require.NoError(t, err)
 
 			report, err := doc.Verify(t.Context())
@@ -1375,14 +1375,14 @@ func TestVerifyComputedToFaceDiameterThreshold(t *testing.T) {
 
 	t.Run("cup", func(t *testing.T) {
 		doc, pin, heldDiameter := computedToFacePin(t)
-		cup, err := pin.Shell(topCap(pin), units.Millimeters(1))
+		cup, err := pin.Shell(t.Context(), topCap(pin), units.Millimeters(1))
 		require.NoError(t, err)
 		requireComputedToFaceDiameterThresholds(t, doc, cup, heldDiameter)
 	})
 
 	t.Run("cap blend", func(t *testing.T) {
 		doc, pin, heldDiameter := computedToFacePin(t)
-		chamfered, err := pin.Chamfer(capLoopEdges(pin), units.Millimeters(1))
+		chamfered, err := pin.Chamfer(t.Context(), capLoopEdges(pin), units.Millimeters(1))
 		require.NoError(t, err)
 		requireComputedToFaceDiameterThresholds(t, doc, chamfered, heldDiameter)
 	})
@@ -1397,7 +1397,7 @@ func TestVerifyComputedToFaceDiameterThreshold(t *testing.T) {
 func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)
-	cup, err := box.Shell(topCap(box), units.Millimeters(5))
+	cup, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -1436,7 +1436,7 @@ func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 func TestVerifyCapBlendChamferAreaVolumeCentroidAllPass(t *testing.T) {
 	t.Parallel()
 	doc, box := capBlendBox(t)
-	_, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
+	_, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -1453,7 +1453,7 @@ func TestVerifyCapBlendChamferAreaVolumeCentroidAllPass(t *testing.T) {
 
 func requiredBodyTolerance(t *testing.T, body *decad.Body) float64 {
 	t.Helper()
-	mesh, err := body.Tessellate(units.Millimeters(1000))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(1000))
 	require.NoError(t, err)
 	diameter := diameterOf(mesh.Vertices())
 	require.Positive(t, diameter)

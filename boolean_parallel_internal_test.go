@@ -108,7 +108,7 @@ func TestMeshBooleanWorkerCountsProduceIdenticalResults(t *testing.T) {
 	b := internalDiscBody(t, doc, 6, 20)
 	tr, err := r3.Translation(r3.Vec{X: 12, Y: 10, Z: -6})
 	require.NoError(t, err)
-	placed, err := b.Placed(tr)
+	placed, err := b.Placed(t.Context(), tr)
 	require.NoError(t, err)
 
 	serial, err := evaluateBoolean(withContactWorkers(t.Context(), 1), opUnion, a, placed)

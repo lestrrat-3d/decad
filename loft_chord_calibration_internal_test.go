@@ -162,7 +162,7 @@ func buildChordedWedgeLoft(t *testing.T, pts [][2]float64) (*Body, time.Duration
 	s1, p1 := chordedWedgeProfile(t, w, top, pts)
 	doc := New()
 	start := time.Now()
-	body, err := doc.Loft(s0, p0, s1, p1)
+	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
 	elapsed := time.Since(start)
 	require.NoError(t, err)
 	return body, elapsed

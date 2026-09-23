@@ -874,7 +874,7 @@ func TestRevolveEdgeAxisGates(t *testing.T) {
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.NewVec(1, 0, 0))
 		require.NoError(t, err)
-		_, err = old.Placed(move)
+		_, err = old.Placed(t.Context(), move)
 		require.NoError(t, err)
 		_, err = doc2.Revolve(s, p, decad.EdgeAxis{Body: old, Edge: decad.Edges().Exactly(1)}, decad.FullRevolution{})
 		require.ErrorIs(t, err, decad.ErrRetiredBody)
@@ -984,7 +984,7 @@ func TestRevolvePlacedRigidMotion(t *testing.T) {
 	xf, err := rot.Then(move)
 	require.NoError(t, err)
 
-	placed, err := body.Placed(xf)
+	placed, err := body.Placed(t.Context(), xf)
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(500*math.Pi))
 	require.Len(t, placed.Faces(), 6)
@@ -1020,7 +1020,7 @@ func TestRevolveReflectedPlacementKeepsOutwardNormals(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, refl.IsReflection())
 
-	placed, err := body.Placed(refl)
+	placed, err := body.Placed(t.Context(), refl)
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(500*math.Pi))
 	requireManifold(t, placed)
@@ -1082,7 +1082,7 @@ func TestRevolveReflectedSphereAndConeNormals(t *testing.T) {
 	require.NoError(t, err)
 	refl, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	placed, err := sphere.Placed(refl)
+	placed, err := sphere.Placed(t.Context(), refl)
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(4.0/3*math.Pi*125))
 	c, err := placed.Centroid()
@@ -1684,7 +1684,7 @@ func TestRevolveBoundsEnclosesTranslatedExtreme(t *testing.T) {
 
 	shift, err := r3.Translation(r3.NewVec(0.1, 0, 0))
 	require.NoError(t, err)
-	placed, err := body.Placed(shift)
+	placed, err := body.Placed(t.Context(), shift)
 	require.NoError(t, err)
 
 	bounds, err := placed.Bounds()
@@ -1823,7 +1823,7 @@ func TestRevolveBoundsEnclosesPlacedScanArithmetic(t *testing.T) {
 		require.Equal(t, 0.0, basis.EZ.X, "the extreme material point below assumes a rotation about Z")
 		require.Equal(t, r3.NewVec(0, 0, 0), rot.Translation())
 
-		placed, err := revolved(t).Placed(rot)
+		placed, err := revolved(t).Placed(t.Context(), rot)
 		require.NoError(t, err)
 		bounds, err := placed.Bounds()
 		require.NoError(t, err)

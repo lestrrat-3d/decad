@@ -50,7 +50,7 @@ func TestCapBlendChamferPolygonLoop(t *testing.T) {
 	t.Parallel()
 	_, box := capBlendBox(t)
 	const d = 5.0
-	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
+	chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(d))
 	require.NoError(t, err)
 	requireManifold(t, chamfered)
 
@@ -73,7 +73,7 @@ func TestCapBlendChamferCircularRim(t *testing.T) {
 	t.Parallel()
 	const R, H, d = 30.0, 20.0, 5.0
 	disk := circleProfile(t, R, H)
-	chamfered, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(d))
+	chamfered, err := disk.Chamfer(t.Context(), capLoopEdges(disk), units.Millimeters(d))
 	require.NoError(t, err)
 	requireManifold(t, chamfered)
 
@@ -100,7 +100,7 @@ func TestCapBlendPartialLoopSelectionRefused(t *testing.T) {
 	matched, err := q.SelectEdges(box)
 	require.NoError(t, err)
 	require.Len(t, matched, 2, `a proper subset of the four-edge loop`)
-	_, err = box.Chamfer(q, units.Millimeters(5))
+	_, err = box.Chamfer(t.Context(), q, units.Millimeters(5))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
@@ -117,7 +117,7 @@ func TestCapBlendMixedCapAndLateralSelectionRefused(t *testing.T) {
 	matched, err := q.SelectEdges(box)
 	require.NoError(t, err)
 	require.Len(t, matched, 12)
-	_, err = box.Chamfer(q, units.Millimeters(5))
+	_, err = box.Chamfer(t.Context(), q, units.Millimeters(5))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
@@ -125,7 +125,7 @@ func TestCapBlendMixedCapAndLateralSelectionRefused(t *testing.T) {
 func TestCapBlendLateralOnlySelectionUsesBasePath(t *testing.T) {
 	t.Parallel()
 	_, box := capBlendBox(t)
-	_, err := box.Chamfer(verticalEdges(), units.Millimeters(5))
+	_, err := box.Chamfer(t.Context(), verticalEdges(), units.Millimeters(5))
 	require.NoError(t, err)
 }
 
@@ -148,7 +148,7 @@ func TestCapBlendOppositeBandsMeetingRefused(t *testing.T) {
 	require.Len(t, edges, 8, `both caps' complete loops`)
 	// filletBoxHeight is 20; a 10mm setback on both caps of the SAME loop
 	// selection reaches exactly the midpoint — refused (SX7).
-	_, err = box.Chamfer(q, units.Millimeters(10))
+	_, err = box.Chamfer(t.Context(), q, units.Millimeters(10))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
@@ -157,7 +157,7 @@ func TestCapBlendBothCapsBuildsWhenClear(t *testing.T) {
 	t.Parallel()
 	_, box := capBlendBox(t)
 	q := bothCapLoops()
-	chamfered, err := box.Chamfer(q, units.Millimeters(5))
+	chamfered, err := box.Chamfer(t.Context(), q, units.Millimeters(5))
 	require.NoError(t, err)
 	requireManifold(t, chamfered)
 	vol, err := chamfered.Volume()
@@ -182,7 +182,7 @@ func TestCapBlendCarrierCollapseRefused(t *testing.T) {
 		t.Run(fmt.Sprintf("d=%g", d), func(t *testing.T) {
 			const R, H = 4.0, 20.0
 			disk := circleProfile(t, R, H)
-			_, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(d))
+			_, err := disk.Chamfer(t.Context(), capLoopEdges(disk), units.Millimeters(d))
 			require.Error(t, err)
 			require.ErrorIs(t, err, decad.ErrDegenerate)
 			require.NotErrorIs(t, err, decad.ErrUnsupported,
@@ -262,7 +262,7 @@ func TestCapBlendReflexCornerBuilds(t *testing.T) {
 	// a Cone-with-apex patch there.
 	body := reflexLBody(t)
 
-	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(3))
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(3))
 	require.NoError(t, err)
 	requireManifold(t, chamfered)
 	vol, err := chamfered.Volume()
@@ -282,7 +282,7 @@ func TestCapBlendReflexCornerBuilds(t *testing.T) {
 func TestCapBlendReflexApexPatchRolesDistinct(t *testing.T) {
 	t.Parallel()
 	body := reflexLBody(t)
-	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(3))
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(3))
 	require.NoError(t, err)
 
 	count := map[string]int{}
@@ -309,7 +309,7 @@ func TestCapBlendReflexApexArcLength(t *testing.T) {
 	t.Parallel()
 	const d = 3.0
 	body := reflexLBody(t)
-	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
 	require.NoError(t, err)
 
 	apex := apexPatchOf(t, chamfered, "chamferCap(end,")
@@ -337,7 +337,7 @@ func TestCapBlendHoleLoopNestingPreserved(t *testing.T) {
 	_, box := plateWithDiskHole(t, 50, 50, 10)
 	// Chamfer only the outer loop's end cap, leaving the hole loop untouched.
 	q := decad.Edges(decad.CreatedBy(decad.CapEnd(box)), decad.LongerThan(units.Millimeters(50)))
-	chamfered, err := box.Chamfer(q, units.Millimeters(3))
+	chamfered, err := box.Chamfer(t.Context(), q, units.Millimeters(3))
 	require.NoError(t, err)
 	requireManifold(t, chamfered)
 	vol, err := chamfered.Volume()
@@ -351,7 +351,7 @@ func TestCapBlendFailedCallLeavesReceiverLiveAndDocumentUnchanged(t *testing.T) 
 	t.Parallel()
 	doc, box := capBlendBox(t)
 	q := decad.Edges(decad.CreatedBy(decad.CapStart(box)), decad.CreatedBy(decad.CapEnd(box)))
-	_, err := box.Chamfer(q, units.Millimeters(10)) // reaches SX7
+	_, err := box.Chamfer(t.Context(), q, units.Millimeters(10)) // reaches SX7
 	require.Error(t, err)
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
 }
@@ -359,18 +359,18 @@ func TestCapBlendFailedCallLeavesReceiverLiveAndDocumentUnchanged(t *testing.T) 
 func TestCapBlendSX10RefusesFurtherModify(t *testing.T) {
 	t.Parallel()
 	_, box := capBlendBox(t)
-	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
+	chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)
 
-	_, err = chamfered.Chamfer(verticalEdges(), units.Millimeters(1))
+	_, err = chamfered.Chamfer(t.Context(), verticalEdges(), units.Millimeters(1))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
-	_, err = chamfered.Fillet(verticalEdges(), units.Millimeters(1))
+	_, err = chamfered.Fillet(t.Context(), verticalEdges(), units.Millimeters(1))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
-	_, err = chamfered.Shell(decad.Faces(decad.FaceCreatedBy(decad.CapStart(chamfered))), units.Millimeters(1))
+	_, err = chamfered.Shell(t.Context(), decad.Faces(decad.FaceCreatedBy(decad.CapStart(chamfered))), units.Millimeters(1))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }

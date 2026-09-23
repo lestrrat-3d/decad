@@ -80,7 +80,7 @@ func translated(t *testing.T, b *decad.Body, x, y, z float64) *decad.Body {
 	t.Helper()
 	tr, err := r3.Translation(r3.Vec{X: x, Y: y, Z: z})
 	require.NoError(t, err)
-	moved, err := b.Placed(tr)
+	moved, err := b.Placed(t.Context(), tr)
 	require.NoError(t, err)
 	return moved
 }
@@ -169,9 +169,9 @@ func TestBooleanContextMatchesCompatibilityWrappers(t *testing.T) {
 			gotVolume, err := got.Volume()
 			require.NoError(t, err)
 			require.Equal(t, wantVolume, gotVolume)
-			wantMesh, err := want.Tessellate(units.Millimeters(1))
+			wantMesh, err := want.Tessellate(t.Context(), units.Millimeters(1))
 			require.NoError(t, err)
-			gotMesh, err := got.Tessellate(units.Millimeters(1))
+			gotMesh, err := got.Tessellate(t.Context(), units.Millimeters(1))
 			require.NoError(t, err)
 			require.Equal(t, wantMesh.Vertices(), gotMesh.Vertices())
 			require.Equal(t, wantMesh.Triangles(), gotMesh.Triangles())
@@ -218,7 +218,7 @@ func boundMM3(t *testing.T, m decad.Measurement) float64 {
 // the edge-pairing audit.
 func requireBodyWatertight(t *testing.T, b *decad.Body) {
 	t.Helper()
-	mesh, err := b.Tessellate(units.Millimeters(1000))
+	mesh, err := b.Tessellate(t.Context(), units.Millimeters(1000))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 }
@@ -363,7 +363,7 @@ func TestUnionSweepDisplacementChangesEnclosedSolid(t *testing.T) {
 		afterVolume, err := afterA.Volume()
 		require.NoError(t, err)
 		require.Equal(t, 1000.0, volumeMM(t, afterVolume))
-		afterMesh, err := afterB.Tessellate(units.Millimeters(1))
+		afterMesh, err := afterB.Tessellate(t.Context(), units.Millimeters(1))
 		require.NoError(t, err)
 		for _, vertex := range afterMesh.Vertices() {
 			require.GreaterOrEqual(t, vertex.X, 0.0)
@@ -637,7 +637,7 @@ func TestBooleanBoundComposition(t *testing.T) {
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
 	first, err := decad.Cut(plate, tool)
 	require.NoError(t, err)
-	firstMesh, err := first.Tessellate(units.Millimeters(1000))
+	firstMesh, err := first.Tessellate(t.Context(), units.Millimeters(1000))
 	require.NoError(t, err)
 	require.Positive(t, firstMesh.Bound().Mag())
 
@@ -645,7 +645,7 @@ func TestBooleanBoundComposition(t *testing.T) {
 	secondTool := translated(t, diskBody(t, doc, 14, 6, 2), 40, 0, -6)
 	second, err := decad.Cut(secondPlate, secondTool)
 	require.NoError(t, err)
-	secondMesh, err := second.Tessellate(units.Millimeters(1000))
+	secondMesh, err := second.Tessellate(t.Context(), units.Millimeters(1000))
 	require.NoError(t, err)
 	require.Positive(t, secondMesh.Bound().Mag())
 
@@ -653,7 +653,7 @@ func TestBooleanBoundComposition(t *testing.T) {
 	// rather than treating the first result's bound as effectively flat.
 	both, err := decad.Union(first, second)
 	require.NoError(t, err)
-	bothMesh, err := both.Tessellate(units.Millimeters(1000))
+	bothMesh, err := both.Tessellate(t.Context(), units.Millimeters(1000))
 	require.NoError(t, err)
 	require.Greater(t, bothMesh.Bound().Mag(), firstMesh.Bound().Mag())
 	require.Greater(t, bothMesh.Bound().Mag(), secondMesh.Bound().Mag())
@@ -701,7 +701,7 @@ func TestBooleanChainsWithinHeldBound(t *testing.T) {
 func TestUnionCupOperand(t *testing.T) {
 	t.Parallel()
 	doc, box := shellBox(t)
-	cup, err := box.Shell(topCap(box), units.Millimeters(5))
+	cup, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
 	require.NoError(t, err)
 	cupVol, err := cup.Volume()
 	require.NoError(t, err)
@@ -786,7 +786,7 @@ func TestFacetedTessellateAndExport(t *testing.T) {
 	got, err := decad.Cut(plate, tool)
 	require.NoError(t, err)
 
-	mesh, err := got.Tessellate(units.Millimeters(1))
+	mesh, err := got.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	require.Positive(t, mesh.Bound().Mag())
@@ -803,7 +803,7 @@ func TestFacetedTessellateAndExport(t *testing.T) {
 
 	// The held polygons cannot be refined: finer than their own bound is
 	// staged, never a mesh whose bound overstates its trust.
-	_, err = got.Tessellate(units.Millimeters(1e-12))
+	_, err = got.Tessellate(t.Context(), units.Millimeters(1e-12))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -845,7 +845,7 @@ func TestUnionOfCapBlendBodiesStagesNotContact(t *testing.T) {
 	// refusal: it must surface as a plain ErrUnsupported, never a *BooleanError
 	// with BooleanUnsupportedContact.
 	doc, box := capBlendBox(t)
-	blended, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
+	blended, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)
 	other := boxBody(t, doc, 200, 0, 210, 10, 10)
 
@@ -1167,7 +1167,7 @@ func TestFacetedPlacedFarFromOriginBoundHolds(t *testing.T) {
 	require.NoError(t, err)
 	xform, err := rot.Then(back)
 	require.NoError(t, err)
-	moved, err := got.Placed(xform)
+	moved, err := got.Placed(t.Context(), xform)
 	require.NoError(t, err)
 
 	volAfter, err := moved.Volume()

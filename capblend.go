@@ -429,7 +429,7 @@ func classifyChamferSelection(ctx context.Context, pp prismPayload, b *Body, sel
 
 // buildCapBlend runs the existence and constructed-geometry gates (SX6, SX7,
 // SX12, and SX13's axial half) and, once every gate passes, builds the body. It
-// is the shared entry ChamferContext calls once a clean cap-loop selection is
+// is the shared entry Chamfer calls once a clean cap-loop selection is
 // classified. SX13's radial half is decided per circular wall as the band is
 // constructed, in capblend_geom.go's capBandRadius.
 func buildCapBlend(ctx context.Context, doc *Document, ref producerID, pp prismPayload, d, dDelta float64, startLoops, endLoops map[int]bool) (*Body, error) {

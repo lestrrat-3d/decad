@@ -312,7 +312,7 @@ func runFilletCase(t *testing.T, fc filletCase, plan filletPlan, r float64) bool
 	count := len(edges)
 	require.Positivef(t, count, "%s/%s selected no corner", fc.name, plan.name)
 
-	filleted, err := body.Fillet(plan.sel(), units.Millimeters(r))
+	filleted, err := body.Fillet(t.Context(), plan.sel(), units.Millimeters(r))
 	if err != nil {
 		// Refuse: a known sentinel, and the document is untouched.
 		require.Truef(t, errors.Is(err, decad.ErrDegenerate) || errors.Is(err, decad.ErrUnsupported),
@@ -407,7 +407,7 @@ func requireTessellates(t *testing.T, body *decad.Body, r float64, name, plan st
 	// admits clears within them, while a true pinch (gap ≈ 0) never does.
 	tol := 0.1 * r
 	for range 16 {
-		mesh, err := body.Tessellate(units.Millimeters(tol))
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(tol))
 		if err == nil {
 			require.NotEmptyf(t, mesh.Triangles(), "%s/%s produced an empty mesh", name, plan)
 			return
@@ -475,7 +475,7 @@ func TestFilletScaleInvariant(t *testing.T) {
 			for i, k := range scales {
 				_, body := fc.build(t, k)
 				r := spec.frac * fc.convexMaxR * k
-				_, err := body.Fillet(convexLateral(), units.Millimeters(r))
+				_, err := body.Fillet(t.Context(), convexLateral(), units.Millimeters(r))
 				verdicts[i] = err == nil
 				if err != nil {
 					require.Truef(t, errors.Is(err, decad.ErrDegenerate) || errors.Is(err, decad.ErrUnsupported),
@@ -521,7 +521,7 @@ func FuzzFillet(f *testing.F) {
 		body, err := doc.Extrude(s, pickProfile(t, s, 4, 0), decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 		require.NoError(t, err)
 
-		filleted, err := body.Fillet(convexLateral(), units.Millimeters(r))
+		filleted, err := body.Fillet(t.Context(), convexLateral(), units.Millimeters(r))
 		if err != nil {
 			require.Truef(t, errors.Is(err, decad.ErrDegenerate) || errors.Is(err, decad.ErrUnsupported),
 				"w=%g h=%g r=%g refused with an unexpected error: %v", w, h, r, err)

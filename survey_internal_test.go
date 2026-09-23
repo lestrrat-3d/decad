@@ -1362,7 +1362,7 @@ func wallNormalDecisionFixtures(t *testing.T) []wallNormalDecisionFixture {
 	doc := New()
 	rectBody, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
 	require.NoError(t, err)
-	body, err := rectBody.Fillet(Edges(ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(6))
+	body, err := rectBody.Fillet(t.Context(), Edges(ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(6))
 	require.NoError(t, err)
 
 	translate, err := r3.Translation(r3.NewVec(7, -3, 19))
@@ -1383,7 +1383,7 @@ func wallNormalDecisionFixtures(t *testing.T) []wallNormalDecisionFixture {
 		b := body
 		if pl.xform != nil {
 			var err error
-			b, err = b.PlacedCopy(*pl.xform)
+			b, err = b.PlacedCopy(t.Context(), *pl.xform)
 			require.NoError(t, err)
 		}
 		pp, ok := b.payload.(prismPayload)

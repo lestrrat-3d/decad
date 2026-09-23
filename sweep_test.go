@@ -28,7 +28,7 @@ func TestSweepLineBuildsVerifiesAndReevaluatesPlacement(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Sweep(s, profile, path, decad.WithSweepTwist(units.Degrees(0)))
+	body, err := doc.Sweep(t.Context(), s, profile, path, decad.WithSweepTwist(units.Degrees(0)))
 	require.NoError(t, err)
 	extrudeDoc := decad.New()
 	extruded, err := extrudeDoc.Extrude(
@@ -93,7 +93,7 @@ func TestSweepLineBuildsVerifiesAndReevaluatesPlacement(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(7, -3, 11))
 	require.NoError(t, err)
-	placed, err := body.Placed(move)
+	placed, err := body.Placed(t.Context(), move)
 	require.NoError(t, err)
 
 	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(60000), decadtest.Exactly())
@@ -108,7 +108,7 @@ func TestSweepLineBuildsVerifiesAndReevaluatesPlacement(t *testing.T) {
 	)
 	require.Equal(t, []*decad.Body{placed}, doc.Bodies())
 	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(60000), decadtest.Exactly())
-	_, err = body.Placed(move)
+	_, err = body.Placed(t.Context(), move)
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 
 	placedReport, err := doc.Verify(t.Context())
@@ -131,12 +131,12 @@ func TestSweepLineStagesTessellation(t *testing.T) {
 	)
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := doc.Sweep(s, profile, path)
+	body, err := doc.Sweep(t.Context(), s, profile, path)
 	require.NoError(t, err)
 
-	_, err = body.Tessellate(units.Millimeters(0.1))
+	_, err = body.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	_, err = body.Fillet(decad.Edges().AtLeast(1), units.Millimeters(1))
+	_, err = body.Fillet(t.Context(), decad.Edges().AtLeast(1), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{body}, doc.Bodies())
 }
@@ -163,7 +163,7 @@ func TestSweepLineTiltedFrameCarriesEndpointGap(t *testing.T) {
 	delta := frame.N().Scale(8)
 	path, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: delta})
 	require.NoError(t, err)
-	body, err := decad.New().Sweep(s, s.Profiles()[0], path)
+	body, err := decad.New().Sweep(t.Context(), s, s.Profiles()[0], path)
 	require.NoError(t, err)
 
 	start := faceVertexReadings(faceByRole(t, body, "capStart"))
@@ -283,13 +283,13 @@ func TestSweepLineGatesLeaveDocumentUnchanged(t *testing.T) {
 	doc := decad.New()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := doc.Sweep(test.sketch, test.profile, test.path, test.opts...)
+			_, err := doc.Sweep(t.Context(), test.sketch, test.profile, test.path, test.opts...)
 			require.ErrorIs(t, err, test.want)
 			require.Empty(t, doc.Bodies())
 		})
 	}
 
-	body, err := doc.Sweep(s, profile, validPath)
+	body, err := doc.Sweep(t.Context(), s, profile, validPath)
 	require.NoError(t, err)
 	require.Equal(t, []*decad.Body{body}, doc.Bodies())
 }
@@ -330,12 +330,12 @@ func TestSweepContextCancellationLeavesDocumentUnchanged(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	_, err = doc.SweepContext(ctx, s, profile, path)
+	_, err = doc.Sweep(ctx, s, profile, path)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Empty(t, doc.Bodies())
 
 	var nilContext context.Context
-	_, err = doc.SweepContext(nilContext, s, profile, path)
+	_, err = doc.Sweep(nilContext, s, profile, path)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Bodies())
 }

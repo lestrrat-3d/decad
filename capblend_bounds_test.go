@@ -42,13 +42,13 @@ func TestCapBlendStartCapVolumeMatchesEndCap(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			endBody := tc.build(t)
-			endChamfered, err := endBody.Chamfer(capLoopEdgesOn(endBody, true), units.Millimeters(tc.d))
+			endChamfered, err := endBody.Chamfer(t.Context(), capLoopEdgesOn(endBody, true), units.Millimeters(tc.d))
 			require.NoError(t, err)
 			endVol, err := endChamfered.Volume()
 			require.NoError(t, err)
 
 			startBody := tc.build(t)
-			startChamfered, err := startBody.Chamfer(capLoopEdgesOn(startBody, false), units.Millimeters(tc.d))
+			startChamfered, err := startBody.Chamfer(t.Context(), capLoopEdgesOn(startBody, false), units.Millimeters(tc.d))
 			require.NoError(t, err)
 			startVol, err := startChamfered.Volume()
 			require.NoError(t, err)
@@ -100,7 +100,7 @@ func TestCapBlendHoleLoopChamferVolume(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, matched, 1, "the hole loop's single whole-circle edge")
 
-	chamfered, err := box.Chamfer(q, units.Millimeters(d))
+	chamfered, err := box.Chamfer(t.Context(), q, units.Millimeters(d))
 	require.NoError(t, err)
 	requireManifold(t, chamfered)
 	vol, err := chamfered.Volume()
@@ -163,7 +163,7 @@ func TestCapBlendPolygonalHoleChamferVolume(t *testing.T) {
 	t.Parallel()
 	const L, H, side, d = 100.0, 10.0, 20.0, 2.0
 	box := plateWithRectHole(t, side)
-	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
+	chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(d))
 	require.NoError(t, err)
 	requireManifold(t, chamfered)
 
@@ -201,7 +201,7 @@ func TestCapBlendThroughAllStopsAtBuiltExtent(t *testing.T) {
 	doc := decad.New()
 	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	require.NoError(t, err)
-	chamfered, err := plate.Chamfer(capLoopEdges(plate), units.Millimeters(d))
+	chamfered, err := plate.Chamfer(t.Context(), capLoopEdges(plate), units.Millimeters(d))
 	require.NoError(t, err)
 
 	// The chamfer offsets INTO the material at the cap and leaves [z0, z1]
@@ -232,11 +232,11 @@ func TestCapBlendThroughAllBehindPlaneRefused(t *testing.T) {
 	doc := decad.New()
 	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	require.NoError(t, err)
-	chamfered, err := plate.Chamfer(capLoopEdges(plate), units.Millimeters(d))
+	chamfered, err := plate.Chamfer(t.Context(), capLoopEdges(plate), units.Millimeters(d))
 	require.NoError(t, err)
 	shift, err := r3.Translation(r3.NewVec(0, 0, -drop))
 	require.NoError(t, err)
-	behind, err := chamfered.Placed(shift)
+	behind, err := chamfered.Placed(t.Context(), shift)
 	require.NoError(t, err)
 
 	zHi := math.Inf(-1)
@@ -259,11 +259,11 @@ func TestCapBlendBooleanReceiverRefusedSX9(t *testing.T) {
 	// is a genuine interior crossing rather than a coplanar cap tangency.
 	shift, err := r3.Translation(r3.NewVec(0, 0, 2))
 	require.NoError(t, err)
-	b, err = b.Placed(shift)
+	b, err = b.Placed(t.Context(), shift)
 	require.NoError(t, err)
 	union, err := decad.Union(a, b)
 	require.NoError(t, err)
-	_, err = union.Chamfer(decad.Edges(decad.Convex()).AtLeast(1), units.Millimeters(1))
+	_, err = union.Chamfer(t.Context(), decad.Edges(decad.Convex()).AtLeast(1), units.Millimeters(1))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
@@ -279,7 +279,7 @@ func TestCapBlendBoundsAreAttainedNotPadded(t *testing.T) {
 	for _, d := range []float64{1, 5, 9} {
 		t.Run(fmt.Sprintf("d=%v", d), func(t *testing.T) {
 			_, box := capBlendBox(t)
-			chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
+			chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(d))
 			require.NoError(t, err)
 
 			bounds, err := chamfered.Bounds()
@@ -338,7 +338,7 @@ func TestCapBlendNestingRefusalKeepsDegenerate(t *testing.T) {
 	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
 	require.NoError(t, err)
 
-	_, err = body.Chamfer(capLoopEdges(body), units.Millimeters(12))
+	_, err = body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(12))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrDegenerate, `an S9 nesting refusal keeps its own sentinel`)
 	require.NotErrorIs(t, err, decad.ErrUnsupported)
@@ -352,7 +352,7 @@ func TestCapBlendNestingRefusalKeepsDegenerate(t *testing.T) {
 func TestCapBlendUndercutOrderIsDeterministic(t *testing.T) {
 	t.Parallel()
 	_, box := capBlendBox(t)
-	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
+	chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)
 	doc := chamfered.Document()
 
@@ -392,7 +392,7 @@ func TestCapBlendConePatchKeepsTaperAtHugeRadius(t *testing.T) {
 	t.Parallel()
 	const R, H, d = 1e12, 10.0, 1e-3
 	disk := circleProfile(t, R, H)
-	chamfered, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(d))
+	chamfered, err := disk.Chamfer(t.Context(), capLoopEdges(disk), units.Millimeters(d))
 	require.NoError(t, err)
 	requireManifold(t, chamfered)
 
@@ -487,7 +487,7 @@ func TestCapBlendVolumeBoundEnclosesExactVolume(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			disk := circleProfile(t, tc.r, tc.h)
-			chamfered, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(tc.d))
+			chamfered, err := disk.Chamfer(t.Context(), capLoopEdges(disk), units.Millimeters(tc.d))
 			require.NoError(t, err)
 			vol, err := chamfered.Volume()
 			require.NoError(t, err)
@@ -517,7 +517,7 @@ func TestCapBlendUnrepresentableRadialChangeRefused(t *testing.T) {
 	disk := circleProfile(t, R, H)
 	doc := disk.Document()
 
-	_, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(d))
+	_, err := disk.Chamfer(t.Context(), capLoopEdges(disk), units.Millimeters(d))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.NotErrorIs(t, err, decad.ErrDegenerate)
@@ -562,7 +562,7 @@ func TestCapBlendUnrepresentableAxialChangeRefused(t *testing.T) {
 	tower, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(H), Dir: decad.Along})
 	require.NoError(t, err)
 
-	_, err = tower.Chamfer(capLoopEdges(tower), units.Millimeters(d))
+	_, err = tower.Chamfer(t.Context(), capLoopEdges(tower), units.Millimeters(d))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.NotErrorIs(t, err, decad.ErrDegenerate)
@@ -570,7 +570,7 @@ func TestCapBlendUnrepresentableAxialChangeRefused(t *testing.T) {
 
 	// The same tower with a setback the level can name still builds, so the gate
 	// refuses the collapse and not the shape.
-	chamfered, err := tower.Chamfer(capLoopEdges(tower), units.Millimeters(1e-3))
+	chamfered, err := tower.Chamfer(t.Context(), capLoopEdges(tower), units.Millimeters(1e-3))
 	require.NoError(t, err)
 	requireManifold(t, chamfered)
 }
@@ -609,7 +609,7 @@ func TestCapBlendPlanePatchVolumeIsExact(t *testing.T) {
 			require.Equal(t, tc.want, L*W*H-((L+W)*tc.d*tc.d-(4.0/3.0)*tc.d*tc.d*tc.d),
 				`the premise: this setback's true volume is a float64`)
 
-			chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(tc.d))
+			chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(tc.d))
 			require.NoError(t, err)
 			vol, err := chamfered.Volume()
 			require.NoError(t, err)
@@ -622,7 +622,7 @@ func TestCapBlendPlanePatchVolumeIsExact(t *testing.T) {
 
 	t.Run(`a Cone patch keeps the band Approximate`, func(t *testing.T) {
 		disk := circleProfile(t, 30, 20)
-		chamfered, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(3))
+		chamfered, err := disk.Chamfer(t.Context(), capLoopEdges(disk), units.Millimeters(3))
 		require.NoError(t, err)
 		vol, err := chamfered.Volume()
 		require.NoError(t, err)
@@ -643,7 +643,7 @@ func TestCapBlendPatchFacesReportTheirOwnArea(t *testing.T) {
 	t.Parallel()
 	const d = 5.0
 	_, box := capBlendBox(t)
-	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
+	chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(d))
 	require.NoError(t, err)
 
 	// The plate's four bevels are trapezoids between the original rim and the
@@ -722,7 +722,7 @@ func TestCapBlendCentroidBoundEncloses(t *testing.T) {
 	receiver, err := body.Centroid()
 	require.NoError(t, err)
 
-	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
 	require.NoError(t, err)
 	centroid, err := chamfered.Centroid()
 	require.NoError(t, err)
@@ -744,7 +744,7 @@ func TestCapBlendCentroidNeverExceedsGeometryNet(t *testing.T) {
 	t.Parallel()
 	const R, H, d = 10.0, 8.0, 0.5
 	body := circleProfile(t, R, H)
-	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
 	require.NoError(t, err)
 
 	centroid, err := chamfered.Centroid()
@@ -787,7 +787,7 @@ func TestCapBlendBandReachRefusalKeepsSX6Degenerate(t *testing.T) {
 	for _, height := range []float64{4.0, 20.0} {
 		t.Run(fmt.Sprintf("H=%g", height), func(t *testing.T) {
 			disk := circleProfile(t, 4, height)
-			_, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(4))
+			_, err := disk.Chamfer(t.Context(), capLoopEdges(disk), units.Millimeters(4))
 			require.Error(t, err)
 			require.ErrorIs(t, err, decad.ErrDegenerate)
 			require.NotErrorIs(t, err, decad.ErrUnsupported,
@@ -799,7 +799,7 @@ func TestCapBlendBandReachRefusalKeepsSX6Degenerate(t *testing.T) {
 	// does not fit is still SX7's own ErrUnsupported. Eroding a radius-30 disk
 	// by 4 leaves a radius-26 circle, so nothing about SX6 applies.
 	disk := circleProfile(t, 30, 4)
-	_, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(4))
+	_, err := disk.Chamfer(t.Context(), capLoopEdges(disk), units.Millimeters(4))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.NotErrorIs(t, err, decad.ErrDegenerate)
@@ -820,7 +820,7 @@ func TestCapBlendCapLevelEdgesReportFiniteLengths(t *testing.T) {
 	t.Parallel()
 	const d = 5.0
 	_, box := capBlendBox(t)
-	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
+	chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(d))
 	require.NoError(t, err)
 
 	slants := 0
@@ -902,7 +902,7 @@ func TestCapBlendCapContourVertexBoundEncloses(t *testing.T) {
 	for _, d := range []float64{0.1, 0.3, 0.7, 1.3, 2.5, 2.9} {
 		t.Run(fmt.Sprintf("d=%v", d), func(t *testing.T) {
 			body := rightTriangleBody(t, height)
-			chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+			chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
 			require.NoError(t, err)
 
 			rd := new(big.Rat).SetFloat64(d)
@@ -971,7 +971,7 @@ func TestCapBlendContourHeldExtentCarriesItsDisplacement(t *testing.T) {
 	doc := decad.New()
 	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
-	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(5))
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(5))
 	require.NoError(t, err)
 
 	upright, err := chamfered.Bounds()
@@ -981,7 +981,7 @@ func TestCapBlendContourHeldExtentCarriesItsDisplacement(t *testing.T) {
 
 	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(0.4))
 	require.NoError(t, err)
-	tilted, err := chamfered.Placed(rot)
+	tilted, err := chamfered.Placed(t.Context(), rot)
 	require.NoError(t, err)
 	tiltedBounds, err := tilted.Bounds()
 	require.NoError(t, err)
@@ -1070,7 +1070,7 @@ func TestCapBlendWedgeAreaAndVolumeBoundsEncloseTrueError(t *testing.T) {
 	t.Parallel()
 	const a, b, h, d = 9e4, 3e6, 50000.0, 13500.0
 	body := rightTriangleBodyLegs(t, a, b, h)
-	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
 	require.NoError(t, err)
 
 	wantArea, wantVol := exactWedgeChamferReadings(t, a, b, h, d)
@@ -1116,7 +1116,7 @@ func TestCapBlendSideLevelCarriesSetbackRounding(t *testing.T) {
 	doc := decad.New()
 	box, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
 	require.NoError(t, err)
-	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
+	chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(d))
 	require.NoError(t, err)
 
 	side := 0
@@ -1161,7 +1161,7 @@ func TestCapBlendInheritsComputedCapLevelBound(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	chamfered, err := pin.Chamfer(
+	chamfered, err := pin.Chamfer(t.Context(),
 		decad.Edges(decad.CreatedBy(decad.CapEnd(pin))),
 		units.Millimeters(shortBy),
 	)
@@ -1227,7 +1227,7 @@ func TestCapBlendComputedStopMassBounds(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	chamfered, err := pin.Chamfer(capLoopEdges(pin), units.Millimeters(shortBy))
+	chamfered, err := pin.Chamfer(t.Context(), capLoopEdges(pin), units.Millimeters(shortBy))
 	require.NoError(t, err)
 
 	wantVolume, wantCentroidZ := exactComputedStopSquareChamfer(t, side, plateHeight, -shortBy, shortBy)
@@ -1318,7 +1318,7 @@ func TestCapBlendWholeCircleInheritsComputedCapLevelBound(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	chamfered, err := disk.Chamfer(
+	chamfered, err := disk.Chamfer(t.Context(),
 		decad.Edges(decad.CreatedBy(decad.CapEnd(disk))),
 		units.Millimeters(shortBy),
 	)
@@ -1381,12 +1381,12 @@ func TestCapBlendFarPlacementOrientationRefusal(t *testing.T) {
 	t.Parallel()
 	const R, r, h, d = 4.0, 1.5, 6.0, 0.5
 	body := concentricDiskWithHole(t, R, r, h)
-	chamfered, err := body.Chamfer(capLoopEdgesOn(body, true), units.Millimeters(d))
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdgesOn(body, true), units.Millimeters(d))
 	require.NoError(t, err)
 
 	far, err := r3.Translation(r3.NewVec(math.Ldexp(1, 60), 0, 0))
 	require.NoError(t, err)
-	_, err = chamfered.Placed(far)
+	_, err = chamfered.Placed(t.Context(), far)
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.False(t, errors.Is(err, decad.ErrDegenerate),
@@ -1397,7 +1397,7 @@ func TestCapBlendFarPlacementOrientationRefusal(t *testing.T) {
 	// fixPatchOrientation decides it when NormalAt succeeds.
 	near, err := r3.Translation(r3.NewVec(1000, 0, 0))
 	require.NoError(t, err)
-	nearBody, err := chamfered.Placed(near)
+	nearBody, err := chamfered.Placed(t.Context(), near)
 	require.NoError(t, err)
 
 	// The hole's cap-level radius grows from r to r+d (a countersink widens a
@@ -1507,7 +1507,7 @@ func TestCapBlendMiterSlantEdgeEnclosesItsLocus(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(fmt.Sprintf("d=%g", tc.d), func(t *testing.T) {
 			body := quarterDiskBody(t, r, h)
-			chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(tc.d))
+			chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(tc.d))
 			require.NoError(t, err)
 
 			edges := capBlendConePatchSlantEdges(chamfered)
@@ -1530,7 +1530,7 @@ func TestCapBlendMiterSlantEdgeEnclosesItsLocus(t *testing.T) {
 	// the reported VALUE is unchanged, and the pre-fix bound (2.66e-15) is
 	// nowhere near the 1.17e-2 mm gap the fix must now cover.
 	body := quarterDiskBody(t, r, h)
-	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(3))
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(3))
 	require.NoError(t, err)
 	edges := capBlendConePatchSlantEdges(chamfered)
 	require.Len(t, edges, 2)
@@ -1551,7 +1551,7 @@ func TestCapBlendStraightMiterSlantEdgeChargesNothingExtra(t *testing.T) {
 	t.Parallel()
 	const d = 5.0
 	_, box := capBlendBox(t)
-	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
+	chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(d))
 	require.NoError(t, err)
 
 	slants := 0
@@ -1579,7 +1579,7 @@ func TestCapBlendReflexSlantEdgeChargesNothingExtra(t *testing.T) {
 	t.Parallel()
 	const d = 3.0
 	body := reflexLBody(t)
-	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
 	require.NoError(t, err)
 
 	apex := apexPatchOf(t, chamfered, "chamferCap(end,")
@@ -1619,12 +1619,12 @@ func TestCapBlendBoundsEnclosesPlacedVertices(t *testing.T) {
 	box, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(H), Dir: decad.Along})
 	require.NoError(t, err)
 
-	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
+	chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(d))
 	require.NoError(t, err)
 
 	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(37))
 	require.NoError(t, err)
-	placed, err := chamfered.Placed(rot)
+	placed, err := chamfered.Placed(t.Context(), rot)
 	require.NoError(t, err)
 
 	bounds, err := placed.Bounds()

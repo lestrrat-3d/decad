@@ -51,7 +51,7 @@ func Example_decad_revolve_tessellate() {
 		return
 	}
 
-	mesh, err := body.TessellateContext(context.Background(), units.Millimeters(0.5))
+	mesh, err := body.Tessellate(context.Background(), units.Millimeters(0.5))
 	if err != nil {
 		fmt.Printf("failed to tessellate: %s\n", err)
 		return

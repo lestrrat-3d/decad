@@ -26,7 +26,7 @@ func TestSweepArcMatchesQuarterRevolveAndReplaysPlacement(t *testing.T) {
 	require.NoError(t, err)
 
 	sweepDoc := decad.New()
-	swept, err := sweepDoc.Sweep(s, profile, path)
+	swept, err := sweepDoc.Sweep(t.Context(), s, profile, path)
 	require.NoError(t, err)
 	revolveDoc := decad.New()
 	revolved, err := revolveDoc.Revolve(
@@ -62,9 +62,9 @@ func TestSweepArcMatchesQuarterRevolveAndReplaysPlacement(t *testing.T) {
 
 	motion, err := r3.Translation(r3.NewVec(7, -3, 11))
 	require.NoError(t, err)
-	placedSweep, err := swept.Placed(motion)
+	placedSweep, err := swept.Placed(t.Context(), motion)
 	require.NoError(t, err)
-	placedRevolve, err := revolved.Placed(motion)
+	placedRevolve, err := revolved.Placed(t.Context(), motion)
 	require.NoError(t, err)
 	requireSameBodyReadings(t, placedRevolve, placedSweep)
 
@@ -86,7 +86,7 @@ func TestSweepArcUsesPathEndpointCapRolesWhenAxisGateFlips(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	body, err := decad.New().Sweep(s, profile, path)
+	body, err := decad.New().Sweep(t.Context(), s, profile, path)
 	require.NoError(t, err)
 
 	startCap := faceByRole(t, body, "capStart")
@@ -116,7 +116,7 @@ func TestSweepArcBuildsGeneralAngleWithRationalCenter(t *testing.T) {
 	)
 	require.NoError(t, err)
 	doc := decad.New()
-	body, err := doc.Sweep(s, profile, path)
+	body, err := doc.Sweep(t.Context(), s, profile, path)
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 
@@ -174,7 +174,7 @@ func TestSweepArcMatchesRevolveFromObliqueSketchPlane(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	swept, err := decad.New().Sweep(s, s.Profiles()[0], path)
+	swept, err := decad.New().Sweep(t.Context(), s, s.Profiles()[0], path)
 	require.NoError(t, err)
 	revolved, err := decad.New().Revolve(
 		s,
@@ -221,7 +221,7 @@ func TestSweepArcRefusalsLeaveDocumentUnchanged(t *testing.T) {
 			)
 			require.NoError(t, err)
 			doc := decad.New()
-			_, err = doc.Sweep(s, profile, path)
+			_, err = doc.Sweep(t.Context(), s, profile, path)
 			require.ErrorIs(t, err, test.want)
 			require.Empty(t, doc.Bodies())
 		})

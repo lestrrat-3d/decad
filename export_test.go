@@ -65,7 +65,7 @@ func TestSTLChordTolerance(t *testing.T) {
 
 	// The explicit tolerance drives the tessellation: same facet count as
 	// Tessellate at that tolerance.
-	mesh, err := body.Tessellate(units.Millimeters(0.5))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
@@ -111,10 +111,10 @@ func TestSTLDefaultChordTolerance(t *testing.T) {
 
 		faceted := translated(t, cut, 1e13, -2e13, 3e13)
 		tol := sizeDefault(t, faceted)
-		held, err := faceted.Tessellate(units.Millimeters(1))
+		held, err := faceted.Tessellate(t.Context(), units.Millimeters(1))
 		require.NoError(t, err)
 		require.Greater(t, held.Bound().Mag(), tol.Mag())
-		_, err = faceted.Tessellate(tol)
+		_, err = faceted.Tessellate(t.Context(), tol)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 
 		var explicit bytes.Buffer
@@ -143,7 +143,7 @@ func TestSTLDefaultChordTolerance(t *testing.T) {
 		delta := box.Bound.Base()
 		tol := sizeDefault(t, got)
 		require.Greater(t, delta, tol.Mag(), "the fixture's displacement must outrun the size default")
-		_, err = got.Tessellate(tol)
+		_, err = got.Tessellate(t.Context(), tol)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 
 		var explicit bytes.Buffer
@@ -202,7 +202,7 @@ func TestOBJPlate(t *testing.T) {
 func TestOBJChordTolerance(t *testing.T) {
 	t.Parallel()
 	body := holedPlateBody(t)
-	mesh, err := body.Tessellate(units.Millimeters(0.5))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.NoError(t, err)
 
 	var buf bytes.Buffer

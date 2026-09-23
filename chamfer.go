@@ -68,11 +68,7 @@ type ChamferOption interface {
 // (ErrUnsupported); the result
 // does not tessellate yet (Table DX row DX3, ErrUnsupported), and a clearance
 // pair its bounding boxes do not already decide reads Suspect (row DX6).
-func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
-	return b.ChamferContext(context.Background(), sel, d, opts...)
-}
-
-func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
+func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}

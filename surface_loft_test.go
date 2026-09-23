@@ -132,7 +132,7 @@ func TestSurfaceLoftBoxIsASheet(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	sheet, err := doc.Loft(s0, p0, s1, p1, decad.WithSurfaceResult())
+	sheet, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, sheet.Kind())
@@ -147,7 +147,7 @@ func TestSurfaceLoftBoxIsASheet(t *testing.T) {
 
 	t0, tp0, t1, tp1 := loftSquares(t, 20, 20)
 	solidDoc := decad.New()
-	solid, err := solidDoc.Loft(t0, tp0, t1, tp1)
+	solid, err := solidDoc.Loft(t.Context(), t0, tp0, t1, tp1)
 	require.NoError(t, err)
 	require.Len(t, solid.Faces(), len(sheet.Faces())+2)
 
@@ -174,7 +174,7 @@ func TestSurfaceLoftCapBoundsComposeOnInexactFixture(t *testing.T) {
 
 	s0, p0, s1, p1 := loftNGonAt(t, n, r, height)
 	solidDoc := decad.New()
-	solid, err := solidDoc.Loft(s0, p0, s1, p1)
+	solid, err := solidDoc.Loft(t.Context(), s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	capStartFaces, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(solid))).Exactly(1).SelectFaces(solid)
@@ -194,7 +194,7 @@ func TestSurfaceLoftCapBoundsComposeOnInexactFixture(t *testing.T) {
 
 	s2, p2, s3, p3 := loftNGonAt(t, n, r, height)
 	sheetDoc := decad.New()
-	sheet, err := sheetDoc.Loft(s2, p2, s3, p3, decad.WithSurfaceResult())
+	sheet, err := sheetDoc.Loft(t.Context(), s2, p2, s3, p3, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	solidArea, err := solid.Area()
@@ -217,7 +217,7 @@ func TestSurfaceLoftRolesResolveThroughFaceCreatedBy(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	sheet, err := doc.Loft(s0, p0, s1, p1, decad.WithSurfaceResult())
+	sheet, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	faces := sheet.Faces()
@@ -243,22 +243,22 @@ func TestSurfaceLoftStaysASheetThroughPlacement(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	sheet, err := doc.Loft(s0, p0, s1, p1, decad.WithSurfaceResult())
+	sheet, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	motion, err := r3.Translation(r3.NewVec(50, 0, 0))
 	require.NoError(t, err)
-	placed, err := sheet.Placed(motion)
+	placed, err := sheet.Placed(t.Context(), motion)
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, placed)
 
-	dup, err := placed.Duplicate()
+	dup, err := placed.Duplicate(t.Context())
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, dup)
 
 	copyMotion, err := r3.Translation(r3.NewVec(0, 50, 0))
 	require.NoError(t, err)
-	copied, err := dup.PlacedCopy(copyMotion)
+	copied, err := dup.PlacedCopy(t.Context(), copyMotion)
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, copied)
 }
@@ -273,7 +273,7 @@ func TestSurfaceLoftHoledProfileReportsDisconnectedLumps(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftHoledSquares(t)
 	doc := decad.New()
-	sheet, err := doc.Loft(s0, p0, s1, p1, decad.WithSurfaceResult())
+	sheet, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	require.Len(t, sheet.Lumps(), 2)
 	for _, l := range sheet.Lumps() {
@@ -284,7 +284,7 @@ func TestSurfaceLoftHoledProfileReportsDisconnectedLumps(t *testing.T) {
 
 	s2, p2, s3, p3 := loftHoledSquares(t)
 	solidDoc := decad.New()
-	solid, err := solidDoc.Loft(s2, p2, s3, p3)
+	solid, err := solidDoc.Loft(t.Context(), s2, p2, s3, p3)
 	require.NoError(t, err)
 	require.Len(t, solid.Lumps(), 1)
 }
@@ -297,7 +297,7 @@ func TestSurfaceLoftSheetVerifiesSound(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 10)
 	doc := decad.New()
-	sheet, err := doc.Loft(s0, p0, s1, p1, decad.WithSurfaceResult())
+	sheet, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -321,7 +321,7 @@ func TestSurfaceLoftChordedPairVerifiesUndecided(t *testing.T) {
 	s0, p0 := loftWedgeSketch(t, w, base, 5)
 	s1, p1 := loftWedgeSketch(t, w, top, 5)
 	doc := decad.New()
-	sheet, err := doc.Loft(s0, p0, s1, p1, decad.WithSurfaceResult())
+	sheet, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -343,10 +343,10 @@ func TestSurfaceLoftTessellationRefused(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	sheet, err := doc.Loft(s0, p0, s1, p1, decad.WithSurfaceResult())
+	sheet, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
-	_, err = sheet.Tessellate(units.Millimeters(1))
+	_, err = sheet.Tessellate(t.Context(), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -360,7 +360,7 @@ func TestSurfaceLoftShellOpenAgreesWithFreeEdgeDerivation(t *testing.T) {
 		t.Parallel()
 		s0, p0, s1, p1 := loftSquares(t, 20, 20)
 		doc := decad.New()
-		body, err := doc.Loft(s0, p0, s1, p1, decad.WithSurfaceResult())
+		body, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithSurfaceResult())
 		require.NoError(t, err)
 		requireOpenAgreesWithFreeEdges(t, body)
 	})
@@ -368,7 +368,7 @@ func TestSurfaceLoftShellOpenAgreesWithFreeEdgeDerivation(t *testing.T) {
 		t.Parallel()
 		s0, p0, s1, p1 := loftSquares(t, 20, 20)
 		doc := decad.New()
-		body, err := doc.Loft(s0, p0, s1, p1)
+		body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
 		require.NoError(t, err)
 		requireOpenAgreesWithFreeEdges(t, body)
 	})
@@ -376,7 +376,7 @@ func TestSurfaceLoftShellOpenAgreesWithFreeEdgeDerivation(t *testing.T) {
 		t.Parallel()
 		s0, p0, s1, p1 := loftHoledSquares(t)
 		doc := decad.New()
-		body, err := doc.Loft(s0, p0, s1, p1, decad.WithSurfaceResult())
+		body, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithSurfaceResult())
 		require.NoError(t, err)
 		requireOpenAgreesWithFreeEdges(t, body)
 	})
@@ -384,7 +384,7 @@ func TestSurfaceLoftShellOpenAgreesWithFreeEdgeDerivation(t *testing.T) {
 		t.Parallel()
 		s0, p0, s1, p1 := loftHoledSquares(t)
 		doc := decad.New()
-		body, err := doc.Loft(s0, p0, s1, p1)
+		body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
 		require.NoError(t, err)
 		requireOpenAgreesWithFreeEdges(t, body)
 	})
@@ -397,7 +397,7 @@ func TestSurfaceLoftWithSurfaceResultIsIdempotent(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	sheet, err := doc.Loft(s0, p0, s1, p1, decad.WithSurfaceResult(), decad.WithSurfaceResult())
+	sheet, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithSurfaceResult(), decad.WithSurfaceResult())
 	require.NoError(t, err)
 	requireSheetWithFreeEdges(t, sheet)
 }

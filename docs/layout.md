@@ -95,9 +95,9 @@ to the byte budget.
 | `stitch_weld.go` | Table J's admission: the shared vertex table and which free edge pairs weld. See `docs/surface-design.md` §6.2. |
 | `stitch.go` | `Stitch`/`StitchContext`: rebuilds fresh topology over the weld plan, derives orientation, and decides Table C's outcome and measurements. See `docs/surface-design.md` §6. |
 | `stitch_flux.go` | The per-surface flux integral for a curved closed boundary: Rule S, the hoisted vertex-link audit call, and the `Plane`/`Cylinder` volume and centroid arms. See `docs/surface-design.md` §6.4. |
-| `unstitch.go` | `Unstitch`/`UnstitchContext`: splits a body into one free single-face sheet per face, reusing `stitch.go`'s placement machinery per face. See `docs/surface-design.md` §6.5. |
+| `unstitch.go` | `Unstitch`: splits a body into one free single-face sheet per face, reusing `stitch.go`'s placement machinery per face. See `docs/surface-design.md` §6.5. |
 | `extrude.go` | `Document.Extrude` (evaluator §5): the public entry point, `WithTaper`, and linear-extent resolution into a `linearSweep`. See `docs/evaluator-design.md` §5 and the file's own doc comment. |
-| `sweep.go` | `Document.Sweep` / `SweepContext`, common path gates, `WithSurfaceResult` parsing, and the distinct replayable payload for zero-twist line and arc spans. See `docs/sweep-design.md` PR 1–4, `docs/surface-design.md` §4. |
+| `sweep.go` | `Document.Sweep`, common path gates, `WithSurfaceResult` parsing, and the distinct replayable payload for zero-twist line and arc spans. See `docs/sweep-design.md` PR 1–4, `docs/surface-design.md` §4. |
 | `sweep_arc.go` | The one-span `ArcThrough` reduction: exact circumcircle and tangent gates, bounded axis/angle publication, Revolve reuse, and Sweep role restoration. See `docs/sweep-design.md` PR 3. |
 | `sweep_composite.go` | Composite Sweep shared join topology, its manifold-with-boundary audit, and the outer-cap omission a surface result takes. See `docs/sweep-design.md` PR 4, `docs/surface-design.md` §4. |
 | `sweep_composite_measure.go` | Composite Sweep span replay and combined body measurements. See `docs/sweep-design.md` PR 4. |
@@ -113,7 +113,7 @@ to the byte budget.
 | `revolve_extent.go` | The extent readings asked of a finished revolve. An extreme is a swept extreme, bracketed by `sweepExtremeBounds` rather than read off a boundary vertex. See `docs/evaluator-design.md` §6. |
 | `revolve_denotation.go` | `angleDenotation`/`sweepDenotation`: exact stated angles or certified derived-angle intervals, their endpoint displacement, and dependent sweep/trig bounds. See `docs/evaluator-design.md` §6 and `docs/sweep-design.md` §3. |
 | `stops.go` | Body-relative stop resolution for `ToFace`/`ToFaceAngular`/`ThroughAll`/`ThroughAllSide`. See evaluator §5/§6/§11 and the file's own doc comments. |
-| `loft.go` | `Document.Loft`/`LoftContext`, the public entry point over `loft_build.go`'s evaluator, and `WithSurfaceResult` parsing. See the file's own doc comment and `docs/loft-design.md` §2/§4/§10. |
+| `loft.go` | `Document.Loft`, the public entry point over `loft_build.go`'s evaluator, and `WithSurfaceResult` parsing. See the file's own doc comment and `docs/loft-design.md` §2/§4/§10. |
 | `loft_build.go` | `loftPayload`, `loftMeshProof`, `evalLoft` and `placed`, including the `WithSurfaceResult` sheet build. Pairing, stations and topology each have their own `loft_*.go` file. See `docs/loft-design.md` §5, §8, §12 and `docs/surface-design.md` §4. |
 | `loft_pairing.go` | `docs/loft-design.md` Table P: which from-segment walls to which to-segment. A pair the table does not decide is refused outright, never matched to the nearest one. See §5, §5.1. |
 | `loft_stations.go` | Places the stations a loft's wall chords run between and proves each chain's departure from the curve it approximates, under one shared chord target and a station cap. See `docs/loft-design.md` §5.2. |

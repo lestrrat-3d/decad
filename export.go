@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math"
@@ -159,7 +160,10 @@ func (b *Body) exportMesh(opts []option.Interface) (*Mesh, error) {
 			return nil, err
 		}
 	}
-	return b.Tessellate(tol)
+	// [Body.STL] and [Body.OBJ] take no context — core §11 gives the export
+	// writers an io.Writer and their options and nothing else — so there is
+	// no caller context to thread here.
+	return b.Tessellate(context.Background(), tol)
 }
 
 // defaultChordTolerance derives the exporter's default from 1/1000 of the

@@ -31,30 +31,30 @@ func TestTessellationCacheKeysAndReplacement(t *testing.T) {
 	t.Parallel()
 	body := holedPlateBody(t)
 	tol := units.Millimeters(cacheTolerance)
-	first, err := body.Tessellate(tol)
+	first, err := body.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
-	hit, err := body.Tessellate(tol)
+	hit, err := body.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	require.Same(t, first, hit, "an identical normalized key returns the cached mesh")
 
 	metric := units.Millimeters(25.4)
-	metricMesh, err := body.Tessellate(metric)
+	metricMesh, err := body.Tessellate(t.Context(), metric)
 	require.NoError(t, err)
-	imperialMesh, err := body.Tessellate(units.Inches(1))
+	imperialMesh, err := body.Tessellate(t.Context(), units.Inches(1))
 	require.NoError(t, err)
 	require.Same(t, metricMesh, imperialMesh, "exactly equal normalized units share a key")
 
-	nearby, err := body.Tessellate(units.Millimeters(math.Nextafter(25.4, math.Inf(1))))
+	nearby, err := body.Tessellate(t.Context(), units.Millimeters(math.Nextafter(25.4, math.Inf(1))))
 	require.NoError(t, err)
 	require.NotSame(t, metricMesh, nearby, "nearby unequal normalized tolerances do not share a key")
 
-	replacement, err := body.Tessellate(units.Millimeters(1))
+	replacement, err := body.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)
 	require.NotSame(t, nearby, replacement)
-	switchedBack, err := body.Tessellate(metric)
+	switchedBack, err := body.Tessellate(t.Context(), metric)
 	require.NoError(t, err)
 	require.NotSame(t, metricMesh, switchedBack, "the one-entry cache evicts the previous tolerance")
-	finalHit, err := body.Tessellate(metric)
+	finalHit, err := body.Tessellate(t.Context(), metric)
 	require.NoError(t, err)
 	require.Same(t, switchedBack, finalHit)
 }
@@ -63,22 +63,22 @@ func TestTessellationCacheErrorsCancellationAndAccessorCopies(t *testing.T) {
 	t.Parallel()
 	body := holedPlateBody(t)
 	tol := units.Millimeters(cacheTolerance)
-	warm, err := body.Tessellate(tol)
+	warm, err := body.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 
-	bad, err := body.Tessellate(units.Millimeters(1e-20))
+	bad, err := body.Tessellate(t.Context(), units.Millimeters(1e-20))
 	require.Nil(t, bad)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	afterFailure, err := body.Tessellate(tol)
+	afterFailure, err := body.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	require.Same(t, warm, afterFailure, "a refusal does not evict a successful entry")
 
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
-	got, err := body.TessellateContext(canceled, tol)
+	got, err := body.Tessellate(canceled, tol)
 	require.Nil(t, got)
 	require.ErrorIs(t, err, context.Canceled)
-	afterCancel, err := body.Tessellate(tol)
+	afterCancel, err := body.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	require.Same(t, warm, afterCancel, "a canceled hit does not evict a successful entry")
 
@@ -89,7 +89,7 @@ func TestTessellationCacheErrorsCancellationAndAccessorCopies(t *testing.T) {
 	vertices[0].X++
 	triangles[0][0]++
 	sources[0] = nil
-	unchanged, err := body.Tessellate(tol)
+	unchanged, err := body.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	require.Equal(t, wantVertex, unchanged.Vertices()[0])
 	require.Equal(t, wantTriangle, unchanged.Triangles()[0])
@@ -98,17 +98,17 @@ func TestTessellationCacheErrorsCancellationAndAccessorCopies(t *testing.T) {
 	fresh := holedPlateBody(t)
 	preCanceled, cancel := context.WithCancel(t.Context())
 	cancel()
-	got, err = fresh.TessellateContext(preCanceled, tol)
+	got, err = fresh.Tessellate(preCanceled, tol)
 	require.Nil(t, got)
 	require.ErrorIs(t, err, context.Canceled)
-	uncanceled, err := fresh.Tessellate(tol)
+	uncanceled, err := fresh.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	require.Same(t, uncanceled, mustTessellate(t, fresh, tol))
 }
 
 func mustTessellate(t *testing.T, body *decad.Body, tol units.Value) *decad.Mesh {
 	t.Helper()
-	mesh, err := body.Tessellate(tol)
+	mesh, err := body.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	return mesh
 }
@@ -122,7 +122,7 @@ func TestTessellationCachePayloadClasses(t *testing.T) {
 		{name: "prism", body: holedPlateBody},
 		{name: "cup", body: func(t *testing.T) *decad.Body {
 			_, box := shellBox(t)
-			body, err := box.Shell(topCap(box), units.Millimeters(5))
+			body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
 			require.NoError(t, err)
 			return body
 		}},
@@ -146,7 +146,7 @@ func TestTessellationCachePayloadClasses(t *testing.T) {
 		}},
 		{name: "cap blend", body: func(t *testing.T) *decad.Body {
 			_, box := capBlendBox(t)
-			body, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
+			body, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(5))
 			require.NoError(t, err)
 			return body
 		}},
@@ -176,14 +176,14 @@ func TestTessellationCacheCopiesDoNotInheritEntries(t *testing.T) {
 	base := holedPlateBody(t)
 	baseMesh := mustTessellate(t, base, tol)
 
-	duplicate, err := base.Duplicate()
+	duplicate, err := base.Duplicate(t.Context())
 	require.NoError(t, err)
 	duplicateMesh := mustTessellate(t, duplicate, tol)
 	require.NotSame(t, baseMesh, duplicateMesh)
 	require.NotSame(t, base.Faces()[0], duplicate.Faces()[0])
 	require.Same(t, duplicateMesh, mustTessellate(t, duplicate, tol))
 
-	copied, err := base.PlacedCopy(mustTransform(t, r3.NewVec(5, 0, 0)))
+	copied, err := base.PlacedCopy(t.Context(), mustTransform(t, r3.NewVec(5, 0, 0)))
 	require.NoError(t, err)
 	copyMesh := mustTessellate(t, copied, tol)
 	require.NotSame(t, baseMesh, copyMesh)
@@ -191,7 +191,7 @@ func TestTessellationCacheCopiesDoNotInheritEntries(t *testing.T) {
 
 	placedSource := holedPlateBody(t)
 	placedSourceMesh := mustTessellate(t, placedSource, tol)
-	placed, err := placedSource.Placed(mustTransform(t, r3.NewVec(5, 0, 0)))
+	placed, err := placedSource.Placed(t.Context(), mustTransform(t, r3.NewVec(5, 0, 0)))
 	require.NoError(t, err)
 	placedMesh := mustTessellate(t, placed, tol)
 	require.NotSame(t, placedSourceMesh, placedMesh)
@@ -218,7 +218,7 @@ func TestTessellationCacheConcurrentColdAndHit(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			meshes[i], errs[i] = body.TessellateContext(t.Context(), units.Millimeters(cacheTolerance))
+			meshes[i], errs[i] = body.Tessellate(t.Context(), units.Millimeters(cacheTolerance))
 		}()
 	}
 	close(start)
@@ -238,7 +238,7 @@ func BenchmarkTessellationCacheCold(b *testing.B) {
 			s.Fix(c)
 			s.CreateCircle(c, 3)
 		}, decad.FullRevolution{})
-		if _, err := body.Tessellate(units.Millimeters(cacheTolerance)); err != nil {
+		if _, err := body.Tessellate(b.Context(), units.Millimeters(cacheTolerance)); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -250,12 +250,12 @@ func BenchmarkTessellationCacheRepeated(b *testing.B) {
 		s.Fix(c)
 		s.CreateCircle(c, 3)
 	}, decad.FullRevolution{})
-	if _, err := body.Tessellate(units.Millimeters(cacheTolerance)); err != nil {
+	if _, err := body.Tessellate(b.Context(), units.Millimeters(cacheTolerance)); err != nil {
 		b.Fatal(err)
 	}
 	b.ResetTimer()
 	for range b.N {
-		if _, err := body.Tessellate(units.Millimeters(cacheTolerance)); err != nil {
+		if _, err := body.Tessellate(b.Context(), units.Millimeters(cacheTolerance)); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -269,7 +269,7 @@ func BenchmarkTessellationCacheAlternatingTolerance(b *testing.B) {
 	}, decad.FullRevolution{})
 	tols := [2]units.Value{units.Millimeters(cacheTolerance), units.Millimeters(1)}
 	for i := range b.N {
-		if _, err := body.Tessellate(tols[i%len(tols)]); err != nil {
+		if _, err := body.Tessellate(b.Context(), tols[i%len(tols)]); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -295,12 +295,12 @@ func BenchmarkTessellationCacheOBJ(b *testing.B) {
 
 func BenchmarkTessellationCacheLoft(b *testing.B) {
 	body := benchLoft()
-	if _, err := body.Tessellate(units.Millimeters(cacheTolerance)); err != nil {
+	if _, err := body.Tessellate(b.Context(), units.Millimeters(cacheTolerance)); err != nil {
 		b.Fatal(err)
 	}
 	b.ResetTimer()
 	for range b.N {
-		if _, err := body.Tessellate(units.Millimeters(cacheTolerance)); err != nil {
+		if _, err := body.Tessellate(b.Context(), units.Millimeters(cacheTolerance)); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -310,7 +310,7 @@ func BenchmarkTessellationCacheVerify(b *testing.B) {
 	doc := decad.New()
 	a := benchRodBody(b, doc, 0, 0, 4)
 	c := benchRodBody(b, doc, 0, 0, 3)
-	placed, err := c.Placed(mustTransform(b, r3.NewVec(0, -4, 2)))
+	placed, err := c.Placed(b.Context(), mustTransform(b, r3.NewVec(0, -4, 2)))
 	if err != nil {
 		b.Fatal(err)
 	}

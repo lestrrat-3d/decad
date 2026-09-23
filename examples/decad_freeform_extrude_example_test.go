@@ -2,6 +2,7 @@ package examples_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 
 	"github.com/lestrrat-3d/decad"
@@ -82,7 +83,7 @@ func Example_decad_freeformExtrude() {
 	// is a float64 whose last bits are not, which is why the relation is
 	// printed rather than the number.
 	const tolerance = 0.1
-	mesh, err := body.Tessellate(units.Millimeters(tolerance))
+	mesh, err := body.Tessellate(context.Background(), units.Millimeters(tolerance))
 	if err != nil {
 		fmt.Printf("failed to tessellate: %s\n", err)
 		return

@@ -65,13 +65,6 @@ their existing builders internally.
 
 ```go
 func (d *Document) Sweep(
-    s *sketch.Sketch,
-    p *sketch.Profile,
-    path *Path,
-    opts ...SweepOption,
-) (*Body, error)
-
-func (d *Document) SweepContext(
     ctx context.Context,
     s *sketch.Sketch,
     p *sketch.Profile,
@@ -124,7 +117,7 @@ path, err := decad.NewPath(
         End:     r3.NewVec(10, 0, 20),
     },
 )
-body, err := doc.Sweep(s, profile, path)
+body, err := doc.Sweep(ctx, s, profile, path)
 ```
 
 `Path` is spatial: every point is an `r3.Vec` coordinate in millimetres. It is
@@ -421,10 +414,9 @@ per-span occupied-volume homotopies; it never substitutes a generic
 Equal profile record, path record, options, and document placement produce the
 same topology, roles, measurements, and tessellation order.
 
-`SweepContext` checks cancellation at every phase boundary and through path
+`Sweep` checks cancellation at every phase boundary and through path
 derivation, station generation, facet-pair classification, exact predicates,
-and measurement accumulation. It returns `ctx.Err()` unchanged. `Sweep` calls
-it with `context.Background()`.
+and measurement accumulation. It returns `ctx.Err()` unchanged.
 
 The evaluator uses the existing per-walk chord cap, mesh facet cap, cumulative
 facet-work cap, and facet-pair-test cap. It adds one sweep-span cap so topology

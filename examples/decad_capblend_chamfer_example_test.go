@@ -43,7 +43,7 @@ func Example_decad_capblend_chamfer() {
 	// Select every edge of the end cap's rim loop — a complete loop, never a
 	// lateral edge.
 	loop := decad.Edges(decad.CreatedBy(decad.CapEnd(box)))
-	body, err := box.Chamfer(loop, units.Millimeters(5))
+	body, err := box.Chamfer(context.Background(), loop, units.Millimeters(5))
 	if err != nil {
 		fmt.Printf("failed to chamfer: %s\n", err)
 		return

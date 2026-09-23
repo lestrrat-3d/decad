@@ -261,16 +261,15 @@ there is no rewrite that skips it. Where the op that produced the rewrite has a
 row of its own for what a test catches, that row is the one the refusal cites;
 the shell has one, and §8 says which.
 
-**Every modify audit is cancellable with bounded work.** `FilletContext`,
-`ChamferContext`, and `ShellContext` create one `workBudget` for their
+**Every modify audit is cancellable with bounded work.** `Fillet`,
+`Chamfer`, and `Shell` create one `workBudget` for their
 pre-commit cancellation path. Fillet and Chamfer share it through profile
 walks, segment-pair crossing/contact tests, hole-pair tests, and each
 ray-boundary containment scan. Shell also shares it through exact offset
 construction before that audit. The budget polls at phase boundaries and after
 at most `workPollInterval` candidate operations. A cancelled operation returns
 `ctx.Err()` before commit, leaving the receiver live and the document
-unchanged. The original `Fillet`, `Chamfer`, and `Shell` methods
-remain source-compatible wrappers using `context.Background()`. The `cupWall`
+unchanged. The `cupWall`
 morphology recheck shares its budget across profile validation and integration,
 offset construction, and the same audit through `Document.Verify`'s context.
 
@@ -341,8 +340,7 @@ is ever made, and `Verify` reads the result exactly as it reads an extrude's.
 ## 6. Fillet
 
 ```go
-func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
-func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
+func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
 ```
 
 `r` is a magnitude, gated at the call like every other (S15), and a zero `r` is
@@ -456,8 +454,7 @@ lands in it, with the struct, when it ships.
 ## 7. Chamfer
 
 ```go
-func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
-func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
+func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
 ```
 
 The same edge class, the same gates, one simpler surface. **The bevel of a
@@ -500,8 +497,7 @@ nil.
 ## 8. Shell
 
 ```go
-func (b *Body) Shell(sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
-func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
+func (b *Body) Shell(ctx context.Context, sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
 ```
 
 `sel` names the faces to **remove** — the openings. What remains of the solid is

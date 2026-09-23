@@ -48,7 +48,7 @@ func TestBooleanContextCancelsFacetedBodyFinishing(t *testing.T) {
 			b := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 			tr, err := r3.Translation(r3.Vec{X: 5, Y: 5, Z: 5})
 			require.NoError(t, err)
-			b, err = b.Placed(tr)
+			b, err = b.Placed(t.Context(), tr)
 			require.NoError(t, err)
 			beforeProducer := doc.nextProducer
 			beforeBodies := doc.Bodies()
@@ -492,7 +492,7 @@ func TestBooleanVolumesAreUnchangedByTheKernelRewrite(t *testing.T) {
 			b := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 			tr, err := r3.Translation(r3.Vec{X: 5, Y: 5, Z: 5})
 			require.NoError(t, err)
-			b, err = b.Placed(tr)
+			b, err = b.Placed(t.Context(), tr)
 			require.NoError(t, err)
 
 			result, err := tc.op(a, b)
@@ -800,7 +800,7 @@ func TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs(t *testing.T) {
 	disc := internalDiscBody(t, doc, 4, 10)
 	tr, err := r3.Translation(r3.NewVec(10, 10, 5))
 	require.NoError(t, err)
-	pin, err := disc.Placed(tr)
+	pin, err := disc.Placed(t.Context(), tr)
 	require.NoError(t, err)
 
 	tolMM, _, err := pairChordTolerance(t.Context(), plate, pin)

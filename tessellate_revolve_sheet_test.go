@@ -108,14 +108,14 @@ func TestSurfaceRevolvePartialClearOfAxisSheetMeshMatchesSolid(t *testing.T) {
 	s1, p1 := annularSketch(t)
 	solid, err := solidDoc.Revolve(s1, p1, uAxis, quarterTurn)
 	require.NoError(t, err)
-	solidMesh, err := solid.Tessellate(tol)
+	solidMesh, err := solid.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 
 	sheetDoc := decad.New()
 	s2, p2 := annularSketch(t)
 	sheet, err := sheetDoc.Revolve(s2, p2, uAxis, quarterTurn, decad.WithSurfaceResult())
 	require.NoError(t, err)
-	sheetMesh, err := sheet.Tessellate(tol)
+	sheetMesh, err := sheet.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 
 	// The source-face set carries no cap role: every mesh facet's source is
@@ -157,7 +157,7 @@ func TestSurfaceRevolvePartialClearOfAxisSheetMeshMatchesSolid(t *testing.T) {
 	coarseDiff := math.Abs(coarseArea - analytic)
 	require.Positive(t, coarseDiff, `a chorded quarter-turn wall must fall strictly short of the analytic curved area`)
 
-	finerMesh, err := sheet.Tessellate(units.Millimeters(0.05))
+	finerMesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.NoError(t, err)
 	finerDiff := math.Abs(meshTriangleArea(finerMesh) - analytic)
 	require.Less(t, finerDiff, coarseDiff, `a finer tolerance must converge closer on the analytic area`)
@@ -175,7 +175,7 @@ func TestSurfaceRevolvePartialMeetingAxisSheetFreeBoundaryIsOneCycle(t *testing.
 	sheet, err := doc.Revolve(s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
-	mesh, err := sheet.Tessellate(units.Millimeters(0.5))
+	mesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.NoError(t, err)
 
 	free := directedEdgeCensus(t, mesh)
@@ -196,14 +196,14 @@ func TestSurfaceRevolveFullTurnClearOfAxisSheetMeshBitEqualsSolid(t *testing.T) 
 	s1, p1 := annularSketch(t)
 	solid, err := solidDoc.Revolve(s1, p1, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
-	solidMesh, err := solid.Tessellate(tol)
+	solidMesh, err := solid.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 
 	sheetDoc := decad.New()
 	s2, p2 := annularSketch(t)
 	sheet, err := sheetDoc.Revolve(s2, p2, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.NoError(t, err)
-	sheetMesh, err := sheet.Tessellate(tol)
+	sheetMesh, err := sheet.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 
 	require.Equal(t, solidMesh.Vertices(), sheetMesh.Vertices())
@@ -224,14 +224,14 @@ func TestSurfaceRevolveHalfDiscFullTurnSheetMeshMatchesSolid(t *testing.T) {
 	s1, p1 := semicircleSketch(t)
 	solid, err := solidDoc.Revolve(s1, p1, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
-	solidMesh, err := solid.Tessellate(tol)
+	solidMesh, err := solid.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 
 	sheetDoc := decad.New()
 	s2, p2 := semicircleSketch(t)
 	sheet, err := sheetDoc.Revolve(s2, p2, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.NoError(t, err)
-	sheetMesh, err := sheet.Tessellate(tol)
+	sheetMesh, err := sheet.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 
 	require.Equal(t, solidMesh.Vertices(), sheetMesh.Vertices())
@@ -243,7 +243,7 @@ func TestSurfaceRevolveHalfDiscFullTurnSheetMeshMatchesSolid(t *testing.T) {
 	require.True(t, sheetMesh.Bound().Equal(solidMesh.Bound(), 1e-12))
 	require.Positive(t, sheetMesh.Bound().Mag())
 
-	finerMesh, err := sheet.Tessellate(units.Millimeters(0.05))
+	finerMesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.NoError(t, err)
 	require.Less(t, finerMesh.Bound().Mag(), sheetMesh.Bound().Mag())
 
@@ -270,15 +270,15 @@ func TestSurfaceRevolveSheetTessellationDeterminism(t *testing.T) {
 
 	sheetA := build(t)
 	tol := units.Millimeters(0.5)
-	meshA1, err := sheetA.Tessellate(tol)
+	meshA1, err := sheetA.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
-	meshA2, err := sheetA.Tessellate(tol)
+	meshA2, err := sheetA.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	require.Equal(t, meshA1.Vertices(), meshA2.Vertices(), `the one-entry cache returns the same mesh on a repeat call`)
 	require.Equal(t, meshA1.Triangles(), meshA2.Triangles())
 
 	sheetB := build(t)
-	meshB, err := sheetB.Tessellate(tol)
+	meshB, err := sheetB.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	require.Equal(t, meshA1.Vertices(), meshB.Vertices())
 	require.Equal(t, meshA1.Triangles(), meshB.Triangles())
@@ -295,7 +295,7 @@ func TestSurfaceRevolveSheetTessellationDeterminism(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, err = sheetA.TessellateContext(ctx, tol)
+	_, err = sheetA.Tessellate(ctx, tol)
 	require.ErrorIs(t, err, context.Canceled)
 }
 
@@ -353,6 +353,6 @@ func TestSurfaceRevolveSheetRefusesTooFewMeridianSamples(t *testing.T) {
 	sheet, err := doc.Revolve(s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
-	_, err = sheet.Tessellate(units.Millimeters(20))
+	_, err = sheet.Tessellate(t.Context(), units.Millimeters(20))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }

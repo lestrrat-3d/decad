@@ -78,7 +78,7 @@ These are cheap now and expensive to retrofit. They are the upgrade path.
 
 | # | Invariant | Rationale |
 |---|---|---|
-| 1 | **NEVER expose triangles as the representation.** `Tessellate(tol)` is an output; the public vocabulary is `Body → Face → Edge → Vertex` even while the backing is approximate. | A public `Triangles()` is a one-way door; callers depend on it and vN can never remove it. |
+| 1 | **NEVER expose triangles as the representation.** `Tessellate(ctx, tol)` is an output; the public vocabulary is `Body → Face → Edge → Vertex` even while the backing is approximate. | A public `Triangles()` is a one-way door; callers depend on it and vN can never remove it. |
 | 2 | **Every measurement carries `Exactness`, from the first commit.** | Makes the upgrade **monotonic, not breaking**: callers already branch on `Approximate`; in vN that branch stops being taken and nobody's code changes. A bare `float64` today means adding exactness later breaks every call site. |
 | 3 | **Selectors, never topology indices.** `Body.Faces()` / `Edges()` / `Vertices()` exist for **traversal and inspection only**; no feature or selector names a face, an edge or a vertex by index or by a bare topology pointer. | An exact kernel produces a different (more correct) face/edge decomposition. If `Edges()[3]` is the API, index order becomes a de facto contract and vN breaks every model. |
 | 4 | **Booleans never mutate their operands, and take no target-out parameter.** `Union(a, b) (*Body, error)` — never Fusion's in-place `booleanOperation(target, tool, type) -> bool`. | A signature free of in-place mutation lets the implementation be swapped with zero API churn. |
@@ -729,8 +729,7 @@ sheet instead of closing it into a solid.
 ```go
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
 func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
-func (d *Document) Sweep(s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error)
-func (d *Document) SweepContext(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error)
+func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error)
 ```
 
 Both take the **sketch** as well as the profile, because a `sketch.Profile`'s
@@ -903,19 +902,15 @@ booleans over one part has to be reshaped, not retried.
 Modify operations return a new body, retiring the receiver, on the same terms:
 
 ```go
-func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
-func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
-func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
-func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
-func (b *Body) Shell(sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
-func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
+func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
+func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
+func (b *Body) Shell(ctx context.Context, sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
 ```
 
-The `Context` forms bound cancellation latency in their cancellable construction
+Each bounds cancellation latency in its cancellable construction
 and audit paths, including Shell's shared offset-construction, crossing, and
 nesting audit. Cancellation returns `ctx.Err()` before commit, so the receiver
-stays live and the document remains unchanged. The original methods
-delegate with `context.Background()` and keep their existing behavior.
+stays live and the document remains unchanged.
 
 Modify reach options state modeling intent, not evaluator switches:
 
@@ -951,15 +946,12 @@ type SurfaceResultOption interface {
 
 func WithSurfaceResult() SurfaceResultOption
 
-func (d *Document) Patch(s *sketch.Sketch, p *sketch.Profile) (*Body, error)
-func (d *Document) PatchContext(ctx context.Context, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
-func (b *Body) Patch(sel EdgeSelector) (*Body, error)
-func (b *Body) PatchContext(ctx context.Context, sel EdgeSelector) (*Body, error)
+func (d *Document) Patch(ctx context.Context, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
+func (b *Body) Patch(ctx context.Context, sel EdgeSelector) (*Body, error)
 
 func Stitch(bodies ...*Body) (*Body, error)
 func StitchContext(ctx context.Context, bodies ...*Body) (*Body, error)
-func (b *Body) Unstitch() ([]*Body, error)
-func (b *Body) UnstitchContext(ctx context.Context) ([]*Body, error)
+func (b *Body) Unstitch(ctx context.Context) ([]*Body, error)
 ```
 
 `WithSurfaceResult()` omits the faces that exist only to close the solid and
@@ -978,16 +970,14 @@ Placement is a body operation on the same terms — it retires the receiver and
 registers the placed body:
 
 ```go
-func (b *Body) PlacedContext(ctx context.Context, t r3.Transform) (*Body, error)
-func (b *Body) Placed(t r3.Transform) (*Body, error)
+func (b *Body) Placed(ctx context.Context, t r3.Transform) (*Body, error)
 ```
 
 This is the whole of the "explicit transforms" story: a body is positioned by an
 argument the caller states — an `r3.Transform`, a rigid motion (§5.2) — never by
 an ambient assembly context (§4). The zero `Transform{}` is invalid
-(`Transform.IsValid`) and is `ErrDegenerate` (§12). `PlacedContext` checks `ctx` through any
+(`Transform.IsValid`) and is `ErrDegenerate` (§12). `Placed` checks `ctx` through any
 faceted-payload rebuild and returns its error without changing the document.
-`Placed` is the compatibility wrapper using `context.Background()`.
 
 **A body can be copied without consuming it.** `Placed` retires its receiver, so
 modelling a part once and placing several instances — a bolt pattern, several
@@ -996,10 +986,8 @@ rebuilding the whole feature chain per instance. The two non-consuming copies
 close that gap:
 
 ```go
-func (b *Body) DuplicateContext(ctx context.Context) (*Body, error)
-func (b *Body) Duplicate() (*Body, error)
-func (b *Body) PlacedCopyContext(ctx context.Context, t r3.Transform) (*Body, error)
-func (b *Body) PlacedCopy(t r3.Transform) (*Body, error)
+func (b *Body) Duplicate(ctx context.Context) (*Body, error)
+func (b *Body) PlacedCopy(ctx context.Context, t r3.Transform) (*Body, error)
 ```
 
 Each returns a NEW live body and leaves the receiver **live**: the source is
@@ -1009,10 +997,9 @@ identity. `PlacedCopy(t)` re-evaluates the payload under the composed rigid
 motion exactly as `Placed` does, so `Duplicate` is `PlacedCopy` with no motion;
 the zero `Transform{}` is `ErrDegenerate` as in `Placed`, and `r3.Identity()` is
 a valid no-op motion. A body this evaluator did not build is `ErrUnsupported`, as
-`Placed`'s is. The context-taking variants check `ctx` throughout a faceted
+`Placed`'s is. Both check `ctx` throughout a faceted
 rebuild and leave the source and live-body set unchanged on
-cancellation. `Duplicate` and `PlacedCopy` are compatibility wrappers using
-`context.Background()`.
+cancellation.
 
 **A copy preserves geometry, so it preserves provenance.** A copy is the same
 part at a new identity and position, and `FaceCreatedBy` (§9) must still find its
@@ -1294,7 +1281,7 @@ invalidate a hand-typed number, and the one selection style that survives a
 rebuild is the geometric one selectors exist to provide.
 
 ```go
-body, err = body.Fillet(
+body, err = body.Fillet(ctx,
     decad.Edges(decad.Convex(), decad.ParallelTo(r3.NewVec(0, 0, 1))),
     units.Millimeters(2),
 )
@@ -1514,8 +1501,7 @@ gap is decad's mandate.
 ## 11. Export and translation
 
 ```go
-func (b *Body) Tessellate(tol units.Value) (*Mesh, error) // an OUTPUT, not the representation
-func (b *Body) TessellateContext(ctx context.Context, tol units.Value) (*Mesh, error)
+func (b *Body) Tessellate(ctx context.Context, tol units.Value) (*Mesh, error) // an OUTPUT, not the representation
 func (b *Body) STL(w io.Writer, opts ...STLOption) error
 func (b *Body) OBJ(w io.Writer, opts ...OBJOption) error
 ```
@@ -1527,9 +1513,9 @@ per-payload staging. A payload with no complete boundary proof is never
 exported. A mesh without the separate occupied-volume proof is never admitted
 to a boolean by an unproved generic bound.
 
-`TessellateContext` passes `ctx` through chording, loop-clearance scans, cap
+`Tessellate` passes `ctx` through chording, loop-clearance scans, cap
 triangulation, mesh audits, and faceted restatement. Cancellation returns
-`ctx.Err()` unchanged. `Tessellate` is its compatibility wrapper with
+`ctx.Err()` unchanged. `STL` and `OBJ` take no context and tessellate under
 `context.Background()`.
 
 **Fusion codegen is out of scope for v1.** Callers model in ordinary Go and use
@@ -1621,5 +1607,5 @@ lands.
 
 The assemblies non-goal rests on a capability in hand, not on an instancing
 graph: interference and clearance (§10) are computed between
-**explicitly-placed bodies** — `Body.Placed(t r3.Transform)` (§8) — which needs
+**explicitly-placed bodies** — `Body.Placed(ctx context.Context, t r3.Transform)` (§8) — which needs
 no `Component`/`Occurrence` machinery.
