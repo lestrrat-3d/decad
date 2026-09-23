@@ -758,7 +758,10 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 		if delta > 0 {
 			bound = absSumUpper(bound, delta)
 		}
-		nv := &Vertex{position: p, bound: units.Millimeters(bound)}
+		// The CURVE half of the shared-denotation certificate (denotation.go)
+		// restates under xform, composing rather than overwriting, exactly
+		// as unstitch.go's copyFaceUnderContext does.
+		nv := &Vertex{position: p, bound: units.Millimeters(bound), denot: old.denot.compose(xform)}
 		newVertByOld[old] = nv
 		return nv, nil
 	}
@@ -792,6 +795,7 @@ func copyPatchFacesUnder(ctx context.Context, srcFaces []*Face, xform r3.Transfo
 			length:          old.length,
 			lengthBound:     lengthBound,
 			lengthUnbounded: old.lengthUnbounded,
+			denot:           old.denot.compose(xform),
 		}
 		newEdgeByOld[old] = ne
 		return ne, nil

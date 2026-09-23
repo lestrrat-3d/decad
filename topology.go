@@ -239,6 +239,17 @@ type Vertex struct {
 	// denoted sweep level, and zero ("no certificate") for every vertex no
 	// builder in this package mints one for.
 	level levelToken
+	// denot is the CURVE half of the shared-denotation certificate
+	// (denotation.go): non-zero only for a vertex a builder minted one for —
+	// today a straight prism's rim corner (prism_build.go) and a revolve's
+	// own internal junction vertex (revolve_build.go; a partial revolve's
+	// own SEAM — its boundary copy at phi0/phi1 — mints none) — and
+	// propagated unchanged,
+	// composing xform, by every copier that reproduces the same point
+	// (stitch.go's rebuildStitchTopology, unstitch.go's
+	// copyFaceUnderContext, patch_body.go's copyPatchFacesUnder). Zero ("no
+	// certificate") for every vertex no builder or copier stamps.
+	denot curveToken
 }
 
 // Position returns the vertex position in millimetres — a computed
@@ -335,6 +346,16 @@ type Edge struct {
 	// denoted sweep level, and zero ("no certificate") for every edge no
 	// builder in this package mints one for.
 	level levelToken
+	// denot is the CURVE half of the shared-denotation certificate
+	// (denotation.go): non-zero only for an edge a builder minted one for —
+	// today a straight prism's rim edge (prism_build.go) and a revolve's
+	// junction edge (revolve_build.go) — and propagated unchanged, composing
+	// xform, by every copier that reproduces the same curve (stitch.go's
+	// rebuildStitchTopology, unstitch.go's copyFaceUnderContext,
+	// patch_body.go's copyPatchFacesUnder). It is what stitch_weld.go's
+	// buildStitchWeldPlan reads to lift Table J's J5 for a bounded pair. Zero
+	// ("no certificate") for every edge no builder or copier stamps.
+	denot curveToken
 }
 
 // Curve returns the edge's tagged geometry.

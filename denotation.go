@@ -2,14 +2,22 @@ package decad
 
 import "github.com/lestrrat-3d/r3"
 
-// This file is the LEVEL half of the shared-denotation certificate
-// docs/surface-design.md §5.2 and §14 Table D row 3 name: a minted identity,
-// never a coordinate or a bound, that lets Body.Patch admit a bounded chain
-// of rim vertices its exact gate 3 arm refuses today. The other half — a
-// CURVE token proving two edges denote the same curve, which lifts Stitch's
-// own Table J row J5 — is a separate proof over a separate code path and is
-// not part of this file or this increment; coplanarity and coincidence do
-// not follow from one another (§14 Table D row 3).
+// This file is both halves of the shared-denotation certificate
+// docs/surface-design.md §5.2, §6.2 and §14 Table D row 3 name: two minted
+// identities, never a coordinate or a bound, proving two different things
+// over two different code paths — coplanarity and coincidence do not follow
+// from one another, so admitting one never discharges the other.
+//
+// The LEVEL half (levelToken, below) lets Body.Patch admit a bounded chain
+// of rim vertices its exact gate 3 arm refuses today: N vertices sharing one
+// levelID are provably coplanar by shared construction.
+//
+// The CURVE half (curveToken, at the foot of this file) lets Stitch admit a
+// bounded free-edge pair its Table J row J5 refuses today: two edges (or two
+// vertices) sharing one non-zero curveID, stated under the same recorded
+// motion, provably denote the same curve or point — never by comparing a
+// coordinate, a residual or a bound magnitude, and never for two
+// independently built bodies, which mint distinct ids by construction.
 //
 // levelToken is minted once per (recorded plane frame, denoted sweep level)
 // pair and never reused. Two vertices or rim edges that carry a levelToken
@@ -97,4 +105,89 @@ func (d *Document) mintLevel(origin, normal r3.Vec) levelToken {
 // normal never enter it.
 func sameLevel(a, b levelToken) bool {
 	return a.id != 0 && a.id == b.id
+}
+
+// curveID is the CURVE half of the shared-denotation certificate
+// (docs/surface-design.md §6.2 Table J's amendment, §14 Table D row 3): a
+// document-local identity minted once per denoted curve or point by the
+// evaluator that FIRST builds it, and propagated unchanged — never re-minted
+// — by every copier that reproduces the same geometry: rebuildStitchTopology
+// (stitch.go), copyFaceUnderContext (unstitch.go) and copyPatchFacesUnder
+// (patch_body.go). Two edges (or two vertices) sharing one non-zero curveID
+// therefore descend from the SAME mint, and so denote the same curve or
+// point exactly, whatever bound each one's own held coordinate carries —
+// this is an identity proof by shared construction, never a coordinate,
+// residual or bound-magnitude comparison, exactly as levelToken's own doc
+// comment states for coplanarity. The zero value means "no certificate" and
+// always declines, so every vertex and edge no builder in this package
+// stamps keeps refusing exactly as it does today.
+//
+// Two SEPARATE evaluator calls — two independent Extrude calls building the
+// identical profile at the identical extent, say — never share a curveID,
+// because the document's own counter never resets and never repeats. That is
+// the narrow-but-sound choice §14 Table D row 3 states: it refuses a pair
+// that is provably equal (two identically-built rims), and it never admits a
+// pair that is not. A caller cannot manufacture two edges that share a curve
+// by any means but having ONE evaluator call, or a proven copy of its
+// output, stamp them.
+type curveID int
+
+// curveToken is what a builder mints and a copier propagates: an identity
+// (id) admission compares, and xform, the rigid motion this token is STATED
+// UNDER. A placement breaks the certificate: two edges that shared a
+// denotation before one body moved no longer denote the same curve AT THE
+// SAME PLACE, so xform is part of the comparison alongside id
+// (sameCurve, below) — the identical discipline stitch.go's own
+// `xform != r3.Identity()` placement check already applies to a whole
+// stitched body. A copier that applies an ADDITIONAL motion on top of
+// whatever a token already carries restates it with compose, never by
+// overwriting xform outright, so a token nested through more than one copy
+// (an unstitched face later placed, say) still states the true accumulated
+// motion.
+type curveToken struct {
+	id    curveID
+	xform r3.Transform
+}
+
+// mintCurve returns a fresh curveToken, document-local and never reused,
+// stated under the identity motion: the evaluator that mints one always
+// builds at its own record's own coordinates, never at an already-displaced
+// copy of them (a PLACED rebuild re-evaluates the record and mints AGAIN,
+// fresh, which is safe because a fresh id only ever declines).
+func (d *Document) mintCurve() curveToken {
+	d.nextCurve++
+	return curveToken{id: d.nextCurve, xform: r3.Identity()}
+}
+
+// compose restates t under an ADDITIONAL rigid motion applied on top of
+// whatever t is already stated under: a copier reading a pristine source
+// token and applying its own xform parameter calls this rather than
+// building a curveToken literal directly, so a token nested through more
+// than one copy states the true total motion. The zero token composes to
+// itself (a decline stays a decline), and a motion this evaluator's own
+// Transform.Then cannot compose (an overflowing translation, or a linear
+// part whose orthonormality has drifted past tolerance) restates as the zero
+// token — a conservative decline, never a wrong acceptance, since this
+// certificate only ever narrows admission.
+func (t curveToken) compose(applied r3.Transform) curveToken {
+	if t.id == 0 {
+		return curveToken{}
+	}
+	composed, err := t.xform.Then(applied)
+	if err != nil {
+		return curveToken{}
+	}
+	return curveToken{id: t.id, xform: composed}
+}
+
+// sameCurve reports whether a and b denote the same curve or point stated
+// under the same motion: both non-zero ids (the zero value is "no
+// certificate" and always declines), equal ids, and equal xform. It is one
+// of the comparisons this certificate ever makes to decide admission — the
+// other being stitch_weld.go's own bit-identical guard layered on top,
+// which this comparison never substitutes for (docs/surface-design.md §6.2:
+// "the certificate admits; bit-identity further narrows; bit-identity alone
+// never admits").
+func sameCurve(a, b curveToken) bool {
+	return a.id != 0 && a.id == b.id && a.xform == b.xform
 }

@@ -143,7 +143,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref producerID, pp prism
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		sideFaces, bottom, top, loopLen, err := buildLoopSides(ctx, body, ref, pp, li, loop, work, pw, levelZ0, levelZ1)
+		sideFaces, bottom, top, loopLen, err := buildLoopSides(ctx, body, ref, pp, li, loop, work, pw, levelZ0, levelZ1, true)
 		if err != nil {
 			return nil, err
 		}
@@ -400,8 +400,15 @@ func rimConvexity(ctx context.Context, w sideWalk, holeLoop bool, work *freeform
 // append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) order a
 // *profileWalks was resolved from — so it is passed straight through as
 // buildLoopSidesAs's roleLoop, which resolved is read against.
-func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPayload, li int, loop LoopRecord, work *freeformWork, resolved *profileWalks, levelZ0, levelZ1 levelToken) ([]*Face, []coedge, []coedge, boundedScalar, error) {
-	return buildLoopSidesAs(ctx, body, ref, pp, li, li != 0, loop, work, resolved, levelZ0, levelZ1)
+//
+// mintCurveTokens is the CURVE half of the shared-denotation certificate's
+// own opt-in, read the same way levelZ0/levelZ1's zero value already opts a
+// caller out of the LEVEL half: true only from evalPrismContext's own
+// straight-prism build, false from every other caller (shell_cup.go,
+// capblend_moments.go), which mint no curve identity for their own rim and
+// so keep every certificate check refusing by default.
+func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPayload, li int, loop LoopRecord, work *freeformWork, resolved *profileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []coedge, []coedge, boundedScalar, error) {
+	return buildLoopSidesAs(ctx, body, ref, pp, li, li != 0, loop, work, resolved, levelZ0, levelZ1, mintCurveTokens)
 }
 
 // buildLoopSidesAs is buildLoopSides with the role index and the orientation
@@ -427,7 +434,22 @@ func buildLoopSides(ctx context.Context, body *Body, ref producerID, pp prismPay
 // respective end — the zero value declines for every OTHER caller of this
 // function (shell_cup.go, capblend_moments.go), which mint neither and so
 // leave every certificate check refusing by default.
-func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord, work *freeformWork, resolved *profileWalks, levelZ0, levelZ1 levelToken) ([]*Face, []coedge, []coedge, boundedScalar, error) {
+//
+// mintCurveTokens is the CURVE half of the shared-denotation certificate:
+// true mints a fresh curveID (body.doc.mintCurve) for every rim vertex and
+// rim edge this loop places, at EITHER end, unconditionally — unlike the
+// LEVEL half, minting a curve identity claims nothing about the section
+// itself, so it needs no sectionDelta==0 precondition; freshness alone is
+// what keeps two separate builds from ever sharing one (denotation.go).
+// False for every OTHER caller of this function, which mints no curve
+// identity for their own rim.
+func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord, work *freeformWork, resolved *profileWalks, levelZ0, levelZ1 levelToken, mintCurveTokens bool) ([]*Face, []coedge, []coedge, boundedScalar, error) {
+	mintCurve := func() curveToken {
+		if !mintCurveTokens {
+			return curveToken{}
+		}
+		return body.doc.mintCurve()
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, nil, nil, boundedScalar{}, err
 	}
@@ -519,8 +541,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	if singleClosed {
 		w := walks[0]
 		extra := math.Max(freeformVertexAllow(w.segmentWalk, w.startBound), freeformVertexAllow(w.segmentWalk, w.endBound))
-		seamBottom = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(absSumUpper(bottomBoundBase, extra)), level: levelZ0}
-		seamTop = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(absSumUpper(topBoundBase, extra)), level: levelZ1}
+		seamBottom = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(absSumUpper(bottomBoundBase, extra)), level: levelZ0, denot: mintCurve()}
+		seamTop = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(absSumUpper(topBoundBase, extra)), level: levelZ1, denot: mintCurve()}
 	} else {
 		bottomV = make([]*Vertex, n)
 		topV = make([]*Vertex, n)
@@ -530,8 +552,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			}
 			prev := walks[(i+n-1)%n]
 			extra := math.Max(freeformVertexAllow(w.segmentWalk, w.startBound), freeformVertexAllow(prev.segmentWalk, prev.endBound))
-			bottomV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(absSumUpper(bottomBoundBase, extra)), level: levelZ0}
-			topV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(absSumUpper(topBoundBase, extra)), level: levelZ1}
+			bottomV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(absSumUpper(bottomBoundBase, extra)), level: levelZ0, denot: mintCurve()}
+			topV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(absSumUpper(topBoundBase, extra)), level: levelZ1, denot: mintCurve()}
 		}
 	}
 
@@ -682,6 +704,11 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		// evalPrismContext call over the SAME recorded frame and level.
 		bottomEdge.level = levelZ0
 		topEdge.level = levelZ1
+		// The CURVE certificate is minted fresh per rim edge, never shared:
+		// each rim edge denotes its OWN curve (a different wall's own top or
+		// bottom boundary), unlike the level, which many rim edges share.
+		bottomEdge.denot = mintCurve()
+		topEdge.denot = mintCurve()
 
 		origins, err := sideOriginsContext(ctx, ref, roleLoop, w.segs)
 		if err != nil {

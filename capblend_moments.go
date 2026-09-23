@@ -127,7 +127,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref producerID, cbp c
 			z1Delta: zHi.bound,
 			xform:   cbp.xform,
 		}
-		sideFaces, bottomCo, topCo, loopLen, err := buildLoopSidesAs(ctx, body, ref, ppFor, li, li != 0, loop, work, nil, levelToken{}, levelToken{})
+		sideFaces, bottomCo, topCo, loopLen, err := buildLoopSidesAs(ctx, body, ref, ppFor, li, li != 0, loop, work, nil, levelToken{}, levelToken{}, false)
 		if err != nil {
 			return nil, err
 		}

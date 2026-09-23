@@ -264,7 +264,7 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		sf, bottom, top, ll, err := buildLoopSides(ctx, body, ref, ppO, i, loop, work, nil, levelToken{}, levelToken{})
+		sf, bottom, top, ll, err := buildLoopSides(ctx, body, ref, ppO, i, loop, work, nil, levelToken{}, levelToken{}, false)
 		if err != nil {
 			return nil, err
 		}
@@ -290,7 +290,7 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 		if err != nil {
 			return nil, err
 		}
-		sf, bottom, top, ll, err := buildLoopSidesAs(ctx, body, ref, ppC, i, i == 0, rev, work, nil, levelToken{}, levelToken{})
+		sf, bottom, top, ll, err := buildLoopSidesAs(ctx, body, ref, ppC, i, i == 0, rev, work, nil, levelToken{}, levelToken{}, false)
 		if err != nil {
 			return nil, err
 		}

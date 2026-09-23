@@ -195,9 +195,14 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 //
 // Every field this copies is read straight off srcFace/its edges/vertices
 // verbatim except the surface, curve and vertex position (transformed by
-// xform through stitch.go's transformSurface/transformCurve) and the
+// xform through stitch.go's transformSurface/transformCurve), the
 // vertex bound / edge lengthBound (widened by delta under a non-identity
-// placement, exactly as rebuildStitchTopology widens them). Face.axialDelta,
+// placement, exactly as rebuildStitchTopology widens them), and the CURVE
+// half of the shared-denotation certificate (restated under xform by
+// curveToken.compose, denotation.go, rather than overwritten — this is one
+// of the copiers that lets a later Stitch prove an unstitched-and-restitched
+// pair coincident again even where a bound makes bit-identity alone fall
+// short). Face.axialDelta,
 // Face.hasAxialDelta and Face.normalBound are left at their zero value,
 // the same choice rebuildStitchTopology already makes for a stitched face:
 // each is a proof tied to the face's role in the body that built it, and
@@ -216,7 +221,11 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 		if delta > 0 {
 			bound = absSumUpper(bound, delta)
 		}
-		nv := &Vertex{position: p, bound: units.Millimeters(bound)}
+		// The CURVE half of the shared-denotation certificate (denotation.go)
+		// restates under xform, composing rather than overwriting, so a
+		// vertex unstitched and later placed still carries the true
+		// accumulated motion.
+		nv := &Vertex{position: p, bound: units.Millimeters(bound), denot: old.denot.compose(xform)}
 		newVertByOld[old] = nv
 		return nv, nil
 	}
@@ -250,6 +259,7 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 			length:          old.length,
 			lengthBound:     lengthBound,
 			lengthUnbounded: old.lengthUnbounded,
+			denot:           old.denot.compose(xform),
 		}
 		newEdgeByOld[old] = ne
 		return ne, nil

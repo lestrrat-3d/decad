@@ -182,6 +182,178 @@ func TestStitchNonzeroBoundRimStaysFreeAgainstExactPatch(t *testing.T) {
 	require.Same(t, sheet, doc.Bodies()[0])
 }
 
+// offAxisPlateSketch is plateSketch's off-axis, non-origin-centred twin: a
+// sketch plane whose axis is (1, 2, 3) normalized, nowhere near a coordinate
+// axis, and whose origin sits away from the world origin. A test that needs
+// a fixture no axis-aligned or origin-centred coincidence can silently zero
+// a term for (the flagship §26 rotated-plane regression already states why)
+// uses this instead of plateSketch.
+func offAxisPlateSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	axis, ok := r3.NewVec(1, 2, 3).Normalize()
+	require.True(t, ok)
+	ref := r3.NewVec(1, 0, 0)
+	u, ok := ref.Sub(axis.Scale(ref.Dot(axis))).Normalize()
+	require.True(t, ok)
+	frame, err := r3.NewFrame(r3.NewVec(7, -3, 11), u, axis.Cross(u))
+	require.NoError(t, err)
+
+	w := sketch.NewWorld()
+	plane, err := w.CreatePlaneFromFrame(frame)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	return s, s.Profiles()[0]
+}
+
+// TestStitchRefusesIdenticalBoundedRimsWithNoSharedDenotation is
+// docs/surface-design.md §15's T41 — the proof the CURVE half of the
+// shared-denotation certificate is an identity check, never a tolerance.
+// Two INDEPENDENT Extrude calls building the identical profile at the
+// identical Symmetric extent hold bit-identical rim coordinates and
+// identical nonzero bounds at BOTH ends (proven first, exactly as T14
+// proves its own premise) — Symmetric rather than Along, since Along's
+// zero-bound bottom rim would legitimately weld through the EXISTING
+// zero-bound route regardless of any certificate, proving nothing about it.
+// Stitch still refuses every one of the 16 rim/rim corner pairs: each
+// call's own evalPrismContext mints a FRESH curveID, so no pair ever shares
+// one, whatever their held data says. This is the test that would go green
+// if the certificate were ever swapped for a bound-magnitude comparison.
+func TestStitchRefusesIdenticalBoundedRimsWithNoSharedDenotation(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	ws, wp := plateSketch(t)
+	wallA, err := doc.Extrude(ws, wp, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	wallB, err := doc.Extrude(ws, wp, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+
+	// The fixture's whole point, proven rather than assumed: a rim vertex
+	// of each independent wall holds a BIT-IDENTICAL coordinate and an
+	// IDENTICAL non-zero bound.
+	rimOf := func(b *decad.Body) decad.VecMeasurement {
+		rim, err := decad.Edges(decad.Free()).Exactly(8).SelectEdges(b)
+		require.NoError(t, err)
+		return rim[0].Start().Position()
+	}
+	rimA, rimB := rimOf(wallA), rimOf(wallB)
+	require.Equal(t, decad.Approximate, rimA.Exactness)
+	require.Greater(t, rimA.Bound.Mag(), 0.0)
+	require.Equal(t, rimA.Value, rimB.Value, "the two independent builds hold the bit-identical rim coordinate")
+	require.Equal(t, rimA.Bound, rimB.Bound, "the two independent builds hold the identical nonzero bound")
+
+	sheet, err := decad.Stitch(wallA, wallB)
+	require.NoError(t, err)
+
+	require.Equal(t, decad.BodySheet, sheet.Kind())
+	require.False(t, sheet.IsSolid())
+	// Nothing welds: both walls' own 16 rim edges (8 apiece) stay free.
+	free, err := decad.Edges(decad.Free()).Exactly(16).SelectEdges(sheet)
+	require.NoError(t, err)
+	require.Len(t, free, 16)
+}
+
+// TestStitchClosesABoundedPatchedWallWithChargedVolumeBound is
+// docs/surface-design.md §15's T42 — the CURVE certificate's own
+// mass-accumulator obligation. A Symmetric surface-extruded wall on an
+// off-axis, non-origin sketch plane (offAxisPlateSketch — every OTHER
+// fixture in this file sits on the axis-aligned XY plane, where a rounding
+// term this test means to exercise could silently read zero) has BOTH rims
+// bounded; Body.Patch caps both in one call (the LEVEL certificate's own
+// flagship), closing every edge with no weld at all. The single-operand
+// Stitch that follows re-audits that already-closed boundary into a
+// BodySolid — and every welded vertex CLASS here is bounded, not zero, so
+// the published Volume must charge that bound (docs/surface-design.md
+// §6.4's amendment) rather than publish Exact over a triangle set whose
+// true vertices are not the held ones.
+func TestStitchClosesABoundedPatchedWallWithChargedVolumeBound(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	s, p := offAxisPlateSketch(t)
+	wall, err := doc.Extrude(s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+
+	rim, err := decad.Edges(decad.Free()).Exactly(8).SelectEdges(wall)
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, rim[0].Start().Position().Exactness)
+	require.Greater(t, rim[0].Start().Position().Bound.Mag(), 0.0)
+
+	capped, err := wall.Patch(decad.Edges(decad.Free()).Exactly(8))
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySheet, capped.Kind())
+	require.Len(t, capped.Faces(), 6)
+	_, err = decad.Edges(decad.Free()).SelectEdges(capped)
+	require.ErrorIs(t, err, decad.ErrNoMatch)
+
+	solid, err := decad.Stitch(capped)
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySolid, solid.Kind())
+	require.True(t, solid.IsSolid())
+
+	vol, err := solid.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Greater(t, vol.Bound.Base(), 0.0)
+	// 100 x 60 x 5 inches (127 mm): the enclosure assertion that matters —
+	// the analytic volume must lie inside the PUBLISHED bound, which is
+	// only true once the welded classes' own bound is charged into it.
+	analytic := 100.0 * 60.0 * 127.0
+	require.GreaterOrEqual(t, analytic, vol.Value.Base()-vol.Bound.Base())
+	require.LessOrEqual(t, analytic, vol.Value.Base()+vol.Bound.Base())
+}
+
+// TestStitchRefusesAPlacedSheetAgainstItsUnplacedSiblings is
+// docs/surface-design.md §15's T42's own placement leg: a placement breaks
+// the CURVE certificate. Unstitching a bounded, closed box (stitch_test.go's
+// TestStitchClosesABoundedPatchedWallWithChargedVolumeBound) frees every
+// edge; placing ONE of the six resulting sheets by a rigid motion neither
+// axis-aligned nor centred on the origin, then re-stitching all six, must
+// NOT re-weld the moved sheet's own 4 edges against its former neighbours —
+// it no longer occupies the place any curve token comparison is stated
+// under (denotation.go's curveToken.xform) — while the 5 UNPLACED siblings
+// still weld normally among themselves, exactly as they would if the moved
+// sheet had never been unstitched at all.
+func TestStitchRefusesAPlacedSheetAgainstItsUnplacedSiblings(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	s, p := offAxisPlateSketch(t)
+	wall, err := doc.Extrude(s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	capped, err := wall.Patch(decad.Edges(decad.Free()).Exactly(8))
+	require.NoError(t, err)
+	solid, err := decad.Stitch(capped)
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySolid, solid.Kind())
+
+	sheets, err := solid.Unstitch()
+	require.NoError(t, err)
+	require.Len(t, sheets, 6)
+
+	axis, ok := r3.NewVec(3, -1, 2).Normalize()
+	require.True(t, ok)
+	xf, err := r3.RotationAround(r3.NewVec(41, -17, 9), axis, units.Degrees(37))
+	require.NoError(t, err)
+	placed, err := sheets[0].Placed(xf)
+	require.NoError(t, err)
+
+	operands := append([]*decad.Body{placed}, sheets[1:]...)
+	restitched, err := decad.Stitch(operands...)
+	require.NoError(t, err)
+
+	// The moved sheet's own boundary and its former neighbours' matching
+	// copies stay free (4 + 4 = 8); the remaining internal welds among the
+	// 5 unplaced siblings still close, exactly as an unmoved re-stitch would.
+	require.Equal(t, decad.BodySheet, restitched.Kind())
+	require.False(t, restitched.IsSolid())
+	free, err := decad.Edges(decad.Free()).Exactly(8).SelectEdges(restitched)
+	require.NoError(t, err)
+	require.Len(t, free, 8)
+}
+
 // TestStitchClosedCurvedSheetIsUnsupported is docs/surface-design.md's T6
 // second half: a half-disc revolved a full turn about its diameter, as a
 // surface, is a closed sheet with no free edge (proven first, so this test

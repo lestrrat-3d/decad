@@ -582,7 +582,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			center := rp.point(b, j.z, 0, 0)
 			switch {
 			case rp.full && !j.onAxis:
-				seam := &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(productUpper(j.rho, rp.phi0Delta()))}
+				seam := &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(productUpper(j.rho, rp.phi0Delta())), denot: body.doc.mintCurve()}
 				latitudeLength := 2 * math.Pi * j.rho
 				latitudeBound := conservativeValueError(latitudeLength, productUpper(w.axisRadiusUpper, twoPiUpper()))
 				if rhoEnc, ok := junctionRadiusInterval(j.rho, w.startVBound); ok {
@@ -596,12 +596,18 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 					convex:      turn > 0,
 					length:      latitudeLength,
 					lengthBound: latitudeBound,
+					// The CURVE half of the shared-denotation certificate
+					// (denotation.go): this junction latitude circle is
+					// shared, by construction, between side faces i-1 and i
+					// of THIS build alone (fullRevLoops below), exactly the
+					// role a prism's own rim edge plays for its two caps.
+					denot: body.doc.mintCurve(),
 				}
 			case !rp.full:
-				j.v0 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(productUpper(j.rho, rp.phi0Delta()))}
+				j.v0 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(productUpper(j.rho, rp.phi0Delta())), denot: body.doc.mintCurve()}
 				j.v1 = j.v0
 				if !j.onAxis {
-					j.v1 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi1), bound: units.Millimeters(productUpper(j.rho, rp.phi1Delta()))}
+					j.v1 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi1), bound: units.Millimeters(productUpper(j.rho, rp.phi1Delta())), denot: body.doc.mintCurve()}
 					arcLength := j.rho * dphi
 					dphiUpper := absSumUpper(math.Abs(dphi), sweep.bound)
 					arcBound := conservativeValueError(arcLength, productUpper(w.axisRadiusUpper, dphiUpper))
@@ -618,6 +624,11 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 						convex:      turn > 0,
 						length:      arcLength,
 						lengthBound: arcBound,
+						// The CURVE half of the shared-denotation certificate
+						// (denotation.go): this junction arc is shared, by
+						// construction, between side faces i-1 and i of THIS
+						// build alone.
+						denot: body.doc.mintCurve(),
 					}
 				}
 			}
