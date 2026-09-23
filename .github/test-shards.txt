@@ -1717,3 +1717,7 @@
 0	0.00	TestStitchRefusesNestedBoxes
 0	0.00	TestStitchRefusesNestedBoxesWithAGap
 0	0.00	TestTessellateStitchClearsSymDiffForOverlappingLumps
+3	0.02	TestRevolveSemicircleFullTurnCentroidBoundTightens
+0	0.02	TestRevolveSemicirclePartialSweepCentroidBoundTightens
+1	0.01	TestRevolveSemicircleVolumeBoundUnaffected
+2	0.01	TestSecondMomentsSemicircleBoundTightens

@@ -658,3 +658,256 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, 
 		return ratInterval{}, ratInterval{}, false
 	}
 }
+
+// circularSecondMomentInterval brackets one circular walk's exact
+// second-moment contributions (∫u² dA, ∫u·v dA, ∫v² dA) about the walk
+// anchor, admitted under exactly the same conditions as its first-moment
+// sibling circularFirstMomentInterval and restating addCircular's own
+// muu/muv/mvv closed forms one order higher still: a CircleSeg over any
+// recorded range, whole or fractional, and an ArcSeg only over its own full
+// recorded range (forward or reverse), never a trimmed fragment or a
+// fragment whose two endpoints round to different radii.
+//
+// A CircleSeg's whole turns restate Pappus's own parallel-axis form: every
+// odd trig moment over a whole period cancels exactly, leaving
+// muu = π·dt·(c.U²·r² + r⁴/4), mvv = π·dt·(c.V²·r² + r⁴/4), muv = π·dt·c.U·c.V·r²
+// (dt the signed turn count) — the disc's own second moments about its
+// centre, shifted by the parallel-axis theorem. A fractional turn instead
+// restates addCircular's own muu/muv/mvv formulas with every sine/cosine
+// factor enclosed by moments_trig.go's turnSinCosInterval, and every
+// higher trig multiple — sin(2θ), cos(2θ), sin(4θ) — taken as an exact
+// DOUBLE-ANGLE algebraic combination of that same enclosure (sin2θ = 2·sinθ·cosθ,
+// cos2θ = cos²θ−sin²θ, sin4θ = 2·sin2θ·cos2θ): no new transcendental is ever
+// evaluated, only interval arithmetic over the one enclosure
+// circularFirstMomentInterval already trusts.
+//
+// An ArcSeg's fragment goes one step further: because its two endpoints are
+// RECORDED coordinates (not evaluated trig), every r·sinθ / r·cosθ that
+// appears — at any power up to four — cancels back to an exact rational
+// coordinate difference, the same substitution circularFirstMomentInterval's
+// own ArcSeg arm makes for mu/mv. Expanding addCircular's muu/muv/mvv this
+// way leaves exactly one term that does not collapse to a rational: the
+// piece proportional to the swept angle dθ itself (a rational COEFFICIENT
+// times the atan2Interval-bracketed sweep), mirroring mu/mv's own
+// muDthCoeff/mvDthCoeff term one order higher. Every other term — built from
+// the endpoints' own dx/dy differences and their squares/cubes/quads — is a
+// single rational point interval.
+func circularSecondMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, ratInterval, ratInterval, bool) {
+	anchorU, anchorV := floatRat(anchor.U), floatRat(anchor.V)
+	if anchorU == nil || anchorV == nil {
+		return ratInterval{}, ratInterval{}, ratInterval{}, false
+	}
+	switch seg := seg.(type) {
+	case CircleSeg:
+		dt := exactCoordinateDelta(seg.TEnd, seg.TStart)
+		radius, err := seg.Radius.In(units.Millimeter)
+		if err != nil {
+			return ratInterval{}, ratInterval{}, ratInterval{}, false
+		}
+		r := floatRat(radius)
+		if r == nil {
+			return ratInterval{}, ratInterval{}, ratInterval{}, false
+		}
+		centerU := new(big.Rat).Sub(floatRat(seg.Center.U), anchorU)
+		centerV := new(big.Rat).Sub(floatRat(seg.Center.V), anchorV)
+		piIv := interval(piLower, piUpper)
+		r2 := ratMul(r, r)
+		r3 := ratMul(r2, r)
+		r4 := ratMul(r2, r2)
+		if dt.IsInt() {
+			// A whole number of turns is the enclosed disc's own second
+			// moments about its centre, shifted by the parallel-axis theorem;
+			// every odd trig moment cancels exactly over a full period.
+			muuVal := ratAdd(ratMul(centerU, centerU, r2, dt), ratScale(ratMul(r4, dt), 1, 4))
+			mvvVal := ratAdd(ratMul(centerV, centerV, r2, dt), ratScale(ratMul(r4, dt), 1, 4))
+			muvVal := ratMul(centerU, centerV, r2, dt)
+			return intervalScale(piIv, muuVal), intervalScale(piIv, muvVal), intervalScale(piIv, mvvVal), true
+		}
+		t0, t1 := floatRat(seg.TStart), floatRat(seg.TEnd)
+		if t0 == nil || t1 == nil {
+			return ratInterval{}, ratInterval{}, ratInterval{}, false
+		}
+		s0, c0 := turnSinCosInterval(t0)
+		s1, c1 := turnSinCosInterval(t1)
+		dtheta := intervalScale(piIv, new(big.Rat).Mul(big.NewRat(2, 1), dt))
+		two := big.NewRat(2, 1)
+		sin2_0 := intervalScale(intervalMul(s0, c0), two)
+		sin2_1 := intervalScale(intervalMul(s1, c1), two)
+		cos2_0 := intervalSub(intervalMul(c0, c0), intervalMul(s0, s0))
+		cos2_1 := intervalSub(intervalMul(c1, c1), intervalMul(s1, s1))
+		sin4_0 := intervalScale(intervalMul(sin2_0, cos2_0), two)
+		sin4_1 := intervalScale(intervalMul(sin2_1, cos2_1), two)
+		cube := func(x ratInterval) ratInterval { return intervalMul(intervalMul(x, x), x) }
+		sq := func(x ratInterval) ratInterval { return intervalMul(x, x) }
+
+		intCos := intervalSub(s1, s0)
+		intCos2 := intervalAdd(
+			intervalScale(dtheta, big.NewRat(1, 2)),
+			intervalScale(intervalSub(sin2_1, sin2_0), big.NewRat(1, 4)),
+		)
+		intCos3 := intervalSub(
+			intervalSub(s1, intervalScale(cube(s1), big.NewRat(1, 3))),
+			intervalSub(s0, intervalScale(cube(s0), big.NewRat(1, 3))),
+		)
+		intCos4 := intervalAdd(
+			intervalAdd(
+				intervalScale(dtheta, big.NewRat(3, 8)),
+				intervalScale(intervalSub(sin2_1, sin2_0), big.NewRat(1, 4)),
+			),
+			intervalScale(intervalSub(sin4_1, sin4_0), big.NewRat(1, 32)),
+		)
+
+		intSin := intervalSub(c0, c1)
+		intSin2 := intervalSub(
+			intervalScale(dtheta, big.NewRat(1, 2)),
+			intervalScale(intervalSub(sin2_1, sin2_0), big.NewRat(1, 4)),
+		)
+		intSin3 := intervalSub(
+			intervalSub(c0, intervalScale(cube(c0), big.NewRat(1, 3))),
+			intervalSub(c1, intervalScale(cube(c1), big.NewRat(1, 3))),
+		)
+		intSin4 := intervalAdd(
+			intervalSub(
+				intervalScale(dtheta, big.NewRat(3, 8)),
+				intervalScale(intervalSub(sin2_1, sin2_0), big.NewRat(1, 4)),
+			),
+			intervalScale(intervalSub(sin4_1, sin4_0), big.NewRat(1, 32)),
+		)
+
+		intSC := intervalScale(intervalSub(intervalMul(s1, s1), intervalMul(s0, s0)), big.NewRat(1, 2))
+		intSC2 := intervalScale(intervalSub(cube(c0), cube(c1)), big.NewRat(1, 3))
+		intSC3 := intervalScale(intervalSub(sq(sq(c0)), sq(sq(c1))), big.NewRat(1, 4))
+
+		cu2 := ratMul(centerU, centerU)
+		cv2 := ratMul(centerV, centerV)
+		cu3 := ratMul(cu2, centerU)
+		cv3 := ratMul(cv2, centerV)
+
+		muuInner := intervalAdd(
+			intervalAdd(
+				intervalAdd(intervalScale(intCos, cu3), intervalScale(intCos2, ratMul(cu2, r, big.NewRat(3, 1)))),
+				intervalScale(intCos3, ratMul(centerU, r2, big.NewRat(3, 1))),
+			),
+			intervalScale(intCos4, r3),
+		)
+		muuVal := intervalScale(muuInner, ratScale(r, 1, 3))
+
+		mvvInner := intervalAdd(
+			intervalAdd(
+				intervalAdd(intervalScale(intSin, cv3), intervalScale(intSin2, ratMul(cv2, r, big.NewRat(3, 1)))),
+				intervalScale(intSin3, ratMul(centerV, r2, big.NewRat(3, 1))),
+			),
+			intervalScale(intSin4, r3),
+		)
+		mvvVal := intervalScale(mvvInner, ratScale(r, 1, 3))
+
+		part1Inner := intervalAdd(
+			intervalAdd(intervalScale(intCos, cu2), intervalScale(intCos2, ratMul(centerU, r, big.NewRat(2, 1)))),
+			intervalScale(intCos3, r2),
+		)
+		part1 := intervalScale(part1Inner, centerV)
+		part2Inner := intervalAdd(
+			intervalAdd(intervalScale(intSC, cu2), intervalScale(intSC2, ratMul(centerU, r, big.NewRat(2, 1)))),
+			intervalScale(intSC3, r2),
+		)
+		part2 := intervalScale(part2Inner, r)
+		muvVal := intervalScale(intervalAdd(part1, part2), ratScale(r, 1, 2))
+
+		return muuVal, muvVal, mvvVal, true
+	case ArcSeg:
+		forward := seg.TStart == 0 && seg.TEnd == 1
+		reverse := seg.TStart == 1 && seg.TEnd == 0
+		if !forward && !reverse {
+			return ratInterval{}, ratInterval{}, ratInterval{}, false
+		}
+		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
+		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
+		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
+		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
+		r2 := ratAdd(ratMul(dx0, dx0), ratMul(dy0, dy0))
+		endR2 := ratAdd(ratMul(dx1, dx1), ratMul(dy1, dy1))
+		if endR2.Cmp(r2) != 0 {
+			return ratInterval{}, ratInterval{}, ratInterval{}, false
+		}
+		heldCenter := shiftPoint(seg.Center, anchor)
+		heldStart := shiftPoint(seg.Start, anchor)
+		heldEnd := shiftPoint(seg.End, anchor)
+		heldDY0 := heldStart.V - heldCenter.V
+		heldDY1 := heldEnd.V - heldCenter.V
+		a0 := atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
+		a1 := atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
+		sweep := intervalSub(a1, a0)
+		heldA0 := math.Atan2(heldStart.V-heldCenter.V, heldStart.U-heldCenter.U)
+		heldA1 := math.Atan2(heldEnd.V-heldCenter.V, heldEnd.U-heldCenter.U)
+		if heldA1-heldA0 <= 0 {
+			sweep = intervalAdd(sweep, twoPiInterval())
+		}
+		p0x, p0y, p1x, p1y, dth := dx0, dy0, dx1, dy1, sweep
+		if reverse {
+			p0x, p0y, p1x, p1y = dx1, dy1, dx0, dy0
+			dth = intervalNeg(sweep)
+		}
+		centerU := new(big.Rat).Sub(floatRat(seg.Center.U), anchorU)
+		centerV := new(big.Rat).Sub(floatRat(seg.Center.V), anchorV)
+
+		dx := new(big.Rat).Sub(p1x, p0x)
+		dy := new(big.Rat).Sub(p1y, p0y)
+		cross := new(big.Rat).Sub(ratMul(p1y, p1x), ratMul(p0y, p0x))
+		p0sq := ratMul(p0x, p0x)
+		p0ysq := ratMul(p0y, p0y)
+		p1sq := ratMul(p1x, p1x)
+		p1ysq := ratMul(p1y, p1y)
+		quad := new(big.Rat).Sub(
+			ratMul(p1x, p1y, new(big.Rat).Sub(p1sq, p1ysq)),
+			ratMul(p0x, p0y, new(big.Rat).Sub(p0sq, p0ysq)),
+		)
+		cube := func(v *big.Rat) *big.Rat { return ratMul(v, v, v) }
+
+		cu2 := ratMul(centerU, centerU)
+		cv2 := ratMul(centerV, centerV)
+
+		// muu = r/3·(c.U³·intCos + 3c.U²·r·intCos2 + 3c.U·r²·intCos3 + r³·intCos4),
+		// every r·sinθ/r·cosθ power substituted by the matching exact
+		// coordinate difference (dy, cross, quad — this file's own
+		// circularFirstMomentInterval doc comment names the same collapse one
+		// order down), leaving one rational constant plus one term scaled by
+		// the enclosed sweep dth.
+		muuConst := ratAdd(
+			ratMul(centerU, cu2, dy),
+			ratScale(ratMul(cross, ratAdd(ratScale(cu2, 3, 1), r2)), 1, 2),
+			ratMul(centerU, r2, dy, big.NewRat(3, 1)),
+			new(big.Rat).Neg(ratMul(centerU, new(big.Rat).Sub(cube(p1y), cube(p0y)))),
+			ratScale(quad, 1, 8),
+		)
+		muuDthCoeff := ratAdd(ratScale(ratMul(cu2, r2), 1, 2), ratScale(ratMul(r2, r2), 1, 8))
+		muuVal := intervalAdd(intervalScale(pointInterval(muuConst), big.NewRat(1, 3)), intervalScale(dth, muuDthCoeff))
+
+		mvvConst := ratAdd(
+			new(big.Rat).Neg(ratMul(centerV, cv2, dx)),
+			ratScale(new(big.Rat).Neg(ratMul(cross, ratAdd(ratScale(cv2, 3, 1), r2))), 1, 2),
+			new(big.Rat).Neg(ratMul(centerV, r2, dx, big.NewRat(3, 1))),
+			ratMul(centerV, new(big.Rat).Sub(cube(p1x), cube(p0x))),
+			ratScale(quad, 1, 8),
+		)
+		mvvDthCoeff := ratAdd(ratScale(ratMul(cv2, r2), 1, 2), ratScale(ratMul(r2, r2), 1, 8))
+		mvvVal := intervalAdd(intervalScale(pointInterval(mvvConst), big.NewRat(1, 3)), intervalScale(dth, mvvDthCoeff))
+
+		// muv = ½r·(c.V·(c.U²intCos+2c.U·r·intCos2+r²intCos3) +
+		// r·(c.U²intSC+2c.U·r·intSC2+r²intSC3)) — the same substitution,
+		// collapsing entirely to a rational except the c.U·c.V·r²·dth piece.
+		muvConst := ratAdd(
+			ratScale(ratMul(centerV, ratAdd(ratMul(cu2, dy), ratMul(centerU, cross))), 1, 2),
+			ratScale(ratMul(centerV, r2, dy), 1, 2),
+			ratScale(new(big.Rat).Neg(ratMul(centerV, new(big.Rat).Sub(cube(p1y), cube(p0y)))), 1, 6),
+			ratScale(ratMul(cu2, new(big.Rat).Sub(p1ysq, p0ysq)), 1, 4),
+			ratScale(ratMul(centerU, new(big.Rat).Sub(cube(p0x), cube(p1x))), 1, 3),
+			ratScale(new(big.Rat).Sub(ratMul(p0sq, p0sq), ratMul(p1sq, p1sq)), 1, 8),
+		)
+		muvDthCoeff := ratScale(ratMul(centerU, centerV, r2), 1, 2)
+		muvVal := intervalAdd(pointInterval(muvConst), intervalScale(dth, muvDthCoeff))
+
+		return muuVal, muvVal, mvvVal, true
+	default:
+		return ratInterval{}, ratInterval{}, ratInterval{}, false
+	}
+}
