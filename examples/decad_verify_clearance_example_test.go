@@ -12,10 +12,12 @@ import (
 
 // WithClearances turns the proven pair partition into measured gaps: every
 // pair of proven-disjoint bodies gets a Clearance row whose Gap the analytic
-// kernel proves — here the facing side faces of two plates, an Exact 400 mm.
-// The gap is a measurement, not a verdict: the caller compares it against
-// their own clearance spec, and the report passes because every answer, the
-// gap included, is proven to the asked figures.
+// kernel proves — here the facing side faces of two plates, 400 mm apart.
+// The first plate arrives via Placed, so its own frame/placement rounding
+// widens the proven interval to honest-Approximate. The gap is a
+// measurement, not a verdict: the caller compares it against their own
+// clearance spec, and the report passes because every answer, the gap
+// included, is proven to the asked figures.
 func Example_decad_verify_clearances() {
 	buildPlate := func(doc *decad.Document) (*decad.Body, error) {
 		w := sketch.NewWorld()
@@ -62,5 +64,5 @@ func Example_decad_verify_clearances() {
 	}
 	// Output:
 	// status: Sound, trustworthy: true
-	// gap: 400 mm (Exact)
+	// gap: 400 mm (Approximate)
 }

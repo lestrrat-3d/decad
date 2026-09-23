@@ -838,16 +838,17 @@ func TestStitchSmallStitchedBoxContainedInABlock(t *testing.T) {
 	decadtest.MeasuresInterference(t, report, box, block, wantVol.Value, decadtest.Exactly())
 }
 
-// TestStitchBoundedStitchedSolidStaysUndecided is docs/surface-design.md's
+// TestStitchBoundedStitchedSolidGetsClearance is docs/surface-design.md's
 // T68: T42's own certificate-welded stitched solid — every vertex bound
-// nonzero even at identity, no placement in play — never reaches the
-// clearance kernel's own carrier model, so a pair holding it reads undecided
-// rather than a falsely precise gap. Shown-to-fail: deleting the zero-bound
-// gate (clearance_geom.go's stitchPayload arm) lets this exact pair read
-// Sound with an Exact Clearance row that does not account for the
-// certificate's own residual bound — a falsely decided answer, watched red
-// by hand while writing this test.
-func TestStitchBoundedStitchedSolidStaysUndecided(t *testing.T) {
+// nonzero even at identity, no placement in play. It now reaches the
+// clearance kernel's own carrier model (clearance_geom.go's stitchPayload
+// arm), charging its worst proven vertex bound into bodyGeom.delta rather
+// than refusing a model outright, so the pair reads a real, honestly
+// Approximate Clearance row instead of DiagUndecidedClearance. Shown-to-fail:
+// reverting the stitch arm's zero-bound gate (clearance_geom.go's
+// stitchPayload case) turns this pair back to Suspect with no row, watched
+// red by hand while writing this test.
+func TestStitchBoundedStitchedSolidGetsClearance(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := offAxisPlateSketch(t)
@@ -866,24 +867,28 @@ func TestStitchBoundedStitchedSolidStaysUndecided(t *testing.T) {
 	bb, err := solid.Bounds()
 	require.NoError(t, err)
 	far := bb.Max.Add(r3.NewVec(50, 50, 50))
-	decadtest.NewBlock(t, doc, far.X, far.Y, far.X+10, far.Y+10, units.Millimeters(10))
+	block := decadtest.NewBlock(t, doc, far.X, far.Y, far.X+10, far.Y+10, units.Millimeters(10))
 
 	report := decadtest.Verify(t, doc, decad.WithClearances())
-	require.Equal(t, decad.Suspect, report.Status)
-	require.Empty(t, report.Clearances)
+	require.Equal(t, decad.Sound, report.Status)
 	require.Empty(t, report.Interferences)
-	diags := decadtest.FindDiagnostics(t, report, decad.DiagUndecidedClearance)
-	require.Len(t, diags, 1)
+	require.Len(t, report.Clearances, 1)
+	row := report.Clearances[0]
+	require.Equal(t, decad.Approximate, row.Gap.Exactness)
+	require.Greater(t, row.Gap.Bound.Mag(), 0.0)
+	require.Same(t, solid, row.A)
+	require.Same(t, block, row.B)
 }
 
-// TestStitchPlacedStitchedSolidStaysUndecided is docs/surface-design.md's
+// TestStitchPlacedStitchedSolidGetsClearance is docs/surface-design.md's
 // T69: T58's own zero-bound box, Placed under a non-identity rigid motion,
 // reaches the identical gate T68 does by the other route — the placement's
 // own rigidRoundAllow widens every vertex bound rather than a certificate
 // weld's own class bound (stitch.go's "recorded weld" comment). Neither
 // route alone would be trusted; together they prove the gate reads the
-// vertex bound itself, not one particular cause of it.
-func TestStitchPlacedStitchedSolidStaysUndecided(t *testing.T) {
+// vertex bound itself, not one particular cause of it. It now gets a real
+// Approximate Clearance row, exactly as the CURVE-welded case above does.
+func TestStitchPlacedStitchedSolidGetsClearance(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	walls, bottom, top := stitchBoxSheets(t, doc, 10)
@@ -901,12 +906,15 @@ func TestStitchPlacedStitchedSolidStaysUndecided(t *testing.T) {
 
 	bb, err := placed.Bounds()
 	require.NoError(t, err)
-	decadtest.NewBlock(t, doc, bb.Min.X-20, bb.Min.Y, bb.Min.X-10, bb.Max.Y, units.Millimeters(10))
+	block := decadtest.NewBlock(t, doc, bb.Min.X-20, bb.Min.Y, bb.Min.X-10, bb.Max.Y, units.Millimeters(10))
 
 	report := decadtest.Verify(t, doc, decad.WithClearances())
-	require.Equal(t, decad.Suspect, report.Status)
-	require.Empty(t, report.Clearances)
+	require.Equal(t, decad.Sound, report.Status)
 	require.Empty(t, report.Interferences)
-	diags := decadtest.FindDiagnostics(t, report, decad.DiagUndecidedClearance)
-	require.Len(t, diags, 1)
+	require.Len(t, report.Clearances, 1)
+	row := report.Clearances[0]
+	require.Equal(t, decad.Approximate, row.Gap.Exactness)
+	require.Greater(t, row.Gap.Bound.Mag(), 0.0)
+	require.Same(t, placed, row.A)
+	require.Same(t, block, row.B)
 }

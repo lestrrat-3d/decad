@@ -414,7 +414,13 @@ func TestClearancePolyBracketContainsTruth(t *testing.T) {
 	t.Logf("seed=%#x", oracleSeed)
 	rng := rand.New(rand.NewSource(oracleSeed + 5))
 
-	t.Run("offset spheres are CF Exact", func(t *testing.T) {
+	// The point-spine CF cell's own closed form is exact, but both balls are
+	// full-turn revolves (angularDelta never collapses to exactly zero — 2π
+	// has no exact rational value) and the second arrives Placed, so
+	// bodyGeom.delta is nonzero for each and the row reads
+	// honest-Approximate: the proven interval must still enclose the true
+	// gap.
+	t.Run("offset spheres are the point-spine CF cell", func(t *testing.T) {
 		for range 20 {
 			r1 := 3 + rng.Float64()*6
 			r2 := 3 + rng.Float64()*6
@@ -431,11 +437,7 @@ func TestClearancePolyBracketContainsTruth(t *testing.T) {
 			report, err := doc.Verify(t.Context(), decad.WithClearances())
 			require.NoError(t, err)
 			require.Equal(t, decad.Suspect, report.Status)
-			require.Len(t, report.Clearances, 1)
-			row := report.Clearances[0]
-			require.Equal(t, decad.Exact, row.Gap.Exactness, "offset spheres are the point-spine CF cell")
-			require.InDelta(t, gap, row.Gap.Value.Mag(), 1e-9)
-			require.Equal(t, 0.0, row.Gap.Bound.Mag())
+			requireBoundedGapContains(t, report, gap)
 		}
 	})
 

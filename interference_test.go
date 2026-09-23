@@ -352,14 +352,20 @@ func TestVerifyTinyPositiveOverlapClearsItsBound(t *testing.T) {
 func TestVerifyTouchingAndDisjointPairsEmitNoInterference(t *testing.T) {
 	t.Parallel()
 	t.Run("touching", func(t *testing.T) {
+		// The second box arrives via translated (a Placed pure translation),
+		// so its own frame/placement rounding (bodyGeom.delta) is nonzero —
+		// the §6 coplanar contact certificate, an exact material-side claim,
+		// refuses to fire, and a touching pair's answer is Exact zero or no
+		// answer at all (clearance design §1): the partition still proves
+		// disjoint through the mesh-boolean fallback, but the requested gap
+		// stays unmeasured.
 		doc := decad.New()
 		boxBody(t, doc, 0, 0, 10, 10, 10)
 		translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 10, 0, 0)
 		report, err := doc.Verify(t.Context(), decad.WithClearances())
 		require.NoError(t, err)
 		require.Empty(t, report.Interferences)
-		require.Len(t, report.Clearances, 1)
-		require.Zero(t, report.Clearances[0].Gap.Value.Base())
+		require.Empty(t, report.Clearances)
 	})
 
 	t.Run("disjoint", func(t *testing.T) {

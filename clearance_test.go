@@ -104,6 +104,165 @@ func requireExactGap(t *testing.T, report *decad.Report, mm float64) {
 	require.Equal(t, 0.0, row.Gap.Bound.Mag())
 }
 
+// requireBoundedGapContains asserts the report carries exactly one clearance
+// row whose interval CONTAINS the true gap mm and is honestly Approximate —
+// never a tightened number, never a silent Exact over a widened body
+// (bodyGeom.delta, docs/clearance-design.md §2). Bound is never pinned to a
+// literal: it differs between amd64 and arm64 (both charge ulp-scale
+// roundoff, at different rounding), so this only asserts enclosure and
+// positivity.
+func requireBoundedGapContains(t *testing.T, report *decad.Report, mm float64) {
+	t.Helper()
+	require.Len(t, report.Clearances, 1)
+	row := report.Clearances[0]
+	require.Equal(t, decad.Approximate, row.Gap.Exactness)
+	bound := row.Gap.Bound.Mag()
+	require.Greater(t, bound, 0.0)
+	value := row.Gap.Value.Mag()
+	require.LessOrEqual(t, value-bound, mm, `the interval's low end must not exclude the truth`)
+	require.GreaterOrEqual(t, value+bound, mm, `the interval's high end must not exclude the truth`)
+}
+
+// TestClearanceTiltedPlanePairIntervalContainsTruth is this file's flagship
+// widening regression, and the single assertion bodyGeom.delta exists for.
+//
+// Two plain extrudes, no placement anywhere, off ONE tilted sketch plane whose
+// axes are a 37° rotation about the normalized (0.3, 0.7, 0.55) and whose
+// origin sits far from the world origin. The two rectangles are separated by
+// exactly 300 mm in the plane's OWN local u, so the true gap between the
+// facing side faces is exactly 300 mm, whatever the plane's pose: the lift is
+// an isometry.
+//
+// Before the widening landed, the kernel published 299.99999999999989 mm with
+// a Bound of 2.84e-14 mm and an Exact-adjacent Sound report — an interval that
+// EXCLUDED the truth by about four times its own width, because the carriers
+// were lifted through `prismPayload.point`/`dir` in raw float64 and the
+// rounding that lift commits was charged nowhere. The axis-aligned control
+// below returns exactly 300 as Exact through the same code, which is why a
+// single axis-aligned fixture never caught this: the frame's own zero fast
+// path (bounds.go's frameAndPlacementRoundAllow) makes every term vanish.
+//
+// The assertion is enclosure, never a pinned Bound literal — the charge is
+// ulp-scale and rounds differently on amd64 and arm64.
+func TestClearanceTiltedPlanePairIntervalContainsTruth(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	tiltedPlanePair(t, doc, r3.NewVec(311, 207, 405))
+
+	report, err := doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	requireBoundedGapContains(t, report, 300)
+}
+
+// tiltedPlanePair builds the flagship fixture's two extrudes off ONE tilted
+// sketch plane at the given origin: rectangles at u ∈ [0, 100] and
+// u ∈ [400, 500], both v ∈ [0, 60], each extruded 40 mm. The facing side
+// faces are exactly 300 mm apart in the plane's own local u, and the lift is
+// an isometry, so the TRUE gap is exactly 300 mm at every origin.
+func tiltedPlanePair(t *testing.T, doc *decad.Document, origin r3.Vec) {
+	t.Helper()
+	axis, ok := r3.NewVec(0.3, 0.7, 0.55).Normalize()
+	require.True(t, ok)
+	rot, err := r3.Rotation(axis, units.Degrees(37))
+	require.NoError(t, err)
+	frame, err := r3.NewFrame(origin, rot.ApplyDir(r3.NewVec(1, 0, 0)), rot.ApplyDir(r3.NewVec(0, 1, 0)))
+	require.NoError(t, err)
+
+	w := sketch.NewWorld()
+	plane, err := w.CreatePlaneFromFrame(frame)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	near := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(near.A)
+	far := s.CreateRectangle(400, 0, 500, 60)
+	s.Fix(far.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 2)
+	for _, p := range s.Profiles() {
+		_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
+		require.NoError(t, err)
+	}
+}
+
+func TestClearanceFarOriginTiltedPlanePairContainsTruth(t *testing.T) {
+	t.Parallel()
+	// The flagship fixture's own far-origin sibling, and the leg that makes
+	// bodyGeom.delta's POINT term load-bearing on its own. At an origin of
+	// (1e6, 2e6, 3e6) the frame lift rounds at the scale of ulp(3e6), so the
+	// held gap misses the truth by ~1.7e-10 mm — two orders of magnitude more
+	// than the per-face tilt term alone charges (~3.2e-11 mm). Dropping
+	// frameAndPlacementRoundAllow from addPrismFaces' own g.delta therefore
+	// turns THIS pair red while leaving the flagship above green, which is
+	// why both fixtures exist: at a near origin the tilt term covers for the
+	// point term, and one combined leg would prove neither.
+	doc := decad.New()
+	tiltedPlanePair(t, doc, r3.NewVec(1e6, 2e6, 3e6))
+
+	report, err := doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	requireBoundedGapContains(t, report, 300)
+}
+
+func TestClearanceInchExtrudeAxialGapContainsTruth(t *testing.T) {
+	t.Parallel()
+	// The leg that makes bodyGeom.delta's AXIAL term load-bearing on its own.
+	// Both sketch planes here are axis-aligned and unplaced, so the point and
+	// tilt terms are exactly zero under the frame's own exemption and only
+	// prismPayload.axialDelta can widen anything.
+	//
+	// The lower box is swept 1.7 in. That is exactly 43.18 mm, which has no
+	// float64 representation, so the held top cap sits a few ulp off the level
+	// the record denotes; the upper box starts at z = 50, which is exact. The
+	// true gap is therefore exactly 50 − 43.18 = 6.82 mm.
+	//
+	// Uncharged, the held reading publishes as a POINT interval labelled Exact
+	// that EXCLUDES 6.82 mm — the same defect class as the tilted pair above,
+	// reached by the other term. Charged, the row is honestly Approximate and
+	// encloses it with about six ulp to spare at each end, which is the margin
+	// that keeps this assertion stable on arm64 as well as amd64.
+	doc := decad.New()
+
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	base := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(base.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	_, err = doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Inches(1.7), Dir: decad.Along})
+	require.NoError(t, err)
+
+	boxBodyAtZ(t, doc, 20, 10, 80, 50, 50, 10)
+
+	report, err := doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	requireBoundedGapContains(t, report, 6.82)
+}
+
+func TestClearanceAxisAlignedPairOf300IsExact(t *testing.T) {
+	t.Parallel()
+	// The tilted pair's own axis-aligned control, on the world XY plane with
+	// the identical 300 mm plane-local separation: every bodyGeom.delta term
+	// collapses to exactly zero under the frame's own axis-aligned exemption,
+	// so this pair keeps publishing an Exact 300 mm. It is what proves the
+	// widening COSTS nothing where nothing was rounded — the tilted case
+	// above widens because its lift genuinely rounds, not because the
+	// widening fires indiscriminately.
+	doc := decad.New()
+	boxBody(t, doc, 0, 0, 100, 60, 40)
+	boxBody(t, doc, 400, 0, 500, 60, 40)
+
+	report, err := doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	requireExactGap(t, report, 300)
+}
+
 func TestClearanceCubesDiagonalOffset(t *testing.T) {
 	t.Parallel()
 	// The §7 worked pair: a 10 mm cube at the origin and one at x∈[13,23],
@@ -123,9 +282,12 @@ func TestClearanceCubesDiagonalOffset(t *testing.T) {
 func TestClearanceStackedCubes(t *testing.T) {
 	t.Parallel()
 	// The same cubes stacked 2 mm apart: the facing caps' trims overlap in
-	// projection, so the face × face plateau carries the answer — 2 mm,
-	// Exact (§7's second worked row). The second cube arrives via Placed, so
-	// the pair also covers the placed-pose path.
+	// projection, so the face × face plateau carries the answer, 2 mm (§7's
+	// second worked row). The second cube arrives via Placed, so the pair
+	// also covers the placed-pose path — which now widens the proven
+	// interval by the placement's own frame/placement rounding
+	// (bodyGeom.delta), so the row reads honest-Approximate rather than the
+	// Exact this pair published before the widening existed to charge it.
 	doc := decad.New()
 	boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 0, 0, 10, 10, 10)
@@ -136,22 +298,22 @@ func TestClearanceStackedCubes(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
-	requireExactGap(t, report, 2)
+	requireBoundedGapContains(t, report, 2)
 }
 
 func TestClearanceStopBuiltStackTouching(t *testing.T) {
 	t.Parallel()
-	// A stack sharing its cap plane: coplanar caps with opposing normals and
-	// a positive-area trim overlap — the §6 coplanar Plane × Plane contact
-	// certificate. The gap is a measured Exact zero and passes the near-zero
-	// gate on its own terms (§1; verification §5).
+	// A stack sharing its cap plane, built directly at the shared level
+	// (boxBodyAtZ — an offset sketch plane, never Placed): coplanar caps
+	// with opposing normals and a positive-area trim overlap — the §6
+	// coplanar Plane × Plane contact certificate. Both bodies' bodyGeom.delta
+	// stay exactly zero (an offset plane keeps the frame's own U/V axis-
+	// aligned and the placement Identity), so the certificate still fires
+	// and the gap is a measured Exact zero, passing the near-zero gate on
+	// its own terms (§1; verification §5).
 	doc := decad.New()
 	boxBody(t, doc, 0, 0, 100, 60, 10)
-	b := boxBody(t, doc, 30, 20, 50, 40, 10)
-	shift, err := r3.Translation(r3.NewVec(0, 0, 10))
-	require.NoError(t, err)
-	_, err = b.Placed(shift)
-	require.NoError(t, err)
+	boxBodyAtZ(t, doc, 30, 20, 50, 40, 10, 10)
 
 	// The partition is owed unasked, and the touching boxes already prove
 	// the interiors disjoint.
@@ -164,6 +326,38 @@ func TestClearanceStopBuiltStackTouching(t *testing.T) {
 	require.Equal(t, decad.Sound, report.Status)
 	require.True(t, report.Passed())
 	requireExactGap(t, report, 0)
+}
+
+func TestClearancePlacedStopBuiltStackTouchingIsUndecided(t *testing.T) {
+	t.Parallel()
+	// The identical stop-built stack, with the smaller box arriving through
+	// Placed (a pure translation) instead of a direct offset-plane
+	// construction: the placement's own frame/placement rounding
+	// (bounds.go's frameAndPlacementRoundAllow) makes the placed box's
+	// bodyGeom.delta nonzero, so the §6 coplanar contact certificate — an
+	// exact material-side claim — refuses to fire (clearancePair's own doc
+	// comment). The partition is still proven disjoint through the
+	// mesh-boolean fallback (verification §1's own "no fabricated rows"
+	// alternative route), but the requested gap stays unmeasured: Suspect,
+	// DiagUndecidedClearance, no Clearance row. This is the honest cost of
+	// refusing to certify a touch a rounded carrier plane cannot actually
+	// prove — never a narrower answer, an ABSENT one.
+	doc := decad.New()
+	boxBody(t, doc, 0, 0, 100, 60, 10)
+	b := boxBody(t, doc, 30, 20, 50, 40, 10)
+	shift, err := r3.Translation(r3.NewVec(0, 0, 10))
+	require.NoError(t, err)
+	_, err = b.Placed(shift)
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status, `the partition is still proven by the mesh-boolean fallback`)
+
+	report, err = doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, report.Status)
+	require.Empty(t, report.Clearances, `a touching pair's answer is Exact zero or no answer at all (§1)`)
 }
 
 func TestClearanceTangentSpheresSuspect(t *testing.T) {
@@ -231,8 +425,14 @@ func TestClearanceCoaxialPegInTube(t *testing.T) {
 	// The §4 worked containment numbers: two coaxial cylinders of radii 10
 	// and 5 have spine distance 0 and a genuine 5 mm gap — the peg-in-hole
 	// clearance a subtraction-only rule would misread as "carriers meet".
-	// The tube is a revolve and the peg a prism, so the pair also covers the
-	// mixed-payload path.
+	// The tube is a revolve and the peg a prism sketched on the YZ plane, so
+	// the pair also covers the mixed-payload path — a plane the frame's own
+	// zero fast path does not cover (bounds.go's frameAndPlacementRoundAllow
+	// only exempts EXACTLY U=(1,0,0), V=(0,1,0)), and a full turn's own
+	// angular displacement never collapses to exactly zero (2π has no exact
+	// rational value), so both bodyGeom.delta are nonzero and the row reads
+	// honest-Approximate rather than the Exact this pair published before
+	// the widening existed to charge either term.
 	doc := decad.New()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -258,7 +458,7 @@ func TestClearanceCoaxialPegInTube(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
-	requireExactGap(t, report, 5)
+	requireBoundedGapContains(t, report, 5)
 }
 
 func TestClearanceToriP8(t *testing.T) {
@@ -437,7 +637,8 @@ func TestClearancePlacedRotatedCube(t *testing.T) {
 	t.Parallel()
 	// A pair with a genuinely rotated pose: cube B is rotated 45° about Z
 	// and translated, so its nearest feature to cube A is a vertical corner
-	// edge — edge × edge, closed form, Exact.
+	// edge — edge × edge, closed form. The rotation's own frame/placement
+	// rounding (bodyGeom.delta) now widens the row to honest-Approximate.
 	doc := decad.New()
 	boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 0, 0, 10, 10, 10)
@@ -457,7 +658,7 @@ func TestClearancePlacedRotatedCube(t *testing.T) {
 	// vertical edge at (10, 10).
 	dx := 25 - 10/math.Sqrt2 - 10
 	dy := 5 + 10/math.Sqrt2 - 10
-	requireExactGap(t, report, math.Hypot(dx, dy))
+	requireBoundedGapContains(t, report, math.Hypot(dx, dy))
 }
 
 func TestClearanceSubTolOverlapNotCertified(t *testing.T) {
@@ -482,7 +683,10 @@ func TestClearanceBallCenteredInHole(t *testing.T) {
 	t.Parallel()
 	// A radius-5 ball centered on the axis of a radius-10 through-hole: the
 	// point-spine d_sup branch is trivially constant against the hole wall,
-	// and the 5 mm ring gap is proven Exact.
+	// and the true 5 mm ring gap is enclosed by the proven interval. The
+	// ball is both a full-turn revolve (angularDelta never collapses to
+	// exactly zero — 2π has no exact rational value) and placed, so
+	// bodyGeom.delta is nonzero and the row reads honest-Approximate.
 	doc := decad.New()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -512,7 +716,7 @@ func TestClearanceBallCenteredInHole(t *testing.T) {
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
-	requireExactGap(t, report, 5)
+	requireBoundedGapContains(t, report, 5)
 }
 
 func TestClearanceNearParallelPlateReadsTheCorner(t *testing.T) {
@@ -589,9 +793,13 @@ func TestClearanceCoaxialToriReadTheRing(t *testing.T) {
 	t.Parallel()
 	// The certified constant-distance branch (§4), pinned: two EXACTLY coaxial
 	// full tori — spine radii 10 and 5, tubes 2 and 1 — have a constant spine
-	// distance of 5 and a 2 mm ring gap, Exact. Neither face carries an edge,
+	// distance of 5 and a true 2 mm ring gap. Neither face carries an edge,
 	// so the boundary tiers hold nothing here: this reading stands on the
-	// coaxial certificate alone, and it must keep standing.
+	// coaxial certificate alone, and it must keep standing. Both bodies are
+	// full-turn revolves, and a full turn's own angular displacement never
+	// collapses to exactly zero — 2π has no exact rational value — so
+	// bodyGeom.delta is nonzero for each and the row reads honest-Approximate
+	// rather than Exact.
 	doc := decad.New()
 	torusBody(t, doc, 10, 2)
 	torusBody(t, doc, 5, 1)
@@ -599,7 +807,7 @@ func TestClearanceCoaxialToriReadTheRing(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
 	require.Equal(t, decad.Suspect, report.Status)
-	requireExactGap(t, report, 2)
+	requireBoundedGapContains(t, report, 2)
 }
 
 func TestClearanceNearCoaxialToriAreNotExact(t *testing.T) {

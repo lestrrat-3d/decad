@@ -112,6 +112,8 @@ a requested `WithClearances` gap remains `Suspect` until its analytic adapter
 lands and reads that term.
 Payload verification §3/§7 owns the cup/faceted
 adapters and their tests; §13/§14.1 own the loft staging and tests.
+Neither adapter has landed yet, per §8's increment table and payload
+verification §13's own stage list.
 
 A surface-result prism's model holds its walls alone, since a cap face is
 geometry the body does not have (`docs/surface-design.md` §4.1), while a
@@ -125,21 +127,17 @@ face is reversed), the trim region from each loop's own coedge start
 vertices, and the interior witnesses from the payload's own recorded triangle
 centroids for that face (`docs/surface-design.md` §6.4's `tris`/`triFaces`),
 filtered by the region's own `classify` call as a reject-only confirmation.
-It is admitted only when the recorded triangle set exists (an all-planar
-body, open or closed) AND every vertex of the body carries a proven bound of
-EXACTLY zero — never a placement's own widened bound, and never a certificate
-weld's own class bound either — because no widening term exists anywhere in
-this file for a bounded stitched vertex to charge against: unlike the
-faceted payload delta this section's own opening paragraph describes,
-`clearancePair` carries no analogous per-payload displacement it could add to
-a stitched body's proven interval. This is deliberately NARROWER than the
-prism arm's own standing just above: `addPrismFaces` builds its carriers
-through a call that applies the placement transform and rounds, then treats
-the result as exact and charges the rounding nowhere, so a placed prism still
-gets a model where a placed stitched solid does not. That asymmetry is a
-pre-existing looseness in the prism arm, not a reason to relax the stitch
-gate to match it — copying it would mean treating bounded coordinates as
-exact in new code, which this file's own reject-only rule forbids.
+It is admitted whenever the recorded triangle set exists (an all-planar body,
+open or closed); a placement's own widened vertex bound (`stitch.go`'s
+`rigidRoundAllow`) or a certificate weld's own nonzero class bound no longer
+refuses it. Instead, `newBodyGeomBudget` charges the body's own largest
+proven vertex bound into `bodyGeom.delta` (`stitchMaxVertexBound`,
+`stitch.go`), the same per-body displacement `addPrismFaces` and
+`addRevolveFaces` charge their own frame/placement rounding, axial or angular
+displacement, and per-face tilt into below, and `clearancePair` widens the
+proven interval by it once candidate aggregation completes (§5). A placed or
+certificate-welded stitched solid therefore reads a real, bounded `Clearance`
+row instead of leaving the pair undecided.
 
 **A sheet-against-solid pair (`sheetSolidPair`, `clearance.go`) reuses this
 carrier model and §3's candidate enumeration unchanged, over the sheet's own
@@ -416,11 +414,14 @@ Two upgrades and one downgrade close the table:
   gate reads a wide `Bound` `Suspect`. Never a tightened number, never a
   silent pass.
 - **Held bounds subtract before anything is proven.** A body whose held
-  boundary carries a nonzero proven bound (a `Faceted` body, increment 4)
-  clears only what exceeds the summed bounds (evaluator §10): the pair's
-  proven `lo` is the held-boundary `lo` minus both bodies' bounds, and the
-  row's `Bound` folds them in. In increment 3 every body is feature-built and
-  the held bounds are zero, so the subtraction is exact nothing.
+  boundary carries a nonzero proven bound — a `Faceted` body (increment 4,
+  not yet landed), or a feature-built body placed, swept off an
+  axis-aligned sketch plane, or stitched from a bounded topology
+  (`bodyGeom.delta`, §2) — clears only what exceeds the summed bounds
+  (evaluator §10): the pair's proven `lo` is the held-boundary `lo` minus
+  both bodies' bounds, and the row's `Bound` folds them in. An unplaced,
+  axis-aligned, feature-built body keeps `bodyGeom.delta` at exactly zero,
+  so the subtraction is exact nothing for it.
 
 ## 6. Touching pairs
 
@@ -453,6 +454,17 @@ zero — a curved-on-curved osculation, a contact through an edge or a
 vertex, a contact set the kernel cannot describe in closed form — is
 undecided: no row, `Suspect` (verification §6). The blessed answer is `Gap` `Exact` zero, and it passes
 the near-zero gate on its own terms (§1).
+
+Every one of these certificates is an EXACT material-side claim about where
+the two boundaries lie, so it runs only when BOTH bodies' `bodyGeom.delta`
+(§2) are exactly zero. A body whose carriers are displaced — placed,
+swept off a non-axis-aligned sketch plane, or stitched from a bounded
+topology — cannot honestly certify that its carrier plane IS the boundary it
+would be certifying against, and a displaced certificate has nothing to widen:
+the blessed answer here is an `Exact` zero, and there is no such thing as an
+approximate one (§1). Such a pair therefore reads undecided — `Suspect`, no
+row — rather than a zero the widening cannot stand behind. This is a
+refusal, not a narrower answer.
 
 ## 7. Feeding the report
 
