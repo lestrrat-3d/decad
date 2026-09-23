@@ -2,9 +2,12 @@ package decad
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -135,4 +138,351 @@ func TestStitchAuditRefusesOverlappingAssembly(t *testing.T) {
 	_, err := evalStitchContext(context.Background(), d, d.nextProducerID(), []*Face{a, b}, plan, r3.Identity())
 	require.ErrorIs(t, err, ErrDegenerate)
 	require.Empty(t, d.Bodies())
+}
+
+// TestStitchRuleSRefusesMultipleSourceBodies is docs/surface-design.md's
+// T35: Rule S's single-source-body restriction, driven directly at
+// stitchRuleSAdmits on two faces whose own bodies each individually carry a
+// construction proof (prismPayload{surfaceResult: true}, the same shape
+// payloadProvesSimple's own prismPayload arm admits) — proving the refusal
+// is specifically about the COUNT of source bodies, not about either
+// payload's own standing. decad's public seam has no way to reach this
+// directly: docs/surface-design.md §6.2's Table J admits a free Line3 edge
+// alone (J5 is undecidable for every other curve variant, stitch_weld.go's
+// own doc comment), so two curved rims from different features never weld
+// into a closed set at all.
+func TestStitchRuleSRefusesMultipleSourceBodies(t *testing.T) {
+	t.Parallel()
+	bodyA := &Body{payload: prismPayload{surfaceResult: true}}
+	bodyB := &Body{payload: prismPayload{surfaceResult: true}}
+	faceA := &Face{body: bodyA}
+	faceB := &Face{body: bodyB}
+
+	require.False(t, stitchRuleSAdmits(context.Background(), []*Face{faceA, faceB}))
+	// The single-body case is what Rule S DOES admit, confirming the
+	// refusal above is about the count rather than the payload shape.
+	require.True(t, stitchRuleSAdmits(context.Background(), []*Face{faceA, faceA}))
+}
+
+// stitchTestFanAroundVertex builds a closed 3-face fan around a shared
+// vertex v: triangles (v, outer[0], outer[1]), (v, outer[1], outer[2]),
+// (v, outer[2], outer[0]), each pair sharing the radial edge (v, outer[i])
+// between them, and each triangle's own opposite (outer[i], outer[i+1])
+// edge free. At v this is the shape auditVertexLinks admits by construction
+// — degree 2 at every face, zero ends, one connected component — the
+// interior-vertex CYCLE its own doc comment names. Every non-v vertex reads
+// as a two-face PATH, also admitted.
+func stitchTestFanAroundVertex(v *Vertex, outer [3]*Vertex) [3]*Face {
+	radial := [3]*Edge{
+		{curve: Line3{}, start: v, end: outer[0]},
+		{curve: Line3{}, start: v, end: outer[1]},
+		{curve: Line3{}, start: v, end: outer[2]},
+	}
+	rim := [3]*Edge{
+		{curve: Line3{}, start: outer[0], end: outer[1]},
+		{curve: Line3{}, start: outer[1], end: outer[2]},
+		{curve: Line3{}, start: outer[2], end: outer[0]},
+	}
+	var faces [3]*Face
+	for i := range 3 {
+		j := (i + 1) % 3
+		// Triangle (v, outer[i], outer[j]): v -> outer[i] via radial[i]
+		// forward, outer[i] -> outer[j] via rim[i] forward, outer[j] -> v
+		// via radial[j] backward.
+		faces[i] = &Face{loops: []*Loop{{outer: true, coedges: []coedge{
+			{edge: radial[i], forward: true},
+			{edge: rim[i], forward: true},
+			{edge: radial[j], forward: false},
+		}}}}
+	}
+	for i := range 3 {
+		j := (i + 1) % 3
+		radial[i].faces = append(radial[i].faces, faces[i], faces[j])
+		rim[i].faces = []*Face{faces[i]}
+	}
+	return faces
+}
+
+// TestStitchVertexLinkAuditRefusesPinchedVertex is the vertex-link gate's
+// own shown-to-fail leg: two independent closed 3-face fans
+// (stitchTestFanAroundVertex) built around the SAME shared vertex, with no
+// edge at all connecting one fan's faces to the other's. Each fan alone is
+// a manifold interior vertex (a connected cycle, admitted); sharing the one
+// vertex between two otherwise-unconnected fans is exactly the pinch
+// docs/surface-design.md §6.4 records — two lobes of a revolved boundary
+// touching at an isolated point — collapsed to its bare combinatorial
+// shape, the same way TestStitchOrientationRefusesMobiusAssembly pins
+// deriveStitchOrientation from a hand-built face set decad's own public
+// seam has no way to reach. No REACHABLE model produces this shape (no
+// admitted Plane/Cylinder generatrix can touch the axis at an isolated
+// point at all — stitch_flux.go's own top comment), which is exactly why a
+// hand-built fixture is the only way to prove the gate does anything.
+func TestStitchVertexLinkAuditRefusesPinchedVertex(t *testing.T) {
+	t.Parallel()
+	v := &Vertex{}
+	fanA := stitchTestFanAroundVertex(v, [3]*Vertex{{}, {}, {}})
+	fanB := stitchTestFanAroundVertex(v, [3]*Vertex{{}, {}, {}})
+
+	faces := append(append([]*Face{}, fanA[:]...), fanB[:]...)
+	err := auditVertexLinksForStitchFaces(context.Background(), faces)
+	require.ErrorIs(t, err, ErrUnsupported)
+}
+
+// TestStitchFluxRefusesNURBSSurface is docs/surface-design.md's T37: a
+// NURBSSurface face driven directly at stitchFaceFluxAndMoment, on the
+// sealed switch's own default arm. decad's public seam has no way to close
+// a free-form-walled sheet at all — Body.Patch refuses any chain carrying a
+// NURBSCurve edge outright — so no fixture reaches this through Stitch.
+func TestStitchFluxRefusesNURBSSurface(t *testing.T) {
+	t.Parallel()
+	f := &Face{surface: NURBSSurface{}}
+	_, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	require.ErrorIs(t, err, ErrUnsupported)
+}
+
+// TestStitchFluxRefusesNonzeroNormalBound is docs/surface-design.md's T38:
+// a face carrying a nonzero normalBound — a cap-blend band patch's own
+// tell, since its published Plane/Cone tag only approximates the ruled
+// surface actually built — driven directly at stitchFaceFluxAndMoment.
+// decad's public seam has no way to reach this either: Unstitch-then-Stitch
+// of a filleted or chamfered solid never re-closes (§6.5's own "no further"
+// limit for any non-all-planar body — confirmed directly, a box filleted on
+// its four vertical edges and unstitched leaves 16 free edges after
+// restitching, not zero), so no fixture reaches this gate through the
+// public seam.
+func TestStitchFluxRefusesNonzeroNormalBound(t *testing.T) {
+	t.Parallel()
+	f := &Face{surface: Plane{Frame: mustPlaneFrame()}, normalBound: 1e-9}
+	_, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	require.ErrorIs(t, err, ErrUnsupported)
+}
+
+// TestStitchCurvedMassCorrectsInwardOrientation is the orientation sign's
+// own shown-to-fail leg, driven directly at stitchCurvedMass: neither of
+// this increment's own public fixtures ever reaches the actual global
+// sign-flip branch, because a revolve build's own outward-normal convention
+// already agrees with the flux formula's own — disabling that branch
+// entirely leaves TestStitchAnnularRevolveSheetClosesToATube and its
+// siblings green, which is exactly the "an untested leg" trap CLAUDE.md
+// warns against. This test reverses every face of a real annular tube sheet
+// BEFORE handing it to stitchCurvedMass, so the flux sum is genuinely
+// negative on the first pass and the correction must fire for the published
+// volume to come out positive and right at all.
+func TestStitchCurvedMassCorrectsInwardOrientation(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 5, 10, 15)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	uAxis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
+
+	d := New()
+	sheet, err := d.Revolve(s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
+	require.NoError(t, err)
+
+	faces := sheet.Faces()
+	for _, f := range faces {
+		reverseFaceOrientation(f)
+	}
+
+	vol, cen, err := stitchCurvedMass(context.Background(), faces, faces[0].loops[0].coedges[0].Start().Position().Value, 0)
+	require.NoError(t, err)
+	require.Greater(t, vol.Value.Base(), 0.0, "the global sign correction must recover a positive volume from an inward-reversed face set")
+	require.InDelta(t, 2000*3.141592653589793, vol.Value.Base(), 1e-6)
+	require.InDelta(t, 5.0, cen.Value.X, 1e-9)
+}
+
+// TestStitchCurvedMassPlacementAllowanceWidensBounds is the placement
+// allowance's own shown-to-fail leg, isolated from every other source of
+// widening by varying ONLY stitchCurvedMass's own delta parameter over the
+// SAME faces and anchor: TestStitchCurvedVolumeBoundWidensWhenPlaced (the
+// public test) places the body through a real rigid motion, whose OWN
+// re-lifted coordinates already carry a little extra rounding of their own
+// even with delta's charge deleted, so it stayed green when this leg alone
+// was cut — recorded here rather than left implicit, and this direct call
+// is what actually isolates the leg.
+func TestStitchCurvedMassPlacementAllowanceWidensBounds(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 5, 10, 15)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	uAxis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
+
+	d := New()
+	sheet, err := d.Revolve(s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
+	require.NoError(t, err)
+	faces := sheet.Faces()
+	anchor := faces[0].loops[0].coedges[0].Start().Position().Value
+
+	unplacedVol, unplacedCen, err := stitchCurvedMass(context.Background(), faces, anchor, 0)
+	require.NoError(t, err)
+	// delta = 1 makes sweptVolumeAllow/sweptMomentAllow's own contribution
+	// (proportional to the body's ~2513 mm^2 of face area) many orders of
+	// magnitude larger than the couple of ulps every absSumUpper call nudges
+	// a bound by regardless of what it is summing — the margin below is set
+	// well above that ulp noise floor and well below the ~2513 mm^3 this
+	// leg is expected to add, so the assertion is about the LEG, not about
+	// absSumUpper's own unconditional upward nudge.
+	placedVol, placedCen, err := stitchCurvedMass(context.Background(), faces, anchor, 1)
+	require.NoError(t, err)
+
+	const margin = 1.0
+	require.Greater(t, placedVol.Bound.Base(), unplacedVol.Bound.Base()+margin)
+	require.Greater(t, placedCen.Bound.Base(), unplacedCen.Bound.Base()+margin)
+}
+
+// stitchTestCylinderFace builds a hand-made full-circumference Cylinder
+// face — radius r, axis Z through the world origin, rims at z = 0 and
+// z = height — with the given area/areaBound, for the Cylinder arm's own
+// shown-to-fail legs below.
+func stitchTestCylinderFace(r, height, area, areaBound float64) *Face {
+	return stitchTestCylinderFaceWithRimBound(r, height, area, areaBound, 0)
+}
+
+// stitchTestCylinderFaceWithRimBound is stitchTestCylinderFace with the two
+// rims' own lengthBound set explicitly, for boundedCircleRadius's own
+// shown-to-fail leg: the rim's length is set to its own exact 2*pi*r (so
+// rB.value comes out r, matching every other field here) and rimBound is
+// otherwise free to set to whatever the test wants to prove propagates.
+func stitchTestCylinderFaceWithRimBound(r, height, area, areaBound, rimBound float64) *Face {
+	v0 := &Vertex{position: r3.NewVec(r, 0, 0)}
+	v1 := &Vertex{position: r3.NewVec(r, 0, height)}
+	length := 2 * math.Pi * r
+	e0 := &Edge{curve: Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, start: v0, end: v0, length: length, lengthBound: rimBound}
+	e1 := &Edge{curve: Circle3{Center: r3.NewVec(0, 0, height), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, start: v1, end: v1, length: length, lengthBound: rimBound}
+	f := &Face{
+		surface: Cylinder{Origin: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)},
+		loops: []*Loop{
+			{outer: true, coedges: []coedge{{edge: e0, forward: true}}},
+			{outer: true, coedges: []coedge{{edge: e1, forward: true}}},
+		},
+		area:      area,
+		areaBound: areaBound,
+	}
+	e0.faces, e1.faces = []*Face{f}, []*Face{f}
+	return f
+}
+
+// TestStitchCylinderFluxReusesAreaBound is the Cylinder area-bound
+// composition's own shown-to-fail leg: K_F = σ·Radius·f.area reuses the
+// face's own already-proven area/areaBound rather than integrating
+// anything fresh (this file's own doc comment), so the flux's own bound
+// must scale with f.areaBound exactly through boundedMul's productUpper
+// term — driven directly at stitchFaceFluxAndMoment so neither piScalar's
+// own tiny representation error nor any other term can mask the leg,
+// unlike the whole-pipeline reading where every term is the same tiny
+// ulp-scale magnitude and a deleted leg is easy to lose in the noise.
+func TestStitchCylinderFluxReusesAreaBound(t *testing.T) {
+	t.Parallel()
+	const r, height = 10.0, 10.0
+	area := 2 * math.Pi * r * height
+	f := stitchTestCylinderFace(r, height, area, 1.0)                    // areaBound=1, far above ulp noise
+	flux, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only flux and the error matter here.
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, flux.bound, r*1.0, "the flux bound must scale with f.areaBound through the Radius multiply")
+
+	zero := stitchTestCylinderFace(r, height, area, 0)
+	fluxZero, _, _, _, err := stitchFaceFluxAndMoment(zero, r3.NewVec(0, 0, 0)) //nolint:dogsled // only flux and the error matter here.
+	require.NoError(t, err)
+	require.Less(t, fluxZero.bound, 1e-6, "with areaBound zero, the flux bound has no other source of that magnitude")
+}
+
+// TestStitchCylinderMomentChargesRadiusBound is boundedCircleRadius's own
+// shown-to-fail leg for the Cylinder arm: Circle3/Cylinder carry Radius as a
+// bare units.Value with no bound field, and a revolve about an axis that is
+// not coordinate-aligned through the origin hands back a Radius that is
+// itself a rounded re-expression of a recorded point (stitch_flux.go's own
+// top comment, revolve_axis.go's axisFrame.walk). Driven directly with a
+// synthetic rim lengthBound far above ulp noise, so the leg is provably
+// exercised rather than left to a fixture where the true bound happens to
+// be zero (every public fixture in stitch_flux_test.go revolves about a
+// coordinate-aligned axis through the origin, where it genuinely is).
+func TestStitchCylinderMomentChargesRadiusBound(t *testing.T) {
+	t.Parallel()
+	const r, height = 10.0, 10.0
+	area := 2 * math.Pi * r * height
+	// anchor is offset along X, away from the cylinder's own axis (which
+	// runs along Z through the world origin): A_x = Origin.X - anchor.X is
+	// then nonzero, so mx's own (A_x + Axis_x*zMid) factor is nonzero and
+	// the piR2Dz term's radius bound actually multiplies through rather
+	// than being annihilated by a zero factor (as it would be at anchor
+	// (0,0,0), where every one of the cylinder's own symmetry axes zeroes
+	// the moment regardless of the radius bound).
+	anchor := r3.NewVec(3, 0, 0)
+	f := stitchTestCylinderFaceWithRimBound(r, height, area, 0, 1.0) // rim lengthBound=1
+	_, mx, _, mz, err := stitchFaceFluxAndMoment(f, anchor)
+	require.NoError(t, err)
+	require.Greater(t, mx.bound, 0.1, "the Cylinder moment must scale with the rim's own lengthBound through boundedCircleRadius")
+	require.Zero(t, mz.bound, "the axis component's own (1 - Axis_z^2) factor is exactly zero, so it carries no radius term to widen")
+
+	zero := stitchTestCylinderFaceWithRimBound(r, height, area, 0, 0)
+	_, mxZero, _, _, err := stitchFaceFluxAndMoment(zero, anchor) //nolint:dogsled // only mx and the error matter here.
+	require.NoError(t, err)
+	require.Less(t, mxZero.bound, 1e-6, "with the rim's own lengthBound zero, the moment bound has no other source of that magnitude")
+}
+
+// stitchTestPlaneDiskFace builds a hand-made Plane face bounded by a single
+// full circle of radius r centered at the frame origin, with the circle's
+// own rim lengthBound set explicitly — boundedCircleRadius's own
+// shown-to-fail leg for the Plane arm, the disk sibling of
+// TestStitchCylinderMomentChargesRadiusBound.
+func stitchTestPlaneDiskFace(r, rimBound float64) *Face {
+	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	if err != nil {
+		panic(err)
+	}
+	v := &Vertex{position: r3.NewVec(r, 0, 0)}
+	e := &Edge{curve: Circle3{Center: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(r)}, start: v, end: v, length: 2 * math.Pi * r, lengthBound: rimBound}
+	f := &Face{
+		surface: Plane{Frame: frame},
+		loops:   []*Loop{{outer: true, coedges: []coedge{{edge: e, forward: true}}}},
+	}
+	e.faces = []*Face{f}
+	return f
+}
+
+// TestStitchPlaneMomentChargesRadiusBound is
+// TestStitchCylinderMomentChargesRadiusBound's Plane-arm sibling: the same
+// boundedCircleRadius leg, exercised through planeFaceFluxAndMoment's own
+// disk decomposition instead.
+func TestStitchPlaneMomentChargesRadiusBound(t *testing.T) {
+	t.Parallel()
+	const r = 10.0
+	// anchor is offset along Z, off the disk's own z=0 plane: c_z =
+	// Origin.Z - anchor.Z is then nonzero, so the z-moment's own c_z^2*Area
+	// term is nonzero and Area's own radius bound actually multiplies
+	// through. At anchor (0,0,0) (in-plane), every moment component comes
+	// out exactly zero regardless of the radius bound — n_x = n_y = 0 for a
+	// disk lying flat in the XY plane, and c_z = 0 too, so this is not a
+	// corner case of this particular anchor choice, it is the ONLY choice
+	// that exercises the leg at all for a flat disk.
+	anchor := r3.NewVec(0, 0, 5)
+	f := stitchTestPlaneDiskFace(r, 1.0)                   // rim lengthBound=1
+	_, _, _, mz, err := stitchFaceFluxAndMoment(f, anchor) //nolint:dogsled // only mz and the error matter here.
+	require.NoError(t, err)
+	require.Greater(t, mz.bound, 0.01, "the Plane arm's own Area/Iuu/Ivv terms must scale with the rim's own lengthBound")
+
+	zero := stitchTestPlaneDiskFace(r, 0)
+	_, _, _, mzZero, err := stitchFaceFluxAndMoment(zero, anchor) //nolint:dogsled // only mz and the error matter here.
+	require.NoError(t, err)
+	require.Less(t, mzZero.bound, 1e-6, "with the rim's own lengthBound zero, the moment bound has no other source of that magnitude")
+}
+
+// mustPlaneFrame returns an arbitrary valid orthonormal frame for
+// TestStitchFluxRefusesNonzeroNormalBound: the normalBound gate fires
+// before the surface is ever read, so the frame's own values never matter,
+// only that NewFrame succeeds.
+func mustPlaneFrame() r3.Frame {
+	f, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	if err != nil {
+		panic(err)
+	}
+	return f
 }

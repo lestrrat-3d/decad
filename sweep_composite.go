@@ -344,25 +344,37 @@ func auditCompositeBoundary(ctx context.Context, body *Body, sewn map[*Edge]stru
 			return fmt.Errorf(`%w: a sewn sweep edge does not have opposite directed uses`, ErrUnsupported)
 		}
 	}
-	if err := auditCompositeVertexLinks(budget, body, uses); err != nil {
+	if err := auditVertexLinks(budget, uses); err != nil {
 		return err
 	}
 	return budget.err()
 }
 
-// auditCompositeVertexLinks proves the manifold-with-boundary invariant at
-// every vertex: the faces touching it, linked by the two-face edges also
-// touching it, form one connected component whose own face degrees (how many
-// such link edges reach that face) are all 1 or all-but-two 2. Two degree-1
-// faces make it a PATH — a rim vertex, where exactly two of the incident
-// edges are free and end the fan instead of continuing it. Zero degree-1
-// faces make it a CYCLE — an interior vertex, exactly the shape the pre-sheet
-// audit already proved. A free (one-face) edge contributes its lone face to
-// the vertex's link as a node with no link edge of its own, since it has no
-// second face to link that face to there.
-func auditCompositeVertexLinks(
+// auditVertexLinks proves the manifold-with-boundary invariant at every
+// vertex the edges in uses touch: the faces touching it, linked by the
+// two-face edges also touching it, form one connected component whose own
+// face degrees (how many such link edges reach that face) are all 1 or
+// all-but-two 2. Two degree-1 faces make it a PATH — a rim vertex, where
+// exactly two of the incident edges are free and end the fan instead of
+// continuing it. Zero degree-1 faces make it a CYCLE — an interior vertex,
+// exactly the shape the pre-sheet audit already proved. A free (one-face)
+// edge contributes its lone face to the vertex's link as a node with no link
+// edge of its own, since it has no second face to link that face to there.
+//
+// This takes no *Body: an earlier version of this function also compared
+// len(links) against len(body.Vertices()) and refused on a mismatch, but
+// that comparison is a tautology, never a fact about the geometry.
+// body.Vertices() derives from Body.Edges(), which walks the identical
+// face.loops -> loop.coedges structure uses is itself built from, over the
+// SAME edge set (every caller builds uses over every edge of every face's
+// every loop, and this function itself refuses any edge with a nil endpoint
+// before the counts could ever be compared), so the two vertex sets can
+// never disagree. Dropping the parameter along with that leg is also what
+// lets this function's second caller (Stitch's curved-body gate) reach it:
+// that caller builds its own uses map over a set of faces that has no
+// *Body at all until after this audit is meant to run.
+func auditVertexLinks(
 	budget *workBudget,
-	body *Body,
 	uses map[*Edge][]compositeCoedgeUse,
 ) error {
 	type vertexLink struct {
@@ -410,9 +422,6 @@ func auditCompositeVertexLinks(
 			link.neighbors[a][b] = struct{}{}
 			link.neighbors[b][a] = struct{}{}
 		}
-	}
-	if len(links) != len(body.Vertices()) {
-		return fmt.Errorf(`%w: a composite sweep vertex is absent from its boundary links`, ErrUnsupported)
 	}
 	for _, link := range links {
 		if err := budget.step(); err != nil {
