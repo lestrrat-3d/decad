@@ -523,6 +523,33 @@ func resolveAxisSide(ctx context.Context, profile ProfileRecord, line axisLine2,
 		return axisFrame{}, 0, err
 	}
 
+	// boundaryExtremesBoundedContext's own returned bound charges each
+	// candidate's POSITIONAL uncertainty (a walked endpoint's own proven
+	// displacement, a circular candidate's own enclosure) but NOT the
+	// multiply-and-sum arithmetic of evaluating gu·u + gv·v itself for a
+	// direction that is not exactly 0, 1 or −1 — the identical gap
+	// axisExtremeContext closes for its own, structurally identical scan
+	// through planeDotDecompositionRoundAllow (bounds.go). A profile vertex
+	// the record states verbatim therefore still commits real rounding
+	// forming its dot with a tilted axis's own (nU, nV)/(dU, dV), and that
+	// rounding is architecture-sensitive (FMA differs amd64/arm64):
+	// left uncharged, the SAME recorded profile can compute as provably
+	// negative on one platform and merely uncertain on another, for a region
+	// whose true radial minimum is exactly zero. Folding it in here — once,
+	// for THIS scan, never composed with axisExtremeContext's own copy of the
+	// identical charge on a different reading — is what makes the admission
+	// decision agree across platforms: the charge is zero for an axis-aligned
+	// direction (planeDotDecompositionRoundAllow's own trivial-coefficient
+	// case), so it costs nothing for the tree's axis-aligned fixtures, and it
+	// dominates a tilted axis's few-ulp discrepancy by orders of magnitude,
+	// which turns a coin-flip sign into a proven straddle everywhere.
+	coordUpper, err := profileCoordinateEnvelope(profile, work, nil)
+	if err != nil {
+		return axisFrame{}, 0, err
+	}
+	rBound = absSumUpper(rBound, planeDotDecompositionRoundAllow(nU, nV, coordUpper))
+	zBound = absSumUpper(zBound, planeDotDecompositionRoundAllow(line.dU, line.dV, coordUpper))
+
 	roffB := boundedAdd(
 		boundedMul(measuredScalar(nU, line.dVBound), measuredScalar(line.aU, line.aUBound)),
 		boundedMul(measuredScalar(nV, line.dUBound), measuredScalar(line.aV, line.aVBound)),

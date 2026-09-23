@@ -437,19 +437,26 @@ func newCone(rng *rand.Rand) setup {
 // the wrong side of the random axis by less than a ulp — a genuine (if
 // vanishingly small) defect in THAT draw's own geometry, which
 // resolveAxisSide's strict admission gate (revolve_axis.go, CLAUDE.md's
-// reject-only rule) now correctly refuses rather than silently admitting
-// under the old tolerance. Measured stable across three repeated local runs
-// on amd64/linux: annularRect refuses draws 4, 7 and 8 of its 12; cone
-// refuses draws 3, 4, 5 and 11 of its 12; groove, sphere and torus refuse
-// none of their 12 — 7 of 60 draws total. This is NOT verified on arm64: the
-// admission gate reads the SIGN of a computed quantity within a ulp of zero,
-// and FMA differs between amd64 and arm64 (`~/.claude/docs's` own note on
-// this repo), so a flip on that architecture is plausible and would need its
-// own measurement to re-pin.
-var revolvePropertyExpectedRefusals = map[string]map[int]bool{
-	"annularRect": {4: true, 7: true, 8: true},
-	"cone":        {3: true, 4: true, 5: true, 11: true},
-}
+// reject-only rule) would correctly refuse rather than silently admit under
+// the old tolerance.
+//
+// It is pinned EMPTY: once resolveAxisSide also charges its own scan
+// arithmetic (planeDotDecompositionRoundAllow, the same mechanism
+// axisExtremeContext already uses for the structurally identical scan,
+// closing the gap a real-geometry end-to-end test found — T95,
+// docs/surface-design.md), every one of these 60 draws' computed radial
+// extremes provably straddles zero rather than reading as proven negative:
+// the strict arm is unreachable for a random tilted axis at this scale, and
+// none of the earlier 7 refusals (annularRect draws 4, 7, 8; cone draws 3, 4,
+// 5, 11) were a genuine defect in those draws' own geometry — they were an
+// artifact of the missing scan-arithmetic charge. Measured stable across
+// three repeated local runs on amd64/linux; verify against CI's
+// `macos-latest` (arm64) job before trusting this pin fully cross-platform,
+// since the strict gate's own T93 fixture (an EXACT axis, no scan-arithmetic
+// charge possible) still refuses deterministically regardless of platform,
+// but a straddle this close to zero is what FMA differences could still
+// move.
+var revolvePropertyExpectedRefusals = map[string]map[int]bool{}
 
 func TestRevolvePropertyInvariants(t *testing.T) {
 	t.Parallel()

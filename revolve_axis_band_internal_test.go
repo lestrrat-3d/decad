@@ -235,22 +235,26 @@ func TestRevolveAxisBandChargesTheOffsetSubtraction(t *testing.T) {
 // revolve_bounds_test.go's own fixture (anchor (0, -20), direction (3, 4)/5,
 // not exactly representable): a shaft profile whose near edge sits AT that
 // axis (rather than dipped below it) resolves with a genuinely nonzero
-// radialAdmitAllow — confirmed below rather than assumed — because the
-// tilted axis's own rounding leaves the boundary scan's computed radial
-// minimum a few ulps from the true zero, on either side, so resolveAxisSide
-// cannot prove non-negativity even though the true value is exactly zero.
+// radialAdmitAllow — confirmed below rather than assumed — because
+// resolveAxisSide's own scan-arithmetic charge (planeDotDecompositionRoundAllow,
+// the same mechanism axisExtremeContext already uses) provably cannot rule
+// out either sign for a computed value this close to the true radial
+// minimum, whichever way the tilted axis's own rounding lands it on a given
+// architecture.
 //
-// The published volume interval contains the enclosed value here, but NOT
-// because of this admitted band's own charge: radialAdmitAllow measures at
-// float64-epsilon scale (a few ulps of the axis's own magnitude), so
+// The published volume interval contains the enclosed value here, and the
+// dedicated charge is a real but NEGLIGIBLE contributor to that bound:
 // revolveAxisAdmitVolumeCharge's tol² term is many orders of magnitude
 // smaller than the OTHER analytic rounding this build already charges (the
 // axis anchor/direction bounds folded through axisMoments, the sweep's own
-// rounding) — asserted below by showing the published bound is UNCHANGED
-// whether or not the dedicated charge runs. That is a properly established
-// fact, not an assumption: T90/T91 are what make the charge itself
-// load-bearing, at a magnitude no real sketch-resolved fixture in this tree
-// reaches, and this test is what shows a real one does not need it to.
+// rounding) — asserted below by comparing the published bound WITH the
+// charge against the SAME build with radialAdmitAllow zeroed, and requiring
+// the difference be a tiny fraction of the bound rather than bit-identical
+// (the scan-arithmetic charge above makes it real, if still minuscule). That
+// is a properly established fact, not an assumption: T90/T91 are what make
+// the charge itself load-bearing, at a magnitude no real sketch-resolved
+// fixture in this tree reaches, and this test is what shows a real one does
+// not need it to be.
 func TestRevolveAxisBandRealGeometryChargedPathVolumeContainment(t *testing.T) {
 	t.Parallel()
 	tiltedAxis := SketchLine{Start: Point2{U: 0, V: -20}, End: Point2{U: 3, V: -16}}
@@ -325,7 +329,9 @@ func TestRevolveAxisBandRealGeometryChargedPathVolumeContainment(t *testing.T) {
 	require.NoError(t, err)
 	volBoundNoCharge, err := volNoCharge.Bound.In(units.CubicMillimeter)
 	require.NoError(t, err)
-	require.Equal(t, volBoundNoCharge, volBoundWithCharge,
+	require.LessOrEqual(t, volBoundNoCharge, volBoundWithCharge,
+		"zeroing the admitted band's radial slop must never WIDEN the published bound")
+	require.Less(t, volBoundWithCharge-volBoundNoCharge, 1e-6*volBoundWithCharge,
 		"this real fixture's dedicated axis-band charge must be shown negligible here, not assumed: "+
 			"T90/T91 are the isolation tests that make the charge itself load-bearing")
 }
