@@ -139,6 +139,15 @@ is no free edge to tell them apart.
 Every other row of §1's table binds a sheet mesh unchanged, and so does §1.1's
 one-entry cache.
 
+**§1's table states no vertex-link requirement for a `BodySolid` mesh, but
+§12's "a vertex link is not one connected cycle" refusal row assumes one
+runs.** Today only the revolve, cap-loop chamfer and stitched-solid
+restatement paths (§2's `stitchPayload` row, `tessellate_stitch.go`) actually
+call `requireVertexLinks` on their solid branch, beside `requireClosedMesh`:
+each welds or joins independently walked or independently authored geometry,
+where nothing upstream already proves a pinched vertex cannot occur the way a
+single swept prism or cup section's own construction does.
+
 **A sheet mesh carries no occupied-volume proof, so §11 never admits it to a
 boolean.** That follows from §11's own rule rather than adding one: admission
 is on the occupied-volume proof, and a body that encloses no region has no
@@ -205,6 +214,7 @@ analytic walk's do (`docs/tessellation-reach-design.md` §5).
 | `revolvePayload` | one meridian chording + one global angular sequence, then final rigid placement | current meridian + angular displacement for that analytic patch, plus construction rounding `deltaC` and final-placement rounding `deltaR`; `deltaC + deltaR` for otherwise exact planar patches | max per-face source bound (§8) | integral of absolute local true-vs-held area-density error + cap deficits + construction/placement area allowances (§10) | meridian/angular + construction/placement homotopy allowances (§11) |
 | `facetedPayload` | held polygons + inherited boundary certificate | inherited certified face displacement, or global composed `Delta` when no tighter face value exists | max per-face source bound | payload's composed slack | payload's composed symmetric-difference bound |
 | `capBlendPayload` | `docs/tessellation-reach-design.md` §7 owns this row: one count per wall walk shared by the trimmed side wall, the band patch and the cap contour | that document's per-patch term table | max per-face source bound | that document's per-patch composition | none until its occupied-volume proof lands; `symDiffOK == false` |
+| `stitchPayload` | the triangle set `Stitch`'s own build assembled and audited (`docs/surface-design.md` §6.4), CLOSED and all-planar only (`stitchAllTetrahedronEligible`); attributed by the payload's own recorded per-triangle live face, never by role (§4) | the largest `Vertex.Bound()` over the vertices that face's own triangles touch; zero only when every one of them is | max per-face source bound | `perturbedTriangleAreaAllow` per triangle at that triangle's own largest vertex bound, summed through `absSumUpper`; zero wherever every vertex bound is zero | unpublished in this increment; `symDiffOK == false` — the tetrahedron sum proves SIGNED volume, never the occupied-volume symmetric-difference bound this row requires before a boolean may consume it |
 | `sweepPayload` | staged until `docs/sweep-design.md` Table D row D2 lands | — | — | — | — |
 
 ### `loftPayload` exact restatement
@@ -362,6 +372,16 @@ Assign sources by patch:
 | start/end cap | `capStart` / `capEnd` face |
 | cup kept cap, pocket floor, rim band | the corresponding `capStart`, `shellCap`, or `rim(i)` face |
 | faceted restatement | faceted body face recorded by the payload's facet group |
+| stitched-solid triangle | the payload's own recorded per-triangle live face (`stitchPayload.triFaces`), never a role lookup |
+
+Every row above but the last names a ROLE this evaluator's own build stamped
+on the face it created, unique per body by construction. A stitched body's
+faces carry no such guarantee: `rebuildStitchTopology` copies each welded
+operand face's own `origins` verbatim, so two independently welded operands
+can carry the identical role string, and a `byRole` map keyed on it would
+collide silently. `stitchPayload` sidesteps the question entirely by
+recording the live face directly, once, at the point its own triangle set is
+built, rather than recovering it from a role afterward.
 
 Walk order carries material on its left. Emit wall triangles from that order,
 the sweep sense, and the source face's `reversed` bit. Start caps point against
@@ -993,6 +1013,7 @@ Refuse before returning any partial mesh:
 | non-adjacent facets intersect after refinement | `ErrUnsupported` |
 | coordinate construction or placement rounding cannot prove positive facets and unchanged contact/component topology over its affine homotopy | `ErrUnsupported` |
 | directed-edge audit fails, a vertex link is not one connected cycle, or a triangle has zero area | `ErrUnsupported`; a missing/conflicting source role is `ErrDegenerate` because the body topology contradicts its payload |
+| a stitched body holding a face that is not a `Plane` bounded entirely by `Line3` edges, or an OPEN stitched body (`docs/surface-design.md` §14 Table D row 5) | `ErrUnsupported` |
 | a mesh has no finite construction/placement-homotopy allowance when used by a boolean | boolean call returns `ErrUnsupported`; export remains available when the payload's own boundary proofs pass |
 
 NEVER snap, weld, drop a facet, round a near-axis ring onto the axis, or perturb a
@@ -1009,6 +1030,7 @@ sample to make an analytic mesh close. Refine or refuse.
 | **T5** | deterministic local meridian refinement and global angular density improvements that preserve every earlier proof | free-form/NURBS REVOLVE generators. An extruded free-form prism's own chording is a DIFFERENT increment, riding the existing prism tessellation path (`docs/spline-design.md` §10 P5, Table C) rather than this row |
 | **T6** | `loftPayload` exact restatement: source-face-preserving wall/cap triangle copy, a proof record carrying the payload's own facet departure `absSumUpper(matchedDelta, maxTwistOffsetUpper)` (zero only when both published terms are zero under loft §5.2's conditions), and mesh-boolean admission | loft surveys and analytic pair clearance |
 | **T7** | `capBlendPayload` export-only tessellation: `docs/tessellation-reach-design.md` §7 owns its cells, proof-record row and refusals | cap-blend mesh-boolean admission, until that document's occupied-volume proof lands |
+| **T8** | `stitchPayload` exact restatement, CLOSED all-planar case only: source-face-preserving triangle copy attributed by the payload's own recorded per-triangle face, a proof record carrying the largest per-face vertex bound and its per-triangle area-slack term, and the closed-mesh audit plus its own vertex-link safety net | a curved, mixed, or OPEN stitched body's own mesh; stitched-body mesh-boolean admission, until its occupied-volume proof lands |
 
 Each increment ships its computed geometry tests with it. §§8–10 prove the
 revolve mesh itself, which is what T2/T3 export; T4's occupied-volume proof is

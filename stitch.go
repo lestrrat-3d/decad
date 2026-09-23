@@ -120,6 +120,24 @@ type stitchPayload struct {
 	// world coordinates — verify_gate.go's own diameter arm reads it back,
 	// modelled on loftPayload's identical field.
 	verts []r3.Vec
+	// vertBound is verts' own per-vertex proven bound (millimetres), the
+	// same widened class bound rebuildStitchTopology's vertexForClass
+	// stamps onto the live Vertex it builds for that class — read back here
+	// so tessellate_stitch.go can publish a per-face bound without
+	// recomputing it. Populated only alongside tris/triFaces below.
+	vertBound []float64
+	// tris is the final outward-wound triangle set (indices into verts) a
+	// CLOSED, all-planar (stitchAllTetrahedronEligible) build assembled and
+	// audited — the exact set tessellate_stitch.go restates with no
+	// chording. Nil for a curved, mixed, or OPEN stitched body: none of
+	// those has a triangle set to restate.
+	tris [][3]int
+	// triFaces is tris' own per-triangle LIVE rebuilt face, parallel to
+	// tris. It is never stitchPayload.faces (the retired operand faces) and
+	// never attributed by role, since rebuildStitchTopology copies a welded
+	// operand's origins verbatim and two welded operands can share one role
+	// string.
+	triFaces []*Face
 	// auditClean records whether the crossing audit ran and passed for this
 	// body: true for a solid (Table C requires it) and for an open sheet
 	// whose audit was also run and admitted (the open-case decision,
@@ -188,6 +206,16 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	if err != nil {
 		return nil, err
 	}
+	// vertBound reads back, per vertex CLASS index (the same index tris and
+	// verts share), the widened bound rebuildStitchTopology's vertexForClass
+	// already stamped onto the live Vertex it built for that class —
+	// tessellate_stitch.go's own per-face bound is the largest of these over
+	// the vertices a face's triangles touch, so this is a read of an
+	// existing proof, never a second one.
+	vertBound := make([]float64, len(verts))
+	for v, class := range classOf {
+		vertBound[class] = v.bound.Base()
+	}
 	if err := attachFaceLoopsContext(ctx, newFaces); err != nil {
 		return nil, err
 	}
@@ -204,6 +232,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	kind, solid := BodySheet, false
 	auditClean := false
 	var tris [][3]int
+	var triFaces []*Face
 	var acc *loftMassAccumulator
 	var curvedVolume Measurement
 	var curvedCentroid VecMeasurement
@@ -214,7 +243,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		tris, err = triangulateStitchFaces(ctx, newFaces, classOf)
+		tris, triFaces, err = triangulateStitchFaces(ctx, newFaces, classOf)
 		if err != nil {
 			return nil, err
 		}
@@ -248,7 +277,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 				for _, f := range newFaces {
 					reverseFaceOrientation(f)
 				}
-				tris, err = triangulateStitchFaces(ctx, newFaces, classOf)
+				tris, triFaces, err = triangulateStitchFaces(ctx, newFaces, classOf)
 				if err != nil {
 					return nil, err
 				}
@@ -368,7 +397,26 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 		return nil, err
 	}
 
-	body.payload = stitchPayload{xform: xform, delta: delta, faces: srcFaces, plan: plan, verts: verts, auditClean: auditClean}
+	// tessellate_stitch.go's exact restatement is scoped to the CLOSED,
+	// all-planar case only (docs/surface-design.md §14 Table D row 5): the
+	// curved-closure arm's own faces have no triangle set to restate, and an
+	// OPEN all-planar sheet's mesh is a later increment even though this
+	// arm did triangulate it to check its own perturbed area sum above.
+	payloadTris, payloadTriFaces, payloadVertBound := tris, triFaces, vertBound
+	if !allTetra || open {
+		payloadTris, payloadTriFaces, payloadVertBound = nil, nil, nil
+	}
+	body.payload = stitchPayload{
+		xform:      xform,
+		delta:      delta,
+		faces:      srcFaces,
+		plan:       plan,
+		verts:      verts,
+		vertBound:  payloadVertBound,
+		tris:       payloadTris,
+		triFaces:   payloadTriFaces,
+		auditClean: auditClean,
+	}
 	return body, nil
 }
 
@@ -712,15 +760,23 @@ func stitchHasFreeEdge(faces []*Face) bool {
 // CHOICE of triangulation but the crossing audit that follows runs on the
 // exact 3D coordinates the table already carries — never on a
 // re-approximated one.
-func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Vertex]int) ([][3]int, error) {
+//
+// It returns the LIVE face each returned triangle belongs to, parallel to
+// the triangle set, so a caller that must attribute a triangle to its face
+// (tessellate_stitch.go) reads it back directly rather than reconstructing
+// the mapping afterward — stitchPayload.faces holds only the retired
+// operand faces, and a stitched body's faces carry no per-body-unique role
+// to recover it from either (docs/tessellation-design.md §4).
+func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Vertex]int) ([][3]int, []*Face, error) {
 	var tris [][3]int
+	var triFaces []*Face
 	for _, f := range faces {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		pl, ok := f.surface.(Plane)
 		if !ok {
-			return nil, fmt.Errorf(`%w: Stitch cannot triangulate a non-planar face`, ErrUnsupported)
+			return nil, nil, fmt.Errorf(`%w: Stitch cannot triangulate a non-planar face`, ErrUnsupported)
 		}
 		frame := pl.Frame
 		var pts []Point2
@@ -746,7 +802,7 @@ func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Ver
 		}
 		tris2D, err := triangulate2DContext(ctx, pts, loopIdx)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for _, t := range tris2D {
 			a, b, c := classOf[verts[t[0]]], classOf[verts[t[1]]], classOf[verts[t[2]]]
@@ -754,9 +810,10 @@ func triangulateStitchFaces(ctx context.Context, faces []*Face, classOf map[*Ver
 				b, c = c, b
 			}
 			tris = append(tris, [3]int{a, b, c})
+			triFaces = append(triFaces, f)
 		}
 	}
-	return tris, nil
+	return tris, triFaces, nil
 }
 
 // shoelace returns twice the signed area of the polygon idx walks over pts —

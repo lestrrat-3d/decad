@@ -285,11 +285,17 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64) (*Mesh, 
 	if cbp, ok := b.payload.(capBlendPayload); ok {
 		return tessellateCapBlend(ctx, b, cbp, chord)
 	}
+	if sp, ok := b.payload.(stitchPayload); ok {
+		// The stitch restatement takes no chord tolerance at all
+		// (tessellate_stitch.go's own doc comment owns why), the same
+		// reasoning tessellateLoft's own arm above states for a loft.
+		return tessellateStitch(ctx, b, sp)
+	}
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
 		// Chording is per payload kind. Name both the staged kind and the
 		// implemented set so the refusal cannot misstate evaluator reach.
-		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, revolve, cup, loft, cap-loop chamfer, and faceted`, ErrUnsupported, b.payload)
+		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, revolve, cup, loft, cap-loop chamfer, stitch, and faceted`, ErrUnsupported, b.payload)
 	}
 	// sheet is docs/surface-design.md §4.1's own flag, read once: a surface
 	// result omits both caps from its wall build (prism_build.go), and every

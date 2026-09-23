@@ -606,6 +606,8 @@ func requireVolumeProvingPayload(b *Body, index int) error {
 		switch b.payload.(type) {
 		case capBlendPayload:
 			err = fmt.Errorf(`%w: a cap-loop chamfer's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
+		case stitchPayload:
+			err = fmt.Errorf(`%w: a stitched body's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
 		default:
 			return nil
 		}

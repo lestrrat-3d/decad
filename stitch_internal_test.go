@@ -1085,3 +1085,23 @@ func TestStitchCurvedMassCorrectsInwardOrientationForTorus(t *testing.T) {
 	require.InDelta(t, wantVol, vol.Value.Base(), 1e-6)
 	require.InDelta(t, 5.0, cen.Value.X, 1e-9)
 }
+
+// TestFaceIsTetrahedronEligibleRefusesHeldPlanarFaceted closes the mismatch
+// tessellate_stitch.go's mesh restatement gives a second caller:
+// f.isPlanar() also admits a heldPlanar Faceted face — a boolean-built face
+// standing for flat source geometry, never a Plane itself — while
+// triangulateStitchFaces demands f.surface.(Plane) and errors on anything
+// else. faceIsTetrahedronEligible checks the surface tag directly so the
+// two never disagree. Latent through the public seam (no Faceted face is
+// ever a stitch operand today), so this drives the eligibility check
+// straight at a hand-built fixture. Shown to fail: reverting the check to
+// f.isPlanar() makes this face pass eligibility, which is exactly the
+// mismatch this test exists to close.
+func TestFaceIsTetrahedronEligibleRefusesHeldPlanarFaceted(t *testing.T) {
+	f := stitchTestSquareFace(r3.Vec{})
+	f.surface = Faceted{}
+	f.heldPlanar = true
+	require.True(t, f.isPlanar(), "the fixture's own premise: isPlanar() alone would admit this face")
+	require.False(t, faceIsTetrahedronEligible(f),
+		"a heldPlanar Faceted face is not a Plane, and triangulateStitchFaces would error on it")
+}
