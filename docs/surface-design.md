@@ -706,7 +706,7 @@ edge, and decides the result.
 |---|---|---|
 | at least one free edge remains | a `BodySheet`, open | the boundary is not closed; the residual free edges name exactly what did not join |
 | every edge welded, all faces planar and straight-edged | a `BodySolid` | closure, manifoldness and non-self-intersection are proven, and the volume is exact (§6.4) |
-| every edge welded, some face not planar-and-straight-edged, every face admits a landed flux arm (`Plane`/`Cylinder`/`Cone`, zero `normalBound`) and the single source body proves the boundary simple by construction | a `BodySolid` | closure and the per-surface flux integral together prove volume and centroid; manifoldness rests on the vertex-link audit alone, since the reused crossing audit has no triangle set to run on (§6.4) |
+| every edge welded, some face not planar-and-straight-edged, every face admits a landed flux arm (`Plane`/`Cylinder`/`Cone`/`Sphere`, zero `normalBound`) and the single source body proves the boundary simple by construction | a `BodySolid` | closure and the per-surface flux integral together prove volume and centroid; manifoldness rests on the vertex-link audit alone, since the reused crossing audit has no triangle set to run on (§6.4) |
 | every edge welded, some face curved, and the set above does not admit | `ErrUnsupported` (R8) | closure is proven but this evaluator has no closed-form flux integral for the boundary as given — the surface kind, the face's own trim, or the construction proof is outside what has landed |
 | the welded set cannot be consistently oriented | `ErrDegenerate` (R7) | a non-orientable assembly bounds nothing; no later proof makes it a solid |
 | the crossing audit proves a self-contact or self-intersection | `ErrDegenerate` (R9) | the faces overlap, so the assembly is no solid's boundary |
@@ -800,12 +800,13 @@ over their own publication rounding, `Bounds` needing nothing further since
 
 **A curved face's flux term is not a tetrahedron sum**, and a per-surface
 closed-form flux integral over an arbitrary trimmed analytic patch is its own
-piece of work. §14's increment 3 lands `Plane` and `Cylinder`; a follow-up PR
-adds `Cone`. Together they give a second admission rule beside the
-tetrahedron sum's: **every face is either a `Plane` bounded entirely by
-`Line3` edges (the tetrahedron path, unchanged), or a variant with a landed
-flux arm, and every face carries a zero `normalBound`.** `stitch_flux.go`
-owns the flux arms, `stitchRuleSAdmits` owns the second rule below.
+piece of work. §14's increment 3 lands `Plane`, `Cylinder`, `Cone` and
+`Sphere`; a follow-up PR adds `Torus`. Together they give a second admission
+rule beside the tetrahedron sum's: **every face is either a `Plane` bounded
+entirely by `Line3` edges (the tetrahedron path, unchanged), or a variant
+with a landed flux arm, and every face carries a zero `normalBound`.**
+`stitch_flux.go` owns the flux arms, `stitchRuleSAdmits` owns the second rule
+below.
 
 **The `Cone` arm needs no general trimmed-boundary contour sum**, for the
 identical reason `Plane` and `Cylinder` do not: this evaluator's own scope
@@ -847,6 +848,65 @@ sibling needs `tan²β` too, but reads it from the two rims' own radii and
 axial positions (`(R_hi−R_lo)/(z_hi−z_lo)`) rather than from `HalfAngle`,
 so no arm here ever needs `tan(HalfAngle)`'s VALUE, only its sign as a
 validity check.
+
+**The `Sphere` arm is scoped to a face with NO boundary loop at all** — a
+complete, closed spherical shell — rather than to any trimmed shape: this
+evaluator's only reachable `Sphere` fixture is a half-disc revolved a full
+turn about its own diameter (§15's T50), and `fullRevLoops` mints a latitude
+circle only for a junction OFF the revolve axis, while both of a
+diameter-revolved semicircle's own junctions are poles ON it. So the face
+carries zero loops and zero edges, and — since `Body.Vertices()` derives
+from `Body.Edges()` — the whole stitched body carries zero vertices too. A
+spherical zone or cap bounded by one or two rim circles would need the
+general vector-area contour sum this file still does not build (this
+section's own `Cone` paragraph), so any `Sphere` face carrying a boundary
+loop refuses (`ErrUnsupported`, R8) rather than being guessed at.
+
+Anchored at the sphere's own `Center`, `p − Center` is parallel to `n` at
+every surface point, so `(p − Center)·n` is identically `σ·Radius` — the
+same identity the `Cylinder` arm uses, with `Center` standing in for a point
+on the cylinder's axis — giving `K_F = σ·Radius·f.area`, the identical shape
+`Cylinder`'s own `K_F` takes. `Sphere` carries `Radius` as a bare
+`units.Value` with no bound field, exactly like `Cylinder` and `Cone`, but
+this arm cannot read `boundedCircleRadius`'s edge-length route the way they
+do: a zero-loop face has no rim edge to read a circumference from at all.
+Instead `boundedSphereRadius` inverts the face's own already-proven
+`area`/`areaBound` (`Area = 4πR²`, so `R = √(Area/4π)`) through
+`boundedQuotient` and `boundedSqrt` — a reuse of an already-published
+reading, on the same terms `Cylinder`'s own `K_F` reuses `f.area` rather
+than integrating anything fresh, never a fresh trust of the bare `Radius`
+field. `boundedSqrt`'s own rational bracket (`ratSqrtDown`/`ratSqrtUp`) is
+what makes the inversion itself sound, since Go's `math.Sqrt` carries no
+accuracy contract this file would otherwise have to lean on either.
+
+Because a zero-loop face has no boundary to sum `½∮p×dr` over, `S_F` is
+exactly the zero vector by construction — no trig integral to collapse,
+unlike `Cylinder`'s full-circumference argument — so the `(Center −
+anchor)·S_F` cross term vanishes for EVERY anchor, and `flux_F` is exactly
+`K_F` regardless of which anchor `stitchCurvedMass` is handed. That is what
+makes this arm safe to reach with the zero anchor `evalStitchContext`
+substitutes when the shared vertex table is empty (stitch.go's own doc
+comment at that substitution, written against exactly this fixture before
+this arm landed). The first moment follows the general shift-of-origin
+identity for a region of volume `V` centred at `Ĉ`: `∫_Ω(x_i−a_i)dV =
+V·(Ĉ_i−a_i)`, valid here because a zero-loop `Sphere` face is never one of
+several faces sharing a boundary with others — it IS the whole closed
+boundary of the ball it bounds, on its own — so `M_i = (flux_F/3)·(Center_i
+− anchor_i)`, `flux_F/3` being this face's own signed volume by the same
+normalization `stitchCurvedMass`'s own `vol := fluxSum/3` uses for the
+total.
+
+A zero-loop `Sphere` face also means `checkStitchClosure`'s directed-edge
+parity leg and the vertex-link audit (`auditVertexLinksForStitchFaces`) both
+walk an empty edge set and pass VACUOUSLY — neither proves anything about
+this fixture's manifoldness, and closure and non-self-intersection rest
+entirely on Rule S's own construction proof (the revolve axis argument,
+above). A mathematical sphere built this way has no pinch point to catch in
+the first place — both of the generating semicircle's own axis contacts are
+its two poles, the ordinary way a sphere closes, never the two-isolated-
+interior-point lens shape this section's vertex-link paragraph names — but
+the vacuous pass is recorded here rather than left to read as a proof it is
+not.
 
 **`Face.normalBound` is nonzero exactly for a cap-blend band patch**
 (topology.go's own field doc): the face is a ruled surface and the `Cone` or
@@ -949,16 +1009,26 @@ both pass). `sweep_composite.go`'s own `auditVertexLinks` — hoisted out of
 leg that turned out to prove nothing about its own two inputs — is the
 existing reject-only mechanism for exactly this, and the curved `Stitch`
 path runs it immediately before a curved body first claims solidity.
-Nothing this increment's own fixtures build can trip it: every admitted
-`Plane`/`Cylinder`/`Cone` shape this increment's own scope reaches stays
-strictly clear of the revolve axis — a `Cone` wall's own scope restriction
-(the paragraph above) admits only two full-circle rims at two distinct,
-provably positive radii, never a rim collapsed onto the axis — so a
-boundary pinch at an isolated interior point, which needs a generatrix that
-actually TOUCHES the axis to produce, stays out of reach here exactly as it
-did before `Cone` landed. The leg stands as a proven-safe backstop for a
-later increment's own `Sphere`/`Torus` arms, or a `Cone` fixture that
-reaches the axis, not a case this one's own tests can observe firing.
+Nothing this increment's own fixtures build can trip it, for two different
+reasons depending on the arm. Every admitted `Plane`/`Cylinder`/`Cone` shape
+this increment's own scope reaches stays strictly clear of the revolve
+axis — a `Cone` wall's own scope restriction (the paragraph above) admits
+only two full-circle rims at two distinct, provably positive radii, never a
+rim collapsed onto the axis. The `Sphere` arm's own reachable fixture DOES
+touch the axis, at its generating semicircle's own two poles — but a
+full-turn revolve's `wallAxis` classification mints no face, edge or vertex
+at all for a boundary stretch lying ON the axis, so a `Sphere` face's two
+poles carry no topology for the audit to even examine (this section's own
+`Sphere` paragraph above); the audit runs on an empty edge set and passes
+vacuously, which is a different reason than "clear of the axis" but stays
+just as safe, since a sphere closing at two ordinary poles has no pinch to
+catch in the first place. A boundary pinch at an isolated INTERIOR point,
+which needs a generatrix that touches the axis at a point other than its
+own endpoint to produce, stays out of reach here exactly as it did before
+`Cone` and `Sphere` landed. The leg stands as a proven-safe backstop for a
+later increment's own `Torus` arm, or a fixture whose generatrix touches the
+axis at an interior point, not a case this one's own tests can observe
+firing.
 
 **What is proven, and what is not, for a curved closed set.** Closure (the
 directed-edge parity leg) and manifoldness at every vertex (the hoisted
@@ -1594,7 +1664,7 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T3 | T1's walls plus a patch at each end, stitched | `Kind() == BodySolid`; `IsSolid()`; `Volume` exactly 60000 mm³ with a zero bound; `Area` exactly 15200 mm²; `Edges(Free())` matches nothing; `Verify` reads `Sound` |
 | T4 | T3's operands with one patch displaced 1e-9 mm | the stitch returns a **sheet**, not an error; `Edges(Free()).Exactly(8)` resolves — the displaced patch's four edges and the four wall rims they failed to meet — while the other patch's four welded |
 | T5 | T3's solid, unstitched then re-stitched | 6 sheets out; the re-stitched body's `Volume` equals T3's to the bit |
-| T6 | a half-disc revolved a full turn about its diameter, as a surface | a closed sheet: `Kind() == BodySheet`, `Edges(Free())` matches nothing, `Volume()` is `ErrNotSolid`; stitching it alone is `ErrUnsupported` (R8) in increment 2 |
+| T6 | a half-disc revolved a full turn about its diameter, as a surface | a closed sheet: `Kind() == BodySheet`, `Edges(Free())` matches nothing, `Volume()` is `ErrNotSolid`; stitching it alone closes to a solid from T50 onward |
 | T7 | a surface-extruded profile and a solid whose boxes meet, with an admitted transversal crossing between them | `Verify` reads `Interfering` with exactly one `DiagSheetSolidCrossing` naming the pair, and no `Interference` or `Clearance` row; `Passed()` is false |
 | T8 | the same pair moved until the boxes separate | `Verify` reads `Sound`, with no diagnostic; under `WithClearances()`, a `Clearance` row carries the measured gap, `Exact` |
 | T7a | a sheet frame around a smaller solid, boxes meeting but the frame's material never touching it | `Verify` reads `Sound`; under `WithClearances()` a `Clearance` row carries the closed-form gap, `Exact`, and no diagnostic |
@@ -1643,6 +1713,9 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T47 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` and `Centroid` agree within the two independently-composed bounds — the independent-producer cross-check, proving the `Cone` arm against the unrelated revolve engine rather than against its own arithmetic |
 | T48 | a hand-built `Cone` face whose `Origin` sits away from the apex (`Radius` nonzero), driven directly at the apex derivation (internal — every reachable construction site sets `Radius` literally to `0`, so a nonzero-`Radius` `Cone` never reaches `Stitch` through the public seam) | `ErrUnsupported` (R8): this evaluator has no sound bound for `tan(HalfAngle)`'s own rounding, so it refuses rather than publish an unbounded apex; a literal zero `Radius` still publishes `Origin` as an `Exact` apex |
 | T49 | a hand-built `Cone` face whose `HalfAngle` is `0` (an exactly-zero tangent, a degenerate needle) or `NaN` (a non-finite tangent, a malformed value), driven directly at the apex derivation (internal — a reachable `wallCone` always carries a finite `HalfAngle` strictly between `0` and `π/2`, `revolve_axis.go`'s own analytic-walk requirement) | `ErrUnsupported` (R8): the half-angle's tangent is not a positive, finite float |
+| T50 | `semicircleSketch` revolved a full turn as a surface (T6's own fixture), stitched alone | `Kind() == BodySolid`; `Volume` (4/3)π·125 mm³, `Area` 100π mm², `Centroid` (5, 0, 0), all `Approximate`, each enclosing its analytic value within `Bound`; `Edges(Free())` matches nothing — this replaces `TestStitchClosedCurvedSheetIsUnsupported`, whose whole subject (T6's second half) this row retires |
+| T51 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` and `Centroid` agree within the two independently-composed bounds — the independent-producer cross-check, proving the `Sphere` arm against the unrelated revolve engine rather than against its own arithmetic |
+| T52 | T50's fixture swept across a family of radii and off-origin diameters (the generating semicircle's own centre moved along the axis) | `\|published − analytic\| <= Bound` on `Volume` and each `Centroid` coordinate for every member |
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'`

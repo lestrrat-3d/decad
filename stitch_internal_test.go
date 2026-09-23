@@ -660,6 +660,217 @@ func TestStitchCurvedMassCorrectsInwardOrientationForCone(t *testing.T) {
 	require.InDelta(t, wantCX, cen.Value.X, 1e-9)
 }
 
+// sphereRevolveFacesForInternalTest builds a semicircle of the given
+// diameter, revolved a full turn about the U axis, and returns its own
+// single, boundary-less Sphere face — stitch_flux_test.go's
+// sphereRevolveSheet, duplicated here because this file's package (decad)
+// cannot import the exported test package (decad_test) that helper lives
+// in.
+func sphereRevolveFacesForInternalTest(t *testing.T, diameter float64) []*Face {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	o := s.CreatePoint(0, 0)
+	s.Fix(o)
+	end := s.CreatePoint(diameter, 0)
+	c := s.CreatePoint(diameter/2, 0)
+	s.CreateLine(o, end)
+	s.CreateArc(c, end, o)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	uAxis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
+
+	d := New()
+	sheet, err := d.Revolve(s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
+	require.NoError(t, err)
+	return sheet.Faces()
+}
+
+// stitchTestSphereFace builds a hand-made, boundary-less Sphere face —
+// centre, radius, and the given area/areaBound — for the Sphere arm's own
+// shown-to-fail legs below: no public fixture's own area carries a bound
+// far enough above ulp noise to prove the areaBound-reuse leg on its own
+// (every public Sphere fixture revolves about a coordinate-aligned axis
+// through the origin, where the profile's own exact-rational radius gives
+// an area bound at the same ulp scale every OTHER term here carries too).
+func stitchTestSphereFace(center r3.Vec, radius, areaBound float64) *Face {
+	return &Face{
+		surface:   Sphere{Center: center, Radius: units.Millimeters(radius)},
+		area:      4 * math.Pi * radius * radius,
+		areaBound: areaBound,
+	}
+}
+
+// TestStitchSphereFluxReusesAreaBound is the Sphere arm's own radius-bound
+// leg: since a closed, boundary-less Sphere face has no rim edge to read a
+// circumference from at all (sphereFaceFluxAndMoment's own doc comment),
+// boundedSphereRadius derives the radius from the face's own already-proven
+// area/areaBound instead (Area = 4*pi*R^2, inverted) — so both the flux and
+// the first moment's own bound must scale with f.areaBound, through TWO
+// redundant paths that both have to be zeroed together to lose the signal:
+// boundedSphereRadius's own inversion, AND the K_F formula's own direct
+// reuse of f.areaBound in Radius*Area (the identical reuse
+// TestStitchCylinderFluxReusesAreaBound isolates for the Cylinder arm,
+// which for Sphere has no independent edge-based radius to fall back on).
+// Zeroing either path ALONE still leaves the other carrying the signal —
+// checked directly while landing this test, not asserted here, since a
+// false failure would be as misleading as a false pass — so the test
+// asserts the OVERALL propagation the two paths jointly guarantee. anchor
+// is offset from center so the moment's own (Center-anchor) factor is
+// nonzero — at anchor == center every moment component is exactly zero
+// regardless of the radius bound, which would not be a corner case of this
+// anchor choice, it would be the ONLY choice that hides the leg.
+func TestStitchSphereFluxReusesAreaBound(t *testing.T) {
+	t.Parallel()
+	const radius = 5.0
+	center := r3.NewVec(5, 0, 0)
+	anchor := r3.NewVec(-2, 0, 0)
+
+	f := stitchTestSphereFace(center, radius, 1.0) // areaBound=1, far above ulp noise
+	flux, mx, _, _, err := stitchFaceFluxAndMoment(f, anchor)
+	require.NoError(t, err)
+	require.Greater(t, flux.bound, 0.1, "the flux bound must scale with f.areaBound")
+	require.Greater(t, mx.bound, 0.1, "the moment bound must scale with f.areaBound")
+
+	zero := stitchTestSphereFace(center, radius, 0)
+	fluxZero, mxZero, _, _, err := stitchFaceFluxAndMoment(zero, anchor)
+	require.NoError(t, err)
+	require.Less(t, fluxZero.bound, 1e-6, "with areaBound zero, the flux bound has no other source of that magnitude")
+	require.Less(t, mxZero.bound, 1e-6, "with areaBound zero, the moment bound has no other source of that magnitude")
+}
+
+// TestStitchSphereFluxDerivesRadiusFromAreaNotBareField is the direct
+// correctness check behind boundedSphereRadius's whole existence: this face
+// carries a Sphere.Radius of 999 mm, an absurd value bearing no relation to
+// its own area, which is set to the TRUE area of a radius-5 sphere. If
+// stitchFaceFluxAndMoment ever read Sphere.Radius bare — the exact defect
+// CLAUDE.md's own rule warns against, and the one boundedSphereRadius's own
+// doc comment exists to close — flux would come out around
+// sign*999*area, wildly larger than the radius-5 answer. The published
+// value must match the AREA-derived radius, proving the bare field is
+// never consulted.
+func TestStitchSphereFluxDerivesRadiusFromAreaNotBareField(t *testing.T) {
+	t.Parallel()
+	const trueRadius = 5.0
+	f := &Face{
+		surface:   Sphere{Center: r3.NewVec(0, 0, 0), Radius: units.Millimeters(999)},
+		area:      4 * math.Pi * trueRadius * trueRadius,
+		areaBound: 0,
+	}
+
+	flux, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only flux and the error matter here.
+	require.NoError(t, err)
+	wantFlux := trueRadius * f.area
+	require.InDelta(t, wantFlux, flux.value, 1e-6,
+		"the published flux must come from the area-derived radius (5 mm), never the bare Sphere.Radius field (999 mm)")
+}
+
+// TestStitchSphereFluxRefusesFaceWithABoundaryLoop is the Sphere arm's own
+// scope restriction: this file never builds the general contour-sum
+// machinery a partial sphere (a zone or cap bounded by one or two rim
+// circles) would need (top-of-file doc comment), so a Sphere face carrying
+// any boundary loop at all is refused rather than guessed at. No reachable
+// fixture builds one today — revolve_build.go's own wallSphere
+// classification requires the generating arc's centre to sit on the
+// axis, and every reachable profile whose generating arc reaches the axis
+// at both of its own endpoints (the only way this evaluator's Rule S can
+// admit a closed set at all, docs/surface-design.md's own record) mints a
+// zero-loop face, never a rimmed one — so this is a hand-built fixture, the
+// same treatment TestStitchConeApexRefusesNonzeroRadius gives an
+// unreachable Cone shape.
+func TestStitchSphereFluxRefusesFaceWithABoundaryLoop(t *testing.T) {
+	t.Parallel()
+	v := &Vertex{position: r3.NewVec(5, 5, 0)}
+	e := &Edge{
+		curve:  Circle3{Center: r3.NewVec(5, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(5)},
+		start:  v,
+		end:    v,
+		length: 2 * math.Pi * 5,
+	}
+	f := &Face{
+		surface: Sphere{Center: r3.NewVec(5, 0, 0), Radius: units.Millimeters(5)},
+		loops:   []*Loop{{outer: true, coedges: []coedge{{edge: e, forward: true}}}},
+		area:    4 * math.Pi * 25,
+	}
+	e.faces = []*Face{f}
+
+	_, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	require.ErrorIs(t, err, ErrUnsupported)
+}
+
+// TestStitchCurvedMassCorrectsInwardOrientationForSphere is the orientation
+// sign's own shown-to-fail leg for the Sphere arm, the sibling of
+// TestStitchCurvedMassCorrectsInwardOrientation and
+// TestStitchCurvedMassCorrectsInwardOrientationForCone: neither public
+// Sphere fixture (stitch_flux_test.go) ever reaches the actual global
+// sign-flip branch, because a revolve build's own outward-normal convention
+// already agrees with the flux formula's own. This test reverses the real
+// T50 fixture's own Sphere face BEFORE handing it to stitchCurvedMass, so
+// the flux sum is genuinely negative on the first pass and the correction
+// must fire for the published volume to come out positive and right at
+// all. The anchor is the zero vector — the same substitution stitch.go's
+// own evalStitchContext makes when the shared vertex table is empty,
+// exactly this fixture's own case, since a zero-loop Sphere face mints no
+// vertex at all.
+func TestStitchCurvedMassCorrectsInwardOrientationForSphere(t *testing.T) {
+	t.Parallel()
+	faces := sphereRevolveFacesForInternalTest(t, 10)
+	require.Len(t, faces, 1)
+	require.Empty(t, faces[0].loops, "the sphere face carries no boundary loop at all")
+
+	for _, f := range faces {
+		reverseFaceOrientation(f)
+	}
+
+	vol, cen, err := stitchCurvedMass(context.Background(), faces, r3.Vec{}, 0)
+	require.NoError(t, err)
+	require.Greater(t, vol.Value.Base(), 0.0, "the global sign correction must recover a positive volume from an inward-reversed Sphere face")
+	require.InDelta(t, 4.0/3.0*math.Pi*125, vol.Value.Base(), 1e-6)
+	require.InDelta(t, 5.0, cen.Value.X, 1e-9)
+}
+
+// TestStitchCurvedMassSphereCoordUpperTracksRadius is stitchCurvedMass's own
+// coordUpper margin for a Sphere face, isolated: a zero-loop face
+// contributes NOTHING to the loop-based vertex scan stitchCurvedMass runs
+// before its per-surface-kind switch, so without a dedicated Sphere case
+// coordUpper would silently ignore the sphere's own extent, however far it
+// sits from anchor — exactly the "an intervening term happened to be zero"
+// trap CLAUDE.md warns against, this time because the fixture has no VERTEX
+// to hide behind rather than a zero coordinate. Anchoring at the sphere's
+// own centre makes the RAW (pre-widening) moment exactly zero
+// (Center-anchor is the zero vector), so every bit of the placed centroid's
+// own bound below comes from the delta-widening step alone, isolating the
+// coordUpper term from the rest of the pipeline. delta is set far smaller
+// than the radius, so sweptMomentAllow's own linear dependence on
+// (coordUpper+delta) is dominated by coordUpper whenever the Sphere case
+// fires, and by delta alone (order delta^2 once areaUpper's own
+// delta factor is folded in) when it does not — the two cases differ by
+// several orders of magnitude, not a close call.
+func TestStitchCurvedMassSphereCoordUpperTracksRadius(t *testing.T) {
+	t.Parallel()
+	faces := sphereRevolveFacesForInternalTest(t, 10)
+	require.Len(t, faces, 1)
+	center := r3.NewVec(5, 0, 0)
+
+	const delta = 0.001
+	_, cenAtCenter, err := stitchCurvedMass(context.Background(), faces, center, delta)
+	require.NoError(t, err)
+	_, cenUnplaced, err := stitchCurvedMass(context.Background(), faces, center, 0)
+	require.NoError(t, err)
+
+	require.Greater(t, cenAtCenter.Bound.Base(), cenUnplaced.Bound.Base(),
+		"the placement allowance must widen the centroid bound even anchored at the sphere's own centre")
+	// Measured directly: with the Sphere case's own margin (radius 5, far
+	// above delta 0.001), the widening comes out ~5.2e-3; deleting the case
+	// (coordUpper falls back to delta alone) drops it to ~1.0e-6, almost
+	// four orders of magnitude smaller — watched red before landing, then
+	// restored. 1e-3 sits safely between the two, on either side by more
+	// than 5x.
+	require.Greater(t, cenAtCenter.Bound.Base()-cenUnplaced.Bound.Base(), 1e-3,
+		"the widening must reflect the sphere's own radius, not just delta")
+}
+
 // frustumShellAnalyticsForInternalTest is stitch_flux_test.go's
 // frustumShellAnalytics, duplicated here because this file's package
 // (decad) cannot import the exported test package (decad_test) that

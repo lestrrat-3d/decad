@@ -11,10 +11,10 @@ import (
 
 // This file is docs/surface-design.md §6.4's per-surface flux integral: the
 // closed-form volume and first-moment reading that lets Stitch close a
-// boundary holding a curved face, for the Plane, Cylinder and Cone
+// boundary holding a curved face, for the Plane, Cylinder, Cone and Sphere
 // variants. Table R row R8 is a per-face dispatch: a face this evaluator
-// has no closed-form flux integral for refuses R8, and a Plane, Cylinder or
-// Cone face with a zero normalBound admits.
+// has no closed-form flux integral for refuses R8, and a Plane, Cylinder,
+// Cone or Sphere face with a zero normalBound admits.
 //
 // THE FORMULA. Volume is V = (1/3) Σ_F ∫_F (p−A)·n dA over one global anchor
 // A (verts[0], the same anchor loft_moments.go's tetrahedron sum uses, so the
@@ -46,14 +46,19 @@ import (
 // full circular rims at two axial levels, and every Cone face with exactly
 // two full circular rims at two distinct positions along its own growth axis
 // (never a partial revolution, never a generatrix edge, for any of the
-// three). All three admitted arms below are scoped to exactly that shape and
+// three). These three admitted arms are scoped to exactly that shape and
 // refuse (ErrUnsupported, R8) anything wider: a Plane loop that is not a
 // single Circle3 edge, or a Cylinder/Cone face that is not exactly two
-// single-Circle3 loops. This is deliberate, not an oversight: an untested
-// closed form is not a proof, and CLAUDE.md's own rule is that a narrower
-// answer always beats a wider guess. Widening any arm to a general Line3/Arc3
-// boundary is a later increment's own work, once a fixture exists to prove it
-// against.
+// single-Circle3 loops. The Sphere arm's own reachable fixture is narrower
+// still — a complete closed spherical shell with NO boundary loop at all
+// (a diameter-revolved semicircle's own two junctions are poles, and a pole
+// junction mints no latitude circle, sphereFaceFluxAndMoment's own doc
+// comment) — so it refuses any Sphere face carrying a boundary loop, rather
+// than guess at a spherical zone or cap this file has no fixture for. This
+// is deliberate, not an oversight: an untested closed form is not a proof,
+// and CLAUDE.md's own rule is that a narrower answer always beats a wider
+// guess. Widening any arm to a general Line3/Arc3 boundary is a later
+// increment's own work, once a fixture exists to prove it against.
 //
 // One consequence of the restriction: because every admitted surface is a
 // FULL circle, a full-circumference cylinder or a full-circumference cone
@@ -70,11 +75,15 @@ import (
 // summed over the cone's own two rims rather than assembled through a
 // generic per-edge dispatch. So this file never builds the general ½∮p×dr
 // contour-sum helper the wider design sketch anticipated, WITH ITS OWN
-// Line3 ARM, for any of the three arms actually landed — none of their
+// Line3 ARM, for any of the four arms actually landed — none of their
 // fixtures ever presents a Line3 or partial-arc boundary edge, and adding
 // unexercised dispatch code for one would be untested code with no fixture
-// behind it. A later increment's Sphere/Torus arms may still need the
-// general form, and can add it then, against their own fixtures.
+// behind it. The Sphere arm's own S_F is zero for a plainer reason still: a
+// zero-loop face has no boundary contour to sum at all, so its vector area
+// is the empty sum rather than a trig integral that happens to collapse
+// (sphereFaceFluxAndMoment's own doc comment). A later increment's Torus arm
+// may still need the general contour-sum form, and can add it then, against
+// its own fixture.
 //
 // THE FIRST MOMENT. Every reading needs the volume's own first-moment
 // sibling too — Body.Centroid has no ErrUnsupported arm for a solid, so a
@@ -88,7 +97,13 @@ import (
 // integration over a disk, summed with each loop's own outer/hole sign). The
 // Cylinder arm's own closed form is derived and verified in
 // cylinderFaceFluxAndMoment's doc comment; the Cone arm's is derived and
-// verified in coneFaceFluxAndMoment's own doc comment.
+// verified in coneFaceFluxAndMoment's own doc comment. The Sphere arm takes
+// a shortcut the other three cannot: because a zero-loop Sphere face IS the
+// whole closed boundary of the ball it bounds, on its own, its first moment
+// is the ball's own moment, and the general shift-of-origin identity
+// (volume times the offset from anchor to centroid) gives it directly —
+// sphereFaceFluxAndMoment's own doc comment derives it and checks it
+// against the same divergence-theorem surface integral by hand.
 //
 // BOUNDS. Every operation between a bound's origin and its use is charged
 // through boundedAdd/boundedSub/boundedMul/boundedQuotient — never a bare
@@ -124,6 +139,17 @@ import (
 // area-bound composition, for the identical reason: a fixture where the
 // true bound happens to be zero cannot show this leg failing if it were
 // ever deleted.
+//
+// The Sphere arm's own radius carries a DIFFERENT source of bound, because
+// it has no rim edge to read boundedCircleRadius's own circumference from
+// at all (this arm's own scope restriction admits only a zero-loop face):
+// boundedSphereRadius inverts the face's own already-proven area/areaBound
+// instead (its own doc comment). The public T50 fixture's own area bound is
+// the same tiny, ulp-scale magnitude every other term here carries, so
+// TestStitchSphereFluxReusesAreaBound (stitch_internal_test.go) pins the
+// leg on a hand-built face carrying a synthetic areaBound far above that
+// noise floor, the same treatment TestStitchCylinderFluxReusesAreaBound
+// gives the Cylinder arm's own area-bound reuse.
 //
 // The Cone arm's apex is Origin when Radius is exactly 0 — the ONLY case
 // this evaluator admits. The general formula, Origin −
@@ -334,6 +360,8 @@ func stitchFaceFluxAndMoment(f *Face, anchor r3.Vec) (flux, mx, my, mz boundedSc
 		return cylinderFaceFluxAndMoment(f, s, anchor, sign)
 	case Cone:
 		return coneFaceFluxAndMoment(f, s, anchor, sign)
+	case Sphere:
+		return sphereFaceFluxAndMoment(f, s, anchor, sign)
 	default:
 		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
 			`%w: Stitch closes a boundary holding a %T face this evaluator has no closed-form flux integral for (docs/surface-design.md Table R row R8)`,
@@ -860,6 +888,121 @@ func coneFaceFluxAndMoment(f *Face, cone Cone, anchor r3.Vec, sign float64) (flu
 	return flux, mx, my, mz, nil
 }
 
+// boundedSphereRadius derives a closed, boundary-less Sphere face's own
+// radius from its already-proven area/areaBound (Area = 4πR², inverted)
+// rather than trusting Sphere.Radius directly. boundedCircleRadius (the
+// Cylinder/Cone arms' own route) reads a RIM EDGE's own proven
+// circumference, but sphereFaceFluxAndMoment's own scope restriction admits
+// a Sphere face only when it carries NO boundary loop at all (this file's
+// only reachable Sphere fixture — docs/surface-design.md's own T50 — mints
+// no latitude circle for either of its two on-axis pole junctions,
+// revolve_build.go's fullRevLoops), so there is no edge here to read a
+// circumference from at all, not merely one this file declines to trust.
+// The face's own area, by contrast, is ALREADY a proven reading regardless
+// of loop count: it is set at construction time from the profile's own
+// closed-form Pappus integral (revolve_build.go's faceArea, walkAxisMoment),
+// the identical value docs/surface-design.md §6.4's Area-sum block already
+// trusts unconditionally for every face kind. Inverting Area = 4πR² through
+// boundedQuotient and boundedSqrt is therefore a reuse of an
+// already-published, already-tested reading, never a fresh unproven one —
+// boundedSqrt's own rational bracket (ratSqrtDown/ratSqrtUp) is what makes
+// the inversion itself sound, since Go's math.Sqrt carries no accuracy
+// contract this file would otherwise have to lean on either.
+func boundedSphereRadius(f *Face) (boundedScalar, error) {
+	fourPi := boundedMul(measuredScalar(4, 0), piScalar())
+	rSq := boundedQuotient(f.area, f.areaBound, fourPi.value, fourPi.bound)
+	rB := boundedSqrt(rSq)
+	if !(rB.value > 0) {
+		return boundedScalar{}, fmt.Errorf(
+			`%w: Stitch's flux path needs a Sphere face with a positive radius (docs/surface-design.md Table R row R8)`,
+			ErrUnsupported,
+		)
+	}
+	return rB, nil
+}
+
+// sphereFaceFluxAndMoment is the Sphere arm, scoped to a face with NO
+// boundary loop at all: a complete, closed spherical shell — the only shape
+// this evaluator's reachable fixtures ever present (a semicircle revolved a
+// full turn about its own diameter, docs/surface-design.md's own T50:
+// fullRevLoops mints a latitude circle only for a junction OFF the revolve
+// axis, and both of a diameter-revolved semicircle's own junctions are
+// poles ON it, so neither junction contributes an edge and the face carries
+// zero loops, zero edges, and — since Body.Vertices() derives from
+// Body.Edges() — the WHOLE stitched body carries zero vertices too).
+// Anything wider (a spherical zone or cap bounded by one or two rim
+// circles) is refused rather than guessed at: this file never builds the
+// general ½∮p×dr contour-sum machinery (top-of-file doc comment), and no
+// reachable fixture today exercises that shape, so admitting it would be
+// untested code with no fixture behind it.
+//
+// K_F. Anchored at the sphere's own Center, p−Center is parallel to n at
+// every surface point (n = σ·(p−Center)/Radius, σ = ±1 from f.reversed), so
+// (p−Center)·n = σ·Radius identically — the same identity the Cylinder arm
+// uses, with the sphere's own Center standing in for a point on the
+// cylinder's axis. So flux_F = K_F + (Center−anchor)·S_F, K_F =
+// σ·Radius·f.area — reusing the face's own already-proven area/areaBound
+// exactly as the Cylinder arm's own doc comment states the reuse — with
+// Radius itself read through boundedSphereRadius, never bare off
+// Sphere.Radius (that function's own doc comment).
+//
+// S_F = 0, EXACTLY, rather than by a trig integral collapsing to zero: a
+// face with no boundary loop has no contour to sum ∮p×dr over at all, so
+// its vector area is the empty sum. (This also follows from an unrelated,
+// more general fact — ∫_F n dA over ANY closed orientable surface is the
+// zero vector, by the divergence theorem applied to a constant field — but
+// the loop-free construction here makes it true by construction, needing no
+// such argument.) So the (Center−anchor)·S_F cross term vanishes for EVERY
+// anchor, not merely the sphere's own center, and flux_F is exactly K_F
+// regardless of which anchor stitchCurvedMass passes in — the property that
+// makes this arm safe to reach with the r3.Vec{} anchor stitch.go
+// substitutes when the shared vertex table is empty (stitch.go's own doc
+// comment at evalStitchContext, written against exactly this fixture before
+// this arm landed).
+//
+// THE FIRST MOMENT. Because the face IS a complete closed boundary all on
+// its own — never one of several faces sharing a boundary with others, by
+// this arm's own zero-loop scope — its own moment is the WHOLE ball's own
+// first moment, not a partial surface-integral term that only sums to
+// something meaningful alongside sibling faces the way Plane/Cylinder/
+// Cone's per-face terms do. The general shift-of-origin identity for a
+// region Ω of volume V centered at Ĉ: ∫_Ω(x_i−a_i)dV = V·(Ĉ_i−a_i), applies
+// directly with Ω the ball, Ĉ = Center, and V this face's own signed
+// sub-volume flux_F/3 (flux_F is exactly 3·(signed volume) by construction,
+// the same normalization stitchCurvedMass's own vol := fluxSum/3 uses for
+// the total). So M_i = (flux_F/3)·(Center_i−anchor_i), checked directly
+// against the divergence-theorem surface integral
+// ∫_S((p_i−a_i)²/2)n_i dA by hand for a sphere: expanding
+// (p_i−a_i)² = r_i²+2r_id_i+d_i² (r = p−Center, d = Center−anchor) and
+// integrating each term over the sphere (∫r_i dA = ∫r_i³ dA = 0 by odd
+// symmetry, ∫r_i² dA = (4/3)πR⁴ from ∫r_i²dA = (1/3)∫|r|²dA = (1/3)R²·Area)
+// gives M_i = σ/(2R)·[2d_i·(4/3)πR⁴] = σ·d_i·(4/3)πR³ — the identical
+// closed form, since (4/3)πR³ = R·Area/3 = K_F/(3σ) and σ²=1.
+func sphereFaceFluxAndMoment(f *Face, sph Sphere, anchor r3.Vec, sign float64) (flux, mx, my, mz boundedScalar, err error) {
+	if len(f.loops) != 0 {
+		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+			`%w: Stitch's flux path needs a Sphere face with no boundary at all (docs/surface-design.md Table R row R8)`,
+			ErrUnsupported,
+		)
+	}
+	rB, err := boundedSphereRadius(f)
+	if err != nil {
+		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+	}
+
+	flux = boundedMul(measuredScalar(sign, 0), boundedMul(rB, measuredScalar(f.area, f.areaBound)))
+
+	third := boundedQuotient(flux.value, flux.bound, 3, 0)
+	moment := func(centerI, anchorI float64) boundedScalar {
+		d := boundedSub(measuredScalar(centerI, 0), measuredScalar(anchorI, 0))
+		return boundedMul(third, d)
+	}
+	mx = moment(sph.Center.X, anchor.X)
+	my = moment(sph.Center.Y, anchor.Y)
+	mz = moment(sph.Center.Z, anchor.Z)
+	return flux, mx, my, mz, nil
+}
+
 // stitchCurvedMass sums every face's own flux and first moment
 // (stitchFaceFluxAndMoment), decides the global orientation sign from its
 // own total — reversing every face and recomputing once, the curved
@@ -897,7 +1040,7 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 				coordUpper = math.Max(coordUpper, ce.Start().Position().Value.Sub(anchor).Len())
 			}
 		}
-		switch f.surface.(type) {
+		switch surf := f.surface.(type) {
 		case Cylinder:
 			if len(f.loops) > 0 && len(f.loops[0].coedges) > 0 {
 				// A rim vertex's own distance from anchor is what the loop
@@ -927,6 +1070,22 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 				if rB, err := boundedCircleRadius(l.coedges[0].edge); err == nil {
 					coordUpper = absSumUpper(coordUpper, rB.value, rB.bound)
 				}
+			}
+		case Sphere:
+			// A zero-loop Sphere face contributes NOTHING to the loop-based
+			// scan above — it has no loop at all — so without this arm
+			// coordUpper would silently ignore the sphere's own surface
+			// entirely, however far it sits from anchor: exactly the "an
+			// intervening term happened to be zero" trap CLAUDE.md warns
+			// against, here because the fixture has no VERTEX to hide behind
+			// rather than a zero coordinate. Every point of the sphere sits
+			// within Center's own distance from anchor plus Radius, so that
+			// sum is the margin, with Radius read through
+			// boundedSphereRadius — never Sphere.Radius bare — exactly as
+			// the Cylinder/Cone margins above read theirs through
+			// boundedCircleRadius.
+			if rB, err := boundedSphereRadius(f); err == nil {
+				coordUpper = absSumUpper(coordUpper, surf.Center.Sub(anchor).Len(), rB.value, rB.bound)
 			}
 		}
 	}
