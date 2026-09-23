@@ -29,7 +29,12 @@ import (
 // two terms below), K_F = σ·Radius·f.area, σ = −1 when f.reversed else +1 —
 // (p−O)·n is identically σ·Radius at every point of a cylinder wall, so the
 // K_F term reuses the face's own already-proven area/areaBound rather than
-// integrating anything fresh.
+// integrating anything fresh. Radius itself is never read bare off
+// Cylinder.Radius/Circle3.Radius — boundedCircleRadius derives it, and its
+// own doc comment states why: neither type carries a bound field, and this
+// evaluator's own revolve build can hand back a Radius that is a rounded,
+// axis-dependent re-expression of a recorded point, not always the exact
+// value the bare units.Value suggests.
 //
 // THE SCOPE RESTRICTION THIS INCREMENT ADDS, not in the original design
 // sketch. A general trimmed Plane or Cylinder face needs S_F from the
@@ -90,6 +95,23 @@ import (
 // Nothing here ever claims Exact: every admitting arm's own K_F or moment
 // carries π, so exactnessOf's zero-bound test can never fire for a curved
 // stitched solid.
+//
+// The radius itself carries a second, independent source of bound
+// (boundedCircleRadius's own doc comment): a revolve about an axis that is
+// not coordinate-aligned through the origin hands back a Radius that is
+// itself a rounded re-expression of a recorded point, and every use of it
+// here goes through boundedMul against that proven bound rather than
+// assuming the bare units.Value is exact. Every PUBLIC fixture this PR
+// tests (stitch_flux_test.go) revolves about a coordinate-aligned axis
+// through the origin, where that bound is proven exactly zero, so the
+// nonzero case is pinned directly instead, on a hand-built face carrying a
+// synthetic rim lengthBound far above ulp noise
+// (TestStitchCylinderMomentChargesRadiusBound,
+// TestStitchPlaneMomentChargesRadiusBound, stitch_internal_test.go) — the
+// same treatment TestStitchCylinderFluxReusesAreaBound already gives the
+// area-bound composition, for the identical reason: a fixture where the
+// true bound happens to be zero cannot show this leg failing if it were
+// ever deleted.
 //
 // RULE S — the construction-proof gate. Before this file's dispatch ever
 // runs, evalStitchContext requires every operand face to descend from ONE
@@ -202,6 +224,39 @@ func piScalar() boundedScalar {
 	return measuredScalar(math.Pi, ulp)
 }
 
+// boundedCircleRadius reads a full circle's own radius as a boundedScalar,
+// derived from the edge's already-proven length/lengthBound (circumference
+// = 2·pi·R) rather than from Circle3.Radius/Cylinder.Radius directly.
+//
+// Circle3 and Cylinder carry Radius as a bare units.Value with no bound
+// field of its own, and this evaluator's own construction does not make
+// that value exact in general: revolve_axis.go's axisFrame.walk re-expresses
+// a recorded profile point in axis coordinates through toAxisRhoBound, which
+// folds in the resolved axis's own anchor and direction bounds
+// (aUBound/aVBound/dUBound/dVBound) — exactly zero only when the axis is
+// coordinate-aligned and passes through the origin (every product is by 0 or
+// 1 and nothing rounds), and genuinely positive for any other axis. A
+// revolve wall's or junction circle's radius (j.rho in revolve_build.go) is
+// exactly this re-expressed value, so a face this arm admits can carry a
+// radius this evaluator has already proven imperfect — the zero-normalBound
+// gate says the face's geometry IS its tag (Plane/Cylinder, not some
+// unpublished ruled approximation), never that every field of that tag is
+// itself exact. Deriving the bound from the edge's own length sidesteps the
+// need to re-derive axisFrame's own bound composition here: Edge.Length()'s
+// public contract already states a sound enclosure of the true circumference
+// for ANY Circle3 edge, from whichever builder made it, and R = length/2·pi
+// inverts that same closed form.
+func boundedCircleRadius(e *Edge) (boundedScalar, error) {
+	if e.lengthUnbounded {
+		return boundedScalar{}, fmt.Errorf(
+			`%w: Stitch's flux path needs a circle whose circumference this evaluator can bound (docs/surface-design.md Table R row R8)`,
+			ErrUnsupported,
+		)
+	}
+	twoPi := boundedMul(measuredScalar(2, 0), piScalar())
+	return boundedQuotient(e.length, e.lengthBound, twoPi.value, twoPi.bound), nil
+}
+
 // boundedDot returns a·b as a boundedScalar, charging every multiply and add
 // this dot product's own arithmetic commits (boundedMul/boundedAdd) —
 // never the operands' own uncertainty, which every caller here supplies as
@@ -287,8 +342,11 @@ func planeFaceFluxAndMoment(f *Face, pl Plane, anchor r3.Vec, sign float64) (flu
 				ErrUnsupported, l.coedges[0].edge.curve,
 			)
 		}
-		r := c3.Radius.Base()
-		if !(r > 0) {
+		rB, err := boundedCircleRadius(l.coedges[0].edge)
+		if err != nil {
+			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+		}
+		if !(rB.value > 0) {
 			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
 				`%w: Stitch's flux path needs a positive circle radius (docs/surface-design.md Table R row R8)`,
 				ErrUnsupported,
@@ -305,7 +363,7 @@ func planeFaceFluxAndMoment(f *Face, pl Plane, anchor r3.Vec, sign float64) (flu
 		cu := measuredScalar(local.X, projBound)
 		cv := measuredScalar(local.Y, projBound)
 
-		rr := boundedMul(measuredScalar(r, 0), measuredScalar(r, 0))
+		rr := boundedMul(rB, rB)
 		diskArea := boundedMul(piScalar(), rr)
 		if loopSign < 0 {
 			diskArea = boundedNeg(diskArea)
@@ -400,6 +458,7 @@ func cylinderFaceFluxAndMoment(f *Face, cyl Cylinder, anchor r3.Vec, sign float6
 		)
 	}
 	var centers [2]r3.Vec
+	var rimEdges [2]*Edge
 	for i, l := range f.loops {
 		if len(l.coedges) != 1 {
 			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
@@ -415,10 +474,18 @@ func cylinderFaceFluxAndMoment(f *Face, cyl Cylinder, anchor r3.Vec, sign float6
 			)
 		}
 		centers[i] = c3.Center
+		rimEdges[i] = l.coedges[0].edge
 	}
 
-	radius := cyl.Radius.Base()
-	if !(radius > 0) {
+	// rB is derived from the FIRST rim's own proven circumference
+	// (boundedCircleRadius's own doc comment), never read off Cylinder.Radius
+	// directly: both rims denote the same cylinder by construction, so
+	// either rim's own proof covers the whole face.
+	rB, err := boundedCircleRadius(rimEdges[0])
+	if err != nil {
+		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+	}
+	if !(rB.value > 0) {
 		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
 			`%w: Stitch's flux path needs a positive cylinder radius (docs/surface-design.md Table R row R8)`,
 			ErrUnsupported,
@@ -436,9 +503,9 @@ func cylinderFaceFluxAndMoment(f *Face, cyl Cylinder, anchor r3.Vec, sign float6
 	}
 	zMid := boundedMul(measuredScalar(0.5, 0), boundedAdd(z0, z1))
 
-	flux = boundedMul(measuredScalar(sign, 0), boundedMul(measuredScalar(radius, 0), measuredScalar(f.area, f.areaBound)))
+	flux = boundedMul(measuredScalar(sign, 0), boundedMul(rB, measuredScalar(f.area, f.areaBound)))
 
-	piR2 := boundedMul(piScalar(), boundedMul(measuredScalar(radius, 0), measuredScalar(radius, 0)))
+	piR2 := boundedMul(piScalar(), boundedMul(rB, rB))
 	piR2Dz := boundedMul(piR2, dz)
 
 	moment := func(oi, ai, axisI float64) boundedScalar {
@@ -492,13 +559,17 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 				coordUpper = math.Max(coordUpper, ce.Start().Position().Value.Sub(anchor).Len())
 			}
 		}
-		if cyl, ok := f.surface.(Cylinder); ok {
+		if _, ok := f.surface.(Cylinder); ok && len(f.loops) > 0 && len(f.loops[0].coedges) > 0 {
 			// A rim vertex's own distance from anchor is what the loop above
-			// already folds in; this adds the cylinder's own radius as a
-			// blanket safety margin so coordUpper never understates a wall
-			// point that sits farther from anchor than either rim vertex
-			// does.
-			coordUpper = absSumUpper(coordUpper, cyl.Radius.Base())
+			// already folds in; this adds the cylinder's own radius — its
+			// PROVEN value plus bound, boundedCircleRadius's own doc comment,
+			// never Cylinder.Radius.Base() read bare — as a blanket safety
+			// margin so coordUpper never understates a wall point that sits
+			// farther from anchor than either rim vertex does, however far
+			// the tagged Radius itself sits from the true one.
+			if rB, err := boundedCircleRadius(f.loops[0].coedges[0].edge); err == nil {
+				coordUpper = absSumUpper(coordUpper, rB.value, rB.bound)
+			}
 		}
 	}
 
