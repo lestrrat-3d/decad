@@ -486,3 +486,207 @@ func mustPlaneFrame() r3.Frame {
 	}
 	return f
 }
+
+// stitchTestConeFace builds a hand-made full-circumference Cone face: apex
+// at the world origin, axis +Z, half-angle halfAngle, and two full-circle
+// rims at (r0, z0) and (r1, z1) — z the distance from the apex along the
+// axis — with the rims' own lengthBound set explicitly, for the Cone arm's
+// own shown-to-fail legs below (docs/surface-design.md's T48/T49, and the
+// radius-bound leg TestStitchCylinderMomentChargesRadiusBound already gives
+// the Cylinder arm).
+func stitchTestConeFace(halfAngle, r0, z0, r1, z1, rimBound float64) *Face {
+	axis := r3.NewVec(0, 0, 1)
+	center0 := r3.NewVec(0, 0, z0)
+	center1 := r3.NewVec(0, 0, z1)
+	v0 := &Vertex{position: r3.NewVec(r0, 0, z0)}
+	v1 := &Vertex{position: r3.NewVec(r1, 0, z1)}
+	length0 := 2 * math.Pi * r0
+	length1 := 2 * math.Pi * r1
+	e0 := &Edge{curve: Circle3{Center: center0, Axis: axis, Radius: units.Millimeters(r0)}, start: v0, end: v0, length: length0, lengthBound: rimBound}
+	e1 := &Edge{curve: Circle3{Center: center1, Axis: axis, Radius: units.Millimeters(r1)}, start: v1, end: v1, length: length1, lengthBound: rimBound}
+	f := &Face{
+		surface: Cone{Origin: r3.NewVec(0, 0, 0), Axis: axis, Radius: units.Millimeters(0), HalfAngle: units.Radians(halfAngle)},
+		loops: []*Loop{
+			{outer: true, coedges: []coedge{{edge: e0, forward: true}}},
+			{outer: true, coedges: []coedge{{edge: e1, forward: true}}},
+		},
+	}
+	e0.faces, e1.faces = []*Face{f}, []*Face{f}
+	return f
+}
+
+// TestStitchConeApexOffsetsFromNonzeroRadius is docs/surface-design.md's
+// T48: coneApex's general division, exercised at a nonzero Radius no
+// reachable construction site ever sets (this function's own doc comment).
+// Shown to fail: deleting the offset term (using apex = Origin unconditionally,
+// ignoring Radius/tan(HalfAngle) entirely) makes this test's InDelta
+// assertions fail, since Origin and the true apex differ by the offset —
+// watched red before landing, then restored.
+func TestStitchConeApexOffsetsFromNonzeroRadius(t *testing.T) {
+	t.Parallel()
+	origin := r3.NewVec(3, -2, 7)
+	axis := r3.NewVec(0, 0, 1)
+	const halfAngle, radius = 0.6, 4.0
+	cone := Cone{Origin: origin, Axis: axis, Radius: units.Millimeters(radius), HalfAngle: units.Radians(halfAngle)}
+
+	apexX, apexY, apexZ, err := coneApex(cone)
+	require.NoError(t, err)
+
+	wantOffset := radius / math.Tan(halfAngle)
+	wantApex := origin.Sub(axis.Scale(wantOffset))
+	require.InDelta(t, wantApex.X, apexX.value, 1e-9)
+	require.InDelta(t, wantApex.Y, apexY.value, 1e-9)
+	require.InDelta(t, wantApex.Z, apexZ.value, 1e-9)
+	require.NotEqual(t, origin.Z, apexZ.value, "a nonzero Radius must move the apex away from Origin")
+
+	zeroRadius := cone
+	zeroRadius.Radius = units.Millimeters(0)
+	zx, zy, zz, err := coneApex(zeroRadius)
+	require.NoError(t, err)
+	require.Equal(t, origin.X, zx.value)
+	require.Equal(t, origin.Y, zy.value)
+	require.Equal(t, origin.Z, zz.value)
+	require.Zero(t, zx.bound, "a literal zero Radius must publish an Exact apex")
+	require.Zero(t, zy.bound)
+	require.Zero(t, zz.bound)
+}
+
+// TestStitchConeHalfAngleRefusesDegenerateTangent is docs/surface-design.md's
+// T49: a HalfAngle of 0 gives tan exactly 0, and coneApex refuses rather
+// than propagate it into a division — no reachable wallCone ever carries
+// this angle, since a real one is math.Atan2(nonzero, nonzero), always
+// strictly between 0 and pi/2 (revolve_axis.go's own analytic-walk
+// requirement). A HalfAngle of NaN is refused one layer up, by
+// units.Value.In itself (ErrNotFinite, wrapped rather than reaching
+// coneApex's own tangent check at all) — units.Value.In never hands back a
+// non-finite float, so coneApex's own `isNonFinite(tanValue)` guard stands
+// as a defensive backstop for a pathological finite HalfAngle whose
+// math.Tan happens to round to +/-Inf, which no float64 input this test can
+// construct actually triggers; that guard is therefore not independently
+// shown-to-fail here, unlike the exactly-zero case below. Shown to fail:
+// weakening the exactly-zero guard to `!(tanValue >= 0)` makes the
+// HalfAngle-0 case return no error instead of ErrUnsupported — watched red
+// before landing, then restored.
+func TestStitchConeHalfAngleRefusesDegenerateTangent(t *testing.T) {
+	t.Parallel()
+	base := Cone{Origin: r3.NewVec(0, 0, 0), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(0)}
+
+	needle := base
+	needle.HalfAngle = units.Radians(0)
+	_, _, _, err := coneApex(needle) //nolint:dogsled // only the error matters here.
+	require.ErrorIs(t, err, ErrUnsupported)
+
+	malformed := base
+	malformed.HalfAngle = units.Radians(math.NaN())
+	_, _, _, err = coneApex(malformed) //nolint:dogsled // only the error matters here.
+	require.Error(t, err, "a NaN half-angle must refuse, even though units.Value.In catches it before coneApex's own tangent check runs")
+
+	// A genuine, non-degenerate half-angle must NOT refuse — confirming the
+	// two refusals above are about the degenerate angles, not a blanket
+	// failure of coneApex itself.
+	ordinary := base
+	ordinary.HalfAngle = units.Radians(0.6)
+	_, _, _, err = coneApex(ordinary) //nolint:dogsled // only the error matters here.
+	require.NoError(t, err)
+}
+
+// TestStitchConeFluxAndMomentChargeRimRadiusBound is the Cone arm's own
+// radius-bound leg, the sibling of TestStitchCylinderMomentChargesRadiusBound
+// and TestStitchPlaneMomentChargesRadiusBound: boundedCircleRadius's proven
+// bound on each rim must propagate into both flux (through S_F's own
+// R_lo^2-R_hi^2 difference) and the first moment (through the rim-slope
+// tan^2(beta)). anchor is off both the apex's own axis (nonzero X) and its
+// z=0 plane (nonzero Z), so neither term is annihilated by symmetry the way
+// it would be at the apex itself or at any point on the axis. Shown to
+// fail: deleting boundedCircleRadius's own lengthBound propagation (reading
+// Circle3.Radius bare, bound 0, instead) collapses both bounds below this
+// test's own floor — watched red before landing, then restored.
+func TestStitchConeFluxAndMomentChargeRimRadiusBound(t *testing.T) {
+	t.Parallel()
+	anchor := r3.NewVec(3, 0, 5)
+	f := stitchTestConeFace(0.6, 3, 2, 8, 5, 1.0) // rims' own lengthBound=1, far above ulp noise
+	flux, mx, _, _, err := stitchFaceFluxAndMoment(f, anchor)
+	require.NoError(t, err)
+	require.Greater(t, flux.bound, 0.01, "the flux bound must scale with the rims' own lengthBound through S_F's radius terms")
+	require.Greater(t, mx.bound, 0.01, "the moment bound must scale with the rims' own lengthBound through the rim-slope tan^2(beta)")
+
+	zero := stitchTestConeFace(0.6, 3, 2, 8, 5, 0)
+	fluxZero, mxZero, _, _, err := stitchFaceFluxAndMoment(zero, anchor)
+	require.NoError(t, err)
+	require.Less(t, fluxZero.bound, 1e-6, "with the rims' own lengthBound zero, the flux bound has no other source of that magnitude")
+	require.Less(t, mxZero.bound, 1e-6, "with the rims' own lengthBound zero, the moment bound has no other source of that magnitude")
+}
+
+// TestStitchCurvedMassCorrectsInwardOrientationForCone is the orientation
+// sign's own shown-to-fail leg for the Cone arm, the sibling of
+// TestStitchCurvedMassCorrectsInwardOrientation: neither public Cone
+// fixture (stitch_flux_test.go) ever reaches the actual global sign-flip
+// branch, because a revolve build's own outward-normal convention already
+// agrees with the flux formula's own. This test reverses every face of a
+// real frustum-shell sheet BEFORE handing it to stitchCurvedMass, so the
+// flux sum is genuinely negative on the first pass and the correction must
+// fire for the published volume to come out positive and right. Shown to
+// fail: deleting the `fluxSum.value < 0` branch in stitchCurvedMass makes
+// this test's volume come out negative (or its centroid wrong) — watched
+// red before landing, then restored.
+func TestStitchCurvedMassCorrectsInwardOrientationForCone(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	p1 := s.CreatePoint(0, 5)
+	p2 := s.CreatePoint(10, 8)
+	p3 := s.CreatePoint(10, 12)
+	p4 := s.CreatePoint(0, 15)
+	s.Fix(p1)
+	s.CreateLine(p1, p2)
+	s.CreateLine(p2, p3)
+	s.CreateLine(p3, p4)
+	s.CreateLine(p4, p1)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	uAxis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
+
+	d := New()
+	sheet, err := d.Revolve(s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
+	require.NoError(t, err)
+
+	faces := sheet.Faces()
+	for _, f := range faces {
+		reverseFaceOrientation(f)
+	}
+
+	anchor := faces[0].loops[0].coedges[0].Start().Position().Value
+	vol, cen, err := stitchCurvedMass(context.Background(), faces, anchor, 0)
+	require.NoError(t, err)
+	require.Greater(t, vol.Value.Base(), 0.0, "the global sign correction must recover a positive volume from an inward-reversed Cone face set")
+
+	wantVol, _, wantCX := frustumShellAnalyticsForInternalTest(10, 5, 15, 8, 12)
+	require.InDelta(t, wantVol, vol.Value.Base(), 1e-6)
+	require.InDelta(t, wantCX, cen.Value.X, 1e-9)
+}
+
+// frustumShellAnalyticsForInternalTest is stitch_flux_test.go's
+// frustumShellAnalytics, duplicated here because this file's package
+// (decad) cannot import the exported test package (decad_test) that
+// function lives in.
+func frustumShellAnalyticsForInternalTest(uLen, vLo0, vHi0, vLo1, vHi1 float64) (volume, area, centroidX float64) {
+	aO, bO := vHi0, vHi1-vHi0
+	aI, bI := vLo0, vLo1-vLo0
+	iOuter := uLen * (aO*aO + aO*bO + bO*bO/3)
+	iInner := uLen * (aI*aI + aI*bI + bI*bI/3)
+	volume = math.Pi * (iOuter - iInner)
+
+	jOuter := uLen * uLen * (aO*aO/2 + 2*aO*bO/3 + bO*bO/4)
+	jInner := uLen * uLen * (aI*aI/2 + 2*aI*bI/3 + bI*bI/4)
+	centroidX = (jOuter - jInner) / (iOuter - iInner)
+
+	slantOuter := math.Hypot(bO, uLen)
+	slantInner := math.Hypot(bI, uLen)
+	lateralOuter := math.Pi * (vHi0 + vHi1) * slantOuter
+	lateralInner := math.Pi * (vLo0 + vLo1) * slantInner
+	annulus0 := math.Pi * (vHi0*vHi0 - vLo0*vLo0)
+	annulus1 := math.Pi * (vHi1*vHi1 - vLo1*vLo1)
+	area = lateralOuter + lateralInner + annulus0 + annulus1
+	return volume, area, centroidX
+}

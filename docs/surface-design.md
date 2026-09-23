@@ -706,7 +706,7 @@ edge, and decides the result.
 |---|---|---|
 | at least one free edge remains | a `BodySheet`, open | the boundary is not closed; the residual free edges name exactly what did not join |
 | every edge welded, all faces planar and straight-edged | a `BodySolid` | closure, manifoldness and non-self-intersection are proven, and the volume is exact (§6.4) |
-| every edge welded, some face not planar-and-straight-edged, every face admits a landed flux arm (`Plane`/`Cylinder`, zero `normalBound`) and the single source body proves the boundary simple by construction | a `BodySolid` | closure and the per-surface flux integral together prove volume and centroid; manifoldness rests on the vertex-link audit alone, since the reused crossing audit has no triangle set to run on (§6.4) |
+| every edge welded, some face not planar-and-straight-edged, every face admits a landed flux arm (`Plane`/`Cylinder`/`Cone`, zero `normalBound`) and the single source body proves the boundary simple by construction | a `BodySolid` | closure and the per-surface flux integral together prove volume and centroid; manifoldness rests on the vertex-link audit alone, since the reused crossing audit has no triangle set to run on (§6.4) |
 | every edge welded, some face curved, and the set above does not admit | `ErrUnsupported` (R8) | closure is proven but this evaluator has no closed-form flux integral for the boundary as given — the surface kind, the face's own trim, or the construction proof is outside what has landed |
 | the welded set cannot be consistently oriented | `ErrDegenerate` (R7) | a non-orientable assembly bounds nothing; no later proof makes it a solid |
 | the crossing audit proves a self-contact or self-intersection | `ErrDegenerate` (R9) | the faces overlap, so the assembly is no solid's boundary |
@@ -800,12 +800,49 @@ over their own publication rounding, `Bounds` needing nothing further since
 
 **A curved face's flux term is not a tetrahedron sum**, and a per-surface
 closed-form flux integral over an arbitrary trimmed analytic patch is its own
-piece of work. §14's increment 3 lands the first two arms of it, `Plane` and
-`Cylinder`, and with them a second admission rule beside the tetrahedron
-sum's: **every face is either a `Plane` bounded entirely by `Line3` edges
-(the tetrahedron path, unchanged), or a variant with a landed flux arm, and
-every face carries a zero `normalBound`.** `stitch_flux.go` owns the flux
-arms, `stitchRuleSAdmits` owns the second rule below.
+piece of work. §14's increment 3 lands `Plane` and `Cylinder`; a follow-up PR
+adds `Cone`. Together they give a second admission rule beside the
+tetrahedron sum's: **every face is either a `Plane` bounded entirely by
+`Line3` edges (the tetrahedron path, unchanged), or a variant with a landed
+flux arm, and every face carries a zero `normalBound`.** `stitch_flux.go`
+owns the flux arms, `stitchRuleSAdmits` owns the second rule below.
+
+**The `Cone` arm needs no general trimmed-boundary contour sum**, for the
+identical reason `Plane` and `Cylinder` do not: this evaluator's own scope
+restriction admits a `Cone` face only when it is bounded by exactly two full
+`Circle3` rims at two distinct positions along the cone's own growth axis —
+never a partial arc, never a generatrix edge — because that is the only
+shape a reachable fixture (a frustum shell from a full-turn revolve of a
+profile whose two non-radial sides both lean off the axis) exercises. A
+`Cone`'s own vector-area integral, unlike a full-circumference `Cylinder`'s,
+is NOT the zero vector — two full circles of DIFFERENT radii do not cancel
+over a full turn the way two equal ones do — but it is still closed-form
+without any contour-sum machinery: it reduces to the standard cone-shadow
+identity `S_F = π(R_lo² − R_hi²)·Axis`, `R_lo`/`R_hi` the two rims' own
+radii ordered by which sits nearer the apex, read through the identical
+`boundedCircleRadius` this file's other arms already use. `flux_F = (apex −
+anchor)·S_F` — `K_F = 0`, since the vector from the apex to any surface
+point runs along a ruling and is therefore normal-orthogonal by the same
+argument `NormalAt`'s own `Cone` case already encodes (`n = cosβ·radial −
+sinβ·Axis`, orthogonal to any ruling direction). The apex itself is derived
+from the face's own `Cone.Origin`, `Cone.Radius` and `Cone.HalfAngle`
+(`Origin − Axis·(Radius/tan(HalfAngle))`). `tan(HalfAngle)` is read through
+one `math.Tan` call and treated as an EXACT recorded parameter, the same
+convention this file already gives `Origin` and `Axis` — composing it from
+`boundedSin`/`boundedCos` instead would not be sound: `conservativeValueError`'s
+own structural bound on a `Sin`/`Cos` result is wider than the result
+itself, so it fails `boundedQuotient`'s own clearance check for every
+angle, not only the degenerate ones. The division by `Radius` IS charged
+through `boundedQuotient`, and refuses a tangent that is not a positive,
+finite float — an exactly-zero tangent (`HalfAngle` of `0`) or a
+non-finite one (a malformed `HalfAngle` of `NaN`/`Inf`); every reachable
+construction site (`revolve_build.go`, `capblend_geom.go`) sets `Radius`
+literally to `0` (`Origin` already IS the apex), so the division is
+exercised at a genuinely nonzero `Radius` only by a hand-built internal
+fixture. The first-moment sibling needs `tan²β` too, but reads it from the
+two rims' own radii and axial positions (`(R_hi−R_lo)/(z_hi−z_lo)`) rather
+than recomputing it from `HalfAngle` a second time, so no arm here calls
+`math.Tan` more than once.
 
 **`Face.normalBound` is nonzero exactly for a cap-blend band patch**
 (topology.go's own field doc): the face is a ruled surface and the `Cone` or
@@ -909,13 +946,15 @@ leg that turned out to prove nothing about its own two inputs — is the
 existing reject-only mechanism for exactly this, and the curved `Stitch`
 path runs it immediately before a curved body first claims solidity.
 Nothing this increment's own fixtures build can trip it: every admitted
-`Plane`/`Cylinder` shape this increment's own scope reaches is built from
-straight or full-circumference generatrices, and a boundary that touches
-its own axis at an isolated interior point needs a curved (`Sphere`/`Torus`)
-or diagonal (`Cone`) generatrix to do it — neither of which this increment
-admits — so the leg stands as a proven-safe backstop for a later increment's
-own `Sphere`/`Torus`/`Cone` arms, not a case this one's own tests can
-observe firing.
+`Plane`/`Cylinder`/`Cone` shape this increment's own scope reaches stays
+strictly clear of the revolve axis — a `Cone` wall's own scope restriction
+(the paragraph above) admits only two full-circle rims at two distinct,
+provably positive radii, never a rim collapsed onto the axis — so a
+boundary pinch at an isolated interior point, which needs a generatrix that
+actually TOUCHES the axis to produce, stays out of reach here exactly as it
+did before `Cone` landed. The leg stands as a proven-safe backstop for a
+later increment's own `Sphere`/`Torus` arms, or a `Cone` fixture that
+reaches the axis, not a case this one's own tests can observe firing.
 
 **What is proven, and what is not, for a curved closed set.** Closure (the
 directed-edge parity leg) and manifoldness at every vertex (the hoisted
@@ -1596,6 +1635,10 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T43 | a hand-built `bodyPatchPayload` whose receiver's own payload is a `prismPayload` with a nonzero `sectionDelta`, driven directly at `bodyPatchPayloadProvesSimple` (internal — Rule P condition 1: a receiver this evaluator can otherwise prove Rule S-admits, isolated from conditions 2 and 3, which the fixture's chain and receiver otherwise satisfy) | `bodyPatchPayloadProvesSimple` reports `false` |
 | T44 | a hand-built `bodyPatchPayload` whose receiver carries two disjoint free-edge loops under the SAME level id and whose one new chain caps only one of them, driven directly at `bodyPatchPayloadProvesSimple` (internal — Rule P condition 2: the receiver's own construction proof does not transfer from a proper subset of its end's own free edges, the annular-rim hazard §6.4 names) | `bodyPatchPayloadProvesSimple` reports `false` |
 | T45 | a hand-built `bodyPatchPayload` whose chain's edges all share one level id but one chain VERTEX carries a different one, driven directly at `bodyPatchPayloadProvesSimple` (internal — Rule P condition 3: every vertex, not only every edge, must be proven part of the same recorded plane) | `bodyPatchPayloadProvesSimple` reports `false` |
+| T46 | a trapezoid profile clear of the axis (both non-radial sides leaning off it, so revolving sweeps two `Cone` walls of different half-angles, not two `Cylinder` walls), revolved a full turn as a surface, stitched alone | `Kind() == BodySolid`; `Volume` and `Area` match the analytic frustum-shell values, `Approximate`, enclosing the analytic value within `Bound`; `Centroid` matches the analytic value, `Approximate`; `Edges(Free())` matches nothing |
+| T47 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` and `Centroid` agree within the two independently-composed bounds — the independent-producer cross-check, proving the `Cone` arm against the unrelated revolve engine rather than against its own arithmetic |
+| T48 | a hand-built `Cone` face whose `Origin` sits away from the apex (`Radius` nonzero), driven directly at the apex derivation (internal — every reachable construction site sets `Radius` literally to `0`, so a nonzero-`Radius` `Cone` never reaches `Stitch` through the public seam) | the derived apex matches `Origin − Axis·(Radius/tan(HalfAngle))` by hand computation, within its own proven bound |
+| T49 | a hand-built `Cone` face whose `HalfAngle` is `0` (an exactly-zero tangent, a degenerate needle) or `NaN` (a non-finite tangent, a malformed value), driven directly at the apex derivation (internal — a reachable `wallCone` always carries a finite `HalfAngle` strictly between `0` and `π/2`, `revolve_axis.go`'s own analytic-walk requirement) | `ErrUnsupported` (R8): the half-angle's tangent is not a positive, finite float |
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'`

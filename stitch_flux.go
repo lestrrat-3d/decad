@@ -11,10 +11,10 @@ import (
 
 // This file is docs/surface-design.md §6.4's per-surface flux integral: the
 // closed-form volume and first-moment reading that lets Stitch close a
-// boundary holding a curved face, for the Plane and Cylinder variants. Table
-// R row R8 is a per-face dispatch: a face this evaluator has no closed-form
-// flux integral for refuses R8, and a Plane or Cylinder face with a zero
-// normalBound admits.
+// boundary holding a curved face, for the Plane, Cylinder and Cone
+// variants. Table R row R8 is a per-face dispatch: a face this evaluator
+// has no closed-form flux integral for refuses R8, and a Plane, Cylinder or
+// Cone face with a zero normalBound admits.
 //
 // THE FORMULA. Volume is V = (1/3) Σ_F ∫_F (p−A)·n dA over one global anchor
 // A (verts[0], the same anchor loft_moments.go's tetrahedron sum uses, so the
@@ -37,33 +37,44 @@ import (
 // value the bare units.Value suggests.
 //
 // THE SCOPE RESTRICTION THIS INCREMENT ADDS, not in the original design
-// sketch. A general trimmed Plane or Cylinder face needs S_F from the
+// sketch. A general trimmed Plane, Cylinder or Cone face needs S_F from the
 // boundary's own ½∮p×dr contour sum, which has an arm for a straight (Line3)
 // edge and one for a circular (Arc3/Circle3) edge alike. Every fixture this
 // increment actually proves — an annular revolve sheet, a solid-of-revolution
-// cylinder built the same way — bounds every Plane face with FULL circles
-// only (never a partial arc) and every Cylinder face with exactly two full
-// circular rims at two axial levels (never a partial revolution). Both
-// admitted arms below are scoped to exactly that shape and refuse
-// (ErrUnsupported, R8) anything wider: a Plane loop that is not a single
-// Circle3 edge, or a Cylinder face that is not exactly two single-Circle3
-// loops. This is deliberate, not an oversight: an untested closed form is not
-// a proof, and CLAUDE.md's own rule is that a narrower answer always beats a
-// wider guess. Widening either arm to a general Line3/Arc3 boundary is a
-// later increment's own work, once a fixture exists to prove it against.
+// cylinder or cone built the same way — bounds every Plane face with FULL
+// circles only (never a partial arc), every Cylinder face with exactly two
+// full circular rims at two axial levels, and every Cone face with exactly
+// two full circular rims at two distinct positions along its own growth axis
+// (never a partial revolution, never a generatrix edge, for any of the
+// three). All three admitted arms below are scoped to exactly that shape and
+// refuse (ErrUnsupported, R8) anything wider: a Plane loop that is not a
+// single Circle3 edge, or a Cylinder/Cone face that is not exactly two
+// single-Circle3 loops. This is deliberate, not an oversight: an untested
+// closed form is not a proof, and CLAUDE.md's own rule is that a narrower
+// answer always beats a wider guess. Widening any arm to a general Line3/Arc3
+// boundary is a later increment's own work, once a fixture exists to prove it
+// against.
 //
-// One consequence of the restriction: because both admitted surfaces are
-// FULL circles/full-circumference cylinders, each face's own vector area S_F
-// collapses to a form simpler than the general contour sum would give —
-// Plane's is exactly n·Area (a constant normal over a flat region has no
-// other vector area to compute), and a full-circumference Cylinder's is
-// exactly the zero vector (the radial normal's own trig integrates to zero
-// over a full turn — proven in cylinderFaceFluxAndMoment's own doc comment).
-// So this file never builds the general ½∮p×dr contour-sum helper the wider
-// design sketch anticipated; it is not needed for either arm actually landed,
-// and adding it unexercised would be untested code with no fixture behind
-// it. A later increment's Cone/Sphere/Torus arms may still need it, and can
-// add it then, against their own fixtures.
+// One consequence of the restriction: because every admitted surface is a
+// FULL circle, a full-circumference cylinder or a full-circumference cone
+// frustum, each face's own vector area S_F collapses to a form simpler than
+// the general contour sum would give — Plane's is exactly n·Area (a constant
+// normal over a flat region has no other vector area to compute), a
+// full-circumference Cylinder's is exactly the zero vector (the radial
+// normal's own trig integrates to zero over a full turn — proven in
+// cylinderFaceFluxAndMoment's own doc comment), and a full-circumference
+// Cone's reduces to the closed-form cone-shadow identity
+// π(R_lo²−R_hi²)·Axis (coneFaceFluxAndMoment's own doc comment) — the SAME
+// circular term the general contour sum's own per-loop formula would give a
+// full circle (½[C×(v1−v0)+R·L·k], with v1=v0 for a closed loop), just
+// summed over the cone's own two rims rather than assembled through a
+// generic per-edge dispatch. So this file never builds the general ½∮p×dr
+// contour-sum helper the wider design sketch anticipated, WITH ITS OWN
+// Line3 ARM, for any of the three arms actually landed — none of their
+// fixtures ever presents a Line3 or partial-arc boundary edge, and adding
+// unexercised dispatch code for one would be untested code with no fixture
+// behind it. A later increment's Sphere/Torus arms may still need the
+// general form, and can add it then, against their own fixtures.
 //
 // THE FIRST MOMENT. Every reading needs the volume's own first-moment
 // sibling too — Body.Centroid has no ErrUnsupported arm for a solid, so a
@@ -76,7 +87,8 @@ import (
 // and cu·cv·Area to Iu, Iv, Iuu, Ivv, Iuv respectively — elementary polar
 // integration over a disk, summed with each loop's own outer/hole sign). The
 // Cylinder arm's own closed form is derived and verified in
-// cylinderFaceFluxAndMoment's doc comment.
+// cylinderFaceFluxAndMoment's doc comment; the Cone arm's is derived and
+// verified in coneFaceFluxAndMoment's own doc comment.
 //
 // BOUNDS. Every operation between a bound's origin and its use is charged
 // through boundedAdd/boundedSub/boundedMul/boundedQuotient — never a bare
@@ -112,6 +124,26 @@ import (
 // area-bound composition, for the identical reason: a fixture where the
 // true bound happens to be zero cannot show this leg failing if it were
 // ever deleted.
+//
+// The Cone arm's apex adds a THIRD, independent source: Origin −
+// Axis·(Radius/tan(HalfAngle)) divides by tan(HalfAngle) (read through a
+// single math.Tan call, coneApex's own doc comment states why it is not
+// composed from boundedSin/boundedCos instead), and refuses
+// (ErrUnsupported, R8) a tangent that is not positive and finite — a
+// degenerate HalfAngle of 0 gives an exactly-zero tangent, and a malformed
+// HalfAngle of NaN/Inf is refused one layer up, by units.Value.In's own
+// ErrNotFinite, before coneApex's own tangent check ever runs. Neither
+// degeneracy is a real wallCone ever carries (revolve_axis.go's own
+// analytic-walk requirement keeps a real cone's HalfAngle finite and
+// strictly between 0 and π/2).
+// Every reachable construction site sets Cone.Radius literally to 0 (Origin
+// already IS the apex), so the division's numerator is exactly zero and the
+// derived apex is Exact for every PUBLIC fixture; the nonzero-Radius case,
+// and the degenerate-tangent refusal, are pinned directly on hand-built
+// faces instead (TestStitchConeApexOffsetsFromNonzeroRadius,
+// TestStitchConeHalfAngleRefusesDegenerateTangent,
+// stitch_internal_test.go), the same treatment the Cylinder radius bound
+// above gets and for the identical reason.
 //
 // RULE S — the construction-proof gate. Before this file's dispatch ever
 // runs, evalStitchContext requires every operand face to descend from ONE
@@ -298,6 +330,8 @@ func stitchFaceFluxAndMoment(f *Face, anchor r3.Vec) (flux, mx, my, mz boundedSc
 		return planeFaceFluxAndMoment(f, s, anchor, sign)
 	case Cylinder:
 		return cylinderFaceFluxAndMoment(f, s, anchor, sign)
+	case Cone:
+		return coneFaceFluxAndMoment(f, s, anchor, sign)
 	default:
 		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
 			`%w: Stitch closes a boundary holding a %T face this evaluator has no closed-form flux integral for (docs/surface-design.md Table R row R8)`,
@@ -522,6 +556,286 @@ func cylinderFaceFluxAndMoment(f *Face, cyl Cylinder, anchor r3.Vec, sign float6
 	return flux, mx, my, mz, nil
 }
 
+// coneApex derives a Cone's apex — Origin − Axis·(Radius/tan(HalfAngle)) —
+// as three boundedScalars, one per world coordinate. Radius and HalfAngle
+// are read exactly as topology.go's own Cone doc states them: Radius is the
+// cone's radius AT Origin (zero when Origin is already the apex), and the
+// wall grows along Axis by HalfAngle from there. Every construction site in
+// this evaluator (revolve_build.go's wallCone, capblend_geom.go's
+// coneSurface) sets Radius literally to 0 — Origin already IS the apex — so
+// this division's numerator is exactly zero for every reachable admitted
+// face and the published apex is Exact; the general division below is
+// written for Cone's own full contract, where Radius need not be zero, and
+// is exercised at a nonzero Radius only by a hand-built internal fixture
+// (TestStitchConeApexOffsetsFromNonzeroRadius, stitch_internal_test.go),
+// since no construction site here ever sets it otherwise.
+//
+// tan(HalfAngle) is read through a single math.Tan call rather than
+// composed from boundedSin/boundedCos and boundedQuotient: a bounded
+// composition would not be TIGHTER, because conservativeValueError's own
+// structural bound on a Sin/Cos result (|value|+1) is wider than either
+// function's own value, so it fails boundedQuotient's clearance check for
+// EVERY angle, not only the degenerate ones — refusing the whole arm rather
+// than only the cases this gate exists to catch. This function instead
+// treats tan(HalfAngle) as an EXACT recorded parameter, the same
+// convention this file already gives Origin and Axis, and refuses (rather
+// than propagate a degenerate value into the apex) whenever the tangent is
+// not a plain positive, finite float: a HalfAngle of 0 gives an
+// exactly-zero tangent, a degenerate needle no reachable wallCone ever
+// carries (revolve_axis.go's own analytic-walk requirement keeps HalfAngle
+// finite and strictly between 0 and π/2 — docs/surface-design.md's own
+// record of that requirement). The `isNonFinite(tanValue)` half of this
+// check is a defensive backstop, not independently exercised: a NaN or Inf
+// HalfAngle is refused one layer up, by units.Value.In's own ErrNotFinite,
+// before this function's own tan(HalfAngle) call ever runs, and a
+// HalfAngle near π/2 does not make math.Tan return an actual ±Inf for any
+// finite input (π/2 itself has no exact float64 representation) —
+// TestStitchConeHalfAngleRefusesDegenerateTangent
+// (stitch_internal_test.go) shows the exactly-zero case failing red and
+// records why the non-finite half of the guard is not similarly shown.
+func coneApex(c Cone) (apexX, apexY, apexZ boundedScalar, err error) {
+	half, herr := c.HalfAngle.In(units.Radian)
+	if herr != nil {
+		return boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(`decad: a cone's half angle is not an angle: %w`, herr)
+	}
+	// tan(HalfAngle) is read through a single math.Tan call and treated as
+	// an EXACT recorded parameter — the same convention this file already
+	// gives Origin and Axis (boundedDot's own doc comment): a placed/tagged
+	// geometric attribute is authoritative for this file's own arithmetic,
+	// with the construction's own rounding charged separately, once,
+	// through sweptVolumeAllow/sweptMomentAllow at the placed level, never
+	// re-derived per arm. Composing tan from boundedSin/boundedCos instead
+	// does NOT give a tighter answer: conservativeValueError's own
+	// structural bound on sin/cos (|value|+1, sized for a quantity this
+	// evaluator has no ulp contract for) is wider than either function's
+	// own VALUE, so it fails boundedQuotient's clearance check
+	// unconditionally and returns an unusable Inf bound for every angle,
+	// including every genuinely admissible one — refusing the whole arm,
+	// not merely the degenerate cases this gate exists to catch. HalfAngle
+	// has no alternative certified source the way a rim's Circle3.Radius
+	// does through boundedCircleRadius (Edge.Length()'s own proven
+	// enclosure), so tan(HalfAngle) is exact-by-convention exactly where
+	// Radius/Axis/Origin already are.
+	tanValue := math.Tan(half)
+	if !(tanValue > 0) || isNonFinite(tanValue) {
+		return boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+			`%w: Stitch's flux path needs a Cone whose half-angle has a positive, finite tangent (docs/surface-design.md Table R row R8)`,
+			ErrUnsupported,
+		)
+	}
+	radiusValue, rerr := c.Radius.In(units.Millimeter)
+	if rerr != nil {
+		return boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(`decad: a cone's radius is not a length: %w`, rerr)
+	}
+	// Radius is read as Exact here — never through boundedCircleRadius,
+	// which derives a RIM's radius from its own edge's proven length/
+	// lengthBound. This field is a different quantity: the aperture radius
+	// AT Origin, which every construction site in this evaluator sets to
+	// the literal constant 0.0, never a value read back through an
+	// axis-resolved computation the way a rim's Circle3.Radius can be
+	// (boundedCircleRadius's own doc comment). Treating a LITERAL 0.0 as
+	// Exact introduces no unproven claim.
+	radius := measuredScalar(radiusValue, 0)
+	offset := boundedQuotient(radius.value, radius.bound, tanValue, 0)
+	apexX = boundedSub(measuredScalar(c.Origin.X, 0), boundedMul(measuredScalar(c.Axis.X, 0), offset))
+	apexY = boundedSub(measuredScalar(c.Origin.Y, 0), boundedMul(measuredScalar(c.Axis.Y, 0), offset))
+	apexZ = boundedSub(measuredScalar(c.Origin.Z, 0), boundedMul(measuredScalar(c.Axis.Z, 0), offset))
+	return apexX, apexY, apexZ, nil
+}
+
+// axisDistanceFromApex returns Axis·(point − apex) as a boundedScalar,
+// where apex carries its own per-coordinate bound (coneApex's own doc
+// comment) and point/Axis are treated as exact placed coordinates, the same
+// convention boundedDot's own doc comment states for every other vector
+// this file asks about.
+func axisDistanceFromApex(apexX, apexY, apexZ boundedScalar, axis, point r3.Vec) boundedScalar {
+	dx := boundedSub(measuredScalar(point.X, 0), apexX)
+	dy := boundedSub(measuredScalar(point.Y, 0), apexY)
+	dz := boundedSub(measuredScalar(point.Z, 0), apexZ)
+	return boundedAdd(boundedAdd(
+		boundedMul(measuredScalar(axis.X, 0), dx),
+		boundedMul(measuredScalar(axis.Y, 0), dy)),
+		boundedMul(measuredScalar(axis.Z, 0), dz))
+}
+
+// coneFaceFluxAndMoment is the Cone arm, scoped identically in shape to
+// cylinderFaceFluxAndMoment: exactly two loops, each a single full Circle3
+// edge, at two distinct positions along the cone's own growth Axis. K_F = 0
+// — the vector from the apex to any surface point runs along a ruling, and
+// NormalAt's own Cone formula (n = cosβ·radial − sinβ·Axis, topology.go)
+// makes that ruling's own direction (cosβ·Axis-perpendicular component +
+// sinβ·Axis, the same angle β off the radial as n is off Axis but
+// complementary) orthogonal to n by construction — a ruling and the
+// surface normal at any of its points are always perpendicular, the
+// defining property of a ruled surface's normal. So flux_F reduces to the
+// pure cross term (apex − anchor)·S_F.
+//
+// S_F, proof. Parametrize the wall p(θ, z) = apex + z·Axis +
+// z·tanβ·(cosθ·e1 + sinθ·e2), z the distance from the apex along Axis,
+// θ ∈ [0, 2π), {e1, e2, Axis} an orthonormal basis. The intrinsic normal is
+// n(θ) = cosβ·(cosθ·e1 + sinθ·e2) − sinβ·Axis (NormalAt's own formula,
+// θ-independent apart from the radial term), and dA = z·tanβ·secβ dθ dz.
+// Over a FULL θ period ∫cosθ dθ = ∫sinθ dθ = 0, so only n's constant −sinβ·
+// Axis term survives the θ integral, at weight ∫₀^2π dθ = 2π:
+//
+//	S_F = ∫_zLo^zHi (−2π·sinβ·Axis)·z·tanβ·secβ dz
+//	    = −2π·tan²β·Axis · ∫_zLo^zHi z dz = −π·tan²β·(zHi²−zLo²)·Axis
+//
+// Since R = z·tanβ at any point on the wall, tan²β·z² = R², so
+// tan²β·(zHi²−zLo²) = R_hi²−R_lo² (R_lo/R_hi the radii AT zLo/zHi), giving
+// the closed form this function implements:
+//
+//	S_F = π·(R_lo² − R_hi²)·Axis
+//
+// — the standard cone-shadow identity, needing no trig at the call site:
+// R_lo/R_hi come from boundedCircleRadius, never a fresh tan(β) evaluation.
+// Verified independently against numeric double-quadrature over several
+// random half-angles, anchors and apex placements before landing (this
+// PR's own scratch verification; not carried into the tree).
+//
+// THE FIRST MOMENT, derived the same way (expand q_i²·n_i, integrate over a
+// full θ period — every ODD power of cosθ/sinθ vanishes, so only the terms
+// surviving in cos²θ+sin²θ = 1 remain — then integrate the z-weighted
+// result over [zLo, zHi]). With A_i = apex_i − anchor_i, B_i = Axis_i,
+// K = 1−B_i² (the {e1,e2} share of that world axis, from the orthonormal
+// basis identity E_i²+F_i² = 1−B_i², cylinderFaceFluxAndMoment's own proof
+// of the identical fact):
+//
+//	M_i = (π·tan²β/2) · [ −2·A_i²·B_i·I1 + 2·A_i·(1−3·B_i²)·I2
+//	                      + (2·B_i·(1−2·B_i²) − B_i·K·tan²β)·I3 ]
+//
+// I1 = (zHi²−zLo²)/2, I2 = (zHi³−zLo³)/3, I3 = (zHi⁴−zLo⁴)/4. tan²β is read
+// from the rims' OWN slope ((R_hi−R_lo)/(zHi−zLo))² rather than a second
+// math.Tan evaluation of HalfAngle, so this arm calls coneApex's own
+// math.Tan exactly once per face, for the apex alone. Verified
+// independently against numeric double-quadrature the same way S_F was,
+// across several random half-angles, anchors, axes and apex placements.
+func coneFaceFluxAndMoment(f *Face, cone Cone, anchor r3.Vec, sign float64) (flux, mx, my, mz boundedScalar, err error) {
+	if len(f.loops) != 2 {
+		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+			`%w: Stitch's flux path needs a Cone face bounded by exactly two full circles (docs/surface-design.md Table R row R8)`,
+			ErrUnsupported,
+		)
+	}
+	var centers [2]r3.Vec
+	var rimEdges [2]*Edge
+	for i, l := range f.loops {
+		if len(l.coedges) != 1 {
+			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+				`%w: Stitch's flux path needs a Cone rim bounded by a single full circle (docs/surface-design.md Table R row R8)`,
+				ErrUnsupported,
+			)
+		}
+		c3, ok := l.coedges[0].edge.curve.(Circle3)
+		if !ok {
+			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+				`%w: Stitch's flux path needs a Cone rim bounded by a full circle, not %T (docs/surface-design.md Table R row R8)`,
+				ErrUnsupported, l.coedges[0].edge.curve,
+			)
+		}
+		centers[i] = c3.Center
+		rimEdges[i] = l.coedges[0].edge
+	}
+
+	apexX, apexY, apexZ, err := coneApex(cone)
+	if err != nil {
+		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+	}
+
+	var radii [2]boundedScalar
+	for i := range rimEdges {
+		rB, err := boundedCircleRadius(rimEdges[i])
+		if err != nil {
+			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+		}
+		if !(rB.value > 0) {
+			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+				`%w: Stitch's flux path needs a positive cone rim radius (docs/surface-design.md Table R row R8)`,
+				ErrUnsupported,
+			)
+		}
+		radii[i] = rB
+	}
+
+	var zs [2]boundedScalar
+	for i := range centers {
+		zs[i] = axisDistanceFromApex(apexX, apexY, apexZ, cone.Axis, centers[i])
+	}
+	loIdx, hiIdx := 0, 1
+	if zs[0].value > zs[1].value {
+		loIdx, hiIdx = 1, 0
+	}
+	zLo, zHi := zs[loIdx], zs[hiIdx]
+	rLo, rHi := radii[loIdx], radii[hiIdx]
+	if !(zLo.value > 0) {
+		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+			`%w: Stitch's flux path needs a Cone face whose rims sit beyond the apex along its own axis (docs/surface-design.md Table R row R8)`,
+			ErrUnsupported,
+		)
+	}
+	dz := boundedSub(zHi, zLo)
+	if !(dz.value > 0) {
+		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+			`%w: Stitch's flux path needs a Cone face whose two rims sit at different positions along its own axis (docs/surface-design.md Table R row R8)`,
+			ErrUnsupported,
+		)
+	}
+
+	// S_F = pi*(rLo^2 - rHi^2)*Axis; the cross term is (apex-anchor).S_F,
+	// which since S_F is a scalar multiple of the unit Axis reduces to
+	// sMag * Axis.(apex-anchor).
+	sMag := boundedMul(piScalar(), boundedSub(boundedMul(rLo, rLo), boundedMul(rHi, rHi)))
+	axisDotApexMinusAnchor := boundedNeg(axisDistanceFromApex(apexX, apexY, apexZ, cone.Axis, anchor))
+	flux = boundedMul(measuredScalar(sign, 0), boundedMul(sMag, axisDotApexMinusAnchor))
+
+	// tan^2(beta) from the rims' own slope, never a second HalfAngle trig
+	// evaluation (this function's own doc comment).
+	slopeNum := boundedSub(rHi, rLo)
+	slope := boundedQuotient(slopeNum.value, slopeNum.bound, dz.value, dz.bound)
+	tan2 := boundedMul(slope, slope)
+
+	zHiSq, zLoSq := boundedMul(zHi, zHi), boundedMul(zLo, zLo)
+	i1 := boundedMul(measuredScalar(0.5, 0), boundedSub(zHiSq, zLoSq))
+	zHiCu := boundedMul(zHiSq, zHi)
+	zLoCu := boundedMul(zLoSq, zLo)
+	i2 := boundedQuotient(boundedSub(zHiCu, zLoCu).value, boundedSub(zHiCu, zLoCu).bound, 3, 0)
+	zHi4 := boundedMul(zHiSq, zHiSq)
+	zLo4 := boundedMul(zLoSq, zLoSq)
+	i3 := boundedMul(measuredScalar(0.25, 0), boundedSub(zHi4, zLo4))
+
+	one := measuredScalar(1, 0)
+	two := measuredScalar(2, 0)
+	three := measuredScalar(3, 0)
+	half := measuredScalar(0.5, 0)
+	piTan2 := boundedMul(piScalar(), tan2)
+
+	moment := func(apexI boundedScalar, anchorI, axisI float64) boundedScalar {
+		ai := boundedSub(apexI, measuredScalar(anchorI, 0))
+		bi := measuredScalar(axisI, 0)
+		biSq := boundedMul(bi, bi)
+
+		term1 := boundedNeg(boundedMul(boundedMul(two, boundedMul(ai, ai)), boundedMul(bi, i1)))
+
+		oneMinus3BiSq := boundedSub(one, boundedMul(three, biSq))
+		term2 := boundedMul(boundedMul(two, boundedMul(ai, oneMinus3BiSq)), i2)
+
+		oneMinus2BiSq := boundedSub(one, boundedMul(two, biSq))
+		partA := boundedMul(two, boundedMul(bi, oneMinus2BiSq))
+		oneMinusBiSq := boundedSub(one, biSq)
+		partB := boundedMul(bi, boundedMul(oneMinusBiSq, tan2))
+		coef3 := boundedSub(partA, partB)
+		term3 := boundedMul(coef3, i3)
+
+		sum := boundedAdd(boundedAdd(term1, term2), term3)
+		m := boundedMul(piTan2, boundedMul(half, sum))
+		return boundedMul(measuredScalar(sign, 0), m)
+	}
+	mx = moment(apexX, anchor.X, cone.Axis.X)
+	my = moment(apexY, anchor.Y, cone.Axis.Y)
+	mz = moment(apexZ, anchor.Z, cone.Axis.Z)
+	return flux, mx, my, mz, nil
+}
+
 // stitchCurvedMass sums every face's own flux and first moment
 // (stitchFaceFluxAndMoment), decides the global orientation sign from its
 // own total — reversing every face and recomputing once, the curved
@@ -559,16 +873,36 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 				coordUpper = math.Max(coordUpper, ce.Start().Position().Value.Sub(anchor).Len())
 			}
 		}
-		if _, ok := f.surface.(Cylinder); ok && len(f.loops) > 0 && len(f.loops[0].coedges) > 0 {
-			// A rim vertex's own distance from anchor is what the loop above
-			// already folds in; this adds the cylinder's own radius — its
-			// PROVEN value plus bound, boundedCircleRadius's own doc comment,
-			// never Cylinder.Radius.Base() read bare — as a blanket safety
-			// margin so coordUpper never understates a wall point that sits
-			// farther from anchor than either rim vertex does, however far
-			// the tagged Radius itself sits from the true one.
-			if rB, err := boundedCircleRadius(f.loops[0].coedges[0].edge); err == nil {
-				coordUpper = absSumUpper(coordUpper, rB.value, rB.bound)
+		switch f.surface.(type) {
+		case Cylinder:
+			if len(f.loops) > 0 && len(f.loops[0].coedges) > 0 {
+				// A rim vertex's own distance from anchor is what the loop
+				// above already folds in; this adds the cylinder's own
+				// radius — its PROVEN value plus bound, boundedCircleRadius's
+				// own doc comment, never Cylinder.Radius.Base() read bare —
+				// as a blanket safety margin so coordUpper never understates
+				// a wall point that sits farther from anchor than either rim
+				// vertex does, however far the tagged Radius itself sits
+				// from the true one. Both rims share one radius, so reading
+				// either suffices.
+				if rB, err := boundedCircleRadius(f.loops[0].coedges[0].edge); err == nil {
+					coordUpper = absSumUpper(coordUpper, rB.value, rB.bound)
+				}
+			}
+		case Cone:
+			// A cone wall is ruled (straight rulings from the apex), so the
+			// farthest wall point from any anchor lies on one of the two rim
+			// CIRCLES, not necessarily at either rim's own seam vertex — the
+			// identical gap the Cylinder margin above closes, but the two
+			// rims here carry DIFFERENT radii, so both need their own
+			// margin rather than just one.
+			for _, l := range f.loops {
+				if len(l.coedges) == 0 {
+					continue
+				}
+				if rB, err := boundedCircleRadius(l.coedges[0].edge); err == nil {
+					coordUpper = absSumUpper(coordUpper, rB.value, rB.bound)
+				}
 			}
 		}
 	}

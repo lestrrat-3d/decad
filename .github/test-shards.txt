@@ -1626,6 +1626,12 @@
 2	0.00	TestStitchCylinderMomentChargesRadiusBound
 3	0.00	TestStitchPlaneMomentChargesRadiusBound
 0	0.00	TestStitchVertexLinkAuditRefusesPinchedVertex
+1	0.00	TestStitchConeApexOffsetsFromNonzeroRadius
+2	0.00	TestStitchConeFluxAndMomentChargeRimRadiusBound
+3	0.00	TestStitchConeHalfAngleRefusesDegenerateTangent
+0	0.00	TestStitchConicalRevolveSheetCloses
+1	0.00	TestStitchConicalSolidMatchesTheRevolveEngine
+2	0.00	TestStitchCurvedMassCorrectsInwardOrientationForCone
 2	0.00	TestUnstitchBoxYieldsSixFreeSheets
 3	0.00	TestUnstitchRestitchRoundTripMatchesOriginal
 0	0.00	TestUnstitchRevolveRoundTripStaysASheet
