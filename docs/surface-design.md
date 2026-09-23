@@ -698,12 +698,14 @@ proved coincident (§6.5, §15's T42).
 
 After welding every admitted pair, the evaluator assembles the surviving faces
 into shells and lumps, derives one consistent orientation across every welded
-edge, and decides the result.
+edge, proves every vertex's own link a manifold (§6.4), and decides the
+result.
 
 **Table C — stitch outcome**
 
 | Assembled boundary | Result | Reason |
 |---|---|---|
+| some vertex's meeting faces do not form one connected fan (interior) or path (rim), open or closed alike | `ErrDegenerate` (R7) | the vertex-link audit runs before any row below is even considered; a pinch is proven at build time regardless of whether the boundary would otherwise close (§6.4) |
 | at least one free edge remains | a `BodySheet`, open | the boundary is not closed; the residual free edges name exactly what did not join |
 | every edge welded, all faces planar and straight-edged | a `BodySolid` | closure, manifoldness and non-self-intersection are proven, and the volume is exact (§6.4) |
 | every edge welded, some face not planar-and-straight-edged, every face admits a landed flux arm (`Plane`/`Cylinder`/`Cone`/`Sphere`, zero `normalBound`) and the single source body proves the boundary simple by construction | a `BodySolid` | closure and the per-surface flux integral together prove volume and centroid; manifoldness rests on the vertex-link audit alone, since the reused crossing audit has no triangle set to run on (§6.4) |
@@ -719,7 +721,13 @@ message: the unjoined edges are handed back as selectable topology, with their
 own curves and endpoints, so an agent can measure the gap it left and repair
 the model. It is also why `Stitch` takes no tolerance and no
 must-close option — there is nothing an option could say that the result does
-not already say better.
+not already say better. **A pinched vertex link is not a residual free
+edge, and this rule does not cover it.** An open sheet can still weld
+cleanly at every edge it touches and yet pinch at one vertex — the same
+shared-vertex-table mechanism that welds two coincident corners merges them
+whether or not any edge joins the faces around them — so the vertex-link
+audit above refuses it outright, `ErrDegenerate` (R7), even though it also
+carries free edges of its own.
 
 ### 6.4 The closure audit, and the volume it earns
 
@@ -1053,40 +1061,53 @@ body — `copyPatchFacesUnder` does not propagate a level token onto the
 copies it mints, so nothing but the receiver's OWN first-hand rim ever
 carries one.
 
-**The vertex-link audit — manifoldness's own remaining gap, closed
-reject-only.** Rule S proves non-self-intersection; it says nothing about
+**The vertex-link audit — manifoldness's own remaining gap, reject-only on
+every arm.** Rule S proves non-self-intersection; it says nothing about
 whether the faces and edges meeting at one VERTEX stay in one connected
 piece, which `checkStitchClosure`'s own directed-edge parity leg does not
 ask either (docs/surface-design.md's own record: a profile that touches its
 revolve axis at more than one isolated point can pinch a revolved boundary
 at those points, non-manifold there even though the parity leg and Rule S
-both pass). `sweep_composite.go`'s own `auditVertexLinks` — hoisted out of
-`auditCompositeVertexLinks`, its `*Body` parameter dropped along with a
-leg that turned out to prove nothing about its own two inputs — is the
-existing reject-only mechanism for exactly this, and the curved `Stitch`
-path runs it immediately before a curved body first claims solidity.
-Nothing this increment's own fixtures build can trip it, for two different
-reasons depending on the arm. Every admitted `Plane`/`Cylinder`/`Cone`/
-`Torus` shape this increment's own scope reaches stays strictly clear of
-the revolve axis — a `Cone` wall's own scope restriction (the paragraph
-above) admits only two full-circle rims at two distinct, provably positive
-radii, never a rim collapsed onto the axis, and the `Torus` arm's own
-`±π/2` window (this section's own `Torus` paragraph above) is bounded by
-two full circles at the tube's own equatorial radius, `Major`, itself
-strictly positive whenever the arm admits at all. The `Sphere` arm's own
-reachable fixture DOES touch the axis, at its generating semicircle's own
-two poles — but a full-turn revolve's `wallAxis` classification mints no
-face, edge or vertex at all for a boundary stretch lying ON the axis, so a
-`Sphere` face's two poles carry no topology for the audit to even examine
-(this section's own `Sphere` paragraph above); the audit runs on an empty
-edge set and passes vacuously, which is a different reason than "clear of
-the axis" but stays just as safe, since a sphere closing at two ordinary
-poles has no pinch to catch in the first place. A boundary pinch at an
-isolated INTERIOR point, which needs a generatrix that touches the axis at
-a point other than its own endpoint to produce, stays out of reach here
-regardless of arm. The leg stands as a proven-safe backstop for a fixture
-whose generatrix touches the axis at an interior point, not a case any of
-this increment's own tests can observe firing.
+both pass; two otherwise-unconnected stitched bodies that share exactly one
+welded vertex-table entry, with no edge joining them, pinch the identical
+way through the all-planar path). `sweep_composite.go`'s own
+`auditVertexLinks` — hoisted out of `auditCompositeVertexLinks`, its `*Body`
+parameter dropped along with a leg that turned out to prove nothing about
+its own two inputs — is the existing reject-only mechanism for exactly
+this, and `Stitch` runs it unconditionally, immediately after
+`checkStitchClosure` proves the directed-edge parity leg and before Table
+C's own closure/curvature branches decide anything at all — on every build
+arm, all-planar or curved, open or closed alike, never the curved-closed
+arm alone. The all-planar arm has a reachable public fixture that trips it:
+two boxes sharing one corner vertex with no shared edge (§15's T76)
+weld cleanly under Table J, and both `checkStitchClosure` and the reused
+crossing audit admit the result, since neither one asks whether the faces
+meeting at the shared vertex stay in one connected piece — the vertex-link
+audit is the only leg standing between that shape and a falsely published
+solid. The curved arm's own reachable fixtures still cannot trip it, for
+two different reasons depending on the surface kind. Every admitted
+`Plane`/`Cylinder`/`Cone`/`Torus` shape this increment's own scope reaches
+stays strictly clear of the revolve axis — a `Cone` wall's own scope
+restriction (the paragraph above) admits only two full-circle rims at two
+distinct, provably positive radii, never a rim collapsed onto the axis, and
+the `Torus` arm's own `±π/2` window (this section's own `Torus` paragraph
+above) is bounded by two full circles at the tube's own equatorial radius,
+`Major`, itself strictly positive whenever the arm admits at all. The
+`Sphere` arm's own reachable fixture DOES touch the axis, at its
+generating semicircle's own two poles — but a full-turn revolve's
+`wallAxis` classification mints no face, edge or vertex at all for a
+boundary stretch lying ON the axis, so a `Sphere` face's two poles carry no
+topology for the audit to even examine (this section's own `Sphere`
+paragraph above); the audit runs on an empty edge set and passes
+vacuously, which is a different reason than "clear of the axis" but stays
+just as safe, since a sphere closing at two ordinary poles has no pinch to
+catch in the first place. A boundary pinch at an isolated INTERIOR point,
+which needs a generatrix that touches the axis at a point other than its
+own endpoint to produce, stays out of reach on the curved arm regardless
+of surface kind. The leg stands as a proven-safe backstop for a curved
+fixture whose generatrix touches the axis at an interior point, not a case
+any of this increment's own curved tests can observe firing — the
+all-planar T76 fixture above is what observes the leg firing at all.
 
 **What is proven, and what is not, for a curved closed set.** Closure (the
 directed-edge parity leg) and manifoldness at every vertex (the hoisted
@@ -1253,7 +1274,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R4 | `Body.Patch` selection holds an edge that is not free | `ErrDegenerate` |
 | R5 | `Body.Patch` selection does not partition into closed chains, or a chain's plane-local walk crosses or touches itself | `ErrDegenerate` |
 | R6 | `Body.Patch` chain is proven non-planar, or carries a nonzero bound so planarity is not proven | `ErrUnsupported` |
-| R7 | `Stitch`'s welded set cannot be consistently oriented | `ErrDegenerate` |
+| R7 | `Stitch`'s welded set cannot be consistently oriented, fails the directed-edge parity leg, or has a vertex whose meeting faces are not one connected fan or path | `ErrDegenerate` |
 | R8 | `Stitch` closes a boundary holding a face this evaluator has no closed-form flux integral for | `ErrUnsupported` |
 | R9 | `Stitch`'s crossing audit proves a self-contact or self-intersection | `ErrDegenerate` |
 | R10 | `Stitch`'s crossing audit exhausts its facet-pair ceiling | `ErrUnsupported` |
@@ -1873,6 +1894,9 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T73 | T58's box `Placed` under a non-identity rigid motion, then `Union`ed with a plain block (`TestStitchPlacedSolidUnionStillRefusesOnTheVolumeProof`) | still `ErrUnsupported`, the volume-proof refusal: a placement's own `rigidRoundAllow` widens every vertex bound, so `stitchZeroVertexBound` no longer holds |
 | T74 | T42's own certificate-welded stitched solid (nonzero vertex bound at identity), `Union`ed with a plain block (`TestStitchCertificateWeldedSolidUnionStillRefusesOnTheVolumeProof`) | still `ErrUnsupported`, the volume-proof refusal, reached by the CERTIFICATE-WELD route rather than T73's placement route — neither test alone would prove the gate reads the vertex bound itself rather than one particular cause of it |
 | T75 | a hand-built planar face bounded by a 10x10 outer square and a 2x2 hole square, driven directly at `triangulateStitchFaces` (internal — `TestTriangulateStitchFacesTilesAHoledFaceExactly`; every public stitched fixture in this tree happens to be hole-free) | every returned triangle has strictly positive area and attributes to the one face handed in; the triangles' own summed area is bit-exactly the analytic 96 mm² outer-minus-hole region — a gap or an overlap would miss it in one direction or the other. Shown-to-fail: dropping hole-bridging (`triangulate2DContext`'s own `holes` slice) turns the summed area into the outer square's whole 100 mm², missing the assertion |
+| T76 | two axis-aligned boxes (T1's box and a second one offset to x∈[100,200], y∈[60,120], z∈[10,20]), each three surface-extruded-wall-plus-two-`Body.Patch`-cap sheets, sharing exactly one corner vertex — (100,60,10) — with no edge joining them, all six sheets `Stitch`ed in one call (`TestStitchRefusesTwoBoxesPinchedAtOneVertex`) | `ErrDegenerate` (R7); the document and every operand are unchanged |
+| T77 | the same two boxes as T76 translated apart so no vertex is shared, `Stitch`ed in one call (`TestStitchTwoDisjointBoxesFormATwoLumpSolid`) | `Kind() == BodySolid`; 16 vertices, 2 lumps, `Volume` `Exact` at 120000 mm³ — the narrowing T76 proves is a pinch refusal, not a blanket one |
+| T78 | T76's two boxes with both top patches omitted, leaving an open, all-planar assembly that still shares the one pinched corner vertex (`TestStitchRefusesOpenAssemblyPinchedAtOneVertex`) | `ErrDegenerate` (R7) even though free edges remain — the vertex-link audit refuses the open arm exactly as it does the closed one (§6.3's amended Table C, §6.4) |
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'`

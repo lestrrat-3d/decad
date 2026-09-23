@@ -90,6 +90,121 @@ func TestStitchClosesBoxFromThreeSheets(t *testing.T) {
 	decadtest.IsSound(t, doc)
 }
 
+// stitchBoxSheetsAtOffset is stitchBoxSheets generalised to an arbitrary
+// axis-aligned span [x0,x1]×[y0,y1]×[z0,z1], for T76/T77/T78's two-box
+// pinch fixtures: stitchBoxSheets itself is pinned to the fixed 100×60
+// rectangle plateSketch draws at the origin, with no way to offset it in X
+// or Y.
+func stitchBoxSheetsAtOffset(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0, z1 float64) (walls, bottom, top *decad.Body) {
+	t.Helper()
+	w := sketch.NewWorld()
+
+	basePlane, err := w.CreateOffsetPlane(w.XY(), z0)
+	require.NoError(t, err)
+	ws, err := w.CreateSketch(basePlane)
+	require.NoError(t, err)
+	rect := ws.CreateRectangle(x0, y0, x1, y1)
+	ws.Fix(rect.A)
+	_, err = ws.Solve(t.Context())
+	require.NoError(t, err)
+	walls, err = doc.Extrude(ws, ws.Profiles()[0], decad.Distance{D: units.Millimeters(z1 - z0), Dir: decad.Along}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+
+	bs, err := w.CreateSketch(basePlane)
+	require.NoError(t, err)
+	brect := bs.CreateRectangle(x0, y0, x1, y1)
+	bs.Fix(brect.A)
+	_, err = bs.Solve(t.Context())
+	require.NoError(t, err)
+	bottom, err = doc.Patch(bs, bs.Profiles()[0])
+	require.NoError(t, err)
+
+	topPlane, err := w.CreateOffsetPlane(w.XY(), z1)
+	require.NoError(t, err)
+	ts, err := w.CreateSketch(topPlane)
+	require.NoError(t, err)
+	trect := ts.CreateRectangle(x0, y0, x1, y1)
+	ts.Fix(trect.A)
+	_, err = ts.Solve(t.Context())
+	require.NoError(t, err)
+	top, err = doc.Patch(ts, ts.Profiles()[0])
+	require.NoError(t, err)
+
+	return walls, bottom, top
+}
+
+// TestStitchRefusesTwoBoxesPinchedAtOneVertex is docs/surface-design.md's
+// T76: T1's box (x∈[0,100], y∈[0,60], z∈[0,10]) and a second, otherwise
+// disjoint box (x∈[100,200], y∈[60,120], z∈[10,20]) sharing exactly ONE
+// corner — (100,60,10) — with no edge at all joining the two boxes there.
+// The shared vertex table (stitch_weld.go) merges the two bit-identical
+// corners into one entry whether or not any edge connects them, so both
+// boxes weld cleanly under Table J and checkStitchClosure's own
+// directed-edge parity leg sees nothing wrong either: every edge still
+// bounds exactly one or two faces with correct parity. Only the vertex-link
+// audit sees that the six faces meeting at the shared corner (three from
+// each box) form two disconnected fans rather than one connected fan, which
+// is exactly the pinch this test proves Stitch now refuses on every
+// build arm, not the curved-closed arm alone.
+func TestStitchRefusesTwoBoxesPinchedAtOneVertex(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	wallsA, bottomA, topA := stitchBoxSheets(t, doc, 10)
+	wallsB, bottomB, topB := stitchBoxSheetsAtOffset(t, doc, 100, 60, 200, 120, 10, 20)
+
+	_, err := decad.Stitch(wallsA, bottomA, topA, wallsB, bottomB, topB)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+
+	// A failed Stitch leaves every operand live and unretired.
+	require.Len(t, doc.Bodies(), 6)
+}
+
+// TestStitchTwoDisjointBoxesFormATwoLumpSolid is docs/surface-design.md's
+// T77, T76's own narrowing companion: the identical two boxes translated
+// apart so NO vertex is shared at all. Without this test, a change that
+// refused every multi-body Stitch (rather than only a pinched one) would
+// pass T76 just as well — this is what proves the vertex-link audit only
+// narrows what Stitch admits, rather than blocking the ordinary case.
+func TestStitchTwoDisjointBoxesFormATwoLumpSolid(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	wallsA, bottomA, topA := stitchBoxSheets(t, doc, 10)
+	wallsB, bottomB, topB := stitchBoxSheetsAtOffset(t, doc, 200, 0, 300, 60, 0, 10)
+
+	box, err := decad.Stitch(wallsA, bottomA, topA, wallsB, bottomB, topB)
+	require.NoError(t, err)
+
+	require.Equal(t, decad.BodySolid, box.Kind())
+	require.True(t, box.IsSolid())
+	require.Len(t, box.Vertices(), 16)
+	require.Len(t, box.Lumps(), 2)
+	decadtest.MeasuresVolume(t, box, units.CubicMillimeters(120000), decadtest.Exactly())
+
+	decadtest.IsSound(t, doc)
+}
+
+// TestStitchRefusesOpenAssemblyPinchedAtOneVertex is docs/surface-design.md's
+// T78: T76's own two boxes with BOTH top patches left off, so the assembly
+// stays open (each box's own top rim is a residual free edge) while still
+// sharing the identical pinched corner vertex. Decision 1 runs the
+// vertex-link audit on the open, all-planar arm exactly as it does the
+// closed one, so this proves the pinch refuses even though §6.3's "a
+// residual free edge is never an error" rule would otherwise let an open
+// assembly like this one back as a BodySheet.
+func TestStitchRefusesOpenAssemblyPinchedAtOneVertex(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	wallsA, bottomA, _ := stitchBoxSheets(t, doc, 10)
+	wallsB, bottomB, _ := stitchBoxSheetsAtOffset(t, doc, 100, 60, 200, 120, 10, 20)
+
+	_, err := decad.Stitch(wallsA, bottomA, wallsB, bottomB)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+
+	// A failed Stitch retires nothing: the 4 operands plus the 2 unused top
+	// patches (never passed to this call) all stay live.
+	require.Len(t, doc.Bodies(), 6)
+}
+
 // TestStitchDisplacedPatchStaysASheet is docs/surface-design.md's T4: T3's
 // operands with one patch (the top) displaced 1e-9 mm off the wall's own
 // rim level. Every one of the top patch's four corners then differs from

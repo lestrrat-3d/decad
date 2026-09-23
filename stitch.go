@@ -42,14 +42,18 @@ func Stitch(bodies ...*Body) (*Body, error) {
 // [ErrForeignBody] (R13), a retired operand is [ErrRetiredBody] (R14), and a
 // [BodySolid] operand is [ErrUnsupported] (R17) — it has no free edge, so
 // stitching cannot change it, and a caller combining two solids means
-// [Union]. Table C decides the result: a residual free edge is a
-// [BodySheet] and never an error; a fully welded, all-planar, non-crossing
-// boundary is a [BodySolid]; a fully welded boundary holding a curved face is
-// [ErrUnsupported] (R8); a welded set with no consistent orientation is
-// [ErrDegenerate] (R7); and a proven self-contact or an exhausted audit
-// budget surfaces the crossing audit's own [ErrDegenerate]/[ErrUnsupported]
-// (R9/R10) unchanged. A failed call leaves the document and every operand
-// unchanged.
+// [Union]. Before Table C decides anything, every vertex's own link across
+// the welded set must be a manifold — one connected fan (interior) or path
+// (rim) — open or closed, all-planar or curved alike; a pinch there is
+// [ErrDegenerate] (R7), the identical sentinel a non-orientable assembly
+// gets, even when free edges also remain. Table C then decides the rest: a
+// residual free edge is a [BodySheet] and never an error; a fully welded,
+// all-planar, non-crossing boundary is a [BodySolid]; a fully welded
+// boundary holding a curved face is [ErrUnsupported] (R8); a welded set
+// with no consistent orientation is [ErrDegenerate] (R7); and a proven
+// self-contact or an exhausted audit budget surfaces the crossing audit's
+// own [ErrDegenerate]/[ErrUnsupported] (R9/R10) unchanged. A failed call
+// leaves the document and every operand unchanged.
 func StitchContext(ctx context.Context, bodies ...*Body) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a stitch`, ErrDegenerate)
@@ -225,6 +229,16 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	if err := checkStitchClosure(newFaces); err != nil {
 		return nil, err
 	}
+	// The vertex-link audit runs unconditionally, on every build arm below —
+	// all-planar or curved, open or closed alike — never the curved-closed
+	// arm alone (docs/surface-design.md §6.4's vertex-link paragraph): a
+	// pinch at a shared-vertex-table entry with no connecting edge is
+	// reachable through the all-planar path exactly as it is through a
+	// curved one, and checkStitchClosure's own directed-edge parity leg does
+	// not see it either way.
+	if err := auditVertexLinksForStitchFaces(ctx, newFaces); err != nil {
+		return nil, err
+	}
 
 	open := stitchHasFreeEdge(newFaces)
 	allTetra := stitchAllTetrahedronEligible(newFaces)
@@ -313,14 +327,11 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 		// edge is welded and at least one face is not tetrahedron-eligible,
 		// so the volume needs stitch_flux.go's per-surface flux integral
 		// rather than the exact triangle sum. Rule S gates admission on the
-		// single source body's own construction proof; the vertex-link audit
-		// gates the curved path's own claim of manifoldness, since the
-		// reused crossing audit consumes triangles this set has none of.
+		// single source body's own construction proof; manifoldness at every
+		// vertex is already proven above, unconditionally, since the reused
+		// crossing audit consumes triangles this set has none of.
 		if !stitchRuleSAdmits(ctx, srcFaces) {
 			return nil, fmt.Errorf(`%w: Stitch closes a boundary this evaluator cannot prove simple by construction (docs/surface-design.md Table R row R8)`, ErrUnsupported)
-		}
-		if err := auditVertexLinksForStitchFaces(ctx, newFaces); err != nil {
-			return nil, err
 		}
 		// verts[0] anchors the flux sum exactly as newLoftMassAccumulator
 		// anchors the tetrahedron sum — but a fully boundary-less analytic

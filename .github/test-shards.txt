@@ -1697,3 +1697,6 @@
 1	0.00	TestTessellateStitchPublishesZeroSymDiffForClosedZeroBoundBody
 2	0.00	TestTessellateStitchDoesNotPublishSymDiffForAPlacedBody
 3	0.00	TestTessellateStitchDoesNotPublishSymDiffForAnOpenSheet
+0	0.00	TestStitchRefusesTwoBoxesPinchedAtOneVertex
+1	0.00	TestStitchTwoDisjointBoxesFormATwoLumpSolid
+2	0.00	TestStitchRefusesOpenAssemblyPinchedAtOneVertex

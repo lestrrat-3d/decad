@@ -212,11 +212,16 @@ func stitchTestFanAroundVertex(v *Vertex, outer [3]*Vertex) [3]*Face {
 // docs/surface-design.md §6.4 records — two lobes of a revolved boundary
 // touching at an isolated point — collapsed to its bare combinatorial
 // shape, the same way TestStitchOrientationRefusesMobiusAssembly pins
-// deriveStitchOrientation from a hand-built face set decad's own public
-// seam has no way to reach. No REACHABLE model produces this shape (no
-// admitted Plane/Cylinder generatrix can touch the axis at an isolated
-// point at all — stitch_flux.go's own top comment), which is exactly why a
-// hand-built fixture is the only way to prove the gate does anything.
+// deriveStitchOrientation from a hand-built face set. Unlike that Möbius
+// shape, this one IS reachable through the public seam: T76
+// (TestStitchRefusesTwoBoxesPinchedAtOneVertex, stitch_test.go) drives the
+// identical combinatorial pinch — two disjoint boxes sharing one corner
+// vertex with no shared edge — through Stitch itself, on the all-planar
+// arm rather than a curved one. This fixture stays useful anyway: it
+// isolates the gate from the all-planar arm's other legs (Table J's
+// welding, the crossing audit, checkStitchClosure) by driving
+// auditVertexLinksForStitchFaces directly, so a regression in one of those
+// other legs can never be mistaken for a fix or a break here.
 func TestStitchVertexLinkAuditRefusesPinchedVertex(t *testing.T) {
 	t.Parallel()
 	v := &Vertex{}
@@ -225,7 +230,7 @@ func TestStitchVertexLinkAuditRefusesPinchedVertex(t *testing.T) {
 
 	faces := append(append([]*Face{}, fanA[:]...), fanB[:]...)
 	err := auditVertexLinksForStitchFaces(context.Background(), faces)
-	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorIs(t, err, ErrDegenerate)
 }
 
 // TestStitchFluxRefusesNURBSSurface is docs/surface-design.md's T37: a
