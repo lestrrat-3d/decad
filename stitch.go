@@ -934,6 +934,27 @@ func stitchZeroVertexBound(budget *workBudget, b *Body) (bool, error) {
 	return true, nil
 }
 
+// stitchMaxVertexBound is stitchZeroVertexBound's own magnitude twin: the
+// largest proven bound over every one of b's own vertices, zero when every
+// vertex is exact. clearance_geom.go's addStitchFaces dispatch reads it as
+// the body's own bodyGeom.delta (docs/clearance-design.md §2) once a bounded
+// stitched body earns a model rather than a refusal: every vertex this
+// carrier model reads comes straight off the body's own topology, so the
+// worst vertex bound is a sound charge against the whole model, exactly as a
+// placed prism's frame/placement rounding is (bodyGeom's own doc comment).
+func stitchMaxVertexBound(budget *workBudget, b *Body) (float64, error) {
+	best := 0.0
+	for _, v := range b.Vertices() {
+		if err := budget.step(); err != nil {
+			return 0, err
+		}
+		if m := v.Position().Bound.Mag(); m > best {
+			best = m
+		}
+	}
+	return best, nil
+}
+
 // triangulateStitchFaces triangulates each planar face in its own plane
 // frame through triangulate.go's existing cap triangulator and maps every
 // resulting index back through the shared vertex table (docs/surface-design.md

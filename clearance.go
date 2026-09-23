@@ -65,19 +65,44 @@ type pairKernel struct {
 	clearanceRefused bool
 }
 
+// clearanceDeltaWiden widens a held-candidate interval [lo, hi] by the two
+// bodies' bodyGeom.delta (payload-verification-design.md §2.3's formula,
+// applied here to the analytic arms rather than the not-yet-landed faceted
+// one): distance between closed sets is 1-Lipschitz in each operand, so the
+// TRUE interval lies in [max(0, down(lo−widen)), up(hi+widen)]. exact
+// collapses to false whenever either delta is nonzero — a widened interval
+// can never carry an Exact label (docs/api-design.md §5.3: Exact is a claim
+// the number IS the truth). A zero widen (both deltas zero, the common
+// feature-built, unplaced, axis-aligned case) returns its inputs unchanged,
+// so it costs no extra rounding there.
+func clearanceDeltaWiden(lo, hi float64, exact bool, deltaA, deltaB float64) (float64, float64, bool) {
+	widen := absSumUpper(deltaA, deltaB)
+	if widen == 0 {
+		return lo, hi, exact
+	}
+	lo = math.Max(0, downRound(lo-widen))
+	hi = absSumUpper(hi, widen)
+	return lo, hi, false
+}
+
 // clearancePair runs the kernel over one pair of proven solids.
 // nestingExcluded is true when box separation has already excluded nesting
 // (a box-proven pair needs the kernel only for its gap — §7).
 //
 // Check order is load-bearing: the coplanar Plane×Plane contact certificate
 // runs first and short-circuits every later check when it certifies a touch,
-// because a separating plane already certifies the whole contact set. Past
-// that, an admitted transversal crossing (sink.overlap) is read before
-// sink.unsure, so a pair that is both overlapping AND touches an unsupported
-// contact elsewhere still reports the overlap it can prove. The proven lower
-// bound lo must then strictly clear the tolerance floor k.tol before the §2
-// nesting cast runs — a lo at or below the floor cannot certify disjointness,
-// so nesting would only spend work on an answer the interval already refuses.
+// because a separating plane already certifies the whole contact set — but
+// ONLY when both bodies' bodyGeom.delta are exactly zero, since the
+// certificate is an exact material-side claim (payload-verification §7.2's
+// rule for the faceted case, applied here to every analytic arm) that a
+// carrier built from rounded coordinates cannot honestly make. Past that, an
+// admitted transversal crossing (sink.overlap) is read before sink.unsure, so
+// a pair that is both overlapping AND touches an unsupported contact
+// elsewhere still reports the overlap it can prove. The held-candidate
+// interval is then widened ONCE by the two bodies' deltas (clearanceDeltaWiden,
+// above) before the proven lower bound lo must clear the tolerance floor
+// k.tol — widening first, so the §2 nesting cast never runs on a lo the
+// widening would have brought back down to the floor.
 func clearancePair(ctx context.Context, a, b *Body, nestingExcluded bool) (pairResult, error) {
 	if err := ctx.Err(); err != nil {
 		return pairResult{}, err
@@ -115,9 +140,16 @@ func clearancePair(ctx context.Context, a, b *Body, nestingExcluded bool) (pairR
 	// overlap, with each body's material wholly on its own side of the
 	// shared plane — the separating plane clears the interiors globally and
 	// certifies the whole contact set, so the gap is a measured Exact zero.
-	certified, err := k.coplanarContactCertified(ctx)
-	if err != nil {
-		return pairResult{}, err
+	// It runs only when both bodies' bodyGeom.delta are exactly zero: it is
+	// an exact material-side claim, and a nonzero delta means at least one
+	// carrier plane may itself be displaced from the boundary it is meant to
+	// certify (clearancePair's own doc comment).
+	certified := false
+	if ga.delta == 0 && gb.delta == 0 {
+		certified, err = k.coplanarContactCertified(ctx)
+		if err != nil {
+			return pairResult{}, err
+		}
 	}
 	if certified {
 		return pairResult{verdict: pairTouching, exact: true, diam: diam}, nil
@@ -158,6 +190,7 @@ func clearancePair(ctx context.Context, a, b *Body, nestingExcluded bool) (pairR
 		}
 	}
 	exact = exact && lo == hi
+	lo, hi, exact = clearanceDeltaWiden(lo, hi, exact, ga.delta, gb.delta)
 	if lo <= k.tol {
 		return pairResult{diam: diam}, nil
 	}
@@ -480,6 +513,7 @@ func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool) (
 		}
 	}
 	exact = exact && lo == hi
+	lo, hi, exact = clearanceDeltaWiden(lo, hi, exact, gs.delta, gb.delta)
 	if lo <= k.tol {
 		return sheetSolidResult{verdict: sheetSolidUndecided, diam: diam}, nil
 	}

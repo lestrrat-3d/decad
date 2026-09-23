@@ -803,6 +803,63 @@ func clrBoxDist(a, b [2]r3.Vec) float64 {
 	return math.Sqrt(dx*dx + dy*dy + dz*dz)
 }
 
+// faceFootExtent bounds |p − f.o| over every point p a planar face's own trim
+// can admit. f.box contains f.region by construction (every arm that builds a
+// ckPlane face's box — capBox, boxOf's own callers — grows it to cover the
+// region), so the farthest of the box's eight corners from the foot o is a
+// sound, if not tight, upper bound on the face's own extent.
+func faceFootExtent(f *cFace) float64 {
+	best := 0.0
+	for _, x := range []float64{f.box[0].X, f.box[1].X} {
+		for _, y := range []float64{f.box[0].Y, f.box[1].Y} {
+			for _, z := range []float64{f.box[0].Z, f.box[1].Z} {
+				if d := r3.NewVec(x, y, z).Sub(f.o).Len(); d > best {
+					best = d
+				}
+			}
+		}
+	}
+	return best
+}
+
+// planeTiltAllow bounds the displacement one rounded carrier PLANE commits
+// across its own extent from its foot f.o. addPrismFaces and addRevolveFaces
+// build a plane carrier's u, v and outward normal n through the payload's own
+// `dir`-style construction in raw float64 (this file's own package doc
+// comment; docs/clearance-design.md §2), so n is not exactly perpendicular to
+// the plane it is meant to describe. For a point p genuinely on the TRUE
+// plane through o with the TRUE normal n_true, the rounded plane's own
+// equation reads n·(p−o) = (n−n_true)·(p−o) + n_true·(p−o) = (n−n_true)·(p−o)
+// — the second term vanishes by definition of the true plane — which
+// Cauchy–Schwarz bounds by |n−n_true|·|p−o|. dirRoundAllow bounds the first
+// factor for the frame/placement composition every such normal is built
+// through (a unit-scale input, since every direction this file feeds it is a
+// unit or axis vector); the ×4 safety factor is prismPointBound's own rule
+// for a value that passes through more than one held linear map — here the
+// frame lift, a cross product and a normalize — before publication, so it is
+// sound rather than tight. faceFootExtent bounds the second factor.
+func planeTiltAllow(f *cFace, frame r3.Frame, xform r3.Transform) float64 {
+	if f.kind != ckPlane {
+		return 0
+	}
+	normalErr := productUpper(4, dirRoundAllow(frame, xform, 1))
+	return productUpper(normalErr, faceFootExtent(f))
+}
+
+// bodyFaceTiltDelta is the worst planeTiltAllow over every planar face a
+// body's carrier model built — the one per-body term addPrismFaces and
+// addRevolveFaces fold into bodyGeom.delta beside the point and axial/angular
+// terms (bodyGeom's own doc comment).
+func bodyFaceTiltDelta(faces []*cFace, frame r3.Frame, xform r3.Transform) float64 {
+	best := 0.0
+	for _, f := range faces {
+		if t := planeTiltAllow(f, frame, xform); t > best {
+			best = t
+		}
+	}
+	return best
+}
+
 // cEdge is one boundary edge: a segment or a circular arc/circle in world
 // coordinates.
 type cEdge struct {
@@ -823,6 +880,19 @@ func (e *cEdge) at(th float64) r3.Vec {
 }
 
 // bodyGeom is one body's kernel boundary model.
+//
+// delta is a proven upper bound on how far every carrier point, direction and
+// axis this model reads may sit from the exact boundary the body's payload
+// denotes (docs/clearance-design.md §2's payload-adapter displacement,
+// docs/payload-verification-design.md §2.3's delta(X)). addPrismFaces and
+// addRevolveFaces fold in the payload's own frame/placement point-rounding
+// (bounds.go's frameAndPlacementRoundAllow, the identical charge
+// topology.go's Vertex.Position already takes), the payload's own proven
+// axial or angular displacement, and the per-face tilt a rounded carrier
+// normal commits across that face's own extent (bodyFaceTiltDelta, below).
+// addStitchFaces folds in the body's own largest proven vertex bound instead.
+// It is exactly zero for an axis-aligned, unplaced, feature-built body, which
+// is what keeps every such body's Clearance rows Exact as before.
 type bodyGeom struct {
 	body     *Body
 	faces    []*cFace
@@ -830,6 +900,7 @@ type bodyGeom struct {
 	verts    []r3.Vec
 	shellWit []r3.Vec // one witness per shell, void shells included (§2)
 	supports []r3.Vec // support points for the pair-D reading (§7)
+	delta    float64
 }
 
 // perpTo returns a deterministic unit vector perpendicular to a unit vector.
@@ -888,34 +959,25 @@ func newBodyGeomBudget(budget *workBudget, b *Body) (*bodyGeom, bool, error) {
 		ok, err = g.addRevolveFaces(budget, pl)
 	case stitchPayload:
 		// Refuse outright unless the recorded triangle set exists (an
-		// all-planar body, open or closed — tessellate_stitch.go's own gate)
-		// AND every vertex of the body carries a proven bound of EXACTLY
-		// zero (stitchZeroVertexBound, stitch.go — the identical question
-		// tessellate_stitch.go's own occupied-volume admission asks, kept in
-		// one place). The second condition subsumes a nonzero placement
-		// delta: a placement widens every vertex bound (stitch.go's
-		// rigidRoundAllow), so a placed stitched solid never passes it
-		// either. This is narrower than
-		// addPrismFaces' own standing below: that arm builds its carriers
-		// through a call that applies the placement transform and rounds,
-		// then treats the result as exact and charges the rounding nowhere,
-		// which is a pre-existing looseness this arm does not copy
-		// (docs/clearance-design.md §2). A residual bound has nowhere to go
-		// here either — clearancePair carries no payload-delta widening term
-		// for this arm to charge one against — so the only sound answer for
-		// a bounded stitched body is no model at all, leaving the pair
-		// undecided rather than certifying a gap against the wrong boundary.
+		// all-planar body, open or closed — tessellate_stitch.go's own gate).
+		// A bounded body — placed (stitch.go's rigidRoundAllow widens every
+		// vertex bound) or closed by the CURVE weld certificate at a nonzero
+		// class bound — no longer refuses on that alone: bodyGeom.delta now
+		// exists for it to charge its own worst vertex bound against
+		// (stitchMaxVertexBound, stitch.go), the identical charge a placed
+		// prism's frame/placement rounding takes (bodyGeom's own doc
+		// comment), so this arm needs no standing narrower than addPrismFaces'
+		// own anymore.
 		if pl.tris == nil {
 			return nil, false, nil
 		}
-		zeroBound, zErr := stitchZeroVertexBound(budget, b)
-		if zErr != nil {
-			return nil, false, zErr
+		maxVertexBound, mErr := stitchMaxVertexBound(budget, b)
+		if mErr != nil {
+			return nil, false, mErr
 		}
-		if !zeroBound {
-			return nil, false, nil
+		if ok, err = g.addStitchFaces(budget, b, pl); ok && err == nil {
+			g.delta = maxVertexBound
 		}
-		ok, err = g.addStitchFaces(budget, b, pl)
 	default:
 		return nil, false, nil
 	}
@@ -1079,6 +1141,7 @@ func (g *bodyGeom) addPrismFaces(budget *workBudget, pp prismPayload) (bool, err
 	h := pp.z1 - pp.z0
 
 	var capElems []surveyElem
+	maxCoordUpper := 0.0
 	for _, loop := range loops {
 		for _, w := range loop {
 			if err := budget.step(); err != nil {
@@ -1088,6 +1151,7 @@ func (g *bodyGeom) addPrismFaces(budget *workBudget, pp prismPayload) (bool, err
 			if !ok {
 				return false, nil
 			}
+			maxCoordUpper = math.Max(maxCoordUpper, w.coordUpper)
 			if !pp.surfaceResult {
 				capElems = append(capElems, el)
 			}
@@ -1169,6 +1233,17 @@ func (g *bodyGeom) addPrismFaces(budget *workBudget, pp prismPayload) (bool, err
 			g.faces = append(g.faces, f)
 		}
 	}
+	// g.delta charges the three terms clearance_geom.go's package doc comment
+	// and bodyGeom's own doc comment name: the payload's own frame/placement
+	// point rounding (every anchor, axis point and witness above came from
+	// pp.point), its proven axial displacement (pp.axialDelta — the section's
+	// own sectionDelta is already refused above, but the sweep levels' own
+	// displacement was never charged here before), and the worst per-face
+	// tilt a rounded carrier normal commits (every u, v and n above came from
+	// pp.dir). It is exactly zero for an axis-aligned, unplaced, feature-built
+	// prism, which is what keeps an ordinary extrude's Clearance rows Exact.
+	pointTerm := frameAndPlacementRoundAllow(pp.frame, pp.xform, math.Max(maxCoordUpper, math.Max(math.Abs(pp.z0), math.Abs(pp.z1))))
+	g.delta = absSumUpper(pointTerm, pp.axialDelta(), bodyFaceTiltDelta(g.faces, pp.frame, pp.xform))
 	return true, nil
 }
 
@@ -1206,11 +1281,12 @@ func capWitnesses(f *cFace) []r3.Vec {
 
 // addRevolveFaces builds the revolved body's faces from its own payload. Its
 // cap planes, angWindow and witnesses all read rp.phi0/rp.phi1 as the held
-// sweep angle rather than the angle the record denotes, and this arm does NOT
-// charge rp.angularDelta() into any of them — the same limit the prism carries
-// (no clearance*.go reads prismPayload.z0Delta/z1Delta either): the clearance
-// and interference kernel is not yet part of this design's soundness claim
-// (docs/evaluator-design.md §6).
+// sweep angle rather than the angle the record denotes, and folds
+// rp.angularDelta() — scaled by the radial envelope every witness can carry
+// it at, verify_gate.go's own reading of the same displacement — into
+// bodyGeom.delta below, beside the payload's own frame/placement point
+// rounding and the per-face tilt term every plane carrier here can commit
+// (bodyGeom's own doc comment).
 func (g *bodyGeom) addRevolveFaces(budget *workBudget, rp revolvePayload) (bool, error) {
 	loops, err := revolveLoops(budget, rp)
 	if err != nil {
@@ -1238,6 +1314,7 @@ func (g *bodyGeom) addRevolveFaces(budget *workBudget, rp revolvePayload) (bool,
 	onAxis := func(z float64) r3.Vec { return a3p.Add(wp.Scale(z)) }
 
 	var capElems []surveyElem
+	maxAxisRadiusUpper := 0.0
 	for _, loop := range loops {
 		for _, w := range loop {
 			if err := budget.step(); err != nil {
@@ -1247,6 +1324,7 @@ func (g *bodyGeom) addRevolveFaces(budget *workBudget, rp revolvePayload) (bool,
 			if el, ok := walkElem(w.segmentWalk); ok {
 				capElems = append(capElems, el)
 			}
+			maxAxisRadiusUpper = math.Max(maxAxisRadiusUpper, w.axisRadiusUpper)
 			switch kind {
 			case wallAxis:
 				continue
@@ -1376,14 +1454,28 @@ func (g *bodyGeom) addRevolveFaces(budget *workBudget, rp revolvePayload) (bool,
 			g.faces = append(g.faces, f)
 		}
 	}
+	// g.delta mirrors addPrismFaces' own three terms, over this payload's own
+	// axis-symmetric construction: the frame/placement point rounding every
+	// anchor, axis point and witness above took through rp.point/onAxis, the
+	// angular displacement scaled by the radial envelope every such point can
+	// carry it at (the same reading verify_gate.go's own bodyGateDiameter
+	// arm takes for the identical displacement), and the worst per-face tilt
+	// a rounded wallPlane/cap carrier normal commits. It is exactly zero for
+	// an axis-aligned, unplaced, full-turn revolve, which is what keeps an
+	// ordinary revolve's Clearance rows Exact.
+	pointTerm := revolveVertexFrameLiftAllow(rp, maxAxisRadiusUpper)
+	angularTerm := productUpper(maxAxisRadiusUpper, rp.angularDelta())
+	g.delta = absSumUpper(pointTerm, angularTerm, bodyFaceTiltDelta(g.faces, rp.frame, rp.xform))
 	return true, nil
 }
 
 // addStitchFaces builds one exact planar carrier per live face of a CLOSED,
-// all-planar stitched body (docs/clearance-design.md §2). The caller
-// (newBodyGeomBudget) reaches this arm only once every vertex of the body
-// carries a proven bound of exactly zero, so every coordinate read here is
-// exact and this arm introduces no bound term of its own.
+// all-planar stitched body (docs/clearance-design.md §2). Every coordinate it
+// reads comes straight off the body's own topology, so this arm introduces no
+// rounding of its own; the caller (newBodyGeomBudget) charges the body's own
+// worst proven vertex bound into bodyGeom.delta separately
+// (stitchMaxVertexBound, stitch.go) rather than refusing a bounded body a
+// model outright.
 //
 // The plane frame's origin and axes come straight off the face's own Plane
 // tag, negating the normal when the face is reversed — the identical

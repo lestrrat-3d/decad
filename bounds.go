@@ -448,6 +448,32 @@ func frameAndPlacementRoundAllow(frame r3.Frame, xform r3.Transform, maxInputAbs
 	return rigidRoundAllow(maxInputAbs, vecMaxAbs(xform.Apply(frame.Origin())))
 }
 
+// dirRoundAllow bounds the rounding a builder's own `dir`-style construction
+// commits on one DIRECTION: a plane-local direction of magnitude at most
+// maxInputAbs, combined from the payload's own frame vectors and then carried
+// through the accumulated placement's rotation (`prismPayload.dir`,
+// `revolvePayload`'s equivalent radial/velocity directions) — the same
+// two-step map `frameAndPlacementRoundAllow` reads for a POINT, with the
+// translation term dropped: a direction carries no origin to translate, so
+// `ApplyDir` commits no translation rounding for `rigidRoundAllow`'s own
+// maxTransAbs term to cover.
+//
+// It shares `frameAndPlacementRoundAllow`'s own zero fast path, for the
+// identical reason: an axis-aligned frame's U/V/N combine only 0, 1 and -1
+// coefficients, each exact in float64, and `ApplyDir` under Identity changes
+// nothing — so under that exemption every direction `dir` builds is bit-exact,
+// and the CROSS product of two such directions (a plane's own outward normal,
+// `addPrismFaces`/`addRevolveFaces`) is a cross product of standard basis
+// vectors, itself exact. Off that exemption, the charge is sound but not
+// claimed tight.
+func dirRoundAllow(frame r3.Frame, xform r3.Transform, maxInputAbs float64) float64 {
+	trivialFrame := frame.U() == r3.NewVec(1, 0, 0) && frame.V() == r3.NewVec(0, 1, 0)
+	if trivialFrame && xform == r3.Identity() {
+		return 0
+	}
+	return rigidRoundAllow(maxInputAbs, 0)
+}
+
 // perturbedAreaUpper bounds the total facet area of a mesh whose vertices may
 // each sit up to delta from the HELD ones — and of every mesh on the straight
 // path between the two, which is what the swept-volume bound integrates over.

@@ -1688,8 +1688,8 @@
 3	0.00	TestCurveTokenComposeDeclinesTheZeroToken
 0	0.00	TestStitchBoxReachesAProvenClearanceGap
 2	0.00	TestStitchSmallStitchedBoxContainedInABlock
-3	0.00	TestStitchBoundedStitchedSolidStaysUndecided
-0	0.00	TestStitchPlacedStitchedSolidStaysUndecided
+3	0.00	TestStitchBoundedStitchedSolidGetsClearance
+0	0.00	TestStitchPlacedStitchedSolidGetsClearance
 1	0.00	TestAddStitchFacesBuildsExactPlanarCarriers
 2	0.00	TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal
 3	0.00	TestStitchOverlappingSolidReportsRealInterference
@@ -1721,3 +1721,8 @@
 0	0.02	TestRevolveSemicirclePartialSweepCentroidBoundTightens
 1	0.01	TestRevolveSemicircleVolumeBoundUnaffected
 2	0.01	TestSecondMomentsSemicircleBoundTightens
+3	0.00	TestClearancePlacedStopBuiltStackTouchingIsUndecided
+0	0.01	TestClearanceTiltedPlanePairIntervalContainsTruth
+1	0.00	TestClearanceAxisAlignedPairOf300IsExact
+2	0.04	TestClearanceFarOriginTiltedPlanePairContainsTruth
+3	0.02	TestClearanceInchExtrudeAxialGapContainsTruth

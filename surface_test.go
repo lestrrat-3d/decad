@@ -733,7 +733,9 @@ func TestSheetSolidPairContainedProvenSound(t *testing.T) {
 	require.Equal(t, decad.Sound, report.Status)
 	require.Empty(t, report.Diagnostics)
 	require.Empty(t, report.Interferences)
-	requireExactGap(t, report, 5)
+	// The sheet arrives via Placed, so its own frame/placement rounding
+	// (bodyGeom.delta) now widens the row to honest-Approximate.
+	requireBoundedGapContains(t, report, 5)
 	require.Same(t, solid, report.Clearances[0].A)
 	require.Same(t, sheet, report.Clearances[0].B)
 

@@ -375,16 +375,14 @@ func TestVerifyClearancesMeasureBoxProvenPair(t *testing.T) {
 
 	// A box-proven pair is already partition-decided, but its row still
 	// needs the kernel: the box distance is a lower bound, not a minimum
-	// (clearance design §7). The facing side faces sit 400 mm apart.
+	// (clearance design §7). The facing side faces sit 400 mm apart. The
+	// second plate arrives via Placed, so its own frame/placement rounding
+	// (bodyGeom.delta) widens the row to honest-Approximate.
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
 	require.True(t, report.Passed())
-	require.Len(t, report.Clearances, 1)
-	row := report.Clearances[0]
-	require.Equal(t, decad.Exact, row.Gap.Exactness)
-	require.True(t, row.Gap.Value.Equal(units.Millimeters(400), 1e-9), `got %s`, row.Gap.Value)
-	require.Equal(t, 0.0, row.Gap.Bound.Mag())
+	requireBoundedGapContains(t, report, 400)
 }
 
 func TestVerifyClearancesAskedWithNoPairIsSound(t *testing.T) {
