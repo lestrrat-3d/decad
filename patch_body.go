@@ -1154,3 +1154,137 @@ func planeFrameFromNormal(origin, normal r3.Vec) (r3.Frame, error) {
 	v := n.Cross(u)
 	return r3.NewFrame(origin, u, v)
 }
+
+// Rule P (docs/surface-design.md §6.4) is the construction-proof gate a
+// bodyPatchPayload earns from its own receiver, letting Rule S
+// (stitch_flux.go) admit the "walls, then cap, then stitch" flow §6.1
+// motivates. A bodyPatchPayload proves its own boundary does not
+// self-intersect — payloadProvesSimple's own bodyPatchPayload arm
+// (verify.go) — when all three hold, decided by
+// bodyPatchPayloadProvesSimple below:
+//
+//  1. its receiver — the body Body.Patch was called on — itself admits
+//     under Rule S, decided by the identical payloadProvesSimple predicate,
+//     never a reimplementation of it;
+//  2. every new face's chain is a COMPLETE free-edge chain of that
+//     receiver's own end, not a proper subset of one;
+//  3. every new face's plane is exactly one of the receiver feature's own
+//     end planes.
+//
+// Under those three the patched assembly IS the receiver feature's own
+// solid boundary — every chain vertex and edge Body.Patch selected is the
+// SAME object the receiver's own build stamped, never a copy or a fit — so
+// the receiver's own construction proof carries onto the patched body
+// unchanged. Any chain this cannot decide keeps the payload undecided,
+// reject-only exactly as every other Rule S arm.
+//
+// Conditions 2 and 3 are both decided through the LEVEL half of the
+// shared-denotation certificate (denotation.go), never by a coordinate or a
+// residual: prism_build.go's evalPrismContext stamps every rim vertex and
+// edge at one end with the SAME level token, minted once per build per end
+// whenever the build's own section is drawn straight from its record
+// (sectionDelta == 0) — regardless of whether that end's own coordinate
+// ends up zero-bound or not. patchChainSharedLevel reads that identity off
+// the chain's own edges AND vertices directly: a shared non-zero id proves
+// the chain's plane IS that recorded level's plane, on the same terms
+// §5.2's own gate 3 level arm already reads the identical token for,
+// regardless of which of gate 3's two arms actually admitted the chain's
+// planarity. A chain with no shared id — the exact-arm case, a chain from
+// any receiver whose build mints no level token at all, or a chain a
+// SECOND Body.Patch call selects from an already-patched body
+// (copyPatchFacesUnder does not propagate a level token onto the copies it
+// mints) — is undecided here, never guessed: Rule P names no distance
+// threshold that could stand in for the identity check CLAUDE.md's
+// reject-only rule requires.
+//
+// Completeness (condition 2) then asks whether that SAME id's full set of
+// the receiver's own free edges is exactly the chain's own edge set: a
+// receiver whose end holds more than one disjoint free-edge loop — an
+// annular profile's inner and outer rims at one level — proves nothing
+// about the WHOLE end's non-self-intersection from patching only one of
+// them, so admitting on a proper subset would be unsound.
+//
+// Only prismPayload mints level tokens today, so Rule P admits a
+// Body.Patch-capped surface-extruded tube's rims and nothing wider yet.
+
+// bodyPatchPayloadProvesSimple decides payloadProvesSimple's bodyPatchPayload
+// arm — Rule P, this file's own doc comment above. bodies is
+// stitchOperandBodies reused verbatim: pp.faces is exactly the shape that
+// function already reads an operand's source body from.
+func bodyPatchPayloadProvesSimple(ctx context.Context, pp bodyPatchPayload) bool {
+	bodies := stitchOperandBodies(pp.faces)
+	if len(bodies) != 1 || bodies[0] == nil || bodies[0].payload == nil {
+		return false
+	}
+	receiver := bodies[0]
+	if !payloadProvesSimple(ctx, receiver.payload) {
+		return false
+	}
+
+	// Every receiver free edge, grouped by its own level id — the candidate
+	// set condition 2 checks each chain against. An edge with no
+	// certificate (id == 0) joins no group: it cannot be one of the
+	// receiver's own end planes (denotation.go), and grouping by "no
+	// certificate" would prove nothing about which plane it belongs to.
+	receiverFreeByLevel := map[levelID][]*Edge{}
+	for _, e := range receiver.Edges() {
+		if !e.IsFree() || e.level.id == 0 {
+			continue
+		}
+		receiverFreeByLevel[e.level.id] = append(receiverFreeByLevel[e.level.id], e)
+	}
+
+	for _, chain := range pp.chains {
+		id, ok := patchChainSharedLevel(chain.edges)
+		if !ok {
+			return false
+		}
+		if !edgeSetsEqual(receiverFreeByLevel[id], chain.edges) {
+			return false
+		}
+	}
+	return true
+}
+
+// patchChainSharedLevel is Rule P condition 3's own decision: the single
+// non-zero level id every edge AND vertex of edges carries, or false when
+// any of them carries a different id, the zero id ("no certificate",
+// denotation.go), or edges is empty. Reading id alone, never origin or
+// normal, is what keeps this an identity comparison rather than a fitted or
+// residual one — sameLevel's own contract. Checking every VERTEX as well as
+// every edge is load-bearing: an edge's own id says its CURVE was stamped at
+// one level, never that both its endpoints were too.
+func patchChainSharedLevel(edges []*Edge) (levelID, bool) {
+	if len(edges) == 0 {
+		return 0, false
+	}
+	id := edges[0].level.id
+	if id == 0 {
+		return 0, false
+	}
+	for _, e := range edges {
+		if e.level.id != id || e.start.level.id != id || e.end.level.id != id {
+			return 0, false
+		}
+	}
+	return id, true
+}
+
+// edgeSetsEqual reports whether a and b hold the same *Edge pointers, order
+// and duplicates aside — Rule P condition 2's own set-equality decision,
+// never a count alone or a residual.
+func edgeSetsEqual(a, b []*Edge) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	set := make(map[*Edge]struct{}, len(a))
+	for _, e := range a {
+		set[e] = struct{}{}
+	}
+	for _, e := range b {
+		if _, ok := set[e]; !ok {
+			return false
+		}
+	}
+	return true
+}
