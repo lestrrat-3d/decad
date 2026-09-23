@@ -307,6 +307,23 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	liftCap := func(p Point2) r3.Vec { return pl.point(p.U, p.V, capZ) }
 	liftSide := func(p Point2) r3.Vec { return pl.point(p.U, p.V, sideZ) }
 
+	// frameLiftAllow is the ONE proven bound this whole band's own cap-level
+	// vertices share for the payload's own frame lift and accumulated
+	// placement rounding (bounds.go's frameAndPlacementRoundAllow;
+	// topology.go's Vertex.Position contract) — computed once here, over
+	// every plane-local coordinate this band's own corner walks and the two
+	// axial levels can put into pl.point, rather than per vertex. It is
+	// exactly zero for an axis-aligned, unplaced payload, which is what
+	// keeps an ordinary chamfer's cap-level vertices Exact as before. It
+	// widens only the VERTEX bounds below (vertexCapLevelDelta), never
+	// capLevelDelta itself, which the band's slant and cap edges still read
+	// unwidened for their own, separate bound.
+	maxCoordUpper := 0.0
+	for _, w := range walks {
+		maxCoordUpper = math.Max(maxCoordUpper, w.coordUpper)
+	}
+	frameLiftAllow := frameAndPlacementRoundAllow(pl.frame, pl.xform, math.Max(maxCoordUpper, math.Max(math.Abs(capZ), math.Abs(sideZ))))
+
 	// levelDelta is the side level's conversion and float-sum rounding: sideZ
 	// is a float sum, so the band's side directrix sits that far from the level
 	// it denotes, and every edge with an endpoint there carries it beside the
@@ -337,7 +354,11 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		}
 		seam0 := sideCo[0].edge // the side wall's own whole-circle bottom/top edge
 		capLevelDelta := absSumUpper(delta, capDelta)
-		capEdge := wholeCircleEdge(pl, w.cU, w.cV, capRadius, capZ, w.th1 > w.th0, capLevelDelta, exactRadius)
+		// wholeCircleEdge's own delta parameter feeds ONLY its seam vertex's
+		// bound — its returned Edge's own lengthBound comes from
+		// capCircleLengthBound instead — so widening it here by
+		// frameLiftAllow charges the vertex alone.
+		capEdge := wholeCircleEdge(pl, w.cU, w.cV, capRadius, capZ, w.th1 > w.th0, absSumUpper(capLevelDelta, frameLiftAllow), exactRadius)
 		patch := buildConePatch(pl, body, ref, li, 0, w.cU, w.cV, w.radius, capRadius, sideZ, capZ, matSign, false, seam0, capEdge)
 		sign := 1.0
 		if w.th1 < w.th0 {
@@ -396,6 +417,12 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		return capBandResult{}, err
 	}
 	capLevelDelta := absSumUpper(delta, capDelta)
+	// vertexCapLevelDelta is capLevelDelta plus the band's own frameLiftAllow
+	// (above): every cap-level VERTEX this band places below charges it, but
+	// capLevelDelta itself stays unwidened wherever it feeds an EDGE's own
+	// bound (capSlantEdge) — the frame lift is a per-coordinate rounding, not
+	// a chord or locus term, so it has no business in an edge's length bound.
+	vertexCapLevelDelta := absSumUpper(capLevelDelta, frameLiftAllow)
 
 	// sideVertexAt(i) is the ORIGINAL corner point before wall i, at sideZ —
 	// buildLoopSidesAs's own shared vertex (sideCo[i].edge.Start() ==
@@ -436,7 +463,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		apex := sideVertexAt(i)
 		prev, cur := walks[(i+n-1)%n], walks[i]
 		if !j.arc {
-			capV := &Vertex{position: liftCap(j.m), bound: units.Millimeters(capLevelDelta)}
+			capV := &Vertex{position: liftCap(j.m), bound: units.Millimeters(vertexCapLevelDelta)}
 			e, held, err := capSlantEdge(budget, j.m, capV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, prev, cur, d, false)
 			if err != nil {
 				return capBandResult{}, err
@@ -445,8 +472,8 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			slantInHeld[i], slantOutHeld[i] = held, held
 			continue
 		}
-		pAV := &Vertex{position: liftCap(j.pA), bound: units.Millimeters(capLevelDelta)}
-		pBV := &Vertex{position: liftCap(j.pB), bound: units.Millimeters(capLevelDelta)}
+		pAV := &Vertex{position: liftCap(j.pA), bound: units.Millimeters(vertexCapLevelDelta)}
+		pBV := &Vertex{position: liftCap(j.pB), bound: units.Millimeters(vertexCapLevelDelta)}
 		var errA, errB error
 		slantIn[i], slantInHeld[i], errA = capSlantEdge(budget, j.pA, pAV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, sideWalk{}, sideWalk{}, 0, true)
 		if errA != nil {

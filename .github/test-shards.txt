@@ -1709,3 +1709,8 @@
 3	0.00	TestRevolveAxisBandRefusesProvenNegativeRadialMinimumUnderExactAxis
 0	0.00	TestRevolveAxisBandChargesTheOffsetSubtraction
 1	0.00	TestRevolveAxisBandRealGeometryChargedPathVolumeContainment
+2	0.00	TestVertexPlacedPrismBoundEnclosesDisplacement
+3	0.00	TestVertexTiltedPlaneUnplacedBoundEnclosesDisplacement
+0	0.00	TestVertexPlacedRevolveBoundEnclosesDisplacement
+1	0.00	TestVertexPlacedCapBlendBoundEnclosesDisplacement
+2	0.00	TestVertexAxisAlignedUnplacedBoundStaysZero

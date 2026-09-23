@@ -262,7 +262,14 @@ type Vertex struct {
 // a PLACED loft's vertex, re-lifted from the record under a rigid motion,
 // carries that motion's own rounding (docs/loft-design.md §5) — a recorded
 // coordinate the identity transform leaves alone is the zero-bound case of
-// that same rule, not an exception to it.
+// that same rule, not an exception to it. An analytic prism's, revolve's or
+// cap-loop chamfer's own rim/junction/cap vertex carries the SAME rounding —
+// bounds.go's frameAndPlacementRoundAllow, one cheap call per vertex group
+// rather than a per-vertex exact-rational bound — whenever its payload's own
+// frame is not axis-aligned or its accumulated placement is not the identity
+// (docs/evaluator-design.md §8): lifting a plane-local coordinate through a
+// tilted sketch plane rounds under the identity placement too, which is what
+// makes the frame half of that test independent of the placement half.
 // A swept vertex is read from two independent coordinates and carries what each
 // was read from: its plane-local pair from the section, and its sweep level from
 // the extent. A level a ToFace or ThroughAll stop resolved in float, a magnitude

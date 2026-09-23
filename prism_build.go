@@ -472,6 +472,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	walkLenAllow := sectionDisplacementLength(delta, 1)
 	raw := make([]sideWalk, len(loop.Segments))
 	total := boundedScalar{}
+	maxCoordUpper := 0.0
 	for i, seg := range loop.Segments {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, boundedScalar{}, err
@@ -498,7 +499,17 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 		w.lengthBound = absSumUpper(w.lengthBound, walkLenAllow)
 		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
 		total = boundedAdd(total, measuredScalar(w.length, w.lengthBound))
+		maxCoordUpper = math.Max(maxCoordUpper, w.coordUpper)
 	}
+	// frameLiftAllow is the ONE proven bound this whole loop's rim vertices
+	// share for the payload's own frame lift and accumulated placement
+	// (bounds.go's frameAndPlacementRoundAllow) — computed once here rather
+	// than per vertex, over every plane-local coordinate this loop's own
+	// walks and sweep levels can put into pp.point (topology.go's
+	// Vertex.Position contract; docs/evaluator-design.md §8). It is exactly
+	// zero for an axis-aligned, unplaced payload, which is what keeps an
+	// ordinary extrude's rim vertices Exact as before.
+	frameLiftAllow := frameAndPlacementRoundAllow(pp.frame, pp.xform, math.Max(maxCoordUpper, math.Max(math.Abs(pp.z0), math.Abs(pp.z1))))
 	walks, err := coalesceWalksContext(ctx, raw)
 	if err != nil {
 		return nil, nil, nil, boundedScalar{}, err
@@ -517,9 +528,13 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	// A side vertex sits at one recorded boundary coordinate and one sweep level,
 	// so it carries both displacements: the section's, which moves it in the
 	// plane, and its own end's, which moves it along the normal. Each is zero for
-	// a coordinate the payload recorded from what the caller stated, which is what
-	// keeps an ordinary extrude's vertices Exact; neither is a claim about the
-	// other's axis, so they compose rather than one standing in for the other.
+	// a coordinate the payload recorded from what the caller stated, and beside
+	// them every rim vertex carries frameLiftAllow, the payload's own frame lift
+	// and accumulated placement rounding (bounds.go's frameAndPlacementRoundAllow;
+	// topology.go's Vertex.Position contract) — zero for an axis-aligned, unplaced
+	// payload, which is what keeps an ordinary extrude's vertices Exact; neither
+	// is a claim about the other's axis, so they compose rather than one
+	// standing in for the other.
 	// A junction touching a FREE-FORM walk's own end also folds in that walk's
 	// own endpoint bound (freeformVertexAllow, bounds.go's walkEndBoundAllow) —
 	// the one rounding §5.1's exact-rational Bézier conversion committed taking
@@ -528,8 +543,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 	// An analytic walk contributes nothing here: widening a trimmed circular
 	// walk's vertex is a separate question this build does not answer by
 	// accident.
-	bottomBoundBase := absSumUpper(delta, pp.z0Delta)
-	topBoundBase := absSumUpper(delta, pp.z1Delta)
+	bottomBoundBase := absSumUpper(delta, pp.z0Delta, frameLiftAllow)
+	topBoundBase := absSumUpper(delta, pp.z1Delta, frameLiftAllow)
 	var bottomV, topV []*Vertex
 	// seamBottom/seamTop are the SINGLE seam vertex a lone closed walk's rim
 	// edges share at each cap — one per cap, no junction vertex at all — the
