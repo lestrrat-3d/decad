@@ -213,7 +213,14 @@ extremes swept over the signed `[z0, z1]`, beside the frame and placement's own
 rounding: `xform.Apply`/`xform.ApplyDir` are isometries only in EXACT
 arithmetic, so a frame that is not axis-aligned or a placement that is not the
 identity rounds, and `Bounds` (a `capBlendPayload` result's included) charges
-that rounding rather than reading the placed extreme as an exact leaf. Beside
+that rounding rather than reading the placed extreme as an exact leaf. Every
+rim and side vertex `buildLoopSidesAs` places charges the identical frame/
+placement rounding, computed once per loop as `frameLiftAllow`
+(`bounds.go`'s `frameAndPlacementRoundAllow`) and folded into the vertex's own
+section/axial displacement rather than into `Bounds` alone — a cap-loop
+chamfer's own cap-level vertices take the same charge in `capblend_geom.go`'s
+`buildCapBand`, beside their own contour displacement, never inside the
+value an edge's own length bound still reads unwidened. Beside
 it, the same reading charges the rounding its own FINAL SUMMATION of those
 terms into one published coordinate commits. That is a separate mechanism, not
 a consequence of the first: a placement can leave every coefficient exactly
@@ -316,7 +323,13 @@ cap-copy seam vertices, the cap faces' own `Plane` normal, the mesh's angular
 sampling, the wall survey's cap wedge, and the tolerance gate's reference
 diameter. Clearance and interference stay on the prism's own precedent:
 neither reads the axial displacement there, and neither reads the angular
-one here.
+one here. Beside the angular displacement, every junction, seam and cap
+vertex `buildRevolveLoop` places charges the SAME frame/placement rounding
+`Bounds` charges below — `revolveVertexFrameLiftAllow`, `bounds.go`'s
+`frameAndPlacementRoundAllow` read at the junction's own axis-radius envelope
+— since a swept vertex's plane-local coordinate is lifted through the
+payload's frame and placement exactly as a box extreme is, and a tilted
+sketch plane rounds it under the identity placement too.
 
 Partial sweeps get two planar cap faces. Volume by Pappus on the §4 first moments; the solid centroid from the §4
 second and mixed moments (`∫u² dA`, `∫uv dA`) — a full revolution's centroid
@@ -403,7 +416,16 @@ leaf: `prismPayload`/`capBlendPayload`'s `Bounds` (§5) and
 displacement the same reading already carries — and beside it each charges the
 rounding of its OWN recombination of the placed terms into a published
 coordinate, which a pure translation commits even where the isometry's float
-evaluation rounded nothing.
+evaluation rounded nothing. `Vertex.Position` takes the identical charge for
+every rim, junction and cap-level vertex `prismPayload`, `revolvePayload` and
+`capBlendPayload` place (`bounds.go`'s `frameAndPlacementRoundAllow`, one
+cheap call per vertex group rather than a per-vertex exact-rational bound): a
+vertex sits at a plane-local
+coordinate lifted through the payload's own frame and then its placement, the
+same two-step map `Bounds` reads, so a tilted frame rounds it under the
+identity placement exactly as it rounds a box extreme — the one difference
+from `Bounds` being that a vertex takes no separate final-summation charge, since
+it is not a recombination of several extremes into one endpoint.
 
 A placement changes the MOTION and nothing else, so a prism's re-evaluation
 reuses the plane-local walk resolution the original build published rather than

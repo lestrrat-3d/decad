@@ -89,6 +89,26 @@ func (rp revolvePayload) basis() revolveBasis {
 	return revolveBasis{a3: a3, w: w, e0: e0, e1: w.Cross(e0)}
 }
 
+// revolveVertexFrameLiftAllow bounds one junction's own share of the
+// payload's frame lift and accumulated placement rounding
+// (bounds.go's frameAndPlacementRoundAllow; topology.go's Vertex.Position
+// contract) — the revolve's own reading of rigidRoundAllow's "plane-local
+// coordinate" input. A swept vertex's plane-local (z, ρ) sits within
+// axisRadiusUpper of the axis anchor (axisFrame.walk's own
+// axisRadiusUpper field, ax.radialUpper(coordUpper) — the SAME enclosure
+// that bounds |z| and ρ alike, revolve_extent.go's own frameRoundAllow
+// states why), and the anchor itself sits within aUpper of the frame
+// origin, so |z| and ρ are each within aUpper+axisRadiusUpper of the frame
+// origin's own plane-local coordinate — folded in twice, once per axis,
+// since z and ρ are independent coordinates rather than one bounding the
+// other. It is exactly zero for an axis-aligned, unplaced revolve, which is
+// what keeps its junction and seam vertices Exact as before.
+func revolveVertexFrameLiftAllow(rp revolvePayload, axisRadiusUpper float64) float64 {
+	aUpper := math.Max(math.Abs(rp.ax.aU), math.Abs(rp.ax.aV))
+	maxInputAbs := absSumUpper(aUpper, axisRadiusUpper, axisRadiusUpper)
+	return frameAndPlacementRoundAllow(rp.frame, rp.xform, maxInputAbs)
+}
+
 // revolveCentroidGeometryBound bounds the centroid independently of the
 // Pappus quotient. Every material point starts in the recorded profile plane,
 // rotates about the resolved axis, then passes through a rigid placement. The
@@ -628,7 +648,7 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 			center := rp.point(b, j.z, 0, 0)
 			switch {
 			case rp.full && !j.onAxis:
-				seam := &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(productUpper(j.rho, rp.phi0Delta())), denot: body.doc.mintCurve()}
+				seam := &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(absSumUpper(productUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, w.axisRadiusUpper))), denot: body.doc.mintCurve()}
 				latitudeLength := 2 * math.Pi * j.rho
 				latitudeBound := conservativeValueError(latitudeLength, productUpper(w.axisRadiusUpper, twoPiUpper()))
 				if rhoEnc, ok := junctionRadiusInterval(j.rho, w.startVBound); ok {
@@ -650,10 +670,10 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref producerID, rp revolv
 					denot: body.doc.mintCurve(),
 				}
 			case !rp.full:
-				j.v0 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(productUpper(j.rho, rp.phi0Delta())), denot: body.doc.mintCurve()}
+				j.v0 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(absSumUpper(productUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, w.axisRadiusUpper))), denot: body.doc.mintCurve()}
 				j.v1 = j.v0
 				if !j.onAxis {
-					j.v1 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi1), bound: units.Millimeters(productUpper(j.rho, rp.phi1Delta())), denot: body.doc.mintCurve()}
+					j.v1 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi1), bound: units.Millimeters(absSumUpper(productUpper(j.rho, rp.phi1Delta()), revolveVertexFrameLiftAllow(rp, w.axisRadiusUpper))), denot: body.doc.mintCurve()}
 					arcLength := j.rho * dphi
 					dphiUpper := absSumUpper(math.Abs(dphi), sweep.bound)
 					arcBound := conservativeValueError(arcLength, productUpper(w.axisRadiusUpper, dphiUpper))
@@ -888,7 +908,7 @@ func (rp revolvePayload) capEdge(b revolveBasis, w segmentWalk, closed bool, vs,
 	center := rp.point(b, w.cU, w.cV, phi)
 	radius := units.Millimeters(w.radius)
 	if closed {
-		seam := &Vertex{position: rp.point(b, w.startU, w.startV, phi), bound: units.Millimeters(productUpper(w.startV, delta))}
+		seam := &Vertex{position: rp.point(b, w.startU, w.startV, phi), bound: units.Millimeters(absSumUpper(productUpper(w.startV, delta), revolveVertexFrameLiftAllow(rp, w.axisRadiusUpper)))}
 		e.curve = Circle3{Center: center, Axis: axis, Radius: radius}
 		e.start, e.end = seam, seam
 		return e

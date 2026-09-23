@@ -419,6 +419,35 @@ func rigidRoundAllow(maxInputAbs, maxTransAbs float64) float64 {
 	return radius3D(16 * ulp)
 }
 
+// frameAndPlacementRoundAllow is rigidRoundAllow's own "second call site"
+// (above), read for a builder that lifts a plane-local coordinate through ITS
+// OWN frame and then its accumulated placement, together: prismPayload's,
+// revolvePayload's and capBlendPayload's shared `point`-style construction,
+// none of which the loft chord-station reading covers. maxInputAbs is the
+// PLANE-LOCAL coordinate's own magnitude — never the lifted world point's —
+// exactly as rigidRoundAllow's own doc comment states for that second site.
+//
+// It is exactly zero only where BOTH the frame is AXIS-ALIGNED (U and V the
+// first two standard basis vectors — N is then the third by Frame's own U×V
+// invariant, and the origin may be anywhere: ToWorldUV's own products by 0
+// or 1 round nothing, whatever the origin, exactly the axis-aligned exemption
+// docs/evaluator-design.md §8 itself states) AND the placement is Identity:
+// an exact comparison, never a tolerance, matching every other analytic
+// builder's own zero-bound fast path (stitch.go, unstitch.go, patch_body.go,
+// loft_topology.go: `xform != r3.Identity()`). Charging it only when the
+// PLACEMENT is non-identity is not enough here: a tilted, non-axis-aligned
+// sketch plane rounds a plane-local coordinate lifting through ToWorldUV
+// under the identity placement too, which is what every OTHER analytic
+// builder never has to consider — their own frame lift already happened in
+// whichever build produced the vertices they re-place.
+func frameAndPlacementRoundAllow(frame r3.Frame, xform r3.Transform, maxInputAbs float64) float64 {
+	trivialFrame := frame.U() == r3.NewVec(1, 0, 0) && frame.V() == r3.NewVec(0, 1, 0)
+	if trivialFrame && xform == r3.Identity() {
+		return 0
+	}
+	return rigidRoundAllow(maxInputAbs, vecMaxAbs(xform.Apply(frame.Origin())))
+}
+
 // perturbedAreaUpper bounds the total facet area of a mesh whose vertices may
 // each sit up to delta from the HELD ones — and of every mesh on the straight
 // path between the two, which is what the swept-volume bound integrates over.
