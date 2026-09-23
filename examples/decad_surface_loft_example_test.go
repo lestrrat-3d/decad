@@ -48,7 +48,7 @@ func Example_decad_surfaceLoft() {
 	}
 
 	doc := decad.New()
-	sheet, err := doc.Loft(s0, s0.Profiles()[0], s1, s1.Profiles()[0], decad.WithSurfaceResult())
+	sheet, err := doc.Loft(context.Background(), s0, s0.Profiles()[0], s1, s1.Profiles()[0], decad.WithSurfaceResult())
 	if err != nil {
 		fmt.Printf("failed to loft: %s\n", err)
 		return
@@ -77,7 +77,7 @@ func Example_decad_surfaceLoft() {
 		return
 	}
 
-	_, tessErr := sheet.Tessellate(units.Millimeters(0.1))
+	_, tessErr := sheet.Tessellate(context.Background(), units.Millimeters(0.1))
 
 	fmt.Printf("is sheet: %v\n", sheet.Kind() == decad.BodySheet)
 	fmt.Printf("faces: %d\n", len(sheet.Faces()))

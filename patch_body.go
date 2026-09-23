@@ -79,12 +79,7 @@ const (
 	patchRowNoPayload = `docs/surface-design.md Table R row R19`
 )
 
-// Patch calls [Body.PatchContext] with [context.Background].
-func (b *Body) Patch(sel EdgeSelector) (*Body, error) {
-	return b.PatchContext(context.Background(), sel)
-}
-
-// PatchContext resolves sel against the receiver's own live topology, fills
+// Patch resolves sel against the receiver's own live topology, fills
 // every closed chain of free edges the selection proves, and returns a new
 // body carrying the receiver's own faces plus one new planar face per chain,
 // retiring the receiver (docs/surface-design.md §5.2). The receiver's own
@@ -103,7 +98,7 @@ func (b *Body) Patch(sel EdgeSelector) (*Body, error) {
 // [ErrNoMatch] or [ErrCardinality], Table R row R16) and every one of gates
 // 1-4's refusals (R4, R5, R6, R18) surface unchanged. A failed call leaves
 // the document and the receiver unchanged.
-func (b *Body) PatchContext(ctx context.Context, sel EdgeSelector) (*Body, error) {
+func (b *Body) Patch(ctx context.Context, sel EdgeSelector) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a patch`, ErrDegenerate)
 	}

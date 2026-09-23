@@ -126,7 +126,7 @@ func TestExtrudeThroughAllStacked(t *testing.T) {
 	require.NoError(t, err)
 	move, err := r3.Translation(r3.NewVec(0, 0, 25))
 	require.NoError(t, err)
-	_, err = second.Placed(move)
+	_, err = second.Placed(t.Context(), move)
 	require.NoError(t, err)
 
 	// The sweep runs through the far side of EVERY live body it meets:
@@ -273,7 +273,7 @@ func TestExtrudeToFaceGates(t *testing.T) {
 		require.NoError(t, err)
 		move, err := r3.Translation(r3.NewVec(0, 0, 1))
 		require.NoError(t, err)
-		_, err = old.Placed(move)
+		_, err = old.Placed(t.Context(), move)
 		require.NoError(t, err)
 		_, err = doc2.Extrude(s2, pinProf2, decad.ToFace{Body: old, Face: capEndFace(old)})
 		require.ErrorIs(t, err, decad.ErrRetiredBody)
@@ -648,7 +648,7 @@ func TestExtrudeThroughAllCupStop(t *testing.T) {
 	// Hollow the plate into a cup (one cap removed): the box is retired, so the
 	// cup is the only live body the pin's sweep can meet. The outer prism still
 	// spans z ∈ [0, 20], so the through-all stop must resolve to 20.
-	cup, err := box.Shell(topCap(box), units.Millimeters(5))
+	cup, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
 	require.NoError(t, err)
 	require.NotContains(t, doc.Bodies(), box)
 
@@ -674,7 +674,7 @@ func TestExtrudeThroughAllSideCupStop(t *testing.T) {
 	doc := decad.New()
 	box, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
 	require.NoError(t, err)
-	cup, err := box.Shell(topCap(box), units.Millimeters(5))
+	cup, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
 	require.NoError(t, err)
 
 	pin, err := doc.Extrude(s, pinProf, decad.TwoSided{
@@ -840,7 +840,7 @@ func TestExtrudeToFaceInheritsCapBlendComputedLevelBound(t *testing.T) {
 		Offset: units.Millimeters(-shortBy),
 	})
 	require.NoError(t, err)
-	chamfered, err := pin.Chamfer(
+	chamfered, err := pin.Chamfer(t.Context(),
 		decad.Edges(decad.CreatedBy(decad.CapStart(pin))),
 		units.Millimeters(shortBy),
 	)
@@ -873,12 +873,12 @@ func TestExtrudeToFaceInheritsPlacedLoftBound(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
 	doc := decad.New()
-	loft, err := doc.Loft(s0, p0, s1, p1)
+	loft, err := doc.Loft(t.Context(), s0, p0, s1, p1)
 	require.NoError(t, err)
 
 	move, err := r3.Translation(r3.NewVec(0.1, 0.2, 0.3))
 	require.NoError(t, err)
-	placed, err := loft.Placed(move)
+	placed, err := loft.Placed(t.Context(), move)
 	require.NoError(t, err)
 
 	loftBound := 0.0

@@ -82,7 +82,7 @@ func internalOffAxisArcFullTurnBody(t *testing.T, surfaceResult bool) *Body {
 func TestRevolveSheetPublishesNoOccupiedVolumeProof(t *testing.T) {
 	t.Parallel()
 	sheet := internalOffAxisArcBody(t, true)
-	mesh, err := sheet.Tessellate(units.Millimeters(0.5))
+	mesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.NoError(t, err)
 	require.False(t, mesh.symDiffOK)
 	require.Zero(t, mesh.volSymDiff)
@@ -98,12 +98,12 @@ func TestRevolveSheetAreaSlackBelowSolidOnCircularMeridian(t *testing.T) {
 	tol := units.Millimeters(0.5)
 
 	solid := internalOffAxisArcBody(t, false)
-	solidMesh, err := solid.Tessellate(tol)
+	solidMesh, err := solid.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	require.Positive(t, solidMesh.areaSlack, `the fixture's circular wall must give the dropped cap term something to drop`)
 
 	sheet := internalOffAxisArcBody(t, true)
-	sheetMesh, err := sheet.Tessellate(tol)
+	sheetMesh, err := sheet.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 
 	// The gap must be the dropped CAP term itself (a few mm² on this
@@ -135,7 +135,7 @@ func TestRevolveSheetOrientationSignIsAnchorDependent(t *testing.T) {
 	anchorB := r3.NewVec(0, 1000, 0)
 
 	open := internalOffAxisArcBody(t, true)
-	openMesh, err := open.Tessellate(units.Millimeters(0.5))
+	openMesh, err := open.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.NoError(t, err)
 	openSignA := meshOrientationSign(openMesh.vertices, openMesh.triangles, anchorA)
 	openSignB := meshOrientationSign(openMesh.vertices, openMesh.triangles, anchorB)
@@ -143,7 +143,7 @@ func TestRevolveSheetOrientationSignIsAnchorDependent(t *testing.T) {
 		`an open sheet mesh's signed-volume sum must be anchor-dependent, or the orientation guard protects against nothing`)
 
 	closed := internalOffAxisArcFullTurnBody(t, true)
-	closedMesh, err := closed.Tessellate(units.Millimeters(0.5))
+	closedMesh, err := closed.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.NoError(t, err)
 	closedSignA := meshOrientationSign(closedMesh.vertices, closedMesh.triangles, anchorA)
 	closedSignB := meshOrientationSign(closedMesh.vertices, closedMesh.triangles, anchorB)

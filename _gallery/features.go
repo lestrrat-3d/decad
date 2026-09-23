@@ -81,7 +81,7 @@ func sweepShot(ctx context.Context) ([]solidlens.Model, error) {
 	if err != nil {
 		return nil, fmt.Errorf("record the sweep path: %w", err)
 	}
-	if _, err := decad.New().SweepContext(ctx, s, profile, path); err != nil {
+	if _, err := decad.New().Sweep(ctx, s, profile, path); err != nil {
 		return nil, fmt.Errorf("sweep the spatial path: %w", err)
 	}
 
@@ -205,7 +205,7 @@ func loftShot(ctx context.Context) ([]solidlens.Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	duct, err := decad.New().LoftContext(ctx, bottom, bottomProfile, top, topProfile)
+	duct, err := decad.New().Loft(ctx, bottom, bottomProfile, top, topProfile)
 	if err != nil {
 		return nil, fmt.Errorf("loft the duct: %w", err)
 	}
@@ -218,7 +218,7 @@ func filletShot(ctx context.Context) ([]solidlens.Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	rounded, err := plate.FilletContext(ctx, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(16))
+	rounded, err := plate.Fillet(ctx, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(16))
 	if err != nil {
 		return nil, fmt.Errorf("fillet the plate: %w", err)
 	}
@@ -232,7 +232,7 @@ func chamferShot(ctx context.Context) ([]solidlens.Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	bevelled, err := plate.ChamferContext(ctx, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(16))
+	bevelled, err := plate.Chamfer(ctx, decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(16))
 	if err != nil {
 		return nil, fmt.Errorf("chamfer the plate: %w", err)
 	}
@@ -246,7 +246,7 @@ func capChamferShot(ctx context.Context) ([]solidlens.Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	bevelled, err := plate.ChamferContext(ctx, decad.Edges(decad.CreatedBy(decad.CapEnd(plate))), units.Millimeters(10))
+	bevelled, err := plate.Chamfer(ctx, decad.Edges(decad.CreatedBy(decad.CapEnd(plate))), units.Millimeters(10))
 	if err != nil {
 		return nil, fmt.Errorf("chamfer the cap loop: %w", err)
 	}
@@ -262,7 +262,7 @@ func shellShot(ctx context.Context) ([]solidlens.Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	tray, err := block.ShellContext(ctx, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(7))
+	tray, err := block.Shell(ctx, decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))), units.Millimeters(7))
 	if err != nil {
 		return nil, fmt.Errorf("shell the block: %w", err)
 	}
@@ -442,7 +442,7 @@ func validProfile(s *sketch.Sketch) (*sketch.Profile, error) {
 
 // oneModel tessellates a body into the single matte model one shot renders.
 func oneModel(ctx context.Context, body *decad.Body, color solidlens.Color) ([]solidlens.Model, error) {
-	mesh, err := body.TessellateContext(ctx, units.Millimeters(featureChordTolerance))
+	mesh, err := body.Tessellate(ctx, units.Millimeters(featureChordTolerance))
 	if err != nil {
 		return nil, fmt.Errorf("tessellate: %w", err)
 	}

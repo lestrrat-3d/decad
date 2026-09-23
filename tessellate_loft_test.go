@@ -27,7 +27,7 @@ func loftBoxAt(t *testing.T, doc *decad.Document, z0, height float64) *decad.Bod
 	t.Helper()
 	const half = 20.0
 	s0, p0, s1, p1 := loftSquaresAt(t, r3.NewVec(0, 0, z0), half, half, height)
-	body, err := doc.Loft(s0, p0, s1, p1)
+	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
 	require.NoError(t, err)
 	return body
 }
@@ -40,7 +40,7 @@ func TestLoftTessellate(t *testing.T) {
 	doc := decad.New()
 	body := loftBoxAt(t, doc, 0, 10)
 
-	mesh, err := body.Tessellate(units.Millimeters(1))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)
 	require.NotNil(t, mesh)
 
@@ -92,7 +92,7 @@ func TestLoftTessellatePinnedLineSegLoftIsExact(t *testing.T) {
 	doc := decad.New()
 	loft := loftBoxAt(t, doc, 2, 6)
 
-	mesh, err := loft.Tessellate(units.Millimeters(1))
+	mesh, err := loft.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)
 	require.Zero(t, mesh.Bound().Base(), "a pinned, unplaced LineSeg-only loft holds its own boundary exactly")
 
@@ -130,10 +130,10 @@ func TestLoftTessellatePlacedLoftUsesThePositiveBoundPath(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := rot.Then(shift)
 	require.NoError(t, err)
-	placed, err := loft.Placed(motion)
+	placed, err := loft.Placed(t.Context(), motion)
 	require.NoError(t, err)
 
-	mesh, err := placed.Tessellate(units.Millimeters(1))
+	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)
 	require.Positive(t, mesh.Bound().Base(), "a placed loft's every held vertex carries the motion's own rounding")
 

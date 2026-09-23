@@ -488,19 +488,19 @@ func TestExtrudeFreeformPlacementReproducesVolume(t *testing.T) {
 
 	// Duplicate and PlacedCopy leave the receiver LIVE; Placed retires it
 	// (core §8), so it runs last.
-	dup, err := body.Duplicate()
+	dup, err := body.Duplicate(t.Context())
 	require.NoError(t, err)
 	dv, err := dup.Volume()
 	require.NoError(t, err)
 	require.InDelta(t, base.Value.Mag(), dv.Value.Mag(), 1e-9, "Duplicate reproduces the volume")
 
-	copied, err := body.PlacedCopy(move)
+	copied, err := body.PlacedCopy(t.Context(), move)
 	require.NoError(t, err)
 	cv, err := copied.Volume()
 	require.NoError(t, err)
 	require.InDelta(t, base.Value.Mag(), cv.Value.Mag(), 1e-9, "PlacedCopy reproduces the volume")
 
-	placed, err := body.Placed(move)
+	placed, err := body.Placed(t.Context(), move)
 	require.NoError(t, err)
 	pv, err := placed.Volume()
 	require.NoError(t, err)
@@ -729,7 +729,7 @@ func TestFreeformPrismTessellatesItsChordedWall(t *testing.T) {
 	body := freeformArchBody(t, doc)
 
 	const tol = 0.02
-	mesh, err := body.Tessellate(units.Millimeters(tol))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(tol))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 
@@ -755,7 +755,7 @@ func TestFreeformPrismTessellatesItsChordedWall(t *testing.T) {
 
 	// The deficit is chording, not a fixed modelling error, so asking for a
 	// four-times finer chord must shrink it.
-	finer, err := body.Tessellate(units.Millimeters(tol / 4))
+	finer, err := body.Tessellate(t.Context(), units.Millimeters(tol/4))
 	require.NoError(t, err)
 	require.Less(t, vol.Value.Base()-meshVolume(finer), vol.Value.Base()-held,
 		"a finer chording must recover volume the coarser one lost")
@@ -776,7 +776,7 @@ func TestFreeformPrismChordingEnclosesTheCurveBothWays(t *testing.T) {
 	body := overshootNetBody(t, doc)
 
 	const tol = 0.01
-	mesh, err := body.Tessellate(units.Millimeters(tol))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(tol))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	bound := mesh.Bound().Base()
@@ -842,7 +842,7 @@ func TestFreeformPrismChordCountTracksTheTolerance(t *testing.T) {
 
 	previous := 0
 	for _, tol := range []float64{0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.5, 1} {
-		mesh, err := body.Tessellate(units.Millimeters(tol))
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(tol))
 		require.NoError(t, err)
 		require.LessOrEqual(t, mesh.Bound().Base(), tol, "tol %v: the published bound stays within the tolerance asked for", tol)
 		count := len(mesh.Vertices())
@@ -852,7 +852,7 @@ func TestFreeformPrismChordCountTracksTheTolerance(t *testing.T) {
 		previous = count
 	}
 
-	mesh, err := body.Tessellate(units.Millimeters(1e-12))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(1e-12))
 	require.Nil(t, mesh, "a refused tessellation returns no mesh")
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
@@ -899,7 +899,7 @@ func TestFreeformPrismCutsAnInteriorBox(t *testing.T) {
 
 	lift, err := r3.Translation(r3.NewVec(0, 0, 3))
 	require.NoError(t, err)
-	inner, err := boxBody(t, doc, 3, 0.5, 5, 1.5, 4).Placed(lift)
+	inner, err := boxBody(t, doc, 3, 0.5, 5, 1.5, 4).Placed(t.Context(), lift)
 	require.NoError(t, err)
 	innerVolume, err := inner.Volume()
 	require.NoError(t, err)
@@ -927,7 +927,7 @@ func TestFreeformPrismInterferenceDecided(t *testing.T) {
 	// shares no face plane with its twin.
 	shift, err := r3.Translation(r3.NewVec(2, 0.2, 1))
 	require.NoError(t, err)
-	_, err = body.PlacedCopy(shift)
+	_, err = body.PlacedCopy(t.Context(), shift)
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
@@ -1043,14 +1043,14 @@ func TestFreeformPrismFilletChamferRefuse(t *testing.T) {
 			t.Run("Fillet", func(t *testing.T) {
 				doc := decad.New()
 				body := fixture.build(t, doc)
-				_, err := body.Fillet(verticalEdges(), units.Millimeters(1))
+				_, err := body.Fillet(t.Context(), verticalEdges(), units.Millimeters(1))
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				require.ErrorContains(t, err, "free-form boundary segment")
 			})
 			t.Run("Chamfer", func(t *testing.T) {
 				doc := decad.New()
 				body := fixture.build(t, doc)
-				_, err := body.Chamfer(verticalEdges(), units.Millimeters(1))
+				_, err := body.Chamfer(t.Context(), verticalEdges(), units.Millimeters(1))
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				require.ErrorContains(t, err, "free-form boundary segment")
 			})
@@ -1077,7 +1077,7 @@ func TestFreeformPrismShellRefuses(t *testing.T) {
 		t.Run(fixture.name, func(t *testing.T) {
 			doc := decad.New()
 			body := fixture.build(t, doc)
-			_, err := body.Shell(bothCaps(), units.Millimeters(1))
+			_, err := body.Shell(t.Context(), bothCaps(), units.Millimeters(1))
 			require.ErrorIs(t, err, decad.ErrUnsupported)
 			require.ErrorContains(t, err, "free-form boundary segment")
 		})
@@ -1092,7 +1092,7 @@ func TestFreeformPrismCapLoopChamferRefuses(t *testing.T) {
 	doc := decad.New()
 	body := freeformArchBody(t, doc)
 
-	_, err := body.Chamfer(capLoopEdges(body), units.Millimeters(1))
+	_, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(1))
 
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, "free-form boundary segment")
@@ -1185,7 +1185,7 @@ func TestFreeformPrismChordsBothWalkDirectionsIdentically(t *testing.T) {
 		s, p := build(t)
 		body, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 		require.NoError(t, err)
-		mesh, err := body.Tessellate(units.Millimeters(tol))
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(tol))
 		require.NoError(t, err)
 		requireWatertight(t, mesh)
 		return mesh

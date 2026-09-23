@@ -184,7 +184,7 @@ func extrudeLoopsWithFillet(ctx context.Context, loops [][]point, extent decad.E
 	if filletRadius > 0 {
 		// Round the exposed outside corners while keeping the counters and
 		// interior cut-ins crisp for a legible wordmark.
-		body, err = body.FilletContext(ctx, decad.Edges(
+		body, err = body.Fillet(ctx, decad.Edges(
 			decad.ParallelTo(r3.NewVec(0, 1, 0)),
 			decad.Convex(),
 		), units.Millimeters(filletRadius))
@@ -192,5 +192,5 @@ func extrudeLoopsWithFillet(ctx context.Context, loops [][]point, extent decad.E
 			return nil, fmt.Errorf("fillet extruded loops: %w", err)
 		}
 	}
-	return body.TessellateContext(ctx, units.Millimeters(0.4))
+	return body.Tessellate(ctx, units.Millimeters(0.4))
 }

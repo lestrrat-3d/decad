@@ -46,7 +46,7 @@ func Example_decad_body_patch() {
 		return
 	}
 
-	capped, err := tube.Patch(decad.Edges(decad.Free()).Exactly(len(rims)))
+	capped, err := tube.Patch(context.Background(), decad.Edges(decad.Free()).Exactly(len(rims)))
 	if err != nil {
 		fmt.Printf("failed to patch the tube: %s\n", err)
 		return

@@ -77,11 +77,7 @@ func WithShellSense(s ShellSense) ShellOption {
 // SIDE wall is S2, a receiver whose payload is not a prism is S3, both
 // ErrUnsupported. The offset section faces the §5 audit before anything is
 // built, so no unproven body is ever made.
-func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Body, error) {
-	return b.ShellContext(context.Background(), sel, t, opts...)
-}
-
-func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value, opts ...ShellOption) (*Body, error) {
+func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts ...ShellOption) (*Body, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}

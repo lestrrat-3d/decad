@@ -13,7 +13,7 @@ import (
 // coordinate-range gate (S9-S11 are the public entry point's job,
 // docs/loft-design.md §2/§4), the wiring of the already-landed §6 audit
 // (loft_audit.go) and §8 mass kernel (loft_moments.go), and the four
-// measurements. Document.Loft/LoftContext are PR 1b; nothing here is called
+// measurements. Document.Loft is PR 1b; nothing here is called
 // from outside this file's own tests, the same shape #114 (loft_audit.go/
 // loft_moments.go) already shipped.
 //
@@ -248,12 +248,12 @@ func validateLoftBodyMeasurements(body *Body) error {
 // (docs/loft-design.md §5-§8): pairing, assembly, the §6 audit, topology, and
 // the four measurements — all four published at build, never staged (§12).
 // budget is shared with the rest of the pre-commit cancellation path exactly
-// as modify §5's audits already share one; the caller (LoftContext, PR 1b)
+// as modify §5's audits already share one; the caller (Loft, PR 1b)
 // mints it once for the whole build.
 //
 // work0/work1 are the per-profile free-form work counters (spline design
 // §5.2): the R7 ceiling is one record's across a whole OPERATION, and
-// LoftContext also runs falsifyRecordedArea on both records before evalLoft
+// Loft also runs falsifyRecordedArea on both records before evalLoft
 // is called, so those counters — not two fresh ones minted here — must be
 // the ones every walkOf call site in this build spends against. S3 admits
 // only same-kind LineSeg or circular pairs, neither of which is a free-form

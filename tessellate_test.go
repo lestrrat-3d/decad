@@ -79,7 +79,7 @@ func TestTessellatePlate(t *testing.T) {
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
-	mesh, err := body.Tessellate(units.Millimeters(0.1))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 
 	// The classic box: 8 welded corner vertices, 12 triangles, and an all-
@@ -114,13 +114,13 @@ func TestTessellateFacetedToleranceBoundary(t *testing.T) {
 	body, err := decad.Cut(plate, tool)
 	require.NoError(t, err)
 
-	held, err := body.Tessellate(units.Millimeters(1))
+	held, err := body.Tessellate(t.Context(), units.Millimeters(1))
 	require.NoError(t, err)
 	bound := held.Bound()
 	require.Positive(t, bound.Mag())
 
 	requested := units.Millimeters(math.Nextafter(bound.Mag(), 0))
-	mesh, err := body.Tessellate(requested)
+	mesh, err := body.Tessellate(t.Context(), requested)
 	require.Nil(t, mesh)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.ErrorContains(t, err, fmt.Sprintf("requested tolerance %s", requested))
@@ -128,13 +128,13 @@ func TestTessellateFacetedToleranceBoundary(t *testing.T) {
 	require.ErrorContains(t, err, fmt.Sprintf("retry with a tolerance of at least %s", bound))
 	require.ErrorContains(t, err, "to restate the held mesh")
 
-	atBound, err := body.Tessellate(bound)
+	atBound, err := body.Tessellate(t.Context(), bound)
 	require.NoError(t, err)
 	require.Equal(t, held.Vertices(), atBound.Vertices())
 	require.Equal(t, held.Triangles(), atBound.Triangles())
 
 	above := units.Millimeters(math.Nextafter(bound.Mag(), math.Inf(1)))
-	aboveBound, err := body.Tessellate(above)
+	aboveBound, err := body.Tessellate(t.Context(), above)
 	require.NoError(t, err)
 	require.Equal(t, held.Vertices(), aboveBound.Vertices())
 	require.Equal(t, held.Triangles(), aboveBound.Triangles())
@@ -143,16 +143,16 @@ func TestTessellateFacetedToleranceBoundary(t *testing.T) {
 func TestTessellatePayloadClasses(t *testing.T) {
 	t.Parallel()
 	t.Run("prism", func(t *testing.T) {
-		mesh, err := holedPlateBody(t).Tessellate(units.Millimeters(1))
+		mesh, err := holedPlateBody(t).Tessellate(t.Context(), units.Millimeters(1))
 		require.NoError(t, err)
 		require.NotEmpty(t, mesh.Triangles())
 	})
 
 	t.Run("cup", func(t *testing.T) {
 		_, box := shellBox(t)
-		cup, err := box.Shell(topCap(box), units.Millimeters(5))
+		cup, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
 		require.NoError(t, err)
-		mesh, err := cup.Tessellate(units.Millimeters(1))
+		mesh, err := cup.Tessellate(t.Context(), units.Millimeters(1))
 		require.NoError(t, err)
 		require.NotEmpty(t, mesh.Triangles())
 	})
@@ -163,7 +163,7 @@ func TestTessellatePayloadClasses(t *testing.T) {
 		tool := translated(t, diskBody(t, doc, 10, 10, 2), 0, 0, -6)
 		body, err := decad.Cut(plate, tool)
 		require.NoError(t, err)
-		mesh, err := body.Tessellate(units.Millimeters(1))
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(1))
 		require.NoError(t, err)
 		require.NotEmpty(t, mesh.Triangles())
 	})
@@ -172,7 +172,7 @@ func TestTessellatePayloadClasses(t *testing.T) {
 		s, p := solidSketch(t)
 		body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
-		mesh, err := body.Tessellate(units.Millimeters(1))
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(1))
 		require.NoError(t, err)
 		require.NotEmpty(t, mesh.Triangles())
 	})
@@ -180,16 +180,16 @@ func TestTessellatePayloadClasses(t *testing.T) {
 	t.Run("revolve with a circular generator", func(t *testing.T) {
 		doc := decad.New()
 		body := ballBody(t, doc, 5)
-		mesh, err := body.Tessellate(units.Millimeters(1))
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(1))
 		require.NoError(t, err)
 		require.NotEmpty(t, mesh.Triangles())
 	})
 
 	t.Run("cap-loop chamfer", func(t *testing.T) {
 		_, box := capBlendBox(t)
-		chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
+		chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(5))
 		require.NoError(t, err)
-		mesh, err := chamfered.Tessellate(units.Millimeters(1))
+		mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(1))
 		require.NoError(t, err)
 		require.NotEmpty(t, mesh.Triangles())
 	})
@@ -199,7 +199,7 @@ func TestTessellatePlateWithHole(t *testing.T) {
 	t.Parallel()
 	body := holedPlateBody(t)
 	tol := 0.5
-	mesh, err := body.Tessellate(units.Millimeters(tol))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(tol))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 
@@ -262,22 +262,6 @@ func TestTessellatePlateWithHole(t *testing.T) {
 	require.Equal(t, 20, cylFacets)
 }
 
-func TestTessellateContextMatchesCompatibilityWrapper(t *testing.T) {
-	t.Parallel()
-	body := holedPlateBody(t)
-	tol := units.Millimeters(0.5)
-
-	want, err := body.Tessellate(tol)
-	require.NoError(t, err)
-	got, err := body.TessellateContext(t.Context(), tol)
-	require.NoError(t, err)
-
-	require.Equal(t, want.Vertices(), got.Vertices())
-	require.Equal(t, want.Triangles(), got.Triangles())
-	require.Equal(t, want.SourceFaces(), got.SourceFaces())
-	require.Equal(t, want.Bound(), got.Bound())
-}
-
 func TestTessellateNonConvexOutline(t *testing.T) {
 	t.Parallel()
 	// An L-shaped plate: the cap triangulation must respect the reflex
@@ -301,7 +285,7 @@ func TestTessellateNonConvexOutline(t *testing.T) {
 	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
-	mesh, err := body.Tessellate(units.Millimeters(0.1))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.Len(t, mesh.Vertices(), 12)
 	require.Len(t, mesh.Triangles(), 20, `12 wall + 2×4 cap facets`)
@@ -331,7 +315,7 @@ func TestTessellateQuarterDisk(t *testing.T) {
 	require.NoError(t, err)
 
 	tol := 0.1
-	mesh, err := body.Tessellate(units.Millimeters(tol))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(tol))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	require.LessOrEqual(t, mesh.Bound().Mag(), tol)
@@ -358,10 +342,10 @@ func TestTessellatePlacedReflected(t *testing.T) {
 	require.NoError(t, err)
 	refl, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	placed, err := body.Placed(refl)
+	placed, err := body.Placed(t.Context(), refl)
 	require.NoError(t, err)
 
-	mesh, err := placed.Tessellate(units.Millimeters(0.1))
+	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.Len(t, mesh.Triangles(), 12)
 	requireWatertight(t, mesh)
@@ -388,7 +372,7 @@ func TestTessellateToleranceValidation(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.Name, func(t *testing.T) {
-			_, err := body.Tessellate(tc.Tol)
+			_, err := body.Tessellate(t.Context(), tc.Tol)
 			require.ErrorIs(t, err, tc.Err)
 		})
 	}
@@ -400,7 +384,7 @@ func TestTessellateChordingBoundNeverExceedsTolerance(t *testing.T) {
 	// bound of an exact payload must never exceed what the caller asked for.
 	body := holedPlateBody(t)
 	for _, tol := range []float64{0.489434836999924627, 0.5, 0.1, 1e-3, 3.7e-2} {
-		mesh, err := body.Tessellate(units.Millimeters(tol))
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(tol))
 		require.NoError(t, err)
 		require.LessOrEqual(t, mesh.Bound().Mag(), tol, `tol %v`, tol)
 	}
@@ -425,7 +409,7 @@ func TestTessellateBoundIncludesComputedLevelDisplacement(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mesh, err := pin.Tessellate(units.Millimeters(tol))
+	mesh, err := pin.Tessellate(t.Context(), units.Millimeters(tol))
 	require.NoError(t, err)
 	bound, err := mesh.Bound().In(units.Millimeter)
 	require.NoError(t, err)
@@ -477,7 +461,7 @@ func testTangentHole(t *testing.T, cx, cy float64) {
 	doc := decad.New()
 	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
-	_, err = body.Tessellate(units.Millimeters(0.5))
+	_, err = body.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
 
@@ -486,12 +470,12 @@ func TestTessellateRejectsImpossiblyFineTolerance(t *testing.T) {
 	// acos(1 − tol/r) rounds to zero for tiny tolerances; the stable inverse
 	// must refuse the unbuildable ask rather than walk up forever.
 	body := holedPlateBody(t)
-	_, err := body.Tessellate(units.Millimeters(1e-20))
+	_, err := body.Tessellate(t.Context(), units.Millimeters(1e-20))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
 	// A tolerance that passes the precheck but lands past the cap after the
 	// ceil/walk-up must be refused too, never returned with n over the cap.
-	_, err = body.Tessellate(units.Millimeters(2.8055335832277702e-12))
+	_, err = body.Tessellate(t.Context(), units.Millimeters(2.8055335832277702e-12))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -536,7 +520,7 @@ func TestTessellateReservesSectionDisplacementFromTolerance(t *testing.T) {
 
 			// 1 mm is the tolerance the audit measured its 13.86 mm bound at.
 			const tol = 1.0
-			mesh, err := got.Tessellate(units.Millimeters(tol))
+			mesh, err := got.Tessellate(t.Context(), units.Millimeters(tol))
 			if tc.delta >= tol {
 				require.ErrorIs(t, err, decad.ErrUnsupported)
 				require.Nil(t, mesh)
@@ -553,7 +537,7 @@ func TestTessellateReservesSectionDisplacementFromTolerance(t *testing.T) {
 			// A tolerance above the displacement admits the mesh, and the bound
 			// it publishes stays within that tolerance.
 			const wide = 20.0
-			mesh, err = got.Tessellate(units.Millimeters(wide))
+			mesh, err = got.Tessellate(t.Context(), units.Millimeters(wide))
 			require.NoError(t, err)
 			requireWatertight(t, mesh)
 			require.LessOrEqual(t, mesh.Bound().Mag(), wide)
@@ -571,7 +555,7 @@ func TestTessellateUndisplacedPrismSpendsTheWholeTolerance(t *testing.T) {
 	t.Parallel()
 	body := holedPlateBody(t)
 	tol := 0.5
-	mesh, err := body.Tessellate(units.Millimeters(tol))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(tol))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 
@@ -589,7 +573,7 @@ func TestTessellateUndisplacedPrismSpendsTheWholeTolerance(t *testing.T) {
 	// A straight-only prism chords exactly, bound and all.
 	doc := decad.New()
 	plain := boxBody(t, doc, 0, 0, 10, 10, 10)
-	flat, err := plain.Tessellate(units.Millimeters(tol))
+	flat, err := plain.Tessellate(t.Context(), units.Millimeters(tol))
 	require.NoError(t, err)
 	requireWatertight(t, flat)
 	require.Zero(t, flat.Bound().Mag())
@@ -630,7 +614,7 @@ func TestTessellateUnreservedAxialDisplacementCanExceedTolerance(t *testing.T) {
 
 		// 0.1 in is 2.54 mm, which binary cannot hold exactly.
 		const tol = 1e-18
-		mesh, err := body.Tessellate(units.Millimeters(tol))
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(tol))
 		require.NoError(t, err)
 		requireWatertight(t, mesh)
 		require.InEpsilon(t, 3.6637359812630174e-17, mesh.Bound().Mag(), 1e-12)
@@ -651,7 +635,7 @@ func TestTessellateUnreservedAxialDisplacementCanExceedTolerance(t *testing.T) {
 		// builds instead of refusing, and it is the axial term riding on top
 		// unreserved that carries the published bound past what was asked for.
 		const tol = 1e-10
-		mesh, err := got.Tessellate(units.Millimeters(tol))
+		mesh, err := got.Tessellate(t.Context(), units.Millimeters(tol))
 		require.NoError(t, err)
 		requireWatertight(t, mesh)
 		require.InEpsilon(t, 1.4336877997816838e-09, mesh.Bound().Mag(), 1e-12)
@@ -659,7 +643,7 @@ func TestTessellateUnreservedAxialDisplacementCanExceedTolerance(t *testing.T) {
 
 		// The same bound at a tolerance 10000× wider: it is displacement, not
 		// chording, and no budget buys it down.
-		wide, err := got.Tessellate(units.Millimeters(1e-6))
+		wide, err := got.Tessellate(t.Context(), units.Millimeters(1e-6))
 		require.NoError(t, err)
 		require.Equal(t, mesh.Bound().Mag(), wide.Bound().Mag())
 	})
@@ -697,7 +681,7 @@ func TestTessellateFourHoleBoltPatternPlate(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, tol := range []float64{1, 0.3, 0.05} {
-		mesh, err := body.Tessellate(units.Millimeters(tol))
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(tol))
 		require.NoErrorf(t, err, `a four-hole plate meshes at tolerance %v`, tol)
 		requireWatertight(t, mesh)
 	}

@@ -20,12 +20,7 @@ import (
 // (document.go) is the multi-produce atomic commit this file's N results
 // need beside the existing single-body commit.
 
-// Unstitch calls [Body.UnstitchContext] with [context.Background].
-func (b *Body) Unstitch() ([]*Body, error) {
-	return b.UnstitchContext(context.Background())
-}
-
-// UnstitchContext returns one single-face sheet body per face of the
+// Unstitch returns one single-face sheet body per face of the
 // receiver, in [Body.Faces] order, retiring the receiver
 // (docs/surface-design.md §6.5). Each result carries that face's own
 // surface, loops and readings, and every edge of every result is free: a
@@ -45,7 +40,7 @@ func (b *Body) Unstitch() ([]*Body, error) {
 // receiver unchanged: every result is built before any is registered, and
 // Document.commitMany registers all of them (and retires the receiver) in
 // one atomic step.
-func (b *Body) UnstitchContext(ctx context.Context) ([]*Body, error) {
+func (b *Body) Unstitch(ctx context.Context) ([]*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control an unstitch`, ErrDegenerate)
 	}

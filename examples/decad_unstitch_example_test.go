@@ -55,12 +55,12 @@ func Example_decad_unstitch() {
 		fmt.Printf("failed to extrude the walls: %s\n", err)
 		return
 	}
-	bottom, err := doc.Patch(s, prof)
+	bottom, err := doc.Patch(context.Background(), s, prof)
 	if err != nil {
 		fmt.Printf("failed to patch the bottom: %s\n", err)
 		return
 	}
-	topPatch, err := doc.Patch(ts, ts.Profiles()[0])
+	topPatch, err := doc.Patch(context.Background(), ts, ts.Profiles()[0])
 	if err != nil {
 		fmt.Printf("failed to patch the top: %s\n", err)
 		return
@@ -72,7 +72,7 @@ func Example_decad_unstitch() {
 		return
 	}
 
-	sheets, err := box.Unstitch()
+	sheets, err := box.Unstitch(context.Background())
 	if err != nil {
 		fmt.Printf("failed to unstitch: %s\n", err)
 		return

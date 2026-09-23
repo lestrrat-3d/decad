@@ -58,7 +58,7 @@ func TestStitchSolidTessellateRecordsThePostSignFixTriangleSet(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, box.Kind())
 
-	mesh, err := box.Tessellate(units.Millimeters(0.1))
+	mesh, err := box.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.InDelta(t, 60000.0, anchoredMeshVolume(mesh), 1e-9,
 		"the recorded triangle set must be the one AFTER the global sign fix, never the stale pre-fix one")
@@ -74,7 +74,7 @@ func TestStitchSolidTessellatesItsOwnTriangleSet(t *testing.T) {
 	doc := decad.New()
 	box := stitchedBox(t, doc)
 
-	mesh, err := box.Tessellate(units.Millimeters(0.1))
+	mesh, err := box.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.NotNil(t, mesh)
 
@@ -120,10 +120,10 @@ func TestStitchPlacedSolidTessellateBoundReadsVertexBound(t *testing.T) {
 	motion, err := shift.Then(rot)
 	require.NoError(t, err)
 
-	placed, err := box.Placed(motion)
+	placed, err := box.Placed(t.Context(), motion)
 	require.NoError(t, err)
 
-	mesh, err := placed.Tessellate(units.Millimeters(0.1))
+	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.Len(t, mesh.Triangles(), 12)
 
@@ -170,7 +170,7 @@ func TestStitchDisplacedPatchSheetTessellatesItsOwnTriangleSet(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
 
-	mesh, err := sheet.Tessellate(units.Millimeters(0.1))
+	mesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.NotNil(t, mesh)
 
@@ -324,9 +324,9 @@ func TestStitchSolidTessellateIsDeterministic(t *testing.T) {
 	doc := decad.New()
 	box := stitchedBox(t, doc)
 
-	m1, err := box.Tessellate(units.Millimeters(0.1))
+	m1, err := box.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
-	m2, err := box.Tessellate(units.Millimeters(5))
+	m2, err := box.Tessellate(t.Context(), units.Millimeters(5))
 	require.NoError(t, err)
 
 	require.Equal(t, m1.Vertices(), m2.Vertices())
@@ -347,7 +347,7 @@ func TestStitchSolidTessellateIsDeterministic(t *testing.T) {
 	verts[0] = r3.NewVec(999, 999, 999)
 	tris := m1.Triangles()
 	tris[0] = [3]int{9, 9, 9}
-	m3, err := box.Tessellate(units.Millimeters(0.1))
+	m3, err := box.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.Equal(t, m2.Vertices(), m3.Vertices(), "mutating a returned slice must not reach the held mesh")
 	require.Equal(t, m2.Triangles(), m3.Triangles())
@@ -403,7 +403,7 @@ func TestStitchPlacedSolidUnionStillRefusesOnTheVolumeProof(t *testing.T) {
 	box := stitchedBox(t, doc)
 	motion, err := r3.Translation(r3.NewVec(500, 500, 500))
 	require.NoError(t, err)
-	placed, err := box.Placed(motion)
+	placed, err := box.Placed(t.Context(), motion)
 	require.NoError(t, err)
 	block := boxBody(t, doc, 700, 500, 800, 560, 10)
 
@@ -426,7 +426,7 @@ func TestStitchCertificateWeldedSolidUnionStillRefusesOnTheVolumeProof(t *testin
 	s, p := offAxisPlateSketch(t)
 	wall, err := doc.Extrude(s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
 	require.NoError(t, err)
-	capped, err := wall.Patch(decad.Edges(decad.Free()).Exactly(8))
+	capped, err := wall.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)
 	solid, err := decad.Stitch(capped)
 	require.NoError(t, err)

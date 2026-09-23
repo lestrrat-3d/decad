@@ -296,7 +296,7 @@ func TestPrismUnionRotatedToothFallback(t *testing.T) {
 		doc := decad.New()
 		hub := hubBody(t, doc, r, h)
 		toothSrc := toothBody(t, doc, r, r2, th1, th2, h)
-		tooth, err := toothSrc.Placed(tr)
+		tooth, err := toothSrc.Placed(t.Context(), tr)
 		require.NoError(t, err)
 		return decad.Union(hub, tooth)
 	}
@@ -483,7 +483,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	got, err := decad.Union(a, b)
 	require.NoError(t, err)
 
-	filleted, err := got.Fillet(verticalConvexEdge(), units.Millimeters(1))
+	filleted, err := got.Fillet(t.Context(), verticalConvexEdge(), units.Millimeters(1))
 	require.NoError(t, err)
 	filletVol, err := filleted.Volume()
 	require.NoError(t, err)
@@ -504,7 +504,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(cutGot), "the analytic reduction must still own this pair")
 
-	_, err = cutGot.Fillet(verticalConvexEdge(), units.Millimeters(1))
+	_, err = cutGot.Fillet(t.Context(), verticalConvexEdge(), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "proven displacement")
 
@@ -522,13 +522,13 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	meshBSrc := boxBody(t, meshDoc, 5, 5, 15, 15, 10)
 	farAbove, err := r3.Translation(r3.Vec{Z: 30})
 	require.NoError(t, err)
-	meshB, err := meshBSrc.Placed(farAbove)
+	meshB, err := meshBSrc.Placed(t.Context(), farAbove)
 	require.NoError(t, err)
 	meshGot, err := decad.Union(meshA, meshB)
 	require.NoError(t, err)
 	require.True(t, anyFaceIsFaceted(meshGot), "expected the mesh path to run and produce a Faceted body")
 
-	_, err = meshGot.Fillet(decad.Edges().AtLeast(1), units.Millimeters(1))
+	_, err = meshGot.Fillet(t.Context(), decad.Edges().AtLeast(1), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
 	meshReport, err := meshDoc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))

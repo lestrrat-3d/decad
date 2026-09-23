@@ -44,7 +44,7 @@ func TestUnstitchBoxYieldsSixFreeSheets(t *testing.T) {
 	wantFaces := box.Faces()
 	require.Len(t, wantFaces, 6)
 
-	results, err := box.Unstitch()
+	results, err := box.Unstitch(t.Context())
 	require.NoError(t, err)
 	require.Len(t, results, 6)
 
@@ -103,7 +103,7 @@ func TestUnstitchRestitchRoundTripMatchesOriginal(t *testing.T) {
 	wantArea, err := box.Area()
 	require.NoError(t, err)
 
-	sheets, err := box.Unstitch()
+	sheets, err := box.Unstitch(t.Context())
 	require.NoError(t, err)
 	require.Len(t, sheets, 6)
 
@@ -150,7 +150,7 @@ func TestUnstitchRestitchRoundTripClosesABoundedBox(t *testing.T) {
 	s, p := offAxisPlateSketch(t)
 	wall, err := doc.Extrude(s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
 	require.NoError(t, err)
-	capped, err := wall.Patch(decad.Edges(decad.Free()).Exactly(8))
+	capped, err := wall.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)
 	solid, err := decad.Stitch(capped)
 	require.NoError(t, err)
@@ -158,7 +158,7 @@ func TestUnstitchRestitchRoundTripClosesABoundedBox(t *testing.T) {
 	wantVol, err := solid.Volume()
 	require.NoError(t, err)
 
-	sheets, err := solid.Unstitch()
+	sheets, err := solid.Unstitch(t.Context())
 	require.NoError(t, err)
 	require.Len(t, sheets, 6)
 
@@ -205,7 +205,7 @@ func TestUnstitchRevolveRoundTripStaysASheet(t *testing.T) {
 	require.Len(t, wantFree, 8, "the profile's own seam at phi0 and phi1: a partial revolve's own free rim")
 	wantEdges := len(sheet.Edges())
 
-	pieces, err := sheet.Unstitch()
+	pieces, err := sheet.Unstitch(t.Context())
 	require.NoError(t, err)
 	require.Len(t, pieces, 4)
 	for _, piece := range pieces {
@@ -247,7 +247,7 @@ func TestUnstitchTableR(t *testing.T) {
 		require.Equal(t, decad.KindFaceted, cut.Faces()[0].Surface().Kind())
 
 		before := doc.Bodies()
-		_, err = cut.Unstitch()
+		_, err = cut.Unstitch(t.Context())
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Equal(t, before, doc.Bodies())
 	})
@@ -255,7 +255,7 @@ func TestUnstitchTableR(t *testing.T) {
 	t.Run("R12 nil receiver", func(t *testing.T) {
 		t.Parallel()
 		var nilBody *decad.Body
-		_, err := nilBody.Unstitch()
+		_, err := nilBody.Unstitch(t.Context())
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 
@@ -263,10 +263,10 @@ func TestUnstitchTableR(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		box := unstitchBox(t, doc)
-		_, err := box.Unstitch()
+		_, err := box.Unstitch(t.Context())
 		require.NoError(t, err)
 
-		_, err = box.Unstitch()
+		_, err = box.Unstitch(t.Context())
 		require.ErrorIs(t, err, decad.ErrRetiredBody)
 	})
 }
@@ -274,7 +274,7 @@ func TestUnstitchTableR(t *testing.T) {
 // countingCtx counts every ctx.Err() poll and, once failAt is positive and
 // the count reaches it, reports err instead of nil. It is
 // TestUnstitchAtomicCommitLeavesDocumentUnchanged's own tool for forcing
-// UnstitchContext to fail strictly AFTER real per-face work has already run
+// Unstitch to fail strictly AFTER real per-face work has already run
 // — the shape a partial-commit bug needs to be observable in — without
 // depending on any particular internal call count.
 type countingCtx struct {
@@ -294,7 +294,7 @@ func (c countingCtx) Err() error {
 
 // TestUnstitchAtomicCommitLeavesDocumentUnchanged proves
 // Document.commitMany's atomicity: a context canceled partway through
-// UnstitchContext's per-face loop — after at least one face's own build has
+// Unstitch's per-face loop — after at least one face's own build has
 // already run to completion — leaves the document exactly as it was before
 // the call, never a state with the receiver retired and only some of its
 // replacements registered.
@@ -306,7 +306,7 @@ func TestUnstitchAtomicCommitLeavesDocumentUnchanged(t *testing.T) {
 	measureDoc := decad.New()
 	measureBox := unstitchBox(t, measureDoc)
 	var total int
-	_, err := measureBox.UnstitchContext(countingCtx{Context: t.Context(), calls: &total})
+	_, err := measureBox.Unstitch(countingCtx{Context: t.Context(), calls: &total})
 	require.NoError(t, err)
 	require.Positive(t, total)
 
@@ -317,7 +317,7 @@ func TestUnstitchAtomicCommitLeavesDocumentUnchanged(t *testing.T) {
 	box := unstitchBox(t, doc)
 	forceErr := errors.New("forced mid-unstitch failure")
 	var calls int
-	_, err = box.UnstitchContext(countingCtx{Context: t.Context(), calls: &calls, failAt: total / 2, err: forceErr})
+	_, err = box.Unstitch(countingCtx{Context: t.Context(), calls: &calls, failAt: total / 2, err: forceErr})
 	require.ErrorIs(t, err, forceErr)
 
 	require.Len(t, doc.Bodies(), 1)
@@ -340,7 +340,7 @@ func TestUnstitchBoxFacesReportOwnTightBounds(t *testing.T) {
 	doc := decad.New()
 	box := unstitchBox(t, doc)
 
-	results, err := box.Unstitch()
+	results, err := box.Unstitch(t.Context())
 	require.NoError(t, err)
 	require.Len(t, results, 6)
 
@@ -377,7 +377,7 @@ func TestUnstitchBoxFacesBoundsUnionSpansOriginal(t *testing.T) {
 	want, err := box.Bounds()
 	require.NoError(t, err)
 
-	results, err := box.Unstitch()
+	results, err := box.Unstitch(t.Context())
 	require.NoError(t, err)
 	require.Len(t, results, 6)
 
@@ -420,7 +420,7 @@ func TestUnstitchCylinderWallBoundsAreSoundButWholeReceiver(t *testing.T) {
 	require.Equal(t, decad.Exact, want.Exactness)
 	require.Zero(t, want.Bound.Base())
 
-	results, err := disk.Unstitch()
+	results, err := disk.Unstitch(t.Context())
 	require.NoError(t, err)
 	require.Len(t, results, 3)
 
@@ -479,7 +479,7 @@ func TestUnstitchedCapToFaceStopMatchesUnUnstitchedCap(t *testing.T) {
 	plate2, err := doc2.Extrude(s, plateProf, decad.Distance{D: units.Inches(10), Dir: decad.Along})
 	require.NoError(t, err)
 	capSelector := capEndFace(plate2)
-	sheets, err := plate2.Unstitch()
+	sheets, err := plate2.Unstitch(t.Context())
 	require.NoError(t, err)
 	var capSheet *decad.Body
 	for _, sh := range sheets {

@@ -40,7 +40,7 @@ func Example_decad_shell() {
 
 	// Remove both caps (planar, normal to the z sweep) and line the rest with a
 	// 5 mm wall — a rectangular tube.
-	tube, err := box.Shell(decad.Faces(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(5))
+	tube, err := box.Shell(context.Background(), decad.Faces(decad.NormalTo(r3.NewVec(0, 0, 1))), units.Millimeters(5))
 	if err != nil {
 		fmt.Printf("failed to shell: %s\n", err)
 		return

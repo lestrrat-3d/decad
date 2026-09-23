@@ -315,7 +315,7 @@ func TestMeasuredInterferenceFallsBackToMeshWhenAnalyticNotAdmitted(t *testing.T
 	b := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 	shift, err := r3.Translation(r3.NewVec(5, 5, 5))
 	require.NoError(t, err)
-	b, err = b.Placed(shift)
+	b, err = b.Placed(t.Context(), shift)
 	require.NoError(t, err)
 
 	_, ok, err := evaluateAnalyticIntersect(t.Context(), a, b)
@@ -343,7 +343,7 @@ func TestSharesFacePlane(t *testing.T) {
 	c := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
 	tr, err := r3.Translation(r3.NewVec(100, 100, 100))
 	require.NoError(t, err)
-	off, err := c.Placed(tr)
+	off, err := c.Placed(t.Context(), tr)
 	require.NoError(t, err)
 	require.False(t, sharesFacePlane(a, off),
 		`translating a prism off every one of its planes leaves no shared face plane`)

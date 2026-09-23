@@ -37,7 +37,7 @@ func Example_decad_sweep() {
 	}
 
 	doc := decad.New()
-	body, err := doc.Sweep(s, s.Profiles()[0], path)
+	body, err := doc.Sweep(context.Background(), s, s.Profiles()[0], path)
 	if err != nil {
 		fmt.Printf("failed to sweep: %s\n", err)
 		return

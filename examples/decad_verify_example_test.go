@@ -44,7 +44,7 @@ func Example_decad_verify() {
 		fmt.Printf("failed to build motion: %s\n", err)
 		return
 	}
-	if _, err := first.Placed(shift); err != nil {
+	if _, err := first.Placed(context.Background(), shift); err != nil {
 		fmt.Printf("failed to place: %s\n", err)
 		return
 	}

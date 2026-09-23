@@ -87,7 +87,7 @@ func TestRevolveUnionWithAPrismMeasuresTheAnalyticVolume(t *testing.T) {
 	require.InDelta(t, want, volume, bound,
 		`the published volume bound must cover the gap to the analytic union`)
 
-	mesh, err := got.Tessellate(units.Millimeters(0.5))
+	mesh, err := got.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 }
@@ -143,7 +143,7 @@ func TestRevolveUnionWithAnotherRevolveObeysInclusionExclusion(t *testing.T) {
 	require.InDelta(t, 2*quarter, unionVol+meetVol, unionBound+meetBound,
 		`the two operands' proven bounds must cover the inclusion-exclusion residue`)
 
-	mesh, err := joined.Tessellate(units.Millimeters(0.5))
+	mesh, err := joined.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 }
@@ -185,7 +185,7 @@ func TestRevolveBooleanRefusesAShallowCrossing(t *testing.T) {
 		box := revolveBoxBody(t, doc, 1, 1, 7, 6, 4)
 		spun, err := r3.RotationAround(r3.Vec{X: 4, Y: 3.5}, r3.Vec{X: 1}, units.Radians(alpha))
 		require.NoError(t, err)
-		moved, err := box.Placed(spun)
+		moved, err := box.Placed(t.Context(), spun)
 		require.NoError(t, err)
 		_, err = decad.Union(cyl, moved)
 		return err

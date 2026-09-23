@@ -200,7 +200,7 @@ func TestPlaced(t *testing.T) {
 	motion, err := rot.Then(shift)
 	require.NoError(t, err)
 
-	placed, err := body.Placed(motion)
+	placed, err := body.Placed(t.Context(), motion)
 	require.NoError(t, err)
 
 	// The motion is rigid: volume and area are untouched, the centroid maps
@@ -218,7 +218,7 @@ func TestPlaced(t *testing.T) {
 	_, err = body.Volume()
 	require.NoError(t, err, `a retired body remains readable`)
 	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(60000))
-	_, err = body.Placed(motion)
+	_, err = body.Placed(t.Context(), motion)
 	require.ErrorIs(t, err, decad.ErrRetiredBody)
 }
 
@@ -458,7 +458,7 @@ func TestReflectedPlacementKeepsOutwardNormals(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, refl.IsReflection())
 
-	placed, err := body.Placed(refl)
+	placed, err := body.Placed(t.Context(), refl)
 	require.NoError(t, err)
 	c, err := placed.Centroid()
 	require.NoError(t, err)
@@ -606,7 +606,7 @@ func TestExtrudeConcaveRoundWall(t *testing.T) {
 
 	// The mesh is wound outward by construction, so every facet's winding
 	// must agree with its source face's outward normal.
-	mesh, err := body.Tessellate(units.Millimeters(0.05))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	require.Positive(t, meshVolume(mesh))
@@ -883,7 +883,7 @@ func TestPlacedUsesEvaluatorCache(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := r3.Translation(r3.NewVec(0, 0, 25))
 	require.NoError(t, err)
-	placed, err := body.Placed(motion)
+	placed, err := body.Placed(t.Context(), motion)
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(60000), decadtest.Exactly())
 	decadtest.MeasuresCentroid(t, placed, r3.NewVec(50, 30, 30))

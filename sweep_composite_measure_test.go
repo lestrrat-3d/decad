@@ -30,7 +30,7 @@ func TestSweepCompositeArcLineArcMeasurementsReplay(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	body, err := doc.Sweep(sketch, profile, path)
+	body, err := doc.Sweep(t.Context(), sketch, profile, path)
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	require.Len(t, body.Lumps(), 1)
@@ -50,7 +50,7 @@ func TestSweepCompositeArcLineArcMeasurementsReplay(t *testing.T) {
 
 	move, err := r3.Translation(r3.NewVec(20, -10, 3))
 	require.NoError(t, err)
-	placed, err := body.Placed(move)
+	placed, err := body.Placed(t.Context(), move)
 	require.NoError(t, err)
 	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(12+20*math.Pi))
 	decadtest.MeasuresArea(t, placed, units.SquareMillimeters(32+40*math.Pi))
@@ -67,18 +67,18 @@ func TestSweepCompositePlacedCopyKeepsSourceReplay(t *testing.T) {
 
 	sketch, profile, path, _, _ := orthogonalSweepFixture(t)
 	doc := decad.New()
-	source, err := doc.Sweep(sketch, profile, path)
+	source, err := doc.Sweep(t.Context(), sketch, profile, path)
 	require.NoError(t, err)
 	sourceCentroid, err := source.Centroid()
 	require.NoError(t, err)
 
 	move, err := r3.Translation(r3.NewVec(20, -10, 3))
 	require.NoError(t, err)
-	placedCopy, err := source.PlacedCopy(move)
+	placedCopy, err := source.PlacedCopy(t.Context(), move)
 	require.NoError(t, err)
 	decadtest.MeasuresCentroid(t, placedCopy, move.Apply(sourceCentroid.Value))
 
-	replayedSource, err := source.Duplicate()
+	replayedSource, err := source.Duplicate(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresCentroid(t, replayedSource, sourceCentroid.Value)
 	decadtest.MeasuresBounds(t, replayedSource, r3.NewVec(-1, -1, 0), r3.NewVec(21, 5, 6))
@@ -96,7 +96,7 @@ func TestSweepCompositeSpanBudgetRejectsBeforeCommit(t *testing.T) {
 	require.NoError(t, err)
 
 	doc := decad.New()
-	_, err = doc.Sweep(sketch, profile, path)
+	_, err = doc.Sweep(t.Context(), sketch, profile, path)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Empty(t, doc.Bodies())
 }

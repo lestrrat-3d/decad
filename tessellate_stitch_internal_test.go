@@ -62,7 +62,7 @@ func TestStitchTessellateClassBoundIsIndependentOfPlacement(t *testing.T) {
 	wall, err := doc.Extrude(s, p, Symmetric{D: units.Inches(2.5)}, WithSurfaceResult())
 	require.NoError(t, err)
 
-	capped, err := wall.Patch(Edges(Free()).Exactly(8))
+	capped, err := wall.Patch(t.Context(), Edges(Free()).Exactly(8))
 	require.NoError(t, err)
 
 	solid, err := Stitch(capped)
@@ -79,7 +79,7 @@ func TestStitchTessellateClassBoundIsIndependentOfPlacement(t *testing.T) {
 	}
 	require.Positive(t, wantBound, "the fixture's own premise: the welded class bound is nonzero even at identity")
 
-	mesh, err := solid.Tessellate(units.Millimeters(0.1))
+	mesh, err := solid.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.Equal(t, wantBound, mesh.Bound().Base())
 	require.Positive(t, mesh.areaSlack)
@@ -107,7 +107,7 @@ func internalStitchedBox(t *testing.T, doc *Document) *Body {
 	bs.Fix(brect.A)
 	_, err = bs.Solve(t.Context())
 	require.NoError(t, err)
-	bottom, err := doc.Patch(bs, bs.Profiles()[0])
+	bottom, err := doc.Patch(t.Context(), bs, bs.Profiles()[0])
 	require.NoError(t, err)
 
 	topPlane, err := w.CreateOffsetPlane(w.XY(), 10)
@@ -118,7 +118,7 @@ func internalStitchedBox(t *testing.T, doc *Document) *Body {
 	ts.Fix(trect.A)
 	_, err = ts.Solve(t.Context())
 	require.NoError(t, err)
-	top, err := doc.Patch(ts, ts.Profiles()[0])
+	top, err := doc.Patch(t.Context(), ts, ts.Profiles()[0])
 	require.NoError(t, err)
 
 	box, err := Stitch(walls, bottom, top)
@@ -136,7 +136,7 @@ func internalStitchedBox(t *testing.T, doc *Document) *Body {
 func TestTessellateStitchPublishesZeroSymDiffForClosedZeroBoundBody(t *testing.T) {
 	t.Parallel()
 	box := internalStitchedBox(t, New())
-	mesh, err := box.Tessellate(units.Millimeters(0.1))
+	mesh, err := box.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.True(t, mesh.symDiffOK)
 	require.Zero(t, mesh.volSymDiff)
@@ -152,10 +152,10 @@ func TestTessellateStitchDoesNotPublishSymDiffForAPlacedBody(t *testing.T) {
 	box := internalStitchedBox(t, New())
 	motion, err := r3.Translation(r3.NewVec(5, 5, 5))
 	require.NoError(t, err)
-	placed, err := box.Placed(motion)
+	placed, err := box.Placed(t.Context(), motion)
 	require.NoError(t, err)
 
-	mesh, err := placed.Tessellate(units.Millimeters(0.1))
+	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.False(t, mesh.symDiffOK)
 }
@@ -184,7 +184,7 @@ func TestTessellateStitchDoesNotPublishSymDiffForAnOpenSheet(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, BodySheet, sheet.Kind())
 
-	mesh, err := sheet.Tessellate(units.Millimeters(0.1))
+	mesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.False(t, mesh.symDiffOK)
 }

@@ -45,7 +45,7 @@ func Example_decad_surfaceSweep() {
 	}
 
 	doc := decad.New()
-	sheet, err := doc.Sweep(s, s.Profiles()[0], path, decad.WithSurfaceResult())
+	sheet, err := doc.Sweep(context.Background(), s, s.Profiles()[0], path, decad.WithSurfaceResult())
 	if err != nil {
 		fmt.Printf("failed to sweep: %s\n", err)
 		return
@@ -69,7 +69,7 @@ func Example_decad_surfaceSweep() {
 		return
 	}
 
-	_, tessErr := sheet.Tessellate(units.Millimeters(0.1))
+	_, tessErr := sheet.Tessellate(context.Background(), units.Millimeters(0.1))
 
 	fmt.Printf("is sheet: %v\n", sheet.Kind() == decad.BodySheet)
 	fmt.Printf("faces: %d\n", len(sheet.Faces()))

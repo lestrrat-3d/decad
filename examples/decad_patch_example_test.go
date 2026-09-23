@@ -28,7 +28,7 @@ func Example_decad_patch() {
 	}
 
 	doc := decad.New()
-	patch, err := doc.Patch(s, s.Profiles()[0])
+	patch, err := doc.Patch(context.Background(), s, s.Profiles()[0])
 	if err != nil {
 		fmt.Printf("failed to patch: %s\n", err)
 		return

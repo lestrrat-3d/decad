@@ -332,7 +332,7 @@ func TestRevolveCircularMeshAreaSlackCoversTheHeldAreaGap(t *testing.T) {
 			axis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
 			body, err := New().Revolve(s, p, axis, FullRevolution{})
 			require.NoError(t, err)
-			mesh, err := body.Tessellate(units.Millimeters(tc.tol))
+			mesh, err := body.Tessellate(t.Context(), units.Millimeters(tc.tol))
 			require.NoError(t, err)
 
 			held := 0.0

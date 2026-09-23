@@ -96,7 +96,7 @@ func Example_decad_placed() {
 		fmt.Printf("failed to build motion: %s\n", err)
 		return
 	}
-	placed, err := body.Placed(motion)
+	placed, err := body.Placed(context.Background(), motion)
 	if err != nil {
 		fmt.Printf("failed to place: %s\n", err)
 		return
@@ -118,7 +118,7 @@ func Example_decad_placed() {
 	fmt.Printf("live bodies: %d\n", len(doc.Bodies()))
 
 	// The original was consumed by the placement.
-	if _, err := body.Placed(motion); err != nil {
+	if _, err := body.Placed(context.Background(), motion); err != nil {
 		fmt.Printf("moving the original again: %s\n", err)
 	}
 	// Output:

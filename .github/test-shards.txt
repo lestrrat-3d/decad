@@ -1398,7 +1398,6 @@
 3	0.02	TestPlacedPrismChargesEveryFaceItsPlacementRounding
 3	0.07	TestPlacementContextCancelsAnalyticAssembly
 3	0.32	TestPlacementContextPollsAnalyticRebuildHelpers
-3	0.06	TestPlacementContextVariantsMatchCompatibilityWrappers
 3	0.12	TestPreparedParityProjectionReuse
 3	0.01	TestPrismCutCrossingBoxesResolvesAnalytically
 3	0.02	TestPrismCutCrossingToolResolvesAnalytically
@@ -1464,7 +1463,6 @@
 3	0.17	TestTessellateCapBlendDiskFrustum
 3	0.06	TestTessellateCapBlendPlacedStaysWatertight
 3	0.02	TestTessellateChargesSectionDisplacementToEveryProof
-3	0.01	TestTessellateContextMatchesCompatibilityWrapper
 3	0.12	TestTessellateContextReachesCapTriangulationCancellation
 3	0.94	TestTessellatePayloadClasses
 3	0.01	TestTessellatePlacedReflected

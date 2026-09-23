@@ -25,7 +25,7 @@ func displacedUnionBody(t *testing.T, shift float64) *Body {
 	b := internalBoxBody(t, doc, 2-shift, 2, 8-shift, 8, 10)
 	m, err := r3.Translation(r3.NewVec(shift, 0, 0))
 	require.NoError(t, err)
-	moved, err := b.Placed(m)
+	moved, err := b.Placed(t.Context(), m)
 	require.NoError(t, err)
 	got, err := Union(a, moved)
 	require.NoError(t, err)
@@ -134,7 +134,7 @@ func TestTessellateContextReachesCapTriangulationCancellation(t *testing.T) {
 	require.NoError(t, err)
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "maxU"}
 
-	_, err = body.TessellateContext(ctx, units.Millimeters(0.0005))
+	_, err = body.Tessellate(ctx, units.Millimeters(0.0005))
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered, `the public context must reach cap hole ordering`)
 }
@@ -430,7 +430,7 @@ func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
 		"premise: the build published a resolution of this very record")
 
 	tol := units.Millimeters(0.2)
-	reused, err := body.TessellateContext(t.Context(), tol)
+	reused, err := body.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	require.NotEmpty(t, reused.triangles)
 
@@ -445,7 +445,7 @@ func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
 		solid:    body.solid,
 		payload:  withoutWalks(published),
 	}
-	resolvedAgain, err := withoutResolution.TessellateContext(t.Context(), tol)
+	resolvedAgain, err := withoutResolution.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 
 	require.Equal(t, resolvedAgain, reused, "the reused resolution must chord to the same mesh")

@@ -54,11 +54,7 @@ const filletTol = 1e-9
 // (ErrUnsupported), and a receiver whose payload is not a prism is S3
 // (ErrUnsupported). The rewritten section faces the §5 audit before anything
 // is built, so no unproven body is ever made.
-func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
-	return b.FilletContext(context.Background(), sel, r, opts...)
-}
-
-func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
+func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}

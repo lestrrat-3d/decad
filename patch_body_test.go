@@ -31,7 +31,7 @@ func circleSheet(t *testing.T, doc *decad.Document, r float64) *decad.Body {
 	s.Fix(c)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	sheet, err := doc.Patch(s, s.Profiles()[0])
+	sheet, err := doc.Patch(t.Context(), s, s.Profiles()[0])
 	require.NoError(t, err)
 	return sheet
 }
@@ -60,7 +60,7 @@ func TestBodyPatchDoublesAFlatSheetWithANegatedNormal(t *testing.T) {
 	t.Parallel()
 	s, p := plateSketch(t)
 	doc := decad.New()
-	sheet, err := doc.Patch(s, p)
+	sheet, err := doc.Patch(t.Context(), s, p)
 	require.NoError(t, err)
 
 	faces, err := decad.Faces(decad.Planar()).Exactly(1).SelectFaces(sheet)
@@ -68,7 +68,7 @@ func TestBodyPatchDoublesAFlatSheetWithANegatedNormal(t *testing.T) {
 	origNormal, err := faces[0].NormalAt(r3.NewVec(50, 30, 0))
 	require.NoError(t, err)
 
-	doubled, err := sheet.Patch(decad.Edges(decad.Free()).Exactly(4))
+	doubled, err := sheet.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(4))
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, doubled.Kind())
@@ -110,7 +110,7 @@ func TestBodyPatchFillsASingleClosedCircularRim(t *testing.T) {
 	_, isCircle := free[0].Curve().(decad.Circle3)
 	require.True(t, isCircle, "a circle profile's own free edge is a whole Circle3")
 
-	doubled, err := disc.Patch(decad.Edges(decad.Free()).Exactly(1))
+	doubled, err := disc.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(1))
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, doubled.Kind())
@@ -133,7 +133,7 @@ func TestBodyPatchFillsAHoleWithTheSameNormal(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	s, p := rectWithHoleSketch(t)
-	sheet, err := doc.Patch(s, p)
+	sheet, err := doc.Patch(t.Context(), s, p)
 	require.NoError(t, err)
 
 	faces, err := decad.Faces(decad.Planar()).Exactly(1).SelectFaces(sheet)
@@ -144,7 +144,7 @@ func TestBodyPatchFillsAHoleWithTheSameNormal(t *testing.T) {
 	_, err = decad.Edges(decad.Free()).Exactly(5).SelectEdges(sheet)
 	require.NoError(t, err)
 
-	filled, err := sheet.Patch(decad.Edges(decad.Free(), decad.Concave()).Exactly(1))
+	filled, err := sheet.Patch(t.Context(), decad.Edges(decad.Free(), decad.Concave()).Exactly(1))
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, filled.Kind())
@@ -186,7 +186,7 @@ func TestBodyPatchCapsBothRimsOfATubeInOneCall(t *testing.T) {
 	_, err := decad.Edges(decad.Free()).Exactly(8).SelectEdges(tube)
 	require.NoError(t, err)
 
-	capped, err := tube.Patch(decad.Edges(decad.Free()).Exactly(8))
+	capped, err := tube.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, capped.Kind())
@@ -222,7 +222,7 @@ func TestBodyPatchClosesASheetsLastFreeEdgeStaysASheet(t *testing.T) {
 	tube := surfaceTube(t, doc)
 
 	bs, bp := plateSketch(t)
-	bottom, err := doc.Patch(bs, bp)
+	bottom, err := doc.Patch(t.Context(), bs, bp)
 	require.NoError(t, err)
 
 	open, err := decad.Stitch(tube, bottom)
@@ -232,7 +232,7 @@ func TestBodyPatchClosesASheetsLastFreeEdgeStaysASheet(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, free)
 
-	closed, err := open.Patch(decad.Edges(decad.Free()).Exactly(4))
+	closed, err := open.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(4))
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, closed.Kind())
@@ -252,7 +252,7 @@ func TestBodyPatchReproducesThroughPlacement(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	tube := surfaceTube(t, doc)
-	capped, err := tube.Patch(decad.Edges(decad.Free()).Exactly(8))
+	capped, err := tube.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)
 	decadtest.MeasuresArea(t, capped, units.SquareMillimeters(3200+2*6000), decadtest.Exactly())
 
@@ -263,7 +263,7 @@ func TestBodyPatchReproducesThroughPlacement(t *testing.T) {
 	// below a generous relative tolerance rather than bit-exact.
 	motion, err := r3.Translation(r3.NewVec(50, 0, 0))
 	require.NoError(t, err)
-	placed, err := capped.Placed(motion)
+	placed, err := capped.Placed(t.Context(), motion)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, placed.Kind())
 	decadtest.MeasuresArea(t, placed, units.SquareMillimeters(3200+2*6000), decadtest.WithinRel(units.Scalar(1e-6)))
@@ -271,13 +271,13 @@ func TestBodyPatchReproducesThroughPlacement(t *testing.T) {
 	_, err = decad.Edges(decad.Free()).SelectEdges(placed)
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 
-	dup, err := placed.Duplicate()
+	dup, err := placed.Duplicate(t.Context())
 	require.NoError(t, err)
 	decadtest.MeasuresArea(t, dup, units.SquareMillimeters(3200+2*6000), decadtest.WithinRel(units.Scalar(1e-6)))
 
 	copyMotion, err := r3.Translation(r3.NewVec(0, 50, 0))
 	require.NoError(t, err)
-	copied, err := dup.PlacedCopy(copyMotion)
+	copied, err := dup.PlacedCopy(t.Context(), copyMotion)
 	require.NoError(t, err)
 	decadtest.MeasuresArea(t, copied, units.SquareMillimeters(3200+2*6000), decadtest.WithinRel(units.Scalar(1e-6)))
 	decadtest.MeasuresBounds(t, copied, r3.NewVec(50, 50, 0), r3.NewVec(150, 110, 10), decadtest.WithinRel(units.Scalar(1e-6)))
@@ -318,7 +318,7 @@ func TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne(t *testing.T) {
 	require.True(t, sawExact, "the bottom rim is recorded directly, at zero bound")
 	require.True(t, sawApproximate, "the top rim is computed through the inch conversion")
 
-	capped, err := tube.Patch(decad.Edges(decad.Free()).Exactly(8))
+	capped, err := tube.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, capped.Kind())
@@ -347,7 +347,7 @@ func TestBodyPatchCapsBothBoundedRimsOfASymmetricSurfaceExtrudedWall(t *testing.
 	require.Equal(t, decad.Approximate, rv.Exactness, "both rims are computed through the inch conversion")
 	require.Greater(t, rv.Bound.Mag(), 0.0)
 
-	capped, err := wall.Patch(decad.Edges(decad.Free()).Exactly(8))
+	capped, err := wall.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, capped.Kind())
@@ -403,7 +403,7 @@ func TestBodyPatchCapsBothBoundedRimsOnARotatedSketchPlane(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.Approximate, rim[0].Start().Position().Exactness)
 
-	capped, err := wall.Patch(decad.Edges(decad.Free()).Exactly(8))
+	capped, err := wall.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, capped.Kind())
@@ -455,7 +455,7 @@ func TestBodyPatchTableR(t *testing.T) {
 		require.NoError(t, err)
 
 		before := doc.Bodies()
-		_, err = solid.Patch(decad.Edges().Exactly(12))
+		_, err = solid.Patch(t.Context(), decad.Edges().Exactly(12))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Equal(t, before, doc.Bodies())
 	})
@@ -464,14 +464,14 @@ func TestBodyPatchTableR(t *testing.T) {
 		t.Parallel()
 		doc := decad.New()
 		s, p := plateSketch(t)
-		sheet, err := doc.Patch(s, p)
+		sheet, err := doc.Patch(t.Context(), s, p)
 		require.NoError(t, err)
 
 		// The rectangle's two 100 mm edges are opposite, non-adjacent sides:
 		// selecting only them leaves each of their four vertices touched by
 		// exactly one selected edge, degree 1, never 2.
 		before := doc.Bodies()
-		_, err = sheet.Patch(decad.Edges(decad.Free(), decad.LongerThan(units.Millimeters(80))).Exactly(2))
+		_, err = sheet.Patch(t.Context(), decad.Edges(decad.Free(), decad.LongerThan(units.Millimeters(80))).Exactly(2))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.Equal(t, before, doc.Bodies())
 	})
@@ -484,7 +484,7 @@ func TestBodyPatchTableR(t *testing.T) {
 		require.NoError(t, err)
 
 		before := doc.Bodies()
-		_, err = solid.Patch(decad.Edges(decad.Free()))
+		_, err = solid.Patch(t.Context(), decad.Edges(decad.Free()))
 		require.ErrorIs(t, err, decad.ErrNoMatch)
 		require.Equal(t, before, doc.Bodies())
 	})
@@ -499,12 +499,12 @@ func TestBodyPatchContextCancellationLeavesDocumentUnchanged(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	_, err := sheet.PatchContext(ctx, decad.Edges(decad.Free()).Exactly(1))
+	_, err := sheet.Patch(ctx, decad.Edges(decad.Free()).Exactly(1))
 	require.ErrorIs(t, err, context.Canceled)
 	require.Len(t, doc.Bodies(), 1)
 
 	var nilContext context.Context
-	_, err = sheet.PatchContext(nilContext, decad.Edges(decad.Free()).Exactly(1))
+	_, err = sheet.Patch(nilContext, decad.Edges(decad.Free()).Exactly(1))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Len(t, doc.Bodies(), 1)
 }

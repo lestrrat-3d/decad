@@ -88,19 +88,19 @@ func TestPlacementContextVariantsCancelFacetedRebuild(t *testing.T) {
 		{
 			name: "Placed",
 			run: func(ctx context.Context, body *decad.Body) (*decad.Body, error) {
-				return body.PlacedContext(ctx, shift)
+				return body.Placed(ctx, shift)
 			},
 		},
 		{
 			name: "Duplicate",
 			run: func(ctx context.Context, body *decad.Body) (*decad.Body, error) {
-				return body.DuplicateContext(ctx)
+				return body.Duplicate(ctx)
 			},
 		},
 		{
 			name: "PlacedCopy",
 			run: func(ctx context.Context, body *decad.Body) (*decad.Body, error) {
-				return body.PlacedCopyContext(ctx, shift)
+				return body.PlacedCopy(ctx, shift)
 			},
 		},
 	}
@@ -137,23 +137,23 @@ func TestPlacementContextChecksCancellationBeforeCommit(t *testing.T) {
 	}{
 		{
 			name:   "Placed",
-			target: "PlacedContext",
+			target: "Placed",
 			run: func(ctx context.Context, body *decad.Body) (*decad.Body, error) {
-				return body.PlacedContext(ctx, shift)
+				return body.Placed(ctx, shift)
 			},
 		},
 		{
 			name:   "Duplicate",
 			target: "copyUnder",
 			run: func(ctx context.Context, body *decad.Body) (*decad.Body, error) {
-				return body.DuplicateContext(ctx)
+				return body.Duplicate(ctx)
 			},
 		},
 		{
 			name:   "PlacedCopy",
 			target: "copyUnder",
 			run: func(ctx context.Context, body *decad.Body) (*decad.Body, error) {
-				return body.PlacedCopyContext(ctx, shift)
+				return body.PlacedCopy(ctx, shift)
 			},
 		},
 	}
@@ -213,7 +213,7 @@ func TestPlacementContextCancelsAnalyticRebuilds(t *testing.T) {
 			name: "Shell",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := box.Shell(topCap(box), units.Millimeters(5))
+				body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -226,7 +226,7 @@ func TestPlacementContextCancelsAnalyticRebuilds(t *testing.T) {
 			beforeBodies := doc.Bodies()
 			ctx := newCancelAfterContext(t.Context(), 3)
 
-			got, err := body.PlacedContext(ctx, shift)
+			got, err := body.Placed(ctx, shift)
 			require.ErrorIs(t, err, context.Canceled)
 			require.Nil(t, got)
 			require.GreaterOrEqual(t, ctx.calls.Load(), int32(3),
@@ -273,7 +273,7 @@ func TestPlacementContextCancelsAnalyticAssembly(t *testing.T) {
 			name: "Cup",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := box.Shell(topCap(box), units.Millimeters(5))
+				body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -289,7 +289,7 @@ func TestPlacementContextCancelsAnalyticAssembly(t *testing.T) {
 				target:  "attachFaceLoopsContext",
 			}
 
-			got, err := body.PlacedContext(ctx, shift)
+			got, err := body.Placed(ctx, shift)
 			require.ErrorIs(t, err, context.Canceled)
 			require.Nil(t, got)
 			require.Equal(t, 2, ctx.targetCalls,
@@ -347,7 +347,7 @@ func TestPlacementContextCancelsAnalyticProvenanceAssembly(t *testing.T) {
 				limit:   1,
 			}
 
-			got, err := body.PlacedContext(ctx, shift)
+			got, err := body.Placed(ctx, shift)
 
 			require.ErrorIs(t, err, context.Canceled)
 			require.Nil(t, got)
@@ -375,7 +375,7 @@ func TestPlacementContextCancelsFullRevolveShellAssembly(t *testing.T) {
 		limit:   1,
 	}
 
-	got, err := body.PlacedContext(ctx, shift)
+	got, err := body.Placed(ctx, shift)
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.Nil(t, got)
@@ -398,7 +398,7 @@ func TestPlacementContextCancelsAnalyticMetadataRewriting(t *testing.T) {
 			target: "addBlendRoles",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := filletBox(t)
-				body, err := box.Fillet(verticalEdges(), units.Millimeters(10))
+				body, err := box.Fillet(t.Context(), verticalEdges(), units.Millimeters(10))
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -408,7 +408,7 @@ func TestPlacementContextCancelsAnalyticMetadataRewriting(t *testing.T) {
 			target: "renameCavityRoles",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := box.Shell(topCap(box), units.Millimeters(5))
+				body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -425,7 +425,7 @@ func TestPlacementContextCancelsAnalyticMetadataRewriting(t *testing.T) {
 				limit:   1,
 			}
 
-			got, err := body.PlacedContext(ctx, shift)
+			got, err := body.Placed(ctx, shift)
 
 			require.ErrorIs(t, err, context.Canceled)
 			require.Nil(t, got)
@@ -475,7 +475,7 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 			target: "integrateMomentRecordModeContext",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := box.Shell(topCap(box), units.Millimeters(5))
+				body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -510,7 +510,7 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 			target: "coalesceWalksContext",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := box.Shell(topCap(box), units.Millimeters(5))
+				body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -520,7 +520,7 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 			target: "reverseLoopRecordContext",
 			build: func(t *testing.T) (*decad.Document, *decad.Body) {
 				doc, box := shellBox(t)
-				body, err := box.Shell(topCap(box), units.Millimeters(5))
+				body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
 				require.NoError(t, err)
 				return doc, body
 			},
@@ -537,76 +537,13 @@ func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 				limit:   2,
 			}
 
-			got, err := body.PlacedContext(ctx, shift)
+			got, err := body.Placed(ctx, shift)
 			require.ErrorIs(t, err, context.Canceled)
 			require.Nil(t, got)
 			require.True(t, ctx.entered, `cancellation must reach %s`, test.target)
 			require.GreaterOrEqual(t, ctx.targetCalls, ctx.limit,
 				`%s must poll while processing recorded segments`, test.target)
 			require.Equal(t, beforeBodies, doc.Bodies())
-		})
-	}
-}
-
-func TestPlacementContextVariantsMatchCompatibilityWrappers(t *testing.T) {
-	t.Parallel()
-	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
-	require.NoError(t, err)
-
-	tests := []struct {
-		name       string
-		wrapper    func(*decad.Body) (*decad.Body, error)
-		contextual func(*decad.Body) (*decad.Body, error)
-	}{
-		{
-			name:    "Placed",
-			wrapper: func(body *decad.Body) (*decad.Body, error) { return body.Placed(shift) },
-			contextual: func(body *decad.Body) (*decad.Body, error) {
-				return body.PlacedContext(t.Context(), shift)
-			},
-		},
-		{
-			name:    "Duplicate",
-			wrapper: func(body *decad.Body) (*decad.Body, error) { return body.Duplicate() },
-			contextual: func(body *decad.Body) (*decad.Body, error) {
-				return body.DuplicateContext(t.Context())
-			},
-		},
-		{
-			name:    "PlacedCopy",
-			wrapper: func(body *decad.Body) (*decad.Body, error) { return body.PlacedCopy(shift) },
-			contextual: func(body *decad.Body) (*decad.Body, error) {
-				return body.PlacedCopyContext(t.Context(), shift)
-			},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			s, p := plateSketch(t)
-			oldDoc := decad.New()
-			oldSource, err := oldDoc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
-			require.NoError(t, err)
-			newDoc := decad.New()
-			newSource, err := newDoc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
-			require.NoError(t, err)
-
-			oldBody, err := test.wrapper(oldSource)
-			require.NoError(t, err)
-			newBody, err := test.contextual(newSource)
-			require.NoError(t, err)
-
-			oldVolume, err := oldBody.Volume()
-			require.NoError(t, err)
-			newVolume, err := newBody.Volume()
-			require.NoError(t, err)
-			require.Equal(t, oldVolume, newVolume)
-			oldCentroid, err := oldBody.Centroid()
-			require.NoError(t, err)
-			newCentroid, err := newBody.Centroid()
-			require.NoError(t, err)
-			require.Equal(t, oldCentroid, newCentroid)
-			require.Len(t, newDoc.Bodies(), len(oldDoc.Bodies()))
 		})
 	}
 }
@@ -633,7 +570,7 @@ func TestDuplicate(t *testing.T) {
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
-	inst, err := body.Duplicate()
+	inst, err := body.Duplicate(t.Context())
 	require.NoError(t, err)
 	require.NotSame(t, body, inst, `a duplicate is a fresh body identity`)
 
@@ -654,7 +591,7 @@ func TestDuplicate(t *testing.T) {
 	srcVol, err := body.Volume()
 	require.NoError(t, err)
 	require.True(t, srcVol.Value.Equal(units.CubicMillimeters(60000), 1e-9))
-	again, err := body.Duplicate()
+	again, err := body.Duplicate(t.Context())
 	require.NoError(t, err, `the source takes further ops — it was never retired`)
 	require.NotNil(t, again)
 
@@ -671,7 +608,7 @@ func TestPlacedCopy(t *testing.T) {
 	shift, err := r3.Translation(r3.NewVec(200, 0, 0))
 	require.NoError(t, err)
 
-	inst, err := body.PlacedCopy(shift)
+	inst, err := body.PlacedCopy(t.Context(), shift)
 	require.NoError(t, err)
 
 	// The motion is rigid: volume is untouched and the centroid MOVES by t.
@@ -696,7 +633,7 @@ func TestPlacedCopy(t *testing.T) {
 	// A second placed instance reuses the same source — the bolt-pattern case.
 	shift2, err := r3.Translation(r3.NewVec(-200, 0, 0))
 	require.NoError(t, err)
-	copy2, err := body.PlacedCopy(shift2)
+	copy2, err := body.PlacedCopy(t.Context(), shift2)
 	require.NoError(t, err)
 	c2, err := copy2.Centroid()
 	require.NoError(t, err)
@@ -712,11 +649,11 @@ func TestPlacedCopyZeroTransformRejected(t *testing.T) {
 	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
-	_, err = body.PlacedCopy(r3.Transform{})
+	_, err = body.PlacedCopy(t.Context(), r3.Transform{})
 	require.ErrorIs(t, err, decad.ErrDegenerate, `the zero transform names no placement`)
 
 	// The identity is a valid no-op motion — the same geometry at a new identity.
-	inst, err := body.PlacedCopy(r3.Identity())
+	inst, err := body.PlacedCopy(t.Context(), r3.Identity())
 	require.NoError(t, err)
 	c, err := inst.Centroid()
 	require.NoError(t, err)
@@ -732,12 +669,12 @@ func TestDuplicatePreservesFilletRoles(t *testing.T) {
 	// record, so a Duplicate re-mints its own fillet(i,j) roles: the copy has
 	// the SAME count of fillet-role faces as the source (modify §9).
 	_, box := filletBox(t)
-	src, err := box.Fillet(verticalEdges(), units.Millimeters(10))
+	src, err := box.Fillet(t.Context(), verticalEdges(), units.Millimeters(10))
 	require.NoError(t, err)
 	srcFillets := countRolePrefix(src, "fillet(")
 	require.Equal(t, 4, srcFillets, `the source has one fillet role per rounded corner`)
 
-	inst, err := src.Duplicate()
+	inst, err := src.Duplicate(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, srcFillets, countRolePrefix(inst, "fillet("),
 		`the duplicate re-mints the same fillet roles from its own record`)
@@ -764,14 +701,14 @@ func TestPlacedCopyPreservesFilletRoles(t *testing.T) {
 	// The same guarantee under a non-identity placement: PlacedCopy re-evaluates
 	// the payload under the composed motion and re-mints the fillet roles.
 	_, box := filletBox(t)
-	src, err := box.Fillet(verticalEdges(), units.Millimeters(10))
+	src, err := box.Fillet(t.Context(), verticalEdges(), units.Millimeters(10))
 	require.NoError(t, err)
 	srcFillets := countRolePrefix(src, "fillet(")
 	require.Equal(t, 4, srcFillets)
 
 	shift, err := r3.Translation(r3.NewVec(300, 0, 0))
 	require.NoError(t, err)
-	inst, err := src.PlacedCopy(shift)
+	inst, err := src.PlacedCopy(t.Context(), shift)
 	require.NoError(t, err)
 	require.Equal(t, srcFillets, countRolePrefix(inst, "fillet("),
 		`the placed copy re-mints the same fillet roles`)
@@ -783,19 +720,19 @@ func TestPlacedCopyPreservesChamferRoles(t *testing.T) {
 	// Chamfer shares the blend-descriptor machinery, so a copy re-mints its
 	// chamfer(i,j) roles the same way a fillet's are re-minted.
 	_, box := filletBox(t)
-	src, err := box.Chamfer(verticalEdges(), units.Millimeters(8))
+	src, err := box.Chamfer(t.Context(), verticalEdges(), units.Millimeters(8))
 	require.NoError(t, err)
 	srcChamfers := countRolePrefix(src, "chamfer(")
 	require.Equal(t, 4, srcChamfers, `the source has one chamfer role per bevelled corner`)
 
 	shift, err := r3.Translation(r3.NewVec(0, 300, 0))
 	require.NoError(t, err)
-	inst, err := src.PlacedCopy(shift)
+	inst, err := src.PlacedCopy(t.Context(), shift)
 	require.NoError(t, err)
 	require.Equal(t, srcChamfers, countRolePrefix(inst, "chamfer("),
 		`the placed copy re-mints the same chamfer roles`)
 
-	dup, err := src.Duplicate()
+	dup, err := src.Duplicate(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, srcChamfers, countRolePrefix(dup, "chamfer("),
 		`the duplicate re-mints the same chamfer roles`)
@@ -812,7 +749,7 @@ func TestDuplicatePlainExtrudeHasNoBlendRoles(t *testing.T) {
 	require.Zero(t, countRolePrefix(body, "fillet("))
 	require.Zero(t, countRolePrefix(body, "chamfer("))
 
-	inst, err := body.Duplicate()
+	inst, err := body.Duplicate(t.Context())
 	require.NoError(t, err)
 	require.Zero(t, countRolePrefix(inst, "fillet("), `a plain extrude copy has no fillet roles`)
 	require.Zero(t, countRolePrefix(inst, "chamfer("), `a plain extrude copy has no chamfer roles`)
@@ -836,7 +773,7 @@ func TestDuplicatePreservesFacetedProvenance(t *testing.T) {
 	}
 	require.NotEmpty(t, want)
 
-	inst, err := cut.Duplicate()
+	inst, err := cut.Duplicate(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, "body", inst.Origin().Role)
 

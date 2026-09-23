@@ -67,7 +67,7 @@ func Example_decad_surfaceExtrude() {
 	// audit docs/tessellation-design.md §1.2 runs in the closed-mesh audit's
 	// place: 8 triangles against the 12 a solid extrude of the same plate
 	// would carry, since the two caps are never chorded.
-	mesh, err := sheet.Tessellate(units.Millimeters(0.1))
+	mesh, err := sheet.Tessellate(context.Background(), units.Millimeters(0.1))
 	if err != nil {
 		fmt.Printf("failed to tessellate: %s\n", err)
 		return

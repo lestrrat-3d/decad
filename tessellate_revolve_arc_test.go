@@ -48,7 +48,7 @@ func TestRevolveTessellateFullSphere(t *testing.T) {
 	body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
-	mesh, err := body.Tessellate(units.Millimeters(0.05))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	requireSourceFacesLive(t, body, mesh)
@@ -105,7 +105,7 @@ func TestRevolveTessellateSphericalBand(t *testing.T) {
 	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
-	mesh, err := body.Tessellate(units.Millimeters(0.05))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	requireSourceFacesLive(t, body, mesh)
@@ -148,7 +148,7 @@ func TestRevolveTessellateRingTorus(t *testing.T) {
 	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
-	mesh, err := body.Tessellate(units.Millimeters(0.2))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.2))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	requireSourceFacesLive(t, body, mesh)
@@ -197,7 +197,7 @@ func TestRevolveTessellateConcaveTorusWall(t *testing.T) {
 	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
-	mesh, err := body.Tessellate(units.Millimeters(0.1))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	requireSourceFacesLive(t, body, mesh)
@@ -243,7 +243,7 @@ func TestRevolveTessellateHemispherePoleAtOneEnd(t *testing.T) {
 	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
-	mesh, err := body.Tessellate(units.Millimeters(0.05))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	requireSourceFacesLive(t, body, mesh)
@@ -295,7 +295,7 @@ func TestRevolveTessellateNarrowBulgeHoleClearance(t *testing.T) {
 		s, prof := sketchOf(t, 12)
 		body, err := decad.New().Revolve(s, prof, uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
-		mesh, err := body.Tessellate(units.Millimeters(0.5))
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.5))
 		require.NoError(t, err)
 		requireWatertight(t, mesh)
 		require.Positive(t, meshVolume(mesh))
@@ -305,7 +305,7 @@ func TestRevolveTessellateNarrowBulgeHoleClearance(t *testing.T) {
 		s, prof := sketchOf(t, 14.999)
 		body, err := decad.New().Revolve(s, prof, uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
-		mesh, err := body.Tessellate(units.Millimeters(0.5))
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.5))
 		require.Nil(t, mesh, `no mesh is returned when the section proof cannot be met`)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 		require.ErrorContains(t, err, "clearance gate")
@@ -315,7 +315,7 @@ func TestRevolveTessellateNarrowBulgeHoleClearance(t *testing.T) {
 		s, prof := sketchOf(t, 14.999)
 		body, err := decad.New().Revolve(s, prof, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 		require.NoError(t, err)
-		mesh, err := body.Tessellate(units.Millimeters(0.5))
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.5))
 		require.Nil(t, mesh)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
@@ -341,7 +341,7 @@ func TestRevolveTessellateTangentDiskIsRefusedBeforeTessellation(t *testing.T) {
 	require.NotEmpty(t, s.Profiles())
 	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
-	_, err = body.Tessellate(units.Millimeters(0.1))
+	_, err = body.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.ErrorContains(t, err, "two off-axis segments")
 }
@@ -374,7 +374,7 @@ func TestRevolveTessellateCircularMeridianChordsWithTolerance(t *testing.T) {
 
 	prev := 0
 	for _, tol := range []float64{0.02, 0.05, 0.1, 0.25} {
-		mesh, err := body.Tessellate(units.Millimeters(tol))
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(tol))
 		require.NoError(t, err)
 		n := len(mesh.Triangles())
 		if prev != 0 {
@@ -419,7 +419,7 @@ func TestRevolveTessellatePartialGrooveMeshes(t *testing.T) {
 		decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
 	require.NoError(t, err)
 
-	mesh, err := body.Tessellate(units.Millimeters(0.2))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.2))
 	require.NoError(t, err, `a partial sweep carrying a chorded arc must mesh`)
 	requireWatertight(t, mesh)
 	requireSourceFacesLive(t, body, mesh)

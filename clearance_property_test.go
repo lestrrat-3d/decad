@@ -47,7 +47,7 @@ const oracleSeed = 0x5EED0C1EA9A11CE
 // across).
 func meshPoints(t *testing.T, body *decad.Body, tol units.Value, k int) ([]r3.Vec, float64) {
 	t.Helper()
-	mesh, err := body.Tessellate(tol)
+	mesh, err := body.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	verts := mesh.Vertices()
 	tris := mesh.Triangles()
@@ -228,7 +228,7 @@ func TestClearanceOraclePrismPairs(t *testing.T) {
 		randPrism(t, doc, rng)
 		b := randPrism(t, doc, rng)
 		// Separate B by a translation well beyond both bodies' ~15 mm reach.
-		_, err := b.Placed(randMotion(t, rng, 25+rng.Float64()*40))
+		_, err := b.Placed(t.Context(), randMotion(t, rng, 25+rng.Float64()*40))
 		require.NoError(t, err)
 
 		report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -274,7 +274,7 @@ func TestClearanceOracleCurvedPairs(t *testing.T) {
 		b := randBallOrTorus(t, doc, rng)
 		// A stays in its canonical pose; B is placed far enough to separate the
 		// ~24 mm-reach tori.
-		pb, err := b.Placed(randMotion(t, rng, 60+rng.Float64()*60))
+		pb, err := b.Placed(t.Context(), randMotion(t, rng, 60+rng.Float64()*60))
 		require.NoError(t, err)
 
 		report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -345,7 +345,7 @@ func TestClearanceOracleOverlapNeverSound(t *testing.T) {
 		off := r3.NewVec(rng.Float64()*6-3, rng.Float64()*6-3, rng.Float64()*6-3)
 		shift, err := r3.Translation(off)
 		require.NoError(t, err)
-		_, err = b.Placed(shift)
+		_, err = b.Placed(t.Context(), shift)
 		require.NoError(t, err)
 		check(t, doc, "overlapping boxes")
 	}
@@ -369,7 +369,7 @@ func TestClearanceOracleOverlapNeverSound(t *testing.T) {
 		inner := ballBody(t, doc, 1+rng.Float64()*3)
 		shift, err := r3.Translation(randUnit(rng).Scale(rng.Float64() * 3))
 		require.NoError(t, err)
-		_, err = inner.Placed(shift)
+		_, err = inner.Placed(t.Context(), shift)
 		require.NoError(t, err)
 		check(t, doc, "ball inside ball")
 	}
@@ -389,7 +389,7 @@ func TestClearanceOracleWellSeparatedSound(t *testing.T) {
 		// gap is a closed-form edge/face reading — must read Sound.
 		shift, err := r3.Translation(randUnit(rng).Scale(80 + rng.Float64()*80))
 		require.NoError(t, err)
-		_, err = b.Placed(shift)
+		_, err = b.Placed(t.Context(), shift)
 		require.NoError(t, err)
 
 		report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -431,7 +431,7 @@ func TestClearancePolyBracketContainsTruth(t *testing.T) {
 			b := ballBody(t, doc, r2)
 			shift, err := r3.Translation(randUnit(rng).Scale(d))
 			require.NoError(t, err)
-			_, err = b.Placed(shift)
+			_, err = b.Placed(t.Context(), shift)
 			require.NoError(t, err)
 
 			report, err := doc.Verify(t.Context(), decad.WithClearances())
@@ -459,7 +459,7 @@ func TestClearancePolyBracketContainsTruth(t *testing.T) {
 			s, c := math.Sincos(rng.Float64() * 2 * math.Pi)
 			shift, err := r3.Translation(r3.NewVec(0, d*c, d*s))
 			require.NoError(t, err)
-			_, err = b.Placed(shift)
+			_, err = b.Placed(t.Context(), shift)
 			require.NoError(t, err)
 
 			report, err := doc.Verify(t.Context(), decad.WithClearances())

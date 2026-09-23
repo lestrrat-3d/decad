@@ -214,7 +214,7 @@ type loftAuditShortcuts struct {
 // It is per-call state, held in loftCrossingAuditWork's own frame and
 // returned by value — never a package-level counter. The audit runs on the
 // production path of every exported entry point that builds or re-lifts a
-// loft (Document.Loft/LoftContext, and Body.Placed/PlacedContext/Duplicate/
+// loft (Document.Loft, and Body.Placed/Duplicate/
 // PlacedCopy through loftPayload.placed), and two goroutines holding two
 // independent Documents may each be inside it at once, so a counter shared
 // across calls would both race and mis-count. Nothing outside the call frame
@@ -624,6 +624,6 @@ func loftCrossingAuditWork(budget *workBudget, verts []r3.Vec, tris [][3]int, sh
 	// unchanged — is discharged at the commit edge by the entry point, the way
 	// fillet.go, chamfer.go and shell.go each check ctx.Err() immediately
 	// before Document.commit. Loft's own commit-edge check belongs to
-	// LoftContext.
+	// Loft.
 	return work, budget.err()
 }

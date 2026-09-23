@@ -19,7 +19,7 @@ func TestSweepSpatialPathTurnsThroughOrthogonalPlanes(t *testing.T) {
 
 	s, profile, path, vertices, joins := orthogonalSweepFixture(t)
 	doc := decad.New()
-	body, err := doc.Sweep(s, profile, path)
+	body, err := doc.Sweep(t.Context(), s, profile, path)
 	require.NoError(t, err)
 
 	require.True(t, body.IsSolid())
@@ -68,7 +68,7 @@ func TestSweepSpatialPathTurnsThroughOrthogonalPlanes(t *testing.T) {
 	require.NoError(t, err)
 	motion, err := turn.Then(shift)
 	require.NoError(t, err)
-	placed, err := body.Placed(motion)
+	placed, err := body.Placed(t.Context(), motion)
 	require.NoError(t, err)
 
 	placedVertices := make([]r3.Vec, len(vertices))
@@ -108,7 +108,7 @@ func TestSweepSpatialPathPreservesProfileHole(t *testing.T) {
 	s, profile := orthogonalSweepProfileWithHole(t)
 	path := orthogonalSweepPath(t)
 	doc := decad.New()
-	body, err := doc.Sweep(s, profile, path)
+	body, err := doc.Sweep(t.Context(), s, profile, path)
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 17)
 	for _, edge := range body.Edges() {

@@ -208,13 +208,10 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // (docs/surface-design.md Table X), so the absence costs nothing a caller
 // reaches through this method. Export still succeeds: [Body.STL] and
 // [Body.OBJ] write a sheet's mesh exactly as they write a solid's.
-func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
-	return b.TessellateContext(context.Background(), tol)
-}
-
-// TessellateContext is [Body.Tessellate] with cancellation. It returns
-// ctx.Err() unchanged when ctx is canceled before or during tessellation.
-func (b *Body) TessellateContext(ctx context.Context, tol units.Value) (*Mesh, error) {
+//
+// It returns ctx.Err() unchanged when ctx is canceled before or during
+// tessellation.
+func (b *Body) Tessellate(ctx context.Context, tol units.Value) (*Mesh, error) {
 	return tessellateContext(ctx, b, tol)
 }
 

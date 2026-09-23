@@ -306,7 +306,7 @@ func translatedBody(t *testing.T, b *Body, x, y, z float64) *Body {
 	t.Helper()
 	tr, err := r3.Translation(r3.Vec{X: x, Y: y, Z: z})
 	require.NoError(t, err)
-	moved, err := b.Placed(tr)
+	moved, err := b.Placed(t.Context(), tr)
 	require.NoError(t, err)
 	return moved
 }
@@ -450,7 +450,7 @@ func chamferedQuarterDiskBody(t *testing.T, r, h, d float64) *Body {
 	doc := New()
 	body, err := doc.Extrude(s, profiles[0], Distance{D: units.Millimeters(h), Dir: Along})
 	require.NoError(t, err)
-	chamfered, err := body.Chamfer(Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
+	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
 	require.NoError(t, err)
 	return chamfered
 }
@@ -556,7 +556,7 @@ func capBlendPlateBody(t *testing.T) *Body {
 	t.Helper()
 	doc := New()
 	body := axisBoxBody(t, doc, 0, 0, 100, 60, 20)
-	chamfered, err := body.Chamfer(Edges(CreatedBy(CapEnd(body))), units.Millimeters(5))
+	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(5))
 	require.NoError(t, err)
 	return chamfered
 }

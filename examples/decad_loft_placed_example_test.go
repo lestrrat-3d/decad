@@ -55,7 +55,7 @@ func Example_decad_loft_placed() {
 	}
 
 	doc := decad.New()
-	tooth, err := doc.Loft(s0, s0.Profiles()[0], s1, s1.Profiles()[0])
+	tooth, err := doc.Loft(context.Background(), s0, s0.Profiles()[0], s1, s1.Profiles()[0])
 	if err != nil {
 		fmt.Printf("failed to loft the tooth: %s\n", err)
 		return
@@ -73,7 +73,7 @@ func Example_decad_loft_placed() {
 		fmt.Printf("failed to build the reflection: %s\n", err)
 		return
 	}
-	other, err := tooth.PlacedCopy(mirror)
+	other, err := tooth.PlacedCopy(context.Background(), mirror)
 	if err != nil {
 		fmt.Printf("failed to mirror the tooth: %s\n", err)
 		return

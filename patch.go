@@ -53,12 +53,7 @@ func (pp patchPayload) prism() prismPayload {
 	return prismPayload{profile: pp.profile, frame: pp.frame, xform: pp.xform, walks: pp.walks}
 }
 
-// Patch calls [Document.PatchContext] with [context.Background].
-func (d *Document) Patch(s *sketch.Sketch, p *sketch.Profile) (*Body, error) {
-	return d.PatchContext(context.Background(), s, p)
-}
-
-// PatchContext records p through the seam exactly as Extrude does — the same
+// Patch records p through the seam exactly as Extrude does — the same
 // authentication, staleness, foreign-entity and TExact admission gates of
 // docs/api-design.md §7 and docs/sketch-seam-design.md, with no relaxation —
 // and builds a single planar face on s.Plane().Frame(), carrying the
@@ -71,7 +66,7 @@ func (d *Document) Patch(s *sketch.Sketch, p *sketch.Profile) (*Body, error) {
 // boundary carrying a free-form segment this evaluator cannot integrate is
 // ErrUnsupported (Table R row R3). A failed evaluation leaves the document
 // untouched.
-func (d *Document) PatchContext(ctx context.Context, s *sketch.Sketch, p *sketch.Profile) (*Body, error) {
+func (d *Document) Patch(ctx context.Context, s *sketch.Sketch, p *sketch.Profile) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}

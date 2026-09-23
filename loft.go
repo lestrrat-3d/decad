@@ -45,12 +45,7 @@ func WithLoftAlignment(offsets ...int) LoftOption {
 	return loftOption{option.New(identLoftAlignment{}, out)}
 }
 
-// Loft calls [Document.LoftContext] with [context.Background].
-func (d *Document) Loft(s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error) {
-	return d.LoftContext(context.Background(), s0, p0, s1, p1, opts...)
-}
-
-// LoftContext builds a solid ruled between two profiles recorded on distinct
+// Loft builds a solid ruled between two profiles recorded on distinct
 // geometric planes (docs/loft-design.md), registers it, and returns the new
 // body. s0/p0 is the FROM section (capStart); s1/p1 is the TO section
 // (capEnd) — the same naming Extrude already uses for its two caps. Both
@@ -86,7 +81,7 @@ func (d *Document) Loft(s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch
 // (docs/surface-design.md §4).
 //
 // A failed call leaves the document untouched.
-func (d *Document) LoftContext(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error) {
+func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}

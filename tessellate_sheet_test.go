@@ -57,7 +57,7 @@ func TestSurfaceExtrudeSheetTessellates(t *testing.T) {
 	s1, p1 := plateSketch(t)
 	solid, err := solidDoc.Extrude(s1, p1, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
-	solidMesh, err := solid.Tessellate(units.Millimeters(0.1))
+	solidMesh, err := solid.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 	require.Len(t, solidMesh.Triangles(), 12)
 
@@ -65,7 +65,7 @@ func TestSurfaceExtrudeSheetTessellates(t *testing.T) {
 	s2, p2 := plateSketch(t)
 	sheet, err := sheetDoc.Extrude(s2, p2, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
 	require.NoError(t, err)
-	sheetMesh, err := sheet.Tessellate(units.Millimeters(0.1))
+	sheetMesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.NoError(t, err)
 
 	require.Len(t, sheetMesh.Triangles(), 8, `8 wall triangles against the solid's 12 — the two omitted caps' 4`)
@@ -147,14 +147,14 @@ func TestSurfaceExtrudeSheetBoundMatchesSolid(t *testing.T) {
 	s1, p1 := rectWithHoleSketch(t)
 	solid, err := solidDoc.Extrude(s1, p1, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
 	require.NoError(t, err)
-	solidMesh, err := solid.Tessellate(tol)
+	solidMesh, err := solid.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 
 	sheetDoc := decad.New()
 	s2, p2 := rectWithHoleSketch(t)
 	sheet, err := sheetDoc.Extrude(s2, p2, decad.Distance{D: units.Millimeters(8), Dir: decad.Along}, decad.WithSurfaceResult())
 	require.NoError(t, err)
-	sheetMesh, err := sheet.Tessellate(tol)
+	sheetMesh, err := sheet.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 
 	require.True(t, sheetMesh.Bound().Equal(solidMesh.Bound(), 1e-12))
@@ -162,7 +162,7 @@ func TestSurfaceExtrudeSheetBoundMatchesSolid(t *testing.T) {
 	require.LessOrEqual(t, sheetMesh.Bound().Mag(), tol.Mag())
 
 	finer := units.Millimeters(0.05)
-	finerMesh, err := sheet.Tessellate(finer)
+	finerMesh, err := sheet.Tessellate(t.Context(), finer)
 	require.NoError(t, err)
 	require.Less(t, finerMesh.Bound().Mag(), sheetMesh.Bound().Mag())
 }
@@ -183,15 +183,15 @@ func TestSurfaceExtrudeSheetDeterminism(t *testing.T) {
 
 	sheetA := build(t)
 	tol := units.Millimeters(0.1)
-	meshA1, err := sheetA.Tessellate(tol)
+	meshA1, err := sheetA.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
-	meshA2, err := sheetA.Tessellate(tol)
+	meshA2, err := sheetA.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	require.Equal(t, meshA1.Vertices(), meshA2.Vertices(), `the one-entry cache returns the same mesh on a repeat call`)
 	require.Equal(t, meshA1.Triangles(), meshA2.Triangles())
 
 	sheetB := build(t)
-	meshB, err := sheetB.Tessellate(tol)
+	meshB, err := sheetB.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	require.Equal(t, meshA1.Vertices(), meshB.Vertices())
 	require.Equal(t, meshA1.Triangles(), meshB.Triangles())
@@ -208,7 +208,7 @@ func TestSurfaceExtrudeSheetDeterminism(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, err = sheetA.TessellateContext(ctx, tol)
+	_, err = sheetA.Tessellate(ctx, tol)
 	require.ErrorIs(t, err, context.Canceled)
 }
 
@@ -224,7 +224,7 @@ func TestSurfaceExtrudeHoledSheetMultiLumpTessellates(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, sheet.Lumps(), 2, `an outer wall tube and a hole wall tube, disconnected once their shared caps are omitted`)
 
-	mesh, err := sheet.Tessellate(units.Millimeters(0.5))
+	mesh, err := sheet.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.NoError(t, err)
 	require.NotEmpty(t, mesh.Triangles())
 	free := directedEdgeCensus(t, mesh)

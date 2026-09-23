@@ -54,19 +54,14 @@ func WithSweepTwist(angle units.Value) SweepOption {
 	return sweepOption{option.New(identSweepTwist{}, angle)}
 }
 
-// Sweep calls [Document.SweepContext] with [context.Background].
-func (d *Document) Sweep(s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error) {
-	return d.SweepContext(context.Background(), s, p, path, opts...)
-}
-
-// SweepContext moves p along path, registers the resulting solid, and returns
+// Sweep moves p along path, registers the resulting solid, and returns
 // it. The path must start in the profile plane and its initial tangent must be
 // exactly codirectional with the plane's positive normal. Composite paths also
 // require tangent joins, exactly representable transported frames, and a
 // certified absence of unintended span contact. Closed paths and nonzero twist
 // remain staged as ErrUnsupported. Every failure and cancellation leaves the
 // document unchanged.
-func (d *Document) SweepContext(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error) {
+func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}

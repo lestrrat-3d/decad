@@ -34,7 +34,7 @@ func chamferedSectionBody(t *testing.T, section func(*sketch.Sketch), d float64)
 	}
 	body, err := doc.Extrude(s, prof, Distance{D: units.Millimeters(capBlendMeshHeight), Dir: Along})
 	require.NoError(t, err)
-	chamfered, err := body.Chamfer(Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
+	chamfered, err := body.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(body))), units.Millimeters(d))
 	require.NoError(t, err)
 	cbp, ok := chamfered.payload.(capBlendPayload)
 	require.True(t, ok)

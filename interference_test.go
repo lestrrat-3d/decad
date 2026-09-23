@@ -386,7 +386,7 @@ func TestVerifyUnsupportedOverlapStaysSuspectAndReadOnly(t *testing.T) {
 	ball := ballBody(t, doc, 8)
 	shift, err := r3.Translation(r3.NewVec(5, 0, 0))
 	require.NoError(t, err)
-	_, err = ball.Placed(shift)
+	_, err = ball.Placed(t.Context(), shift)
 	require.NoError(t, err)
 	before := snapshotDocument(t, doc)
 
@@ -624,7 +624,7 @@ func TestVerifyCrossingPairSeatedResolvesPlacedStaysUndecided(t *testing.T) {
 
 	// §3.4 reads the operands' ACCUMULATED placement, never the motion one
 	// Placed call received: newPrismReexpression compares pa.frame/pa.xform
-	// against pb.frame/pb.xform, and PlacedContext composes onto the transform
+	// against pb.frame/pb.xform, and Placed composes onto the transform
 	// the receiver already carries. So a body moved by a motion and then by its
 	// inverse is back at the partner's own placement and the pair is measured
 	// again, even though the last Placed call took a nonidentity transform.

@@ -105,7 +105,7 @@ func TestRevolveTessellateFullCylinder(t *testing.T) {
 	require.NoError(t, err)
 
 	tol := units.Millimeters(0.05)
-	mesh, err := body.Tessellate(tol)
+	mesh, err := body.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	requireSourceFacesLive(t, body, mesh)
@@ -172,7 +172,7 @@ func TestRevolveTessellateConeApexIsOneInternedVertex(t *testing.T) {
 	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 
-	mesh, err := body.Tessellate(units.Millimeters(0.05))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	requireSourceFacesLive(t, body, mesh)
@@ -213,7 +213,7 @@ func TestRevolveTessellatePartialAxisLineSharesOneCapEdge(t *testing.T) {
 	body, err := decad.New().Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 
-	mesh, err := body.Tessellate(units.Millimeters(0.05))
+	mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	requireSourceFacesLive(t, body, mesh)
@@ -252,7 +252,7 @@ func TestRevolveTessellateAnnulusAndProfileHole(t *testing.T) {
 		s, p := annularSketch(t)
 		body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
-		mesh, err := body.Tessellate(units.Millimeters(0.05))
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.05))
 		require.NoError(t, err)
 		requireWatertight(t, mesh)
 		requireSourceFacesLive(t, body, mesh)
@@ -287,7 +287,7 @@ func TestRevolveTessellateAnnulusAndProfileHole(t *testing.T) {
 		body, err := decad.New().Revolve(s, prof, uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
 
-		mesh, err := body.Tessellate(units.Millimeters(0.2))
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.2))
 		require.NoError(t, err)
 		requireWatertight(t, mesh)
 		requireSourceFacesLive(t, body, mesh)
@@ -314,10 +314,10 @@ func TestRevolveTessellateReflectedPlacementKeepsOutwardWinding(t *testing.T) {
 	require.NoError(t, err)
 	xf, err := r3.Reflection(mirror)
 	require.NoError(t, err)
-	placed, err := body.Placed(xf)
+	placed, err := body.Placed(t.Context(), xf)
 	require.NoError(t, err)
 
-	mesh, err := placed.Tessellate(units.Millimeters(0.05))
+	mesh, err := placed.Tessellate(t.Context(), units.Millimeters(0.05))
 	require.NoError(t, err)
 	requireWatertight(t, mesh)
 	requireSourceFacesLive(t, placed, mesh)
@@ -334,16 +334,16 @@ func TestRevolveTessellateChargesPlacementRoundingSeparately(t *testing.T) {
 	require.NoError(t, err)
 	tol := units.Millimeters(0.05)
 
-	unplaced, err := body.Tessellate(tol)
+	unplaced, err := body.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	base, err := unplaced.Bound().In(units.Millimeter)
 	require.NoError(t, err)
 
 	rot, err := r3.Rotation(r3.Vec{X: 1, Y: 2, Z: 3}, units.Degrees(37))
 	require.NoError(t, err)
-	rotated, err := body.PlacedCopy(rot)
+	rotated, err := body.PlacedCopy(t.Context(), rot)
 	require.NoError(t, err)
-	rotMesh, err := rotated.Tessellate(tol)
+	rotMesh, err := rotated.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	rotBound, err := rotMesh.Bound().In(units.Millimeter)
 	require.NoError(t, err)
@@ -351,9 +351,9 @@ func TestRevolveTessellateChargesPlacementRoundingSeparately(t *testing.T) {
 
 	far, err := r3.Translation(r3.Vec{X: 1e7, Y: 3e6, Z: -2e6})
 	require.NoError(t, err)
-	moved, err := body.PlacedCopy(far)
+	moved, err := body.PlacedCopy(t.Context(), far)
 	require.NoError(t, err)
-	farMesh, err := moved.Tessellate(tol)
+	farMesh, err := moved.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
 	farBound, err := farMesh.Bound().In(units.Millimeter)
 	require.NoError(t, err)
@@ -371,7 +371,7 @@ func TestRevolveTessellateRefusals(t *testing.T) {
 		s, p := solidSketch(t)
 		body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
-		_, err = body.Tessellate(units.Millimeters(1e-9))
+		_, err = body.Tessellate(t.Context(), units.Millimeters(1e-9))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 
@@ -394,7 +394,7 @@ func TestRevolveTessellateRefusals(t *testing.T) {
 		require.NoError(t, err)
 		body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 		require.NoError(t, err)
-		_, err = body.Tessellate(units.Millimeters(0.05))
+		_, err = body.Tessellate(t.Context(), units.Millimeters(0.05))
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
 }
@@ -424,7 +424,7 @@ func TestRevolveTessellateChordCountFollowsTolerance(t *testing.T) {
 
 	prev := 0
 	for _, tol := range []float64{0.02, 0.04, 0.08, 0.16} {
-		mesh, err := body.Tessellate(units.Millimeters(tol))
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(tol))
 		require.NoError(t, err)
 		n := len(mesh.Triangles())
 		if prev != 0 {

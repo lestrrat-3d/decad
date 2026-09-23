@@ -41,7 +41,7 @@ func Example_decad_verify_undercuts() {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	chamfered, err := body.Chamfer(decad.Edges(decad.CreatedBy(decad.CapEnd(body))), units.Millimeters(0.5))
+	chamfered, err := body.Chamfer(context.Background(), decad.Edges(decad.CreatedBy(decad.CapEnd(body))), units.Millimeters(0.5))
 	if err != nil {
 		fmt.Printf("failed to chamfer: %s\n", err)
 		return
