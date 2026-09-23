@@ -194,6 +194,17 @@ func TestUnstitchRevolveRoundTripStaysASheet(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
 
+	// Measure the original's own free-edge shape BEFORE unstitching it (which
+	// retires sheet), so the round trip below is checked against what the
+	// original actually publishes rather than a number typed into the test.
+	// The 8 is still asserted directly here, so a silent change to the
+	// original's own shape still surfaces — it is the round-trip comparison
+	// itself that must read this measurement back, not a literal.
+	wantFree, err := decad.Edges(decad.Free()).SelectEdges(sheet)
+	require.NoError(t, err)
+	require.Len(t, wantFree, 8, "the profile's own seam at phi0 and phi1: a partial revolve's own free rim")
+	wantEdges := len(sheet.Edges())
+
 	pieces, err := sheet.Unstitch()
 	require.NoError(t, err)
 	require.Len(t, pieces, 4)
@@ -209,16 +220,16 @@ func TestUnstitchRevolveRoundTripStaysASheet(t *testing.T) {
 
 	// The certificate now closes the 4 internal junction welds (each shared,
 	// by construction, between two adjacent side faces before Unstitch ever
-	// split them), leaving exactly the 8 seam edges — the profile's own
+	// split them), leaving free exactly the seam edges — the profile's own
 	// boundary at phi0 and phi1, which never had a partner to weld against,
-	// before or after this round trip — free. That is the SAME free-edge
-	// shape the original, never-unstitched sheet itself carries; the
-	// certificate loses no information the original build already published,
-	// it only lets the round trip REPRODUCE it exactly.
-	free, err := decad.Edges(decad.Free()).Exactly(8).SelectEdges(restitched)
+	// before or after this round trip. That is the SAME free-edge shape the
+	// original, never-unstitched sheet itself carried (wantFree/wantEdges,
+	// measured above): the certificate loses no information the original
+	// build already published, it only lets the round trip REPRODUCE it.
+	free, err := decad.Edges(decad.Free()).Exactly(len(wantFree)).SelectEdges(restitched)
 	require.NoError(t, err)
-	require.Len(t, free, 8)
-	require.Len(t, restitched.Edges(), 12)
+	require.Len(t, free, len(wantFree))
+	require.Len(t, restitched.Edges(), wantEdges)
 }
 
 // TestUnstitchTableR covers Unstitch's own Table R rows: R11 (a Faceted
