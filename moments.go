@@ -491,6 +491,7 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 		}
 		areaProof, haveAreaProof := circularAreaInterval(segment, anchor)
 		muProof, mvProof, haveMomentProof := circularFirstMomentInterval(segment, anchor)
+		muuProof, muvProof, mvvProof, haveSecondMomentProof := circularSecondMomentInterval(segment, anchor)
 		segment.Center = shiftPoint(segment.Center, anchor)
 		// The arrangement's normalized t is the angle 2π·t from +u
 		// (geom.BoundaryEdge); the recorded range order is the walk.
@@ -506,11 +507,16 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 			muProof,
 			mvProof,
 			haveMomentProof,
+			muuProof,
+			muvProof,
+			mvvProof,
+			haveSecondMomentProof,
 		)
 		return nil
 	case ArcSeg:
 		areaProof, haveAreaProof := circularAreaInterval(segment, anchor)
 		muProof, mvProof, haveMomentProof := circularFirstMomentInterval(segment, anchor)
+		muuProof, muvProof, mvvProof, haveSecondMomentProof := circularSecondMomentInterval(segment, anchor)
 		segment.Center = shiftPoint(segment.Center, anchor)
 		segment.Start = shiftPoint(segment.Start, anchor)
 		segment.End = shiftPoint(segment.End, anchor)
@@ -534,6 +540,10 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 			muProof,
 			mvProof,
 			haveMomentProof,
+			muuProof,
+			muvProof,
+			mvvProof,
+			haveSecondMomentProof,
 		)
 		return nil
 	default:
@@ -862,6 +872,8 @@ func (ig *regionIntegrals) addCircular(
 	haveAreaProof bool,
 	muProof, mvProof ratInterval,
 	haveMomentProof bool,
+	muuProof, muvProof, mvvProof ratInterval,
+	haveSecondMomentProof bool,
 ) {
 	sin0, cos0 := math.Sincos(th0)
 	sin1, cos1 := math.Sincos(th1)
@@ -932,9 +944,17 @@ func (ig *regionIntegrals) addCircular(
 	accumulateMoment(&ig.area, &ig.areaBound, area, areaBound)
 	accumulateMoment(&ig.mu, &ig.muBound, mu, muBound)
 	accumulateMoment(&ig.mv, &ig.mvBound, mv, mvBound)
-	accumulateMoment(&ig.muu, &ig.muuBound, muu, conservativeValueError(muu, muuScale))
-	accumulateMoment(&ig.muv, &ig.muvBound, muv, conservativeValueError(muv, muvScale))
-	accumulateMoment(&ig.mvv, &ig.mvvBound, mvv, conservativeValueError(mvv, mvvScale))
+	muuBound := conservativeValueError(muu, muuScale)
+	muvBound := conservativeValueError(muv, muvScale)
+	mvvBound := conservativeValueError(mvv, mvvScale)
+	if haveSecondMomentProof {
+		muuBound = math.Min(muuBound, intervalFloatError(muuProof, muu))
+		muvBound = math.Min(muvBound, intervalFloatError(muvProof, muv))
+		mvvBound = math.Min(mvvBound, intervalFloatError(mvvProof, mvv))
+	}
+	accumulateMoment(&ig.muu, &ig.muuBound, muu, muuBound)
+	accumulateMoment(&ig.muv, &ig.muvBound, muv, muvBound)
+	accumulateMoment(&ig.mvv, &ig.mvvBound, mvv, mvvBound)
 }
 
 // lerp2 returns the point at parameter t on the segment start→end.

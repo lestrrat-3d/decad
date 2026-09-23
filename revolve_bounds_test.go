@@ -304,6 +304,56 @@ func TestRevolvePartialCentroidBoundTightens(t *testing.T) {
 	}
 }
 
+// TestRevolveSemicirclePartialSweepCentroidBoundTightens is design §15's
+// T114: semicircleSketch's half-disc under a quarter turn (90 degrees)
+// published a centroid bound of exactly 638.75 mm before this fix — the
+// investigation's own worse-than-full-turn case. moments_circular.go's
+// circularSecondMomentInterval now brackets the arc's own second moments
+// exactly, so the bound shrinks to a tiny fraction of the body's own
+// diameter, exactly as TestRevolvePartialCentroidBoundTightens's own
+// straight-walled fixture already does.
+//
+// q, mzr and mrr are the half-disc's own analytic in-plane moments about the
+// profile's origin anchor, independently derived (never read back from
+// decad): q = ∫v dA = (2/3)r^3, mzr = ∫uv dA = r*q = (2/3)r^4 (the disc's own
+// u'v term vanishes by symmetry about the arc's centre, leaving the anchor
+// shift alone), mrr = ∫v^2 dA = (half of a full disc's own ∫u^2 dA by the
+// same symmetry) = (pi*r^4)/8. axial = mzr/q = r is sweep-independent, as
+// TestRevolvePartialCentroidBoundTightens's own comment already establishes
+// for its straight-walled fixture.
+//
+// Shown-to-fail: forcing circularSecondMomentInterval to answer ok == false
+// reproduces the old 638.75 mm envelope and turns the tightness assertion
+// below red — verified by hand, since the toggle lives in unexported
+// production code no external test can reach.
+func TestRevolveSemicirclePartialSweepCentroidBoundTightens(t *testing.T) {
+	t.Parallel()
+	const r = 5.0
+	q := 2.0 / 3 * r * r * r
+	mzr := 2.0 / 3 * r * r * r * r
+	mrr := math.Pi * r * r * r * r / 8
+
+	s, p := semicircleSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+
+	c, err := body.Centroid()
+	require.NoError(t, err)
+	const diameter = 2 * r
+	bound := c.Bound.Base()
+	require.Positive(t, bound)
+	require.LessOrEqual(t, bound, 1e-6*diameter,
+		"the centroid bound %g mm is not tight against the body's own %g mm diameter", bound, diameter)
+
+	sweep := 90.0 * math.Pi / 180
+	sin, cos := math.Sincos(sweep)
+	radialScale := mrr / (sweep * q)
+	want := r3.NewVec(mzr/q, radialScale*sin, radialScale*(1-cos))
+	require.LessOrEqual(t, c.Value.Sub(want).Len(), bound,
+		"the centroid bound does not enclose the analytically predicted centroid")
+}
+
 // widthBracketFor returns the widthBracket of the named case in
 // annularSweepCases, for a test that needs the reference pi bracket without
 // duplicating the case table.
@@ -788,9 +838,10 @@ func TestRevolveReflexSweepBoundsBoundaryStayTight(t *testing.T) {
 
 // TestRevolveVerifySoundReflex is the reflex-box design's test 6: with the
 // reflex arm landed, annularSketch verifies Sound at both Along 270 and
-// Symmetric 135, and the holed 270 body's own only tolerance diagnostic
-// names ReadingCentroid (the second-moment envelope, out of this design's
-// scope) and never ReadingBounds.
+// Symmetric 135, and so does the holed 270 body: circularSecondMomentInterval
+// (moments_circular.go) certifies the hole's own circular second moments, so
+// the centroid reading stays inside tolerance and the report carries no
+// diagnostic at all.
 func TestRevolveVerifySoundReflex(t *testing.T) {
 	t.Parallel()
 
@@ -816,11 +867,6 @@ func TestRevolveVerifySoundReflex(t *testing.T) {
 		_, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
 		require.NoError(t, err)
 
-		report := decadtest.Verify(t, doc)
-		decadtest.HasOnlyDiagnostics(t, report, decad.DiagMeasurementBeyondTolerance)
-		for _, d := range decadtest.FindDiagnostics(t, report, decad.DiagMeasurementBeyondTolerance) {
-			require.Equal(t, decad.ReadingCentroid, d.Reading,
-				`the holed body's only tolerance diagnostic must name the centroid's own second-moment envelope, never the box`)
-		}
+		decadtest.IsSound(t, doc)
 	})
 }

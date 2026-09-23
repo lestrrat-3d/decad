@@ -303,6 +303,63 @@ func TestRevolveSphere(t *testing.T) {
 	require.False(t, report.Passed())
 }
 
+// TestRevolveSemicircleFullTurnCentroidBoundTightens is design §15's T110:
+// the diagnosed symptom directly. semicircleSketch's half-disc, radius 5,
+// centred at u=5, published a centroid bound of exactly 460.625 mm before
+// this fix — wide enough to admit any centroid inside the 10 mm body.
+// moments_circular.go's circularSecondMomentInterval now brackets the arc's
+// own second moments exactly, so the bound shrinks to a tiny fraction of the
+// body's own diameter.
+//
+// Shown-to-fail: forcing circularSecondMomentInterval to answer ok == false
+// (moments_circular.go) reproduces the old envelope and turns the tightness
+// assertion below red — verified by hand, since the toggle lives in
+// unexported production code no external test can reach.
+func TestRevolveSemicircleFullTurnCentroidBoundTightens(t *testing.T) {
+	t.Parallel()
+	s, p := semicircleSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	c, err := body.Centroid()
+	require.NoError(t, err)
+	const diameter = 10.0
+	bound := c.Bound.Base()
+	require.Positive(t, bound)
+	require.LessOrEqual(t, bound, 1e-6*diameter,
+		"the centroid bound %g mm is not tight against the body's own %g mm diameter", bound, diameter)
+
+	want := r3.NewVec(5, 0, 0)
+	require.LessOrEqual(t, c.Value.Sub(want).Len(), bound,
+		"the centroid bound does not enclose the true (5, 0, 0) centroid")
+}
+
+// TestRevolveSemicircleVolumeBoundUnaffected is design §15's T113: Volume is
+// Pappus's first theorem over the region's first moments alone
+// (axisMoments's q), which circularSecondMomentInterval never touches, so
+// the ball's own volume bound must be unmoved by the second-moment fix.
+//
+// Verified by hand: forcing circularSecondMomentInterval to answer
+// ok == false leaves this reading's value and bound bit-for-bit unchanged
+// while TestRevolveSemicircleFullTurnCentroidBoundTightens's own assertion
+// goes red — the toggle lives in unexported production code no external
+// test can reach, so this is not automated here.
+func TestRevolveSemicircleVolumeBoundUnaffected(t *testing.T) {
+	t.Parallel()
+	s, p := semicircleSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	value, bound := vol.Value.Base(), vol.Bound.Base()
+	require.InDelta(t, 4.0/3*math.Pi*125, value, 1e-9) // (4/3)pi r^3, r = 5
+	require.LessOrEqual(t, bound, 1e-9*value,
+		"the volume bound %g mm^3 is not tight against the value %g mm^3", bound, value)
+}
+
 func TestRevolveTorus(t *testing.T) {
 	t.Parallel()
 	w := sketch.NewWorld()
@@ -1097,9 +1154,13 @@ func TestRevolveFullTurnHoleIsVoidShell(t *testing.T) {
 	require.InDelta(t, 1.0, n.Value.Y, 1e-9)
 	require.InDelta(t, 0.0, n.Value.Z, 1e-9)
 
+	// The hole's circular second moments carry a certified rational bracket
+	// (moments_circular.go's circularSecondMomentInterval), so the centroid's
+	// own bound stays inside tolerance and the report is Sound even though a
+	// void is present.
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status)
+	require.Equal(t, decad.Sound, report.Status)
 	require.Equal(t, 1, report.Bodies[0].Topology.Voids)
 }
 

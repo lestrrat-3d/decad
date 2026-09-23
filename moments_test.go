@@ -709,6 +709,40 @@ func TestSecondMomentsOffsetCircle(t *testing.T) {
 	require.InDelta(t, quarter+9*area, vv, 1e-6)
 }
 
+// TestSecondMomentsSemicircleBoundTightens is design §15's T111:
+// semicircleSketch's own profile record published a UV bound of 38385.42 mm⁴
+// against a 416.67 mm⁴ value before this fix — 92 times the value itself,
+// never mind hundreds — and UU/VV were wider still (188201.04 against
+// 1227.18, 98751.38 against 245.44). moments_circular.go's
+// circularSecondMomentInterval now brackets all three exactly, so every
+// bound shrinks to a tiny fraction of its own value.
+//
+// Shown-to-fail: forcing circularSecondMomentInterval to answer ok == false
+// reproduces the old three magnitudes and turns every assertion below red —
+// verified by hand, since the toggle lives in unexported production code no
+// external test can reach.
+func TestSecondMomentsSemicircleBoundTightens(t *testing.T) {
+	t.Parallel()
+	s, _ := semicircleSketch(t)
+	record := recordOne(t, s, func(*sketch.Profile) bool { return true })
+
+	moments, err := record.SecondMoments()
+	require.NoError(t, err)
+	checkTight := func(name string, m decad.Measurement) {
+		t.Helper()
+		value, err := m.Value.In(units.QuarticMillimeter)
+		require.NoError(t, err)
+		bound, err := m.Bound.In(units.QuarticMillimeter)
+		require.NoError(t, err)
+		require.Positive(t, bound, "%s: the bound should still be positive (the true value carries pi)", name)
+		require.LessOrEqual(t, bound, 1e-6*math.Abs(value),
+			"%s: the bound %g mm^4 is not tight against the value %g mm^4", name, bound, value)
+	}
+	checkTight("UU", moments.UU)
+	checkTight("UV", moments.UV)
+	checkTight("VV", moments.VV)
+}
+
 func TestLineRationalRoundingIsBounded(t *testing.T) {
 	t.Parallel()
 	rec := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
@@ -800,7 +834,12 @@ func TestArcSegExactQuarterDisk(t *testing.T) {
 	wantCentroid := 4 * radius / (3 * math.Pi)
 	require.LessOrEqual(t, math.Hypot(centroid.Value.X-wantCentroid, centroid.Value.Y-wantCentroid), centroid.Bound.Base())
 	require.Equal(t, decad.Approximate, moments.UU.Exactness)
-	require.Equal(t, decad.Approximate, moments.UV.Exactness)
+	// UV collapses to a rational with no swept-angle term at all (center on
+	// the origin cancels muv's own dth coefficient,
+	// moments_circular.go's circularSecondMomentInterval doc comment), so it
+	// is Exact with a zero bound — unlike UU/VV, whose true value carries pi.
+	require.Equal(t, decad.Exact, moments.UV.Exactness)
+	require.Zero(t, moments.UV.Bound.Base())
 	require.Equal(t, decad.Approximate, moments.VV.Exactness)
 	uu, err := moments.UU.Value.In(units.QuarticMillimeter)
 	require.NoError(t, err)
