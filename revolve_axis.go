@@ -274,12 +274,30 @@ func axisDirectionSqrtBracket(du, dv *big.Rat, heldU, heldV float64) (float64, f
 // ρ = cross(d, p−a) ≥ 0 is the radial coordinate. snapTol is the
 // scale-relative tolerance that classified axis contact; a coordinate
 // within it of the axis IS on the axis.
+//
+// radialAdmitAllow and axialExtentUpper are resolveAxisSide's own charge for
+// admitting a region under UNCERTAINTY rather than proof: they are zero
+// whenever resolveAxisSide proved the region's radial minimum non-negative —
+// which is every axis-aligned fixture in the tree, since the arithmetic is
+// then exact and admits nothing it has not proven — and otherwise they carry
+// the worst case a genuine straddle leaves open. radialAdmitAllow bounds how
+// far below zero the TRUE radial minimum can sit despite being admitted, and
+// axialExtentUpper bounds the recorded region's own axial reach; together they
+// are what revolve_build.go charges into the published volume, cap area and
+// centroid bounds (revolvePayload.ax's own doc comment there), since the
+// admitted region's faces are built from the SNAPPED profile while the
+// integrals behind those measurements read the UNSNAPPED one. Both are the
+// zero value for any axisFrame not built by resolveAxisSide (a full-sweep
+// composite payload's own literal), which is the safe default: no admitted
+// uncertainty, no charge.
 type axisFrame struct {
 	aU, aV           float64
 	aUBound, aVBound float64
 	dU, dV           float64
 	dUBound, dVBound float64
 	snapTol          float64
+	radialAdmitAllow float64
+	axialExtentUpper float64
 }
 
 // toAxis maps a plane-local point into (z, ρ) axis coordinates. It reads
@@ -457,30 +475,103 @@ func (ax axisFrame) classify(w segmentWalk) wallKind {
 // and the bound is the scan's own last-ulp figure, so an ordinary section is
 // decided with eight orders of magnitude to spare; reaching the refusal means
 // the region genuinely sits on the axis to within its own arithmetic.
+//
+// roff/zoff are the axis anchor's own offset along each functional: the scan
+// above reads the profile about the FRAME origin, and the axis's anchor is
+// what shifts that reading onto the axis. A bare `rlo -= roff` would leave
+// the two products, their sum, and the subtraction's OWN round-to-nearest
+// error unaccounted for, on top of whatever aU/aV/dU/dV's own proven bounds
+// already are — the identical gap verify.go's revolvePayloadProvesSimple
+// exists to close one level up, only here it feeds the gate that decides
+// which side the region is admitted on, not a review AFTER the fact. Reading
+// the offset through boundedMul/boundedAdd/boundedSub (the same vocabulary
+// axisFrame.toAxisRhoBound already uses for the identical ρ formula at one
+// point) charges every one of those roundings into rloB/rhiB, so the strict
+// admission gate below reads a number the accompanying bound provably covers.
+//
+// THE ADMISSION GATE ITSELF is the two-part repair CLAUDE.md's reject-only
+// rule requires: admitBelow(near, 0) reads whether the CHOSEN side's
+// near-axis extreme is proven negative, proven non-negative, or neither, off
+// the extreme's own proven interval — never off a tolerance.
+//
+//   - Proven negative (survAdmit) refuses outright, however the interval got
+//     that wide: a region that truly dips across the axis is a real defect,
+//     not an artifact of the bound charging it wide.
+//   - Proven non-negative (survReject) needs no allowance, and that holds
+//     even where the bound is nonzero — an interval whose own lower end
+//     already clears zero commits nothing further. This is what keeps
+//     radialAdmitAllow at exactly zero for every axis-aligned fixture: their
+//     arithmetic is exact (a zero bound), so admitBelow can only answer
+//     survReject or survAdmit, never straddle, and a zero-bound interval that
+//     is not proven negative IS proven non-negative.
+//   - Neither (survStraddle) is the genuine case a nonzero bound creates — a
+//     tilted or offset axis whose own direction/anchor rounding leaves the
+//     true radial minimum undecided. Admitting it is sound only because the
+//     interval's own worst case is bounded (by the coarse ±tol classification
+//     above, which already proved the chosen side's near extreme sits no
+//     lower than −tol), and radialAdmitAllow carries exactly that worst case
+//     forward to revolve_build.go, which charges it into every published
+//     measurement the snap/unsnap mismatch can touch.
 func resolveAxisSide(ctx context.Context, profile ProfileRecord, line axisLine2, work *freeformWork) (axisFrame, float64, error) {
 	nU, nV := -line.dV, line.dU
 	rlo, rhi, rBound, err := boundaryExtremesBoundedContext(ctx, profile, nU, nV, work, nil)
 	if err != nil {
 		return axisFrame{}, 0, err
 	}
-	roff := nU*line.aU + nV*line.aV
-	rlo, rhi = rlo-roff, rhi-roff
-	zlo, zhi, _, err := boundaryExtremesBoundedContext(ctx, profile, line.dU, line.dV, work, nil)
+	zlo, zhi, zBound, err := boundaryExtremesBoundedContext(ctx, profile, line.dU, line.dV, work, nil)
 	if err != nil {
 		return axisFrame{}, 0, err
 	}
-	zoff := line.dU*line.aU + line.dV*line.aV
-	zlo, zhi = zlo-zoff, zhi-zoff
 
-	scale := math.Max(math.Max(math.Abs(rlo), math.Abs(rhi)), math.Max(math.Abs(zlo), math.Abs(zhi)))
+	// boundaryExtremesBoundedContext's own returned bound charges each
+	// candidate's POSITIONAL uncertainty (a walked endpoint's own proven
+	// displacement, a circular candidate's own enclosure) but NOT the
+	// multiply-and-sum arithmetic of evaluating gu·u + gv·v itself for a
+	// direction that is not exactly 0, 1 or −1 — the identical gap
+	// axisExtremeContext closes for its own, structurally identical scan
+	// through planeDotDecompositionRoundAllow (bounds.go). A profile vertex
+	// the record states verbatim therefore still commits real rounding
+	// forming its dot with a tilted axis's own (nU, nV)/(dU, dV), and that
+	// rounding is architecture-sensitive (FMA differs amd64/arm64):
+	// left uncharged, the SAME recorded profile can compute as provably
+	// negative on one platform and merely uncertain on another, for a region
+	// whose true radial minimum is exactly zero. Folding it in here — once,
+	// for THIS scan, never composed with axisExtremeContext's own copy of the
+	// identical charge on a different reading — is what makes the admission
+	// decision agree across platforms: the charge is zero for an axis-aligned
+	// direction (planeDotDecompositionRoundAllow's own trivial-coefficient
+	// case), so it costs nothing for the tree's axis-aligned fixtures, and it
+	// dominates a tilted axis's few-ulp discrepancy by orders of magnitude,
+	// which turns a coin-flip sign into a proven straddle everywhere.
+	coordUpper, err := profileCoordinateEnvelope(profile, work, nil)
+	if err != nil {
+		return axisFrame{}, 0, err
+	}
+	rBound = absSumUpper(rBound, planeDotDecompositionRoundAllow(nU, nV, coordUpper))
+	zBound = absSumUpper(zBound, planeDotDecompositionRoundAllow(line.dU, line.dV, coordUpper))
+
+	roffB := boundedAdd(
+		boundedMul(measuredScalar(nU, line.dVBound), measuredScalar(line.aU, line.aUBound)),
+		boundedMul(measuredScalar(nV, line.dUBound), measuredScalar(line.aV, line.aVBound)),
+	)
+	zoffB := boundedAdd(
+		boundedMul(measuredScalar(line.dU, line.dUBound), measuredScalar(line.aU, line.aUBound)),
+		boundedMul(measuredScalar(line.dV, line.dVBound), measuredScalar(line.aV, line.aVBound)),
+	)
+	rloB := boundedSub(measuredScalar(rlo, rBound), roffB)
+	rhiB := boundedSub(measuredScalar(rhi, rBound), roffB)
+	zloB := boundedSub(measuredScalar(zlo, zBound), zoffB)
+	zhiB := boundedSub(measuredScalar(zhi, zBound), zoffB)
+
+	scale := math.Max(math.Max(math.Abs(rloB.value), math.Abs(rhiB.value)), math.Max(math.Abs(zloB.value), math.Abs(zhiB.value)))
 	tol := 1e-9 * math.Max(1, scale)
 	// Each side test is decided on the extreme's own proven interval: above
 	// names "clear of the axis on the + side", below "clear on the − side",
 	// and an interval spanning the threshold decides neither.
-	hiAbove := admitAbove(measuredScalar(rhi, rBound), tol)
-	loBelow := admitBelow(measuredScalar(rlo, rBound), -tol)
+	hiAbove := admitAbove(rhiB, tol)
+	loBelow := admitBelow(rloB, -tol)
 	if hiAbove == survStraddle || loBelow == survStraddle {
-		return axisFrame{}, 0, fmt.Errorf(`%w: the recorded region's radial extreme about this axis is known only to ±%v mm, which does not decide which side of the axis the region lies on`, ErrDegenerate, rBound)
+		return axisFrame{}, 0, fmt.Errorf(`%w: the recorded region's radial extreme about this axis is known only to ±%v mm, which does not decide which side of the axis the region lies on`, ErrDegenerate, math.Max(rloB.bound, rhiB.bound))
 	}
 	switch {
 	case hiAbove == survAdmit && loBelow == survAdmit:
@@ -489,15 +580,32 @@ func resolveAxisSide(ctx context.Context, profile ProfileRecord, line axisLine2,
 		return axisFrame{}, 0, fmt.Errorf(`%w: the region collapses onto the revolve axis`, ErrDegenerate)
 	}
 	side := 1.0
+	near := rloB
 	if hiAbove == survReject {
 		side = -1
+		near = boundedNeg(rhiB)
 	}
+
+	var radialAdmitAllow float64
+	switch admitBelow(near, 0) {
+	case survAdmit:
+		return axisFrame{}, 0, fmt.Errorf(`%w: the recorded region's radial minimum about this axis is proven negative, so the axis cuts through material`, ErrDegenerate)
+	case survStraddle:
+		radialAdmitAllow = math.Max(0, near.bound-near.value)
+	}
+
+	axialExtent := boundedSub(zhiB, zloB)
+	axialExtentUpper := absSumUpper(axialExtent.value, axialExtent.bound)
+
 	ax := axisFrame{
 		aU: line.aU, aV: line.aV,
 		aUBound: line.aUBound, aVBound: line.aVBound,
 		dU: side * line.dU, dV: side * line.dV,
-		dUBound: line.dUBound, dVBound: line.dVBound,
-		snapTol: tol,
+		dUBound:          line.dUBound,
+		dVBound:          line.dVBound,
+		snapTol:          tol,
+		radialAdmitAllow: radialAdmitAllow,
+		axialExtentUpper: axialExtentUpper,
 	}
 	if err := ax.rejectInteriorContact(profile, work); err != nil {
 		return axisFrame{}, 0, err

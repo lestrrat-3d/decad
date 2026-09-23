@@ -179,6 +179,31 @@ func axisMoments(ig regionIntegrals, ax axisFrame) (boundedScalar, boundedScalar
 	return q, mzr, mrr
 }
 
+// revolveAxisAdmitBandCharge is resolveAxisSide's own tol·Lz charge for a
+// LINEAR measurement (a cap's area, the centroid): tol is
+// ax.radialAdmitAllow, the proven worst-case depth resolveAxisSide's gate
+// admitted without proof, and Lz is ax.axialExtentUpper, the recorded
+// region's own axial reach. It is exactly zero wherever that gate proved the
+// region's radial minimum non-negative — every axis-aligned fixture in the
+// tree, since radialAdmitAllow is then zero — and otherwise bounds how far a
+// face built from the SNAPPED profile (revolve_axis.go's axisFrame.walk) can
+// diverge from a measurement integrated over the UNSNAPPED one: a cap's own
+// loop follows the snap, while its area is the Pappus engine's integral over
+// the recorded region, and the two disagree by at most the admitted band's
+// own width times the boundary's axial run.
+func revolveAxisAdmitBandCharge(ax axisFrame) float64 {
+	return productUpper(ax.radialAdmitAllow, ax.axialExtentUpper)
+}
+
+// revolveAxisAdmitVolumeCharge is the volume's own share of the same
+// admitted band, 2π·tol²·Lz: the band is swept a full turn rather than read
+// once, so the material it can hide scales with tol² (a thin annulus of
+// radius and width both order tol) rather than tol.
+func revolveAxisAdmitVolumeCharge(ax axisFrame) float64 {
+	tol := ax.radialAdmitAllow
+	return productUpper(twoPiUpper(), productUpper(productUpper(tol, tol), ax.axialExtentUpper))
+}
+
 // evalRevolve builds the analytic revolved body from the payload: side
 // surfaces of revolution per boundary segment, caps only for a partial
 // sweep, shared edges and vertices, and bounded mass measurements
@@ -247,12 +272,21 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		// unit normal rotates about the axis at unit rate in φ, so the angle
 		// this cap's own end denotes charges its plane's normal by exactly
 		// that end's proven displacement (docs/evaluator-design.md §6).
+		//
+		// capAdmitAllow is revolveAxisAdmitBandCharge's own term (above): each
+		// cap face's LOOP is walked from the axis-snapped profile, while its
+		// area here is ig.area, the Pappus engine's own integral over the
+		// UNSNAPPED recorded one. The two agree exactly wherever
+		// rp.ax.radialAdmitAllow is zero — every axis-aligned fixture — and
+		// otherwise this is what keeps the published cap area from claiming a
+		// tighter bound than the snap/unsnap mismatch can actually cost it.
+		capAdmitAllow := revolveAxisAdmitBandCharge(rp.ax)
 		capStart = &Face{
 			surface:     Plane{Frame: startFrame},
 			origins:     []FeatureRef{{producer: ref, Role: roleCapStart}},
 			body:        body,
 			area:        ig.area,
-			areaBound:   ig.areaBound,
+			areaBound:   absSumUpper(ig.areaBound, capAdmitAllow),
 			normalBound: rp.phi0Delta(),
 		}
 		capEnd = &Face{
@@ -260,7 +294,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 			origins:     []FeatureRef{{producer: ref, Role: roleCapEnd}},
 			body:        body,
 			area:        ig.area,
-			areaBound:   ig.areaBound,
+			areaBound:   absSumUpper(ig.areaBound, capAdmitAllow),
 			normalBound: rp.phi1Delta(),
 		}
 	}
@@ -339,7 +373,13 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	// carried through (docs/evaluator-design.md §6).
 	area := sideArea
 	if !rp.full {
-		area = boundedAdd(area, boundedMul(exactScalar(2), measuredScalar(ig.area, ig.areaBound)))
+		// Both caps' own (area, areaBound) are read back rather than
+		// re-derived from ig directly, so the solid's aggregate area takes the
+		// SAME admitted-band charge (capAdmitAllow, above) the individual cap
+		// Face fields already carry — never a narrower, uncharged bound the
+		// two would then disagree with.
+		area = boundedAdd(area, measuredScalar(capStart.area, capStart.areaBound))
+		area = boundedAdd(area, measuredScalar(capEnd.area, capEnd.areaBound))
 		if rp.surfaceResult {
 			// §4.3: a surface result's area is the solid's area minus the two
 			// omitted caps'. Each cap's area and bound are read back from the
@@ -356,6 +396,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		}
 	}
 	volume := boundedMul(q, sweep)
+	volume.bound = absSumUpper(volume.bound, revolveAxisAdmitVolumeCharge(rp.ax))
 	body.volume = Measurement{
 		Value:     units.CubicMillimeters(volume.value),
 		Exactness: exactnessOf(volume.bound),
@@ -401,6 +442,11 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 		return nil, err
 	}
 	centroidBound = math.Min(centroidBound, geometryBound)
+	// The axis gate's own admitted-band charge is added AFTER the geometry
+	// bound's independent min: revolveCentroidGeometryBound knows nothing of
+	// resolveAxisSide's own uncertainty, so folding this charge in before the
+	// min would let a smaller geometry bound silently discard it.
+	centroidBound = absSumUpper(centroidBound, revolveAxisAdmitBandCharge(rp.ax))
 	body.centroid = VecMeasurement{
 		Value:     centroidValue,
 		Exactness: exactnessOf(centroidBound),
