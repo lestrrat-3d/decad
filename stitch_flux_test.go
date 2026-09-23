@@ -12,10 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md §15's T31-T36 public coverage for
-// stitch_flux.go's per-surface flux integral: the `Plane` and `Cylinder`
-// arms that let `Stitch` close a boundary holding a curved face. T37 and T38
-// are internal-only (stitch_internal_test.go): a genuinely closed
+// This file is docs/surface-design.md §15's T31-T36 and T46-T47 public
+// coverage for stitch_flux.go's per-surface flux integral: the `Plane`,
+// `Cylinder` and `Cone` arms that let `Stitch` close a boundary holding a
+// curved face. T37, T38, T48 and T49 are internal-only
+// (stitch_internal_test.go): a genuinely closed
 // `NURBSSurface`-holding set and a hand-built nonzero-`normalBound` face are
 // both unreachable through the public seam, for reasons each test records.
 
@@ -275,4 +276,146 @@ func TestStitchTorusFaceStaysUnsupported(t *testing.T) {
 	_, err = decad.Stitch(sheet)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, before, doc.Bodies())
+}
+
+// trapezoidFrustumSketch builds a trapezoid profile clear of the revolve
+// axis whose two non-radial sides both lean off it — (0, vLo0)-(uLen, vLo1)
+// and (0, vHi0)-(uLen, vHi1) — rather than running parallel to it the way
+// annularSketchRange's rectangle does. Revolved a full turn, those two
+// sides sweep two Cone walls of different half-angles (T46's own fixture),
+// never Cylinder walls, as long as vLo0 != vLo1 and vHi0 != vHi1.
+func trapezoidFrustumSketch(t *testing.T, uLen, vLo0, vHi0, vLo1, vHi1 float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	p1 := s.CreatePoint(0, vLo0)
+	p2 := s.CreatePoint(uLen, vLo1)
+	p3 := s.CreatePoint(uLen, vHi1)
+	p4 := s.CreatePoint(0, vHi0)
+	s.Fix(p1)
+	s.CreateLine(p1, p2)
+	s.CreateLine(p2, p3)
+	s.CreateLine(p3, p4)
+	s.CreateLine(p4, p1)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	return s, s.Profiles()[0]
+}
+
+// frustumSheet builds trapezoidFrustumSketch's profile as a closed
+// full-revolution surface sheet: 2 Cone walls, 2 Plane annuli, no free
+// edge (Table W), the frustum-shell analogue of annularRevolveSheet.
+func frustumSheet(t *testing.T, uLen, vLo0, vHi0, vLo1, vHi1 float64) (*decad.Document, *decad.Body) {
+	t.Helper()
+	s, p := trapezoidFrustumSketch(t, uLen, vLo0, vHi0, vLo1, vHi1)
+	doc := decad.New()
+	sheet, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	return doc, sheet
+}
+
+// frustumShellAnalytics is the by-hand Pappus-style closed form for the
+// frustum shell trapezoidFrustumSketch describes: the outer and inner
+// radii are each linear in u, v(u) = a + b*(u/uLen), so
+// integral_0^uLen v(u)^2 du = uLen*(a^2 + a*b + b^2/3) (the standard
+// integral of a linear function squared over a unit interval, scaled) and
+// integral_0^uLen u*v(u)^2 du = uLen^2*(a^2/2 + 2*a*b/3 + b^2/4), the same
+// substitution weighted by u for the first moment. Lateral area is the
+// standard frustum formula pi*(r1+r2)*slant, slant = hypot(deltaR, uLen).
+func frustumShellAnalytics(uLen, vLo0, vHi0, vLo1, vHi1 float64) (volume, area, centroidX float64) {
+	aO, bO := vHi0, vHi1-vHi0
+	aI, bI := vLo0, vLo1-vLo0
+	iOuter := uLen * (aO*aO + aO*bO + bO*bO/3)
+	iInner := uLen * (aI*aI + aI*bI + bI*bI/3)
+	volume = math.Pi * (iOuter - iInner)
+
+	jOuter := uLen * uLen * (aO*aO/2 + 2*aO*bO/3 + bO*bO/4)
+	jInner := uLen * uLen * (aI*aI/2 + 2*aI*bI/3 + bI*bI/4)
+	centroidX = (jOuter - jInner) / (iOuter - iInner)
+
+	slantOuter := math.Hypot(bO, uLen)
+	slantInner := math.Hypot(bI, uLen)
+	lateralOuter := math.Pi * (vHi0 + vHi1) * slantOuter
+	lateralInner := math.Pi * (vLo0 + vLo1) * slantInner
+	annulus0 := math.Pi * (vHi0*vHi0 - vLo0*vLo0)
+	annulus1 := math.Pi * (vHi1*vHi1 - vLo1*vLo1)
+	area = lateralOuter + lateralInner + annulus0 + annulus1
+	return volume, area, centroidX
+}
+
+// TestStitchConicalRevolveSheetCloses is T46: trapezoidFrustumSketch's own
+// full-revolution surface sheet, stitched alone, closes to a solid whose
+// volume, area and centroid the Cone arm now computes against the
+// hand-derived frustumShellAnalytics closed form.
+func TestStitchConicalRevolveSheetCloses(t *testing.T) {
+	t.Parallel()
+	const uLen, vLo0, vHi0, vLo1, vHi1 = 10.0, 5.0, 15.0, 8.0, 12.0
+	doc, sheet := frustumSheet(t, uLen, vLo0, vHi0, vLo1, vHi1)
+	require.Equal(t, decad.BodySheet, sheet.Kind())
+	require.Len(t, sheet.Faces(), 4)
+	decadtest.HasSurfaceKinds(t, sheet, map[decad.SurfaceKind]int{
+		decad.KindCone:  2,
+		decad.KindPlane: 2,
+	})
+
+	solid, err := decad.Stitch(sheet)
+	require.NoError(t, err)
+
+	require.Equal(t, decad.BodySolid, solid.Kind())
+	require.True(t, solid.IsSolid())
+	wantVol, wantArea, wantCX := frustumShellAnalytics(uLen, vLo0, vHi0, vLo1, vHi1)
+	decadtest.MeasuresVolume(t, solid, units.CubicMillimeters(wantVol))
+	decadtest.MeasuresArea(t, solid, units.SquareMillimeters(wantArea))
+	decadtest.MeasuresCentroid(t, solid, r3.NewVec(wantCX, 0, 0))
+
+	vol, err := solid.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, vol.Exactness, "a term carrying pi can never claim Exact")
+	require.Greater(t, vol.Bound.Base(), 0.0)
+
+	cen, err := solid.Centroid()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, cen.Exactness)
+
+	_, err = decad.Edges(decad.Free()).SelectEdges(solid)
+	require.ErrorIs(t, err, decad.ErrNoMatch)
+
+	require.Len(t, doc.Bodies(), 1)
+	require.Same(t, solid, doc.Bodies()[0])
+}
+
+// TestStitchConicalSolidMatchesTheRevolveEngine is T47: the
+// independent-producer cross-check, TestStitchAnnularSolidMatchesTheRevolveEngine's
+// Cone-arm sibling. The same profile built as a BodySolid through Revolve
+// with no option is the Pappus-based analytic solid evaluator, never
+// stitch_flux.go's own arithmetic, so agreement here is the strongest
+// available proof: it does not depend on this PR's own derivation being
+// right, only on the two independent producers agreeing.
+func TestStitchConicalSolidMatchesTheRevolveEngine(t *testing.T) {
+	t.Parallel()
+	const uLen, vLo0, vHi0, vLo1, vHi1 = 10.0, 5.0, 15.0, 8.0, 12.0
+	_, sheet := frustumSheet(t, uLen, vLo0, vHi0, vLo1, vHi1)
+	stitched, err := decad.Stitch(sheet)
+	require.NoError(t, err)
+
+	s2, p2 := trapezoidFrustumSketch(t, uLen, vLo0, vHi0, vLo1, vHi1)
+	solidDoc := decad.New()
+	direct, err := solidDoc.Revolve(s2, p2, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	stitchedVol, err := stitched.Volume()
+	require.NoError(t, err)
+	directVol, err := direct.Volume()
+	require.NoError(t, err)
+	decadtest.Agree(t, "volume", stitchedVol, directVol)
+
+	stitchedCen, err := stitched.Centroid()
+	require.NoError(t, err)
+	directCen, err := direct.Centroid()
+	require.NoError(t, err)
+	tol := stitchedCen.Bound.Base() + directCen.Bound.Base() + 1e-9
+	require.InDelta(t, directCen.Value.X, stitchedCen.Value.X, tol)
+	require.InDelta(t, directCen.Value.Y, stitchedCen.Value.Y, tol)
+	require.InDelta(t, directCen.Value.Z, stitchedCen.Value.Z, tol)
 }
