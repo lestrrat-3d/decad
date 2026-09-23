@@ -1714,3 +1714,6 @@
 0	0.00	TestVertexPlacedRevolveBoundEnclosesDisplacement
 1	0.00	TestVertexPlacedCapBlendBoundEnclosesDisplacement
 2	0.00	TestVertexAxisAlignedUnplacedBoundStaysZero
+0	0.00	TestStitchRefusesNestedBoxes
+0	0.00	TestStitchRefusesNestedBoxesWithAGap
+0	0.00	TestTessellateStitchClearsSymDiffForOverlappingLumps

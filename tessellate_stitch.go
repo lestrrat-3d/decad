@@ -39,6 +39,21 @@ import (
 // Intersect keep refusing it (boolean.go's own requireVolumeProvingPayload
 // arm), whatever the exact tetrahedron sum itself already proves about
 // signed volume.
+// stitchLumpFaceGroups returns b's own lumps' constituent faces, one slice
+// per lump: sheetLumps builds exactly one shell per lump
+// (docs/surface-design.md §2.2), so this is a direct read of b's own
+// recorded connectivity, never a second split.
+func stitchLumpFaceGroups(b *Body) [][]*Face {
+	lumps := b.Lumps()
+	groups := make([][]*Face, len(lumps))
+	for i, lp := range lumps {
+		for _, s := range lp.Shells() {
+			groups[i] = append(groups[i], s.Faces()...)
+		}
+	}
+	return groups
+}
+
 func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -134,7 +149,16 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 		if err != nil {
 			return nil, err
 		}
-		mesh.symDiffOK = zeroBound
+		// The three-step argument above proves each triangle set exact PER
+		// LUMP; it says nothing about how the lumps relate to one another.
+		// evalStitchContext's own lump-separation gate (stitch.go,
+		// docs/surface-design.md Table C/R20) already refuses a nested or
+		// interlocking multi-lump assembly before this body could ever
+		// exist, but this reading does not lean on that: it re-asks the
+		// identical axis-aligned box question directly against b's own
+		// Lumps, so the zero claim stays sound on its own terms even if
+		// evalStitchContext's gate were ever loosened or bypassed.
+		mesh.symDiffOK = zeroBound && stitchLumpsProvenSeparate(stitchLumpFaceGroups(b))
 	}
 
 	// Every audit below restates the payload's own invariants over the

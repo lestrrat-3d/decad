@@ -1110,3 +1110,111 @@ func TestFaceIsTetrahedronEligibleRefusesHeldPlanarFaceted(t *testing.T) {
 	require.False(t, faceIsTetrahedronEligible(f),
 		"a heldPlanar Faceted face is not a Plane, and triangulateStitchFaces would error on it")
 }
+
+// stitchTestClosedBoxVerts returns one 10x10x10 box's own 8 corners,
+// anchored at base — the identical corner layout a real stitched box
+// fixture (stitchBoxSheets, stitch_test.go) produces, restated by hand so
+// this file can build two independent boxes that occupy the SAME world
+// region without sharing a single vertex object.
+func stitchTestClosedBoxVerts(base r3.Vec) [8]r3.Vec {
+	return [8]r3.Vec{
+		base,
+		base.Add(r3.NewVec(10, 0, 0)),
+		base.Add(r3.NewVec(10, 10, 0)),
+		base.Add(r3.NewVec(0, 10, 0)),
+		base.Add(r3.NewVec(0, 0, 10)),
+		base.Add(r3.NewVec(10, 0, 10)),
+		base.Add(r3.NewVec(10, 10, 10)),
+		base.Add(r3.NewVec(0, 10, 10)),
+	}
+}
+
+// stitchTestClosedBoxTriangles is stitchTestClosedBoxVerts's own matching
+// 12-triangle closure, each face wound outward and both triangles of a face
+// sharing one diagonal, offset so its indices run [off, off+8) — every
+// directed edge occurs exactly once, and its reverse exactly once, the
+// identical invariant requireClosedMesh checks (tessellate.go).
+func stitchTestClosedBoxTriangles(off int) [12][3]int {
+	v := func(i int) int { return off + i }
+	return [12][3]int{
+		{v(0), v(3), v(2)}, {v(0), v(2), v(1)}, // bottom, outward -Z
+		{v(4), v(5), v(6)}, {v(4), v(6), v(7)}, // top, outward +Z
+		{v(0), v(1), v(5)}, {v(0), v(5), v(4)}, // front (y=0), outward -Y
+		{v(3), v(6), v(2)}, {v(3), v(7), v(6)}, // back (y=10), outward +Y
+		{v(0), v(7), v(3)}, {v(0), v(4), v(7)}, // left (x=0), outward -X
+		{v(1), v(2), v(6)}, {v(1), v(6), v(5)}, // right (x=10), outward +X
+	}
+}
+
+// stitchTestLumpFace builds one lump's own bookkeeping face — a single
+// cyclic loop chaining every vertex in vs, in order, carrying no surface and
+// never triangulated — purely so stitchLumpFaceGroups (tessellate_stitch.go)
+// can read the component's own held vertex positions back through the
+// ordinary Lump -> Shell -> Face -> Loop -> CoEdge -> Edge -> Vertex chain,
+// exactly as it does for a body Stitch itself built.
+func stitchTestLumpFace(vs []*Vertex) *Face {
+	coedges := make([]coedge, len(vs))
+	for i := range vs {
+		e := &Edge{curve: Line3{}, start: vs[i], end: vs[(i+1)%len(vs)]}
+		coedges[i] = coedge{edge: e, forward: true}
+	}
+	return &Face{loops: []*Loop{{outer: true, coedges: coedges}}}
+}
+
+// TestTessellateStitchClearsSymDiffForOverlappingLumps is docs/surface-design.md's
+// T122, tessellate_stitch.go's own half of the nesting repair: two
+// independent, fully-overlapping closed boxes (stitchTestClosedBoxVerts
+// built twice over the SAME base corner, so all 16 vertices are zero-bound
+// yet the two boxes occupy the identical world region), each its own
+// single-lump component, fed straight to tessellateStitch on a hand-built
+// Body/stitchPayload. decad's public seam has no way to reach this: once
+// evalStitchContext's own lump-separation gate lands (stitch.go), Stitch
+// itself refuses this exact shape before a body this overlapped could ever
+// reach tessellation (TestStitchRefusesNestedBoxes, stitch_test.go). This
+// fixture is what proves tessellateStitch's own symDiffOK reading does not
+// merely inherit that earlier refusal: stitchZeroVertexBound alone holds
+// here (every one of the 16 vertices is zero-bound), so without this file's
+// OWN lump-separation reading, symDiffOK would wrongly read true.
+func TestTessellateStitchClearsSymDiffForOverlappingLumps(t *testing.T) {
+	t.Parallel()
+	base := r3.NewVec(0, 0, 0)
+	vertsA := stitchTestClosedBoxVerts(base)
+	vertsB := stitchTestClosedBoxVerts(base)
+	verts := append(append([]r3.Vec{}, vertsA[:]...), vertsB[:]...)
+	vertBound := make([]float64, len(verts))
+
+	trisA := stitchTestClosedBoxTriangles(0)
+	trisB := stitchTestClosedBoxTriangles(8)
+	tris := append(append([][3]int{}, trisA[:]...), trisB[:]...)
+
+	faceA, faceB := &Face{}, &Face{}
+	triFaces := make([]*Face, 0, len(tris))
+	for range trisA {
+		triFaces = append(triFaces, faceA)
+	}
+	for range trisB {
+		triFaces = append(triFaces, faceB)
+	}
+
+	vertexObjs := make([]*Vertex, len(verts))
+	for i, p := range verts {
+		vertexObjs[i] = &Vertex{position: p}
+	}
+
+	body := &Body{kind: BodySolid, solid: true}
+	body.lumps = []*Lump{
+		{shells: []*Shell{{faces: []*Face{stitchTestLumpFace(vertexObjs[0:8])}}}},
+		{shells: []*Shell{{faces: []*Face{stitchTestLumpFace(vertexObjs[8:16])}}}},
+	}
+
+	sp := stitchPayload{
+		verts:     verts,
+		vertBound: vertBound,
+		tris:      tris,
+		triFaces:  triFaces,
+	}
+
+	mesh, err := tessellateStitch(context.Background(), body, sp)
+	require.NoError(t, err)
+	require.False(t, mesh.symDiffOK, "two fully-overlapping lumps must not earn the zero occupied-volume proof")
+}
