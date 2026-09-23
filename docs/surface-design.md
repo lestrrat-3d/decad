@@ -164,6 +164,13 @@ Three things it holds differently, and nothing else changes:
   `1` is a free edge on a sheet and **non-manifold** on a solid; `2` is an
   interior edge on either; `3` or more is non-manifold on either.
 
+A `Stitch`ed **solid** with more than one lump denotes the disjoint union of
+the volume each lump encloses, never a shared or nested one: `Shell.void` is
+hardcoded `false`, so a cavity — a void shell in the SAME lump as its outer
+shell — is not a fact this evaluator records at all, and `Stitch` refuses a
+boundary that would need one rather than publish a volume that double-counts
+it (Table C, §6.4).
+
 `Edge.IsConvex` needs no new rule. A surface-result feature's free edges are
 exactly the rim edges `docs/evaluator-design.md` §3 already decides — a wall's
 own copy in the plane the omitted cap would have occupied — and they keep the
@@ -706,7 +713,8 @@ result.
 | Assembled boundary | Result | Reason |
 |---|---|---|
 | some vertex's meeting faces do not form one connected fan (interior) or path (rim), open or closed alike | `ErrDegenerate` (R7) | the vertex-link audit runs before any row below is even considered; a pinch is proven at build time regardless of whether the boundary would otherwise close (§6.4) |
-| at least one free edge remains | a `BodySheet`, open | the boundary is not closed; the residual free edges name exactly what did not join |
+| at least one free edge remains | a `BodySheet`, open | the boundary is not closed; the residual free edges name exactly what did not join; an open multi-component assembly earns no lump-separation check either — it publishes no volume for a nested or interlocking pair of components to double-count |
+| every edge welded, more than one connected component, and some pair's own axis-aligned bounding box (held vertex coordinates, each widened on both sides by that vertex's own proven bound) is not proven separate in any axis | `ErrUnsupported` (R20) | runs right after the vertex-link audit and the open check, before the two remaining rows below: a nested or interlocking pair of lumps would otherwise double-count, since neither the tetrahedron sum nor the per-surface flux integral carries any notion of which lump a triangle or face belongs to (§6.4) |
 | every edge welded, all faces planar and straight-edged | a `BodySolid` | closure, manifoldness and non-self-intersection are proven, and the volume is exact (§6.4) |
 | every edge welded, some face not planar-and-straight-edged, every face admits a landed flux arm (`Plane`/`Cylinder`/`Cone`/`Sphere`, zero `normalBound`) and the single source body proves the boundary simple by construction | a `BodySolid` | closure and the per-surface flux integral together prove volume and centroid; manifoldness rests on the vertex-link audit alone, since the reused crossing audit has no triangle set to run on (§6.4) |
 | every edge welded, some face curved, and the set above does not admit | `ErrUnsupported` (R8) | closure is proven but this evaluator has no closed-form flux integral for the boundary as given — the surface kind, the face's own trim, or the construction proof is outside what has landed |
@@ -1308,8 +1316,9 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R17 | `Stitch` handed a `BodySolid` operand | `ErrUnsupported` |
 | R18 | `Body.Patch` chain's adjacent faces cannot be brought into agreement on the new face's orientation | `ErrDegenerate` |
 | R19 | `Body.Patch` handed a receiver with no evaluator payload | `ErrUnsupported` |
+| R20 | `Stitch`'s assembled lumps are not proven mutually separate by axis-aligned bounding box | `ErrUnsupported` |
 
-R6, R8 and R10 are `ErrUnsupported` rather than `ErrDegenerate` on
+R6, R8, R10 and R20 are `ErrUnsupported` rather than `ErrDegenerate` on
 `docs/api-design.md` §8's own distinction: the input names real geometry and
 the refusal is this evaluator's reach, not a zero or self-crossing region. R5,
 R7 and R9 are `ErrDegenerate` because the geometry itself is the problem and
@@ -1927,6 +1936,9 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T93 | `resolveAxisSide` against the SAME exact axis with the near edge dipped 1e-7 mm below it (internal — `TestRevolveAxisBandRefusesProvenNegativeRadialMinimumUnderExactAxis`; the fixture the investigation measured admitted under the pre-repair tolerance) | `ErrDegenerate`, never an admission with a widened bound — the strict half of the repair: an admission gate may not rest on a tolerance once the radial bound is proven zero. Shown-to-fail: removing the strict refusal turns this assertion red |
 | T94 | `resolveAxisSide` against an axis anchored far from the origin (`aV = 1e10`) on a direction whose components are not exactly representable, mirroring `TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift`'s own fixture one level up (internal — `TestRevolveAxisBandChargesTheOffsetSubtraction`) | the axis-offset subtraction's own rounding is charged into the bound the "ambiguous side" refusal states, which is never zero. Shown-to-fail: reverting to a bare `rlo -= roff` drops the charge and the fixture wrongly reaches an unrefused, uncharged admission |
 | T95 | a real sketch-solver-resolved shaft profile whose near edge sits AT (not below) `tiltedAxis` (`revolve_bounds_test.go`'s own anchor/direction), built end to end through `Document.Revolve` (internal — `TestRevolveAxisBandRealGeometryChargedPathVolumeContainment`) | `axisFrame.radialAdmitAllow` is confirmed positive (the charged path, not the strict one, fires on real geometry — `resolveAxisSide`'s own `planeDotDecompositionRoundAllow` charge on its scan arithmetic is what makes this reading agree across architectures instead of one proving the same true-zero radial minimum negative); `Volume`'s published interval contains the plain cylinder its snapped topology encloses; rebuilding the SAME payload with `radialAdmitAllow` zeroed publishes a bound smaller by less than one part in a million, establishing rather than assuming that this real fixture's own charge is swamped by the build's other analytic-rounding terms — T90/T91 are what make the charge itself load-bearing, at a magnitude no real sketch-resolved fixture in this tree reaches. Shown-to-fail: moving the near edge off the axis turns the `radialAdmitAllow` positivity assertion red; comparing the no-charge bound against an arbitrary literal instead of the real one turns the relative-magnitude assertion red |
+| T120 | an inner box (`stitchBoxSheetsAtOffset`, x∈[20,40], y∈[20,40], z∈[2,3]) wholly inside T1's own outer box, all six sheets `Stitch`ed in one call (`TestStitchRefusesNestedBoxes`) | `ErrUnsupported` (R20); the document and every operand are unchanged — without the separation check this fixture publishes 60400 mm³ `Exact` against a true 60000 mm³, the point-set volume the nesting double-counts |
+| T121 | the same shape as T120 with the inner box shrunk 1 mm off every wall of the outer box (x∈[1,99], y∈[1,59], z∈[1,9] inside T1's box), all six sheets `Stitch`ed in one call (`TestStitchRefusesNestedBoxesWithAGap`) | `ErrUnsupported` (R20); without the separation check this fixture publishes 105472 mm³ `Exact` against a true 60000 mm³ — wrong by more than three quarters, nowhere near a rounding miss |
+| T122 | two hand-built, bit-identical (fully overlapping) zero-bound square faces, each its own single-face lump, driven directly at `tessellateStitch` on a hand-built `stitchPayload` — bypassing `Stitch`'s own public seam, since T120's own lump-separation gate refuses this shape before a body ever reaches tessellation (internal — `TestTessellateStitchClearsSymDiffForOverlappingLumps`) | `symDiffOK` is `false` even though `stitchZeroVertexBound` holds: `tessellateStitch`'s own lump-separation reading refuses independently of `evalStitchContext`'s, so the zero occupied-volume claim stays sound even if that earlier gate were ever loosened or bypassed |
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'`

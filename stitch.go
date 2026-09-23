@@ -243,6 +243,38 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	open := stitchHasFreeEdge(newFaces)
 	allTetra := stitchAllTetrahedronEligible(newFaces)
 
+	// A fully welded multi-lump assembly whose components are not PROVEN
+	// mutually separate is refused outright, on both remaining Table C arms
+	// below — the all-planar tetrahedron sum and the curved flux integral
+	// alike sum one additive mass/flux term over the whole welded face set
+	// with no notion of which component a triangle or face belongs to, so a
+	// nested or interlocking pair double-counts the same way regardless of
+	// which arm Table C reaches. An open assembly earns no such check: it
+	// publishes no volume at all (Table C's first row), so there is nothing
+	// for a nested or interlocking pair of components to double-count. This
+	// evaluator cannot express a cavity at all — Shell.void is hardcoded
+	// false and sheetLumps builds one shell per lump, so admitting a nested
+	// pair would need a new recorded fact, a new shell-assembly rule and a
+	// per-component orientation derivation this increment does not add —
+	// and a refusal needs none of that. Strict axis-aligned bounding-box
+	// separation on the held (placed) vertex coordinates, each widened on
+	// both sides by that vertex's OWN proven class bound, is the one
+	// question asked instead: it is exact and tolerance-free, unlike the
+	// clearance kernel's pointInBody ray cast, which settles crossings
+	// through a tolerance and a near-parallel guard and so may never serve
+	// as the ADMISSION gate for publishing an exact volume (CLAUDE.md's
+	// reject-only rule). Two lumps that are genuinely disjoint but whose
+	// boxes interlock in all three axes — a holed-profile extrude capped
+	// with annular patches, stitched with a plug sitting in its hole — also
+	// refuse here: for axis-aligned boxes that shape cannot arise, no
+	// fixture in this tree builds it, and a refusal is the sound answer
+	// until this evaluator can decide the case on its own terms.
+	if !open {
+		if components := splitConnectedFaces(newFaces); len(components) > 1 && !stitchLumpsProvenSeparate(components) {
+			return nil, fmt.Errorf(`%w: Stitch refuses a multi-lump assembly whose lumps are not proven mutually separate (docs/surface-design.md Table R row R20)`, ErrUnsupported)
+		}
+	}
+
 	kind, solid := BodySheet, false
 	auditClean := false
 	var tris [][3]int
@@ -786,6 +818,99 @@ func stitchHasFreeEdge(faces []*Face) bool {
 		}
 	}
 	return false
+}
+
+// stitchLumpBox is one component's own axis-aligned bounding box, built
+// entirely from held vertex coordinates and their own proven bounds
+// (stitchLumpsProvenSeparate's doc comment) — never a tolerance, never a
+// clearance-kernel reading.
+type stitchLumpBox struct {
+	lo, hi r3.Vec
+	have   bool
+}
+
+// include widens box to also cover p, inflated on both sides by bound — the
+// vertex's own proven class bound, charged exactly once per side rather
+// than once total, so the box the caller compares is never tighter than
+// what this evaluator actually proved.
+func (box *stitchLumpBox) include(p r3.Vec, bound float64) {
+	lo := r3.Vec{X: p.X - bound, Y: p.Y - bound, Z: p.Z - bound}
+	hi := r3.Vec{X: p.X + bound, Y: p.Y + bound, Z: p.Z + bound}
+	if !box.have {
+		box.lo, box.hi, box.have = lo, hi, true
+		return
+	}
+	box.lo = r3.Vec{X: math.Min(box.lo.X, lo.X), Y: math.Min(box.lo.Y, lo.Y), Z: math.Min(box.lo.Z, lo.Z)}
+	box.hi = r3.Vec{X: math.Max(box.hi.X, hi.X), Y: math.Max(box.hi.Y, hi.Y), Z: math.Max(box.hi.Z, hi.Z)}
+}
+
+// stitchLumpBoxFromFaces builds one component's own box from its faces'
+// held vertices, deduplicated by pointer identity: every distinct vertex
+// contributes its own position/bound pair exactly once, regardless of how
+// many edges or faces of this component reach it.
+func stitchLumpBoxFromFaces(faces []*Face) stitchLumpBox {
+	var box stitchLumpBox
+	seen := map[*Vertex]struct{}{}
+	visit := func(v *Vertex) {
+		if v == nil {
+			return
+		}
+		if _, ok := seen[v]; ok {
+			return
+		}
+		seen[v] = struct{}{}
+		box.include(v.position, v.bound.Base())
+	}
+	for _, f := range faces {
+		for _, l := range f.loops {
+			for _, ce := range l.coedges {
+				visit(ce.edge.start)
+				visit(ce.edge.end)
+			}
+		}
+	}
+	return box
+}
+
+// stitchLumpBoxesSeparated reports whether a and b are strictly separated in
+// at least one axis — the exact, tolerance-free comparison
+// stitchLumpsProvenSeparate's doc comment describes. Two boxes that merely
+// touch (equal on one bound) are NOT separated: strict inequality only,
+// matching sweepAuditBoxesStrictlySeparated's identical convention.
+func stitchLumpBoxesSeparated(a, b stitchLumpBox) bool {
+	if !a.have || !b.have {
+		return false
+	}
+	return a.hi.X < b.lo.X || b.hi.X < a.lo.X ||
+		a.hi.Y < b.lo.Y || b.hi.Y < a.lo.Y ||
+		a.hi.Z < b.lo.Z || b.hi.Z < a.lo.Z
+}
+
+// stitchLumpsProvenSeparate reports whether every pair of the given
+// connected-face components (splitConnectedFaces, evalStitchContext's own
+// call, or a Stitch'd body's own Lumps read back by tessellate_stitch.go)
+// carries a strict axis-aligned bounding-box separation in at least one
+// axis: a nested or overlapping pair proves nothing separated, so a caller
+// with more than one component and any non-separated pair must refuse
+// rather than sum an additive mass/flux term across them (evalStitchContext,
+// docs/surface-design.md Table C/R20). Fewer than two components trivially
+// holds, since there is no pair to separate.
+func stitchLumpsProvenSeparate(components [][]*Face) bool {
+	if len(components) < 2 {
+		return true
+	}
+	boxes := make([]stitchLumpBox, len(components))
+	for i, c := range components {
+		boxes[i] = stitchLumpBoxFromFaces(c)
+	}
+	for i := range boxes {
+		for j := i + 1; j < len(boxes); j++ {
+			if !stitchLumpBoxesSeparated(boxes[i], boxes[j]) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // stitchZeroVertexBound reports whether every one of b's own vertices

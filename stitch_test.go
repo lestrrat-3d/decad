@@ -183,6 +183,46 @@ func TestStitchTwoDisjointBoxesFormATwoLumpSolid(t *testing.T) {
 	decadtest.IsSound(t, doc)
 }
 
+// TestStitchRefusesNestedBoxes is docs/surface-design.md's T120: a small
+// inner box (`stitchBoxSheetsAtOffset`, x∈[20,40], y∈[20,40], z∈[2,3])
+// wholly inside T1's own outer box (x∈[0,100], y∈[0,60], z∈[0,10]), sharing
+// no vertex, no edge and no face with it — every weld and closure leg above
+// admits this fixture cleanly, and without the lump-separation gate it
+// would publish 60400 mm³ `Exact`, double-counting the inner box's own
+// cavity on top of the outer box's true 60000 mm³ point-set volume.
+func TestStitchRefusesNestedBoxes(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	outerWalls, outerBottom, outerTop := stitchBoxSheets(t, doc, 10)
+	innerWalls, innerBottom, innerTop := stitchBoxSheetsAtOffset(t, doc, 20, 20, 40, 40, 2, 3)
+
+	_, err := decad.Stitch(outerWalls, outerBottom, outerTop, innerWalls, innerBottom, innerTop)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+
+	// A failed Stitch retires nothing: all six operands stay live.
+	require.Len(t, doc.Bodies(), 6)
+}
+
+// TestStitchRefusesNestedBoxesWithAGap is docs/surface-design.md's T121, the
+// sharper leg of T120: the inner box shrunk 1 mm off every wall of the
+// outer box (98×58×8 inside 100×60×10) rather than sitting arbitrarily deep
+// inside it. Without the lump-separation gate this fixture publishes
+// 105472 mm³ `Exact` against a true 60000 mm³ point-set volume — wrong by
+// more than three quarters, nowhere near a rounding miss, which is what
+// rules out "the check only matters for a pathologically tight nesting"
+// as an explanation for why this evaluator needs it at all.
+func TestStitchRefusesNestedBoxesWithAGap(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	outerWalls, outerBottom, outerTop := stitchBoxSheets(t, doc, 10)
+	innerWalls, innerBottom, innerTop := stitchBoxSheetsAtOffset(t, doc, 1, 1, 99, 59, 1, 9)
+
+	_, err := decad.Stitch(outerWalls, outerBottom, outerTop, innerWalls, innerBottom, innerTop)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+
+	require.Len(t, doc.Bodies(), 6)
+}
+
 // TestStitchRefusesOpenAssemblyPinchedAtOneVertex is docs/surface-design.md's
 // T78: T76's own two boxes with BOTH top patches left off, so the assembly
 // stays open (each box's own top rim is a residual free edge) while still
