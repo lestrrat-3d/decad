@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"math/rand"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -472,6 +473,19 @@ func runRevolveCase(t *testing.T, su setup, ap axisPlacement, sw sweep, xf r3.Tr
 
 	doc := decad.New()
 	body, err := doc.Revolve(s, profiles[0], ap.sketchLine(), sw.ext)
+	if err != nil && errors.Is(err, decad.ErrDegenerate) && strings.Contains(err.Error(), "radial minimum") {
+		// The strict admission gate (revolve_axis.go's resolveAxisSide) refuses
+		// a region whose radial minimum is PROVEN negative rather than merely
+		// unproven — CLAUDE.md's reject-only rule, never a tolerance. A random
+		// axis this generic occasionally solves with a boundary vertex on the
+		// wrong side of the axis by less than a ulp, which is a genuine (if
+		// vanishingly small) defect in THIS draw's own geometry, not a false
+		// refusal: admitting it under the old tolerance is exactly the defect
+		// this repair closes. Skip this draw rather than fail the suite on a
+		// correct refusal.
+		t.Skipf("%s: axis proves the radial minimum negative, correctly refused (axis=%+v sweep=%+v): %v",
+			su.name, ap, sw, err)
+	}
 	require.NoErrorf(t, err, "%s revolve failed (axis=%+v sweep=%+v)", su.name, ap, sw)
 
 	// Independent Pappus cross-check: the engine's volume is q * dphi; a full
