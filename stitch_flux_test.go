@@ -184,15 +184,15 @@ func TestStitchCurvedVolumeBoundWidensWhenPlaced(t *testing.T) {
 		"a placed curved solid's centroid bound must widen over the unplaced one")
 }
 
-// TestStitchPatchCappedTubeStaysUnsupported is T34: an extruded tube capped
-// on both rims by Body.Patch structurally succeeds — this design's own
-// motivating "walls, then cap, then stitch" flow (§6.1) — but Rule S
-// refuses the stitch that would close it, since a bodyPatchPayload carries
-// no non-self-intersection proof of its own (Body.Patch proves its own
-// chains simple in their own plane, never the whole assembled boundary's).
-// This is a real, visible gap this increment leaves open, not a corner
-// case: a later increment's own Rule P is what closes it.
-func TestStitchPatchCappedTubeStaysUnsupported(t *testing.T) {
+// TestStitchPatchCappedTubeClosesToASolid is T34: an extruded tube capped
+// on both rims by Body.Patch, in one call, then stitched — this design's
+// own motivating "walls, then cap, then stitch" flow (§6.1). Rule P admits
+// the closure: the receiver's own prismPayload proves simple under Rule S
+// (a plain Distance extrude, sectionDelta zero), and each of the two new
+// chains is the receiver's own COMPLETE end rim under its own shared level
+// id, minted once per end by prism_build.go's evalPrismContext regardless
+// of the end's own bound.
+func TestStitchPatchCappedTubeClosesToASolid(t *testing.T) {
 	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -214,10 +214,25 @@ func TestStitchPatchCappedTubeStaysUnsupported(t *testing.T) {
 	_, err = decad.Edges(decad.Free()).SelectEdges(patched)
 	require.ErrorIs(t, err, decad.ErrNoMatch, "Body.Patch itself closes the tube")
 
-	before := doc.Bodies()
-	_, err = decad.Stitch(patched)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Equal(t, before, doc.Bodies())
+	solid, err := decad.Stitch(patched)
+	require.NoError(t, err)
+
+	require.Equal(t, decad.BodySolid, solid.Kind())
+	require.True(t, solid.IsSolid())
+	decadtest.MeasuresVolume(t, solid, units.CubicMillimeters(1000*math.Pi))
+	decadtest.MeasuresArea(t, solid, units.SquareMillimeters(400*math.Pi))
+	decadtest.MeasuresCentroid(t, solid, r3.NewVec(0, 0, 5))
+
+	vol, err := solid.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, vol.Exactness, "a term carrying pi can never claim Exact")
+	require.Greater(t, vol.Bound.Base(), 0.0)
+
+	_, err = decad.Edges(decad.Free()).SelectEdges(solid)
+	require.ErrorIs(t, err, decad.ErrNoMatch)
+
+	require.Len(t, doc.Bodies(), 1)
+	require.Same(t, solid, doc.Bodies()[0])
 }
 
 // T35 (two curved sheets from different features, refused by Rule S's

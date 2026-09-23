@@ -329,3 +329,113 @@ func TestBodyPatchRejectsAReceiverWithNoPayload(t *testing.T) {
 	_, err := b.Patch(Edges(Free()))
 	require.ErrorIs(t, err, ErrUnsupported)
 }
+
+// patchTestReceiverWithOneChain builds a receiver *Body carrying one face
+// bounded by edges, so receiver.Edges() returns exactly edges, each free.
+// Rule P's three tests below each hand-build a receiver this shape rather
+// than a real Extrude, since only one of the three conditions is ever the
+// thing under test and the other two must hold cleanly for the isolation to
+// mean anything.
+func patchTestReceiverWithOneChain(payload featurePayload, edges []*Edge) *Body {
+	loop := &Loop{outer: true}
+	for _, e := range edges {
+		loop.coedges = append(loop.coedges, coedge{edge: e, forward: true})
+	}
+	face := &Face{loops: []*Loop{loop}}
+	for _, e := range edges {
+		e.faces = []*Face{face}
+	}
+	receiver := &Body{payload: payload}
+	receiver.lumps = sheetLumps([]*Face{face})
+	face.body = receiver
+	return receiver
+}
+
+// TestBodyPatchPayloadProvesSimpleRefusesNonAdmittingReceiver is
+// docs/surface-design.md's T43, Rule P condition 1 isolated: the receiver's
+// own payload is a prismPayload whose sectionDelta is nonzero, so
+// payloadProvesSimple refuses it — exactly the shape a boolean-reduced
+// prism reads (denotation.go's own doc comment: such a section is COMPUTED,
+// never recorded). The chain itself is the receiver's own complete
+// single-level end rim (conditions 2 and 3 both hold), isolating the
+// refusal to condition 1 alone: deleting the receiver-admission check in
+// bodyPatchPayloadProvesSimple is what this test is shown to catch.
+func TestBodyPatchPayloadProvesSimpleRefusesNonAdmittingReceiver(t *testing.T) {
+	t.Parallel()
+	edges, _ := boundedSquareChain(1, units.Millimeters(0))
+	receiver := patchTestReceiverWithOneChain(prismPayload{surfaceResult: true, sectionDelta: 5}, edges)
+
+	pp := bodyPatchPayload{faces: receiver.Faces(), chains: []bodyPatchChain{{edges: edges}}}
+	require.False(t, bodyPatchPayloadProvesSimple(context.Background(), pp))
+}
+
+// TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain is
+// docs/surface-design.md's T44, Rule P condition 2 isolated: the receiver's
+// own end holds TWO disjoint free-edge loops sharing one level id — a
+// four-edge outer rim and a one-edge inner (hole) rim, the annular-profile
+// shape §6.4 names — and the new chain caps only the inner one. The
+// receiver's own payload admits Rule S and the chain's own shared level id
+// is valid (conditions 1 and 3 both hold), isolating the refusal to
+// condition 2 alone: patching a proper subset of an end's own free edges
+// proves nothing about the whole end's non-self-intersection.
+func TestBodyPatchPayloadProvesSimpleRefusesIncompleteChain(t *testing.T) {
+	t.Parallel()
+	tok := levelToken{id: 1, origin: r3.NewVec(0, 0, 10), normal: r3.NewVec(0, 0, 1)}
+	outer, _ := boundedSquareChain(1, units.Millimeters(0))
+	cv := &Vertex{position: r3.NewVec(5, 5, 10), level: tok}
+	inner := &Edge{
+		curve: Circle3{Center: r3.NewVec(5, 5, 10), Axis: r3.NewVec(0, 0, 1), Radius: units.Millimeters(1)},
+		start: cv, end: cv, level: tok,
+	}
+
+	outerLoop := &Loop{outer: true}
+	for _, e := range outer {
+		outerLoop.coedges = append(outerLoop.coedges, coedge{edge: e, forward: true})
+	}
+	outerFace := &Face{loops: []*Loop{outerLoop}}
+	for _, e := range outer {
+		e.faces = []*Face{outerFace}
+	}
+	innerFace := &Face{loops: []*Loop{{outer: true, coedges: []coedge{{edge: inner, forward: true}}}}}
+	inner.faces = []*Face{innerFace}
+
+	receiver := &Body{payload: prismPayload{surfaceResult: true, sectionDelta: 0}}
+	receiver.lumps = sheetLumps([]*Face{outerFace, innerFace})
+	outerFace.body = receiver
+	innerFace.body = receiver
+
+	pp := bodyPatchPayload{
+		faces:  receiver.Faces(),
+		chains: []bodyPatchChain{{edges: []*Edge{inner}}},
+	}
+	require.False(t, bodyPatchPayloadProvesSimple(context.Background(), pp))
+}
+
+// TestBodyPatchPayloadProvesSimpleRefusesVertexLevelMismatch is
+// docs/surface-design.md's T45, Rule P condition 3 isolated: every one of
+// the chain's four edges carries the SAME non-zero level id, but one
+// vertex (v2) was stamped under a different one. The receiver's own end
+// holds exactly these four edges under the edges' shared id (so
+// completeness, condition 2, would hold), and the receiver's own payload
+// admits Rule S (condition 1 holds), isolating the refusal to condition 3's
+// own vertex check: an edge's id alone says its CURVE was recorded at one
+// level, never that both its endpoints were too.
+func TestBodyPatchPayloadProvesSimpleRefusesVertexLevelMismatch(t *testing.T) {
+	t.Parallel()
+	levelA := levelToken{id: 1, origin: r3.NewVec(0, 0, 10), normal: r3.NewVec(0, 0, 1)}
+	levelB := levelToken{id: 2, origin: r3.NewVec(0, 0, 10), normal: r3.NewVec(0, 0, 1)}
+	v0 := &Vertex{position: r3.NewVec(0, 0, 10), level: levelA}
+	v1 := &Vertex{position: r3.NewVec(1, 0, 10), level: levelA}
+	v2 := &Vertex{position: r3.NewVec(1, 1, 10), level: levelB}
+	v3 := &Vertex{position: r3.NewVec(0, 1, 10), level: levelA}
+	edges := []*Edge{
+		{curve: Line3{}, start: v0, end: v1, level: levelA},
+		{curve: Line3{}, start: v1, end: v2, level: levelA},
+		{curve: Line3{}, start: v2, end: v3, level: levelA},
+		{curve: Line3{}, start: v3, end: v0, level: levelA},
+	}
+	receiver := patchTestReceiverWithOneChain(prismPayload{surfaceResult: true, sectionDelta: 0}, edges)
+
+	pp := bodyPatchPayload{faces: receiver.Faces(), chains: []bodyPatchChain{{edges: edges}}}
+	require.False(t, bodyPatchPayloadProvesSimple(context.Background(), pp))
+}

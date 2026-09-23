@@ -1012,10 +1012,16 @@ func auditSheetBoundary(ctx context.Context, b *Body) sheetAuditOutcome {
 // whose audit ran and passed (auditClean) admits leg 4 the same as a
 // proven-simple prism or loft does, letting a clean stitched sheet read
 // ValidityValid instead of being permanently Suspect. A bodyPatchPayload
-// reads undecided on the same terms as any other payload this leg does not
-// name: Body.Patch proves its own chains simple in their own plane (gate 4,
-// docs/surface-design.md §5.2), never the whole assembled boundary's
-// non-self-intersection, so it earns no admission here either.
+// admits under Rule P (patch_body.go's bodyPatchPayloadProvesSimple,
+// docs/surface-design.md §6.4): Body.Patch itself proves only its own
+// chains simple in their own plane (gate 4, §5.2), never the whole
+// assembled boundary's non-self-intersection, but where its receiver itself
+// admits this same predicate, every new chain is a COMPLETE free-edge chain
+// of that receiver's own end, and every new chain's plane is proven — by
+// the LEVEL half of the shared-denotation certificate's own identity, never
+// a coordinate or a residual — to be exactly one of that receiver's own end
+// planes, the patched assembly IS the receiver's own solid boundary and its
+// proof carries. Any chain this cannot decide keeps the payload undecided.
 //
 // A revolvePayload admits leg 4 on the CONSTRUCTION argument
 // revolvePayloadProvesSimple states in full — its build runs no crossing
@@ -1049,6 +1055,8 @@ func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
 		return pp.surfaceResult && pp.sectionDelta == 0
 	case stitchPayload:
 		return pp.auditClean
+	case bodyPatchPayload:
+		return bodyPatchPayloadProvesSimple(ctx, pp)
 	case sweepPayload:
 		return len(pp.spans) == 0 && !pp.arc && pp.prism.surfaceResult && pp.prism.sectionDelta == 0
 	case revolvePayload:
