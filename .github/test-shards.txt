@@ -1649,3 +1649,11 @@
 1	0.00	TestSurfaceRevolveAxisStraddlingProfileNeverReachesTheAudit
 2	0.00	TestSurfaceRevolveFullTurnSheetVerifiesValid
 3	0.00	TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift
+0	0.01	TestStitchRefusesIdenticalBoundedRimsWithNoSharedDenotation
+1	0.01	TestStitchClosesABoundedPatchedWallWithChargedVolumeBound
+2	0.01	TestStitchRefusesAPlacedSheetAgainstItsUnplacedSiblings
+3	0.01	TestUnstitchRestitchRoundTripClosesABoundedBox
+0	0.00	TestSameCurveRequiresEqualXform
+1	0.00	TestSameCurveDeclinesTheZeroToken
+2	0.00	TestMintCurveNeverRepeats
+3	0.00	TestCurveTokenComposeDeclinesTheZeroToken

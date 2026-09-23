@@ -163,6 +163,26 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	if xform != r3.Identity() {
 		delta = rigidRoundAllow(maxInputAbs, vecMaxAbs(xform.Translation()))
 	}
+	// massDelta is what the mass accumulator charges instead of delta alone:
+	// a welded vertex the shared-denotation certificate admitted (J5's
+	// bounded-pair lift, docs/surface-design.md §6.2's amendment) is no
+	// longer zero-bound, so the triangle set the tetrahedron sum runs over is
+	// no longer the body's own true vertices — it is only within
+	// maxClassBound of them. sweptVolumeAllow already bounds exactly this
+	// shape of error (a uniform per-vertex displacement), so folding the
+	// widest class bound into the same delta the placement rounding uses is
+	// a reuse, not new proof machinery (§6.4's amendment: a bounded weld's
+	// volume is never Exact). It stays equal to delta whenever every welded
+	// class is zero-bound, which is every case this evaluator admitted
+	// before this increment.
+	maxClassBound := 0.0
+	for _, b := range plan.table.boundByClass {
+		maxClassBound = max(maxClassBound, b)
+	}
+	massDelta := delta
+	if maxClassBound > 0 {
+		massDelta = absSumUpper(delta, maxClassBound)
+	}
 
 	newFaces, classOf, welded, err := rebuildStitchTopology(ctx, plan, xform, verts, delta, srcFaces)
 	if err != nil {
@@ -214,7 +234,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 		// residual free edge is never an error.
 
 		if !open {
-			acc = newLoftMassAccumulator(verts[0], delta, 0, 0)
+			acc = newLoftMassAccumulator(verts[0], massDelta, 0, 0)
 			for _, t := range tris {
 				acc.add(verts[t[0]], verts[t[1]], verts[t[2]], false)
 			}
@@ -232,13 +252,19 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 				if err != nil {
 					return nil, err
 				}
-				acc = newLoftMassAccumulator(verts[0], delta, 0, 0)
+				acc = newLoftMassAccumulator(verts[0], massDelta, 0, 0)
 				for _, t := range tris {
 					acc.add(verts[t[0]], verts[t[1]], verts[t[2]], false)
 				}
 			}
 			solid, kind = true, BodySolid
 		} else if delta > 0 {
+			// This accumulator instance only ever feeds perturbAreaSum below
+			// (open means solid stays false, so body.volume/centroid never
+			// read it): Area needs no massDelta charge of its own — each
+			// face's own areaBound already covers a bounded weld
+			// (docs/surface-design.md §6.4's amendment) — so this stays the
+			// placement's own delta, unwidened.
 			acc = newLoftMassAccumulator(verts[0], delta, 0, 0)
 			for _, t := range tris {
 				acc.add(verts[t[0]], verts[t[1]], verts[t[2]], false)
@@ -358,6 +384,11 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.Transform, verts []r3.Vec, delta float64, srcFaces []*Face) ([]*Face, map[*Vertex]int, map[*Edge]struct{}, error) {
 	newVertByClass := map[int]*Vertex{}
 	classOf := map[*Vertex]int{}
+	// vertexForClass restates the class's own curve token (denotByClass,
+	// stitch_weld.go — the zero value for a class no member carries one for)
+	// under xform, composing rather than overwriting so a token nested
+	// through more than one placement still states the true accumulated
+	// motion (denotation.go's curveToken.compose).
 	vertexForClass := func(class int) *Vertex {
 		if nv, ok := newVertByClass[class]; ok {
 			return nv
@@ -366,7 +397,7 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if delta > 0 {
 			bound = absSumUpper(bound, delta)
 		}
-		nv := &Vertex{position: verts[class], bound: units.Millimeters(bound)}
+		nv := &Vertex{position: verts[class], bound: units.Millimeters(bound), denot: plan.table.denotByClass[class].compose(xform)}
 		newVertByClass[class] = nv
 		classOf[nv] = class
 		return nv
@@ -409,6 +440,11 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 			length:          old.length,
 			lengthBound:     lengthBound,
 			lengthUnbounded: old.lengthUnbounded,
+			// A welded pair's two edges are already proven to denote the same
+			// curve (Table J), so the FIRST one reached here — the only one
+			// that ever builds a new Edge for the group, per buildByGroup
+			// above — is a sound representative for the other's identity too.
+			denot: old.denot.compose(xform),
 		}
 		eb := &edgeBuild{edge: ne, startClass: startClass, endClass: endClass}
 		buildByOld[old] = eb

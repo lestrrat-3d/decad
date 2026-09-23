@@ -635,14 +635,64 @@ is true coincidence. This is `CLAUDE.md`'s reject-only rule applied to
 coincidence: a small separation proves nothing, so only an exactly-zero one
 admits.
 
-J5 is what a later increment lifts, and §14's increment 3 names the mechanism:
-two edges that derive from **one record** — the same profile segment swept to
-the same computed level — denote the same curve exactly, whatever bound each
-carries, because the bound is on the same underlying quantity. A
-shared-denotation certificate carried in the payload states that, and admits a
-bounded pair without ever comparing coordinates. Until it exists, a revolve's
-computed-level rim and a `ToFace`-stopped prism's rim do not join, and the
-free edges say so.
+**J5 is lifted by the CURVE half of the shared-denotation certificate — a
+separate proof from §5.2 gate 3's LEVEL half, over a separate code path.**
+Coplanarity and coincidence do not follow from one another: a chain can be
+provably coplanar with no two of its edges coincident, and two edges can be
+provably coincident on a chain that is not planar. The LEVEL token proves the
+first; the CURVE token below proves the second, and neither discharges the
+other.
+
+A `curveToken` (`denotation.go`) is minted once per denoted curve or point by
+the evaluator that first builds it — today a straight prism's own rim edge
+and rim vertex (`prism_build.go`, minted fresh per edge and per vertex, with
+no `sectionDelta == 0` precondition: unlike coplanarity, an identity claims
+nothing about the section itself) and a revolve's own internal junction edge
+and its shared vertex (`revolve_build.go`; a revolve's SEAM — its boundary
+copy at `phi0`/`phi1` — mints none, since it never has a partner to weld
+against) — and propagated unchanged, composing the rigid motion it is applied
+under, by every copier that reproduces the same geometry:
+`rebuildStitchTopology` (`stitch.go`), `copyFaceUnderContext` (`unstitch.go`)
+and `copyPatchFacesUnder` (`patch_body.go`). Two edges (or two vertices)
+admit under the certificate when both carry a non-zero token, the ids are
+equal, AND the motions they are stated under are equal
+(`sameCurve`) — a placement breaks the certificate: two edges that shared a
+denotation before one body moved no longer denote the same curve **at the
+same place**, so the motion is part of the comparison, not merely the
+identity. Two independently built bodies never share a token, whatever their
+held coordinates or bounds say: two separate `Extrude` calls building the
+identical profile at the identical extent each mint their own fresh ids from
+the same document-local counter, which never repeats and never resets.
+
+**The certificate admits; J3/J4's bit-identical comparison stays a
+reject-only guard layered on top of it, and bit-identity alone never
+admits.** `stitchVertexTable.classOf` (`stitch_weld.go`) gains a SECOND merge
+route beside the existing zero-bound one: two vertices with the bit-identical
+held key that also carry an equal non-zero token merge into one class too,
+whatever bound either carries — narrowed by the same bit-identical key the
+zero-bound route already requires, so a token match at a DIFFERENT held
+coordinate never merges. `buildStitchWeldPlan`'s own edge gate widens from
+"Line3 only" to "Line3, or a non-zero token": a `Line3` pair still joins
+vacuously (J3 states nothing beyond what the shared vertex class already
+proves), while any other pair — a revolve's own `Circle3`/`Arc3` junction,
+which carries no bound field to decide J5 on at all — joins only through an
+equal non-zero token AND `sameCurveVariant`'s own bit-identical guard
+(`Center`/`Radius` bit-identical, `Axis` up to sign). Dropping this guard
+would let a token match alone admit a pair whose HELD geometry disagrees,
+which is exactly the tolerant admission this design refuses (`CLAUDE.md`'s
+reject-only rule; `TestStitchNonzeroBoundRimStaysFreeAgainstExactPatch` is
+the permanent proof that bit-identity alone never admits, and it stays green
+unchanged by this certificate).
+
+A rebuild from a record — `Placed`/`Duplicate`/`PlacedCopy` re-evaluating a
+straight prism or a revolve from `evalPrismContext`/`evalRevolveContextWork`
+— mints fresh ids every time, which is safe because a fresh id only ever
+declines: two builds of the identical profile at the identical extent, one
+placed and one not, never share a token regardless. A copy path — Unstitch
+then Stitch, or a stitched/patched rebuild under a placement — instead
+propagates the SAME id, composing the applied motion, which is what lets
+that round trip re-admit exactly the pairs the original build already
+proved coincident (§6.5, §15's T42).
 
 ### 6.3 Table C — what a stitch returns
 
@@ -718,16 +768,35 @@ sums to 15200 mm² at a zero bound, the four walls' 3200 mm² (T1) plus the two
 patches' 6000 mm² apiece (T2).
 
 **The volume is `loft_moments.go`'s exact-rational tetrahedron sum over the
-assembled triangle set**, and its bound is zero only when that exact
-rational is itself representable in `units.Value`'s `float64` magnitude —
-never unconditionally. Every held vertex is exact, so every tetrahedron term
-and their sum are exact rationals, and the one rounding `Volume` ever
-carries is that single publication step: `Exact` exactly when the published
-number IS the sum (the box's 60000 mm³, a small integer, always is),
-`Approximate` with a proven bound otherwise (a body a third of a millimetre
-wide, whose exact volume is rarely representable in cubic millimetres to the
-last bit). `Centroid` and `Bounds` follow the identical rule over their own
-publication rounding.
+assembled triangle set**, and its bound is zero only when every held vertex
+is exact AND that exact rational is itself representable in `units.Value`'s
+`float64` magnitude — never unconditionally. Every held vertex is exact
+whenever every welded vertex CLASS carries a zero bound, which is every case
+this evaluator admitted before the CURVE certificate (§6.2's amendment): the
+one rounding `Volume` then ever carries is the single publication step,
+`Exact` exactly when the published number IS the sum (the box's 60000 mm³, a
+small integer, always is), `Approximate` with a proven bound otherwise (a
+body a third of a millimetre wide, whose exact volume is rarely
+representable in cubic millimetres to the last bit).
+
+**A weld the certificate admits changes what the triangle set's own vertices
+are held to be, and `Volume`/`Centroid` charge exactly that.** A welded class
+the certificate proves coincident by identity, rather than by a proven-zero
+bound, is no longer zero-bound itself — the triangle set the tetrahedron sum
+runs over is only within that class's own bound of the body's true vertices,
+never `Exact` regardless of what the exact-rational sum over the HELD
+vertices happens to round to. `evalStitchContext` charges this as
+`massDelta`, `sweptVolumeAllow(massDelta, areaUpper)` widening the same term
+a PLACEMENT's own rounding already widens (`delta`) rather than a second,
+parallel proof: `massDelta` is `delta` further widened by the largest bound
+any vertex class in the shared table carries
+(`stitchVertexTable.boundByClass`), zero exactly when every class is, which
+recovers the unwidened case unchanged. `Area` needs no equivalent charge — it
+sums each already-built face's own `area`/`areaBound` through `boundedAdd`
+(this section, above), and each face's own bound already covers a bounded
+weld on its own boundary. `Centroid` and `Bounds` follow the identical rule
+over their own publication rounding, `Bounds` needing nothing further since
+`stitchBounds` already inflates each operand's own box by its own `Bound`.
 
 **A curved face's flux term is not a tetrahedron sum**, and a per-surface
 closed-form flux integral over an arbitrary trimmed analytic patch is its own
@@ -916,13 +985,27 @@ with no analytic identity, and returning thousands of facet sheets would be a
 shape no caller asked for.
 
 **`Unstitch` inverts `Stitch` exactly where `Stitch` reaches.** Every edge
-`Unstitch` frees was welded from a proven-coincident pair, so Table J re-admits
-every one of them and re-stitching the results reproduces the body. The round
-trip therefore closes for an exact all-planar body and no further: unstitching a
-revolve gives sheets whose rims carry the revolve's own bounds, which J5 does
-not admit, and re-stitching them returns a sheet. That is the same reach limit
-J5 and R8 state, not a separate one, and the closing case is a required test
-(§15).
+`Unstitch` frees was welded from a proven-coincident pair, so Table J
+re-admits every one of them and re-stitching the results reproduces the body
+— now true for a BOUNDED weld too, not only an exact one, because
+`copyFaceUnderContext` propagates the CURVE half of the shared-denotation
+certificate (composing the applied motion) rather than dropping it, so the
+second `Stitch`'s own certificate route re-admits exactly the pair the
+original build already proved coincident (§6.2's amendment, §15's T42).
+
+**A revolve's own internal junction weld now round-trips too, closing back
+to what the never-unstitched sheet itself already published — its own
+free-edge shape, not the whole boundary.** `revolve_build.go` mints a curve
+token for a junction edge and its shared vertex (the boundary an internal
+`Circle3`/`Arc3` shares between two adjacent side faces before Unstitch ever
+splits them), so `Unstitch` then `Stitch` re-admits that pair on the
+certificate route (`sameCurveVariant`'s own bit-identical guard) exactly as
+it always could for a straight prism's own `Line3` rim. A revolve's SEAM —
+its boundary copy at `phi0`/`phi1`, a partial revolve's own free rim — mints
+no token and never had a partner to weld against, before or after the round
+trip, so it stays free either way: the round trip closes what was welded
+before Unstitch, and leaves free what was already free, reproducing the
+original sheet's own shape rather than losing it to every edge going free.
 
 **`unstitchPayload` (`unstitch.go`) is the held-B-rep-under-a-rigid-motion
 mechanism restricted to one face**, `stitchPayload`'s own idea narrowed from a
@@ -1430,7 +1513,7 @@ ANSWER is accepted and reads `Suspect`.
 |---|---|
 | 1 | `BodyKind` and `Kind()`, `Shell.IsOpen`, `Edge.IsFree`, `Free()`; `WithSurfaceResult()` on `Extrude` and `Revolve`; `Document.Patch`; the sheet validity audit; `DiagUnsupportedPairSheet` and §9.3's box rule; every Table A amendment; prism sheet tessellation and export with the manifold-with-boundary audit. The revolve sheet mesh is staged to increment 4 (§10) |
 | 2 | `Stitch` over exact all-planar boundaries (Table J with J5, Table C's first two rows), including its own directed-edge parity leg, derived orientation, and the recorded-weld replay a placement reuses; `Body.Patch`; the sheet-against-solid containment cast and clearance gap of §9.3, narrowing when `DiagUnsupportedPairSheet` fires. `Unstitch` is a separate follow-up: it needs no new proof this increment does not already carry, but it is its own PR |
-| 3 | `WithSurfaceResult()` on `Sweep` and `Loft`; the shared-denotation certificate — two distinct proofs sharing one name, never one lifted "together": a LEVEL token proving N chain vertices coplanar by shared construction, which lifts §5.2 gate 3's bounded-chain half of R6 for a straight prism's own rim (landed); a separate CURVE token proving two edges denote one curve, which lifts Table J's J5, lands in a later increment, and does not follow from the level token proving anything — coplanarity and coincidence are different proofs over different code paths; the per-surface flux integral that lifts Table C's curved-closure refusal (R8); the undercut survey over a surface-extruded prism sheet's positive side — the only sheet family this increment opens it on; a loft, stitch or one-span-sweep sheet moves from `DiagSurveyPrerequisite` to `DiagUnsupportedSurveyPayload` for it instead, and stays there until its own proof lands |
+| 3 | `WithSurfaceResult()` on `Sweep` and `Loft`; the shared-denotation certificate — two distinct proofs sharing one name, never one lifted "together": a LEVEL token proving N chain vertices coplanar by shared construction, which lifts §5.2 gate 3's bounded-chain half of R6 for a straight prism's own rim; a separate CURVE token proving two edges (or two vertices) denote one curve or point, which lifts Table J's J5 for a straight prism's own rim and a revolve's own internal junction, and does not follow from the level token proving anything — coplanarity and coincidence are different proofs over different code paths; the per-surface flux integral that lifts Table C's curved-closure refusal (R8); the undercut survey over a surface-extruded prism sheet's positive side — the only sheet family this increment opens it on; a loft, stitch or one-span-sweep sheet moves from `DiagSurveyPrerequisite` to `DiagUnsupportedSurveyPayload` for it instead, and stays there until its own proof lands |
 | 4 | The revolve sheet mesh (§10): the meridian and angular chordings a surface result keeps, the caps it omits — and, where the profile meets the axis, the on-axis edge between two poles that only the caps carried (Table W) — the cap terms its area slack drops, and the manifold-with-boundary audit in the closed-mesh audit's place. It also settles which audit a CLOSED sheet runs |
 | 5 | A stitched solid's own mesh: the manifold-with-boundary/closed-mesh audit reads a `stitchPayload`'s already-triangulated face set directly rather than chording one. A stitched solid's own clearance-kernel carrier model: `newBodyGeomBudget` (`docs/clearance-design.md` §2) gains a `stitchPayload` arm, which is what lets a stitched solid reach a proven pair relation at all — until it lands, `Tessellate`/`STL`/`OBJ` and every pair question read `ErrUnsupported`/undecided exactly as they do for any other payload this evaluator has not wired an arm for |
 
@@ -1508,6 +1591,8 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T38 | a hand-built face carrying a nonzero `normalBound`, driven directly at `stitchFaceFluxAndMoment` (internal — a fillet or chamfer's `Unstitch`-then-`Stitch` round trip never re-closes, §6.5's own "no further" limit for any non-all-planar body, so no public fixture reaches this gate) | `ErrUnsupported` (R8) |
 | T39 | `annularSketch` revolved a full turn as a surface | `Verify` reads `Validity.Outcome == ValidityValid` with no `Validity.Diagnostics`, admitted by construction: `payloadProvesSimple`'s `revolvePayload` arm holds because the sweep is exactly one full turn and the radial minimum is proven clear of the axis |
 | T40 | `annularSketch` revolved a quarter turn as a surface | `Verify` stays `Validity.Outcome == ValidityUndecided` with one `DiagUndecidedValidity`: a partial turn earns no construction admission |
+| T41 | two INDEPENDENT `Extrude` calls building the identical profile at the identical Symmetric extent, both `WithSurfaceResult()` | first, the premise: a rim vertex of each holds a bit-identical coordinate and an identical non-zero bound; then `Stitch(a, b)`: `Kind() == BodySheet`, and `Edges(Free())` resolves to the full 16 edges, none welded — the proof the CURVE certificate is an identity check, never a tolerance, since each independent build mints its own fresh `curveID` |
+| T42 | a Symmetric surface-extruded wall (both rims bounded) on an off-axis, non-origin sketch plane, `Body.Patch`-capped on both rims in one call, then a single-operand `Stitch` | no error; `Kind() == BodySolid`; `Volume` `Approximate` with `Bound.Base() > 0`, and the denoted volume lies inside `[value−bound, value+bound]` — the enclosure assertion a missing `massDelta` charge breaks (§6.4's amendment). Unstitching that solid then re-stitching it closes to a `BodySolid` again, `Volume` matching bit for bit — the CURVE certificate's own copy-path proof, since Table J's J5 could never admit the bounded rim pair on bit-identity alone. Placing ONE of the six unstitched sheets by a motion neither axis-aligned nor centred on the origin, then stitching all six, leaves exactly that sheet's own boundary and its former neighbours' matching copies free (8 of 24 edges), while the remaining five unplaced siblings still weld among themselves — a placement breaks the certificate |
 | T43 | a hand-built `bodyPatchPayload` whose receiver's own payload is a `prismPayload` with a nonzero `sectionDelta`, driven directly at `bodyPatchPayloadProvesSimple` (internal — Rule P condition 1: a receiver this evaluator can otherwise prove Rule S-admits, isolated from conditions 2 and 3, which the fixture's chain and receiver otherwise satisfy) | `bodyPatchPayloadProvesSimple` reports `false` |
 | T44 | a hand-built `bodyPatchPayload` whose receiver carries two disjoint free-edge loops under the SAME level id and whose one new chain caps only one of them, driven directly at `bodyPatchPayloadProvesSimple` (internal — Rule P condition 2: the receiver's own construction proof does not transfer from a proper subset of its end's own free edges, the annular-rim hazard §6.4 names) | `bodyPatchPayloadProvesSimple` reports `false` |
 | T45 | a hand-built `bodyPatchPayload` whose chain's edges all share one level id but one chain VERTEX carries a different one, driven directly at `bodyPatchPayloadProvesSimple` (internal — Rule P condition 3: every vertex, not only every edge, must be proven part of the same recorded plane) | `bodyPatchPayloadProvesSimple` reports `false` |

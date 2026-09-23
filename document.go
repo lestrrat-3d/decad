@@ -23,6 +23,9 @@ type Document struct {
 	// nextLevel is denotation.go's own counter behind mintLevel: the LEVEL
 	// half of the shared-denotation certificate.
 	nextLevel levelID
+	// nextCurve is denotation.go's own counter behind mintCurve: the CURVE
+	// half of the shared-denotation certificate.
+	nextCurve curveID
 }
 
 // DocumentOption configures New. No options are currently supported: the

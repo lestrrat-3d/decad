@@ -55,15 +55,53 @@ func stitchKeyOf(v r3.Vec) stitchVertexKey {
 // nonzero-bound vertices merges only the zero-bound ones together and gives
 // every nonzero-bound vertex its own class, exactly as the pairwise rule
 // states.
+//
+// A SECOND, independent merge route exists beside the zero-bound one: two
+// vertices with the SAME bit-identical key that also carry an equal
+// non-zero CURVE token (sameCurve, denotation.go) merge into one class too,
+// whatever bound either one carries — the shared-denotation certificate's
+// own vertex-level admission (docs/surface-design.md §6.2's amendment). The
+// certificate ADMITS; the bit-identical key is what NARROWS it — a curve
+// token match with a DIFFERENT key never merges, exactly as
+// CLAUDE.md's rule that bit-identity alone never admits is answered here by
+// its converse: the certificate alone never admits either, without the key.
 type stitchVertexTable struct {
-	class          map[*Vertex]int
-	zeroClassByKey map[stitchVertexKey]int
-	verts          []r3.Vec
+	class           map[*Vertex]int
+	zeroClassByKey  map[stitchVertexKey]int
+	curveClassByKey map[stitchCurveKey]int
+	verts           []r3.Vec
 	// boundByClass is each class's own representative bound, read before any
 	// placement widens it: 0 for a class that arose from a zero-bound merge
-	// (every member is zero-bound by the merge rule itself), or the one
-	// vertex's own bound for a singleton class.
+	// (every member is zero-bound by the merge rule itself), the FIRST
+	// member's own bound for a class that arose from a curve-token merge
+	// (both members bound the same true point, so either one's own bound is
+	// a sound representative), or the one vertex's own bound for a singleton
+	// class.
 	boundByClass []float64
+	// denotByClass is each class's own representative curve token, read from
+	// the FIRST vertex registered for the class: the zero value for a class
+	// no member carries one for, or a merge formed entirely over the
+	// zero-bound route with no token in sight. Reusing the first member's own
+	// token — rather than fabricating a fresh one — is what lets
+	// rebuildStitchTopology restate an identity a LATER copy or stitch can
+	// still recognize, and it stays sound whichever route merged the class: a
+	// curve-token merge's members all carry the identical token by
+	// construction, and a zero-bound merge's members all denote the same
+	// TRUE point regardless of any token, so crediting that point with one
+	// member's own proven identity asserts nothing false about the others.
+	denotByClass []curveToken
+}
+
+// stitchCurveKey is a candidate vertex-class merge key for the CURVE route:
+// the vertex's own bit-identical position key alongside the curveToken it
+// carries — both must match another registered vertex's for the two to
+// merge, so a token match at a DIFFERENT held coordinate never merges (the
+// bit-identity guard, kept as a reject-only narrowing layered on the
+// certificate).
+type stitchCurveKey struct {
+	key   stitchVertexKey
+	curve curveID
+	xform r3.Transform
 }
 
 func newStitchVertexTable() *stitchVertexTable {
@@ -86,15 +124,31 @@ func (t *stitchVertexTable) classOf(v *Vertex) int {
 			return idx
 		}
 	}
+	hasCurve := v.denot.id != 0
+	var ckey stitchCurveKey
+	if hasCurve {
+		ckey = stitchCurveKey{key: key, curve: v.denot.id, xform: v.denot.xform}
+		if idx, ok := t.curveClassByKey[ckey]; ok {
+			t.class[v] = idx
+			return idx
+		}
+	}
 	idx := len(t.verts)
 	t.verts = append(t.verts, v.position)
 	t.boundByClass = append(t.boundByClass, v.bound.Base())
+	t.denotByClass = append(t.denotByClass, v.denot)
 	t.class[v] = idx
 	if zero {
 		if t.zeroClassByKey == nil {
 			t.zeroClassByKey = map[stitchVertexKey]int{}
 		}
 		t.zeroClassByKey[key] = idx
+	}
+	if hasCurve {
+		if t.curveClassByKey == nil {
+			t.curveClassByKey = map[stitchCurveKey]int{}
+		}
+		t.curveClassByKey[ckey] = idx
 	}
 	return idx
 }
@@ -150,13 +204,24 @@ type stitchWeldPlan struct {
 // zero-bound) are then both already proven by the SHARED CLASS itself,
 // since stitchVertexTable never merges two vertices unless both hold.
 //
-// Grouping every admitted free Line3 edge by that unordered class pair and
-// welding a group of exactly two is the rest of §6.2/§6.4: a group of one
-// stays free (a residual, Table C's first row again), and a group of three
-// or more joins NONE of its members — welding an arbitrary two would be a
-// silent choice among equally-claimed edges and welding all three would be
+// Grouping every admitted free edge by that unordered class pair and welding
+// a group of exactly two is the rest of §6.2/§6.4: a group of one stays free
+// (a residual, Table C's first row again), and a group of three or more
+// joins NONE of its members — welding an arbitrary two would be a silent
+// choice among equally-claimed edges and welding all three would be
 // non-manifold, so every edge in an ambiguous group stays free and the
 // result names the ambiguity through its own residual free edges.
+//
+// A free edge whose Curve is NOT Line3 still enters this grouping when it
+// carries a non-zero CURVE token (denotation.go): the shared-denotation
+// certificate's own edge-level admission, which lifts J5 for exactly that
+// pair rather than deciding it for the variant in general (a Circle3/Arc3
+// edge minted by no builder still declines, as it always has). Two edges
+// sharing one weld key are only actually WELDED, though, when
+// stitchEdgesJoin says so — both Line3 (J3 vacuous, J4/J5 already proven by
+// the shared class), or an equal non-zero curve token AND a bit-identical
+// curve variant (J2/J3's own reject-only guard, kept layered on the
+// certificate exactly as J4's shared-class guard already is).
 func buildStitchWeldPlan(faces []*Face) *stitchWeldPlan {
 	table := newStitchVertexTable()
 	for _, f := range faces {
@@ -182,7 +247,8 @@ func buildStitchWeldPlan(faces []*Face) *stitchWeldPlan {
 				if !e.IsFree() { // J1
 					continue
 				}
-				if _, isLine := e.curve.(Line3); !isLine { // J2, then J5 by correction 4
+				_, isLine := e.curve.(Line3)
+				if !isLine && e.denot.id == 0 { // J2, then J5 by correction 4, or the certificate
 					continue
 				}
 				key := newStitchWeldKey(table.classOf(e.start), table.classOf(e.end))
@@ -204,10 +270,63 @@ func buildStitchWeldPlan(faces []*Face) *stitchWeldPlan {
 			// ambiguity.
 			continue
 		}
+		if !stitchEdgesJoin(edges[0], edges[1]) {
+			continue
+		}
 		id := plan.groups
 		plan.groups++
 		plan.group[edges[0]] = id
 		plan.group[edges[1]] = id
 	}
 	return plan
+}
+
+// stitchEdgesJoin decides Table J's J2/J3 for a pair of free edges that
+// already share a weld key (so J4/J5's vertex half is already proven by the
+// shared class, either by the zero-bound route or the certificate's own
+// vertex-level route). A straight edge pair needs nothing further: a
+// Line3's whole geometry lives in its two vertices, so J3 states nothing
+// beyond what the shared class already proved (§6.2's amendment). Any other
+// pair joins only through the shared-denotation certificate: an equal
+// non-zero curve token (sameCurve, denotation.go) AND a bit-identical curve
+// variant (sameCurveVariant) — the certificate admits, and the bit-identical
+// guard is what keeps admission from ever resting on the token alone.
+func stitchEdgesJoin(a, b *Edge) bool {
+	_, aLine := a.curve.(Line3)
+	_, bLine := b.curve.(Line3)
+	if aLine && bLine {
+		return true
+	}
+	return sameCurve(a.denot, b.denot) && sameCurveVariant(a.curve, b.curve)
+}
+
+// sameCurveVariant is Table J's J3 for a non-Line3 pair: bit-identical held
+// float64 parameters, up to the one sign freedom the variant allows. Line3
+// is vacuous here (stitchEdgesJoin never calls this for two Line3 edges) —
+// its own J3 is answered entirely by J4's shared vertex class. Circle3 and
+// Arc3 compare Center and Radius bit-identical and Axis up to sign (a
+// reflected or oppositely-walked copy of the same circle carries the
+// negated axis). Any other pairing, including a mismatched variant type,
+// declines: this evaluator mints no curve token for a NURBSCurve or
+// FacetedCurve edge, so the certificate's own edge-level route never
+// reaches them regardless.
+func sameCurveVariant(a, b Curve) bool {
+	switch av := a.(type) {
+	case Circle3:
+		bv, ok := b.(Circle3)
+		if !ok {
+			return false
+		}
+		return av.Center == bv.Center && av.Radius.Base() == bv.Radius.Base() &&
+			(av.Axis == bv.Axis || av.Axis == bv.Axis.Scale(-1))
+	case Arc3:
+		bv, ok := b.(Arc3)
+		if !ok {
+			return false
+		}
+		return av.Center == bv.Center && av.Radius.Base() == bv.Radius.Base() &&
+			(av.Axis == bv.Axis || av.Axis == bv.Axis.Scale(-1))
+	default:
+		return false
+	}
 }

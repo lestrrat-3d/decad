@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -130,12 +131,61 @@ func TestUnstitchRestitchRoundTripMatchesOriginal(t *testing.T) {
 	require.Same(t, restitched, doc.Bodies()[0])
 }
 
+// TestUnstitchRestitchRoundTripClosesABoundedBox is docs/surface-design.md
+// §15's T42's own copy-path leg: the CURVE half of the shared-denotation
+// certificate must survive Unstitch's own copy (copyFaceUnderContext) for a
+// BOUNDED body, not only an exact one — TestUnstitchRestitchRoundTripMatchesOriginal
+// already covers the exact case. A Symmetric surface-extruded wall on an
+// off-axis, non-origin plane (offAxisPlateSketch) has both rims bounded;
+// Body.Patch caps both, and a single-operand Stitch closes the result to a
+// BodySolid (docs/surface-design.md §15's T42, stitch_test.go). Unstitching
+// that solid frees every edge, INCLUDING the bounded rim edges Table J's J5
+// could never admit on bit-identity alone — the round trip closes again only
+// because each unstitched copy still carries the ORIGINAL curveID Body.Patch's
+// own rim edges minted, so the second Stitch's certificate route re-admits
+// exactly the same pairs the first Body.Patch call already proved coincident.
+func TestUnstitchRestitchRoundTripClosesABoundedBox(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	s, p := offAxisPlateSketch(t)
+	wall, err := doc.Extrude(s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	capped, err := wall.Patch(decad.Edges(decad.Free()).Exactly(8))
+	require.NoError(t, err)
+	solid, err := decad.Stitch(capped)
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySolid, solid.Kind())
+	wantVol, err := solid.Volume()
+	require.NoError(t, err)
+
+	sheets, err := solid.Unstitch()
+	require.NoError(t, err)
+	require.Len(t, sheets, 6)
+
+	restitched, err := decad.Stitch(sheets...)
+	require.NoError(t, err)
+
+	require.Equal(t, decad.BodySolid, restitched.Kind(), "the round trip closes again rather than falling back to a sheet")
+	require.True(t, restitched.IsSolid())
+
+	gotVol, err := restitched.Volume()
+	require.NoError(t, err)
+	require.Equal(t, wantVol, gotVol, "volume matches the pre-unstitch solid's own reading bit for bit")
+
+	_, err = decad.Edges(decad.Free()).SelectEdges(restitched)
+	require.ErrorIs(t, err, decad.ErrNoMatch)
+}
+
 // TestUnstitchRevolveRoundTripStaysASheet is the reach-limit round trip
-// docs/surface-design.md §6.5 names explicitly: unstitching a
-// surface-result Revolve body and re-stitching it stays a SHEET, because
-// the revolve's own rim and junction curves (Circle3/Arc3) never satisfy
-// Table J's J5 — the same reach limit R8 already states for Stitch, not a
-// separate one.
+// docs/surface-design.md §6.5 names: unstitching a surface-result Revolve
+// body and re-stitching it stays a SHEET, because the profile's own seam —
+// its boundary copy at phi0 and phi1, a partial revolve's own free rim —
+// never had a partner to weld against, before or after the round trip. The
+// CURVE half of the shared-denotation certificate (denotation.go) now
+// closes the revolve's own internal junction welds it could not before
+// (a Circle3/Arc3 carries no bound field of its own, so Table J's J5 could
+// never decide them on bit-identity alone), reproducing the never-unstitched
+// sheet's own free-edge shape exactly rather than leaving every edge free.
 func TestUnstitchRevolveRoundTripStaysASheet(t *testing.T) {
 	t.Parallel()
 	s, p := annularSketch(t)
@@ -143,6 +193,17 @@ func TestUnstitchRevolveRoundTripStaysASheet(t *testing.T) {
 	sheet, err := doc.Revolve(s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
+
+	// Measure the original's own free-edge shape BEFORE unstitching it (which
+	// retires sheet), so the round trip below is checked against what the
+	// original actually publishes rather than a number typed into the test.
+	// The 8 is still asserted directly here, so a silent change to the
+	// original's own shape still surfaces — it is the round-trip comparison
+	// itself that must read this measurement back, not a literal.
+	wantFree, err := decad.Edges(decad.Free()).SelectEdges(sheet)
+	require.NoError(t, err)
+	require.Len(t, wantFree, 8, "the profile's own seam at phi0 and phi1: a partial revolve's own free rim")
+	wantEdges := len(sheet.Edges())
 
 	pieces, err := sheet.Unstitch()
 	require.NoError(t, err)
@@ -157,9 +218,18 @@ func TestUnstitchRevolveRoundTripStaysASheet(t *testing.T) {
 	require.Equal(t, decad.BodySheet, restitched.Kind())
 	require.False(t, restitched.IsSolid())
 
-	free, err := decad.Edges(decad.Free()).SelectEdges(restitched)
+	// The certificate now closes the 4 internal junction welds (each shared,
+	// by construction, between two adjacent side faces before Unstitch ever
+	// split them), leaving free exactly the seam edges — the profile's own
+	// boundary at phi0 and phi1, which never had a partner to weld against,
+	// before or after this round trip. That is the SAME free-edge shape the
+	// original, never-unstitched sheet itself carried (wantFree/wantEdges,
+	// measured above): the certificate loses no information the original
+	// build already published, it only lets the round trip REPRODUCE it.
+	free, err := decad.Edges(decad.Free()).Exactly(len(wantFree)).SelectEdges(restitched)
 	require.NoError(t, err)
-	require.NotEmpty(t, free)
+	require.Len(t, free, len(wantFree))
+	require.Len(t, restitched.Edges(), wantEdges)
 }
 
 // TestUnstitchTableR covers Unstitch's own Table R rows: R11 (a Faceted

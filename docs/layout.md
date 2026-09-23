@@ -91,7 +91,7 @@ to the byte budget.
 | `surface.go` | `WithSurfaceResult`, the `refuseSheetOperand` refusal helper, and the shared shell/lump helpers (`shellIsOpen`, `sheetLumps`) prism, revolve, sweep and loft builds share. See `docs/surface-design.md` §2.2-§4, §7, §11. |
 | `patch.go` | `Document.Patch`: a single planar face from a recorded profile, reusing `buildLoopSidesAs`'s per-kind curve construction. See `docs/surface-design.md` §5.1. |
 | `patch_body.go` | `Body.Patch`: partitions a free-edge selection into closed chains, proves each planar via `dyadic.go` or a shared level token, and fills each with its own face. See `docs/surface-design.md` §5.2. |
-| `denotation.go` | The LEVEL half of the shared-denotation certificate: a minted plane identity a copy path carries, never a coordinate comparison. See `docs/surface-design.md` §5.2. |
+| `denotation.go` | The shared-denotation certificate's two halves: a minted plane identity (LEVEL) and a minted curve/point identity (CURVE), each a copy path carries under its own motion, never a coordinate comparison. See `docs/surface-design.md` §5.2, §6.2. |
 | `stitch_weld.go` | Table J's admission: the shared vertex table and which free edge pairs weld. See `docs/surface-design.md` §6.2. |
 | `stitch.go` | `Stitch`/`StitchContext`: rebuilds fresh topology over the weld plan, derives orientation, and decides Table C's outcome and measurements. See `docs/surface-design.md` §6. |
 | `stitch_flux.go` | The per-surface flux integral for a curved closed boundary: Rule S, the hoisted vertex-link audit call, and the `Plane`/`Cylinder` volume and centroid arms. See `docs/surface-design.md` §6.4. |
