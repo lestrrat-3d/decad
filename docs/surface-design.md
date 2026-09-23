@@ -1584,6 +1584,25 @@ D row D1), which already holds the complete triangle set including both
 omitted caps; the refusal is what keeps that set from being restated as a
 solid mesh for a body with no material.
 
+**A stitched `BodySolid` is a different case from every sheet above, and its
+own mesh is a separate, later-landing capability (§14 Table D row 5).** A
+stitched solid is not a sheet — Table X's whole subject — so nothing above
+governs it. A CLOSED, all-planar stitched body (`stitchAllTetrahedronEligible`,
+§6.4: every face a `Plane` bounded entirely by `Line3` edges, zero
+`normalBound`) restates the triangle set `Stitch`'s own build already
+assembled and audited (`tessellate_stitch.go`), the same shape
+`docs/tessellation-design.md` §2's `loftPayload` row restates a loft's: no
+chording, no retriangulation, no moved coordinate, and so no chord tolerance
+to take. Its per-face bound is the largest `Vertex.Bound()` over the vertices
+that face's own triangles touch, zero exactly when every one of them is —
+the box worked example's own case. A stitched body holding a face that is not
+a `Plane` bounded entirely by `Line3` edges, and an OPEN stitched sheet, both
+stay `ErrUnsupported`, staged past this increment. The mesh publishes no
+occupied-volume proof (`symDiffOK` stays false in this increment), so
+`Union`, `Cut` and `Intersect` keep refusing a stitched operand on the
+identical reasoning Table X's boolean row states for a sheet, whatever the
+exact tetrahedron sum itself already proves about signed volume.
+
 Two consequences this design leans on, stated here as claims and derived there.
 A sheet mesh is never a boolean operand, which is what Table X's boolean row
 rests on. An open body's STL is not a solid file, and `Body.STL`'s doc comment
@@ -1611,6 +1630,13 @@ rather than after.
 A sheet is a first-class body everywhere it is admitted: it is registered in
 the document, it appears in `Document.Bodies()`, `Verify` reports on it, and
 it retires and copies on `docs/api-design.md` §6's uniform terms.
+
+A stitched body that closes to a `BodySolid` is not a sheet at all, so no row
+above governs its mesh or its boolean reach: §10's own stitched-solid
+paragraph and `docs/tessellation-design.md` §2's `stitchPayload` row state
+its mesh, and the boolean row's own reasoning above — no occupied-volume
+proof, so no boolean admits it — is exactly what a stitched solid's mesh
+restates unchanged, until a later increment states one.
 
 ## 12. Table A — the contract amendments this design forces
 
@@ -1686,12 +1712,14 @@ ANSWER is accepted and reads `Suspect`.
 | 2 | `Stitch` over exact all-planar boundaries (Table J with J5, Table C's first two rows), including its own directed-edge parity leg, derived orientation, and the recorded-weld replay a placement reuses; `Body.Patch`; the sheet-against-solid containment cast and clearance gap of §9.3, narrowing when `DiagUnsupportedPairSheet` fires. `Unstitch` is a separate follow-up: it needs no new proof this increment does not already carry, but it is its own PR |
 | 3 | `WithSurfaceResult()` on `Sweep` and `Loft`; the shared-denotation certificate — two distinct proofs sharing one name, never one lifted "together": a LEVEL token proving N chain vertices coplanar by shared construction, which lifts §5.2 gate 3's bounded-chain half of R6 for a straight prism's own rim; a separate CURVE token proving two edges (or two vertices) denote one curve or point, which lifts Table J's J5 for a straight prism's own rim and a revolve's own internal junction, and does not follow from the level token proving anything — coplanarity and coincidence are different proofs over different code paths; the per-surface flux integral that lifts Table C's curved-closure refusal (R8); the undercut survey over a surface-extruded prism sheet's positive side — the only sheet family this increment opens it on; a loft, stitch or one-span-sweep sheet moves from `DiagSurveyPrerequisite` to `DiagUnsupportedSurveyPayload` for it instead, and stays there until its own proof lands |
 | 4 | The revolve sheet mesh (§10): the meridian and angular chordings a surface result keeps, the caps it omits — and, where the profile meets the axis, the on-axis edge between two poles that only the caps carried (Table W) — the cap terms its area slack drops, and the manifold-with-boundary audit in the closed-mesh audit's place. It also settles which audit a CLOSED sheet runs |
-| 5 | A stitched solid's own mesh: the manifold-with-boundary/closed-mesh audit reads a `stitchPayload`'s already-triangulated face set directly rather than chording one. A stitched solid's own clearance-kernel carrier model: `newBodyGeomBudget` (`docs/clearance-design.md` §2) gains a `stitchPayload` arm, which is what lets a stitched solid reach a proven pair relation at all — until it lands, `Tessellate`/`STL`/`OBJ` and every pair question read `ErrUnsupported`/undecided exactly as they do for any other payload this evaluator has not wired an arm for |
+| 5 | A CLOSED, all-planar stitched solid's own mesh: `stitchPayload` records the final outward-wound triangle set `Stitch`'s own build assembled and audited (§6.4), attributed by the live rebuilt face per triangle rather than by role (two welded operands can carry the same role string), and `tessellate_stitch.go` restates it with no chording — the closed-mesh audit plus its own vertex-link safety net run over that restated set, never a chorded approximation. A curved, mixed, or OPEN stitched body's mesh stays `ErrUnsupported`, staged to a later increment. The mesh publishes no occupied-volume proof in this increment (`symDiffOK` false), so no boolean admits a stitched operand. A stitched solid's own clearance-kernel carrier model is a later increment still: `newBodyGeomBudget` (`docs/clearance-design.md` §2) gains a `stitchPayload` arm only then, which is what lets a stitched solid reach a proven pair relation at all — until it lands, every pair question involving a stitched solid reads undecided exactly as it does for any other payload this evaluator has not wired a carrier for |
 
 **Increment 4 depends on neither 2 nor 3, and they do not depend on it.**
-Increment 5 depends only on increment 2, which is what gives it a triangle
-set and a topology to read; it is numbered after 3 and 4 only so that no
-reference to them has to move. Any order among 3, 4 and 5 is admissible.
+Increment 5 depends on increment 2 for the triangle set and topology its own
+mesh restates, and on increment 3 for identifying — never yet covering — the
+curved and flux-integrated stitched solids its own mesh does not reach; it is
+numbered after 3 and 4 only so that no reference to them has to move. Any
+order among 3, 4 and 5 is admissible.
 
 **A closed sheet is increment 4's own question, and no earlier increment meets
 one.** `Extrude` never closes its wall set, so every prism sheet has free
@@ -1779,6 +1807,13 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T55 | T53's fixture swept across a family of `Major`/`Minor` radii and axial centres | `\|published − analytic\| <= Bound` on `Volume` and `Centroid` for every member |
 | T56 | a hand-built `Torus` face whose `Axis` is not exactly a signed coordinate vector, or whose `Center` sits off that axis line, driven directly at `stitchFaceFluxAndMoment` (internal — every public fixture revolves about `uAxis`, coordinate-aligned through the origin, so no public fixture reaches this gate) | `ErrUnsupported` (R8): this evaluator has no sound bound for `Major`/`Minor`'s own rounding off a coordinate-aligned axis |
 | T57 | a hand-built `Torus` face whose two rims sit at axial offsets from `Center` other than exactly `±Minor` (a narrower window, a wider one, or both rims on the same side), driven directly at `stitchFaceFluxAndMoment` (internal — every reachable revolve wall junction in this tree happens to land on the exact half window, so no public fixture reaches this gate) | `ErrUnsupported` (R8): this evaluator has no sound way to recover a narrower angular window without an unbounded trig computation |
+| T58 | T3's stitched box (`stitchBoxSheets`), `Tessellate(0.1 mm)` | exactly 12 triangles and 8 vertices; every vertex bit-equal to one of the box's 8 corners; `len(SourceFaces()) == 12` over exactly 6 distinct faces, 2 triangles each; `Bound()` exactly zero; the tetrahedron sum over the mesh equals 60000 mm³ to the bit; every directed edge occurs once with its reverse once |
+| T59 | T58's box `Placed` by a translation far from the origin, then a rotation | `Bound()` is strictly positive and equals the body's own largest `Vertex.Bound()`; 12 triangles unchanged; the mesh's integrated volume encloses 60000 mm³ within the published bound — the placement-delta route to a nonzero per-face bound |
+| T60 | T42's bounded-rim stitched solid (`TestStitchClosesABoundedPatchedWallWithChargedVolumeBound`'s fixture: a `Symmetric` surface-extruded wall, `Body.Patch`-capped, welded by the CURVE certificate) at identity, no placement in play | `Bound()` strictly positive and equal to the largest vertex bound; `areaSlack` strictly positive — the independent, class-bound route to a nonzero per-face bound, which T59 alone cannot distinguish from a placement-only charge |
+| T62 | each of T46's frustum, T50's ball and T53's torus body, stitched | `Tessellate`, `STL` and `OBJ` each return `ErrUnsupported`; the message names the face this evaluator has no chording arm for, not the payload class; the body's analytic `Volume`/`Centroid` still read unchanged afterwards |
+| T63 | T58's box tessellated twice at two different tolerances | equal vertex order, triangle order and source-face order; byte-identical STL and byte-identical OBJ; mutating the returned `Vertices()`/`Triangles()` slices changes nothing on a later call |
+| T64 | `Union` of T58's box with a plain `Extrude` block | `ErrUnsupported`, and the failure is the volume-proof refusal (`operandSymDiff`'s wording, via `requireVolumeProvingPayload`'s own `stitchPayload` arm), not the payload-class one; the document is unchanged and both operands stay live |
+| T70 | a hand-built stitched face set whose recorded triangle list repeats a directed edge, driven directly at `tessellateStitch` (internal — `checkStitchClosure` already catches this at build time, so no public fixture reaches this gate) | the audit refuses and no partial mesh is returned |
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'`

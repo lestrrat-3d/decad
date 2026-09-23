@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -451,25 +452,91 @@ func TestStitchTableR(t *testing.T) {
 	})
 }
 
-// TestStitchSolidDoesNotYetTessellate pins one of the two out-of-scope
-// refusals docs/surface-design.md §14's increment 5 names: a stitched
-// solid's mesh is staged, so Tessellate/STL/OBJ refuse it exactly as they
-// refuse any other payload this evaluator has not wired a chording arm for.
-func TestStitchSolidDoesNotYetTessellate(t *testing.T) {
+// TestStitchCurvedSolidDoesNotYetTessellate is docs/surface-design.md's T62:
+// a stitched solid holding a face that is not a Plane bounded entirely by
+// Line3 edges has no recorded triangle set to restate (§14 Table D row 5),
+// so Tessellate/STL/OBJ refuse it exactly as they refuse any other payload
+// this evaluator has not wired a chording arm for, naming the offending
+// face's own kind rather than the stitchPayload class — and the refusal
+// touches nothing the body already proved: its analytic Volume/Centroid
+// read unchanged afterward. This replaces
+// TestStitchSolidDoesNotYetTessellate, whose all-planar box case now
+// succeeds (TestStitchSolidTessellatesItsOwnTriangleSet,
+// tessellate_stitch_test.go).
+func TestStitchCurvedSolidDoesNotYetTessellate(t *testing.T) {
 	t.Parallel()
-	doc := decad.New()
-	walls, bottom, top := stitchBoxSheets(t, doc, 10)
-	box, err := decad.Stitch(walls, bottom, top)
-	require.NoError(t, err)
 
-	_, err = box.Tessellate(units.Millimeters(0.1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	// Each fixture's first non-planar face may be either wall the revolve
+	// built, so the message is checked against the SET of curved kinds that
+	// fixture can name, never a single hardcoded one.
+	fixtures := map[string]struct {
+		build func(t *testing.T) *decad.Body
+		names []string
+	}{
+		"T46 frustum": {
+			build: func(t *testing.T) *decad.Body {
+				const uLen, vLo0, vHi0, vLo1, vHi1 = 10.0, 5.0, 15.0, 8.0, 12.0
+				_, sheet := frustumSheet(t, uLen, vLo0, vHi0, vLo1, vHi1)
+				solid, err := decad.Stitch(sheet)
+				require.NoError(t, err)
+				return solid
+			},
+			names: []string{"Cone"},
+		},
+		"T50 ball": {
+			build: func(t *testing.T) *decad.Body {
+				_, sheet := sphereRevolveSheet(t, 0, 10)
+				solid, err := decad.Stitch(sheet)
+				require.NoError(t, err)
+				return solid
+			},
+			names: []string{"Sphere"},
+		},
+		"T53 torus body": {
+			build: func(t *testing.T) *decad.Body {
+				sheet := halfTorusRevolveSheet(t, 5, 10, 5)
+				solid, err := decad.Stitch(sheet)
+				require.NoError(t, err)
+				return solid
+			},
+			names: []string{"Cylinder", "Torus"},
+		},
+	}
 
-	var sink discardWriter
-	err = box.STL(sink)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	err = box.OBJ(sink)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	for name, fx := range fixtures {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			solid := fx.build(t)
+			require.Equal(t, decad.BodySolid, solid.Kind())
+
+			wantVol, err := solid.Volume()
+			require.NoError(t, err)
+			wantCen, err := solid.Centroid()
+			require.NoError(t, err)
+
+			_, err = solid.Tessellate(units.Millimeters(0.1))
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			named := false
+			for _, kind := range fx.names {
+				named = named || strings.Contains(err.Error(), kind)
+			}
+			require.True(t, named, "the message %q names the face kind, not the payload class", err.Error())
+			require.NotContains(t, err.Error(), "stitchPayload")
+
+			var sink discardWriter
+			err = solid.STL(sink)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			err = solid.OBJ(sink)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+
+			gotVol, err := solid.Volume()
+			require.NoError(t, err)
+			gotCen, err := solid.Centroid()
+			require.NoError(t, err)
+			require.Equal(t, wantVol, gotVol, "a refused mesh never touches the analytic measurement")
+			require.Equal(t, wantCen, gotCen)
+		})
+	}
 }
 
 type discardWriter struct{}

@@ -1606,8 +1606,16 @@
 2	0.00	TestStitchSphereRevolveSheetClosesToABall
 3	0.00	TestStitchPlacedBoxIsApproximateSolid
 0	0.00	TestStitchTableR
-1	0.00	TestStitchSolidDoesNotYetTessellate
+1	0.00	TestStitchSolidTessellatesItsOwnTriangleSet
 2	0.00	TestStitchSolidDoesNotYetReachAPairRelation
+3	0.00	TestStitchCurvedSolidDoesNotYetTessellate
+0	0.00	TestStitchPlacedSolidTessellateBoundReadsVertexBound
+1	0.00	TestStitchSolidTessellateIsDeterministic
+2	0.00	TestStitchSolidUnionRefusesOnTheVolumeProof
+3	0.00	TestStitchTessellateClassBoundIsIndependentOfPlacement
+0	0.00	TestTessellateStitchRefusesARepeatedDirectedEdge
+1	0.00	TestStitchSolidTessellateRecordsThePostSignFixTriangleSet
+2	0.00	TestFaceIsTetrahedronEligibleRefusesHeldPlanarFaceted
 3	0.00	TestStitchOrientationRefusesMobiusAssembly
 0	0.00	TestStitchClosureRefusesNonManifoldEdge
 1	0.00	TestStitchAuditRefusesOverlappingAssembly

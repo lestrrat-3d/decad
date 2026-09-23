@@ -188,6 +188,9 @@ func (b *Body) defaultChordTolerance() (units.Value, error) {
 	if pp, ok := b.payload.(prismPayload); ok {
 		tol = math.Max(tol, productUpper(2, pp.sectionDelta))
 	}
+	// A stitchPayload restatement takes no chord tolerance at all
+	// (tessellate_stitch.go), so the size-derived default above is already
+	// harmless for it and needs no arm of its own here.
 	return units.Millimeters(tol), nil
 }
 

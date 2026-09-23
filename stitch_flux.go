@@ -249,8 +249,19 @@ func stitchAllTetrahedronEligible(faces []*Face) bool {
 	return true
 }
 
+// faceIsTetrahedronEligible checks the surface tag itself (Plane), never
+// f.isPlanar(): isPlanar also admits a heldPlanar Faceted face — a
+// boolean-built face that stands for flat source geometry but is not itself
+// a Plane — and triangulateStitchFaces demands a Plane outright, erroring on
+// anything else. Latent today because no Faceted face is ever a stitch
+// operand, but the mesh restatement (tessellate_stitch.go) gives the
+// mismatch a second caller, so the tighter check closes it here rather than
+// leave two admission rules that can disagree.
 func faceIsTetrahedronEligible(f *Face) bool {
-	if !f.isPlanar() || f.normalBound != 0 {
+	if _, ok := f.surface.(Plane); !ok {
+		return false
+	}
+	if f.normalBound != 0 {
 		return false
 	}
 	for _, l := range f.loops {
