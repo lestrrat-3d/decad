@@ -886,6 +886,34 @@ func newBodyGeomBudget(budget *workBudget, b *Body) (*bodyGeom, bool, error) {
 			return nil, false, nil
 		}
 		ok, err = g.addRevolveFaces(budget, pl)
+	case stitchPayload:
+		// Refuse outright unless the recorded triangle set exists (a CLOSED,
+		// all-planar body — tessellate_stitch.go's own gate) AND every vertex
+		// of the body carries a proven bound of EXACTLY zero. The second
+		// condition subsumes a nonzero placement delta: a placement widens
+		// every vertex bound (stitch.go's rigidRoundAllow), so a placed
+		// stitched solid never passes it either. This is narrower than
+		// addPrismFaces' own standing below: that arm builds its carriers
+		// through a call that applies the placement transform and rounds,
+		// then treats the result as exact and charges the rounding nowhere,
+		// which is a pre-existing looseness this arm does not copy
+		// (docs/clearance-design.md §2). A residual bound has nowhere to go
+		// here either — clearancePair carries no payload-delta widening term
+		// for this arm to charge one against — so the only sound answer for
+		// a bounded stitched body is no model at all, leaving the pair
+		// undecided rather than certifying a gap against the wrong boundary.
+		if pl.tris == nil {
+			return nil, false, nil
+		}
+		for _, v := range b.Vertices() {
+			if err := budget.step(); err != nil {
+				return nil, false, err
+			}
+			if v.Position().Bound.Mag() != 0 {
+				return nil, false, nil
+			}
+		}
+		ok, err = g.addStitchFaces(budget, b, pl)
 	default:
 		return nil, false, nil
 	}
@@ -1345,6 +1373,89 @@ func (g *bodyGeom) addRevolveFaces(budget *workBudget, rp revolvePayload) (bool,
 			f.wit = capWitnesses(f)
 			g.faces = append(g.faces, f)
 		}
+	}
+	return true, nil
+}
+
+// addStitchFaces builds one exact planar carrier per live face of a CLOSED,
+// all-planar stitched body (docs/clearance-design.md §2). The caller
+// (newBodyGeomBudget) reaches this arm only once every vertex of the body
+// carries a proven bound of exactly zero, so every coordinate read here is
+// exact and this arm introduces no bound term of its own.
+//
+// The plane frame's origin and axes come straight off the face's own Plane
+// tag, negating the normal when the face is reversed — the identical
+// construction fixWeldedEdgeConvexity (stitch.go) already uses for a welded
+// edge's own convexity. The trim region reads each loop's own coedge start
+// vertices, outer loop and holes together, exactly as addPrismFaces builds
+// its cap region. The interior witnesses are the payload's own recorded
+// triangle centroids for that face, filtered by the region's own classify
+// call as a reject-only confirmation (CLAUDE.md's reject-only rule): ear
+// clipping tiles the polygon, so every centroid is interior by construction,
+// and this filter costs nothing more than a proof it never fires wrong.
+func (g *bodyGeom) addStitchFaces(budget *workBudget, b *Body, sp stitchPayload) (bool, error) {
+	for _, f := range b.Faces() {
+		if err := budget.step(); err != nil {
+			return false, err
+		}
+		pl, ok := f.surface.(Plane)
+		if !ok {
+			// Every face of a closed, all-planar stitched body is a Plane
+			// (tessellate_stitch.go's own gate); anything else reaching here
+			// means the payload should never have offered this arm a model.
+			return false, nil
+		}
+		normal := pl.Frame.N()
+		if f.reversed {
+			normal = normal.Scale(-1)
+		}
+		cf := &cFace{kind: ckPlane, o: pl.Frame.Origin(), u: pl.Frame.U(), v: pl.Frame.V(), n: normal}
+
+		var elems []surveyElem
+		var pts []r3.Vec
+		for _, l := range f.loops {
+			cnt := len(l.coedges)
+			if cnt == 0 {
+				return false, nil
+			}
+			local := make([]r3.Vec, cnt)
+			for i, ce := range l.coedges {
+				if err := budget.step(); err != nil {
+					return false, err
+				}
+				v := ce.Start().position
+				pts = append(pts, v)
+				local[i] = pl.Frame.ToLocal(v)
+			}
+			for i := range local {
+				a, next := local[i], local[(i+1)%cnt]
+				if el, ok := lineElem(a.X, a.Y, next.X, next.Y); ok {
+					elems = append(elems, el)
+				}
+			}
+		}
+		region, err := newRegion2Budget(budget, elems)
+		if err != nil {
+			return false, err
+		}
+		cf.region = region
+		cf.box = boxOf(pts...)
+
+		for i, tri := range sp.tris {
+			if sp.triFaces[i] != f {
+				continue
+			}
+			if err := budget.step(); err != nil {
+				return false, err
+			}
+			a, b2, c := sp.verts[tri[0]], sp.verts[tri[1]], sp.verts[tri[2]]
+			cen := a.Add(b2).Add(c).Scale(1.0 / 3.0)
+			lx, ly := cf.planeCoords(cen)
+			if cf.region.classify(lx, ly, cf.region.tol()) > 0 {
+				cf.wit = append(cf.wit, cen)
+			}
+		}
+		g.faces = append(g.faces, cf)
 	}
 	return true, nil
 }

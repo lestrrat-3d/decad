@@ -859,3 +859,138 @@ func TestNewBodyGeomRefusesSurfaceResultRevolve(t *testing.T) {
 	require.False(t, ok,
 		`a partial-sweep surface-result revolve must be refused a model, not handed a closed one`)
 }
+
+// stitchedBoxForClearanceTest builds T3's worked box (docs/surface-design.md)
+// directly against the package's own evaluator entry points, for a test that
+// must reach the private bodyGeom the public seam does not expose.
+func stitchedBoxForClearanceTest(t *testing.T) (doc *Document, box *Body) {
+	t.Helper()
+	w := sketch.NewWorld()
+	doc = New()
+
+	ws, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	wrect := ws.CreateRectangle(0, 0, 100, 60)
+	ws.Fix(wrect.A)
+	_, err = ws.Solve(t.Context())
+	require.NoError(t, err)
+	walls, err := doc.Extrude(ws, ws.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along}, WithSurfaceResult())
+	require.NoError(t, err)
+
+	bs, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	brect := bs.CreateRectangle(0, 0, 100, 60)
+	bs.Fix(brect.A)
+	_, err = bs.Solve(t.Context())
+	require.NoError(t, err)
+	bottom, err := doc.Patch(bs, bs.Profiles()[0])
+	require.NoError(t, err)
+
+	topPlane, err := w.CreateOffsetPlane(w.XY(), 10)
+	require.NoError(t, err)
+	ts, err := w.CreateSketch(topPlane)
+	require.NoError(t, err)
+	trect := ts.CreateRectangle(0, 0, 100, 60)
+	ts.Fix(trect.A)
+	_, err = ts.Solve(t.Context())
+	require.NoError(t, err)
+	top, err := doc.Patch(ts, ts.Profiles()[0])
+	require.NoError(t, err)
+
+	box, err = Stitch(walls, bottom, top)
+	require.NoError(t, err)
+	return doc, box
+}
+
+// TestAddStitchFacesBuildsExactPlanarCarriers is docs/clearance-design.md
+// §2's stitch arm (C2), computed-geometry coverage beside the public
+// stitch_test.go rows: every one of the box's 6 faces builds a ckPlane
+// carrier whose outward normal is an exact signed unit axis vector — the
+// same box T3 already proves closed and outward-wound — and whose own
+// region correctly admits an interior probe and rejects an exterior one.
+func TestAddStitchFacesBuildsExactPlanarCarriers(t *testing.T) {
+	t.Parallel()
+	_, box := stitchedBoxForClearanceTest(t)
+
+	g, ok := newBodyGeom(box)
+	require.True(t, ok, "a zero-bound, all-planar stitched box must reach a carrier model")
+	require.Len(t, g.faces, 6)
+
+	var normals []r3.Vec
+	for _, f := range g.faces {
+		require.Equal(t, ckPlane, f.kind)
+		require.InDelta(t, 1, f.n.Len(), 1e-12, "every face normal is a unit vector")
+		normals = append(normals, f.n)
+
+		require.NotEmpty(t, f.wit, "every face carries at least one interior witness")
+		for _, w := range f.wit {
+			lx, ly := f.planeCoords(w)
+			require.Equal(t, 1, f.region.classify(lx, ly, f.region.tol()),
+				"a recorded triangle centroid must classify strictly inside its own face's region")
+		}
+		require.Equal(t, -1, f.region.classify(1e6, 1e6, f.region.tol()),
+			"a point far outside the box's own extent must classify strictly outside")
+	}
+
+	// The box's own 6 outward normals are exactly the 6 signed axis unit
+	// vectors, each once — the direct geometric proof that fixWeldedEdgeConvexity's
+	// own frame/reversed construction (which addStitchFaces reuses) gives the
+	// right outward sense on every face, not merely a unit-length one.
+	want := map[r3.Vec]bool{
+		r3.NewVec(1, 0, 0):  false,
+		r3.NewVec(-1, 0, 0): false,
+		r3.NewVec(0, 1, 0):  false,
+		r3.NewVec(0, -1, 0): false,
+		r3.NewVec(0, 0, 1):  false,
+		r3.NewVec(0, 0, -1): false,
+	}
+	for _, n := range normals {
+		found := false
+		for axis := range want {
+			if n.Sub(axis).Len() < 1e-9 {
+				want[axis] = true
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "face normal %v is not an exact signed axis vector", n)
+	}
+	for axis, seen := range want {
+		require.True(t, seen, "axis %v is missing from the box's own outward normals", axis)
+	}
+}
+
+// TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal is
+// stitch_test.go's TestStitchOverlappingSolidStaysUndecided (T66) own
+// internal companion: the clearance kernel DOES prove pairOverlapping for
+// this exact fixture — the carrier model this file's addStitchFaces builds
+// admits the transversal crossing — even though Verify's own public report
+// never gets to read that verdict, because requireVolumeProvingPayload
+// (boolean.go) refuses the stitched operand before measuredInterference
+// (interference.go) ever consults it. That refusal is a boolean-side limit
+// on this increment's mesh (tessellate_stitch.go publishes no
+// occupied-volume proof), never a clearance-kernel one.
+func TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal(t *testing.T) {
+	t.Parallel()
+	doc, box := stitchedBoxForClearanceTest(t)
+
+	w := sketch.NewWorld()
+	bs, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := bs.CreateRectangle(50, 0, 150, 60)
+	bs.Fix(rect.A)
+	_, err = bs.Solve(t.Context())
+	require.NoError(t, err)
+	// The block's own height (6 mm) stays under the box's own 10 mm rim, so
+	// the two z=10/z=6 caps never land on the same plane — a same-orientation
+	// coplanar cap pair is its own ambiguous configuration the kernel
+	// correctly reads as unsure, which would only obscure the point this
+	// test makes.
+	block, err := doc.Extrude(bs, bs.Profiles()[0], Distance{D: units.Millimeters(6), Dir: Along})
+	require.NoError(t, err)
+
+	res, err := clearancePair(t.Context(), box, block, false)
+	require.NoError(t, err)
+	require.Equal(t, pairOverlapping, res.verdict)
+	require.Nil(t, res.contained, "a true, non-nesting overlap, never a strict containment")
+}
