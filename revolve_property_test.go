@@ -4,7 +4,7 @@ import (
 	"errors"
 	"math"
 	"math/rand"
-	"strings"
+	"sync"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -432,6 +432,25 @@ func newCone(rng *rand.Rand) setup {
 
 // --- the property driver -----------------------------------------------------
 
+// revolvePropertyExpectedRefusals pins the exact set of draws this seed
+// produces whose sketch-solver-resolved geometry puts a boundary vertex on
+// the wrong side of the random axis by less than a ulp — a genuine (if
+// vanishingly small) defect in THAT draw's own geometry, which
+// resolveAxisSide's strict admission gate (revolve_axis.go, CLAUDE.md's
+// reject-only rule) now correctly refuses rather than silently admitting
+// under the old tolerance. Measured stable across three repeated local runs
+// on amd64/linux: annularRect refuses draws 4, 7 and 8 of its 12; cone
+// refuses draws 3, 4, 5 and 11 of its 12; groove, sphere and torus refuse
+// none of their 12 — 7 of 60 draws total. This is NOT verified on arm64: the
+// admission gate reads the SIGN of a computed quantity within a ulp of zero,
+// and FMA differs between amd64 and arm64 (`~/.claude/docs's` own note on
+// this repo), so a flip on that architecture is plausible and would need its
+// own measurement to re-pin.
+var revolvePropertyExpectedRefusals = map[string]map[int]bool{
+	"annularRect": {4: true, 7: true, 8: true},
+	"cone":        {3: true, 4: true, 5: true, 11: true},
+}
+
 func TestRevolvePropertyInvariants(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewSource(revolvePropertySeed))
@@ -442,21 +461,42 @@ func TestRevolvePropertyInvariants(t *testing.T) {
 	}
 
 	const perTemplate = 12
+	var mu sync.Mutex
+	refused := map[string]map[int]bool{}
+	t.Cleanup(func() {
+		mu.Lock()
+		defer mu.Unlock()
+		require.Equal(t, revolvePropertyExpectedRefusals, refused,
+			"the set of draws refused for a proven-negative radial minimum changed; "+
+				"a regression that widens or narrows this must turn red here")
+	})
+
 	for _, factory := range factories {
-		for range perTemplate {
+		for draw := range perTemplate {
 			su := factory(rng)
 			ap := randAxisPlacement(rng)
 			sw := randSweep(rng)
 			xf := randPlacement(t, rng)
 			t.Run(su.name, func(t *testing.T) {
 				t.Parallel()
-				runRevolveCase(t, su, ap, sw, xf)
+				if runRevolveCase(t, su, ap, sw, xf) {
+					mu.Lock()
+					if refused[su.name] == nil {
+						refused[su.name] = map[int]bool{}
+					}
+					refused[su.name][draw] = true
+					mu.Unlock()
+				}
 			})
 		}
 	}
 }
 
-func runRevolveCase(t *testing.T, su setup, ap axisPlacement, sw sweep, xf r3.Transform) {
+// runRevolveCase builds and checks one randomized draw, returning true when
+// the draw was correctly REFUSED for a proven-negative radial minimum (the
+// pinned, expected outcome for a small named set of draws) rather than run
+// through the rest of the invariants.
+func runRevolveCase(t *testing.T, su setup, ap axisPlacement, sw sweep, xf r3.Transform) bool {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -473,20 +513,15 @@ func runRevolveCase(t *testing.T, su setup, ap axisPlacement, sw sweep, xf r3.Tr
 
 	doc := decad.New()
 	body, err := doc.Revolve(s, profiles[0], ap.sketchLine(), sw.ext)
-	if err != nil && errors.Is(err, decad.ErrDegenerate) && strings.Contains(err.Error(), "radial minimum") {
-		// The strict admission gate (revolve_axis.go's resolveAxisSide) refuses
-		// a region whose radial minimum is PROVEN negative rather than merely
-		// unproven — CLAUDE.md's reject-only rule, never a tolerance. A random
-		// axis this generic occasionally solves with a boundary vertex on the
-		// wrong side of the axis by less than a ulp, which is a genuine (if
-		// vanishingly small) defect in THIS draw's own geometry, not a false
-		// refusal: admitting it under the old tolerance is exactly the defect
-		// this repair closes. Skip this draw rather than fail the suite on a
-		// correct refusal.
-		t.Skipf("%s: axis proves the radial minimum negative, correctly refused (axis=%+v sweep=%+v): %v",
-			su.name, ap, sw, err)
+	if err != nil {
+		// A refusal is accepted ONLY as the strict admission gate's own named
+		// outcome — never any other error masquerading as an expected one.
+		require.ErrorIsf(t, err, decad.ErrDegenerate,
+			"%s revolve failed (axis=%+v sweep=%+v)", su.name, ap, sw)
+		require.Containsf(t, err.Error(), "radial minimum",
+			"%s revolve refused for an unexpected reason (axis=%+v sweep=%+v): %v", su.name, ap, sw, err)
+		return true
 	}
-	require.NoErrorf(t, err, "%s revolve failed (axis=%+v sweep=%+v)", su.name, ap, sw)
 
 	// Independent Pappus cross-check: the engine's volume is q * dphi; a full
 	// turn's dphi is 2*pi. q here is computed by hand from the meridian region.
@@ -531,6 +566,7 @@ func runRevolveCase(t *testing.T, su setup, ap axisPlacement, sw sweep, xf r3.Tr
 	require.InDelta(t, wantC.X, cenP.Value.X, 1e-6)
 	require.InDelta(t, wantC.Y, cenP.Value.Y, 1e-6)
 	require.InDelta(t, wantC.Z, cenP.Value.Z, 1e-6)
+	return false
 }
 
 func mmOf2(v units.Value) float64 {

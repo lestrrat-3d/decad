@@ -6,11 +6,12 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md §15's T90-T94: the revolve axis-band
+// This file is docs/surface-design.md §15's T90-T95: the revolve axis-band
 // repair (revolve_axis.go's resolveAxisSide, revolve_build.go's
 // revolveAxisAdmitBandCharge/revolveAxisAdmitVolumeCharge). Every fixture is
 // a straight-edged rectangle in plane-local (u, v), U the axial coordinate
@@ -225,4 +226,106 @@ func TestRevolveAxisBandChargesTheOffsetSubtraction(t *testing.T) {
 	// the offset subtraction's rounding went uncounted, exactly defect #2.
 	msg := err.Error()
 	require.NotContains(t, msg, "±0 mm", "the roff charge must be nonzero, never silently dropped")
+}
+
+// T95: the charged path exercised through REAL, sketch-solver-resolved
+// geometry rather than a hand-set axisFrame, so the containment T90/T91
+// assert in isolation is also established at least once on a body this
+// evaluator actually built end to end. tiltedAxis mirrors
+// revolve_bounds_test.go's own fixture (anchor (0, -20), direction (3, 4)/5,
+// not exactly representable): a shaft profile whose near edge sits AT that
+// axis (rather than dipped below it) resolves with a genuinely nonzero
+// radialAdmitAllow — confirmed below rather than assumed — because the
+// tilted axis's own rounding leaves the boundary scan's computed radial
+// minimum a few ulps from the true zero, on either side, so resolveAxisSide
+// cannot prove non-negativity even though the true value is exactly zero.
+//
+// The published volume interval contains the enclosed value here, but NOT
+// because of this admitted band's own charge: radialAdmitAllow measures at
+// float64-epsilon scale (a few ulps of the axis's own magnitude), so
+// revolveAxisAdmitVolumeCharge's tol² term is many orders of magnitude
+// smaller than the OTHER analytic rounding this build already charges (the
+// axis anchor/direction bounds folded through axisMoments, the sweep's own
+// rounding) — asserted below by showing the published bound is UNCHANGED
+// whether or not the dedicated charge runs. That is a properly established
+// fact, not an assumption: T90/T91 are what make the charge itself
+// load-bearing, at a magnitude no real sketch-resolved fixture in this tree
+// reaches, and this test is what shows a real one does not need it to.
+func TestRevolveAxisBandRealGeometryChargedPathVolumeContainment(t *testing.T) {
+	t.Parallel()
+	tiltedAxis := SketchLine{Start: Point2{U: 0, V: -20}, End: Point2{U: 3, V: -16}}
+	const dU, dV = 0.6, 0.8 // the axis's own (3,4)/5 direction, restated for the profile's placement
+	uv := func(z, rho float64) (float64, float64) {
+		return z*dU - rho*dV, -20 + z*dV + rho*dU
+	}
+	const length, radius = 100.0, 5.0
+
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	pt := func(z, rho float64) *sketch.Point {
+		u, v := uv(z, rho)
+		p := s.CreatePoint(u, v)
+		s.Fix(p)
+		return p
+	}
+	a, b, c, d := pt(0, 0), pt(length, 0), pt(length, radius), pt(0, radius)
+	s.CreateLine(a, b)
+	s.CreateLine(b, c)
+	s.CreateLine(c, d)
+	s.CreateLine(d, a)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	require.NotEmpty(t, profiles)
+
+	doc := New()
+	body, err := doc.Revolve(s, profiles[0], tiltedAxis, FullRevolution{})
+	require.NoError(t, err)
+
+	rp, ok := body.payload.(revolvePayload)
+	require.True(t, ok)
+	require.Positive(t, rp.ax.radialAdmitAllow,
+		"this fixture must actually exercise the charged (survStraddle) path, not the strict one")
+
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	require.Equal(t, Approximate, vol.Exactness)
+	volVal, err := vol.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	volBoundWithCharge, err := vol.Bound.In(units.CubicMillimeter)
+	require.NoError(t, err)
+
+	// The body's own snapped topology: the near wall (touching the axis at
+	// every point) collapses to wallAxis, leaving a plain cylinder.
+	var foundRadius bool
+	for _, f := range body.Faces() {
+		if cyl, ok := f.Surface().(Cylinder); ok {
+			r, err := cyl.Radius.In(units.Millimeter)
+			require.NoError(t, err)
+			require.InDelta(t, radius, r, 1e-9)
+			foundRadius = true
+		}
+	}
+	require.True(t, foundRadius, "no cylindrical wall face found")
+	enclosed := math.Pi * radius * radius * length
+	require.LessOrEqual(t, math.Abs(enclosed-volVal), volBoundWithCharge,
+		"the published volume interval must contain the volume the body's own faces enclose")
+
+	// Confirm the containment above holds independently of the dedicated
+	// charge: rebuild the SAME payload with radialAdmitAllow zeroed and check
+	// the published bound is unchanged, which is what "every other analytic
+	// rounding term already swamps this real fixture's charge" means made
+	// concrete rather than assumed.
+	rpNoCharge := rp
+	rpNoCharge.ax.radialAdmitAllow = 0
+	bodyNoCharge, err := evalRevolveContext(t.Context(), New(), producerID(0), rpNoCharge)
+	require.NoError(t, err)
+	volNoCharge, err := bodyNoCharge.Volume()
+	require.NoError(t, err)
+	volBoundNoCharge, err := volNoCharge.Bound.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.Equal(t, volBoundNoCharge, volBoundWithCharge,
+		"this real fixture's dedicated axis-band charge must be shown negligible here, not assumed: "+
+			"T90/T91 are the isolation tests that make the charge itself load-bearing")
 }
