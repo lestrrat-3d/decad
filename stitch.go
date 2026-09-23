@@ -441,7 +441,24 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 // through its body back-pointer and populated edge list (docs/surface-design.md
 // §6, correction 1's construction note), so nothing here aliases an operand's
 // own Face, Loop, CoEdge, Edge or Vertex.
+//
+// axialDelta, hasAxialDelta and normalBound copy the same way
+// unstitch.go's copyFaceUnderContext does, and for the same reason: the copy
+// carries the operand's identical surface and identical tag, so both
+// readings stay exactly as true of the copy as they were of the operand.
+// hasAxialDelta and normalBound copy verbatim; axialDelta additionally
+// widens by delta under a non-identity placement. A placed copy of an
+// operand face whose normalBound is nonzero refuses with [ErrUnsupported]
+// rather than invent the dimensionless term a sound composition would need
+// (unstitch.go's copyFaceUnderContext doc comment).
 func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.Transform, verts []r3.Vec, delta float64, srcFaces []*Face) ([]*Face, map[*Vertex]int, map[*Edge]struct{}, error) {
+	if xform != r3.Identity() {
+		for _, f := range srcFaces {
+			if f.normalBound != 0 {
+				return nil, nil, nil, fmt.Errorf(`%w: a placed copy of a face whose normalBound is nonzero has no dimensionless term to bound the placement's own rotation of the tag frame off the true rotation, so this evaluator refuses rather than guess one`, ErrUnsupported)
+			}
+		}
+	}
 	newVertByClass := map[int]*Vertex{}
 	classOf := map[*Vertex]int{}
 	// vertexForClass restates the class's own curve token (denotByClass,
@@ -524,13 +541,20 @@ func rebuildStitchTopology(ctx context.Context, plan *stitchWeldPlan, xform r3.T
 		if err != nil {
 			return nil, nil, nil, err
 		}
+		axialDelta := f.axialDelta
+		if delta > 0 {
+			axialDelta = absSumUpper(axialDelta, delta)
+		}
 		nf := &Face{
-			surface:    surface,
-			origins:    append([]FeatureRef(nil), f.origins...),
-			area:       f.area,
-			areaBound:  f.areaBound,
-			reversed:   f.reversed,
-			heldPlanar: f.heldPlanar,
+			surface:       surface,
+			origins:       append([]FeatureRef(nil), f.origins...),
+			area:          f.area,
+			areaBound:     f.areaBound,
+			reversed:      f.reversed,
+			heldPlanar:    f.heldPlanar,
+			axialDelta:    axialDelta,
+			hasAxialDelta: f.hasAxialDelta,
+			normalBound:   f.normalBound,
 		}
 		for _, l := range f.loops {
 			coedges := make([]coedge, len(l.coedges))

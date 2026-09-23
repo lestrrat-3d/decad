@@ -116,6 +116,13 @@ type unstitchPayload struct {
 
 func (up unstitchPayload) transform() r3.Transform { return up.xform }
 
+// axialDelta reports the held face's own proven axial displacement
+// (stops.go's axialDisplacement interface), so an unstitched sheet's
+// payload-wide fallback (payloadAxialDelta) reads the same figure
+// selectedFaceAxialDelta already reads straight off the face when it holds
+// one (Face.hasAxialDelta) — zero, honestly, for a face that does not.
+func (up unstitchPayload) axialDelta() float64 { return up.face.axialDelta }
+
 func (up unstitchPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	return evalUnstitchFaceContext(ctx, d, ref, up.face, up.bounds, composed)
 }
@@ -197,17 +204,32 @@ func evalUnstitchFaceContext(ctx context.Context, d *Document, ref producerID, s
 // verbatim except the surface, curve and vertex position (transformed by
 // xform through stitch.go's transformSurface/transformCurve), the
 // vertex bound / edge lengthBound (widened by delta under a non-identity
-// placement, exactly as rebuildStitchTopology widens them), and the CURVE
+// placement, exactly as rebuildStitchTopology widens them), the CURVE
 // half of the shared-denotation certificate (restated under xform by
 // curveToken.compose, denotation.go, rather than overwritten — this is one
 // of the copiers that lets a later Stitch prove an unstitched-and-restitched
 // pair coincident again even where a bound makes bit-identity alone fall
-// short). Face.axialDelta,
-// Face.hasAxialDelta and Face.normalBound are left at their zero value,
-// the same choice rebuildStitchTopology already makes for a stitched face:
-// each is a proof tied to the face's role in the body that built it, and
-// this evaluator does not re-derive it for the face's new, different body.
+// short), and Face.axialDelta.
+//
+// Face.axialDelta, Face.hasAxialDelta and Face.normalBound carry forward
+// rather than reading as absent, because the copy carries the identical
+// surface and the identical tag: normalBound states how far that surface
+// departs from that tag, and axialDelta states the same tag's own
+// displacement along the same normal, so both readings are exactly as true
+// of the copy as they were of srcFace. hasAxialDelta and normalBound copy
+// verbatim; axialDelta additionally widens by delta under a non-identity
+// placement, exactly as the vertex bound and edge lengthBound do above.
+// normalBound cannot take the same composition: it is DIMENSIONLESS while
+// delta is a length, and this package has no term for how far a placement's
+// own rounding can rotate the tag frame off the true rotation, so a placed
+// copy of a face whose normalBound is nonzero refuses with [ErrUnsupported]
+// rather than invent one — a narrowing is sound, but inventing an error
+// model is not.
 func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform, delta float64) (*Face, error) {
+	if xform != r3.Identity() && srcFace.normalBound != 0 {
+		return nil, fmt.Errorf(`%w: a placed copy of a face whose normalBound is nonzero has no dimensionless term to bound the placement's own rotation of the tag frame off the true rotation, so this evaluator refuses rather than guess one`, ErrUnsupported)
+	}
+
 	newVertByOld := map[*Vertex]*Vertex{}
 	vertexFor := func(old *Vertex) (*Vertex, error) {
 		if nv, ok := newVertByOld[old]; ok {
@@ -269,13 +291,20 @@ func copyFaceUnderContext(ctx context.Context, srcFace *Face, xform r3.Transform
 	if err != nil {
 		return nil, err
 	}
+	axialDelta := srcFace.axialDelta
+	if delta > 0 {
+		axialDelta = absSumUpper(axialDelta, delta)
+	}
 	nf := &Face{
-		surface:    surface,
-		origins:    append([]FeatureRef(nil), srcFace.origins...),
-		area:       srcFace.area,
-		areaBound:  srcFace.areaBound,
-		reversed:   srcFace.reversed,
-		heldPlanar: srcFace.heldPlanar,
+		surface:       surface,
+		origins:       append([]FeatureRef(nil), srcFace.origins...),
+		area:          srcFace.area,
+		areaBound:     srcFace.areaBound,
+		reversed:      srcFace.reversed,
+		heldPlanar:    srcFace.heldPlanar,
+		axialDelta:    axialDelta,
+		hasAxialDelta: srcFace.hasAxialDelta,
+		normalBound:   srcFace.normalBound,
 	}
 	for _, l := range srcFace.loops {
 		if err := ctx.Err(); err != nil {

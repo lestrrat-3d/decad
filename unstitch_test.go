@@ -451,3 +451,52 @@ func TestUnstitchCylinderWallBoundsAreSoundButWholeReceiver(t *testing.T) {
 		require.Equal(t, 10.0, got.Max.Y, "result %d", i)
 	}
 }
+
+// TestUnstitchedCapToFaceStopMatchesUnUnstitchedCap is
+// docs/surface-design.md's T81: a ToFace stop resolved against an
+// unstitched cap must publish the identical Exactness and Bound as the same
+// stop resolved against the un-unstitched plate — Unstitch changes
+// representation, never the proof a body-relative stop reads off the cap it
+// selects. The plate's own extrude depth is stated in inches, a genuine
+// unit-conversion rounding (document.go), so the cap's own axialDelta is
+// nonzero and the stop reads Approximate on both sides unless the copy
+// drops it.
+func TestUnstitchedCapToFaceStopMatchesUnUnstitchedCap(t *testing.T) {
+	t.Parallel()
+	s, plateProf, pinProf := plateAndPin(t)
+
+	doc1 := decad.New()
+	plate, err := doc1.Extrude(s, plateProf, decad.Distance{D: units.Inches(10), Dir: decad.Along})
+	require.NoError(t, err)
+	pin, err := doc1.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate)})
+	require.NoError(t, err)
+	want, err := pin.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, want.Exactness,
+		"the inch-stated depth's own unit-conversion rounding must actually reach the stop")
+
+	doc2 := decad.New()
+	plate2, err := doc2.Extrude(s, plateProf, decad.Distance{D: units.Inches(10), Dir: decad.Along})
+	require.NoError(t, err)
+	capSelector := capEndFace(plate2)
+	sheets, err := plate2.Unstitch()
+	require.NoError(t, err)
+	var capSheet *decad.Body
+	for _, sh := range sheets {
+		if faces, err := capSelector.SelectFaces(sh); err == nil && len(faces) == 1 {
+			capSheet = sh
+			break
+		}
+	}
+	require.NotNil(t, capSheet, "one of the six unstitched sheets must be the cap")
+
+	pin2, err := doc2.Extrude(s, pinProf, decad.ToFace{Body: capSheet, Face: decad.Faces()})
+	require.NoError(t, err)
+	got, err := pin2.Bounds()
+	require.NoError(t, err)
+
+	require.Equal(t, want.Exactness, got.Exactness,
+		"an unstitched cap's own stop must read exactly as approximate as the un-unstitched plate's")
+	require.Equal(t, want.Bound, got.Bound,
+		"an unstitched cap's own stop must carry exactly the un-unstitched plate's own axial bound")
+}
