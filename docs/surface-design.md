@@ -800,13 +800,12 @@ over their own publication rounding, `Bounds` needing nothing further since
 
 **A curved face's flux term is not a tetrahedron sum**, and a per-surface
 closed-form flux integral over an arbitrary trimmed analytic patch is its own
-piece of work. §14's increment 3 lands `Plane`, `Cylinder`, `Cone` and
-`Sphere`; a follow-up PR adds `Torus`. Together they give a second admission
-rule beside the tetrahedron sum's: **every face is either a `Plane` bounded
-entirely by `Line3` edges (the tetrahedron path, unchanged), or a variant
-with a landed flux arm, and every face carries a zero `normalBound`.**
-`stitch_flux.go` owns the flux arms, `stitchRuleSAdmits` owns the second rule
-below.
+piece of work. §14's increment 3 lands `Plane`, `Cylinder`, `Cone`, `Sphere`
+and `Torus`. Together they give a second admission rule beside the
+tetrahedron sum's: **every face is either a `Plane` bounded entirely by
+`Line3` edges (the tetrahedron path, unchanged), or a variant with a landed
+flux arm, and every face carries a zero `normalBound`.** `stitch_flux.go`
+owns the flux arms, `stitchRuleSAdmits` owns the second rule below.
 
 **The `Cone` arm needs no general trimmed-boundary contour sum**, for the
 identical reason `Plane` and `Cylinder` do not: this evaluator's own scope
@@ -907,6 +906,63 @@ its two poles, the ordinary way a sphere closes, never the two-isolated-
 interior-point lens shape this section's vertex-link paragraph names — but
 the vacuous pass is recorded here rather than left to read as a proof it is
 not.
+
+**The `Torus` arm is scoped to the ONE window shape this evaluator can
+integrate without an unbounded trig call**, and admits nothing wider — this
+evaluator's only reachable `Torus` fixture is `offAxisSemicircleSketch`'s
+own full-revolution sheet (§15's T53), a straight chord at the tube's own
+equatorial radius (revolving into the face's own `Cylinder` sibling)
+alongside a semicircular arc bulging outward from that radius to
+`Major+Minor` and back, sweeping exactly the tube's own OUTER quarter-to-
+quarter window, `φ ∈ [−π/2, π/2]`, measuring `φ` from the plane through the
+tube's own centre circle. A torus zone's `K_F = ∫∫ (Major·cosφ + Minor) dA`
+integral is not constant the way `Cylinder`'s and `Sphere`'s are, so
+integrating it needs the window's own endpoints as raw angles — and its
+antiderivative carries a term LINEAR in that raw angle (`∫cos²φ dφ =
+φ/2 + sin2φ/4`), not reducible to `sinφ`/`cosφ` alone, so recovering it from
+a rim's own proven radius and axial position would need an inverse trig
+function of computed data, which this evaluator has no sound bound for (the
+`Cone` arm's own apex paragraph, above, states the identical limit at
+length). Nor can `Major`, `Minor` and the window be recovered algebraically
+without one: two rims of the SAME radius at axial offsets `±e` from
+`Center` satisfy `(ρ−Major)²+e² = Minor²` for infinitely many `(Major,
+Minor)` pairs — `Major=10, Minor=5` (window `±90°`) and `Major=8,
+Minor=√29≈5.385` (window `≈±68.2°`) both put a full circle of radius 10 at
+axial offset `±5` from the SAME centre — a genuine ambiguity, checked by
+hand, not a derivation this evaluator merely has not found. So the ONLY
+window this arm can integrate without an unbounded trig call is one whose
+endpoints are KNOWN constants rather than recovered ones, and `±π/2` is the
+sole such window any reachable fixture in this tree ever presents (a
+complete, zero-loop torus is the other, `Δφ = 2π`, the `Sphere` arm's own
+shape taken one variant over — no reachable fixture ever builds one).
+
+Trusting `Major` and `Minor` off the tag at all needs its own gate first,
+for a reason neither `Cylinder`, `Cone` nor `Sphere` shares: unlike a rim's
+own circumference or a face's own area, a torus's two rims and its own
+proven area do not determine `Major` and `Minor` independently even
+together — the identical ambiguity above. So this arm reads
+`Torus.Major`/`Torus.Minor` from the tag directly, gated on
+`torusAxisIsCoordinateAligned` (the axis is exactly a signed coordinate
+vector, and `Center` sits exactly on it through the world origin) — the one
+condition under which that read carries the identical zero bound
+`boundedCircleRadius`'s own doc comment names for the other radius fields'
+axis-dependent rounding. Given that gate, the two rims' own axial offsets
+from `Center` (`boundedDot`, EXACT under an axis-aligned `Axis`) are checked
+against `±Minor` EXACTLY — never a tolerance, since a small residual proves
+nothing (CLAUDE.md's own rule) — which is what proves `sinφ = ∓1` and so
+`cosφ = 0`, `φ = ±π/2` EXACTLY, a pure algebraic consequence of the check
+rather than a measurement of an angle. `torusFaceFluxAndMoment`'s own doc
+comment carries the closed forms this gate makes reachable,
+
+	K_F = 3·π²·Major·Minor² + 4·π·Minor·(Major² + Minor²)
+	M_i = π·Minor·(Center_i − anchor_i)·(2·Major²·(1−Axis_i²) + π·Major·Minor + (4/3)·Minor²)
+
+verified against independent numeric double integration before landing.
+`K_F` needs no cross term: the window's two rims share the SAME radius
+(`Major`, by the check above), so — exactly as `Cylinder`'s own
+full-circumference argument shows for two equal-radius circles — the face's
+own vector area is the zero vector, and `flux_F` is exactly `K_F` for every
+anchor.
 
 **`Face.normalBound` is nonzero exactly for a cap-blend band patch**
 (topology.go's own field doc): the face is a ruled surface and the `Cone` or
@@ -1010,25 +1066,27 @@ leg that turned out to prove nothing about its own two inputs — is the
 existing reject-only mechanism for exactly this, and the curved `Stitch`
 path runs it immediately before a curved body first claims solidity.
 Nothing this increment's own fixtures build can trip it, for two different
-reasons depending on the arm. Every admitted `Plane`/`Cylinder`/`Cone` shape
-this increment's own scope reaches stays strictly clear of the revolve
-axis — a `Cone` wall's own scope restriction (the paragraph above) admits
-only two full-circle rims at two distinct, provably positive radii, never a
-rim collapsed onto the axis. The `Sphere` arm's own reachable fixture DOES
-touch the axis, at its generating semicircle's own two poles — but a
-full-turn revolve's `wallAxis` classification mints no face, edge or vertex
-at all for a boundary stretch lying ON the axis, so a `Sphere` face's two
-poles carry no topology for the audit to even examine (this section's own
-`Sphere` paragraph above); the audit runs on an empty edge set and passes
-vacuously, which is a different reason than "clear of the axis" but stays
-just as safe, since a sphere closing at two ordinary poles has no pinch to
-catch in the first place. A boundary pinch at an isolated INTERIOR point,
-which needs a generatrix that touches the axis at a point other than its
-own endpoint to produce, stays out of reach here exactly as it did before
-`Cone` and `Sphere` landed. The leg stands as a proven-safe backstop for a
-later increment's own `Torus` arm, or a fixture whose generatrix touches the
-axis at an interior point, not a case this one's own tests can observe
-firing.
+reasons depending on the arm. Every admitted `Plane`/`Cylinder`/`Cone`/
+`Torus` shape this increment's own scope reaches stays strictly clear of
+the revolve axis — a `Cone` wall's own scope restriction (the paragraph
+above) admits only two full-circle rims at two distinct, provably positive
+radii, never a rim collapsed onto the axis, and the `Torus` arm's own
+`±π/2` window (this section's own `Torus` paragraph above) is bounded by
+two full circles at the tube's own equatorial radius, `Major`, itself
+strictly positive whenever the arm admits at all. The `Sphere` arm's own
+reachable fixture DOES touch the axis, at its generating semicircle's own
+two poles — but a full-turn revolve's `wallAxis` classification mints no
+face, edge or vertex at all for a boundary stretch lying ON the axis, so a
+`Sphere` face's two poles carry no topology for the audit to even examine
+(this section's own `Sphere` paragraph above); the audit runs on an empty
+edge set and passes vacuously, which is a different reason than "clear of
+the axis" but stays just as safe, since a sphere closing at two ordinary
+poles has no pinch to catch in the first place. A boundary pinch at an
+isolated INTERIOR point, which needs a generatrix that touches the axis at
+a point other than its own endpoint to produce, stays out of reach here
+regardless of arm. The leg stands as a proven-safe backstop for a fixture
+whose generatrix touches the axis at an interior point, not a case any of
+this increment's own tests can observe firing.
 
 **What is proven, and what is not, for a curved closed set.** Closure (the
 directed-edge parity leg) and manifoldness at every vertex (the hoisted
@@ -1699,7 +1757,7 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T33 | T31's fixture swept across a family of radii and heights | `\|published − analytic\| <= Bound` on `Volume` and each `Centroid` coordinate for every member |
 | T34 | a surface-extruded tube capped on both rims by `Body.Patch` in one call, stitched (`TestStitchPatchCappedTubeClosesToASolid`) | `Kind() == BodySolid`; `Volume` 1000π mm³, `Area` 400π mm², `Centroid` (0, 0, 5), all `Approximate`; `Edges(Free())` matches nothing — Rule P admits: the receiver's own `prismPayload` proves simple under Rule S, and each of the two chains is the receiver's own complete end rim under its own shared level id |
 | T35 | a hand-built two-body face set, driven directly at `stitchRuleSAdmits` (internal — Table J's own J5 admits a free `Line3` edge alone, so no two curved rims from different features ever weld into a closed set through the public seam to reach this gate at all) | `stitchRuleSAdmits` reports `false` |
-| T36 | `offAxisSemicircleSketch` revolved a full turn as a surface, stitched alone | `ErrUnsupported` (R8): the body closes with no free edge and Rule S admits it, but its `Torus` face has no landed flux arm — the sealed switch's own default, not a Rule S or vertex-link refusal |
+| T36 | `offAxisSemicircleSketch` revolved a full turn as a surface, stitched alone | closes to a solid from T53 onward |
 | T37 | a hand-built face carrying a `NURBSSurface`, driven directly at `stitchFaceFluxAndMoment` (internal — `Body.Patch` itself refuses any chain carrying a `NURBSCurve` edge, so a free-form-walled sheet can never be closed through the public seam at all) | `ErrUnsupported` (R8), permanently: `NURBSSurface` exports no control net to integrate |
 | T38 | a hand-built face carrying a nonzero `normalBound`, driven directly at `stitchFaceFluxAndMoment` (internal — a fillet or chamfer's `Unstitch`-then-`Stitch` round trip never re-closes, §6.5's own "no further" limit for any non-all-planar body, so no public fixture reaches this gate) | `ErrUnsupported` (R8) |
 | T39 | `annularSketch` revolved a full turn as a surface | `Verify` reads `Validity.Outcome == ValidityValid` with no `Validity.Diagnostics`, admitted by construction: `payloadProvesSimple`'s `revolvePayload` arm holds because the sweep is exactly one full turn and the radial minimum is proven clear of the axis |
@@ -1716,6 +1774,11 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T50 | `semicircleSketch` revolved a full turn as a surface (T6's own fixture), stitched alone | `Kind() == BodySolid`; `Volume` (4/3)π·125 mm³, `Area` 100π mm², `Centroid` (5, 0, 0), all `Approximate`, each enclosing its analytic value within `Bound`; `Edges(Free())` matches nothing — this replaces `TestStitchClosedCurvedSheetIsUnsupported`, whose whole subject (T6's second half) this row retires |
 | T51 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` and `Centroid` agree within the two independently-composed bounds — the independent-producer cross-check, proving the `Sphere` arm against the unrelated revolve engine rather than against its own arithmetic |
 | T52 | T50's fixture swept across a family of radii and off-origin diameters (the generating semicircle's own centre moved along the axis) | `\|published − analytic\| <= Bound` on `Volume` and each `Centroid` coordinate for every member |
+| T53 | `offAxisSemicircleSketch` revolved a full turn as a surface, stitched alone — one `Cylinder` wall and one `Torus` wall spanning exactly the tube's own outer half, `φ ∈ [−π/2, π/2]` | `Kind() == BodySolid`; `Volume` and `Area`, `Approximate`, each enclosing its own hand-derived (Pappus, over the 2D half-disc profile) analytic value within `Bound`; `Centroid` (5, 0, 0), `Approximate`; `Edges(Free())` matches nothing — this replaces `TestStitchTorusFaceStaysUnsupported`, whose whole subject (T36) this row retires |
+| T54 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` agree within the two independently-composed bounds — the independent-producer cross-check, proving the `Torus` arm against the unrelated revolve engine rather than against its own arithmetic. The matching `Centroid` comparison is real but WEAK for this fixture: the direct revolve engine's own centroid bound comes out about 80 mm wide for this 20 mm-wide solid — clear of the roughly 460 mm the `Sphere` arm's own cross-check hits for a profile touching the axis at both poles, since this fixture stays off the axis, but still far too wide to be decisive on its own; T53 and T55 carry the tight, decisive centroid proof |
+| T55 | T53's fixture swept across a family of `Major`/`Minor` radii and axial centres | `\|published − analytic\| <= Bound` on `Volume` and `Centroid` for every member |
+| T56 | a hand-built `Torus` face whose `Axis` is not exactly a signed coordinate vector, or whose `Center` sits off that axis line, driven directly at `stitchFaceFluxAndMoment` (internal — every public fixture revolves about `uAxis`, coordinate-aligned through the origin, so no public fixture reaches this gate) | `ErrUnsupported` (R8): this evaluator has no sound bound for `Major`/`Minor`'s own rounding off a coordinate-aligned axis |
+| T57 | a hand-built `Torus` face whose two rims sit at axial offsets from `Center` other than exactly `±Minor` (a narrower window, a wider one, or both rims on the same side), driven directly at `stitchFaceFluxAndMoment` (internal — every reachable revolve wall junction in this tree happens to land on the exact half window, so no public fixture reaches this gate) | `ErrUnsupported` (R8): this evaluator has no sound way to recover a narrower angular window without an unbounded trig computation |
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'`

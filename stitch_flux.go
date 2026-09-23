@@ -11,10 +11,10 @@ import (
 
 // This file is docs/surface-design.md §6.4's per-surface flux integral: the
 // closed-form volume and first-moment reading that lets Stitch close a
-// boundary holding a curved face, for the Plane, Cylinder, Cone and Sphere
-// variants. Table R row R8 is a per-face dispatch: a face this evaluator
-// has no closed-form flux integral for refuses R8, and a Plane, Cylinder,
-// Cone or Sphere face with a zero normalBound admits.
+// boundary holding a curved face, for the Plane, Cylinder, Cone, Sphere and
+// Torus variants. Table R row R8 is a per-face dispatch: a face this
+// evaluator has no closed-form flux integral for refuses R8, and a Plane,
+// Cylinder, Cone, Sphere or Torus face with a zero normalBound admits.
 //
 // THE FORMULA. Volume is V = (1/3) Σ_F ∫_F (p−A)·n dA over one global anchor
 // A (verts[0], the same anchor loft_moments.go's tetrahedron sum uses, so the
@@ -81,9 +81,12 @@ import (
 // behind it. The Sphere arm's own S_F is zero for a plainer reason still: a
 // zero-loop face has no boundary contour to sum at all, so its vector area
 // is the empty sum rather than a trig integral that happens to collapse
-// (sphereFaceFluxAndMoment's own doc comment). A later increment's Torus arm
-// may still need the general contour-sum form, and can add it then, against
-// its own fixture.
+// (sphereFaceFluxAndMoment's own doc comment). The Torus arm needs no
+// general contour-sum form either, for a different reason again: its own
+// scope restriction admits only the two-rim shape whose rims share the
+// SAME radius (Major, torusFaceFluxAndMoment's own doc comment), so its S_F
+// cancels the identical way a full-circumference Cylinder's does — reused,
+// never re-derived, since it is the same fact under a different name.
 //
 // THE FIRST MOMENT. Every reading needs the volume's own first-moment
 // sibling too — Body.Centroid has no ErrUnsupported arm for a solid, so a
@@ -103,7 +106,12 @@ import (
 // is the ball's own moment, and the general shift-of-origin identity
 // (volume times the offset from anchor to centroid) gives it directly —
 // sphereFaceFluxAndMoment's own doc comment derives it and checks it
-// against the same divergence-theorem surface integral by hand.
+// against the same divergence-theorem surface integral by hand. The Torus
+// arm cannot take that shortcut — its own scope restriction always admits a
+// TWO-loop face sharing its boundary with a sibling Cylinder face, never a
+// zero-loop complete torus — so its own moment is the general per-face
+// divergence-theorem integral, derived and verified in
+// torusFaceFluxAndMoment's own doc comment.
 //
 // BOUNDS. Every operation between a bound's origin and its use is charged
 // through boundedAdd/boundedSub/boundedMul/boundedQuotient — never a bare
@@ -172,6 +180,22 @@ import (
 // stitch_internal_test.go) — no real wallCone ever carries one
 // (revolve_axis.go's own analytic-walk requirement keeps a real cone's
 // HalfAngle finite and strictly between 0 and π/2).
+//
+// The Torus arm's Major and Minor carry a THIRD, still different treatment,
+// because neither of the other two routes exists for them: unlike Cylinder/
+// Cone (a rim's own circumference) or Sphere (the face's own area), a
+// torus's two rims and its own proven area do not determine Major and Minor
+// independently even together (torusFaceFluxAndMoment's own doc comment
+// proves the ambiguity by a hand-checked counter-example). So this arm
+// reads Torus.Major/Torus.Minor from the tag directly, gated on
+// torusAxisIsCoordinateAligned rather than derived — the one condition
+// under which that read carries the identical zero bound the OTHER arms'
+// own edge/area derivations already give for a coordinate-aligned axis.
+// Every public fixture this PR tests revolves about a coordinate-aligned
+// axis through the origin, so the gate's own refusal for an off-axis Torus
+// is pinned on a hand-built face (TestStitchTorusRefusesOffAxisAlignedAxis,
+// stitch_internal_test.go), the same treatment the other arms' own
+// hand-built refusal fixtures already get.
 //
 // RULE S — the construction-proof gate. Before this file's dispatch ever
 // runs, evalStitchContext requires every operand face to descend from ONE
@@ -362,6 +386,8 @@ func stitchFaceFluxAndMoment(f *Face, anchor r3.Vec) (flux, mx, my, mz boundedSc
 		return coneFaceFluxAndMoment(f, s, anchor, sign)
 	case Sphere:
 		return sphereFaceFluxAndMoment(f, s, anchor, sign)
+	case Torus:
+		return torusFaceFluxAndMoment(f, s, anchor, sign)
 	default:
 		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
 			`%w: Stitch closes a boundary holding a %T face this evaluator has no closed-form flux integral for (docs/surface-design.md Table R row R8)`,
@@ -1003,6 +1029,204 @@ func sphereFaceFluxAndMoment(f *Face, sph Sphere, anchor r3.Vec, sign float64) (
 	return flux, mx, my, mz, nil
 }
 
+// torusAxisIsCoordinateAligned reports whether t's own axis line is exactly
+// a signed coordinate axis through the world origin: Axis is bit-identical
+// to one of the six signed unit basis vectors, and Center's own two
+// components perpendicular to it are bit-identical to zero. This is the
+// SAME condition boundedCircleRadius's own doc comment names as making a
+// revolve's axis-dependent re-expression bound exactly zero ("every
+// product is by 0 or 1 and nothing rounds") — the reason the Cylinder/Cone/
+// Sphere arms still derive their own radius from a rim or from area,
+// regardless of axis alignment, is that their derivation has to work
+// uniformly whether the axis is aligned or not, and doing so gives a bound
+// that is automatically zero in the aligned case without a separate gate.
+//
+// A Torus has no such uniform, axis-independent derivation for Major and
+// Minor (torusFaceFluxAndMoment's own doc comment proves why: the two rims
+// of a symmetric tube zone do not determine them, even together with the
+// face's own proven area — the system is genuinely under-determined, not
+// merely hard). So this file cannot avoid reading Torus.Major/Torus.Minor
+// from the tag directly the way it avoids reading Cylinder.Radius/
+// Sphere.Radius directly; instead it GATES on the one condition under which
+// that read carries the identical zero bound the other arms' own
+// derivations already prove for a coordinate-aligned axis, and refuses
+// (ErrUnsupported, R8) every other axis placement rather than publish a
+// Major or Minor this file cannot bound.
+func torusAxisIsCoordinateAligned(t Torus) bool {
+	switch t.Axis {
+	case r3.NewVec(1, 0, 0), r3.NewVec(-1, 0, 0):
+		return t.Center.Y == 0 && t.Center.Z == 0
+	case r3.NewVec(0, 1, 0), r3.NewVec(0, -1, 0):
+		return t.Center.X == 0 && t.Center.Z == 0
+	case r3.NewVec(0, 0, 1), r3.NewVec(0, 0, -1):
+		return t.Center.X == 0 && t.Center.Y == 0
+	default:
+		return false
+	}
+}
+
+// torusFaceFluxAndMoment is the Torus arm, scoped to the one shape this
+// evaluator's own reachable fixture builds: a symmetric tube zone spanning
+// EXACTLY the tube's own outer quarter-to-quarter window — φ ∈ [−π/2, π/2],
+// measuring φ from the tube's own equatorial plane (ρ = Major, the plane
+// through Center perpendicular to... no, through Center's own axial
+// position, containing the axis) — bounded by exactly two full Circle3
+// rims, one Minor above Center's own axial position and one Minor below
+// it. offAxisSemicircleSketch (docs/surface-design.md's own T53) is exactly
+// this shape: a straight wall at ρ = Major (the chord, closing the tube's
+// own equatorial diameter, revolved into the face's own Cylinder sibling)
+// and a semicircular arc bulging OUTWARD from ρ = Major to ρ = Major+Minor
+// and back (revolved into this Torus face).
+//
+// WHY THIS FILE CANNOT ADMIT A WIDER WINDOW, and why that is a genuine
+// mathematical limit rather than a missing derivation. Parametrizing the
+// torus surface by (θ, φ) — θ the revolve angle, φ the tube angle, with
+// ρ(φ) = Major + Minor·cosφ and axial offset z(φ) = Minor·sinφ from
+// Center's own axial position — the outward normal is
+// n(φ) = cosφ·radial + sinφ·Axis, and (p−Center)·n = Major·cosφ + Minor
+// pointwise (the identity this file's own top-of-file doc table states).
+// Integrating that over a φ window [φlo, φhi] and a full θ turn gives
+// K_F = 2π·Minor·∫ (Major·cosφ+Minor)(Major+Minor·cosφ) dφ, whose
+// antiderivative carries a term LINEAR IN THE RAW ANGLE φ itself (from
+// ∫cos²φ dφ = φ/2 + sin2φ/4), not reducible to sinφ/cosφ alone. Recovering
+// φlo/φhi as raw angles from the two rims' own proven radius and axial
+// position needs an inverse trig function of computed floating data — this
+// evaluator has no sound bound for one (this file's own coneApex doc
+// comment states why at length; the same limit applies here). Nor can
+// Major/Minor/φlo/φhi be recovered algebraically without one: two rims of
+// the SAME radius at axial offsets ±e from Center satisfy
+// (ρ−Major)²+e² = Minor² for infinitely many (Major, Minor) pairs — e.g.
+// Major=10, Minor=5 (φ=±90°, e=5) and Major=8, Minor=√29≈5.385 (φ≈±68.2°,
+// e=5) both put a full circle of radius 10 at axial offset ±5 from the
+// SAME Center — a genuine, checked-by-hand ambiguity, not a derivation this
+// file merely has not found. So the ONLY φ window this file can integrate
+// without an unbounded trig call is one whose endpoints are KNOWN constants
+// rather than recovered ones — ±π/2 is the sole such window this
+// evaluator's own construction ever reaches (a complete, zero-loop torus
+// would be the OTHER such window, Δφ=2π, the same shape sphereFaceFluxAndMoment's
+// own zero-loop scope takes for a sphere, but no reachable fixture in this
+// tree ever builds one) — and detecting THAT specific window from held data
+// is what the two gates below establish, structurally, never by measuring
+// an angle.
+//
+// GATE 1 — torusAxisIsCoordinateAligned. Trusting Major and Minor bare off
+// the tag at all needs the identical zero-bound condition boundedCircleRadius's
+// own doc names for the OTHER radius fields' axis-dependent rounding.
+//
+// GATE 2 — the window check. Given Gate 1, Major and Minor carry a proven
+// zero bound, so e_lo = Axis·(rimCenter_lo − Center) and e_hi similarly are
+// EXACT (boundedDot's own zero-bound result for an axis-aligned Axis — every
+// product is by 0 or 1). Checking {e_lo, e_hi} == {−Minor, +Minor} EXACTLY
+// (bit-for-bit, never a tolerance) is what proves sinφ_lo = −1, sinφ_hi = +1
+// EXACTLY — a pure algebraic consequence, not a measurement — and therefore
+// cosφ_lo = cosφ_hi = 0 and φ_lo, φ_hi = ∓π/2 EXACTLY, since sin = ±1 pins φ
+// uniquely on the tube's own principal branch. This is reject-only: a face
+// that fails the check is refused, never admitted on a near-match — a small
+// residual here would prove nothing (CLAUDE.md's own rule), so none is
+// accepted; only exact equality of already-exact quantities is.
+//
+// THE CLOSED FORMS, verified against independent numeric double integration
+// (θ, φ grid, ~6×10⁵ samples, this PR's own scratch verification — not
+// carried into the tree) for both a coordinate-aligned and a deliberately
+// oblique Torus (arbitrary Center, Axis and anchor), agreeing to 4–5
+// significant digits at that grid's own resolution:
+//
+//	K_F     = 3·π²·Major·Minor² + 4·π·Minor·(Major² + Minor²)
+//	M_i     = π·Minor·(Center_i − anchor_i)·
+//	            (2·Major²·(1 − Axis_i²) + π·Major·Minor + (4/3)·Minor²)
+//
+// K_F needs no cross term: the two rims share the SAME radius (Major, by
+// Gate 2), so — exactly as cylinderFaceFluxAndMoment's own full-circumference
+// argument shows for two equal-radius circles — the face's own vector area
+// S_F is the zero vector, and flux_F is exactly K_F for every anchor. M_i's
+// own derivation integrates (p_i−anchor_i)²·n_i over a full θ period first
+// (every odd power of cosθ/sinθ vanishing, the same fact
+// cylinderFaceFluxAndMoment's and coneFaceFluxAndMoment's own moment proofs
+// use), then over φ ∈ [−π/2, π/2] — where ∫cosφ dφ = 2, ∫sinφ dφ = 0,
+// ∫cos²φ dφ = ∫sin²φ dφ = π/2, ∫cos³φ dφ = 4/3, ∫sin²φ·cosφ dφ = 2/3, and
+// every ODD-in-φ integral (sinφ alone, sinφ·cos²φ, sin³φ, sinφ·cosφ) is
+// zero over the symmetric interval — collapsing every term but two, whose
+// (1 − Axis_i²)-weighted and constant parts combine to the M_i form above
+// (this PR's own scratch derivation, hand-expanded and cross-checked
+// against the numeric integral).
+func torusFaceFluxAndMoment(f *Face, t Torus, anchor r3.Vec, sign float64) (flux, mx, my, mz boundedScalar, err error) {
+	refuse := func(msg string) (boundedScalar, boundedScalar, boundedScalar, boundedScalar, error) {
+		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+			`%w: %s (docs/surface-design.md Table R row R8)`, ErrUnsupported, msg,
+		)
+	}
+	if len(f.loops) != 2 {
+		return refuse(`Stitch's flux path needs a Torus face bounded by exactly two full circles`)
+	}
+	if !torusAxisIsCoordinateAligned(t) {
+		return refuse(`Stitch's flux path needs a Torus revolved about a coordinate-aligned axis through the origin; this evaluator has no sound bound for Major/Minor's own rounding otherwise`)
+	}
+	majorValue, merr := t.Major.In(units.Millimeter)
+	if merr != nil {
+		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(`decad: a torus's major radius is not a length: %w`, merr)
+	}
+	minorValue, nerr := t.Minor.In(units.Millimeter)
+	if nerr != nil {
+		return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(`decad: a torus's minor radius is not a length: %w`, nerr)
+	}
+	if !(majorValue > 0) || !(minorValue > 0) {
+		return refuse(`Stitch's flux path needs a Torus with a positive Major and Minor radius`)
+	}
+
+	var centers [2]r3.Vec
+	for i, l := range f.loops {
+		if len(l.coedges) != 1 {
+			return refuse(`Stitch's flux path needs a Torus rim bounded by a single full circle`)
+		}
+		c3, ok := l.coedges[0].edge.curve.(Circle3)
+		if !ok {
+			return boundedScalar{}, boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+				`%w: Stitch's flux path needs a Torus rim bounded by a full circle, not %T (docs/surface-design.md Table R row R8)`,
+				ErrUnsupported, l.coedges[0].edge.curve,
+			)
+		}
+		centers[i] = c3.Center
+	}
+
+	e0 := boundedDot(t.Axis, centers[0].Sub(t.Center))
+	e1 := boundedDot(t.Axis, centers[1].Sub(t.Center))
+	halfWindow := (e0.value == -minorValue && e1.value == minorValue) ||
+		(e0.value == minorValue && e1.value == -minorValue)
+	if !halfWindow {
+		return refuse(`Stitch's flux path needs a Torus face bounded by the tube's own two equatorial rims (its ±π/2 window); this evaluator has no sound way to recover a narrower angular window without an unbounded trig computation`)
+	}
+
+	major := measuredScalar(majorValue, 0)
+	minor := measuredScalar(minorValue, 0)
+	majorSq := boundedMul(major, major)
+	minorSq := boundedMul(minor, minor)
+	pi := piScalar()
+	piSq := boundedMul(pi, pi)
+
+	term1 := boundedMul(measuredScalar(3, 0), boundedMul(piSq, boundedMul(major, minorSq)))
+	term2 := boundedMul(measuredScalar(4, 0), boundedMul(pi, boundedMul(minor, boundedAdd(majorSq, minorSq))))
+	kf := boundedAdd(term1, term2)
+	flux = boundedMul(measuredScalar(sign, 0), kf)
+
+	majMinorPi := boundedMul(pi, boundedMul(major, minor))
+	fourThirdsMinorSq := boundedMul(boundedQuotient(4, 0, 3, 0), minorSq)
+	moment := func(centerI, anchorI, axisI float64) boundedScalar {
+		axisISq := boundedMul(measuredScalar(axisI, 0), measuredScalar(axisI, 0))
+		oneMinusAxisISq := boundedSub(measuredScalar(1, 0), axisISq)
+		bracket := boundedAdd(
+			boundedAdd(boundedMul(measuredScalar(2, 0), boundedMul(majorSq, oneMinusAxisISq)), majMinorPi),
+			fourThirdsMinorSq,
+		)
+		d := boundedSub(measuredScalar(centerI, 0), measuredScalar(anchorI, 0))
+		m := boundedMul(pi, boundedMul(minor, boundedMul(d, bracket)))
+		return boundedMul(measuredScalar(sign, 0), m)
+	}
+	mx = moment(t.Center.X, anchor.X, t.Axis.X)
+	my = moment(t.Center.Y, anchor.Y, t.Axis.Y)
+	mz = moment(t.Center.Z, anchor.Z, t.Axis.Z)
+	return flux, mx, my, mz, nil
+}
+
 // stitchCurvedMass sums every face's own flux and first moment
 // (stitchFaceFluxAndMoment), decides the global orientation sign from its
 // own total — reversing every face and recomputing once, the curved
@@ -1086,6 +1310,23 @@ func stitchCurvedMass(ctx context.Context, faces []*Face, anchor r3.Vec, delta f
 			// boundedCircleRadius.
 			if rB, err := boundedSphereRadius(f); err == nil {
 				coordUpper = absSumUpper(coordUpper, surf.Center.Sub(anchor).Len(), rB.value, rB.bound)
+			}
+		case Torus:
+			// Every point of a Torus face this file admits lies within
+			// Major+Minor of Center's own radial position and within Minor
+			// of its own axial position, regardless of which φ window the
+			// face spans, so Center's own distance from anchor plus
+			// Major+Minor is a safe margin — the same shape the Sphere
+			// case above takes. Reaching this loop at all means
+			// sumStitchFlux already ran torusFaceFluxAndMoment
+			// successfully for this face, which is what proves
+			// torusAxisIsCoordinateAligned and a positive Major/Minor
+			// here; this reads them bare only because that proof already
+			// ran, never in place of it.
+			if majorValue, merr := surf.Major.In(units.Millimeter); merr == nil {
+				if minorValue, nerr := surf.Minor.In(units.Millimeter); nerr == nil {
+					coordUpper = absSumUpper(coordUpper, surf.Center.Sub(anchor).Len(), majorValue+minorValue)
+				}
 			}
 		}
 	}

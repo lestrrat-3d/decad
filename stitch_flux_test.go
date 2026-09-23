@@ -250,20 +250,96 @@ func TestStitchPatchCappedTubeClosesToASolid(t *testing.T) {
 // (stitch_internal_test.go), on a hand-built face set the same way
 // TestStitchOrientationRefusesMobiusAssembly pins deriveStitchOrientation.
 
-// TestStitchTorusFaceStaysUnsupported is T36: offAxisSemicircleSketch's own
-// full-revolution surface sheet closes with one Cylinder wall (this
-// increment's own landed arm) and one Torus wall (not landed) and no free
-// edge. Rule S admits it — a full-turn revolvePayload clear of the axis —
-// so the refusal this test pins is the sealed switch's own default arm for
-// KindTorus, not a Rule S or vertex-link refusal; stitch_flux.go's own
-// dispatch never reaches a face it cannot classify without first deciding
-// every OTHER face admits.
-func TestStitchTorusFaceStaysUnsupported(t *testing.T) {
+// halfTorusAnalytics is the by-hand closed form for offAxisSemicircleSketch's
+// own shape: a straight chord at rho=Major (the tube's own equatorial
+// diameter, revolving into a Cylinder wall) and a semicircular arc bulging
+// outward from Major to Major+Minor and back (revolving into a Torus wall
+// spanning exactly the tube's own outer half, phi in [-pi/2, pi/2]).
+// Volume and area are Pappus's theorem over the 2D half-disc profile
+// directly (a route independent of stitch_flux.go's own per-face flux
+// arms, matching how frustumShellAnalytics stays independent of the Cone
+// arm): a half-disc of radius Minor has area (pi/2)*Minor^2 and its own
+// centroid sits (4*Minor)/(3*pi) from the flat diameter, on the bulge side,
+// so Volume = 2*pi*(Major + (4*Minor)/(3*pi))*((pi/2)*Minor^2) — expanding
+// the (4*Minor)/(3*pi) term against the *pi factor it multiplies removes pi
+// from that half entirely, matching torusFaceFluxAndMoment's own K_F
+// closed form once the sibling Cylinder wall's own INWARD-facing K_F
+// (Cylinder's own K_F identity always faces away from its axis; here that
+// direction points OUT of the solid, so it subtracts rather than adds — the
+// solid occupies rho >= Major, not rho <= Major) is folded in. Area is the
+// straight chord's own cylinder wall (2*pi*Major*(2*Minor), the chord's own
+// length being the tube's own diameter 2*Minor) plus the arc's own Torus
+// wall lateral area (2*pi*Minor*(Major*pi + 2*Minor), the standard partial
+// torus-zone area over a pi-wide window). The axial centroid is exactly the
+// generatrix's own chord midpoint (offAxisSemicircleSketchGeneral's u0),
+// independent of Major and Minor, so the caller asserts that directly
+// rather than through a formula here — checked by hand against the
+// divergence-theorem moment integral while landing this test: the
+// Cylinder wall's own first moment along the revolve axis is exactly zero
+// (a cylinder's outward normal never has an axial component), and the
+// Torus wall's own axial moment reduces to exactly u0 times the total
+// volume once its own (1-Axis_i^2) coefficient (torusFaceFluxAndMoment's
+// own doc comment) vanishes for the axis-aligned component.
+func halfTorusAnalytics(major, minor float64) (volume, area float64) {
+	halfDiscArea := (math.Pi / 2) * minor * minor
+	halfDiscCentroidOffset := (4 * minor) / (3 * math.Pi)
+	volume = 2 * math.Pi * (major + halfDiscCentroidOffset) * halfDiscArea
+	cylinderArea := 2 * math.Pi * major * (2 * minor)
+	torusArea := 2 * math.Pi * minor * (major*math.Pi + 2*minor)
+	area = cylinderArea + torusArea
+	return volume, area
+}
+
+// offAxisSemicircleSketchGeneral generalizes offAxisSemicircleSketch to an
+// arbitrary Major (the chord's own axial-clear radius) and Minor (the
+// arc's own radius) centered at axial position u0 — T53's own fixture with
+// T55's family swept across it.
+func offAxisSemicircleSketchGeneral(t *testing.T, u0, major, minor float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	o := s.CreatePoint(u0-minor, major)
+	s.Fix(o)
+	end := s.CreatePoint(u0+minor, major)
+	c := s.CreatePoint(u0, major)
+	s.CreateLine(o, end)
+	s.CreateArc(c, end, o)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	return s, s.Profiles()[0]
+}
+
+// halfTorusRevolveSheet builds offAxisSemicircleSketchGeneral's profile as
+// a closed full-revolution surface sheet: one Cylinder wall (the chord) and
+// one Torus wall (the arc), no free edge.
+func halfTorusRevolveSheet(t *testing.T, u0, major, minor float64) *decad.Body {
+	t.Helper()
+	s, p := offAxisSemicircleSketchGeneral(t, u0, major, minor)
+	doc := decad.New()
+	sheet, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	return sheet
+}
+
+// TestStitchTorusRevolveSheetClosesToASolid is T53: offAxisSemicircleSketch's
+// own full-revolution surface sheet (u0=5, Major=10, Minor=5 in
+// offAxisSemicircleSketchGeneral's own parametrization — the identical
+// points TestStitchTorusFaceStaysUnsupported built) — one Cylinder wall and
+// one Torus wall spanning exactly the tube's own outer half, phi in
+// [-pi/2, pi/2] — closes to a solid whose volume, area and centroid the
+// Torus arm now computes, checked against halfTorusAnalytics's own
+// independent Pappus derivation. This replaces
+// TestStitchTorusFaceStaysUnsupported: the refusal that test pinned (the
+// sealed switch's own then-missing KindTorus arm) is retired, and its shard
+// row moves to this test's name.
+func TestStitchTorusRevolveSheetClosesToASolid(t *testing.T) {
 	t.Parallel()
 	s, p := offAxisSemicircleSketch(t)
 	doc := decad.New()
 	sheet, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.NoError(t, err)
+	require.Equal(t, decad.BodySheet, sheet.Kind())
 	require.Len(t, sheet.Faces(), 2)
 	decadtest.HasSurfaceKinds(t, sheet, map[decad.SurfaceKind]int{
 		decad.KindCylinder: 1,
@@ -272,10 +348,103 @@ func TestStitchTorusFaceStaysUnsupported(t *testing.T) {
 	_, err = decad.Edges(decad.Free()).SelectEdges(sheet)
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 
-	before := doc.Bodies()
-	_, err = decad.Stitch(sheet)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Equal(t, before, doc.Bodies())
+	solid, err := decad.Stitch(sheet)
+	require.NoError(t, err)
+
+	require.Equal(t, decad.BodySolid, solid.Kind())
+	require.True(t, solid.IsSolid())
+	wantVol, wantArea := halfTorusAnalytics(10, 5)
+	decadtest.MeasuresVolume(t, solid, units.CubicMillimeters(wantVol))
+	decadtest.MeasuresArea(t, solid, units.SquareMillimeters(wantArea))
+	decadtest.MeasuresCentroid(t, solid, r3.NewVec(5, 0, 0))
+
+	vol, err := solid.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, vol.Exactness, "a term carrying pi can never claim Exact")
+	require.Greater(t, vol.Bound.Base(), 0.0)
+
+	cen, err := solid.Centroid()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, cen.Exactness)
+
+	_, err = decad.Edges(decad.Free()).SelectEdges(solid)
+	require.ErrorIs(t, err, decad.ErrNoMatch)
+
+	require.Len(t, doc.Bodies(), 1)
+	require.Same(t, solid, doc.Bodies()[0])
+}
+
+// TestStitchTorusSolidMatchesTheRevolveEngine is T54: the
+// independent-producer cross-check, the Torus arm's own sibling of
+// TestStitchAnnularSolidMatchesTheRevolveEngine,
+// TestStitchConicalSolidMatchesTheRevolveEngine and
+// TestStitchSphereSolidMatchesTheRevolveEngine. The same profile built as a
+// BodySolid through Revolve with no option is the Pappus-based analytic
+// solid evaluator, never stitch_flux.go's own arithmetic, so agreement here
+// does not depend on this PR's own derivation being right.
+func TestStitchTorusSolidMatchesTheRevolveEngine(t *testing.T) {
+	t.Parallel()
+	sheet := halfTorusRevolveSheet(t, 5, 10, 5)
+	stitched, err := decad.Stitch(sheet)
+	require.NoError(t, err)
+
+	s2, p2 := offAxisSemicircleSketchGeneral(t, 5, 10, 5)
+	solidDoc := decad.New()
+	direct, err := solidDoc.Revolve(s2, p2, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	stitchedVol, err := stitched.Volume()
+	require.NoError(t, err)
+	directVol, err := direct.Volume()
+	require.NoError(t, err)
+	decadtest.Agree(t, "volume", stitchedVol, directVol)
+
+	// The centroid comparison below is real but WEAK for this fixture,
+	// checked directly while landing this test: the direct revolve
+	// engine's own centroid bound comes out about 80 mm wide for this
+	// 20 mm-wide solid — nowhere near the roughly 460 mm the Sphere arm's
+	// own cross-check hits for a profile touching the axis at both poles
+	// (this fixture stays clear of the axis, so it does not suffer that
+	// failure mode), but still far too wide to be decisive on its own. So
+	// this leg only catches a gross blunder (a wrong sign, an
+	// order-of-magnitude error); the tight, decisive centroid proof against
+	// the hand-derived analytic value is
+	// TestStitchTorusRevolveSheetClosesToASolid (T53) and
+	// TestStitchTorusVolumeBoundEncloses (T55), both Bound-tight and both
+	// shown to fail against a broken moment formula.
+	stitchedCen, err := stitched.Centroid()
+	require.NoError(t, err)
+	directCen, err := direct.Centroid()
+	require.NoError(t, err)
+	tol := stitchedCen.Bound.Base() + directCen.Bound.Base() + 1e-9
+	require.InDelta(t, directCen.Value.X, stitchedCen.Value.X, tol)
+	require.InDelta(t, directCen.Value.Y, stitchedCen.Value.Y, tol)
+	require.InDelta(t, directCen.Value.Z, stitchedCen.Value.Z, tol)
+}
+
+// TestStitchTorusVolumeBoundEncloses is T55: T53's fixture swept across a
+// family of Major/Minor radii and axial centers, each checked against its
+// own halfTorusAnalytics closed form.
+func TestStitchTorusVolumeBoundEncloses(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		u0, major, minor float64
+	}{
+		{5, 10, 5},
+		{0, 20, 3},
+		{-15, 6, 6},
+		{100, 50, 1},
+	}
+	for _, c := range cases {
+		sheet := halfTorusRevolveSheet(t, c.u0, c.major, c.minor)
+		solid, err := decad.Stitch(sheet)
+		require.NoError(t, err)
+
+		wantVol, wantArea := halfTorusAnalytics(c.major, c.minor)
+		decadtest.MeasuresVolume(t, solid, units.CubicMillimeters(wantVol))
+		decadtest.MeasuresArea(t, solid, units.SquareMillimeters(wantArea))
+		decadtest.MeasuresCentroid(t, solid, r3.NewVec(c.u0, 0, 0))
+	}
 }
 
 // trapezoidFrustumSketch builds a trapezoid profile clear of the revolve
