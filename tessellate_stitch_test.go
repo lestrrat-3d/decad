@@ -10,9 +10,10 @@ import (
 )
 
 // This file is docs/surface-design.md §14 Table D row 5's own test list
-// (§15 T58-T60, T63, T64): a CLOSED, all-planar stitched body's mesh is an
-// exact restatement of the triangle set Stitch's own build already
-// assembled and audited, over T3's stitched-box fixture.
+// (§15 T58-T61, T63, T64): an all-planar stitched body's mesh, CLOSED or
+// OPEN, is an exact restatement of the triangle set Stitch's own build
+// already assembled and audited, over T3's stitched-box fixture (CLOSED) and
+// T4's displaced-patch fixture (OPEN).
 
 // stitchedBox stitches T3's box (stitchBoxSheets) into one BodySolid.
 func stitchedBox(t *testing.T, doc *decad.Document) *decad.Body {
@@ -146,6 +147,172 @@ func TestStitchPlacedSolidTessellateBoundReadsVertexBound(t *testing.T) {
 	// tetrahedron sum anchors at verts[0].
 	require.InDelta(t, value, anchoredMeshVolume(mesh), vol.Bound.Base()+1e-9,
 		"the mesh's integrated volume must lie within the body's own published volume bound")
+}
+
+// TestStitchDisplacedPatchSheetTessellatesItsOwnTriangleSet is
+// docs/surface-design.md's T61: T4's displaced-patch stitched sheet — open,
+// every face planar — restates its own triangle set exactly as a closed
+// stitched solid's mesh does (TestStitchSolidTessellatesItsOwnTriangleSet,
+// above), running docs/tessellation-design.md §1.2's manifold-with-boundary
+// audit (requireSheetMesh, requireSheetVertexLinks) in the closed-mesh
+// audit's place. The free-boundary attribution needs no role at all: the
+// mesh side and the body side agree by the identical live face pointer
+// stitchPayload records and Body.Edges() reads back
+// (docs/tessellation-design.md §1.2), which meshFreeChainsByFace and
+// bodyFreeChainsByFace below check independently of tessellate_sheet.go's
+// own audit, over the SAME connected-component-by-chain reading that audit
+// uses.
+func TestStitchDisplacedPatchSheetTessellatesItsOwnTriangleSet(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	walls, bottom, top := stitchBoxSheets(t, doc, 10+1e-9)
+	sheet, err := decad.Stitch(walls, bottom, top)
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySheet, sheet.Kind())
+
+	mesh, err := sheet.Tessellate(units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.NotNil(t, mesh)
+
+	meshFree := meshFreeChainsByFace(mesh)
+	bodyFree := bodyFreeChainsByFace(sheet)
+	require.Len(t, bodyFree, 5, "the 4 wall faces and the displaced patch")
+	require.Equal(t, bodyFree, meshFree,
+		"the mesh's free boundary must attribute to exactly the faces, with the same chain count per face, the body reports free Edges on")
+	for face, n := range meshFree {
+		require.Equalf(t, 1, n, "face %v carries %d free boundary chain(s), want 1", face, n)
+	}
+
+	_, err = sheet.Volume()
+	require.ErrorIs(t, err, decad.ErrNotSolid)
+
+	block := boxBody(t, doc, 200, 0, 300, 60, 10)
+	_, err = decad.Union(sheet, block)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+}
+
+// meshFreeChainsByFace groups a mesh's own free directed edges — one whose
+// reverse is absent — by the face SourceFaces names for the triangle it
+// belongs to, then counts the connected components (chains) each face's own
+// free edges form over the mesh's vertex indices. It is an independent
+// reading of the same shape tessellate_sheet.go's freeSheetEdgesByFace and
+// countChains compute internally, built from Mesh's public accessors alone.
+func meshFreeChainsByFace(mesh *decad.Mesh) map[*decad.Face]int {
+	directed := map[[2]int]int{}
+	for _, tri := range mesh.Triangles() {
+		for k := range 3 {
+			directed[[2]int{tri[k], tri[(k+1)%3]}]++
+		}
+	}
+	byFace := map[*decad.Face]map[int]int{}
+	for i, tri := range mesh.Triangles() {
+		face := mesh.SourceFaces()[i]
+		for k := range 3 {
+			e := [2]int{tri[k], tri[(k+1)%3]}
+			if directed[[2]int{e[1], e[0]}] != 0 {
+				continue // interior: shared with the facet across it
+			}
+			parent, ok := byFace[face]
+			if !ok {
+				parent = map[int]int{}
+				byFace[face] = parent
+			}
+			unionVertices(parent, e[0], e[1])
+		}
+	}
+	counts := make(map[*decad.Face]int, len(byFace))
+	for face, parent := range byFace {
+		counts[face] = countRoots(parent)
+	}
+	return counts
+}
+
+// bodyFreeChainsByFace groups a body's own recorded free Edges by their
+// single adjacent face, then counts the connected components (chains) each
+// face's own free Edges form over their own Vertex pointers — an
+// independent reading of tessellate_sheet.go's freeChainCountsByFace, built
+// from Body's public accessors alone.
+func bodyFreeChainsByFace(body *decad.Body) map[*decad.Face]int {
+	byFace := map[*decad.Face]map[*decad.Vertex]*decad.Vertex{}
+	for _, e := range body.Edges() {
+		if !e.IsFree() {
+			continue
+		}
+		faces := e.Faces()
+		require1Face(faces)
+		face := faces[0]
+		parent, ok := byFace[face]
+		if !ok {
+			parent = map[*decad.Vertex]*decad.Vertex{}
+			byFace[face] = parent
+		}
+		unionVertexPointers(parent, e.Start(), e.End())
+	}
+	counts := make(map[*decad.Face]int, len(byFace))
+	for face, parent := range byFace {
+		roots := map[*decad.Vertex]struct{}{}
+		for v := range parent {
+			roots[findVertexPointer(parent, v)] = struct{}{}
+		}
+		counts[face] = len(roots)
+	}
+	return counts
+}
+
+func require1Face(faces []*decad.Face) {
+	if len(faces) != 1 {
+		panic("a free Edge must bound exactly one face")
+	}
+}
+
+func unionVertices(parent map[int]int, a, b int) {
+	if _, ok := parent[a]; !ok {
+		parent[a] = a
+	}
+	if _, ok := parent[b]; !ok {
+		parent[b] = b
+	}
+	ra, rb := findVertex(parent, a), findVertex(parent, b)
+	if ra != rb {
+		parent[ra] = rb
+	}
+}
+
+func findVertex(parent map[int]int, v int) int {
+	for parent[v] != v {
+		parent[v] = parent[parent[v]]
+		v = parent[v]
+	}
+	return v
+}
+
+func countRoots(parent map[int]int) int {
+	roots := map[int]struct{}{}
+	for v := range parent {
+		roots[findVertex(parent, v)] = struct{}{}
+	}
+	return len(roots)
+}
+
+func unionVertexPointers(parent map[*decad.Vertex]*decad.Vertex, a, b *decad.Vertex) {
+	if _, ok := parent[a]; !ok {
+		parent[a] = a
+	}
+	if _, ok := parent[b]; !ok {
+		parent[b] = b
+	}
+	ra, rb := findVertexPointer(parent, a), findVertexPointer(parent, b)
+	if ra != rb {
+		parent[ra] = rb
+	}
+}
+
+func findVertexPointer(parent map[*decad.Vertex]*decad.Vertex, v *decad.Vertex) *decad.Vertex {
+	for parent[v] != v {
+		parent[v] = parent[parent[v]]
+		v = parent[v]
+	}
+	return v
 }
 
 // TestStitchSolidTessellateIsDeterministic is docs/surface-design.md's T63:

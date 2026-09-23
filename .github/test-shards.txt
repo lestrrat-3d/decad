@@ -1610,6 +1610,7 @@
 2	0.00	TestStitchSolidDoesNotYetReachAPairRelation
 3	0.00	TestStitchCurvedSolidDoesNotYetTessellate
 0	0.00	TestStitchPlacedSolidTessellateBoundReadsVertexBound
+3	0.00	TestStitchDisplacedPatchSheetTessellatesItsOwnTriangleSet
 1	0.00	TestStitchSolidTessellateIsDeterministic
 2	0.00	TestStitchSolidUnionRefusesOnTheVolumeProof
 3	0.00	TestStitchTessellateClassBoundIsIndependentOfPlacement
