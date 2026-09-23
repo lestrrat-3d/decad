@@ -543,23 +543,203 @@ type discardWriter struct{}
 
 func (discardWriter) Write(p []byte) (int, error) { return len(p), nil }
 
-// TestStitchSolidDoesNotYetReachAPairRelation pins the second out-of-scope
-// refusal: a stitched solid's clearance-kernel carrier model is staged, so a
-// pair holding one never reaches a proven interference or clearance row —
-// the report reads undecided rather than falsely Sound.
-func TestStitchSolidDoesNotYetReachAPairRelation(t *testing.T) {
+// stitchBoxSheetsAtZ is stitchBoxSheets with its base plane offset to z0
+// rather than z=0, so the whole assembly can float clear of another body's
+// own z=0 base face with no Placed transform in play — a Placed motion would
+// widen every vertex bound (rigidRoundAllow) and refuse the exact-carrier
+// gate T67/T68/T69 exist to exercise.
+func stitchBoxSheetsAtZ(t *testing.T, doc *decad.Document, z0 float64) (walls, bottom, top *decad.Body) {
+	t.Helper()
+	w := sketch.NewWorld()
+
+	basePlane, err := w.CreateOffsetPlane(w.XY(), z0)
+	require.NoError(t, err)
+	ws, err := w.CreateSketch(basePlane)
+	require.NoError(t, err)
+	rect := ws.CreateRectangle(0, 0, 100, 60)
+	ws.Fix(rect.A)
+	_, err = ws.Solve(t.Context())
+	require.NoError(t, err)
+	walls, err = doc.Extrude(ws, ws.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+
+	bs, err := w.CreateSketch(basePlane)
+	require.NoError(t, err)
+	brect := bs.CreateRectangle(0, 0, 100, 60)
+	bs.Fix(brect.A)
+	_, err = bs.Solve(t.Context())
+	require.NoError(t, err)
+	bottom, err = doc.Patch(bs, bs.Profiles()[0])
+	require.NoError(t, err)
+
+	topPlane, err := w.CreateOffsetPlane(w.XY(), z0+10)
+	require.NoError(t, err)
+	ts, err := w.CreateSketch(topPlane)
+	require.NoError(t, err)
+	trect := ts.CreateRectangle(0, 0, 100, 60)
+	ts.Fix(trect.A)
+	_, err = ts.Solve(t.Context())
+	require.NoError(t, err)
+	top, err = doc.Patch(ts, ts.Profiles()[0])
+	require.NoError(t, err)
+
+	return walls, bottom, top
+}
+
+// TestStitchBoxReachesAProvenClearanceGap is docs/surface-design.md's T65:
+// the stitched box's own clearance-kernel carrier model
+// (docs/clearance-design.md §2/§6.4's zero-bound gate) lets a pair holding
+// it reach a proven, Sound answer instead of reading undecided. Shown-to-
+// fail: pulling the stitchPayload arm out of newBodyGeomBudget
+// (clearance_geom.go) turns this same Sound report into Suspect with
+// DiagUndecidedClearance and zero Clearance rows (verified by hand while
+// writing this test).
+func TestStitchBoxReachesAProvenClearanceGap(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	walls, bottom, top := stitchBoxSheets(t, doc, 10)
-	_, err := decad.Stitch(walls, bottom, top)
+	box, err := decad.Stitch(walls, bottom, top)
 	require.NoError(t, err)
 
-	// A plain solid whose box overlaps the stitched box's, so the pair
-	// cannot be dismissed by box separation alone.
-	decadtest.NewBlock(t, doc, 5, 5, 20, 20, units.Millimeters(5))
+	// A plain block 3 mm beyond the box's own +X wall (the box spans
+	// x ∈ [0, 100]).
+	block := decadtest.NewBlock(t, doc, 103, 0, 113, 60, units.Millimeters(10))
 
 	report := decadtest.Verify(t, doc, decad.WithClearances())
-	require.NotEqual(t, decad.Sound, report.Status)
+	require.Equal(t, decad.Sound, report.Status)
+	requireExactGap(t, report, 3)
+	decadtest.MeasuresClearance(t, report, box, block, units.Millimeters(3), decadtest.Exactly())
+}
+
+// TestStitchOverlappingSolidStaysUndecided is docs/surface-design.md's T66.
+// The clearance kernel itself proves this exact pair pairOverlapping —
+// TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal
+// (clearance_internal_test.go) pins that fact directly — but Verify never
+// gets to read it: requireVolumeProvingPayload (boolean.go) refuses a
+// stitched operand before measuredInterference ever consults the kernel's
+// own verdict, since this increment publishes no occupied-volume proof for
+// a stitched mesh (tessellate_stitch.go). So the report reads Suspect with
+// DiagUnsupportedPairPayload and no Interference row — never Sound, and
+// never a false Clearance row either.
+func TestStitchOverlappingSolidStaysUndecided(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	walls, bottom, top := stitchBoxSheets(t, doc, 10)
+	box, err := decad.Stitch(walls, bottom, top)
+	require.NoError(t, err)
+
+	// A plain block straddling the box's own +X wall: a true, non-nesting
+	// overlap (x ∈ [50, 150] against the box's x ∈ [0, 100]) at a shorter
+	// height (6 mm against the box's 10 mm) so the two caps never land on
+	// the same plane — a same-orientation coplanar cap pair is its own
+	// ambiguous configuration the kernel correctly reads as unsure, which
+	// would only obscure the point this test makes.
+	decadtest.NewBlock(t, doc, 50, 0, 150, 60, units.Millimeters(6))
+
+	report := decadtest.Verify(t, doc, decad.WithClearances())
+	require.Equal(t, decad.Suspect, report.Status)
 	require.Empty(t, report.Interferences)
 	require.Empty(t, report.Clearances)
+	require.Len(t, report.Diagnostics, 1)
+	diags := decadtest.FindDiagnostics(t, report, decad.DiagUnsupportedPairPayload)
+	require.Len(t, diags, 1)
+	require.Same(t, box, diags[0].Pair.A)
+}
+
+// TestStitchSmallStitchedBoxContainedInABlock is docs/surface-design.md's
+// T67: a small stitched box wholly inside a large plain block reaches the
+// solid-solid path's own strict-containment certificate —
+// TestVerifyStrictContainmentReusesInnerVolume (interference_test.go) pins
+// the identical mechanism for two plain solids — without ever tessellating
+// either operand: the witness cast this needs comes straight off the
+// clearance kernel's own carrier model, never a mesh.
+func TestStitchSmallStitchedBoxContainedInABlock(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	walls, bottom, top := stitchBoxSheetsAtZ(t, doc, 45)
+	box, err := decad.Stitch(walls, bottom, top)
+	require.NoError(t, err)
+	wantVol, err := box.Volume()
+	require.NoError(t, err)
+
+	block := decadtest.NewBlock(t, doc, -50, -50, 200, 150, units.Millimeters(200))
+
+	report := decadtest.Verify(t, doc, decad.WithClearances())
+	require.Equal(t, decad.Interfering, report.Status)
+	require.Len(t, report.Interferences, 1)
+	require.Empty(t, report.Clearances)
+	decadtest.MeasuresInterference(t, report, box, block, wantVol.Value, decadtest.Exactly())
+}
+
+// TestStitchBoundedStitchedSolidStaysUndecided is docs/surface-design.md's
+// T68: T42's own certificate-welded stitched solid — every vertex bound
+// nonzero even at identity, no placement in play — never reaches the
+// clearance kernel's own carrier model, so a pair holding it reads undecided
+// rather than a falsely precise gap. Shown-to-fail: deleting the zero-bound
+// gate (clearance_geom.go's stitchPayload arm) lets this exact pair read
+// Sound with an Exact Clearance row that does not account for the
+// certificate's own residual bound — a falsely decided answer, watched red
+// by hand while writing this test.
+func TestStitchBoundedStitchedSolidStaysUndecided(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	s, p := offAxisPlateSketch(t)
+	wall, err := doc.Extrude(s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	capped, err := wall.Patch(decad.Edges(decad.Free()).Exactly(8))
+	require.NoError(t, err)
+	solid, err := decad.Stitch(capped)
+	require.NoError(t, err)
+
+	for _, v := range solid.Vertices() {
+		require.Greater(t, v.Position().Bound.Mag(), 0.0,
+			"every vertex of the CURVE-welded solid carries a nonzero bound, at identity")
+	}
+
+	bb, err := solid.Bounds()
+	require.NoError(t, err)
+	far := bb.Max.Add(r3.NewVec(50, 50, 50))
+	decadtest.NewBlock(t, doc, far.X, far.Y, far.X+10, far.Y+10, units.Millimeters(10))
+
+	report := decadtest.Verify(t, doc, decad.WithClearances())
+	require.Equal(t, decad.Suspect, report.Status)
+	require.Empty(t, report.Clearances)
+	require.Empty(t, report.Interferences)
+	diags := decadtest.FindDiagnostics(t, report, decad.DiagUndecidedClearance)
+	require.Len(t, diags, 1)
+}
+
+// TestStitchPlacedStitchedSolidStaysUndecided is docs/surface-design.md's
+// T69: T58's own zero-bound box, Placed under a non-identity rigid motion,
+// reaches the identical gate T68 does by the other route — the placement's
+// own rigidRoundAllow widens every vertex bound rather than a certificate
+// weld's own class bound (stitch.go's "recorded weld" comment). Neither
+// route alone would be trusted; together they prove the gate reads the
+// vertex bound itself, not one particular cause of it.
+func TestStitchPlacedStitchedSolidStaysUndecided(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	walls, bottom, top := stitchBoxSheets(t, doc, 10)
+	box, err := decad.Stitch(walls, bottom, top)
+	require.NoError(t, err)
+
+	motion, err := r3.Translation(r3.NewVec(500, 500, 500))
+	require.NoError(t, err)
+	placed, err := box.Placed(motion)
+	require.NoError(t, err)
+
+	for _, v := range placed.Vertices() {
+		require.Greater(t, v.Position().Bound.Mag(), 0.0, "a placement widens every vertex bound")
+	}
+
+	bb, err := placed.Bounds()
+	require.NoError(t, err)
+	decadtest.NewBlock(t, doc, bb.Min.X-20, bb.Min.Y, bb.Min.X-10, bb.Max.Y, units.Millimeters(10))
+
+	report := decadtest.Verify(t, doc, decad.WithClearances())
+	require.Equal(t, decad.Suspect, report.Status)
+	require.Empty(t, report.Clearances)
+	require.Empty(t, report.Interferences)
+	diags := decadtest.FindDiagnostics(t, report, decad.DiagUndecidedClearance)
+	require.Len(t, diags, 1)
 }

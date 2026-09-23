@@ -1607,7 +1607,6 @@
 3	0.00	TestStitchPlacedBoxIsApproximateSolid
 0	0.00	TestStitchTableR
 1	0.00	TestStitchSolidTessellatesItsOwnTriangleSet
-2	0.00	TestStitchSolidDoesNotYetReachAPairRelation
 3	0.00	TestStitchCurvedSolidDoesNotYetTessellate
 0	0.00	TestStitchPlacedSolidTessellateBoundReadsVertexBound
 3	0.00	TestStitchDisplacedPatchSheetTessellatesItsOwnTriangleSet
@@ -1685,3 +1684,10 @@
 1	0.00	TestSameCurveDeclinesTheZeroToken
 2	0.00	TestMintCurveNeverRepeats
 3	0.00	TestCurveTokenComposeDeclinesTheZeroToken
+0	0.00	TestStitchBoxReachesAProvenClearanceGap
+1	0.00	TestStitchOverlappingSolidStaysUndecided
+2	0.00	TestStitchSmallStitchedBoxContainedInABlock
+3	0.00	TestStitchBoundedStitchedSolidStaysUndecided
+0	0.00	TestStitchPlacedStitchedSolidStaysUndecided
+1	0.00	TestAddStitchFacesBuildsExactPlanarCarriers
+2	0.00	TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal

@@ -118,6 +118,29 @@ geometry the body does not have (`docs/surface-design.md` §4.1), while a
 surface-result revolve is refused a model outright rather than the closed one
 its own builder would otherwise hand back.
 
+**A stitched solid's model (`addStitchFaces`, `clearance_geom.go`) is one
+exact planar carrier per live face, read straight off the body's own rebuilt
+topology** — the plane frame from the face's own `Plane` tag (negated when the
+face is reversed), the trim region from each loop's own coedge start
+vertices, and the interior witnesses from the payload's own recorded triangle
+centroids for that face (`docs/surface-design.md` §6.4's `tris`/`triFaces`),
+filtered by the region's own `classify` call as a reject-only confirmation.
+It is admitted only when the recorded triangle set exists (a CLOSED,
+all-planar body) AND every vertex of the body carries a proven bound of
+EXACTLY zero — never a placement's own widened bound, and never a certificate
+weld's own class bound either — because no widening term exists anywhere in
+this file for a bounded stitched vertex to charge against: unlike the
+faceted payload delta this section's own opening paragraph describes,
+`clearancePair` carries no analogous per-payload displacement it could add to
+a stitched body's proven interval. This is deliberately NARROWER than the
+prism arm's own standing just above: `addPrismFaces` builds its carriers
+through a call that applies the placement transform and rounds, then treats
+the result as exact and charges the rounding nowhere, so a placed prism still
+gets a model where a placed stitched solid does not. That asymmetry is a
+pre-existing looseness in the prism arm, not a reason to relax the stitch
+gate to match it — copying it would mean treating bounded coordinates as
+exact in new code, which this file's own reject-only rule forbids.
+
 **A sheet-against-solid pair (`sheetSolidPair`, `clearance.go`) reuses this
 carrier model and §3's candidate enumeration unchanged, over the sheet's own
 walls-alone or refused-outright model above.** One check does NOT apply: the
@@ -525,6 +548,20 @@ That staging is the same one the cup payload took before its own model landed,
 and for the same reason: admitting a trimmed patch face without a proof of its
 trim would yield a false disjointness certificate, which is worse than an
 undecided pair — `Verify` would report a clearance the geometry does not have.
+
+A closed, all-planar `stitchPayload` (docs/surface-design.md §6.4) gains a
+carrier model, §2's `addStitchFaces`, once every vertex of the body carries a
+proven bound of exactly zero. A placed stitched solid, or one closed by the
+CURVE weld certificate at a nonzero class bound, still gets no model — the
+pair stays `Suspect` (`DiagUndecidedClearance` when box separation already
+proved the partition and only the gap is unmeasured, `DiagUnsupportedPair`
+family otherwise) rather than a falsely precise gap. A stitched solid's own
+occupied-volume proof has not landed either (`docs/tessellation-design.md`),
+so `requireVolumeProvingPayload` (`boolean.go`) refuses it before
+`measuredInterference` ever reads the carrier model's own verdict: a pair the
+kernel proves `pairOverlapping` still reports through the boolean-side
+`DiagUnsupportedPairPayload`, never `DiagUndecidedInterference`, until that
+proof lands.
 
 ## 9. Open questions
 

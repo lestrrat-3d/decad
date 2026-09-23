@@ -1142,6 +1142,20 @@ solid therefore publishes `Approximate` — `Volume`, `Area`, `Bounds` and
 `Centroid` all carry `delta`, on the same terms `docs/loft-design.md` §8
 states for a placed loft.
 
+**The clearance kernel's own carrier model (`docs/clearance-design.md` §2)
+admits a stitched body only when the recorded triangle set exists — every
+face tetrahedron-eligible, this section's own closed, all-planar case — AND
+every vertex of the body carries a proven bound of exactly zero**, on
+`addPrismFaces`' own `sectionDelta != 0` reasoning (`clearance_geom.go`): the
+kernel's certificates are exact statements about the carriers it reads, so a
+body whose vertices are only within a bound of their true position is a body
+it cannot model. The second condition subsumes a nonzero placement `delta`,
+since a placement widens every vertex bound; it also subsumes a CURVE
+certificate's own class bound (this section's own `massDelta` paragraph
+above). A pair holding a body the gate refuses reads undecided rather than a
+falsely precise gap — reject-only, never an approximation dressed as an
+answer.
+
 ### 6.5 `Unstitch`
 
 `b.Unstitch()` returns one single-face sheet body per face of `b`, in
@@ -1432,6 +1446,12 @@ neither construction has a crossing-audit proof, nor §9.1's full-turn
 argument, for `Verify`'s switch to read.
 
 ### 9.3 Pairs
+
+**A stitched `BodySolid` takes the solid-solid path (`clearancePair`), never
+this section's own `sheetSolidPair`** — §6.3's Table C already decided it is
+a solid, not a sheet, so none of this section's box rule or its diagnostics
+govern it; `docs/clearance-design.md` §2/§8 own its own carrier-model gate
+and the diagnostics a pair holding one reads.
 
 `docs/interference-design.md` §2 keeps **only proven solids** for its own four
 relations (§1 there), so a pair with a sheet operand needs a different
@@ -1835,6 +1855,11 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T62 | each of T46's frustum, T50's ball and T53's torus body, stitched | `Tessellate`, `STL` and `OBJ` each return `ErrUnsupported`; the message names the face this evaluator has no chording arm for, not the payload class; the body's analytic `Volume`/`Centroid` still read unchanged afterwards |
 | T63 | T58's box tessellated twice at two different tolerances | equal vertex order, triangle order and source-face order; byte-identical STL and byte-identical OBJ; mutating the returned `Vertices()`/`Triangles()` slices changes nothing on a later call |
 | T64 | `Union` of T58's box with a plain `Extrude` block | `ErrUnsupported`, and the failure is the volume-proof refusal (`operandSymDiff`'s wording, via `requireVolumeProvingPayload`'s own `stitchPayload` arm), not the payload-class one; the document is unchanged and both operands stay live |
+| T65 | T58's box and a plain solid block 3 mm beyond its own +X wall, `Verify(WithClearances())` | `Sound`; exactly one `Clearance` row; its proven interval encloses 3 mm; `Exact`. Replaces `TestStitchSolidDoesNotYetReachAPairRelation`'s Sound-side premise |
+| T66 | T58's box and a plain block straddling its own +X wall (a true, non-nesting overlap) | the clearance kernel itself proves `pairOverlapping` (`TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal`, internal) but the report never reads it: `requireVolumeProvingPayload` refuses the stitched operand first, so `Verify` reads `Suspect` with `DiagUnsupportedPairPayload` and no `Interference` row — never `Sound`, never a false `Clearance` row |
+| T67 | a small stitched box wholly inside a large plain block, boxes meeting | the solid-solid path's own strict-containment certificate: `Interfering`, exactly one `Interference` row reusing the contained box's own `Volume`, no `Clearance` row — reached through the clearance kernel's own carrier model alone, with neither operand ever tessellated |
+| T68 | T42's own certificate-welded stitched solid (nonzero vertex bound at identity) against a plain block with a real box-proven gap, `Verify(WithClearances())` | no carrier model; `Suspect` with `DiagUndecidedClearance`, never a `Clearance` row. Shown-to-fail: deleting the zero-bound gate lets this pair read `Sound` with a falsely `Exact` `Clearance` row that does not account for the certificate's own residual bound |
+| T69 | T58's box `Placed` under a non-identity rigid motion, same pairing as T68 | identical outcome, reached by the other route: the placement's own `rigidRoundAllow` widens every vertex bound rather than a certificate weld's own class bound — neither T68 nor T69 alone would be trusted to test the gate itself rather than one particular cause of it |
 | T70 | a hand-built stitched face set whose recorded triangle list repeats a directed edge, driven directly at `tessellateStitch` (internal — `checkStitchClosure` already catches this at build time, so no public fixture reaches this gate) | the audit refuses and no partial mesh is returned |
 
 `.github/test-shards.txt` gains a row for every root-package test each
