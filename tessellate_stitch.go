@@ -30,11 +30,15 @@ import (
 // triangle set as a Mesh, CLOSED or OPEN. Its per-face bound is the largest
 // Vertex.Bound() over the vertices that face's own triangles touch, zero
 // exactly when every one of them is; its areaSlack is the matching
-// perturbedTriangleAreaAllow sum. It publishes no occupied-volume proof —
-// symDiffOK stays false — so Union, Cut and Intersect keep refusing a
-// stitched operand (boolean.go's own requireVolumeProvingPayload arm) until
-// a later increment states that proof, whatever the exact tetrahedron sum
-// itself already proves about signed volume.
+// perturbedTriangleAreaAllow sum. A CLOSED body (b.Kind() == BodySolid)
+// whose every vertex carries a proven bound of exactly zero
+// (stitchZeroVertexBound, stitch.go) publishes a zero occupied-volume proof
+// (symDiffOK == true) — see the comment at that publication below for the
+// three-step argument. Every other stitched body — open, curved/mixed,
+// placed, or certificate-welded — keeps symDiffOK false, so Union, Cut and
+// Intersect keep refusing it (boolean.go's own requireVolumeProvingPayload
+// arm), whatever the exact tetrahedron sum itself already proves about
+// signed volume.
 func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -78,14 +82,60 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	}
 	mesh.areaSlack = slack
 
-	// A stitched body's mesh publishes no occupied-volume proof in this
-	// increment (docs/surface-design.md §14 Table D row 5): the exact
-	// tetrahedron sum proves SIGNED volume, never the occupied-volume
-	// symmetric-difference bound a boolean requires. symDiffOK stays false
-	// permanently for now, and boolean.go's requireVolumeProvingPayload
-	// refuses a stitched operand before this mesh is even built.
+	// A stitched body's mesh publishes an occupied-volume proof of EXACTLY
+	// zero — the strongest claim this codebase makes — only for a CLOSED body
+	// whose every vertex carries a proven bound of exactly zero. Every other
+	// stitched body's exact tetrahedron sum proves only SIGNED volume, never
+	// the occupied-volume symmetric-difference bound a boolean requires, so
+	// symDiffOK stays false for it (docs/surface-design.md §14 Table D row 5)
+	// and boolean.go's requireVolumeProvingPayload refuses it before this
+	// mesh is even built.
+	//
+	// The zero claim rests on three steps, each of which must hold for every
+	// triangle this mesh restates, or the claim does not:
+	//
+	//  1. Every held vertex IS the true boundary vertex, not merely near it.
+	//     stitchZeroVertexBound (stitch.go) proves every one of b.Vertices()'s
+	//     own proven bounds is exactly zero — the same gate
+	//     clearance_geom.go's addStitchFaces dispatch already applies, reused
+	//     verbatim rather than re-derived. That rules out both a nonzero
+	//     placement delta (stitch.go's rigidRoundAllow, evalStitchContext)
+	//     and a certificate-welded class bound (docs/surface-design.md §6.4's
+	//     massDelta amendment) — the only two ways this evaluator ever widens
+	//     a stitched vertex's bound above zero.
+	//  2. The polygon triangulateStitchFaces (stitch.go) built for every face
+	//     IS that face's exact boundary, never an approximation of a curved
+	//     one. stitchAllTetrahedronEligible — already required for sp.tris to
+	//     be non-nil, which is why this function reached this point at all —
+	//     requires every face to be a Plane bounded entirely by Line3 edges.
+	//     A Line3's whole geometry is its two endpoints, so the coedge-start-
+	//     vertex polygon the triangulator reads drops no bulge: there is none
+	//     to drop.
+	//  3. Ear clipping, with Eberly's hole-bridging ahead of it for a holed
+	//     face, exactly tiles that exact polygon — holes excluded once each,
+	//     with no gap and no overlap. This is the identical triangulator
+	//     loft's own exact restatement already relies on for its cap
+	//     triangles (docs/tessellation-design.md §2's loftPayload row), and it
+	//     introduces no coordinate the polygon's own vertices did not already
+	//     hold: no rounding, no interpolation. checkStitchClosure's
+	//     directed-edge parity leg and loftCrossingAudit's own crossing test
+	//     — both already run before this mesh is built, in
+	//     stitch.go's evalStitchContext — are what prove the several faces'
+	//     own triangle sets close into one watertight solid with no
+	//     self-contact; that is never this restatement's own concern.
+	//
+	// Together the three steps mean the held triangle set occupies EXACTLY
+	// the same volume the denoted body does: a zero symmetric difference, not
+	// merely a small one.
 	mesh.volSymDiff = 0
 	mesh.symDiffOK = false
+	if b.Kind() == BodySolid {
+		zeroBound, err := stitchZeroVertexBound(budget, b)
+		if err != nil {
+			return nil, err
+		}
+		mesh.symDiffOK = zeroBound
+	}
 
 	// Every audit below restates the payload's own invariants over the
 	// copied set (tessellate_loft.go's identical reasoning): Stitch's own

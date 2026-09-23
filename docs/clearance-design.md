@@ -125,8 +125,8 @@ face is reversed), the trim region from each loop's own coedge start
 vertices, and the interior witnesses from the payload's own recorded triangle
 centroids for that face (`docs/surface-design.md` §6.4's `tris`/`triFaces`),
 filtered by the region's own `classify` call as a reject-only confirmation.
-It is admitted only when the recorded triangle set exists (a CLOSED,
-all-planar body) AND every vertex of the body carries a proven bound of
+It is admitted only when the recorded triangle set exists (an all-planar
+body, open or closed) AND every vertex of the body carries a proven bound of
 EXACTLY zero — never a placement's own widened bound, and never a certificate
 weld's own class bound either — because no widening term exists anywhere in
 this file for a bounded stitched vertex to charge against: unlike the
@@ -551,17 +551,18 @@ undecided pair — `Verify` would report a clearance the geometry does not have.
 
 A closed, all-planar `stitchPayload` (docs/surface-design.md §6.4) gains a
 carrier model, §2's `addStitchFaces`, once every vertex of the body carries a
-proven bound of exactly zero. A placed stitched solid, or one closed by the
-CURVE weld certificate at a nonzero class bound, still gets no model — the
-pair stays `Suspect` (`DiagUndecidedClearance` when box separation already
-proved the partition and only the gap is unmeasured, `DiagUnsupportedPair`
-family otherwise) rather than a falsely precise gap. A stitched solid's own
-occupied-volume proof has not landed either (`docs/tessellation-design.md`),
-so `requireVolumeProvingPayload` (`boolean.go`) refuses it before
-`measuredInterference` ever reads the carrier model's own verdict: a pair the
-kernel proves `pairOverlapping` still reports through the boolean-side
-`DiagUnsupportedPairPayload`, never `DiagUndecidedInterference`, until that
-proof lands.
+proven bound of exactly zero — the identical gate (`stitchZeroVertexBound`)
+that lets its mesh publish a zero occupied-volume proof
+(`docs/tessellation-design.md` §2's `stitchPayload` row), so a pair the
+kernel proves `pairOverlapping` for such a body now reaches a real
+`Interference` row through the ordinary mesh boolean: `requireVolumeProvingPayload`
+(`boolean.go`) no longer refuses the operand once its own carrier model
+exists. A placed stitched solid, or one closed by the CURVE weld certificate
+at a nonzero class bound, still gets no model and publishes no occupied-volume
+proof either — the pair stays `Suspect` (`DiagUndecidedClearance` when box
+separation already proved the partition and only the gap is unmeasured,
+`DiagUnsupportedPairPayload` family otherwise) rather than a falsely precise
+gap or a falsely decided interference.
 
 ## 9. Open questions
 

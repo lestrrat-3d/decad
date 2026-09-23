@@ -353,27 +353,99 @@ func TestStitchSolidTessellateIsDeterministic(t *testing.T) {
 	require.Equal(t, m2.Triangles(), m3.Triangles())
 }
 
-// TestStitchSolidUnionRefusesOnTheVolumeProof is docs/surface-design.md's
-// T64: a stitched solid's mesh publishes no occupied-volume proof in this
-// increment, so a boolean refuses it at requireVolumeProvingPayload's own
-// stitchPayload arm — the volume-proof wording, never the payload-class
-// wording tessellation's own dispatch would otherwise report — before
-// either operand is touched.
-func TestStitchSolidUnionRefusesOnTheVolumeProof(t *testing.T) {
+// TestStitchSolidUnionComposesTheCorrectVolume is docs/surface-design.md's
+// T71: a CLOSED, all-planar, zero-vertex-bound stitched solid now publishes
+// an occupied-volume proof of exactly zero, so requireVolumeProvingPayload's
+// stitchPayload arm no longer refuses it and Union composes the two disjoint
+// operands' exact volumes — the mesh-boolean analog of TestUnionDisjointCubes
+// (boolean_test.go), over a stitched operand instead of a plain one. This
+// replaces TestStitchSolidUnionRefusesOnTheVolumeProof, whose whole subject
+// (a stitched solid ever entering a boolean) this row retires; T64's own row
+// keeps the refusal only for a stitched solid this proof does not cover
+// (T73, T74).
+func TestStitchSolidUnionComposesTheCorrectVolume(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	box := stitchedBox(t, doc)
 	block := boxBody(t, doc, 200, 0, 300, 60, 10)
 
+	got, err := decad.Union(box, block)
+	require.NoError(t, err)
+
+	// Disjoint: the union is exactly the sum, two lumps, nothing chorded,
+	// nothing rounded — Exact with a zero bound, the identical reading
+	// TestUnionDisjointCubes gets for two plain boxes.
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, vol.Exactness)
+	volMM3, err := vol.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.Equal(t, 120000.0, volMM3)
+	boundMM3, err := vol.Bound.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.Zero(t, boundMM3)
+	require.Len(t, got.Lumps(), 2)
+}
+
+// TestStitchPlacedSolidUnionStillRefusesOnTheVolumeProof is
+// docs/surface-design.md's T73: T58's own zero-bound box, Placed under a
+// non-identity rigid motion, still refuses a boolean — the placement's own
+// rigidRoundAllow widens every vertex bound (stitch.go), so
+// stitchZeroVertexBound no longer holds and requireVolumeProvingPayload
+// keeps refusing this operand exactly as it did before this increment. This
+// reaches the gate by the PLACEMENT route; T74 reaches it by the
+// CERTIFICATE-WELD route, and neither alone would prove the gate reads the
+// vertex bound itself rather than one particular cause of it (T68/T69's
+// identical pairing, for the clearance-kernel gate instead of this one).
+func TestStitchPlacedSolidUnionStillRefusesOnTheVolumeProof(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	box := stitchedBox(t, doc)
+	motion, err := r3.Translation(r3.NewVec(500, 500, 500))
+	require.NoError(t, err)
+	placed, err := box.Placed(motion)
+	require.NoError(t, err)
+	block := boxBody(t, doc, 700, 500, 800, 560, 10)
+
 	before := len(doc.Bodies())
-	_, err := decad.Union(box, block)
+	_, err = decad.Union(placed, block)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "no proof of the volume")
 	require.NotContains(t, err.Error(), "does not support payload")
-
 	require.Len(t, doc.Bodies(), before, "a refused boolean leaves the document unchanged")
-	require.True(t, box.IsSolid())
-	require.True(t, block.IsSolid())
+}
+
+// TestStitchCertificateWeldedSolidUnionStillRefusesOnTheVolumeProof is
+// docs/surface-design.md's T74: T42's own certificate-welded stitched
+// solid — every vertex bound nonzero even at identity, no placement in
+// play — still refuses a boolean by the CERTIFICATE-WELD route rather than
+// the placement route T73 exercises.
+func TestStitchCertificateWeldedSolidUnionStillRefusesOnTheVolumeProof(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	s, p := offAxisPlateSketch(t)
+	wall, err := doc.Extrude(s, p, decad.Symmetric{D: units.Inches(2.5)}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	capped, err := wall.Patch(decad.Edges(decad.Free()).Exactly(8))
+	require.NoError(t, err)
+	solid, err := decad.Stitch(capped)
+	require.NoError(t, err)
+	for _, v := range solid.Vertices() {
+		require.Greater(t, v.Position().Bound.Mag(), 0.0,
+			"every vertex of the CURVE-welded solid carries a nonzero bound, at identity")
+	}
+
+	bb, err := solid.Bounds()
+	require.NoError(t, err)
+	far := bb.Max.Add(r3.NewVec(50, 50, 50))
+	block := boxBody(t, doc, far.X, far.Y, far.X+10, far.Y+10, 10)
+
+	before := len(doc.Bodies())
+	_, err = decad.Union(solid, block)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Contains(t, err.Error(), "no proof of the volume")
+	require.NotContains(t, err.Error(), "does not support payload")
+	require.Len(t, doc.Bodies(), before, "a refused boolean leaves the document unchanged")
 }
 
 // anchoredMeshVolume is meshVolume's own tetrahedron sum, anchored at the

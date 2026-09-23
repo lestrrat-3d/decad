@@ -430,7 +430,7 @@ func TestRevolveMeshCarriesItsOccupiedVolumeProof(t *testing.T) {
 	require.NoError(t, err)
 	require.Positive(t, sym)
 	require.Equal(t, mesh.volSymDiff, sym)
-	require.NoError(t, requireVolumeProvingPayload(body, 0))
+	require.NoError(t, requireVolumeProvingPayload(t.Context(), body, 0))
 
 	// Every source face publishes a positive displacement beside it, so the
 	// mesh is a complete operand rather than an export-only one.
