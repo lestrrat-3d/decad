@@ -126,11 +126,11 @@ type stitchPayload struct {
 	// so tessellate_stitch.go can publish a per-face bound without
 	// recomputing it. Populated only alongside tris/triFaces below.
 	vertBound []float64
-	// tris is the final outward-wound triangle set (indices into verts) a
-	// CLOSED, all-planar (stitchAllTetrahedronEligible) build assembled and
-	// audited — the exact set tessellate_stitch.go restates with no
-	// chording. Nil for a curved, mixed, or OPEN stitched body: none of
-	// those has a triangle set to restate.
+	// tris is the final wound triangle set (indices into verts) an
+	// all-planar (stitchAllTetrahedronEligible) build assembled and
+	// audited, CLOSED or OPEN — the exact set tessellate_stitch.go restates
+	// with no chording. Nil for a curved or mixed stitched body: it has no
+	// triangle set to restate.
 	tris [][3]int
 	// triFaces is tris' own per-triangle LIVE rebuilt face, parallel to
 	// tris. It is never stitchPayload.faces (the retired operand faces) and
@@ -397,13 +397,14 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 		return nil, err
 	}
 
-	// tessellate_stitch.go's exact restatement is scoped to the CLOSED,
-	// all-planar case only (docs/surface-design.md §14 Table D row 5): the
-	// curved-closure arm's own faces have no triangle set to restate, and an
-	// OPEN all-planar sheet's mesh is a later increment even though this
-	// arm did triangulate it to check its own perturbed area sum above.
+	// tessellate_stitch.go's exact restatement is scoped to the all-planar
+	// case, CLOSED or OPEN (docs/surface-design.md §14 Table D row 5): the
+	// curved-closure arm's own faces have no triangle set to restate, but an
+	// OPEN all-planar sheet's own triangle set is exactly the one this arm
+	// already built (and audited via its own perturbed area sum) above, so
+	// it is recorded rather than discarded.
 	payloadTris, payloadTriFaces, payloadVertBound := tris, triFaces, vertBound
-	if !allTetra || open {
+	if !allTetra {
 		payloadTris, payloadTriFaces, payloadVertBound = nil, nil, nil
 	}
 	body.payload = stitchPayload{

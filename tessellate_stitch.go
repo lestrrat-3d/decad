@@ -8,21 +8,26 @@ import (
 )
 
 // This file is docs/tessellation-design.md §2's stitchPayload restatement
-// row (docs/surface-design.md §10, §14 Table D row 5): a CLOSED, all-planar
-// stitched body's mesh is an exact restatement of the triangle set Stitch's
-// own build already assembled and audited (stitch.go's evalStitchContext),
-// modelled line for line on tessellate_loft.go's exact restatement. Nothing
-// is chorded, welded, moved, or retriangulated here, so this path takes no
-// chord tolerance at all — there is no chording component for one to bind
-// (tessellate_loft.go's own reasoning, restated for this payload).
+// row (docs/surface-design.md §10, §14 Table D row 5): an all-planar
+// stitched body's mesh, CLOSED or OPEN, is an exact restatement of the
+// triangle set Stitch's own build already assembled and audited (stitch.go's
+// evalStitchContext), modelled line for line on tessellate_loft.go's exact
+// restatement. Nothing is chorded, welded, moved, or retriangulated here, so
+// this path takes no chord tolerance at all — there is no chording
+// component for one to bind (tessellate_loft.go's own reasoning, restated
+// for this payload).
 //
-// A curved, mixed, or OPEN stitched body carries no recorded triangle set
+// A curved or mixed stitched body carries no recorded triangle set
 // (stitchPayload.tris is nil) and refuses here with ErrUnsupported: this
-// evaluator has not wired a chording arm for either, and both stay staged
-// past this increment (docs/surface-design.md §14 Table D row 5).
+// evaluator has not wired a chording arm for it, and it stays staged past
+// this increment (docs/surface-design.md §14 Table D row 5). An OPEN
+// all-planar sheet runs docs/tessellation-design.md §1.2's manifold-with-
+// boundary audit (requireSheetMesh, requireSheetVertexLinks) in the
+// closed-mesh audit's place, exactly as a surface-result prism or revolve
+// sheet's own mesh does (docs/surface-design.md §10).
 
-// tessellateStitch restates a CLOSED, all-planar stitched body's own
-// recorded triangle set as a Mesh. Its per-face bound is the largest
+// tessellateStitch restates an all-planar stitched body's own recorded
+// triangle set as a Mesh, CLOSED or OPEN. Its per-face bound is the largest
 // Vertex.Bound() over the vertices that face's own triangles touch, zero
 // exactly when every one of them is; its areaSlack is the matching
 // perturbedTriangleAreaAllow sum. It publishes no occupied-volume proof —
@@ -35,9 +40,6 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 		return nil, err
 	}
 	if sp.tris == nil {
-		if b.Kind() == BodySheet {
-			return nil, fmt.Errorf(`%w: tessellating an open stitched sheet is staged for a later increment`, ErrUnsupported)
-		}
 		for _, f := range b.Faces() {
 			if !faceIsTetrahedronEligible(f) {
 				return nil, fmt.Errorf(`%w: this evaluator has no chording arm for a stitched body's %T face`, ErrUnsupported, f.Surface())
@@ -85,15 +87,39 @@ func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, er
 	mesh.volSymDiff = 0
 	mesh.symDiffOK = false
 
-	// Both audits are the payload's own invariants restated over the copied
-	// set (tessellate_loft.go's identical reasoning): Stitch's own build
-	// already ran checkStitchClosure and, on the curved path, its own
-	// vertex-link audit, so failing either here can only mean a payload
-	// that never should have reached this restatement. requireClosedMesh's
-	// own ErrDegenerate is rewrapped as ErrUnsupported to match — this
-	// evaluator's own restatement reach, never a claim the body's geometry
-	// is bad (docs/tessellation-design.md §12; §1.2's own note that a
-	// stitched solid mesh also runs requireVertexLinks beside it).
+	// Every audit below restates the payload's own invariants over the
+	// copied set (tessellate_loft.go's identical reasoning): Stitch's own
+	// build already ran checkStitchClosure's directed-edge parity leg over
+	// this exact triangle set, whether open or closed, so failing an audit
+	// here can only mean a payload that never should have reached this
+	// restatement.
+	//
+	// A BodySheet runs docs/tessellation-design.md §1.2's manifold-with-
+	// boundary audit in the closed-mesh audit's place, exactly as a
+	// surface-result prism or revolve sheet's own mesh does
+	// (docs/surface-design.md §10): requireSheetMesh proves every free
+	// directed edge attributes, face by face and chain count by chain
+	// count, to the body's own recorded free Edges — the one leg Stitch's
+	// own build never itself checked, since checkStitchClosure only ever
+	// asked whether an edge has one or two adjacent faces, never which face
+	// a mesh triangle attributes to — and requireSheetVertexLinks is its own
+	// vertex-link safety net for an open boundary vertex's link, a path
+	// rather than requireVertexLinks' cycle.
+	if b.Kind() == BodySheet {
+		if err := requireSheetMesh(ctx, b, mesh); err != nil {
+			return nil, err
+		}
+		if err := requireSheetVertexLinks(ctx, mesh); err != nil {
+			return nil, err
+		}
+		return mesh, nil
+	}
+
+	// requireClosedMesh's own ErrDegenerate is rewrapped as ErrUnsupported to
+	// match — this evaluator's own restatement reach, never a claim the
+	// body's geometry is bad (docs/tessellation-design.md §12; §1.2's own
+	// note that a stitched solid mesh also runs requireVertexLinks beside
+	// it).
 	if err := requireClosedMesh(mesh); err != nil {
 		return nil, fmt.Errorf(`%w: the stitched body's held triangle set is not a closed mesh, so it restates no boundary`, ErrUnsupported)
 	}
