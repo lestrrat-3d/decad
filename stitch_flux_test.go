@@ -12,10 +12,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md §15's T31-T36 and T46-T47 public
-// coverage for stitch_flux.go's per-surface flux integral: the `Plane`,
-// `Cylinder` and `Cone` arms that let `Stitch` close a boundary holding a
-// curved face. T37, T38, T48 and T49 are internal-only
+// This file is docs/surface-design.md §15's T31-T36, T46-T47 and T50-T52
+// public coverage for stitch_flux.go's per-surface flux integral: the
+// `Plane`, `Cylinder`, `Cone` and `Sphere` arms that let `Stitch` close a
+// boundary holding a curved face. T37, T38, T48 and T49 are internal-only
 // (stitch_internal_test.go): a genuinely closed
 // `NURBSSurface`-holding set and a hand-built nonzero-`normalBound` face are
 // both unreachable through the public seam, for reasons each test records.
@@ -418,4 +418,156 @@ func TestStitchConicalSolidMatchesTheRevolveEngine(t *testing.T) {
 	require.InDelta(t, directCen.Value.X, stitchedCen.Value.X, tol)
 	require.InDelta(t, directCen.Value.Y, stitchedCen.Value.Y, tol)
 	require.InDelta(t, directCen.Value.Z, stitchedCen.Value.Z, tol)
+}
+
+// semicircleSketchAt is semicircleSketch generalized to an arbitrary
+// diameter length and starting position along the axis — T50's own fixture
+// with T52's family swept across it. The diameter still runs along the
+// sketch's own U axis, collinear with uAxis, so every fixture this builds
+// stays on-origin and axis-aligned in the sense boundedCircleRadius's own
+// doc comment names, exactly as T50 itself is.
+func semicircleSketchAt(t *testing.T, u0, diameter float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	o := s.CreatePoint(u0, 0)
+	s.Fix(o)
+	end := s.CreatePoint(u0+diameter, 0)
+	c := s.CreatePoint(u0+diameter/2, 0)
+	s.CreateLine(o, end)
+	s.CreateArc(c, end, o)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	return s, s.Profiles()[0]
+}
+
+// sphereRevolveSheet builds semicircleSketchAt's profile as a closed
+// full-revolution surface sheet: a single, boundary-less Sphere face, no
+// free edge (T6/T50's own shape).
+func sphereRevolveSheet(t *testing.T, u0, diameter float64) (*decad.Document, *decad.Body) {
+	t.Helper()
+	s, p := semicircleSketchAt(t, u0, diameter)
+	doc := decad.New()
+	sheet, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	return doc, sheet
+}
+
+// TestStitchSphereRevolveSheetClosesToABall is T50: semicircleSketch's own
+// full-revolution surface sheet (T6's fixture) closes to a solid whose
+// volume, area and centroid the Sphere arm now computes. This replaces
+// TestStitchClosedCurvedSheetIsUnsupported (stitch_test.go): T6's own
+// "stitching it alone is ErrUnsupported" half is retired, and its shard row
+// moves to this test's name.
+func TestStitchSphereRevolveSheetClosesToABall(t *testing.T) {
+	t.Parallel()
+	doc, sheet := sphereRevolveSheet(t, 0, 10)
+	require.Equal(t, decad.BodySheet, sheet.Kind())
+	require.Len(t, sheet.Faces(), 1)
+	decadtest.HasSurfaceKinds(t, sheet, map[decad.SurfaceKind]int{
+		decad.KindSphere: 1,
+	})
+	// The premise the Sphere arm's own doc comment rests on: the face
+	// carries no boundary loop at all, and the whole body carries no edge or
+	// vertex either.
+	require.Empty(t, sheet.Faces()[0].Loops())
+	require.Empty(t, sheet.Edges())
+	require.Empty(t, sheet.Vertices())
+
+	solid, err := decad.Stitch(sheet)
+	require.NoError(t, err)
+
+	require.Equal(t, decad.BodySolid, solid.Kind())
+	require.True(t, solid.IsSolid())
+	decadtest.MeasuresVolume(t, solid, units.CubicMillimeters(4.0/3.0*math.Pi*125))
+	decadtest.MeasuresArea(t, solid, units.SquareMillimeters(100*math.Pi))
+	decadtest.MeasuresCentroid(t, solid, r3.NewVec(5, 0, 0))
+
+	vol, err := solid.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, vol.Exactness, "a term carrying pi can never claim Exact")
+	require.Greater(t, vol.Bound.Base(), 0.0)
+
+	cen, err := solid.Centroid()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, cen.Exactness)
+
+	_, err = decad.Edges(decad.Free()).SelectEdges(solid)
+	require.ErrorIs(t, err, decad.ErrNoMatch)
+
+	require.Len(t, doc.Bodies(), 1)
+	require.Same(t, solid, doc.Bodies()[0])
+}
+
+// TestStitchSphereSolidMatchesTheRevolveEngine is T51: the
+// independent-producer cross-check, the Sphere arm's own sibling of
+// TestStitchAnnularSolidMatchesTheRevolveEngine and
+// TestStitchConicalSolidMatchesTheRevolveEngine. The same profile built as a
+// BodySolid through Revolve with no option is the Pappus-based analytic
+// solid evaluator, never stitch_flux.go's own arithmetic, so agreement here
+// does not depend on this PR's own derivation being right.
+func TestStitchSphereSolidMatchesTheRevolveEngine(t *testing.T) {
+	t.Parallel()
+	_, sheet := sphereRevolveSheet(t, 0, 10)
+	stitched, err := decad.Stitch(sheet)
+	require.NoError(t, err)
+
+	s2, p2 := semicircleSketchAt(t, 0, 10)
+	solidDoc := decad.New()
+	direct, err := solidDoc.Revolve(s2, p2, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	stitchedVol, err := stitched.Volume()
+	require.NoError(t, err)
+	directVol, err := direct.Volume()
+	require.NoError(t, err)
+	decadtest.Agree(t, "volume", stitchedVol, directVol)
+
+	// The centroid comparison below is real but genuinely weak for THIS
+	// shape: the direct revolve engine's own centroid bound for a profile
+	// touching the axis at both poles comes out on the order of a hundred
+	// millimetres for this 5 mm sphere (checked directly while landing this
+	// test), an existing property of the unrelated Pappus-based solid
+	// evaluator, not of this arm — every Cylinder/Cone cross-check fixture
+	// stays clear of the axis and does not hit it. So this leg still catches
+	// a gross blunder (a wrong sign, an order-of-magnitude error), but the
+	// tight, decisive centroid proof against the hand-derived analytic value
+	// is TestStitchSphereRevolveSheetClosesToABall (T50) and
+	// TestStitchSphereVolumeBoundEncloses (T52), both `Bound`-tight and both
+	// shown to fail against a broken moment formula.
+	stitchedCen, err := stitched.Centroid()
+	require.NoError(t, err)
+	directCen, err := direct.Centroid()
+	require.NoError(t, err)
+	tol := stitchedCen.Bound.Base() + directCen.Bound.Base() + 1e-9
+	require.InDelta(t, directCen.Value.X, stitchedCen.Value.X, tol)
+	require.InDelta(t, directCen.Value.Y, stitchedCen.Value.Y, tol)
+	require.InDelta(t, directCen.Value.Z, stitchedCen.Value.Z, tol)
+}
+
+// TestStitchSphereVolumeBoundEncloses is T52: T50's fixture swept across a
+// family of radii and off-origin diameters (the generating semicircle's own
+// centre moved along the axis), each checked against its own analytic
+// (4/3)*pi*R^3 volume and its own centre as centroid.
+func TestStitchSphereVolumeBoundEncloses(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		u0, diameter float64
+	}{
+		{0, 10},
+		{0, 6},
+		{-20, 200},
+		{5, 2},
+	}
+	for _, c := range cases {
+		_, sheet := sphereRevolveSheet(t, c.u0, c.diameter)
+		solid, err := decad.Stitch(sheet)
+		require.NoError(t, err)
+
+		r := c.diameter / 2
+		wantVol := 4.0 / 3.0 * math.Pi * r * r * r
+		decadtest.MeasuresVolume(t, solid, units.CubicMillimeters(wantVol))
+		decadtest.MeasuresCentroid(t, solid, r3.NewVec(c.u0+r, 0, 0))
+	}
 }

@@ -1603,7 +1603,7 @@
 0	0.00	TestStitchClosesBoxFromThreeSheets
 1	0.00	TestStitchDisplacedPatchStaysASheet
 2	0.00	TestStitchNonzeroBoundRimStaysFreeAgainstExactPatch
-2	0.00	TestStitchClosedCurvedSheetIsUnsupported
+2	0.00	TestStitchSphereRevolveSheetClosesToABall
 3	0.00	TestStitchPlacedBoxIsApproximateSolid
 0	0.00	TestStitchTableR
 1	0.00	TestStitchSolidDoesNotYetTessellate
@@ -1632,6 +1632,13 @@
 0	0.00	TestStitchConicalRevolveSheetCloses
 1	0.00	TestStitchConicalSolidMatchesTheRevolveEngine
 2	0.00	TestStitchCurvedMassCorrectsInwardOrientationForCone
+3	0.00	TestStitchSphereFluxReusesAreaBound
+0	0.00	TestStitchSphereFluxDerivesRadiusFromAreaNotBareField
+1	0.00	TestStitchSphereFluxRefusesFaceWithABoundaryLoop
+2	0.00	TestStitchCurvedMassCorrectsInwardOrientationForSphere
+3	0.00	TestStitchCurvedMassSphereCoordUpperTracksRadius
+0	0.00	TestStitchSphereSolidMatchesTheRevolveEngine
+1	0.00	TestStitchSphereVolumeBoundEncloses
 2	0.00	TestUnstitchBoxYieldsSixFreeSheets
 3	0.00	TestUnstitchRestitchRoundTripMatchesOriginal
 0	0.00	TestUnstitchRevolveRoundTripStaysASheet

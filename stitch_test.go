@@ -11,13 +11,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md's T3/T4/T6-shaped public tests for
+// This file is docs/surface-design.md's T3/T4-shaped public tests for
 // Stitch, plus Table R's R12/R13/R14/R17 rows and the two out-of-scope
 // refusals a stitched solid pins for this increment (tessellation and the
 // pair relation). The internal fixtures for Table R's R7 rows (a
 // non-orientable set and a non-manifold one) and R9 live in
 // stitch_internal_test.go, since decad's public seam admits no way to
-// author either shape directly.
+// author either shape directly. T6's own stitched-solid half (T50) moved to
+// stitch_flux_test.go once the Sphere arm retired its "ErrUnsupported"
+// outcome — TestStitchClosedCurvedSheetIsUnsupported is gone, replaced by
+// TestStitchSphereRevolveSheetClosesToABall.
 
 // stitchBoxSheets builds T1's rectangle walls plus a patch at each end —
 // docs/surface-design.md's worked box example — and returns the three
@@ -352,32 +355,6 @@ func TestStitchRefusesAPlacedSheetAgainstItsUnplacedSiblings(t *testing.T) {
 	free, err := decad.Edges(decad.Free()).Exactly(8).SelectEdges(restitched)
 	require.NoError(t, err)
 	require.Len(t, free, 8)
-}
-
-// TestStitchClosedCurvedSheetIsUnsupported is docs/surface-design.md's T6
-// second half: a half-disc revolved a full turn about its diameter, as a
-// surface, is a closed sheet with no free edge (proven first, so this test
-// cannot pass through an earlier gate); stitching it alone is
-// [decad.ErrUnsupported] (Table R row R8), since the boundary is already
-// closed and every one of its faces is curved.
-func TestStitchClosedCurvedSheetIsUnsupported(t *testing.T) {
-	t.Parallel()
-	s, p := semicircleSketch(t)
-	doc := decad.New()
-	sheet, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
-	require.NoError(t, err)
-
-	// The operand really is closed before Stitch ever sees it.
-	require.Equal(t, decad.BodySheet, sheet.Kind())
-	_, err = decad.Edges(decad.Free()).SelectEdges(sheet)
-	require.ErrorIs(t, err, decad.ErrNoMatch)
-
-	_, err = decad.Stitch(sheet)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-
-	// The failed call leaves the document unchanged.
-	require.Len(t, doc.Bodies(), 1)
-	require.Same(t, sheet, doc.Bodies()[0])
 }
 
 // TestStitchPlacedBoxIsApproximateSolid is the placed-box case: T3's box,
