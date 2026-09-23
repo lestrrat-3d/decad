@@ -655,8 +655,9 @@ edge, and decides the result.
 | Assembled boundary | Result | Reason |
 |---|---|---|
 | at least one free edge remains | a `BodySheet`, open | the boundary is not closed; the residual free edges name exactly what did not join |
-| every edge welded, all faces planar, the crossing audit passes | a `BodySolid` | closure, manifoldness and non-self-intersection are proven, and the volume is exact (§6.4) |
-| every edge welded, some face curved | `ErrUnsupported` (R8) | closure is proven but the region's volume is not yet computable, and narrowing the result to a closed sheet would silently give the caller something other than what they asked for (`docs/evaluator-design.md` §2) |
+| every edge welded, all faces planar and straight-edged | a `BodySolid` | closure, manifoldness and non-self-intersection are proven, and the volume is exact (§6.4) |
+| every edge welded, some face not planar-and-straight-edged, every face admits a landed flux arm (`Plane`/`Cylinder`, zero `normalBound`) and the single source body proves the boundary simple by construction | a `BodySolid` | closure and the per-surface flux integral together prove volume and centroid; manifoldness rests on the vertex-link audit alone, since the reused crossing audit has no triangle set to run on (§6.4) |
+| every edge welded, some face curved, and the set above does not admit | `ErrUnsupported` (R8) | closure is proven but this evaluator has no closed-form flux integral for the boundary as given — the surface kind, the face's own trim, or the construction proof is outside what has landed |
 | the welded set cannot be consistently oriented | `ErrDegenerate` (R7) | a non-orientable assembly bounds nothing; no later proof makes it a solid |
 | the crossing audit proves a self-contact or self-intersection | `ErrDegenerate` (R9) | the faces overlap, so the assembly is no solid's boundary |
 | the crossing audit exhausts its facet-pair ceiling | `ErrUnsupported` (R10) | undecided, not disproven; `docs/loft-design.md` §6's own S8 outcome |
@@ -728,10 +729,88 @@ wide, whose exact volume is rarely representable in cubic millimetres to the
 last bit). `Centroid` and `Bounds` follow the identical rule over their own
 publication rounding.
 
-That is why Table C admits closure only for an all-planar face set in this
-design. A curved face's flux term is not a tetrahedron sum, and a per-surface
+**A curved face's flux term is not a tetrahedron sum**, and a per-surface
 closed-form flux integral over an arbitrary trimmed analytic patch is its own
-piece of work. §14's increment 3 takes it up.
+piece of work. §14's increment 3 lands the first two arms of it, `Plane` and
+`Cylinder`, and with them a second admission rule beside the tetrahedron
+sum's: **every face is either a `Plane` bounded entirely by `Line3` edges
+(the tetrahedron path, unchanged), or a variant with a landed flux arm, and
+every face carries a zero `normalBound`.** `stitch_flux.go` owns the flux
+arms, `stitchRuleSAdmits` owns the second rule below.
+
+**`Face.normalBound` is nonzero exactly for a cap-blend band patch**
+(topology.go's own field doc): the face is a ruled surface and the `Cone` or
+`Plane` it publishes is that surface only to within a measured departure.
+Integrating a closed form over the tag would be unsound for such a face, so
+every admitting arm — the tetrahedron path included, not only the new flux
+arms — requires a zero `normalBound`. An `Unstitch`ed fillet or chamfer face
+re-stitched into a closed set refuses on this gate alone (§15's T38).
+
+**The split is "`Plane` bounded entirely by `Line3`" versus everything
+else, never "planar versus curved".** The old wording ("all faces planar")
+was already wrong for a reachable shape: a `Plane` face bounded by a
+`Circle3`/`Arc3` edge triangulates, under the tetrahedron path's own
+polygon-from-coedge-start-vertices construction, to a boundary that drops
+the arc's own bulge. No construction reaching `Stitch` today puts such a
+face through that path without ALSO putting a genuinely curved surface
+elsewhere in the same closed set (which already refused before
+triangulation), so the shape was latent rather than live — closed here
+regardless, by `faceIsTetrahedronEligible`'s own edge-kind check
+(stitch.go), rather than left for a future fixture to discover it live.
+
+**Rule S — the construction-proof gate a curved closed set needs, since the
+reused crossing audit cannot run on one.** That audit (this section's own
+opening paragraph) consumes a triangulated face set, which a curved
+boundary has none of, and chording curved faces into one just to run it
+would be an admission gate resting on an approximation — CLAUDE.md's
+reject-only rule forbids exactly this, and `verify.go`'s own
+`payloadProvesSimple` doc comment already states the two ways such a chord
+mesh can be wrong in both directions. So a curved closed set's only
+available proof of non-self-intersection is the one its own SOURCE
+feature's construction already carries: `verify.go`'s `payloadProvesSimple`,
+built for `Verify`'s own Table V leg 4 and reused here unchanged. Before the
+flux arms ever run, `stitchRuleSAdmits` requires every operand face to
+descend from exactly ONE source body (`stitchOperandBodies`), whose own
+payload `payloadProvesSimple` admits. A full-turn `revolvePayload` clear of
+the axis (an annular revolve sheet) admits; a `bodyPatchPayload` (any
+`Body.Patch`-capped sheet, however admitted its own chains are) does not,
+since `Body.Patch` proves its own chains simple in their own plane and never
+the whole assembled boundary's non-self-intersection — the design's own
+motivating "walls, then cap, then stitch" story (§6.1) stays refused until a
+later increment's own Rule P proves that flow's own construction sound. A
+stitch of curved sheets from two different features also refuses: Rule S's
+single-source restriction has no way to compare two features' own proofs
+against each other.
+
+**The vertex-link audit — manifoldness's own remaining gap, closed
+reject-only.** Rule S proves non-self-intersection; it says nothing about
+whether the faces and edges meeting at one VERTEX stay in one connected
+piece, which `checkStitchClosure`'s own directed-edge parity leg does not
+ask either (docs/surface-design.md's own record: a profile that touches its
+revolve axis at more than one isolated point can pinch a revolved boundary
+at those points, non-manifold there even though the parity leg and Rule S
+both pass). `sweep_composite.go`'s own `auditVertexLinks` — hoisted out of
+`auditCompositeVertexLinks`, its `*Body` parameter dropped along with a
+leg that turned out to prove nothing about its own two inputs — is the
+existing reject-only mechanism for exactly this, and the curved `Stitch`
+path runs it immediately before a curved body first claims solidity.
+Nothing this increment's own fixtures build can trip it: every admitted
+`Plane`/`Cylinder` shape this increment's own scope reaches is built from
+straight or full-circumference generatrices, and a boundary that touches
+its own axis at an isolated interior point needs a curved (`Sphere`/`Torus`)
+or diagonal (`Cone`) generatrix to do it — neither of which this increment
+admits — so the leg stands as a proven-safe backstop for a later increment's
+own `Sphere`/`Torus`/`Cone` arms, not a case this one's own tests can
+observe firing.
+
+**What is proven, and what is not, for a curved closed set.** Closure (the
+directed-edge parity leg) and manifoldness at every vertex (the hoisted
+audit) are proven directly. Non-self-intersection rests entirely on Rule
+S's construction proof, never on a geometric test this evaluator runs
+itself — a strictly different, and for a `Body.Patch`-capped flow strictly
+narrower, standing than the tetrahedron path's own crossing audit gives an
+all-planar solid. §9.1's own leg 4 for `Verify` is the identical proof,
+reused rather than re-derived.
 
 **This audit governs the all-planar STITCH closure alone.** It is not §9.1's
 sheet validity audit: a stitched solid's triangulated, exactly welded face set
@@ -862,7 +941,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R5 | `Body.Patch` selection does not partition into closed chains, or a chain's plane-local walk crosses or touches itself | `ErrDegenerate` |
 | R6 | `Body.Patch` chain is proven non-planar, or carries a nonzero bound so planarity is not proven | `ErrUnsupported` |
 | R7 | `Stitch`'s welded set cannot be consistently oriented | `ErrDegenerate` |
-| R8 | `Stitch` closes a boundary holding a curved face | `ErrUnsupported` |
+| R8 | `Stitch` closes a boundary holding a face this evaluator has no closed-form flux integral for | `ErrUnsupported` |
 | R9 | `Stitch`'s crossing audit proves a self-contact or self-intersection | `ErrDegenerate` |
 | R10 | `Stitch`'s crossing audit exhausts its facet-pair ceiling | `ErrUnsupported` |
 | R11 | `Unstitch` on a `Faceted` body | `ErrUnsupported` |
@@ -1370,6 +1449,14 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T28 | two vertices whose held coordinates and held bounds are bit-identical, minted under two different `levelID`s | `Body.Patch`'s own public seam cannot construct one chain spanning two independently built bodies — a chain requires two edges to SHARE a vertex pointer, which only one evaluator's own build or a zero-bound weld creates, and Table J refuses a zero-bound weld of a bounded pair — so this is pinned directly against `provePatchChainPlane`: still `ErrUnsupported`, proving the certificate is an identity check, never a tolerance |
 | T29 | `buildPatchFace` over a chain the level arm admitted | the new face's `axialDelta`/`hasAxialDelta` carry the chain's own proven axial bound, the same fields a prism cap already publishes |
 | T30 | `Body.Patch` capping both rims of a `Distance` (one end recorded, one end unit-converted) surface-extruded wall in one call — the single-bounded-end case | no error: the recorded end's chain passes gate 3's first (exact) arm, the computed end's chain passes the second (level) arm, in the same call |
+| T31 | `annularSketch` revolved a full turn as a surface, stitched alone | `Kind() == BodySolid`; `Volume` 2000π mm³, `Approximate`, enclosing the analytic value within its own `Bound`; `Area` 800π mm², bit-identical to the equivalent solid revolve's; `Centroid` (5, 0, 0), `Approximate`; `Edges(Free())` matches nothing |
+| T32 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` and `Centroid` agree within the two independently-composed bounds — the independent-producer cross-check, which proves the flux arms against the unrelated revolve engine rather than against its own arithmetic |
+| T33 | T31's fixture swept across a family of radii and heights | `\|published − analytic\| <= Bound` on `Volume` and each `Centroid` coordinate for every member |
+| T34 | a surface-extruded tube capped on both rims by `Body.Patch`, stitched | `ErrUnsupported` (R8): a `bodyPatchPayload` carries no non-self-intersection proof, so Rule S refuses regardless of how soundly `Body.Patch` itself admitted the caps |
+| T35 | a hand-built two-body face set, driven directly at `stitchRuleSAdmits` (internal — Table J's own J5 admits a free `Line3` edge alone, so no two curved rims from different features ever weld into a closed set through the public seam to reach this gate at all) | `stitchRuleSAdmits` reports `false` |
+| T36 | `offAxisSemicircleSketch` revolved a full turn as a surface, stitched alone | `ErrUnsupported` (R8): the body closes with no free edge and Rule S admits it, but its `Torus` face has no landed flux arm — the sealed switch's own default, not a Rule S or vertex-link refusal |
+| T37 | a hand-built face carrying a `NURBSSurface`, driven directly at `stitchFaceFluxAndMoment` (internal — `Body.Patch` itself refuses any chain carrying a `NURBSCurve` edge, so a free-form-walled sheet can never be closed through the public seam at all) | `ErrUnsupported` (R8), permanently: `NURBSSurface` exports no control net to integrate |
+| T38 | a hand-built face carrying a nonzero `normalBound`, driven directly at `stitchFaceFluxAndMoment` (internal — a fillet or chamfer's `Unstitch`-then-`Stitch` round trip never re-closes, §6.5's own "no further" limit for any non-all-planar body, so no public fixture reaches this gate) | `ErrUnsupported` (R8) |
 | T39 | `annularSketch` revolved a full turn as a surface | `Verify` reads `Validity.Outcome == ValidityValid` with no `Validity.Diagnostics`, admitted by construction: `payloadProvesSimple`'s `revolvePayload` arm holds because the sweep is exactly one full turn and the radial minimum is proven clear of the axis |
 | T40 | `annularSketch` revolved a quarter turn as a surface | `Verify` stays `Validity.Outcome == ValidityUndecided` with one `DiagUndecidedValidity`: a partial turn earns no construction admission |
 

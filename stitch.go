@@ -179,17 +179,18 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	}
 
 	open := stitchHasFreeEdge(newFaces)
-	allPlanar := stitchAllPlanar(newFaces)
-	if !open && !allPlanar {
-		return nil, fmt.Errorf(`%w: Stitch closes a boundary holding a curved face (docs/surface-design.md Table R row R8)`, ErrUnsupported)
-	}
+	allTetra := stitchAllTetrahedronEligible(newFaces)
 
 	kind, solid := BodySheet, false
 	auditClean := false
 	var tris [][3]int
 	var acc *loftMassAccumulator
+	var curvedVolume Measurement
+	var curvedCentroid VecMeasurement
+	haveCurved := false
 
-	if allPlanar {
+	switch {
+	case allTetra:
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -251,6 +252,45 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 		// — from the two adjacent faces' own outward normals rather than
 		// carried over from either original operand's now-meaningless walk.
 		fixWeldedEdgeConvexity(welded)
+
+	case !open:
+		// Table C's curved-closure arm (docs/surface-design.md §6.4): every
+		// edge is welded and at least one face is not tetrahedron-eligible,
+		// so the volume needs stitch_flux.go's per-surface flux integral
+		// rather than the exact triangle sum. Rule S gates admission on the
+		// single source body's own construction proof; the vertex-link audit
+		// gates the curved path's own claim of manifoldness, since the
+		// reused crossing audit consumes triangles this set has none of.
+		if !stitchRuleSAdmits(ctx, srcFaces) {
+			return nil, fmt.Errorf(`%w: Stitch closes a boundary this evaluator cannot prove simple by construction (docs/surface-design.md Table R row R8)`, ErrUnsupported)
+		}
+		if err := auditVertexLinksForStitchFaces(ctx, newFaces); err != nil {
+			return nil, err
+		}
+		// verts[0] anchors the flux sum exactly as newLoftMassAccumulator
+		// anchors the tetrahedron sum — but a fully boundary-less analytic
+		// face (a complete Sphere or Torus, which mints no edge at all) can
+		// leave the shared vertex table empty, and every admitted arm this
+		// increment lands (Plane, Cylinder) is bounded by at least one full
+		// circle and so always has a vertex. An empty table therefore means
+		// the flux path is about to refuse on the sealed switch's own
+		// default arm regardless of the anchor's value, so a zero anchor is
+		// safe rather than a special-cased refusal here.
+		anchor := r3.Vec{}
+		if len(verts) > 0 {
+			anchor = verts[0]
+		}
+		vol, cen, err := stitchCurvedMass(ctx, newFaces, anchor, delta)
+		if err != nil {
+			return nil, err
+		}
+		curvedVolume, curvedCentroid, haveCurved = vol, cen, true
+		solid, kind = true, BodySolid
+
+	// open && !allTetra: an open curved (or mixed) sheet earns no volume
+	// attempt at all — Table C's first row, a residual free edge, and
+	// never an error (docs/surface-design.md §6.3).
+	default:
 	}
 
 	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: solid, kind: kind}
@@ -284,12 +324,18 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 	body.bounds = bounds
 
 	if solid {
-		body.volume = acc.volume(verts, tris)
-		cen, err := acc.centroid(verts, tris)
-		if err != nil {
-			return nil, err
+		switch {
+		case acc != nil:
+			body.volume = acc.volume(verts, tris)
+			cen, err := acc.centroid(verts, tris)
+			if err != nil {
+				return nil, err
+			}
+			body.centroid = cen
+		case haveCurved:
+			body.volume = curvedVolume
+			body.centroid = curvedCentroid
 		}
-		body.centroid = cen
 	}
 
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
@@ -620,15 +666,6 @@ func stitchHasFreeEdge(faces []*Face) bool {
 		}
 	}
 	return false
-}
-
-func stitchAllPlanar(faces []*Face) bool {
-	for _, f := range faces {
-		if !f.isPlanar() {
-			return false
-		}
-	}
-	return true
 }
 
 // triangulateStitchFaces triangulates each planar face in its own plane
