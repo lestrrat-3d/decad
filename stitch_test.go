@@ -611,39 +611,51 @@ func TestStitchBoxReachesAProvenClearanceGap(t *testing.T) {
 	decadtest.MeasuresClearance(t, report, box, block, units.Millimeters(3), decadtest.Exactly())
 }
 
-// TestStitchOverlappingSolidStaysUndecided is docs/surface-design.md's T66.
-// The clearance kernel itself proves this exact pair pairOverlapping —
-// TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal
-// (clearance_internal_test.go) pins that fact directly — but Verify never
-// gets to read it: requireVolumeProvingPayload (boolean.go) refuses a
-// stitched operand before measuredInterference ever consults the kernel's
-// own verdict, since this increment publishes no occupied-volume proof for
-// a stitched mesh (tessellate_stitch.go). So the report reads Suspect with
-// DiagUnsupportedPairPayload and no Interference row — never Sound, and
-// never a false Clearance row either.
-func TestStitchOverlappingSolidStaysUndecided(t *testing.T) {
+// TestStitchOverlappingSolidReportsRealInterference is
+// docs/surface-design.md's T72. This replaces
+// TestStitchOverlappingSolidStaysUndecided (T66), whose whole subject — a
+// stitched solid's overlap ever reaching a real Interference row — this row
+// retires: the clearance kernel already proved this shape of pair
+// pairOverlapping before this increment
+// (TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal,
+// clearance_internal_test.go), but requireVolumeProvingPayload
+// (boolean.go) refused the stitched operand before measuredInterference
+// ever consulted that verdict. A CLOSED, all-planar, zero-vertex-bound
+// stitched solid no longer hits that refusal, so the pair now resolves
+// through the ordinary mesh boolean (measuredInterference's own
+// evaluateBoolean(opIntersect) fallback) to a real, bounded volume.
+//
+// The overlap here is a clean crossing rather than T66's own fixture: T66's
+// block shared the box's own y ∈ [0, 60] extent and its z = 0 base plane,
+// which the mesh boolean's own (pre-existing, unrelated) coplanar-contact
+// gate still refuses as undecided — a genuine limit of the general boolean,
+// not of this increment's volume proof. This fixture's block sits strictly
+// inside the box's y-range and off both its z-caps, so no operand face lands
+// on the other operand's own face plane.
+func TestStitchOverlappingSolidReportsRealInterference(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	walls, bottom, top := stitchBoxSheets(t, doc, 10)
 	box, err := decad.Stitch(walls, bottom, top)
 	require.NoError(t, err)
 
-	// A plain block straddling the box's own +X wall: a true, non-nesting
-	// overlap (x ∈ [50, 150] against the box's x ∈ [0, 100]) at a shorter
-	// height (6 mm against the box's 10 mm) so the two caps never land on
-	// the same plane — a same-orientation coplanar cap pair is its own
-	// ambiguous configuration the kernel correctly reads as unsure, which
-	// would only obscure the point this test makes.
-	decadtest.NewBlock(t, doc, 50, 0, 150, 60, units.Millimeters(6))
+	// The box spans x ∈ [0,100], y ∈ [0,60], z ∈ [0,10]. The block spans
+	// x ∈ [50,150], y ∈ [10,50] (strictly inside the box's own y-range), and
+	// z ∈ [3,13] (crossing both z-caps without landing on either) — a clean
+	// transversal crossing whose exact analytic overlap is
+	// 50 × 40 × 7 = 14000 mm³.
+	block := boxBodyAtZ(t, doc, 50, 10, 150, 50, 3, 10)
 
 	report := decadtest.Verify(t, doc, decad.WithClearances())
-	require.Equal(t, decad.Suspect, report.Status)
-	require.Empty(t, report.Interferences)
+	require.Equal(t, decad.Interfering, report.Status)
 	require.Empty(t, report.Clearances)
-	require.Len(t, report.Diagnostics, 1)
-	diags := decadtest.FindDiagnostics(t, report, decad.DiagUnsupportedPairPayload)
-	require.Len(t, diags, 1)
-	require.Same(t, box, diags[0].Pair.A)
+	require.Len(t, report.Interferences, 1)
+	// Not Exactly(): the mesh boolean's own crossing computes new rim
+	// vertices from a float intersection, so the result carries the final
+	// weld's own tiny rounding bound even though both operands are
+	// themselves zero-bound — the bound this test proves is nonzero, not
+	// zero, unlike the disjoint-union case (TestStitchSolidUnionComposesTheCorrectVolume).
+	decadtest.MeasuresInterference(t, report, box, block, units.CubicMillimeters(14000))
 }
 
 // TestStitchSmallStitchedBoxContainedInABlock is docs/surface-design.md's

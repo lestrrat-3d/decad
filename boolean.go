@@ -364,10 +364,10 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 	// it — this only asks the same question of the payload class, where the
 	// answer is already known, so a refusal costs a map lookup instead of a
 	// complete tessellation and its facet-pair audit.
-	if err := requireVolumeProvingPayload(a, 0); err != nil {
+	if err := requireVolumeProvingPayload(ctx, a, 0); err != nil {
 		return booleanEvaluation{}, err
 	}
-	if err := requireVolumeProvingPayload(b, 1); err != nil {
+	if err := requireVolumeProvingPayload(ctx, b, 1); err != nil {
 		return booleanEvaluation{}, err
 	}
 	ma, err := tessellateContext(ctx, a, units.Millimeters(tolMM))
@@ -597,16 +597,35 @@ func sourceIDs(ctx context.Context, m *Mesh, faceID map[*Face]int) ([]int, error
 // so this arm exists to keep this function's own stated invariant, that it
 // and operandSymDiff name the same set of payload classes, true even for a
 // caller that reaches this function by some other path.
-func requireVolumeProvingPayload(b *Body, index int) error {
+//
+// A stitchPayload operand narrows rather than refuses outright: a CLOSED,
+// all-planar body (sp.tris != nil) whose every vertex carries a proven bound
+// of exactly zero (stitchZeroVertexBound, stitch.go — the identical gate
+// tessellate_stitch.go's own occupied-volume publication and
+// clearance_geom.go's carrier-model dispatch both apply) will publish
+// symDiffOK == true once meshed, so refusing it here would contradict what
+// operandSymDiff decides one step later over the same payload. Every other
+// stitched body — open, curved/mixed, placed, or certificate-welded — still
+// refuses here, before it is ever meshed.
+func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error {
 	var err error
 	switch {
 	case b.Kind() == BodySheet:
 		err = fmt.Errorf(`%w: a sheet's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
 	default:
-		switch b.payload.(type) {
+		switch pl := b.payload.(type) {
 		case capBlendPayload:
 			err = fmt.Errorf(`%w: a cap-loop chamfer's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
 		case stitchPayload:
+			if pl.tris != nil {
+				zeroBound, zErr := stitchZeroVertexBound(newWorkBudget(ctx), b)
+				if zErr != nil {
+					return zErr
+				}
+				if zeroBound {
+					return nil
+				}
+			}
 			err = fmt.Errorf(`%w: a stitched body's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
 		default:
 			return nil

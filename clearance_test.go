@@ -35,6 +35,27 @@ func boxBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, h float64) *deca
 	return body
 }
 
+// boxBodyAtZ is boxBody's own z-offset sibling: an axis-aligned rectangle
+// extruded from an offset plane, spanning z ∈ [z0, z0+h]. A fixture that
+// needs a clean transversal crossing — no operand face landing exactly on
+// the other operand's own face plane — reaches for this rather than boxBody,
+// whose z0 is always 0.
+func boxBodyAtZ(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0, h float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	plane, err := w.CreateOffsetPlane(w.XY(), z0)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	rect := s.CreateRectangle(x0, y0, x1, y1)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
 // ballBody revolves a semicircle of radius r centered at the origin into a
 // ball at the origin.
 func ballBody(t *testing.T, doc *decad.Document, r float64) *decad.Body {

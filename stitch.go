@@ -753,6 +753,27 @@ func stitchHasFreeEdge(faces []*Face) bool {
 	return false
 }
 
+// stitchZeroVertexBound reports whether every one of b's own vertices
+// carries a proven bound of exactly zero — clearance_geom.go's own
+// addStitchFaces dispatch gate (docs/clearance-design.md §2) and
+// tessellate_stitch.go's own occupied-volume admission
+// (docs/tessellation-design.md §2's stitchPayload row) both ask this
+// identical question, so it lives here once rather than as two checks that
+// could drift apart. budget charges one step per vertex visited, the same
+// cancellable walk clearance_geom.go's own version charged before this
+// extraction.
+func stitchZeroVertexBound(budget *workBudget, b *Body) (bool, error) {
+	for _, v := range b.Vertices() {
+		if err := budget.step(); err != nil {
+			return false, err
+		}
+		if v.Position().Bound.Mag() != 0 {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
 // triangulateStitchFaces triangulates each planar face in its own plane
 // frame through triangulate.go's existing cap triangulator and maps every
 // resulting index back through the shared vertex table (docs/surface-design.md

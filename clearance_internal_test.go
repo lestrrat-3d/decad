@@ -960,16 +960,21 @@ func TestAddStitchFacesBuildsExactPlanarCarriers(t *testing.T) {
 	}
 }
 
-// TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal is
-// stitch_test.go's TestStitchOverlappingSolidStaysUndecided (T66) own
-// internal companion: the clearance kernel DOES prove pairOverlapping for
-// this exact fixture — the carrier model this file's addStitchFaces builds
-// admits the transversal crossing — even though Verify's own public report
-// never gets to read that verdict, because requireVolumeProvingPayload
-// (boolean.go) refuses the stitched operand before measuredInterference
-// (interference.go) ever consults it. That refusal is a boolean-side limit
-// on this increment's mesh (tessellate_stitch.go publishes no
-// occupied-volume proof), never a clearance-kernel one.
+// TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal pins
+// that the clearance kernel proves pairOverlapping for this exact
+// fixture — the carrier model this file's addStitchFaces builds admits the
+// transversal crossing — directly against clearancePair, independent of
+// whatever the mesh boolean itself later decides. This fixture's block
+// shares the box's own y-range and z = 0 base plane, so even after the
+// occupied-volume proof lifted (tessellate_stitch.go, this stitched
+// operand's own gate), Verify's public report on it still reads Suspect: the
+// mesh boolean's own (pre-existing, unrelated) coplanar-contact gate
+// refuses a shared face plane as undecided, a genuine limit of the general
+// boolean rather than of the stitched operand's own volume proof.
+// stitch_test.go's TestStitchOverlappingSolidReportsRealInterference (T72)
+// is the public demonstration that the volume proof itself now lets a
+// stitched pair reach a real Interference row, over a fixture with no
+// shared face plane to trip that separate gate.
 func TestClearancePairProvesStitchedSolidOverlapDespiteTheBooleanRefusal(t *testing.T) {
 	t.Parallel()
 	doc, box := stitchedBoxForClearanceTest(t)

@@ -887,12 +887,15 @@ func newBodyGeomBudget(budget *workBudget, b *Body) (*bodyGeom, bool, error) {
 		}
 		ok, err = g.addRevolveFaces(budget, pl)
 	case stitchPayload:
-		// Refuse outright unless the recorded triangle set exists (a CLOSED,
-		// all-planar body — tessellate_stitch.go's own gate) AND every vertex
-		// of the body carries a proven bound of EXACTLY zero. The second
-		// condition subsumes a nonzero placement delta: a placement widens
-		// every vertex bound (stitch.go's rigidRoundAllow), so a placed
-		// stitched solid never passes it either. This is narrower than
+		// Refuse outright unless the recorded triangle set exists (an
+		// all-planar body, open or closed — tessellate_stitch.go's own gate)
+		// AND every vertex of the body carries a proven bound of EXACTLY
+		// zero (stitchZeroVertexBound, stitch.go — the identical question
+		// tessellate_stitch.go's own occupied-volume admission asks, kept in
+		// one place). The second condition subsumes a nonzero placement
+		// delta: a placement widens every vertex bound (stitch.go's
+		// rigidRoundAllow), so a placed stitched solid never passes it
+		// either. This is narrower than
 		// addPrismFaces' own standing below: that arm builds its carriers
 		// through a call that applies the placement transform and rounds,
 		// then treats the result as exact and charges the rounding nowhere,
@@ -905,13 +908,12 @@ func newBodyGeomBudget(budget *workBudget, b *Body) (*bodyGeom, bool, error) {
 		if pl.tris == nil {
 			return nil, false, nil
 		}
-		for _, v := range b.Vertices() {
-			if err := budget.step(); err != nil {
-				return nil, false, err
-			}
-			if v.Position().Bound.Mag() != 0 {
-				return nil, false, nil
-			}
+		zeroBound, zErr := stitchZeroVertexBound(budget, b)
+		if zErr != nil {
+			return nil, false, zErr
+		}
+		if !zeroBound {
+			return nil, false, nil
 		}
 		ok, err = g.addStitchFaces(budget, b, pl)
 	default:
