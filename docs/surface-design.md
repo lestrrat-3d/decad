@@ -1223,6 +1223,27 @@ composed transform every time, exactly as `stitchPayload.placed` replays
 `*Face`, `*Edge` or `*Vertex`, so a retired receiver stays readable and
 unmodified for any caller still holding it.
 
+**Every result carries its source face's own `axialDelta`, `hasAxialDelta`
+and `normalBound`, never their zero value.** The copy shares the source
+face's identical surface and identical tag — `Unstitch` mints no new
+geometry of its own — so `normalBound` (how far that surface departs from
+that tag) and `axialDelta` (that same tag's own displacement along that same
+normal) stay exactly as true of the copy as they were of the source.
+`hasAxialDelta` and `normalBound` copy verbatim; `Body.Unstitch`'s public
+call always places under the identity transform (`UnstitchContext`), so a
+verbatim copy is correct for every call the public API makes today.
+`unstitchPayload.placed`'s own replay under a composed, non-identity
+transform additionally widens `axialDelta` by `absSumUpper` against the
+placement's own proven displacement, the same treatment the vertex bound and
+edge `lengthBound` already receive. `normalBound` is dimensionless while
+that displacement is a length, so no such composition covers it, and this
+package carries no separate term bounding how far a placement's own rounding
+rotates the tag frame off the true rotation — so a placed copy of a face
+whose `normalBound` is nonzero is `ErrUnsupported` rather than an invented
+bound. `stitch.go`'s `rebuildStitchTopology` carries the same three fields
+the same way, so a stitched body's own later placement never reopens this
+gap.
+
 **Each result's own `Bounds` is a tight box exactly when its face is bounded
 entirely by straight (`Line3`) edges on a `Plane` surface, and the sound
 whole-receiver box otherwise.** A straight-edged planar face's enclosed
@@ -1897,6 +1918,9 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T76 | two axis-aligned boxes (T1's box and a second one offset to x∈[100,200], y∈[60,120], z∈[10,20]), each three surface-extruded-wall-plus-two-`Body.Patch`-cap sheets, sharing exactly one corner vertex — (100,60,10) — with no edge joining them, all six sheets `Stitch`ed in one call (`TestStitchRefusesTwoBoxesPinchedAtOneVertex`) | `ErrDegenerate` (R7); the document and every operand are unchanged |
 | T77 | the same two boxes as T76 translated apart so no vertex is shared, `Stitch`ed in one call (`TestStitchTwoDisjointBoxesFormATwoLumpSolid`) | `Kind() == BodySolid`; 16 vertices, 2 lumps, `Volume` `Exact` at 120000 mm³ — the narrowing T76 proves is a pinch refusal, not a blanket one |
 | T78 | T76's two boxes with both top patches omitted, leaving an open, all-planar assembly that still shares the one pinched corner vertex (`TestStitchRefusesOpenAssemblyPinchedAtOneVertex`) | `ErrDegenerate` (R7) even though free edges remain — the vertex-link audit refuses the open arm exactly as it does the closed one (§6.3's amended Table C, §6.4) |
+| T80 | a chamfered rectangular plate's own flat band patch (`normalBound` nonzero under a far placement), unstitched at identity | the unstitched face's `NormalAt` published bound at the patch's own held corner still covers the SOURCE face's own `normalBound` — asserted against that face's own value, never a literal, since the bound is architecture-dependent. Shown-to-fail: reverting `copyFaceUnderContext`'s carried `normalBound` to its old zero value turns this red, the published bound falling under the source's own `normalBound` |
+| T81 | a pin extruded `ToFace` against a plate's own cap, where the plate's own extrude depth is stated in inches (a genuine unit-conversion rounding, so the cap's own `axialDelta` is nonzero) — once against the un-unstitched plate, once against that SAME plate unstitched into its six free sheets first | the two pins' own `Bounds` agree exactly, `Exactness` and `Bound` alike — the equality is the assertion, stronger than either number alone. Shown-to-fail: reverting `copyFaceUnderContext`'s carried `axialDelta`/`hasAxialDelta` to their old zero value turns the unstitched-cap pin's own `Bounds` `Exact` at a zero bound while the un-unstitched pin's stays `Approximate`, breaking the equality |
+| T82 | the same far-placed chamfered plate's own flat band patch (T80's fixture), unstitched at identity then placed again under a second, non-identity motion | `ErrUnsupported`: `normalBound` is dimensionless and carries no term to absorb a placement's own length-scale rounding, so this evaluator refuses the placed copy rather than invent one. Shown-to-fail: removing `copyFaceUnderContext`'s placed-nonzero-`normalBound` refusal turns this `NoError`, publishing a placed copy whose `normalBound` no longer covers the tag's true departure |
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'`

@@ -1700,3 +1700,6 @@
 0	0.00	TestStitchRefusesTwoBoxesPinchedAtOneVertex
 1	0.00	TestStitchTwoDisjointBoxesFormATwoLumpSolid
 2	0.00	TestStitchRefusesOpenAssemblyPinchedAtOneVertex
+0	0.00	TestUnstitchChamferBandNormalAtBoundCoversSource
+1	0.00	TestUnstitchPlacedCopyOfNonzeroNormalBoundFaceRefuses
+2	0.00	TestUnstitchedCapToFaceStopMatchesUnUnstitchedCap
