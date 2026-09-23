@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 
@@ -284,10 +285,23 @@ func faceIsTetrahedronEligible(f *Face) bool {
 // this: it says nothing about whether, AT ONE VERTEX, the several faces and
 // two-face edges meeting there stay in one piece, which is exactly the gap
 // a curved profile that touches its own revolve axis at more than one
-// isolated point could open (docs/surface-design.md's own record of the
-// two-arc lens case). This is a reject-only gate: it can only narrow what
-// the curved path admits, never bless anything checkStitchClosure did not
-// already allow through.
+// isolated point could open, or two otherwise-unconnected stitched bodies
+// sharing exactly one welded vertex-table entry with no edge joining them
+// (docs/surface-design.md's own record of both shapes). This is a
+// reject-only gate, called unconditionally on every build arm
+// (docs/surface-design.md §6.4): it can only narrow what evalStitchContext
+// admits, never bless anything checkStitchClosure did not already allow
+// through.
+//
+// auditVertexLinks itself is worded for its OTHER caller, the composite
+// sweep (sweep_composite.go), and reports [ErrUnsupported] there. Translated
+// here rather than reworded in place, so the composite sweep's own wording
+// and sentinel stay exactly as that caller states them: a pinch this
+// evaluator proves is disproven input for Stitch, never unsupported reach
+// (docs/surface-design.md Table R row R7), so this wrapper re-reports it as
+// [ErrDegenerate] with Stitch's own wording. A bare context cancellation —
+// auditVertexLinks' own budget-polling return, never wrapped in
+// [ErrUnsupported] — passes through unchanged.
 func auditVertexLinksForStitchFaces(ctx context.Context, faces []*Face) error {
 	budget := newWorkBudget(ctx)
 	uses := map[*Edge][]compositeCoedgeUse{}
@@ -301,7 +315,13 @@ func auditVertexLinksForStitchFaces(ctx context.Context, faces []*Face) error {
 			}
 		}
 	}
-	return auditVertexLinks(budget, uses)
+	if err := auditVertexLinks(budget, uses); err != nil {
+		if errors.Is(err, ErrUnsupported) {
+			return fmt.Errorf(`%w: Stitch's welded set has a vertex whose meeting faces are not one connected fan or path (docs/surface-design.md Table R row R7): %s`, ErrDegenerate, err)
+		}
+		return err
+	}
+	return nil
 }
 
 // piScalar returns math.Pi as a boundedScalar. Go's math.Pi is the correctly
