@@ -125,25 +125,27 @@ import (
 // true bound happens to be zero cannot show this leg failing if it were
 // ever deleted.
 //
-// The Cone arm's apex adds a THIRD, independent source: Origin −
-// Axis·(Radius/tan(HalfAngle)) divides by tan(HalfAngle) (read through a
-// single math.Tan call, coneApex's own doc comment states why it is not
-// composed from boundedSin/boundedCos instead), and refuses
-// (ErrUnsupported, R8) a tangent that is not positive and finite — a
-// degenerate HalfAngle of 0 gives an exactly-zero tangent, and a malformed
-// HalfAngle of NaN/Inf is refused one layer up, by units.Value.In's own
-// ErrNotFinite, before coneApex's own tangent check ever runs. Neither
-// degeneracy is a real wallCone ever carries (revolve_axis.go's own
-// analytic-walk requirement keeps a real cone's HalfAngle finite and
-// strictly between 0 and π/2).
-// Every reachable construction site sets Cone.Radius literally to 0 (Origin
-// already IS the apex), so the division's numerator is exactly zero and the
-// derived apex is Exact for every PUBLIC fixture; the nonzero-Radius case,
-// and the degenerate-tangent refusal, are pinned directly on hand-built
-// faces instead (TestStitchConeApexOffsetsFromNonzeroRadius,
-// TestStitchConeHalfAngleRefusesDegenerateTangent,
-// stitch_internal_test.go), the same treatment the Cylinder radius bound
-// above gets and for the identical reason.
+// The Cone arm's apex is Origin when Radius is exactly 0 — the ONLY case
+// this evaluator admits. The general formula, Origin −
+// Axis·(Radius/tan(HalfAngle)), needs tan(HalfAngle)'s own rounding charged
+// before that division could be trusted, and this evaluator has no sound
+// way to do that: Go gives Sin/Cos/Atan2/Hypot (and so Tan) no public ulp
+// contract, and composing tan from boundedSin/boundedCos and running it
+// through boundedQuotient — the natural-looking fix — fails
+// boundedQuotient's own clearance check unconditionally, for every angle,
+// not only the degenerate ones (coneApex's own doc comment walks through
+// why). So a nonzero Radius refuses (ErrUnsupported, R8) rather than
+// publish an apex this evaluator cannot bound — pinned directly on a
+// hand-built face (TestStitchConeApexRefusesNonzeroRadius,
+// stitch_internal_test.go), since every reachable construction site sets
+// Cone.Radius literally to 0 (Origin already IS the apex) and so never
+// reaches this gate. coneApex separately refuses a degenerate HalfAngle
+// (0, or non-finite one layer up through units.Value.In's own
+// ErrNotFinite) regardless of Radius, pinned the same way
+// (TestStitchConeHalfAngleRefusesDegenerateTangent,
+// stitch_internal_test.go) — no real wallCone ever carries one
+// (revolve_axis.go's own analytic-walk requirement keeps a real cone's
+// HalfAngle finite and strictly between 0 and π/2).
 //
 // RULE S — the construction-proof gate. Before this file's dispatch ever
 // runs, evalStitchContext requires every operand face to descend from ONE
@@ -556,31 +558,45 @@ func cylinderFaceFluxAndMoment(f *Face, cyl Cylinder, anchor r3.Vec, sign float6
 	return flux, mx, my, mz, nil
 }
 
-// coneApex derives a Cone's apex — Origin − Axis·(Radius/tan(HalfAngle)) —
-// as three boundedScalars, one per world coordinate. Radius and HalfAngle
-// are read exactly as topology.go's own Cone doc states them: Radius is the
-// cone's radius AT Origin (zero when Origin is already the apex), and the
-// wall grows along Axis by HalfAngle from there. Every construction site in
-// this evaluator (revolve_build.go's wallCone, capblend_geom.go's
-// coneSurface) sets Radius literally to 0 — Origin already IS the apex — so
-// this division's numerator is exactly zero for every reachable admitted
-// face and the published apex is Exact; the general division below is
-// written for Cone's own full contract, where Radius need not be zero, and
-// is exercised at a nonzero Radius only by a hand-built internal fixture
-// (TestStitchConeApexOffsetsFromNonzeroRadius, stitch_internal_test.go),
-// since no construction site here ever sets it otherwise.
+// coneApex derives a Cone's apex as three boundedScalars, one per world
+// coordinate. Radius and HalfAngle are read exactly as topology.go's own
+// Cone doc states them: Radius is the cone's radius AT Origin (zero when
+// Origin is already the apex), and the wall grows along Axis by HalfAngle
+// from there. The general formula is Origin − Axis·(Radius/tan(HalfAngle)),
+// but this function NEVER evaluates that division: it admits Radius == 0
+// only, where the formula collapses to apex = Origin, Exact, independent of
+// tan(HalfAngle)'s own value. Every construction site in this evaluator
+// (revolve_build.go's wallCone, capblend_geom.go's coneSurface) sets Radius
+// literally to 0 — Origin already IS the apex — so this restriction costs
+// no reachable admitted face; the refusal it adds for a nonzero Radius is
+// exercised at a hand-built internal fixture
+// (TestStitchConeApexRefusesNonzeroRadius, stitch_internal_test.go), since
+// no construction site here ever sets Radius otherwise.
 //
-// tan(HalfAngle) is read through a single math.Tan call rather than
-// composed from boundedSin/boundedCos and boundedQuotient: a bounded
-// composition would not be TIGHTER, because conservativeValueError's own
-// structural bound on a Sin/Cos result (|value|+1) is wider than either
-// function's own value, so it fails boundedQuotient's clearance check for
-// EVERY angle, not only the degenerate ones — refusing the whole arm rather
-// than only the cases this gate exists to catch. This function instead
-// treats tan(HalfAngle) as an EXACT recorded parameter, the same
-// convention this file already gives Origin and Axis, and refuses (rather
-// than propagate a degenerate value into the apex) whenever the tangent is
-// not a plain positive, finite float: a HalfAngle of 0 gives an
+// WHY THE GENERAL DIVISION IS NOT SOUNDLY BOUNDABLE HERE, so a future
+// change does not silently reintroduce it. tan(HalfAngle) would need its
+// own rounding charged before Radius/tan(HalfAngle) could be trusted, and
+// this codebase has no tool for that: analyticRoundBound's own doc comment
+// states "Go deliberately gives Sin, Cos, Atan2 and Hypot no public ulp
+// contract, so a result computed through them never trusts this helper's
+// roundoff budget on its own" — the same posture capblend_moments.go and
+// survey2d.go state independently, and boundedSqrt honors even for
+// math.Sqrt, which IEEE 754 DOES guarantee correctly rounded. The
+// natural-looking fix — compose tan from boundedSin/boundedCos and run it
+// through boundedQuotient — was tried and fails outright:
+// conservativeValueError's own structural bound on a Sin/Cos result
+// (|value|+1) is wider than either function's own value, so it fails
+// boundedQuotient's clearance check for EVERY angle, not only the
+// degenerate ones, refusing the whole arm rather than only the cases a
+// tangent gate should catch. Charging only "a few ulps" of math.Tan's own
+// result instead would be a NEW error model this codebase does not have
+// and, per the citations above, would contradict its own repeated stance —
+// not a reuse of an existing one. Refusing the one construction that would
+// need it is the reject-only alternative CLAUDE.md's own rule favors over
+// carrying an unproven bound.
+//
+// The tan(HalfAngle) call below still runs, but only to validate the angle
+// is non-degenerate, never to compute anything: a HalfAngle of 0 gives an
 // exactly-zero tangent, a degenerate needle no reachable wallCone ever
 // carries (revolve_axis.go's own analytic-walk requirement keeps HalfAngle
 // finite and strictly between 0 and π/2 — docs/surface-design.md's own
@@ -598,24 +614,13 @@ func coneApex(c Cone) (apexX, apexY, apexZ boundedScalar, err error) {
 	if herr != nil {
 		return boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(`decad: a cone's half angle is not an angle: %w`, herr)
 	}
-	// tan(HalfAngle) is read through a single math.Tan call and treated as
-	// an EXACT recorded parameter — the same convention this file already
-	// gives Origin and Axis (boundedDot's own doc comment): a placed/tagged
-	// geometric attribute is authoritative for this file's own arithmetic,
-	// with the construction's own rounding charged separately, once,
-	// through sweptVolumeAllow/sweptMomentAllow at the placed level, never
-	// re-derived per arm. Composing tan from boundedSin/boundedCos instead
-	// does NOT give a tighter answer: conservativeValueError's own
-	// structural bound on sin/cos (|value|+1, sized for a quantity this
-	// evaluator has no ulp contract for) is wider than either function's
-	// own VALUE, so it fails boundedQuotient's clearance check
-	// unconditionally and returns an unusable Inf bound for every angle,
-	// including every genuinely admissible one — refusing the whole arm,
-	// not merely the degenerate cases this gate exists to catch. HalfAngle
-	// has no alternative certified source the way a rim's Circle3.Radius
-	// does through boundedCircleRadius (Edge.Length()'s own proven
-	// enclosure), so tan(HalfAngle) is exact-by-convention exactly where
-	// Radius/Axis/Origin already are.
+	// tan(HalfAngle) is read through a single math.Tan call purely to
+	// validate the angle is non-degenerate — a HalfAngle of 0 gives an
+	// exactly-zero tangent, no real wallCone geometry at all. Its VALUE is
+	// never used to compute anything: this file has no sound way to bound
+	// tan(HalfAngle)'s own rounding (this function's own doc comment states
+	// why), so the apex formula below never divides by it. That is also why
+	// this check alone cannot admit a nonzero Radius — see the gate below.
 	tanValue := math.Tan(half)
 	if !(tanValue > 0) || isNonFinite(tanValue) {
 		return boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
@@ -627,19 +632,38 @@ func coneApex(c Cone) (apexX, apexY, apexZ boundedScalar, err error) {
 	if rerr != nil {
 		return boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(`decad: a cone's radius is not a length: %w`, rerr)
 	}
-	// Radius is read as Exact here — never through boundedCircleRadius,
-	// which derives a RIM's radius from its own edge's proven length/
-	// lengthBound. This field is a different quantity: the aperture radius
-	// AT Origin, which every construction site in this evaluator sets to
-	// the literal constant 0.0, never a value read back through an
-	// axis-resolved computation the way a rim's Circle3.Radius can be
-	// (boundedCircleRadius's own doc comment). Treating a LITERAL 0.0 as
-	// Exact introduces no unproven claim.
-	radius := measuredScalar(radiusValue, 0)
-	offset := boundedQuotient(radius.value, radius.bound, tanValue, 0)
-	apexX = boundedSub(measuredScalar(c.Origin.X, 0), boundedMul(measuredScalar(c.Axis.X, 0), offset))
-	apexY = boundedSub(measuredScalar(c.Origin.Y, 0), boundedMul(measuredScalar(c.Axis.Y, 0), offset))
-	apexZ = boundedSub(measuredScalar(c.Origin.Z, 0), boundedMul(measuredScalar(c.Axis.Z, 0), offset))
+	if radiusValue != 0 {
+		// The general apex formula is Origin − Axis·(Radius/tan(HalfAngle)),
+		// and CHARGING that division soundly needs a proven bound on
+		// tan(HalfAngle)'s own rounding — this function's own doc comment
+		// explains why no such bound exists in this codebase: Go gives
+		// Sin/Cos/Atan2/Hypot (and so Tan, composed from them) no public
+		// ulp contract, and every other place this evaluator reads one of
+		// those functions falls back to conservativeValueError's
+		// deliberately wide structural bound rather than assume tighter
+		// accuracy — which, as boundedCircleRadius's own history in this
+		// file already showed, fails boundedQuotient's clearance check
+		// outright rather than merely widen the result. Composing tan from
+		// boundedSin/boundedCos and running it through boundedQuotient hits
+		// exactly that failure. So a nonzero Radius refuses rather than
+		// publish an apex whose own bound this evaluator cannot prove:
+		// Radius is EXACTLY zero at every construction site in this
+		// evaluator (revolve_build.go's wallCone, capblend_geom.go's
+		// coneSurface — Origin is already the apex), so refusing what
+		// nothing builds costs no reachable fixture
+		// (TestStitchConeApexRefusesNonzeroRadius, stitch_internal_test.go).
+		return boundedScalar{}, boundedScalar{}, boundedScalar{}, fmt.Errorf(
+			`%w: Stitch's flux path needs a Cone whose Origin is already its own apex (Radius exactly 0); this evaluator has no sound bound for tan(HalfAngle)'s own rounding, which a nonzero Radius would need to divide by (docs/surface-design.md Table R row R8)`,
+			ErrUnsupported,
+		)
+	}
+	// Radius is EXACTLY zero (checked above), so the general formula's
+	// division by tan(HalfAngle) is skipped entirely rather than computed
+	// and discarded: Origin is already the apex, Exact, with no dependency
+	// on tan(HalfAngle)'s own accuracy at all.
+	apexX = measuredScalar(c.Origin.X, 0)
+	apexY = measuredScalar(c.Origin.Y, 0)
+	apexZ = measuredScalar(c.Origin.Z, 0)
 	return apexX, apexY, apexZ, nil
 }
 

@@ -515,29 +515,23 @@ func stitchTestConeFace(halfAngle, r0, z0, r1, z1, rimBound float64) *Face {
 	return f
 }
 
-// TestStitchConeApexOffsetsFromNonzeroRadius is docs/surface-design.md's
-// T48: coneApex's general division, exercised at a nonzero Radius no
-// reachable construction site ever sets (this function's own doc comment).
-// Shown to fail: deleting the offset term (using apex = Origin unconditionally,
-// ignoring Radius/tan(HalfAngle) entirely) makes this test's InDelta
-// assertions fail, since Origin and the true apex differ by the offset —
-// watched red before landing, then restored.
-func TestStitchConeApexOffsetsFromNonzeroRadius(t *testing.T) {
+// TestStitchConeApexRefusesNonzeroRadius is docs/surface-design.md's T48:
+// coneApex's own gate on Cone.Radius, exercised at a nonzero value no
+// reachable construction site ever sets (coneApex's own doc comment states
+// why the general Origin − Axis·(Radius/tan(HalfAngle)) formula is never
+// evaluated — this evaluator has no sound bound for tan(HalfAngle)'s own
+// rounding). Shown to fail: deleting the `radiusValue != 0` gate (falling
+// through to publish apex = Origin regardless of Radius) makes this test's
+// ErrorIs assertion fail, since coneApex would return no error at all for
+// a nonzero Radius — watched red before landing, then restored.
+func TestStitchConeApexRefusesNonzeroRadius(t *testing.T) {
 	t.Parallel()
 	origin := r3.NewVec(3, -2, 7)
 	axis := r3.NewVec(0, 0, 1)
-	const halfAngle, radius = 0.6, 4.0
-	cone := Cone{Origin: origin, Axis: axis, Radius: units.Millimeters(radius), HalfAngle: units.Radians(halfAngle)}
+	cone := Cone{Origin: origin, Axis: axis, Radius: units.Millimeters(4), HalfAngle: units.Radians(0.6)}
 
-	apexX, apexY, apexZ, err := coneApex(cone)
-	require.NoError(t, err)
-
-	wantOffset := radius / math.Tan(halfAngle)
-	wantApex := origin.Sub(axis.Scale(wantOffset))
-	require.InDelta(t, wantApex.X, apexX.value, 1e-9)
-	require.InDelta(t, wantApex.Y, apexY.value, 1e-9)
-	require.InDelta(t, wantApex.Z, apexZ.value, 1e-9)
-	require.NotEqual(t, origin.Z, apexZ.value, "a nonzero Radius must move the apex away from Origin")
+	_, _, _, err := coneApex(cone) //nolint:dogsled // only the error matters here.
+	require.ErrorIs(t, err, ErrUnsupported)
 
 	zeroRadius := cone
 	zeroRadius.Radius = units.Millimeters(0)

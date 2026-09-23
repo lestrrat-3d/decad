@@ -824,25 +824,29 @@ radii ordered by which sits nearer the apex, read through the identical
 anchor)·S_F` — `K_F = 0`, since the vector from the apex to any surface
 point runs along a ruling and is therefore normal-orthogonal by the same
 argument `NormalAt`'s own `Cone` case already encodes (`n = cosβ·radial −
-sinβ·Axis`, orthogonal to any ruling direction). The apex itself is derived
-from the face's own `Cone.Origin`, `Cone.Radius` and `Cone.HalfAngle`
-(`Origin − Axis·(Radius/tan(HalfAngle))`). `tan(HalfAngle)` is read through
-one `math.Tan` call and treated as an EXACT recorded parameter, the same
-convention this file already gives `Origin` and `Axis` — composing it from
-`boundedSin`/`boundedCos` instead would not be sound: `conservativeValueError`'s
-own structural bound on a `Sin`/`Cos` result is wider than the result
-itself, so it fails `boundedQuotient`'s own clearance check for every
-angle, not only the degenerate ones. The division by `Radius` IS charged
-through `boundedQuotient`, and refuses a tangent that is not a positive,
-finite float — an exactly-zero tangent (`HalfAngle` of `0`) or a
-non-finite one (a malformed `HalfAngle` of `NaN`/`Inf`); every reachable
-construction site (`revolve_build.go`, `capblend_geom.go`) sets `Radius`
-literally to `0` (`Origin` already IS the apex), so the division is
-exercised at a genuinely nonzero `Radius` only by a hand-built internal
-fixture. The first-moment sibling needs `tan²β` too, but reads it from the
-two rims' own radii and axial positions (`(R_hi−R_lo)/(z_hi−z_lo)`) rather
-than recomputing it from `HalfAngle` a second time, so no arm here calls
-`math.Tan` more than once.
+sinβ·Axis`, orthogonal to any ruling direction). The apex itself is Origin
+when `Radius` is exactly `0` — the ONLY case this evaluator admits, and
+every reachable construction site (`revolve_build.go`, `capblend_geom.go`)
+sets `Radius` to that literal constant (`Origin` already IS the apex), so
+this costs no reachable face. The general formula, `Origin −
+Axis·(Radius/tan(HalfAngle))`, is never evaluated: charging that division
+would need a proven bound on `tan(HalfAngle)`'s own rounding, which this
+evaluator has no sound way to produce — Go gives `Sin`/`Cos`/`Atan2`/`Hypot`
+(and so `Tan`) no public ulp contract, a limit this codebase states
+independently in at least four other places, and composing tan from
+`boundedSin`/`boundedCos` through `boundedQuotient` — the natural-looking
+fix — fails `boundedQuotient`'s own clearance check unconditionally, for
+every angle, not only the degenerate ones, because `conservativeValueError`'s
+structural bound on a `Sin`/`Cos` result is wider than the result itself.
+So a nonzero `Radius` refuses (`ErrUnsupported`, R8) rather than publish an
+apex this evaluator cannot bound, exercised at a hand-built internal
+fixture. `coneApex` separately refuses a degenerate `HalfAngle` (`0`, or a
+non-finite one caught one layer up by `units.Value.In`) regardless of
+`Radius`, since no real `wallCone` ever carries one. The first-moment
+sibling needs `tan²β` too, but reads it from the two rims' own radii and
+axial positions (`(R_hi−R_lo)/(z_hi−z_lo)`) rather than from `HalfAngle`,
+so no arm here ever needs `tan(HalfAngle)`'s VALUE, only its sign as a
+validity check.
 
 **`Face.normalBound` is nonzero exactly for a cap-blend band patch**
 (topology.go's own field doc): the face is a ruled surface and the `Cone` or
@@ -1637,7 +1641,7 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T45 | a hand-built `bodyPatchPayload` whose chain's edges all share one level id but one chain VERTEX carries a different one, driven directly at `bodyPatchPayloadProvesSimple` (internal — Rule P condition 3: every vertex, not only every edge, must be proven part of the same recorded plane) | `bodyPatchPayloadProvesSimple` reports `false` |
 | T46 | a trapezoid profile clear of the axis (both non-radial sides leaning off it, so revolving sweeps two `Cone` walls of different half-angles, not two `Cylinder` walls), revolved a full turn as a surface, stitched alone | `Kind() == BodySolid`; `Volume` and `Area` match the analytic frustum-shell values, `Approximate`, enclosing the analytic value within `Bound`; `Centroid` matches the analytic value, `Approximate`; `Edges(Free())` matches nothing |
 | T47 | the same profile built as a solid `Revolve` with no option, and separately stitched from the surface-result build | the two bodies' `Volume` and `Centroid` agree within the two independently-composed bounds — the independent-producer cross-check, proving the `Cone` arm against the unrelated revolve engine rather than against its own arithmetic |
-| T48 | a hand-built `Cone` face whose `Origin` sits away from the apex (`Radius` nonzero), driven directly at the apex derivation (internal — every reachable construction site sets `Radius` literally to `0`, so a nonzero-`Radius` `Cone` never reaches `Stitch` through the public seam) | the derived apex matches `Origin − Axis·(Radius/tan(HalfAngle))` by hand computation, within its own proven bound |
+| T48 | a hand-built `Cone` face whose `Origin` sits away from the apex (`Radius` nonzero), driven directly at the apex derivation (internal — every reachable construction site sets `Radius` literally to `0`, so a nonzero-`Radius` `Cone` never reaches `Stitch` through the public seam) | `ErrUnsupported` (R8): this evaluator has no sound bound for `tan(HalfAngle)`'s own rounding, so it refuses rather than publish an unbounded apex; a literal zero `Radius` still publishes `Origin` as an `Exact` apex |
 | T49 | a hand-built `Cone` face whose `HalfAngle` is `0` (an exactly-zero tangent, a degenerate needle) or `NaN` (a non-finite tangent, a malformed value), driven directly at the apex derivation (internal — a reachable `wallCone` always carries a finite `HalfAngle` strictly between `0` and `π/2`, `revolve_axis.go`'s own analytic-walk requirement) | `ErrUnsupported` (R8): the half-angle's tangent is not a positive, finite float |
 
 `.github/test-shards.txt` gains a row for every root-package test each
