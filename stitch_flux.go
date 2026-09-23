@@ -1068,9 +1068,9 @@ func torusAxisIsCoordinateAligned(t Torus) bool {
 // torusFaceFluxAndMoment is the Torus arm, scoped to the one shape this
 // evaluator's own reachable fixture builds: a symmetric tube zone spanning
 // EXACTLY the tube's own outer quarter-to-quarter window — φ ∈ [−π/2, π/2],
-// measuring φ from the tube's own equatorial plane (ρ = Major, the plane
-// through Center perpendicular to... no, through Center's own axial
-// position, containing the axis) — bounded by exactly two full Circle3
+// measuring φ from the plane through Center perpendicular to the axis
+// (φ = 0 there: the tube's own outermost point, ρ = Major+Minor, at
+// Center's own axial position) — bounded by exactly two full Circle3
 // rims, one Minor above Center's own axial position and one Minor below
 // it. offAxisSemicircleSketch (docs/surface-design.md's own T53) is exactly
 // this shape: a straight wall at ρ = Major (the chord, closing the tube's
