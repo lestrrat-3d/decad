@@ -37,6 +37,7 @@ func featureRenders() []imageRender {
 		{"shell", shellShot},
 		{"boolean", booleanShot},
 		{"freeform", freeformShot},
+		{"surface", surfaceShot},
 		{"verify", verifyShot},
 	}
 	renders := make([]imageRender, len(shots))
@@ -330,6 +331,72 @@ func freeformShot(ctx context.Context) ([]solidlens.Model, error) {
 	return oneModel(ctx, blade, coral)
 }
 
+// surfaceShot revolves a half-disc standing on the axis through part of a turn
+// and keeps only the swept wall, so the result is a dish: one sheet face, open
+// along both cap-plane rims. The opening faces the gallery camera, which is
+// what makes the shot worth taking — the far half of the dish is seen from its
+// inner side, and the two materials say which side of the sheet a reader is
+// looking at.
+func surfaceShot(ctx context.Context) ([]solidlens.Model, error) {
+	w := sketch.NewWorld()
+	// The XZ plane puts the sketch's v axis on world Z, so the dish stands
+	// upright and its axis is vertical. Offsetting that plane carries the axis
+	// with it, which slides the swept half of the dish back over the camera's
+	// target and frames it like every other shot.
+	plane, err := w.CreateOffsetPlane(w.XZ(), 26)
+	if err != nil {
+		return nil, err
+	}
+	s, err := w.CreateSketch(plane)
+	if err != nil {
+		return nil, err
+	}
+	const radius, rise = 42.0, 20.0
+	center := s.CreatePoint(0, rise)
+	s.Fix(center)
+	bottom := s.CreatePoint(0, rise-radius)
+	top := s.CreatePoint(0, rise+radius)
+	// The diameter lies on the axis and sweeps nothing, so the arc is the
+	// whole of the wall and the sheet carries one face.
+	s.CreateLine(top, bottom)
+	s.CreateArc(center, bottom, top)
+	if _, err := s.Solve(ctx); err != nil {
+		return nil, err
+	}
+	profile, err := validProfile(s)
+	if err != nil {
+		return nil, err
+	}
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
+	// Revolve has no context-aware variant; Solve above is the cancellable phase.
+	dish, err := decad.New().Revolve(s, profile, axis, //nolint:contextcheck
+		decad.AngleExtent{A: units.Degrees(150), Dir: decad.Along},
+		decad.WithSurfaceResult())
+	if err != nil {
+		return nil, fmt.Errorf("revolve the dish: %w", err)
+	}
+	if err := requireSheet(dish); err != nil {
+		return nil, err
+	}
+	return twoSidedModel(ctx, dish, violet, gold)
+}
+
+// requireSheet refuses a body that is not an open sheet, so the thumbnail
+// cannot quietly become a closed solid whose inner side no reader ever sees.
+func requireSheet(body *decad.Body) error {
+	if body.Kind() != decad.BodySheet {
+		return fmt.Errorf("body is %v, want a sheet", body.Kind())
+	}
+	free, err := decad.Edges(decad.Free()).SelectEdges(body)
+	if err != nil {
+		return fmt.Errorf("select the free edges: %w", err)
+	}
+	if len(free) == 0 {
+		return fmt.Errorf("sheet has no free edge, so nothing opens onto its inner side")
+	}
+	return nil
+}
+
 // verifyShot poses the question verification answers: a pin standing in a bore
 // it must not touch, with the clearance ring visible all the way round.
 func verifyShot(ctx context.Context) ([]solidlens.Model, error) {
@@ -447,4 +514,16 @@ func oneModel(ctx context.Context, body *decad.Body, color solidlens.Color) ([]s
 		return nil, fmt.Errorf("tessellate: %w", err)
 	}
 	return []solidlens.Model{{Mesh: mesh, Material: solidlens.Matte(color)}}, nil
+}
+
+// twoSidedModel tessellates a sheet and shades its two sides apart: front is
+// the positive side every surface-result wall inherits from the solid's
+// outward normal, back is the side a reader sees through the sheet's opening.
+func twoSidedModel(ctx context.Context, body *decad.Body, front, back solidlens.Color) ([]solidlens.Model, error) {
+	mesh, err := body.TessellateContext(ctx, units.Millimeters(featureChordTolerance))
+	if err != nil {
+		return nil, fmt.Errorf("tessellate: %w", err)
+	}
+	inner := solidlens.Matte(back)
+	return []solidlens.Model{{Mesh: mesh, Material: solidlens.Matte(front), BackMaterial: &inner}}, nil
 }
