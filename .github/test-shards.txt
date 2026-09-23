@@ -1619,7 +1619,7 @@
 3	0.00	TestStitchFluxRefusesNonzeroNormalBound
 0	0.00	TestStitchPatchCappedTubeClosesToASolid
 1	0.00	TestStitchRuleSRefusesMultipleSourceBodies
-2	0.00	TestStitchTorusFaceStaysUnsupported
+2	0.00	TestStitchTorusRevolveSheetClosesToASolid
 3	0.00	TestStitchCurvedMassCorrectsInwardOrientation
 0	0.00	TestStitchCurvedMassPlacementAllowanceWidensBounds
 1	0.00	TestStitchCylinderFluxReusesAreaBound
@@ -1639,6 +1639,12 @@
 3	0.00	TestStitchCurvedMassSphereCoordUpperTracksRadius
 0	0.00	TestStitchSphereSolidMatchesTheRevolveEngine
 1	0.00	TestStitchSphereVolumeBoundEncloses
+2	0.00	TestStitchTorusSolidMatchesTheRevolveEngine
+3	0.00	TestStitchTorusVolumeBoundEncloses
+0	0.00	TestStitchTorusRefusesOffAxisAlignedAxis
+1	0.00	TestStitchTorusRefusesPartialWindow
+2	0.00	TestStitchTorusFluxAndMomentMatchClosedForm
+3	0.00	TestStitchCurvedMassCorrectsInwardOrientationForTorus
 2	0.00	TestUnstitchBoxYieldsSixFreeSheets
 3	0.00	TestUnstitchRestitchRoundTripMatchesOriginal
 0	0.00	TestUnstitchRevolveRoundTripStaysASheet

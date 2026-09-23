@@ -895,3 +895,193 @@ func frustumShellAnalyticsForInternalTest(uLen, vLo0, vHi0, vLo1, vHi1 float64) 
 	area = lateralOuter + lateralInner + annulus0 + annulus1
 	return volume, area, centroidX
 }
+
+// stitchTestTorusFace builds a hand-built Torus face bounded by two full
+// Circle3 rims of radius major, at axial offsets e0/e1 from center along
+// axis, letting a test construct both the admitted half-window shape
+// (e0, e1 == -minor, +minor in either order) and the two ways this arm
+// refuses it: an axis or center that is not coordinate-aligned through the
+// origin, and a window whose rims sit somewhere other than +/-minor.
+func stitchTestTorusFace(center, axis r3.Vec, major, minor, e0, e1 float64) *Face { //nolint:unparam // major is a real parameter of the shape this helper builds; every test so far happens to want the same one, but the formula-verification test below reads it back by name rather than as a bare literal.
+	rim := func(offset float64) *Edge {
+		rimCenter := center.Add(axis.Scale(offset))
+		v := &Vertex{position: rimCenter}
+		return &Edge{
+			curve: Circle3{Center: rimCenter, Axis: axis, Radius: units.Millimeters(major)},
+			start: v, end: v,
+			length: 2 * math.Pi * major,
+		}
+	}
+	e0Edge, e1Edge := rim(e0), rim(e1)
+	f := &Face{
+		surface: Torus{Center: center, Axis: axis, Major: units.Millimeters(major), Minor: units.Millimeters(minor)},
+		loops: []*Loop{
+			{outer: true, coedges: []coedge{{edge: e0Edge, forward: true}}},
+			{outer: true, coedges: []coedge{{edge: e1Edge, forward: true}}},
+		},
+	}
+	e0Edge.faces, e1Edge.faces = []*Face{f}, []*Face{f}
+	return f
+}
+
+// TestStitchTorusRefusesOffAxisAlignedAxis is torusAxisIsCoordinateAligned's
+// own shown-to-fail leg: this evaluator has no sound bound for Major/Minor
+// off a coordinate-aligned axis through the origin (torusFaceFluxAndMoment's
+// own doc comment), so a Torus whose Axis is not exactly a signed unit
+// coordinate vector, or whose Center sits off that axis line, must refuse
+// even though its rims otherwise describe a perfectly admissible half
+// window. No public fixture ever reaches this leg — every one revolves
+// about uAxis, coordinate-aligned through the origin — so it is pinned
+// here on a hand-built face. Shown to fail: replacing
+// torusAxisIsCoordinateAligned's own call with `true` makes both of these
+// return no error instead of ErrUnsupported — watched red before landing,
+// then restored.
+func TestStitchTorusRefusesOffAxisAlignedAxis(t *testing.T) {
+	t.Parallel()
+	obliqueAxis := r3.NewVec(0.6, 0.8, 0) // a unit vector, but not a coordinate one
+	f := stitchTestTorusFace(r3.NewVec(5, 0, 0), obliqueAxis, 10, 5, -5, 5)
+	_, _, _, _, err := stitchFaceFluxAndMoment(f, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	require.ErrorIs(t, err, ErrUnsupported)
+
+	offCenter := r3.NewVec(5, 0.5, 0) // axis-aligned direction, but off the axis line
+	f2 := stitchTestTorusFace(offCenter, r3.NewVec(1, 0, 0), 10, 5, -5, 5)
+	_, _, _, _, err = stitchFaceFluxAndMoment(f2, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	require.ErrorIs(t, err, ErrUnsupported)
+
+	// A positive control: the identical shape on a genuinely coordinate-
+	// aligned axis through the origin must NOT refuse on this gate.
+	good := stitchTestTorusFace(r3.NewVec(5, 0, 0), r3.NewVec(1, 0, 0), 10, 5, -5, 5)
+	_, _, _, _, err = stitchFaceFluxAndMoment(good, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	require.NoError(t, err)
+}
+
+// TestStitchTorusRefusesPartialWindow is the window-check's own
+// shown-to-fail leg: this arm can only integrate the tube's own exact
+// +/-pi/2 window (torusFaceFluxAndMoment's own doc comment proves why any
+// other window would need an unbounded trig call), so a face whose two
+// rims sit at some other pair of axial offsets — even a symmetric one —
+// must refuse rather than integrate a window this evaluator cannot prove.
+// No public fixture ever reaches this leg — every reachable revolve wall
+// junction in this tree happens to land on the exact half window — so it
+// is pinned here on a hand-built face. Shown to fail: replacing the
+// halfWindow check with `true` makes all three of these return no error
+// instead of ErrUnsupported — watched red before landing, then restored.
+func TestStitchTorusRefusesPartialWindow(t *testing.T) {
+	t.Parallel()
+	center, axis := r3.NewVec(5, 0, 0), r3.NewVec(1, 0, 0)
+
+	narrower := stitchTestTorusFace(center, axis, 10, 5, -3, 3)
+	_, _, _, _, err := stitchFaceFluxAndMoment(narrower, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	require.ErrorIs(t, err, ErrUnsupported)
+
+	sameSide := stitchTestTorusFace(center, axis, 10, 5, 5, 5)
+	_, _, _, _, err = stitchFaceFluxAndMoment(sameSide, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	require.ErrorIs(t, err, ErrUnsupported)
+
+	wrongMagnitude := stitchTestTorusFace(center, axis, 10, 5, -6, 5)
+	_, _, _, _, err = stitchFaceFluxAndMoment(wrongMagnitude, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	require.ErrorIs(t, err, ErrUnsupported)
+
+	// A positive control: the exact +/-minor window must NOT refuse on this
+	// gate, in either rim order.
+	good := stitchTestTorusFace(center, axis, 10, 5, -5, 5)
+	_, _, _, _, err = stitchFaceFluxAndMoment(good, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	require.NoError(t, err)
+	swapped := stitchTestTorusFace(center, axis, 10, 5, 5, -5)
+	_, _, _, _, err = stitchFaceFluxAndMoment(swapped, r3.NewVec(0, 0, 0)) //nolint:dogsled // only the error matters here.
+	require.NoError(t, err)
+}
+
+// TestStitchTorusFluxAndMomentMatchClosedForm pins torusFaceFluxAndMoment's
+// own K_F and M_i closed forms directly, on a hand-built face and an anchor
+// off both Center and the axis, so neither term is annihilated by symmetry
+// the way it would be at Center itself or at a point on the axis
+// (TestStitchConeFluxAndMomentChargeRimRadiusBound's own anchor choice for
+// the identical reason). Verified independently against numeric double
+// integration before landing (this PR's own scratch verification; not
+// carried into the tree). Shown to fail: negating the K_F formula's own
+// 4*pi*Minor*(Major^2+Minor^2) term drops flux.value by roughly 30% for
+// these parameters — watched red before landing, then restored.
+func TestStitchTorusFluxAndMomentMatchClosedForm(t *testing.T) {
+	t.Parallel()
+	const major, minor = 10.0, 5.0
+	center := r3.NewVec(5, 0, 0)
+	f := stitchTestTorusFace(center, r3.NewVec(1, 0, 0), major, minor, -minor, minor)
+	anchor := r3.NewVec(1, 2, -3)
+
+	flux, mx, my, mz, err := stitchFaceFluxAndMoment(f, anchor)
+	require.NoError(t, err)
+
+	wantFlux := 3*math.Pi*math.Pi*major*minor*minor + 4*math.Pi*minor*(major*major+minor*minor)
+	require.InDelta(t, wantFlux, flux.value, 1e-9)
+
+	bracket := func(axisI float64) float64 {
+		return 2*major*major*(1-axisI*axisI) + math.Pi*major*minor + (4.0/3.0)*minor*minor
+	}
+	wantMoment := func(centerI, anchorI, axisI float64) float64 {
+		return math.Pi * minor * (centerI - anchorI) * bracket(axisI)
+	}
+	require.InDelta(t, wantMoment(center.X, anchor.X, 1), mx.value, 1e-9)
+	require.InDelta(t, wantMoment(center.Y, anchor.Y, 0), my.value, 1e-9)
+	require.InDelta(t, wantMoment(center.Z, anchor.Z, 0), mz.value, 1e-9)
+}
+
+// halfTorusAnalyticsForInternalTest is stitch_flux_test.go's
+// halfTorusAnalytics, duplicated here because this file's package (decad)
+// cannot import the exported test package (decad_test) that function lives
+// in.
+func halfTorusAnalyticsForInternalTest(major, minor float64) (volume, area float64) {
+	halfDiscArea := (math.Pi / 2) * minor * minor
+	halfDiscCentroidOffset := (4 * minor) / (3 * math.Pi)
+	volume = 2 * math.Pi * (major + halfDiscCentroidOffset) * halfDiscArea
+	cylinderArea := 2 * math.Pi * major * (2 * minor)
+	torusArea := 2 * math.Pi * minor * (major*math.Pi + 2*minor)
+	area = cylinderArea + torusArea
+	return volume, area
+}
+
+// TestStitchCurvedMassCorrectsInwardOrientationForTorus is the orientation
+// sign's own shown-to-fail leg for the Torus arm, the sibling of
+// TestStitchCurvedMassCorrectsInwardOrientationForCone: no public Torus
+// fixture (stitch_flux_test.go) ever reaches the actual global sign-flip
+// branch, because a revolve build's own outward-normal convention already
+// agrees with the flux formula's own. This test reverses every face of a
+// real half-torus sheet BEFORE handing it to stitchCurvedMass, so the flux
+// sum is genuinely negative on the first pass and the correction must fire
+// for the published volume to come out positive and right. Shown to fail:
+// deleting the `fluxSum.value < 0` branch in stitchCurvedMass makes this
+// test's volume come out negative — watched red before landing, then
+// restored.
+func TestStitchCurvedMassCorrectsInwardOrientationForTorus(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	o := s.CreatePoint(0, 10)
+	s.Fix(o)
+	end := s.CreatePoint(10, 10)
+	c := s.CreatePoint(5, 10)
+	s.CreateLine(o, end)
+	s.CreateArc(c, end, o)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	uAxis := SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}
+
+	d := New()
+	sheet, err := d.Revolve(s, s.Profiles()[0], uAxis, FullRevolution{}, WithSurfaceResult())
+	require.NoError(t, err)
+
+	faces := sheet.Faces()
+	for _, f := range faces {
+		reverseFaceOrientation(f)
+	}
+
+	anchor := faces[0].loops[0].coedges[0].Start().Position().Value
+	vol, cen, err := stitchCurvedMass(context.Background(), faces, anchor, 0)
+	require.NoError(t, err)
+	require.Greater(t, vol.Value.Base(), 0.0, "the global sign correction must recover a positive volume from an inward-reversed Torus face set")
+
+	wantVol, _ := halfTorusAnalyticsForInternalTest(10, 5)
+	require.InDelta(t, wantVol, vol.Value.Base(), 1e-6)
+	require.InDelta(t, 5.0, cen.Value.X, 1e-9)
+}
