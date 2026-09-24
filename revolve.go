@@ -507,17 +507,16 @@ func (rp chainRevolvePayload) placed(ctx context.Context, d *Document, ref produ
 // ErrUnrecordableProfile (docs/sketch-seam-design.md §2.2). The axis must be
 // non-degenerate and coplanar with the sketch plane, and the walk must lie in
 // one closed half-plane of it, exactly as Revolve's own profile does
-// (docs/evaluator-design.md §6). A chain free end lying ON the resolved axis
-// is ErrUnsupported (Table R, R22), staged rather than permanent: the
-// existing axis-incidence audit needs each on-axis point to carry one
-// off-axis walk end and one LineSeg end along the axis, and a free end offers
-// no partner. The result is always a sheet — Kind() == BodySheet — one
-// swept wall per recorded segment (docs/surface-design.md §13.4, Table G),
-// with no cap and no closing face: WithSurfaceResult() does not compile
-// against this call. A full revolution of the chain is still OPEN: its two
-// free ends sweep two circles nothing fills, so the result carries exactly
-// two free edges rather than closing the way a full-turn profile revolve
-// does. A failed evaluation leaves the document untouched.
+// (docs/evaluator-design.md §6). One free end may lie on the resolved axis
+// when its incident wall leaves the axis; it sweeps to a pole rather than a
+// rim. Both free ends on the axis, or an on-axis free end whose incident walk
+// lies along the axis, are ErrUnsupported (Table R, R22). The result is always
+// a sheet — Kind() == BodySheet — one swept wall per off-axis recorded segment
+// (docs/surface-design.md §13.4, Table G), with no cap and no closing face.
+// WithSurfaceResult() does not compile against this call. A full revolution
+// of the chain is still OPEN: each off-axis free end sweeps one free circle,
+// so a chain with one pole has one free rim. A failed evaluation leaves the
+// document untouched.
 func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent, opts ...ChainRevolveOption) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)

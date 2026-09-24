@@ -1096,14 +1096,8 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	if n == 0 {
 		return nil, fmt.Errorf(`%w: a recorded chain holds no segments`, ErrDegenerate)
 	}
-	// R22 (Table R): a chain free end lying ON the resolved axis is staged
-	// rather than built. The existing axis-incidence audit needs each
-	// on-axis point to carry one off-axis walk end and one LineSeg end along
-	// the axis, from the same loop (docs/evaluator-design.md §6) — a free end
-	// offers one incident walk end and no partner, so the audit has nothing
-	// to admit (docs/surface-design.md §13.3).
-	if resolved.walks[0].startV == 0 || resolved.walks[n-1].endV == 0 {
-		return nil, fmt.Errorf(`%w: a chain free end lying on the revolve axis is staged to a later increment`, ErrUnsupported)
+	if err := requireChainAxisIncidence(resolved); err != nil {
+		return nil, err
 	}
 
 	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
@@ -1132,6 +1126,45 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	}
 	body.payload = rp
 	return body, nil
+}
+
+// requireChainAxisIncidence reads an open walk without wrapping its last
+// junction onto its first. A free pole has one off-axis incident wall; an
+// interior axis junction still needs the profile audit's axis-line partner.
+// The closed-profile revolve never calls this chain-only audit.
+func requireChainAxisIncidence(resolved revolveWalks) error {
+	walks, kinds := resolved.walks, resolved.kinds
+	n := len(walks)
+	startPole, endPole := walks[0].startV == 0, walks[n-1].endV == 0
+	if startPole && endPole {
+		return fmt.Errorf(`%w: a chain with both free ends on the revolve axis needs closed-sheet pole topology`, ErrUnsupported)
+	}
+	if startPole && kinds[0] == wallAxis || endPole && kinds[n-1] == wallAxis {
+		return fmt.Errorf(`%w: a chain free end on the revolve axis has no incident swept wall`, ErrUnsupported)
+	}
+
+	seen := map[float64]struct{}{}
+	for i, w := range walks {
+		if w.startV != 0 {
+			continue
+		}
+		if _, duplicate := seen[w.startU]; duplicate {
+			return fmt.Errorf(`%w: two chain junctions meet the revolve axis at the same point`, ErrDegenerate)
+		}
+		seen[w.startU] = struct{}{}
+		if i == 0 {
+			continue // the free pole has no incoming walk
+		}
+		if walks[i-1].endV != 0 || (kinds[i-1] == wallAxis) == (kinds[i] == wallAxis) {
+			return fmt.Errorf(`%w: a chain interior axis junction needs one swept wall and one axis line`, ErrDegenerate)
+		}
+	}
+	if endPole {
+		if _, duplicate := seen[walks[n-1].endU]; duplicate {
+			return fmt.Errorf(`%w: two chain junctions meet the revolve axis at the same point`, ErrDegenerate)
+		}
+	}
+	return nil
 }
 
 // chainRevolveWalks resolves the chain's segments the way a revolve reads

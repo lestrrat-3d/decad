@@ -1,13 +1,180 @@
 package decad_test
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func TestRevolveChainFullTurnWithOnePole(t *testing.T) {
+	t.Parallel()
+	s, ch, axis := coneChainAtRadius(t, 0)
+	doc := decad.New()
+	body, err := doc.RevolveChain(s, ch, axis, decad.FullRevolution{})
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySheet, body.Kind())
+	require.Len(t, body.Faces(), 1)
+	_, err = decad.Edges(decad.Free()).Exactly(1).SelectEdges(body)
+	require.NoError(t, err)
+	area, err := body.Area()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, area.Exactness)
+	requireAreaContains15PiFraction(t, area, 1)
+	box, err := body.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, box.Exactness)
+	require.Equal(t, r3.NewVec(0, -3, -3), box.Min)
+	require.Equal(t, r3.NewVec(4, 3, 3), box.Max)
+	_, err = body.Tessellate(t.Context(), units.Millimeters(0.5))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+}
+
+func TestRevolveChainPoleAtLastEnd(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rim := s.CreatePoint(4, 3)
+	s.Fix(rim)
+	s.CreateLine(rim, s.CreatePoint(0, 0))
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Chains(), 1)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	body, err := decad.New().RevolveChain(s, s.Chains()[0], axis, decad.FullRevolution{})
+	require.NoError(t, err)
+	_, err = decad.Edges(decad.Free()).Exactly(1).SelectEdges(body)
+	require.NoError(t, err)
+	area, err := body.Area()
+	require.NoError(t, err)
+	requireAreaContains15PiFraction(t, area, 1)
+}
+
+func TestRevolveChainRejectsInteriorAxisPinch(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	start := s.CreatePoint(0, 3)
+	s.Fix(start)
+	pole := s.CreatePoint(4, 0)
+	s.CreateLine(start, pole)
+	s.CreateLine(pole, s.CreatePoint(8, 3))
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Chains(), 1)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	doc := decad.New()
+	_, err = doc.RevolveChain(s, s.Chains()[0], axis, decad.FullRevolution{})
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.ErrorContains(t, err, "interior axis junction")
+	require.Empty(t, doc.Bodies())
+}
+
+func TestRevolveChainQuarterTurnWithOnePole(t *testing.T) {
+	t.Parallel()
+	s, ch, axis := coneChainAtRadius(t, 0)
+	doc := decad.New()
+	body, err := doc.RevolveChain(s, ch, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySheet, body.Kind())
+	require.Len(t, body.Faces(), 1)
+	free, err := decad.Edges(decad.Free()).Exactly(3).SelectEdges(body)
+	require.NoError(t, err)
+	require.Len(t, body.Vertices(), 3)
+	pole := 0
+	for _, v := range body.Vertices() {
+		if v.Position().Value.X == 0 && v.Position().Value.Y == 0 && v.Position().Value.Z == 0 {
+			pole++
+			incident := 0
+			for _, edge := range free {
+				if edge.Start() == v || edge.End() == v {
+					incident++
+				}
+			}
+			require.Equal(t, 2, incident)
+		}
+	}
+	require.Equal(t, 1, pole)
+	area, err := body.Area()
+	require.NoError(t, err)
+	requireAreaContains15PiFraction(t, area, 4)
+}
+
+func TestRevolveChainSnappedPoleChargesArea(t *testing.T) {
+	t.Parallel()
+	s, ch, axis := coneChainAtRadius(t, 1e-10)
+	doc := decad.New()
+	body, err := doc.RevolveChain(s, ch, axis, decad.FullRevolution{})
+	require.NoError(t, err)
+	_, err = decad.Edges(decad.Free()).Exactly(1).SelectEdges(body)
+	require.NoError(t, err)
+	area, err := body.Area()
+	require.NoError(t, err)
+	// The snapped wall is the cone from (0,0) to (4,3), even though its
+	// recorded start radius was positive. The published bound must cover it.
+	requireAreaContains15PiFraction(t, area, 1)
+}
+
+func TestRevolveChainPolePlacedBounds(t *testing.T) {
+	t.Parallel()
+	s, ch, axis := coneChain(t, 1e6, 0)
+	doc := decad.New()
+	body, err := doc.RevolveChain(s, ch, axis, decad.FullRevolution{})
+	require.NoError(t, err)
+	before, err := body.Area()
+	require.NoError(t, err)
+	rot, err := r3.Rotation(r3.NewVec(0, 0, 1), units.Degrees(30))
+	require.NoError(t, err)
+	placed, err := body.Placed(t.Context(), rot)
+	require.NoError(t, err)
+	_, err = decad.Edges(decad.Free()).Exactly(1).SelectEdges(placed)
+	require.NoError(t, err)
+	after, err := placed.Area()
+	require.NoError(t, err)
+	require.Equal(t, before, after)
+	box, err := placed.Bounds()
+	require.NoError(t, err)
+	basis := rot.Basis()
+	bound := box.Bound.Base()
+	requireEnclosesExactDot(t, box.Max.X, bound, [2]float64{basis.EX.X, 1e6}, [2]float64{basis.EY.X, -3})
+	requireEnclosesExactDot(t, box.Max.Y, bound, [2]float64{basis.EX.Y, 1e6}, [2]float64{basis.EY.Y, 3})
+}
+
+func coneChainAtRadius(tb testing.TB, radius float64) (*sketch.Sketch, *sketch.Chain, decad.Axis) {
+	return coneChain(tb, 4, radius)
+}
+
+func coneChain(tb testing.TB, length, radius float64) (*sketch.Sketch, *sketch.Chain, decad.Axis) {
+	tb.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(tb, err)
+	start := s.CreatePoint(0, radius)
+	s.Fix(start)
+	s.CreateLine(start, s.CreatePoint(length, 3))
+	_, err = s.Solve(tb.Context())
+	require.NoError(tb, err)
+	require.Len(tb, s.Chains(), 1)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	return s, s.Chains()[0], axis
+}
+
+func requireAreaContains15PiFraction(t *testing.T, area decad.Measurement, denominator int64) {
+	t.Helper()
+	value := new(big.Rat).SetFloat64(area.Value.Base())
+	bound := new(big.Rat).SetFloat64(area.Bound.Base())
+	factor := big.NewRat(15, denominator)
+	truthLo := new(big.Rat).Mul(factor, piRefLo)
+	truthHi := new(big.Rat).Mul(factor, piRefHi)
+	require.LessOrEqual(t, new(big.Rat).Sub(value, bound).Cmp(truthLo), 0)
+	require.GreaterOrEqual(t, new(big.Rat).Add(value, bound).Cmp(truthHi), 0)
+}
 
 // This file is docs/surface-design.md §13's public-surface tests for
 // RevolveChain: a chain spun into a shell with no cap, over any segment count

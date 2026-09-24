@@ -374,8 +374,8 @@ func TestExtrudeChainFreeformWallAreaNeverPublishesTheLengthUnderestimate(t *tes
 // TestChainFedRefusals is docs/surface-design.md's T139: SweepChain and
 // LoftChain are ErrUnsupported (Table R row R23) even for a valid chain,
 // ahead of the increment that states their own pairing rule; RevolveChain
-// handed a chain whose free end lies exactly on the resolved axis is
-// ErrUnsupported (R22), staged rather than permanent.
+// handed a chain with both free ends on the resolved axis is ErrUnsupported
+// (R22), pending its closed-sheet pole topology.
 func TestChainFedRefusals(t *testing.T) {
 	t.Parallel()
 	s, ch := lineChainSketch(t)
@@ -394,21 +394,25 @@ func TestChainFedRefusals(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Empty(t, doc.Bodies())
 
-	// R22: a chain free end lying exactly on the resolved axis.
+	// R22: a half-circle chain with both free ends on the resolved axis.
 	axisWorld := sketch.NewWorld()
 	axisSketch, err := axisWorld.CreateSketch(axisWorld.XY())
 	require.NoError(t, err)
-	onAxis := axisSketch.CreatePoint(0, 0)
-	axisSketch.Fix(onAxis)
-	axisSketch.CreateLine(onAxis, axisSketch.CreatePoint(10, 5))
+	start := axisSketch.CreatePoint(0, 0)
+	axisSketch.Fix(start)
+	end := axisSketch.CreatePoint(10, 0)
+	center := axisSketch.CreatePoint(5, 0)
+	axisSketch.CreateArc(center, end, start)
 	_, err = axisSketch.Solve(t.Context())
 	require.NoError(t, err)
+	require.Len(t, axisSketch.Chains(), 1)
 	axisChain := axisSketch.Chains()[0]
 
 	_, err = doc.RevolveChain(axisSketch, axisChain,
-		decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}},
+		decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}},
 		decad.FullRevolution{})
 	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "both free ends")
 	require.Empty(t, doc.Bodies())
 }
 
