@@ -591,9 +591,9 @@ func buildCircularWasherMeshes(t testing.TB) (*boolMesh, *boolMesh) {
 	tool := internalWasherBodySymmetric(t, doc, 8, 3, 11)
 	tolMM, _, err := pairChordTolerance(t.Context(), target, tool)
 	require.NoError(t, err)
-	ma, err := tessellateContext(t.Context(), target, units.Millimeters(tolMM))
+	ma, err := tessellateContext(t.Context(), target, units.Millimeters(tolMM), VerifyAll)
 	require.NoError(t, err)
-	mb, err := tessellateContext(t.Context(), tool, units.Millimeters(tolMM))
+	mb, err := tessellateContext(t.Context(), tool, units.Millimeters(tolMM), VerifyAll)
 	require.NoError(t, err)
 	bmA, err := prepBoolMeshContext(t.Context(), ma, make([]int, len(ma.triangles)))
 	require.NoError(t, err)
@@ -805,9 +805,9 @@ func TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs(t *testing.T) {
 
 	tolMM, _, err := pairChordTolerance(t.Context(), plate, pin)
 	require.NoError(t, err)
-	ma, err := tessellateContext(t.Context(), plate, units.Millimeters(tolMM))
+	ma, err := tessellateContext(t.Context(), plate, units.Millimeters(tolMM), VerifyAll)
 	require.NoError(t, err)
-	mb, err := tessellateContext(t.Context(), pin, units.Millimeters(tolMM))
+	mb, err := tessellateContext(t.Context(), pin, units.Millimeters(tolMM), VerifyAll)
 	require.NoError(t, err)
 
 	symA, err := operandSymDiff(ma)
@@ -839,13 +839,47 @@ func TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs(t *testing.T) {
 func TestOperandSymDiffRefusesAMeshWithNoOccupiedVolumeProof(t *testing.T) {
 	t.Parallel()
 	// An export-only mesh — one whose payload class has no occupied-volume proof
-	// yet — is refused as a staging limit, never composed as a zero.
-	_, err := operandSymDiff(&Mesh{volSymDiff: 17, symDiffOK: false})
+	// yet — is refused as a staging limit, never composed as a zero. Its
+	// boundary audits all ran, so the refusal names the missing volume proof.
+	_, err := operandSymDiff(&Mesh{volSymDiff: 17, symDiffOK: false, boundaryOK: true})
 	require.ErrorIs(t, err, ErrUnsupported)
+	require.Contains(t, err.Error(), "no proof of the volume")
 
-	got, err := operandSymDiff(&Mesh{volSymDiff: 17, symDiffOK: true})
+	got, err := operandSymDiff(&Mesh{volSymDiff: 17, symDiffOK: true, boundaryOK: true})
 	require.NoError(t, err)
 	require.Equal(t, 17.0, got)
+
+	// A mesh whose facet-contact audit never ran is refused ONE STEP EARLIER
+	// and by its own cause: every homotopy the volume proof composes has that
+	// audit as an antecedent (docs/tessellation-design.md §11), so blaming the
+	// payload class here would misstate why this operand cannot be composed.
+	_, err = operandSymDiff(&Mesh{volSymDiff: 17, symDiffOK: true, boundaryOK: false})
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Contains(t, err.Error(), "no facet-contact audit")
+}
+
+// The same gate over a REAL unverified mesh rather than a hand-written one: the
+// tessellator's own VerifyNone output, through the boolean's own operand gate.
+func TestOperandSymDiffRefusesARealUnverifiedMesh(t *testing.T) {
+	t.Parallel()
+	body := internalCylinderBody(t)
+	tol := units.Millimeters(0.2)
+
+	drawn, err := tessellateContext(t.Context(), body, tol, VerifyNone)
+	require.NoError(t, err)
+	require.False(t, drawn.BoundaryVerified())
+	require.False(t, drawn.VolumeVerified())
+	_, err = operandSymDiff(drawn)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Contains(t, err.Error(), "no facet-contact audit")
+
+	// The same body at the same tolerance, proven, is admitted — so the
+	// refusal is the level's doing and not the body's.
+	proven, err := tessellateContext(t.Context(), body, tol, VerifyAll)
+	require.NoError(t, err)
+	sym, err := operandSymDiff(proven)
+	require.NoError(t, err)
+	require.Positive(t, sym)
 }
 
 func TestFacesOfMeshReadsTheMeshProofRecord(t *testing.T) {

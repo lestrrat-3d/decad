@@ -205,7 +205,7 @@ func TestRevolveMeshSymDiffBoundsTheCylinderVolumeDeficit(t *testing.T) {
 	// the analytic volume minus the mesh's own. volSymDiff must cover it.
 	body := internalCylinderBody(t)
 
-	mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.05))
+	mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
 	require.True(t, mesh.symDiffOK)
 	require.Positive(t, mesh.volSymDiff)
@@ -228,9 +228,9 @@ func TestRevolveMeshSymDiffFallsWithTolerance(t *testing.T) {
 	t.Parallel()
 	body := internalCylinderBody(t)
 
-	coarse, err := tessellateContext(t.Context(), body, units.Millimeters(0.2))
+	coarse, err := tessellateContext(t.Context(), body, units.Millimeters(0.2), VerifyAll)
 	require.NoError(t, err)
-	fine, err := tessellateContext(t.Context(), body, units.Millimeters(0.01))
+	fine, err := tessellateContext(t.Context(), body, units.Millimeters(0.01), VerifyAll)
 	require.NoError(t, err)
 	require.True(t, coarse.symDiffOK)
 	require.True(t, fine.symDiffOK)
@@ -243,12 +243,12 @@ func TestRevolveMeridianMomentChargesACurvedGenerator(t *testing.T) {
 	// and Mmeridian is the term that says by how much. A cylinder's is straight,
 	// so its slivers are empty and the term is exactly zero.
 	sphere := internalSphereBody(t)
-	plan, err := planRevolve(t.Context(), sphere, sphere.payload.(revolvePayload), 0.05)
+	plan, err := planRevolve(t.Context(), sphere, sphere.payload.(revolvePayload), 0.05, VerifyAll)
 	require.NoError(t, err)
 	require.Positive(t, revolveMeridianMoment(plan))
 
 	cyl := internalCylinderBody(t)
-	cylPlan, err := planRevolve(t.Context(), cyl, cyl.payload.(revolvePayload), 0.05)
+	cylPlan, err := planRevolve(t.Context(), cyl, cyl.payload.(revolvePayload), 0.05, VerifyAll)
 	require.NoError(t, err)
 	require.Zero(t, revolveMeridianMoment(cylPlan))
 }
@@ -256,7 +256,7 @@ func TestRevolveMeridianMomentChargesACurvedGenerator(t *testing.T) {
 func TestRevolveSweepUpperNeverUnderstatesAFullTurn(t *testing.T) {
 	t.Parallel()
 	body := internalCylinderBody(t)
-	plan, err := planRevolve(t.Context(), body, body.payload.(revolvePayload), 0.05)
+	plan, err := planRevolve(t.Context(), body, body.payload.(revolvePayload), 0.05, VerifyAll)
 	require.NoError(t, err)
 	// math.Pi is the nearest float to π and sits BELOW it, which is the wrong
 	// side for a bound, so the published figure must beat it strictly.
@@ -302,11 +302,11 @@ func TestPairChordToleranceClearsARevolveCoordinateReservation(t *testing.T) {
 
 	// The raised tolerance is one the revolve can actually be meshed at, which
 	// is the whole point: without it planRevolve refuses before it chords.
-	mesh, err := tessellateContext(t.Context(), placed, units.Millimeters(tol))
+	mesh, err := tessellateContext(t.Context(), placed, units.Millimeters(tol), VerifyAll)
 	require.NoError(t, err)
 	require.True(t, mesh.symDiffOK)
 
-	_, err = tessellateContext(t.Context(), placed, units.Millimeters(dPair*boolChordFactor))
+	_, err = tessellateContext(t.Context(), placed, units.Millimeters(dPair*boolChordFactor), VerifyAll)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
 
@@ -352,9 +352,9 @@ func TestRevolveSymDiffChargesEveryStageSeparately(t *testing.T) {
 	// was.
 	build := func(t *testing.T, body *Body) (*Mesh, *revolvePlan) {
 		t.Helper()
-		mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.05))
+		mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.05), VerifyAll)
 		require.NoError(t, err)
-		plan, err := planRevolve(t.Context(), body, body.payload.(revolvePayload), 0.05)
+		plan, err := planRevolve(t.Context(), body, body.payload.(revolvePayload), 0.05, VerifyAll)
 		require.NoError(t, err)
 		return mesh, plan
 	}
@@ -389,10 +389,10 @@ func TestRevolveSymDiffChargesEveryStageSeparately(t *testing.T) {
 
 func TestRevolveSymDiffRefusesAnAbsentAngularTerm(t *testing.T) {
 	t.Parallel()
-	mesh, err := tessellateContext(t.Context(), internalCylinderBody(t), units.Millimeters(0.05))
+	mesh, err := tessellateContext(t.Context(), internalCylinderBody(t), units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
 	body := internalCylinderBody(t)
-	plan, err := planRevolve(t.Context(), body, body.payload.(revolvePayload), 0.05)
+	plan, err := planRevolve(t.Context(), body, body.payload.(revolvePayload), 0.05, VerifyAll)
 	require.NoError(t, err)
 	_, err = revolveSymDiff(mesh, plan, nil, 0, 0)
 	require.ErrorIs(t, err, ErrUnsupported)

@@ -44,7 +44,7 @@ func TestTessellateChargesSectionDisplacementToEveryProof(t *testing.T) {
 	require.True(t, ok, `the analytic reduction must own this pair`)
 	require.Positive(t, pp.sectionDelta)
 
-	mesh, err := tessellateContext(t.Context(), got, units.Millimeters(20))
+	mesh, err := tessellateContext(t.Context(), got, units.Millimeters(20), VerifyAll)
 	require.NoError(t, err)
 
 	// The bound is the displacement, up-rounded once.
@@ -63,7 +63,7 @@ func TestTessellateChargesSectionDisplacementToEveryProof(t *testing.T) {
 
 	// An undisplaced straight prism charges neither term.
 	plain := internalBoxBody(t, New(), 0, 0, 10, 10, 10)
-	flat, err := tessellateContext(t.Context(), plain, units.Millimeters(1))
+	flat, err := tessellateContext(t.Context(), plain, units.Millimeters(1), VerifyAll)
 	require.NoError(t, err)
 	require.Zero(t, flat.bound)
 	require.Zero(t, flat.areaSlack)

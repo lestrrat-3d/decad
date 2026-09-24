@@ -360,7 +360,12 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 	if err := requireVolumeProvingPayload(ctx, b, 1); err != nil {
 		return booleanEvaluation{}, err
 	}
-	ma, err := tessellateContext(ctx, a, units.Millimeters(tolMM))
+	// VerifyAll, passed explicitly rather than taken from Tessellate's default
+	// (docs/tessellation-design.md §11 step 1): the composition below reads
+	// every proof a mesh can carry, and the one-entry cache keys on the level,
+	// so a caller's own earlier unverified mesh at this same internal tolerance
+	// is a different entry and is never handed back here.
+	ma, err := tessellateContext(ctx, a, units.Millimeters(tolMM), VerifyAll)
 	if err != nil {
 		var coarse *tessellationExpectedError
 		if errors.As(err, &coarse) {
@@ -376,7 +381,7 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
-	mb, err := tessellateContext(ctx, b, units.Millimeters(tolMM))
+	mb, err := tessellateContext(ctx, b, units.Millimeters(tolMM), VerifyAll)
 	if err != nil {
 		var coarse *tessellationExpectedError
 		if errors.As(err, &coarse) {
@@ -624,7 +629,17 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 	return expectedBooleanForOperand(booleanExpectedVolumeProof, index, err)
 }
 
+// An operand mesh built below VerifyBoundary is refused FIRST, and with its own
+// message. Every homotopy §11 composes has §9's facet-contact audit as an
+// antecedent, so such a mesh fails for the audit it declined rather than for
+// the payload class it belongs to, and the volume-proof message would misstate
+// the cause. No public call path reaches it — evaluateBoolean tessellates both
+// operands at VerifyAll and the one-entry cache keys on the level — so this
+// arm holds the invariant for any other path to the same composition.
 func operandSymDiff(m *Mesh) (float64, error) {
+	if !m.boundaryOK {
+		return 0, fmt.Errorf(`%w: this operand's tessellation ran no facet-contact audit, so its facets are not proven to be an embedded boundary and no boolean may compose it; tessellate it at VerifyAll`, ErrUnsupported)
+	}
 	if !m.symDiffOK {
 		return 0, fmt.Errorf(`%w: this operand's tessellation carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
 	}

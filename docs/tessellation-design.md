@@ -21,36 +21,84 @@ occupied-volume proof.
 public accessors remain:
 
 ```go
-func (b *Body) Tessellate(ctx context.Context, tol units.Value) (*Mesh, error)
+type Verification int
+
+const (
+    VerifyNone     Verification = iota // skip the audits and proofs below
+    VerifyBoundary                     // + the facet-contact audit (§9)
+    VerifyAll                          // + every proof this payload supports
+)
+
+func WithVerification(v Verification) TessellateOption
+
+func (b *Body) Tessellate(ctx context.Context, tol units.Value, opts ...TessellateOption) (*Mesh, error)
 
 func (m *Mesh) Vertices() []r3.Vec
 func (m *Mesh) Triangles() [][3]int
 func (m *Mesh) SourceFaces() []*Face
 func (m *Mesh) Bound() units.Value
+func (m *Mesh) BoundaryVerified() bool
+func (m *Mesh) VolumeVerified() bool
 ```
 
 `Tessellate` propagates `ctx` through every cancellable chording,
 clearance, triangulation, and audit phase and returns `ctx.Err()` unchanged.
 An uncanceled call produces the same deterministic mesh every time.
 
-Every successful mesh MUST satisfy all rows:
+**`VerifyAll` is the default, and a mesh built at it is the only mesh any
+boolean admits.** The request is an ORDERED level because choosing how much work
+to do is a total order; what a mesh then publishes is two independent readings,
+because the proofs are not a chain. `BoundaryVerified()` reports that every
+boundary audit this payload supports ran and passed, the facet-contact audit
+included. `VolumeVerified()` reports that the occupied-volume proof holds, which
+is what admits the mesh to `Union`, `Cut` and `Intersect` (§11). A payload whose
+own occupied-volume proof has not landed returns `VolumeVerified() == false` at
+every level, exactly as its `symDiffOK` is false today (§2), and a stitched
+body's volume proof rests on its vertices being exact rather than on more work —
+so neither reading is derivable from the other.
+
+Every successful mesh MUST satisfy all rows, at every level:
 
 | Property | Requirement |
 |---|---|
-| **Geometry** | `Triangles` index `Vertices`; every triangle has positive area; on a `BodySolid`, every connected boundary component is a closed, consistently outward-oriented 2-manifold; on a `BodySheet`, every component is a consistently oriented 2-manifold WITH BOUNDARY (§1.2) |
+| **Geometry** | `Triangles` index `Vertices`; every triangle has positive area; on a `BodySolid`, every directed edge is matched by its reverse and every audited vertex link is one connected cycle; on a `BodySheet`, every component is a consistently oriented 2-manifold WITH BOUNDARY (§1.2); the winding is consistent across every shared edge and outward under the construction's own convention (§4) |
 | **Deviation** | `Bound` is a two-sided boundary bound: every point of the analytic boundary is within `Bound` of the mesh, and every point of the mesh is within `Bound` of the analytic boundary |
 | **Tolerance** | The chording component is `<= tol`; `Bound` also includes inherited payload displacement, so it can exceed `tol` |
 | **Provenance** | `len(SourceFaces()) == len(Triangles())`; entry `i` is the live body face whose patch triangle `i` approximates |
 | **Sharing** | Two facets meeting along one analytic edge reuse the same vertex indices; coincident coordinates in separately allocated vertices do not satisfy this rule |
-| **Determinism** | Equal payload + equal tolerance → equal vertex order, triangle order, source-face order, and export bytes |
+| **Determinism** | Equal payload + equal tolerance + equal level → equal vertex order, triangle order, source-face order, and export bytes. The level changes which proofs are published, NEVER a vertex, an index or an order: a `VerifyNone` mesh and a `VerifyAll` mesh of one body at one tolerance are vertex- and index-identical |
 | **Immutability** | Accessors return copies; callers cannot change the held mesh or its proof data |
+
+A mesh built at `VerifyBoundary` or above additionally satisfies:
+
+| Property | Requirement |
+|---|---|
+| **Embedding** | The facet set is embedded: no non-adjacent facet pair touches, and an adjacent pair meets only along the vertex or edge its indices share (§9). `BoundaryVerified()` is true |
+
+That row is what makes the word "outside" well defined. The Geometry row's
+winding is consistent and outward under the construction's own convention at
+every level; a self-intersecting closed mesh can carry a positive signed volume
+while having points where "outside the body" names nothing, so below
+`VerifyBoundary` the outward claim is the construction's convention and not a
+geometric statement. `Mesh.Triangles`'s own doc comment states that caveat in
+the caller's terms.
+
+`VerifyAll` additionally publishes §2's `areaSlack` and, where the payload
+proves one, `volSymDiff`. Below it a mesh publishes NEITHER: it withholds the
+proofs it did not run rather than publishing an incomplete term, and its
+`VolumeVerified()` is false. `Bound()` and `sourceBound(face)` are published at
+every level and are never withheld — a zero `Bound` is a positive claim of
+exactness, so there is nothing honest to publish in place of the proven figure,
+and §10.1's chain is per patch and per vertex and rests on no facet-pair audit.
 
 The closed-mesh audit is mandatory for every `BodySolid` payload. It counts
 directed edges:
 each directed edge occurs once and its reverse occurs once. A payload with
 several shells or lumps may produce several closed components; the audit is per
 whole mesh and permits that. The audit is a safety net after construction, not a
-replacement for shared sampling.
+replacement for shared sampling. The facet-contact audit is NOT mandatory: it is
+the one audit a level below `VerifyBoundary` declines, and §9 states what runs
+in its place.
 
 `tol` is a length magnitude. Wrong kind → `ErrUnitKind`; non-finite →
 `ErrNotFinite`; negative → `ErrNegativeMagnitude`; zero → `ErrDegenerate`.
@@ -60,11 +108,20 @@ with no evaluator payload is rejected before dispatch.
 ### 1.1 One-entry tessellation cache
 
 Each immutable `Body` may retain one complete successful tessellation. The
-cache is bounded to one entry. Its key is the exact `math.Float64bits` value
-of the validated tolerance after conversion to millimetres; unit spellings
-that normalize to different represented millimetre values are different keys,
-even when they are mathematically close. A successful lookup returns the
-stored mesh pointer, while the mesh accessors continue to return fresh slices.
+cache is bounded to one entry. **Its key is the validated tolerance AND the
+verification level**: the exact `math.Float64bits` value of the tolerance after
+conversion to millimetres, paired with the `Verification` the call asked for.
+Unit spellings that normalize to different represented millimetre values are
+different keys, even when they are mathematically close, and two levels at one
+tolerance are different keys too. A successful lookup returns the stored mesh
+pointer, while the mesh accessors continue to return fresh slices.
+
+**The level in that key is normative, not an implementation detail.** A caller
+who asks for a `VerifyNone` mesh at some tolerance, followed by a boolean whose
+own internal tolerance lands on the same value, would otherwise be handed the
+unverified mesh as a boolean operand — and the boolean's own gates are stated
+over a mesh it believes was proven. Keying on the tolerance alone is the single
+place this split can go wrong silently.
 
 The cache pointer is mutable implementation state only. It does not change the
 body's logical geometry, topology, measurements, or payload,
@@ -135,7 +192,10 @@ the closed-mesh audit would, since the two audits agree completely once there
 is no free edge to tell them apart.
 
 Every other row of §1's table binds a sheet mesh unchanged, and so does §1.1's
-one-entry cache.
+one-entry cache. Both audits in this section's table run at every verification
+level: they are linear in the facets and the vertices, and they are what §1's
+Geometry row rests on for a sheet, so a `VerifyNone` sheet mesh runs exactly the
+pair a `VerifyAll` one does.
 
 **§1's table states no vertex-link requirement for a `BodySolid` mesh, but
 §12's "a vertex link is not one connected cycle" refusal row assumes one
@@ -179,7 +239,13 @@ data on every `Mesh`:
 | `areaSlack` | cut-stable upper bound on area error: the integral of absolute local true-vs-held area-density error under the certified correspondence, plus separate trim and coordinate-movement allowances | boolean result area bounds |
 | `volSymDiff` + `symDiffOK` | upper bound on `volume(TrueBody △ MeshSolid)`, present only after that payload's occupied-volume proof lands | boolean operand error composition |
 
-`sourceBound` and `areaSlack` are mandatory for every returned mesh.
+`sourceBound` is mandatory for every returned mesh, at every verification
+level. `areaSlack` and `volSymDiff` are mandatory for a `VerifyAll` mesh and
+are WITHHELD below it: a level that did not run those proofs publishes no term
+for them, leaves `symDiffOK` false, and so never reaches a boolean at all. That
+withholding costs a caller nothing it can consume — §11 admits only a proven
+operand, and the mesh boolean is `areaSlack`'s only consumer — while publishing
+a partly composed term would widen what the mesh asserts past what it proved.
 `volSymDiff` is mandatory before a boolean may consume it; an export-only
 increment may return a mesh with `symDiffOK == false`. `Mesh.Bound()` is the
 maximum `sourceBound` over the body, for every payload class. For an analytic
@@ -355,6 +421,14 @@ raises the admitted ceiling. Overflow or a finer request than any cap admits →
 `ErrUnsupported`. No facet allocation or pair predicate starts before its
 corresponding preflight passes.
 
+**`maxFacetPairTestsPerCall` is charged only when the audit it bounds will
+run.** It is a bound on the work one all-pairs audit may do, so a level that
+declines that audit does no pair work and is charged none. `maxFacetsPerMesh`
+and `maxFacetWorkPerCall` bound allocation instead and are charged at every
+level. This is why a tolerance `VerifyAll` refuses for the pair ceiling alone is
+met at `VerifyNone`: the refusal was a work budget, never a statement that the
+geometry could not be meshed.
+
 A requested tolerance is an upper bound on chording, not on the complete mesh
 bound or a density request. The tessellator may refine beyond the first
 admissible `n` to prove topology, non-intersection, or a finite private bound.
@@ -400,7 +474,18 @@ the sweep sense, and the source face's `reversed` bit. Start caps point against
 the sweep; end caps point with it. A reflected placement reverses every final
 triangle once. Run the signed-volume orientation audit after the directed-edge
 closure audit; every non-void shell must be positive and every void shell
-negative under the evaluator's convention.
+negative under the evaluator's convention. That audit runs at every
+verification level: it is linear in the facets, it decides the winding rather
+than the embedding, and demoting its exact rational arithmetic to floats would
+install an admission gate on a float comparison, which `CLAUDE.md`'s
+reject-only rule forbids.
+
+**Below `VerifyBoundary`, "outward" is the construction's own convention and
+not a geometric reading.** The audits above prove the winding consistent across
+every shared edge and the signed tetrahedron sum positive, and both hold at
+every level. Neither proves the surface embedded, and "seen from outside the
+body" presupposes an embedding, so §1's Embedding row is what carries that word
+(§9).
 
 ## 5. Prism
 
@@ -742,13 +827,30 @@ plane, mapped at `phi0` and `phi1`. They reuse all meridian samples and all
 pole vertices. An on-axis line emits no wall, but its one geometric edge is
 shared by both caps. Full revolutions emit no caps.
 
-After unplaced assembly, preflight §3's cumulative pair-work budget. Audit both
-the ideal-coordinate angularly chorded endpoint and the stored unplaced
-endpoint: every facet is positive-area; adjacent facet interiors meet only on
-their shared vertex/edge paths; every non-adjacent pair is disjoint. Shared
+**Every facet is positive-area under the coordinate displacement this mesh
+carries, at every verification level.** That is §1's Geometry row, it is linear
+in the facets, and a zero-area facet has no normal at all — so the check stands
+on its own, outside the facet-contact audit below and never inside it. It
+compares each facet's exact held area, bracketed from below, against the most a
+displacement of `deltaC + deltaR` at each corner can take from it (§10.2's own
+per-triangle area allowance, read as a gate rather than as a slack term).
+
+The facet-contact audit runs at `VerifyBoundary` and above. After unplaced
+assembly, preflight §3's cumulative pair-work budget — charged only when this
+audit will run — and audit both the ideal-coordinate angularly chorded endpoint
+and the stored unplaced endpoint: adjacent facet interiors meet only on their
+shared vertex/edge paths; every non-adjacent pair is disjoint. Shared
 vertices and shared edges are the only admitted contacts. Isolate every ideal
 endpoint predicate with certified coordinate enclosures from §8; the stored
 endpoint uses the boolean's exact predicates over its binary64 values.
+
+A mesh built at `VerifyNone` declines this audit and states no embedding: it
+sets `BoundaryVerified()` false, publishes no `areaSlack` and no `volSymDiff`,
+and no boolean composes it. It keeps every other row of §1 — the section
+proof, the ring-collapse detection, the closed-mesh or manifold-with-boundary
+audit, the vertex-link audit, the positive-area check above, the signed-volume
+orientation audit, `Bound` and its per-face composition — because none of those
+reads a facet pair.
 
 Then certify the affine construction homotopy from every ideal unplaced vertex
 to its stored unplaced vertex. Run the same positive-area/contact/disjointness
@@ -769,7 +871,8 @@ charge both homotopy audits to §3's cumulative pair-work budget before starting
 them. Together with the meridian proof, they preserve loop nesting, shell and
 component topology, and contact relations through every construction stage.
 
-Before return, build the combinatorial link of every stored mesh vertex: each
+Before return, at every verification level, build the combinatorial link of
+every stored mesh vertex: each
 incident triangle contributes the edge between its other two vertices. Every
 link vertex MUST have degree two and the complete link MUST be one connected
 cycle. More than one cycle at an interned pole is a pinched vertex even when the
@@ -950,9 +1053,21 @@ A payload class whose own occupied-volume proof has not landed may still serve
 export, but the mesh boolean MUST reject that operand with `ErrUnsupported`. It
 MUST NOT fall back to `Mesh.Bound * held area`, for any payload class.
 
+**A mesh built below `VerifyAll` is never a boolean operand**, on the same
+terms: it published no `volSymDiff` at all, so the same gate refuses it with no
+arm of its own. A mesh built below `VerifyBoundary` refuses one step earlier and
+with its own message, naming the declined facet-contact audit rather than
+blaming a missing volume proof on the payload class — §9's audits are
+antecedents to every homotopy above, so an unaudited operand fails for a reason
+the payload-class message would misstate. The boolean tessellates both operands
+at `VerifyAll` itself (step 1), so a caller reaches neither refusal through
+`Union`, `Cut` or `Intersect`; they hold the invariant for any other path to
+the same composition.
+
 Boolean composition then stays evaluator §9's:
 
-1. Tessellate both operands at the evaluator's internal tolerance.
+1. Tessellate both operands at the evaluator's internal tolerance and at
+   `VerifyAll`, passed explicitly rather than taken from the default.
 2. Require a complete `volSymDiff` proof from each mesh.
 3. Use `sourceBound(face)` for the hidden-tangency pre-pass. For a faceted
    operand this is its inherited certified face displacement, or its global
@@ -1016,7 +1131,8 @@ Refuse before returning any partial mesh:
 | free-form section chording past the record's exact-rational work budget (`docs/spline-design.md` R7) or past one curve's chord cap (R8) | `ErrUnsupported`, before the station chain is emitted |
 | faceted request finer than the certified maximum face bound | `ErrUnsupported` |
 | prism request whose tolerance the payload's section displacement exhausts | `ErrUnsupported` |
-| meridian/angular, per-mesh facet, cumulative facet-work, cumulative pair-test, or certified-interval proof budget exceeded; integer size overflow | `ErrUnsupported`, before the refused allocation/audit starts |
+| a `Verification` naming no level of §1 | `ErrUnsupported`, before any chording |
+| meridian/angular, per-mesh facet, cumulative facet-work, cumulative pair-test, or certified-interval proof budget exceeded; integer size overflow | `ErrUnsupported`, before the refused allocation/audit starts. The cumulative pair-test budget is charged, and so can refuse, only at a level that runs the facet-contact audit (§3) |
 | non-finite `rhoMax`, `deltaC`, `deltaR`, sagitta, area slack, source bound, construction/placement allowance, or symmetric-difference allowance | `ErrUnsupported` unless it proves an impossible payload invariant |
 | positive chording budget whose inverse underflows, cannot produce a represented checked count, or exceeds the owning chord cap | `ErrUnsupported` before integer conversion or allocation |
 | recorded on-axis incidence is not exactly one off-axis walk end plus one on-axis line end from the same loop | `ErrDegenerate` |
@@ -1043,6 +1159,8 @@ sample to make an analytic mesh close. Refine or refuse.
 | **T6** | `loftPayload` exact restatement: source-face-preserving wall/cap triangle copy, a proof record carrying the payload's own facet departure `absSumUpper(matchedDelta, maxTwistOffsetUpper)` (zero only when both published terms are zero under loft §5.2's conditions), and mesh-boolean admission | loft surveys and analytic pair clearance |
 | **T7** | `capBlendPayload` export-only tessellation: `docs/tessellation-reach-design.md` §7 owns its cells, proof-record row and refusals | cap-blend mesh-boolean admission, until that document's occupied-volume proof lands |
 | **T8** | `stitchPayload` exact restatement, all-planar case only, CLOSED or OPEN: source-face-preserving triangle copy attributed by the payload's own recorded per-triangle face, a proof record carrying the largest per-face vertex bound and its per-triangle area-slack term, the closed-mesh audit plus its own vertex-link safety net on a CLOSED body, and §1.2's manifold-with-boundary audit on an OPEN one; a zero occupied-volume proof and mesh-boolean admission for a CLOSED body whose every vertex bound is exactly zero | a curved or mixed stitched body's own mesh; mesh-boolean admission for a stitched body carrying any nonzero vertex bound, placed or certificate-welded |
+
+| **T9** | `Verification` and `WithVerification`: the three levels of §1, the cache key that carries the level (§1.1), the facet-contact audit and the two volume-class proofs gated on it, `BoundaryVerified`/`VolumeVerified`, and `STL`/`OBJ` defaulting to `VerifyNone` | a per-audit selection finer than the three levels |
 
 Each increment ships its computed geometry tests with it. §§8–10 prove the
 revolve mesh itself, which is what T2/T3 export; T4's occupied-volume proof is
@@ -1145,6 +1263,22 @@ completion of §2's proof record on `Mesh` they all publish into.
 - Hit each fixed facet/work ceiling exactly and one unit beyond it. Assert the
   over-budget call refuses before allocation or pair testing and repeated
   refinement never resets either cumulative counter.
+- Tessellate one body at one tolerance at `VerifyNone` and at `VerifyAll`;
+  assert the two meshes are vertex- and index-identical and their `Bound` and
+  source faces agree, while `BoundaryVerified` and `VolumeVerified` differ.
+- Assert a tolerance the `VerifyAll` path refuses for the pair ceiling is met
+  by the `VerifyNone` path, and that the refusal names the audit rather than
+  the geometry.
+- Assert the per-facet positive-area check still refuses at `VerifyNone`, shown
+  to fail by deleting the hoisted check.
+- Assert the one-entry cache never answers one level's request with another
+  level's mesh, in both directions, at one tolerance.
+- Assert `Union`, `Cut` and `Intersect` refuse an operand mesh built below
+  `VerifyBoundary` with a message naming the declined audit, and one built at
+  `VerifyBoundary` but below `VerifyAll` with the missing-volume-proof message.
+- Assert `STL` and `OBJ` write a body their own default chord tolerance refuses
+  at `VerifyAll`, and that `WithVerification(VerifyAll)` reinstates that
+  refusal. Assert the bytes are identical wherever both levels succeed.
 
 ## 15. Open implementation choice
 

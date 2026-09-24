@@ -62,6 +62,16 @@ func WithChordTolerance(tol units.Value) STLOBJOption {
 // requested tolerance returns, which cannot be meshed and so cannot be
 // exported.
 //
+// The mesh is built at [VerifyNone] unless [WithVerification] says otherwise:
+// a writer consumes vertices and indices and reads no proof term, so there is
+// nothing here to spend the facet-contact audit or the two volume-class proofs
+// on. The file is still CLOSED — the directed-edge audit runs at every level —
+// but it is not proven free of self-intersection, so a slicer can still meet a
+// shell that crosses itself. Ask for [VerifyAll] to demand that proof, and
+// expect the refusals that come with it: the audit's own work ceiling refuses
+// some ordinary bodies at the very tolerance this writer's default chooses for
+// them.
+//
 // STL writes a [BodySheet] exactly as it writes a solid's mesh — both formats
 // are triangle lists and neither format requires closure — but the file it
 // produces is NOT a solid despite carrying STL's own `solid`/`endsolid`
@@ -109,6 +119,10 @@ func (b *Body) STL(w io.Writer, opts ...STLOption) error {
 // rejection surfaces unchanged — including the [ErrUnsupported] a body whose
 // own payload displacement exhausts the requested tolerance returns, which
 // cannot be meshed and so cannot be exported.
+//
+// The mesh is built at [VerifyNone] unless [WithVerification] says otherwise,
+// on the terms [Body.STL]'s own doc comment states: the written triangle set
+// is closed but not proven free of self-intersection.
 func (b *Body) OBJ(w io.Writer, opts ...OBJOption) error {
 	folded := make([]option.Interface, len(opts))
 	for i, o := range opts {
@@ -132,7 +146,7 @@ func (b *Body) OBJ(w io.Writer, opts ...OBJOption) error {
 }
 
 // exportMesh folds the exporter options and tessellates the body at the
-// chosen — or default — chord tolerance.
+// chosen — or default — chord tolerance and verification level.
 func (b *Body) exportMesh(opts []option.Interface) (*Mesh, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
@@ -160,10 +174,19 @@ func (b *Body) exportMesh(opts []option.Interface) (*Mesh, error) {
 			return nil, err
 		}
 	}
+	// Neither writer reads Bound, areaSlack or volSymDiff, so both default to
+	// VerifyNone and let WithVerification ask for more
+	// (docs/api-design.md §11). The bytes are identical wherever two levels
+	// both succeed: the level changes which proofs are published, never a
+	// vertex, an index or an order.
+	verify, err := foldVerification(opts, VerifyNone)
+	if err != nil {
+		return nil, err
+	}
 	// [Body.STL] and [Body.OBJ] take no context — core §11 gives the export
 	// writers an io.Writer and their options and nothing else — so there is
 	// no caller context to thread here.
-	return b.Tessellate(context.Background(), tol)
+	return tessellateContext(context.Background(), b, tol, verify)
 }
 
 // defaultChordTolerance derives the exporter's default from 1/1000 of the

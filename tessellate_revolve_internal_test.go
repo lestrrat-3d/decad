@@ -224,9 +224,21 @@ func TestRequireVertexLinksRejectsAPinchedVertex(t *testing.T) {
 	require.NoError(t, requireVertexLinks(t.Context(), single))
 }
 
+// auditRevolveFacets runs the two facet audits buildRevolveMesh runs, in its
+// order: the per-facet positive-area check every verification level takes, then
+// the facet-contact audit VerifyBoundary adds on top of it.
+func auditRevolveFacets(t *testing.T, verts []r3.Vec, tris [][3]int, delta float64) error {
+	t.Helper()
+	budget := newWorkBudget(t.Context())
+	data, err := requireRevolveFacetAreas(budget, verts, tris, delta)
+	if err != nil {
+		return err
+	}
+	return revolveContactAudit(budget, data, tris, delta)
+}
+
 func TestRevolveContactAuditRefusesACrossingPair(t *testing.T) {
 	t.Parallel()
-	budget := newWorkBudget(t.Context())
 	// Two triangles sharing nothing and crossing each other: no separating axis
 	// exists, so the audit refuses rather than admitting the pair.
 	verts := []r3.Vec{
@@ -234,7 +246,7 @@ func TestRevolveContactAuditRefusesACrossingPair(t *testing.T) {
 		{X: 0, Y: 1, Z: -1}, {X: 0, Y: 1, Z: 1}, {X: 0, Y: -1, Z: 0},
 	}
 	tris := [][3]int{{0, 1, 2}, {3, 4, 5}}
-	err := revolveContactAudit(budget, verts, tris, 0)
+	err := auditRevolveFacets(t, verts, tris, 0)
 	require.ErrorIs(t, err, ErrUnsupported)
 
 	// Move the second triangle clear and the same pair is proven apart.
@@ -242,15 +254,21 @@ func TestRevolveContactAuditRefusesACrossingPair(t *testing.T) {
 	for i := 3; i < 6; i++ {
 		apart[i].X += 100
 	}
-	require.NoError(t, revolveContactAudit(newWorkBudget(t.Context()), apart, tris, 0))
+	require.NoError(t, auditRevolveFacets(t, apart, tris, 0))
 }
 
-func TestRevolveContactAuditRefusesAFacetThinnerThanItsOwnDisplacement(t *testing.T) {
+// The positive-area check lives OUTSIDE the facet-contact audit, so a mesh
+// built at any verification level takes it (docs/tessellation-design.md §1's
+// Geometry row, §9). This asserts it through its own owner rather than through
+// the pair audit, which is what the split moved it out of.
+func TestRevolveFacetAreaRefusesAFacetThinnerThanItsOwnDisplacement(t *testing.T) {
 	t.Parallel()
 	verts := []r3.Vec{{X: 0}, {X: 1}, {X: 0.5, Y: 1e-12}}
 	tris := [][3]int{{0, 1, 2}}
-	require.NoError(t, revolveContactAudit(newWorkBudget(t.Context()), verts, tris, 0))
-	err := revolveContactAudit(newWorkBudget(t.Context()), verts, tris, 1e-6)
+	data, err := requireRevolveFacetAreas(newWorkBudget(t.Context()), verts, tris, 0)
+	require.NoError(t, err)
+	require.Len(t, data, 1)
+	_, err = requireRevolveFacetAreas(newWorkBudget(t.Context()), verts, tris, 1e-6)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "positive area")
 }
@@ -365,25 +383,25 @@ func TestRevolvePreflightFacetsChargesTheCeilingBeforeAllocating(t *testing.T) {
 	// The facet-pair ceiling is the binding one: F·(F−1)/2 stays inside
 	// maxFacetPairTestsPerCall only up to 4000 facets, which this shape reaches
 	// at n = 666 exactly. One angular step more refuses.
-	require.NoError(t, revolvePreflightFacets([]revLoopMesh{loop}, 666, false, false, &revolveWork{}))
-	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 667, false, false, &revolveWork{}), ErrUnsupported)
-	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 10923, false, false, &revolveWork{}), ErrUnsupported)
+	require.NoError(t, revolvePreflightFacets([]revLoopMesh{loop}, 666, false, false, true, &revolveWork{}))
+	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 667, false, false, true, &revolveWork{}), ErrUnsupported)
+	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 10923, false, false, true, &revolveWork{}), ErrUnsupported)
 
 	// A pole ring fans rather than quads, so its own cell costs half as many
 	// facets per angular step and the same walks admit a finer count.
 	poled := loop
 	poled.samples = []revMeridian{{walk: 0, onAxis: true}, {walk: 1}, {walk: 2}, {walk: 3}}
-	require.NoError(t, revolvePreflightFacets([]revLoopMesh{poled}, 799, false, false, &revolveWork{}))
-	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{poled}, 800, false, false, &revolveWork{}), ErrUnsupported)
+	require.NoError(t, revolvePreflightFacets([]revLoopMesh{poled}, 799, false, false, true, &revolveWork{}))
+	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{poled}, 800, false, false, true, &revolveWork{}), ErrUnsupported)
 
 	// A refinement retry never resets the cumulative counters
 	// (docs/tessellation-design.md §3): the same shape that fits on its own is
 	// refused once an earlier attempt has already spent most of the ceiling.
 	work := &revolveWork{}
-	require.NoError(t, revolvePreflightFacets([]revLoopMesh{loop}, 600, false, false, work))
+	require.NoError(t, revolvePreflightFacets([]revLoopMesh{loop}, 600, false, false, true, work))
 	require.Positive(t, work.facets)
 	require.Positive(t, work.pairs)
-	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 600, false, false, work), ErrUnsupported)
+	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 600, false, false, true, work), ErrUnsupported)
 }
 
 func TestCheckedIntegerArithmeticRefusesOverflow(t *testing.T) {
@@ -487,5 +505,5 @@ func TestRevolveVertexIsolatedDecidesACapFanAgainstTheNextChordWall(t *testing.T
 	// The same pair inside the whole audit, which is where the refusal used to
 	// surface. Facet indices are the audit's own, so the two triangles are
 	// handed to it alone.
-	require.NoError(t, revolveContactAudit(newWorkBudget(t.Context()), verts, [][3]int{triA, triB}, delta))
+	require.NoError(t, auditRevolveFacets(t, verts, [][3]int{triA, triB}, delta))
 }

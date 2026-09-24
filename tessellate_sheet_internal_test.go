@@ -58,13 +58,13 @@ func internalHoledSheetBody(t *testing.T, doc *Document) *Body {
 func TestSheetMeshPublishesNoOccupiedVolumeProof(t *testing.T) {
 	t.Parallel()
 	solid := internalHoledPlateBody(t, New())
-	solidMesh, err := tessellateContext(t.Context(), solid, units.Millimeters(0.5))
+	solidMesh, err := tessellateContext(t.Context(), solid, units.Millimeters(0.5), VerifyAll)
 	require.NoError(t, err)
 	require.True(t, solidMesh.symDiffOK)
 	require.Positive(t, solidMesh.volSymDiff)
 
 	sheet := internalHoledSheetBody(t, New())
-	sheetMesh, err := tessellateContext(t.Context(), sheet, units.Millimeters(0.5))
+	sheetMesh, err := tessellateContext(t.Context(), sheet, units.Millimeters(0.5), VerifyAll)
 	require.NoError(t, err)
 	require.False(t, sheetMesh.symDiffOK)
 	require.Zero(t, sheetMesh.volSymDiff)
@@ -80,11 +80,11 @@ func TestSheetMeshPublishesNoOccupiedVolumeProof(t *testing.T) {
 func TestSheetMeshFaceBoundCoversWallsOnly(t *testing.T) {
 	t.Parallel()
 	solid := internalHoledPlateBody(t, New())
-	solidMesh, err := tessellateContext(t.Context(), solid, units.Millimeters(0.5))
+	solidMesh, err := tessellateContext(t.Context(), solid, units.Millimeters(0.5), VerifyAll)
 	require.NoError(t, err)
 
 	sheet := internalHoledSheetBody(t, New())
-	sheetMesh, err := tessellateContext(t.Context(), sheet, units.Millimeters(0.5))
+	sheetMesh, err := tessellateContext(t.Context(), sheet, units.Millimeters(0.5), VerifyAll)
 	require.NoError(t, err)
 
 	require.Equal(t, len(sheet.Faces()), len(sheetMesh.faceBound), `one faceBound entry per wall, and a sheet carries no cap face`)
@@ -103,11 +103,11 @@ func TestSheetMeshFaceBoundCoversWallsOnly(t *testing.T) {
 func TestSheetAreaSlackIsBelowTheSolidsOnTheHoledFixture(t *testing.T) {
 	t.Parallel()
 	solid := internalHoledPlateBody(t, New())
-	solidMesh, err := tessellateContext(t.Context(), solid, units.Millimeters(0.5))
+	solidMesh, err := tessellateContext(t.Context(), solid, units.Millimeters(0.5), VerifyAll)
 	require.NoError(t, err)
 
 	sheet := internalHoledSheetBody(t, New())
-	sheetMesh, err := tessellateContext(t.Context(), sheet, units.Millimeters(0.5))
+	sheetMesh, err := tessellateContext(t.Context(), sheet, units.Millimeters(0.5), VerifyAll)
 	require.NoError(t, err)
 
 	require.Positive(t, solidMesh.areaSlack)
@@ -126,7 +126,7 @@ func TestSheetAreaSlackIsBelowTheSolidsOnTheHoledFixture(t *testing.T) {
 func TestRequireSheetMeshRejectsBrokenFreeEdgeAttribution(t *testing.T) {
 	t.Parallel()
 	sheet := internalSheetBoxBody(t, New(), 0, 0, 10, 10, 5)
-	mesh, err := tessellateContext(t.Context(), sheet, units.Millimeters(1))
+	mesh, err := tessellateContext(t.Context(), sheet, units.Millimeters(1), VerifyAll)
 	require.NoError(t, err)
 	require.NoError(t, requireSheetMesh(t.Context(), sheet, mesh), `premise: the real mesh passes the audit as built`)
 
@@ -156,7 +156,7 @@ func TestRequireSheetMeshRejectsBrokenFreeEdgeAttribution(t *testing.T) {
 func TestRequireSheetMeshCatchesADuplicatedDirectedEdge(t *testing.T) {
 	t.Parallel()
 	sheet := internalSheetBoxBody(t, New(), 0, 0, 10, 10, 5)
-	mesh, err := tessellateContext(t.Context(), sheet, units.Millimeters(1))
+	mesh, err := tessellateContext(t.Context(), sheet, units.Millimeters(1), VerifyAll)
 	require.NoError(t, err)
 
 	broken := *mesh
