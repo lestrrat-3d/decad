@@ -165,6 +165,40 @@ func TestBooleanContextCancellationLeavesDocumentUnchanged(t *testing.T) {
 	}
 }
 
+// TestBooleanNilContextIsDegenerate pins the guard performBoolean runs before
+// it looks at either operand. A nil context cannot be polled, so every
+// cancellation check downstream would dereference it; the refusal is the same
+// ErrDegenerate Sweep, Stitch, Patch and Unstitch already return for one. The
+// operands stay live and the document is untouched, which is what separates a
+// refusal from a half-run boolean.
+func TestBooleanNilContextIsDegenerate(t *testing.T) {
+	t.Parallel()
+	testcases := []struct {
+		Name string
+		Call func(context.Context, *decad.Body, *decad.Body) (*decad.Body, error)
+	}{
+		{Name: "Union", Call: decad.Union},
+		{Name: "Cut", Call: decad.Cut},
+		{Name: "Intersect", Call: decad.Intersect},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.Name, func(t *testing.T) {
+			doc := decad.New()
+			a := boxBody(t, doc, 0, 0, 10, 10, 10)
+			b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 5, 5, 5)
+			beforeBodies := doc.Bodies()
+
+			// A nil-valued variable rather than an untyped nil literal: the
+			// call under test is exactly the mistake staticcheck's SA1012
+			// forbids writing, so the value has to reach it past that check.
+			var nilCtx context.Context
+			_, err := tc.Call(nilCtx, a, b)
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			require.Equal(t, beforeBodies, doc.Bodies())
+		})
+	}
+}
+
 // boundMM3 reads a volume bound in mm³.
 func boundMM3(t *testing.T, m decad.Measurement) float64 {
 	t.Helper()

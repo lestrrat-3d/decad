@@ -179,6 +179,9 @@ type booleanEvaluation struct {
 // then builds and commits the public result atomically. A failure before the
 // commit leaves the live-body set, and operands unchanged.
 func performBoolean(ctx context.Context, op operationKind, a, b *Body) (*Body, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a boolean`, ErrDegenerate)
+	}
 	if a == nil || a.doc == nil {
 		return nil, fmt.Errorf(`%w: the first operand belongs to no document`, ErrDegenerate)
 	}

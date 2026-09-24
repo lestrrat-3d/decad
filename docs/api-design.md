@@ -763,6 +763,12 @@ through operand tessellation, exact-predicate classification, cutting,
 stitching, mesh audit, and exact volume calculation. Cancellation returns
 `ctx.Err()` unchanged and leaves both operands and the live-body set unchanged.
 
+**A nil context is `ErrDegenerate`, for every operation that takes one.** The
+context is polled rather than merely stored, so a nil one is a caller mistake
+the operation cannot carry out, not a request to run uncancellably; it is
+refused at the entry point, before any operand is examined and before the
+document is touched.
+
 **A boolean failure is typed, because its three failures are three different
 caller actions.** A boolean that produces no body, reaches a valid-model limit
 this evaluator cannot handle, or breaks an internal invariant returns a
