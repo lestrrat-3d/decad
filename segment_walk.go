@@ -958,14 +958,23 @@ func coalesceWalks(walks []sideWalk) []sideWalk {
 }
 
 func coalesceWalksBudget(walks []sideWalk, budget *workBudget) ([]sideWalk, error) {
-	return coalesceWalksWithPoll(func() error { return wallBudgetStep(budget) }, walks)
+	return coalesceWalksWithPoll(func() error { return wallBudgetStep(budget) }, walks, true)
 }
 
 func coalesceWalksContext(ctx context.Context, walks []sideWalk) ([]sideWalk, error) {
-	return coalesceWalksWithPoll(ctx.Err, walks)
+	return coalesceWalksWithPoll(ctx.Err, walks, true)
 }
 
-func coalesceWalksWithPoll(poll func() error, walks []sideWalk) ([]sideWalk, error) {
+// coalesceChainWalksContext is coalesceWalksContext's OPEN-walk counterpart:
+// it merges adjacent collinear segments exactly as a loop's coalescing does,
+// but never wraps the last walk into the first. An open chain's two ends are
+// free — they meet no neighbour to merge into
+// (docs/surface-design.md §13.4).
+func coalesceChainWalksContext(ctx context.Context, walks []sideWalk) ([]sideWalk, error) {
+	return coalesceWalksWithPoll(ctx.Err, walks, false)
+}
+
+func coalesceWalksWithPoll(poll func() error, walks []sideWalk, wrap bool) ([]sideWalk, error) {
 	collinear := func(a, b sideWalk) bool {
 		if !a.isLine() || !b.isLine() {
 			return false
@@ -1003,8 +1012,13 @@ func coalesceWalksWithPoll(poll func() error, walks []sideWalk) ([]sideWalk, err
 		}
 		out = append(out, w)
 	}
-	// Wrap-around: the loop's last walk may continue into its first.
-	for len(out) > 1 && collinear(out[len(out)-1], out[0]) {
+	// Wrap-around: a closed loop's last walk may continue into its first. An
+	// open chain's never does (wrap is false), since its last segment meets
+	// no neighbour at all.
+	for wrap {
+		if len(out) <= 1 || !collinear(out[len(out)-1], out[0]) {
+			break
+		}
 		if poll != nil {
 			if err := poll(); err != nil {
 				return nil, err

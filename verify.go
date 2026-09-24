@@ -1061,6 +1061,13 @@ func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
 		return len(pp.spans) == 0 && !pp.arc && pp.prism.surfaceResult && pp.prism.sectionDelta == 0
 	case revolvePayload:
 		return revolvePayloadProvesSimple(ctx, pp)
+	case chainRevolvePayload:
+		// A chain-fed revolve earns leg 4 on the identical full-turn argument,
+		// re-read over the chain's own open walk through the SAME generic
+		// reading revolvePayloadProvesSimple already takes off rp.profile and
+		// rp.ax — neither of which assumes the walk closes
+		// (docs/surface-design.md §13.4).
+		return revolvePayloadProvesSimple(ctx, pp.revolve())
 	default:
 		return false
 	}

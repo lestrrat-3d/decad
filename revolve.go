@@ -307,7 +307,7 @@ const angFullEps = 1e-12
 // displacement between the two is what every consumer charges, never a
 // reinterpretation of the record. Magnitudes are validated per core §8.1/§12;
 // a zero-angle sweep is ErrDegenerate, as is one past a full turn.
-func (d *Document) resolveAngularExtent(a AngularExtent, st angularStops) (float64, float64, bool, sweepDenotation, []producerID, error) {
+func (d *Document) resolveAngularExtent(a AngularExtent, st angularStops) (float64, float64, bool, sweepDenotation, []producerID, error) { //nolint:unparam // the stop refs have no consumer yet in either caller (Revolve, RevolveChain), matching resolveLinearExtent's own untracked linearSweep.inputs field — dependency tracking for a ToFaceAngular stop is not wired to the document.
 	var phi0, phi1 float64
 	var den sweepDenotation
 	var refs []producerID
@@ -432,4 +432,166 @@ func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float
 	default:
 		return 0, angleDenotation{}, nil, fmt.Errorf(`%w: side angular %T is not supported by this evaluator`, ErrUnsupported, s)
 	}
+}
+
+// This section is RevolveChain of docs/surface-design.md §13: the open
+// sketch chain's own spin into a shell with no cap. It reuses
+// revolve_axis.go's axis resolution and revolve_build.go/revolve_extent.go's
+// per-kind wall construction and extent readings unchanged — the same
+// evaluator Revolve runs, over an open rather than a closed walk — and reads
+// its recorded walk through RecordChain (seam.go) rather than RecordProfile.
+
+// ChainRevolveOption configures RevolveChain. It is its own sealed tier,
+// exactly as [ChainExtrudeOption] is (docs/surface-design.md §13.2):
+// WithSurfaceResult() does not implement it, so the compiler refuses that
+// option outright rather than accepting it as a no-op — a chain-fed revolve
+// always returns a sheet. No option is a member of this tier yet; it exists
+// so a later chain-only option has a tier to land on.
+type ChainRevolveOption interface {
+	option.Interface
+	chainRevolveOption()
+}
+
+// chainRevolvePayload is RevolveChain's own record of a shell body: the
+// recorded open walk, the plane frame, the oriented plane-local axis, the
+// sweep interval, and the accumulated rigid placement — chainRevolvePayload
+// is to RevolveChain what chainPayload is to ExtrudeChain, and what
+// revolvePayload is to Revolve (docs/surface-design.md §13.4).
+type chainRevolvePayload struct {
+	chain      ChainRecord
+	frame      r3.Frame
+	ax         axisFrame
+	phi0, phi1 float64
+	full       bool
+	den        sweepDenotation
+	xform      r3.Transform
+}
+
+// revolve is a *view* of rp as a revolvePayload wrapping the chain's own
+// segment list as an unclosed "outer loop" with no holes — never a body this
+// evaluator builds from directly — used only to feed the axis, sweep and
+// extent readings revolvePayload already proves generically over rp.profile:
+// none of them assumes the loop closes (docs/surface-design.md §13.4).
+// surfaceResult stays false and is read nowhere below: RevolveChain never
+// runs revolvePayload's own solid/cap topology, only its own open-walk build
+// (buildChainRevolveWalls).
+func (rp chainRevolvePayload) revolve() revolvePayload {
+	return revolvePayload{
+		profile: ProfileRecord{Outer: LoopRecord(rp.chain)},
+		frame:   rp.frame,
+		ax:      rp.ax,
+		phi0:    rp.phi0, phi1: rp.phi1,
+		full:  rp.full,
+		den:   rp.den,
+		xform: rp.xform,
+	}
+}
+
+// transform is the accumulated rigid placement.
+func (rp chainRevolvePayload) transform() r3.Transform { return rp.xform }
+
+// placed re-evaluates the same record under the composed motion (core §8). A
+// re-evaluation path: no preflight has run on this record within the call, so
+// the build opens the record's one free-form work counter itself
+// (docs/spline-design.md §5.2), exactly as revolvePayload.placed does.
+func (rp chainRevolvePayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+	rp.xform = composed
+	return evalChainRevolveContext(ctx, d, ref, rp, newFreeformWork())
+}
+
+// RevolveChain spins the open chain ch of sketch s about axis per the
+// angular extent a, and registers the new shell body. ch MUST be a chain of s
+// (ErrForeignProfile) and a current, unaltered snapshot (ErrStaleProfile or
+// ErrInvalidProfile); an invalid or self-intersecting chain is also
+// ErrInvalidProfile, and a walk decad cannot record exactly is
+// ErrUnrecordableProfile (docs/sketch-seam-design.md §2.2). The axis must be
+// non-degenerate and coplanar with the sketch plane, and the walk must lie in
+// one closed half-plane of it, exactly as Revolve's own profile does
+// (docs/evaluator-design.md §6). A chain free end lying ON the resolved axis
+// is ErrUnsupported (Table R, R22), staged rather than permanent: the
+// existing axis-incidence audit needs each on-axis point to carry one
+// off-axis walk end and one LineSeg end along the axis, and a free end offers
+// no partner. The result is always a sheet — Kind() == BodySheet — one
+// swept wall per recorded segment (docs/surface-design.md §13.4, Table G),
+// with no cap and no closing face: WithSurfaceResult() does not compile
+// against this call. A full revolution of the chain is still OPEN: its two
+// free ends sweep two circles nothing fills, so the result carries exactly
+// two free edges rather than closing the way a full-turn profile revolve
+// does. A failed evaluation leaves the document untouched.
+func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent, opts ...ChainRevolveOption) (*Body, error) {
+	if d == nil {
+		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
+	}
+	for _, o := range opts {
+		if o == nil {
+			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+		}
+	}
+
+	chain, plane, err := recordChain(s, ch)
+	if err != nil {
+		return nil, err
+	}
+
+	axis, err = normalizeAxis(axis)
+	if err != nil {
+		return nil, err
+	}
+	evalAxis := axis
+	if ea, ok := axis.(EdgeAxis); ok {
+		line, err := d.resolveEdgeAxis(ea)
+		if err != nil {
+			return nil, err
+		}
+		evalAxis = line
+	}
+
+	a, err = normalizeAngularExtent(a)
+	if err != nil {
+		return nil, err
+	}
+
+	frame, err := r3.NewFrame(plane.Origin, plane.U, plane.V)
+	if err != nil {
+		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
+	}
+	line, err := axisInPlane(evalAxis, frame)
+	if err != nil {
+		return nil, err
+	}
+
+	// ONE free-form work counter for this whole call, exactly as Revolve
+	// opens for its own profile-fed build (docs/spline-design.md §5.2): the
+	// axis gates below, the chain wall build and the final bounds reading all
+	// spend from the same ceiling.
+	work := newFreeformWork()
+	chainProfile := ProfileRecord{Outer: LoopRecord(chain)}
+	ax, side, err := resolveAxisSide(context.Background(), chainProfile, line, work)
+	if err != nil {
+		return nil, err
+	}
+	phi0, phi1, full, den, _, err := d.resolveAngularExtent(a, d.angularStopCtx(frame, line, ax))
+	if err != nil {
+		return nil, err
+	}
+	if side < 0 {
+		phi0, phi1 = -phi1, -phi0
+		den.phi0, den.phi1 = den.phi1.neg(), den.phi0.neg()
+	}
+
+	ref := d.nextProducerID()
+	body, err := evalChainRevolveContext(context.Background(), d, ref, chainRevolvePayload{
+		chain: chain,
+		frame: frame,
+		ax:    ax,
+		phi0:  phi0, phi1: phi1,
+		full:  full,
+		den:   den,
+		xform: r3.Identity(),
+	}, work)
+	if err != nil {
+		return nil, err
+	}
+	d.commit(body)
+	return body, nil
 }
