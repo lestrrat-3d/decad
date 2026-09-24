@@ -14,7 +14,7 @@ Companion contracts remain authoritative for their existing areas:
 - `docs/verification-design.md` owns report meaning and tolerance gates;
 - `docs/spline-design.md` owns free-form profile-segment reach.
 
-Four tables are normative:
+Five tables are normative:
 
 | Table | States | Section |
 |---|---|---|
@@ -22,6 +22,7 @@ Four tables are normative:
 | **S** | refusals and their sentinels | §5 |
 | **B** | payload, topology, faces, and roles | §8 |
 | **D** | downstream coverage and staging | §10 |
+| **SC** | what refuses a chain sweep | §15.4 |
 
 ## 1. Scope
 
@@ -60,6 +61,13 @@ The following remain outside this design:
 direct operation for one angular span. `Sweep` does not infer either operation
 from approximate input; its evaluator may reduce an admitted path segment to
 their existing builders internally.
+
+**`Document.Sweep` takes a closed profile and always will. The OPEN sketch
+chain is `Document.SweepChain`, a separate entry point, and §15 owns it** —
+its pairing rule, signature, refusals, result and staging. Everything §1
+through §14 states about the path, the transport, the span builders and the
+global audit is what that section consumes; what it replaces is the section
+alone.
 
 ## 2. Public API
 
@@ -495,8 +503,199 @@ Landing this design makes these contract edits:
 - the implementation increment that adds `sweepPayload` adds its row to
   tessellation and payload-verification tables in the same change;
 - `doc.go` changes only when an implementation increment changes current
-  evaluator support.
+  evaluator support;
+- `docs/surface-design.md` §1.2, §13.5, Table R and Table D name §15 as the
+  owner of `SweepChain`'s pairing rule, and its §15 carries §15.7's test rows.
 
 No current dependency exposes a 3D sketch. This design consumes none. A future
 adapter is a separate design change after an upstream spatial-path snapshot and
 its certification contract exist.
+
+## 15. `SweepChain` — sweeping an open sketch chain
+
+`docs/surface-design.md` §13 owns the open chain itself: what `sketch.Chain`
+publishes, what `ChainRecord` records, the gates `RecordChain` runs, the four
+seam sentinels every chain-fed entry point reuses, and Table G's per-segment
+wall set. That document left exactly one question here (§13.5) — whether this
+document's composite join topology states a pairing rule for an open walk.
+
+**It does.** §15.1 states why the rule survives, §15.2 states which paths need
+no rule at all, and §15.3 through §15.7 state the entry point, the refusals,
+the result and the staging that follow.
+
+### 15.1 The join pairs by recorded-segment index, and the loop is not what makes that true
+
+**A composite sweep pairs two adjacent spans' rim edges by POSITION in the
+recorded section.** It reads no winding, no closure, no coordinate and no
+proximity. The two sections meeting at a join are the ONE recorded section
+under two rigid motions, so element `i` of the first denotes the same recorded
+generator as element `i` of the second. That identity is the whole content of
+the pairing, and §8's internal section edge is what it produces.
+
+**A `ChainRecord` states that index exactly as a `LoopRecord` does.**
+`ChainRecord.Segments` is an ordered list over the same ten sealed
+`CurveSegment` variants, in `sketch`'s own published walk order
+(`docs/surface-design.md` §13.1, §13.3). Two adjacent chain spans transport
+that one list, so segment `j`'s terminal rim edge on span `k` pairs with
+segment `j`'s initial rim edge on span `k+1`. The rule needs no new proof
+because it consumes no new fact: a shared record, not a shared winding, is
+what makes index `i` mean one thing on both sides.
+
+**What the loop supplies and the walk does not is the WRAP, and dropping it
+mints free ends rather than breaking the pairing.** A closed section of `n`
+segments carries `n` rim posts, each shared by the two walls that meet there;
+an open walk of `n` segments carries `n+1`, of which post `0` and post `n` are
+touched by one wall each. So a chain join sews `n` rim edges and `n+1` rim
+vertices where a profile join sews `n` and `n`, by the same index in both
+lists. `buildChainSides` (`extrude.go`) already mints that post set for one
+span, and `docs/surface-design.md` §13.3 states the same drop for a chain
+revolve's own two free ends.
+
+**What the loop supplies and the walk does not is a CAP FACE, and that is an
+implementation seam rather than a proof.** The composite build reads each
+span's two rim lists off that span's `capStart` and `capEnd` face loops and
+refuses a span carrying neither. A chain-fed span mints no cap at all
+(`docs/surface-design.md` §13.4), so the increment that builds one reads its
+two rim lists off the span's WALL faces instead — wall `j`'s own start rim
+edge and end rim edge, in recorded-segment order. That is the identical index,
+reached through the face an open walk does have.
+
+**The separation certificate carries over unchanged.** §7's adjacent-span rule
+requires each span's material to be certified on its own side of the shared
+section plane. It reads the span's analytic extent along that plane's normal
+and the span's own endpoint-supporting-plane property, and neither reading asks
+whether the section closes: a chain prism span supplies both through
+`chainPayload.prism`'s `prismPayload` view, and a chain arc span through
+`chainRevolvePayload.revolve`'s `revolvePayload` view. The non-neighbour rule
+is a bounded-box separation and reads no section at all. The topology audit
+that follows the sew already admits a free rim edge — it requires one or two
+incident faces per edge and a vertex link that is one cycle or one path — so a
+chain span's own free rims pass it for the reason a surface result's two
+omitted outer caps already do.
+
+**What the join does NOT inherit is a solid.** Every profile-fed span builds
+closed and the two outer caps are dropped afterwards, which is why a
+surface-result composite sweep still carries two cap roles through the pairing.
+Every chain span publishes `BodySheet` from its own first face, so the
+increment that builds a composite chain sweep pairs two sheets at every join
+and never a temporary solid.
+
+### 15.2 A one-span chain sweep states no join at all
+
+A path of one span has no internal join, so §15.1's rule has nothing to
+decide there. The whole build is the recorded walk transported over that one
+span:
+
+- a **`LineTo`** span is the chain prism `Document.ExtrudeChain` already
+  builds, over the path's own signed height instead of a resolved `Extent`;
+- an **`ArcThrough`** span is the chain shell `Document.RevolveChain` already
+  builds, over the arc's exact centre, axis and directed angle instead of a
+  resolved `AngularExtent`.
+
+Both constructions are landed (`docs/surface-design.md` Table D row 6), so a
+one-span `SweepChain` was never waiting on a pairing rule. It was waiting on
+this section to say so, and on Table SC to state which path shapes it admits.
+
+**The two reductions are not the same call as their chain siblings, and the
+difference is the height.** `ExtrudeChain` takes its interval from an `Extent`
+the document resolves; a straight chain sweep takes it from the path's two
+recorded points, so the interval carries `validateStraightSweepPath`'s own
+composed bound — the square root's committed error against the exact rational
+squared length, plus the per-component departure of the held sweep vector from
+the exact tangent. On an axis-aligned frame every one of those terms is zero
+and the two calls publish bit-identical measurements; on any other frame the
+chain sweep's `Area` is `Approximate` where the same walk's `ExtrudeChain`
+reading may not be.
+
+### 15.3 The entry point
+
+```go
+func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch,
+    ch *sketch.Chain, path *Path, opts ...ChainSweepOption) (*Body, error)
+
+// ChainSweepOption configures SweepChain. It is its own sealed tier.
+type ChainSweepOption interface { /* sealed */ }
+```
+
+**`ChainSweepOption` is a sealed tier of its own rather than `SweepOption`**,
+for the reason `docs/surface-design.md` §13.2 states for `ChainExtrudeOption`
+and `ChainRevolveOption`: `WithSurfaceResult()` must not compile against a
+chain-fed call. A chain sweep is always a sheet — an open walk encloses no
+region, so there is no cap to omit and no solid to ask for — and accepting the
+option as a no-op would give one option two meanings. `WithSweepTwist` is not a
+member either: a nonzero twist is S11 for a profile-fed sweep, and a chain
+inherits that staging rather than a second spelling of it. The tier carries no
+member in this increment; it exists so a later chain-only option has one to
+land on. The rejected alternative is the `SweepOption` tier the staged
+signature first landed with, which type-checks `WithSurfaceResult()` against a
+call that can never honour it.
+
+The call takes `ctx` because `Document.Sweep` does, and takes the sketch beside
+the chain because a chain's geometry is plane-local and the plane is the
+sketch's (`docs/api-design.md` §7).
+
+**A chain-fed result is always a sheet**, which is `docs/surface-design.md`
+§13.2's answer for `ExtrudeChain` and `RevolveChain` restated with no change:
+`Kind()` is `BodySheet` by construction, `IsSolid()` is `false`, and
+`Volume()`/`Centroid()` answer `ErrNotSolid` by KIND rather than by soundness.
+
+### 15.4 Table SC — what refuses a chain sweep
+
+Every row lands on `docs/api-design.md` §12's existing vocabulary, and no row
+mints a sentinel of its own. Gate order is §5's, with its step 2 reading a
+chain through `RecordChain` instead of a profile through `RecordProfile`.
+
+| SC | Condition | Sentinel |
+|---|---|---|
+| **SC1** | a nil document, context, sketch, chain or path; an empty path; a nil or foreign option | `ErrDegenerate` |
+| **SC2** | the chain fails one of `docs/surface-design.md` §13.3's gates | the seam's own: `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` |
+| **SC3** | the path start is not in the sketch plane, or its initial tangent is not codirectional with that plane's positive normal | `ErrDegenerate`, S5's rule over a chain's own recorded plane |
+| **SC4** | every path condition S3, S4, S7 and S13 through S15 already state — a non-finite point, a degenerate segment, a closed path, a non-finite derived bound, an exhausted budget, a collapse from computed-coordinate rounding | those rows' own sentinels, unchanged |
+| **SC5** | an internal path join is not tangent | `ErrUnsupported`, S6 |
+| **SC6** | a recorded chain segment outside the line, circle and arc set the span builders admit | `ErrUnsupported`, S10 |
+| **SC7** | a composite path, before the increment that builds §15.1's join | `ErrUnsupported` |
+| **SC8** | an arc span the chain shell refuses — a walk that does not lie in one closed half-plane of the arc axis, both free ends on that axis, or an interior on-axis junction | exactly what `RevolveChain` answers: `ErrDegenerate`, or `ErrUnsupported` under `docs/surface-design.md` R22 and R33 |
+| **SC9** | `SweepChain` in every increment before the one that builds the case asked for | `ErrUnsupported`, `docs/surface-design.md` R23 |
+
+**SC2 is decided before SC3, and that order is load-bearing.** A foreign,
+stale, invalid or unrecordable chain names a repair the caller makes in the
+sketch, and reporting a path refusal first would hide it behind geometry the
+caller cannot act on. It is also what keeps a staged `ErrUnsupported` from
+masking a seam refusal, which is the order the staged signature already runs.
+
+### 15.5 What a chain sweep publishes
+
+| Reading | A chain sweep |
+|---|---|
+| `Kind()` | `BodySheet`, always and by construction — a decided enum carrying no bound |
+| `IsSolid()` | `false`, always |
+| `Volume()`, `Centroid()` | `ErrNotSolid`, by kind |
+| faces | one wall per recorded segment per path span, after the rim coalescing `Extrude` already runs — `docs/surface-design.md` Table G's own per-kind construction, never a cap and never a closing face |
+| `Edges(Free())` | both rims of the walk over every span, plus the one sweep edge at each of the walk's two free ends; a one-span straight sweep of an `n`-segment walk resolves `2n + 2` |
+| `Area` | the sum of each wall's own area through `boundedAdd`. A straight span's wall is `boundedMul(segment length, span height)`, the height carrying §15.2's composed path bound; an arc span's is `boundedMul(walkAxisMoment, sweep)` on `docs/surface-design.md` §13.4's own terms. A circular wall carries its proven integral enclosure and a free-form wall `spline_length.go`'s proven bracket |
+| `Bounds` | the recorded walk's per-segment analytic extremes swept over the span's signed interval, from `prism_extent.go` and `revolve_extent.go` verbatim, charging the frame and placement rounding those readings already charge |
+| `Verify`'s validity | exactly what an `ExtrudeChain` ribbon or a `RevolveChain` shell over the same recorded walk and interval reads (`docs/surface-design.md` §13.4, §9.1). A composite chain sweep reads `ValidityUndecided`, for D1's own reason: the assembled topology audit proves how the spans sew together, never that the swept walls do not fold back through one another |
+
+No bound in that table is new, because no geometry is: every wall is built by
+the per-segment construction its chain sibling already proves, and the one term
+a chain sweep adds that neither sibling has is §15.2's path height bound.
+
+### 15.6 Increments
+
+| PR | Lands | Still staged |
+|---|---|---|
+| **C1** | `Document.SweepChain` over a one-span `LineTo` path: the sealed `ChainSweepOption` tier, Table SC rows SC1 through SC4, SC6 and SC7, the chain prism reduction, and the four readings §15.5 states for it | the arc reduction, every composite path, D2 through D8 |
+| **C2** | the one-span `ArcThrough` reduction with the chain shell's own axis gates (SC8) | every composite path |
+| **C3** | §15.1's composite join over a tangent line/arc path: the wall-face rim lists, the sew, the separation certificate over chain spans, and the assembled boundary audit | D2 through D8 for a chain sweep |
+
+Every downstream row of Table D reads a chain sweep exactly as it reads a
+profile-fed one, and each stays staged on its own terms: a chain sweep's mesh
+is `ErrUnsupported` until D2 lands, and the modify operations have no receiver
+row for it (D8).
+
+### 15.7 Required tests
+
+Each row asserts on computed geometry, and each bound assertion is shown to
+fail before it is trusted. `docs/surface-design.md` §15 carries the rows
+themselves, as T190 onward, so the obligations sit beside every other
+chain-fed obligation rather than in two places.
