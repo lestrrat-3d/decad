@@ -10,10 +10,9 @@ import (
 // This file is docs/tessellation-reach-design.md §4 (docs/tessellation-design.md
 // §13's increment T6): the loftPayload EXACT RESTATEMENT. A loft body already
 // holds the complete, globally oriented triangle set its construction built and
-// its §6 crossing audit classified, so the tessellation copies that set and its
-// source faces and publishes the proof record the payload composed for the same
-// triangles. It chords nothing, retriangulates nothing, welds nothing and moves
-// no coordinate.
+// its §6 crossing audit classified. A solid copies that set; a sheet copies its
+// recorded wall range and omits the cap ranges. Both preserve the held wall
+// triangles and their source faces without chording, retriangulation or motion.
 
 // tessellateLoft restates a lofted body's held triangle set as a Mesh
 // (docs/tessellation-design.md §2's "loftPayload exact restatement", §4's
@@ -32,14 +31,14 @@ import (
 // step already turned every triangle outward from the signed tetrahedron sum,
 // and placed re-runs that step on the placed triangle set, so §4's "a reflected
 // placement reverses every final triangle once" rule is discharged by the
-// payload and repeating it would reverse a mirrored shell twice. The audit below
-// is what holds that claim to account rather than assuming it.
+// payload and repeating it would reverse a mirrored shell twice. The signed
+// orientation audit below applies to the closed solid; the sheet takes its
+// winding from that same whole-shell build before the caps are omitted.
 //
-// The two audits are the payload's own invariants restated over the copied set,
-// so failing either can only mean a payload that never passed §6's audit reached
-// this path. Both refuse with ErrUnsupported (docs/tessellation-design.md §12)
-// and return no partial mesh. A missing source role is ErrDegenerate instead —
-// §4's rule — because there the body's live topology contradicts its own payload.
+// A solid runs closure and signed-volume orientation audits. An open sheet runs
+// the manifold-with-boundary and vertex-link audits instead: the signed sum is
+// anchor-dependent without caps and cannot decide orientation. A missing source
+// role is ErrDegenerate because the live topology contradicts its payload.
 func tessellateLoft(ctx context.Context, b *Body, lp loftPayload) (*Mesh, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -52,7 +51,7 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload) (*Mesh, error)
 	// buildLoftTopology built from them (docs/evaluator-design.md §3): one
 	// side(i,j,k) face per wall triangle — a loft coalesces no wall, so the two
 	// halves of a cell keep their two distinct faces even when coplanar
-	// (docs/tessellation-design.md §4) — plus the two caps.
+	// (docs/tessellation-design.md §4). A sheet carries no cap role.
 	byRole := map[string]*Face{}
 	for _, f := range b.Faces() {
 		for _, o := range f.Origins() {
@@ -66,17 +65,29 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload) (*Mesh, error)
 		}
 		return f, nil
 	}
-	capStart, err := faceOfRole(roleCapStart)
-	if err != nil {
-		return nil, err
-	}
-	capEnd, err := faceOfRole(roleCapEnd)
-	if err != nil {
-		return nil, err
+	sheet := b.Kind() == BodySheet
+	var capStart, capEnd *Face
+	if !sheet {
+		var err error
+		capStart, err = faceOfRole(roleCapStart)
+		if err != nil {
+			return nil, err
+		}
+		capEnd, err = faceOfRole(roleCapEnd)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	budget := newWorkBudget(ctx)
-	src := make([]*Face, len(lp.tris))
+	// The payload records walls first, then capStart, then capEnd. Dropping
+	// exactly the latter two ranges uses that provenance rather than testing
+	// a triangle's coordinates against a section plane.
+	triangles := lp.tris
+	if sheet {
+		triangles = lp.tris[:lp.walls]
+	}
+	src := make([]*Face, len(triangles))
 	for k := range lp.walls {
 		if err := budget.step(); err != nil {
 			return nil, err
@@ -87,11 +98,13 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload) (*Mesh, error)
 		}
 		src[k] = f
 	}
-	for k := lp.walls; k < lp.walls+lp.capStartCount; k++ {
-		src[k] = capStart
-	}
-	for k := lp.walls + lp.capStartCount; k < len(lp.tris); k++ {
-		src[k] = capEnd
+	if !sheet {
+		for k := lp.walls; k < lp.walls+lp.capStartCount; k++ {
+			src[k] = capStart
+		}
+		for k := lp.walls + lp.capStartCount; k < len(lp.tris); k++ {
+			src[k] = capEnd
+		}
 	}
 	if err := budget.err(); err != nil {
 		return nil, err
@@ -102,11 +115,23 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload) (*Mesh, error)
 	// through one would rewrite the body's boundary.
 	mesh := &Mesh{
 		vertices:  append([]r3.Vec(nil), lp.verts...),
-		triangles: append([][3]int(nil), lp.tris...),
+		triangles: append([][3]int(nil), triangles...),
 		source:    src,
 	}
-	if err := publishLoftMeshProof(mesh, lp.proof); err != nil {
+	if err := publishLoftMeshProof(mesh, lp.proof, !sheet); err != nil {
 		return nil, err
+	}
+	if sheet {
+		// The payload's areaSlack includes nonnegative cap allowances. They
+		// conservatively cover the wall-only mesh without subtracting an
+		// unproven cap contribution. A sheet publishes no volume proof.
+		if err := requireSheetMesh(ctx, b, mesh); err != nil {
+			return nil, err
+		}
+		if err := requireSheetVertexLinks(ctx, mesh); err != nil {
+			return nil, err
+		}
+		return mesh, nil
 	}
 	if err := requireClosedMesh(mesh); err != nil {
 		return nil, fmt.Errorf(`%w: the loft payload's held triangle set is not a closed mesh, so it restates no boundary`, ErrUnsupported)
@@ -144,10 +169,10 @@ func requireLoftTriangleSplit(lp loftPayload) error {
 	return nil
 }
 
-// publishLoftMeshProof writes docs/tessellation-design.md §2's three private
-// proofs onto the restated mesh, unchanged from the payload's own composition:
-// the restatement introduces no displacement of its own, so every term the mesh
-// states is the term the payload already carries for the same triangles.
+// publishLoftMeshProof writes the payload's boundary and area proofs onto the
+// restated mesh. The solid also publishes its occupied-volume proof. A sheet's
+// areaSlack may include cap allowances, all nonnegative, so it remains a bound
+// on the retained wall triangles without a new subtraction.
 //
 // sourceBound is that facet departure for EVERY face, and Bound with it, since
 // each face's facets are exactly the payload's triangles for it. A zero is
@@ -156,20 +181,21 @@ func requireLoftTriangleSplit(lp loftPayload) error {
 // boolean's all-planar zero-bound path; every other loft is an ordinary
 // positive-bound operand.
 //
-// A non-finite term refuses (docs/tessellation-design.md §12) before any of the
-// three is published: an absent proof must never reach a consumer as a bound,
-// and volSymDiff in particular would otherwise be composed into a boolean
-// result's own volume error.
-func publishLoftMeshProof(m *Mesh, p loftMeshProof) error {
-	if isNonFinite(p.facetDeparture) || isNonFinite(p.areaSlack) || isNonFinite(p.volSymDiff) {
-		return fmt.Errorf(`%w: the loft payload states no finite proof of how far its held facets, their area, or the volume they enclose sit from the boundary they stand for`, ErrUnsupported)
+// A non-finite published term refuses (docs/tessellation-design.md §12): an
+// absent proof must never reach a consumer as a bound. The sheet never
+// publishes volSymDiff, so its value does not gate sheet export.
+func publishLoftMeshProof(m *Mesh, p loftMeshProof, solid bool) error {
+	if isNonFinite(p.facetDeparture) || isNonFinite(p.areaSlack) || (solid && isNonFinite(p.volSymDiff)) {
+		return fmt.Errorf(`%w: the loft payload states no finite proof for a required mesh bound`, ErrUnsupported)
 	}
 	for _, f := range m.source {
 		m.setFaceBound(f, p.facetDeparture)
 	}
 	m.bound = p.facetDeparture
 	m.areaSlack = p.areaSlack
-	m.volSymDiff = p.volSymDiff
-	m.symDiffOK = true
+	if solid {
+		m.volSymDiff = p.volSymDiff
+		m.symDiffOK = true
+	}
 	return nil
 }
