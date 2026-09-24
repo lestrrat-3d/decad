@@ -487,13 +487,18 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 }
 
 func pairGapMeasurement(res pairResult) Measurement {
+	midpoint := boundedMul(boundedAdd(exactScalar(res.lo), exactScalar(res.hi)), exactScalar(0.5))
+	halfWidth := boundedMul(boundedSub(exactScalar(res.hi), exactScalar(res.lo)), exactScalar(0.5))
+	// The midpoint error and the half-width's own error both widen the
+	// published interval. The same bound feeds appendClearance's tolerance gate.
+	bound := absSumUpper(halfWidth.value, halfWidth.bound, midpoint.bound)
 	gap := Measurement{
-		Value:     units.Millimeters((res.lo + res.hi) / 2),
-		Exactness: Exact,
-		Bound:     units.Millimeters((res.hi - res.lo) / 2),
+		Value:     units.Millimeters(midpoint.value),
+		Exactness: Approximate,
+		Bound:     units.Millimeters(bound),
 	}
-	if !res.exact {
-		gap.Exactness = Approximate
+	if res.exact && bound == 0 {
+		gap.Exactness = Exact
 	}
 	return gap
 }

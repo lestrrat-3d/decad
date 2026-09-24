@@ -283,6 +283,8 @@
 1	0.00	TestAtanSmallIntervalDegenerateArguments
 1	0.00	TestBezierSliceCountSplitsBrokenFromUnsliceable
 1	0.00	TestBodyGateDiameterCancellation
+1	0.00	TestPairGapMeasurementEnclosesProvenInterval
+1	0.00	TestPairGapMeasurementChargeReachesToleranceGate
 1	0.00	TestBodyGateDiameterDisplacedPrismShrinksByTwiceTheSum
 1	0.01	TestBodyGateDiameterExactCarrierArmNeverOverstates
 1	0.04	TestBodyGateDiameterFreeformArmAnswersHandComputedMaximum

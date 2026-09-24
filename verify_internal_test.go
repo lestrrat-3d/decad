@@ -12,6 +12,53 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestPairGapMeasurementEnclosesProvenInterval(t *testing.T) {
+	t.Parallel()
+	next := math.Nextafter(1, math.Inf(1))
+	afterNext := math.Nextafter(next, math.Inf(1))
+	for _, tc := range []struct {
+		name   string
+		lo, hi float64
+	}{
+		{"upper endpoint", 1, next},
+		{"lower endpoint", next, afterNext},
+		{"wide interval", 0.1, 1},
+		{"subnormal half-width", math.SmallestNonzeroFloat64, 2 * math.SmallestNonzeroFloat64},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gap := pairGapMeasurement(pairResult{lo: tc.lo, hi: tc.hi})
+			value, bound := gap.Value.Base(), gap.Bound.Base()
+			require.LessOrEqual(t, value-bound, tc.lo,
+				"the published lower end must contain the proven lower end")
+			require.GreaterOrEqual(t, value+bound, tc.hi,
+				"the published upper end must contain the proven upper end")
+			require.Positive(t, bound)
+			require.Equal(t, Approximate, gap.Exactness)
+			t.Logf("proven [%g, %g]; published value %.17g bound %.17g; interval [%.17g, %.17g]",
+				tc.lo, tc.hi, value, bound, value-bound, value+bound)
+		})
+	}
+
+	point := pairGapMeasurement(pairResult{lo: 1, hi: 1, exact: true})
+	require.Equal(t, 1.0, point.Value.Base())
+	require.Zero(t, point.Bound.Base())
+	require.Equal(t, Exact, point.Exactness)
+	inconsistent := pairGapMeasurement(pairResult{lo: 1, hi: next, exact: true})
+	require.Equal(t, Approximate, inconsistent.Exactness,
+		"the kernel's exact flag cannot turn a nonzero rounding bound into Exact")
+}
+
+func TestPairGapMeasurementChargeReachesToleranceGate(t *testing.T) {
+	t.Parallel()
+	res := pairResult{lo: 1, hi: math.Nextafter(1, math.Inf(1)), diam: 1}
+	report := &Report{}
+	diag := appendClearance(report, nil, nil, res, 1.5e-16)
+	require.Len(t, report.Clearances, 1)
+	require.NotNil(t, diag, "the charged gap width must reach the tolerance gate")
+	require.Equal(t, DiagMeasurementBeyondTolerance, diag.Code)
+	require.Equal(t, ReadingGap, diag.Reading)
+}
+
 func TestBodyGateDiameterCancellation(t *testing.T) {
 	t.Parallel()
 	doc := New()

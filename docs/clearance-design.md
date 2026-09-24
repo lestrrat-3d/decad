@@ -33,9 +33,13 @@ everywhere it does not look (§5), proves a minimum.
 candidate's.** Every candidate distance the kernel computes is carried as a
 proven interval `[lo, hi]` — degenerate (`[v, v]`) when the candidate is
 closed-form, a certified bracket otherwise (§4/§5). The gap over a candidate
-set is the minimum of intervals: `Gap ∈ [min lo_i, min hi_i]`. The row reports
-`Value = (lo + hi)/2`, `Bound = (hi − lo)/2`, and `Exact` exactly when the
-interval is a point — which requires not just a closed-form winner but every
+set is the minimum of intervals: `Gap ∈ [min lo_i, min hi_i]`. The ideal
+midpoint is `(lo + hi)/2` and the ideal half-width is `(hi − lo)/2`. The row
+reports the computed midpoint and an outward bound covering the ideal
+half-width, midpoint rounding, and bound accumulation rounding. Halving is
+exact when its result is representable; the charged arithmetic also covers
+subnormal underflow. `Exact` requires a point interval and a zero charged
+bound — which requires not just a closed-form winner but every
 bracketed rival proven to sit at or above it (`lo_j ≥` the winner's value). A
 rival whose bracket straddles the winner keeps the answer honest-`Approximate`
 at the bracket's width, never blessed by the winner's pedigree.
