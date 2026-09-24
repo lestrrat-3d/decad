@@ -2536,7 +2536,7 @@ bodies remain live and retain their original measurements.
 
 | T190 | T130's single 40 mm line chain, `SweepChain` along a one-span `LineTo` path from the sketch plane's origin 10 mm along its positive normal | `Kind() == BodySheet`, `IsSolid() == false`, `Volume()` is `ErrNotSolid`; exactly 1 face; `Edges(Free()).Exactly(4)`; `Bounds` is the 40×0×10 slab, `Exact`; and `Area` is bit-identical to T130's own `ExtrudeChain` reading, value, `Exactness` and `Bound` alike — the equality is the assertion, since the two calls denote one ribbon and reach it by two different height derivations |
 | T191 | T131's open line/arc/line walk, swept along the same one-span path | 3 faces; `Edges(Free()).Exactly(8)`, the two junction sweep edges matching nothing under `Free()`; the arc wall's `Area` is `Approximate` while both line walls read `Exact`; the body's `Area` equals the three walls' `boundedAdd` sum, value and bound |
-| T192 | T190's chain on a sketch plane whose positive normal is not a signed coordinate vector, swept 10 mm along that normal | `Area` is `Approximate` with a strictly positive `Bound`, and its interval encloses the analytic 400 mm². Shown-to-fail: dropping `validateStraightSweepPath`'s composed height bound — the square root's committed error against the exact rational squared length, and the per-component departure of the held sweep vector from the exact path tangent — publishes `Exact` at a zero bound and turns both the positive-`Bound` and the enclosure assertions red |
+| T192 | T190's chain on a sketch plane whose positive normal is not a signed coordinate vector, swept `7√2` mm along that normal | `Area` is `Approximate` with a strictly positive `Bound` whose interval encloses the analytic `280√2` mm²; each of the walk's two SWEEP edges reads `Length` `Approximate` with a strictly positive `Bound` whose interval encloses the analytic `7√2` mm. Shown-to-fail: dropping `validateStraightSweepPath`'s composed height bound — the square root's committed error against the exact rational squared length, and the per-component departure of the held sweep vector from the exact path tangent — turns the two sweep-edge assertions red. The edge reading is what ISOLATES that bound: a wall's area is a `boundedMul` of two scalars and carries the product's own rounding whatever the height bound says, while a sweep edge's length IS the height and carries nothing else |
 | T193 | T190's chain against a path whose start lies off the sketch plane, and separately against one whose initial tangent opposes the plane's positive normal | `ErrDegenerate` both ways (`docs/sweep-design.md` Table SC row SC3); `Document.Bodies()` is unchanged |
 | T194 | T190's chain against a two-span tangent line/arc path, and separately against a one-span `ArcThrough` path | `ErrUnsupported` both ways (R34), the message naming the composite join and the arc reduction respectively; the document is unchanged. Shown-to-fail: removing the span-count gate reaches the analytic reduction with a path it has no height for |
 | T195 | `SweepChain` handed a chain held across a `Params().SetValue` plus `Solve`, and separately a chain whose `Valid` is false, each with a path that would otherwise refuse at SC3 | `ErrStaleProfile` for the first and `ErrInvalidProfile` for the second, never the path refusal — the seam gate runs first (`docs/sweep-design.md` Table SC); neither call touches `Document.Bodies()` |
@@ -2547,11 +2547,17 @@ bodies remain live and retain their original measurements.
 
 T190's equality against T130 is the stronger assertion of the two available:
 either reading alone could be right for the wrong reason, while the two agreeing
-pins the chain sweep's own height derivation to the extent vocabulary's. T192
-is the only row in this group whose fixture needs a non-axis-aligned frame,
-which is what makes its height bound positive at all — on an axis-aligned frame
-every term of that bound is exactly zero and T190 asserts the `Exact` reading
-instead.
+pins the chain sweep's own height derivation to the extent vocabulary's. T190
+also places its ribbon by a translation and asserts the area unmoved and the box
+translated, which is the only reading that exercises the chain sweep payload's
+own replay. T192 is the only row in this group whose fixture needs a
+non-axis-aligned frame, which is what makes its height bound positive at all —
+on an axis-aligned frame every term of that bound is exactly zero and T190
+asserts the `Exact` reading instead. Its plane is the one whose orthonormalized
+`V` carries two bit-identical components, so the plane's own `U × V` is exactly
+`(0, −c, c)` and the path direction `(0, −7, 7)` is exactly codirectional with
+it over rationals; any other tilt fails the initial-tangent gate before the
+bound can be read.
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'`

@@ -344,6 +344,16 @@ func sweepRatIsZero(v sweepRatVec) bool {
 	return v[0].Sign() == 0 && v[1].Sign() == 0 && v[2].Sign() == 0
 }
 
+// finishArcSweepBody restores Table B's own role vocabulary on an arc
+// reduction, which builds through the Revolve evaluator and so mints roles
+// that know nothing of a path. Every wall role gains the path-span index ahead
+// of the section's loop and segment indices, exactly as
+// prefixSweepSpanZeroRole does for a straight reduction. A span whose Revolve
+// axis was reoriented (reverseArcCaps) also has its two cap roles swapped back
+// into PATH order, so capStart always names the section the path leaves and
+// capEnd the one it arrives at — the orientation sweep_composite.go's own
+// join pairing reads when it takes one span's end cap against the next span's
+// start cap.
 func finishArcSweepBody(body *Body, payload sweepPayload) {
 	if built, ok := body.payload.(revolvePayload); ok {
 		payload.revolve = built

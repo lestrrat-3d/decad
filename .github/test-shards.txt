@@ -1812,3 +1812,9 @@
 0	0.01	TestLoftHoledProfilesMakePassage
 1	0.01	TestUnstitchVoidRevolveMakesNonVoidSheets
 2	0.01	TestVoidRevolveModifyOpsRefuseReceiver
+3	0.01	TestSweepChainOneLineRibbonMatchesExtrudeChain
+0	0.01	TestSweepChainMultiSegmentWallSet
+1	0.01	TestSweepChainTiltedPathAreaBoundEnclosesAnalyticValue
+2	0.01	TestSweepChainRefusesAnOffNormalPath
+3	0.01	TestSweepChainRefusesCompositeAndArcPaths
+0	0.01	TestSweepChainSeamGatesPrecedeThePathGates

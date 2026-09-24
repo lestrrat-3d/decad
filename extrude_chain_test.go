@@ -371,11 +371,13 @@ func TestExtrudeChainFreeformWallAreaNeverPublishesTheLengthUnderestimate(t *tes
 		"Chain.Length's sampling-convergent underestimate must sit at or below the enclosure's own lower end, never inside it")
 }
 
-// TestChainFedRefusals is docs/surface-design.md's T139: SweepChain and
-// LoftChain are ErrUnsupported (Table R row R23) even for a valid chain,
-// ahead of the increment that states their own pairing rule; RevolveChain
-// handed a chain with both free ends on the resolved axis is ErrUnsupported
-// (R22), pending its closed-sheet pole topology.
+// TestChainFedRefusals is docs/surface-design.md's T139: a SweepChain over a
+// COMPOSITE path is ErrUnsupported (R34) ahead of the increment that builds
+// docs/sweep-design.md §15.1's join, LoftChain is ErrUnsupported (R23) for a
+// valid chain pair, and RevolveChain handed a chain with both free ends on the
+// resolved axis is ErrUnsupported (R22), pending its closed-sheet pole
+// topology. A one-span straight path builds instead, which sweep_chain_test.go
+// owns.
 func TestChainFedRefusals(t *testing.T) {
 	t.Parallel()
 	s, ch := lineChainSketch(t)
@@ -384,7 +386,11 @@ func TestChainFedRefusals(t *testing.T) {
 	_, err := doc.SweepChain(t.Context(), s, ch, nil)
 	require.ErrorIs(t, err, decad.ErrDegenerate, "a nil path is refused before the staged refusal")
 
-	path, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: r3.NewVec(0, 0, 10)})
+	path, err := decad.NewPath(
+		r3.NewVec(0, 0, 0),
+		decad.LineTo{End: r3.NewVec(0, 0, 20)},
+		decad.ArcThrough{Through: r3.NewVec(5, 0, 25), End: r3.NewVec(10, 0, 20)},
+	)
 	require.NoError(t, err)
 	_, err = doc.SweepChain(t.Context(), s, ch, path)
 	require.ErrorIs(t, err, decad.ErrUnsupported)

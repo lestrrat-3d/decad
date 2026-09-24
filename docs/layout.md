@@ -101,8 +101,8 @@ to the byte budget.
 | `stitch_flux.go` | The per-surface flux integral for a curved closed boundary: Rule S, the hoisted vertex-link audit call, and the `Plane`/`Cylinder` volume and centroid arms. See `docs/surface-design.md` §6.4. |
 | `unstitch.go` | `Unstitch`: splits a body into one free single-face sheet per face, reusing `stitch.go`'s placement machinery per face. See `docs/surface-design.md` §6.5. |
 | `extrude.go` | `Document.Extrude` (evaluator §5): the public entry point, `WithTaper`, and linear-extent resolution into a `linearSweep`. See `docs/evaluator-design.md` §5 and the file's own doc comment. |
-| `sweep.go` | `Document.Sweep`, common path gates, `WithSurfaceResult` parsing, and the distinct replayable payload for zero-twist line and arc spans. See `docs/sweep-design.md` PR 1–4, `docs/surface-design.md` §4. |
-| `sweep_arc.go` | The one-span `ArcThrough` reduction: exact circumcircle and tangent gates, bounded axis/angle publication, Revolve reuse, and Sweep role restoration. See `docs/sweep-design.md` PR 3. |
+| `sweep.go` | `Document.Sweep` and `SweepChain`, common path gates, `WithSurfaceResult` parsing, and the distinct replayable payloads for line and arc spans. See `docs/sweep-design.md` PR 1–4 and §15, `docs/surface-design.md` §4. |
+| `sweep_arc.go` | The one-span `ArcThrough` reduction: exact circumcircle and tangent gates, bounded axis/angle publication and Revolve reuse. See `docs/sweep-design.md` PR 3. |
 | `sweep_composite.go` | Composite Sweep shared join topology, its manifold-with-boundary audit, and the outer-cap omission a surface result takes. See `docs/sweep-design.md` PR 4, `docs/surface-design.md` §4. |
 | `sweep_composite_measure.go` | Composite Sweep span replay and combined body measurements. See `docs/sweep-design.md` PR 4. |
 | `sweep_audit.go` | Composite Sweep adjacent-span and remote-span separation proofs. See `docs/sweep-design.md` §7. |

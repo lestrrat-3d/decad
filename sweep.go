@@ -276,16 +276,27 @@ func validateStraightSweepPath(path *Path, frame r3.Frame) (float64, float64, er
 func validateAnalyticSweepProfile(profile ProfileRecord) error {
 	loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
 	for _, loop := range loops {
-		for _, raw := range loop.Segments {
-			segment, err := normalizeSegment(raw)
-			if err != nil {
-				return err
-			}
-			switch segment.(type) {
-			case LineSeg, CircleSeg, ArcSeg:
-			default:
-				return fmt.Errorf(`%w: Sweep supports line, circle, and arc profile segments only`, ErrUnsupported)
-			}
+		if err := validateAnalyticSweepSegments(loop.Segments, "profile"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateAnalyticSweepSegments is Table S row S10 over one recorded walk,
+// shared by the profile-fed gate above and SweepChain's own chain gate
+// (docs/sweep-design.md Table SC row SC6). kind names the walk in the refusal
+// so a caller reading it knows which argument to repair.
+func validateAnalyticSweepSegments(segments []CurveSegment, kind string) error {
+	for _, raw := range segments {
+		segment, err := normalizeSegment(raw)
+		if err != nil {
+			return err
+		}
+		switch segment.(type) {
+		case LineSeg, CircleSeg, ArcSeg:
+		default:
+			return fmt.Errorf(`%w: Sweep supports line, circle, and arc %s segments only`, ErrUnsupported, kind)
 		}
 	}
 	return nil
@@ -360,16 +371,70 @@ func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, 
 	return body, nil
 }
 
-// SweepChain sweeps the open chain ch of sketch s along path. Every call is
-// ErrUnsupported (Table R row R23, docs/surface-design.md §13.5, §14): the
-// signature lands so a caller's intent has somewhere to go and a refusal to
-// read, ahead of the increment that states SweepChain's own pairing rule
-// against docs/sweep-design.md's composite join topology. ch still runs the
-// same seam gates ExtrudeChain does (RecordChain) before that refusal, so a
-// foreign, stale, invalid or unrecordable chain is reported as such rather
-// than masked by the staged ErrUnsupported. The document and every operand
-// are unchanged.
-func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.Chain, path *Path, opts ...SweepOption) (*Body, error) {
+// This section is SweepChain of docs/sweep-design.md §15: the open sketch
+// chain swept along a Path. §15.1 states why the composite join's pairing rule
+// survives an open walk — it pairs by recorded-segment index and reads no
+// winding — and §15.2 states why a ONE-SPAN path needs no such rule at all: it
+// has no join, so its whole build is the recorded walk transported over that
+// one span. This increment builds the one-span STRAIGHT case, which reduces to
+// the chain prism ExtrudeChain already builds, over the path's own height
+// rather than a resolved Extent. The arc reduction and every composite path
+// stay ErrUnsupported (Table SC rows SC7 and SC9, docs/surface-design.md R34).
+
+// ChainSweepOption configures SweepChain. It is its own sealed tier rather
+// than [SweepOption]: WithSurfaceResult() does not implement it, so the
+// compiler refuses that option outright rather than accepting it as a no-op —
+// a chain-fed sweep always returns a sheet, so there is no "build a solid
+// instead" state for the option to toggle (docs/surface-design.md §13.2,
+// docs/sweep-design.md §15.3). WithSweepTwist is not a member either: a
+// nonzero twist is Table S row S11 for a profile-fed sweep, and a chain
+// inherits that staging rather than a second spelling of it. No option is a
+// member of this tier yet; it exists so a later chain-only option has a tier
+// to land on.
+type ChainSweepOption interface {
+	option.Interface
+	chainSweepOption()
+}
+
+// chainSweepPayload is SweepChain's own record of a ribbon body: the chain
+// ribbon payload the reduction built, beside the Path that stated its height.
+// It stays DISTINCT from chainPayload for the reason sweepPayload stays
+// distinct from prismPayload — a downstream consumer whose Sweep proof has not
+// landed dispatches on this type and refuses, rather than reading the analytic
+// reduction as proof for the original operation (docs/sweep-design.md §10).
+type chainSweepPayload struct {
+	chain chainPayload
+	path  *Path
+}
+
+// transform is the accumulated rigid placement.
+func (sp chainSweepPayload) transform() r3.Transform { return sp.chain.transform() }
+
+// placed re-evaluates the same records under the composed motion (core §8),
+// through the identical reduction the first build took, and restates the
+// path-span role prefix the reduction itself does not mint.
+func (sp chainSweepPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+	sp.chain.xform = composed
+	body, err := evalChainExtrudeContext(ctx, d, ref, sp.chain, newFreeformWork())
+	if err != nil {
+		return nil, err
+	}
+	finishChainSweepBody(body, sp)
+	return body, nil
+}
+
+// SweepChain sweeps the open chain ch of sketch s along path, and registers
+// the resulting ribbon body. ch MUST be a chain of s and a current, unaltered
+// snapshot, under the identical gates ExtrudeChain runs (RecordChain,
+// docs/surface-design.md §13.3); the seam's own sentinel wins before any path
+// geometry is read. The path MUST start in the sketch plane with its initial
+// tangent codirectional with that plane's positive normal (ErrDegenerate), and
+// this evaluator sweeps ONE straight span: a composite path and an arc span
+// are ErrUnsupported (docs/sweep-design.md Table SC). The result is always a
+// sheet — Kind() == BodySheet — one wall per recorded segment with no cap and
+// no closing face, so WithSurfaceResult() does not compile against this call.
+// A failed evaluation leaves the document unchanged.
+func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.Chain, path *Path, opts ...ChainSweepOption) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
@@ -379,19 +444,107 @@ func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.
 	if s == nil || ch == nil || path == nil {
 		return nil, fmt.Errorf(`%w: SweepChain requires a non-nil sketch, chain, and path`, ErrDegenerate)
 	}
+	for _, o := range opts {
+		if o == nil {
+			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if _, _, err := recordChain(s, ch); err != nil {
+
+	// SC2 before SC3: a seam refusal names a repair the caller makes in the
+	// sketch, and reporting a path refusal first would hide it behind geometry
+	// the caller cannot act on (docs/sweep-design.md Table SC).
+	chain, plane, err := recordChain(s, ch)
+	if err != nil {
 		return nil, err
 	}
-	return nil, fmt.Errorf(`%w: SweepChain has no pairing rule yet (docs/surface-design.md §13.5, §14)`, ErrUnsupported)
+	if len(path.records) == 0 || len(path.segments) == 0 {
+		return nil, fmt.Errorf(`%w: a sweep path must contain at least one span`, ErrDegenerate)
+	}
+
+	frame, err := r3.NewFrame(plane.Origin, plane.U, plane.V)
+	if err != nil {
+		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
+	}
+	if err := validateSweepPathGeometry(path, plane); err != nil {
+		return nil, err
+	}
+	if err := validateAnalyticSweepSegments(chain.Segments, "chain"); err != nil {
+		return nil, err
+	}
+	if samePathPoint(path.Start(), path.End()) {
+		return nil, fmt.Errorf(`%w: closed sweep paths are not implemented`, ErrUnsupported)
+	}
+
+	segments := path.Segments()
+	if len(segments) > 1 {
+		return nil, fmt.Errorf(
+			`%w: SweepChain has no composite path join yet: it sweeps one path span and this path has %d (docs/sweep-design.md §15.1)`,
+			ErrUnsupported, len(segments))
+	}
+	if _, ok := segments[0].(LineTo); !ok {
+		return nil, fmt.Errorf(
+			`%w: SweepChain sweeps a straight path span only; the arc reduction is staged (docs/sweep-design.md §15.6)`,
+			ErrUnsupported)
+	}
+	height, heightBound, err := validateStraightSweepPath(path, frame)
+	if err != nil {
+		return nil, err
+	}
+
+	// ONE free-form work counter for the whole call, exactly as ExtrudeChain
+	// opens for its own build (docs/spline-design.md §5.2).
+	work := newFreeformWork()
+	ref := d.nextProducerID()
+	// z0 is exactly zero and carries no bound: the recorded walk sits in the
+	// sketch plane by construction and the path starts there (S5's own gate
+	// above). Only the far level is derived, and z1Delta is where the path's
+	// composed length bound lands — the term §15.2 names as the one thing a
+	// chain sweep carries that the same walk's ExtrudeChain reading may not.
+	reduction := chainPayload{
+		chains:  []ChainRecord{chain},
+		frame:   frame,
+		z0:      0,
+		z1:      height,
+		z1Delta: heightBound,
+		xform:   r3.Identity(),
+	}
+	body, err := evalChainExtrudeContext(ctx, d, ref, reduction, work)
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	finishChainSweepBody(body, chainSweepPayload{chain: reduction, path: path})
+	d.commit(body)
+	return body, nil
 }
 
 func finishStraightSweepBody(body *Body, payload sweepPayload) {
 	if built, ok := body.payload.(prismPayload); ok {
 		payload.prism = built
 	}
+	prefixSweepSpanZeroRole(body)
+	body.payload = payload
+}
+
+func finishChainSweepBody(body *Body, payload chainSweepPayload) {
+	if built, ok := body.payload.(chainPayload); ok {
+		payload.chain = built
+	}
+	prefixSweepSpanZeroRole(body)
+	body.payload = payload
+}
+
+// prefixSweepSpanZeroRole rewrites every wall role a one-span reduction minted
+// so it carries Table B's own path-span index ahead of the section's loop and
+// segment indices: side(i,j) becomes side(0,i,j). The reduction builds through
+// the prism or chain-prism evaluator, which knows nothing of a path span, so
+// the index is restored here rather than threaded through that builder.
+func prefixSweepSpanZeroRole(body *Body) {
 	for _, face := range body.Faces() {
 		for i, origin := range face.origins {
 			if suffix, ok := strings.CutPrefix(origin.Role, "side("); ok {
@@ -400,5 +553,4 @@ func finishStraightSweepBody(body *Body, payload sweepPayload) {
 			}
 		}
 	}
-	body.payload = payload
 }
