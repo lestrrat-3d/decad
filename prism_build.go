@@ -388,6 +388,108 @@ func rimConvexity(ctx context.Context, w sideWalk, holeLoop bool, work *freeform
 	}
 }
 
+// buildWallGeometry builds one wall's two rim curves and the surface it
+// sweeps, from its walk alone: convex is rimConvexity's own answer for this
+// walk, and closed marks a single whole closed walk sharing one seam vertex
+// at each cap (bStart==bEnd, tStart==tEnd) — never true for a chain, since
+// RecordChain admits no whole closed segment
+// (docs/sketch-seam-design.md §2.2). It is the one per-kind construction a
+// closed loop's own wall (buildLoopSidesAs) and an open chain's own wall
+// (buildChainSides, extrude.go) share; the two differ only in the TOPOLOGY
+// around it — wraparound junctions and cap coedges for a loop, neither for a
+// chain (docs/surface-design.md §13.4).
+func buildWallGeometry(pp prismPayload, w sideWalk, convex, closed bool, bStart, bEnd, tStart, tEnd *Vertex) (*Edge, *Edge, Surface, bool, error) {
+	switch w.kind {
+	case walkCircular:
+		axis := pp.dir(0, 0, 1)
+		// The material's side of a circular wall is decided by the WALK, not
+		// by the loop's role: the outward normal is the walk tangent turned a
+		// quarter turn against the walk's sense, which is the radial
+		// direction away from the centre for a counter-clockwise walk and
+		// toward the centre for a clockwise one. A hole is walked clockwise —
+		// which is why its wall reverses — but so is a CONCAVE round on an
+		// outer loop (a rounded bite out of the boundary), whose material
+		// also lies outside the cylinder.
+		clockwise := w.th1 < w.th0
+		// An Arc3/Circle3 is CCW from start to end about its axis. A
+		// clockwise walk, and a reflected placement (which flips
+		// handedness), each invert that sense, so the EDGE axis carries
+		// the corrected sign; the cylinder surface keeps the plain ruling
+		// direction.
+		edgeSign := 1.0
+		if clockwise {
+			edgeSign = -1
+		}
+		if pp.reflected() {
+			edgeSign = -edgeSign
+		}
+		edgeAxis := axis.Scale(edgeSign)
+		center0 := pp.point(w.cU, w.cV, pp.z0)
+		center1 := pp.point(w.cU, w.cV, pp.z1)
+		radius := units.Millimeters(w.radius)
+		var curve0, curve1 Curve
+		if closed {
+			// A full circle's edge closes on itself: one vertex per cap
+			// edge, start == end (topology.go's Circle3 contract) — the
+			// seamBottom/seamTop pair the caller already built.
+			curve0, curve1 = Circle3{Center: center0, Axis: edgeAxis, Radius: radius}, Circle3{Center: center1, Axis: edgeAxis, Radius: radius}
+		} else {
+			curve0, curve1 = Arc3{Center: center0, Axis: edgeAxis, Radius: radius}, Arc3{Center: center1, Axis: edgeAxis, Radius: radius}
+		}
+		// The rim edges read the same WALK: a clockwise wall's material
+		// lies outside its cylinder, so the boundary turns into the metal
+		// there and the rim is concave — a hole's rim (clockwise) and a
+		// concave outer bite's (also clockwise) alike, while a
+		// counter-clockwise round keeps its convex rim. The loop's role
+		// decides nothing here. convex is rimConvexity's own answer for
+		// this walk, computed by the caller.
+		bottomEdge := &Edge{curve: curve0, start: bStart, end: bEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
+		topEdge := &Edge{curve: curve1, start: tStart, end: tEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
+		surf := Cylinder{Origin: center0, Axis: axis, Radius: radius}
+		// A clockwise-walked wall has its material OUTSIDE the cylinder,
+		// so its outward normal is the radial direction negated.
+		return bottomEdge, topEdge, surf, clockwise, nil
+	case walkFreeform:
+		// §6.5's wall-edge convexity certificate, wired here for the first
+		// time (docs/spline-design.md §6.5, Table R R19). It applies the
+		// one reversal negation internally and states its verdict in the
+		// LOOP'S OWN WALK direction, so the mapping below reads it
+		// verbatim — a counter-clockwise turn convex, clockwise concave,
+		// the identical convention the circular wall's own turn test
+		// fixes above. NEVER negate again for a hole loop: a hole rim's
+		// concavity falls out of the clockwise walk itself, exactly as it
+		// does for a circular hole wall. An R19 refusal already returned
+		// from rimConvexity, before this switch ever ran.
+		bottomEdge := &Edge{curve: NURBSCurve{}, start: bStart, end: bEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
+		topEdge := &Edge{curve: NURBSCurve{}, start: tStart, end: tEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
+		// faceReversed stays false: an opaque NURBSSurface publishes no
+		// normal at all (§7's NormalAt refusal, topology.go), so
+		// Face.reversed — "the outward normal is the surface's geometric
+		// normal negated" — names nothing for this variant.
+		return bottomEdge, topEdge, NURBSSurface{}, false, nil
+	default:
+		// A straight wall has no turn of its own to disagree with the
+		// loop's: which side its material lies on is decided by the sense
+		// the whole loop is walked, and that sense IS the loop's role —
+		// the outer loop counter-clockwise, holes clockwise (moments.go).
+		bottomEdge := &Edge{curve: Line3{}, start: bStart, end: bEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
+		topEdge := &Edge{curve: Line3{}, start: tStart, end: tEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
+		mid := pp.point((w.startU+w.endU)/2, (w.startV+w.endV)/2, pp.z0)
+		// tangent × N is the outward normal for a CCW outer walk (and a
+		// CW hole walk); a reflection flips the cross product, so the
+		// tangent is negated to keep the frame's normal outward.
+		tu, tv := w.tanInU, w.tanInV
+		if pp.reflected() {
+			tu, tv = -tu, -tv
+		}
+		f, err := r3.NewFrame(mid, pp.dir(tu, tv, 0), pp.dir(0, 0, 1))
+		if err != nil {
+			return nil, nil, nil, false, fmt.Errorf(`%w: a boundary segment has no direction`, ErrDegenerate)
+		}
+		return bottomEdge, topEdge, Plane{Frame: f}, false, nil
+	}
+}
+
 // buildLoopSides builds one loop's side faces with shared vertices and
 // edges, returning the faces, the bottom and top cap coedges in walk order,
 // and the loop's perimeter length. A loop's index is both its role index and,
@@ -618,101 +720,13 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref producerID, pp prismP
 			bStart, tStart = bottomV[i], topV[i]
 			bEnd, tEnd = bottomV[(i+1)%n], topV[(i+1)%n]
 		}
-		var bottomEdge, topEdge *Edge
-		var surf Surface
-		faceReversed := false
 		convex, err := rimConvexity(ctx, w, holeLoop, work)
 		if err != nil {
 			return nil, nil, nil, boundedScalar{}, err
 		}
-		switch w.kind {
-		case walkCircular:
-			axis := pp.dir(0, 0, 1)
-			// The material's side of a circular wall is decided by the WALK,
-			// not by the loop's role: the outward normal is the walk tangent
-			// turned a quarter turn against the walk's sense, which is the
-			// radial direction away from the centre for a counter-clockwise
-			// walk and toward the centre for a clockwise one. A hole is
-			// walked clockwise — which is why its wall reverses — but so is a
-			// CONCAVE round on an outer loop (a rounded bite out of the
-			// boundary), whose material also lies outside the cylinder.
-			clockwise := w.th1 < w.th0
-			// An Arc3/Circle3 is CCW from start to end about its axis. A
-			// clockwise walk, and a reflected placement (which flips
-			// handedness), each invert that sense, so the EDGE axis carries
-			// the corrected sign; the cylinder surface keeps the plain ruling
-			// direction.
-			edgeSign := 1.0
-			if clockwise {
-				edgeSign = -1
-			}
-			if pp.reflected() {
-				edgeSign = -edgeSign
-			}
-			edgeAxis := axis.Scale(edgeSign)
-			center0 := pp.point(w.cU, w.cV, pp.z0)
-			center1 := pp.point(w.cU, w.cV, pp.z1)
-			radius := units.Millimeters(w.radius)
-			var curve0, curve1 Curve
-			if singleClosed {
-				// A full circle's edge closes on itself: one vertex per cap
-				// edge, start == end (topology.go's Circle3 contract) — the
-				// seamBottom/seamTop pair the switch's caller already built.
-				curve0, curve1 = Circle3{Center: center0, Axis: edgeAxis, Radius: radius}, Circle3{Center: center1, Axis: edgeAxis, Radius: radius}
-			} else {
-				curve0, curve1 = Arc3{Center: center0, Axis: edgeAxis, Radius: radius}, Arc3{Center: center1, Axis: edgeAxis, Radius: radius}
-			}
-			// The rim edges read the same WALK: a clockwise wall's material
-			// lies outside its cylinder, so the boundary turns into the metal
-			// there and the rim is concave — a hole's rim (clockwise) and a
-			// concave outer bite's (also clockwise) alike, while a
-			// counter-clockwise round keeps its convex rim. The loop's role
-			// decides nothing here. convex is rimConvexity's own answer for
-			// this walk, computed once above the switch.
-			bottomEdge = &Edge{curve: curve0, start: bStart, end: bEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
-			topEdge = &Edge{curve: curve1, start: tStart, end: tEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
-			surf = Cylinder{Origin: center0, Axis: axis, Radius: radius}
-			// A clockwise-walked wall has its material OUTSIDE the cylinder,
-			// so its outward normal is the radial direction negated.
-			faceReversed = clockwise
-		case walkFreeform:
-			// §6.5's wall-edge convexity certificate, wired here for the first
-			// time (docs/spline-design.md §6.5, Table R R19). It applies the
-			// one reversal negation internally and states its verdict in the
-			// LOOP'S OWN WALK direction, so the mapping below reads it
-			// verbatim — a counter-clockwise turn convex, clockwise concave,
-			// the identical convention the circular wall's own turn test
-			// fixes above. NEVER negate again for a hole loop: a hole rim's
-			// concavity falls out of the clockwise walk itself, exactly as it
-			// does for a circular hole wall. An R19 refusal already returned
-			// from rimConvexity above, before this switch ever ran.
-			bottomEdge = &Edge{curve: NURBSCurve{}, start: bStart, end: bEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
-			topEdge = &Edge{curve: NURBSCurve{}, start: tStart, end: tEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
-			surf = NURBSSurface{}
-			// faceReversed stays false: an opaque NURBSSurface publishes no
-			// normal at all (§7's NormalAt refusal, topology.go), so
-			// Face.reversed — "the outward normal is the surface's geometric
-			// normal negated" — names nothing for this variant.
-		default:
-			// A straight wall has no turn of its own to disagree with the
-			// loop's: which side its material lies on is decided by the sense
-			// the whole loop is walked, and that sense IS the loop's role —
-			// the outer loop counter-clockwise, holes clockwise (moments.go).
-			bottomEdge = &Edge{curve: Line3{}, start: bStart, end: bEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
-			topEdge = &Edge{curve: Line3{}, start: tStart, end: tEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
-			mid := pp.point((w.startU+w.endU)/2, (w.startV+w.endV)/2, pp.z0)
-			// tangent × N is the outward normal for a CCW outer walk (and a
-			// CW hole walk); a reflection flips the cross product, so the
-			// tangent is negated to keep the frame's normal outward.
-			tu, tv := w.tanInU, w.tanInV
-			if pp.reflected() {
-				tu, tv = -tu, -tv
-			}
-			f, err := r3.NewFrame(mid, pp.dir(tu, tv, 0), pp.dir(0, 0, 1))
-			if err != nil {
-				return nil, nil, nil, boundedScalar{}, fmt.Errorf(`%w: a boundary segment has no direction`, ErrDegenerate)
-			}
-			surf = Plane{Frame: f}
+		bottomEdge, topEdge, surf, faceReversed, err := buildWallGeometry(pp, w, convex, singleClosed, bStart, bEnd, tStart, tEnd)
+		if err != nil {
+			return nil, nil, nil, boundedScalar{}, err
 		}
 		// The LEVEL certificate travels uniformly, whatever curve kind this
 		// rim edge carries: every rim edge at one end is stamped by the SAME

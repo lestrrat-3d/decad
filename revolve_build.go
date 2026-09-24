@@ -1065,3 +1065,275 @@ func circularAxisMomentTotal(segs []CurveSegment, ax axisFrame) (ratInterval, bo
 	}
 	return total, true
 }
+
+// This section is RevolveChain's own build (docs/surface-design.md §13.4):
+// the open chain's counterpart of evalRevolveContextWork/buildRevolveLoop
+// above, reusing rp.wallSurface, rp.capEdge, sideOriginsContext and
+// walkAxisMoment unchanged. It differs only in TOPOLOGY: n segments place
+// n+1 junctions with no wraparound, and neither cap face nor cap coedge
+// collection is ever built — a chain mints no cap.
+
+// evalChainRevolveContext builds the shell body: one swept wall per recorded
+// segment (Table G rows 2-3), never a cap and never a wraparound junction.
+// work is the record's ONE free-form work counter (docs/spline-design.md
+// §5.2): the caller opens it once and this build and the final bounds
+// reading both spend from it.
+func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, rp chainRevolvePayload, work *freeformWork) (*Body, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	rev := rp.revolve()
+	sweep := rev.sweep()
+	if sweep.value <= 0 {
+		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
+	}
+
+	resolved, err := chainRevolveWalks(ctx, rev, rp.chain, work)
+	if err != nil {
+		return nil, err
+	}
+	n := len(resolved.walks)
+	if n == 0 {
+		return nil, fmt.Errorf(`%w: a recorded chain holds no segments`, ErrDegenerate)
+	}
+	// R22 (Table R): a chain free end lying ON the resolved axis is staged
+	// rather than built. The existing axis-incidence audit needs each
+	// on-axis point to carry one off-axis walk end and one LineSeg end along
+	// the axis, from the same loop (docs/evaluator-design.md §6) — a free end
+	// offers one incident walk end and no partner, so the audit has nothing
+	// to admit (docs/surface-design.md §13.3).
+	if resolved.walks[0].startV == 0 || resolved.walks[n-1].endV == 0 {
+		return nil, fmt.Errorf(`%w: a chain free end lying on the revolve axis is staged to a later increment`, ErrUnsupported)
+	}
+
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
+	b := rev.basis()
+	faces, area, err := buildChainRevolveWalls(ctx, body, ref, rev, b, resolved)
+	if err != nil {
+		return nil, err
+	}
+	body.lumps = sheetLumps(faces)
+	body.area = Measurement{
+		Value:     units.SquareMillimeters(area.value),
+		Exactness: exactnessOf(area.bound),
+		Bound:     units.SquareMillimeters(area.bound),
+	}
+	// volume and centroid stay at their zero value: a chain bounds no region
+	// (docs/surface-design.md §13.3), so neither is ever integrated here, and
+	// neither is reachable through Body.Volume/Body.Centroid while solid is
+	// false (§8) — exactly as evalChainExtrudeContext leaves them.
+	bounds, err := revolveBoundsContext(ctx, rev, work)
+	if err != nil {
+		return nil, err
+	}
+	body.bounds = bounds
+	if err := validateAnalyticBodyMeasurements(body); err != nil {
+		return nil, err
+	}
+	body.payload = rp
+	return body, nil
+}
+
+// chainRevolveWalks resolves the chain's segments the way a revolve reads
+// them, exactly as revolveLoopWalks does for a profile loop, except that
+// consecutive segments never wrap: an open walk's last segment does not
+// continue into its first (docs/surface-design.md §13.4). singleClosed is
+// always false: RecordChain admits no whole closed segment
+// (docs/sketch-seam-design.md §2.2).
+func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord, work *freeformWork) (revolveWalks, error) {
+	if len(chain.Segments) == 0 {
+		return revolveWalks{}, fmt.Errorf(`%w: a recorded chain holds no segments`, ErrDegenerate)
+	}
+	raw := make([]sideWalk, len(chain.Segments))
+	plane := make([]segmentWalk, len(chain.Segments))
+	for i, seg := range chain.Segments {
+		if err := ctx.Err(); err != nil {
+			return revolveWalks{}, err
+		}
+		w, err := walkOf(seg, work)
+		if err != nil {
+			return revolveWalks{}, err
+		}
+		if err := requireAnalyticWalk(w, "the revolve wall build"); err != nil {
+			return revolveWalks{}, err
+		}
+		plane[i] = w
+		raw[i] = sideWalk{segmentWalk: rp.ax.walk(w), segs: []int{i}}
+	}
+	walks, err := coalesceChainWalksContext(ctx, raw)
+	if err != nil {
+		return revolveWalks{}, err
+	}
+	kinds := make([]wallKind, len(walks))
+	for i, w := range walks {
+		kinds[i] = rp.ax.classify(w.segmentWalk)
+	}
+	return revolveWalks{walks: walks, kinds: kinds, plane: plane, singleClosed: false}, nil
+}
+
+// buildChainRevolveWalls builds an open chain's whole swept-wall set with
+// shared vertices and edges: one wall per recorded segment, never a cap and
+// never a wraparound junction. n segments place n+1 junctions, so the
+// chain's two FREE ends (junction 0 and junction n) each carry a swept edge
+// (an arc, or a full latitude circle under a full revolution) touched by
+// exactly one wall — Free() resolves them (Edge.IsFree, topology.go) —
+// while every INTERIOR junction (1..n-1) shares its swept edge between the
+// two walls it joins, exactly as buildRevolveLoop's own junctions do for a
+// closed loop. A wall's own copy of its walk at phi0/phi1 (capEdge) is never
+// attached to a cap face here — a chain mints none — so it stays free
+// regardless of position (docs/surface-design.md §13.4). It returns the
+// faces and the walk's own total wall area, folded through boundedAdd.
+func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp revolvePayload, b revolveBasis, resolved revolveWalks) ([]*Face, boundedScalar, error) {
+	walks, kinds := resolved.walks, resolved.kinds
+	n := len(walks)
+	sweep := rp.sweep()
+	dphi := sweep.value
+	sweepSign := 1.0
+	if rp.reflected() {
+		sweepSign = -1
+	}
+	wDir := rp.xform.ApplyDir(b.w)
+
+	// junctionSource reads junction i's own (z, rho) and the walk whose end
+	// it belongs to: junction i sits at walk i's start for i < n, and at the
+	// LAST walk's own end for i == n — the chain's own two free ends.
+	junctionSource := func(i int) (z, rho, rhoBound, axisRadiusUpper float64) {
+		if i < n {
+			w := walks[i]
+			return w.startU, w.startV, w.startVBound, w.axisRadiusUpper
+		}
+		w := walks[n-1]
+		return w.endU, w.endV, w.endVBound, w.axisRadiusUpper
+	}
+
+	js := make([]revJunction, n+1)
+	for i := 0; i <= n; i++ {
+		if err := ctx.Err(); err != nil {
+			return nil, boundedScalar{}, err
+		}
+		z, rho, rhoBound, axisRadiusUpper := junctionSource(i)
+		j := revJunction{z: z, rho: rho, onAxis: rho == 0}
+		var turn float64
+		if i > 0 && i < n {
+			prev, w := walks[i-1], walks[i]
+			turn = prev.tanOutU*w.tanInV - prev.tanOutV*w.tanInU
+		}
+		center := rp.point(b, j.z, 0, 0)
+		switch {
+		case rp.full && !j.onAxis:
+			seam := &Vertex{
+				position: rp.point(b, j.z, j.rho, rp.phi0),
+				bound:    units.Millimeters(absSumUpper(productUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, axisRadiusUpper))),
+				denot:    body.doc.mintCurve(),
+			}
+			latitudeLength := 2 * math.Pi * j.rho
+			latitudeBound := conservativeValueError(latitudeLength, productUpper(axisRadiusUpper, twoPiUpper()))
+			if rhoEnc, ok := junctionRadiusInterval(j.rho, rhoBound); ok {
+				enc := intervalMul(twoPiInterval(), rhoEnc)
+				latitudeBound = math.Min(latitudeBound, intervalFloatError(enc, latitudeLength))
+			}
+			j.lat = &Edge{
+				curve:       Circle3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
+				start:       seam,
+				end:         seam,
+				convex:      turn > 0,
+				length:      latitudeLength,
+				lengthBound: latitudeBound,
+				denot:       body.doc.mintCurve(),
+			}
+		case !rp.full:
+			j.v0 = &Vertex{
+				position: rp.point(b, j.z, j.rho, rp.phi0),
+				bound:    units.Millimeters(absSumUpper(productUpper(j.rho, rp.phi0Delta()), revolveVertexFrameLiftAllow(rp, axisRadiusUpper))),
+				denot:    body.doc.mintCurve(),
+			}
+			j.v1 = j.v0
+			if !j.onAxis {
+				j.v1 = &Vertex{
+					position: rp.point(b, j.z, j.rho, rp.phi1),
+					bound:    units.Millimeters(absSumUpper(productUpper(j.rho, rp.phi1Delta()), revolveVertexFrameLiftAllow(rp, axisRadiusUpper))),
+					denot:    body.doc.mintCurve(),
+				}
+				arcLength := j.rho * dphi
+				dphiUpper := absSumUpper(math.Abs(dphi), sweep.bound)
+				arcBound := conservativeValueError(arcLength, productUpper(axisRadiusUpper, dphiUpper))
+				if rhoEnc, ok := junctionRadiusInterval(j.rho, rhoBound); ok {
+					if widthEnc, ok := rp.den.widthInterval(); ok {
+						enc := intervalMul(rhoEnc, widthEnc)
+						arcBound = math.Min(arcBound, intervalFloatError(enc, arcLength))
+					}
+				}
+				j.arc = &Edge{
+					curve:       Arc3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
+					start:       j.v0,
+					end:         j.v1,
+					convex:      turn > 0,
+					length:      arcLength,
+					lengthBound: arcBound,
+					denot:       body.doc.mintCurve(),
+				}
+			}
+		}
+		js[i] = j
+	}
+
+	faces := make([]*Face, 0, n)
+	total := boundedScalar{}
+	for i, w := range walks {
+		if err := ctx.Err(); err != nil {
+			return nil, boundedScalar{}, err
+		}
+		if kinds[i] == wallAxis {
+			// A LineSeg lying exactly on the axis sweeps no face — the same
+			// rule a profile-fed revolve's own wallAxis segment follows
+			// (docs/evaluator-design.md §6) — and, with no cap to bridge the
+			// gap either side of it, a chain mints nothing at all for it.
+			continue
+		}
+		surf, reversed, err := rp.wallSurface(b, w.segmentWalk, kinds[i])
+		if err != nil {
+			return nil, boundedScalar{}, err
+		}
+		origins, err := sideOriginsContext(ctx, ref, 0, w.segs)
+		if err != nil {
+			return nil, boundedScalar{}, err
+		}
+		segs := make([]CurveSegment, len(w.segs))
+		for oi, si := range w.segs {
+			segs[oi] = rp.profile.Outer.Segments[si]
+		}
+		faceArea := boundedMul(walkAxisMoment(w.segmentWalk, kinds[i], segs, rp.ax), sweep)
+		face := &Face{
+			surface:   surf,
+			origins:   origins,
+			body:      body,
+			area:      faceArea.value,
+			areaBound: faceArea.bound,
+			reversed:  reversed,
+		}
+		if rp.full {
+			face.loops = fullRevLoops(js[i], js[i+1], kinds[i])
+		} else {
+			// holeLoop is always false: a chain has no hole, and its whole
+			// walk takes the loop-0 (outer) convention
+			// (docs/surface-design.md §13.4).
+			cap0 := rp.capEdge(b, w.segmentWalk, false, js[i].v0, js[i+1].v0, rp.phi0, rp.phi0Delta(), false)
+			cap1 := rp.capEdge(b, w.segmentWalk, false, js[i].v1, js[i+1].v1, rp.phi1, rp.phi1Delta(), false)
+			co := []coedge{{edge: cap0, forward: true}}
+			if a := js[i+1].arc; a != nil {
+				co = append(co, coedge{edge: a, forward: true})
+			}
+			co = append(co, coedge{edge: cap1, forward: false})
+			if a := js[i].arc; a != nil {
+				co = append(co, coedge{edge: a, forward: false})
+			}
+			face.loops = []*Loop{{coedges: co, outer: true}}
+		}
+		if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
+			return nil, boundedScalar{}, err
+		}
+		faces = append(faces, face)
+		total = boundedAdd(total, faceArea)
+	}
+	return faces, total, nil
+}

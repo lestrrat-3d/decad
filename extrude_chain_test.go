@@ -201,12 +201,76 @@ func TestExtrudeChainRejectsInvalidChain(t *testing.T) {
 	require.Empty(t, doc.Bodies())
 }
 
-// TestExtrudeChainRefusesMultiSegmentChain confirms this increment's own
-// staged boundary: ExtrudeChain builds a chain of exactly one straight
-// segment (docs/surface-design.md §14's own two-PR split for this
-// capability); a genuine multi-segment chain is ErrUnsupported, staged to a
-// later increment rather than built incorrectly.
-func TestExtrudeChainRefusesMultiSegmentChain(t *testing.T) {
+// TestExtrudeChainMultiSegmentWallSet is docs/surface-design.md's T131: an
+// open three-segment walk — line, arc, line — each meeting the next at a
+// shared point, built into a three-face ribbon whose per-wall area bounds
+// compose through boundedAdd rather than as raw floats.
+func TestExtrudeChainMultiSegmentWallSet(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a := s.CreatePoint(0, 0)
+	b := s.CreatePoint(10, 0)
+	c := s.CreatePoint(15, 5)
+	d := s.CreatePoint(25, 5)
+	s.Fix(a)
+	s.CreateLine(a, b)
+	s.CreateArc(s.CreatePoint(10, 5), b, c)
+	s.CreateLine(c, d)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Empty(t, s.Profiles())
+	chains := s.Chains()
+	require.Len(t, chains, 1, "one connected open run")
+	require.Len(t, chains[0].Edges, 3)
+
+	doc := decad.New()
+	body, err := doc.ExtrudeChain(s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	require.Len(t, body.Faces(), 3)
+
+	free, err := decad.Edges(decad.Free()).Exactly(8).SelectEdges(body)
+	require.NoError(t, err)
+	for _, e := range free {
+		require.True(t, e.IsFree())
+	}
+
+	var lineWalls, arcWalls int
+	sumValue, sumBound := 0.0, 0.0
+	for _, f := range body.Faces() {
+		area, err := f.Area()
+		require.NoError(t, err)
+		switch f.Surface().Kind() {
+		case decad.KindPlane:
+			lineWalls++
+			require.Equal(t, decad.Exact, area.Exactness, "a line wall's area is exact")
+			require.Zero(t, area.Bound.Base())
+		case decad.KindCylinder:
+			arcWalls++
+			require.Equal(t, decad.Approximate, area.Exactness, "the arc wall's area carries rθ's own evaluation bound")
+			require.Greater(t, area.Bound.Base(), 0.0)
+		default:
+			t.Fatalf("unexpected chain wall surface kind %v", f.Surface().Kind())
+		}
+		sumValue += area.Value.Base()
+		sumBound += area.Bound.Base()
+	}
+	require.Equal(t, 2, lineWalls)
+	require.Equal(t, 1, arcWalls)
+
+	bodyArea, err := body.Area()
+	require.NoError(t, err)
+	require.Equal(t, sumValue, bodyArea.Value.Base(), "the body's own area is the three walls' own values summed")
+	require.Equal(t, decad.Approximate, bodyArea.Exactness)
+	require.InDelta(t, sumBound, bodyArea.Bound.Base(), 1e-9,
+		"the body's own area bound is the three walls' own bounds folded through boundedAdd")
+}
+
+// TestExtrudeChainRectangleMinusOneSideBuildsThreeWalls is docs/surface-design.md's
+// T132: a rectangle with one side erased mints one wall per surviving side —
+// three, not four — the ribbon this section opens on.
+func TestExtrudeChainRectangleMinusOneSideBuildsThreeWalls(t *testing.T) {
 	t.Parallel()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -214,26 +278,104 @@ func TestExtrudeChainRefusesMultiSegmentChain(t *testing.T) {
 	a := s.CreatePoint(0, 0)
 	b := s.CreatePoint(10, 0)
 	c := s.CreatePoint(10, 6)
+	d := s.CreatePoint(0, 6)
 	s.Fix(a)
 	s.CreateLine(a, b)
 	s.CreateLine(b, c)
+	s.CreateLine(c, d)
+	// The fourth side, d-a, is never drawn.
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	require.Empty(t, s.Profiles())
 	chains := s.Chains()
 	require.Len(t, chains, 1)
-	require.Len(t, chains[0].Edges, 2)
+	require.Len(t, chains[0].Edges, 3)
 
 	doc := decad.New()
-	_, err = doc.ExtrudeChain(s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Empty(t, doc.Bodies())
+	body, err := doc.ExtrudeChain(s, chains[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	require.Len(t, body.Faces(), 3, "the erased side mints no wall")
+	_, err = body.Volume()
+	require.ErrorIs(t, err, decad.ErrNotSolid)
+
+	_, err = decad.Edges(decad.Free()).Exactly(8).SelectEdges(body)
+	require.NoError(t, err)
 }
 
-// TestChainFedRefusals is docs/surface-design.md's T139 for SweepChain and
-// LoftChain: each is ErrUnsupported (Table R row R23) even for a valid
-// chain, ahead of the increment that states its own pairing rule. The
-// RevolveChain-on-axis third of T139 is deferred with RevolveChain itself.
+// TestExtrudeChainOverEachChainOfACutVertex is docs/surface-design.md's T133:
+// three lines meeting at one point publish three separate one-edge chains
+// (§13.1's cut-vertex rule), and ExtrudeChain over each in turn builds its
+// own one-face ribbon — three bodies, never one.
+func TestExtrudeChainOverEachChainOfACutVertex(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	s.CreateLine(center, s.CreatePoint(10, 0))
+	s.CreateLine(center, s.CreatePoint(0, 10))
+	s.CreateLine(center, s.CreatePoint(-10, 0))
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Empty(t, s.Profiles())
+	chains := s.Chains()
+	require.Len(t, chains, 3, "three lines meeting at one point publish three chains")
+
+	doc := decad.New()
+	for _, ch := range chains {
+		body, err := doc.ExtrudeChain(s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		require.NoError(t, err)
+		require.Len(t, body.Faces(), 1)
+	}
+	require.Len(t, doc.Bodies(), 3, "each chain builds its own body, never one shared body")
+}
+
+// TestExtrudeChainFreeformWallAreaNeverPublishesTheLengthUnderestimate is
+// docs/surface-design.md's T141: a chain holding a Tier A free-form fragment
+// builds a NURBSSurface wall whose area is Approximate over
+// spline_length.go's proven bracket, and Chain.Length·h — the sampling-
+// convergent underestimate §13.3 forbids ExtrudeChain from ever publishing —
+// sits at or below that interval's own lower end, never inside it.
+func TestExtrudeChainFreeformWallAreaNeverPublishesTheLengthUnderestimate(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	p0 := s.CreatePoint(0, 0)
+	p1 := s.CreatePoint(10, 5)
+	p2 := s.CreatePoint(20, 8)
+	p3 := s.CreatePoint(30, 9)
+	s.Fix(p0)
+	_, err = s.CreateSpline(p0, p1, p2, p3)
+	require.NoError(t, err)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	chains := s.Chains()
+	require.Len(t, chains, 1)
+	chainLength := chains[0].Length
+
+	const h = 10.0
+	doc := decad.New()
+	body, err := doc.ExtrudeChain(s, chains[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	require.NoError(t, err)
+
+	area, err := body.Area()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Greater(t, area.Bound.Base(), 0.0)
+
+	lo := area.Value.Base() - area.Bound.Base()
+	underestimate := chainLength * h
+	require.LessOrEqual(t, underestimate, lo,
+		"Chain.Length's sampling-convergent underestimate must sit at or below the enclosure's own lower end, never inside it")
+}
+
+// TestChainFedRefusals is docs/surface-design.md's T139: SweepChain and
+// LoftChain are ErrUnsupported (Table R row R23) even for a valid chain,
+// ahead of the increment that states their own pairing rule; RevolveChain
+// handed a chain whose free end lies exactly on the resolved axis is
+// ErrUnsupported (R22), staged rather than permanent.
 func TestChainFedRefusals(t *testing.T) {
 	t.Parallel()
 	s, ch := lineChainSketch(t)
@@ -251,6 +393,69 @@ func TestChainFedRefusals(t *testing.T) {
 	_, err = doc.LoftChain(t.Context(), s, ch, s, ch)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Empty(t, doc.Bodies())
+
+	// R22: a chain free end lying exactly on the resolved axis.
+	axisWorld := sketch.NewWorld()
+	axisSketch, err := axisWorld.CreateSketch(axisWorld.XY())
+	require.NoError(t, err)
+	onAxis := axisSketch.CreatePoint(0, 0)
+	axisSketch.Fix(onAxis)
+	axisSketch.CreateLine(onAxis, axisSketch.CreatePoint(10, 5))
+	_, err = axisSketch.Solve(t.Context())
+	require.NoError(t, err)
+	axisChain := axisSketch.Chains()[0]
+
+	_, err = doc.RevolveChain(axisSketch, axisChain,
+		decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}},
+		decad.FullRevolution{})
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Empty(t, doc.Bodies())
+}
+
+// TestExtrudeChainRibbonsWeldAtAProvenCoincidentPair is docs/surface-design.md's
+// T140: a ribbon is an ordinary Stitch operand, admitted by the existing
+// gates and not by a new one. Two independently built ribbons whose free-end
+// edges are a proven-coincident, zero-bound pair weld under Table J's Line3
+// row, and the result is a BodySheet whose Edges(Free()) resolves to the
+// remaining 6 edges, not 8.
+func TestExtrudeChainRibbonsWeldAtAProvenCoincidentPair(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s1, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a := s1.CreatePoint(0, 0)
+	b := s1.CreatePoint(10, 0)
+	s1.Fix(a)
+	s1.CreateLine(a, b)
+	_, err = s1.Solve(t.Context())
+	require.NoError(t, err)
+	ch1 := s1.Chains()[0]
+
+	// A separate sketch, so the two lines never arrange into one connected
+	// chain even though their free ends are bit-identical: (10, 0) is where
+	// the first ribbon's wall ends and the second's begins.
+	s2, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	c := s2.CreatePoint(10, 0)
+	d := s2.CreatePoint(10, 10)
+	s2.Fix(c)
+	s2.CreateLine(c, d)
+	_, err = s2.Solve(t.Context())
+	require.NoError(t, err)
+	ch2 := s2.Chains()[0]
+
+	doc := decad.New()
+	body1, err := doc.ExtrudeChain(s1, ch1, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	require.NoError(t, err)
+	body2, err := doc.ExtrudeChain(s2, ch2, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	require.NoError(t, err)
+
+	stitched, err := decad.Stitch(t.Context(), body1, body2)
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySheet, stitched.Kind())
+
+	_, err = decad.Edges(decad.Free()).Exactly(6).SelectEdges(stitched)
+	require.NoError(t, err)
 }
 
 // TestChainFedRefusalsStillRunTheSeamGates confirms SweepChain and LoftChain

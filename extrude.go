@@ -326,10 +326,10 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 // chain's own sweep into a ribbon. It reuses resolveLinearExtent unchanged —
 // the extent vocabulary and the frame it resolves against are identical to
 // Extrude's — and reads its recorded walk through RecordChain (seam.go)
-// rather than RecordProfile. This increment admits exactly one chain of one
-// straight LineSeg segment, evaluated by evalChainExtrudeContext below;
-// docs/surface-design.md Table G's multi-segment and curved-wall rows are
-// staged to a later increment and refuse here with ErrUnsupported.
+// rather than RecordProfile. It builds a chain of any segment count and kind
+// Table G's per-kind construction admits, through buildChainSides
+// (prism_build.go's buildWallGeometry, shared with the profile-fed prism
+// build) — the same evaluator, over an open rather than a closed walk.
 
 // ChainExtrudeOption configures ExtrudeChain. It is its own sealed tier
 // rather than [ExtrudeOption]: WithSurfaceResult() does not implement it, so
@@ -346,12 +346,9 @@ type ChainExtrudeOption interface {
 // chainPayload is ExtrudeChain's own record of a ribbon body: the recorded
 // open walk, the plane frame it lifts through, the signed sweep interval, and
 // the accumulated rigid placement — chainPayload is to ExtrudeChain what
-// prismPayload is to Extrude (docs/surface-design.md §13.4). This increment
-// admits exactly one segment, a LineSeg, read out once as line so the build
-// never re-type-asserts chain.Segments[0].
+// prismPayload is to Extrude (docs/surface-design.md §13.4).
 type chainPayload struct {
 	chain   ChainRecord
-	line    LineSeg
 	frame   r3.Frame
 	z0, z1  float64
 	z0Delta float64
@@ -371,7 +368,7 @@ func (pp chainPayload) z1Scalar() boundedScalar { return measuredScalar(pp.z1, p
 // exactly that list.
 func (pp chainPayload) prism() prismPayload {
 	return prismPayload{
-		profile: ProfileRecord{Outer: LoopRecord{Segments: pp.chain.Segments}},
+		profile: ProfileRecord{Outer: LoopRecord(pp.chain)},
 		frame:   pp.frame,
 		z0:      pp.z0, z1: pp.z1,
 		z0Delta: pp.z0Delta, z1Delta: pp.z1Delta,
@@ -382,10 +379,13 @@ func (pp chainPayload) prism() prismPayload {
 // transform is the accumulated rigid placement.
 func (pp chainPayload) transform() r3.Transform { return pp.xform }
 
-// placed re-evaluates the same record under the composed motion (core §8).
+// placed re-evaluates the same record under the composed motion (core §8). A
+// re-evaluation path: no moments preflight has run on this record within the
+// call, so the build opens the record's one free-form work counter itself
+// (docs/spline-design.md §5.2), exactly as prismPayload.placed does.
 func (pp chainPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
 	pp.xform = composed
-	return evalChainExtrudeContext(ctx, d, ref, pp)
+	return evalChainExtrudeContext(ctx, d, ref, pp, newFreeformWork())
 }
 
 // ExtrudeChain sweeps the open chain ch of sketch s along the sketch plane's
@@ -396,10 +396,12 @@ func (pp chainPayload) placed(ctx context.Context, d *Document, ref producerID, 
 // ErrUnrecordableProfile (docs/sketch-seam-design.md §2.2). The result is
 // always a sheet — Kind() == BodySheet — one wall face per recorded segment
 // (docs/surface-design.md §13.4, Table G), with no cap and no closing face:
-// WithSurfaceResult() does not compile against this call. This increment
-// builds a chain of exactly one straight LineSeg segment; a multi-segment
-// chain, or one carrying a circular or free-form segment, is ErrUnsupported,
-// staged to a later increment. A failed evaluation leaves the document
+// WithSurfaceResult() does not compile against this call. A chain of any
+// segment count and kind builds — a line wall Exact, an arc or circle
+// fragment wall carrying rθ's own bound, a Tier A free-form wall carrying
+// spline_length.go's proven bracket (docs/spline-design.md); a Tier B or
+// Tier C free-form segment is ErrUnsupported, exactly as Extrude's own
+// profile-fed wall refuses it. A failed evaluation leaves the document
 // untouched.
 func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, opts ...ChainExtrudeOption) (*Body, error) {
 	if d == nil {
@@ -414,13 +416,6 @@ func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, op
 	chain, plane, err := recordChain(s, ch)
 	if err != nil {
 		return nil, err
-	}
-	if len(chain.Segments) != 1 {
-		return nil, fmt.Errorf(`%w: this evaluator sweeps a chain of exactly one straight segment; a %d-segment chain is staged to a later increment`, ErrUnsupported, len(chain.Segments))
-	}
-	line, ok := chain.Segments[0].(LineSeg)
-	if !ok {
-		return nil, fmt.Errorf(`%w: this evaluator sweeps a chain of exactly one straight segment; a %T wall is staged to a later increment`, ErrUnsupported, chain.Segments[0])
 	}
 
 	frame, err := r3.NewFrame(plane.Origin, plane.U, plane.V)
@@ -437,17 +432,21 @@ func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, op
 		return nil, err
 	}
 
+	// ONE free-form work counter for this whole call, exactly as Extrude
+	// opens for its own profile-fed build (docs/spline-design.md §5.2):
+	// buildChainSides's own walkOf calls and the final bounds reading below
+	// spend from the same ceiling rather than each opening a fresh one.
+	work := newFreeformWork()
 	ref := d.nextProducerID()
-	body, err := evalChainExtrude(d, ref, chainPayload{
+	body, err := evalChainExtrudeContext(context.Background(), d, ref, chainPayload{
 		chain:   chain,
-		line:    line,
 		frame:   frame,
 		z0:      sweep.z0,
 		z1:      sweep.z1,
 		z0Delta: sweep.z0Delta,
 		z1Delta: sweep.z1Delta,
 		xform:   r3.Identity(),
-	})
+	}, work)
 	if err != nil {
 		return nil, err
 	}
@@ -455,18 +454,15 @@ func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, op
 	return body, nil
 }
 
-// evalChainExtrude builds a ribbon body from pp, over context.Background().
-func evalChainExtrude(d *Document, ref producerID, pp chainPayload) (*Body, error) {
-	return evalChainExtrudeContext(context.Background(), d, ref, pp)
-}
-
-// evalChainExtrudeContext builds the ribbon body: one Plane wall face over the
-// chain's own single LineSeg segment, its two rim edges and the one sweep
-// edge at each of its two free ends (docs/surface-design.md §13.4, Table G
-// row 1), and the measurements the finished body publishes. It mirrors
-// evalPrismContext's own order (prism_build.go) without ever building a solid
-// or a closing cap: an open chain mints neither.
-func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, pp chainPayload) (*Body, error) {
+// evalChainExtrudeContext builds the ribbon body: one wall face per recorded
+// segment, both rims of the walk and the one sweep edge at each of its two
+// free ends (docs/surface-design.md §13.4, Table G row 1), and the
+// measurements the finished body publishes. It mirrors evalPrismContext's own
+// order (prism_build.go) without ever building a solid or a closing cap: an
+// open chain mints neither. work is the record's ONE free-form work counter
+// (docs/spline-design.md §5.2): the caller opens it once and this build and
+// the final bounds reading both spend from it.
+func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, pp chainPayload, work *freeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -475,85 +471,13 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 
-	w, err := walkOf(pp.line, nil)
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
+	faces, total, err := buildChainSides(ctx, body, ref, pp, work)
 	if err != nil {
 		return nil, err
 	}
-
-	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
-	prismView := pp.prism()
-
-	// frameLiftAllow is the one proven bound this ribbon's four rim vertices
-	// share for the payload's own frame lift and accumulated placement
-	// (bounds.go's frameAndPlacementRoundAllow) — exactly zero for an
-	// axis-aligned, unplaced payload, which is what keeps a plain
-	// ExtrudeChain's rim vertices Exact, mirroring buildLoopSidesAs's own
-	// frameLiftAllow (prism_build.go).
-	frameLiftAllow := frameAndPlacementRoundAllow(pp.frame, pp.xform, math.Max(w.coordUpper, math.Max(math.Abs(pp.z0), math.Abs(pp.z1))))
-	bottomBoundBase := absSumUpper(pp.z0Delta, frameLiftAllow)
-	topBoundBase := absSumUpper(pp.z1Delta, frameLiftAllow)
-
-	bStart := &Vertex{position: prismView.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(bottomBoundBase)}
-	bEnd := &Vertex{position: prismView.point(w.endU, w.endV, pp.z0), bound: units.Millimeters(bottomBoundBase)}
-	tStart := &Vertex{position: prismView.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(topBoundBase)}
-	tEnd := &Vertex{position: prismView.point(w.endU, w.endV, pp.z1), bound: units.Millimeters(topBoundBase)}
-
-	bottomEdge := &Edge{curve: Line3{}, start: bStart, end: bEnd, convex: true, length: w.length, lengthBound: w.lengthBound}
-	topEdge := &Edge{curve: Line3{}, start: tStart, end: tEnd, convex: true, length: w.length, lengthBound: w.lengthBound}
-	// startSweep and endSweep are Table G's "one sweep edge at each of its two
-	// free ends" — the chain's own counterpart of buildLoopSidesAs's junction
-	// verticals, except that a free end joins no neighbouring wall.
-	startSweep := &Edge{curve: Line3{}, start: bStart, end: tStart, length: pp.z1 - pp.z0, lengthBound: height.bound}
-	endSweep := &Edge{curve: Line3{}, start: bEnd, end: tEnd, length: pp.z1 - pp.z0, lengthBound: height.bound}
-
-	// T × N: the walk tangent crossed with the plane normal, the identical
-	// construction buildLoopSidesAs's own straight-wall branch takes for a
-	// profile-fed wall's outward normal (docs/surface-design.md §13.4). A
-	// reflected placement flips the cross product's handedness, so the
-	// tangent is negated to keep it outward, exactly as the profile-fed
-	// branch does.
-	mid := prismView.point((w.startU+w.endU)/2, (w.startV+w.endV)/2, pp.z0)
-	tu, tv := w.tanInU, w.tanInV
-	if prismView.reflected() {
-		tu, tv = -tu, -tv
-	}
-	wallFrame, err := r3.NewFrame(mid, prismView.dir(tu, tv, 0), prismView.dir(0, 0, 1))
-	if err != nil {
-		return nil, fmt.Errorf(`%w: the chain's own segment has no direction`, ErrDegenerate)
-	}
-
-	wallArea := boundedMul(measuredScalar(w.length, w.lengthBound), height)
-	face := &Face{
-		surface: Plane{Frame: wallFrame},
-		// The role name matches sideOriginsContext's own "side(loop,segment)"
-		// convention (prism_build.go): this increment's single wall is
-		// loop 0, segment 0.
-		origins:   []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(%d,%d)", 0, 0)}},
-		body:      body,
-		area:      wallArea.value,
-		areaBound: wallArea.bound,
-		loops: []*Loop{{outer: true, coedges: []coedge{
-			{edge: bottomEdge, forward: true},
-			{edge: endSweep, forward: true},
-			{edge: topEdge, forward: false},
-			{edge: startSweep, forward: false},
-		}}},
-	}
-	for _, e := range []*Edge{bottomEdge, topEdge, startSweep, endSweep} {
-		e.faces = append(e.faces, face)
-	}
-	faces := []*Face{face}
-	// sheetLumps derives IsOpen from the faces' own edge adjacency: every one
-	// of this ribbon's four edges carries exactly one face, so its one lump's
-	// one shell reads open, exactly as a profile-fed wall's own free rim does
-	// (surface.go).
 	body.lumps = sheetLumps(faces)
 
-	// The ribbon's area is the sum of its per-wall areas, composed through
-	// boundedAdd rather than added as raw floats (docs/surface-design.md
-	// §13.4): one term this increment, and the same fold a later increment's
-	// multi-segment wall set extends with no change here.
-	total := boundedAdd(boundedScalar{}, wallArea)
 	body.area = Measurement{
 		Value:     units.SquareMillimeters(total.value),
 		Exactness: exactnessOf(total.bound),
@@ -564,8 +488,7 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 	// reachable through Body.Volume/Body.Centroid while solid is false
 	// (docs/surface-design.md §8), exactly as patch.go's evalPatchContext
 	// leaves them.
-	work := newFreeformWork()
-	bounds, err := prismBoundsContext(ctx, prismView, work, nil)
+	bounds, err := prismBoundsContext(ctx, pp.prism(), work, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -575,4 +498,137 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 	}
 	body.payload = pp
 	return body, nil
+}
+
+// buildChainSides builds an open chain's whole wall set with shared vertices
+// and edges: one wall face per recorded segment (Table G row 1), never a cap
+// and never a wraparound junction. n segments place n+1 rim posts at each
+// sweep level, so the chain's two FREE ends (post 0 and post n) each carry a
+// sweep edge touched by exactly one wall — Free() resolves them
+// (Edge.IsFree, topology.go) — while every INTERIOR post (1..n-1) shares its
+// sweep edge between the two walls it joins, exactly as buildLoopSidesAs's
+// own junction verticals do for a closed loop
+// (docs/surface-design.md §13.4). It returns the faces and the walk's own
+// total wall area, folded through boundedAdd rather than summed as raw
+// floats.
+func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPayload, work *freeformWork) ([]*Face, boundedScalar, error) {
+	prismView := pp.prism()
+	raw := make([]sideWalk, len(pp.chain.Segments))
+	for i, seg := range pp.chain.Segments {
+		if err := ctx.Err(); err != nil {
+			return nil, boundedScalar{}, err
+		}
+		w, err := walkOf(seg, work)
+		if err != nil {
+			return nil, boundedScalar{}, err
+		}
+		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
+	}
+	walks, err := coalesceChainWalksContext(ctx, raw)
+	if err != nil {
+		return nil, boundedScalar{}, err
+	}
+	n := len(walks)
+
+	height := boundedSub(pp.z1Scalar(), pp.z0Scalar())
+	maxCoordUpper := 0.0
+	for _, w := range walks {
+		maxCoordUpper = math.Max(maxCoordUpper, w.coordUpper)
+	}
+	// frameLiftAllow is the one proven bound this ribbon's rim vertices share
+	// for the payload's own frame lift and accumulated placement
+	// (bounds.go's frameAndPlacementRoundAllow) — exactly zero for an
+	// axis-aligned, unplaced payload, which is what keeps a plain
+	// ExtrudeChain's rim vertices Exact, mirroring buildLoopSidesAs's own
+	// frameLiftAllow.
+	frameLiftAllow := frameAndPlacementRoundAllow(pp.frame, pp.xform, math.Max(maxCoordUpper, math.Max(math.Abs(pp.z0), math.Abs(pp.z1))))
+	bottomBoundBase := absSumUpper(pp.z0Delta, frameLiftAllow)
+	topBoundBase := absSumUpper(pp.z1Delta, frameLiftAllow)
+
+	// Rim posts 0..n, no wraparound: post i sits at walk i's start for
+	// i < n, and at the LAST walk's own end for i == n — the chain's two free
+	// ends. A post touching a FREE-FORM walk's own end also folds in that
+	// walk's own endpoint bound (freeformVertexAllow), exactly as
+	// buildLoopSidesAs does for a closed loop's junctions.
+	bottomV := make([]*Vertex, n+1)
+	topV := make([]*Vertex, n+1)
+	for i := 0; i <= n; i++ {
+		if err := ctx.Err(); err != nil {
+			return nil, boundedScalar{}, err
+		}
+		var u, v, extra float64
+		if i < n {
+			u, v = walks[i].startU, walks[i].startV
+			extra = freeformVertexAllow(walks[i].segmentWalk, walks[i].startBound)
+		} else {
+			u, v = walks[n-1].endU, walks[n-1].endV
+			extra = freeformVertexAllow(walks[n-1].segmentWalk, walks[n-1].endBound)
+		}
+		if i > 0 && i < n {
+			extra = math.Max(extra, freeformVertexAllow(walks[i-1].segmentWalk, walks[i-1].endBound))
+		}
+		bottomV[i] = &Vertex{position: prismView.point(u, v, pp.z0), bound: units.Millimeters(absSumUpper(bottomBoundBase, extra))}
+		topV[i] = &Vertex{position: prismView.point(u, v, pp.z1), bound: units.Millimeters(absSumUpper(topBoundBase, extra))}
+	}
+
+	// Sweep edges at every post, free-end and interior alike. Convexity from
+	// the 2D turn, exactly as buildLoopSidesAs's own junction verticals: only
+	// an interior post has both a leaving and an entering tangent to cross,
+	// so a free end's carries no turn of its own and keeps its zero
+	// (concave) default — Table G assigns it no sense.
+	vertical := make([]*Edge, n+1)
+	for i := 0; i <= n; i++ {
+		if err := ctx.Err(); err != nil {
+			return nil, boundedScalar{}, err
+		}
+		convex := false
+		if i > 0 && i < n {
+			prev, w := walks[i-1], walks[i]
+			convex = prev.tanOutU*w.tanInV-prev.tanOutV*w.tanInU > 0
+		}
+		vertical[i] = &Edge{curve: Line3{}, start: bottomV[i], end: topV[i], convex: convex, length: pp.z1 - pp.z0, lengthBound: height.bound}
+	}
+
+	faces := make([]*Face, 0, n)
+	total := boundedScalar{}
+	for i, w := range walks {
+		if err := ctx.Err(); err != nil {
+			return nil, boundedScalar{}, err
+		}
+		// holeLoop is always false: a chain has no hole, and the whole walk
+		// takes the loop-0 (outer) convention (docs/surface-design.md §13.4).
+		convex, err := rimConvexity(ctx, w, false, work)
+		if err != nil {
+			return nil, boundedScalar{}, err
+		}
+		bottomEdge, topEdge, surf, faceReversed, err := buildWallGeometry(prismView, w, convex, false, bottomV[i], bottomV[i+1], topV[i], topV[i+1])
+		if err != nil {
+			return nil, boundedScalar{}, err
+		}
+		origins, err := sideOriginsContext(ctx, ref, 0, w.segs)
+		if err != nil {
+			return nil, boundedScalar{}, err
+		}
+		faceArea := boundedMul(measuredScalar(w.length, w.lengthBound), height)
+		face := &Face{
+			surface:   surf,
+			origins:   origins,
+			body:      body,
+			area:      faceArea.value,
+			areaBound: faceArea.bound,
+			reversed:  faceReversed,
+			loops: []*Loop{{outer: true, coedges: []coedge{
+				{edge: bottomEdge, forward: true},
+				{edge: vertical[i+1], forward: true},
+				{edge: topEdge, forward: false},
+				{edge: vertical[i], forward: false},
+			}}},
+		}
+		for _, e := range []*Edge{bottomEdge, topEdge, vertical[i], vertical[i+1]} {
+			e.faces = append(e.faces, face)
+		}
+		faces = append(faces, face)
+		total = boundedAdd(total, faceArea)
+	}
+	return faces, total, nil
 }
