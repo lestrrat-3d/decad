@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"math/big"
 
 	"github.com/lestrrat-3d/units"
 )
@@ -30,9 +31,10 @@ const (
 func WithThickenSide(side ThickenSide) ThickenOption { return thickenSideOption{side: side} }
 
 // Thicken builds a solid from an admitted sheet and retires that sheet.
-// It extrudes a recorded planar patch through the signed thickness interval
-// or builds a certified annular wall around a profile-fed prism sheet. Other
-// sheet families are staged under docs/surface-design.md §16.
+// It extrudes a recorded planar patch through the signed thickness interval,
+// builds a certified annular wall around a profile-fed prism sheet, or spins
+// a certified meridian annulus through a profile-fed revolve sheet's own
+// interval. Other sheet families are staged under docs/surface-design.md §16.
 func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...ThickenOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a thicken`, ErrDegenerate)
@@ -74,6 +76,8 @@ func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...Thick
 		result, err = thickenPatch(ctx, d, payload, side, tmm, tDelta)
 	case prismPayload:
 		result, err = thickenPrism(ctx, d, payload, side, tmm, tDelta)
+	case revolvePayload:
+		result, err = thickenRevolve(ctx, d, payload, side, tmm, tDelta)
 	default:
 		return nil, fmt.Errorf(`%w: this sheet has no admitted Thicken generator`, ErrUnsupported)
 	}
@@ -110,4 +114,112 @@ func thickenPatch(ctx context.Context, d *Document, pp patchPayload, side Thicke
 	prism.z1, prism.z1Delta = z1.value, z1.bound
 	ref := d.nextProducerID()
 	return evalPrismContext(ctx, d, ref, prism, newFreeformWork())
+}
+
+// thickenRadial is the revolve arm's radial-axis gate (docs/surface-design.md
+// §16.5): the plane-local axis every swept offset must keep a strictly
+// positive radius from, held as exact rationals so each comparison below is
+// decided rather than measured. A surface of revolution's own normal lies in
+// its meridian plane, so offsetting the meridian IS offsetting the surface,
+// and the swept offset folds exactly where the offset meridian reaches the
+// axis.
+type thickenRadial struct{ aU, aV, dU, dV *big.Rat }
+
+// thickenRadialOf reads one resolved axis frame into the gate, refusing any
+// axis this arm cannot decide exactly.
+func thickenRadialOf(ax axisFrame) (thickenRadial, error) {
+	// An axis along one recorded plane axis is what keeps axisFrame.toAxis
+	// exact: every product it forms is by 0 or ±1, so the built wall's own
+	// radial coordinate is the coordinate this gate decided on. Any other
+	// direction rounds that re-expression, and a rounded radius admits no
+	// exact positive-radius claim. The direction is read first because it is
+	// what a caller can act on: a tilted axis also arrives with a rounded
+	// direction bound, and naming the tilt says which input to change.
+	along := (ax.dU == 0 && (ax.dV == 1 || ax.dV == -1)) || (ax.dV == 0 && (ax.dU == 1 || ax.dU == -1))
+	if !along {
+		return thickenRadial{}, fmt.Errorf(`%w: the revolve axis is not parallel to a recorded plane axis`, ErrUnsupported)
+	}
+	if ax.aUBound != 0 || ax.aVBound != 0 || ax.dUBound != 0 || ax.dVBound != 0 {
+		return thickenRadial{}, fmt.Errorf(`%w: the revolve axis is not stated exactly in the sketch plane`, ErrUnsupported)
+	}
+	aU, aV, dU, dV := floatRat(ax.aU), floatRat(ax.aV), floatRat(ax.dU), floatRat(ax.dV)
+	if aU == nil || aV == nil || dU == nil || dV == nil {
+		return thickenRadial{}, fmt.Errorf(`%w: the revolve axis has a non-finite plane-local coordinate`, ErrUnsupported)
+	}
+	return thickenRadial{aU: aU, aV: aV, dU: dU, dV: dV}, nil
+}
+
+// rho is axisFrame.toAxis's own radial coordinate, taken over the rationals.
+func (r thickenRadial) rho(u, v *big.Rat) *big.Rat {
+	du := new(big.Rat).Sub(u, r.aU)
+	dv := new(big.Rat).Sub(v, r.aV)
+	return new(big.Rat).Sub(new(big.Rat).Mul(dv, r.dU), new(big.Rat).Mul(du, r.dV))
+}
+
+// leastOverBox is the least radius any point of one exact box reaches. ρ is
+// affine in (u, v), so its minimum over a box sits at a corner.
+func (r thickenRadial) leastOverBox(b thickenExactBox) *big.Rat {
+	least := r.rho(b.minU, b.minV)
+	for _, corner := range [][2]*big.Rat{{b.minU, b.maxV}, {b.maxU, b.minV}, {b.maxU, b.maxV}} {
+		if got := r.rho(corner[0], corner[1]); got.Cmp(least) < 0 {
+			least = got
+		}
+	}
+	return least
+}
+
+// require refuses a swept offset whose least radius is not proven positive.
+func (r thickenRadial) require(least *big.Rat) error {
+	if least.Sign() <= 0 {
+		return fmt.Errorf(`%w: the swept offset reaches the revolve axis (least radius %s mm)`,
+			ErrUnsupported, least.FloatString(9))
+	}
+	return nil
+}
+
+// thickenRevolve builds a solid of revolution from an admitted revolve sheet
+// by offsetting its recorded meridian and spinning the annulus through the
+// sheet's own interval (docs/surface-design.md §16.5).
+func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side ThickenSide, tmm, tDelta float64) (*Body, error) {
+	if !rp.surfaceResult || len(rp.profile.Holes) != 0 {
+		return nil, fmt.Errorf(`%w: this revolve sheet has no admitted Thicken section`, ErrUnsupported)
+	}
+	radial, err := thickenRadialOf(rp.ax)
+	if err != nil {
+		return nil, err
+	}
+	amount, err := thickenAmount(tmm, tDelta, side)
+	if err != nil {
+		return nil, err
+	}
+	budget := newWorkBudget(ctx)
+	if err := budget.err(); err != nil {
+		return nil, err
+	}
+	sec, err := thickenSectionOf(ctx, rp.profile, side, amount, budget, &radial)
+	if err != nil {
+		return nil, err
+	}
+	annulus, err := thickenAnnulus(ctx, sec)
+	if err != nil {
+		return nil, err
+	}
+	// The annulus is a section no axis resolution has seen, so its own snap
+	// allowances, radial admission charge and axial envelope are proven here
+	// rather than inherited from the sheet's: every one of them is an integral
+	// over the region, and the region changed.
+	work := newFreeformWork()
+	ax, axisSide, err := resolveAxisSide(ctx, annulus, axisLine2{
+		aU: rp.ax.aU, aV: rp.ax.aV, dU: rp.ax.dU, dV: rp.ax.dV,
+	}, work)
+	if err != nil {
+		return nil, fmt.Errorf(`%w: the thicken offset's revolve axis side is unresolved: %v`, ErrUnsupported, err)
+	}
+	if axisSide < 0 {
+		return nil, fmt.Errorf(`%w: the thicken offset crossed to the far side of the revolve axis`, ErrUnsupported)
+	}
+	rp.profile = annulus
+	rp.ax = ax
+	rp.surfaceResult = false
+	return evalRevolveContextWork(ctx, d, d.nextProducerID(), rp, work)
 }

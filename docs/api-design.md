@@ -1693,9 +1693,9 @@ feature tree / timeline / rollback, STEP, sheet metal, mesh import,
 GUI or view state of any kind, and Fusion code generation.
 
 Sheet bodies themselves are **not** a non-goal — `docs/surface-design.md` owns
-them. `Thicken` and `Offset` each admit the recorded patch and profile-fed
-prism families of §16 and §17 there; the other sheet families refuse at either
-call with `ErrUnsupported`. Trim, Extend, surface Offset and a sheet operand in
+them. `Thicken` admits the sheet families §16.1 names and `Offset` the two
+§17.1 names; every other sheet family refuses at its call with
+`ErrUnsupported`. Trim, Extend, surface Offset and a sheet operand in
 any boolean are staged there, each refusing at the call until its own increment
 lands. Ruled and Boundary Fill refuse permanently, because the surface each
 needs is a fit through a boundary nothing generated (`docs/surface-design.md`
