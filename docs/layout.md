@@ -91,7 +91,9 @@ to the byte budget.
 | `document.go` | `Document` (`New`/`Bodies`), its atomic commit tail, private provenance identities, and retire/liveness gates. `Body.Placed`/`Duplicate`/`PlacedCopy` rebuild the payload under a composed motion; see their doc comments and evaluator §8. |
 | `surface.go` | `WithSurfaceResult`, the `refuseSheetOperand` refusal helper, and the shared shell/lump helpers (`shellIsOpen`, `sheetLumps`) prism, revolve, sweep and loft builds share. See `docs/surface-design.md` §2.2-§4, §7, §11. |
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
-| `thicken.go` | `Body.Thicken` grows an admitted sheet into a solid. See surface §16. |
+| `thicken.go` | `Body.Thicken` dispatches admitted sheets. See surface §16. |
+| `thicken_prism.go` | Prism-sheet gates and annular build. See surface §16. |
+| `thicken_axis.go` | Exact axis-line offset and interval proof. See surface §16. |
 | `patch_body.go` | `Body.Patch`: partitions a free-edge selection into closed chains, proves each planar via `dyadic.go` or a shared level token, and fills each with its own face. See `docs/surface-design.md` §5.2. |
 | `denotation.go` | The shared-denotation certificate's two halves: a minted plane identity (LEVEL) and a minted curve/point identity (CURVE), each a copy path carries under its own motion, never a coordinate comparison. See `docs/surface-design.md` §5.2, §6.2. |
 | `stitch_weld.go` | Table J's admission: the shared vertex table and which free edge pairs weld. See `docs/surface-design.md` §6.2. |

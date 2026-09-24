@@ -1605,6 +1605,12 @@
 2	0.01	TestThickenPatchHole
 3	0.01	TestThickenPatchConversionBound
 0	0.01	TestThickenPatchRefusals
+1	0.01	TestThickenPrismCircle
+2	0.01	TestThickenPrismRectangle
+2	0.01	TestThickenPrismRoundedRectangle
+3	0.01	TestThickenPrismNeckRefusal
+0	0.01	TestThickenPrismUnrepresentableOffset
+1	0.01	TestThickenChainFamiliesStayStaged
 0	0.00	TestSurfaceExtrudeSheetTessellates
 1	0.00	TestSurfaceExtrudeSheetBoundMatchesSolid
 2	0.00	TestSurfaceExtrudeSheetDeterminism
