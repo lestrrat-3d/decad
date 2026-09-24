@@ -1186,7 +1186,7 @@ vertex coordinate and triangle index at the same tolerance; only winding
 and live-face attribution may change. A curved seam made by a new weld
 must refuse until both faces can reuse one chord station sequence.
 
-For T11, `docs/surface-design.md` §15 T190–T191 checks a real welded
+For T11, `docs/surface-design.md` §15 T101–T102 checks a real welded
 curved seam and the placed-sibling refusal. The original source mesh is
 the producer and the re-stitched sheet mesh is its consumer; their shared
 edge must reuse the same vertex indices, not merely equal coordinates.
