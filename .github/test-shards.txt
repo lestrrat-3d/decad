@@ -1609,8 +1609,10 @@
 1	0.01	TestThickenPrismRectangle
 2	0.02	TestThickenPrismNeckRefusal
 3	0.01	TestThickenPrismUnrepresentableOffset
+0	0.01	TestThickenPrismUnrepresentablePublicOffset
 0	0.01	TestThickenChainFamiliesStayStaged
 1	0.02	TestThickenPrismConcaveAdmitted
+1	0.02	TestThickenPrismNarrowNeckAdmitted
 2	0.02	TestThickenPrismRectangleRoundedSides
 0	0.00	TestSurfaceExtrudeSheetTessellates
 1	0.00	TestSurfaceExtrudeSheetBoundMatchesSolid

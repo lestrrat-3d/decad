@@ -126,6 +126,19 @@ func TestThickenPrismConcaveAdmitted(t *testing.T) {
 	decadtest.MeasuresBounds(t, solid, r3.NewVec(0, 0, 0), r3.NewVec(30, 20, 10), decadtest.Exactly())
 }
 
+func TestThickenPrismNarrowNeckAdmitted(t *testing.T) {
+	t.Parallel()
+	_, sheet := thickenNeckSheet(t)
+	solid, err := sheet.Thicken(t.Context(), units.Millimeters(1.5),
+		decad.WithThickenSide(decad.ThickenNegative))
+	require.NoError(t, err)
+	require.Len(t, solid.Faces(), 30)
+	volume, err := solid.Volume()
+	require.NoError(t, err)
+	requirePiLinearEnclosed(t, volume, 1800, 22.5)
+	decadtest.MeasuresBounds(t, solid, r3.NewVec(0, 0, 0), r3.NewVec(30, 20, 10), decadtest.Exactly())
+}
+
 func thickenNeckSheet(t *testing.T) (*decad.Document, *decad.Body) {
 	t.Helper()
 	pts := [][2]float64{
@@ -153,7 +166,7 @@ func thickenNeckSheet(t *testing.T) (*decad.Document, *decad.Body) {
 	return doc, sheet
 }
 
-func TestThickenPrismUnrepresentableOffset(t *testing.T) {
+func TestThickenPrismUnrepresentablePublicOffset(t *testing.T) {
 	t.Parallel()
 	base := math.Ldexp(1, 40)
 	w := sketch.NewWorld()
