@@ -132,6 +132,25 @@ code:
   introduces no coordinate at all — and it needs no `cos`/`sin` walk, which is
   why `prismProfileHasTrimmedCircularSource`'s refusal does not reach this
   path.
+- **The recreated range is ALWAYS ascending, `t` from 0 to 1**, whichever way
+  the receiver's own recorded range runs. This is what makes the scene entity's
+  parameterisation the receiver's OWN, so §3.2's nearest-cut reading and the
+  bound it stores live in one space and no map runs between them. The
+  derivation is per kind, off `buildPrismScene`'s entity creation, which reads
+  `walkOf`'s walked geometry of exactly the segment it is handed:
+
+  | Kind | Entity created | Why the scene parameter IS the record's |
+  |---|---|---|
+  | `LineSeg` | `CreateLine(P(TStart), P(TEnd))` | At `(0, 1)` those two points are the record's own `Start` and `End`, so the scene line runs `Start` to `End` and `sketch` indexes it by the record's own lerp parameter. At `(1, 0)` it would run `End` to `Start` and the scene parameter would be `1 − t` |
+  | `CircleSeg` | `CreateCircle(centre, radius)` | Both fields are the record's own and no walk direction reaches the entity. `walkOf` indexes the record's `t` as the angle `2πt` and `sketch` indexes its own the same way, so the two agree in either recorded sense; `CCW` is set true only because `walkOf` refuses a flag contradicting an ascending range |
+  | `ArcSeg` | `CreateArc(centre, lo, hi)`, `lo`/`hi` in ascending angle | At `(0, 1)` `pinArcWalkEnds` pins the two walked ends to the record's own `Start` and `End` verbatim and `th1 > th0` leaves them unswapped, so the scene arc sweeps CCW from `Start` to `End` — the angle interval `a0 → a0 + sweep` the record's own `t` indexes |
+
+  Only the reversed `LineSeg` is affected, and it is the most common admitted
+  kind: `sketch.Chains()` publishes a `Reversed` fragment whenever the chain
+  walk runs against the line's authored direction, and `recordEdge` stores it
+  with its range order swapped. Fixing the recreation's order costs no
+  arithmetic on any parameter and so charges no bound of its own; translating
+  a candidate afterwards would round `1 − t` and owe one.
 
 S7 keeps every consumed segment whole, so no walk charge arises: prism §7's
 `δ_walk` is charged only for a segment whose recorded range narrows its
@@ -173,16 +192,29 @@ and drops the rest.
 
 **`Extend`: the new bound is `sketch`'s own cut parameter.** The extended
 segment's entity reaches the scene over its full domain, so the arrangement
-cuts it at every crossing with the tool. decad takes the fragment whose one
-bound is the receiver's own recorded bound — a structural comparison against
-its own record, exact equality on `TStart`/`TEnd` — and whose other bound is
-the nearest cut in the direction the caller named, "nearest" read off the
-arrangement's own parameter order on that one entity rather than from any
-distance decad computes. The widened range replaces the recorded one; every
-other segment of the receiver's walk is copied verbatim. The named edge is one
-of the two sweep edges the ribbon's free ends carry (surface Table G), so which
-end is being lengthened, and therefore which direction "nearest" runs in, is
-read off the receiver's own walk rather than stated by the caller.
+cuts it at every crossing with the tool. decad reads the CUT PARAMETERS the
+arrangement published on that one entity — the `TStart`/`TEnd` of its `Partial`
+fragments, taken in the entity's own natural direction and with the two natural
+bounds 0 and 1 discarded as the ends of the domain rather than crossings — and
+takes the nearest one strictly past the receiver's own recorded bound in the
+direction that bound widens, "nearest" read off the arrangement's own parameter
+order rather than from any distance decad computes. It does NOT look for a
+fragment carrying the receiver's own recorded bound: the entity enters the
+scene at full domain, so no fragment carries that bound and no such comparison
+is available. The widened range replaces the recorded one; every other segment
+of the receiver's walk is copied verbatim. The named edge is one of the two
+sweep edges the ribbon's free ends carry (surface Table G), so which end is
+being lengthened is read off the receiver's own walk rather than stated by the
+caller, and the direction follows from the recorded range order alone:
+`TStart` is the covered interval's lower bound when the record runs ascending
+and its upper bound when it runs reversed, so widening `TStart` decreases it in
+the first case and increases it in the second, and `TEnd` is the mirror.
+
+**Every parameter this reading compares or stores is the RECEIVER'S own**, and
+§3.1's ascending recreation is what puts the candidates in that same space. A
+candidate read in the scene's order and stored in the record's would publish a
+boundary at `1 − t` for a reversed `LineSeg` receiver — a wrong boundary, not a
+refusal, and with the two refusal directions swapped besides.
 
 **`Split`: the pieces are the cells, and no side is read.** The classification
 runs against the TARGET alone — `selectPrismCells` under a `keep` predicate
@@ -484,5 +516,18 @@ neither PR2 nor PR3.
 
 Surface §15 carries the fixtures as rows T170–T181, each asserting on computed
 geometry and each bound assertion shown to fail before it is trusted, under
-that section's own rule. This section adds only what those rows state and no
-fixture of its own.
+that section's own rule.
+
+This section adds three of its own, all on §3.1's ascending recreation and the
+one-space reading §3.2 rests on. Each asserts on computed geometry:
+
+| Row | Fixture | Expected |
+|---|---|---|
+| TI1 | a receiver whose recorded `LineSeg` runs against its line's authored direction — `sketch` publishes the fragment `Reversed`, so the record holds `TStart` > `TEnd` — extended in both directions in turn | a tool lying entirely INSIDE the ribbon is RS4, naming the carrier and its domain; a tool genuinely past the named end lengthens the ribbon to the nearer of its two crossings, with `Bounds` and `Area` enclosing that answer and the untouched end's `Point2` fields byte-identical to the pre-extend record's |
+| TI2 | an `ArcSeg` receiver, likewise recorded in the reversed sense, extended against a tool crossing its carrier twice beyond the receiver's own end | the nearer crossing wins; `Bounds` reaches it and `Area` encloses the analytic arc-length product. The arc arm needs no map, so this fixture holds both before and after the recreation's order is fixed — which is what proves the `LineSeg` arm was the only broken one |
+| TI3 | each admitted kind in BOTH recorded senses, taken through `fullExtendSegment` and `buildPrismScene`, sampled against the record's own parameterisation | the scene entity passes through the same point at every sampled parameter. This is the table in §3.1 checked as geometry rather than argued. It is the only fixture the `CircleSeg` arm has: a circle fragment separates the disk's interior from the exterior, so it is never a bridge in `sketch`'s arrangement and never reaches `Chains()`, and `ExtrudeChain` is the one producer of an undisplaced `chainPayload` — S7 refuses `Trim`'s, which always carries a displacement. The arm stays for a receiver's non-extended circle segments and for a future producer, proven rather than unexercised |
+
+The untouched-end obligation of T178 and TI1 is read by ELIMINATION against the
+end that moved, never by a selector clause keyed on the untouched coordinate:
+such a clause filters a nudged bound out before the byte comparison runs and
+leaves the comparison proving nothing.
