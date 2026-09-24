@@ -18,7 +18,9 @@ Companion contracts stay authoritative for their own areas:
 - `docs/tessellation-design.md` owns the mesh contract and boolean admission;
 - `docs/interference-design.md` owns the pair relation and its proof paths;
 - `docs/loft-design.md` §6 owns the exact crossing audit §6.4 below reuses;
-- `docs/sketch-seam-design.md` owns profile authentication and recording.
+- `docs/sketch-seam-design.md` owns profile authentication and recording;
+- `docs/surface-intersection-design.md` owns `Trim`, `Extend` and `Split` over a
+  pair whose two sweeps share one generator — the class §1.2's own rows name.
 
 Ten tables are normative:
 
@@ -62,11 +64,11 @@ increment takes it up; §11 says what a caller gets until then.
 | Command | Why it is not here yet |
 |---|---|
 | Thicken | §16 admits a recorded planar patch and a prism sheet from a closed section. Other sheet families refuse until their own offset and closure proofs land. |
-| Trim, Extend | Both need surface-surface intersection, which is where exactness dies (`docs/api-design.md` §2.1). Trimming a sheet with another sheet decides topology from a fitted curve, and decad does not fit. |
+| Trim, Extend | `docs/surface-intersection-design.md` owns both. A pair whose two sweeps share one generator — two prisms along one direction, two revolves about one axis — meets along the sweep of a 2D crossing `sketch` certifies, so its topology is decided by a flag and nothing is fitted; that document's §2 states the exact predicate and §4 what it excludes. A pair sharing no generator meets along a space curve `CurveSegment` has no variant for, and stays refused on `docs/api-design.md` §2.1's own reasoning. Table D row 8. |
 | Offset (surface) | A standalone offset sheet needs open-boundary topology, placement and bounded surface readings beyond §16's closed solid result. |
 | Ruled, Boundary Fill | Both need a fitted free-form patch through a boundary decad did not record. `docs/spline-design.md` owns what a recorded free-form curve may become; no rule there yet produces a surface from a boundary. |
 | Reverse Normal | §16's explicit `ThickenSide` names the side without changing the source sheet. Reversing a sheet's published normals and coedge senses remains a separate operation. |
-| A sheet operand in `Union` / `Cut` / `Intersect` (Fusion's Split Body) | Needs surface-solid intersection, the same fitted curve Trim needs. |
+| A sheet operand in `Union` / `Cut` / `Intersect` (Fusion's Split Body) | The intent lands as `Document.Split` in `docs/surface-intersection-design.md` §8, one body in and several out, over the same shared-generator class. The three booleans keep refusing a sheet operand permanently (Table X): each owes its caller ONE body, and a sheet claims no material to union, cut or intersect with. Table D row 8. |
 | `SweepChain`, `LoftChain` | Both take an open chain where `docs/sweep-design.md` and `docs/loft-design.md` state a closed section: a composite sweep's join topology pairs rim loops, and Table P pairs a from-loop to a to-loop. Neither pairing rule is stated for an open walk, and restating one is that document's work, not this one's (§13.5). |
 
 ### 1.3 What this design refuses permanently
@@ -1342,6 +1344,9 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R26 | `Thicken`'s prism offset drops a feature, cannot close a join, crosses or touches itself or the source boundary, fails strict nesting, or has an undecided offset audit | `ErrUnsupported` |
 | R27 | `Thicken`'s first prism arm cannot prove the generated plane-local geometry and millimetre thickness exact; a patch or prism interval cannot prove positive height | `ErrUnsupported` |
 | R28 | `Thicken` on a retired receiver | `ErrRetiredBody` |
+| R29 | `Trim`, `Extend` or `Split` handed a pair `docs/surface-intersection-design.md` §2's entry gate refuses, or a resolution its §6 cannot complete | as that table states: `ErrUnsupported` / `ErrUnrecordableProfile` |
+| R30 | `Trim` whose tool separates no fragment of the receiver, or `Split` whose tool separates no part of the target | `ErrDegenerate` |
+| R31 | `Trim`, `Extend` or `Split` in every increment before Table D row 8 | `ErrUnsupported` |
 
 R6, R8, R10 and R20 are `ErrUnsupported` rather than `ErrDegenerate` on
 `docs/api-design.md` §8's own distinction: the input names real geometry and
@@ -1361,6 +1366,10 @@ authentication, a range this seam cannot record exactly — and the caller's
 repair for each is identical whether a profile or a chain carried it, so a
 parallel set would double the branches a caller writes while every branch's
 move stayed the same (§12 widens each sentinel's stated cause to name both).
+R29 and R31 are `ErrUnsupported` and STAGED for the same reason, and R30 joins
+R5, R7 and R9 as `ErrDegenerate`: a tool that separates nothing names no
+trimmed body for any later evaluator to build.
+
 R22 and R23 are `ErrUnsupported` and STAGED: both name real geometry, and both
 wait on a proof rather than on a different operation. The one refusal in §13
 that is permanent has no Table R row at all, because the compiler carries it:
@@ -1751,7 +1760,7 @@ rather than after.
 
 | Operation | With a sheet | Why |
 |---|---|---|
-| `Union` / `Cut` / `Intersect` | `ErrUnsupported` | needs surface-solid intersection (§1.2), and the mesh path needs an occupied-volume proof a sheet has none of (§10) |
+| `Union` / `Cut` / `Intersect` | `ErrUnsupported`, permanently | each owes its caller ONE body and a sheet claims no material to combine, while the mesh path needs an occupied-volume proof a sheet has none of (§10). The Split Body intent has its own entry point instead, `Document.Split` (§1.2, `docs/surface-intersection-design.md` §8) |
 | `Fillet` / `Chamfer` | `ErrUnsupported` | `docs/modify-design.md`'s reduction rewrites a prism's **section**; a sheet's free boundary is not a section, and blending to a free edge is its own design |
 | `Shell` | `ErrUnsupported` | removes faces from a solid and offsets its material section; a prism sheet does carry a section, but it has no material or caps to remove. `Thicken` uses that section under §16's separate contract |
 | `Thicken` | §16's patch and profile-fed prism families build; the other families are R24 | builds a new solid from a sheet's recorded generator and retires the sheet |
@@ -1807,8 +1816,11 @@ reverses a decision already taken.
 | `docs/api-design.md` §8 | the v1 feature vocabulary gains `ExtrudeChain`, `RevolveChain`, `SweepChain` and `LoftChain`; the four signatures land beside the existing surface block |
 | `docs/api-design.md` §12 | `ErrForeignProfile`, `ErrStaleProfile`, `ErrInvalidProfile` and `ErrUnrecordableProfile` each state that their cause is a profile OR an open chain (§7 there, §13.3 here) |
 | `docs/sketch-seam-design.md` §2 | the recording IR gains `ChainRecord` and `RecordChain`, over the same ten `CurveSegment` variants; §2.1's admission list gains the chain's own interior-junction reading (§13.3) |
-| `docs/layout.md` | a row for this document, and one per `.go` file each increment adds; the chain increment adds no file, so `record.go`'s and `seam.go`'s own rows name the chain instead |
-| `CLAUDE.md` | a "Read before you write" row pointing here for sheet-body, surface-feature, patch and stitch code |
+| `docs/api-design.md` §2.1 | the admitted-class sentence names the shared-generator predicate and both owning documents, in place of the one class it named before |
+| `docs/api-design.md` §8 | the v1 feature vocabulary gains `Body.Trim`, `Body.Extend` and `Document.Split`, with `TrimSide`; the signatures land beside the existing surface block (`docs/surface-intersection-design.md` §8) |
+| `docs/prism-boolean-design.md` §3.4 | states that the same three displacement causes REFUSE rather than reroute wherever no mesh path exists, which is every sheet-involving pair (`docs/surface-intersection-design.md` §2.1 S7, §5) |
+| `docs/layout.md` | a row for this document and one for `docs/surface-intersection-design.md`, and one per `.go` file each increment adds; the chain increment adds no file, so `record.go`'s and `seam.go`'s own rows name the chain instead |
+| `CLAUDE.md` | a "Read before you write" row pointing here for sheet-body, surface-feature, patch and stitch code, and one pointing at `docs/surface-intersection-design.md` for trim, extend and split code |
 
 ## 13. The open sketch chain — a ribbon and an uncapped shell
 
@@ -2130,10 +2142,19 @@ ANSWER is accepted and reads `Suspect`.
 | 5 | An all-planar stitched body's own mesh, CLOSED or OPEN: `stitchPayload` records the final wound triangle set `Stitch`'s own build assembled and audited (§6.4), attributed by the live rebuilt face per triangle rather than by role (two welded operands can carry the same role string), and `tessellate_stitch.go` restates it with no chording. A CLOSED body runs the closed-mesh audit plus its own vertex-link safety net over that restated set; an OPEN body — a sheet — runs `docs/tessellation-design.md` §1.2's manifold-with-boundary audit instead, its free-boundary attribution agreeing with the body's own recorded free `Edge`s by the identical live face pointer on both sides, never a role lookup. A curved or mixed stitched body's mesh stays `ErrUnsupported`, staged to a later increment, whether open or closed. The mesh publishes a zero occupied-volume proof (`symDiffOK == true`) for a CLOSED body whose every vertex carries a proven bound of exactly zero, admitting it to a boolean like any other zero-bound operand; every other stitched body keeps `symDiffOK` false, so no boolean admits it — an open one refusing on Table X's own sheet-boolean rule, a bounded or placed closed one on `boolean.go`'s `requireVolumeProvingPayload` arm. `newBodyGeomBudget` (`docs/clearance-design.md` §2) carries the identical zero-bound `stitchPayload` arm already, which is what lets a stitched solid reach a proven pair relation at all; a bounded or placed stitched solid still reads undecided exactly as it does for any other payload this evaluator has not wired a carrier for |
 | 6 | The open sketch chain (§13): `ChainRecord` and `RecordChain` beside `ProfileRecord` and `RecordProfile`, under the same gates and the same four sentinels; `Document.ExtrudeChain` and `Document.RevolveChain` with their two sealed option tiers, building Table G's wall set with no cap and no closing face; the fourth validity leg for a chain-fed prism and for a full-turn chain revolve clear of the axis; prism ribbon tessellation and export on the identical manifold-with-boundary audit; Table A's four new amendment rows; §15's T130–T141. `Document.SweepChain` and `Document.LoftChain` land as signatures refusing with `ErrUnsupported` (R23), a chain free end ON the revolve axis refuses with `ErrUnsupported` (R22), and the chain-fed revolve ribbon's own mesh waits on increment 4 exactly as a profile-fed revolve sheet's does |
 | 7 | `Body.Thicken` for §16's patch and profile-fed prism cases, all three sides, the full offset-interval and cross-boundary audits, and T150–T157. Other sheet families stay R24 |
+| 8 | `Trim`, `Extend` and `Split` over a pair whose two sweeps share one generator, in the four PRs `docs/surface-intersection-design.md` §11 states: its §2 entry gate, `buildPrismScene`'s `ChainRecord` arm, `classifyPrismCells`'s side reading consumed unchanged, the open-walk chaining of its §3.3, `chainPayload`'s and `chainRevolvePayload`'s walk set and section displacement, and the one displacement term its §7 derives from `bounds.go`'s existing `cutParamUlps`/`cutDisplacementAllow`. Table A's five new rows; Table R's R29–R31; §15's T170–T181. A pair sharing no generator, a chain ribbon as `Trim`'s receiver, and a second trim of an already-trimmed body each refuse with `ErrUnsupported`, and that document's §4 and §5 own why |
 
 **Increment 7 depends on increment 1's patch and prism sheets and analytic
 prism builder, plus `docs/modify-design.md` §5/§8's section offset and audit.**
 It depends on none of increments 2–6.
+
+**Increment 8 depends on increments 1 and 6**, and on no other: increment 1 for
+`BodyKind`, `Edge.IsFree` and §9.1's sheet validity audit, and increment 6 for
+`ChainRecord` and the ribbon wall build every trimmed result is assembled by.
+None of 2, 3, 4 or 5 is a prerequisite of it, and none of them depends on it. A
+trimmed revolve sheet's own mesh waits on increment 4 exactly as a profile-fed
+revolve sheet's does, which is that increment's reach rather than a dependency
+of this one.
 
 **Increment 6 depends on increment 1 alone**, for `BodyKind` and `Kind()`,
 `Edge.IsFree` and `Free()`, §8's sheet measurement rows, §9.1's sheet validity
@@ -2143,7 +2164,7 @@ depends on it: a ribbon reaches `Stitch` and `Body.Patch` as an ordinary sheet
 operand once increment 2 lands, which is increment 2's own reach rather than a
 prerequisite of this one. It is numbered after 5 only so that no reference to
 an earlier row has to move, and any order among 2 through 6 that keeps 1 first
-is admissible.
+is admissible; 7 comes after 6 wherever 6 lands.
 
 **Increment 4 depends on neither 2 nor 3, and they do not depend on it.**
 Increment 5 depends on increment 2 for the triangle set and topology its own
@@ -2165,9 +2186,11 @@ Increment 6's own full revolution does not reach that question at all: an OPEN
 walk's two free ends sweep two circles nothing fills, so a full-turn
 `RevolveChain` is an open sheet carrying exactly two free edges (§13.4).
 
-Staged past increment 7, each with the gap §1.2 names: Trim, Extend, surface
-Offset, Ruled, Boundary Fill, Reverse Normal, and a sheet operand in any
-boolean. §16 stages the remaining `Thicken` receiver families at R24. Every
+Staged past increment 8, each with the gap §1.2 names: surface Offset, Ruled,
+Boundary Fill and Reverse Normal. §16 stages the remaining `Thicken` receiver
+families at R24. Trim and Extend are increment 8's, over the shared-generator
+class alone, and a sheet operand in `Union`/`Cut`/`Intersect` refuses
+permanently (Table X) with `Document.Split` carrying that intent instead. Every
 unlanded build refuses at the call with `ErrUnsupported`.
 
 ## 15. Test obligations
@@ -2317,6 +2340,19 @@ audit leg before trusting T154: its `ErrUnsupported` assertion must turn red.
 Deleting T156's exact-generation check must accept a held edge at the source
 coordinate and turn its refusal assertion red. T157 also asserts that the
 source bodies remain live and retain their original measurements.
+
+| T170 | T1's 100×60 rectangle surface-extruded 10 mm `Along`, `Trim`med `KeepOutside` by a solid extruded from the square (40,−10)–(60,70) over z ∈ [−5, 15] — a tool spanning the sheet axially and cutting its bottom and top walls at x = 40 and x = 60 | `Kind() == BodySheet`; 2 lumps, 3 faces each; `Edges(Free()).Exactly(16)`; `Bounds` equal to the untrimmed sheet's, value and bound, since both surviving runs still reach every extreme; `Volume()` is `ErrNotSolid`; `Area` is `Approximate` with a strictly positive `Bound`, and its interval encloses the exact 2800 mm² taken over `math/big.Rat` from the two operands' own recorded floats, never a second float answer. Shown-to-fail: forcing the result's `sectionDelta` to zero publishes `Exact` at a zero bound and turns both the positive-`Bound` and the enclosure assertions red — the leg that proves `docs/surface-intersection-design.md` §7's `δ_cut` is charged rather than assumed away |
+| T171 | T170's pair, `KeepInside` | 2 lumps, 1 face each; `Edges(Free()).Exactly(8)`; `Area` `Approximate` over an interval enclosing the exact 400 mm²; the two surviving walls' own `NormalAt` values equal the untrimmed sheet's at the same points, bit for bit — a trim moves no wall |
+| T172 | T170's sheet against a tool whose section lies wholly outside it, and separately against one whose section wholly contains it | `ErrDegenerate` (R30) both ways: the first keeps every fragment under `KeepOutside`, the second none, and neither names a trimmed body. `Document.Bodies()` and both operands are unchanged |
+| T173 | T170's trimmed result `Trim`med again by a second tool, and the same second tool applied to the untrimmed sheet | `ErrUnsupported` (R29) for the first, message naming the receiver's own section displacement rather than its payload class; `NoError` for the second — the refusal is the displacement's doing, not the tool's (`docs/surface-intersection-design.md` §2.1 S7, §5) |
+| T174 | T170's sheet against a co-directional tool placed by `r3.RotationAround` at several counts from `docs/prism-boolean-design.md` §3.3's inexact set, and separately against a tool whose section sits on a plane parallel to the sheet's 5 mm away | `ErrUnsupported` (R29) in every case, never an admission: S4 reads the stored `r3.Vec` floats with Go `==` and a dot product against the literal `0.0`, so a pair one ulp off co-directional refuses and a parallel-plane pair refuses on S7's identity re-expression. The same model built through a hand-constructed `r3.FromBasis` placement on the sheet's own frame is admitted, which pins the refusal to the comparison rather than to the option |
+| T175 | a 100×60 solid block over z ∈ [0, 10], `Split` by an `ExtrudeChain` ribbon from the single line (−10,30)–(110,30) over z ∈ [−5, 15] | 2 bodies, each `Kind() == BodySolid` and `IsSolid()`; each `Volume` `Approximate` with a strictly positive `Bound`; the two intervals' sum encloses the target's own exact 60000 mm³; the target and the tool are both retired and `Document.Bodies()` holds the two pieces in `sketch`'s own cell order, reproduced across a replay |
+| T176 | the same block `Split` by a surface-extruded circle of radius 20 centred at (50,30) over z ∈ [−5, 15] — a closed-section tool | 2 bodies; the disk piece's `Volume` interval encloses 4000π mm³ and the remainder's encloses 60000 − 4000π mm³; the two intervals' sum encloses 60000 mm³ |
+| T177 | the same block `Split` by a ribbon from the line (−10,30)–(40,30) — a tool that enters the block's footprint and stops inside it | `ErrDegenerate` (R30); the document and both operands are unchanged. This is the fixture that pins `sketch`'s own pruning: the inside stub bounds no published cell, the target's section is returned whole, and no split exists to return |
+| T178 | a sketch holding the line (0,0)–(100,0) and a second line at x = 40 crossing it; the left fragment `ExtrudeChain`d 10 mm `Along` — a 400 mm² ribbon — then `Extend`ed on its x = 40 sweep edge against a solid extruded from the square (70,−10)–(90,10) over a spanning interval | no error; `Area` is `Approximate` with a strictly positive `Bound` over an interval enclosing 700 mm²; `Bounds` now reaches x = 70; the ribbon's other recorded bound is byte-identical to its own pre-extend record (`Point2` fields, not just area) — `docs/surface-intersection-design.md` §3.1's full-domain recreation introduces no coordinate of its own. The same call on a CLOSED-footprint sheet is `ErrUnsupported` (RS12), the receiver having no section end to lengthen |
+| T179 | T178's fixture with a tool whose section crosses the carrier only beyond x = 100 — past the recorded entity's own natural domain | `ErrUnsupported` (R29, RS4), message naming the carrier's own domain; the document is unchanged. The same tool moved inside the domain succeeds, so the refusal is the domain's doing and not the tool's |
+| T180 | a meridian segment from (r = 5, z = 0) to (r = 5, z = 20) revolved a full turn as a surface — a cylindrical sheet of area 200π mm² — `Trim`med `KeepOutside` by a solid revolve of the rectangle meridian r ∈ [0, 8], z ∈ [5, 10] about the identical axis on the identical frame | `Kind() == BodySheet`; 2 lumps, 1 face each; `Edges(Free()).Exactly(4)`, the two circles each surviving ribbon's own ends sweep (Table G's full-revolution row); `Area` `Approximate` over an interval enclosing 150π mm²; `Volume()` is `ErrNotSolid`; `Tessellate` returns `ErrUnsupported` until increment 4, as every revolve sheet's mesh does. Shown-to-fail: replacing S4's revolve arm with an angle comparison admits a pair whose axes differ in the last ulp and turns the enclosure assertion red |
+| T181 | the revolve sheet of T180 against a co-directional prism solid sharing its axis direction, and separately a revolve-built cylinder of the same radius against that same prism | `ErrUnsupported` (R29) both ways: S1 reads the two payload families and refuses a mixed pair, and it reads the payload rather than the shape, so a cylinder authored as a revolve refuses where the same cylinder authored as an extruded circle is admitted. The message names the two generators, not the payload class |
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'`

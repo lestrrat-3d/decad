@@ -45,6 +45,7 @@ to the byte budget.
 | `docs/sweep-design.md` | The spatial `Path` and `Sweep` contract: rotation-minimizing transport, refusals, topology, measurements, 3D-sketch boundary, and staged downstream reach. |
 | `docs/prism-boolean-design.md` | The analytic reduction for `Union`/`Cut`/`Intersect` over co-directional coplanar prisms: the reject-only entry gate, the private `sketch` scene, and section/axial displacement bounds. |
 | `docs/tessellation-reach-design.md` | The tessellation reach plan: the loft restatement, free-form prism chording, revolve T2–T4 and the cap-loop chamfer tessellator, each with its cells, proof terms, refusals and tests. |
+| `docs/surface-intersection-design.md` | `Trim`, `Extend` and `Split` over a pair whose two sweeps share one generator: the reject-only entry gate, the private `sketch` scene reused from the prism boolean, and the cut-parameter displacement. |
 | `docs/surface-design.md` | The sheet body and the operations over one: `BodyKind`, `WithSurfaceResult`, `Patch`, `Stitch`/`Unstitch`, `ExtrudeChain`/`RevolveChain`, the proven-coincidence join rule, and what every reading, `Verify` question and export says about a body that encloses no region. |
 
 ### Seam and records
@@ -78,8 +79,8 @@ to the byte budget.
 | `spline_extreme.go` | `docs/spline-design.md` §6.2's Tier A directional-extreme bracket, reducing to `clearance_poly.go`'s root engine. See the file's own doc comment. |
 | `spline_fit.go` | `docs/spline-design.md` §5.1.2's fit-spline reduction: converts a recorded `FitSplineSeg` into the same `bezierSpan` chain the other Tier A kinds produce, over its own closed form rather than knot insertion. See the file's own doc comment. |
 | `spline_moments.go` | The exact integration of `docs/spline-design.md` §5.1 over Bézier spans, reusing `clearance_poly.go`'s `ratPoly`. `addFreeform` feeds `moments.go`'s region-level rational accumulator. |
-| `spline_sagitta.go` | `docs/spline-design.md` §6.2.1's chord-sagitta bounds and the shared dyadic station generator built on them. Each bound's derivation, refusal and work charge lives on its own function's doc comment. See the file's own doc comments. |
-| `spline_convexity.go` | `docs/spline-design.md` §6.5: proves a free-form wall edge's single curvature sign from the curvature numerator's Bernstein coefficients, subdividing to a fixed depth, or refuses. Owns Table R row R19's refusal. See the file's own doc comment. |
+| `spline_sagitta.go` | `docs/spline-design.md` §6.2.1's chord-sagitta bounds and the shared dyadic station generator built on them. See the file's own doc comments. |
+| `spline_convexity.go` | `docs/spline-design.md` §6.5: proves a free-form wall edge's single curvature sign from its Bernstein certificate, or refuses. Owns Table R row R19's refusal. See the file's own doc comment. |
 
 ### Features
 
@@ -142,7 +143,7 @@ to the byte budget.
 | `capblend_centroid.go` | Computes closed-form first moments for the cap-blend payload's centroid: exact-rational Plane patch moments, a Fourier sum for Cone patches, and a bounding-box ceiling on the result. See `docs/modify-reach-design.md` §8.4. |
 | `capblend_moments.go` | `evalCapBlendContext` builds the cap-blend body and its bounded area/volume/centroid by closed-form per-patch integrals. See `docs/modify-reach-design.md` §8.4. |
 | `capblend_survey.go` | The cap-blend payload's undercut and minimum-radius surveys, per patch and over the receiver's unchanged profile. See the file's own doc comments and `docs/modify-reach-design.md` §12 Table DX (DX7/DX8). |
-| `capblend_normal.go` | The certified half of DX7's circular-patch reading: the rational-interval enclosure of a band patch's own exact normal-component model, and the proven enclosure of a harmonic form's extremes over one window. See the file's own doc comment. |
+| `capblend_normal.go` | The certified half of DX7's circular-patch reading: a band patch's own exact normal-component model, enclosed over rational intervals. See the file's own doc comment. |
 | `capblend_departure.go` | The proven bound on how far a band patch's BUILT ruled surface points away from the surface it publishes, measured in world space from the published corners, curves and tag. See the file's own doc comment. |
 
 ### Verification and surveys
@@ -159,7 +160,7 @@ to the byte budget.
 | `clearance_degen.go` | The degeneracy oracle every cell asks before emitting a constant/`Exact` candidate, decided three-valued over exact arithmetic only, never a tolerance. See `docs/clearance-design.md` §4/§5 and the file's own doc comment. |
 | `clearance_cells.go` | The §3 candidate sink and §4 face-interior table: enumerates stationarity tiers per face pair, folds admission into contributions, and reduces offset-surface pairs to spine-pair criticals. See `docs/clearance-design.md` §3/§4. |
 | `clearance_tiers.go` | The curve and vertex tiers of §3: face-edge, edge-edge, and vertex cells over §4's curve-tier table. Constant-distance families emit only on the degeneracy oracle's `degYes`. See `docs/clearance-design.md` §3/§4. |
-| `clearance_geom.go` | The kernel's boundary model: builds trimmed carrier faces, edges and vertices from a body's payload, charges `bodyGeom.delta`, and runs the §2 nesting ray casts, closed form except a Sturm-certified torus quartic. See `docs/clearance-design.md` §2/§3. |
+| `clearance_geom.go` | The kernel's boundary model: builds trimmed carrier faces, edges and vertices from a body's payload, charges `bodyGeom.delta`, and runs the §2 nesting ray casts. See `docs/clearance-design.md` §2/§3. |
 | `clearance_poly.go` | The certified-bracket machinery of §4/§5: isolates stationarity polynomials by Sturm sequences over exact rationals, then brackets each critical value by a proven Lipschitz bound. See `docs/clearance-design.md` §4/§5. |
 | `survey.go` | The analytic wall, undercut, and min-radius surveys on prism, revolve, and cup payloads. An undecided answer reads `Suspect`, never a silent pass. See `docs/verification-design.md` §6. |
 | `survey_undercut.go` | The exact three-valued receiver-face undercut reader `prismUndercuts`/`cupUndercuts`/`capBlendUndercuts` share, decided over the rationals with no float allowance. See the file's own doc comment. |
