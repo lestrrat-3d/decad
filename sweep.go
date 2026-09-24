@@ -360,6 +360,34 @@ func (sp sweepPayload) placed(ctx context.Context, d *Document, ref producerID, 
 	return body, nil
 }
 
+// SweepChain sweeps the open chain ch of sketch s along path. Every call is
+// ErrUnsupported (Table R row R23, docs/surface-design.md §13.5, §14): the
+// signature lands so a caller's intent has somewhere to go and a refusal to
+// read, ahead of the increment that states SweepChain's own pairing rule
+// against docs/sweep-design.md's composite join topology. ch still runs the
+// same seam gates ExtrudeChain does (RecordChain) before that refusal, so a
+// foreign, stale, invalid or unrecordable chain is reported as such rather
+// than masked by the staged ErrUnsupported. The document and every operand
+// are unchanged.
+func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.Chain, path *Path, opts ...SweepOption) (*Body, error) {
+	if d == nil {
+		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
+	}
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a sweep`, ErrDegenerate)
+	}
+	if s == nil || ch == nil || path == nil {
+		return nil, fmt.Errorf(`%w: SweepChain requires a non-nil sketch, chain, and path`, ErrDegenerate)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if _, _, err := recordChain(s, ch); err != nil {
+		return nil, err
+	}
+	return nil, fmt.Errorf(`%w: SweepChain has no pairing rule yet (docs/surface-design.md §13.5, §14)`, ErrUnsupported)
+}
+
 func finishStraightSweepBody(body *Body, payload sweepPayload) {
 	if built, ok := body.payload.(prismPayload); ok {
 		payload.prism = built

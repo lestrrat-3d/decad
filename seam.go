@@ -209,6 +209,174 @@ func sameBoundaryEdge(a, b sketch.BoundaryEdge) bool {
 		slices.Equal(a.Polyline, b.Polyline)
 }
 
+// RecordChain converts a sketch chain — Profile's open counterpart — into the
+// structural records the evaluator carries: the open walk as a [ChainRecord]
+// and the sketch plane as a [PlaneRecord], read through s.Plane().Frame().
+// ExtrudeChain and RevolveChain run exactly this conversion; it is exported so
+// a consumer can record — and therefore vet — a chain without a Document.
+//
+// Every gate RecordProfile runs, RecordChain runs unchanged
+// (docs/sketch-seam-design.md §2.2, docs/surface-design.md §13.3): ch must
+// name s (Chain.Sketch, else [ErrForeignProfile]), be current (Chain.IsStale,
+// else [ErrStaleProfile]), and its exported fields — Entities, Edges, Length,
+// Valid, SelfIntersecting — must exactly match one member of a fresh
+// s.Chains() result, matched by CONTENT over the whole slice rather than at
+// one index: that slice's order consults entity and point names, which
+// Sketch.Revision hashes none of, so renaming an entity re-ranks Chains()
+// while every held chain stays fresh (a mismatch is [ErrInvalidProfile]). A
+// chain whose Valid is false is also never silently swept
+// ([ErrInvalidProfile]). The one further rejection is not a validity
+// judgement: an authenticated valid chain whose walk decad cannot record
+// exactly — a Partial fragment sketch could not certify, a certified range
+// the seam's falsifier disproves, or an INTERIOR junction whose two
+// coordinates contradict — is [ErrUnrecordableProfile]. A chain's two free
+// ends state no junction to check, exactly as a whole closed curve states
+// none. Chain.Length enters only the snapshot equality comparison above and
+// is never recorded or read as a measurement: it is exact only for a *Line,
+// *Arc or *Circle fragment and a sampling-convergent underestimate otherwise,
+// with no bound stated for the gap (docs/surface-design.md §13.3).
+func RecordChain(s *sketch.Sketch, ch *sketch.Chain) (ChainRecord, PlaneRecord, error) {
+	return recordChain(s, ch)
+}
+
+func recordChain(s *sketch.Sketch, ch *sketch.Chain) (ChainRecord, PlaneRecord, error) {
+	if s == nil || ch == nil {
+		return ChainRecord{}, PlaneRecord{}, fmt.Errorf(`%w: RecordChain requires a sketch and a chain`, ErrDegenerate)
+	}
+	if ch.Sketch() != s {
+		return ChainRecord{}, PlaneRecord{}, fmt.Errorf(`%w: the chain was built from a different sketch, so its plane-local coordinates are another plane's`, ErrForeignProfile)
+	}
+	if ch.IsStale() {
+		return ChainRecord{}, PlaneRecord{}, fmt.Errorf(`%w: the sketch has changed since this chain was built; rebuild with Sketch.Chains`, ErrStaleProfile)
+	}
+	if !ch.Valid {
+		return ChainRecord{}, PlaneRecord{}, fmt.Errorf(`%w: a self-intersecting or degenerate walk is never silently swept`, ErrInvalidProfile)
+	}
+
+	trusted, err := authenticateChain(s, ch)
+	if err != nil {
+		return ChainRecord{}, PlaneRecord{}, err
+	}
+
+	frame, err := s.Plane().Frame()
+	if err != nil {
+		return ChainRecord{}, PlaneRecord{}, fmt.Errorf(`decad: failed to resolve the sketch plane: %w`, err)
+	}
+	plane := PlaneRecord{Origin: frame.Origin(), U: frame.U(), V: frame.V()}
+
+	segs, err := recordChainSegments(trusted.Edges)
+	if err != nil {
+		return ChainRecord{}, PlaneRecord{}, err
+	}
+	return ChainRecord{Segments: segs}, plane, nil
+}
+
+// authenticateChain rejects caller changes to the exported Chain fields and
+// returns a fresh snapshot built by sketch. Boundary ownership is checked
+// first so a foreign or typed-nil entity never reaches Geometry — a nil or
+// foreign chain entity is [ErrForeignProfile], docs/surface-design.md §13.3's
+// own table, rather than [ErrInvalidProfile] as a profile's is: the chain's
+// own admission table groups both under the one foreign-source row.
+func authenticateChain(s *sketch.Sketch, ch *sketch.Chain) (*sketch.Chain, error) {
+	owned := make(map[sketch.Entity]struct{})
+	for _, ent := range s.Entities() {
+		owned[ent] = struct{}{}
+	}
+	if err := authenticateChainEdges(owned, ch.Edges); err != nil {
+		return nil, err
+	}
+
+	var trusted *sketch.Chain
+	for _, candidate := range s.Chains() {
+		if !sameChainSnapshot(ch, candidate) {
+			continue
+		}
+		if trusted != nil {
+			return nil, fmt.Errorf(`%w: the chain snapshot matches more than one current chain; rebuild with Sketch.Chains`, ErrInvalidProfile)
+		}
+		trusted = candidate
+	}
+	if trusted == nil {
+		return nil, fmt.Errorf(`%w: the chain snapshot was altered after Sketch.Chains returned it; rebuild and pass the chain unchanged`, ErrInvalidProfile)
+	}
+	return trusted, nil
+}
+
+func authenticateChainEdges(owned map[sketch.Entity]struct{}, edges []sketch.BoundaryEdge) error {
+	for _, edge := range edges {
+		if isNilSketchEntity(edge.Entity) {
+			return fmt.Errorf(`%w: the chain contains a nil entity; rebuild with Sketch.Chains`, ErrForeignProfile)
+		}
+		if _, ok := owned[edge.Entity]; !ok {
+			return fmt.Errorf(`%w: the chain contains an entity not owned by its source sketch`, ErrForeignProfile)
+		}
+	}
+	return nil
+}
+
+// sameChainSnapshot compares every exported Chain field two values publish —
+// Entities, Edges, Length, Valid, SelfIntersecting — the identical set
+// docs/surface-design.md §13.3's table requires to match exactly.
+// sameBoundaryLoop is Profile's own comparison over []sketch.BoundaryEdge and
+// applies unchanged to a Chain's Edges.
+func sameChainSnapshot(a, b *sketch.Chain) bool {
+	return a.Sketch() == b.Sketch() && a.Revision() == b.Revision() &&
+		a.Length == b.Length && a.Valid == b.Valid && a.SelfIntersecting == b.SelfIntersecting &&
+		(a.Entities == nil) == (b.Entities == nil) && slices.Equal(a.Entities, b.Entities) &&
+		sameBoundaryLoop(a.Edges, b.Edges)
+}
+
+// recordChainSegments converts one authenticated chain's walk, edge by edge,
+// in walk order, then disproves a walk whose recorded segments do not join at
+// an INTERIOR junction (falsifyChainJoins) — the chain's own counterpart of
+// recordLoop, which additionally checks the junction that closes a loop. A
+// chain's two free ends state no junction to check at all.
+func recordChainSegments(edges []sketch.BoundaryEdge) ([]CurveSegment, error) {
+	segs := make([]CurveSegment, 0, len(edges))
+	joins := make([]loopJoin, 0, len(edges))
+	for i, e := range edges {
+		seg, err := recordEdge(e)
+		if err != nil {
+			return nil, fmt.Errorf("chain edge %d: %w", i, err)
+		}
+		join, err := edgeJoin(e, seg)
+		if err != nil {
+			return nil, fmt.Errorf("chain edge %d: %w", i, err)
+		}
+		segs = append(segs, seg)
+		joins = append(joins, join)
+	}
+	if err := falsifyChainJoins(joins); err != nil {
+		return nil, err
+	}
+	return segs, nil
+}
+
+// falsifyChainJoins is falsifyLoopJoins restricted to a chain's INTERIOR
+// junctions: junction i, between edge i and edge i+1, for every i but the
+// last (docs/sketch-seam-design.md §2.2). A chain of one segment has no
+// interior junction and this is a no-op for it. It only ever rejects, on the
+// identical source-aware rule falsifyLoopJoins applies.
+func falsifyChainJoins(joins []loopJoin) error {
+	for i := 0; i+1 < len(joins); i++ {
+		from, to := joins[i], joins[i+1]
+		if from.closed || to.closed {
+			// A whole closed curve never reaches a chain (docs/sketch-seam-design.md
+			// §2.2), but the guard is kept for the same reason falsifyLoopJoins
+			// keeps it: a defensive no-op rather than an assumption.
+			continue
+		}
+		if loopJoinPointsAgree(from.end, to.start) {
+			continue
+		}
+		return fmt.Errorf(
+			`%w: chain edge %d ends at (%v, %v) but edge %d starts at (%v, %v), so the recorded chain does not join; sketch admitted the walk on its own proximity threshold, and decad records no walk its own segments do not bound`,
+			ErrUnrecordableProfile, i, from.end.point.U, from.end.point.V, i+1, to.start.point.U, to.start.point.V,
+		)
+	}
+	return nil
+}
+
 // recordLoop converts one named boundary loop, edge by edge, in walk order,
 // then disproves a loop whose recorded segments do not join (falsifyLoopJoins).
 func recordLoop(name string, edges []sketch.BoundaryEdge) (LoopRecord, error) {

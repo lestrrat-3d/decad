@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math"
 
@@ -319,4 +320,259 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 	default:
 		return linearSide{}, fmt.Errorf(`%w: side extent %T is not supported by this evaluator`, ErrUnsupported, s)
 	}
+}
+
+// This section is ExtrudeChain of docs/surface-design.md §13: the open sketch
+// chain's own sweep into a ribbon. It reuses resolveLinearExtent unchanged —
+// the extent vocabulary and the frame it resolves against are identical to
+// Extrude's — and reads its recorded walk through RecordChain (seam.go)
+// rather than RecordProfile. This increment admits exactly one chain of one
+// straight LineSeg segment, evaluated by evalChainExtrudeContext below;
+// docs/surface-design.md Table G's multi-segment and curved-wall rows are
+// staged to a later increment and refuse here with ErrUnsupported.
+
+// ChainExtrudeOption configures ExtrudeChain. It is its own sealed tier
+// rather than [ExtrudeOption]: WithSurfaceResult() does not implement it, so
+// the compiler refuses that option outright rather than accepting it as a
+// no-op — a chain-fed sweep always returns a sheet, so there is no "build a
+// solid instead" state for the option to toggle (docs/surface-design.md
+// §13.2). No option is a member of this tier yet; it exists so a later
+// chain-only option has a tier to land on.
+type ChainExtrudeOption interface {
+	option.Interface
+	chainExtrudeOption()
+}
+
+// chainPayload is ExtrudeChain's own record of a ribbon body: the recorded
+// open walk, the plane frame it lifts through, the signed sweep interval, and
+// the accumulated rigid placement — chainPayload is to ExtrudeChain what
+// prismPayload is to Extrude (docs/surface-design.md §13.4). This increment
+// admits exactly one segment, a LineSeg, read out once as line so the build
+// never re-type-asserts chain.Segments[0].
+type chainPayload struct {
+	chain   ChainRecord
+	line    LineSeg
+	frame   r3.Frame
+	z0, z1  float64
+	z0Delta float64
+	z1Delta float64
+	xform   r3.Transform
+}
+
+func (pp chainPayload) z0Scalar() boundedScalar { return measuredScalar(pp.z0, pp.z0Delta) }
+func (pp chainPayload) z1Scalar() boundedScalar { return measuredScalar(pp.z1, pp.z1Delta) }
+
+// prism is a *view* of pp as a zero-section-delta, no-holes prismPayload —
+// never a body this evaluator builds — used only to feed pp.point/pp.dir/
+// reflected and prismBoundsContext, none of which cares whether the section
+// it reads closes. The chain's own segment list stands in for a profile's
+// outer loop with no holes: every reader below walks profile.Outer.Segments
+// exactly as it would a real profile's, and an open chain's segments are
+// exactly that list.
+func (pp chainPayload) prism() prismPayload {
+	return prismPayload{
+		profile: ProfileRecord{Outer: LoopRecord{Segments: pp.chain.Segments}},
+		frame:   pp.frame,
+		z0:      pp.z0, z1: pp.z1,
+		z0Delta: pp.z0Delta, z1Delta: pp.z1Delta,
+		xform: pp.xform,
+	}
+}
+
+// transform is the accumulated rigid placement.
+func (pp chainPayload) transform() r3.Transform { return pp.xform }
+
+// placed re-evaluates the same record under the composed motion (core §8).
+func (pp chainPayload) placed(ctx context.Context, d *Document, ref producerID, composed r3.Transform) (*Body, error) {
+	pp.xform = composed
+	return evalChainExtrudeContext(ctx, d, ref, pp)
+}
+
+// ExtrudeChain sweeps the open chain ch of sketch s along the sketch plane's
+// normal per the linear extent e, and registers the new ribbon body. ch MUST
+// be a chain of s (ErrForeignProfile) and a current, unaltered snapshot
+// (ErrStaleProfile or ErrInvalidProfile); an invalid or self-intersecting
+// chain is also ErrInvalidProfile, and a walk decad cannot record exactly is
+// ErrUnrecordableProfile (docs/sketch-seam-design.md §2.2). The result is
+// always a sheet — Kind() == BodySheet — one wall face per recorded segment
+// (docs/surface-design.md §13.4, Table G), with no cap and no closing face:
+// WithSurfaceResult() does not compile against this call. This increment
+// builds a chain of exactly one straight LineSeg segment; a multi-segment
+// chain, or one carrying a circular or free-form segment, is ErrUnsupported,
+// staged to a later increment. A failed evaluation leaves the document
+// untouched.
+func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, opts ...ChainExtrudeOption) (*Body, error) {
+	if d == nil {
+		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
+	}
+	for _, o := range opts {
+		if o == nil {
+			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+		}
+	}
+
+	chain, plane, err := recordChain(s, ch)
+	if err != nil {
+		return nil, err
+	}
+	if len(chain.Segments) != 1 {
+		return nil, fmt.Errorf(`%w: this evaluator sweeps a chain of exactly one straight segment; a %d-segment chain is staged to a later increment`, ErrUnsupported, len(chain.Segments))
+	}
+	line, ok := chain.Segments[0].(LineSeg)
+	if !ok {
+		return nil, fmt.Errorf(`%w: this evaluator sweeps a chain of exactly one straight segment; a %T wall is staged to a later increment`, ErrUnsupported, chain.Segments[0])
+	}
+
+	frame, err := r3.NewFrame(plane.Origin, plane.U, plane.V)
+	if err != nil {
+		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
+	}
+
+	e, err = normalizeExtent(e)
+	if err != nil {
+		return nil, err
+	}
+	sweep, err := d.resolveLinearExtent(e, frame)
+	if err != nil {
+		return nil, err
+	}
+
+	ref := d.nextProducerID()
+	body, err := evalChainExtrude(d, ref, chainPayload{
+		chain:   chain,
+		line:    line,
+		frame:   frame,
+		z0:      sweep.z0,
+		z1:      sweep.z1,
+		z0Delta: sweep.z0Delta,
+		z1Delta: sweep.z1Delta,
+		xform:   r3.Identity(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	d.commit(body)
+	return body, nil
+}
+
+// evalChainExtrude builds a ribbon body from pp, over context.Background().
+func evalChainExtrude(d *Document, ref producerID, pp chainPayload) (*Body, error) {
+	return evalChainExtrudeContext(context.Background(), d, ref, pp)
+}
+
+// evalChainExtrudeContext builds the ribbon body: one Plane wall face over the
+// chain's own single LineSeg segment, its two rim edges and the one sweep
+// edge at each of its two free ends (docs/surface-design.md §13.4, Table G
+// row 1), and the measurements the finished body publishes. It mirrors
+// evalPrismContext's own order (prism_build.go) without ever building a solid
+// or a closing cap: an open chain mints neither.
+func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, pp chainPayload) (*Body, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	height := boundedSub(pp.z1Scalar(), pp.z0Scalar())
+	if height.value <= 0 {
+		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
+	}
+
+	w, err := walkOf(pp.line, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
+	prismView := pp.prism()
+
+	// frameLiftAllow is the one proven bound this ribbon's four rim vertices
+	// share for the payload's own frame lift and accumulated placement
+	// (bounds.go's frameAndPlacementRoundAllow) — exactly zero for an
+	// axis-aligned, unplaced payload, which is what keeps a plain
+	// ExtrudeChain's rim vertices Exact, mirroring buildLoopSidesAs's own
+	// frameLiftAllow (prism_build.go).
+	frameLiftAllow := frameAndPlacementRoundAllow(pp.frame, pp.xform, math.Max(w.coordUpper, math.Max(math.Abs(pp.z0), math.Abs(pp.z1))))
+	bottomBoundBase := absSumUpper(pp.z0Delta, frameLiftAllow)
+	topBoundBase := absSumUpper(pp.z1Delta, frameLiftAllow)
+
+	bStart := &Vertex{position: prismView.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(bottomBoundBase)}
+	bEnd := &Vertex{position: prismView.point(w.endU, w.endV, pp.z0), bound: units.Millimeters(bottomBoundBase)}
+	tStart := &Vertex{position: prismView.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(topBoundBase)}
+	tEnd := &Vertex{position: prismView.point(w.endU, w.endV, pp.z1), bound: units.Millimeters(topBoundBase)}
+
+	bottomEdge := &Edge{curve: Line3{}, start: bStart, end: bEnd, convex: true, length: w.length, lengthBound: w.lengthBound}
+	topEdge := &Edge{curve: Line3{}, start: tStart, end: tEnd, convex: true, length: w.length, lengthBound: w.lengthBound}
+	// startSweep and endSweep are Table G's "one sweep edge at each of its two
+	// free ends" — the chain's own counterpart of buildLoopSidesAs's junction
+	// verticals, except that a free end joins no neighbouring wall.
+	startSweep := &Edge{curve: Line3{}, start: bStart, end: tStart, length: pp.z1 - pp.z0, lengthBound: height.bound}
+	endSweep := &Edge{curve: Line3{}, start: bEnd, end: tEnd, length: pp.z1 - pp.z0, lengthBound: height.bound}
+
+	// T × N: the walk tangent crossed with the plane normal, the identical
+	// construction buildLoopSidesAs's own straight-wall branch takes for a
+	// profile-fed wall's outward normal (docs/surface-design.md §13.4). A
+	// reflected placement flips the cross product's handedness, so the
+	// tangent is negated to keep it outward, exactly as the profile-fed
+	// branch does.
+	mid := prismView.point((w.startU+w.endU)/2, (w.startV+w.endV)/2, pp.z0)
+	tu, tv := w.tanInU, w.tanInV
+	if prismView.reflected() {
+		tu, tv = -tu, -tv
+	}
+	wallFrame, err := r3.NewFrame(mid, prismView.dir(tu, tv, 0), prismView.dir(0, 0, 1))
+	if err != nil {
+		return nil, fmt.Errorf(`%w: the chain's own segment has no direction`, ErrDegenerate)
+	}
+
+	wallArea := boundedMul(measuredScalar(w.length, w.lengthBound), height)
+	face := &Face{
+		surface: Plane{Frame: wallFrame},
+		// The role name matches sideOriginsContext's own "side(loop,segment)"
+		// convention (prism_build.go): this increment's single wall is
+		// loop 0, segment 0.
+		origins:   []FeatureRef{{producer: ref, Role: fmt.Sprintf("side(%d,%d)", 0, 0)}},
+		body:      body,
+		area:      wallArea.value,
+		areaBound: wallArea.bound,
+		loops: []*Loop{{outer: true, coedges: []coedge{
+			{edge: bottomEdge, forward: true},
+			{edge: endSweep, forward: true},
+			{edge: topEdge, forward: false},
+			{edge: startSweep, forward: false},
+		}}},
+	}
+	for _, e := range []*Edge{bottomEdge, topEdge, startSweep, endSweep} {
+		e.faces = append(e.faces, face)
+	}
+	faces := []*Face{face}
+	// sheetLumps derives IsOpen from the faces' own edge adjacency: every one
+	// of this ribbon's four edges carries exactly one face, so its one lump's
+	// one shell reads open, exactly as a profile-fed wall's own free rim does
+	// (surface.go).
+	body.lumps = sheetLumps(faces)
+
+	// The ribbon's area is the sum of its per-wall areas, composed through
+	// boundedAdd rather than added as raw floats (docs/surface-design.md
+	// §13.4): one term this increment, and the same fold a later increment's
+	// multi-segment wall set extends with no change here.
+	total := boundedAdd(boundedScalar{}, wallArea)
+	body.area = Measurement{
+		Value:     units.SquareMillimeters(total.value),
+		Exactness: exactnessOf(total.bound),
+		Bound:     units.SquareMillimeters(total.bound),
+	}
+	// volume and centroid stay at their zero value: finite, so
+	// validateAnalyticBodyMeasurements below passes, and neither is
+	// reachable through Body.Volume/Body.Centroid while solid is false
+	// (docs/surface-design.md §8), exactly as patch.go's evalPatchContext
+	// leaves them.
+	work := newFreeformWork()
+	bounds, err := prismBoundsContext(ctx, prismView, work, nil)
+	if err != nil {
+		return nil, err
+	}
+	body.bounds = bounds
+	if err := validateAnalyticBodyMeasurements(body); err != nil {
+		return nil, err
+	}
+	body.payload = pp
+	return body, nil
 }
