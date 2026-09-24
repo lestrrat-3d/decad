@@ -16,9 +16,9 @@ import (
 // fit one shared camera, so a reader comparing two rows of the README table
 // is comparing the geometry and not the framing.
 const (
-	featureWidth          = 640
-	featureHeight         = 480
-	featureChordTolerance = 0.2
+	featureWidth          = 1280
+	featureHeight         = 960
+	featureChordTolerance = 0.02
 )
 
 // featureRenders is one image per README feature entry.

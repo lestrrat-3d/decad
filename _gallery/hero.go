@@ -20,14 +20,14 @@ type letter struct {
 
 // heroChordTolerance is the chord tolerance the hero shot tessellates at
 // unless -chord overrides it.
-const heroChordTolerance = 0.4
+const heroChordTolerance = 0.02
 
 // heroRender is the README's masthead: the wordmark itself is decad geometry,
 // each letter an extruded profile with its outside corners filleted.
 func heroRender() imageRender {
 	return imageRender{
 		rel:      "hero.png",
-		settings: solidlens.Settings{Width: 1440, Height: 810},
+		settings: solidlens.Settings{Width: 2880, Height: 1620},
 		chord:    units.Millimeters(heroChordTolerance),
 		scene:    heroScene,
 	}
