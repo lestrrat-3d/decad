@@ -1822,3 +1822,9 @@
 2	0.01	TestSweepChainRefusesAnOffNormalPath
 3	0.01	TestSweepChainRefusesCompositeAndArcPaths
 0	0.01	TestSweepChainSeamGatesPrecedeThePathGates
+1	0.01	TestLoftChainOneCellRibbonPinsTheSideToExtrudeChain
+2	0.01	TestLoftChainMultiCellRibbonFreeEdgesAndArea
+3	0.01	TestLoftChainRefusesANonParallelOrNegativePlanePair
+0	0.01	TestLoftChainCrossingCorrespondenceIsRefused
+1	0.01	TestLoftChainRefusesAMismatchedOrCurvedPairing
+2	0.01	TestLoftChainPlacedRibbonKeepsItsAreaAndChargesItsVertices

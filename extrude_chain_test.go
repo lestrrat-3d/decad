@@ -373,11 +373,11 @@ func TestExtrudeChainFreeformWallAreaNeverPublishesTheLengthUnderestimate(t *tes
 
 // TestChainFedRefusals is docs/surface-design.md's T139: a SweepChain over a
 // COMPOSITE path is ErrUnsupported (R34) ahead of the increment that builds
-// docs/sweep-design.md §15.1's join, LoftChain is ErrUnsupported (R23) for a
-// valid chain pair, and RevolveChain handed a chain with both free ends on the
-// resolved axis is ErrUnsupported (R22), pending its closed-sheet pole
-// topology. A one-span straight path builds instead, which sweep_chain_test.go
-// owns.
+// docs/sweep-design.md §15.1's join, and RevolveChain handed a chain with both
+// free ends on the resolved axis is ErrUnsupported (R22), pending its
+// closed-sheet pole topology. A one-span straight path builds instead, which
+// sweep_chain_test.go owns; LoftChain's own staged refusal is the curved pair
+// (R36), which loft_chain_test.go owns beside the pairing it does build.
 func TestChainFedRefusals(t *testing.T) {
 	t.Parallel()
 	s, ch := lineChainSketch(t)
@@ -393,10 +393,6 @@ func TestChainFedRefusals(t *testing.T) {
 	)
 	require.NoError(t, err)
 	_, err = doc.SweepChain(t.Context(), s, ch, path)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Empty(t, doc.Bodies())
-
-	_, err = doc.LoftChain(t.Context(), s, ch, s, ch)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Empty(t, doc.Bodies())
 
