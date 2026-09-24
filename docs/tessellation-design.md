@@ -209,8 +209,9 @@ single swept prism or cup section's own construction does.
 **The free-boundary row's attribution needs no role at all for an OPEN
 stitched sheet's mesh** (`stitchPayload`, T8), unlike every other sheet row
 above, which attributes by the role this evaluator's own build stamped on a
-face it created. `stitchPayload.triFaces` names the live rebuilt `*Face` a
-triangle belongs to directly, and `Body.Edges()`'s own `Faces()` reads that
+face it created. `stitchPayload.triFaces` names the live rebuilt `*Face` of
+an all-planar triangle directly. T10's source-to-live pairing names that
+face for a revolve-backed triangle. `Body.Edges()`'s own `Faces()` reads that
 identical pointer back off the same rebuilt topology
 (`docs/surface-design.md` §10), so `freeSheetEdgesByFace`'s per-triangle
 grouping and `freeChainCountsByFace`'s per-`Edge` grouping agree by pointer
@@ -294,6 +295,7 @@ analytic walk's do (`docs/tessellation-reach-design.md` §5).
 | `capBlendPayload` | `docs/tessellation-reach-design.md` §7 owns this row: one count per wall walk shared by the trimmed side wall, the band patch and the cap contour | that document's per-patch term table | max per-face source bound | that document's per-patch composition | none until its occupied-volume proof lands; `symDiffOK == false` |
 | `stitchPayload` | the triangle set `Stitch`'s own build assembled and audited (`docs/surface-design.md` §6.4), all-planar only (`stitchAllTetrahedronEligible`), CLOSED or OPEN; attributed by the payload's own recorded per-triangle live face, never by role (§4) | the largest `Vertex.Bound()` over the vertices that face's own triangles touch; zero only when every one of them is | max per-face source bound | `perturbedTriangleAreaAllow` per triangle at that triangle's own largest vertex bound, summed through `absSumUpper`; zero wherever every vertex bound is zero | zero, `symDiffOK == true`, for a CLOSED body (`b.Kind() == BodySolid`) whose every vertex carries a proven bound of exactly zero (`stitchZeroVertexBound`, the same gate `docs/clearance-design.md` §2's stitch arm applies): every held vertex is then the true boundary vertex, every triangulated polygon is that face's own exact `Line3` boundary, and ear clipping tiles it exactly, so the held triangle set occupies exactly the denoted volume; `symDiffOK == false` for every other case (open, curved/mixed, placed, or certificate-welded) — the tetrahedron sum there proves only SIGNED volume, never the occupied-volume symmetric-difference bound this row requires before a boolean may consume it |
 | `sweepPayload` | staged until `docs/sweep-design.md` Table D row D2 lands | — | — | — | — |
+| `stitchPayload` (revolve-backed) | T10 copies a complete source revolve-sheet mesh, mapping each triangle to its paired live face; a new curved weld refuses | source mesh's per-face bound, including meridian/angular chording and construction/placement rounding (§8); zero extra stitch displacement | max mapped per-face bound | source mesh's non-cancelling area allowance at `VerifyAll` | no occupied-volume proof; `symDiffOK == false` for closed and open results |
 
 ### `loftPayload` exact restatement
 
@@ -462,16 +464,16 @@ Assign sources by patch:
 | start/end cap | `capStart` / `capEnd` face |
 | cup kept cap, pocket floor, rim band | the corresponding `capStart`, `shellCap`, or `rim(i)` face |
 | faceted restatement | faceted body face recorded by the payload's facet group |
-| stitched-solid triangle | the payload's own recorded per-triangle live face (`stitchPayload.triFaces`), never a role lookup |
+| stitched-solid triangle | the payload's own recorded per-triangle live face (`stitchPayload.triFaces`), or T10's source-to-live pairing; never a role lookup |
 
 Every row above but the last names a ROLE this evaluator's own build stamped
 on the face it created, unique per body by construction. A stitched body's
 faces carry no such guarantee: `rebuildStitchTopology` copies each welded
 operand face's own `origins` verbatim, so two independently welded operands
 can carry the identical role string, and a `byRole` map keyed on it would
-collide silently. `stitchPayload` sidesteps the question entirely by
-recording the live face directly, once, at the point its own triangle set is
-built, rather than recovering it from a role afterward.
+collide silently. `stitchPayload` records the live face directly for an
+all-planar triangle. T10 pairs each original source face with its live
+copy before reattributing the source mesh, so it never looks up a role.
 
 Walk order carries material on its left. Emit wall triangles from that order,
 the sweep sense, and the source face's `reversed` bit. Start caps point against
@@ -1145,7 +1147,7 @@ Refuse before returning any partial mesh:
 | non-adjacent facets intersect after refinement | `ErrUnsupported` |
 | coordinate construction or placement rounding cannot prove positive facets and unchanged contact/component topology over its affine homotopy | `ErrUnsupported` |
 | directed-edge audit fails, a vertex link is not one connected cycle, or a triangle has zero area | `ErrUnsupported`; a missing/conflicting source role is `ErrDegenerate` because the body topology contradicts its payload |
-| a stitched body holding a face that is not a `Plane` bounded entirely by `Line3` edges, open or closed (`docs/surface-design.md` §14 Table D row 5) | `ErrUnsupported` |
+| a curved stitched body outside `docs/surface-design.md` §10.1's complete one-source revolve-sheet gate; refusal names its first unsupported surface kind | `ErrUnsupported` |
 | a mesh has no finite construction/placement-homotopy allowance when used by a boolean | boolean call returns `ErrUnsupported`; export remains available when the payload's own boundary proofs pass |
 
 NEVER snap, weld, drop a facet, round a near-axis ring onto the axis, or perturb a
@@ -1165,6 +1167,7 @@ sample to make an analytic mesh close. Refine or refuse.
 | **T8** | `stitchPayload` exact restatement, all-planar case only, CLOSED or OPEN: source-face-preserving triangle copy attributed by the payload's own recorded per-triangle face, a proof record carrying the largest per-face vertex bound and its per-triangle area-slack term, the closed-mesh audit plus its own vertex-link safety net on a CLOSED body, and §1.2's manifold-with-boundary audit on an OPEN one; a zero occupied-volume proof and mesh-boolean admission for a CLOSED body whose every vertex bound is exactly zero | a curved or mixed stitched body's own mesh; mesh-boolean admission for a stitched body carrying any nonzero vertex bound, placed or certificate-welded |
 
 | **T9** | `Verification` and `WithVerification`: the three levels of §1, the cache key that carries the level (§1.1), the facet-contact audit and the two volume-class proofs gated on it, `BoundaryVerified`/`VolumeVerified`, and `STL`/`OBJ` defaulting to `VerifyNone` | a per-audit selection finer than the three levels |
+| **T10** | One complete revolve-sheet source copied through a curved or mixed `Stitch`: reuse the source mesher's shared stations, map source faces to live stitched faces, carry its face and area bounds, and run the closed or sheet audits; `BoundaryVerified` follows the source contact audit | newly welded curved seams, other source payloads, non-identity stitch placement, and a chorded stitch occupied-volume proof |
 
 Each increment ships its computed geometry tests with it. §§8–10 prove the
 revolve mesh itself, which is what T2/T3 export; T4's occupied-volume proof is
@@ -1173,6 +1176,13 @@ implementation plan and order for T2–T4, T6, T7 and the P5 chording, and the
 completion of §2's proof record on `Mesh` they all publish into.
 
 ## 14. Test obligations
+
+For T10, `docs/surface-design.md` §15 T83–T89 names the curved stitched
+fixtures, computed geometry, refusal cases and two shown-to-fail proof legs.
+The source revolve sheet's own mesh and the stitched mesh must share every
+vertex coordinate and triangle index at the same tolerance; only winding
+and live-face attribution may change. A curved seam made by a new weld
+must refuse until both faces can reuse one chord station sequence.
 
 - Assert directed-edge closure, positive triangle area, outward winding, and
   `len(SourceFaces) == len(Triangles)` on every payload class.

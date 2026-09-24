@@ -1347,6 +1347,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R29 | `Trim`, `Extend` or `Split` handed a pair `docs/surface-intersection-design.md` §2's entry gate refuses, or a resolution its §6 cannot complete | as that table states: `ErrUnsupported` / `ErrUnrecordableProfile` |
 | R30 | `Trim` whose tool separates no fragment of the receiver, or `Split` whose tool separates no part of the target | `ErrDegenerate` |
 | R31 | `Trim`, `Extend` or `Split` in every increment before Table D row 8 | `ErrUnsupported` |
+| R32 | a curved stitched mesh has an unsupported surface kind, lacks one complete revolve-sheet source, has a new curved weld, or has a non-identity stitch placement (§10.1) | `ErrUnsupported`, naming the first affected surface kind |
 
 R6, R8, R10 and R20 are `ErrUnsupported` rather than `ErrDegenerate` on
 `docs/api-design.md` §8's own distinction: the input names real geometry and
@@ -1733,8 +1734,8 @@ built, so the mesh side and the body side of the audit agree by construction,
 never by coincidence or by a second geometric test.
 
 A stitched body holding a face that is not a `Plane` bounded entirely by
-`Line3` edges stays `ErrUnsupported` whether the body is open or closed,
-staged past this increment. The mesh publishes a zero occupied-volume proof
+`Line3` edges follows the revolve-backed route below when its source qualifies.
+The mesh publishes a zero occupied-volume proof
 (`symDiffOK == true`) only for a CLOSED, all-planar body whose every vertex
 carries a proven bound of exactly zero (`stitchZeroVertexBound`, the same
 gate `docs/clearance-design.md` §2's stitch arm applies): every held vertex
@@ -1754,6 +1755,55 @@ rests on. An open body's STL is not a solid file, and `Body.STL`'s doc comment
 says so, which is how a caller learns it before handing the file to a slicer
 rather than after.
 
+### 10.1 Curved stitched mesh from one revolve sheet
+
+Table D row 9 admits a curved or mixed stitched body only when every source
+face came from one `revolvePayload` sheet, the source face set is complete,
+`Stitch` made no new edge weld, and the stitch placement is the identity.
+The source mesh is built through `tessellateRevolve` at the requested chord
+tolerance and verification level. Its faces may be `Plane`, `Cylinder`,
+`Cone`, `Sphere` or `Torus`, the same surface kinds the flux integral admits.
+Any other surface kind, incomplete source face set, new curved weld, or
+unsupported source payload returns `ErrUnsupported` naming the first
+affected surface kind (Table R, R32). This restriction is on the source
+construction proof, not on a surface tag by itself. Re-chording a tagged
+surface independently was rejected: `Surface` does not record the generating
+walk, the shared angular count, or the source mesher's certified rounding.
+
+The source revolve mesh uses one global angular sequence and shared meridian
+stations across every source face. `Stitch` copies each source face to one
+live face without moving a coordinate under this gate. Reattribute each
+triangle through that source-to-live pairing, and reverse its winding when
+the live face's `reversed` bit differs from the source face's. The copied
+vertex and triangle arrays are fresh; neither the source mesh nor the
+stitched body aliases a returned array. A newly welded curved edge from
+separate source meshes is refused because their chord stations can differ.
+That refusal is necessary even when the two analytic edges share a CURVE
+certificate: the certificate proves equal curves, not equal mesh samples.
+
+Each live face inherits its source mesh face bound. That bound already
+composes the meridian sagitta, angular sagitta, construction rounding and
+source placement rounding through `docs/tessellation-design.md` §8. The
+stitch gate proves zero extra placement and zero new weld displacement, so
+the copied mesh adds no term. Its `areaSlack` is the source mesh's proved
+non-cancelling area allowance. A chorded mesh never claims a zero bound
+merely because the source has no recorded triangles. A closed chorded body
+publishes no occupied-volume proof (`VolumeVerified() == false`); its signed
+volume and its boundary displacement do not bound symmetric difference.
+At `VerifyNone`, the source revolve contact audit is skipped and
+`BoundaryVerified()` is false. It is true after `VerifyBoundary` or
+`VerifyAll` passes that audit. An open sheet also keeps
+`VolumeVerified() == false` at every level.
+
+A closed result runs `requireClosedMesh` and `requireVertexLinks` on the
+reattributed set. An open result runs `requireSheetMesh` and
+`requireSheetVertexLinks` instead. A curved free `Edge` can contribute
+several free directed mesh edges: `requireSheetMesh` compares connected
+boundary chains per live face, not edge counts. Both sides use the same
+live `*Face` pointer, and a source rim's consecutive chord segments stay
+one chain. The rejected alternative was matching one mesh segment to one
+recorded curved `Edge`; that would reject every sufficiently chorded rim.
+
 ## 11. Table X — which existing operations admit a sheet
 
 **Table X — a sheet as receiver or operand**
@@ -1765,7 +1815,7 @@ rather than after.
 | `Shell` | `ErrUnsupported` | removes faces from a solid and offsets its material section; a prism sheet does carry a section, but it has no material or caps to remove. `Thicken` uses that section under §16's separate contract |
 | `Thicken` | §16's patch and profile-fed prism families build; the other families are R24 | builds a new solid from a sheet's recorded generator and retires the sheet |
 | `Placed` / `PlacedCopy` / `Duplicate` | admitted, unchanged | a rigid motion of a payload; nothing in it reads solidity |
-| `Tessellate` / `STL` / `OBJ` | a prism, revolve, loft or all-planar stitched sheet tessellates and exports; a stitched sheet holding a face that is not a `Plane` bounded entirely by `Line3` edges is `ErrUnsupported`, staged (§10) | each supported sheet path runs the manifold-with-boundary audit §10 describes; a curved or mixed stitched sheet awaits a later increment |
+| `Tessellate` / `STL` / `OBJ` | a prism, revolve, loft, all-planar stitched or §10.1 revolve-backed stitched sheet tessellates and exports; other curved stitched sheets are R32 | each supported sheet path runs the manifold-with-boundary audit §10 describes |
 | `ToFace` / `ToFaceAngular` naming a **planar** face of a live sheet | admitted | the stop reads the face's plane and nothing about material, so `stops.go`'s resolution is unchanged |
 | `ToFace` naming a curved face of a sheet | as for a solid | this design changes no curved-stop reach |
 | `EdgeAxis` naming a linear edge of a live sheet | admitted | the axis reads the edge's line; `docs/api-design.md` §6.2's exactly-one and liveness rules apply unchanged |
@@ -2143,6 +2193,7 @@ ANSWER is accepted and reads `Suspect`.
 | 6 | The open sketch chain (§13): `ChainRecord` and `RecordChain` beside `ProfileRecord` and `RecordProfile`, under the same gates and the same four sentinels; `Document.ExtrudeChain` and `Document.RevolveChain` with their two sealed option tiers, building Table G's wall set with no cap and no closing face; the fourth validity leg for a chain-fed prism and for a full-turn chain revolve clear of the axis; prism ribbon tessellation and export on the identical manifold-with-boundary audit; Table A's four new amendment rows; §15's T130–T141. `Document.SweepChain` and `Document.LoftChain` land as signatures refusing with `ErrUnsupported` (R23), a chain free end ON the revolve axis refuses with `ErrUnsupported` (R22), and the chain-fed revolve ribbon's own mesh waits on increment 4 exactly as a profile-fed revolve sheet's does |
 | 7 | `Body.Thicken` for §16's patch and profile-fed prism cases, all three sides, the full offset-interval and cross-boundary audits, and T150–T157. Other sheet families stay R24 |
 | 8 | `Trim`, `Extend` and `Split` over a pair whose two sweeps share one generator, in the four PRs `docs/surface-intersection-design.md` §11 states: its §2 entry gate, `buildPrismScene`'s `ChainRecord` arm, `classifyPrismCells`'s side reading consumed unchanged, the open-walk chaining of its §3.3, `chainPayload`'s and `chainRevolvePayload`'s walk set and section displacement, and the one displacement term its §7 derives from `bounds.go`'s existing `cutParamUlps`/`cutDisplacementAllow`. Table A's five new rows; Table R's R29–R31; §15's T170–T181. A pair sharing no generator, a chain ribbon as `Trim`'s receiver, and a second trim of an already-trimmed body each refuse with `ErrUnsupported`, and that document's §4 and §5 own why |
+| 9 | §10.1's curved or mixed stitched mesh from one complete revolve sheet, closed or open. Other source constructions and new curved welds remain R32 until they can prove identical seam samples. |
 
 **Increment 7 depends on increment 1's patch and prism sheets and analytic
 prism builder, plus `docs/modify-design.md` §5/§8's section offset and audit.**
@@ -2199,6 +2250,35 @@ unlanded build refuses at the call with `ErrUnsupported`.
 computed geometry, never merely that it ran. Each row below names a concrete
 assertion, and each bound assertion must first be **shown to fail** — the
 proof leg deleted, the test watched to go red — before it is trusted.
+
+The row-9 curved-mesh obligations are:
+
+- T83: Stitch T31's annular full-turn revolve sheet. Tessellate at two
+  tolerances; assert every source face is live, all directed edges pair,
+  the fine mesh's signed tetrahedron sum is closer to 2000π mm³ than the
+  coarse mesh's, and each mesh copies its source sheet's vertices exactly.
+- T84: Repeat with T46's two cones, T50's complete sphere and T53's
+  cylinder/torus pair. Assert each mesh's surface-kind counts, positive
+  facet areas and signed tetrahedron sum against the same-tolerance direct
+  revolve mesh, whose independent solid proof encloses analytic volume.
+- T85: Stitch one partial-revolution sheet whose two curved faces share an
+  internal latitude and whose curved free rims each chord into several
+  segments. Assert the mesh's per-face free-boundary chain counts equal
+  `Body.Edges()`'s, and every shared seam segment has one reverse.
+- T86: T83 at `VerifyNone`, `VerifyBoundary` and `VerifyAll` reports
+  `BoundaryVerified()` false, true and true; all three report
+  `VolumeVerified()` false. `STL` and `OBJ` export the same geometry at
+  the same tolerance.
+- T87: T34's patched prism tube and a hand-built `NURBSSurface` stitch
+  each return `ErrUnsupported` from tessellation, naming `Cylinder` and
+  `NURBSSurface` respectively. A placed copy of T83 also refuses R32.
+- T88: Remove the inherited source-face bound from the T83 mesh, run the
+  test, record the failure, and restore it. The asserted relation is that
+  every stitched face bound covers its source mesh face bound; a missing
+  charge publishes zero where the source bound is positive.
+- T89: Remove the source-to-live face remap from T85, run the free-boundary
+  attribution test, record its failure, and restore it. This isolates the
+  face-identity proof from the chording proof.
 
 | # | Fixture | Asserted |
 |---|---|---|
