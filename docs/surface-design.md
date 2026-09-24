@@ -1347,7 +1347,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R29 | `Trim`, `Extend` or `Split` handed a pair `docs/surface-intersection-design.md` §2's entry gate refuses, or a resolution its §6 cannot complete | as that table states: `ErrUnsupported` / `ErrUnrecordableProfile` |
 | R30 | `Trim` whose tool separates no fragment of the receiver, or `Split` whose tool separates no part of the target | `ErrDegenerate` |
 | R31 | `Trim`, `Extend` or `Split` in every increment before Table D row 8 | `ErrUnsupported` |
-| R32 | a curved stitched mesh lacks §10.1's one-source route or §10.2's proven sibling-weld route, has an unsupported surface kind, or has a non-identity stitch placement | `ErrUnsupported`, naming the first affected surface kind |
+| R32 | a curved stitched mesh lacks §10.1's one-source route or §10.2's proven sibling-weld route, has an unsupported surface kind, or has a non-identity stitch placement | `ErrUnsupported`, naming a source surface kind |
 | R33 | `RevolveChain` with an interior on-axis junction lacking one swept-wall end and one axis-line end, or with repeated on-axis junctions at one axial coordinate | `ErrDegenerate` |
 
 R6, R8, R10 and R20 are `ErrUnsupported` rather than `ErrDegenerate` on
@@ -1766,8 +1766,8 @@ The source mesh is built through `tessellateRevolve` at the requested chord
 tolerance and verification level. Its faces may be `Plane`, `Cylinder`,
 `Cone`, `Sphere` or `Torus`, the same surface kinds the flux integral admits.
 Any other surface kind, incomplete source face set, new weld or vertex merge, or
-unsupported source payload returns `ErrUnsupported` naming the first
-affected surface kind (Table R, R32). This restriction is on the source
+unsupported source payload returns `ErrUnsupported` naming a source
+surface kind (Table R, R32). This restriction is on the source
 construction proof, not on a surface tag by itself. Re-chording a tagged
 surface independently was rejected: `Surface` does not record the generating
 walk, the shared angular count, or the source mesher's certified rounding.

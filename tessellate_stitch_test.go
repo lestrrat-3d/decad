@@ -270,6 +270,7 @@ func TestStitchCurvedMeshRefusesUnsharedChording(t *testing.T) {
 	require.NoError(t, err)
 	_, err = stitched.Tessellate(t.Context(), units.Millimeters(0.1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "this evaluator has no chording arm for the source construction")
 	require.ErrorContains(t, err, "Cylinder")
 
 	_, source := annularRevolveSheet(t, 10, 5, 15)
