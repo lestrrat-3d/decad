@@ -1838,3 +1838,7 @@
 0	0.02	TestThickenRibbonNeck
 1	0.01	TestThickenRibbonUnrepresentableOffset
 2	0.01	TestThickenRibbonWalkClassRefusals
+3	0.02	TestThickenChainRevolveCylinder
+0	0.01	TestThickenChainRevolveReachesAxis
+1	0.02	TestThickenChainRevolveStep
+2	0.01	TestThickenChainRevolvePoleRefuses

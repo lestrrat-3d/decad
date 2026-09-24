@@ -770,7 +770,7 @@ func thickenArcIsCCW(start, end, center Point2) bool {
 // proven simple there and proven free of any nonadjacent contact over the
 // whole interval 0 < τ ≤ amount.
 func thickenRibbon(ctx context.Context, chain ChainRecord, side ThickenSide, amount float64,
-	budget *workBudget, work *freeformWork) (ProfileRecord, error) {
+	budget *workBudget, work *freeformWork, radial *thickenRadial) (ProfileRecord, error) {
 	raw := make([]sideWalk, len(chain.Segments))
 	for i, seg := range chain.Segments {
 		if err := ctx.Err(); err != nil {
@@ -802,7 +802,7 @@ func thickenRibbon(ctx context.Context, chain ChainRecord, side ThickenSide, amo
 	if limit == nil {
 		return ProfileRecord{}, fmt.Errorf(`%w: the thicken offset is not finite`, ErrUnsupported)
 	}
-	if err := thickenPiecesIntervalClear(ctx, pieces, limit, budget, nil); err != nil {
+	if err := thickenPiecesIntervalClear(ctx, pieces, limit, budget, radial); err != nil {
 		return ProfileRecord{}, err
 	}
 	section, err := thickenRibbonSection(pieces, limit)
