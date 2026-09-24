@@ -1027,9 +1027,11 @@ An edge it cannot join stays free, which is a result rather than an error, so
 the caller reads `Edges(Free())` to see what did not close.
 
 **A chain-fed form takes the sketch beside the chain, on §7's terms, and
-consumes nothing.** `ExtrudeChain` and `RevolveChain` build; `SweepChain` and
-`LoftChain` are `ErrUnsupported` until the increment that states their pairing
-rule (`docs/surface-design.md` §14). All four run §7's four gates over
+consumes nothing.** All four build the part of their reach
+`docs/surface-design.md` §1.2 states: `SweepChain` sweeps one straight path
+span and `LoftChain` rules a `LineSeg`-only correspondence between two
+exactly-parallel walks, and each refuses the rest at the call with
+`ErrUnsupported`. All four run §7's four gates over
 `RecordChain` and return the same four sentinels a profile earns, and there is
 no chain-fed `Document.Patch`: an open walk encloses no region to fill, and a
 walk whose ends met is a `sketch.Profile`.
@@ -1695,9 +1697,12 @@ GUI or view state of any kind, and Fusion code generation.
 Sheet bodies themselves are **not** a non-goal — `docs/surface-design.md` owns
 them. `Thicken` admits the sheet families §16.1 names and `Offset` the two
 §17.1 names; every other sheet family refuses at its call with
-`ErrUnsupported`. Trim, Extend, surface Offset and a sheet operand in
-any boolean are staged there, each refusing at the call until its own increment
-lands. Ruled and Boundary Fill refuse permanently, because the surface each
+`ErrUnsupported`. `Trim`, `Extend` and `Split` build over a pair whose two
+sweeps share one generator and refuse every other pair
+(`docs/surface-design.md` §1.1, §1.2); a sheet operand in any boolean refuses
+permanently, and `Document.Split` carries that intent instead
+(`docs/surface-design.md` Table X).
+Ruled and Boundary Fill refuse permanently, because the surface each
 needs is a fit through a boundary nothing generated (`docs/surface-design.md`
 §1.3). Reverse Normal takes no increment either: no shipped operation's result
 turns on a side its caller cannot already name (`docs/surface-design.md` §1.4).

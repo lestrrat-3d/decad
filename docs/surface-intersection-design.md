@@ -15,9 +15,9 @@ operations produces or consumes. References of the form "core §N" are to
 
 ## 1. Problem
 
-Surface §1.2 stages Trim, Extend and a sheet operand in a boolean on one
-reason: each needs surface-surface or surface-solid intersection, and
-trimming a sheet with another sheet would decide topology from a fitted
+Trim, Extend and a sheet operand in a boolean each need surface-surface or
+surface-solid intersection, and trimming a sheet with another sheet would
+decide topology from a fitted
 curve. Core §2.1 states the general case behind it — cylinder against
 cylinder at an arbitrary angle is a quartic space curve with no closed form,
 and a flipped floating-point sign on a fit gives a solid with a hole in its
