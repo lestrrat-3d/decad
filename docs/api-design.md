@@ -282,9 +282,10 @@ while `Document.Bodies()` stays truthful: `Union(ctx, a, b)` reaches the documen
 the operation, with no `*Document` argument and no caller bookkeeping. Operands
 themselves are untouched: retiring is a change of *document* membership, not of
 the body, which stays immutable and readable. The rule is uniform — every
-operation that consumes a body (the booleans of §8, the `Body.Fillet` /
-`Chamfer` / `Shell` modify ops, and `Body.Placed`) retires its input body or
-bodies from the document and registers the body it returns. A retired body
+operation that consumes a body (the booleans of §8, `Body.Fillet` /
+`Chamfer` / `Shell`, the surface operations `Thicken` / `Body.Patch` /
+`Stitch` / `Unstitch`, and `Body.Placed`) retires its input body or
+bodies from the document and registers every body it returns. A retired body
 remains readable, but it is gone from `Document.Bodies()` and
 `Document.Verify()` never reports on it. The two copies of §8 —
 `Body.Duplicate` and `Body.PlacedCopy` — are the deliberate exception: they
@@ -737,15 +738,15 @@ before extruding. decad never re-derives it.
 
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
 Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy, Loft, Sweep, Patch,
-Stitch, Unstitch**, plus the four sweeps of an OPEN sketch curve —
+Stitch, Unstitch, Thicken**, plus the four sweeps of an OPEN sketch curve —
 **ExtrudeChain, RevolveChain, SweepChain, LoftChain** — which take a
 `*sketch.Chain` where their siblings take a `*sketch.Profile` and always build a
 sheet.
 `docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
 rule, and its increment-1 scope. `docs/sweep-design.md` owns `Sweep`'s
 signature, spatial `Path`, frame transport, refusals, and staged reach.
-`docs/surface-design.md` owns the three sheet-body operations — `Patch`,
-`Stitch` and `Unstitch` — together with `WithSurfaceResult()`, the option that
+`docs/surface-design.md` owns `Patch`, `Stitch`, `Unstitch` and `Thicken`,
+together with `WithSurfaceResult()`, the option that
 makes `Extrude`, `Revolve`, `Sweep` and `Loft` return their wall set as a
 sheet instead of closing it into a solid, and the four chain-fed forms that
 sweep an open curve (§13 there).
@@ -955,9 +956,9 @@ shell form that accepts `sel == nil`; it conflicts with a non-nil selector.
 `docs/modify-reach-design.md` owns exact receiver/target limits, refusal order,
 payloads, and validation.
 
-Surface operations build and close a **sheet body** — a body that encloses no
-material region (§6, `BodyKind`). They take the same shapes every other
-operation does, and `docs/surface-design.md` is normative for all of them:
+Surface operations build, close and thicken a **sheet body** — a body that
+encloses no material region (§6, `BodyKind`). `Thicken` returns a solid;
+`docs/surface-design.md` is normative for all these operations:
 
 ```go
 type SurfaceResultOption interface {
@@ -974,6 +975,8 @@ func (b *Body) Patch(ctx context.Context, sel EdgeSelector) (*Body, error)
 
 func Stitch(ctx context.Context, bodies ...*Body) (*Body, error)
 func (b *Body) Unstitch(ctx context.Context) ([]*Body, error)
+func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...ThickenOption) (*Body, error)
+func WithThickenSide(side ThickenSide) ThickenOption
 
 // The chain-fed forms. Each sweeps an OPEN sketch curve and always returns a
 // BodySheet, so WithSurfaceResult() is not among their options: ChainExtrudeOption
@@ -985,15 +988,18 @@ func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.
 func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...LoftOption) (*Body, error)
 ```
 
-`WithSurfaceResult()` omits the faces that exist only to close the solid and
-changes nothing else — a wall keeps its surface, its role and every bound.
+`ThickenSide` is `ThickenPositive` (default), `ThickenNegative` or
+`ThickenCentered`; `docs/surface-design.md` §16 owns the receiver and proof
+limits. `WithSurfaceResult()` omits the faces that exist only to close the
+solid and changes nothing else — a wall keeps its surface, its role and every bound.
 `Document.Patch` builds a planar face from a recorded profile and consumes
 nothing; `Body.Patch` fills a closed chain of the receiver's free edges and
 retires it. `Stitch` retires every operand and `Unstitch` its receiver, on §6's
 uniform terms, and neither takes a `*Document` because a `*Body` carries its
-own. **`Stitch` is the only operation that turns a boundary into a solid**, and
-it joins two free edges only where coincidence is proven, never within a
-tolerance — Fusion's tolerant stitch is the `isTolerant` topology §2.1 rejects.
+own. `Stitch` closes an existing face assembly; `Thicken` builds a new skin
+and rim from an admitted sheet. `Stitch` joins two free edges only where
+coincidence is proven, never within a tolerance — Fusion's tolerant stitch
+is the `isTolerant` topology §2.1 rejects.
 An edge it cannot join stays free, which is a result rather than an error, so
 the caller reads `Edges(Free())` to see what did not close.
 
@@ -1655,11 +1661,11 @@ feature tree / timeline / rollback, STEP, sheet metal, mesh import,
 GUI or view state of any kind, and Fusion code generation.
 
 Sheet bodies themselves are **not** a non-goal — `docs/surface-design.md` owns
-them — but the Fusion surface commands that need surface-surface intersection
-or a rejecting offset are staged there rather than here: Thicken, Trim, Extend,
-surface Offset, Ruled, Boundary Fill, Reverse Normal, and a sheet operand in any
-boolean. Each refuses at the call with `ErrUnsupported` until its own design
-lands.
+them. `Thicken` admits the recorded patch and profile-fed prism families of §16
+there; the other sheet families refuse at its call with `ErrUnsupported`.
+Trim, Extend, surface Offset, Ruled, Boundary Fill, Reverse Normal, and a
+sheet operand in any boolean remain staged there, each refusing at the call
+until its own design lands.
 
 The assemblies non-goal rests on a capability in hand, not on an instancing
 graph: interference and clearance (§10) are computed between
