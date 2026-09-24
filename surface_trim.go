@@ -8,19 +8,22 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// This file implements Body.Trim, Body.Extend and Document.Split over the prism family.
-// Their §2.1 gates share prism-boolean's exact generator comparison, identity
+// This file implements Body.Trim, Body.Extend and Document.Split. Their §2.1
+// gates share prism-boolean's exact generator comparison, identity
 // re-expression check and sweep-span relation. All three use buildPrismScene;
 // Trim reads classifyPrismCells unchanged, while Split reads only the target
 // label. Every miss is a typed refusal at the call: a sheet's mesh proves no
 // occupied volume, and a mesh trim would decide topology from float signs on
 // chorded triangles (docs/surface-intersection-design.md §2.1).
 //
-// The revolve family (S1's and S4's other arm) is left as a hook for PR4.
+// Trim and Extend take the REVOLVE family too, over the two operands' meridian
+// views: §11's PR4, this file's own last section. Split's revolve arm is staged
+// (RS13) and refuses by name.
 
 // Extend lengthens the receiver along the named edges' own carriers until
-// they meet tool, and returns the lengthened sheet. This prism-family arm
-// admits only the exact shared generator of surface-intersection §2.1.
+// they meet tool, and returns the lengthened sheet. It admits a receiver and
+// tool sharing ONE generator, exactly as Trim does — both a straight sweep, or
+// both a revolve about one axis — under surface-intersection §2.1's own gate.
 func (b *Body) Extend(ctx context.Context, edges *EdgeQuery, tool *Body) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control an extension`, ErrDegenerate)
@@ -46,6 +49,12 @@ func (b *Body) Extend(ctx context.Context, edges *EdgeQuery, tool *Body) (*Body,
 	if err := budget.err(); err != nil {
 		return nil, err
 	}
+	// S1 routes the pair by family before either arm's gate runs, exactly as
+	// Trim's own entry does. A MIXED pair reaches neither arm: it falls through
+	// to admitExtendPair, whose own S1 names the two generators.
+	if bodyTrimFamily(b) == trimFamilyRevolve && bodyTrimFamily(tool) == trimFamilyRevolve {
+		return b.extendRevolve(ctx, budget, selected, tool)
+	}
 	rcv, tl, err := admitExtendPair(budget, b, tool)
 	if err != nil {
 		return nil, err
@@ -60,7 +69,7 @@ func (b *Body) Extend(ctx context.Context, edges *EdgeQuery, tool *Body) (*Body,
 		if err != nil {
 			return nil, err
 		}
-		widened, delta, err := resolveExtend(ctx, budget, rcv, tl, chains[ci].Segments[si], atStart)
+		widened, delta, err := resolveExtend(ctx, budget, rcv.prism(), tl, chains[ci].Segments[si], atStart)
 		if err != nil {
 			return nil, err
 		}
@@ -120,11 +129,9 @@ func extendEndSegment(b *Body, pp chainPayload, edge *Edge) (int, int, bool, err
 // admitExtendPair applies S1-S4, S6 and S7. The selected segment enters the
 // scene at full domain; every other receiver segment stays outside it.
 func admitExtendPair(budget *workBudget, receiver, tool *Body) (chainPayload, prismPayload, error) {
+	// A revolve pair never reaches here: Body.Extend routes it to its own arm
+	// before this gate runs, exactly as Trim routes one.
 	rf, tf := bodyTrimFamily(receiver), bodyTrimFamily(tool)
-	if rf == trimFamilyRevolve && tf == trimFamilyRevolve {
-		return chainPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: Extend over the revolve family is not yet supported by this evaluator`, ErrUnsupported)
-	}
 	if rf != tf || rf != trimFamilyPrism {
 		return chainPayload{}, prismPayload{}, fmt.Errorf(
 			`%w: Extend needs a receiver and tool sharing a straight-sweep generator (receiver %s, tool %s)`,
@@ -313,7 +320,10 @@ func extendSetBound(seg CurveSegment, atStart bool, bound float64) CurveSegment 
 // publish a boundary at 1 − t for a reversed LineSeg receiver — a wrong
 // boundary, not a refusal. The candidates themselves stay sketch's own cut
 // parameters, untouched: decad selects among them and never computes one.
-func resolveExtend(ctx context.Context, budget *workBudget, rcv chainPayload, tool prismPayload,
+// view is the receiver's own section view — a prism ribbon's prism() or a
+// revolve ribbon's meridian() — carrying the frame and placement the scene is
+// built in; its profile is replaced below by the one recreated carrier.
+func resolveExtend(ctx context.Context, budget *workBudget, view prismPayload, tool prismPayload,
 	seg CurveSegment, atStart bool) (CurveSegment, float64, error) {
 	t0, t1, err := trimSegmentParamRange(seg)
 	if err != nil {
@@ -330,7 +340,6 @@ func resolveExtend(ctx context.Context, budget *workBudget, rcv chainPayload, to
 	if err != nil {
 		return nil, 0, err
 	}
-	view := rcv.prism()
 	view.profile = ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{full}}}
 	segments, withinCap, err := prismSceneWithinWorkCap(budget, view, tool)
 	if err != nil {
@@ -490,14 +499,15 @@ func (s TrimSide) String() string {
 // Trim cuts the receiver where it meets tool and returns the kept pieces as
 // one sheet body (docs/surface-intersection-design.md §8). The receiver and
 // tool are consumed on the document's uniform terms (core §6); a refusal
-// consumes neither. This PR admits only a pair whose two sweeps are both the
-// prism family (a straight Extrude/ExtrudeChain sweep, docs/api-design.md's
-// evaluator §5) — a mixed pair, a revolve-family pair, or any condition
-// §2.1's S1-S7 states is [ErrUnsupported] at the call, never a fallback: a
-// sheet's mesh proves no occupied volume (boolean.go's
-// requireVolumeProvingPayload), so there is no mesh path for a miss to
-// reroute to. A tool that separates no fragment of the receiver, or every
-// fragment, is [ErrDegenerate] (R30): no trimmed body exists either way.
+// consumes neither. It admits a pair whose two sweeps share ONE generator —
+// both the prism family (a straight Extrude/ExtrudeChain sweep) or both the
+// revolve family (a Revolve/RevolveChain spin about one axis,
+// docs/api-design.md's evaluator §5). A mixed pair, or any condition §2.1's
+// S1-S7 states, is [ErrUnsupported] at the call, never a fallback: a sheet's
+// mesh proves no occupied volume (boolean.go's requireVolumeProvingPayload),
+// so there is no mesh path for a miss to reroute to. A tool that separates no
+// fragment of the receiver, or every fragment, is [ErrDegenerate] (R30): no
+// trimmed body exists either way.
 func (b *Body) Trim(ctx context.Context, tool *Body, side TrimSide) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a trim`, ErrDegenerate)
@@ -522,6 +532,13 @@ func (b *Body) Trim(ctx context.Context, tool *Body, side TrimSide) (*Body, erro
 	budget := newWorkBudget(ctx)
 	if err := budget.err(); err != nil {
 		return nil, err
+	}
+
+	// S1 routes the pair by family before either arm's gate runs. A MIXED pair
+	// reaches neither: it falls through to admitTrimPair, whose own S1 names
+	// the two generators that share nothing (T181).
+	if bodyTrimFamily(b) == trimFamilyRevolve && bodyTrimFamily(tool) == trimFamilyRevolve {
+		return b.trimRevolve(ctx, budget, tool, side == KeepInside)
 	}
 
 	rcv, tl, err := admitTrimPair(budget, b, tool)
@@ -594,18 +611,23 @@ func bodyTrimFamily(b *Body) trimSweepFamily {
 	}
 }
 
-// trimOperandSectionDelta reads S7's own section-displacement bound off a
-// prism-family body, generically over either shape it may carry: a
-// prismPayload's own sectionDelta, or a chainPayload's identical field
+// trimOperandSectionDelta reads S7's own section-displacement bound off an
+// admitted body, generically over all four shapes one may carry: a
+// prismPayload's or revolvePayload's own sectionDelta, or a chainPayload's or
+// chainRevolvePayload's identical field
 // (docs/surface-intersection-design.md §3.4) — the term this design's own
 // Trim is the first construction to set nonzero on a ribbon. Called only
-// once S1 has already proved the body is one of the two, so no third case
+// once S1 has already proved the body is one of the four, so no fifth case
 // arises.
 func trimOperandSectionDelta(b *Body) float64 {
 	switch p := b.payload.(type) {
 	case prismPayload:
 		return p.sectionDelta
 	case chainPayload:
+		return p.sectionDelta
+	case revolvePayload:
+		return p.sectionDelta
+	case chainRevolvePayload:
 		return p.sectionDelta
 	default:
 		return 0
@@ -628,10 +650,6 @@ func admitTrimPair(budget *workBudget, receiver, tool *Body) (rcv, tl prismPaylo
 	if rf != tf {
 		return prismPayload{}, prismPayload{}, fmt.Errorf(
 			`%w: the receiver's %s and the tool's %s share no generator`, ErrUnsupported, trimFamilyName(rf), trimFamilyName(tf))
-	}
-	if rf == trimFamilyRevolve {
-		return prismPayload{}, prismPayload{}, fmt.Errorf(
-			`%w: Trim over the revolve family is not yet supported by this evaluator`, ErrUnsupported)
 	}
 
 	// S7's own section-displacement clause is checked here, ahead of the
@@ -830,6 +848,40 @@ func trimCutChargeUV(seg CurveSegment) (chargeU, chargeV float64, err error) {
 	}
 	charge := cutDisplacementAllow(speed)
 	return charge, charge, nil
+}
+
+// trimRevolveSegmentCharges is trimBoundsWalks's own per-endpoint rule, read
+// for the revolve family (docs/surface-intersection-design.md §7.1): the
+// per-component charge trimCutChargeUV states lands at exactly the endpoint
+// whose OWN recorded parameter is not a natural bound (0 or 1, per field —
+// never per segment, since a segment cut on only one side keeps its natural
+// end exact), and at NEITHER endpoint of a segment the arrangement did not
+// cut. The decision reads only the two recorded floats.
+//
+// delta is the payload's own sectionDelta, read as a gate and never as the
+// charge: a payload no construction displaced has every recorded parameter
+// natural anyway, so the two answers would be absent regardless, and gating
+// keeps an ordinary RevolveChain off this path entirely.
+func trimRevolveSegmentCharges(seg CurveSegment, delta float64) (walkEndBound, walkEndBound, error) {
+	if delta == 0 {
+		return walkEndBound{}, walkEndBound{}, nil
+	}
+	t0, t1, err := trimSegmentParamRange(seg)
+	if err != nil {
+		return walkEndBound{}, walkEndBound{}, err
+	}
+	chargeU, chargeV, err := trimCutChargeUV(seg)
+	if err != nil {
+		return walkEndBound{}, walkEndBound{}, err
+	}
+	var start, end walkEndBound
+	if t0 != 0 && t0 != 1 {
+		start = walkEndBound{u: chargeU, v: chargeV}
+	}
+	if t1 != 0 && t1 != 1 {
+		end = walkEndBound{u: chargeU, v: chargeV}
+	}
+	return start, end, nil
 }
 
 // trimBoundsWalks resolves profile's Outer-then-Holes walks for a trimmed
@@ -1288,6 +1340,18 @@ func (d *Document) Split(ctx context.Context, target, tool *Body) ([]*Body, erro
 // The closed-sheet and chain-sheet views share buildPrismScene's input shape.
 func admitSplitPair(budget *workBudget, target, tool *Body) (prismPayload, prismPayload, error) {
 	rf, tf := bodyTrimFamily(target), bodyTrimFamily(tool)
+	// RS13: a revolve pair clears S1 and is refused BY NAME, ahead of the
+	// mixed-pair message, so the refusal states the staging rather than
+	// claiming the two generators differ. What it waits on is stated in
+	// docs/surface-intersection-design.md §3.4: a split piece is a SOLID
+	// revolve, and §7.1 derives the section displacement's reach into the area
+	// and the box alone, never into the Pappus volume and centroid a solid
+	// publishes.
+	if rf == trimFamilyRevolve && tf == trimFamilyRevolve {
+		return prismPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: Split over the revolve family waits on a solid revolve's own section-displacement terms; this evaluator charges them for a sheet's area and box alone`,
+			ErrUnsupported)
+	}
 	if rf != tf || rf != trimFamilyPrism {
 		return prismPayload{}, prismPayload{}, fmt.Errorf(
 			`%w: Split needs a solid and sheet sharing a straight-sweep generator (target %s, tool %s)`,
@@ -1558,4 +1622,440 @@ func classifySplitTargetCells(budget *workBudget, tags map[sketch.Entity]prismEn
 		matter[i] = m.val
 	}
 	return matter, nil
+}
+
+// This section is the revolve family's arm of the gate and of Trim
+// (docs/surface-intersection-design.md §11's PR4). Only S1's routing, S4's
+// generator test and S6's span relation differ from the prism arm; §3's whole
+// resolution — buildPrismScene, classifyPrismCells, the survivor chaining and
+// the cut-displacement reading — is consumed VERBATIM over the two operands'
+// MERIDIAN views, which is what §3.1 claims and what revolvePayload.meridian
+// supplies.
+
+// trimRevolve is Trim over a pair S1 has already routed to the revolve family.
+// The receiver's section must CLOSE (§2.2), exactly as the prism arm's does and
+// for the identical reason: §3.2's side reading needs every fragment to bound a
+// cell of the receiver's own interior, and sketch prunes a ribbon's dangling
+// free-end fragments before publishing its regions, so an inside stub and an
+// outside stub arrive identically (§4's own row, RS3).
+func (b *Body) trimRevolve(ctx context.Context, budget *workBudget, tool *Body, keepInside bool) (*Body, error) {
+	d := b.doc
+	rcv, rcvView, tlView, err := admitTrimRevolvePair(ctx, budget, b, tool)
+	if err != nil {
+		return nil, err
+	}
+	chains, sectionDelta, err := resolveTrim(ctx, budget, rcvView, tlView, keepInside)
+	if err != nil {
+		return nil, err
+	}
+	pp := chainRevolvePayload{
+		chains: chains,
+		frame:  rcv.frame,
+		ax:     rcv.ax,
+		phi0:   rcv.phi0,
+		phi1:   rcv.phi1,
+		full:   rcv.full,
+		den:    rcv.den,
+		xform:  rcv.xform,
+		// §7.1's fold reads this field as its gate, and resolveTrim's own
+		// δ_cut is the whole of it: S4 and S7 zero every other term prism §7
+		// derives.
+		sectionDelta: sectionDelta,
+	}
+	body, err := evalChainRevolveContext(ctx, d, d.nextProducerID(), pp, newFreeformWork())
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	d.commit(body, b, tool)
+	return body, nil
+}
+
+// admitTrimRevolvePair runs S2-S7 for a Trim over the revolve family; S1 has
+// already routed the pair here. It returns the receiver's own revolve record —
+// what the result is rebuilt on — beside the two MERIDIAN views §3's
+// resolution consumes.
+func admitTrimRevolvePair(ctx context.Context, budget *workBudget, receiver, tool *Body) (revolvePayload, prismPayload, prismPayload, error) {
+	fail := func(format string, args ...any) (revolvePayload, prismPayload, prismPayload, error) {
+		return revolvePayload{}, prismPayload{}, prismPayload{}, fmt.Errorf(format, args...)
+	}
+
+	// S7's section-displacement clause runs first and reads generically off
+	// EITHER revolve payload shape, so a body this design already trimmed names
+	// ITS OWN displacement rather than the open-walk shape every
+	// chainRevolvePayload receiver carries regardless.
+	rcvDelta, tlDelta := trimOperandSectionDelta(receiver), trimOperandSectionDelta(tool)
+	if rcvDelta != 0 || tlDelta != 0 {
+		return fail(`%w: Trim does not admit an operand carrying its own section displacement (receiver %v mm, tool %v mm)`,
+			ErrUnsupported, rcvDelta, tlDelta)
+	}
+
+	rcv, rcvOk := receiver.payload.(revolvePayload)
+	if !rcvOk {
+		return fail(`%w: Trim's receiver meridian is an open walk, which closes onto nothing for the tool to trim`, ErrUnsupported)
+	}
+	tl, tlOk := tool.payload.(revolvePayload)
+	if !tlOk {
+		return fail(`%w: Trim's tool meridian is an open walk, which bounds no region to keep a side of`, ErrUnsupported)
+	}
+
+	rcvView, tlView := rcv.meridian(), tl.meridian()
+
+	// S2: neither operand's accumulated placement is a reflection.
+	if rcvView.reflected() || tlView.reflected() {
+		return fail(`%w: Trim does not admit a reflected operand`, ErrUnsupported)
+	}
+
+	// S3: every segment of both meridians is a LineSeg, CircleSeg or ArcSeg.
+	rcvAnalytic, err := prismProfileIsAnalytic(budget, rcv.profile)
+	if err != nil {
+		return revolvePayload{}, prismPayload{}, prismPayload{}, err
+	}
+	tlAnalytic, err := prismProfileIsAnalytic(budget, tl.profile)
+	if err != nil {
+		return revolvePayload{}, prismPayload{}, prismPayload{}, err
+	}
+	if !rcvAnalytic || !tlAnalytic {
+		return fail(`%w: Trim admits only line, circle and arc segments; a free-form segment blinds sketch's whole-scene TExact gate`, ErrUnsupported)
+	}
+
+	// S4's revolve arm. The plane frames and the RESOLVED AXIS must agree
+	// component-wise on the stored floats, and both meridians must stand clear
+	// of that axis.
+	if rcv.frame != tl.frame {
+		return fail(`%w: the receiver and tool do not spin about the same frame, exactly`, ErrUnsupported)
+	}
+	if !revolveAxisIdentical(rcv.ax, tl.ax) {
+		return fail(`%w: the receiver and tool do not spin about the same axis, exactly`, ErrUnsupported)
+	}
+	rcvClear, err := revolveMeridianClearOfAxis(ctx, rcv)
+	if err != nil {
+		return revolvePayload{}, prismPayload{}, prismPayload{}, err
+	}
+	tlClear, err := revolveMeridianClearOfAxis(ctx, tl)
+	if err != nil {
+		return revolvePayload{}, prismPayload{}, prismPayload{}, err
+	}
+	if !rcvClear || !tlClear {
+		return fail(`%w: Trim needs both meridians clear of the revolve axis; one of them touches it, and the fragment a cut would leave there sweeps a pole this arm does not yet place`, ErrUnsupported)
+	}
+
+	// S5: for Trim, the tool's meridian is one closed hole-free loop.
+	if len(tl.profile.Holes) != 0 {
+		return fail(`%w: Trim's tool meridian carries a hole, whose interior this evaluator cannot yet distinguish as a side`, ErrUnsupported)
+	}
+
+	// S6's revolve arm: the same span relation the prism arm reads over its
+	// sweep levels, taken over the angular interval instead. S4 has already
+	// proven the two axes identical, so the prism arm's origin shift has no
+	// counterpart here and the comparison is on the stored endpoint floats
+	// alone.
+	if tl.phi0 > rcv.phi0 || tl.phi1 < rcv.phi1 {
+		return fail(`%w: the tool's angular span [%v, %v] does not cover the receiver's [%v, %v]`,
+			ErrUnsupported, tl.phi0, tl.phi1, rcv.phi0, rcv.phi1)
+	}
+
+	// S7's remaining two clauses.
+	reexpress, err := newPrismReexpression(rcvView, tlView)
+	if err != nil {
+		return revolvePayload{}, prismPayload{}, prismPayload{}, err
+	}
+	if !reexpress.identity {
+		return fail(`%w: the receiver and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
+	}
+	rcvWhole, err := trimProfileFullyWhole(budget, rcv.profile)
+	if err != nil {
+		return revolvePayload{}, prismPayload{}, prismPayload{}, err
+	}
+	tlWhole, err := trimProfileFullyWhole(budget, tl.profile)
+	if err != nil {
+		return revolvePayload{}, prismPayload{}, prismPayload{}, err
+	}
+	if !rcvWhole || !tlWhole {
+		return fail(`%w: every segment the receiver or tool consumes must span its entity's own natural domain`, ErrUnsupported)
+	}
+
+	return rcv, rcvView, tlView, nil
+}
+
+// revolveAxisIdentical is S4's revolve comparison: the resolved axis's own
+// anchor, direction and each of those four fields' proven bound, under Go ==
+// on the stored floats and never a tolerance
+// (docs/surface-intersection-design.md §2.1 S4).
+//
+// It compares EIGHT fields and not the whole axisFrame. The remaining four —
+// snapTol, radialAdmitAllow, axialExtentUpper and snap — are each operand's own
+// admission allowances, derived from ITS OWN section rather than from the
+// generator the two share, so two genuinely co-axial operands differ in them by
+// construction and comparing them would refuse every admissible pair.
+func revolveAxisIdentical(a, b axisFrame) bool {
+	return a.aU == b.aU && a.aV == b.aV &&
+		a.aUBound == b.aUBound && a.aVBound == b.aVBound &&
+		a.dU == b.dU && a.dV == b.dV &&
+		a.dUBound == b.dUBound && a.dVBound == b.dVBound
+}
+
+// revolveMeridianClearOfAxis reads S4's clearance clause off the axis snap that
+// has ALREADY run: axisFrame.walk assigns a walk endpoint ρ exactly zero when
+// the resolved axis's own snap tolerance covers it, so "clear" is the published
+// structural fact that no endpoint carries that zero, never a fresh measurement
+// decad takes on the geometry it was handed. A meridian touching the axis
+// sweeps a pole, and a cut fragment ending at one would need pole topology this
+// arm does not place.
+func revolveMeridianClearOfAxis(ctx context.Context, rp revolvePayload) (bool, error) {
+	work := newFreeformWork()
+	for _, loop := range append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...) {
+		resolved, err := revolveLoopWalks(ctx, rp, loop, work, "the trim axis-clearance gate")
+		if err != nil {
+			return false, err
+		}
+		for _, w := range resolved.walks {
+			if w.startV == 0 || w.endV == 0 {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
+}
+
+// revolveChainClearOfAxis is revolveMeridianClearOfAxis over an OPEN meridian
+// walk set, read through the chain resolver rather than the loop one: an open
+// walk's last segment does not continue into its first, so coalescing it as a
+// loop could merge the two free ends into one walk and hide an endpoint the
+// clearance clause has to see.
+func revolveChainClearOfAxis(ctx context.Context, rp chainRevolvePayload) (bool, error) {
+	work := newFreeformWork()
+	for ci := range rp.chains {
+		resolved, err := chainRevolveWalks(ctx, rp.walkView(ci), rp.chains[ci], work)
+		if err != nil {
+			return false, err
+		}
+		for _, w := range resolved.walks {
+			if w.startV == 0 || w.endV == 0 {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
+}
+
+// extendRevolve is Extend over a pair S1 has already routed to the revolve
+// family. Everything past the gate is the prism arm's own: resolveExtend reads
+// sketch's cut parameter off the recreated carrier in the two operands'
+// MERIDIAN views (§3.1), and the widened range goes back into the receiver's
+// own record. Only the gate and the free-edge reading differ.
+func (b *Body) extendRevolve(ctx context.Context, budget *workBudget, selected []*Edge, tool *Body) (*Body, error) {
+	d := b.doc
+	rcv, rcvView, tlView, err := admitExtendRevolvePair(ctx, budget, b, tool)
+	if err != nil {
+		return nil, err
+	}
+	chains := make([]ChainRecord, len(rcv.chains))
+	for i, chain := range rcv.chains {
+		chains[i] = ChainRecord{Segments: append([]CurveSegment(nil), chain.Segments...)}
+	}
+	cutDelta := 0.0
+	for _, edge := range selected {
+		ci, si, atStart, err := extendRevolveEndSegment(b, rcv, edge)
+		if err != nil {
+			return nil, err
+		}
+		widened, delta, err := resolveExtend(ctx, budget, rcvView, tlView, chains[ci].Segments[si], atStart)
+		if err != nil {
+			return nil, err
+		}
+		chains[ci].Segments[si] = widened
+		cutDelta = math.Max(cutDelta, delta)
+	}
+	rcv.chains = chains
+	// §7.1's fold reads this field as its gate, and resolveExtend's own δ_cut is
+	// the whole of it: S4 and S7 zero every other term prism §7 derives.
+	rcv.sectionDelta = cutDelta
+	result, err := evalChainRevolveContext(ctx, d, d.nextProducerID(), rcv, newFreeformWork())
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	d.commit(result, b, tool)
+	return result, nil
+}
+
+// admitExtendRevolvePair runs S2-S4, S6 and S7 for an Extend over the revolve
+// family; S1 has already routed the pair here. S5 does not reach an Extend,
+// which reads no side. It returns the receiver's own chain record — what the
+// result is rebuilt on — beside the two MERIDIAN views §3's resolution
+// consumes.
+func admitExtendRevolvePair(ctx context.Context, budget *workBudget, receiver, tool *Body) (chainRevolvePayload, prismPayload, prismPayload, error) {
+	fail := func(format string, args ...any) (chainRevolvePayload, prismPayload, prismPayload, error) {
+		return chainRevolvePayload{}, prismPayload{}, prismPayload{}, fmt.Errorf(format, args...)
+	}
+	pass := func(err error) (chainRevolvePayload, prismPayload, prismPayload, error) {
+		return chainRevolvePayload{}, prismPayload{}, prismPayload{}, err
+	}
+
+	// S7's section-displacement clause runs first and reads generically off
+	// either revolve payload shape, so a body this design already trimmed names
+	// ITS OWN displacement rather than the shape of its section.
+	rcvDelta, tlDelta := trimOperandSectionDelta(receiver), trimOperandSectionDelta(tool)
+	if rcvDelta != 0 || tlDelta != 0 {
+		return fail(`%w: Extend does not admit an operand carrying its own section displacement (receiver %v mm, tool %v mm)`,
+			ErrUnsupported, rcvDelta, tlDelta)
+	}
+
+	rcv, rcvOk := receiver.payload.(chainRevolvePayload)
+	if !rcvOk || receiver.Kind() != BodySheet {
+		return fail(`%w: Extend's receiver needs an open meridian to lengthen; a closed one has no free end and its other free direction is its own sweep`, ErrUnsupported)
+	}
+	// The FULL-revolution restriction, and it is a reading rather than a bound:
+	// extendRevolveEndSegment below names a free end by the single-coedge
+	// latitude loop fullRevLoops (revolve_build.go) puts on the first and last
+	// wall. A PARTIAL revolution carries no such loop — each wall holds one loop
+	// gathering its two cap edges beside the swept arcs, and which member of it
+	// is the meridian's own free end is not a recorded fact — so the pair is
+	// refused rather than resolved by position.
+	if !rcv.full {
+		return fail(`%w: Extend over the revolve family admits a full revolution alone; a partially revolved ribbon's swept free edge shares one loop with its wall's two cap edges, and no recorded fact separates them`, ErrUnsupported)
+	}
+	var tl revolvePayload
+	switch p := tool.payload.(type) {
+	case revolvePayload:
+		tl = p
+	case chainRevolvePayload:
+		tl = p.revolve()
+	default:
+		return fail(`%w: Extend's tool has no revolve meridian`, ErrUnsupported)
+	}
+
+	rcvRev := rcv.revolve()
+	rcvView, tlView := rcvRev.meridian(), tl.meridian()
+
+	// S2: neither operand's accumulated placement is a reflection.
+	if rcvView.reflected() || tlView.reflected() {
+		return fail(`%w: Extend does not admit a reflected operand`, ErrUnsupported)
+	}
+
+	// S3: every segment of both meridians is a LineSeg, CircleSeg or ArcSeg.
+	rcvAnalytic, err := prismProfileIsAnalytic(budget, rcvRev.profile)
+	if err != nil {
+		return pass(err)
+	}
+	tlAnalytic, err := prismProfileIsAnalytic(budget, tl.profile)
+	if err != nil {
+		return pass(err)
+	}
+	if !rcvAnalytic || !tlAnalytic {
+		return fail(`%w: Extend admits only line, circle and arc segments; a free-form segment blinds sketch's whole-scene TExact gate`, ErrUnsupported)
+	}
+
+	// S4's revolve arm, the identical eight-field comparison Trim's own takes.
+	if rcv.frame != tl.frame {
+		return fail(`%w: the receiver and tool do not spin about the same frame, exactly`, ErrUnsupported)
+	}
+	if !revolveAxisIdentical(rcv.ax, tl.ax) {
+		return fail(`%w: the receiver and tool do not spin about the same axis, exactly`, ErrUnsupported)
+	}
+	rcvClear, err := revolveChainClearOfAxis(ctx, rcv)
+	if err != nil {
+		return pass(err)
+	}
+	tlClear, err := revolveMeridianClearOfAxis(ctx, tl)
+	if err != nil {
+		return pass(err)
+	}
+	if !rcvClear || !tlClear {
+		return fail(`%w: Extend needs both meridians clear of the revolve axis; one of them touches it, and the end a lengthening would place there sweeps a pole this arm does not build`, ErrUnsupported)
+	}
+
+	// S6's revolve arm: S4 has proven the two axes identical, so the prism
+	// arm's origin shift has no counterpart and the comparison is on the
+	// stored endpoint floats alone.
+	if tl.phi0 > rcv.phi0 || tl.phi1 < rcv.phi1 {
+		return fail(`%w: the tool's angular span [%v, %v] does not cover the receiver's [%v, %v]`,
+			ErrUnsupported, tl.phi0, tl.phi1, rcv.phi0, rcv.phi1)
+	}
+
+	// S7's remaining two clauses. Only the TOOL is required whole: §3.1 puts
+	// the receiver's extended segment into the scene over its own full domain
+	// and leaves every other receiver segment outside it, so a receiver
+	// carrying narrowed segments elsewhere clears S7 for an Extend and refuses
+	// it for a Trim.
+	reexpress, err := newPrismReexpression(rcvView, tlView)
+	if err != nil {
+		return pass(err)
+	}
+	if !reexpress.identity {
+		return fail(`%w: the receiver and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
+	}
+	tlWhole, err := trimProfileFullyWhole(budget, tl.profile)
+	if err != nil {
+		return pass(err)
+	}
+	if !tlWhole {
+		return fail(`%w: every segment the tool consumes must span its entity's own natural domain`, ErrUnsupported)
+	}
+
+	return rcv, rcvView, tlView, nil
+}
+
+// extendRevolveEndSegment maps a selected topology edge to the recorded
+// meridian end it names — extendEndSegment's own reading, re-derived for the
+// chain-revolve build, whose free ends are SWEPT latitude circles rather than
+// straight sweep edges.
+//
+// Under a full revolution buildChainRevolveWalls gives every wall face its
+// junctions' latitude circles as SEPARATE single-coedge loops through
+// fullRevLoops (revolve_build.go), which sets forward true for the wall's own
+// START junction and false for its END. That flag is the map: the receiver's
+// two free ends are junction 0 of the FIRST wall and junction n of the LAST,
+// and reading the flag rather than the loop position is what makes the reading
+// survive fullRevLoops' own outer-loop swap. The first and last wall are never
+// the skipped wallAxis kind — a segment lying on the axis puts both its ends at
+// ρ == 0, which requireChainAxisIncidence already refuses at a chain's free end
+// — so faces[0] and faces[len-1] are walk 0 and walk n-1.
+//
+// The loop indexes b.lumps and reads pp.chains at the SAME index, on
+// extendEndSegment's own terms: evalChainRevolveContext appends each chain's
+// faces in chain order and sheetLumps preserves first-appearance order, so the
+// body's i-th lump is the payload's i-th chain. A producer that emits a lump
+// per connected PIECE rather than per chain owes this function a recorded map
+// rather than the shared index.
+func extendRevolveEndSegment(b *Body, pp chainRevolvePayload, edge *Edge) (int, int, bool, error) {
+	miss := func() (int, int, bool, error) {
+		return 0, 0, false, fmt.Errorf(
+			`%w: Extend needs a free swept edge at an open meridian end`, ErrUnsupported)
+	}
+	if !edge.IsFree() {
+		return miss()
+	}
+	for ci, lump := range b.lumps {
+		if ci >= len(pp.chains) || len(lump.shells) != 1 || len(lump.shells[0].faces) == 0 {
+			continue
+		}
+		faces := lump.shells[0].faces
+		if named, ok := revolveLatitudeLoopEdge(faces[0], true); ok && named == edge {
+			return ci, 0, true, nil
+		}
+		if named, ok := revolveLatitudeLoopEdge(faces[len(faces)-1], false); ok && named == edge {
+			return ci, len(pp.chains[ci].Segments) - 1, false, nil
+		}
+	}
+	return miss()
+}
+
+// revolveLatitudeLoopEdge reads one wall face's own latitude loop for the
+// junction fullRevLoops' forward flag names: true for the wall's start
+// junction, false for its end. A junction ON the axis mints no latitude circle
+// at all, so that end answers absent and the caller refuses.
+func revolveLatitudeLoopEdge(f *Face, start bool) (*Edge, bool) {
+	for _, l := range f.loops {
+		if len(l.coedges) != 1 || l.coedges[0].forward != start {
+			continue
+		}
+		return l.coedges[0].edge, true
+	}
+	return nil, false
 }

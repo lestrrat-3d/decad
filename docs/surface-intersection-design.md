@@ -104,6 +104,17 @@ own reading is defined on.
 **`Split`'s tool needs no closed section**, because the operation returns
 every piece and reads no side at all.
 
+**`Extend`'s revolve arm takes a FULL revolution alone.** §3.2 reads which end
+is being lengthened off the receiver's own topology, and a full revolution
+gives each wall face its two junctions' latitude circles as separate
+single-coedge loops whose `forward` flag names which junction each came from —
+a recorded structural fact the ribbon's free ends are read through. A PARTIAL
+revolution gives the wall one loop instead, gathering its two cap edges beside
+the swept arcs, and which member of that loop is the meridian's own free end is
+not a fact the build records. So the partial case refuses (RS14) rather than
+being resolved by position; lifting it is a recorded free-end map from the
+chain-revolve build, not a bound and not a gate.
+
 ## 3. Design
 
 ### 3.1 Scene construction
@@ -300,6 +311,7 @@ set, so it needs the same two fields and no third.
 | A free-form segment on either operand | S3, `ErrUnsupported`. The whole-scene `TExact` gate blinds the arrangement, not only the free-form segment's own edges |
 | A `Trim` that keeps every fragment or none | `ErrDegenerate` (RS6). The tool separates nothing, so no trimmed body exists |
 | A `Split` whose tool separates no part of the target | `ErrDegenerate` (RS7), on the same reading |
+| An `Extend` over a PARTIALLY revolved ribbon | `ErrUnsupported` (RS14). §2.2's own paragraph states why: a partial revolution's swept free edge shares one loop with its wall's two cap edges, and no recorded fact separates them. A recorded free-end map from the chain-revolve build admits it |
 
 ## 5. What S7 costs, and what would lift it
 
@@ -342,6 +354,7 @@ point pointing here.
 | RS11 | `Trim`, `Extend` or `Split` handed a retired body, or bodies owned by different documents | `ErrRetiredBody` / `ErrForeignBody` | The existing uniform terms (core §6) |
 | RS12 | `Extend` handed a receiver whose section is a closed walk, or an edge that is not one of the two sweep edges its free ends carry | `ErrUnsupported` | Permanent for the closed receiver — the operation it wants is an extent, not an intersection |
 | RS13 | `Split` handed a revolve-family pair, or any construction handing a `revolvePayload` carrying a nonzero section displacement to the solid build | `ErrUnsupported` | No — §11's Split increment lifts both, and §3.4 states what it owes first |
+| RS14 | `Extend` handed a partially revolved ribbon, or a revolve pair either of whose meridians touches the resolved axis | `ErrUnsupported` | No — the first waits on a recorded free-end map (§2.2), the second on the pole topology a cut fragment ending on the axis would sweep |
 
 The work budget and cancellation are `budget.go`'s existing `workBudget` and
 prism §10's discipline unchanged: one counter per attempt, charged per created
@@ -453,6 +466,18 @@ the same `absSumUpper` the other four take. The envelope
 `profileCoordinateUpper` states is widened by the same per-component figure
 wherever the axis-frame and sweep-extreme terms read it, so those two are
 charged at an envelope covering the true section too.
+
+**The axis-contact audit never sees a displaced meridian.**
+`auditAxisContact`'s `regionSnapAllow` runs ONCE, at axis resolution, over the
+caller's own recorded profile, and a trimmed body reuses the receiver's
+already-resolved axis rather than resolving a new one. Its four figures are read
+in exactly one place, the solid build's region integrals — the area, first,
+mixed and second moments the Pappus volume and centroid are composed from — and
+`requireExactRevolveSection` refuses a nonzero displacement before any of them
+runs. So the audit's own exact-leaf reading of a plane-local coordinate stands
+unchanged, and the sheet readings this section derives reach it on no path at
+all. That is the same boundary §3.4 draws for `revolvePayload.sectionDelta`,
+read from the audit's side.
 
 **A zero charge stays a zero charge.** Every one of these folds is taken only
 where the payload's own `sectionDelta` is nonzero, on the prism ribbon's own
@@ -587,8 +612,8 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
 4. **PR4 — `Trim` and `Extend` over the revolve family.** S1's and S4's revolve
    arms over `chainRevolvePayload`'s own walk set, the angular span relation of
    S6, the meridian scene, and §7.1's fold into the axis-coordinate walk. Tests:
-   T180. A trimmed revolve sheet's own mesh waits on surface increment 4,
-   exactly as a profile-fed revolve sheet's does.
+   T180, T182 and T183. A trimmed revolve sheet's own mesh waits on surface
+   increment 4, exactly as a profile-fed revolve sheet's does.
 5. **PR5 — `Document.Split` over the revolve family.** It owes what PR4 does
    not: `revolvePayload.sectionDelta` reaching the Pappus VOLUME and CENTROID
    beside the area and the box, and the removal of the solid build's refusal
@@ -606,7 +631,7 @@ the revolve gate and §7.1's fold.
 
 ## 12. Required tests
 
-Surface §15 carries the fixtures as rows T170–T181, each asserting on computed
+Surface §15 carries the fixtures as rows T170–T183, each asserting on computed
 geometry and each bound assertion shown to fail before it is trusted, under
 that section's own rule.
 
