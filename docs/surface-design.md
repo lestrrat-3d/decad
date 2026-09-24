@@ -155,6 +155,8 @@ Three things it holds differently, and nothing else changes:
   ```
 
   `IsVoid()` is `false` on every sheet shell: a sheet bounds no cavity.
+  This includes a closed sheet built by a full surface-result revolution or
+  by patching its last free rim; closure alone makes no material claim.
   `IsOpen()` and `IsVoid()` are independent questions and neither implies the
   other.
 - **An edge may be free**, and says so:

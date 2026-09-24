@@ -602,7 +602,8 @@ the original solid and the original solid is what it now encloses. The bodies
 that come out — their payload class, their **lump count**, their faces and their
 roles — are Table B (§9), and this section states none of it a second time.
 
-**A shelled body has no void, and `Shell.IsVoid()` is false on it.** An opening
+**A shelled body with a removed face has no void, and `Shell.IsVoid()` is false
+on it.** An opening
 is what a removed face *is*, so the cavity's skin reaches the outside through
 the rim, and the inner and outer skins are one connected shell — a cup and a
 tube alike. A hollow **closed** body — the one shape whose inner skin is a

@@ -632,6 +632,19 @@ func (v *Vertex) Position() VecMeasurement // millimetres (§5.2); a computed co
 type MeshBody struct{ /* ... */ }
 ```
 
+The current solid builders publish a separate void shell for a full `Revolve`
+of a profile with a hole, and for a Boolean result with an enclosed negative
+boundary component, such as a `Cut` by a wholly embedded tool. `Extrude` and
+`Loft` of holed profiles make passages between their end caps. An admitted
+open-path `Sweep` does the same. A partial `Revolve` opens its groove at the
+angular caps. Those bodies have one connected, non-void shell. A `Shell`
+operation that removes a face leaves an opening, so its inner and outer skins
+connect. The closed `WithNoOpenings()` form described in
+`docs/modify-reach-design.md` §9.2 remains a later extension. Sheet shells
+always report `IsVoid() == false`, even when closed
+(`docs/surface-design.md` §2.2). `Stitch` refuses a closed assembly whose
+components are not proven separate, rather than publish an unrecorded cavity.
+
 ## 7. The sketch seam
 
 `sketch` answers every 2D question; decad consumes the answer and NEVER
