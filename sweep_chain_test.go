@@ -88,6 +88,29 @@ func TestSweepChainOneLineRibbonMatchesExtrudeChain(t *testing.T) {
 	decadtest.MeasuresBounds(t, placed, r3.NewVec(100, 0, 0), r3.NewVec(140, 0, 10), decadtest.Exactly())
 }
 
+// TestSweepChainRibbonReadsValid is docs/surface-design.md §9.1's fourth
+// validity leg, restated for a chain-fed sweep: the one-span straight
+// reduction builds through the identical evalChainExtrudeContext a plain
+// ExtrudeChain does, so it earns the same construction proof
+// payloadProvesSimple's chainPayload arm does, re-read off the
+// chainSweepPayload it wraps that build in — never ValidityUndecided, which
+// is what a payload without this leg's own arm would read instead.
+func TestSweepChainRibbonReadsValid(t *testing.T) {
+	t.Parallel()
+	s, ch := lineChainSketch(t)
+	doc := decad.New()
+	body, err := doc.SweepChain(t.Context(), s, ch, straightSweepPath(t, 10))
+	require.NoError(t, err)
+
+	rep, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	br, err := rep.ForBody(body)
+	require.NoError(t, err)
+	require.Equal(t, decad.ValidityValid, br.Validity.Outcome,
+		"a chain-fed sweep's one-span straight reduction earns the fourth leg exactly as ExtrudeChain's own does")
+	require.Empty(t, br.Validity.Diagnostics)
+}
+
 // TestSweepChainMultiSegmentWallSet is docs/surface-design.md's T191: T131's
 // open line/arc/line walk swept along the same one-span path mints one wall
 // per recorded segment, the two junction sweep edges are shared rather than
