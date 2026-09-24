@@ -30,8 +30,9 @@ const (
 func WithThickenSide(side ThickenSide) ThickenOption { return thickenSideOption{side: side} }
 
 // Thicken builds a solid from an admitted sheet and retires that sheet.
-// The first arm extrudes a recorded planar patch through the signed thickness
-// interval. Other sheet families are staged under docs/surface-design.md §16.
+// It extrudes a recorded planar patch through the signed thickness interval
+// or builds a certified annular wall around a profile-fed prism sheet. Other
+// sheet families are staged under docs/surface-design.md §16.
 func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...ThickenOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a thicken`, ErrDegenerate)
@@ -64,10 +65,32 @@ func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...Thick
 	if tmm == 0 {
 		return nil, fmt.Errorf(`%w: a zero-thickness sheet encloses no solid`, ErrDegenerate)
 	}
-	pp, ok := b.payload.(patchPayload)
-	if !ok || b.Kind() != BodySheet {
-		return nil, fmt.Errorf(`%w: this evaluator thickens a recorded planar patch only`, ErrUnsupported)
+	if b.Kind() != BodySheet {
+		return nil, fmt.Errorf(`%w: Thicken requires a sheet body`, ErrUnsupported)
 	}
+	var result *Body
+	switch payload := b.payload.(type) {
+	case patchPayload:
+		result, err = thickenPatch(ctx, d, payload, side, tmm, tDelta)
+	case prismPayload:
+		result, err = thickenPrism(ctx, d, payload, side, tmm, tDelta)
+	default:
+		return nil, fmt.Errorf(`%w: this sheet has no admitted Thicken generator`, ErrUnsupported)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := d.requireLive(b); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	d.commit(result, b)
+	return result, nil
+}
+
+func thickenPatch(ctx context.Context, d *Document, pp patchPayload, side ThickenSide, tmm, tDelta float64) (*Body, error) {
 	level := measuredScalar(tmm, tDelta)
 	var z0, z1 boundedScalar
 	switch side {
@@ -86,16 +109,5 @@ func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...Thick
 	prism.z0, prism.z0Delta = z0.value, z0.bound
 	prism.z1, prism.z1Delta = z1.value, z1.bound
 	ref := d.nextProducerID()
-	result, err := evalPrismContext(ctx, d, ref, prism, newFreeformWork())
-	if err != nil {
-		return nil, err
-	}
-	if err := d.requireLive(b); err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	d.commit(result, b)
-	return result, nil
+	return evalPrismContext(ctx, d, ref, prism, newFreeformWork())
 }
