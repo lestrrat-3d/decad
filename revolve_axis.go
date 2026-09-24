@@ -426,11 +426,69 @@ func (ax axisFrame) planeDirection(wg, k float64) (float64, float64) {
 // (a cone, where |L'−L| is a fraction of the discarded radius) toward radial (a
 // disk, where it is the whole of it).
 func (ax axisFrame) walk(w segmentWalk) segmentWalk {
+	return ax.walkCharged(w, walkEndBound{}, walkEndBound{})
+}
+
+// axisCharge is docs/surface-intersection-design.md §7.1's fold: how far a
+// plane-local endpoint displacement (δu, δv) can move that endpoint's two AXIS
+// coordinates. toAxis is the stored-float rotation z = Δu·dU + Δv·dV,
+// ρ = Δv·dU − Δu·dV about the resolved anchor, and it is linear, so each
+// coordinate moves by at most the two products' sum:
+//
+//	δz ≤ |δu·dU| + |δv·dV|      δρ ≤ |δv·dU| + |δu·dV|
+//
+// Every step is a product and a sum of magnitudes through productUpper and
+// absSumUpper, so no square root and no transcendental appears and no step
+// needs an accuracy contract math does not give.
+//
+// An ABSENT charge answers two zeros and the caller folds nothing. That is not
+// a convenience: absSumUpper up-rounds every term it folds, so composing a
+// literal zero would still nudge a published bound by an ulp per term, and an
+// untrimmed revolve must read exactly as it reads today.
+func (ax axisFrame) axisCharge(c walkEndBound) (float64, float64) {
+	if c.u == 0 && c.v == 0 {
+		return 0, 0
+	}
+	dz := absSumUpper(productUpper(math.Abs(c.u), math.Abs(ax.dU)), productUpper(math.Abs(c.v), math.Abs(ax.dV)))
+	drho := absSumUpper(productUpper(math.Abs(c.v), math.Abs(ax.dU)), productUpper(math.Abs(c.u), math.Abs(ax.dV)))
+	return dz, drho
+}
+
+// walkCharged is walk with a section displacement folded in, per endpoint.
+// startCharge and endCharge are the plane-local per-component displacements
+// docs/surface-intersection-design.md §7.1 charges — trimCutChargeUV's own
+// figures, taken at exactly the endpoint whose recorded parameter is not a
+// natural bound, and at neither endpoint of a segment the arrangement did not
+// cut. Both zero is the ordinary revolve, and every fold below is skipped.
+//
+// Three fields carry the charge and every reading downstream is already
+// composed from them, so no reading gains arithmetic of its own:
+//
+//   - startVBound/endVBound gain δρ, folded BEFORE the axis snap so the snap's
+//     own discarded magnitude composes on top of the widened figure.
+//   - lengthBound gains both endpoints' total displacement, the chord's own
+//     triangle inequality: a segment whose two ends each move by at most that
+//     much changes length by at most their sum.
+//   - coordUpper and lengthUpper — the ENVELOPES — gain the same figures, so
+//     radialUpper and axisMomentUpper enclose the TRUE meridian rather than
+//     only the recorded one. This is the step that makes the charge survive:
+//     walkAxisMoment clamps its composed bound with math.Min against
+//     conservativeValueError(value, axisMomentUpper), and an envelope covering
+//     only the recorded meridian would clamp the charge straight back off.
+func (ax axisFrame) walkCharged(w segmentWalk, startCharge, endCharge walkEndBound) segmentWalk {
 	out := w
 	out.startU, out.startV = ax.toAxis(w.startU, w.startV)
 	out.endU, out.endV = ax.toAxis(w.endU, w.endV)
 	out.startVBound = ax.toAxisRhoBound(w.startU, w.startV)
 	out.endVBound = ax.toAxisRhoBound(w.endU, w.endV)
+	startZ, startRho := ax.axisCharge(startCharge)
+	endZ, endRho := ax.axisCharge(endCharge)
+	if startRho > 0 {
+		out.startVBound = absSumUpper(out.startVBound, startRho)
+	}
+	if endRho > 0 {
+		out.endVBound = absSumUpper(out.endVBound, endRho)
+	}
 	out.tanInU = w.tanInU*ax.dU + w.tanInV*ax.dV
 	out.tanInV = w.tanInV*ax.dU - w.tanInU*ax.dV
 	out.tanOutU = w.tanOutU*ax.dU + w.tanOutV*ax.dV
@@ -452,9 +510,19 @@ func (ax axisFrame) walk(w segmentWalk) segmentWalk {
 		out.th0 = w.th0 - beta
 		out.th1 = w.th1 - beta
 	}
-	rhoUpper := ax.radialUpper(w.coordUpper)
+	// §7.1's remaining two folds. chord is the displacement the wall's own two
+	// ends can put between them; coord is the L1 magnitude the same two
+	// displacements can add to the envelope, which coordUpper is measured in.
+	if chord := absSumUpper(startZ, startRho, endZ, endRho); chord > 0 {
+		out.lengthBound = absSumUpper(out.lengthBound, chord)
+		out.lengthUpper = absSumUpper(out.lengthUpper, chord)
+	}
+	if coord := math.Max(absSumUpper(startCharge.u, startCharge.v), absSumUpper(endCharge.u, endCharge.v)); coord > 0 {
+		out.coordUpper = absSumUpper(out.coordUpper, coord)
+	}
+	rhoUpper := ax.radialUpper(out.coordUpper)
 	out.axisRadiusUpper = rhoUpper
-	out.axisMomentUpper = productUpper(w.lengthUpper, rhoUpper)
+	out.axisMomentUpper = productUpper(out.lengthUpper, rhoUpper)
 	return out
 }
 

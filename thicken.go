@@ -268,6 +268,14 @@ func thickenChainExtrude(ctx context.Context, d *Document, cp chainPayload, side
 // shell: §16.6's assembled section under §16.5's sweep and radial gate
 // (docs/surface-design.md §16.7).
 func thickenChainRevolve(ctx context.Context, d *Document, cp chainRevolvePayload, side ThickenSide, tmm, tDelta float64) (*Body, error) {
+	// The prism ribbon's own admission, re-read over the meridian walk set
+	// (thickenChainExtrude above): §16.6 offsets ONE walk, and the assembled
+	// section it hands the solid build has to be exact — requireExactRevolveSection
+	// refuses a displaced one at that build anyway, and refusing here names the
+	// ribbon rather than the revolve it was about to become.
+	if len(cp.chains) != 1 || cp.sectionDelta != 0 {
+		return nil, fmt.Errorf(`%w: this ribbon has no admitted Thicken walk`, ErrUnsupported)
+	}
 	radial, err := thickenRadialOf(cp.ax)
 	if err != nil {
 		return nil, err
@@ -283,7 +291,7 @@ func thickenChainRevolve(ctx context.Context, d *Document, cp chainRevolvePayloa
 	// ONE free-form work counter for the record: the walk resolution, the axis
 	// re-resolution and the build that consumes the section all spend from it.
 	work := newFreeformWork()
-	section, err := thickenRibbon(ctx, cp.chain, side, amount, budget, work, &radial)
+	section, err := thickenRibbon(ctx, cp.chains[0], side, amount, budget, work, &radial)
 	if err != nil {
 		return nil, err
 	}

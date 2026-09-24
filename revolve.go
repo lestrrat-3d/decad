@@ -453,18 +453,28 @@ type ChainRevolveOption interface {
 }
 
 // chainRevolvePayload is RevolveChain's own record of a shell body: the
-// recorded open walk, the plane frame, the oriented plane-local axis, the
+// recorded open walk SET, the plane frame, the oriented plane-local axis, the
 // sweep interval, and the accumulated rigid placement — chainRevolvePayload
 // is to RevolveChain what chainPayload is to ExtrudeChain, and what
-// revolvePayload is to Revolve (docs/surface-design.md §13.4).
+// revolvePayload is to Revolve (docs/surface-design.md §13.4). A plain
+// RevolveChain builds the one-walk case; docs/surface-intersection-design.md
+// §3.4 is what first builds more than one, one lump per surviving walk, and
+// sets sectionDelta beside them.
 type chainRevolvePayload struct {
-	chain      ChainRecord
+	chains     []ChainRecord
 	frame      r3.Frame
 	ax         axisFrame
 	phi0, phi1 float64
 	full       bool
 	den        sweepDenotation
 	xform      r3.Transform
+	// sectionDelta is prismPayload's own §7 term (docs/prism-boolean-design.md),
+	// carried here on the identical terms: the proven upper bound on how far
+	// any recorded meridian coordinate sits from the meridian its construction
+	// denotes. It is zero for every walk a caller draws through RevolveChain,
+	// and docs/surface-intersection-design.md §7.1 derives how a nonzero one
+	// reaches this body's published Area and Bounds.
+	sectionDelta float64
 }
 
 // revolve is a *view* of rp as a revolvePayload wrapping the chain's own
@@ -475,16 +485,35 @@ type chainRevolvePayload struct {
 // surfaceResult stays false and is read nowhere below: RevolveChain never
 // runs revolvePayload's own solid/cap topology, only its own open-walk build
 // (buildChainRevolveWalls).
+// The first chain stands in for a profile's outer loop and the rest for its
+// holes, exactly as chainPayload.prism folds its own walk set: every reading
+// this view feeds walks the segments and cares about neither winding nor
+// closure.
 func (rp chainRevolvePayload) revolve() revolvePayload {
+	profile := ProfileRecord{Outer: LoopRecord(rp.chains[0])}
+	for _, c := range rp.chains[1:] {
+		profile.Holes = append(profile.Holes, LoopRecord(c))
+	}
 	return revolvePayload{
-		profile: ProfileRecord{Outer: LoopRecord(rp.chain)},
+		profile: profile,
 		frame:   rp.frame,
 		ax:      rp.ax,
 		phi0:    rp.phi0, phi1: rp.phi1,
-		full:  rp.full,
-		den:   rp.den,
-		xform: rp.xform,
+		full:         rp.full,
+		den:          rp.den,
+		xform:        rp.xform,
+		sectionDelta: rp.sectionDelta,
 	}
+}
+
+// walkView is the single-walk view the wall build takes: chain ci alone as the
+// outer loop, so sideOriginsContext's segment indices and walkAxisMoment's own
+// rp.profile.Outer read reach exactly that walk's segments. loopIdx feeds the
+// face role, so two walks' faces never collide on one role string.
+func (rp chainRevolvePayload) walkView(ci int) revolvePayload {
+	view := rp.revolve()
+	view.profile = ProfileRecord{Outer: LoopRecord(rp.chains[ci])}
+	return view
 }
 
 // transform is the accumulated rigid placement.
@@ -580,10 +609,10 @@ func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a
 
 	ref := d.nextProducerID()
 	body, err := evalChainRevolveContext(context.Background(), d, ref, chainRevolvePayload{
-		chain: chain,
-		frame: frame,
-		ax:    ax,
-		phi0:  phi0, phi1: phi1,
+		chains: []ChainRecord{chain},
+		frame:  frame,
+		ax:     ax,
+		phi0:   phi0, phi1: phi1,
 		full:  full,
 		den:   den,
 		xform: r3.Identity(),

@@ -61,6 +61,51 @@ type revolvePayload struct {
 	den           sweepDenotation
 	xform         r3.Transform
 	surfaceResult bool
+	// sectionDelta is prismPayload's own §7 term over the MERIDIAN: the proven
+	// upper bound on how far any recorded meridian coordinate sits from the
+	// meridian its construction denotes. Only the SHEET readings charge it
+	// today — the wall areas, through docs/surface-intersection-design.md
+	// §7.1's fold into the axis-coordinate walk, and the box, through
+	// extentBoundedAlong's fifth mechanism. The Pappus VOLUME and CENTROID do
+	// not, so requireExactRevolveSection refuses a nonzero value at the solid
+	// build rather than integrating a region over a section it cannot charge
+	// (§3.4; §6's RS13). A revolve a caller draws directly leaves it zero and
+	// every reading takes the path it takes today, bit for bit.
+	sectionDelta float64
+}
+
+// requireExactRevolveSection is RS13's reject-only guard: the solid build
+// integrates a volume and a centroid over the recorded meridian, and
+// docs/surface-intersection-design.md §7.1 derives the section displacement's
+// reach into the AREA and the BOX alone. The field is either zero or it is
+// not, so the guard needs no tolerance and can only refuse.
+//
+// It is also what keeps auditAxisContact's own exact-leaf reading of a
+// plane-local coordinate sound. That audit runs ONCE, at axis resolution, over
+// the caller's own undisplaced profile, and its four regionSnapAllow figures
+// are read in exactly one place — evalRevolveContextWork's region integrals
+// below, every one of them past this guard. A trimmed body reuses the
+// receiver's already-resolved axis and never re-runs the audit, so no
+// displaced meridian reaches it by either route.
+func requireExactRevolveSection(rp revolvePayload, what string) error {
+	if rp.sectionDelta == 0 {
+		return nil
+	}
+	return fmt.Errorf(
+		`%w: %s cannot integrate a region over a meridian carrying its own section displacement of %v mm`,
+		ErrUnsupported, what, rp.sectionDelta)
+}
+
+// meridian is a *view* of rp as a prismPayload carrying the recorded MERIDIAN
+// and the frame and placement it is expressed in — never a body this evaluator
+// builds from. It is what docs/surface-intersection-design.md §3.1 hands
+// buildPrismScene, newPrismReexpression, classifyPrismCells and the rest of
+// §3's resolution, every one of which reads a profile, a frame and a placement
+// and nothing else. The sweep fields are deliberately absent: the revolve's own
+// angular interval is S6's business, never the private 2D scene's, and the
+// levels a prismPayload would carry have no meaning for a meridian.
+func (rp revolvePayload) meridian() prismPayload {
+	return prismPayload{profile: rp.profile, frame: rp.frame, xform: rp.xform}
 }
 
 // transform is the accumulated rigid placement.
@@ -247,6 +292,9 @@ func evalRevolveContext(ctx context.Context, d *Document, ref producerID, rp rev
 
 func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp revolvePayload, work *freeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := requireExactRevolveSection(rp, "a profile-fed revolve"); err != nil {
 		return nil, err
 	}
 	ig, err := rp.profile.evaluatorIntegralsUncheckedContext(ctx, momentSecondOrder, work)
@@ -611,7 +659,11 @@ func revolveLoopWalks(ctx context.Context, rp revolvePayload, loop LoopRecord, w
 			return revolveWalks{}, err
 		}
 		plane[i] = w
-		raw[i] = sideWalk{segmentWalk: rp.ax.walk(w), segs: []int{i}}
+		startCharge, endCharge, err := trimRevolveSegmentCharges(seg, rp.sectionDelta)
+		if err != nil {
+			return revolveWalks{}, err
+		}
+		raw[i] = sideWalk{segmentWalk: rp.ax.walkCharged(w, startCharge, endCharge), segs: []int{i}}
 	}
 	walks, err := coalesceWalksContext(ctx, raw)
 	if err != nil {
@@ -1101,31 +1153,44 @@ func evalChainRevolveContext(ctx context.Context, d *Document, ref producerID, r
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if len(rp.chains) == 0 {
+		return nil, fmt.Errorf(`%w: a chain-revolve payload holds no walk`, ErrDegenerate)
+	}
 	rev := rp.revolve()
 	sweep := rev.sweep()
 	if sweep.value <= 0 {
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 
-	resolved, err := chainRevolveWalks(ctx, rev, rp.chain, work)
-	if err != nil {
-		return nil, err
-	}
-	n := len(resolved.walks)
-	if n == 0 {
-		return nil, fmt.Errorf(`%w: a recorded chain holds no segments`, ErrDegenerate)
-	}
-	if err := requireChainAxisIncidence(resolved); err != nil {
-		return nil, err
-	}
-
 	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
 	b := rev.basis()
-	faces, area, err := buildChainRevolveWalls(ctx, body, ref, rev, b, resolved)
-	if err != nil {
-		return nil, err
+	var allFaces []*Face
+	area := boundedScalar{}
+	for ci := range rp.chains {
+		// Each walk builds from its OWN single-walk view, so
+		// sideOriginsContext's segment indices and walkAxisMoment's own
+		// rp.profile.Outer read reach exactly that walk's segments, and ci
+		// feeds the face role so two walks never collide on one role string
+		// (docs/surface-intersection-design.md §3.4).
+		view := rp.walkView(ci)
+		resolved, err := chainRevolveWalks(ctx, view, rp.chains[ci], work)
+		if err != nil {
+			return nil, err
+		}
+		if len(resolved.walks) == 0 {
+			return nil, fmt.Errorf(`%w: a recorded chain holds no segments`, ErrDegenerate)
+		}
+		if err := requireChainAxisIncidence(resolved); err != nil {
+			return nil, err
+		}
+		faces, walkArea, err := buildChainRevolveWalls(ctx, body, ref, view, ci, b, resolved)
+		if err != nil {
+			return nil, err
+		}
+		allFaces = append(allFaces, faces...)
+		area = boundedAdd(area, walkArea)
 	}
-	body.lumps = sheetLumps(faces)
+	body.lumps = sheetLumps(allFaces)
 	body.area = Measurement{
 		Value:     units.SquareMillimeters(area.value),
 		Exactness: exactnessOf(area.bound),
@@ -1210,7 +1275,11 @@ func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord
 			return revolveWalks{}, err
 		}
 		plane[i] = w
-		raw[i] = sideWalk{segmentWalk: rp.ax.walk(w), segs: []int{i}}
+		startCharge, endCharge, err := trimRevolveSegmentCharges(seg, rp.sectionDelta)
+		if err != nil {
+			return revolveWalks{}, err
+		}
+		raw[i] = sideWalk{segmentWalk: rp.ax.walkCharged(w, startCharge, endCharge), segs: []int{i}}
 	}
 	walks, err := coalesceChainWalksContext(ctx, raw)
 	if err != nil {
@@ -1235,7 +1304,7 @@ func chainRevolveWalks(ctx context.Context, rp revolvePayload, chain ChainRecord
 // attached to a cap face here — a chain mints none — so it stays free
 // regardless of position (docs/surface-design.md §13.4). It returns the
 // faces and the walk's own total wall area, folded through boundedAdd.
-func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp revolvePayload, b revolveBasis, resolved revolveWalks) ([]*Face, boundedScalar, error) {
+func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp revolvePayload, loopIdx int, b revolveBasis, resolved revolveWalks) ([]*Face, boundedScalar, error) {
 	walks, kinds := resolved.walks, resolved.kinds
 	n := len(walks)
 	sweep := rp.sweep()
@@ -1346,7 +1415,7 @@ func buildChainRevolveWalls(ctx context.Context, body *Body, ref producerID, rp 
 		if err != nil {
 			return nil, boundedScalar{}, err
 		}
-		origins, err := sideOriginsContext(ctx, ref, 0, w.segs)
+		origins, err := sideOriginsContext(ctx, ref, loopIdx, w.segs)
 		if err != nil {
 			return nil, boundedScalar{}, err
 		}

@@ -1866,3 +1866,9 @@
 3	0.02	TestOffsetPrismUnrepresentableOffset
 0	0.02	TestOffsetPrismIntervalCertificationRefusesThePinch
 1	0.02	TestOffsetPrismResultIsBoundedByTheOffsetLoopAlone
+0	0.07	TestSurfaceTrimRevolveRefusalsNameTheirOwnGate
+1	0.06	TestSurfaceExtendRevolveRefusalsNameTheirOwnGate
+2	0.03	TestSurfaceTrimRevolveKeepOutsideSplitsIntoTwoWalks
+3	0.02	TestSurfaceExtendRevolveRibbonToNearestCut
+2	0.00	TestAxisFrameWalkChargeIsAbsentAtZero
+3	0.00	TestAxisFrameWalkChargeWidensEveryFieldItTouches

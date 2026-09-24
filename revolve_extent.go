@@ -158,7 +158,60 @@ func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work 
 		exactSumRound(hiEnd, base, hi),
 	)
 	bound = absSumUpper(bound, frameAllow, sumAllow)
+	// The FIFTH mechanism: the meridian this reading scanned is the RECORDED
+	// one, and a trimmed section's own cut coordinates sit within its
+	// sectionDelta of the meridian the record denotes
+	// (docs/surface-intersection-design.md §7.1). It is zero for every payload
+	// no construction displaced, which is what leaves an ordinary revolve's box
+	// on the path it takes today.
+	if sectionAllow := rp.sectionExtentAllow(); sectionAllow > 0 {
+		bound = absSumUpper(bound, sectionAllow)
+	}
 	return loEnd, hiEnd, bound, nil
+}
+
+// sectionCoordUpper widens the RECORDED meridian's own coordinate envelope
+// into one that covers the meridian the record DENOTES
+// (docs/surface-intersection-design.md §7.1). coordUpper is an L1 magnitude
+// (segment_walk.go's ratL1Upper), so a point whose two components each move by
+// at most sectionDelta adds at most twice it. Every term the axis frame and the
+// sweep extreme charge at an envelope has to be charged at THIS one, or those
+// two terms would be proven against the recorded meridian while the extreme
+// they bound sits on the denoted one.
+//
+// A payload no construction displaced answers its own argument back, untouched:
+// absSumUpper up-rounds, so folding a zero would widen an ordinary revolve's
+// every published box by an ulp.
+func (rp revolvePayload) sectionCoordUpper(coordUpper float64) float64 {
+	if rp.sectionDelta <= 0 {
+		return coordUpper
+	}
+	return absSumUpper(coordUpper, productUpper(2, rp.sectionDelta))
+}
+
+// sectionExtentAllow is docs/surface-intersection-design.md §7.1's FIFTH
+// mechanism in extentBoundedAlong's own enumeration: how far the extreme of the
+// linear functional wg·z + m·ρ moves when the meridian it is taken over is the
+// recorded one rather than the denoted one.
+//
+// A recorded endpoint displaced by at most sectionDelta in each plane-local
+// component moves its two AXIS coordinates by at most axisCharge's own two
+// figures, each bounded by sectionDelta·(|dU| + |dV|) — the same fold §7.1
+// derives for the walk, read here for the envelope rather than per endpoint.
+// The functional's own coefficients satisfy wg² + c0² + c1² = 1 for a unit g
+// over the orthonormal basis, so |wg| ≤ 1 and |m| ≤ 1 and the extreme moves by
+// at most δz + δρ. The held basis departs from orthonormal only by the rounding
+// frameRoundAllow already charges, at an envelope sectionCoordUpper widens, so
+// that departure is accounted for there rather than doubled here.
+//
+// It displaces both ends the same way, so it composes OUTWARD with the per-end
+// maximum exactly as frameRoundAllow does, never folded into one end's own sum.
+func (rp revolvePayload) sectionExtentAllow() float64 {
+	if rp.sectionDelta <= 0 {
+		return 0
+	}
+	per := productUpper(rp.sectionDelta, absSumUpper(rp.ax.dU, rp.ax.dV))
+	return productUpper(2, per)
 }
 
 // frameRoundAllow bounds how far base/wg/c0/c1 — the four scalar coefficients
@@ -198,7 +251,7 @@ func (rp revolvePayload) frameRoundAllow(g r3.Vec, b revolveBasis, base, wg, c0,
 		return 0, err
 	}
 	ax := rp.ax
-	envUpper := ax.radialUpper(coordUpper)
+	envUpper := ax.radialUpper(rp.sectionCoordUpper(coordUpper))
 	dirAllow := absSumUpper(ax.dUBound, ax.dVBound)
 	e1Allow := absSumUpper(productUpper(2, dirAllow), productUpper(dirAllow, dirAllow))
 	anchorAllow := absSumUpper(ax.aUBound, ax.aVBound)
@@ -247,7 +300,7 @@ func (rp revolvePayload) sweepBoundAlong(c0, c1, mlo, mhi float64, work *freefor
 	if err != nil {
 		return 0, 0, err
 	}
-	rhoUpper := rp.ax.radialUpper(coordUpper)
+	rhoUpper := rp.ax.radialUpper(rp.sectionCoordUpper(coordUpper))
 	if isNonFinite(rhoUpper) {
 		return 0, 0, fmt.Errorf(`%w: the revolved region's radial distance from its own axis has no finite proven bound, so no sweep-extreme bound can be composed`, ErrNotFinite)
 	}
