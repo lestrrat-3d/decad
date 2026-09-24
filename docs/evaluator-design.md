@@ -338,7 +338,23 @@ sweep's is closed form in the sweep angle. `Area` by Pappus's first theorem
 per side face — swept arc length × the sweep angle × the segment CURVE's
 centroidal radius about the axis, a boundary first moment with closed forms
 for `LineSeg`/`ArcSeg`/`CircleSeg` — plus the §4 region area for each partial-
-sweep cap. `Bounds` from per-face analytic extremes: each face's radial
+sweep cap.
+Every one of those readings integrates the RECORDED region while every face is
+built from the SNAPPED one — `axisFrame.walk` assigns an endpoint within the
+contact tolerance exactly 0 — so each carries the SNAP's own charge, and each
+carries it where the reading is taken. A wall's own area takes it on the wall
+LENGTH, because moving an endpoint onto the axis moves the wall's two ends apart
+by at most the sum of the two discarded radial magnitudes. `Volume`, the cap
+area and the centroid take it on the region integrals themselves
+(`regionSnapAllow`): the snapped and recorded boundaries bound a ribbon of
+radial width the discarded magnitude along each walk, so each integral moves by
+at most that ribbon's area times the integrand's own proven envelope — nothing
+for `∫dA`, the walk's radial envelope for `∫ρ dA`, and a radial beside an axial
+one for `∫zρ dA`, all read in AXIS coordinates so a profile far down the axis
+pays its large `|z|` only where `z` appears. Every one of those charges is
+exactly zero for a profile whose on-axis endpoints already sit on the axis,
+which is what leaves an ordinary axis-incident revolve as `Exact` as before.
+`Bounds` from per-face analytic extremes: each face's radial
 extreme about the axis (a cylinder's radius, a cone's two end radii, a
 torus/sphere's center distance ± minor/radius) and axial range, with a
 partial sweep's angular interval deciding which cardinal directions are
