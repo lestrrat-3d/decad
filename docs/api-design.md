@@ -1693,8 +1693,8 @@ feature tree / timeline / rollback, STEP, sheet metal, mesh import,
 GUI or view state of any kind, and Fusion code generation.
 
 Sheet bodies themselves are **not** a non-goal — `docs/surface-design.md` owns
-them. `Thicken` admits the recorded patch and profile-fed prism families of §16
-there; the other sheet families refuse at its call with `ErrUnsupported`.
+them. `Thicken` admits the sheet families §16.1 names there and refuses every other
+at its call with `ErrUnsupported`.
 Trim, Extend, surface Offset, Ruled, Boundary Fill, Reverse Normal, and a
 sheet operand in any boolean remain staged there, each refusing at the call
 until its own design lands.
