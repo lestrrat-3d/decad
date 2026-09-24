@@ -33,6 +33,7 @@ it owns, and names what every other file in the package owns.
 | `evaluateBoolean` dispatch, `Union`/`Cut`/`Intersect`, or any code combining two recorded sections through a private `sketch` scene | `docs/prism-boolean-design.md` |
 | Any modify op, option codec or modify payload | `docs/modify-design.md`, `docs/modify-reach-design.md` |
 | Sheet-body, surface-result, patch or stitch code | `docs/surface-design.md` |
+| `Trim`, `Extend` or `Split` code | `docs/surface-intersection-design.md` |
 | Anything the surrounding `.go` file already documents | that file's own doc comments |
 
 ## Hard rules
@@ -50,9 +51,10 @@ it owns, and names what every other file in the package owns.
   private `sketch` scene from decad's OWN recorded entities and asking it to
   arrange them is not re-deriving an answer — the moments engine already does
   this for authentication (`moments_validate.go`), and
-  `docs/prism-boolean-design.md` extends it to combining two recorded sections:
-  decad selects among the regions `sketch` returns; it never computes the
-  crossing, cut parameter, or containment itself.
+  `docs/prism-boolean-design.md` extends it to combining two recorded sections
+  and `docs/surface-intersection-design.md` to a sheet-involving pair: decad
+  selects among the regions, chains and cells `sketch` returns; it never
+  computes the crossing, cut parameter, or containment itself.
 - **A decad-side check may only FALSIFY an upstream claim, never bless one.**
   Admission is decided by what `sketch` says — `BoundaryEdge.TExact` for a
   `Partial` fragment — never by a test decad runs on the
