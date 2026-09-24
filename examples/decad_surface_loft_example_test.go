@@ -1,9 +1,10 @@
 package examples_test
 
 import (
+	"bytes"
 	"context"
-	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/sketch"
@@ -14,8 +15,8 @@ import (
 // section caps, publishing a sheet body — Kind() == BodySheet — instead of a
 // solid (docs/surface-design.md §4). Volume and Centroid answer ErrNotSolid
 // for a sheet, proven sound or not; Area and Bounds still answer, over the
-// walls alone. Tessellating a loft sheet is staged for a later increment
-// (docs/surface-design.md §10), unlike a surface-extruded prism's.
+// walls alone. Tessellate and OBJ export the wall triangles with both section
+// rims free (docs/surface-design.md §10).
 func Example_decad_surfaceLoft() {
 	w := sketch.NewWorld()
 	s0, err := w.CreateSketch(w.XY())
@@ -77,7 +78,16 @@ func Example_decad_surfaceLoft() {
 		return
 	}
 
-	_, tessErr := sheet.Tessellate(context.Background(), units.Millimeters(0.1))
+	mesh, err := sheet.Tessellate(context.Background(), units.Millimeters(0.1))
+	if err != nil {
+		fmt.Printf("failed to tessellate: %s\n", err)
+		return
+	}
+	var obj bytes.Buffer
+	if err := sheet.OBJ(&obj); err != nil {
+		fmt.Printf("failed to export OBJ: %s\n", err)
+		return
+	}
 
 	fmt.Printf("is sheet: %v\n", sheet.Kind() == decad.BodySheet)
 	fmt.Printf("faces: %d\n", len(sheet.Faces()))
@@ -85,7 +95,8 @@ func Example_decad_surfaceLoft() {
 	fmt.Printf("area: %s\n", area.Value)
 	fmt.Printf("volume error: %v\n", volErr)
 	fmt.Printf("verify status: %s\n", report.Status)
-	fmt.Printf("tessellate is unsupported: %v\n", errors.Is(tessErr, decad.ErrUnsupported))
+	fmt.Printf("triangles: %d\n", len(mesh.Triangles()))
+	fmt.Printf("OBJ faces: %d\n", strings.Count(obj.String(), "\nf "))
 	// Output:
 	// is sheet: true
 	// faces: 8
@@ -93,5 +104,6 @@ func Example_decad_surfaceLoft() {
 	// area: 1600 mm^2
 	// volume error: decad: body is not a solid
 	// verify status: Sound
-	// tessellate is unsupported: true
+	// triangles: 8
+	// OBJ faces: 8
 }

@@ -1691,18 +1691,18 @@ check (`docs/tessellation-design.md` §1.2) runs only when the mesh is
 closed — a solid, or a full-turn sheet — and never on an open partial-sweep
 sheet, where that sum is anchor-dependent and decides nothing.
 
-A surface-result **loft** sheet does not yet: `Tessellate`/`STL`/`OBJ` refuse
-it with `ErrUnsupported` at the dispatch that would otherwise look up a role a
-surface result's own build never attached (§4.2) — this evaluator's own
-reach, never the `ErrDegenerate` a missing face role would otherwise report,
-since the body's geometry is not the problem. A loft sheet's own refusal sits
-ahead of `tessellateLoft`'s exact restatement (`docs/loft-design.md` §9 Table
-D row D1), which already holds the complete triangle set including both
-omitted caps; the refusal is what keeps that set from being restated as a
-solid mesh for a body with no material.
+A surface-result **loft** sheet tessellates and exports its recorded wall
+triangles. The payload holds walls before both cap ranges, so `tessellateLoft`
+copies only `tris[:walls]` and attributes each triangle to its live
+`side(i,j,k)` face (§4.2). `requireSheetMesh` matches the exposed section rims
+to the body's recorded free edges, and `requireSheetVertexLinks` checks the
+open boundary vertices. The complete held set still supplies the build-time
+crossing and whole-shell orientation proofs; the open mesh does not run the
+signed-volume audit, whose sum depends on the anchor when caps are absent.
+The sheet mesh carries no occupied-volume proof.
 
 **A stitched `BodySolid` is a different case from every sheet above, and its
-own mesh is a separate, later-landing capability (§14 Table D row 5).** A
+own mesh follows §14 Table D row 5.** A
 stitched solid is not a sheet — Table X's whole subject — so nothing above
 governs it. A CLOSED, all-planar stitched body (`stitchAllTetrahedronEligible`,
 §6.4: every face a `Plane` bounded entirely by `Line3` edges, zero
@@ -1765,7 +1765,7 @@ rather than after.
 | `Shell` | `ErrUnsupported` | removes faces from a solid and offsets its material section; a prism sheet does carry a section, but it has no material or caps to remove. `Thicken` uses that section under §16's separate contract |
 | `Thicken` | §16's patch and profile-fed prism families build; the other families are R24 | builds a new solid from a sheet's recorded generator and retires the sheet |
 | `Placed` / `PlacedCopy` / `Duplicate` | admitted, unchanged | a rigid motion of a payload; nothing in it reads solidity |
-| `Tessellate` / `STL` / `OBJ` | a prism, revolve or all-planar stitched sheet tessellates and exports; a loft sheet, or a stitched sheet holding a face that is not a `Plane` bounded entirely by `Line3` edges, is `ErrUnsupported`, staged (§10) | the manifold-with-boundary audit §10 describes runs on the prism, revolve and stitched paths; the loft path, and a curved or mixed stitched sheet, await a later increment |
+| `Tessellate` / `STL` / `OBJ` | a prism, revolve, loft or all-planar stitched sheet tessellates and exports; a stitched sheet holding a face that is not a `Plane` bounded entirely by `Line3` edges is `ErrUnsupported`, staged (§10) | each supported sheet path runs the manifold-with-boundary audit §10 describes; a curved or mixed stitched sheet awaits a later increment |
 | `ToFace` / `ToFaceAngular` naming a **planar** face of a live sheet | admitted | the stop reads the face's plane and nothing about material, so `stops.go`'s resolution is unchanged |
 | `ToFace` naming a curved face of a sheet | as for a solid | this design changes no curved-stop reach |
 | `EdgeAxis` naming a linear edge of a live sheet | admitted | the axis reads the edge's line; `docs/api-design.md` §6.2's exactly-one and liveness rules apply unchanged |
@@ -2216,7 +2216,7 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T7d | two sheets whose boxes meet, in a fixture that would cross if either were a solid | `Verify` keeps `DiagUnsupportedPairSheet`, `Suspect`: neither operand offers a closed boundary to cast against |
 | T7e | T7's fixture with the two bodies created in the opposite order | the `DiagSheetSolidCrossing` diagnostic's `Pair.A`/`Pair.B` follow `Document.Bodies()` order, not "sheet first" |
 | T9 | a sheet handed to `Union`, `Fillet`, `Chamfer` and `Shell` | each is `ErrUnsupported`; the receiver and every operand stay live, and `Document.Bodies()` is unchanged |
-| T10 | a sheet tessellated | a prism sheet tessellates and exports through the manifold-with-boundary audit (§10, Table D; `tessellate_sheet_test.go`); a revolve sheet does the same, over every Table W row and the design's T6 (`tessellate_revolve_sheet_test.go`); a loft sheet still refuses with `ErrUnsupported`, deferred to a later increment |
+| T10 | a sheet tessellated | prism, revolve and loft sheets tessellate and export through the manifold-with-boundary audit (§10; `tessellate_sheet_test.go`, `tessellate_revolve_sheet_test.go`, `surface_loft_test.go`); a loft sheet omits both recorded cap ranges and carries no occupied-volume proof |
 | T11 | a three-face assembly welded into a Möbius orientation | `Stitch` is `ErrDegenerate` (R7), and the document is unchanged |
 | T12 | `Body.Patch` on a non-planar four-edge chain | `ErrUnsupported` (R6); and on a bounded chain that carries no shared level token — a revolve seam, or any other chain no builder stamped one onto — `ErrUnsupported` on the same row. A bounded chain that DOES share one level token is T26's own admission, gate 3's second arm |
 | T13 | every Table R row | the stated sentinel, with `errors.Is` holding, and no document change |

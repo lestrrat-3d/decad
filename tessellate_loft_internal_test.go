@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"errors"
 	"math"
 	"testing"
 
@@ -13,6 +14,24 @@ import (
 // §4: the loftMeshProof evalLoft composes, and the restatement tessellateLoft
 // publishes from it. The public half — mesh shape, boolean admission, export
 // determinism — is tessellate_loft_test.go.
+
+// TestLoftSheetAuditRejectsCapInPlaceOfWall checks the recorded free-edge
+// attribution after one cap triangle is kept where a wall triangle belongs.
+func TestLoftSheetAuditRejectsCapInPlaceOfWall(t *testing.T) {
+	t.Parallel()
+	pl := boxLoftPayload(t)
+	pl.surfaceResult = true
+	body := evalLoftFixture(t, pl)
+	lp, _ := loftProofOf(t, body)
+	mesh, err := tessellateLoft(t.Context(), body, lp)
+	require.NoError(t, err)
+	require.Greater(t, lp.capStartCount, 0)
+
+	mesh.triangles[0] = lp.tris[lp.walls]
+	err = requireSheetMesh(t.Context(), body, mesh)
+	require.True(t, errors.Is(err, ErrDegenerate), "a cap replacing a wall must fail free-edge attribution: %v", err)
+	t.Logf("wrong-drop audit: %v", err)
+}
 
 // loftProofOf reads the payload's own composed mesh proof off a built body.
 func loftProofOf(t *testing.T, body *Body) (loftPayload, loftMeshProof) {

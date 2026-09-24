@@ -65,9 +65,9 @@ func WithChordTolerance(tol units.Value) STLOBJOption {
 // The mesh is built at [VerifyNone] unless [WithVerification] says otherwise:
 // a writer consumes vertices and indices and reads no proof term, so there is
 // nothing here to spend the facet-contact audit or the two volume-class proofs
-// on. The file is still CLOSED — the directed-edge audit runs at every level —
-// but it is not proven free of self-intersection, so a slicer can still meet a
-// shell that crosses itself. Ask for [VerifyAll] to demand that proof, and
+// on. The closed-mesh audit runs on a solid, while the manifold-with-boundary
+// audit runs on a sheet at every level. Below [VerifyBoundary], a mesh is not
+// proven free of self-intersection. Ask for [VerifyAll] to demand that proof, and
 // expect the refusals that come with it: the audit's own work ceiling refuses
 // some ordinary bodies at the very tolerance this writer's default chooses for
 // them.
@@ -122,7 +122,8 @@ func (b *Body) STL(w io.Writer, opts ...STLOption) error {
 //
 // The mesh is built at [VerifyNone] unless [WithVerification] says otherwise,
 // on the terms [Body.STL]'s own doc comment states: the written triangle set
-// is closed but not proven free of self-intersection.
+// passes its kind's mandatory mesh audit but is not proven free of
+// self-intersection.
 func (b *Body) OBJ(w io.Writer, opts ...OBJOption) error {
 	folded := make([]option.Interface, len(opts))
 	for i, o := range opts {

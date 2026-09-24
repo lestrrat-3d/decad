@@ -659,6 +659,7 @@
 1	0.01	TestLoftPlacedRotationSoundness
 1	0.00	TestLoftSameKindCircleAgainstCircleAdmitted
 1	0.00	TestLoftSeamGates
+1	0.01	TestLoftSheetAuditRejectsCapInPlaceOfWall
 1	0.06	TestLoftShippedFractionOnReferenceWedge
 1	0.00	TestLoftStationCapClearsTheAuditPairCeiling
 1	0.94	TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair
@@ -1556,7 +1557,7 @@
 0	0.00	TestSurfaceLoftSheetVerifiesSound
 1	0.00	TestSurfaceLoftShellOpenAgreesWithFreeEdgeDerivation
 2	0.00	TestSurfaceLoftStaysASheetThroughPlacement
-3	0.00	TestSurfaceLoftTessellationRefused
+3	0.01	TestSurfaceLoftTessellationRestatesWalls
 0	0.00	TestSurfaceLoftWithSurfaceResultIsIdempotent
 3	0.00	TestSurfaceRevolveCapBoundsComposeOnInexactFixture
 0	0.00	TestSurfaceRevolveFullTurnClearOfAxisIsClosed
