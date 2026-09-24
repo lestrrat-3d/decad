@@ -237,6 +237,9 @@ func TestBodyPatchClosesASheetsLastFreeEdgeStaysASheet(t *testing.T) {
 
 	require.Equal(t, decad.BodySheet, closed.Kind())
 	require.False(t, closed.IsSolid())
+	for _, shell := range closed.Shells() {
+		require.False(t, shell.IsVoid(), `a closed sheet still bounds no material cavity`)
+	}
 	_, err = closed.Volume()
 	require.ErrorIs(t, err, decad.ErrNotSolid)
 	_, err = decad.Edges(decad.Free()).SelectEdges(closed)

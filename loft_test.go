@@ -109,6 +109,42 @@ func TestLoftBuildsCongruentSquares(t *testing.T) {
 	require.Len(t, body.Vertices(), 8)
 }
 
+func TestLoftHoledProfilesMakePassage(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	top, err := w.CreateOffsetPlane(w.XY(), 10)
+	require.NoError(t, err)
+	var sketches [2]*sketch.Sketch
+	var profiles [2]*sketch.Profile
+	for i, plane := range []*sketch.Plane{w.XY(), top} {
+		s, err := w.CreateSketch(plane)
+		require.NoError(t, err)
+		outer := s.CreateRectangle(0, 0, 10, 10)
+		inner := s.CreateRectangle(3, 3, 7, 7)
+		s.Fix(outer.A)
+		s.Fix(inner.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		for _, p := range s.Profiles() {
+			if len(p.Holes) == 1 {
+				profiles[i] = p
+				break
+			}
+		}
+		require.NotNil(t, profiles[i])
+		sketches[i] = s
+	}
+
+	body, err := decad.New().Loft(t.Context(), sketches[0], profiles[0], sketches[1], profiles[1])
+	require.NoError(t, err)
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	require.True(t, vol.Value.Equal(units.CubicMillimeters(840), 1e-9))
+	requireManifold(t, body)
+	require.Len(t, body.Shells(), 1)
+	require.False(t, body.Shells()[0].IsVoid(), `the hole opens through both caps`)
+}
+
 func TestLoftFrustumVolumeMatchesClosedForm(t *testing.T) {
 	t.Parallel()
 	// bottom side 40 (half 20), top side 20 (half 10), height 10: the

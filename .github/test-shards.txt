@@ -1755,3 +1755,6 @@
 1	0.00	TestRevolveChainQuarterTurnStaysUndecided
 2	0.00	TestRevolveChainFullTurnStaysOpen
 3	0.00	TestRevolveChainRunsTheSeamGates
+0	0.01	TestLoftHoledProfilesMakePassage
+1	0.01	TestUnstitchVoidRevolveMakesNonVoidSheets
+2	0.01	TestVoidRevolveModifyOpsRefuseReceiver

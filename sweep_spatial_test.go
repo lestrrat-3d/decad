@@ -111,6 +111,8 @@ func TestSweepSpatialPathPreservesProfileHole(t *testing.T) {
 	body, err := doc.Sweep(t.Context(), s, profile, path)
 	require.NoError(t, err)
 	require.Len(t, body.Faces(), 17)
+	require.Len(t, body.Shells(), 1, `the endpoint caps join both wall tubes`)
+	require.False(t, body.Shells()[0].IsVoid(), `the swept hole is a passage`)
 	for _, edge := range body.Edges() {
 		require.Len(t, edge.Faces(), 2)
 	}
