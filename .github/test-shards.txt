@@ -1812,3 +1812,8 @@
 0	0.01	TestLoftHoledProfilesMakePassage
 1	0.01	TestUnstitchVoidRevolveMakesNonVoidSheets
 2	0.01	TestVoidRevolveModifyOpsRefuseReceiver
+1	0.02	TestThickenRevolveWasherInward
+1	0.02	TestThickenRevolveTorus
+0	0.02	TestThickenRevolvePartialSweep
+1	0.01	TestThickenRevolveAxisRefusals
+2	0.01	TestThickenRadialRefusesBoundedAxis

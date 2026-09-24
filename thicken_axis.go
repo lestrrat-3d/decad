@@ -15,80 +15,64 @@ type thickenAxisJoin struct {
 	m, before, after thickenExactPoint
 }
 
-func thickenPrismAxis(ctx context.Context, d *Document, pp prismPayload, side ThickenSide,
-	amount float64, budget *workBudget) (*Body, error) {
-	for _, seg := range pp.profile.Outer.Segments {
+func thickenAxisSection(ctx context.Context, profile ProfileRecord, side ThickenSide,
+	amount float64, budget *workBudget, radial *thickenRadial) (thickenSection, error) {
+	for _, seg := range profile.Outer.Segments {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return thickenSection{}, err
 		}
 		if _, ok := seg.(LineSeg); !ok {
-			return nil, fmt.Errorf(`%w: the prism sheet requires line-only axis-parallel walks`, ErrUnsupported)
+			return thickenSection{}, fmt.Errorf(`%w: the sheet requires line-only axis-parallel walks`, ErrUnsupported)
 		}
 	}
-	loops, err := prismCornerLoopsBudget(budget, pp)
+	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
 	if err != nil {
-		return nil, err
+		return thickenSection{}, err
 	}
 	if len(loops) != 1 {
-		return nil, fmt.Errorf(`%w: the prism sheet requires one outer loop`, ErrUnsupported)
+		return thickenSection{}, fmt.Errorf(`%w: the sheet requires one outer loop`, ErrUnsupported)
 	}
 	loop := loops[0]
 	dirs, err := thickenAxisDirections(loop, budget)
 	if err != nil {
-		return nil, err
+		return thickenSection{}, err
 	}
-	var outer, inner ProfileRecord
-	switch side {
-	case ThickenPositive:
-		outer, err = thickenAxisOffset(budget, pp.profile, loop, dirs, -1, amount)
-		inner = pp.profile
-	case ThickenNegative:
-		inner, err = thickenAxisOffset(budget, pp.profile, loop, dirs, +1, amount)
-		outer = pp.profile
-	case ThickenCentered:
-		outer, err = thickenAxisOffset(budget, pp.profile, loop, dirs, -1, amount)
-		if err == nil {
-			inner, err = thickenAxisOffset(budget, pp.profile, loop, dirs, +1, amount)
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
+	sec := thickenSection{source: profile, outer: profile, inner: profile}
 	if side != ThickenNegative {
-		if err := thickenAxisIntervalClear(ctx, loop, dirs, -1, amount, budget); err != nil {
-			return nil, err
+		if sec.outer, err = thickenAxisOffset(budget, profile, loop, dirs, -1, amount); err != nil {
+			return thickenSection{}, err
 		}
 	}
 	if side != ThickenPositive {
-		if err := thickenAxisIntervalClear(ctx, loop, dirs, +1, amount, budget); err != nil {
-			return nil, err
+		if sec.inner, err = thickenAxisOffset(budget, profile, loop, dirs, +1, amount); err != nil {
+			return thickenSection{}, err
 		}
 	}
-	hole, err := reverseLoopRecordContext(ctx, inner.Outer)
-	if err != nil {
-		return nil, err
+	if side != ThickenNegative {
+		if err := thickenAxisIntervalClear(ctx, loop, dirs, -1, amount, budget, radial); err != nil {
+			return thickenSection{}, err
+		}
 	}
-	annulus := ProfileRecord{Outer: outer.Outer, Holes: []LoopRecord{hole}}
-	entries, err := buildSegEntriesBudget(budget, []LoopRecord{annulus.Outer, hole})
+	if side != ThickenPositive {
+		if err := thickenAxisIntervalClear(ctx, loop, dirs, +1, amount, budget, radial); err != nil {
+			return thickenSection{}, err
+		}
+	}
+	hole, err := reverseLoopRecordContext(ctx, sec.inner.Outer)
 	if err != nil {
-		return nil, err
+		return thickenSection{}, err
+	}
+	entries, err := buildSegEntriesBudget(budget, []LoopRecord{sec.outer.Outer, hole})
+	if err != nil {
+		return thickenSection{}, err
 	}
 	if err := thickenAuditRefusal(crossingAuditBudget(budget, entries)); err != nil {
-		return nil, err
+		return thickenSection{}, err
 	}
 	if err := thickenAuditRefusal(nestingAuditBudget(budget, entries, 2)); err != nil {
-		return nil, err
+		return thickenSection{}, err
 	}
-	if side == ThickenPositive {
-		return evalTubeContext(ctx, d, d.nextProducerID(), pp, outer, -1)
-	}
-	if side == ThickenNegative {
-		return evalTubeContext(ctx, d, d.nextProducerID(), pp, inner, +1)
-	}
-	pp.profile = annulus
-	pp.surfaceResult = false
-	pp.walks = nil
-	return evalPrismContext(ctx, d, d.nextProducerID(), pp, newFreeformWork())
+	return sec, nil
 }
 
 func thickenAxisDirections(loop cornerLoop, budget *workBudget) ([]thickenAxisDir, error) {
@@ -329,7 +313,7 @@ func thickenContactEvent(ctx context.Context, p ratPoly, limit *big.Rat) (bool, 
 // refusing it is conservative. If no such root lies in (0, amount], no actual
 // contact can begin there. The audited endpoint decides the final winding.
 func thickenAxisIntervalClear(ctx context.Context, loop cornerLoop, dirs []thickenAxisDir,
-	sense int, amount float64, budget *workBudget) error {
+	sense int, amount float64, budget *workBudget, radial *thickenRadial) error {
 	n := len(dirs)
 	joins := make([]struct {
 		arc              bool
@@ -370,13 +354,33 @@ func thickenAxisIntervalClear(ctx context.Context, loop cornerLoop, dirs []thick
 			})
 		}
 	}
-	limit := floatRat(amount)
+	return thickenPiecesIntervalClear(ctx, pieces, floatRat(amount), budget, radial)
+}
+
+// thickenPiecesIntervalClear is the interval scan itself, over one CLOSED ring
+// of moving pieces in loop order: consecutive pieces are the joins the
+// construction prescribes and are excluded, and every other pair is isolated
+// exactly.
+func thickenPiecesIntervalClear(ctx context.Context, pieces []thickenMovingPiece,
+	limit *big.Rat, budget *workBudget, radial *thickenRadial) error {
 	boxes := make([]thickenExactBox, len(pieces))
 	for i, piece := range pieces {
 		if err := wallBudgetStep(budget); err != nil {
 			return err
 		}
 		boxes[i] = thickenPieceBox(piece, limit)
+	}
+	if radial != nil {
+		// Each box encloses its own piece over every τ in [0, amount], so the
+		// least radius the whole swept family reaches is the least any box
+		// corner reaches. The boxes at τ = 0 are the SOURCE walks, so one scan
+		// certifies the source section, the requested offset, and every
+		// intermediate offset between them.
+		for _, box := range boxes {
+			if err := radial.require(radial.leastOverBox(box)); err != nil {
+				return err
+			}
+		}
 	}
 	check := func(p ratPoly) error {
 		contact, err := thickenContactEvent(ctx, p, limit)

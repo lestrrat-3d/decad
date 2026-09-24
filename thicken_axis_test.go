@@ -44,3 +44,29 @@ func TestThickenPrismUnrepresentableOffset(t *testing.T) {
 	require.True(t, strings.Contains(err.Error(), "rounded"), err.Error())
 	require.Empty(t, doc.Bodies())
 }
+
+// A resolved axis whose anchor or direction carries a proven bound reaches
+// thickenRadialOf's second leg. No public axis constructor produces one
+// alongside an exactly axis-parallel direction, so the gate is exercised
+// where it lives.
+func TestThickenRadialRefusesBoundedAxis(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		ax   axisFrame
+		want string
+	}{
+		{"bounded anchor", axisFrame{dU: 0, dV: 1, aUBound: math.Ldexp(1, -40)},
+			"not stated exactly in the sketch plane"},
+		{"bounded direction", axisFrame{dU: 0, dV: 1, dVBound: math.Ldexp(1, -40)},
+			"not stated exactly in the sketch plane"},
+		{"off a plane axis", axisFrame{dU: 0.6, dV: 0.8},
+			"not parallel to a recorded plane axis"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := thickenRadialOf(tc.ax)
+			require.ErrorIs(t, err, ErrUnsupported)
+			require.True(t, strings.Contains(err.Error(), tc.want), err.Error())
+		})
+	}
+}
