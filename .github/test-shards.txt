@@ -1579,6 +1579,13 @@
 0	0.00	TestSurfaceSweepShellOpenAgreesWithFreeEdgeDerivation
 1	0.00	TestSurfaceSweepStaysASheetThroughPlacement
 2	0.00	TestSurfaceSweepTessellationRefused
+3	0.01	TestSurfaceTrimDegenerateWhenNothingSeparates
+1	0.01	TestSurfaceTrimBoundsChargesAnExtremeWonByACut
+0	0.01	TestSurfaceTrimKeepInsideKeepsTheCutStrips
+1	0.01	TestSurfaceTrimKeepOutsideSplitsIntoTwoRibbons
+2	0.01	TestSurfaceTrimRefusesAMixedFamilyPair
+3	0.01	TestSurfaceTrimRefusesASecondTrim
+0	0.01	TestSurfaceTrimS4IsExactFloatEquality
 0	0.00	TestThroughAllIgnoresASheetBody
 0	0.00	TestAuditSheetBoundaryStructuralViolations
 0	0.00	TestPatchReproducesThroughPlacement
