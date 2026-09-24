@@ -7,7 +7,7 @@ replace github.com/lestrrat-3d/decad => ..
 require (
 	github.com/lestrrat-3d/decad v0.0.0-00010101000000-000000000000
 	github.com/lestrrat-3d/r3 v0.0.0-20260904102550-456163073bdd
-	github.com/lestrrat-3d/sketch v0.0.0-20260905104222-34765bc10360
+	github.com/lestrrat-3d/sketch v0.0.0-20260924052631-80849197f03e
 	github.com/lestrrat-3d/solidlens v0.0.0-20260923143758-1c243e10a96e
 	github.com/lestrrat-3d/units v0.0.0-20260904073908-07332345ff86
 )
