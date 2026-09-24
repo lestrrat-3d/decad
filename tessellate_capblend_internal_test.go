@@ -219,6 +219,38 @@ func TestCapBlendBandPatchBoundCoversItsOwnChording(t *testing.T) {
 	}
 }
 
+func TestCapBlendHoleApexPatchBoundCoversConnectorSagitta(t *testing.T) {
+	t.Parallel()
+	chamfered, cbp := chamferedSectionBody(t, func(s *sketch.Sketch) {
+		outer := s.CreateRectangle(0, 0, 60, 40)
+		s.Fix(outer.A)
+		s.CreateRectangle(15, 10, 45, 30)
+	}, 1.5)
+	const tol = 0.05
+	lm, err := chordCapBlendLoop(t.Context(), newWorkBudget(t.Context()), cbp, 1, cbp.loops()[1],
+		tol, newFreeformWork())
+	require.NoError(t, err)
+	require.Equal(t, len(lm.capPts), lm.capArcStart[0]+lm.arcCount[0],
+		"corner 0's connector ends at the sample array boundary")
+	require.Positive(t, lm.arcSag[0])
+	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol)
+	require.NoError(t, err)
+
+	roles := facesByRole(chamfered)
+	apexCount := 0
+	for _, patch := range cbp.patches {
+		if !patch.geom.circular || patch.geom.sideRadius != 0 {
+			continue
+		}
+		apexCount++
+		bound, ok := mesh.sourceBound(roles[patch.role])
+		require.True(t, ok)
+		require.GreaterOrEqual(t, bound, lm.arcSag[0],
+			"each apex face's own bound covers its connector chord")
+	}
+	require.Equal(t, 4, apexCount)
+}
+
 // TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine pins the
 // locus-gap term: a built miter ruling is tagged Line3, and it IS the denoted
 // locus only where both neighbouring offsets move affinely in the setback. A
