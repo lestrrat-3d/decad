@@ -1,13 +1,219 @@
 package decad_test
 
 import (
+	"bytes"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func TestStitchCurvedRevolveSheetTessellates(t *testing.T) {
+	t.Parallel()
+	_, sheet := annularRevolveSheet(t, 10, 5, 15)
+	tol := units.Millimeters(0.1)
+	source, err := sheet.Tessellate(t.Context(), tol)
+	require.NoError(t, err)
+
+	stitched, err := decad.Stitch(t.Context(), sheet)
+	require.NoError(t, err)
+	mesh, err := stitched.Tessellate(t.Context(), tol)
+	require.NoError(t, err)
+	require.Equal(t, source.Vertices(), mesh.Vertices())
+	require.Len(t, mesh.SourceFaces(), len(mesh.Triangles()))
+	require.Equal(t, source.Bound(), mesh.Bound())
+	require.Greater(t, mesh.Bound().Base(), 0.0)
+	require.True(t, mesh.BoundaryVerified())
+	require.False(t, mesh.VolumeVerified())
+	require.Zero(t, directedEdgeCensus(t, mesh))
+	live := map[*decad.Face]struct{}{}
+	for _, f := range stitched.Faces() {
+		live[f] = struct{}{}
+	}
+	for _, f := range mesh.SourceFaces() {
+		require.Contains(t, live, f)
+	}
+	volume := anchoredMeshVolume(mesh)
+	require.Less(t, math.Abs(volume-2000*math.Pi), 0.03*2000*math.Pi)
+	coarse, err := stitched.Tessellate(t.Context(), units.Millimeters(0.4))
+	require.NoError(t, err)
+	coarseVolume := anchoredMeshVolume(coarse)
+	require.Less(t, math.Abs(volume-2000*math.Pi), math.Abs(coarseVolume-2000*math.Pi))
+	t.Logf("fine volume %.12g mm3; coarse volume %.12g mm3; analytic %.12g mm3", volume, coarseVolume, 2000*math.Pi)
+}
+
+func TestStitchOpenCurvedRevolveSheetKeepsFreeRims(t *testing.T) {
+	t.Parallel()
+	s, p := annularSketch(t)
+	doc := decad.New()
+	sheet, err := doc.Revolve(s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	stitched, err := decad.Stitch(t.Context(), sheet)
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySheet, stitched.Kind())
+	mesh, err := stitched.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.Equal(t, 2, meshFreeChainCount(t, mesh))
+	require.False(t, mesh.VolumeVerified())
+	free, err := decad.Edges(decad.Free()).SelectEdges(stitched)
+	require.NoError(t, err)
+	require.Len(t, free, 8)
+}
+
+func TestStitchCurvedMeshInheritsSourcePlacementBound(t *testing.T) {
+	t.Parallel()
+	_, sheet := annularRevolveSheet(t, 10, 5, 15)
+	motion, err := r3.Translation(r3.NewVec(1000, -500, 200))
+	require.NoError(t, err)
+	placedSource, err := sheet.Placed(t.Context(), motion)
+	require.NoError(t, err)
+	source, err := placedSource.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	stitched, err := decad.Stitch(t.Context(), placedSource)
+	require.NoError(t, err)
+	mesh, err := stitched.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.NoError(t, err)
+	require.Equal(t, source.Vertices(), mesh.Vertices())
+	require.Equal(t, source.Bound(), mesh.Bound())
+	require.Positive(t, mesh.Bound().Base())
+}
+
+func TestStitchCurvedRevolveSurfaceKindsTessellate(t *testing.T) {
+	t.Parallel()
+	frustumVolume, _, _ := frustumShellAnalytics(10, 5, 15, 8, 12)
+	torusVolume, _ := halfTorusAnalytics(10, 5)
+	cases := []struct {
+		name        string
+		build       func(*testing.T) *decad.Body
+		buildDirect func(*testing.T) *decad.Body
+		want        float64
+	}{
+		{"cone", func(t *testing.T) *decad.Body {
+			_, sheet := frustumSheet(t, 10, 5, 15, 8, 12)
+			return sheet
+		}, func(t *testing.T) *decad.Body {
+			s, p := trapezoidFrustumSketch(t, 10, 5, 15, 8, 12)
+			solid, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
+			require.NoError(t, err)
+			return solid
+		}, frustumVolume},
+		{"sphere", func(t *testing.T) *decad.Body {
+			_, sheet := sphereRevolveSheet(t, 0, 10)
+			return sheet
+		}, func(t *testing.T) *decad.Body {
+			s, p := semicircleSketchAt(t, 0, 10)
+			solid, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
+			require.NoError(t, err)
+			return solid
+		}, 4.0 / 3.0 * math.Pi * 125},
+		{"torus", func(t *testing.T) *decad.Body {
+			s, p := offAxisSemicircleSketch(t)
+			doc := decad.New()
+			sheet, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+			require.NoError(t, err)
+			return sheet
+		}, func(t *testing.T) *decad.Body {
+			s, p := offAxisSemicircleSketch(t)
+			solid, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
+			require.NoError(t, err)
+			return solid
+		}, torusVolume},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sheet := tc.build(t)
+			tol := units.Millimeters(0.1)
+			source, err := sheet.Tessellate(t.Context(), tol)
+			require.NoError(t, err)
+			stitched, err := decad.Stitch(t.Context(), sheet)
+			require.NoError(t, err)
+			mesh, err := stitched.Tessellate(t.Context(), tol)
+			require.NoError(t, err)
+			direct, err := tc.buildDirect(t).Tessellate(t.Context(), tol)
+			require.NoError(t, err)
+			require.True(t, direct.VolumeVerified())
+			require.Equal(t, source.Vertices(), mesh.Vertices())
+			require.Equal(t, direct.Vertices(), mesh.Vertices())
+			require.Equal(t, source.Bound(), mesh.Bound())
+			require.Zero(t, directedEdgeCensus(t, mesh))
+			require.Positive(t, meshTriangleArea(mesh))
+			require.InDelta(t, anchoredMeshVolume(direct), anchoredMeshVolume(mesh), 1e-9)
+			sourceKinds := map[decad.SurfaceKind]int{}
+			for _, f := range source.SourceFaces() {
+				sourceKinds[f.Surface().Kind()]++
+			}
+			stitchedKinds := map[decad.SurfaceKind]int{}
+			for _, f := range mesh.SourceFaces() {
+				stitchedKinds[f.Surface().Kind()]++
+			}
+			require.Equal(t, sourceKinds, stitchedKinds)
+			require.InDelta(t, anchoredMeshVolume(source), anchoredMeshVolume(mesh), 1e-9)
+			got := anchoredMeshVolume(mesh)
+			require.Less(t, math.Abs(got-tc.want), 0.05*tc.want)
+			t.Logf("mesh volume %.12g mm3; analytic %.12g mm3; bound %.12g mm", got, tc.want, mesh.Bound().Base())
+		})
+	}
+}
+
+func TestStitchCurvedRevolveMeshVerificationAndExport(t *testing.T) {
+	t.Parallel()
+	_, sheet := annularRevolveSheet(t, 10, 5, 15)
+	stitched, err := decad.Stitch(t.Context(), sheet)
+	require.NoError(t, err)
+	tol := units.Millimeters(0.1)
+	for _, tc := range []struct {
+		level decad.Verification
+		bound bool
+	}{
+		{decad.VerifyNone, false},
+		{decad.VerifyBoundary, true},
+		{decad.VerifyAll, true},
+	} {
+		mesh, err := stitched.Tessellate(t.Context(), tol, decad.WithVerification(tc.level))
+		require.NoError(t, err)
+		require.Equal(t, tc.bound, mesh.BoundaryVerified())
+		require.False(t, mesh.VolumeVerified())
+		require.Greater(t, mesh.Bound().Base(), 0.0)
+	}
+	var stl, obj bytes.Buffer
+	require.NoError(t, stitched.STL(&stl, decad.WithChordTolerance(tol)))
+	require.NoError(t, stitched.OBJ(&obj, decad.WithChordTolerance(tol)))
+	require.NotEmpty(t, stl.Bytes())
+	require.NotEmpty(t, obj.Bytes())
+}
+
+func TestStitchCurvedMeshRefusesUnsharedChording(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	s.CreateCircle(s.CreatePoint(0, 0), 10)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	doc := decad.New()
+	sheet, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	stitched, err := decad.Stitch(t.Context(), sheet)
+	require.NoError(t, err)
+	_, err = stitched.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "Cylinder")
+
+	_, source := annularRevolveSheet(t, 10, 5, 15)
+	curved, err := decad.Stitch(t.Context(), source)
+	require.NoError(t, err)
+	motion, err := r3.Translation(r3.NewVec(100, 0, 0))
+	require.NoError(t, err)
+	placed, err := curved.Placed(t.Context(), motion)
+	require.NoError(t, err)
+	_, err = placed.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "Cylinder")
+}
 
 // This file is docs/surface-design.md §14 Table D row 5's own test list
 // (§15 T58-T61, T63, T64): an all-planar stitched body's mesh, CLOSED or

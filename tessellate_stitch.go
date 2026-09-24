@@ -18,9 +18,9 @@ import (
 // for this payload).
 //
 // A curved or mixed stitched body carries no recorded triangle set
-// (stitchPayload.tris is nil) and refuses here with ErrUnsupported: this
-// evaluator has not wired a chording arm for it, and it stays staged past
-// this increment (docs/surface-design.md §14 Table D row 5). An OPEN
+// (stitchPayload.tris is nil). The T10 route below reuses one complete
+// revolve sheet's chording under the gate of surface §10.1. Other curved
+// sources refuse with ErrUnsupported. An OPEN
 // all-planar sheet runs docs/tessellation-design.md §1.2's manifold-with-
 // boundary audit (requireSheetMesh, requireSheetVertexLinks) in the
 // closed-mesh audit's place, exactly as a surface-result prism or revolve
@@ -52,6 +52,113 @@ func stitchLumpFaceGroups(b *Body) [][]*Face {
 		}
 	}
 	return groups
+}
+
+// tessellateStitchCurved reuses one complete revolve sheet's own chording.
+// The gate below proves Stitch introduced no coordinate motion, vertex merge,
+// or edge weld. Those are the conditions under which the source mesh's shared
+// samples and proof terms still describe the rebuilt boundary.
+func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chord float64, verify Verification) (*Mesh, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	refuse := func(reason string) (*Mesh, error) {
+		if len(sp.faces) == 0 || sp.faces[0] == nil {
+			return nil, fmt.Errorf(`%w: %s for a stitched body with no source face`, ErrUnsupported, reason)
+		}
+		return nil, fmt.Errorf(`%w: %s for a stitched body's %T face`, ErrUnsupported, reason, sp.faces[0].Surface())
+	}
+	if len(sp.faces) == 0 || len(sp.liveFaces) != len(sp.faces) || sp.plan == nil || sp.plan.table == nil {
+		return refuse("this evaluator has no complete source-to-live face pairing")
+	}
+	for _, f := range sp.faces {
+		if f == nil {
+			return refuse("this evaluator has no complete source-to-live face pairing")
+		}
+		switch f.Surface().(type) {
+		case Plane, Cylinder, Cone, Sphere, Torus:
+		default:
+			return nil, fmt.Errorf(`%w: this evaluator has no chording arm for a stitched body's %T face`, ErrUnsupported, f.Surface())
+		}
+	}
+	if sp.xform != r3.Identity() || sp.plan.groups != 0 ||
+		len(sp.plan.table.class) != len(sp.plan.table.verts) {
+		return refuse("this evaluator cannot reuse source chording after a stitch motion or weld")
+	}
+	sourceBody := sp.faces[0].body
+	if sourceBody == nil || sourceBody.Kind() != BodySheet {
+		return refuse("this evaluator has no complete revolve-sheet source")
+	}
+	rp, ok := sourceBody.payload.(revolvePayload)
+	if !ok {
+		return refuse("this evaluator has no chording arm for the source construction")
+	}
+	sourceFaces := sourceBody.Faces()
+	if len(sourceFaces) != len(sp.faces) {
+		return refuse("this evaluator has no complete revolve-sheet face set")
+	}
+	paired := make(map[*Face]*Face, len(sp.faces))
+	for i, f := range sp.faces {
+		if f == nil || f.body != sourceBody || sp.liveFaces[i] == nil {
+			return refuse("this evaluator has no complete revolve-sheet face set")
+		}
+		if _, exists := paired[f]; exists {
+			return refuse("this evaluator has a repeated revolve-sheet source face")
+		}
+		paired[f] = sp.liveFaces[i]
+	}
+	for _, f := range sourceFaces {
+		if _, ok := paired[f]; !ok {
+			return refuse("this evaluator has no complete revolve-sheet face set")
+		}
+	}
+
+	sourceMesh, err := tessellateRevolve(ctx, sourceBody, rp, chord, verify)
+	if err != nil {
+		return nil, err
+	}
+	mesh := &Mesh{
+		vertices:  append([]r3.Vec(nil), sourceMesh.vertices...),
+		triangles: append([][3]int(nil), sourceMesh.triangles...),
+		source:    make([]*Face, len(sourceMesh.source)),
+		areaSlack: sourceMesh.areaSlack,
+	}
+	for i, sourceFace := range sourceMesh.source {
+		liveFace, ok := paired[sourceFace]
+		if !ok {
+			return refuse("the revolve mesh names a face outside the stitched source set")
+		}
+		mesh.source[i] = liveFace
+		if sourceFace.reversed != liveFace.reversed {
+			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
+		}
+	}
+	for sourceFace, liveFace := range paired {
+		bound, ok := sourceMesh.sourceBound(sourceFace)
+		if !ok || isNonFinite(bound) {
+			return refuse("the revolve mesh has no finite source-face bound")
+		}
+		mesh.setFaceBound(liveFace, bound)
+	}
+	if b.Kind() == BodySheet {
+		if err := requireSheetMesh(ctx, b, mesh); err != nil {
+			return nil, err
+		}
+		if err := requireSheetVertexLinks(ctx, mesh); err != nil {
+			return nil, err
+		}
+		return mesh, nil
+	}
+	if err := requireClosedMesh(mesh); err != nil {
+		return nil, fmt.Errorf(`%w: the chorded stitched boundary is not a closed mesh`, ErrUnsupported)
+	}
+	if err := requireVertexLinks(ctx, mesh); err != nil {
+		return nil, err
+	}
+	if len(mesh.vertices) == 0 || meshOrientationSign(mesh.vertices, mesh.triangles, mesh.vertices[0]) <= 0 {
+		return nil, fmt.Errorf(`%w: the chorded stitched boundary does not enclose a positive volume`, ErrUnsupported)
+	}
+	return mesh, nil
 }
 
 func tessellateStitch(ctx context.Context, b *Body, sp stitchPayload) (*Mesh, error) {

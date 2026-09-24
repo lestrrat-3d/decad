@@ -10,11 +10,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/surface-design.md §15's T60 and T70, over
+// This file is docs/surface-design.md §15's T60, T70 and T87, over
 // tessellate_stitch.go's own private proof terms: T60 needs areaSlack, which
 // the public API does not expose, and T70 needs a hand-built triangle set no
 // public seam can construct (checkStitchClosure already catches it at build
 // time).
+
+func TestStitchCurvedMeshNamesUnsupportedSurface(t *testing.T) {
+	t.Parallel()
+	plane := &Face{surface: Plane{}}
+	freeform := &Face{surface: NURBSSurface{}}
+	sp := stitchPayload{
+		faces:     []*Face{plane, freeform},
+		liveFaces: []*Face{{surface: Plane{}}, {surface: NURBSSurface{}}},
+		plan:      &stitchWeldPlan{table: newStitchVertexTable()},
+	}
+	_, err := tessellateStitchCurved(t.Context(), &Body{kind: BodySheet}, sp, 0.1, VerifyAll)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, "NURBSSurface")
+}
 
 // stitchInternalOffAxisPlateSketch is stitch_test.go's offAxisPlateSketch
 // (package decad_test), duplicated here because this file's package (decad)

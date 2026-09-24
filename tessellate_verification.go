@@ -128,13 +128,18 @@ func (m *Mesh) withholdProofs() {
 // payloadAuditsFacetContact reports whether this payload's own tessellation
 // runs the facet-contact audit that proves its facet set embedded
 // (docs/tessellation-design.md §9). It names the same payload classes
-// revolveContactAudit is reached from, and a payload class that gains such an
+// revolveContactAudit is reached from, including a curved stitched body
+// backed by one revolve sheet. A payload class that gains such an
 // audit MUST be added here in the same change — a class missing from this list
 // publishes BoundaryVerified() true at every level, which is the whole of what
 // it claims today and would be an over-claim once it had an audit to decline.
 func payloadAuditsFacetContact(p featurePayload) bool {
 	_, ok := p.(revolvePayload)
-	return ok
+	if ok {
+		return true
+	}
+	sp, ok := p.(stitchPayload)
+	return ok && sp.tris == nil
 }
 
 // foldVerification reads the level a call's options name, starting from the

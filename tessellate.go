@@ -61,7 +61,8 @@ type Mesh struct {
 	// boundaryOK is docs/tessellation-design.md §1's Embedding row: every
 	// boundary audit this body's payload supports ran and passed, the
 	// facet-contact audit included. It is false exactly when VerifyNone was
-	// asked of a payload that carries such an audit — the revolve path today
+	// asked of a payload that carries such an audit — revolve and its curved
+	// stitched reuse today
 	// (payloadAuditsFacetContact) — and true everywhere else, since every
 	// other boundary audit is linear and runs at every level.
 	// [Mesh.BoundaryVerified] publishes it; tessellateContext is the one
@@ -316,10 +317,10 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 
 // tessellateBodyContext dispatches one body to its payload's own tessellator.
 // verify reaches only the paths that would otherwise COMPUTE a proof the level
-// withholds — prism, cup and revolve. A restatement path (faceted, loft,
-// stitch) copies its proof terms off the payload at no cost and publishes them
-// unconditionally; tessellateContext withholds them afterwards, so those paths
-// carry no level of their own.
+// withholds — prism, cup, revolve and the revolve-backed curved stitch route.
+// A restatement path (faceted, loft, all-planar stitch) copies its proof terms
+// off the payload at no cost and publishes them unconditionally;
+// tessellateContext withholds them afterwards.
 func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify Verification) (*Mesh, error) {
 	if fp, ok := b.payload.(facetedPayload); ok {
 		return tessellateFaceted(ctx, b, fp, chord)
@@ -340,7 +341,10 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return tessellateCapBlend(ctx, b, cbp, chord)
 	}
 	if sp, ok := b.payload.(stitchPayload); ok {
-		// The stitch restatement takes no chord tolerance at all
+		if sp.tris == nil {
+			return tessellateStitchCurved(ctx, b, sp, chord, verify)
+		}
+		// The all-planar stitch restatement takes no chord tolerance at all
 		// (tessellate_stitch.go's own doc comment owns why), the same
 		// reasoning tessellateLoft's own arm above states for a loft.
 		return tessellateStitch(ctx, b, sp)
