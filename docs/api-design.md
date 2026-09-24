@@ -715,6 +715,19 @@ handed over, and it never solves for one. What decad reads of a
 `BoundaryEdge`, why a residual test cannot be an admission gate, and the
 whole-edge rules are specified in `docs/sketch-seam-design.md`.
 
+**An OPEN sketch curve reaches the same seam, through `RecordChain`.** A
+`sketch.Chain` is `Profile`'s open counterpart — an ordered run of the same
+`BoundaryEdge` values, carrying the same `TStart`/`TEnd`/`TExact` trim contract
+and the same `Sketch()`/`Revision()`/`IsStale()` handles — so every rule above
+governs it unchanged: the foreign, stale, snapshot-match, validity and `TExact`
+gates, and the four sentinels they return. Two things read differently, and
+`docs/surface-design.md` §13 owns both: the snapshot match runs against the
+whole fresh `s.Chains()` result rather than at one index, because that slice's
+ORDER consults entity names and `Sketch.Revision()` hashes none of them; and
+`Chain.Length` is compared for equality and never read as a measurement,
+because it is a sampling-convergent underestimate for every entity but a line,
+arc or circle.
+
 Whether the *sketch* is fully constrained is a separate, sketch-level question: a
 profile can close while the sketch still has degrees of freedom. It is not decad's
 to answer — an agent that wants that guarantee gates on `sketch.Sketch.Verify`
@@ -724,14 +737,18 @@ before extruding. decad never re-derives it.
 
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
 Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy, Loft, Sweep, Patch,
-Stitch, Unstitch**.
+Stitch, Unstitch**, plus the four sweeps of an OPEN sketch curve —
+**ExtrudeChain, RevolveChain, SweepChain, LoftChain** — which take a
+`*sketch.Chain` where their siblings take a `*sketch.Profile` and always build a
+sheet.
 `docs/loft-design.md` owns `Loft`'s signature, its two-profile correspondence
 rule, and its increment-1 scope. `docs/sweep-design.md` owns `Sweep`'s
 signature, spatial `Path`, frame transport, refusals, and staged reach.
 `docs/surface-design.md` owns the three sheet-body operations — `Patch`,
 `Stitch` and `Unstitch` — together with `WithSurfaceResult()`, the option that
 makes `Extrude`, `Revolve`, `Sweep` and `Loft` return their wall set as a
-sheet instead of closing it into a solid.
+sheet instead of closing it into a solid, and the four chain-fed forms that
+sweep an open curve (§13 there).
 
 ```go
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
@@ -957,6 +974,15 @@ func (b *Body) Patch(ctx context.Context, sel EdgeSelector) (*Body, error)
 
 func Stitch(ctx context.Context, bodies ...*Body) (*Body, error)
 func (b *Body) Unstitch(ctx context.Context) ([]*Body, error)
+
+// The chain-fed forms. Each sweeps an OPEN sketch curve and always returns a
+// BodySheet, so WithSurfaceResult() is not among their options: ChainExtrudeOption
+// and ChainRevolveOption are their own sealed tiers, which SurfaceResultOption
+// does not implement.
+func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, opts ...ChainExtrudeOption) (*Body, error)
+func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent, opts ...ChainRevolveOption) (*Body, error)
+func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.Chain, path *Path, opts ...SweepOption) (*Body, error)
+func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...LoftOption) (*Body, error)
 ```
 
 `WithSurfaceResult()` omits the faces that exist only to close the solid and
@@ -970,6 +996,14 @@ it joins two free edges only where coincidence is proven, never within a
 tolerance — Fusion's tolerant stitch is the `isTolerant` topology §2.1 rejects.
 An edge it cannot join stays free, which is a result rather than an error, so
 the caller reads `Edges(Free())` to see what did not close.
+
+**A chain-fed form takes the sketch beside the chain, on §7's terms, and
+consumes nothing.** `ExtrudeChain` and `RevolveChain` build; `SweepChain` and
+`LoftChain` are `ErrUnsupported` until the increment that states their pairing
+rule (`docs/surface-design.md` §14). All four run §7's four gates over
+`RecordChain` and return the same four sentinels a profile earns, and there is
+no chain-fed `Document.Patch`: an open walk encloses no region to fill, and a
+walk whose ends met is a `sketch.Profile`.
 
 Placement is a body operation on the same terms — it retires the receiver and
 registers the placed body:
@@ -1582,6 +1616,11 @@ the resulting bodies, measurements, and verification reports directly.
   selector kind, the query's stable rendering, the body, the expected/actual
   cardinality and the per-clause residual counts, wrapping `ErrNoMatch` or
   `ErrCardinality` (§9).
+- **The four `*Profile` sentinels cover an open chain too.** Each names a CAUSE
+  — a foreign source, a stale snapshot, a failed authentication, a range this
+  seam cannot record exactly — and the caller's repair is the same whether a
+  `sketch.Profile` or a `sketch.Chain` carried it, so there is no parallel
+  `*Chain` set to branch on (§7; `docs/surface-design.md` §7, §13.3).
 - **`ErrUnitKind` covers exactly the wrong-`Kind` values.** A `units.Value` whose
   `Kind` is not the one the parameter takes: an angle where a length is wanted, and
   a `WithTolerance` value that is not `Dimensionless`

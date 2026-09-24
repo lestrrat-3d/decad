@@ -45,7 +45,7 @@ to the byte budget.
 | `docs/sweep-design.md` | The spatial `Path` and `Sweep` contract: rotation-minimizing transport, refusals, topology, measurements, 3D-sketch boundary, and staged downstream reach. |
 | `docs/prism-boolean-design.md` | The analytic reduction for `Union`/`Cut`/`Intersect` over co-directional coplanar prisms: the reject-only entry gate, the private `sketch` scene, and section/axial displacement bounds. |
 | `docs/tessellation-reach-design.md` | The tessellation reach plan: the loft restatement, free-form prism chording, revolve T2–T4 and the cap-loop chamfer tessellator, each with its cells, proof terms, refusals and tests. |
-| `docs/surface-design.md` | The sheet body and the operations over one: `BodyKind`, `WithSurfaceResult`, `Patch`, `Stitch`/`Unstitch`, the proven-coincidence join rule, and what every reading, `Verify` question and export says about a body that encloses no region. |
+| `docs/surface-design.md` | The sheet body and the operations over one: `BodyKind`, `WithSurfaceResult`, `Patch`, `Stitch`/`Unstitch`, `ExtrudeChain`/`RevolveChain`, the proven-coincidence join rule, and what every reading, `Verify` question and export says about a body that encloses no region. |
 
 ### Seam and records
 
@@ -55,8 +55,8 @@ to the byte budget.
 | `errors.go` | The core §12 sentinel error vocabulary, plus the H2 typed `BooleanError` whose public `Code` classifies failures wrapping `ErrBooleanFailed` or `ErrUnsupported`. See `docs/api-design.md` §12, §8. |
 | `measurement.go` | The bounded-result shapes: `Exactness`, `Measurement`, `VecMeasurement`, `Box`. See `docs/api-design.md` §5.3, §6. |
 | `identity.go` | Private document-local producer identities, the boolean evaluator's operation kind, and the shared zero-vector predicate. |
-| `record.go` | The profile-analysis records: `PlaneRecord`, `ProfileRecord`, `LoopRecord`, and the ten sealed `CurveSegment` variants. NURBS validation rules are documented on their own functions. See `docs/sketch-seam-design.md` §2. |
-| `seam.go` | The seam conversion `RecordProfile(s, p)`: admits, authenticates and records a profile, then applies the `TExact` admission gate and the reject-only range and loop-closure falsifiers. See `docs/sketch-seam-design.md` §1, §7. |
+| `record.go` | The profile-analysis records: `PlaneRecord`, `ProfileRecord`, `ChainRecord`, `LoopRecord`, and the ten sealed `CurveSegment` variants. NURBS validation rules are documented on their own functions. See `docs/sketch-seam-design.md` §2. |
+| `seam.go` | The seam conversions `RecordProfile`/`RecordChain`: admit, authenticate and record a profile or an open chain, then apply the `TExact` admission gate and the reject-only range and loop-closure falsifiers. See `docs/sketch-seam-design.md` §1, §7. |
 | `path.go` | The immutable spatial `Path` and its sealed `LineTo` / `ArcThrough` segment vocabulary. See `docs/sweep-design.md` §2–§3. |
 | `extent.go` | The extent vocabulary: the sealed linear `Extent`/`SideExtent` and angular `AngularExtent`/`SideAngular` tiers, deliberately disjoint. `ToFace`/`ToFaceAngular` name live bodies directly. See `docs/api-design.md` §8.1. |
 | `selector.go` | The selector vocabulary: `EdgeQuery`/`FaceQuery`, predicate conjunction plus `Exactly`/`AtLeast` cardinality. Resolution is a filter pipeline over live topology; a failing resolution returns a `SelectionError`. See `docs/api-design.md` §9. |

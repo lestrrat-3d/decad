@@ -498,6 +498,46 @@ path: it returns structural values only after the source profile and every
 recorded fragment pass the checks above. The evaluator then reads those values,
 not the original sketch.
 
+### 2.2 The open chain's record
+
+`sketch.Chain` is `Profile`'s open counterpart: an ordered run of the same
+`BoundaryEdge` values, over the same entities, carrying the same
+`TStart`/`TEnd`/`TExact` trim contract. So it records through the same ten
+`CurveSegment` variants, under the same gates, into one further structural
+value:
+
+```go
+// ChainRecord is ProfileRecord's OPEN counterpart: one directed walk whose
+// first segment's walk start and last segment's walk end are FREE. It carries
+// no Holes and no walk-level winding, because an open walk bounds no region
+// and so has no inside.
+type ChainRecord struct {
+    Segments []CurveSegment
+}
+
+func RecordChain(s *sketch.Sketch, ch *sketch.Chain) (ChainRecord, PlaneRecord, error)
+```
+
+Two things separate it from `ProfileRecord`, and nothing else does.
+
+**It is not a `LoopRecord`.** A `LoopRecord` states that its last segment's
+walk closes onto its first, and every consumer reads one as a closed region's
+boundary. An open walk states the opposite at its two ends, so a
+`ChainRecord` is its own type rather than a `LoopRecord` carrying a flag.
+
+**Its closure check runs at INTERIOR junctions only.** §1's source-aware
+junction rule is unchanged — bit-equal for two same-source coordinates, the
+range falsifier's relative threshold for a record endpoint against a certified
+cut node — but a chain states no junction at its two free ends, exactly as a
+whole closed curve states none. §2.1's admission list holds otherwise verbatim,
+`Profile.Valid` reading as `Chain.Valid`.
+
+`Chain.Length` is compared against the fresh chain's own value in the snapshot
+match and is never recorded or published: it is exact only for a `*Line`,
+`*Arc` or `*Circle` fragment and a sampling-convergent underestimate otherwise,
+with no bound stated for the gap. `docs/surface-design.md` §13 owns what decad
+builds from a `ChainRecord` and the whole of that reasoning.
+
 ## 3. `ErrUnrecordableProfile`
 
 `ErrUnrecordableProfile` is the seam's exactness rejection of an
@@ -525,7 +565,9 @@ three cases:
   the region on its own proximity threshold; the record decad would write bounds
   no region, so it writes none. Unlike the two above, this one is not a `sketch`
   bug to report: it is the caller's own entities missing each other, and closing
-  the gap in the sketch is what makes the profile recordable.
+  the gap in the sketch is what makes the profile recordable. A `ChainRecord`'s
+  INTERIOR junctions are read by the same rule; its two free ends state no
+  junction to read (§2.2).
 
 A `Step` that recorded a loop its own segments do not bound, the whole curve
 where the caller drew a piece of it, or
