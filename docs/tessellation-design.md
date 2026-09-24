@@ -295,7 +295,7 @@ analytic walk's do (`docs/tessellation-reach-design.md` §5).
 | `capBlendPayload` | `docs/tessellation-reach-design.md` §7 owns this row: one count per wall walk shared by the trimmed side wall, the band patch and the cap contour | that document's per-patch term table | max per-face source bound | that document's per-patch composition | none until its occupied-volume proof lands; `symDiffOK == false` |
 | `stitchPayload` | the triangle set `Stitch`'s own build assembled and audited (`docs/surface-design.md` §6.4), all-planar only (`stitchAllTetrahedronEligible`), CLOSED or OPEN; attributed by the payload's own recorded per-triangle live face, never by role (§4) | the largest `Vertex.Bound()` over the vertices that face's own triangles touch; zero only when every one of them is | max per-face source bound | `perturbedTriangleAreaAllow` per triangle at that triangle's own largest vertex bound, summed through `absSumUpper`; zero wherever every vertex bound is zero | zero, `symDiffOK == true`, for a CLOSED body (`b.Kind() == BodySolid`) whose every vertex carries a proven bound of exactly zero (`stitchZeroVertexBound`, the same gate `docs/clearance-design.md` §2's stitch arm applies): every held vertex is then the true boundary vertex, every triangulated polygon is that face's own exact `Line3` boundary, and ear clipping tiles it exactly, so the held triangle set occupies exactly the denoted volume; `symDiffOK == false` for every other case (open, curved/mixed, placed, or certificate-welded) — the tetrahedron sum there proves only SIGNED volume, never the occupied-volume symmetric-difference bound this row requires before a boolean may consume it |
 | `sweepPayload` | staged until `docs/sweep-design.md` Table D row D2 lands | — | — | — | — |
-| `stitchPayload` (revolve-backed) | T10 copies a complete source revolve-sheet mesh, mapping each triangle to its paired live face; a new weld or vertex merge refuses | source mesh's per-face bound, including meridian/angular chording and construction/placement rounding (§8); zero extra stitch displacement | max mapped per-face bound | source mesh's non-cancelling area allowance at `VerifyAll` | no occupied-volume proof; `symDiffOK == false` for closed and open results |
+| `stitchPayload` (revolve-backed) | T10 copies a complete source revolve-sheet mesh; T11 also accepts §10.2's pointer-proven sibling weld, both mapping triangles to live faces | source mesh's per-face bound, including meridian/angular chording and construction/placement rounding (§8); zero extra stitch displacement | max mapped per-face bound | source mesh's non-cancelling area allowance at `VerifyAll` | no occupied-volume proof; `symDiffOK == false` for closed and open results |
 
 ### `loftPayload` exact restatement
 
@@ -1168,6 +1168,7 @@ sample to make an analytic mesh close. Refine or refuse.
 
 | **T9** | `Verification` and `WithVerification`: the three levels of §1, the cache key that carries the level (§1.1), the facet-contact audit and the two volume-class proofs gated on it, `BoundaryVerified`/`VolumeVerified`, and `STL`/`OBJ` defaulting to `VerifyNone` | a per-audit selection finer than the three levels |
 | **T10** | One complete revolve-sheet source copied through a curved or mixed `Stitch`: reuse the source mesher's shared stations, map source faces to live stitched faces, carry its face and area bounds, and run the closed or sheet audits; `BoundaryVerified` follows the source contact audit | new welds or vertex merges, other source payloads, non-identity stitch placement, and a chorded stitch occupied-volume proof |
+| **T11** | An OPEN stitched result made from all `Unstitch` siblings of one revolve sheet: restore original edge and vertex identity through copied loop positions, admit only welds that rejoin the identical original edge, and reuse T10's source mesh and proofs | independently generated seams and placed siblings |
 
 Each increment ships its computed geometry tests with it. §§8–10 prove the
 revolve mesh itself, which is what T2/T3 export; T4's occupied-volume proof is
@@ -1183,6 +1184,11 @@ The source revolve sheet's own mesh and the stitched mesh must share every
 vertex coordinate and triangle index at the same tolerance; only winding
 and live-face attribution may change. A curved seam made by a new weld
 must refuse until both faces can reuse one chord station sequence.
+
+For T11, `docs/surface-design.md` §15 T190–T191 checks a real welded
+curved seam and the placed-sibling refusal. The original source mesh is
+the producer and the re-stitched sheet mesh is its consumer; their shared
+edge must reuse the same vertex indices, not merely equal coordinates.
 
 - Assert directed-edge closure, positive triangle area, outward winding, and
   `len(SourceFaces) == len(Triangles)` on every payload class.
