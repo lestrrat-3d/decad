@@ -1735,3 +1735,16 @@
 1	0.00	TestClearanceAxisAlignedPairOf300IsExact
 2	0.04	TestClearanceFarOriginTiltedPlanePairContainsTruth
 3	0.02	TestClearanceInchExtrudeAxialGapContainsTruth
+0	0.00	TestAuthenticateChainMatchesByContentAfterRename
+1	0.00	TestChainFedRefusals
+2	0.00	TestChainFedRefusalsStillRunTheSeamGates
+3	0.00	TestExtrudeChainDiagonalLineAreaBoundEnclosesAnalyticValue
+0	0.00	TestExtrudeChainOneLineRibbon
+1	0.00	TestExtrudeChainRefusesMultiSegmentChain
+2	0.00	TestExtrudeChainRejectsInvalidChain
+3	0.00	TestExtrudeChainRejectsStaleChain
+0	0.00	TestExtrudeChainRejectsUncertifiedFragment
+1	0.00	TestRecordChainGates
+2	0.00	TestRecordChainRejectsChangedSnapshot
+3	0.00	TestRecordChainRejectsForeignBoundaryEntity
+0	0.00	TestRecordChainRejectsTypedNilBoundaryEntity

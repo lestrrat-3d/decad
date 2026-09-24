@@ -200,3 +200,34 @@ func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profi
 	d.commit(body)
 	return body, nil
 }
+
+// LoftChain lofts between the open chains c0 (of s0) and c1 (of s1). Every
+// call is ErrUnsupported (Table R row R23, docs/surface-design.md §13.5,
+// §14): the signature lands so a caller's intent has somewhere to go and a
+// refusal to read, ahead of the increment that states LoftChain's own
+// pairing rule against docs/loft-design.md's Table P. Both chains still run
+// the same seam gates ExtrudeChain does (RecordChain), in argument order,
+// before that refusal, so a foreign, stale, invalid or unrecordable chain is
+// reported as such rather than masked by the staged ErrUnsupported. The
+// document and every operand are unchanged.
+func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...LoftOption) (*Body, error) {
+	if d == nil {
+		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
+	}
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a loft`, ErrDegenerate)
+	}
+	if s0 == nil || c0 == nil || s1 == nil || c1 == nil {
+		return nil, fmt.Errorf(`%w: LoftChain requires two non-nil sketches and two non-nil chains`, ErrDegenerate)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if _, _, err := recordChain(s0, c0); err != nil {
+		return nil, err
+	}
+	if _, _, err := recordChain(s1, c1); err != nil {
+		return nil, err
+	}
+	return nil, fmt.Errorf(`%w: LoftChain has no pairing rule yet (docs/surface-design.md §13.5, §14)`, ErrUnsupported)
+}
