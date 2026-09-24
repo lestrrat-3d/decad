@@ -654,7 +654,8 @@ func TestStitchCurvedSolidMeshPreservesAnalyticMass(t *testing.T) {
 
 			mesh, err := solid.Tessellate(t.Context(), units.Millimeters(0.1))
 			require.NoError(t, err)
-			require.Positive(t, mesh.Bound().Base())
+			require.Positivef(t, mesh.Bound().Base(),
+				"%s mesh bound must be positive: it must inherit a nonzero source-face chording bound", name)
 			require.True(t, mesh.BoundaryVerified())
 			require.False(t, mesh.VolumeVerified())
 			require.NoError(t, solid.STL(io.Discard))
