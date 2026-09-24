@@ -30,14 +30,22 @@ const (
 	// The swept rail reuses sweepShot's own proven path shape (see
 	// heroRailModels) exactly, moved by translation alone — a rotation- and
 	// scale-free shift keeps every tangent match Sweep's P5 join gate found
-	// exact. Only the rendered profile is drawn narrower than sweepShot's own
-	// 12mm square (railProfileHalf below): the profile's size plays no part
-	// in Sweep's own path validation, and a narrower rail is what clears both
-	// the letters' top (Z=60) and the plate's own top edge (Z=84) alongside
-	// the path's own 20mm rise. The rail sits in the gap above "C" and "A" as
-	// a corner accent rather than spanning the full width.
-	railShiftX      = 75.0
-	railShiftZ      = 52.0
+	// exact. The rendered profile is drawn narrower than sweepShot's own
+	// 12mm square, in BOTH dimensions (railProfileHalf below): the profile's
+	// size plays no part in Sweep's own path validation, and a slender rail
+	// is what fits the whole shape — the arc's own 20mm rise plus the second
+	// arc's 20mm reach — inside the plate. railShiftZ keeps even the lowest
+	// point of the first arc above the letters' own top (Z=60), so the rail
+	// clears every letter by height alone rather than by hunting for a gap
+	// between letters no gap is wide enough for. railShiftX centers the rail
+	// over the wordmark. The second arc bends toward the camera (negative Y)
+	// rather than away from it: bending away crosses into the shelled
+	// plate's own solid back wall within its 20mm reach, and the wall
+	// occludes whatever is behind it, cutting the rail's own silhouette off
+	// mid-curve. Nothing solid stands in front of the plate's open face, so
+	// the same 20mm reach toward the camera clears cleanly.
+	railShiftX      = 0.0
+	railShiftZ      = 62.0
 	railProfileHalf = 0.8
 
 	// studRadius is the revolved dome accent's radius.
@@ -47,15 +55,31 @@ const (
 type letter struct {
 	color  solidlens.Color
 	shapes [][][]point
+	// chamferCap is true for a letter whose shapes should get a cap-loop
+	// chamfer instead of a lateral fillet. It is a per-LETTER choice, not a
+	// per-shape one: A's three strokes (aLeft, aRight, aBar) are each a
+	// single, hole-free loop, but the crossbar's own rectangle overlaps each
+	// leg's trapezoid — both occupy the same X range at crossbar height AND
+	// the same Y depth, by the original (pre-hero-rework) design of these
+	// three shapes. Two bodies that already coincide there is not itself a
+	// defect; it only became visible once each stroke got its OWN
+	// independent cap-loop chamfer: the two bevelled cap faces are different
+	// sloped surfaces at that shared depth, so whichever one the renderer
+	// resolves as farther back shows a sliver of its slope past the nearer
+	// one's edge. A lateral fillet never touches the cap face's interior, so
+	// it never exposes this — the same reason D (a hole-bearing single
+	// shape) keeps a fillet instead of a chamfer.
+	chamferCap bool
 }
 
 // heroChordTolerance is the chord tolerance the hero shot tessellates at
 // unless -chord overrides it.
 const heroChordTolerance = 0.02
 
-// railColor is the swept rail's accent color, distinct from every letter and
-// from the two remaining boss accents.
-var railColor = solidlens.RGB(0.74, 0.78, 0.86)
+// railColor is the swept rail's accent color: the same gold scene.go's
+// feature thumbnails use, so the rail reads as part of this gallery's own
+// palette instead of an off-palette grey accessory.
+var railColor = gold
 
 // heroRender is the README's masthead: the wordmark itself is decad geometry.
 func heroRender() imageRender {
@@ -69,14 +93,14 @@ func heroRender() imageRender {
 
 // heroScene builds the masthead from six of decad's features rather than
 // extrude and fillet alone: the backing plate is a shelled shadow-box whose
-// rim carries a real wall thickness; every hole-free letter (E, C and A's
-// three strokes) is extruded and has its whole front face bevelled by a
-// cap-loop chamfer, while D's outer+inner loop pair is extruded and has its
-// outside corners filleted instead (see extrudeLetterLoops for why the two
-// treatments differ); a swept rail — the same composite path sweepShot
-// proves, bending through more than one plane — sits in the gap above the
-// wordmark; and one accent is a revolved dome rather than a plain extruded
-// cylinder.
+// rim carries a real wall thickness; "E" and "C" are extruded and have their
+// whole front face bevelled by a cap-loop chamfer, while "D" (an outer+inner
+// loop pair) and "A" (three separately overlapping strokes) are extruded and
+// have their outside corners filleted instead (see letter.chamferCap and
+// extrudeLetterLoops for why each keeps the fillet); a swept rail — the same
+// composite path sweepShot proves, bending through more than one plane —
+// sits in the gap above the wordmark; and one accent is a revolved dome
+// rather than a plain extruded cylinder.
 func heroScene(ctx context.Context, chord units.Value) (solidlens.Scene, error) {
 	base, err := heroPlate(ctx, chord)
 	if err != nil {
@@ -86,7 +110,7 @@ func heroScene(ctx context.Context, chord units.Value) (solidlens.Scene, error) 
 
 	for li, item := range decadLetters() {
 		for si, shape := range item.shapes {
-			mesh, err := extrudeLetterLoops(ctx, shape, decad.Distance{D: units.Millimeters(14), Dir: decad.Along}, chord)
+			mesh, err := extrudeLetterLoops(ctx, shape, decad.Distance{D: units.Millimeters(14), Dir: decad.Along}, chord, item.chamferCap)
 			if err != nil {
 				return solidlens.Scene{}, fmt.Errorf("build letter %d shape %d: %w", li, si, err)
 			}
@@ -233,11 +257,11 @@ func decadLetters() []letter {
 	aBar := []point{{stroke, -stroke / 2}, {width - stroke, -stroke / 2}, {width - stroke, stroke / 2}, {stroke, stroke / 2}}
 
 	return []letter{
-		{color: solidlens.RGB(0.05, 0.85, 0.96), shapes: [][][]point{place(dOuter, dInner)}},
-		{color: solidlens.RGB(0.18, 0.47, 1), shapes: [][][]point{place(e)}},
-		{color: solidlens.RGB(0.58, 0.24, 1), shapes: [][][]point{place(c)}},
-		{color: solidlens.RGB(1, 0.25, 0.2), shapes: placeShapes([][]point{aLeft}, [][]point{aRight}, [][]point{aBar})},
-		{color: solidlens.RGB(1, 0.68, 0.08), shapes: [][][]point{place(dOuter, dInner)}},
+		{color: solidlens.RGB(0.05, 0.85, 0.96), shapes: [][][]point{place(dOuter, dInner)}, chamferCap: false},
+		{color: solidlens.RGB(0.18, 0.47, 1), shapes: [][][]point{place(e)}, chamferCap: true},
+		{color: solidlens.RGB(0.58, 0.24, 1), shapes: [][][]point{place(c)}, chamferCap: true},
+		{color: solidlens.RGB(1, 0.25, 0.2), shapes: placeShapes([][]point{aLeft}, [][]point{aRight}, [][]point{aBar}), chamferCap: false},
+		{color: solidlens.RGB(1, 0.68, 0.08), shapes: [][][]point{place(dOuter, dInner)}, chamferCap: false},
 	}
 }
 
@@ -262,17 +286,20 @@ func extrudeLoops(ctx context.Context, loops [][]point, extent decad.Extent, cho
 }
 
 // extrudeLetterLoops extrudes one letter shape, then either fillets its
-// outside vertical corners (a shape with an inner loop, i.e. D's outer+inner
-// pair) or bevels its whole front face with a cap-loop chamfer (every other
-// shape). The two treatments are mutually exclusive here, not by design
-// choice: chamfering D's cap loop panics decad's own cap-blend tessellator
-// (it indexes past a band slice, decad-side), so D keeps the plain filleted
-// cap instead of triggering it. Fillet-then-chamfer on the hole-free shapes
-// was tried too — it does not panic, but every setback tried (0.3mm through
-// 1.5mm) hit "the offset changes the section's topology; a trimmed-offset
-// kernel is not available" on at least one letter, so those shapes go
-// straight from extrude to chamfer with no fillet.
-func extrudeLetterLoops(ctx context.Context, loops [][]point, extent decad.Extent, chord units.Value) (*decad.Mesh, error) {
+// outside vertical corners (chamferCap false) or bevels its whole front face
+// with a cap-loop chamfer (chamferCap true) — the caller decides per LETTER,
+// not per shape; see letter.chamferCap for why D and A both keep the fillet.
+// Chamfering D's own cap loop (an outer+inner loop pair) panics decad's own
+// cap-blend tessellator regardless (it indexes past a band slice,
+// decad-side), so D's shape could not take a chamfer even loop-by-loop.
+// Fillet-then-chamfer on a hole-free shape was tried too — it does not
+// panic, but every setback tried (0.3mm through 1.5mm) hit "the offset
+// changes the section's topology; a trimmed-offset kernel is not available"
+// on at least one letter, so a chamfered shape goes straight from extrude to
+// chamfer with no fillet.
+func extrudeLetterLoops(
+	ctx context.Context, loops [][]point, extent decad.Extent, chord units.Value, chamferCap bool,
+) (*decad.Mesh, error) {
 	w := sketch.NewWorld()
 	// XZ makes the wordmark face the camera; extrusion then gives each stroke
 	// depth along Y without relying on a steep viewing angle.
@@ -289,7 +316,7 @@ func extrudeLetterLoops(ctx context.Context, loops [][]point, extent decad.Exten
 	if err != nil {
 		return nil, err
 	}
-	if len(loops) > 1 {
+	if !chamferCap {
 		// Round the exposed outside corners while keeping the counters and
 		// interior cut-ins crisp for a legible wordmark.
 		filleted, err := extruded.Fillet(ctx, decad.Edges(
@@ -373,7 +400,7 @@ func heroRailModels(ctx context.Context, chord units.Value) ([]solidlens.Model, 
 	if err != nil {
 		return nil, err
 	}
-	s, profile, err := sketchLoops(ctx, w, firstPlane, rectangle(x(-46), -railProfileHalf, x(-34), railProfileHalf))
+	s, profile, err := sketchLoops(ctx, w, firstPlane, rectangle(x(-40)-railProfileHalf, -railProfileHalf, x(-40)+railProfileHalf, railProfileHalf))
 	if err != nil {
 		return nil, err
 	}
@@ -385,8 +412,8 @@ func heroRailModels(ctx context.Context, chord units.Value) ([]solidlens.Model, 
 		},
 		decad.LineTo{End: r3.NewVec(x(20), 0, z(20))},
 		decad.ArcThrough{
-			Through: r3.NewVec(x(36), 8, z(20)),
-			End:     r3.NewVec(x(40), 20, z(20)),
+			Through: r3.NewVec(x(36), -8, z(20)),
+			End:     r3.NewVec(x(40), -20, z(20)),
 		},
 	)
 	if err != nil {
@@ -415,7 +442,7 @@ func heroRailModels(ctx context.Context, chord units.Value) ([]solidlens.Model, 
 	if err != nil {
 		return nil, err
 	}
-	middleSketch, middleProfile, err := sketchLoops(ctx, w, middlePlane, rectangle(-46, -railProfileHalf, -34, railProfileHalf))
+	middleSketch, middleProfile, err := sketchLoops(ctx, w, middlePlane, rectangle(-40-railProfileHalf, -railProfileHalf, -40+railProfileHalf, railProfileHalf))
 	if err != nil {
 		return nil, err
 	}
@@ -437,13 +464,13 @@ func heroRailModels(ctx context.Context, chord units.Value) ([]solidlens.Model, 
 	if err != nil {
 		return nil, err
 	}
-	lastSketch, lastProfile, err := sketchLoops(ctx, w, lastPlane, rectangle(-46, -railProfileHalf, -34, railProfileHalf))
+	lastSketch, lastProfile, err := sketchLoops(ctx, w, lastPlane, rectangle(-40-railProfileHalf, -railProfileHalf, -40+railProfileHalf, railProfileHalf))
 	if err != nil {
 		return nil, err
 	}
 	last, err := decad.New().Revolve(lastSketch, lastProfile, //nolint:contextcheck // Sweep and sketch solve above are cancellable.
-		decad.SketchLine{Start: decad.Point2{U: -39, V: 20}, End: decad.Point2{U: -41, V: 20}},
-		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+		decad.SketchLine{Start: decad.Point2{U: -39, V: -20}, End: decad.Point2{U: -41, V: -20}},
+		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Against})
 	if err != nil {
 		return nil, fmt.Errorf("build the rail's second span: %w", err)
 	}
