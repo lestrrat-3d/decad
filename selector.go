@@ -256,11 +256,12 @@ func (q *FaceQuery) selector() {}
 
 // EdgePredicate is one clause of an EdgeQuery. Predicates come
 // only from the package constructors — Convex, Concave, ParallelTo,
-// LongerThan, CreatedBy, Circular, Free — and compose by conjunction; the zero
+// EndpointAt, LongerThan, CreatedBy, Circular, Free — and compose by conjunction; the zero
 // value names no predicate and is rejected at resolve.
 type EdgePredicate struct {
 	kind   string
 	dir    r3.Vec
+	point  r3.Vec
 	length units.Value
 	ref    FeatureRef
 }
@@ -280,6 +281,7 @@ const (
 	predKindConvex        = "convex"
 	predKindConcave       = "concave"
 	predKindParallelTo    = "parallel_to"
+	predKindEndpointAt    = "endpoint_at"
 	predKindLongerThan    = "longer_than"
 	predKindCreatedBy     = "created_by"
 	predKindCircular      = "circular"
@@ -308,6 +310,12 @@ func Concave() EdgePredicate { return EdgePredicate{kind: predKindConcave} }
 // degenerate (zero or non-finite) direction is rejected at resolve, not here.
 func ParallelTo(v r3.Vec) EdgePredicate {
 	return EdgePredicate{kind: predKindParallelTo, dir: v}
+}
+
+// EndpointAt matches an edge whose stored start or end position equals p
+// component-wise. It uses no tolerance; a non-finite p fails at resolve.
+func EndpointAt(p r3.Vec) EdgePredicate {
+	return EdgePredicate{kind: predKindEndpointAt, point: p}
 }
 
 // LongerThan matches edges strictly longer than l. The quantity is recorded
@@ -474,6 +482,13 @@ func (p EdgePredicate) validate() error {
 		return validatePredicateRef(p.ref, "created-by")
 	case predKindParallelTo:
 		return validateDirection(p.dir, "parallel-to")
+	case predKindEndpointAt:
+		for _, c := range []float64{p.point.X, p.point.Y, p.point.Z} {
+			if math.IsNaN(c) || math.IsInf(c, 0) {
+				return fmt.Errorf(`%w: an endpoint-at position component is not finite`, ErrNotFinite)
+			}
+		}
+		return nil
 	case predKindLongerThan:
 		_, err := magnitudeIn(p.length, units.Length, units.Millimeter, "the longer-than length")
 		return err
@@ -532,6 +547,8 @@ func faceMatchesAll(f *Face, preds []FacePredicate) bool {
 //   - parallel_to compares a LINEAR edge's direction (start vertex toward
 //     end vertex) against the recorded vector, either sense — a curved edge
 //     has no single direction, so it does not match;
+//   - endpoint_at compares either stored endpoint with the stated position
+//     component-wise, without a tolerance;
 //   - longer_than compares Edge.Length() strictly against the recorded
 //     quantity;
 //   - created_by matches provenance through the edge's adjacent faces: an
@@ -554,6 +571,8 @@ func (p EdgePredicate) matches(e *Edge) bool {
 			return false
 		}
 		return parallelDirs(e.end.position.Sub(e.start.position), p.dir)
+	case predKindEndpointAt:
+		return e.start.position == p.point || e.end.position == p.point
 	case predKindLongerThan:
 		// validate ran magnitudeIn already, so the conversion cannot fail.
 		mm, err := p.length.In(units.Millimeter)

@@ -1278,6 +1278,7 @@ func (q *FaceQuery) AtLeast(n int) *FaceQuery
 func Convex() EdgePredicate
 func Concave() EdgePredicate
 func ParallelTo(v r3.Vec) EdgePredicate
+func EndpointAt(p r3.Vec) EdgePredicate // either endpoint equals p in stored coordinates
 func LongerThan(l units.Value) EdgePredicate
 func CreatedBy(f FeatureRef) EdgePredicate   // provenance
 func Circular() EdgePredicate
@@ -1299,6 +1300,14 @@ concave, so a fillet meant for them asks for `Concave()`.
 `Edges(Free(), Circular())` picks the circular ones. On a solid, and on a
 closed sheet, it matches nothing — an ordinary `ErrNoMatch`, or
 `ErrCardinality` under an assertion, never an error in itself.
+
+`EndpointAt(p)` matches an edge when either stored endpoint position equals
+`p` component-wise, with no distance tolerance. Non-finite `p` fails at
+resolve. A ribbon's two free sweep edges share the same direction, length,
+convexity and face provenance; `EndpointAt` distinguishes them by their
+recorded end positions. Combine it with `Free()` and `ParallelTo` to name
+one end for `Extend`. A placed or rounded model needs the position its live
+topology reports, not an assumed exact mathematical point.
 
 **`Facing(v)` is the signed one-face predicate.** `NormalTo(v)` matches a planar
 face on either normal sense, so a slab's two parallel caps both match `NormalTo(z)`

@@ -8,16 +8,377 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// This file implements Body.Trim and Document.Split over the prism family.
+// This file implements Body.Trim, Body.Extend and Document.Split over the prism family.
 // Their §2.1 gates share prism-boolean's exact generator comparison, identity
-// re-expression check and sweep-span relation. Both use buildPrismScene;
+// re-expression check and sweep-span relation. All three use buildPrismScene;
 // Trim reads classifyPrismCells unchanged, while Split reads only the target
 // label. Every miss is a typed refusal at the call: a sheet's mesh proves no
 // occupied volume, and a mesh trim would decide topology from float signs on
 // chorded triangles (docs/surface-intersection-design.md §2.1).
 //
 // The revolve family (S1's and S4's other arm) is left as a hook for PR4.
-// Body.Extend remains staged for PR3.
+
+// Extend lengthens the receiver along the named edges' own carriers until
+// they meet tool, and returns the lengthened sheet. This prism-family arm
+// admits only the exact shared generator of surface-intersection §2.1.
+func (b *Body) Extend(ctx context.Context, edges *EdgeQuery, tool *Body) (*Body, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control an extension`, ErrDegenerate)
+	}
+	if b == nil || b.doc == nil {
+		return nil, fmt.Errorf(`%w: the receiver belongs to no document`, ErrDegenerate)
+	}
+	d := b.doc
+	if err := d.requireLive(b); err != nil {
+		return nil, err
+	}
+	if err := d.requireLive(tool); err != nil {
+		return nil, err
+	}
+	if b == tool {
+		return nil, fmt.Errorf(`%w: an extension needs two distinct bodies`, ErrDegenerate)
+	}
+	selected, err := edges.SelectEdges(b)
+	if err != nil {
+		return nil, err
+	}
+	budget := newWorkBudget(ctx)
+	if err := budget.err(); err != nil {
+		return nil, err
+	}
+	rcv, tl, err := admitExtendPair(budget, b, tool)
+	if err != nil {
+		return nil, err
+	}
+	chains := make([]ChainRecord, len(rcv.chains))
+	for i, chain := range rcv.chains {
+		chains[i] = ChainRecord{Segments: append([]CurveSegment(nil), chain.Segments...)}
+	}
+	cutDelta := 0.0
+	for _, edge := range selected {
+		ci, si, atStart, err := extendEndSegment(b, rcv, edge)
+		if err != nil {
+			return nil, err
+		}
+		widened, delta, err := resolveExtend(ctx, budget, rcv, tl, chains[ci].Segments[si], atStart)
+		if err != nil {
+			return nil, err
+		}
+		chains[ci].Segments[si] = widened
+		cutDelta = math.Max(cutDelta, delta)
+	}
+	rcv.chains = chains
+	rcv.sectionDelta = cutDelta
+	result, err := evalChainExtrudeContext(ctx, d, d.nextProducerID(), rcv, newFreeformWork())
+	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	d.commit(result, b, tool)
+	return result, nil
+}
+
+// extendEndSegment maps a selected topology edge to the recorded end it names.
+// The ribbon builder places the free sweep edges at the first and last wall's
+// vertical sides; it preserves walk order through the one-lump-per-chain build.
+func extendEndSegment(b *Body, pp chainPayload, edge *Edge) (int, int, bool, error) {
+	if !edge.IsFree() {
+		return 0, 0, false, fmt.Errorf(`%w: Extend needs a free sweep edge at an open section end`, ErrUnsupported)
+	}
+	for ci, lump := range b.lumps {
+		if ci >= len(pp.chains) || len(lump.shells) != 1 || len(lump.shells[0].faces) == 0 {
+			continue
+		}
+		faces := lump.shells[0].faces
+		first := faces[0].loops[0].coedges
+		last := faces[len(faces)-1].loops[0].coedges
+		if edge == first[3].edge {
+			return ci, 0, true, nil
+		}
+		if edge == last[1].edge {
+			return ci, len(pp.chains[ci].Segments) - 1, false, nil
+		}
+	}
+	return 0, 0, false, fmt.Errorf(`%w: Extend needs a free sweep edge at an open section end`, ErrUnsupported)
+}
+
+// admitExtendPair applies S1-S4, S6 and S7. The selected segment enters the
+// scene at full domain; every other receiver segment stays outside it.
+func admitExtendPair(budget *workBudget, receiver, tool *Body) (chainPayload, prismPayload, error) {
+	rf, tf := bodyTrimFamily(receiver), bodyTrimFamily(tool)
+	if rf == trimFamilyRevolve && tf == trimFamilyRevolve {
+		return chainPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: Extend over the revolve family is not yet supported by this evaluator`, ErrUnsupported)
+	}
+	if rf != tf || rf != trimFamilyPrism {
+		return chainPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: Extend needs a receiver and tool sharing a straight-sweep generator (receiver %s, tool %s)`,
+			ErrUnsupported, trimFamilyName(rf), trimFamilyName(tf))
+	}
+	rcv, ok := receiver.payload.(chainPayload)
+	if !ok || receiver.Kind() != BodySheet {
+		return chainPayload{}, prismPayload{}, fmt.Errorf(`%w: Extend's receiver needs an open section`, ErrUnsupported)
+	}
+	var tl prismPayload
+	switch p := tool.payload.(type) {
+	case prismPayload:
+		tl = p
+	case chainPayload:
+		tl = p.prism()
+	default:
+		return chainPayload{}, prismPayload{}, fmt.Errorf(`%w: Extend's tool has no prism section`, ErrUnsupported)
+	}
+	if rcv.sectionDelta != 0 || trimOperandSectionDelta(tool) != 0 {
+		return chainPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: Extend does not admit an operand carrying its own section displacement`, ErrUnsupported)
+	}
+	view := rcv.prism()
+	if view.reflected() || tl.reflected() {
+		return chainPayload{}, prismPayload{}, fmt.Errorf(`%w: Extend does not admit a reflected operand`, ErrUnsupported)
+	}
+	rcvAnalytic, err := prismProfileIsAnalytic(budget, view.profile)
+	if err != nil {
+		return chainPayload{}, prismPayload{}, err
+	}
+	tlAnalytic, err := prismProfileIsAnalytic(budget, tl.profile)
+	if err != nil {
+		return chainPayload{}, prismPayload{}, err
+	}
+	if !rcvAnalytic || !tlAnalytic {
+		return chainPayload{}, prismPayload{}, fmt.Errorf(`%w: Extend admits only line, circle and arc segments`, ErrUnsupported)
+	}
+	// S4 uses the exact stored-float equality and literal zero of Trim.
+	worldNormalRcv := view.xform.ApplyDir(view.frame.N())
+	worldNormalTool := tl.xform.ApplyDir(tl.frame.N())
+	if worldNormalRcv != worldNormalTool {
+		return chainPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: the receiver and tool do not sweep along the same generator, exactly`, ErrUnsupported)
+	}
+	worldOriginRcv := view.xform.Apply(view.frame.Origin())
+	worldOriginTool := tl.xform.Apply(tl.frame.Origin())
+	if worldOriginTool.Sub(worldOriginRcv).Dot(worldNormalRcv) != 0.0 {
+		return chainPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: the receiver and tool do not sweep along the same generator, exactly`, ErrUnsupported)
+	}
+	if !prismCutZIntervalSpans(view, tl) {
+		return chainPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: the tool does not span the receiver over the sweep parameter`, ErrUnsupported)
+	}
+	reexpress, err := newPrismReexpression(view, tl)
+	if err != nil {
+		return chainPayload{}, prismPayload{}, err
+	}
+	if !reexpress.identity {
+		return chainPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: the receiver and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
+	}
+	tlWhole, err := trimProfileFullyWhole(budget, tl.profile)
+	if err != nil {
+		return chainPayload{}, prismPayload{}, err
+	}
+	if !tlWhole {
+		return chainPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: every segment the tool consumes must span its entity's own natural domain`, ErrUnsupported)
+	}
+	return rcv, tl, nil
+}
+
+// fullExtendSegment copies the entity's defining data and names its natural
+// parameter bounds. No coordinate is computed, even for an arc or circle.
+func fullExtendSegment(seg CurveSegment) (CurveSegment, error) {
+	seg, err := normalizeSegment(seg)
+	if err != nil {
+		return nil, err
+	}
+	t0, t1, err := trimSegmentParamRange(seg)
+	if err != nil {
+		return nil, err
+	}
+	start, end := 0.0, 1.0
+	if t0 > t1 {
+		start, end = 1, 0
+	}
+	switch s := seg.(type) {
+	case LineSeg:
+		s.TStart, s.TEnd = start, end
+		return s, nil
+	case CircleSeg:
+		s.TStart, s.TEnd = start, end
+		return s, nil
+	case ArcSeg:
+		s.TStart, s.TEnd = start, end
+		return s, nil
+	default:
+		return nil, fmt.Errorf(`%w: a %T segment has no admitted full domain`, ErrUnsupported, seg)
+	}
+}
+
+func extendSetBound(seg CurveSegment, atStart bool, bound float64) CurveSegment {
+	switch s := seg.(type) {
+	case LineSeg:
+		if atStart {
+			s.TStart = bound
+		} else {
+			s.TEnd = bound
+		}
+		return s
+	case CircleSeg:
+		if atStart {
+			s.TStart = bound
+		} else {
+			s.TEnd = bound
+		}
+		return s
+	case ArcSeg:
+		if atStart {
+			s.TStart = bound
+		} else {
+			s.TEnd = bound
+		}
+		return s
+	}
+	return seg
+}
+
+// resolveExtend reads the nearest cut from sketch's parameter order on the
+// recreated entity, then widens only the receiver's named recorded bound.
+func resolveExtend(ctx context.Context, budget *workBudget, rcv chainPayload, tool prismPayload,
+	seg CurveSegment, atStart bool) (CurveSegment, float64, error) {
+	t0, t1, err := trimSegmentParamRange(seg)
+	if err != nil {
+		return nil, 0, err
+	}
+	old := t1
+	if atStart {
+		old = t0
+	}
+	if old == 0 || old == 1 {
+		return nil, 0, fmt.Errorf(`%w: the named section end already reaches its carrier's own domain`, ErrUnsupported)
+	}
+	full, err := fullExtendSegment(seg)
+	if err != nil {
+		return nil, 0, err
+	}
+	view := rcv.prism()
+	view.profile = ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{full}}}
+	segments, withinCap, err := prismSceneWithinWorkCap(budget, view, tool)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !withinCap {
+		return nil, 0, fmt.Errorf(`%w: the extend scene charges %d segments against the cap of %d`,
+			ErrUnsupported, segments, prismMaxArrangementSegments)
+	}
+	reexpress, err := newPrismReexpression(view, tool)
+	if err != nil {
+		return nil, 0, err
+	}
+	s, tags, _, err := buildPrismScene(budget, view, tool, reexpress)
+	if err != nil {
+		return nil, 0, err
+	}
+	profiles, err := prismProfilesContext(ctx, s.Profiles)
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := budget.err(); err != nil {
+		return nil, 0, err
+	}
+	var source sketch.Entity
+	for entity, tag := range tags {
+		if !tag.isB {
+			source = entity
+			break
+		}
+	}
+	if source == nil {
+		return nil, 0, fmt.Errorf(`%w: the extended carrier has no scene entity`, ErrUnsupported)
+	}
+	var fragments []sketch.BoundaryEdge
+	for _, profile := range profiles {
+		if !profile.Valid {
+			return nil, 0, fmt.Errorf(`%w: the extend arrangement has an invalid cell`, ErrUnsupported)
+		}
+		for _, loop := range append([][]sketch.BoundaryEdge{profile.Outer}, profile.Holes...) {
+			fragments = append(fragments, loop...)
+		}
+	}
+	chains, err := extendChainsContext(ctx, s.Chains)
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := budget.err(); err != nil {
+		return nil, 0, err
+	}
+	for _, chain := range chains {
+		if !chain.Valid {
+			return nil, 0, fmt.Errorf(`%w: the extend arrangement has an invalid chain`, ErrUnsupported)
+		}
+		fragments = append(fragments, chain.Edges...)
+	}
+	forward := t1 > t0
+	if atStart {
+		forward = !forward
+	}
+	nearest := 0.0
+	found := false
+	for _, edge := range fragments {
+		if err := budget.step(); err != nil {
+			return nil, 0, err
+		}
+		if edge.Entity != source || !edge.Partial {
+			continue
+		}
+		for _, candidate := range []float64{edge.TStart, edge.TEnd} {
+			if candidate == 0 || candidate == 1 {
+				continue
+			}
+			if forward && candidate <= old || !forward && candidate >= old {
+				continue
+			}
+			if !found || forward && candidate < nearest || !forward && candidate > nearest {
+				nearest, found = candidate, true
+			}
+		}
+	}
+	if !found {
+		return nil, 0, fmt.Errorf(`%w: the tool has no cut past the named end inside the carrier's own natural domain`, ErrUnsupported)
+	}
+	for _, edge := range fragments {
+		if edge.Entity != source || edge.TStart != nearest && edge.TEnd != nearest {
+			continue
+		}
+		if _, err := recordEdge(edge); err != nil {
+			return nil, 0, err
+		}
+		break
+	}
+	widened := extendSetBound(seg, atStart, nearest)
+	delta, err := prismUnionCutDelta(sketch.BoundaryEdge{Partial: true}, widened)
+	if err != nil {
+		return nil, 0, err
+	}
+	return widened, delta, nil
+}
+
+// extendChainsContext gives the second bounded arrangement publication the
+// same cancellation discipline as prismProfilesContext.
+func extendChainsContext(ctx context.Context, chains func() []*sketch.Chain) ([]*sketch.Chain, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	done := make(chan []*sketch.Chain)
+	go func() { done <- chains() }()
+	select {
+	case result := <-done:
+		return result, nil
+	case <-ctx.Done():
+		<-done
+		return nil, ctx.Err()
+	}
+}
 
 // TrimSide names which pieces of the receiver a Trim keeps
 // (docs/surface-intersection-design.md §8).
