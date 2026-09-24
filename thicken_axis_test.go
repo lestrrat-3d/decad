@@ -70,3 +70,53 @@ func TestThickenRadialRefusesBoundedAxis(t *testing.T) {
 		})
 	}
 }
+
+// The public sketch seam rejects a walk this far from the origin before
+// Thicken can read it, so the ribbon's exact-generation gate is exercised on
+// its own record: at u = 2^53 the float spacing is 2, so the offset
+// coordinate u + 1 is not representable and the gate must name the rounding
+// rather than a contact.
+func TestThickenRibbonUnrepresentableOffset(t *testing.T) {
+	t.Parallel()
+	base := math.Ldexp(1, 53)
+	chain := ChainRecord{Segments: []CurveSegment{
+		LineSeg{Start: Point2{U: base, V: 0}, End: Point2{U: base, V: 40}, TStart: 0, TEnd: 1},
+	}}
+	budget := newWorkBudget(t.Context())
+	_, err := thickenRibbon(t.Context(), chain, ThickenPositive, 1, budget, newFreeformWork())
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.True(t, strings.Contains(err.Error(), "rounded"), err.Error())
+}
+
+// A walk this arm cannot read exactly refuses before any section is
+// assembled, each on its own stated reason.
+func TestThickenRibbonWalkClassRefusals(t *testing.T) {
+	t.Parallel()
+	line := func(a, b Point2) CurveSegment {
+		return LineSeg{Start: a, End: b, TStart: 0, TEnd: 1}
+	}
+	for _, tc := range []struct {
+		name  string
+		chain ChainRecord
+		want  string
+	}{
+		{"not axis parallel", ChainRecord{Segments: []CurveSegment{
+			line(Point2{U: 0, V: 0}, Point2{U: 10, V: 10}),
+		}}, "not axis-parallel"},
+		{"reverses on itself", ChainRecord{Segments: []CurveSegment{
+			line(Point2{U: 0, V: 0}, Point2{U: 10, V: 0}),
+			line(Point2{U: 10, V: 0}, Point2{U: 0, V: 0}),
+		}}, "not a right angle"},
+		{"arc segment", ChainRecord{Segments: []CurveSegment{
+			ArcSeg{Center: Point2{U: 0, V: 0}, Start: Point2{U: 10, V: 0},
+				End: Point2{U: 0, V: 10}, TStart: 0, TEnd: 1},
+		}}, "line-only axis-parallel segments"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			budget := newWorkBudget(t.Context())
+			_, err := thickenRibbon(t.Context(), tc.chain, ThickenPositive, 1, budget, newFreeformWork())
+			require.ErrorIs(t, err, ErrUnsupported)
+			require.True(t, strings.Contains(err.Error(), tc.want), err.Error())
+		})
+	}
+}

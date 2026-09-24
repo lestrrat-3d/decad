@@ -32,8 +32,9 @@ func WithThickenSide(side ThickenSide) ThickenOption { return thickenSideOption{
 
 // Thicken builds a solid from an admitted sheet and retires that sheet.
 // It extrudes a recorded planar patch through the signed thickness interval,
-// builds a certified annular wall around a profile-fed prism sheet, or spins
-// a certified meridian annulus through a profile-fed revolve sheet's own
+// builds a certified annular wall around a profile-fed prism sheet, spins a
+// certified meridian annulus through a profile-fed revolve sheet's own
+// interval, or sweeps a ribbon's own assembled section through the ribbon's
 // interval. Other sheet families are staged under docs/surface-design.md §16.
 func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...ThickenOption) (*Body, error) {
 	if ctx == nil {
@@ -78,6 +79,8 @@ func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...Thick
 		result, err = thickenPrism(ctx, d, payload, side, tmm, tDelta)
 	case revolvePayload:
 		result, err = thickenRevolve(ctx, d, payload, side, tmm, tDelta)
+	case chainPayload:
+		result, err = thickenChainExtrude(ctx, d, payload, side, tmm, tDelta)
 	default:
 		return nil, fmt.Errorf(`%w: this sheet has no admitted Thicken generator`, ErrUnsupported)
 	}
@@ -222,4 +225,38 @@ func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side Th
 	rp.ax = ax
 	rp.surfaceResult = false
 	return evalRevolveContextWork(ctx, d, d.nextProducerID(), rp, work)
+}
+
+// thickenChainExtrude builds a solid from a ribbon: the open walk's own
+// thickened section swept through the ribbon's unchanged interval
+// (docs/surface-design.md §16.6).
+func thickenChainExtrude(ctx context.Context, d *Document, cp chainPayload, side ThickenSide, tmm, tDelta float64) (*Body, error) {
+	if len(cp.chains) != 1 || cp.sectionDelta != 0 {
+		return nil, fmt.Errorf(`%w: this ribbon has no admitted Thicken walk`, ErrUnsupported)
+	}
+	if admitAbove(boundedSub(cp.z1Scalar(), cp.z0Scalar()), 0) != survAdmit {
+		return nil, fmt.Errorf(`%w: the ribbon has no proven positive sweep height`, ErrUnsupported)
+	}
+	amount, err := thickenAmount(tmm, tDelta, side)
+	if err != nil {
+		return nil, err
+	}
+	budget := newWorkBudget(ctx)
+	if err := budget.err(); err != nil {
+		return nil, err
+	}
+	// ONE free-form work counter for the record: the walk resolution below and
+	// the build that consumes its section both spend from it.
+	work := newFreeformWork()
+	section, err := thickenRibbon(ctx, cp.chains[0], side, amount, budget, work)
+	if err != nil {
+		return nil, err
+	}
+	return evalPrismContext(ctx, d, d.nextProducerID(), prismPayload{
+		profile: section,
+		frame:   cp.frame,
+		z0:      cp.z0, z1: cp.z1,
+		z0Delta: cp.z0Delta, z1Delta: cp.z1Delta,
+		xform: cp.xform,
+	}, work)
 }
