@@ -1147,7 +1147,7 @@ Refuse before returning any partial mesh:
 | non-adjacent facets intersect after refinement | `ErrUnsupported` |
 | coordinate construction or placement rounding cannot prove positive facets and unchanged contact/component topology over its affine homotopy | `ErrUnsupported` |
 | directed-edge audit fails, a vertex link is not one connected cycle, or a triangle has zero area | `ErrUnsupported`; a missing/conflicting source role is `ErrDegenerate` because the body topology contradicts its payload |
-| a curved stitched body outside `docs/surface-design.md` §10.1's complete one-source revolve-sheet gate; refusal names its first unsupported surface kind | `ErrUnsupported` |
+| a curved stitched body outside `docs/surface-design.md` §10.1's complete one-source revolve-sheet gate and §10.2's sibling-weld gate; refusal names a source surface kind | `ErrUnsupported` |
 | a mesh has no finite construction/placement-homotopy allowance when used by a boolean | boolean call returns `ErrUnsupported`; export remains available when the payload's own boundary proofs pass |
 
 NEVER snap, weld, drop a facet, round a near-axis ring onto the axis, or perturb a
