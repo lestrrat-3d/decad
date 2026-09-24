@@ -18,18 +18,23 @@ type letter struct {
 	shapes [][][]point
 }
 
+// heroChordTolerance is the chord tolerance the hero shot tessellates at
+// unless -chord overrides it.
+const heroChordTolerance = 0.4
+
 // heroRender is the README's masthead: the wordmark itself is decad geometry,
 // each letter an extruded profile with its outside corners filleted.
 func heroRender() imageRender {
 	return imageRender{
-		rel:      "docs/images/hero.png",
+		rel:      "hero.png",
 		settings: solidlens.Settings{Width: 1440, Height: 810},
+		chord:    units.Millimeters(heroChordTolerance),
 		scene:    heroScene,
 	}
 }
 
-func heroScene(ctx context.Context) (solidlens.Scene, error) {
-	base, err := extrudeLoops(ctx, [][]point{rectangle(-151, -84, 151, 84)}, decad.Symmetric{D: units.Millimeters(3)})
+func heroScene(ctx context.Context, chord units.Value) (solidlens.Scene, error) {
+	base, err := extrudeLoops(ctx, [][]point{rectangle(-151, -84, 151, 84)}, decad.Symmetric{D: units.Millimeters(3)}, chord)
 	if err != nil {
 		return solidlens.Scene{}, fmt.Errorf("build backing plate: %w", err)
 	}
@@ -37,7 +42,7 @@ func heroScene(ctx context.Context) (solidlens.Scene, error) {
 
 	for _, item := range decadLetters() {
 		for _, shape := range item.shapes {
-			mesh, err := extrudeLetterLoops(ctx, shape, decad.Distance{D: units.Millimeters(14), Dir: decad.Along})
+			mesh, err := extrudeLetterLoops(ctx, shape, decad.Distance{D: units.Millimeters(14), Dir: decad.Along}, chord)
 			if err != nil {
 				return solidlens.Scene{}, fmt.Errorf("build letter: %w", err)
 			}
@@ -54,7 +59,7 @@ func heroScene(ctx context.Context) (solidlens.Scene, error) {
 	} {
 		mesh, err := extrudeLoops(ctx, [][]point{circle(accent.x, accent.y, accent.radius, 24)}, decad.Distance{
 			D: units.Millimeters(8), Dir: decad.Along,
-		})
+		}, chord)
 		if err != nil {
 			return solidlens.Scene{}, fmt.Errorf("build accent: %w", err)
 		}
@@ -156,15 +161,17 @@ func decadLetters() []letter {
 	}
 }
 
-func extrudeLoops(ctx context.Context, loops [][]point, extent decad.Extent) (*decad.Mesh, error) {
-	return extrudeLoopsWithFillet(ctx, loops, extent, 0)
+func extrudeLoops(ctx context.Context, loops [][]point, extent decad.Extent, chord units.Value) (*decad.Mesh, error) {
+	return extrudeLoopsWithFillet(ctx, loops, extent, 0, chord)
 }
 
-func extrudeLetterLoops(ctx context.Context, loops [][]point, extent decad.Extent) (*decad.Mesh, error) {
-	return extrudeLoopsWithFillet(ctx, loops, extent, letterFilletRadius)
+func extrudeLetterLoops(ctx context.Context, loops [][]point, extent decad.Extent, chord units.Value) (*decad.Mesh, error) {
+	return extrudeLoopsWithFillet(ctx, loops, extent, letterFilletRadius, chord)
 }
 
-func extrudeLoopsWithFillet(ctx context.Context, loops [][]point, extent decad.Extent, filletRadius float64) (*decad.Mesh, error) {
+func extrudeLoopsWithFillet(
+	ctx context.Context, loops [][]point, extent decad.Extent, filletRadius float64, chord units.Value,
+) (*decad.Mesh, error) {
 	w := sketch.NewWorld()
 	// XZ makes the wordmark face the camera; extrusion then gives each stroke
 	// depth along Y without relying on a steep viewing angle.
@@ -192,5 +199,7 @@ func extrudeLoopsWithFillet(ctx context.Context, loops [][]point, extent decad.E
 			return nil, fmt.Errorf("fillet extruded loops: %w", err)
 		}
 	}
-	return body.Tessellate(ctx, units.Millimeters(0.4))
+	// These meshes are drawn, never proven: VerifyNone skips the facet-contact
+	// audit's own work ceiling, which a fine chord tolerance can otherwise hit.
+	return body.Tessellate(ctx, chord, decad.WithVerification(decad.VerifyNone))
 }

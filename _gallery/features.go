@@ -12,9 +12,9 @@ import (
 )
 
 // Every feature thumbnail is rendered at this size and chorded at this
-// tolerance. The parts are all drawn to fit one shared camera, so a reader
-// comparing two rows of the README table is comparing the geometry and not the
-// framing.
+// tolerance unless -chord or -scale override it. The parts are all drawn to
+// fit one shared camera, so a reader comparing two rows of the README table
+// is comparing the geometry and not the framing.
 const (
 	featureWidth          = 640
 	featureHeight         = 480
@@ -25,7 +25,7 @@ const (
 func featureRenders() []imageRender {
 	shots := []struct {
 		name  string
-		build func(context.Context) ([]solidlens.Model, error)
+		build func(context.Context, units.Value) ([]solidlens.Model, error)
 	}{
 		{"extrude", extrudeShot},
 		{"revolve", revolveShot},
@@ -43,10 +43,11 @@ func featureRenders() []imageRender {
 	renders := make([]imageRender, len(shots))
 	for i, shot := range shots {
 		renders[i] = imageRender{
-			rel:      "docs/images/features/" + shot.name + ".png",
+			rel:      "features/" + shot.name + ".png",
 			settings: solidlens.Settings{Width: featureWidth, Height: featureHeight},
-			scene: func(ctx context.Context) (solidlens.Scene, error) {
-				models, err := shot.build(ctx)
+			chord:    units.Millimeters(featureChordTolerance),
+			scene: func(ctx context.Context, chord units.Value) (solidlens.Scene, error) {
+				models, err := shot.build(ctx, chord)
 				if err != nil {
 					return solidlens.Scene{}, err
 				}
@@ -61,7 +62,7 @@ func featureRenders() []imageRender {
 // current Sweep payload deliberately stages tessellation, so the scene renders
 // the same two Revolve spans and intervening Extrude after the real composite
 // Sweep has passed its topology, measurement, and contact audits.
-func sweepShot(ctx context.Context) ([]solidlens.Model, error) {
+func sweepShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
 	w := sketch.NewWorld()
 	s, profile, err := sketchLoops(ctx, w, w.XY(), rectangle(-46, -6, -34, 6))
 	if err != nil {
@@ -140,7 +141,7 @@ func sweepShot(ctx context.Context) ([]solidlens.Model, error) {
 
 	models := make([]solidlens.Model, 0, 3)
 	for _, body := range []*decad.Body{first, middle, last} {
-		spanModels, modelErr := oneModel(ctx, body, cyan)
+		spanModels, modelErr := oneModel(ctx, body, cyan, chord)
 		if modelErr != nil {
 			return nil, modelErr
 		}
@@ -150,7 +151,7 @@ func sweepShot(ctx context.Context) ([]solidlens.Model, error) {
 }
 
 // extrudeShot sweeps one L-shaped section straight up into an angle bracket.
-func extrudeShot(ctx context.Context) ([]solidlens.Model, error) {
+func extrudeShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
 	w := sketch.NewWorld()
 	doc := decad.New()
 	bracket, err := prism(ctx, doc, w, w.XY(), 44, []point{
@@ -159,12 +160,12 @@ func extrudeShot(ctx context.Context) ([]solidlens.Model, error) {
 	if err != nil {
 		return nil, fmt.Errorf("extrude the bracket: %w", err)
 	}
-	return oneModel(ctx, bracket, cyan)
+	return oneModel(ctx, bracket, cyan, chord)
 }
 
 // revolveShot spins a circle offset from the axis into a torus — the curved
 // generator, where a revolve says something a straight sweep cannot.
-func revolveShot(ctx context.Context) ([]solidlens.Model, error) {
+func revolveShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
 	w := sketch.NewWorld()
 	// The XZ plane puts the sketch's v axis on world Z, so the ring lies flat.
 	s, err := w.CreateSketch(w.XZ())
@@ -187,12 +188,12 @@ func revolveShot(ctx context.Context) ([]solidlens.Model, error) {
 	if err != nil {
 		return nil, fmt.Errorf("revolve the ring: %w", err)
 	}
-	return oneModel(ctx, ring, blue)
+	return oneModel(ctx, ring, blue, chord)
 }
 
 // loftShot rules a wall between two rectangles on different planes, the top one
 // smaller and offset — a transition duct rather than a plain pyramid.
-func loftShot(ctx context.Context) ([]solidlens.Model, error) {
+func loftShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
 	w := sketch.NewWorld()
 	bottom, bottomProfile, err := sketchLoops(ctx, w, w.XY(), rectangle(-42, -30, 42, 30))
 	if err != nil {
@@ -210,11 +211,11 @@ func loftShot(ctx context.Context) ([]solidlens.Model, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loft the duct: %w", err)
 	}
-	return oneModel(ctx, duct, violet)
+	return oneModel(ctx, duct, violet, chord)
 }
 
 // filletShot rounds the four lateral edges of a plate into tangent cylinders.
-func filletShot(ctx context.Context) ([]solidlens.Model, error) {
+func filletShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
 	plate, err := lateralEdgePlate(ctx)
 	if err != nil {
 		return nil, err
@@ -223,12 +224,12 @@ func filletShot(ctx context.Context) ([]solidlens.Model, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fillet the plate: %w", err)
 	}
-	return oneModel(ctx, rounded, coral)
+	return oneModel(ctx, rounded, coral, chord)
 }
 
 // chamferShot bevels the same four lateral edges the fillet rounds, so the two
 // thumbnails differ only in what the modify op put there.
-func chamferShot(ctx context.Context) ([]solidlens.Model, error) {
+func chamferShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
 	plate, err := lateralEdgePlate(ctx)
 	if err != nil {
 		return nil, err
@@ -237,12 +238,12 @@ func chamferShot(ctx context.Context) ([]solidlens.Model, error) {
 	if err != nil {
 		return nil, fmt.Errorf("chamfer the plate: %w", err)
 	}
-	return oneModel(ctx, bevelled, gold)
+	return oneModel(ctx, bevelled, gold, chord)
 }
 
 // capChamferShot bevels a complete cap loop — the lead-in a bore or a keycap
 // carries — which the evaluator builds along its own path, not the lateral one.
-func capChamferShot(ctx context.Context) ([]solidlens.Model, error) {
+func capChamferShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
 	plate, err := lateralEdgePlate(ctx)
 	if err != nil {
 		return nil, err
@@ -251,12 +252,12 @@ func capChamferShot(ctx context.Context) ([]solidlens.Model, error) {
 	if err != nil {
 		return nil, fmt.Errorf("chamfer the cap loop: %w", err)
 	}
-	return oneModel(ctx, bevelled, cyan)
+	return oneModel(ctx, bevelled, cyan, chord)
 }
 
 // shellShot removes one cap and offsets the section inward, leaving an open
 // tray whose wall thickness is the section's own exact offset.
-func shellShot(ctx context.Context) ([]solidlens.Model, error) {
+func shellShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
 	w := sketch.NewWorld()
 	doc := decad.New()
 	block, err := prism(ctx, doc, w, w.XY(), 34, rectangle(-46, -32, 46, 32))
@@ -267,12 +268,12 @@ func shellShot(ctx context.Context) ([]solidlens.Model, error) {
 	if err != nil {
 		return nil, fmt.Errorf("shell the block: %w", err)
 	}
-	return oneModel(ctx, tray, blue)
+	return oneModel(ctx, tray, blue, chord)
 }
 
 // booleanShot drills a flange plate: one central bore and two bolt holes,
 // one Cut per hole.
-func booleanShot(ctx context.Context) ([]solidlens.Model, error) {
+func booleanShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
 	w := sketch.NewWorld()
 	doc := decad.New()
 	plate, err := prism(ctx, doc, w, w.XY(), 16, rectangle(-48, -34, 48, 34))
@@ -294,13 +295,13 @@ func booleanShot(ctx context.Context) ([]solidlens.Model, error) {
 			return nil, fmt.Errorf("drill the plate: %w", err)
 		}
 	}
-	return oneModel(ctx, plate, violet)
+	return oneModel(ctx, plate, violet, chord)
 }
 
 // freeformShot extrudes a section whose curved wall is a fit spline, closed by
 // a straight chord: a blade the evaluator measures exactly rather than
 // approximating.
-func freeformShot(ctx context.Context) ([]solidlens.Model, error) {
+func freeformShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -328,7 +329,7 @@ func freeformShot(ctx context.Context) ([]solidlens.Model, error) {
 	if err != nil {
 		return nil, fmt.Errorf("extrude the blade: %w", err)
 	}
-	return oneModel(ctx, blade, coral)
+	return oneModel(ctx, blade, coral, chord)
 }
 
 // surfaceShot revolves a half-disc standing on the axis through part of a turn
@@ -337,7 +338,7 @@ func freeformShot(ctx context.Context) ([]solidlens.Model, error) {
 // what makes the shot worth taking — the far half of the dish is seen from its
 // inner side, and the two materials say which side of the sheet a reader is
 // looking at.
-func surfaceShot(ctx context.Context) ([]solidlens.Model, error) {
+func surfaceShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
 	w := sketch.NewWorld()
 	// The XZ plane puts the sketch's v axis on world Z, so the dish stands
 	// upright and its axis is vertical. Offsetting that plane carries the axis
@@ -378,7 +379,7 @@ func surfaceShot(ctx context.Context) ([]solidlens.Model, error) {
 	if err := requireSheet(dish); err != nil {
 		return nil, err
 	}
-	return twoSidedModel(ctx, dish, violet, gold)
+	return twoSidedModel(ctx, dish, violet, gold, chord)
 }
 
 // requireSheet refuses a body that is not an open sheet, so the thumbnail
@@ -399,7 +400,7 @@ func requireSheet(body *decad.Body) error {
 
 // verifyShot poses the question verification answers: a pin standing in a bore
 // it must not touch, with the clearance ring visible all the way round.
-func verifyShot(ctx context.Context) ([]solidlens.Model, error) {
+func verifyShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
 	w := sketch.NewWorld()
 	doc := decad.New()
 	plate, err := prism(ctx, doc, w, w.XY(), 16, rectangle(-44, -38, 44, 38))
@@ -436,11 +437,11 @@ func verifyShot(ctx context.Context) ([]solidlens.Model, error) {
 		return nil, fmt.Errorf("extrude the pin: %w", err)
 	}
 
-	housingModel, err := oneModel(ctx, housing, gold)
+	housingModel, err := oneModel(ctx, housing, gold, chord)
 	if err != nil {
 		return nil, err
 	}
-	pinModel, err := oneModel(ctx, pin, cyan)
+	pinModel, err := oneModel(ctx, pin, cyan, chord)
 	if err != nil {
 		return nil, err
 	}
@@ -508,8 +509,10 @@ func validProfile(s *sketch.Sketch) (*sketch.Profile, error) {
 }
 
 // oneModel tessellates a body into the single matte model one shot renders.
-func oneModel(ctx context.Context, body *decad.Body, color solidlens.Color) ([]solidlens.Model, error) {
-	mesh, err := body.Tessellate(ctx, units.Millimeters(featureChordTolerance))
+// These meshes are drawn, never proven: VerifyNone skips the facet-contact
+// audit's own work ceiling, which a fine chord tolerance can otherwise hit.
+func oneModel(ctx context.Context, body *decad.Body, color solidlens.Color, chord units.Value) ([]solidlens.Model, error) {
+	mesh, err := body.Tessellate(ctx, chord, decad.WithVerification(decad.VerifyNone))
 	if err != nil {
 		return nil, fmt.Errorf("tessellate: %w", err)
 	}
@@ -519,8 +522,10 @@ func oneModel(ctx context.Context, body *decad.Body, color solidlens.Color) ([]s
 // twoSidedModel tessellates a sheet and shades its two sides apart: front is
 // the positive side every surface-result wall inherits from the solid's
 // outward normal, back is the side a reader sees through the sheet's opening.
-func twoSidedModel(ctx context.Context, body *decad.Body, front, back solidlens.Color) ([]solidlens.Model, error) {
-	mesh, err := body.Tessellate(ctx, units.Millimeters(featureChordTolerance))
+func twoSidedModel(
+	ctx context.Context, body *decad.Body, front, back solidlens.Color, chord units.Value,
+) ([]solidlens.Model, error) {
+	mesh, err := body.Tessellate(ctx, chord, decad.WithVerification(decad.VerifyNone))
 	if err != nil {
 		return nil, fmt.Errorf("tessellate: %w", err)
 	}
