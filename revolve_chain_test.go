@@ -1,7 +1,6 @@
 package decad_test
 
 import (
-	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -165,15 +164,13 @@ func coneChain(tb testing.TB, length, radius float64) (*sketch.Sketch, *sketch.C
 	return s, s.Chains()[0], axis
 }
 
+// requireAreaContains15PiFraction is the cone chain's own reading of
+// requireEnclosesPiMultiple (revolve_snap_test.go), which owns the rational
+// comparison and states the interval, the truth and the shortfall when it
+// fails.
 func requireAreaContains15PiFraction(t *testing.T, area decad.Measurement, denominator int64) {
 	t.Helper()
-	value := new(big.Rat).SetFloat64(area.Value.Base())
-	bound := new(big.Rat).SetFloat64(area.Bound.Base())
-	factor := big.NewRat(15, denominator)
-	truthLo := new(big.Rat).Mul(factor, piRefLo)
-	truthHi := new(big.Rat).Mul(factor, piRefHi)
-	require.LessOrEqual(t, new(big.Rat).Sub(value, bound).Cmp(truthLo), 0)
-	require.GreaterOrEqual(t, new(big.Rat).Add(value, bound).Cmp(truthHi), 0)
+	requireEnclosesPiMultiple(t, "the cone chain's Area", area.Value.Base(), area.Bound.Base(), 15, denominator)
 }
 
 // This file is docs/surface-design.md §13's public-surface tests for
