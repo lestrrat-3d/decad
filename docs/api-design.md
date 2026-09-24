@@ -1693,11 +1693,14 @@ feature tree / timeline / rollback, STEP, sheet metal, mesh import,
 GUI or view state of any kind, and Fusion code generation.
 
 Sheet bodies themselves are **not** a non-goal — `docs/surface-design.md` owns
-them. `Thicken` admits the recorded patch and profile-fed prism families of §16
-there; the other sheet families refuse at its call with `ErrUnsupported`.
-Trim, Extend, surface Offset, Ruled, Boundary Fill, Reverse Normal, and a
-sheet operand in any boolean remain staged there, each refusing at the call
-until its own design lands.
+them. `Thicken` and `Offset` each admit the recorded patch and profile-fed
+prism families of §16 and §17 there; the other sheet families refuse at either
+call with `ErrUnsupported`. Trim, Extend, surface Offset and a sheet operand in
+any boolean are staged there, each refusing at the call until its own increment
+lands. Ruled and Boundary Fill refuse permanently, because the surface each
+needs is a fit through a boundary nothing generated (`docs/surface-design.md`
+§1.3). Reverse Normal takes no increment either: no shipped operation's result
+turns on a side its caller cannot already name (`docs/surface-design.md` §1.4).
 
 The assemblies non-goal rests on a capability in hand, not on an instancing
 graph: interference and clearance (§10) are computed between

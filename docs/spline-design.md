@@ -38,6 +38,7 @@ Three tables are normative:
 | why a build refuses on a bracket it cannot decide | §6.4 |
 | how a free-form wall edge's convexity is decided, or refused | §6.5 |
 | what surface an extruded spline gets | §7 |
+| whether a boundary can become a surface | §7.1 |
 | what each capability answers | Table C §8 |
 | what stays refused forever | Table R §4 |
 | landing order | §10 |
@@ -1617,6 +1618,27 @@ certificates rather than a closed form, and it lands with the faceted
 certificate stage (`docs/payload-verification-design.md` §5.4, §13). Nothing
 internal needs any of them: the undercut survey reads normals off the payload
 walk, never off `NormalAt`.
+
+### 7.1 No rule here produces a surface from a boundary
+
+**Both variants above are the surface a one-parameter rigid motion SWEEPS from
+a recorded curve** — an extrusion along a direction, a revolution about an
+axis — and the control net falls out of the recorded net and that motion with
+nothing fitted. That is what makes them `Exact` by construction, and it is the
+only way a free-form surface arises in this evaluator.
+
+A closed boundary names no such motion. The surface through it is a choice of
+blending function, so its interior is not determined by the input, and every
+coordinate of it, its normal, its area and its self-intersection test would be
+read off that choice rather than off anything the caller stated. §2's
+whole-recorded-entity scope is the other half: this evaluator mints no
+free-form curve at all, so it has nothing of its own to build a net from.
+
+`docs/surface-design.md` §1.3 refuses Fusion's Ruled and Boundary Fill on that
+rule, and owns the refusal. **Neither belongs in §9 as an upstream ask.** Every
+ask there is an ask to `sketch`, and `sketch` is a 2D constraint engine that
+publishes no surface at all, so no change to it reaches either command. What
+would unblock them is a new exact surface kernel inside decad.
 
 ## 8. Table C — per-capability reach
 

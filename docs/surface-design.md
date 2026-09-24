@@ -51,6 +51,8 @@ Ten tables are normative:
   coincident, and splitting a body back into one sheet per face (§6);
 - **`Thicken`** — building a solid from an admitted sheet's recorded generator
   and a stated wall thickness (§16);
+- **`Offset`** — a second sheet at a stated normal distance from an admitted
+  sheet, the source left live (§17);
 - **`ExtrudeChain` / `RevolveChain`** — a ribbon from one open sketch curve, and
   an uncapped shell from an open profile revolved (§13);
 - what every reading, every `Verify` question and every export says about a
@@ -65,9 +67,6 @@ increment takes it up; §11 says what a caller gets until then.
 |---|---|
 | Thicken | §16 admits a recorded planar patch and a prism sheet from a closed section. Other sheet families refuse until their own offset and closure proofs land. |
 | Trim, Extend | `docs/surface-intersection-design.md` owns both. A pair whose two sweeps share one generator — two prisms along one direction, two revolves about one axis — meets along the sweep of a 2D crossing `sketch` certifies, so its topology is decided by a flag and nothing is fitted; that document's §2 states the exact predicate and §4 what it excludes. A pair sharing no generator meets along a space curve `CurveSegment` has no variant for, and stays refused on `docs/api-design.md` §2.1's own reasoning. Table D row 8. |
-| Offset (surface) | A standalone offset sheet needs open-boundary topology, placement and bounded surface readings beyond §16's closed solid result. |
-| Ruled, Boundary Fill | Both need a fitted free-form patch through a boundary decad did not record. `docs/spline-design.md` owns what a recorded free-form curve may become; no rule there yet produces a surface from a boundary. |
-| Reverse Normal | §16's explicit `ThickenSide` names the side without changing the source sheet. Reversing a sheet's published normals and coedge senses remains a separate operation. |
 | A sheet operand in `Union` / `Cut` / `Intersect` (Fusion's Split Body) | The intent lands as `Document.Split` in `docs/surface-intersection-design.md` §8, one body in and several out, over the same shared-generator class. The three booleans keep refusing a sheet operand permanently (Table X): each owes its caller ONE body, and a sheet claims no material to union, cut or intersect with. Table D row 8. |
 | `SweepChain` | `docs/sweep-design.md` §15 owns it and states its pairing rule: a composite sweep's join pairs by recorded-segment index, which a `ChainRecord` states exactly as a `LoopRecord` does, and a one-span path has no join to pair at all. That document's §15.6 stages the build. Table D rows 12 and 13. |
 | `LoftChain` | `docs/loft-design.md` §16 owns it and states its pairing rule: Table P's segment-count and same-kind rows survive an open walk verbatim, the alignment offset is forced to `0`, and the walk direction `sketch` publishes replaces the winding P6 names. What a closed shell also supplied is the positive side, and §16.2's exactly-parallel plane gate replaces it. That document's §16.6 stages the build. Table D row 14. |
@@ -80,6 +79,101 @@ that its geometry does not meet (`docs/api-design.md` §2.1). decad joins two
 free edges only where coincidence is **proven** (Table J), and leaves every
 other edge free. A caller reads the residual free edges to see what did not
 join. There is no gap parameter to widen, in this design or a later one.
+
+**A fitted surface through a boundary — Fusion's Ruled and Boundary Fill.**
+Both name a face whose interior no recorded entity generates. A boundary states
+where a face ends and says nothing about what lies between, so the surface
+through it is a choice of blending function — a fit — and
+`docs/api-design.md` §2.1 is why that is refused rather than staged: every
+topology decision over a fitted surface is a floating-point sign test on an
+approximation, and a flipped sign gives a nonsensical answer rather than a
+slightly wrong one.
+
+**The rule decad builds by is not "mint no geometry".** It mints a section
+offset's lines and arcs (§16.2, §17.2) and a cap blend's cone patches
+(`docs/modify-reach-design.md` §8.3). The rule is a conjunction, and BOTH halves
+must hold: every generated coordinate has a closed form it is proven equal to,
+**and** every reading taken over it has a closed form too. A geometry meeting
+one half and not the other is refused, so passing the first half is never the
+admission.
+
+A boundary-interpolating patch fails both. Its coordinates come from a blend
+nobody stated, and its area integrand is the square root of a quartic even in
+the simplest ruled case — the patch between two straight edges that are not
+coplanar — so §8's rule that a sheet's `Area` is its faces' areas from the
+engine that already computes each one has no engine to name. The tree already
+shows this: `bounds_wall_area_internal_test.go`'s `convergedRuledArea` reaches a
+ruled patch's area only by sweeping a numerical integral at increasing
+resolutions until it settles, and it is used only to VALIDATE a bound, never to
+publish a reading. A quantity the repository can reach no other way is a
+quantity with no closed form here.
+`docs/spline-design.md` cannot state the missing rule either: its §2 admits
+whole recorded entities alone and mints no curve, and its §7 fixes both
+free-form surface variants as the exact extrusion or revolution of a recorded
+curve — a one-parameter rigid motion that GENERATES the surface. A boundary
+names no such motion (`docs/spline-design.md` §7.1).
+
+**What of the two intents a caller can already reach**, so that the refusal
+costs no move: a closed PLANAR boundary is `Document.Patch` or `Body.Patch`
+(§5); a ruled wall between two recorded closed sections is `Loft` under
+`WithSurfaceResult` (Table W), whose wall is flat triangles between proven
+stations rather than a fitted surface; the same between two open chains is
+`LoftChain`, whose pairing rule `docs/loft-design.md` §16 states and whose
+build Table D row 14 takes up; and extending a sheet from its own rim is `Extend`
+(`docs/surface-intersection-design.md`). What remains under the two Fusion
+names once those are subtracted is exactly the fitted non-planar patch, which
+is what this paragraph refuses. `Body.Patch`'s own non-planar chain is the same
+refusal reached from the other side, and R6 carries it.
+
+**What would have to exist**, recorded so nobody re-derives it: a surface the
+boundary DETERMINES rather than one a blend picks, with closed forms for its
+coordinates, its normal, its area and its self-intersection test.
+
+**This is NOT an upstream ask, and filing one would go to the wrong place.**
+Every ask in `docs/spline-design.md` §9 is an ask to `sketch`, and `sketch` is a
+2D constraint engine that publishes no surface at all — no change to it reaches
+either command. The change that would unblock these two is a new exact surface
+kernel inside decad, which is a different engine rather than an increment of
+this one.
+
+### 1.4 Reverse Normal — named, and staged for no increment
+
+**No shipped operation's result depends on which side of a sheet the caller
+meant while leaving the caller no way to say so.** Reversing a sheet's
+published normals and co-edge senses therefore closes no gap, and no increment
+takes it up. Every operation that could read a side either reads none, or takes
+the side as an argument:
+
+- `Thicken` takes `ThickenSide` and changes no source face (§16.1). §16.4 owns
+  why the side option and the result skin's outward normal are different
+  questions.
+- `Trim` takes `TrimSide`, which names which pieces of the receiver survive the
+  tool's cut rather than a side of the receiver's normal; `Extend` names the
+  end to extend through the edge-selector vocabulary; `Split` returns every
+  piece and reads no side at all (`docs/surface-intersection-design.md` §8).
+- `Stitch` derives orientation combinatorially across welded edges and then
+  fixes the global sign from the assembly's own signed volume or flux, so it
+  accepts no side and needs none (§6.3, §6.4). `Unstitch` carries each face's
+  orientation forward unchanged (§6.5).
+- `Union`, `Cut` and `Intersect` refuse a sheet because it claims no material
+  to combine, which is a statement about volume and not about orientation
+  (Table X).
+- The undercut survey and `Face.NormalAt` read the orientation §2.3 decides at
+  build, and that orientation is a determined consequence of the profile
+  winding and sweep direction the caller already chose (§4.2).
+- A sheet-against-solid `Clearance` row states the distance to the solid's
+  boundary without asserting which side the sheet is on (§9.3), so no side a
+  caller might mean changes the published answer.
+- `STL` and `OBJ` write the facet winding the build decided, which §10's audits
+  read; neither format's options carry a side.
+
+**What would make it necessary**: an operation whose result depends on the
+sheet's side and that cannot take that side as an argument. `Cut(solid, sheet)`
+keeping the piece on the sheet's negative side would be one, and
+`docs/surface-intersection-design.md` §10 rejects it for exactly that reason,
+giving the Split Body intent to `Document.Split` instead. Until such an
+operation is proposed, this entry names an operation rather than a gap. §16.4
+states what a Reverse Normal would have to do if one ever is.
 
 ## 2. The sheet body
 
@@ -238,6 +332,10 @@ func (b *Body) Unstitch(ctx context.Context) ([]*Body, error)
 func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...ThickenOption) (*Body, error)
 func WithThickenSide(side ThickenSide) ThickenOption
 
+// A second sheet at a stated normal distance from an admitted sheet (§17).
+func (b *Body) Offset(ctx context.Context, distance units.Value, opts ...OffsetOption) (*Body, error)
+func WithOffsetSide(side OffsetSide) OffsetOption
+
 // A sheet from one open sketch curve. §13 owns all four.
 type ChainExtrudeOption interface{ chainExtrudeOption() }
 type ChainRevolveOption interface{ chainRevolveOption() }
@@ -267,7 +365,10 @@ owning document, which is what lets `Union` take the same shape.
 
 `Body.Patch` retires its receiver and registers the filled body.
 `Document.Patch` consumes nothing — it builds from a sketch profile, as
-`Extrude` does.
+`Extrude` does. `Body.Offset` consumes nothing either: it registers its result
+and leaves its receiver LIVE, on the non-consuming terms `PlacedCopy` and
+`Duplicate` already take, because the offset sheet and the sheet it came from
+are what a caller measures, stitches or thickens together (§17.1).
 
 Worked, end to end — a closed box from three sheets:
 
@@ -459,8 +560,8 @@ Four gates, in this order, and each is reject-only:
    surface states. A vertex or a curve carrying a **nonzero bound** is not
    proven planar by this arm and falls to the second arm below. A chain
    proven **non-planar** is `ErrUnsupported` (R6) outright: a non-planar
-   patch needs a fitted free-form surface, which §1.2 stages, and no later
-   arm admits it.
+   patch needs a fitted free-form surface, which §1.3 refuses permanently, and
+   no later arm admits it.
 
    **A second arm — the LEVEL half of the shared-denotation certificate — is
    tried only when this first, exact arm refuses on a nonzero bound**, and its
@@ -1353,6 +1454,12 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R31 | `Trim`, `Extend` or `Split` in every increment before Table D row 8 | `ErrUnsupported` |
 | R32 | a curved stitched mesh lacks §10.1's one-source route or §10.2's proven sibling-weld route, has an unsupported surface kind, or has a non-identity stitch placement | `ErrUnsupported`, naming a source surface kind |
 | R33 | `RevolveChain` with an interior on-axis junction lacking one swept-wall end and one axis-line end, or with repeated on-axis junctions at one axial coordinate | `ErrDegenerate` |
+| R37 | `Offset` on a live body other than §17.1's admitted `patchPayload` or profile-fed `prismPayload` sheet — a solid, a sheet with no evaluator payload, or a prism sheet whose section is outside §17.1's admitted shapes | `ErrUnsupported` |
+| R38 | `Offset`'s prism offset drops a feature, cannot close a join, crosses or touches itself, or has an undecided offset audit or interval proof | `ErrUnsupported` |
+| R39 | `Offset` cannot prove the prism arm's generated plane-local geometry and millimetre distance exact, or cannot carry the patch arm's translation | `ErrUnsupported` |
+| R40 | `Offset` with a wrong-kind, non-finite, negative or zero distance | `ErrUnitKind` / `ErrNotFinite` / `ErrNegativeMagnitude` / `ErrDegenerate`, respectively |
+| R41 | `Offset` on a retired receiver | `ErrRetiredBody` |
+| R42 | `Offset` in every increment before Table D row 15 | `ErrUnsupported` |
 
 R6, R8, R10 and R20 are `ErrUnsupported` rather than `ErrDegenerate` on
 `docs/api-design.md` §8's own distinction: the input names real geometry and
@@ -1399,6 +1506,14 @@ matter which face the cause itself points to, because most of those causes
 (a mismatched weld group, an omitted original face) name no single face at
 all. "Naming a source surface kind" is true of every cause for that reason;
 only the unsupported-surface-kind cause additionally names the one at fault.
+
+R37, R38, R39 and R42 take `ErrUnsupported` for the reasons R24, R26, R27 and
+R31 take it: a receiver family this evaluator holds no recorded generator for,
+a construction it cannot prove, a value it cannot generate exactly, and a build
+that has not landed are each this evaluator's reach rather than geometry with
+no usable shape. R40 and R41 restate R25 and R28 for the second entry point
+rather than widening either row, so a caller reading one refusal reads both the
+same way.
 
 ## 8. Measurements
 
@@ -1869,6 +1984,7 @@ audits of §10.1 apply unchanged. This route publishes
 | `Fillet` / `Chamfer` | `ErrUnsupported` | `docs/modify-design.md`'s reduction rewrites a prism's **section**; a sheet's free boundary is not a section, and blending to a free edge is its own design |
 | `Shell` | `ErrUnsupported` | removes faces from a solid and offsets its material section; a prism sheet does carry a section, but it has no material or caps to remove. `Thicken` uses that section under §16's separate contract |
 | `Thicken` | §16's patch and profile-fed prism families build; the other families are R24 | builds a new solid from a sheet's recorded generator and retires the sheet |
+| `Offset` | §17's patch and profile-fed prism families build; the other families are R37 | builds a second sheet at a stated normal distance from the receiver's own faces, over the same recorded generator `Thicken` reads, and leaves the receiver live |
 | `Placed` / `PlacedCopy` / `Duplicate` | admitted, unchanged | a rigid motion of a payload; nothing in it reads solidity |
 | `Tessellate` / `STL` / `OBJ` | a prism, revolve, loft, all-planar stitched or §10.1–§10.2 revolve-backed stitched sheet tessellates and exports; other curved stitched sheets are R32 | each supported sheet path runs the manifold-with-boundary audit §10 describes |
 | `ToFace` / `ToFaceAngular` naming a **planar** face of a live sheet | admitted | the stop reads the face's plane and nothing about material, so `stops.go`'s resolution is unchanged |
@@ -1903,8 +2019,9 @@ reverses a decision already taken.
 | `docs/api-design.md` §6.1 | `Edge.Faces()`'s `len != 2` gloss gains the per-kind reading (§2.2) |
 | `docs/api-design.md` §8 | the v1 feature vocabulary gains `Patch`, `Stitch`, `Unstitch` and `WithSurfaceResult`; the signatures land beside the existing ones |
 | `docs/api-design.md` §8 | `Body.Thicken`, `ThickenSide` and `WithThickenSide` add §16's sheet-to-solid path under §6's consuming-body rule |
+| `docs/api-design.md` §8 | `Body.Offset`, `OffsetSide` and `WithOffsetSide` add §17's sheet-to-sheet path under §6's NON-consuming rule, the one `PlacedCopy` and `Duplicate` already take |
 | `docs/api-design.md` §9 | the predicate list gains `Free()`, and the rendering table gains its `free` token |
-| `docs/api-design.md` §13 | the v1 non-goal list keeps sheet-metal, and gains the §1.2 staged commands so the list stays the whole of what is out |
+| `docs/api-design.md` §13 | the v1 non-goal list keeps sheet-metal, and names §1.2's staged commands, §1.3's permanent refusals and §1.4's unstaged one, so the list stays the whole of what is out |
 | `docs/evaluator-design.md` §3 | the `Lump` row states "connected piece"; the topology-model rules gain the free-edge reading |
 | `docs/evaluator-design.md` §11 | the increment table gains Table D's rows |
 | `docs/verification-design.md` §1 | `Region`'s biconditional becomes validity **and** `Kind() == BodySolid` (§9.1) |
@@ -2277,10 +2394,17 @@ ANSWER is accepted and reads `Suspect`.
 | 12 | `Document.SweepChain` over a ONE-SPAN straight path (`docs/sweep-design.md` §15, PR C1): the sealed `ChainSweepOption` tier in place of the staged signature's `SweepOption`, Table SC's gate set, the chain prism reduction over the path's own height and composed length bound, and §15's T190–T195. An arc span and every composite path stay R34 |
 | 13 | `SweepChain`'s one-span ARC reduction and then §15.1's composite join (`docs/sweep-design.md` PRs C2 and C3): the wall-face rim lists a capless span supplies, the sew, the separation certificate over chain spans, and the assembled boundary audit. It retires R34 |
 | 14 | `Document.LoftChain` over a `LineSeg`-only correspondence (`docs/loft-design.md` §16, PR L1): the sealed `ChainLoftOption` tier, Table SL's gate set, §16.2's exactly-parallel plane gate and per-wall positive side, the open-walk cell walk with its two free end rungs, and §15's T196–T199. A curved correspondence stays R36 and a non-parallel plane pair stays R35 |
+| 15 | `Body.Offset` for §17's patch and profile-fed prism families, both sides: the patch arm's translation over the existing placement rebuild; the prism arm's `offsetProfile` section reused from §16.2 with its exact-generation gate, its offset audit and its whole-interval certification, and WITHOUT the source-and-offset nesting audit an annulus needs; Table R's R37–R42; Table X's own row; and §15's T200–T207. Other sheet families stay R37 |
 
 **Increment 7 depends on increment 1's patch and prism sheets and analytic
 prism builder, plus `docs/modify-design.md` §5/§8's section offset and audit.**
 It depends on none of increments 2–6.
+
+**Increment 15 has increment 7's dependency set exactly, and neither increment
+depends on the other**: 7 builds a solid from the offset section and 15 a
+sheet, over the same `offsetProfile` construction and the same two gates. Either
+may land first; 15 after 7 costs less review, because the gates 15 reuses are
+then already in the tree.
 
 **Increment 8 depends on increments 1 and 6**, and on no other: increment 1 for
 `BodyKind`, `Edge.IsFree` and §9.1's sheet validity audit, and increment 6 for
@@ -2319,12 +2443,13 @@ the same reason the closed-mesh audit would. Increment 4 states that in
 An admitted full-turn `RevolveChain` remains an open sheet: its off-axis free
 ends sweep one or two circles that nothing fills (§13.4).
 
-Staged past increment 8, each with the gap §1.2 names: surface Offset, Ruled,
-Boundary Fill and Reverse Normal. §16 stages the remaining `Thicken` receiver
-families at R24. Trim and Extend are increment 8's, over the shared-generator
+§16 stages the remaining `Thicken` receiver families at R24 and §17 the same
+families at R37. Trim and Extend are increment 8's, over the shared-generator
 class alone, and a sheet operand in `Union`/`Cut`/`Intersect` refuses
-permanently (Table X) with `Document.Split` carrying that intent instead. Every
-unlanded build refuses at the call with `ErrUnsupported`.
+permanently (Table X) with `Document.Split` carrying that intent instead. Ruled
+and Boundary Fill take no increment at all — §1.3 refuses them permanently —
+and Reverse Normal takes none either, on §1.4's own reading. Every unlanded
+build refuses at the call with `ErrUnsupported`.
 
 ## 15. Test obligations
 
@@ -2499,6 +2624,14 @@ The row-9 curved-mesh obligations are:
 | T155 | 100×60 mm `Document.Patch` with a radius-10 mm hole, positive 2 mm | 7 faces; volume and area intervals enclose `12000-200π` mm³ and `12640-160π` mm²; box (0,0,0)–(100,60,2) mm |
 | T156 | internal exact-generation check: U = 2^53 mm axis-parallel edge displaced by 1 mm | R27 `ErrUnsupported`; the held coordinate cannot equal the true derived coordinate |
 | T157 | 40 mm `ExtrudeChain` ribbon swept 10 mm, and a full-turn `RevolveChain` shell | R24 `ErrUnsupported` for both; the ribbon stays live with `Area` 400 mm², and the revolve shell retains two free edges |
+| T200 | 100×60 mm `Document.Patch`, offset positive 2 mm | `Kind() == BodySheet`; one face; `Area` exactly 6000 mm² and `Exact`, equal to the source's value AND its bound; `Bounds` (0,0,2)–(100,60,2) mm; `Edges(Free()).Exactly(4)`; the SOURCE is still live and reports its own `Area` and `Bounds` unchanged |
+| T201 | the same patch, offset negative 2 mm | the box is (0,0,-2)–(100,60,-2) mm and every other T200 assertion holds; source, positive result and negative result are three live bodies of one document, and `Document.Bodies()` reports all three |
+| T202 | 100×60 mm surface-extruded prism sheet over 10 mm, offset positive 3 mm | 8 wall faces — four straight, four corner arcs; `Edges(Free()).Exactly(16)`; `Area` `Approximate` over an interval enclosing `3200 + 60π` mm²; `Volume()` is `ErrNotSolid`; `Bounds` is (-3,-3,0)–(103,63,10) mm |
+| T203 | radius-10 mm whole-circle prism sheet over 10 mm, offset positive 2 mm and negative 2 mm | one wall face each; `Area` intervals enclose 240π and 160π mm²; the boxes reach ±12 and ±8 mm in x and y and keep z ∈ [0,10] mm. Shown-to-fail: remove the arc perimeter's rational π enclosure and the reading publishes a zero bound on a value no float represents, turning the `Approximate` assertion red |
+| T204 | §17.2's 4 mm-wide neck axis-parallel prism sheet over 10 mm, offset negative 3 mm | R38 `ErrUnsupported` naming the crossing audit; no result is registered, the source stays live, and `Document.Bodies()` is unchanged |
+| T205 | T202's result offset again by 1 mm, and T203's positive result offset again by 1 mm | R37 for the first — its section carries corner arcs and is no longer the axis-parallel line class — and a radius-13 mm sheet for the second, `Area` enclosing 260π mm² |
+| T206 | a 40 mm `ExtrudeChain` ribbon, a full-turn `RevolveChain` shell, a `Body.Patch` result, an all-planar stitched sheet and a solid box | R37 `ErrUnsupported` for each; every receiver stays live and readable, and no document body set changes |
+| T207 | internal exact-generation check: an axis-parallel edge at U = 2^53 mm offset by 1 mm | R39 `ErrUnsupported`; the held coordinate cannot equal the true generated one. Shown-to-fail: replace the `rationalFloatError` comparison with a small-residual test and the case is admitted, turning the refusal assertion red |
 
 T152's section is the 100×60 outer rectangle less the 90×50 inner
 rectangle. Omitting the inner loop makes its 15000 mm³ volume assertion fail
@@ -2764,7 +2897,9 @@ Normal should consume a sheet and rebuild it with every face normal and
 loop/coedge traversal reversed, preserving positions, `Area` and `Bounds`
 and their bounds; it must leave a solid receiver unsupported. It needs a
 payload replay rule for each sheet family and a fresh proof that every
-downstream orientation reader sees the reversal. §1.2 keeps it staged.
+downstream orientation reader sees the reversal. §1.4 records why no increment
+takes it up: no shipped operation's result turns on a side its caller cannot
+already name.
 
 This fixed-distance section construction does not land tapered extrude.
 `WithTaper` needs an offset for EVERY axial level and a proof that no two
@@ -2772,3 +2907,176 @@ intermediate sections or their ruled walls cross, including a proof for
 computed taper angles and their bounds. Certifying one endpoint section with
 `offsetProfile` proves none of those statements. `docs/evaluator-design.md`
 §12's tapered-extrude refusal therefore remains in force.
+
+## 17. Offset
+
+### 17.1 Entry point, side and receivers
+
+```go
+func (b *Body) Offset(ctx context.Context, distance units.Value,
+    opts ...OffsetOption) (*Body, error)
+
+type OffsetOption interface{ offsetOption() }
+type OffsetSide int
+const (
+    OffsetPositive OffsetSide = iota // default: along each source face's positive normal
+    OffsetNegative                   // opposite the positive normal
+)
+func WithOffsetSide(side OffsetSide) OffsetOption
+```
+
+**`Offset` returns a second sheet whose every face lies at the stated normal
+distance from the source face it came from.** `distance` is a strictly positive
+`units.Value` of kind Length, and its sign never chooses a side, exactly as
+`Thicken`'s thickness does not (§16.1). `WithOffsetSide` is a sealed option,
+admits exactly the two values above, and the last occurrence wins as
+`WithThickenSide` does. There is no centered value: an offset publishes one
+surface, and two surfaces are two calls. An unknown or nil option and a nil
+context are `ErrDegenerate`; a cancelled context returns `ctx.Err()` unchanged
+before commit.
+
+**The receiver stays LIVE.** Offset depends on its source and consumes nothing:
+the offset sheet and the sheet it came from are the pair a caller measures a
+clearance between, stitches into a closed boundary, or thickens separately, and
+retiring the source would put a `Duplicate` in front of each of those. The
+result registers under a new producer identity on the non-consuming terms
+`PlacedCopy` and `Duplicate` already take (`docs/api-design.md` §6). That is
+the one contract difference from `Thicken`, which consumes.
+
+The source sheet's positive side is §2.3's built orientation, read exactly as
+§16.1 reads it: a `Document.Patch` sheet's is its sketch plane's normal, and a
+surface-extruded profile-fed prism sheet's is the profile region's exterior on
+EVERY loop wall. So `OffsetPositive` grows a prism sheet's section and
+`OffsetNegative` erodes it, and the two never need a reversal of the source to
+be named (§1.4).
+
+The admitted receivers are §16.1's two, for §16.1's own reason: an offset needs
+one recorded generator and a closed-form rule that carries it a stated distance.
+
+| Sheet family and payload | Result at the call | Deciding record or missing proof |
+|---|---|---|
+| `Document.Patch`, `patchPayload` | admitted | the offset of a planar face along its own normal is that face translated, so §17.2's patch arm is a rigid motion over the unchanged recorded profile |
+| profile-fed prism sheet, `prismPayload` with `surfaceResult == true` | admitted under §17.2's gates | one outer loop, no holes; either all `LineSeg` walks parallel to recorded U or V, or one whole `CircleSeg`; `sectionDelta == 0` |
+| every other sheet family — revolve, sweep, loft, stitched, chain ribbon, chain revolve shell, `Body.Patch`, `Unstitch` | R37 | §16.1's table states each family's own missing proof, and an offset reads the same recorded generator `Thicken` does |
+| a `BodySolid` receiver | R37 | a solid encloses material, so offsetting its skin states nothing about the region; `Shell` is the operation that offsets a solid's section, and `docs/modify-design.md` §8 owns it |
+
+### 17.2 Construction and refusal
+
+**The patch arm is a translation, and it mints no geometry.** The result is the
+receiver's `patchPayload` under the composed motion that translates it by
+`±d·N` in the recorded patch frame, `N` the frame's own normal — the identical
+rebuild `PlacedCopy` performs, charging the identical placement rounding. The
+recorded profile, its frame axes and every plane-local coordinate are the
+source's, unchanged: a planar region carried along its own normal is congruent
+to itself, so no boundary is regenerated, no corner is minted and no offset
+audit has anything to run on. The millimetre conversion's own displacement is
+charged into the translation before the composition, as §16.2 charges it into a
+patch's prism levels. A conversion or composition this evaluator cannot carry
+is R39.
+
+This arm therefore adds no proof the evaluator does not already run, and a
+caller can spell it today as `PlacedCopy` under a translation built by hand.
+The entry point exists so that the direction comes from the sheet's own
+recorded normal rather than from the caller's arithmetic, and so that one
+operation covers both admitted families under one refusal set.
+
+**The prism arm is §16.2's offset without the annulus.** Write `P` for the
+receiver's recorded hole-free section. `OffsetPositive` requests `Q = P ⊕ d`
+and `OffsetNegative` requests `Q = P ⊖ d`. The result is a prism sheet over the
+source's own sweep: the same `frame`, the same `z0`/`z1` with the same
+`z0Delta`/`z1Delta`, the same accumulated placement, `surfaceResult` true, and
+`Q` as the section. A convex outside corner grows a radius-`d` arc and a
+concave inside corner miters, as `docs/modify-design.md` §8 states.
+`shell_offset.go`'s `offsetProfile` supplies `Q` and `auditOffsetSectionBudget`
+checks it, exactly as §16.2 has them supply and check each of Thicken's
+requested sections, and the certification of the whole offset interval
+`0 < τ ≤ d` runs unchanged for §16.2's own reason: an endpoint that looks
+simple cannot prove an earlier offset did not pinch and change which boundary
+the construction denotes.
+
+**Two of Thicken's proofs do not apply, and naming which is the whole of the
+difference.** The source-and-offset disjointness-and-nesting audit §16.2 runs
+before building an annulus has nothing here to run on — the result holds ONE
+region, bounded by `Q` alone, and denotes nothing whatever about `P`, so no
+nesting relation is published and none is needed. The result is likewise not an
+outer region less an inner one, so `reverseLoopRecordContext` and
+`evalTubeContext` are not on this path. Everything else §16.2 states — the
+exact-generation gate below, the offset audit, the interval certification and
+the refusal set — is this arm's unchanged.
+
+**The exact-generation gate is §16.2's, and it is what keeps
+`sectionDelta == 0` truthful.** The distance must convert to millimetres with
+zero displacement, every source line endpoint must resolve with zero bound, and
+every generated plane-local endpoint, center and radius must equal its
+closed-form value as a binary rational, compared with `dyadic`/
+`rationalFloatError`. The U/V normal is selected by the nonzero coordinate
+directly; a miter is solved over the exact dyadic input; a convex corner takes
+the stated corner point and radius `d`; a whole circle takes its stated center
+and the exact sum or difference of its radius and `d`. Never infer exactness
+from a small residual or from `math.Hypot`, `Atan2`, `Sin` or `Cos`: none has
+an accuracy contract here. A generated value that is not representable is R39.
+Because the gate holds, the result carries `sectionDelta == 0`, so
+`evalPrismContext`'s existing moment and extent proofs apply to the offset
+section as they do to a recorded one, and no reading describes a more precise
+wall than the record denotes.
+
+**A dropped feature, a failed miter, a crossing, a tangency, a shared boundary
+point, a lost orientation or an undecided comparison is R38**, on §16.2's own
+wording: a 4 mm-wide neck eroded by 3 mm crosses its own offset walls although
+every source segment is valid, and an erosion at or past the section's inradius
+drops a loop outright. A scale-anchored contact floor may refuse more inputs; a
+gap above that floor is never the proof of separation. Only the closed-form
+segment-pair decisions on decad's OWN synthesized section permit construction.
+`shell_offset.go`'s header owns that distinction, and it is why a closed-form
+decision on the offset is admissible where a residual against a handed-in curve
+would not be: `CLAUDE.md`'s reject-only rule governs what `sketch` hands over,
+and this section is decad's own construction proven in closed form.
+
+Gate order is fixed: check context, liveness, owned options and magnitude;
+select the receiver family; for a prism, convert and certify the distance;
+construct the requested offset and certify its generated values; run
+`auditOffsetSectionBudget`; prove the whole offset interval; build the sheet;
+recheck liveness and context; commit. A construction refusal is returned
+unchanged before any body is registered, and the receiver stays live in a
+refusal exactly as it does on success.
+
+### 17.3 Result and downstream readings
+
+**Both arms return a `BodySheet`.** The patch arm returns a one-face sheet with
+one free edge per coalesced recorded boundary walk — the source's own face and
+edge counts. The prism arm returns a prism sheet with one wall face per segment
+of `Q` and both rims free, inserted corner arcs counted as segments: `N_Q`
+faces and `2·N_Q` free edges for a single loop, and no cap. Roles are the new
+producer's `side(i, j)` indexing the RESULT record; no source face role is
+inherited (`docs/modify-design.md` §9), so a caller re-selects by geometric
+predicate as it already must after a Fillet.
+
+Both arms hold an ordinary payload of a class this evaluator already
+dispatches — `patchPayload` and a `surfaceResult` `prismPayload` — so §8's
+measurement rows, §9's `Verify` questions, §10's mesh and export, §11's Table X
+rows and §16's own `Thicken` admission all read the result by payload class
+under their existing gates. No row of any of them is amended.
+
+Where each reading and each bound comes from:
+
+| Reading | Value | Bound |
+|---|---|---|
+| `Area`, patch arm | the source's, unchanged | the source's, unchanged: the recorded profile and its region integral are the same ones, and a rigid motion moves no area |
+| `Bounds`, patch arm | the recorded boundary's box under the composed motion | the frame and placement rounding `prismBoundsContext` already charges, as `PlacedCopy` charges it |
+| `Area`, prism arm | `evalPrismContext`'s wall sum over `Q`, the omitted caps subtracted as §4.3 states | the perimeter and height terms that builder already composes; the section term is zero by §17.2's gate |
+| `Bounds`, prism arm | `prism_extent.go`'s reading over `Q` | the source's `z0Delta`/`z1Delta` unchanged, plus the frame and placement rounding |
+| `Volume`, `Centroid` | `ErrNotSolid`, both arms | — §8, by kind, not by soundness |
+
+A zero bound is a positive claim of exactness and is published only where the
+complete value is exactly representable. An offset whole circle's perimeter
+carries the rational π enclosure and reads `Approximate`, never an unbounded
+float evaluation, and no raw arithmetic follows a proven bound without charging
+its own rounding.
+
+**A second offset of an offset result is admitted for the whole circle alone.**
+The result passes §17.1's family gate — it is a `surfaceResult` prism sheet
+with `sectionDelta == 0` and no hole — and then meets the section-shape gate:
+an offset circle is again one whole `CircleSeg` and offsets again, while an
+offset rectilinear loop carries corner arcs and is no longer the axis-parallel
+line class, so it is R37. The identical reading decides `Thicken` on an offset
+result, through §16.1's own gate rather than a second rule.
