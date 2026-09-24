@@ -520,7 +520,7 @@ func oneModel(ctx context.Context, body *decad.Body, color solidlens.Color) ([]s
 // the positive side every surface-result wall inherits from the solid's
 // outward normal, back is the side a reader sees through the sheet's opening.
 func twoSidedModel(ctx context.Context, body *decad.Body, front, back solidlens.Color) ([]solidlens.Model, error) {
-	mesh, err := body.TessellateContext(ctx, units.Millimeters(featureChordTolerance))
+	mesh, err := body.Tessellate(ctx, units.Millimeters(featureChordTolerance))
 	if err != nil {
 		return nil, fmt.Errorf("tessellate: %w", err)
 	}
