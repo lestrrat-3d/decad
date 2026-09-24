@@ -70,6 +70,30 @@ func TestExtrudeChainOneLineRibbon(t *testing.T) {
 	require.Equal(t, []*decad.Body{body}, doc.Bodies())
 }
 
+// TestExtrudeChainRibbonReadsValid is docs/surface-design.md §9.1's fourth
+// validity leg, restated for a chain-fed prism: `sketch` already proved
+// T130's single line simple, ExtrudeChain refuses a non-positive height, and
+// a simple planar curve crossed with a positive interval cannot
+// self-intersect (§13.4). The ribbon's three structural legs hold by
+// construction, so the whole audit admits ValidityValid with no diagnostics
+// — never ValidityUndecided, which is what a payload without this leg's own
+// arm would read instead.
+func TestExtrudeChainRibbonReadsValid(t *testing.T) {
+	t.Parallel()
+	s, ch := lineChainSketch(t)
+	doc := decad.New()
+	body, err := doc.ExtrudeChain(s, ch, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+
+	rep, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	br, err := rep.ForBody(body)
+	require.NoError(t, err)
+	require.Equal(t, decad.ValidityValid, br.Validity.Outcome,
+		"a chain-fed prism ribbon earns the fourth leg by construction, exactly as its profile-fed sibling does")
+	require.Empty(t, br.Validity.Diagnostics)
+}
+
 // TestExtrudeChainDiagonalLineAreaBoundEnclosesAnalyticValue builds a
 // diagonal (irrational-length) one-line chain, so the wall area's bound is
 // genuinely nonzero (docs/surface-design.md §13.4's boundedAdd/boundedMul

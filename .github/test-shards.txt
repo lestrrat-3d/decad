@@ -1842,3 +1842,5 @@
 0	0.01	TestThickenChainRevolveReachesAxis
 1	0.02	TestThickenChainRevolveStep
 2	0.01	TestThickenChainRevolvePoleRefuses
+3	0.00	TestExtrudeChainRibbonReadsValid
+0	0.00	TestSweepChainRibbonReadsValid
