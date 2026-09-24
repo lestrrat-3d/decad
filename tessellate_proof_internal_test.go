@@ -55,7 +55,7 @@ func roleOf(t *testing.T, f *Face) string {
 func TestPrismProofRecordChargesEveryFaceItsOwnDisplacement(t *testing.T) {
 	t.Parallel()
 	body := internalHoledPlateBody(t, New())
-	mesh, err := tessellateContext(t.Context(), body, units.Millimeters(1))
+	mesh, err := tessellateContext(t.Context(), body, units.Millimeters(1), VerifyAll)
 	require.NoError(t, err)
 
 	// Every source face states a bound, and the mesh's global figure is their
@@ -113,7 +113,7 @@ func TestPlacedPrismChargesEveryFaceItsPlacementRounding(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	flat := internalHoledPlateBody(t, doc)
-	unplaced, err := tessellateContext(t.Context(), flat, units.Millimeters(1))
+	unplaced, err := tessellateContext(t.Context(), flat, units.Millimeters(1), VerifyAll)
 	require.NoError(t, err)
 
 	// A rotation about an axis no coordinate lies on: the frame/placement write
@@ -122,7 +122,7 @@ func TestPlacedPrismChargesEveryFaceItsPlacementRounding(t *testing.T) {
 	require.NoError(t, err)
 	turned, err := flat.Placed(t.Context(), motion)
 	require.NoError(t, err)
-	mesh, err := tessellateContext(t.Context(), turned, units.Millimeters(1))
+	mesh, err := tessellateContext(t.Context(), turned, units.Millimeters(1), VerifyAll)
 	require.NoError(t, err)
 
 	for _, f := range mesh.source {
@@ -184,7 +184,7 @@ func TestPrismVolSymDiffBracketsTheCylindersOwnSegmentDeficit(t *testing.T) {
 	const r, h = 4.0, 6.0
 	doc := New()
 	disc := internalDiscBody(t, doc, r, h)
-	mesh, err := tessellateContext(t.Context(), disc, units.Millimeters(0.05))
+	mesh, err := tessellateContext(t.Context(), disc, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
 	require.True(t, mesh.symDiffOK)
 
@@ -206,7 +206,7 @@ func TestPrismVolSymDiffBracketsTheCylindersOwnSegmentDeficit(t *testing.T) {
 
 	// A box chords nothing and displaces nothing, so its mesh IS its body.
 	box := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
-	flat, err := tessellateContext(t.Context(), box, units.Millimeters(1))
+	flat, err := tessellateContext(t.Context(), box, units.Millimeters(1), VerifyAll)
 	require.NoError(t, err)
 	require.Zero(t, flat.volSymDiff)
 	require.True(t, flat.symDiffOK)
@@ -223,7 +223,7 @@ func TestCupProofRecordCoversEveryPatchItHolds(t *testing.T) {
 	_, ok := cup.payload.(cupPayload)
 	require.True(t, ok, `a one-cap shell of a disc builds the cup payload`)
 
-	mesh, err := tessellateContext(t.Context(), cup, units.Millimeters(0.05))
+	mesh, err := tessellateContext(t.Context(), cup, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
 	require.True(t, mesh.symDiffOK)
 	require.Positive(t, mesh.volSymDiff)
@@ -260,7 +260,7 @@ func TestFacetedRestatementPublishesItsPayloadsOwnProofRecord(t *testing.T) {
 	require.Positive(t, fp.meshBound)
 	require.Positive(t, fp.volSymDiff)
 
-	mesh, err := tessellateContext(t.Context(), drilled, units.Millimeters(1))
+	mesh, err := tessellateContext(t.Context(), drilled, units.Millimeters(1), VerifyAll)
 	require.NoError(t, err)
 	require.Equal(t, fp.meshBound, mesh.bound)
 	require.Equal(t, fp.volSymDiff, mesh.volSymDiff)
@@ -339,7 +339,7 @@ func TestFreeformPrismProofRecordCoversItsOwnChording(t *testing.T) {
 	for _, height := range []float64{10, 2000} {
 		t.Run(units.Millimeters(height).String(), func(t *testing.T) {
 			body := internalFreeformArchBody(t, New(), height)
-			mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.05))
+			mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.05), VerifyAll)
 			require.NoError(t, err)
 			require.True(t, mesh.symDiffOK, `a chorded free-form prism still proves its occupied volume`)
 
@@ -360,7 +360,7 @@ func TestFreeformPrismProofRecordCoversItsOwnChording(t *testing.T) {
 	}
 
 	body := internalFreeformArchBody(t, New(), 10)
-	mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.05))
+	mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.05), VerifyAll)
 	require.NoError(t, err)
 
 	worst := 0.0

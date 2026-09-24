@@ -693,9 +693,50 @@ func boxGapExceeds(a, b [2]r3.Vec, margin float64) bool {
 		gap(a[1].Z, b[0].Z) || gap(b[1].Z, a[0].Z)
 }
 
-// revolveContactAudit is docs/tessellation-design.md §9's complete boundary
-// audit: every facet has positive area, adjacent facets meet ONLY along the
-// vertex or edge their indices share, and no non-adjacent pair touches at all.
+// requireRevolveFacetAreas proves docs/tessellation-design.md §1's positive-area
+// row over the whole mesh and returns the audit triangles it built on the way.
+//
+// It stands OUTSIDE revolveContactAudit, and runs at every verification level,
+// because the two answer different questions at different costs. Positive area
+// is per FACET and linear; a zero-area facet has no normal, so a renderer, the
+// exporter's own facet normals and the boolean all need it. Contact is per
+// facet PAIR and quadratic, and it is what a caller who only wants to draw the
+// mesh declines. Folding the first into the second would silently drop §1's
+// positive-area row from every mesh built below VerifyBoundary.
+//
+// The returned slice is parallel to tris, so revolveContactAudit consumes it
+// rather than walking the facets a second time. delta is the combined
+// coordinate displacement deltaC + deltaR, as the audit's own doc comment
+// derives it.
+func requireRevolveFacetAreas(budget *workBudget, verts []r3.Vec, tris [][3]int, delta float64) ([]revolveAuditTri, error) {
+	if err := budget.err(); err != nil {
+		return nil, err
+	}
+	if isNonFinite(delta) || delta < 0 {
+		return nil, fmt.Errorf(`%w: this revolve mesh states no finite coordinate displacement, so its facets cannot be audited`, ErrUnsupported)
+	}
+	data := make([]revolveAuditTri, len(tris))
+	for i, tri := range tris {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
+		t, ok := newRevolveAuditTri(verts, tri)
+		if !ok {
+			return nil, fmt.Errorf(`%w: revolve facet %d holds a coordinate that is not finite`, ErrUnsupported, i)
+		}
+		if err := requireRevolveFacetArea(t, i, delta); err != nil {
+			return nil, err
+		}
+		data[i] = t
+	}
+	return data, budget.err()
+}
+
+// revolveContactAudit is docs/tessellation-design.md §9's facet-contact audit:
+// adjacent facets meet ONLY along the vertex or edge their indices share, and
+// no non-adjacent pair touches at all. It runs at VerifyBoundary and above, and
+// data is requireRevolveFacetAreas' own output for the same triangle set, which
+// has already proven every facet positive-area.
 //
 // §9 asks for that verdict four times over — at the ideal-coordinate endpoint,
 // at the stored unplaced endpoint, and across the two affine homotopies that
@@ -728,29 +769,12 @@ func boxGapExceeds(a, b [2]r3.Vec, margin float64) bool {
 // ones the stored mesh has, which is exactly what §9 charges to deltaC and
 // deltaR. A pair the audit cannot decide is ErrUnsupported (§12), never an
 // admission.
-func revolveContactAudit(budget *workBudget, verts []r3.Vec, tris [][3]int, delta float64) error {
+func revolveContactAudit(budget *workBudget, data []revolveAuditTri, tris [][3]int, delta float64) error {
 	if err := budget.err(); err != nil {
 		return err
 	}
-	if isNonFinite(delta) || delta < 0 {
-		return fmt.Errorf(`%w: this revolve mesh states no finite coordinate displacement, so its facets cannot be audited`, ErrUnsupported)
-	}
-	data := make([]revolveAuditTri, len(tris))
-	for i, tri := range tris {
-		if err := budget.step(); err != nil {
-			return err
-		}
-		t, ok := newRevolveAuditTri(verts, tri)
-		if !ok {
-			return fmt.Errorf(`%w: revolve facet %d holds a coordinate that is not finite`, ErrUnsupported, i)
-		}
-		if err := requireRevolveFacetArea(t, i, delta); err != nil {
-			return err
-		}
-		data[i] = t
-	}
-	if err := budget.err(); err != nil {
-		return err
+	if len(data) != len(tris) {
+		return fmt.Errorf(`%w: the revolve facet audit holds %d triangles for a mesh of %d facets`, ErrUnsupported, len(data), len(tris))
 	}
 
 	f := len(tris)

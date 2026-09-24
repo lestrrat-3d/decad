@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
+	"github.com/lestrrat-go/option/v3"
 )
 
 // This file is the tessellation half of the export slice (core §11,
@@ -57,11 +58,26 @@ type Mesh struct {
 	// volSymDiff stays zero.
 	volSymDiff float64
 	symDiffOK  bool
+	// boundaryOK is docs/tessellation-design.md §1's Embedding row: every
+	// boundary audit this body's payload supports ran and passed, the
+	// facet-contact audit included. It is false exactly when VerifyNone was
+	// asked of a payload that carries such an audit — the revolve path today
+	// (payloadAuditsFacetContact) — and true everywhere else, since every
+	// other boundary audit is linear and runs at every level.
+	// [Mesh.BoundaryVerified] publishes it; tessellateContext is the one
+	// writer.
+	boundaryOK bool
 }
 
 type tessellationCacheEntry struct {
 	chordBits uint64
-	mesh      *Mesh
+	// verify is the level the cached mesh was BUILT at, and half of the entry's
+	// key (docs/tessellation-design.md §1.1). Keying on the tolerance alone
+	// would hand a VerifyNone mesh back to a boolean whose own internal
+	// tolerance happened to match, and the boolean's gates are stated over a
+	// mesh it believes was proven.
+	verify Verification
+	mesh   *Mesh
 }
 
 // sourceBound reads docs/tessellation-design.md §2's sourceBound(face) for one
@@ -103,6 +119,16 @@ func (m *Mesh) Vertices() []r3.Vec { return append([]r3.Vec(nil), m.vertices...)
 // answers on for a wall the solid the sheet came from would have carried. The
 // indices describe the mesh's own connectivity; they are not selectors
 // (core §3 invariant #3).
+//
+// "Outside the body" presupposes an EMBEDDED surface, which is what the
+// facet-contact audit proves, so the word holds as a geometric statement only
+// when [Mesh.BoundaryVerified] is true. On a mesh built below [VerifyBoundary]
+// the winding is still consistent across every shared edge and still outward
+// under the construction's own convention — the signed-volume orientation
+// audit runs at every level — but a self-intersecting closed mesh can carry a
+// positive signed volume while having points where "outside" names nothing.
+// For a renderer culling back faces or lighting them the two readings agree;
+// for a caller who needs the guarantee, ask for it.
 func (m *Mesh) Triangles() [][3]int { return append([][3]int(nil), m.triangles...) }
 
 // SourceFaces returns, parallel to Triangles, the analytic face each facet
@@ -209,15 +235,47 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // reaches through this method. Export still succeeds: [Body.STL] and
 // [Body.OBJ] write a sheet's mesh exactly as they write a solid's.
 //
+// [WithVerification] chooses how much of the mesh's proof this call runs. The
+// default is [VerifyAll]: every audit and proof the body's payload supports,
+// which is the only mesh [Union], [Cut] and [Intersect] accept. A lower level
+// returns the SAME mesh — same vertices, same indices, same order, same proven
+// Bound — and simply declines to prove some of it, which both costs less and
+// reaches tolerances the facet-pair audit's own work ceiling refuses. The
+// mesh says which proofs it ended up with through [Mesh.BoundaryVerified] and
+// [Mesh.VolumeVerified].
+//
 // It returns ctx.Err() unchanged when ctx is canceled before or during
-// tessellation.
-func (b *Body) Tessellate(ctx context.Context, tol units.Value) (*Mesh, error) {
-	return tessellateContext(ctx, b, tol)
+// tessellation. A nil ctx is [ErrDegenerate] (core §12): the context is polled
+// rather than merely stored, so a nil one is a caller mistake this call cannot
+// carry out.
+func (b *Body) Tessellate(ctx context.Context, tol units.Value, opts ...TessellateOption) (*Mesh, error) {
+	folded := make([]option.Interface, len(opts))
+	for i, o := range opts {
+		folded[i] = o
+	}
+	verify, err := foldVerification(folded, VerifyAll)
+	if err != nil {
+		return nil, err
+	}
+	return tessellateContext(ctx, b, tol, verify)
 }
 
 // tessellateContext is the read-only evaluator's cancellable tessellation
 // entry. It builds only an unowned Mesh and never touches document state.
-func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, error) {
+//
+// It is also the one writer of the mesh's boundaryOK reading and the one place
+// a level below VerifyAll withholds docs/tessellation-design.md §2's area and
+// volume proofs. Both live here rather than in each payload path so the
+// contract holds for every path by construction: a path that skipped some
+// terms of a proof cannot publish the rest of it, and a path that runs no
+// facet-contact audit cannot forget to say what it did prove.
+func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Verification) (*Mesh, error) {
+	// core §12's rule for every operation that takes a context: a nil one
+	// cannot be polled, and every cancellation check below would dereference
+	// it, so it is refused at the entry before the body is examined.
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a tessellation`, ErrDegenerate)
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -235,29 +293,39 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 		return nil, fmt.Errorf(`%w: this evaluator cannot tessellate a body it did not build`, ErrUnsupported)
 	}
 	key := math.Float64bits(chord)
-	if cached := b.tessellationCache.Load(); cached != nil && cached.chordBits == key {
+	if cached := b.tessellationCache.Load(); cached != nil && cached.chordBits == key && cached.verify == verify {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		return cached.mesh, nil
 	}
-	mesh, err := tessellateBodyContext(ctx, b, chord)
+	mesh, err := tessellateBodyContext(ctx, b, chord, verify)
 	if err != nil {
 		return nil, err
 	}
+	if verify < VerifyAll {
+		mesh.withholdProofs()
+	}
+	mesh.boundaryOK = verify >= VerifyBoundary || !payloadAuditsFacetContact(b.payload)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	b.tessellationCache.Store(&tessellationCacheEntry{chordBits: key, mesh: mesh})
+	b.tessellationCache.Store(&tessellationCacheEntry{chordBits: key, verify: verify, mesh: mesh})
 	return mesh, nil
 }
 
-func tessellateBodyContext(ctx context.Context, b *Body, chord float64) (*Mesh, error) {
+// tessellateBodyContext dispatches one body to its payload's own tessellator.
+// verify reaches only the paths that would otherwise COMPUTE a proof the level
+// withholds — prism, cup and revolve. A restatement path (faceted, loft,
+// stitch) copies its proof terms off the payload at no cost and publishes them
+// unconditionally; tessellateContext withholds them afterwards, so those paths
+// carry no level of their own.
+func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify Verification) (*Mesh, error) {
 	if fp, ok := b.payload.(facetedPayload); ok {
 		return tessellateFaceted(ctx, b, fp, chord)
 	}
 	if cp, ok := b.payload.(cupPayload); ok {
-		return tessellateCup(ctx, b, cp, chord)
+		return tessellateCup(ctx, b, cp, chord, verify)
 	}
 	if lp, ok := b.payload.(loftPayload); ok {
 		if lp.surfaceResult {
@@ -277,7 +345,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64) (*Mesh, 
 		return tessellateLoft(ctx, b, lp)
 	}
 	if rp, ok := b.payload.(revolvePayload); ok {
-		return tessellateRevolve(ctx, b, rp, chord)
+		return tessellateRevolve(ctx, b, rp, chord, verify)
 	}
 	if cbp, ok := b.payload.(capBlendPayload); ok {
 		return tessellateCapBlend(ctx, b, cbp, chord)
@@ -556,6 +624,15 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64) (*Mesh, 
 	}
 	if err := composeFaceBounds(&mesh, faceTrim, faceAxial, vertexStore, pp.sectionDelta); err != nil {
 		return nil, err
+	}
+	if verify < VerifyAll {
+		// The area slack accumulated above is only part of its composition —
+		// the section-displacement and per-facet terms below are the rest —
+		// and the occupied-volume proof has not started. The caller asked for
+		// neither, so neither is finished and neither is published
+		// (tessellateContext's own withholdProofs is what drops them). Every
+		// face bound this mesh states is complete and stands.
+		return &mesh, nil
 	}
 	if pp.sectionDelta > 0 {
 		wallMove := productUpper(sectionDisplacementLength(pp.sectionDelta, walks), math.Abs(pp.z1-pp.z0))
@@ -1021,7 +1098,10 @@ func freeformChordAreas(chain freeformChain, height float64) (float64, float64) 
 // whole body; a hole of C is a solid POST rising from the floor. The planar
 // faces (the kept cap over O, the pocket floor over C, and one rim band per
 // loop) triangulate through the shipped cap triangulator.
-func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64) (*Mesh, error) {
+// verify decides whether the area-slack and occupied-volume proofs at the end
+// of the build are composed at all; every audit and every face bound above
+// them runs at each level (docs/tessellation-design.md §1).
+func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, verify Verification) (*Mesh, error) {
 	byRole := map[string]*Face{}
 	for _, f := range b.Faces() {
 		for _, o := range f.Origins() {
@@ -1362,6 +1442,12 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64) (
 	// trim, store and level terms alone (docs/tessellation-design.md §6).
 	if err := composeFaceBounds(&mesh, faceTrim, faceAxial, vertexStore, 0); err != nil {
 		return nil, err
+	}
+	if verify < VerifyAll {
+		// The same reading the prism arm states: the slack accumulated above
+		// is unfinished without the per-facet term below, and the
+		// occupied-volume proof has not started, so neither is published.
+		return &mesh, nil
 	}
 	mesh.areaSlack = absSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, vertexStore))
 

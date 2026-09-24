@@ -72,6 +72,7 @@
 0	0.03	TestEdgeCross2FracsMatchesCross2xUpToOneSharedFactor
 0	0.01	TestEvalCupRejectsOverflowedMeasurements
 0	0.01	TestEvalRevolveRejectsOverflowedMeasurements
+0	0.10	TestExportBytesAreIdenticalAcrossVerificationLevels
 0	0.96	TestExtrudeBoundsSweepEnclosesArcApex
 0	0.01	TestExtrudeCirclePrismBoundsTighten
 0	0.25	TestExtrudeClosedSplineProfileBuilds
@@ -689,6 +690,7 @@
 1	0.19	TestNormalAtArmBoundCoversItsOwnDefect
 1	0.00	TestNormalAtRefusesNURBSSurface
 1	0.00	TestOperandSymDiffRefusesAMeshWithNoOccupiedVolumeProof
+1	0.03	TestOperandSymDiffRefusesARealUnverifiedMesh
 1	0.01	TestOrientRatAgreesWithOrientSignExact
 1	0.00	TestOutwardRoundingNeverPublishesAFlushedZero
 1	0.03	TestOverBudgetConversionRefusesBeforeLifting
@@ -835,7 +837,7 @@
 1	0.00	TestRevolveBudgetReservesBothCoordinateStages
 1	0.00	TestRevolveCellAreaSlackBracketsTheTrueJacobianGap
 1	0.00	TestRevolveContactAuditRefusesACrossingPair
-1	0.00	TestRevolveContactAuditRefusesAFacetThinnerThanItsOwnDisplacement
+1	0.00	TestRevolveFacetAreaRefusesAFacetThinnerThanItsOwnDisplacement
 1	0.00	TestRevolveCoordMaxCoversEveryIdealCoordinate
 1	0.01	TestRevolveEdgeAxisDirectionSense
 1	0.00	TestRevolveEdgeAxisMustBeCoplanar
@@ -938,6 +940,7 @@
 1	0.00	TestTessellationCacheCopiesDoNotInheritEntries
 1	0.00	TestTessellationCacheErrorsCancellationAndAccessorCopies
 1	0.00	TestTessellationCacheKeysAndReplacement
+1	0.01	TestTessellationCacheNeverCrossesVerificationLevels
 1	0.00	TestTessellationCachePayloadClasses
 1	0.00	TestTessellationCacheRetainedMemory
 1	0.00	TestTorusCrossingsCancellationReachesTheChainBuild
@@ -1237,6 +1240,7 @@
 2	0.04	TestTessellateCapBlendPlateExportsDeterministically
 2	0.05	TestTessellateCapBlendReflexApexFan
 2	0.16	TestTessellateCapBlendRoundedRectMiters
+2	0.10	TestTessellateDefaultsToVerifyAll
 2	0.01	TestTessellateLoftRefusesAnUnrestatablePayload
 2	0.01	TestTessellatePlateWithHole
 2	0.02	TestTessellateRejectsTangentHole
@@ -1245,6 +1249,7 @@
 2	0.01	TestUndercutUnseparablePullIsUndecided
 2	0.01	TestUnionDisjointCubes
 2	0.02	TestUnionRejectsVertexTangentContact
+2	0.45	TestVerificationLevelsAgreeOnEveryVertexAndIndex
 2	0.01	TestVerifyAdmittedCoplanarPrismPairResolvesAnalytically
 2	0.05	TestVerifyAskedSurveysAreAnswered
 2	0.02	TestVerifyClearanceCancellationInsideSturmChainBuild
@@ -1256,6 +1261,7 @@
 2	3.07	TestVerifyGearScaleEightRegionOverlapReportsSummedVolume
 2	18.17	TestVerifyGearScaleOverArrangementCapStaysSuspect
 2	0.36	TestVerifyInterferenceRowsKeepDocumentPairOrder
+2	0.10	TestVerifyNonePublishesOnlyPositiveAreaFacets
 2	0.01	TestVerifyOptionValidation
 2	0.02	TestVerifyPublishAbsentWall
 2	0.02	TestVerifyPublishRevolveVoid
@@ -1337,6 +1343,7 @@
 3	0.01	TestDuplicatePlainExtrudeHasNoBlendRoles
 3	0.05	TestDyadicVectorMatchesBigRatVector
 3	0.01	TestEvalLoftCollinearSplitKeepsTwoFacesPerCell
+3	0.48	TestExportWritesABodyTheProvenPathRefusesAtItsOwnDefault
 3	0.01	TestExtrudeArcSectionBoxEnclosesArcApex
 3	0.04	TestExtrudeFreeformJointCarriesChainVerdict
 3	0.18	TestExtrudeFreeformR19RefusesTheBuild
@@ -1482,6 +1489,8 @@
 3	0.02	TestVerifyDiagnosticsUnsupportedFacetedSurveys
 3	0.04	TestVerifyEffectiveRequestRecorded
 3	0.01	TestVerifyExactlyTangentPairStaysUndecided
+3	0.47	TestVerifyNoneMeetsAToleranceTheProvenPathRefuses
+3	0.02	TestVerifyNoneWithholdsTheVolumeProofOnARestatedMesh
 3	0.03	TestVerifyPublishCapBlendWallStaged
 3	0.02	TestVerifyPublishExactZeroWall
 3	0.08	TestVerifyPublishMeasuredWall
@@ -1655,6 +1664,8 @@
 3	0.00	TestStitchCurvedMassCorrectsInwardOrientationForTorus
 2	0.00	TestUnstitchBoxYieldsSixFreeSheets
 3	0.00	TestUnstitchRestitchRoundTripMatchesOriginal
+0	0.02	TestTessellateNilContextIsDegenerate
+0	0.01	TestTessellateRefusesAVerificationLevelItDoesNotKnow
 0	0.00	TestUnstitchRevolveRoundTripStaysASheet
 1	0.00	TestUnstitchTableR
 2	0.00	TestUnstitchAtomicCommitLeavesDocumentUnchanged

@@ -187,9 +187,10 @@ to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `tessellate.go` | `Mesh` and `Body.Tessellate`: the proof record, the shared loop chording, and the dispatch to each payload path. See the file's own doc comment and `docs/tessellation-design.md`. |
+| `tessellate.go` | `Mesh` and `Body.Tessellate`: the proof record and which level publishes it, the shared loop chording, and the dispatch to each payload path. See the file's own doc comment and `docs/tessellation-design.md`. |
+| `tessellate_verification.go` | `Verification`, `WithVerification` and what a mesh publishes about its own proofs. See `docs/tessellation-design.md` §1. |
 | `tessellate_revolve.go` | `tessellateRevolve`: the tolerance split, the meridian and angular chordings, and the rings, cells, poles and partial caps a revolve builds from them. See the file's own doc comment. |
-| `tessellate_revolve_proof.go` | The revolve mesh's proofs: certified angular trig, both coordinate stages, the facet-pair and vertex-link audits, and a straight cell's `Ecell`. See the file's own doc comment. |
+| `tessellate_revolve_proof.go` | The revolve mesh's proofs: certified angular trig, both coordinate stages, the facet-area, facet-pair and vertex-link audits, and a straight cell's `Ecell`. See the file's own doc comment. |
 | `tessellate_revolve_arc.go` | What a CIRCULAR revolve generator needs: its meridian stations, its `Ecell` by certified subdivision, and its cap segment area. See the file's own doc comment. |
 | `tessellate_revolve_volume.go` | The revolve mesh's occupied-volume proof: the meridian first-moment allowance, the per-cell angular homotopy integral and the two coordinate-stage allowances. See the file's own doc comment. |
 | `tessellate_station.go` | `chordStationBound`: the proven enclosure gap of one interior chord station on a circular walk. See the file's own doc comment. |

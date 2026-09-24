@@ -242,6 +242,13 @@ vol, err := body.Volume()  // v1 after a boolean: {12.9997mm³, Approximate, 1e-
                            // vN:                 {13.0000mm³, Exact,       0mm³}
 ```
 
+A mesh's proof level is a property of the MESH, not of a scalar, so it is its
+own vocabulary beside `Exactness`: `Verification` says how much proof
+`Tessellate` was asked to run, and `Mesh.BoundaryVerified`/`Mesh.VolumeVerified`
+say which proofs the returned mesh carries (`docs/tessellation-design.md` §1).
+`Mesh.Bound` remains a `units.Value` at every level and is never withheld, so
+nothing here weakens invariant #2.
+
 `Measurement`, `VecMeasurement` and `Box` (§6) are the **three and only three**
 bounded results the API returns. Every one of them carries a `Bound`; how
 verification judges each against the caller's tolerance is specified in
@@ -1499,17 +1506,29 @@ gap is decad's mandate.
 ## 11. Export and translation
 
 ```go
-func (b *Body) Tessellate(ctx context.Context, tol units.Value) (*Mesh, error) // an OUTPUT, not the representation
+func (b *Body) Tessellate(ctx context.Context, tol units.Value, opts ...TessellateOption) (*Mesh, error) // an OUTPUT, not the representation
 func (b *Body) STL(w io.Writer, opts ...STLOption) error
 func (b *Body) OBJ(w io.Writer, opts ...OBJOption) error
 ```
 
 `docs/tessellation-design.md` is normative for the mesh these calls consume and
 return: shared boundary samples, two-sided `Mesh.Bound`, source-face mapping,
-area slack, the symmetric-difference proof a boolean requires, and explicit
+area slack, the symmetric-difference proof a boolean requires, the
+`Verification` level each proof is gated on, and explicit
 per-payload staging. A payload with no complete boundary proof is never
 exported. A mesh without the separate occupied-volume proof is never admitted
 to a boolean by an unproved generic bound.
+
+**`Tessellate` defaults to `VerifyAll`; `STL` and `OBJ` default to
+`VerifyNone`.** A writer consumes vertices and indices and reads no proof term,
+so paying for the facet-contact audit and the two volume-class proofs buys an
+exporter nothing — and the audit's own work ceiling refuses ordinary bodies at
+the size-derived default tolerance the exporter itself chose, which no caller
+can raise without asking for a coarser mesh than the exporter wanted. Both
+writers take `WithVerification` to demand the proof and accept the refusals that
+come with it. `STL`'s doc comment states, beside its existing warning that a
+sheet's file is not a solid, that a default file is closed but not proven free
+of self-intersection.
 
 `Tessellate` passes `ctx` through chording, loop-clearance scans, cap
 triangulation, mesh audits, and faceted restatement. Cancellation returns

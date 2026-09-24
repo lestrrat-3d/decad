@@ -154,11 +154,17 @@ type revolvePlan struct {
 	coordMax    float64
 	sweep       float64
 	chord       float64
+	// verify is how much of docs/tessellation-design.md §1's proof this build
+	// runs: below VerifyBoundary the facet-contact audit is skipped and §3's
+	// pair-test ceiling is charged nothing, and below VerifyAll the per-cell
+	// area slack and occupied-volume terms are never composed. Every other
+	// audit, and the face bounds, run at each level.
+	verify Verification
 }
 
 // tessellateRevolve meshes a revolved body (docs/tessellation-design.md §§8-10).
-func tessellateRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64) (*Mesh, error) {
-	plan, err := planRevolve(ctx, b, rp, chord)
+func tessellateRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64, verify Verification) (*Mesh, error) {
+	plan, err := planRevolve(ctx, b, rp, chord, verify)
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +307,7 @@ func resolveRevolve(ctx context.Context, rp revolvePayload) (*revolveResolution,
 // §8's tolerance split in its stated order: both coordinate stages are reserved
 // against count-independent ceilings, the meridian takes half of what is left
 // and chords every circular walk, and the angular sequence takes the remainder.
-func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64) (*revolvePlan, error) {
+func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64, verify Verification) (*revolvePlan, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -373,6 +379,7 @@ func planRevolve(ctx context.Context, b *Body, rp revolvePayload, chord float64)
 		deltaM: deltaM, deltaPhi: deltaPhi,
 		deltaCPrior: deltaCPrior, deltaRPrior: deltaRPrior, samplePrior: res.samplePrior,
 		rhoMax: rhoMax, coordMax: coordMax, sweep: sweep, chord: chord,
+		verify: verify,
 	}, nil
 }
 
@@ -440,7 +447,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		return nil, revolveSectionRetry(loopMesh, err)
 	}
 
-	if err := revolvePreflightFacets(loopMesh, p.nPhi, rp.full, sheet, p.work); err != nil {
+	if err := revolvePreflightFacets(loopMesh, p.nPhi, rp.full, sheet, p.verify >= VerifyBoundary, p.work); err != nil {
 		return nil, err
 	}
 	angular, err := revolveAngularSequence(rp, p.nPhi)
@@ -536,9 +543,12 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// answers for every cell and every angular interval of it. A sheet
 	// publishes no occupied-volume proof at all (docs/surface-design.md §10),
 	// so it skips this factor and the per-cell swept volume below rather than
-	// prove a figure publishRevolveProof will never read.
+	// prove a figure publishRevolveProof will never read. A level below
+	// VerifyAll skips both for the same reason: it publishes neither the area
+	// slack nor the occupied-volume bound, so nothing reads either term.
+	proofs := p.verify >= VerifyAll
 	var angularHomotopy *big.Rat
-	if !sheet {
+	if proofs && !sheet {
 		var err error
 		angularHomotopy, err = revolveAngularHomotopyFactor(angular.step)
 		if err != nil {
@@ -572,6 +582,9 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			cur.rho = math.Max(cur.rho, math.Max(lo.rho, hi.rho))
 			cur.sag = math.Max(cur.sag, lo.sag)
 			faceCells[face] = cur
+			if !proofs {
+				continue
+			}
 			slack, err := revolveCellSlack(p.ideal, angular, lo, hi, coord)
 			if err != nil {
 				return nil, err
@@ -584,7 +597,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	}
 	// Σ_cells Icell: one meridian cell's reading answers for each of the nPhi
 	// angular intervals it spans.
-	if !sheet {
+	if proofs && !sheet {
 		cellVolume.Mul(cellVolume, new(big.Rat).SetInt64(int64(p.nPhi)))
 	}
 
@@ -616,7 +629,9 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 		if err := emitRevolveCaps(ctx, mesh, loopMesh, sectionPts, sectionLoops, angular.samples-1, p.faceOf); err != nil {
 			return nil, err
 		}
-		cellSlack = absSumUpper(cellSlack, productUpper(2, revolveCapSegmentArea(p)))
+		if proofs {
+			cellSlack = absSumUpper(cellSlack, productUpper(2, revolveCapSegmentArea(p)))
+		}
 	}
 	if len(mesh.triangles) == 0 {
 		return nil, fmt.Errorf(`%w: this revolve's recorded section sweeps no face`, ErrDegenerate)
@@ -650,15 +665,28 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 			return nil, err
 		}
 	}
-	if err := revolveContactAudit(newWorkBudget(ctx), mesh.vertices, mesh.triangles, coord); err != nil {
-		// A crossing or an undecided contact is the one failure a finer
-		// angular sequence can still answer, and §3 makes the global count the
-		// thing an angular failure increments. A canceled context or an
-		// exhausted work budget is not that failure and is returned unchanged.
-		if !errors.Is(err, ErrUnsupported) {
-			return nil, err
+	// Every facet keeps a positive area under the displacement this mesh
+	// carries, at every verification level (docs/tessellation-design.md §1's
+	// Geometry row, §9's own paragraph): a zero-area facet has no normal, so a
+	// renderer and the boolean both need the check, and it is linear in the
+	// facets. It also builds the audit triangles the facet-pair audit below
+	// consumes, so the two share one pass and one work budget.
+	auditBudget := newWorkBudget(ctx)
+	auditTris, err := requireRevolveFacetAreas(auditBudget, mesh.vertices, mesh.triangles, coord)
+	if err != nil {
+		return nil, err
+	}
+	if p.verify >= VerifyBoundary {
+		if err := revolveContactAudit(auditBudget, auditTris, mesh.triangles, coord); err != nil {
+			// A crossing or an undecided contact is the one failure a finer
+			// angular sequence can still answer, and §3 makes the global count the
+			// thing an angular failure increments. A canceled context or an
+			// exhausted work budget is not that failure and is returned unchanged.
+			if !errors.Is(err, ErrUnsupported) {
+				return nil, err
+			}
+			return nil, &revolveRefineError{err: err, retry: revolveRefine{loop: -1}}
 		}
-		return nil, &revolveRefineError{err: err, retry: revolveRefine{loop: -1}}
 	}
 	// The signed-volume orientation check decides nothing on an open mesh:
 	// the sum is anchor-dependent when nothing pins where the missing
@@ -970,7 +998,15 @@ func revolveCapSegmentArea(p *revolvePlan) float64 {
 // sheet at a finer tolerance than its own mesh actually needs. A full
 // revolution already charges no cap for a solid, so sheet changes nothing
 // there.
-func revolvePreflightFacets(loops []revLoopMesh, nPhi int, full, sheet bool, work *revolveWork) error {
+//
+// audit says whether this build will run the facet-contact audit. §3 charges
+// maxFacetPairTestsPerCall only when it will: that ceiling bounds the work one
+// all-pairs audit may do, and a build that runs no pair predicate does none of
+// that work. The facet and facet-work ceilings bound ALLOCATION instead and are
+// charged either way. This is why the tolerance a VerifyAll revolve refuses for
+// the pair ceiling alone is met at VerifyNone — the refusal was a work budget,
+// never a statement that the geometry could not be meshed.
+func revolvePreflightFacets(loops []revLoopMesh, nPhi int, full, sheet, audit bool, work *revolveWork) error {
 	var walls, samples uint64
 	for _, lm := range loops {
 		n := len(lm.samples)
@@ -1011,16 +1047,20 @@ func revolvePreflightFacets(loops []revLoopMesh, nPhi int, full, sheet bool, wor
 	if !ok || spent > maxFacetWorkPerCall {
 		return errRevolveFacetCeiling
 	}
-	// The facet-pair audit's own ceiling, charged here rather than at the audit:
-	// §3 requires the conservative F·(F−1)/2 to be checked before the audit
-	// starts, and checking it before the ALLOCATION is strictly earlier.
-	pairs, ok := wallChoose2(total)
-	if !ok {
-		return errRevolveFacetCeiling
-	}
-	charged, ok := addChecked(work.pairs, pairs)
-	if !ok || charged > maxFacetPairTestsPerCall {
-		return fmt.Errorf(`%w: this chord tolerance asks for %d facets in one revolve mesh, whose pairwise audit exceeds the fixed ceiling of %d exact tests; retry with a coarser tolerance`, ErrUnsupported, total, maxFacetPairTestsPerCall)
+	charged := work.pairs
+	if audit {
+		// The facet-pair audit's own ceiling, charged here rather than at the
+		// audit: §3 requires the conservative F·(F−1)/2 to be checked before
+		// the audit starts, and checking it before the ALLOCATION is strictly
+		// earlier.
+		pairs, ok := wallChoose2(total)
+		if !ok {
+			return errRevolveFacetCeiling
+		}
+		charged, ok = addChecked(work.pairs, pairs)
+		if !ok || charged > maxFacetPairTestsPerCall {
+			return fmt.Errorf(`%w: this chord tolerance asks for %d facets in one revolve mesh, whose pairwise audit exceeds the fixed ceiling of %d exact tests; retry with a coarser tolerance, or ask for a mesh that does not run that audit`, ErrUnsupported, total, maxFacetPairTestsPerCall)
+		}
 	}
 	work.facets, work.pairs = spent, charged
 	return nil
@@ -1263,6 +1303,13 @@ func publishRevolveProof(m *Mesh, faceCells map[*Face]revFaceExtent, p *revolveP
 	}
 	if isNonFinite(m.bound) {
 		return fmt.Errorf(`%w: this revolve mesh states no finite displacement bound`, ErrUnsupported)
+	}
+	if p.verify < VerifyAll {
+		// The face bounds above are complete and published; §10.2's area slack
+		// and §11's occupied-volume bound were never composed, so neither is
+		// stated (tessellateContext's withholdProofs drops the zeroes they
+		// would otherwise leave behind).
+		return nil
 	}
 	slack := absSumUpper(cellSlack, meshCoordAreaAllow(m, coord))
 	if isNonFinite(slack) {
