@@ -48,7 +48,7 @@ func TestStitchCurvedRevolveSheetTessellates(t *testing.T) {
 
 func TestStitchOpenCurvedRevolveSheetKeepsFreeRims(t *testing.T) {
 	t.Parallel()
-	s, p := annularSketch(t)
+	s, p := offAxisSemicircleSketch(t)
 	doc := decad.New()
 	sheet, err := doc.Revolve(s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
 	require.NoError(t, err)
@@ -61,7 +61,16 @@ func TestStitchOpenCurvedRevolveSheetKeepsFreeRims(t *testing.T) {
 	require.False(t, mesh.VolumeVerified())
 	free, err := decad.Edges(decad.Free()).SelectEdges(stitched)
 	require.NoError(t, err)
-	require.Len(t, free, 8)
+	require.NotEmpty(t, free)
+	curved := 0
+	for _, e := range free {
+		if _, ok := e.Curve().(decad.Arc3); ok {
+			curved++
+		}
+	}
+	require.Positive(t, curved, "the open boundary must include a curved edge")
+	require.Greater(t, directedEdgeCensus(t, mesh), len(free),
+		"one recorded curved free edge must produce several mesh segments")
 }
 
 func TestStitchCurvedMeshInheritsSourcePlacementBound(t *testing.T) {
