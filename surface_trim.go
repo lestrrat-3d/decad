@@ -83,6 +83,19 @@ func (b *Body) Extend(ctx context.Context, edges *EdgeQuery, tool *Body) (*Body,
 // extendEndSegment maps a selected topology edge to the recorded end it names.
 // The ribbon builder places the free sweep edges at the first and last wall's
 // vertical sides; it preserves walk order through the one-lump-per-chain build.
+//
+// The loop indexes b.lumps and reads pp.chains at the SAME index, which assumes
+// the body's i-th lump is the payload's i-th chain. That holds because every
+// chainPayload a body carrying zero section displacement can hold comes from
+// one of two producers — ExtrudeChain (extrude.go) and this file's own Extend —
+// and both build exactly one lump per chain in chain order through
+// evalChainExtrudeContext; Trim's chainPayload is the only other one, and S7
+// already refused it for its nonzero sectionDelta. What would break it: a
+// producer that emits a lump per connected PIECE rather than per chain (one
+// self-touching walk splitting into two lumps, or two walks meeting at a vertex
+// merging into one), or one that reorders lumps. Either would silently widen a
+// bound on the wrong chain, so a producer adding that shape owes this function
+// a recorded lump-to-chain map rather than the shared index.
 func extendEndSegment(b *Body, pp chainPayload, edge *Edge) (int, int, bool, error) {
 	if !edge.IsFree() {
 		return 0, 0, false, fmt.Errorf(`%w: Extend needs a free sweep edge at an open section end`, ErrUnsupported)
@@ -186,32 +199,77 @@ func admitExtendPair(budget *workBudget, receiver, tool *Body) (chainPayload, pr
 }
 
 // fullExtendSegment copies the entity's defining data and names its natural
-// parameter bounds. No coordinate is computed, even for an arc or circle.
+// parameter bounds, ALWAYS ascending — t from 0 to 1 — whichever way the
+// receiver's own recorded range runs. No coordinate is computed, even for an
+// arc or circle.
+//
+// The ascending order is what makes the scene entity's parameterisation the
+// receiver's own, so §3.2's nearest-cut reading and the bound it stores live in
+// ONE space and no map runs between them. This is not decad re-deriving a 2D
+// answer: the cut parameter stays sketch's, and the only thing settled here is
+// which of decad's own two parameterisations of decad's own recorded entity the
+// scene is built in. The derivation is per kind, off buildPrismScene's own
+// entity creation (prism_boolean.go), which reads walkOf's walked geometry of
+// exactly the segment handed to it:
+//
+//   - LineSeg. buildPrismScene creates CreateLine(P(TStart), P(TEnd)). At
+//     (0, 1) those are the record's own Start and End, so the scene line runs
+//     Start to End and sketch's parameter is the record's own lerp parameter:
+//     the identity. At (1, 0) it would run End to Start and the scene parameter
+//     would be 1 − t, which is why the order is fixed here rather than mapped
+//     back later.
+//   - CircleSeg. buildPrismScene creates CreateCircle(centre, radius) from the
+//     record's own two fields, so no walk direction reaches the entity at all.
+//     walkOf indexes the record's t as the angle 2πt and sketch indexes its own
+//     the same way, so the map is the identity in either sense; CCW is set true
+//     only because walkOf refuses a CCW flag contradicting an ascending range.
+//   - ArcSeg. buildPrismScene creates CreateArc(centre, lo, hi) with lo and hi
+//     the walked endpoints put in ascending-angle order. At (0, 1)
+//     pinArcWalkEnds (segment_walk.go) pins them to the record's own Start and
+//     End verbatim and th1 > th0 leaves them unswapped, so the scene arc sweeps
+//     CCW from Start to End — the very angle interval a0 → a0 + sweep the
+//     record's own t indexes. The identity.
+//
+// No arithmetic runs on any parameter here, so no bound is charged: every field
+// written is either a recorded field copied verbatim or one of the two literal
+// natural bounds.
 func fullExtendSegment(seg CurveSegment) (CurveSegment, error) {
 	seg, err := normalizeSegment(seg)
 	if err != nil {
 		return nil, err
 	}
-	t0, t1, err := trimSegmentParamRange(seg)
-	if err != nil {
-		return nil, err
-	}
-	start, end := 0.0, 1.0
-	if t0 > t1 {
-		start, end = 1, 0
-	}
 	switch s := seg.(type) {
 	case LineSeg:
-		s.TStart, s.TEnd = start, end
+		s.TStart, s.TEnd = 0, 1
 		return s, nil
 	case CircleSeg:
-		s.TStart, s.TEnd = start, end
+		s.CCW, s.TStart, s.TEnd = true, 0, 1
 		return s, nil
 	case ArcSeg:
-		s.TStart, s.TEnd = start, end
+		s.TStart, s.TEnd = 0, 1
 		return s, nil
 	default:
 		return nil, fmt.Errorf(`%w: a %T segment has no admitted full domain`, ErrUnsupported, seg)
+	}
+}
+
+// extendCarrierDomain names the carrier a refusal is about — its kind, its own
+// defining coordinates and its natural parameter range — so RS4's message
+// states the domain the tool missed rather than only that it missed one
+// (docs/surface-design.md §15's T179).
+func extendCarrierDomain(seg CurveSegment) string {
+	switch s := seg.(type) {
+	case LineSeg:
+		return fmt.Sprintf("the line from (%v, %v) to (%v, %v) over t in [0, 1]",
+			s.Start.U, s.Start.V, s.End.U, s.End.V)
+	case CircleSeg:
+		return fmt.Sprintf("the circle of radius %v about (%v, %v) over t in [0, 1]",
+			s.Radius, s.Center.U, s.Center.V)
+	case ArcSeg:
+		return fmt.Sprintf("the arc about (%v, %v) from (%v, %v) to (%v, %v) over t in [0, 1]",
+			s.Center.U, s.Center.V, s.Start.U, s.Start.V, s.End.U, s.End.V)
+	default:
+		return fmt.Sprintf("a %T carrier over t in [0, 1]", seg)
 	}
 }
 
@@ -244,6 +302,17 @@ func extendSetBound(seg CurveSegment, atStart bool, bound float64) CurveSegment 
 
 // resolveExtend reads the nearest cut from sketch's parameter order on the
 // recreated entity, then widens only the receiver's named recorded bound.
+//
+// EVERY parameter this function compares or stores is in the RECEIVER'S OWN
+// recorded parameterisation, and that is the whole of the space discipline
+// here: the direction test below reads the record's TStart/TEnd, the stored
+// bound is written back into them, and the candidates arrive in the same space
+// because fullExtendSegment recreates the scene entity in the record's own
+// ascending order (its own comment derives the identity per segment kind).
+// Reading a candidate in the SCENE's order and storing it in the RECORD's would
+// publish a boundary at 1 − t for a reversed LineSeg receiver — a wrong
+// boundary, not a refusal. The candidates themselves stay sketch's own cut
+// parameters, untouched: decad selects among them and never computes one.
 func resolveExtend(ctx context.Context, budget *workBudget, rcv chainPayload, tool prismPayload,
 	seg CurveSegment, atStart bool) (CurveSegment, float64, error) {
 	t0, t1, err := trimSegmentParamRange(seg)
@@ -286,6 +355,14 @@ func resolveExtend(ctx context.Context, budget *workBudget, rcv chainPayload, to
 	if err := budget.err(); err != nil {
 		return nil, 0, err
 	}
+	// The receiver side of this scene holds exactly ONE entity: §3.1's
+	// Extend scene carries the extended segment's own carrier and the tool's
+	// section and nothing else, and view.profile above was replaced by a
+	// single-segment loop for precisely that reason. So breaking out of the
+	// map range is deterministic — there is one non-isB tag to find, and map
+	// iteration order cannot change which. Give the Extend scene a second
+	// receiver segment and this stops holding: it would then pick an arbitrary
+	// one of them, and the pick would vary run to run.
 	var source sketch.Entity
 	for entity, tag := range tags {
 		if !tag.isB {
@@ -318,6 +395,11 @@ func resolveExtend(ctx context.Context, budget *workBudget, rcv chainPayload, to
 		}
 		fragments = append(fragments, chain.Edges...)
 	}
+	// Which way the named bound widens, read off the record's own range order
+	// alone. TStart is the covered interval's LOWER bound when the record runs
+	// ascending and its UPPER bound when it runs reversed, so widening TStart
+	// decreases it in the first case and increases it in the second; TEnd is
+	// the mirror. forward means "increasing t".
 	forward := t1 > t0
 	if atStart {
 		forward = !forward
@@ -344,7 +426,9 @@ func resolveExtend(ctx context.Context, budget *workBudget, rcv chainPayload, to
 		}
 	}
 	if !found {
-		return nil, 0, fmt.Errorf(`%w: the tool has no cut past the named end inside the carrier's own natural domain`, ErrUnsupported)
+		return nil, 0, fmt.Errorf(
+			`%w: the tool has no cut past the named end at t = %v inside the carrier's own natural domain, which is %s`,
+			ErrUnsupported, old, extendCarrierDomain(seg))
 	}
 	for _, edge := range fragments {
 		if edge.Entity != source || edge.TStart != nearest && edge.TEnd != nearest {

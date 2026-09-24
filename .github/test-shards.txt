@@ -1589,6 +1589,10 @@
 0	0.01	TestSurfaceExtendLeftFragmentToNearestCut
 1	0.01	TestSurfaceExtendRefusesBeyondCarrierDomain
 2	0.01	TestSurfaceExtendRequiresNamedEnd
+3	0.01	TestSurfaceExtendReversedFragmentToNearestCut
+0	0.01	TestSurfaceExtendArcReceiverToNearestCut
+1	0.01	TestExtendFullDomainSceneSharesTheRecordParameterisation
+2	0.01	TestExtendSetBoundWidensOnlyTheNamedEnd
 3	0.01	TestSurfaceTrimDegenerateWhenNothingSeparates
 1	0.01	TestSurfaceTrimBoundsChargesAnExtremeWonByACut
 0	0.01	TestSurfaceTrimKeepInsideKeepsTheCutStrips
