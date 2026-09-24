@@ -2323,19 +2323,38 @@ id or authoring order takes part. So "segment `j` of the from-chain" and
 decad and no correspondence invented. That is the same standing P4 already has
 for a loop: the order is the record's, and the pairing is read off it.
 
-**A disagreeing pair is refused, never built.** Two chains whose published
-walks run opposite ways rule each side against the other's reversed walk, and
-the resulting ribbon crosses itself. §6's audit proves that crossing and
-refuses with `ErrDegenerate` — S7's audit arm, reached through the identical
-pairwise triangle classification, which reads an expected-adjacency table and
-never a closed shell, so it transfers to an open ribbon with the cap triangles
-simply absent from the set. This is the safety net P4 already relies on for a
-wrong alignment offset, on the identical terms.
+**A correspondence whose walls CROSS is refused, and that is the whole of the
+safety net.** §6's audit is a pure function of the assembled vertex and
+triangle sets — it classifies every pair against the adjacency the triangles
+themselves state, reading no cap and no closed shell — so it transfers to an
+open ribbon with the cap triangles simply absent, and a proven crossing is
+`ErrDegenerate` (S7's audit arm). This is the safety net P4 already relies on
+for a wrong alignment offset, on the identical terms.
+
+**An OPPOSED pair is not the same thing, and is not necessarily refused.** Two
+chains whose published walks run opposite ways rule each side against the
+other's reversed walk, which twists the ribbon; a twisted ribbon crosses itself
+only sometimes, and one that does not cross builds. decad guesses no intent
+here: the correspondence the two records state is the one it rules, and the
+audit refuses a crossing rather than a correspondence the caller did not mean.
+The same reading already holds for a loop pair under a wrong `WithLoftAlignment`
+offset, which §3 states as a crossing refusal and not as an intent check.
+
+**`sketch`'s canonical direction is what makes an opposed pair rare.** Two
+walks whose free ends hold the SAME plane-local coordinates always publish in
+the same direction, whatever order the caller drew them in, because the walk
+starts at the lexicographically smaller end either way. An opposed pair needs
+two walks whose lexicographic end order disagrees with the geometric
+correspondence, which the ordinary case — one section drawn, then drawn again
+on the other plane — does not produce.
 
 **`WithLoftAlignment` therefore carries nothing for a chain pair.** P4's own
-row above forces the offset to `0`, so a `WithLoftAlignment` payload on a
-chain-fed call names a correspondence that does not exist and is `ErrDegenerate`
-(Table SL row SL4). The rejected alternative is a chain-only reversal option
+row above forces the offset to `0`, so a `WithLoftAlignment` payload names a
+correspondence that does not exist. The refusal is the COMPILER rather than a
+sentinel: the option returns a `LoftOption` and `LoftChain` takes the sealed
+`ChainLoftOption` tier (§16.3), so Table SL carries no row for it, exactly as
+Table R carries none for `WithSurfaceResult()` against a chain-fed call
+(`docs/surface-design.md` §13.5). The rejected alternative is a chain-only reversal option
 pairing segment `j` against segment `n-1-j`: §1 excludes a reversed
 correspondence permanently, because reversal changes which vertices are
 material-adjacent and needs its own audit story, and an open walk changes
@@ -2462,7 +2481,7 @@ end and no closing face anywhere.
 | `Volume()`, `Centroid()` | `ErrNotSolid`, by kind |
 | faces | two flat triangles per chord cell, `side(0,j,0)` and `side(0,j,1)` — Table B's two wall rows with the loop index always `0`, and neither of its two cap rows. A walk of `n` segments carries `n` cells at one station a segment, so a `LineSeg`-only pair builds `2n` faces |
 | `Edges(Free())` | the from-walk's own `n` rim edges, the to-walk's own `n` rim edges, and the two END rungs — the rule at station `0` and the rule at station `n`. Every diagonal and every interior rung bounds two triangles and is not free, so an `n`-segment pair resolves `2n + 2` |
-| `Area` | §8's accumulator over the wall triangles alone, with both cap terms absent rather than subtracted: a chain loft never builds a cap to read an area off |
+| `Area` | §8's accumulator over the wall triangles alone, with both cap terms absent rather than subtracted: a chain loft never builds a cap to read an area off. `Approximate` by §8's constant rule, whatever its bound reaches |
 | `Bounds` | the held vertex set's box, charging the payload's own `delta` exactly as §8's reading already does |
 | `Verify`'s validity | `ValidityValid` with no diagnostics where §6's audit closed over the whole assembled triangle set, which is the same construction admission a closed loft earns; a build whose audit was budget-refused never commits, so no other outcome is reachable |
 
@@ -2475,11 +2494,23 @@ over `n`. Dropping the wrap is what mints the two end rungs as free edges, and
 it is the identical drop `buildChainSides` already makes for a chain prism's
 rim posts (`docs/surface-design.md` §13.4).
 
-**No term in §5.2's table is new and none is removed by kind.** A `LineSeg`
-pair's stations are PINNED and its `sectionDelta`, `sectionMatchedDelta` and
-`stationRound` are exactly zero, so an unplaced chain loft over such a pair
-publishes `Area` `Exact` at a zero bound; every other term the table lists is
-read on the value it publishes, never on the pairing having been chain-fed.
+**No term in §5.2's table is new and none is removed by kind.** An untrimmed
+`LineSeg` pair's stations are PINNED and its `sectionDelta`,
+`sectionMatchedDelta` and `stationRound` are exactly zero, so an unplaced chain
+loft over such a pair publishes a zero `delta` and an exact `Bounds`; every
+other term the table lists is read on the value it publishes, never on the
+pairing having been chain-fed. A TRIMMED `LineSeg` station is not pinned — it
+lands on `walkOf`'s float `lerp2` endpoint rather than the exact rational the
+record denotes — so its own `stationRound` is positive and `delta` with it.
+
+**`Area` stays `Approximate` on every chain loft, as it does on every loft.**
+§8 states that exactness as a constant and never derives it from the published
+bound: a triangle's own area is a square root of a rational and is generically
+irrational, so no arithmetic on the bound makes the reading exactly
+representable. A bound that reaches zero says only that the bound arithmetic
+ran out of scale to state, which is a fact about the proof term and not about
+the value. The terminal station a chain loft carries and the two caps it does
+not build change nothing about that.
 
 ### 16.6 Increments
 
