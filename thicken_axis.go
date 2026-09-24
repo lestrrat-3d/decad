@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"slices"
 )
 
 type thickenAxisDir struct{ u, v int }
@@ -537,4 +538,283 @@ func thickenLineArcEvents(line, arc thickenMovingPiece) []ratPoly {
 	}
 	return []ratPoly{contact, endpoint(line.start), endpoint(line.end),
 		thickenAffineSub(arcStart, lineCoord), thickenAffineSub(arcEnd, lineCoord)}
+}
+
+// This section is the OPEN-walk counterpart of the closed offsets above: the
+// ribbon and the uncapped chain shell of docs/surface-design.md §16.6 and
+// §16.7. An open walk has no interior to erode, so there is no P ⊖ t / P ⊕ t
+// to take. What a thickened ribbon sweeps is one CLOSED section assembled in
+// closed form: the walk's two offset copies — or the walk and one copy —
+// joined by one cap line at each free end, walked right copy forward, end cap,
+// left copy backward, start cap. Every coordinate of that section is a
+// recorded walk coordinate plus an INTEGER multiple of the offset parameter,
+// so the whole section is affine in τ and the interval scan above reads it
+// unchanged.
+
+// thickenRibbonSide names one side of the walk and how far its copy sits from
+// it: normal is the left-normal sign (−1 the walk's right-hand side, +1 its
+// left), and steps is 0 where that copy IS the recorded walk and 1 where it is
+// an offset copy.
+type thickenRibbonSide struct{ normal, steps int }
+
+// thickenRibbonSides is the pair of copies one thicken side assembles, right
+// copy first.
+func thickenRibbonSides(side ThickenSide) (right, left thickenRibbonSide) {
+	switch side {
+	case ThickenNegative:
+		return thickenRibbonSide{normal: -1, steps: 0}, thickenRibbonSide{normal: +1, steps: 1}
+	case ThickenCentered:
+		return thickenRibbonSide{normal: -1, steps: 1}, thickenRibbonSide{normal: +1, steps: 1}
+	default:
+		return thickenRibbonSide{normal: -1, steps: 1}, thickenRibbonSide{normal: +1, steps: 0}
+	}
+}
+
+// thickenOpenDirections is thickenAxisDirections without wraparound: it reads
+// one open walk's per-segment axis direction, refusing an inexact endpoint, a
+// junction the two walks do not share exactly, a segment that is not
+// axis-parallel, and an interior corner that is not a right angle.
+func thickenOpenDirections(walks []sideWalk, budget *workBudget) ([]thickenAxisDir, error) {
+	n := len(walks)
+	if n == 0 {
+		return nil, fmt.Errorf(`%w: an open walk holds no segment`, ErrUnsupported)
+	}
+	dirs := make([]thickenAxisDir, n)
+	for i, w := range walks {
+		if err := wallBudgetStep(budget); err != nil {
+			return nil, err
+		}
+		if w.startBound.u != 0 || w.startBound.v != 0 || w.endBound.u != 0 || w.endBound.v != 0 {
+			return nil, fmt.Errorf(`%w: an open walk endpoint has an unresolved coordinate bound`, ErrUnsupported)
+		}
+		if i+1 < n {
+			next := walks[i+1]
+			if w.endU != next.startU || w.endV != next.startV {
+				return nil, fmt.Errorf(`%w: the open walk has no exact interior joins`, ErrUnsupported)
+			}
+		}
+		switch {
+		case w.startU == w.endU && w.startV < w.endV:
+			dirs[i] = thickenAxisDir{v: 1}
+		case w.startU == w.endU && w.startV > w.endV:
+			dirs[i] = thickenAxisDir{v: -1}
+		case w.startV == w.endV && w.startU < w.endU:
+			dirs[i] = thickenAxisDir{u: 1}
+		case w.startV == w.endV && w.startU > w.endU:
+			dirs[i] = thickenAxisDir{u: -1}
+		default:
+			return nil, fmt.Errorf(`%w: the open walk is not axis-parallel`, ErrUnsupported)
+		}
+		if floatRat(w.startU) == nil || floatRat(w.startV) == nil ||
+			floatRat(w.endU) == nil || floatRat(w.endV) == nil {
+			return nil, fmt.Errorf(`%w: an open walk coordinate is not finite`, ErrUnsupported)
+		}
+	}
+	for i := 1; i < n; i++ {
+		p, q := dirs[i-1], dirs[i]
+		if p.u*q.v-p.v*q.u == 0 {
+			return nil, fmt.Errorf(`%w: an open walk corner is not a right angle`, ErrUnsupported)
+		}
+	}
+	return dirs, nil
+}
+
+// thickenRibbonCopy is one side's moving copy of the walk, in walk order: the
+// offset lines and the corner arcs between them, plus the two free-end points
+// the caps attach to.
+type thickenRibbonCopy struct {
+	pieces     []thickenMovingPiece
+	head, tail thickenMovingPoint
+}
+
+// thickenRibbonCopyOf builds one copy in closed form. A corner arc appears
+// exactly where the walk turns AWAY from this copy's side, the same
+// sign(cross) == −s rule the closed offset takes (shell_offset.go); the other
+// corner miters. A copy with steps == 0 is the recorded walk itself and takes
+// neither.
+func thickenRibbonCopyOf(walks []sideWalk, dirs []thickenAxisDir, c thickenRibbonSide) thickenRibbonCopy {
+	n := len(dirs)
+	k := c.steps * c.normal
+	offset := func(u, v float64, d thickenAxisDir) thickenMovingPoint {
+		return thickenMovingOffset(u, v, k*-d.v, k*d.u)
+	}
+	type join struct {
+		arc              bool
+		m, before, after thickenMovingPoint
+	}
+	joins := make([]join, n)
+	for i := 1; i < n; i++ {
+		prev, cur := dirs[i-1], dirs[i]
+		v := walks[i]
+		joins[i] = join{
+			arc:    c.steps != 0 && prev.u*cur.v-prev.v*cur.u == -c.normal,
+			before: offset(v.startU, v.startV, prev),
+			after:  offset(v.startU, v.startV, cur),
+			m: thickenMovingOffset(v.startU, v.startV,
+				k*(-prev.v-cur.v), k*(prev.u+cur.u)),
+		}
+	}
+	out := thickenRibbonCopy{
+		head: offset(walks[0].startU, walks[0].startV, dirs[0]),
+		tail: offset(walks[n-1].endU, walks[n-1].endV, dirs[n-1]),
+	}
+	for i, dir := range dirs {
+		start, end := out.head, out.tail
+		if i > 0 {
+			start = joins[i].m
+			if joins[i].arc {
+				start = joins[i].after
+			}
+		}
+		if i+1 < n {
+			end = joins[i+1].m
+			if joins[i+1].arc {
+				end = joins[i+1].before
+			}
+		}
+		out.pieces = append(out.pieces, thickenMovingPiece{line: true, horizontal: dir.u != 0,
+			start: start, end: end})
+		if i+1 < n && joins[i+1].arc {
+			v := walks[i+1]
+			out.pieces = append(out.pieces, thickenMovingPiece{
+				start: joins[i+1].before, end: joins[i+1].after,
+				center: thickenExactPoint{u: floatRat(v.startU), v: floatRat(v.startV)},
+			})
+		}
+	}
+	return out
+}
+
+// thickenReverseMovingPiece walks one piece the other way. A line swaps its
+// two ends; an arc swaps them about the same fixed centre.
+func thickenReverseMovingPiece(p thickenMovingPiece) thickenMovingPiece {
+	p.start, p.end = p.end, p.start
+	return p
+}
+
+// thickenRibbonLoop assembles the two copies into ONE closed moving boundary
+// in loop order: the right copy forward, the cap at the walk's far end, the
+// left copy backward, and the cap at its near end. The order is what makes the
+// interval scan's own adjacency exclusion (consecutive pieces of one loop)
+// correct with no second rule.
+func thickenRibbonLoop(right, left thickenRibbonCopy) []thickenMovingPiece {
+	pieces := append([]thickenMovingPiece{}, right.pieces...)
+	pieces = append(pieces, thickenCapPiece(right.tail, left.tail))
+	for _, piece := range slices.Backward(left.pieces) {
+		pieces = append(pieces, thickenReverseMovingPiece(piece))
+	}
+	return append(pieces, thickenCapPiece(left.head, right.head))
+}
+
+// thickenCapPiece is one free end's cap: the straight join between the two
+// copies' own endpoints there. Both endpoints offset along the SAME normal
+// line, so the cap is axis-parallel wherever the walk's end segment is.
+func thickenCapPiece(from, to thickenMovingPoint) thickenMovingPiece {
+	horizontal := from.v.a.Cmp(to.v.a) == 0 && from.v.b.Cmp(to.v.b) == 0
+	return thickenMovingPiece{line: true, horizontal: horizontal, start: from, end: to}
+}
+
+// thickenExactPointAt evaluates one moving point at τ and refuses unless every
+// held float64 equals its closed-form value exactly (R27).
+func thickenExactPointAt(p thickenMovingPoint, at *big.Rat) (Point2, error) {
+	u, v := thickenAffineAt(p.u, at), thickenAffineAt(p.v, at)
+	held := Point2{U: ratToFloat(u), V: ratToFloat(v)}
+	if rationalFloatError(u, held.U) != 0 || rationalFloatError(v, held.V) != 0 {
+		return Point2{}, fmt.Errorf(`%w: a generated ribbon coordinate is rounded`, ErrUnsupported)
+	}
+	return held, nil
+}
+
+func ratToFloat(r *big.Rat) float64 {
+	f, _ := r.Float64()
+	return f
+}
+
+// thickenRibbonSection evaluates the assembled moving boundary at the
+// requested offset, refusing any coordinate that does not land exactly.
+func thickenRibbonSection(pieces []thickenMovingPiece, at *big.Rat) (ProfileRecord, error) {
+	segs := make([]CurveSegment, 0, len(pieces))
+	for _, p := range pieces {
+		start, err := thickenExactPointAt(p.start, at)
+		if err != nil {
+			return ProfileRecord{}, err
+		}
+		end, err := thickenExactPointAt(p.end, at)
+		if err != nil {
+			return ProfileRecord{}, err
+		}
+		if p.line {
+			if start == end {
+				return ProfileRecord{}, fmt.Errorf(`%w: a generated ribbon segment has no length`, ErrUnsupported)
+			}
+			segs = append(segs, LineSeg{Start: start, End: end, TStart: 0, TEnd: 1})
+			continue
+		}
+		center := Point2{U: ratToFloat(p.center.u), V: ratToFloat(p.center.v)}
+		if rationalFloatError(p.center.u, center.U) != 0 || rationalFloatError(p.center.v, center.V) != 0 {
+			return ProfileRecord{}, fmt.Errorf(`%w: a generated ribbon corner centre is rounded`, ErrUnsupported)
+		}
+		segs = append(segs, arcSegment(center, start, end, thickenArcIsCCW(start, end, center)))
+	}
+	return ProfileRecord{Outer: LoopRecord{Segments: segs}}, nil
+}
+
+// thickenArcIsCCW reads a right-angle corner arc's own sense from the exact
+// integer cross product of its two radii — never an angle.
+func thickenArcIsCCW(start, end, center Point2) bool {
+	return (start.U-center.U)*(end.V-center.V)-(start.V-center.V)*(end.U-center.U) > 0
+}
+
+// thickenRibbon certifies the closed section one open axis-parallel walk
+// sweeps when it is thickened: the assembled boundary at the requested offset,
+// proven simple there and proven free of any nonadjacent contact over the
+// whole interval 0 < τ ≤ amount.
+func thickenRibbon(ctx context.Context, chain ChainRecord, side ThickenSide, amount float64,
+	budget *workBudget, work *freeformWork) (ProfileRecord, error) {
+	raw := make([]sideWalk, len(chain.Segments))
+	for i, seg := range chain.Segments {
+		if err := ctx.Err(); err != nil {
+			return ProfileRecord{}, err
+		}
+		if _, ok := seg.(LineSeg); !ok {
+			return ProfileRecord{}, fmt.Errorf(`%w: the open walk requires line-only axis-parallel segments`, ErrUnsupported)
+		}
+		w, err := walkOf(seg, work)
+		if err != nil {
+			return ProfileRecord{}, err
+		}
+		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
+	}
+	walks, err := coalesceChainWalksContext(ctx, raw)
+	if err != nil {
+		return ProfileRecord{}, err
+	}
+	dirs, err := thickenOpenDirections(walks, budget)
+	if err != nil {
+		return ProfileRecord{}, err
+	}
+	rightSide, leftSide := thickenRibbonSides(side)
+	pieces := thickenRibbonLoop(
+		thickenRibbonCopyOf(walks, dirs, rightSide),
+		thickenRibbonCopyOf(walks, dirs, leftSide),
+	)
+	limit := floatRat(amount)
+	if limit == nil {
+		return ProfileRecord{}, fmt.Errorf(`%w: the thicken offset is not finite`, ErrUnsupported)
+	}
+	if err := thickenPiecesIntervalClear(ctx, pieces, limit, budget, nil); err != nil {
+		return ProfileRecord{}, err
+	}
+	section, err := thickenRibbonSection(pieces, limit)
+	if err != nil {
+		return ProfileRecord{}, err
+	}
+	entries, err := buildSegEntriesBudget(budget, []LoopRecord{section.Outer})
+	if err != nil {
+		return ProfileRecord{}, err
+	}
+	if err := thickenAuditRefusal(crossingAuditBudget(budget, entries)); err != nil {
+		return ProfileRecord{}, err
+	}
+	return section, nil
 }

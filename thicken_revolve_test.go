@@ -110,7 +110,7 @@ func TestThickenRevolveTorus(t *testing.T) {
 		axial     float64
 	}{
 		{"outward", decad.ThickenPositive, 2, 960, 27, 7},
-		{"centered", decad.ThickenCentered, 4, 1600, 27, 7},
+		{"centered 4 mm", decad.ThickenCentered, 4, 1600, 27, 7},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

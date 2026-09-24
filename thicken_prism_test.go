@@ -188,33 +188,33 @@ func TestThickenPrismUnrepresentablePublicOffset(t *testing.T) {
 	require.Len(t, doc.Bodies(), 1)
 }
 
-func TestThickenChainFamiliesStayStaged(t *testing.T) {
+// TestThickenStagedFamiliesRefuse is T157: a sweep sheet and a loft sheet
+// carry no admitted Thicken generator, so each refuses at the call and each
+// stays live with its own readings.
+func TestThickenStagedFamiliesRefuse(t *testing.T) {
 	t.Parallel()
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
-	require.NoError(t, err)
-	a := s.CreatePoint(10, 0)
-	b := s.CreatePoint(10, 40)
-	s.Fix(a)
-	s.CreateLine(a, b)
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
-	chain := s.Chains()[0]
+	s, p := plateSketch(t)
 	doc := decad.New()
-	ribbon, err := doc.ExtrudeChain(s, chain, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	sweepSheet, err := doc.Sweep(t.Context(), s, p, sweepLinePath(t), decad.WithSurfaceResult())
 	require.NoError(t, err)
-	_, err = ribbon.Thicken(t.Context(), units.Millimeters(1))
+	_, err = sweepSheet.Thicken(t.Context(), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	decadtest.MeasuresArea(t, ribbon, units.SquareMillimeters(400), decadtest.Exactly())
-	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 0, V: 1}}
-	shell, err := doc.RevolveChain(s, chain, axis, decad.FullRevolution{})
+	require.Contains(t, err.Error(), "no admitted Thicken generator")
+	require.Equal(t, decad.BodySheet, sweepSheet.Kind())
+
+	s0, p0, s1, p1 := loftSquares(t, 20, 20)
+	loftDoc := decad.New()
+	loftSheet, err := loftDoc.Loft(t.Context(), s0, p0, s1, p1, decad.WithSurfaceResult())
 	require.NoError(t, err)
-	_, err = shell.Thicken(t.Context(), units.Millimeters(1))
+	_, err = loftSheet.Thicken(t.Context(), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	free, err := decad.Edges(decad.Free()).Exactly(2).SelectEdges(shell)
+	require.Contains(t, err.Error(), "no admitted Thicken generator")
+	area, err := loftSheet.Area()
 	require.NoError(t, err)
-	require.Len(t, free, 2)
-	require.Len(t, doc.Bodies(), 2)
+	require.InDelta(t, 1600.0, area.Value.Base(), area.Bound.Base())
+
+	require.Len(t, doc.Bodies(), 1)
+	require.Len(t, loftDoc.Bodies(), 1)
 }
 
 func requirePiLinearEnclosed(t *testing.T, got decad.Measurement, base int64, coeff float64) {

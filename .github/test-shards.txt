@@ -1632,7 +1632,7 @@
 2	0.02	TestThickenPrismNeckRefusal
 3	0.01	TestThickenPrismUnrepresentableOffset
 0	0.01	TestThickenPrismUnrepresentablePublicOffset
-0	0.01	TestThickenChainFamiliesStayStaged
+0	0.01	TestThickenStagedFamiliesRefuse
 1	0.02	TestThickenPrismConcaveAdmitted
 1	0.02	TestThickenPrismNarrowNeckAdmitted
 2	0.02	TestThickenPrismRectangleRoundedSides
@@ -1833,3 +1833,8 @@
 0	0.02	TestThickenRevolvePartialSweep
 1	0.01	TestThickenRevolveAxisRefusals
 2	0.01	TestThickenRadialRefusesBoundedAxis
+2	0.02	TestThickenRibbonStraight
+3	0.02	TestThickenRibbonCorner
+0	0.02	TestThickenRibbonNeck
+1	0.01	TestThickenRibbonUnrepresentableOffset
+2	0.01	TestThickenRibbonWalkClassRefusals
