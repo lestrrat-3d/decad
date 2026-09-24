@@ -115,6 +115,9 @@ type stitchPayload struct {
 	delta float64
 	faces []*Face
 	plan  *stitchWeldPlan
+	// liveFaces parallels faces after the orientation and global sign passes.
+	// A curved source mesh uses this pairing without looking up copied roles.
+	liveFaces []*Face
 	// verts is the shared vertex table actually built for THIS body, in
 	// world coordinates — verify_gate.go's own diameter arm reads it back,
 	// modelled on loftPayload's identical field.
@@ -450,6 +453,7 @@ func evalStitchContext(ctx context.Context, d *Document, ref producerID, srcFace
 		delta:      delta,
 		faces:      srcFaces,
 		plan:       plan,
+		liveFaces:  newFaces,
 		verts:      verts,
 		vertBound:  payloadVertBound,
 		tris:       payloadTris,

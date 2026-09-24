@@ -475,7 +475,7 @@ func trapezoidFrustumSketch(t *testing.T, uLen, vLo0, vHi0, vLo1, vHi1 float64) 
 // frustumSheet builds trapezoidFrustumSketch's profile as a closed
 // full-revolution surface sheet: 2 Cone walls, 2 Plane annuli, no free
 // edge (Table W), the frustum-shell analogue of annularRevolveSheet.
-func frustumSheet(t *testing.T, uLen, vLo0, vHi0, vLo1, vHi1 float64) (*decad.Document, *decad.Body) {
+func frustumSheet(t *testing.T, uLen, vLo0, vHi0, vLo1, vHi1 float64) (*decad.Document, *decad.Body) { //nolint:unparam // The independent frustum dimensions make this fixture reusable beyond the current call sites.
 	t.Helper()
 	s, p := trapezoidFrustumSketch(t, uLen, vLo0, vHi0, vLo1, vHi1)
 	doc := decad.New()
