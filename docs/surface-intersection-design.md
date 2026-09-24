@@ -462,8 +462,8 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
   translating a Fusion script finds the Split Body command under a different
   name. The alternative — `Cut` taking a sheet and keeping the piece on the
   sheet's negative side — was rejected because it makes the result depend on
-  an orientation surface §2.3 decides at build and surface §1.2 has no
-  `Reverse Normal` to change.
+  an orientation surface §2.3 decides at build, and surface §1.4 records that
+  no `Reverse Normal` exists to change it.
 - **S7 refuses a second trim rather than charging the amplification.** §5
   states the proof that would lift it. Charging it without that proof would
   publish a bound no derivation supports; refusing costs the caller a
