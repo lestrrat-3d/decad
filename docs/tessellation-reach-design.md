@@ -39,7 +39,7 @@ meridian generator refuses (T5).
 |---|---|---|
 | `sourceBound(face)` | `faceBound`, one entry per source face | `facesOfMesh` (`boolean.go`), for the hidden-tangency pre-pass |
 | `areaSlack` | yes, the analytic terms plus a per-facet coordinate allowance | boolean area composition |
-| `volSymDiff` + `symDiffOK` | yes; `symDiffOK` true for prism, cup, loft, revolve and faceted, and FALSE for the cap-loop chamfer | `operandSymDiff` (`boolean.go`), which refuses a mesh carrying no proof |
+| `volSymDiff` + `symDiffOK` | yes; `symDiffOK` is true for solid prism, cup, loft, revolve and faceted paths, and false for a loft sheet and cap-loop chamfer | `operandSymDiff` (`boolean.go`), which refuses a mesh carrying no proof |
 | `deltaStore` (tess §5) | charged per vertex into `faceBound`, `areaSlack` and `volSymDiff` | — |
 
 Every restatement below publishes into that record, and no consumer infers a term the mesh did not state. A
@@ -191,16 +191,23 @@ chorded cells `computeLoftChordedAllow` already walks (gated on `p.matchedDelta[
 ### `tessellateLoft(ctx, b, lp, chord)`
 
 1. Build `byRole` from `b.Faces()` as the prism does. For `k < walls`: face of role
-   `side(cell[k][0], cell[k][1], side[k])`. Then `capStartCount` triangles → `capStart`, rest → `capEnd`.
-   A missing role is `ErrDegenerate` (tess §4).
-2. Copy `verts`, `tris` (fresh slices — `Mesh` accessors already copy, but the payload's slices must not
+   `side(cell[k][0], cell[k][1], side[k])`. For a solid, `capStartCount` triangles → `capStart`,
+   rest → `capEnd`. A missing role is `ErrDegenerate` (tess §4).
+2. Copy `verts` and the selected triangle range (fresh slices — `Mesh` accessors already copy, but payload slices must not
    alias the mesh's). No chording, no retriangulation, no reflection flip: loft §5's whole-shell orientation
    step already made every triangle outward, and `placed` re-runs it, so tess §4's "reflected placement
    reverses once" rule is discharged by the payload. Assert the tetrahedron sum positive in the audit below.
-3. `faceBound[f] = proof.facetDeparture` for every face; `bound = facetDeparture`; `areaSlack`, `volSymDiff`
-   from `proof`; `symDiffOK = true`.
-4. `requireClosedMesh`, then the signed-volume audit. Either failing is `ErrUnsupported` (tess §12) — it can
-   only mean the payload's own §6 audit was bypassed.
+3. `faceBound[f] = proof.facetDeparture` for every face; `bound = facetDeparture`; `areaSlack` from `proof`.
+   A solid also publishes `volSymDiff` and `symDiffOK = true`.
+4. A solid runs `requireClosedMesh` and the signed-volume audit. Either failing is `ErrUnsupported` (tess §12).
+
+A surface-result sheet copies only `tris[:walls]`, using the recorded split
+rather than a geometric cap test. Its live `side(i,j,k)` faces supply sources;
+the absent cap roles are never looked up. It runs `requireSheetMesh` and
+`requireSheetVertexLinks`, and keeps `symDiffOK` false. The payload's
+`areaSlack` includes nonnegative cap allowances and remains conservative over
+the retained wall triangles. Its open triangle set cannot use the signed-volume
+audit, because that sum depends on the anchor without caps.
 
 No tolerance refusal: the tessellation adds no chording of its own, and the whole `Bound` is inherited
 payload displacement, which tess §1's Tolerance row lets ride above `tol` (the same standing as a prism's

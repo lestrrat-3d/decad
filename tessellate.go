@@ -328,19 +328,8 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return tessellateCup(ctx, b, cp, chord, verify)
 	}
 	if lp, ok := b.payload.(loftPayload); ok {
-		if lp.surfaceResult {
-			// Tessellating (and so exporting, export.go) a sheet is staged
-			// for a later increment (docs/surface-design.md §10): the
-			// manifold-with-boundary mesh audit T10 asks for is not built
-			// yet. Refusing here, before any face-role lookup, is a clean
-			// ErrUnsupported rather than the ErrDegenerate a missing
-			// capStart/capEnd role would otherwise report — this
-			// evaluator's own reach, not a claim the body's geometry is
-			// bad, matching the revolve sheet's own staged refusal above.
-			return nil, fmt.Errorf(`%w: tessellating a sheet body is staged for a later increment`, ErrUnsupported)
-		}
-		// The loft path is an exact restatement of the triangle set the payload
-		// already holds, so it takes no chord tolerance at all
+		// The loft path exactly restates the payload's complete set for a
+		// solid or its recorded wall range for a sheet, with no chording
 		// (tessellate_loft.go's own doc comment owns why).
 		return tessellateLoft(ctx, b, lp)
 	}

@@ -288,7 +288,7 @@ analytic walk's do (`docs/tessellation-reach-design.md` §5).
 |---|---|---|---|---|---|
 | `prismPayload` | one chording per recorded section loop, shared by walls + caps | wall sagitta; each cap's maximum curved-trim sagitta; plus `sectionDelta`, per-end axial displacement, and proven coordinate/placement rounding; zero only for an exact held trim with exact stored coordinates and no section displacement | max per-face source bound | non-cancelling wall error + both cap circular-segment deficits + coordinate-movement allowance + section-displacement area (§5) | section symmetric-difference allowance × sweep height + coordinate swept allowance (§5) |
 | `cupPayload` | one chording per outer/cavity loop, shared by walls + floors + rims | wall sagitta; each floor/rim patch's maximum curved-trim sagitta; plus `zDelta` and proven coordinate/placement rounding; zero only for an exact held trim with exact stored coordinates | max per-face source bound | non-cancelling per-wall/per-planar-patch error + coordinate-movement allowance | outer-prism + cavity-prism allowances + coordinate swept allowance (§6) |
-| `loftPayload` | the wall and cap triangles already held by the payload | the payload's own facet departure `absSumUpper(matchedDelta, maxTwistOffsetUpper)` (loft §5.2, which owns both terms and the conditions under which each published value is zero): every held facet IS the payload's triangle for its source face, so the facet departs by exactly what the payload states for it; exactness requires both published values to be zero | max per-face source bound, so that facet departure | the payload's own per-triangle perturbation sum, plus, for a CHORDED body, the two further terms its own `Area` bound composes: the wall's three-leg area gap and the two caps' `capAreaAllow` (loft §5.2, §8, §8.1) | `sweptVolumeAllow(delta, areaUpper)` composed with the four-leg `chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow)` (loft §8, §8.1); `symDiffOK == true` either way |
+| `loftPayload` | held wall triangles plus both cap ranges for a solid; only `tris[:walls]` for a sheet | the payload's facet departure `absSumUpper(matchedDelta, maxTwistOffsetUpper)` (loft §5.2), zero only when both terms are zero | that facet departure | the payload's nonnegative per-triangle perturbation and wall area-gap terms; its cap allowances also remain on a sheet as conservative excess | solid: `sweptVolumeAllow` plus four-leg `chordedBoundaryVolumeAllow`, `symDiffOK == true`; sheet: no occupied-volume proof, `symDiffOK == false` |
 | `revolvePayload` | one meridian chording + one global angular sequence, then final rigid placement | current meridian + angular displacement for that analytic patch, plus construction rounding `deltaC` and final-placement rounding `deltaR`; `deltaC + deltaR` for otherwise exact planar patches | max per-face source bound (§8) | integral of absolute local true-vs-held area-density error + cap deficits + construction/placement area allowances (§10) | meridian/angular + construction/placement homotopy allowances (§11) |
 | `facetedPayload` | held polygons + inherited boundary certificate | inherited certified face displacement, or global composed `Delta` when no tighter face value exists | max per-face source bound | payload's composed slack | payload's composed symmetric-difference bound |
 | `capBlendPayload` | `docs/tessellation-reach-design.md` §7 owns this row: one count per wall walk shared by the trimmed side wall, the band patch and the cap contour | that document's per-patch term table | max per-face source bound | that document's per-patch composition | none until its occupied-volume proof lands; `symDiffOK == false` |
@@ -302,26 +302,29 @@ triangulation and the wall triangles loft §5.1's Table C gives every cell of
 every loop, over the chord-cell sequence loft §7 counts. Its
 construction normalizes the complete triangle shell to a positive signed
 tetrahedron sum (loft §5), and the crossing audit proves it free of
-non-adjacent contact. `Tessellate` copies that triangle connectivity, vertices,
-and source faces directly. It MUST NOT chord,
-retriangulate, move, round, weld, or otherwise alter a loft facet.
+non-adjacent contact. A solid copies the complete set. A sheet copies the
+recorded wall range and omits both cap ranges; its free boundary attributes to
+the body's recorded free `Edge`s through each wall triangle's live source face.
+`Tessellate` MUST NOT chord, retriangulate, move, round, weld, or otherwise
+alter a loft facet.
 
 **The restatement is exact; the BOUNDS are the payload's own.** The mesh is the
-held triangle boundary itself, so the tessellation introduces no displacement
-of its own and every proof term it publishes is the term the payload already
-carries for that same triangle set: `sourceBound(face)` and `Bound` are the
-payload's own facet departure
+held triangle boundary itself for a solid, and the held wall boundary for a
+sheet. Tessellation introduces no displacement of its own. `sourceBound(face)`
+and `Bound` are the payload's own facet departure
 `absSumUpper(matchedDelta, maxTwistOffsetUpper)` (loft §5.2 — the
 payload's `Bounds.Bound` remains `absSumUpper(delta, sectionDelta)` and is NOT
 this one),
 `areaSlack` is the per-triangle perturbation sum loft §8's own `Area` bound
-composes, and `volSymDiff` composes `sweptVolumeAllow(delta, areaUpper)` with
+composes. For a solid, `volSymDiff` composes `sweptVolumeAllow(delta, areaUpper)` with
 the four-leg
 `chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper,
-capVolumeUpper, seamAllow)` (loft §8.1) — with
-`symDiffOK == true` throughout, since each of those displacements is a
-proven allowance rather than an unbounded one. **A CHORDED loft's `areaSlack`
-carries the two further terms its own `Area` bound composes**: the wall's
+capVolumeUpper, seamAllow)` (loft §8.1). A solid publishes that occupied-volume
+proof with `symDiffOK == true`. A sheet publishes none and keeps
+`symDiffOK == false`. Its retained nonnegative cap-area allowances
+conservatively bound its wall-only area gap without subtracting any proof
+term. **A CHORDED loft's `areaSlack` carries the two further terms its own
+`Area` bound composes**: the wall's
 three-leg area gap — `cellTwistAreaAllow` for the held-to-bilinear leg,
 `cellChordCurveAreaAllow` for the bilinear-to-ruled leg, and
 `cellStationShiftAreaAllow` for the held-corner-to-denoted-station leg the
@@ -334,8 +337,9 @@ to the mesh boolean as an all-planar zero-bound operand; every other loft's
 mesh is admitted as an ordinary positive-bound all-planar operand instead,
 through the same `rimDelta` composition every other nonzero-bound operand
 already uses. Loft §5.2 owns when each published term is zero; admission
-follows those two values. The normal closed-mesh and source-face audits run in
-either case.
+follows those two values for a solid. A sheet runs §1.2's two audits in the
+closed-mesh and signed-volume audits' place; the source-face audit applies to
+both kinds.
 
 ## 3. Shared curve chording
 
@@ -1238,6 +1242,9 @@ completion of §2's proof record on `Mesh` they all publish into.
   `matchedDelta` case MUST use the positive-bound path; zero-bound admission
   still requires both facet-departure terms to be zero by value under loft
   §5.2's conditions.
+- Cover a surface-result loft: copy only recorded wall triangles, match its
+  free section rims to recorded free edges, and keep `VolumeVerified()` false.
+  Replacing one wall triangle with one held cap triangle MUST fail §1.2's audit.
 - Prove the T4 interval integrator encloses analytic fixed-sign cells and
   adversarial sign-changing cells; budget exhaustion MUST refuse.
 - Exercise revolve×prism and revolve×revolve booleans after T4, including a

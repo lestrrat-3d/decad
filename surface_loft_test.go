@@ -1,7 +1,10 @@
 package decad_test
 
 import (
+	"bytes"
 	"math"
+	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -17,7 +20,7 @@ import (
 // obligations, the area-bound composition on a fixture whose caps are
 // genuinely inexact, role resolution, placement reproduction, a holed
 // profile's disconnected lumps, the sheet's own validity reading at a zero
-// and a positive section displacement, the tessellation refusal, and the
+// and a positive section displacement, sheet tessellation, and the
 // shared IsOpen obligation. WithSurfaceResult() on Extrude/Revolve has its own
 // file (surface_test.go/surface_revolve_test.go). Every fixture reuses
 // loftSquares/loftSquaresAt (loft_test.go) or builds its own n-gon, wedge or
@@ -206,8 +209,28 @@ func TestSurfaceLoftCapBoundsComposeOnInexactFixture(t *testing.T) {
 	require.Equal(t, wantValue, sheetArea.Value.Base())
 
 	wantBound := solidArea.Bound.Base() + capStartArea.Bound.Base() + capEndArea.Bound.Base()
+	t.Logf("cap bounds: start=%g end=%g solid=%g sheet=%g want=%g",
+		capStartArea.Bound.Base(), capEndArea.Bound.Base(), solidArea.Bound.Base(), sheetArea.Bound.Base(), wantBound)
 	require.GreaterOrEqual(t, sheetArea.Bound.Base(), wantBound)
 	require.InDelta(t, wantBound, sheetArea.Bound.Base(), 1e-9)
+	// The two float subtractions add their own exact rounding gaps beside all
+	// three input bounds. Compare as rationals, so this assertion does not
+	// depend on the host's FMA behavior or a pinned decimal threshold.
+	rat := func(v float64) *big.Rat { return new(big.Rat).SetFloat64(v) }
+	mid := solidArea.Value.Base() - capStartArea.Value.Base()
+	exactMid := new(big.Rat).Sub(rat(solidArea.Value.Base()), rat(capStartArea.Value.Base()))
+	firstRound := new(big.Rat).Sub(exactMid, rat(mid))
+	firstRound.Abs(firstRound)
+	end := mid - capEndArea.Value.Base()
+	exactEnd := new(big.Rat).Sub(rat(mid), rat(capEndArea.Value.Base()))
+	secondRound := new(big.Rat).Sub(exactEnd, rat(end))
+	secondRound.Abs(secondRound)
+	needed := new(big.Rat).Add(rat(solidArea.Bound.Base()), rat(capStartArea.Bound.Base()))
+	needed.Add(needed, rat(capEndArea.Bound.Base()))
+	needed.Add(needed, firstRound)
+	needed.Add(needed, secondRound)
+	require.GreaterOrEqual(t, rat(sheetArea.Bound.Base()).Cmp(needed), 0,
+		"the sheet area bound must include both cap bounds and both subtraction roundings")
 }
 
 // TestSurfaceLoftRolesResolveThroughFaceCreatedBy is §4.2: every wall face
@@ -336,18 +359,76 @@ func TestSurfaceLoftChordedPairVerifiesUndecided(t *testing.T) {
 	}
 }
 
-// TestSurfaceLoftTessellationRefused is docs/surface-design.md §10/Table D row
-// D1's carve-out: tessellating a surface-result loft is staged, ErrUnsupported
-// before any face-role lookup, matching the revolve sheet's own refusal.
-func TestSurfaceLoftTessellationRefused(t *testing.T) {
+// TestSurfaceLoftTessellationRestatesWalls checks that a surface-result loft
+// publishes its wall triangles with the free section rims intact.
+func TestSurfaceLoftTessellationRestatesWalls(t *testing.T) {
 	t.Parallel()
 	s0, p0, s1, p1 := loftSquares(t, 20, 20)
+	solidDoc := decad.New()
+	solid, err := solidDoc.Loft(t.Context(), s0, p0, s1, p1)
+	require.NoError(t, err)
+	solidMesh, err := solid.Tessellate(t.Context(), units.Millimeters(1))
+	require.NoError(t, err)
 	doc := decad.New()
 	sheet, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithSurfaceResult())
 	require.NoError(t, err)
 
-	_, err = sheet.Tessellate(t.Context(), units.Millimeters(1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	mesh, err := sheet.Tessellate(t.Context(), units.Millimeters(1))
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySheet, sheet.Kind())
+	require.Len(t, sheet.Faces(), 8)
+	free, err := decad.Edges(decad.Free()).SelectEdges(sheet)
+	require.NoError(t, err)
+	require.Len(t, free, 8)
+	require.Len(t, solidMesh.Triangles(), 12)
+	require.Len(t, mesh.Triangles(), 8)
+	require.Equal(t, solidMesh.Triangles()[:8], mesh.Triangles())
+	require.Equal(t, solidMesh.Vertices(), mesh.Vertices())
+	require.Equal(t, 8, directedEdgeCensus(t, mesh))
+	require.Len(t, mesh.SourceFaces(), 8)
+	live := map[*decad.Face]struct{}{}
+	for _, f := range sheet.Faces() {
+		live[f] = struct{}{}
+	}
+	for _, f := range mesh.SourceFaces() {
+		require.Contains(t, live, f)
+	}
+	require.InDelta(t, 1600.0, meshTriangleArea(mesh), 1e-9)
+	area, err := sheet.Area()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(area.Value.Base()-1600), area.Bound.Base())
+	require.False(t, mesh.VolumeVerified())
+	t.Logf("sheet mesh: faces=%d free_edges=%d triangles=%d area=%g bound=%g",
+		len(sheet.Faces()), len(free), len(mesh.Triangles()), area.Value.Base(), area.Bound.Base())
+
+	for _, format := range []string{"STL", "OBJ"} {
+		var plain, verified bytes.Buffer
+		if format == "STL" {
+			require.NoError(t, sheet.STL(&plain))
+			require.NoError(t, sheet.STL(&verified, decad.WithVerification(decad.VerifyAll)))
+			require.Equal(t, 8, strings.Count(plain.String(), "  facet normal "))
+		} else {
+			require.NoError(t, sheet.OBJ(&plain))
+			require.NoError(t, sheet.OBJ(&verified, decad.WithVerification(decad.VerifyAll)))
+			require.Equal(t, 8, strings.Count(plain.String(), "\nf "))
+		}
+		require.Equal(t, plain.Bytes(), verified.Bytes())
+	}
+	rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
+	require.NoError(t, err)
+	placed, err := sheet.PlacedCopy(t.Context(), rotation)
+	require.NoError(t, err)
+	placedArea, err := placed.Area()
+	require.NoError(t, err)
+	require.Positive(t, placedArea.Bound.Base())
+	require.LessOrEqual(t, math.Abs(placedArea.Value.Base()-1600), placedArea.Bound.Base())
+	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(1))
+	require.NoError(t, err)
+	require.Len(t, placedMesh.Triangles(), 8)
+	require.Positive(t, placedMesh.Bound().Base())
+	require.False(t, placedMesh.VolumeVerified())
+	t.Logf("placed sheet area=%g bound=%g mesh_bound=%g", placedArea.Value.Base(),
+		placedArea.Bound.Base(), placedMesh.Bound().Base())
 }
 
 // TestSurfaceLoftShellOpenAgreesWithFreeEdgeDerivation catches a builder that
