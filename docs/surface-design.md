@@ -221,8 +221,7 @@ func (d *Document) Patch(ctx context.Context, s *sketch.Sketch, p *sketch.Profil
 func (b *Body) Patch(ctx context.Context, sel EdgeSelector) (*Body, error)
 
 // Joining sheets, and taking a body apart.
-func Stitch(bodies ...*Body) (*Body, error)
-func StitchContext(ctx context.Context, bodies ...*Body) (*Body, error)
+func Stitch(ctx context.Context, bodies ...*Body) (*Body, error)
 func (b *Body) Unstitch(ctx context.Context) ([]*Body, error)
 
 // The free-edge selector predicate.
@@ -232,7 +231,7 @@ func Free() EdgePredicate
 Every one of these bounds cancellation in its own construction and audit
 paths, returns `ctx.Err()` unchanged before commit, and leaves the document
 and every operand unchanged, exactly as `docs/api-design.md` §8 states for
-every other operation. `Stitch` keeps its own `Context` form.
+every other operation.
 
 `Stitch` and `Unstitch` consume their operands and register their results, on
 `docs/api-design.md` §6's uniform terms: `Stitch` retires every body handed
@@ -254,7 +253,7 @@ bottom, err := doc.Patch(ctx, s, prof)            // 1 face at z = 0
 // topSketch draws the same profile on the z = 10 plane.
 top, err := doc.Patch(ctx, topSketch, topProf)    // 1 face at z = 10
 
-box, err := decad.Stitch(walls, bottom, top)      // Kind() == BodySolid
+box, err := decad.Stitch(ctx, walls, bottom, top) // Kind() == BodySolid
 vol, err := box.Volume()                          // 60000 mm³, Exact
 ```
 

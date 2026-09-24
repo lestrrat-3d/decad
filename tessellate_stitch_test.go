@@ -19,7 +19,7 @@ import (
 func stitchedBox(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	walls, bottom, top := stitchBoxSheets(t, doc, 10)
-	box, err := decad.Stitch(walls, bottom, top)
+	box, err := decad.Stitch(t.Context(), walls, bottom, top)
 	require.NoError(t, err)
 	return box
 }
@@ -54,7 +54,7 @@ func TestStitchSolidTessellateRecordsThePostSignFixTriangleSet(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	walls, bottom, top := stitchBoxSheets(t, doc, 10)
-	box, err := decad.Stitch(bottom, top, walls)
+	box, err := decad.Stitch(t.Context(), bottom, top, walls)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, box.Kind())
 
@@ -166,7 +166,7 @@ func TestStitchDisplacedPatchSheetTessellatesItsOwnTriangleSet(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	walls, bottom, top := stitchBoxSheets(t, doc, 10+1e-9)
-	sheet, err := decad.Stitch(walls, bottom, top)
+	sheet, err := decad.Stitch(t.Context(), walls, bottom, top)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, sheet.Kind())
 
@@ -187,7 +187,7 @@ func TestStitchDisplacedPatchSheetTessellatesItsOwnTriangleSet(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNotSolid)
 
 	block := boxBody(t, doc, 200, 0, 300, 60, 10)
-	_, err = decad.Union(sheet, block)
+	_, err = decad.Union(t.Context(), sheet, block)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -369,7 +369,7 @@ func TestStitchSolidUnionComposesTheCorrectVolume(t *testing.T) {
 	box := stitchedBox(t, doc)
 	block := boxBody(t, doc, 200, 0, 300, 60, 10)
 
-	got, err := decad.Union(box, block)
+	got, err := decad.Union(t.Context(), box, block)
 	require.NoError(t, err)
 
 	// Disjoint: the union is exactly the sum, two lumps, nothing chorded,
@@ -408,7 +408,7 @@ func TestStitchPlacedSolidUnionStillRefusesOnTheVolumeProof(t *testing.T) {
 	block := boxBody(t, doc, 700, 500, 800, 560, 10)
 
 	before := len(doc.Bodies())
-	_, err = decad.Union(placed, block)
+	_, err = decad.Union(t.Context(), placed, block)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "no proof of the volume")
 	require.NotContains(t, err.Error(), "does not support payload")
@@ -428,7 +428,7 @@ func TestStitchCertificateWeldedSolidUnionStillRefusesOnTheVolumeProof(t *testin
 	require.NoError(t, err)
 	capped, err := wall.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)
-	solid, err := decad.Stitch(capped)
+	solid, err := decad.Stitch(t.Context(), capped)
 	require.NoError(t, err)
 	for _, v := range solid.Vertices() {
 		require.Greater(t, v.Position().Bound.Mag(), 0.0,
@@ -441,7 +441,7 @@ func TestStitchCertificateWeldedSolidUnionStillRefusesOnTheVolumeProof(t *testin
 	block := boxBody(t, doc, far.X, far.Y, far.X+10, far.Y+10, 10)
 
 	before := len(doc.Bodies())
-	_, err = decad.Union(solid, block)
+	_, err = decad.Union(t.Context(), solid, block)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "no proof of the volume")
 	require.NotContains(t, err.Error(), "does not support payload")

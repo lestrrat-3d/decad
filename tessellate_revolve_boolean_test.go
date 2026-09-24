@@ -70,7 +70,7 @@ func TestRevolveUnionWithAPrismMeasuresTheAnalyticVolume(t *testing.T) {
 	// genuine crossing rather than a containment certificate.
 	box := translated(t, revolveBoxBody(t, doc, 2, 6, 6, 12, 4), 0, 0, 1)
 
-	got, err := decad.Union(cyl, box)
+	got, err := decad.Union(t.Context(), cyl, box)
 	require.NoError(t, err)
 	volume, bound := mm3(t, got)
 	require.Positive(t, bound)
@@ -100,7 +100,7 @@ func TestRevolveCutByAPrismMeasuresTheAnalyticVolume(t *testing.T) {
 	// cylinder rather than adding to it.
 	box := translated(t, revolveBoxBody(t, doc, 2, 2, 6, 12, 4), 0, 0, 1)
 
-	got, err := decad.Cut(cyl, box)
+	got, err := decad.Cut(t.Context(), cyl, box)
 	require.NoError(t, err)
 	volume, bound := mm3(t, got)
 	require.Positive(t, bound)
@@ -125,14 +125,14 @@ func TestRevolveUnionWithAnotherRevolveObeysInclusionExclusion(t *testing.T) {
 	unionDoc := decad.New()
 	ua := quarterCylinder(t, unionDoc)
 	ub := translated(t, quarterCylinder(t, unionDoc), 4, 4, 4)
-	joined, err := decad.Union(ua, ub)
+	joined, err := decad.Union(t.Context(), ua, ub)
 	require.NoError(t, err)
 	unionVol, unionBound := mm3(t, joined)
 
 	meetDoc := decad.New()
 	ma := quarterCylinder(t, meetDoc)
 	mb := translated(t, quarterCylinder(t, meetDoc), 4, 4, 4)
-	shared, err := decad.Intersect(ma, mb)
+	shared, err := decad.Intersect(t.Context(), ma, mb)
 	require.NoError(t, err)
 	meetVol, meetBound := mm3(t, shared)
 
@@ -161,7 +161,7 @@ func TestRevolveBooleanRefusesAHiddenTangency(t *testing.T) {
 	require.NoError(t, err)
 	box := translated(t, revolveBoxBody(t, doc, 2, -4, 6, 4, 6), 0, 0, 8)
 
-	_, err = decad.Union(cyl, box)
+	_, err = decad.Union(t.Context(), cyl, box)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	var be *decad.BooleanError
 	require.ErrorAs(t, err, &be)
@@ -187,7 +187,7 @@ func TestRevolveBooleanRefusesAShallowCrossing(t *testing.T) {
 		require.NoError(t, err)
 		moved, err := box.Placed(t.Context(), spun)
 		require.NoError(t, err)
-		_, err = decad.Union(cyl, moved)
+		_, err = decad.Union(t.Context(), cyl, moved)
 		return err
 	}
 
@@ -212,7 +212,7 @@ func TestRevolveBooleanChargesBothOperandVolumeProofs(t *testing.T) {
 	_, boundA := func() (float64, float64) {
 		cyl := quarterCylinder(t, withPrism)
 		box := translated(t, revolveBoxBody(t, withPrism, 2, 6, 6, 12, 4), 0, 0, 1)
-		got, err := decad.Union(cyl, box)
+		got, err := decad.Union(t.Context(), cyl, box)
 		require.NoError(t, err)
 		return mm3(t, got)
 	}()
@@ -221,7 +221,7 @@ func TestRevolveBooleanChargesBothOperandVolumeProofs(t *testing.T) {
 	_, boundB := func() (float64, float64) {
 		a := quarterCylinder(t, withRevolve)
 		b := translated(t, quarterCylinder(t, withRevolve), 4, 4, 4)
-		got, err := decad.Union(a, b)
+		got, err := decad.Union(t.Context(), a, b)
 		require.NoError(t, err)
 		return mm3(t, got)
 	}()

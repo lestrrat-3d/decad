@@ -65,7 +65,7 @@ func TestStitchTessellateClassBoundIsIndependentOfPlacement(t *testing.T) {
 	capped, err := wall.Patch(t.Context(), Edges(Free()).Exactly(8))
 	require.NoError(t, err)
 
-	solid, err := Stitch(capped)
+	solid, err := Stitch(t.Context(), capped)
 	require.NoError(t, err)
 	require.Equal(t, BodySolid, solid.Kind())
 
@@ -121,7 +121,7 @@ func internalStitchedBox(t *testing.T, doc *Document) *Body {
 	top, err := doc.Patch(t.Context(), ts, ts.Profiles()[0])
 	require.NoError(t, err)
 
-	box, err := Stitch(walls, bottom, top)
+	box, err := Stitch(t.Context(), walls, bottom, top)
 	require.NoError(t, err)
 	return box
 }
@@ -180,7 +180,7 @@ func TestTessellateStitchDoesNotPublishSymDiffForAnOpenSheet(t *testing.T) {
 	walls, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along}, WithSurfaceResult())
 	require.NoError(t, err)
 
-	sheet, err := Stitch(walls)
+	sheet, err := Stitch(t.Context(), walls)
 	require.NoError(t, err)
 	require.Equal(t, BodySheet, sheet.Kind())
 

@@ -27,7 +27,7 @@ func displacedUnionBody(t *testing.T, shift float64) *Body {
 	require.NoError(t, err)
 	moved, err := b.Placed(t.Context(), m)
 	require.NoError(t, err)
-	got, err := Union(a, moved)
+	got, err := Union(t.Context(), a, moved)
 	require.NoError(t, err)
 	return got
 }

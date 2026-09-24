@@ -932,8 +932,8 @@ scene runs in one worker while the caller selects its result against
 `ctx.Done()`. On cancellation, the caller waits for that bounded arrangement
 worker to finish, discards its result, and then returns `ctx.Err()` before the
 arrangement reaches the document.
-`UnionContext`/`CutContext`/`IntersectContext` add no public cancellation
-surface. Exhaustion is RB7 (§9), not silent truncation.
+`Union`/`Cut`/`Intersect` add no public cancellation surface beyond the context
+they already take. Exhaustion is RB7 (§9), not silent truncation.
 
 ## 11. Topology, provenance, and roles
 

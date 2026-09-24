@@ -29,7 +29,7 @@ func newUnion(t *testing.T) *decad.Body {
 	doc := decad.New()
 	b1 := decadtest.NewBlock(t, doc, 0, 0, 10, 10, units.Millimeters(10))
 	b2 := decadtest.NewBlock(t, doc, 5, 5, 20, 20, units.Millimeters(10))
-	u, err := decad.Union(b1, b2)
+	u, err := decad.Union(t.Context(), b1, b2)
 	require.NoError(t, err)
 	return u
 }

@@ -81,7 +81,7 @@ These are cheap now and expensive to retrofit. They are the upgrade path.
 | 1 | **NEVER expose triangles as the representation.** `Tessellate(ctx, tol)` is an output; the public vocabulary is `Body → Face → Edge → Vertex` even while the backing is approximate. | A public `Triangles()` is a one-way door; callers depend on it and vN can never remove it. |
 | 2 | **Every measurement carries `Exactness`, from the first commit.** | Makes the upgrade **monotonic, not breaking**: callers already branch on `Approximate`; in vN that branch stops being taken and nobody's code changes. A bare `float64` today means adding exactness later breaks every call site. |
 | 3 | **Selectors, never topology indices.** `Body.Faces()` / `Edges()` / `Vertices()` exist for **traversal and inspection only**; no feature or selector names a face, an edge or a vertex by index or by a bare topology pointer. | An exact kernel produces a different (more correct) face/edge decomposition. If `Edges()[3]` is the API, index order becomes a de facto contract and vN breaks every model. |
-| 4 | **Booleans never mutate their operands, and take no target-out parameter.** `Union(a, b) (*Body, error)` — never Fusion's in-place `booleanOperation(target, tool, type) -> bool`. | A signature free of in-place mutation lets the implementation be swapped with zero API churn. |
+| 4 | **Booleans never mutate their operands, and take no target-out parameter.** `Union(ctx, a, b) (*Body, error)` — never Fusion's in-place `booleanOperation(target, tool, type) -> bool`. | A signature free of in-place mutation lets the implementation be swapped with zero API churn. |
 | 5 | **Imported meshes are a separate type.** A `MeshBody` never claims to be a solid B-rep. | For imported triangle soup, no future kernel can recover exactness. Keeping it separate stops approximate-forever geometry from contaminating the type we promise to make exact. |
 
 **What will still churn**, stated honestly: face/edge *counts* may change under an
@@ -270,7 +270,7 @@ retired from the document.
 
 **A `*Body` carries its owning `*Document`.** This is what lets a boolean keep the
 signature invariant #4 demands — no target-out parameter, no operand mutated —
-while `Document.Bodies()` stays truthful: `Union(a, b)` reaches the document
+while `Document.Bodies()` stays truthful: `Union(ctx, a, b)` reaches the document
 *through* `a`, so retiring the operands and registering the result happen inside
 the operation, with no `*Document` argument and no caller bookkeeping. Operands
 themselves are untouched: retiring is a change of *document* membership, not of
@@ -291,7 +291,7 @@ op, or to an extent that names a body (`ToFace`, §8.1) is `ErrRetiredBody` (§1
 Using such a body as a stop would resolve topology outside the live model.
 
 It follows that **bodies from different documents cannot be combined**.
-`Union(a, b)` where `a` and `b` have different owners has no defined result — which
+`Union(ctx, a, b)` where `a` and `b` have different owners has no defined result — which
 document would own it? — and is `ErrForeignBody` (§12).
 
 ```go
@@ -747,13 +747,9 @@ implicitly-chosen target — and they never mutate an operand or take a target-o
 parameter:
 
 ```go
-func Union(a, b *Body) (*Body, error)
-func Cut(target, tool *Body) (*Body, error)
-func Intersect(a, b *Body) (*Body, error)
-
-func UnionContext(ctx context.Context, a, b *Body) (*Body, error)
-func CutContext(ctx context.Context, target, tool *Body) (*Body, error)
-func IntersectContext(ctx context.Context, a, b *Body) (*Body, error)
+func Union(ctx context.Context, a, b *Body) (*Body, error)
+func Cut(ctx context.Context, target, tool *Body) (*Body, error)
+func Intersect(ctx context.Context, a, b *Body) (*Body, error)
 ```
 
 No `*Document` appears in those signatures, and none is needed: a `*Body` carries
@@ -762,13 +758,10 @@ result inside the document that owns them. The operands are themselves unchanged
 — invariant #4 — and `Document.Bodies()` and `Document.Verify()` stay truthful.
 Operands owned by different documents are `ErrForeignBody`.
 
-**Context variants cancel the complete Boolean before its atomic commit.**
-They pass `ctx` through operand tessellation, exact-predicate classification,
-cutting, stitching, mesh audit, and exact volume calculation. Cancellation
-returns `ctx.Err()` unchanged and leaves both operands and the live-body set
-unchanged. `Union` / `Cut` / `Intersect` are compatibility wrappers over their
-`Context` variants with `context.Background()`; success keeps the same consuming
-behavior.
+**Each cancels the complete Boolean before its atomic commit.** They pass `ctx`
+through operand tessellation, exact-predicate classification, cutting,
+stitching, mesh audit, and exact volume calculation. Cancellation returns
+`ctx.Err()` unchanged and leaves both operands and the live-body set unchanged.
 
 **A boolean failure is typed, because its three failures are three different
 caller actions.** A boolean that produces no body, reaches a valid-model limit
@@ -949,8 +942,7 @@ func WithSurfaceResult() SurfaceResultOption
 func (d *Document) Patch(ctx context.Context, s *sketch.Sketch, p *sketch.Profile) (*Body, error)
 func (b *Body) Patch(ctx context.Context, sel EdgeSelector) (*Body, error)
 
-func Stitch(bodies ...*Body) (*Body, error)
-func StitchContext(ctx context.Context, bodies ...*Body) (*Body, error)
+func Stitch(ctx context.Context, bodies ...*Body) (*Body, error)
 func (b *Body) Unstitch(ctx context.Context) ([]*Body, error)
 ```
 

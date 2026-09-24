@@ -101,7 +101,7 @@ func TestPrismCutCleanNestingBoreThroughHub(t *testing.T) {
 	targetCyl := cylinderWall(t, target)
 	toolCyl := cylinderWall(t, tool)
 
-	got, err := decad.Cut(target, tool)
+	got, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(got), `the clean-nesting cut must build analytically`)
 
@@ -161,7 +161,7 @@ func TestPrismCutCleanNestingKeepsAToolVertexTheFormulaMisses(t *testing.T) {
 	pts := [][2]float64{{u0, 2}, {u1, 2}, {3, 8}, {1, 8}}
 	tool := polyPrism(t, doc, w, w.XY(), pts, 2*plateHeight)
 
-	got, err := decad.Cut(plate, tool)
+	got, err := decad.Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(got), `the clean-nesting cut must build analytically`)
 
@@ -234,7 +234,7 @@ func TestPrismCutCleanNestingKeepsAToolArcEndTheAnglesMiss(t *testing.T) {
 	toolVol, err := tool.Volume()
 	require.NoError(t, err)
 
-	got, err := decad.Cut(plate, tool)
+	got, err := decad.Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(got), `the clean-nesting cut must build analytically`)
 
@@ -281,13 +281,13 @@ func TestPrismIntersectFullyNestedPairReturnsInnerOperand(t *testing.T) {
 	big1 := discBody(t, doc, 0, R, h)
 	small1 := discBody(t, doc, 0, r, h)
 	smallCyl := cylinderWall(t, small1)
-	gotBigFirst, err := decad.Intersect(big1, small1)
+	gotBigFirst, err := decad.Intersect(t.Context(), big1, small1)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(gotBigFirst))
 
 	big2 := discBody(t, doc, 0, R, h)
 	small2 := discBody(t, doc, 0, r, h)
-	gotSmallFirst, err := decad.Intersect(small2, big2)
+	gotSmallFirst, err := decad.Intersect(t.Context(), small2, big2)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(gotSmallFirst))
 
@@ -324,7 +324,7 @@ func TestPrismIntersectDisjointFootprintsFallsBack(t *testing.T) {
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 20, 0, 30, 10, 10)
 
-	_, err := decad.Intersect(a, b)
+	_, err := decad.Intersect(t.Context(), a, b)
 	require.ErrorIs(t, err, decad.ErrBooleanFailed)
 	var be *decad.BooleanError
 	require.ErrorAs(t, err, &be)
@@ -342,7 +342,7 @@ func TestPrismCutDisjointFootprintFallsBack(t *testing.T) {
 	target := boxBody(t, doc, 0, 0, 10, 10, 10)
 	tool := boxBody(t, doc, 20, 0, 30, 10, 10)
 
-	got, err := decad.Cut(target, tool)
+	got, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
 	require.True(t, anyFaceIsFaceted(got), `an unresolved topology falls back to the mesh path`)
 	vol, err := got.Volume()
@@ -364,7 +364,7 @@ func TestPrismCutG5FallsBackWhenToolDoesNotSpanTarget(t *testing.T) {
 	target := boxBody(t, doc, -half, -half, half, half, h)                            // z: 0..10
 	tool := boxBodySymmetric(t, doc, -toolHalf, -toolHalf, toolHalf, toolHalf, reach) // z: -2..2, short of target's z1 = 10
 
-	got, err := decad.Cut(target, tool)
+	got, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
 	require.True(t, anyFaceIsFaceted(got), `a non-spanning tool is not the clean-nesting shape`)
 
@@ -396,7 +396,7 @@ func TestPrismIntersectG5FallsBackOnDisjointZIntervals(t *testing.T) {
 	b, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(3), Dir: decad.Against}) // z: -3..0
 	require.NoError(t, err)
 
-	_, err = decad.Intersect(a, b)
+	_, err = decad.Intersect(t.Context(), a, b)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	var be *decad.BooleanError
 	require.ErrorAs(t, err, &be)
@@ -417,7 +417,7 @@ func TestPrismCutG6HoledToolFallsBackKeepingTheStandingPost(t *testing.T) {
 	target := boxBody(t, doc, -half, -half, half, half, h)
 	tool := holedBoxSymmetric(t, doc, outer, inner, 11) // spans target fully, caps clear of it
 
-	got, err := decad.Cut(target, tool)
+	got, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
 	require.True(t, anyFaceIsFaceted(got), `a holed tool is not the clean-nesting shape (G6)`)
 
@@ -450,7 +450,7 @@ func TestPrismCutCrossingToolResolvesAnalytically(t *testing.T) {
 	target := boxBody(t, doc, -half, -half, half, half, h)
 	tool := boxBodySymmetric(t, doc, x0, -y, x1, y, 20) // spans the target's full height
 
-	got, err := decad.Cut(target, tool)
+	got, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(got), `the crossing sub-case must build analytically`)
 
@@ -478,7 +478,7 @@ func TestPrismCutCancellationLeavesDocumentUnchanged(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, err := decad.CutContext(ctx, target, tool)
+	_, err := decad.Cut(ctx, target, tool)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, beforeBodies, doc.Bodies())
 }

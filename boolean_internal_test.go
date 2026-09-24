@@ -54,7 +54,7 @@ func TestBooleanContextCancelsFacetedBodyFinishing(t *testing.T) {
 			beforeBodies := doc.Bodies()
 			ctx := &internalBooleanBuildCancelContext{Context: t.Context(), target: target}
 
-			_, err = UnionContext(ctx, a, b)
+			_, err = Union(ctx, a, b)
 			require.ErrorIs(t, err, context.Canceled)
 			require.True(t, ctx.entered)
 			require.Equal(t, beforeProducer, doc.nextProducer)
@@ -478,7 +478,7 @@ func TestBooleanVolumesAreUnchangedByTheKernelRewrite(t *testing.T) {
 	}
 	testcases := []struct {
 		name string
-		op   func(a, b *Body) (*Body, error)
+		op   func(ctx context.Context, a, b *Body) (*Body, error)
 		want want
 	}{
 		{"Union", Union, want{1875, 7.5, 7.5, 7.5, 0, 0, 0, 15, 15, 15}},
@@ -495,7 +495,7 @@ func TestBooleanVolumesAreUnchangedByTheKernelRewrite(t *testing.T) {
 			b, err = b.Placed(t.Context(), tr)
 			require.NoError(t, err)
 
-			result, err := tc.op(a, b)
+			result, err := tc.op(t.Context(), a, b)
 			require.NoError(t, err)
 
 			volM, err := result.Volume()

@@ -29,7 +29,7 @@ import (
 func unstitchBox(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()
 	walls, bottom, top := stitchBoxSheets(t, doc, 10)
-	box, err := decad.Stitch(walls, bottom, top)
+	box, err := decad.Stitch(t.Context(), walls, bottom, top)
 	require.NoError(t, err)
 	return box
 }
@@ -107,7 +107,7 @@ func TestUnstitchRestitchRoundTripMatchesOriginal(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, sheets, 6)
 
-	restitched, err := decad.Stitch(sheets...)
+	restitched, err := decad.Stitch(t.Context(), sheets...)
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySolid, restitched.Kind())
@@ -152,7 +152,7 @@ func TestUnstitchRestitchRoundTripClosesABoundedBox(t *testing.T) {
 	require.NoError(t, err)
 	capped, err := wall.Patch(t.Context(), decad.Edges(decad.Free()).Exactly(8))
 	require.NoError(t, err)
-	solid, err := decad.Stitch(capped)
+	solid, err := decad.Stitch(t.Context(), capped)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySolid, solid.Kind())
 	wantVol, err := solid.Volume()
@@ -162,7 +162,7 @@ func TestUnstitchRestitchRoundTripClosesABoundedBox(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, sheets, 6)
 
-	restitched, err := decad.Stitch(sheets...)
+	restitched, err := decad.Stitch(t.Context(), sheets...)
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySolid, restitched.Kind(), "the round trip closes again rather than falling back to a sheet")
@@ -212,7 +212,7 @@ func TestUnstitchRevolveRoundTripStaysASheet(t *testing.T) {
 		require.Equal(t, decad.BodySheet, piece.Kind())
 	}
 
-	restitched, err := decad.Stitch(pieces...)
+	restitched, err := decad.Stitch(t.Context(), pieces...)
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySheet, restitched.Kind())
@@ -242,7 +242,7 @@ func TestUnstitchTableR(t *testing.T) {
 		doc := decad.New()
 		plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 		tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
-		cut, err := decad.Cut(plate, tool)
+		cut, err := decad.Cut(t.Context(), plate, tool)
 		require.NoError(t, err)
 		require.Equal(t, decad.KindFaceted, cut.Faces()[0].Surface().Kind())
 

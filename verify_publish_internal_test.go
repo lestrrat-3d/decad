@@ -319,7 +319,7 @@ func planarBooleanBody(t *testing.T) *Body {
 	doc := New()
 	a := axisBoxBody(t, doc, 0, 0, 10, 10, 10)
 	b := translatedBody(t, axisBoxBody(t, doc, 0, 0, 10, 10, 10), 5, 5, 5)
-	body, err := Union(a, b)
+	body, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
 	return body
 }

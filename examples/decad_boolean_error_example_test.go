@@ -33,7 +33,7 @@ func Example_decad_boolean_error() {
 		fmt.Printf("failed to build upper cube: %s\n", err)
 		return
 	}
-	if _, err := decad.Union(lower, upper); err != nil {
+	if _, err := decad.Union(context.Background(), lower, upper); err != nil {
 		reportBooleanError("union", err)
 	}
 
@@ -50,7 +50,7 @@ func Example_decad_boolean_error() {
 		fmt.Printf("failed to build right cube: %s\n", err)
 		return
 	}
-	if _, err := decad.Intersect(left, right); err != nil {
+	if _, err := decad.Intersect(context.Background(), left, right); err != nil {
 		reportBooleanError("intersect", err)
 	}
 

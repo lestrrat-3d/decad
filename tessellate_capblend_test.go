@@ -312,10 +312,10 @@ func TestCapBlendMeshIsExportOnly(t *testing.T) {
 		name string
 		run  func() (*decad.Body, error)
 	}{
-		{"union", func() (*decad.Body, error) { return decad.Union(chamfered, tool) }},
-		{"cut", func() (*decad.Body, error) { return decad.Cut(chamfered, tool) }},
-		{"intersect", func() (*decad.Body, error) { return decad.Intersect(chamfered, tool) }},
-		{"union as second operand", func() (*decad.Body, error) { return decad.Union(tool, chamfered) }},
+		{"union", func() (*decad.Body, error) { return decad.Union(t.Context(), chamfered, tool) }},
+		{"cut", func() (*decad.Body, error) { return decad.Cut(t.Context(), chamfered, tool) }},
+		{"intersect", func() (*decad.Body, error) { return decad.Intersect(t.Context(), chamfered, tool) }},
+		{"union as second operand", func() (*decad.Body, error) { return decad.Union(t.Context(), tool, chamfered) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			body, err := tc.run()

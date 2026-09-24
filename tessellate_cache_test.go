@@ -134,7 +134,7 @@ func TestTessellationCachePayloadClasses(t *testing.T) {
 			doc := decad.New()
 			plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 			tool := translated(t, diskBody(t, doc, 10, 10, 2), 0, 0, -6)
-			body, err := decad.Cut(plate, tool)
+			body, err := decad.Cut(t.Context(), plate, tool)
 			require.NoError(t, err)
 			return body
 		}},

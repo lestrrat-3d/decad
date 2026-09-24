@@ -30,7 +30,7 @@ func TestPrismIntersectCrossingBoxesResolvesAnalytically(t *testing.T) {
 	a := boxBody(t, doc, 0, 0, 10, 10, 5)
 	b := boxBody(t, doc, 5, 5, 15, 15, 5)
 
-	got, err := decad.Intersect(a, b)
+	got, err := decad.Intersect(t.Context(), a, b)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(got), `the crossing sub-case must build analytically`)
 
@@ -52,7 +52,7 @@ func TestPrismCutCrossingBoxesResolvesAnalytically(t *testing.T) {
 	target := boxBody(t, doc, 0, 0, 10, 10, 5)
 	tool := boxBody(t, doc, 5, 5, 15, 15, 5)
 
-	got, err := decad.Cut(target, tool)
+	got, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(got), `the crossing sub-case must build analytically`)
 
@@ -76,7 +76,7 @@ func TestPrismIntersectCrossingCylindersMatchesClosedFormLens(t *testing.T) {
 	a := discBody(t, doc, 0, r, h)
 	b := discBody(t, doc, d, r, h)
 
-	got, err := decad.Intersect(a, b)
+	got, err := decad.Intersect(t.Context(), a, b)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(got), `the crossing sub-case must build analytically`)
 
@@ -138,7 +138,7 @@ func TestPrismCutIntersectNonCoplanarPairStillTakesMeshPath(t *testing.T) {
 	tool, err := toolSrc.Placed(t.Context(), shift)
 	require.NoError(t, err)
 
-	gotCut, err := decad.Cut(target, tool)
+	gotCut, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
 	require.True(t, anyFaceIsFaceted(gotCut), `a non-coplanar pair must still take the mesh path`)
 
@@ -147,7 +147,7 @@ func TestPrismCutIntersectNonCoplanarPairStillTakesMeshPath(t *testing.T) {
 	bSrc := boxBody(t, doc2, 5, 5, 15, 15, 10)
 	b, err := bSrc.Placed(t.Context(), shift)
 	require.NoError(t, err)
-	gotIntersect, err := decad.Intersect(a, b)
+	gotIntersect, err := decad.Intersect(t.Context(), a, b)
 	require.NoError(t, err)
 	require.True(t, anyFaceIsFaceted(gotIntersect), `a non-coplanar pair must still take the mesh path`)
 }
@@ -172,7 +172,7 @@ func TestPrismCutIntersectRotatedSectionStillTakesMeshPath(t *testing.T) {
 	tooth, err := toothSrc.Placed(t.Context(), tr)
 	require.NoError(t, err)
 
-	_, err = decad.Cut(hub, tooth)
+	_, err = decad.Cut(t.Context(), hub, tooth)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 
 	doc2 := decad.New()
@@ -180,6 +180,6 @@ func TestPrismCutIntersectRotatedSectionStillTakesMeshPath(t *testing.T) {
 	toothSrc2 := toothBody(t, doc2, r, r2, th1, th2, h)
 	tooth2, err := toothSrc2.Placed(t.Context(), tr)
 	require.NoError(t, err)
-	_, err = decad.Intersect(hub2, tooth2)
+	_, err = decad.Intersect(t.Context(), hub2, tooth2)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }

@@ -369,7 +369,7 @@ func TestMultiLumpFacetedBodyBypassesAnalyticContainment(t *testing.T) {
 	outer := internalBoxBody(t, doc, 0, 0, 20, 20, 10)
 	a := internalBoxBody(t, doc, 2, 2, 4, 4, 2)
 	b := internalBoxBody(t, doc, 10, 10, 12, 12, 2)
-	multi, err := Union(a, b)
+	multi, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
 	require.Len(t, multi.Lumps(), 2)
 

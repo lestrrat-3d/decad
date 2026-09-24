@@ -480,10 +480,9 @@ a wrapper.** Interference PR 1 (`docs/interference-design.md` §11) factors one
 internal `evaluateBoolean(ctx, op, a, b)` over tessellation, exact-predicate
 classification, cutting, stitching, bound composition, and the rational volume
 integral. It never advances provenance, retires an operand, or registers a body.
-`UnionContext` / `CutContext` / `IntersectContext`
+`Union` / `Cut` / `Intersect`
 gate their operands, pass the caller context through evaluation and faceted-body
-construction, then commit the step atomically. `Union` / `Cut` / `Intersect`
-call those variants with `context.Background()` for compatibility. `Verify`
+construction, then commit the step atomically. `Verify`
 passes its own context to the read-only analytic intersection twin first, and
 to this same mesh evaluator for a pair that twin does not admit; it consumes
 only a bounded intersection volume from whichever path answers, never calls

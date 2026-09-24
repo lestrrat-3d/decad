@@ -61,7 +61,7 @@ func TestStitchAnnularRevolveSheetClosesToATube(t *testing.T) {
 		decad.KindPlane:    2,
 	})
 
-	solid, err := decad.Stitch(sheet)
+	solid, err := decad.Stitch(t.Context(), sheet)
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySolid, solid.Kind())
@@ -95,7 +95,7 @@ func TestStitchAnnularRevolveSheetClosesToATube(t *testing.T) {
 func TestStitchAnnularSolidMatchesTheRevolveEngine(t *testing.T) {
 	t.Parallel()
 	_, sheet := annularRevolveSheet(t, 10, 5, 15)
-	stitched, err := decad.Stitch(sheet)
+	stitched, err := decad.Stitch(t.Context(), sheet)
 	require.NoError(t, err)
 
 	s2, p2 := annularSketchRange(t, 10, 5, 15)
@@ -134,7 +134,7 @@ func TestStitchCurvedVolumeBoundEncloses(t *testing.T) {
 	}
 	for _, c := range cases {
 		_, sheet := annularRevolveSheet(t, c.uLen, c.vLo, c.vHi)
-		solid, err := decad.Stitch(sheet)
+		solid, err := decad.Stitch(t.Context(), sheet)
 		require.NoError(t, err)
 
 		area := c.vHi*c.vHi - c.vLo*c.vLo // pi * area factor, Pappus: V = pi*(vHi^2-vLo^2)*uLen
@@ -153,7 +153,7 @@ func TestStitchCurvedVolumeBoundEncloses(t *testing.T) {
 func TestStitchCurvedVolumeBoundWidensWhenPlaced(t *testing.T) {
 	t.Parallel()
 	_, sheet := annularRevolveSheet(t, 10, 5, 15)
-	unplaced, err := decad.Stitch(sheet)
+	unplaced, err := decad.Stitch(t.Context(), sheet)
 	require.NoError(t, err)
 	unplacedVol, err := unplaced.Volume()
 	require.NoError(t, err)
@@ -215,7 +215,7 @@ func TestStitchPatchCappedTubeClosesToASolid(t *testing.T) {
 	_, err = decad.Edges(decad.Free()).SelectEdges(patched)
 	require.ErrorIs(t, err, decad.ErrNoMatch, "Body.Patch itself closes the tube")
 
-	solid, err := decad.Stitch(patched)
+	solid, err := decad.Stitch(t.Context(), patched)
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySolid, solid.Kind())
@@ -348,7 +348,7 @@ func TestStitchTorusRevolveSheetClosesToASolid(t *testing.T) {
 	_, err = decad.Edges(decad.Free()).SelectEdges(sheet)
 	require.ErrorIs(t, err, decad.ErrNoMatch)
 
-	solid, err := decad.Stitch(sheet)
+	solid, err := decad.Stitch(t.Context(), sheet)
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySolid, solid.Kind())
@@ -385,7 +385,7 @@ func TestStitchTorusRevolveSheetClosesToASolid(t *testing.T) {
 func TestStitchTorusSolidMatchesTheRevolveEngine(t *testing.T) {
 	t.Parallel()
 	sheet := halfTorusRevolveSheet(t, 5, 10, 5)
-	stitched, err := decad.Stitch(sheet)
+	stitched, err := decad.Stitch(t.Context(), sheet)
 	require.NoError(t, err)
 
 	s2, p2 := offAxisSemicircleSketchGeneral(t, 5, 10, 5)
@@ -437,7 +437,7 @@ func TestStitchTorusVolumeBoundEncloses(t *testing.T) {
 	}
 	for _, c := range cases {
 		sheet := halfTorusRevolveSheet(t, c.u0, c.major, c.minor)
-		solid, err := decad.Stitch(sheet)
+		solid, err := decad.Stitch(t.Context(), sheet)
 		require.NoError(t, err)
 
 		wantVol, wantArea := halfTorusAnalytics(c.major, c.minor)
@@ -528,7 +528,7 @@ func TestStitchConicalRevolveSheetCloses(t *testing.T) {
 		decad.KindPlane: 2,
 	})
 
-	solid, err := decad.Stitch(sheet)
+	solid, err := decad.Stitch(t.Context(), sheet)
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySolid, solid.Kind())
@@ -565,7 +565,7 @@ func TestStitchConicalSolidMatchesTheRevolveEngine(t *testing.T) {
 	t.Parallel()
 	const uLen, vLo0, vHi0, vLo1, vHi1 = 10.0, 5.0, 15.0, 8.0, 12.0
 	_, sheet := frustumSheet(t, uLen, vLo0, vHi0, vLo1, vHi1)
-	stitched, err := decad.Stitch(sheet)
+	stitched, err := decad.Stitch(t.Context(), sheet)
 	require.NoError(t, err)
 
 	s2, p2 := trapezoidFrustumSketch(t, uLen, vLo0, vHi0, vLo1, vHi1)
@@ -644,7 +644,7 @@ func TestStitchSphereRevolveSheetClosesToABall(t *testing.T) {
 	require.Empty(t, sheet.Edges())
 	require.Empty(t, sheet.Vertices())
 
-	solid, err := decad.Stitch(sheet)
+	solid, err := decad.Stitch(t.Context(), sheet)
 	require.NoError(t, err)
 
 	require.Equal(t, decad.BodySolid, solid.Kind())
@@ -679,7 +679,7 @@ func TestStitchSphereRevolveSheetClosesToABall(t *testing.T) {
 func TestStitchSphereSolidMatchesTheRevolveEngine(t *testing.T) {
 	t.Parallel()
 	_, sheet := sphereRevolveSheet(t, 0, 10)
-	stitched, err := decad.Stitch(sheet)
+	stitched, err := decad.Stitch(t.Context(), sheet)
 	require.NoError(t, err)
 
 	s2, p2 := semicircleSketchAt(t, 0, 10)
@@ -731,7 +731,7 @@ func TestStitchSphereVolumeBoundEncloses(t *testing.T) {
 	}
 	for _, c := range cases {
 		_, sheet := sphereRevolveSheet(t, c.u0, c.diameter)
-		solid, err := decad.Stitch(sheet)
+		solid, err := decad.Stitch(t.Context(), sheet)
 		require.NoError(t, err)
 
 		r := c.diameter / 2

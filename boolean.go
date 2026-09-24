@@ -78,40 +78,27 @@ const boolChordFactor = 2e-5
 // number itself is readable, not only printed in that refusal:
 // [Body.Tessellate] at any tolerance the faceted body already meets returns a
 // [Mesh] whose Bound is exactly the held bound the refusal names.
-func Union(a, b *Body) (*Body, error) {
-	return UnionContext(context.Background(), a, b)
-}
-
-// UnionContext is [Union] with cancellation. It returns ctx.Err() unchanged
-// when ctx is canceled before the document commit.
-func UnionContext(ctx context.Context, a, b *Body) (*Body, error) {
+//
+// It returns ctx.Err() unchanged when ctx is canceled before the document
+// commit.
+func Union(ctx context.Context, a, b *Body) (*Body, error) {
 	return performBoolean(ctx, opUnion, a, b)
 }
 
 // Cut returns target minus tool, retiring both operands from their document
 // (core §8). The target and tool roles are asymmetric. A cut that removes
 // everything is ErrBooleanFailed;
-// the other gates match Union's.
-func Cut(target, tool *Body) (*Body, error) {
-	return CutContext(context.Background(), target, tool)
-}
-
-// CutContext is [Cut] with cancellation. It returns ctx.Err() unchanged when
-// ctx is canceled before the document commit.
-func CutContext(ctx context.Context, target, tool *Body) (*Body, error) {
+// the other gates match Union's. It returns ctx.Err() unchanged when ctx is
+// canceled before the document commit.
+func Cut(ctx context.Context, target, tool *Body) (*Body, error) {
 	return performBoolean(ctx, opCut, target, tool)
 }
 
 // Intersect returns the volume common to a and b, retiring both operands
 // from their document (core §8). Disjoint operands share nothing, so the
-// empty result is ErrBooleanFailed; the other gates match Union's.
-func Intersect(a, b *Body) (*Body, error) {
-	return IntersectContext(context.Background(), a, b)
-}
-
-// IntersectContext is [Intersect] with cancellation. It returns ctx.Err()
-// unchanged when ctx is canceled before the document commit.
-func IntersectContext(ctx context.Context, a, b *Body) (*Body, error) {
+// empty result is ErrBooleanFailed; the other gates match Union's. It returns
+// ctx.Err() unchanged when ctx is canceled before the document commit.
+func Intersect(ctx context.Context, a, b *Body) (*Body, error) {
 	return performBoolean(ctx, opIntersect, a, b)
 }
 
