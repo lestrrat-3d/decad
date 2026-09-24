@@ -897,7 +897,7 @@ func stitchedBoxForClearanceTest(t *testing.T) (doc *Document, box *Body) {
 	top, err := doc.Patch(t.Context(), ts, ts.Profiles()[0])
 	require.NoError(t, err)
 
-	box, err = Stitch(walls, bottom, top)
+	box, err = Stitch(t.Context(), walls, bottom, top)
 	require.NoError(t, err)
 	return doc, box
 }

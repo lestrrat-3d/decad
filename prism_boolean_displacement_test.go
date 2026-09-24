@@ -120,7 +120,7 @@ func TestPrismUnionFarPlacementReturnsTheTrueUnion(t *testing.T) {
 			bBox, err := b.Bounds()
 			require.NoError(t, err)
 
-			got, err := decad.Union(a, b)
+			got, err := decad.Union(t.Context(), a, b)
 			require.NoError(t, err)
 			require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
 
@@ -183,7 +183,7 @@ func TestPrismUnionCutDisplacementBoundEnclosesTheError(t *testing.T) {
 			a := boxBody(t, doc, 0, 0, 10, 10, h)
 			b := boxBody(t, doc, 5.1, 5.1, 15.1, 15.1, h)
 
-			got, err := decad.Union(a, b)
+			got, err := decad.Union(t.Context(), a, b)
 			require.NoError(t, err)
 			require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
 
@@ -236,7 +236,7 @@ func TestPrismUnionWholeEdgeMergeStaysExact(t *testing.T) {
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 2, 2, 8, 8, 10)
 
-	got, err := decad.Union(a, b)
+	got, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
 
@@ -271,7 +271,7 @@ func TestPrismUnionReExpressionDisplacementBoundEnclosesTheError(t *testing.T) {
 			lo, hi := 2-shift, 8-shift
 			b := placedFar(t, boxBody(t, doc, lo, 2, hi, 8, 10), shift)
 
-			got, err := decad.Union(a, b)
+			got, err := decad.Union(t.Context(), a, b)
 			require.NoError(t, err)
 			require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
 
@@ -328,7 +328,7 @@ func TestPrismUnionRoundedReExpressionStaysWithinItsBound(t *testing.T) {
 	lo, hi := 2-shift, 8-shift
 	b := placedFar(t, boxBody(t, doc, lo, 2, hi, 8, 10), shift)
 
-	got, err := decad.Union(a, b)
+	got, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
 
@@ -357,7 +357,7 @@ func TestPrismUnionChainedSecondOperandReexpressionAccumulatesDisplacement(t *te
 	const firstShift = 1e8
 	inside := boxBody(t, doc, 2, 2, 8, 8, 10)
 	outer := placedFar(t, boxBody(t, doc, -firstShift, 0, 10-firstShift, 10, 10), firstShift)
-	first, err := decad.Union(inside, outer)
+	first, err := decad.Union(t.Context(), inside, outer)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(first), "the analytic reduction must own the first union")
 	firstVolume, err := first.Volume()
@@ -367,7 +367,7 @@ func TestPrismUnionChainedSecondOperandReexpressionAccumulatesDisplacement(t *te
 
 	const secondShift = 3e8
 	insideAgain := placedFar(t, boxBody(t, doc, 2-secondShift, 2, 8-secondShift, 8, 10), secondShift)
-	chained, err := decad.Union(insideAgain, first)
+	chained, err := decad.Union(t.Context(), insideAgain, first)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(chained), "the analytic reduction must own the chained union")
 	volume, err := chained.Volume()
@@ -391,7 +391,7 @@ func TestPrismUnionDisplacedSectionRefusesTheSectionRewrites(t *testing.T) {
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	const shift = 1e9
 	b := placedFar(t, boxBody(t, doc, 2-shift, 2, 8-shift, 8, 10), shift)
-	got, err := decad.Union(a, b)
+	got, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 
 	_, err = got.Fillet(t.Context(), verticalConvexEdge(), units.Millimeters(1))
@@ -410,7 +410,7 @@ func TestPrismUnionDisplacedSectionDownstreamReadings(t *testing.T) {
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	const shift = 1e9
 	b := placedFar(t, boxBody(t, doc, 2-shift, 2, 8-shift, 8, 10), shift)
-	got, err := decad.Union(a, b)
+	got, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 	box, err := got.Bounds()
 	require.NoError(t, err)
@@ -440,7 +440,7 @@ func TestPrismUnionDisplacedOperandStillReachesTheMeshBoolean(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := placedFar(t, boxBody(t, doc, 2-shift, 2, 8-shift, 8, 10), shift)
-	got, err := decad.Union(a, b)
+	got, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 	box, err := got.Bounds()
 	require.NoError(t, err)
@@ -452,7 +452,7 @@ func TestPrismUnionDisplacedOperandStillReachesTheMeshBoolean(t *testing.T) {
 
 	// A 4×4 pocket cut 2 mm into the 10 mm-tall union's top: 1000 − 4·4·2.
 	tool := translated(t, boxBody(t, doc, 3, 3, 7, 7, 4), 0, 0, 8)
-	cut, err := decad.Cut(got, tool)
+	cut, err := decad.Cut(t.Context(), got, tool)
 	require.NoError(t, err)
 	vol, err := cut.Volume()
 	require.NoError(t, err)

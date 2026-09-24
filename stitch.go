@@ -25,12 +25,7 @@ import (
 // crossing audit IS re-run, because a rigid motion can make two placed
 // triangles meet that the unplaced ones did not.
 
-// Stitch calls [StitchContext] with [context.Background].
-func Stitch(bodies ...*Body) (*Body, error) {
-	return StitchContext(context.Background(), bodies...)
-}
-
-// StitchContext welds every free-edge pair it can prove coincident
+// Stitch welds every free-edge pair it can prove coincident
 // (docs/surface-design.md §6.2's Table J) across bodies, assembles the
 // result, and returns one new body, retiring every operand. One operand is
 // meaningful: it re-audits that body's own boundary, which is how a closed
@@ -54,7 +49,7 @@ func Stitch(bodies ...*Body) (*Body, error) {
 // self-contact or an exhausted audit budget surfaces the crossing audit's
 // own [ErrDegenerate]/[ErrUnsupported] (R9/R10) unchanged. A failed call
 // leaves the document and every operand unchanged.
-func StitchContext(ctx context.Context, bodies ...*Body) (*Body, error) {
+func Stitch(ctx context.Context, bodies ...*Body) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a stitch`, ErrDegenerate)
 	}

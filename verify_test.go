@@ -1126,7 +1126,7 @@ func TestVerifyDiagnosticsSectionDeltaPrismReadsItsOwnGateDiameter(t *testing.T)
 	lo, hi := 2-shift, 8-shift
 	b := placedFar(t, boxBody(t, doc, lo, 2, hi, 8, 10), shift)
 
-	got, err := decad.Union(a, b)
+	got, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
 
@@ -1179,7 +1179,7 @@ func allPlanarBoolean(t *testing.T, scale float64) (*decad.Document, *decad.Body
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10*scale, 10*scale, 10*scale)
 	b := translated(t, boxBody(t, doc, 0, 0, 10*scale, 10*scale, 10*scale), 5*scale, 5*scale, 5*scale)
-	body, err := decad.Union(a, b)
+	body, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 	return doc, body
 }

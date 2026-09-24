@@ -286,15 +286,14 @@ It MUST NOT call `nextProducerID`, advance provenance, retire an operand, regist
 body, or expose a transient result through the document. Its result contains
 the held facets and every bound input needed by either caller.
 
-The public context variants keep consuming behavior:
+The public booleans keep consuming behavior:
 
 1. gate nil, foreign, retired, and identical operands;
 2. call `evaluateBoolean(ctx, op, a, b)`;
 3. build and audit the public faceted body with `ctx` and the next real step reference;
 4. append the boolean step and retire/register atomically.
 
-`Union` / `Cut` / `Intersect` call their context variants with
-`context.Background()` for compatibility. Cancellation before step 4 returns
+Cancellation before step 4 returns
 `ctx.Err()` unchanged and leaves the document and operands unchanged.
 
 `Verify` calls `evaluateAnalyticIntersect(ctx, a, b)` — §5.2's read-only
@@ -501,9 +500,8 @@ boundaries check unconditionally. This gives prompt cancellation without
 threading context through arithmetic primitives or changing deterministic
 geometry decisions.
 
-`UnionContext` / `CutContext` / `IntersectContext` propagate their caller
-context through evaluation and faceted-body construction. `Union` / `Cut` /
-`Intersect` supply `context.Background()` as compatibility wrappers.
+`Union` / `Cut` / `Intersect` propagate their caller
+context through evaluation and faceted-body construction.
 
 The mesh fallback has no constant-work promise. `meshBoolean` checks every
 pair of operand facets, using the facet boxes to skip exact predicates only

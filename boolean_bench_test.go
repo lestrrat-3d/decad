@@ -67,7 +67,7 @@ func BenchmarkBooleanUnionRodThroughPlate(b *testing.B) {
 		plate := benchBoxBody(b, doc, 0, 0, 20, 20, 8)
 		rod := benchRodBody(b, doc, 12, 10, 6)
 		b.StartTimer()
-		got, err := decad.Union(plate, rod)
+		got, err := decad.Union(b.Context(), plate, rod)
 		require.NoError(b, err)
 		require.Len(b, got.Lumps(), 1)
 	}
@@ -91,7 +91,7 @@ func BenchmarkBooleanUnionCrossedRods(b *testing.B) {
 		c, err = c.Placed(b.Context(), xf)
 		require.NoError(b, err)
 		b.StartTimer()
-		got, err := decad.Union(a, c)
+		got, err := decad.Union(b.Context(), a, c)
 		require.NoError(b, err)
 		require.NotNil(b, got)
 	}

@@ -261,7 +261,7 @@ func TestCapBlendBooleanReceiverRefusedSX9(t *testing.T) {
 	require.NoError(t, err)
 	b, err = b.Placed(t.Context(), shift)
 	require.NoError(t, err)
-	union, err := decad.Union(a, b)
+	union, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 	_, err = union.Chamfer(t.Context(), decad.Edges(decad.Convex()).AtLeast(1), units.Millimeters(1))
 	require.Error(t, err)

@@ -283,9 +283,9 @@ func TestVerifyFacetedMultiRegionPairStaysAsBefore(t *testing.T) {
 	// (unchanged) mesh path.
 	notch := translated(t, boxBody(t, doc, 1, 1, 2, 2, 2), 0, 0, 1)
 	notch2 := translated(t, boxBody(t, doc, -1, 3, 0, 4, 2), 0, 0, 1)
-	uBored, err := decad.Cut(u, notch)
+	uBored, err := decad.Cut(t.Context(), u, notch)
 	require.NoError(t, err)
-	barBored, err := decad.Cut(bar, notch2)
+	barBored, err := decad.Cut(t.Context(), bar, notch2)
 	require.NoError(t, err)
 	require.True(t, anyFaceIsFaceted(uBored), "the bore must force the mesh path")
 	require.True(t, anyFaceIsFaceted(barBored), "the bore must force the mesh path")
@@ -314,7 +314,7 @@ func TestPublicBooleansUnchangedOnMultiRegionPair(t *testing.T) {
 	t.Run("intersect refuses through the mesh path", func(t *testing.T) {
 		doc := decad.New()
 		u, bar := uAndBarBodies(t, doc)
-		_, err := decad.Intersect(u, bar)
+		_, err := decad.Intersect(t.Context(), u, bar)
 		require.Error(t, err)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		var be *decad.BooleanError
@@ -325,7 +325,7 @@ func TestPublicBooleansUnchangedOnMultiRegionPair(t *testing.T) {
 	t.Run("cut refuses through the same mesh-path contact refusal", func(t *testing.T) {
 		doc := decad.New()
 		u, bar := uAndBarBodies(t, doc)
-		_, err := decad.Cut(u, bar)
+		_, err := decad.Cut(t.Context(), u, bar)
 		require.Error(t, err)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		var be *decad.BooleanError
@@ -336,7 +336,7 @@ func TestPublicBooleansUnchangedOnMultiRegionPair(t *testing.T) {
 	t.Run("union still builds analytically", func(t *testing.T) {
 		doc := decad.New()
 		u, bar := uAndBarBodies(t, doc)
-		got, err := decad.Union(u, bar)
+		got, err := decad.Union(t.Context(), u, bar)
 		require.NoError(t, err)
 		require.False(t, anyFaceIsFaceted(got),
 			"Union's select-all path merges every cell into one loop and is unaffected by §4.5")

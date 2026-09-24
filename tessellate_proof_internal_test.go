@@ -253,7 +253,7 @@ func TestFacetedRestatementPublishesItsPayloadsOwnProofRecord(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := tool.Placed(t.Context(), moved)
 	require.NoError(t, err)
-	drilled, err := Cut(plate, placed)
+	drilled, err := Cut(t.Context(), plate, placed)
 	require.NoError(t, err)
 	fp, ok := drilled.payload.(facetedPayload)
 	require.True(t, ok)

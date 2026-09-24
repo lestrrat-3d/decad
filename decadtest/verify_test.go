@@ -52,7 +52,7 @@ func suspectUnionDoc(t *testing.T) (*decad.Document, *decad.Body) {
 	doc := decad.New()
 	a := decadtest.NewBlock(t, doc, 0, 0, 10, 10, units.Millimeters(10))
 	b := decadtest.NewBlock(t, doc, 5, 5, 20, 20, units.Millimeters(10))
-	u, err := decad.Union(a, b)
+	u, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 	return doc, u
 }

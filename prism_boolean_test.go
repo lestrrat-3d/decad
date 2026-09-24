@@ -149,7 +149,7 @@ func TestPrismUnionCutFragmentOperandRefusesNonClosingMerge(t *testing.T) {
 	b := boxBody(t, doc, -1, -1, 1, 1, 5)
 	beforeBodies := doc.Bodies()
 
-	_, err := decad.Union(a, b)
+	_, err := decad.Union(t.Context(), a, b)
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
 	require.Equal(t, beforeBodies, doc.Bodies())
@@ -174,7 +174,7 @@ func TestPrismUnionTwoBoxesSharingCapPlaneBuildsAnalyticPrism(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 5, 5, 15, 15, 10)
-	got, err := decad.Union(a, b)
+	got, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 
 	vol, err := got.Volume()
@@ -221,7 +221,7 @@ func TestPrismUnionGearToothOnHubSharedCarrier(t *testing.T) {
 	require.NoError(t, err)
 	closedForm := volumeMM(t, hubVol) + volumeMM(t, toothVol)
 
-	got, err := decad.Union(hub, tooth)
+	got, err := decad.Union(t.Context(), hub, tooth)
 	require.NoError(t, err)
 	vol, err := got.Volume()
 	require.NoError(t, err)
@@ -261,7 +261,7 @@ func TestPrismUnionG1FallsBackWithUnchangedBehavior(t *testing.T) {
 	doc := decad.New()
 	ball := ballBody(t, doc, 5)
 	box := boxBody(t, doc, -20, -20, 20, 20, 20)
-	_, err := decad.Union(ball, box)
+	_, err := decad.Union(t.Context(), ball, box)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -298,7 +298,7 @@ func TestPrismUnionRotatedToothFallback(t *testing.T) {
 		toothSrc := toothBody(t, doc, r, r2, th1, th2, h)
 		tooth, err := toothSrc.Placed(t.Context(), tr)
 		require.NoError(t, err)
-		return decad.Union(hub, tooth)
+		return decad.Union(t.Context(), hub, tooth)
 	}
 
 	t.Run("RotationAround falls back to the mesh path's own coplanar-contact refusal", func(t *testing.T) {
@@ -363,7 +363,7 @@ func TestPrismUnionIndependentlyConstructedCoplanarFrames(t *testing.T) {
 	b, err := doc.Extrude(sB, sB.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
-	_, err = decad.Union(a, b)
+	_, err = decad.Union(t.Context(), a, b)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -382,7 +382,7 @@ func TestPrismUnionAdmittedThenInvalidRegionRefuses(t *testing.T) {
 	b := boxBody(t, doc, 9.9999999, 0, 20, 10, 10)
 	beforeBodies := doc.Bodies()
 
-	_, err := decad.Union(a, b)
+	_, err := decad.Union(t.Context(), a, b)
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	var booleanErr *decad.BooleanError
@@ -404,7 +404,7 @@ func TestPrismUnionCancellationLeavesDocumentUnchanged(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, err := decad.UnionContext(ctx, a, b)
+	_, err := decad.Union(ctx, a, b)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, beforeBodies, doc.Bodies())
 }
@@ -439,13 +439,13 @@ func TestPrismUnionChainedBooleanCarriesNoAccumulatedBound(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 2, 2, 8, 8, 10)
-	first, err := decad.Union(a, b)
+	first, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 	// b sits strictly inside a, so the union is exactly a's own volume.
 	decadtest.MeasuresVolume(t, first, units.CubicMillimeters(1000), decadtest.Exactly())
 
 	c := boxBody(t, doc, 8, 4, 18, 14, 10)
-	second, err := decad.Union(first, c)
+	second, err := decad.Union(t.Context(), first, c)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(second), "the chained union must stay analytic")
 	secondVol, err := second.Volume()
@@ -459,10 +459,10 @@ func TestPrismUnionChainedBooleanCarriesNoAccumulatedBound(t *testing.T) {
 	cutDoc := decad.New()
 	cutA := boxBody(t, cutDoc, 0, 0, 10, 10, 10)
 	cutB := boxBody(t, cutDoc, 5, 5, 15, 15, 10)
-	cutFirst, err := decad.Union(cutA, cutB)
+	cutFirst, err := decad.Union(t.Context(), cutA, cutB)
 	require.NoError(t, err)
 	cutC := boxBody(t, cutDoc, 8, 4, 18, 14, 10)
-	_, err = decad.Union(cutFirst, cutC)
+	_, err = decad.Union(t.Context(), cutFirst, cutC)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -480,7 +480,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 2, 2, 8, 8, 10)
-	got, err := decad.Union(a, b)
+	got, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 
 	filleted, err := got.Fillet(t.Context(), verticalConvexEdge(), units.Millimeters(1))
@@ -500,7 +500,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	cutDoc := decad.New()
 	cutA := boxBody(t, cutDoc, 0, 0, 10, 10, 10)
 	cutB := boxBody(t, cutDoc, 5, 5, 15, 15, 10)
-	cutGot, err := decad.Union(cutA, cutB)
+	cutGot, err := decad.Union(t.Context(), cutA, cutB)
 	require.NoError(t, err)
 	require.False(t, anyFaceIsFaceted(cutGot), "the analytic reduction must still own this pair")
 
@@ -524,7 +524,7 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	require.NoError(t, err)
 	meshB, err := meshBSrc.Placed(t.Context(), farAbove)
 	require.NoError(t, err)
-	meshGot, err := decad.Union(meshA, meshB)
+	meshGot, err := decad.Union(t.Context(), meshA, meshB)
 	require.NoError(t, err)
 	require.True(t, anyFaceIsFaceted(meshGot), "expected the mesh path to run and produce a Faceted body")
 
@@ -622,7 +622,7 @@ func TestPrismUnionCoplanarCircleLensBounds(t *testing.T) {
 			doc := decad.New()
 			a := discBody(t, doc, 0, tc.bigR, tc.h)
 			b := discBody(t, doc, tc.centerDist, tc.smallR, tc.h)
-			got, err := decad.Union(a, b)
+			got, err := decad.Union(t.Context(), a, b)
 			require.NoError(t, err)
 
 			vol, err := got.Volume()

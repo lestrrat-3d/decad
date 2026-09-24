@@ -127,7 +127,7 @@ func TestVerifyAdmittedDisplacedPrismPairCarriesItsOwnBound(t *testing.T) {
 	doc := decad.New()
 	const shift = 1e12
 	lo, hi := 2-shift, 8-shift
-	merged, err := decad.Union(
+	merged, err := decad.Union(t.Context(),
 		boxBody(t, doc, 0, 0, 10, 10, 10),
 		placedFar(t, boxBody(t, doc, lo, 2, hi, 8, 10), shift),
 	)

@@ -288,7 +288,7 @@ func booleanShot(ctx context.Context) ([]solidlens.Model, error) {
 		if err != nil {
 			return nil, err
 		}
-		plate, err = decad.CutContext(ctx, plate, tool)
+		plate, err = decad.Cut(ctx, plate, tool)
 		if err != nil {
 			return nil, fmt.Errorf("drill the plate: %w", err)
 		}
@@ -343,7 +343,7 @@ func verifyShot(ctx context.Context) ([]solidlens.Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	housing, err := decad.CutContext(ctx, plate, bore)
+	housing, err := decad.Cut(ctx, plate, bore)
 	if err != nil {
 		return nil, fmt.Errorf("bore the housing: %w", err)
 	}

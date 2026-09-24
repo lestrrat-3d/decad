@@ -66,7 +66,7 @@ func Example_decad_unstitch() {
 		return
 	}
 
-	box, err := decad.Stitch(walls, bottom, topPatch)
+	box, err := decad.Stitch(context.Background(), walls, bottom, topPatch)
 	if err != nil {
 		fmt.Printf("failed to stitch: %s\n", err)
 		return

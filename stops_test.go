@@ -82,7 +82,7 @@ func TestExtrudeThroughAllRefusesDisplacedPrismExtentOnYZPlane(t *testing.T) {
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	const shift = 1e9
 	b := placedFar(t, boxBody(t, doc, 2-shift, 2, 8-shift, 8, 10), shift)
-	union, err := decad.Union(a, b)
+	union, err := decad.Union(t.Context(), a, b)
 	require.NoError(t, err)
 	box, err := union.Bounds()
 	require.NoError(t, err)

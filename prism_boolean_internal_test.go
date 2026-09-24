@@ -775,7 +775,7 @@ func TestPrismUnionTrimmedSourceSegmentChargesItsWalkedEndpoint(t *testing.T) {
 
 	b := prismRectBody(t, doc, 2, 2, 4, 8)
 
-	u, err := Union(a, b)
+	u, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
 	pu, ok := u.payload.(prismPayload)
 	require.True(t, ok, "the analytic reduction must own this pair")
@@ -831,7 +831,7 @@ func TestPrismUnionChargesEachWalkExactlyOnce(t *testing.T) {
 	require.Positive(t, sceneDelta.a, "operand A's own trimmed walls must carry a walk charge")
 	require.Zero(t, sceneDelta.b, "operand B is drawn whole, so δ_walkB is zero")
 
-	u, err := Union(a, b)
+	u, err := Union(t.Context(), a, b)
 	require.NoError(t, err)
 	pu, ok := u.payload.(prismPayload)
 	require.True(t, ok, "the analytic reduction must own this pair")
@@ -862,7 +862,7 @@ func TestPrismCutTrimmedTargetChargesItsWalkedEndpoint(t *testing.T) {
 	ptarget := target.payload.(prismPayload)
 	tool := prismRectBody(t, doc, 2, 2, 4, 8)
 
-	got, err := Cut(target, tool)
+	got, err := Cut(t.Context(), target, tool)
 	require.NoError(t, err)
 	pg, ok := got.payload.(prismPayload)
 	require.True(t, ok, "the clean-nesting cut must build analytically")
@@ -891,7 +891,7 @@ func TestPrismIntersectTrimmedOperandChargesItsWalkedEndpoint(t *testing.T) {
 	a := prismSplitLeftCellBody(t, doc)
 	pa := a.payload.(prismPayload)
 
-	got, err := Intersect(outer, a)
+	got, err := Intersect(t.Context(), outer, a)
 	require.NoError(t, err)
 	pg, ok := got.payload.(prismPayload)
 	require.True(t, ok, "the clean-nesting intersect must build analytically")
@@ -917,7 +917,7 @@ func TestPrismBooleanWholeSourceSegmentsChargeNothing(t *testing.T) {
 		doc := New()
 		a := prismRectBody(t, doc, 0, 0, 10, 10)
 		b := prismRectBody(t, doc, 2, 2, 8, 8)
-		u, err := Union(a, b)
+		u, err := Union(t.Context(), a, b)
 		require.NoError(t, err)
 		pu, ok := u.payload.(prismPayload)
 		require.True(t, ok)
@@ -928,7 +928,7 @@ func TestPrismBooleanWholeSourceSegmentsChargeNothing(t *testing.T) {
 		doc := New()
 		target := prismRectBody(t, doc, 0, 0, 10, 10)
 		tool := prismRectBody(t, doc, 2, 2, 8, 8)
-		got, err := Cut(target, tool)
+		got, err := Cut(t.Context(), target, tool)
 		require.NoError(t, err)
 		pg, ok := got.payload.(prismPayload)
 		require.True(t, ok)
@@ -939,7 +939,7 @@ func TestPrismBooleanWholeSourceSegmentsChargeNothing(t *testing.T) {
 		doc := New()
 		outer := prismRectBody(t, doc, 0, 0, 10, 10)
 		inner := prismRectBody(t, doc, 2, 2, 8, 8)
-		got, err := Intersect(outer, inner)
+		got, err := Intersect(t.Context(), outer, inner)
 		require.NoError(t, err)
 		pg, ok := got.payload.(prismPayload)
 		require.True(t, ok)

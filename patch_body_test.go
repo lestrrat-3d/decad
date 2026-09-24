@@ -225,7 +225,7 @@ func TestBodyPatchClosesASheetsLastFreeEdgeStaysASheet(t *testing.T) {
 	bottom, err := doc.Patch(t.Context(), bs, bp)
 	require.NoError(t, err)
 
-	open, err := decad.Stitch(tube, bottom)
+	open, err := decad.Stitch(t.Context(), tube, bottom)
 	require.NoError(t, err)
 	require.Equal(t, decad.BodySheet, open.Kind())
 	free, err := decad.Edges(decad.Free()).Exactly(4).SelectEdges(open)
