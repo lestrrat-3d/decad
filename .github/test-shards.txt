@@ -1598,6 +1598,11 @@
 2	0.00	TestSheetSolidPairKernelCannotSettleStaysSuspect
 3	0.00	TestSheetSheetPairStaysUndecided
 0	0.00	TestSheetSolidPairDiagnosticFollowsDocumentOrder
+0	0.01	TestThickenPatchRectangle
+1	0.01	TestThickenPatchSides
+2	0.01	TestThickenPatchHole
+3	0.01	TestThickenPatchConversionBound
+0	0.01	TestThickenPatchRefusals
 0	0.00	TestSurfaceExtrudeSheetTessellates
 1	0.00	TestSurfaceExtrudeSheetBoundMatchesSolid
 2	0.00	TestSurfaceExtrudeSheetDeterminism

@@ -89,7 +89,8 @@ to the byte budget.
 | `normal_bound.go` | The proof behind the bound every `Face.NormalAt` arm publishes: rational-interval enclosures of each arm's own exact unit normal, and the radian sine/cosine enclosure the `Cone` arm needs. See the file's own doc comment. |
 | `document.go` | `Document` (`New`/`Bodies`), its atomic commit tail, private provenance identities, and retire/liveness gates. `Body.Placed`/`Duplicate`/`PlacedCopy` rebuild the payload under a composed motion; see their doc comments and evaluator §8. |
 | `surface.go` | `WithSurfaceResult`, the `refuseSheetOperand` refusal helper, and the shared shell/lump helpers (`shellIsOpen`, `sheetLumps`) prism, revolve, sweep and loft builds share. See `docs/surface-design.md` §2.2-§4, §7, §11. |
-| `patch.go` | `Document.Patch`: a single planar face from a recorded profile, reusing `buildLoopSidesAs`'s per-kind curve construction. See `docs/surface-design.md` §5.1. |
+| `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
+| `thicken.go` | `Body.Thicken` grows an admitted sheet into a solid. See surface §16. |
 | `patch_body.go` | `Body.Patch`: partitions a free-edge selection into closed chains, proves each planar via `dyadic.go` or a shared level token, and fills each with its own face. See `docs/surface-design.md` §5.2. |
 | `denotation.go` | The shared-denotation certificate's two halves: a minted plane identity (LEVEL) and a minted curve/point identity (CURVE), each a copy path carries under its own motion, never a coordinate comparison. See `docs/surface-design.md` §5.2, §6.2. |
 | `stitch_weld.go` | Table J's admission: the shared vertex table and which free edge pairs weld. See `docs/surface-design.md` §6.2. |
@@ -128,7 +129,7 @@ to the byte budget.
 | `fillet.go` | `Body.Fillet` rewrites a straight prism's section into a tangent arc at each selected corner and rebuilds through `evalPrism`. It also defines the shared `cornerBlend` machinery Chamfer reuses. See `docs/modify-design.md` §6. |
 | `chamfer.go` | `Body.Chamfer` bevels a straight prism's lateral corners with a chord between setback feet, sharing `cornerBlend` machinery with `fillet.go`. A cap-loop selection instead routes to `capblend.go`. See `docs/modify-design.md` §7. |
 | `fillet_audit.go` | The shared §5 audit of a modify op's rewritten section — orientation, self-consuming trim, crossing/contact, and nesting — run by Fillet and Chamfer, and reused by Shell's offset audit. See `docs/modify-design.md` §5. |
-| `shell.go` | `Body.Shell` removes a prism's cap faces and offsets the section into a wall of thickness `t`, building a tube (both caps) or a `cupPayload` (one cap). See `docs/modify-design.md` §8. |
+| `shell.go` | `Body.Shell` offsets a prism into a tube or cup. See modify §8. |
 | `shell_offset.go` | The exact per-feature section offset (`P ⊖ t` / `P ⊕ t`) behind `Shell`, plus the §5 audit wrapper run on the offset section. See `docs/modify-design.md` §7-§8. |
 | `shell_cup.go` | `cupPayload` and `evalCup`: the two-co-directional-prism body a one-cap `Shell` builds, with Exact mass properties and roles. See `docs/modify-design.md` §9; clearance stays staged (§12 D6). |
 
