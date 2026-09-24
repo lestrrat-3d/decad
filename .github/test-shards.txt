@@ -1579,6 +1579,11 @@
 0	0.00	TestSurfaceSweepShellOpenAgreesWithFreeEdgeDerivation
 1	0.00	TestSurfaceSweepStaysASheetThroughPlacement
 2	0.00	TestSurfaceSweepTessellationRefused
+0	0.01	TestSurfaceSplitCirclePartitionsBlock
+0	0.01	TestSurfaceSplitCoincidentBoundaryRefusesInvalidCell
+1	0.01	TestSurfaceSplitInsideStubDoesNotSeparate
+3	0.01	TestSurfaceSplitOutsideRibbonDoesNotSeparate
+2	0.01	TestSurfaceSplitRibbonPartitionsBlock
 3	0.01	TestSurfaceTrimDegenerateWhenNothingSeparates
 1	0.01	TestSurfaceTrimBoundsChargesAnExtremeWonByACut
 0	0.01	TestSurfaceTrimKeepInsideKeepsTheCutStrips

@@ -8,25 +8,16 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
-// This file is PR1 of docs/surface-intersection-design.md: Body.Trim over the
-// prism family alone. §2.1's entry gate (S1-S7) reuses prism-boolean's own
-// admission primitives wherever the two designs' conditions are the same
-// test — admitPrismPairBudget's G3 for S4, newPrismReexpression's identity
-// check for S7's re-expression clause, prismCutZIntervalSpans for S6 — and
-// §3's resolution reuses buildPrismScene and classifyPrismCells UNCHANGED
-// (prism_boolean.go, prism_boolean_crossing.go). Every miss below is a
-// genuine, typed refusal at the call: unlike prism-boolean's own gate, there
-// is no mesh path to reroute a miss to (§2.1's own reasoning — a sheet's mesh
-// proves no occupied volume, and a mesh trim would decide topology from a
-// float sign test on chorded triangles).
+// This file implements Body.Trim and Document.Split over the prism family.
+// Their §2.1 gates share prism-boolean's exact generator comparison, identity
+// re-expression check and sweep-span relation. Both use buildPrismScene;
+// Trim reads classifyPrismCells unchanged, while Split reads only the target
+// label. Every miss is a typed refusal at the call: a sheet's mesh proves no
+// occupied volume, and a mesh trim would decide topology from float signs on
+// chorded triangles (docs/surface-intersection-design.md §2.1).
 //
-// The revolve family (S1's and S4's other arm) is left as a hook for PR4: a
-// pair naming it fails S1 here, exactly like a genuinely mixed pair, and no
-// revolve-specific code exists in this file. Document.Split (PR2) and
-// Body.Extend (PR3) are left unbuilt entirely — neither symbol exists yet —
-// though the admission and resolution helpers below are written generic over
-// "receiver against tool" so a later PR can call into them rather than
-// duplicate S1-S7.
+// The revolve family (S1's and S4's other arm) is left as a hook for PR4.
+// Body.Extend remains staged for PR3.
 
 // TrimSide names which pieces of the receiver a Trim keeps
 // (docs/surface-intersection-design.md §8).
@@ -796,4 +787,330 @@ func chainTrimSurvivorWalks(budget *workBudget, survivors []sketch.BoundaryEdge)
 		}
 	}
 	return walks, true, nil
+}
+
+// Split cuts target with tool and returns one solid per arranged target cell
+// in sketch's cell order. Both operands are consumed only after every piece
+// has been built. A tool that separates no target cell is ErrDegenerate.
+func (d *Document) Split(ctx context.Context, target, tool *Body) ([]*Body, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a split`, ErrDegenerate)
+	}
+	if d == nil {
+		return nil, fmt.Errorf(`%w: a split needs a document`, ErrDegenerate)
+	}
+	if err := d.requireLive(target); err != nil {
+		return nil, err
+	}
+	if err := d.requireLive(tool); err != nil {
+		return nil, err
+	}
+	if target == tool {
+		return nil, fmt.Errorf(`%w: a split needs two distinct bodies`, ErrDegenerate)
+	}
+	budget := newWorkBudget(ctx)
+	if err := budget.err(); err != nil {
+		return nil, err
+	}
+	rcv, tl, err := admitSplitPair(budget, target, tool)
+	if err != nil {
+		return nil, err
+	}
+	pieces, err := resolveSplit(ctx, budget, rcv, tl)
+	if err != nil {
+		return nil, err
+	}
+	ref := d.nextProducerID()
+	bodies := make([]*Body, len(pieces))
+	for i, piece := range pieces {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
+		bodies[i], err = evalPrismContext(ctx, d, ref+producerID(i), piece, newFreeformWork())
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	d.commitMany(bodies, target, tool)
+	return bodies, nil
+}
+
+// admitSplitPair applies S1-S4, S6 and S7 to a solid prism target and a
+// prism-family sheet. S5 belongs to Trim alone: Split reads no tool side.
+// The closed-sheet and chain-sheet views share buildPrismScene's input shape.
+func admitSplitPair(budget *workBudget, target, tool *Body) (prismPayload, prismPayload, error) {
+	rf, tf := bodyTrimFamily(target), bodyTrimFamily(tool)
+	if rf != tf || rf != trimFamilyPrism {
+		return prismPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: Split needs a solid and sheet sharing a straight-sweep generator (target %s, tool %s)`,
+			ErrUnsupported, trimFamilyName(rf), trimFamilyName(tf))
+	}
+	rcv, ok := target.payload.(prismPayload)
+	if !ok || target.Kind() != BodySolid || !target.IsSolid() {
+		return prismPayload{}, prismPayload{}, fmt.Errorf(`%w: Split's target must be a solid prism`, ErrUnsupported)
+	}
+	if tool.Kind() != BodySheet {
+		return prismPayload{}, prismPayload{}, fmt.Errorf(`%w: Split's tool must be a sheet`, ErrUnsupported)
+	}
+	var tl prismPayload
+	switch p := tool.payload.(type) {
+	case prismPayload:
+		tl = p
+	case chainPayload:
+		tl = p.prism()
+	default:
+		return prismPayload{}, prismPayload{}, fmt.Errorf(`%w: Split's tool has no prism section`, ErrUnsupported)
+	}
+	if trimOperandSectionDelta(target) != 0 || trimOperandSectionDelta(tool) != 0 {
+		return prismPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: Split does not admit an operand carrying its own section displacement`, ErrUnsupported)
+	}
+	if rcv.reflected() || tl.reflected() {
+		return prismPayload{}, prismPayload{}, fmt.Errorf(`%w: Split does not admit a reflected operand`, ErrUnsupported)
+	}
+	rcvAnalytic, err := prismProfileIsAnalytic(budget, rcv.profile)
+	if err != nil {
+		return prismPayload{}, prismPayload{}, err
+	}
+	tlAnalytic, err := prismProfileIsAnalytic(budget, tl.profile)
+	if err != nil {
+		return prismPayload{}, prismPayload{}, err
+	}
+	if !rcvAnalytic || !tlAnalytic {
+		return prismPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: Split admits only line, circle and arc segments`, ErrUnsupported)
+	}
+	// S4 is the same exact stored-float comparison as Trim and prism G3.
+	worldNormalRcv := rcv.xform.ApplyDir(rcv.frame.N())
+	worldNormalTool := tl.xform.ApplyDir(tl.frame.N())
+	if worldNormalRcv != worldNormalTool {
+		return prismPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: the target and tool do not sweep along the same generator, exactly`, ErrUnsupported)
+	}
+	worldOriginRcv := rcv.xform.Apply(rcv.frame.Origin())
+	worldOriginTool := tl.xform.Apply(tl.frame.Origin())
+	if worldOriginTool.Sub(worldOriginRcv).Dot(worldNormalRcv) != 0.0 {
+		return prismPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: the target and tool do not sweep along the same generator, exactly`, ErrUnsupported)
+	}
+	if !prismCutZIntervalSpans(rcv, tl) {
+		return prismPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: the tool does not span the target over the sweep parameter`, ErrUnsupported)
+	}
+	reexpress, err := newPrismReexpression(rcv, tl)
+	if err != nil {
+		return prismPayload{}, prismPayload{}, err
+	}
+	if !reexpress.identity {
+		return prismPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: the target and tool do not share one frame and placement, so their re-expression is not the identity`, ErrUnsupported)
+	}
+	rcvWhole, err := trimProfileFullyWhole(budget, rcv.profile)
+	if err != nil {
+		return prismPayload{}, prismPayload{}, err
+	}
+	tlWhole, err := trimProfileFullyWhole(budget, tl.profile)
+	if err != nil {
+		return prismPayload{}, prismPayload{}, err
+	}
+	if !rcvWhole || !tlWhole {
+		return prismPayload{}, prismPayload{}, fmt.Errorf(
+			`%w: every segment the target or tool consumes must span its entity's own natural domain`, ErrUnsupported)
+	}
+	return rcv, tl, nil
+}
+
+// resolveSplit asks sketch for the bounded cells of the private scene, keeps
+// precisely the cells on the target's material side, and authenticates each
+// selected cell through RecordProfile before rebuilding it as a prism.
+func resolveSplit(ctx context.Context, budget *workBudget, target, tool prismPayload) ([]prismPayload, error) {
+	segments, withinCap, err := prismSceneWithinWorkCap(budget, target, tool)
+	if err != nil {
+		return nil, err
+	}
+	if !withinCap {
+		return nil, fmt.Errorf(`%w: the split scene charges %d arranger segments against the cap of %d`,
+			ErrUnsupported, segments, prismMaxArrangementSegments)
+	}
+	reexpress, err := newPrismReexpression(target, tool)
+	if err != nil {
+		return nil, err
+	}
+	s, tags, _, err := buildPrismScene(budget, target, tool, reexpress)
+	if err != nil {
+		return nil, err
+	}
+	if err := budget.err(); err != nil {
+		return nil, err
+	}
+	profiles, err := prismProfilesContext(ctx, s.Profiles)
+	if err != nil {
+		return nil, err
+	}
+	if err := budget.err(); err != nil {
+		return nil, err
+	}
+	if len(profiles) == 0 {
+		return nil, fmt.Errorf(`%w: the split arrangement holds no bounded cell`, ErrUnsupported)
+	}
+	unchanged, err := splitUnchangedTargetCell(budget, tags, profiles, target.profile)
+	if err != nil {
+		return nil, err
+	}
+	if unchanged {
+		return nil, fmt.Errorf(`%w: the tool separates no part of the target`, ErrDegenerate)
+	}
+	matterTarget, err := classifySplitTargetCells(budget, tags, profiles)
+	if err != nil {
+		return nil, err
+	}
+	selected, err := selectPrismCells(budget, profiles, matterTarget, make([]bool, len(profiles)),
+		func(a, _ bool) bool { return a })
+	if err != nil {
+		return nil, err
+	}
+	if len(selected) < 2 {
+		return nil, fmt.Errorf(`%w: the tool separates no part of the target`, ErrDegenerate)
+	}
+	result := make([]prismPayload, len(selected))
+	for i, cell := range selected {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
+		record, err := prismRecordProfileContext(ctx, s, cell)
+		if err != nil {
+			return nil, err
+		}
+		cutDelta := 0.0
+		for _, loop := range append([][]sketch.BoundaryEdge{cell.Outer}, cell.Holes...) {
+			for _, edge := range loop {
+				if err := budget.step(); err != nil {
+					return nil, err
+				}
+				seg, err := recordEdge(edge)
+				if err != nil {
+					return nil, err
+				}
+				delta, err := prismUnionCutDelta(edge, seg)
+				if err != nil {
+					return nil, err
+				}
+				cutDelta = math.Max(cutDelta, delta)
+			}
+		}
+		result[i] = prismPayload{
+			profile: record, frame: target.frame, xform: target.xform,
+			z0: target.z0, z1: target.z1,
+			z0Delta: target.z0Delta, z1Delta: target.z1Delta,
+			sectionDelta: cutDelta,
+		}
+	}
+	return result, nil
+}
+
+// splitUnchangedTargetCell finds the target's original loops reproduced in
+// one sketch cell. An inside stub or an outside tool leaves this exact cell;
+// neither creates a piece boundary. The match reads only entity identity and
+// whole-edge flags from sketch's publication.
+func splitUnchangedTargetCell(budget *workBudget, tags map[sketch.Entity]prismEntityOrigin,
+	profiles []*sketch.Profile, target ProfileRecord) (bool, error) {
+	outer, err := prismLoopEntitySet(budget, tags, false, -1)
+	if err != nil {
+		return false, err
+	}
+	holes := make([]map[sketch.Entity]struct{}, len(target.Holes))
+	for i := range holes {
+		holes[i], err = prismLoopEntitySet(budget, tags, false, i)
+		if err != nil {
+			return false, err
+		}
+	}
+	match, found, err := prismFindLoopMatch(budget, profiles, outer, holes)
+	if err != nil || !found {
+		return false, err
+	}
+	if !match.Valid {
+		return false, fmt.Errorf(`%w: the unchanged target cell is invalid`, ErrUnsupported)
+	}
+	return true, nil
+}
+
+// classifySplitTargetCells uses classifyPrismCells's orientation and
+// propagation rule for the target alone. A sheet tool has no material side;
+// its edges only divide cells. In particular a circular tool may leave a
+// holed target cell, so every published loop participates in the link map.
+func classifySplitTargetCells(budget *workBudget, tags map[sketch.Entity]prismEntityOrigin, profiles []*sketch.Profile) ([]bool, error) {
+	type edgeKey struct {
+		entity sketch.Entity
+		t0, t1 float64
+	}
+	type occurrence struct {
+		cell int
+		isB  bool
+	}
+	member := make([]prismCellMembership, len(profiles))
+	occ := map[edgeKey][]occurrence{}
+	for i, p := range profiles {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
+		if !p.Valid {
+			return nil, fmt.Errorf(`%w: a cell the split resolution depends on is invalid`, ErrUnsupported)
+		}
+		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
+			for _, edge := range loop {
+				if err := budget.step(); err != nil {
+					return nil, err
+				}
+				origin, ok := tags[edge.Entity]
+				if !ok {
+					return nil, fmt.Errorf(`%w: a split cell edge traces to neither operand`, ErrUnsupported)
+				}
+				if !origin.isB {
+					match := edge.Reversed == origin.authoredReversed
+					if member[i].known && member[i].val != match {
+						return nil, fmt.Errorf(`%w: a split cell has conflicting target-side labels`, ErrUnsupported)
+					}
+					member[i] = prismCellMembership{known: true, val: match}
+				}
+				key := edgeKey{entity: edge.Entity, t0: edge.TStart, t1: edge.TEnd}
+				occ[key] = append(occ[key], occurrence{cell: i, isB: origin.isB})
+			}
+		}
+	}
+	var links []prismCellLink
+	for _, uses := range occ {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
+		switch len(uses) {
+		case 1:
+		case 2:
+			if uses[0].cell == uses[1].cell || uses[0].isB != uses[1].isB {
+				return nil, fmt.Errorf(`%w: a split edge has inconsistent cell ownership`, ErrUnsupported)
+			}
+			links = append(links, prismCellLink{a: uses[0].cell, b: uses[1].cell, isB: uses[0].isB})
+		default:
+			return nil, fmt.Errorf(`%w: a split edge belongs to more than two cells`, ErrUnsupported)
+		}
+	}
+	if err := propagatePrismMembership(budget, links, true, member); err != nil {
+		return nil, err
+	}
+	for _, link := range links {
+		if link.isB && member[link.a].known && member[link.b].known && member[link.a].val != member[link.b].val {
+			return nil, fmt.Errorf(`%w: adjacent split cells disagree on the target side of a tool edge`, ErrUnsupported)
+		}
+	}
+	matter := make([]bool, len(profiles))
+	for i, m := range member {
+		if !m.known {
+			return nil, fmt.Errorf(`%w: a split cell has no target-side label`, ErrUnsupported)
+		}
+		matter[i] = m.val
+	}
+	return matter, nil
 }
