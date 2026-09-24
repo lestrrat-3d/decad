@@ -2327,19 +2327,23 @@ proof leg deleted, the test watched to go red — before it is trusted.
 T152's section is the 100×60 outer rectangle less the 90×50 inner
 rectangle. Omitting the inner loop makes its 15000 mm³ volume assertion fail
 at 60000 mm³. T153's positive volume differs from the sheet-area product
-`400π mm³`; deleting the rational π error term from its published bound
-must fail the independently bracketed `440π mm³` enclosure. T155's two π
-bounds receive the same shown-to-fail treatment, one bound at a time.
+`400π mm³`; deleting the region integral's area bound makes its independently
+bracketed `440π mm³` enclosure fail. T155's volume enclosure fails under
+the same deletion; its area enclosure fails when the composed area bound is
+deleted separately.
 
 T154's ordered polygon vertices are (0,0), (10,0), (10,8), (20,8),
 (20,0), (30,0), (30,20), (20,20), (20,12), (10,12), (10,20), (0,20),
 in millimetres. The current `Shell` call on the solid prism with both caps
 removed and the same 3 mm inward thickness returns `the rewrite crosses
-itself`, so the intended offset refusal is reachable. Delete the crossing
-audit leg before trusting T154: its `ErrUnsupported` assertion must turn red.
-Deleting T156's exact-generation check must accept a held edge at the source
-coordinate and turn its refusal assertion red. T157 also asserts that the
-source bodies remain live and retain their original measurements.
+itself`, so the intended offset refusal is reachable. Deleting the crossing
+audit changes T154's required crossing diagnostic. At 0.5 mm inward, the
+same neck builds 30 faces and its volume interval encloses `640+2.5π` mm³.
+At 1.5 mm inward, it still builds 30 faces and its volume interval encloses
+`1800+22.5π` mm³; the contact-event proof admits this safe narrow section.
+Deleting T156's exact-generation check changes its required rounded-coordinate
+diagnostic to the contact-audit refusal. T157 also asserts that the source
+bodies remain live and retain their original measurements.
 
 | T170 | T1's 100×60 rectangle surface-extruded 10 mm `Along`, `Trim`med `KeepOutside` by a solid extruded from the square (40,−10)–(60,70) over z ∈ [−5, 15] — a tool spanning the sheet axially and cutting its bottom and top walls at x = 40 and x = 60 | `Kind() == BodySheet`; 2 lumps, 3 faces each; `Edges(Free()).Exactly(16)`; `Bounds` equal to the untrimmed sheet's, value and bound, since both surviving runs still reach every extreme; `Volume()` is `ErrNotSolid`; `Area` is `Approximate` with a strictly positive `Bound`, and its interval encloses the exact 2800 mm² taken over `math/big.Rat` from the two operands' own recorded floats, never a second float answer. Shown-to-fail: forcing the result's `sectionDelta` to zero publishes `Exact` at a zero bound and turns both the positive-`Bound` and the enclosure assertions red — the leg that proves `docs/surface-intersection-design.md` §7's `δ_cut` is charged rather than assumed away |
 | T171 | T170's pair, `KeepInside` | 2 lumps, 1 face each; `Edges(Free()).Exactly(8)`; `Area` `Approximate` over an interval enclosing the exact 400 mm²; the two surviving walls' own `NormalAt` values equal the untrimmed sheet's at the same points, bit for bit — a trim moves no wall |
@@ -2473,13 +2477,14 @@ the offset construction prescribes; isolate every OTHER positive line-line,
 line-circle and circle-circle contact parameter and every zero-length
 walk parameter with exact rational polynomial comparisons; refuse if one
 lies in the requested interval or its order against the endpoint is
-undecided. A whole circle has only its radius-zero event. Never sample
-intermediate offsets or infer their validity from the final section.
+undecided. A whole circle has only its radius-zero event, settled by
+its exact endpoint radius. Never sample intermediate offsets or infer their
+validity from the final section alone.
 Any crossing, tangency, shared boundary point, dropped walk, failed miter,
 wrong orientation, lost nesting or undecided comparison is R26. In
 particular, a 4 mm-wide neck eroded by 3 mm makes its two offset walls
 cross, even though every source segment is valid. A scale-anchored contact
-floor may refuse more inputs; a gap above it is never the proof of
+floor may refuse more inputs; a gap above that floor is never the proof of
 separation. Only the closed-form segment-pair and nesting decisions on
 decad's OWN synthesized section permit construction. No residual or
 chorded mesh admits the annulus. A topology-changing offset can still
@@ -2488,7 +2493,8 @@ the caller's positive thickness is malformed.
 
 The first prism arm has an additional exact-generation gate before either
 offset is admitted. The thickness must convert to millimetres with zero
-displacement, and every generated plane-local endpoint, center and radius
+displacement, every source line endpoint must resolve with zero bound, and
+every generated plane-local endpoint, center and radius
 must equal its closed-form value as a binary rational. For the axis-parallel
 line class, the U/V normal is selected by the nonzero coordinate directly;
 the miter is solved over the exact dyadic input, and a convex arc takes the

@@ -89,9 +89,11 @@ to the byte budget.
 | `topology.go` | The topology model (evaluator §3): `Body`→`Lump`→`Shell`→`Face`→`Loop`→`CoEdge`→`Edge`→`Vertex`, plus sealed `Surface`/`Curve` variant sets. See the types' own doc comments and `docs/evaluator-design.md` §3. |
 | `normal_bound.go` | The proof behind the bound every `Face.NormalAt` arm publishes: rational-interval enclosures of each arm's own exact unit normal, and the radian sine/cosine enclosure the `Cone` arm needs. See the file's own doc comment. |
 | `document.go` | `Document` (`New`/`Bodies`), its atomic commit tail, private provenance identities, and retire/liveness gates. `Body.Placed`/`Duplicate`/`PlacedCopy` rebuild the payload under a composed motion; see their doc comments and evaluator §8. |
-| `surface.go` | `WithSurfaceResult`, the `refuseSheetOperand` refusal helper, and the shared shell/lump helpers (`shellIsOpen`, `sheetLumps`) prism, revolve, sweep and loft builds share. See `docs/surface-design.md` §2.2-§4, §7, §11. |
+| `surface.go` | `WithSurfaceResult`, sheet refusal, and shared shell/lump helpers. See surface §2-§4, §7, §11. |
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
 | `thicken.go` | `Body.Thicken` grows an admitted sheet into a solid. See surface §16. |
+| `thicken_prism.go` | Builds the certified wall of a prism sheet. See surface §16.2. |
+| `thicken_axis.go` | Certifies exact axis-parallel offsets and interval separation. See surface §16.2. |
 | `patch_body.go` | `Body.Patch`: partitions a free-edge selection into closed chains, proves each planar via `dyadic.go` or a shared level token, and fills each with its own face. See `docs/surface-design.md` §5.2. |
 | `denotation.go` | The shared-denotation certificate's two halves: a minted plane identity (LEVEL) and a minted curve/point identity (CURVE), each a copy path carries under its own motion, never a coordinate comparison. See `docs/surface-design.md` §5.2, §6.2. |
 | `stitch_weld.go` | Table J's admission: the shared vertex table and which free edge pairs weld. See `docs/surface-design.md` §6.2. |
