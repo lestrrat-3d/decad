@@ -256,12 +256,31 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref producerID, rp
 	if ig.area <= 0 {
 		return nil, fmt.Errorf(`%w: the recorded region encloses no area`, ErrDegenerate)
 	}
+	// Every reading below integrates the RECORDED region while every face below
+	// is built from the SNAPPED one (revolve_axis.go's axisFrame.walk), so each
+	// integral owes what the snap moved its own integrand's region by
+	// (regionSnapAllow). The area's share lands here, before the cap faces read
+	// it; the three axis-frame moments' shares land on q, mzr and mrr below,
+	// since those are the coordinates their envelopes were proven in. Every one
+	// of the four is exactly zero for a profile whose on-axis endpoints already
+	// sit on the axis.
+	ig.areaBound = absSumUpper(ig.areaBound, rp.ax.snap.area)
 	sweep := rp.sweep()
 	dphi := sweep.value
 	if dphi <= 0 {
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 	q, mzr, mrr := axisMoments(ig, rp.ax)
+	// The snap's own share of each axis-frame moment, charged where the moment
+	// is read rather than back on the plane-local integrals it was composed
+	// from: ρ and z are what regionSnapAllow's envelopes were proven against,
+	// and a profile far down the axis has a large |z| beside a small ρ, so
+	// charging the volume's ∫ρ dA at a frame-origin envelope would inflate it by
+	// the whole axial offset. boundedMul and boundedDiv below then carry these
+	// into the volume and the centroid through the arithmetic they already run.
+	q.bound = absSumUpper(q.bound, rp.ax.snap.first)
+	mzr.bound = absSumUpper(mzr.bound, rp.ax.snap.mixed)
+	mrr.bound = absSumUpper(mrr.bound, rp.ax.snap.second)
 	if q.value <= 0 {
 		return nil, fmt.Errorf(`%w: the region has no material off the revolve axis`, ErrDegenerate)
 	}

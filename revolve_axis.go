@@ -290,6 +290,17 @@ func axisDirectionSqrtBracket(du, dv *big.Rat, heldU, heldV float64) (float64, f
 // zero value for any axisFrame not built by resolveAxisSide (a full-sweep
 // composite payload's own literal), which is the safe default: no admitted
 // uncertainty, no charge.
+//
+// snap is the SNAP's own share of that same mismatch, and it answers a
+// displacement decad COMMITS rather than one it admits without proof: wherever
+// axisFrame.walk assigns an endpoint exactly 0 that the arithmetic put a
+// positive distance out, the region whose boundary the built faces follow is no
+// longer the recorded one, and every measurement integrated over the recorded
+// one owes the difference. Its four fields bound how far the region's own area
+// and its three axis-frame moments can move, and revolve_build.go adds each to
+// the reading it belongs to. Every one of them is exactly zero for a profile
+// whose on-axis endpoints already sit on the axis, which is every axis-incident
+// fixture in the tree.
 type axisFrame struct {
 	aU, aV           float64
 	aUBound, aVBound float64
@@ -298,6 +309,7 @@ type axisFrame struct {
 	snapTol          float64
 	radialAdmitAllow float64
 	axialExtentUpper float64
+	snap             regionSnapAllow
 }
 
 // toAxis maps a plane-local point into (z, ρ) axis coordinates. It reads
@@ -385,6 +397,34 @@ func (ax axisFrame) planeDirection(wg, k float64) (float64, float64) {
 // exactly ON the axis keeps a zero bound. Charging it leaves the snap itself
 // untouched: the assigned value, and with it every classification and vertex
 // placement decided on snapTol's margin, is exactly what it was.
+//
+// The snap is charged a SECOND time, into w.lengthBound, because moving an
+// endpoint radially moves the wall's two ends apart as well as inward, and
+// w.length is the RECORDED, unsnapped segment's length while every wall this
+// walk goes on to build runs between the SNAPPED endpoints. Writing the walk in
+// axis coordinates as (z0, r0)-(z1, r1) with a = |z1−z0| and the snapped radii
+// r0', r1', the recorded length is L = hypot(a, r1−r0) and the built wall's is
+// L' = hypot(a, r1'−r0'). Euclidean norm is 1-Lipschitz in each argument, so
+//
+//	|L' − L| = |hypot(a, r1'−r0') − hypot(a, r1−r0)|
+//	         ≤ |(r1'−r0') − (r1−r0)|
+//	         ≤ |r1'−r1| + |r0'−r0|
+//
+// — the sum of the two discarded magnitudes, and no approximation anywhere:
+// each step is an inequality in the widening direction, so the charge is an
+// upper bound rather than a first-order estimate of one. Both terms go in
+// through snapToZeroAllow, which adds under upRound, so the composed float is
+// at or above the exact sum; an endpoint the arithmetic already put exactly on
+// the axis discards nothing and leaves the length bound untouched, which is
+// what keeps every on-axis fixture's wall area exactly as proven.
+//
+// Charging it is what makes walkAxisMoment's straight arm (revolve_build.go)
+// enclose the wall it actually built: that arm reads w.length against a mean
+// radius whose own bound already carries the snap, so without this term the
+// product covers L·(r0'+r1')/2 while the truth is L'·(r0'+r1')/2, and the
+// shortfall |L'−L|·(r0'+r1')/2 grows without limit as the wall turns from steep
+// (a cone, where |L'−L| is a fraction of the discarded radius) toward radial (a
+// disk, where it is the whole of it).
 func (ax axisFrame) walk(w segmentWalk) segmentWalk {
 	out := w
 	out.startU, out.startV = ax.toAxis(w.startU, w.startV)
@@ -397,10 +437,12 @@ func (ax axisFrame) walk(w segmentWalk) segmentWalk {
 	out.tanOutV = w.tanOutV*ax.dU - w.tanOutU*ax.dV
 	if m := math.Abs(out.startV); m <= ax.snapTol {
 		out.startVBound = snapToZeroAllow(out.startVBound, m)
+		out.lengthBound = snapToZeroAllow(out.lengthBound, m)
 		out.startV = 0
 	}
 	if m := math.Abs(out.endV); m <= ax.snapTol {
 		out.endVBound = snapToZeroAllow(out.endVBound, m)
+		out.lengthBound = snapToZeroAllow(out.lengthBound, m)
 		out.endV = 0
 	}
 	if w.isCircular() {
@@ -607,14 +649,136 @@ func resolveAxisSide(ctx context.Context, profile ProfileRecord, line axisLine2,
 		radialAdmitAllow: radialAdmitAllow,
 		axialExtentUpper: axialExtentUpper,
 	}
-	if err := ax.rejectInteriorContact(profile, work); err != nil {
+	snap, err := ax.auditAxisContact(profile, work)
+	if err != nil {
 		return axisFrame{}, 0, err
 	}
+	ax.snap = snap
 	return ax, side, nil
 }
 
-// rejectInteriorContact rejects the circular boundary walks a revolve
-// cannot sweep soundly: a walk tangent to the axis at a point interior to
+// regionSnapAllow is one profile's accumulated snap allowance, one field per
+// integral the revolve publishes a measurement from: area bounds Σ|Δ∫dA| (the
+// cap's own reading), first bounds Σ|Δ∫ρ dA| (Pappus's second theorem, so the
+// volume), mixed bounds Σ|Δ∫zρ dA| (the solid centroid's axial term) and second
+// bounds Σ|Δ∫ρ² dA| (a partial sweep's in-plane centroid term). ρ and z are the
+// AXIS-frame coordinates, which is what keeps the last three tight: a profile
+// far down the axis has a large |z| and a small ρ, and charging both at one
+// frame-origin envelope would inflate the volume by the axial offset.
+type regionSnapAllow struct {
+	area   float64
+	first  float64
+	mixed  float64
+	second float64
+}
+
+// add composes another walk's allowance into this one, each order summed
+// outward. The integrals are additive over the boundary, so the region's total
+// displacement is at most its walks' displacements summed.
+func (a regionSnapAllow) add(b regionSnapAllow) regionSnapAllow {
+	return regionSnapAllow{
+		area:   absSumUpper(a.area, b.area),
+		first:  absSumUpper(a.first, b.first),
+		mixed:  absSumUpper(a.mixed, b.mixed),
+		second: absSumUpper(a.second, b.second),
+	}
+}
+
+// snapAllowOf is ONE walk's contribution to the region snap allowance, and the
+// place the charge is derived.
+//
+// axisFrame.walk assigns an endpoint exactly 0 when the arithmetic put it
+// within snapTol of the axis, discarding a magnitude δ ≤ snapTol. The built
+// wall follows the snapped walk, the region integrals follow the recorded one,
+// and the two curves bound a ribbon between them. Every point of that ribbon
+// sits within δ of the recorded walk measured radially, so the ribbon lies in a
+// band of width δ along a curve no longer than the longer of the two walks:
+//
+//	area(ribbon) ≤ δ · max(L, L') ≤ δ · (w.length + w.lengthBound)
+//
+// — w.lengthBound already carries both discarded magnitudes by the time this
+// reads it (axisFrame.walk's own doc comment), so absSumUpper over the pair
+// covers whichever of the two is longer.
+//
+// The symmetric difference between the recorded region and the snapped one is
+// contained in the union of those ribbons, so for any integrand f,
+// |Δ∫f dA| ≤ area(ribbon) · sup|f| over the ribbon, and each order's charge is
+// that product against the matching envelope: nothing for ∫dA, one radial
+// envelope for ∫ρ dA, a radial and an axial one for ∫zρ dA, and two radial ones
+// for ∫ρ² dA.
+//
+// Every step widens. productUpper and absSumUpper each round outward, δ is the
+// discarded magnitude itself rather than an estimate of what it costs, and
+// every sup|f| is replaced by an envelope that dominates it. A walk with
+// nothing discarded contributes exactly zero, which is what leaves an
+// axis-incident profile's published volume, cap area and centroid as proven as
+// they were.
+//
+// A CIRCULAR walk with a snapped endpoint takes the same charge although its
+// built surface keeps the recorded circle's own center, radius and angles: the
+// snap still displaces the endpoint its neighbouring walls meet it at, by the
+// same δ over the same walk, so the same ribbon dominates the difference.
+func snapAllowOf(walked segmentWalk, discarded float64) regionSnapAllow {
+	if !(discarded > 0) {
+		return regionSnapAllow{}
+	}
+	ribbon := productUpper(absSumUpper(walked.length, walked.lengthBound), discarded)
+	rhoUp := walkRadialUpper(walked, discarded)
+	// |z| = |(p−a)·d| ≤ |p−a| ≤ |p| + |a|, which is exactly what
+	// axisFrame.radialUpper composes — it is the envelope of the whole axis-
+	// local position, so it bounds the axial coordinate as well as the radial
+	// one, and for a profile far down the axis it is the axial one that is
+	// large.
+	zUp := absSumUpper(walked.axisRadiusUpper, discarded)
+	first := productUpper(ribbon, rhoUp)
+	return regionSnapAllow{
+		area:   ribbon,
+		first:  first,
+		mixed:  productUpper(first, zUp),
+		second: productUpper(first, rhoUp),
+	}
+}
+
+// walkRadialUpper is a proven upper bound on |ρ| over one walk already
+// re-expressed in axis coordinates, widened by the snap magnitude discarded
+// along it. A straight walk's ρ runs linearly between its two endpoints, so its
+// extremes ARE those endpoints, each read through the radial bound
+// axisFrame.walk proved for it; a circular walk reaches at most its center's
+// radial coordinate plus its radius, each read through its own bound. The
+// answer is capped by the walk's own axis-radius envelope, which is proven
+// independently, so this can only ever tighten and never widen it.
+func walkRadialUpper(w segmentWalk, discarded float64) float64 {
+	held := absSumUpper(
+		math.Max(math.Abs(w.startV), math.Abs(w.endV)),
+		math.Max(w.startVBound, w.endVBound),
+		discarded,
+	)
+	if w.isCircular() {
+		held = absSumUpper(math.Abs(w.cV), w.cVBound, w.radius, w.radiusBound, discarded)
+	}
+	return math.Min(held, absSumUpper(w.axisRadiusUpper, discarded))
+}
+
+// snapDiscarded is the largest radial magnitude axisFrame.walk's snap discards
+// over one walk's two endpoints, read from the walk BEFORE it was re-expressed
+// — the same toAxis reading and the same snapTol comparison walk itself makes,
+// so the two can never disagree about whether an endpoint snapped.
+func (ax axisFrame) snapDiscarded(w segmentWalk) float64 {
+	var discarded float64
+	for _, end := range [][2]float64{{w.startU, w.startV}, {w.endU, w.endV}} {
+		_, rho := ax.toAxis(end[0], end[1])
+		if m := math.Abs(rho); m <= ax.snapTol && m > discarded {
+			discarded = m
+		}
+	}
+	return discarded
+}
+
+// auditAxisContact makes ONE pass over the profile's recorded walks for two
+// jobs that both need every walk re-expressed in axis coordinates.
+//
+// It rejects the circular boundary walks a revolve cannot sweep soundly: a
+// walk tangent to the axis at a point interior to
 // the walk — the horn-torus contact §6 forbids — and a walk whose circle
 // center lies across the axis, whose swept surface is a spindle-branch
 // torus the shipped Torus (non-negative Major) cannot represent; the solid
@@ -622,39 +786,47 @@ func resolveAxisSide(ctx context.Context, profile ProfileRecord, line axisLine2,
 // For the tangency, the circle's radial minimum sits at its lowest angle;
 // when that angle is strictly inside the walked range and the minimum
 // reaches the axis, the contact is neither of the two allowed forms.
-func (ax axisFrame) rejectInteriorContact(profile ProfileRecord, work *freeformWork) error {
+//
+// It also sums the region snap allowance (snapAllowOf) the same walks earn,
+// here rather than in a second pass of its own: re-walking a profile costs a
+// second free-form conversion and a second rational bracket per segment for an
+// answer this loop already holds.
+func (ax axisFrame) auditAxisContact(profile ProfileRecord, work *freeformWork) (regionSnapAllow, error) {
 	const angEps = 1e-9
+	var snap regionSnapAllow
 	loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
 	for _, loop := range loops {
 		for _, seg := range loop.Segments {
 			w, err := walkOf(seg, work)
 			if err != nil {
-				return err
+				return regionSnapAllow{}, err
 			}
 			if err := requireAnalyticWalk(w, "the revolve axis-contact audit"); err != nil {
-				return err
+				return regionSnapAllow{}, err
 			}
+			discarded := ax.snapDiscarded(w)
 			w = ax.walk(w)
+			snap = snap.add(snapAllowOf(w, discarded))
 			if !w.isCircular() {
 				continue
 			}
 			if w.cV < -ax.snapTol {
-				return fmt.Errorf(`%w: a boundary arc centered across the revolve axis sweeps a spindle torus this evaluator cannot represent`, ErrUnsupported)
+				return regionSnapAllow{}, fmt.Errorf(`%w: a boundary arc centered across the revolve axis sweeps a spindle torus this evaluator cannot represent`, ErrUnsupported)
 			}
 			if w.cV-w.radius > ax.snapTol {
 				continue
 			}
 			lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
 			if w.closed {
-				return fmt.Errorf(`%w: a closed curve touching the revolve axis sweeps a self-touching solid`, ErrDegenerate)
+				return regionSnapAllow{}, fmt.Errorf(`%w: a closed curve touching the revolve axis sweeps a self-touching solid`, ErrDegenerate)
 			}
 			// The minimum-ρ angle is −π/2 modulo a full turn.
 			for th := -math.Pi/2 + 2*math.Pi*math.Floor((lo+math.Pi/2)/(2*math.Pi)); th <= hi+angEps; th += 2 * math.Pi {
 				if th > lo+angEps && th < hi-angEps {
-					return fmt.Errorf(`%w: the boundary touches the revolve axis at an interior point`, ErrDegenerate)
+					return regionSnapAllow{}, fmt.Errorf(`%w: the boundary touches the revolve axis at an interior point`, ErrDegenerate)
 				}
 			}
 		}
 	}
-	return nil
+	return snap, nil
 }
