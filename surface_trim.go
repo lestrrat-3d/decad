@@ -334,20 +334,145 @@ func trimProfileFullyWhole(budget *workBudget, p ProfileRecord) (bool, error) {
 // through wholeSegmentRange (prism_boolean.go) — exact float equality
 // against 0 and 1, never a tolerance in either direction.
 func trimSegmentIsWhole(seg CurveSegment) (bool, error) {
-	seg, err := normalizeSegment(seg)
+	t0, t1, err := trimSegmentParamRange(seg)
 	if err != nil {
 		return false, err
 	}
+	return wholeSegmentRange(t0, t1), nil
+}
+
+// trimSegmentParamRange reads an S3-admitted segment's own recorded TStart/
+// TEnd — the one place decad names, per field, whether that end is the
+// entity's own natural bound or a coordinate the arrangement computed. Every
+// admitted kind (LineSeg, CircleSeg, ArcSeg) carries the two fields directly.
+func trimSegmentParamRange(seg CurveSegment) (t0, t1 float64, err error) {
+	seg, err = normalizeSegment(seg)
+	if err != nil {
+		return 0, 0, err
+	}
 	switch s := seg.(type) {
 	case LineSeg:
-		return wholeSegmentRange(s.TStart, s.TEnd), nil
+		return s.TStart, s.TEnd, nil
 	case CircleSeg:
-		return wholeSegmentRange(s.TStart, s.TEnd), nil
+		return s.TStart, s.TEnd, nil
 	case ArcSeg:
-		return wholeSegmentRange(s.TStart, s.TEnd), nil
+		return s.TStart, s.TEnd, nil
 	default:
-		return false, fmt.Errorf(`%w: a %T segment is not part of the admitted class`, ErrUnsupported, seg)
+		return 0, 0, fmt.Errorf(`%w: a %T segment is not part of the admitted class`, ErrUnsupported, seg)
 	}
+}
+
+// trimCutChargeUV is trimBoundsWalks's own per-component reading of §7's
+// δ_cut: how far a cut endpoint's u and v coordinates can EACH sit from the
+// crossing they denote, given cutDisplacementAllow's own parameter-to-
+// coordinate scaling (bounds.go). A CircleSeg/ArcSeg's position varies with
+// BOTH components under a cos/sin walk, so both take carrierSpeedUpper's
+// existing isotropic reading (prism_boolean.go) unchanged. A LineSeg's does
+// not: its walk is Start + t·(End−Start), so a coordinate whose OWN
+// End−Start difference is exactly zero — a horizontal line's v, a vertical
+// line's u — carries no displacement AT ALL as t moves, however uncertain t
+// itself is, and charging it anyway would smear a widened cut candidate's
+// slop onto an axis the cut never touches (T170's own top and bottom walls,
+// whose v never moves at any parameter). Each component's own exact
+// End−Start difference, taken over the recorded floats and rounded outward
+// (ratL1Upper), is what carrierSpeedUpper already reduces to a single L1
+// figure for the isotropic case; reading it per component instead is the
+// same mechanism, not a new one.
+func trimCutChargeUV(seg CurveSegment) (chargeU, chargeV float64, err error) {
+	seg, err = normalizeSegment(seg)
+	if err != nil {
+		return 0, 0, err
+	}
+	if line, ok := seg.(LineSeg); ok {
+		du := ratL1Upper(exactCoordinateDelta(line.End.U, line.Start.U))
+		dv := ratL1Upper(exactCoordinateDelta(line.End.V, line.Start.V))
+		return cutDisplacementAllow(du), cutDisplacementAllow(dv), nil
+	}
+	speed, err := carrierSpeedUpper(seg)
+	if err != nil {
+		return 0, 0, err
+	}
+	charge := cutDisplacementAllow(speed)
+	return charge, charge, nil
+}
+
+// trimBoundsWalks resolves profile's Outer-then-Holes walks for a trimmed
+// ribbon's own Bounds reading (docs/surface-intersection-design.md §7),
+// charging trimCutChargeUV into exactly the endpoint bound whose OWN
+// recorded parameter is not a natural bound (0 or 1, per field — never per
+// segment, since a segment cut on only one side keeps its natural end exact)
+// — the coordinate the arrangement computed for that end, never one the
+// record states verbatim. An endpoint whose own parameter IS natural gets no
+// charge, whether or not the segment's OTHER end was cut, which is what lets
+// an extreme won by an untouched vertex stay exactly as tight as the
+// untrimmed sheet's own (T170) while an extreme won by a genuine cut point
+// carries the bound its own construction owes (docs/surface-design.md's
+// end-cut fixture). The decision reads only the two recorded floats — never a
+// coordinate comparison, never whether a value "looks like" it moved.
+//
+// This is never called for a plain ExtrudeChain ribbon: evalChainExtrudeContext
+// gates it on pp.sectionDelta != 0, which no construction but this design's
+// Trim ever sets, so an ordinary ribbon keeps resolving through walkOf with
+// no augmentation.
+func trimBoundsWalks(profile ProfileRecord, work *freeformWork) (*profileWalks, error) {
+	before, beforeRecon := workSpent(work)
+	walkCharged := func(seg CurveSegment) (segmentWalk, error) {
+		w, err := walkOf(seg, work)
+		if err != nil {
+			return segmentWalk{}, err
+		}
+		t0, t1, err := trimSegmentParamRange(seg)
+		if err != nil {
+			return segmentWalk{}, err
+		}
+		chargeU, chargeV, err := trimCutChargeUV(seg)
+		if err != nil {
+			return segmentWalk{}, err
+		}
+		if t0 != 0 && t0 != 1 {
+			w.startBound = walkEndBound{
+				u: absSumUpper(w.startBound.u, chargeU),
+				v: absSumUpper(w.startBound.v, chargeV),
+			}
+		}
+		if t1 != 0 && t1 != 1 {
+			w.endBound = walkEndBound{
+				u: absSumUpper(w.endBound.u, chargeU),
+				v: absSumUpper(w.endBound.v, chargeV),
+			}
+		}
+		return w, nil
+	}
+
+	outer := make([]segmentWalk, len(profile.Outer.Segments))
+	for i, seg := range profile.Outer.Segments {
+		w, err := walkCharged(seg)
+		if err != nil {
+			return nil, err
+		}
+		outer[i] = w
+	}
+	holes := make([][]segmentWalk, len(profile.Holes))
+	for hi, hole := range profile.Holes {
+		hw := make([]segmentWalk, len(hole.Segments))
+		for i, seg := range hole.Segments {
+			w, err := walkCharged(seg)
+			if err != nil {
+				return nil, err
+			}
+			hw[i] = w
+		}
+		holes[hi] = hw
+	}
+	after, afterRecon := workSpent(work)
+	return &profileWalks{
+		profile:             profile,
+		outer:               outer,
+		holes:               holes,
+		spent:               after - before,
+		reconstructionSpent: afterRecon - beforeRecon,
+		metered:             true,
+	}, nil
 }
 
 // resolveTrim is §3's design over an admitted pair: buildPrismScene's own

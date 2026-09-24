@@ -1579,6 +1579,7 @@
 1	0.00	TestSurfaceSweepStaysASheetThroughPlacement
 2	0.00	TestSurfaceSweepTessellationRefused
 3	0.01	TestSurfaceTrimDegenerateWhenNothingSeparates
+1	0.01	TestSurfaceTrimBoundsChargesAnExtremeWonByACut
 0	0.01	TestSurfaceTrimKeepInsideKeepsTheCutStrips
 1	0.01	TestSurfaceTrimKeepOutsideSplitsIntoTwoRibbons
 2	0.01	TestSurfaceTrimRefusesAMixedFamilyPair

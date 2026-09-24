@@ -370,13 +370,16 @@ func (pp chainPayload) z1Scalar() boundedScalar { return measuredScalar(pp.z1, p
 // prism is a *view* of pp as a zero-section-delta prismPayload — never a body
 // this evaluator builds — used only to feed pp.point/pp.dir/reflected and
 // prismBoundsContext, none of which cares whether the section it reads
-// closes. sectionDelta stays zero in this view deliberately: a trimmed
-// ribbon's own extreme candidates are read off the recorded (possibly cut)
-// coordinates directly, exactly as an untrimmed ribbon's are, so a Bounds
-// reading whose winning extreme sits on an untouched vertex stays as tight as
-// the untrimmed sheet's own (docs/surface-design.md §15 T170) rather than
-// widening by δ on every face the way an ordinary prismPayload's blanket term
-// does. The first chain stands in for a profile's outer loop, the rest for
+// closes. sectionDelta stays zero in THIS view deliberately: prismPayload's
+// own Bounds reading (prismBoundsContext) charges a nonzero sectionDelta as a
+// BLANKET term, δ outward on every face regardless of which candidate wins
+// each extreme, which is sound for an ordinary prismPayload but would widen a
+// trimmed ribbon's UNTOUCHED extremes too — exactly the ones T170 requires to
+// stay bit-identical to the untrimmed sheet's own. The tight, per-extreme
+// charge this design actually needs is carried instead by the WALKS
+// evalChainExtrudeContext resolves through trimBoundsWalks
+// (surface_trim.go) when pp.sectionDelta != 0, never by this view's own
+// field. The first chain stands in for a profile's outer loop, the rest for
 // its holes — extentBoundedAlong reads every one the same way, caring only
 // about the segments, never about winding or closure.
 func (pp chainPayload) prism() prismPayload {
@@ -517,7 +520,26 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 	// reachable through Body.Volume/Body.Centroid while solid is false
 	// (docs/surface-design.md §8), exactly as patch.go's evalPatchContext
 	// leaves them.
-	bounds, err := prismBoundsContext(ctx, pp.prism(), work, nil)
+	//
+	// A ribbon this design's Trim assembled (pp.sectionDelta != 0 — the only
+	// construction that ever sets it, docs/surface-intersection-design.md
+	// §3.4) reads its extent through walks that charge §7's δ_cut into
+	// exactly the endpoint a cut produced, never into one the record states
+	// verbatim (trimBoundsWalks, surface_trim.go) — a plain ExtrudeChain
+	// ribbon's sectionDelta is always zero, so it keeps resolving through
+	// walkOf with no augmentation, unchanged.
+	var boundsWalks *profileWalks
+	if pp.sectionDelta != 0 {
+		var err error
+		boundsWalks, err = trimBoundsWalks(pp.prism().profile, work)
+		if err != nil {
+			return nil, err
+		}
+		if err := boundsWalks.charge(work); err != nil {
+			return nil, err
+		}
+	}
+	bounds, err := prismBoundsContext(ctx, pp.prism(), work, boundsWalks)
 	if err != nil {
 		return nil, err
 	}

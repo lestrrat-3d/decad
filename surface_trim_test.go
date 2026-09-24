@@ -159,6 +159,53 @@ func TestSurfaceTrimKeepInsideKeepsTheCutStrips(t *testing.T) {
 	}
 }
 
+// TestSurfaceTrimBoundsChargesAnExtremeWonByACut is the end-cut fixture: a
+// tool that removes one END of the sheet's own footprint, rather than a
+// middle band, leaves a single surviving run whose own extreme along the cut
+// axis IS the cut point, not an untouched corner — the case
+// docs/surface-intersection-design.md §7's δ_cut must still reach even
+// though T170's own fixture (both surviving runs touch every extreme through
+// an untouched vertex) never exercises it. The tool spans the sheet axially
+// and covers x in [60, 120]: only its own left edge at x = 60 crosses the
+// sheet's bottom and top walls, so KeepOutside keeps one open run —
+// top[0,60] + left wall + bottom[0,60], a rectangle with its right side
+// removed — whose own x-maximum is exactly the cut at x = 60.
+func TestSurfaceTrimBoundsChargesAnExtremeWonByACut(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	sheet := trimRectSheet(t, doc)
+	tool := trimSpanningTool(t, doc, 60, -10, 120, 70)
+
+	trimmed, err := sheet.Trim(t.Context(), tool, decad.KeepOutside)
+	require.NoError(t, err)
+
+	require.Len(t, trimmed.Lumps(), 1)
+	requireLumpFaceCounts(t, trimmed, 3)
+
+	bounds, err := trimmed.Bounds()
+	require.NoError(t, err)
+	// The published interval must enclose the true corner (60, 60, 10) —
+	// the run's own x-maximum, sitting exactly at the cut — within its own
+	// proven bound.
+	decadtest.Encloses(t, "trimmed bounds", bounds, r3.NewVec(60, 60, 10))
+	require.Equal(t, decad.Approximate, bounds.Exactness)
+	// The bound must clear the incidental float-evaluation noise
+	// lineWalkEndBound's own lerp2-vs-exact-rational comparison carries even
+	// with no δ_cut charge at all (measured at 7.1e-15 mm for this fixture,
+	// gating trimBoundsWalks's own augmentation off) — a bare > 0 assertion
+	// would pass on that noise alone and prove nothing about δ_cut. The
+	// proven bound charging it measures 1.8e-13 mm here, over an order above
+	// that floor. Shown-to-fail: gating trimBoundsWalks off drops this bound
+	// under 5e-14 and turns this assertion red.
+	require.Greater(t, bounds.Bound.Base(), 5e-14)
+	// The y-extremes (0 and 60) are won either by an untouched corner or by
+	// a cut end whose own v-component never moves — a horizontal wall's cut
+	// only displaces its u-coordinate, the per-component reading this
+	// design uses rather than an isotropic one — so they stay exact.
+	require.Equal(t, 0.0, bounds.Min.Y)
+	require.Equal(t, 60.0, bounds.Max.Y)
+}
+
 // TestSurfaceTrimDegenerateWhenNothingSeparates is T172: a tool wholly
 // outside the receiver's section keeps every fragment, and one wholly
 // containing it keeps none — both ErrDegenerate (R30), and neither operand
