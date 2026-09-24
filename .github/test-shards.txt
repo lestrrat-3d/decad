@@ -1070,6 +1070,7 @@
 2	0.12	TestCapBlendChordingSharesOneCountPerWalk
 2	0.02	TestCapBlendCircularRimCentroidIsClosedForm
 2	0.01	TestCapBlendCircularRimVerifyArea
+2	0.02	TestCapBlendHoleApexPatchBoundCoversConnectorSagitta
 2	0.02	TestCapBlendHoleLoopChamferVolume
 2	0.04	TestCapBlendInheritsComputedCapLevelBound
 2	0.03	TestCapBlendMeshIsExportOnly
@@ -1238,6 +1239,7 @@
 2	0.01	TestSplineBezierMatchesGeomEvaluator
 2	0.03	TestSturmVarAtMatchesRationalHornerSigns
 2	0.04	TestTessellateCapBlendPlateExportsDeterministically
+2	0.02	TestTessellateCapBlendRectangularHoleApexFans
 2	0.05	TestTessellateCapBlendReflexApexFan
 2	0.16	TestTessellateCapBlendRoundedRectMiters
 2	0.10	TestTessellateDefaultsToVerifyAll

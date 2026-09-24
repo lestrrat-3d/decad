@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -277,6 +278,73 @@ func TestTessellateCapBlendReflexApexFan(t *testing.T) {
 	// That vertex is the ORIGINAL reflex corner (20, 40 is convex; the notch sits
 	// at (20, 20)) carried to the band's own side level, reflexLHeight - d.
 	require.Equal(t, r3.Vec{X: 20, Y: 20, Z: reflexLHeight - d}, mesh.Vertices()[interned[0]])
+}
+
+func TestTessellateCapBlendRectangularHoleApexFans(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	outer := s.CreateRectangle(0, 0, 60, 40)
+	s.Fix(outer.A)
+	s.CreateRectangle(15, 10, 45, 30)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var profile *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			profile = p
+		}
+	}
+	require.NotNil(t, profile)
+	doc := decad.New()
+	body, err := doc.Extrude(s, profile, decad.Distance{D: units.Millimeters(14), Dir: decad.Along})
+	require.NoError(t, err)
+	const d = 1.5
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
+	require.NoError(t, err)
+	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(0.05))
+	require.NoError(t, err)
+	requireWatertight(t, mesh)
+
+	apex := map[*decad.Face]int{}
+	for _, f := range capBlendPatchFaces(chamfered) {
+		if len(f.Loops()[0].CoEdges()) == 3 {
+			apex[f] = 0
+		}
+	}
+	require.Len(t, apex, 4, "the four hole corners each own one apex patch")
+	for _, f := range mesh.SourceFaces() {
+		if _, ok := apex[f]; ok {
+			apex[f]++
+		}
+	}
+	for _, n := range apex {
+		require.Equal(t, 4, n, "a quarter-turn connector has four facets at 0.05 mm tolerance")
+	}
+
+	// The independent section integral subtracts the widening rectangular
+	// hole and its four rounded corners from the outer eroded rectangle.
+	want := 1800*14 - 300*d*d/2 + (4-math.Pi)*d*d*d/3
+	require.InDelta(t, want, meshVolume(mesh), 0.5)
+
+	// Mid-chord points on each true connector arc must fit the published
+	// surface displacement. The internal face-bound test pins its sagitta term.
+	for _, corner := range []r3.Vec{
+		{X: 15, Y: 10}, {X: 45, Y: 10}, {X: 45, Y: 30}, {X: 15, Y: 30},
+	} {
+		sx, sy := 1.0, 1.0
+		if corner.X == 15 {
+			sx = -1
+		}
+		if corner.Y == 10 {
+			sy = -1
+		}
+		th := math.Pi / 16
+		point := r3.Vec{X: corner.X + sx*d*math.Cos(th), Y: corner.Y + sy*d*math.Sin(th), Z: 14}
+		require.LessOrEqual(t, distanceToMesh(mesh, point), mesh.Bound().Mag(),
+			"connector point %v exceeds the mesh bound", point)
+	}
 }
 
 // TestTessellateCapBlendPlacedStaysWatertight meshes a chamfer under a

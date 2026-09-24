@@ -671,13 +671,14 @@ func emitCapBand(budget *workBudget, m *Mesh, cbp capBlendPayload, lm *capBlendL
 		count := lm.arcCount[i]
 		for k := range count {
 			a := capV[base+k]
-			b := capV[base+k+1]
+			bIndex := base + k + 1
 			if k == count-1 {
 				// A reflex corner's connector runs pA -> pB, and pB is the
 				// FOLLOWING wall's own first cap station, so the fan's last
 				// triangle closes on that vertex rather than one of its own.
-				b = capV[lm.capWallStart[i]]
+				bIndex = lm.capWallStart[i]
 			}
+			b := capV[bIndex]
 			if start {
 				m.addTriangle([3]int{a, b, apex}, face)
 			} else {
