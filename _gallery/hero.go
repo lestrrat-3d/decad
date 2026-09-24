@@ -27,27 +27,6 @@ const (
 	// its XZ sketch is -Y, so the face nearest the camera sits at -plateHalfDepth).
 	plateHalfDepth = plateDepth / 2
 
-	// The swept rail reuses sweepShot's own proven path shape (see
-	// heroRailModels) exactly, moved by translation alone — a rotation- and
-	// scale-free shift keeps every tangent match Sweep's P5 join gate found
-	// exact. The rendered profile is drawn narrower than sweepShot's own
-	// 12mm square, in BOTH dimensions (railProfileHalf below): the profile's
-	// size plays no part in Sweep's own path validation, and a slender rail
-	// is what fits the whole shape — the arc's own 20mm rise plus the second
-	// arc's 20mm reach — inside the plate. railShiftZ keeps even the lowest
-	// point of the first arc above the letters' own top (Z=60), so the rail
-	// clears every letter by height alone rather than by hunting for a gap
-	// between letters no gap is wide enough for. railShiftX centers the rail
-	// over the wordmark. The second arc bends toward the camera (negative Y)
-	// rather than away from it: bending away crosses into the shelled
-	// plate's own solid back wall within its 20mm reach, and the wall
-	// occludes whatever is behind it, cutting the rail's own silhouette off
-	// mid-curve. Nothing solid stands in front of the plate's open face, so
-	// the same 20mm reach toward the camera clears cleanly.
-	railShiftX      = 0.0
-	railShiftZ      = 62.0
-	railProfileHalf = 0.8
-
 	// studRadius is the revolved dome accent's radius.
 	studRadius = 6.0
 )
@@ -76,11 +55,6 @@ type letter struct {
 // unless -chord overrides it.
 const heroChordTolerance = 0.02
 
-// railColor is the swept rail's accent color: the same gold scene.go's
-// feature thumbnails use, so the rail reads as part of this gallery's own
-// palette instead of an off-palette grey accessory.
-var railColor = gold
-
 // heroRender is the README's masthead: the wordmark itself is decad geometry.
 func heroRender() imageRender {
 	return imageRender{
@@ -91,16 +65,14 @@ func heroRender() imageRender {
 	}
 }
 
-// heroScene builds the masthead from six of decad's features rather than
+// heroScene builds the masthead from five of decad's features rather than
 // extrude and fillet alone: the backing plate is a shelled shadow-box whose
 // rim carries a real wall thickness; "E" and "C" are extruded and have their
 // whole front face bevelled by a cap-loop chamfer, while "D" (an outer+inner
 // loop pair) and "A" (three separately overlapping strokes) are extruded and
 // have their outside corners filleted instead (see letter.chamferCap and
-// extrudeLetterLoops for why each keeps the fillet); a swept rail — the same
-// composite path sweepShot proves, bending through more than one plane —
-// sits in the gap above the wordmark; and one accent is a revolved dome
-// rather than a plain extruded cylinder.
+// extrudeLetterLoops for why each keeps the fillet); and one accent is a
+// revolved dome rather than a plain extruded cylinder.
 func heroScene(ctx context.Context, chord units.Value) (solidlens.Scene, error) {
 	base, err := heroPlate(ctx, chord)
 	if err != nil {
@@ -117,12 +89,6 @@ func heroScene(ctx context.Context, chord units.Value) (solidlens.Scene, error) 
 			models = append(models, solidlens.Model{Mesh: mesh, Material: solidlens.Matte(item.color)})
 		}
 	}
-
-	railModels, err := heroRailModels(ctx, chord)
-	if err != nil {
-		return solidlens.Scene{}, fmt.Errorf("build rail: %w", err)
-	}
-	models = append(models, railModels...)
 
 	// The left accent stays a plain extruded peg; the right one is a
 	// revolved dome, so the masthead shows both an extrude and a revolve at
@@ -378,110 +344,4 @@ func heroStud(ctx context.Context, x, z, radius float64, chord units.Value) (*de
 		return nil, fmt.Errorf("revolve the stud: %w", err)
 	}
 	return dome.Tessellate(ctx, chord, decad.WithVerification(decad.VerifyNone))
-}
-
-// heroRailModels builds the rail above the wordmark from the same composite
-// path sweepShot proves: an arc, a flat run, and a second arc that leaves the
-// first arc's plane — what a single extrude cannot draw. Composite-Sweep
-// tessellation is still staged (docs/sweep-design.md Table D), so the picture
-// is drawn from the equivalent Revolve/Extrude/Revolve spans after the real
-// Sweep has passed its own topology, measurement and contact audits, exactly
-// as sweepShot does.
-func heroRailModels(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
-	// x and z translate sweepShot's own path/axis coordinates by a fixed
-	// shift alone: translation changes no tangent direction, so every join
-	// Sweep's P5 gate already accepted for these numbers stays accepted here.
-	x := func(v float64) float64 { return v + railShiftX }
-	z := func(v float64) float64 { return v + railShiftZ }
-
-	w := sketch.NewWorld()
-
-	firstPlane, err := w.CreateOffsetPlane(w.XY(), z(0))
-	if err != nil {
-		return nil, err
-	}
-	s, profile, err := sketchLoops(ctx, w, firstPlane, rectangle(x(-40)-railProfileHalf, -railProfileHalf, x(-40)+railProfileHalf, railProfileHalf))
-	if err != nil {
-		return nil, err
-	}
-	path, err := decad.NewPath(
-		r3.NewVec(x(-40), 0, z(0)),
-		decad.ArcThrough{
-			Through: r3.NewVec(x(-32), 0, z(16)),
-			End:     r3.NewVec(x(-20), 0, z(20)),
-		},
-		decad.LineTo{End: r3.NewVec(x(20), 0, z(20))},
-		decad.ArcThrough{
-			Through: r3.NewVec(x(36), -8, z(20)),
-			End:     r3.NewVec(x(40), -20, z(20)),
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("record the rail's sweep path: %w", err)
-	}
-	if _, err := decad.New().Sweep(ctx, s, profile, path); err != nil {
-		return nil, fmt.Errorf("sweep the rail's spatial path: %w", err)
-	}
-
-	first, err := decad.New().Revolve(s, profile, //nolint:contextcheck // Sweep and sketch solve above are cancellable.
-		decad.SketchLine{Start: decad.Point2{U: x(-20), V: -1}, End: decad.Point2{U: x(-20), V: 1}},
-		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
-	if err != nil {
-		return nil, fmt.Errorf("build the rail's first span: %w", err)
-	}
-
-	middleFrame, err := r3.NewFrame(
-		r3.NewVec(x(-20), 0, z(-20)),
-		r3.NewVec(0, 0, -1),
-		r3.NewVec(0, 1, 0),
-	)
-	if err != nil {
-		return nil, err
-	}
-	middlePlane, err := w.CreatePlaneFromFrame(middleFrame)
-	if err != nil {
-		return nil, err
-	}
-	middleSketch, middleProfile, err := sketchLoops(ctx, w, middlePlane, rectangle(-40-railProfileHalf, -railProfileHalf, -40+railProfileHalf, railProfileHalf))
-	if err != nil {
-		return nil, err
-	}
-	middle, err := decad.New().Extrude(middleSketch, middleProfile, //nolint:contextcheck // Sweep and sketch solve above are cancellable.
-		decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
-	if err != nil {
-		return nil, fmt.Errorf("build the rail's straight span: %w", err)
-	}
-
-	lastFrame, err := r3.NewFrame(
-		r3.NewVec(x(20), 0, z(-20)),
-		r3.NewVec(0, 0, -1),
-		r3.NewVec(0, 1, 0),
-	)
-	if err != nil {
-		return nil, err
-	}
-	lastPlane, err := w.CreatePlaneFromFrame(lastFrame)
-	if err != nil {
-		return nil, err
-	}
-	lastSketch, lastProfile, err := sketchLoops(ctx, w, lastPlane, rectangle(-40-railProfileHalf, -railProfileHalf, -40+railProfileHalf, railProfileHalf))
-	if err != nil {
-		return nil, err
-	}
-	last, err := decad.New().Revolve(lastSketch, lastProfile, //nolint:contextcheck // Sweep and sketch solve above are cancellable.
-		decad.SketchLine{Start: decad.Point2{U: -39, V: -20}, End: decad.Point2{U: -41, V: -20}},
-		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Against})
-	if err != nil {
-		return nil, fmt.Errorf("build the rail's second span: %w", err)
-	}
-
-	models := make([]solidlens.Model, 0, 3)
-	for _, body := range []*decad.Body{first, middle, last} {
-		spanModels, modelErr := oneModel(ctx, body, railColor, chord)
-		if modelErr != nil {
-			return nil, modelErr
-		}
-		models = append(models, spanModels...)
-	}
-	return models, nil
 }
