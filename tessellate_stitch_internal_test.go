@@ -30,6 +30,35 @@ func TestStitchCurvedMeshNamesUnsupportedSurface(t *testing.T) {
 	require.ErrorContains(t, err, "NURBSSurface")
 }
 
+// TestStitchCurvedMeshInheritsEverySourceFaceBound checks T88's per-face
+// relation. It lives in the internal test package because sourceBound is a
+// private proof term; Mesh.Bound alone cannot detect a missing face bound.
+func TestStitchCurvedMeshInheritsEverySourceFaceBound(t *testing.T) {
+	t.Parallel()
+	sheet := internalOffAxisArcBody(t, true)
+	tol := units.Millimeters(0.1)
+	source, err := sheet.Tessellate(t.Context(), tol)
+	require.NoError(t, err)
+	stitched, err := Stitch(t.Context(), sheet)
+	require.NoError(t, err)
+	mesh, err := stitched.Tessellate(t.Context(), tol)
+	require.NoError(t, err)
+	sp, ok := stitched.payload.(stitchPayload)
+	require.True(t, ok)
+	require.Len(t, sp.faces, 2)
+	require.Equal(t, source.Bound(), mesh.Bound())
+	require.Positive(t, mesh.Bound().Base())
+
+	for i, sourceFace := range sp.faces {
+		want, ok := source.sourceBound(sourceFace)
+		require.True(t, ok)
+		require.Positive(t, want)
+		got, ok := mesh.sourceBound(sp.liveFaces[i])
+		require.Truef(t, ok, "stitched face %d has no inherited source bound", i)
+		require.Equalf(t, want, got, "stitched face %d lost its source bound", i)
+	}
+}
+
 func TestStitchCurvedWeldedRevolveSiblingRejectsWrongEdgeAncestry(t *testing.T) {
 	t.Parallel()
 	sheet := internalOffAxisArcBody(t, true)

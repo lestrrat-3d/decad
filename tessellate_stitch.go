@@ -224,7 +224,8 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 	var sourceBody *Body
 	var paired map[*Face]*Face
 	if direct := sp.faces[0].body; direct != nil {
-		if _, ok := direct.payload.(revolvePayload); ok {
+		switch direct.payload.(type) {
+		case revolvePayload:
 			if direct.Kind() != BodySheet || sp.plan.groups != 0 ||
 				len(sp.plan.table.class) != len(sp.plan.table.verts) {
 				return refuse("this evaluator cannot reuse source chording after a stitch weld")
@@ -240,12 +241,14 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 				}
 				paired[f] = sp.liveFaces[i]
 			}
-		} else {
+		case unstitchPayload:
 			var reason string
 			sourceBody, paired, reason = stitchSiblingRevolveSource(b, sp)
 			if reason != "" {
 				return refuse(reason)
 			}
+		default:
+			return refuse("this evaluator has no chording arm for the source construction")
 		}
 	}
 	if sourceBody == nil || len(sourceBody.Faces()) != len(paired) {
@@ -280,6 +283,8 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 			return refuse("the revolve mesh names a face outside the stitched source set")
 		}
 		mesh.source[i] = liveFace
+		// Today's identity-copy routes preserve this bit. Keep the winding
+		// aligned if an admitted stitch ever reverses a live face.
 		if sourceFace.reversed != liveFace.reversed {
 			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
 		}
