@@ -18,9 +18,10 @@ import (
 // for this payload).
 //
 // A curved or mixed stitched body carries no recorded triangle set
-// (stitchPayload.tris is nil). The T10 route below reuses one complete
-// revolve sheet's chording under the gate of surface §10.1. Other curved
-// sources refuse with ErrUnsupported. An OPEN
+// (stitchPayload.tris is nil). T10 reuses one complete revolve sheet's
+// chording under surface §10.1; T11 also accepts that sheet's identity
+// Unstitch siblings re-welded along their original edges (§10.2). Other
+// curved sources refuse with ErrUnsupported. An OPEN
 // all-planar sheet runs docs/tessellation-design.md §1.2's manifold-with-
 // boundary audit (requireSheetMesh, requireSheetVertexLinks) in the
 // closed-mesh audit's place, exactly as a surface-result prism or revolve
@@ -54,10 +55,146 @@ func stitchLumpFaceGroups(b *Body) [][]*Face {
 	return groups
 }
 
+// stitchSiblingRevolveSource proves that every stitched source face is an
+// identity Unstitch copy of one original revolve sheet and that the weld plan
+// only rejoins original edges and vertices. The original mesher's shared
+// stations then still describe every welded seam.
+func stitchSiblingRevolveSource(b *Body, sp stitchPayload) (*Body, map[*Face]*Face, string) {
+	if b.Kind() != BodySheet {
+		return nil, nil, "a newly welded curved stitch has no open-sheet proof"
+	}
+	var originalBody *Body
+	paired := make(map[*Face]*Face, len(sp.faces))
+	originalEdgeOf := map[*Edge]*Edge{}
+	originalVertexOf := map[*Vertex]*Vertex{}
+	copiesByOriginalEdge := map[*Edge]map[*Edge]struct{}{}
+	for i, copied := range sp.faces {
+		piece := copied.body
+		if piece == nil || len(piece.Faces()) != 1 || piece.Faces()[0] != copied {
+			return nil, nil, "a source is not a single-face unstitched sheet"
+		}
+		up, ok := piece.payload.(unstitchPayload)
+		if !ok || up.xform != r3.Identity() || up.delta != 0 || up.face == nil {
+			return nil, nil, "an unstitched source has no identity copy proof"
+		}
+		original := up.face
+		if originalBody == nil {
+			originalBody = original.body
+		}
+		if originalBody == nil || original.body != originalBody || sp.liveFaces[i] == nil {
+			return nil, nil, "the unstitched faces have no common original"
+		}
+		if _, exists := paired[original]; exists {
+			return nil, nil, "an original face occurs more than once"
+		}
+		paired[original] = sp.liveFaces[i]
+		if len(copied.loops) != len(original.loops) {
+			return nil, nil, "an unstitched face changed its loop layout"
+		}
+		for li, loop := range copied.loops {
+			oldLoop := original.loops[li]
+			if len(loop.coedges) != len(oldLoop.coedges) || loop.outer != oldLoop.outer {
+				return nil, nil, "an unstitched face changed its coedge layout"
+			}
+			for ci, ce := range loop.coedges {
+				old := oldLoop.coedges[ci]
+				if ce.forward != old.forward {
+					return nil, nil, "an unstitched coedge changed direction"
+				}
+				if prev, exists := originalEdgeOf[ce.edge]; exists && prev != old.edge {
+					return nil, nil, "a copied edge has two original identities"
+				}
+				originalEdgeOf[ce.edge] = old.edge
+				if copiesByOriginalEdge[old.edge] == nil {
+					copiesByOriginalEdge[old.edge] = map[*Edge]struct{}{}
+				}
+				copiesByOriginalEdge[old.edge][ce.edge] = struct{}{}
+				for _, pair := range [][2]*Vertex{{ce.Start(), old.Start()}, {ce.End(), old.End()}} {
+					if prev, exists := originalVertexOf[pair[0]]; exists && prev != pair[1] {
+						return nil, nil, "a copied vertex has two original identities"
+					}
+					originalVertexOf[pair[0]] = pair[1]
+				}
+			}
+		}
+	}
+	if originalBody.Kind() != BodySheet {
+		return nil, nil, "the original is not a revolve sheet"
+	}
+	if _, ok := originalBody.payload.(revolvePayload); !ok {
+		return nil, nil, "the original has no revolve chording"
+	}
+	originalFaces := originalBody.Faces()
+	if len(originalFaces) != len(paired) {
+		return nil, nil, "the unstitched set omits an original face"
+	}
+	for _, f := range originalFaces {
+		if _, ok := paired[f]; !ok {
+			return nil, nil, "the unstitched set omits an original face"
+		}
+	}
+	classOriginal := map[int]*Vertex{}
+	for v, class := range sp.plan.table.class {
+		original, ok := originalVertexOf[v]
+		if !ok {
+			return nil, nil, "a welded vertex has no original identity"
+		}
+		if prev, exists := classOriginal[class]; exists && prev != original {
+			return nil, nil, "a vertex class merges different original vertices"
+		}
+		classOriginal[class] = original
+	}
+	if len(originalVertexOf) != len(sp.plan.table.class) {
+		return nil, nil, "an unstitched vertex is absent from the weld plan"
+	}
+	groupOriginal := map[int]*Edge{}
+	groupCount := map[int]int{}
+	for copied, gid := range sp.plan.group {
+		original, ok := originalEdgeOf[copied]
+		if !ok {
+			return nil, nil, "a welded edge has no original identity"
+		}
+		if prev, exists := groupOriginal[gid]; exists && prev != original {
+			return nil, nil, "a weld joins different original edges"
+		}
+		groupOriginal[gid] = original
+		groupCount[gid]++
+	}
+	for gid, count := range groupCount {
+		if count != 2 {
+			return nil, nil, fmt.Sprintf("weld group %d has %d source edges", gid, count)
+		}
+	}
+	for original, copies := range copiesByOriginalEdge {
+		if len(original.faces) == 2 {
+			if len(copies) != 2 {
+				return nil, nil, "an original two-face edge lacks two copies"
+			}
+			gid := -1
+			for copied := range copies {
+				got, ok := sp.plan.group[copied]
+				if !ok || (gid >= 0 && got != gid) {
+					return nil, nil, "an original two-face edge was not re-welded"
+				}
+				gid = got
+			}
+			continue
+		}
+		if len(copies) != 1 {
+			return nil, nil, "an original free edge has multiple copies"
+		}
+		for copied := range copies {
+			if _, welded := sp.plan.group[copied]; welded {
+				return nil, nil, "an original free edge was newly welded"
+			}
+		}
+	}
+	return originalBody, paired, ""
+}
+
 // tessellateStitchCurved reuses one complete revolve sheet's own chording.
-// The gate below proves Stitch introduced no coordinate motion, vertex merge,
-// or edge weld. Those are the conditions under which the source mesh's shared
-// samples and proof terms still describe the rebuilt boundary.
+// A direct copy adds no weld; a sibling round trip re-welds only original
+// edges, so both paths reuse the same source mesh and its proof terms.
 func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chord float64, verify Verification) (*Mesh, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -81,36 +218,50 @@ func tessellateStitchCurved(ctx context.Context, b *Body, sp stitchPayload, chor
 			return nil, fmt.Errorf(`%w: this evaluator has no chording arm for a stitched body's %T face`, ErrUnsupported, f.Surface())
 		}
 	}
-	if sp.xform != r3.Identity() || sp.plan.groups != 0 ||
-		len(sp.plan.table.class) != len(sp.plan.table.verts) {
-		return refuse("this evaluator cannot reuse source chording after a stitch motion or weld")
+	if sp.xform != r3.Identity() {
+		return refuse("this evaluator cannot reuse source chording after stitch placement")
 	}
-	sourceBody := sp.faces[0].body
-	if sourceBody == nil || sourceBody.Kind() != BodySheet {
+	var sourceBody *Body
+	var paired map[*Face]*Face
+	if direct := sp.faces[0].body; direct != nil {
+		if _, ok := direct.payload.(revolvePayload); ok {
+			if direct.Kind() != BodySheet || sp.plan.groups != 0 ||
+				len(sp.plan.table.class) != len(sp.plan.table.verts) {
+				return refuse("this evaluator cannot reuse source chording after a stitch weld")
+			}
+			sourceBody = direct
+			paired = make(map[*Face]*Face, len(sp.faces))
+			for i, f := range sp.faces {
+				if f.body != direct || sp.liveFaces[i] == nil {
+					return refuse("this evaluator has no complete revolve-sheet face set")
+				}
+				if _, exists := paired[f]; exists {
+					return refuse("this evaluator has a repeated revolve-sheet source face")
+				}
+				paired[f] = sp.liveFaces[i]
+			}
+		} else {
+			var reason string
+			sourceBody, paired, reason = stitchSiblingRevolveSource(b, sp)
+			if reason != "" {
+				return refuse(reason)
+			}
+		}
+	}
+	if sourceBody == nil || len(sourceBody.Faces()) != len(paired) {
 		return refuse("this evaluator has no complete revolve-sheet source")
+	}
+	for _, f := range sourceBody.Faces() {
+		if _, ok := paired[f]; !ok {
+			return refuse("this evaluator has no complete revolve-sheet face set")
+		}
 	}
 	rp, ok := sourceBody.payload.(revolvePayload)
 	if !ok {
 		return refuse("this evaluator has no chording arm for the source construction")
 	}
-	sourceFaces := sourceBody.Faces()
-	if len(sourceFaces) != len(sp.faces) {
-		return refuse("this evaluator has no complete revolve-sheet face set")
-	}
-	paired := make(map[*Face]*Face, len(sp.faces))
-	for i, f := range sp.faces {
-		if f == nil || f.body != sourceBody || sp.liveFaces[i] == nil {
-			return refuse("this evaluator has no complete revolve-sheet face set")
-		}
-		if _, exists := paired[f]; exists {
-			return refuse("this evaluator has a repeated revolve-sheet source face")
-		}
-		paired[f] = sp.liveFaces[i]
-	}
-	for _, f := range sourceFaces {
-		if _, ok := paired[f]; !ok {
-			return refuse("this evaluator has no complete revolve-sheet face set")
-		}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	sourceMesh, err := tessellateRevolve(ctx, sourceBody, rp, chord, verify)

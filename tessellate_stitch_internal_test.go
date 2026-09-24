@@ -30,6 +30,42 @@ func TestStitchCurvedMeshNamesUnsupportedSurface(t *testing.T) {
 	require.ErrorContains(t, err, "NURBSSurface")
 }
 
+func TestStitchCurvedWeldedRevolveSiblingRejectsWrongEdgeAncestry(t *testing.T) {
+	t.Parallel()
+	sheet := internalOffAxisArcBody(t, true)
+	pieces, err := sheet.Unstitch(t.Context())
+	require.NoError(t, err)
+	require.Len(t, pieces, 2)
+	stitched, err := Stitch(t.Context(), pieces...)
+	require.NoError(t, err)
+	sp, ok := stitched.payload.(stitchPayload)
+	require.True(t, ok)
+	require.GreaterOrEqual(t, sp.plan.groups, 2)
+
+	// Keep the real welded body, but claim one copied edge belongs to a
+	// different original edge's weld group. The ancestry gate must refuse.
+	plan := *sp.plan
+	plan.group = make(map[*Edge]int, len(sp.plan.group))
+	var first *Edge
+	firstGroup := -1
+	for edge, group := range sp.plan.group {
+		plan.group[edge] = group
+		if first == nil {
+			first, firstGroup = edge, group
+		}
+	}
+	for _, group := range sp.plan.group {
+		if group != firstGroup {
+			plan.group[first] = group
+			break
+		}
+	}
+	sp.plan = &plan
+	_, err = tessellateStitchCurved(t.Context(), stitched, sp, 0.1, VerifyAll)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, "a weld joins different original edges")
+}
+
 // stitchInternalOffAxisPlateSketch is stitch_test.go's offAxisPlateSketch
 // (package decad_test), duplicated here because this file's package (decad)
 // cannot import the exported test package that helper lives in — the same

@@ -73,6 +73,66 @@ func TestStitchOpenCurvedRevolveSheetKeepsFreeRims(t *testing.T) {
 		"one recorded curved free edge must produce several mesh segments")
 }
 
+func TestStitchCurvedWeldedRevolveSiblingsTessellate(t *testing.T) {
+	t.Parallel()
+	s, p := offAxisSemicircleSketch(t)
+	doc := decad.New()
+	sheet, err := doc.Revolve(s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	tol := units.Millimeters(0.1)
+	original, err := sheet.Tessellate(t.Context(), tol)
+	require.NoError(t, err)
+	pieces, err := sheet.Unstitch(t.Context())
+	require.NoError(t, err)
+	require.Len(t, pieces, 2)
+	stitched, err := decad.Stitch(t.Context(), pieces...)
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySheet, stitched.Kind())
+	mesh, err := stitched.Tessellate(t.Context(), tol)
+	require.NoError(t, err)
+	require.Equal(t, original.Vertices(), mesh.Vertices())
+	require.Equal(t, original.Bound(), mesh.Bound())
+	require.InDelta(t, meshTriangleArea(original), meshTriangleArea(mesh), 1e-9)
+	require.Equal(t, meshFreeChainCount(t, original), meshFreeChainCount(t, mesh))
+	require.True(t, mesh.BoundaryVerified())
+	require.False(t, mesh.VolumeVerified())
+	weldedCurves := 0
+	for _, e := range stitched.Edges() {
+		if _, ok := e.Curve().(decad.Arc3); ok && !e.IsFree() {
+			weldedCurves++
+		}
+		if _, ok := e.Curve().(decad.Circle3); ok && !e.IsFree() {
+			weldedCurves++
+		}
+	}
+	require.Positive(t, weldedCurves)
+	free, err := decad.Edges(decad.Free()).SelectEdges(stitched)
+	require.NoError(t, err)
+	require.Greater(t, directedEdgeCensus(t, mesh), len(free),
+		"the recorded curved free rim must chord into several mesh segments")
+	t.Logf("welded curves %d; facet area %.12g mm2; bound %.12g mm; free chains %d",
+		weldedCurves, meshTriangleArea(mesh), mesh.Bound().Base(), meshFreeChainCount(t, mesh))
+}
+
+func TestStitchCurvedWeldedRevolveSiblingPlacementRefusesMesh(t *testing.T) {
+	t.Parallel()
+	s, p := offAxisSemicircleSketch(t)
+	doc := decad.New()
+	sheet, err := doc.Revolve(s, p, uAxis, quarterTurn, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	pieces, err := sheet.Unstitch(t.Context())
+	require.NoError(t, err)
+	motion, err := r3.Translation(r3.NewVec(100, 0, 0))
+	require.NoError(t, err)
+	placed, err := pieces[0].Placed(t.Context(), motion)
+	require.NoError(t, err)
+	stitched, err := decad.Stitch(t.Context(), placed, pieces[1])
+	require.NoError(t, err)
+	_, err = stitched.Tessellate(t.Context(), units.Millimeters(0.1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, "unstitched source")
+}
+
 func TestStitchCurvedMeshInheritsSourcePlacementBound(t *testing.T) {
 	t.Parallel()
 	_, sheet := annularRevolveSheet(t, 10, 5, 15)
