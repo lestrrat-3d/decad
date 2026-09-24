@@ -71,7 +71,7 @@ type loftAssembly struct {
 // complete shell once from the signed tetrahedron sum anchored at the placed
 // p0 origin (§5's whole-shell rule). It also owns Table S row S13: every
 // placed coordinate it emits, the anchor among them, is proven finite before
-// any of them is lifted into an exact rational.
+// any of them is lifted into an exact dyadic.
 //
 // stationRound is loftPairings' own accumulated Table S row S14 term
 // (a10-plan.md Part 3 PR 6): the proven rounding every COMPUTED circular
@@ -79,8 +79,8 @@ type loftAssembly struct {
 // rigidRoundAllow term.
 func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, plane0 PlaneRecord, xform r3.Transform, stationRound float64) (loftAssembly, error) {
 	// S13, decided before the first coordinate is lifted into an exact
-	// rational: the orientation anchor is the first point meshOrientationSign
-	// hands to xptOf, so its own finiteness is the gate's first question.
+	// dyadic: meshOrientationSign lifts the orientation anchor first, so its
+	// finiteness is the gate's first question.
 	anchor := xform.Apply(plane0.Origin)
 	if !finiteVec(anchor) {
 		return loftAssembly{}, errLoftPointUnrepresentable("placed plane origin")
@@ -242,9 +242,9 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 // non-finite PARAMETER or a derived non-finite MEASUREMENT, and
 // validateLoftBodyMeasurements already owns that second case.
 //
-// The gate runs BEFORE the first exact-rational lift, never after it:
-// meshOrientationSign lifts the anchor and every vertex through xptOf, whose
-// mustRatOf PANICS on a non-finite float, so a check placed any later is a
+// The gate runs BEFORE the first exact-dyadic lift, never after it:
+// meshOrientationSign lifts the anchor and every vertex through dyVec, whose
+// mustDyOf PANICS on a non-finite float, so a check placed any later is a
 // panic out of a public method rather than a returned error.
 func errLoftPointUnrepresentable(what string) error {
 	return fmt.Errorf(`%w: the loft's %s runs past the representable float64 range`, ErrUnsupported, what)
@@ -268,21 +268,21 @@ func wrapLoftTriangulationError(err error) error {
 // meshOrientationSign is the sign of the signed tetrahedron sum
 // docs/loft-design.md §8 defines, over the complete triangle set anchored at
 // anchor — the same identity §5's whole-shell orientation rule reads, computed
-// once directly over exact rationals rather than through the full
+// once directly over exact dyadics rather than through the full
 // loftMassAccumulator (which also folds in the area/bounds bookkeeping this
 // sign check does not need). It reads nothing loft-specific, so
 // docs/tessellation-design.md §4's signed-volume audit runs on it too, for
 // every payload class that assembles its own triangle set.
 func meshOrientationSign(verts []r3.Vec, tris [][3]int, anchor r3.Vec) int {
-	xa := xptOf(anchor)
-	sum := new(big.Rat)
+	xa := dyVec(anchor)
+	sum := dyZero()
 	for _, t := range tris {
-		a := xsub(xptOf(verts[t[0]]), xa)
-		b := xsub(xptOf(verts[t[1]]), xa)
-		c := xsub(xptOf(verts[t[2]]), xa)
-		sum.Add(sum, xdotRat(a, xcross(b, c)))
+		a := dvSub(dyVec(verts[t[0]]), xa)
+		b := dvSub(dyVec(verts[t[1]]), xa)
+		c := dvSub(dyVec(verts[t[2]]), xa)
+		sum = dyAdd(sum, dvDot(a, dvCross(b, c)))
 	}
-	return sum.Sign()
+	return sum.sign()
 }
 
 // loftVertex builds a vertex at a recorded (or lifted-from-recorded)
