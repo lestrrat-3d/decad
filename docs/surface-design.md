@@ -1347,7 +1347,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R29 | `Trim`, `Extend` or `Split` handed a pair `docs/surface-intersection-design.md` §2's entry gate refuses, or a resolution its §6 cannot complete | as that table states: `ErrUnsupported` / `ErrUnrecordableProfile` |
 | R30 | `Trim` whose tool separates no fragment of the receiver, or `Split` whose tool separates no part of the target | `ErrDegenerate` |
 | R31 | `Trim`, `Extend` or `Split` in every increment before Table D row 8 | `ErrUnsupported` |
-| R32 | a curved stitched mesh has an unsupported surface kind, lacks one complete revolve-sheet source, has a new curved weld, or has a non-identity stitch placement (§10.1) | `ErrUnsupported`, naming the first affected surface kind |
+| R32 | a curved stitched mesh has an unsupported surface kind, lacks one complete revolve-sheet source, has a new weld or vertex merge, or has a non-identity stitch placement (§10.1) | `ErrUnsupported`, naming the first affected surface kind |
 
 R6, R8, R10 and R20 are `ErrUnsupported` rather than `ErrDegenerate` on
 `docs/api-design.md` §8's own distinction: the input names real geometry and
@@ -1759,11 +1759,12 @@ rather than after.
 
 Table D row 9 admits a curved or mixed stitched body only when every source
 face came from one `revolvePayload` sheet, the source face set is complete,
-`Stitch` made no new edge weld, and the stitch placement is the identity.
+`Stitch` made no new edge weld or vertex-class merge, and the stitch
+placement is the identity.
 The source mesh is built through `tessellateRevolve` at the requested chord
 tolerance and verification level. Its faces may be `Plane`, `Cylinder`,
 `Cone`, `Sphere` or `Torus`, the same surface kinds the flux integral admits.
-Any other surface kind, incomplete source face set, new curved weld, or
+Any other surface kind, incomplete source face set, new weld or vertex merge, or
 unsupported source payload returns `ErrUnsupported` naming the first
 affected surface kind (Table R, R32). This restriction is on the source
 construction proof, not on a surface tag by itself. Re-chording a tagged
@@ -2348,7 +2349,7 @@ The row-9 curved-mesh obligations are:
 | T59 | T58's box `Placed` by a translation far from the origin, then a rotation | `Bound()` is strictly positive and equals the body's own largest `Vertex.Bound()`; 12 triangles unchanged; the mesh's integrated volume encloses 60000 mm³ within the published bound — the placement-delta route to a nonzero per-face bound |
 | T60 | T42's bounded-rim stitched solid (`TestStitchClosesABoundedPatchedWallWithChargedVolumeBound`'s fixture: a `Symmetric` surface-extruded wall, `Body.Patch`-capped, welded by the CURVE certificate) at identity, no placement in play | `Bound()` strictly positive and equal to the largest vertex bound; `areaSlack` strictly positive — the independent, class-bound route to a nonzero per-face bound, which T59 alone cannot distinguish from a placement-only charge |
 | T61 | T4's displaced-patch stitched sheet (`TestStitchDisplacedPatchStaysASheet`'s fixture, open, all faces planar), `Tessellate(0.1 mm)` | the mesh's free directed edges attribute to exactly the 5 faces the body reports free `Edge`s on (the 4 wall faces and the displaced patch), one boundary chain per face on both sides; `requireSheetVertexLinks` passes; `Volume()` is still `ErrNotSolid`; `Union` with a plain solid block refuses |
-| T62 | each of T46's frustum, T50's ball and T53's torus body, stitched | `Tessellate`, `STL` and `OBJ` each return `ErrUnsupported`; the message names the face this evaluator has no chording arm for, not the payload class; the body's analytic `Volume`/`Centroid` still read unchanged afterwards |
+| T62 | each of T46's frustum, T50's ball and T53's torus body, stitched | `Tessellate`, `STL` and `OBJ` succeed through §10.1; each mesh has a positive bound and no occupied-volume proof; the body's analytic `Volume`/`Centroid` read bit-identically before and after export |
 | T63 | T58's box tessellated twice at two different tolerances | equal vertex order, triangle order and source-face order; byte-identical STL and byte-identical OBJ; mutating the returned `Vertices()`/`Triangles()` slices changes nothing on a later call |
 | T64 | `Union` of T58's box with a plain `Extrude` block | this fixture's own outcome changes from T71 onward, once the occupied-volume proof lifts for a CLOSED, all-planar, zero-vertex-bound stitched solid; a stitched operand this proof does not cover (placed, or certificate-welded) keeps this row's own `ErrUnsupported`, the volume-proof refusal (`operandSymDiff`'s wording, via `requireVolumeProvingPayload`'s own `stitchPayload` arm), not the payload-class one — T73, T74 |
 | T65 | T58's box and a plain solid block 3 mm beyond its own +X wall, `Verify(WithClearances())` | `Sound`; exactly one `Clearance` row; its proven interval encloses 3 mm; `Exact`. Replaces `TestStitchSolidDoesNotYetReachAPairRelation`'s Sound-side premise |
