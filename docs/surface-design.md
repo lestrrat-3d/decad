@@ -2298,25 +2298,27 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T153 | radius-10 mm whole-circle prism sheet over 10 mm: positive 2, negative 2, centered 4 mm | 4 faces each; volume intervals enclose 440π, 360π, 800π mm³; positive bounds reach ±12 mm |
 | T154 | §16.2's 4 mm-neck axis-parallel prism sheet over 10 mm, negative 3 mm | R26 `ErrUnsupported` with the crossing-audit diagnostic; no result, source still live and document unchanged |
 | T155 | 100×60 mm `Document.Patch` with a radius-10 mm hole, positive 2 mm | 7 faces; volume and area intervals enclose `12000-200π` mm³ and `12640-160π` mm²; box (0,0,0)–(100,60,2) mm |
-| T156 | internal exact-generation check: U = 2^53 mm axis-parallel edge displaced by 1 mm | R27 `ErrUnsupported`; the held coordinate cannot equal the true derived coordinate |
+| T156 | 100×60 mm prism sheet at U = 2^40 mm, eroded by 2^-13 mm | R27 `ErrUnsupported`; the held coordinate cannot equal the true derived coordinate |
 | T157 | 40 mm `ExtrudeChain` ribbon swept 10 mm, and a full-turn `RevolveChain` shell | R24 `ErrUnsupported` for both; the ribbon stays live with `Area` 400 mm², and the revolve shell retains two free edges |
 
 T152's section is the 100×60 outer rectangle less the 90×50 inner
 rectangle. Omitting the inner loop makes its 15000 mm³ volume assertion fail
 at 60000 mm³. T153's positive volume differs from the sheet-area product
-`400π mm³`; deleting the rational π error term from its published bound
-must fail the independently bracketed `440π mm³` enclosure. T155's two π
-bounds receive the same shown-to-fail treatment, one bound at a time.
+`400π mm³`; deleting the region integral's area bound makes its independently
+bracketed `440π mm³` enclosure fail. T155's volume enclosure fails under
+the same deletion; its area enclosure fails when the composed area bound is
+deleted separately.
 
 T154's ordered polygon vertices are (0,0), (10,0), (10,8), (20,8),
 (20,0), (30,0), (30,20), (20,20), (20,12), (10,12), (10,20), (0,20),
 in millimetres. The current `Shell` call on the solid prism with both caps
 removed and the same 3 mm inward thickness returns `the rewrite crosses
-itself`, so the intended offset refusal is reachable. Delete the crossing
-audit leg before trusting T154: its `ErrUnsupported` assertion must turn red.
-Deleting T156's exact-generation check must accept a held edge at the source
-coordinate and turn its refusal assertion red. T157 also asserts that the
-source bodies remain live and retain their original measurements.
+itself`, so the intended offset refusal is reachable. Deleting the crossing
+audit changes T154's required crossing diagnostic. At 0.5 mm inward, the
+same neck builds 30 faces and its volume interval encloses `640+2.5π` mm³.
+Deleting T156's exact-generation check changes its required rounded-coordinate
+diagnostic to the contact-audit refusal. T157 also asserts that the source
+bodies remain live and retain their original measurements.
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'`
@@ -2431,28 +2433,30 @@ containment primitives over the outer and reversed inner loops together.
 Also certify the entire offset interval `0 < τ ≤ t` (or `t/2` on each side):
 an endpoint that looks simple cannot prove an earlier offset did not pinch
 and change which boundary the per-feature construction denotes. On the
-admitted axis-parallel line class, moving line coordinates are affine in
-`τ` and inserted corner-circle radii equal `τ`. Exclude the adjacent joins
-the offset construction prescribes; isolate every OTHER positive line-line,
-line-circle and circle-circle contact parameter and every zero-length
-walk parameter with exact rational polynomial comparisons; refuse if one
-lies in the requested interval or its order against the endpoint is
-undecided. A whole circle has only its radius-zero event. Never sample
-intermediate offsets or infer their validity from the final section.
+admitted axis-parallel line class, every generated piece stays within
+`√2 τ` of its source walk, including a corner miter. Require the exact
+rational squared distance between EVERY pair of nonadjacent source walks
+to exceed `8t²` (or `8(t/2)²` for centered thickness). This sufficient
+gap proves those pieces cannot meet at ANY intermediate parameter; the
+offset's consumed-walk gate handles adjacent pieces. It may refuse a safe
+narrow section. A whole circle has only its radius-zero event, settled by
+its exact endpoint radius. Never sample intermediate offsets or infer their
+validity from the final section alone.
 Any crossing, tangency, shared boundary point, dropped walk, failed miter,
 wrong orientation, lost nesting or undecided comparison is R26. In
 particular, a 4 mm-wide neck eroded by 3 mm makes its two offset walls
 cross, even though every source segment is valid. A scale-anchored contact
-floor may refuse more inputs; a gap above it is never the proof of
-separation. Only the closed-form segment-pair and nesting decisions on
-decad's OWN synthesized section permit construction. No residual or
+floor may refuse more inputs; a gap above that floor is never the proof of
+separation. The exact source-gap inequality and the segment-pair and nesting
+decisions on decad's OWN synthesized section permit construction. No residual or
 chorded mesh admits the annulus. A topology-changing offset can still
 denote a solid after trimming, so R26 is `ErrUnsupported`, not a claim that
 the caller's positive thickness is malformed.
 
 The first prism arm has an additional exact-generation gate before either
 offset is admitted. The thickness must convert to millimetres with zero
-displacement, and every generated plane-local endpoint, center and radius
+displacement, every source line endpoint must resolve with zero bound, and
+every generated plane-local endpoint, center and radius
 must equal its closed-form value as a binary rational. For the axis-parallel
 line class, the U/V normal is selected by the nonzero coordinate directly;
 the miter is solved over the exact dyadic input, and a convex arc takes the

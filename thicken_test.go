@@ -1,7 +1,6 @@
 package decad_test
 
 import (
-	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -48,7 +47,8 @@ func TestThickenPatchSides(t *testing.T) {
 			doc := decad.New()
 			patch, err := doc.Patch(t.Context(), s, p)
 			require.NoError(t, err)
-			solid, err := patch.Thicken(t.Context(), units.Millimeters(2), decad.WithThickenSide(tc.side))
+			solid, err := patch.Thicken(t.Context(), units.Millimeters(2),
+				decad.WithThickenSide(decad.ThickenPositive), decad.WithThickenSide(tc.side))
 			require.NoError(t, err)
 			decadtest.MeasuresVolume(t, solid, units.CubicMillimeters(12000), decadtest.Exactly())
 			decadtest.MeasuresBounds(t, solid, r3.NewVec(0, 0, tc.low),
@@ -72,13 +72,18 @@ func TestThickenPatchHole(t *testing.T) {
 	solid, err := patch.Thicken(t.Context(), units.Millimeters(2))
 	require.NoError(t, err)
 	require.Len(t, solid.Faces(), 7)
-	vol, err := solid.Volume()
-	require.NoError(t, err)
-	require.Equal(t, decad.Approximate, vol.Exactness)
-	require.LessOrEqual(t, math.Abs(vol.Value.Base()-(12000-200*math.Pi)), vol.Bound.Base())
-	area, err := solid.Area()
-	require.NoError(t, err)
-	require.LessOrEqual(t, math.Abs(area.Value.Base()-(12640-160*math.Pi)), area.Bound.Base())
+	t.Run("volume", func(t *testing.T) {
+		vol, err := solid.Volume()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, vol.Exactness)
+		requirePiLinearEnclosed(t, vol, 12000, -200)
+	})
+	t.Run("area", func(t *testing.T) {
+		area, err := solid.Area()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, area.Exactness)
+		requirePiLinearEnclosed(t, area, 12640, -160)
+	})
 	decadtest.MeasuresBounds(t, solid, r3.NewVec(0, 0, 0), r3.NewVec(100, 60, 2), decadtest.Exactly())
 }
 
