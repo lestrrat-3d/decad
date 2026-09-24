@@ -1828,3 +1828,8 @@
 0	0.01	TestLoftChainCrossingCorrespondenceIsRefused
 1	0.01	TestLoftChainRefusesAMismatchedOrCurvedPairing
 2	0.01	TestLoftChainPlacedRibbonKeepsItsAreaAndChargesItsVertices
+1	0.02	TestThickenRevolveWasherInward
+1	0.02	TestThickenRevolveTorus
+0	0.02	TestThickenRevolvePartialSweep
+1	0.01	TestThickenRevolveAxisRefusals
+2	0.01	TestThickenRadialRefusesBoundedAxis
