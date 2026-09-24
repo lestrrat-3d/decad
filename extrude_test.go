@@ -99,6 +99,8 @@ func TestExtrudePlateWithHole(t *testing.T) {
 	faces := body.Faces()
 	require.Len(t, faces, 7)
 	requireManifold(t, body)
+	require.Len(t, body.Shells(), 1, `both caps connect the hole wall to the outer wall`)
+	require.False(t, body.Shells()[0].IsVoid(), `the extruded hole is a through passage`)
 	cylinders := 0
 	for _, f := range faces {
 		cyl, ok := f.Surface().(decad.Cylinder)

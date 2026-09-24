@@ -90,6 +90,37 @@ func TestUnstitchBoxYieldsSixFreeSheets(t *testing.T) {
 	require.NotContains(t, bodies, box)
 }
 
+func TestUnstitchVoidRevolveMakesNonVoidSheets(t *testing.T) {
+	t.Parallel()
+	s, p := holedSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	require.Len(t, body.Shells(), 2)
+	require.True(t, body.Shells()[1].IsVoid())
+	voidFace := body.Shells()[1].Faces()[0]
+	voidArea, err := voidFace.Area()
+	require.NoError(t, err)
+
+	pieces, err := body.Unstitch(t.Context())
+	require.NoError(t, err)
+	require.Len(t, pieces, len(body.Faces()))
+	var foundVoidFace bool
+	for _, piece := range pieces {
+		require.Equal(t, decad.BodySheet, piece.Kind())
+		require.Len(t, piece.Faces(), 1)
+		require.Len(t, piece.Shells(), 1)
+		require.False(t, piece.Shells()[0].IsVoid())
+		if piece.Faces()[0].Origins()[0].Role == voidFace.Origins()[0].Role {
+			area, err := piece.Faces()[0].Area()
+			require.NoError(t, err)
+			require.Equal(t, voidArea, area)
+			foundVoidFace = true
+		}
+	}
+	require.True(t, foundVoidFace, `the source void face becomes a sheet face`)
+}
+
 // TestUnstitchRestitchRoundTripMatchesOriginal is docs/surface-design.md's
 // T5: the T3 box, unstitched then re-stitched, reproduces it bit for bit —
 // every edge Unstitch freed was welded from a proven-coincident pair, so

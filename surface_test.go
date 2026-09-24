@@ -373,6 +373,7 @@ func TestSurfaceExtrudeHoledProfileReportsDisconnectedLumps(t *testing.T) {
 	for _, l := range sheet.Lumps() {
 		require.Len(t, l.Shells(), 1)
 		require.True(t, l.Shells()[0].IsOpen())
+		require.False(t, l.Shells()[0].IsVoid())
 	}
 
 	s2, p2 := rectWithHoleSketch(t)

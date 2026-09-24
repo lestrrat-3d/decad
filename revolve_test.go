@@ -1164,6 +1164,31 @@ func TestRevolveFullTurnHoleIsVoidShell(t *testing.T) {
 	require.Equal(t, 1, report.Bodies[0].Topology.Voids)
 }
 
+func TestVoidRevolveModifyOpsRefuseReceiver(t *testing.T) {
+	t.Parallel()
+	s, p := holedSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	require.Len(t, body.Shells(), 2)
+	require.True(t, body.Shells()[1].IsVoid())
+	before, err := body.Volume()
+	require.NoError(t, err)
+
+	_, err = body.Fillet(t.Context(), decad.Edges(decad.Circular()), units.Millimeters(1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	_, err = body.Chamfer(t.Context(), decad.Edges(decad.Circular()), units.Millimeters(1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	_, err = body.Shell(t.Context(), decad.Faces(), units.Millimeters(1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+
+	after, err := body.Volume()
+	require.NoError(t, err)
+	require.Equal(t, before, after)
+	require.True(t, body.Shells()[1].IsVoid())
+	require.Equal(t, []*decad.Body{body}, doc.Bodies())
+}
+
 func TestRevolvePartialSweepWithHole(t *testing.T) {
 	t.Parallel()
 	s, p := holedSketch(t)
@@ -1175,6 +1200,7 @@ func TestRevolvePartialSweepWithHole(t *testing.T) {
 	require.Len(t, body.Faces(), 7, `four outer walls, the hole's torus wall, two caps`)
 	requireManifold(t, body)
 	require.Len(t, body.Shells(), 1, `the caps connect the hole wall to the outer boundary`)
+	require.False(t, body.Shells()[0].IsVoid(), `the groove opens through both angular caps`)
 
 	// Each cap carries the hole as a second, non-outer loop.
 	for _, role := range []string{roleCapStart, roleCapEnd} {

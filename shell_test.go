@@ -314,6 +314,8 @@ func TestShellTubeInwardBox(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	requireManifold(t, body)
+	require.Len(t, body.Shells(), 1)
+	require.False(t, body.Shells()[0].IsVoid(), `the tube opens at both ends`)
 
 	// Volume = (A_P − A_Q)·h, Q = P ⊖ t, both exact.
 	aP := 100.0 * 60.0
