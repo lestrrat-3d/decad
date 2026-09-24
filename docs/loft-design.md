@@ -17,7 +17,7 @@ document's Table W follows, "spline §N"), `docs/tessellation-design.md`
 for its scope. §15 records the companion contracts that keep the tree
 consistent.
 
-Four tables are normative, in the discipline `docs/modify-design.md`
+Five tables are normative, in the discipline `docs/modify-design.md`
 established:
 
 | Table | States | Section |
@@ -26,6 +26,7 @@ established:
 | **S** | every refusal, once, with the existence test that picks its sentinel | §4 |
 | **B** | the result: topology, faces, roles | §7 |
 | **D** | one row per downstream consumer, and what it can prove today | §9 |
+| **PC** | how two open chains are paired, and what has no counterpart | §16.1 |
 
 ## 1. Scope — the increment-1 case, deferred reach, and permanent exclusions
 
@@ -101,6 +102,14 @@ between two full-circle loops is not reachable by this construction.
   Reversal changes which vertices are material-adjacent, which needs its own
   audit story; it is not needed for a twisted (rotated) top loop, which is
   what the target case is.
+
+**`Document.Loft` takes two closed profiles and always will. The OPEN sketch
+chain is `Document.LoftChain`, a separate entry point, and §16 owns it** — how
+Table P reads over two open walks, the one row that has no counterpart there,
+the gate that replaces it, the refusals, and the staging. Everything §3
+through §15 states about correspondence, construction, the crossing audit and
+the published terms is what that section consumes; what it replaces is the
+closed section alone.
 
 ## 2. Public signature and options
 
@@ -2213,6 +2222,9 @@ The following sites point to this design:
   delegates its correspondence and staged reach here.
 - **`docs/api-design.md` §13** does not list Loft as a non-goal.
 - **`docs/layout.md`'s Layout table** lists this document.
+- **`docs/surface-design.md` §1.2, §13.5, Table R and Table D** name §16 as
+  the owner of `LoftChain`'s pairing rule, and its §15 carries §16.7's test
+  rows.
 - **§6.2's `Step.Op` comment** lists `Loft` among the ops.
 - **§6.2's `Step.Profile` and `Step.Plane` comments** name Loft beside
   Extrude and Revolve, and say the recorded section is the **from** one (§10).
@@ -2275,3 +2287,214 @@ allowance names `chordedBoundaryVolumeAllow`'s four unsigned legs (§5.2 and
   `sectionDelta` while every station publishes a zero `stationRound`, and as
   the `2*delta`-shrunk reading wherever `delta` is positive — a condition on
   `delta` and never on the body having been placed (§12).
+
+## 16. `LoftChain` — lofting between two open sketch chains
+
+`docs/surface-design.md` §13 owns the open chain itself: what `sketch.Chain`
+publishes, what `ChainRecord` records, the gates `RecordChain` runs, and the
+four seam sentinels every chain-fed entry point reuses. That document left
+exactly one question here (§13.5) — whether Table P states a pairing rule for
+two open walks.
+
+**It does, with two rows lost and one gate added.** §16.1 states which of
+Table P's six rows survive an open walk and what replaces the one that cannot.
+§16.2 states the second thing a closed shell supplies and two open walks do
+not — the positive side — and the exact-rational gate that stands in its place.
+§16.3 through §16.6 state the entry point, the refusals, the result and the
+staging.
+
+### 16.1 Table PC — Table P read over two open walks
+
+| P | What it states for two loops | An open walk |
+|---|---|---|
+| **P1** | `Outer` pairs with `Outer`, `Holes[h]` with `Holes[h]`, by position | **collapses.** A `ChainRecord` holds one `Segments` list and no `Holes` (`docs/surface-design.md` §13.3), so one walk pairs with one walk and there is no positional rule left to state |
+| **P2** | the two hole counts must be equal | **vacuous.** Neither chain has a hole to count |
+| **P3** | the two paired walks' segment counts must be equal, call it `n` | **survives verbatim.** A mismatch has no one-to-one pairing and is S2's own `ErrUnsupported` |
+| **P4** | segment `j` pairs with segment `(j + offset) mod n` | **loses the wrap.** An open walk has a first and a last segment; a nonzero offset would pair segment `n-1` across a free end and leave both free ends unpaired, which is a shear rather than a rotation. Segment `j` pairs with segment `j`, and `0` is the only admissible offset |
+| **P5** | the two sides must be same-kind, and a circular pair must agree in walk sense | **survives verbatim**, both arms. Only the `ArcSeg` arm is reachable: a whole `*Circle`, `*Ellipse` or `*ClosedSpline` edge is a closed run `sketch` publishes as a `Profile` or publishes nowhere, so a `CircleSeg` never reaches a chain at all (`docs/surface-design.md` §13.3) |
+| **P6** | every loop's walk direction is intrinsic to its own plane — outer counter-clockwise, holes clockwise | **has no counterpart.** An open walk carries no winding at all: "outer counter-clockwise" names a side it does not have, and `ChainRecord` records none |
+
+**What replaces P6 is `sketch`'s own canonical walk direction, read and never
+re-derived.** `Sketch.Chains` publishes each chain walked in a deterministic
+direction decided by the walk's coordinates — the walk starts at the
+lexicographically smaller of its two free-end points, and nothing about entity
+id or authoring order takes part. So "segment `j` of the from-chain" and
+"segment `j` of the to-chain" each name one segment, with no choice left to
+decad and no correspondence invented. That is the same standing P4 already has
+for a loop: the order is the record's, and the pairing is read off it.
+
+**A disagreeing pair is refused, never built.** Two chains whose published
+walks run opposite ways rule each side against the other's reversed walk, and
+the resulting ribbon crosses itself. §6's audit proves that crossing and
+refuses with `ErrDegenerate` — S7's audit arm, reached through the identical
+pairwise triangle classification, which reads an expected-adjacency table and
+never a closed shell, so it transfers to an open ribbon with the cap triangles
+simply absent from the set. This is the safety net P4 already relies on for a
+wrong alignment offset, on the identical terms.
+
+**`WithLoftAlignment` therefore carries nothing for a chain pair.** P4's own
+row above forces the offset to `0`, so a `WithLoftAlignment` payload on a
+chain-fed call names a correspondence that does not exist and is `ErrDegenerate`
+(Table SL row SL4). The rejected alternative is a chain-only reversal option
+pairing segment `j` against segment `n-1-j`: §1 excludes a reversed
+correspondence permanently, because reversal changes which vertices are
+material-adjacent and needs its own audit story, and an open walk changes
+nothing about that argument.
+
+### 16.2 The positive side is the second thing a closed shell supplies
+
+**§5's whole-shell orientation step reads the signed tetrahedron sum over the
+CLOSED triangle set — every wall triangle plus both triangulated caps —
+anchored at the placed `p0` origin, and flips every triangle's winding when
+that sum is negative.** A surface-result loft assembles both caps for exactly
+this reason and omits them from the published face set afterwards, which is why
+`WithSurfaceResult()` costs the orientation nothing. Two open walks assemble no
+cap and no closed set, so that sum is anchor-dependent and states nothing about
+the ribbon, and `docs/surface-design.md` §2.3's "the orientation the solid would
+have had" names a solid that does not exist for two open walks.
+
+**So a chain loft states its positive side per wall, the way
+`docs/surface-design.md` Table G already states one for a chain-fed prism, and
+admits only the poses on which that statement holds.** The rule has two halves:
+
+- **The stated side.** Each chord cell's LOWER wall triangle is wound so its
+  own normal agrees with `T × N0` — `T` the from-walk's chord direction across
+  that cell and `N0` the from-plane's positive normal `U0 × V0`. That is the
+  identical vector `ExtrudeChain`'s wall over the same recorded segment
+  publishes (`docs/surface-design.md` Table G), so a chain loft and a chain
+  prism over one from-chain publish one side. The UPPER triangle takes the
+  sense its shared diagonal gives it under the construction's own coedge
+  convention, which is what makes the sheet consistently oriented (§2.3); its
+  own normal may tilt off `T × N0`, exactly as a chorded wall's second triangle
+  already does on a closed loft.
+- **The admission gate.** The two recorded planes MUST be exactly parallel, and
+  the to-plane's recorded origin MUST lie strictly on the from-plane's positive
+  side. Both are exact rational signs over the two `PlaneRecord`s' own `U`, `V`
+  and `Origin` floats — `U0 × V0` crossed with `U1 × V1` exactly zero, and
+  `(Origin1 - Origin0) · (U0 × V0)` strictly positive — the same
+  take-the-floats-exactly arithmetic `loftPlanesCoincide` already runs for S5.
+
+**Why the gate is stated on the two PLANES and not on the stations.** Parallel
+planes put every point the to-record denotes at one exactly-positive offset
+along `N0`, whatever that point's own plane-local coordinates are and whether
+the station generator PINNED it or COMPUTED it. A gate reading a held station
+coordinate instead would decide admission from a float that sits only within
+its own `stationRound` of the point the record denotes, which is an admission
+gate resting on a bound — the one shape `CLAUDE.md`'s reject-only rule forbids
+outright. The plane pair is a fact the record states; a station's position is a
+fact the build computes.
+
+**The gate is reject-only and carries no tolerance.** A non-parallel pair, a
+zero sign, or a negative sign refuses (Table SL row SL5). A zero sign is the
+coplanar case S5 already refuses; a negative sign names a ribbon this evaluator
+has no orientation for, not a ribbon that does not exist, so the sentinel is
+`ErrUnsupported`. **The rejected alternative is deriving the side from the
+rule vectors' own held floats** — the sign of `(W - V) · N0` at each station —
+which decides one build's orientation from rounded coordinates and flips it
+silently where a station lands on the wrong side of the from-plane by its own
+displacement.
+
+**What the gate costs is the non-parallel pose.** A closed loft admits two
+sections on any two distinct planes; a chain loft admits two parallel ones. The
+narrowing is what states a positive side with no new proof, and §16.6's reach row
+is where a non-parallel chain loft would land once it can state one.
+
+### 16.3 The entry point
+
+```go
+func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch,
+    c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain,
+    opts ...ChainLoftOption) (*Body, error)
+
+// ChainLoftOption configures LoftChain. It is its own sealed tier.
+type ChainLoftOption interface { /* sealed */ }
+```
+
+`s0`/`c0` is the **from** chain and `s1`/`c1` the **to** chain — the same
+argument order `Document.Loft` uses for its two sections, and the order §16.2's
+gate reads `N0` from. Two sketches are required for the reason `Loft` requires
+them: `sketch.Sketch` has one plane, and two sections on distinct planes need
+two.
+
+**`ChainLoftOption` is a sealed tier of its own rather than `LoftOption`**, on
+`docs/surface-design.md` §13.2's own reasoning: `WithSurfaceResult()` must not
+compile against a chain-fed call, since a chain loft is always a sheet and
+there is no cap for the option to omit. `WithLoftAlignment` is not a member
+either, for §16.1's reason — the offset is forced to `0`, so the option names
+nothing. The tier carries no member in this increment. The rejected alternative
+is the `LoftOption` tier the staged signature first landed with, which
+type-checks both of those options against a call that can honour neither.
+
+**A chain-fed result is always a sheet**: `Kind()` is `BodySheet` by
+construction, `IsSolid()` is `false`, and `Volume()`/`Centroid()` answer
+`ErrNotSolid` by KIND rather than by soundness
+(`docs/surface-design.md` §13.2, §8).
+
+### 16.4 Table SL — what refuses a chain loft
+
+Every row lands on `docs/api-design.md` §12's existing vocabulary. Gate order
+is §4's, with its seam step reading two chains through `RecordChain`.
+
+| SL | Condition | Sentinel |
+|---|---|---|
+| **SL1** | a nil document, context, sketch or chain; a nil or foreign option | `ErrDegenerate` |
+| **SL2** | either chain fails one of `docs/surface-design.md` §13.3's gates, in argument order | the seam's own: `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` |
+| **SL3** | the two walks' segment counts differ (PC's P3 row) | `ErrUnsupported`, S2's own answer |
+| **SL4** | a paired segment whose two sides are not same-kind, or a same-kind `ArcSeg` pair whose recorded ranges run opposite ways (PC's P5 row) | `ErrUnsupported` for the kind mismatch, S3; `ErrDegenerate` for the opposing walk sense, S7's structural arm |
+| **SL5** | the two recorded planes are not exactly parallel, or the to-plane's origin does not lie strictly on the from-plane's positive side (§16.2) | `ErrUnsupported`; the coplanar case is S5's `ErrDegenerate` and is decided first |
+| **SL6** | every condition S6, S7's audit arm, S8, S12 through S16 already state — a collapsed triangle, a proven crossing, an exhausted audit budget, an unbounded or unrepresentable term, an unmet chord target, a one-sided chord cell | those rows' own sentinels, unchanged |
+| **SL7** | a curved correspondence, before the increment that states its stations' own side proof (§16.2) | `ErrUnsupported` |
+| **SL8** | `LoftChain` in every increment before the one that builds the case asked for | `ErrUnsupported`, `docs/surface-design.md` R23 |
+
+**SL2 is decided before SL3 through SL5**, for the reason
+`docs/sweep-design.md` Table SC states: a seam refusal names a repair the caller
+makes in the sketch, and a shape refusal reported first would hide it.
+
+### 16.5 What a chain loft publishes
+
+A chain loft is a ribbon: the two walks ruled together, with no cap at either
+end and no closing face anywhere.
+
+| Reading | A chain loft |
+|---|---|
+| `Kind()` | `BodySheet`, always and by construction |
+| `IsSolid()` | `false`, always |
+| `Volume()`, `Centroid()` | `ErrNotSolid`, by kind |
+| faces | two flat triangles per chord cell, `side(0,j,0)` and `side(0,j,1)` — Table B's two wall rows with the loop index always `0`, and neither of its two cap rows. A walk of `n` segments carries `n` cells at one station a segment, so a `LineSeg`-only pair builds `2n` faces |
+| `Edges(Free())` | the from-walk's own `n` rim edges, the to-walk's own `n` rim edges, and the two END rungs — the rule at station `0` and the rule at station `n`. Every diagonal and every interior rung bounds two triangles and is not free, so an `n`-segment pair resolves `2n + 2` |
+| `Area` | §8's accumulator over the wall triangles alone, with both cap terms absent rather than subtracted: a chain loft never builds a cap to read an area off |
+| `Bounds` | the held vertex set's box, charging the payload's own `delta` exactly as §8's reading already does |
+| `Verify`'s validity | `ValidityValid` with no diagnostics where §6's audit closed over the whole assembled triangle set, which is the same construction admission a closed loft earns; a build whose audit was budget-refused never commits, so no other outcome is reachable |
+
+**The station chain carries one extra entry that a loop's does not.** A loop's
+chain holds each segment's own stations and never its shared end point, because
+the next segment's first station or the loop's own wrap supplies it. An open
+walk has no wrap, so its chain carries the last segment's end point explicitly
+and the cell walk runs `j` to `j+1` over `n+1` stations rather than cyclically
+over `n`. Dropping the wrap is what mints the two end rungs as free edges, and
+it is the identical drop `buildChainSides` already makes for a chain prism's
+rim posts (`docs/surface-design.md` §13.4).
+
+**No term in §5.2's table is new and none is removed by kind.** A `LineSeg`
+pair's stations are PINNED and its `sectionDelta`, `sectionMatchedDelta` and
+`stationRound` are exactly zero, so an unplaced chain loft over such a pair
+publishes `Area` `Exact` at a zero bound; every other term the table lists is
+read on the value it publishes, never on the pairing having been chain-fed.
+
+### 16.6 Increments
+
+| PR | Lands | Still staged |
+|---|---|---|
+| **L1** | `Document.LoftChain` over a `LineSeg`-only correspondence: the sealed `ChainLoftOption` tier, Table SL rows SL1 through SL6, §16.2's plane gate, the open-walk cell walk, and the four readings §16.5 states | a curved correspondence (SL7); a non-parallel plane pair; every Table D consumer beyond D6 |
+| **L2** | a same-kind `ArcSeg` correspondence, once §5.1's station generator states each COMPUTED station's own side against the from-plane rather than inheriting it from the plane pair | a non-parallel plane pair |
+| **L3 (reach, not committed by this document)** | a non-parallel plane pair, which needs a stated positive side that the two planes' own offset no longer supplies | — |
+
+Every Table D consumer reads a chain loft as it reads a surface-result loft,
+and each stays on its own terms: the mesh is D1's, and no modify operation has
+a receiver row for a chain-fed payload.
+
+### 16.7 Required tests
+
+`docs/surface-design.md` §15 carries the rows themselves, as T190 onward, so
+every chain-fed obligation sits in one place. Each asserts on computed
+geometry, and each bound assertion is shown to fail before it is trusted.
