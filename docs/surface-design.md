@@ -20,7 +20,7 @@ Companion contracts stay authoritative for their own areas:
 - `docs/loft-design.md` §6 owns the exact crossing audit §6.4 below reuses;
 - `docs/sketch-seam-design.md` owns profile authentication and recording.
 
-Nine tables are normative:
+Ten tables are normative:
 
 | Table | States | Section |
 |---|---|---|
@@ -32,6 +32,7 @@ Nine tables are normative:
 | **V** | what `Verify` says about a sheet body | §9.1 |
 | **X** | which existing operations admit a sheet | §11 |
 | **A** | the contract amendments this design forces | §12 |
+| **G** | what a chain-fed feature builds, mints and orients | §13.4 |
 | **D** | delivery, and what each increment lands | §14 |
 
 ## 1. Scope
@@ -46,6 +47,8 @@ Nine tables are normative:
   closed chain of a body's free edges (§5);
 - **`Stitch` / `Unstitch`** — joining sheets along free edges that are proven
   coincident, and splitting a body back into one sheet per face (§6);
+- **`ExtrudeChain` / `RevolveChain`** — a ribbon from one open sketch curve, and
+  an uncapped shell from an open profile revolved (§13);
 - what every reading, every `Verify` question and every export says about a
   sheet body (§8, §9, §10).
 
@@ -63,6 +66,7 @@ takes it up; §11 says what a caller gets until then.
 | Ruled, Boundary Fill | Both need a fitted free-form patch through a boundary decad did not record. `docs/spline-design.md` owns what a recorded free-form curve may become; no rule there yet produces a surface from a boundary. |
 | Reverse Normal | Not needed while orientation is decided at build (§2.3) and `Stitch` derives a consistent orientation combinatorially (§6.3). It becomes necessary only when a sheet enters an operation whose result depends on which side the caller meant. |
 | A sheet operand in `Union` / `Cut` / `Intersect` (Fusion's Split Body) | Needs surface-solid intersection, the same fitted curve Trim needs. |
+| `SweepChain`, `LoftChain` | Both take an open chain where `docs/sweep-design.md` and `docs/loft-design.md` state a closed section: a composite sweep's join topology pairs rim loops, and Table P pairs a from-loop to a to-loop. Neither pairing rule is stated for an open walk, and restating one is that document's work, not this one's (§13.5). |
 
 ### 1.3 What this design refuses permanently
 
@@ -224,14 +228,26 @@ func (b *Body) Patch(ctx context.Context, sel EdgeSelector) (*Body, error)
 func Stitch(ctx context.Context, bodies ...*Body) (*Body, error)
 func (b *Body) Unstitch(ctx context.Context) ([]*Body, error)
 
+// A sheet from one open sketch curve. §13 owns all four.
+type ChainExtrudeOption interface{ chainExtrudeOption() }
+type ChainRevolveOption interface{ chainRevolveOption() }
+
+func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent, opts ...ChainExtrudeOption) (*Body, error)
+func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis, a AngularExtent, opts ...ChainRevolveOption) (*Body, error)
+func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.Chain, path *Path, opts ...SweepOption) (*Body, error)
+func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...LoftOption) (*Body, error)
+
 // The free-edge selector predicate.
 func Free() EdgePredicate
 ```
 
-Every one of these bounds cancellation in its own construction and audit
-paths, returns `ctx.Err()` unchanged before commit, and leaves the document
-and every operand unchanged, exactly as `docs/api-design.md` §8 states for
-every other operation.
+Every one of these that takes a context bounds cancellation in its own
+construction and audit paths, returns `ctx.Err()` unchanged before commit, and
+leaves the document and every operand unchanged, exactly as
+`docs/api-design.md` §8 states for every other operation. `ExtrudeChain` and
+`RevolveChain` take none, for the same reason `Extrude` and `Revolve` take
+none: each resolves an extent and walks a recorded boundary in bounded work,
+with no audit to poll (§13.2).
 
 `Stitch` and `Unstitch` consume their operands and register their results, on
 `docs/api-design.md` §6's uniform terms: `Stitch` retires every body handed
@@ -1312,6 +1328,9 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R18 | `Body.Patch` chain's adjacent faces cannot be brought into agreement on the new face's orientation | `ErrDegenerate` |
 | R19 | `Body.Patch` handed a receiver with no evaluator payload | `ErrUnsupported` |
 | R20 | `Stitch`'s assembled lumps are not proven mutually separate by axis-aligned bounding box | `ErrUnsupported` |
+| R21 | `ExtrudeChain` or `RevolveChain` handed a chain that fails one of §13.3's gates | as the seam states: `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` |
+| R22 | `RevolveChain` handed a chain with a free end lying ON the resolved axis | `ErrUnsupported` |
+| R23 | `SweepChain` or `LoftChain`, in every increment before the one that states its pairing rule | `ErrUnsupported` |
 
 R6, R8, R10 and R20 are `ErrUnsupported` rather than `ErrDegenerate` on
 `docs/api-design.md` §8's own distinction: the input names real geometry and
@@ -1324,6 +1343,18 @@ is a different operation, not a later version. R18 joins R5, R7 and R9 for the
 same reason: an inconsistent assembly is the problem, not this evaluator's
 reach. R19 joins R11, R15 and R17: a body this evaluator did not build is a
 different operation's receiver, not a later version of this one.
+
+R21 reuses the four seam sentinels rather than minting chain-specific ones.
+Each already names a CAUSE — a foreign source, a stale snapshot, a failed
+authentication, a range this seam cannot record exactly — and the caller's
+repair for each is identical whether a profile or a chain carried it, so a
+parallel set would double the branches a caller writes while every branch's
+move stayed the same (§12 widens each sentinel's stated cause to name both).
+R22 and R23 are `ErrUnsupported` and STAGED: both name real geometry, and both
+wait on a proof rather than on a different operation. The one refusal in §13
+that is permanent has no Table R row at all, because the compiler carries it:
+`Document.Patch` takes a `*sketch.Profile`, and `WithSurfaceResult()`
+implements neither chain option tier (§13.2, §13.5).
 
 ## 8. Measurements
 
@@ -1759,37 +1790,314 @@ reverses a decision already taken.
 | `docs/clearance-design.md` §3 | states that a sheet-against-solid pair settles a proven positive lower bound with ONE witness cast, never the two-directional nesting relation a solid pair needs, and why (§9.3) |
 | `docs/api-design.md` §6.2 | `Clearance`'s doc comment states the one consequence: for a sheet-solid pair the row states the distance to the solid's boundary without asserting which side the sheet is on; a solid-solid row's meaning is unchanged |
 | `docs/tessellation-design.md` §1 | the Geometry row and the mandatory closed-mesh audit become kind-conditional (§10) |
-| `docs/layout.md` | a row for this document, and one per `.go` file each increment adds |
+| `docs/api-design.md` §7 | the seam gains the open chain: `RecordChain` beside `RecordProfile`, under the identical foreign, stale, snapshot-match and `TExact` gates (§13.3) |
+| `docs/api-design.md` §8 | the v1 feature vocabulary gains `ExtrudeChain`, `RevolveChain`, `SweepChain` and `LoftChain`; the four signatures land beside the existing surface block |
+| `docs/api-design.md` §12 | `ErrForeignProfile`, `ErrStaleProfile`, `ErrInvalidProfile` and `ErrUnrecordableProfile` each state that their cause is a profile OR an open chain (§7 there, §13.3 here) |
+| `docs/sketch-seam-design.md` §2 | the recording IR gains `ChainRecord` and `RecordChain`, over the same ten `CurveSegment` variants; §2.1's admission list gains the chain's own interior-junction reading (§13.3) |
+| `docs/layout.md` | a row for this document, and one per `.go` file each increment adds; the chain increment adds no file, so `record.go`'s and `seam.go`'s own rows name the chain instead |
 | `CLAUDE.md` | a "Read before you write" row pointing here for sheet-body, surface-feature, patch and stitch code |
 
-## 13. The upstream ask — an open sketch chain
+## 13. The open sketch chain — a ribbon and an uncapped shell
 
-**Fusion's most common surface extrude starts from an open sketch curve, and
-decad cannot express one.** `sketch.Profile` is a closed planar region by
-definition, and `sketch` exposes no open boundary chain, so
-`WithSurfaceResult()` builds only from a closed profile: a rectangle gives a
-four-walled tube, never a single ribbon from one line.
+**Fusion's commonest surface extrude starts from an open sketch curve, and this
+section is where decad builds from one.** `sketch.Profile` is a closed planar
+region, so `WithSurfaceResult()` only ever builds a wall set around a region: a
+rectangle gives a four-walled tube, and a single line gives nothing at all.
+`sketch.Chain` is that region's open counterpart — an ordered run of boundary
+edges whose two ends are free — and `ExtrudeChain` sweeps one into a ribbon
+while `RevolveChain` spins one into a shell with no cap.
 
-What decad needs from `sketch`, stated so the seam's existing gates apply
-unchanged:
+### 13.1 What `sketch` publishes, and what decad reads
 
-- an **ordered open chain** of `BoundaryEdge` values over the sketch's own
-  entities, with the same `TStart`/`TEnd`/`TExact` trim contract a `Profile`'s
-  boundary carries, so `docs/sketch-seam-design.md`'s admission gate and
-  reject-only falsifiers govern it with no new rule;
-- the same **authentication and staleness** handles a `Profile` carries — a
-  source-sketch back-reference and a revision — so
-  `docs/api-design.md` §7's foreign, stale and snapshot-match gates apply
-  verbatim;
-- the chain **self-intersection** answer, from `sketch`'s own arrangement, so
-  decad consumes it rather than re-deriving it.
+`Sketch.Chains()` returns the sketch's open connected runs: every edge of the
+same single arrangement that no region boundary used, so no edge is reported by
+both `Profiles()` and `Chains()`. Three things a chain carries are what let the
+existing seam govern it with no new rule.
 
-This is the same shape as `docs/spline-design.md` §9's upstream ask, and it is
-tracked the same way: named here, with the capability it unlocks stated, and
-no decad-side workaround. decad will not assemble a chain from selected
-entities itself — deciding which entities form a chain and in what order is a
-2D arrangement question, and `CLAUDE.md`'s rule is that decad asks `sketch`
-for the answer and never re-derives it.
+- **The ordered walk.** `Chain.Edges` is `[]BoundaryEdge` — the same struct a
+  profile's `Outer` and `Holes` hold, filled by the same `mapBoundaryEdge`
+  conversion — so `Partial`, `Reversed`, `TStart`, `TEnd` and `TExact` mean on a
+  chain edge exactly what `docs/sketch-seam-design.md` §1 states they mean on a
+  region boundary edge. `Chain.Entities` is the de-duplicated entity set in walk
+  order, `Profile.Entities`'s counterpart.
+- **Authentication and staleness.** `Chain.Sketch()` returns the source sketch,
+  `Chain.Revision()` the `Sketch.Revision()` value the chain was built at, and
+  `Chain.IsStale()` compares the two. One arrangement pass stamps every chain
+  and every profile from one `Sketch.Revision()` read, so a chain's staleness
+  answer is the answer a profile's is.
+- **The arrangement's own self-intersection verdict.** `Chain.SelfIntersecting`
+  marks a walk that crosses or touches itself; `Chain.Valid` is false for that,
+  for an unresolvable degeneracy reaching the chain's own curves, and for a
+  zero-length walk. Validity is scoped as `Profile.Valid` is: an attributable
+  condition on curves this chain does not use leaves it valid, and an
+  unattributable one invalidates every chain and every profile at once.
+
+Every ask this section once held is answered by the published type, and decad
+still assembles no chain of its own: which entities form a run, and in what
+order, is a 2D arrangement question `sketch` answers (`CLAUDE.md`). One field
+decad must not read as a measurement is `Chain.Length` — §13.3 states why, and
+comparing it is the whole of what decad does with it.
+
+**`sketch` cuts the walk wherever it cannot continue unambiguously, so one
+curve a caller drew is not always one chain.** The cut points are a vertex where
+three or more edges meet and the crossing point of two curves, so three lines
+meeting at a point publish three chains, and a curve another curve crosses
+publishes its pieces separately. Two consequences a caller acts on, stated here
+rather than left to be found later:
+
+- **One ribbon per chain.** An L drawn as two lines meeting at a plain corner is
+  one chain, and `ExtrudeChain` builds one two-face ribbon from it. A T is three
+  chains, so the caller extrudes each and may `Stitch` the three ribbons
+  afterwards. No option asks `ExtrudeChain` to span a cut vertex: spanning one
+  means choosing which two of three edges continue the walk, which is the
+  arrangement decision `sketch` declined to make and decad never re-derives.
+- **A chain's index is not a handle.** The published order consults entity and
+  point names, and `Sketch.Revision()` hashes none of them, so renaming an
+  entity re-ranks `Chains()` while every held chain stays fresh. A caller picks
+  a chain by what it holds, and §13.3's authentication gate matches by content
+  against the whole fresh set rather than at one index.
+
+### 13.2 The entry points
+
+**A chain gets its own two entry points rather than widening the profile
+path's.**
+
+```go
+func (d *Document) ExtrudeChain(s *sketch.Sketch, ch *sketch.Chain, e Extent,
+    opts ...ChainExtrudeOption) (*Body, error)
+func (d *Document) RevolveChain(s *sketch.Sketch, ch *sketch.Chain, axis Axis,
+    a AngularExtent, opts ...ChainRevolveOption) (*Body, error)
+```
+
+Each takes the sketch beside the chain, for the reason `Extrude` does: a chain's
+geometry is plane-local and the plane is the sketch's (`docs/api-design.md` §7).
+Each resolves its extent through the vocabulary its profile-fed sibling already
+uses, and neither takes a context, exactly as `Extrude` and `Revolve` take none.
+
+**The rejected alternative is a sealed `Section` interface that both
+`*sketch.Profile` and `*sketch.Chain` satisfy**, handed to the existing
+`Extrude` and `Revolve`. It would turn every existing call site's compile-time
+guarantee — this argument is a closed region, so this call builds a solid — into
+a runtime question, and it would make `WithSurfaceResult()`'s ABSENCE mean
+"build a solid" for one variant and nothing at all for the other. Two entry
+points keep each contract decidable by the type.
+
+**`WithSurfaceResult()` does not compile against either call, which is this
+design's answer to whether a chain result is always a sheet.** It always is: an
+open walk encloses no region, so there is no closing face to omit and no solid
+to ask for. `ChainExtrudeOption` and `ChainRevolveOption` are their own sealed
+option tiers, and `SurfaceResultOption` — `ExtrudeOption` + `RevolveOption` +
+`SweepOption` + `LoftOption` — implements neither, so the compiler refuses the
+option and Table R carries no row for it. The rejected alternative is accepting
+it as a no-op, which gives one option two meanings: omit the closing faces here,
+state nothing there. Neither tier has a member in this increment; both exist so
+a later chain-only option has a tier to land on.
+
+### 13.3 `ChainRecord` — the record, and its gates
+
+decad records a chain before building it, exactly as it records a profile:
+
+```go
+// ChainRecord is ProfileRecord's open counterpart: one directed OPEN walk,
+// structural and plane-local, over the same sealed CurveSegment variants. The
+// first segment's walk start and the last segment's walk end are FREE — they
+// meet nothing, and nothing closes onto them.
+type ChainRecord struct {
+    Segments []CurveSegment
+}
+
+// RecordChain is RecordProfile's sibling: it admits, authenticates and records
+// an open chain under the identical gates, and returns the structural values.
+func RecordChain(s *sketch.Sketch, ch *sketch.Chain) (ChainRecord, PlaneRecord, error)
+```
+
+**What it shares with `ProfileRecord` is everything the seam already owns.** The
+ten sealed `CurveSegment` variants record a chain edge exactly as they record a
+region boundary edge — the entity's own defining fields verbatim, plus `sketch`'s
+normalized range, with `Reversed` baked in as the order of that range
+(`docs/sketch-seam-design.md` §2). The `PlaneRecord` beside it is the same value,
+read through `s.Plane().Frame()`. Every admission gate is the same gate, run by
+the same code: `record.go` owns the type beside `ProfileRecord`, and `seam.go`
+owns `RecordChain` beside `RecordProfile`, because a file of its own would copy
+the variant set and the gates both.
+
+**What it cannot share is `LoopRecord`.** A `LoopRecord` states that its last
+segment's walk closes onto its first, and every consumer downstream reads one as
+the boundary of a closed region — `moments.go`'s region integrals,
+`triangulate.go`'s cap tiling, `segment_walk.go`'s region walks. A chain states
+the opposite at its two ends, so recording one as a `LoopRecord` carrying a flag
+would hand each of those consumers a closure that is not there. Two further
+things fall away with the loop: a `ChainRecord` holds no `Holes`, since an open
+walk has no interior to put one in, and no walk-level winding, since "outer
+counter-clockwise, holes clockwise" names a side an open walk does not have. A
+closed-kind segment's own `CCW` survives, because it still records the walk
+sense — but it survives only on a FRAGMENT, since a whole `*Circle`, `*Ellipse`
+or `*ClosedSpline` edge is a closed run `sketch` publishes as a `Profile` or
+publishes nowhere, and so never reaches a chain. Nor does a `ChainRecord` feed
+any region reading: `moments.go` integrates `Area`, `Centroid` and
+`SecondMoments` over a region, and a chain bounds none. Its only 2D reading is
+per-segment arc length, through `segment_walk.go` and, for a free-form segment,
+`spline_length.go`'s proven bracket.
+
+**The gates are the existing ones, in the existing order, and every sentinel is
+reused unchanged.**
+
+| Condition | Handling | Sentinel |
+|---|---|---|
+| `ch.Sketch() != s`, or a `ch.Edges[i].Entity` that is nil or absent from `s.Entities()` | refused before anything is read off the chain, so no foreign plane-local coordinate is ever lifted through `s`'s frame | `ErrForeignProfile` |
+| `ch.IsStale()` | refused: the walk describes the sketch's earlier geometry, and sweeping it builds the wrong shape silently | `ErrStaleProfile` |
+| the snapshot matches no member of a fresh `s.Chains()` result | refused: every exported field — `Entities`, `Edges`, `Length`, `Valid`, `SelfIntersecting` — must match one fresh chain exactly, and the fresh match is what records | `ErrInvalidProfile` |
+| `ch.Valid == false` | refused: `sketch`'s own verdict, never one decad recomputes | `ErrInvalidProfile` |
+| `ch.SelfIntersecting == true` | refused on the same row; `Valid` is already false for it, so this is a reject-only redundancy rather than a second gate | `ErrInvalidProfile` |
+| a `Partial` edge whose `TExact` is false | refused: an uncertified range is never recorded as an exact trim, never widened to the whole entity, and never repaired | `ErrUnrecordableProfile` |
+| a certified range the reject-only falsifier disproves | refused, and the discrepancy reported upstream as a `sketch` bug | `ErrUnrecordableProfile` |
+| an INTERIOR junction whose two coordinates contradict | refused by the same source-aware rule: bit-equal for two same-source coordinates, the range falsifier's relative threshold for a record endpoint against a certified cut node | `ErrUnrecordableProfile` |
+
+Three readings of that table carry this increment's soundness argument, and each
+follows from a rule already stated rather than adding one.
+
+**The match is by content over the whole fresh set, never at one index.**
+§13.1's renaming case is why: a held chain can be fresh and correct while
+sitting at a different index, so an index comparison would reject a chain
+nothing is wrong with. Matching every exported field against some fresh member
+is what `docs/api-design.md` §7 already prescribes for a profile, which is
+freshly allocated on every call for the same reason.
+
+**Only the walk's INTERIOR junctions are checked.** A `LoopRecord`'s closure
+check runs at every junction including the one that closes the loop; a chain has
+no such junction, and asserting one would reject every chain there is. The two
+free ends state no junction to check, exactly as a whole closed curve states
+none (`docs/sketch-seam-design.md` §1).
+
+**`Chain.Length` is compared and never consumed.** It is a bare `float64`,
+published whatever `TExact` reports, and exact only for a `*Line`, `*Arc` or
+`*Circle` fragment — for every other entity it is a sampling-convergent
+UNDERESTIMATE, the chord sum of the entity's own curve over the reported range,
+with no bound stated for the gap. A measurement decad published from it would be
+confidently short by an unstated amount, which is the failure this engine exists
+to prevent, and `docs/api-design.md` §5.1's rule that a scalar quantity is a
+`units.Value` refuses the bare float besides. So the field enters the snapshot
+comparison as an integrity check — equality against the fresh chain's own value,
+the use `Profile.Area` already gets at the same seam — and nothing else reads
+it. Every length decad publishes about a ribbon is computed from the recorded
+segments, by the engines that already prove their own bounds.
+
+`RevolveChain` then runs `revolve_axis.go`'s existing axis resolution over the
+recorded walk unchanged: the axis must be non-degenerate and coplanar with the
+sketch plane, and the walk must lie in one closed half-plane of it. **A free end
+lying ON the axis is `ErrUnsupported` in this increment** (Table R, R22). The
+existing axis-incidence audit requires each on-axis point to carry exactly one
+off-axis walk end and one `LineSeg` end running along the axis, from the same
+loop (`docs/evaluator-design.md` §6) — a free end offers one incident walk end
+and no partner, so the audit has nothing to admit. It is a real shape, and the
+one that closes a revolved shell at a pole, which is why that refusal is staged
+rather than permanent.
+
+### 13.4 Table G — what a chain-fed feature builds
+
+A chain-fed feature mints no face to close anything: the record states no loop,
+so there is no cap, no seam face and nothing for a later option to omit. Table G
+is therefore three columns rather than Table W's four.
+
+**Table G — a chain-fed feature's faces, orientation and free edges**
+
+| Feature | Sheet faces | Positive side | Free edges |
+|---|---|---|---|
+| `ExtrudeChain` | one wall per recorded segment, by `docs/evaluator-design.md` §5's own per-kind table: a `LineSeg` a `Plane`, a `CircleSeg`/`ArcSeg` fragment a `Cylinder` patch, a free-form segment a `NURBSSurface` | `T × N` at each wall point, `T` the walk tangent and `N` the plane normal — the walk's right-hand side, the identical construction a profile-fed wall's outward normal already takes | both rims of the walk, plus the one sweep edge at each of its two free ends |
+| `RevolveChain`, partial sweep | one swept wall per recorded segment | the same sense, transported through the sweep by `revolve_build.go` unchanged | the walk's own copy at each of `phi0` and `phi1`, plus the arc each free end sweeps |
+| `RevolveChain`, full revolution | one swept wall per recorded segment, the walls closing angularly | the same | the circle each free end sweeps, and nothing else |
+
+Three readings of Table G are worth stating outright.
+
+**Face count is segment count.** A single-line chain extruded is ONE face, the
+ribbon this section opened on. `Extrude`'s own rim coalescing
+(`coalesceWalksContext`) still merges adjacent collinear segments into one rim
+edge, exactly as it does for a profile, so a line drawn as two collinear halves
+gives one wall and one rim edge per end.
+
+**A full revolution of an open chain is an OPEN sheet, unlike a full revolution
+of a closed profile.** §4.1's closed-sheet case rests on a closed loop's wall
+set closing onto itself; an open walk's two free ends sweep two circles that
+bound nothing, and no face is minted to fill them. So `RevolveChain` over a full
+turn returns `Kind() == BodySheet` with exactly two free edges, and §14's
+increment 4 closed-sheet question never reaches it. `Body.Patch` is how a caller
+fills one of those circles, on §5.2's existing terms.
+
+**The positive side derives nothing new.** `T × N` is the vector a profile-fed
+wall already publishes as its outward normal — for a plane whose normal is `+Z`
+and a walk running `+X` it is `−Y`, the side away from the material a closed
+walk would carry on its left — so a chain-fed wall and a profile-fed wall over
+the same recorded segment publish the same normal, face for face. The rejected
+alternative is a caller-stated side option, which would add an input the profile
+path does not have and give one built surface two admissible orientations.
+
+**What the body publishes**, and where each answer's exactness comes from:
+
+| Reading | A chain-fed body |
+|---|---|
+| `Kind()` | `BodySheet`, always and by construction — a decided enum carrying no bound (§2.1) |
+| `IsSolid()` | `false`, always: Table K's fourth row is structural |
+| `Volume()`, `Centroid()` | `ErrNotSolid`, by KIND rather than by soundness (§8) |
+| faces | one per recorded segment, Table G |
+| `Edges(Free())` | Table G's own count — 2 rims plus 2 sweep edges for a one-segment ribbon |
+| `Area` | the sum of each wall's own area through `boundedAdd`: `segment length · h` for an extrude, `revolve_build.go`'s swept-wall reading for a revolve. `Exact` where the segment length is exact and the product is representable; a `CircleSeg`/`ArcSeg` wall carries `rθ`'s own evaluation bound, and a free-form wall `spline_length.go`'s proven bracket |
+| `Bounds` | the recorded walk's per-segment analytic extremes swept over the signed interval, from `prism_extent.go` and `revolve_extent.go` verbatim, charging the frame and placement rounding those readings already charge |
+
+No bound in that table is new, because no geometry is: every wall is built by
+the identical per-segment construction — `buildLoopSidesAs` for a prism,
+`revolve_build.go`'s wall walk for a revolve — so its surface, its area and its
+bound are the ones that construction already proves. The tolerance gate's
+reference diameter comes from the same extent readings a profile-fed payload
+supplies it from, so §8's "no sheet payload withholds the gate" holds here
+unchanged.
+
+**§9.1's fourth validity leg is earned by construction, on the profile argument
+with one word changed.** A chain-fed prism earns it because `sketch` already
+proved the recorded walk a simple planar curve — `Valid` true means the walk
+neither crosses nor touches itself, and a walk whose two ends met would be a
+closed run `sketch` publishes as a `Profile` instead — `evalPrismContext`
+already refuses a non-positive sweep height, and a simple planar curve crossed
+with a positive interval cannot self-intersect. A chain-fed revolve earns it on
+the full-turn argument §9.1 already carries: with the walk proven clear of the
+axis, two distinct generating points map to one 3D point only by sharing both
+radius and axial position, which inside one closed half-plane makes them the
+same 2D point, so a simple walk never repeats one, and a full turn traverses
+each angular fibre exactly once. A partial-turn chain revolve earns no such
+proof and reads `ValidityUndecided`, exactly as a partial-turn profile revolve
+does (§9.2).
+
+**Everything else a sheet already does, a ribbon does unchanged.** Table X
+governs it row for row: a boolean, `Fillet`, `Chamfer` and `Shell` refuse it,
+`Placed`/`PlacedCopy`/`Duplicate` admit it, a planar wall answers `ToFace`, and
+every selector predicate reads its faces and edges. A chain-fed prism ribbon
+tessellates and exports through §10's manifold-with-boundary audit, since its
+walls chord exactly as the same record's profile-fed siblings do and it mints no
+cap to leave out; a chain-fed revolve ribbon waits on increment 4 exactly as a
+profile-fed revolve sheet does. A ribbon is an ordinary `Stitch` operand: a
+straight walk's free edges are all `Line3`, so Table J's J5 answers vacuously
+for them and two ribbons meeting at a proven-coincident end weld. `Body.Patch`
+reads a ribbon's free edges as one closed chain and admits or refuses it on
+§5.2's four gates with no new rule — planar for a straight walk, `ErrUnsupported`
+(R6) for an L.
+
+### 13.5 What refuses a chain
+
+- **`Document.Patch` has no chain-fed form, permanently.** A planar fill needs a
+  region to fill and an open walk encloses none; a walk whose ends met would be
+  a `Profile`, so no chain a patch could take exists. The refusal is the type —
+  `Document.Patch` takes a `*sketch.Profile` — and the caller's move is to close
+  the curve in the sketch. This is §1.3's shape of permanent refusal: no later
+  proof changes it.
+- **`SweepChain` and `LoftChain` exist and return `ErrUnsupported`** (Table R,
+  R23), on §14's own staging rule — the signature lands so a caller's intent has
+  somewhere to go and a refusal to read, and the build lands with the increment
+  that states its pairing rule. Neither `docs/sweep-design.md`'s composite join
+  topology nor `docs/loft-design.md`'s Table P is stated for an open walk, and
+  stating one is that document's work rather than this one's.
+- **`Stitch` and `Unstitch` never see a chain.** Both take bodies, so there is
+  nothing to refuse: a ribbon reaches them as the sheet it is, on §6's terms.
+- **`WithSurfaceResult()` never reaches a chain-fed call**, by §13.2's option
+  tiers — a compile error rather than a sentinel.
 
 ## 14. Table D — delivery
 
@@ -1807,6 +2115,17 @@ ANSWER is accepted and reads `Suspect`.
 | 3 | `WithSurfaceResult()` on `Sweep` and `Loft`; the shared-denotation certificate — two distinct proofs sharing one name, never one lifted "together": a LEVEL token proving N chain vertices coplanar by shared construction, which lifts §5.2 gate 3's bounded-chain half of R6 for a straight prism's own rim; a separate CURVE token proving two edges (or two vertices) denote one curve or point, which lifts Table J's J5 for a straight prism's own rim and a revolve's own internal junction, and does not follow from the level token proving anything — coplanarity and coincidence are different proofs over different code paths; the per-surface flux integral that lifts Table C's curved-closure refusal (R8); the undercut survey over a surface-extruded prism sheet's positive side — the only sheet family this increment opens it on; a loft, stitch or one-span-sweep sheet moves from `DiagSurveyPrerequisite` to `DiagUnsupportedSurveyPayload` for it instead, and stays there until its own proof lands |
 | 4 | The revolve sheet mesh (§10): the meridian and angular chordings a surface result keeps, the caps it omits — and, where the profile meets the axis, the on-axis edge between two poles that only the caps carried (Table W) — the cap terms its area slack drops, and the manifold-with-boundary audit in the closed-mesh audit's place. It also settles which audit a CLOSED sheet runs |
 | 5 | An all-planar stitched body's own mesh, CLOSED or OPEN: `stitchPayload` records the final wound triangle set `Stitch`'s own build assembled and audited (§6.4), attributed by the live rebuilt face per triangle rather than by role (two welded operands can carry the same role string), and `tessellate_stitch.go` restates it with no chording. A CLOSED body runs the closed-mesh audit plus its own vertex-link safety net over that restated set; an OPEN body — a sheet — runs `docs/tessellation-design.md` §1.2's manifold-with-boundary audit instead, its free-boundary attribution agreeing with the body's own recorded free `Edge`s by the identical live face pointer on both sides, never a role lookup. A curved or mixed stitched body's mesh stays `ErrUnsupported`, staged to a later increment, whether open or closed. The mesh publishes a zero occupied-volume proof (`symDiffOK == true`) for a CLOSED body whose every vertex carries a proven bound of exactly zero, admitting it to a boolean like any other zero-bound operand; every other stitched body keeps `symDiffOK` false, so no boolean admits it — an open one refusing on Table X's own sheet-boolean rule, a bounded or placed closed one on `boolean.go`'s `requireVolumeProvingPayload` arm. `newBodyGeomBudget` (`docs/clearance-design.md` §2) carries the identical zero-bound `stitchPayload` arm already, which is what lets a stitched solid reach a proven pair relation at all; a bounded or placed stitched solid still reads undecided exactly as it does for any other payload this evaluator has not wired a carrier for |
+| 6 | The open sketch chain (§13): `ChainRecord` and `RecordChain` beside `ProfileRecord` and `RecordProfile`, under the same gates and the same four sentinels; `Document.ExtrudeChain` and `Document.RevolveChain` with their two sealed option tiers, building Table G's wall set with no cap and no closing face; the fourth validity leg for a chain-fed prism and for a full-turn chain revolve clear of the axis; prism ribbon tessellation and export on the identical manifold-with-boundary audit; Table A's four new amendment rows; §15's T130–T141. `Document.SweepChain` and `Document.LoftChain` land as signatures refusing with `ErrUnsupported` (R23), a chain free end ON the revolve axis refuses with `ErrUnsupported` (R22), and the chain-fed revolve ribbon's own mesh waits on increment 4 exactly as a profile-fed revolve sheet's does |
+
+**Increment 6 depends on increment 1 alone**, for `BodyKind` and `Kind()`,
+`Edge.IsFree` and `Free()`, §8's sheet measurement rows, §9.1's sheet validity
+audit and the prism sheet mesh — every one of which it consumes unchanged, and
+none of which it amends. It depends on none of 2, 3, 4 or 5, and none of them
+depends on it: a ribbon reaches `Stitch` and `Body.Patch` as an ordinary sheet
+operand once increment 2 lands, which is increment 2's own reach rather than a
+prerequisite of this one. It is numbered after 5 only so that no reference to
+an earlier row has to move, and any order among 2 through 6 that keeps 1 first
+is admissible.
 
 **Increment 4 depends on neither 2 nor 3, and they do not depend on it.**
 Increment 5 depends on increment 2 for the triangle set and topology its own
@@ -1824,6 +2143,9 @@ its reverse, which is exactly what the closed-mesh audit counts — so
 closed sheet runs, and it passes for
 the same reason the closed-mesh audit would. Increment 4 states that in
 `docs/tessellation-design.md` §1.2 rather than leaving it to coincidence.
+Increment 6's own full revolution does not reach that question at all: an OPEN
+walk's two free ends sweep two circles nothing fills, so a full-turn
+`RevolveChain` is an open sheet carrying exactly two free edges (§13.4).
 
 Staged past increment 3, each with the gap §1.2 names: Thicken, Trim, Extend,
 surface Offset, Ruled, Boundary Fill, Reverse Normal, and a sheet operand in
@@ -1939,6 +2261,19 @@ proof leg deleted, the test watched to go red — before it is trusted.
 | T120 | an inner box (`stitchBoxSheetsAtOffset`, x∈[20,40], y∈[20,40], z∈[2,3]) wholly inside T1's own outer box, all six sheets `Stitch`ed in one call (`TestStitchRefusesNestedBoxes`) | `ErrUnsupported` (R20); the document and every operand are unchanged — without the separation check this fixture publishes 60400 mm³ `Exact` against a true 60000 mm³, the point-set volume the nesting double-counts |
 | T121 | the same shape as T120 with the inner box shrunk 1 mm off every wall of the outer box (x∈[1,99], y∈[1,59], z∈[1,9] inside T1's box), all six sheets `Stitch`ed in one call (`TestStitchRefusesNestedBoxesWithAGap`) | `ErrUnsupported` (R20); without the separation check this fixture publishes 105472 mm³ `Exact` against a true 60000 mm³ — wrong by more than three quarters, nowhere near a rounding miss |
 | T122 | two hand-built, bit-identical (fully overlapping) zero-bound square faces, each its own single-face lump, driven directly at `tessellateStitch` on a hand-built `stitchPayload` — bypassing `Stitch`'s own public seam, since T120's own lump-separation gate refuses this shape before a body ever reaches tessellation (internal — `TestTessellateStitchClearsSymDiffForOverlappingLumps`) | `symDiffOK` is `false` even though `stitchZeroVertexBound` holds: `tessellateStitch`'s own lump-separation reading refuses independently of `evalStitchContext`'s, so the zero occupied-volume claim stays sound even if that earlier gate were ever loosened or bypassed |
+
+| T130 | a single 40 mm line, the only non-construction entity in its sketch, `ExtrudeChain` 10 mm `Along` | `s.Profiles()` is empty and `s.Chains()` has length 1; `Kind() == BodySheet`, `IsSolid() == false`, `Volume()` is `ErrNotSolid`; exactly 1 face; `Area` exactly 400 mm² and `Exact`; `Edges(Free()).Exactly(4)` resolves; `Bounds` is the 40×0×10 slab, `Exact` |
+| T131 | an open three-segment walk — line, arc, line, each meeting the next at a shared point | 3 faces; `Edges(Free()).Exactly(8)`, the two junction edges matching nothing under `Free()`; the arc wall's `Area` is `Approximate` over `rθ`'s own bound while both line walls read `Exact`; the body's own `Area` equals the three walls' sum through `boundedAdd`, value and bound |
+| T132 | a rectangle with one side erased, `ExtrudeChain` 10 mm `Along` | 3 faces, not 4 — the erased side mints no wall, which is the ribbon §13 opens on; `Edges(Free()).Exactly(8)`; `Volume()` is `ErrNotSolid` |
+| T133 | three lines meeting at one point, `ExtrudeChain` over each member of `s.Chains()` in turn | `s.Chains()` has length 3; each call returns its own one-face ribbon and the document holds three bodies, never one — the walk-cutting consequence §13.1 states, asserted rather than assumed |
+| T134 | an open two-segment walk clear of the axis, `RevolveChain` a quarter turn | `Kind() == BodySheet`; 2 faces; `Edges(Free()).Exactly(6)` — the walk's two seam copies plus the arc each free end sweeps; `Area` `Approximate`, its interval enclosing the analytic Pappus value; `Verify` reads `Validity.Outcome == ValidityUndecided`, a partial turn earning no construction proof |
+| T135 | the same walk revolved a FULL turn | still open: `Edges(Free()).Exactly(2)`, the two circles the free ends sweep; `Kind() == BodySheet`; `Volume()` is `ErrNotSolid`; `Verify` reads `ValidityValid` with no `Validity.Diagnostics`, the full-turn construction proof of §13.4 |
+| T136 | a rectangle-minus-one-side chain in a sketch that also holds an untouched spline, so every edge reads `TExact == false` | `ErrUnrecordableProfile`, the identical seam refusal the equivalent profile earns, and the document is unchanged |
+| T137 | a chain held across a `Params().SetValue` plus `Solve`, and separately a chain whose `Valid` is false | `ErrStaleProfile` for the first, `ErrInvalidProfile` for the second; neither call touches `Document.Bodies()` |
+| T138 | a held chain re-ranked by RENAMING one of its entities, with no geometry change and no re-solve | `ch.IsStale()` is false and `ExtrudeChain` succeeds, publishing the same `Area` and `Bounds` as the pre-rename call: the authentication gate matches the held snapshot against the whole fresh `s.Chains()` set by content, never at one index. Shown-to-fail: matching at the held chain's original index turns this `ErrInvalidProfile` |
+| T139 | `SweepChain` and `LoftChain` each handed a valid chain, and `RevolveChain` handed a chain whose free end lies exactly on the resolved axis | `ErrUnsupported` at each call (R23, R23, R22); `errors.Is` holds; the document and every operand are unchanged |
+| T140 | two `ExtrudeChain` ribbons whose free end edges are a proven-coincident, zero-bound pair, `Stitch`ed | the pair welds under Table J's `Line3` row and the result is a `BodySheet` whose `Edges(Free())` resolves to the remaining 6 edges, not 8 — a ribbon is an ordinary stitch operand, admitted by the existing gates and not by a new one |
+| T141 | a chain holding a free-form fragment, `ExtrudeChain` 10 mm `Along` | `Area` is `Approximate` with a strictly positive `Bound`, and its interval encloses the analytic wall area; `ch.Length · h` sits at or below that interval's lower end, never inside it — the underestimate §13.3 refuses to publish. Shown-to-fail: replacing the per-segment sum with `ch.Length · h` published as `Exact` turns the enclosure assertion red |
 
 `.github/test-shards.txt` gains a row for every root-package test each
 increment adds, and `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'`
