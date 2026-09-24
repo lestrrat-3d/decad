@@ -35,7 +35,8 @@ func WithThickenSide(side ThickenSide) ThickenOption { return thickenSideOption{
 // builds a certified annular wall around a profile-fed prism sheet, spins a
 // certified meridian annulus through a profile-fed revolve sheet's own
 // interval, or sweeps a ribbon's own assembled section through the ribbon's
-// interval. Other sheet families are staged under docs/surface-design.md §16.
+// interval and spins a chain shell's own through the shell's. Other sheet
+// families are staged under docs/surface-design.md §16.8.
 func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...ThickenOption) (*Body, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a thicken`, ErrDegenerate)
@@ -81,6 +82,8 @@ func (b *Body) Thicken(ctx context.Context, thickness units.Value, opts ...Thick
 		result, err = thickenRevolve(ctx, d, payload, side, tmm, tDelta)
 	case chainPayload:
 		result, err = thickenChainExtrude(ctx, d, payload, side, tmm, tDelta)
+	case chainRevolvePayload:
+		result, err = thickenChainRevolve(ctx, d, payload, side, tmm, tDelta)
 	default:
 		return nil, fmt.Errorf(`%w: this sheet has no admitted Thicken generator`, ErrUnsupported)
 	}
@@ -248,7 +251,7 @@ func thickenChainExtrude(ctx context.Context, d *Document, cp chainPayload, side
 	// ONE free-form work counter for the record: the walk resolution below and
 	// the build that consumes its section both spend from it.
 	work := newFreeformWork()
-	section, err := thickenRibbon(ctx, cp.chains[0], side, amount, budget, work)
+	section, err := thickenRibbon(ctx, cp.chains[0], side, amount, budget, work, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -259,4 +262,46 @@ func thickenChainExtrude(ctx context.Context, d *Document, cp chainPayload, side
 		z0Delta: cp.z0Delta, z1Delta: cp.z1Delta,
 		xform: cp.xform,
 	}, work)
+}
+
+// thickenChainRevolve builds a solid of revolution from an uncapped chain
+// shell: §16.6's assembled section under §16.5's sweep and radial gate
+// (docs/surface-design.md §16.7).
+func thickenChainRevolve(ctx context.Context, d *Document, cp chainRevolvePayload, side ThickenSide, tmm, tDelta float64) (*Body, error) {
+	radial, err := thickenRadialOf(cp.ax)
+	if err != nil {
+		return nil, err
+	}
+	amount, err := thickenAmount(tmm, tDelta, side)
+	if err != nil {
+		return nil, err
+	}
+	budget := newWorkBudget(ctx)
+	if err := budget.err(); err != nil {
+		return nil, err
+	}
+	// ONE free-form work counter for the record: the walk resolution, the axis
+	// re-resolution and the build that consumes the section all spend from it.
+	work := newFreeformWork()
+	section, err := thickenRibbon(ctx, cp.chain, side, amount, budget, work, &radial)
+	if err != nil {
+		return nil, err
+	}
+	// The assembled section is a region no axis resolution has seen, so its own
+	// snap allowances, radial admission charge and axial envelope are proven
+	// here rather than inherited from the shell's: every one of them is an
+	// integral over the region, and the shell had no region at all.
+	ax, axisSide, err := resolveAxisSide(ctx, section, axisLine2{
+		aU: cp.ax.aU, aV: cp.ax.aV, dU: cp.ax.dU, dV: cp.ax.dV,
+	}, work)
+	if err != nil {
+		return nil, fmt.Errorf(`%w: the thicken offset's revolve axis side is unresolved: %v`, ErrUnsupported, err)
+	}
+	if axisSide < 0 {
+		return nil, fmt.Errorf(`%w: the thicken offset crossed to the far side of the revolve axis`, ErrUnsupported)
+	}
+	rp := cp.revolve()
+	rp.profile = section
+	rp.ax = ax
+	return evalRevolveContextWork(ctx, d, d.nextProducerID(), rp, work)
 }

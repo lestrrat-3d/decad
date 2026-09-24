@@ -83,7 +83,7 @@ func TestThickenRibbonUnrepresentableOffset(t *testing.T) {
 		LineSeg{Start: Point2{U: base, V: 0}, End: Point2{U: base, V: 40}, TStart: 0, TEnd: 1},
 	}}
 	budget := newWorkBudget(t.Context())
-	_, err := thickenRibbon(t.Context(), chain, ThickenPositive, 1, budget, newFreeformWork())
+	_, err := thickenRibbon(t.Context(), chain, ThickenPositive, 1, budget, newFreeformWork(), nil)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.True(t, strings.Contains(err.Error(), "rounded"), err.Error())
 }
@@ -114,7 +114,7 @@ func TestThickenRibbonWalkClassRefusals(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			budget := newWorkBudget(t.Context())
-			_, err := thickenRibbon(t.Context(), tc.chain, ThickenPositive, 1, budget, newFreeformWork())
+			_, err := thickenRibbon(t.Context(), tc.chain, ThickenPositive, 1, budget, newFreeformWork(), nil)
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.True(t, strings.Contains(err.Error(), tc.want), err.Error())
 		})
