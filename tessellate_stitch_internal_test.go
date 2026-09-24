@@ -30,12 +30,34 @@ func TestStitchCurvedMeshNamesUnsupportedSurface(t *testing.T) {
 	require.ErrorContains(t, err, "NURBSSurface")
 }
 
+// internalAnnularRevolveSheet is T31's own annular full-turn revolve sheet
+// (annularRevolveSheet, stitch_flux_test.go: 2 Cylinder walls, 2 Plane
+// annuli), duplicated here because this file's package (decad) cannot import
+// the exported test package that helper lives in — the same reach
+// stitchInternalOffAxisPlateSketch's own duplication above sets the
+// precedent for.
+func internalAnnularRevolveSheet(t *testing.T) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 5, 10, 15)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	sheet, err := New().Revolve(s, s.Profiles()[0], revolveAxisU, FullRevolution{}, WithSurfaceResult())
+	require.NoError(t, err)
+	return sheet
+}
+
 // TestStitchCurvedMeshInheritsEverySourceFaceBound checks T88's per-face
-// relation. It lives in the internal test package because sourceBound is a
-// private proof term; Mesh.Bound alone cannot detect a missing face bound.
+// relation over T31's own annular full-turn sheet — docs/surface-design.md
+// §15 calls it "the T83 mesh", the same fixture T83 stitches. It lives in
+// the internal test package because sourceBound is a private proof term;
+// Mesh.Bound alone cannot detect a missing face bound.
 func TestStitchCurvedMeshInheritsEverySourceFaceBound(t *testing.T) {
 	t.Parallel()
-	sheet := internalOffAxisArcBody(t, true)
+	sheet := internalAnnularRevolveSheet(t)
 	tol := units.Millimeters(0.1)
 	source, err := sheet.Tessellate(t.Context(), tol)
 	require.NoError(t, err)
@@ -45,14 +67,15 @@ func TestStitchCurvedMeshInheritsEverySourceFaceBound(t *testing.T) {
 	require.NoError(t, err)
 	sp, ok := stitched.payload.(stitchPayload)
 	require.True(t, ok)
-	require.Len(t, sp.faces, 2)
+	require.Len(t, sp.faces, 4)
 	require.Equal(t, source.Bound(), mesh.Bound())
-	require.Positive(t, mesh.Bound().Base())
+	require.Positive(t, mesh.Bound().Base(),
+		"the fixture's own premise: the source mesh's overall bound must be positive, or a missing per-face charge would go unnoticed")
 
 	for i, sourceFace := range sp.faces {
 		want, ok := source.sourceBound(sourceFace)
 		require.True(t, ok)
-		require.Positive(t, want)
+		require.Positivef(t, want, "source face %d's own bound must be positive, or the equality check below proves nothing", i)
 		got, ok := mesh.sourceBound(sp.liveFaces[i])
 		require.Truef(t, ok, "stitched face %d has no inherited source bound", i)
 		require.Equalf(t, want, got, "stitched face %d lost its source bound", i)
@@ -93,6 +116,44 @@ func TestStitchCurvedWeldedRevolveSiblingRejectsWrongEdgeAncestry(t *testing.T) 
 	_, err = tessellateStitchCurved(t.Context(), stitched, sp, 0.1, VerifyAll)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorContains(t, err, "a weld joins different original edges")
+}
+
+// TestStitchCurvedWeldedRevolveSiblingsInheritEverySourceFaceBound restates
+// T88's per-face relation for the sibling-weld route (§10.2): each live
+// face's bound must trace back to the ORIGINAL revolve sheet's own source
+// mesh face, reached here through unstitchPayload.face, since sp.faces on
+// this route holds the intermediate unstitched COPY, not the original.
+// TestStitchCurvedMeshInheritsEverySourceFaceBound covers the direct route
+// (§10.1) by reading sp.faces straight; a regression confined to
+// stitchSiblingRevolveSource's own paired construction leaves that test
+// green, which is why the sibling route needs this assertion of its own.
+func TestStitchCurvedWeldedRevolveSiblingsInheritEverySourceFaceBound(t *testing.T) {
+	t.Parallel()
+	sheet := internalOffAxisArcBody(t, true)
+	tol := units.Millimeters(0.1)
+	source, err := sheet.Tessellate(t.Context(), tol)
+	require.NoError(t, err)
+	pieces, err := sheet.Unstitch(t.Context())
+	require.NoError(t, err)
+	require.Len(t, pieces, 2)
+	stitched, err := Stitch(t.Context(), pieces...)
+	require.NoError(t, err)
+	mesh, err := stitched.Tessellate(t.Context(), tol)
+	require.NoError(t, err)
+	sp, ok := stitched.payload.(stitchPayload)
+	require.True(t, ok)
+	require.Len(t, sp.faces, 2)
+
+	for i, copied := range sp.faces {
+		up, ok := copied.body.payload.(unstitchPayload)
+		require.True(t, ok)
+		want, ok := source.sourceBound(up.face)
+		require.True(t, ok)
+		require.Positivef(t, want, "original face %d's own bound must be positive, or the equality check below proves nothing", i)
+		got, ok := mesh.sourceBound(sp.liveFaces[i])
+		require.Truef(t, ok, "stitched sibling face %d has no inherited source bound", i)
+		require.Equalf(t, want, got, "stitched sibling face %d lost its original source bound", i)
+	}
 }
 
 // stitchInternalOffAxisPlateSketch is stitch_test.go's offAxisPlateSketch

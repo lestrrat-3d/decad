@@ -1378,6 +1378,19 @@ that is permanent has no Table R row at all, because the compiler carries it:
 `Document.Patch` takes a `*sketch.Profile`, and `WithSurfaceResult()`
 implements neither chain option tier (§13.2, §13.5).
 
+R32's own naming is not uniform across its causes, and the row's wording
+states the weaker claim true of all of them. `tessellateStitchCurved`'s
+surface-kind switch (`tessellate_stitch.go`) walks `sp.faces` in order and
+returns at the first one its switch does not recognize, so that cause names
+the actual offending face's surface kind. Every other cause the row
+covers — an incomplete or duplicated face pairing, a non-identity stitch
+placement, a broken sibling ancestry check — returns through one shared
+`refuse` closure that always names `sp.faces[0]`'s surface kind instead, no
+matter which face the cause itself points to, because most of those causes
+(a mismatched weld group, an omitted original face) name no single face at
+all. "Naming a source surface kind" is true of every cause for that reason;
+only the unsupported-surface-kind cause additionally names the one at fault.
+
 ## 8. Measurements
 
 | Reading | Sheet body |

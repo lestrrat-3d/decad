@@ -1653,6 +1653,7 @@
 1	0.17	TestStitchCurvedWeldedRevolveSiblingsTessellate
 2	0.01	TestStitchCurvedWeldedRevolveSiblingPlacementRefusesMesh
 3	0.01	TestStitchCurvedWeldedRevolveSiblingRejectsWrongEdgeAncestry
+3	0.01	TestStitchCurvedWeldedRevolveSiblingsInheritEverySourceFaceBound
 1	0.08	TestStitchOpenCurvedRevolveSheetKeepsFreeRims
 1	0.05	TestStitchCurvedMeshInheritsSourcePlacementBound
 2	0.84	TestStitchCurvedRevolveSurfaceKindsTessellate
