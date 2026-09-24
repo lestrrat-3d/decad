@@ -1586,6 +1586,9 @@
 1	0.01	TestSurfaceSplitInsideStubDoesNotSeparate
 3	0.01	TestSurfaceSplitOutsideRibbonDoesNotSeparate
 2	0.01	TestSurfaceSplitRibbonPartitionsBlock
+0	0.01	TestSurfaceExtendLeftFragmentToNearestCut
+1	0.01	TestSurfaceExtendRefusesBeyondCarrierDomain
+2	0.01	TestSurfaceExtendRequiresNamedEnd
 3	0.01	TestSurfaceTrimDegenerateWhenNothingSeparates
 1	0.01	TestSurfaceTrimBoundsChargesAnExtremeWonByACut
 0	0.01	TestSurfaceTrimKeepInsideKeepsTheCutStrips

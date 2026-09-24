@@ -393,6 +393,9 @@ func (d *Document) Split(ctx context.Context, target, tool *Body) ([]*Body, erro
 (core §9), never by index — core §3's invariant 3 admits no other shape. Its
 cardinality assertion is the selector's own, so a query resolving to nothing
 returns a `SelectionError` wrapping `ErrNoMatch` unchanged.
+Core §9's `EndpointAt` predicate distinguishes the two free sweep edges of a
+one-wall ribbon by exact stored endpoint coordinates; combine it with `Free()`
+and `ParallelTo` to name the intended end.
 
 **`Split` is a new entry point, and `Union`/`Cut`/`Intersect` keep refusing a
 sheet operand.** Surface Table X's boolean row is unchanged: each of the three

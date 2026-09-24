@@ -181,7 +181,7 @@ to the byte budget.
 | `prism_boolean_nesting.go` | Cut/Intersect's clean-nesting structural match (§4.2's "clean" sub-case): the whole-loop tag-map search resolving a clean bore/nested pair. See the file's own doc comment and `docs/prism-boolean-design.md`. |
 | `prism_boolean_crossing.go` | Cut/Intersect's crossing sub-case (§4.2): edge-orientation propagation classifies each arrangement cell per operand; `mergePrismCells` assembles the selected set. See the file's own doc comment and `docs/prism-boolean-design.md`. |
 | `prism_overlap.go` | `docs/prism-boolean-design.md` §4.5's overlap-area reading, read-only for `Verify`'s interference path alone. See the file's own doc comment. |
-| `surface_trim.go` | Prism `Trim`/`Split` gates and resolution. See surface-intersection §2–§3. |
+| `surface_trim.go` | Prism `Trim`/`Extend`/`Split` gates. See surface-intersection §2–§3. |
 | `boolean_mesh.go` | The exact-predicate mesh-boolean pipeline: contact classification, subdivision, stitching, and the closed-mesh audit. See the file's own doc comment and `docs/evaluator-design.md` §9. |
 | `boolean_cut.go` | Per-facet exact subdivision along contact segments into classified regions, in rational 2D on the facet's own plane. See the file's own doc comment. |
 | `boolean_exact.go` | The exact-arithmetic kernel behind the mesh boolean: adaptive orient3d, rational predicates, and the reject-only pre-filters. See each filter's own doc comment. |

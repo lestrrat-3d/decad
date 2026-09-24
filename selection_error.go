@@ -203,6 +203,8 @@ func (p EdgePredicate) render() string {
 		return p.kind
 	case predKindParallelTo:
 		return p.kind + "(" + renderVec(p.dir) + ")"
+	case predKindEndpointAt:
+		return p.kind + "(" + renderVec(p.point) + ")"
 	case predKindLongerThan:
 		return p.kind + "(" + p.length.String() + ")"
 	case predKindCreatedBy:
