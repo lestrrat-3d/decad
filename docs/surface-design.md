@@ -1347,7 +1347,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R29 | `Trim`, `Extend` or `Split` handed a pair `docs/surface-intersection-design.md` §2's entry gate refuses, or a resolution its §6 cannot complete | as that table states: `ErrUnsupported` / `ErrUnrecordableProfile` |
 | R30 | `Trim` whose tool separates no fragment of the receiver, or `Split` whose tool separates no part of the target | `ErrDegenerate` |
 | R31 | `Trim`, `Extend` or `Split` in every increment before Table D row 8 | `ErrUnsupported` |
-| R32 | a curved stitched mesh has an unsupported surface kind, lacks one complete revolve-sheet source, has a new weld or vertex merge, or has a non-identity stitch placement (§10.1) | `ErrUnsupported`, naming the first affected surface kind |
+| R32 | a curved stitched mesh lacks §10.1's one-source route or §10.2's proven sibling-weld route, has an unsupported surface kind, or has a non-identity stitch placement | `ErrUnsupported`, naming the first affected surface kind |
 | R33 | `RevolveChain` with an interior on-axis junction lacking one swept-wall end and one axis-line end, or with repeated on-axis junctions at one axial coordinate | `ErrDegenerate` |
 
 R6, R8, R10 and R20 are `ErrUnsupported` rather than `ErrDegenerate` on
@@ -1806,6 +1806,37 @@ live `*Face` pointer, and a source rim's consecutive chord segments stay
 one chain. The rejected alternative was matching one mesh segment to one
 recorded curved `Edge`; that would reject every sufficiently chorded rim.
 
+### 10.2 Curved welds among one revolve sheet's unstitched faces
+
+An OPEN stitched body also reuses the source revolve mesh when its inputs
+are the complete set of single-face sheets made by `Unstitch` on one
+revolve sheet, with no placement on the pieces or on the stitch. Every
+`unstitchPayload.face` must belong to that same original sheet, and each
+original face must appear once. The original may be retired: its payload
+and faces remain readable, and `tessellateRevolve` works from that immutable
+record. This route admits a new weld only when each welded pair of copied
+`Edge`s maps back to the SAME original `*Edge` and every vertex class maps
+back to ONE original `*Vertex`. It also requires every original two-face
+edge to be re-welded in the stitched body. A failed ancestry check is R32.
+The rejected alternative was accepting equal edge coordinates or a CURVE
+certificate alone: either can weld analytic curves while two independently
+chosen mesh chord sequences still differ.
+
+`Unstitch` copies each face's loops, coedges and vertices in order. The
+stitch gate pairs a copied edge and vertex with its original by those
+recorded loop positions, then checks the weld plan against original pointer
+identity. The source revolve mesh already gives the two original faces
+identical chord stations at their shared edge through its global angular
+sequence. Reattributing all its triangles through original face → live
+stitched face therefore restores the same seam after the real weld. No
+coordinate is snapped, interpolated or moved by this mesh path. Each face
+inherits its original mesh bound, including meridian/angular chording and
+construction/placement rounding; the identity copy and pointer-proven weld
+add zero displacement. The source mesh's area allowance and the sheet
+audits of §10.1 apply unchanged. This route publishes
+`BoundaryVerified()` after the source contact audit and never publishes
+`VolumeVerified()` for the open sheet.
+
 ## 11. Table X — which existing operations admit a sheet
 
 **Table X — a sheet as receiver or operand**
@@ -1817,7 +1848,7 @@ recorded curved `Edge`; that would reject every sufficiently chorded rim.
 | `Shell` | `ErrUnsupported` | removes faces from a solid and offsets its material section; a prism sheet does carry a section, but it has no material or caps to remove. `Thicken` uses that section under §16's separate contract |
 | `Thicken` | §16's patch and profile-fed prism families build; the other families are R24 | builds a new solid from a sheet's recorded generator and retires the sheet |
 | `Placed` / `PlacedCopy` / `Duplicate` | admitted, unchanged | a rigid motion of a payload; nothing in it reads solidity |
-| `Tessellate` / `STL` / `OBJ` | a prism, revolve, loft, all-planar stitched or §10.1 revolve-backed stitched sheet tessellates and exports; other curved stitched sheets are R32 | each supported sheet path runs the manifold-with-boundary audit §10 describes |
+| `Tessellate` / `STL` / `OBJ` | a prism, revolve, loft, all-planar stitched or §10.1–§10.2 revolve-backed stitched sheet tessellates and exports; other curved stitched sheets are R32 | each supported sheet path runs the manifold-with-boundary audit §10 describes |
 | `ToFace` / `ToFaceAngular` naming a **planar** face of a live sheet | admitted | the stop reads the face's plane and nothing about material, so `stops.go`'s resolution is unchanged |
 | `ToFace` naming a curved face of a sheet | as for a solid | this design changes no curved-stop reach |
 | `EdgeAxis` naming a linear edge of a live sheet | admitted | the axis reads the edge's line; `docs/api-design.md` §6.2's exactly-one and liveness rules apply unchanged |
@@ -2216,6 +2247,7 @@ ANSWER is accepted and reads `Suspect`.
 | 8 | `Trim`, `Extend` and `Split` over a pair whose two sweeps share one generator, in the four PRs `docs/surface-intersection-design.md` §11 states: its §2 entry gate, `buildPrismScene`'s `ChainRecord` arm, `classifyPrismCells`'s side reading consumed unchanged, the open-walk chaining of its §3.3, `chainPayload`'s and `chainRevolvePayload`'s walk set and section displacement, and the one displacement term its §7 derives from `bounds.go`'s existing `cutParamUlps`/`cutDisplacementAllow`. Table A's five new rows; Table R's R29–R31; §15's T170–T181. A pair sharing no generator, a chain ribbon as `Trim`'s receiver, and a second trim of an already-trimmed body each refuse with `ErrUnsupported`, and that document's §4 and §5 own why |
 | 9 | §10.1's curved or mixed stitched mesh from one complete revolve sheet, closed or open. Other source constructions and new curved welds remain R32 until they can prove identical seam samples. |
 | 10 | One free pole on `RevolveChain` (§13.3): Table G's pole topology, the wall `Area` and `Bounds` charges, one free rim after a full revolution, and T139 plus T142–T146. Both free ends on the axis stay R22; interior axis pinches are R33. The chain-fed revolve mesh remains a separate increment because its open-walk pole fan and boundary audit need their own proof |
+| 11 | §10.2's open stitched mesh from all single-face sheets unstitched from one revolve sheet. Pointer-proven re-welds reuse the source mesh's identical curved seam samples; other curved welds remain R32. |
 
 **Increment 7 depends on increment 1's patch and prism sheets and analytic
 prism builder, plus `docs/modify-design.md` §5/§8's section offset and audit.**
@@ -2300,6 +2332,15 @@ The row-9 curved-mesh obligations are:
 - T89: Remove the source-to-live face remap from T85, run the free-boundary
   attribution test, record its failure, and restore it. This isolates the
   face-identity proof from the chording proof.
+- T190: Unstitch T85's partial cylinder/torus sheet into its two faces,
+  stitch both pieces, then tessellate. Assert the original and re-stitched
+  meshes have identical vertex coordinates and signed facet area, the
+  curved shared `Edge` is no longer free, curved free arcs still chord into
+  multiple segments, and the mesh/body free-chain counts agree per face.
+- T191: Place one T190 piece before stitching. The result may be an open
+  sheet, but its mesh is R32 because the original shared stations no longer
+  describe the placed copy. A second fixture whose two copied edges map
+  to different original `*Edge`s refuses through the ancestry gate.
 
 | # | Fixture | Asserted |
 |---|---|---|
