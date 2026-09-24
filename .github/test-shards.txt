@@ -1844,3 +1844,10 @@
 2	0.01	TestThickenChainRevolvePoleRefuses
 3	0.00	TestExtrudeChainRibbonReadsValid
 0	0.00	TestSweepChainRibbonReadsValid
+1	0.00	TestExtrudeChainTessellatesOneWallRibbon
+2	0.00	TestExtrudeChainTessellatesThreeWallRibbon
+3	0.00	TestExtrudeChainTessellateRefusesCurvedWall
+0	0.00	TestSweepChainTessellatesRibbon
+1	0.00	TestTessellateChainBuildsOneExactQuadPerWall
+2	0.00	TestTessellateChainRejectsWronglyAttributedWalls
+3	0.00	TestTessellateChainReflectedPlacementFlipsWinding

@@ -46,7 +46,7 @@ to the byte budget.
 | `docs/prism-boolean-design.md` | The analytic reduction for `Union`/`Cut`/`Intersect` over co-directional coplanar prisms: the reject-only entry gate, the private `sketch` scene, and section/axial displacement bounds. |
 | `docs/tessellation-reach-design.md` | The tessellation reach plan: the loft restatement, free-form prism chording, revolve T2–T4 and the cap-loop chamfer tessellator, each with its cells, proof terms, refusals and tests. |
 | `docs/surface-intersection-design.md` | `Trim`, `Extend` and `Split` over a pair whose two sweeps share one generator: the reject-only entry gate, the private `sketch` scene reused from the prism boolean, and the cut-parameter displacement. |
-| `docs/surface-design.md` | The sheet body and the operations over one: `BodyKind`, `WithSurfaceResult`, `Patch`, `Stitch`/`Unstitch`, `ExtrudeChain`/`RevolveChain`, the proven-coincidence join rule, and what every reading, `Verify` question and export says about a body that encloses no region. |
+| `docs/surface-design.md` | The sheet body and its operations: `BodyKind`, `WithSurfaceResult`, `Patch`, `Stitch`/`Unstitch`, `ExtrudeChain`/`RevolveChain`, and what `Verify`/export say. |
 
 ### Seam and records
 
@@ -202,6 +202,7 @@ to the byte budget.
 | `tessellate_sheet.go` | `requireSheetMesh` and `requireSheetVertexLinks`: the sheet mesh's manifold-with-boundary and vertex-link audits. See `docs/tessellation-design.md` §1.2. |
 | `tessellate_loft.go` | `tessellateLoft`: the exact restatement of a `loftPayload`'s held triangle set and proof record. See the file's own doc comments. |
 | `tessellate_stitch.go` | Restates planar stitched triangles or reuses a revolve sheet's curved mesh. See `docs/tessellation-design.md` §2 and `docs/surface-design.md` §10.1. |
+| `tessellate_chain.go` | A chain ribbon's exact-quad mesh off its wall topology. `docs/surface-design.md` §13.4. |
 | `tessellate_capblend.go` | `tessellateCapBlend`: the export-only cap-loop chamfer mesh, one chord count per wall walk shared three ways. See `docs/tessellation-reach-design.md` §7. |
 | `triangulate.go` | The cap triangulator behind `Tessellate`: hole bridging plus reflex-blocked ear clipping, correct for non-convex outlines with holes. See the file's own doc comment. |
 | `export.go` | `Body.STL`/`Body.OBJ`: deterministic writers over `Tessellate`, with `WithChordTolerance`'s documented default. See the file's own doc comment. |

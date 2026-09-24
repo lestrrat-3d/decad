@@ -1462,6 +1462,7 @@ input with no usable geometry, `ErrUnsupported` is this evaluator's reach.
 | R42 | `Offset` in every increment before Table D row 15 | `ErrUnsupported` |
 | R43 | `Thicken` on a revolve sheet or a chain revolve shell whose axis is not stated exactly along a recorded plane axis, whose swept offset has no proven strictly positive radius from that axis over the whole interval, or whose assembled section leaves the axis side undecided (§16.5, §16.7) | `ErrUnsupported` |
 | R44 | `Thicken` on a chain-fed sheet holding more than one recorded walk, carrying a nonzero section displacement, or holding a walk outside §16.6's axis-parallel right-angle class | `ErrUnsupported` |
+| R45 | `ExtrudeChain` or `SweepChain`'s tessellation or export over a chain holding a curved (`CircleSeg`/`ArcSeg` fragment) or free-form wall, before the increment that chords that wall too | `ErrUnsupported` |
 
 R6, R8, R10 and R20 are `ErrUnsupported` rather than `ErrDegenerate` on
 `docs/api-design.md` §8's own distinction: the input names real geometry and
@@ -1485,7 +1486,7 @@ R29 and R31 are `ErrUnsupported` and STAGED for the same reason, and R30 joins
 R5, R7 and R9 as `ErrDegenerate`: a tool that separates nothing names no
 trimmed body for any later evaluator to build.
 
-R22, R23, R34 and R36 are `ErrUnsupported` and STAGED: each names real
+R22, R23, R34, R36 and R45 are `ErrUnsupported` and STAGED: each names real
 geometry, and each waits on a topology build rather than on a different
 operation. R43 and R44 are `ErrUnsupported` and NOT staged in that sense:
 each names a receiver whose own geometry the proof cannot decide — an axis
@@ -2340,9 +2341,12 @@ profile revolve does (§9.2).
 governs it row for row: a boolean, `Fillet`, `Chamfer` and `Shell` refuse it,
 `Placed`/`PlacedCopy`/`Duplicate` admit it, a planar wall answers `ToFace`, and
 every selector predicate reads its faces and edges. A chain-fed prism ribbon
-tessellates and exports through §10's manifold-with-boundary audit, since its
-walls chord exactly as the same record's profile-fed siblings do and it mints no
-cap to leave out; a chain-fed revolve ribbon's mesh remains `ErrUnsupported`:
+built from `LineSeg` segments alone tessellates and exports through §10's
+manifold-with-boundary audit, reading each wall's own exact planar quad
+straight off its topology with no chording at all — a curved
+(`CircleSeg`/`ArcSeg` fragment) or free-form wall is `ErrUnsupported` (R45)
+until the increment that chords it too; a chain-fed revolve ribbon's mesh
+remains `ErrUnsupported`:
 `tessellateBodyContext` has no `chainRevolvePayload` arm, and `planRevolve` plus
 its wraparound axis-incidence audit consume closed loops. The existing pole-fan
 chording does not prove that an open walk's free pole gets one manifold
@@ -2405,6 +2409,7 @@ ANSWER is accepted and reads `Suspect`.
 | 16 | `Body.Thicken` on a profile-fed revolve sheet (§16.5): the exact axis class, the meridian annulus over §16.2's own offsets, the radial gate over the interval scan's own boxes, the re-resolved axis frame, and §15's T158–T161 |
 | 17 | `Body.Thicken` on a chain ribbon (§16.6): the closed-form assembled section, its exact-generation gate and endpoint crossing audit, all three sides, and §15's T162–T164 |
 | 18 | `Body.Thicken` on a chain revolve shell (§16.7): §16.6's assembled section under §16.5's sweep and radial gate, and §15's T165–T169. A free end on the axis stays R43 |
+| 19 | The chain-fed prism ribbon's `Tessellate`/`STL`/`OBJ` mesh over a `LineSeg`-only chain (`tessellate_chain.go`): every wall's exact planar quad read straight off its topology with no chording. A curved or free-form wall, and the chain-fed revolve ribbon's mesh, stay R45 and row 10's own staging respectively |
 
 **Increment 7 depends on increment 1's patch and prism sheets and analytic
 prism builder, plus `docs/modify-design.md` §5/§8's section offset and audit.**

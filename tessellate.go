@@ -349,11 +349,26 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		// reasoning tessellateLoft's own arm above states for a loft.
 		return tessellateStitch(ctx, b, sp)
 	}
+	if cp, ok := b.payload.(chainPayload); ok {
+		// The chain-fed ribbon path takes no chord tolerance either, on the
+		// identical reasoning: every wall is already an exact planar quad,
+		// so there is no chording decision for a tolerance to bind
+		// (tessellate_chain.go's own doc comment owns why).
+		return tessellateChain(ctx, b, cp)
+	}
+	if sp, ok := b.payload.(chainSweepPayload); ok {
+		// SweepChain's one-span straight reduction builds through the
+		// identical evalChainExtrudeContext a plain ExtrudeChain does, over
+		// the chainPayload it wraps unchanged (sweep.go's
+		// finishChainSweepBody), so it reuses that same restatement rather
+		// than a second one keyed on the wrapper type.
+		return tessellateChain(ctx, b, sp.chain)
+	}
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
 		// Chording is per payload kind. Name both the staged kind and the
 		// implemented set so the refusal cannot misstate evaluator reach.
-		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, revolve, cup, loft, cap-loop chamfer, stitch, and faceted`, ErrUnsupported, b.payload)
+		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, chain-fed prism, revolve, cup, loft, cap-loop chamfer, stitch, and faceted`, ErrUnsupported, b.payload)
 	}
 	// sheet is docs/surface-design.md §4.1's own flag, read once: a surface
 	// result omits both caps from its wall build (prism_build.go), and every
