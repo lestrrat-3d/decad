@@ -1703,6 +1703,8 @@
 3	0.02	TestPrismCutCancellationLeavesDocumentUnchanged
 3	0.04	TestPrismCutCleanNestingKeepsAToolArcEndTheAnglesMiss
 3	0.02	TestPrismIntersectCrossingBoxesResolvesAnalytically
+3	0.02	TestPrismIntersectDiscAndNestedWasherKeepsAnnularSection
+3	0.05	TestPrismIntersectHoledCrossingFallsBack
 3	0.03	TestPrismOverlapVolumeMatchesEvalPrismOnASingleCell
 3	0.10	TestPrismProfilesContextWaitsForArrangementAfterCancellation
 3	0.02	TestPrismProofRecordChargesEveryFaceItsOwnDisplacement

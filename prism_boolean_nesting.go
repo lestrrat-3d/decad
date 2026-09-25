@@ -7,6 +7,58 @@ import (
 	"github.com/lestrrat-3d/sketch"
 )
 
+// tryPrismHoledIntersect admits one cleanly nested, one-hole prism under a
+// hole-free prism. Intersect is symmetric, so put the hole-free operand first.
+// The shared Intersect admission used by the overlap-area reading stays
+// hole-free; this body-only arm uses the same gates and work cap explicitly.
+func tryPrismHoledIntersect(ctx context.Context, a, b *Body) (prismPayload, bool, error) {
+	ah, aok := a.payload.(prismPayload)
+	bh, bok := b.payload.(prismPayload)
+	if !aok || !bok {
+		return prismPayload{}, false, nil
+	}
+	if len(ah.profile.Holes) == 1 && len(bh.profile.Holes) == 0 {
+		a, b = b, a
+	} else if len(ah.profile.Holes) != 0 || len(bh.profile.Holes) != 1 {
+		return prismPayload{}, false, nil
+	}
+
+	budget := newWorkBudget(ctx)
+	if err := budget.err(); err != nil {
+		return prismPayload{}, false, err
+	}
+	pa, pb, ok, err := admitPrismPairBudget(budget, a, b)
+	if err != nil || !ok {
+		return prismPayload{}, false, err
+	}
+	for _, profile := range []ProfileRecord{pa.profile, pb.profile} {
+		trimmed, err := prismProfileHasTrimmedCircularSource(budget, profile)
+		if err != nil {
+			return prismPayload{}, false, err
+		}
+		if trimmed {
+			return prismPayload{}, false, nil
+		}
+	}
+	if !prismIntersectZIntervalOverlaps(pa, pb) {
+		return prismPayload{}, false, nil
+	}
+	segments, withinCap, err := prismSceneWithinWorkCap(budget, pa, pb)
+	if err != nil {
+		return prismPayload{}, false, err
+	}
+	if !withinCap {
+		return prismPayload{}, false, fmt.Errorf(
+			`%w: the analytic %s scene charges at least %d arranger segments against this evaluator's cap of %d`,
+			ErrUnsupported, opIntersect, segments, prismMaxArrangementSegments)
+	}
+	reexpress, err := newPrismReexpression(pa, pb)
+	if err != nil {
+		return prismPayload{}, false, err
+	}
+	return resolveAndBuildPrismIntersect(ctx, budget, pa, pb, reexpress)
+}
+
 // This file is docs/prism-boolean-design.md §4.2's "clean" sub-case for
 // Cut and Intersect: the structural whole-loop match against buildPrismScene's
 // own tag map (prism_boolean.go), reusing that file's scene construction, G1-G4
@@ -89,7 +141,7 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *workBudget, target, to
 
 // resolveAndBuildPrismIntersect runs Intersect's clean-nesting structural
 // match (§4.2) in both directions first and, once it finds the unique nested
-// operand, authenticates its own disk verbatim and builds §7's exactness.
+// operand, authenticates its own region verbatim and builds §7's exactness.
 // There is no §6 audit on this path, for the same reason as Cut's. When
 // neither direction matches, this tries prism_boolean_crossing.go's
 // edge-orientation classifier before giving up.
@@ -418,8 +470,9 @@ func resolvePrismCut(ctx context.Context, budget *workBudget, target, tool prism
 // nesting proof: is X's own cell reported with Y's Outer as one further hole?
 // That is what closes the disjoint-footprint trap here too. Once a direction
 // proves nesting, the RESULT is a separate s.Profiles() candidate: the
-// profile whose Outer reproduces the NESTED operand's own Outer with no
-// holes — that operand's own disk cell, untouched. If both directions match,
+// profile whose Outer reproduces the NESTED operand's own Outer, with its
+// admitted hole if present — that operand's own cell, untouched. If both
+// directions match,
 // or neither does, the topology is unresolved (§4.4).
 //
 // resolved=false (err always nil in that case) means the pair's topology is
@@ -463,8 +516,8 @@ func resolvePrismIntersect(ctx context.Context, budget *workBudget, pa, pb prism
 		return nil, nil, prismSceneDelta{}, false, false, err
 	}
 
-	// G6 keeps both operands hole-free for Intersect, so neither direction's
-	// nesting search wants any hole beyond the other operand's own Outer.
+	// The one-hole arm keeps A hole-free and needs only B-inside-A. The
+	// hole-free arm searches in both directions as before.
 	//
 	// The proof cell carries the whole weight of the nesting claim, so its own
 	// validity is checked exactly like the result cell's below: a cell sketch
@@ -479,12 +532,16 @@ func resolvePrismIntersect(ctx context.Context, budget *workBudget, pa, pb prism
 	if bNested && !proofBNested.Valid {
 		return nil, nil, prismSceneDelta{}, false, false, prismInvalidRegionErr("intersect")
 	}
-	proofANested, aNested, err := prismFindLoopMatch(budget, profiles, bOuter, []map[sketch.Entity]struct{}{aOuter})
-	if err != nil {
-		return nil, nil, prismSceneDelta{}, false, false, err
-	}
-	if aNested && !proofANested.Valid {
-		return nil, nil, prismSceneDelta{}, false, false, prismInvalidRegionErr("intersect")
+	aNested := false
+	if len(pb.profile.Holes) == 0 {
+		proofANested, matched, err := prismFindLoopMatch(budget, profiles, bOuter, []map[sketch.Entity]struct{}{aOuter})
+		if err != nil {
+			return nil, nil, prismSceneDelta{}, false, false, err
+		}
+		if matched && !proofANested.Valid {
+			return nil, nil, prismSceneDelta{}, false, false, prismInvalidRegionErr("intersect")
+		}
+		aNested = matched
 	}
 	if bNested == aNested {
 		// Both directions match (should not occur for a genuine pair) or
@@ -493,14 +550,21 @@ func resolvePrismIntersect(ctx context.Context, budget *workBudget, pa, pb prism
 		return nil, nil, prismSceneDelta{}, false, false, nil
 	}
 
-	// The nested operand's own disk: its Outer reproduced verbatim, no holes
-	// (G6 already keeps it hole-free) — a SEPARATE s.Profiles() candidate
-	// from the nesting proof above.
+	// The nested operand's own region is a SEPARATE s.Profiles() candidate
+	// from the nesting proof above. B may carry one hole in the new arm.
 	wantOuter, nested := aOuter, false
+	var wantHoles []map[sketch.Entity]struct{}
 	if bNested {
 		wantOuter, nested = bOuter, true
+		for i := range pb.profile.Holes {
+			hole, err := prismLoopEntitySet(budget, tags, true, i)
+			if err != nil {
+				return nil, nil, prismSceneDelta{}, false, false, err
+			}
+			wantHoles = append(wantHoles, hole)
+		}
 	}
-	result, resultResolved, err := prismFindLoopMatch(budget, profiles, wantOuter, nil)
+	result, resultResolved, err := prismFindLoopMatch(budget, profiles, wantOuter, wantHoles)
 	if err != nil {
 		return nil, nil, prismSceneDelta{}, false, false, err
 	}
