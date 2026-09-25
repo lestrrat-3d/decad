@@ -156,6 +156,7 @@
 0	0.00	TestCircularStationChainRefusesAnUnenclosableRecord
 0	0.00	TestClampedConversionCostIsQuadratic
 0	0.00	TestClearDenomsIsAPositiveRescaling
+0	0.02	TestClearanceAxisBoxesNearTolerance
 0	0.03	TestClearanceCoaxialPegInTube
 0	0.00	TestClearanceEnumerationCountsVertexTierFaces
 0	0.02	TestClearanceFarOriginTiltedPlanePairContainsTruth

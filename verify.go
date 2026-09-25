@@ -408,8 +408,15 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 			if boxProven && !cfg.clearances {
 				continue
 			}
-			res, err := clearancePairCached(ctx, a, b, boxProven, geomCache)
-			if err != nil {
+			res, fast := clearanceAxisBoxes(a, b)
+			if !fast {
+				var pairErr error
+				res, pairErr = clearancePairCached(ctx, a, b, boxProven, geomCache)
+				if pairErr != nil {
+					return nil, pairErr
+				}
+			}
+			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
 
