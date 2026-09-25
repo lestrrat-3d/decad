@@ -114,6 +114,11 @@ func TestRevolveArcCellSlackIsExactOnAFixedSignCell(t *testing.T) {
 		arcCellReference(cell, scale, held, revolveWeightOneMinusT)
 	require.GreaterOrEqual(t, got, want)
 	require.InDelta(t, want, got, 0.01*want)
+	reversed := arcCellFixture(cV, radius, dth, -dth)
+	gotReversed, err := revolveArcCellSlack(reversed, step, [2]ratInterval{area, area}, 0)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, gotReversed, want)
+	require.InDelta(t, got, gotReversed, 0.01*want)
 }
 
 func TestRevolveArcFanSlackBoundsAPoleCell(t *testing.T) {
