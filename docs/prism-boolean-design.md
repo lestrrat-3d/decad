@@ -122,10 +122,18 @@ that pair.
 | G3 | The two operands' **composed world planes** (`xform ∘ frame`, core §5.2/§6.2's r3 vocabulary — `worldOrigin = xform.Apply(frame.Origin())`, `worldNormal = xform.ApplyDir(frame.N())`) are the same plane, exactly: `worldNormalA == worldNormalB` (Go `==` on the stored `r3.Vec` floats — component-wise exact equality, which treats `-0.0` and `0.0` as equal, §3.3; "co-directional" — the same outward sweep sense, not merely antiparallel) **and** `(worldOriginB − worldOriginA)·worldNormalA == 0.0` (an ordinary float64 dot product compared against the literal zero). | This is decad's own admission decision, not a question `sketch` answers, so CLAUDE.md's reject-only rule binds it directly: a residual test here would be an admission gate on a residual, which the hard rule forbids outright. Every quantity is read off the stored `r3.Vec` floats as-is (the `clearance_degen.go` discipline: exact arithmetic on the payload's own floats, never a re-derived angle) — never loosened to a tolerance. §3.3 covers what this excludes and why it is not fixed here. |
 | G4 | Every segment of both operands' `ProfileRecord` (`Outer` and every loop of `Holes`) is a `LineSeg`, `CircleSeg`, or `ArcSeg`. | `geom.BoundaryEdge.TExact`'s own contract is a **whole-scene** gate (`sketch`'s `geom/region.go`): one `Ellipse`/`EllipticalArc`/`Conic`/`Spline`/`ClosedSpline`/`FitSpline`/`NURBS` anywhere in an arrangement makes every bound in it — including unrelated line/circle/arc edges — report `TExact = false`. A single free-form segment on either operand would silently blind the whole combination, not just its own edges, so the gate excludes the kind entirely rather than trying to admit "the free-form parts don't touch." Staged: §9's free-form row. |
 | G5 | The z-interval relation the op needs (§3.2) holds, computed after re-expressing operand B's `[z0, z1]` onto operand A's normal axis: `z' = z + (originB − originA)·normalA` (an origin shift along an axis G3 already proved identical — ordinary float arithmetic, no rotation). | A shift, not a containment test — G3 already certified the shared axis; this is bookkeeping on it. The shift is only a comparison input for `Union` and `Cut`, whose result interval is one operand's own endpoints verbatim (§3.2); for `Intersect` a shifted endpoint can reach the result, and its rounding is the same rigid-shift mechanism §7's displacement term already carries. |
-| G6 | `ProfileRecord.Holes` is empty wherever §4.2's selection rule for the op needs it: `Union` needs it on **both** operands, `Cut` needs it on the **tool** (the target's own holes are carried through unchanged). | `Union`'s rule (select every returned cell) is sound only when neither operand has a hole a returned cell could sit inside without touching either outer boundary; holed unions are §9's PR3 row. `Cut`'s clean-nesting match describes the removed tool as **one** new hole reproducing the tool's `Outer`, which is the tool's whole solid only while the tool is hole-free: a holed tool's solid is its `Outer` minus its own `Holes`, so the material standing inside each tool hole survives the cut as an island that one new hole does not describe. Those islands are disconnected lumps a single `ProfileRecord` cannot carry (§4.4's multi-lump row), so the pair falls back rather than building a body missing them. |
+| G6 | `Union` needs both operands hole-free. `Cut` needs the tool hole-free; the target may carry holes. `Intersect` needs both operands hole-free except for the one-hole clean-nesting arm below. | `Union`'s select-all rule would include a hole's void. A holed `Cut` tool can leave separate lumps that one `ProfileRecord` cannot carry. The admitted holed `Intersect` has one nested result profile, including its hole. |
 
 G1–G6 are the only conditions checked before touching `sketch`. **Passing
 them is not admission** — see §3.4.
+
+`Intersect` has one additional G6 arm: exactly one operand may have exactly
+one hole when the other is hole-free. Reorder this symmetric operation so the
+hole-free operand is A, then require the clean-nesting proof in §4.2 to show
+that A contains B's whole outer loop. The result must be one `sketch` profile
+whose outer and hole reproduce B's loops whole. Any other holed intersection
+falls back to the mesh path. This arm leaves the shared overlap-area reading
+of §4.5 on its existing admission gate.
 
 ### 3.2 Per-operation shape
 
@@ -362,8 +370,8 @@ additionally reproduce target's original holes plus **one new hole** that
 structurally reproduces tool/B's own `Outer` (also every edge `Whole`; G6
 keeps the tool hole-free, so that one hole is the tool's whole solid and no
 material inside a tool hole is dropped); for `Intersect` with B fully inside
-A, the match is simply B's own disk cell, `Outer` reproducing B's original
-loop. A structural match — entity identity, order, and `Whole`-ness, nothing
+A, the match is B's own cell: its `Outer` and any admitted hole reproduce
+B's original loops. A structural match — entity identity, order, and `Whole`-ness, nothing
 geometric — is a pure data comparison against decad's own tag map. **When a
 unique such profile exists, it is not assembled at all: it is one of
 `s.Profiles()`'s own results, and is authenticated by handing it directly to
@@ -384,6 +392,15 @@ the SCENE entity's endpoint, not the target's original, wider one: a
 returns from a clean-nesting cut as `LineSeg{(1,0)→(5,0), t=[0,1]}` — a
 different, computed corner recorded as though it were exact. §7's `δ_walk`
 is what charges that gap into the result's own `sectionDelta`.
+
+For the one-hole `Intersect` arm, the proof cell has A's whole outer loop
+and B's whole outer loop as its only hole. A second cell must reproduce B's
+whole outer and hole loops. Both cells must report `Valid`, and the result
+cell alone becomes the payload's section. The proof cell excludes a disjoint
+pair; the result cell preserves the void in B. The existing G3 plane gate,
+G5 overlapping sweep intervals, split-boundary reroute, work cap,
+`RecordProfile` authentication, and per-end bound selection apply unchanged.
+The crossing classifier does not admit this arm.
 
 **`Cut`/`Intersect`, crossing sub-case (boundary contact, not clean nesting):
 implemented for the direct-edge case (`prism_boolean_crossing.go`); the
@@ -453,6 +470,7 @@ regardless of who authored the input curves it was cut from.
 | `Union` with a holed operand | G6, mesh path; §9 PR3 |
 | A split arranged boundary with a nonzero source displacement, a nonzero walk charge, or a nonidentity re-expression — any one of the three alone | §3.4 safety routing, mesh path; a future crossing-sensitivity proof may admit it |
 | `Cut` with a holed tool | G6, mesh path; the surviving material inside each tool hole is a separate lump, so it waits on the multi-lump prism payload of the row below, not on PR3 |
+| `Intersect` with a holed operand outside §3.1's one-hole clean-nesting arm | G6, mesh path; the result may require several regions or a split boundary |
 | `Cut`/`Intersect` crossing sub-case reachable only through a coincident carrier named under one operand's own entity (§4.2's own further extension) | not yet built (`prism_boolean_crossing.go`), mesh path |
 | A holed `Cut` target whose tool does not clear it via clean nesting (the crossing classifier is scoped to hole-free operands on both sides, §4.2) | mesh path; the clean-nesting path above still covers a holed target whose tool does not touch it |
 | A `Cut`/`Intersect` selection covering two or more disjoint regions (a multi-region coplanar overlap) | no BODY is built: a `ProfileRecord` carries one outer loop, so resolution fails to close one (§4.2) and the pair takes the mesh path, waiting on a multi-lump prism payload that is not currently planned. `Verify`'s interference reading answers such a pair anyway, without a body, through §4.5's overlap-area reading |

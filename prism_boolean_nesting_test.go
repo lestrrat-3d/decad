@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"testing"
 
@@ -82,6 +83,22 @@ func cylinderWall(t *testing.T, b *decad.Body) decad.Cylinder {
 	cyl, ok := faces[0].Surface().(decad.Cylinder)
 	require.True(t, ok)
 	return cyl
+}
+
+// BenchmarkIntersectDiscWasher measures the complete boolean over two fresh
+// sketch-produced extrusions. The washer lies inside the disc in the section,
+// while its sweep extends beyond both disc caps.
+func BenchmarkIntersectDiscWasher(b *testing.B) {
+	for b.Loop() {
+		b.StopTimer()
+		doc := decad.New()
+		disc := discBody(b, doc, 0, 15, 10)
+		washer := washerBodySymmetric(b, doc, 8, 3, 11)
+		b.StartTimer()
+		if _, err := decad.Intersect(b.Context(), disc, washer); err != nil {
+			b.Fatal(err)
+		}
+	}
 }
 
 // TestPrismCutCleanNestingBoreThroughHub is §15's F1 workload: a bore cut
@@ -306,6 +323,57 @@ func TestPrismIntersectFullyNestedPairReturnsInnerOperand(t *testing.T) {
 	smallFirstVol, err := gotSmallFirst.Volume()
 	require.NoError(t, err)
 	require.Equal(t, bigFirstVol, smallFirstVol, `both call orders return the same body`)
+}
+
+func TestPrismIntersectDiscAndNestedWasherKeepsAnnularSection(t *testing.T) {
+	t.Parallel()
+	const discRadius, outer, inner, height, half = 15.0, 8.0, 3.0, 10.0, 11.0
+	for _, washerFirst := range []bool{false, true} {
+		t.Run(fmt.Sprint("washerFirst=", washerFirst), func(t *testing.T) {
+			doc := decad.New()
+			disc := discBody(t, doc, 0, discRadius, height)
+			washer := washerBodySymmetric(t, doc, outer, inner, half)
+			var got *decad.Body
+			var err error
+			if washerFirst {
+				got, err = decad.Intersect(t.Context(), washer, disc)
+			} else {
+				got, err = decad.Intersect(t.Context(), disc, washer)
+			}
+			require.NoError(t, err)
+			require.False(t, anyFaceIsFaceted(got))
+			require.Len(t, got.Lumps(), 1)
+			walls, err := decad.Faces(decad.Cylindrical()).Exactly(2).SelectFaces(got)
+			require.NoError(t, err)
+			radii := []units.Value{
+				walls[0].Surface().(decad.Cylinder).Radius,
+				walls[1].Surface().(decad.Cylinder).Radius,
+			}
+			require.ElementsMatch(t, []units.Value{units.Millimeters(outer), units.Millimeters(inner)}, radii)
+			box, err := got.Bounds()
+			require.NoError(t, err)
+			require.Equal(t, 0.0, box.Min.Z)
+			require.Equal(t, height, box.Max.Z)
+			vol, err := got.Volume()
+			require.NoError(t, err)
+			want := math.Pi * (outer*outer - inner*inner) * height
+			require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), boundMM3(t, vol))
+		})
+	}
+}
+
+func TestPrismIntersectHoledCrossingFallsBack(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := boxBody(t, doc, -12, -10, 5, 10, 10)
+	washer := holedBoxSymmetric(t, doc, 8, 3, 11)
+	got, err := decad.Intersect(t.Context(), plate, washer)
+	require.NoError(t, err)
+	require.True(t, anyFaceIsFaceted(got), `the split boundary stays on the mesh path`)
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	const want = (13*16 - 6*6) * 10.0
+	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), boundMM3(t, vol))
 }
 
 // TestPrismIntersectDisjointFootprintsFallsBack is §15's disjoint trap

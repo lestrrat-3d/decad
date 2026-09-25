@@ -75,6 +75,9 @@ import (
 // per §3.2's table.
 func tryPrismBoolean(ctx context.Context, op operationKind, a, b *Body) (prismPayload, bool, error) {
 	if op == opIntersect {
+		if result, ok, err := tryPrismHoledIntersect(ctx, a, b); ok || err != nil {
+			return result, ok, err
+		}
 		// admitPrismIntersectPair is Intersect's own preamble (G1-G4, the
 		// trimmed-circular refusal, G6, G5, the arrangement cap, the
 		// re-expression) factored out so §4.5's overlap-area reading
