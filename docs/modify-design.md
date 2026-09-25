@@ -542,19 +542,23 @@ because each needs the one before it to have passed.**
   Before an inward inradius survey starts, count concentric-scan,
   element/vertex pair, and Apollonius-triple candidate-family visits with
   checked arithmetic.
-  Require at most **1,048,576 visits**. Stream every emitted disk directly into
-  validation, and charge generation plus every whole-boundary validation visit
-  to one shared **1,048,576-visit budget**. Count overflow, a preflight count
-  above the limit, or runtime exhaustion is S18 (`ErrUnsupported`). Outward
-  shelling does not need an inradius survey, so S18 does not reach it.
+  Require at most **1,048,576 visits**. After that count, an exact contained
+  disk may prove the requested thickness fits without finding the full
+  inradius. Otherwise, stream every emitted disk directly into validation,
+  and charge generation plus every whole-boundary validation visit to one
+  shared **1,048,576-visit budget**. Count overflow, a preflight count above
+  the limit, or runtime exhaustion is S18 (`ErrUnsupported`). Outward shelling
+  does not need an inradius survey, so S18 does not reach it.
 - **Does the body exist?** This is the inward sense's question, and the **cavity**
   answers it. The cavity is a region swept along an interval, so it is empty when
   either of them is — and the thickness can empty either one, which is why S10
   carries **two independent limits**:
   - the **section** limit: `P ⊖ t` is non-empty exactly when `t` is strictly less
     than the section's **inradius** — the radius of its largest inscribed disk,
-    which `survey2d.go` already computes **exactly** as part of the wall survey.
-    The reading that refuses is the same one that answers `Wall.Minimum`;
+    which `survey2d.go` computes as part of the wall survey. A contained disk
+    whose radius exceeds the requested thickness plus the rounding margin
+    proves the success side without the full survey. A failure still uses
+    the inradius reading that answers `Wall.Minimum`;
   - the **height** limit: the wall behind a **kept** cap is a floor `t` thick, so
     the cavity is swept over `[z0 + t, z1]` (B5) and is non-empty exactly when `t`
     is strictly less than the sweep's height `h`. A wide, shallow section clears
