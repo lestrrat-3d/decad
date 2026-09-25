@@ -24,7 +24,7 @@ import (
 // through origin (normal +Z), topHalf on the plane offset by height along
 // that normal. CreateOffsetPlane keeps the same U/V basis, so the natural
 // (offset-0) correspondence pairs corresponding corners directly.
-func loftSquaresAt(t *testing.T, origin r3.Vec, bottomHalf, topHalf, height float64) (*sketch.Sketch, *sketch.Profile, *sketch.Sketch, *sketch.Profile) {
+func loftSquaresAt(t testing.TB, origin r3.Vec, bottomHalf, topHalf, height float64) (*sketch.Sketch, *sketch.Profile, *sketch.Sketch, *sketch.Profile) {
 	t.Helper()
 	w := sketch.NewWorld()
 	frame, err := r3.NewFrame(origin, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
@@ -52,7 +52,7 @@ func loftSquaresAt(t *testing.T, origin r3.Vec, bottomHalf, topHalf, height floa
 }
 
 // loftSquares is loftSquaresAt at the world origin.
-func loftSquares(t *testing.T, bottomHalf, topHalf float64) (*sketch.Sketch, *sketch.Profile, *sketch.Sketch, *sketch.Profile) {
+func loftSquares(t testing.TB, bottomHalf, topHalf float64) (*sketch.Sketch, *sketch.Profile, *sketch.Sketch, *sketch.Profile) {
 	t.Helper()
 	return loftSquaresAt(t, r3.NewVec(0, 0, 0), bottomHalf, topHalf, 10)
 }

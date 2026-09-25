@@ -78,7 +78,7 @@ func ballBody(t *testing.T, doc *decad.Document, r float64) *decad.Body {
 
 // torusBody revolves a circle at (0, major) of radius minor about the u
 // axis: a full torus about the world X axis centered at the origin.
-func torusBody(t *testing.T, doc *decad.Document, major, minor float64) *decad.Body {
+func torusBody(t testing.TB, doc *decad.Document, major, minor float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
