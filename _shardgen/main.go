@@ -85,9 +85,10 @@ func run() error {
 	return write(*outPath, assigned, totals, costs)
 }
 
-// readCosts reads each top-level test's elapsed time from `go test -json`
-// output. Subtest events carry a "/" in their name and are skipped: their time
-// is already inside their parent's, and -run selects the parent.
+// readCosts reads each top-level test's cost from `go test -json` output.
+// A parent's elapsed time includes sequential subtests but excludes children
+// paused by t.Parallel. Add each direct parallel child's cost recursively;
+// adding a parallel descendant through a sequential child would count it twice.
 func readCosts(path string) (map[string]float64, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -95,7 +96,14 @@ func readCosts(path string) (map[string]float64, error) {
 	}
 	defer f.Close()
 
-	costs := make(map[string]float64)
+	type testCost struct {
+		children []*testCost
+		elapsed  float64
+		paused   bool
+	}
+	nodes := make(map[string]*testCost)
+	roots := make(map[string]*testCost)
+	var active []*testCost
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 1<<20), 1<<24)
 	for sc.Scan() {
@@ -107,15 +115,62 @@ func readCosts(path string) (map[string]float64, error) {
 		if err := json.Unmarshal(sc.Bytes(), &ev); err != nil {
 			continue // a non-JSON line is build output, not a test event
 		}
-		if ev.Test == "" || strings.Contains(ev.Test, "/") {
+		if ev.Test == "" {
 			continue
 		}
 		switch ev.Action {
+		case "run":
+			node := &testCost{}
+			nodes[ev.Test] = node
+			if len(active) == 0 {
+				roots[ev.Test] = node
+			} else {
+				parent := active[len(active)-1]
+				parent.children = append(parent.children, node)
+			}
+			active = append(active, node)
+		case "pause":
+			if node := nodes[ev.Test]; node != nil {
+				node.paused = true
+			}
+			if len(active) != 0 {
+				active = active[:len(active)-1]
+			}
+		case "cont":
+			if node := nodes[ev.Test]; node != nil {
+				active = append(active, node)
+			}
 		case "pass", "fail", "skip":
-			costs[ev.Test] = ev.Elapsed
+			if node := nodes[ev.Test]; node != nil {
+				node.elapsed = ev.Elapsed
+			} else if !strings.Contains(ev.Test, "/") {
+				// Keep accepting a top-level result from a partial event log.
+				roots[ev.Test] = &testCost{elapsed: ev.Elapsed}
+			}
+			if len(active) != 0 {
+				active = active[:len(active)-1]
+			}
 		}
 	}
-	return costs, sc.Err()
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+
+	var cost func(*testCost) float64
+	cost = func(node *testCost) float64 {
+		total := node.elapsed
+		for _, child := range node.children {
+			if child.paused {
+				total += cost(child)
+			}
+		}
+		return total
+	}
+	costs := make(map[string]float64, len(roots))
+	for name, root := range roots {
+		costs[name] = cost(root)
+	}
+	return costs, nil
 }
 
 // listTests enumerates the package's Test, Fuzz and Example names, which is the
