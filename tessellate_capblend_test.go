@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -74,10 +75,10 @@ func TestTessellateCapBlendPlateExportsDeterministically(t *testing.T) {
 	t.Parallel()
 	chamfered := chamferedPlate(t)
 	var stlA, stlB, objA, objB strings.Builder
-	require.NoError(t, chamfered.STL(&stlA))
-	require.NoError(t, chamfered.STL(&stlB))
-	require.NoError(t, chamfered.OBJ(&objA))
-	require.NoError(t, chamfered.OBJ(&objB))
+	require.NoError(t, export.STL(t.Context(), &stlA, chamfered, units.Millimeters(0.1)))
+	require.NoError(t, export.STL(t.Context(), &stlB, chamfered, units.Millimeters(0.1)))
+	require.NoError(t, export.OBJ(t.Context(), &objA, chamfered, units.Millimeters(0.1)))
+	require.NoError(t, export.OBJ(t.Context(), &objB, chamfered, units.Millimeters(0.1)))
 	require.NotEmpty(t, stlA.String())
 	require.NotEmpty(t, objA.String())
 	require.Equal(t, stlA.String(), stlB.String())

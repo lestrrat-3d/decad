@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -249,8 +250,8 @@ func TestStitchCurvedRevolveMeshVerificationAndExport(t *testing.T) {
 		require.Greater(t, mesh.Bound().Base(), 0.0)
 	}
 	var stl, obj bytes.Buffer
-	require.NoError(t, stitched.STL(&stl, decad.WithChordTolerance(tol)))
-	require.NoError(t, stitched.OBJ(&obj, decad.WithChordTolerance(tol)))
+	require.NoError(t, export.STL(t.Context(), &stl, stitched, tol))
+	require.NoError(t, export.OBJ(t.Context(), &obj, stitched, tol))
 	require.NotEmpty(t, stl.Bytes())
 	require.NotEmpty(t, obj.Bytes())
 }
@@ -610,13 +611,13 @@ func TestStitchSolidTessellateIsDeterministic(t *testing.T) {
 	require.Equal(t, m1.SourceFaces(), m2.SourceFaces())
 
 	var stl1, stl2 stringWriter
-	require.NoError(t, box.STL(&stl1))
-	require.NoError(t, box.STL(&stl2))
+	require.NoError(t, export.STL(t.Context(), &stl1, box, units.Millimeters(0.1)))
+	require.NoError(t, export.STL(t.Context(), &stl2, box, units.Millimeters(0.1)))
 	require.Equal(t, stl1.s, stl2.s)
 
 	var obj1, obj2 stringWriter
-	require.NoError(t, box.OBJ(&obj1))
-	require.NoError(t, box.OBJ(&obj2))
+	require.NoError(t, export.OBJ(t.Context(), &obj1, box, units.Millimeters(0.1)))
+	require.NoError(t, export.OBJ(t.Context(), &obj2, box, units.Millimeters(0.1)))
 	require.Equal(t, obj1.s, obj2.s)
 
 	verts := m1.Vertices()

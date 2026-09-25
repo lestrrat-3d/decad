@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
@@ -84,7 +85,7 @@ func Example_decad_surfaceLoft() {
 		return
 	}
 	var obj bytes.Buffer
-	if err := sheet.OBJ(&obj); err != nil {
+	if err := export.OBJ(context.Background(), &obj, sheet, units.Millimeters(0.1)); err != nil {
 		fmt.Printf("failed to export OBJ: %s\n", err)
 		return
 	}

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
@@ -81,7 +82,7 @@ func Example_decad_revolve_tessellate() {
 	fmt.Printf("chorded volume under the analytic volume: %v\n", held < analytic)
 
 	var stl strings.Builder
-	if err := body.STL(&stl, decad.WithChordTolerance(units.Millimeters(0.5))); err != nil {
+	if err := export.STL(context.Background(), &stl, body, units.Millimeters(0.5)); err != nil {
 		fmt.Printf("failed to write STL: %s\n", err)
 		return
 	}

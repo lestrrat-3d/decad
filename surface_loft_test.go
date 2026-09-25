@@ -9,6 +9,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/decadtest"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -404,12 +405,12 @@ func TestSurfaceLoftTessellationRestatesWalls(t *testing.T) {
 	for _, format := range []string{"STL", "OBJ"} {
 		var plain, verified bytes.Buffer
 		if format == "STL" {
-			require.NoError(t, sheet.STL(&plain))
-			require.NoError(t, sheet.STL(&verified, decad.WithVerification(decad.VerifyAll)))
+			require.NoError(t, export.STL(t.Context(), &plain, sheet, units.Millimeters(0.1)))
+			require.NoError(t, export.STL(t.Context(), &verified, sheet, units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll)))
 			require.Equal(t, 8, strings.Count(plain.String(), "  facet normal "))
 		} else {
-			require.NoError(t, sheet.OBJ(&plain))
-			require.NoError(t, sheet.OBJ(&verified, decad.WithVerification(decad.VerifyAll)))
+			require.NoError(t, export.OBJ(t.Context(), &plain, sheet, units.Millimeters(0.1)))
+			require.NoError(t, export.OBJ(t.Context(), &verified, sheet, units.Millimeters(0.1), decad.WithVerification(decad.VerifyAll)))
 			require.Equal(t, 8, strings.Count(plain.String(), "\nf "))
 		}
 		require.Equal(t, plain.Bytes(), verified.Bytes())

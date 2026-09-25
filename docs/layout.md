@@ -47,6 +47,7 @@ to the byte budget.
 | `docs/tessellation-reach-design.md` | The tessellation reach plan: the loft restatement, free-form prism chording, revolve T2–T4 and the cap-loop chamfer tessellator, each with its cells, proof terms, refusals and tests. |
 | `docs/surface-intersection-design.md` | `Trim`, `Extend` and `Split` over a pair whose two sweeps share one generator: the reject-only entry gate, the private `sketch` scene reused from the prism boolean, and the cut-parameter displacement. |
 | `docs/surface-design.md` | The sheet body and its operations: `BodyKind`, `WithSurfaceResult`, `Patch`, `Stitch`/`Unstitch`, `ExtrudeChain`/`RevolveChain`, `Offset`, and what `Verify`/export say. |
+| `docs/step-export-design.md` | Export package entry points and the AP214 faceted writer contract. |
 
 ### Seam and records
 
@@ -119,7 +120,7 @@ to the byte budget.
 | `revolve_denotation.go` | `angleDenotation`/`sweepDenotation`: exact stated angles or certified derived-angle intervals, their endpoint displacement, and dependent sweep/trig bounds. See `docs/evaluator-design.md` §6 and `docs/sweep-design.md` §3. |
 | `stops.go` | Body-relative stop resolution for `ToFace`/`ToFaceAngular`/`ThroughAll`/`ThroughAllSide`. See evaluator §5/§6/§11 and the file's own doc comments. |
 | `loft.go` | `Document.Loft` and `LoftChain`: the entry points over `loft_build.go`'s evaluator, the chain ribbon build, and `WithSurfaceResult` parsing. See `docs/loft-design.md` §2/§4/§10/§16. |
-| `loft_build.go` | `loftPayload`, `loftMeshProof`, `evalLoft` and `placed`, including the `WithSurfaceResult` sheet build. Pairing, stations and topology each have their own `loft_*.go` file. See `docs/loft-design.md` §5, §8, §12 and `docs/surface-design.md` §4. |
+| `loft_build.go` | Loft payload, evaluation, and placement. See `docs/loft-design.md` §5, §8, §12 and `docs/surface-design.md` §4. |
 | `loft_pairing.go` | `docs/loft-design.md` Table P: which from-segment walls to which to-segment. A pair the table does not decide is refused outright, never matched to the nearest one. See §5, §5.1. |
 | `loft_stations.go` | Places the stations a loft's wall chords run between and proves each chain's departure from the curve it approximates, under one shared chord target and a station cap. See `docs/loft-design.md` §5.2. |
 | `loft_topology.go` | Assembles the paired stations into the flat-triangle solid the payload holds, and builds the `Body` topology over it. See `docs/loft-design.md` §5.1, §7 and the file's own doc comment. |
@@ -196,9 +197,9 @@ to the byte budget.
 | `tessellate.go` | `Mesh` and `Body.Tessellate`: the proof record and which level publishes it, the shared loop chording, and the dispatch to each payload path. See the file's own doc comment and `docs/tessellation-design.md`. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and what a mesh publishes about its own proofs. See `docs/tessellation-design.md` §1. |
 | `tessellate_revolve.go` | `tessellateRevolve`: the tolerance split, the meridian and angular chordings, and the rings, cells, poles and partial caps a revolve builds from them. See the file's own doc comment. |
-| `tessellate_revolve_proof.go` | The revolve mesh's proofs: certified angular trig, both coordinate stages, the facet-area, facet-pair and vertex-link audits, and a straight cell's `Ecell`. See the file's own doc comment. |
+| `tessellate_revolve_proof.go` | Revolve mesh proofs and audits. See the file's own doc comment. |
 | `tessellate_revolve_arc.go` | What a CIRCULAR revolve generator needs: its meridian stations, its `Ecell` by certified subdivision, and its cap segment area. See the file's own doc comment. |
-| `tessellate_revolve_volume.go` | The revolve mesh's occupied-volume proof: the meridian first-moment allowance, the per-cell angular homotopy integral and the two coordinate-stage allowances. See the file's own doc comment. |
+| `tessellate_revolve_volume.go` | Revolve mesh occupied-volume proof. See the file's own doc comment. |
 | `tessellate_station.go` | `chordStationBound`: the proven enclosure gap of one interior chord station on a circular walk. See the file's own doc comment. |
 | `tessellate_sheet.go` | `requireSheetMesh` and `requireSheetVertexLinks`: the sheet mesh's manifold-with-boundary and vertex-link audits. See `docs/tessellation-design.md` §1.2. |
 | `tessellate_loft.go` | `tessellateLoft`: the exact restatement of a `loftPayload`'s held triangle set and proof record. See the file's own doc comments. |
@@ -206,7 +207,7 @@ to the byte budget.
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh off its wall topology. `docs/surface-design.md` §13.4. |
 | `tessellate_capblend.go` | `tessellateCapBlend`: the export-only cap-loop chamfer mesh, one chord count per wall walk shared three ways. See `docs/tessellation-reach-design.md` §7. |
 | `triangulate.go` | The cap triangulator behind `Tessellate`: hole bridging plus reflex-blocked ear clipping, correct for non-convex outlines with holes. See the file's own doc comment. |
-| `export.go` | `Body.STL`/`Body.OBJ`: deterministic writers over `Tessellate`, with `WithChordTolerance`'s documented default. See the file's own doc comment. |
+| `export/` | STL and OBJ mesh writers and the faceted AP214 writer. See `docs/step-export-design.md`. |
 
 ### Repository
 

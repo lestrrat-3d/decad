@@ -635,7 +635,7 @@ walk's own `coordUpper`: analytic walks produce the same value
 placed-frame gate. The target therefore scales with the section's own size
 rather than with one arc's own radius, so a Tier-A free-form pair that has no
 radius can share the identical rule (§12 reach). **The target is not a caller
-option.** `WithChordTolerance` is a tessellation/export render knob; a loft's
+option.** The export writer's chord tolerance is a tessellation render knob; a loft's
 chording is TOPOLOGY — it decides the vertex set the payload holds — so a
 caller-supplied tolerance would change body identity and demand a wire field.
 The constant stays in source, and `LoftOpts` gains no new field for it (§10).

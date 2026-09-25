@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -1217,13 +1218,13 @@ func TestShellCupTessellateBox(t *testing.T) {
 
 	// STL and OBJ round-trip deterministically — the writers are byte-stable.
 	var stl1, stl2 bytes.Buffer
-	require.NoError(t, cup.STL(&stl1))
-	require.NoError(t, cup.STL(&stl2))
+	require.NoError(t, export.STL(t.Context(), &stl1, cup, units.Millimeters(0.1)))
+	require.NoError(t, export.STL(t.Context(), &stl2, cup, units.Millimeters(0.1)))
 	require.Equal(t, stl1.Bytes(), stl2.Bytes(), `STL export is deterministic`)
 	require.Positive(t, stl1.Len())
 	var obj1, obj2 bytes.Buffer
-	require.NoError(t, cup.OBJ(&obj1))
-	require.NoError(t, cup.OBJ(&obj2))
+	require.NoError(t, export.OBJ(t.Context(), &obj1, cup, units.Millimeters(0.1)))
+	require.NoError(t, export.OBJ(t.Context(), &obj2, cup, units.Millimeters(0.1)))
 	require.Equal(t, obj1.Bytes(), obj2.Bytes(), `OBJ export is deterministic`)
 	require.Positive(t, obj1.Len())
 }
@@ -1498,13 +1499,13 @@ func TestShellCupHoledTessellate(t *testing.T) {
 
 	// STL and OBJ export deterministically.
 	var stl1, stl2 bytes.Buffer
-	require.NoError(t, cup.STL(&stl1))
-	require.NoError(t, cup.STL(&stl2))
+	require.NoError(t, export.STL(t.Context(), &stl1, cup, units.Millimeters(0.1)))
+	require.NoError(t, export.STL(t.Context(), &stl2, cup, units.Millimeters(0.1)))
 	require.Equal(t, stl1.Bytes(), stl2.Bytes(), `STL export is deterministic`)
 	require.Positive(t, stl1.Len())
 	var obj1, obj2 bytes.Buffer
-	require.NoError(t, cup.OBJ(&obj1))
-	require.NoError(t, cup.OBJ(&obj2))
+	require.NoError(t, export.OBJ(t.Context(), &obj1, cup, units.Millimeters(0.1)))
+	require.NoError(t, export.OBJ(t.Context(), &obj2, cup, units.Millimeters(0.1)))
 	require.Equal(t, obj1.Bytes(), obj2.Bytes(), `OBJ export is deterministic`)
 }
 

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +20,7 @@ func TestSTLPlate(t *testing.T) {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, body.STL(&buf))
+	require.NoError(t, export.STL(t.Context(), &buf, body, units.Millimeters(0.1)))
 	out := buf.String()
 
 	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
@@ -55,7 +56,7 @@ func TestSTLPlate(t *testing.T) {
 
 	// Deterministic: a second write is byte-identical.
 	var again bytes.Buffer
-	require.NoError(t, body.STL(&again))
+	require.NoError(t, export.STL(t.Context(), &again, body, units.Millimeters(0.1)))
 	require.Equal(t, out, again.String())
 }
 
@@ -69,90 +70,17 @@ func TestSTLChordTolerance(t *testing.T) {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, body.STL(&buf, decad.WithChordTolerance(units.Millimeters(0.5))))
+	require.NoError(t, export.STL(t.Context(), &buf, body, units.Millimeters(0.5)))
 	require.Equal(t, len(mesh.Triangles()), strings.Count(buf.String(), "facet normal"))
 
 	// A finer tolerance takes more chords.
 	var fine bytes.Buffer
-	require.NoError(t, body.STL(&fine, decad.WithChordTolerance(units.Millimeters(0.05))))
+	require.NoError(t, export.STL(t.Context(), &fine, body, units.Millimeters(0.05)))
 	require.Greater(t, strings.Count(fine.String(), "facet normal"), len(mesh.Triangles()))
 
 	// The tolerance is validated exactly like Tessellate's.
-	require.ErrorIs(t, body.STL(&buf, decad.WithChordTolerance(units.Millimeters(0))), decad.ErrDegenerate)
-	require.ErrorIs(t, body.STL(&buf, decad.WithChordTolerance(units.Degrees(1))), decad.ErrUnitKind)
-}
-
-func TestSTLDefaultChordTolerance(t *testing.T) {
-	t.Parallel()
-	sizeDefault := func(t *testing.T, body *decad.Body) units.Value {
-		t.Helper()
-		bounds, err := body.Bounds()
-		require.NoError(t, err)
-		return units.Millimeters(bounds.Max.Sub(bounds.Min).Len() / 1000)
-	}
-
-	t.Run("analytic body uses size default", func(t *testing.T) {
-		body := holedPlateBody(t)
-		tol := sizeDefault(t, body)
-
-		var explicit bytes.Buffer
-		require.NoError(t, body.STL(&explicit, decad.WithChordTolerance(tol)))
-		var automatic bytes.Buffer
-		require.NoError(t, body.STL(&automatic))
-		require.Equal(t, explicit.String(), automatic.String())
-	})
-
-	t.Run("faceted body honors retained bound", func(t *testing.T) {
-		doc := decad.New()
-		plate := boxBody(t, doc, 0, 0, 20, 20, 8)
-		tool := translated(t, diskBody(t, doc, 10, 10, 2), 0, 0, -6)
-		cut, err := decad.Cut(t.Context(), plate, tool)
-		require.NoError(t, err)
-
-		faceted := translated(t, cut, 1e13, -2e13, 3e13)
-		tol := sizeDefault(t, faceted)
-		held, err := faceted.Tessellate(t.Context(), units.Millimeters(1))
-		require.NoError(t, err)
-		require.Greater(t, held.Bound().Mag(), tol.Mag())
-		_, err = faceted.Tessellate(t.Context(), tol)
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-
-		var explicit bytes.Buffer
-		require.NoError(t, faceted.STL(&explicit, decad.WithChordTolerance(held.Bound())))
-		var automatic bytes.Buffer
-		require.NoError(t, faceted.STL(&automatic))
-		require.Equal(t, explicit.String(), automatic.String())
-	})
-
-	// An assembled prism holds its section within a proven displacement of the
-	// one it denotes, and Tessellate reserves that displacement from the
-	// tolerance, so the size-derived default names a mesh this body cannot
-	// produce. The exporter raises its default past the displacement rather
-	// than refusing a body it can perfectly well write.
-	t.Run("displaced prism honors its section displacement", func(t *testing.T) {
-		const shift = 1e14
-		doc := decad.New()
-		a := boxBody(t, doc, 0, 0, 10, 10, 10)
-		b := placedFar(t, boxBody(t, doc, 2-shift, 2, 8-shift, 8, 10), shift)
-		got, err := decad.Union(t.Context(), a, b)
-		require.NoError(t, err)
-		require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
-
-		box, err := got.Bounds()
-		require.NoError(t, err)
-		delta := box.Bound.Base()
-		tol := sizeDefault(t, got)
-		require.Greater(t, delta, tol.Mag(), "the fixture's displacement must outrun the size default")
-		_, err = got.Tessellate(t.Context(), tol)
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-
-		var explicit bytes.Buffer
-		require.NoError(t, got.STL(&explicit, decad.WithChordTolerance(units.Millimeters(2*delta))))
-		var automatic bytes.Buffer
-		require.NoError(t, got.STL(&automatic))
-		require.Equal(t, explicit.String(), automatic.String())
-		require.Contains(t, automatic.String(), "facet normal")
-	})
+	require.ErrorIs(t, export.STL(t.Context(), &buf, body, units.Millimeters(0)), decad.ErrDegenerate)
+	require.ErrorIs(t, export.STL(t.Context(), &buf, body, units.Degrees(1)), decad.ErrUnitKind)
 }
 
 func TestOBJPlate(t *testing.T) {
@@ -163,7 +91,7 @@ func TestOBJPlate(t *testing.T) {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, body.OBJ(&buf))
+	require.NoError(t, export.OBJ(t.Context(), &buf, body, units.Millimeters(0.1)))
 	out := buf.String()
 
 	var vs, fs int
@@ -195,7 +123,7 @@ func TestOBJPlate(t *testing.T) {
 
 	// Deterministic: a second write is byte-identical.
 	var again bytes.Buffer
-	require.NoError(t, body.OBJ(&again))
+	require.NoError(t, export.OBJ(t.Context(), &again, body, units.Millimeters(0.1)))
 	require.Equal(t, out, again.String())
 }
 
@@ -206,10 +134,10 @@ func TestOBJChordTolerance(t *testing.T) {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, body.OBJ(&buf, decad.WithChordTolerance(units.Millimeters(0.5))))
+	require.NoError(t, export.OBJ(t.Context(), &buf, body, units.Millimeters(0.5)))
 	out := buf.String()
 	require.Equal(t, len(mesh.Vertices()), strings.Count(out, "v "))
 	require.Equal(t, len(mesh.Triangles()), strings.Count(out, "f "))
 
-	require.ErrorIs(t, body.OBJ(&buf, decad.WithChordTolerance(units.Millimeters(-1))), decad.ErrNegativeMagnitude)
+	require.ErrorIs(t, export.OBJ(t.Context(), &buf, body, units.Millimeters(-1)), decad.ErrNegativeMagnitude)
 }

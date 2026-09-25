@@ -126,7 +126,7 @@
 //	Placed        any body this evaluator built               builds
 //	Verify        every body; surveys read prisms/revolves/cups/cap blends
 //	  a question the evaluator cannot decide                  Status Suspect
-//	Tessellate / STL / OBJ  prism, revolve, cup, loft,
+//	Tessellate / export.STL / export.OBJ  prism, revolve, cup, loft,
 //	                        cap-loop chamfer, boolean body    builds
 //	  revolve whose tolerance its coordinate stages exhaust   ErrUnsupported
 //	  revolve chording no bounded refinement can prove        ErrUnsupported
@@ -143,8 +143,8 @@
 // picks a loft's per-loop correspondence rotation
 // and is accepted at most once; a repeat is [ErrDegenerate]. Separately,
 // Verify's options (WithTolerance, WithMinWallThickness, WithPullDirection,
-// WithConcaveRadius, WithClearances) and the STL/OBJ WithChordTolerance also
-// take effect.
+// WithConcaveRadius, WithClearances) take effect. The export package's STL and
+// OBJ writers take an explicit chord tolerance.
 //
 // # Layering
 //

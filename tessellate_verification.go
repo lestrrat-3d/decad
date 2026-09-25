@@ -55,33 +55,25 @@ const (
 	VerifyAll
 )
 
-// TessellateOption configures [Body.Tessellate]. [Body.STL] and [Body.OBJ]
-// accept one too: both write a mesh, so both choose how much of that mesh's
-// proof to pay for.
+// TessellateOption configures [Body.Tessellate]. The export package accepts
+// the same options for its STL and OBJ writers.
 type TessellateOption interface {
-	STLOption
-	OBJOption
+	option.Interface
 	tessellateOption()
 }
 
 type tessellateOption struct{ option.Interface }
 
 func (tessellateOption) tessellateOption() {}
-func (tessellateOption) stlOption()        {}
-func (tessellateOption) objOption()        {}
 
 type identVerification struct{}
 
 // WithVerification sets how much of the mesh's proof the call runs.
 //
-// [Body.Tessellate] defaults to [VerifyAll]. [Body.STL] and [Body.OBJ] default
-// to [VerifyNone]: a writer consumes vertices and indices and reads no proof
-// term, so an exporter pays for the facet-contact audit and the two
-// volume-class proofs without a consumer for either. Pass
-// WithVerification([VerifyAll]) to either writer to demand the proof and take
-// the refusals that come with it — the facet-pair audit's own work ceiling
-// refuses some ordinary bodies at the very chord tolerance the exporter's own
-// default chooses for them.
+// [Body.Tessellate] defaults to [VerifyAll]. The export package's STL and OBJ
+// writers default to [VerifyNone] because they consume vertices and indices
+// without reading proof terms. Pass WithVerification([VerifyAll]) to demand
+// stronger proofs and accept their refusals.
 //
 // A value naming none of the three levels is [ErrUnsupported].
 func WithVerification(v Verification) TessellateOption {
@@ -143,9 +135,8 @@ func payloadAuditsFacetContact(p featurePayload) bool {
 }
 
 // foldVerification reads the level a call's options name, starting from the
-// caller's own default — [VerifyAll] for [Body.Tessellate], [VerifyNone] for
-// the two writers. The last [WithVerification] wins, matching how every other
-// option in this package folds.
+// caller's own default. The last [WithVerification] wins, matching how every
+// other option in this package folds.
 func foldVerification(opts []option.Interface, fallback Verification) (Verification, error) {
 	chosen := fallback
 	for _, o := range opts {

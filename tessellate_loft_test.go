@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -172,8 +173,8 @@ func TestLoftExportIsDeterministic(t *testing.T) {
 	body := loftBoxAt(t, doc, 0, 10)
 
 	var first, second bytes.Buffer
-	require.NoError(t, body.STL(&first))
-	require.NoError(t, body.STL(&second))
+	require.NoError(t, export.STL(t.Context(), &first, body, units.Millimeters(0.1)))
+	require.NoError(t, export.STL(t.Context(), &second, body, units.Millimeters(0.1)))
 	require.NotEmpty(t, first.Bytes())
 	require.True(t, bytes.Equal(first.Bytes(), second.Bytes()), "two STL writes of one loft must agree byte for byte")
 }

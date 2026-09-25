@@ -224,7 +224,7 @@ values, never a role string.
 **A sheet mesh carries no occupied-volume proof, so §11 never admits it to a
 boolean.** That follows from §11's own rule rather than adding one: admission
 is on the occupied-volume proof, and a body that encloses no region has no
-occupied volume to prove. `Body.STL` and `Body.OBJ` still write a sheet mesh —
+occupied volume to prove. `export.STL` and `export.OBJ` still write a sheet mesh —
 both formats are triangle lists and neither requires closure — and `STL`'s doc
 comment states that an open body produces a file that is **not** a solid, so a
 caller learns it before handing the file to a slicer rather than after.
@@ -1300,8 +1300,8 @@ edge must reuse the same vertex indices, not merely equal coordinates.
 - Assert `Union`, `Cut` and `Intersect` refuse an operand mesh built below
   `VerifyBoundary` with a message naming the declined audit, and one built at
   `VerifyBoundary` but below `VerifyAll` with the missing-volume-proof message.
-- Assert `STL` and `OBJ` write a body their own default chord tolerance refuses
-  at `VerifyAll`, and that `WithVerification(VerifyAll)` reinstates that
+- Assert `STL` and `OBJ` write a body at a stated tolerance that `VerifyAll`
+  refuses, and that `WithVerification(VerifyAll)` reinstates that
   refusal. Assert the bytes are identical wherever both levels succeed.
 
 ## 15. Open implementation choice

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -281,13 +282,13 @@ func BenchmarkTessellationCacheOBJ(b *testing.B) {
 		s.Fix(c)
 		s.CreateCircle(c, 3)
 	}, decad.FullRevolution{})
-	opts := []decad.OBJOption{decad.WithChordTolerance(units.Millimeters(cacheTolerance))}
-	if err := body.OBJ(io.Discard, opts...); err != nil {
+	tol := units.Millimeters(cacheTolerance)
+	if err := export.OBJ(b.Context(), io.Discard, body, tol); err != nil {
 		b.Fatal(err)
 	}
 	b.ResetTimer()
 	for range b.N {
-		if err := body.OBJ(io.Discard, opts...); err != nil {
+		if err := export.OBJ(b.Context(), io.Discard, body, tol); err != nil {
 			b.Fatal(err)
 		}
 	}

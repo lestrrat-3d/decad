@@ -971,7 +971,7 @@
 1	0.69	TestEvalLoftAuditRefusesOverBudget
 1	0.01	TestEvalLoftFaceAreasSumToBodyArea
 1	0.01	TestEvalLoftUnitBoxTopology
-1	2.04	TestExportWritesABodyTheProvenPathRefusesAtItsOwnDefault
+1	0.48	TestExportWritesABodyTheProvenPathRefuses
 1	0.02	TestExtrudeArcSectionBoxEnclosesArcApex
 1	0.01	TestExtrudeArcSegPrismBoundsTighten
 1	3.00	TestExtrudeBoundsSweepEnclosesArcApex
@@ -1749,7 +1749,6 @@
 3	0.05	TestRevolveToFaceAngularSides
 3	1.03	TestRevolveUnionWithAPrismMeasuresTheAnalyticVolume
 3	3.31	TestRevolveUnionWithAnotherRevolveObeysInclusionExclusion
-3	1.16	TestSTLDefaultChordTolerance
 3	0.01	TestSecondMomentsOffsetCircle
 3	0.22	TestSegFilterNeverRejectsAnExactHit
 3	0.03	TestSegTriOverlap2MatchesReference

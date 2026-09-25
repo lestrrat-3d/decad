@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -218,26 +219,28 @@ func TestVerifyNonePublishesOnlyPositiveAreaFacets(t *testing.T) {
 	}
 }
 
-// STL and OBJ default to VerifyNone, so a body their own size-derived default
-// tolerance asks 4408 facets of writes instead of refusing on the facet-pair
-// ceiling (docs/api-design.md §11). WithVerification reinstates the refusal.
-func TestExportWritesABodyTheProvenPathRefusesAtItsOwnDefault(t *testing.T) {
+// STL and OBJ default to VerifyNone, so they can write a dense mesh that the
+// facet-pair audit refuses at VerifyAll (docs/api-design.md §11).
+func TestExportWritesABodyTheProvenPathRefuses(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	body := fatTorus(t, doc)
+	bounds, err := body.Bounds()
+	require.NoError(t, err)
+	tol := units.Millimeters(bounds.Max.Sub(bounds.Min).Len() / 1000)
 
 	var stl bytes.Buffer
-	require.NoError(t, body.STL(&stl))
+	require.NoError(t, export.STL(t.Context(), &stl, body, tol))
 	require.Greater(t, strings.Count(stl.String(), "facet normal"), 4000)
 
 	var obj bytes.Buffer
-	require.NoError(t, body.OBJ(&obj))
+	require.NoError(t, export.OBJ(t.Context(), &obj, body, tol))
 	require.Greater(t, strings.Count(obj.String(), "\nf "), 4000)
 
-	err := body.STL(io.Discard, decad.WithVerification(decad.VerifyAll))
+	err = export.STL(t.Context(), io.Discard, body, tol, decad.WithVerification(decad.VerifyAll))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "exact tests")
-	err = body.OBJ(io.Discard, decad.WithVerification(decad.VerifyAll))
+	err = export.OBJ(t.Context(), io.Discard, body, tol, decad.WithVerification(decad.VerifyAll))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -247,11 +250,11 @@ func TestExportBytesAreIdenticalAcrossVerificationLevels(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
 	body := torusBody(t, doc, 10, 3)
-	tol := decad.WithChordTolerance(units.Millimeters(0.2))
+	tol := units.Millimeters(0.2)
 
 	var drawn, proven bytes.Buffer
-	require.NoError(t, body.STL(&drawn, tol))
-	require.NoError(t, body.STL(&proven, tol, decad.WithVerification(decad.VerifyAll)))
+	require.NoError(t, export.STL(t.Context(), &drawn, body, tol))
+	require.NoError(t, export.STL(t.Context(), &proven, body, tol, decad.WithVerification(decad.VerifyAll)))
 	require.Equal(t, drawn.String(), proven.String())
 	require.NotEmpty(t, drawn.String())
 }

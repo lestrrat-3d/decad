@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/decadtest"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -658,8 +659,8 @@ func TestStitchCurvedSolidMeshPreservesAnalyticMass(t *testing.T) {
 				"%s mesh bound must be positive: it must inherit a nonzero source-face chording bound", name)
 			require.True(t, mesh.BoundaryVerified())
 			require.False(t, mesh.VolumeVerified())
-			require.NoError(t, solid.STL(io.Discard))
-			require.NoError(t, solid.OBJ(io.Discard))
+			require.NoError(t, export.STL(t.Context(), io.Discard, solid, units.Millimeters(0.1)))
+			require.NoError(t, export.OBJ(t.Context(), io.Discard, solid, units.Millimeters(0.1)))
 
 			gotVol, err := solid.Volume()
 			require.NoError(t, err)

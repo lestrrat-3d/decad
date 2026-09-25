@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
@@ -74,11 +75,11 @@ func Example_decad_surfaceExtrude() {
 	}
 
 	// STL and OBJ still write a sheet's mesh — both formats are triangle
-	// lists and neither requires closure — but Body.STL's own doc comment
+	// lists and neither requires closure — but export.STL's own doc comment
 	// says the file is NOT a solid despite carrying the format's
 	// solid/endsolid keywords.
 	var stl bytes.Buffer
-	if err := sheet.STL(&stl); err != nil {
+	if err := export.STL(context.Background(), &stl, sheet, units.Millimeters(0.1)); err != nil {
 		fmt.Printf("failed to write STL: %s\n", err)
 		return
 	}

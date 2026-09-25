@@ -1910,7 +1910,7 @@ tetrahedron sum itself already proves about signed volume.
 
 Two consequences this design leans on, stated here as claims and derived there.
 A sheet mesh is never a boolean operand, which is what Table X's boolean row
-rests on. An open body's STL is not a solid file, and `Body.STL`'s doc comment
+rests on. An open body's STL is not a solid file, and `export.STL`'s doc comment
 says so, which is how a caller learns it before handing the file to a slicer
 rather than after.
 

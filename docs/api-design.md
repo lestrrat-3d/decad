@@ -1581,8 +1581,15 @@ gap is decad's mandate.
 
 ```go
 func (b *Body) Tessellate(ctx context.Context, tol units.Value, opts ...TessellateOption) (*Mesh, error) // an OUTPUT, not the representation
-func (b *Body) STL(w io.Writer, opts ...STLOption) error
-func (b *Body) OBJ(w io.Writer, opts ...OBJOption) error
+// package export:
+func STL(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...decad.TessellateOption) error
+func OBJ(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...decad.TessellateOption) error
+func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...STEPOption) error
+func WithSTEPName(name string) STEPOption
+func WithSTEPTimestamp(timestamp time.Time) STEPOption
+func WithSTEPAuthor(author string) STEPOption
+func WithSTEPOrganization(organization string) STEPOption
+func WithSTEPHeader(header step.Header) STEPOption
 ```
 
 `docs/tessellation-design.md` is normative for the mesh these calls consume and
@@ -1593,21 +1600,26 @@ per-payload staging. A payload with no complete boundary proof is never
 exported. A mesh without the separate occupied-volume proof is never admitted
 to a boolean by an unproved generic bound.
 
-**`Tessellate` defaults to `VerifyAll`; `STL` and `OBJ` default to
-`VerifyNone`.** A writer consumes vertices and indices and reads no proof term,
-so paying for the facet-contact audit and the two volume-class proofs buys an
-exporter nothing — and the audit's own work ceiling refuses ordinary bodies at
-the size-derived default tolerance the exporter itself chose, which no caller
-can raise without asking for a coarser mesh than the exporter wanted. Both
-writers take `WithVerification` to demand the proof and accept the refusals that
-come with it. `STL`'s doc comment states, beside its existing warning that a
-sheet's file is not a solid, that a default file is closed but not proven free
-of self-intersection.
+**`Tessellate` defaults to `VerifyAll`; `export.STL` and `export.OBJ` default to
+`VerifyNone`.** The caller supplies a positive length chord tolerance to every
+writer. STL and OBJ consume vertices and indices but no proof term. Both accept
+`WithVerification` to demand a stronger proof and accept its refusals. An STL
+file from a sheet is not a solid; at `VerifyNone`, a solid mesh is closed but
+not proven free of self-intersection.
 
-`Tessellate` passes `ctx` through chording, loop-clearance scans, cap
-triangulation, mesh audits, and faceted restatement. Cancellation returns
-`ctx.Err()` unchanged. `STL` and `OBJ` take no context and tessellate under
-`context.Background()`.
+`Tessellate` and every writer pass `ctx` through chording, loop-clearance
+scans, cap triangulation, mesh audits, and faceted restatement. Cancellation
+returns `ctx.Err()` unchanged.
+
+`export.STEP` writes a boundary-verified solid mesh as a faceted AP214 B-rep.
+Simple callers pass the file name, author, and organization as options and
+need no STEP module type. The timestamp defaults to the current UTC time, or
+the caller sets it with `WithSTEPTimestamp`. `WithSTEPHeader` supplies the
+complete `step.Header` to the same `export.STEP` function. The writer rejects
+calls that combine it with field options; it does not fill missing header fields.
+`export.NewSTEPFile` returns the underlying `step.File`.
+The root package does not import STEP, and STEP export does not preserve
+analytic surfaces. See `docs/step-export-design.md`.
 
 **Fusion codegen is out of scope for v1.** Callers model in ordinary Go and use
 the resulting bodies, measurements, and verification reports directly.
@@ -1691,7 +1703,7 @@ the resulting bodies, measurements, and verification reports directly.
 ## 13. Non-goals for v1
 
 Assemblies (`Component`/`Occurrence` instancing and the DAG that comes with it), a
-feature tree / timeline / rollback, STEP, sheet metal, mesh import,
+feature tree / timeline / rollback, native analytic STEP export, sheet metal, mesh import,
 GUI or view state of any kind, and Fusion code generation.
 
 Sheet bodies themselves are **not** a non-goal — `docs/surface-design.md` owns

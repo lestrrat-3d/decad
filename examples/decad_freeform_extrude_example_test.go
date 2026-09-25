@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
@@ -93,7 +94,7 @@ func Example_decad_freeformExtrude() {
 
 	// STL export writes that same mesh.
 	var stl bytes.Buffer
-	if err := body.STL(&stl); err != nil {
+	if err := export.STL(context.Background(), &stl, body, units.Millimeters(tolerance)); err != nil {
 		fmt.Printf("failed to export STL: %s\n", err)
 		return
 	}

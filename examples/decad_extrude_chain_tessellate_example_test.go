@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
@@ -53,7 +54,7 @@ func Example_decad_extrude_chain_tessellate() {
 	fmt.Printf("boundary verified: %v, volume verified: %v\n", mesh.BoundaryVerified(), mesh.VolumeVerified())
 
 	var stl strings.Builder
-	if err := body.STL(&stl); err != nil {
+	if err := export.STL(context.Background(), &stl, body, units.Millimeters(0.1)); err != nil {
 		fmt.Printf("failed to write STL: %s\n", err)
 		return
 	}
