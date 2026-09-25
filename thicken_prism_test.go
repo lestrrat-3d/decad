@@ -139,7 +139,7 @@ func TestThickenPrismNarrowNeckAdmitted(t *testing.T) {
 	decadtest.MeasuresBounds(t, solid, r3.NewVec(0, 0, 0), r3.NewVec(30, 20, 10), decadtest.Exactly())
 }
 
-func thickenNeckSheet(t *testing.T) (*decad.Document, *decad.Body) {
+func thickenNeckSheet(t testing.TB) (*decad.Document, *decad.Body) {
 	t.Helper()
 	pts := [][2]float64{
 		{0, 0}, {10, 0}, {10, 8}, {20, 8}, {20, 0}, {30, 0},

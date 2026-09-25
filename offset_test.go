@@ -33,7 +33,7 @@ func offsetPrismSheet(t *testing.T) (*decad.Document, *decad.Body) {
 
 // offsetCircleSheet builds a whole-circle prism sheet of the given radius over
 // 10 mm — §17.1's second admitted section shape.
-func offsetCircleSheet(t *testing.T, doc *decad.Document, radius float64) *decad.Body {
+func offsetCircleSheet(t testing.TB, doc *decad.Document, radius float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
