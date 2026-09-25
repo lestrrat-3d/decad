@@ -136,10 +136,10 @@ func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *f
 // prismPlacementCoeffAllow bounds how far base/gu/gv/gz — the four scalar
 // coefficients extentBoundedAlong lifts the boundary and sweep extremes
 // through — can sit from the value the SAME frame-and-placement chain's exact
-// arithmetic would give, through exactIsometryDotRound's rational check
-// (bounds.go): zero exactly where the frame is axis-aligned and the placement
-// is the identity, nonzero only where that isometry's own float evaluation
-// genuinely rounds. Each coefficient's own displacement moves the published
+// arithmetic would give. An identity placement read along a world axis uses
+// only exact zero-or-one products and additions for these coefficients; other
+// cases use exactIsometryDotRound's rational check (bounds.go). Each
+// coefficient's own displacement moves the published
 // extreme at the rate of the coordinate it multiplies —
 // directionalPerturbationAllow's own Lipschitz shape, coordUpper for gu/gv and
 // zUpper for gz — while base's displaces the extreme directly, at both ends
@@ -157,10 +157,13 @@ func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *f
 // (exactSumRound), because it rounds for placements this function's own check
 // proves exact — a translation is committed there and nowhere else.
 func prismPlacementCoeffAllow(pp prismPayload, g r3.Vec, base, gu, gv, gz, coordUpper, zUpper float64) float64 {
-	baseRound := exactIsometryDotRound(pp.xform, pp.frame.Origin(), g, true, base)
-	guRound := exactIsometryDotRound(pp.xform, pp.frame.U(), g, false, gu)
-	gvRound := exactIsometryDotRound(pp.xform, pp.frame.V(), g, false, gv)
-	gzRound := exactIsometryDotRound(pp.xform, pp.frame.N(), g, false, gz)
+	var baseRound, guRound, gvRound, gzRound float64
+	if pp.xform != r3.Identity() || !prismWorldAxis(g) {
+		baseRound = exactIsometryDotRound(pp.xform, pp.frame.Origin(), g, true, base)
+		guRound = exactIsometryDotRound(pp.xform, pp.frame.U(), g, false, gu)
+		gvRound = exactIsometryDotRound(pp.xform, pp.frame.V(), g, false, gv)
+		gzRound = exactIsometryDotRound(pp.xform, pp.frame.N(), g, false, gz)
+	}
 	return absSumUpper(
 		baseRound,
 		directionalPerturbationAllow(guRound, coordUpper),
@@ -168,6 +171,13 @@ func prismPlacementCoeffAllow(pp prismPayload, g r3.Vec, base, gu, gv, gz, coord
 		directionalPerturbationAllow(gzRound, zUpper),
 		prismDecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper),
 	)
+}
+
+// With an identity placement and a world axis, Apply and Dot multiply each
+// frame component only by zero or one. Their additions include only zero, so
+// every coefficient equals the exact rational result of those operations.
+func prismWorldAxis(g r3.Vec) bool {
+	return g == r3.NewVec(1, 0, 0) || g == r3.NewVec(0, 1, 0) || g == r3.NewVec(0, 0, 1)
 }
 
 // prismDecompositionRoundAllow bounds the rounding the MULTIPLY-AND-SUM
