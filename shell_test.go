@@ -182,7 +182,7 @@ func TestShellContextCancellationDuringAuditPreservesError(t *testing.T) {
 	t.Parallel()
 	for _, cancelErr := range []error{context.Canceled, context.DeadlineExceeded} {
 		t.Run(cancelErr.Error(), func(t *testing.T) {
-			doc, box := manySidedPrism(t, 17)
+			doc, box := manySidedPrism(t, 4)
 			ctx := &operationCancelContext{
 				Context:   t.Context(),
 				target:    "auditOffsetSectionBudget",
