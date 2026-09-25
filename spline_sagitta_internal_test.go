@@ -537,7 +537,7 @@ func TestPairStationsSettlesOnSmallestLevelForTarget(t *testing.T) {
 
 func TestPairStationsOverCapRefuses(t *testing.T) {
 	t.Parallel()
-	spans := quarterCircleFitSpans(t)
+	spans := []bezierSpan{parabolaSpan()}
 	_, _, _, _, err := pairStations(spans, spans, 1e-20, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
 	require.Error(t, err)
 	require.ErrorIs(t, err, errTooManyChords)
