@@ -327,9 +327,13 @@ func TestPrismIntersectFullyNestedPairReturnsInnerOperand(t *testing.T) {
 
 func TestPrismIntersectDiscAndNestedWasherKeepsAnnularSection(t *testing.T) {
 	t.Parallel()
-	const discRadius, outer, inner, height, half = 15.0, 8.0, 3.0, 10.0, 11.0
+	const discRadius, height = 15.0, 10.0
 	for _, washerFirst := range []bool{false, true} {
 		t.Run(fmt.Sprint("washerFirst=", washerFirst), func(t *testing.T) {
+			outer, inner, half := 8.0, 3.0, 11.0
+			if washerFirst {
+				outer, inner, half = 9, 2, 12
+			}
 			doc := decad.New()
 			disc := discBody(t, doc, 0, discRadius, height)
 			washer := washerBodySymmetric(t, doc, outer, inner, half)
@@ -357,7 +361,10 @@ func TestPrismIntersectDiscAndNestedWasherKeepsAnnularSection(t *testing.T) {
 			vol, err := got.Volume()
 			require.NoError(t, err)
 			want := math.Pi * (outer*outer - inner*inner) * height
-			require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), boundMM3(t, vol))
+			// The closed form uses float64 pi; allow its final rounding in
+			// addition to the body's much tighter published volume bound.
+			wantRound := math.Nextafter(want, math.Inf(1)) - want
+			require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), boundMM3(t, vol)+wantRound)
 		})
 	}
 }
