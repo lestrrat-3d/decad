@@ -276,6 +276,7 @@
 0	0.02	TestFilletHoleOutsideRoundedLoopRefused
 0	0.00	TestFilletRefusals
 0	0.01	TestFilletTooLargeRadius
+0	0.01	TestFirstOrderMomentsMatchFullAreaCentroidAndBounds
 0	0.00	TestFitInterpolantChargeRefusesBeforeSolving
 0	0.00	TestFitInterpolantCostIsLinear
 0	0.00	TestFitInterpolantNonFiniteMapsToR16
