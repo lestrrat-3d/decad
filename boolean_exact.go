@@ -186,24 +186,42 @@ func orientSignMixed(a, b, c r3.Vec, d xpt) int {
 type xhp struct{ x, y, z, w *big.Int }
 
 // xhpOf lifts a finite float vertex into homogeneous integer coordinates. A
-// float64 is an exact dyadic rational, so each coordinate's own numerator and
-// denominator (mustRatOf, clearance_poly.go) combine over one shared
-// denominator — the other two coordinates' own denominators — with no
-// rounding.
+// float64 is an exact dyadic rational. Aligning its three binary exponents
+// directly gives one shared power-of-two denominator without constructing
+// three big.Rat values or multiplying their denominators.
 func xhpOf(v r3.Vec) xhp {
-	rx, ry, rz := mustRatOf(v.X), mustRatOf(v.Y), mustRatOf(v.Z)
-	dx, dy, dz := rx.Denom(), ry.Denom(), rz.Denom()
+	dx, dy, dz := mustDyOf(v.X), mustDyOf(v.Y), mustDyOf(v.Z)
+	base := 0
+	for _, d := range [3]dyadic{dx, dy, dz} {
+		if !d.isZero() && d.exp < base {
+			base = d.exp
+		}
+	}
+	coord := func(d dyadic) *big.Int {
+		if d.isZero() {
+			return new(big.Int)
+		}
+		return new(big.Int).Lsh(d.mant, uint(d.exp-base))
+	}
 	return xhp{
-		x: new(big.Int).Mul(rx.Num(), new(big.Int).Mul(dy, dz)),
-		y: new(big.Int).Mul(ry.Num(), new(big.Int).Mul(dx, dz)),
-		z: new(big.Int).Mul(rz.Num(), new(big.Int).Mul(dx, dy)),
-		w: new(big.Int).Mul(dx, new(big.Int).Mul(dy, dz)),
+		x: coord(dx),
+		y: coord(dy),
+		z: coord(dz),
+		w: new(big.Int).Lsh(big.NewInt(1), uint(-base)),
 	}
 }
 
 // xhpSub is p − q, exact: a homogeneous vector over the positive denominator
-// p.w·q.w.
+// p.w·q.w, or over their shared denominator when the weights match.
 func xhpSub(p, q xhp) xhp {
+	if p.w.Cmp(q.w) == 0 {
+		return xhp{
+			x: new(big.Int).Sub(p.x, q.x),
+			y: new(big.Int).Sub(p.y, q.y),
+			z: new(big.Int).Sub(p.z, q.z),
+			w: new(big.Int).Set(p.w),
+		}
+	}
 	var term big.Int
 	axis := func(pn, qn *big.Int) *big.Int {
 		out := new(big.Int).Mul(pn, q.w)

@@ -86,12 +86,10 @@ type triCutter struct {
 }
 
 func (tc *triCutter) proj(p xpt) xp2 {
-	a := ratCoordOf(p, tc.u)
-	b := ratCoordOf(p, tc.v)
 	if tc.swap {
-		a, b = b, a
+		return newXP2FromXpt(p, tc.v, tc.u)
 	}
-	return newXP2(a, b)
+	return newXP2FromXpt(p, tc.u, tc.v)
 }
 
 // addVert interns a vertex by its exact 2D identity; boundary is sticky.
@@ -119,7 +117,7 @@ func cutTriangle(ctx context.Context, xtri [3]xpt, normal xpt, segs []xseg) ([]c
 
 	// Keep the projected facet counter-clockwise, so polygon areas and ear
 	// clipping read the facet's own orientation.
-	corner := func(p xpt) xp2 { return newXP2(ratCoordOf(p, tc.u), ratCoordOf(p, tc.v)) }
+	corner := func(p xpt) xp2 { return newXP2FromXpt(p, tc.u, tc.v) }
 	if cross2xSign(corner(xtri[0]), corner(xtri[1]), corner(xtri[2])) < 0 {
 		tc.swap = true
 	}
