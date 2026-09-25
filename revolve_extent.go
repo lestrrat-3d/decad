@@ -110,21 +110,35 @@ func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *fr
 // rounds. It is zero wherever that addition is exactly representable, so an
 // unplaced revolve's box keeps its zero bound.
 func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
+	return rp.extentBoundedAlongProfile(ctx, g, work, nil)
+}
+
+// revolveExtentProfile shares plane-local walks and their coordinate envelope
+// across the three axis reads of one bounds calculation. Only analytic walks
+// enter this cache: free-form walks charge a per-read work budget.
+type revolveExtentProfile struct {
+	walks      *profileWalks
+	coordUpper float64
+}
+
+func (rp revolvePayload) extentBoundedAlongProfile(
+	ctx context.Context, g r3.Vec, work *freeformWork, profile *revolveExtentProfile,
+) (float64, float64, float64, error) {
 	b := rp.basis()
 	base := rp.xform.Apply(b.a3).Dot(g)
 	wg := rp.xform.ApplyDir(b.w).Dot(g)
 	c0 := rp.xform.ApplyDir(b.e0).Dot(g)
 	c1 := rp.xform.ApplyDir(b.e1).Dot(g)
 	mlo, mhi := sweepExtremes(c0, c1, rp.phi0, rp.phi1, rp.full)
-	hi, hiBound, err := axisExtremeContext(ctx, rp, wg, mhi, true, work)
+	hi, hiBound, err := axisExtremeContext(ctx, rp, wg, mhi, true, work, profile)
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	lo, loBound, err := axisExtremeContext(ctx, rp, wg, mlo, false, work)
+	lo, loBound, err := axisExtremeContext(ctx, rp, wg, mlo, false, work, profile)
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	sweepLo, sweepHi, err := rp.sweepBoundAlong(c0, c1, mlo, mhi, work)
+	sweepLo, sweepHi, err := rp.sweepBoundAlong(c0, c1, mlo, mhi, work, profile)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -140,7 +154,7 @@ func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work 
 		return absSumUpper(boundary, sweep)
 	}
 	bound := math.Max(outward(loBound, sweepLo), outward(hiBound, sweepHi))
-	frameAllow, err := rp.frameRoundAllow(g, b, base, wg, c0, c1, work)
+	frameAllow, err := rp.frameRoundAllow(g, b, base, wg, c0, c1, work, profile)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -245,10 +259,18 @@ func (rp revolvePayload) sectionExtentAllow() float64 {
 //     extreme at the rate of |z| ≤ envUpper; c0's and c1's at the rate of
 //     |ρ| ≤ envUpper (the swept radial coefficient multiplies ρ); base's
 //     displaces the extreme directly, at both ends alike.
-func (rp revolvePayload) frameRoundAllow(g r3.Vec, b revolveBasis, base, wg, c0, c1 float64, work *freeformWork) (float64, error) {
-	coordUpper, err := profileCoordinateUpper(rp.profile, work, nil)
-	if err != nil {
-		return 0, err
+func (rp revolvePayload) frameRoundAllow(
+	g r3.Vec, b revolveBasis, base, wg, c0, c1 float64, work *freeformWork, profile *revolveExtentProfile,
+) (float64, error) {
+	coordUpper := 0.0
+	if profile != nil {
+		coordUpper = profile.coordUpper
+	} else {
+		var err error
+		coordUpper, err = profileCoordinateUpper(rp.profile, work, nil)
+		if err != nil {
+			return 0, err
+		}
 	}
 	ax := rp.ax
 	envUpper := ax.radialUpper(rp.sectionCoordUpper(coordUpper))
@@ -295,10 +317,18 @@ func (rp revolvePayload) frameRoundAllow(g r3.Vec, b revolveBasis, base, wg, c0,
 // envelope and folds in the axis anchor, which is the whole term an offset axis
 // adds; an extent whose radial envelope cannot be proven finite is refused
 // rather than published against a bound that omits it.
-func (rp revolvePayload) sweepBoundAlong(c0, c1, mlo, mhi float64, work *freeformWork) (float64, float64, error) {
-	coordUpper, err := profileCoordinateUpper(rp.profile, work, nil)
-	if err != nil {
-		return 0, 0, err
+func (rp revolvePayload) sweepBoundAlong(
+	c0, c1, mlo, mhi float64, work *freeformWork, profile *revolveExtentProfile,
+) (float64, float64, error) {
+	coordUpper := 0.0
+	if profile != nil {
+		coordUpper = profile.coordUpper
+	} else {
+		var err error
+		coordUpper, err = profileCoordinateUpper(rp.profile, work, nil)
+		if err != nil {
+			return 0, 0, err
+		}
 	}
 	rhoUpper := rp.ax.radialUpper(rp.sectionCoordUpper(coordUpper))
 	if isNonFinite(rhoUpper) {
@@ -330,6 +360,17 @@ func (rp revolvePayload) sweepBoundAlong(c0, c1, mlo, mhi float64, work *freefor
 // leave the same coordinate bounded on this path and exact on the
 // through-all stop path.
 func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeformWork) (Box, error) {
+	var profile *revolveExtentProfile
+	analytic, err := analyticRevolveProfile(ctx, rp.profile)
+	if err != nil {
+		return Box{}, err
+	}
+	if analytic {
+		profile, err = resolveAnalyticRevolveExtentProfile(ctx, rp.profile, work)
+		if err != nil {
+			return Box{}, err
+		}
+	}
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	var minC, maxC [3]float64
 	bound := 0.0
@@ -337,7 +378,7 @@ func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeform
 		if err := ctx.Err(); err != nil {
 			return Box{}, err
 		}
-		lo, hi, extentBound, err := rp.extentBoundedAlong(ctx, g, work)
+		lo, hi, extentBound, err := rp.extentBoundedAlongProfile(ctx, g, work, profile)
 		if err != nil {
 			return Box{}, err
 		}
@@ -353,6 +394,68 @@ func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeform
 		Exactness: exactnessOf(bound),
 		Bound:     units.Millimeters(bound),
 	}, nil
+}
+
+// analyticRevolveProfile leaves free-form and unknown segment kinds on the
+// original per-read path, including their work charges and refusal order.
+func analyticRevolveProfile(ctx context.Context, profile ProfileRecord) (bool, error) {
+	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
+		for _, segment := range loop.Segments {
+			if err := ctx.Err(); err != nil {
+				return false, err
+			}
+			switch segment.(type) {
+			case LineSeg, ArcSeg, CircleSeg:
+			default:
+				return false, nil
+			}
+		}
+	}
+	return true, ctx.Err()
+}
+
+// resolveAnalyticRevolveExtentProfile resolves each analytic walk once and
+// polls cancellation before each segment. Analytic walks charge no free-form
+// work, so this local view needs no replay charge when the three axes read it.
+func resolveAnalyticRevolveExtentProfile(
+	ctx context.Context, profile ProfileRecord, work *freeformWork,
+) (*revolveExtentProfile, error) {
+	walks := &profileWalks{
+		profile: profile,
+		outer:   make([]segmentWalk, len(profile.Outer.Segments)),
+		holes:   make([][]segmentWalk, len(profile.Holes)),
+	}
+	coordUpper := 0.0
+	resolve := func(segments []CurveSegment, result []segmentWalk) error {
+		for i, segment := range segments {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			walk, err := walkOf(segment, work)
+			if err != nil {
+				return err
+			}
+			if err := requireAnalyticWalk(walk, "a placed cap frame"); err != nil {
+				return err
+			}
+			result[i] = walk
+			coordUpper = math.Max(coordUpper, walk.coordUpper)
+		}
+		return nil
+	}
+	if err := resolve(profile.Outer.Segments, walks.outer); err != nil {
+		return nil, err
+	}
+	for i, hole := range profile.Holes {
+		walks.holes[i] = make([]segmentWalk, len(hole.Segments))
+		if err := resolve(hole.Segments, walks.holes[i]); err != nil {
+			return nil, err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return &revolveExtentProfile{walks: walks, coordUpper: coordUpper}, nil
 }
 
 // sweepExtremes returns the range of m(φ) = c0·cos φ + c1·sin φ over the
@@ -587,15 +690,27 @@ func sweepExtremeBounds(c0, c1, phi0, phi1 float64, den sweepDenotation, heldLo,
 // charge exactly what that arithmetic committed, and the anchor's own proven
 // uncertainty (axisInPlane's aUBound/aVBound) rides in beside them through the
 // direction it is read against.
-func axisExtremeContext(ctx context.Context, rp revolvePayload, wg, k float64, wantMax bool, work *freeformWork) (float64, float64, error) {
+func axisExtremeContext(
+	ctx context.Context, rp revolvePayload, wg, k float64, wantMax bool,
+	work *freeformWork, profile *revolveExtentProfile,
+) (float64, float64, error) {
 	gu, gv := rp.ax.planeDirection(wg, k)
-	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, rp.profile, gu, gv, work, nil)
+	var walks *profileWalks
+	if profile != nil {
+		walks = profile.walks
+	}
+	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, rp.profile, gu, gv, work, walks)
 	if err != nil {
 		return 0, 0, err
 	}
-	coordUpper, err := profileCoordinateEnvelope(rp.profile, work, nil)
-	if err != nil {
-		return 0, 0, err
+	coordUpper := 0.0
+	if profile != nil {
+		coordUpper = profile.coordUpper
+	} else {
+		coordUpper, err = profileCoordinateEnvelope(rp.profile, work, nil)
+		if err != nil {
+			return 0, 0, err
+		}
 	}
 	scanAllow := planeDotDecompositionRoundAllow(gu, gv, coordUpper)
 	off := gu*rp.ax.aU + gv*rp.ax.aV
