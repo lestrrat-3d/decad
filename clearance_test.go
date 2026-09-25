@@ -268,7 +268,7 @@ func TestClearanceCubesDiagonalOffset(t *testing.T) {
 	// The §7 worked pair: a 10 mm cube at the origin and one at x∈[13,23],
 	// y∈[12,22] — the facing-face plateaus are discarded (the trims clear in
 	// projection) and the minimum falls to two parallel vertical edges:
-	// √13 ≈ 3.606 mm, Exact.
+	// √13 ≈ 3.606 mm. Its float64 representation needs a proven bound.
 	doc := decad.New()
 	boxBody(t, doc, 0, 0, 10, 10, 10)
 	boxBody(t, doc, 13, 12, 23, 22, 10)
@@ -276,7 +276,25 @@ func TestClearanceCubesDiagonalOffset(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
 	require.True(t, report.Passed())
-	requireExactGap(t, report, math.Sqrt(13))
+	requireBoundedGapContains(t, report, math.Sqrt(13))
+}
+
+func TestClearanceAxisBoxesNearTolerance(t *testing.T) {
+	t.Parallel()
+	const gap = 3e-8
+	x0 := float64(10 + gap)
+	doc := decad.New()
+	boxBody(t, doc, 0, 0, 10, 10, 10)
+	boxBody(t, doc, x0, 0, 20+gap, 10, 10)
+
+	report, err := doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	require.Len(t, report.Clearances, 1)
+	row := report.Clearances[0]
+	truth := x0 - 10
+	require.LessOrEqual(t, row.Gap.Value.Mag()-row.Gap.Bound.Mag(), truth)
+	require.GreaterOrEqual(t, row.Gap.Value.Mag()+row.Gap.Bound.Mag(), truth)
 }
 
 func TestClearanceStackedCubes(t *testing.T) {

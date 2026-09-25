@@ -143,6 +143,12 @@ func clearancePairCached(ctx context.Context, a, b *Body, nestingExcluded bool, 
 	if err := ctx.Err(); err != nil {
 		return pairResult{}, err
 	}
+	if result, ok := clearanceAxisBoxes(a, b); ok {
+		if err := ctx.Err(); err != nil {
+			return pairResult{}, err
+		}
+		return result, nil
+	}
 	budget := newWorkBudget(ctx)
 	ga, oka, err := cache.get(budget, a)
 	if err != nil {

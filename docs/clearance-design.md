@@ -521,8 +521,8 @@ Worked, at the default `rel = 1e-3`:
 
 | pair | closest features | kernel path | `Gap` | pair `D` | reads |
 |---|---|---|---|---|---|
-| 10 mm cube at origin; 10 mm cube at x∈[13,23], y∈[12,22] | two parallel vertical edges | facing-face plateau discarded (trims clear in projection); edge × edge CF | √13 ≈ 3.606 mm, `Exact` | 33.4 mm | passes |
-| the same cubes stacked 2 mm apart | facing caps, trims overlap in projection | face × face plateau CF | 2 mm, `Exact` | 26.2 mm | passes |
+| 10 mm cube at origin; 10 mm cube at x∈[13,23], y∈[12,22] | two parallel vertical edges | box gap | √13 ≈ 3.606 mm, `Approximate` | ≈33.4 mm lower bound | passes |
+| the same cubes stacked 2 mm apart via placement | facing caps, trims overlap in projection | face × face plateau CF | 2 mm, `Approximate` | 26.2 mm | passes |
 | a stop-built stack sharing its cap plane | coplanar caps, opposing normals | §6 contact | 0 mm, `Exact` | — | passes on its own terms (verification §5) |
 | two tori, parallel axes 30 mm apart, major 10, minor 2 | tube to tube | circle × circle P8, ⊕ | 6 mm ± 5e-10, `Approximate` | ≈54 mm | passes — 5e-10 ≤ 6e-3 |
 | a cone face near a torus, budget out at `lo` = 0.5 mm | — | BB, coarse | 0.8 ± 0.3 mm | 40 mm | row stands, **`Suspect`** — 0.3 ≫ 8e-4 |
@@ -530,6 +530,11 @@ Worked, at the default `rel = 1e-3`:
 The last row is the honest coarse answer: the partition is decided — disjoint,
 proven — and the measurement is not to the figures asked, so the row exists
 and the gate says so.
+
+The box-gap path applies only to unplaced rectangular prisms with axis-aligned
+frames and exact bounds. It computes the distance from the six box planes
+with bounded arithmetic. An irrational distance such as √13 carries a
+rounding bound; contact and near-contact use the general kernel.
 
 ## 8. Increments
 
