@@ -1664,7 +1664,7 @@ func TestChainStationsRefusals(t *testing.T) {
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 	t.Run("a target past the cap's reach", func(t *testing.T) {
-		_, err := chainStations(quarterCircleFitSpans(t), 1e-20, nil)
+		_, err := chainStations([]bezierSpan{parabolaSpan()}, 1e-20, nil)
 		require.ErrorIs(t, err, errTooManyChords)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
