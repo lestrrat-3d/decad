@@ -907,7 +907,13 @@ func placementChain(t *testing.T, pp prismPayload, drop bool) (*Body, []*profile
 // resolve-every-time chain, and that is what this asserts.
 func TestRepeatedPlacementAccumulatesNoError(t *testing.T) {
 	t.Parallel()
-	built, err := evalPrism(New(), 0, involuteFitPrismPayload(t), newFreeformWork())
+	pp := involuteFitPrismPayload(t)
+	fit := pp.profile.Outer.Segments[1].(FitSplineSeg)
+	// Four curved spans exercise placement without repeating the 15-point
+	// work-budget reproducer used by the other involute tests.
+	fit.Fit = []Point2{fit.Fit[0], fit.Fit[4], fit.Fit[7], fit.Fit[10], fit.Fit[14]}
+	pp.profile.Outer.Segments[1] = fit
+	built, err := evalPrism(New(), 0, pp, newFreeformWork())
 	require.NoError(t, err)
 	source := prismPayloadOf(t, built)
 
