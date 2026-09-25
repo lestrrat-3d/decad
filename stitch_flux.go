@@ -94,11 +94,14 @@ import (
 // curved solid's centroid is not optional (docs/surface-design.md §8) — via
 // the identical divergence-theorem shape with F_i = ((x_i−a_i)²/2)·ê_i,
 // div F_i = x_i−a_i: ∫_Ω(x_i−a_i)dV = Σ_F ∫_F ((p_i−a_i)²/2)·n_i dA. The
-// Plane arm reduces this to the standard disk/annulus second-moment
-// identity (a full circle of radius R centered at (cu,cv) in the face's own
+// Plane arm uses the standard disk/annulus second-moment identity when
+// the active world-axis moments have in-plane components (a full circle of
+// radius R centered at (cu,cv) in the face's own
 // local frame contributes cu·Area, cv·Area, cu²·Area+πR⁴/4, cv²·Area+πR⁴/4
 // and cu·cv·Area to Iu, Iv, Iuu, Ivv, Iuv respectively — elementary polar
-// integration over a disk, summed with each loop's own outer/hole sign). The
+// integration over a disk, summed with each loop's own outer/hole sign).
+// When the normal is exactly world-axis aligned, only disk area enters the
+// nonzero moment component. The
 // Cylinder arm's own closed form is derived and verified in
 // cylinderFaceFluxAndMoment's doc comment; the Cone arm's is derived and
 // verified in coneFaceFluxAndMoment's own doc comment. The Sphere arm takes
@@ -434,7 +437,9 @@ func stitchFaceFluxAndMoment(f *Face, anchor r3.Vec) (flux, mx, my, mz boundedSc
 // file's own scope restriction, top-of-file doc comment); anything else is
 // ErrUnsupported. The first moment sums each loop's own disk (or, for a
 // hole, negative-disk) contribution to the region's Iu, Iv, Iuu, Ivv, Iuv in
-// the face's own local (u, v) frame, then folds those into the world-axis
+// the face's own local (u, v) frame when an active world-axis moment has an
+// in-plane component. Otherwise the arm sums only disk areas. It folds the
+// needed terms into the world-axis
 // second moments through q_i = c_i + u·U_i + v·V_i (c_i = O_i − anchor_i):
 //
 //	∫_F q_i² dA = c_i²·Area + 2·c_i·U_i·Iu + 2·c_i·V_i·Iv
@@ -444,6 +449,12 @@ func stitchFaceFluxAndMoment(f *Face, anchor r3.Vec) (flux, mx, my, mz boundedSc
 func planeFaceFluxAndMoment(f *Face, pl Plane, anchor r3.Vec, sign float64) (flux, mx, my, mz boundedScalar, err error) {
 	origin := pl.Frame.Origin()
 	u, v, n := pl.Frame.U(), pl.Frame.V(), pl.Frame.N()
+	// A world-axis normal has no in-plane component on its active moment
+	// axis. Its first moment needs only the disk areas, not their local
+	// centers or second moments. The general tilted-plane path keeps them.
+	needDiskMoments := (n.X != 0 && (u.X != 0 || v.X != 0)) ||
+		(n.Y != 0 && (u.Y != 0 || v.Y != 0)) ||
+		(n.Z != 0 && (u.Z != 0 || v.Z != 0))
 
 	area := boundedScalar{}
 	iu, iv := boundedScalar{}, boundedScalar{}
@@ -478,23 +489,27 @@ func planeFaceFluxAndMoment(f *Face, pl Plane, anchor r3.Vec, sign float64) (flu
 			loopSign = -1.0
 		}
 
+		rr := boundedMul(rB, rB)
+		diskArea := boundedMul(piScalar(), rr)
+		if loopSign < 0 {
+			diskArea = boundedNeg(diskArea)
+		}
+		area = boundedAdd(area, diskArea)
+		if !needDiskMoments {
+			continue
+		}
+
 		local := pl.Frame.ToLocal(c3.Center)
 		projScale := absSumUpper(vecMaxAbs(c3.Center), vecMaxAbs(origin))
 		projBound := analyticRoundBound(projScale)
 		cu := measuredScalar(local.X, projBound)
 		cv := measuredScalar(local.Y, projBound)
 
-		rr := boundedMul(rB, rB)
-		diskArea := boundedMul(piScalar(), rr)
-		if loopSign < 0 {
-			diskArea = boundedNeg(diskArea)
-		}
 		fourth := boundedMul(measuredScalar(0.25, 0), boundedMul(piScalar(), boundedMul(rr, rr)))
 		if loopSign < 0 {
 			fourth = boundedNeg(fourth)
 		}
 
-		area = boundedAdd(area, diskArea)
 		iu = boundedAdd(iu, boundedMul(cu, diskArea))
 		iv = boundedAdd(iv, boundedMul(cv, diskArea))
 		iuu = boundedAdd(iuu, boundedAdd(boundedMul(boundedMul(cu, cu), diskArea), fourth))
@@ -515,14 +530,19 @@ func planeFaceFluxAndMoment(f *Face, pl Plane, anchor r3.Vec, sign float64) (flu
 
 	half := measuredScalar(0.5, 0)
 	moment := func(ci boundedScalar, ni, ui, vi float64) boundedScalar {
+		if ni == 0 {
+			return boundedScalar{}
+		}
 		uiB, viB := measuredScalar(ui, 0), measuredScalar(vi, 0)
 		term := boundedMul(ci, ci)
 		term = boundedMul(term, area)
-		term = boundedAdd(term, boundedMul(boundedMul(measuredScalar(2, 0), boundedMul(ci, uiB)), iu))
-		term = boundedAdd(term, boundedMul(boundedMul(measuredScalar(2, 0), boundedMul(ci, viB)), iv))
-		term = boundedAdd(term, boundedMul(boundedMul(uiB, uiB), iuu))
-		term = boundedAdd(term, boundedMul(boundedMul(measuredScalar(2, 0), boundedMul(uiB, viB)), iuv))
-		term = boundedAdd(term, boundedMul(boundedMul(viB, viB), ivv))
+		if ui != 0 || vi != 0 {
+			term = boundedAdd(term, boundedMul(boundedMul(measuredScalar(2, 0), boundedMul(ci, uiB)), iu))
+			term = boundedAdd(term, boundedMul(boundedMul(measuredScalar(2, 0), boundedMul(ci, viB)), iv))
+			term = boundedAdd(term, boundedMul(boundedMul(uiB, uiB), iuu))
+			term = boundedAdd(term, boundedMul(boundedMul(measuredScalar(2, 0), boundedMul(uiB, viB)), iuv))
+			term = boundedAdd(term, boundedMul(boundedMul(viB, viB), ivv))
+		}
 		term = boundedMul(measuredScalar(sign, 0), term)
 		term = boundedMul(half, term)
 		return boundedMul(measuredScalar(ni, 0), term)

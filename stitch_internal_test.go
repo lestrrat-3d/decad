@@ -469,15 +469,62 @@ func TestStitchPlaneMomentChargesRadiusBound(t *testing.T) {
 	// corner case of this particular anchor choice, it is the ONLY choice
 	// that exercises the leg at all for a flat disk.
 	anchor := r3.NewVec(0, 0, 5)
-	f := stitchTestPlaneDiskFace(r, 1.0)                   // rim lengthBound=1
-	_, _, _, mz, err := stitchFaceFluxAndMoment(f, anchor) //nolint:dogsled // only mz and the error matter here.
+	f := stitchTestPlaneDiskFace(r, 1.0) // rim lengthBound=1
+	flux, mx, my, mz, err := stitchFaceFluxAndMoment(f, anchor)
 	require.NoError(t, err)
-	require.Greater(t, mz.bound, 0.01, "the Plane arm's own Area/Iuu/Ivv terms must scale with the rim's own lengthBound")
+	require.Equal(t, boundedScalar{}, mx)
+	require.Equal(t, boundedScalar{}, my)
+	require.InDelta(t, -500*math.Pi, flux.value, 1e-10)
+	require.InDelta(t, 1250*math.Pi, mz.value, 1e-10)
+	require.Greater(t, mz.bound, 0.01, "the Plane area term must scale with the rim's own lengthBound")
 
 	zero := stitchTestPlaneDiskFace(r, 0)
 	_, _, _, mzZero, err := stitchFaceFluxAndMoment(zero, anchor) //nolint:dogsled // only mz and the error matter here.
 	require.NoError(t, err)
 	require.Less(t, mzZero.bound, 1e-6, "with the rim's own lengthBound zero, the moment bound has no other source of that magnitude")
+}
+
+// TestStitchPlaneMomentUsesTiltedDiskTerms checks the in-plane disk
+// integral for a plane whose normal has two world-axis components. Neither
+// of those moments can use the axis-aligned area-only reduction.
+func TestStitchPlaneMomentUsesTiltedDiskTerms(t *testing.T) {
+	t.Parallel()
+	frame, err := r3.NewFrame(r3.NewVec(2, 3, 4), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 1))
+	require.NoError(t, err)
+	const radius = 2.0
+	center := frame.Origin().Add(frame.U()).Add(frame.V().Scale(0.5))
+	vertex := &Vertex{position: center.Add(frame.U().Scale(radius))}
+	edge := &Edge{
+		curve: Circle3{Center: center, Axis: frame.N(), Radius: units.Millimeters(radius)},
+		start: vertex, end: vertex, length: 2 * math.Pi * radius,
+	}
+	face := &Face{
+		surface: Plane{Frame: frame},
+		loops:   []*Loop{{outer: true, coedges: []coedge{{edge: edge, forward: true}}}},
+	}
+	edge.faces = []*Face{face}
+
+	anchor := r3.NewVec(1, 1, 1)
+	flux, mx, my, mz, err := stitchFaceFluxAndMoment(face, anchor)
+	require.NoError(t, err)
+	require.Equal(t, boundedScalar{}, mx)
+
+	area := math.Pi * radius * radius
+	fourth := math.Pi * math.Pow(radius, 4) / 4
+	n := frame.N()
+	u := frame.U()
+	v := frame.V()
+	planeDelta := frame.Origin().Sub(anchor)
+	centerDelta := center.Sub(anchor)
+	require.InDelta(t, area*(planeDelta.Y*n.Y+planeDelta.Z*n.Z), flux.value, 1e-10)
+	require.InDelta(t, n.Y*(area*centerDelta.Y*centerDelta.Y+fourth*(u.Y*u.Y+v.Y*v.Y))/2, my.value, 1e-10)
+	require.InDelta(t, n.Z*(area*centerDelta.Z*centerDelta.Z+fourth*(u.Z*u.Z+v.Z*v.Z))/2, mz.value, 1e-10)
+
+	edge.lengthBound = 0.5
+	_, _, myWide, mzWide, err := stitchFaceFluxAndMoment(face, anchor)
+	require.NoError(t, err)
+	require.Greater(t, myWide.bound, my.bound)
+	require.Greater(t, mzWide.bound, mz.bound)
 }
 
 // mustPlaneFrame returns an arbitrary valid orthonormal frame for
