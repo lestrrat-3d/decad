@@ -171,12 +171,72 @@ func BenchmarkTessRevolveSphere(b *testing.B) {
 }
 
 func BenchmarkTessRevolveTorus(b *testing.B) {
-	body := benchRevolve(func(s *sketch.Sketch) {
+	runTess(b, benchTorus())
+}
+
+func benchTorus() *decad.Body {
+	return benchRevolve(func(s *sketch.Sketch) {
 		c := s.CreatePoint(0, 10)
 		s.Fix(c)
 		s.CreateCircle(c, 3)
 	}, decad.FullRevolution{})
-	runTess(b, body)
+}
+
+// BenchmarkTessRevolveTorusCold measures a fresh body's first tessellation at
+// each verification level. Reusing one body primarily measures its cache.
+func BenchmarkTessRevolveTorusCold(b *testing.B) {
+	for _, tc := range []struct {
+		name  string
+		level decad.Verification
+	}{
+		{name: "all", level: decad.VerifyAll},
+		{name: "boundary", level: decad.VerifyBoundary},
+		{name: "none", level: decad.VerifyNone},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			opt := decad.WithVerification(tc.level)
+			var tris float64
+			for b.Loop() {
+				b.StopTimer()
+				body := benchTorus()
+				b.StartTimer()
+				mesh, err := body.Tessellate(b.Context(), units.Millimeters(benchTol), opt)
+				if err != nil {
+					b.Fatal(err)
+				}
+				tris = float64(len(mesh.Triangles()))
+			}
+			b.ReportMetric(tris, "tris")
+		})
+	}
+}
+
+// BenchmarkTessRevolveTorusColdTolerance tracks the full proof as the same
+// torus gains facets at tighter chord tolerances.
+func BenchmarkTessRevolveTorusColdTolerance(b *testing.B) {
+	for _, tc := range []struct {
+		name string
+		tol  float64
+	}{
+		{name: "0.4mm", tol: 0.4},
+		{name: "0.2mm", tol: 0.2},
+		{name: "0.1mm", tol: 0.1},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			var tris float64
+			for b.Loop() {
+				b.StopTimer()
+				body := benchTorus()
+				b.StartTimer()
+				mesh, err := body.Tessellate(b.Context(), units.Millimeters(tc.tol))
+				if err != nil {
+					b.Fatal(err)
+				}
+				tris = float64(len(mesh.Triangles()))
+			}
+			b.ReportMetric(tris, "tris")
+		})
+	}
 }
 
 // A groove: z in [0, 18], rho in [4, 14], a semicircular groove of radius 3

@@ -80,8 +80,10 @@ func (c revArcCell) speed() *big.Rat {
 // rhoNodes encloses ρ at each node of the fixed subdivision, and states the
 // per-piece second-order allowance the integral below charges beside them.
 //
-// Nothing here compares against π: radSinCosInterval encloses each node's
-// radian angle through moments_trig.go's own series.
+// Nothing here compares against π. Two radSinCosInterval calls enclose the
+// starting angle and one step. The addition identities then carry certified
+// intervals from one node to the next. This avoids running the trig series at
+// every node while preserving an enclosure at each exact rational angle.
 //
 // The allowance is elementary and needs no monotonicity argument. Over one
 // piece of width h in t, the integrand's own second derivative is
@@ -94,14 +96,24 @@ func (c revArcCell) speed() *big.Rat {
 // which is larger by N·8/Δθ at every depth.
 func (c revArcCell) rhoNodes() ([]ratInterval, *big.Rat, bool) {
 	nodes := make([]ratInterval, revolveArcIntegralSteps+1)
-	for i := range revolveArcIntegralSteps + 1 {
-		t := big.NewRat(int64(i), revolveArcIntegralSteps)
-		angle := new(big.Rat).Add(c.th0, new(big.Rat).Mul(c.dth, t))
-		sin, _, ok := radSinCosInterval(angle)
-		if !ok {
-			return nil, nil, false
+	step := new(big.Rat).Quo(c.dth, big.NewRat(revolveArcIntegralSteps, 1))
+	sinIv, cosIv, ok := radSinCosInterval(c.th0)
+	if !ok {
+		return nil, nil, false
+	}
+	stepSinIv, stepCosIv, ok := radSinCosInterval(step)
+	if !ok {
+		return nil, nil, false
+	}
+	sin, cos := arcFixedFromRat(sinIv), arcFixedFromRat(cosIv)
+	stepSin, stepCos := arcFixedFromRat(stepSinIv), arcFixedFromRat(stepCosIv)
+	for i := range nodes {
+		nodes[i] = intervalAdd(pointInterval(c.cV), intervalScale(sin.rat(), c.radius))
+		if i+1 < len(nodes) {
+			nextSin := arcFixedAdd(arcFixedMul(sin, stepCos), arcFixedMul(cos, stepSin))
+			cos = arcFixedSub(arcFixedMul(cos, stepCos), arcFixedMul(sin, stepSin))
+			sin = nextSin
 		}
-		nodes[i] = intervalAdd(pointInterval(c.cV), intervalScale(sin, c.radius))
 	}
 	steps := big.NewRat(revolveArcIntegralSteps, 1)
 	bulge := new(big.Rat).Quo(
@@ -109,6 +121,48 @@ func (c revArcCell) rhoNodes() ([]ratInterval, *big.Rat, bool) {
 		new(big.Rat).Mul(big.NewRat(8, 1), new(big.Rat).Mul(steps, steps)),
 	)
 	return nodes, bulge, true
+}
+
+// arcFixedInterval holds a certified interval as integer multiples of the
+// package's 2^-trigFixedBits grid. The recurrence rounds each product outward,
+// keeping numerator and denominator sizes fixed across all 32 nodes.
+type arcFixedInterval struct{ lo, hi *big.Int }
+
+func arcFixedFromRat(a ratInterval) arcFixedInterval {
+	return arcFixedInterval{fixedFloor(a.lo), fixedCeil(a.hi)}
+}
+
+func (a arcFixedInterval) rat() ratInterval {
+	return intervalOwned(fixedToRat(a.lo), fixedToRat(a.hi))
+}
+
+func arcFixedAdd(a, b arcFixedInterval) arcFixedInterval {
+	return arcFixedInterval{new(big.Int).Add(a.lo, b.lo), new(big.Int).Add(a.hi, b.hi)}
+}
+
+func arcFixedSub(a, b arcFixedInterval) arcFixedInterval {
+	return arcFixedInterval{new(big.Int).Sub(a.lo, b.hi), new(big.Int).Sub(a.hi, b.lo)}
+}
+
+func arcFixedMul(a, b arcFixedInterval) arcFixedInterval {
+	products := [4]*big.Int{
+		new(big.Int).Mul(a.lo, b.lo), new(big.Int).Mul(a.lo, b.hi),
+		new(big.Int).Mul(a.hi, b.lo), new(big.Int).Mul(a.hi, b.hi),
+	}
+	lo, hi := products[0], products[0]
+	for _, product := range products[1:] {
+		if product.Cmp(lo) < 0 {
+			lo = product
+		}
+		if product.Cmp(hi) > 0 {
+			hi = product
+		}
+	}
+	// Rsh rounds a negative integer toward minus infinity. Negating that
+	// floor gives the outward ceiling for the upper endpoint.
+	lo = new(big.Int).Rsh(lo, trigFixedBits)
+	hi = new(big.Int).Neg(new(big.Int).Rsh(new(big.Int).Neg(hi), trigFixedBits))
+	return arcFixedInterval{lo, hi}
 }
 
 // revolveArcIntegralSteps is the fixed certified-subdivision budget one
