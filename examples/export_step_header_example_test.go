@@ -44,7 +44,7 @@ func Example_export_step_header() {
 	}
 	var out bytes.Buffer
 	if err := export.STEP(context.Background(), &out, body, units.Millimeters(0.1),
-		export.STEPMetadata{}, export.WithSTEPHeader(header)); err != nil {
+		export.WithSTEPHeader(header)); err != nil {
 		fmt.Printf("failed to write STEP: %s\n", err)
 		return
 	}

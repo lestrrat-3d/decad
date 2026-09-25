@@ -1584,7 +1584,11 @@ func (b *Body) Tessellate(ctx context.Context, tol units.Value, opts ...Tessella
 // package export:
 func STL(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...decad.TessellateOption) error
 func OBJ(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...decad.TessellateOption) error
-func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, metadata STEPMetadata, opts ...STEPOption) error
+func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...STEPOption) error
+func WithSTEPName(name string) STEPOption
+func WithSTEPTimestamp(timestamp time.Time) STEPOption
+func WithSTEPAuthor(author string) STEPOption
+func WithSTEPOrganization(organization string) STEPOption
 func WithSTEPHeader(header step.Header) STEPOption
 ```
 
@@ -1608,8 +1612,8 @@ scans, cap triangulation, mesh audits, and faceted restatement. Cancellation
 returns `ctx.Err()` unchanged.
 
 `export.STEP` writes a boundary-verified solid mesh as a faceted AP214 B-rep.
-Its `STEPMetadata` asks for a file name, timestamp, author, and organization;
-simple callers need no STEP module type. `WithSTEPHeader` overrides all metadata
+Simple callers pass the file name, timestamp, author, and organization as
+options and need no STEP module type. `WithSTEPHeader` replaces those options
 and default header fields with a complete `step.Header` passed to the same
 `export.STEP` function. `export.NewSTEPFile` returns the underlying `step.File`.
 The root package does not import STEP, and STEP export does not preserve

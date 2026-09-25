@@ -7,13 +7,14 @@
 requested verification level. `export` imports decad and
 `github.com/lestrrat-3d/step/ap214`; decad's root package does not import
 STEP. `NewSTEPFile(ctx, body, tol, header)` returns a `step.File`. The
-`STEP(ctx, w, body, tol, metadata, opts...)` writer takes `STEPMetadata` with a
-nonempty file name, author, organization, and a nonzero timestamp. It sets
+`STEP(ctx, w, body, tol, opts...)` writer takes options for a nonempty file
+name, author, organization, and a nonzero timestamp. It sets
 `Description` to `faceted decad solid`, `PreprocessorVersion` to `decad export`,
 and `OriginatingSystem` to `decad`. It never reads the clock. Callers needing
 different or multiple header values pass `WithSTEPHeader(step.Header)` to
-`STEP`. This option replaces all metadata and default header fields; the last
-header option wins. `ap214.NewFile` sets `AUTOMOTIVE_DESIGN` in `FILE_SCHEMA`.
+`STEP`. This option replaces all simple options and default header fields; the
+last header option wins. `ap214.NewFile` sets `AUTOMOTIVE_DESIGN` in
+`FILE_SCHEMA`.
 
 ## Geometry contract
 

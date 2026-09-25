@@ -31,15 +31,13 @@ func Example_export_formats() {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	metadata := export.STEPMetadata{
-		Name:         "box.step",
-		Timestamp:    time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
-		Author:       "Example",
-		Organization: "Example",
-	}
 	tol := units.Millimeters(0.1)
 	var out bytes.Buffer
-	if err := export.STEP(context.Background(), &out, body, tol, metadata); err != nil {
+	if err := export.STEP(context.Background(), &out, body, tol,
+		export.WithSTEPName("box.step"),
+		export.WithSTEPTimestamp(time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC)),
+		export.WithSTEPAuthor("Example"),
+		export.WithSTEPOrganization("Example")); err != nil {
 		fmt.Printf("failed to write STEP: %s\n", err)
 		return
 	}

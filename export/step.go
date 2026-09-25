@@ -15,15 +15,6 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// STEPMetadata holds the four caller-supplied fields for a faceted AP214 file.
-// Name, Author, and Organization must be nonempty; Timestamp must be nonzero.
-type STEPMetadata struct {
-	Name         string
-	Timestamp    time.Time
-	Author       string
-	Organization string
-}
-
 // STEPOption configures the STEP writer.
 type STEPOption interface {
 	option.Interface
@@ -35,12 +26,35 @@ type stepOption struct{ option.Interface }
 func (stepOption) stepOption() {}
 
 type identSTEPHeader struct{}
+type identSTEPName struct{}
+type identSTEPTimestamp struct{}
+type identSTEPAuthor struct{}
+type identSTEPOrganization struct{}
 
-// WithSTEPHeader replaces all STEPMetadata fields and defaults with header.
-// It allows callers to set the complete Part 21 header. If supplied more
-// than once, the last header wins.
+// WithSTEPHeader replaces all simple STEP options with a complete Part 21
+// header. If supplied more than once, the last header wins.
 func WithSTEPHeader(header step.Header) STEPOption {
 	return stepOption{option.New(identSTEPHeader{}, header)}
+}
+
+// WithSTEPName sets the file name and product name in a STEP file.
+func WithSTEPName(name string) STEPOption {
+	return stepOption{option.New(identSTEPName{}, name)}
+}
+
+// WithSTEPTimestamp sets the STEP file's timestamp.
+func WithSTEPTimestamp(timestamp time.Time) STEPOption {
+	return stepOption{option.New(identSTEPTimestamp{}, timestamp)}
+}
+
+// WithSTEPAuthor sets the STEP file's author.
+func WithSTEPAuthor(author string) STEPOption {
+	return stepOption{option.New(identSTEPAuthor{}, author)}
+}
+
+// WithSTEPOrganization sets the STEP file's organization.
+func WithSTEPOrganization(organization string) STEPOption {
+	return stepOption{option.New(identSTEPOrganization{}, organization)}
 }
 
 // NewSTEPFile builds an AP214 file from one solid's boundary-verified mesh.
@@ -126,41 +140,52 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 	return ap214.NewFile(header, b.entities...), nil
 }
 
-// STEP writes one faceted AP214 file. Metadata supplies the required Part 21
-// fields; WithSTEPHeader can replace it with a complete step.Header. Geometry
-// and references are built before the writer is touched. Invalid header data
-// also leaves the writer untouched. An I/O error may leave a partial file.
-// ctx, w, and body must not be nil.
-func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, metadata STEPMetadata, opts ...STEPOption) error {
+// STEP writes one faceted AP214 file. Supply the name, timestamp, author, and
+// organization as options, or use WithSTEPHeader for a complete step.Header.
+// Geometry and references are built before the writer is touched. Invalid
+// header data also leaves the writer untouched. An I/O error may leave a
+// partial file. ctx, w, and body must not be nil.
+func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...STEPOption) error {
 	if w == nil {
 		return fmt.Errorf("export: STEP: %w: nil writer", decad.ErrDegenerate)
 	}
-	var header step.Header
-	var overridden bool
+	var name, author, organization string
+	var timestamp time.Time
+	var fullHeader *step.Header
 	for _, opt := range opts {
 		if opt == nil {
 			return fmt.Errorf("export: STEP: %w: nil option", decad.ErrDegenerate)
 		}
-		if _, ok := opt.Ident().(identSTEPHeader); !ok {
-			continue
+		switch opt.Ident().(type) {
+		case identSTEPHeader:
+			value, ok := option.Get[step.Header](opt)
+			if !ok {
+				return fmt.Errorf("export: STEP: %w: invalid header option", decad.ErrDegenerate)
+			}
+			fullHeader = &value
+		case identSTEPName:
+			name, _ = option.Get[string](opt)
+		case identSTEPTimestamp:
+			timestamp, _ = option.Get[time.Time](opt)
+		case identSTEPAuthor:
+			author, _ = option.Get[string](opt)
+		case identSTEPOrganization:
+			organization, _ = option.Get[string](opt)
 		}
-		value, ok := option.Get[step.Header](opt)
-		if !ok {
-			return fmt.Errorf("export: STEP: %w: invalid header option", decad.ErrDegenerate)
-		}
-		header = value
-		overridden = true
 	}
-	if !overridden {
-		if metadata.Name == "" || metadata.Author == "" || metadata.Organization == "" || metadata.Timestamp.IsZero() {
+	var header step.Header
+	if fullHeader != nil {
+		header = *fullHeader
+	} else {
+		if name == "" || author == "" || organization == "" || timestamp.IsZero() {
 			return fmt.Errorf("export: STEP: %w: name, timestamp, author, and organization are required", decad.ErrDegenerate)
 		}
 		header = step.Header{
 			Description:         []string{"faceted decad solid"},
-			Name:                metadata.Name,
-			Timestamp:           metadata.Timestamp,
-			Authors:             []string{metadata.Author},
-			Organizations:       []string{metadata.Organization},
+			Name:                name,
+			Timestamp:           timestamp,
+			Authors:             []string{author},
+			Organizations:       []string{organization},
 			PreprocessorVersion: "decad export",
 			OriginatingSystem:   "decad",
 		}
