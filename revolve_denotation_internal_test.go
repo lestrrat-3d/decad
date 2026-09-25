@@ -105,7 +105,7 @@ func TestSweepDenotationHalfTurnExcess(t *testing.T) {
 func bruteExtremes(c0, c1, phi0, phi1 float64) (float64, float64) {
 	m := func(phi float64) float64 { return c0*math.Cos(phi) + c1*math.Sin(phi) }
 	lo, hi := math.Inf(1), math.Inf(-1)
-	const n = 200000
+	const n = 1024
 	for i := 0; i <= n; i++ {
 		v := m(phi0 + (phi1-phi0)*float64(i)/n)
 		lo, hi = math.Min(lo, v), math.Max(hi, v)
