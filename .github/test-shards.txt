@@ -708,6 +708,7 @@
 0	0.02	TestStitchPatchCappedTubeClosesToASolid
 0	0.03	TestStitchPlacedSolidTessellateBoundReadsVertexBound
 0	0.00	TestStitchPlaneMomentChargesRadiusBound
+0	0.00	TestStitchPlaneMomentUsesTiltedDiskTerms
 0	0.00	TestStitchRefusesAWeldedAwayComponent
 0	0.03	TestStitchRefusesNestedBoxesWithAGap
 0	0.00	TestStitchRuleSRefusesMultipleSourceBodies
