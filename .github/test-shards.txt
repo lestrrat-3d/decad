@@ -654,7 +654,9 @@
 0	0.02	TestSheetUndercutsRefusedOnARevolveSheet
 0	0.01	TestSheetWallAndConcaveRadiusKeepTheSurveyPrerequisiteRefusal
 0	0.08	TestShellContextCancellationDuringOffsetSetupLeavesReceiverLive
+0	0.01	TestShellCirclePostSectionGate
 0	0.16	TestShellCupHoledMinRadius
+0	0.01	TestShellRectCircleWitnessKeepsToleranceAndFallsBack
 0	0.63	TestShellCupHoledRectangularPost
 0	0.31	TestShellCupHoledUndercuts
 0	0.12	TestShellCupPlacedComposes

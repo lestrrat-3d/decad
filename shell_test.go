@@ -159,15 +159,23 @@ func TestShellContextCancellationDuringSectionSurveyLeavesReceiverLive(t *testin
 
 func TestShellContextCancellationDuringKernelSetupLeavesReceiverLive(t *testing.T) {
 	t.Parallel()
-	doc, box := shellBox(t)
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	s.CreateCircle(s.CreatePoint(0, 0), 20)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	doc := decad.New()
+	disk, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	require.NoError(t, err)
 	ctx := &operationCancelContext{Context: t.Context(), target: "newWallKernelBudget"}
 
-	body, err := box.Shell(ctx, topCap(box), units.Millimeters(5))
+	body, err := disk.Shell(ctx, topCap(disk), units.Millimeters(5))
 
 	require.Nil(t, body)
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
-	require.Equal(t, []*decad.Body{box}, doc.Bodies())
+	require.Equal(t, []*decad.Body{disk}, doc.Bodies())
 }
 
 func TestShellContextCancellationDuringAuditPreservesError(t *testing.T) {
@@ -612,6 +620,33 @@ func TestShellCupHoledInward(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.Sound, report.Status)
 	require.True(t, report.Passed())
+}
+
+func TestShellCirclePostSectionGate(t *testing.T) {
+	t.Parallel()
+	const holeRadius = 8.0
+	t.Run("contained disk permits a cup", func(t *testing.T) {
+		doc, box := circleHoledBox(t, [3]float64{50, 30, holeRadius})
+		cup, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
+		require.NoError(t, err)
+		vol, err := cup.Volume()
+		require.NoError(t, err)
+		got, err := vol.Value.In(units.CubicMillimeter)
+		require.NoError(t, err)
+		outerArea := 100*60 - math.Pi*holeRadius*holeRadius
+		cavityArea := 90*50 - math.Pi*(holeRadius+5)*(holeRadius+5)
+		require.InDelta(t, outerArea*shellBoxHeight-cavityArea*(shellBoxHeight-5), got, 1e-9)
+		require.Equal(t, []*decad.Body{cup}, doc.Bodies())
+	})
+	t.Run("near section limit uses inradius refusal", func(t *testing.T) {
+		doc, box := circleHoledBox(t, [3]float64{50, 30, holeRadius})
+		// Removing both caps excludes the cup's independent height limit.
+		body, err := box.Shell(t.Context(), bothCaps(), units.Millimeters(22))
+		require.Nil(t, body)
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.Contains(t, err.Error(), "section's inradius")
+		require.Equal(t, []*decad.Body{box}, doc.Bodies())
+	})
 }
 
 // rimByRole returns the body's face carrying the given rim role.
