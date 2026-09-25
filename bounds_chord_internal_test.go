@@ -402,9 +402,7 @@ var chordSweepTable = sync.OnceValue(func() []chordSweepRow {
 	jobs := make(chan int)
 	var workersDone sync.WaitGroup
 	for range workers {
-		workersDone.Add(1)
-		go func() {
-			defer workersDone.Done()
+		workersDone.Go(func() {
 			for i := range jobs {
 				in := inputs[i]
 				sweepRad := in.sweepDeg * math.Pi / 180
@@ -417,7 +415,7 @@ var chordSweepTable = sync.OnceValue(func() []chordSweepRow {
 					breakdown:   chordedBoundaryAllowForTwistedPieSlice(in.r, sweepRad, twistRad, in.h, in.n),
 				}
 			}
-		}()
+		})
 	}
 	for i := range inputs {
 		jobs <- i
