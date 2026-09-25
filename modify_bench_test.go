@@ -17,7 +17,7 @@ func BenchmarkFilletBoxAllConvexEdges(b *testing.B) {
 	const radius = 10.0
 	wantVolume := (100*60 - (4-math.Pi)*radius*radius) * 20
 	selector := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex())
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		b.StopTimer()
 		doc := decad.New()
 		box := benchBoxBody(b, doc, 0, 0, 100, 60, 20)
@@ -44,7 +44,7 @@ func BenchmarkChamferBoxAllConvexEdges(b *testing.B) {
 	const setback = 10.0
 	wantVolume := (100*60 - 4*setback*setback/2) * 20
 	selector := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex())
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		b.StopTimer()
 		doc := decad.New()
 		box := benchBoxBody(b, doc, 0, 0, 100, 60, 20)
