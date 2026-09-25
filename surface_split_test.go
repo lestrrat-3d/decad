@@ -39,7 +39,7 @@ func requireSplitVolumeSumEncloses(t *testing.T, a, b decad.Measurement, want *b
 	require.GreaterOrEqual(t, new(big.Rat).Add(aHi, bHi).Cmp(want), 0)
 }
 
-func splitBlock(t *testing.T, d *decad.Document) *decad.Body {
+func splitBlock(t testing.TB, d *decad.Document) *decad.Body {
 	t.Helper()
 	s, p := plateSketch(t)
 	b, err := d.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -47,7 +47,7 @@ func splitBlock(t *testing.T, d *decad.Document) *decad.Body {
 	return b
 }
 
-func splitRibbon(t *testing.T, d *decad.Document, endU float64) *decad.Body {
+func splitRibbon(t testing.TB, d *decad.Document, endU float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
