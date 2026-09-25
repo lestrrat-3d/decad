@@ -226,6 +226,7 @@ func thickenRevolve(ctx context.Context, d *Document, rp revolvePayload, side Th
 	}
 	rp.profile = annulus
 	rp.ax = ax
+	rp.radialProof = false
 	rp.surfaceResult = false
 	return evalRevolveContextWork(ctx, d, d.nextProducerID(), rp, work)
 }
@@ -311,5 +312,6 @@ func thickenChainRevolve(ctx context.Context, d *Document, cp chainRevolvePayloa
 	rp := cp.revolve()
 	rp.profile = section
 	rp.ax = ax
+	rp.radialProof = false
 	return evalRevolveContextWork(ctx, d, d.nextProducerID(), rp, work)
 }

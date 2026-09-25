@@ -72,6 +72,9 @@ type revolvePayload struct {
 	// (§3.4; §6's RS13). A revolve a caller draws directly leaves it zero and
 	// every reading takes the path it takes today, bit for bit.
 	sectionDelta float64
+	// radialProof belongs to this exact profile and resolved axis. A path
+	// replacing either must clear it; placement alone preserves both.
+	radialProof bool
 }
 
 // requireExactRevolveSection is RS13's reject-only guard: the solid build

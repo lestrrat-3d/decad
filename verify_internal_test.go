@@ -812,6 +812,49 @@ func TestRevolvePayloadProvesSimple(t *testing.T) {
 		rp := revolvePayload{profile: rectangleProfile(0, 8), ax: axis, full: true}
 		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
 	})
+
+	t.Run("build proof survives placement and respects cancellation", func(t *testing.T) {
+		t.Parallel()
+		profile := rectangleProfile(5, 15)
+		ax, side, err := resolveAxisSide(t.Context(), profile, axisLine2{dU: 1}, newFreeformWork())
+		require.NoError(t, err)
+		require.Equal(t, 1.0, side)
+		require.True(t, ax.radialProof)
+		rp := revolvePayload{
+			profile: profile, frame: axisAlignedFrame(t), ax: ax,
+			phi1: 2 * math.Pi, full: true, den: fullTurnDenotation(),
+			xform: r3.Identity(), surfaceResult: true, radialProof: ax.radialProof,
+		}
+		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
+		motion, err := r3.Translation(r3.NewVec(1, 2, 3))
+		require.NoError(t, err)
+		doc := New()
+		body, err := evalRevolveContext(t.Context(), doc, doc.nextProducerID(), rp)
+		require.NoError(t, err)
+		doc.commit(body)
+		placed, err := body.Placed(t.Context(), motion)
+		require.NoError(t, err)
+		placedPayload, ok := placed.payload.(revolvePayload)
+		require.True(t, ok)
+		require.True(t, placedPayload.radialProof)
+		require.True(t, revolvePayloadProvesSimple(t.Context(), placedPayload))
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		require.False(t, revolvePayloadProvesSimple(ctx, placedPayload))
+	})
+
+	t.Run("flipped axis and chain view keep the scan", func(t *testing.T) {
+		t.Parallel()
+		profile := rectangleProfile(-15, -5)
+		ax, side, err := resolveAxisSide(t.Context(), profile, axisLine2{dU: 1}, newFreeformWork())
+		require.NoError(t, err)
+		require.Equal(t, -1.0, side)
+		require.False(t, ax.radialProof)
+		rp := revolvePayload{profile: profile, ax: ax, full: true}
+		require.True(t, revolvePayloadProvesSimple(t.Context(), rp))
+		chain := chainRevolvePayload{chains: []ChainRecord{{Segments: profile.Outer.Segments}}, ax: ax, full: true}
+		require.False(t, chain.revolve().radialProof)
+	})
 }
 
 // TestRevolvePayloadProvesSimpleChargesTheAxisOffsetShift is the fixture

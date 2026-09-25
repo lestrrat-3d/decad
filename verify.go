@@ -1153,8 +1153,14 @@ func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
 // redundant free-form gate here would be dead code guarding a case this
 // arm can never reach.
 //
-// The radial extreme is recomputed here against rp.ax, the AXIS THE BUILD
-// ALREADY RESOLVED, rather than re-deriving a side or a tolerance: rp.ax's
+// A direct Revolve can carry the strict positive-side proof produced by
+// resolveAxisSide's scan of this same profile and axis. Its scan adds a
+// dot-product charge that makes the proof at least as strict as this scan.
+// Placement keeps the profile and axis, so it keeps that proof; a changed
+// profile or axis clears it. Other payloads take the scan below.
+//
+// The radial extreme is otherwise recomputed against rp.ax, the AXIS THE
+// BUILD ALREADY RESOLVED, rather than re-deriving a side or a tolerance: rp.ax's
 // own doc comment (axisFrame) states ρ = cross(d, p−a) as its radial
 // coordinate with the region already oriented onto its non-negative side, so
 // evaluating that same functional's extreme over the recorded profile reads
@@ -1187,6 +1193,12 @@ func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
 func revolvePayloadProvesSimple(ctx context.Context, rp revolvePayload) bool {
 	if !rp.full {
 		return false
+	}
+	if ctx.Err() != nil {
+		return false
+	}
+	if rp.radialProof {
+		return true
 	}
 	nU, nV := -rp.ax.dV, rp.ax.dU
 	rawLo, _, rawBound, err := boundaryExtremesBoundedContext(ctx, rp.profile, nU, nV, newFreeformWork(), nil)

@@ -1630,8 +1630,11 @@ angular fibre traverse it exactly once, so no off-axis point is covered
 twice. The radial condition is deliberately stricter than `resolveAxisSide`'s
 own build-time gate, which admits down to a `-tol` band rather than proving
 the minimum clear of zero — an admission gate resting on a tolerance is what
-CLAUDE.md's reject-only rule forbids, so this leg re-decides the question at
-zero instead of inheriting the build's tolerance. A revolve profile can never
+CLAUDE.md's reject-only rule forbids. For a direct Revolve on the positive
+axis side, `resolveAxisSide` also records a strict zero-threshold proof from
+its profile scan when one exists. `revolvePayloadProvesSimple` reuses that
+proof only while the profile and axis are unchanged; otherwise it scans the
+recorded profile again at zero. A revolve profile can never
 carry a free-form segment reaching this leg either: `resolveAxisSide` refuses
 one before this leg is ever reached, so no separate free-form gate is needed
 here. A partial-turn revolve sheet, or one whose radial minimum is not proven

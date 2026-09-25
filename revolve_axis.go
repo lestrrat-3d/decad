@@ -308,6 +308,9 @@ type axisFrame struct {
 	dUBound, dVBound float64
 	snapTol          float64
 	radialAdmitAllow float64
+	// radialProof is a strict zero-threshold proof from this profile's own
+	// build scan. Only a payload retaining that profile and axis may reuse it.
+	radialProof      bool
 	axialExtentUpper float64
 	snap             regionSnapAllow
 }
@@ -697,11 +700,19 @@ func resolveAxisSide(ctx context.Context, profile ProfileRecord, line axisLine2,
 	}
 
 	var radialAdmitAllow float64
+	var radialProof bool
 	switch admitBelow(near, 0) {
 	case survAdmit:
 		return axisFrame{}, 0, fmt.Errorf(`%w: the recorded region's radial minimum about this axis is proven negative, so the axis cuts through material`, ErrDegenerate)
 	case survStraddle:
 		radialAdmitAllow = math.Max(0, near.bound-near.value)
+	case survReject:
+		// The positive-side reading is the same extreme and offset that
+		// revolvePayloadProvesSimple would scan again. The build adds an
+		// extra dot-product charge, so this proof is at least as strict.
+		// A flipped axis keeps the old scan because its coefficient signs
+		// and rounding path differ.
+		radialProof = side > 0
 	}
 
 	axialExtent := boundedSub(zhiB, zloB)
@@ -715,6 +726,7 @@ func resolveAxisSide(ctx context.Context, profile ProfileRecord, line axisLine2,
 		dVBound:          line.dVBound,
 		snapTol:          tol,
 		radialAdmitAllow: radialAdmitAllow,
+		radialProof:      radialProof,
 		axialExtentUpper: axialExtentUpper,
 	}
 	snap, err := ax.auditAxisContact(profile, work)
