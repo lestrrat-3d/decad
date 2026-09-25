@@ -407,8 +407,8 @@ func triTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, pa, pb *[
 			return out, nil
 		}
 	}
-	ptsA := dedupePoints(planeCrossings(xta, xtb, signsA))
-	ptsB := dedupePoints(planeCrossings(xtb, xta, signsB))
+	ptsA := planeCrossings(xta, xtb, signsA)
+	ptsB := planeCrossings(xtb, xta, signsB)
 	if len(ptsA) == 0 || len(ptsB) == 0 {
 		return out, nil
 	}
@@ -613,7 +613,10 @@ func sinLowerBound(sin2 *big.Rat) float64 {
 // parameter t = vi/(vi − vj) is formed directly as tn/td from the two orient
 // values' own numerators and positive denominators (vi = ni/di, vj = nj/dj
 // gives t = ni·dj / (ni·dj − nj·di)) and handed straight to xlerp, which
-// renormalises td's sign itself.
+// renormalises td's sign itself. A nondegenerate triangle contributes at most
+// two distinct points: its on-plane vertices, or crossings on edges whose
+// endpoints have strictly opposite signs. No canonical point-key pass is
+// needed to deduplicate this list.
 func planeCrossings(xt [3]xpt, xo [3]xpt, signs [3]int) []xpt {
 	var out []xpt
 	nums := [3]*big.Int{}
@@ -649,21 +652,6 @@ func countZero(s [3]int) int {
 		}
 	}
 	return n
-}
-
-// dedupePoints removes exactly-coincident points.
-func dedupePoints(pts []xpt) []xpt {
-	var out []xpt
-	seen := map[string]struct{}{}
-	for _, p := range pts {
-		k := p.key()
-		if _, ok := seen[k]; ok {
-			continue
-		}
-		seen[k] = struct{}{}
-		out = append(out, p)
-	}
-	return out
 }
 
 // projAxes picks the two projection coordinates for a plane with exact

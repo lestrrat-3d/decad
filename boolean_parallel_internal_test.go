@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strconv"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -118,5 +119,35 @@ func TestMeshBooleanWorkerCountsProduceIdenticalResults(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, serial.payload, parallel.payload, "worker count %d changed held geometry", workers)
 		require.Equal(t, serial.volume, parallel.volume, "worker count %d changed volume", workers)
+	}
+}
+
+// BenchmarkMeshBooleanWorkers keeps operand tessellations cached so each
+// sub-benchmark compares the same read-only boolean pipeline at one worker cap.
+func BenchmarkMeshBooleanWorkers(b *testing.B) {
+	for _, workers := range []int{1, 2, 4, 8, 12} {
+		b.Run(strconv.Itoa(workers), func(b *testing.B) {
+			doc := New()
+			a := internalDiscBody(b, doc, 10, 20)
+			tool := internalDiscBody(b, doc, 7, 22)
+			tr, err := r3.Translation(r3.Vec{X: 10, Z: -11})
+			if err != nil {
+				b.Fatal(err)
+			}
+			placed, err := tool.Placed(b.Context(), tr)
+			if err != nil {
+				b.Fatal(err)
+			}
+			ctx := withContactWorkers(b.Context(), workers)
+			if _, err := evaluateBoolean(ctx, opUnion, a, placed); err != nil {
+				b.Fatal(err)
+			}
+			b.ResetTimer()
+			for b.Loop() {
+				if _, err := evaluateBoolean(ctx, opUnion, a, placed); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 	}
 }

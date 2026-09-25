@@ -485,6 +485,12 @@ func TestXHPLerpDenotesTheSameCoordinate(t *testing.T) {
 // cannot preserve a wrong answer by mutating both sides of the comparison.
 func TestXHPArithmeticKeepsBorrowedOperands(t *testing.T) {
 	t.Parallel()
+	for _, v := range []r3.Vec{
+		r3.NewVec(math.SmallestNonzeroFloat64, -math.MaxFloat64, 0),
+		r3.NewVec(-math.SmallestNonzeroFloat64, math.Ldexp(1, -1022), math.MaxFloat64),
+	} {
+		assertXHPRatEqual(t, xhpOf(v), refPointOf(v))
+	}
 	a := xhpOf(r3.NewVec(0.1, -2.25, 3.5))
 	b := xhpOf(r3.NewVec(-1.75, 0.375, 4.125))
 	aBefore, bBefore := xhpKeyOf(a), xhpKeyOf(b)
@@ -493,6 +499,9 @@ func TestXHPArithmeticKeepsBorrowedOperands(t *testing.T) {
 	gotSub := xhpSub(a, b)
 	wantSub := refSub(ra, rb)
 	assertXHPRatEqual(t, gotSub, wantSub)
+	sharedA, sharedB := r3.NewVec(1.5, 2.25, 0), r3.NewVec(-0.5, 1.25, 0)
+	assertXHPRatEqual(t, xhpSub(xhpOf(sharedA), xhpOf(sharedB)),
+		refSub(refPointOf(sharedA), refPointOf(sharedB)))
 	gotCross := xhpCross(a, b)
 	wantCross := refCross(ra, rb)
 	assertXHPRatEqual(t, gotCross, wantCross)
