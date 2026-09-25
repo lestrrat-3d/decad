@@ -10,7 +10,6 @@ import (
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/sketch"
-	"github.com/lestrrat-3d/step"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -32,16 +31,15 @@ func Example_export_formats() {
 		fmt.Printf("failed to extrude: %s\n", err)
 		return
 	}
-	header := step.Header{
-		Description:   []string{"faceted solid"},
-		Name:          "box.step",
-		Timestamp:     time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
-		Authors:       []string{"Example"},
-		Organizations: []string{"Example"},
+	metadata := export.STEPMetadata{
+		Name:         "box.step",
+		Timestamp:    time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
+		Author:       "Example",
+		Organization: "Example",
 	}
 	tol := units.Millimeters(0.1)
 	var out bytes.Buffer
-	if err := export.STEP(context.Background(), &out, body, tol, header); err != nil {
+	if err := export.STEP(context.Background(), &out, body, tol, metadata); err != nil {
 		fmt.Printf("failed to write STEP: %s\n", err)
 		return
 	}

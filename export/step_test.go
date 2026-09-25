@@ -95,16 +95,36 @@ func TestWriteDeterministicAndUntouchedOnInvalidHeader(t *testing.T) {
 	t.Parallel()
 	body := box(t, false)
 	var first, second bytes.Buffer
-	require.NoError(t, export.STEP(t.Context(), &first, body, units.Millimeters(0.1), header()))
-	require.NoError(t, export.STEP(t.Context(), &second, body, units.Millimeters(0.1), header()))
+	metadata := export.STEPMetadata{
+		Name:         "box.step",
+		Timestamp:    time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
+		Author:       "Decad",
+		Organization: "Decad",
+	}
+	require.NoError(t, export.STEP(t.Context(), &first, body, units.Millimeters(0.1), metadata))
+	require.NoError(t, export.STEP(t.Context(), &second, body, units.Millimeters(0.1), metadata))
 	require.Equal(t, first.Bytes(), second.Bytes())
 	require.Equal(t, 12, strings.Count(first.String(), "=ADVANCED_FACE("))
+	require.Contains(t, first.String(), "faceted decad solid")
+	require.Contains(t, first.String(), "decad export")
+
+	full := header()
+	full.Name = "override.step"
+	var overridden bytes.Buffer
+	require.NoError(t, export.STEP(t.Context(), &overridden, body, units.Millimeters(0.1),
+		export.STEPMetadata{}, export.WithSTEPHeader(header()), export.WithSTEPHeader(full)))
+	require.Contains(t, overridden.String(), "override.step")
+	require.Contains(t, overridden.String(), "faceted AP214 test")
+	require.Contains(t, overridden.String(), "FILE_DESCRIPTION(('faceted AP214 test')")
+	require.NotContains(t, overridden.String(), "FILE_DESCRIPTION(('faceted decad solid')")
 
 	bad := header()
 	bad.Timestamp = time.Time{}
 	var untouched bytes.Buffer
 	untouched.WriteString("original")
-	require.Error(t, export.STEP(t.Context(), &untouched, body, units.Millimeters(0.1), bad))
+	require.Error(t, export.STEP(t.Context(), &untouched, body, units.Millimeters(0.1), export.STEPMetadata{}, export.WithSTEPHeader(bad)))
+	require.Equal(t, "original", untouched.String())
+	require.ErrorIs(t, export.STEP(t.Context(), &untouched, body, units.Millimeters(0.1), export.STEPMetadata{}), decad.ErrDegenerate)
 	require.Equal(t, "original", untouched.String())
 }
 

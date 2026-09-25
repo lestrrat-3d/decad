@@ -6,10 +6,14 @@
 `decad.VerifyNone`. They write the mesh returned by `Body.Tessellate` at the
 requested verification level. `export` imports decad and
 `github.com/lestrrat-3d/step/ap214`; decad's root package does not import
-STEP. `NewSTEPFile(ctx, body, tol, header)` returns a `step.File`, and
-`STEP(ctx, w, body, tol, header)` writes it.
-The caller supplies complete Part 21 header metadata and a positive length
-chord tolerance. `ap214.NewFile` sets `AUTOMOTIVE_DESIGN` in `FILE_SCHEMA`.
+STEP. `NewSTEPFile(ctx, body, tol, header)` returns a `step.File`. The
+`STEP(ctx, w, body, tol, metadata, opts...)` writer takes `STEPMetadata` with a
+nonempty file name, author, organization, and a nonzero timestamp. It sets
+`Description` to `faceted decad solid`, `PreprocessorVersion` to `decad export`,
+and `OriginatingSystem` to `decad`. It never reads the clock. Callers needing
+different or multiple header values pass `WithSTEPHeader(step.Header)` to
+`STEP`. This option replaces all metadata and default header fields; the last
+header option wins. `ap214.NewFile` sets `AUTOMOTIVE_DESIGN` in `FILE_SCHEMA`.
 
 ## Geometry contract
 
@@ -35,6 +39,6 @@ chord tolerance. `ap214.NewFile` sets `AUTOMOTIVE_DESIGN` in `FILE_SCHEMA`.
   `ADVANCED_BREP_SHAPE_REPRESENTATION` to one AP214 product definition.
 - Allocate entity IDs in deterministic traversal order. The same body,
   tolerance, and header produce identical bytes. Never read the clock.
-- Honor context cancellation while building records. `Write` validates and
+- Honor context cancellation while building records. `STEP` validates and
   builds the complete file before touching its writer; `step.File.Write`
   validates its model before output. I/O errors may leave a partial file.

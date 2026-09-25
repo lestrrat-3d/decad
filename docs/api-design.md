@@ -1584,7 +1584,8 @@ func (b *Body) Tessellate(ctx context.Context, tol units.Value, opts ...Tessella
 // package export:
 func STL(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...decad.TessellateOption) error
 func OBJ(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...decad.TessellateOption) error
-func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, header step.Header) error
+func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, metadata STEPMetadata, opts ...STEPOption) error
+func WithSTEPHeader(header step.Header) STEPOption
 ```
 
 `docs/tessellation-design.md` is normative for the mesh these calls consume and
@@ -1607,8 +1608,11 @@ scans, cap triangulation, mesh audits, and faceted restatement. Cancellation
 returns `ctx.Err()` unchanged.
 
 `export.STEP` writes a boundary-verified solid mesh as a faceted AP214 B-rep.
-`export.NewSTEPFile` returns the underlying `step.File` for callers that need
-it. The root package does not import STEP, and STEP export does not preserve
+Its `STEPMetadata` asks for a file name, timestamp, author, and organization;
+simple callers need no STEP module type. `WithSTEPHeader` overrides all metadata
+and default header fields with a complete `step.Header` passed to the same
+`export.STEP` function. `export.NewSTEPFile` returns the underlying `step.File`.
+The root package does not import STEP, and STEP export does not preserve
 analytic surfaces. See `docs/step-export-design.md`.
 
 **Fusion codegen is out of scope for v1.** Callers model in ordinary Go and use

@@ -5,13 +5,43 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/step"
 	"github.com/lestrrat-3d/step/ap214"
 	"github.com/lestrrat-3d/units"
+	"github.com/lestrrat-go/option/v3"
 )
+
+// STEPMetadata holds the four caller-supplied fields for a faceted AP214 file.
+// Name, Author, and Organization must be nonempty; Timestamp must be nonzero.
+type STEPMetadata struct {
+	Name         string
+	Timestamp    time.Time
+	Author       string
+	Organization string
+}
+
+// STEPOption configures the STEP writer.
+type STEPOption interface {
+	option.Interface
+	stepOption()
+}
+
+type stepOption struct{ option.Interface }
+
+func (stepOption) stepOption() {}
+
+type identSTEPHeader struct{}
+
+// WithSTEPHeader replaces all STEPMetadata fields and defaults with header.
+// It allows callers to set the complete Part 21 header. If supplied more
+// than once, the last header wins.
+func WithSTEPHeader(header step.Header) STEPOption {
+	return stepOption{option.New(identSTEPHeader{}, header)}
+}
 
 // NewSTEPFile builds an AP214 file from one solid's boundary-verified mesh.
 // tol is Body.Tessellate's chord tolerance. The caller supplies the mandatory
@@ -96,13 +126,44 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 	return ap214.NewFile(header, b.entities...), nil
 }
 
-// STEP writes one AP214 file. Geometry and references are built before the
-// writer is touched. Invalid header data also leaves the writer untouched,
-// because step.File.Write validates before output. An I/O error may leave a
-// partial file. ctx, w, and body must not be nil.
-func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, header step.Header) error {
+// STEP writes one faceted AP214 file. Metadata supplies the required Part 21
+// fields; WithSTEPHeader can replace it with a complete step.Header. Geometry
+// and references are built before the writer is touched. Invalid header data
+// also leaves the writer untouched. An I/O error may leave a partial file.
+// ctx, w, and body must not be nil.
+func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, metadata STEPMetadata, opts ...STEPOption) error {
 	if w == nil {
 		return fmt.Errorf("export: STEP: %w: nil writer", decad.ErrDegenerate)
+	}
+	var header step.Header
+	var overridden bool
+	for _, opt := range opts {
+		if opt == nil {
+			return fmt.Errorf("export: STEP: %w: nil option", decad.ErrDegenerate)
+		}
+		if _, ok := opt.Ident().(identSTEPHeader); !ok {
+			continue
+		}
+		value, ok := option.Get[step.Header](opt)
+		if !ok {
+			return fmt.Errorf("export: STEP: %w: invalid header option", decad.ErrDegenerate)
+		}
+		header = value
+		overridden = true
+	}
+	if !overridden {
+		if metadata.Name == "" || metadata.Author == "" || metadata.Organization == "" || metadata.Timestamp.IsZero() {
+			return fmt.Errorf("export: STEP: %w: name, timestamp, author, and organization are required", decad.ErrDegenerate)
+		}
+		header = step.Header{
+			Description:         []string{"faceted decad solid"},
+			Name:                metadata.Name,
+			Timestamp:           metadata.Timestamp,
+			Authors:             []string{metadata.Author},
+			Organizations:       []string{metadata.Organization},
+			PreprocessorVersion: "decad export",
+			OriginatingSystem:   "decad",
+		}
 	}
 	file, err := NewSTEPFile(ctx, body, tol, header)
 	if err != nil {
