@@ -1059,6 +1059,8 @@
 1	1.36	TestPlacementContextChecksCancellationBeforeCommit
 1	0.01	TestPrismBooleanGateG6RestrictsUnionToHoleFreeOperands
 1	0.48	TestPrismBoundsFreeformEndpointHeldExtremesStayExact
+0	0.01	TestPrismPlacementCoeffAllowIdentityWorldAxes
+0	0.01	TestPrismPlacementCoeffAllowKeepsGeneralProof
 1	0.06	TestPrismCutCleanNestingBoreThroughHub
 1	0.02	TestPrismCutCleanNestingKeepsAToolVertexTheFormulaMisses
 1	0.03	TestPrismCutCrossingToolResolvesAnalytically
