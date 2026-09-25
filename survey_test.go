@@ -1081,6 +1081,7 @@ func TestSurveySweepEnclosesHalfDiscTruths(t *testing.T) {
 		for j := 1; j <= 12; j++ {
 			au, av := 0.31*float64(i), 0.17*float64(j)
 			t.Run(fmt.Sprintf("au=%g/av=%g", au, av), func(t *testing.T) {
+				t.Parallel()
 				s, prof := halfDiscPlate(t, half, au, av)
 				doc := decad.New()
 				// A tall prism keeps the sweep height out of the wall
