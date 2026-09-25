@@ -65,6 +65,38 @@ type pairKernel struct {
 	clearanceRefused bool
 }
 
+// bodyGeomCache reuses completed carrier models within one Verify call.
+// A failed or canceled build is never cached.
+type bodyGeomCache struct {
+	entries map[*Body]bodyGeomCacheEntry
+}
+
+type bodyGeomCacheEntry struct {
+	geom *bodyGeom
+	ok   bool
+}
+
+func (cache *bodyGeomCache) get(budget *workBudget, body *Body) (*bodyGeom, bool, error) {
+	if cache == nil {
+		return newBodyGeomBudget(budget, body)
+	}
+	if err := budget.err(); err != nil {
+		return nil, false, err
+	}
+	if entry, found := cache.entries[body]; found {
+		return entry.geom, entry.ok, nil
+	}
+	geom, ok, err := newBodyGeomBudget(budget, body)
+	if err != nil {
+		return nil, false, err
+	}
+	if cache.entries == nil {
+		cache.entries = make(map[*Body]bodyGeomCacheEntry)
+	}
+	cache.entries[body] = bodyGeomCacheEntry{geom: geom, ok: ok}
+	return geom, ok, nil
+}
+
 // clearanceDeltaWiden widens a held-candidate interval [lo, hi] by the two
 // bodies' bodyGeom.delta (payload-verification-design.md §2.3's formula,
 // applied here to the analytic arms rather than the not-yet-landed faceted
@@ -104,15 +136,19 @@ func clearanceDeltaWiden(lo, hi float64, exact bool, deltaA, deltaB float64) (fl
 // k.tol — widening first, so the §2 nesting cast never runs on a lo the
 // widening would have brought back down to the floor.
 func clearancePair(ctx context.Context, a, b *Body, nestingExcluded bool) (pairResult, error) {
+	return clearancePairCached(ctx, a, b, nestingExcluded, nil)
+}
+
+func clearancePairCached(ctx context.Context, a, b *Body, nestingExcluded bool, cache *bodyGeomCache) (pairResult, error) {
 	if err := ctx.Err(); err != nil {
 		return pairResult{}, err
 	}
 	budget := newWorkBudget(ctx)
-	ga, oka, err := newBodyGeomBudget(budget, a)
+	ga, oka, err := cache.get(budget, a)
 	if err != nil {
 		return pairResult{}, err
 	}
-	gb, okb, err := newBodyGeomBudget(budget, b)
+	gb, okb, err := cache.get(budget, b)
 	if err != nil {
 		return pairResult{}, err
 	}
@@ -442,15 +478,19 @@ type sheetSolidResult struct {
 // easier way: a box that does not even meet the solid's own box cannot admit
 // a crossing or a containment either.
 func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool) (sheetSolidResult, error) {
+	return sheetSolidPairCached(ctx, sheet, solid, boxDisjoint, nil)
+}
+
+func sheetSolidPairCached(ctx context.Context, sheet, solid *Body, boxDisjoint bool, cache *bodyGeomCache) (sheetSolidResult, error) {
 	if err := ctx.Err(); err != nil {
 		return sheetSolidResult{}, err
 	}
 	budget := newWorkBudget(ctx)
-	gs, oks, err := newBodyGeomBudget(budget, sheet)
+	gs, oks, err := cache.get(budget, sheet)
 	if err != nil {
 		return sheetSolidResult{}, err
 	}
-	gb, okb, err := newBodyGeomBudget(budget, solid)
+	gb, okb, err := cache.get(budget, solid)
 	if err != nil {
 		return sheetSolidResult{}, err
 	}

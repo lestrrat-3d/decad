@@ -321,6 +321,10 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	// stay Suspect and name themselves in the slice; invariant failures
 	// return from Verify. A pair holding a sheet operand takes none of this —
 	// see the first arm below and docs/surface-design.md §9.3.
+	var geomCache *bodyGeomCache
+	if cfg.clearances {
+		geomCache = &bodyGeomCache{}
+	}
 	for i := range pairBodies {
 		for j := i + 1; j < len(pairBodies); j++ {
 			if err := ctx.Err(); err != nil {
@@ -361,7 +365,7 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 				if b.Kind() == BodySheet {
 					sheet, solid = b, a
 				}
-				sres, err := sheetSolidPair(ctx, sheet, solid, boxProven)
+				sres, err := sheetSolidPairCached(ctx, sheet, solid, boxProven, geomCache)
 				if err != nil {
 					return nil, err
 				}
@@ -404,7 +408,7 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 			if boxProven && !cfg.clearances {
 				continue
 			}
-			res, err := clearancePair(ctx, a, b, boxProven)
+			res, err := clearancePairCached(ctx, a, b, boxProven, geomCache)
 			if err != nil {
 				return nil, err
 			}
