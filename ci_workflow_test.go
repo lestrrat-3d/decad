@@ -203,6 +203,19 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 			"%s names these tests, which no longer exist: regenerate it (see _shardgen/main.go)", ciShardFilePath)
 	})
 
+	t.Run("the chord sweep fixture is built by one shard", func(t *testing.T) {
+		assigned := shardAssignment(t)
+		const enclosure = "TestChordedBoundaryVolumeAllowEnclosesTheMeasuredGap"
+		shard, ok := assigned[enclosure]
+		require.Truef(t, ok, "%s must have a shard assignment", enclosure)
+		for _, name := range []string{
+			"TestChordedBoundaryVolumeAllowWallLegDeletionSearch",
+			"TestChordedBoundaryVolumeAllowSeamLegDeletionSearch",
+		} {
+			require.Equalf(t, shard, assigned[name], "%s and %s read chordSweepTable and must run in one shard", enclosure, name)
+		}
+	})
+
 	t.Run("the file uses exactly the shards the matrix declares", func(t *testing.T) {
 		declared := make(map[string]struct{})
 		for _, m := range ciMatrixShardRe.FindAllStringSubmatch(workflow, -1) {
