@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -76,9 +77,12 @@ func TestRevolveBoundsSharedProfileMatchesIndependentExtents(t *testing.T) {
 }
 
 type cancelAfterExtentChecks struct {
-	context.Context
 	remaining int
 }
+
+func (*cancelAfterExtentChecks) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (*cancelAfterExtentChecks) Done() <-chan struct{}       { return nil }
+func (*cancelAfterExtentChecks) Value(any) any               { return nil }
 
 func (ctx *cancelAfterExtentChecks) Err() error {
 	ctx.remaining--
@@ -90,7 +94,7 @@ func (ctx *cancelAfterExtentChecks) Err() error {
 
 func TestRevolveBoundsSharedProfilePollsCancellation(t *testing.T) {
 	t.Parallel()
-	ctx := &cancelAfterExtentChecks{Context: t.Context(), remaining: 3}
+	ctx := &cancelAfterExtentChecks{remaining: 3}
 	_, err := resolveAnalyticRevolveExtentProfile(ctx, dipShaftBandProfile(10, 0), newFreeformWork())
 	require.ErrorIs(t, err, context.Canceled)
 }
