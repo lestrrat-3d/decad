@@ -81,19 +81,34 @@ func recordProfile(s *sketch.Sketch, p *sketch.Profile) (ProfileRecord, PlaneRec
 	}
 	plane := PlaneRecord{Origin: frame.Origin(), U: frame.U(), V: frame.V()}
 
-	outer, err := recordLoop("outer", trusted.Outer)
+	record, err := recordArrangedProfile(trusted)
 	if err != nil {
 		return ProfileRecord{}, PlaneRecord{}, 0, err
 	}
+	return record, plane, trusted.Area, nil
+}
+
+// recordArrangedProfile records a profile from a fresh sketch arrangement.
+// Callers that skip authenticateProfile must own the sketch and pass a profile
+// returned by that same arrangement. recordLoop still checks every fragment's
+// TExact claim, its range, and the resulting loop's closure.
+func recordArrangedProfile(p *sketch.Profile) (ProfileRecord, error) {
+	if !p.Valid {
+		return ProfileRecord{}, fmt.Errorf(`%w: a self-intersecting or degenerate region is never silently swept`, ErrInvalidProfile)
+	}
+	outer, err := recordLoop("outer", p.Outer)
+	if err != nil {
+		return ProfileRecord{}, err
+	}
 	var holes []LoopRecord
-	for i, h := range trusted.Holes {
+	for i, h := range p.Holes {
 		loop, err := recordLoop(fmt.Sprintf("hole %d", i), h)
 		if err != nil {
-			return ProfileRecord{}, PlaneRecord{}, 0, err
+			return ProfileRecord{}, err
 		}
 		holes = append(holes, loop)
 	}
-	return ProfileRecord{Outer: outer, Holes: holes}, plane, trusted.Area, nil
+	return ProfileRecord{Outer: outer, Holes: holes}, nil
 }
 
 // authenticateProfile rejects caller changes to the exported Profile fields

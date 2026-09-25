@@ -593,6 +593,22 @@ func prismInvalidRegionErr(op string) error {
 // read here — the caller keeps operand A's own frame/xform (§4.1) — so only
 // the ProfileRecord and error are surfaced.
 func prismRecordProfileContext(ctx context.Context, s *sketch.Sketch, p *sketch.Profile) (ProfileRecord, error) {
+	return prismProfileRecordContext(ctx, func() (ProfileRecord, error) {
+		profile, _, err := RecordProfile(s, p)
+		return profile, err
+	})
+}
+
+// prismRecordArrangedProfileContext is for a profile returned by the private
+// scene's first Profiles call. The caller owns that scene and selects from its
+// returned slice, so no second authentication arrangement is needed.
+func prismRecordArrangedProfileContext(ctx context.Context, p *sketch.Profile) (ProfileRecord, error) {
+	return prismProfileRecordContext(ctx, func() (ProfileRecord, error) {
+		return recordArrangedProfile(p)
+	})
+}
+
+func prismProfileRecordContext(ctx context.Context, record func() (ProfileRecord, error)) (ProfileRecord, error) {
 	if err := ctx.Err(); err != nil {
 		return ProfileRecord{}, err
 	}
@@ -602,7 +618,7 @@ func prismRecordProfileContext(ctx context.Context, s *sketch.Sketch, p *sketch.
 	}
 	done := make(chan prismRecordResult)
 	go func() {
-		profile, _, err := RecordProfile(s, p)
+		profile, err := record()
 		done <- prismRecordResult{profile: profile, err: err}
 	}()
 	select {
