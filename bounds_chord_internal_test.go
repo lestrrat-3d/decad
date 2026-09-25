@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"runtime"
 	"sync"
 	"testing"
 
@@ -380,26 +381,47 @@ var chordSweepTable = sync.OnceValue(func() []chordSweepRow {
 	chordCounts := []int{8, 32, 64, 128, 256}
 	twistsDeg := []float64{0, 5, 20, 45, 90}
 
-	rows := make([]chordSweepRow, 0, len(radii)*len(sweepsDeg)*len(heights)*len(chordCounts)*len(twistsDeg))
+	type input struct {
+		r, sweepDeg, h, twistDeg float64
+		n                        int
+	}
+	inputs := make([]input, 0, len(radii)*len(sweepsDeg)*len(heights)*len(chordCounts)*len(twistsDeg))
 	for _, r := range radii {
 		for _, sweepDeg := range sweepsDeg {
-			sweepRad := sweepDeg * math.Pi / 180
 			for _, h := range heights {
 				for _, twistDeg := range twistsDeg {
-					twistRad := twistDeg * math.Pi / 180
 					for _, n := range chordCounts {
-						verts, tris := twistedPieSliceMesh(r, sweepRad, twistRad, h, n)
-						trueVolume := twistedPieSliceTrueVolume(r, sweepRad, twistRad, h)
-						rows = append(rows, chordSweepRow{
-							radius: r, sweepDeg: sweepDeg, h: h, twistDeg: twistDeg, n: n,
-							measuredGap: math.Abs(trueVolume - heldVolumeExact(verts, tris)),
-							breakdown:   chordedBoundaryAllowForTwistedPieSlice(r, sweepRad, twistRad, h, n),
-						})
+						inputs = append(inputs, input{r, sweepDeg, h, twistDeg, n})
 					}
 				}
 			}
 		}
 	}
+	rows := make([]chordSweepRow, len(inputs))
+	workers := min(4, runtime.GOMAXPROCS(0))
+	jobs := make(chan int)
+	var workersDone sync.WaitGroup
+	for range workers {
+		workersDone.Go(func() {
+			for i := range jobs {
+				in := inputs[i]
+				sweepRad := in.sweepDeg * math.Pi / 180
+				twistRad := in.twistDeg * math.Pi / 180
+				verts, tris := twistedPieSliceMesh(in.r, sweepRad, twistRad, in.h, in.n)
+				trueVolume := twistedPieSliceTrueVolume(in.r, sweepRad, twistRad, in.h)
+				rows[i] = chordSweepRow{
+					radius: in.r, sweepDeg: in.sweepDeg, h: in.h, twistDeg: in.twistDeg, n: in.n,
+					measuredGap: math.Abs(trueVolume - heldVolumeExact(verts, tris)),
+					breakdown:   chordedBoundaryAllowForTwistedPieSlice(in.r, sweepRad, twistRad, in.h, in.n),
+				}
+			}
+		})
+	}
+	for i := range inputs {
+		jobs <- i
+	}
+	close(jobs)
+	workersDone.Wait()
 	return rows
 })
 
