@@ -700,6 +700,41 @@ func TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle(t *testing.T) {
 
 	require.Equal(t, contactSegment, exact.kind, `the shared edge is a real, unambiguous contact`)
 	requireSameTriContact(t, exact, filtered)
+
+	// The classifier's prepared plane signs must match its original adaptive
+	// predicate, including copies and points exactly on a nearly shared plane.
+	near := math.Ldexp(1, -40)
+	for _, tc := range []struct {
+		name string
+		tri  [3]r3.Vec
+	}{
+		{name: `shared edge`, tri: b},
+		{name: `copied facet`, tri: a},
+		{name: `near coplanar`, tri: [3]r3.Vec{
+			{X: 0, Y: 0, Z: 0}, {X: 10, Y: 0, Z: near}, {X: 5, Y: 10, Z: -near},
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			xtri := [3]xpt{xptOf(tc.tri[0]), xptOf(tc.tri[1]), xptOf(tc.tri[2])}
+			ntri := xcross(xsub(xtri[1], xtri[0]), xsub(xtri[2], xtri[0]))
+			uncertain := 0
+			for i := range 3 {
+				_, certainA := orientSignFloat(a[0], a[1], a[2], tc.tri[i])
+				_, certainB := orientSignFloat(tc.tri[0], tc.tri[1], tc.tri[2], a[i])
+				if !certainA {
+					uncertain++
+				}
+				if !certainB {
+					uncertain++
+				}
+				require.Equal(t, orientSign(a[0], a[1], a[2], tc.tri[i]),
+					orientSignPrepared(a[0], a[1], a[2], tc.tri[i], xta[0], xtri[i], na))
+				require.Equal(t, orientSign(tc.tri[0], tc.tri[1], tc.tri[2], a[i]),
+					orientSignPrepared(tc.tri[0], tc.tri[1], tc.tri[2], a[i], xtri[0], xta[i], ntri))
+			}
+			require.Positive(t, uncertain, `this case must exercise the exact fallback`)
+		})
+	}
 }
 
 // BenchmarkTriTriClassifyCircularPairs isolates fu158's fix from the rest of

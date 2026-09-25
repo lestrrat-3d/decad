@@ -60,6 +60,13 @@ func rationalFloatError(exact *big.Rat, held float64) float64 {
 }
 
 func addRoundError(a, b, held float64) float64 {
+	if !isNonFinite(a) && !isNonFinite(b) && !isNonFinite(held) && held == a+b {
+		// TwoSum recovers the exact residual of a finite rounded addition.
+		// Keep the rational path when held came from a different expression.
+		bPart := held - a
+		aPart := held - bPart
+		return math.Abs((a - aPart) + (b - bPart))
+	}
 	ra, rb := floatRat(a), floatRat(b)
 	if ra == nil || rb == nil {
 		return math.Inf(1)
@@ -68,6 +75,17 @@ func addRoundError(a, b, held float64) float64 {
 }
 
 func mulRoundError(a, b, held float64) float64 {
+	if !isNonFinite(a) && !isNonFinite(b) && !isNonFinite(held) && held == a*b {
+		if a == 0 || b == 0 {
+			return 0
+		}
+		// Each operand's least bit is at or above Ilogb(x)-52. Under
+		// this gate the exact product has no bits below the subnormal floor,
+		// so FMA's product residual is exactly representable.
+		if math.Ilogb(a)+math.Ilogb(b) >= -970 {
+			return math.Abs(math.FMA(a, b, -held))
+		}
+	}
 	ra, rb := floatRat(a), floatRat(b)
 	if ra == nil || rb == nil {
 		return math.Inf(1)

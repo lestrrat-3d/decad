@@ -558,6 +558,49 @@ func TestOutwardRoundingNeverPublishesAFlushedZero(t *testing.T) {
 		// becoming a finite quotient.
 		require.True(t, math.IsInf(divUpper(math.Inf(1), 3), 1))
 	})
+
+	t.Run("addition and multiplication keep their exact rounding errors", func(t *testing.T) {
+		check := func(a, b, held float64) {
+			var addWant, mulWant float64
+			ra, rb, rh := floatRat(a), floatRat(b), floatRat(held)
+			if ra == nil || rb == nil || rh == nil {
+				addWant, mulWant = math.Inf(1), math.Inf(1)
+			} else {
+				addWant = rationalFloatError(new(big.Rat).Add(ra, rb), held)
+				mulWant = rationalFloatError(new(big.Rat).Mul(ra, rb), held)
+			}
+			require.Equal(t, math.Float64bits(addWant), math.Float64bits(addRoundError(a, b, held)),
+				"addition: a=%g b=%g held=%g", a, b, held)
+			require.Equal(t, math.Float64bits(mulWant), math.Float64bits(mulRoundError(a, b, held)),
+				"multiplication: a=%g b=%g held=%g", a, b, held)
+		}
+
+		for _, pair := range [][2]float64{
+			{1, math.Ldexp(1, -53)},
+			{math.Nextafter(1, math.Inf(1)), math.Nextafter(1, math.Inf(1))},
+			{math.Ldexp(math.Nextafter(1, math.Inf(1)), -485),
+				math.Ldexp(math.Nextafter(1, math.Inf(1)), -485)},
+			{math.SmallestNonzeroFloat64, 0.5},
+			{1e-200, 1e-200},
+			{math.MaxFloat64, 2},
+			{math.Copysign(0, -1), 1},
+			{-1e100, 1e100},
+		} {
+			check(pair[0], pair[1], pair[0]+pair[1])
+			check(pair[0], pair[1], pair[0]*pair[1])
+		}
+		check(1, 0.5, 2) // A separately formed held value uses the rational path.
+		check(math.Inf(1), 1, math.Inf(1))
+		check(math.NaN(), 1, math.NaN())
+
+		rng := rand.New(rand.NewPCG(41, 73))
+		for range 1000 {
+			a := math.Float64frombits(rng.Uint64())
+			b := math.Float64frombits(rng.Uint64())
+			check(a, b, a+b)
+			check(a, b, a*b)
+		}
+	})
 }
 
 // TestChordedBoundsNeverPublishAFlushedZero drives every chorded-loft bound

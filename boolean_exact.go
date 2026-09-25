@@ -138,6 +138,25 @@ func orientRat(a, b, c, d xpt) *big.Rat {
 // decides the generic case; anything inside the error bound falls back to the
 // exact value — the §9 discipline, so a sign is never wrong.
 func orientSign(a, b, c, d r3.Vec) int {
+	if sign, certain := orientSignFloat(a, b, c, d); certain {
+		return sign
+	}
+	return orientSignExact(xptOf(a), xptOf(b), xptOf(c), xptOf(d))
+}
+
+// orientSignPrepared uses an already lifted triangle and its exact normal on
+// the uncertain path. xa and xd are the exact lifts of a and d, and n is the
+// exact oriented cross product of (b-a) and (c-a), with positive denominator.
+func orientSignPrepared(a, b, c, d r3.Vec, xa, xd, n xpt) int {
+	if sign, certain := orientSignFloat(a, b, c, d); certain {
+		return sign
+	}
+	return xdotSign(n, xsub(xd, xa))
+}
+
+// orientSignFloat gives the same adaptive float decision to both plane-side
+// callers. An uncertain sign must be decided by exact integer arithmetic.
+func orientSignFloat(a, b, c, d r3.Vec) (int, bool) {
 	bax, bay, baz := b.X-a.X, b.Y-a.Y, b.Z-a.Z
 	cax, cay, caz := c.X-a.X, c.Y-a.Y, c.Z-a.Z
 	dax, day, daz := d.X-a.X, d.Y-a.Y, d.Z-a.Z
@@ -149,11 +168,11 @@ func orientSign(a, b, c, d r3.Vec) int {
 	// leaves three decades of margin, so a sign the filter accepts is proven.
 	if err := 1e-12 * perm; det > err || det < -err {
 		if det > 0 {
-			return 1
+			return 1, true
 		}
-		return -1
+		return -1, true
 	}
-	return orientSignExact(xptOf(a), xptOf(b), xptOf(c), xptOf(d))
+	return 0, false
 }
 
 // orientSignMixed is the exact plane-side sign of a homogeneous probe against

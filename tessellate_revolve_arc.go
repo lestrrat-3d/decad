@@ -177,6 +177,29 @@ func arcFixedMul(a, b arcFixedInterval) arcFixedInterval {
 // buys the most.
 const revolveArcIntegralSteps = 32
 
+// The subdivision points and weight integrals depend only on the fixed step
+// count. Callers use these rationals as read-only operands and allocate fresh
+// receivers for every operation, so concurrent tessellations cannot alter them.
+type revolveArcGridData struct {
+	t       [revolveArcIntegralSteps + 1]*big.Rat
+	weights [3][revolveArcIntegralSteps]*big.Rat
+}
+
+var revolveArcGrid = makeRevolveArcGrid()
+
+func makeRevolveArcGrid() revolveArcGridData {
+	var grid revolveArcGridData
+	for i := range grid.t {
+		grid.t[i] = big.NewRat(int64(i), revolveArcIntegralSteps)
+	}
+	for i := range revolveArcIntegralSteps {
+		for weight := range grid.weights {
+			grid.weights[weight][i] = revolveWeightIntegral(grid.t[i], grid.t[i+1], weight)
+		}
+	}
+	return grid
+}
+
 // revolveArcCellSlack is docs/tessellation-design.md §10.2's Ecell for one wall
 // cell of a CIRCULAR generator, by certified interval subdivision — tess §15's
 // second admissible path, and the one T3 takes because the first does not
@@ -283,18 +306,22 @@ var errRevolveArcCellSlack = fmt.Errorf(`%w: a circular revolve cell states no e
 // answer is an upper bound at any depth and nothing cancels between pieces.
 func revolveArcAbsIntegral(scaledRho []ratInterval, held, slope ratInterval, extra *big.Rat, weight int) *big.Rat {
 	at := func(i int) *big.Rat {
-		t := big.NewRat(int64(i), revolveArcIntegralSteps)
-		f := intervalSub(scaledRho[i], intervalAdd(held, intervalScale(slope, t)))
+		f := intervalSub(scaledRho[i], intervalAdd(held, intervalScale(slope, revolveArcGrid.t[i])))
 		return intervalAbsUpper(f)
+	}
+	weights := &revolveArcGrid.weights[revolveWeightOne]
+	switch weight {
+	case revolveWeightT:
+		weights = &revolveArcGrid.weights[revolveWeightT]
+	case revolveWeightOneMinusT:
+		weights = &revolveArcGrid.weights[revolveWeightOneMinusT]
 	}
 	total := new(big.Rat)
 	prev := at(0)
 	for i := range revolveArcIntegralSteps {
 		next := at(i + 1)
-		a := big.NewRat(int64(i), revolveArcIntegralSteps)
-		b := big.NewRat(int64(i+1), revolveArcIntegralSteps)
 		piece := new(big.Rat).Add(ratMax(prev, next), extra)
-		total.Add(total, new(big.Rat).Mul(piece, revolveWeightIntegral(a, b, weight)))
+		total.Add(total, new(big.Rat).Mul(piece, weights[i]))
 		prev = next
 	}
 	return total

@@ -407,12 +407,14 @@ type wallKernel struct {
 	containOnly []surveyElem // boundary for containment only (on-axis chords)
 	verts       [][2]float64
 	alpha       float64
-	wedgeS      boundedScalar // value 0 = no wedge
-	wedgeSpans  bool          // two wedge-cap contacts count as a spanning pair
-	fitMax      float64       // spanning disks wider than this cannot lift to 3D
-	scale, tol  float64
-	subTolFar   bool         // a sub-tolerance candidate away from every junction was dropped
-	boundary    []surveyElem // elems + containOnly, built lazily for contains
+	// draftTrig holds certified ±(π−alpha) values in candidate order.
+	draftTrig  [2]struct{ sin, cos boundedScalar }
+	wedgeS     boundedScalar // value 0 = no wedge
+	wedgeSpans bool          // two wedge-cap contacts count as a spanning pair
+	fitMax     float64       // spanning disks wider than this cannot lift to 3D
+	scale, tol float64
+	subTolFar  bool         // a sub-tolerance candidate away from every junction was dropped
+	boundary   []surveyElem // elems + containOnly, built lazily for contains
 }
 
 // newWallKernel sizes the tolerances from the geometry with the default draft allowance.
@@ -447,16 +449,23 @@ func newWallKernelBudget(budget *workBudget, elems, containOnly []surveyElem, ve
 			grow(e.qx-e.rr, e.qx+e.rr, e.qy-e.rr, e.qy+e.rr)
 		}
 	}
+	aStar := math.Pi - alpha
+	positiveSin, positiveCos := radianTrigBounds(aStar)
+	negativeSin, negativeCos := radianTrigBounds(-aStar)
 	return &wallKernel{
 		elems:       elems,
 		containOnly: containOnly,
 		verts:       verts,
 		alpha:       alpha,
-		wedgeS:      wedgeS,
-		wedgeSpans:  wedgeSpans,
-		fitMax:      fitMax,
-		scale:       scale,
-		tol:         1e-9 * scale,
+		draftTrig: [2]struct{ sin, cos boundedScalar }{
+			{sin: positiveSin, cos: positiveCos},
+			{sin: negativeSin, cos: negativeCos},
+		},
+		wedgeS:     wedgeS,
+		wedgeSpans: wedgeSpans,
+		fitMax:     fitMax,
+		scale:      scale,
+		tol:        1e-9 * scale,
 	}, nil
 }
 
@@ -1080,11 +1089,10 @@ func (k *wallKernel) lineArcCands(l, a surveyElem, add func(x, y, r, rBound floa
 	}
 	// T3: contact directions exactly π − α apart. The line contact direction
 	// is −n̂; the arc contact direction is s·(ĉ−q̂); c = q + (s·R − r)·u2.
-	aStar := math.Pi - k.alpha
-	for _, rot := range []float64{aStar, -aStar} {
-		snBS, csBS := radianTrigBounds(rot)
+	for _, trig := range k.draftTrig {
+		snBS, csBS := trig.sin, trig.cos
 		cs, sn := csBS.value, snBS.value
-		// u2 = rotate(−n̂, rot)
+		// u2 = rotate(−n̂, ±aStar)
 		ux := -(l.nx*cs - l.ny*sn)
 		uy := -(l.nx*sn + l.ny*cs)
 		uxBS := boundedMul(exactScalar(-1), boundedSub(boundedMul(exactScalar(l.nx), csBS), boundedMul(exactScalar(l.ny), snBS)))
@@ -1160,7 +1168,7 @@ func (k *wallKernel) arcArcCands(a, b surveyElem, add func(x, y, r, rBound float
 	}
 	// T3: angle at the center between (c−qa) and (c−qb) fixed by the
 	// allowance boundary; law of cosines in r, then the two mirror centers.
-	_, cosAStarBS := radianTrigBounds(math.Pi - k.alpha)
+	cosAStarBS := k.draftTrig[0].cos
 	cosThBS := boundedMul(exactScalar(sa*sb), cosAStarBS)
 	// d² = Da² + Db² − 2·Da·Db·cosθ with Da = Ra − sa·r, Db = Rb − sb·r.
 	raBS, rbBS := a.rrBS(), b.rrBS()
@@ -1199,7 +1207,6 @@ func (k *wallKernel) arcArcCands(a, b surveyElem, add func(x, y, r, rBound float
 // readings below decide it outright. The arc T2 denominator sgn·s − ev is built
 // from three SIGNS and takes one of {0, ±2} exactly.
 func (k *wallKernel) vertexElemCands(v [2]float64, e surveyElem, add func(x, y, r, rBound float64)) {
-	aStar := math.Pi - k.alpha
 	if e.kind == surveyLine {
 		// T2: the foot midpoint.
 		h := e.nx*(v[0]-e.ax) + e.ny*(v[1]-e.ay)
@@ -1212,8 +1219,8 @@ func (k *wallKernel) vertexElemCands(v [2]float64, e surveyElem, add func(x, y, 
 			add(v[0]-h/2*e.nx, v[1]-h/2*e.ny, h/2, rBS.bound)
 		}
 		// T3: u_v = rotate(−n̂, ±A*), c = v − r·u_v, tangency fixes r.
-		for _, rot := range []float64{aStar, -aStar} {
-			snBS, csBS := radianTrigBounds(rot)
+		for _, trig := range k.draftTrig {
+			snBS, csBS := trig.sin, trig.cos
 			cs, sn := csBS.value, snBS.value
 			ux := -(e.nx*cs - e.ny*sn)
 			uy := -(e.nx*sn + e.ny*cs)
@@ -1258,7 +1265,7 @@ func (k *wallKernel) vertexElemCands(v [2]float64, e surveyElem, add func(x, y, 
 		}
 	}
 	// T3: law of cosines with sides r and R − s·r.
-	_, cosAStarBS := radianTrigBounds(aStar)
+	cosAStarBS := k.draftTrig[0].cos
 	cosThBS := boundedMul(exactScalar(-s), cosAStarBS)
 	ABS := boundedAdd(exactScalar(2), boundedMul(exactScalar(2*s), cosThBS))
 	reBS := e.rrBS()
@@ -1289,7 +1296,7 @@ func (k *wallKernel) vertexVertexCands(a, b [2]float64, add func(x, y, r, rBound
 	}
 	rBS := boundedQuotient(dBS.value, dBS.bound, 2, 0)
 	add((a[0]+b[0])/2, (a[1]+b[1])/2, d/2, rBS.bound)
-	_, cosAStarBS := radianTrigBounds(math.Pi - k.alpha)
+	cosAStarBS := k.draftTrig[0].cos
 	denBS := boundedMul(exactScalar(2), boundedSub(exactScalar(1), cosAStarBS))
 	if admitAbove(denBS, survTiny) != survReject {
 		sqrtDenBS := boundedSqrt(denBS)
