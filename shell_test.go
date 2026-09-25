@@ -508,7 +508,7 @@ func TestShellCupPlacedComposes(t *testing.T) {
 // circleHoledBox extrudes the 100×60 plate carrying the given circular holes
 // (each [cx, cy, r]) by shellBoxHeight — a straight prism whose section has
 // k ≥ 1 holes, the posts a one-cap shell must wrap.
-func circleHoledBox(t *testing.T, holes ...[3]float64) (*decad.Document, *decad.Body) {
+func circleHoledBox(t testing.TB, holes ...[3]float64) (*decad.Document, *decad.Body) {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
