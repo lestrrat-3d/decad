@@ -1433,8 +1433,8 @@ func admitSplitPair(budget *workBudget, target, tool *Body) (prismPayload, prism
 }
 
 // resolveSplit asks sketch for the bounded cells of the private scene, keeps
-// precisely the cells on the target's material side, and authenticates each
-// selected cell through RecordProfile before rebuilding it as a prism.
+// precisely the cells on the target's material side, and records each selected
+// cell from that arrangement before rebuilding it as a prism.
 func resolveSplit(ctx context.Context, budget *workBudget, target, tool prismPayload) ([]prismPayload, error) {
 	segments, withinCap, err := prismSceneWithinWorkCap(budget, target, tool)
 	if err != nil {
@@ -1489,7 +1489,7 @@ func resolveSplit(ctx context.Context, budget *workBudget, target, tool prismPay
 		if err := budget.step(); err != nil {
 			return nil, err
 		}
-		record, err := prismRecordProfileContext(ctx, s, cell)
+		record, err := prismRecordArrangedProfileContext(ctx, cell)
 		if err != nil {
 			return nil, err
 		}

@@ -249,10 +249,12 @@ the existing, unmodified `recordEdge`/`falsifyRange` pair (seam.go), so every
 fragment's `TExact` admission and reject-only range falsifier applies exactly
 as it does for a caller-drawn profile.
 
-**`Split`'s pieces are `s.Profiles()`'s own results, taken verbatim.** Each is
-handed to the existing public `RecordProfile`, the same direct authentication
-prism §4.2's clean-nesting match uses, so the full seam applies with no new
-authentication code.
+**`Split`'s pieces are `s.Profiles()`'s own results, taken verbatim.** The
+private scene is owned by this call, and each selected cell comes from that
+scene's single arrangement. The seam records those cells directly, applying
+the same `TExact`, range and loop-closure checks as public `RecordProfile`.
+Public `RecordProfile` still re-arranges a caller's sketch to authenticate a
+profile snapshot, because callers can change its exported fields.
 
 **`Extend`'s output is the receiver's own record with one range widened.** No
 assembly runs at all.
@@ -604,7 +606,7 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
    walk set and section displacement, §7's exactness, and `Body.Trim`. Tests:
    surface §15's T170–T174 and T181.
 2. **PR2 — `Document.Split` over the prism family.** §3.2's cell selection,
-   per-cell `RecordProfile` authentication, and one `prismPayload` per piece
+   per-cell recording of the private arrangement, and one `prismPayload` per piece
    through `evalPrism` unchanged. Tests: T175–T177.
 3. **PR3 — `Body.Extend` over the prism family.** §3.1's full-domain entity
    recreation, §3.2's nearest-cut reading, and RS4's refusal. Tests:
@@ -617,8 +619,8 @@ predicate, exactly as it must after a mesh boolean produces several lumps.
 5. **PR5 — `Document.Split` over the revolve family.** It owes what PR4 does
    not: `revolvePayload.sectionDelta` reaching the Pappus VOLUME and CENTROID
    beside the area and the box, and the removal of the solid build's refusal
-   §3.4 states. `Split`'s cell selection, its per-cell `RecordProfile`
-   authentication and its deterministic order are PR2's, unchanged. Until it
+   §3.4 states. `Split`'s cell selection, per-cell recording and deterministic
+   order are PR2's. Until it
    lands, `Split` refuses a revolve pair by name.
 
 PR1 depends on surface increments 1 and 6 alone — increment 1 for `BodyKind`,
