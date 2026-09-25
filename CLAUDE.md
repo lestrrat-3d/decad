@@ -29,6 +29,7 @@ it owns, and names what every other file in the package owns.
 | Any public type | `docs/api-design.md`, and every companion design `docs/layout.md`'s "Design documents" table lists |
 | Evaluator, topology or feature code | `docs/evaluator-design.md` |
 | Tessellation, export or mesh-boolean operand code | `docs/tessellation-design.md` |
+| STEP adapter | `docs/step-adapter-design.md` |
 | Free-form geometry or per-segment-kind dispatch | `docs/spline-design.md` |
 | `evaluateBoolean` dispatch, `Union`/`Cut`/`Intersect`, or any code combining two recorded sections through a private `sketch` scene | `docs/prism-boolean-design.md` |
 | Any modify op, option codec or modify payload | `docs/modify-design.md`, `docs/modify-reach-design.md` |
@@ -92,6 +93,7 @@ it owns, and names what every other file in the package owns.
     Direct: decad's model inputs and `Measurement` quantities are `units.Value`.
     It is the same module `sketch` uses for its dimensions (`sketch` has no
     in-tree units package), so there is no parallel unit system to reconcile.
+  - `github.com/lestrrat-3d/step` — AP214; `stepadapter` only.
   - `github.com/lestrrat-go/option/v3` — functional options (house library). Used
     by feature options.
   - `github.com/stretchr/testify/require` — assertions, **test code only**.

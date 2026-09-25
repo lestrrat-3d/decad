@@ -1609,6 +1609,11 @@ triangulation, mesh audits, and faceted restatement. Cancellation returns
 `ctx.Err()` unchanged. `STL` and `OBJ` take no context and tessellate under
 `context.Background()`.
 
+`stepadapter` is a separate package over `github.com/lestrrat-3d/step/ap214`.
+It writes a boundary-verified solid mesh as a faceted AP214 B-rep. It does not
+add a method to `Body` or claim to preserve analytic surfaces. See
+`docs/step-adapter-design.md`.
+
 **Fusion codegen is out of scope for v1.** Callers model in ordinary Go and use
 the resulting bodies, measurements, and verification reports directly.
 
@@ -1691,7 +1696,7 @@ the resulting bodies, measurements, and verification reports directly.
 ## 13. Non-goals for v1
 
 Assemblies (`Component`/`Occurrence` instancing and the DAG that comes with it), a
-feature tree / timeline / rollback, STEP, sheet metal, mesh import,
+feature tree / timeline / rollback, native analytic STEP export, sheet metal, mesh import,
 GUI or view state of any kind, and Fusion code generation.
 
 Sheet bodies themselves are **not** a non-goal — `docs/surface-design.md` owns
