@@ -365,7 +365,7 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 				if b.Kind() == BodySheet {
 					sheet, solid = b, a
 				}
-				sres, err := sheetSolidPairCached(ctx, sheet, solid, boxProven, geomCache)
+				sres, err := sheetSolidPair(ctx, sheet, solid, boxProven, geomCache)
 				if err != nil {
 					return nil, err
 				}

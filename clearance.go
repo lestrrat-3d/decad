@@ -477,11 +477,7 @@ type sheetSolidResult struct {
 // has nothing left to prove. Box separation proves the same conclusion an
 // easier way: a box that does not even meet the solid's own box cannot admit
 // a crossing or a containment either.
-func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool) (sheetSolidResult, error) {
-	return sheetSolidPairCached(ctx, sheet, solid, boxDisjoint, nil)
-}
-
-func sheetSolidPairCached(ctx context.Context, sheet, solid *Body, boxDisjoint bool, cache *bodyGeomCache) (sheetSolidResult, error) {
+func sheetSolidPair(ctx context.Context, sheet, solid *Body, boxDisjoint bool, cache *bodyGeomCache) (sheetSolidResult, error) {
 	if err := ctx.Err(); err != nil {
 		return sheetSolidResult{}, err
 	}
