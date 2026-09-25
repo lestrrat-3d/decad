@@ -37,13 +37,15 @@ func benchmarkShellCupPosts(b *testing.B, outward bool, holes ...[3]float64) {
 	if outward {
 		outerArea := 110.0*70.0 - (4-math.Pi)*thickness*thickness
 		for _, hole := range holes {
-			outerArea -= math.Pi * math.Pow(hole[2]-thickness, 2)
+			radius := hole[2] - thickness
+			outerArea -= math.Pi * radius * radius
 		}
 		wantVolume = outerArea*(shellBoxHeight+thickness) - area*shellBoxHeight
 	} else {
 		innerArea := 90.0 * 50.0
 		for _, hole := range holes {
-			innerArea -= math.Pi * math.Pow(hole[2]+thickness, 2)
+			radius := hole[2] + thickness
+			innerArea -= math.Pi * radius * radius
 		}
 		wantVolume = area*shellBoxHeight - innerArea*(shellBoxHeight-thickness)
 	}
