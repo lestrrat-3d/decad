@@ -31,8 +31,9 @@ type identSTEPTimestamp struct{}
 type identSTEPAuthor struct{}
 type identSTEPOrganization struct{}
 
-// WithSTEPHeader replaces all simple STEP options with a complete Part 21
-// header. If supplied more than once, the last header wins.
+// WithSTEPHeader supplies the complete Part 21 header. It cannot be combined
+// with individual STEP field options. If supplied more than once, the last
+// header wins.
 func WithSTEPHeader(header step.Header) STEPOption {
 	return stepOption{option.New(identSTEPHeader{}, header)}
 }
@@ -140,8 +141,9 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 	return ap214.NewFile(header, b.entities...), nil
 }
 
-// STEP writes one faceted AP214 file. Supply the name, timestamp, author, and
-// organization as options, or use WithSTEPHeader for a complete step.Header.
+// STEP writes one faceted AP214 file. Supply the name, author, and organization
+// as options, or use WithSTEPHeader for a complete step.Header. When no
+// timestamp option is supplied, STEP uses the current UTC time.
 // Geometry and references are built before the writer is touched. Invalid
 // header data also leaves the writer untouched. An I/O error may leave a
 // partial file. ctx, w, and body must not be nil.
@@ -149,8 +151,8 @@ func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, o
 	if w == nil {
 		return fmt.Errorf("export: STEP: %w: nil writer", decad.ErrDegenerate)
 	}
-	var name, author, organization string
-	var timestamp time.Time
+	var name, author, organization *string
+	var timestamp *time.Time
 	var fullHeader *step.Header
 	for _, opt := range opts {
 		if opt == nil {
@@ -164,30 +166,47 @@ func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, o
 			}
 			fullHeader = &value
 		case identSTEPName:
-			name, _ = option.Get[string](opt)
+			value, _ := option.Get[string](opt)
+			name = &value
 		case identSTEPTimestamp:
-			timestamp, _ = option.Get[time.Time](opt)
+			value, _ := option.Get[time.Time](opt)
+			timestamp = &value
 		case identSTEPAuthor:
-			author, _ = option.Get[string](opt)
+			value, _ := option.Get[string](opt)
+			author = &value
 		case identSTEPOrganization:
-			organization, _ = option.Get[string](opt)
+			value, _ := option.Get[string](opt)
+			organization = &value
 		}
+	}
+	if fullHeader != nil && (name != nil || author != nil || organization != nil || timestamp != nil) {
+		return fmt.Errorf("export: STEP: %w: WithSTEPHeader cannot be combined with field options", decad.ErrDegenerate)
 	}
 	var header step.Header
 	if fullHeader != nil {
 		header = *fullHeader
 	} else {
-		if name == "" || author == "" || organization == "" || timestamp.IsZero() {
-			return fmt.Errorf("export: STEP: %w: name, timestamp, author, and organization are required", decad.ErrDegenerate)
-		}
 		header = step.Header{
 			Description:         []string{"faceted decad solid"},
-			Name:                name,
-			Timestamp:           timestamp,
-			Authors:             []string{author},
-			Organizations:       []string{organization},
+			Timestamp:           time.Now().UTC(),
 			PreprocessorVersion: "decad export",
 			OriginatingSystem:   "decad",
+		}
+		if name != nil {
+			header.Name = *name
+		}
+		if timestamp != nil {
+			header.Timestamp = *timestamp
+		}
+		if author != nil {
+			header.Authors = []string{*author}
+		}
+		if organization != nil {
+			header.Organizations = []string{*organization}
+		}
+		if header.Name == "" || len(header.Authors) == 0 || header.Authors[0] == "" ||
+			len(header.Organizations) == 0 || header.Organizations[0] == "" {
+			return fmt.Errorf("export: STEP: %w: name, author, and organization are required", decad.ErrDegenerate)
 		}
 	}
 	file, err := NewSTEPFile(ctx, body, tol, header)

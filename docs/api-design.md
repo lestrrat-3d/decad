@@ -1612,10 +1612,12 @@ scans, cap triangulation, mesh audits, and faceted restatement. Cancellation
 returns `ctx.Err()` unchanged.
 
 `export.STEP` writes a boundary-verified solid mesh as a faceted AP214 B-rep.
-Simple callers pass the file name, timestamp, author, and organization as
-options and need no STEP module type. `WithSTEPHeader` replaces those options
-and default header fields with a complete `step.Header` passed to the same
-`export.STEP` function. `export.NewSTEPFile` returns the underlying `step.File`.
+Simple callers pass the file name, author, and organization as options and
+need no STEP module type. The timestamp defaults to the current UTC time, or
+the caller sets it with `WithSTEPTimestamp`. `WithSTEPHeader` supplies the
+complete `step.Header` to the same `export.STEP` function. The writer rejects
+calls that combine it with field options; it does not fill missing header fields.
+`export.NewSTEPFile` returns the underlying `step.File`.
 The root package does not import STEP, and STEP export does not preserve
 analytic surfaces. See `docs/step-export-design.md`.
 

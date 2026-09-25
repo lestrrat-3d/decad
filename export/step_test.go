@@ -128,6 +128,43 @@ func TestWriteDeterministicAndUntouchedOnInvalidHeader(t *testing.T) {
 	require.Equal(t, "original", untouched.String())
 }
 
+func TestSTEPHeaderUsesEntireValue(t *testing.T) {
+	t.Parallel()
+	body := box(t, false)
+	base := step.Header{
+		Description:   []string{"full header"},
+		Name:          "base.step",
+		Timestamp:     time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
+		Authors:       []string{"Original Author"},
+		Organizations: []string{"Original Organization"},
+	}
+	var out bytes.Buffer
+	require.NoError(t, export.STEP(t.Context(), &out, body, units.Millimeters(0.1), export.WithSTEPHeader(base)))
+	require.Contains(t, out.String(), "FILE_DESCRIPTION(('full header')")
+	require.Contains(t, out.String(), "FILE_NAME('base.step','2026-09-25T00:00:00Z',('Original Author'),('Original Organization'),'','','')")
+
+	out.Reset()
+	out.WriteString("original")
+	require.ErrorIs(t, export.STEP(t.Context(), &out, body, units.Millimeters(0.1),
+		export.WithSTEPHeader(base), export.WithSTEPName("changed.step")), decad.ErrDegenerate)
+	require.Equal(t, "original", out.String())
+}
+
+func TestSTEPDefaultTimestampAndRequiredFields(t *testing.T) {
+	t.Parallel()
+	body := box(t, false)
+	var out bytes.Buffer
+	require.NoError(t, export.STEP(t.Context(), &out, body, units.Millimeters(0.1),
+		export.WithSTEPName("box.step"), export.WithSTEPAuthor("Decad"), export.WithSTEPOrganization("Decad")))
+	require.Contains(t, out.String(), "FILE_NAME('box.step','")
+	require.NotContains(t, out.String(), "FILE_NAME('box.step','0001-")
+
+	out.Reset()
+	require.ErrorContains(t, export.STEP(t.Context(), &out, body, units.Millimeters(0.1),
+		export.WithSTEPName("box.step"), export.WithSTEPOrganization("Decad")), "author")
+	require.Empty(t, out.String())
+}
+
 func TestNewSTEPFileRefusals(t *testing.T) {
 	t.Parallel()
 	_, err := export.NewSTEPFile(t.Context(), nil, units.Millimeters(0.1), header())

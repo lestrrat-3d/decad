@@ -7,14 +7,16 @@
 requested verification level. `export` imports decad and
 `github.com/lestrrat-3d/step/ap214`; decad's root package does not import
 STEP. `NewSTEPFile(ctx, body, tol, header)` returns a `step.File`. The
-`STEP(ctx, w, body, tol, opts...)` writer takes options for a nonempty file
-name, author, organization, and a nonzero timestamp. It sets
+`STEP(ctx, w, body, tol, opts...)` writer requires options for a nonempty file
+name, author, and organization. It defaults the timestamp to the current UTC
+time unless `WithSTEPTimestamp` supplies one. It sets
 `Description` to `faceted decad solid`, `PreprocessorVersion` to `decad export`,
-and `OriginatingSystem` to `decad`. It never reads the clock. Callers needing
-different or multiple header values pass `WithSTEPHeader(step.Header)` to
-`STEP`. This option replaces all simple options and default header fields; the
-last header option wins. `ap214.NewFile` sets `AUTOMOTIVE_DESIGN` in
-`FILE_SCHEMA`.
+and `OriginatingSystem` to `decad`. Callers needing different or multiple
+header values pass `WithSTEPHeader(step.Header)` to `STEP`. This uses the
+entire supplied header, including zero values, without filling fields from
+defaults or individual options. Mixing `WithSTEPHeader` with a field option
+returns `ErrDegenerate`. If several header options are given, the last wins.
+`ap214.NewFile` sets `AUTOMOTIVE_DESIGN` in `FILE_SCHEMA`.
 
 ## Geometry contract
 
@@ -39,7 +41,7 @@ last header option wins. `ap214.NewFile` sets `AUTOMOTIVE_DESIGN` in
   for solid angles. Link one `MANIFOLD_SOLID_BREP` through an
   `ADVANCED_BREP_SHAPE_REPRESENTATION` to one AP214 product definition.
 - Allocate entity IDs in deterministic traversal order. The same body,
-  tolerance, and header produce identical bytes. Never read the clock.
+  tolerance, and explicit timestamp or header produce identical bytes.
 - Honor context cancellation while building records. `STEP` validates and
   builds the complete file before touching its writer; `step.File.Write`
   validates its model before output. I/O errors may leave a partial file.

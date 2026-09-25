@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/export"
@@ -35,7 +34,6 @@ func Example_export_formats() {
 	var out bytes.Buffer
 	if err := export.STEP(context.Background(), &out, body, tol,
 		export.WithSTEPName("box.step"),
-		export.WithSTEPTimestamp(time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC)),
 		export.WithSTEPAuthor("Example"),
 		export.WithSTEPOrganization("Example")); err != nil {
 		fmt.Printf("failed to write STEP: %s\n", err)
