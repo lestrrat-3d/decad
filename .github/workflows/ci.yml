@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  # Tier 1: lint runs first. The heavier tiers below gate on it via `needs`,
-  # so a lint failure short-circuits the pipeline before any tests run.
+  # Lint gates every test job. The race binary builds alongside lint so the
+  # root shards can reuse one compilation once both jobs pass.
   lint:
     name: golangci-lint
     runs-on: ubuntu-latest
@@ -34,10 +34,37 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
-  # Tier 2: tests, only after lint succeeds. Race detector on Linux; the other
-  # OSes run the same suite without it, purely for cross-platform coverage.
-  test:
-    needs: lint
+  race-binary:
+    name: Build root race test binary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build root race test binary
+        run: go test -c -race -o decad.race.test .
+
+      - name: Upload root race test binary
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: decad-race-test
+          path: decad.race.test
+          if-no-files-found: error
+          retention-days: 1
+
+  # The root package uses one compiled race binary across its shards. The
+  # remaining package and OS tests below still wait only for lint.
+  test-root-race:
+    name: test (${{ matrix.os }}, ${{ matrix.race }}, ${{ matrix.shard }})
+    needs: [lint, race-binary]
     strategy:
       fail-fast: false
       matrix:
@@ -66,9 +93,72 @@ jobs:
             race: "-race"
             shard: "5"
             packages: ""
-          # The packages outside the root run on their own runner rather than
-          # riding along with a shard, so a shard's reported time is its own
-          # tests alone and nothing else has to be netted out of it.
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download root race test binary
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: decad-race-test
+          path: .
+
+      # The shard regex is derived from the ROOT package's own names, so it is
+      # applied to the ROOT package alone. A -run filter built from one
+      # package's names matches nothing in another, so handing it ./... would
+      # run zero tests in every other package while still reporting success.
+      # -run gates Examples and Fuzz seed corpora as well as Test functions,
+      # so the enumeration takes all three.
+      #
+      # Which shard a test belongs to is READ from .github/test-shards.txt, not
+      # computed from its position in the enumeration. A positional split moves
+      # half the suite between shards whenever a test is added, so a balance that
+      # held yesterday is re-rolled by the next commit; the recorded assignment
+      # is packed by measured cost and moves nothing when the suite grows.
+      # ci_workflow_test.go fails when a test on disk is in no shard.
+      - name: Run root-package tests (Ubuntu shard)
+        shell: bash
+        run: |
+          chmod +x decad.race.test
+          tests="$(./decad.race.test -test.list '.*' | awk -v shard='${{ matrix.shard }}' '
+            NR == FNR {
+              if ($0 !~ /^#/ && NF == 3) {
+                pin[$3] = $1
+              }
+              next
+            }
+            /^(Test|Fuzz|Example)/ {
+              if ($0 in pin && pin[$0] == shard) {
+                printf "%s|", $0
+              }
+            }
+          ' .github/test-shards.txt -)"
+          tests="${tests%|}"
+          test -n "$tests"
+          start=$SECONDS
+          ./decad.race.test -test.timeout 10m -test.run "^(${tests})$"
+          elapsed=$(( SECONDS - start ))
+          echo "shard ${{ matrix.shard }} finished in ${elapsed}s"
+          # A soft budget, far below the -timeout above. The suite runs its tests
+          # in parallel, so a balanced shard finishes in a small fraction of this;
+          # crossing it means the recorded costs have drifted, and it says so HERE
+          # rather than months later when a shard finally hits the ceiling and
+          # fails as if a test had hung. Re-measure and regenerate the assignment;
+          # _shardgen/main.go carries the command.
+          if [ "$elapsed" -gt 300 ]; then
+            echo "::error::shard ${{ matrix.shard }} took ${elapsed}s, over the 300s budget; re-measure and regenerate .github/test-shards.txt (see _shardgen/main.go)"
+            exit 1
+          fi
+
+  # The packages outside the root run on their own Ubuntu runner. macOS and
+  # Windows run the whole suite without the race detector.
+  test:
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
           - os: ubuntu-latest
             race: "-race"
             shard: ""
@@ -93,53 +183,6 @@ jobs:
 
       - name: Download dependencies
         run: go mod download
-
-      # The shard regex is derived from the ROOT package's own names, so it is
-      # applied to the ROOT package alone. A -run filter built from one
-      # package's names matches nothing in another, so handing it ./... would
-      # run zero tests in every other package while still reporting success.
-      # -run gates Examples and Fuzz seed corpora as well as Test functions,
-      # so the enumeration takes all three.
-      #
-      # Which shard a test belongs to is READ from .github/test-shards.txt, not
-      # computed from its position in the enumeration. A positional split moves
-      # half the suite between shards whenever a test is added, so a balance that
-      # held yesterday is re-rolled by the next commit; the recorded assignment
-      # is packed by measured cost and moves nothing when the suite grows.
-      # ci_workflow_test.go fails when a test on disk is in no shard.
-      - name: Run root-package tests (Ubuntu shard)
-        if: matrix.shard != ''
-        shell: bash
-        run: |
-          tests="$(go test -list '.*' . | awk -v shard='${{ matrix.shard }}' '
-            NR == FNR {
-              if ($0 !~ /^#/ && NF == 3) {
-                pin[$3] = $1
-              }
-              next
-            }
-            /^(Test|Fuzz|Example)/ {
-              if ($0 in pin && pin[$0] == shard) {
-                printf "%s|", $0
-              }
-            }
-          ' .github/test-shards.txt -)"
-          tests="${tests%|}"
-          test -n "$tests"
-          start=$SECONDS
-          go test ${{ matrix.race }} -timeout 10m -run "^(${tests})$" .
-          elapsed=$(( SECONDS - start ))
-          echo "shard ${{ matrix.shard }} finished in ${elapsed}s"
-          # A soft budget, far below the -timeout above. The suite runs its tests
-          # in parallel, so a balanced shard finishes in a small fraction of this;
-          # crossing it means the recorded costs have drifted, and it says so HERE
-          # rather than months later when a shard finally hits the ceiling and
-          # fails as if a test had hung. Re-measure and regenerate the assignment;
-          # _shardgen/main.go carries the command.
-          if [ "$elapsed" -gt 300 ]; then
-            echo "::error::shard ${{ matrix.shard }} took ${elapsed}s, over the 300s budget; re-measure and regenerate .github/test-shards.txt (see _shardgen/main.go)"
-            exit 1
-          fi
 
       # Every package outside the root runs UNFILTERED on one shard, so the
       # shards together cover what an unsharded `go test ./...` covers.
