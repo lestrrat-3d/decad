@@ -3,6 +3,8 @@ package decad
 import (
 	"fmt"
 	"math"
+
+	"github.com/lestrrat-3d/units"
 )
 
 // This file is the §5 audit of a fillet's rewritten section
@@ -239,18 +241,73 @@ func buildSegEntriesBudget(budget *workBudget, loops []LoopRecord) ([]segEntry, 
 // loopSignedAreaBudget is one loop's signed area (positive counter-clockwise): the
 // Green's-theorem boundary integral of its own segments.
 func loopSignedAreaBudget(budget *workBudget, loop LoopRecord) (float64, error) {
-	var ig regionIntegrals
+	var area float64
 	for _, seg := range loop.Segments {
 		if err := wallBudgetStep(budget); err != nil {
 			return 0, err
 		}
-		// Integrated about the plane origin itself: this audit compares one
-		// loop's own signed area against zero, so it needs no walk anchor.
-		if err := ig.addAnalytic(seg, Point2{}); err != nil {
+		term, err := analyticSignedArea(seg)
+		if err != nil {
 			return 0, err
 		}
+		area += term
 	}
-	return ig.area, nil
+	return area, nil
+}
+
+// analyticSignedArea evaluates only the area term of the same Green's-theorem
+// integral used by regionIntegrals.addAnalytic. Keep its float operations in
+// the same order: S8 compares the held signed areas, including near zero.
+func analyticSignedArea(segment CurveSegment) (float64, error) {
+	segment, err := normalizeSegment(segment)
+	if err != nil {
+		return 0, err
+	}
+	switch segment := segment.(type) {
+	case LineSeg:
+		start := shiftPoint(segment.Start, Point2{})
+		end := shiftPoint(segment.End, Point2{})
+		u0, v0 := lerp2(start, end, segment.TStart)
+		u1, v1 := lerp2(start, end, segment.TEnd)
+		return 0.5 * (u0*v1 - u1*v0), nil
+	case CircleSeg:
+		if segment.Radius.Kind() != units.Length {
+			return 0, fmt.Errorf(`%w: a circle segment's radius must be a %s, got %s`,
+				ErrUnitKind, units.Length, segment.Radius.Kind())
+		}
+		radius, err := segment.Radius.In(units.Millimeter)
+		if err != nil {
+			return 0, fmt.Errorf(`%w: a circle segment's radius is not representable: %s`, ErrNotFinite, err)
+		}
+		if segment.CCW != (segment.TStart < segment.TEnd) {
+			return 0, fmt.Errorf(`%w: a circle segment's CCW flag contradicts its range order`, ErrDegenerate)
+		}
+		return circularSignedArea(shiftPoint(segment.Center, Point2{}), radius,
+			2*math.Pi*segment.TStart, 2*math.Pi*segment.TEnd), nil
+	case ArcSeg:
+		center := shiftPoint(segment.Center, Point2{})
+		start := shiftPoint(segment.Start, Point2{})
+		end := shiftPoint(segment.End, Point2{})
+		radius := math.Hypot(start.U-center.U, start.V-center.V)
+		a0 := math.Atan2(start.V-center.V, start.U-center.U)
+		a1 := math.Atan2(end.V-center.V, end.U-center.U)
+		sweep := math.Mod(a1-a0, 2*math.Pi)
+		if sweep <= 0 {
+			sweep += 2 * math.Pi
+		}
+		return circularSignedArea(center, radius,
+			a0+segment.TStart*sweep, a0+segment.TEnd*sweep), nil
+	default:
+		return 0, fmt.Errorf(`%w: this evaluator computes mass properties over line, arc, circle and Tier A free-form profile segments only; the profile has a %T segment`,
+			ErrUnsupported, segment)
+	}
+}
+
+func circularSignedArea(center Point2, radius, start, end float64) float64 {
+	sin0, cos0 := math.Sincos(start)
+	sin1, cos1 := math.Sincos(end)
+	delta := end - start
+	return 0.5 * (radius*radius*delta + center.U*radius*(sin1-sin0) - center.V*radius*(cos1-cos0))
 }
 
 // segEntry is one rewritten segment as a boundary primitive, tagged by the loop
