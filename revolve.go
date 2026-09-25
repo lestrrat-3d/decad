@@ -219,6 +219,7 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 		den:           den,
 		xform:         r3.Identity(),
 		surfaceResult: surfaceResult,
+		radialProof:   ax.radialProof,
 	})
 	if err != nil {
 		return nil, err
