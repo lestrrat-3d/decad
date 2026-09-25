@@ -58,6 +58,14 @@ jobs:
             race: "-race"
             shard: "3"
             packages: ""
+          - os: ubuntu-latest
+            race: "-race"
+            shard: "4"
+            packages: ""
+          - os: ubuntu-latest
+            race: "-race"
+            shard: "5"
+            packages: ""
           # The packages outside the root run on their own runner rather than
           # riding along with a shard, so a shard's reported time is its own
           # tests alone and nothing else has to be netted out of it.
