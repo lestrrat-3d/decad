@@ -1,4 +1,4 @@
-package stepadapter_test
+package export_test
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/lestrrat-3d/decad"
-	"github.com/lestrrat-3d/decad/stepadapter"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/step"
 	"github.com/lestrrat-3d/step/ap214"
@@ -44,15 +44,15 @@ func header() step.Header {
 		Timestamp:           time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC),
 		Authors:             []string{"Decad"},
 		Organizations:       []string{"Decad"},
-		PreprocessorVersion: "decad stepadapter",
+		PreprocessorVersion: "decad export",
 		OriginatingSystem:   "decad",
 	}
 }
 
-func TestNewFileBoxTopology(t *testing.T) {
+func TestNewSTEPFileBoxTopology(t *testing.T) {
 	t.Parallel()
 	body := box(t, false)
-	f, err := stepadapter.NewFile(t.Context(), body, header(), units.Millimeters(0.1))
+	f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
 	require.NoError(t, err)
 	require.Equal(t, []string{ap214.Schema}, f.Header.Schemas)
 	counts := map[string]int{}
@@ -95,8 +95,8 @@ func TestWriteDeterministicAndUntouchedOnInvalidHeader(t *testing.T) {
 	t.Parallel()
 	body := box(t, false)
 	var first, second bytes.Buffer
-	require.NoError(t, stepadapter.Write(t.Context(), &first, body, header(), units.Millimeters(0.1)))
-	require.NoError(t, stepadapter.Write(t.Context(), &second, body, header(), units.Millimeters(0.1)))
+	require.NoError(t, export.STEP(t.Context(), &first, body, units.Millimeters(0.1), header()))
+	require.NoError(t, export.STEP(t.Context(), &second, body, units.Millimeters(0.1), header()))
 	require.Equal(t, first.Bytes(), second.Bytes())
 	require.Equal(t, 12, strings.Count(first.String(), "=ADVANCED_FACE("))
 
@@ -104,20 +104,20 @@ func TestWriteDeterministicAndUntouchedOnInvalidHeader(t *testing.T) {
 	bad.Timestamp = time.Time{}
 	var untouched bytes.Buffer
 	untouched.WriteString("original")
-	require.Error(t, stepadapter.Write(t.Context(), &untouched, body, bad, units.Millimeters(0.1)))
+	require.Error(t, export.STEP(t.Context(), &untouched, body, units.Millimeters(0.1), bad))
 	require.Equal(t, "original", untouched.String())
 }
 
-func TestNewFileRefusals(t *testing.T) {
+func TestNewSTEPFileRefusals(t *testing.T) {
 	t.Parallel()
-	_, err := stepadapter.NewFile(t.Context(), nil, header(), units.Millimeters(0.1))
+	_, err := export.NewSTEPFile(t.Context(), nil, units.Millimeters(0.1), header())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = stepadapter.NewFile(t.Context(), box(t, true), header(), units.Millimeters(0.1))
+	_, err = export.NewSTEPFile(t.Context(), box(t, true), units.Millimeters(0.1), header())
 	require.ErrorIs(t, err, decad.ErrNotSolid)
-	_, err = stepadapter.NewFile(t.Context(), box(t, false), header(), units.Millimeters(0))
+	_, err = export.NewSTEPFile(t.Context(), box(t, false), units.Millimeters(0), header())
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, err = stepadapter.NewFile(ctx, box(t, false), header(), units.Millimeters(0.1))
+	_, err = export.NewSTEPFile(ctx, box(t, false), units.Millimeters(0.1), header())
 	require.True(t, errors.Is(err, context.Canceled))
 }

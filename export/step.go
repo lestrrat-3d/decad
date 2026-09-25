@@ -1,8 +1,5 @@
-// Package stepadapter writes decad solids as faceted AP214 STEP files.
-// The exported B-rep represents a boundary-verified tessellation, not the
-// body's analytic surfaces. Its geometric departure is bounded by the
-// tessellation returned by Body.Tessellate at the requested tolerance.
-package stepadapter
+// Package export writes decad bodies as STL, OBJ, and faceted AP214 STEP files.
+package export
 
 import (
 	"context"
@@ -16,28 +13,28 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// NewFile builds an AP214 file from one solid's boundary-verified mesh.
+// NewSTEPFile builds an AP214 file from one solid's boundary-verified mesh.
 // tol is Body.Tessellate's chord tolerance. The caller supplies the mandatory
 // header fields, including a timestamp; AP214's schema replaces Header.Schemas.
 // The result contains one planar ADVANCED_FACE per mesh triangle. It is a
 // faceted approximation, and cannot preserve analytic cylinders or splines.
-// Sheets and bodies with multiple shells are refused.
-func NewFile(ctx context.Context, body *decad.Body, header step.Header, tol units.Value) (step.File, error) {
+// Sheets and bodies with multiple shells are refused. ctx and body must not be nil.
+func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header step.Header) (step.File, error) {
 	if ctx == nil {
-		return step.File{}, fmt.Errorf("stepadapter: %w: nil context", decad.ErrDegenerate)
+		return step.File{}, fmt.Errorf("export: STEP: %w: nil context", decad.ErrDegenerate)
 	}
 	if err := ctx.Err(); err != nil {
 		return step.File{}, err
 	}
 	if body == nil {
-		return step.File{}, fmt.Errorf("stepadapter: %w: nil body", decad.ErrDegenerate)
+		return step.File{}, fmt.Errorf("export: STEP: %w: nil body", decad.ErrDegenerate)
 	}
 	if body.Kind() != decad.BodySolid || !body.IsSolid() {
-		return step.File{}, fmt.Errorf("stepadapter: %w: body does not enclose a valid region", decad.ErrNotSolid)
+		return step.File{}, fmt.Errorf("export: STEP: %w: body does not enclose a valid region", decad.ErrNotSolid)
 	}
 	shells := body.Shells()
 	if len(shells) != 1 || shells[0].IsVoid() {
-		return step.File{}, fmt.Errorf("stepadapter: %w: only a single non-void shell is supported", decad.ErrUnsupported)
+		return step.File{}, fmt.Errorf("export: STEP: %w: only a single non-void shell is supported", decad.ErrUnsupported)
 	}
 
 	mesh, err := body.Tessellate(ctx, tol, decad.WithVerification(decad.VerifyBoundary))
@@ -45,7 +42,7 @@ func NewFile(ctx context.Context, body *decad.Body, header step.Header, tol unit
 		return step.File{}, err
 	}
 	if !mesh.BoundaryVerified() {
-		return step.File{}, fmt.Errorf("stepadapter: %w: mesh boundary is not verified", decad.ErrUnsupported)
+		return step.File{}, fmt.Errorf("export: STEP: %w: mesh boundary is not verified", decad.ErrUnsupported)
 	}
 	vertices, triangles := mesh.Vertices(), mesh.Triangles()
 	if err := checkMesh(ctx, vertices, triangles); err != nil {
@@ -85,7 +82,7 @@ func NewFile(ctx context.Context, body *decad.Body, header step.Header, tol unit
 		}
 		face, err := b.addTriangle(tri, vertices, pointRefs, vertexRefs, edges)
 		if err != nil {
-			return step.File{}, fmt.Errorf("stepadapter: triangle %d: %w", i, err)
+			return step.File{}, fmt.Errorf("export: STEP triangle %d: %w", i, err)
 		}
 		faces = append(faces, face)
 	}
@@ -99,12 +96,15 @@ func NewFile(ctx context.Context, body *decad.Body, header step.Header, tol unit
 	return ap214.NewFile(header, b.entities...), nil
 }
 
-// Write writes one AP214 file. Geometry and references are built before the
+// STEP writes one AP214 file. Geometry and references are built before the
 // writer is touched. Invalid header data also leaves the writer untouched,
 // because step.File.Write validates before output. An I/O error may leave a
-// partial file.
-func Write(ctx context.Context, w io.Writer, body *decad.Body, header step.Header, tol units.Value) error {
-	file, err := NewFile(ctx, body, header, tol)
+// partial file. ctx, w, and body must not be nil.
+func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, header step.Header) error {
+	if w == nil {
+		return fmt.Errorf("export: STEP: %w: nil writer", decad.ErrDegenerate)
+	}
+	file, err := NewSTEPFile(ctx, body, tol, header)
 	if err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ type edgeUse struct {
 // exactly two opposite uses of each edge and one connected facet component.
 func checkMesh(ctx context.Context, vertices []r3.Vec, triangles [][3]int) error {
 	if len(triangles) == 0 {
-		return fmt.Errorf("stepadapter: %w: mesh has no facets", decad.ErrUnsupported)
+		return fmt.Errorf("export: STEP: %w: mesh has no facets", decad.ErrUnsupported)
 	}
 	parents := make([]int, len(triangles))
 	for i := range parents {
@@ -195,13 +195,13 @@ func checkMesh(ctx context.Context, vertices []r3.Vec, triangles [][3]int) error
 		}
 		for _, index := range tri {
 			if index < 0 || index >= len(vertices) {
-				return fmt.Errorf("stepadapter: %w: facet %d has an invalid vertex index", decad.ErrUnsupported, i)
+				return fmt.Errorf("export: STEP: %w: facet %d has an invalid vertex index", decad.ErrUnsupported, i)
 			}
 		}
 		for j := range 3 {
 			u, v := tri[j], tri[(j+1)%3]
 			if u == v {
-				return fmt.Errorf("stepadapter: %w: facet %d has a repeated vertex", decad.ErrUnsupported, i)
+				return fmt.Errorf("export: STEP: %w: facet %d has a repeated vertex", decad.ErrUnsupported, i)
 			}
 			key := orderedEdge(u, v)
 			use, exists := uses[key]
@@ -210,7 +210,7 @@ func checkMesh(ctx context.Context, vertices []r3.Vec, triangles [][3]int) error
 				continue
 			}
 			if use.count != 1 || use.forward == (u == key.a) {
-				return fmt.Errorf("stepadapter: %w: inconsistent mesh edge", decad.ErrUnsupported)
+				return fmt.Errorf("export: STEP: %w: inconsistent mesh edge", decad.ErrUnsupported)
 			}
 			parents[meshRoot(parents, i)] = meshRoot(parents, use.face)
 			use.count = 2
@@ -219,12 +219,12 @@ func checkMesh(ctx context.Context, vertices []r3.Vec, triangles [][3]int) error
 	}
 	for _, use := range uses {
 		if use.count != 2 {
-			return fmt.Errorf("stepadapter: %w: open mesh edge", decad.ErrUnsupported)
+			return fmt.Errorf("export: STEP: %w: open mesh edge", decad.ErrUnsupported)
 		}
 	}
 	for i := 1; i < len(triangles); i++ {
 		if meshRoot(parents, i) != meshRoot(parents, 0) {
-			return fmt.Errorf("stepadapter: %w: disconnected mesh facets", decad.ErrUnsupported)
+			return fmt.Errorf("export: STEP: %w: disconnected mesh facets", decad.ErrUnsupported)
 		}
 	}
 	return nil

@@ -1581,8 +1581,10 @@ gap is decad's mandate.
 
 ```go
 func (b *Body) Tessellate(ctx context.Context, tol units.Value, opts ...TessellateOption) (*Mesh, error) // an OUTPUT, not the representation
-func (b *Body) STL(w io.Writer, opts ...STLOption) error
-func (b *Body) OBJ(w io.Writer, opts ...OBJOption) error
+// package export:
+func STL(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...decad.TessellateOption) error
+func OBJ(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...decad.TessellateOption) error
+func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, header step.Header) error
 ```
 
 `docs/tessellation-design.md` is normative for the mesh these calls consume and
@@ -1593,26 +1595,21 @@ per-payload staging. A payload with no complete boundary proof is never
 exported. A mesh without the separate occupied-volume proof is never admitted
 to a boolean by an unproved generic bound.
 
-**`Tessellate` defaults to `VerifyAll`; `STL` and `OBJ` default to
-`VerifyNone`.** A writer consumes vertices and indices and reads no proof term,
-so paying for the facet-contact audit and the two volume-class proofs buys an
-exporter nothing — and the audit's own work ceiling refuses ordinary bodies at
-the size-derived default tolerance the exporter itself chose, which no caller
-can raise without asking for a coarser mesh than the exporter wanted. Both
-writers take `WithVerification` to demand the proof and accept the refusals that
-come with it. `STL`'s doc comment states, beside its existing warning that a
-sheet's file is not a solid, that a default file is closed but not proven free
-of self-intersection.
+**`Tessellate` defaults to `VerifyAll`; `export.STL` and `export.OBJ` default to
+`VerifyNone`.** The caller supplies a positive length chord tolerance to every
+writer. STL and OBJ consume vertices and indices but no proof term. Both accept
+`WithVerification` to demand a stronger proof and accept its refusals. An STL
+file from a sheet is not a solid; at `VerifyNone`, a solid mesh is closed but
+not proven free of self-intersection.
 
-`Tessellate` passes `ctx` through chording, loop-clearance scans, cap
-triangulation, mesh audits, and faceted restatement. Cancellation returns
-`ctx.Err()` unchanged. `STL` and `OBJ` take no context and tessellate under
-`context.Background()`.
+`Tessellate` and every writer pass `ctx` through chording, loop-clearance
+scans, cap triangulation, mesh audits, and faceted restatement. Cancellation
+returns `ctx.Err()` unchanged.
 
-`stepadapter` is a separate package over `github.com/lestrrat-3d/step/ap214`.
-It writes a boundary-verified solid mesh as a faceted AP214 B-rep. It does not
-add a method to `Body` or claim to preserve analytic surfaces. See
-`docs/step-adapter-design.md`.
+`export.STEP` writes a boundary-verified solid mesh as a faceted AP214 B-rep.
+`export.NewSTEPFile` returns the underlying `step.File` for callers that need
+it. The root package does not import STEP, and STEP export does not preserve
+analytic surfaces. See `docs/step-export-design.md`.
 
 **Fusion codegen is out of scope for v1.** Callers model in ordinary Go and use
 the resulting bodies, measurements, and verification reports directly.

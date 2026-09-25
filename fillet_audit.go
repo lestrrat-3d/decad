@@ -314,7 +314,7 @@ const contactEps = 1e-9
 // the SECTION'S scale exactly as verification design §4 anchors a length's
 // noise floor: δ = ε·D with ε = contactEps and D the section's diameter (its
 // (u, v) bounding-box diagonal — the standard decad reading of D, as in
-// Body.STL and the boolean chord tolerance). Below δ two boundaries are
+// export.STL and the boolean chord tolerance). Below δ two boundaries are
 // indistinguishable from a pinch, so the test REFUSES; comfortably above it is
 // a real positive gap that builds. The threshold is reject-only and SCALES with
 // the section — a fixed absolute band mis-scales, rejecting a macroscopic gap

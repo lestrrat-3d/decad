@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 )
@@ -55,7 +56,7 @@ func Example_decad_tessellate() {
 	fmt.Printf("proven chord bound within tolerance: %v\n", mesh.Bound().Mag() <= 0.5)
 
 	var stl strings.Builder
-	if err := body.STL(&stl, decad.WithChordTolerance(units.Millimeters(0.5))); err != nil {
+	if err := export.STL(context.Background(), &stl, body, units.Millimeters(0.5)); err != nil {
 		fmt.Printf("failed to write STL: %s\n", err)
 		return
 	}

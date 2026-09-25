@@ -1223,7 +1223,6 @@
 2	0.59	TestRevolveTessellateSphericalBand
 2	0.04	TestRevolveToFaceAngularGates
 2	0.02	TestRevolveToFaceAngularHalfDiskCap
-2	0.73	TestSTLDefaultChordTolerance
 2	0.01	TestSTLPlate
 2	0.10	TestSegFilterNeverRejectsAnExactHit
 2	0.03	TestSegTriOverlap2MatchesReference
@@ -1348,7 +1347,7 @@
 3	0.01	TestDuplicatePlainExtrudeHasNoBlendRoles
 3	0.05	TestDyadicVectorMatchesBigRatVector
 3	0.01	TestEvalLoftCollinearSplitKeepsTwoFacesPerCell
-3	0.48	TestExportWritesABodyTheProvenPathRefusesAtItsOwnDefault
+3	0.48	TestExportWritesABodyTheProvenPathRefuses
 3	0.01	TestExtrudeArcSectionBoxEnclosesArcApex
 3	0.04	TestExtrudeFreeformJointCarriesChainVerdict
 3	0.18	TestExtrudeFreeformR19RefusesTheBuild

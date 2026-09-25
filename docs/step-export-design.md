@@ -1,8 +1,13 @@
-# STEP adapter design
+# STEP export design
 
-`stepadapter` is an optional package in this module. It imports decad and
-`github.com/lestrrat-3d/step/ap214`; decad's root package does not import STEP.
-`NewFile(ctx, body, header, tol)` returns a `step.File`, and `Write` writes it.
+`export` groups STL, OBJ, and STEP writers in one package. Every writer takes
+`ctx`, `w`, `body`, and a positive length chord tolerance in that order.
+`STL` and `OBJ` accept `decad.TessellateOption` values and default to
+`decad.VerifyNone`. They write the mesh returned by `Body.Tessellate` at the
+requested verification level. `export` imports decad and
+`github.com/lestrrat-3d/step/ap214`; decad's root package does not import
+STEP. `NewSTEPFile(ctx, body, tol, header)` returns a `step.File`, and
+`STEP(ctx, w, body, tol, header)` writes it.
 The caller supplies complete Part 21 header metadata and a positive length
 chord tolerance. `ap214.NewFile` sets `AUTOMOTIVE_DESIGN` in `FILE_SCHEMA`.
 

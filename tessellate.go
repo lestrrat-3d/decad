@@ -233,8 +233,8 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // terms it no longer carries, and it publishes no occupied-volume proof at
 // all — [Union], [Cut] and [Intersect] refuse a sheet operand outright
 // (docs/surface-design.md Table X), so the absence costs nothing a caller
-// reaches through this method. Export still succeeds: [Body.STL] and
-// [Body.OBJ] write a sheet's mesh exactly as they write a solid's.
+// reaches through this method. Export still succeeds: export.STL and
+// export.OBJ write a sheet's mesh exactly as they write a solid's.
 //
 // [WithVerification] chooses how much of the mesh's proof this call runs. The
 // default is [VerifyAll]: every audit and proof the body's payload supports,

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -131,8 +132,8 @@ func TestSurfaceExtrudeSheetTessellates(t *testing.T) {
 
 	// STL: 8 facets, and a second write is byte-identical.
 	var buf1, buf2 bytes.Buffer
-	require.NoError(t, sheet.STL(&buf1))
-	require.NoError(t, sheet.STL(&buf2))
+	require.NoError(t, export.STL(t.Context(), &buf1, sheet, units.Millimeters(0.1)))
+	require.NoError(t, export.STL(t.Context(), &buf2, sheet, units.Millimeters(0.1)))
 	require.Equal(t, buf1.String(), buf2.String())
 	require.Equal(t, 8, countSTLFacets(buf1.String()))
 }
@@ -197,13 +198,13 @@ func TestSurfaceExtrudeSheetDeterminism(t *testing.T) {
 	require.Equal(t, meshA1.Triangles(), meshB.Triangles())
 
 	var stlA, stlB bytes.Buffer
-	require.NoError(t, sheetA.STL(&stlA))
-	require.NoError(t, sheetB.STL(&stlB))
+	require.NoError(t, export.STL(t.Context(), &stlA, sheetA, units.Millimeters(0.1)))
+	require.NoError(t, export.STL(t.Context(), &stlB, sheetB, units.Millimeters(0.1)))
 	require.Equal(t, stlA.String(), stlB.String())
 
 	var objA, objB bytes.Buffer
-	require.NoError(t, sheetA.OBJ(&objA))
-	require.NoError(t, sheetB.OBJ(&objB))
+	require.NoError(t, export.OBJ(t.Context(), &objA, sheetA, units.Millimeters(0.1)))
+	require.NoError(t, export.OBJ(t.Context(), &objB, sheetB, units.Millimeters(0.1)))
 	require.Equal(t, objA.String(), objB.String())
 
 	ctx, cancel := context.WithCancel(t.Context())

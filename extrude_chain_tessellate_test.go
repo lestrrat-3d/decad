@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -50,8 +51,8 @@ func TestExtrudeChainTessellatesOneWallRibbon(t *testing.T) {
 	require.Equal(t, 4, free, "both rims plus one sweep edge at each of the walk's two free ends")
 
 	var buf1, buf2 bytes.Buffer
-	require.NoError(t, body.STL(&buf1))
-	require.NoError(t, body.OBJ(&buf2))
+	require.NoError(t, export.STL(t.Context(), &buf1, body, units.Millimeters(0.1)))
+	require.NoError(t, export.OBJ(t.Context(), &buf2, body, units.Millimeters(0.1)))
 	require.Equal(t, 2, countSTLFacets(buf1.String()))
 	require.NotEmpty(t, buf2.String())
 }
@@ -95,7 +96,7 @@ func TestExtrudeChainTessellatesThreeWallRibbon(t *testing.T) {
 	require.InDelta(t, 260.0, meshTriangleArea(mesh), 1e-9, "10+6+10 mm walls of 10 mm height sum to 260 mm^2")
 
 	var buf bytes.Buffer
-	require.NoError(t, body.STL(&buf))
+	require.NoError(t, export.STL(t.Context(), &buf, body, units.Millimeters(0.1)))
 	require.Equal(t, 6, countSTLFacets(buf.String()))
 }
 
@@ -127,7 +128,7 @@ func TestExtrudeChainTessellateRefusesCurvedWall(t *testing.T) {
 	require.ErrorContains(t, err, "no chording arm for a chain-fed")
 
 	var buf bytes.Buffer
-	require.ErrorIs(t, body.STL(&buf), decad.ErrUnsupported)
+	require.ErrorIs(t, export.STL(t.Context(), &buf, body, units.Millimeters(0.1)), decad.ErrUnsupported)
 }
 
 // TestSweepChainTessellatesRibbon confirms the chainSweepPayload arm reuses
@@ -160,6 +161,6 @@ func TestSweepChainTessellatesRibbon(t *testing.T) {
 	require.Zero(t, mesh.Bound().Mag())
 
 	var buf bytes.Buffer
-	require.NoError(t, body.STL(&buf))
+	require.NoError(t, export.STL(t.Context(), &buf, body, units.Millimeters(0.1)))
 	require.Equal(t, 2, countSTLFacets(buf.String()))
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/export"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/sketch/geom"
@@ -872,8 +873,8 @@ func TestFreeformPrismExportsDeterministically(t *testing.T) {
 		name  string
 		write func(w io.Writer) error
 	}{
-		{"STL", func(w io.Writer) error { return body.STL(w) }},
-		{"OBJ", func(w io.Writer) error { return body.OBJ(w) }},
+		{"STL", func(w io.Writer) error { return export.STL(t.Context(), w, body, units.Millimeters(0.1)) }},
+		{"OBJ", func(w io.Writer) error { return export.OBJ(t.Context(), w, body, units.Millimeters(0.1)) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var first, second bytes.Buffer
