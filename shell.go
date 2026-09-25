@@ -478,7 +478,10 @@ func shellRectCircleWitness(budget *workBudget, profile ProfileRecord, loops [][
 			return false, nil
 		}
 		radius, radiusDelta, err := magnitudeInBounded(segment.Radius, units.Length, units.Millimeter, "the hole radius")
-		if err != nil || radius != w.radius || isNonFinite(radiusDelta) {
+		if err != nil {
+			return false, err
+		}
+		if radius != w.radius || isNonFinite(radiusDelta) {
 			return false, nil
 		}
 		radiusUpper := new(big.Rat).Add(floatRat(radius), floatRat(radiusDelta))
@@ -508,17 +511,17 @@ func shellRectCircleWitness(budget *workBudget, profile ProfileRecord, loops [][
 				return false, err
 			}
 			y := new(big.Rat).Add(ylo, new(big.Rat).Mul(height, v))
-			clear := true
+			fits := true
 			for _, edge := range []*big.Rat{
 				new(big.Rat).Sub(x, xlo), new(big.Rat).Sub(xhi, x),
 				new(big.Rat).Sub(y, ylo), new(big.Rat).Sub(yhi, y),
 			} {
 				if edge.Cmp(need) <= 0 {
-					clear = false
+					fits = false
 					break
 				}
 			}
-			if !clear {
+			if !fits {
 				continue
 			}
 			for _, hole := range holes {
@@ -529,11 +532,11 @@ func shellRectCircleWitness(budget *workBudget, profile ProfileRecord, loops [][
 				distance2 := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
 				separation := new(big.Rat).Add(hole.radius, need)
 				if distance2.Cmp(new(big.Rat).Mul(separation, separation)) <= 0 {
-					clear = false
+					fits = false
 					break
 				}
 			}
-			if clear {
+			if fits {
 				return true, wallBudgetErr(budget)
 			}
 		}
