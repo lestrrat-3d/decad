@@ -164,10 +164,10 @@ func ratLerpGeneral(start, end, t float64) *big.Rat {
 
 // TestRatLerpEndpointsMatchTheGeneralPath is the correctness proof for
 // ratLerp's endpoint fast path: over the cross product of a fixed value set
-// (including negative zero, both infinities and NaN) and a fixed parameter
-// set, at t == 0 and t == 1 alike, ratLerp must return exactly what
-// ratLerpGeneral returns — nil for nil, and an exact rational equal by
-// Cmp otherwise. This is what settles the claim, not a tolerance: a sampled
+// (including negative zero, both infinities and NaN), plus seeded raw-bit
+// pairs, and a fixed parameter set, ratLerp must return exactly what
+// ratLerpGeneral returns — nil for nil, and an exact rational equal by Cmp
+// otherwise. This is what settles the claim, not a tolerance: a sampled
 // near-endpoint parameter belongs to the general path, never this one.
 func TestRatLerpEndpointsMatchTheGeneralPath(t *testing.T) {
 	t.Parallel()
@@ -177,33 +177,33 @@ func TestRatLerpEndpointsMatchTheGeneralPath(t *testing.T) {
 		math.MaxFloat64, math.SmallestNonzeroFloat64,
 		math.Inf(1), math.Inf(-1), math.NaN(),
 	}
-	rng := rand.New(rand.NewPCG(41, 43))
-	for range 200 {
-		// Raw bit patterns cover every float64 class deterministically:
-		// normals across every magnitude, subnormals, both zeros, both
-		// infinities and a spread of NaN payloads.
-		values = append(values, math.Float64frombits(rng.Uint64()))
-	}
 	params := []float64{0, negZero, 1, 0.5, 0.25, 1.0 / 3.0, -0.5, 2, math.NaN(), math.Inf(1)}
 
 	checked := 0
-	for _, start := range values {
-		for _, end := range values {
-			for _, tParam := range params {
-				want := ratLerpGeneral(start, end, tParam)
-				got := ratLerp(start, end, tParam)
-				checked++
-				if want == nil {
-					require.Nil(t, got, "start=%v end=%v t=%v", start, end, tParam)
-					continue
-				}
-				require.NotNil(t, got, "start=%v end=%v t=%v", start, end, tParam)
-				require.Zero(t, got.Cmp(want),
-					"start=%v end=%v t=%v got=%v want=%v", start, end, tParam, got, want)
+	checkPair := func(start, end float64) {
+		for _, tParam := range params {
+			want := ratLerpGeneral(start, end, tParam)
+			got := ratLerp(start, end, tParam)
+			checked++
+			if want == nil {
+				require.Nil(t, got, "start=%v end=%v t=%v", start, end, tParam)
+				continue
 			}
+			require.NotNil(t, got, "start=%v end=%v t=%v", start, end, tParam)
+			require.Zero(t, got.Cmp(want),
+				"start=%v end=%v t=%v got=%v want=%v", start, end, tParam, got, want)
 		}
 	}
-	require.Greater(t, checked, 440000, "the fixture must exercise the full cross product")
+	for _, start := range values {
+		for _, end := range values {
+			checkPair(start, end)
+		}
+	}
+	rng := rand.New(rand.NewPCG(41, 43))
+	for range 200 {
+		checkPair(math.Float64frombits(rng.Uint64()), math.Float64frombits(rng.Uint64()))
+	}
+	require.Equal(t, 3210, checked, "the fixture must exercise every special pair and 200 raw-bit pairs")
 
 	// A degenerate TStart == TEnd == 0 record defeats "the other endpoint is
 	// checked anyway": the far operand here is never read by the general
