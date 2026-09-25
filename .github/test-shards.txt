@@ -403,6 +403,8 @@
 0	0.02	TestLoftVerifySound
 0	0.04	TestLoftVerifySurveysStaySuspect
 0	0.00	TestLoopCoEdgesFollowDirectedBoundary
+0	0.00	TestLoopSignedAreaMatchesFullIntegrator
+0	0.00	TestLoopSignedAreaPreservesBudgetAndErrors
 0	0.01	TestMalformedNURBSRefusesBeforeScanningControls
 0	0.00	TestMeasurement
 0	0.00	TestMintCurveNeverRepeats

@@ -37,6 +37,74 @@ func TestNestingAuditCancellationReachesSectionBBox(t *testing.T) {
 		`the nesting audit must spend the shared budget in its section bounding-box scan`)
 }
 
+func TestLoopSignedAreaMatchesFullIntegrator(t *testing.T) {
+	t.Parallel()
+	cases := map[string][]CurveSegment{
+		"lines with a partial and reverse walk": {
+			LineSeg{Start: Point2{U: 3, V: -4}, End: Point2{U: 9, V: 7}, TStart: 0.125, TEnd: 0.875},
+			LineSeg{Start: Point2{U: -2, V: 5}, End: Point2{U: 7, V: -1}, TStart: 1, TEnd: 0},
+		},
+		"whole circle": {
+			CircleSeg{Center: Point2{U: 3, V: -4}, Radius: units.Millimeters(5), CCW: true, TEnd: 1},
+		},
+		"clockwise circle fragment": {
+			CircleSeg{Center: Point2{U: -3, V: 2}, Radius: units.Millimeters(7),
+				TStart: 0.75, TEnd: 0.125},
+		},
+		"arc and reverse arc": {
+			ArcSeg{Center: Point2{U: 1, V: 2}, Start: Point2{U: 6, V: 2},
+				End: Point2{U: 1, V: 7}, TStart: 0.1, TEnd: 0.8},
+			ArcSeg{Center: Point2{U: 1, V: 2}, Start: Point2{U: 6, V: 2},
+				End: Point2{U: 1, V: 7}, TStart: 1, TEnd: 0},
+		},
+	}
+	for name, segments := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var full regionIntegrals
+			for _, segment := range segments {
+				require.NoError(t, full.addAnalytic(segment, Point2{}))
+			}
+			got, err := loopSignedAreaBudget(nil, LoopRecord{Segments: segments})
+			require.NoError(t, err)
+			require.Equal(t, math.Float64bits(full.area), math.Float64bits(got))
+		})
+	}
+}
+
+func TestLoopSignedAreaPreservesBudgetAndErrors(t *testing.T) {
+	t.Parallel()
+	var nilLine *LineSeg
+	bad := []CurveSegment{
+		nilLine,
+		CircleSeg{Radius: units.Degrees(1), CCW: true, TEnd: 1},
+		CircleSeg{Radius: units.Millimeters(1), TEnd: 1},
+		EllipseSeg{},
+		SplineSeg{},
+	}
+	for _, segment := range bad {
+		var full regionIntegrals
+		want := full.addAnalytic(segment, Point2{})
+		require.Error(t, want)
+		_, got := loopSignedAreaBudget(nil, LoopRecord{Segments: []CurveSegment{segment}})
+		require.EqualError(t, got, want.Error())
+	}
+
+	calls := 0
+	budget := &workBudget{stepFn: func() error {
+		calls++
+		if calls == 2 {
+			return context.Canceled
+		}
+		return nil
+	}}
+	_, err := loopSignedAreaBudget(budget, LoopRecord{Segments: []CurveSegment{
+		LineSeg{TEnd: 1}, LineSeg{TEnd: 1},
+	}})
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, 2, calls)
+}
+
 // TestContactFloorUsesTrueSectionBBox confirms the §5 noise floor δ = ε·D reads
 // the TRUE section (u, v) bounding box — an arc's own extrema, not its endpoint
 // chord. An arc bulges outside its endpoint box, so an endpoint-only D
