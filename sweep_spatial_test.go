@@ -167,7 +167,7 @@ func orthogonalSweepFixture(t *testing.T) (*sketch.Sketch, *sketch.Profile, *dec
 	return s, profile, path, vertices, joins
 }
 
-func orthogonalSweepPath(t *testing.T) *decad.Path {
+func orthogonalSweepPath(t testing.TB) *decad.Path {
 	t.Helper()
 
 	path, err := decad.NewPath(
@@ -186,7 +186,7 @@ func orthogonalSweepPath(t *testing.T) *decad.Path {
 	return path
 }
 
-func orthogonalSweepProfile(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+func orthogonalSweepProfile(t testing.TB) (*sketch.Sketch, *sketch.Profile) {
 	t.Helper()
 
 	world := sketch.NewWorld()
