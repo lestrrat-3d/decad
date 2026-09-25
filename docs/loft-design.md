@@ -2462,8 +2462,7 @@ is §4's, with its seam step reading two chains through `RecordChain`.
 | **SL4** | a paired segment whose two sides are not same-kind, or a same-kind `ArcSeg` pair whose recorded ranges run opposite ways (PC's P5 row) | `ErrUnsupported` for the kind mismatch, S3; `ErrDegenerate` for the opposing walk sense, S7's structural arm |
 | **SL5** | the two recorded planes are not exactly parallel, or the to-plane's origin does not lie strictly on the from-plane's positive side (§16.2) | `ErrUnsupported`; the coplanar case is S5's `ErrDegenerate` and is decided first |
 | **SL6** | every condition S6, S7's audit arm, S8, S12 through S16 already state — a collapsed triangle, a proven crossing, an exhausted audit budget, an unbounded or unrepresentable term, an unmet chord target, a one-sided chord cell | those rows' own sentinels, unchanged |
-| **SL7** | a curved correspondence, before the increment that states its stations' own side proof (§16.2) | `ErrUnsupported` |
-| **SL8** | `LoftChain` in every increment before the one that builds the case asked for | `ErrUnsupported`, `docs/surface-design.md` R23 |
+| **SL7** | a curved correspondence, before the increment that states its stations' own side proof (§16.2) | `ErrUnsupported`, `docs/surface-design.md` R36 |
 
 **SL2 is decided before SL3 through SL5**, for the reason
 `docs/sweep-design.md` Table SC states: a seam refusal names a repair the caller

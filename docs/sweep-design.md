@@ -655,7 +655,7 @@ chain through `RecordChain` instead of a profile through `RecordProfile`.
 | **SC6** | a recorded chain segment outside the line, circle and arc set the span builders admit | `ErrUnsupported`, S10 |
 | **SC7** | a composite path, before the increment that builds §15.1's join | `ErrUnsupported` |
 | **SC8** | an arc span the chain shell refuses — a walk that does not lie in one closed half-plane of the arc axis, both free ends on that axis, or an interior on-axis junction | exactly what `RevolveChain` answers: `ErrDegenerate`, or `ErrUnsupported` under `docs/surface-design.md` R22 and R33 |
-| **SC9** | `SweepChain` in every increment before the one that builds the case asked for | `ErrUnsupported`, `docs/surface-design.md` R23 |
+| **SC9** | an arc span, before the increment that builds §15.6's C2 reduction | `ErrUnsupported`, `docs/surface-design.md` R34 |
 
 **SC2 is decided before SC3, and that order is load-bearing.** A foreign,
 stale, invalid or unrecordable chain names a repair the caller makes in the
