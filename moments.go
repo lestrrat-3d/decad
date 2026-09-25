@@ -469,14 +469,14 @@ func translateMomentIntegrals(ig regionIntegrals, anchor Point2, order momentInt
 // A free-form segment arrives with the chain the record-level preflight already
 // converted and charged (moments_validate.go), so this pass converts nothing and
 // charges nothing.
-func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor Point2) error {
+func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor Point2, order momentIntegralOrder) error {
 	segment, err := normalizeSegment(segment)
 	if err != nil {
 		return err
 	}
 	switch segment := segment.(type) {
 	case LineSeg:
-		ig.addLine(segment, anchor)
+		ig.addLine(segment, anchor, order)
 		return nil
 	case CircleSeg:
 		if segment.Radius.Kind() != units.Length {
@@ -491,7 +491,11 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 		}
 		areaProof, haveAreaProof := circularAreaInterval(segment, anchor)
 		muProof, mvProof, haveMomentProof := circularFirstMomentInterval(segment, anchor)
-		muuProof, muvProof, mvvProof, haveSecondMomentProof := circularSecondMomentInterval(segment, anchor)
+		var muuProof, muvProof, mvvProof ratInterval
+		var haveSecondMomentProof bool
+		if order != momentFirstOrder {
+			muuProof, muvProof, mvvProof, haveSecondMomentProof = circularSecondMomentInterval(segment, anchor)
+		}
 		segment.Center = shiftPoint(segment.Center, anchor)
 		// The arrangement's normalized t is the angle 2π·t from +u
 		// (geom.BoundaryEdge); the recorded range order is the walk.
@@ -511,12 +515,17 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 			muvProof,
 			mvvProof,
 			haveSecondMomentProof,
+			order,
 		)
 		return nil
 	case ArcSeg:
 		areaProof, haveAreaProof := circularAreaInterval(segment, anchor)
 		muProof, mvProof, haveMomentProof := circularFirstMomentInterval(segment, anchor)
-		muuProof, muvProof, mvvProof, haveSecondMomentProof := circularSecondMomentInterval(segment, anchor)
+		var muuProof, muvProof, mvvProof ratInterval
+		var haveSecondMomentProof bool
+		if order != momentFirstOrder {
+			muuProof, muvProof, mvvProof, haveSecondMomentProof = circularSecondMomentInterval(segment, anchor)
+		}
 		segment.Center = shiftPoint(segment.Center, anchor)
 		segment.Start = shiftPoint(segment.Start, anchor)
 		segment.End = shiftPoint(segment.End, anchor)
@@ -544,6 +553,7 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 			muvProof,
 			mvvProof,
 			haveSecondMomentProof,
+			order,
 		)
 		return nil
 	default:
@@ -557,7 +567,7 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 		if err := shiftFreeformSpans(plan.spans, anchor); err != nil {
 			return err
 		}
-		ig.addFreeform(plan.spans, plan.reversed)
+		ig.addFreeformTo(plan.spans, plan.reversed, order)
 		return nil
 	}
 }
@@ -567,21 +577,19 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 // loops are proven walkable before any area is asked for — walkOf refuses every
 // free-form kind — so no converted chain is involved and no work is charged.
 func (ig *regionIntegrals) addAnalytic(segment CurveSegment, anchor Point2) error {
-	return ig.add(segment, freeformPlan{}, anchor)
+	return ig.add(segment, freeformPlan{}, anchor, momentSecondOrder)
 }
 
-// addFor preserves the evaluator helper's order-aware call shape. The bounded
-// implementation computes all moments together, so the requested order does
-// not change the accumulated result.
-func (ig *regionIntegrals) addFor(segment CurveSegment, plan freeformPlan, anchor Point2, _ momentIntegralOrder) error {
-	return ig.add(segment, plan, anchor)
+// addFor skips second-moment work when the caller needs only first moments.
+func (ig *regionIntegrals) addFor(segment CurveSegment, plan freeformPlan, anchor Point2, order momentIntegralOrder) error {
+	return ig.add(segment, plan, anchor, order)
 }
 
 // addLine accumulates the straight chord from the walk's start point to its
 // end point. The recorded range picks the walked piece of the entity's own
 // Start→End parameterization.
-func (ig *regionIntegrals) addLine(seg LineSeg, anchor Point2) {
-	exact := exactLineMoments(seg, anchor)
+func (ig *regionIntegrals) addLine(seg LineSeg, anchor Point2, order momentIntegralOrder) {
+	exact := exactLineMoments(seg, anchor, order)
 	seg.Start = shiftPoint(seg.Start, anchor)
 	seg.End = shiftPoint(seg.End, anchor)
 	u0, v0 := lerp2(seg.Start, seg.End, seg.TStart)
@@ -596,6 +604,14 @@ func (ig *regionIntegrals) addLine(seg LineSeg, anchor Point2) {
 	mu := (v1 - v0) * (u0*u0 + u0*u1 + u1*u1) / 6
 	mv := -(u1 - u0) * (v0*v0 + v0*v1 + v1*v1) / 6
 
+	accumulateMoment(&ig.area, &ig.areaBound, area, rationalFloatError(exact.area, area))
+	accumulateMoment(&ig.mu, &ig.muBound, mu, rationalFloatError(exact.mu, mu))
+	accumulateMoment(&ig.mv, &ig.mvBound, mv, rationalFloatError(exact.mv, mv))
+	if order == momentFirstOrder {
+		ig.addExact(exact)
+		return
+	}
+
 	// ∫u² dA = ⅓ ∮ u³ dv;  ∫v² dA = −⅓ ∮ v³ du — the cubic sums are the
 	// exact ∫₀¹ of the lerp cubed.
 	muu := (v1 - v0) * (u0*u0*u0 + u0*u0*u1 + u0*u1*u1 + u1*u1*u1) / 12
@@ -605,9 +621,6 @@ func (ig *regionIntegrals) addLine(seg LineSeg, anchor Point2) {
 	intU2V := v0*(u0*u0+u0*du+du*du/3) + dv*(u0*u0/2+2*u0*du/3+du*du/4)
 	muv := 0.5 * dv * intU2V
 
-	accumulateMoment(&ig.area, &ig.areaBound, area, rationalFloatError(exact.area, area))
-	accumulateMoment(&ig.mu, &ig.muBound, mu, rationalFloatError(exact.mu, mu))
-	accumulateMoment(&ig.mv, &ig.mvBound, mv, rationalFloatError(exact.mv, mv))
 	accumulateMoment(&ig.muu, &ig.muuBound, muu, rationalFloatError(exact.muu, muu))
 	accumulateMoment(&ig.muv, &ig.muvBound, muv, rationalFloatError(exact.muv, muv))
 	accumulateMoment(&ig.mvv, &ig.mvvBound, mvv, rationalFloatError(exact.mvv, mvv))
@@ -815,7 +828,7 @@ func ratLerp(start, end, t float64) *big.Rat {
 // subtracting is identical to subtracting then lerping — but only in exact
 // arithmetic: fl(p−anchor) rounds, and the rational taken over those rounded
 // coordinates would be a different chord's exact area.
-func exactLineMoments(seg LineSeg, anchor Point2) exactMoments {
+func exactLineMoments(seg LineSeg, anchor Point2, order momentIntegralOrder) exactMoments {
 	u0 := ratLerp(seg.Start.U, seg.End.U, seg.TStart)
 	v0 := ratLerp(seg.Start.V, seg.End.V, seg.TStart)
 	u1 := ratLerp(seg.Start.U, seg.End.U, seg.TEnd)
@@ -836,6 +849,15 @@ func exactLineMoments(seg LineSeg, anchor Point2) exactMoments {
 	area := ratScale(new(big.Rat).Sub(ratMul(u0, v1), ratMul(u1, v0)), 1, 2)
 	mu := ratScale(ratMul(dv, ratAdd(u0sq, ratMul(u0, u1), u1sq)), 1, 6)
 	mv := ratScale(ratMul(du, ratAdd(v0sq, ratMul(v0, v1), v1sq)), -1, 6)
+	if order == momentFirstOrder {
+		// The accumulator still requires six non-nil fields. These zero
+		// placeholders are never read by a first-order caller; they let the
+		// region publish its exact area and centroid without cubic work.
+		return exactMoments{
+			area: area, mu: mu, mv: mv,
+			muu: new(big.Rat), muv: new(big.Rat), mvv: new(big.Rat),
+		}
+	}
 
 	muu := ratScale(ratMul(dv, ratAdd(
 		ratMul(u0, u0, u0),
@@ -874,6 +896,7 @@ func (ig *regionIntegrals) addCircular(
 	haveMomentProof bool,
 	muuProof, muvProof, mvvProof ratInterval,
 	haveSecondMomentProof bool,
+	order momentIntegralOrder,
 ) {
 	sin0, cos0 := math.Sincos(th0)
 	sin1, cos1 := math.Sincos(th1)
@@ -900,6 +923,30 @@ func (ig *regionIntegrals) addCircular(
 	muScale := 0.5 * absR * (2*absU*absU + 2*absU*absR*int2Scale + absR*absR*int3Scale)
 	mvScale := 0.5 * absR * (2*absV*absV + 2*absV*absR*int2Scale + absR*absR*int3Scale)
 
+	areaScale = productUpper(2, areaScale)
+	muScale = productUpper(2, muScale)
+	mvScale = productUpper(2, mvScale)
+
+	areaBound := conservativeValueError(area, areaScale)
+	if haveAreaProof {
+		areaBound = math.Min(areaBound, intervalFloatError(areaProof, area))
+	}
+	muBound := conservativeValueError(mu, muScale)
+	mvBound := conservativeValueError(mv, mvScale)
+	if haveMomentProof {
+		muBound = math.Min(muBound, intervalFloatError(muProof, mu))
+		mvBound = math.Min(mvBound, intervalFloatError(mvProof, mv))
+	}
+	// A circular integral's exact value carries π and trig terms, so it has no
+	// exact rational and the region's rational sum ends here.
+	ig.dropExact()
+	accumulateMoment(&ig.area, &ig.areaBound, area, areaBound)
+	accumulateMoment(&ig.mu, &ig.muBound, mu, muBound)
+	accumulateMoment(&ig.mv, &ig.mvBound, mv, mvBound)
+	if order == momentFirstOrder {
+		return
+	}
+
 	intCos4 := 3*dth/8 + (math.Sin(2*th1)-math.Sin(2*th0))/4 + (math.Sin(4*th1)-math.Sin(4*th0))/32
 	intSin4 := 3*dth/8 - (math.Sin(2*th1)-math.Sin(2*th0))/4 + (math.Sin(4*th1)-math.Sin(4*th0))/32
 	int4Scale := 3*absDth/8 + 0.5 + 1.0/16
@@ -921,29 +968,9 @@ func (ig *regionIntegrals) addCircular(
 		r*(c.U*c.U*intSC+2*c.U*r*intSC2+r*r*intSC3))
 	muvScale := 0.5 * absR * (absV*(2*absU*absU+2*absU*absR*int2Scale+absR*absR*int3Scale) +
 		absR*(0.5*absU*absU+4*absU*absR/3+absR*absR/4))
-	areaScale = productUpper(2, areaScale)
-	muScale = productUpper(2, muScale)
-	mvScale = productUpper(2, mvScale)
 	muuScale = productUpper(2, muuScale)
 	muvScale = productUpper(2, muvScale)
 	mvvScale = productUpper(2, mvvScale)
-
-	areaBound := conservativeValueError(area, areaScale)
-	if haveAreaProof {
-		areaBound = math.Min(areaBound, intervalFloatError(areaProof, area))
-	}
-	muBound := conservativeValueError(mu, muScale)
-	mvBound := conservativeValueError(mv, mvScale)
-	if haveMomentProof {
-		muBound = math.Min(muBound, intervalFloatError(muProof, mu))
-		mvBound = math.Min(mvBound, intervalFloatError(mvProof, mv))
-	}
-	// A circular integral's exact value carries π and trig terms, so it has no
-	// exact rational and the region's rational sum ends here.
-	ig.dropExact()
-	accumulateMoment(&ig.area, &ig.areaBound, area, areaBound)
-	accumulateMoment(&ig.mu, &ig.muBound, mu, muBound)
-	accumulateMoment(&ig.mv, &ig.mvBound, mv, mvBound)
 	muuBound := conservativeValueError(muu, muuScale)
 	muvBound := conservativeValueError(muv, muvScale)
 	mvvBound := conservativeValueError(mvv, mvvScale)

@@ -132,9 +132,12 @@ func spanCoordinatePolys(span bezierSpan) (ratPoly, ratPoly) {
 //	∫u² dA = ⅓∮u³ dv
 //	∫v² dA = −⅓∮v³ du
 //	∫uv dA = ½∮u²v dv
-func exactFreeformMoments(spans []bezierSpan, reversed bool) exactMoments {
+func exactFreeformMoments(spans []bezierSpan, reversed bool, order momentIntegralOrder) exactMoments {
 	half := big.NewRat(1, 2)
-	third := big.NewRat(1, 3)
+	var third *big.Rat
+	if order != momentFirstOrder {
+		third = big.NewRat(1, 3)
+	}
 	out := exactMoments{
 		area: new(big.Rat),
 		mu:   new(big.Rat),
@@ -152,9 +155,11 @@ func exactFreeformMoments(spans []bezierSpan, reversed bool) exactMoments {
 		out.area.Add(out.area, new(big.Rat).Mul(half, rpIntegral01(rpSub(rpMul(u, dv), rpMul(v, du)))))
 		out.mu.Add(out.mu, new(big.Rat).Mul(half, rpIntegral01(rpMul(uu, dv))))
 		out.mv.Sub(out.mv, new(big.Rat).Mul(half, rpIntegral01(rpMul(vv, du))))
-		out.muu.Add(out.muu, new(big.Rat).Mul(third, rpIntegral01(rpMul(rpMul(uu, u), dv))))
-		out.mvv.Sub(out.mvv, new(big.Rat).Mul(third, rpIntegral01(rpMul(rpMul(vv, v), du))))
-		out.muv.Add(out.muv, new(big.Rat).Mul(half, rpIntegral01(rpMul(rpMul(uu, v), dv))))
+		if order != momentFirstOrder {
+			out.muu.Add(out.muu, new(big.Rat).Mul(third, rpIntegral01(rpMul(rpMul(uu, u), dv))))
+			out.mvv.Sub(out.mvv, new(big.Rat).Mul(third, rpIntegral01(rpMul(rpMul(vv, v), du))))
+			out.muv.Add(out.muv, new(big.Rat).Mul(half, rpIntegral01(rpMul(rpMul(uu, v), dv))))
+		}
 	}
 	if reversed {
 		for _, value := range []*big.Rat{out.area, out.mu, out.mv, out.muu, out.muv, out.mvv} {
@@ -164,7 +169,7 @@ func exactFreeformMoments(spans []bezierSpan, reversed bool) exactMoments {
 	return out
 }
 
-// addFreeform accumulates one converted free-form curve's contribution. The
+// addFreeformTo accumulates one converted free-form curve's contribution. The
 // exact rational goes into the REGION's own accumulator, which is what the
 // published float is rounded from — once, after the complete signed
 // outer-minus-holes sum (moments.go). Rounding here instead would make a
@@ -176,12 +181,12 @@ func exactFreeformMoments(spans []bezierSpan, reversed bool) exactMoments {
 //
 // The chain arrives already converted, re-anchored and CHARGED by the
 // record-level preflight, so nothing here consults the work counter.
-func (ig *regionIntegrals) addFreeform(spans []bezierSpan, reversed bool) {
-	exact := exactFreeformMoments(spans, reversed)
+func (ig *regionIntegrals) addFreeformTo(spans []bezierSpan, reversed bool, order momentIntegralOrder) {
+	exact := exactFreeformMoments(spans, reversed, order)
 	if extent := freeformControlExtent(spans); extent > ig.coordUpper {
 		ig.coordUpper = extent
 	}
-	for _, moment := range []struct {
+	moments := []struct {
 		value *float64
 		bound *float64
 		exact *big.Rat
@@ -192,7 +197,11 @@ func (ig *regionIntegrals) addFreeform(spans []bezierSpan, reversed bool) {
 		{&ig.muu, &ig.muuBound, exact.muu},
 		{&ig.muv, &ig.muvBound, exact.muv},
 		{&ig.mvv, &ig.mvvBound, exact.mvv},
-	} {
+	}
+	if order == momentFirstOrder {
+		moments = moments[:3]
+	}
+	for _, moment := range moments {
 		held, _ := moment.exact.Float64()
 		accumulateMoment(moment.value, moment.bound, held, rationalFloatError(moment.exact, held))
 	}

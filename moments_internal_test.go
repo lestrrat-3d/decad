@@ -7,8 +7,76 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
+	t.Parallel()
+	check := func(t *testing.T, first, full regionIntegrals) {
+		t.Helper()
+		first.publishExact()
+		full.publishExact()
+		require.Equal(t, full.area, first.area)
+		require.Equal(t, full.areaBound, first.areaBound)
+		require.Equal(t, full.mu, first.mu)
+		require.Equal(t, full.muBound, first.muBound)
+		require.Equal(t, full.mv, first.mv)
+		require.Equal(t, full.mvBound, first.mvBound)
+		require.Zero(t, first.muu)
+		require.Zero(t, first.muv)
+		require.Zero(t, first.mvv)
+		require.True(t, full.muu != 0 || full.muv != 0 || full.mvv != 0)
+	}
+
+	for _, tc := range []struct {
+		name    string
+		segment CurveSegment
+	}{
+		{"line", LineSeg{Start: Point2{U: 2, V: 1}, End: Point2{U: 5, V: 4}, TEnd: 1}},
+		{"whole circle", CircleSeg{Center: Point2{U: 4, V: 3}, Radius: units.Millimeters(2), CCW: true, TEnd: 1}},
+		{"circle fragment", CircleSeg{Center: Point2{U: 4, V: 3}, Radius: units.Millimeters(2), CCW: true, TStart: 0.125, TEnd: 0.625}},
+		{"arc", ArcSeg{Center: Point2{U: 4, V: 3}, Start: Point2{U: 5, V: 3}, End: Point2{U: 4, V: 4}, TEnd: 1}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var first, full regionIntegrals
+			require.NoError(t, first.addFor(tc.segment, freeformPlan{}, Point2{}, momentFirstOrder))
+			require.NoError(t, full.addFor(tc.segment, freeformPlan{}, Point2{}, momentSecondOrder))
+			check(t, first, full)
+		})
+	}
+
+	t.Run("freeform", func(t *testing.T) {
+		spans := []bezierSpan{{
+			{u: big.NewRat(0, 1), v: big.NewRat(0, 1)},
+			{u: big.NewRat(1, 1), v: big.NewRat(2, 1)},
+			{u: big.NewRat(3, 1), v: big.NewRat(0, 1)},
+		}}
+		var first, full regionIntegrals
+		first.addFreeformTo(spans, false, momentFirstOrder)
+		full.addFreeformTo(spans, false, momentSecondOrder)
+		check(t, first, full)
+	})
+
+	t.Run("offset rectangle through evaluator", func(t *testing.T) {
+		record := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+			LineSeg{Start: Point2{U: 100.25, V: -50.5}, End: Point2{U: 120.25, V: -50.5}, TEnd: 1},
+			LineSeg{Start: Point2{U: 120.25, V: -50.5}, End: Point2{U: 120.25, V: -45.5}, TEnd: 1},
+			LineSeg{Start: Point2{U: 120.25, V: -45.5}, End: Point2{U: 100.25, V: -45.5}, TEnd: 1},
+			LineSeg{Start: Point2{U: 100.25, V: -45.5}, End: Point2{U: 100.25, V: -50.5}, TEnd: 1},
+		}}}
+		first, err := record.evaluatorIntegralsUncheckedContext(t.Context(), momentFirstOrder, newFreeformWork())
+		require.NoError(t, err)
+		full, err := record.evaluatorIntegralsUncheckedContext(t.Context(), momentSecondOrder, newFreeformWork())
+		require.NoError(t, err)
+		check(t, first, full)
+		firstCentroid, firstExact := first.exactCentroid()
+		fullCentroid, fullExact := full.exactCentroid()
+		require.True(t, firstExact)
+		require.True(t, fullExact)
+		require.Equal(t, fullCentroid, firstCentroid)
+	})
+}
 
 // The positive-area gate reads the region's own exact rational wherever there is
 // one, and the float accumulator only where there is not. Underflow is why: a
