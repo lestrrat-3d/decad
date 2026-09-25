@@ -18,7 +18,7 @@ import (
 // Regression guard for the race-detector shards in .github/workflows/ci.yml.
 //
 // The shards exist to bound the race job's wall time, and they split the ROOT
-// package's test names between two runners. The hazard the split creates is
+// package's test names between runners. The hazard the split creates is
 // silent: a `-run` regex built from one package's names matches NOTHING in
 // any other package, so a shard handed `./...` runs the root package's half
 // and zero tests everywhere else, then reports success. No `go test` exit
@@ -30,7 +30,7 @@ import (
 // approved modules (CLAUDE.md) and gains none for a guard — and asserts five
 // properties, each of which fails loudly rather than degrading quietly:
 //
-//   - no `go test` command combines a `-run` filter with `./...`;
+//   - no shard command combines a `-run` filter with `./...`;
 //   - every Go package directory on disk outside the root is named by some
 //     shard's own `packages:` operand, so adding a package fails this test
 //     until the workflow covers it;
@@ -65,10 +65,10 @@ var (
 	// shard steps key on.
 	ciMatrixShardRe    = regexp.MustCompile(`(?m)^\s*shard:\s*"([^"]*)"\s*$`)
 	ciMatrixPackagesRe = regexp.MustCompile(`(?m)^\s*packages:\s*"([^"]*)"\s*$`)
-	// ciListPatternRe reads the regexp handed to `go test -list`, and
+	// ciListPatternRe reads the regexp handed to the test binary's -test.list, and
 	// ciSelectPatternRe the awk pattern that keeps a listed name. Both gate
 	// which names a shard can ever run.
-	ciListPatternRe   = regexp.MustCompile(`-list '([^']*)'`)
+	ciListPatternRe   = regexp.MustCompile(`-test\.list '([^']*)'`)
 	ciSelectPatternRe = regexp.MustCompile(`(?m)^\s*/([^/]+)/\s*\{\s*$`)
 )
 
@@ -84,7 +84,14 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 	t.Run("no -run filter is applied to ./...", func(t *testing.T) {
 		var filtered int
 		for line := range strings.SplitSeq(workflow, "\n") {
-			if !strings.Contains(line, "go test ") || !strings.Contains(line, "-run ") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "#") {
+				continue
+			}
+			if !strings.Contains(line, "go test ") && !strings.Contains(line, "./decad.race.test ") {
+				continue
+			}
+			if !strings.Contains(line, "-run ") && !strings.Contains(line, "-test.run ") {
 				continue
 			}
 			filtered++
@@ -92,7 +99,7 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 				"a -run regex derived from one package matches no name in another, so this command runs nothing outside the package it was derived from: %s", strings.TrimSpace(line))
 		}
 		require.Positive(t, filtered,
-			"no `go test` command in %s carries -run, so this check asserted nothing — the shard step was renamed or removed", ciWorkflowPath)
+			"no test command in %s carries -run or -test.run, so this check asserted nothing — the shard step was renamed or removed", ciWorkflowPath)
 	})
 
 	t.Run("every non-root package is named by a shard", func(t *testing.T) {
@@ -120,7 +127,7 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 
 	t.Run("the shard enumeration selects Examples and Fuzz targets", func(t *testing.T) {
 		list := ciListPatternRe.FindAllStringSubmatch(workflow, -1)
-		require.Len(t, list, 1, "expected exactly one `go test -list` pattern in %s", ciWorkflowPath)
+		require.Len(t, list, 1, "expected exactly one test-binary -test.list pattern in %s", ciWorkflowPath)
 		selects := ciSelectPatternRe.FindAllStringSubmatch(workflow, -1)
 		require.Len(t, selects, 1, "expected exactly one awk selection pattern in %s", ciWorkflowPath)
 
@@ -271,10 +278,12 @@ func shardAssignment(t *testing.T) map[string]string {
 }
 
 // listedTestNames enumerates the root package's own Test, Fuzz and Example
-// names — the same set `-run` gates and the same set the workflow lists.
+// names from this test binary, as the workflow does without rebuilding it.
 func listedTestNames(t *testing.T) map[string]struct{} {
 	t.Helper()
-	cmd := exec.CommandContext(t.Context(), "go", "test", "-list", ".*", ".")
+	executable, err := os.Executable()
+	require.NoError(t, err, "finding the running test binary")
+	cmd := exec.CommandContext(t.Context(), executable, "-test.list", ".*")
 	out, err := cmd.Output()
 	require.NoError(t, err, "enumerating the root package's test names")
 
