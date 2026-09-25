@@ -355,7 +355,7 @@ func triTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, pa, pb *[
 		signsB = *sb
 	} else {
 		for i := range 3 {
-			signsB[i] = orientSign(ta[0], ta[1], ta[2], tb[i])
+			signsB[i] = orientSignPrepared(ta[0], ta[1], ta[2], tb[i], xta[0], xtb[i], na)
 		}
 	}
 	if allOneSide(signsB) {
@@ -365,7 +365,7 @@ func triTriClassifyCore(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, pa, pb *[
 		signsA = *sa
 	} else {
 		for i := range 3 {
-			signsA[i] = orientSign(tb[0], tb[1], tb[2], ta[i])
+			signsA[i] = orientSignPrepared(tb[0], tb[1], tb[2], ta[i], xtb[0], xta[i], nb)
 		}
 	}
 	if allOneSide(signsA) {
