@@ -361,6 +361,7 @@
 0	0.00	TestLoftChainPlacedRibbonKeepsItsAreaAndChargesItsVertices
 0	0.00	TestLoftChainRefusesAMismatchedOrCurvedPairing
 0	0.00	TestLoftChainRefusesANonParallelOrNegativePlanePair
+0	0.01	TestLoftChainVerifyValidityAfterAudit
 0	0.04	TestLoftChordCalibrationCeilingCoversRuledExcess
 0	0.00	TestLoftChordCalibrationSweep
 0	0.26	TestLoftChordCalibrationTrueOutlineIsTheChordedTwin

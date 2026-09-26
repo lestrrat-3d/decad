@@ -1022,6 +1022,11 @@ func auditSheetBoundary(ctx context.Context, b *Body) sheetAuditOutcome {
 // identical reading a nonzero sectionDelta gives a prism, restated here
 // because a loft's own displacement is section-plane rather than axial.
 //
+// A chainLoftPayload records only the held flat ribbon triangles. Its build
+// runs the complete crossing audit before committing a body, and placement
+// rebuilds and audits that triangle set again. A committed chain loft thus
+// already proves leg 4 over the exact sheet Verify reads.
+//
 // A stitchPayload is proven instead by an explicit build-time audit: Stitch
 // runs docs/loft-design.md §6's crossing audit on the OPEN case too
 // (docs/surface-design.md §6.3's open-case decision), so a stitchPayload
@@ -1069,6 +1074,8 @@ func payloadProvesSimple(ctx context.Context, p featurePayload) bool {
 		return pp.surfaceResult && pp.sectionDelta == 0
 	case loftPayload:
 		return pp.surfaceResult && pp.sectionDelta == 0
+	case chainLoftPayload:
+		return true
 	case stitchPayload:
 		return pp.auditClean
 	case bodyPatchPayload:
