@@ -8,7 +8,7 @@
 # with the command in _shardgen/main.go's doc comment.
 #
 # Shard totals at the last measurement:
-#   shard 0:   84.43s over 902 tests
+#   shard 0:   84.43s over 903 tests
 #   shard 1:   84.43s over 193 tests
 #   shard 2:   84.44s over 193 tests
 #   shard 3:   84.44s over 194 tests
@@ -495,6 +495,7 @@
 0	0.01	TestPlacedUsesEvaluatorCache
 0	0.02	TestPlanarUnionCentroidBoundCoversRounding
 0	0.00	TestPointInBodyCancellationReachesTorusRootPath
+0	0.00	TestPolyArea2SignAgreesWithRationalArea
 0	0.00	TestPositiveAreaGateConsultsExactRational
 0	0.00	TestPrepRefusesACollapsedOperandFacet
 0	0.00	TestPrismBooleanGateG1RequiresBothOperandsPrismPayload

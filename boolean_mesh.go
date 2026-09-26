@@ -1853,11 +1853,11 @@ func triangulatePlanarPolygon(ctx context.Context, verts []xpt, poly []int) ([][
 	}
 	// Keep the projected orientation counter-clockwise so ear clipping and
 	// the emitted winding agree with the facet's own.
-	area, err := polyArea2(budget, pts)
+	area, err := polyArea2Sign(budget, pts)
 	if err != nil {
 		return nil, err
 	}
-	flip := area.Sign() < 0
+	flip := area < 0
 	if flip {
 		for i, j := 0, len(idx)-1; i < j; i, j = i+1, j-1 {
 			if err := budget.step(); err != nil {
