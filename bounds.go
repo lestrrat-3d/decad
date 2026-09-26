@@ -1191,6 +1191,7 @@ func cellBilinearArea(vLo, vHi, wLo, wHi r3.Vec) (float64, float64) {
 	n0 := dvCross(da, g)
 	a := dvCross(da, twist)
 	b := dvCross(twist, g)
+	aZero, bZero := dvIsZero(a), dvIsZero(b)
 
 	at := func(s, r dyadic) dyV3 {
 		var out dyV3
@@ -1214,22 +1215,47 @@ func cellBilinearArea(vLo, vHi, wLo, wHi r3.Vec) (float64, float64) {
 	const divShift = 2 // divisions == 1 << divShift
 	integralLo := dyZero()
 	integralHi := dyZero()
+	// A zero coefficient makes the exact norm constant along that parameter.
+	// Reuse its reading, but add it at every original quadrature position.
+	var midNorms [divisions][divisions]struct {
+		value dyadic
+		ready bool
+	}
 	var cornerNorms [divisions + 1][divisions + 1]struct {
 		value dyadic
 		ready bool
 	}
 	for i := range divisions {
 		for j := range divisions {
-			sMid := dyShift(dyInt(int64(2*i+1)), -(divShift + 1))
-			rMid := dyShift(dyInt(int64(2*j+1)), -(divShift + 1))
-			lo, ok := normEnd(at(sMid, rMid), false)
-			if !ok {
-				return 0, math.Inf(1)
+			midI, midJ := i, j
+			if aZero {
+				midI = 0
 			}
-			integralLo = dyAdd(integralLo, lo)
+			if bZero {
+				midJ = 0
+			}
+			mid := &midNorms[midI][midJ]
+			if !mid.ready {
+				sMid := dyShift(dyInt(int64(2*i+1)), -(divShift + 1))
+				rMid := dyShift(dyInt(int64(2*j+1)), -(divShift + 1))
+				lo, ok := normEnd(at(sMid, rMid), false)
+				if !ok {
+					return 0, math.Inf(1)
+				}
+				mid.value = lo
+				mid.ready = true
+			}
+			integralLo = dyAdd(integralLo, mid.value)
 
 			for _, p := range [][2]int{{i, j}, {i + 1, j}, {i, j + 1}, {i + 1, j + 1}} {
-				corner := &cornerNorms[p[0]][p[1]]
+				key := p
+				if aZero {
+					key[0] = 0
+				}
+				if bZero {
+					key[1] = 0
+				}
+				corner := &cornerNorms[key[0]][key[1]]
 				if !corner.ready {
 					node := func(v int) dyadic { return dyShift(dyInt(int64(v)), -divShift) }
 					hi, ok := normEnd(at(node(p[0]), node(p[1])), true)
