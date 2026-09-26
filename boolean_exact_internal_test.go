@@ -642,6 +642,44 @@ func TestXHPDenominatorStaysBounded(t *testing.T) {
 		`the stripped denominator must stay far below the unreduced 14113-bit growth at the same depth`)
 }
 
+func TestPolyArea2SignAgreesWithRationalArea(t *testing.T) {
+	t.Parallel()
+	r := func(n, d int64) *big.Rat { return big.NewRat(n, d) }
+	zero := r(0, 1)
+	huge := new(big.Rat).SetFrac(new(big.Int).Lsh(big.NewInt(1), 700), big.NewInt(3))
+	large := new(big.Rat).SetFrac(new(big.Int).Lsh(big.NewInt(1), 699), big.NewInt(5))
+	near := new(big.Rat).Add(new(big.Rat).Mul(big.NewRat(2, 1), large), r(1, 97))
+	cases := [][]xp2{
+		{newXP2(zero, zero), newXP2(r(1, 3), r(2, 7)), newXP2(r(5, 11), r(3, 13))},
+		{newXP2(zero, zero), newXP2(huge, large), newXP2(new(big.Rat).Mul(big.NewRat(2, 1), huge), near)},
+		{newXP2(zero, zero), newXP2(huge, large),
+			newXP2(new(big.Rat).Mul(big.NewRat(2, 1), huge), new(big.Rat).Mul(big.NewRat(2, 1), large))},
+	}
+	rng := rand.New(rand.NewPCG(29, 31))
+	for range 64 {
+		poly := make([]xp2, 3+rng.IntN(6))
+		for i := range poly {
+			poly[i] = newXP2(
+				r(int64(rng.IntN(2001)-1000), int64(2*rng.IntN(31)+1)),
+				r(int64(rng.IntN(2001)-1000), int64(2*rng.IntN(31)+1)),
+			)
+		}
+		cases = append(cases, poly)
+	}
+	for _, poly := range cases {
+		for _, points := range [][]xp2{poly, {poly[2], poly[1], poly[0]}} {
+			want := new(big.Rat)
+			for i, a := range points {
+				b := points[(i+1)%len(points)]
+				want.Add(want, new(big.Rat).Sub(new(big.Rat).Mul(a.u, b.v), new(big.Rat).Mul(b.u, a.v)))
+			}
+			got, err := polyArea2Sign(newWorkBudget(t.Context()), points)
+			require.NoError(t, err)
+			require.Equal(t, want.Sign(), got)
+		}
+	}
+}
+
 // BenchmarkOrientSignExact measures one exact orient sign over the
 // homogeneous-integer representation on float-derived points (fu163 §9's
 // cost guard: the math/big.Rat baseline this replaces was 14.6us/206

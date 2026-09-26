@@ -1190,18 +1190,38 @@ func pointInPoly2(budget *workBudget, poly []xp2, p xp2) (bool, bool, error) {
 	return inside, false, nil
 }
 
-// polyArea2 is twice the exact signed area of the polygon.
-func polyArea2(budget *workBudget, poly []xp2) (*big.Rat, error) {
-	total := new(big.Rat)
+// polyArea2Sign is the exact sign of twice the polygon's signed area.
+// Reduce after every edge so the integer accumulator cannot grow with the
+// number of edges beyond the exact area's denominator.
+func polyArea2Sign(budget *workBudget, poly []xp2) (int, error) {
+	var num, den big.Int
+	den.SetInt64(1)
+	var leftDen, rightDen, termDen, left, right, next, part, gcd big.Int
 	n := len(poly)
 	for i := range n {
 		if err := budget.step(); err != nil {
-			return nil, err
+			return 0, err
 		}
 		a, b := poly[i], poly[(i+1)%n]
-		total.Add(total, new(big.Rat).Sub(new(big.Rat).Mul(a.u, b.v), new(big.Rat).Mul(b.u, a.v)))
+		leftDen.Mul(a.u.Denom(), b.v.Denom())
+		rightDen.Mul(b.u.Denom(), a.v.Denom())
+		termDen.Mul(&leftDen, &rightDen)
+		left.Mul(a.u.Num(), b.v.Num())
+		left.Mul(&left, &rightDen)
+		right.Mul(b.u.Num(), a.v.Num())
+		right.Mul(&right, &leftDen)
+		left.Sub(&left, &right)
+		next.Mul(&num, &termDen)
+		next.Add(&next, part.Mul(&den, &left))
+		den.Mul(&den, &termDen)
+		num.Set(&next)
+		gcd.GCD(nil, nil, &num, &den)
+		if gcd.BitLen() > 1 {
+			num.Quo(&num, &gcd)
+			den.Quo(&den, &gcd)
+		}
 	}
-	return total, nil
+	return num.Sign(), nil
 }
 
 // earClipX triangulates a weakly-simple counter-clockwise polygon (given as

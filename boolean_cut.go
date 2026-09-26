@@ -536,22 +536,22 @@ func (tc *triCutter) splitConvexByU(piece []int, c *big.Rat) ([]int, []int, erro
 	if err != nil {
 		return nil, nil, err
 	}
-	leftArea, err := polyArea2(tc.work, leftPts)
+	leftArea, err := polyArea2Sign(tc.work, leftPts)
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(left) < 3 || leftArea.Sign() <= 0 {
+	if len(left) < 3 || leftArea <= 0 {
 		left = nil
 	}
 	rightPts, err := tc.polyPoints(right)
 	if err != nil {
 		return nil, nil, err
 	}
-	rightArea, err := polyArea2(tc.work, rightPts)
+	rightArea, err := polyArea2Sign(tc.work, rightPts)
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(right) < 3 || rightArea.Sign() <= 0 {
+	if len(right) < 3 || rightArea <= 0 {
 		right = nil
 	}
 	return left, right, nil
@@ -636,7 +636,7 @@ func (tc *triCutter) splitByChains(piece []int, chains []chainPath) ([][]int, er
 		if err != nil {
 			return nil, err
 		}
-		areaA, err := polyArea2(tc.work, ptsA)
+		areaA, err := polyArea2Sign(tc.work, ptsA)
 		if err != nil {
 			return nil, err
 		}
@@ -644,11 +644,11 @@ func (tc *triCutter) splitByChains(piece []int, chains []chainPath) ([][]int, er
 		if err != nil {
 			return nil, err
 		}
-		areaB, err := polyArea2(tc.work, ptsB)
+		areaB, err := polyArea2Sign(tc.work, ptsB)
 		if err != nil {
 			return nil, err
 		}
-		if areaA.Sign() <= 0 || areaB.Sign() <= 0 {
+		if areaA <= 0 || areaB <= 0 {
 			return nil, fmt.Errorf(`%w: a chain split produced a non-positive region`, ErrBooleanFailed)
 		}
 		wa := work{poly: polyA}
