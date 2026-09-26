@@ -728,6 +728,8 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 		scratchDistance := s.distanceSquaredScratch(s.points[0], s.points[1], scratch)
 		require.Zero(t, d.num.Cmp(scratchDistance.num), "reused numerator matches the original")
 		q := ratSquaredDistance(span[0], span[1])
+		require.Equal(t, math.Float64bits(spanSqrtSeed(d)), math.Float64bits(spanSqrtSeedScratch(scratchDistance, scratch)),
+			"scratch seed matches the original at every finite scale")
 		require.Equal(t, ratSqrtDown(q), spanSqrtDown(d), "random distance lower bound")
 		require.Equal(t, ratSqrtUp(q), spanSqrtUp(d), "random distance upper bound")
 		require.Equal(t, spanSqrtDown(d), spanSqrtDownScratch(scratchDistance, scratch), "scratch lower bound")
@@ -752,6 +754,8 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 		require.Equal(t, ratSqrtDown(q), spanSqrtDown(d), "large common factor lower bound")
 		require.Equal(t, ratSqrtUp(q), spanSqrtUp(d), "large common factor upper bound")
 		scratch := &lengthDistanceScratch{}
+		require.Equal(t, math.Float64bits(spanSqrtSeed(d)), math.Float64bits(spanSqrtSeedScratch(d, scratch)),
+			"large common factor scratch seed")
 		require.Equal(t, spanSqrtDown(d), spanSqrtDownScratch(d, scratch), "large common factor scratch lower bound")
 		require.Equal(t, spanSqrtUp(d), spanSqrtUpScratch(d, scratch), "large common factor scratch upper bound")
 		for _, f := range []float64{0, math.SmallestNonzeroFloat64, 1, math.MaxFloat64} {

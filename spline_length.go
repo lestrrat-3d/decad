@@ -436,7 +436,8 @@ func (s dyadicSpan) polygonUpperScratch(scratch *lengthDistanceScratch) float64 
 // distances. A leaf completes each square-root comparison before the next
 // distance overwrites num, so no returned interval holds one of these values.
 type lengthDistanceScratch struct {
-	du, dv, tmp, num, lhs, rhs big.Int
+	du, dv, tmp, num, lhs, rhs            big.Int
+	seedMant, seedRatio, seedNum, seedDen big.Float
 }
 
 // spanSquaredDistance is |b−a|² = num / (denSq · 2^(2 exp)). Keeping the
@@ -537,6 +538,26 @@ func spanSqrtSeed(d spanSquaredDistance) float64 {
 	return math.Ldexp(math.Sqrt(m), exp/2)
 }
 
+// spanSqrtSeedScratch uses the same precision and rounding as spanSqrtSeed.
+// Each integer input starts with zero precision so SetInt gives it its full
+// bit length, as a newly allocated big.Float would. The quotient and mantissa
+// use 64 bits, while their storage is reused across this bracket's leaf legs.
+func spanSqrtSeedScratch(d spanSquaredDistance, scratch *lengthDistanceScratch) float64 {
+	scratch.seedMant.SetPrec(64)
+	scratch.seedRatio.SetPrec(64)
+	ratio := scratch.seedRatio.Quo(
+		scratch.seedNum.SetPrec(0).SetInt(d.num),
+		scratch.seedDen.SetPrec(0).SetInt(d.denSq),
+	)
+	exp := ratio.MantExp(&scratch.seedMant) - 2*int(d.exp)
+	if exp%2 != 0 {
+		exp--
+		scratch.seedMant.SetMantExp(&scratch.seedMant, 1)
+	}
+	m, _ := scratch.seedMant.Float64()
+	return math.Ldexp(math.Sqrt(m), exp/2)
+}
+
 func spanSqrtDown(d spanSquaredDistance) float64 {
 	if d.num.Sign() <= 0 {
 		return 0
@@ -558,7 +579,7 @@ func spanSqrtDownScratch(d spanSquaredDistance, scratch *lengthDistanceScratch) 
 	if d.num.Sign() <= 0 {
 		return 0
 	}
-	f := spanSqrtSeed(d)
+	f := spanSqrtSeedScratch(d, scratch)
 	if isNonFinite(f) {
 		f = math.MaxFloat64
 	}
@@ -592,7 +613,7 @@ func spanSqrtUpScratch(d spanSquaredDistance, scratch *lengthDistanceScratch) fl
 	if d.num.Sign() <= 0 {
 		return 0
 	}
-	f := spanSqrtSeed(d)
+	f := spanSqrtSeedScratch(d, scratch)
 	if isNonFinite(f) {
 		f = math.MaxFloat64
 	}
