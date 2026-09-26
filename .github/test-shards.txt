@@ -542,6 +542,7 @@
 0	0.00	TestRatIntervalArithmeticOwnsFreshEndpoints
 0	0.00	TestRatIntervalCachedPiCopiesRemainIndependent
 0	0.00	TestRatIntervalConstructorsCopyBorrowedEndpoints
+0	0.00	TestRatIntervalMulSignCases
 0	0.00	TestRatLenAtLeastDecidesExactly
 0	0.00	TestRatLerpEndpointReturnsAFreshRational
 0	0.00	TestRatPolyOfRejectsNonFiniteCoefficient
