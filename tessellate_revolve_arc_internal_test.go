@@ -46,6 +46,56 @@ func arcCellReference(cell revArcCell, scale, held float64, weight int) float64 
 	return total
 }
 
+// oldRevolveArcAbsIntegral retains the per-piece rational sum as an oracle for
+// the common-denominator implementation. Both must return the same rational,
+// including its endpoints before conversion to the public float bound.
+type oldRevolveArcGridData struct {
+	t       [revolveArcIntegralSteps + 1]*big.Rat
+	weights [3][revolveArcIntegralSteps]*big.Rat
+}
+
+var revolveArcGrid = func() oldRevolveArcGridData {
+	var grid oldRevolveArcGridData
+	for i := range grid.t {
+		grid.t[i] = big.NewRat(int64(i), revolveArcIntegralSteps)
+	}
+	for i := range revolveArcIntegralSteps {
+		a, b := grid.t[i], grid.t[i+1]
+		width := new(big.Rat).Sub(b, a)
+		half := new(big.Rat).Mul(
+			new(big.Rat).Sub(new(big.Rat).Mul(b, b), new(big.Rat).Mul(a, a)),
+			big.NewRat(1, 2),
+		)
+		grid.weights[revolveWeightOne][i] = width
+		grid.weights[revolveWeightT][i] = half
+		grid.weights[revolveWeightOneMinusT][i] = new(big.Rat).Sub(width, half)
+	}
+	return grid
+}()
+
+func oldRevolveArcAbsIntegral(scaledRho []ratInterval, held, slope ratInterval, extra *big.Rat, weight int) *big.Rat {
+	at := func(i int) *big.Rat {
+		f := intervalSub(scaledRho[i], intervalAdd(held, intervalScale(slope, revolveArcGrid.t[i])))
+		return intervalAbsUpper(f)
+	}
+	weights := &revolveArcGrid.weights[revolveWeightOne]
+	switch weight {
+	case revolveWeightT:
+		weights = &revolveArcGrid.weights[revolveWeightT]
+	case revolveWeightOneMinusT:
+		weights = &revolveArcGrid.weights[revolveWeightOneMinusT]
+	}
+	total := new(big.Rat)
+	prev := at(0)
+	for i := range revolveArcIntegralSteps {
+		next := at(i + 1)
+		piece := new(big.Rat).Add(ratMax(prev, next), extra)
+		total.Add(total, new(big.Rat).Mul(piece, weights[i]))
+		prev = next
+	}
+	return total
+}
+
 func TestRevolveArcCellSlackBoundsASignChangingJacobianGap(t *testing.T) {
 	t.Parallel()
 	// docs/tessellation-design.md §14's inner-torus cell: the meridian runs
@@ -91,6 +141,41 @@ func TestRevolveArcCellSlackBoundsASignChangingJacobianGap(t *testing.T) {
 	}
 	require.Less(t, math.Abs(signed), 1e-6*want, `this fixture's signed error cancels to nothing`)
 	require.Greater(t, got, 0.9*want)
+
+	for _, tc := range []struct {
+		name        string
+		start, span float64
+		held, slope ratInterval
+	}{
+		{"cancellation", th0, dth, area, pointInterval(new(big.Rat))},
+		{"wrap", 2*math.Pi - 0.2, 0.4, interval(big.NewRat(6, 1), big.NewRat(7, 1)),
+			pointInterval(new(big.Rat))},
+		{"extremum", math.Pi/2 - 0.3, 0.6, area, pointInterval(new(big.Rat))},
+		{"reversed fan", 0.4, -0.8, pointInterval(new(big.Rat)),
+			interval(big.NewRat(-2, 1), big.NewRat(3, 1))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cell := arcCellFixture(cV, radius, tc.start, tc.span)
+			_, rho, extra, ok := revolveArcScale(cell, step, 1e-3)
+			require.True(t, ok)
+			den := revolveArcIntegralDenominator(rho, tc.held, tc.slope, extra)
+			heldLo := revolveArcScaledNumerator(tc.held.lo, den, 1)
+			heldHi := revolveArcScaledNumerator(tc.held.hi, den, 1)
+			slopeLo := revolveArcScaledNumerator(tc.slope.lo, den, revolveArcIntegralSteps)
+			slopeHi := revolveArcScaledNumerator(tc.slope.hi, den, revolveArcIntegralSteps)
+			for i, node := range rho {
+				lo, hi := revolveArcNodeNumerators(node, den, heldLo, heldHi, slopeLo, slopeHi, i)
+				old := intervalSub(node, intervalAdd(tc.held, intervalScale(tc.slope, revolveArcGrid.t[i])))
+				require.Zero(t, new(big.Rat).SetFrac(lo, den).Cmp(old.lo), "node %d lower endpoint", i)
+				require.Zero(t, new(big.Rat).SetFrac(hi, den).Cmp(old.hi), "node %d upper endpoint", i)
+			}
+			for _, weight := range []int{revolveWeightOne, revolveWeightT, revolveWeightOneMinusT} {
+				got := revolveArcAbsIntegral(rho, tc.held, tc.slope, extra, weight)
+				old := oldRevolveArcAbsIntegral(rho, tc.held, tc.slope, extra, weight)
+				require.Zero(t, got.Cmp(old), "weight %d changed the exact bound", weight)
+			}
+		})
+	}
 }
 
 func TestRevolveArcCellSlackIsExactOnAFixedSignCell(t *testing.T) {

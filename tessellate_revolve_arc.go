@@ -177,29 +177,6 @@ func arcFixedMul(a, b arcFixedInterval) arcFixedInterval {
 // buys the most.
 const revolveArcIntegralSteps = 32
 
-// The subdivision points and weight integrals depend only on the fixed step
-// count. Callers use these rationals as read-only operands and allocate fresh
-// receivers for every operation, so concurrent tessellations cannot alter them.
-type revolveArcGridData struct {
-	t       [revolveArcIntegralSteps + 1]*big.Rat
-	weights [3][revolveArcIntegralSteps]*big.Rat
-}
-
-var revolveArcGrid = makeRevolveArcGrid()
-
-func makeRevolveArcGrid() revolveArcGridData {
-	var grid revolveArcGridData
-	for i := range grid.t {
-		grid.t[i] = big.NewRat(int64(i), revolveArcIntegralSteps)
-	}
-	for i := range revolveArcIntegralSteps {
-		for weight := range grid.weights {
-			grid.weights[weight][i] = revolveWeightIntegral(grid.t[i], grid.t[i+1], weight)
-		}
-	}
-	return grid
-}
-
 // revolveArcCellSlack is docs/tessellation-design.md §10.2's Ecell for one wall
 // cell of a CIRCULAR generator, by certified interval subdivision — tess §15's
 // second admissible path, and the one T3 takes because the first does not
@@ -305,45 +282,85 @@ var errRevolveArcCellSlack = fmt.Errorf(`%w: a circular revolve cell states no e
 // allowance, times the exact integral of the weight over that piece, so the
 // answer is an upper bound at any depth and nothing cancels between pieces.
 func revolveArcAbsIntegral(scaledRho []ratInterval, held, slope ratInterval, extra *big.Rat, weight int) *big.Rat {
-	at := func(i int) *big.Rat {
-		f := intervalSub(scaledRho[i], intervalAdd(held, intervalScale(slope, revolveArcGrid.t[i])))
-		return intervalAbsUpper(f)
+	// Every node uses t=i/N, and each weight integrates to an integer over
+	// 2N². Put all endpoint and allowance rationals over one denominator,
+	// then sum integer numerators. The final SetFrac is the only reduction;
+	// the resulting rational is identical to the per-piece Rat sum.
+	const n = revolveArcIntegralSteps
+	den := revolveArcIntegralDenominator(scaledRho, held, slope, extra)
+	heldLo := revolveArcScaledNumerator(held.lo, den, 1)
+	heldHi := revolveArcScaledNumerator(held.hi, den, 1)
+	slopeLo := revolveArcScaledNumerator(slope.lo, den, n)
+	slopeHi := revolveArcScaledNumerator(slope.hi, den, n)
+	extraNum := revolveArcScaledNumerator(extra, den, 1)
+	at := func(i int) *big.Int {
+		lo, hi := revolveArcNodeNumerators(scaledRho[i], den, heldLo, heldHi, slopeLo, slopeHi, i)
+		lo.Abs(lo)
+		hi.Abs(hi)
+		if lo.Cmp(hi) > 0 {
+			return lo
+		}
+		return hi
 	}
-	weights := &revolveArcGrid.weights[revolveWeightOne]
-	switch weight {
-	case revolveWeightT:
-		weights = &revolveArcGrid.weights[revolveWeightT]
-	case revolveWeightOneMinusT:
-		weights = &revolveArcGrid.weights[revolveWeightOneMinusT]
-	}
-	total := new(big.Rat)
+	total := new(big.Int)
 	prev := at(0)
-	for i := range revolveArcIntegralSteps {
+	for i := range n {
 		next := at(i + 1)
-		piece := new(big.Rat).Add(ratMax(prev, next), extra)
-		total.Add(total, new(big.Rat).Mul(piece, weights[i]))
+		maximum := prev
+		if next.Cmp(maximum) > 0 {
+			maximum = next
+		}
+		piece := new(big.Int).Add(maximum, extraNum)
+		weightNum := int64(2 * n)
+		switch weight {
+		case revolveWeightT:
+			weightNum = int64(2*i + 1)
+		case revolveWeightOneMinusT:
+			weightNum = int64(2*n - 2*i - 1)
+		}
+		total.Add(total, piece.Mul(piece, big.NewInt(weightNum)))
 		prev = next
 	}
-	return total
+	return new(big.Rat).SetFrac(total, new(big.Int).Mul(den, big.NewInt(2*n*n)))
 }
 
-// revolveWeightIntegral is the exact ∫_a^b w(t) dt of the three weights
-// absLinearIntegral integrates against, so the subdivision charges each piece
-// the measure its own half-domain gives it.
-func revolveWeightIntegral(a, b *big.Rat, weight int) *big.Rat {
-	width := new(big.Rat).Sub(b, a)
-	half := new(big.Rat).Mul(
-		new(big.Rat).Sub(new(big.Rat).Mul(b, b), new(big.Rat).Mul(a, a)),
-		big.NewRat(1, 2),
-	)
-	switch weight {
-	case revolveWeightT:
-		return half
-	case revolveWeightOneMinusT:
-		return new(big.Rat).Sub(width, half)
-	default:
-		return width
+// revolveArcIntegralDenominator is divisible by every endpoint denominator,
+// the allowance's denominator, and each slope denominator times the grid size.
+// This lets every node and piece be evaluated over the same exact unit.
+func revolveArcIntegralDenominator(rho []ratInterval, held, slope ratInterval, extra *big.Rat) *big.Int {
+	den := big.NewInt(1)
+	include := func(r *big.Rat, factor int64) {
+		d := new(big.Int).Mul(r.Denom(), big.NewInt(factor))
+		g := new(big.Int).GCD(nil, nil, den, d)
+		den.Mul(new(big.Int).Quo(den, g), d)
 	}
+	for _, node := range rho {
+		include(node.lo, 1)
+		include(node.hi, 1)
+	}
+	include(held.lo, 1)
+	include(held.hi, 1)
+	include(slope.lo, revolveArcIntegralSteps)
+	include(slope.hi, revolveArcIntegralSteps)
+	include(extra, 1)
+	return den
+}
+
+func revolveArcScaledNumerator(r *big.Rat, den *big.Int, factor int64) *big.Int {
+	d := new(big.Int).Mul(r.Denom(), big.NewInt(factor))
+	return new(big.Int).Mul(r.Num(), new(big.Int).Quo(den, d))
+}
+
+// revolveArcNodeNumerators returns the old interval subtraction's exact lower
+// and upper endpoints as integer numerators over den. Inputs remain owned by
+// the caller; the returned integers are fresh and may be mutated.
+func revolveArcNodeNumerators(rho ratInterval, den, heldLo, heldHi, slopeLo, slopeHi *big.Int, i int) (*big.Int, *big.Int) {
+	idx := big.NewInt(int64(i))
+	lo := new(big.Int).Sub(revolveArcScaledNumerator(rho.lo, den, 1), heldHi)
+	lo.Sub(lo, new(big.Int).Mul(idx, slopeHi))
+	hi := new(big.Int).Sub(revolveArcScaledNumerator(rho.hi, den, 1), heldLo)
+	hi.Sub(hi, new(big.Int).Mul(idx, slopeLo))
+	return lo, hi
 }
 
 // intervalAbsSpan is the enclosure of |x| for x in the given enclosure.
