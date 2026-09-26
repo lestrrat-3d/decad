@@ -232,6 +232,15 @@ func profileCoordinateEnvelope(profile ProfileRecord, work *freeformWork, walks 
 // consumer did before profileWalks existed.
 func resolveOrRead(seg CurveSegment, work *freeformWork, walks *profileWalks, loopIndex, segIndex int) (segmentWalk, error) {
 	if walks != nil {
+		if walks.readCharges != nil {
+			charge := walks.readCharges[loopIndex][segIndex]
+			if err := work.step(charge.spent); err != nil {
+				return segmentWalk{}, err
+			}
+			if err := work.reconstructionStep(charge.reconstructionSpent); err != nil {
+				return segmentWalk{}, err
+			}
+		}
 		return walks.at(loopIndex, segIndex), nil
 	}
 	return walkOf(seg, work)

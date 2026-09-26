@@ -277,6 +277,14 @@ type profileWalks struct {
 	// leaves it false, and charge refuses such a set rather than replaying a
 	// zero it never measured.
 	metered bool
+	// readCharges is set only by a chain build that captured each walk at
+	// its existing build position. Bounds replays that segment's measured
+	// charges at each read, preserving the old per-read work ceiling.
+	readCharges [][]walkReadCharge
+}
+
+type walkReadCharge struct {
+	spent, reconstructionSpent uint64
 }
 
 // resolveProfileWalks resolves every segment of profile's outer loop and each
