@@ -319,6 +319,13 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*face
 // component/void analysis, per-source-face topology, and measurements with
 // the composed proven bounds.
 func buildFacetedBody(ctx context.Context, d *Document, ref producerID, pp facetedPayload) (*Body, error) {
+	return buildFacetedBodyWithProof(ctx, d, ref, pp, nil, Measurement{}, nil)
+}
+
+// buildFacetedBodyWithProof reuses a proof only for the evaluator's unchanged
+// result mesh. Placement calls buildFacetedBody and proves its moved mesh anew.
+func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID, pp facetedPayload,
+	audit *facetedMeshAudit, volume Measurement, volRat *big.Rat) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -331,9 +338,11 @@ func buildFacetedBody(ctx context.Context, d *Document, ref producerID, pp facet
 		return nil, fmt.Errorf(`%w: the held boundary has no usable diameter`, ErrBooleanFailed)
 	}
 	pp.diameter = diameter
-	audit, err := auditFacetedMesh(ctx, verts, tris)
-	if err != nil {
-		return nil, err
+	if audit == nil {
+		audit, err = auditFacetedMesh(ctx, verts, tris)
+		if err != nil {
+			return nil, err
+		}
 	}
 	budget := newWorkBudget(ctx)
 	if err := budget.err(); err != nil {
@@ -527,9 +536,11 @@ func buildFacetedBody(ctx context.Context, d *Document, ref producerID, pp facet
 	// verification design, composed from the operands' chord errors). The
 	// volume helper is also the read-only interference evaluator's one source
 	// of volume truth.
-	volume, volRat, err := meshVolumeMeasurement(ctx, verts, tris, pp.volSymDiff)
-	if err != nil {
-		return nil, err
+	if volRat == nil {
+		volume, volRat, err = meshVolumeMeasurement(ctx, xverts, tris, pp.volSymDiff)
+		if err != nil {
+			return nil, err
+		}
 	}
 	body.volume = volume
 	var mx, my, mz = new(big.Rat), new(big.Rat), new(big.Rat)
@@ -657,18 +668,9 @@ func facetFaceIndices(ctx context.Context, faces, facetFace []*Face) ([]int, err
 
 // meshVolumeMeasurement integrates one stitched, oriented, closed mesh in
 // exact rational arithmetic and composes the shared symmetric-difference
-// allowance with the final rational-to-float rounding. Public booleans and
-// read-only interference measurement both call this helper.
-func meshVolumeMeasurement(ctx context.Context, verts []r3.Vec, tris [][3]int, volSymDiff float64) (Measurement, *big.Rat, error) {
-	xverts := make([]xpt, len(verts))
-	for i, v := range verts {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return Measurement{}, nil, err
-			}
-		}
-		xverts[i] = xptOf(v)
-	}
+// allowance with the final rational-to-float rounding. It reuses the audit's
+// exact vertices while retaining the original facet-order sum.
+func meshVolumeMeasurement(ctx context.Context, xverts []xpt, tris [][3]int, volSymDiff float64) (Measurement, *big.Rat, error) {
 	total := new(big.Rat)
 	for i, t := range tris {
 		if i%256 == 0 {

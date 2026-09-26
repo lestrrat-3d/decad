@@ -171,8 +171,10 @@ func asExpectedBoolean(err error) (*booleanExpectedError, bool) {
 // interference verification. It contains no document reference or public model
 // state and cannot make the transient result live.
 type booleanEvaluation struct {
-	payload facetedPayload
-	volume  Measurement
+	payload   facetedPayload
+	volume    Measurement
+	volumeRat *big.Rat
+	audit     *facetedMeshAudit
 }
 
 // performBoolean gates the operands, runs the read-only geometry evaluator,
@@ -240,7 +242,7 @@ func performBoolean(ctx context.Context, op operationKind, a, b *Body) (*Body, e
 	}
 
 	ref := d.nextProducerID()
-	body, err := buildFacetedBody(ctx, d, ref, eval.payload)
+	body, err := buildFacetedBodyWithProof(ctx, d, ref, eval.payload, eval.audit, eval.volume, eval.volumeRat)
 	if err != nil {
 		return nil, asBooleanError(op, err)
 	}
@@ -524,17 +526,18 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
-	if _, err := auditFacetedMesh(ctx, payload.verts, payload.tris); err != nil {
+	audit, err := auditFacetedMesh(ctx, payload.verts, payload.tris)
+	if err != nil {
 		return booleanEvaluation{}, err
 	}
-	volume, _, err := meshVolumeMeasurement(ctx, payload.verts, payload.tris, payload.volSymDiff)
+	volume, volumeRat, err := meshVolumeMeasurement(ctx, audit.xverts, payload.tris, payload.volSymDiff)
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
-	return booleanEvaluation{payload: payload, volume: volume}, nil
+	return booleanEvaluation{payload: payload, volume: volume, volumeRat: volumeRat, audit: audit}, nil
 }
 
 // sourceIDs maps a tessellation's per-facet source faces to the global
