@@ -1417,6 +1417,10 @@ func TestCellBilinearAreaMatchesUncachedBits(t *testing.T) {
 		vLo, vHi, wLo, wHi r3.Vec
 	}{
 		{"planar", r3.NewVec(0, 0, 0), r3.NewVec(2, 0, 0), r3.NewVec(0, 3, 0), r3.NewVec(2, 3, 0)},
+		{"A zero taper", r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 1), r3.NewVec(0, 1, 1), r3.NewVec(2, 1, 3)},
+		{"B zero taper", r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(1, 2, 0)},
+		{"one ulp from A zero", r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 1), r3.NewVec(0, 1, 1), r3.NewVec(2, 1, math.Nextafter(3, 4))},
+		{"one ulp from B zero", r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(1, 2, math.Nextafter(1, 2)-1)},
 		{"twisted", r3.NewVec(1, -2, .5), r3.NewVec(4, 0, 1), r3.NewVec(-.5, 2, 6), r3.NewVec(3, 4, 7.5)},
 		{"degenerate", r3.NewVec(1, 1, 1), r3.NewVec(1, 1, 1), r3.NewVec(1, 1, 1), r3.NewVec(1, 1, 1)},
 		{"subnormal", r3.NewVec(0, 0, 0), r3.NewVec(small, 0, 0), r3.NewVec(0, small, 0), r3.NewVec(small, small, small)},
@@ -1427,6 +1431,25 @@ func TestCellBilinearAreaMatchesUncachedBits(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			switch tc.name {
+			case "A zero taper", "B zero taper", "one ulp from A zero", "one ulp from B zero":
+				da := heldDelta(tc.vHi, tc.vLo)
+				g := heldDelta(tc.wLo, tc.vLo)
+				twist := dvSub(heldDelta(tc.vLo, tc.vHi), heldDelta(tc.wLo, tc.wHi))
+				aZero := dvIsZero(dvCross(da, twist))
+				bZero := dvIsZero(dvCross(twist, g))
+				switch tc.name {
+				case "A zero taper":
+					require.True(t, aZero)
+					require.False(t, bZero)
+				case "B zero taper":
+					require.False(t, aZero)
+					require.True(t, bZero)
+				default:
+					require.False(t, aZero)
+					require.False(t, bZero)
+				}
+			}
 			wantValue, wantBound := cellBilinearAreaUncached(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
 			gotValue, gotBound := cellBilinearArea(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
 			require.Equal(t, math.Float64bits(wantValue), math.Float64bits(gotValue))
