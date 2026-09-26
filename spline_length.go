@@ -152,6 +152,9 @@ func spanLengthBracket(span bezierSpan, depth int) (float64, float64) {
 	// how freeformWork.step spells "already accounted for". The error a metered
 	// conversion could return is unreachable here for that reason.
 	s, _ := dyadicSpanOf(nil, span)
+	// This square is part of the bracket's already-paid subtree, not the
+	// conversion shared with other dyadic-span consumers.
+	s.denSq = new(big.Int).Mul(s.den, s.den)
 	return s.lengthBracket(depth)
 }
 
@@ -183,6 +186,9 @@ type dyadicPoint struct {
 type dyadicSpan struct {
 	points []dyadicPoint
 	den    *big.Int
+	// denSq is populated by the arc-length path and shared by its child spans.
+	// Other dyadic-span consumers do not need to pay for this cache.
+	denSq *big.Int
 }
 
 // valueWidth is one split value's own operand width in bits: the widest of its
@@ -285,7 +291,8 @@ func (s dyadicSpan) split(w *freeformWork) (dyadicSpan, dyadicSpan, error) {
 		left = append(left, work[0])
 		right[round-1] = work[round-1]
 	}
-	return dyadicSpan{points: left, den: s.den}, dyadicSpan{points: right, den: s.den}, nil
+	return dyadicSpan{points: left, den: s.den, denSq: s.denSq},
+		dyadicSpan{points: right, den: s.den, denSq: s.denSq}, nil
 }
 
 // dyadicMidpoint is (a+b)/2 exactly: the two numerators are raised to their
@@ -322,30 +329,115 @@ func alignedDifference(a *big.Int, aShift uint, b *big.Int, bShift uint) *big.In
 // ends: the largest float whose square does not exceed the exact squared
 // distance.
 func (s dyadicSpan) chordLower() float64 {
-	return ratSqrtDown(s.squaredDistance(s.points[0], s.points[len(s.points)-1]))
+	return spanSqrtDown(s.distanceSquared(s.points[0], s.points[len(s.points)-1]))
 }
 
 // polygonUpper is a proven upper bound on a control polygon's length.
 func (s dyadicSpan) polygonUpper() float64 {
 	total := 0.0
 	for i := 0; i+1 < len(s.points); i++ {
-		total = upRound(total + ratSqrtUp(s.squaredDistance(s.points[i], s.points[i+1])))
+		total = upRound(total + spanSqrtUp(s.distanceSquared(s.points[i], s.points[i+1])))
 	}
 	return total
 }
 
-// squaredDistance is the exact |b−a|² of two split values, handed to the
-// outward-rounded square roots as the rational they already read. This is the
-// one boundary where the split form becomes a big.Rat: the leaves are where the
-// bracket is decided, and everything above them stays free of normalisation.
-func (s dyadicSpan) squaredDistance(a, b dyadicPoint) *big.Rat {
+// spanSquaredDistance is |b−a|² = num / (denSq · 2^(2 exp)). Keeping the
+// denominator in this form lets the leaf square roots compare integers without
+// reducing a new rational for every control-polygon leg.
+type spanSquaredDistance struct {
+	num, denSq *big.Int
+	exp        uint
+}
+
+func (s dyadicSpan) distanceSquared(a, b dyadicPoint) spanSquaredDistance {
 	exp := max(a.exp, b.exp)
 	du := alignedDifference(b.u, exp-b.exp, a.u, exp-a.exp)
 	dv := alignedDifference(b.v, exp-b.exp, a.v, exp-a.exp)
 	num := du.Mul(du, du)
 	num.Add(num, dv.Mul(dv, dv))
-	den := new(big.Int).Mul(s.den, s.den)
-	return new(big.Rat).SetFrac(num, den.Lsh(den, 2*exp))
+	denSq := s.denSq
+	if denSq == nil {
+		denSq = new(big.Int).Mul(s.den, s.den)
+	}
+	return spanSquaredDistance{num: num, denSq: denSq, exp: exp}
+}
+
+// squaredDistance is the rational reference for callers that need the exact
+// squared distance rather than a directed float square root.
+func (s dyadicSpan) squaredDistance(a, b dyadicPoint) *big.Rat {
+	d := s.distanceSquared(a, b)
+	return new(big.Rat).SetFrac(d.num, new(big.Int).Lsh(d.denSq, 2*d.exp))
+}
+
+// spanSquareCmp compares f² to the exact squared distance without a rational
+// reduction. A finite float is an integer mantissa times a power of two, so
+// multiplying by the shared denSq and shifting preserves the exact ordering.
+func spanSquareCmp(f float64, d spanSquaredDistance) int {
+	square, ok := dyOf(f)
+	if !ok {
+		return 1
+	}
+	if square.isZero() {
+		return -d.num.Sign()
+	}
+	lhs := new(big.Int).Mul(square.mant, square.mant)
+	lhs.Mul(lhs, d.denSq)
+	shift := 2 * (square.exp + int(d.exp))
+	if shift >= 0 {
+		return lhs.Lsh(lhs, uint(shift)).Cmp(d.num)
+	}
+	return lhs.Cmp(new(big.Int).Lsh(d.num, uint(-shift)))
+}
+
+// spanSqrtSeed follows ratSqrtSeed's 64-bit big.Float quotient, while keeping
+// the power-of-two part of the denominator as an exponent. SetRat uses the same
+// full-precision integer operands and Quo for a noninteger rational.
+func spanSqrtSeed(d spanSquaredDistance) float64 {
+	mant := new(big.Float).SetPrec(64)
+	ratio := new(big.Float).SetPrec(64).Quo(
+		new(big.Float).SetInt(d.num), new(big.Float).SetInt(d.denSq),
+	)
+	exp := ratio.MantExp(mant) - 2*int(d.exp)
+	if exp%2 != 0 {
+		exp--
+		mant.SetMantExp(mant, 1)
+	}
+	m, _ := mant.Float64()
+	return math.Ldexp(math.Sqrt(m), exp/2)
+}
+
+func spanSqrtDown(d spanSquaredDistance) float64 {
+	if d.num.Sign() <= 0 {
+		return 0
+	}
+	f := spanSqrtSeed(d)
+	if isNonFinite(f) {
+		f = math.MaxFloat64
+	}
+	for range sqrtAdjustLimit {
+		if spanSquareCmp(f, d) <= 0 {
+			return f
+		}
+		f = math.Nextafter(f, 0)
+	}
+	return 0
+}
+
+func spanSqrtUp(d spanSquaredDistance) float64 {
+	if d.num.Sign() <= 0 {
+		return 0
+	}
+	f := spanSqrtSeed(d)
+	if isNonFinite(f) {
+		f = math.MaxFloat64
+	}
+	for range sqrtAdjustLimit {
+		if spanSquareCmp(f, d) >= 0 {
+			return f
+		}
+		f = math.Nextafter(f, math.Inf(1))
+	}
+	return math.Inf(1)
 }
 
 // ratSqrtSeed approximates sqrt(q) for a positive rational at EVERY scale a

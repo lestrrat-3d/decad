@@ -3,6 +3,7 @@ package decad
 import (
 	"math"
 	"math/big"
+	"math/rand/v2"
 	"runtime"
 	"strconv"
 	"testing"
@@ -60,6 +61,28 @@ func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
 	// TestFreeformArcLengthRelativeWidthVariesWithTheSpan.
 	require.Less(t, previous, 1e-5, "this ordinary spline closes to well under 10 nm at full depth")
 	require.Less(t, previous/reference, 2e-7, "this ordinary spline's relative bracket width")
+
+	// Compare the complete fixed-depth bracket, including its outward sums,
+	// with the former rational leaf calculation.
+	var rationalBracket func(bezierSpan, int) (float64, float64)
+	rationalBracket = func(span bezierSpan, depth int) (float64, float64) {
+		if depth == 0 {
+			lo := ratSqrtDown(ratSquaredDistance(span[0], span[len(span)-1]))
+			hi := 0.0
+			for i := 0; i+1 < len(span); i++ {
+				hi = upRound(hi + ratSqrtUp(ratSquaredDistance(span[i], span[i+1])))
+			}
+			return lo, hi
+		}
+		left, right := referenceSplit(span)
+		leftLo, leftHi := rationalBracket(left, depth-1)
+		rightLo, rightHi := rationalBracket(right, depth-1)
+		return downRound(leftLo + rightLo), upRound(leftHi + rightHi)
+	}
+	wantLo, wantHi := rationalBracket(spans[0], freeformLengthDepth)
+	gotLo, gotHi := spanLengthBracket(spans[0], freeformLengthDepth)
+	require.Equal(t, wantLo, gotLo, "the complete lower bracket matches rational leaves")
+	require.Equal(t, wantHi, gotHi, "the complete upper bracket matches rational leaves")
 }
 
 // The reported bound is the enclosure MEASURED at the fixed depth, and a fixed
@@ -594,6 +617,49 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 			}
 		})
 	}
+
+	// Include values whose squared distance underflows or overflows float64.
+	// The old rational root is an independent exact comparison for each result.
+	rng := rand.New(rand.NewPCG(0x6c656e677468, 0x627261636b6574))
+	for range 200 {
+		coord := func() float64 {
+			exp := rng.IntN(2098) - 1074
+			return math.Ldexp((rng.Float64()*2)-1, exp)
+		}
+		span := bezierSpan{
+			{u: floatRat(coord()), v: floatRat(coord())},
+			{u: floatRat(coord()), v: floatRat(coord())},
+		}
+		s, err := dyadicSpanOf(nil, span)
+		require.NoError(t, err)
+		d := s.distanceSquared(s.points[0], s.points[1])
+		q := ratSquaredDistance(span[0], span[1])
+		require.Equal(t, ratSqrtDown(q), spanSqrtDown(d), "random distance lower bound")
+		require.Equal(t, ratSqrtUp(q), spanSqrtUp(d), "random distance upper bound")
+	}
+
+	// The raw representation can have large factors shared by numerator and
+	// denominator. Its seed and comparison must agree with the reduced rational
+	// even when reduction would remove thousands of bits.
+	factor := new(big.Int).Lsh(new(big.Int).Exp(big.NewInt(3), big.NewInt(128), nil), 4096)
+	for _, q := range []*big.Rat{
+		big.NewRat(1, 3),
+		new(big.Rat).Mul(floatRat(math.SmallestNonzeroFloat64), floatRat(math.SmallestNonzeroFloat64)),
+		new(big.Rat).Mul(floatRat(math.MaxFloat64), floatRat(math.MaxFloat64)),
+		new(big.Rat).Add(floatRat(1), floatRat(math.SmallestNonzeroFloat64)),
+	} {
+		d := spanSquaredDistance{
+			num:   new(big.Int).Lsh(new(big.Int).Mul(q.Num(), factor), 34),
+			denSq: new(big.Int).Mul(q.Denom(), factor),
+			exp:   17,
+		}
+		require.Equal(t, ratSqrtDown(q), spanSqrtDown(d), "large common factor lower bound")
+		require.Equal(t, ratSqrtUp(q), spanSqrtUp(d), "large common factor upper bound")
+		for _, f := range []float64{0, math.SmallestNonzeroFloat64, 1, math.MaxFloat64} {
+			sq := new(big.Rat).Mul(floatRat(f), floatRat(f))
+			require.Equal(t, sq.Cmp(q), spanSquareCmp(f, d), "large common factor square comparison")
+		}
+	}
 }
 
 // requireSubdivisionStaysDyadic walks the whole subdivision tree to the given
@@ -629,10 +695,11 @@ func requireSameSpan(t *testing.T, dyadic dyadicSpan, reference bezierSpan, msgA
 	// The leaf reading is where the split form hands the bracket back a
 	// rational, so it is checked against the plain one every leg of the way.
 	for i := 0; i+1 < len(reference); i++ {
-		require.Zero(t,
-			dyadic.squaredDistance(dyadic.points[i], dyadic.points[i+1]).
-				Cmp(ratSquaredDistance(reference[i], reference[i+1])),
-			msgAndArgs...)
+		d := dyadic.distanceSquared(dyadic.points[i], dyadic.points[i+1])
+		q := ratSquaredDistance(reference[i], reference[i+1])
+		require.Zero(t, dyadic.squaredDistance(dyadic.points[i], dyadic.points[i+1]).Cmp(q), msgAndArgs...)
+		require.Equal(t, ratSqrtDown(q), spanSqrtDown(d), msgAndArgs...)
+		require.Equal(t, ratSqrtUp(q), spanSqrtUp(d), msgAndArgs...)
 	}
 }
 
