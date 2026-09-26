@@ -3,10 +3,11 @@ package decad_test
 // Benchmarks for Body.Tessellate across every payload class it builds a mesh
 // for: analytic prisms (box, fillet, free-form wall), a shell cup, a cap-loop
 // chamfer, a loft, a mesh-boolean (faceted) result, and circular-generator
-// revolves (line, sphere, torus, groove) both full and partial. Each fixture
-// builds its body once outside the timed loop and reports triangle count and
-// refusal rate alongside the timing, so a payload class that stages a refusal
-// still yields a comparable number.
+// revolves (line, sphere, torus, groove) both full and partial. The regular
+// fixtures build their bodies outside the timed loop and report triangle count
+// and refusal rate, so a staged payload still yields a comparable number. The
+// cold free-form fixture rebuilds the body on every iteration to measure its
+// spline chording work.
 
 import (
 	"context"
@@ -126,6 +127,26 @@ func BenchmarkTessPrismFillet(b *testing.B) {
 }
 
 func BenchmarkTessPrismFreeform(b *testing.B) { runTess(b, benchFreeformPrism()) }
+
+// BenchmarkTessPrismFreeformCold rebuilds the free-form body so each iteration
+// measures the spline chording work performed during construction.
+func BenchmarkTessPrismFreeformCold(b *testing.B) {
+	b.ReportAllocs()
+	triangles := 0
+	for b.Loop() {
+		body := benchFreeformPrism()
+		mesh, err := body.Tessellate(b.Context(), units.Millimeters(benchTol))
+		if err != nil {
+			b.Fatal(err)
+		}
+		count := len(mesh.Triangles())
+		if count == 0 || (triangles != 0 && count != triangles) {
+			b.Fatalf("unstable triangle count: got %d, want %d", count, triangles)
+		}
+		triangles = count
+	}
+	b.ReportMetric(float64(triangles), "tris")
+}
 
 func BenchmarkTessCup(b *testing.B) {
 	body := must(benchBox().Shell(b.Context(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(4)))
