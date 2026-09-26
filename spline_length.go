@@ -162,7 +162,7 @@ func spanLengthBracket(span bezierSpan, depth int) (float64, float64) {
 	for i := range frames {
 		frames[i].init(len(s.points))
 	}
-	return s.lengthBracketScratch(frames)
+	return s.lengthBracketScratch(frames, &lengthDistanceScratch{})
 }
 
 // dyadicPoint is one split value: the plane-local coordinate
@@ -290,16 +290,18 @@ func (f *lengthSplitScratch) init(n int) {
 	}
 }
 
-func (s dyadicSpan) lengthBracketScratch(frames []lengthSplitScratch) (float64, float64) {
+func (s dyadicSpan) lengthBracketScratch(
+	frames []lengthSplitScratch, distance *lengthDistanceScratch,
+) (float64, float64) {
 	if len(frames) == 0 {
-		return s.chordLower(), s.polygonUpper()
+		return s.chordLowerScratch(distance), s.polygonUpperScratch(distance)
 	}
 	f := &frames[len(frames)-1]
 	f.split(s.points)
 	left := dyadicSpan{points: f.left, den: s.den, denSq: s.denSq}
 	right := dyadicSpan{points: f.right, den: s.den, denSq: s.denSq}
-	leftLo, leftHi := left.lengthBracketScratch(frames[:len(frames)-1])
-	rightLo, rightHi := right.lengthBracketScratch(frames[:len(frames)-1])
+	leftLo, leftHi := left.lengthBracketScratch(frames[:len(frames)-1], distance)
+	rightLo, rightHi := right.lengthBracketScratch(frames[:len(frames)-1], distance)
 	return downRound(leftLo + rightLo), upRound(leftHi + rightHi)
 }
 
@@ -409,6 +411,10 @@ func (s dyadicSpan) chordLower() float64 {
 	return spanSqrtDown(s.distanceSquared(s.points[0], s.points[len(s.points)-1]))
 }
 
+func (s dyadicSpan) chordLowerScratch(scratch *lengthDistanceScratch) float64 {
+	return spanSqrtDownScratch(s.distanceSquaredScratch(s.points[0], s.points[len(s.points)-1], scratch), scratch)
+}
+
 // polygonUpper is a proven upper bound on a control polygon's length.
 func (s dyadicSpan) polygonUpper() float64 {
 	total := 0.0
@@ -416,6 +422,21 @@ func (s dyadicSpan) polygonUpper() float64 {
 		total = upRound(total + spanSqrtUp(s.distanceSquared(s.points[i], s.points[i+1])))
 	}
 	return total
+}
+
+func (s dyadicSpan) polygonUpperScratch(scratch *lengthDistanceScratch) float64 {
+	total := 0.0
+	for i := 0; i+1 < len(s.points); i++ {
+		total = upRound(total + spanSqrtUpScratch(s.distanceSquaredScratch(s.points[i], s.points[i+1], scratch), scratch))
+	}
+	return total
+}
+
+// lengthDistanceScratch reuses exact integer operands across successive leaf
+// distances. A leaf completes each square-root comparison before the next
+// distance overwrites num, so no returned interval holds one of these values.
+type lengthDistanceScratch struct {
+	du, dv, tmp, num, lhs, rhs big.Int
 }
 
 // spanSquaredDistance is |b−a|² = num / (denSq · 2^(2 exp)). Keeping the
@@ -437,6 +458,22 @@ func (s dyadicSpan) distanceSquared(a, b dyadicPoint) spanSquaredDistance {
 		denSq = new(big.Int).Mul(s.den, s.den)
 	}
 	return spanSquaredDistance{num: num, denSq: denSq, exp: exp}
+}
+
+func (s dyadicSpan) distanceSquaredScratch(
+	a, b dyadicPoint, scratch *lengthDistanceScratch,
+) spanSquaredDistance {
+	exp := max(a.exp, b.exp)
+	scratch.du.Lsh(b.u, exp-b.exp)
+	scratch.tmp.Lsh(a.u, exp-a.exp)
+	scratch.du.Sub(&scratch.du, &scratch.tmp)
+	scratch.dv.Lsh(b.v, exp-b.exp)
+	scratch.tmp.Lsh(a.v, exp-a.exp)
+	scratch.dv.Sub(&scratch.dv, &scratch.tmp)
+	scratch.num.Mul(&scratch.du, &scratch.du)
+	scratch.tmp.Mul(&scratch.dv, &scratch.dv)
+	scratch.num.Add(&scratch.num, &scratch.tmp)
+	return spanSquaredDistance{num: &scratch.num, denSq: s.denSq, exp: exp}
 }
 
 // squaredDistance is the rational reference for callers that need the exact
@@ -464,6 +501,23 @@ func spanSquareCmp(f float64, d spanSquaredDistance) int {
 		return lhs.Lsh(lhs, uint(shift)).Cmp(d.num)
 	}
 	return lhs.Cmp(new(big.Int).Lsh(d.num, uint(-shift)))
+}
+
+func spanSquareCmpScratch(f float64, d spanSquaredDistance, scratch *lengthDistanceScratch) int {
+	square, ok := dyOf(f)
+	if !ok {
+		return 1
+	}
+	if square.isZero() {
+		return -d.num.Sign()
+	}
+	scratch.lhs.Mul(square.mant, square.mant)
+	scratch.lhs.Mul(&scratch.lhs, d.denSq)
+	shift := 2 * (square.exp + int(d.exp))
+	if shift >= 0 {
+		return scratch.lhs.Lsh(&scratch.lhs, uint(shift)).Cmp(d.num)
+	}
+	return scratch.lhs.Cmp(scratch.rhs.Lsh(d.num, uint(-shift)))
 }
 
 // spanSqrtSeed follows ratSqrtSeed's 64-bit big.Float quotient, while keeping
@@ -500,6 +554,23 @@ func spanSqrtDown(d spanSquaredDistance) float64 {
 	return 0
 }
 
+func spanSqrtDownScratch(d spanSquaredDistance, scratch *lengthDistanceScratch) float64 {
+	if d.num.Sign() <= 0 {
+		return 0
+	}
+	f := spanSqrtSeed(d)
+	if isNonFinite(f) {
+		f = math.MaxFloat64
+	}
+	for range sqrtAdjustLimit {
+		if spanSquareCmpScratch(f, d, scratch) <= 0 {
+			return f
+		}
+		f = math.Nextafter(f, 0)
+	}
+	return 0
+}
+
 func spanSqrtUp(d spanSquaredDistance) float64 {
 	if d.num.Sign() <= 0 {
 		return 0
@@ -510,6 +581,23 @@ func spanSqrtUp(d spanSquaredDistance) float64 {
 	}
 	for range sqrtAdjustLimit {
 		if spanSquareCmp(f, d) >= 0 {
+			return f
+		}
+		f = math.Nextafter(f, math.Inf(1))
+	}
+	return math.Inf(1)
+}
+
+func spanSqrtUpScratch(d spanSquaredDistance, scratch *lengthDistanceScratch) float64 {
+	if d.num.Sign() <= 0 {
+		return 0
+	}
+	f := spanSqrtSeed(d)
+	if isNonFinite(f) {
+		f = math.MaxFloat64
+	}
+	for range sqrtAdjustLimit {
+		if spanSquareCmpScratch(f, d, scratch) >= 0 {
 			return f
 		}
 		f = math.Nextafter(f, math.Inf(1))

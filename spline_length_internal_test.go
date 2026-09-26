@@ -119,6 +119,42 @@ func TestFreeformLengthScratchMatchesOriginalSplit(t *testing.T) {
 		require.NoError(t, err)
 		cases[scaled.name] = points
 	}
+	for _, tc := range []struct {
+		name   string
+		points []Point2
+	}{
+		{
+			name: "subnormal",
+			points: []Point2{
+				{U: 0, V: 0},
+				{U: math.SmallestNonzeroFloat64, V: 0},
+				{U: 2 * math.SmallestNonzeroFloat64, V: math.SmallestNonzeroFloat64},
+				{U: 3 * math.SmallestNonzeroFloat64, V: 0},
+			},
+		},
+		{
+			name: "near-maximum",
+			points: []Point2{
+				{U: 0, V: 0},
+				{U: math.MaxFloat64 / 4, V: math.MaxFloat64 / 4},
+				{U: math.MaxFloat64 / 2, V: math.MaxFloat64 / 4},
+				{U: 3 * (math.MaxFloat64 / 4), V: 0},
+			},
+		},
+		{
+			name: "near-duplicate",
+			points: []Point2{
+				{U: 0, V: 0},
+				{U: 1, V: 1},
+				{U: math.Nextafter(1, 2), V: 1},
+				{U: 2, V: 0},
+			},
+		},
+	} {
+		points, err := ratPointsOf(tc.points)
+		require.NoError(t, err)
+		cases[tc.name] = points
+	}
 	for name, span := range cases {
 		t.Run(name, func(t *testing.T) {
 			for _, depth := range []int{0, 1, 4, freeformLengthDepth} {
@@ -686,10 +722,16 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 		}
 		s, err := dyadicSpanOf(nil, span)
 		require.NoError(t, err)
+		s.denSq = new(big.Int).Mul(s.den, s.den)
 		d := s.distanceSquared(s.points[0], s.points[1])
+		scratch := &lengthDistanceScratch{}
+		scratchDistance := s.distanceSquaredScratch(s.points[0], s.points[1], scratch)
+		require.Zero(t, d.num.Cmp(scratchDistance.num), "reused numerator matches the original")
 		q := ratSquaredDistance(span[0], span[1])
 		require.Equal(t, ratSqrtDown(q), spanSqrtDown(d), "random distance lower bound")
 		require.Equal(t, ratSqrtUp(q), spanSqrtUp(d), "random distance upper bound")
+		require.Equal(t, spanSqrtDown(d), spanSqrtDownScratch(scratchDistance, scratch), "scratch lower bound")
+		require.Equal(t, spanSqrtUp(d), spanSqrtUpScratch(scratchDistance, scratch), "scratch upper bound")
 	}
 
 	// The raw representation can have large factors shared by numerator and
@@ -709,9 +751,14 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 		}
 		require.Equal(t, ratSqrtDown(q), spanSqrtDown(d), "large common factor lower bound")
 		require.Equal(t, ratSqrtUp(q), spanSqrtUp(d), "large common factor upper bound")
+		scratch := &lengthDistanceScratch{}
+		require.Equal(t, spanSqrtDown(d), spanSqrtDownScratch(d, scratch), "large common factor scratch lower bound")
+		require.Equal(t, spanSqrtUp(d), spanSqrtUpScratch(d, scratch), "large common factor scratch upper bound")
 		for _, f := range []float64{0, math.SmallestNonzeroFloat64, 1, math.MaxFloat64} {
 			sq := new(big.Rat).Mul(floatRat(f), floatRat(f))
 			require.Equal(t, sq.Cmp(q), spanSquareCmp(f, d), "large common factor square comparison")
+			require.Equal(t, spanSquareCmp(f, d), spanSquareCmpScratch(f, d, scratch),
+				"large common factor scratch square comparison")
 		}
 	}
 }
