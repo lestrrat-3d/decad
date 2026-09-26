@@ -63,3 +63,31 @@ func BenchmarkChamferBoxAllConvexEdges(b *testing.B) {
 		require.InDelta(b, wantVolume, volume.Value.Base(), 1e-8)
 	}
 }
+
+// BenchmarkChamferBoxCapLoop measures the complete cap-band build on a fresh
+// receiver. Chamfer retires the receiver after each successful iteration.
+func BenchmarkChamferBoxCapLoop(b *testing.B) {
+	for b.Loop() {
+		b.StopTimer()
+		doc := decad.New()
+		box := benchBoxBody(b, doc, 0, 0, 100, 60, 20)
+		selector := decad.Edges(decad.CreatedBy(decad.CapEnd(box)))
+		edges, err := selector.SelectEdges(box)
+		require.NoError(b, err)
+		require.Len(b, edges, 4)
+		b.StartTimer()
+		body, err := box.Chamfer(b.Context(), selector, units.Millimeters(3))
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.StopTimer()
+		require.True(b, body.IsSolid())
+		require.Equal(b, []*decad.Body{body}, doc.Bodies())
+		volume, err := body.Volume()
+		require.NoError(b, err)
+		require.Positive(b, volume.Value.Base())
+		require.Less(b, volume.Value.Base(), 120000.0)
+		b.StartTimer()
+	}
+	b.StopTimer()
+}

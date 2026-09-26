@@ -119,7 +119,64 @@ func runTess(b *testing.B, body *decad.Body) {
 	b.ReportMetric(tris, "tris")
 }
 
+// runColdTess builds a fresh body for each iteration, outside the timed
+// section, then measures the body's first tessellation at the requested key.
+func runColdTess(b *testing.B, build func() *decad.Body) {
+	b.Helper()
+	b.ReportAllocs()
+	var tris float64
+	for b.Loop() {
+		b.StopTimer()
+		body := build()
+		b.StartTimer()
+		mesh, err := body.Tessellate(b.Context(), units.Millimeters(benchTol))
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.StopTimer()
+		vertices := mesh.Vertices()
+		triangles := mesh.Triangles()
+		count := len(triangles)
+		if count == 0 || (tris != 0 && float64(count) != tris) {
+			b.Fatalf("unstable triangle count: got %d, want %g", count, tris)
+		}
+		if len(vertices) < 4 || len(mesh.SourceFaces()) != count {
+			b.Fatalf("incomplete mesh: %d vertices, %d triangles, %d sources",
+				len(vertices), count, len(mesh.SourceFaces()))
+		}
+		min, max := vertices[0], vertices[0]
+		for _, vertex := range vertices {
+			if math.IsNaN(vertex.X) || math.IsNaN(vertex.Y) || math.IsNaN(vertex.Z) ||
+				math.IsInf(vertex.X, 0) || math.IsInf(vertex.Y, 0) || math.IsInf(vertex.Z, 0) {
+				b.Fatalf("non-finite mesh vertex: %v", vertex)
+			}
+			min.X, min.Y, min.Z = math.Min(min.X, vertex.X), math.Min(min.Y, vertex.Y), math.Min(min.Z, vertex.Z)
+			max.X, max.Y, max.Z = math.Max(max.X, vertex.X), math.Max(max.Y, vertex.Y), math.Max(max.Z, vertex.Z)
+		}
+		if max.X <= min.X || max.Y <= min.Y || max.Z <= min.Z {
+			b.Fatalf("mesh has no three-dimensional extent: min %v, max %v", min, max)
+		}
+		for _, triangle := range triangles {
+			for _, index := range triangle {
+				if index < 0 || index >= len(vertices) {
+					b.Fatalf("triangle index %d outside %d vertices", index, len(vertices))
+				}
+			}
+			a, c, d := vertices[triangle[0]], vertices[triangle[1]], vertices[triangle[2]]
+			if a.Sub(c).Cross(a.Sub(d)).Len() <= 0 {
+				b.Fatalf("degenerate triangle: %v", triangle)
+			}
+		}
+		tris = float64(count)
+		b.StartTimer()
+	}
+	b.StopTimer()
+	b.ReportMetric(tris, "tris")
+}
+
 func BenchmarkTessPrismBox(b *testing.B) { runTess(b, benchBox()) }
+
+func BenchmarkTessPrismBoxCold(b *testing.B) { runColdTess(b, benchBox) }
 
 func BenchmarkTessPrismFillet(b *testing.B) {
 	body := must(benchBox().Fillet(b.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(6)))
@@ -153,15 +210,32 @@ func BenchmarkTessCup(b *testing.B) {
 	runTess(b, body)
 }
 
+func BenchmarkTessCupCold(b *testing.B) {
+	runColdTess(b, func() *decad.Body {
+		return must(benchBox().Shell(b.Context(), decad.Faces(decad.Facing(r3.NewVec(0, 0, 1))).Exactly(1), units.Millimeters(4)))
+	})
+}
+
 func BenchmarkTessCapBlend(b *testing.B) {
 	box := benchBox()
 	body := must(box.Chamfer(b.Context(), decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(3)))
 	runTess(b, body)
 }
 
+func BenchmarkTessCapBlendCold(b *testing.B) {
+	runColdTess(b, func() *decad.Body {
+		box := benchBox()
+		return must(box.Chamfer(b.Context(), decad.Edges(decad.CreatedBy(decad.CapEnd(box))), units.Millimeters(3)))
+	})
+}
+
 func BenchmarkTessLoft(b *testing.B) { runTess(b, benchLoft()) }
 
+func BenchmarkTessLoftCold(b *testing.B) { runColdTess(b, benchLoft) }
+
 func BenchmarkTessFaceted(b *testing.B) { runTess(b, benchCut()) }
+
+func BenchmarkTessFacetedCold(b *testing.B) { runColdTess(b, benchCut) }
 
 func BenchmarkTessRevolveLineFull(b *testing.B) {
 	body := benchRevolve(func(s *sketch.Sketch) {
@@ -189,6 +263,19 @@ func BenchmarkTessRevolveSphere(b *testing.B) {
 		s.CreateLine(left, right)
 	}, decad.FullRevolution{})
 	runTess(b, body)
+}
+
+func BenchmarkTessRevolveSphereCold(b *testing.B) {
+	runColdTess(b, func() *decad.Body {
+		return benchRevolve(func(s *sketch.Sketch) {
+			o := s.CreatePoint(0, 0)
+			s.Fix(o)
+			left := s.CreatePoint(-8, 0)
+			right := s.CreatePoint(8, 0)
+			s.CreateArc(o, right, left)
+			s.CreateLine(left, right)
+		}, decad.FullRevolution{})
+	})
 }
 
 func BenchmarkTessRevolveTorus(b *testing.B) {
