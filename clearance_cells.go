@@ -58,6 +58,7 @@ func (s *cellSink) crossing(admit int) {
 // discarded (a lower tier holds the minimum), a straddle keeps only the
 // lower bound, and a near-zero value that is not cleanly rejected is a
 // possible contact — undecided.
+//
 //nolint:unparam // Keep witness arguments while preserving every caller's admission and evaluation path.
 func (s *cellSink) candidate(k *pairKernel, admit int, lo, hi float64, exact bool, pa, pb r3.Vec) {
 	if admit == -1 {
