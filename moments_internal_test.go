@@ -43,6 +43,14 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 			require.NoError(t, first.addFor(tc.segment, freeformPlan{}, Point2{}, momentFirstOrder))
 			require.NoError(t, full.addFor(tc.segment, freeformPlan{}, Point2{}, momentSecondOrder))
 			check(t, first, full)
+			var area regionIntegrals
+			require.NoError(t, area.addFor(tc.segment, freeformPlan{}, Point2{}, momentAreaOrder))
+			area.publishExact()
+			require.Equal(t, full.area, area.area)
+			require.Equal(t, full.areaBound, area.areaBound)
+			require.Zero(t, area.muu)
+			require.Zero(t, area.muv)
+			require.Zero(t, area.mvv)
 		})
 	}
 
@@ -56,6 +64,14 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 		first.addFreeformTo(spans, false, momentFirstOrder)
 		full.addFreeformTo(spans, false, momentSecondOrder)
 		check(t, first, full)
+		var area regionIntegrals
+		area.addFreeformTo(spans, false, momentAreaOrder)
+		area.publishExact()
+		require.Equal(t, full.area, area.area)
+		require.Equal(t, full.areaBound, area.areaBound)
+		require.Zero(t, area.muu)
+		require.Zero(t, area.muv)
+		require.Zero(t, area.mvv)
 	})
 
 	t.Run("offset rectangle through evaluator", func(t *testing.T) {
@@ -70,11 +86,42 @@ func TestFirstOrderMomentsMatchFullAreaCentroidAndBounds(t *testing.T) {
 		full, err := record.evaluatorIntegralsUncheckedContext(t.Context(), momentSecondOrder, newFreeformWork())
 		require.NoError(t, err)
 		check(t, first, full)
+		area, err := record.evaluatorIntegrals(momentAreaOrder, newFreeformWork())
+		require.NoError(t, err)
+		require.Equal(t, full.area, area.area)
+		require.Equal(t, full.areaBound, area.areaBound)
+		require.Zero(t, area.muu)
+		require.Zero(t, area.muv)
+		require.Zero(t, area.mvv)
 		firstCentroid, firstExact := first.exactCentroid()
 		fullCentroid, fullExact := full.exactCentroid()
 		require.True(t, firstExact)
 		require.True(t, fullExact)
 		require.Equal(t, fullCentroid, firstCentroid)
+	})
+
+	t.Run("area with overflowing higher moments", func(t *testing.T) {
+		seg := LineSeg{Start: Point2{}, End: Point2{U: 1e120, V: 1e120}, TEnd: 1}
+		var area regionIntegrals
+		require.NoError(t, area.addFor(seg, freeformPlan{}, Point2{}, momentAreaOrder))
+		require.True(t, area.isFinite(momentAreaOrder))
+		require.False(t, area.isFinite(momentFirstOrder))
+		require.Zero(t, area.muu)
+		require.Zero(t, area.muv)
+		require.Zero(t, area.mvv)
+	})
+
+	t.Run("freeform work charges", func(t *testing.T) {
+		profile := involuteFitProfile()
+		areaWork := newFreeformWork()
+		_, err := profile.evaluatorIntegrals(momentAreaOrder, areaWork)
+		require.NoError(t, err)
+		fullWork := newFreeformWork()
+		_, err = profile.evaluatorIntegrals(momentSecondOrder, fullWork)
+		require.NoError(t, err)
+		require.Positive(t, areaWork.spent)
+		require.Positive(t, areaWork.reconstructionSpent)
+		require.Equal(t, *fullWork, *areaWork)
 	})
 }
 
