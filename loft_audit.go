@@ -381,7 +381,7 @@ func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int, shortcuts l
 
 	signsB := trianglePlaneSigns(xta, na, xtb)
 	if shortcuts.certificates && sharedCount == 1 && countZero(signsB) == 3 &&
-		coplanarIsolatedSharedVertex(data, tris[i], tris[j], shared[0], na) {
+		coplanarIsolatedSharedVertex(data, tris[i], tris[j], i, j, shared[0]) {
 		return loftPairVertexCertificate, nil
 	}
 	if shortcuts.certificates && sharedCount == 1 && isolatedSharedVertex(tris[j], shared[0], signsB) {
@@ -427,30 +427,35 @@ func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int, shortcuts l
 // at their one recorded common vertex. An edge line through that vertex
 // separates both remaining corners of the second triangle strictly from the
 // opposite corner of the first. The second triangle meets the line only at
-// the shared vertex, while the first lies entirely on its own side.
-func coplanarIsolatedSharedVertex(data *loftAuditData, a, b [3]int, shared int, n xpt) bool {
-	var aOther, bOther [2]xpt
+// the shared vertex, while the first lies entirely on its own side. The
+// triangles' exact normals are proportional, so projAxes drops the same
+// dominant coordinate for both; that projection is invertible on their plane.
+// Its cross2xSign preserves the line-side signs and uses an exact fallback.
+func coplanarIsolatedSharedVertex(data *loftAuditData, a, b [3]int, i, j, shared int) bool {
+	var aOther, bOther [2]xp2
 	countA, countB := 0, 0
-	for _, vertex := range a {
-		if vertex != shared {
-			aOther[countA] = data.xverts[vertex]
-			countA++
+	var v xp2
+	for corner, vertex := range a {
+		if vertex == shared {
+			v = data.projections[i][corner]
+			continue
 		}
+		aOther[countA] = data.projections[i][corner]
+		countA++
 	}
-	for _, vertex := range b {
+	for corner, vertex := range b {
 		if vertex != shared {
-			bOther[countB] = data.xverts[vertex]
+			bOther[countB] = data.projections[j][corner]
 			countB++
 		}
 	}
-	v := data.xverts[shared]
 	for k := range 2 {
-		side := planeSide(v, aOther[k], aOther[1-k], n)
+		side := cross2xSign(v, aOther[k], aOther[1-k])
 		if side == 0 {
 			continue
 		}
-		if planeSide(v, aOther[k], bOther[0], n) == -side &&
-			planeSide(v, aOther[k], bOther[1], n) == -side {
+		if cross2xSign(v, aOther[k], bOther[0]) == -side &&
+			cross2xSign(v, aOther[k], bOther[1]) == -side {
 			return true
 		}
 	}
