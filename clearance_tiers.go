@@ -2,6 +2,7 @@ package decad
 
 import (
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 )
@@ -597,9 +598,58 @@ func (k *pairKernel) lineCircleEE(el, ec *cEdge, sink *cellSink) {
 	}
 }
 
-// circleCircleEE: coaxial circles are the constant closed form; otherwise
-// the P8 bracket.
+// principalCircleEdgeGap proves the minimum over two complete circles whose
+// axes are exactly vertical and whose centers differ along one horizontal
+// principal axis. Their facing radial points attain the minimum. The points
+// returned for the candidate are rounded representatives; the exact rational
+// separation and directed square-root interval certify the distance.
+func (k *pairKernel) principalCircleEdgeGap(ea, eb *cEdge, sink *cellSink) bool {
+	if !ea.ang.full || !eb.ang.full || !finiteVec(ea.center) || !finiteVec(eb.center) ||
+		isNonFinite(ea.radius) || isNonFinite(eb.radius) || ea.radius <= 0 || eb.radius <= 0 ||
+		ea.axis.X != 0 || ea.axis.Y != 0 || math.Abs(ea.axis.Z) != 1 ||
+		eb.axis.X != 0 || eb.axis.Y != 0 || math.Abs(eb.axis.Z) != 1 {
+		return false
+	}
+	var offset big.Rat
+	var radial r3.Vec
+	switch {
+	case ea.center.Y == eb.center.Y && ea.center.X != eb.center.X:
+		offset.Sub(floatRat(eb.center.X), floatRat(ea.center.X))
+		radial = r3.NewVec(1, 0, 0)
+	case ea.center.X == eb.center.X && ea.center.Y != eb.center.Y:
+		offset.Sub(floatRat(eb.center.Y), floatRat(ea.center.Y))
+		radial = r3.NewVec(0, 1, 0)
+	default:
+		return false
+	}
+	sign := float64(offset.Sign())
+	offset.Abs(&offset)
+	gap := new(big.Rat).Sub(&offset, new(big.Rat).Add(floatRat(ea.radius), floatRat(eb.radius)))
+	if gap.Sign() <= 0 {
+		return false
+	}
+	dz := new(big.Rat).Sub(floatRat(ea.center.Z), floatRat(eb.center.Z))
+	square := new(big.Rat).Mul(gap, gap)
+	square.Add(square, new(big.Rat).Mul(dz, dz))
+	lo, hi := ratSqrtDown(square), ratSqrtUp(square)
+	if lo <= k.tol || isNonFinite(hi) {
+		return false
+	}
+	pa := ea.center.Add(radial.Scale(sign * ea.radius))
+	pb := eb.center.Sub(radial.Scale(sign * eb.radius))
+	if !finiteVec(pa) || !finiteVec(pb) {
+		return false
+	}
+	sink.candidate(k, 1, lo, hi, lo == hi, pa, pb)
+	return true
+}
+
+// circleCircleEE: complete principal-axis exterior circles have a direct
+// minimum; coaxial circles use their constant closed form; the rest use P8.
 func (k *pairKernel) circleCircleEE(ea, eb *cEdge, sink *cellSink) {
+	if k.principalCircleEdgeGap(ea, eb, sink) {
+		return
+	}
 	fa := &cFace{kind: ckTorus, anchor: ea.center, axis: ea.axis, refU: ea.refU, refV: ea.refV, major: ea.radius}
 	fb := &cFace{kind: ckTorus, anchor: eb.center, axis: eb.axis, refU: eb.refU, refV: eb.refV, major: eb.radius}
 	crits, ok := k.circleCircleCrits(fa, fb)
