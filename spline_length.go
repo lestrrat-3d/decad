@@ -436,8 +436,8 @@ func (s dyadicSpan) polygonUpperScratch(scratch *lengthDistanceScratch) float64 
 // distances. A leaf completes each square-root comparison before the next
 // distance overwrites num, so no returned interval holds one of these values.
 type lengthDistanceScratch struct {
-	du, dv, tmp, num, lhs, rhs            big.Int
-	seedMant, seedRatio, seedNum, seedDen big.Float
+	du, dv, tmp, num, lhs, rhs, squareMant big.Int
+	seedMant, seedRatio, seedNum, seedDen  big.Float
 }
 
 // spanSquaredDistance is |b−a|² = num / (denSq · 2^(2 exp)). Keeping the
@@ -505,13 +505,13 @@ func spanSquareCmp(f float64, d spanSquaredDistance) int {
 }
 
 func spanSquareCmpScratch(f float64, d spanSquaredDistance, scratch *lengthDistanceScratch) int {
-	square, ok := dyOf(f)
-	if !ok {
+	if math.IsNaN(f) || math.IsInf(f, 0) {
 		return 1
 	}
-	if square.isZero() {
+	if f == 0 {
 		return -d.num.Sign()
 	}
+	square := dyOfFiniteInto(f, &scratch.squareMant)
 	scratch.lhs.Mul(square.mant, square.mant)
 	scratch.lhs.Mul(&scratch.lhs, d.denSq)
 	shift := 2 * (square.exp + int(d.exp))

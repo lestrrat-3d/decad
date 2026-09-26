@@ -758,7 +758,10 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 			"large common factor scratch seed")
 		require.Equal(t, spanSqrtDown(d), spanSqrtDownScratch(d, scratch), "large common factor scratch lower bound")
 		require.Equal(t, spanSqrtUp(d), spanSqrtUpScratch(d, scratch), "large common factor scratch upper bound")
-		for _, f := range []float64{0, math.SmallestNonzeroFloat64, 1, math.MaxFloat64} {
+		for _, f := range []float64{
+			0, math.SmallestNonzeroFloat64, -math.SmallestNonzeroFloat64,
+			1, -1, math.MaxFloat64, -math.MaxFloat64,
+		} {
 			sq := new(big.Rat).Mul(floatRat(f), floatRat(f))
 			require.Equal(t, sq.Cmp(q), spanSquareCmp(f, d), "large common factor square comparison")
 			require.Equal(t, spanSquareCmp(f, d), spanSquareCmpScratch(f, d, scratch),

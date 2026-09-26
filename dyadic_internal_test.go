@@ -52,9 +52,16 @@ func abs(v int) int {
 // number big.Rat holds for it.
 func TestDyadicLiftsEveryFloatExactly(t *testing.T) {
 	t.Parallel()
+	var reusedMant big.Int
 	for _, f := range dyadicProbeFloats {
 		d, ok := dyOf(f)
 		require.True(t, ok, "%v is finite and must lift", f)
+		if f != 0 {
+			reused := dyOfFiniteInto(f, &reusedMant)
+			require.Equal(t, d.exp, reused.exp, "reused exponent for %v", f)
+			require.Equal(t, d.mant, reused.mant, "reused mantissa for %v", f)
+			require.Same(t, &reusedMant, reused.mant, "the lift writes into caller storage for %v", f)
+		}
 		require.Zero(t, ratOfDyadic(t, d).Cmp(floatRat(f)), "the lift of %v must equal its exact rational", f)
 		require.Zero(t, d.rat().Cmp(floatRat(f)), "rat must return the same number the lift holds, for %v", f)
 
