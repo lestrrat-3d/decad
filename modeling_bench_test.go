@@ -220,6 +220,52 @@ func BenchmarkModelingVerifyDefaultWarmDisjoint(b *testing.B) {
 	}
 }
 
+// BenchmarkModelingVerifyDefaultColdOverlap measures a fresh document's first
+// pairwise interference proof over overlapping prisms.
+func BenchmarkModelingVerifyDefaultColdOverlap(b *testing.B) {
+	for _, count := range []int{2, 4, 8} {
+		b.Run(fmt.Sprintf("bodies_%d", count), func(b *testing.B) {
+			for b.Loop() {
+				b.StopTimer()
+				doc := decad.New()
+				bodies := make([]*decad.Body, count)
+				indices := make(map[*decad.Body]int, count)
+				for i := range count {
+					x := float64(i * 3)
+					bodies[i] = modelingBenchRect(b, doc, x, x, x+10, x+10, 10)
+					indices[bodies[i]] = i
+				}
+				b.StartTimer()
+				report, err := doc.Verify(b.Context())
+				if err != nil {
+					b.Fatal(err)
+				}
+				b.StopTimer()
+				require.Len(b, report.Bodies, count)
+				require.Equal(b, decad.Interfering, report.Status)
+				wantPairs := 0
+				for i := range count {
+					for j := i + 1; j < count && j-i <= 3; j++ {
+						wantPairs++
+					}
+				}
+				require.Len(b, report.Interferences, wantPairs)
+				for _, row := range report.Interferences {
+					i, hasA := indices[row.A]
+					j, hasB := indices[row.B]
+					require.True(b, hasA)
+					require.True(b, hasB)
+					require.Less(b, i, j)
+					width := float64(10 - 3*(j-i))
+					require.InDelta(b, width*width*10, row.Volume.Value.Base(), 1e-8)
+				}
+				b.StartTimer()
+			}
+			b.StopTimer()
+		})
+	}
+}
+
 // BenchmarkModelingPatchCircle measures building a public planar patch.
 func BenchmarkModelingPatchCircle(b *testing.B) {
 	w := sketch.NewWorld()
