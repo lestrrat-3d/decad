@@ -90,8 +90,16 @@ func dyOf(f float64) (dyadic, bool) {
 	if f == 0 {
 		return dyadic{}, true
 	}
+	return dyOfFiniteInto(f, new(big.Int)), true
+}
+
+// dyOfFiniteInto lifts a finite, nonzero float into caller-owned integer
+// storage. Its callers gate zero and non-finite inputs before reaching it.
+// Reusing mant changes only storage; the Frexp scale and norm match dyOf.
+func dyOfFiniteInto(f float64, mant *big.Int) dyadic {
 	frac, exp := math.Frexp(f)
-	return dyadic{mant: big.NewInt(int64(frac * (1 << 53))), exp: exp - 53}.norm(), true
+	mant.SetInt64(int64(frac * (1 << 53)))
+	return dyadic{mant: mant, exp: exp - 53}.norm()
 }
 
 // mustDyOf is dyOf for a value the caller has already proven finite
