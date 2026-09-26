@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  # Lint gates every test job. The race binary builds alongside lint so the
-  # root shards can reuse one compilation once both jobs pass.
+  # Lint and test jobs run independently. The root race shards share one test
+  # binary built by race-binary.
   lint:
     name: golangci-lint
     runs-on: ubuntu-latest
@@ -60,11 +60,10 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # The root package uses one compiled race binary across its shards. The
-  # remaining package and OS tests below still wait only for lint.
+  # The root package uses one compiled race binary across its shards.
   test-root-race:
     name: test (${{ matrix.os }}, ${{ matrix.race }}, ${{ matrix.shard }})
-    needs: [lint, race-binary]
+    needs: [race-binary]
     strategy:
       fail-fast: false
       matrix:
@@ -154,7 +153,6 @@ jobs:
   # The packages outside the root run on their own Ubuntu runner. macOS and
   # Windows run the whole suite without the race detector.
   test:
-    needs: lint
     strategy:
       fail-fast: false
       matrix:
@@ -199,9 +197,8 @@ jobs:
         if: matrix.shard == '' && matrix.packages == ''
         run: go test ${{ matrix.race }} -timeout 10m ./...
 
-  # Tier 2: verify the tree is tidy.
+  # Verify the tree is tidy.
   verify:
-    needs: lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -220,9 +217,8 @@ jobs:
           go mod tidy
           git diff --exit-code go.mod go.sum
 
-  # Tier 2: vulnerability scan of the module and its dependencies.
+  # Scan the module and its dependencies for known vulnerabilities.
   govulncheck:
-    needs: lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
