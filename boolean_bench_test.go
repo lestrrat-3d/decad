@@ -96,3 +96,59 @@ func BenchmarkBooleanUnionCrossedRods(b *testing.B) {
 		require.NotNil(b, got)
 	}
 }
+
+// BenchmarkBooleanUnionFacetCandidates compares geometry sizes for sparse
+// crossed rods and near-parallel rods whose walls nearly touch.
+func BenchmarkBooleanUnionFacetCandidates(b *testing.B) {
+	for _, size := range []struct {
+		name    string
+		radiusA float64
+		radiusB float64
+	}{
+		{name: "radius_4_3", radiusA: 4, radiusB: 3},
+		{name: "radius_8_6", radiusA: 8, radiusB: 6},
+	} {
+		b.Run("sparse/"+size.name, func(b *testing.B) {
+			benchmarkUnionFacetCandidateCase(b, size.radiusA, size.radiusB, false)
+		})
+		b.Run("dense/"+size.name, func(b *testing.B) {
+			benchmarkUnionFacetCandidateCase(b, size.radiusA, size.radiusB, true)
+		})
+	}
+}
+
+func benchmarkUnionFacetCandidateCase(b *testing.B, radiusA, radiusB float64, dense bool) {
+	for b.Loop() {
+		b.StopTimer()
+		doc := decad.New()
+		a := benchRodBody(b, doc, 0, 0, radiusA)
+		bodyB := benchRodBody(b, doc, 0, 0, radiusB)
+		angle := units.Degrees(90)
+		translation := r3.Vec{Y: -radiusA}
+		if dense {
+			angle = units.Degrees(3)
+			translation = r3.Vec{X: radiusA + radiusB - 0.2}
+		}
+		axis := r3.Vec{X: 1}
+		if dense {
+			axis = r3.Vec{Y: 1}
+		}
+		rot, err := r3.Rotation(axis, angle)
+		require.NoError(b, err)
+		tr, err := r3.Translation(translation)
+		require.NoError(b, err)
+		xf, err := rot.Then(tr)
+		require.NoError(b, err)
+		bodyB, err = bodyB.Placed(b.Context(), xf)
+		require.NoError(b, err)
+		b.StartTimer()
+		got, err := decad.Union(b.Context(), a, bodyB)
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.StopTimer()
+		require.Len(b, got.Lumps(), 1)
+		b.StartTimer()
+	}
+	b.StopTimer()
+}
