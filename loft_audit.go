@@ -89,12 +89,11 @@ func newLoftExactPlane(anchor, n xpt) loftExactPlane {
 	}
 }
 
-func (plane loftExactPlane) sign(p xpt) int {
-	var sum, term big.Int
+func (plane loftExactPlane) sign(p xpt, sum, term *big.Int) int {
 	sum.Mul(plane.a, p.x)
-	sum.Add(&sum, term.Mul(plane.b, p.y))
-	sum.Add(&sum, term.Mul(plane.c, p.z))
-	sum.Add(&sum, term.Mul(plane.d, p.w))
+	sum.Add(sum, term.Mul(plane.b, p.y))
+	sum.Add(sum, term.Mul(plane.c, p.z))
+	sum.Add(sum, term.Mul(plane.d, p.w))
 	return sum.Sign()
 }
 
@@ -538,8 +537,9 @@ func isolatedSharedVertex(tri [3]int, sharedIndex int, signs [3]int) bool {
 // for each point of each facet pair.
 func trianglePlaneSigns(plane loftExactPlane, other [3]xpt) [3]int {
 	var signs [3]int
+	var sum, term big.Int
 	for i, p := range other {
-		signs[i] = plane.sign(p)
+		signs[i] = plane.sign(p, &sum, &term)
 	}
 	return signs
 }

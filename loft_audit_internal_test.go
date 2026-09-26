@@ -50,7 +50,7 @@ func TestLoftExactPlaneSignsMatchDifferencePredicate(t *testing.T) {
 		{
 			name:   "large cancellation near the plane",
 			anchor: extreme, normal: point(1, 1, 5, 9),
-			other: [3]xpt{extremePoint(0), extremePoint(1), extremePoint(-1)},
+			other: [3]xpt{extremePoint(1), extremePoint(0), extremePoint(-1)},
 		},
 		{
 			name:   "zero normal",
@@ -69,10 +69,11 @@ func TestLoftExactPlaneSignsMatchDifferencePredicate(t *testing.T) {
 	}
 	anchor, normal, p := point(1, 2, 3, 5), point(2, 3, 5, 7), point(4, 5, 6, 11)
 	plane := newLoftExactPlane(anchor, normal)
-	want := plane.sign(p)
+	var sum, term big.Int
+	want := plane.sign(p, &sum, &term)
 	anchor.w.SetInt64(99)
 	normal.x.SetInt64(99)
-	require.Equal(t, want, plane.sign(p), "cached coefficients must own their integers")
+	require.Equal(t, want, plane.sign(p, &sum, &term), "cached coefficients must own their integers")
 }
 
 // boxLoftVerts and boxLoftTris are an untwisted, unit-square-to-unit-square
