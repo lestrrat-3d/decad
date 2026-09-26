@@ -782,6 +782,58 @@ func TestCellTwistVolumeAllowMatchesTheSweptMeasure(t *testing.T) {
 	require.GreaterOrEqual(t, got, want, "the answer must round outward, never inward")
 }
 
+func TestCellTwistMomentPlanarShortcutMatchesExactIntegral(t *testing.T) {
+	t.Parallel()
+	base := [4]r3.Vec{
+		r3.NewVec(10, 0, 0), r3.NewVec(0, 10, 0),
+		r3.NewVec(5, 0, 10), r3.NewVec(0, 5, 10),
+	}
+	translate := func(v r3.Vec) r3.Vec { return r3.NewVec(v.X+7, v.Y-3, v.Z+11) }
+	tilt := func(v r3.Vec) r3.Vec { return r3.NewVec(v.X+v.Z, v.Y-v.Z, 2*v.X+v.Z) }
+	reflect := func(v r3.Vec) r3.Vec { return r3.NewVec(-v.X, v.Y, v.Z) }
+	mapCorners := func(f func(r3.Vec) r3.Vec) [4]r3.Vec {
+		var out [4]r3.Vec
+		for i, v := range base {
+			out[i] = f(v)
+		}
+		return out
+	}
+	near := base
+	near[3] = r3.NewVec(0, 5, math.Nextafter(10, 11))
+	for _, tc := range []struct {
+		name   string
+		v      [4]r3.Vec
+		anchor r3.Vec
+		planar bool
+	}{
+		{"taper", base, r3.NewVec(0, 0, 0), true},
+		{"translated", mapCorners(translate), r3.NewVec(1, 2, 3), true},
+		{"tilted", mapCorners(tilt), r3.NewVec(2, -1, 4), true},
+		{"reflected", mapCorners(reflect), r3.NewVec(0, 0, 0), true},
+		{"self-crossing", [4]r3.Vec{
+			r3.NewVec(0, 0, 0), r3.NewVec(2, 2, 0), r3.NewVec(0, 2, 0), r3.NewVec(2, 0, 0),
+		}, r3.NewVec(3, 4, 5), true},
+		{"near-coplanar", near, r3.NewVec(0, 0, 0), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			signed := cellTwistVolume(tc.v[0], tc.v[1], tc.v[2], tc.v[3])
+			if tc.planar {
+				require.Zero(t, signed.Sign())
+			} else {
+				require.NotZero(t, signed.Sign())
+			}
+			want := cellTwistMoment(tc.v[0], tc.v[1], tc.v[2], tc.v[3], tc.anchor)
+			got := cellTwistMomentFromVolume(tc.v[0], tc.v[1], tc.v[2], tc.v[3], tc.anchor, signed)
+			for axis := range want {
+				require.Zero(t, got[axis].Cmp(want[axis]))
+				if tc.planar {
+					require.Zero(t, got[axis].Sign())
+				}
+			}
+		})
+	}
+}
+
 // TestCellTwistOffsetUpperMatchesPointwiseDeviation pins the exact |T|/4
 // maximum against the same hand-computed cell as the swept-measure test.
 func TestCellTwistOffsetUpperMatchesPointwiseDeviation(t *testing.T) {

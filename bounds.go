@@ -864,6 +864,23 @@ func cellTwistMoment(vLo, vHi, wLo, wHi, anchor r3.Vec) ratV3 {
 	return out
 }
 
+// cellTwistMomentFromVolume reuses the exact signed correction as a planarity
+// certificate. Its determinant is zero exactly when the four corners are
+// coplanar. In one plane, the bilinear patch and the two held triangles have
+// the same oriented boundary, so their signed first-moment fluxes agree even
+// for a tapered or self-crossing quadrilateral and any anchor. A nonzero
+// determinant keeps the full integration path.
+func cellTwistMomentFromVolume(vLo, vHi, wLo, wHi, anchor r3.Vec, signed *big.Rat) ratV3 {
+	if signed.Sign() != 0 {
+		return cellTwistMoment(vLo, vHi, wLo, wHi, anchor)
+	}
+	var out ratV3
+	for axis := range out {
+		out[axis] = new(big.Rat)
+	}
+	return out
+}
+
 type momentPoly map[[2]int]*big.Rat
 
 func momentPolyAdd(p momentPoly, degree [2]int, term *big.Rat) {

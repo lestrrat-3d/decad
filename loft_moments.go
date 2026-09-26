@@ -809,7 +809,7 @@ func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r
 			wallAreaUpper = absSumUpper(wallAreaUpper, cellWallUpper)
 			twistVolumeUpper = absSumUpper(twistVolumeUpper, cellTwistVolumeAllow(vLo, vHi, wLo, wHi))
 			cellTwist := cellTwistVolume(vLo, vHi, wLo, wHi)
-			cellMoment := cellTwistMoment(vLo, vHi, wLo, wHi, anchor)
+			cellMoment := cellTwistMomentFromVolume(vLo, vHi, wLo, wHi, anchor, cellTwist)
 			if reversed {
 				cellTwist.Neg(cellTwist)
 				for axis := range cellMoment {
