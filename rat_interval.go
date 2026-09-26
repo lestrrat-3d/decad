@@ -93,27 +93,48 @@ func pointInterval(value *big.Rat) ratInterval {
 	return interval(value, value)
 }
 
-// intervalMul multiplies two rational-bounded intervals by their four corner
-// products, the general bound that assumes nothing about either interval's
-// sign — what a radius bracket times a swept-angle bracket needs, since
-// neither is known to be sign-fixed at the call site.
+// intervalMul multiplies two rational-bounded intervals. Endpoint signs
+// identify the two extreme products unless both intervals cross zero; that
+// case compares four products. Both result endpoints are owned independently.
 func intervalMul(a, b ratInterval) ratInterval {
-	corners := [4]*big.Rat{
-		new(big.Rat).Mul(a.lo, b.lo),
-		new(big.Rat).Mul(a.lo, b.hi),
-		new(big.Rat).Mul(a.hi, b.lo),
-		new(big.Rat).Mul(a.hi, b.hi),
-	}
-	lo, hi := corners[0], corners[0]
-	for _, c := range corners[1:] {
-		if c.Cmp(lo) < 0 {
-			lo = c
-		}
-		if c.Cmp(hi) > 0 {
-			hi = c
+	if a.lo.Sign() >= 0 {
+		switch {
+		case b.lo.Sign() >= 0:
+			return intervalOwned(new(big.Rat).Mul(a.lo, b.lo), new(big.Rat).Mul(a.hi, b.hi))
+		case b.hi.Sign() <= 0:
+			return intervalOwned(new(big.Rat).Mul(a.hi, b.lo), new(big.Rat).Mul(a.lo, b.hi))
+		default:
+			return intervalOwned(new(big.Rat).Mul(a.hi, b.lo), new(big.Rat).Mul(a.hi, b.hi))
 		}
 	}
-	return intervalOwned(lo, hi)
+	if a.hi.Sign() <= 0 {
+		switch {
+		case b.lo.Sign() >= 0:
+			return intervalOwned(new(big.Rat).Mul(a.lo, b.hi), new(big.Rat).Mul(a.hi, b.lo))
+		case b.hi.Sign() <= 0:
+			return intervalOwned(new(big.Rat).Mul(a.hi, b.hi), new(big.Rat).Mul(a.lo, b.lo))
+		default:
+			return intervalOwned(new(big.Rat).Mul(a.lo, b.hi), new(big.Rat).Mul(a.lo, b.lo))
+		}
+	}
+	if b.lo.Sign() >= 0 {
+		return intervalOwned(new(big.Rat).Mul(a.lo, b.hi), new(big.Rat).Mul(a.hi, b.hi))
+	}
+	if b.hi.Sign() <= 0 {
+		return intervalOwned(new(big.Rat).Mul(a.hi, b.lo), new(big.Rat).Mul(a.lo, b.lo))
+	}
+
+	loA := new(big.Rat).Mul(a.lo, b.hi)
+	loB := new(big.Rat).Mul(a.hi, b.lo)
+	hiA := new(big.Rat).Mul(a.lo, b.lo)
+	hiB := new(big.Rat).Mul(a.hi, b.hi)
+	if loB.Cmp(loA) < 0 {
+		loA = loB
+	}
+	if hiB.Cmp(hiA) > 0 {
+		hiA = hiB
+	}
+	return intervalOwned(loA, hiA)
 }
 
 func intervalFloatError(a ratInterval, held float64) float64 {

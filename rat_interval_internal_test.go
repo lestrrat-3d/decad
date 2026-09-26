@@ -51,6 +51,65 @@ func TestRatIntervalArithmeticOwnsFreshEndpoints(t *testing.T) {
 	}
 }
 
+func TestRatIntervalMulSignCases(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		iv   ratInterval
+	}{
+		{"positive", interval(big.NewRat(2, 3), big.NewRat(7, 5))},
+		{"negative", interval(big.NewRat(-11, 7), big.NewRat(-3, 4))},
+		{"mixed", interval(big.NewRat(-13, 9), big.NewRat(5, 6))},
+		{"zero", interval(big.NewRat(0, 1), big.NewRat(0, 1))},
+		{"zero-to-positive", interval(big.NewRat(0, 1), big.NewRat(17, 13))},
+		{"negative-to-zero", interval(big.NewRat(-19, 11), big.NewRat(0, 1))},
+		{"positive-point", interval(big.NewRat(23, 17), big.NewRat(23, 17))},
+		{"negative-point", interval(big.NewRat(-29, 19), big.NewRat(-29, 19))},
+	}
+	check := func(t *testing.T, a, b ratInterval) {
+		t.Helper()
+		before := [4]*big.Rat{
+			new(big.Rat).Set(a.lo), new(big.Rat).Set(a.hi),
+			new(big.Rat).Set(b.lo), new(big.Rat).Set(b.hi),
+		}
+		corners := [4]*big.Rat{
+			new(big.Rat).Mul(a.lo, b.lo), new(big.Rat).Mul(a.lo, b.hi),
+			new(big.Rat).Mul(a.hi, b.lo), new(big.Rat).Mul(a.hi, b.hi),
+		}
+		wantLo, wantHi := corners[0], corners[0]
+		for _, corner := range corners[1:] {
+			if corner.Cmp(wantLo) < 0 {
+				wantLo = corner
+			}
+			if corner.Cmp(wantHi) > 0 {
+				wantHi = corner
+			}
+		}
+
+		got := intervalMul(a, b)
+		require.Zero(t, got.lo.Cmp(wantLo))
+		require.Zero(t, got.hi.Cmp(wantHi))
+		for i, input := range [4]*big.Rat{a.lo, a.hi, b.lo, b.hi} {
+			require.Zero(t, input.Cmp(before[i]), "input endpoint %d changed", i)
+			require.NotSame(t, input, got.lo)
+			require.NotSame(t, input, got.hi)
+		}
+		require.NotSame(t, got.lo, got.hi)
+		got.lo.SetInt64(101)
+		got.hi.SetInt64(103)
+		for i, input := range [4]*big.Rat{a.lo, a.hi, b.lo, b.hi} {
+			require.Zero(t, input.Cmp(before[i]), "result mutation changed input endpoint %d", i)
+		}
+	}
+
+	for _, a := range cases {
+		for _, b := range cases {
+			t.Run(a.name+"/"+b.name, func(t *testing.T) { check(t, a.iv, b.iv) })
+		}
+		t.Run(a.name+"/shared", func(t *testing.T) { check(t, a.iv, a.iv) })
+	}
+}
+
 func TestRatIntervalConstructorsCopyBorrowedEndpoints(t *testing.T) {
 	t.Parallel()
 	value := big.NewRat(7, 11)
