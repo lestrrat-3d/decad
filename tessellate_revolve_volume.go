@@ -130,14 +130,20 @@ func revolveAngularHomotopyFactor(step ratInterval) (*big.Rat, error) {
 	n := int64(revolveAngularIntegralSteps)
 	pAt := make([]*big.Rat, n+1)
 	qAt := make([]*big.Rat, n+1)
+	sinAt := make([]ratInterval, n+1)
+	cosAt := make([]ratInterval, n+1)
+	for i := int64(0); i <= n; i++ {
+		u := big.NewRat(i, n)
+		sin, cos, ok := radSinCosSpan(intervalScale(d, u))
+		if !ok {
+			return nil, errRevolveAngularHomotopy
+		}
+		sinAt[i], cosAt[i] = sin, cos
+	}
 	for i := int64(0); i <= n; i++ {
 		u := big.NewRat(i, n)
 		co := new(big.Rat).Sub(big.NewRat(1, 1), u)
-		sinA, cosA, okA := radSinCosSpan(intervalScale(d, u))
-		_, cosB, okB := radSinCosSpan(intervalScale(d, co))
-		if !okA || !okB {
-			return nil, errRevolveAngularHomotopy
-		}
+		sinA, cosA, cosB := sinAt[i], cosAt[i], cosAt[n-i]
 		versA := intervalSub(one, cosA)
 		p := intervalMul(d, intervalAdd(
 			intervalScale(versA, co),
