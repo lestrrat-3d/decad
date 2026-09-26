@@ -364,6 +364,8 @@ func TestLoftCoplanarVertexCertificateMatchesExactClassifier(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		scale   float64
+		axis    int
+		reverse bool
 		otherA  r3.Vec
 		otherB  r3.Vec
 		certify bool
@@ -371,19 +373,31 @@ func TestLoftCoplanarVertexCertificateMatchesExactClassifier(t *testing.T) {
 		{name: "separated fan", scale: 1, otherA: r3.NewVec(-2, -1, 0), otherB: r3.NewVec(-1, -2, 0), certify: true},
 		{name: "large dyadic fan", scale: math.Ldexp(1, 450), otherA: r3.NewVec(-2, -1, 0), otherB: r3.NewVec(-1, -2, 0), certify: true},
 		{name: "small dyadic fan", scale: math.Ldexp(1, -450), otherA: r3.NewVec(-2, -1, 0), otherB: r3.NewVec(-1, -2, 0), certify: true},
+		{name: "yz fan", scale: 1, axis: 1, otherA: r3.NewVec(-2, -1, 0), otherB: r3.NewVec(-1, -2, 0), certify: true},
+		{name: "xz reversed fan", scale: 1, axis: 2, reverse: true, otherA: r3.NewVec(-2, -1, 0), otherB: r3.NewVec(-1, -2, 0), certify: true},
 		{name: "touches edge ray", scale: 1, otherA: r3.NewVec(1, 0, 0), otherB: r3.NewVec(-1, -1, 0)},
 		{name: "overlaps area", scale: 1, otherA: r3.NewVec(0.25, 0.25, 0), otherB: r3.NewVec(2, 0.25, 0)},
 		{name: "noncoplanar", scale: 1, otherA: r3.NewVec(0, 0, 1), otherB: r3.NewVec(0, 1, 1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			scale := func(v r3.Vec) r3.Vec {
-				return r3.NewVec(v.X*tc.scale, v.Y*tc.scale, v.Z*tc.scale)
+				switch tc.axis {
+				case 1:
+					return r3.NewVec(v.Z*tc.scale, v.X*tc.scale, v.Y*tc.scale)
+				case 2:
+					return r3.NewVec(v.Y*tc.scale, v.Z*tc.scale, v.X*tc.scale)
+				default:
+					return r3.NewVec(v.X*tc.scale, v.Y*tc.scale, v.Z*tc.scale)
+				}
 			}
 			verts := []r3.Vec{
 				r3.NewVec(0, 0, 0), scale(r3.NewVec(1, 0, 0)), scale(r3.NewVec(0, 1, 0)),
 				scale(tc.otherA), scale(tc.otherB),
 			}
 			tris := [][3]int{{0, 1, 2}, {0, 3, 4}}
+			if tc.reverse {
+				tris[1] = [3]int{0, 4, 3}
+			}
 			data := newLoftAuditData(verts, tris)
 			_, want := auditLoftPairData(data, tris, 0, 1, loftAuditReference)
 			outcome, got := auditLoftPairData(data, tris, 0, 1, loftAuditProduction)

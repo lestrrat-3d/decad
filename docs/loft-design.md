@@ -1244,7 +1244,11 @@ from a float tolerance:
   corner from BOTH remaining corners of the second triangle. Convexity then
   confines their intersection to the common vertex. A corner ON the tested
   line or on the wrong side proves nothing and leaves the pair to the exact
-  classification. The signs come from `planeSide` over exact rational points.
+  classification. The audit projects both triangles onto the same coordinate
+  pair: coplanarity makes their nonzero normals proportional, so `projAxes`
+  drops the same dominant axis for both and the projection is invertible on
+  their plane. `cross2xSign` uses the cached projected points, with an exact
+  rational fallback when its float filter cannot prove a sign.
 
 The noncoplanar certificates read signs the audit computes anyway. The
 coplanar certificate tests at most two lines before falling through. The
