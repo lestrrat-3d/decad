@@ -21,18 +21,16 @@ import (
 const freeformSpanCeiling = 1 << 12
 
 // freeformSpanCost is the conservative preflight of one span's exact
-// integration, charged BEFORE any coefficient is allocated. Cost is CUBIC in
-// the span degree p while the span itself is only p+1 control points long, so
-// a charge read off the control count alone lets an arbitrarily wide span
-// through — which is what the whole ceiling exists to stop.
+// integration, charged BEFORE any coefficient is allocated. The charge keeps
+// its original cubic ceiling even though rpFromBernstein now computes the
+// coefficients with a quadratic difference table. Keeping the charge gives
+// existing records the same work-budget acceptance and refusal.
 //
-// The dominant term is the Bernstein-to-monomial expansion (rpFromBernstein),
-// run once per coordinate: term i starts at degree i and is multiplied by
-// (1−t) until it reaches degree p, so it costs Σᵢ Σ_{d=i}^{p−1} 2(d+1) =
-// p(p+1)(2p+1)/3 coefficient products. Everything else is QUADRATIC in p — the
-// per-term add and scale inside that expansion, the six Green's-theorem
-// products (none above degree 4p, so under 24(p+1)² together) and their ∫₀¹
-// terms — and 64(p+1)² covers all of it at once.
+// The cubic term bounds the former Bernstein expansion's
+// p(p+1)(2p+1)/3 products per coordinate. The difference table performs fewer
+// products, while the six Green's-theorem products (none above degree 4p, so
+// under 24(p+1)² together) and their ∫₀¹ terms remain quadratic in p. The
+// unchanged 64(p+1)² term covers those quadratic operations.
 func freeformSpanCost(controls int) uint64 {
 	if controls <= 0 {
 		return 0
@@ -72,29 +70,28 @@ func rpIntegral01(p ratPoly) *big.Rat {
 }
 
 // rpFromBernstein converts one coordinate's Bézier control values to the
-// monomial form of the same polynomial: Σ bᵢ·C(n,i)·tⁱ·(1−t)ⁿ⁻ⁱ, built as that
-// literal sum of products so the conversion is transparently the identity it
-// claims rather than a difference table a reader must re-derive.
+// monomial form of the same polynomial. Its coefficient of tᵏ is
+// C(n,k)·Δᵏb₀, where Δ is the forward difference on the control values.
+// This is the binomial expansion of Σ bᵢ·C(n,i)·tⁱ·(1−t)ⁿ⁻ⁱ; the difference
+// table computes all coefficients with quadratic rather than cubic rational
+// work. The record's existing conservative integration charge is unchanged.
 func rpFromBernstein(values []*big.Rat) ratPoly {
 	degree := len(values) - 1
-	out := ratPoly{}
-	for i, value := range values {
-		if value.Sign() == 0 {
-			continue
+	if degree < 0 {
+		return nil
+	}
+	differences := append([]*big.Rat(nil), values...)
+	out := make(ratPoly, len(values))
+	choose := big.NewRat(1, 1)
+	for k := range out {
+		out[k] = new(big.Rat).Mul(choose, differences[0])
+		for i := range len(differences) - 1 {
+			differences[i] = new(big.Rat).Sub(differences[i+1], differences[i])
 		}
-		// tⁱ
-		term := make(ratPoly, i+1)
-		for k := range term {
-			term[k] = new(big.Rat)
+		differences = differences[:len(differences)-1]
+		if k < degree {
+			choose.Mul(choose, big.NewRat(int64(degree-k), int64(k+1)))
 		}
-		term[i] = big.NewRat(1, 1)
-		// ·(1−t)ⁿ⁻ⁱ
-		oneMinusT := ratPoly{big.NewRat(1, 1), big.NewRat(-1, 1)}
-		for range degree - i {
-			term = rpMul(term, oneMinusT)
-		}
-		// ·bᵢ·C(n,i)
-		out = rpAdd(out, rpScale(term, new(big.Rat).Mul(value, binomialRat(degree, i))))
 	}
 	return rpTrim(out)
 }
