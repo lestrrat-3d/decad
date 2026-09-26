@@ -164,6 +164,8 @@
 0	0.00	TestClearanceEnumerationCountsVertexTierFaces
 0	7.92	TestClearanceOracleCurvedPairs
 0	2.30	TestClearanceOraclePrismPairs
+0	0.01	TestClearanceParallelCirclePlacementBound
+0	0.01	TestClearanceParallelCircleRods
 0	0.01	TestClearancePlacedRotatedCube
 0	0.16	TestClearanceRodPiercingBallIsNeverSound
 0	0.00	TestClipFracComparesExactlyAcrossDenominators
@@ -503,6 +505,7 @@
 0	0.00	TestPolyArea2SignAgreesWithRationalArea
 0	0.00	TestPositiveAreaGateConsultsExactRational
 0	0.00	TestPrepRefusesACollapsedOperandFacet
+0	0.00	TestPrincipalCircleEdgeGapBoundsAndFallback
 0	0.00	TestPrismBooleanGateG1RequiresBothOperandsPrismPayload
 0	0.00	TestPrismBooleanGateG2RejectsAReflectedOperand
 0	0.00	TestPrismBooleanGateG3RequiresCoDirectionalCoplanarPlanes

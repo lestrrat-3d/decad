@@ -231,6 +231,74 @@ func TestDegCircleCircleCritsNeedExactCoaxiality(t *testing.T) {
 	})
 }
 
+func TestPrincipalCircleEdgeGapBoundsAndFallback(t *testing.T) {
+	t.Parallel()
+	z := r3.NewVec(0, 0, 1)
+	full := func(center, axis r3.Vec, radius float64) *cEdge {
+		u := perpTo(axis)
+		return &cEdge{
+			center: center, axis: axis, refU: u, refV: axis.Cross(u),
+			radius: radius, ang: angWindow{full: true},
+		}
+	}
+	k := testKernel()
+	a := full(r3.NewVec(0, 0, 0), z, 1)
+	t.Run("opposite axis and axial offset", func(t *testing.T) {
+		b := full(r3.NewVec(7, 0, 3), z.Scale(-1), 2)
+		sink := &cellSink{}
+		require.True(t, k.principalCircleEdgeGap(a, b, sink))
+		require.Len(t, sink.contribs, 1)
+		require.Equal(t, 5.0, sink.contribs[0].lo)
+		require.Equal(t, 5.0, sink.contribs[0].hi)
+		require.True(t, sink.contribs[0].exact)
+	})
+	t.Run("irrational distance is enclosed", func(t *testing.T) {
+		b := full(r3.NewVec(6, 0, 1), z, 2)
+		sink := &cellSink{}
+		require.True(t, k.principalCircleEdgeGap(a, b, sink))
+		require.Len(t, sink.contribs, 1)
+		c := sink.contribs[0]
+		require.LessOrEqual(t, c.lo, math.Sqrt(10))
+		require.GreaterOrEqual(t, c.hi, math.Sqrt(10))
+		require.False(t, c.exact)
+	})
+	t.Run("other principal direction", func(t *testing.T) {
+		b := full(r3.NewVec(0, -7, 3), z, 2)
+		sink := &cellSink{}
+		require.True(t, k.principalCircleEdgeGap(a, b, sink))
+		require.Equal(t, 5.0, sink.contribs[0].lo)
+	})
+	t.Run("uncertified shapes fall back", func(t *testing.T) {
+		cases := map[string]*cEdge{
+			"near contact":     full(r3.NewVec(3+1e-12, 0, 0), z, 2),
+			"diagonal centers": full(r3.NewVec(7, 1, 0), z, 2),
+			"tilted axis":      full(r3.NewVec(7, 0, 0), r3.NewVec(1e-12, 0, 1), 2),
+			"nonfinite center": full(r3.NewVec(math.Inf(1), 0, 0), z, 2),
+		}
+		partial := full(r3.NewVec(7, 0, 0), z, 2)
+		partial.ang = newAngWindow(0, math.Pi)
+		cases["partial arc"] = partial
+		for name, b := range cases {
+			t.Run(name, func(t *testing.T) {
+				sink := &cellSink{}
+				require.False(t, k.principalCircleEdgeGap(a, b, sink))
+				require.Empty(t, sink.contribs)
+			})
+		}
+	})
+	t.Run("phase boundary observes cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		b := full(r3.NewVec(7, 0, 0), z, 2)
+		kernel := &pairKernel{
+			a: &bodyGeom{edges: []*cEdge{a}}, b: &bodyGeom{edges: []*cEdge{b}},
+			ctx: ctx, tol: k.tol,
+		}
+		_, err := kernel.enumerate()
+		require.ErrorIs(t, err, context.Canceled)
+	})
+}
+
 func TestRatPolyOfRejectsNonFiniteCoefficient(t *testing.T) {
 	t.Parallel()
 	for _, coeff := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {

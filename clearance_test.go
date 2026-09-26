@@ -123,6 +123,49 @@ func requireBoundedGapContains(t *testing.T, report *decad.Report, mm float64) {
 	require.GreaterOrEqual(t, value+bound, mm, `the interval's high end must not exclude the truth`)
 }
 
+// TestClearanceParallelCircleRods checks every pair in the public benchmark's
+// eight-rod document, including the placement that retires each source body.
+func TestClearanceParallelCircleRods(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	bodies := make([]*decad.Body, 8)
+	indices := make(map[*decad.Body]int, len(bodies))
+	for i := range bodies {
+		bodies[i] = translated(t, diskBody(t, doc, float64(i*20), 0, 2), 0, 0, -6)
+		indices[bodies[i]] = i
+	}
+	report, err := doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	require.Len(t, report.Clearances, 28)
+	seen := make(map[[2]int]struct{}, 28)
+	for _, row := range report.Clearances {
+		i, okA := indices[row.A]
+		j, okB := indices[row.B]
+		require.True(t, okA)
+		require.True(t, okB)
+		require.Less(t, i, j)
+		want := float64(20*(j-i) - 4)
+		value, bound := row.Gap.Value.Mag(), row.Gap.Bound.Mag()
+		require.LessOrEqual(t, value-bound, want)
+		require.GreaterOrEqual(t, value+bound, want)
+		require.Less(t, bound, 1e-8)
+		seen[[2]int{i, j}] = struct{}{}
+	}
+	require.Len(t, seen, 28)
+}
+
+func TestClearanceParallelCirclePlacementBound(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	diskBody(t, doc, 0, 0, 2)
+	translated(t, diskBody(t, doc, 20, 0, 2), 0.1, 0, 0)
+	report, err := doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	requireBoundedGapContains(t, report, 16.1)
+}
+
 // TestClearanceTiltedPlanePairIntervalContainsTruth is this file's flagship
 // widening regression, and the single assertion bodyGeom.delta exists for.
 //

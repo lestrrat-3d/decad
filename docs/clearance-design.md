@@ -325,7 +325,7 @@ only in trim):
 |---|---|
 | `Line3` × `Line3` | CF |
 | `Line3` × `Circle3` | P4 |
-| `Circle3` × `Circle3` | P8 |
+| `Circle3` × `Circle3` | CF for complete, principal-axis, exterior-separated circles; P8 otherwise |
 | `Line3` × `Plane` / `Cylinder` / `Sphere` | CF |
 | `Line3` × `Torus` | P4 — line × spine, ⊕ |
 | `Line3` × `Cone` | BB, 1-variable |
@@ -334,6 +334,16 @@ only in trim):
 | `Circle3` × `Torus` | P8 — circle × spine, ⊕ |
 | `Circle3` × `Cone` | BB, 1-variable |
 | a vertex × any surface or curve | CF |
+
+For two complete circle edges with axes exactly along world Z, centers that
+differ along only world X or Y, and a projected center distance strictly greater
+than the sum of their radii, the two facing radial points attain the edge-pair
+minimum. The evaluator compares the center separation and radii as exact
+rationals, then brackets `√((distance − radius₁ − radius₂)² + axial²)` by
+directed square-root rounding. This interval, rather than rounded coordinates
+of the facing points, certifies the candidate. Partial arcs, uncertain
+separation, non-principal axes and near-contact gaps use the P8 cell. The
+ordinary candidate admission and held-boundary widening still apply.
 
 **Every `BB` cell reduces to a one- or two-variable azimuth search whose
 pointwise evaluation is itself a `CF` or `P4`/`P8` cell.** A cone is its
