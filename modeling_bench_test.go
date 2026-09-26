@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -80,6 +81,114 @@ func BenchmarkModelingExtrudeFreeformCold(b *testing.B) {
 		volume, volumeErr := body.Volume()
 		require.NoError(b, volumeErr)
 		require.InDelta(b, 150.0, volume.Value.Base(), 1e-8)
+		b.StartTimer()
+	}
+	b.StopTimer()
+}
+
+// BenchmarkModelingExtrudeChainCold measures a curved open-chain sheet build.
+func BenchmarkModelingExtrudeChainCold(b *testing.B) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(b, err)
+	p0 := s.CreatePoint(0, 0)
+	s.Fix(p0)
+	_, err = s.CreateSpline(p0, s.CreatePoint(10, 5), s.CreatePoint(20, 8), s.CreatePoint(30, 9))
+	require.NoError(b, err)
+	_, err = s.Solve(b.Context())
+	require.NoError(b, err)
+	require.Empty(b, s.Profiles())
+	chains := s.Chains()
+	require.Len(b, chains, 1)
+	chain := chains[0]
+	depth := decad.Distance{D: units.Millimeters(10), Dir: decad.Along}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		b.StopTimer()
+		doc := decad.New()
+		b.StartTimer()
+		body, buildErr := doc.ExtrudeChain(s, chain, depth)
+		if buildErr != nil {
+			b.Fatal(buildErr)
+		}
+		b.StopTimer()
+		require.Equal(b, decad.BodySheet, body.Kind())
+		require.Len(b, body.Faces(), 1)
+		require.Equal(b, []*decad.Body{body}, doc.Bodies())
+		area, areaErr := body.Area()
+		require.NoError(b, areaErr)
+		require.False(b, math.IsNaN(area.Value.Base()) || math.IsInf(area.Value.Base(), 0))
+		require.Greater(b, area.Value.Base()-area.Bound.Base(), chain.Length*10)
+		report, verifyErr := doc.Verify(b.Context())
+		require.NoError(b, verifyErr)
+		require.True(b, report.Passed())
+		b.StartTimer()
+	}
+	b.StopTimer()
+}
+
+// BenchmarkModelingRevolveChainCold measures a full-turn cone shell build.
+func BenchmarkModelingRevolveChainCold(b *testing.B) {
+	s, chain, axis := coneChainAtRadius(b, 0)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		b.StopTimer()
+		doc := decad.New()
+		b.StartTimer()
+		body, err := doc.RevolveChain(s, chain, axis, decad.FullRevolution{})
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.StopTimer()
+		require.Equal(b, decad.BodySheet, body.Kind())
+		require.Len(b, body.Faces(), 1)
+		free, freeErr := decad.Edges(decad.Free()).Exactly(1).SelectEdges(body)
+		require.NoError(b, freeErr)
+		require.Len(b, free, 1)
+		require.Equal(b, []*decad.Body{body}, doc.Bodies())
+		area, areaErr := body.Area()
+		require.NoError(b, areaErr)
+		require.LessOrEqual(b, area.Value.Base()-area.Bound.Base(), 15*math.Pi)
+		require.GreaterOrEqual(b, area.Value.Base()+area.Bound.Base(), 15*math.Pi)
+		report, verifyErr := doc.Verify(b.Context())
+		require.NoError(b, verifyErr)
+		require.True(b, report.Passed())
+		b.StartTimer()
+	}
+	b.StopTimer()
+}
+
+// BenchmarkModelingLoftChainCold measures a ruled ribbon between two open lines.
+func BenchmarkModelingLoftChainCold(b *testing.B) {
+	line0to40 := [][2]float64{{0, 0}, {40, 0}}
+	s0, c0, s1, c1 := chainLoftPair(b, 10, line0to40, line0to40)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		b.StopTimer()
+		doc := decad.New()
+		b.StartTimer()
+		body, err := doc.LoftChain(b.Context(), s0, c0, s1, c1)
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.StopTimer()
+		require.Equal(b, decad.BodySheet, body.Kind())
+		require.Len(b, body.Faces(), 2)
+		free, freeErr := decad.Edges(decad.Free()).Exactly(4).SelectEdges(body)
+		require.NoError(b, freeErr)
+		require.Len(b, free, 4)
+		require.Equal(b, []*decad.Body{body}, doc.Bodies())
+		area, areaErr := body.Area()
+		require.NoError(b, areaErr)
+		require.LessOrEqual(b, area.Value.Base()-area.Bound.Base(), 400.0)
+		require.GreaterOrEqual(b, area.Value.Base()+area.Bound.Base(), 400.0)
+		report, verifyErr := doc.Verify(b.Context())
+		require.NoError(b, verifyErr)
+		require.True(b, report.Passed())
 		b.StartTimer()
 	}
 	b.StopTimer()
