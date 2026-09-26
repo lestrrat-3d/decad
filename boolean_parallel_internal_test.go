@@ -103,6 +103,95 @@ func TestContactBatchStopsOnCancellationDuringMerge(t *testing.T) {
 	require.Equal(t, 1, merged)
 }
 
+func TestContactBatchAllocatesBuffersOnDemand(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		e := newContactBatchExecutor(ctx, &boolMesh{}, &boolMesh{}, nil, 1, nil)
+		require.NoError(t, e.done())
+		require.Nil(t, e.batch)
+		require.Nil(t, e.misses)
+		require.Nil(t, e.results)
+		cancel()
+		require.ErrorIs(t, e.done(), context.Canceled)
+		require.Nil(t, e.batch)
+		require.Nil(t, e.misses)
+		require.Nil(t, e.results)
+	})
+
+	t.Run("partial and repeated flushes", func(t *testing.T) {
+		ma, mb := &boolMesh{}, &boolMesh{}
+		var got []contactPair
+		e := newContactBatchExecutor(t.Context(), ma, mb, newContactMemo(ma, mb), 1,
+			func(pair contactPair, _ triContact) error {
+				got = append(got, pair)
+				return nil
+			})
+		e.limit = 2
+		e.run = func(_ context.Context, _, _ *boolMesh, pairs []contactPair, results []contactBatchResult, _ int) error {
+			for i := range pairs {
+				results[i].contact = triContact{kind: contactPoint}
+			}
+			return nil
+		}
+		require.NoError(t, e.add(0, 0))
+		require.Equal(t, contactBatchSize, cap(e.batch))
+		require.Nil(t, e.misses)
+		require.Nil(t, e.results)
+		require.NoError(t, e.add(1, 1))
+		require.Equal(t, contactBatchSize, cap(e.misses))
+		require.Equal(t, contactBatchSize, cap(e.results))
+		batchBuf := &e.batch[:1][0]
+		missBuf := &e.misses[:1][0]
+		resultBuf := &e.results[:1][0]
+		require.NoError(t, e.add(2, 2))
+		require.NoError(t, e.done())
+		require.Same(t, batchBuf, &e.batch[:1][0])
+		require.Same(t, missBuf, &e.misses[:1][0])
+		require.Same(t, resultBuf, &e.results[:1][0])
+		require.Equal(t, []contactPair{{0, 0}, {1, 1}, {2, 2}}, got)
+	})
+
+	t.Run("full batch", func(t *testing.T) {
+		ma, mb := &boolMesh{}, &boolMesh{}
+		var got []contactPair
+		e := newContactBatchExecutor(t.Context(), ma, mb, newContactMemo(ma, mb), 1,
+			func(pair contactPair, _ triContact) error {
+				got = append(got, pair)
+				return nil
+			})
+		e.run = func(_ context.Context, _, _ *boolMesh, pairs []contactPair, _ []contactBatchResult, _ int) error {
+			require.Len(t, pairs, contactBatchSize)
+			return nil
+		}
+		for i := range contactBatchSize {
+			require.NoError(t, e.add(i, i))
+		}
+		require.Len(t, got, contactBatchSize)
+		require.Equal(t, contactPair{0, 0}, got[0])
+		require.Equal(t, contactPair{contactBatchSize - 1, contactBatchSize - 1}, got[len(got)-1])
+		require.Equal(t, contactBatchSize, cap(e.batch))
+		require.Equal(t, contactBatchSize, cap(e.misses))
+		require.Equal(t, contactBatchSize, cap(e.results))
+	})
+
+	t.Run("memo hits", func(t *testing.T) {
+		ma, mb := &boolMesh{}, &boolMesh{}
+		memo := newContactMemo(ma, mb)
+		memo.store(0, 0, triContact{kind: contactPoint})
+		e := newContactBatchExecutor(t.Context(), ma, mb, memo, 1, nil)
+		e.run = func(_ context.Context, _, _ *boolMesh, pairs []contactPair, results []contactBatchResult, _ int) error {
+			require.Empty(t, pairs)
+			require.Empty(t, results)
+			return nil
+		}
+		require.NoError(t, e.add(0, 0))
+		require.NoError(t, e.done())
+		require.Equal(t, contactBatchSize, cap(e.batch))
+		require.Nil(t, e.misses)
+		require.Nil(t, e.results)
+	})
+}
+
 func TestMeshBooleanWorkerCountsProduceIdenticalResults(t *testing.T) {
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 20, 20, 8)
@@ -119,6 +208,21 @@ func TestMeshBooleanWorkerCountsProduceIdenticalResults(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, serial.payload, parallel.payload, "worker count %d changed held geometry", workers)
 		require.Equal(t, serial.volume, parallel.volume, "worker count %d changed volume", workers)
+	}
+}
+
+// BenchmarkContactBatchEmpty measures the executor path used when a face pair
+// contributes no candidate facets after the box check.
+func BenchmarkContactBatchEmpty(b *testing.B) {
+	ctx := b.Context()
+	ma, mb := &boolMesh{}, &boolMesh{}
+	memo := newContactMemo(ma, mb)
+	b.ReportAllocs()
+	for b.Loop() {
+		e := newContactBatchExecutor(ctx, ma, mb, memo, 1, nil)
+		if err := e.done(); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

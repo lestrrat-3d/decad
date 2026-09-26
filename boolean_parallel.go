@@ -86,9 +86,6 @@ func newContactBatchExecutor(ctx context.Context, ma, mb *boolMesh, memo *contac
 		limit:   contactBatchSize,
 		run:     runContactBatch,
 		consume: consume,
-		batch:   make([]contactBatchEntry, 0, contactBatchSize),
-		misses:  make([]contactPair, 0, contactBatchSize),
-		results: make([]contactBatchResult, 0, contactBatchSize),
 	}
 }
 
@@ -110,6 +107,9 @@ func (e *contactBatchExecutor) add(i, j int) error {
 	} else {
 		entry.miss = true
 	}
+	if e.batch == nil {
+		e.batch = make([]contactBatchEntry, 0, contactBatchSize)
+	}
 	e.batch = append(e.batch, entry)
 	if len(e.batch) < e.limit {
 		return nil
@@ -124,11 +124,14 @@ func (e *contactBatchExecutor) flush() error {
 	e.misses = e.misses[:0]
 	for _, entry := range e.batch {
 		if entry.miss {
+			if e.misses == nil {
+				e.misses = make([]contactPair, 0, contactBatchSize)
+			}
 			e.misses = append(e.misses, entry.pair)
 		}
 	}
 	if cap(e.results) < len(e.misses) {
-		e.results = make([]contactBatchResult, len(e.misses))
+		e.results = make([]contactBatchResult, len(e.misses), contactBatchSize)
 	} else {
 		e.results = e.results[:len(e.misses)]
 	}
