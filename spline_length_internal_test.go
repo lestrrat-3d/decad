@@ -45,6 +45,12 @@ func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
 		lo, hi := 0.0, 0.0
 		for _, span := range spans {
 			spanLo, spanHi := spanLengthBracket(span, depth)
+			direct, err := dyadicSpanOf(nil, span)
+			require.NoError(t, err)
+			direct.denSq = new(big.Int).Mul(direct.den, direct.den)
+			originalLo, originalHi := direct.lengthBracket(depth)
+			require.Equal(t, originalLo, spanLo, "scratch and original splits have identical lower sums")
+			require.Equal(t, originalHi, spanHi, "scratch and original splits have identical upper sums")
 			lo += spanLo
 			hi += spanHi
 		}
@@ -83,6 +89,54 @@ func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
 	gotLo, gotHi := spanLengthBracket(spans[0], freeformLengthDepth)
 	require.Equal(t, wantLo, gotLo, "the complete lower bracket matches rational leaves")
 	require.Equal(t, wantHi, gotHi, "the complete upper bracket matches rational leaves")
+}
+
+func TestFreeformLengthScratchMatchesOriginalSplit(t *testing.T) {
+	t.Parallel()
+	makeSpan := func(coords [][4]int64) bezierSpan {
+		span := make(bezierSpan, len(coords))
+		for i, c := range coords {
+			span[i] = ratPoint{u: big.NewRat(c[0], c[1]), v: big.NewRat(c[2], c[3])}
+		}
+		return span
+	}
+	cases := map[string]bezierSpan{
+		"odd denominators": makeSpan([][4]int64{{0, 1, 0, 1}, {1, 3, 2, 5}, {7, 11, -4, 7}, {3, 1, 0, 1}}),
+		"collapsed":        makeSpan([][4]int64{{1, 3, 2, 5}, {1, 3, 2, 5}, {1, 3, 2, 5}, {1, 3, 2, 5}}),
+		"degree seven": makeSpan([][4]int64{
+			{0, 1, 0, 1}, {1, 3, 2, 5}, {7, 11, -4, 7}, {3, 1, 2, 3},
+			{2, 7, 5, 9}, {4, 5, -1, 3}, {9, 8, 3, 7}, {4, 1, 0, 1},
+		}),
+	}
+	for _, scaled := range []struct {
+		name  string
+		scale float64
+	}{{"tiny", 1e-300}, {"huge", 1e300}} {
+		points, err := ratPointsOf([]Point2{
+			{U: 0, V: 0}, {U: scaled.scale, V: 2 * scaled.scale},
+			{U: 3 * scaled.scale, V: 2 * scaled.scale}, {U: 4 * scaled.scale, V: 0},
+		})
+		require.NoError(t, err)
+		cases[scaled.name] = points
+	}
+	for name, span := range cases {
+		t.Run(name, func(t *testing.T) {
+			for _, depth := range []int{0, 1, 4, freeformLengthDepth} {
+				original, err := dyadicSpanOf(nil, span)
+				require.NoError(t, err)
+				original.denSq = new(big.Int).Mul(original.den, original.den)
+				wantLo, wantHi := original.lengthBracket(depth)
+				gotLo, gotHi := spanLengthBracket(span, depth)
+				require.Equal(t, math.Float64bits(wantLo), math.Float64bits(gotLo))
+				require.Equal(t, math.Float64bits(wantHi), math.Float64bits(gotHi))
+			}
+			cost := freeformBracketCost(len(span))
+			work := &freeformWork{spent: freeformWorkLimit - cost + 1}
+			_, _, err := freeformArcLength([]bezierSpan{span}, work)
+			require.ErrorIs(t, err, ErrUnsupported)
+			require.Equal(t, freeformWorkLimit, work.spent)
+		})
+	}
 }
 
 // The reported bound is the enclosure MEASURED at the fixed depth, and a fixed

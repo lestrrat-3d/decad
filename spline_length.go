@@ -155,7 +155,14 @@ func spanLengthBracket(span bezierSpan, depth int) (float64, float64) {
 	// This square is part of the bracket's already-paid subtree, not the
 	// conversion shared with other dyadic-span consumers.
 	s.denSq = new(big.Int).Mul(s.den, s.den)
-	return s.lengthBracket(depth)
+	if depth <= 0 || len(s.points) < 2 {
+		return s.chordLower(), s.polygonUpper()
+	}
+	frames := make([]lengthSplitScratch, depth)
+	for i := range frames {
+		frames[i].init(len(s.points))
+	}
+	return s.lengthBracketScratch(frames)
 }
 
 // dyadicPoint is one split value: the plane-local coordinate
@@ -261,6 +268,76 @@ func (s dyadicSpan) lengthBracket(depth int) (float64, float64) {
 	leftLo, leftHi := left.lengthBracket(depth - 1)
 	rightLo, rightHi := right.lengthBracket(depth - 1)
 	return downRound(leftLo + rightLo), upRound(leftHi + rightHi)
+}
+
+// lengthSplitScratch owns the three control nets used at one subdivision
+// level. Its integer storage remains live for the whole depth-first walk, so
+// sibling subtrees reuse it without changing the order of leaf summation.
+type lengthSplitScratch struct {
+	work, left, right []dyadicPoint
+	tmp               big.Int
+}
+
+func (f *lengthSplitScratch) init(n int) {
+	f.work = make([]dyadicPoint, n)
+	f.left = make([]dyadicPoint, n)
+	f.right = make([]dyadicPoint, n)
+	for _, points := range [][]dyadicPoint{f.work, f.left, f.right} {
+		for i := range points {
+			points[i].u = new(big.Int)
+			points[i].v = new(big.Int)
+		}
+	}
+}
+
+func (s dyadicSpan) lengthBracketScratch(frames []lengthSplitScratch) (float64, float64) {
+	if len(frames) == 0 {
+		return s.chordLower(), s.polygonUpper()
+	}
+	f := &frames[len(frames)-1]
+	f.split(s.points)
+	left := dyadicSpan{points: f.left, den: s.den, denSq: s.denSq}
+	right := dyadicSpan{points: f.right, den: s.den, denSq: s.denSq}
+	leftLo, leftHi := left.lengthBracketScratch(frames[:len(frames)-1])
+	rightLo, rightHi := right.lengthBracketScratch(frames[:len(frames)-1])
+	return downRound(leftLo + rightLo), upRound(leftHi + rightHi)
+}
+
+func (f *lengthSplitScratch) split(points []dyadicPoint) {
+	n := len(points)
+	for i, p := range points {
+		f.work[i].u.Set(p.u)
+		f.work[i].v.Set(p.v)
+		f.work[i].exp = p.exp
+	}
+	f.left[0].u.Set(f.work[0].u)
+	f.left[0].v.Set(f.work[0].v)
+	f.left[0].exp = f.work[0].exp
+	f.right[n-1].u.Set(f.work[n-1].u)
+	f.right[n-1].v.Set(f.work[n-1].v)
+	f.right[n-1].exp = f.work[n-1].exp
+	for round := n - 1; round > 0; round-- {
+		for i := range round {
+			midpointInto(&f.work[i], f.work[i], f.work[i+1], &f.tmp)
+		}
+		f.left[n-round].u.Set(f.work[0].u)
+		f.left[n-round].v.Set(f.work[0].v)
+		f.left[n-round].exp = f.work[0].exp
+		f.right[round-1].u.Set(f.work[round-1].u)
+		f.right[round-1].v.Set(f.work[round-1].v)
+		f.right[round-1].exp = f.work[round-1].exp
+	}
+}
+
+func midpointInto(dst *dyadicPoint, a, b dyadicPoint, tmp *big.Int) {
+	exp := max(a.exp, b.exp)
+	dst.u.Lsh(a.u, exp-a.exp)
+	tmp.Lsh(b.u, exp-b.exp)
+	dst.u.Add(dst.u, tmp)
+	dst.v.Lsh(a.v, exp-a.exp)
+	tmp.Lsh(b.v, exp-b.exp)
+	dst.v.Add(dst.v, tmp)
+	dst.exp = exp + 1
 }
 
 // split halves a span by de Casteljau at t = 1/2, exactly: every blend is a
