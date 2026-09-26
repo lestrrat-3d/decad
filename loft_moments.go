@@ -171,6 +171,20 @@ func newLoftMassAccumulator(anchor r3.Vec, delta, sectionDelta, sectionMatchedDe
 // nothing until publication, and the area sum's own terms are the endpoints
 // of a proven per-triangle enclosure rather than a float evaluation.
 func (m *loftMassAccumulator) add(a, b, c r3.Vec, wall bool) {
+	m.addTriangle(a, b, c, wall, [3]int{}, nil)
+}
+
+// loftVertexDistance is local to one assembled Loft. A ready entry can hold
+// +Inf: that is the exact upper-distance result when float64 saturates.
+type loftVertexDistance struct {
+	upper float64
+	ready bool
+}
+
+// addTriangle keeps add's triangle fold unchanged. Only evalLoft supplies
+// indices and a cache, so repeated references to one assembled vertex reuse
+// its exact Euclidean upper distance.
+func (m *loftMassAccumulator) addTriangle(a, b, c r3.Vec, wall bool, indices [3]int, distances []loftVertexDistance) {
 	sa := xsub(xptOf(a), m.anchor)
 	sb := xsub(xptOf(b), m.anchor)
 	sc := xsub(xptOf(c), m.anchor)
@@ -191,9 +205,15 @@ func (m *loftMassAccumulator) add(a, b, c r3.Vec, wall bool) {
 	m.foldBounds(a)
 	m.foldBounds(b)
 	m.foldBounds(c)
-	m.foldCoordUpper(a)
-	m.foldCoordUpper(b)
-	m.foldCoordUpper(c)
+	if distances == nil {
+		m.foldCoordUpper(a)
+		m.foldCoordUpper(b)
+		m.foldCoordUpper(c)
+	} else {
+		m.foldCoordUpperCached(a, &distances[indices[0]])
+		m.foldCoordUpperCached(b, &distances[indices[1]])
+		m.foldCoordUpperCached(c, &distances[indices[2]])
+	}
 
 	if m.delta > 0 {
 		m.perturbAreaSum = upRound(m.perturbAreaSum + perturbedTriangleAreaAllow(a, b, c, m.delta))
@@ -280,6 +300,22 @@ func (m *loftMassAccumulator) foldCoordUpper(p r3.Vec) {
 		dist = ratSqrtUp(d2)
 	}
 	m.distUpper = max(m.distUpper, dist)
+}
+
+// foldCoordUpperCached performs the same per-reference maxima as
+// foldCoordUpper. The distance is computed when this assembled vertex index
+// is first referenced, so unused vertices never affect the measurements.
+func (m *loftMassAccumulator) foldCoordUpperCached(p r3.Vec, entry *loftVertexDistance) {
+	d := p.Sub(m.anchorF)
+	m.coordUpper = max(m.coordUpper, math.Abs(d.X), math.Abs(d.Y), math.Abs(d.Z))
+	if !entry.ready {
+		entry.upper = math.Inf(1)
+		if d2 := ratSquaredDistance3(m.anchorF.X, m.anchorF.Y, m.anchorF.Z, p.X, p.Y, p.Z); d2 != nil {
+			entry.upper = ratSqrtUp(d2)
+		}
+		entry.ready = true
+	}
+	m.distUpper = max(m.distUpper, entry.upper)
 }
 
 // volume publishes Σvol6/6 plus the exact bilinear-patch correction, rounded

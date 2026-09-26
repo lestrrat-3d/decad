@@ -32,6 +32,78 @@ func addBoxFaces(m *loftMassAccumulator, a, b, c float64) {
 	}
 }
 
+func TestLoftVertexDistanceCacheMatchesUncachedAccumulator(t *testing.T) {
+	t.Parallel()
+	verts := []r3.Vec{
+		r3.NewVec(0, 0, 0), r3.NewVec(2, 0, 0),
+		r3.NewVec(0, 3, 0), r3.NewVec(0, 0, 5),
+		r3.NewVec(math.NaN(), 0, 0), // No triangle admits this vertex.
+	}
+	tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
+	anchor := r3.NewVec(0.125, -0.375, 0.625)
+	for _, delta := range []float64{0, 1e-8} {
+		uncached := newLoftMassAccumulator(anchor, delta, 0, 0)
+		cached := newLoftMassAccumulator(anchor, delta, 0, 0)
+		cache := make([]loftVertexDistance, len(verts))
+		for _, tri := range tris {
+			uncached.add(verts[tri[0]], verts[tri[1]], verts[tri[2]], true)
+			cached.addTriangle(verts[tri[0]], verts[tri[1]], verts[tri[2]], true, tri, cache)
+		}
+		for _, pair := range [][2]*big.Rat{
+			{uncached.vol6, cached.vol6}, {uncached.momX, cached.momX},
+			{uncached.momY, cached.momY}, {uncached.momZ, cached.momZ},
+		} {
+			require.Zero(t, pair[0].Cmp(pair[1]))
+		}
+		require.Equal(t, math.Float64bits(uncached.coordUpper), math.Float64bits(cached.coordUpper))
+		require.Equal(t, math.Float64bits(uncached.distUpper), math.Float64bits(cached.distUpper))
+		require.Equal(t, math.Float64bits(uncached.perturbAreaSum), math.Float64bits(cached.perturbAreaSum))
+		for i, entry := range cache {
+			require.Equal(t, i < 4, entry.ready, "only referenced vertices receive a distance")
+		}
+
+		for _, pair := range [][2]Measurement{
+			{uncached.volume(verts, tris), cached.volume(verts, tris)},
+			{uncached.area(), cached.area()},
+		} {
+			require.Equal(t, math.Float64bits(pair[0].Value.Base()), math.Float64bits(pair[1].Value.Base()))
+			require.Equal(t, math.Float64bits(pair[0].Bound.Base()), math.Float64bits(pair[1].Bound.Base()))
+			require.Equal(t, pair[0].Exactness, pair[1].Exactness)
+		}
+		oldCentroid, oldErr := uncached.centroid(verts, tris)
+		newCentroid, newErr := cached.centroid(verts, tris)
+		require.Equal(t, oldErr, newErr)
+		if oldErr == nil {
+			for _, pair := range [][2]float64{
+				{oldCentroid.Value.X, newCentroid.Value.X},
+				{oldCentroid.Value.Y, newCentroid.Value.Y},
+				{oldCentroid.Value.Z, newCentroid.Value.Z},
+				{oldCentroid.Bound.Base(), newCentroid.Bound.Base()},
+			} {
+				require.Equal(t, math.Float64bits(pair[0]), math.Float64bits(pair[1]))
+			}
+			require.Equal(t, oldCentroid.Exactness, newCentroid.Exactness)
+		}
+		oldBox, oldOK := uncached.bounds()
+		newBox, newOK := cached.bounds()
+		require.Equal(t, oldOK, newOK)
+		require.Equal(t, oldBox, newBox)
+	}
+
+	// A finite coordinate can still have no finite float64 upper distance.
+	uncached := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
+	cached := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
+	far := r3.NewVec(math.MaxFloat64, 1, 0)
+	entry := new(loftVertexDistance)
+	for range 2 {
+		uncached.foldCoordUpper(far)
+		cached.foldCoordUpperCached(far, entry)
+	}
+	require.True(t, entry.ready)
+	require.True(t, math.IsInf(entry.upper, 1))
+	require.Equal(t, math.Float64bits(uncached.distUpper), math.Float64bits(cached.distUpper))
+}
+
 // TestLoftMassAccumulatorBoxIsExact reproduces a closed box's closed-form
 // volume and all three centroid coordinates exactly: every dimension is a
 // power of two, so every intermediate rational is exactly representable in
