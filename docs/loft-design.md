@@ -1238,10 +1238,17 @@ from a float tolerance:
   sign, or two differing signs, proves nothing and takes no shortcut — that
   pair still goes to the exact classification, which is what refuses a
   vertex-sharing pair that crosses away from its vertex.
+- **The coplanar isolated shared vertex.** For a pair with one common vertex
+  whose other two vertices lie exactly in the first triangle's plane, an edge
+  line through that vertex may strictly separate the first triangle's other
+  corner from BOTH remaining corners of the second triangle. Convexity then
+  confines their intersection to the common vertex. A corner ON the tested
+  line or on the wrong side proves nothing and leaves the pair to the exact
+  classification. The signs come from `planeSide` over exact rational points.
 
-Each certificate reads signs the audit computes anyway, so neither adds exact
-work to the pairs it cannot decide. The certificates are individually
-switchable so the audit keeps an independent reference path — no broad-phase
+The noncoplanar certificates read signs the audit computes anyway. The
+coplanar certificate tests at most two lines before falling through. The
+certificates can be disabled together, so the audit keeps an independent reference path — no broad-phase
 and no certificate, every pair through the exact classification — for the
 required tests to compare every verdict against.
 

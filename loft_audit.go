@@ -239,7 +239,7 @@ const (
 	// loftPairEdgeCertificate: the noncoplanar shared-edge certificate
 	// admitted the pair.
 	loftPairEdgeCertificate
-	// loftPairVertexCertificate: the isolated shared-vertex certificate
+	// loftPairVertexCertificate: an isolated shared-vertex certificate
 	// admitted the pair.
 	loftPairVertexCertificate
 )
@@ -349,6 +349,14 @@ func auditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error { //nolint:unp
 // vertex. Sharing a vertex is not itself evidence — EVERY such pair has its
 // shared vertex on both planes, which is why the certificate reads the two
 // OTHER vertices and never that one.
+//
+// # Certificate C — the coplanar isolated shared vertex
+//
+// A line through the shared vertex and another corner of one triangle may
+// separate its third corner strictly from both remaining corners of the
+// second triangle. The second triangle meets the line only at the shared
+// vertex; the first stays entirely on its own side. Convexity confines their
+// intersection to that vertex. A zero sign falls through to classification.
 func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int, shortcuts loftAuditShortcuts) (loftPairOutcome, error) {
 	ta := data.corners[i]
 	tb := data.corners[j]
@@ -372,6 +380,10 @@ func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int, shortcuts l
 	}
 
 	signsB := trianglePlaneSigns(xta, na, xtb)
+	if shortcuts.certificates && sharedCount == 1 && countZero(signsB) == 3 &&
+		coplanarIsolatedSharedVertex(data, tris[i], tris[j], shared[0], na) {
+		return loftPairVertexCertificate, nil
+	}
 	if shortcuts.certificates && sharedCount == 1 && isolatedSharedVertex(tris[j], shared[0], signsB) {
 		return loftPairVertexCertificate, nil
 	}
@@ -409,6 +421,40 @@ func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int, shortcuts l
 	default:
 		return loftPairClassified, errLoftContact(i, j, "share an unexpected vertex count")
 	}
+}
+
+// coplanarIsolatedSharedVertex proves that two coplanar triangles meet only
+// at their one recorded common vertex. An edge line through that vertex
+// separates both remaining corners of the second triangle strictly from the
+// opposite corner of the first. The second triangle meets the line only at
+// the shared vertex, while the first lies entirely on its own side.
+func coplanarIsolatedSharedVertex(data *loftAuditData, a, b [3]int, shared int, n xpt) bool {
+	var aOther, bOther [2]xpt
+	countA, countB := 0, 0
+	for _, vertex := range a {
+		if vertex != shared {
+			aOther[countA] = data.xverts[vertex]
+			countA++
+		}
+	}
+	for _, vertex := range b {
+		if vertex != shared {
+			bOther[countB] = data.xverts[vertex]
+			countB++
+		}
+	}
+	v := data.xverts[shared]
+	for k := range 2 {
+		side := planeSide(v, aOther[k], aOther[1-k], n)
+		if side == 0 {
+			continue
+		}
+		if planeSide(v, aOther[k], bOther[0], n) == -side &&
+			planeSide(v, aOther[k], bOther[1], n) == -side {
+			return true
+		}
+	}
+	return false
 }
 
 // isolatedSharedVertex is certificate B's own reading (docs/loft-design.md
