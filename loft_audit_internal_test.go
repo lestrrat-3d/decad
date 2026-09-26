@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"math"
+	"math/big"
 	"sync"
 	"testing"
 
@@ -10,6 +11,69 @@ import (
 	"github.com/lestrrat-3d/sketch"
 	"github.com/stretchr/testify/require"
 )
+
+func TestLoftExactPlaneSignsMatchDifferencePredicate(t *testing.T) {
+	point := func(x, y, z, w int64) xpt {
+		return xpt{big.NewInt(x), big.NewInt(y), big.NewInt(z), big.NewInt(w)}
+	}
+	huge := new(big.Int).Lsh(big.NewInt(1), 1000)
+	extreme := xpt{
+		x: new(big.Int).Set(huge),
+		y: new(big.Int).Neg(huge),
+		z: big.NewInt(0),
+		w: big.NewInt(5),
+	}
+	extremePoint := func(z int64) xpt {
+		return xpt{
+			x: new(big.Int).Mul(huge, big.NewInt(3)),
+			y: new(big.Int).Neg(new(big.Int).Mul(huge, big.NewInt(3))),
+			z: big.NewInt(z),
+			w: big.NewInt(15),
+		}
+	}
+	for _, tc := range []struct {
+		name   string
+		anchor xpt
+		normal xpt
+		other  [3]xpt
+	}{
+		{
+			name:   "odd weights and a plane crossing",
+			anchor: point(1, -2, 1, 3), normal: point(2, -3, 5, 7),
+			other: [3]xpt{point(30, 12, 3, 9), point(10, 4, 2, 3), point(10, 4, 0, 3)},
+		},
+		{
+			name:   "reversed normal and shared point",
+			anchor: point(1, -2, 1, 3), normal: point(-2, 3, -5, 11),
+			other: [3]xpt{point(3, -6, 3, 9), point(10, 4, 2, 3), point(10, 4, 0, 3)},
+		},
+		{
+			name:   "large cancellation near the plane",
+			anchor: extreme, normal: point(1, 1, 5, 9),
+			other: [3]xpt{extremePoint(0), extremePoint(1), extremePoint(-1)},
+		},
+		{
+			name:   "zero normal",
+			anchor: point(5, 3, -9, 7), normal: point(0, 0, 0, 13),
+			other: [3]xpt{point(1, 2, 3, 5), point(-7, 9, 4, 11), point(0, 0, 0, 1)},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			plane := newLoftExactPlane(tc.anchor, tc.normal)
+			var want [3]int
+			for i, p := range tc.other {
+				want[i] = xdotSign(tc.normal, xsub(p, tc.anchor))
+			}
+			require.Equal(t, want, trianglePlaneSigns(plane, tc.other))
+		})
+	}
+	anchor, normal, p := point(1, 2, 3, 5), point(2, 3, 5, 7), point(4, 5, 6, 11)
+	plane := newLoftExactPlane(anchor, normal)
+	want := plane.sign(p)
+	anchor.w.SetInt64(99)
+	normal.x.SetInt64(99)
+	require.Equal(t, want, plane.sign(p), "cached coefficients must own their integers")
+}
 
 // boxLoftVerts and boxLoftTris are an untwisted, unit-square-to-unit-square
 // loft's own vertex table and wall triangle set (docs/loft-design.md §5):
