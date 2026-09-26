@@ -40,15 +40,16 @@ import (
 // entry is only correct if the function actually charges its own cost first and
 // returns having done nothing when the counter refuses.
 var meteredPrimitives = map[string]struct{}{
-	"chordSegmentSquaredDistance": {},
-	"ratChordFrame":               {},
-	"ratRunningMax":               {},
-	"ratPointCopy":                {},
-	"dyadicSpan.ratPointAt":       {},
-	"spanChordVector":             {},
-	"spanChordSquared":            {},
-	"spanHodographGapSquared":     {},
-	"ratQuarterOf":                {},
+	"chordSegmentSquaredDistance":  {},
+	"chordEndpointSquaredDistance": {},
+	"ratChordFrame":                {},
+	"ratRunningMax":                {},
+	"ratPointCopy":                 {},
+	"dyadicSpan.ratPointAt":        {},
+	"spanChordVector":              {},
+	"spanChordSquared":             {},
+	"spanHodographGapSquared":      {},
+	"ratQuarterOf":                 {},
 }
 
 // bigArithmeticMethods are the math/big method names that DO work: they

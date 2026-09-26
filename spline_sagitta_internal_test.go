@@ -1176,6 +1176,65 @@ func TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths(t *testing.T) {
 		"the matched delta pays for n reconstructions, one chord vector, its own per-point hull scan, one exact quartering and one rounding")
 	require.NotEqual(t, sagWork.spent, mdWork.spent,
 		"the two readings must carry their own separately derived charge, never one reused for the other")
+
+	// Replay the original fused reading with its full endpoint projections.
+	// Each case must return the same bound and spend the same amount, including
+	// when the chord collapses or the control values need multiple words.
+	for name, points := range map[string][][2]float64{
+		"one point":       {{0, 0}},
+		"two points":      {{0, 0}, {2, 1}},
+		"overshoot":       {{0, 0}, {-3, 0.01}, {4, 0.01}, {1, 0}},
+		"interior":        {{0, 0}, {1, 2}, {3, -1}, {5, 3}},
+		"collinear":       {{0, 0}, {1, 0}, {2, 0}},
+		"collapsed chord": {{0, 0}, {1, 5}, {-1, 5}, {0, 0}},
+		"wide":            {{0, 0}, {1e100, 2e100}, {3e100, 0}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cell, err := dyadicSpanOf(nil, ratSpan(points))
+			require.NoError(t, err)
+
+			reference := func(w *freeformWork) (float64, error) {
+				span, err := cell.bezierSpan(w)
+				if err != nil {
+					return 0, err
+				}
+				a, b := span[0], span[len(span)-1]
+				bax, bay, d, err := ratChordFrame(w, a, b)
+				if err != nil {
+					return 0, err
+				}
+				var maxSq *big.Rat
+				for _, p := range span {
+					sq, err := chordSegmentSquaredDistance(w, p, a, bax, bay, d)
+					if err != nil {
+						return 0, err
+					}
+					maxSq, err = ratRunningMax(w, maxSq, sq)
+					if err != nil {
+						return 0, err
+					}
+				}
+				return chargedRatSqrtUp(w, maxSq)
+			}
+
+			originalWork := newFreeformWork()
+			original, err := reference(originalWork)
+			require.NoError(t, err)
+			optimizedWork := newFreeformWork()
+			optimized, _, err := dyadicSpanSagittaUpperWithSpan(optimizedWork, cell)
+			require.NoError(t, err)
+			require.Equal(t, original, optimized)
+			require.Equal(t, originalWork.spent, optimizedWork.spent)
+
+			exact := &freeformWork{spent: freeformWorkLimit - originalWork.spent}
+			_, _, err = dyadicSpanSagittaUpperWithSpan(exact, cell)
+			require.NoError(t, err)
+			require.Equal(t, freeformWorkLimit, exact.spent)
+			short := &freeformWork{spent: freeformWorkLimit - originalWork.spent + 1}
+			_, _, err = dyadicSpanSagittaUpperWithSpan(short, cell)
+			require.ErrorIs(t, err, ErrUnsupported)
+		})
+	}
 }
 
 // TestPairStationsChargesEveryPhaseOfAWalkThatNeverSplits pins the whole

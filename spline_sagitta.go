@@ -258,6 +258,17 @@ func chordSegmentSquaredDistance(w *freeformWork, p, a ratPoint, bax, bay, d *bi
 	return new(big.Rat).Quo(new(big.Rat).Mul(cross, cross), d), nil
 }
 
+// chordEndpointSquaredDistance pays the same projection charge at the same
+// operand width as chordSegmentSquaredDistance. A chord endpoint has exact
+// squared distance zero, so its projection arithmetic can be skipped after
+// the charge succeeds without changing a budget refusal.
+func chordEndpointSquaredDistance(w *freeformWork, p, a ratPoint, bax, bay, d *big.Rat) (*big.Rat, error) {
+	if err := w.step(costMul(chordProjectionCost, widthUnits(ratBitWidth(p.u, p.v, a.u, a.v, bax, bay, d)))); err != nil {
+		return nil, err
+	}
+	return new(big.Rat), nil
+}
+
 // ratChordFrame is the shared chord frame every sagitta reading projects
 // against: the vector from a to b and that vector's own exact squared length,
 // built ONCE per span so chordSegmentSquaredDistance never rebuilds it per
@@ -446,7 +457,12 @@ func dyadicSpanSagittaUpper(w *freeformWork, s dyadicSpan) (float64, error) {
 		if err != nil {
 			return 0, err
 		}
-		sq, err := chordSegmentSquaredDistance(w, p, a, bax, bay, d)
+		var sq *big.Rat
+		if i == 0 || i == n-1 {
+			sq, err = chordEndpointSquaredDistance(w, p, a, bax, bay, d)
+		} else {
+			sq, err = chordSegmentSquaredDistance(w, p, a, bax, bay, d)
+		}
 		if err != nil {
 			return 0, err
 		}
@@ -482,8 +498,13 @@ func dyadicSpanSagittaUpperWithSpan(w *freeformWork, s dyadicSpan) (float64, bez
 	}
 
 	var maxSq *big.Rat
-	for _, p := range span {
-		sq, err := chordSegmentSquaredDistance(w, p, a, bax, bay, d)
+	for i, p := range span {
+		var sq *big.Rat
+		if i == 0 || i == len(span)-1 {
+			sq, err = chordEndpointSquaredDistance(w, p, a, bax, bay, d)
+		} else {
+			sq, err = chordSegmentSquaredDistance(w, p, a, bax, bay, d)
+		}
 		if err != nil {
 			return 0, nil, err
 		}
