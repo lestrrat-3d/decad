@@ -34,6 +34,18 @@ func TestChainGateDiameterCurvedExtrudeVerify(t *testing.T) {
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 	require.True(t, report.Passed(), "%+v", report.Diagnostics)
+	strict, err := doc.Verify(t.Context(), decad.WithTolerance(units.Scalar(1e-18)))
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, strict.Status)
+	areaRejected := false
+	for _, diag := range strict.Diagnostics {
+		require.NotEqual(t, decad.DiagToleranceReferenceUnavailable, diag.Code)
+		if diag.Reading == decad.ReadingArea && diag.Code == decad.DiagMeasurementBeyondTolerance {
+			require.NotNil(t, diag.Required)
+			areaRejected = true
+		}
+	}
+	require.True(t, areaRejected, "%+v", strict.Diagnostics)
 	rotation, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
 	placed, err := body.Placed(t.Context(), rotation)
