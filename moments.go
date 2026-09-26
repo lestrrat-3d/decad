@@ -493,7 +493,7 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 		muProof, mvProof, haveMomentProof := circularFirstMomentInterval(segment, anchor)
 		var muuProof, muvProof, mvvProof ratInterval
 		var haveSecondMomentProof bool
-		if order != momentFirstOrder {
+		if order == momentSecondOrder {
 			muuProof, muvProof, mvvProof, haveSecondMomentProof = circularSecondMomentInterval(segment, anchor)
 		}
 		segment.Center = shiftPoint(segment.Center, anchor)
@@ -523,7 +523,7 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 		muProof, mvProof, haveMomentProof := circularFirstMomentInterval(segment, anchor)
 		var muuProof, muvProof, mvvProof ratInterval
 		var haveSecondMomentProof bool
-		if order != momentFirstOrder {
+		if order == momentSecondOrder {
 			muuProof, muvProof, mvvProof, haveSecondMomentProof = circularSecondMomentInterval(segment, anchor)
 		}
 		segment.Center = shiftPoint(segment.Center, anchor)
@@ -580,7 +580,7 @@ func (ig *regionIntegrals) addAnalytic(segment CurveSegment, anchor Point2) erro
 	return ig.add(segment, freeformPlan{}, anchor, momentSecondOrder)
 }
 
-// addFor skips second-moment work when the caller needs only first moments.
+// addFor skips second-moment work when the caller needs only area or first moments.
 func (ig *regionIntegrals) addFor(segment CurveSegment, plan freeformPlan, anchor Point2, order momentIntegralOrder) error {
 	return ig.add(segment, plan, anchor, order)
 }
@@ -607,7 +607,7 @@ func (ig *regionIntegrals) addLine(seg LineSeg, anchor Point2, order momentInteg
 	accumulateMoment(&ig.area, &ig.areaBound, area, rationalFloatError(exact.area, area))
 	accumulateMoment(&ig.mu, &ig.muBound, mu, rationalFloatError(exact.mu, mu))
 	accumulateMoment(&ig.mv, &ig.mvBound, mv, rationalFloatError(exact.mv, mv))
-	if order == momentFirstOrder {
+	if order != momentSecondOrder {
 		ig.addExact(exact)
 		return
 	}
@@ -849,10 +849,10 @@ func exactLineMoments(seg LineSeg, anchor Point2, order momentIntegralOrder) exa
 	area := ratScale(new(big.Rat).Sub(ratMul(u0, v1), ratMul(u1, v0)), 1, 2)
 	mu := ratScale(ratMul(dv, ratAdd(u0sq, ratMul(u0, u1), u1sq)), 1, 6)
 	mv := ratScale(ratMul(du, ratAdd(v0sq, ratMul(v0, v1), v1sq)), -1, 6)
-	if order == momentFirstOrder {
+	if order != momentSecondOrder {
 		// The accumulator still requires six non-nil fields. These zero
-		// placeholders are never read by a first-order caller; they let the
-		// region publish its exact area and centroid without cubic work.
+		// placeholders are never read by an area- or first-order caller; they
+		// let the region publish its exact area and centroid without cubic work.
 		return exactMoments{
 			area: area, mu: mu, mv: mv,
 			muu: new(big.Rat), muv: new(big.Rat), mvv: new(big.Rat),
@@ -943,7 +943,7 @@ func (ig *regionIntegrals) addCircular(
 	accumulateMoment(&ig.area, &ig.areaBound, area, areaBound)
 	accumulateMoment(&ig.mu, &ig.muBound, mu, muBound)
 	accumulateMoment(&ig.mv, &ig.mvBound, mv, mvBound)
-	if order == momentFirstOrder {
+	if order != momentSecondOrder {
 		return
 	}
 

@@ -135,7 +135,7 @@ func spanCoordinatePolys(span bezierSpan) (ratPoly, ratPoly) {
 func exactFreeformMoments(spans []bezierSpan, reversed bool, order momentIntegralOrder) exactMoments {
 	half := big.NewRat(1, 2)
 	var third *big.Rat
-	if order != momentFirstOrder {
+	if order == momentSecondOrder {
 		third = big.NewRat(1, 3)
 	}
 	out := exactMoments{
@@ -155,7 +155,7 @@ func exactFreeformMoments(spans []bezierSpan, reversed bool, order momentIntegra
 		out.area.Add(out.area, new(big.Rat).Mul(half, rpIntegral01(rpSub(rpMul(u, dv), rpMul(v, du)))))
 		out.mu.Add(out.mu, new(big.Rat).Mul(half, rpIntegral01(rpMul(uu, dv))))
 		out.mv.Sub(out.mv, new(big.Rat).Mul(half, rpIntegral01(rpMul(vv, du))))
-		if order != momentFirstOrder {
+		if order == momentSecondOrder {
 			out.muu.Add(out.muu, new(big.Rat).Mul(third, rpIntegral01(rpMul(rpMul(uu, u), dv))))
 			out.mvv.Sub(out.mvv, new(big.Rat).Mul(third, rpIntegral01(rpMul(rpMul(vv, v), du))))
 			out.muv.Add(out.muv, new(big.Rat).Mul(half, rpIntegral01(rpMul(rpMul(uu, v), dv))))
@@ -198,7 +198,7 @@ func (ig *regionIntegrals) addFreeformTo(spans []bezierSpan, reversed bool, orde
 		{&ig.muv, &ig.muvBound, exact.muv},
 		{&ig.mvv, &ig.mvvBound, exact.mvv},
 	}
-	if order == momentFirstOrder {
+	if order != momentSecondOrder {
 		moments = moments[:3]
 	}
 	for _, moment := range moments {

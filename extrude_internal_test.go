@@ -680,6 +680,17 @@ func TestEvalPrismContinuesCallerFreeformWork(t *testing.T) {
 	require.Greater(t, work.spent, spent)
 }
 
+// BenchmarkMomentAreaInvoluteFit measures the area pass used by Extrude's
+// recorded-area falsifier on an admitted free-form profile.
+func BenchmarkMomentAreaInvoluteFit(b *testing.B) {
+	profile := involuteFitProfile()
+	for b.Loop() {
+		if _, err := profile.evaluatorIntegrals(momentAreaOrder, newFreeformWork()); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 // ------------------------------------------- reusing a published resolution
 
 // prismPayloadOf reads back the payload a prism build published on its body.
