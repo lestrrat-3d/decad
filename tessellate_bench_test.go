@@ -144,17 +144,17 @@ func runColdTess(b *testing.B, build func() *decad.Body) {
 			b.Fatalf("incomplete mesh: %d vertices, %d triangles, %d sources",
 				len(vertices), count, len(mesh.SourceFaces()))
 		}
-		min, max := vertices[0], vertices[0]
+		low, high := vertices[0], vertices[0]
 		for _, vertex := range vertices {
 			if math.IsNaN(vertex.X) || math.IsNaN(vertex.Y) || math.IsNaN(vertex.Z) ||
 				math.IsInf(vertex.X, 0) || math.IsInf(vertex.Y, 0) || math.IsInf(vertex.Z, 0) {
 				b.Fatalf("non-finite mesh vertex: %v", vertex)
 			}
-			min.X, min.Y, min.Z = math.Min(min.X, vertex.X), math.Min(min.Y, vertex.Y), math.Min(min.Z, vertex.Z)
-			max.X, max.Y, max.Z = math.Max(max.X, vertex.X), math.Max(max.Y, vertex.Y), math.Max(max.Z, vertex.Z)
+			low.X, low.Y, low.Z = math.Min(low.X, vertex.X), math.Min(low.Y, vertex.Y), math.Min(low.Z, vertex.Z)
+			high.X, high.Y, high.Z = math.Max(high.X, vertex.X), math.Max(high.Y, vertex.Y), math.Max(high.Z, vertex.Z)
 		}
-		if max.X <= min.X || max.Y <= min.Y || max.Z <= min.Z {
-			b.Fatalf("mesh has no three-dimensional extent: min %v, max %v", min, max)
+		if high.X <= low.X || high.Y <= low.Y || high.Z <= low.Z {
+			b.Fatalf("mesh has no three-dimensional extent: min %v, max %v", low, high)
 		}
 		for _, triangle := range triangles {
 			for _, index := range triangle {
