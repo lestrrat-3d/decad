@@ -365,6 +365,7 @@
 0	0.00	TestLoftCircularCellStationsHandDerivedStationCount
 0	0.02	TestLoftCircularCellStationsJointWalkUpOutrunsTheSeed
 0	0.00	TestLoftCircularCellStationsSymmetricCollapseIsFine
+0	0.01	TestLoftCoplanarVertexCertificateMatchesExactClassifier
 0	0.00	TestLoftContextCancellation
 0	0.00	TestLoftCrossingAuditAdmitsCoplanarSharedEdge
 0	0.00	TestLoftCrossingAuditAdmitsUntwistedBox

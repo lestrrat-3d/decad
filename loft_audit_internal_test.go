@@ -359,6 +359,46 @@ var (
 	loftAuditProduction = loftAuditShortcuts{broadPhase: true, certificates: true}
 )
 
+func TestLoftCoplanarVertexCertificateMatchesExactClassifier(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		scale   float64
+		otherA  r3.Vec
+		otherB  r3.Vec
+		certify bool
+	}{
+		{name: "separated fan", scale: 1, otherA: r3.NewVec(-2, -1, 0), otherB: r3.NewVec(-1, -2, 0), certify: true},
+		{name: "large dyadic fan", scale: math.Ldexp(1, 450), otherA: r3.NewVec(-2, -1, 0), otherB: r3.NewVec(-1, -2, 0), certify: true},
+		{name: "small dyadic fan", scale: math.Ldexp(1, -450), otherA: r3.NewVec(-2, -1, 0), otherB: r3.NewVec(-1, -2, 0), certify: true},
+		{name: "touches edge ray", scale: 1, otherA: r3.NewVec(1, 0, 0), otherB: r3.NewVec(-1, -1, 0)},
+		{name: "overlaps area", scale: 1, otherA: r3.NewVec(0.25, 0.25, 0), otherB: r3.NewVec(2, 0.25, 0)},
+		{name: "noncoplanar", scale: 1, otherA: r3.NewVec(0, 0, 1), otherB: r3.NewVec(0, 1, 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			scale := func(v r3.Vec) r3.Vec {
+				return r3.NewVec(v.X*tc.scale, v.Y*tc.scale, v.Z*tc.scale)
+			}
+			verts := []r3.Vec{
+				r3.NewVec(0, 0, 0), scale(r3.NewVec(1, 0, 0)), scale(r3.NewVec(0, 1, 0)),
+				scale(tc.otherA), scale(tc.otherB),
+			}
+			tris := [][3]int{{0, 1, 2}, {0, 3, 4}}
+			data := newLoftAuditData(verts, tris)
+			_, want := auditLoftPairData(data, tris, 0, 1, loftAuditReference)
+			outcome, got := auditLoftPairData(data, tris, 0, 1, loftAuditProduction)
+			if want == nil {
+				require.NoError(t, got)
+			} else {
+				require.EqualError(t, got, want.Error())
+			}
+			if tc.certify {
+				require.Equal(t, loftPairVertexCertificate, outcome)
+			}
+		})
+	}
+}
+
 // boundaryTouchingFixture builds two triangles that share NO recorded vertex
 // INDEX (so S7 expects contactNone, same as genuineCrossingFixture) but whose
 // bounding boxes touch EXACTLY on a shared boundary plane (x=1) rather than
