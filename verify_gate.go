@@ -236,7 +236,7 @@ func chainWalkEndpointAllow(ctx context.Context, chains []ChainRecord) (float64,
 			}
 			walk, err := walkOf(segment, work)
 			if err != nil {
-				return 0, false, nil
+				return 0, false, nil //nolint:nilerr // structural walk refusal withholds the reference
 			}
 			for _, bound := range [2]walkEndBound{walk.startBound, walk.endBound} {
 				endAllow := walkEndBoundAllow(bound)
@@ -311,7 +311,7 @@ func chainRevolveEdgeGateDiameter(ctx context.Context, body *Body, sectionDelta 
 		}
 		length, err := edge.Length()
 		if err != nil {
-			return 0, false, nil
+			return 0, false, nil //nolint:nilerr // unbounded edge length withholds the reference
 		}
 		value, bound := length.Value.Base(), length.Bound.Base()
 		if !usableMagnitude(value) || !usableMagnitude(bound) || value <= bound {
