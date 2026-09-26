@@ -310,6 +310,8 @@
 0	0.00	TestFreeChainCountsByFaceCountsConnectedComponentsNotEdges
 0	0.00	TestFreeEdgeAndOpenShellReadTheirOwnState
 0	0.77	TestFreeformArcLengthBracketEnclosesAndNarrows
+0	0.12	TestFreeformArcLengthMatchesIndependentSplineSampling
+0	0.20	TestFreeformLengthScratchMatchesOriginalSplit
 0	0.00	TestFreeformBezierSpansRefusals
 0	0.00	TestFreeformBracketCostGrowsWithDegree
 0	0.00	TestFreeformExtremeFloatsRefusesUnrepresentableEnclosures
