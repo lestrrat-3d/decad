@@ -85,7 +85,7 @@ func rpFromBernstein(values []*big.Rat) ratPoly {
 	choose := big.NewRat(1, 1)
 	for k := range out {
 		out[k] = new(big.Rat).Mul(choose, differences[0])
-		for i := 0; i < len(differences)-1; i++ {
+		for i := range len(differences) - 1 {
 			differences[i] = new(big.Rat).Sub(differences[i+1], differences[i])
 		}
 		differences = differences[:len(differences)-1]

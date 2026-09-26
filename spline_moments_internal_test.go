@@ -66,7 +66,7 @@ func TestRPFromBernsteinMatchesLiteralExpansion(t *testing.T) {
 			big.NewRat(-1, 3), big.NewRat(-5, 11), big.NewRat(-7, 13),
 			big.NewRat(-17, 23),
 		}},
-		{name: "empty", values: nil},
+		{name: "no-input", values: nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -91,7 +91,7 @@ func BenchmarkExactFreeformMomentsDegreeAndSpans(b *testing.B) {
 			spans := benchmarkMomentSpans(degree, spanCount)
 			b.Run(name, func(b *testing.B) {
 				b.ReportAllocs()
-				for i := 0; i < b.N; i++ {
+				for range b.N {
 					_ = exactFreeformMoments(spans, false, momentSecondOrder)
 				}
 			})
