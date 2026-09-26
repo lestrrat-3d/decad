@@ -26,7 +26,7 @@ func (c *internalBooleanBuildCancelContext) Err() error {
 	inBuild, inTarget := false, false
 	for {
 		frame, more := frames.Next()
-		inBuild = inBuild || strings.HasSuffix(frame.Function, ".buildFacetedBody")
+		inBuild = inBuild || strings.HasSuffix(frame.Function, ".buildFacetedBodyWithProof")
 		inTarget = inTarget || strings.HasSuffix(frame.Function, "."+c.target)
 		if !more {
 			break
@@ -41,7 +41,7 @@ func (c *internalBooleanBuildCancelContext) Err() error {
 
 func TestBooleanContextCancelsFacetedBodyFinishing(t *testing.T) {
 	t.Parallel()
-	for _, target := range []string{"auditFacetedMesh", "meshVolumeMeasurement"} {
+	for _, target := range []string{"pointSetDiameterContext", "facetFaceIndices"} {
 		t.Run(target, func(t *testing.T) {
 			doc := New()
 			a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
@@ -495,11 +495,26 @@ func TestBooleanVolumesAreUnchangedByTheKernelRewrite(t *testing.T) {
 			b, err = b.Placed(t.Context(), tr)
 			require.NoError(t, err)
 
+			var op operationKind
+			switch tc.name {
+			case "Union":
+				op = opUnion
+			case "Cut":
+				op = opCut
+			case "Intersect":
+				op = opIntersect
+			}
+			eval, err := evaluateBoolean(t.Context(), op, a, b)
+			require.NoError(t, err)
+			require.NotNil(t, eval.audit)
+			require.NotNil(t, eval.volumeRat)
+
 			result, err := tc.op(t.Context(), a, b)
 			require.NoError(t, err)
 
 			volM, err := result.Volume()
 			require.NoError(t, err)
+			require.Equal(t, eval.volume, volM, `the body must publish the evaluator's exact measurement and bound`)
 			vol, err := volM.Value.In(units.CubicMillimeter)
 			require.NoError(t, err)
 			require.Equal(t, tc.want.volume, vol, `volume must be bit-identical to the pre-rewrite kernel`)
