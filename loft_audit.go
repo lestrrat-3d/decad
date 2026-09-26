@@ -2,6 +2,7 @@ package decad
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 )
@@ -69,7 +70,32 @@ type loftAuditData struct {
 	xverts      []xpt
 	xtris       [][3]xpt
 	norms       []xpt
+	planes      []loftExactPlane
 	projections [][3]xp2
+}
+
+// loftExactPlane is an owned integer numerator for the oriented plane through
+// anchor with normal n. For a point p, its sign is the sign of n dot
+// (p-anchor), since all three homogeneous weights are positive.
+type loftExactPlane struct{ a, b, c, d *big.Int }
+
+func newLoftExactPlane(anchor, n xpt) loftExactPlane {
+	d := xdotNum(n, anchor)
+	return loftExactPlane{
+		a: new(big.Int).Mul(n.x, anchor.w),
+		b: new(big.Int).Mul(n.y, anchor.w),
+		c: new(big.Int).Mul(n.z, anchor.w),
+		d: d.Neg(d),
+	}
+}
+
+func (plane loftExactPlane) sign(p xpt) int {
+	var sum, term big.Int
+	sum.Mul(plane.a, p.x)
+	sum.Add(&sum, term.Mul(plane.b, p.y))
+	sum.Add(&sum, term.Mul(plane.c, p.z))
+	sum.Add(&sum, term.Mul(plane.d, p.w))
+	return sum.Sign()
 }
 
 func newLoftAuditData(verts []r3.Vec, tris [][3]int) *loftAuditData {
@@ -78,6 +104,7 @@ func newLoftAuditData(verts []r3.Vec, tris [][3]int) *loftAuditData {
 		xverts:      make([]xpt, len(verts)),
 		xtris:       make([][3]xpt, len(tris)),
 		norms:       make([]xpt, len(tris)),
+		planes:      make([]loftExactPlane, len(tris)),
 		projections: make([][3]xp2, len(tris)),
 	}
 	for i, v := range verts {
@@ -87,6 +114,7 @@ func newLoftAuditData(verts []r3.Vec, tris [][3]int) *loftAuditData {
 		d.corners[i] = loftTriCorners(verts, tri)
 		d.xtris[i] = [3]xpt{d.xverts[tri[0]], d.xverts[tri[1]], d.xverts[tri[2]]}
 		d.norms[i] = xcross(xsub(d.xtris[i][1], d.xtris[i][0]), xsub(d.xtris[i][2], d.xtris[i][0]))
+		d.planes[i] = newLoftExactPlane(d.xtris[i][0], d.norms[i])
 		projection := projectionPairIndex(projAxes(d.norms[i]))
 		for j, p := range d.xtris[i] {
 			switch projection {
@@ -379,7 +407,7 @@ func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int, shortcuts l
 		}
 	}
 
-	signsB := trianglePlaneSigns(xta, na, xtb)
+	signsB := trianglePlaneSigns(data.planes[i], xtb)
 	if shortcuts.certificates && sharedCount == 1 && countZero(signsB) == 3 &&
 		coplanarIsolatedSharedVertex(data, tris[i], tris[j], i, j, shared[0]) {
 		return loftPairVertexCertificate, nil
@@ -387,7 +415,7 @@ func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int, shortcuts l
 	if shortcuts.certificates && sharedCount == 1 && isolatedSharedVertex(tris[j], shared[0], signsB) {
 		return loftPairVertexCertificate, nil
 	}
-	signsA := trianglePlaneSigns(xtb, nb, xta)
+	signsA := trianglePlaneSigns(data.planes[j], xta)
 	if shortcuts.certificates && sharedCount == 1 && isolatedSharedVertex(tris[i], shared[0], signsA) {
 		return loftPairVertexCertificate, nil
 	}
@@ -505,14 +533,13 @@ func isolatedSharedVertex(tri [3]int, sharedIndex int, signs [3]int) bool {
 	return positive == 2 || negative == 2
 }
 
-// trianglePlaneSigns returns the exact signs of other against tri's oriented
-// plane. The triangle normal and all vertices are cached by the audit, so this
-// avoids rebuilding float-to-homogeneous points in orientSign's exact fallback
-// for every repeated facet pair.
-func trianglePlaneSigns(tri [3]xpt, n xpt, other [3]xpt) [3]int {
+// trianglePlaneSigns returns the exact signs of other against the cached
+// oriented plane. Its affine numerator avoids rebuilding a difference vector
+// for each point of each facet pair.
+func trianglePlaneSigns(plane loftExactPlane, other [3]xpt) [3]int {
 	var signs [3]int
 	for i, p := range other {
-		signs[i] = xdotSign(n, xsub(p, tri[0]))
+		signs[i] = plane.sign(p)
 	}
 	return signs
 }
