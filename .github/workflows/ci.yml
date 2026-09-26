@@ -150,6 +150,46 @@ jobs:
             exit 1
           fi
 
+  # Temporary PR-only measurement to regenerate the root race-shard costs.
+  measure-root-race-costs:
+    name: Measure root race test costs
+    if: github.event_name == 'pull_request'
+    needs: [race-binary]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Download root race test binary
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: decad-race-test
+          path: .
+
+      - name: Measure serial root-package test costs
+        run: |
+          chmod +x ./decad.race.test
+          GOMAXPROCS=4 go tool test2json -p github.com/lestrrat-3d/decad -t ./decad.race.test -test.v -test.parallel=1 -test.timeout=40m -test.count=1 > costs.jsonl
+          go -C _shardgen run . -costs ../costs.jsonl -out ../candidate-shards.txt
+
+      - name: Upload measured costs and candidate shards
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: root-race-shard-measurement
+          path: |
+            costs.jsonl
+            candidate-shards.txt
+          if-no-files-found: error
+          retention-days: 1
+
   # The packages outside the root run on their own Ubuntu runner. macOS and
   # Windows run the whole suite without the race detector.
   test:
