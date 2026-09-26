@@ -101,6 +101,8 @@ func TestFreeformLengthScratchMatchesOriginalSplit(t *testing.T) {
 		return span
 	}
 	cases := map[string]bezierSpan{
+		"degree one":       makeSpan([][4]int64{{0, 1, 0, 1}, {7, 11, -4, 7}}),
+		"degree two":       makeSpan([][4]int64{{0, 1, 0, 1}, {1, 3, 2, 5}, {7, 11, -4, 7}}),
 		"odd denominators": makeSpan([][4]int64{{0, 1, 0, 1}, {1, 3, 2, 5}, {7, 11, -4, 7}, {3, 1, 0, 1}}),
 		"collapsed":        makeSpan([][4]int64{{1, 3, 2, 5}, {1, 3, 2, 5}, {1, 3, 2, 5}, {1, 3, 2, 5}}),
 		"degree seven": makeSpan([][4]int64{
@@ -157,6 +159,30 @@ func TestFreeformLengthScratchMatchesOriginalSplit(t *testing.T) {
 	}
 	for name, span := range cases {
 		t.Run(name, func(t *testing.T) {
+			// Equal derivatives at every uniform split boundary imply equal
+			// exact lengths for the two adjoining control edges.
+			root, err := dyadicSpanOf(nil, span)
+			require.NoError(t, err)
+			var leaves []dyadicSpan
+			var collect func(dyadicSpan, int)
+			collect = func(s dyadicSpan, depth int) {
+				if depth == 0 {
+					leaves = append(leaves, s)
+					return
+				}
+				left, right, splitErr := s.split(nil)
+				require.NoError(t, splitErr)
+				collect(left, depth-1)
+				collect(right, depth-1)
+			}
+			collect(root, 4)
+			for i := 1; i < len(leaves); i++ {
+				previous, next := leaves[i-1], leaves[i]
+				n := len(previous.points)
+				last := previous.squaredDistance(previous.points[n-2], previous.points[n-1])
+				first := next.squaredDistance(next.points[0], next.points[1])
+				require.Zero(t, last.Cmp(first), "adjacent leaf edges %d and %d", i-1, i)
+			}
 			for _, depth := range []int{0, 1, 4, freeformLengthDepth} {
 				original, err := dyadicSpanOf(nil, span)
 				require.NoError(t, err)
@@ -168,7 +194,7 @@ func TestFreeformLengthScratchMatchesOriginalSplit(t *testing.T) {
 			}
 			cost := freeformBracketCost(len(span))
 			work := &freeformWork{spent: freeformWorkLimit - cost + 1}
-			_, _, err := freeformArcLength([]bezierSpan{span}, work)
+			_, _, err = freeformArcLength([]bezierSpan{span}, work)
 			require.ErrorIs(t, err, ErrUnsupported)
 			require.Equal(t, freeformWorkLimit, work.spent)
 		})

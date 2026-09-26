@@ -427,7 +427,19 @@ func (s dyadicSpan) polygonUpper() float64 {
 func (s dyadicSpan) polygonUpperScratch(scratch *lengthDistanceScratch) float64 {
 	total := 0.0
 	for i := 0; i+1 < len(s.points); i++ {
-		total = upRound(total + spanSqrtUpScratch(s.distanceSquaredScratch(s.points[i], s.points[i+1], scratch), scratch))
+		// Uniform halves of one Bézier have the same derivative at their
+		// shared endpoint. Their adjoining control edges therefore have
+		// equal exact lengths, so the previous leaf's last upper bound is
+		// this leaf's first upper bound. Keep every outward sum in place.
+		edge := scratch.lastUpper
+		if i != 0 || !scratch.hasLastUpper {
+			edge = spanSqrtUpScratch(s.distanceSquaredScratch(s.points[i], s.points[i+1], scratch), scratch)
+		}
+		total = upRound(total + edge)
+		if i+2 == len(s.points) {
+			scratch.lastUpper = edge
+			scratch.hasLastUpper = true
+		}
 	}
 	return total
 }
@@ -438,6 +450,10 @@ func (s dyadicSpan) polygonUpperScratch(scratch *lengthDistanceScratch) float64 
 type lengthDistanceScratch struct {
 	du, dv, tmp, num, lhs, rhs, squareMant big.Int
 	seedMant, seedRatio, seedNum, seedDen  big.Float
+	// spanLengthBracket creates one scratch per original span, so this
+	// bound is never reused across unrelated control nets.
+	lastUpper    float64
+	hasLastUpper bool
 }
 
 // spanSquaredDistance is |b−a|² = num / (denSq · 2^(2 exp)). Keeping the
