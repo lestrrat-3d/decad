@@ -1343,6 +1343,98 @@ func TestCellBilinearAreaEnclosesDirectIntegral(t *testing.T) {
 		"the certified bilinear-area interval must enclose an independent direct integral")
 }
 
+// cellBilinearAreaUncached retains the per-corner computation used before the
+// grid cache, including its original summation and non-finite return order.
+func cellBilinearAreaUncached(vLo, vHi, wLo, wHi r3.Vec) (float64, float64) {
+	const divisions = 4
+	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
+		return 0, math.Inf(1)
+	}
+	da := heldDelta(vHi, vLo)
+	g := heldDelta(wLo, vLo)
+	twist := dvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	n0 := dvCross(da, g)
+	a := dvCross(da, twist)
+	b := dvCross(twist, g)
+	at := func(s, r dyadic) dyV3 {
+		var out dyV3
+		for k := range out {
+			out[k] = dyAdd(dyAdd(n0[k], dyMul(s, a[k])), dyMul(r, b[k]))
+		}
+		return out
+	}
+	normEnd := func(v dyV3, up bool) (dyadic, bool) {
+		f := dySqrtDown(dvDot(v, v))
+		if up {
+			f = dySqrtUp(dvDot(v, v))
+		}
+		return dyOf(f)
+	}
+	const divShift = 2
+	integralLo := dyZero()
+	integralHi := dyZero()
+	for i := range divisions {
+		for j := range divisions {
+			sMid := dyShift(dyInt(int64(2*i+1)), -(divShift + 1))
+			rMid := dyShift(dyInt(int64(2*j+1)), -(divShift + 1))
+			lo, ok := normEnd(at(sMid, rMid), false)
+			if !ok {
+				return 0, math.Inf(1)
+			}
+			integralLo = dyAdd(integralLo, lo)
+			for _, p := range [][2]int{{i, j}, {i + 1, j}, {i, j + 1}, {i + 1, j + 1}} {
+				node := func(v int) dyadic { return dyShift(dyInt(int64(v)), -divShift) }
+				hi, ok := normEnd(at(node(p[0]), node(p[1])), true)
+				if !ok {
+					return 0, math.Inf(1)
+				}
+				integralHi = dyAdd(integralHi, hi)
+			}
+		}
+	}
+	integralLo = dyShift(integralLo, -2*divShift)
+	integralHi = dyShift(integralHi, -(2*divShift + 2))
+	mid := dyShift(dyAdd(integralLo, integralHi), -1)
+	value, _ := mid.float64()
+	valueDy, ok := dyOf(value)
+	if !ok {
+		return 0, math.Inf(1)
+	}
+	dLo := dyAbs(dySubScalar(valueDy, integralLo))
+	dHi := dyAbs(dySubScalar(integralHi, valueDy))
+	if dyCmp(dHi, dLo) > 0 {
+		dLo = dHi
+	}
+	return value, dyFloatUp(dLo)
+}
+
+func TestCellBilinearAreaMatchesUncachedBits(t *testing.T) {
+	t.Parallel()
+	small := math.SmallestNonzeroFloat64
+	large := math.Ldexp(1, 500)
+	cases := []struct {
+		name               string
+		vLo, vHi, wLo, wHi r3.Vec
+	}{
+		{"planar", r3.NewVec(0, 0, 0), r3.NewVec(2, 0, 0), r3.NewVec(0, 3, 0), r3.NewVec(2, 3, 0)},
+		{"twisted", r3.NewVec(1, -2, .5), r3.NewVec(4, 0, 1), r3.NewVec(-.5, 2, 6), r3.NewVec(3, 4, 7.5)},
+		{"degenerate", r3.NewVec(1, 1, 1), r3.NewVec(1, 1, 1), r3.NewVec(1, 1, 1), r3.NewVec(1, 1, 1)},
+		{"subnormal", r3.NewVec(0, 0, 0), r3.NewVec(small, 0, 0), r3.NewVec(0, small, 0), r3.NewVec(small, small, small)},
+		{"large finite", r3.NewVec(0, 0, 0), r3.NewVec(large, 0, 0), r3.NewVec(0, large, 0), r3.NewVec(large, large, 1)},
+		{"saturated", r3.NewVec(0, 0, 0), r3.NewVec(math.MaxFloat64, 0, 0), r3.NewVec(0, math.MaxFloat64, 0), r3.NewVec(math.MaxFloat64, math.MaxFloat64, 0)},
+		{"nan", r3.NewVec(math.NaN(), 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(1, 1, 0)},
+		{"infinity", r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, math.Inf(1), 0), r3.NewVec(1, 1, 0)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			wantValue, wantBound := cellBilinearAreaUncached(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
+			gotValue, gotBound := cellBilinearArea(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
+			require.Equal(t, math.Float64bits(wantValue), math.Float64bits(gotValue))
+			require.Equal(t, math.Float64bits(wantBound), math.Float64bits(gotBound))
+		})
+	}
+}
+
 func TestCellTwistMomentsMatchRefinedBilinearSurface(t *testing.T) {
 	t.Parallel()
 	vLo := r3.NewVec(1, -2, 0.5)

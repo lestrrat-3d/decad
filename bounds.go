@@ -1200,11 +1200,11 @@ func cellBilinearArea(vLo, vHi, wLo, wHi r3.Vec) (float64, float64) {
 		return out
 	}
 	normEnd := func(v dyV3, up bool) (dyadic, bool) {
-		f := dySqrtDown(dvDot(v, v))
+		dot := dvDot(v, v)
 		if up {
-			f = dySqrtUp(dvDot(v, v))
+			return dyOf(dySqrtUp(dot))
 		}
-		return dyOf(f)
+		return dyOf(dySqrtDown(dot))
 	}
 
 	// divisions is a power of two, so every quadrature node below — i/4,
@@ -1214,6 +1214,10 @@ func cellBilinearArea(vLo, vHi, wLo, wHi r3.Vec) (float64, float64) {
 	const divShift = 2 // divisions == 1 << divShift
 	integralLo := dyZero()
 	integralHi := dyZero()
+	var cornerNorms [divisions + 1][divisions + 1]struct {
+		value dyadic
+		ready bool
+	}
 	for i := range divisions {
 		for j := range divisions {
 			sMid := dyShift(dyInt(int64(2*i+1)), -(divShift + 1))
@@ -1225,12 +1229,17 @@ func cellBilinearArea(vLo, vHi, wLo, wHi r3.Vec) (float64, float64) {
 			integralLo = dyAdd(integralLo, lo)
 
 			for _, p := range [][2]int{{i, j}, {i + 1, j}, {i, j + 1}, {i + 1, j + 1}} {
-				node := func(v int) dyadic { return dyShift(dyInt(int64(v)), -divShift) }
-				hi, ok := normEnd(at(node(p[0]), node(p[1])), true)
-				if !ok {
-					return 0, math.Inf(1)
+				corner := &cornerNorms[p[0]][p[1]]
+				if !corner.ready {
+					node := func(v int) dyadic { return dyShift(dyInt(int64(v)), -divShift) }
+					hi, ok := normEnd(at(node(p[0]), node(p[1])), true)
+					if !ok {
+						return 0, math.Inf(1)
+					}
+					corner.value = hi
+					corner.ready = true
 				}
-				integralHi = dyAdd(integralHi, hi)
+				integralHi = dyAdd(integralHi, corner.value)
 			}
 		}
 	}
