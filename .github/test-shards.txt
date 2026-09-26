@@ -114,6 +114,7 @@
 0	0.00	TestCellTwistBoundsEncloseTheirExactTerms
 0	0.00	TestCellTwistOffsetUpperIsZeroWithoutTwist
 0	0.00	TestCellTwistOffsetUpperMatchesPointwiseDeviation
+0	0.01	TestCellTwistMomentPlanarShortcutMatchesExactIntegral
 0	0.00	TestCellTwistVolumeAllowIsZeroWithoutTwist
 0	0.00	TestCellTwistVolumeAllowMatchesTheSweptMeasure
 0	0.00	TestCertifiedRootRefinementCancellation
