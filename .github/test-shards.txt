@@ -553,6 +553,7 @@
 0	0.00	TestReconstructionChargeInternsSharedAnalyticEntity
 0	0.00	TestReconstructionChargeSquaresTheRecordTotal
 0	0.00	TestReconstructionChordsRestateSketchSampling
+0	0.00	TestRPFromBernsteinMatchesLiteralExpansion
 0	0.00	TestRecordChainGates
 0	0.00	TestRecordChainRejectsChangedSnapshot
 0	0.00	TestRecordChainRejectsForeignBoundaryEntity
