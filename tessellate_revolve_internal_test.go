@@ -459,6 +459,29 @@ func TestRevolveMeshCarriesItsOccupiedVolumeProof(t *testing.T) {
 		require.Positive(t, d)
 		require.LessOrEqual(t, d, mesh.bound)
 	}
+
+	t.Run("torus proof record", func(t *testing.T) {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		center := s.CreatePoint(0, 10)
+		s.Fix(center)
+		s.CreateCircle(center, 3)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		body, err := New().Revolve(s, s.Profiles()[0], axis, FullRevolution{})
+		require.NoError(t, err)
+		mesh, err := body.Tessellate(t.Context(), units.Millimeters(0.2), WithVerification(VerifyAll))
+		require.NoError(t, err)
+		require.Len(t, mesh.triangles, 624)
+		require.True(t, mesh.boundaryOK)
+		require.True(t, mesh.symDiffOK)
+		// Captured from the same public cold build on 17c0b30 before the
+		// arithmetic change. The three bit patterns cover the published proof.
+		require.Equal(t, uint64(0x3fc971e5d844c3a0), math.Float64bits(mesh.bound))
+		require.Equal(t, uint64(0x404512d7dcf71848), math.Float64bits(mesh.areaSlack))
+		require.Equal(t, uint64(0x4060f7766e48d54b), math.Float64bits(mesh.volSymDiff))
+	})
 }
 
 // TestRevolveVertexIsolatedDecidesACapFanAgainstTheNextChordWall pins the pair
