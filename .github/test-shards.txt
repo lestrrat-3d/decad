@@ -8,7 +8,7 @@
 # with the command in _shardgen/main.go's doc comment.
 #
 # Shard totals at the last measurement:
-#   shard 0:   84.43s over 903 tests
+#   shard 0:   84.43s over 904 tests
 #   shard 1:   84.43s over 193 tests
 #   shard 2:   84.44s over 193 tests
 #   shard 3:   84.44s over 194 tests
@@ -93,6 +93,7 @@
 0	0.00	TestCapPolygonAreaRatMatchesMomentsOnUntrimmedLineSeg
 0	0.00	TestCapStationBoundEnclosesTheStationItDenotes
 0	0.05	TestCellBilinearAreaEnclosesDirectIntegral
+0	0.00	TestCellBilinearAreaMatchesUncachedBits
 0	0.00	TestCellChordCurveAreaAllowAdmitsAnExactlyTightArcClaim
 0	0.00	TestCellChordCurveAreaAllowComposesEveryTerm
 0	0.00	TestCellChordCurveAreaAllowEnclosesItsExactTerms
