@@ -357,8 +357,9 @@ func evalLoft(ctx context.Context, d *Document, ref producerID, pl loftPayload, 
 		matchedDelta = chordCellDeltaUpper(sectionMatchedDelta, a.delta)
 	}
 	mass := newLoftMassAccumulator(anchor, a.delta, sectionDelta, matchedDelta)
+	vertexDistances := make([]loftVertexDistance, len(a.verts))
 	for k, t := range a.tris {
-		mass.add(a.verts[t[0]], a.verts[t[1]], a.verts[t[2]], k < a.walls)
+		mass.addTriangle(a.verts[t[0]], a.verts[t[1]], a.verts[t[2]], k < a.walls, t, vertexDistances)
 	}
 	// The chorded correction terms (docs/loft-design.md §5/§8, a10-plan.md
 	// Part 3 PR 6) read the mass accumulator's own coordUpper, which is only
