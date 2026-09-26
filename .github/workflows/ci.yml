@@ -177,7 +177,7 @@ jobs:
       - name: Measure serial root-package test costs
         run: |
           chmod +x ./decad.race.test
-          GOMAXPROCS=4 go tool test2json -p github.com/lestrrat-3d/decad -t ./decad.race.test -test.v -test.parallel=1 -test.timeout=40m -test.count=1 > costs.jsonl
+          GOMAXPROCS=4 go tool test2json -p github.com/lestrrat-3d/decad -t ./decad.race.test -test.v=test2json -test.parallel=1 -test.timeout=40m -test.count=1 > costs.jsonl
           go -C _shardgen run . -costs ../costs.jsonl -out ../candidate-shards.txt
 
       - name: Upload measured costs and candidate shards
