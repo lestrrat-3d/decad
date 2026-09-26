@@ -176,6 +176,7 @@
 0	0.00	TestConformCandidateScanCancellationIsBounded
 0	0.00	TestConformCandidateScanFindsEdgeInteriorVertices
 0	0.00	TestConsecutiveCollapsedSpansPairAcrossTheWholeRun
+0	0.00	TestContactBatchAllocatesBuffersOnDemand
 0	0.00	TestContactBatchMergesOutOfOrderCompletionsInInputOrder
 0	0.00	TestContactBatchPreparedNormalsAgreeWithStandalone
 0	0.00	TestContactBatchReturnsEarliestOrderedError
