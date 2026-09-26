@@ -500,8 +500,16 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 	body := &Body{doc: d, origin: FeatureRef{producer: ref, Role: roleBody}, solid: false, kind: BodySheet}
 	var allFaces []*Face
 	total := boundedScalar{}
+	var captures []chainWalkCapture
+	if pp.sectionDelta == 0 {
+		captures = make([]chainWalkCapture, len(pp.chains))
+	}
 	for ci, chain := range pp.chains {
-		faces, area, err := buildChainSides(ctx, body, ref, pp, ci, chain, work)
+		var capture *chainWalkCapture
+		if captures != nil {
+			capture = &captures[ci]
+		}
+		faces, area, err := buildChainSides(ctx, body, ref, pp, ci, chain, work, capture)
 		if err != nil {
 			return nil, err
 		}
@@ -525,21 +533,23 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 	// construction that ever sets it, docs/surface-intersection-design.md
 	// §3.4) reads its extent through walks that charge §7's δ_cut into
 	// exactly the endpoint a cut produced, never into one the record states
-	// verbatim (trimBoundsWalks, surface_trim.go) — a plain ExtrudeChain
-	// ribbon's sectionDelta is always zero, so it keeps resolving through
-	// walkOf with no augmentation, unchanged.
+	// verbatim (trimBoundsWalks, surface_trim.go). A plain ExtrudeChain
+	// ribbon has zero sectionDelta and reuses the walks resolved for its sides.
+	view := pp.prism()
 	var boundsWalks *profileWalks
 	if pp.sectionDelta != 0 {
 		var err error
-		boundsWalks, err = trimBoundsWalks(pp.prism().profile, work)
+		boundsWalks, err = trimBoundsWalks(view.profile, work)
 		if err != nil {
 			return nil, err
 		}
 		if err := boundsWalks.charge(work); err != nil {
 			return nil, err
 		}
+	} else {
+		boundsWalks = chainBoundsWalks(view.profile, captures)
 	}
-	bounds, err := prismBoundsContext(ctx, pp.prism(), work, boundsWalks)
+	bounds, err := prismBoundsContext(ctx, view, work, boundsWalks)
 	if err != nil {
 		return nil, err
 	}
@@ -549,6 +559,28 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 	}
 	body.payload = pp
 	return body, nil
+}
+
+type chainWalkCapture struct {
+	walks   []segmentWalk
+	charges []walkReadCharge
+}
+
+// chainBoundsWalks reads the exact pre-widening walks buildChainSides already
+// resolved. The cache is local to this build; its per-segment measured charges
+// are replayed by resolveOrRead at each bounds read.
+func chainBoundsWalks(profile ProfileRecord, captures []chainWalkCapture) *profileWalks {
+	reads := make([][]walkReadCharge, len(captures))
+	walks := &profileWalks{profile: profile, readCharges: reads}
+	for i, capture := range captures {
+		reads[i] = capture.charges
+		if i == 0 {
+			walks.outer = capture.walks
+		} else {
+			walks.holes = append(walks.holes, capture.walks)
+		}
+	}
+	return walks
 }
 
 // buildChainSides builds ONE walk's whole wall set with shared vertices and
@@ -564,7 +596,7 @@ func evalChainExtrudeContext(ctx context.Context, d *Document, ref producerID, p
 // (docs/surface-design.md §13.4). It returns the faces and the walk's own
 // total wall area, folded through boundedAdd rather than summed as raw
 // floats.
-func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPayload, chainIdx int, chain ChainRecord, work *freeformWork) ([]*Face, boundedScalar, error) {
+func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPayload, chainIdx int, chain ChainRecord, work *freeformWork, capture *chainWalkCapture) ([]*Face, boundedScalar, error) {
 	prismView := pp.prism()
 	// Every coordinate this walk's segments read sits within pp's own section
 	// displacement of the section it denotes, so each segment's own length
@@ -574,13 +606,23 @@ func buildChainSides(ctx context.Context, body *Body, ref producerID, pp chainPa
 	// directly.
 	walkLenAllow := sectionDisplacementLength(pp.sectionDelta, 1)
 	raw := make([]sideWalk, len(chain.Segments))
+	if capture != nil {
+		capture.walks = make([]segmentWalk, len(chain.Segments))
+		capture.charges = make([]walkReadCharge, len(chain.Segments))
+	}
 	for i, seg := range chain.Segments {
 		if err := ctx.Err(); err != nil {
 			return nil, boundedScalar{}, err
 		}
+		before, beforeRecon := workSpent(work)
 		w, err := walkOf(seg, work)
 		if err != nil {
 			return nil, boundedScalar{}, err
+		}
+		if capture != nil {
+			after, afterRecon := workSpent(work)
+			capture.walks[i] = w
+			capture.charges[i] = walkReadCharge{after - before, afterRecon - beforeRecon}
 		}
 		w.lengthBound = absSumUpper(w.lengthBound, walkLenAllow)
 		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
