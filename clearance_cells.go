@@ -22,12 +22,11 @@ import (
 // in doubt is kept for the lower bound and never counted toward exactness.
 
 // gapContrib is one contribution to a pair's distance interval: a proven
-// [lo, hi] with representative feet, hi = +Inf for a lower-bound-only
-// (straddle-admitted or unresolvable) contribution.
+// [lo, hi], with hi = +Inf for a lower-bound-only (straddle-admitted or
+// unresolvable) contribution.
 type gapContrib struct {
 	lo, hi float64
 	exact  bool
-	pa, pb r3.Vec
 }
 
 // cellSink accumulates contributions and the undecidable findings.
@@ -59,6 +58,8 @@ func (s *cellSink) crossing(admit int) {
 // discarded (a lower tier holds the minimum), a straddle keeps only the
 // lower bound, and a near-zero value that is not cleanly rejected is a
 // possible contact — undecided.
+//
+//nolint:unparam // Keep witness arguments while preserving every caller's admission and evaluation path.
 func (s *cellSink) candidate(k *pairKernel, admit int, lo, hi float64, exact bool, pa, pb r3.Vec) {
 	if admit == -1 {
 		return
@@ -71,7 +72,7 @@ func (s *cellSink) candidate(k *pairKernel, admit int, lo, hi float64, exact boo
 		s.contribs = append(s.contribs, gapContrib{lo: lo, hi: math.Inf(1)})
 		return
 	}
-	s.contribs = append(s.contribs, gapContrib{lo: lo, hi: hi, exact: exact, pa: pa, pb: pb})
+	s.contribs = append(s.contribs, gapContrib{lo: lo, hi: hi, exact: exact})
 }
 
 // loOnly contributes a bare proven lower bound.
@@ -86,15 +87,14 @@ func (s *cellSink) loOnly(lo float64) {
 func (s *cellSink) coarse(boxA, boxB [2]r3.Vec, witA, witB []r3.Vec) {
 	lo := clrBoxDist(boxA, boxB)
 	hi := math.Inf(1)
-	var pa, pb r3.Vec
 	for _, wa := range witA {
 		for _, wb := range witB {
 			if d := wa.Sub(wb).Len(); d < hi {
-				hi, pa, pb = d, wa, wb
+				hi = d
 			}
 		}
 	}
-	s.contribs = append(s.contribs, gapContrib{lo: math.Max(0, lo), hi: hi, pa: pa, pb: pb})
+	s.contribs = append(s.contribs, gapContrib{lo: math.Max(0, lo), hi: hi})
 }
 
 // enumerate runs every tier over the pair. One shared budget bounds
