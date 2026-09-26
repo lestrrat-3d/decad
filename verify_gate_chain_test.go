@@ -102,9 +102,7 @@ func TestChainGateDiameterLoftHasToleranceReference(t *testing.T) {
 	require.GreaterOrEqual(t, area.Value.Base()+area.Bound.Base(), 400.0)
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	for _, diag := range report.Diagnostics {
-		require.NotEqual(t, decad.DiagToleranceReferenceUnavailable, diag.Code)
-	}
+	require.True(t, report.Passed(), "%+v", report.Diagnostics)
 }
 
 func TestChainGateDiameterPartialRevolveHasToleranceReference(t *testing.T) {
