@@ -21,8 +21,8 @@ import (
 
 // bodyGateDiameter returns the body's own diameter, never a document scale or
 // a bounds-box diagonal — and returns it as a value proven to be at or below
-// that diameter, since every arm below publishes through
-// pointSetDiameterWithBudget, whose own doc comment owns that rule.
+// that diameter. Point witnesses publish through pointSetDiameterWithBudget;
+// a chain revolve's circular edge uses its certified length interval.
 // A Faceted body's cached value covers every held
 // payload vertex, including vertices absent from the B-rep boundary loops. The
 // analytic carrier model is built through the shared work budget (§7.2), so a
@@ -152,6 +152,19 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok = lowerDiameterForDisplacement(d, payload.delta)
 		return d, ok, nil
 	}
+	if payload, ok := body.payload.(chainPayload); ok {
+		endpointAllow, ok, err := chainWalkEndpointAllow(ctx, payload.chains)
+		if err != nil || !ok {
+			return 0, false, err
+		}
+		return chainVertexGateDiameter(ctx, body, absSumUpper(payload.sectionDelta, endpointAllow))
+	}
+	if _, ok := body.payload.(chainLoftPayload); ok {
+		return chainVertexGateDiameter(ctx, body, 0)
+	}
+	if payload, ok := body.payload.(chainRevolvePayload); ok {
+		return chainRevolveEdgeGateDiameter(ctx, body, payload.sectionDelta)
+	}
 	if _, ok := body.payload.(patchPayload); ok {
 		// A patch has no exact carrier model of its own (it is a single flat
 		// face, not a prism or a revolve), and no witness set gateWitnessPrism
@@ -207,6 +220,112 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		}
 	}
 	return fallbackGateDiameter(budget, body)
+}
+
+// chainWalkEndpointAllow covers the computed walk endpoint coordinates not
+// present in ExtrudeChain's topology-vertex bounds for analytic segments.
+// It reads every source segment, including those later coalesced into one
+// wall, so the result also covers a coalesced line's last endpoint.
+func chainWalkEndpointAllow(ctx context.Context, chains []ChainRecord) (float64, bool, error) {
+	work := newFreeformWork()
+	allow := 0.0
+	for _, chain := range chains {
+		for _, segment := range chain.Segments {
+			if err := ctx.Err(); err != nil {
+				return 0, false, err
+			}
+			walk, err := walkOf(segment, work)
+			if err != nil {
+				return 0, false, nil
+			}
+			for _, bound := range [2]walkEndBound{walk.startBound, walk.endBound} {
+				endAllow := walkEndBoundAllow(bound)
+				if !usableMagnitude(endAllow) {
+					return 0, false, nil
+				}
+				allow = math.Max(allow, endAllow)
+			}
+			// An ArcSeg's recorded natural end can sit off the radius its
+			// denoted circle reads from Start, even when walkEndBound is zero.
+			residual := arcNaturalEndRadialUpper(segment)
+			if !usableMagnitude(residual) {
+				return 0, false, nil
+			}
+			allow = math.Max(allow, residual)
+		}
+	}
+	return allow, true, ctx.Err()
+}
+
+// chainVertexGateDiameter reads only actual boundary vertices. Each builder
+// publishes the displacement of its held vertex in Position().Bound; the
+// supplied extra allowance covers section displacement and any endpoint
+// rounding that the topology does not charge. The exact-down point-set reader
+// and two-sided shrink keep the result below the denoted body's diameter.
+func chainVertexGateDiameter(ctx context.Context, body *Body, extraAllow float64) (float64, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+	vertices := body.Vertices()
+	points := make([]r3.Vec, 0, len(vertices))
+	maxBound := 0.0
+	for _, vertex := range vertices {
+		if err := ctx.Err(); err != nil {
+			return 0, false, err
+		}
+		position := vertex.Position()
+		bound := position.Bound.Base()
+		if !finiteVec(position.Value) || !usableMagnitude(bound) {
+			return 0, false, nil
+		}
+		points = append(points, position.Value)
+		maxBound = math.Max(maxBound, bound)
+	}
+	d, ok, err := pointSetDiameterContext(ctx, points)
+	if err != nil || !ok {
+		return d, ok, err
+	}
+	d, ok = lowerDiameterForDisplacement(d, absSumUpper(maxBound, extraAllow))
+	return d, ok && d > 0, nil
+}
+
+// A full-turn chain can expose only one seam vertex even though its circular
+// rim has positive diameter. Every swept circle or connected circular arc of
+// at most one turn has diameter at least its arc length divided by π: up to a
+// half turn the endpoint chord proves it, and past a half turn the arc
+// contains antipodal points. The edge's published length bound already
+// includes its radius and angular uncertainty. Rational arithmetic rounds
+// the resulting reference down exactly once.
+func chainRevolveEdgeGateDiameter(ctx context.Context, body *Body, sectionDelta float64) (float64, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
+	for _, edge := range body.Edges() {
+		if err := ctx.Err(); err != nil {
+			return 0, false, err
+		}
+		switch edge.Curve().(type) {
+		case Circle3, Arc3:
+		default:
+			continue
+		}
+		length, err := edge.Length()
+		if err != nil {
+			return 0, false, nil
+		}
+		value, bound := length.Value.Base(), length.Bound.Base()
+		if !usableMagnitude(value) || !usableMagnitude(bound) || value <= bound {
+			continue
+		}
+		lengthLow := new(big.Rat).Sub(new(big.Rat).SetFloat64(value), new(big.Rat).SetFloat64(bound))
+		denominator := new(big.Rat).SetFloat64(twoPiUpper())
+		diameterLow := new(big.Rat).Quo(lengthLow.Mul(lengthLow, big.NewRat(2, 1)), denominator)
+		d, ok := lowerDiameterForDisplacement(ratFloatDown(diameterLow), sectionDelta)
+		if ok && d > 0 {
+			return d, true, nil
+		}
+	}
+	return 0, false, nil
 }
 
 // lowerDiameterForDisplacement turns a held witness diameter into a lower
