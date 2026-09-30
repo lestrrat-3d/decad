@@ -298,8 +298,8 @@ func loftVertex(p r3.Vec, delta float64) *Vertex {
 }
 
 // loftEdgeLength is the proven bound on a straight loft edge's held length:
-// the square root's own committed error against the exact rational squared
-// length (capblend_contour.go's straightEdgeBound/ratSquaredDistance3), no
+// the square root's own committed error against the exact squared length
+// (capblend_contour.go's straightEdgeBound/dySquaredDistance3), no
 // new mechanism for an edge whose build carries a zero delta. An edge at a
 // positive delta (§12 PR 2a — a placed build, or a COMPUTED station)
 // composes that with bounds.go's chainLengthBound(1, delta, held) — both
@@ -307,8 +307,8 @@ func loftVertex(p r3.Vec, delta float64) *Vertex {
 // through absSumUpper.
 func loftEdgeLength(a, b r3.Vec, delta float64) (float64, float64) {
 	held := a.Sub(b).Len()
-	sq := ratSquaredDistance3(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
-	bound := straightEdgeBound(held, sq)
+	sq, sqOK := dySquaredDistance3(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
+	bound := straightEdgeBound(held, sq, sqOK)
 	if delta > 0 {
 		bound = absSumUpper(bound, chainLengthBound(1, delta, held))
 	}

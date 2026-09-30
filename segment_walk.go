@@ -598,10 +598,21 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 			arcRadiusUpper(seg),
 			circularSweepUpper(seg.TStart, seg.TEnd),
 		)
-		w.radiusBound = arcWalkRadiusBound(seg, radius)
 		pinArcWalkEnds(&w, seg)
-		if iv, ok := circularLengthInterval(seg); ok {
-			w.lengthBound = math.Min(w.lengthBound, intervalFloatError(iv, w.length))
+		// circularWalkEnclosures brackets the radius from the same exact
+		// squared Start-to-Center distance arcWalkRadiusBound does, so its
+		// radius interval IS that function's bracket and is read here rather
+		// than built twice. Both ends are floatRat of a float, so Float64
+		// returns those floats exactly. The enclosures answer false exactly
+		// where the bracket overflows, and arcWalkRadiusBound answers +Inf
+		// there on its own.
+		if rIv, sweepIv, ok := circularWalkEnclosures(seg); ok {
+			rLo, _ := rIv.lo.Float64()
+			rHi, _ := rIv.hi.Float64()
+			w.radiusBound = arcRadiusBoundFromBracket(radius, rLo, rHi)
+			w.lengthBound = math.Min(w.lengthBound, intervalFloatError(intervalMul(rIv, sweepIv), w.length))
+		} else {
+			w.radiusBound = arcWalkRadiusBound(seg, radius)
 		}
 		return w, nil
 	default:
@@ -617,21 +628,21 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 // states the segment's endpoints and its parameter range, never the tangent,
 // so the walk's held tangent is the float difference u1−u0, v1−v0 of two
 // endpoints the float lerp already rounded. The tangent the record DENOTES is
-// the difference of the exact rational lerps (ratLerp), which carries no
-// rounding at either step, and the bound is the wider of the two components'
-// gaps from it, rounded outward. A lerp that is not representable as a
-// rational yields +Inf — the underivable bound consumers refuse on.
+// the difference of the exact lerps (dyLerp), which carries no rounding at
+// either step, and the bound is the wider of the two components' gaps from it,
+// rounded outward. A lerp that is not representable as a rational yields +Inf
+// — the underivable bound consumers refuse on.
 func lineWalkTangentBound(seg LineSeg, heldU, heldV float64) float64 {
-	u0 := ratLerp(seg.Start.U, seg.End.U, seg.TStart)
-	v0 := ratLerp(seg.Start.V, seg.End.V, seg.TStart)
-	u1 := ratLerp(seg.Start.U, seg.End.U, seg.TEnd)
-	v1 := ratLerp(seg.Start.V, seg.End.V, seg.TEnd)
-	if u0 == nil || v0 == nil || u1 == nil || v1 == nil {
+	u0, okU0 := dyLerp(seg.Start.U, seg.End.U, seg.TStart)
+	v0, okV0 := dyLerp(seg.Start.V, seg.End.V, seg.TStart)
+	u1, okU1 := dyLerp(seg.Start.U, seg.End.U, seg.TEnd)
+	v1, okV1 := dyLerp(seg.Start.V, seg.End.V, seg.TEnd)
+	if !okU0 || !okV0 || !okU1 || !okV1 {
 		return math.Inf(1)
 	}
 	return math.Max(
-		rationalFloatError(new(big.Rat).Sub(u1, u0), heldU),
-		rationalFloatError(new(big.Rat).Sub(v1, v0), heldV),
+		dyRoundedFloatError(dySubScalar(u1, u0), heldU),
+		dyRoundedFloatError(dySubScalar(v1, v0), heldV),
 	)
 }
 
@@ -639,18 +650,22 @@ func lineWalkTangentBound(seg LineSeg, heldU, heldV float64) float64 {
 // endpoint, and lineWalkTangentBound's twin one field over: the record states
 // the segment's endpoints and its parameter range, never the point at a trimmed
 // parameter, so the walk's held endpoint is lerp2's float evaluation. The point
-// the record DENOTES is the exact rational lerp (ratLerp), which carries no
-// rounding at either step, and the bound is the wider of the two components'
-// gaps from it, rounded outward. A natural bound needs no argument of its own:
-// lerp2 and ratLerp both special-case t = 0 and t = 1 to the recorded Point2
-// verbatim, so the two agree exactly and this answers zero. A lerp that is not
-// representable as a rational yields +Inf — the underivable bound consumers
-// refuse on.
+// the record DENOTES is the exact lerp (dyLerp), which carries no rounding at
+// either step, and the bound is the wider of the two components' gaps from it,
+// rounded outward. A natural bound needs no argument of its own: lerp2 and
+// dyLerp both special-case t = 0 and t = 1 to the recorded Point2 verbatim, so
+// the two agree exactly and this answers zero. A lerp that is not
+// representable as a rational yields +Inf on its component — the underivable
+// bound consumers refuse on.
 func lineWalkEndBound(seg LineSeg, t, heldU, heldV float64) walkEndBound {
-	return walkEndBound{
-		u: rationalFloatError(ratLerp(seg.Start.U, seg.End.U, t), heldU),
-		v: rationalFloatError(ratLerp(seg.Start.V, seg.End.V, t), heldV),
+	out := walkEndBound{u: math.Inf(1), v: math.Inf(1)}
+	if u, ok := dyLerp(seg.Start.U, seg.End.U, t); ok {
+		out.u = dyRoundedFloatError(u, heldU)
 	}
+	if v, ok := dyLerp(seg.Start.V, seg.End.V, t); ok {
+		out.v = dyRoundedFloatError(v, heldV)
+	}
+	return out
 }
 
 // circularWalkEndBound is the single owner of the proven bound on a CIRCULAR
@@ -714,6 +729,15 @@ func arcWalkRadiusBound(seg ArcSeg, held float64) float64 {
 	if isNonFinite(rLo) || isNonFinite(rHi) {
 		return math.Inf(1)
 	}
+	return arcRadiusBoundFromBracket(held, rLo, rHi)
+}
+
+// arcRadiusBoundFromBracket is arcWalkRadiusBound's formula over an already
+// built radius bracket [rLo, rHi]: the wider side of the bracket about the
+// held radius, rounded outward. It exists so walkOf, which reads the same
+// bracket out of circularWalkEnclosures, states the formula through its one
+// owner instead of copying it.
+func arcRadiusBoundFromBracket(held, rLo, rHi float64) float64 {
 	return math.Max(upRound(held-rLo), upRound(rHi-held))
 }
 
@@ -891,49 +915,45 @@ func circularWalk(cu, cv, r, th0, th1, radiusUpper, sweepUpper float64) segmentW
 }
 
 // lineWalkBounds compares the held square root with the segment's exact
-// rational squared length. A Pythagorean or axis-aligned length that lands
-// exactly keeps a zero bound; every other square root uses the exact L1 length
-// as a finite magnitude envelope, without assuming a Hypot ulp guarantee. It
-// also returns an L1 coordinate envelope for later revolution bounds.
+// squared length, a polynomial in the recorded floats and hence a dyadic
+// (dyLerp). A Pythagorean or axis-aligned length that lands exactly keeps a
+// zero bound; every other square root uses the exact L1 length as a finite
+// magnitude envelope, without assuming a Hypot ulp guarantee. It also returns
+// an L1 coordinate envelope for later revolution bounds.
 func lineWalkBounds(seg LineSeg, held float64) (float64, float64, float64) {
-	u0 := ratLerp(seg.Start.U, seg.End.U, seg.TStart)
-	v0 := ratLerp(seg.Start.V, seg.End.V, seg.TStart)
-	u1 := ratLerp(seg.Start.U, seg.End.U, seg.TEnd)
-	v1 := ratLerp(seg.Start.V, seg.End.V, seg.TEnd)
-	if u0 == nil || v0 == nil || u1 == nil || v1 == nil {
+	u0, okU0 := dyLerp(seg.Start.U, seg.End.U, seg.TStart)
+	v0, okV0 := dyLerp(seg.Start.V, seg.End.V, seg.TStart)
+	u1, okU1 := dyLerp(seg.Start.U, seg.End.U, seg.TEnd)
+	v1, okV1 := dyLerp(seg.Start.V, seg.End.V, seg.TEnd)
+	if !okU0 || !okV0 || !okU1 || !okV1 {
 		return math.Inf(1), math.Inf(1), math.Inf(1)
 	}
-	du := new(big.Rat).Sub(u1, u0)
-	dv := new(big.Rat).Sub(v1, v0)
-	lengthSquared := new(big.Rat).Add(
-		new(big.Rat).Mul(du, du),
-		new(big.Rat).Mul(dv, dv),
-	)
-	heldRat := floatRat(held)
-	coordUpper := math.Max(ratL1Upper(u0, v0), ratL1Upper(u1, v1))
-	if heldRat != nil && new(big.Rat).Mul(heldRat, heldRat).Cmp(lengthSquared) == 0 {
+	du := dySubScalar(u1, u0)
+	dv := dySubScalar(v1, v0)
+	lengthSquared := dyAdd(dyMul(du, du), dyMul(dv, dv))
+	coordUpper := math.Max(dyL1Upper(u0, v0), dyL1Upper(u1, v1))
+	if dySquareEquals(held, lengthSquared) {
 		return 0, held, coordUpper
 	}
-	l1 := new(big.Rat).Add(new(big.Rat).Abs(du), new(big.Rat).Abs(dv))
-	upper, exact := l1.Float64()
-	if !exact {
-		upper = math.Nextafter(upper, math.Inf(1))
-	}
-	bound := math.Min(conservativeValueError(held, upper), sqrtIntervalError(lengthSquared, held))
+	upper := dyL1Upper(du, dv)
+	bound := math.Min(conservativeValueError(held, upper), dySqrtIntervalError(lengthSquared, held))
 	return bound, upper, coordUpper
 }
 
-// sqrtIntervalError proves |held-sqrt(lengthSquared)| from the
-// directed-rounding square root bracket (ratSqrtDown/ratSqrtUp,
-// spline_length.go), assuming no ulp contract from Hypot or Sqrt. It returns
-// +Inf when the bracket cannot be built (a non-finite endpoint), so a
+// dySqrtIntervalError proves |held − sqrt(lengthSquared)| from the
+// directed-rounding square root bracket (dyadic.go's dySqrtDown/dySqrtUp),
+// assuming no ulp contract from Hypot or Sqrt. The answer is the farther of the
+// held float's two gaps from the bracket's ends, each rounded outward through
+// dyRoundedFloatError — intervalFloatError's rule over this arithmetic. It
+// returns +Inf when the bracket cannot be built (an end past MaxFloat64), so a
 // math.Min against it can only ever keep the caller's own bound.
-func sqrtIntervalError(lengthSquared *big.Rat, held float64) float64 {
-	lo, hi := floatRat(ratSqrtDown(lengthSquared)), floatRat(ratSqrtUp(lengthSquared))
-	if lo == nil || hi == nil {
+func dySqrtIntervalError(lengthSquared dyadic, held float64) float64 {
+	lo, okLo := dyOf(dySqrtDown(lengthSquared))
+	hi, okHi := dyOf(dySqrtUp(lengthSquared))
+	if !okLo || !okHi {
 		return math.Inf(1)
 	}
-	return intervalFloatError(interval(lo, hi), held)
+	return math.Max(dyRoundedFloatError(lo, held), dyRoundedFloatError(hi, held))
 }
 
 func ratL1Upper(values ...*big.Rat) float64 {

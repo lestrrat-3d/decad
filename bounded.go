@@ -3,6 +3,7 @@ package decad
 import (
 	"math"
 	"math/big"
+	"math/bits"
 )
 
 // This file is the package's bounded-scalar vocabulary: a float64 value
@@ -36,10 +37,38 @@ func measuredScalar(value, bound float64) boundedScalar {
 	return boundedScalar{value: value, bound: bound}
 }
 
+// floatRat lifts a held float64 to the exact rational it denotes, or answers
+// nil for a NaN or an infinity, which denote no rational. It is
+// big.Rat.SetFloat64's value in SetFloat64's reduced form, built without the
+// GCD SetFloat64 runs to normalise: a float is an integer mantissa times a
+// power of two, so stripping the mantissa's trailing zero bits leaves an odd
+// numerator over a power-of-two denominator, already in lowest terms. The
+// shifts write through Rat.Num and Rat.Denom, which are documented references
+// into the receiver; after SetInt64 the denominator is an initialised 1, so
+// Denom never hands back the detached value it returns for a zero-value Rat.
 func floatRat(value float64) *big.Rat {
-	r := new(big.Rat)
-	if r.SetFloat64(value) == nil {
+	if math.IsNaN(value) || math.IsInf(value, 0) {
 		return nil
+	}
+	if value == 0 {
+		return new(big.Rat)
+	}
+	// value = frac × 2^exp exactly, frac in [0.5, 1) with at most 53
+	// significant bits, so frac × 2^53 is an exact signed integer. Frexp is
+	// exact for a subnormal too.
+	frac, exp := math.Frexp(value)
+	mant := int64(frac * (1 << 53))
+	exp -= 53
+	// A negative mantissa has the same trailing zeros as its magnitude, so the
+	// arithmetic shift leaves it odd with its sign intact.
+	tz := bits.TrailingZeros64(uint64(mant))
+	mant >>= tz
+	exp += tz
+	r := new(big.Rat).SetInt64(mant)
+	if exp >= 0 {
+		r.Num().Lsh(r.Num(), uint(exp))
+	} else {
+		r.Denom().Lsh(r.Denom(), uint(-exp))
 	}
 	return r
 }

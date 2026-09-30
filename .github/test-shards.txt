@@ -79,6 +79,7 @@
 0	0.01	TestFilletConcaveEdgeReadsMinRadius
 0	0.02	TestFilletLineArcCorner
 0	0.01	TestFitSplineCollinearPointsMeasureAsTheLine
+0	5.29	TestFloatRatMatchesSetFloat64
 0	0.01	TestFreeformAnchorSubtractsExactly
 0	0.09	TestFreeformArcLengthAboveFloat64RangeRefused
 0	0.28	TestFreeformPrismClearanceUndecided
@@ -288,6 +289,7 @@
 1	0.09	TestFreeformRecordedRangeRefusals
 1	0.03	TestFreeformWalkRefusedByAnalyticConsumers
 1	0.01	TestImplicitExactlyOneStopUnassertedZeroRewritten
+1	11.12	TestLineWalkBoundsDyadicMatchRational
 1	0.31	TestLoftArcWedgeBuildsAndMatchesClosedForm
 1	0.08	TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound
 1	0.01	TestLoftCircularCellStationsHandDerivedStationCount
@@ -464,6 +466,7 @@
 2	0.01	TestDisplacedStationCellNeedsTheStationShiftLeg
 2	0.01	TestEvalLoftCollinearSplitKeepsTwoFacesPerCell
 2	0.03	TestEvalPrismContinuesCallerFreeformWork
+2	1.77	TestExactSumRoundDyadicMatchesRational
 2	0.01	TestExtrudeArcSectionBoxEnclosesArcApex
 2	0.01	TestExtrudeExtents
 2	0.08	TestExtrudeFreeformAreaIsRegionPlusPerimeter
@@ -627,6 +630,7 @@
 2	0.05	TestXHPLerpDenotesTheSameCoordinate
 3	0.01	FuzzTriangulate2D
 3	0.02	TestAnalyticChordsAreCharged
+3	4.76	TestArcWalkRadiusBoundMatchesEnclosureBracket
 3	2.56	TestAtanSmallIntervalContainsExactSeries
 3	0.01	TestAtanSmallIntervalEnclosesMathAtan
 3	0.19	TestBodyGateDiameterFreeformArmBelowBoxDiagonal
@@ -1859,6 +1863,7 @@
 5	0.02	TestStitchRefusesNestedBoxes
 5	0.01	TestStitchSolidTessellatesItsOwnTriangleSet
 5	0.02	TestStitchSphereSolidMatchesTheRevolveEngine
+5	5.45	TestStraightEdgeBoundDyadicMatchesRational
 5	0.03	TestSurfaceExtendArcReceiverToNearestCut
 5	0.01	TestSurfaceExtendRequiresNamedEnd
 5	0.01	TestSurfaceExtrudeStaysASheetThroughPlacement

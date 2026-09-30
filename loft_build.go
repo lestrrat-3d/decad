@@ -64,7 +64,7 @@ type loftPayload struct {
 	// own magnitude and the composed translation's magnitude. stationRound is
 	// each station's own displacement from the point the record denotes for
 	// it — an exact-rational trig enclosure rounded once into a Point2 for a
-	// circular station, lerp2's own gap from ratLerp for a LineSeg station
+	// circular station, lerp2's own gap from dyLerp for a LineSeg station
 	// sitting at a TRIMMED parameter, and the arc-end radial residual
 	// (arcNaturalEndRadialUpper) at an untrimmed ArcSeg's t == 1 end, whose
 	// recorded coordinate the record states while denoting another point

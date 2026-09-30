@@ -188,10 +188,11 @@ func compositeLineSweepSpan(
 	if math.IsInf(height, 0) || math.IsNaN(height) {
 		return sweepSpanPayload{}, fmt.Errorf(`%w: the sweep line's length is outside the representable range`, ErrUnsupported)
 	}
-	heightBound := straightEdgeBound(height, ratSquaredDistance3(
+	heightSquared, heightSquaredOK := dySquaredDistance3(
 		record.start.X, record.start.Y, record.start.Z,
 		record.end.X, record.end.Y, record.end.Z,
-	))
+	)
+	heightBound := straightEdgeBound(height, heightSquared, heightSquaredOK)
 	heldSweep := frame.N().Scale(height)
 	heightBound = absSumUpper(
 		heightBound,
