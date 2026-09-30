@@ -598,10 +598,21 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 			arcRadiusUpper(seg),
 			circularSweepUpper(seg.TStart, seg.TEnd),
 		)
-		w.radiusBound = arcWalkRadiusBound(seg, radius)
 		pinArcWalkEnds(&w, seg)
-		if iv, ok := circularLengthInterval(seg); ok {
-			w.lengthBound = math.Min(w.lengthBound, intervalFloatError(iv, w.length))
+		// circularWalkEnclosures brackets the radius from the same exact
+		// squared Start-to-Center distance arcWalkRadiusBound does, so its
+		// radius interval IS that function's bracket and is read here rather
+		// than built twice. Both ends are floatRat of a float, so Float64
+		// returns those floats exactly. The enclosures answer false exactly
+		// where the bracket overflows, and arcWalkRadiusBound answers +Inf
+		// there on its own.
+		if rIv, sweepIv, ok := circularWalkEnclosures(seg); ok {
+			rLo, _ := rIv.lo.Float64()
+			rHi, _ := rIv.hi.Float64()
+			w.radiusBound = arcRadiusBoundFromBracket(radius, rLo, rHi)
+			w.lengthBound = math.Min(w.lengthBound, intervalFloatError(intervalMul(rIv, sweepIv), w.length))
+		} else {
+			w.radiusBound = arcWalkRadiusBound(seg, radius)
 		}
 		return w, nil
 	default:
@@ -718,6 +729,15 @@ func arcWalkRadiusBound(seg ArcSeg, held float64) float64 {
 	if isNonFinite(rLo) || isNonFinite(rHi) {
 		return math.Inf(1)
 	}
+	return arcRadiusBoundFromBracket(held, rLo, rHi)
+}
+
+// arcRadiusBoundFromBracket is arcWalkRadiusBound's formula over an already
+// built radius bracket [rLo, rHi]: the wider side of the bracket about the
+// held radius, rounded outward. It exists so walkOf, which reads the same
+// bracket out of circularWalkEnclosures, states the formula through its one
+// owner instead of copying it.
+func arcRadiusBoundFromBracket(held, rLo, rHi float64) float64 {
 	return math.Max(upRound(held-rLo), upRound(rHi-held))
 }
 

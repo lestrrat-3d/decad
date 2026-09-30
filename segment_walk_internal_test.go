@@ -140,3 +140,93 @@ func TestLineWalkBoundsDyadicMatchRational(t *testing.T) {
 		}
 	}
 }
+
+// ratArcWalk is walkOf's ArcSeg arm as it was before the radius bracket was
+// read out of circularWalkEnclosures, kept verbatim as the oracle below: the
+// radius bound from arcWalkRadiusBound's own bracket, and the length bound
+// from a second, separate circularLengthInterval.
+func ratArcWalk(seg ArcSeg) segmentWalk {
+	radius := math.Hypot(seg.Start.U-seg.Center.U, seg.Start.V-seg.Center.V)
+	a0 := math.Atan2(seg.Start.V-seg.Center.V, seg.Start.U-seg.Center.U)
+	a1 := math.Atan2(seg.End.V-seg.Center.V, seg.End.U-seg.Center.U)
+	sweep := math.Mod(a1-a0, 2*math.Pi)
+	if sweep <= 0 {
+		sweep += 2 * math.Pi
+	}
+	w := circularWalk(
+		seg.Center.U,
+		seg.Center.V,
+		radius,
+		a0+seg.TStart*sweep,
+		a0+seg.TEnd*sweep,
+		arcRadiusUpper(seg),
+		circularSweepUpper(seg.TStart, seg.TEnd),
+	)
+	w.radiusBound = arcWalkRadiusBound(seg, radius)
+	pinArcWalkEnds(&w, seg)
+	if iv, ok := circularLengthInterval(seg); ok {
+		w.lengthBound = math.Min(w.lengthBound, intervalFloatError(iv, w.length))
+	}
+	return w
+}
+
+// TestArcWalkRadiusBoundMatchesEnclosureBracket pins walkOf's ArcSeg arm,
+// which reads the radius bracket once out of circularWalkEnclosures, to the
+// arm that built it twice, bit for bit on the radius bound and the length
+// bound. The arcs mix integer (Pythagorean, so an exact radius), unit, 1e-3,
+// 1e3 and 1e6 magnitudes over natural and trimmed ranges, and one arc whose
+// squared radius overflows the bracket drives the refusal arm.
+//
+// Shown to fail: reading rIv.hi for both ends of the bracket turns the radius
+// leg red on an arc whose radius the bracket does not pin to one float;
+// multiplying the radius interval by itself instead of by the sweep turns the
+// length leg red; dropping the arcWalkRadiusBound fallback turns the overflow
+// arc red.
+func TestArcWalkRadiusBoundMatchesEnclosureBracket(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(11, 13))
+	check := func(t *testing.T, seg ArcSeg) {
+		t.Helper()
+		got, err := walkOf(seg, nil)
+		require.NoError(t, err, "%+v", seg)
+		want := ratArcWalk(seg)
+		requireSameFloatBits(t, want.radiusBound, got.radiusBound, "radius bound of %+v", seg)
+		requireSameFloatBits(t, want.lengthBound, got.lengthBound, "length bound of %+v", seg)
+	}
+	// 2000 arcs, not more: each walk builds two certified atan2 enclosures,
+	// and at 10000 the test alone cost about 25s of a race shard.
+	for range 2000 {
+		scale := []float64{1, 1e-3, 1e3, 1e6}[rng.IntN(4)]
+		c := Point2{U: rng.NormFloat64() * scale, V: rng.NormFloat64() * scale}
+		var start, end Point2
+		if rng.IntN(3) == 0 {
+			k := float64(1 + rng.IntN(50))
+			c = Point2{U: float64(rng.IntN(200) - 100), V: float64(rng.IntN(200) - 100)}
+			start = Point2{U: c.U + 3*k, V: c.V + 4*k}
+			end = Point2{U: c.U - 4*k, V: c.V + 3*k}
+		} else {
+			r := math.Abs(rng.NormFloat64())*scale + scale/100
+			a, b := rng.Float64()*2*math.Pi, rng.Float64()*2*math.Pi
+			start = Point2{U: c.U + r*math.Cos(a), V: c.V + r*math.Sin(a)}
+			end = Point2{U: c.U + r*math.Cos(b), V: c.V + r*math.Sin(b)}
+		}
+		t0, t1 := 0.0, 1.0
+		if rng.IntN(2) == 0 {
+			t0, t1 = rng.Float64()/2, 0.5+rng.Float64()/2
+		}
+		check(t, ArcSeg{Center: c, Start: start, End: end, TStart: t0, TEnd: t1})
+	}
+
+	overflow := ArcSeg{
+		Center: Point2{U: -1e308, V: 0},
+		Start:  Point2{U: 1e308, V: 0},
+		End:    Point2{U: -1e308, V: 1e308},
+		TStart: 0, TEnd: 1,
+	}
+	_, _, ok := circularWalkEnclosures(overflow)
+	require.False(t, ok, "the fixture must overflow the radius bracket to reach the refusal arm")
+	check(t, overflow)
+	got, err := walkOf(overflow, nil)
+	require.NoError(t, err)
+	require.True(t, math.IsInf(got.radiusBound, 1), "an overflowed bracket refuses with +Inf")
+}
