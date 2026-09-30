@@ -5,7 +5,12 @@ package decad_test
 // accessor is a warm read of the stored result; there is no cold measurement
 // path to time separately, and the build cost is what the modeling and
 // tessellation benchmarks already cover. Each fixture builds its body outside
-// the timed loop and asserts the measurement against a closed-form value.
+// the timed loop. The timed loop holds only the accessor call and a plain
+// error check: a testify assertion walks the call stack on every call, which
+// costs two orders of magnitude more than the read it would be checking, so
+// the closed-form check runs once on the last reading after the loop. The
+// accessor is a pure read of a stored value, so the last reading is every
+// reading.
 
 import (
 	"math"
@@ -74,11 +79,15 @@ func BenchmarkMeasureVolume(b *testing.B) {
 	for _, tc := range measureCases(b) {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
+			var m decad.Measurement
 			for b.Loop() {
-				m, err := tc.body.Volume()
-				require.NoError(b, err)
-				require.InEpsilon(b, tc.volume, m.Value.Base(), 1e-9)
+				var err error
+				m, err = tc.body.Volume()
+				if err != nil {
+					b.Fatal(err)
+				}
 			}
+			require.InEpsilon(b, tc.volume, m.Value.Base(), 1e-9)
 		})
 	}
 }
@@ -88,11 +97,15 @@ func BenchmarkMeasureArea(b *testing.B) {
 	for _, tc := range measureCases(b) {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
+			var m decad.Measurement
 			for b.Loop() {
-				m, err := tc.body.Area()
-				require.NoError(b, err)
-				require.InEpsilon(b, tc.area, m.Value.Base(), 1e-9)
+				var err error
+				m, err = tc.body.Area()
+				if err != nil {
+					b.Fatal(err)
+				}
 			}
+			require.InEpsilon(b, tc.area, m.Value.Base(), 1e-9)
 		})
 	}
 }
@@ -103,13 +116,17 @@ func BenchmarkMeasureCentroid(b *testing.B) {
 	for _, tc := range measureCases(b) {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ReportAllocs()
+			var m decad.VecMeasurement
 			for b.Loop() {
-				m, err := tc.body.Centroid()
-				require.NoError(b, err)
-				require.InDelta(b, tc.centroid.X, m.Value.X, 1e-9)
-				require.InDelta(b, tc.centroid.Y, m.Value.Y, 1e-9)
-				require.InDelta(b, tc.centroid.Z, m.Value.Z, 1e-9)
+				var err error
+				m, err = tc.body.Centroid()
+				if err != nil {
+					b.Fatal(err)
+				}
 			}
+			require.InDelta(b, tc.centroid.X, m.Value.X, 1e-9)
+			require.InDelta(b, tc.centroid.Y, m.Value.Y, 1e-9)
+			require.InDelta(b, tc.centroid.Z, m.Value.Z, 1e-9)
 		})
 	}
 }
