@@ -256,10 +256,9 @@ func validateStraightSweepPath(path *Path, frame r3.Frame) (float64, float64, er
 	if math.IsInf(height, 0) || math.IsNaN(height) {
 		return 0, 0, fmt.Errorf(`%w: the sweep line's length is outside the representable range`, ErrUnsupported)
 	}
-	lengthBound := straightEdgeBound(height, ratSquaredDistance3(
-		start.X, start.Y, start.Z,
-		line.End.X, line.End.Y, line.End.Z,
-	))
+	// The squared length is the recorded tangent's own exact dot product; both
+	// endpoints are finite (dyVec's precondition), so it always states one.
+	lengthBound := straightEdgeBound(height, dvDot(tangent, tangent), true)
 	heldSweep := frame.N().Scale(height)
 	bound := absSumUpper(
 		lengthBound,

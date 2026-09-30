@@ -655,11 +655,11 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 			held := math.Hypot(end.U-start.U, end.V-start.V)
 			// Both endpoints are contour points, so both carry the band's own
 			// displacement; the square root's own committed error is measured
-			// against the exact rational squared length.
+			// against the exact squared length.
 			capEdge = &Edge{
 				curve: Line3{}, start: capA, end: capB, convex: true,
 				length:      held,
-				lengthBound: straightEdgeBound(held, ratSquaredDistance3(end.U, end.V, 0, start.U, start.V, 0), delta, delta),
+				lengthBound: capEdgeLengthBound(held, end, start, delta),
 			}
 		} else {
 			sweepSigned := capTh1 - capTh0
@@ -861,8 +861,8 @@ func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt) {
 // more than it can building the contour displacement itself.
 func capSlantEdge(budget *workBudget, capP Point2, capV, apex *Vertex, apexU, apexV, capZ, sideZ, delta, levelDelta float64, prev, cur sideWalk, dc float64, reflex bool) (*Edge, float64, error) {
 	held := math.Hypot(math.Hypot(capP.U-apexU, capP.V-apexV), capZ-sideZ)
-	squared := ratSquaredDistance3(capP.U, capP.V, capZ, apexU, apexV, sideZ)
-	heldBound := straightEdgeBound(held, squared, delta, levelDelta)
+	squared, squaredOK := dySquaredDistance3(capP.U, capP.V, capZ, apexU, apexV, sideZ)
+	heldBound := straightEdgeBound(held, squared, squaredOK, delta, levelDelta)
 	e := &Edge{
 		curve: Line3{}, start: capV, end: apex, convex: true,
 		length:      held,

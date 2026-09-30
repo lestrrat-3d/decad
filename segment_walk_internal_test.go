@@ -65,8 +65,19 @@ func ratLineWalkBounds(seg LineSeg, held float64) (float64, float64, float64) {
 	if !exact {
 		upper = math.Nextafter(upper, math.Inf(1))
 	}
-	bound := math.Min(conservativeValueError(held, upper), sqrtIntervalError(lengthSquared, held))
+	bound := math.Min(conservativeValueError(held, upper), ratSqrtIntervalError(lengthSquared, held))
 	return bound, upper, coordUpper
+}
+
+// ratSqrtIntervalError is dySqrtIntervalError as it was computed over big.Rat
+// before the dyadic rewrite, kept verbatim as the oracle the line-walk and
+// straight-edge comparisons read.
+func ratSqrtIntervalError(lengthSquared *big.Rat, held float64) float64 {
+	lo, hi := floatRat(ratSqrtDown(lengthSquared)), floatRat(ratSqrtUp(lengthSquared))
+	if lo == nil || hi == nil {
+		return math.Inf(1)
+	}
+	return intervalFloatError(interval(lo, hi), held)
 }
 
 // TestLineWalkBoundsDyadicMatchRational pins lineWalkBounds,

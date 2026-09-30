@@ -940,24 +940,12 @@ func lineWalkBounds(seg LineSeg, held float64) (float64, float64, float64) {
 	return bound, upper, coordUpper
 }
 
-// sqrtIntervalError proves |held-sqrt(lengthSquared)| from the
-// directed-rounding square root bracket (ratSqrtDown/ratSqrtUp,
-// spline_length.go), assuming no ulp contract from Hypot or Sqrt. It returns
-// +Inf when the bracket cannot be built (a non-finite endpoint), so a
-// math.Min against it can only ever keep the caller's own bound.
-func sqrtIntervalError(lengthSquared *big.Rat, held float64) float64 {
-	lo, hi := floatRat(ratSqrtDown(lengthSquared)), floatRat(ratSqrtUp(lengthSquared))
-	if lo == nil || hi == nil {
-		return math.Inf(1)
-	}
-	return intervalFloatError(interval(lo, hi), held)
-}
-
-// dySqrtIntervalError is sqrtIntervalError over a dyadic squared length:
-// |held − sqrt(lengthSquared)| proven from the directed-rounding bracket
-// (dySqrtDown/dySqrtUp), each end's gap published through dyRoundedFloatError,
-// so it answers the value its rational twin answers, bit for bit. It returns
-// +Inf when the bracket cannot be built (an end past MaxFloat64), so a
+// dySqrtIntervalError proves |held − sqrt(lengthSquared)| from the
+// directed-rounding square root bracket (dyadic.go's dySqrtDown/dySqrtUp),
+// assuming no ulp contract from Hypot or Sqrt. The answer is the farther of the
+// held float's two gaps from the bracket's ends, each rounded outward through
+// dyRoundedFloatError — intervalFloatError's rule over this arithmetic. It
+// returns +Inf when the bracket cannot be built (an end past MaxFloat64), so a
 // math.Min against it can only ever keep the caller's own bound.
 func dySqrtIntervalError(lengthSquared dyadic, held float64) float64 {
 	lo, okLo := dyOf(dySqrtDown(lengthSquared))

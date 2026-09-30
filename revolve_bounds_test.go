@@ -575,7 +575,7 @@ var tiltedAxis = decad.SketchLine{Start: decad.Point2{U: 0, V: -20}, End: decad.
 
 // TestRevolveTiltedAxisBoundsTighten is design §11 test 8: the axis
 // direction's own sqrt bracket (axisDirectionSqrtBracket, the transfer of
-// the straight-prism campaign's lineWalkBounds/sqrtIntervalError) replaces
+// the straight-prism campaign's lineWalkBounds/dySqrtIntervalError) replaces
 // sketchAxisDirectionBounds's old conservativeValueError(dU, 1) envelope —
 // measured ratio ~4.07 before this change on tiltedAxis, for both a full
 // turn and a 1-radian sweep — so the tilted-axis volume and area bounds

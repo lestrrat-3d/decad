@@ -1863,6 +1863,7 @@
 5	0.02	TestStitchRefusesNestedBoxes
 5	0.01	TestStitchSolidTessellatesItsOwnTriangleSet
 5	0.02	TestStitchSphereSolidMatchesTheRevolveEngine
+5	5.45	TestStraightEdgeBoundDyadicMatchesRational
 5	0.03	TestSurfaceExtendArcReceiverToNearestCut
 5	0.01	TestSurfaceExtendRequiresNamedEnd
 5	0.01	TestSurfaceExtrudeStaysASheetThroughPlacement

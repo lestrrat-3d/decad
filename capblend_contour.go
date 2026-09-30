@@ -871,34 +871,55 @@ func loopContourDelta(ctx context.Context, loop LoopRecord, d float64) (float64,
 	return capContourDelta(cl.walks, joins, d)
 }
 
-// ratSquaredDistance3 is the exact squared distance between two plane-local
-// points, every coordinate a float64 and hence an exact rational, so the
-// returned value is the true square of the length the float evaluation
-// approximated. sqrtIntervalError then reports what that evaluation committed.
-func ratSquaredDistance3(a0, a1, a2, b0, b1, b2 float64) *big.Rat {
-	sum := new(big.Rat)
+// dySquaredDistance3 is the exact squared distance between two points, every
+// coordinate a float64 and hence an exact dyadic, so the returned value is the
+// true square of the length the float evaluation approximated.
+// dySqrtIntervalError then reports what that evaluation committed. ok is false
+// where a coordinate is not finite, which states no distance at all.
+func dySquaredDistance3(a0, a1, a2, b0, b1, b2 float64) (dyadic, bool) {
+	sum := dyZero()
 	for _, pair := range [3][2]float64{{a0, b0}, {a1, b1}, {a2, b2}} {
-		x, y := floatRat(pair[0]), floatRat(pair[1])
-		if x == nil || y == nil {
-			return nil
+		x, okX := dyOf(pair[0])
+		y, okY := dyOf(pair[1])
+		if !okX || !okY {
+			return dyadic{}, false
 		}
-		diff := new(big.Rat).Sub(x, y)
-		sum.Add(sum, diff.Mul(diff, diff))
+		diff := dySubScalar(x, y)
+		sum = dyAdd(sum, dyMul(diff, diff))
 	}
-	return sum
+	return sum, true
+}
+
+// ratSquaredDistance3 is dySquaredDistance3 as a big.Rat, for the callers that
+// go on to divide by it or compare it against a general fraction. It answers
+// nil where a coordinate is not finite.
+func ratSquaredDistance3(a0, a1, a2, b0, b1, b2 float64) *big.Rat {
+	d, ok := dySquaredDistance3(a0, a1, a2, b0, b1, b2)
+	if !ok {
+		return nil
+	}
+	return d.rat()
 }
 
 // straightEdgeBound is the proven bound on a straight cap-level edge's held
 // length. It has three independent terms and each speaks for a different thing:
-// the square root's own committed error, measured against the exact rational
-// squared length rather than against a Hypot ulp contract Go does not give;
-// and one displacement per endpoint, since moving an endpoint of a segment by
-// e moves its length by at most e.
-func straightEdgeBound(held float64, squared *big.Rat, endpointDeltas ...float64) float64 {
-	if squared == nil {
+// the square root's own committed error, measured against the exact squared
+// length (dySquaredDistance3) rather than against a Hypot ulp contract Go does
+// not give; and one displacement per endpoint, since moving an endpoint of a
+// segment by e moves its length by at most e. ok false — a squared length the
+// coordinates could not state — is an underivable bound, +Inf.
+func straightEdgeBound(held float64, squared dyadic, ok bool, endpointDeltas ...float64) float64 {
+	if !ok {
 		return math.Inf(1)
 	}
-	return absSumUpper(append([]float64{sqrtIntervalError(squared, held)}, endpointDeltas...)...)
+	return absSumUpper(append([]float64{dySqrtIntervalError(squared, held)}, endpointDeltas...)...)
+}
+
+// capEdgeLengthBound is straightEdgeBound for a straight cap-level edge between
+// two contour points, each displaced by the band's own delta.
+func capEdgeLengthBound(held float64, end, start Point2, delta float64) float64 {
+	squared, ok := dySquaredDistance3(end.U, end.V, 0, start.U, start.V, 0)
+	return straightEdgeBound(held, squared, ok, delta, delta)
 }
 
 // arcSweepAllow converts a contour displacement into the arc length it can move.
