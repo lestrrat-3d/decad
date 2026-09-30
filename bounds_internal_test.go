@@ -1144,3 +1144,59 @@ func TestRatLenAtLeastDecidesExactly(t *testing.T) {
 	require.False(t, dvLenAtLeast(-1, d), "a negative claim is refused")
 	require.False(t, dvLenAtLeast(math.NaN(), d), "a NaN claim is refused")
 }
+
+// ratExactSumRound is exactSumRound as it was computed over big.Rat before the
+// dyadic rewrite, kept verbatim as the oracle below.
+func ratExactSumRound(held float64, terms ...float64) float64 {
+	sum := new(big.Rat)
+	for _, term := range terms {
+		r := floatRat(term)
+		if r == nil {
+			return math.Inf(1)
+		}
+		sum.Add(sum, r)
+	}
+	return rationalFloatError(sum, held)
+}
+
+// TestExactSumRoundDyadicMatchesRational pins exactSumRound, computed over
+// dyadics, to the big.Rat computation it replaced, bit for bit, on random
+// two-to-four term sums of mixed magnitudes and on sums holding a NaN term.
+// Each is read at the float sum itself, one ulp below it, and at a held value
+// of zero. The first two leave a gap a float64 almost always holds exactly,
+// since a short float summation's error is itself a short binary fraction; the
+// zero held value leaves the whole exact sum as the gap, which mixed
+// magnitudes make wider than 53 bits, so the inexact rounding path is compared
+// too.
+//
+// Shown to fail: publishing through dyFloatUp instead of dyNearestUp in
+// dyRoundedFloatError turns it red on an inexact gap whose nearest float
+// rounded up. Without the zero held value it stays green under that change.
+func TestExactSumRoundDyadicMatchesRational(t *testing.T) {
+	t.Parallel()
+	rng := rand.New(rand.NewPCG(3, 4))
+	for i := range 40000 {
+		terms := make([]float64, 2+rng.IntN(3))
+		for j := range terms {
+			switch rng.IntN(3) {
+			case 0:
+				terms[j] = float64(rng.IntN(100) - 50)
+			case 1:
+				terms[j] = rng.NormFloat64() * 1e3
+			default:
+				terms[j] = rng.NormFloat64() * 1e-3
+			}
+		}
+		if i%101 == 0 {
+			terms[0] = math.NaN()
+		}
+		held := 0.0
+		for _, term := range terms {
+			held += term
+		}
+		for _, h := range []float64{held, math.Nextafter(held, math.Inf(-1)), 0} {
+			want, got := ratExactSumRound(h, terms...), exactSumRound(h, terms...)
+			require.Equal(t, math.Float64bits(want), math.Float64bits(got), "terms %v at %v", terms, h)
+		}
+	}
+}

@@ -2892,7 +2892,7 @@ func planeDotDecompositionRoundAllow(gu, gv, coordUpper float64) float64 {
 	))
 }
 
-// exactSumRound proves, over the rationals, the rounding the FINAL float64
+// exactSumRound proves, in exact dyadic arithmetic, the rounding the FINAL float64
 // summation of already-held terms commits: the recombination every directional
 // extent reading publishes each of its two endpoints through — a prism's
 // base + boundary extreme + sweep level, a revolve's or a cap-loop chamfer's
@@ -2921,15 +2921,15 @@ func planeDotDecompositionRoundAllow(gu, gv, coordUpper float64) float64 {
 // lands on a float64 sum — keeps its zero bound and stays Exact. A term no
 // rational holds answers +Inf, never 0 (cutDisplacementAllow's own rule).
 func exactSumRound(held float64, terms ...float64) float64 {
-	sum := new(big.Rat)
+	sum := dyZero()
 	for _, term := range terms {
-		r := floatRat(term)
-		if r == nil {
+		d, ok := dyOf(term)
+		if !ok {
 			return math.Inf(1)
 		}
-		sum.Add(sum, r)
+		sum = dyAdd(sum, d)
 	}
-	return rationalFloatError(sum, held)
+	return dyRoundedFloatError(sum, held)
 }
 
 // snapToZeroAllow composes the bound a coordinate carries once a deliberate

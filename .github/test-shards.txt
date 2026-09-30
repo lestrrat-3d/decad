@@ -466,6 +466,7 @@
 2	0.01	TestDisplacedStationCellNeedsTheStationShiftLeg
 2	0.01	TestEvalLoftCollinearSplitKeepsTwoFacesPerCell
 2	0.03	TestEvalPrismContinuesCallerFreeformWork
+2	0.3	TestExactSumRoundDyadicMatchesRational
 2	0.01	TestExtrudeArcSectionBoxEnclosesArcApex
 2	0.01	TestExtrudeExtents
 2	0.08	TestExtrudeFreeformAreaIsRegionPlusPerimeter
