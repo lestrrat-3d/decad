@@ -1022,9 +1022,11 @@ Instead `boundedSphereRadius` inverts the face's own already-proven
 `boundedQuotient` and `boundedSqrt` — a reuse of an already-published
 reading, on the same terms `Cylinder`'s own `K_F` reuses `f.area` rather
 than integrating anything fresh, never a fresh trust of the bare `Radius`
-field. `boundedSqrt`'s own rational bracket (`ratSqrtDown`/`ratSqrtUp`) is
-what makes the inversion itself sound, since Go's `math.Sqrt` carries no
-accuracy contract this file would otherwise have to lean on either.
+field. `boundedSqrt`'s own exact checks make the inversion itself sound:
+its rational bracket (`ratSqrtDown`/`ratSqrtUp`), or, for a zero-bound
+operand, `exactFloatSquare`'s FMA residual proving the float root exact. Go's
+`math.Sqrt` carries no accuracy contract this file would otherwise have to
+lean on either.
 
 Because a zero-loop face has no boundary to sum `½∮p×dr` over, `S_F` is
 exactly the zero vector by construction — no trig integral to collapse,

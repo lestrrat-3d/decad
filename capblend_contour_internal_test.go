@@ -120,3 +120,105 @@ func TestStraightEdgeBoundDyadicMatchesRational(t *testing.T) {
 			"plane bound of %v to %v", end, start)
 	}
 }
+
+// TestStraightEdgeBoundExactSquareSkipsTheBracket pins straightEdgeBound's
+// exact-square shortcut to the rational computation it skips. A non-negative
+// held length whose exact square is the squared length must read a zero
+// square-root term, where the oracle may read zero or at most one ulp; every
+// other held length must read the oracle bit for bit. Pairs sweep
+// axis-aligned full-width lengths, whose squares need up to 106 bits, scaled
+// Pythagorean triples, and general pairs whose Hypot is usually not exact,
+// each read at the held length, one ulp above it, and its negation.
+//
+// Shown to fail: dropping the dySquareEquals test (so every non-negative held
+// length reads a zero square-root term) turns the 1+2^-60 fixture, the random
+// sweep and TestStraightEdgeBoundDyadicMatchesRational red. Dropping the
+// held < 0 test turns the negated fixture and the random sweep's negated held
+// lengths red: their square matches while the length is off by twice its
+// magnitude.
+func TestStraightEdgeBoundExactSquareSkipsTheBracket(t *testing.T) {
+	t.Parallel()
+	var shortcut, wideShortcut, bracket int
+	check := func(t *testing.T, a, b r3.Vec, held, delta float64) {
+		t.Helper()
+		want := ratSquaredDistance3Oracle(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
+		squared, ok := dySquaredDistance3(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
+		got := straightEdgeBound(held, squared, ok, delta, delta)
+		old := ratStraightEdgeBound(held, want, delta, delta)
+		if want != nil && held >= 0 && new(big.Rat).Mul(floatRat(held), floatRat(held)).Cmp(want) == 0 {
+			requireSameFloatBits(t, absSumUpper(0, delta, delta), got,
+				"an exact length %v from %v to %v must read no square-root term", held, a, b)
+			require.LessOrEqual(t, old, absSumUpper(upRound(ulpOf(held)), delta, delta),
+				"the oracle may miss an exact length %v by one ulp at most", held)
+			shortcut++
+			if !isExactFloat(want) {
+				wideShortcut++
+			}
+			return
+		}
+		requireSameFloatBits(t, old, got, "bound of %v to %v at %v", a, b, held)
+		if want != nil && !isNonFinite(held) {
+			require.Positive(t, got, "%v is not the length from %v to %v and must not read exact", held, a, b)
+			bracket++
+		}
+	}
+
+	t.Run("fixtures", func(t *testing.T) {
+		// Hypot(1, 2^-30) rounds to 1, but the squared length is 1+2^-60:
+		// only the exact comparison keeps the held 1 from reading exact.
+		near := r3.Vec{X: 1, Y: 0x1p-30}
+		require.Equal(t, 1.0, near.Len(), "the fixture's held length must round to 1")
+		check(t, near, r3.Vec{}, near.Len(), 0)
+
+		// -5 squares to 25 exactly, and the true length is 5, ten away.
+		pyth := r3.Vec{X: 3, Y: 4}
+		check(t, pyth, r3.Vec{}, -5, 0)
+		require.GreaterOrEqual(t, straightEdgeBound(-5, dyInt(25), true), 10.0,
+			"a negated length is off by twice its magnitude")
+		check(t, pyth, r3.Vec{}, 5, 1e-9)
+	})
+
+	t.Run("random", func(t *testing.T) {
+		rng := rand.New(rand.NewPCG(31, 37))
+		triples := [][3]float64{{3, 4, 5}, {5, 12, 13}, {8, 15, 17}, {1, 2, 3}, {2, 3, 6}}
+		for range 10000 {
+			delta := 0.0
+			if rng.IntN(2) == 0 {
+				delta = math.Abs(rng.NormFloat64()) * 1e-9
+			}
+			origin := r3.Vec{X: float64(rng.IntN(200) - 100), Y: float64(rng.IntN(200) - 100), Z: rng.NormFloat64()}
+
+			axis := math.Ldexp(1+rng.Float64(), rng.IntN(200)-100)
+			pairs := [][2]r3.Vec{{{X: axis, Z: origin.Z}, {Z: origin.Z}}}
+
+			// {1,2,3} is not a triple and {2,3,6} is the 3D one (4+9+36 = 49).
+			tri := triples[rng.IntN(len(triples))]
+			scale := math.Ldexp(1, rng.IntN(40)-20)
+			pairs = append(pairs, [2]r3.Vec{origin, origin.Add(r3.Vec{X: tri[0] * scale, Y: tri[1] * scale, Z: 0})})
+			if tri == triples[4] {
+				pairs = append(pairs, [2]r3.Vec{{}, {X: 2 * scale, Y: 3 * scale, Z: 6 * scale}})
+			}
+
+			pairs = append(pairs, [2]r3.Vec{
+				{X: rng.NormFloat64() * 100, Y: rng.NormFloat64() * 100, Z: rng.NormFloat64() * 100},
+				{X: rng.NormFloat64() * 100, Y: rng.NormFloat64() * 100, Z: rng.NormFloat64() * 100},
+			})
+			for _, pair := range pairs {
+				held := pair[0].Sub(pair[1]).Len()
+				for _, h := range []float64{held, math.Nextafter(held, math.Inf(1)), -held} {
+					check(t, pair[0], pair[1], h, delta)
+				}
+			}
+		}
+	})
+
+	require.Positive(t, shortcut, "the sweep must reach the shortcut")
+	require.Positive(t, wideShortcut, "the sweep must reach the shortcut on a squared length past 53 bits")
+	require.Positive(t, bracket, "the sweep must reach the bracket")
+}
+
+// isExactFloat reports whether q is exactly a float64.
+func isExactFloat(q *big.Rat) bool {
+	_, exact := q.Float64()
+	return exact
+}

@@ -122,6 +122,43 @@ func mulRoundError(a, b, held float64) float64 {
 	return rationalFloatError(new(big.Rat).Mul(ra, rb), held)
 }
 
+// exactFloatSquare reports whether root·root == value EXACTLY. A true answer
+// is a proof; a false answer proves nothing and only sends the caller to its
+// exact rational comparison.
+//
+// The proof is math.FMA(root, root, -value) == 0 under mulRoundError's own
+// gate. FMA forms root² − value exactly and rounds once, so the only way it
+// can answer 0 for a nonzero residual is by rounding a residual of at most
+// half the smallest subnormal down to zero. The gate rules that out. root's
+// least significand bit weighs at least 2^(Ilogb(root)−52), so the exact root²
+// is an integer multiple of 2^(2·Ilogb(root)−104), and 2·Ilogb(root) ≥ −970
+// makes that at least 2^−1074. value is a finite float, which is always a
+// multiple of 2^−1074. The residual is then an integer multiple of 2^−1074:
+// either exactly zero, or at least 2^−1074 in magnitude, which is itself a
+// float and which round-to-nearest therefore never sends to zero.
+//
+// Outside the gate the function answers false. A subnormal root has
+// Ilogb ≤ −1023, and any value below about 2^−970 has a root under the gate,
+// so neither is ever decided here. Without the gate, root = (1+2^−52)·2^−500
+// against value = root*root has the exact residual 2^−1104, FMA flushes it to
+// zero, and a wrong root would read exact. At the top of the range the product
+// root*root may overflow; the cheap rounded check then fails and the answer is
+// false, and FMA's exact residual is finite in any case. That rounded check
+// only rejects: every exact square passes it, and FMA alone decides the rest.
+// math.FMA is correctly rounded on every platform, hardware or software.
+func exactFloatSquare(root, value float64) bool {
+	if isNonFinite(root) || isNonFinite(value) || value < 0 {
+		return false
+	}
+	if root == 0 {
+		return value == 0
+	}
+	if root*root != value || 2*math.Ilogb(root) < -970 {
+		return false
+	}
+	return math.FMA(root, root, -value) == 0
+}
+
 func divRoundError(a, b, held float64) float64 {
 	ra, rb := floatRat(a), floatRat(b)
 	if ra == nil || rb == nil || rb.Sign() == 0 {

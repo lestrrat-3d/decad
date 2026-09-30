@@ -262,9 +262,8 @@ func requireEnclosesSqrt(t *testing.T, q *big.Rat, got boundedScalar) {
 // TestBoundedSqrtKeepsAZeroBoundOperandExact pins the arm the analytic surveys
 // publish their exact readings through. A zero-bound operand's interval ends
 // are its own held value — adding or subtracting exactly zero rounds nothing —
-// so the rational brackets answer a zero bound precisely when that value is a
-// perfect square of a float64, and a genuine directed-rounding bound when it is
-// not.
+// so boundedSqrt answers a zero bound precisely when that value is a perfect
+// square of a float64, and a genuine directed-rounding bound when it is not.
 func TestBoundedSqrtKeepsAZeroBoundOperandExact(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -323,6 +322,169 @@ func TestBoundedSqrtWidensABoundedOperand(t *testing.T) {
 	micro := floatRat(1e-6)
 	requireEnclosesSqrt(t, new(big.Rat).Add(four, micro), wide)
 	requireEnclosesSqrt(t, new(big.Rat).Sub(four, micro), wide)
+}
+
+// boundedSqrtBracketOracle is boundedSqrt as it was before exactFloatSquare's
+// shortcut, kept verbatim as the oracle below: every operand, exact or not,
+// goes through the rational brackets.
+func boundedSqrtBracketOracle(x boundedScalar) boundedScalar {
+	value := math.Sqrt(math.Max(x.value, 0))
+	if isNonFinite(x.bound) {
+		return measuredScalar(value, math.Inf(1))
+	}
+	lo := math.Max(0, x.value-x.bound)
+	hi := x.value + x.bound
+	if x.bound != 0 {
+		lo = math.Nextafter(lo, math.Inf(-1))
+		if lo < 0 {
+			lo = 0
+		}
+		hi = math.Nextafter(hi, math.Inf(1))
+	}
+	loR, hiR := floatRat(lo), floatRat(hi)
+	if loR == nil || hiR == nil {
+		return measuredScalar(value, math.Inf(1))
+	}
+	sqrtLo := ratSqrtDown(loR)
+	sqrtHi := ratSqrtUp(hiR)
+	if isNonFinite(sqrtLo) || isNonFinite(sqrtHi) {
+		return measuredScalar(value, math.Inf(1))
+	}
+	bound := upRound(math.Max(value-sqrtLo, sqrtHi-value))
+	return measuredScalar(value, bound)
+}
+
+// ratIsFloatSquare reports, over the rationals, whether root² == value
+// exactly. It is the test's own ground truth and shares no code with
+// exactFloatSquare.
+func ratIsFloatSquare(root, value float64) bool {
+	r, v := floatRat(root), floatRat(value)
+	if r == nil || v == nil || root < 0 {
+		return false
+	}
+	return new(big.Rat).Mul(r, r).Cmp(v) == 0
+}
+
+// TestBoundedSqrtExactSquareMatchesBracket pins exactFloatSquare's shortcut in
+// boundedSqrt to the rational-bracket computation it skips. Every operand must
+// read bit for bit what the bracket oracle reads, except an exact operand that
+// is the exact square of its own float root: that one must read a zero bound,
+// and the oracle may read zero or at most one ulp there. Every answer that is
+// not exact must still enclose the true root. Operands sweep random exact
+// squares across the whole exponent range (inside and below the gate), random
+// rounded products that are usually not squares, random bit patterns
+// (subnormal, huge, negative, NaN, ±Inf) and operands that carry a bound.
+//
+// Shown to fail: deleting the Ilogb gate turns the (1+2^-52)·2^-500 fixture
+// red, because its residual 2^-1104 flushes to zero in FMA and the shortcut
+// then claims a root that is wrong. Replacing the FMA residual test with true
+// (leaving only the rounded root*root == value check) turns the 11 fixture,
+// the MaxFloat64 edge operand and the random sweep red. Dropping the
+// x.bound == 0 guard in boundedSqrt turns TestBoundedSqrtWidensABoundedOperand
+// red. The counters at the end prove the sweep reaches the shortcut, a
+// rounded non-square the FMA residual rejects, and an exact square below the
+// gate.
+func TestBoundedSqrtExactSquareMatchesBracket(t *testing.T) {
+	t.Parallel()
+	var shortcut, fmaRejected, belowGate int
+	check := func(t *testing.T, x boundedScalar) {
+		t.Helper()
+		got := boundedSqrt(x)
+		want := boundedSqrtBracketOracle(x)
+		requireSameFloatBits(t, want.value, got.value, "the root of %v", x)
+		if x.bound == 0 && ratIsFloatSquare(got.value, x.value) {
+			requireSameFloatBits(t, 0, got.bound, "an exact square %v must read a zero bound", x.value)
+			if want.bound != 0 {
+				require.LessOrEqual(t, want.bound, upRound(ulpOf(got.value)),
+					"the oracle may miss an exact square %v by one ulp at most", x.value)
+			}
+			if exactFloatSquare(got.value, x.value) {
+				shortcut++
+			} else if got.value != 0 {
+				belowGate++
+			}
+			return
+		}
+		requireSameFloatBits(t, want.bound, got.bound, "the bound on the root of %v", x)
+		if x.bound == 0 && x.value >= 0 && !isNonFinite(x.value) {
+			require.Positive(t, got.bound, "%v is not the square of %v and must not read exact", x.value, got.value)
+			requireEnclosesSqrt(t, floatRat(x.value), got)
+			if got.value*got.value == x.value {
+				fmaRejected++
+			}
+		}
+	}
+
+	t.Run("gate fixture", func(t *testing.T) {
+		// The exact residual of this root against its own rounded square is
+		// 2^-1104, below the smallest subnormal, so FMA flushes it to zero.
+		// Only the Ilogb gate keeps the shortcut from reading it exact.
+		root := math.Ldexp(1+0x1p-52, -500)
+		value := root * root
+		require.Equal(t, root, math.Sqrt(value), "the fixture's float root must square back to it")
+		require.Zero(t, math.FMA(root, root, -value), "the fixture's residual must flush in FMA")
+		require.False(t, ratIsFloatSquare(root, value), "the fixture must not be an exact square")
+
+		got := boundedSqrt(exactScalar(value))
+		require.Positive(t, got.bound)
+		requireEnclosesSqrt(t, floatRat(value), got)
+		check(t, exactScalar(value))
+		require.False(t, exactFloatSquare(root, value))
+	})
+
+	t.Run("FMA fixture", func(t *testing.T) {
+		// √11's float squares back to 11 when rounded, but not exactly, so the
+		// rounded check passes it and only the FMA residual rejects it.
+		root := math.Sqrt(11)
+		require.Equal(t, 11.0, root*root, "the fixture's rounded square must come back to 11")
+		require.NotZero(t, math.FMA(root, root, -11))
+
+		got := boundedSqrt(exactScalar(11))
+		require.Positive(t, got.bound)
+		requireEnclosesSqrt(t, big.NewRat(11, 1), got)
+		check(t, exactScalar(11))
+		require.False(t, exactFloatSquare(root, 11))
+	})
+
+	t.Run("edge operands", func(t *testing.T) {
+		smallestNormal := math.Ldexp(1, -1022)
+		for _, v := range []float64{
+			0, math.Copysign(0, -1), -1, -1e-300, math.NaN(), math.Inf(1), math.Inf(-1),
+			math.SmallestNonzeroFloat64,        // (2^-537)², an exact square below the gate
+			math.Ldexp(1, -1072),               // (2^-536)²
+			smallestNormal, 4 * smallestNormal, // squares of 2^-511 and 2^-510, below the gate
+			math.Ldexp(1, -972), math.Ldexp(1, -970), math.Ldexp(1, -968), // the gate's own edge
+			1, 2, 4, 0.25, 1e-300, 1e300,
+			math.Ldexp(1, 1022), math.MaxFloat64,
+			math.Ldexp(float64((1<<26-1)*(1<<26-1)), 972), // ((2^26-1)·2^486)², near the top
+		} {
+			check(t, exactScalar(v))
+		}
+		top := math.Sqrt(math.MaxFloat64)
+		check(t, exactScalar(top*top))
+	})
+
+	t.Run("random", func(t *testing.T) {
+		rng := rand.New(rand.NewPCG(23, 29))
+		for range 20000 {
+			// A root with at most 26 significant bits squares exactly wherever
+			// the square stays normal.
+			short := math.Ldexp(float64(1+rng.IntN(1<<26-1)), rng.IntN(1040)-560)
+			check(t, exactScalar(short*short))
+			// A full-width root's rounded square is almost never exact, and its
+			// own float root often squares back to it anyway.
+			full := math.Ldexp(1+rng.Float64(), rng.IntN(1020)-510)
+			check(t, exactScalar(full*full))
+			check(t, exactScalar(math.Nextafter(short*short, math.Inf(1))))
+			check(t, exactScalar(math.Float64frombits(rng.Uint64())))
+			// An operand that carries a bound never takes the shortcut.
+			check(t, measuredScalar(short*short, math.Abs(rng.NormFloat64())*math.Ldexp(1, rng.IntN(120)-100)))
+		}
+	})
+
+	require.Positive(t, shortcut, "the sweep must reach the shortcut")
+	require.Positive(t, fmaRejected, "the sweep must reach a rounded non-square the FMA residual rejects")
+	require.Positive(t, belowGate, "the sweep must reach an exact square below the gate")
 }
 
 // TestBoundedFloatErrorEnclosesEveryTruthTheScalarAdmits pins boundedFloatError's
