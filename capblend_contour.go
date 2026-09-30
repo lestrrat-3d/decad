@@ -908,11 +908,21 @@ func ratSquaredDistance3(a0, a1, a2, b0, b1, b2 float64) *big.Rat {
 // not give; and one displacement per endpoint, since moving an endpoint of a
 // segment by e moves its length by at most e. ok false — a squared length the
 // coordinates could not state — is an underivable bound, +Inf.
+//
+// A non-negative held length whose exact square IS the squared length
+// (dySquareEquals, an exact dyadic comparison) is the true length, so its
+// square-root term is zero and the bracket is not built. A negative held
+// length never takes that shortcut: its square can match while the length
+// itself is off by twice its magnitude, and the bracket measures that gap.
 func straightEdgeBound(held float64, squared dyadic, ok bool, endpointDeltas ...float64) float64 {
 	if !ok {
 		return math.Inf(1)
 	}
-	return absSumUpper(append([]float64{dySqrtIntervalError(squared, held)}, endpointDeltas...)...)
+	sqrtErr := 0.0
+	if held < 0 || !dySquareEquals(held, squared) {
+		sqrtErr = dySqrtIntervalError(squared, held)
+	}
+	return absSumUpper(append([]float64{sqrtErr}, endpointDeltas...)...)
 }
 
 // capEdgeLengthBound is straightEdgeBound for a straight cap-level edge between

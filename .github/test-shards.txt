@@ -789,6 +789,7 @@
 3	0.02	TestStitchPlacedStitchedSolidGetsClearance
 3	0.02	TestStitchSmallStitchedBoxContainedInABlock
 3	0.01	TestStitchSolidTessellateIsDeterministic
+3	5.07	TestStraightEdgeBoundExactSquareSkipsTheBracket
 3	0.05	TestSturmVarAtMatchesRationalHornerSigns
 3	0.01	TestSurfaceExtendLeftFragmentToNearestCut
 3	0.02	TestSurfaceExtrudeHoledProfileReportsDisconnectedLumps
@@ -874,6 +875,7 @@
 4	0.00	TestBoundaryExtremesBoundedNonFiniteDirectionRefuses
 4	0.00	TestBoundaryExtremesKeepAProvenZero
 4	0.00	TestBoundedFloatErrorRefusesANonFiniteOperand
+4	3.38	TestBoundedSqrtExactSquareMatchesBracket
 4	0.00	TestBoundedSqrtKeepsAZeroBoundOperandExact
 4	0.00	TestBoundedSqrtWidensABoundedOperand
 4	0.00	TestBox

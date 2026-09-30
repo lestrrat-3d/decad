@@ -137,7 +137,8 @@ import (
 //     own centre distance, an Apollonius radius) → boundedSqrt, which reads
 //     the operand's own interval ends through the same rational sqrt brackets
 //     (ratSqrtDown/ratSqrtUp) a free-form arc's radius already does, rather
-//     than trusting math.Sqrt's accuracy on either end;
+//     than trusting math.Sqrt's accuracy on either end, and proves an exact
+//     operand's float root exact through exactFloatSquare's FMA residual;
 //   - a linear functional's own extreme over a bounded region moving when its
 //     DIRECTION is perturbed (a revolved solid's directional extent, whose swept direction
 //     carries the sweep angle's own trig enclosure) →
@@ -2596,14 +2597,24 @@ func chordedBoundaryMomentResidualAllow(matchedDelta, wallAreaUpper, capVolumeUp
 // ulp inside the interval they stand for and MUST be stepped out. Adding or
 // subtracting exactly zero rounds nothing, so a zero-bound operand's ends are
 // already the exact interval — the held value twice — and stepping them out
-// would invent a rounding error that provably did not occur. The rational
-// brackets then decide the answer by exact comparison: a zero bound precisely
-// when the held value is a perfect square of a float64, and a genuine
-// directed-rounding bound whenever it is not.
+// would invent a rounding error that provably did not occur. The answer is a
+// zero bound precisely when the held value is a perfect square of a float64,
+// and a genuine directed-rounding bound whenever it is not.
+//
+// A zero-bound operand whose float root squares back to it exactly is decided
+// first, by exactFloatSquare's FMA residual, and publishes that zero bound
+// without the rational brackets. Every other operand, including an exact
+// square too small for exactFloatSquare's gate, takes the brackets, which
+// decide by exact comparison.
 func boundedSqrt(x boundedScalar) boundedScalar {
 	value := math.Sqrt(math.Max(x.value, 0))
 	if isNonFinite(x.bound) {
 		return measuredScalar(value, math.Inf(1))
+	}
+	if x.bound == 0 && exactFloatSquare(value, x.value) {
+		// A zero bound means the true operand IS x.value, and value² equals it
+		// exactly, so value is the true root.
+		return measuredScalar(value, 0)
 	}
 	lo := math.Max(0, x.value-x.bound)
 	hi := x.value + x.bound

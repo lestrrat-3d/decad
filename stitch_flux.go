@@ -982,9 +982,11 @@ func coneFaceFluxAndMoment(f *Face, cone Cone, anchor r3.Vec, sign float64) (flu
 // trusts unconditionally for every face kind. Inverting Area = 4πR² through
 // boundedQuotient and boundedSqrt is therefore a reuse of an
 // already-published, already-tested reading, never a fresh unproven one —
-// boundedSqrt's own rational bracket (ratSqrtDown/ratSqrtUp) is what makes
-// the inversion itself sound, since Go's math.Sqrt carries no accuracy
-// contract this file would otherwise have to lean on either.
+// boundedSqrt's own exact checks make the inversion itself sound: its
+// rational bracket (ratSqrtDown/ratSqrtUp), or, for a zero-bound operand,
+// exactFloatSquare's FMA residual proving the float root exact. Go's
+// math.Sqrt carries no accuracy contract this file would otherwise have to
+// lean on either.
 func boundedSphereRadius(f *Face) (boundedScalar, error) {
 	fourPi := boundedMul(measuredScalar(4, 0), piScalar())
 	rSq := boundedQuotient(f.area, f.areaBound, fourPi.value, fourPi.bound)
