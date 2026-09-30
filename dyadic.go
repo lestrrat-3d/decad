@@ -206,15 +206,21 @@ func dyNeg(d dyadic) dyadic {
 // denominator. It is the ONE boundary between this file and math/big's general
 // fractions, and it is exact: a non-negative exponent scales an integer, and a
 // negative one puts an odd mantissa over a power of two, which is already in
-// lowest terms.
+// lowest terms. Because it is, the denominator is written through Rat.Denom's
+// documented reference into the receiver rather than handed to SetFrac, whose
+// GCD would only rediscover that it is 1; after SetInt the denominator is an
+// initialised 1, so Denom returns the receiver's own.
 func (d dyadic) rat() *big.Rat {
 	if d.mant == nil || d.mant.Sign() == 0 {
 		return new(big.Rat)
 	}
+	r := new(big.Rat).SetInt(d.mant)
 	if d.exp >= 0 {
-		return new(big.Rat).SetInt(new(big.Int).Lsh(d.mant, uint(d.exp)))
+		r.Num().Lsh(r.Num(), uint(d.exp))
+	} else {
+		r.Denom().Lsh(r.Denom(), uint(-d.exp))
 	}
-	return new(big.Rat).SetFrac(d.mant, new(big.Int).Lsh(big.NewInt(1), uint(-d.exp)))
+	return r
 }
 
 // dyOfRat lifts a big.Rat this package knows to be dyadic — one whose

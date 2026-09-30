@@ -79,6 +79,7 @@
 0	0.01	TestFilletConcaveEdgeReadsMinRadius
 0	0.02	TestFilletLineArcCorner
 0	0.01	TestFitSplineCollinearPointsMeasureAsTheLine
+0	5.29	TestFloatRatMatchesSetFloat64
 0	0.01	TestFreeformAnchorSubtractsExactly
 0	0.09	TestFreeformArcLengthAboveFloat64RangeRefused
 0	0.28	TestFreeformPrismClearanceUndecided
