@@ -376,15 +376,15 @@ func loftCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target float6
 // junction the two segments share.
 //
 // At an UNTRIMMED start the term is exactly zero, proven rather than assumed:
-// lerp2 and moments.go's ratLerp both special-case t == 0 and t == 1 to the
-// recorded Point2 verbatim, so lineWalkEndBound's two rationalFloatError calls
+// lerp2 and dyadic.go's dyLerp both special-case t == 0 and t == 1 to the
+// recorded Point2 verbatim, so lineWalkEndBound's two dyRoundedFloatError calls
 // measure no gap at all. An untrimmed LineSeg-only pairing therefore still
 // publishes the bit-identical zero delta — and the Exact readings §8 gives it
 // — that it always did.
 //
 // At a TRIMMED start the term is whatever lineWalkEndBound proves. walkOf
 // fills such a walk's start from lerp2 in FLOAT (extrude.go's LineSeg arm),
-// while the point the record denotes is the exact rational ratLerp, and
+// while the point the record denotes is the exact dyLerp, and
 // lineWalkEndBound stamps the outward-rounded gap between them. That gap is a
 // real displacement of a held vertex from the point the record denotes, so
 // leaving it uncharged would publish a bound smaller than the displacement the
@@ -394,7 +394,7 @@ func loftCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target float6
 //
 // The refusal is DEFENSIVE and no admitted record reaches it. walkEndPlaneDelta
 // answers +Inf only where lineWalkEndBound could not state the denoted point as
-// a rational, and ratLerp fails solely on a non-finite coordinate — which the
+// a rational, and dyLerp fails solely on a non-finite coordinate — which the
 // record gates exclude long before any walk is resolved. It stands so that an
 // underivable term can never be published as a finite bound, which is the S14
 // discipline §5.2's table states for every term in it.

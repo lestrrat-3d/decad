@@ -289,6 +289,7 @@
 1	0.09	TestFreeformRecordedRangeRefusals
 1	0.03	TestFreeformWalkRefusedByAnalyticConsumers
 1	0.01	TestImplicitExactlyOneStopUnassertedZeroRewritten
+1	1.9	TestLineWalkBoundsDyadicMatchRational
 1	0.31	TestLoftArcWedgeBuildsAndMatchesClosedForm
 1	0.08	TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound
 1	0.01	TestLoftCircularCellStationsHandDerivedStationCount

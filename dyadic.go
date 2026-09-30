@@ -450,3 +450,64 @@ func dyadicFloatError(exact dyadic, held float64) float64 {
 	}
 	return dyFloatUp(dyAbs(dySubScalar(exact, heldDy)))
 }
+
+// dyNearestUp converts d to the NEAREST float64 and steps it one ulp toward
+// +Inf when that conversion was inexact — the publication rule
+// rationalFloatError and ratL1Upper apply to a big.Rat, bit for bit. It is not
+// dyFloatUp, the tight ceiling: where the nearest float already lies above d,
+// this answer is one ulp above dyFloatUp's, and a caller that must reproduce
+// the rational twins' published value needs this one.
+func dyNearestUp(d dyadic) float64 {
+	f, exact := d.float64()
+	if !exact {
+		f = math.Nextafter(f, math.Inf(1))
+	}
+	return f
+}
+
+// dyRoundedFloatError returns |exact − held| under dyNearestUp's rounding —
+// rationalFloatError's contract and published value over this file's
+// arithmetic. A held value that does not lift is an unbounded error, never a
+// zero.
+func dyRoundedFloatError(exact dyadic, held float64) float64 {
+	heldDy, ok := dyOf(held)
+	if !ok {
+		return math.Inf(1)
+	}
+	return dyNearestUp(dyAbs(dySubScalar(exact, heldDy)))
+}
+
+// dyLerp is ratLerp over this file's arithmetic: the exact value of
+// P(t) = start + t·(end − start), a polynomial in three held floats and hence
+// a dyadic. At the two natural bounds the answer is the record's own
+// coordinate, exactly as ratLerp and lerp2 read it, and a non-finite far
+// endpoint still refuses there. ok is false exactly where ratLerp answers nil.
+func dyLerp(start, end, t float64) (dyadic, bool) {
+	if t == 0 || t == 1 {
+		near, far := start, end
+		if t == 1 {
+			near, far = end, start
+		}
+		if math.IsNaN(far) || math.IsInf(far, 0) {
+			return dyadic{}, false
+		}
+		return dyOf(near)
+	}
+	s, okS := dyOf(start)
+	e, okE := dyOf(end)
+	dt, okT := dyOf(t)
+	if !okS || !okE || !okT {
+		return dyadic{}, false
+	}
+	return dyAdd(s, dyMul(dt, dySubScalar(e, s))), true
+}
+
+// dyL1Upper is ratL1Upper over this file's arithmetic: the exact sum of the
+// values' magnitudes, published through dyNearestUp.
+func dyL1Upper(values ...dyadic) float64 {
+	total := dyZero()
+	for _, value := range values {
+		total = dyAdd(total, dyAbs(value))
+	}
+	return dyNearestUp(total)
+}
