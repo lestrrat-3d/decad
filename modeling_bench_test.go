@@ -194,6 +194,62 @@ func BenchmarkModelingLoftChainCold(b *testing.B) {
 	b.StopTimer()
 }
 
+// BenchmarkModelingSweepChainCold measures a line/arc/line open-chain sweep
+// along a straight path.
+func BenchmarkModelingSweepChainCold(b *testing.B) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(b, err)
+	a := s.CreatePoint(0, 0)
+	p1 := s.CreatePoint(10, 0)
+	p2 := s.CreatePoint(15, 5)
+	p3 := s.CreatePoint(25, 5)
+	s.Fix(a)
+	s.CreateLine(a, p1)
+	s.CreateArc(s.CreatePoint(10, 5), p1, p2)
+	s.CreateLine(p2, p3)
+	_, err = s.Solve(b.Context())
+	require.NoError(b, err)
+	chains := s.Chains()
+	require.Len(b, chains, 1)
+	chain := chains[0]
+	require.Len(b, chain.Edges, 3)
+	path, err := decad.NewPath(r3.NewVec(0, 0, 0), decad.LineTo{End: r3.NewVec(0, 0, 10)})
+	require.NoError(b, err)
+	// Two 10 mm lines and a quarter arc of radius 5, each swept 10 mm.
+	wantArea := 10 * (20 + 2.5*math.Pi)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		b.StopTimer()
+		doc := decad.New()
+		b.StartTimer()
+		body, buildErr := doc.SweepChain(b.Context(), s, chain, path)
+		if buildErr != nil {
+			b.Fatal(buildErr)
+		}
+		b.StopTimer()
+		require.Equal(b, decad.BodySheet, body.Kind())
+		require.Len(b, body.Faces(), 3)
+		free, freeErr := decad.Edges(decad.Free()).Exactly(8).SelectEdges(body)
+		require.NoError(b, freeErr)
+		require.Len(b, free, 8)
+		require.Equal(b, []*decad.Body{body}, doc.Bodies())
+		area, areaErr := body.Area()
+		require.NoError(b, areaErr)
+		require.LessOrEqual(b, area.Value.Base()-area.Bound.Base(), wantArea)
+		require.GreaterOrEqual(b, area.Value.Base()+area.Bound.Base(), wantArea)
+		report, verifyErr := doc.Verify(b.Context())
+		require.NoError(b, verifyErr)
+		bodyReport, reportErr := report.ForBody(body)
+		require.NoError(b, reportErr)
+		require.Equal(b, decad.ValidityValid, bodyReport.Validity.Outcome)
+		b.StartTimer()
+	}
+	b.StopTimer()
+}
+
 // BenchmarkModelingRevolveCold measures a public full-turn revolve build.
 func BenchmarkModelingRevolveCold(b *testing.B) {
 	w := sketch.NewWorld()
