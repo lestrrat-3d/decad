@@ -28,6 +28,9 @@
 0	0.03	TestBoundaryExtremesBoundedEndpointExtremeIsExact
 0	0.01	TestBoundaryExtremesChargeAComputedWalkEndpoint
 0	0.07	TestCLAUDEMDLayoutStaysCompact
+0	0.00	TestCapBlendAdmissionAdmitsTheFlange
+0	0.00	TestCapBlendAdmissionRefusesAMiteredArc
+0	0.00	TestCapBlendAdmissionRefusesAReflexCorner
 0	0.06	TestCapBlendCapLevelArcLengthMatchesGeometry
 0	0.11	TestCapBlendCentroidBoundEncloses
 0	0.03	TestCapBlendChamferPolygonLoop
@@ -235,6 +238,9 @@
 1	1.55	TestBooleanUnionRodThroughPlateGeometryUnchanged
 1	0.67	TestBooleanVerifyUsesProvenToleranceBound
 1	0.03	TestBoundaryExtremesBoundedRepeatedInteriorKnot
+1	0.00	TestCapBlendBooleanAdmitsPlanarBand
+1	0.00	TestCapBlendBooleanChargesTheMiterDisplacement
+1	0.00	TestCapBlendBooleanRefusesMiteredBand
 1	0.02	TestCapBlendCentroidNeverExceedsGeometryNet
 1	0.02	TestCapBlendCircularRimVerifyArea
 1	0.03	TestCapBlendConeAreaEnclosesTheDenotedPatch
@@ -455,7 +461,10 @@
 2	1.11	TestCIWorkflowRaceShardsCoverEveryPackage
 2	0.03	TestCapBlendBandReachRefusalKeepsSX6Degenerate
 2	1.44	TestCapBlendChordLocusVolumeAllowScalesSweptTermToFlux
+2	0.00	TestCapBlendChamferedPinAsTool
 2	0.03	TestCapBlendConePatchKeepsTaperAtHugeRadius
+2	0.00	TestCapBlendDiskIntersectBandDominated
+2	0.00	TestCapBlendFlangeCutAfterChamfer
 2	0.05	TestCapBlendHoleLoopNestingPreserved
 2	0.02	TestCapBlendMinRadiusUndecidedOnCircularBand
 2	0.07	TestCapBlendMinRadiusUndecidedOnMiteredBand
@@ -687,7 +696,9 @@
 3	0.04	TestCapBlendFlatPatchUndercutRespectsNormalBound
 3	0.03	TestCapBlendHoleLoopChamferVolume
 3	0.12	TestCapBlendMeshChargesTheWindowSkew
-3	0.09	TestCapBlendMeshPublishesNoVolumeProof
+3	0.00	TestCapBlendMeshMotionCarriesEachLevelBound
+3	0.00	TestCapBlendMeshMotionCarriesPlacementRounding
+3	0.00	TestCapBlendMeshMotionCarriesTheMiterDisplacement
 3	0.05	TestCapBlendMinRadiusMatchesUnchamferedSection
 3	0.43	TestCapBlendMiterSlantEdgeEnclosesItsLocus
 3	0.97	TestCapBlendPlacedTangentBandDepartureGrowsWithPlacement
@@ -933,6 +944,8 @@
 4	0.00	TestCapBandMomentCoordUpperCoversOffsetBoundary
 4	0.00	TestCapBandVolumeBoundTracksTheFluxNotTheCancelledBand
 4	0.31	TestCapBlendApexPatchAreaBoundIsTight
+4	0.00	TestCapJoinIsG1IsExact
+4	0.00	TestCapOffsetStationBoundReadsTheExactOffsetCircle
 4	0.03	TestCapBlendBooleanReceiverRefusedSX9
 4	0.09	TestCapBlendBoundsAreAttainedNotPadded
 4	0.04	TestCapBlendComputedStopMassBounds
@@ -1778,8 +1791,10 @@
 5	0.03	TestCapBlendConeAreaEnclosesRoundedRadiusDifference
 5	0.11	TestCapBlendCornerLocusGapIsZeroOnlyWhereBothLociAreAffine
 5	4.55	TestCapBlendErosionFamilyVolumeBoundEncloses
-5	0.04	TestCapBlendMeshIsExportOnly
+5	0.00	TestCapBlendMeshPublishesNoVolumeProofForAMiteredBand
+5	0.00	TestCapBlendMeshPublishesVolumeProofForAnAdmittedBand
 5	1.50	TestCapBlendMiteredPatchNormalCarriesItsOwnBound
+5	0.00	TestCapBlendOverlapIsMeasured
 5	0.06	TestCapBlendOverlapReadsSuspect
 5	0.03	TestCapBlendPatchFacesReportTheirOwnArea
 5	0.89	TestCapBlendPlacedFlatPatchNormalCarriesItsOwnBound

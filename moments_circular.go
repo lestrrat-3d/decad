@@ -311,6 +311,17 @@ func circularLengthInterval(seg CurveSegment) (ratInterval, bool) {
 // NEIGHBOURING parameter and prove a bound about a point no construction
 // named.
 func circularEndpointInterval(seg CurveSegment, rt *big.Rat) (ratInterval, ratInterval, bool) {
+	return circularOffsetEndpointInterval(seg, rt, new(big.Rat))
+}
+
+// circularOffsetEndpointInterval is circularEndpointInterval read on the
+// CONCENTRIC circle whose radius is the segment's own plus radiusOffset (an
+// exact rational; zero gives the segment itself). The offset joins the radius
+// before any product, so for an ArcSeg it shifts BOTH ends of the
+// ratSqrtDown/ratSqrtUp bracket and the held radius's own rounding stays
+// enclosed rather than assumed. A resulting radius whose lower end is not
+// positive denotes no circle and answers ok == false.
+func circularOffsetEndpointInterval(seg CurveSegment, rt, radiusOffset *big.Rat) (ratInterval, ratInterval, bool) {
 	switch seg := seg.(type) {
 	case CircleSeg:
 		radius, err := seg.Radius.In(units.Millimeter)
@@ -320,6 +331,10 @@ func circularEndpointInterval(seg CurveSegment, rt *big.Rat) (ratInterval, ratIn
 		r := floatRat(radius)
 		cu, cv := floatRat(seg.Center.U), floatRat(seg.Center.V)
 		if r == nil || cu == nil || cv == nil {
+			return ratInterval{}, ratInterval{}, false
+		}
+		r.Add(r, radiusOffset)
+		if r.Sign() <= 0 {
 			return ratInterval{}, ratInterval{}, false
 		}
 		sin, cos := quarterTurnSinCos(rt)
@@ -337,6 +352,11 @@ func circularEndpointInterval(seg CurveSegment, rt *big.Rat) (ratInterval, ratIn
 		r2 := new(big.Rat).Add(new(big.Rat).Mul(dx0, dx0), new(big.Rat).Mul(dy0, dy0))
 		rLo, rHi := floatRat(ratSqrtDown(r2)), floatRat(ratSqrtUp(r2))
 		if rLo == nil || rHi == nil {
+			return ratInterval{}, ratInterval{}, false
+		}
+		rLo.Add(rLo, radiusOffset)
+		rHi.Add(rHi, radiusOffset)
+		if rLo.Sign() <= 0 {
 			return ratInterval{}, ratInterval{}, false
 		}
 		heldDY0 := seg.Start.V - seg.Center.V

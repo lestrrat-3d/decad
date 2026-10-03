@@ -639,9 +639,11 @@ interval-window station enclosure this increment does not build. Both keep `symD
   `capRadius·skew`; `requireWatertight`; every `chamferCap` face appears in `SourceFaces()`.
 - Reflex (notched) profile: the apex fan has one interned vertex and one link cycle.
 - Square plate chamfered on one cap loop (all `Plane`, unplaced, `volSymDiff == 0`): `Intersect` with a box
-  straddling one straight side over the band reports an EXACT volume equal to the closed form
+  straddling one straight side over the band reports a bounded volume containing the closed form
   `w · (∫ over the flat part + ∫ (sideZ + (edge − x) − zBox) dx over the band)`, and `Cut` reports the
-  plate's volume minus it; `Union` with a disjoint box reports the sum.
+  plate's volume minus it; `Union` reports its corresponding sum. Triangle intersections can introduce rational
+  vertices that do not round exactly to float64, so the result is `Approximate` even when this operand's
+  `volSymDiff` is zero.
 - The drilled flange (plate, analytic `Cut` of a bore, 12 mm `Fillet` of the vertical edges, 1 mm cap-loop
   chamfer): `Cut` by a bolt cylinder clear of the band reports `V_flange − π r² h` within the published
   bound, where `V_flange = 16·(6528 − (4 − π)·144 − 324π) − (116 + 30π)`; the bound is below a stated

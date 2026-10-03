@@ -15,13 +15,17 @@ import (
 // its two cap faces, and publishes §2's per-face displacement bound and area
 // slack for them.
 //
-// It is EXPORT-ONLY. No occupied-volume homotopy from the held facets to the
-// exact offset family has been proven for the ruled-to-cone step, so the mesh
-// carries symDiffOK false and the mesh boolean refuses a cap-blend operand
-// (boolean.go's requireVolumeProvingPayload and operandSymDiff), exactly as a
-// revolve mesh does until its own §11 proof lands. tess §2 permits that for an
-// export-only increment; substituting bound × held area for the missing proof
-// is forbidden outright (§11).
+// At VerifyAll it also publishes §7's slice-wise occupied-volume proof for a
+// payload whose every band capBlendOccupiedVolumeAdmission (capblend_admit.go)
+// admits — whole turns, line-line miters and exactly G1 joins: the chord
+// polygon's circular-segment integral over the trimmed and band ranges
+// (capBlendChordVolume) plus sweptVolumeAllow over each vertex's displacement
+// from the ideal polyhedron B1. Every other band — a circular wall at a genuine
+// miter, a reflex corner — leaves the mesh export-only with symDiffOK false,
+// and the mesh boolean refuses that operand (boolean.go's
+// requireVolumeProvingPayload and operandSymDiff) with the same reason.
+// Substituting bound × held area for a missing proof is forbidden outright
+// (tess §11).
 //
 // One structural fact shapes the whole file, and it is the answer to
 // docs/modify-reach-design.md §12 Table DX row DX3's "a strip whose two sides
@@ -68,14 +72,22 @@ type capBlendLoopMesh struct {
 	capPts         []Point2
 	capBound       []walkEndBound
 	capWallStart   []int // walk i's first cap sample
+	// capMotion is each cap sample's plane-local displacement from the point
+	// docs/tessellation-reach-design.md §7's ideal polyhedron B1 places there,
+	// filled by capBlendCapMotion only when the occupied-volume proof is built.
+	// It answers a different question from capBound — a station's gap from the
+	// held offset circle — and never replaces it.
+	capMotion      []float64
 	capArcStart    []int // corner i's first connector-arc sample, −1 when not reflex
 	sideLo, sideHi []int // mesh vertices of each side sample at zLo and zHi
 	capLoV, capHiV []int // mesh vertices of each cap sample at z0 and z1
 }
 
 // tessellateCapBlend meshes a cap-loop chamfer result
-// (docs/tessellation-reach-design.md §7).
-func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord float64) (*Mesh, error) {
+// (docs/tessellation-reach-design.md §7). Below VerifyAll it builds no
+// occupied-volume proof at all and leaves symDiffOK false, the level's own
+// contract (tessellateContext's withholdProofs).
+func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord float64, verify Verification) (*Mesh, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -118,47 +130,19 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 		lms[li] = lm
 	}
 
-	// Vertices. Every sample of a loop owns one vertex per level the loop
-	// reaches: the side ring at zLo and zHi, and the cap contour ring at
-	// whichever cap(s) the selection named. store is
-	// docs/tessellation-reach-design.md §3's deltaStore, one entry per vertex.
-	var mesh Mesh
-	var store []float64
-	addVertex := func(p Point2, z, plane float64) int {
-		held := pl.point(p.U, p.V, z)
-		mesh.vertices = append(mesh.vertices, held)
-		store = append(store, absSumUpper(plane, exactPrismPointRound(pl, p.U, p.V, z, held)))
-		return len(mesh.vertices) - 1
+	proveVolume := verify >= VerifyAll
+	if proveVolume {
+		for li := range lms {
+			if err := capBlendCapMotion(budget, cbp, &lms[li]); err != nil {
+				return nil, err
+			}
+		}
 	}
-	for li := range lms {
-		lm := &lms[li]
-		lm.sideLo = make([]int, len(lm.sidePts))
-		lm.sideHi = make([]int, len(lm.sidePts))
-		for j, p := range lm.sidePts {
-			if err := budget.step(); err != nil {
-				return nil, err
-			}
-			plane := walkEndBoundAllow(lm.sideBound[j])
-			lm.sideLo[j] = addVertex(p, lm.zLo.value, plane)
-			lm.sideHi[j] = addVertex(p, lm.zHi.value, plane)
-		}
-		if len(lm.capPts) == 0 {
-			continue
-		}
-		lm.capLoV = make([]int, len(lm.capPts))
-		lm.capHiV = make([]int, len(lm.capPts))
-		for j, p := range lm.capPts {
-			if err := budget.step(); err != nil {
-				return nil, err
-			}
-			plane := walkEndBoundAllow(lm.capBound[j])
-			if lm.onStart {
-				lm.capLoV[j] = addVertex(p, cbp.z0, plane)
-			}
-			if lm.onEnd {
-				lm.capHiV[j] = addVertex(p, cbp.z1, plane)
-			}
-		}
+
+	var mesh Mesh
+	store, motion, err := capBlendVertices(budget, cbp, pl, lms, &mesh, proveVolume)
+	if err != nil {
+		return nil, err
 	}
 	if _, err := requireDerivableStore(store); err != nil {
 		return nil, err
@@ -255,11 +239,232 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	if isNonFinite(mesh.areaSlack) {
 		return nil, fmt.Errorf(`%w: this cap-loop chamfer mesh states no finite area slack`, ErrUnsupported)
 	}
-	// The occupied-volume proof for the held-facet → bilinear → ruled → cone
-	// chain is not built (docs/tessellation-reach-design.md §9), so this mesh
-	// serves export alone and every boolean refuses it at operandSymDiff.
-	mesh.symDiffOK = false
+	if !proveVolume {
+		// The level withholds every volume proof (tessellateContext's
+		// withholdProofs), so none is built.
+		return &mesh, nil
+	}
+	refusal, err := capBlendOccupiedVolumeAdmission(budget, cbp)
+	if err != nil {
+		return nil, err
+	}
+	if refusal != nil {
+		// docs/tessellation-reach-design.md §7: this band's cells are not proven
+		// to reproduce the exact offset family slice by slice, so the mesh serves
+		// export alone and requireVolumeProvingPayload/operandSymDiff refuse it
+		// with the same reason.
+		mesh.symDiffOK = false
+		return &mesh, nil
+	}
+	// Occupied volume (docs/tessellation-reach-design.md §7): the ideal
+	// polyhedron B1 differs from the body by its chord polygons' circular
+	// segments, slice by slice, and the held mesh differs from B1 by its
+	// vertices' motion alone, since the two share one triangle index set.
+	motionMax, err := requireDerivableStore(motion)
+	if err != nil {
+		return nil, err
+	}
+	terms := []float64{
+		capBlendChordVolume(cbp, lms),
+		sweptVolumeAllow(motionMax, perturbedAreaUpper(mesh.vertices, mesh.triangles, motionMax)),
+	}
+	if err := publishSymDiff(&mesh, terms); err != nil {
+		return nil, err
+	}
 	return &mesh, nil
+}
+
+// capBlendVertices writes every loop's mesh vertices. Every sample of a loop
+// owns one vertex per level the loop reaches: the side ring at zLo and zHi, and
+// the cap contour ring at whichever cap(s) the selection named. store is
+// docs/tessellation-reach-design.md §3's deltaStore, one entry per vertex.
+//
+// motion, built only when proveVolume, is §7's per-vertex displacement from
+// the ideal polyhedron B1, a parallel array: the vertex's plane-local
+// displacement (the side station's own bound, or the cap station's capMotion),
+// the rounding exactPrismPointRound measures, and the proven bound on the level
+// it stands at, summed outward. The rounding is measured once per vertex and
+// read by both arrays.
+func capBlendVertices(budget *workBudget, cbp capBlendPayload, pl prismPayload, lms []capBlendLoopMesh, mesh *Mesh, proveVolume bool) ([]float64, []float64, error) {
+	var store, motion []float64
+	addVertex := func(p Point2, z, plane float64) (int, float64) {
+		held := pl.point(p.U, p.V, z)
+		mesh.vertices = append(mesh.vertices, held)
+		round := exactPrismPointRound(pl, p.U, p.V, z, held)
+		store = append(store, absSumUpper(plane, round))
+		return len(mesh.vertices) - 1, round
+	}
+	startLevel := cbp.capBandLevel(cbp.z0, 1)
+	endLevel := cbp.capBandLevel(cbp.z1, -1)
+	for li := range lms {
+		lm := &lms[li]
+		lm.sideLo = make([]int, len(lm.sidePts))
+		lm.sideHi = make([]int, len(lm.sidePts))
+		for j, p := range lm.sidePts {
+			if err := budget.step(); err != nil {
+				return nil, nil, err
+			}
+			plane := walkEndBoundAllow(lm.sideBound[j])
+			var round float64
+			lm.sideLo[j], round = addVertex(p, lm.zLo.value, plane)
+			if proveVolume {
+				motion = append(motion, absSumUpper(plane, round, lm.zLo.bound))
+			}
+			lm.sideHi[j], round = addVertex(p, lm.zHi.value, plane)
+			if proveVolume {
+				motion = append(motion, absSumUpper(plane, round, lm.zHi.bound))
+			}
+		}
+		if len(lm.capPts) == 0 {
+			continue
+		}
+		lm.capLoV = make([]int, len(lm.capPts))
+		lm.capHiV = make([]int, len(lm.capPts))
+		for j, p := range lm.capPts {
+			if err := budget.step(); err != nil {
+				return nil, nil, err
+			}
+			plane := walkEndBoundAllow(lm.capBound[j])
+			var round float64
+			if lm.onStart {
+				lm.capLoV[j], round = addVertex(p, cbp.z0, plane)
+				if proveVolume {
+					motion = append(motion, absSumUpper(lm.capMotion[j], round, startLevel.bound))
+				}
+			}
+			if lm.onEnd {
+				lm.capHiV[j], round = addVertex(p, cbp.z1, plane)
+				if proveVolume {
+					motion = append(motion, absSumUpper(lm.capMotion[j], round, endLevel.bound))
+				}
+			}
+		}
+	}
+	return store, motion, nil
+}
+
+// capBlendCapMotion fills one loop's capMotion: each cap sample's plane-local
+// displacement from the point docs/tessellation-reach-design.md §7's ideal
+// polyhedron B1 places there — on the wall's exact offset circle at the exact
+// fraction k/n of the SIDE window, or at the exact miter point of a line-line
+// corner. It walks the cap ring in the order emitCapBlendSamples wrote it.
+//
+// A reflex connector station keeps +Inf: capBlendOccupiedVolumeAdmission
+// refuses that band before the motion is read, and the sentinel makes
+// requireDerivableStore fail loudly if it ever is.
+func capBlendCapMotion(budget *workBudget, cbp capBlendPayload, lm *capBlendLoopMesh) error {
+	lm.capMotion = make([]float64, len(lm.capPts))
+	for j := range lm.capMotion {
+		lm.capMotion[j] = math.Inf(1)
+	}
+	if !lm.chamfered {
+		return nil
+	}
+	n := len(lm.walks)
+	offset := func(w sideWalk) *big.Rat { return capWallRadiusOffset(w, cbp.d) }
+	if lm.whole {
+		w := lm.walks[0]
+		seg := lm.loop.Segments[w.segs[0]]
+		off := offset(w)
+		for k := range lm.count[0] {
+			if err := budget.step(); err != nil {
+				return err
+			}
+			p := lm.capPts[k]
+			lm.capMotion[k] = walkEndBoundAllow(capOffsetStationBound(seg, k, lm.count[0], off, p.U, p.V))
+		}
+		return nil
+	}
+	// A line-line miter foot is the exact miter point within the band's own
+	// contour displacement (capContourDelta). The contour is the same whichever
+	// cap the loop is chamfered on, and the larger of the two stated
+	// displacements covers it either way.
+	miter := 0.0
+	for _, start := range []bool{true, false} {
+		if (start && !lm.onStart) || (!start && !lm.onEnd) {
+			continue
+		}
+		delta, ok := cbp.bandDelta[capBandKey{loop: lm.li, start: start}]
+		if !ok {
+			return fmt.Errorf(`%w: the payload states no contour displacement for the chamfer band on loop %d`, ErrDegenerate, lm.li)
+		}
+		miter = math.Max(miter, delta)
+	}
+	for i, w := range lm.walks {
+		if err := budget.step(); err != nil {
+			return err
+		}
+		base := lm.capWallStart[i]
+		if !w.isCircular() {
+			prev := lm.walks[(i+n-1)%n]
+			if !prev.isCircular() {
+				lm.capMotion[base] = miter
+				continue
+			}
+			// A G1 foot after a circular wall is that wall's own k == n station
+			// on its exact offset circle.
+			p := lm.capPts[base]
+			prevIdx := (i + n - 1) % n
+			prevSeg := lm.loop.Segments[prev.segs[0]]
+			cnt := lm.count[prevIdx]
+			lm.capMotion[base] = walkEndBoundAllow(capOffsetStationBound(prevSeg, cnt, cnt, offset(prev), p.U, p.V))
+			continue
+		}
+		seg := lm.loop.Segments[w.segs[0]]
+		off := offset(w)
+		for k := range lm.count[i] {
+			if err := budget.step(); err != nil {
+				return err
+			}
+			p := lm.capPts[base+k]
+			lm.capMotion[base+k] = walkEndBoundAllow(capOffsetStationBound(seg, k, lm.count[i], off, p.U, p.V))
+		}
+	}
+	return nil
+}
+
+// capBlendChordVolume is docs/tessellation-reach-design.md §7's Mchord: the
+// volume between the ideal polyhedron B1 and the body, slice by slice. Over
+// each loop's trimmed range a level section of B1 is the chord polygon of the
+// recorded section, and over each chamfered band it is the chord polygon of
+// the exact offset section at the SAME exact azimuths; either differs from the
+// region it chords by the union of its circular segments, whose summed area
+// walkSegmentArea states (the same helper the prism's own volSymDiff charges).
+//
+// A band's segments are read over the SIDE window at the larger of the wall's
+// two radii: the band shares that one window at every level (admission proves
+// it), and a segment's area ρ²(Δθ − sin Δθ)/2 is monotone in ρ, so the larger
+// radius bounds every intermediate level. The computed cap window
+// (capTh0/capTh1) is never read here.
+func capBlendChordVolume(cbp capBlendPayload, lms []capBlendLoopMesh) float64 {
+	total := 0.0
+	dUpper := absSumUpper(cbp.d, cbp.dDelta)
+	for li := range lms {
+		lm := &lms[li]
+		trim := boundedSub(lm.zHi, lm.zLo)
+		hTrimUpper := absSumUpper(math.Abs(trim.value), trim.bound)
+		sideSegs, bandSegs := 0.0, 0.0
+		for i, w := range lm.walks {
+			if !w.isCircular() {
+				continue
+			}
+			sideSegs = absSumUpper(sideSegs, walkSegmentArea(w.segmentWalk, lm.count[i]))
+			if !lm.chamfered {
+				continue
+			}
+			bandSegs = absSumUpper(bandSegs, walkSegmentArea(segmentWalk{
+				kind: walkCircular, radius: math.Max(w.radius, lm.capRadius[i]),
+				th0: w.th0, th1: w.th1, closed: w.closed,
+			}, lm.count[i]))
+		}
+		total = absSumUpper(total, productUpper(hTrimUpper, sideSegs))
+		for _, chamfered := range []bool{lm.onStart, lm.onEnd} {
+			if chamfered {
+				total = absSumUpper(total, productUpper(dUpper, bandSegs))
+			}
+		}
+	}
+	return total
 }
 
 // chordCapBlendLoop resolves ONE loop's walks the way buildCapBand does and
