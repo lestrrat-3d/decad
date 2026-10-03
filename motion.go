@@ -17,10 +17,10 @@ import (
 
 // Motion is a one-parameter family of rigid motions, parameterised by a typed
 // scalar whose Kind the variant fixes: an Angle for Revolute, a Length for
-// Prismatic. PoseAt returns the rigid motion at one parameter value; it is
-// what a layer above calls to draw the moving set, and what VerifyMotion
-// calls to evaluate a pose. The set is sealed: Revolute and Prismatic are its
-// only members.
+// Prismatic, a Dimensionless fraction of the path for Between. PoseAt returns
+// the rigid motion at one parameter value; it is what a layer above calls to
+// draw the moving set, and what VerifyMotion calls to evaluate a pose. The set
+// is sealed: Revolute, Prismatic and Between are its only members.
 type Motion interface {
 	PoseAt(at units.Value) (r3.Transform, error)
 	motion()
@@ -130,6 +130,116 @@ func (m Prismatic) validate() error {
 	return nil
 }
 
+// Between is the screw motion joining two rigid poses: the parameter s runs
+// from 0, where each moving body sits under From composed onto its own
+// placement, to 1, where it sits under To. The path rotates through the
+// shorter arc between the two orientations and slides uniformly along the
+// rotation axis (Chasles; r3's Transform.Screw). r3.Identity() as From is the
+// moving set as it currently sits.
+type Between struct {
+	From r3.Transform // the pose at s = 0
+	To   r3.Transform // the pose at s = 1
+}
+
+func (Between) motion() {}
+
+// PoseAt returns From.Then(screw.At(s)), where screw is the relative motion
+// From.Inverse().Then(To) read by r3's Transform.Screw: the rotation by s·θ
+// about the screw axis and the slide s·d along it, applied after From. At
+// s = 0 it returns From and at s = 1 it returns To, both as stated. at is a
+// Dimensionless fraction; an angle or a length is ErrUnitKind, a non-finite
+// one ErrNotFinite.
+//
+// From and To are refused in docs/motion-check-design.md §2's order: a
+// non-finite component is ErrNotFinite; a transform that is not a rigid motion
+// (Transform.IsValid false, the zero r3.Transform{} included) is
+// ErrDegenerate; a reflection joined to a proper motion, which no rigid path
+// connects, is ErrDegenerate; and a screw or pose r3 cannot represent is
+// ErrNotFinite. PoseAt takes no range, so From == To is not its refusal.
+func (m Between) PoseAt(at units.Value) (r3.Transform, error) {
+	if err := m.validate(); err != nil {
+		return r3.Transform{}, err
+	}
+	if err := motionValueValid(at, units.Dimensionless, "the pose fraction"); err != nil {
+		return r3.Transform{}, err
+	}
+	sc, err := m.screw()
+	if err != nil {
+		return r3.Transform{}, err
+	}
+	s, err := at.In(units.One)
+	if err != nil || isNonFinite(s) {
+		return r3.Transform{}, fmt.Errorf(`%w: the pose fraction is not representable`, ErrNotFinite)
+	}
+	switch s {
+	case 0:
+		return m.From, nil
+	case 1:
+		return m.To, nil
+	}
+	step, err := sc.At(s)
+	if err != nil {
+		return r3.Transform{}, betweenError(err)
+	}
+	pose, err := m.From.Then(step)
+	if err != nil {
+		return r3.Transform{}, betweenError(err)
+	}
+	return pose, nil
+}
+
+// validate applies the Between's own field refusals in
+// docs/motion-check-design.md §2's order: finiteness, then rigidity, then
+// handedness. Degeneracy — From == To, or a zero screw — is VerifyMotion's.
+func (m Between) validate() error {
+	ends := [2]r3.Transform{m.From, m.To}
+	for _, t := range ends {
+		b := t.Basis()
+		if !finiteVec(b.EX) || !finiteVec(b.EY) || !finiteVec(b.EZ) || !finiteVec(t.Translation()) {
+			return fmt.Errorf(`%w: a between's From and To must be finite`, ErrNotFinite)
+		}
+	}
+	for _, t := range ends {
+		if !t.IsValid() {
+			return fmt.Errorf(`%w: a between's From and To must each be a rigid motion`, ErrDegenerate)
+		}
+	}
+	if m.From.IsReflection() != m.To.IsReflection() {
+		return fmt.Errorf(`%w: no rigid path joins a reflection to a proper motion`, ErrDegenerate)
+	}
+	return nil
+}
+
+// screw reads the relative motion From.Inverse().Then(To) as a screw. It is
+// a deterministic function of From's and To's bits, so every PoseAt call and
+// VerifyMotion's exact frame read the same parameters.
+func (m Between) screw() (r3.Screw, error) {
+	inv, err := m.From.Inverse()
+	if err != nil {
+		return r3.Screw{}, betweenError(err)
+	}
+	rel, err := inv.Then(m.To)
+	if err != nil {
+		return r3.Screw{}, betweenError(err)
+	}
+	sc, err := rel.Screw()
+	if err != nil {
+		return r3.Screw{}, betweenError(err)
+	}
+	return sc, nil
+}
+
+// betweenError maps an r3 refusal met while reading or evaluating a Between
+// onto the core §12 vocabulary: a reflection joined to a proper motion, or a
+// result that is not a rigid motion, is ErrDegenerate; anything else r3
+// refuses is a screw or pose it cannot represent, ErrNotFinite.
+func betweenError(err error) error {
+	if errors.Is(err, r3.ErrImproper) || errors.Is(err, r3.ErrNotOrthonormal) {
+		return fmt.Errorf(`%w: the between's relative motion is not a rigid motion: %w`, ErrDegenerate, err)
+	}
+	return fmt.Errorf(`%w: the between's screw or pose is not representable: %w`, ErrNotFinite, err)
+}
+
 // motionKinds refuses a From or To of the wrong Kind.
 func motionKinds(kind units.Kind, from, to units.Value) error {
 	if from.Kind() != kind {
@@ -214,10 +324,12 @@ func WithMotionTolerance(rel units.Value) MotionOption {
 // §6): an interval at or below it that the certificate still cannot settle
 // reads IntervalUndecided, and a path reading or margin the floor leaves
 // coarse is published coarse. It is a magnitude of the motion's own Kind —
-// an angle for a Revolute, a length for a Prismatic. A wrong Kind is
-// ErrUnitKind, a negative or zero value ErrNegativeMagnitude, a non-finite one
-// ErrNotFinite. A resolution wider than the whole path evaluates the
-// endpoints alone. The default is |To − From|/1024.
+// an angle for a Revolute, a length for a Prismatic, a dimensionless fraction
+// of the path for a Between. A wrong Kind is ErrUnitKind, a negative or zero
+// value ErrNegativeMagnitude, a non-finite one ErrNotFinite. A resolution
+// wider than the whole path (wider than 1 for a Between) evaluates the
+// endpoints alone. The default is |To − From|/1024, units.Scalar(1.0/1024)
+// for a Between.
 func WithResolution(step units.Value) MotionOption {
 	return motionOption{option.New(identResolution{}, step)}
 }
@@ -265,10 +377,7 @@ func resolveMotionOptions(opts []MotionOption, spec motionSpec) (motionConfig, e
 			}
 			cfg.rel = rel
 		case identResolution:
-			kind := units.Length
-			if spec.revolute {
-				kind = units.Angle
-			}
+			kind := spec.paramKind()
 			base, _ := units.BaseUnit(kind)
 			step, err := magnitudeIn(v, kind, base, "resolution")
 			if err != nil {
@@ -352,7 +461,7 @@ type MotionRequest struct {
 // names the caller's own moving body as A, never the transient placement the
 // check evaluated.
 type PoseResult struct {
-	At            units.Value    // the parameter; Kind Angle or Length as the Motion fixes
+	At            units.Value    // the parameter; Kind Angle, Length or Dimensionless as the Motion fixes
 	Pose          r3.Transform   // Motion.PoseAt(At): what composes onto each mover's own placement
 	Interferences []Interference // A is the mover, B the static body; proven overlap, bounded volume
 	Clearances    []Clearance    // A is the mover, B the static body; every pair proven disjoint or touching

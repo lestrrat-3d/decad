@@ -175,7 +175,7 @@ to the byte budget.
 | `budget.go` | `workBudget`, the shared bounded work counter read-only and pre-commit audit phases poll via `step`/`err`. It holds closures, never a stored `context.Context`. See `docs/interference-design.md` §7.2. |
 | `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's doc comment. |
 | `motion.go` / `motion_verify.go` | The `Motion` set, its options and `MotionReport`; `Document.VerifyMotion`'s swept-box exclusion, transient poses and interval certificate. See `docs/motion-check-design.md`. |
-| `motion_bound.go` | The motion certificate's exact-rational bounds: the ideal pose, its deviation η, ρ_max and travel. See the file's doc comment. |
+| `motion_bound.go` | The motion certificate's exact-rational bounds: the ideal pose (a `Between`'s exact screw frame among them), its deviation η, ρ_max, travel and the swept box. See the file's doc comment. |
 
 ### Booleans
 

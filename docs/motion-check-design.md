@@ -4,7 +4,7 @@ How `Document.VerifyMotion` answers "does this body hit anything while it moves 
 changing the document: where the capability sits (§1), how the caller states the motion (§2), the entry point
 and its options (§3), the report (§4), what a pose proves and what an interval between two poses proves (§5),
 the refinement procedure (§6), evaluator coverage (§7), errors (§8), required tests (§9), increments (§10),
-and the dependency gaps and settled points (§11). Companion to `docs/api-design.md` (the core contract,
+and the dependencies and settled points (§11). Companion to `docs/api-design.md` (the core contract,
 referenced as "core §N"), `docs/verification-design.md` ("verification §N", which owns `Status`,
 `Diagnostic`, the tolerance gate and the result vocabulary this report reuses), `docs/clearance-design.md`
 ("clearance §N", which owns the pair kernel every pose runs), `docs/interference-design.md` ("interference
@@ -28,11 +28,12 @@ Three things do NOT belong in decad, and this design keeps them out:
 |---|---|---|
 | Animation, frame generation, rendering | Core §4 rejects GUI and view state on the geometry model; nothing here produces an image or a frame sequence | A separate module that imports decad and calls `Motion.PoseAt` (§2) for the poses it wants to draw |
 | Kinematic chains, joints, linkages, more than one independent motion | A second independent motion makes the relative motion of two movers a composition decad would have to derive; one rigid moving set has one path | The same layer above, which can call `VerifyMotion` once per relative motion it has already resolved |
-| Dynamics, contact forces, time | decad measures geometry; the parameter `s` is an angle or a length, never a time | Out of scope |
+| Dynamics, contact forces, time | decad measures geometry; the parameter `s` is an angle, a length or a dimensionless fraction of the path, never a time | Out of scope |
 
 The layering rule holds unchanged: `decad -> sketch -> r3 -> units`. Every pose is an `r3.Transform` built by
-`r3.RotationAround` or `r3.Translation`; decad composes it onto a body's placement with `Transform.Then`
-exactly as `Body.Placed` does, and hand-rolls no rotation. §11 records the one `r3` gap this exposes.
+`r3.RotationAround`, `r3.Translation` or, for a `Between`, `r3.Transform.Screw` read once and `r3.Screw.At`
+per pose; decad composes it onto a body's placement with `Transform.Then` exactly as `Body.Placed` does, and
+hand-rolls no rotation. §11 records what each dependency supplies and the one bound `r3` does not publish.
 
 ## 2. The motion vocabulary
 
@@ -42,9 +43,9 @@ shapes, and an illegal one is unrepresentable rather than rejected at runtime.
 ```go
 // Motion is a one-parameter family of rigid motions, parameterised by a typed
 // scalar whose Kind the variant fixes: an Angle for Revolute, a Length for
-// Prismatic. PoseAt returns the rigid motion at one parameter value; it is
-// what a layer above calls to draw the moving set, and what VerifyMotion
-// calls to evaluate a pose.
+// Prismatic, a Dimensionless fraction of the path for Between. PoseAt returns
+// the rigid motion at one parameter value; it is what a layer above calls to
+// draw the moving set, and what VerifyMotion calls to evaluate a pose.
 type Motion interface {
     PoseAt(at units.Value) (r3.Transform, error)
     motion()
@@ -67,40 +68,73 @@ type Prismatic struct {
     From units.Value // Kind Length, signed
     To   units.Value // Kind Length, signed
 }
+
+// Between is the screw motion joining two rigid poses: the parameter s runs
+// from 0, where each moving body sits under From composed onto its own
+// placement, to 1, where it sits under To. The path rotates through the
+// shorter arc between the two orientations and slides uniformly along the
+// rotation axis (Chasles; r3 docs/screw-motion-design.md).
+type Between struct {
+    From r3.Transform // the pose at s = 0; r3.Identity() is the moving set as it currently sits
+    To   r3.Transform // the pose at s = 1
+}
 ```
 
-`From` and `To` are **signed displacements, not magnitudes**, on the same terms as `ToFace.Offset` and
-`ExtrudeOpts.Taper` (core §12): the sign says which way the body moves, so a negative value is a legal intent
-and never `ErrNegativeMagnitude`. `From == To` names no path and is `ErrDegenerate`. `From > To` is legal and
-traverses the path in the other sense; the report (§4) lists poses in traversal order.
+A `Revolute`'s and a `Prismatic`'s `From` and `To` are **signed displacements, not magnitudes**, on the same
+terms as `ToFace.Offset` and `ExtrudeOpts.Taper` (core §12): the sign says which way the body moves, so a
+negative value is a legal intent and never `ErrNegativeMagnitude`. `From == To` names no path and is
+`ErrDegenerate`. `From > To` is legal and traverses the path in the other sense; the report (§4) lists poses
+in traversal order.
+
+A `Between`'s parameter is the **dimensionless fraction `s ∈ [0, 1]` of the path**, carried as
+`units.Scalar(s)` (`Kind` `Dimensionless`) wherever a report carries a parameter: `PoseResult.At`,
+`MotionInterval.From`/`To`, `Collision.At` and `Diagnostic.At`. Its path always runs from `0` to `1`, so it
+has no reversed sense, and every parameter the check labels a pose with is a dyadic fraction, exact in
+float. A `From` equal to `To` names no path and is `ErrDegenerate` (§8).
 
 `PoseAt(at)` is `r3.RotationAround(Center, Axis, at)` for a `Revolute` and `r3.Translation(d·at)` for a
-`Prismatic`, where `d` is `Dir` normalised by `r3.Vec.Normalize`. It is the ONLY place a pose transform is
-built, so the renderer above and the verifier below evaluate the same pose from the same inputs. Its
-refusals follow the variant's own fields and the `r3` constructor's:
+`Prismatic`, where `d` is `Dir` normalised by `r3.Vec.Normalize`. For a `Between`, `PoseAt(s)` reads the
+relative motion `rel = From⁻¹ ∘ To` (`From.Inverse().Then(To)`), decomposes it with `rel.Screw()` into the
+axis direction `Axis`, the axis point `Point`, the angle `θ ∈ [0, π]` radians and the slide `d` (r3
+`docs/screw-motion-design.md` §3–§4), and returns `From.Then(screw.At(s))`: the rotation by `s·θ` about the
+line through `Point` along `Axis`, slid by `s·d` along it, applied after `From`. At `s == 0` it returns
+`From` and at `s == 1` it returns `To`, both as stated: `screw.At(0)` is the identity bit for bit, so
+`From.Then(screw.At(0))` IS `From`, while `screw.At(1)` rebuilds `rel` only to rounding (r3 §7), so the
+stated `To` is returned in its place and §5.1 charges the difference. `Transform.Screw` is a deterministic
+function of its input bits (r3 §3), so every `PoseAt` call and §5's exact frame read the same parameters.
+`Transform.Interpolate` is not called: the certificate needs the parameters, not only the pose. A `Between`
+traces the SHORTER of the two arcs between its orientations, because `θ ≤ π`; a swing past a half-turn is
+stated as a `Revolute`, or as two `Between` legs through an intermediate pose. At exactly `π` both arcs are
+equally short and r3 picks one deterministically (r3 §3); the report's `Poses` show which. `PoseAt` is the
+ONLY place a pose transform is built, so the renderer above and the verifier below evaluate the same pose
+from the same inputs. Its refusals follow the variant's own fields and the `r3` constructor's:
 
 | Input | Error |
 |---|---|
 | `From` or `To` of the wrong `Kind` (a length for a `Revolute`, an angle for a `Prismatic`, a bare scalar for either) | `ErrUnitKind` |
-| `at` of the wrong `Kind` | `ErrUnitKind` |
+| `at` of the wrong `Kind` (a `Between` takes a `Dimensionless` fraction and refuses an angle or a length) | `ErrUnitKind` |
 | a non-finite `From`, `To`, `at`, `Center`, `Axis` or `Dir` component | `ErrNotFinite` |
 | `Axis` or `Dir` the zero vector (`r3.ErrDegenerateAxis`, or `Normalize` reporting no direction) | `ErrDegenerate` |
 | `From == To` (checked by `VerifyMotion`, not by `PoseAt`, which takes no range) | `ErrDegenerate` |
 | the `r3` constructor refusing the result (`r3.ErrNonFinite`, an overflowing pivot offset) | `ErrNotFinite` |
+| a `Between` `From` or `To` with a non-finite basis or translation component | `ErrNotFinite` |
+| a `Between` `From` or `To` that is not a rigid motion (`Transform.IsValid` false: the zero `r3.Transform{}`, a skewed basis) | `ErrDegenerate` |
+| a `Between` joining a reflection to a proper motion (`r3.ErrImproper`: no rigid path joins the two handedness classes); two reflections are a legal pair, as a reflecting placement is legal for `Placed` | `ErrDegenerate` |
+| a `Between` whose `From` equals `To` (`==` on the two values), or whose relative motion decomposes to the zero screw (`Angle` and `Slide` both zero); checked by `VerifyMotion`, since `PoseAt` of such a motion is `From` at every `s` | `ErrDegenerate` |
+| `rel.Screw()` or `screw.At` refusing the result (`r3.ErrNonFinite`: an axis point or slide past `MaxFloat64`, a `1e-300` rad rotation with a `1e10` mm translation) | `ErrNotFinite` |
+
+A `Between` checks its fields in that order: finiteness, then rigidity, then handedness, then degeneracy;
+a `Revolute` and a `Prismatic` check `Kind`, then finiteness, then the direction.
 
 A `Revolute` names its axis with two vectors, a position and a direction, because that form needs no
 selector resolution at the call. A second form taking core §6.2's sealed `Axis` — an `EdgeAxis` naming a
 hinge pin's own edge — is a later addition on the same `Motion` set; it is not refused today, it does not
 exist.
 
-**Two shapes are deliberately absent.** A list of discrete poses adds nothing the API lacks: `PlacedCopy`
+**One shape is deliberately absent.** A list of discrete poses adds nothing the API lacks: `PlacedCopy`
 then `Verify` already checks any finite set of placements the caller can name, and a pose list carries no
-path between its entries, so nothing continuous could be proven over it (§5.2). An interpolation between two
-`r3.Transform`s — `Between{From, To r3.Transform}`, the screw motion joining them — needs the axis, angle and
-pitch of a rigid motion read back out of its matrix, and `r3` has no such reader (§11). It is **staged, not
-rejected**: when `r3` gains it, `Between` joins the sealed set with the §5.2 travel bound of a screw motion
-(a rotation term and a translation term summed), and until then no `Between` type exists, so no caller can
-be handed `ErrUnsupported` for it.
+path between its entries, so nothing continuous could be proven over it (§5.2). A caller with a sequence of
+poses states one `Between` per consecutive pair.
 
 ## 3. The entry point
 
@@ -134,11 +168,13 @@ the reading alike. An interval narrower than the resolution that the certificate
 undecided and is not split further, and a path reading or margin the floor leaves coarse is published
 coarse; it is the caller's statement that a feature narrower than this does not need to be found and that
 figures finer than it buys are not asked for. It is a magnitude of the
-motion's own `Kind` — an angle for a `Revolute`, a length for a `Prismatic` — so a value of the wrong
-`Kind` is `ErrUnitKind`, a negative or zero one `ErrNegativeMagnitude`, a non-finite one `ErrNotFinite`. A
-resolution larger than `|To − From|` is legal and means the endpoints alone are evaluated. The default,
-`(To − From)/1024` in magnitude, caps a worst-case run at 1025 poses per pair; it is a constant the
-implementation owns and re-sizes from measured per-pose cost, not a value the API promises.
+motion's own `Kind` — an angle for a `Revolute`, a length for a `Prismatic`, a dimensionless fraction of the
+path for a `Between` — so a value of the wrong `Kind` is `ErrUnitKind`, a negative or zero one
+`ErrNegativeMagnitude`, a non-finite one `ErrNotFinite`. A resolution larger than `|To − From|` (larger than
+`1` for a `Between`) is legal and means the endpoints alone are evaluated. The default, `(To − From)/1024`
+in magnitude and `units.Scalar(1.0/1024)` for a `Between`, caps a worst-case run at 1025 poses per pair; it
+is a constant the implementation owns and re-sizes from measured per-pose cost, not a value the API
+promises.
 
 `WithMinClearance` states a spec: the moving set MUST stay at least `minimum` from every static body over the
 whole path. Like `WithMinWallThickness` it turns a measurement into an `Assessment` (verification §1.0):
@@ -182,7 +218,7 @@ type MotionRequest struct {
 // PoseResult is one evaluated pose: the parameter, the rigid motion applied to
 // the moving set there, and the pair results at that pose in Verify's own shape.
 type PoseResult struct {
-    At            units.Value    // the parameter; Kind Angle or Length as the Motion fixes
+    At            units.Value    // the parameter; Kind Angle, Length or Dimensionless as the Motion fixes
     Pose          r3.Transform   // Motion.PoseAt(At): what composes onto each mover's own placement
     Interferences []Interference // A is the mover, B the static body; proven overlap, bounded volume
     Clearances    []Clearance    // A is the mover, B the static body; every pair proven disjoint or touching
@@ -301,6 +337,31 @@ of interference §3 over every (placed mover, static) pair. Three rules make it 
   must be charged rather than argued away: a bound stops covering a value the moment unproven float ops touch
   it, and the pose is such an op.
 
+**A `Between`'s ideal path is the exact screw of the READ parameters, applied after `From`.** `rel.Screw()`
+returns float values for `Axis`, `Point`, `Angle` and `Slide`; the ideal path takes each as the exact
+rational the float denotes and composes the exact screw they name onto `From`, itself taken as the exact
+rationals of its float entries: `T*(s) = S*(s) ∘ From`, where `S*(s)` rotates by `s·θ` radians about the
+line through `c = Point` along `n = Axis/|Axis|` and slides `s·d` along `n`. In `idealPose`'s form
+`x ↦ rot·x + shift` that is `rot = R(s·θ, n)·B(From)` and `shift = R(s·θ, n)·(t(From) − c) + c + s·d·n`,
+every entry a rational interval: `R`'s sine and cosine come from `radianSinCos` — `s·θ` is a radian value,
+never a turn fraction, so it is enclosed through `rat_interval.go`'s π enclosures exactly as a radian-stated
+`Revolute` angle is — and `n` carries `unitScaleInterval`'s enclosure of `1/|Axis|`, a point for an
+axis-aligned `Axis`. `S*(0)` is the identity exactly (the enclosure of `sin 0, cos 0` is the point pair
+`(0, 1)`), so `T*(0)` is `From` itself and the `s = 0` pose of an unplaced mover under `From = Identity()`
+has `η_0` exactly zero. `T*(1)` is NOT `To`: the exact screw of the read parameters rebuilds `rel` only to
+within r3's rebuild error, about `ε·|t(rel)|` (r3 §7). **The gap between the ideal end and the stated `To`
+is CHARGED, not reported and not refused.** `PoseAt(1)` returns `To`, so the kernel measures the mover under
+`C_1 = P0 then To`, and the pose charges `η_1 = max(η_ideal, η_To)`: `η_ideal` is `poseDeviation` of `C_1`
+against `T*(1)∘P0`, and `η_To` is `poseDeviation` of `C_1` against the exact product `To∘P0` (an `idealPose`
+with `rot = B(To)` and `shift = t(To)`, both point intervals). Every gap row and every transferred collision
+at `s = 1` therefore holds for the ideal end, which the interval certificate consumes, AND for the stated
+`To`, which the caller named. `η_ideal(1)` is of order `ε·|t(rel)|` — about `1e-10` mm for a pivot `1e6` mm
+away, `1e-14` mm for coordinates of order ten — and is strictly positive wherever `θ ≠ 0`, because the
+enclosures it is built from have nonzero width; `η_To` is the rounding of one `Then`, exactly zero for an
+unplaced mover. The path the report speaks for is `T*(s)`, `s ∈ [0, 1]`: a rigid screw motion throughout,
+starting at the stated `From` and ending within `η_ideal(1)` of the stated `To`. Nothing is claimed about
+any other screw joining the two poses (§5.4).
+
 With those three in place, pose `k` proves, for each pair, one of interference §1's four relations about the
 FLOAT pose, and when disjoint or touching a gap interval `[lo_k, hi_k]` — widened by `η_k` on both sides,
 which is what `recordGap` does — with `lo_k` a proven lower bound and `hi_k` a proven upper bound on the true
@@ -318,8 +379,14 @@ asks for. Relative to the mover at rest, a point of that path is `M_t·x + c` wi
 area scales by at most its square: `A = (Area.Value + Area.Bound)·(1 + linear/σ)²`, up-rounded, where
 `linear` is `η_k`'s own linear factor `‖B(C_k) − R·B(P0)‖_F` and `σ` a proven lower bound on the smallest
 singular value of `B(P0)`, read exactly off its columns as `√(1 − ‖B(P0)ᵀB(P0) − I‖_F)` rounded down. A pose
-whose linear part matches the ideal one exactly takes `A = Area.Value + Area.Bound` unscaled. A pose
-therefore publishes a `Collision` for a pair exactly when the
+whose linear part matches the ideal one exactly takes `A = Area.Value + Area.Bound` unscaled. For a
+`Between` the ideal linear part is `R(s·θ, n)·B(From)`, which is orthogonal only as far as `B(From)` is:
+`r3` admits a basis skewed up to `1e-9`, so `‖R·B(From)‖₂ ≤ σ_max`, where `σ_max` is a proven upper bound on
+the largest singular value of `B(From)` — `√(1 + ‖B(From)ᵀB(From) − I‖_F)` rounded up, `basisSigmaLower`'s
+mirror — and at `s = 1`, where `η_To` also enters, the larger of `B(From)`'s and `B(To)`'s. The stretch is
+then `σ_max + linear/σ`, and the unscaled shortcut becomes `A·σ_max²`. `pathAreaUpper` takes that stretch
+base as an argument; a `Revolute` and a `Prismatic` pass exactly `1`, so their allowance is unchanged. A
+pose therefore publishes a `Collision` for a pair exactly when the
 read-only proof bounded the overlap volume `V` and
 
 ```text
@@ -357,16 +424,31 @@ where `τ_k(Δ)` bounds how far any point of the mover travels over a parameter 
 a bound and the comparison it feeds. A motion parameter denotes `θ = 2π·turn + base`: a degree-stated angle
 is the exact rational turn `deg/360` (the degree count is what the caller stated; `units.Degree`'s factor is
 a rounded `π/180` and is never used), any other angle unit is `magnitude × factor` radians read exactly, and
-a length is `base` millimetres. The span of an interval is `2π·|Δturn| + |Δbase|` with `π` at its upper
-enclosure (`rat_interval.go`), exact for a length. For a `Prismatic`, every point travels exactly the span
-along the unit direction, so `τ(Δ)` is the span. For a `Revolute`, a point at distance `ρ` from the axis
-travels an arc of length `ρ·|Δθ|`, which bounds its chord, so `τ(Δθ) = ρ_max × span`, where `ρ_max` bounds
-the distance from the axis of every point of the mover. `ρ_max` is read ONCE, from the mover's `Bounds()` at
+a length is `base` millimetres, and a `Between` fraction is `base`, dimensionless. The span of an interval is
+`2π·|Δturn| + |Δbase|` with `π` at its upper enclosure (`rat_interval.go`), exact for a length and for a
+fraction. For a `Prismatic`, every point travels exactly the span along the unit direction, so `τ(Δ)` is the
+span. For a `Revolute`, a point at distance `ρ` from the axis travels an arc of length `ρ·|Δθ|`, which
+bounds its chord, so `τ(Δθ) = ρ_max × span`, where `ρ_max` bounds the distance from the axis of every point
+of the mover. For a `Between`, a point at distance `ρ` from the screw axis rotates through an arc of length
+`ρ·|Δs|·θ` and slides `|Δs|·|d|` along the axis; the two displacements are perpendicular, and their sum
+bounds their resultant, so
+
+```text
+τ(Δs) = |Δs| × (ρ_max × θ + |d|)      (θ and d the exact rationals of the floats rel.Screw() returned; no π enters)
+```
+
+The Pythagorean form `|Δs|·√((ρ_max·θ)² + d²)` is tighter by at most a factor `√2` and needs a root;
+refinement absorbs the difference, so the sum is used. `ρ_max` is read ONCE, from the mover's `Bounds()` at
 its current placement, the parameter `0`: the box is inflated outward by its own `Bound` and read as exact
 rational extremes, each of its eight corners' squared distance from the axis line, `|(x − c) × a|² / |a|²`,
 is taken exactly, the largest is rooted upward by `ratSqrtUp`; distance from a line is convex, so the maximum
-over the box sits at a corner. A rotation about the axis preserves every point's distance from it, so one
-reading covers every pose.
+over the box sits at a corner. For a `Between` the path starts at `From`, not at rest, and the screw axis —
+the line through `Point` along `Axis` — in general passes nowhere near the origin, so the eight inflated
+corners are first mapped through `From` exactly, `x' = B(From)·x + t(From)` over rationals (the ideal
+`T*(0)`), and each image's squared distance from that line is what is taken; the moved body lies inside the
+convex hull of the eight images, and distance from a line is convex, so the maximum sits at an image. A
+rotation about the axis and a slide along it both preserve every point's distance from it, so one reading
+covers every pose.
 
 **The certificate.** The interval is `IntervalClear` for a pair when the two one-sided bounds together cover
 it with strictly positive distance everywhere, which holds exactly when
@@ -429,6 +511,9 @@ list (clearance §7).
   records, to the resolution, never reported as a number.
 - No tolerance decides admission. Every comparison above is a strict inequality on bounds rounded against
   the claim; a bound that fails by one ulp fails.
+- Nothing is claimed about any path but the ideal one of §5.1. For a `Between` that is the exact screw of
+  the read parameters composed onto `From`; the exact screw joining `From` to `To` differs from it by
+  amounts this design does not bound, and only the stated `To` itself, at `s = 1`, is covered beyond it.
 
 ## 6. The refinement procedure
 
@@ -436,7 +521,7 @@ Evaluation is deterministic bisection on a dyadic grid, so a replay reproduces t
 verdicts and the same report (evaluator §8):
 
 1. **Validate** (§3, §8) before reading `ctx`.
-2. **Read every mover's `ρ_max`** (§5.2) for a `Revolute`; a `Prismatic` needs none.
+2. **Read every mover's `ρ_max`** (§5.2) for a `Revolute` or a `Between`; a `Prismatic` needs none.
 3. **Swept-box exclusion.** The mover's `Bounds()` box is read at REST, the parameter `0`, not at `From`, so
    the travel that inflates it runs from rest to the farther endpoint: `max(τ(0 → From), τ(0 → To))`.
    Inflating by `τ(To − From)` alone is unsound whenever `From ≠ 0` — an arm swinging from 80° to 90° has
@@ -446,7 +531,14 @@ verdicts and the same report (evaluator §8):
    along some axis proves the pair apart at every parameter, and the largest such gap, rounded down, is a
    proven lower bound on the pair's distance over the whole path. The pair is never evaluated at any pose and
    contributes to every interval as `IntervalClear` (§5.3). This is the same Lipschitz fact as §5.2 applied
-   once, and it is what keeps a large document cheap when the mover is far from most of it.
+   once, and it is what keeps a large document cheap when the mover is far from most of it. A `Between`'s
+   path starts at `From`, which the rest box has not undergone, so its box is the **From-placed box**: the
+   axis-aligned hull, per axis the exact rational minimum and maximum, of the eight inflated rest-box
+   corners mapped through `From` exactly — the same corner images `ρ_max` reads (§5.2) — inflated by the
+   whole path's travel `τ(0 → 1) = ρ_max·θ + |d|` and by nothing else, since the corners already carry the
+   box's `Bound`. Inflating the rest box by the path's travel alone is unsound whenever `From` is not the
+   identity: the mover has moved by `From` before the path begins, and a wall beside its START is excluded
+   by a box that never left its resting place.
 4. **Evaluate the endpoints** `From` and `To` (§5.1) for every remaining pair.
 5. **Bisect for the verdict.** Take the first interval, in traversal order, whose width exceeds the
    resolution and that is either undecided — neither `IntervalClear` nor `IntervalColliding` — or
@@ -479,8 +571,9 @@ contact's onset costs about `log₂(|To − From| / Resolution)` further poses p
 the colliding interval that still has a collision-free end; step 6 spends them
 only around the current minimum, so its cost grows with the logarithm of `1 / Resolution` rather than with
 the path length. A caller who wants only the verdict and not the figures states a coarse `WithResolution`;
-a caller who wants a path reading at the gate states one fine enough that `ρ_max × Resolution / 4` is below
-`rel × gap` (§9 test 2 works the arithmetic).
+a caller who wants a path reading at the gate states one fine enough that `ρ_max × Resolution / 4` — for a
+`Between`, `(ρ_max·θ + |d|) × Resolution / 4` — is below `rel × gap` (§9 tests 2 and 13 work the
+arithmetic).
 
 A pose whose pair is undecided or unsupported (a payload the kernel cannot model, an uncertified contact)
 offers no `lo`, so no interval touching it can certify through that endpoint; the far endpoint may still
@@ -500,8 +593,8 @@ payload's reach without adding a weaker one:
 
 | Mover or static payload | Pose relation and gap | Collision proof | Over the path |
 |---|---|---|---|
-| mover: unplaced or placed `prismPayload` with zero section displacement, or `revolvePayload`; static: the same, or a zero-vertex-bound closed `stitchPayload` | analytic kernel (clearance §2); the mover's record radius `R0` (§5.1) is read off its prism or revolve envelope, so `η_k` is bounded under both motions | kernel overlap, or read-only intersection, transferred through `η_k` | `IntervalClear` reachable |
-| mover: zero-vertex-bound closed `stitchPayload` | analytic kernel, but the payload states no `R0`: under a `Prismatic` the pose's linear part matches the ideal one exactly and `η_k` is the translation term alone, so the gap is measured; under a `Revolute` `η_k` is unbounded, the pair reads `DiagUndecidedClearance` at every pose, and no collision transfers | read-only intersection, under a `Prismatic` only | `IntervalClear` reachable under a `Prismatic`; every interval `IntervalUndecided` under a `Revolute` unless swept-box exclusion settles the pair |
+| mover: unplaced or placed `prismPayload` with zero section displacement, or `revolvePayload`; static: the same, or a zero-vertex-bound closed `stitchPayload` | analytic kernel (clearance §2); the mover's record radius `R0` (§5.1) is read off its prism or revolve envelope, so `η_k` is bounded under every motion | kernel overlap, or read-only intersection, transferred through `η_k` | `IntervalClear` reachable |
+| mover: zero-vertex-bound closed `stitchPayload` | analytic kernel, but the payload states no `R0`: where the pose's linear part matches the ideal one exactly — under a `Prismatic`, and under a `Between` whose `From` and `To` are both translations, so the read `θ` is `0` and `B(From)` the identity — `η_k` is the translation term alone and the gap is measured; under a `Revolute`, and under any other `Between`, `η_k` is unbounded, the pair reads `DiagUndecidedClearance` at every pose, and no collision transfers | read-only intersection, where the linear parts match only | `IntervalClear` reachable where the linear parts match; every interval `IntervalUndecided` otherwise unless swept-box exclusion settles the pair |
 | `prismPayload` with nonzero section displacement, `cupPayload`, `facetedPayload`, `loftPayload`, `capBlendPayload` | box separation only; gap `Suspect` (clearance §8) | read-only intersection where the payload tessellates (interference §9) | collisions found; intervals `IntervalUndecided` unless swept-box exclusion settles the pair |
 | a `BodySheet` operand on either side | none | none | the pair reads `DiagUnsupportedPairSheet` at every pose, intervals `IntervalUndecided`, unless swept-box exclusion settles it |
 | a mover this evaluator did not build (`payload == nil`) | — | — | `ErrUnsupported` at the call, as for `Placed` |
@@ -522,8 +615,12 @@ and a report is returned only when the check ran.
 | a mover retired | `ErrRetiredBody` |
 | a mover of another document | `ErrForeignBody` |
 | a mover this evaluator did not build | `ErrUnsupported` |
-| `From == To` | `ErrDegenerate` |
+| `From == To` (a `Between` included, compared with `==`), or a `Between` whose relative motion is the zero screw | `ErrDegenerate` |
 | `Axis`/`Dir` with no direction | `ErrDegenerate` |
+| a `Between` `From` or `To` with a non-finite component (kept as a guard; `r3`'s public API cannot produce one, so no test reaches it) | `ErrNotFinite` |
+| a `Between` `From` or `To` that is not a rigid motion (`Transform.IsValid` false, the zero `r3.Transform{}` included) | `ErrDegenerate` |
+| a `Between` joining a reflection to a proper motion (`r3.ErrImproper`) | `ErrDegenerate` |
+| a `Between` whose screw point or slide, or whose pose at some `s`, `r3` cannot represent (`r3.ErrNonFinite`) | `ErrNotFinite` |
 | a wrong-`Kind` `From`, `To`, resolution, tolerance or minimum | `ErrUnitKind` |
 | a non-finite parameter, vector component, resolution, tolerance or minimum | `ErrNotFinite` |
 | a negative or zero resolution, a negative tolerance or minimum | `ErrNegativeMagnitude` |
@@ -637,6 +734,156 @@ farthest corner `(48, 14)` sits at exactly `50` mm from the axis and at polar an
     `// Output:` prints the first collision parameter to two decimals; the grid is dyadic in `90°`, so the
     printed value is the same on every platform.
 
+**The screw arm.** Tests 12, 13, 17, 20 and 21 share one `Between`: the arm of tests 1–2 under
+`Between{From: r3.Identity(), To: RotationAround(origin, Z, 90°).Then(Translation(0, 0, 20))}`, a quarter
+turn about Z with a `20` mm rise. Its read screw is `Axis (0, 0, 1)`, `Point (0, 0, 0)`, `Angle` the float
+nearest `π/2` and `Slide 20`, and `From.Then(screw.At(1))` reproduces `To` bit for bit, so `η_1` is of
+enclosure-width scale. The rise leaves every `y` unchanged, so every angle test 1 and test 2 work out holds
+at the fraction `s = θ/(π/2)`; the walls are raised to `z ∈ [−10, 40]` so they reach past the arm's caps at
+every height the rise visits. Every `Between` resolution below is a `units.Scalar`; a `Scalar(1)` evaluates
+the endpoints alone.
+
+12. **Known collision on a screw.** **Rotation-led**: the screw arm against test 1's wall raised. The corner
+    `(48, 14)` reaches `y = 40` at `θ* = atan(3/4)`, so at `s* = (2/π)·atan(3/4) ≈ 0.40967`. Assert: `Status`
+    is `Interfering`; every `Collision.At` has `Kind` `Dimensionless` and is strictly greater than `s*`;
+    every `IntervalClear` interval ends at or below `s*`; the interval containing `s*` is not
+    `IntervalClear`; with `WithResolution(Scalar(1.0/256))` the first `Collision.At` is within `2/256` above
+    `s*`; every `Collision.Volume` is positive with its `Bound` below its `Value`; the `s = 1` pose's `Pose`
+    equals `To` with `==`, and its collision volume is within `1e-6` of `2240` mm³ (at `s = 1` the arm spans
+    `x ∈ [−14, 14]`, `y ∈ [0, 48]`, `z ∈ [20, 30]`, and the overlap with the wall is `28 × 8 × 10`).
+    **Slide-led**: a floor `x, y ∈ [−100, 100]`, `z ∈ [−40, −15]`, and
+    `To = RotationAround(origin, Z, 90°).Then(Translation(0, 0, −20))`, descending. The arm's underside
+    `z = 0` reaches the floor at slide `−15`, `s = 3/4` exactly, a grid point where the two share a face plane
+    and touch without overlapping. Assert: `Interfering`; every `Collision.At` strictly greater than `3/4`;
+    with `WithResolution(Scalar(1.0/256))` the first within `2/256` above it; no `IntervalClear` interval
+    ends above `3/4`. The slide-led
+    fixture goes red when the slide is dropped from the ideal pose: `η` then grows to `|s·d|`, `15` mm at the
+    floor, no overlap clears the allowance, and the report reads `Suspect`.
+13. **Clear screw path with a stated margin.** The screw arm against test 2's wall raised. The minimum gap is
+    `10` mm at `s₁ = 1 − (2/π)·atan(7/24) ≈ 0.81933`; the endpoint gaps are `46` at `s = 0` and `12` at
+    `s = 1`, their sum `58` under the whole path's travel `τ(0 → 1) = 50·π/2 + 20 ≈ 98.54` mm, so the
+    endpoints alone certify nothing. **Endpoints only** (`WithResolution(Scalar(1))`): assert `Suspect`, one
+    `IntervalUndecided`, no `Collisions`, nil `Clearance`, the `s = 0` row an `Exact` `46` (`From` is the
+    identity and the mover unplaced, so `η_0` is exactly zero), the `s = 1` row enclosing `12` with an
+    ulp-scale bound. **Bisected**: a certified interval's `Clearance` dips below the true gap by up to
+    `τ_k/2 = (50·θ + 20)/2 × Δs ≈ 49.27 × Δs` mm, so the path reading's half-width is about `24.6 × Δs`; the
+    gate at `rel = 1e-3` on a `10` mm gap admits `0.01` mm; `Δs = 1/4096` gives `6.0e-3` mm, inside it,
+    while the default `1/1024` gives `0.024` mm, outside. With `WithResolution(Scalar(1.0/4096))` assert:
+    `Sound`; every interval `IntervalClear`; `Clearance.Value` within `0.1` mm of `10` with
+    `ToleranceSatisfied`; `WithMinClearance(9 mm)` gives `AssessmentMet`; `11 mm` gives
+    `AssessmentViolated`, `Violating` and a `DiagMotionClearanceViolated` whose `At` is the proving pose;
+    `10 mm` exactly gives `AssessmentUndecided` and `Suspect`. At the default resolution assert the verdict
+    `Sound` but the reading beyond tolerance: `Suspect`, with a `DiagMeasurementBeyondTolerance` on
+    `ReadingGap` and a nil `At`. This fixture goes red when the ideal pose omits the slide or reads `θ` in
+    anything but radians: `η` then exceeds the gaps and no interval certifies.
+14. **Near miss between samples under a screw.** Test 3's blade and pin under
+    `Between{Identity(), RotationAround(origin, Z, 90°)}`. The pin's angle `α = 90·31/64°` is the fraction
+    `s_α = 31/64`, a
+    depth-6 grid point, and test 3's contact window `±1.247°` is `±0.013856` in `s`. With
+    `WithResolution(Scalar(1.0/30))` (3° of the quarter turn) refinement stops at width `1/32`, whose grid
+    points `15/32` and `16/32` each sit `1/64` from `s_α` — `1.40625°`, outside the window by at least
+    `0.137` mm as test 3 works out. Assert: no `Collision`; `Status` is `Suspect`, never `Sound`; the
+    `IntervalUndecided` interval contains `31/64`. With `WithResolution(Scalar(1.0/900))` (a floor of
+    `1/1024`, whose grid includes `31/64`) assert `Interfering` and the first `Collision.At` within
+    `[31/64 − 0.013856, 31/64 + 0.013856]`. This is the fixture that goes red when the `ρ_max·θ` term is
+    deleted from a `Between`'s `τ`.
+15. **Offset screw axis.** Test 3's blade under
+    `Between{From: Translation(50, 0, 0), To: Translation(50, 0, 0).Then(RotationAround((−50, 0, 0), Z, 90°))}`:
+    the blade starts at `x ∈ [50, 100]` and swings about the Z axis through `(−50, 0, 0)`, so its tip is
+    `150` mm from the screw axis; the read screw has `Point` within `1e-9` of `(−50, 0, 0)`, `Angle` the
+    float nearest `π/2` and `Slide 0`. The pin is a `0.8` mm cube centred at
+    `(−50 + 149·cos α, 149·sin α, 5)`, `α = 90·31/64°`, `149` mm from the axis. Its centre sits
+    `149·|sin(θ − α)|` from the blade's mid-plane, so the contact window is
+    `|θ − α| ≤ asin(1.066/149) ≈ 0.41°`; the depth-5 grid points `15/32` and `16/32` are `1.40625°` from
+    `α` and clear of the pin by
+    `149·sin(1.40625°) − 1.066 ≈ 2.59` mm each. Over a width-`1/32` interval the travel with the true
+    `ρ_max ≈ 150` is `150·(π/2)/32 ≈ 7.36` mm, above the two gaps' sum `5.18`, so the interval stays
+    undecided; a `ρ_max` of `100` — what the REST box about the true axis reads (`x ∈ [0, 50]` against
+    `x = −50`), and what the From-placed box about an axis through the ORIGIN reads (`x ∈ [50, 100]`) —
+    gives `4.91` mm and falsely certifies it. With `WithResolution(Scalar(1.0/30))` assert: no `Collision`;
+    `Suspect`; the `IntervalUndecided` interval contains `31/64`. With `WithResolution(Scalar(1.0/900))`
+    assert `Interfering` and the first `Collision.At` within `[31/64 − 0.41/90, 31/64 + 0.41/90]`. This
+    fixture goes red when `ρ_max` is read from the rest box instead of the From-placed corners, or about the
+    axis through the origin instead of through `Point`.
+16. **A pure translation agrees with `Prismatic`.** Test 5's cube under
+    `Between{Identity(), Translation(30, 0, 0)}` and under `Prismatic{Dir: X, From: 0 mm, To: 30 mm}`, on
+    test 5's three static fixtures: the
+    wall at `x = 25`, the L-shaped clear body, and the pin between samples with the endpoints alone
+    (`WithResolution(Scalar(1))` against `WithResolution(30 mm)`). The read screw is `Axis (1, 0, 0)`,
+    `Angle 0`, `Slide 30`, `Point 0`: the ideal rotation is the identity exactly, the ideal shift
+    `s·30·(1, 0, 0)` is exact, and `screw.At(s)` builds the translation `(30·s, 0, 0)` exactly for every
+    dyadic `s`, so the float poses, the kernel results and `η` (zero on both sides) coincide. Assert, pair
+    by pair: equal `Status`; equal pose counts; interval outcomes equal in order and each interval
+    `Clearance.Value` equal within `1e-9` mm; each `Collision.At` equal under `s ↦ 30·s` mm within `1e-9` mm
+    and each `Collision.Volume.Value` within `1e-9` mm³; the path `Clearance.Value` within `1e-9` mm, or nil
+    on both. The pin subtest goes red when the slide term is deleted from a `Between`'s `τ`: the read `θ` is
+    `0`, `τ` collapses to zero, and the endpoints falsely certify the interval.
+17. **A pure rotation agrees with `Revolute`.** The arm under
+    `Between{Identity(), RotationAround(origin, Z, 90°)}` and under test 1's `Revolute`, on test 1's wall
+    (`WithResolution(Scalar(1.0/256))` against
+    `WithResolution(90°/256)`), on test 2's wall bisected (`Scalar(0.01/90)` against `0.01°`: both floors
+    stop the dyadic grid at depth 14) and on test 4's stop. The read screw's `Angle` is the float nearest
+    `π/2`, not the exact quarter turn the `Revolute` denotes, so the two ideal paths differ by about `6e-17`
+    rad and their bounds by about `3e-15` mm, twelve orders below the fixtures' margins. Assert: equal
+    `Status`; interval outcomes equal in order; each `Collision.At` equal under `s ↦ 90·s` degrees within
+    `1e-9°`; the path `Clearance.Value` within `1e-9` mm, or nil on both; on the stop fixture the `s = 0` row
+    an `Exact` zero with a zero bound, as test 4's `0°` row is.
+18. **The swept box is the From-placed box.** Test 5's cube, at rest at `x ∈ [0, 10]`, under
+    `Between{From: Translation(100, 0, 0), To: Translation(130, 0, 0)}`, so it travels `x ∈ [100, 140]`;
+    static bodies: a
+    wall `x ∈ [125, 135]` spanning the cube in `y` and `z`, a slab `x ∈ [20, 30]` beside the cube's RESTING
+    place, and a far slab `x ∈ [500, 510]`. The cube's leading face reaches the wall at `s = 1/2` exactly, a
+    grid point where the two touch across a shared plane. Assert: `Interfering`; every `Collision.At`
+    strictly greater than `1/2` and, at `WithResolution(Scalar(1.0/256))`, the first within `2/256` above
+    it; the last collision's volume within `1e-6` of `500` mm³; all three static bodies in `Against`; the
+    near slab and the far slab in no `PoseResult` row, both excluded by the From-placed box `[100, 110]`
+    grown by the travel `30` to `[70, 140]`. This fixture goes red when the swept box is read at rest: the
+    rest box `[0, 10]` grown by `30` excludes the wall, and the report reads `Sound`.
+19. **The stated `To` is covered.** The arm against test 2's wall (`y ∈ [60, 80]`) under
+    `Between{From: RotationAround((1e6, 3e5, 0), Z, 90°).Inverse(), To: r3.Identity()}`, endpoints only:
+    the arm starts about `1.5e6` mm away and arrives at `s = 1` exactly where it sits, `46` mm from the
+    wall. The relative
+    motion is the far rotation itself, whose read screw rebuilds it only to about `ε·|t| ≈ 1e-10` mm (r3
+    §7), so the ideal end misses the identity by that much, while the kernel's own `s = 1` reading is the
+    exact axis-aligned box gap. Assert: the `s = 1` row's `Pose` equals `r3.Identity()`; its `Gap.Value` is
+    within `1e-6` of `46`; its `Gap.Bound` is strictly positive and below `1e-6`, with `Exactness`
+    `Approximate`; the same fixture with the pivot at the origin
+    (`From = RotationAround(origin, Z, 90°).Inverse()`) has a strictly smaller, still positive, `s = 1`
+    bound; both bounds pass the default gate. This test goes red when `η_1` is charged against `To` alone: `C_1` is then `To` bit for bit for the
+    unplaced arm, `η_To` is exactly zero, and the row comes back `Exact` with a zero bound — a claim about an
+    ideal end the check never bounded. The `η_To` leg of the maximum is not a leg any fixture can fail:
+    `max(η_ideal, η_To) ≥ η_To` by definition, and its size is one `Then` rounding; the test file records
+    that argument.
+20. **Errors, non-mutation and cancellation.** Test 9 gains one subtest per `Between` row of §8's table
+    that the public API can reach: the zero `r3.Transform{}` as `From` and as `To`
+    (`ErrDegenerate`); a reflection against the identity (`ErrDegenerate`); `From` equal to `To`
+    (`ErrDegenerate`); `Rotation(Z, 1e-300 rad).Then(Translation(1e10, 0, 0))` as `To` against the identity,
+    whose screw point is not a float64 (`ErrNotFinite`); a resolution stated as a length or an angle
+    (`ErrUnitKind`); each asserting `errors.Is`, no report and an unchanged document. `PoseAt` with an angle
+    or a length is `ErrUnitKind`, with `NaN` `ErrNotFinite`. Test 7 runs its before-and-after and replay
+    comparison on the screw arm as well. Test 10 needs no change: cancellation is decided before the motion
+    kind. The non-finite-component row (`ErrNotFinite`) is kept in code and has no test: every `r3`
+    producer validates what it builds and `Transform`'s fields are unexported, so `r3`'s public API cannot
+    produce a `Transform` with a non-finite component.
+21. **Example.** `examples/` gains `Example_decad_motionBetween`: the screw arm of test 12 against the raised
+    wall at `WithResolution(Scalar(1.0/256))`, printing `Status` and the first collision's fraction to three
+    decimals. The grid is dyadic, so it prints `0.410` — `105/256`, the first depth-8 grid point above
+    `s* ≈ 0.40967`, where the corner penetrates the wall by `0.0235` mm and the overlap is a `5.8e-3` mm³
+    wedge, far above the transfer allowance — on every platform.
+
+Three legs of the `Between` bound sit below any public fixture's observability and are pinned by internal
+tests in `motion_internal_test.go`, each on the production function: `pathAreaUpper`'s stretch base — a
+base above `1` scales both the unscaled shortcut and the stretched allowance, and the base `1` reproduces
+the `Revolute` value exactly — which goes red when the base is dropped; `basisSigmaUpper`, exactly `1` for
+the identity and strictly above `1` for a basis whose columns are not exactly orthonormal; and the
+`Between` frame's ideal end, which maps the rest-box corners of the screw arm, of test 19's far pivot and
+of test 15's offset axis to within `1e-9·(1 + |t|)` of their images under `To` — a test, not an admission
+gate, and it admits nothing. Test 15's offset axis is the fixture that shows a frame composed in the wrong
+order: its `From` translates the blade off the screw axis, so the screw before `From` and the screw after
+it land the corners tens of millimetres apart. The screw arm and test 19 cannot show it, because their
+`From` commutes with the screw — the identity in one, a rotation about the screw's own axis in the other —
+so both orders give the same end.
+
 `.github/test-shards.txt` is updated for every root-package test, fuzz target and example above, and
 `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'` is run before the push.
 
@@ -646,30 +893,44 @@ farthest corner `(48, 14)` sits at exactly `50` mm from the axis and at polar an
 |---|---|---|
 | 1 (`motion.go`, `motion_verify.go`, `motion_bound.go`) | `Motion`, `Revolute`, `Prismatic`, `PoseAt` and their refusals; `WithMotionTolerance`; `Diagnostic.At` and the four `DiagMotion*` codes; `VerifyMotion` over the two endpoints only (§6 steps 1–4 and 7, no bisection), the swept-box exclusion with travel from rest, `η_k` charged to gaps, `ρ_max` and `τ` over exact rationals; `IntervalClear`/`IntervalColliding`/`IntervalUndecided`; `MotionRequest.RelativeTolerance`; tests 2 (endpoints only), 4, 5, 6, 7, 8, 9, 10 and the swept-box-from-rest test | every interval the endpoints alone cannot certify (test 2's swing among them); a collision at a pose whose `η_k` is nonzero is published without the §5.1 transfer |
 | 2 | §6 steps 5 and 6 — bisection for the verdict, including the onset bisection of a colliding interval with a collision-free end, and for the reading — `WithResolution`, `WithMinClearance`, `Assessment`, `MotionRequest.Resolution`/`MinClearance`; the §5.1 collision transfer through `sweptVolumeAllow(η_k, A)`, with `DiagUndecidedInterference` at a pose for an overlap that does not transfer, and `Collision`'s doc comment restated as a claim about the ideal pose; tests 1, 2 (bisected), 3, 11, and a transfer test: a pose with a nonzero `η_k` whose measured overlap is published with its bound widened by the allowance, and a fixture whose overlap volume is below the allowance that reads `DiagUndecidedInterference` rather than `Collision` | pairs the clearance kernel leaves undecided (§7); a stitched mover under a `Revolute` |
-| 3 | `Between` over a screw motion, once `r3` reads axis, angle and pitch out of a `Transform` (§11) | — |
+| 3 (`motion.go`, `motion_verify.go`, `motion_bound.go`; `go.mod` pins `r3` at `b624f6d`) | `Between`, its `PoseAt` and refusals (§2, §8); the `Dimensionless` parameter, its resolution and labels (§2, §3); the screw frame — `θ`, `d`, `Axis`, `Point` and `From` read exactly, `radianSinCos` for `s·θ` — and `η_1 = max(η_ideal, η_To)` at the stated `To` (§5.1); `ρ_max` and the swept box from the From-placed corners (§5.2, §6); `τ` with the slide term (§5.2); `pathAreaUpper`'s stretch base and `basisSigmaUpper` (§5.1); tests 12–21, the internal tests of §9, and test 9's and test 7's `Between` rows | pairs the clearance kernel leaves undecided (§7); a stitched mover under any `Between` that is not a translation between translations |
 
 PR 1 was the end-to-end instance: a real mover, a real static body, the real kernel, one certificate, one
 report, at endpoint scope. PR 2 builds on it and changes no PR 1 result except the two the transfer rule
 names: a collision whose measured volume does not clear `sweptVolumeAllow(η_k, A)` stops being a
-`Collision`, and every published collision volume carries the widened bound.
+`Collision`, and every published collision volume carries the widened bound. PR 3 changes no `Revolute` or
+`Prismatic` result: both pass the stretch base `1`, read their swept box at rest and their `τ` without a
+slide term, exactly as before.
 
-## 11. Dependency gaps and settled points
+## 11. Dependencies and settled points
 
-**Dependency gaps.**
+**What each dependency supplies.**
 
-- `r3` has no interpolation between two `Transform`s and no reader for a transform's screw parameters —
-  rotation axis, angle and translation along the axis (`Rotation` constructs from axis and angle; nothing
-  inverts it). `Between` (§2) is staged on it. It belongs in `r3`, which owns coordinate math, never in decad.
-- `r3` publishes no bound on how far `Rotation`, `RotationAround`, `Translation` and `Then` deviate from the
-  ideal isometry they denote; it validates only that the result IS an isometry within `1e-9`. decad closes
-  the gap itself with `η_k`'s exact enclosure (§5.1), so this is not blocking. An `r3`-published bound would
-  let the enclosure be replaced by a read, and would be the first `r3` API to carry a `units.Value` bound.
+- `r3` at `b624f6d` provides `Transform.Screw`, `Screw.At` and `Transform.Interpolate` (r3
+  `docs/screw-motion-design.md`), and `go.mod` pins that revision. `Between` reads the axis, point, angle and
+  slide with `Screw` — once per `PoseAt` call, and once per `VerifyMotion` for the exact frame — builds every
+  pose with `At`, and never calls `Interpolate`, whose pose alone would not give the travel bound its
+  parameters. `Screw` is a deterministic function of its input bits, which is what lets the frame and
+  `PoseAt` read the same parameters; the soundness of `η` does not depend on it, since `η` charges whatever
+  separates the pose actually built from the ideal one.
+- `r3` publishes no bound on how far `Rotation`, `RotationAround`, `Translation`, `Then`, `Screw` and `At`
+  deviate from the ideal isometry they denote; it validates only that each result IS an isometry within
+  `1e-9` (r3 §10 leaves this out of scope). decad closes the gap itself with `η_k`'s exact enclosure (§5.1)
+  — for a `Between`, including the rebuild error between the read screw's end and the stated `To` — so this
+  is not blocking. An `r3`-published bound would let the enclosure be replaced by a read, and would be the
+  first `r3` API to carry a `units.Value` bound.
 - `units` and `sketch` need nothing. `units.Degree`'s factor is a rounded `π/180`, which is exactly why a
-  degree-stated angle is enclosed as an exact turn fraction rather than through `In(units.Radian)`.
+  degree-stated angle is enclosed as an exact turn fraction rather than through `In(units.Radian)`; a
+  `Between`'s `Scalar` fraction and `Screw`'s radian `Angle` both carry the factor `1` and are read exactly.
 
 **Settled design points.** Each of these is stated in full where it applies and summarised here so a
 reader finds them in one place: `Diagnostic` carries `At *units.Value`, nil on every `Verify` diagnostic
 (§4.1); the motion tolerance is its own `WithMotionTolerance` and `WithTolerance` is unchanged (§3); the
-default resolution is `(To − From)/1024` (§3); the static set is every other live body, with no option to
-narrow it (§3); `Revolute` names its axis with two vectors, and a form taking core §6.2's sealed `Axis` is a
-later addition (§2); the interval certificate is two-sided (§5.2).
+default resolution is `(To − From)/1024`, `1/1024` for a `Between` (§3); the static set is every other live
+body, with no option to narrow it (§3); `Revolute` names its axis with two vectors, and a form taking core
+§6.2's sealed `Axis` is a later addition (§2); the interval certificate is two-sided (§5.2); a `Between`'s
+parameter is the dimensionless fraction `s ∈ [0, 1]` (§2); its ideal path is the exact screw of the read
+parameters composed onto `From`, and the stated `To` is charged at `s = 1` through `η_1 = max(η_ideal,
+η_To)`, not reported and not refused (§5.1); its travel bound is the sum `|Δs|·(ρ_max·θ + |d|)`, not the
+Pythagorean form (§5.2); its `ρ_max` and swept box are read from the From-placed corners (§5.2, §6); it
+traces the shorter arc, accepts two reflections and refuses a reflection on one side only (§2).
