@@ -31,8 +31,9 @@ import (
 // integral is reference-point independent). A flat Plane patch's flux is the
 // tetrahedron identity, a polynomial in the payload's own floats, taken
 // EXACTLY over big.Rat and rounded once at the end; a Cone patch's is a
-// closed-form polynomial-plus-trig expression evaluated in floats and never
-// claimed Exact.
+// closed-form polynomial-plus-trig expression evaluated over exact rationals
+// with every sine and cosine enclosed (conePatchFluxInterval), held at the
+// enclosure's midpoint and never claimed Exact.
 //
 // The volume bound is composed term by term, and the reason is the band's own
 // shape. Every one of these flux terms is a DIFFERENCE that cancels: the two
@@ -44,10 +45,14 @@ import (
 // step acted on, and boundedAdd/boundedMul then sum bounds while the values
 // cancel. The Plane arm escapes that composition entirely rather than manage
 // it: an exact rational has nothing to cancel, and its committed rounding is
-// measured (rationalFloatError), not budgeted. The one term that passes
-// through math.Sincos carries the magnitude envelope moments.go's
-// analyticRoundBound doc reserves for a libm result, never that helper's
-// roundoff budget.
+// measured (rationalFloatError), not budgeted. The Cone arm escapes it the
+// same way: its closed form is an exact-rational interval whose trig factors
+// are certified enclosures, so its bound is the interval's reach from the held
+// midpoint (intervalFloatError). Only the whole-turn arm, which has no trig
+// term to enclose, and the non-finite fallback, which has no rational to
+// carry, still pass through math.Sincos; there the magnitude envelope
+// bounded.go's analyticRoundBound doc reserves for a libm result stands, never
+// that helper's roundoff budget alone.
 
 // evalCapBlendContext builds the analytic cap-blend body from the payload
 // (BX3): the trimmed prism side walls (buildLoopSidesAs, unmodified) plus,
@@ -398,8 +403,9 @@ func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecor
 //   - the rounding of sideZ itself, which multiplies a whole disk area;
 //   - each float multiplication and addition, whose committed error
 //     boundedMul/boundedAdd take EXACTLY over big.Rat rather than estimate;
-//   - each patch's own flux bound (patchRawFlux), including the Sincos term
-//     that analyticRoundBound may never speak for.
+//   - each patch's own flux bound (patchRawFlux), including a Cone patch's
+//     trig terms, which a certified enclosure bounds (a magnitude envelope
+//     only where no enclosure lifts) and analyticRoundBound never speaks for.
 //
 // boundedAdd sums bounds, so no step of this composition is ever rescaled by
 // a result the step's own operands cancelled down to.
@@ -512,10 +518,14 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 // path therefore survives only as the fallback for a patch whose coordinates
 // do not lift (a non-finite one), where the float result is no better.
 //
-// A Cone patch keeps the float closed form and its envelope bound for the same
-// reason in reverse: its flux passes through math.Sincos, whose result no
-// rational carries, so a mixed section holding one circular wall stays
-// Approximate however exactly its Plane patches integrate.
+// A Cone patch's flux holds sines and cosines no rational carries, so
+// conePatchFluxInterval evaluates the same closed form over exact rationals
+// with each trig factor read through a certified enclosure, and the bound is
+// that interval's reach from its held midpoint. The enclosure always has
+// width, so a mixed section holding one circular wall stays Approximate
+// however exactly its Plane patches integrate. The whole-turn arm (no trig
+// term survives) and a patch whose parameters do not lift keep the float
+// closed form and its envelope bound.
 //
 // A regular wall's Cone patch (capPatchGeom.circular with a nonzero
 // sideRadius, i.e. neither a reflex corner's apex patch nor a cornerless
@@ -639,8 +649,11 @@ func patchRawFlux(g capPatchGeom) boundedScalar {
 		productUpper(absZ0, polyZ0Env),
 		productUpper(productUpper(absR0, absR0), productUpper(absH, absDS)),
 	)
+	// polyEnv, originEnv and crossEnv serve the whole-turn arm and the
+	// non-finite fallback below; every other patch takes
+	// conePatchFluxInterval's enclosure instead and reads none of them.
 	// origin and cross both carry a trig factor — origin through Sincos
-	// directly, cross through ruledAngleCos's cos/sinc — and moments.go's
+	// directly, cross through ruledAngleCos's cos/sinc — and bounded.go's
 	// analyticRoundBound states the rule both break: Go gives Sin, Cos and
 	// Atan2 no ulp contract, so a result computed through them never rests on
 	// that roundoff budget alone. originEnv/crossEnv are the STRUCTURAL
@@ -658,8 +671,9 @@ func patchRawFlux(g capPatchGeom) boundedScalar {
 		productUpper(productUpper(absR0, absR1), productUpper(absH, absDC)),
 	)
 
-	var flux, trigBound float64
-	if g.wholeTurn {
+	var flux, bound float64
+	switch {
+	case g.wholeTurn:
 		// Structural: this patch's window is a genuinely FULL period built
 		// from the SAME floats on both directrices (capblend_geom.go's
 		// cornerless closed circle branch, and every apex patch's degenerate
@@ -671,14 +685,24 @@ func patchRawFlux(g capPatchGeom) boundedScalar {
 		// origin is therefore its own whole error, and cross (now ordinary
 		// arithmetic, no trig) is charged the same rounding budget poly is.
 		flux = poly + cross + origin
-		trigBound = upRound(math.Abs(origin))
-	} else {
-		intCos := ruledAngleCos(thS0, thS1, thC0, thC1)
-		trig := origin + cross*intCos
-		flux = poly + trig
-		trigBound = conservativeValueError(trig, absSumUpper(originEnv, crossEnv))
+		trigBound := upRound(math.Abs(origin))
+		bound = absSumUpper(analyticRoundBound(absSumUpper(polyEnv, originEnv, crossEnv)), trigBound)
+	default:
+		iv, ok := conePatchFluxInterval(g)
+		if !ok {
+			// A parameter that does not lift (non-finite geometry) leaves the
+			// float closed form and its structural magnitude envelope.
+			intCos := ruledAngleCos(thS0, thS1, thC0, thC1)
+			trig := origin + cross*intCos
+			flux = poly + trig
+			trigBound := conservativeValueError(trig, absSumUpper(originEnv, crossEnv))
+			bound = absSumUpper(analyticRoundBound(absSumUpper(polyEnv, originEnv, crossEnv)), trigBound)
+			break
+		}
+		held, _ := intervalMid(iv).Float64()
+		flux = held
+		bound = intervalFloatError(iv, held)
 	}
-	bound := absSumUpper(analyticRoundBound(absSumUpper(polyEnv, originEnv, crossEnv)), trigBound)
 	if !g.wholeTurn {
 		// The arithmetic bound above is only for the STRAIGHT-RULED patch
 		// this evaluator actually builds; at a non-tangential corner (where
@@ -789,6 +813,122 @@ func sincHalf(x float64) float64 {
 		return 1
 	}
 	return math.Sin(h) / h
+}
+
+// sincHalfInterval encloses sin(x/2)/(x/2) for an exact rational x: exactly 1
+// at x == 0 (no enclosure needed), otherwise the certified sine of h = x/2
+// divided by the exact nonzero point h. intervalQuo never refuses here: the
+// divisor is a nonzero point interval.
+func sincHalfInterval(x *big.Rat) (ratInterval, bool) {
+	if x.Sign() == 0 {
+		return pointInterval(big.NewRat(1, 1)), true
+	}
+	h := new(big.Rat).Mul(x, big.NewRat(1, 2))
+	sin, _, ok := radSinCosInterval(h)
+	if !ok {
+		return ratInterval{}, false
+	}
+	return intervalQuo(sin, pointInterval(h))
+}
+
+// phaseIntegralInterval encloses ∫₀¹ cos(a0 + u·(a1−a0)) du and the sine
+// analogue for exact rational a0, a1, via the product-to-sum form
+// cos(mid)·sinc(width/2), sin(mid)·sinc(width/2) that ruledAngleCos and
+// phaseSumInterval already state (mid = (a0+a1)/2, width = a1−a0). Both
+// factors are certified enclosures (radSinCosInterval, sincHalfInterval) and
+// intervalMul is inclusion-monotonic, so each output contains the true
+// integral whatever the platform's math package returns.
+func phaseIntegralInterval(a0, a1 *big.Rat) (cosIv, sinIv ratInterval, ok bool) {
+	mid := new(big.Rat).Mul(new(big.Rat).Add(a0, a1), big.NewRat(1, 2))
+	width := new(big.Rat).Sub(a1, a0)
+	s, c, okMid := radSinCosInterval(mid)
+	if !okMid {
+		return ratInterval{}, ratInterval{}, false
+	}
+	sc, okSinc := sincHalfInterval(width)
+	if !okSinc {
+		return ratInterval{}, ratInterval{}, false
+	}
+	return intervalMul(c, sc), intervalMul(s, sc), true
+}
+
+// conePatchFluxInterval encloses the EXACT raw flux of the ruled Cone patch
+// at its held parameters — the same closed form patchRawFlux's float arm
+// evaluates (poly + origin + cross·intCos) — over rationals, with the four
+// endpoint sines/cosines and the ruled-angle integral read through the
+// certified radian enclosure. ok is false only where a parameter does not
+// lift to a rational (non-finite geometry).
+//
+// Why the enclosure is sound, and why its reach is the whole bound:
+//   - every non-trigonometric input is a float64 field, hence an exact
+//     rational, and H, dS, dC, dR, dSC are formed exactly, so no subtraction
+//     rounds;
+//   - the four endpoint sines/cosines (radSinCosInterval) and the ruled-angle
+//     integral (phaseIntegralInterval) are enclosed, and interval arithmetic
+//     is inclusion-monotonic, so the result contains the exact closed form at
+//     the held parameters whatever the platform's math package does;
+//   - its caller holds the nearest float to the midpoint and publishes
+//     intervalFloatError, the larger distance to either end rounded up, so
+//     the true flux in the interval lies within that bound of the held value.
+//
+// Nothing here grows with the arc centre's distance from the plane-local
+// origin beyond the enclosure's own width, which is set by the radian-to-turn
+// grid (turnGridShift), not by a magnitude envelope. The width is never zero
+// for a non-whole-turn patch: radSinCosInterval answers a non-point interval
+// for every nonzero rational, so a Cone patch stays Approximate.
+func conePatchFluxInterval(g capPatchGeom) (ratInterval, bool) {
+	R0, R1 := floatRat(g.sideRadius), floatRat(g.capRadius)
+	z0, z1 := floatRat(g.sideZ), floatRat(g.capZ)
+	thS0, thS1 := floatRat(g.th0), floatRat(g.th1)
+	thC0, thC1 := floatRat(g.capTh0), floatRat(g.capTh1)
+	cU, cV := floatRat(g.cU), floatRat(g.cV)
+	for _, r := range []*big.Rat{R0, R1, z0, z1, thS0, thS1, thC0, thC1, cU, cV} {
+		if r == nil {
+			return ratInterval{}, false
+		}
+	}
+	half := big.NewRat(1, 2)
+	H := new(big.Rat).Sub(z1, z0)
+	dS := new(big.Rat).Sub(thS1, thS0)
+	dC := new(big.Rat).Sub(thC1, thC0)
+	dR := new(big.Rat).Sub(R1, R0)
+	dSC := new(big.Rat).Sub(dS, dC)
+
+	sS0, cS0, okS0 := radSinCosInterval(thS0)
+	sS1, cS1, okS1 := radSinCosInterval(thS1)
+	sC0, cC0, okC0 := radSinCosInterval(thC0)
+	sC1, cC1, okC1 := radSinCosInterval(thC1)
+	if !okS0 || !okS1 || !okC0 || !okC1 {
+		return ratInterval{}, false
+	}
+	// origin = H/2·R0·(cU·(sinS1−sinS0) + cV·(cosS0−cosS1))
+	//        + H/2·R1·(cU·(sinC1−sinC0) + cV·(cosC0−cosC1)).
+	originR0 := intervalScale(
+		intervalAdd(intervalScale(intervalSub(sS1, sS0), cU), intervalScale(intervalSub(cS0, cS1), cV)),
+		ratMul(H, half, R0))
+	originR1 := intervalScale(
+		intervalAdd(intervalScale(intervalSub(sC1, sC0), cU), intervalScale(intervalSub(cC0, cC1), cV)),
+		ratMul(H, half, R1))
+	origin := intervalAdd(originR0, originR1)
+
+	// poly = z0·(R1²·dSC − dS·dR·(R0+R1))/2 + R0²·H·dS/2 and
+	// cross = z0·(−R0·R1·dSC)/2 + R0·R1·H·dC/2, patchRawFlux's own regrouped
+	// forms — exact identities, so the grouping costs nothing over rationals.
+	polyZ0 := new(big.Rat).Sub(ratMul(R1, R1, dSC), ratMul(dS, dR, ratAdd(R0, R1)))
+	poly := ratAdd(ratMul(z0, polyZ0, half), ratMul(R0, R0, H, dS, half))
+	crossZ0 := new(big.Rat).Neg(ratMul(R0, R1, dSC))
+	cross := ratAdd(ratMul(z0, crossZ0, half), ratMul(R0, R1, H, dC, half))
+
+	// intCos = ∫₀¹ cos(thS(u) − thC(u)) du, the phase running from
+	// phi0 = thS0−thC0 to phi1 = thS1−thC1: ruledAngleCos's
+	// cos((phi0+phi1)/2)·sincHalf(phi1−phi0), enclosed.
+	phi0 := new(big.Rat).Sub(thS0, thC0)
+	phi1 := new(big.Rat).Sub(thS1, thC1)
+	intCos, _, ok := phaseIntegralInterval(phi0, phi1)
+	if !ok {
+		return ratInterval{}, false
+	}
+	return intervalAdd(intervalAdd(pointInterval(poly), origin), intervalScale(intCos, cross)), true
 }
 
 // exactPlanePatchFlux is the flat quad patch's raw flux

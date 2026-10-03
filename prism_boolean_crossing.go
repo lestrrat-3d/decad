@@ -118,14 +118,13 @@ func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *workBudg
 		return prismPayload{}, false, err
 	}
 
-	// §3.2's Intersect row, after G5's shift — provably zero once G3 holds
-	// (prismZShift's own doc comment) — is applied to B's own recorded
-	// interval, exactly as the clean-nesting path's own Intersect builder
-	// does.
-	shift := prismZShift(pa, pb)
-	pbZ0, pbZ1 := pb.z0+shift, pb.z1+shift
-	z0, z0Delta := prismIntersectEnd(pa.z0, pa.z0Delta, pbZ0, pb.z0Delta, func(x, y float64) bool { return x > y })
-	z1, z1Delta := prismIntersectEnd(pa.z1, pa.z1Delta, pbZ1, pb.z1Delta, func(x, y float64) bool { return x < y })
+	// §3.2's Intersect row, after G5's exact shift (prismZShift) is applied
+	// to B's own recorded interval, exactly as the clean-nesting path's own
+	// Intersect builder does; prismIntersectEnd charges a shifted endpoint's
+	// single rounding.
+	pbZ0, pbZ1 := prismShiftedIntervalAdmitted(pa, pb)
+	z0, z0Delta := prismIntersectEnd(pa.z0, pa.z0Delta, pbZ0, pb.z0Delta, func(c int) bool { return c > 0 })
+	z1, z1Delta := prismIntersectEnd(pa.z1, pa.z1Delta, pbZ1, pb.z1Delta, func(c int) bool { return c < 0 })
 
 	result := prismPayload{
 		profile: merged,

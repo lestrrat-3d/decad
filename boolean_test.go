@@ -3,6 +3,7 @@ package decad_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"testing"
@@ -685,6 +686,39 @@ func TestBooleanChainsWithinHeldBound(t *testing.T) {
 	require.InDelta(t, volumeMM(t, drilledVol)+250.0, volumeMM(t, twiceVol), 1e-6)
 	require.Len(t, twice.Lumps(), 3)
 	requireBodyWatertight(t, twice)
+}
+
+// TestBooleanChainDepthRefusalNamesOperandAndTakesNoTolerance is
+// docs/api-design.md §8's "The chain depth" wording: three hole tools Placed
+// 16 mm down stay on the mesh path (the shared-axis arm excludes a
+// placement), and the third Cut's target holds a mesh bound coarser than the
+// pair's chord tolerance. The refusal names the target, quotes the held
+// bound, says a boolean takes no tolerance, and never tells this caller to
+// retry with one. Shown to fail: with evaluateBoolean's booleanOperandStaging
+// calls removed, the "retry with a tolerance" NotContains assertion went red
+// on the Tessellate caller's wording, which also lacks "cut's target" and
+// "a boolean takes no tolerance".
+func TestBooleanChainDepthRefusalNamesOperandAndTakesNoTolerance(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := boxBody(t, doc, -48, -34, 48, 34, 16)
+	tools := []struct{ cx, r float64 }{{0, 18}, {-36, 7}, {36, 7}}
+	for i, tool := range tools[:2] {
+		var err error
+		plate, err = decad.Cut(t.Context(), plate, translated(t, discBody(t, doc, tool.cx, tool.r, 48), 0, 0, -16))
+		require.NoError(t, err, "cut %d", i+1)
+		require.True(t, anyFaceIsFaceted(plate), "cut %d takes the mesh path", i+1)
+	}
+
+	held := mustTessellate(t, plate, units.Millimeters(1)).Bound()
+	_, err := decad.Cut(t.Context(), plate, translated(t, discBody(t, doc, tools[2].cx, tools[2].r, 48), 0, 0, -16))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	var be *decad.BooleanError
+	require.False(t, errors.As(err, &be), "the chain-depth refusal is a plain ErrUnsupported, not a BooleanError")
+	require.NotContains(t, err.Error(), "retry with a tolerance")
+	require.ErrorContains(t, err, "a boolean takes no tolerance")
+	require.ErrorContains(t, err, "cut's target")
+	require.ErrorContains(t, err, fmt.Sprint(held), "the refusal quotes the target's held mesh bound")
 }
 
 // TestUnionCupOperand pins the operand admission set: booleans tessellate their
