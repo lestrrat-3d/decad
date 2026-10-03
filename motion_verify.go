@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -15,8 +16,13 @@ import (
 // placements, the two-sided interval certificate, and the report assembly.
 // motion.go owns the vocabulary and motion_bound.go the bounds.
 //
-// The check evaluates the two endpoints of the path. An interval those two
-// poses cannot certify reads IntervalUndecided and makes the report Suspect;
+// The check evaluates the two endpoints, then bisects on a dyadic grid of the
+// path (§6): first for the verdict, until every interval is certified clear,
+// bounded by a proven collision, or no wider than the resolution; then for the
+// readings, refining the interval holding the smallest certified clearance
+// while the whole-path reading fails the tolerance gate or a requested margin
+// is neither proven nor disproven, on the same floor. An interval the floor
+// leaves uncertified reads IntervalUndecided and makes the report Suspect;
 // nothing between evaluated poses is ever assumed clear.
 
 // transientProducer is the reserved producer identity every transient pose
@@ -91,6 +97,62 @@ func resolveMotion(m Motion) (motionSpec, error) {
 	return spec, nil
 }
 
+// defaultResolution is the published default resolution, |To − From|/1024
+// carried in From's unit. The check itself refines against the exact
+// rational defaultResolutionParam, so this float is a label.
+func (s motionSpec) defaultResolution() units.Value {
+	from := floatRat(s.from.Mag())
+	toMag, err := s.to.In(s.from.Unit())
+	to := floatRat(toMag)
+	if err != nil || from == nil || to == nil {
+		return units.New(0, s.from.Unit())
+	}
+	d := new(big.Rat).Sub(to, from)
+	d.Abs(d)
+	mag, _ := d.Quo(d, big.NewRat(1024, 1)).Float64()
+	return units.New(mag, s.from.Unit())
+}
+
+// defaultResolutionParam is |θ(To) − θ(From)|/1024 taken part by part over
+// exact rationals: never zero for a validated motion, and exactly one
+// dyadic step of depth ten whatever units From and To were stated in.
+func (s motionSpec) defaultResolutionParam() motionParam {
+	part := func(a, b *big.Rat) *big.Rat {
+		d := new(big.Rat).Sub(b, a)
+		d.Abs(d)
+		return d.Quo(d, big.NewRat(1024, 1))
+	}
+	return motionParam{turn: part(s.fromP.turn, s.toP.turn), base: part(s.fromP.base, s.toP.base)}
+}
+
+// label is the published parameter of the pose at fraction f of the path:
+// From and To exactly at the ends, and otherwise the float nearest the exact
+// interpolation carried in From's unit — exact itself whenever From and To
+// share a unit and the dyadic step is representable. It is a label: every
+// bound is built from the exact parameter fromP.lerp(toP, f), and
+// poseDeviation charges whatever separates the pose PoseAt builds from this
+// label and the ideal pose at f.
+func (s motionSpec) label(f *big.Rat) units.Value {
+	switch {
+	case f.Sign() == 0:
+		return s.from
+	case f.Cmp(big.NewRat(1, 1)) == 0:
+		return s.to
+	}
+	from := floatRat(s.from.Mag())
+	toMag, err := s.to.In(s.from.Unit())
+	to := floatRat(toMag)
+	if err != nil || from == nil || to == nil {
+		// Unreachable for a validated motion, whose endpoints both convert;
+		// the exact parameter still governs every bound if it were reached.
+		return s.from
+	}
+	d := new(big.Rat).Sub(to, from)
+	d.Mul(d, f)
+	mag, _ := d.Add(d, from).Float64()
+	return units.New(mag, s.from.Unit())
+}
+
 // resolveMotionAs resolves a dereferenced pointer motion while keeping the
 // caller's own value as the stated motion the report echoes.
 func resolveMotionAs(stated Motion, value Motion) (motionSpec, error) {
@@ -134,8 +196,9 @@ func (d *Document) resolveMovers(moving []*Body) error {
 // adjacent poses the interval certificate (§5.2) proves the path clear only
 // when every (mover, static) pair's two proven lower bounds together exceed
 // the farthest any mover point can travel across the interval; an interval it
-// cannot certify is IntervalUndecided and the report reads Suspect, never
-// Sound. This increment evaluates the two endpoints of the path only.
+// cannot certify down to the resolution is IntervalUndecided and the report
+// reads Suspect, never Sound. A pose publishes a Collision only for an overlap
+// that survives the pose's own deviation from the ideal motion (§5.1).
 //
 // moving MUST be non-empty, hold live bodies of d, and list no body twice.
 // Every validation error is returned before ctx is read; after validation a
@@ -151,7 +214,7 @@ func (d *Document) VerifyMotion(ctx context.Context, moving []*Body, m Motion, o
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := resolveMotionOptions(opts)
+	cfg, err := resolveMotionOptions(opts, spec)
 	if err != nil {
 		return nil, err
 	}
@@ -181,6 +244,8 @@ type motionMover struct {
 	validity ValidityResult
 	rho      float64 // ρ_max; revolute only
 	r0       float64 // the record radius poseDeviation charges at
+	area     float64 // a proven upper bound on the mover's surface area at rest
+	sigma    float64 // a proven lower bound on its placement's smallest singular value
 }
 
 type motionStatic struct {
@@ -216,7 +281,9 @@ type motionPairPose struct {
 
 // motionPose is one evaluated pose.
 type motionPose struct {
+	f          *big.Rat
 	param      motionParam
+	violated   bool // some pair's gap here is proven below the requested minimum
 	result     PoseResult
 	pairs      [][]motionPairPose
 	findings   []Diagnostic // this pose's findings, in report order
@@ -240,6 +307,8 @@ func (r *motionRun) setup(moving []*Body) {
 	for i := range r.movers {
 		mv := &r.movers[i]
 		mv.r0 = moverRecordRadius(r.ctx, mv.body)
+		mv.area = absSumUpper(mv.body.area.Value.Base(), mv.body.area.Bound.Base())
+		mv.sigma = basisSigmaLower(mv.body.payload.transform())
 		if r.spec.revolute {
 			mv.rho = moverAxisRadius(mv.body, r.spec.frame)
 		}
@@ -280,6 +349,12 @@ func maxRat(a, b *big.Rat) *big.Rat {
 	return b
 }
 
+// motionSpan is one interval's standing between two adjacent poses.
+type motionSpan struct {
+	outcome   IntervalOutcome
+	clearance *Measurement
+}
+
 func (r *motionRun) execute() (*MotionReport, error) {
 	var poses []*motionPose
 	for _, end := range []struct {
@@ -292,10 +367,81 @@ func (r *motionRun) execute() (*MotionReport, error) {
 		}
 		poses = append(poses, pose)
 	}
+	spans := []motionSpan{r.intervalVerdict(poses[0], poses[1])}
+	for {
+		k := r.nextRefinement(poses, spans)
+		if k < 0 {
+			break
+		}
+		f := new(big.Rat).Add(poses[k].f, poses[k+1].f)
+		f.Quo(f, big.NewRat(2, 1))
+		mid, err := r.evaluatePose(f, r.spec.label(f))
+		if err != nil {
+			return nil, err
+		}
+		poses = slices.Insert(poses, k+1, mid)
+		spans[k] = r.intervalVerdict(poses[k], mid)
+		spans = slices.Insert(spans, k+1, r.intervalVerdict(mid, poses[k+2]))
+	}
 	if err := r.ctx.Err(); err != nil {
 		return nil, err
 	}
-	return r.publish(poses), nil
+	return r.publish(poses, spans), nil
+}
+
+// nextRefinement picks the interval §6 bisects next, or −1 when refinement is
+// done. Step 5 comes first: the first interval in traversal order that is
+// neither clear nor colliding and still wider than the resolution. Step 6
+// follows: the interval holding the smallest certified clearance (ties in
+// traversal order), while the whole-path reading would fail the tolerance gate
+// or a requested margin is neither proven nor disproven by that interval, and
+// only while it is wider than the resolution. Every interval narrower than the
+// floor stops, so the loop ends.
+func (r *motionRun) nextRefinement(poses []*motionPose, spans []motionSpan) int {
+	allClear := true
+	smallest := -1
+	for k, span := range spans {
+		if span.outcome == IntervalUndecided && r.wide(poses[k], poses[k+1]) {
+			return k
+		}
+		if span.outcome != IntervalClear {
+			allClear = false
+		}
+		if span.clearance != nil && (smallest < 0 || span.clearance.Value.Base() < spans[smallest].clearance.Value.Base()) {
+			smallest = k
+		}
+	}
+	if smallest < 0 || !r.wide(poses[smallest], poses[smallest+1]) {
+		return -1
+	}
+	if allClear {
+		if reading, _ := r.pathClearance(poses, spans[smallest].clearance); reading != nil && reading.Tolerance.State != ToleranceSatisfied {
+			return smallest
+		}
+	}
+	if r.cfg.minimumMM != nil && !anyViolated(poses) && !r.meetsMinimum(spans[smallest].clearance) {
+		return smallest
+	}
+	return -1
+}
+
+// wide reports whether the interval between two poses is wider than the
+// resolution.
+func (r *motionRun) wide(a, b *motionPose) bool {
+	return exceedsResolution(a.param, b.param, r.cfg.resolutionP)
+}
+
+// meetsMinimum reports whether a certified interval lower bound proves the
+// requested minimum, compared exactly against the minimum as stated.
+func (r *motionRun) meetsMinimum(clearance *Measurement) bool {
+	if clearance == nil {
+		return true
+	}
+	return floatRat(clearance.Value.Base()).Cmp(r.cfg.minimumMM) >= 0
+}
+
+func anyViolated(poses []*motionPose) bool {
+	return slices.ContainsFunc(poses, func(p *motionPose) bool { return p.violated })
 }
 
 // evaluatePose builds every mover's transient placement at fraction f of the
@@ -313,6 +459,7 @@ func (r *motionRun) evaluatePose(f *big.Rat, at units.Value) (*motionPose, error
 	}
 	ideal := r.spec.frame.at(param)
 	mp := &motionPose{
+		f:     f,
 		param: param,
 		result: PoseResult{
 			At:            at,
@@ -384,12 +531,17 @@ func (r *motionRun) evaluateMover(mp *motionPose, i int, pose r3.Transform, idea
 		return err
 	}
 	defer delete(r.cache.entries, transient)
-	eta := poseDeviation(composed, placement, ideal, mv.r0)
+	eta, linear := poseDeviation(composed, placement, ideal, mv.r0)
+	// The volume an overlap can lose between the float pose and the ideal one
+	// (§5.1): every boundary point moves at most η along the straight path
+	// between the two images, and the area that path carries is the mover's
+	// own, scaled by the path's largest linear stretch.
+	allowance := sweptVolumeAllow(eta, pathAreaUpper(mv.area, linear, mv.sigma))
 	for j := range r.statics {
 		if !r.pairs[i][j].evaluated() {
 			continue
 		}
-		if err := r.evaluatePair(mp, i, j, transient, eta); err != nil {
+		if err := r.evaluatePair(mp, i, j, transient, eta, allowance); err != nil {
 			return err
 		}
 	}
@@ -400,7 +552,7 @@ func (r *motionRun) evaluateMover(mp *motionPose, i int, pose r3.Transform, idea
 // mover, static) pair at one pose, with the gap always asked: box separation,
 // the closed-form axis-box gap or the clearance kernel, then the read-only
 // overlap proof.
-func (r *motionRun) evaluatePair(mp *motionPose, i, j int, transient *Body, eta float64) error {
+func (r *motionRun) evaluatePair(mp *motionPose, i, j int, transient *Body, eta, allowance float64) error {
 	mover, static := r.movers[i].body, r.statics[j].body
 	at := mp.result.At
 	boxProven := boxesDisjoint(transient.bounds, static.bounds)
@@ -434,31 +586,32 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, j int, transient *Body, eta 
 		r.poseDiag(mp, withAt(diag, at))
 		return nil
 	}
-	mp.pairs[i][j].collision = true
-	collision := Collision{At: at, Pose: mp.result.Pose, Moving: mover, Static: static}
-	diag := Diagnostic{
-		Code:    DiagMotionCollision,
-		Status:  Interfering,
-		Pair:    &DiagnosticPair{A: mover, B: static},
-		Reading: ReadingNone,
-		Message: fmt.Sprintf("the moving body overlaps a static body at %s", at),
-	}
-	if outcome != interferenceMeasured {
-		mp.collisions = append(mp.collisions, collision)
-		mp.findings = append(mp.findings, withAt(diag, at))
+	published, ok := transferredOverlap(volume, outcome == interferenceMeasured, allowance)
+	if !ok {
+		msg := "the pair is proven to overlap at the evaluated float pose, but the overlap volume is unmeasured, so it cannot be carried to the ideal pose and no collision is proven at this parameter"
+		if outcome == interferenceMeasured {
+			msg = fmt.Sprintf("the pair is proven to overlap at the evaluated float pose, but the measured volume %s does not clear the %v mm^3 the pose's deviation from the ideal motion can sweep, so no collision is proven at this parameter", volume.Value, allowance)
+		}
+		r.poseDiag(mp, withAt(pairDiagNone(mover, static, DiagUndecidedInterference, msg), at))
 		return nil
 	}
-	obs := volume
-	collision.Volume = &obs
-	mp.collisions = append(mp.collisions, collision)
-	mp.result.Interferences = append(mp.result.Interferences, Interference{A: mover, B: static, Volume: volume})
-	diag.Reading, diag.Observed = ReadingOverlapVolume, &obs
-	mp.findings = append(mp.findings, withAt(diag, at))
+	mp.pairs[i][j].collision = true
+	obs := published
+	mp.collisions = append(mp.collisions, Collision{At: at, Pose: mp.result.Pose, Moving: mover, Static: static, Volume: published})
+	mp.result.Interferences = append(mp.result.Interferences, Interference{A: mover, B: static, Volume: published})
+	mp.findings = append(mp.findings, withAt(Diagnostic{
+		Code:     DiagMotionCollision,
+		Status:   Interfering,
+		Pair:     &DiagnosticPair{A: mover, B: static},
+		Reading:  ReadingOverlapVolume,
+		Observed: &obs,
+		Message:  fmt.Sprintf("the moving body overlaps a static body at %s", at),
+	}, at))
 	pairD, err := interferencePairDiameter(r.ctx, transient, static)
 	if err != nil {
 		return err
 	}
-	pass, ref, haveRef := interferenceToleranceRef(volume, transient, static, pairD, r.cfg.rel)
+	pass, ref, haveRef := interferenceToleranceRef(published, transient, static, pairD, r.cfg.rel)
 	if !pass {
 		beyond := Diagnostic{
 			Code:     DiagMeasurementBeyondTolerance,
@@ -466,14 +619,42 @@ func (r *motionRun) evaluatePair(mp *motionPose, i, j int, transient *Body, eta 
 			Pair:     &DiagnosticPair{A: mover, B: static},
 			Reading:  ReadingOverlapVolume,
 			Observed: &obs,
-			Message:  fmt.Sprintf("the overlap-volume reading's bound %s is beyond the relative tolerance", volume.Bound),
+			Message:  fmt.Sprintf("the overlap-volume reading's bound %s is beyond the relative tolerance", published.Bound),
 		}
 		if haveRef {
-			beyond.Required = requiredThreshold(r.cfg.rel*ref, volume.Value)
+			beyond.Required = requiredThreshold(r.cfg.rel*ref, published.Value)
 		}
 		mp.findings = append(mp.findings, withAt(beyond, at))
 	}
 	return nil
+}
+
+// transferredOverlap is §5.1's collision transfer. An overlap measured at the
+// float pose is a collision at the ideal pose only when its proven lower end,
+// Value − Bound rounded down, strictly exceeds the volume the mover's boundary
+// can sweep between the two poses; the published volume then carries that
+// allowance in its Bound, so Value − Bound stays a proven lower bound on the
+// ideal overlap. An unmeasured overlap never transfers.
+func transferredOverlap(volume Measurement, measured bool, allowance float64) (Measurement, bool) {
+	if !measured || isNonFinite(allowance) {
+		return Measurement{}, false
+	}
+	value, bound := floatRat(volume.Value.Base()), floatRat(volume.Bound.Base())
+	if value == nil || bound == nil {
+		return Measurement{}, false
+	}
+	lower := ratFloatDown(new(big.Rat).Sub(value, bound))
+	if !(lower > allowance) {
+		return Measurement{}, false
+	}
+	if allowance == 0 {
+		return volume, true
+	}
+	return Measurement{
+		Value:     volume.Value,
+		Exactness: Approximate,
+		Bound:     units.CubicMillimeters(absSumUpper(volume.Bound.Base(), allowance)),
+	}, true
 }
 
 // poseDiag records an undecided or unsupported pair finding both on the pose
@@ -501,6 +682,21 @@ func (r *motionRun) recordGap(mp *motionPose, i, j int, res pairResult, eta floa
 	mp.pairs[i][j] = motionPairPose{hasGap: true, lo: lo, hi: hi, diam: res.diam}
 	gap := pairGapMeasurement(pairResult{lo: lo, hi: hi, exact: exact})
 	mp.result.Clearances = append(mp.result.Clearances, Clearance{A: mover, B: static, Gap: gap})
+	if r.cfg.minimumMM != nil && floatRat(hi).Cmp(r.cfg.minimumMM) < 0 {
+		// The proven upper end of the ideal pose's gap lies below the spec:
+		// the margin is disproven here, whatever the reading's precision.
+		mp.violated = true
+		violation := gap
+		mp.findings = append(mp.findings, withAt(Diagnostic{
+			Code:     DiagMotionClearanceViolated,
+			Status:   Violating,
+			Pair:     &DiagnosticPair{A: mover, B: static},
+			Reading:  ReadingGap,
+			Observed: &violation,
+			Required: r.cfg.minimum,
+			Message:  fmt.Sprintf("the gap at %s is proven below the required minimum %s", at, *r.cfg.minimum),
+		}, at))
+	}
 	pass, ref, haveRef := scalarToleranceRef(gap, r.cfg.rel, pairToleranceInputs{diameter: res.diam}.lengthReference)
 	if pass {
 		return
@@ -528,7 +724,12 @@ func (r *motionRun) recordGap(mp *motionPose, i, j int, res pairResult, eta floa
 // no rounding sits between the proven terms and the strict comparison. The
 // lower envelope's minimum over the interval, (lo_a + lo_b − τ)/2, is rounded
 // down to the float the Clearance publishes.
-func (r *motionRun) intervalVerdict(a, b *motionPose) (IntervalOutcome, *Measurement) {
+func (r *motionRun) intervalVerdict(a, b *motionPose) motionSpan {
+	outcome, clearance := r.intervalOutcome(a, b)
+	return motionSpan{outcome: outcome, clearance: clearance}
+}
+
+func (r *motionRun) intervalOutcome(a, b *motionPose) (IntervalOutcome, *Measurement) {
 	for i := range r.movers {
 		for j := range r.statics {
 			if a.pairs[i][j].collision || b.pairs[i][j].collision {
@@ -579,9 +780,13 @@ func minRat(running, candidate *big.Rat) *big.Rat {
 }
 
 // publish assembles the report (docs/motion-check-design.md §4).
-func (r *motionRun) publish(poses []*motionPose) *MotionReport {
+func (r *motionRun) publish(poses []*motionPose, spans []motionSpan) *MotionReport {
 	report := &MotionReport{
-		Request:     MotionRequest{RelativeTolerance: units.Scalar(r.cfg.rel)},
+		Request: MotionRequest{
+			RelativeTolerance: units.Scalar(r.cfg.rel),
+			Resolution:        r.cfg.resolution,
+			MinClearance:      r.cfg.minimum,
+		},
 		Motion:      r.spec.motion,
 		Diagnostics: []Diagnostic{},
 		Collisions:  []Collision{},
@@ -594,27 +799,52 @@ func (r *motionRun) publish(poses []*motionPose) *MotionReport {
 		report.Against = append(report.Against, st.body)
 	}
 
-	allClear := true
+	violated := anyViolated(poses)
+	allClear, met := true, true
 	var lowest *Measurement
-	for k := 0; k+1 < len(poses); k++ {
+	for k, span := range spans {
 		a, b := poses[k], poses[k+1]
-		outcome, clearance := r.intervalVerdict(a, b)
-		interval := MotionInterval{From: a.result.At, To: b.result.At, Outcome: outcome, Clearance: clearance}
+		interval := MotionInterval{From: a.result.At, To: b.result.At, Outcome: span.outcome, Clearance: span.clearance}
 		report.Intervals = append(report.Intervals, interval)
-		if outcome != IntervalClear {
-			allClear = false
+		if span.outcome != IntervalClear {
+			allClear, met = false, false
 		}
-		if clearance != nil && (lowest == nil || clearance.Value.Base() < lowest.Value.Base()) {
-			lowest = clearance
+		if span.clearance != nil && (lowest == nil || span.clearance.Value.Base() < lowest.Value.Base()) {
+			lowest = span.clearance
 		}
-		if outcome == IntervalUndecided {
+		switch {
+		case span.outcome == IntervalUndecided:
 			report.Diagnostics = append(report.Diagnostics, withAt(Diagnostic{
 				Code:    DiagMotionUndecidedInterval,
 				Status:  Suspect,
 				Reading: ReadingNone,
 				Message: fmt.Sprintf("the motion from %s to %s is neither certified clear nor bounded by a proven collision", a.result.At, b.result.At),
 			}, a.result.At))
+		case span.outcome == IntervalClear && r.cfg.minimumMM != nil && !r.meetsMinimum(span.clearance):
+			met = false
+			if violated {
+				break
+			}
+			obs := *span.clearance
+			report.Diagnostics = append(report.Diagnostics, withAt(Diagnostic{
+				Code:     DiagMotionUndecidedClearance,
+				Status:   Suspect,
+				Reading:  ReadingGap,
+				Observed: &obs,
+				Required: r.cfg.minimum,
+				Message:  fmt.Sprintf("the motion from %s to %s is certified clear, but its proven lower bound does not reach the required minimum", a.result.At, b.result.At),
+			}, a.result.At))
 		}
+	}
+	switch {
+	case r.cfg.minimumMM == nil:
+		report.Assessment = AssessmentNotEvaluated
+	case violated:
+		report.Assessment = AssessmentViolated
+	case met:
+		report.Assessment = AssessmentMet
+	default:
+		report.Assessment = AssessmentUndecided
 	}
 	for _, pose := range poses {
 		report.Poses = append(report.Poses, pose.result)

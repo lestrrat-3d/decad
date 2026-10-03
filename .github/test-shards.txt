@@ -205,6 +205,7 @@
 0	0.01	TestVerifyDiagnosticsInterference
 0	0.02	TestVerifyDiagnosticsSectionDeltaPrismReadsItsOwnGateDiameter
 0	3.12	TestVerifyGearScaleEightRegionOverlapReportsSummedVolume
+0	5.50	TestVerifyMotionClearSwingBisected
 0	0.01	TestVerifyMotionClearSwingEndpoints
 0	0.00	TestVerifyMotionRefusesABodyItDidNotBuild
 0	0.03	TestVerifyMultiRegionOverlapReportsSummedVolume
@@ -304,7 +305,11 @@
 1	0.83	TestLoftWalkResolutionChargesOncePerSegment
 1	0.03	TestMeasuredInterferenceFallsBackToMeshWhenAnalyticNotAdmitted
 1	0.01	TestMinRadiusHolePlate
+1	0.04	TestMotionCollisionTransferWidensTheBound
+1	0.00	TestMotionExceedsResolution
+1	0.05	TestMotionOverlapThatDoesNotTransferIsUndecided
 1	0.00	TestMotionParamSinCosEnclosesTheAngle
+1	0.00	TestMotionPathAreaUpper
 1	0.02	TestMultiLumpFacetedBodyBypassesAnalyticContainment
 1	0.01	TestOffsetPatchNegative
 1	0.02	TestOffsetPrismCircle
@@ -619,7 +624,7 @@
 2	0.01	TestVerifyExactlyTangentPairStaysUndecided
 2	0.19	TestVerifyInterferenceRowsKeepDocumentPairOrder
 2	0.02	TestVerifyMotionKeepsTheNextProducerIdentity
-2	0.00	TestVerifyMotionSweptBoxExclusion
+2	1.20	TestVerifyMotionSweptBoxExclusion
 2	1.24	TestVerifyNoneMeetsAToleranceTheProvenPathRefuses
 2	0.03	TestVerifyOffsetBoxesReportBoundedInterference
 2	0.03	TestVerifyPublishUndercutUnavailable
@@ -828,7 +833,7 @@
 3	0.04	TestVerifyDiagnosticsUndecidedClearance
 3	0.05	TestVerifyFacetedMultiRegionPairStaysAsBefore
 3	19.37	TestVerifyGearScaleOverArrangementCapStaysSuspect
-3	0.07	TestVerifyMotionNonMutationAndDeterminism
+3	0.41	TestVerifyMotionNonMutationAndDeterminism
 3	0.00	TestVerifyMotionSweptBoxSettlesASlab
 3	0.01	TestVerifyPublishAbsentWall
 3	0.03	TestVerifyPublishCapBlendWallStaged
@@ -1665,7 +1670,7 @@
 4	0.00	TestVerifyEmptyDocument
 4	0.00	TestVerifyExactBodyPassesZeroTolerance
 4	0.28	TestVerifyIsNonMutating
-4	0.09	TestVerifyMotionCancellation
+4	1.90	TestVerifyMotionCancellation
 4	0.00	TestVerifyMotionPrismatic
 4	0.00	TestVerifyNilDocument
 4	0.20	TestVerifyNonePublishesOnlyPositiveAreaFacets
@@ -1914,7 +1919,7 @@
 5	0.02	TestVerifyDiagnosticsUnsupportedFacetedSurveys
 5	0.01	TestVerifyDiagnosticsWallTooThin
 5	0.03	TestVerifyMotionPoseDeviationIsCharged
-5	0.01	TestVerifyMotionTouchingStart
+5	0.63	TestVerifyMotionTouchingStart
 5	0.03	TestVerifyMultiRegionOverlapSumMatchesIndependentRationalAnswer
 5	0.03	TestVerifyPublishDiagnosticFlattening
 5	0.01	TestVerifyPublishPlateWithHoleTopology

@@ -21,7 +21,10 @@ import (
 //   - R0, the record-coordinate radius η is charged at (moverRecordRadius);
 //   - ρ_max, the largest distance from the rotation axis of any point of a
 //     mover (moverAxisRadius, §5.2);
-//   - the travel bound τ and the swept-box exclusion (§5.2, §6).
+//   - the travel bound τ and the swept-box exclusion (§5.2, §6);
+//   - the area the collision transfer charges its swept-volume allowance at
+//     (pathAreaUpper, basisSigmaLower, §5.1);
+//   - the resolution floor's width comparison (exceedsResolution, §6).
 
 // motionParam is one motion parameter's exact denotation. An angle denotes
 // θ = 2π·turn + base radians: a degree-stated angle is an exact rational turn
@@ -292,7 +295,11 @@ func (mf motionFrame) at(p motionParam) idealPose {
 // r0 is — the true radius is finite even where no reader states it — so a
 // pure translation stays chargeable on a payload with no record radius.
 // Every other unreadable term answers +Inf, a refusal rather than a bound.
-func poseDeviation(composed, placement r3.Transform, ideal idealPose, r0 float64) float64 {
+//
+// The second result is the linear term's own factor, an upper bound on
+// ‖B(C) − R·B(P0)‖_F, which pathAreaUpper reads to bound how far the straight
+// path between the two images stretches the mover's surface.
+func poseDeviation(composed, placement r3.Transform, ideal idealPose, r0 float64) (float64, float64) {
 	bc, bp := composed.Basis(), placement.Basis()
 	colsC := [3]r3.Vec{bc.EX, bc.EY, bc.EZ}
 	colsP := [3]r3.Vec{bp.EX, bp.EY, bp.EZ}
@@ -301,7 +308,7 @@ func poseDeviation(composed, placement r3.Transform, ideal idealPose, r0 float64
 		c, okC := ratVecOf(colsC[j])
 		p, okP := ratVecOf(colsP[j])
 		if !okC || !okP {
-			return math.Inf(1)
+			return math.Inf(1), math.Inf(1)
 		}
 		image := ideal.rot.apply(pointVec(p))
 		diff := ivVecSub(pointVec(c), image)
@@ -310,16 +317,101 @@ func poseDeviation(composed, placement r3.Transform, ideal idealPose, r0 float64
 	tc, okC := ratVecOf(composed.Translation())
 	tp, okP := ratVecOf(placement.Translation())
 	if !okC || !okP {
-		return math.Inf(1)
+		return math.Inf(1), math.Inf(1)
 	}
 	idealT := ivVecAdd(ivVecAdd(ideal.rot.apply(ivVecSub(pointVec(tp), ideal.pivot)), ideal.pivot), ideal.shift)
 	dt := ivVecSub(pointVec(tc), idealT)
 	transUp := ratSqrtUp(magnitudeSquaredUpper(dt[:]...))
 	linSq := magnitudeSquaredUpper(linear...)
 	if linSq.Sign() == 0 {
-		return transUp
+		return transUp, 0
 	}
-	return absSumUpper(productUpper(ratSqrtUp(linSq), r0), transUp)
+	linUp := ratSqrtUp(linSq)
+	return absSumUpper(productUpper(linUp, r0), transUp), linUp
+}
+
+// basisSigmaLower is a proven lower bound on the smallest singular value of a
+// placement's linear part B. r3 holds B orthonormal only to rounding, so
+// BᵀB = I + E with E read exactly off the float columns; every eigenvalue of
+// BᵀB is then at least 1 − ‖E‖_F, and the bound is that value's root,
+// rounded down. An exactly orthonormal basis answers exactly 1; a defect too
+// large to bound answers 0, which pathAreaUpper reads as a refusal.
+func basisSigmaLower(t r3.Transform) float64 {
+	b := t.Basis()
+	var cols [3]ratVec
+	for j, v := range []r3.Vec{b.EX, b.EY, b.EZ} {
+		c, ok := ratVecOf(v)
+		if !ok {
+			return 0
+		}
+		cols[j] = c
+	}
+	var defect []ratInterval
+	for i := range 3 {
+		for j := range 3 {
+			e := ratAdd(ratMul(cols[i][0], cols[j][0]), ratMul(cols[i][1], cols[j][1]), ratMul(cols[i][2], cols[j][2]))
+			if i == j {
+				e.Sub(e, big.NewRat(1, 1))
+			}
+			defect = append(defect, pointInterval(e))
+		}
+	}
+	sq := magnitudeSquaredUpper(defect...)
+	if sq.Sign() == 0 {
+		return 1
+	}
+	e := floatRat(ratSqrtUp(sq))
+	if e == nil || e.Cmp(big.NewRat(1, 1)) >= 0 {
+		return 0
+	}
+	return ratSqrtDown(new(big.Rat).Sub(big.NewRat(1, 1), e))
+}
+
+// pathAreaUpper bounds the mover's surface area at every point of the straight
+// path between the float pose's image and the ideal pose's — the area
+// sweptVolumeAllow's own contract asks for along the WHOLE path. Relative to
+// the mover at rest, a point of that path is M_t·x + c with
+// M_t = R + (1 − t)·(B(C) − R·B(P0))·B(P0)⁻¹ and R exactly orthogonal, so
+// ‖M_t‖₂ ≤ 1 + linear/sigma, and an area scales by at most ‖M_t‖₂². area is
+// the rest area's upper bound (Area().Value + Bound), linear poseDeviation's
+// second result, sigma basisSigmaLower of the rest placement. An exact linear
+// part leaves area unscaled.
+func pathAreaUpper(area, linear, sigma float64) float64 {
+	if linear == 0 {
+		return area
+	}
+	stretch := absSumUpper(1, divUpper(linear, sigma))
+	return productUpper(area, productUpper(stretch, stretch))
+}
+
+// exceedsResolution reports whether the interval between two exact parameters
+// is wider than the resolution. Parts stated in the same terms — both whole
+// turns, or both base units — compare exactly, which is what lets a dyadic
+// step equal to the resolution stop on it. Mixed parts compare the interval's
+// smallest possible width, π at its lower enclosure, against the resolution's
+// largest, π at its upper, so the floor never stops refinement early by
+// rounding.
+func exceedsResolution(p, q, res motionParam) bool {
+	dTurn := new(big.Rat).Sub(q.turn, p.turn)
+	dBase := new(big.Rat).Sub(q.base, p.base)
+	switch {
+	case dBase.Sign() == 0 && res.base.Sign() == 0:
+		return new(big.Rat).Abs(dTurn).Cmp(res.turn) > 0
+	case dTurn.Sign() == 0 && res.turn.Sign() == 0:
+		return new(big.Rat).Abs(dBase).Cmp(res.base) > 0
+	}
+	twoPi := twoPiInterval()
+	width := intervalAdd(intervalScale(twoPi, dTurn), pointInterval(dBase))
+	lower := new(big.Rat)
+	switch {
+	case width.lo.Sign() > 0:
+		lower = width.lo
+	case width.hi.Sign() < 0:
+		lower = new(big.Rat).Neg(width.hi)
+	}
+	upper := new(big.Rat).Mul(twoPi.hi, res.turn)
+	upper.Add(upper, res.base)
+	return lower.Cmp(upper) > 0
 }
 
 // moverRecordRadius is R0 of docs/motion-check-design.md §5.1: a proven upper
