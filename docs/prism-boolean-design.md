@@ -477,7 +477,7 @@ regardless of who authored the input curves it was cut from.
 |---|---|
 | Antiparallel, tilted, reflected, or non-analytic-segment pairs | G1–G4, mesh path, unchanged |
 | A parallel-offset pair outside G3's shared-axis arm: the operands carry different accumulated placements (one of them `Placed`, even along the shared normal), their frames' `U`/`V` differ in the stored bits (an offset of a tilted base plane re-normalises `U` one ulp apart), or the origin difference has an in-plane component (`CreatePlaneFromFrame` with an origin off A's axis) | G3, mesh path. The shared-axis arm could later admit an equal-rotation pair whose placements differ by a pure translation along `N`, by the same exact `d × N == 0` test over `(tB + oB) − (tA + oA)`; not built, since it changes the routing of every existing `Placed`-along-normal fixture |
-| An offset plane carrying the OPPOSITE normal (a tool sketched above the target and extruded `Against`) | G3's co-directional requirement, mesh path. Admitting it needs a reflection of B's section (`V` reversed, arcs re-sensed) that §4's selection does not carry |
+| A tool plane whose normal is genuinely reversed (a frame built with `V` flipped, so `N` opposes the target's), whichever way the tool is extruded | G3's co-directional requirement, mesh path. Admitting it needs a reflection of B's section (`V` reversed, arcs re-sensed) that §4's selection does not carry. A tool sketched on a same-normal offset plane above the target and extruded `Against` is not this case: `Extrude` keeps the sketch frame and records the negative interval `[−D, 0]`, so the shared-axis arm admits it with the exact shift (G3, G5) |
 | `Union` with unequal z-intervals | G5, mesh path; future `stackedPrismPayload` (modify-reach §9.1) |
 | `Cut` whose tool does not span the target | G5, mesh path; future `cupPayload`-shaped pocket |
 | `Intersect` with disjoint intervals | G5, mesh path (result is empty; unchanged `BooleanEmpty`) |
@@ -1034,13 +1034,17 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
   tool with `Placed` along the normal, so it waits for its own change. The
   coplanar arm keeps its float dot product against the literal zero; the
   shared-axis arm's `d × N` test is exact over the stored floats.
-- **Opposite normals stay outside G3.** A tool sketched on a plane above the
-  target and extruded `Against` sweeps the same solid as one sketched below
-  and extruded `Along`, but its section is mirrored relative to A's frame
-  (`V` reversed, every arc's sense flipped), and §4's selection reads the
-  recorded orientation as authored. Routing it to the mesh path is the
-  sound choice until a reflection of B's record is specified; a caller
-  sketches the tool below and extrudes `Along`, or on the target's own plane.
+- **Opposite normals stay outside G3.** A tool sketched on a plane whose
+  normal is genuinely reversed (a frame built with `V` flipped) sweeps the
+  same solid as one sketched on the target's own orientation, but its
+  section is mirrored relative to A's frame (`V` reversed, every arc's sense
+  flipped), and §4's selection reads the recorded orientation as authored.
+  Routing it to the mesh path is the sound choice until a reflection of B's
+  record is specified. Extruding `Against` does not reverse a normal:
+  `Extrude` keeps the sketch frame and records the negative interval
+  `[−D, 0]`, so a tool sketched on `CreateOffsetPlane` above the target and
+  extruded `Against` shares A's frame bits and is admitted by the shared-axis
+  arm with the exact shift, its section copied verbatim.
 - **§11's provenance decision** — fresh roles only, no inherited
   `Face.Origins()`, overturning the investigation's lean toward the mesh
   boolean's behavior. Reason given in §11; the alternative (thread operand
@@ -1294,9 +1298,14 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   a tool sketched on an offset of a tilted base plane (the test asserts the
   two frames' `U` differ in the stored bits, so the fixture cannot silently
   stop being the one under test); a tool moved along the normal through
-  `Placed` instead of a sketch plane; and a tool sketched above the target and
-  extruded `Against` (opposite normal). Each asserts a `Faceted` face on the
-  result, or the mesh path's own refusal where that path refuses the pair.
+  `Placed` instead of a sketch plane; and a tool sketched on a plane above the
+  target whose `V` is flipped, so its normal opposes the target's. Each
+  asserts a `Faceted` face on the result, or the mesh path's own refusal
+  where that path refuses the pair.
+- A tool sketched on `CreateOffsetPlane(XY, 32)` above the 16 mm plate and
+  extruded `Against` 48 mm (the same z −16..32 solid) is admitted by the
+  shared-axis arm: the result has no `Faceted` face, its volume is within
+  1e-6 mm³ of `104448 − π·18²·16`, and its bound is below 1e-9 mm³.
 - G5's exactness over the shift: a `Cut` whose tool cap meets the target cap
   exactly after the shift (offset −16, tool 32 mm tall under a 16 mm target,
   so `z1' == 16 == z1_target` exactly) is admitted, and a tool whose shifted

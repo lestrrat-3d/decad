@@ -205,3 +205,36 @@ func TestPrismCutOffsetPlaneExclusionsTakeMeshPath(t *testing.T) {
 		requireMeshCut(t, plate, offsetDiscBody(t, doc, w, above, 0, 18, 48))
 	})
 }
+
+// TestPrismCutAgainstToolOnOffsetPlaneIsAnalytic cuts the plate by a tool
+// sketched on CreateOffsetPlane(XY, 32) and extruded Against 48 mm. Extrude
+// keeps the sketch frame and records the interval [-48, 0], so the tool shares
+// the plate's frame bits and G3's shared-axis arm admits it with shift 32: the
+// same z -16..32 solid as a tool sketched below and extruded Along. Shown to
+// fail: with admitPrismPairBudget's prismSharedAxisOf arm deleted, the pair
+// took the mesh path and the anyFaceIsFaceted assertion went red.
+func TestPrismCutAgainstToolOnOffsetPlaneIsAnalytic(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	w := sketch.NewWorld()
+	plate := offsetPlateBody(t, doc, w, w.XY())
+	above, err := w.CreateOffsetPlane(w.XY(), 32)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(above)
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	s.CreateCircle(center, 18)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	tool, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(48), Dir: decad.Against})
+	require.NoError(t, err)
+
+	got, err := decad.Cut(t.Context(), plate, tool)
+	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(got), "the Against tool takes the analytic path")
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 96.0*68*16-math.Pi*18*18*16, volumeMM(t, vol), 1e-6)
+	require.Less(t, boundMM3(t, vol), 1e-9)
+}
