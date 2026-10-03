@@ -43,7 +43,7 @@ to the byte budget.
 | `docs/modify-reach-design.md` | The approved modify extension: tangent-chain expansion, asymmetric chamfers, cap-loop blends, allowed shells, proof gates, payload topology and staging. |
 | `docs/loft-design.md` | The count-free `Loft` design in five normative tables (pairing, refusals, result, consumers, chains), its exact-rational mass properties, and the wall-crossing audit. |
 | `docs/sweep-design.md` | The spatial `Path` and `Sweep` contract: rotation-minimizing transport, refusals, topology, measurements, 3D-sketch boundary, `SweepChain`'s own pairing rule, and staged downstream reach. |
-| `docs/prism-boolean-design.md` | The analytic reduction for `Union`/`Cut`/`Intersect` over co-directional coplanar prisms: the reject-only entry gate, the private `sketch` scene, and section/axial displacement bounds. |
+| `docs/prism-boolean-design.md` | The analytic `Union`/`Cut`/`Intersect` reduction over co-directional coplanar or offset-plane prisms: reject-only entry gate, private `sketch` scene, displacement bounds. |
 | `docs/tessellation-reach-design.md` | The tessellation reach plan: the loft restatement, free-form prism chording, revolve T2–T4 and the cap-loop chamfer tessellator, each with its cells, proof terms, refusals and tests. |
 | `docs/surface-intersection-design.md` | `Trim`, `Extend` and `Split` over a pair whose two sweeps share one generator: the reject-only entry gate, the private `sketch` scene reused from the prism boolean, and the cut-parameter displacement. |
 | `docs/surface-design.md` | The sheet body and its operations: `BodyKind`, `WithSurfaceResult`, `Patch`, `Stitch`/`Unstitch`, `ExtrudeChain`/`RevolveChain`, `Offset`, and what `Verify`/export say. |
@@ -183,7 +183,7 @@ to the byte budget.
 |---|---|
 | `boolean.go` | Public `Union`/`Cut`/`Intersect` surface over the mesh-boolean evaluator and the typed `BooleanError` mapping. See the file's doc comment and `docs/evaluator-design.md` §9. |
 | `boolean_parallel.go` | The bounded ordered contact-classification batches shared by `facesNearMiss` and `meshBoolean`; workers classify uncached facet pairs into indexed slots, while memo access and aggregation stay serial. |
-| `prism_boolean.go` | The analytic Union/Cut/Intersect reduction over co-directional coplanar prisms, dispatched ahead of the mesh path. See the file's doc comment and `docs/prism-boolean-design.md`. |
+| `prism_boolean.go` | The analytic Union/Cut/Intersect reduction over co-directional coplanar or offset-plane prisms, ahead of the mesh path. See the file's doc comment and `docs/prism-boolean-design.md`. |
 | `prism_boolean_nesting.go` | Cut/Intersect's clean-nesting structural match (§4.2's "clean" sub-case): the whole-loop tag-map search resolving a clean bore/nested pair. See the file's doc comment and `docs/prism-boolean-design.md`. |
 | `prism_boolean_crossing.go` | Cut/Intersect's crossing sub-case (§4.2): edge-orientation propagation classifies each arrangement cell per operand; `mergePrismCells` assembles the selected set. See the file's doc comment and `docs/prism-boolean-design.md`. |
 | `prism_overlap.go` | `docs/prism-boolean-design.md` §4.5's overlap-area reading, read-only for `Verify`'s interference path alone. See the file's doc comment. |
