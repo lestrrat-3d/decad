@@ -144,14 +144,15 @@ to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `capblend.go` | Builds the complete-cap-loop chamfer: `capBlendPayload` plus the selection classification and build gates in `buildCapBlend`. Gate order and sentinels sit on each function; see `docs/modify-reach-design.md` §8.3/§4. |
-| `capblend_geom.go` | Builds the `capBlendPayload` topology in `buildCapBand`: trimmed side walls, cap faces and Plane/Cone band patches, each stamped with its readings. See the function doc comments and `docs/modify-reach-design.md` §8.3. |
-| `capblend_contour.go` | Proves the cap contour's displacement bound every cap-level reading charges, plus a miter ruling's locus-speed bound. See the file's doc comments and `docs/modify-reach-design.md` §8.3-§8.4. |
-| `capblend_centroid.go` | Closed-form first moments for the cap-blend centroid: exact-rational Plane patch moments, a Fourier sum for Cone patches, a bounding-box ceiling on the result. See `docs/modify-reach-design.md` §8.4. |
+| `capblend.go` | Builds the complete-cap-loop chamfer: `capBlendPayload` plus the selection classification and build gates in `buildCapBlend`. See `docs/modify-reach-design.md` §8.3/§4. |
+| `capblend_geom.go` | Builds the `capBlendPayload` topology in `buildCapBand`: trimmed side walls, cap faces, and Plane/Cone band patches. See `docs/modify-reach-design.md` §8.3. |
+| `capblend_contour.go` | Proves the cap contour's displacement bound every cap-level reading charges, plus a miter ruling's own locus-speed bound. See `docs/modify-reach-design.md` §8.3-§8.4. |
+| `capblend_centroid.go` | Closed-form first moments for the cap-blend centroid: exact-rational Plane patch moments, a Fourier sum for Cone patches, and a bounding-box ceiling on the result. See `docs/modify-reach-design.md` §8.4. |
 | `capblend_moments.go` | `evalCapBlendContext` builds the cap-blend body and its bounded area/volume/centroid by closed-form per-patch integrals. See `docs/modify-reach-design.md` §8.4. |
-| `capblend_survey.go` | The cap-blend payload's undercut and minimum-radius surveys, per patch and over the receiver's unchanged profile. See the file's doc comments and `docs/modify-reach-design.md` Table DX (DX7/DX8). |
+| `capblend_survey.go` | The cap-blend payload's undercut and minimum-radius surveys, per patch and over the receiver's unchanged profile. See `docs/modify-reach-design.md` §12 Table DX (DX7/DX8). |
 | `capblend_normal.go` | The certified half of DX7's circular-patch reading: a band patch's own exact normal-component model, enclosed over rational intervals. See the file's doc comment. |
-| `capblend_departure.go` | The proven bound on how far a band patch's BUILT ruled surface sits from the surface it publishes, measured in world space from the published corners, curves and tag. See the file's doc comment. |
+| `capblend_departure.go` | The proven bound on how far a band patch's BUILT ruled surface points away from the surface it publishes, measured in world space from the published corners, curves and tag. See the file's doc comment. |
+| `capblend_admit.go` | Decides by exact rational tests whether `docs/tessellation-reach-design.md` §7's occupied-volume proof covers a cap-blend payload. |
 
 ### Verification and surveys
 
@@ -210,7 +211,7 @@ to the byte budget.
 | `tessellate_loft.go` | `tessellateLoft`: the exact restatement of a `loftPayload`'s held triangle set and proof record. See the file's doc comments. |
 | `tessellate_stitch.go` | Restates planar stitched triangles or reuses a revolve sheet's curved mesh. See `docs/tessellation-design.md` §2 and `docs/surface-design.md` §10.1. |
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh off its wall topology. `docs/surface-design.md` §13.4. |
-| `tessellate_capblend.go` | `tessellateCapBlend`: the export-only cap-loop chamfer mesh, one chord count per wall walk shared three ways. See `docs/tessellation-reach-design.md` §7. |
+| `tessellate_capblend.go` | `tessellateCapBlend`: the cap-loop chamfer mesh, one chord count per wall walk shared three ways. See `docs/tessellation-reach-design.md` §7. |
 | `triangulate.go` | The cap triangulator behind `Tessellate`: hole bridging plus reflex-blocked ear clipping, correct for non-convex outlines with holes. See the file's doc comment. |
 | `export/` | STL and OBJ mesh writers and the faceted AP214 writer. See `docs/step-export-design.md`. |
 

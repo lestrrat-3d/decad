@@ -55,11 +55,16 @@ const boolChordFactor = 2e-5
 // ErrBooleanFailed). errors.As(err, &be) reads the Code.
 // Every pair outside that analytic path tessellates both operands at a chord
 // tolerance derived from the pair's diameter, so an operand no boolean may
-// consume — a cap-loop chamfer body, whose mesh carries no proof yet of the
-// volume it and the body it stands for differ by, or a Faceted operand whose own held
+// consume — a cap-loop chamfer body whose band has a corner this evaluator
+// cannot prove a line-line miter or an exactly tangent join, or a reflex
+// corner, so its mesh carries no proof of the volume it and the body it stands
+// for differ by (docs/tessellation-reach-design.md §7), or a Faceted operand whose own held
 // Bound is coarser than that pair tolerance (it cannot be re-tessellated finer
 // than its bound) — surfaces a plain ErrUnsupported before any contact is
-// examined: a capability limit, not a BooleanError. A valid operand whose
+// examined: a capability limit, not a BooleanError. A cap-loop chamfer whose
+// every band is a whole turn or joins only line-line miters and exactly tangent
+// corners — a filleted plate with drilled holes among them — is an ordinary
+// operand. A valid operand whose
 // boolean OUTPUT
 // cannot be chorded finely enough to tessellate surfaces the retryable
 // coarse-chording ErrDegenerate on that operand — a finer chord tolerance may
@@ -119,7 +124,8 @@ const (
 	booleanExpectedUnsupported
 	// booleanExpectedStaging is a capability/staging limit reached BEFORE any
 	// contact is examined: an operand whose mesh carries no occupied-volume proof
-	// (a cap-loop chamfer body), or a Faceted operand whose held bound is coarser
+	// (a cap-loop chamfer body whose band capBlendOccupiedVolumeAdmission does
+	// not admit), or a Faceted operand whose held bound is coarser
 	// than the pair tolerance. No contact was ever inspected, so it is NOT a
 	// contact refusal —
 	// it passes through the public boundary as a plain ErrUnsupported, never a
@@ -348,9 +354,9 @@ func evaluateAnalyticIntersect(ctx context.Context, a, b *Body) (*Body, bool, er
 // BooleanUnsupportedContact — the model is real and the refusal is the
 // evaluator's contact reach, so the wrapped sentinel is ErrUnsupported, never
 // ErrDegenerate. A capability/staging limit reached BEFORE any contact is
-// examined — an operand no boolean may consume (a cap-loop chamfer body, whose
-// mesh proves no swept volume yet, or a Faceted operand coarser than the pair
-// tolerance) — is NOT a contact refusal and passes through unwrapped as a plain
+// examined — an operand no boolean may consume (a cap-loop chamfer body whose
+// band has a mitered circular wall or a reflex corner, so its mesh proves no
+// occupied volume, or a Faceted operand coarser than the pair tolerance) — is NOT a contact refusal and passes through unwrapped as a plain
 // ErrUnsupported, not a BooleanError. A
 // coarse-chording tessellation refusal is a retryable ErrDegenerate on a valid
 // operand and likewise passes through unwrapped. An ordinary ErrBooleanFailed
@@ -628,18 +634,21 @@ func sourceIDs(ctx context.Context, m *Mesh, faceID map[*Face]int) ([]int, error
 // no occupied-volume proof on its mesh, before that mesh is built.
 //
 // It is operandSymDiff's question asked one step earlier. A cap-loop chamfer
-// mesh serves export and carries symDiffOK false until
-// docs/tessellation-design.md §13's increment T7 gains the occupied-volume
-// proof docs/tessellation-reach-design.md §9 states is still open. Meshing such
-// an operand for a boolean only to refuse it afterwards buys nothing and costs
-// the whole tessellation and its facet-pair audit — which the evaluator's own
-// internal tolerance makes the most expensive part of the call. Both this and
-// operandSymDiff must name the same payload classes, and each proof retires
-// both arms of its own row together.
+// narrows rather than refuses outright: both arms read the SAME predicate,
+// capBlendOccupiedVolumeAdmission (capblend_admit.go) — this one before the
+// mesh is built, and tessellateCapBlend through symDiffOK after it — so a
+// payload whose every band docs/tessellation-reach-design.md §7 admits (whole
+// turns, line-line miters, exactly G1 joins) passes here and publishes its
+// proof there, and every other one refuses here with the loop and corner it
+// fails on. Meshing a refused operand for a boolean only to refuse it
+// afterwards buys nothing and costs the whole tessellation and its facet-pair
+// audit — which the evaluator's own internal tolerance makes the most
+// expensive part of the call. Both this and operandSymDiff must name the same
+// payload classes, and each proof retires both arms of its own row together.
 //
 // A sheet operand refuses HERE too, ahead of the payload-class switch below:
 // docs/surface-design.md §10 states that a sheet mesh carries no
-// occupied-volume proof, on the same terms as a cap-loop chamfer's. This is
+// occupied-volume proof, on the same terms as a refused cap-loop chamfer's. This is
 // defence in depth rather than dead code — performBoolean's own
 // refuseSheetOperand already fires first in the ordinary call path (Table X),
 // so this arm exists to keep this function's own stated invariant, that it
@@ -663,7 +672,14 @@ func requireVolumeProvingPayload(ctx context.Context, b *Body, index int) error 
 	default:
 		switch pl := b.payload.(type) {
 		case capBlendPayload:
-			err = fmt.Errorf(`%w: a cap-loop chamfer's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
+			refusal, aErr := capBlendOccupiedVolumeAdmission(newWorkBudget(ctx), pl)
+			if aErr != nil {
+				return aErr
+			}
+			if refusal == nil {
+				return nil
+			}
+			err = refusal
 		case stitchPayload:
 			if pl.tris != nil {
 				zeroBound, zErr := stitchZeroVertexBound(newWorkBudget(ctx), b)

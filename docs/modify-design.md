@@ -529,11 +529,29 @@ Write `P` for the section. The inward offset (the erosion) `P ⊖ t` is bounded 
 | a circular segment, material outside — a hole wall, a concave round | the concentric circle of radius `R + t` |
 | a **convex** corner | a miter: the two offset curves meet, and the corner stays sharp |
 | a **reflex** corner | an **arc of radius `t` centered on the corner point** — the nearest boundary feature there is the corner itself, so the erosion's boundary is at distance exactly `t` from it |
+| a **G1 join** — the two walks leave and arrive along the same direction (a fillet's tangent foot, a slot's line–semicircle seam) | **the corner moved `t` along the shared left normal**: `v + t·n̂`, with `n̂` the leaving walk's own unit normal at `v`. The two offset carriers are tangent there, so this is their one common point, and intersecting them would solve for a double root the float discriminant cannot hold at zero |
 
 Every piece is a line or an arc, so `P ⊖ t` is a `ProfileRecord`. The outward
 offset `P ⊕ t` is the same table with the two corner rules exchanged (a convex
-corner rounds, a reflex one miters) and the radii moved the other way. Both are
-exact.
+corner rounds, a reflex one miters) and the radii moved the other way; a G1
+join is the same point either way, `v + s·t·n̂`. Both are exact.
+
+**Which row a corner takes is decided on the held unit tangents, with one dead
+zone.** Write `a` for the arriving walk's unit leaving tangent and `b` for the
+leaving walk's unit arriving tangent, both normalised from the walk's own held
+components, and `cross = a × b`, `dot = a · b`. A corner is a **G1 join** when
+`|cross| ≤ 1e-9` and `dot > 0`; it is an arc or a miter by the sign of `cross`
+otherwise. A corner with `|cross| ≤ 1e-9` and `dot ≤ 0` is a cusp and stays on
+the miter row, which refuses it as S11 when its carriers do not meet. The dead
+zone is the construction's own rule, not an admission on a residual: it decides
+which of two closed forms is built, never whether a body exists, and every gate
+below — the dropped-walk test, S8, S11b, S9 — runs on the section it builds.
+Within the dead zone the three rows name points at most `t·|a − b| + R·|cross|`
+apart (a corner turning by under `1e-9` moves its miter or its connector arc by
+under that), and the G1 row is the one whose point is well-conditioned in the
+held floats. The sibling exact predicate `capJoinIsG1` (exact rational zero
+cross over the record) is an admission test for the boolean proof and implies
+this rule; this rule never replaces it.
 
 **Three gates, and they are different questions — asked in that order (§4),
 because each needs the one before it to have passed.**

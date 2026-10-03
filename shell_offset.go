@@ -11,7 +11,8 @@ import (
 // This file is the exact section offset of docs/modify-design.md §7 and the §5
 // audit wrapper for a shell. The offset is per-feature and topology-preserving:
 // a line offsets to a parallel line, a circle to a concentric circle, a corner
-// closes with a miter or an arc of radius t about the corner point. Every piece
+// closes with a miter or an arc of radius t about the corner point or, at a G1
+// join, with the corner moved t along the shared normal (§7). Every piece
 // is a line or an arc, so P ⊖ t / P ⊕ t is again a ProfileRecord in the
 // line-and-arc vocabulary (§2). The offset is decad's OWN synthesized geometry,
 // proven by exact closed-form tests, never a residual (§5, CLAUDE.md's
@@ -72,6 +73,12 @@ func offsetProfileBudget(budget *workBudget, profile ProfileRecord, s, t float64
 // (offset carriers meet) or an arc of radius t about the corner point; which,
 // is decided by the corner turn and the sense: an arc appears exactly when
 // sign(cross) == −s — the inward reflex and the outward convex cases (§7).
+// Inside the shellTol dead zone (|cross| ≤ shellTol, dot > 0) the corner is a
+// G1 join instead, closed at the leaving walk's offset start; the rule decides
+// only which closed form is built, and every drop and audit gate still runs on
+// the section it builds (modify §7). The cap-chamfer boolean operand's exact
+// admission predicate capJoinIsG1 (exact zero cross over the record) implies
+// this classification and stays separate from it.
 func offsetLoopBudget(budget *workBudget, loop cornerLoop, s, t float64) ([]CurveSegment, error) {
 	walks := loop.walks
 	n := len(walks)
@@ -124,6 +131,16 @@ func offsetLoopBudget(budget *workBudget, loop cornerLoop, s, t float64) ([]Curv
 		if math.Abs(cross) > shellTol && (cross > 0) == (s < 0) {
 			// arc corner: sign(cross) == −s.
 			joins[i] = cornerJoin{arc: true, vU: vU, vV: vV, pA: pA, pB: pB}
+			continue
+		}
+		if math.Abs(cross) <= shellTol && aox*bix+aoy*biy > 0 {
+			// G1 join (modify §7's dead-zone rule): the two offset carriers are
+			// tangent at the corner moved t along the shared normal, so that point
+			// is their one common point. Intersecting them would solve a double
+			// root the float discriminant cannot hold at zero (±1e-14 in practice),
+			// which is the erratic S11/S11a refusal this branch replaces. A cusp
+			// (dot <= 0) stays on the miter row below.
+			joins[i] = cornerJoin{g1: true, vU: vU, vV: vV, m: pB}
 			continue
 		}
 		// miter corner: intersect the two offset carriers, nearest the corner.
@@ -182,7 +199,11 @@ func offsetLoopBudget(budget *workBudget, loop cornerLoop, s, t float64) ([]Curv
 // of radius t about (vU, vV) from pA (the arriving walk's offset end) to pB (the
 // leaving walk's offset start).
 type cornerJoin struct {
-	arc    bool
+	arc bool
+	// g1 marks a G1 join (modify §7): m is the leaving walk's offset start
+	// v + s·t·n̂, not a carrier intersection, and the corner ruling v→m is the
+	// exact affine locus.
+	g1     bool
 	vU, vV float64
 	m      Point2
 	pA, pB Point2
@@ -239,7 +260,10 @@ func offsetWalkSegment(w sideWalk, s, t float64, start, end Point2) (CurveSegmen
 // join overshoots and each straight walk's offset segment runs BACKWARD; an arc
 // walk's offset sweeps the long way round, past its own span. The offset loop
 // keeps its walk sense (its signed area does not change sign), so S8 cannot see
-// this — the drop is a per-walk fact, decided here as the offset is built.
+// this — the drop is a per-walk fact, decided here as the offset is built. An
+// arc's overshoot past its own span is read as a length on the offset circle,
+// against shellTol scaled by the walk's coordinate magnitude, so the rounding
+// of feet held far from the origin never reads as a sweep past the span.
 func walkOffsetConsumed(w sideWalk, start, end Point2) bool {
 	du, dv := end.U-start.U, end.V-start.V
 	if !w.isCircular() {
@@ -266,7 +290,16 @@ func walkOffsetConsumed(w sideWalk, start, end Point2) bool {
 		}
 		span = -span
 	}
-	return span > math.Abs(w.th1-w.th0)+shellTol
+	// The feet are held to coordinate rounding, so an overshoot is evidence only
+	// once it exceeds that rounding AS A LENGTH on the offset circle — the same
+	// scale-relative reading offsetRadius and the line branch above take. A
+	// consumed arc overshoots by nearly a whole turn minus its own span, so the
+	// gate's reject side is untouched; only a G1-joined arc far from the origin,
+	// whose feet differ from its own endpoints' radials by ulp(coordinate)/radius,
+	// stops reading as consumed.
+	overshoot := span - math.Abs(w.th1-w.th0)
+	rr := math.Hypot(start.U-w.cU, start.V-w.cV)
+	return rr*overshoot > shellTol*math.Max(1, math.Abs(w.cU)+math.Abs(w.cV)+2*w.radius)
 }
 
 // circleSegConcentric records a full-circle walk as a CircleSeg of radius rr in

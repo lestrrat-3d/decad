@@ -56,3 +56,53 @@ func chordStationBound(seg CurveSegment, k, n int, heldU, heldV float64) walkEnd
 	rt := new(big.Rat).Add(start, new(big.Rat).Mul(frac, span))
 	return circularPointBound(seg, rt, heldU, heldV)
 }
+
+// capOffsetStationBound is chordStationBound read on a wall's exact OFFSET
+// circle at the exact fraction k/n of the wall's own recorded window, k in
+// [0, n] inclusive: the gap between a held cap-contour sample and the point
+// docs/tessellation-reach-design.md §7's ideal polyhedron B1 places there.
+// k == 0 and k == n are the two corner feet.
+//
+// radiusOffset is the exact rational the offset adds to the segment's own
+// radius — −insideSign·d, ivExactOffsetRadius's own sign — and the enclosure
+// is circularOffsetEndpointInterval's, so neither the offset nor the station's
+// parameter is ever rounded to a float before it is enclosed.
+//
+// An index outside [0, n], an enclosure the record cannot state and a held
+// coordinate that is not finite all answer +Inf on both components — the
+// underivable bound the tessellation refuses on (docs/tessellation-design.md
+// §12), never a zero.
+func capOffsetStationBound(seg CurveSegment, k, n int, radiusOffset *big.Rat, heldU, heldV float64) walkEndBound {
+	underivable := walkEndBound{u: math.Inf(1), v: math.Inf(1)}
+	if n <= 0 || k < 0 || k > n || radiusOffset == nil {
+		return underivable
+	}
+	seg, err := normalizeSegment(seg)
+	if err != nil {
+		return underivable
+	}
+	start, span, ok := circularSegmentRange(seg)
+	if !ok {
+		return underivable
+	}
+	frac := new(big.Rat).SetFrac64(int64(k), int64(n))
+	rt := new(big.Rat).Add(start, new(big.Rat).Mul(frac, span))
+	uIv, vIv, ok := circularOffsetEndpointInterval(seg, rt, radiusOffset)
+	if !ok {
+		return underivable
+	}
+	return walkEndBound{u: intervalFloatError(uIv, heldU), v: intervalFloatError(vIv, heldV)}
+}
+
+// capWallRadiusOffset is the exact rational a circular wall's cap contour adds
+// to the wall's own radius: −insideSign·d, so a counter-clockwise wall (its
+// material inside) shrinks and a clockwise one (a hole rim) grows — the same
+// sign offsetRadius and ivExactOffsetRadius take. A setback that is not finite
+// answers nil, which capOffsetStationBound refuses on.
+func capWallRadiusOffset(w sideWalk, d float64) *big.Rat {
+	rd := floatRat(d)
+	if rd == nil {
+		return nil
+	}
+	return new(big.Rat).Neg(new(big.Rat).Mul(insideSignOf(w), rd))
+}

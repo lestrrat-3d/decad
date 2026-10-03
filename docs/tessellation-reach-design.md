@@ -39,7 +39,7 @@ meridian generator refuses (T5).
 |---|---|---|
 | `sourceBound(face)` | `faceBound`, one entry per source face | `facesOfMesh` (`boolean.go`), for the hidden-tangency pre-pass |
 | `areaSlack` | yes, the analytic terms plus a per-facet coordinate allowance | boolean area composition |
-| `volSymDiff` + `symDiffOK` | yes; `symDiffOK` is true for solid prism, cup, loft, revolve and faceted paths, and false for a loft sheet and cap-loop chamfer | `operandSymDiff` (`boolean.go`), which refuses a mesh carrying no proof |
+| `volSymDiff` + `symDiffOK` | yes; `symDiffOK` is true for solid prism, cup, loft, revolve and faceted paths and for a cap-loop chamfer whose every band §7 admits, and false for a loft sheet and for a cap-loop chamfer carrying a band §7 does not admit | `operandSymDiff` (`boolean.go`), which refuses a mesh carrying no proof |
 | `deltaStore` (tess §5) | charged per vertex into `faceBound`, `areaSlack` and `volSymDiff` | — |
 
 Every restatement below publishes into that record, and no consumer infers a term the mesh did not state. A
@@ -61,7 +61,7 @@ while the boolean refuses the operand.
 | **R3** | tess T2 | revolve, line generators only: cylinder/cone/plane/axis, poles, partial caps, both coordinate proofs, `Ecell`, export | first revolve export; largest single increment, so it follows the two cheap ones |
 | **R4** | tess T3 | revolve circular generators: sphere/torus, axis-to-axis minimum, intra-loop tube clearance, circular `Ecell` | extends R3's cells; same files |
 | **R5** | tess T4 | `Mmeridian` + certified `Icell`; `symDiffOK` true; revolve admitted to booleans | the last revolve proof; heaviest proof engineering |
-| **R6** | new: T7 | `capBlendPayload` tessellator, export-only (`symDiffOK == false`) | depends on R3's cone/pole cells and R1's twist term; last because no other increment waits on it |
+| **R6** | new: T7 | `capBlendPayload` tessellator: export for every band; `symDiffOK == true` for a band of line-line miters, exactly tangent joins and whole turns (§7), `false` for every other band | depends on R3's cone/pole cells and R1's twist term; last because no other increment waits on it |
 
 R6 depends on R3 only, so it may be scheduled anywhere after R3. R5 and R6 are independent.
 
@@ -448,13 +448,18 @@ invariant becomes mandatory for line-only fixtures, after R4 for all.
 
 ### Verdict
 
-It earns an export-only increment, last. Every term its proof record needs is either an existing published
-term (`band.delta`, `g.levelDelta`, `capBandLevel`, `capPatchWindowSkew`, `cellTwistOffsetUpper`,
-`chordSagitta`, `miterLocusSpeedUpper`) or a one-step derivation from one, stated below. What does NOT
-exist is a proven occupied-volume homotopy from the held facets to the exact offset family, so the boolean
-stays refused (`symDiffOK == false`), which tess §2 permits for an export-only increment. DX3's "a strip whose
-densities disagree is not watertight" is answered by sharing ONE count per wall walk across the side wall,
-the band patch and the cap contour (below).
+It earns an export increment for every band and a boolean increment for the bands whose held cells
+reproduce the exact offset family slice by slice ("Occupied volume" below). Every term its proof record
+needs is either an existing published term (`band.delta`, `g.levelDelta`, `capBandLevel`,
+`capPatchWindowSkew`, `cellTwistOffsetUpper`, `chordSagitta`, `miterLocusSpeedUpper`) or a one-step
+derivation from one, stated below. The occupied-volume proof is complete for a band whose every corner is a
+line-line miter or an exactly tangent (G1) join, and for the cornerless whole turn: there the band's true
+section at every axial fraction is the exact offset section, and the held cells' section is its chord polygon
+at fixed azimuths, so the proof is the prism's own two legs — a slice-wise circular-segment integral and a
+vertex-motion `sweptVolumeAllow`. Every other band — a circular wall at a genuine miter, a reflex corner —
+keeps `symDiffOK == false`, which tess §2 permits for an export-only mesh. DX3's "a strip whose densities
+disagree is not watertight" is answered by sharing ONE count per wall walk across the side wall, the band
+patch and the cap contour (below).
 
 ### Geometry the payload states
 
@@ -521,8 +526,8 @@ publishes in another dimension):
   chord — the boundary ruling (tagged `Line3`) to the conic miter locus it stands for: a curve of length `L`
   between endpoints `c` apart lies inside the ellipse with those foci and major axis `L`, whose semi-minor
   axis is `sqrt(L²−c²)/2`. `speedUpper` is `miterLocusSpeedUpper` (`capblend_contour.go`), the same input
-  `chordLocusLengthAllow` reads. Zero at a line-line miter and every reflex foot (both loci affine). Charged
-  on BOTH patches sharing the ruling.
+  `chordLocusLengthAllow` reads. Zero at a line-line miter, every reflex foot and every G1 join (modify §7's
+  dead-zone rule; all three loci affine). Charged on BOTH patches sharing the ruling.
 - `capRadiusRound = addRoundError(r, ∓d, capRadius)` — the held cap directrix radius against the exact
   offset radius `ivExactOffsetRadius` states.
 - `band.delta`, `levelDelta`, `deltaAxial` (`capBandLevel`), `deltaStore` (§3's mechanism over `prismLike`).
@@ -530,6 +535,87 @@ publishes in another dimension):
 `faceBound(patch) = upRound(Σ terms)`; `bound = max`. `areaSlack` per patch: `perturbedTriangleAreaAllow`
 over the `twist + sagitta + skewGap + locusGap` displacement plus `contourAllow + bandLevelAreaAllow` the
 payload already publishes per patch; the trimmed walls and caps charge the prism's own terms.
+
+### Occupied volume — `volSymDiff` for an admitted band
+
+**Admission** (`capBlendOccupiedVolumeAdmission`, `capblend_admit.go`) is decided from the record alone and
+read by both consumers that must agree: `requireVolumeProvingPayload` (`boolean.go`) before any mesh is
+built, and `tessellateCapBlend` when it publishes. Every loop of the payload must be either
+
+- a single closed `CircleSeg` walk (the whole turn), or
+- a loop whose every walk is a natural-bounded (`TStart`, `TEnd` ∈ {0, 1}) `LineSeg` or `ArcSeg`, whose
+  every `ArcSeg` satisfies `|End − Center|² == |Start − Center|²` exactly over the rationals (so the denoted
+  arc passes through both recorded endpoints and the pinned junction vertex lies on it), and whose every
+  corner join is either (i) a line-line miter — both walks straight — or (ii) an exactly G1 join: the two
+  walks' recorded junction points are the same rational point, and their exact tangent directions there have
+  a zero cross product and a positive dot product, where a line's direction is `end − start` and an arc's is
+  its walk sense times `rot90(P − Center)`.
+
+A reflex corner (`cornerJoin.arc`) is not admitted. Every test is exact rational arithmetic over the record's
+own floats; none is a tolerance, so the predicate classifies the denoted geometry and never admits on a
+residual. A band it does not prove is export-only, and a boolean over it is the staging `ErrUnsupported`
+routed through `booleanExpectedVolumeProof`, naming the loop and the corner.
+
+**Why an admitted band reduces to two legs.** Write `B0` for the body the record denotes, `M` for the held
+mesh, and `B1` for the IDEAL polyhedron with `M`'s triangle index set and exact vertex positions: every
+side-ring vertex at the exact fraction `k/n` of its walk's exact window, on the exact curve, at the exact
+level; every cap-ring vertex of a circular wall at the exact fraction `k/n` of the SIDE window on the exact
+offset circle `Center + (R ∓ d)·e(θ_k)`; every line-line foot at the exact offset corner point; all at the
+exact cap level. For an admitted loop the exact offset family is `P ⊖ s·d` with every circular wall keeping
+its own window — a G1 join's offset foot is `P + s·d·n` on the shared normal, so its azimuth about either
+centre never moves — and every corner-foot locus affine in `s` (a line-line miter is the intersection of two
+offset lines; a G1 foot rides the shared normal). Each band cell of `B1` is a planar trapezoid, because the
+matched side and cap chords are parallel, so its section at axial fraction `s` is the straight segment
+between `(1−s)·side_k + s·cap_k = Center + (R ∓ s·d)·e(θ_k)` for a circular wall, and the exact offset line
+between its exact feet for a straight one. `B1`'s band section is therefore the chord polygon of the true
+section `P ⊖ s·d` at the SAME exact azimuths, with every vertex ON the true boundary; over the trimmed
+range it is the chord polygon of `P` itself, and at each cap it is the cap triangulation of that polygon.
+Both bodies are unions of their level sections, so
+
+```text
+volume(B1 △ B0) = ∫ area(S1(z) △ S0(z)) dz <= Mchord
+Mchord = Σ_loops [ hTrimUpper(loop) · Σ_{circular walks} walkSegmentArea(w, n(w))
+                 + Σ_{chamfered caps} dUpper · Σ_{circular walks} walkSegmentArea(w at radius max(R, R ∓ d), n(w)) ]
+hTrimUpper = |zHi − zLo| + zLo.bound + zHi.bound        dUpper = d + dDelta
+```
+
+because a chord polygon whose vertices lie on the curve differs from the region it chords by the union of
+its circular segments — overlapping segments only make the union smaller than the sum — and a segment's
+area `ρ²(Δθ − sin Δθ)/2` is monotone in `ρ`, so the larger of the two radii bounds every level of the band
+over the one shared window.
+
+`volume(M △ B1)` is vertex motion: `M` and `B1` share a triangle index set and differ vertex by vertex, so
+`sweptVolumeAllow(motionMax, perturbedAreaUpper(M, motionMax))` (bounds.go) bounds it, with `motionMax`
+the largest per-vertex displacement:
+
+| Vertex | Per-vertex motion (each term already proven; summed through `absSumUpper`) |
+|---|---|
+| side ring, level `L` ∈ {`zLo`, `zHi`} | `walkEndBoundAllow(sideBound)` — `chordStationBound` at `k/n` for an interior station, the walk's own `startBound` at a junction — plus `exactPrismPointRound` plus `L.bound` |
+| cap ring, station `k` of a circular walk (`k = 0` is the foot verbatim) | `walkEndBoundAllow(capOffsetStationBound(seg, k, n, ∓d))` — `circularEndpointInterval`'s enclosure with the exact offset radius `R ∓ d` (`ivExactOffsetRadius`), read at the exact fraction `k/n` of the SIDE window — plus `exactPrismPointRound` plus `capBandLevel(capZ).bound` |
+| cap ring, a straight walk's foot preceded by a circular walk | the same enclosure on the PRECEDING walk at `k = n`, plus the same two terms |
+| cap ring, a line-line miter foot | `band.delta` (`capContourDelta`'s enclosure of the exact miter point) plus the same two terms |
+
+The per-vertex figure is a NEW `motion` array beside `store`: `store` keeps publishing `sourceBound` and
+`areaSlack` exactly as above, because the two answer different questions — a cap station's Hausdorff gap
+from the held offset circle, versus its displacement from the exact-fraction point the slice argument pairs
+it with. Then
+
+```text
+volSymDiff = upRound(Mchord + sweptVolumeAllow(motionMax, perturbedAreaUpper(M, motionMax)))
+symDiffOK  = true
+```
+
+A non-finite term refuses (tess §12). The cap-blend path runs no facet-contact audit
+(`payloadAuditsFacetContact`), so `boundaryOK` is true at every level and `operandSymDiff` reads the proof
+at `VerifyAll`. The payload's own `Volume()` bound is a different composition (`capBandVolume`) and is not
+read here.
+
+**What is not admitted, and why.** A circular wall meeting a genuine (non-G1) miter has its cap window
+trimmed inside its side window, its true foot locus is a conic, and the ruled cells' sections are no longer
+chord polygons of the true offset sections: the sliver at the corner is covered by none of the terms above
+and needs §9's per-cell certified integral. A reflex corner's apex fan has an interval window — the two
+exact unit normals' azimuths, which no record states — rather than a recorded one, so its stations need an
+interval-window station enclosure this increment does not build. Both keep `symDiffOK == false`.
 
 ### Refusals
 
@@ -540,7 +626,7 @@ payload already publishes per patch; the trimmed walls and caps charge the prism
 | `n(w)` exceeds `maxChordsPerWalk` | `ErrUnsupported` (`errTooManyChords`) |
 | directed-edge, link, or zero-area audit fails | `ErrUnsupported` |
 | a `chamferCap(...)` role or a `side(i,j)` role resolves to no face | `ErrDegenerate` |
-| cap blend in a boolean | `ErrUnsupported` through R0's `operandSymDiff` (export-only) |
+| a band the occupied-volume admission above does not prove, in a boolean or in `Verify`'s read-only intersection | `ErrUnsupported` naming the loop and corner, through `requireVolumeProvingPayload` before the mesh and R0's `operandSymDiff` after it; `Verify` reads the pair `Suspect` (`DiagUnsupportedPairPayload`) |
 
 ### Tests (R6)
 
@@ -552,8 +638,25 @@ payload already publishes per patch; the trimmed walls and caps charge the prism
 - Rounded rectangle chamfered on a cap loop (miter corners, windows differ): `Bound() > sagitta` by at least
   `capRadius·skew`; `requireWatertight`; every `chamferCap` face appears in `SourceFaces()`.
 - Reflex (notched) profile: the apex fan has one interned vertex and one link cycle.
-- A cap-blend body in `Union` refuses `ErrUnsupported`; `Verify` reads the pair `Suspect`.
-- `capblend_test.go`'s tessellation staging assertion flips to success.
+- Square plate chamfered on one cap loop (all `Plane`, unplaced, `volSymDiff == 0`): `Intersect` with a box
+  straddling one straight side over the band reports a bounded volume containing the closed form
+  `w · (∫ over the flat part + ∫ (sideZ + (edge − x) − zBox) dx over the band)`, and `Cut` reports the
+  plate's volume minus it; `Union` reports its corresponding sum. Triangle intersections can introduce rational
+  vertices that do not round exactly to float64, so the result is `Approximate` even when this operand's
+  `volSymDiff` is zero.
+- The drilled flange (plate, analytic `Cut` of a bore, 12 mm `Fillet` of the vertical edges, 1 mm cap-loop
+  chamfer): `Cut` by a bolt cylinder clear of the band reports `V_flange − π r² h` within the published
+  bound, where `V_flange = 16·(6528 − (4 − π)·144 − 324π) − (116 + 30π)`; the bound is below a stated
+  ceiling and positive; the result is `Approximate`.
+- A chamfered pin as the TOOL of a `Cut`: the plate's volume minus the cylinder it removes, within bound.
+- A band with a genuine miter at a circular wall (a circular-segment section: one chord, one arc) and a
+  band with a reflex corner: every boolean refuses `ErrUnsupported`, `errors.As` finds no `*BooleanError`,
+  and the message names the loop and corner; `Verify` reads an overlapping pair `Suspect` with
+  `DiagUnsupportedPairPayload`.
+- `Verify` on an overlapping pair of admitted cap-blend bodies publishes an `Interference` row.
+- Each leg of `volSymDiff` is shown to fail: deleting `Mchord`'s band term, its trimmed term, the cap
+  `motion` enclosure, the side `L.bound` term or `exactPrismPointRound` makes a named fixture's result
+  volume fall outside its published bound, recorded in the test file.
 
 ## 8. Recorded decisions this design changes
 
@@ -569,11 +672,12 @@ design decision; R1 rewrites it to say the payload stores the COMPOSED proof ter
 
 ## 9. Open questions
 
-- **R6 occupied-volume proof.** Decide between (a) a per-cell certified interval integral over the explicit
-  homotopy held-facet → bilinear → ruled → cone, tess §11's `Icell` shape, and (b) restricting boolean
-  admission to bands whose every patch is `Plane`, `wholeTurn`, or tangent-joined (where the chain collapses
-  to vertex motion and `sweptVolumeAllow(faceBound, perturbedAreaUpper)` is already a proof). Choose (b)
-  first if any cap-blend boolean is wanted before (a) is engineered; (a) is the complete answer.
+- **R6 occupied volume for the bands §7 does not admit.** §7's slice-wise proof admits a band of line-line
+  miters, exactly G1 joins and whole turns. A circular wall at a genuine miter needs a per-cell certified
+  interval integral over the explicit homotopy held-facet → bilinear → ruled → cone, tess §11's `Icell`
+  shape — the complete answer. A reflex corner's apex fan needs only an interval-window station enclosure
+  (the fan's connector stations read against the two exact unit normals' enclosed azimuths), which reaches
+  it without the integral.
 
 ## 10. Tasks
 

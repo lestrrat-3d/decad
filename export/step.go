@@ -148,6 +148,9 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 // header data also leaves the writer untouched. An I/O error may leave a
 // partial file. ctx, w, and body must not be nil.
 func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...STEPOption) error {
+	if ctx == nil {
+		return fmt.Errorf("export: STEP: %w: nil context", decad.ErrDegenerate)
+	}
 	if w == nil {
 		return fmt.Errorf("export: STEP: %w: nil writer", decad.ErrDegenerate)
 	}

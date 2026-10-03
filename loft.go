@@ -83,6 +83,9 @@ func WithLoftAlignment(offsets ...int) LoftOption {
 //
 // A failed call leaves the document untouched.
 func (d *Document) Loft(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a loft`, ErrDegenerate)
+	}
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
@@ -274,11 +277,11 @@ func (lp chainLoftPayload) placed(ctx context.Context, d *Document, ref producer
 // chord cell with no cap and no closing face, so WithSurfaceResult() does not
 // compile against this call. A failed call leaves the document untouched.
 func (d *Document) LoftChain(ctx context.Context, s0 *sketch.Sketch, c0 *sketch.Chain, s1 *sketch.Sketch, c1 *sketch.Chain, opts ...ChainLoftOption) (*Body, error) {
-	if d == nil {
-		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
-	}
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a loft`, ErrDegenerate)
+	}
+	if d == nil {
+		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
 	if s0 == nil || c0 == nil || s1 == nil || c1 == nil {
 		return nil, fmt.Errorf(`%w: LoftChain requires two non-nil sketches and two non-nil chains`, ErrDegenerate)

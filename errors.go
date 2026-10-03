@@ -129,8 +129,9 @@ var ErrNotFinite = errors.New("decad: non-finite value")
 // docs/evaluator-design.md §2. A public Union, Cut or Intersect wraps a valid
 // but unclassifiable contact or analytic prism-arrangement refusal in a
 // [BooleanError] carrying [BooleanUnsupportedContact], but an operand no
-// boolean may consume (a cap-loop chamfer body, whose mesh carries no proof yet
-// of the volume it and the body it stands for differ by, or a Faceted operand
+// boolean may consume (a cap-loop chamfer body whose band has a mitered
+// circular wall or a reflex corner, so its mesh carries no proof of the volume
+// it and the body it stands for differ by, or a Faceted operand
 // coarser than the pair tolerance) is a capability limit reached before any contact —
 // it passes through as a plain ErrUnsupported, not a [BooleanError].
 // errors.Is(err, ErrUnsupported) branches on both.
@@ -200,7 +201,8 @@ const (
 // [ErrUnsupported], are [BooleanUnsupportedContact]. [ErrDegenerate] stays
 // reserved for a genuinely malformed operand and for the retryable coarse-chording
 // tessellation refusal; a whole-operand tessellation-staging [ErrUnsupported]
-// (a cap-loop chamfer operand, or a Faceted operand coarser than the pair
+// (a cap-loop chamfer operand whose mesh carries no occupied-volume proof, or a
+// Faceted operand coarser than the pair
 // tolerance)
 // passes through plain — none of these three is a BooleanError.
 type BooleanError struct {

@@ -201,9 +201,11 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // its two cap faces from ONE chord count per wall walk, shared by the side
 // wall's own rings, the band patch ruled off them and the cap contour the band
 // ends on, so no strip is sampled at two densities and the mesh is watertight
-// by construction. It carries no proof of the volume it and the body it stands
-// for differ by, so it serves export while [Union], [Cut] and [Intersect]
-// refuse it.
+// by construction. Where every band is a whole turn or joins only line-line
+// miters and exactly tangent corners, it also proves the volume it and the
+// body it stands for differ by, so [Union], [Cut] and [Intersect] take it as
+// an operand; a band with a mitered circular wall or a reflex corner carries
+// no such proof, and that mesh serves export while the booleans refuse it.
 //
 // A lofted body RESTATES the flat triangle set its construction already built
 // and audited: nothing is chorded here, so tol binds nothing on that path and
@@ -250,6 +252,9 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // rather than merely stored, so a nil one is a caller mistake this call cannot
 // carry out.
 func (b *Body) Tessellate(ctx context.Context, tol units.Value, opts ...TessellateOption) (*Mesh, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a tessellation`, ErrDegenerate)
+	}
 	folded := make([]option.Interface, len(opts))
 	for i, o := range opts {
 		folded[i] = o
@@ -317,7 +322,8 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value, verify Ver
 
 // tessellateBodyContext dispatches one body to its payload's own tessellator.
 // verify reaches only the paths that would otherwise COMPUTE a proof the level
-// withholds — prism, cup, revolve and the revolve-backed curved stitch route.
+// withholds — prism, cup, revolve, cap-loop chamfer and the revolve-backed
+// curved stitch route.
 // A restatement path (faceted, loft, all-planar stitch) copies its proof terms
 // off the payload at no cost and publishes them unconditionally;
 // tessellateContext withholds them afterwards.
@@ -338,7 +344,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 		return tessellateRevolve(ctx, b, rp, chord, verify)
 	}
 	if cbp, ok := b.payload.(capBlendPayload); ok {
-		return tessellateCapBlend(ctx, b, cbp, chord)
+		return tessellateCapBlend(ctx, b, cbp, chord, verify)
 	}
 	if sp, ok := b.payload.(stitchPayload); ok {
 		if sp.tris == nil {

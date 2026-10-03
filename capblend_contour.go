@@ -50,8 +50,9 @@ import (
 // intersectOffsets rejects a determinant at or below filletTol (1e-9), while
 // the interval widths here are the relative rounding of unit directions, so the
 // determinant interval cannot straddle zero once the float one cleared that
-// floor. It stands as the honest answer for a configuration that does reach it
-// rather than as a case the tests can exhibit.
+// floor, and a G1 join (modify §7) never reaches ivIntersect at all. It stands
+// as the honest answer for a configuration that does reach it rather than as a
+// case the tests can exhibit.
 var errCapContourUnbounded = fmt.Errorf(`%w: this evaluator cannot prove a bound on the cap-loop chamfer's own offset contour at a corner, so no cap-level coordinate it emits there can be published with a proven displacement`, ErrUnsupported)
 
 // ivPoint is a rational-interval enclosure of one plane-local (u, v) point.
@@ -458,6 +459,20 @@ func capContourDelta(walks []sideWalk, joins []cornerJoin, d float64) (float64, 
 				return 0, errCapContourUnbounded
 			}
 			delta = math.Max(delta, math.Max(a.reach(j.pA), b.reach(j.pB)))
+			continue
+		}
+		if j.g1 {
+			// A G1 join intersects no carriers (modify §7; modify-reach §8.4): its
+			// denoted corner is v + d·n̂ for the leaving wall's exact unit normal, and
+			// the enclosure is the HULL of the two shared-normal feet, so a join the
+			// dead zone classified G1 with a residual turn is charged the spread
+			// between the two normals it could have taken.
+			a, okA := ivOffsetFoot(j.vU, j.vV, prev.tanOutU, prev.tanOutV, d)
+			b, okB := ivOffsetFoot(j.vU, j.vV, cur.tanInU, cur.tanInV, d)
+			if !okA || !okB {
+				return 0, errCapContourUnbounded
+			}
+			delta = math.Max(delta, ivUnion(a, b).reach(j.m))
 			continue
 		}
 		ca, okA := ivCarrierOf(prev, d)
