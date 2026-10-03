@@ -653,17 +653,33 @@ func TestVerifyMotionBetweenErrors(t *testing.T) {
 	require.NoError(t, err)
 	reflect := transformOK(t)(r3.Reflection(mirror))
 	tiny := transformOK(t)(r3.Rotation(r3.NewVec(0, 0, 1), units.Radians(1e-300)))
+	// turnedBack is the identity pose built a second way: a 37° turn about
+	// (1, 1, 1), then its inverse. Rounding leaves its basis a few ulps off
+	// the identity, so it is not == r3.Identity(), but the product of a basis
+	// with its transpose is computed as the same sums for entry (i, j) and
+	// (j, i), so the basis is exactly symmetric and the translation exactly
+	// zero. r3's Screw then reads the relative motion as zero angle and zero
+	// slide, which reaches the zero-screw refusal past the From == To check.
+	turn := transformOK(t)(r3.Rotation(r3.NewVec(1, 1, 1), units.Degrees(37)))
+	turnedBack := then(t, turn, transformOK(t)(turn.Inverse()))
+	require.NotEqual(t, r3.Identity(), turnedBack, `the turned-back pose differs from the identity in some bit`)
+	zero, err := turnedBack.Screw()
+	require.NoError(t, err)
+	require.Zero(t, zero.Angle.Mag())
+	require.Zero(t, zero.Slide)
 
 	cases := []struct {
 		name   string
 		motion decad.Motion
 		opts   []decad.MotionOption
 		want   error
+		text   string // a substring the error must carry, when one pins the refusal
 	}{
 		{name: "zero From", motion: decad.Between{To: r3.Identity()}, want: decad.ErrDegenerate},
 		{name: "zero To", motion: decad.Between{From: r3.Identity()}, want: decad.ErrDegenerate},
 		{name: "reflection against the identity", motion: decad.Between{From: r3.Identity(), To: reflect}, want: decad.ErrDegenerate},
 		{name: "From equals To", motion: decad.Between{From: screwTo(t, 20), To: screwTo(t, 20)}, want: decad.ErrDegenerate},
+		{name: "zero screw", motion: decad.Between{From: r3.Identity(), To: turnedBack}, want: decad.ErrDegenerate, text: `zero screw`},
 		{name: "unrepresentable screw point", motion: decad.Between{From: r3.Identity(), To: then(t, tiny, shiftBy(t, r3.NewVec(1e10, 0, 0)))}, want: decad.ErrNotFinite},
 		{name: "nil between pointer", motion: (*decad.Between)(nil), want: decad.ErrDegenerate},
 		{name: "resolution as a length", motion: screwArm(t), opts: []decad.MotionOption{decad.WithResolution(units.Millimeters(1))}, want: decad.ErrUnitKind},
@@ -674,6 +690,9 @@ func TestVerifyMotionBetweenErrors(t *testing.T) {
 			before := doc.Bodies()
 			report, err := doc.VerifyMotion(t.Context(), []*decad.Body{arm}, tc.motion, tc.opts...)
 			require.ErrorIs(t, err, tc.want)
+			if tc.text != "" {
+				require.ErrorContains(t, err, tc.text)
+			}
 			require.Nil(t, report)
 			require.Equal(t, before, doc.Bodies())
 		})
