@@ -176,6 +176,23 @@ regions use direct disk containment/separation, preserving valid thin annuli
 below sketch's general arrangement threshold. Reject malformed or overflowing
 input; NEVER return a non-finite `Exact` result.
 
+An `ArcSeg` denotes the circle of **Start's** radius about `Center`, swept from
+Start's angle to End's angle — geom's own arc reading
+(`docs/sketch-seam-design.md` §2). The recorded `End` need not sit on that
+circle exactly: a fillet or shell rewrite rounds each coordinate at its own
+magnitude, and a solver-placed sketch arc carries the solver's residual, so the
+two pinned radii generally differ by rounding of the *coordinates*, not of the
+radius. The preflight refuses, as malformed input, an End whose radius differs
+from Start's by more than 1024 ulps of the largest magnitude the record states
+(its six coordinates and its two radii). That check is reject-only: passing it
+certifies nothing. Every circular bracket encloses the denoted arc — Start's
+radius, End's angle — by reading End's radial ratio `ρ = r / |End − Center|`
+as the `ratSqrtDown`/`ratSqrtUp` bracket of the exact rational
+`r² / |End − Center|²` and substituting `ρ·(End − Center)` for End's
+coordinate differences. Equal radii give a point `ρ = 1` and lose nothing;
+unequal radii have the difference charged into the published bound, never
+trusted and never dropped to the magnitude envelope.
+
 Increment 1 implements the closed forms for `LineSeg`/`CircleSeg`/`ArcSeg`.
 `docs/spline-design.md` owns the free-form kinds entirely: Table F there assigns
 each an exactness tier and what a measurement over it may claim, §5 gives the
@@ -483,7 +500,8 @@ Increment 4, the deep end. Strategy:
 
 `docs/prism-boolean-design.md` is the approved analytic reduction
 `performBoolean` dispatches, ahead of the tessellation path below, for
-co-directional coplanar prism pairs: `Union`'s select-all/merge/chain path and
+co-directional prism pairs on one plane or on shared-axis offset planes:
+`Union`'s select-all/merge/chain path and
 `Cut`/`Intersect`'s clean-nesting structural match. `Verify`'s own interference
 evaluation (below) dispatches that same reduction for intersection through
 `evaluateAnalyticIntersect`, a read-only twin that builds the admitted payload

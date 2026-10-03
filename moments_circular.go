@@ -23,6 +23,30 @@ func exactCoordinateDelta(a, b float64) *big.Rat {
 	return new(big.Rat).Sub(floatRat(a), floatRat(b))
 }
 
+// arcEndRadialRatio brackets ρ = |Start − Center| / |End − Center| for a recorded
+// ArcSeg, given the two exact squared distances. The denoted arc runs on Start's
+// radius and ends at End's ANGLE, so the point the arc actually ends at is
+// Center + ρ·(End − Center); every circular bracket substitutes that for the
+// recorded End. ρ is the ratSqrtDown/ratSqrtUp bracket of the exact rational
+// r²/endR², rounded outward once at each end and never a float sqrt of a float.
+// Equal squared radii answer the exact point 1 — the record states an exact
+// circle and the substitution is the identity. A zero endR² (End == Center)
+// answers false; the preflight refuses that record before any bracket runs.
+func arcEndRadialRatio(r2, endR2 *big.Rat) (ratInterval, bool) {
+	if endR2.Sign() == 0 {
+		return ratInterval{}, false
+	}
+	if endR2.Cmp(r2) == 0 {
+		return pointInterval(big.NewRat(1, 1)), true
+	}
+	q := new(big.Rat).Quo(r2, endR2)
+	lo, hi := floatRat(ratSqrtDown(q)), floatRat(ratSqrtUp(q))
+	if lo == nil || hi == nil {
+		return ratInterval{}, false
+	}
+	return interval(lo, hi), true
+}
+
 // circularAreaInterval brackets one circular walk's exact area contribution
 // about the walk anchor. The segment holds the RECORDED coordinates and the
 // anchor is subtracted here over rationals: every radial term is a difference
@@ -493,12 +517,9 @@ func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (ratInterval, bo
 
 // circularFirstMomentInterval brackets one circular walk's exact first-moment
 // contributions (∫u dA, ∫v dA) about the walk anchor: a CircleSeg over any
-// recorded range, whole or fractional, and — under a narrower admission,
-// unchanged by this — an ArcSeg only over its own full recorded range
-// (forward or reverse), never a trimmed fragment, and never a fragment whose
-// two endpoints round to different radii, since the area bracket's
-// endpoint-radius correction has no first-moment analogue and a mismatched
-// ArcSeg fragment is left to the conservative bound.
+// recorded range, whole or fractional, and — under a narrower admission — an
+// ArcSeg only over its own full recorded range (forward or reverse), never a
+// trimmed fragment.
 //
 // A CircleSeg's whole turns are the enclosed disk's own boundary, whose first
 // moment about each axis is its centroid times its area: every odd trig
@@ -517,11 +538,19 @@ func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (ratInterval, bo
 // back to a rational coordinate difference, and the one term that does not
 // cancel — the θ term inside intCos2/intSin2 — is exactly the swept angle
 // atan2Interval already brackets. What is left after multiplying through is
-// rational except for that single c.U·r²·dth (respectively c.V·r²·dth) term,
-// so the whole expression is one rational point plus one scaled interval.
+// rational except for that single c.U·r²·dth (respectively c.V·r²·dth) term.
 // Forward walks th0→th1 through (Start, End) in the sweep direction; reverse
 // walks the same arc the other way, so the two endpoints swap which
 // "th0"/"th1" role they play and the signed sweep negates.
+//
+// The denoted arc runs on Start's radius r and ends at End's ANGLE, so End's
+// r·sinθ1, r·cosθ1 are ρ·(End − Center) with ρ = r/|End − Center|, not the
+// recorded difference itself. The arm reads ρ through arcEndRadialRatio — a
+// proven bracket of the exact ratio — and substitutes ρ·(End − Center) for
+// End's coordinate differences before the reverse swap, evaluating the same
+// polynomial in interval arithmetic. Equal pinned radii give the point ρ = 1,
+// so every term is a rational point and the expression is one rational point
+// plus one scaled interval; unequal radii carry ρ's width into the enclosure.
 func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, ratInterval, bool) {
 	anchorU, anchorV := floatRat(anchor.U), floatRat(anchor.V)
 	if anchorU == nil || anchorV == nil {
@@ -603,7 +632,8 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, 
 		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
 		r2 := ratAdd(ratMul(dx0, dx0), ratMul(dy0, dy0))
 		endR2 := ratAdd(ratMul(dx1, dx1), ratMul(dy1, dy1))
-		if endR2.Cmp(r2) != 0 {
+		rho, ok := arcEndRadialRatio(r2, endR2)
+		if !ok {
 			return ratInterval{}, ratInterval{}, false
 		}
 		heldCenter := shiftPoint(seg.Center, anchor)
@@ -619,39 +649,44 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, 
 		if heldA1-heldA0 <= 0 {
 			sweep = intervalAdd(sweep, twoPiInterval())
 		}
-		p0x, p0y, p1x, p1y, dth := dx0, dy0, dx1, dy1, sweep
+		// End contributes its ANGLE (the sweep above reads the recorded
+		// deltas); its point on the denoted circle is ρ·(End − Center).
+		s0x, s0y := pointInterval(dx0), pointInterval(dy0)
+		e1x, e1y := intervalScale(rho, dx1), intervalScale(rho, dy1)
+		p0x, p0y, p1x, p1y, dth := s0x, s0y, e1x, e1y, sweep
 		if reverse {
-			p0x, p0y, p1x, p1y = dx1, dy1, dx0, dy0
+			p0x, p0y, p1x, p1y = e1x, e1y, s0x, s0y
 			dth = intervalNeg(sweep)
 		}
 		centerU := new(big.Rat).Sub(floatRat(seg.Center.U), anchorU)
 		centerV := new(big.Rat).Sub(floatRat(seg.Center.V), anchorV)
-		dy := new(big.Rat).Sub(p1y, p0y)
-		dx := new(big.Rat).Sub(p1x, p0x)
-		cross := new(big.Rat).Sub(ratMul(p1y, p1x), ratMul(p0y, p0x))
-		cubeThird := func(v *big.Rat) *big.Rat { return ratScale(ratMul(v, v, v), 1, 3) }
+		dy := intervalSub(p1y, p0y)
+		dx := intervalSub(p1x, p0x)
+		cross := intervalSub(intervalMul(p1y, p1x), intervalMul(p0y, p0x))
+		cube := func(x ratInterval) ratInterval { return intervalMul(intervalMul(x, x), x) }
+		third := big.NewRat(1, 3)
 
-		muConst := ratAdd(
-			ratMul(centerU, centerU, dy),
-			ratMul(centerU, cross),
-			ratMul(p1y, r2),
-			new(big.Rat).Neg(cubeThird(p1y)),
-			new(big.Rat).Neg(ratMul(p0y, r2)),
-			cubeThird(p0y),
+		// muConst = c.U²·dy + c.U·cross + r²·dy − (p1y³ − p0y³)/3
+		muConst := intervalSub(
+			intervalAdd(
+				intervalAdd(intervalScale(dy, ratMul(centerU, centerU)), intervalScale(cross, centerU)),
+				intervalScale(dy, r2),
+			),
+			intervalScale(intervalSub(cube(p1y), cube(p0y)), third),
 		)
 		muDthCoeff := ratMul(centerU, r2)
-		mu := intervalScale(intervalAdd(pointInterval(muConst), intervalScale(dth, muDthCoeff)), big.NewRat(1, 2))
+		mu := intervalScale(intervalAdd(muConst, intervalScale(dth, muDthCoeff)), big.NewRat(1, 2))
 
-		mvConst := ratAdd(
-			new(big.Rat).Neg(ratMul(centerV, centerV, dx)),
-			new(big.Rat).Neg(ratMul(centerV, cross)),
-			ratMul(p0x, r2),
-			new(big.Rat).Neg(ratMul(p1x, r2)),
-			new(big.Rat).Neg(cubeThird(p0x)),
-			cubeThird(p1x),
+		// mvConst = −c.V²·dx − c.V·cross − r²·dx + (p1x³ − p0x³)/3
+		mvConst := intervalAdd(
+			intervalNeg(intervalAdd(
+				intervalAdd(intervalScale(dx, ratMul(centerV, centerV)), intervalScale(cross, centerV)),
+				intervalScale(dx, r2),
+			)),
+			intervalScale(intervalSub(cube(p1x), cube(p0x)), third),
 		)
 		mvDthCoeff := ratMul(centerV, r2)
-		mv := intervalScale(intervalAdd(pointInterval(mvConst), intervalScale(dth, mvDthCoeff)), big.NewRat(1, 2))
+		mv := intervalScale(intervalAdd(mvConst, intervalScale(dth, mvDthCoeff)), big.NewRat(1, 2))
 
 		return mu, mv, true
 	default:
@@ -665,8 +700,7 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, 
 // sibling circularFirstMomentInterval and restating addCircular's own
 // muu/muv/mvv closed forms one order higher still: a CircleSeg over any
 // recorded range, whole or fractional, and an ArcSeg only over its own full
-// recorded range (forward or reverse), never a trimmed fragment or a
-// fragment whose two endpoints round to different radii.
+// recorded range (forward or reverse), never a trimmed fragment.
 //
 // A CircleSeg's whole turns restate Pappus's own parallel-axis form: every
 // odd trig moment over a whole period cancels exactly, leaving
@@ -689,9 +723,12 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, 
 // way leaves exactly one term that does not collapse to a rational: the
 // piece proportional to the swept angle dθ itself (a rational COEFFICIENT
 // times the atan2Interval-bracketed sweep), mirroring mu/mv's own
-// muDthCoeff/mvDthCoeff term one order higher. Every other term — built from
-// the endpoints' own dx/dy differences and their squares/cubes/quads — is a
-// single rational point interval.
+// muDthCoeff/mvDthCoeff term one order higher. Every other term is built from
+// the endpoints' own dx/dy differences and their squares/cubes/quads, with
+// End's pair read as ρ·(End − Center) through arcEndRadialRatio exactly as
+// the first-moment arm reads it: a single rational point interval when the
+// pinned radii are equal (ρ = 1), and an enclosure carrying ρ's width when
+// they differ.
 func circularSecondMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, ratInterval, ratInterval, bool) {
 	anchorU, anchorV := floatRat(anchor.U), floatRat(anchor.V)
 	if anchorU == nil || anchorV == nil {
@@ -826,7 +863,8 @@ func circularSecondMomentInterval(seg CurveSegment, anchor Point2) (ratInterval,
 		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
 		r2 := ratAdd(ratMul(dx0, dx0), ratMul(dy0, dy0))
 		endR2 := ratAdd(ratMul(dx1, dx1), ratMul(dy1, dy1))
-		if endR2.Cmp(r2) != 0 {
+		rho, ok := arcEndRadialRatio(r2, endR2)
+		if !ok {
 			return ratInterval{}, ratInterval{}, ratInterval{}, false
 		}
 		heldCenter := shiftPoint(seg.Center, anchor)
@@ -842,69 +880,96 @@ func circularSecondMomentInterval(seg CurveSegment, anchor Point2) (ratInterval,
 		if heldA1-heldA0 <= 0 {
 			sweep = intervalAdd(sweep, twoPiInterval())
 		}
-		p0x, p0y, p1x, p1y, dth := dx0, dy0, dx1, dy1, sweep
+		// End contributes its ANGLE (the sweep above reads the recorded
+		// deltas); its point on the denoted circle is ρ·(End − Center).
+		s0x, s0y := pointInterval(dx0), pointInterval(dy0)
+		e1x, e1y := intervalScale(rho, dx1), intervalScale(rho, dy1)
+		p0x, p0y, p1x, p1y, dth := s0x, s0y, e1x, e1y, sweep
 		if reverse {
-			p0x, p0y, p1x, p1y = dx1, dy1, dx0, dy0
+			p0x, p0y, p1x, p1y = e1x, e1y, s0x, s0y
 			dth = intervalNeg(sweep)
 		}
 		centerU := new(big.Rat).Sub(floatRat(seg.Center.U), anchorU)
 		centerV := new(big.Rat).Sub(floatRat(seg.Center.V), anchorV)
 
-		dx := new(big.Rat).Sub(p1x, p0x)
-		dy := new(big.Rat).Sub(p1y, p0y)
-		cross := new(big.Rat).Sub(ratMul(p1y, p1x), ratMul(p0y, p0x))
-		p0sq := ratMul(p0x, p0x)
-		p0ysq := ratMul(p0y, p0y)
-		p1sq := ratMul(p1x, p1x)
-		p1ysq := ratMul(p1y, p1y)
-		quad := new(big.Rat).Sub(
-			ratMul(p1x, p1y, new(big.Rat).Sub(p1sq, p1ysq)),
-			ratMul(p0x, p0y, new(big.Rat).Sub(p0sq, p0ysq)),
+		dx := intervalSub(p1x, p0x)
+		dy := intervalSub(p1y, p0y)
+		cross := intervalSub(intervalMul(p1y, p1x), intervalMul(p0y, p0x))
+		p0sq := intervalMul(p0x, p0x)
+		p0ysq := intervalMul(p0y, p0y)
+		p1sq := intervalMul(p1x, p1x)
+		p1ysq := intervalMul(p1y, p1y)
+		quad := intervalSub(
+			intervalMul(intervalMul(p1x, p1y), intervalSub(p1sq, p1ysq)),
+			intervalMul(intervalMul(p0x, p0y), intervalSub(p0sq, p0ysq)),
 		)
-		cube := func(v *big.Rat) *big.Rat { return ratMul(v, v, v) }
+		cube := func(x ratInterval) ratInterval { return intervalMul(intervalMul(x, x), x) }
 
 		cu2 := ratMul(centerU, centerU)
 		cv2 := ratMul(centerV, centerV)
 
 		// muu = r/3·(c.U³·intCos + 3c.U²·r·intCos2 + 3c.U·r²·intCos3 + r³·intCos4),
-		// every r·sinθ/r·cosθ power substituted by the matching exact
+		// every r·sinθ/r·cosθ power substituted by the matching endpoint
 		// coordinate difference (dy, cross, quad — this file's own
 		// circularFirstMomentInterval doc comment names the same collapse one
-		// order down), leaving one rational constant plus one term scaled by
+		// order down), leaving one constant enclosure plus one term scaled by
 		// the enclosed sweep dth.
-		muuConst := ratAdd(
-			ratMul(centerU, cu2, dy),
-			ratScale(ratMul(cross, ratAdd(ratScale(cu2, 3, 1), r2)), 1, 2),
-			ratMul(centerU, r2, dy, big.NewRat(3, 1)),
-			new(big.Rat).Neg(ratMul(centerU, new(big.Rat).Sub(cube(p1y), cube(p0y)))),
-			ratScale(quad, 1, 8),
+		muuConst := intervalAdd(
+			intervalAdd(
+				intervalAdd(
+					intervalScale(dy, ratMul(centerU, cu2)),
+					intervalScale(cross, ratScale(ratAdd(ratScale(cu2, 3, 1), r2), 1, 2)),
+				),
+				intervalScale(dy, ratMul(centerU, r2, big.NewRat(3, 1))),
+			),
+			intervalAdd(
+				intervalScale(intervalSub(cube(p1y), cube(p0y)), new(big.Rat).Neg(centerU)),
+				intervalScale(quad, big.NewRat(1, 8)),
+			),
 		)
 		muuDthCoeff := ratAdd(ratScale(ratMul(cu2, r2), 1, 2), ratScale(ratMul(r2, r2), 1, 8))
-		muuVal := intervalAdd(intervalScale(pointInterval(muuConst), big.NewRat(1, 3)), intervalScale(dth, muuDthCoeff))
+		muuVal := intervalAdd(intervalScale(muuConst, big.NewRat(1, 3)), intervalScale(dth, muuDthCoeff))
 
-		mvvConst := ratAdd(
-			new(big.Rat).Neg(ratMul(centerV, cv2, dx)),
-			ratScale(new(big.Rat).Neg(ratMul(cross, ratAdd(ratScale(cv2, 3, 1), r2))), 1, 2),
-			new(big.Rat).Neg(ratMul(centerV, r2, dx, big.NewRat(3, 1))),
-			ratMul(centerV, new(big.Rat).Sub(cube(p1x), cube(p0x))),
-			ratScale(quad, 1, 8),
+		mvvConst := intervalAdd(
+			intervalNeg(intervalAdd(
+				intervalAdd(
+					intervalScale(dx, ratMul(centerV, cv2)),
+					intervalScale(cross, ratScale(ratAdd(ratScale(cv2, 3, 1), r2), 1, 2)),
+				),
+				intervalScale(dx, ratMul(centerV, r2, big.NewRat(3, 1))),
+			)),
+			intervalAdd(
+				intervalScale(intervalSub(cube(p1x), cube(p0x)), centerV),
+				intervalScale(quad, big.NewRat(1, 8)),
+			),
 		)
 		mvvDthCoeff := ratAdd(ratScale(ratMul(cv2, r2), 1, 2), ratScale(ratMul(r2, r2), 1, 8))
-		mvvVal := intervalAdd(intervalScale(pointInterval(mvvConst), big.NewRat(1, 3)), intervalScale(dth, mvvDthCoeff))
+		mvvVal := intervalAdd(intervalScale(mvvConst, big.NewRat(1, 3)), intervalScale(dth, mvvDthCoeff))
 
 		// muv = ½r·(c.V·(c.U²intCos+2c.U·r·intCos2+r²intCos3) +
 		// r·(c.U²intSC+2c.U·r·intSC2+r²intSC3)) — the same substitution,
-		// collapsing entirely to a rational except the c.U·c.V·r²·dth piece.
-		muvConst := ratAdd(
-			ratScale(ratMul(centerV, ratAdd(ratMul(cu2, dy), ratMul(centerU, cross))), 1, 2),
-			ratScale(ratMul(centerV, r2, dy), 1, 2),
-			ratScale(new(big.Rat).Neg(ratMul(centerV, new(big.Rat).Sub(cube(p1y), cube(p0y)))), 1, 6),
-			ratScale(ratMul(cu2, new(big.Rat).Sub(p1ysq, p0ysq)), 1, 4),
-			ratScale(ratMul(centerU, new(big.Rat).Sub(cube(p0x), cube(p1x))), 1, 3),
-			ratScale(new(big.Rat).Sub(ratMul(p0sq, p0sq), ratMul(p1sq, p1sq)), 1, 8),
+		// collapsing to one constant enclosure except the c.U·c.V·r²·dth piece.
+		muvConst := intervalAdd(
+			intervalAdd(
+				intervalAdd(
+					intervalScale(
+						intervalAdd(intervalScale(dy, cu2), intervalScale(cross, centerU)),
+						ratScale(centerV, 1, 2),
+					),
+					intervalScale(dy, ratScale(ratMul(centerV, r2), 1, 2)),
+				),
+				intervalAdd(
+					intervalScale(intervalSub(cube(p1y), cube(p0y)), ratScale(new(big.Rat).Neg(centerV), 1, 6)),
+					intervalScale(intervalSub(p1ysq, p0ysq), ratScale(cu2, 1, 4)),
+				),
+			),
+			intervalAdd(
+				intervalScale(intervalSub(cube(p0x), cube(p1x)), ratScale(centerU, 1, 3)),
+				intervalScale(intervalSub(intervalMul(p0sq, p0sq), intervalMul(p1sq, p1sq)), big.NewRat(1, 8)),
+			),
 		)
 		muvDthCoeff := ratScale(ratMul(centerU, centerV, r2), 1, 2)
-		muvVal := intervalAdd(pointInterval(muvConst), intervalScale(dth, muvDthCoeff))
+		muvVal := intervalAdd(muvConst, intervalScale(dth, muvDthCoeff))
 
 		return muuVal, muvVal, mvvVal, true
 	default:

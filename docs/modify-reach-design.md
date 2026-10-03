@@ -564,6 +564,18 @@ over each trimmed patch. Parameter domains are line/circle intervals, tube
 angles, and spherical normal polygons; all integrands reduce to polynomials and
 trigonometric endpoint terms. NEVER use quadrature to claim Exact.
 
+A trigonometric endpoint term is ENCLOSED, never trusted from `math`. A `Cone`
+patch's volume flux and first moments are evaluated over exact rationals with
+the sine and cosine of each held float angle read through the certified radian
+enclosure (`normal_bound.go`'s `radSinCosInterval`, `moments_trig.go`'s series
+underneath it), so the published bound is the enclosure's reach from the held
+value — the same `intervalFloatError` discipline every certified circular
+bracket already publishes — and it neither grows with the arc centre's
+distance from the plane-local origin nor with the term's own magnitude. The
+magnitude envelope (`conservativeValueError`) stands only where no enclosure
+can be built: a non-finite coordinate. A `Cone` patch is never `Exact`: the
+enclosure always has width, and that width is the bound.
+
 Compute bounds from patch boundary extrema plus interior stationary points.
 An unisolated stationary family is `ErrUnsupported` at build, not a loose Exact
 box.
@@ -678,11 +690,14 @@ flat `Plane` patch's own first moment is exact rational, the same
 `(x_a²+x_b²+x_c²+x_a·x_b+x_b·x_c+x_c·x_a)/24` triangle identity one degree
 higher than the tetrahedron identity the volume uses; a `Cone`/apex/
 whole-turn patch's is a closed-form Fourier sum over a finite set of phases
-`k·θS+m·θC` (`|k|+|m| <= 3`), bounded by the SAME structural-envelope
-discipline (`|cos|`, `|sin|`, `|sincHalf|` never exceed 1) the volume's own
-cross term already uses, with the whole-turn window collapsing to two terms
-computed with no trigonometric call at all — the moment's own analogue of the
-volume's zero-valued eccentric origin term there. The centroid divides the
+`k·θS+m·θC` (`|k|+|m| <= 3`) whose coefficients are exact rationals in the
+patch's own held floats, each phase's integral `cos(mid)·sinc(width/2)` (and
+the sine analogue) enclosed through the same certified radian enclosure the
+volume's own eccentric origin term and ruled cross term take, so the bound is
+the enclosure's reach from the held value and never a magnitude envelope of
+the coefficients; the whole-turn window collapses to the `k+m = 0` terms,
+exact rationals with no trigonometric enclosure at all — the moment's own
+analogue of the volume's zero-valued eccentric origin term there. The centroid divides the
 summed first moment by the body's own volume and lifts the plane-local
 quotient to world through the same frame/placement lift a prism centroid
 uses, with the geometric safety-net bound (the true centroid lies within the
@@ -1062,6 +1077,15 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
   with a zero bound, and a band carrying a `Cone` patch reports `Approximate`;
 - the centroid bound encloses the true centroid, tested on a box far wider than
   it is tall — the shape whose farthest corner is neither `Min` nor `Max`;
+- a cap-loop chamfer on a tangent-filleted plate (every circular wall a
+  partial turn) reads `Sound` under `Document.Verify` at the default tolerance,
+  with a volume bound and a centroid bound orders below the material the
+  chamfer removed, drawn at the sketch origin and drawn a thousand millimetres
+  from it alike — a bound that grows with the arc centres' distance from the
+  plane-local origin is the magnitude envelope, not the enclosure;
+- the same plate's centroid matches the erosion family's own closed form, and
+  a `Cone` patch's exact-rational Fourier coefficients agree with their float
+  reference term by term;
 - bounded mass properties from independent closed forms;
 - shared-curve tessellation is watertight and bound `<= tol`;
 - selected/unselected hole loops retain correct nesting.
