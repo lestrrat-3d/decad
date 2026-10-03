@@ -175,16 +175,20 @@ path for a `Between` — so a value of the wrong `Kind` is `ErrUnitKind`, a nega
 in magnitude and `units.Scalar(1.0/1024)` for a `Between`, caps a worst-case run at 1025 poses per pair; it
 is a constant the implementation owns and re-sizes from measured per-pose cost, not a value the API
 promises.
+If that default rounds to zero in `From`'s unit or its base unit, the check uses and reports the smallest
+positive resolution in `From`'s unit that `WithResolution` accepts. This can exceed the path span for a
+subnormal displacement.
 
 `WithMinClearance` states a spec: the moving set MUST stay at least `minimum` from every static body over the
 whole path. Like `WithMinWallThickness` it turns a measurement into an `Assessment` (verification §1.0):
 `AssessmentMet` when every interval certifies the margin (§5.2), `AssessmentViolated` when some evaluated
 pose proves a gap below it, `AssessmentUndecided` otherwise. Its magnitude rules are `WithMinWallThickness`'s.
 
-Duplicate options keep verification §1.0's last-occurrence-wins rule. `VerifyMotion` validates the document,
-the moving set and every option before it reads `ctx`, so a validation error wins over an already-cancelled
-context exactly as in verification §1.2; after validation, a cancelled context returns `ctx.Err()` unchanged
-and no report. The context is the public work control: there is no separate budget or progress API
+Duplicate options keep verification §1.0's last-occurrence-wins rule. A nil `ctx` returns `ErrDegenerate`
+before `VerifyMotion` checks the document, moving set or options. With a non-nil context, it validates those
+inputs before checking cancellation, so a validation error wins over an already-cancelled context exactly
+as in verification §1.2; after validation, a cancelled context returns `ctx.Err()` unchanged and no report.
+The context is the public work control: there is no separate budget or progress API
 (interference §7.2), and the resolution floor is a spec about the answer, not a work limit.
 
 ## 4. The report

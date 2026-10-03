@@ -252,6 +252,9 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // rather than merely stored, so a nil one is a caller mistake this call cannot
 // carry out.
 func (b *Body) Tessellate(ctx context.Context, tol units.Value, opts ...TessellateOption) (*Mesh, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a tessellation`, ErrDegenerate)
+	}
 	folded := make([]option.Interface, len(opts))
 	for i, o := range opts {
 		folded[i] = o
