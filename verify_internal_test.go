@@ -12,6 +12,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestBoxesDisjointUsesExactInflatedEndpoints(t *testing.T) {
+	t.Parallel()
+	a := Box{
+		Min:   r3.Vec{},
+		Max:   r3.Vec{X: math.Nextafter(1, math.Inf(-1)), Y: 1, Z: 1},
+		Bound: units.Millimeters(math.Ldexp(3, -55)),
+	}
+	b := Box{
+		Min:   r3.Vec{X: 1},
+		Max:   r3.Vec{X: 2, Y: 1, Z: 1},
+		Bound: units.Millimeters(math.Ldexp(1, -54)),
+	}
+
+	// The exact inflated endpoints overlap by 2^-55, although both
+	// round to 1 when computed as float64 values.
+	require.False(t, boxesDisjoint(a, b))
+	require.False(t, boxesDisjoint(b, a))
+
+	// Reducing the first bound makes the inflated endpoints touch exactly.
+	a.Bound = units.Millimeters(math.Ldexp(1, -54))
+	require.True(t, boxesDisjoint(a, b))
+	require.True(t, boxesDisjoint(b, a))
+}
+
 func TestPairGapMeasurementEnclosesProvenInterval(t *testing.T) {
 	t.Parallel()
 	next := math.Nextafter(1, math.Inf(1))
