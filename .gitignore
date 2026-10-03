@@ -29,3 +29,6 @@ go.work.sum
 
 # Binary built by `go build` in the nested gallery module
 /_gallery/_gallery
+
+# Frames and videos `go run . clip` writes by default
+/_gallery/out/

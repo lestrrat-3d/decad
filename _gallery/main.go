@@ -1,7 +1,8 @@
-// Command gallery renders decad's README images with SolidLens.
+// Command gallery renders decad's README images with SolidLens, and its
+// landing-page clip with kinetograph.
 //
-// It lives in its own module so that SolidLens stays out of the decad
-// library's dependency list. Run it from this directory with `go run .`; with
+// It lives in its own module so that SolidLens and kinetograph stay out of
+// the decad library's dependency list. Run it from this directory with `go run .`; with
 // no flags it writes the hero image and every feature-table thumbnail under
 // the repository's docs/images, at each shot's own chord tolerance and size,
 // exactly as committed.
@@ -20,6 +21,16 @@
 //     size, then exits without rendering.
 //
 // Run `go run . -h` for the full flag reference.
+//
+// The clip subcommand renders the landing-page clip instead: `go run . clip`
+// animates the boolean plate, the shapes of the feature thumbnails and the
+// hero wordmark with kinetograph, writes each shot's PNG frames under out/,
+// and prints the two ffmpeg commands that assemble them into
+// out/decad-landing.mp4 and out/decad-landing.gif, so
+// `go run . clip > assemble.sh && sh assemble.sh` writes both videos. Its own
+// flags (-out, -width, -height, -fps, -workers, -only, -smoke, -probe) follow
+// the subcommand; runClip documents them and the shots. The flags above do
+// not apply to it.
 package main
 
 import (
@@ -93,8 +104,19 @@ func main() {
 
 // run renders every image the README references: the hero wordmark first,
 // then one thumbnail per feature-table row, each governed by the flags parsed
-// here.
+// here. A first argument of "clip" hands the rest of the arguments to
+// runClip instead.
 func run(ctx context.Context) error {
+	if len(os.Args) > 1 && os.Args[1] == "clip" {
+		return runClip(ctx, os.Args[2:], os.Stdout)
+	}
+	flag.Usage = func() {
+		out := flag.CommandLine.Output()
+		fmt.Fprintln(out, "Usage: go run . [flags]")
+		fmt.Fprintln(out, "       go run . clip [clip flags]   (go run . clip -h lists the clip flags)")
+		fmt.Fprintln(out, "Flags:")
+		flag.PrintDefaults()
+	}
 	var chordOverride *units.Value
 	flag.Func("chord", "override the chord tolerance in mm for every shot rendered (default: each shot's own tolerance)",
 		func(s string) error {
@@ -111,6 +133,9 @@ func run(ctx context.Context) error {
 	outDir := flag.String("out", "", "write images under this directory instead of the repository's docs/images")
 	list := flag.Bool("list", false, "print each shot's name, default chord tolerance and default size, then exit")
 	flag.Parse()
+	if flag.NArg() > 0 {
+		return fmt.Errorf("unexpected argument %q; the one subcommand is clip, and it must come first", flag.Arg(0))
+	}
 
 	renders := append([]imageRender{heroRender()}, featureRenders()...)
 

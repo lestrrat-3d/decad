@@ -17,6 +17,9 @@ const (
 	// front face carries, well under half the 9mm stroke width so the bevel
 	// reads as a lead-in rather than eating the stroke.
 	letterCapChamfer = 1.5
+	// letterDepth is how far every letter shape is extruded toward the
+	// camera.
+	letterDepth = 14.0
 
 	// plateDepth is the backing plate's total thickness before shelling.
 	plateDepth = 12.0
@@ -71,18 +74,26 @@ func heroRender() imageRender {
 // whole front face bevelled by a cap-loop chamfer, while "D" (an outer+inner
 // loop pair) and "A" (three separately overlapping strokes) are extruded and
 // have their outside corners filleted instead (see letter.chamferCap and
-// extrudeLetterLoops for why each keeps the fillet); and one accent is a
-// revolved dome rather than a plain extruded cylinder.
+// letterBody for why each keeps the fillet); and one accent is a revolved
+// dome rather than a plain extruded cylinder.
 func heroScene(ctx context.Context, chord units.Value) (solidlens.Scene, error) {
-	base, err := heroPlate(ctx, chord)
+	plate, err := heroPlate(ctx)
 	if err != nil {
 		return solidlens.Scene{}, fmt.Errorf("build backing plate: %w", err)
 	}
-	models := []solidlens.Model{{Mesh: base, Material: solidlens.Matte(solidlens.RGB(0.015, 0.06, 0.18))}}
+	base, err := drawnMesh(ctx, plate, chord)
+	if err != nil {
+		return solidlens.Scene{}, fmt.Errorf("build backing plate: %w", err)
+	}
+	models := []solidlens.Model{{Mesh: base, Material: solidlens.Matte(navy)}}
 
 	for li, item := range decadLetters() {
 		for si, shape := range item.shapes {
-			mesh, err := extrudeLetterLoops(ctx, shape, decad.Distance{D: units.Millimeters(14), Dir: decad.Along}, chord, item.chamferCap)
+			body, err := letterBody(ctx, shape, item.chamferCap)
+			if err != nil {
+				return solidlens.Scene{}, fmt.Errorf("build letter %d shape %d: %w", li, si, err)
+			}
+			mesh, err := drawnMesh(ctx, body, chord)
 			if err != nil {
 				return solidlens.Scene{}, fmt.Errorf("build letter %d shape %d: %w", li, si, err)
 			}
@@ -93,60 +104,87 @@ func heroScene(ctx context.Context, chord units.Value) (solidlens.Scene, error) 
 	// The left accent stays a plain extruded peg; the right one is a
 	// revolved dome, so the masthead shows both an extrude and a revolve at
 	// the same small scale.
-	peg, err := extrudeLoops(ctx, [][]point{circle(-126, -70, 4.5, 24)}, decad.Distance{
-		D: units.Millimeters(8), Dir: decad.Along,
-	}, chord)
+	pegBody, err := heroPeg(ctx)
 	if err != nil {
 		return solidlens.Scene{}, fmt.Errorf("build peg accent: %w", err)
 	}
-	models = append(models, solidlens.Model{Mesh: peg, Material: solidlens.Matte(solidlens.RGB(1, 0.58, 0.08))})
+	peg, err := drawnMesh(ctx, pegBody, chord)
+	if err != nil {
+		return solidlens.Scene{}, fmt.Errorf("build peg accent: %w", err)
+	}
+	models = append(models, solidlens.Model{Mesh: peg, Material: solidlens.Matte(orange)})
 
-	dome, err := heroStud(ctx, 126, -70, studRadius, chord)
+	domeBody, err := heroStud(ctx, 126, -70, studRadius)
 	if err != nil {
 		return solidlens.Scene{}, fmt.Errorf("build dome accent: %w", err)
 	}
-	models = append(models, solidlens.Model{Mesh: dome, Material: solidlens.Matte(solidlens.RGB(0.1, 0.78, 0.95))})
+	dome, err := drawnMesh(ctx, domeBody, chord)
+	if err != nil {
+		return solidlens.Scene{}, fmt.Errorf("build dome accent: %w", err)
+	}
+	models = append(models, solidlens.Model{Mesh: dome, Material: solidlens.Matte(sky)})
 
 	return solidlens.Scene{
 		Camera: solidlens.Camera{
-			Position: solidlens.Vec{X: 18, Y: -360, Z: 68},
-			Target:   solidlens.Vec{Z: 4},
+			Position: heroCameraPosition,
+			Target:   heroCameraTarget,
 			Up:       solidlens.Vec{Z: 1},
 			FOV:      30,
 		},
-		Models: models,
-		DirectionalLights: []solidlens.DirectionalLight{
-			{
-				Direction: solidlens.Vec{X: -0.7, Y: 0.35, Z: -1},
-				Color:     solidlens.RGB(1, 1, 1),
-				Intensity: 1.25,
-			},
-			{
-				Direction: solidlens.Vec{X: 0.6, Y: -0.2, Z: -0.6},
-				Color:     solidlens.RGB(0.25, 0.55, 1),
-				Intensity: 0.4,
-			},
-		},
-		PointLights: []solidlens.PointLight{{
-			Position:  solidlens.Vec{X: -90, Y: -135, Z: 160},
-			Color:     solidlens.RGB(0.45, 0.75, 1),
-			Intensity: 1800,
-		}},
-		Background: backgroundColor,
+		Models:            models,
+		DirectionalLights: heroDirectionalLights(),
+		PointLights:       heroPointLights(),
+		Background:        backgroundColor,
 	}, nil
+}
+
+// The hero camera: up is +Z and the field of view is 30°.
+var (
+	heroCameraPosition = solidlens.Vec{X: 18, Y: -360, Z: 68}
+	heroCameraTarget   = solidlens.Vec{Z: 4}
+)
+
+// heroDirectionalLights are the hero's two directional lights: a white key
+// light and a blue fill.
+func heroDirectionalLights() []solidlens.DirectionalLight {
+	return []solidlens.DirectionalLight{
+		{
+			Direction: solidlens.Vec{X: -0.7, Y: 0.35, Z: -1},
+			Color:     solidlens.RGB(1, 1, 1),
+			Intensity: 1.25,
+		},
+		{
+			Direction: solidlens.Vec{X: 0.6, Y: -0.2, Z: -0.6},
+			Color:     solidlens.RGB(0.25, 0.55, 1),
+			Intensity: 0.4,
+		},
+	}
+}
+
+// heroPointLights is the hero's one point light, above and to the left of
+// the wordmark.
+func heroPointLights() []solidlens.PointLight {
+	return []solidlens.PointLight{{
+		Position:  solidlens.Vec{X: -90, Y: -135, Z: 160},
+		Color:     solidlens.RGB(0.45, 0.75, 1),
+		Intensity: 1800,
+	}}
+}
+
+// drawnMesh tessellates a body that is drawn, never proven: VerifyNone skips
+// the facet-contact audit's own work ceiling, which a fine chord tolerance
+// can otherwise hit.
+func drawnMesh(ctx context.Context, body *decad.Body, chord units.Value) (*decad.Mesh, error) {
+	return body.Tessellate(ctx, chord, decad.WithVerification(decad.VerifyNone))
 }
 
 // heroPlate builds the backing plate as a shallow shadow-box: a solid slab
 // extruded from the wordmark's outline, then shelled through the cap facing
 // the camera so the plate's rim shows a real wall thickness instead of a flat
 // backdrop.
-func heroPlate(ctx context.Context, chord units.Value) (*decad.Mesh, error) {
+func heroPlate(ctx context.Context) (*decad.Body, error) {
 	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XZ())
-	if err != nil {
-		return nil, err
-	}
-	profile, err := polylineProfile(ctx, s, [][]point{rectangle(-151, -84, 151, 84)})
+	s, profile, err := sketchLoops(ctx, w, w.XZ(), rectangle(-151, -84, 151, 84))
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +200,7 @@ func heroPlate(ctx context.Context, chord units.Value) (*decad.Mesh, error) {
 	if err != nil {
 		return nil, fmt.Errorf("shell backing plate: %w", err)
 	}
-	return shelled.Tessellate(ctx, chord, decad.WithVerification(decad.VerifyNone))
+	return shelled, nil
 }
 
 func decadLetters() []letter {
@@ -223,62 +261,49 @@ func decadLetters() []letter {
 	aBar := []point{{stroke, -stroke / 2}, {width - stroke, -stroke / 2}, {width - stroke, stroke / 2}, {stroke, stroke / 2}}
 
 	return []letter{
-		{color: solidlens.RGB(0.05, 0.85, 0.96), shapes: [][][]point{place(dOuter, dInner)}, chamferCap: false},
-		{color: solidlens.RGB(0.18, 0.47, 1), shapes: [][][]point{place(e)}, chamferCap: true},
-		{color: solidlens.RGB(0.58, 0.24, 1), shapes: [][][]point{place(c)}, chamferCap: true},
-		{color: solidlens.RGB(1, 0.25, 0.2), shapes: placeShapes([][]point{aLeft}, [][]point{aRight}, [][]point{aBar}), chamferCap: false},
-		{color: solidlens.RGB(1, 0.68, 0.08), shapes: [][][]point{place(dOuter, dInner)}, chamferCap: false},
+		{color: cyan, shapes: [][][]point{place(dOuter, dInner)}, chamferCap: false},
+		{color: blue, shapes: [][][]point{place(e)}, chamferCap: true},
+		{color: violet, shapes: [][][]point{place(c)}, chamferCap: true},
+		{color: coral, shapes: placeShapes([][]point{aLeft}, [][]point{aRight}, [][]point{aBar}), chamferCap: false},
+		{color: gold, shapes: [][][]point{place(dOuter, dInner)}, chamferCap: false},
 	}
 }
 
-func extrudeLoops(ctx context.Context, loops [][]point, extent decad.Extent, chord units.Value) (*decad.Mesh, error) {
+// heroPeg is the masthead's left accent: a 24-sided polygon of radius 4.5mm
+// at plane-local (-126, -70) on XZ, extruded 8mm toward the camera.
+func heroPeg(ctx context.Context) (*decad.Body, error) {
+	return xzPrism(ctx, [][]point{circle(-126, -70, 4.5, 24)}, decad.Distance{
+		D: units.Millimeters(8), Dir: decad.Along,
+	})
+}
+
+// xzPrism extrudes the region loops bound on the XZ plane by extent. XZ makes
+// the wordmark face the camera; extrusion then gives each stroke depth along
+// Y without relying on a steep viewing angle.
+func xzPrism(ctx context.Context, loops [][]point, extent decad.Extent) (*decad.Body, error) {
 	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XZ())
-	if err != nil {
-		return nil, err
-	}
-	profile, err := polylineProfile(ctx, s, loops)
+	s, profile, err := sketchLoops(ctx, w, w.XZ(), loops...)
 	if err != nil {
 		return nil, err
 	}
 	// Extrude has no context-aware variant; Solve above is the cancellable phase.
-	body, err := decad.New().Extrude(s, profile, extent) //nolint:contextcheck
-	if err != nil {
-		return nil, err
-	}
-	// This mesh is drawn, never proven: VerifyNone skips the facet-contact
-	// audit's own work ceiling, which a fine chord tolerance can otherwise hit.
-	return body.Tessellate(ctx, chord, decad.WithVerification(decad.VerifyNone))
+	return decad.New().Extrude(s, profile, extent) //nolint:contextcheck
 }
 
-// extrudeLetterLoops extrudes one letter shape, then either fillets its
-// outside vertical corners (chamferCap false) or bevels its whole front face
-// with a cap-loop chamfer (chamferCap true) — the caller decides per LETTER,
-// not per shape; see letter.chamferCap for why D and A both keep the fillet.
-// Chamfering D's own cap loop (an outer+inner loop pair) panics decad's own
-// cap-blend tessellator regardless (it indexes past a band slice,
-// decad-side), so D's shape could not take a chamfer even loop-by-loop.
-// Fillet-then-chamfer on a hole-free shape was tried too — it does not
-// panic, but every setback tried (0.3mm through 1.5mm) hit "the offset
-// changes the section's topology; a trimmed-offset kernel is not available"
-// on at least one letter, so a chamfered shape goes straight from extrude to
-// chamfer with no fillet.
-func extrudeLetterLoops(
-	ctx context.Context, loops [][]point, extent decad.Extent, chord units.Value, chamferCap bool,
-) (*decad.Mesh, error) {
-	w := sketch.NewWorld()
-	// XZ makes the wordmark face the camera; extrusion then gives each stroke
-	// depth along Y without relying on a steep viewing angle.
-	s, err := w.CreateSketch(w.XZ())
-	if err != nil {
-		return nil, err
-	}
-	profile, err := polylineProfile(ctx, s, loops)
-	if err != nil {
-		return nil, err
-	}
-	// Extrude has no context-aware variant; Solve above is the cancellable phase.
-	extruded, err := decad.New().Extrude(s, profile, extent) //nolint:contextcheck
+// letterBody extrudes one letter shape letterDepth toward the camera, then
+// either fillets its outside vertical corners (chamferCap false) or bevels
+// its whole front face with a cap-loop chamfer (chamferCap true) — the
+// caller decides per LETTER, not per shape; see letter.chamferCap for why D
+// and A both keep the fillet. Chamfering D's own cap loop (an outer+inner
+// loop pair) panics decad's own cap-blend tessellator regardless (it indexes
+// past a band slice, decad-side), so D's shape could not take a chamfer even
+// loop-by-loop. Fillet-then-chamfer on a hole-free shape was tried too — it
+// does not panic, but every setback tried (0.3mm through 1.5mm) hit "the
+// offset changes the section's topology; a trimmed-offset kernel is not
+// available" on at least one letter, so a chamfered shape goes straight from
+// extrude to chamfer with no fillet.
+func letterBody(ctx context.Context, loops [][]point, chamferCap bool) (*decad.Body, error) {
+	extruded, err := xzPrism(ctx, loops, decad.Distance{D: units.Millimeters(letterDepth), Dir: decad.Along})
 	if err != nil {
 		return nil, err
 	}
@@ -292,15 +317,13 @@ func extrudeLetterLoops(
 		if err != nil {
 			return nil, fmt.Errorf("fillet extruded loops: %w", err)
 		}
-		return filleted.Tessellate(ctx, chord, decad.WithVerification(decad.VerifyNone))
+		return filleted, nil
 	}
 	beveled, err := extruded.Chamfer(ctx, decad.Edges(decad.CreatedBy(decad.CapEnd(extruded))), units.Millimeters(letterCapChamfer))
 	if err != nil {
 		return nil, fmt.Errorf("chamfer letter cap: %w", err)
 	}
-	// These meshes are drawn, never proven: VerifyNone skips the facet-contact
-	// audit's own work ceiling, which a fine chord tolerance can otherwise hit.
-	return beveled.Tessellate(ctx, chord, decad.WithVerification(decad.VerifyNone))
+	return beveled, nil
 }
 
 // heroStud revolves a quarter-disc profile — an on-axis base point, its rim,
@@ -308,7 +331,7 @@ func extrudeLetterLoops(
 // standing on the plate's front face at plane-local (x, z). Full 360°, the
 // profile's own arc is a quarter circle, so the sweep is a hemisphere rather
 // than surfaceShot's full-sphere dish wall.
-func heroStud(ctx context.Context, x, z, radius float64, chord units.Value) (*decad.Mesh, error) {
+func heroStud(ctx context.Context, x, z, radius float64) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	// Offsetting the YZ datum by x puts the sketch's own U axis on world Y,
 	// with the plane positioned at world X=x — the axis this stud revolves
@@ -343,5 +366,5 @@ func heroStud(ctx context.Context, x, z, radius float64, chord units.Value) (*de
 	if err != nil {
 		return nil, fmt.Errorf("revolve the stud: %w", err)
 	}
-	return dome.Tessellate(ctx, chord, decad.WithVerification(decad.VerifyNone))
+	return dome, nil
 }

@@ -217,6 +217,45 @@ jobs:
           go mod tidy
           git diff --exit-code go.mod go.sum
 
+  # _gallery is its own module, so no ./... above reaches it. Its go.mod
+  # replaces decad with this checkout, so a root change that breaks the README
+  # renderer or the landing clip fails here.
+  gallery:
+    name: gallery (README images and landing clip)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: _gallery
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: _gallery/go.mod
+          cache-dependency-path: _gallery/go.sum
+
+      - name: Tidy dependencies
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      # These commands run in _gallery, not over the root suite the shard jobs
+      # own.
+      - name: Vet and test
+        run: |
+          go vet ./...
+          go test ./...
+
+      # -smoke renders the first frame of every shot. -probe builds and
+      # tessellates the bodies of every frame, so it also catches decad
+      # refusing a value partway through a parameter ramp.
+      - name: Smoke-render and probe the landing clip
+        run: |
+          go run . clip -smoke -out "$RUNNER_TEMP/frames"
+          go run . clip -probe
+
   # Scan the module and its dependencies for known vulnerabilities.
   govulncheck:
     runs-on: ubuntu-latest

@@ -58,11 +58,30 @@ func featureRenders() []imageRender {
 	return renders
 }
 
-// sweepShot carries a square section through two orthogonal bend planes. The
-// current Sweep payload deliberately stages tessellation, so the scene renders
-// the same two Revolve spans and intervening Extrude after the real composite
-// Sweep has passed its topology, measurement, and contact audits.
+// sweepShot carries a square section through two orthogonal bend planes,
+// drawn as the three spans ductSpans builds.
 func sweepShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
+	spans, err := ductSpans(ctx)
+	if err != nil {
+		return nil, err
+	}
+	models := make([]solidlens.Model, 0, len(spans))
+	for _, body := range spans {
+		spanModels, modelErr := oneModel(ctx, body, cyan, chord)
+		if modelErr != nil {
+			return nil, modelErr
+		}
+		models = append(models, spanModels...)
+	}
+	return models, nil
+}
+
+// ductSpans sweeps a 12mm square section along an arc, a line and a second
+// arc in another plane. The current Sweep payload deliberately stages
+// tessellation, so it returns the two Revolve spans and the intervening
+// Extrude that fill the same space, after the real composite Sweep has passed
+// its topology, measurement, and contact audits.
+func ductSpans(ctx context.Context) ([]*decad.Body, error) {
 	w := sketch.NewWorld()
 	s, profile, err := sketchLoops(ctx, w, w.XY(), rectangle(-46, -6, -34, 6))
 	if err != nil {
@@ -139,15 +158,7 @@ func sweepShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error
 		return nil, fmt.Errorf("build the second render span: %w", err)
 	}
 
-	models := make([]solidlens.Model, 0, 3)
-	for _, body := range []*decad.Body{first, middle, last} {
-		spanModels, modelErr := oneModel(ctx, body, cyan, chord)
-		if modelErr != nil {
-			return nil, modelErr
-		}
-		models = append(models, spanModels...)
-	}
-	return models, nil
+	return []*decad.Body{first, middle, last}, nil
 }
 
 // extrudeShot sweeps one L-shaped section straight up into an angle bracket.
@@ -166,6 +177,16 @@ func extrudeShot(ctx context.Context, chord units.Value) ([]solidlens.Model, err
 // revolveShot spins a circle offset from the axis into a torus — the curved
 // generator, where a revolve says something a straight sweep cannot.
 func revolveShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
+	ring, err := ringBody(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return oneModel(ctx, ring, blue, chord)
+}
+
+// ringBody revolves a circle of radius 14mm, 38mm off the axis, into a flat
+// torus.
+func ringBody(ctx context.Context) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	// The XZ plane puts the sketch's v axis on world Z, so the ring lies flat.
 	s, err := w.CreateSketch(w.XZ())
@@ -188,12 +209,22 @@ func revolveShot(ctx context.Context, chord units.Value) ([]solidlens.Model, err
 	if err != nil {
 		return nil, fmt.Errorf("revolve the ring: %w", err)
 	}
-	return oneModel(ctx, ring, blue, chord)
+	return ring, nil
 }
 
 // loftShot rules a wall between two rectangles on different planes, the top one
 // smaller and offset — a transition duct rather than a plain pyramid.
 func loftShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
+	duct, err := loftDuct(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return oneModel(ctx, duct, violet, chord)
+}
+
+// loftDuct lofts an 84×60mm rectangle into a 36×28mm one, offset along X,
+// 46mm above it.
+func loftDuct(ctx context.Context) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	bottom, bottomProfile, err := sketchLoops(ctx, w, w.XY(), rectangle(-42, -30, 42, 30))
 	if err != nil {
@@ -211,7 +242,7 @@ func loftShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error)
 	if err != nil {
 		return nil, fmt.Errorf("loft the duct: %w", err)
 	}
-	return oneModel(ctx, duct, violet, chord)
+	return duct, nil
 }
 
 // filletShot rounds the four lateral edges of a plate into tangent cylinders.
@@ -258,6 +289,16 @@ func capChamferShot(ctx context.Context, chord units.Value) ([]solidlens.Model, 
 // shellShot removes one cap and offsets the section inward, leaving an open
 // tray whose wall thickness is the section's own exact offset.
 func shellShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
+	tray, err := trayBody(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return oneModel(ctx, tray, blue, chord)
+}
+
+// trayBody shells a 92×64×34mm block through its top face, leaving a 7mm
+// wall.
+func trayBody(ctx context.Context) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	doc := decad.New()
 	block, err := prism(ctx, doc, w, w.XY(), 34, rectangle(-46, -32, 46, 32))
@@ -268,32 +309,15 @@ func shellShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error
 	if err != nil {
 		return nil, fmt.Errorf("shell the block: %w", err)
 	}
-	return oneModel(ctx, tray, blue, chord)
+	return tray, nil
 }
 
-// booleanShot drills a flange plate: one central bore and two bolt holes,
-// one Cut per hole.
+// booleanShot drills the flange plate: one central bore and two bolt holes,
+// one Cut per hole (flangeBody).
 func booleanShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
-	w := sketch.NewWorld()
-	doc := decad.New()
-	plate, err := prism(ctx, doc, w, w.XY(), 16, rectangle(-48, -34, 48, 34))
+	plate, err := flangeBody(ctx, throughFlange())
 	if err != nil {
 		return nil, err
-	}
-	for _, hole := range []struct {
-		at     point
-		radius float64
-	}{{point{0, 0}, 18}, {point{-36, 0}, 7}, {point{36, 0}, 7}} {
-		// The drill runs clear past both plate faces: a tool cap resting ON a
-		// face is a face-on-face contact the boolean refuses.
-		tool, err := boreTool(ctx, doc, w, hole.at, hole.radius)
-		if err != nil {
-			return nil, err
-		}
-		plate, err = decad.Cut(ctx, plate, tool)
-		if err != nil {
-			return nil, fmt.Errorf("drill the plate: %w", err)
-		}
 	}
 	return oneModel(ctx, plate, violet, chord)
 }
@@ -302,6 +326,16 @@ func booleanShot(ctx context.Context, chord units.Value) ([]solidlens.Model, err
 // a straight chord: a blade the evaluator measures exactly rather than
 // approximating.
 func freeformShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
+	blade, err := bladeBody(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return oneModel(ctx, blade, coral, chord)
+}
+
+// bladeBody extrudes 30mm a section bounded by a fit spline through five
+// points and the straight chord between its ends.
+func bladeBody(ctx context.Context) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	if err != nil {
@@ -329,7 +363,7 @@ func freeformShot(ctx context.Context, chord units.Value) ([]solidlens.Model, er
 	if err != nil {
 		return nil, fmt.Errorf("extrude the blade: %w", err)
 	}
-	return oneModel(ctx, blade, coral, chord)
+	return blade, nil
 }
 
 // surfaceShot revolves a half-disc standing on the axis through part of a turn
@@ -339,6 +373,17 @@ func freeformShot(ctx context.Context, chord units.Value) ([]solidlens.Model, er
 // inner side, and the two materials say which side of the sheet a reader is
 // looking at.
 func surfaceShot(ctx context.Context, chord units.Value) ([]solidlens.Model, error) {
+	dish, err := dishBody(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return twoSidedModel(ctx, dish, violet, gold, chord)
+}
+
+// dishBody revolves a half-disc of radius 42mm through 150° about a vertical
+// axis 26mm behind the origin and keeps only the swept wall. It refuses a
+// result that is not an open sheet (requireSheet).
+func dishBody(ctx context.Context) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	// The XZ plane puts the sketch's v axis on world Z, so the dish stands
 	// upright and its axis is vertical. Offsetting that plane carries the axis
@@ -379,7 +424,7 @@ func surfaceShot(ctx context.Context, chord units.Value) ([]solidlens.Model, err
 	if err := requireSheet(dish); err != nil {
 		return nil, err
 	}
-	return twoSidedModel(ctx, dish, violet, gold, chord)
+	return dish, nil
 }
 
 // requireSheet refuses a body that is not an open sheet, so the thumbnail
@@ -416,25 +461,9 @@ func verifyShot(ctx context.Context, chord units.Value) ([]solidlens.Model, erro
 		return nil, fmt.Errorf("bore the housing: %w", err)
 	}
 
-	pinSketch, err := w.CreateSketch(w.XY())
+	pin, err := verifyPin(ctx, doc, w)
 	if err != nil {
 		return nil, err
-	}
-	center := pinSketch.CreatePoint(0, 0)
-	pinSketch.Fix(center)
-	pinSketch.CreateCircle(center, 15)
-	if _, err := pinSketch.Solve(ctx); err != nil {
-		return nil, err
-	}
-	pinProfile, err := validProfile(pinSketch)
-	if err != nil {
-		return nil, err
-	}
-	// Extrude has no context-aware variant; Solve above is the cancellable phase.
-	pin, err := doc.Extrude(pinSketch, pinProfile, //nolint:contextcheck
-		decad.Distance{D: units.Millimeters(46), Dir: decad.Along})
-	if err != nil {
-		return nil, fmt.Errorf("extrude the pin: %w", err)
 	}
 
 	housingModel, err := oneModel(ctx, housing, gold, chord)
@@ -455,10 +484,37 @@ func lateralEdgePlate(ctx context.Context) (*decad.Body, error) {
 	return prism(ctx, decad.New(), w, w.XY(), 26, rectangle(-50, -34, 50, 34))
 }
 
+// The verify pin: a cylinder standing on XY at the origin.
+const (
+	pinRadius = 15.0
+	pinLength = 46.0
+)
+
+// verifyPin extrudes the pin from XY along +Z.
+func verifyPin(ctx context.Context, doc *decad.Document, w *sketch.World) (*decad.Body, error) {
+	pin, err := cylinder(ctx, doc, w, w.XY(), point{}, pinRadius, decad.Distance{
+		D:   units.Millimeters(pinLength),
+		Dir: decad.Along,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("extrude the pin: %w", err)
+	}
+	return pin, nil
+}
+
 // boreTool extrudes a circular drill through the sketch plane in both
 // directions, long enough to clear any plate in this gallery.
 func boreTool(ctx context.Context, doc *decad.Document, w *sketch.World, center point, radius float64) (*decad.Body, error) {
-	s, err := w.CreateSketch(w.XY())
+	return cylinder(ctx, doc, w, w.XY(), center, radius, decad.Symmetric{D: units.Millimeters(30)})
+}
+
+// cylinder extrudes the circle of radius about plane-local center on plane
+// by extent.
+func cylinder(
+	ctx context.Context, doc *decad.Document, w *sketch.World, plane *sketch.Plane,
+	center point, radius float64, extent decad.Extent,
+) (*decad.Body, error) {
+	s, err := w.CreateSketch(plane)
 	if err != nil {
 		return nil, err
 	}
@@ -473,7 +529,7 @@ func boreTool(ctx context.Context, doc *decad.Document, w *sketch.World, center 
 		return nil, err
 	}
 	// Extrude has no context-aware variant; Solve above is the cancellable phase.
-	return doc.Extrude(s, profile, decad.Symmetric{D: units.Millimeters(30)}) //nolint:contextcheck
+	return doc.Extrude(s, profile, extent) //nolint:contextcheck
 }
 
 // prism sweeps the given plane-local loops straight along the plane normal.
