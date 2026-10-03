@@ -683,16 +683,7 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 	// is proven validity. publishValidityResult (verify_publish.go) maps the
 	// evidence onto ValidityResult and carries the one diagnostic that
 	// explains it (proposal §9).
-	evidence := validityEvidence{Kind: b.Kind()}
-	switch b.Kind() {
-	case BodySheet:
-		evidence.Sheet = auditSheetBoundary(ctx, b)
-	default:
-		evidence.Clean = auditBoundary(b)
-		evidence.Built = b.payload != nil
-		evidence.Solid = b.solid
-	}
-	validity := publishValidityResult(b, evidence)
+	validity := publishValidityResult(b, bodyValidityEvidence(ctx, b))
 	haveRegion := validity.Outcome == ValidityValid && b.Kind() == BodySolid
 
 	var vol Measurement
@@ -856,6 +847,23 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig, req VerifyReques
 		RadiusToleranceDiag: diagSet.Radius,
 		CoreDiagnostics:     diagSet.Core,
 	}), nil
+}
+
+// bodyValidityEvidence gathers the evidence publishValidityResult decides one
+// body's validity from: the sheet audit for a BodySheet, the closed-skin audit
+// plus the build and solidity facts otherwise. Verify and VerifyMotion share
+// it so the two never judge one body two different ways.
+func bodyValidityEvidence(ctx context.Context, b *Body) validityEvidence {
+	evidence := validityEvidence{Kind: b.Kind()}
+	switch b.Kind() {
+	case BodySheet:
+		evidence.Sheet = auditSheetBoundary(ctx, b)
+	default:
+		evidence.Clean = auditBoundary(b)
+		evidence.Built = b.payload != nil
+		evidence.Solid = b.solid
+	}
+	return evidence
 }
 
 // auditBoundary checks the structural invariants of the held boundary:

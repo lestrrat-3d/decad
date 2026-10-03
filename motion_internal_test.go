@@ -1,0 +1,400 @@
+package decad
+
+import (
+	"math"
+	"math/big"
+	"testing"
+
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
+	"github.com/stretchr/testify/require"
+)
+
+// motionRunFor builds VerifyMotion's own run state for one call, so a test
+// can drive a single pose through the production path.
+func motionRunFor(t *testing.T, doc *Document, moving []*Body, m Motion) *motionRun {
+	t.Helper()
+	spec, err := resolveMotion(m)
+	require.NoError(t, err)
+	run := &motionRun{ctx: t.Context(), d: doc, spec: spec, cfg: motionConfig{rel: 1e-3}, cache: &bodyGeomCache{}}
+	run.setup(moving)
+	return run
+}
+
+// TestMotionPoseDeviationReachesThePoseGap is the half of §9 test 8 the
+// public report cannot isolate: the arm at 90°, stated in degrees, about the
+// origin and about a pivot 1e6 mm away. η is nonzero at both — the float
+// π/180, math.Sincos and Rodrigues' formula each round — and the far pivot's
+// η carries the rounding of center − R·center at its magnitude, so it is
+// orders larger. The same right angle stated in radians takes the π
+// enclosure path instead and is charged the same way. The pose's published
+// gap interval is the kernel's own interval for the same transient
+// placement, widened by η on both sides.
+//
+// Legs seen to fail when deleted: charging η into the pose gap (the pose's
+// interval then equals the kernel's); η's translation term (the far pivot's η
+// falls to the near pivot's); and η's linear term (the near pivot's η is
+// zero).
+func TestMotionPoseDeviationReachesThePoseGap(t *testing.T) {
+	t.Parallel()
+	deviation := func(t *testing.T, cx float64, to units.Value) float64 {
+		t.Helper()
+		doc := New()
+		arm := internalBoxBody(t, doc, 0, -14, 48, 14, 10)
+		wall := internalBoxBody(t, doc, cx-20, -cx+58, cx+20, -cx+68, 10)
+		swing := Revolute{Center: r3.NewVec(cx, 0, 0), Axis: r3.NewVec(0, 0, 1), From: units.Degrees(0), To: to}
+		run := motionRunFor(t, doc, []*Body{arm}, swing)
+		pose, err := run.evaluatePose(big.NewRat(1, 1), to)
+		require.NoError(t, err)
+		got := pose.pairs[0][0]
+		require.True(t, got.hasGap)
+
+		placement := arm.payload.transform()
+		composed, err := placement.Then(pose.result.Pose)
+		require.NoError(t, err)
+		transient, err := arm.payload.placed(t.Context(), doc, transientProducer, composed)
+		require.NoError(t, err)
+		_, fast := clearanceAxisBoxes(transient, wall)
+		require.False(t, fast, `a rotated arm is not an axis box`)
+		res, err := clearancePair(t.Context(), transient, wall, boxesDisjoint(transient.bounds, wall.bounds))
+		require.NoError(t, err)
+		require.Equal(t, pairDisjoint, res.verdict)
+
+		eta, _ := poseDeviation(composed, placement, run.spec.frame.at(pose.param), run.movers[0].r0)
+		require.Greater(t, eta, 0.0)
+		require.Less(t, got.lo, res.lo, `η lowers the proven lower end`)
+		require.Greater(t, got.hi, res.hi, `η raises the proven upper end`)
+		require.LessOrEqual(t, got.lo, 10.0)
+		require.GreaterOrEqual(t, got.hi, 10.0)
+		return eta
+	}
+	near := deviation(t, 0, units.Degrees(90))
+	far := deviation(t, 1e6, units.Degrees(90))
+	require.Greater(t, deviation(t, 0, units.Radians(math.Pi/2)), 0.0)
+	// The near pivot's η is the basis error times a ~100 mm record radius; the
+	// far pivot's adds the pivot offset's rounding at 1e6 mm. Asserted as a
+	// ratio, never as a literal: FMA contraction moves both by an ulp.
+	require.Greater(t, far, 1000*near)
+}
+
+// TestMotionPoseDeviationIsZeroForAnExactPose: the identity pose at 0°, a
+// right-angle pose about an axis whose rotation float arithmetic states
+// exactly, and a dyadic translation along a unit axis are each the ideal
+// pose bit for bit, so η is exactly zero and an Exact row stays Exact.
+func TestMotionPoseDeviationIsZeroForAnExactPose(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	arm := internalBoxBody(t, doc, 0, -14, 48, 14, 10)
+	cases := []struct {
+		name string
+		m    Motion
+		at   units.Value
+	}{
+		{"identity rotation", Revolute{Axis: r3.NewVec(0, 0, 1), From: units.Degrees(0), To: units.Degrees(90)}, units.Degrees(0)},
+		{"dyadic translation", Prismatic{Dir: r3.NewVec(0, 4, 0), From: units.Millimeters(0), To: units.Millimeters(30)}, units.Millimeters(30)},
+		{"translation in another unit", Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(30)}, units.Centimeters(2)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			spec, err := resolveMotion(tc.m)
+			require.NoError(t, err)
+			pose, err := tc.m.PoseAt(tc.at)
+			require.NoError(t, err)
+			param, ok := exactMotionParam(tc.at)
+			require.True(t, ok)
+			placement := arm.payload.transform()
+			composed, err := placement.Then(pose)
+			require.NoError(t, err)
+			eta, linear := poseDeviation(composed, placement, spec.frame.at(param), math.Inf(1))
+			require.Zero(t, eta)
+			require.Zero(t, linear)
+		})
+	}
+}
+
+// TestMotionParamSinCosEnclosesTheAngle checks the ideal rotation's sine and
+// cosine for each way an angle can be stated: a whole number of quarter turns
+// is a point, a degree count is an exact turn, a radian count is enclosed
+// through π, and an interpolation between the two mixes both. Each enclosure
+// is far below float resolution and agrees with math.Sincos to float
+// accuracy.
+func TestMotionParamSinCosEnclosesTheAngle(t *testing.T) {
+	t.Parallel()
+	exact := []struct {
+		at       units.Value
+		sin, cos int64
+	}{
+		{units.Degrees(0), 0, 1},
+		{units.Degrees(90), 1, 0},
+		{units.Degrees(-180), 0, -1},
+		{units.Degrees(630), -1, 0},
+		{units.Radians(0), 0, 1},
+	}
+	for _, tc := range exact {
+		p, ok := exactMotionParam(tc.at)
+		require.True(t, ok)
+		sin, cos := paramSinCos(p)
+		require.Zero(t, sin.lo.Cmp(big.NewRat(tc.sin, 1)), tc.at.String())
+		require.Zero(t, sin.hi.Cmp(big.NewRat(tc.sin, 1)), tc.at.String())
+		require.Zero(t, cos.lo.Cmp(big.NewRat(tc.cos, 1)), tc.at.String())
+		require.Zero(t, cos.hi.Cmp(big.NewRat(tc.cos, 1)), tc.at.String())
+	}
+
+	fromDeg, ok := exactMotionParam(units.Degrees(10))
+	require.True(t, ok)
+	toRad, ok := exactMotionParam(units.Radians(1))
+	require.True(t, ok)
+	approx := []struct {
+		name  string
+		p     motionParam
+		angle float64
+	}{
+		{"degrees", fromDeg, 10 * math.Pi / 180},
+		{"negative degrees", mustMotionParam(t, units.Degrees(-450.25)), -450.25 * math.Pi / 180},
+		{"radians", toRad, 1},
+		{"negative radians", mustMotionParam(t, units.Radians(-2.5)), -2.5},
+		{"degrees to radians halfway", fromDeg.lerp(toRad, big.NewRat(1, 2)), 5*math.Pi/180 + 0.5},
+	}
+	tiny := big.NewRat(1, 1)
+	tiny.SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 150))
+	for _, tc := range approx {
+		sin, cos := paramSinCos(tc.p)
+		for _, iv := range []struct {
+			got  ratInterval
+			want float64
+		}{{sin, math.Sin(tc.angle)}, {cos, math.Cos(tc.angle)}} {
+			width := new(big.Rat).Sub(iv.got.hi, iv.got.lo)
+			require.Equal(t, 1, tiny.Cmp(width), `%s: enclosure width`, tc.name)
+			mid, _ := new(big.Rat).Add(iv.got.lo, iv.got.hi).Float64()
+			require.InDelta(t, iv.want, mid/2, 4e-16, tc.name)
+		}
+	}
+}
+
+func mustMotionParam(t *testing.T, v units.Value) motionParam {
+	t.Helper()
+	p, ok := exactMotionParam(v)
+	require.True(t, ok)
+	return p
+}
+
+// TestMotionAxisRadiusReadsTheBox checks ρ_max on the arm of §9: its far
+// corners (48, ±14) sit exactly 50 mm from the Z axis through the origin, and
+// moving the axis to (0, −14) moves the far corner (48, 14) to exactly
+// √(48² + 28²) mm from it.
+func TestMotionAxisRadiusReadsTheBox(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	arm := internalBoxBody(t, doc, 0, -14, 48, 14, 10)
+	for _, tc := range []struct {
+		center r3.Vec
+		want   float64
+	}{
+		{r3.Vec{}, 50},
+		{r3.NewVec(0, -14, 0), math.Sqrt(48*48 + 28*28)},
+	} {
+		spec, err := resolveMotion(Revolute{Center: tc.center, Axis: r3.NewVec(0, 0, 3), From: units.Degrees(0), To: units.Degrees(90)})
+		require.NoError(t, err)
+		rho := moverAxisRadius(arm, spec.frame)
+		require.GreaterOrEqual(t, rho, tc.want)
+		require.InDelta(t, tc.want, rho, 1e-12)
+	}
+}
+
+// TestVerifyMotionKeepsTheNextProducerIdentity is §9 test 7's producer
+// half: a Duplicate after the call receives exactly the identity it would
+// have received before it, so no transient placement occupied one.
+func TestVerifyMotionKeepsTheNextProducerIdentity(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	cube := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
+	internalBoxBody(t, doc, 25, 2, 35, 8, 10)
+	before := doc.nextProducerID()
+	_, err := doc.VerifyMotion(t.Context(), []*Body{cube}, Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(30)}, WithResolution(units.Millimeters(100)))
+	require.NoError(t, err)
+	require.Equal(t, before, doc.nextProducerID())
+	dup, err := cube.Duplicate(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, before, dup.originProducer())
+}
+
+// TestVerifyMotionRefusesABodyItDidNotBuild is §9 test 9's row the public
+// API cannot reach: a mover with no payload is ErrUnsupported, as for Placed.
+func TestVerifyMotionRefusesABodyItDidNotBuild(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	foreignBuilt := &Body{doc: doc, kind: BodySolid}
+	doc.commit(foreignBuilt)
+	before := doc.Bodies()
+	report, err := doc.VerifyMotion(t.Context(), []*Body{foreignBuilt}, Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(1)})
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Nil(t, report)
+	require.Equal(t, before, doc.Bodies())
+}
+
+// farCornerFixture is the arm swinging 45° about a pivot (pivot, 0, 0) far
+// from the origin, against a 20 mm block whose top face sits depth below the
+// arm's lowest corner at 45°: the corner pokes into the block as a wedge of
+// volume depth² × 10 mm³. The pivot's magnitude makes the pose's η — chiefly
+// the rounding of center − R·center — large enough for the swept-volume
+// allowance to matter. The block spans z ∈ [−5, 15], past the arm's caps, so
+// the read-only proof can measure the overlap.
+func farCornerFixture(t *testing.T, pivot, depth float64) (*Document, *Body, *Body, Revolute) {
+	t.Helper()
+	doc := New()
+	arm := internalBoxBody(t, doc, 0, -14, 48, 14, 10)
+	half := math.Sqrt(0.5)
+	lowest := -(pivot + 14) * half
+	cornerX := pivot - pivot*half + 14*half
+	block := internalBoxBody(t, doc, -10, -20, 10, 0, 20)
+	shift, err := r3.Translation(r3.NewVec(cornerX, lowest+depth, -5))
+	require.NoError(t, err)
+	block, err = block.Placed(t.Context(), shift)
+	require.NoError(t, err)
+	swing := Revolute{Center: r3.NewVec(pivot, 0, 0), Axis: r3.NewVec(0, 0, 1), From: units.Degrees(0), To: units.Degrees(45)}
+	return doc, arm, block, swing
+}
+
+// farCornerOverlap measures, through the production pieces, what the 45°
+// pose of farCornerFixture proves: the read-only overlap volume at the float
+// pose and the swept-volume allowance that pose's η charges.
+func farCornerOverlap(t *testing.T, doc *Document, arm, block *Body, swing Revolute) (Measurement, interferenceOutcome, float64) {
+	t.Helper()
+	run := motionRunFor(t, doc, []*Body{arm}, swing)
+	pose, err := swing.PoseAt(swing.To)
+	require.NoError(t, err)
+	placement := arm.payload.transform()
+	composed, err := placement.Then(pose)
+	require.NoError(t, err)
+	transient, err := arm.payload.placed(t.Context(), doc, transientProducer, composed)
+	require.NoError(t, err)
+	eta, linear := poseDeviation(composed, placement, run.spec.frame.at(run.spec.toP), run.movers[0].r0)
+	require.Greater(t, eta, 0.0)
+	allowance := sweptVolumeAllow(eta, pathAreaUpper(run.movers[0].area, linear, run.movers[0].sigma))
+	res, err := clearancePair(t.Context(), transient, block, false)
+	require.NoError(t, err)
+	volume, outcome, err := measuredInterference(t.Context(), transient, block, res)
+	require.NoError(t, err)
+	return volume, outcome, allowance
+}
+
+// TestMotionCollisionTransferWidensTheBound is the transfer test of
+// docs/motion-check-design.md §10: a 45° pose about a pivot 1e9 mm away has
+// a nonzero η, and its 0.02 mm-deep corner overlap clears the swept-volume
+// allowance by a wide margin, so it is published as a Collision whose Bound
+// is the read-only proof's own widened by exactly that allowance.
+//
+// Legs seen to fail when deleted: the widening of the published bound (the
+// published Bound equals the read-only proof's own).
+func TestMotionCollisionTransferWidensTheBound(t *testing.T) {
+	t.Parallel()
+	doc, arm, block, swing := farCornerFixture(t, 1e9, 0.02)
+	volume, outcome, allowance := farCornerOverlap(t, doc, arm, block, swing)
+	require.Equal(t, interferenceMeasured, outcome)
+	require.Greater(t, allowance, 0.0)
+	require.Greater(t, volume.Value.Base()-volume.Bound.Base(), allowance, `the fixture's overlap clears the allowance`)
+
+	report, err := doc.VerifyMotion(t.Context(), []*Body{arm}, swing, WithResolution(units.Degrees(360)))
+	require.NoError(t, err)
+	require.Equal(t, Interfering, report.Status)
+	require.Len(t, report.Collisions, 1)
+	collision := report.Collisions[0]
+	require.Equal(t, units.Degrees(45), collision.At)
+	require.Equal(t, volume.Value, collision.Volume.Value)
+	require.Equal(t, Approximate, collision.Volume.Exactness)
+	require.Equal(t, absSumUpper(volume.Bound.Base(), allowance), collision.Volume.Bound.Base())
+	require.Greater(t, collision.Volume.Bound.Base(), volume.Bound.Base())
+	require.Greater(t, collision.Volume.Value.Base()-collision.Volume.Bound.Base(), 0.0)
+	end := report.Poses[len(report.Poses)-1]
+	require.Equal(t, []Interference{{A: arm, B: block, Volume: collision.Volume}}, end.Interferences)
+}
+
+// TestMotionOverlapThatDoesNotTransferIsUndecided pins the two overlaps §5.1
+// refuses to call a collision. A 0.008 mm-deep corner overlap at a pivot
+// 2e9 mm away is measured positive at the float pose, but its proven lower
+// end does not clear the allowance the pose's η charges; and an overlap the
+// read-only proof cannot measure at all — the block sharing the arm's cap
+// planes, a contact it refuses — has no volume to carry. Each reads
+// DiagUndecidedInterference at the pose, never a Collision, and leaves the
+// interval undecided.
+//
+// Legs seen to fail when deleted: the allowance in the transfer comparison
+// (the thin overlap transfers and the pose publishes a Collision).
+func TestMotionOverlapThatDoesNotTransferIsUndecided(t *testing.T) {
+	t.Parallel()
+	requireUndecided := func(t *testing.T, doc *Document, arm, block *Body, swing Revolute) {
+		t.Helper()
+		before := doc.Bodies()
+		report, err := doc.VerifyMotion(t.Context(), []*Body{arm}, swing, WithResolution(units.Degrees(360)))
+		require.NoError(t, err)
+		require.Equal(t, before, doc.Bodies())
+		require.Empty(t, report.Collisions)
+		require.Equal(t, Suspect, report.Status)
+		require.Equal(t, IntervalUndecided, report.Intervals[0].Outcome)
+		end := report.Poses[len(report.Poses)-1]
+		require.Empty(t, end.Interferences)
+		require.Empty(t, end.Clearances)
+		require.Len(t, end.Diagnostics, 1)
+		d := end.Diagnostics[0]
+		require.Equal(t, DiagUndecidedInterference, d.Code)
+		require.Equal(t, &DiagnosticPair{A: arm, B: block}, d.Pair)
+		require.Equal(t, units.Degrees(45), *d.At)
+		require.Equal(t, ReadingNone, d.Reading)
+	}
+	t.Run("measured below the allowance", func(t *testing.T) {
+		t.Parallel()
+		doc, arm, block, swing := farCornerFixture(t, 2e9, 0.008)
+		volume, outcome, allowance := farCornerOverlap(t, doc, arm, block, swing)
+		require.Equal(t, interferenceMeasured, outcome)
+		lower := volume.Value.Base() - volume.Bound.Base()
+		require.Greater(t, lower, 0.0, `the float pose's overlap is proven positive`)
+		require.Less(t, lower, allowance, `but its lower end does not clear the allowance`)
+		requireUndecided(t, doc, arm, block, swing)
+	})
+	t.Run("unmeasured", func(t *testing.T) {
+		t.Parallel()
+		doc := New()
+		arm := internalBoxBody(t, doc, 0, -14, 48, 14, 10)
+		block := internalBoxBody(t, doc, -100, 40, 100, 60, 10)
+		swing := Revolute{Axis: r3.NewVec(0, 0, 1), From: units.Degrees(0), To: units.Degrees(45)}
+		requireUndecided(t, doc, arm, block, swing)
+	})
+}
+
+// TestMotionPathAreaUpper checks the area the swept-volume allowance is
+// charged at: an exactly orthonormal rest placement has σ = 1, a float
+// rotation's σ sits just below 1, and a pose whose linear part departs from
+// the ideal one stretches the rest area by (1 + linear/σ)², never less.
+//
+// Legs seen to fail when deleted: the stretch factor (the stretched area
+// equals the rest area).
+func TestMotionPathAreaUpper(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, 1.0, basisSigmaLower(r3.Identity()))
+	rot, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
+	require.NoError(t, err)
+	sigma := basisSigmaLower(rot)
+	require.LessOrEqual(t, sigma, 1.0)
+	require.Greater(t, sigma, 1-1e-12)
+
+	require.Equal(t, 100.0, pathAreaUpper(100, 0, sigma))
+	stretched := pathAreaUpper(100, 1e-3, 0.5)
+	require.GreaterOrEqual(t, stretched, 100*(1+2e-3)*(1+2e-3))
+	require.InDelta(t, 100*(1+2e-3)*(1+2e-3), stretched, 1e-9)
+	require.True(t, math.IsInf(pathAreaUpper(100, 1e-3, 0), 1), `an unbounded σ refuses`)
+}
+
+// TestMotionExceedsResolution checks the resolution floor's comparison: an
+// interval exactly one resolution wide stops when both are stated in the
+// same terms, and a mixed degree/radian pair compares through π without
+// stopping early.
+func TestMotionExceedsResolution(t *testing.T) {
+	t.Parallel()
+	at := func(v units.Value) motionParam { return mustMotionParam(t, v) }
+	require.False(t, exceedsResolution(at(units.Degrees(0)), at(units.Degrees(90.0/1024)), at(units.Degrees(90.0/1024))))
+	require.True(t, exceedsResolution(at(units.Degrees(0)), at(units.Degrees(90.0/512)), at(units.Degrees(90.0/1024))))
+	require.False(t, exceedsResolution(at(units.Millimeters(30)), at(units.Millimeters(0)), at(units.Centimeters(3))))
+	require.True(t, exceedsResolution(at(units.Degrees(0)), at(units.Degrees(1)), at(units.Radians(0.017))))
+	require.False(t, exceedsResolution(at(units.Degrees(0)), at(units.Degrees(1)), at(units.Radians(0.0175))))
+}

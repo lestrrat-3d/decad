@@ -273,6 +273,24 @@ const (
 	// usable tolerance reference, so the gate could not judge it. Reading
 	// names the quantity, Required nil. Contributes Suspect.
 	DiagToleranceReferenceUnavailable
+	// DiagMotionCollision — a motion pose proves a (mover, static) pair
+	// overlaps (docs/motion-check-design.md §4.1). Pair and At set; Reading
+	// ReadingOverlapVolume with Observed the volume when it was bounded, else
+	// ReadingNone. Contributes Interfering.
+	DiagMotionCollision
+	// DiagMotionClearanceViolated — a motion pose proves a pair's gap below
+	// the WithMinClearance minimum. Pair and At set, Reading ReadingGap,
+	// Observed the gap, Required the minimum. Contributes Violating.
+	DiagMotionClearanceViolated
+	// DiagMotionUndecidedInterval — a motion interval neither certified clear
+	// nor bounded by a proven collision. Pair nil, At the interval's From,
+	// Reading ReadingNone; Message names both ends. Contributes Suspect.
+	DiagMotionUndecidedInterval
+	// DiagMotionUndecidedClearance — a motion interval certified clear whose
+	// lower bound does not reach the WithMinClearance minimum while no pose
+	// falsifies it. At the interval's From, Reading ReadingGap, Observed the
+	// interval's lower bound, Required the minimum. Contributes Suspect.
+	DiagMotionUndecidedClearance
 )
 
 // String renders the pinned lower-snake token — the identity a caller branches
@@ -322,6 +340,14 @@ func (c DiagnosticCode) String() string {
 		return "survey_prerequisite"
 	case DiagToleranceReferenceUnavailable:
 		return "tolerance_reference_unavailable"
+	case DiagMotionCollision:
+		return "motion_collision"
+	case DiagMotionClearanceViolated:
+		return "motion_clearance_violated"
+	case DiagMotionUndecidedInterval:
+		return "motion_undecided_interval"
+	case DiagMotionUndecidedClearance:
+		return "motion_undecided_clearance"
 	default:
 		return fmt.Sprintf("diagnostic(%d)", int(c))
 	}
@@ -339,7 +365,9 @@ type DiagnosticPair struct{ A, B *Body }
 // reason concerns — SurveyNone for every core reading and every pair
 // diagnostic — set even when Reading is ReadingNone, so an unsupported wall,
 // undercut, or concave-radius refusal is distinguished without inspecting
-// Message text.
+// Message text. At is the motion parameter a VerifyMotion finding concerns
+// (docs/motion-check-design.md §4.1); it is nil on every diagnostic Verify
+// emits and on every motion finding about the whole path.
 type Diagnostic struct {
 	Code        DiagnosticCode  // the stable branch key
 	Status      Status          // the rung this reason contributes
@@ -351,6 +379,7 @@ type Diagnostic struct {
 	ObservedVec *VecMeasurement // a vector reading (a Centroid); nil unless Reading == ReadingCentroid
 	ObservedBox *Box            // a box reading (a Bounds); nil unless Reading == ReadingBounds
 	Required    *units.Value    // the threshold the reading was judged against; nil when the reason states none
+	At          *units.Value    // the motion parameter a VerifyMotion finding concerns; nil outside motion reports
 	Message     string          // human-readable; NEVER the branch key
 }
 

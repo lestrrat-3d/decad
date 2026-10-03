@@ -101,6 +101,7 @@
 0	0.04	TestLoftVerifySurveysStaySuspect
 0	0.01	TestMinRadiusAnnularRevolveStaysExact
 0	0.02	TestMinRadiusArcRadiusBound
+0	0.00	TestMotionAxisRadiusReadsTheBox
 0	0.05	TestNewBodyGeomCancellationIsBounded
 0	0.66	TestNormalAtRefusesEveryUntaggedSurface
 0	0.01	TestOBJPlate
@@ -205,6 +206,9 @@
 0	0.01	TestVerifyDiagnosticsInterference
 0	0.02	TestVerifyDiagnosticsSectionDeltaPrismReadsItsOwnGateDiameter
 0	3.12	TestVerifyGearScaleEightRegionOverlapReportsSummedVolume
+0	5.50	TestVerifyMotionClearSwingBisected
+0	0.01	TestVerifyMotionClearSwingEndpoints
+0	0.00	TestVerifyMotionRefusesABodyItDidNotBuild
 0	0.03	TestVerifyMultiRegionOverlapReportsSummedVolume
 0	0.03	TestVerifyPublishCoarseReadingKeepsGeometry
 0	0.01	TestVerifyPublishMeasuredConcaveRadius
@@ -303,6 +307,11 @@
 1	0.83	TestLoftWalkResolutionChargesOncePerSegment
 1	0.03	TestMeasuredInterferenceFallsBackToMeshWhenAnalyticNotAdmitted
 1	0.01	TestMinRadiusHolePlate
+1	0.04	TestMotionCollisionTransferWidensTheBound
+1	0.00	TestMotionExceedsResolution
+1	0.05	TestMotionOverlapThatDoesNotTransferIsUndecided
+1	0.00	TestMotionParamSinCosEnclosesTheAngle
+1	0.00	TestMotionPathAreaUpper
 1	0.02	TestMultiLumpFacetedBodyBypassesAnalyticContainment
 1	0.01	TestOffsetPatchNegative
 1	0.02	TestOffsetPrismCircle
@@ -409,6 +418,9 @@
 1	0.01	TestVerifyContextCancellation
 1	0.02	TestVerifyDiagnosticsUnsupportedPairStagedContact
 1	0.01	TestVerifyDisjointPairIsSound
+1	0.02	TestVerifyMotionErrors
+1	0.27	TestVerifyMotionKnownCollisionAngle
+1	0.08	TestVerifyMotionSweptBoxCoversTravelFromRest
 1	0.03	TestVerifyNoneWithholdsTheVolumeProofOnARestatedMesh
 1	0.01	TestVerifyPublishUndercutCompleteViolation
 1	0.03	TestVerifyPublishUndercutFacesOrderedByBody
@@ -508,6 +520,7 @@
 2	0.02	TestLoftPlacementDoesNotRerunTheSeamGates
 2	0.01	TestLoftVerifySound
 2	0.03	TestMinRadiusAggregatesLosingCandidate
+2	0.00	TestMotionPoseAt
 2	0.02	TestMultiSegmentFreeformRegionRoundsOnce
 2	0.01	TestNURBSBezierMatchesGeomEvaluator
 2	0.02	TestOffsetPrismNeckRefusal
@@ -614,6 +627,8 @@
 2	0.02	TestVerifyEffectiveRequestRecorded
 2	0.01	TestVerifyExactlyTangentPairStaysUndecided
 2	0.19	TestVerifyInterferenceRowsKeepDocumentPairOrder
+2	0.02	TestVerifyMotionKeepsTheNextProducerIdentity
+2	1.20	TestVerifyMotionSweptBoxExclusion
 2	1.24	TestVerifyNoneMeetsAToleranceTheProvenPathRefuses
 2	0.03	TestVerifyOffsetBoxesReportBoundedInterference
 2	0.03	TestVerifyPublishUndercutUnavailable
@@ -714,6 +729,7 @@
 3	0.01	TestMalformedNURBSRefusesBeforeScanningControls
 3	4.90	TestMeshBooleanWorkerCountsProduceIdenticalResults
 3	0.56	TestModifyRefusalRendersAClosedCircleAsClosed
+3	0.00	TestMotionPoseDeviationIsZeroForAnExactPose
 3	0.23	TestNormalAtArmBoundCoversItsOwnDefect
 3	0.01	TestNormalAtPlaneArmCoversItsFrameCross
 3	0.02	TestOBJChordTolerance
@@ -823,6 +839,9 @@
 3	0.04	TestVerifyDiagnosticsUndecidedClearance
 3	0.05	TestVerifyFacetedMultiRegionPairStaysAsBefore
 3	19.37	TestVerifyGearScaleOverArrangementCapStaysSuspect
+3	0.28	TestVerifyMotionNearMissBetweenSamples
+3	0.41	TestVerifyMotionNonMutationAndDeterminism
+3	0.00	TestVerifyMotionSweptBoxSettlesASlab
 3	0.01	TestVerifyPublishAbsentWall
 3	0.03	TestVerifyPublishCapBlendWallStaged
 3	0.02	TestVerifyPublishMeasuredWall
@@ -1659,6 +1678,8 @@
 4	0.00	TestVerifyEmptyDocument
 4	0.00	TestVerifyExactBodyPassesZeroTolerance
 4	0.28	TestVerifyIsNonMutating
+4	1.90	TestVerifyMotionCancellation
+4	0.19	TestVerifyMotionPrismatic
 4	0.00	TestVerifyNilDocument
 4	0.20	TestVerifyNonePublishesOnlyPositiveAreaFacets
 4	0.00	TestVerifyOptionValidation
@@ -1803,6 +1824,7 @@
 5	0.01	TestMinRadiusDonutWaist
 5	0.02	TestMinRadiusExactCandidatesStayExact
 5	0.04	TestMomentValidationCancellationIsBounded
+5	0.05	TestMotionPoseDeviationReachesThePoseGap
 5	0.05	TestNormalAtArmDegeneraciesRefuse
 5	0.01	TestOffsetPatchConversionIsRefused
 5	0.02	TestOffsetPrismCarriesTheSourceAxialDisplacement
@@ -1905,6 +1927,8 @@
 5	0.29	TestVerifyDiagnosticsProximityRefusalIsContact
 5	0.02	TestVerifyDiagnosticsUnsupportedFacetedSurveys
 5	0.01	TestVerifyDiagnosticsWallTooThin
+5	0.03	TestVerifyMotionPoseDeviationIsCharged
+5	0.63	TestVerifyMotionTouchingStart
 5	0.03	TestVerifyMultiRegionOverlapSumMatchesIndependentRationalAnswer
 5	0.03	TestVerifyPublishDiagnosticFlattening
 5	0.01	TestVerifyPublishPlateWithHoleTopology
