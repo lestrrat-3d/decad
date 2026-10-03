@@ -425,13 +425,10 @@ func TestPrismCutDisjointFootprintFallsBack(t *testing.T) {
 	require.Equal(t, 1000.0, volumeMM(t, vol), `the disjoint tool removes nothing`)
 }
 
-// TestPrismCutG5FallsBackWhenToolDoesNotSpanTarget is §15's G5 fallback for
-// Cut: a pocketing tool shorter than the target's own height falls back to the
-// mesh path's own blind-hole result, unchanged. The tool is built symmetrically
-// about the shared sketch plane so its own caps land clear of the target's —
-// a coincident cap plane is the mesh path's own separate, pre-existing
-// coplanar-contact limitation (§1), not what G5 is under test for here.
-func TestPrismCutG5FallsBackWhenToolDoesNotSpanTarget(t *testing.T) {
+// TestPrismCutG5BuildsAnalyticBlindPocket checks a tool that reaches only one
+// end of the target. Its two cap planes miss both target caps, so this also
+// exercises the interior-level path independently of coincident cap contact.
+func TestPrismCutG5BuildsAnalyticBlindPocket(t *testing.T) {
 	t.Parallel()
 	// half and toolHalf are the two footprints' own half-widths.
 	const half, toolHalf, h, reach = 10.0, 3.0, 10.0, 2.0
@@ -441,7 +438,7 @@ func TestPrismCutG5FallsBackWhenToolDoesNotSpanTarget(t *testing.T) {
 
 	got, err := decad.Cut(t.Context(), target, tool)
 	require.NoError(t, err)
-	require.True(t, anyFaceIsFaceted(got), `a non-spanning tool is not the clean-nesting shape`)
+	require.False(t, anyFaceIsFaceted(got))
 
 	vol, err := got.Volume()
 	require.NoError(t, err)

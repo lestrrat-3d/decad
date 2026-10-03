@@ -266,6 +266,25 @@ func performBoolean(ctx context.Context, op operationKind, a, b *Body) (*Body, e
 		d.commit(body, a, b)
 		return body, nil
 	}
+	if op == opCut {
+		if cp, ok, err := tryBlindCupCut(ctx, a, b); err != nil {
+			if errors.Is(err, ErrUnsupported) {
+				return nil, asBooleanError(op, expectedBoolean(booleanExpectedUnsupported, err))
+			}
+			return nil, err
+		} else if ok {
+			ref := d.nextProducerID()
+			body, err := evalCupContext(ctx, d, ref, cp)
+			if err != nil {
+				return nil, err
+			}
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			d.commit(body, a, b)
+			return body, nil
+		}
+	}
 
 	eval, err := evaluateBoolean(ctx, op, a, b)
 	if err != nil {

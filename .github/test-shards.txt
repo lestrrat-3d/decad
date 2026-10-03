@@ -894,6 +894,7 @@
 4	0.00	TestAxisFrameWalkChargeIsAbsentAtZero
 4	0.00	TestAxisFrameWalkChargeWidensEveryFieldItTouches
 4	0.00	TestBezierSliceCountSplitsBrokenFromUnsliceable
+4	0.01	TestBlindCutBuildsAnalyticPocket
 4	0.00	TestBodyGateDiameterCancellation
 4	0.00	TestBodyGateDiameterDisplacedPrismShrinksByTwiceTheSum
 4	0.00	TestBodyGateDiameterFreeformArmDoesNotWidenRevolvePayload
@@ -1353,7 +1354,7 @@
 4	0.01	TestPrismBooleanNearWholeCircleSourceFallsBack
 4	0.00	TestPrismBooleanTrimmedCircularSourceFallsBack
 4	0.00	TestPrismCircularWalkChargeImpliesRefusal
-4	0.02	TestPrismCutG5FallsBackWhenToolDoesNotSpanTarget
+4	0.02	TestPrismCutG5BuildsAnalyticBlindPocket
 4	0.05	TestPrismCutIntersectNonCoplanarPairStillTakesMeshPath
 4	0.01	TestPrismIntersectDisjointFootprintsFallsBack
 4	0.07	TestPrismIntersectFullyNestedPairReturnsInnerOperand
