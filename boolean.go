@@ -162,6 +162,37 @@ func expectedBooleanForOperand(kind booleanExpectedKind, operand int, err error)
 	return &booleanExpectedError{kind: kind, operand: operand, err: err}
 }
 
+// booleanOperandStaging restates a Faceted operand's held-bound refusal
+// (facetedBoundRefusal) in the boolean's own terms (docs/api-design.md §8,
+// "The chain depth"): it names the operand, quotes the held bound and the
+// pair's chord tolerance, and says that a boolean takes no tolerance, since
+// the Tessellate wording's "retry with a tolerance" names an argument this
+// caller does not have. Every other tessellation refusal passes through
+// unchanged.
+func booleanOperandStaging(op operationKind, operand int, err error) error {
+	var held *facetedBoundRefusal
+	if !errors.As(err, &held) {
+		return err
+	}
+	return fmt.Errorf(`%w: %s's %s is a boolean result whose held mesh bound %s is coarser than this pair's chord tolerance %s; a boolean takes no tolerance, so the chain cannot continue from this operand: reshape the construction with fewer booleans over it, or draw the pair so the analytic prism path admits it (docs/api-design.md §8, "The chain depth")`,
+		ErrUnsupported, op, booleanOperandRole(op, operand), units.Millimeters(held.held), units.Millimeters(held.requested))
+}
+
+// booleanOperandRole names an operand the way the public signatures do: Cut's
+// target and tool, otherwise first and second operand.
+func booleanOperandRole(op operationKind, operand int) string {
+	switch {
+	case op == opCut && operand == 0:
+		return "target"
+	case op == opCut:
+		return "tool"
+	case operand == 0:
+		return "first operand"
+	default:
+		return "second operand"
+	}
+}
+
 func asExpectedBoolean(err error) (*booleanExpectedError, bool) {
 	var expected *booleanExpectedError
 	return expected, errors.As(err, &expected)
@@ -376,7 +407,7 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 			// A tessellation ErrUnsupported is a capability/staging limit on the
 			// operand itself, reached before any contact is examined — never a
 			// contact refusal (see booleanExpectedStaging).
-			err = expectedBooleanForOperand(booleanExpectedStaging, 0, err)
+			err = expectedBooleanForOperand(booleanExpectedStaging, 0, booleanOperandStaging(op, 0, err))
 		}
 		return booleanEvaluation{}, err
 	}
@@ -392,7 +423,7 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 			// A tessellation ErrUnsupported is a capability/staging limit on the
 			// operand itself, reached before any contact is examined — never a
 			// contact refusal (see booleanExpectedStaging).
-			err = expectedBooleanForOperand(booleanExpectedStaging, 1, err)
+			err = expectedBooleanForOperand(booleanExpectedStaging, 1, booleanOperandStaging(op, 1, err))
 		}
 		return booleanEvaluation{}, err
 	}

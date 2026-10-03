@@ -1961,3 +1961,4 @@
 2	0.00	TestPrismIntersectShiftedEndpointChargesItsRounding
 2	0.00	TestPrismCutOffsetPlaneToolsChainAnalytically
 2	0.00	TestPrismCutOffsetPlaneExclusionsTakeMeshPath
+2	0.00	TestBooleanChainDepthRefusalNamesOperandAndTakesNoTolerance
