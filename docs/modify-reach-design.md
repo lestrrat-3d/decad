@@ -132,7 +132,7 @@ more specific SX row replaces that base refusal.
 | **SX11** | inward closed/side-opening prism shell leaves axial cavity height `h - k*t <= 0`, where `k` is kept cap count; or section cavity is empty | no cavity | `ErrDegenerate` |
 | **SX12** | cap chamfer ruled patches intersect away from shared boundaries or cannot be certified disjoint | body exists under trim kernel | `ErrUnsupported` |
 | **SX13** | a cap-loop chamfer whose setback rounds away against the level it displaces: the cap contour's offset radius rounds back onto a circular wall's own radius (`R -/+ d == R`), or the band's side level rounds back onto its own cap level (`z1 - d == z1` on the end cap, `z0 + d == z0` on the start cap) | body exists; its taper is real but finer than float64 names at that radius or at that sweep level, so the band's patches cannot be told from a cylinder or from the cap plane | `ErrUnsupported` |
-| **SX14** | a cap-loop chamfer whose denoted contour corner cannot be enclosed: the two offset carriers' interval intersection is unbounded, or the exact carriers do not meet where the float solve found a root | body exists; its offset corner is real and this evaluator cannot state where it is, so no cap-level coordinate there can publish a proven displacement | `ErrUnsupported` |
+| **SX14** | a cap-loop chamfer whose denoted contour corner cannot be enclosed: the two offset carriers' interval intersection is unbounded, or the exact carriers do not meet where the float solve found a root. A G1 join (modify §7's dead-zone rule) intersects no carriers — its corner is the shared-normal foot, enclosed as a reflex corner's feet are — so SX14 never fires on one | body exists; its offset corner is real and this evaluator cannot state where it is, so no cap-level coordinate there can publish a proven displacement | `ErrUnsupported` |
 | **SX15** | a cap-loop chamfer whose band patch's outward orientation cannot be certified: the patch's own `Face.NormalAt` refuses at the build's orientation sample point | body exists and its patches are real; the evaluator cannot evaluate its own orientation sample on this patch, so it cannot state which side of the patch is outward | `ErrUnsupported` |
 
 Gate order:
@@ -428,7 +428,11 @@ window and the narrow (cap) one, and the ruled patch's own point-for-point
 departure from the wide cone is bounded in closed form from the two windows'
 angular skew; `chordLocusVolumeAllow` composes both terms into one proven
 volume bound. The residual, and its bound, are exactly zero wherever the two
-windows already coincide: a tangent join, an apex patch, and a whole turn.
+windows already coincide: a tangent join, an apex patch, and a whole turn. A
+tangent join is modify §7's G1 row: its cap-level foot is `v + dc·n̂` and its
+ruling runs from `v` to that foot, so the ruling IS the denoted corner locus
+`v + s·dc·n̂` — affine in `s`, exactly as a reflex foot is — and the two windows
+coincide because the foot sits on the circular wall's own radial through `v`.
 
 That residual is not only a quantity: it is a difference of KIND. A straight
 ruled surface between two arcs sweeping different windows has negative
@@ -516,9 +520,10 @@ term:
   covers the chord-versus-locus excess beside its own arithmetic. The excess
   is ONE-SIDED — a chord never exceeds the curve it subtends — so the term
   only ever widens the bound upward, never the reported value, and it is
-  exactly zero at a line-line miter and at every reflex foot, because both
-  loci are affine in the offset amount there (a reflex foot rides one wall's
-  own offset carrier alone, whatever that wall's kind). A corner whose locus
+  exactly zero at a line-line miter, at every reflex foot and at every G1
+  join, because the locus is affine in the offset amount there (a reflex foot
+  rides one wall's own offset carrier alone, whatever that wall's kind, and a
+  G1 join's foot is `v + s·dc·n̂` by construction). A corner whose locus
   enclosure this evaluator cannot build refuses through `ErrUnsupported`
   rather than publish an understated bound — the same rule `Edge.Length`'s own
   doc comment (`topology.go`) already states for a boolean rim on a curved
@@ -584,7 +589,13 @@ outward-rounded square roots, and report the enclosure's greatest reach from the
 float point the build holds. Interval arithmetic is inclusion-monotonic, so the
 box holds the denoted point whatever the platform's `sqrt` and `hypot` did, and
 nothing in the derivation assumes an ulp contract. Where no bounded box exists
-the call is SX14.
+the call is SX14. A G1 join's corner is not a carrier intersection: its
+denoted point is `v + dc·n̂` for the leaving wall's exact unit normal, and the
+enclosure is the hull of the two shared-normal feet (the arriving wall's and
+the leaving wall's, the same enclosure a reflex corner's two feet take), read
+against the held foot. The hull is what charges the dead zone: the two normals
+differ by at most the classification's own `|cross|`, so a join classified G1
+with a residual turn is displaced by at most what the hull spans.
 
 The readings that carry it: every cap-level vertex `bound`; every cap-level
 edge length — the corner-to-apex slants, a wall's own cap edge, a reflex
