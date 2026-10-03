@@ -315,6 +315,7 @@
 1	0.00	TestMotionBasisSigmaUpper
 1	0.00	TestMotionBetweenFrameReachesTo
 1	0.04	TestMotionCollisionTransferWidensTheBound
+1	0.01	TestMotionDefaultResolutionUnderflowIsReusable
 1	0.00	TestMotionExceedsResolution
 1	0.05	TestMotionOverlapThatDoesNotTransferIsUndecided
 1	0.00	TestMotionParamSinCosEnclosesTheAngle
@@ -650,6 +651,7 @@
 2	0.26	TestVerifyMotionBetweenNearMissBetweenSamples
 2	0.20	TestVerifyMotionBetweenNonMutationAndDeterminism
 2	0.02	TestVerifyMotionKeepsTheNextProducerIdentity
+2	0.40	TestVerifyMotionRevolveKeepsLiveDenotationIdentities
 2	1.20	TestVerifyMotionSweptBoxExclusion
 2	1.24	TestVerifyNoneMeetsAToleranceTheProvenPathRefuses
 2	0.03	TestVerifyOffsetBoxesReportBoundedInterference
@@ -922,6 +924,7 @@
 4	0.00	TestBoundedSqrtKeepsAZeroBoundOperandExact
 4	0.00	TestBoundedSqrtWidensABoundedOperand
 4	0.00	TestBox
+4	0.00	TestBoxesDisjointUsesExactInflatedEndpoints
 4	0.00	TestBrokenNURBSKnotVectorRefuses
 4	0.00	TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta
 4	0.00	TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame
@@ -1048,6 +1051,7 @@
 4	0.00	TestContactFloorUsesTrueSectionBBox
 4	0.00	TestContactMemoPromotesDenseWithoutChangingEntries
 4	0.00	TestContactMemoRepeatsTheClassifier
+4	0.00	TestContextOperationsRejectNilBeforeOperands
 4	0.00	TestConvexityCertificateChargesTheRecordWorkCounter
 4	0.00	TestConvexityCertificateSpendIncreases
 4	0.00	TestCoplanarRelationCancellationIsBounded

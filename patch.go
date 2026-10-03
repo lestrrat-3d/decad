@@ -67,11 +67,11 @@ func (pp patchPayload) prism() prismPayload {
 // ErrUnsupported (Table R row R3). A failed evaluation leaves the document
 // untouched.
 func (d *Document) Patch(ctx context.Context, s *sketch.Sketch, p *sketch.Profile) (*Body, error) {
-	if d == nil {
-		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
-	}
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a patch`, ErrDegenerate)
+	}
+	if d == nil {
+		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

@@ -3,9 +3,11 @@ package decad
 import (
 	"math"
 	"math/big"
+	"sync"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -202,21 +204,72 @@ func TestMotionAxisRadiusReadsTheBox(t *testing.T) {
 	}
 }
 
-// TestVerifyMotionKeepsTheNextProducerIdentity is §9 test 7's producer
-// half: a Duplicate after the call receives exactly the identity it would
-// have received before it, so no transient placement occupied one.
+// TestVerifyMotionKeepsTheNextProducerIdentity is §9 test 7's document
+// identity half: a transient placement must mint no live producer, level, or
+// curve identity. A Duplicate after the call receives the next producer.
 func TestVerifyMotionKeepsTheNextProducerIdentity(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	cube := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 	internalBoxBody(t, doc, 25, 2, 35, 8, 10)
 	before := doc.nextProducerID()
-	_, err := doc.VerifyMotion(t.Context(), []*Body{cube}, Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(30)}, WithResolution(units.Millimeters(100)))
+	levelBefore, curveBefore := doc.nextLevel, doc.nextCurve
+	report, err := doc.VerifyMotion(t.Context(), []*Body{cube}, Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(30)}, WithResolution(units.Millimeters(100)))
 	require.NoError(t, err)
+	require.Len(t, report.Poses, 2)
 	require.Equal(t, before, doc.nextProducerID())
+	require.Equal(t, levelBefore, doc.nextLevel)
+	require.Equal(t, curveBefore, doc.nextCurve)
+	const readers = 4
+	reports := make([]*MotionReport, readers)
+	errs := make([]error, readers)
+	var wg sync.WaitGroup
+	for i := range reports {
+		wg.Go(func() {
+			reports[i], errs[i] = doc.VerifyMotion(t.Context(), []*Body{cube},
+				Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(30)},
+				WithResolution(units.Millimeters(100)))
+		})
+	}
+	wg.Wait()
+	for i := range reports {
+		require.NoError(t, errs[i])
+		require.Equal(t, report, reports[i])
+	}
+	require.Equal(t, levelBefore, doc.nextLevel)
+	require.Equal(t, curveBefore, doc.nextCurve)
 	dup, err := cube.Duplicate(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, before, dup.originProducer())
+}
+
+func TestVerifyMotionRevolveKeepsLiveDenotationIdentities(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 10, 8)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	mover, err := doc.Revolve(s, s.Profiles()[0],
+		SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}, FullRevolution{})
+	require.NoError(t, err)
+	static := internalBoxBody(t, doc, 15, -10, 25, 10, 10)
+	before := doc.Bodies()
+	levelBefore, curveBefore := doc.nextLevel, doc.nextCurve
+	report, err := doc.VerifyMotion(t.Context(), []*Body{mover},
+		Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(20)},
+		WithResolution(units.Millimeters(100)))
+	require.NoError(t, err)
+	require.Len(t, report.Poses, 2)
+	require.Equal(t, static, report.Against[0])
+	require.Len(t, report.Poses[0].Diagnostics, 1)
+	require.Equal(t, DiagUndecidedClearance, report.Poses[0].Diagnostics[0].Code)
+	require.Equal(t, before, doc.Bodies())
+	require.Equal(t, levelBefore, doc.nextLevel)
+	require.Equal(t, curveBefore, doc.nextCurve)
 }
 
 // TestVerifyMotionRefusesABodyItDidNotBuild is §9 test 9's row the public
@@ -397,6 +450,70 @@ func TestMotionExceedsResolution(t *testing.T) {
 	require.False(t, exceedsResolution(at(units.Millimeters(30)), at(units.Millimeters(0)), at(units.Centimeters(3))))
 	require.True(t, exceedsResolution(at(units.Degrees(0)), at(units.Degrees(1)), at(units.Radians(0.017))))
 	require.False(t, exceedsResolution(at(units.Degrees(0)), at(units.Degrees(1)), at(units.Radians(0.0175))))
+}
+
+// A one-subnormal-millimetre path is valid, but one 1024th of it cannot be
+// carried by units.Value. The reported fallback must be accepted as an
+// explicit option and name the floor actually used by the check.
+func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	mover := internalBoxBody(t, doc, 0, 0, 1, 1, 1)
+	motion := Prismatic{
+		Dir:  r3.NewVec(1, 0, 0),
+		From: units.Millimeters(0),
+		To:   units.Millimeters(math.SmallestNonzeroFloat64),
+	}
+	spec, err := resolveMotion(motion)
+	require.NoError(t, err)
+	cfg, err := resolveMotionOptions(nil, spec)
+	require.NoError(t, err)
+	require.Equal(t, units.Millimeters(math.SmallestNonzeroFloat64), cfg.resolution)
+	reported, ok := exactMotionParam(cfg.resolution)
+	require.True(t, ok)
+	require.Zero(t, reported.base.Cmp(cfg.resolutionP.base))
+
+	report, err := doc.VerifyMotion(t.Context(), []*Body{mover}, motion)
+	require.NoError(t, err)
+	require.Equal(t, cfg.resolution, report.Request.Resolution)
+	replayed, err := doc.VerifyMotion(t.Context(), []*Body{mover}, motion, WithResolution(report.Request.Resolution))
+	require.NoError(t, err)
+	require.Equal(t, report.Status, replayed.Status)
+
+	// A degree needs a larger subnormal magnitude before conversion to the
+	// radian base unit is nonzero. The report must also be reusable there.
+	swing := Revolute{
+		Axis: r3.NewVec(0, 0, 1),
+		From: units.Degrees(0),
+		To:   units.Degrees(math.SmallestNonzeroFloat64),
+	}
+	swingSpec, err := resolveMotion(swing)
+	require.NoError(t, err)
+	swingCfg, err := resolveMotionOptions(nil, swingSpec)
+	require.NoError(t, err)
+	require.Greater(t, swingCfg.resolution.Mag(), math.SmallestNonzeroFloat64)
+	swingReported, ok := exactMotionParam(swingCfg.resolution)
+	require.True(t, ok)
+	require.Zero(t, swingReported.turn.Cmp(swingCfg.resolutionP.turn))
+	_, err = resolveMotionOptions([]MotionOption{WithResolution(swingCfg.resolution)}, swingSpec)
+	require.NoError(t, err)
+
+	// The nominal 1/1024 step can round to a positive degree magnitude that
+	// still converts to zero radians. It must trigger the same fallback.
+	swing.To = units.Degrees(1024 * math.SmallestNonzeroFloat64)
+	swingSpec, err = resolveMotion(swing)
+	require.NoError(t, err)
+	swingCfg, err = resolveMotionOptions(nil, swingSpec)
+	require.NoError(t, err)
+	require.Greater(t, swingCfg.resolution.Mag(), math.SmallestNonzeroFloat64)
+	swingReported, ok = exactMotionParam(swingCfg.resolution)
+	require.True(t, ok)
+	require.Zero(t, swingReported.turn.Cmp(swingCfg.resolutionP.turn))
+	swingReport, err := doc.VerifyMotion(t.Context(), []*Body{mover}, swing)
+	require.NoError(t, err)
+	require.Equal(t, swingCfg.resolution, swingReport.Request.Resolution)
+	_, err = doc.VerifyMotion(t.Context(), []*Body{mover}, swing, WithResolution(swingReport.Request.Resolution))
+	require.NoError(t, err)
 }
 
 // TestMotionPathAreaUpperStretchBase pins pathAreaUpper's stretch base

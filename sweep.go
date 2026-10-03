@@ -62,11 +62,11 @@ func WithSweepTwist(angle units.Value) SweepOption {
 // remain staged as ErrUnsupported. Every failure and cancellation leaves the
 // document unchanged.
 func (d *Document) Sweep(ctx context.Context, s *sketch.Sketch, p *sketch.Profile, path *Path, opts ...SweepOption) (*Body, error) {
-	if d == nil {
-		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
-	}
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a sweep`, ErrDegenerate)
+	}
+	if d == nil {
+		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
 	if s == nil || p == nil || path == nil {
 		return nil, fmt.Errorf(`%w: Sweep requires a non-nil sketch, profile, and path`, ErrDegenerate)
@@ -434,11 +434,11 @@ func (sp chainSweepPayload) placed(ctx context.Context, d *Document, ref produce
 // no closing face, so WithSurfaceResult() does not compile against this call.
 // A failed evaluation leaves the document unchanged.
 func (d *Document) SweepChain(ctx context.Context, s *sketch.Sketch, ch *sketch.Chain, path *Path, opts ...ChainSweepOption) (*Body, error) {
-	if d == nil {
-		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
-	}
 	if ctx == nil {
 		return nil, fmt.Errorf(`%w: a nil context cannot control a sweep`, ErrDegenerate)
+	}
+	if d == nil {
+		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
 	if s == nil || ch == nil || path == nil {
 		return nil, fmt.Errorf(`%w: SweepChain requires a non-nil sketch, chain, and path`, ErrDegenerate)

@@ -79,6 +79,9 @@ func WithShellSense(s ShellSense) ShellOption {
 // ErrUnsupported. The offset section faces the §5 audit before anything is
 // built, so no unproven body is ever made.
 func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts ...ShellOption) (*Body, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a shell`, ErrDegenerate)
+	}
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}

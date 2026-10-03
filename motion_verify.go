@@ -137,19 +137,49 @@ func resolveMotion(m Motion) (motionSpec, error) {
 }
 
 // defaultResolution is the published default resolution, |To − From|/1024
-// carried in From's unit. The check itself refines against the exact
-// rational defaultResolutionParam, so this float is a label.
-func (s motionSpec) defaultResolution() units.Value {
-	from := floatRat(s.from.Mag())
-	toMag, err := s.to.In(s.from.Unit())
-	to := floatRat(toMag)
-	if err != nil || from == nil || to == nil {
-		return units.New(0, s.from.Unit())
+// carried in From's unit. When that value underflows in From's unit or its
+// base unit, it returns the smallest positive resolution in From's unit
+// accepted by WithResolution and reports clamped so the check uses that floor.
+func (s motionSpec) defaultResolution() (units.Value, bool) {
+	var d *big.Rat
+	if s.kind == motionPrismatic {
+		// The exact base-unit difference survives conversion that could round
+		// two distinct endpoints to the same float in From's unit.
+		d = new(big.Rat).Sub(s.toP.base, s.fromP.base)
+		d.Abs(d)
+		d.Quo(d, floatRat(s.from.Unit().Factor()))
+	} else {
+		from := floatRat(s.from.Mag())
+		toMag, err := s.to.In(s.from.Unit())
+		to := floatRat(toMag)
+		if err != nil || from == nil || to == nil {
+			return units.New(0, s.from.Unit()), false
+		}
+		d = new(big.Rat).Sub(to, from)
+		d.Abs(d)
 	}
-	d := new(big.Rat).Sub(to, from)
-	d.Abs(d)
 	mag, _ := d.Quo(d, big.NewRat(1024, 1)).Float64()
-	return units.New(mag, s.from.Unit())
+	base, _ := units.BaseUnit(s.paramKind())
+	reported := units.New(mag, s.from.Unit())
+	converted, err := reported.In(base)
+	if mag > 0 && err == nil && converted > 0 {
+		return reported, false
+	}
+	// A positive exact floor can underflow in From's unit or its base unit.
+	// Binary search positive finite float bits for the first value whose base
+	// conversion is nonzero, which is also the first WithResolution accepts.
+	low, high := uint64(0), math.Float64bits(1)
+	for high-low > 1 {
+		mid := low + (high-low)/2
+		candidate := units.New(math.Float64frombits(mid), s.from.Unit())
+		converted, err := candidate.In(base)
+		if err != nil || converted == 0 {
+			low = mid
+			continue
+		}
+		high = mid
+	}
+	return units.New(math.Float64frombits(high), s.from.Unit()), true
 }
 
 // defaultResolutionParam is |θ(To) − θ(From)|/1024 taken part by part over
@@ -262,9 +292,13 @@ func (d *Document) resolveMovers(moving []*Body) error {
 // that survives the pose's own deviation from the ideal motion (§5.1).
 //
 // moving MUST be non-empty, hold live bodies of d, and list no body twice.
-// Every validation error is returned before ctx is read; after validation a
-// canceled context returns ctx.Err() and no report.
+// A nil context returns ErrDegenerate before validation. Other validation
+// errors precede cancellation; after validation a canceled context returns
+// ctx.Err() and no report.
 func (d *Document) VerifyMotion(ctx context.Context, moving []*Body, m Motion, opts ...MotionOption) (*MotionReport, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control motion verification`, ErrDegenerate)
+	}
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
@@ -290,14 +324,15 @@ func (d *Document) VerifyMotion(ctx context.Context, moving []*Body, m Motion, o
 // motionRun is one VerifyMotion call's working state. It lives in the call
 // alone, never on the Document.
 type motionRun struct {
-	ctx     context.Context //nolint:containedctx // motionRun is per-call state and never outlives VerifyMotion.
-	d       *Document
-	spec    motionSpec
-	cfg     motionConfig
-	cache   *bodyGeomCache
-	movers  []motionMover
-	statics []motionStatic
-	pairs   [][]motionPair // [mover][static]
+	ctx       context.Context //nolint:containedctx // motionRun is per-call state and never outlives VerifyMotion.
+	d         *Document
+	transient *Document // per-call identity counters for uncommitted pose bodies
+	spec      motionSpec
+	cfg       motionConfig
+	cache     *bodyGeomCache
+	movers    []motionMover
+	statics   []motionStatic
+	pairs     [][]motionPair // [mover][static]
 	// stretch and stretchEnd are pathAreaUpper's stretch base (§5.1) for a
 	// pose before the end and for the end itself: exactly 1 for a Revolute
 	// and a Prismatic; basisSigmaUpper of From, and at s = 1 the larger of
@@ -357,6 +392,12 @@ type motionPose struct {
 }
 
 func (r *motionRun) setup(moving []*Body) {
+	// Payload rebuilding mints level and curve denotations. Start above every
+	// live identity, then mint only on this copy: successive pose bodies stay
+	// distinct from static geometry without changing the caller's document.
+	transient := *r.d
+	transient.bodies = append([]*Body(nil), r.d.bodies...)
+	r.transient = &transient
 	isMover := make(map[*Body]struct{}, len(moving))
 	for _, b := range moving {
 		isMover[b] = struct{}{}
@@ -617,7 +658,7 @@ func (r *motionRun) evaluateMover(mp *motionPose, i int, pose r3.Transform, idea
 	if err != nil {
 		return fmt.Errorf(`%w: composing the pose onto a moving body's placement failed: %w`, ErrNotFinite, err)
 	}
-	transient, err := mv.body.payload.placed(r.ctx, r.d, transientProducer, composed)
+	transient, err := mv.body.payload.placed(r.ctx, r.transient, transientProducer, composed)
 	if err != nil {
 		return err
 	}
