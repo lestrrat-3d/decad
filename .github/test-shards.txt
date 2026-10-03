@@ -417,6 +417,7 @@
 1	0.02	TestVerifyDiagnosticsUnsupportedPairStagedContact
 1	0.01	TestVerifyDisjointPairIsSound
 1	0.02	TestVerifyMotionErrors
+1	0.27	TestVerifyMotionKnownCollisionAngle
 1	0.08	TestVerifyMotionSweptBoxCoversTravelFromRest
 1	0.03	TestVerifyNoneWithholdsTheVolumeProofOnARestatedMesh
 1	0.01	TestVerifyPublishUndercutCompleteViolation
@@ -833,6 +834,7 @@
 3	0.04	TestVerifyDiagnosticsUndecidedClearance
 3	0.05	TestVerifyFacetedMultiRegionPairStaysAsBefore
 3	19.37	TestVerifyGearScaleOverArrangementCapStaysSuspect
+3	0.28	TestVerifyMotionNearMissBetweenSamples
 3	0.41	TestVerifyMotionNonMutationAndDeterminism
 3	0.00	TestVerifyMotionSweptBoxSettlesASlab
 3	0.01	TestVerifyPublishAbsentWall
@@ -1671,7 +1673,7 @@
 4	0.00	TestVerifyExactBodyPassesZeroTolerance
 4	0.28	TestVerifyIsNonMutating
 4	1.90	TestVerifyMotionCancellation
-4	0.00	TestVerifyMotionPrismatic
+4	0.19	TestVerifyMotionPrismatic
 4	0.00	TestVerifyNilDocument
 4	0.20	TestVerifyNonePublishesOnlyPositiveAreaFacets
 4	0.00	TestVerifyOptionValidation

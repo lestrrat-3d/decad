@@ -131,6 +131,115 @@ func TestMotionPoseAt(t *testing.T) {
 	}
 }
 
+// TestVerifyMotionKnownCollisionAngle is §9 test 1: the arm swinging into a
+// wall at y ∈ [40, 60] whose z ∈ [−10, 30] reaches past the arm's caps, so
+// the two bodies share no face plane and the read-only proof measures their
+// overlap. The corner (48, 14) reaches y = 40 first, at θ* = atan(3/4) ≈
+// 36.87°. The 90° endpoint collides, so the colliding interval is halved
+// toward the onset, and at WithResolution(0.25°) — a grid step of
+// 90°/512 ≈ 0.176° — the first collision lands within 0.5° above θ*. The same
+// holds for the swing stated in radians.
+//
+// Legs seen to fail when deleted: the onset bisection of a colliding interval
+// with a collision-free end (the first collision stays at the 90° endpoint).
+func TestVerifyMotionKnownCollisionAngle(t *testing.T) {
+	t.Parallel()
+	thetaStar := math.Atan(3.0 / 4.0)
+	cases := []struct {
+		name       string
+		motion     decad.Motion
+		resolution units.Value
+		toRadians  func(units.Value) float64
+	}{
+		{"degrees", armSwing(), units.Degrees(0.25), func(v units.Value) float64 { return v.Mag() * math.Pi / 180 }},
+		{"radians", decad.Revolute{Axis: r3.NewVec(0, 0, 1), From: units.Radians(0), To: units.Radians(math.Pi / 2)},
+			units.Radians(0.25 * math.Pi / 180), func(v units.Value) float64 { return v.Mag() }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			doc := decad.New()
+			arm := motionArm(t, doc)
+			wall := boxBodyAtZ(t, doc, -100, 40, 100, 60, -10, 40)
+			report := verifyMotion(t, doc, []*decad.Body{arm}, tc.motion, decad.WithResolution(tc.resolution))
+
+			require.Equal(t, decad.Interfering, report.Status)
+			require.NotEmpty(t, report.Collisions)
+			for _, c := range report.Collisions {
+				require.Greater(t, tc.toRadians(c.At), thetaStar)
+				require.Same(t, arm, c.Moving)
+				require.Same(t, wall, c.Static)
+				require.Greater(t, c.Volume.Value.Mag(), 0.0)
+				require.Less(t, c.Volume.Bound.Mag(), c.Volume.Value.Mag())
+			}
+			first := tc.toRadians(report.Collisions[0].At)
+			require.Less(t, first-thetaStar, 0.5*math.Pi/180, `the onset is bracketed to the resolution`)
+			for _, iv := range report.Intervals {
+				from, to := tc.toRadians(iv.From), tc.toRadians(iv.To)
+				if iv.Outcome == decad.IntervalClear {
+					require.LessOrEqual(t, to, thetaStar)
+				}
+				if from <= thetaStar && thetaStar <= to {
+					require.NotEqual(t, decad.IntervalClear, iv.Outcome, `the interval holding θ* is never clear`)
+				}
+			}
+		})
+	}
+}
+
+// TestVerifyMotionNearMissBetweenSamples is §9 test 3: a 1 mm blade swinging
+// through a 0.8 mm pin at polar angle α = 90·31/64 = 43.59375°, radius 49.
+// Contact needs 49·|sin(θ − α)| ≤ 0.5 + 0.4·√2, so the contact window lies
+// within |θ − α| ≤ 1.247°. At WithResolution(3°) refinement stops at
+// 90°/32 = 2.8125°, and the reachable poses nearest α, 42.1875° and 45°, sit
+// 1.40625° from it — outside the window — so the blade passes through the pin
+// between samples and the interval spanning it reads undecided, never clear.
+// At WithResolution(0.1°) the grid reaches α itself and the collision is found.
+//
+// Legs seen to fail when deleted: the ρ_max·Δθ travel term, and ρ_max read
+// from the blade's centroid instead of its box (each lets the coarse interval
+// spanning the pin certify, and the 3° report reads Sound). Proven redundant:
+// a one-sided certificate, lo_k > τ or lo_{k+1} > τ alone, implies the
+// two-sided lo_k + lo_{k+1} > τ, so it certifies fewer intervals, never more,
+// and no fixture can fail on it.
+func TestVerifyMotionNearMissBetweenSamples(t *testing.T) {
+	t.Parallel()
+	alpha := 90.0 * 31 / 64
+	window := 1.247
+	build := func(t *testing.T) (*decad.Document, *decad.Body) {
+		t.Helper()
+		doc := decad.New()
+		blade := boxBody(t, doc, 0, -0.5, 50, 0.5, 10)
+		a := alpha * math.Pi / 180
+		cx, cy := 49*math.Cos(a), 49*math.Sin(a)
+		boxBodyAtZ(t, doc, cx-0.4, cy-0.4, cx+0.4, cy+0.4, 4.6, 0.8)
+		return doc, blade
+	}
+	t.Run("a coarse resolution never reads the pass clear", func(t *testing.T) {
+		t.Parallel()
+		doc, blade := build(t)
+		report := verifyMotion(t, doc, []*decad.Body{blade}, armSwing(), decad.WithResolution(units.Degrees(3)))
+		require.Empty(t, report.Collisions)
+		require.Equal(t, decad.Suspect, report.Status)
+		found := false
+		for _, iv := range report.Intervals {
+			if iv.From.Mag() <= alpha && alpha <= iv.To.Mag() {
+				found = true
+				require.Equal(t, decad.IntervalUndecided, iv.Outcome)
+			}
+		}
+		require.True(t, found)
+	})
+	t.Run("a fine resolution finds the pin", func(t *testing.T) {
+		t.Parallel()
+		doc, blade := build(t)
+		report := verifyMotion(t, doc, []*decad.Body{blade}, armSwing(), decad.WithResolution(units.Degrees(0.1)))
+		require.Equal(t, decad.Interfering, report.Status)
+		require.NotEmpty(t, report.Collisions)
+		require.InDelta(t, alpha, report.Collisions[0].At.Mag(), window)
+	})
+}
+
 // TestVerifyMotionClearSwingEndpoints is §9 test 2's endpoints-only part: the
 // arm swinging 0°→90° past a wall at
 // y ∈ [60, 80]. The true minimum gap is 10 mm, at θ = 90° − atan(7/24), and

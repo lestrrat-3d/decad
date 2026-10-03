@@ -18,7 +18,9 @@ import (
 //
 // The check evaluates the two endpoints, then bisects on a dyadic grid of the
 // path (§6): first for the verdict, until every interval is certified clear,
-// bounded by a proven collision, or no wider than the resolution; then for the
+// colliding at both ends, or no wider than the resolution — a colliding
+// interval with a collision-free end is halved toward the contact's onset;
+// then for the
 // readings, refining the interval holding the smallest certified clearance
 // while the whole-path reading fails the tolerance gate or a requested margin
 // is neither proven nor disproven, on the same floor. An interval the floor
@@ -390,8 +392,11 @@ func (r *motionRun) execute() (*MotionReport, error) {
 }
 
 // nextRefinement picks the interval §6 bisects next, or −1 when refinement is
-// done. Step 5 comes first: the first interval in traversal order that is
-// neither clear nor colliding and still wider than the resolution. Step 6
+// done. Step 5 comes first: the first interval in traversal order, still wider
+// than the resolution, that is either undecided or colliding at one end only —
+// halving the latter walks the first collision toward the contact's onset,
+// while an interval colliding at both ends says nothing more for being split.
+// Step 6
 // follows: the interval holding the smallest certified clearance (ties in
 // traversal order), while the whole-path reading would fail the tolerance gate
 // or a requested margin is neither proven nor disproven by that interval, and
@@ -401,7 +406,9 @@ func (r *motionRun) nextRefinement(poses []*motionPose, spans []motionSpan) int 
 	allClear := true
 	smallest := -1
 	for k, span := range spans {
-		if span.outcome == IntervalUndecided && r.wide(poses[k], poses[k+1]) {
+		startHits, endHits := len(poses[k].collisions) > 0, len(poses[k+1].collisions) > 0
+		onset := span.outcome == IntervalColliding && startHits != endHits
+		if (span.outcome == IntervalUndecided || onset) && r.wide(poses[k], poses[k+1]) {
 			return k
 		}
 		if span.outcome != IntervalClear {
