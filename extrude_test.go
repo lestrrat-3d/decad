@@ -890,3 +890,85 @@ func TestPlacedUsesEvaluatorCache(t *testing.T) {
 	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(60000), decadtest.Exactly())
 	decadtest.MeasuresCentroid(t, placed, r3.NewVec(50, 30, 30))
 }
+
+// A sketch arc rounding the (48, 10) corner of a 96×20 rectangle has its
+// centre and feet at |u| ≈ 48 and |v| ≈ 10, two different binades, so the
+// recorded ArcSeg's two pinned radii differ by ulps of the coordinate. The
+// extrude must still build, and its centroid must keep a tight bound that
+// Verify reads as Sound.
+//
+// Shown-to-fail: (i) restoring the radius-anchored pin tolerance
+// (momentCoordinateJoins, 1024 ulps of the radius) in place of
+// arcPinnedRadiiJoin refuses r = 0.001 with ErrDegenerate; (ii) restoring the
+// first-moment bail-out `if endR2.Cmp(r2) != 0 { return …, false }` in
+// circularFirstMomentInterval publishes a ~1795 mm centroid bound for
+// r = 0.01, and the ceiling and Passed legs go red.
+func TestExtrudeSketchArcRadiiRoundApart(t *testing.T) {
+	t.Parallel()
+	const h = 16.0
+	for _, r := range []float64{0.001, 0.01} {
+		t.Run(units.Millimeters(r).String(), func(t *testing.T) {
+			t.Parallel()
+			w := sketch.NewWorld()
+			s, err := w.CreateSketch(w.XY())
+			require.NoError(t, err)
+			a := s.CreatePoint(-48, -10)
+			b := s.CreatePoint(48, -10)
+			c0 := s.CreatePoint(48, 10-r)
+			center := s.CreatePoint(48-r, 10-r)
+			c1 := s.CreatePoint(48-r, 10)
+			d := s.CreatePoint(-48, 10)
+			for _, p := range []*sketch.Point{a, b, c0, center, c1, d} {
+				s.Fix(p)
+			}
+			s.CreateLine(a, b)
+			s.CreateLine(b, c0)
+			s.CreateArc(center, c0, c1)
+			s.CreateLine(c1, d)
+			s.CreateLine(d, a)
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+
+			var profile *sketch.Profile
+			for _, p := range s.Profiles() {
+				if p.Valid {
+					profile = p
+					break
+				}
+			}
+			require.NotNil(t, profile, `the rounded rectangle has a valid profile`)
+			record, _, err := decad.RecordProfile(s, profile)
+			require.NoError(t, err)
+			arcs := 0
+			for _, seg := range record.Outer.Segments {
+				arc, ok := seg.(decad.ArcSeg)
+				if !ok {
+					continue
+				}
+				arcs++
+				requireArcRadiiDiffer(t, arc.Center, arc.Start, arc.End)
+			}
+			require.Equal(t, 1, arcs, `the profile records the one corner arc`)
+
+			doc := decad.New()
+			body, err := doc.Extrude(s, profile, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+			require.NoError(t, err)
+
+			// One corner is rounded: the 96×20 section less one (1 − π/4)r² wedge.
+			wantVol := (96*20 - (1-math.Pi/4)*r*r) * h
+			vol, err := body.Volume()
+			require.NoError(t, err)
+			gotVol, err := vol.Value.In(units.CubicMillimeter)
+			require.NoError(t, err)
+			require.InDelta(t, wantVol, gotVol, 1e-9)
+
+			centroid, err := body.Centroid()
+			require.NoError(t, err)
+			require.LessOrEqual(t, centroid.Bound.Base(), 1e-9, `the drifted arc is charged into a tight bound`)
+
+			rep, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			require.True(t, rep.Passed(), `Verify reads the extrude Sound`)
+		})
+	}
+}
