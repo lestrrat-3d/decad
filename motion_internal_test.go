@@ -225,13 +225,11 @@ func TestVerifyMotionKeepsTheNextProducerIdentity(t *testing.T) {
 	errs := make([]error, readers)
 	var wg sync.WaitGroup
 	for i := range reports {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			reports[i], errs[i] = doc.VerifyMotion(t.Context(), []*Body{cube},
 				Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(30)},
 				WithResolution(units.Millimeters(100)))
-		}()
+		})
 	}
 	wg.Wait()
 	for i := range reports {
