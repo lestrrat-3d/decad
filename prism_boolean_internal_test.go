@@ -121,9 +121,13 @@ func TestPrismBooleanGateG2RejectsAReflectedOperand(t *testing.T) {
 }
 
 // TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes isolates G3's
-// two arms (§3.1). Shown to fail: with admitPrismPairBudget's
-// prismSharedAxisOf call deleted (the coplanar arm alone), the "offset frame
-// on the normal axis clears G3" subtest went red.
+// two arms (§3.1). Shown to fail, one deletion at a time: with
+// admitPrismPairBudget's prismSharedAxisOf call deleted (the coplanar arm
+// alone), "offset frame on the normal axis clears G3" went red; with
+// prismSharedAxisOf's exact cross-product test deleted, "an in-plane origin
+// component refuses" went red; with its placement comparison deleted,
+// "placed along the normal stays outside the shared-axis arm" went red; with
+// its U/V comparison deleted, "U/V bits one ulp apart refuse" went red.
 func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
@@ -175,11 +179,15 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 		require.False(t, ok)
 	})
 
-	t.Run("U bits one ulp apart refuse", func(t *testing.T) {
+	t.Run("U/V bits one ulp apart refuse", func(t *testing.T) {
 		// r3.NewFrame normalises U = (0.7071067811865475, 0.7071067811865475, 0)
 		// and (0.7071067811865476, 0.7071067811865476, 0) to the same bits, so
-		// the pair is a tilted plane and its sketch.CreateOffsetPlane by -16,
-		// whose re-normalised U lands one ulp apart: the shape a caller meets.
+		// the pair is the one a caller meets: a tilted plane and its
+		// sketch.CreateOffsetPlane by -16, whose plane frames hold U one ulp
+		// apart, each rebuilt through r3.NewFrame the way Extrude records it.
+		// The rebuilt frames hold equal U and N and V one ulp apart, with the
+		// origin difference exactly along N, so the U/V comparison is the one
+		// leg that refuses.
 		w := sketch.NewWorld()
 		tilted, err := r3.NewFrame(r3.NewVec(1, 2, 3), r3.NewVec(1, 1, 0), r3.NewVec(0, 1, 1))
 		require.NoError(t, err)
@@ -187,11 +195,19 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 		require.NoError(t, err)
 		below, err := w.CreateOffsetPlane(base, -16)
 		require.NoError(t, err)
-		fa, err := base.Frame()
+		planeA, err := base.Frame()
 		require.NoError(t, err)
-		fb, err := below.Frame()
+		planeB, err := below.Frame()
 		require.NoError(t, err)
-		require.NotEqual(t, fa.U(), fb.U(), "premise: the two frames' U differ in the stored bits")
+		require.NotEqual(t, planeA.U(), planeB.U(), "premise: the two plane frames' U differ in the stored bits")
+		fa, err := r3.NewFrame(planeA.Origin(), planeA.U(), planeA.V())
+		require.NoError(t, err)
+		fb, err := r3.NewFrame(planeB.Origin(), planeB.U(), planeB.V())
+		require.NoError(t, err)
+		require.Equal(t, fa.N(), fb.N(), "premise: the rebuilt normals agree, so G3's normal check passes")
+		require.NotEqual(t, [2]r3.Vec{fa.U(), fa.V()}, [2]r3.Vec{fb.U(), fb.V()}, "premise: the rebuilt U/V differ in the stored bits")
+		d := dvSub(dyVec(fb.Origin()), dyVec(fa.Origin()))
+		require.True(t, dvIsZero(dvCross(d, dyVec(fa.N()))), "premise: the origin difference lies exactly along N")
 		tiltedA := pp
 		tiltedA.frame = fa
 		tiltedB := pp

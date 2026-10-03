@@ -1218,7 +1218,11 @@ type prismReexpression struct {
 // the transpose, r3.Transform's own contract — and a Frame is orthonormal, so
 // every step here is a dot product, never a solve.
 func newPrismReexpression(pa, pb prismPayload) (*prismReexpression, error) {
-	if prismSharedAxisOf(pa, pb).ok {
+	// Equal frames under one placement are the arm's d = 0 case. They are
+	// tested on their own too, because prismSharedAxisOf refuses a frame
+	// whose stored normal is zero, and two bit-identical frames are the
+	// identity map whatever their normal holds.
+	if (pa.frame == pb.frame && pa.xform == pb.xform) || prismSharedAxisOf(pa, pb).ok {
 		return &prismReexpression{identity: true}, nil
 	}
 	fail := func(err error) (*prismReexpression, error) {
