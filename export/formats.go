@@ -15,6 +15,9 @@ import (
 // stronger proofs. A sheet produces an open STL file even though STL uses the
 // words "solid" and "endsolid". ctx, w, and body must not be nil.
 func STL(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...decad.TessellateOption) error {
+	if ctx == nil {
+		return fmt.Errorf("export: STL: %w: nil context", decad.ErrDegenerate)
+	}
 	if w == nil {
 		return fmt.Errorf("export: STL: %w: nil writer", decad.ErrDegenerate)
 	}
@@ -58,6 +61,9 @@ func STL(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, op
 // decad.WithVerification to demand stronger proofs. ctx, w, and body must not
 // be nil.
 func OBJ(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...decad.TessellateOption) error {
+	if ctx == nil {
+		return fmt.Errorf("export: OBJ: %w: nil context", decad.ErrDegenerate)
+	}
 	if w == nil {
 		return fmt.Errorf("export: OBJ: %w: nil writer", decad.ErrDegenerate)
 	}
