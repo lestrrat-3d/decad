@@ -137,9 +137,9 @@ func resolveMotion(m Motion) (motionSpec, error) {
 }
 
 // defaultResolution is the published default resolution, |To − From|/1024
-// carried in From's unit. When that value underflows, it returns the smallest
-// positive resolution in that unit accepted by WithResolution and reports
-// clamped so the check can use that same floor.
+// carried in From's unit. When that value underflows in From's unit or its
+// base unit, it returns the smallest positive resolution in From's unit
+// accepted by WithResolution and reports clamped so the check uses that floor.
 func (s motionSpec) defaultResolution() (units.Value, bool) {
 	var d *big.Rat
 	if s.kind == motionPrismatic {
@@ -159,13 +159,15 @@ func (s motionSpec) defaultResolution() (units.Value, bool) {
 		d.Abs(d)
 	}
 	mag, _ := d.Quo(d, big.NewRat(1024, 1)).Float64()
-	if mag != 0 {
-		return units.New(mag, s.from.Unit()), false
+	base, _ := units.BaseUnit(s.paramKind())
+	reported := units.New(mag, s.from.Unit())
+	converted, err := reported.In(base)
+	if mag > 0 && err == nil && converted > 0 {
+		return reported, false
 	}
-	// A positive exact floor can be below the smallest float64 in this unit.
+	// A positive exact floor can underflow in From's unit or its base unit.
 	// Binary search positive finite float bits for the first value whose base
 	// conversion is nonzero, which is also the first WithResolution accepts.
-	base, _ := units.BaseUnit(s.paramKind())
 	low, high := uint64(0), math.Float64bits(1)
 	for high-low > 1 {
 		mid := low + (high-low)/2

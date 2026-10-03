@@ -444,6 +444,23 @@ func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
 	require.Zero(t, swingReported.turn.Cmp(swingCfg.resolutionP.turn))
 	_, err = resolveMotionOptions([]MotionOption{WithResolution(swingCfg.resolution)}, swingSpec)
 	require.NoError(t, err)
+
+	// The nominal 1/1024 step can round to a positive degree magnitude that
+	// still converts to zero radians. It must trigger the same fallback.
+	swing.To = units.Degrees(1024 * math.SmallestNonzeroFloat64)
+	swingSpec, err = resolveMotion(swing)
+	require.NoError(t, err)
+	swingCfg, err = resolveMotionOptions(nil, swingSpec)
+	require.NoError(t, err)
+	require.Greater(t, swingCfg.resolution.Mag(), math.SmallestNonzeroFloat64)
+	swingReported, ok = exactMotionParam(swingCfg.resolution)
+	require.True(t, ok)
+	require.Zero(t, swingReported.turn.Cmp(swingCfg.resolutionP.turn))
+	swingReport, err := doc.VerifyMotion(t.Context(), []*Body{mover}, swing)
+	require.NoError(t, err)
+	require.Equal(t, swingCfg.resolution, swingReport.Request.Resolution)
+	_, err = doc.VerifyMotion(t.Context(), []*Body{mover}, swing, WithResolution(swingReport.Request.Resolution))
+	require.NoError(t, err)
 }
 
 // TestMotionPathAreaUpperStretchBase pins pathAreaUpper's stretch base

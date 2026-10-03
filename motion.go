@@ -329,8 +329,9 @@ func WithMotionTolerance(rel units.Value) MotionOption {
 // value ErrNegativeMagnitude, a non-finite one ErrNotFinite. A resolution
 // wider than the whole path (wider than 1 for a Between) evaluates the
 // endpoints alone. The default is |To − From|/1024, units.Scalar(1.0/1024)
-// for a Between. If that step underflows, the check uses and reports the
-// smallest positive resolution in From's unit accepted by WithResolution.
+// for a Between. If that step underflows in From's unit or its base unit,
+// the check uses and reports the smallest positive resolution in From's
+// unit accepted by WithResolution.
 func WithResolution(step units.Value) MotionOption {
 	return motionOption{option.New(identResolution{}, step)}
 }
