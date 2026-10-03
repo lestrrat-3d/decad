@@ -8,6 +8,12 @@ A **headless CAD engine** for Go: the 3D modeling layer above the
 [sketch](https://github.com/lestrrat-3d/sketch) 2D constraint engine and the
 [r3](https://github.com/lestrrat-3d/r3) coordinate-math layer.
 
+decad lets a coding agent develop **parametric construction steps** for a 3D
+part: dimensioned sketches followed by features such as extrudes, fillets and
+cuts. The Go function holds those steps; changing a dimension and rerunning it
+rebuilds the part. decad checks the resulting geometry before the agent carries
+the steps into a CAD script. The images below illustrate the results.
+
 > **Work in progress.** The API and supported capabilities may change.
 
 ## Why this exists
