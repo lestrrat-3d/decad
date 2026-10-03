@@ -181,10 +181,11 @@ whole path. Like `WithMinWallThickness` it turns a measurement into an `Assessme
 `AssessmentMet` when every interval certifies the margin (§5.2), `AssessmentViolated` when some evaluated
 pose proves a gap below it, `AssessmentUndecided` otherwise. Its magnitude rules are `WithMinWallThickness`'s.
 
-Duplicate options keep verification §1.0's last-occurrence-wins rule. `VerifyMotion` validates the document,
-the moving set and every option before it reads `ctx`, so a validation error wins over an already-cancelled
-context exactly as in verification §1.2; after validation, a cancelled context returns `ctx.Err()` unchanged
-and no report. The context is the public work control: there is no separate budget or progress API
+Duplicate options keep verification §1.0's last-occurrence-wins rule. A nil `ctx` returns `ErrDegenerate`
+before `VerifyMotion` checks the document, moving set or options. With a non-nil context, it validates those
+inputs before checking cancellation, so a validation error wins over an already-cancelled context exactly
+as in verification §1.2; after validation, a cancelled context returns `ctx.Err()` unchanged and no report.
+The context is the public work control: there is no separate budget or progress API
 (interference §7.2), and the resolution floor is a spec about the answer, not a work limit.
 
 ## 4. The report

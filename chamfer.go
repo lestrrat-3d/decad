@@ -69,6 +69,9 @@ type ChamferOption interface {
 // does not tessellate yet (Table DX row DX3, ErrUnsupported), and a clearance
 // pair its bounding boxes do not already decide reads Suspect (row DX6).
 func (b *Body) Chamfer(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a chamfer`, ErrDegenerate)
+	}
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}

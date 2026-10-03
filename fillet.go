@@ -55,6 +55,9 @@ const filletTol = 1e-9
 // (ErrUnsupported). The rewritten section faces the §5 audit before anything
 // is built, so no unproven body is ever made.
 func (b *Body) Fillet(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a fillet`, ErrDegenerate)
+	}
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}

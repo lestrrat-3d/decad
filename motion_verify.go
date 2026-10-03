@@ -262,9 +262,13 @@ func (d *Document) resolveMovers(moving []*Body) error {
 // that survives the pose's own deviation from the ideal motion (§5.1).
 //
 // moving MUST be non-empty, hold live bodies of d, and list no body twice.
-// Every validation error is returned before ctx is read; after validation a
-// canceled context returns ctx.Err() and no report.
+// A nil context returns ErrDegenerate before validation. Other validation
+// errors precede cancellation; after validation a canceled context returns
+// ctx.Err() and no report.
 func (d *Document) VerifyMotion(ctx context.Context, moving []*Body, m Motion, opts ...MotionOption) (*MotionReport, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control motion verification`, ErrDegenerate)
+	}
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}

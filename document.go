@@ -135,6 +135,9 @@ type featurePayload interface {
 // sketch clears that cause alone — a section displacement or a walk charge on
 // either operand reroutes the pair however it was placed.
 func (b *Body) Placed(ctx context.Context, t r3.Transform) (*Body, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a placement`, ErrDegenerate)
+	}
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -175,6 +178,9 @@ func (b *Body) Placed(ctx context.Context, t r3.Transform) (*Body, error) {
 // body this evaluator did not build is ErrUnsupported. A canceled context
 // stops the rebuild before the document changes.
 func (b *Body) Duplicate(ctx context.Context) (*Body, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a copy`, ErrDegenerate)
+	}
 	return b.copyUnder(ctx, r3.Identity())
 }
 
@@ -186,6 +192,9 @@ func (b *Body) Duplicate(ctx context.Context) (*Body, error) {
 // this evaluator did not build is ErrUnsupported. A canceled context stops the
 // rebuild before the document changes.
 func (b *Body) PlacedCopy(ctx context.Context, t r3.Transform) (*Body, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control a copy`, ErrDegenerate)
+	}
 	return b.copyUnder(ctx, t)
 }
 

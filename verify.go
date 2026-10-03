@@ -265,6 +265,9 @@ func effectiveVerifyRequest(cfg verifyConfig) VerifyRequest {
 // retains its Sound result even when the context is already canceled. The
 // document remains unchanged.
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf(`%w: a nil context cannot control verification`, ErrDegenerate)
+	}
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}

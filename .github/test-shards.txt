@@ -1049,6 +1049,7 @@
 4	0.00	TestContactFloorUsesTrueSectionBBox
 4	0.00	TestContactMemoPromotesDenseWithoutChangingEntries
 4	0.00	TestContactMemoRepeatsTheClassifier
+4	0.00	TestContextOperationsRejectNilBeforeOperands
 4	0.00	TestConvexityCertificateChargesTheRecordWorkCounter
 4	0.00	TestConvexityCertificateSpendIncreases
 4	0.00	TestCoplanarRelationCancellationIsBounded
