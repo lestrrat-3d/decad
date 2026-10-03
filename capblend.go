@@ -589,9 +589,11 @@ func mixedOffsetProfile(budget *workBudget, profile ProfileRecord, d float64, st
 // SX6 (docs/modify-reach-design.md Table SX). The offset code is Shell's, and
 // there its drop is S11a — ErrUnsupported, because the shell body exists and
 // only a trimmed-offset kernel is missing. A CAP-LOOP CHAMFER asks a different
-// question of the same machinery: the drop says the requested cap contour is
-// the empty set (offsetting a radius-4 circle inward by 4 leaves nothing), so
-// the body the caller named does not exist at all. §4's existence test puts
+// question of the same machinery: the drop says the selected loop has no
+// regular radius-d envelope — the contour is empty (offsetting a radius-4
+// circle inward by 4 leaves nothing) or merely irregular (a fillet arc whose
+// offset radius reaches zero collapses to a sharp corner) — so the body the
+// caller named does not exist as a cap-loop chamfer. §4's existence test puts
 // that in stage 5 with ErrDegenerate. The translation lives here, at the one
 // call site that asks the existence question, never on errOffsetDrop itself —
 // Shell's own sentinel is correct for Shell. The result does not wrap
@@ -602,7 +604,7 @@ func wrapCapBlendDropError(err error) error {
 	if !errors.Is(err, errOffsetDrop) {
 		return err
 	}
-	return fmt.Errorf(`%w: the cap-loop offset drops a section feature, so the requested cap contour is empty`, ErrDegenerate)
+	return fmt.Errorf(`%w: the cap-loop offset drops a section feature (a circular wall's offset radius reaches zero, or a walk is consumed), so the selected loop has no regular cap contour at this setback`, ErrDegenerate)
 }
 
 // wrapCapBlendAuditError relabels the shared offset audit's refusal with the

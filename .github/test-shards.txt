@@ -1626,6 +1626,8 @@
 4	0.00	TestSweepDenotationHalfTurnExcess
 4	0.00	TestSweepLineStagesTessellation
 4	0.00	TestSweepLineTiltedFrameCarriesEndpointGap
+4	0.00	TestTangentJoinedOffsetsBuildBothFeatures
+4	0.00	TestTangentJoinedSlotChamferAtOffsetOrigin
 4	0.00	TestTessellateChainBuildsOneExactQuadPerWall
 4	0.00	TestTessellateChainReflectedPlacementFlipsWinding
 4	0.00	TestTessellateChainRejectsWronglyAttributedWalls
