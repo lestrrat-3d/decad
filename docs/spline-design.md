@@ -100,10 +100,11 @@ The two datasets disagree, and decad has no exact reconciliation:
   to build;
 - trusting the pinned endpoints leaves no curve between them.
 
-`ArcSeg` has the same shape of problem and decad already resolves it by
-REFUSING an inconsistent record: `validateMomentSegment` computes both pinned
-radii and rejects when they disagree. The elliptical analogue — do the pinned
-ends lie on the parametric ellipse — fails on realistic input.
+`ArcSeg` has the same shape of problem and decad already resolves it:
+`validateMomentSegment` computes both pinned radii and REFUSES a record whose
+radii disagree beyond coordinate rounding, and every circular bracket charges a
+smaller disagreement into its bound (evaluator §4). The elliptical analogue —
+do the pinned ends lie on the parametric ellipse — fails on realistic input.
 
 So `EllipticalArcSeg` is `ErrUnsupported` at the evaluator, permanently from
 decad's side, pending the upstream fix (§9). A whole `EllipseSeg` is closed and

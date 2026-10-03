@@ -527,7 +527,7 @@ func validateAnalyticMomentSegment(segment CurveSegment, work *freeformWork) (Cu
 		if !finiteMomentValues(startRadius, endRadius) {
 			return nil, Point2{}, fmt.Errorf(`%w: an arc segment's derived radius is not finite`, ErrNotFinite)
 		}
-		if !momentCoordinateJoins(startRadius, endRadius) {
+		if !arcPinnedRadiiJoin(segment, startRadius, endRadius) {
 			return nil, Point2{}, fmt.Errorf(
 				`%w: an arc segment's pinned start and end radii differ (%g and %g)`,
 				ErrDegenerate,
@@ -695,13 +695,27 @@ func validateMomentRange(start, end float64) error {
 	return nil
 }
 
-func momentCoordinateJoins(a, b float64) bool {
-	scale := math.Max(math.Abs(a), math.Abs(b))
+// arcPinnedRadiiJoin reports whether an ArcSeg's two pinned radii agree to
+// within coordinate rounding: 1024 ulps of the largest magnitude the record
+// states — its six coordinates and the two radii — never of the radius alone.
+// A fillet's or shell's corner arc rounds its centre and feet at the
+// coordinate's own scale, so its radii differ by ulps of the coordinate even
+// when the radius is a thousand times smaller. The check is reject-only: a
+// larger difference disproves the record as an arc (ErrDegenerate); a smaller
+// one proves nothing and is CHARGED by every circular bracket through
+// arcEndRadialRatio (moments_circular.go), never trusted.
+func arcPinnedRadiiJoin(seg ArcSeg, startRadius, endRadius float64) bool {
+	scale := max(
+		math.Abs(seg.Center.U), math.Abs(seg.Center.V),
+		math.Abs(seg.Start.U), math.Abs(seg.Start.V),
+		math.Abs(seg.End.U), math.Abs(seg.End.V),
+		math.Abs(startRadius), math.Abs(endRadius),
+	)
 	if scale == 0 {
 		return true
 	}
 	ulp := scale - math.Nextafter(scale, 0)
-	return math.Abs(a-b) <= 1024*ulp
+	return math.Abs(startRadius-endRadius) <= 1024*ulp
 }
 
 // validateWholeCircleRegion keeps exact whole-circle regions independent of

@@ -165,6 +165,265 @@ func preciseGreenArcArea(t *testing.T, center, start, end decad.Point2) *big.Flo
 	return arc.Add(arc, line)
 }
 
+// preciseArcWedge holds the 256-bit trig reading of the wedge record
+// preciseGreenArcArea integrates — an arc from Start (at angle 0 about Center)
+// on Start's radius to End's angle, closed by End→Center→Start — built the
+// same way that helper builds it: the radius is the square root of Start's
+// exact squared distance, the end angle is π/4 + atan((dy1−dx1)/(dy1+dx1)),
+// and End's sine/cosine are its exact deltas over End's own radius.
+type preciseArcWedge struct {
+	cU, cV, r, theta *big.Float
+	sin0, cos0       *big.Float
+	sin1, cos1       *big.Float
+	startU, startV   *big.Float
+	endU, endV       *big.Float
+}
+
+// preciseLineMoment is addLine's own first- and second-moment contribution of
+// one line segment, in 256-bit arithmetic.
+type preciseLineMoment struct {
+	mu, mv, muu, muv, mvv *big.Float
+}
+
+const preciseWedgePrecision = uint(256)
+
+func preciseFloat() *big.Float { return new(big.Float).SetPrec(preciseWedgePrecision) }
+
+func preciseFloat64(value float64) *big.Float { return preciseFloat().SetFloat64(value) }
+
+func preciseRat(value *big.Rat) *big.Float { return preciseFloat().SetRat(value) }
+
+func preciseAdd(values ...*big.Float) *big.Float {
+	out := preciseFloat()
+	for _, value := range values {
+		out.Add(out, value)
+	}
+	return out
+}
+
+func preciseMul(values ...*big.Float) *big.Float {
+	out := preciseFloat64(1)
+	for _, value := range values {
+		out.Mul(out, value)
+	}
+	return out
+}
+
+func preciseSub(a, b *big.Float) *big.Float { return preciseFloat().Sub(a, b) }
+
+func preciseQuo(a, b *big.Float) *big.Float { return preciseFloat().Quo(a, b) }
+
+func newPreciseArcWedge(t *testing.T, center, start, end decad.Point2) preciseArcWedge {
+	t.Helper()
+	floatRat := func(value float64) *big.Rat { return new(big.Rat).SetFloat64(value) }
+	dx0 := new(big.Rat).Sub(floatRat(start.U), floatRat(center.U))
+	dy0 := new(big.Rat).Sub(floatRat(start.V), floatRat(center.V))
+	dx1 := new(big.Rat).Sub(floatRat(end.U), floatRat(center.U))
+	dy1 := new(big.Rat).Sub(floatRat(end.V), floatRat(center.V))
+	require.Zero(t, dy0.Sign(), `the wedge's Start must sit at angle 0 about its Center`)
+	require.Positive(t, dx0.Sign(), `the wedge's Start must sit at angle 0 about its Center`)
+	r0Squared := new(big.Rat).Add(new(big.Rat).Mul(dx0, dx0), new(big.Rat).Mul(dy0, dy0))
+	r1Squared := new(big.Rat).Add(new(big.Rat).Mul(dx1, dx1), new(big.Rat).Mul(dy1, dy1))
+	r0 := preciseFloat().Sqrt(preciseRat(r0Squared))
+	r1 := preciseFloat().Sqrt(preciseRat(r1Squared))
+
+	angleArg := new(big.Rat).Quo(new(big.Rat).Sub(dy1, dx1), new(big.Rat).Add(dy1, dx1))
+	theta := preciseAdd(preciseQuo(precisePi(t), preciseFloat64(4)), preciseAtan(t, angleArg))
+
+	return preciseArcWedge{
+		cU:     preciseFloat64(center.U),
+		cV:     preciseFloat64(center.V),
+		r:      r0,
+		theta:  theta,
+		sin0:   preciseQuo(preciseRat(dy0), r0),
+		cos0:   preciseQuo(preciseRat(dx0), r0),
+		sin1:   preciseQuo(preciseRat(dy1), r1),
+		cos1:   preciseQuo(preciseRat(dx1), r1),
+		startU: preciseFloat64(start.U),
+		startV: preciseFloat64(start.V),
+		endU:   preciseFloat64(end.U),
+		endV:   preciseFloat64(end.V),
+	}
+}
+
+// preciseLineMoments evaluates addLine's own first- and second-moment
+// closed forms for the segment (u0, v0)→(u1, v1) in 256-bit arithmetic.
+func preciseLineMoments(u0, v0, u1, v1 *big.Float) preciseLineMoment {
+	six, twelve := preciseFloat64(6), preciseFloat64(12)
+	du, dv := preciseSub(u1, u0), preciseSub(v1, v0)
+	mu := preciseQuo(preciseMul(dv, preciseAdd(preciseMul(u0, u0), preciseMul(u0, u1), preciseMul(u1, u1))), six)
+	mv := preciseQuo(preciseMul(du, preciseAdd(preciseMul(v0, v0), preciseMul(v0, v1), preciseMul(v1, v1))), six)
+	mv.Neg(mv)
+	muu := preciseQuo(preciseMul(dv, preciseAdd(
+		preciseMul(u0, u0, u0), preciseMul(u0, u0, u1), preciseMul(u0, u1, u1), preciseMul(u1, u1, u1),
+	)), twelve)
+	mvv := preciseQuo(preciseMul(du, preciseAdd(
+		preciseMul(v0, v0, v0), preciseMul(v0, v0, v1), preciseMul(v0, v1, v1), preciseMul(v1, v1, v1),
+	)), twelve)
+	mvv.Neg(mvv)
+	intU2V := preciseAdd(
+		preciseMul(v0, preciseAdd(preciseMul(u0, u0), preciseMul(u0, du), preciseQuo(preciseMul(du, du), preciseFloat64(3)))),
+		preciseMul(dv, preciseAdd(
+			preciseQuo(preciseMul(u0, u0), preciseFloat64(2)),
+			preciseQuo(preciseMul(preciseFloat64(2), u0, du), preciseFloat64(3)),
+			preciseQuo(preciseMul(du, du), preciseFloat64(4)),
+		)),
+	)
+	muv := preciseMul(preciseFloat64(0.5), dv, intU2V)
+	return preciseLineMoment{mu: mu, mv: mv, muu: muu, muv: muv, mvv: mvv}
+}
+
+// arcTrigIntegrals are addCircular's own trig integrals over [0, θ1] in
+// 256-bit arithmetic, every higher multiple taken through the double-angle
+// identities.
+type arcTrigIntegrals struct {
+	intCos, intCos2, intCos3, intCos4 *big.Float
+	intSin, intSin2, intSin3, intSin4 *big.Float
+	intSC, intSC2, intSC3             *big.Float
+}
+
+func (w preciseArcWedge) trigIntegrals() arcTrigIntegrals {
+	two, three, four := preciseFloat64(2), preciseFloat64(3), preciseFloat64(4)
+	sin2 := func(s, c *big.Float) *big.Float { return preciseMul(two, s, c) }
+	cos2 := func(s, c *big.Float) *big.Float { return preciseSub(preciseMul(c, c), preciseMul(s, s)) }
+	sin4 := func(s, c *big.Float) *big.Float { return preciseMul(two, sin2(s, c), cos2(s, c)) }
+	cube := func(x *big.Float) *big.Float { return preciseMul(x, x, x) }
+	quartic := func(x *big.Float) *big.Float { return preciseMul(x, x, x, x) }
+	dth := w.theta
+	sin2Diff := preciseSub(sin2(w.sin1, w.cos1), sin2(w.sin0, w.cos0))
+	sin4Diff := preciseSub(sin4(w.sin1, w.cos1), sin4(w.sin0, w.cos0))
+	halfDth := preciseQuo(dth, two)
+	threeEighthsDth := preciseQuo(preciseMul(three, dth), preciseFloat64(8))
+	return arcTrigIntegrals{
+		intCos:  preciseSub(w.sin1, w.sin0),
+		intCos2: preciseAdd(halfDth, preciseQuo(sin2Diff, four)),
+		intCos3: preciseSub(
+			preciseSub(w.sin1, preciseQuo(cube(w.sin1), three)),
+			preciseSub(w.sin0, preciseQuo(cube(w.sin0), three)),
+		),
+		intCos4: preciseAdd(threeEighthsDth, preciseQuo(sin2Diff, four), preciseQuo(sin4Diff, preciseFloat64(32))),
+		intSin:  preciseSub(w.cos0, w.cos1),
+		intSin2: preciseSub(halfDth, preciseQuo(sin2Diff, four)),
+		intSin3: preciseSub(
+			preciseSub(w.cos0, preciseQuo(cube(w.cos0), three)),
+			preciseSub(w.cos1, preciseQuo(cube(w.cos1), three)),
+		),
+		intSin4: preciseAdd(
+			preciseSub(threeEighthsDth, preciseQuo(sin2Diff, four)),
+			preciseQuo(sin4Diff, preciseFloat64(32)),
+		),
+		intSC:  preciseQuo(preciseSub(preciseMul(w.sin1, w.sin1), preciseMul(w.sin0, w.sin0)), two),
+		intSC2: preciseQuo(preciseSub(cube(w.cos0), cube(w.cos1)), three),
+		intSC3: preciseQuo(preciseSub(quartic(w.cos0), quartic(w.cos1)), four),
+	}
+}
+
+// preciseGreenArcFirstMoments is preciseGreenArcArea's first-moment sibling:
+// addCircular's own mu/mv trig closed forms over the denoted arc plus addLine's
+// over End→Center and Center→Start, all in 256-bit arithmetic. It evaluates the
+// trig closed form independently of the rational substitution the bracket
+// under test makes.
+func preciseGreenArcFirstMoments(t *testing.T, center, start, end decad.Point2) (*big.Float, *big.Float) {
+	t.Helper()
+	w := newPreciseArcWedge(t, center, start, end)
+	in := w.trigIntegrals()
+	two, half := preciseFloat64(2), preciseFloat64(0.5)
+	mu := preciseMul(half, w.r, preciseAdd(
+		preciseMul(w.cU, w.cU, in.intCos),
+		preciseMul(two, w.cU, w.r, in.intCos2),
+		preciseMul(w.r, w.r, in.intCos3),
+	))
+	mv := preciseMul(half, w.r, preciseAdd(
+		preciseMul(w.cV, w.cV, in.intSin),
+		preciseMul(two, w.cV, w.r, in.intSin2),
+		preciseMul(w.r, w.r, in.intSin3),
+	))
+	for _, line := range [][4]*big.Float{
+		{w.endU, w.endV, w.cU, w.cV},
+		{w.cU, w.cV, w.startU, w.startV},
+	} {
+		lm := preciseLineMoments(line[0], line[1], line[2], line[3])
+		mu = preciseAdd(mu, lm.mu)
+		mv = preciseAdd(mv, lm.mv)
+	}
+	return mu, mv
+}
+
+// preciseGreenArcSecondMoments is the second-moment sibling of
+// preciseGreenArcFirstMoments: addCircular's own muu/muv/mvv trig closed forms
+// plus addLine's, in 256-bit arithmetic.
+func preciseGreenArcSecondMoments(t *testing.T, center, start, end decad.Point2) (*big.Float, *big.Float, *big.Float) {
+	t.Helper()
+	w := newPreciseArcWedge(t, center, start, end)
+	in := w.trigIntegrals()
+	two, three := preciseFloat64(2), preciseFloat64(3)
+	cU, cV, r := w.cU, w.cV, w.r
+	muu := preciseMul(preciseQuo(r, three), preciseAdd(
+		preciseMul(cU, cU, cU, in.intCos),
+		preciseMul(three, cU, cU, r, in.intCos2),
+		preciseMul(three, cU, r, r, in.intCos3),
+		preciseMul(r, r, r, in.intCos4),
+	))
+	mvv := preciseMul(preciseQuo(r, three), preciseAdd(
+		preciseMul(cV, cV, cV, in.intSin),
+		preciseMul(three, cV, cV, r, in.intSin2),
+		preciseMul(three, cV, r, r, in.intSin3),
+		preciseMul(r, r, r, in.intSin4),
+	))
+	muv := preciseMul(preciseFloat64(0.5), r, preciseAdd(
+		preciseMul(cV, preciseAdd(
+			preciseMul(cU, cU, in.intCos),
+			preciseMul(two, cU, r, in.intCos2),
+			preciseMul(r, r, in.intCos3),
+		)),
+		preciseMul(r, preciseAdd(
+			preciseMul(cU, cU, in.intSC),
+			preciseMul(two, cU, r, in.intSC2),
+			preciseMul(r, r, in.intSC3),
+		)),
+	))
+	for _, line := range [][4]*big.Float{
+		{w.endU, w.endV, w.cU, w.cV},
+		{w.cU, w.cV, w.startU, w.startV},
+	} {
+		lm := preciseLineMoments(line[0], line[1], line[2], line[3])
+		muu = preciseAdd(muu, lm.muu)
+		muv = preciseAdd(muv, lm.muv)
+		mvv = preciseAdd(mvv, lm.mvv)
+	}
+	return muu, muv, mvv
+}
+
+// driftedArcWedge is the wedge record the arc-endpoint-drift tests share: an
+// arc about (5, −3) from angle 0 on the unit circle to End, one ulp of the
+// radius off that circle, closed by End→Center→Start.
+func driftedArcWedge() (decad.ProfileRecord, decad.Point2, decad.Point2, decad.Point2) {
+	center := decad.Point2{U: 5, V: -3}
+	start := decad.Point2{U: 6, V: -3}
+	driftedRadius := math.Nextafter(1, math.Inf(1))
+	end := decad.Point2{
+		U: 5 + 0.6*driftedRadius,
+		V: -3 + 0.8*driftedRadius,
+	}
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.ArcSeg{Center: center, Start: start, End: end, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: end, End: center, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: center, End: start, TStart: 0, TEnd: 1},
+	}}}
+	return record, center, start, end
+}
+
+func requireArcRadiiDiffer(t *testing.T, center, start, end decad.Point2) {
+	t.Helper()
+	floatRat := func(value float64) *big.Rat { return new(big.Rat).SetFloat64(value) }
+	squared := func(p decad.Point2) *big.Rat {
+		du := new(big.Rat).Sub(floatRat(p.U), floatRat(center.U))
+		dv := new(big.Rat).Sub(floatRat(p.V), floatRat(center.V))
+		return new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
+	}
+	require.NotEqual(t, 0, squared(end).Cmp(squared(start)), `the fixture's exact squared radii must differ`)
+}
+
 func TestRegionAreaAndCentroidRectangle(t *testing.T) {
 	t.Parallel()
 	world := sketch.NewWorld()
@@ -905,4 +1164,114 @@ func TestRegionAreaBoundContainsArcEndpointDriftGreenIntegral(t *testing.T) {
 	require.NoError(t, err)
 	want := preciseGreenArcArea(t, center, start, end)
 	requireBoundContainsBig(t, got, area.Bound.Base(), want)
+}
+
+// Shown-to-fail: restoring the `if endR2.Cmp(r2) != 0 { return …, false }`
+// bail-out in circularFirstMomentInterval's ArcSeg arm leaves the arc's first
+// moments to the magnitude envelope, and the 1e-9 ceiling leg goes red.
+func TestRegionCentroidBoundContainsArcEndpointDriftGreenIntegral(t *testing.T) {
+	t.Parallel()
+	record, center, start, end := driftedArcWedge()
+	requireArcRadiiDiffer(t, center, start, end)
+
+	centroid, err := record.Centroid()
+	require.NoError(t, err)
+	area := preciseGreenArcArea(t, center, start, end)
+	mu, mv := preciseGreenArcFirstMoments(t, center, start, end)
+	bound := centroid.Bound.Base()
+	requireBoundContainsBig(t, centroid.Value.X, bound, preciseQuo(mu, area))
+	requireBoundContainsBig(t, centroid.Value.Y, bound, preciseQuo(mv, area))
+	require.LessOrEqual(t, bound, 1e-9, `a drifted End is charged into the bracket, not left to the envelope`)
+}
+
+// Shown-to-fail: restoring the `if endR2.Cmp(r2) != 0 { return …, false }`
+// bail-out in circularSecondMomentInterval's ArcSeg arm leaves the arc's
+// second moments to the magnitude envelope, and the 1e-9 ceiling legs go red.
+func TestRegionSecondMomentsBoundContainArcEndpointDriftGreenIntegral(t *testing.T) {
+	t.Parallel()
+	record, center, start, end := driftedArcWedge()
+	requireArcRadiiDiffer(t, center, start, end)
+
+	moments, err := record.SecondMoments()
+	require.NoError(t, err)
+	muu, muv, mvv := preciseGreenArcSecondMoments(t, center, start, end)
+	for _, tc := range []struct {
+		name string
+		m    decad.Measurement
+		want *big.Float
+	}{
+		{"UU", moments.UU, muu},
+		{"UV", moments.UV, muv},
+		{"VV", moments.VV, mvv},
+	} {
+		got, err := tc.m.Value.In(units.QuarticMillimeter)
+		require.NoError(t, err, tc.name)
+		bound := tc.m.Bound.Base()
+		requireBoundContainsBig(t, got, bound, tc.want)
+		require.LessOrEqual(t, bound, 1e-9, "%s: a drifted End is charged into the bracket, not left to the envelope", tc.name)
+	}
+}
+
+// filletCornerRecord is a 96×20 rectangle about the origin whose (48, −10)
+// corner is rounded by an arc of radius r: the centre is (48 − r, −10 + r) in
+// float arithmetic and the two feet sit on the rectangle's own sides. 48 and
+// 10 sit in different binades, so the two subtractions round r to different
+// grids and the pinned radii differ by ulps of the COORDINATE — the same
+// rounding a fillet's or an outward shell's corner arc carries. endU moves the
+// arc's End (and the following line's Start) along u.
+func filletCornerRecord(r, endU float64) (decad.ProfileRecord, decad.ArcSeg) {
+	oU := 48 - r
+	oV := -10 + r
+	arc := decad.ArcSeg{
+		Center: decad.Point2{U: oU, V: oV},
+		Start:  decad.Point2{U: oU, V: -10},
+		End:    decad.Point2{U: endU, V: oV},
+		TStart: 0,
+		TEnd:   1,
+	}
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		arc,
+		momentLine(endU, oV, 48, 10),
+		momentLine(48, 10, -48, 10),
+		momentLine(-48, 10, -48, -10),
+		momentLine(-48, -10, oU, -10),
+	}}}
+	return record, arc
+}
+
+// Shown-to-fail: the acceptance leg goes red with the radius-anchored
+// tolerance (momentCoordinateJoins, 1024 ulps of the radius) restored in
+// place of arcPinnedRadiiJoin; the refusal leg's reason assertion goes red
+// with arcPinnedRadiiJoin made to return true unconditionally.
+func TestRegionMomentsArcPinToleranceFollowsCoordinateScale(t *testing.T) {
+	t.Parallel()
+	const r = 0.001
+
+	record, arc := filletCornerRecord(r, 48)
+	requireArcRadiiDiffer(t, arc.Center, arc.Start, arc.End)
+	startRadius := math.Hypot(arc.Start.U-arc.Center.U, arc.Start.V-arc.Center.V)
+	endRadius := math.Hypot(arc.End.U-arc.Center.U, arc.End.V-arc.Center.V)
+	radiusScale := math.Max(startRadius, endRadius)
+	radiusULP := radiusScale - math.Nextafter(radiusScale, 0)
+	require.Greater(t, math.Abs(startRadius-endRadius), 1024*radiusULP,
+		`the radii must differ by more than 1024 ulps of the radius itself`)
+
+	area, err := record.Area()
+	require.NoError(t, err)
+	gotArea, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, 96*20-(1-math.Pi/4)*r*r, gotArea, 1e-9)
+	centroid, err := record.Centroid()
+	require.NoError(t, err)
+	require.LessOrEqual(t, centroid.Bound.Base(), 1e-9)
+	_, err = record.SecondMoments()
+	require.NoError(t, err)
+
+	// The moved End still closes the loop, but the record no longer matches
+	// what sketch rebuilds from it either; the reason asserted here pins the
+	// refusal to the radius check, which reads it first.
+	refused, _ := filletCornerRecord(r, 48+1e-6)
+	requireProfileMomentError(t, refused, decad.ErrDegenerate)
+	_, err = refused.Area()
+	require.ErrorContains(t, err, `pinned start and end radii differ`)
 }
