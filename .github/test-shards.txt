@@ -33,6 +33,7 @@
 0	0.03	TestCapBlendChamferPolygonLoop
 0	0.02	TestCapBlendCircularRimAreaBoundIsTight
 0	0.22	TestCapBlendContourHeldExtentCarriesItsDisplacement
+0	0.00	TestCapBlendFilletedPlateReadsSound
 0	0.13	TestCapBlendHoleApexPatchBoundCoversConnectorSagitta
 0	0.04	TestCapBlendInheritsComputedCapLevelBound
 0	0.03	TestCapBlendMinRadiusStillAnsweredOnPlaneOnlyBand
@@ -240,6 +241,7 @@
 1	0.05	TestCapBlendConePatchNormalOutwardBothCaps
 1	0.26	TestCapBlendDHoleLoopBoundStaysTight
 1	0.07	TestCapBlendFarPlacementOrientationRefusal
+1	0.00	TestCapBlendFilletedPlateCentroidIsClosedForm
 1	0.01	TestCapBlendLateralOnlySelectionUsesBasePath
 1	0.06	TestCapBlendPayloadStoresEachBandsContourDisplacement
 1	0.03	TestCapBlendPlateCentroidIsExactRational
@@ -924,6 +926,8 @@
 4	0.03	TestCapBlendBooleanReceiverRefusedSX9
 4	0.09	TestCapBlendBoundsAreAttainedNotPadded
 4	0.04	TestCapBlendComputedStopMassBounds
+4	0.00	TestCapBlendConeFluxIntervalEnclosesFloatClosedForm
+4	0.00	TestCapBlendConeMomentCoefficientsMatchReference
 4	0.00	TestCapBlendFailedCallLeavesReceiverLiveAndDocumentUnchanged
 4	0.03	TestCapBlendHoleLoopCentroid
 4	0.07	TestCapBlendMiteredUndercutStillProven
