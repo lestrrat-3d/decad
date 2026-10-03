@@ -694,38 +694,24 @@ answer, never the whole bound.
 ### 9.1 `stackedPrismPayload`
 
 General prism shells are a finite axial stack of exact line/arc regions. One
-axial slab may contain several disconnected regions:
-
-```go
-type prismSlab struct {
-    Regions []ProfileRecord
-    Z0, Z1  float64 // evaluator coordinates, not public measurements
-}
-
-type prismSlabInterface struct {
-    Shared       []ProfileRecord // material on both sides; cancelled
-    LowerExposed []ProfileRecord // outward normal points toward +Z
-    UpperExposed []ProfileRecord // outward normal points toward -Z
-}
-
-type stackedPrismPayload struct {
-    Slabs      []prismSlab
-    Interfaces []prismSlabInterface // exactly len(Slabs)-1
-    Frame      r3.Frame
-    Xform      r3.Transform
-}
-```
+axial slab may contain several disconnected regions. `docs/stacked-prism-design.md`
+owns the payload: its record (`prismSlab`, `prismSlabInterface`,
+`stackedPrismPayload`), its invariants, its body build, its measurements, its
+tessellation and what every consumer does with it. The analytic blind `Cut`
+builds it today, over slabs of one region each and interfaces whose exposed
+material is each exclusive hole's own interior. The rules below are the shell
+cases this section adds on top of that record.
 
 Slab intervals are ordered, have positive height, and have disjoint interiors.
 Consecutive intervals meet at exactly one axial plane. Region interiors within
 one slab are pairwise disjoint. Material is the union of every region prism.
 
-This payload is evaluator-private and is built only from the shell cases in
-this section. At each shared plane, the shell construction records a certified
-partition into coincident material, exposed lower material, and exposed upper
-material. Every region on the narrower side is proven contained in its paired
-region on the wider side; any relation outside that subset/equality form is
-SX8. The payload builder therefore does not hide a general planar Boolean.
+At each shared plane, the shell construction records a certified partition into
+exposed lower material and exposed upper material; the material on both sides
+is the narrower region itself and is not stored. Every region on the narrower
+side is proven contained in its paired region on the wider side; any relation
+outside that subset/equality form is SX8. The payload builder therefore does
+not hide a general planar Boolean.
 
 Builder rules:
 
