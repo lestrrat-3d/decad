@@ -175,6 +175,9 @@ path for a `Between` — so a value of the wrong `Kind` is `ErrUnitKind`, a nega
 in magnitude and `units.Scalar(1.0/1024)` for a `Between`, caps a worst-case run at 1025 poses per pair; it
 is a constant the implementation owns and re-sizes from measured per-pose cost, not a value the API
 promises.
+If that default rounds to zero in `From`'s unit or its base unit, the check uses and reports the smallest
+positive resolution in `From`'s unit that `WithResolution` accepts. This can exceed the path span for a
+subnormal displacement.
 
 `WithMinClearance` states a spec: the moving set MUST stay at least `minimum` from every static body over the
 whole path. Like `WithMinWallThickness` it turns a measurement into an `Assessment` (verification §1.0):

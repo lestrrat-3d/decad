@@ -452,6 +452,70 @@ func TestMotionExceedsResolution(t *testing.T) {
 	require.False(t, exceedsResolution(at(units.Degrees(0)), at(units.Degrees(1)), at(units.Radians(0.0175))))
 }
 
+// A one-subnormal-millimetre path is valid, but one 1024th of it cannot be
+// carried by units.Value. The reported fallback must be accepted as an
+// explicit option and name the floor actually used by the check.
+func TestMotionDefaultResolutionUnderflowIsReusable(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	mover := internalBoxBody(t, doc, 0, 0, 1, 1, 1)
+	motion := Prismatic{
+		Dir:  r3.NewVec(1, 0, 0),
+		From: units.Millimeters(0),
+		To:   units.Millimeters(math.SmallestNonzeroFloat64),
+	}
+	spec, err := resolveMotion(motion)
+	require.NoError(t, err)
+	cfg, err := resolveMotionOptions(nil, spec)
+	require.NoError(t, err)
+	require.Equal(t, units.Millimeters(math.SmallestNonzeroFloat64), cfg.resolution)
+	reported, ok := exactMotionParam(cfg.resolution)
+	require.True(t, ok)
+	require.Zero(t, reported.base.Cmp(cfg.resolutionP.base))
+
+	report, err := doc.VerifyMotion(t.Context(), []*Body{mover}, motion)
+	require.NoError(t, err)
+	require.Equal(t, cfg.resolution, report.Request.Resolution)
+	replayed, err := doc.VerifyMotion(t.Context(), []*Body{mover}, motion, WithResolution(report.Request.Resolution))
+	require.NoError(t, err)
+	require.Equal(t, report.Status, replayed.Status)
+
+	// A degree needs a larger subnormal magnitude before conversion to the
+	// radian base unit is nonzero. The report must also be reusable there.
+	swing := Revolute{
+		Axis: r3.NewVec(0, 0, 1),
+		From: units.Degrees(0),
+		To:   units.Degrees(math.SmallestNonzeroFloat64),
+	}
+	swingSpec, err := resolveMotion(swing)
+	require.NoError(t, err)
+	swingCfg, err := resolveMotionOptions(nil, swingSpec)
+	require.NoError(t, err)
+	require.Greater(t, swingCfg.resolution.Mag(), math.SmallestNonzeroFloat64)
+	swingReported, ok := exactMotionParam(swingCfg.resolution)
+	require.True(t, ok)
+	require.Zero(t, swingReported.turn.Cmp(swingCfg.resolutionP.turn))
+	_, err = resolveMotionOptions([]MotionOption{WithResolution(swingCfg.resolution)}, swingSpec)
+	require.NoError(t, err)
+
+	// The nominal 1/1024 step can round to a positive degree magnitude that
+	// still converts to zero radians. It must trigger the same fallback.
+	swing.To = units.Degrees(1024 * math.SmallestNonzeroFloat64)
+	swingSpec, err = resolveMotion(swing)
+	require.NoError(t, err)
+	swingCfg, err = resolveMotionOptions(nil, swingSpec)
+	require.NoError(t, err)
+	require.Greater(t, swingCfg.resolution.Mag(), math.SmallestNonzeroFloat64)
+	swingReported, ok = exactMotionParam(swingCfg.resolution)
+	require.True(t, ok)
+	require.Zero(t, swingReported.turn.Cmp(swingCfg.resolutionP.turn))
+	swingReport, err := doc.VerifyMotion(t.Context(), []*Body{mover}, swing)
+	require.NoError(t, err)
+	require.Equal(t, swingCfg.resolution, swingReport.Request.Resolution)
+	_, err = doc.VerifyMotion(t.Context(), []*Body{mover}, swing, WithResolution(swingReport.Request.Resolution))
+	require.NoError(t, err)
+}
+
 // TestMotionPathAreaUpperStretchBase pins pathAreaUpper's stretch base
 // (docs/motion-check-design.md §5.1): the base 1 a Revolute and a Prismatic
 // pass reproduces their allowance exactly, and a base above 1 — a Between
