@@ -187,6 +187,8 @@ to the byte budget.
 | `boolean_parallel.go` | The bounded ordered contact-classification batches `facesNearMiss` and `meshBoolean` share; workers classify uncached facet pairs into indexed slots, memo access and aggregation stay serial. |
 | `prism_boolean.go` | The analytic Union/Cut/Intersect reduction over co-directional coplanar or offset-plane prisms, ahead of the mesh path. See the file's doc comment and `docs/prism-boolean-design.md`. |
 | `prism_boolean_nesting.go` | Cut/Intersect's clean-nesting structural match (§4.2): the whole-loop tag-map search resolving a clean bore/nested pair. See the file's doc comment and `docs/prism-boolean-design.md`. |
+| `prism_boolean_blind.go` | Blind Cut admission on a prism and spanning Cut admission on a stacked prism. It preserves whole target loops from sketch's structural match. See `docs/prism-boolean-design.md` §3.2. |
+| `stacked_prism.go` | The stacked prism record, slab and interface audit, continuous wall columns, and analytic body measurements. See `docs/stacked-prism-design.md`. |
 | `prism_boolean_crossing.go` | Cut/Intersect's crossing sub-case (§4.2): edge-orientation propagation classifies each cell per operand; `mergePrismCells` assembles the selection. See the file's doc comment and `docs/prism-boolean-design.md`. |
 | `prism_overlap.go` | `docs/prism-boolean-design.md` §4.5's overlap-area reading, read-only for `Verify`'s interference path alone. See the file's doc comment. |
 | `surface_trim.go` | `Trim`/`Extend`/`Split` gates. See surface-intersection §2–§3. |
@@ -201,6 +203,7 @@ to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `tessellate.go` | `Mesh` and `Body.Tessellate`: the proof record and which level publishes it, the shared loop chording, the dispatch to each payload path. See the file's doc comment and `docs/tessellation-design.md`. |
+| `tessellate_stacked.go` | One shared chorded ring per stacked prism wall column, planar patch triangulation, and the mesh bounds and occupied-volume proof. See `docs/stacked-prism-design.md` §5. |
 | `tessellate_verification.go` | `Verification`, `WithVerification` and what a mesh publishes about its own proofs. See `docs/tessellation-design.md` §1. |
 | `tessellate_revolve.go` | `tessellateRevolve`: the tolerance split, the meridian and angular chordings, and the rings, cells, poles and partial caps a revolve builds from them. See the file's doc comment. |
 | `tessellate_revolve_proof.go` | Revolve mesh proofs and audits. See the file's doc comment. |

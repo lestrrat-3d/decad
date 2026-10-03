@@ -10,12 +10,9 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Cut removes the tool from the target — an explicit boolean, never folded
-// into a feature. The result is a Faceted body: the operation runs on the
-// operands' tessellations with exact predicates, so the stitched boundary is
-// watertight by construction, and every measurement says how far it can be
-// trusted — the volume reads Approximate with a PROVEN error bound, and
-// Verify accepts that bound when it is within the requested tolerance.
+// Cut removes the tool from the target. This placed tool takes the mesh path,
+// which stitches a watertight faceted boundary and publishes a proven volume
+// bound. A same-plane blind tool is shown in Example_decad_blind_cut.
 func Example_decad_cut() {
 	w := sketch.NewWorld()
 	plateSketch, err := w.CreateSketch(w.XY())
@@ -54,8 +51,8 @@ func Example_decad_cut() {
 		fmt.Printf("failed to extrude tool: %s\n", err)
 		return
 	}
-	// Drop the tool so it pierces both plate faces; a tool whose cap merely
-	// rests ON a plate face is a face-on-face contact the boolean rejects.
+	// Drop this placed tool so it pierces both plate faces, keeping its caps
+	// clear of the mesh path's face-on-face contact case.
 	down, err := r3.Translation(r3.Vec{Z: -6})
 	if err != nil {
 		fmt.Printf("failed to build translation: %s\n", err)

@@ -265,8 +265,9 @@ arm64.
 
 - A rectangular blind pocket in a rectangular plate, both drawn on one plane,
   from each end: the result is analytic (no `Faceted` face), has one lump and
-  eight faces, every edge bounds two faces, and its volume and centroid are
-  `Exact` and equal to the exact rational answer over the recorded floats.
+  eleven faces, every edge bounds two faces, and its `Exact` volume equals
+  the rational answer. Its centroid bound contains the rational answer;
+  the Z coordinate is `Approximate` when that answer is not a float.
 - A round blind bore: `Approximate` volume within the published bound of
   `A·h − π r² d`, and the bound below `1e-9` of the value.
 - Blind bore then two through bolt holes: all three build analytically, the

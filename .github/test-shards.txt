@@ -907,7 +907,19 @@
 4	0.00	TestAxisFrameWalkChargeIsAbsentAtZero
 4	0.00	TestAxisFrameWalkChargeWidensEveryFieldItTouches
 4	0.00	TestBezierSliceCountSplitsBrokenFromUnsliceable
+4	0.03	TestBlindBoreThenCircularThroughHoles
 4	0.01	TestBlindCutBuildsAnalyticPocket
+4	0.01	TestBlindCutFromBottomFace
+4	0.01	TestBlindCutKeepsExistingThroughHole
+4	0.01	TestBlindCutThenTwoThroughHoles
+4	0.01	TestBlindPocketCanEnterMeshBoolean
+4	0.01	TestBlindPocketFilletIsStaged
+4	0.01	TestBlindPocketPlacedAndVerified
+4	0.01	TestBlindRoundBoreTessellates
+4	0.01	TestBlindStackedAdmissionLeavesOtherCutsToMesh
+4	0.01	TestBlindStackedLevelCarriesToolConversion
+4	0.01	TestBlindStackedLevelChargesExactOffsetSum
+4	0.01	TestBlindStackedPlacedToolChargesSectionDisplacement
 4	0.00	TestBodyGateDiameterCancellation
 4	0.00	TestBodyGateDiameterDisplacedPrismShrinksByTwiceTheSum
 4	0.00	TestBodyGateDiameterFreeformArmDoesNotWidenRevolvePayload
@@ -1570,6 +1582,7 @@
 4	0.00	TestSpanSagittaUpperCollapsedSpanIsExactZero
 4	0.00	TestSpanSagittaUpperDistinguishesFromParametricDeviation
 4	0.00	TestSpanSagittaUpperRoundsOutward
+4	0.01	TestStackedPayloadAuditRejectsBrokenRecords
 4	0.00	TestStatusString
 4	0.01	TestStitchAnnularRevolveSheetClosesToATube
 4	0.00	TestStitchAuditRefusesOverlappingAssembly
