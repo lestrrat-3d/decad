@@ -120,7 +120,11 @@ func TestPrismBooleanGateG2RejectsAReflectedOperand(t *testing.T) {
 	require.True(t, ok)
 }
 
-func TestPrismBooleanGateG3RequiresCoDirectionalCoplanarPlanes(t *testing.T) {
+// TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes isolates G3's
+// two arms (§3.1). Shown to fail: with admitPrismPairBudget's
+// prismSharedAxisOf call deleted (the coplanar arm alone), the "offset frame
+// on the normal axis clears G3" subtest went red.
+func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 	t.Parallel()
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
@@ -140,13 +144,59 @@ func TestPrismBooleanGateG3RequiresCoDirectionalCoplanarPlanes(t *testing.T) {
 		require.False(t, ok)
 	})
 
-	t.Run("co-directional but not coplanar", func(t *testing.T) {
+	t.Run("placed along the normal stays outside the shared-axis arm", func(t *testing.T) {
 		shifted, err := r3.Translation(r3.Vec{Z: 3})
 		require.NoError(t, err)
 		shiftedPP := pp
 		shiftedPP.xform = shifted
 		b := &Body{payload: shiftedPP}
 		_, _, ok := admitPrismPair(a, b)
+		require.False(t, ok)
+	})
+
+	t.Run("offset frame on the normal axis clears G3", func(t *testing.T) {
+		frameB, err := r3.NewFrame(r3.Vec{Z: -16}, frame.U(), frame.V())
+		require.NoError(t, err)
+		offsetPP := pp
+		offsetPP.frame = frameB
+		b := &Body{payload: offsetPP}
+		pa, pb, ok := admitPrismPair(a, b)
+		require.True(t, ok)
+		require.Zero(t, prismZShift(pa, pb).Cmp(big.NewRat(-16, 1)), "G5's shift is the exact origin offset along N")
+	})
+
+	t.Run("an in-plane origin component refuses", func(t *testing.T) {
+		frameB, err := r3.NewFrame(r3.Vec{X: 3, Z: -16}, frame.U(), frame.V())
+		require.NoError(t, err)
+		offsetPP := pp
+		offsetPP.frame = frameB
+		b := &Body{payload: offsetPP}
+		_, _, ok := admitPrismPair(a, b)
+		require.False(t, ok)
+	})
+
+	t.Run("U bits one ulp apart refuse", func(t *testing.T) {
+		// r3.NewFrame normalises U = (0.7071067811865475, 0.7071067811865475, 0)
+		// and (0.7071067811865476, 0.7071067811865476, 0) to the same bits, so
+		// the pair is a tilted plane and its sketch.CreateOffsetPlane by -16,
+		// whose re-normalised U lands one ulp apart: the shape a caller meets.
+		w := sketch.NewWorld()
+		tilted, err := r3.NewFrame(r3.NewVec(1, 2, 3), r3.NewVec(1, 1, 0), r3.NewVec(0, 1, 1))
+		require.NoError(t, err)
+		base, err := w.CreatePlaneFromFrame(tilted)
+		require.NoError(t, err)
+		below, err := w.CreateOffsetPlane(base, -16)
+		require.NoError(t, err)
+		fa, err := base.Frame()
+		require.NoError(t, err)
+		fb, err := below.Frame()
+		require.NoError(t, err)
+		require.NotEqual(t, fa.U(), fb.U(), "premise: the two frames' U differ in the stored bits")
+		tiltedA := pp
+		tiltedA.frame = fa
+		tiltedB := pp
+		tiltedB.frame = fb
+		_, _, ok := admitPrismPair(&Body{payload: tiltedA}, &Body{payload: tiltedB})
 		require.False(t, ok)
 	})
 
@@ -198,20 +248,121 @@ func TestPrismBooleanGateG5RequiresMatchingZInterval(t *testing.T) {
 		require.False(t, prismUnionZIntervalMatches(pa, pb))
 	})
 
-	t.Run("matching interval, re-expressed through a placed operand", func(t *testing.T) {
-		// B starts its own z0/z1 at [0, 10] in its own frame, then is placed
-		// 3mm along the shared normal: G5 must read the SHIFTED interval
-		// [3, 13], not B's own unshifted one.
-		shifted, err := r3.Translation(r3.Vec{Z: 3})
+	t.Run("matching interval, re-expressed through an offset frame", func(t *testing.T) {
+		// B starts its own z0/z1 at [0, 10] in its own frame, whose origin sits
+		// 3mm along the shared normal (G3's shared-axis arm): G5 must read the
+		// SHIFTED interval [3, 13], not B's own unshifted one.
+		offset, err := r3.NewFrame(r3.Vec{Z: 3}, frame.U(), frame.V())
 		require.NoError(t, err)
 		pb := pa
-		pb.xform = shifted
+		pb.frame = offset
 		require.False(t, prismUnionZIntervalMatches(pa, pb), "A's [0,10] must not match B's shifted [3,13]")
 
 		paShiftedToMatch := pa
 		paShiftedToMatch.z0, paShiftedToMatch.z1 = 3, 13
 		require.True(t, prismUnionZIntervalMatches(paShiftedToMatch, pb))
 	})
+}
+
+// TestPrismBooleanGateG5ShiftIsExactRational covers G5's comparisons over
+// G3's shared-axis arm (§3.1): B's interval is lifted onto A's axis by the
+// exact rational shift, never by a float sum. Shown to fail: with
+// prismCutZIntervalSpans comparing the float sums tool.z0+shift and
+// tool.z1+shift instead of the big.Rat lift, "a hair short refused" went red
+// (the float sum 15.6 + 0.4 rounds onto 16).
+func TestPrismBooleanGateG5ShiftIsExactRational(t *testing.T) {
+	t.Parallel()
+	frame := canonicalPrismFrame(t)
+	offsetBy := func(t *testing.T, z float64) r3.Frame {
+		t.Helper()
+		f, err := r3.NewFrame(r3.Vec{Z: z}, frame.U(), frame.V())
+		require.NoError(t, err)
+		return f
+	}
+	payload := func(f r3.Frame, z0, z1 float64) prismPayload {
+		return prismPayload{
+			profile: ProfileRecord{Outer: synthLineLoop()},
+			frame:   f, z0: z0, z1: z1, xform: r3.Identity(),
+		}
+	}
+
+	t.Run("meeting caps admitted", func(t *testing.T) {
+		target := payload(frame, 0, 16)
+		tool := payload(offsetBy(t, -16), 0, 32)
+		require.True(t, prismCutZIntervalSpans(target, tool))
+	})
+
+	t.Run("a hair short refused", func(t *testing.T) {
+		target := payload(frame, 0, 16)
+		tool := payload(offsetBy(t, 0.4), -1, 15.6)
+		z1, shift := 15.6, 0.4
+		require.Equal(t, 16.0, z1+shift, "premise: the float sum rounds onto the target's cap")
+		require.Negative(t, new(big.Rat).Add(floatRat(z1), floatRat(shift)).Cmp(big.NewRat(16, 1)),
+			"premise: the exact sum falls short of the target's cap")
+		require.False(t, prismCutZIntervalSpans(target, tool))
+	})
+
+	t.Run("union matches the shifted interval exactly", func(t *testing.T) {
+		pa := payload(frame, 0, 10)
+		require.True(t, prismUnionZIntervalMatches(pa, payload(offsetBy(t, -16), 16, 26)))
+		require.False(t, prismUnionZIntervalMatches(pa, payload(offsetBy(t, -16), 16, 26.000000000000004)))
+	})
+
+	t.Run("intersect overlap over the shifted interval", func(t *testing.T) {
+		pa := payload(frame, 0, 10)
+		require.True(t, prismIntersectZIntervalOverlaps(pa, payload(offsetBy(t, -16), 20, 30)))
+		require.False(t, prismIntersectZIntervalOverlaps(pa, payload(offsetBy(t, -16), 26, 30)))
+	})
+}
+
+// TestPrismIntersectShiftedEndpointChargesItsRounding is §7's one new axial
+// term: Intersect publishes B's shifted cap fl(0.1) + fl(0.3), which is no
+// float, rounded once and charged into z1Delta. Shown to fail: with the
+// rationalFloatError term deleted from prismIntersectEnd, z1Delta came back
+// 0 and the require.Positive assertion went red.
+func TestPrismIntersectShiftedEndpointChargesItsRounding(t *testing.T) {
+	t.Parallel()
+	frame := canonicalPrismFrame(t)
+	offset, err := r3.NewFrame(r3.Vec{Z: 0.1}, frame.U(), frame.V())
+	require.NoError(t, err)
+	a := &Body{payload: prismPayload{
+		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
+		frame:   frame, z0: 0, z1: 1, xform: r3.Identity(),
+	}}
+	b := &Body{payload: prismPayload{
+		profile: ProfileRecord{Outer: synthRectLoop(3, 3, 7, 7)},
+		frame:   offset, z0: 0, z1: 0.3, xform: r3.Identity(),
+	}}
+
+	result, ok, err := tryPrismBoolean(t.Context(), opIntersect, a, b)
+	require.NoError(t, err)
+	require.True(t, ok, "a nested pair on shared-axis offset planes takes the analytic path")
+
+	require.Equal(t, 0.1, result.z0, "B's shifted z0 is 0 + fl(0.1), itself a float")
+	require.Zero(t, result.z0Delta)
+
+	exact := new(big.Rat).Add(floatRat(0.3), floatRat(0.1))
+	nearest, isFloat := exact.Float64()
+	require.False(t, isFloat, "premise: fl(0.1) + fl(0.3) is no float")
+	require.Equal(t, nearest, result.z1)
+	require.Positive(t, result.z1Delta)
+	// B's incoming z1Delta is 0, so the published term is the rounding charge
+	// folded through absSumUpper's outward rounding.
+	require.GreaterOrEqual(t, result.z1Delta, rationalFloatError(exact, result.z1))
+	require.Equal(t, absSumUpper(0, rationalFloatError(exact, result.z1)), result.z1Delta)
+
+	body, err := evalPrism(New(), producerID(0), result, newFreeformWork())
+	require.NoError(t, err)
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	value, err := vol.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	bound, err := vol.Bound.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	want := new(big.Rat).Mul(big.NewRat(16, 1), floatRat(0.3))
+	gap := new(big.Rat).Sub(floatRat(value), want)
+	require.LessOrEqual(t, gap.Abs(gap).Cmp(floatRat(bound)), 0,
+		"the published volume bound contains the exact rational volume 16·fl(0.3)")
 }
 
 func TestPrismBooleanGateG6RestrictsUnionToHoleFreeOperands(t *testing.T) {

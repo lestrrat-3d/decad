@@ -1332,7 +1332,7 @@
 4	0.00	TestPrincipalCircleEdgeGapBoundsAndFallback
 4	0.00	TestPrismBooleanGateG1RequiresBothOperandsPrismPayload
 4	0.00	TestPrismBooleanGateG2RejectsAReflectedOperand
-4	0.00	TestPrismBooleanGateG3RequiresCoDirectionalCoplanarPlanes
+4	0.00	TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes
 4	0.00	TestPrismBooleanGateG4RefusesNonAnalyticSegment
 4	0.00	TestPrismBooleanGateG5RequiresMatchingZInterval
 4	0.00	TestPrismBooleanGateG6RestrictsUnionToHoleFreeOperands
@@ -1957,3 +1957,7 @@
 5	0.01	TestWallKernelCleanProfileDoesNotFlag
 5	0.02	TestWallReflexSweep
 5	0.01	TestWholeCircleCylinderHasTwoLoops
+2	0.00	TestPrismBooleanGateG5ShiftIsExactRational
+2	0.00	TestPrismIntersectShiftedEndpointChargesItsRounding
+2	0.00	TestPrismCutOffsetPlaneToolsChainAnalytically
+2	0.00	TestPrismCutOffsetPlaneExclusionsTakeMeshPath
