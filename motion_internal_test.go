@@ -3,9 +3,11 @@ package decad
 import (
 	"math"
 	"math/big"
+	"sync"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -202,21 +204,74 @@ func TestMotionAxisRadiusReadsTheBox(t *testing.T) {
 	}
 }
 
-// TestVerifyMotionKeepsTheNextProducerIdentity is §9 test 7's producer
-// half: a Duplicate after the call receives exactly the identity it would
-// have received before it, so no transient placement occupied one.
+// TestVerifyMotionKeepsTheNextProducerIdentity is §9 test 7's document
+// identity half: a transient placement must mint no live producer, level, or
+// curve identity. A Duplicate after the call receives the next producer.
 func TestVerifyMotionKeepsTheNextProducerIdentity(t *testing.T) {
 	t.Parallel()
 	doc := New()
 	cube := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
 	internalBoxBody(t, doc, 25, 2, 35, 8, 10)
 	before := doc.nextProducerID()
-	_, err := doc.VerifyMotion(t.Context(), []*Body{cube}, Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(30)}, WithResolution(units.Millimeters(100)))
+	levelBefore, curveBefore := doc.nextLevel, doc.nextCurve
+	report, err := doc.VerifyMotion(t.Context(), []*Body{cube}, Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(30)}, WithResolution(units.Millimeters(100)))
 	require.NoError(t, err)
+	require.Len(t, report.Poses, 2)
 	require.Equal(t, before, doc.nextProducerID())
+	require.Equal(t, levelBefore, doc.nextLevel)
+	require.Equal(t, curveBefore, doc.nextCurve)
+	const readers = 4
+	reports := make([]*MotionReport, readers)
+	errs := make([]error, readers)
+	var wg sync.WaitGroup
+	for i := range reports {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			reports[i], errs[i] = doc.VerifyMotion(t.Context(), []*Body{cube},
+				Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(30)},
+				WithResolution(units.Millimeters(100)))
+		}()
+	}
+	wg.Wait()
+	for i := range reports {
+		require.NoError(t, errs[i])
+		require.Equal(t, report, reports[i])
+	}
+	require.Equal(t, levelBefore, doc.nextLevel)
+	require.Equal(t, curveBefore, doc.nextCurve)
 	dup, err := cube.Duplicate(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, before, dup.originProducer())
+}
+
+func TestVerifyMotionRevolveKeepsLiveDenotationIdentities(t *testing.T) {
+	t.Parallel()
+	doc := New()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 10, 8)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	mover, err := doc.Revolve(s, s.Profiles()[0],
+		SketchLine{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}}, FullRevolution{})
+	require.NoError(t, err)
+	static := internalBoxBody(t, doc, 15, -10, 25, 10, 10)
+	before := doc.Bodies()
+	levelBefore, curveBefore := doc.nextLevel, doc.nextCurve
+	report, err := doc.VerifyMotion(t.Context(), []*Body{mover},
+		Prismatic{Dir: r3.NewVec(1, 0, 0), From: units.Millimeters(0), To: units.Millimeters(20)},
+		WithResolution(units.Millimeters(100)))
+	require.NoError(t, err)
+	require.Len(t, report.Poses, 2)
+	require.Equal(t, static, report.Against[0])
+	require.Len(t, report.Poses[0].Diagnostics, 1)
+	require.Equal(t, DiagUndecidedClearance, report.Poses[0].Diagnostics[0].Code)
+	require.Equal(t, before, doc.Bodies())
+	require.Equal(t, levelBefore, doc.nextLevel)
+	require.Equal(t, curveBefore, doc.nextCurve)
 }
 
 // TestVerifyMotionRefusesABodyItDidNotBuild is §9 test 9's row the public
