@@ -864,23 +864,24 @@ func TestCurvedRimLengthRefuses(t *testing.T) {
 	require.Positive(t, straightAnswered, `the plate's own outline rims are straight`)
 }
 
-func TestUnionOfCapBlendBodiesStagesNotContact(t *testing.T) {
+func TestUnionOfAdmittedCapBlendBodies(t *testing.T) {
 	t.Parallel()
-	// A cap-loop chamfer is a valid solid, but its mesh carries no
-	// occupied-volume proof yet, so a boolean over it is refused BEFORE any
-	// contact is examined. That is a capability/staging limit, not a contact
-	// refusal: it must surface as a plain ErrUnsupported, never a *BooleanError
-	// with BooleanUnsupportedContact.
+	// A line-line cap chamfer carries a zero occupied-volume bound, so a
+	// disjoint union must retain both bodies' exact volume.
 	doc, box := capBlendBox(t)
 	blended, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)
 	other := boxBody(t, doc, 200, 0, 210, 10, 10)
 
-	_, err = decad.Union(t.Context(), blended, other)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	var be *decad.BooleanError
-	require.False(t, errors.As(err, &be),
-		`operand staging is a capability limit, not a BooleanUnsupportedContact`)
+	blendedVolume, err := blended.Volume()
+	require.NoError(t, err)
+	got, err := decad.Union(t.Context(), blended, other)
+	require.NoError(t, err)
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, volumeMM(t, blendedVolume)+1000, volumeMM(t, vol), boundMM3(t, vol)+1e-9)
+	require.Len(t, got.Lumps(), 2)
+	requireBodyWatertight(t, got)
 }
 
 func TestUnionRejectsVertexTangentContact(t *testing.T) {

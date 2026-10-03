@@ -2,8 +2,10 @@ package decad
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -156,7 +158,7 @@ func TestCapBlendMeshChargesTheWindowSkew(t *testing.T) {
 	t.Parallel()
 	const tol = 0.05
 	chamfered, cbp := chamferedSectionBody(t, quarterDiskSection(10), 2)
-	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol)
+	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol, VerifyAll)
 	require.NoError(t, err)
 
 	lm, err := chordCapBlendLoop(t.Context(), newWorkBudget(t.Context()), cbp, 0, cbp.loops()[0], tol, newFreeformWork())
@@ -199,7 +201,7 @@ func TestCapBlendBandPatchBoundCoversItsOwnChording(t *testing.T) {
 	t.Parallel()
 	const tol = 0.25
 	chamfered, cbp := chamferedSectionBody(t, diskSection(0, 0, 10), 2)
-	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol)
+	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol, VerifyAll)
 	require.NoError(t, err)
 	lm, err := chordCapBlendLoop(t.Context(), newWorkBudget(t.Context()), cbp, 0, cbp.loops()[0], tol, newFreeformWork())
 	require.NoError(t, err)
@@ -233,7 +235,7 @@ func TestCapBlendHoleApexPatchBoundCoversConnectorSagitta(t *testing.T) {
 	require.Equal(t, len(lm.capPts), lm.capArcStart[0]+lm.arcCount[0],
 		"corner 0's connector ends at the sample array boundary")
 	require.Positive(t, lm.arcSag[0])
-	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol)
+	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol, VerifyAll)
 	require.NoError(t, err)
 
 	roles := facesByRole(chamfered)
@@ -322,23 +324,270 @@ func TestCapStationBoundEnclosesTheStationItDenotes(t *testing.T) {
 	require.False(t, capStationBound(cU, cV, math.NaN(), theta, held.U, held.V).derivable())
 }
 
-// TestCapBlendMeshPublishesNoVolumeProof is the increment's own boundary, read
-// off the mesh record: every face states a bound and the area slack is finite,
-// but no occupied-volume allowance is published, so the boolean's own gate
-// refuses the operand (docs/tessellation-reach-design.md §7, §9).
-func TestCapBlendMeshPublishesNoVolumeProof(t *testing.T) {
+// TestCapBlendMeshPublishesNoVolumeProofForAMiteredBand is the proof's own
+// boundary, read off the mesh record: a quarter disk's arc meets each radius at
+// a genuine miter, so every face states a bound and the area slack is finite,
+// but no occupied-volume allowance is published, and the boolean's own gate
+// refuses the operand with the admission's reason
+// (docs/tessellation-reach-design.md §7).
+func TestCapBlendMeshPublishesNoVolumeProofForAMiteredBand(t *testing.T) {
 	t.Parallel()
 	chamfered, cbp := chamferedSectionBody(t, quarterDiskSection(10), 2)
-	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, 0.1)
+	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, 0.1, VerifyAll)
 	require.NoError(t, err)
-	require.False(t, mesh.symDiffOK, `no occupied-volume homotopy is proven for a cap blend`)
+	require.False(t, mesh.symDiffOK, `a mitered circular wall is not covered by the slice-wise proof`)
 	require.Equal(t, 0.0, mesh.volSymDiff)
 	_, err = operandSymDiff(mesh)
 	require.ErrorIs(t, err, ErrUnsupported)
+	refusal, err := capBlendOccupiedVolumeAdmission(newWorkBudget(t.Context()), cbp)
+	require.NoError(t, err)
+	require.ErrorContains(t, refusal, `loop 0`)
+	require.ErrorContains(t, refusal, `no proof of the volume`)
 	require.False(t, isNonFinite(mesh.areaSlack))
 	require.Positive(t, mesh.areaSlack)
 	for _, f := range mesh.source {
 		_, ok := mesh.sourceBound(f)
 		require.True(t, ok, `every source face is present in the proof record`)
 	}
+}
+
+// capBlendMotionUnderTest rebuilds a payload's loops, cap motion and vertices
+// exactly as tessellateCapBlend does at VerifyAll, and returns the loops and
+// the per-vertex motion array the occupied-volume proof reads.
+func capBlendMotionUnderTest(t *testing.T, cbp capBlendPayload, chord float64) ([]capBlendLoopMesh, []float64) {
+	t.Helper()
+	budget := newWorkBudget(t.Context())
+	loops := cbp.loops()
+	lms := make([]capBlendLoopMesh, len(loops))
+	for li, loop := range loops {
+		lm, err := chordCapBlendLoop(t.Context(), budget, cbp, li, loop, chord, newFreeformWork())
+		require.NoError(t, err)
+		require.NoError(t, capBlendCapMotion(budget, cbp, &lm))
+		lms[li] = lm
+	}
+	var mesh Mesh
+	store, motion, err := capBlendVertices(budget, cbp, cbp.prismLike(0, 0), lms, &mesh, true)
+	require.NoError(t, err)
+	require.Len(t, motion, len(store), `motion is a parallel array, one entry per vertex`)
+	return lms, motion
+}
+
+// TestCapBlendMeshPublishesVolumeProofForAnAdmittedBand reads §7's proof off
+// the flange's mesh: every corner is exactly tangent and the bore a whole turn,
+// so the mesh publishes a finite volSymDiff at least as large as its own
+// chord-polygon term, and operandSymDiff hands that figure to the boolean.
+//
+// It also guards the cap leg of the per-vertex motion. The bore's seam cap
+// station is held at the float full turn while B1 places it at (19, 0)
+// exactly, so its motion must cover that measured gap.
+func TestCapBlendMeshPublishesVolumeProofForAnAdmittedBand(t *testing.T) {
+	t.Parallel()
+	const tol = 0.05
+	chamfered, cbp := chamferedFlange(t)
+	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol, VerifyAll)
+	require.NoError(t, err)
+	require.True(t, mesh.symDiffOK)
+	require.False(t, isNonFinite(mesh.volSymDiff))
+
+	lms, motion := capBlendMotionUnderTest(t, cbp, tol)
+	chordVolume := capBlendChordVolume(cbp, lms)
+	require.Positive(t, chordVolume, `the fillet arcs and the bore are chorded`)
+	require.GreaterOrEqual(t, mesh.volSymDiff, chordVolume)
+	// tessellateContext is the one writer of boundaryOK, which operandSymDiff
+	// reads first; the cap-blend path runs no facet-contact audit, so it is
+	// true at VerifyAll and the published figure reaches the boolean.
+	viaContext, err := tessellateContext(t.Context(), chamfered, units.Millimeters(tol), VerifyAll)
+	require.NoError(t, err)
+	got, err := operandSymDiff(viaContext)
+	require.NoError(t, err)
+	require.Equal(t, mesh.volSymDiff, got)
+
+	// Shown to fail: dropping lm.capMotion[j] from the cap vertex's motion in
+	// capBlendVertices turns this assertion red.
+	bore := lms[1]
+	require.True(t, bore.whole)
+	seg := bore.loop.Segments[bore.walks[0].segs[0]]
+	held := bore.capPts[0]
+	gap := walkEndBoundAllow(capOffsetStationBound(seg, 0, bore.count[0],
+		capWallRadiusOffset(bore.walks[0], cbp.d), held.U, held.V))
+	require.Positive(t, gap, `the float full turn leaves the seam station off (19, 0)`)
+	seam := motion[bore.capHiV[0]]
+	require.Positive(t, seam)
+	require.GreaterOrEqual(t, seam, gap, `the seam cap vertex's motion covers its own measured gap`)
+}
+
+// TestCapBlendMeshMotionCarriesEachLevelBound guards the level legs of the
+// per-vertex motion: a pin stopped ToFace against a 1e12 mm plate holds a
+// COMPUTED end level, and chamfered on that end both its side ring at
+// zHi = z1 − d and its cap ring at z1 carry that level's proven bound. The
+// plate is no boolean operand, so the mesh is read here directly.
+func TestCapBlendMeshMotionCarriesEachLevelBound(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(rect.A)
+	s.CreateRectangle(120, 0, 140, 20)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var plateProfile, pinProfile *sketch.Profile
+	for _, p := range s.Profiles() {
+		if p.Area > 1000 {
+			plateProfile = p
+		} else {
+			pinProfile = p
+		}
+	}
+	require.NotNil(t, plateProfile)
+	require.NotNil(t, pinProfile)
+	doc := New()
+	plate, err := doc.Extrude(s, plateProfile, Distance{D: units.Millimeters(1e12), Dir: Along})
+	require.NoError(t, err)
+	pin, err := doc.Extrude(s, pinProfile, ToFace{
+		Body:   plate,
+		Face:   Faces(FaceCreatedBy(CapEnd(plate))),
+		Offset: units.Millimeters(-1e-3),
+	})
+	require.NoError(t, err)
+	chamfered, err := pin.Chamfer(t.Context(), Edges(CreatedBy(CapEnd(pin))), units.Millimeters(1))
+	require.NoError(t, err)
+	cbp, ok := chamfered.payload.(capBlendPayload)
+	require.True(t, ok)
+	capLevel := cbp.capBandLevel(cbp.z1, -1)
+	require.Positive(t, capLevel.bound, `a ToFace stop's end level is computed, and says so`)
+
+	const tol = 1.0
+	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, tol, VerifyAll)
+	require.NoError(t, err)
+	require.True(t, mesh.symDiffOK, `an all-Plane band of line-line miters is admitted`)
+
+	lms, motion := capBlendMotionUnderTest(t, cbp, tol)
+	require.Len(t, lms, 1)
+	lm := lms[0]
+	require.Equal(t, 0.0, capBlendChordVolume(cbp, lms), `nothing in a rectangle is chorded`)
+	// Shown to fail: dropping lm.zHi.bound (the side leg) or
+	// capBandLevel(...).bound (the cap leg) from capBlendVertices' motion turns
+	// the matching assertion red.
+	require.Positive(t, lm.zHi.bound)
+	for j := range lm.sidePts {
+		require.GreaterOrEqual(t, motion[lm.sideHi[j]], lm.zHi.bound, `side vertex %d stands at a computed level`, j)
+	}
+	for j := range lm.capPts {
+		require.GreaterOrEqual(t, motion[lm.capHiV[j]], capLevel.bound, `cap vertex %d stands at a computed level`, j)
+	}
+	// The end cap is a 20×20 square shrunk by the 1 mm setback, so its area is
+	// at least 18², and a level displaced by its bound sweeps at least that
+	// much volume times the bound.
+	require.GreaterOrEqual(t, mesh.volSymDiff, productUpper(capLevel.bound, 18*18))
+}
+
+// TestCapBlendMeshMotionCarriesPlacementRounding guards the rounding leg: a
+// placed plate's every coordinate is computed, and its only motion is the
+// rounding exactPrismPointRound measures, so a zero there would publish an
+// exact proof the placement never earned.
+func TestCapBlendMeshMotionCarriesPlacementRounding(t *testing.T) {
+	t.Parallel()
+	chamfered, _ := chamferedSectionBody(t, func(s *sketch.Sketch) {
+		rect := s.CreateRectangle(0, 0, 100, 60)
+		s.Fix(rect.A)
+	}, 5)
+	rot, err := r3.Rotation(r3.Vec{X: 1, Y: 2, Z: 3}, units.Radians(0.7))
+	require.NoError(t, err)
+	moved, err := chamfered.Placed(t.Context(), rot)
+	require.NoError(t, err)
+	cbp, ok := moved.payload.(capBlendPayload)
+	require.True(t, ok)
+	mesh, err := tessellateCapBlend(t.Context(), moved, cbp, 1, VerifyAll)
+	require.NoError(t, err)
+	require.True(t, mesh.symDiffOK)
+	_, motion := capBlendMotionUnderTest(t, cbp, 1)
+	require.Equal(t, 0.0, capBlendChordVolume(cbp, nil))
+	// Shown to fail: dropping round from capBlendVertices' motion leaves every
+	// entry zero and this assertion red.
+	require.Positive(t, mesh.volSymDiff, `a placed plate rounds every coordinate it writes`)
+	worst := 0.0
+	for _, m := range motion {
+		worst = math.Max(worst, m)
+	}
+	require.Positive(t, worst)
+}
+
+// TestCapBlendMeshMotionCarriesTheMiterDisplacement guards the line-line miter
+// leg: a hexagon's offset corners sit at irrational points, so each held miter
+// foot is the exact one only within the band's contour displacement, and that
+// displacement is the whole of the proof.
+func TestCapBlendMeshMotionCarriesTheMiterDisplacement(t *testing.T) {
+	t.Parallel()
+	chamfered, cbp := chamferedSectionBody(t, func(s *sketch.Sketch) {
+		points := make([]*sketch.Point, 6)
+		for i := range points {
+			th := 2 * math.Pi * float64(i) / 6
+			points[i] = s.CreatePoint(100*math.Cos(th), 100*math.Sin(th))
+		}
+		for i := range points {
+			s.CreateLine(points[i], points[(i+1)%len(points)])
+		}
+		s.Fix(points[0])
+	}, 2)
+	delta := cbp.bandDelta[capBandKey{loop: 0, start: false}]
+	require.Positive(t, delta, `an irrational miter point is held only within the band's contour displacement`)
+	mesh, err := tessellateCapBlend(t.Context(), chamfered, cbp, 1, VerifyAll)
+	require.NoError(t, err)
+	require.True(t, mesh.symDiffOK)
+	lms, motion := capBlendMotionUnderTest(t, cbp, 1)
+	require.Equal(t, 0.0, capBlendChordVolume(cbp, lms), `a hexagon chords nothing`)
+	// Shown to fail: dropping the bandDelta arm of capBlendCapMotion turns
+	// these assertions red.
+	require.Positive(t, mesh.volSymDiff)
+	for j := range lms[0].capPts {
+		require.GreaterOrEqual(t, motion[lms[0].capHiV[j]], delta, `miter foot %d`, j)
+	}
+}
+
+// TestCapOffsetStationBoundReadsTheExactOffsetCircle pins
+// capOffsetStationBound: the gap between a held cap station and the point the
+// ideal polyhedron places on the wall's EXACT offset circle at the exact
+// fraction k/n of the wall's own window, both ends of the window included.
+func TestCapOffsetStationBoundReadsTheExactOffsetCircle(t *testing.T) {
+	t.Parallel()
+	t.Run("a clockwise bore's seam", func(t *testing.T) {
+		// The bore is a whole clockwise circle walked T = 1 → 0, and a hole rim
+		// grows by d. Its seam station is (19, 0) exactly, while the held sample
+		// is evaluated at the float full turn, which is not 2π: the gap is real
+		// and small.
+		bore := CircleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(18), CCW: false, TStart: 1, TEnd: 0}
+		off := big.NewRat(1, 1)
+		const n = 64
+		heldU, heldV := 19*math.Cos(2*math.Pi), 19*math.Sin(2*math.Pi)
+		first := capOffsetStationBound(bore, 0, n, off, heldU, heldV)
+		require.True(t, first.derivable())
+		require.Positive(t, walkEndBoundAllow(first), `the float full turn is not 2π, and the gap says so`)
+		require.Less(t, walkEndBoundAllow(first), 1e-13)
+		last := capOffsetStationBound(bore, n, n, off, heldU, heldV)
+		require.Equal(t, first, last, `k == n closes the turn on the same exact point as k == 0`)
+	})
+
+	t.Run("a fillet arc's foot", func(t *testing.T) {
+		fillet := ArcSeg{Center: Point2{U: 36, V: -22}, Start: Point2{U: 36, V: -34}, End: Point2{U: 48, V: -22}, TStart: 0, TEnd: 1}
+		off := big.NewRat(-1, 1)
+		at := capOffsetStationBound(fillet, 0, 8, off, 36, -33)
+		require.True(t, at.derivable())
+		ulp := math.Nextafter(36, math.Inf(1)) - 36
+		require.LessOrEqual(t, math.Max(at.u, at.v), 4*ulp, `the foot on the shrunken circle is (36, −33) to within the enclosure's own rounding`)
+
+		displaced := capOffsetStationBound(fillet, 0, 8, off, 36+1e-6, -33)
+		require.Greater(t, displaced.u, 5e-7, `a displaced station is measured, not excused`)
+	})
+
+	t.Run("an index or coordinate it cannot read", func(t *testing.T) {
+		fillet := ArcSeg{Center: Point2{U: 36, V: -22}, Start: Point2{U: 36, V: -34}, End: Point2{U: 48, V: -22}, TStart: 0, TEnd: 1}
+		off := big.NewRat(-1, 1)
+		require.False(t, capOffsetStationBound(fillet, -1, 8, off, 36, -33).derivable())
+		require.False(t, capOffsetStationBound(fillet, 9, 8, off, 36, -33).derivable())
+		require.False(t, capOffsetStationBound(fillet, 0, 8, off, math.NaN(), -33).derivable())
+		require.False(t, capOffsetStationBound(fillet, 0, 8, off, 36, math.Inf(1)).derivable())
+		require.False(t, capOffsetStationBound(fillet, 0, 8, big.NewRat(-13, 1), 36, -33).derivable(),
+			`an offset that swallows the radius denotes no circle`)
+	})
 }
