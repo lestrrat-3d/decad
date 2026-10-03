@@ -46,6 +46,12 @@ tessellates.
 
 Regenerate every image on this page with `cd _gallery && go run .`.
 
+The landing-page clip animates these parts and the wordmark. Render it with
+`cd _gallery && go run . clip > assemble.sh && sh assemble.sh`: the program
+writes each shot's PNG frames under `_gallery/out/` and prints the two ffmpeg
+commands, which the script runs to write `out/decad-landing.mp4` and
+`out/decad-landing.gif`.
+
 ## Layering
 
 ```
