@@ -163,14 +163,14 @@ func expectedBooleanForOperand(kind booleanExpectedKind, operand int, err error)
 }
 
 // booleanOperandStaging restates a Faceted operand's held-bound refusal
-// (facetedBoundRefusal) in the boolean's own terms (docs/api-design.md §8,
+// (facetedBoundError) in the boolean's own terms (docs/api-design.md §8,
 // "The chain depth"): it names the operand, quotes the held bound and the
 // pair's chord tolerance, and says that a boolean takes no tolerance, since
 // the Tessellate wording's "retry with a tolerance" names an argument this
 // caller does not have. Every other tessellation refusal passes through
 // unchanged.
 func booleanOperandStaging(op operationKind, operand int, err error) error {
-	var held *facetedBoundRefusal
+	var held *facetedBoundError
 	if !errors.As(err, &held) {
 		return err
 	}

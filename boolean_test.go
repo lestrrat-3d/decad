@@ -695,8 +695,9 @@ func TestBooleanChainsWithinHeldBound(t *testing.T) {
 // pair's chord tolerance. The refusal names the target, quotes the held
 // bound, says a boolean takes no tolerance, and never tells this caller to
 // retry with one. Shown to fail: with evaluateBoolean's booleanOperandStaging
-// calls removed, the "a boolean takes no tolerance" ErrorContains and the
-// "retry with a tolerance" NotContains assertions went red.
+// calls removed, the "retry with a tolerance" NotContains assertion went red
+// on the Tessellate caller's wording, which also lacks "cut's target" and
+// "a boolean takes no tolerance".
 func TestBooleanChainDepthRefusalNamesOperandAndTakesNoTolerance(t *testing.T) {
 	t.Parallel()
 	doc := decad.New()
@@ -714,10 +715,10 @@ func TestBooleanChainDepthRefusalNamesOperandAndTakesNoTolerance(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	var be *decad.BooleanError
 	require.False(t, errors.As(err, &be), "the chain-depth refusal is a plain ErrUnsupported, not a BooleanError")
-	require.ErrorContains(t, err, "cut's target")
-	require.ErrorContains(t, err, "a boolean takes no tolerance")
-	require.ErrorContains(t, err, fmt.Sprint(held), "the refusal quotes the target's held mesh bound")
 	require.NotContains(t, err.Error(), "retry with a tolerance")
+	require.ErrorContains(t, err, "a boolean takes no tolerance")
+	require.ErrorContains(t, err, "cut's target")
+	require.ErrorContains(t, err, fmt.Sprint(held), "the refusal quotes the target's held mesh bound")
 }
 
 // TestUnionCupOperand pins the operand admission set: booleans tessellate their
