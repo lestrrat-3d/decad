@@ -129,9 +129,11 @@ bounded reading the motion report carries (§4) by verification §2's rule, with
 clearance §7 as the reference. Its refusals are `WithTolerance`'s: `ErrUnitKind`, `ErrNegativeMagnitude`,
 `ErrNotFinite`.
 
-`WithResolution` states the finest parameter step the check will refine to (§6). An interval narrower than
-the resolution that the certificate still cannot settle reads undecided and is not split further; it is the
-caller's statement that a feature narrower than this does not need to be found. It is a magnitude of the
+`WithResolution` states the finest parameter step the check will refine to (§6), for the verdict and for
+the reading alike. An interval narrower than the resolution that the certificate still cannot settle reads
+undecided and is not split further, and a path reading or margin the floor leaves coarse is published
+coarse; it is the caller's statement that a feature narrower than this does not need to be found and that
+figures finer than it buys are not asked for. It is a magnitude of the
 motion's own `Kind` — an angle for a `Revolute`, a length for a `Prismatic` — so a value of the wrong
 `Kind` is `ErrUnitKind`, a negative or zero one `ErrNegativeMagnitude`, a non-finite one `ErrNotFinite`. A
 resolution larger than `|To − From|` is legal and means the endpoints alone are evaluated. The default,
@@ -197,13 +199,15 @@ type MotionInterval struct {
 type IntervalOutcome int
 // IntervalNotEvaluated | IntervalClear | IntervalColliding | IntervalUndecided
 
-// Collision is a proven overlap at an evaluated pose.
+// Collision is a proven overlap at an evaluated pose, about the IDEAL pose the
+// parameter names (§5.1): the measured overlap survives the pose's own
+// deviation from the ideal motion, and Volume's bound carries that allowance.
 type Collision struct {
     At     units.Value   // the parameter of the pose
     Pose   r3.Transform  // Motion.PoseAt(At)
     Moving *Body
     Static *Body
-    Volume *Measurement  // the overlap volume when the read-only proof bounded it; nil when overlap is proven but unmeasured
+    Volume Measurement   // the overlap volume, Value − Bound a proven lower bound on the ideal overlap; always present
 }
 ```
 
@@ -234,7 +238,8 @@ when it is `Sound`:
 
 | Finding | Rung | Diagnostic |
 |---|---|---|
-| a pose proves overlap for some pair | `Interfering` | `DiagMotionCollision` — `Pair` set, `At` set, `Reading` `ReadingOverlapVolume` with `Observed` the volume when bounded, else `ReadingNone` |
+| a pose proves overlap for some pair and the overlap transfers to the ideal pose (§5.1) | `Interfering` | `DiagMotionCollision` — `Pair` set, `At` set, `Reading` `ReadingOverlapVolume`, `Observed` the transferred volume |
+| a pose proves overlap at the float pose that does not transfer: unmeasured, or measured below the `η_k` allowance (§5.1) | `Suspect` | `DiagUndecidedInterference` — `Pair` set, `At` set, `Reading` `ReadingNone` |
 | `WithMinClearance` asked and some pose's gap interval lies wholly below the minimum (`hi < minimum`) | `Violating` | `DiagMotionClearanceViolated` — `Pair`, `At`, `Reading` `ReadingGap`, `Observed` the gap, `Required` the minimum |
 | an interval is `IntervalUndecided` | `Suspect` | `DiagMotionUndecidedInterval` — `Pair` nil, `At` the interval's `From`, `Reading` `ReadingNone`; `Message` names both ends |
 | `WithMinClearance` asked and an interval is `IntervalClear` but its lower bound does not reach the minimum, while no pose falsifies it | `Suspect` | `DiagMotionUndecidedClearance` — `At` the interval's `From`, `Reading` `ReadingGap`, `Observed` the interval's `Clearance`, `Required` the minimum |
@@ -297,10 +302,35 @@ of interference §3 over every (placed mover, static) pair. Three rules make it 
   it, and the pose is such an op.
 
 With those three in place, pose `k` proves, for each pair, one of interference §1's four relations about the
-IDEAL pose, and when disjoint or touching a gap interval `[lo_k, hi_k]` with `lo_k` a proven lower bound and
-`hi_k` a proven upper bound on the true distance between the ideal placed mover and the static body. A proven
-overlap is a `Collision`: this is the falsification CLAUDE.md's hard rule permits, and it is sound on any
-payload the read-only overlap proof reaches (§7), whether or not the clearance kernel can model the pair.
+FLOAT pose, and when disjoint or touching a gap interval `[lo_k, hi_k]` — widened by `η_k` on both sides,
+which is what `recordGap` does — with `lo_k` a proven lower bound and `hi_k` a proven upper bound on the true
+distance between the IDEAL placed mover and the static body.
+
+**A collision is transferred to the ideal pose through the same `η_k`, or it is not a collision.** The
+overlap proof runs on the float pose, so a proven overlap there is, by itself, a claim about a transform that
+differs from the ideal one by up to `η_k`; publishing it as a collision on the stated path would be a false
+falsification whenever the true overlap is thinner than `η_k`. The transfer uses the volume: moving every
+boundary point of the mover by at most `η_k` changes the overlap volume by at most the volume its boundary
+sweeps, `sweptVolumeAllow(η_k, A)` (`bounds.go`), where `A` is an upper bound on the mover's surface area —
+its `Area()` reading's `Value + Bound`. A pose therefore publishes a `Collision` for a pair exactly when the
+read-only proof bounded the overlap volume `V` and
+
+```text
+V.Value − V.Bound > sweptVolumeAllow(η_k, A)      (the right side up-rounded, the left down-rounded)
+```
+
+and the published `Collision.Volume` and `Interference.Volume` carry `V.Bound` widened by that allowance,
+so `Value − Bound` stays a proven lower bound on the IDEAL overlap volume. An overlap proven at the float
+pose that fails this — an overlap the read-only path could not measure (interference §7.1), or one whose
+measured volume does not clear the allowance — is NOT a `Collision`: the pose records
+`DiagUndecidedInterference` with `Pair` and `At` set (the pair is proven to overlap at the float pose and its
+ideal-pose overlap is unbounded), the pose has no gap for that pair, every interval touching the pose is
+`IntervalUndecided`, and the report reads `Suspect`. This is the falsification CLAUDE.md's hard rule
+permits, stated about the pose the caller named rather than the one float arithmetic produced, and it is
+sound on any payload the read-only overlap proof reaches (§7), whether or not the clearance kernel can model
+the pair. Where `η_k` is exactly zero — the parameter `0` under an identity placement, a whole number of
+quarter turns about an axis-aligned exact axis — the allowance is zero and every measured positive overlap
+transfers unchanged.
 
 ### 5.2 What an interval proves
 
@@ -316,22 +346,26 @@ d(M(s), S) ≥ max( lo_k − τ_k(s − s_k),  lo_{k+1} − τ_k(s_{k+1} − s) 
 
 where `τ_k(Δ)` bounds how far any point of the mover travels over a parameter change `Δ`.
 
-**The bound.** For a `Prismatic`, every point travels exactly `|Δ|` along the unit direction, so `τ(Δ) =
-|Δ|`, up-rounded. For a `Revolute`, a point at distance `ρ` from the axis travels an arc of length `ρ·|Δθ|`,
-which bounds its chord, so `τ(Δθ) = ρ_max · |Δθ|` in radians, up-rounded, where `ρ_max` bounds the distance
-from the axis of every point of the mover. `ρ_max` is read ONCE, from the mover's `Bounds()` at its current
-placement: the box inflated outward by its own `Bound`, the eight corners' distances from the axis line
-computed with `r3.Vec.Sub`, `Cross` and `Len`, each up-rounded, the largest taken, then the rounding of the
-`r3` operations themselves charged by `rigidRoundAllow`'s discipline at the corner's magnitude. A rotation
-about the axis preserves every point's distance from it, so one reading covers every pose. The angle `Δθ` is
-the exact difference of two dyadic grid parameters (§6) converted to radians through an upward-rounded `π`
-enclosure for a degree-stated motion, and taken as stated for a radian one.
+**The bound.** Every term of it is an exact rational (`motion_bound.go`), so no float rounding sits between
+a bound and the comparison it feeds. A motion parameter denotes `θ = 2π·turn + base`: a degree-stated angle
+is the exact rational turn `deg/360` (the degree count is what the caller stated; `units.Degree`'s factor is
+a rounded `π/180` and is never used), any other angle unit is `magnitude × factor` radians read exactly, and
+a length is `base` millimetres. The span of an interval is `2π·|Δturn| + |Δbase|` with `π` at its upper
+enclosure (`rat_interval.go`), exact for a length. For a `Prismatic`, every point travels exactly the span
+along the unit direction, so `τ(Δ)` is the span. For a `Revolute`, a point at distance `ρ` from the axis
+travels an arc of length `ρ·|Δθ|`, which bounds its chord, so `τ(Δθ) = ρ_max × span`, where `ρ_max` bounds
+the distance from the axis of every point of the mover. `ρ_max` is read ONCE, from the mover's `Bounds()` at
+its current placement, the parameter `0`: the box is inflated outward by its own `Bound` and read as exact
+rational extremes, each of its eight corners' squared distance from the axis line, `|(x − c) × a|² / |a|²`,
+is taken exactly, the largest is rooted upward by `ratSqrtUp`; distance from a line is convex, so the maximum
+over the box sits at a corner. A rotation about the axis preserves every point's distance from it, so one
+reading covers every pose.
 
 **The certificate.** The interval is `IntervalClear` for a pair when the two one-sided bounds together cover
 it with strictly positive distance everywhere, which holds exactly when
 
 ```text
-lo_k + lo_{k+1} > τ_k(s_{k+1} − s_k)      (every term rounded against the claim)
+lo_k + lo_{k+1} > τ_k(s_{k+1} − s_k)      (compared over exact rationals; lo_k, lo_{k+1} are the floats the poses proved)
 ```
 
 The two sides meet where `lo_k − τ(s − s_k) = lo_{k+1} − τ(s_{k+1} − s)`, and the lower envelope's minimum
@@ -343,10 +377,18 @@ The interval is `IntervalClear` only when EVERY (mover, static) pair certifies.
 
 Three consequences are deliberate:
 
-- **A touching endpoint does not block the interval.** A swing that begins resting on a stop has `lo_0 = 0`,
-  an `Exact` zero (clearance §6); the certificate still closes from the far end when `lo_1 > τ_0`. The
-  one-sided form `lo_k > τ_k` alone could never certify the first interval of such a swing, which is why the
-  certificate is two-sided.
+- **A touching endpoint can never certify its interval.** A swing that begins resting on a stop has
+  `lo_0 = 0`, an `Exact` zero (clearance §6). The far pose's gap is at most `τ_0`: the point of contact at
+  `s_0` travels at most `τ_0` to reach `s_1`, so the mover there is within `τ_0` of the static body, so
+  `lo_1 ≤ τ_0` and `lo_0 + lo_1 ≤ τ_0` — the strict inequality can never hold, from either side. The
+  interval is `IntervalUndecided` and the report `Suspect`. This is not a weakness of the two-sided form; it
+  is what the claim means: `IntervalClear` asserts a positive gap at EVERY parameter of the closed interval,
+  and the interval contains a pose at zero distance. Proving that a body lifts cleanly off a resting contact
+  needs a direction-of-motion argument — that the contact point's velocity points out of the static body and
+  stays so — and this design makes no such argument. A caller who wants the swing certified states a `From`
+  strictly past the contact, at which point the certificate applies unchanged. The two-sided form is kept
+  because it is the tight form of the Lipschitz bound and halves the refinement an asymmetric gap needs; it
+  is not kept for the touching case.
 - **`WithMinClearance` is the same certificate at a higher level.** The margin `m` is met over the interval
   when `(lo_k + lo_{k+1} − τ_k)/2 ≥ m`, down-rounded; it is falsified at a pose when `hi_k < m`, up-rounded.
   Only those two directions exist: a lower bound can prove the margin, an upper bound can disprove it, and
@@ -388,19 +430,43 @@ verdicts and the same report (evaluator §8):
 
 1. **Validate** (§3, §8) before reading `ctx`.
 2. **Read every mover's `ρ_max`** (§5.2) for a `Revolute`; a `Prismatic` needs none.
-3. **Swept-box exclusion.** For each (mover, static) pair, inflate the mover's `Bounds()` box outward by its
-   `Bound` plus the whole path's travel bound `τ(To − From)`, and the static body's by its `Bound`. Boxes
-   `boxesDisjoint` prove the pair clear over the whole path, with a lower bound of the box gap minus the
-   travel bound; the pair is never evaluated at any pose and contributes to every interval as `IntervalClear`
-   (§5.3). This is the same Lipschitz fact as §5.2 applied once, and it is what keeps a large document cheap
-   when the mover is far from most of it.
+3. **Swept-box exclusion.** The mover's `Bounds()` box is read at REST, the parameter `0`, not at `From`, so
+   the travel that inflates it runs from rest to the farther endpoint: `max(τ(0 → From), τ(0 → To))`.
+   Inflating by `τ(To − From)` alone is unsound whenever `From ≠ 0` — an arm swinging from 80° to 90° has
+   moved 80° before the path begins, and a box grown by 10° of travel excludes a wall it is already inside.
+   For each (mover, static) pair, the mover's box inflated outward by its `Bound` plus that travel, and the
+   static body's by its `Bound`, are compared as exact rational extremes per axis; a strictly positive gap
+   along some axis proves the pair apart at every parameter, and the largest such gap, rounded down, is a
+   proven lower bound on the pair's distance over the whole path. The pair is never evaluated at any pose and
+   contributes to every interval as `IntervalClear` (§5.3). This is the same Lipschitz fact as §5.2 applied
+   once, and it is what keeps a large document cheap when the mover is far from most of it.
 4. **Evaluate the endpoints** `From` and `To` (§5.1) for every remaining pair.
-5. **Bisect.** Take the first interval, in traversal order, that is neither `IntervalClear` nor
-   `IntervalColliding` and whose width exceeds the resolution; evaluate its midpoint `(s_a + s_b)/2` — exact
-   in float because the grid is dyadic in `(To − From)` — and replace the interval by its two halves.
+5. **Bisect for the verdict.** Take the first interval, in traversal order, that is neither `IntervalClear`
+   nor `IntervalColliding` and whose width exceeds the resolution; evaluate its midpoint `(s_a + s_b)/2` —
+   exact in float because the grid is dyadic in `(To − From)` — and replace the interval by its two halves.
    Repeat until no such interval remains. An interval whose width is at or below the resolution and that
    still fails the certificate becomes `IntervalUndecided`.
-6. **Publish** (§4), with `Poses` in parameter order including every midpoint inserted.
+6. **Bisect for the reading.** A certified interval's `Clearance` sits below the true minimum by up to
+   `τ_k/2` — for the arm of §9, `25 mm × Δθ` — so an interval that certifies at a coarse width leaves the
+   path reading's half-width (§5.3) at that scale, and a margin that the true gap meets by less than
+   `τ_k/2` reads undecided. Refinement therefore continues past certification, on certified intervals, with
+   two stopping rules, each bounded by the resolution floor: while `MotionReport.Clearance` would fail the
+   tolerance gate, bisect the interval holding the smallest `Clearance` (ties in traversal order) unless its
+   width is at or below the resolution; and while `WithMinClearance` is neither proven (every interval's
+   `Clearance ≥ minimum`) nor disproven (some pose's `hi < minimum`), bisect the interval holding the
+   smallest `Clearance` on the same terms. A midpoint evaluated here is an ordinary pose: it can disprove the
+   margin, find a collision, or leave the interval undecided, and each of those stands. When the floor stops
+   the loop, the reading is published beyond tolerance and reads `Suspect`, or the margin reads
+   `AssessmentUndecided` — the honest coarse answer of clearance §7, never a tightened number.
+7. **Publish** (§4), with `Poses` in parameter order including every midpoint inserted.
+
+The pose count is bounded by the floor: at most `|To − From| / Resolution + 1` poses on the path, `1025` at
+the default, each running every non-excluded pair through the kernel once. Step 5 spends poses wherever
+the certificate fails, which near a collision or a close approach is down to the floor; step 6 spends them
+only around the current minimum, so its cost grows with the logarithm of `1 / Resolution` rather than with
+the path length. A caller who wants only the verdict and not the figures states a coarse `WithResolution`;
+a caller who wants a path reading at the gate states one fine enough that `ρ_max × Resolution / 4` is below
+`rel × gap` (§9 test 2 works the arithmetic).
 
 A pose whose pair is undecided or unsupported (a payload the kernel cannot model, an uncertified contact)
 offers no `lo`, so no interval touching it can certify through that endpoint; the far endpoint may still
@@ -420,7 +486,8 @@ payload's reach without adding a weaker one:
 
 | Mover or static payload | Pose relation and gap | Collision proof | Over the path |
 |---|---|---|---|
-| unplaced or placed `prismPayload` with zero section displacement, `revolvePayload`, zero-vertex-bound closed `stitchPayload` | analytic kernel (clearance §2) | kernel overlap, or read-only intersection | `IntervalClear` reachable |
+| mover: unplaced or placed `prismPayload` with zero section displacement, or `revolvePayload`; static: the same, or a zero-vertex-bound closed `stitchPayload` | analytic kernel (clearance §2); the mover's record radius `R0` (§5.1) is read off its prism or revolve envelope, so `η_k` is bounded under both motions | kernel overlap, or read-only intersection, transferred through `η_k` | `IntervalClear` reachable |
+| mover: zero-vertex-bound closed `stitchPayload` | analytic kernel, but the payload states no `R0`: under a `Prismatic` the pose's linear part matches the ideal one exactly and `η_k` is the translation term alone, so the gap is measured; under a `Revolute` `η_k` is unbounded, the pair reads `DiagUndecidedClearance` at every pose, and no collision transfers | read-only intersection, under a `Prismatic` only | `IntervalClear` reachable under a `Prismatic`; every interval `IntervalUndecided` under a `Revolute` unless swept-box exclusion settles the pair |
 | `prismPayload` with nonzero section displacement, `cupPayload`, `facetedPayload`, `loftPayload`, `capBlendPayload` | box separation only; gap `Suspect` (clearance §8) | read-only intersection where the payload tessellates (interference §9) | collisions found; intervals `IntervalUndecided` unless swept-box exclusion settles the pair |
 | a `BodySheet` operand on either side | none | none | the pair reads `DiagUnsupportedPairSheet` at every pose, intervals `IntervalUndecided`, unless swept-box exclusion settles it |
 | a mover this evaluator did not build (`payload == nil`) | — | — | `ErrUnsupported` at the call, as for `Placed` |
@@ -472,13 +539,23 @@ farthest corner `(48, 14)` sits at exactly `50` mm from the axis and at polar an
    `WithResolution(0.25°)` the first `Collision.At` is within `0.5°` above `θ*`; every `Collision.Volume` is
    positive with its `Bound` below its `Value`. Assert the same under a `Revolute` stated in radians.
 2. **Clear swing with a stated margin.** Static wall at `y ∈ [60, 80]`. The minimum gap over the path is
-   exactly `10` mm, at `θ = 90° − atan(7/24)`. Assert: `Status` is `Sound`; every interval is
-   `IntervalClear`; `MotionReport.Clearance.Value` is within `0.1` mm of `10` with its bound below the
-   tolerance gate; with `WithMinClearance(9 mm)` the `Assessment` is `AssessmentMet`; with
-   `WithMinClearance(11 mm)` it is `AssessmentViolated` and `Status` is `Violating` with a
-   `DiagMotionClearanceViolated` whose `At` is the pose of the proving gap; with `WithMinClearance(10 mm)`
-   exactly, the `Assessment` is `AssessmentUndecided` and the report `Suspect` — never `Met`, because no
-   proven lower bound can reach an exact minimum.
+   exactly `10` mm, at `θ = 90° − atan(7/24)`. The two endpoint gaps are `46` mm at `0°` and `12` mm at
+   `90°`; their sum, `58` mm, is under the whole swing's travel `50 × π/2 ≈ 78.54` mm, so the endpoints
+   alone certify nothing, and the test has two parts. **Endpoints only** (no bisection): assert `Status` is
+   `Suspect`, the one interval is `IntervalUndecided`, `Collisions` is empty, `Clearance` is nil, the `0°`
+   row is an `Exact` `46` and the `90°` row encloses `12` with an ulp-scale bound. **Bisected**, with
+   `WithResolution(0.01°)`: a certified interval's `Clearance` dips below the true gap by up to
+   `τ_k/2 = 25 mm × Δθ`, so the path reading's half-width is about `12.5 mm × Δθ`, and the gate at
+   `rel = 1e-3` on a `10` mm gap admits `0.01` mm; `Δθ = 0.01° ≈ 1.75e-4 rad` gives `2.2e-3` mm, inside it,
+   while the default floor `90°/1024` gives `0.019` mm, outside it. Assert: `Status` is `Sound`; every
+   interval is `IntervalClear`; `MotionReport.Clearance.Value` is within `0.1` mm of `10` with
+   `Tolerance.State` `ToleranceSatisfied`; with `WithMinClearance(9 mm)` the `Assessment` is
+   `AssessmentMet`; with `WithMinClearance(11 mm)` it is `AssessmentViolated` and `Status` is `Violating`
+   with a `DiagMotionClearanceViolated` whose `At` is the pose of the proving gap; with
+   `WithMinClearance(10 mm)` exactly, the `Assessment` is `AssessmentUndecided` and the report `Suspect` —
+   never `Met`, because no proven lower bound can reach an exact minimum. Assert also that at the default
+   resolution the same fixture is `Sound` in verdict but its `Clearance` reading is beyond tolerance, so the
+   report reads `Suspect` with a `DiagMeasurementBeyondTolerance` on `ReadingGap` and a nil `At`.
 3. **Near miss between samples.** Mover: a blade `x ∈ [0, 50], y ∈ [−0.5, 0.5]`, same motion. Static: a pin,
    a 1 mm cube centred at polar angle `90·31/64 ≈ 43.59°`, radius `49`, so the blade sweeps through it over a
    window about `2.3°` wide that contains no dyadic grid point of depth 5. With `WithResolution(3°)` assert:
@@ -487,14 +564,30 @@ farthest corner `(48, 14)` sits at exactly `50` mm from the axis and at polar an
    window. This fixture is the one that goes red when the `ρ_max·Δθ` term is deleted, when `ρ_max` is read
    from the centroid instead of the box, or when the certificate is made one-sided and the pin is moved to
    the first interval; the test file records each.
-4. **Touching start.** The arm of fixture 2 with a stop prism sharing its `y = −14` face plane at `θ = 0`
-   (a stop-built extrude, clearance §6's coplanar certificate), swinging away. Assert: the first
-   `PoseResult.Clearances` row is an `Exact` zero; the first interval is `IntervalClear`; `Status` is `Sound`.
-   This fixture goes red when the certificate loses its `lo_{k+1}` side.
-5. **Prismatic.** A 10 mm cube translating along `+X` from `0` to `30` mm toward a wall whose face is at
-   `x = 25`. Assert a collision with every `Collision.At` strictly greater than `15` mm, every `IntervalClear`
-   ending at or below `15` mm, and with the wall at `x = 45` a `Sound` report whose `Clearance` is within
-   `0.01` mm of `5`.
+4. **Touching start.** The arm with a stop prism sharing its `y = −14` face plane at `θ = 0` (a stop-built
+   extrude, clearance §6's coplanar certificate), swinging away. Assert: the first `PoseResult.Clearances`
+   row is an `Exact` zero with a zero bound (the `0°` pose is the identity motion, so the transient arm
+   carries no placement rounding and `η_0` is exactly zero); `Collisions` is empty, because touching is not
+   overlap; the first interval is `IntervalUndecided`; `Status` is `Suspect`. The pinned outcome is §5.2's:
+   an interval that contains a zero-distance pose is never `IntervalClear`. This fixture goes red when the
+   exact sine and cosine of a whole number of quarter turns is deleted (the identity pose then carries an
+   enclosure-width `η` and its row is no longer `Exact`).
+5. **Prismatic.** A 10 mm cube translating along `+X` from `0` to `30` mm. **Hit**: a wall whose face is at
+   `x = 25`; assert a collision with every `Collision.At` strictly greater than `15` mm, every `IntervalClear`
+   ending at or below `15` mm, the last interval `IntervalColliding`, and the last collision's volume within
+   `1e-6` of `500` mm³ (the cube at `[30, 40]` against the wall's `[25, 35]`). **Clear, evaluated**: an
+   L-shaped static prism whose bar face stands at `x = 45` and whose arm along `y ∈ [50, 60]` reaches back
+   over the cube's resting place, so the wall's box meets the cube's swept box and the pair is evaluated
+   rather than excluded while the arm's own `40` mm gap never becomes the minimum. The cube's gap to the
+   bar shrinks at exactly the travel rate, so the certificate's lower envelope meets the far endpoint's gap
+   and the endpoints alone certify; assert a `Sound` report, one `IntervalClear` interval whose `Clearance`
+   is at most `5` and within `0.01` mm of it, and a path `Clearance` within `0.01` mm of `5` with
+   `ToleranceSatisfied`. **Clear, excluded**: a plain slab at `x ∈ [45, 55]`; its box lies outside the
+   cube's resting box grown by the whole travel, so the pair is settled by swept-box exclusion alone. Assert
+   a `Sound` report, no pose row for the slab, one `IntervalClear` interval whose `Clearance` is positive
+   and at most `5`, and a nil path `Clearance` (§5.3: no pose measured an upper bound). **Pin between
+   samples**: a `2 × 2 × 2` mm pin `4` mm ahead of the resting cube, `14` mm behind it at the end; with the
+   endpoints alone, assert no `Collision`, `IntervalUndecided`, `Suspect`.
 6. **Swept-box exclusion.** Fixture 2 plus a far body at `x ∈ [500, 510]`. Assert the far pair appears in
    `Against`, in no `PoseResult` row, and that the report's `Status` and `Clearance` are unchanged from
    fixture 2.
@@ -521,13 +614,14 @@ farthest corner `(48, 14)` sits at exactly `50` mm from the axis and at polar an
 
 | PR | lands | still `Suspect` after it |
 |---|---|---|
-| 1 | `Motion`, `Revolute`, `Prismatic`, `PoseAt` and their refusals; `Diagnostic.At` and the four codes; `VerifyMotion` over the analytic kernel with endpoints only (no bisection), swept-box exclusion, `η_k`, `ρ_max`; `IntervalClear`/`IntervalColliding`/`IntervalUndecided`; tests 2, 4, 5, 6, 7, 8, 9, 10 | every interval the endpoints alone cannot certify |
-| 2 | bisection to the resolution floor, `WithResolution`, `WithMinClearance` and `Assessment`; tests 1, 3, 11 | pairs the clearance kernel leaves undecided (§7) |
+| 1 (`motion.go`, `motion_verify.go`, `motion_bound.go`) | `Motion`, `Revolute`, `Prismatic`, `PoseAt` and their refusals; `WithMotionTolerance`; `Diagnostic.At` and the four `DiagMotion*` codes; `VerifyMotion` over the two endpoints only (§6 steps 1–4 and 7, no bisection), the swept-box exclusion with travel from rest, `η_k` charged to gaps, `ρ_max` and `τ` over exact rationals; `IntervalClear`/`IntervalColliding`/`IntervalUndecided`; `MotionRequest.RelativeTolerance`; tests 2 (endpoints only), 4, 5, 6, 7, 8, 9, 10 and the swept-box-from-rest test | every interval the endpoints alone cannot certify (test 2's swing among them); a collision at a pose whose `η_k` is nonzero is published without the §5.1 transfer |
+| 2 | §6 steps 5 and 6 — bisection for the verdict and for the reading — `WithResolution`, `WithMinClearance`, `Assessment`, `MotionRequest.Resolution`/`MinClearance`; the §5.1 collision transfer through `sweptVolumeAllow(η_k, A)`, with `DiagUndecidedInterference` at a pose for an overlap that does not transfer, and `Collision`'s doc comment restated as a claim about the ideal pose; tests 1, 2 (bisected), 3, 11, and a transfer test: a pose with a nonzero `η_k` whose measured overlap is published with its bound widened by the allowance, and a fixture whose overlap volume is below the allowance that reads `DiagUndecidedInterference` rather than `Collision` | pairs the clearance kernel leaves undecided (§7); a stitched mover under a `Revolute` |
 | 3 | `Between` over a screw motion, once `r3` reads axis, angle and pitch out of a `Transform` (§11) | — |
 
-PR 1 is the end-to-end instance: a real mover, a real static body, the real kernel, one certificate, one
-report. If `η_k`'s rational enclosure or the transient-placement path blocks it, that is the blocker to
-report, not a reason to ship a sampled check under the continuous name.
+PR 1 was the end-to-end instance: a real mover, a real static body, the real kernel, one certificate, one
+report, at endpoint scope. PR 2 builds on it and changes no PR 1 result except the two the transfer rule
+names: a collision whose measured volume does not clear `sweptVolumeAllow(η_k, A)` stops being a
+`Collision`, and every published collision volume carries the widened bound.
 
 ## 11. Dependency gaps and settled points
 
