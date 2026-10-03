@@ -10,10 +10,11 @@ A **headless CAD engine** for Go: the 3D modeling layer above the
 
 While modern coding agents can already create 3D models, decad aims for
 **idempotent, parametric construction**. You can ask a coding agent to put
-dimensioned sketches and ordered features in code. Rerunning that workflow
-with the same inputs rebuilds the same part. A CAD plugin can use the same
-approach. decad checks the geometry before the agent carries those steps into
-the plugin. The images below illustrate the results.
+dimensioned sketches and ordered features in code. A CAD plugin can use the
+same approach. decad checks the geometry before the agent carries those steps
+into the plugin. This coded workflow lets you rebuild the same model from the
+same inputs, while decad's verification report tells the agent whether the
+geometry passes its checks. The images below illustrate the results.
 
 > **Work in progress.** The API and supported capabilities may change.
 
