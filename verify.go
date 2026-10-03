@@ -1246,13 +1246,13 @@ func boxesDisjoint(a, b Box) bool {
 // inflatedBoxEndsDisjoint compares the exact inflated endpoints. A strict
 // float comparison has the same ordering because rounding is monotone; when
 // both expressions round to the same float, compare their dyadic values.
-func inflatedBoxEndsDisjoint(max, maxBound, min, minBound float64) bool {
-	upper, lower := max+maxBound, min-minBound
+func inflatedBoxEndsDisjoint(maxCoord, maxBound, minCoord, minBound float64) bool {
+	upper, lower := maxCoord+maxBound, minCoord-minBound
 	if upper != lower {
 		return upper < lower
 	}
-	exactUpper := dyAdd(mustDyOf(max), mustDyOf(maxBound))
-	exactLower := dySubScalar(mustDyOf(min), mustDyOf(minBound))
+	exactUpper := dyAdd(mustDyOf(maxCoord), mustDyOf(maxBound))
+	exactLower := dySubScalar(mustDyOf(minCoord), mustDyOf(minBound))
 	return dyCmp(exactUpper, exactLower) <= 0
 }
 
