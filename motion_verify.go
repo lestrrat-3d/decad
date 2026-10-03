@@ -137,19 +137,47 @@ func resolveMotion(m Motion) (motionSpec, error) {
 }
 
 // defaultResolution is the published default resolution, |To − From|/1024
-// carried in From's unit. The check itself refines against the exact
-// rational defaultResolutionParam, so this float is a label.
-func (s motionSpec) defaultResolution() units.Value {
-	from := floatRat(s.from.Mag())
-	toMag, err := s.to.In(s.from.Unit())
-	to := floatRat(toMag)
-	if err != nil || from == nil || to == nil {
-		return units.New(0, s.from.Unit())
+// carried in From's unit. When that value underflows, it returns the smallest
+// positive resolution in that unit accepted by WithResolution and reports
+// clamped so the check can use that same floor.
+func (s motionSpec) defaultResolution() (units.Value, bool) {
+	var d *big.Rat
+	if s.kind == motionPrismatic {
+		// The exact base-unit difference survives conversion that could round
+		// two distinct endpoints to the same float in From's unit.
+		d = new(big.Rat).Sub(s.toP.base, s.fromP.base)
+		d.Abs(d)
+		d.Quo(d, floatRat(s.from.Unit().Factor()))
+	} else {
+		from := floatRat(s.from.Mag())
+		toMag, err := s.to.In(s.from.Unit())
+		to := floatRat(toMag)
+		if err != nil || from == nil || to == nil {
+			return units.New(0, s.from.Unit()), false
+		}
+		d = new(big.Rat).Sub(to, from)
+		d.Abs(d)
 	}
-	d := new(big.Rat).Sub(to, from)
-	d.Abs(d)
 	mag, _ := d.Quo(d, big.NewRat(1024, 1)).Float64()
-	return units.New(mag, s.from.Unit())
+	if mag != 0 {
+		return units.New(mag, s.from.Unit()), false
+	}
+	// A positive exact floor can be below the smallest float64 in this unit.
+	// Binary search positive finite float bits for the first value whose base
+	// conversion is nonzero, which is also the first WithResolution accepts.
+	base, _ := units.BaseUnit(s.paramKind())
+	low, high := uint64(0), math.Float64bits(1)
+	for high-low > 1 {
+		mid := low + (high-low)/2
+		candidate := units.New(math.Float64frombits(mid), s.from.Unit())
+		converted, err := candidate.In(base)
+		if err != nil || converted == 0 {
+			low = mid
+			continue
+		}
+		high = mid
+	}
+	return units.New(math.Float64frombits(high), s.from.Unit()), true
 }
 
 // defaultResolutionParam is |θ(To) − θ(From)|/1024 taken part by part over

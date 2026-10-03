@@ -315,6 +315,7 @@
 1	0.00	TestMotionBasisSigmaUpper
 1	0.00	TestMotionBetweenFrameReachesTo
 1	0.04	TestMotionCollisionTransferWidensTheBound
+1	0.01	TestMotionDefaultResolutionUnderflowIsReusable
 1	0.00	TestMotionExceedsResolution
 1	0.05	TestMotionOverlapThatDoesNotTransferIsUndecided
 1	0.00	TestMotionParamSinCosEnclosesTheAngle

@@ -329,7 +329,8 @@ func WithMotionTolerance(rel units.Value) MotionOption {
 // value ErrNegativeMagnitude, a non-finite one ErrNotFinite. A resolution
 // wider than the whole path (wider than 1 for a Between) evaluates the
 // endpoints alone. The default is |To − From|/1024, units.Scalar(1.0/1024)
-// for a Between.
+// for a Between. If that step underflows, the check uses and reports the
+// smallest positive resolution in From's unit accepted by WithResolution.
 func WithResolution(step units.Value) MotionOption {
 	return motionOption{option.New(identResolution{}, step)}
 }
@@ -399,10 +400,15 @@ func resolveMotionOptions(opts []MotionOption, spec motionSpec) (motionConfig, e
 		}
 	}
 	if resolution == nil {
-		// The published default is a float label; the floor itself is the
-		// exact one-1024th step of the path, whatever units it was stated in.
-		cfg.resolution = spec.defaultResolution()
+		// The published default is a float label for the exact one-1024th
+		// step, unless that label underflows. Then use the reported positive
+		// fallback as the floor itself.
+		var clamped bool
+		cfg.resolution, clamped = spec.defaultResolution()
 		cfg.resolutionP = spec.defaultResolutionParam()
+		if clamped {
+			cfg.resolutionP, _ = exactMotionParam(cfg.resolution)
+		}
 	} else {
 		cfg.resolution = *resolution
 		var ok bool
