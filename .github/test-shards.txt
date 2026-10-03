@@ -202,7 +202,7 @@
 0	0.01	TestThickenPatchSides
 0	0.01	TestTriangulate2DBridgeCollinearFamily
 0	0.02	TestUnderflowingSplineAreaPublishesBoundedZero
-0	0.03	TestUnionOfCapBlendBodiesStagesNotContact
+0	0.00	TestUnionOfAdmittedCapBlendBodies
 0	0.01	TestUnionRejectsEdgeEdgePointTouch
 0	0.02	TestUnstitchRestitchRoundTripMatchesOriginal
 0	0.01	TestUnstitchRevolveRoundTripStaysASheet

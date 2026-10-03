@@ -254,7 +254,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 		// export alone and requireVolumeProvingPayload/operandSymDiff refuse it
 		// with the same reason.
 		mesh.symDiffOK = false
-		return &mesh, nil
+		return &mesh, nil //nolint:nilerr // refusal is the admission result; err was checked above
 	}
 	// Occupied volume (docs/tessellation-reach-design.md §7): the ideal
 	// polyhedron B1 differs from the body by its chord polygons' circular

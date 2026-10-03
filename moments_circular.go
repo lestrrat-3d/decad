@@ -319,8 +319,9 @@ func circularEndpointInterval(seg CurveSegment, rt *big.Rat) (ratInterval, ratIn
 // exact rational; zero gives the segment itself). The offset joins the radius
 // before any product, so for an ArcSeg it shifts BOTH ends of the
 // ratSqrtDown/ratSqrtUp bracket and the held radius's own rounding stays
-// enclosed rather than assumed. A resulting radius whose lower end is not
-// positive denotes no circle and answers ok == false.
+// enclosed rather than assumed. A nonzero offset whose resulting radius is
+// not positive denotes no offset circle and answers ok == false. A zero offset
+// keeps circularEndpointInterval's collapsed-radius reading unchanged.
 func circularOffsetEndpointInterval(seg CurveSegment, rt, radiusOffset *big.Rat) (ratInterval, ratInterval, bool) {
 	switch seg := seg.(type) {
 	case CircleSeg:
@@ -334,7 +335,7 @@ func circularOffsetEndpointInterval(seg CurveSegment, rt, radiusOffset *big.Rat)
 			return ratInterval{}, ratInterval{}, false
 		}
 		r.Add(r, radiusOffset)
-		if r.Sign() <= 0 {
+		if radiusOffset.Sign() != 0 && r.Sign() <= 0 {
 			return ratInterval{}, ratInterval{}, false
 		}
 		sin, cos := quarterTurnSinCos(rt)
@@ -356,7 +357,7 @@ func circularOffsetEndpointInterval(seg CurveSegment, rt, radiusOffset *big.Rat)
 		}
 		rLo.Add(rLo, radiusOffset)
 		rHi.Add(rHi, radiusOffset)
-		if rLo.Sign() <= 0 {
+		if radiusOffset.Sign() != 0 && rLo.Sign() <= 0 {
 			return ratInterval{}, ratInterval{}, false
 		}
 		heldDY0 := seg.Start.V - seg.Center.V
