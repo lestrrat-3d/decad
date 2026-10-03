@@ -617,7 +617,7 @@ and a report is returned only when the check ran.
 | a mover this evaluator did not build | `ErrUnsupported` |
 | `From == To` (a `Between` included, compared with `==`), or a `Between` whose relative motion is the zero screw | `ErrDegenerate` |
 | `Axis`/`Dir` with no direction | `ErrDegenerate` |
-| a `Between` `From` or `To` with a non-finite component | `ErrNotFinite` |
+| a `Between` `From` or `To` with a non-finite component (kept as a guard; `r3`'s public API cannot produce one, so no test reaches it) | `ErrNotFinite` |
 | a `Between` `From` or `To` that is not a rigid motion (`Transform.IsValid` false, the zero `r3.Transform{}` included) | `ErrDegenerate` |
 | a `Between` joining a reflection to a proper motion (`r3.ErrImproper`) | `ErrDegenerate` |
 | a `Between` whose screw point or slide, or whose pose at some `s`, `r3` cannot represent (`r3.ErrNonFinite`) | `ErrNotFinite` |
@@ -854,15 +854,17 @@ the endpoints alone.
     ideal end the check never bounded. The `η_To` leg of the maximum is not a leg any fixture can fail:
     `max(η_ideal, η_To) ≥ η_To` by definition, and its size is one `Then` rounding; the test file records
     that argument.
-20. **Errors, non-mutation and cancellation.** Test 9 gains one subtest per `Between` row of §8's table: a
-    non-finite component (`ErrNotFinite`); the zero `r3.Transform{}` as `From` and as `To`
+20. **Errors, non-mutation and cancellation.** Test 9 gains one subtest per `Between` row of §8's table
+    that the public API can reach: the zero `r3.Transform{}` as `From` and as `To`
     (`ErrDegenerate`); a reflection against the identity (`ErrDegenerate`); `From` equal to `To`
     (`ErrDegenerate`); `Rotation(Z, 1e-300 rad).Then(Translation(1e10, 0, 0))` as `To` against the identity,
     whose screw point is not a float64 (`ErrNotFinite`); a resolution stated as a length or an angle
     (`ErrUnitKind`); each asserting `errors.Is`, no report and an unchanged document. `PoseAt` with an angle
     or a length is `ErrUnitKind`, with `NaN` `ErrNotFinite`. Test 7 runs its before-and-after and replay
     comparison on the screw arm as well. Test 10 needs no change: cancellation is decided before the motion
-    kind.
+    kind. The non-finite-component row (`ErrNotFinite`) is kept in code and has no test: every `r3`
+    producer validates what it builds and `Transform`'s fields are unexported, so `r3`'s public API cannot
+    produce a `Transform` with a non-finite component.
 21. **Example.** `examples/` gains `Example_decad_motionBetween`: the screw arm of test 12 against the raised
     wall at `WithResolution(Scalar(1.0/256))`, printing `Status` and the first collision's fraction to three
     decimals. The grid is dyadic, so it prints `0.410` — `105/256`, the first depth-8 grid point above
@@ -874,9 +876,13 @@ tests in `motion_internal_test.go`, each on the production function: `pathAreaUp
 base above `1` scales both the unscaled shortcut and the stretched allowance, and the base `1` reproduces
 the `Revolute` value exactly — which goes red when the base is dropped; `basisSigmaUpper`, exactly `1` for
 the identity and strictly above `1` for a basis whose columns are not exactly orthonormal; and the
-`Between` frame's ideal end, which maps the rest-box corners of the screw arm and of test 19's far pivot to
-within `1e-9·(1 + |t|)` of their images under `To` — a test, not an admission gate: it would show a frame
-composed in the wrong order, and admits nothing.
+`Between` frame's ideal end, which maps the rest-box corners of the screw arm, of test 19's far pivot and
+of test 15's offset axis to within `1e-9·(1 + |t|)` of their images under `To` — a test, not an admission
+gate, and it admits nothing. Test 15's offset axis is the fixture that shows a frame composed in the wrong
+order: its `From` translates the blade off the screw axis, so the screw before `From` and the screw after
+it land the corners tens of millimetres apart. The screw arm and test 19 cannot show it, because their
+`From` commutes with the screw — the identity in one, a rotation about the screw's own axis in the other —
+so both orders give the same end.
 
 `.github/test-shards.txt` is updated for every root-package test, fuzz target and example above, and
 `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'` is run before the push.
