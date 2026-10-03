@@ -294,14 +294,15 @@ func (d *Document) VerifyMotion(ctx context.Context, moving []*Body, m Motion, o
 // motionRun is one VerifyMotion call's working state. It lives in the call
 // alone, never on the Document.
 type motionRun struct {
-	ctx     context.Context //nolint:containedctx // motionRun is per-call state and never outlives VerifyMotion.
-	d       *Document
-	spec    motionSpec
-	cfg     motionConfig
-	cache   *bodyGeomCache
-	movers  []motionMover
-	statics []motionStatic
-	pairs   [][]motionPair // [mover][static]
+	ctx       context.Context //nolint:containedctx // motionRun is per-call state and never outlives VerifyMotion.
+	d         *Document
+	transient *Document // per-call identity counters for uncommitted pose bodies
+	spec      motionSpec
+	cfg       motionConfig
+	cache     *bodyGeomCache
+	movers    []motionMover
+	statics   []motionStatic
+	pairs     [][]motionPair // [mover][static]
 	// stretch and stretchEnd are pathAreaUpper's stretch base (§5.1) for a
 	// pose before the end and for the end itself: exactly 1 for a Revolute
 	// and a Prismatic; basisSigmaUpper of From, and at s = 1 the larger of
@@ -361,6 +362,12 @@ type motionPose struct {
 }
 
 func (r *motionRun) setup(moving []*Body) {
+	// Payload rebuilding mints level and curve denotations. Start above every
+	// live identity, then mint only on this copy: successive pose bodies stay
+	// distinct from static geometry without changing the caller's document.
+	transient := *r.d
+	transient.bodies = append([]*Body(nil), r.d.bodies...)
+	r.transient = &transient
 	isMover := make(map[*Body]struct{}, len(moving))
 	for _, b := range moving {
 		isMover[b] = struct{}{}
@@ -621,7 +628,7 @@ func (r *motionRun) evaluateMover(mp *motionPose, i int, pose r3.Transform, idea
 	if err != nil {
 		return fmt.Errorf(`%w: composing the pose onto a moving body's placement failed: %w`, ErrNotFinite, err)
 	}
-	transient, err := mv.body.payload.placed(r.ctx, r.d, transientProducer, composed)
+	transient, err := mv.body.payload.placed(r.ctx, r.transient, transientProducer, composed)
 	if err != nil {
 		return err
 	}
