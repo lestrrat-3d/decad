@@ -271,7 +271,7 @@ func farCornerOverlap(t *testing.T, doc *Document, arm, block *Body, swing Revol
 	require.NoError(t, err)
 	eta, linear := poseDeviation(composed, placement, run.spec.frame.at(run.spec.toP), run.movers[0].r0)
 	require.Greater(t, eta, 0.0)
-	allowance := sweptVolumeAllow(eta, pathAreaUpper(run.movers[0].area, linear, run.movers[0].sigma))
+	allowance := sweptVolumeAllow(eta, pathAreaUpper(run.movers[0].area, linear, run.movers[0].sigma, run.stretchEnd))
 	res, err := clearancePair(t.Context(), transient, block, false)
 	require.NoError(t, err)
 	volume, outcome, err := measuredInterference(t.Context(), transient, block, res)
@@ -378,11 +378,11 @@ func TestMotionPathAreaUpper(t *testing.T) {
 	require.LessOrEqual(t, sigma, 1.0)
 	require.Greater(t, sigma, 1-1e-12)
 
-	require.Equal(t, 100.0, pathAreaUpper(100, 0, sigma))
-	stretched := pathAreaUpper(100, 1e-3, 0.5)
+	require.Equal(t, 100.0, pathAreaUpper(100, 0, sigma, 1))
+	stretched := pathAreaUpper(100, 1e-3, 0.5, 1)
 	require.GreaterOrEqual(t, stretched, 100*(1+2e-3)*(1+2e-3))
 	require.InDelta(t, 100*(1+2e-3)*(1+2e-3), stretched, 1e-9)
-	require.True(t, math.IsInf(pathAreaUpper(100, 1e-3, 0), 1), `an unbounded σ refuses`)
+	require.True(t, math.IsInf(pathAreaUpper(100, 1e-3, 0, 1), 1), `an unbounded σ refuses`)
 }
 
 // TestMotionExceedsResolution checks the resolution floor's comparison: an
@@ -397,4 +397,113 @@ func TestMotionExceedsResolution(t *testing.T) {
 	require.False(t, exceedsResolution(at(units.Millimeters(30)), at(units.Millimeters(0)), at(units.Centimeters(3))))
 	require.True(t, exceedsResolution(at(units.Degrees(0)), at(units.Degrees(1)), at(units.Radians(0.017))))
 	require.False(t, exceedsResolution(at(units.Degrees(0)), at(units.Degrees(1)), at(units.Radians(0.0175))))
+}
+
+// TestMotionPathAreaUpperStretchBase pins pathAreaUpper's stretch base
+// (docs/motion-check-design.md §5.1): the base 1 a Revolute and a Prismatic
+// pass reproduces their allowance exactly, and a base above 1 — a Between
+// whose From is not exactly orthonormal — scales both the unscaled shortcut,
+// by base², and the stretched allowance, whose stretch becomes
+// base + linear/σ.
+//
+// Legs seen to fail when deleted: the base in the stretch (the stretched
+// allowance with base 1.5 falls to the base-1 value) and the base in the
+// unscaled shortcut (the exact-linear area with base 1.5 falls to the rest
+// area).
+func TestMotionPathAreaUpperStretchBase(t *testing.T) {
+	t.Parallel()
+	stretch := absSumUpper(1, divUpper(1e-3, 0.5))
+	require.Equal(t, productUpper(100, productUpper(stretch, stretch)), pathAreaUpper(100, 1e-3, 0.5, 1),
+		`the base 1 is the Revolute and Prismatic allowance unchanged`)
+	require.Equal(t, 100.0, pathAreaUpper(100, 0, 0.5, 1))
+
+	unscaled := pathAreaUpper(100, 0, 0.5, 1.5)
+	require.GreaterOrEqual(t, unscaled, 100*1.5*1.5)
+	require.InDelta(t, 225, unscaled, 1e-9)
+	stretched := pathAreaUpper(100, 1e-3, 0.5, 1.5)
+	require.GreaterOrEqual(t, stretched, 100*(1.5+2e-3)*(1.5+2e-3))
+	require.InDelta(t, 100*(1.5+2e-3)*(1.5+2e-3), stretched, 1e-9)
+
+	// A real From: a float rotation's basis is orthonormal only to rounding,
+	// so its stretch base sits strictly above 1 and still scales the area.
+	rot, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
+	require.NoError(t, err)
+	base := basisSigmaUpper(rot)
+	require.Greater(t, pathAreaUpper(100, 0, 1, base), 100.0)
+	require.Greater(t, pathAreaUpper(100, 1e-3, 0.5, base), pathAreaUpper(100, 1e-3, 0.5, 1))
+}
+
+// TestMotionBasisSigmaUpper checks the stretch base's own bound: exactly 1
+// for an exactly orthonormal basis, and strictly above 1 — while still an
+// ulp-scale excess — for a float rotation whose columns are orthonormal only
+// to rounding, where basisSigmaLower sits strictly below 1.
+func TestMotionBasisSigmaUpper(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, 1.0, basisSigmaUpper(r3.Identity()))
+	quarter, err := r3.Rotation(r3.NewVec(0, 0, 1), units.Degrees(90))
+	require.NoError(t, err)
+	rot, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
+	require.NoError(t, err)
+	for _, tr := range []r3.Transform{quarter, rot} {
+		require.Less(t, basisSigmaLower(tr), 1.0, `the fixture's columns are not exactly orthonormal`)
+		upper := basisSigmaUpper(tr)
+		require.Greater(t, upper, 1.0)
+		require.Less(t, upper, 1+1e-12)
+	}
+}
+
+// TestMotionBetweenFrameReachesTo checks the Between frame's ideal end
+// T*(1) = S*(1) ∘ From against the stated To: it maps every rest-box corner of
+// the mover to within 1e-9·(1 + |t(To)|) of its image under To. The screw arm
+// rebuilds To from an axis through the origin, test 19's far pivot from an
+// axis 1e6 mm out, and test 15's offset axis from a From and a screw that do
+// not commute. This is a test, not an admission gate: it would show a frame
+// composed in the wrong order, and admits nothing.
+//
+// Legs seen to fail when deleted: composing the screw before From instead of
+// after it (test 15's offset-axis corners land about 70 mm from To's images;
+// the screw arm's identity From and test 19's pivot-coaxial From commute with
+// their screws and cannot see the order).
+func TestMotionBetweenFrameReachesTo(t *testing.T) {
+	t.Parallel()
+	must := func(tr r3.Transform, err error) r3.Transform {
+		t.Helper()
+		require.NoError(t, err)
+		return tr
+	}
+	z := r3.NewVec(0, 0, 1)
+	quarter := func(center r3.Vec) r3.Transform { return must(r3.RotationAround(center, z, units.Degrees(90))) }
+	offsetFrom := must(r3.Translation(r3.NewVec(50, 0, 0)))
+	cases := []struct {
+		name string
+		m    Between
+	}{
+		{"the screw arm", Between{From: r3.Identity(), To: must(quarter(r3.Vec{}).Then(must(r3.Translation(r3.NewVec(0, 0, 20)))))}},
+		{"test 19's far pivot", Between{From: must(quarter(r3.NewVec(1e6, 3e5, 0)).Inverse()), To: r3.Identity()}},
+		{"test 15's offset axis", Between{From: offsetFrom, To: must(offsetFrom.Then(quarter(r3.NewVec(-50, 0, 0))))}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			spec, err := resolveMotion(tc.m)
+			require.NoError(t, err)
+			end := spec.frame.at(spec.toP)
+			tol := 1e-9 * (1 + tc.m.To.Translation().Len())
+			for _, corner := range []r3.Vec{
+				r3.NewVec(0, -14, 0), r3.NewVec(48, -14, 0), r3.NewVec(0, 14, 0), r3.NewVec(48, 14, 0),
+				r3.NewVec(0, -14, 10), r3.NewVec(48, -14, 10), r3.NewVec(0, 14, 10), r3.NewVec(48, 14, 10),
+			} {
+				x, ok := ratVecOf(corner)
+				require.True(t, ok)
+				image := ivVecAdd(end.rot.apply(pointVec(x)), end.shift)
+				want := tc.m.To.Apply(corner)
+				for i, w := range []float64{want.X, want.Y, want.Z} {
+					lo, _ := image[i].lo.Float64()
+					hi, _ := image[i].hi.Float64()
+					require.InDelta(t, w, lo, tol, `corner %v axis %d`, corner, i)
+					require.InDelta(t, w, hi, tol, `corner %v axis %d`, corner, i)
+				}
+			}
+		})
+	}
 }

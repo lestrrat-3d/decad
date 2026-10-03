@@ -15,15 +15,17 @@ import (
 //
 //   - the exact denotation of a motion parameter (motionParam) and of the
 //     ideal pose it names (idealPose), with the ideal rotation's sine and
-//     cosine enclosed by moments_trig.go's turnSinCosInterval;
+//     cosine enclosed by moments_trig.go's turnSinCosInterval; for a Between,
+//     the exact screw of the parameters r3 read, composed onto the exact
+//     From, and the stated To read exactly (motionFrame);
 //   - η, the proven distance between the float pose the kernel measured and
 //     the ideal pose the claim is about (poseDeviation, §5.1);
 //   - R0, the record-coordinate radius η is charged at (moverRecordRadius);
-//   - ρ_max, the largest distance from the rotation axis of any point of a
-//     mover (moverAxisRadius, §5.2);
+//   - ρ_max, the largest distance from the rotation or screw axis of any
+//     point of a mover (moverAxisRadius, §5.2);
 //   - the travel bound τ and the swept-box exclusion (§5.2, §6);
 //   - the area the collision transfer charges its swept-volume allowance at
-//     (pathAreaUpper, basisSigmaLower, §5.1);
+//     (pathAreaUpper, basisSigmaLower, basisSigmaUpper, §5.1);
 //   - the resolution floor's width comparison (exceedsResolution, §6).
 
 // motionParam is one motion parameter's exact denotation. An angle denotes
@@ -31,6 +33,7 @@ import (
 // (units.Degree's own factor is a rounded π/180, so the degree count, not the
 // factor, is what the caller stated), and any other angle unit is base =
 // magnitude × factor radians, read exactly. A length denotes base millimetres
+// and leaves turn zero, and a Between's dimensionless fraction denotes base
 // and leaves turn zero.
 type motionParam struct {
 	turn *big.Rat
@@ -201,11 +204,45 @@ func unitScaleInterval(a ratVec) (ratInterval, bool) {
 	return intervalOwned(new(big.Rat).Inv(lo), new(big.Rat).Inv(hi)), true
 }
 
+func (m ivMat) mul(o ivMat) ivMat {
+	var out ivMat
+	for i := range 3 {
+		for j := range 3 {
+			sum := intervalMul(m[i][0], o[0][j])
+			sum = intervalAdd(sum, intervalMul(m[i][1], o[1][j]))
+			out[i][j] = intervalAdd(sum, intervalMul(m[i][2], o[2][j]))
+		}
+	}
+	return out
+}
+
+// exactTransform reads a float transform's linear part (by rows) and its
+// translation as the exact rationals its entries denote.
+func exactTransform(t r3.Transform) (ivMat, ratVec, bool) {
+	b := t.Basis()
+	var rot ivMat
+	for j, col := range []r3.Vec{b.EX, b.EY, b.EZ} {
+		c, ok := ratVecOf(col)
+		if !ok {
+			return ivMat{}, ratVec{}, false
+		}
+		for i := range 3 {
+			rot[i][j] = pointInterval(c[i])
+		}
+	}
+	shift, ok := ratVecOf(t.Translation())
+	if !ok {
+		return ivMat{}, ratVec{}, false
+	}
+	return rot, shift, true
+}
+
 // idealPose is the exact rigid motion T*(θ) a motion parameter denotes,
 // enclosed over rationals: x ↦ rot·(x − pivot) + pivot + shift. A revolute
 // carries the Rodrigues rotation about its exact unit axis Axis/|Axis| and
 // its exact Center as pivot; a prismatic carries the identity rotation and
-// the shift d·Dir/|Dir|.
+// the shift d·Dir/|Dir|; a between carries the exact screw composed onto its
+// exact From with a zero pivot (motionFrame.at).
 type idealPose struct {
 	rot   ivMat
 	pivot ivVec
@@ -213,19 +250,29 @@ type idealPose struct {
 }
 
 // motionFrame is the exact reading of a Motion's own fields every ideal pose
-// is built from.
+// is built from. For a Between, axis and center are the read screw's Axis and
+// Point, theta and slide its Angle and Slide, each the exact rational of the
+// float r3 returned, and from and to its two stated poses read exactly.
 type motionFrame struct {
-	revolute bool
-	axis     ratVec      // Axis (revolute) or Dir (prismatic), exact
-	unit     ratInterval // 1/|axis|
-	center   ratVec      // the revolute's pivot; zero for a prismatic
+	kind   motionKind
+	axis   ratVec      // Axis (revolute, between) or Dir (prismatic), exact
+	unit   ratInterval // 1/|axis|
+	center ratVec      // the revolute's pivot or the screw's Point; zero for a prismatic
+
+	theta          motionParam // the screw's angle θ, radians
+	slide          *big.Rat    // the screw's slide d, millimetres
+	fromRot, toRot ivMat       // B(From), B(To)
+	fromT, toT     ratVec      // t(From), t(To)
 }
 
 func newMotionFrame(spec motionSpec) (motionFrame, bool) {
 	dirVec := spec.dir
 	center := r3.Vec{}
-	if spec.revolute {
+	switch spec.kind {
+	case motionRevolute:
 		dirVec, center = spec.axis, spec.center
+	case motionBetween:
+		dirVec, center = spec.screw.Axis, spec.screw.Point
 	}
 	axis, okA := ratVecOf(dirVec)
 	pivot, okC := ratVecOf(center)
@@ -236,17 +283,66 @@ func newMotionFrame(spec motionSpec) (motionFrame, bool) {
 	if !ok {
 		return motionFrame{}, false
 	}
-	return motionFrame{revolute: spec.revolute, axis: axis, unit: unit, center: pivot}, true
+	mf := motionFrame{kind: spec.kind, axis: axis, unit: unit, center: pivot}
+	if spec.kind != motionBetween {
+		return mf, true
+	}
+	theta, okT := exactMotionParam(spec.screw.Angle)
+	slide := floatRat(spec.screw.Slide)
+	fromRot, fromT, okF := exactTransform(spec.between.From)
+	toRot, toT, okTo := exactTransform(spec.between.To)
+	if !okT || slide == nil || !okF || !okTo {
+		return motionFrame{}, false
+	}
+	mf.theta, mf.slide = theta, slide
+	mf.fromRot, mf.fromT, mf.toRot, mf.toT = fromRot, fromT, toRot, toT
+	return mf, true
 }
 
-// at builds the ideal pose for the exact parameter p. The revolute's matrix
-// is R = cos·I + sin·[k]× + (1 − cos)·k kᵀ with k = a/|a|: k kᵀ = a aᵀ/|a|²
-// is exact, and [k]× = [a]×·(1/|a|) carries unitScaleInterval's enclosure.
+// rotation is the Rodrigues matrix R = cos·I + sin·[k]× + (1 − cos)·k kᵀ
+// about k = axis/|axis| for an enclosed sine and cosine: k kᵀ = a aᵀ/|a|² is
+// exact, and [k]× = [a]×·(1/|a|) carries unitScaleInterval's enclosure.
+func (mf motionFrame) rotation(sin, cos ratInterval) ivMat {
+	one := pointInterval(big.NewRat(1, 1))
+	a := mf.axis
+	sq := ratAdd(ratMul(a[0], a[0]), ratMul(a[1], a[1]), ratMul(a[2], a[2]))
+	oneMinusCos := intervalSub(one, cos)
+	cross := [3][3]*big.Rat{
+		{new(big.Rat), new(big.Rat).Neg(a[2]), a[1]},
+		{a[2], new(big.Rat), new(big.Rat).Neg(a[0])},
+		{new(big.Rat).Neg(a[1]), a[0], new(big.Rat)},
+	}
+	sinUnit := intervalMul(sin, mf.unit)
+	var rot ivMat
+	for i := range 3 {
+		for j := range 3 {
+			outer := new(big.Rat).Quo(ratMul(a[i], a[j]), sq)
+			entry := intervalAdd(intervalScale(sinUnit, cross[i][j]), intervalScale(oneMinusCos, outer))
+			if i == j {
+				entry = intervalAdd(entry, cos)
+			}
+			rot[i][j] = entry
+		}
+	}
+	return rot
+}
+
+// at builds the ideal pose for the exact parameter p.
+//
+// A between's parameter is the fraction s = p.base, and its ideal path is
+// docs/motion-check-design.md §5.1's T*(s) = S*(s) ∘ From: the exact screw of
+// the read parameters, rotating by s·θ about the line through c = Point along
+// n = Axis/|Axis| and sliding s·d along n, applied after the exact From. In
+// x ↦ rot·x + shift form that is rot = R(s·θ, n)·B(From) and
+// shift = R(s·θ, n)·(t(From) − c) + c + s·d·n. s·θ is a radian value, so its
+// sine and cosine come from paramSinCos's π enclosures, and at s = 0 they are
+// the point pair (0, 1): T*(0) is From exactly.
 func (mf motionFrame) at(p motionParam) idealPose {
 	zero := pointInterval(new(big.Rat))
 	one := pointInterval(big.NewRat(1, 1))
 	pose := idealPose{pivot: pointVec(mf.center), shift: ivVec{zero, zero, zero}}
-	if !mf.revolute {
+	switch mf.kind {
+	case motionPrismatic:
 		for i := range 3 {
 			for j := range 3 {
 				pose.rot[i][j] = zero
@@ -255,28 +351,50 @@ func (mf motionFrame) at(p motionParam) idealPose {
 			pose.shift[i] = intervalMul(intervalScale(mf.unit, mf.axis[i]), pointInterval(p.base))
 		}
 		return pose
+	case motionRevolute:
+		pose.rot = mf.rotation(paramSinCos(p))
+		return pose
 	}
-	sin, cos := paramSinCos(p)
-	sq := ratAdd(ratMul(mf.axis[0], mf.axis[0]), ratMul(mf.axis[1], mf.axis[1]), ratMul(mf.axis[2], mf.axis[2]))
-	oneMinusCos := intervalSub(one, cos)
-	a := mf.axis
-	cross := [3][3]*big.Rat{
-		{new(big.Rat), new(big.Rat).Neg(a[2]), a[1]},
-		{a[2], new(big.Rat), new(big.Rat).Neg(a[0])},
-		{new(big.Rat).Neg(a[1]), a[0], new(big.Rat)},
-	}
-	sinUnit := intervalMul(sin, mf.unit)
+	s := p.base
+	phi := motionParam{turn: new(big.Rat).Mul(mf.theta.turn, s), base: new(big.Rat).Mul(mf.theta.base, s)}
+	r := mf.rotation(paramSinCos(phi))
+	c := pointVec(mf.center)
+	slide := new(big.Rat).Mul(s, mf.slide)
+	var along ivVec
 	for i := range 3 {
-		for j := range 3 {
-			outer := new(big.Rat).Quo(ratMul(a[i], a[j]), sq)
-			entry := intervalAdd(intervalScale(sinUnit, cross[i][j]), intervalScale(oneMinusCos, outer))
-			if i == j {
-				entry = intervalAdd(entry, cos)
-			}
-			pose.rot[i][j] = entry
-		}
+		along[i] = intervalScale(intervalScale(mf.unit, mf.axis[i]), slide)
 	}
-	return pose
+	return idealPose{
+		rot:   r.mul(mf.fromRot),
+		pivot: ivVec{zero, zero, zero},
+		shift: ivVecAdd(ivVecAdd(r.apply(ivVecSub(pointVec(mf.fromT), c)), c), along),
+	}
+}
+
+// statedEnd is the ideal pose of a between's stated To, x ↦ B(To)·x + t(To)
+// read exactly: what η_To of docs/motion-check-design.md §5.1 charges the
+// s = 1 pose against, beside the ideal end T*(1).
+func (mf motionFrame) statedEnd() idealPose {
+	zero := pointInterval(new(big.Rat))
+	return idealPose{rot: mf.toRot, pivot: ivVec{zero, zero, zero}, shift: pointVec(mf.toT)}
+}
+
+// placeFrom maps an exact point through the between's From exactly,
+// x' = B(From)·x + t(From) — the ideal T*(0). Every other kind starts its path
+// at rest, so the point is returned unchanged.
+func (mf motionFrame) placeFrom(x ratVec) ratVec {
+	if mf.kind != motionBetween {
+		return x
+	}
+	var out ratVec
+	for i := range 3 {
+		sum := new(big.Rat).Set(mf.fromT[i])
+		for j := range 3 {
+			sum.Add(sum, ratMul(mf.fromRot[i][j].lo, x[j]))
+		}
+		out[i] = sum
+	}
+	return out
 }
 
 // poseDeviation is docs/motion-check-design.md §5.1's η: a proven upper bound
@@ -337,12 +455,45 @@ func poseDeviation(composed, placement r3.Transform, ideal idealPose, r0 float64
 // rounded down. An exactly orthonormal basis answers exactly 1; a defect too
 // large to bound answers 0, which pathAreaUpper reads as a refusal.
 func basisSigmaLower(t r3.Transform) float64 {
+	e, ok := basisDefectUpper(t)
+	switch {
+	case !ok:
+		return 0
+	case e.Sign() == 0:
+		return 1
+	case e.Cmp(big.NewRat(1, 1)) >= 0:
+		return 0
+	}
+	return ratSqrtDown(new(big.Rat).Sub(big.NewRat(1, 1), e))
+}
+
+// basisSigmaUpper is basisSigmaLower's mirror: a proven upper bound on the
+// largest singular value of a transform's linear part B. Every eigenvalue of
+// BᵀB = I + E is at most 1 + ‖E‖_F, and the bound is that value's root,
+// rounded up. An exactly orthonormal basis answers exactly 1; a defect that
+// cannot be read answers +Inf, a refusal rather than a bound.
+func basisSigmaUpper(t r3.Transform) float64 {
+	e, ok := basisDefectUpper(t)
+	switch {
+	case !ok:
+		return math.Inf(1)
+	case e.Sign() == 0:
+		return 1
+	}
+	return ratSqrtUp(new(big.Rat).Add(big.NewRat(1, 1), e))
+}
+
+// basisDefectUpper is a proven upper bound on ‖BᵀB − I‖_F for a transform's
+// linear part B, read exactly off its float columns and rooted upward; it is
+// exactly zero for an exactly orthonormal basis. ok is false when a column is
+// not finite or the root overflows.
+func basisDefectUpper(t r3.Transform) (*big.Rat, bool) {
 	b := t.Basis()
 	var cols [3]ratVec
 	for j, v := range []r3.Vec{b.EX, b.EY, b.EZ} {
 		c, ok := ratVecOf(v)
 		if !ok {
-			return 0
+			return nil, false
 		}
 		cols[j] = c
 	}
@@ -358,29 +509,36 @@ func basisSigmaLower(t r3.Transform) float64 {
 	}
 	sq := magnitudeSquaredUpper(defect...)
 	if sq.Sign() == 0 {
-		return 1
+		return new(big.Rat), true
 	}
 	e := floatRat(ratSqrtUp(sq))
-	if e == nil || e.Cmp(big.NewRat(1, 1)) >= 0 {
-		return 0
-	}
-	return ratSqrtDown(new(big.Rat).Sub(big.NewRat(1, 1), e))
+	return e, e != nil
 }
 
 // pathAreaUpper bounds the mover's surface area at every point of the straight
 // path between the float pose's image and the ideal pose's — the area
 // sweptVolumeAllow's own contract asks for along the WHOLE path. Relative to
 // the mover at rest, a point of that path is M_t·x + c with
-// M_t = R + (1 − t)·(B(C) − R·B(P0))·B(P0)⁻¹ and R exactly orthogonal, so
-// ‖M_t‖₂ ≤ 1 + linear/sigma, and an area scales by at most ‖M_t‖₂². area is
-// the rest area's upper bound (Area().Value + Bound), linear poseDeviation's
-// second result, sigma basisSigmaLower of the rest placement. An exact linear
-// part leaves area unscaled.
-func pathAreaUpper(area, linear, sigma float64) float64 {
+// M_t = R + (1 − t)·(B(C) − R·B(P0))·B(P0)⁻¹, so
+// ‖M_t‖₂ ≤ ‖R‖₂ + linear/sigma, and an area scales by at most ‖M_t‖₂². area
+// is the rest area's upper bound (Area().Value + Bound), linear
+// poseDeviation's second result, sigma basisSigmaLower of the rest placement.
+//
+// base is a proven upper bound on ‖R‖₂, the stretch base of
+// docs/motion-check-design.md §5.1: exactly 1 for a Revolute and a Prismatic,
+// whose ideal rotation is exactly orthogonal, and basisSigmaUpper of the
+// between's From — at s = 1 the larger of From's and To's — for a Between,
+// whose ideal linear part R(s·θ, n)·B(From) is orthogonal only as far as
+// B(From) is. An exact linear part scales area by base² alone, and base 1
+// leaves it unscaled.
+func pathAreaUpper(area, linear, sigma, base float64) float64 {
 	if linear == 0 {
-		return area
+		if base == 1 {
+			return area
+		}
+		return productUpper(area, productUpper(base, base))
 	}
-	stretch := absSumUpper(1, divUpper(linear, sigma))
+	stretch := absSumUpper(base, divUpper(linear, sigma))
 	return productUpper(area, productUpper(stretch, stretch))
 }
 
@@ -484,30 +642,53 @@ func boxCornersExact(box Box, extra *big.Rat) (lo, hi ratVec, ok bool) {
 	return lo, hi, true
 }
 
+// startCorners is the eight corners of the mover's Bounds box inflated by its
+// own Bound, as exact rationals, each mapped to where the path STARTS:
+// unchanged for a Revolute and a Prismatic, whose parameter 0 is the mover at
+// rest, and through the between's From exactly for a Between (placeFrom). The
+// true body at the start lies inside the convex hull of these eight points.
+func startCorners(box Box, mf motionFrame) ([8]ratVec, bool) {
+	lo, hi, ok := boxCornersExact(box, new(big.Rat))
+	if !ok {
+		return [8]ratVec{}, false
+	}
+	var out [8]ratVec
+	for corner := range 8 {
+		var x ratVec
+		for i := range 3 {
+			x[i] = lo[i]
+			if corner&(1<<i) != 0 {
+				x[i] = hi[i]
+			}
+		}
+		out[corner] = mf.placeFrom(x)
+	}
+	return out, true
+}
+
 // moverAxisRadius is ρ_max of docs/motion-check-design.md §5.2: a proven
 // upper bound on the distance from the rotation axis of every point of the
 // mover, read ONCE off its Bounds box at its current placement. The box is
-// inflated by its own Bound, and each of its eight corners' squared distance
+// inflated by its own Bound, its eight corners are mapped to the path's start
+// (startCorners: through From exactly for a Between, whose screw axis passes
+// nowhere near the rest box in general), and each image's squared distance
 // from the axis line, |(x − c) × a|²/|a|², is taken exactly over rationals;
-// distance from a line is convex, so its maximum over the box sits at a
-// corner. ratSqrtUp roots the largest. A rotation about the axis preserves
-// every point's distance from it, so this one reading covers every pose.
+// distance from a line is convex, so its maximum over the hull of the images
+// sits at one of them. ratSqrtUp roots the largest. A rotation about the axis
+// and a slide along it both preserve every point's distance from it, so this
+// one reading covers every pose.
 func moverAxisRadius(b *Body, mf motionFrame) float64 {
-	lo, hi, ok := boxCornersExact(b.bounds, new(big.Rat))
+	corners, ok := startCorners(b.bounds, mf)
 	if !ok {
 		return math.Inf(1)
 	}
 	a := mf.axis
 	sq := ratAdd(ratMul(a[0], a[0]), ratMul(a[1], a[1]), ratMul(a[2], a[2]))
 	best := new(big.Rat)
-	for corner := range 8 {
+	for _, x := range corners {
 		var w ratVec
 		for i := range 3 {
-			x := lo[i]
-			if corner&(1<<i) != 0 {
-				x = hi[i]
-			}
-			w[i] = new(big.Rat).Sub(x, mf.center[i])
+			w[i] = new(big.Rat).Sub(x[i], mf.center[i])
 		}
 		cx := new(big.Rat).Sub(ratMul(w[1], a[2]), ratMul(w[2], a[1]))
 		cy := new(big.Rat).Sub(ratMul(w[2], a[0]), ratMul(w[0], a[2]))
@@ -526,35 +707,75 @@ func moverAxisRadius(b *Body, mf motionFrame) float64 {
 // parameter runs from p to q. A prismatic moves every point by exactly the
 // displacement change along a unit direction; a revolute moves a point at
 // distance ρ from the axis along an arc of length ρ·|Δθ|, which bounds its
-// chord, and ρ ≤ rho. No rounding is committed: rho is already an upper
-// bound, and the span is taken at π's upper enclosure.
-func moverTravel(revolute bool, rho float64, p, q motionParam) *big.Rat {
+// chord, and ρ ≤ rho. A between rotates a point at distance ρ from the screw
+// axis through an arc of length ρ·|Δs|·θ and slides it |Δs|·|d| along the
+// axis; the sum bounds the resultant, so τ = |Δs|·(rho·θ + |d|), with θ and
+// d the exact rationals of the floats r3 read and no π entering. No rounding
+// is committed: rho is already an upper bound, and a span over an angle is
+// taken at π's upper enclosure.
+func moverTravel(mf motionFrame, rho float64, p, q motionParam) *big.Rat {
 	span := p.spanUpper(q)
-	if !revolute {
+	if mf.kind == motionPrismatic {
 		return span
 	}
 	r := floatRat(rho)
 	if r == nil {
 		return nil
 	}
-	return span.Mul(span, r)
+	if mf.kind == motionRevolute {
+		return span.Mul(span, r)
+	}
+	zero := motionParam{turn: new(big.Rat), base: new(big.Rat)}
+	rate := r.Mul(r, zero.spanUpper(mf.theta))
+	rate.Add(rate, new(big.Rat).Abs(mf.slide))
+	return span.Mul(span, rate)
+}
+
+// moverSweptBox is §6 step 3's swept box: every point the mover occupies over
+// the whole path, as exact rational extremes per axis. A Revolute or a
+// Prismatic reads its Bounds box at rest, inflated by its own Bound plus
+// travel — the farthest any of its points moves from where it sits now. A
+// Between's path starts at From, which the rest box has not undergone, so it
+// reads the From-placed box: the axis-aligned hull of startCorners, which
+// already carry the box's Bound, inflated by travel and by nothing else.
+func moverSweptBox(box Box, mf motionFrame, travel *big.Rat) (ratVec, ratVec, bool) {
+	if travel == nil {
+		return ratVec{}, ratVec{}, false
+	}
+	if mf.kind != motionBetween {
+		return boxCornersExact(box, travel)
+	}
+	corners, ok := startCorners(box, mf)
+	if !ok {
+		return ratVec{}, ratVec{}, false
+	}
+	var lo, hi ratVec
+	for i := range 3 {
+		lo[i], hi[i] = corners[0][i], corners[0][i]
+		for _, c := range corners[1:] {
+			if c[i].Cmp(lo[i]) < 0 {
+				lo[i] = c[i]
+			}
+			if c[i].Cmp(hi[i]) > 0 {
+				hi[i] = c[i]
+			}
+		}
+		lo[i] = new(big.Rat).Sub(lo[i], travel)
+		hi[i] = new(big.Rat).Add(hi[i], travel)
+	}
+	return lo, hi, true
 }
 
 // sweptBoxLower is §6 step 3's swept-box exclusion for one (mover, static)
-// pair, decided over exact rationals: the mover's Bounds box inflated by its
-// own Bound plus travel — the farthest any of its points moves from where it
-// sits now over the whole path — against the static body's box inflated by
-// its own Bound. Inflated boxes separated by a strictly positive gap along
-// some axis prove the pair apart at every parameter, and the largest such
-// axis gap is a proven lower bound on the pair's distance over the whole
-// path. ok is false when the boxes do not separate.
-func sweptBoxLower(mover, static Box, travel *big.Rat) (float64, bool) {
-	if travel == nil {
-		return 0, false
-	}
-	mLo, mHi, okM := boxCornersExact(mover, travel)
+// pair, decided over exact rationals: the mover's swept box (moverSweptBox)
+// against the static body's box inflated by its own Bound. Boxes separated by
+// a strictly positive gap along some axis prove the pair apart at every
+// parameter, and the largest such axis gap is a proven lower bound on the
+// pair's distance over the whole path. ok is false when the boxes do not
+// separate.
+func sweptBoxLower(mLo, mHi ratVec, static Box) (float64, bool) {
 	sLo, sHi, okS := boxCornersExact(static, new(big.Rat))
-	if !okM || !okS {
+	if !okS {
 		return 0, false
 	}
 	var best *big.Rat

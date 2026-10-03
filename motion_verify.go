@@ -32,17 +32,43 @@ import (
 // never committed, never published, and its provenance is never read back.
 const transientProducer producerID = -1
 
+// motionKind names which Motion variant a motionSpec was read from.
+type motionKind int
+
+const (
+	motionRevolute motionKind = iota + 1
+	motionPrismatic
+	motionBetween
+)
+
 // motionSpec is a validated Motion read into the fields every pose and bound
-// is built from.
+// is built from. A Between's parameter runs over the dimensionless fraction
+// [0, 1], so its from and to are units.Scalar(0) and units.Scalar(1), and
+// between and screw carry its poses and the screw r3 reads off them.
 type motionSpec struct {
 	motion     Motion
-	revolute   bool
+	kind       motionKind
 	center     r3.Vec
 	axis       r3.Vec
 	dir        r3.Vec
+	between    Between
+	screw      r3.Screw
 	from, to   units.Value
 	fromP, toP motionParam
 	frame      motionFrame
+}
+
+// paramKind is the Kind the motion's parameter, and so its resolution, is
+// stated in.
+func (s motionSpec) paramKind() units.Kind {
+	switch s.kind {
+	case motionRevolute:
+		return units.Angle
+	case motionBetween:
+		return units.Dimensionless
+	default:
+		return units.Length
+	}
 }
 
 // resolveMotion validates m (docs/motion-check-design.md §2, §8): the
@@ -55,7 +81,7 @@ func resolveMotion(m Motion) (motionSpec, error) {
 		if err := mv.validate(); err != nil {
 			return motionSpec{}, err
 		}
-		spec = motionSpec{revolute: true, center: mv.Center, axis: mv.Axis, from: mv.From, to: mv.To}
+		spec = motionSpec{kind: motionRevolute, center: mv.Center, axis: mv.Axis, from: mv.From, to: mv.To}
 	case *Revolute:
 		if mv == nil {
 			return motionSpec{}, fmt.Errorf(`%w: a nil motion names no path`, ErrDegenerate)
@@ -65,8 +91,19 @@ func resolveMotion(m Motion) (motionSpec, error) {
 		if err := mv.validate(); err != nil {
 			return motionSpec{}, err
 		}
-		spec = motionSpec{dir: mv.Dir, from: mv.From, to: mv.To}
+		spec = motionSpec{kind: motionPrismatic, dir: mv.Dir, from: mv.From, to: mv.To}
 	case *Prismatic:
+		if mv == nil {
+			return motionSpec{}, fmt.Errorf(`%w: a nil motion names no path`, ErrDegenerate)
+		}
+		return resolveMotionAs(m, *mv)
+	case Between:
+		sc, err := mv.resolve()
+		if err != nil {
+			return motionSpec{}, err
+		}
+		spec = motionSpec{kind: motionBetween, between: mv, screw: sc, from: units.Scalar(0), to: units.Scalar(1)}
+	case *Between:
 		if mv == nil {
 			return motionSpec{}, fmt.Errorf(`%w: a nil motion names no path`, ErrDegenerate)
 		}
@@ -155,6 +192,28 @@ func (s motionSpec) label(f *big.Rat) units.Value {
 	return units.New(mag, s.from.Unit())
 }
 
+// resolve validates a Between for VerifyMotion (docs/motion-check-design.md
+// §2, §8): its own field refusals, then From == To, then the screw r3 reads
+// off the relative motion, which must be representable and must not be the
+// zero screw — a relative motion with neither angle nor slide names no path,
+// since PoseAt is then From at every s.
+func (m Between) resolve() (r3.Screw, error) {
+	if err := m.validate(); err != nil {
+		return r3.Screw{}, err
+	}
+	if m.From == m.To {
+		return r3.Screw{}, fmt.Errorf(`%w: a between whose From equals its To names no path`, ErrDegenerate)
+	}
+	sc, err := m.screw()
+	if err != nil {
+		return r3.Screw{}, err
+	}
+	if sc.Angle.Mag() == 0 && sc.Slide == 0 {
+		return r3.Screw{}, fmt.Errorf(`%w: a between whose relative motion is the zero screw names no path`, ErrDegenerate)
+	}
+	return sc, nil
+}
+
 // resolveMotionAs resolves a dereferenced pointer motion while keeping the
 // caller's own value as the stated motion the report echoes.
 func resolveMotionAs(stated Motion, value Motion) (motionSpec, error) {
@@ -239,12 +298,17 @@ type motionRun struct {
 	movers  []motionMover
 	statics []motionStatic
 	pairs   [][]motionPair // [mover][static]
+	// stretch and stretchEnd are pathAreaUpper's stretch base (§5.1) for a
+	// pose before the end and for the end itself: exactly 1 for a Revolute
+	// and a Prismatic; basisSigmaUpper of From, and at s = 1 the larger of
+	// From's and To's, for a Between.
+	stretch, stretchEnd float64
 }
 
 type motionMover struct {
 	body     *Body
 	validity ValidityResult
-	rho      float64 // ρ_max; revolute only
+	rho      float64 // ρ_max; revolute and between only
 	r0       float64 // the record radius poseDeviation charges at
 	area     float64 // a proven upper bound on the mover's surface area at rest
 	sigma    float64 // a proven lower bound on its placement's smallest singular value
@@ -304,6 +368,11 @@ func (r *motionRun) setup(moving []*Body) {
 		}
 		r.statics = append(r.statics, motionStatic{body: b, validity: publishValidityResult(b, bodyValidityEvidence(r.ctx, b))})
 	}
+	r.stretch, r.stretchEnd = 1, 1
+	if r.spec.kind == motionBetween {
+		r.stretch = basisSigmaUpper(r.spec.between.From)
+		r.stretchEnd = math.Max(r.stretch, basisSigmaUpper(r.spec.between.To))
+	}
 	zero := motionParam{turn: new(big.Rat), base: new(big.Rat)}
 	r.pairs = make([][]motionPair, len(r.movers))
 	for i := range r.movers {
@@ -311,16 +380,19 @@ func (r *motionRun) setup(moving []*Body) {
 		mv.r0 = moverRecordRadius(r.ctx, mv.body)
 		mv.area = absSumUpper(mv.body.area.Value.Base(), mv.body.area.Bound.Base())
 		mv.sigma = basisSigmaLower(mv.body.payload.transform())
-		if r.spec.revolute {
+		if r.spec.kind != motionPrismatic {
 			mv.rho = moverAxisRadius(mv.body, r.spec.frame)
 		}
-		// The swept box covers every pose from where the mover sits NOW — the
+		// The swept box covers every pose from where the path's box was read:
+		// for a Revolute or a Prismatic that is the mover at rest — the
 		// parameter 0 — so its travel runs from 0 to the farther endpoint,
-		// never merely across [From, To].
+		// never merely across [From, To]; for a Between it is the From-placed
+		// box at s = 0, From itself, so the travel is the whole path's.
 		travel := maxRat(
-			moverTravel(r.spec.revolute, mv.rho, zero, r.spec.fromP),
-			moverTravel(r.spec.revolute, mv.rho, zero, r.spec.toP),
+			moverTravel(r.spec.frame, mv.rho, zero, r.spec.fromP),
+			moverTravel(r.spec.frame, mv.rho, zero, r.spec.toP),
 		)
+		sweptLo, sweptHi, sweptOK := moverSweptBox(mv.body.bounds, r.spec.frame, travel)
 		r.pairs[i] = make([]motionPair, len(r.statics))
 		for j, st := range r.statics {
 			pair := &r.pairs[i][j]
@@ -328,9 +400,11 @@ func (r *motionRun) setup(moving []*Body) {
 				pair.invalid = true
 				continue
 			}
-			if lower, ok := sweptBoxLower(mv.body.bounds, st.body.bounds, travel); ok {
-				pair.excluded, pair.lower = true, lower
-				continue
+			if sweptOK {
+				if lower, ok := sweptBoxLower(sweptLo, sweptHi, st.body.bounds); ok {
+					pair.excluded, pair.lower = true, lower
+					continue
+				}
 			}
 			if mv.body.Kind() == BodySheet || st.body.Kind() == BodySheet {
 				pair.sheet = true
@@ -464,7 +538,15 @@ func (r *motionRun) evaluatePose(f *big.Rat, at units.Value) (*motionPose, error
 	if err != nil {
 		return nil, err
 	}
-	ideal := r.spec.frame.at(param)
+	ideals := []idealPose{r.spec.frame.at(param)}
+	stretch := r.stretch
+	if r.spec.kind == motionBetween && f.Cmp(big.NewRat(1, 1)) == 0 {
+		// PoseAt(1) returns the stated To, which the exact screw of the read
+		// parameters rebuilds only to rounding: the pose is charged against
+		// both the ideal end and To itself (§5.1, η_1 = max(η_ideal, η_To)).
+		ideals = append(ideals, r.spec.frame.statedEnd())
+		stretch = r.stretchEnd
+	}
 	mp := &motionPose{
 		f:     f,
 		param: param,
@@ -485,7 +567,7 @@ func (r *motionRun) evaluatePose(f *big.Rat, at units.Value) (*motionPose, error
 	}
 	for i := range r.movers {
 		mp.pairs[i] = make([]motionPairPose, len(r.statics))
-		if err := r.evaluateMover(mp, i, pose, ideal); err != nil {
+		if err := r.evaluateMover(mp, i, pose, ideals, stretch); err != nil {
 			return nil, err
 		}
 	}
@@ -511,8 +593,10 @@ func withAt(diag Diagnostic, at units.Value) Diagnostic {
 }
 
 // evaluateMover places mover i at the pose as a transient body and runs its
-// evaluated pairs.
-func (r *motionRun) evaluateMover(mp *motionPose, i int, pose r3.Transform, ideal idealPose) error {
+// evaluated pairs. η is the largest poseDeviation against every ideal pose
+// the claim at this parameter speaks for, and the swept-volume allowance is
+// charged at the largest linear factor among them and the pose's stretch base.
+func (r *motionRun) evaluateMover(mp *motionPose, i int, pose r3.Transform, ideals []idealPose, stretch float64) error {
 	mv := r.movers[i]
 	need := false
 	for j := range r.statics {
@@ -538,12 +622,16 @@ func (r *motionRun) evaluateMover(mp *motionPose, i int, pose r3.Transform, idea
 		return err
 	}
 	defer delete(r.cache.entries, transient)
-	eta, linear := poseDeviation(composed, placement, ideal, mv.r0)
+	var eta, linear float64
+	for _, ideal := range ideals {
+		e, l := poseDeviation(composed, placement, ideal, mv.r0)
+		eta, linear = math.Max(eta, e), math.Max(linear, l)
+	}
 	// The volume an overlap can lose between the float pose and the ideal one
 	// (§5.1): every boundary point moves at most η along the straight path
 	// between the two images, and the area that path carries is the mover's
 	// own, scaled by the path's largest linear stretch.
-	allowance := sweptVolumeAllow(eta, pathAreaUpper(mv.area, linear, mv.sigma))
+	allowance := sweptVolumeAllow(eta, pathAreaUpper(mv.area, linear, mv.sigma, stretch))
 	for j := range r.statics {
 		if !r.pairs[i][j].evaluated() {
 			continue
@@ -756,7 +844,7 @@ func (r *motionRun) intervalOutcome(a, b *motionPose) (IntervalOutcome, *Measure
 			if !pair.evaluated() || !pa.hasGap || !pb.hasGap {
 				return IntervalUndecided, nil
 			}
-			tau := moverTravel(r.spec.revolute, mv.rho, a.param, b.param)
+			tau := moverTravel(r.spec.frame, mv.rho, a.param, b.param)
 			if tau == nil {
 				return IntervalUndecided, nil
 			}
