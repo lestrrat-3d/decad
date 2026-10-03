@@ -1235,10 +1235,25 @@ func revolvePayloadProvesSimple(ctx context.Context, rp revolvePayload) bool {
 func boxesDisjoint(a, b Box) bool {
 	ia := a.Bound.Base()
 	ib := b.Bound.Base()
-	overlapping := a.Max.X+ia > b.Min.X-ib && b.Max.X+ib > a.Min.X-ia &&
-		a.Max.Y+ia > b.Min.Y-ib && b.Max.Y+ib > a.Min.Y-ia &&
-		a.Max.Z+ia > b.Min.Z-ib && b.Max.Z+ib > a.Min.Z-ia
-	return !overlapping
+	return inflatedBoxEndsDisjoint(a.Max.X, ia, b.Min.X, ib) ||
+		inflatedBoxEndsDisjoint(b.Max.X, ib, a.Min.X, ia) ||
+		inflatedBoxEndsDisjoint(a.Max.Y, ia, b.Min.Y, ib) ||
+		inflatedBoxEndsDisjoint(b.Max.Y, ib, a.Min.Y, ia) ||
+		inflatedBoxEndsDisjoint(a.Max.Z, ia, b.Min.Z, ib) ||
+		inflatedBoxEndsDisjoint(b.Max.Z, ib, a.Min.Z, ia)
+}
+
+// inflatedBoxEndsDisjoint compares the exact inflated endpoints. A strict
+// float comparison has the same ordering because rounding is monotone; when
+// both expressions round to the same float, compare their dyadic values.
+func inflatedBoxEndsDisjoint(max, maxBound, min, minBound float64) bool {
+	upper, lower := max+maxBound, min-minBound
+	if upper != lower {
+		return upper < lower
+	}
+	exactUpper := dyAdd(mustDyOf(max), mustDyOf(maxBound))
+	exactLower := dySubScalar(mustDyOf(min), mustDyOf(minBound))
+	return dyCmp(exactUpper, exactLower) <= 0
 }
 
 // aggregateStatus is the worst-wins precedence of verification §6.

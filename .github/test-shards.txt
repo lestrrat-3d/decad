@@ -922,6 +922,7 @@
 4	0.00	TestBoundedSqrtKeepsAZeroBoundOperandExact
 4	0.00	TestBoundedSqrtWidensABoundedOperand
 4	0.00	TestBox
+4	0.00	TestBoxesDisjointUsesExactInflatedEndpoints
 4	0.00	TestBrokenNURBSKnotVectorRefuses
 4	0.00	TestBuildPatchFaceCarriesTheLevelBoundOntoTheNewFacesAxialDelta
 4	0.00	TestBuildPatchFaceReadsTheLevelTokensNormalNotAFittedOneOnARotatedFrame
