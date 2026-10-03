@@ -234,6 +234,8 @@ type Diagnostic struct {
     ObservedBox *Box            // a BOX reading — a Bounds box (§1). nil unless Reading == ReadingBounds.
     Required    *units.Value    // the threshold the reading was judged against, same Kind as the reading's own
                                 // Bound or the spec's own Kind; nil when the reason states none
+    At          *units.Value    // the motion parameter a VerifyMotion finding concerns (docs/motion-check-design.md
+                                // §4.1); nil on every diagnostic Verify emits
     Message     string          // human-readable; NEVER the branch key
 }
 
