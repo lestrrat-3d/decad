@@ -777,14 +777,14 @@ func capStationBound(cU, cV, radius, theta, heldU, heldV float64) walkEndBound {
 // difference is never inflated by a square root this package cannot bound.
 //
 // It is zero where both loci are affine in the offset amount — a line-line
-// miter, and every reflex corner's own two feet, which ride one carrier each —
-// and it is the SAME number at either cap, since the two differ only in the
+// miter, every reflex corner's own two feet, which ride one carrier each, and
+// every G1 join (modify §7), whose foot is v + s·d·n̂ — and it is the SAME number at either cap, since the two differ only in the
 // sign of an axial span both readings take the magnitude of. A sub-range whose
 // speed cannot be enclosed answers +Inf, which refuses.
 func capBlendCornerLocusGap(budget *workBudget, cbp capBlendPayload, walks []sideWalk, i int, j cornerJoin) (float64, error) {
 	n := len(walks)
 	prev, cur := walks[(i+n-1)%n], walks[i]
-	if !prev.isCircular() && !cur.isCircular() {
+	if j.g1 || (!prev.isCircular() && !cur.isCircular()) {
 		return 0, nil
 	}
 	locus, ok, err := capMiterLocusUpper(budget, prev, cur, j.vU, j.vV, cbp.d, cbp.d)

@@ -61,6 +61,12 @@ func capOffsetJoins(budget *workBudget, cl cornerLoop, d float64) ([]cornerJoin,
 			joins[i] = cornerJoin{arc: true, vU: vU, vV: vV, pA: pA, pB: pB}
 			continue
 		}
+		if math.Abs(cross) <= shellTol && aox*bix+aoy*biy > 0 {
+			// G1 join: the same dead-zone rule and the same point as
+			// offsetLoopBudget's (modify §7).
+			joins[i] = cornerJoin{g1: true, vU: vU, vV: vV, m: pB}
+			continue
+		}
 		offA := offsetCarrier(prev, 1, d)
 		offB := offsetCarrier(cur, 1, d)
 		mx, my, err := intersectOffsets(offA, offB, vU, vV)
@@ -464,7 +470,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 		prev, cur := walks[(i+n-1)%n], walks[i]
 		if !j.arc {
 			capV := &Vertex{position: liftCap(j.m), bound: units.Millimeters(vertexCapLevelDelta)}
-			e, held, err := capSlantEdge(budget, j.m, capV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, prev, cur, d, false)
+			e, held, err := capSlantEdge(budget, j.m, capV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, prev, cur, d, j.g1)
 			if err != nil {
 				return capBandResult{}, err
 			}
@@ -823,7 +829,7 @@ func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt) {
 // root's, charged what it committed against the exact rational squared length
 // rather than an ulp contract math.Hypot does not offer.
 //
-// A MITER corner's ruling (reflex false) is tagged Line3 but is the true
+// A MITER corner's ruling (affine false) is tagged Line3 but is the true
 // denoted locus only where BOTH prev and cur are straight walls: the exact
 // offset family's corner foot is otherwise a conic, and the chord this Edge
 // holds understates its length (docs/modify-reach-design.md §8.3's boundary
@@ -841,11 +847,11 @@ func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt) {
 // tight enough not to; the line-circle case (lineCircleLocusSpeedUpper) has
 // no such looseness but still subdivides the same way, harmlessly. Where any
 // sub-range's enclosure cannot be built, the edge refuses through
-// lengthUnbounded rather than publish an understated bound. A REFLEX corner's
-// own two edges (reflex true) ride one wall's own offset carrier alone and
-// are affine in the offset amount regardless of that wall's kind, so
-// prev/cur/dc go unused and the term stays zero — the same zero a line-line
-// miter gets.
+// lengthUnbounded rather than publish an understated bound. An AFFINE corner
+// ruling (affine true) — a reflex corner's two feet, which ride one wall's own
+// carrier, and a G1 join's foot v + s·dc·n̂ (modify §7) — is the denoted locus
+// itself, so prev/cur/dc go unused and the term stays zero — the same zero a
+// line-line miter gets.
 //
 // The second return is the edge's own ARITHMETIC-ONLY bound — heldBound,
 // before any locus excess is folded in — which bandPatchAreaAllow's
@@ -859,7 +865,7 @@ func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt) {
 // band's build; each sub-range's own enclosure charges one step, so a band
 // with many mitered circular corners cannot spend unbounded work here any
 // more than it can building the contour displacement itself.
-func capSlantEdge(budget *workBudget, capP Point2, capV, apex *Vertex, apexU, apexV, capZ, sideZ, delta, levelDelta float64, prev, cur sideWalk, dc float64, reflex bool) (*Edge, float64, error) {
+func capSlantEdge(budget *workBudget, capP Point2, capV, apex *Vertex, apexU, apexV, capZ, sideZ, delta, levelDelta float64, prev, cur sideWalk, dc float64, affine bool) (*Edge, float64, error) {
 	held := math.Hypot(math.Hypot(capP.U-apexU, capP.V-apexV), capZ-sideZ)
 	squared, squaredOK := dySquaredDistance3(capP.U, capP.V, capZ, apexU, apexV, sideZ)
 	heldBound := straightEdgeBound(held, squared, squaredOK, delta, levelDelta)
@@ -868,7 +874,7 @@ func capSlantEdge(budget *workBudget, capP Point2, capV, apex *Vertex, apexU, ap
 		length:      held,
 		lengthBound: heldBound,
 	}
-	if reflex || dc <= 0 || (!prev.isCircular() && !cur.isCircular()) {
+	if affine || dc <= 0 || (!prev.isCircular() && !cur.isCircular()) {
 		return e, heldBound, nil
 	}
 	chordUpper := absSumUpper(held, heldBound)

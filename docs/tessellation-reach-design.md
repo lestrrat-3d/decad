@@ -526,8 +526,8 @@ publishes in another dimension):
   chord — the boundary ruling (tagged `Line3`) to the conic miter locus it stands for: a curve of length `L`
   between endpoints `c` apart lies inside the ellipse with those foci and major axis `L`, whose semi-minor
   axis is `sqrt(L²−c²)/2`. `speedUpper` is `miterLocusSpeedUpper` (`capblend_contour.go`), the same input
-  `chordLocusLengthAllow` reads. Zero at a line-line miter and every reflex foot (both loci affine). Charged
-  on BOTH patches sharing the ruling.
+  `chordLocusLengthAllow` reads. Zero at a line-line miter, every reflex foot and every G1 join (modify §7's
+  dead-zone rule; all three loci affine). Charged on BOTH patches sharing the ruling.
 - `capRadiusRound = addRoundError(r, ∓d, capRadius)` — the held cap directrix radius against the exact
   offset radius `ivExactOffsetRadius` states.
 - `band.delta`, `levelDelta`, `deltaAxial` (`capBandLevel`), `deltaStore` (§3's mechanism over `prismLike`).
