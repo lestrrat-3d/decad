@@ -500,7 +500,8 @@ Increment 4, the deep end. Strategy:
 
 `docs/prism-boolean-design.md` is the approved analytic reduction
 `performBoolean` dispatches, ahead of the tessellation path below, for
-co-directional coplanar prism pairs: `Union`'s select-all/merge/chain path and
+co-directional prism pairs on one plane or on shared-axis offset planes:
+`Union`'s select-all/merge/chain path and
 `Cut`/`Intersect`'s clean-nesting structural match. `Verify`'s own interference
 evaluation (below) dispatches that same reduction for intersection through
 `evaluateAnalyticIntersect`, a read-only twin that builds the admitted payload

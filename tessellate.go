@@ -1542,19 +1542,31 @@ func walkSegmentArea(w segmentWalk, n int) float64 {
 	return w.radius * w.radius / 2 * math.Max(sweep-float64(n)*math.Sin(sweep/float64(n)), 0)
 }
 
+// facetedBoundError is tessellateFaceted's refusal of a chord tolerance
+// finer than the bound the faceted body holds (docs/tessellation-design.md;
+// docs/api-design.md §8 "The chain depth"). It is a type so the boolean path
+// can restate it in its own terms: the Tessellate caller chose the tolerance,
+// a boolean caller did not.
+type facetedBoundError struct{ requested, held float64 }
+
+func (e *facetedBoundError) Error() string {
+	requested, minimum := units.Millimeters(e.requested), units.Millimeters(e.held)
+	return fmt.Sprintf(`%v: requested tolerance %s is below the faceted body's minimum mesh bound %s; retry with a tolerance of at least %s to restate the held mesh`, ErrUnsupported, requested, minimum, minimum)
+}
+
+func (e *facetedBoundError) Unwrap() error { return ErrUnsupported }
+
 // tessellateFaceted restates a boolean-built body's held mesh: the polygons
 // ARE the boundary this evaluator holds (core §6.1), carrying their own
 // proven bound. It cannot refine them — the analytic identity is gone — so a
-// tolerance finer than the held bound is ErrUnsupported, never a mesh whose
-// bound overstates its trust.
+// tolerance finer than the held bound is ErrUnsupported (facetedBoundError),
+// never a mesh whose bound overstates its trust.
 func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord float64) (*Mesh, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if chord < fp.meshBound {
-		requested := units.Millimeters(chord)
-		minimum := units.Millimeters(fp.meshBound)
-		return nil, fmt.Errorf(`%w: requested tolerance %s is below the faceted body's minimum mesh bound %s; retry with a tolerance of at least %s to restate the held mesh`, ErrUnsupported, requested, minimum, minimum)
+		return nil, &facetedBoundError{requested: chord, held: fp.meshBound}
 	}
 	faces := b.Faces()
 	src := make([]*Face, len(fp.tris))

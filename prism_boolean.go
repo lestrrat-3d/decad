@@ -12,9 +12,9 @@ import (
 )
 
 // This file is docs/prism-boolean-design.md's analytic reduction of
-// Union/Cut/Intersect over two co-directional coplanar straight prisms,
-// routed entirely through sketch (§4) rather than through the mesh boolean
-// (evaluator-design §9). The entry gate (§3) is reject-only and never
+// Union/Cut/Intersect over co-directional straight prisms on one plane or on
+// shared-axis offset planes, routed entirely through sketch (§4) rather than
+// through the mesh boolean (evaluator-design §9). The entry gate (§3) is reject-only and never
 // surfaces an error on a miss — the caller falls back to the unchanged mesh
 // path exactly as it did before this file existed. A sketch-split boundary
 // also reroutes before resolution accepts a candidate whenever either input
@@ -284,11 +284,17 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *workBudget, pa, pb p
 }
 
 // admitPrismPair checks G1 (both operands a prismPayload), G2 (neither
-// placement a reflection), G3 (the composed world planes are the same plane,
-// exactly) and G4 (every segment of both records is line/circle/arc) — §3.1.
-// G3's comparisons are ordinary Go == on the stored r3.Vec/float64 values
-// (the design's "bit-identical" / "the literal zero"): Go's == already
-// treats -0.0 and 0.0 as equal, so no separate zero-sign handling is needed.
+// placement a reflection), G3 (the composed world normals are bit-identical
+// and the two planes share one sweep axis, exactly) and G4 (every segment of
+// both records is line/circle/arc) — §3.1. G3 has two arms. The shared-axis
+// arm (prismSharedAxisOf) needs one placement, bit-identical U/V and a
+// frame-origin difference whose cross product with N is exactly zero over the
+// stored floats; the coplanar arm needs the float dot product of the world
+// origin difference with the world normal to be the literal zero. Every
+// comparison is ordinary Go == on the stored r3.Vec/float64 values (the
+// design's "bit-identical" / "the literal zero") or exact dyadic arithmetic:
+// Go's == already treats -0.0 and 0.0 as equal, so no separate zero-sign
+// handling is needed.
 // A miss on any row returns ok=false, never an error (§3.1: "passing them is
 // not admission" for what follows, but MISSING one is never a refusal). The
 // G4 scan shares the operation budget because a large rejected profile must
@@ -318,10 +324,12 @@ func admitPrismPairBudget(budget *workBudget, a, b *Body) (pa, pb prismPayload, 
 	if worldNormalA != worldNormalB { // G3: co-directional, bit-identical
 		return prismPayload{}, prismPayload{}, false, nil
 	}
-	worldOriginA := pa.xform.Apply(pa.frame.Origin())
-	worldOriginB := pb.xform.Apply(pb.frame.Origin())
-	if worldOriginB.Sub(worldOriginA).Dot(worldNormalA) != 0.0 { // G3: coplanar
-		return prismPayload{}, prismPayload{}, false, nil
+	if !prismSharedAxisOf(pa, pb).ok { // G3's shared-axis arm (exact, §3.1)
+		worldOriginA := pa.xform.Apply(pa.frame.Origin())
+		worldOriginB := pb.xform.Apply(pb.frame.Origin())
+		if worldOriginB.Sub(worldOriginA).Dot(worldNormalA) != 0.0 { // G3's coplanar arm, unchanged
+			return prismPayload{}, prismPayload{}, false, nil
+		}
 	}
 	return pa, pb, true, nil
 }
@@ -388,31 +396,97 @@ func prismSceneWithinWorkCap(budget *workBudget, pa, pb prismPayload) (int, bool
 	return segments, true, nil
 }
 
-// prismZShift is G5's re-expression of operand B's [z0, z1] onto operand A's
-// normal axis (§3.1): an origin shift along the axis G3 already proved
-// identical — ordinary float arithmetic, no rotation. Every op's G5 check,
-// and Intersect's result interval, read this SAME shift.
-//
-// G3 already tests (worldOriginB - worldOriginA)·worldNormalA != 0.0 and
-// refuses on anything but the literal zero, so this shift is 0.0, exactly,
-// for every pair that reaches it — computed rather than assumed only because
-// that is the design's own stated shape for G5 (§3.1's own row). §7's
-// "Intersect's shifted interval endpoint" term is therefore zero for every
-// pair this design admits, and no pair reaching this shift commits a new
-// axial displacement by computing it.
-func prismZShift(pa, pb prismPayload) float64 {
-	worldNormalA := pa.xform.ApplyDir(pa.frame.N())
-	worldOriginA := pa.xform.Apply(pa.frame.Origin())
-	worldOriginB := pb.xform.Apply(pb.frame.Origin())
-	return worldOriginB.Sub(worldOriginA).Dot(worldNormalA)
+// prismSharedAxis is G3's shared-axis arm (docs/prism-boolean-design.md §3.1):
+// ok when the two operands share one placement and bit-identical U/V and B's
+// frame origin sits on A's normal axis EXACTLY, with shift the exact rational
+// s for which originB − originA == s·N over the stored floats. A pair drawn on
+// one frame is the arm's d = 0 case.
+type prismSharedAxis struct {
+	ok    bool
+	shift *big.Rat
+}
+
+// prismSharedAxisOf decides G3's shared-axis arm over the stored floats taken
+// exactly. B's denoted prism {X(oB + uU + vV + zN)} is then
+// {X(oA + uU + vV + (z+s)N)} term for term, with no orthonormality assumption
+// on the stored frame, so B's Point2 fields are A-frame coordinates verbatim
+// and only the sweep interval moves, by s. It is reject-only: anything but an
+// exactly zero cross product of the origin difference with N refuses the arm.
+// No float arithmetic is performed — dvSub, dvCross, dyadic.rat and
+// big.Rat.Quo are exact.
+func prismSharedAxisOf(pa, pb prismPayload) prismSharedAxis {
+	if pa.xform != pb.xform || pa.frame.U() != pb.frame.U() || pa.frame.V() != pb.frame.V() {
+		return prismSharedAxis{}
+	}
+	oa, ob, n := pa.frame.Origin(), pb.frame.Origin(), pa.frame.N()
+	if !finiteVec(oa) || !finiteVec(ob) || !finiteVec(n) {
+		return prismSharedAxis{}
+	}
+	d := dvSub(dyVec(ob), dyVec(oa))
+	nd := dyVec(n)
+	if !dvIsZero(dvCross(d, nd)) {
+		return prismSharedAxis{}
+	}
+	// d = s·N exactly, so any component with N_i != 0 gives s; the largest
+	// |N_i| is chosen, and a zero there (no valid frame has a zero normal)
+	// refuses the arm so the quotient stays total.
+	comps := [3]float64{n.X, n.Y, n.Z}
+	i := 0
+	for j := 1; j < len(comps); j++ {
+		if math.Abs(comps[j]) > math.Abs(comps[i]) {
+			i = j
+		}
+	}
+	if comps[i] == 0 {
+		return prismSharedAxis{}
+	}
+	return prismSharedAxis{ok: true, shift: new(big.Rat).Quo(d[i].rat(), nd[i].rat())}
+}
+
+// prismZShift is G5's shift s as an exact rational (§3.1): the shared-axis
+// arm's d_i/N_i, or the literal zero in G3's coplanar arm, whose float dot
+// product G3 required to be exactly 0.0. No float operation is performed.
+// Every op's G5 check, and Intersect's result interval, read this SAME shift.
+func prismZShift(pa, pb prismPayload) *big.Rat {
+	if sa := prismSharedAxisOf(pa, pb); sa.ok {
+		return sa.shift
+	}
+	return new(big.Rat)
+}
+
+// prismShiftedInterval is operand B's [z0, z1] re-expressed onto operand A's
+// axis exactly: floatRat(z) + s per end. ok is false when a level does not
+// lift (non-finite), which every G5 check treats as a miss.
+func prismShiftedInterval(pa, pb prismPayload) (*big.Rat, *big.Rat, bool) {
+	b0, b1 := floatRat(pb.z0), floatRat(pb.z1)
+	if b0 == nil || b1 == nil {
+		return nil, nil, false
+	}
+	shift := prismZShift(pa, pb)
+	return b0.Add(b0, shift), b1.Add(b1, shift), true
+}
+
+// prismShiftedIntervalAdmitted is prismShiftedInterval for a pair G5 already
+// admitted (so the lift cannot fail); it panics naming this gate otherwise,
+// the mustDyOf contract.
+func prismShiftedIntervalAdmitted(pa, pb prismPayload) (*big.Rat, *big.Rat) {
+	z0, z1, ok := prismShiftedInterval(pa, pb)
+	if !ok {
+		panic("decad: G5 admitted a prism pair whose sweep interval does not lift exactly")
+	}
+	return z0, z1
 }
 
 // prismUnionZIntervalMatches is G5 for Union (§3.2): operand B's [z0, z1] is
-// re-expressed onto operand A's normal axis by prismZShift, and Union
-// requires the two intervals to match exactly.
+// re-expressed onto operand A's normal axis by prismShiftedInterval, and Union
+// requires the two intervals to match exactly, compared as rationals.
 func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
-	shift := prismZShift(pa, pb)
-	return pa.z0 == pb.z0+shift && pa.z1 == pb.z1+shift
+	a0, a1 := floatRat(pa.z0), floatRat(pa.z1)
+	z0, z1, ok := prismShiftedInterval(pa, pb)
+	if a0 == nil || a1 == nil || !ok {
+		return false
+	}
+	return a0.Cmp(z0) == 0 && a1.Cmp(z1) == 0
 }
 
 // resolvePrismUnion is §4.2's hole-free select-all/merge/chain path. It
@@ -1129,10 +1203,12 @@ func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismRe
 // carried regardless.
 type prismReexpression struct {
 	relative r3.Transform
-	// identity records §7's one decidable zero case: B's composed map into A's
-	// frame is the identity in the stored floats, so B's Point2 fields are
-	// copied verbatim and nothing is computed at all. Two profiles drawn on one
-	// sketch plane under one placement are that case.
+	// identity records §7's one decidable zero case: G3's shared-axis arm
+	// holds (prismSharedAxisOf), so B's denoted prism is A's frame swept over a
+	// shifted interval, B's Point2 fields are A-frame coordinates verbatim, and
+	// nothing is computed at all. Two profiles drawn on one sketch plane under
+	// one placement are the arm's d = 0 case; a datum and its
+	// CreateOffsetPlane are the d = s·N case.
 	identity bool
 	transAbs float64
 	delta    float64
@@ -1142,7 +1218,11 @@ type prismReexpression struct {
 // the transpose, r3.Transform's own contract — and a Frame is orthonormal, so
 // every step here is a dot product, never a solve.
 func newPrismReexpression(pa, pb prismPayload) (*prismReexpression, error) {
-	if pa.frame == pb.frame && pa.xform == pb.xform {
+	// Equal frames under one placement are the arm's d = 0 case. They are
+	// tested on their own too, because prismSharedAxisOf refuses a frame
+	// whose stored normal is zero, and two bit-identical frames are the
+	// identity map whatever their normal holds.
+	if (pa.frame == pb.frame && pa.xform == pb.xform) || prismSharedAxisOf(pa, pb).ok {
 		return &prismReexpression{identity: true}, nil
 	}
 	fail := func(err error) (*prismReexpression, error) {
@@ -1177,8 +1257,9 @@ func newPrismReexpression(pa, pb prismPayload) (*prismReexpression, error) {
 }
 
 // point re-expresses one of operand B's plane-local points into operand A's
-// frame, dropping the resulting local z — which G3 already certified is the
-// shared plane's own zero axis — and charges the rounding it commits.
+// frame, dropping the resulting local z — which G3's coplanar arm certified is
+// zero; the shared-axis arm never reaches this map — and charges the rounding
+// it commits.
 //
 // The charge is rigidRoundAllow's existing shape, at the INPUT coordinate and
 // the composed map's own translation, and it covers the composition as well as
