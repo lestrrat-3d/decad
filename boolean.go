@@ -55,11 +55,16 @@ const boolChordFactor = 2e-5
 // ErrBooleanFailed). errors.As(err, &be) reads the Code.
 // Every pair outside that analytic path tessellates both operands at a chord
 // tolerance derived from the pair's diameter, so an operand no boolean may
-// consume — a cap-loop chamfer body, whose mesh carries no proof yet of the
-// volume it and the body it stands for differ by, or a Faceted operand whose own held
+// consume — a cap-loop chamfer body whose band has a corner this evaluator
+// cannot prove a line-line miter or an exactly tangent join, or a reflex
+// corner, so its mesh carries no proof of the volume it and the body it stands
+// for differ by (docs/tessellation-reach-design.md §7), or a Faceted operand whose own held
 // Bound is coarser than that pair tolerance (it cannot be re-tessellated finer
 // than its bound) — surfaces a plain ErrUnsupported before any contact is
-// examined: a capability limit, not a BooleanError. A valid operand whose
+// examined: a capability limit, not a BooleanError. A cap-loop chamfer whose
+// every band is a whole turn or joins only line-line miters and exactly tangent
+// corners — a filleted plate with drilled holes among them — is an ordinary
+// operand. A valid operand whose
 // boolean OUTPUT
 // cannot be chorded finely enough to tessellate surfaces the retryable
 // coarse-chording ErrDegenerate on that operand — a finer chord tolerance may
