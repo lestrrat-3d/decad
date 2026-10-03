@@ -1125,12 +1125,13 @@ func TestShellCupWallThickness(t *testing.T) {
 			decad.WithShellSense(decad.Outward),
 		)
 		require.NoError(t, err)
-		// The wall is Exact and met, but this cup's mass-subtracted centroid
-		// (outer minus a cavity nearly as large) carries a genuine ~5000mm
-		// bound here — a real precision defect in evalCup's centroid formula
-		// on a near-degenerate outward shell, separate from the tolerance
-		// gate this file otherwise exercises. Suspect is the correct verdict.
-		requireCupWall(t, doc, mirrorThickness, mirrorThickness, decad.Suspect)
+		// The outward dilation's corner arcs round their centres and feet at
+		// the plate's coordinates (u near 100, v near 60, two different
+		// binades), so an arc's pinned radii can differ by ulps of the
+		// coordinate. The circular moment brackets charge that
+		// difference, so the cup's centroid keeps a tight bound and the wall,
+		// Exact and met, reads Sound.
+		requireCupWall(t, doc, mirrorThickness, mirrorThickness, decad.Sound)
 	})
 
 	t.Run("cylinder", func(t *testing.T) {
@@ -1770,4 +1771,66 @@ func TestShellCupWallThicknessCarriesConversionDelta(t *testing.T) {
 	const denoted = 0.2 * 25.4 // 0.2 inch in millimetres
 	require.LessOrEqual(t, value-bound, denoted)
 	require.GreaterOrEqual(t, value+bound, denoted)
+}
+
+// An outward shell of a 96×20 box rounds its convex corners with arcs of
+// radius t whose feet sit at |u| = 48 and |v| = 10, two different binades, so
+// the arc's two pinned radii differ by ulps of the coordinate. The shell must
+// still build, and its centroid must keep a tight bound that Verify reads as
+// Sound.
+//
+// Shown-to-fail: (i) restoring the radius-anchored pin tolerance
+// (momentCoordinateJoins, 1024 ulps of the radius) in place of
+// arcPinnedRadiiJoin refuses t = 0.001 with ErrDegenerate; (ii) restoring the
+// first-moment bail-out `if endR2.Cmp(r2) != 0 { return …, false }` in
+// circularFirstMomentInterval publishes a ~1793 mm centroid bound for
+// t ∈ {0.01, 0.1}, and the ceiling and Passed legs go red.
+func TestShellOutwardSmallThicknessArcRadiiRoundApart(t *testing.T) {
+	t.Parallel()
+	const h = 16.0
+	for _, th := range []float64{0.001, 0.01, 0.1} {
+		t.Run(units.Millimeters(th).String(), func(t *testing.T) {
+			t.Parallel()
+			w := sketch.NewWorld()
+			s, err := w.CreateSketch(w.XY())
+			require.NoError(t, err)
+			rect := s.CreateRectangle(-48, -10, 48, 10)
+			s.Fix(rect.A)
+			_, err = s.Solve(t.Context())
+			require.NoError(t, err)
+			doc := decad.New()
+			box, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+			require.NoError(t, err)
+
+			body, err := box.Shell(t.Context(), topCap(box), units.Millimeters(th), decad.WithShellSense(decad.Outward))
+			require.NoError(t, err)
+			require.True(t, body.IsSolid())
+
+			// Volume = A_Q·(h + t) − A_P·h with Q the outward dilation of the
+			// 96×20 section, its four corners rounded by quarter arcs of radius t.
+			aP := 96.0 * 20.0
+			aQ := (96+2*th)*(20+2*th) - (4-math.Pi)*th*th
+			vol, err := body.Volume()
+			require.NoError(t, err)
+			gotVol, err := vol.Value.In(units.CubicMillimeter)
+			require.NoError(t, err)
+			require.Positive(t, gotVol)
+			require.InDelta(t, aQ*(h+th)-aP*h, gotVol, 1e-9)
+
+			centroid, err := body.Centroid()
+			require.NoError(t, err)
+			bound := centroid.Bound.Base()
+			require.LessOrEqual(t, math.Abs(centroid.Value.X), bound, `the bound must contain the symmetric centre's X`)
+			require.LessOrEqual(t, math.Abs(centroid.Value.Y), bound, `the bound must contain the symmetric centre's Y`)
+			// The thin wall's own small volume dominates this bound (about 1e-6 mm
+			// at t = 0.001 whether or not the corner radii drift), so the ceiling
+			// sits above that and still eight orders below the ~1793 mm magnitude
+			// envelope an uncharged drifted arc falls back to.
+			require.LessOrEqual(t, bound, 1e-5, `the drifted corner arcs are charged into a tight bound`)
+
+			rep, err := doc.Verify(t.Context())
+			require.NoError(t, err)
+			require.True(t, rep.Passed(), `Verify reads the shelled box Sound`)
+		})
+	}
 }
