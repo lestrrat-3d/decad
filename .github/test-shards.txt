@@ -447,6 +447,7 @@
 1	0.01	TestWholeCircleEdgeSeamVertices
 2	0.03	FuzzFillet
 2	0.01	TestArcEdgeAxisFollowsWalkSense
+2	0.00	TestArcEndRadialRatioBracketsTheRatio
 2	0.03	TestArcMatchedDeltaEqualsSagitta
 2	0.01	TestBodyPatchAdmitsASingleBoundedRimAlongsideAnExactOne
 2	0.01	TestBodyPatchFillsAHoleWithTheSameNormal
@@ -476,6 +477,9 @@
 2	0.01	TestChamferBreaksNestingRefused
 2	0.48	TestChordLoopRefusesMismatchedResolvedWalks
 2	0.02	TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing
+2	0.00	TestCircularFirstMomentIntervalChargesEndpointRadiusDrift
+2	0.00	TestCircularMomentIntervalsExactArcKeepPointRadialRatio
+2	0.00	TestCircularSecondMomentIntervalChargesEndpointRadiusDrift
 2	0.15	TestCircularStationChainDeltaBoundsEveryGeneratedStation
 2	0.01	TestClearanceAxisAlignedPairOf300IsExact
 2	0.03	TestClearanceCoaxialToriReadTheRing
@@ -492,6 +496,7 @@
 2	0.01	TestExtrudeExtents
 2	0.08	TestExtrudeFreeformAreaIsRegionPlusPerimeter
 2	0.02	TestExtrudeFreeformJointCarriesChainVerdict
+2	0.02	TestExtrudeSketchArcRadiiRoundApart
 2	0.01	TestExtrudeThroughAllArcSectionCarriesRadiusBound
 2	0.02	TestExtrudeThroughAllStacked
 2	0.65	TestFacetedRestatementPublishesItsPayloadsOwnProofRecord
@@ -499,6 +504,7 @@
 2	0.01	TestFacingPredicate
 2	0.07	TestFilletContactToleranceScaleInvariant
 2	5.96	TestFilletPropertyInvariants
+2	0.10	TestFilletSmallRadiusArcRadiiRoundApart
 2	0.01	TestFilletTooLargeRadius
 2	0.25	TestFirstOrderMomentsMatchFullAreaCentroidAndBounds
 2	0.04	TestFitSplineCurvedHandComputedArea
@@ -560,7 +566,10 @@
 2	0.05	TestRecordLoopsCancellationIsBounded
 2	0.01	TestRecordProfileRecordsMixedWholeAndCertifiedPartialJoin
 2	0.03	TestRecordProfileRejectsSampledCuts
+2	0.87	TestRegionCentroidBoundContainsArcEndpointDriftGreenIntegral
+2	0.01	TestRegionMomentsArcPinToleranceFollowsCoordinateScale
 2	0.01	TestRegionMomentsRejectUnsupportedAndEmptyRecords
+2	0.43	TestRegionSecondMomentsBoundContainArcEndpointDriftGreenIntegral
 2	0.01	TestRevolveAxisBandVolumeContainsEnclosedVolume
 2	0.02	TestRevolveBoundsExactOffsetAnchor
 2	3.22	TestRevolveBoundsSweepEnclosesArcApex
@@ -587,6 +596,7 @@
 2	0.05	TestShellCirclePostSectionGate
 2	0.03	TestShellCupOutwardBox
 2	0.02	TestShellCupWallContextCancellationDuringFollowUpLeavesDocumentUnchanged
+2	0.06	TestShellOutwardSmallThicknessArcRadiiRoundApart
 2	0.03	TestSpanMatchedDeltaUpperEnclosesDenseSampleOnOrdinarySpans
 2	0.07	TestSpanSagittaUpperEnclosesOvershootingChordSegment
 2	0.01	TestSplineSagittaRunsNoExactArithmeticOutsideAMeteredPrimitive

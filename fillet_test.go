@@ -932,3 +932,71 @@ func TestModifyRefusalRendersAClosedCircleAsClosed(t *testing.T) {
 	require.Contains(t, err.Error(), `selected edge[1] from (9.164221314665161,4,5) to (9.164221314665161,-4,5)`,
 		`an open edge of the same body keeps the from/to form`)
 }
+
+// A small fillet on a box whose corner coordinates are hundreds or thousands
+// of radii away rounds its arc's centre and feet at the coordinate's scale, so
+// the arc's two pinned radii differ by ulps of the coordinate. The fillet must
+// still build, and its centroid must keep a tight bound that Verify reads as
+// Sound.
+//
+// Shown-to-fail: (i) restoring the radius-anchored pin tolerance
+// (momentCoordinateJoins, 1024 ulps of the radius) in place of
+// arcPinnedRadiiJoin refuses r ≤ 0.031 with ErrDegenerate; (ii) restoring the
+// first-moment bail-out `if endR2.Cmp(r2) != 0 { return …, false }` in
+// circularFirstMomentInterval publishes a ~2514 mm centroid bound for
+// r ∈ {0.034, 0.04, 0.1}, and the ceiling and Passed legs go red. Every
+// origin radius goes red under (ii). The offset box runs only the radii whose
+// corner arcs round apart there: 0.034 and 0.1 go red under both deletions,
+// while the other radii build arcs with equal pinned radii at that offset and
+// prove nothing about the drift.
+func TestFilletSmallRadiusArcRadiiRoundApart(t *testing.T) {
+	t.Parallel()
+	const h = 16.0
+	for _, box := range []struct {
+		name           string
+		u0, v0, u1, v1 float64
+		want           r3.Vec
+		radii          []float64
+	}{
+		{"origin", -48, -34, 48, 34, r3.NewVec(0, 0, h/2), []float64{0.001, 0.002, 0.01, 0.02, 0.031, 0.034, 0.04, 0.1}},
+		{"offset", 952, 966, 1048, 1034, r3.NewVec(1000, 1000, h/2), []float64{0.034, 0.1}},
+	} {
+		for _, r := range box.radii {
+			t.Run(box.name+"/"+units.Millimeters(r).String(), func(t *testing.T) {
+				t.Parallel()
+				w := sketch.NewWorld()
+				s, err := w.CreateSketch(w.XY())
+				require.NoError(t, err)
+				rect := s.CreateRectangle(box.u0, box.v0, box.u1, box.v1)
+				s.Fix(rect.A)
+				_, err = s.Solve(t.Context())
+				require.NoError(t, err)
+				doc := decad.New()
+				prism, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+				require.NoError(t, err)
+
+				body, err := prism.Fillet(t.Context(), verticalEdges(), units.Millimeters(r))
+				require.NoError(t, err)
+				require.True(t, body.IsSolid())
+
+				wantVol := ((box.u1-box.u0)*(box.v1-box.v0) - (4-math.Pi)*r*r) * h
+				vol, err := body.Volume()
+				require.NoError(t, err)
+				gotVol, err := vol.Value.In(units.CubicMillimeter)
+				require.NoError(t, err)
+				require.InDelta(t, wantVol, gotVol, 1e-9)
+
+				centroid, err := body.Centroid()
+				require.NoError(t, err)
+				bound := centroid.Bound.Base()
+				require.LessOrEqual(t, centroid.Value.Sub(box.want).Len(), bound,
+					`the centroid bound must contain the symmetric centre`)
+				require.LessOrEqual(t, bound, 1e-9, `the drifted corner arcs are charged into a tight bound`)
+
+				rep, err := doc.Verify(t.Context())
+				require.NoError(t, err)
+				require.True(t, rep.Passed(), `Verify reads the filleted box Sound`)
+			})
+		}
+	}
+}

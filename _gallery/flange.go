@@ -126,9 +126,8 @@ func splitHoles(shape flangeShape) ([]drill, []drill) {
 // holeTool is the cutter for a hole depth below the top face of a plate top
 // millimetres tall, depth at least minHoleDepth: a blind cutter whose end cap
 // lies at that depth up to top - minHoleDepth, and a through cutter clearing
-// both faces above it. No cutter ends in a plate face: decad refuses a cap
-// lying in the top face, and one lying in the bottom face gives the wrong
-// body.
+// both faces above it. No cutter ends in the top face: decad refuses a blind
+// cutter whose cap lies there ("two operand facets overlap in one plane").
 func holeTool(ctx context.Context, doc *decad.Document, w *sketch.World, d drill, top, depth float64) (*decad.Body, error) {
 	if depth > top-minHoleDepth {
 		// A through cutter is sketched on XY itself: with three cutters
