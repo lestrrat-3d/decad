@@ -17,6 +17,7 @@
 #
 0	0.07	FuzzBoolean
 0	0.01	TestAddStitchFacesBuildsExactPlanarCarriers
+0	0.00	TestBetweenPoseAt
 0	0.01	TestBodyGateDiameterExactCarrierArmNeverOverstates
 0	0.02	TestBodyGateDiameterFreeformArmAnswersHandComputedMaximum
 0	1.18	TestBodyGateDiameterFreeformArmCancelsDuringWitnessMaximum
@@ -206,6 +207,8 @@
 0	0.01	TestVerifyDiagnosticsInterference
 0	0.02	TestVerifyDiagnosticsSectionDeltaPrismReadsItsOwnGateDiameter
 0	3.12	TestVerifyGearScaleEightRegionOverlapReportsSummedVolume
+0	4.48	TestVerifyMotionBetweenClearPath
+0	0.02	TestVerifyMotionBetweenCoversTheStatedTo
 0	5.50	TestVerifyMotionClearSwingBisected
 0	0.01	TestVerifyMotionClearSwingEndpoints
 0	0.00	TestVerifyMotionRefusesABodyItDidNotBuild
@@ -307,6 +310,8 @@
 1	0.83	TestLoftWalkResolutionChargesOncePerSegment
 1	0.03	TestMeasuredInterferenceFallsBackToMeshWhenAnalyticNotAdmitted
 1	0.01	TestMinRadiusHolePlate
+1	0.00	TestMotionBasisSigmaUpper
+1	0.00	TestMotionBetweenFrameReachesTo
 1	0.04	TestMotionCollisionTransferWidensTheBound
 1	0.00	TestMotionExceedsResolution
 1	0.05	TestMotionOverlapThatDoesNotTransferIsUndecided
@@ -418,6 +423,8 @@
 1	0.01	TestVerifyContextCancellation
 1	0.02	TestVerifyDiagnosticsUnsupportedPairStagedContact
 1	0.01	TestVerifyDisjointPairIsSound
+1	0.00	TestVerifyMotionBetweenErrors
+1	0.32	TestVerifyMotionBetweenKnownCollision
 1	0.02	TestVerifyMotionErrors
 1	0.27	TestVerifyMotionKnownCollisionAngle
 1	0.08	TestVerifyMotionSweptBoxCoversTravelFromRest
@@ -520,6 +527,7 @@
 2	0.02	TestLoftPlacementDoesNotRerunTheSeamGates
 2	0.01	TestLoftVerifySound
 2	0.03	TestMinRadiusAggregatesLosingCandidate
+2	0.00	TestMotionPathAreaUpperStretchBase
 2	0.00	TestMotionPoseAt
 2	0.02	TestMultiSegmentFreeformRegionRoundsOnce
 2	0.01	TestNURBSBezierMatchesGeomEvaluator
@@ -627,6 +635,8 @@
 2	0.02	TestVerifyEffectiveRequestRecorded
 2	0.01	TestVerifyExactlyTangentPairStaysUndecided
 2	0.19	TestVerifyInterferenceRowsKeepDocumentPairOrder
+2	0.26	TestVerifyMotionBetweenNearMissBetweenSamples
+2	0.20	TestVerifyMotionBetweenNonMutationAndDeterminism
 2	0.02	TestVerifyMotionKeepsTheNextProducerIdentity
 2	1.20	TestVerifyMotionSweptBoxExclusion
 2	1.24	TestVerifyNoneMeetsAToleranceTheProvenPathRefuses
@@ -839,6 +849,8 @@
 3	0.04	TestVerifyDiagnosticsUndecidedClearance
 3	0.05	TestVerifyFacetedMultiRegionPairStaysAsBefore
 3	19.37	TestVerifyGearScaleOverArrangementCapStaysSuspect
+3	0.20	TestVerifyMotionBetweenOffsetAxis
+3	2.43	TestVerifyMotionBetweenRotationAgreesWithRevolute
 3	0.28	TestVerifyMotionNearMissBetweenSamples
 3	0.41	TestVerifyMotionNonMutationAndDeterminism
 3	0.00	TestVerifyMotionSweptBoxSettlesASlab
@@ -1927,6 +1939,8 @@
 5	0.29	TestVerifyDiagnosticsProximityRefusalIsContact
 5	0.02	TestVerifyDiagnosticsUnsupportedFacetedSurveys
 5	0.01	TestVerifyDiagnosticsWallTooThin
+5	0.12	TestVerifyMotionBetweenSweptBoxIsFromPlaced
+5	0.32	TestVerifyMotionBetweenTranslationAgreesWithPrismatic
 5	0.03	TestVerifyMotionPoseDeviationIsCharged
 5	0.63	TestVerifyMotionTouchingStart
 5	0.03	TestVerifyMultiRegionOverlapSumMatchesIndependentRationalAnswer
