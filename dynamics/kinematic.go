@@ -159,6 +159,9 @@ func (w *World) stepKinematicPush(ctx context.Context, from, kicked State, dt un
 		return &StepReport{Status: Advanced, Next: &end,
 			Trace: Trace{start: from, end: end, duration: dt}}, nil
 	}
+	if first.Outcome == decad.SweepImpactBracket {
+		return w.stepKinematicImpact(ctx, from, kicked, dt, motion, first)
+	}
 	if first.Outcome != decad.SweepInitiallyTouching || first.Event == nil ||
 		first.Event.Relation != decad.ContactTouching || first.Event.Manifold == nil {
 		return undecided(w, fmt.Sprintf("kinematic first sweep returned %v", first.Outcome)), nil

@@ -17,7 +17,8 @@ torque per dynamic body contributes to the step's full-duration velocity kick.
 The first separated edge exit records a zero-impulse contact transition and
 advances through a certified clear remainder.
 An affine kinematic driver can push an initially touching dynamic source box
-through a certified persistent contact path. Torque loads, rotating kinematic
+through a certified persistent contact path or produce a centered interior
+impact with a certified separating remainder. Torque loads, rotating kinematic
 drivers, friction, stacks, and broader payload paths
 remain design contracts. Each companion document owns its detail.
 
