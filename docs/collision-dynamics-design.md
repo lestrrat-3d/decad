@@ -7,7 +7,9 @@ persistent face contact and its first edge transition, and mass properties for
 source boxes and admitted untapered prisms. It steps one frictionless pair with
 a fixed and dynamic body or two centered dynamic bodies. A three-body world
 with one dynamic and two fixed bodies steps one active pair when every other
-pair has a certified clear path. A source box can hit
+pair has a certified clear path. It also steps two orthogonal, frictionless
+initial face contacts and their repeated resting response after real manifolds
+and full-span tracks certify both pairs. A source box can hit
 a fixed floor obliquely while retaining tangential velocity. A fixed floor and
 dynamic source box can complete an initial resting contact after a full-step
 gravity kick or a zero-restitution impact. A stationary touching pair also

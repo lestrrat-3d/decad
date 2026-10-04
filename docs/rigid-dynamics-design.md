@@ -14,10 +14,19 @@ face corridor.
 A two-body world's pair may be excluded; its bodies drift independently even
 through overlap, and no pair material is mixed.
 The current three-body step admits one dynamic body and two fixed bodies.
-It sweeps each non-excluded dynamic/fixed pair, requires the fixed/fixed pair
-to be separated, and advances one active pair only when every other pair has
-a certified clear path through the response. An excluded pair may overlap
-or cross without a contact event or material mixing.
+It sweeps each non-excluded dynamic/fixed pair. One active pair advances only
+when every other pair has a certified clear path through the response. Two
+simultaneous initial face contacts also advance when their certified normals
+lie on distinct coordinate axes, both effective pair friction coefficients
+are zero, and the fixed/fixed pair is separated or excluded. It applies each
+zero-restitution normal impulse to the shared dynamic body, bounds their
+combined omitted spin and whole-step point travel, and certifies both ideal
+and rounded persistent tracks through the endpoint. Resting constraints may
+receive zero impulse. Each impulse produces an ordered event; the step reports
+their summed contact impulse and the dynamic body's conservation readings.
+Later simultaneous impacts, coupled normals, separating initial contacts,
+and simultaneous friction return `Undecided`. An excluded pair may overlap or
+cross without a contact event or material mixing.
 At an initial face touch, a fixed floor and dynamic source box can receive a
 full-step kick from gravity and any center force, then a zero-restitution
 support impulse. A zero-restitution impact can continue as certified
@@ -332,15 +341,15 @@ when its source solids overlap or cross. Publish no contact event and typed
 zero contact impulse and kinematic work. The trace and conservation readings
 still describe the completed step.
 
-In a three-body world, the current response handles one dynamic/fixed pair
-while the other fixed body stays clear. Sweep both non-excluded dynamic/fixed
-pairs before choosing a response. A second possible contact returns
-`Undecided` with no `Next`. For an active response, certify the other pair's
-ideal and rounded paths before and after the event; sweep any position
-correction against it. Query the fixed/fixed pair at its constant pose.
-The response pair's conservation report includes the world's sole dynamic
-body. More than one dynamic body or a kinematic body returns `ErrUnsupported`
-at three-body world construction.
+In a three-body world, sweep both non-excluded dynamic/fixed pairs before
+choosing a response. The first simultaneous increment consumes both real
+initial manifolds for orthogonal frictionless face contacts. A simultaneous
+case outside that increment returns `Undecided` with no `Next`. For one active
+response, certify the other pair's ideal and rounded paths before and after
+the event; sweep any position correction against it. Query the fixed/fixed
+pair at its constant pose unless it is excluded. The conservation report
+includes the world's sole dynamic body. More than one dynamic body or a
+kinematic body returns `ErrUnsupported` at three-body world construction.
 
 A `SweepPair` `Undecided` that could precede the next event makes the step
 `Undecided`; a later undecided interval can be revisited after an earlier
