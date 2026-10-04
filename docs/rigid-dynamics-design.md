@@ -672,6 +672,10 @@ claim that an independently interpolated `PoseSegment` is clear.
 `Trace.Sample` evaluates clear, departed, persistent-contact, and transition
 slices against each stored rounded sweep's cached source-box or source-sphere
 certificate.
+For an off-axis sphere-pair impact, the rounded impact prefix must reach its
+own certified bracket endpoint with the same source faces, bounded normal,
+and separation within `PenetrationResidual`. Interior trace samples before
+and after the event use the corresponding sphere-pair sweep certificates.
 It compares the exact held time values when selecting an event or endpoint.
 An event at a proved final sweep fraction retains the input `dt` value;
 interior event times must lie strictly inside the exact held duration.

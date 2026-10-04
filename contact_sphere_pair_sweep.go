@@ -396,11 +396,13 @@ func (r *sourceSpherePairSweepRun) transverse(ctx context.Context, first *SweepS
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
 	r.report.bracketRight = new(big.Rat).Set(rightF)
+	r.report.replay.setBracket(leftF, rightF)
 	r.sortSamples()
 	return r.report, nil
 }
 
 func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*SweepReport, error) {
+	defer r.report.replay.snapshot(r.report)
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	first, err := r.sample(ctx, zero)
 	if errors.Is(err, errSweepPoseBudget) {
@@ -490,6 +492,7 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
 	r.report.bracketRight = new(big.Rat).Set(rightF)
+	r.report.replay.setBracket(leftF, rightF)
 	r.sortSamples()
 	return r.report, nil
 }

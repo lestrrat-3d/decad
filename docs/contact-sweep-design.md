@@ -519,10 +519,17 @@ fraction with one. The public `Fraction` may be rounded.
 
 `CertifiedPosesAt` evaluates the same float path used by the sweep at
 the requested elapsed time. For affine paths it checks the read float poses
-against the cached exact source boxes. It refuses when their total displacement
-exceeds `PointResolution` or changes a clear or departing relation. For persistent
-contact and event brackets, it accepts only a rounded relation within that
-resolution of the exact source-box relation. It does not call `ContactPair` or
+against the cached exact source boxes or spheres. The sphere-pair path keeps
+both source centers, radii, exact translations, and impact bracket. At an
+arbitrary interior fraction it compares both rounded centers with their ideal
+rational centers, then checks the exact squared center distance against the
+radius sum. A clear or departing sample must retain a positive gap after
+charging the center displacement; an impact prefix stays clear before the
+bracket and stays near contact at its right endpoint. A sample beyond the
+bracket is unsupported. It refuses when total displacement exceeds
+`PointResolution` or changes a clear or departing relation. For source-box
+persistent contact and event brackets, it accepts only a rounded relation
+within that resolution of the exact source-box relation. It does not call `ContactPair` or
 read the document. It refuses times outside the sweep or outside a certified
 event prefix. `CertifiedPosesAtInterval` maps exact held time values in a
 specified interval onto the certified spatial path. A dynamics trace uses
