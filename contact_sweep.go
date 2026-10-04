@@ -424,8 +424,8 @@ func (r *pairSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, er
 }
 
 // idealContact classifies the exact source boxes at the dyadic path fraction.
-// Its manifold is an internal feature proof; only transferManifold can publish
-// the manifold returned by the real ContactPair query.
+// Its manifold is an internal feature proof. transferManifold publishes either
+// that bounded proof or a matching real ContactPair manifold.
 func (r *pairSweepRun) idealContact(f *big.Rat, at SweepInstant) SweepEvent {
 	fraction, ok := dyOfRat(f)
 	if !ok {
