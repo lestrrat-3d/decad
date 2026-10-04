@@ -141,6 +141,52 @@ func TestMassPropertiesSourceBox(t *testing.T) {
 	require.Equal(t, base.Inertia.ZZ, rotated.Inertia.ZZ)
 }
 
+func TestMassPropertiesSourceSphere(t *testing.T) {
+	ball := ballBody(t, decad.New(), 5)
+	density := units.KilogramsPerCubicMillimeter(0.001)
+	got, err := ball.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	wantMass := 4 * math.Pi * 125 * density.Base() / 3
+	wantInertia := 2 * wantMass * 25 / 5
+	require.InDelta(t, wantMass, got.Mass.Value.Base(), 1e-14)
+	require.InDelta(t, wantInertia, got.Inertia.XX.Value.Base(), 1e-13)
+	require.Equal(t, got.Inertia.XX, got.Inertia.YY)
+	require.Equal(t, got.Inertia.XX, got.Inertia.ZZ)
+	for _, mixed := range []decad.Measurement{got.Inertia.XY, got.Inertia.XZ, got.Inertia.YZ} {
+		require.Equal(t, decad.Exact, mixed.Exactness)
+		require.Zero(t, mixed.Value.Base())
+		require.Zero(t, mixed.Bound.Base())
+	}
+	pi, ok := new(big.Rat).SetString("3.14159265358979323846264338327950288419716939937510582097494459230781640628620899")
+	require.True(t, ok)
+	exactMass := new(big.Rat).Mul(new(big.Rat).SetFloat64(density.Mag()), big.NewRat(500, 3))
+	exactMass.Mul(exactMass, pi)
+	requireReadingCovers(t, got.Mass, exactMass)
+	exactInertia := new(big.Rat).Mul(exactMass, big.NewRat(10, 1))
+	requireReadingCovers(t, got.Inertia.XX, exactInertia)
+
+	pose, err := r3.RotationAround(r3.NewVec(20, -3, 7), r3.NewVec(1, 1, 1), units.Degrees(37))
+	require.NoError(t, err)
+	placed, err := ball.Placed(t.Context(), pose)
+	require.NoError(t, err)
+	rotated, err := placed.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	require.Equal(t, got.Mass, rotated.Mass)
+	require.Equal(t, got.Inertia, rotated.Inertia)
+	center := pose.Apply(r3.Vec{})
+	require.InDelta(t, center.X, rotated.Center.Value.X, rotated.Center.Bound.Base())
+	require.InDelta(t, center.Y, rotated.Center.Value.Y, rotated.Center.Bound.Base())
+	require.InDelta(t, center.Z, rotated.Center.Value.Z, rotated.Center.Bound.Base())
+	again, err := ball.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	require.Equal(t, got, again)
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	partial, err := ball.MassProperties(canceled, density)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, decad.MassProperties{}, partial)
+}
+
 func requireReadingCovers(t *testing.T, reading decad.Measurement, exact *big.Rat) {
 	t.Helper()
 	held := new(big.Rat).SetFloat64(reading.Value.Base())
@@ -178,8 +224,8 @@ func TestMassPropertiesRefusals(t *testing.T) {
 	require.True(t, errors.Is(err, context.Canceled))
 	require.Equal(t, decad.MassProperties{}, got)
 
-	ball := ballBody(t, decad.New(), 10)
-	got, err = ball.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(1))
+	torus := torusBody(t, decad.New(), 10, 3)
+	got, err = torus.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, decad.MassProperties{}, got)
 }
