@@ -87,7 +87,7 @@ func (w *World) stepInitialTwoDynamicFriction(ctx context.Context, from, kicked 
 				}
 			}
 			var leverOK bool
-			whole[i], leverOK = w.frictionWholeBodyLeverWithin(&witnesses, i)
+			whole[i], leverOK = w.frictionWholeBodyLeverWithin(&witnesses, i, post.entries[i].Pose)
 			if !leverOK {
 				return undecided(w, "two-dynamic friction path exceeds an audited corner lever"), nil
 			}
