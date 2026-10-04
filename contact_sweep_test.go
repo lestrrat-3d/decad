@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -57,6 +58,13 @@ func TestSweepPairTranslatedBoxesImpact(t *testing.T) {
 	require.NotNil(t, report.Event.Manifold)
 	require.NotEmpty(t, report.Event.Manifold.Points)
 	require.Equal(t, r3.Vec{X: 1}, report.Event.Manifold.Points[0].Normal.Value)
+	replayA, replayB, err := report.CertifiedPosesAt(units.Seconds(0.05))
+	require.NoError(t, err)
+	replayContact, err := doc.ContactPair(t.Context(), a, b, replayA, replayB, sweepRequest().ContactRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, replayContact.Relation)
+	_, _, err = report.CertifiedPosesAt(units.Seconds(0.15))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
 	floatPoint := report.Samples[len(report.Samples)-1].FloatContact.Manifold.Points[0]
 	idealPoint := report.Event.Manifold.Points[0]
 	require.Equal(t, floatPoint.OnA.Value, idealPoint.OnA.Value)
@@ -64,6 +72,46 @@ func TestSweepPairTranslatedBoxesImpact(t *testing.T) {
 	require.GreaterOrEqual(t, idealPoint.OnA.Bound.Base(), floatPoint.OnA.Bound.Base())
 	require.GreaterOrEqual(t, idealPoint.OnB.Bound.Base(), floatPoint.OnB.Bound.Base())
 	require.Equal(t, before, doc.Bodies())
+
+	t.Run("rounded interior pose", func(t *testing.T) {
+		large := decad.New()
+		moving := boxBody(t, large, 0, 0, 10, 10, 10)
+		far := boxBody(t, large, 100, 0, 110, 10, 10)
+		from, err := r3.Translation(r3.Vec{X: 1e16})
+		require.NoError(t, err)
+		to, err := r3.Translation(r3.Vec{X: 1e16 + 2})
+		require.NoError(t, err)
+		request := sweepRequest()
+		request.PointResolution = units.Millimeters(1e-6)
+		clearReport, err := large.SweepPair(t.Context(), moving, far,
+			decad.PoseSegment{From: from, To: to, Duration: units.Seconds(1)},
+			decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(1)}, request)
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepClear, clearReport.Outcome)
+		_, _, err = clearReport.CertifiedPosesAt(units.Seconds(.5))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+	})
+
+	t.Run("deep grid bracket", func(t *testing.T) {
+		deep := decad.New()
+		moving := boxBody(t, deep, 0, 0, 10, 10, 10)
+		stationary := boxBody(t, deep, 20, 0, 30, 10, 10)
+		request := sweepRequest()
+		request.TimeResolution = units.Seconds(math.Ldexp(1, -55))
+		report, err := deep.SweepPair(t.Context(), moving, stationary,
+			sweepDrift(r3.Vec{X: 30}, 1), sweepDrift(r3.Vec{}, 1), request)
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepImpactBracket, report.Outcome)
+		require.NotNil(t, report.Bracket)
+		require.False(t, report.BracketEndsAtDuration())
+		grid := new(big.Int).Lsh(big.NewInt(1), 56)
+		floor := new(big.Int).Quo(grid, big.NewInt(3))
+		trueRight := new(big.Rat).SetFrac(new(big.Int).Add(floor, big.NewInt(2)), grid)
+		published := new(big.Rat).SetFloat64(report.Bracket.To.Fraction.Base())
+		require.Positive(t, published.Cmp(trueRight))
+		_, _, err = report.CertifiedPosesAt(report.Bracket.To.Elapsed.Value)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+	})
 }
 
 func TestSweepPairOffCenterBoxImpactAtEndpoint(t *testing.T) {
@@ -79,6 +127,7 @@ func TestSweepPairOffCenterBoxImpactAtEndpoint(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepImpactBracket, report.Outcome)
 	require.NotNil(t, report.Bracket)
+	require.True(t, report.BracketEndsAtDuration())
 	require.Less(t, report.Bracket.From.Fraction.Base(), 1.0)
 	require.Equal(t, 1.0, report.Bracket.To.Fraction.Base())
 	require.LessOrEqual(t, report.Bracket.To.Elapsed.Value.Base()-

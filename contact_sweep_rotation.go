@@ -297,7 +297,7 @@ func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSam
 		}
 	}
 	sample := &SweepSample{At: at, PoseA: poseA, PoseB: poseB,
-		FloatContact: contact, Ideal: event}
+		FloatContact: contact, Ideal: event, exactFraction: new(big.Rat).Set(f)}
 	r.report.Samples = append(r.report.Samples, *sample)
 	r.report.PoseEvaluations++
 	return sample, nil
@@ -478,6 +478,7 @@ func (r *rotationalPairSweep) refine(ctx context.Context, left, right *SweepSamp
 			(right.Ideal.Relation == ContactTouching || right.Ideal.Relation == ContactOverlapping) {
 			r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 			r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
+			r.report.bracketRight = new(big.Rat).Set(right.exactFraction)
 			return true, nil
 		}
 		r.undecided(lf, rf, SweepTimeFloor)

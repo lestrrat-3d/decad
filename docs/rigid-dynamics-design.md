@@ -68,7 +68,7 @@ the drift-only energy, linear momentum, and angular momentum changes.
 Torque-driven rotation advances when `SweepPair` certifies a clear full-span
 drift and its rounded endpoint. A rotating contact that lacks a sweep proof
 returns `Undecided`. Rotating kinematic drivers, broader frictional stepping,
-stacks, broader contact-transition stepping, broader spin response, and arbitrary
+stacks, broader contact-transition stepping, broader spin response, and rotational
 trace sampling remain design contracts.
 
 Navigation only; the named sections own the rules:
@@ -603,10 +603,19 @@ as a `PoseSegment`. A numerical path that lacks `Clear` or
 The rotational response uses the certified `RigidDriftSegment` as its stored
 path and returns that sweep's certified fraction-one float pose. It does not
 claim that an independently interpolated `PoseSegment` is clear.
-`Trace.Sample` currently returns only the stored start, impact, and end
-checkpoints. It returns `ErrUnsupported` for an interior time whose rounded
-pose has no contact certificate. Arbitrary interior replay follows when that
-sampling certificate is implemented.
+`Trace.Sample` evaluates clear, departed, persistent-contact, and transition
+slices against each stored rounded sweep's cached source-box certificate.
+It compares the exact held time values when selecting an event or endpoint.
+An event at a proved final sweep fraction retains the input `dt` value;
+interior event times must lie strictly inside the exact held duration.
+For each slice it maps the exact time between its recorded global endpoints
+onto the certified rounded path fraction, so subtraction rounding leaves no
+unsampled gap before the step endpoint.
+It returns `ErrUnsupported` for a slice without a rounded certificate, or
+when the requested float pose exceeds the sweep's resolution. Impact prefixes
+have a separate rounded sweep ending at the published pre-event pose, so
+samples on both sides of an impact consume their own certificates.
+Rotating paths still return `ErrUnsupported` at interior sample times.
 
 Publish kinetic energy, linear momentum, and angular momentum at the input,
 after the full-step force kick, and at completion as typed numeric readings;

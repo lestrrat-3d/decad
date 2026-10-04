@@ -77,7 +77,8 @@ func (r *sourceSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSa
 	at := sweepInstant(f, r.pa.duration)
 	ideal := r.idealAt(f, at)
 	r.transferManifold(f, poseA, poseB, contact, &ideal)
-	sample := SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: ideal}
+	sample := SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: ideal,
+		exactFraction: new(big.Rat).Set(f)}
 	r.report.Samples = append(r.report.Samples, sample)
 	r.report.PoseEvaluations++
 	return &sample, nil
@@ -395,6 +396,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 	}
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
+	r.report.bracketRight = new(big.Rat).Set(rightF)
 	r.sortSamples()
 	return r.report, nil
 }

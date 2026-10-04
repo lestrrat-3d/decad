@@ -182,10 +182,11 @@ type SweepEvent struct {
 
 // SweepSample keeps the query pose and the transferred pair finding.
 type SweepSample struct {
-	At           SweepInstant
-	PoseA, PoseB r3.Transform
-	FloatContact *ContactReport
-	Ideal        SweepEvent
+	At            SweepInstant
+	PoseA, PoseB  r3.Transform
+	FloatContact  *ContactReport
+	Ideal         SweepEvent
+	exactFraction *big.Rat
 }
 
 // SweepReport states the first certified event or the earliest unresolved span.
@@ -204,6 +205,15 @@ type SweepReport struct {
 	Samples         []SweepSample
 	BoxExcluded     bool
 	PoseEvaluations uint64
+	replay          *sweepReplayProof
+	bracketRight    *big.Rat
+}
+
+// BracketEndsAtDuration reports whether the sweep producer proved its bracket
+// right endpoint is the exact final fraction of the requested duration.
+func (r *SweepReport) BracketEndsAtDuration() bool {
+	return r != nil && r.Bracket != nil && r.bracketRight != nil &&
+		r.bracketRight.Cmp(big.NewRat(1, 1)) == 0
 }
 
 type affinePairPath struct {
@@ -419,9 +429,16 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			To: sweepInstant(big.NewRat(1, 1), pa.duration)}
 		return report, nil
 	}
+	report.replay = &sweepReplayProof{pa: pa, pb: pb, boxA: boxA, boxB: boxB,
+		request: req.ContactRequest}
 	run := pairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb, req: req, report: report,
 		boxA: boxA, boxB: boxB}
-	return run.execute(ctx, resolution)
+	result, err := run.execute(ctx, resolution)
+	if err != nil || result == nil {
+		return result, err
+	}
+	result.replay.snapshot(result)
+	return result, nil
 }
 
 type pairSweepRun struct {
@@ -455,7 +472,8 @@ func (r *pairSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, er
 	at := sweepInstant(f, r.pa.duration)
 	event := r.idealContact(f, at)
 	r.transferManifold(f, poseA, poseB, contact, &event)
-	sample := SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: event}
+	sample := SweepSample{At: at, PoseA: poseA, PoseB: poseB, FloatContact: contact, Ideal: event,
+		exactFraction: new(big.Rat).Set(f)}
 	r.report.Samples = append(r.report.Samples, sample)
 	r.report.PoseEvaluations++
 	return &sample, nil
@@ -796,6 +814,8 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 							(right.Ideal.Relation == ContactTouching || right.Ideal.Relation == ContactSeparated) {
 							r.report.Outcome, r.report.ContactTrack = SweepContactTransitionBracket, track
 							r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
+							r.report.bracketRight = new(big.Rat).Set(rightF)
+							r.report.replay.setBracket(leftF, rightF)
 							r.report.Event = &right.Ideal
 							r.sortSamples()
 							return r.report, nil
@@ -897,6 +917,8 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 	}
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
+	r.report.bracketRight = new(big.Rat).Set(rightF)
+	r.report.replay.setBracket(leftF, rightF)
 	r.sortSamples()
 	return r.report, nil
 }

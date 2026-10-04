@@ -100,34 +100,85 @@ type StepReport struct {
 	Conservation *StepConservation
 }
 
-// Trace keeps the certified drift and the event state for replay in this first slice.
+// Trace keeps the rounded sweep certificates and the event states for replay.
 type Trace struct {
 	start               State
 	pre                 State
 	post                State
 	end                 State
+	preSweep            *decad.SweepReport
+	postSweep           *decad.SweepReport
+	rotationalRemainder *decad.SweepReport
 	duration            units.Value
 	eventAt             units.Value
 	hasEvent            bool
-	rotationalRemainder *decad.SweepReport
+	excluded            bool
 }
 
-// Sample returns recorded checkpoint states. Interior poses need a separate
-// float-pose certificate and are refused by this first slice.
+// Sample evaluates a recorded rounded path and its cached source-box proof.
+// It performs no Document geometry query or response solve.
 func (tr Trace) Sample(t units.Value) (State, error) {
-	if t.Kind() != units.Time || !finite(t.Base()) || t.Base() < 0 || t.Base() > tr.duration.Base() {
+	timeValue, durationValue := exactBase(t), exactBase(tr.duration)
+	if t.Kind() != units.Time || !finite(t.Base()) || timeValue == nil || durationValue == nil ||
+		timeValue.Sign() < 0 || timeValue.Cmp(durationValue) > 0 {
 		return State{}, fmt.Errorf("%w: trace time outside step", ErrInvalidInput)
 	}
-	if tr.hasEvent && t.Base() == tr.eventAt.Base() {
+	var eventValue *big.Rat
+	if tr.hasEvent {
+		eventValue = exactBase(tr.eventAt)
+		if eventValue == nil {
+			return State{}, fmt.Errorf("%w: trace event time is invalid", ErrUnsupported)
+		}
+	}
+	if tr.hasEvent && timeValue.Cmp(eventValue) == 0 {
 		return tr.post, nil
 	}
-	if t.Base() == 0 {
+	if timeValue.Sign() == 0 {
 		return tr.start, nil
 	}
-	if t.Base() == tr.duration.Base() {
+	if timeValue.Cmp(durationValue) == 0 {
 		return tr.end, nil
 	}
-	return State{}, fmt.Errorf("%w: interior trace sample has no float-pose contact certificate", ErrUnsupported)
+	state := tr.end
+	sweep := tr.preSweep
+	sliceStart, sliceEnd := units.Seconds(0), tr.duration
+	if tr.hasEvent {
+		if timeValue.Cmp(eventValue) < 0 {
+			state = tr.pre
+			sliceEnd = tr.eventAt
+		} else {
+			state = tr.post
+			sweep = tr.postSweep
+			sliceStart = tr.eventAt
+		}
+	}
+	if tr.excluded {
+		var from, to State
+		if tr.hasEvent {
+			return State{}, fmt.Errorf("%w: excluded trace has an event", ErrUnsupported)
+		}
+		from, to = tr.start, tr.end
+		fraction, _ := new(big.Rat).Quo(timeValue, durationValue).Float64()
+		for i := range state.entries {
+			start, end := from.entries[i].Pose.Translation(), to.entries[i].Pose.Translation()
+			delta := end.Sub(start).Scale(fraction)
+			pose, err := translatePose(from.entries[i].Pose, delta)
+			if err != nil {
+				return State{}, fmt.Errorf("%w: excluded replay pose is not finite: %v", ErrUnsupported, err)
+			}
+			state.entries[i].Pose = pose
+		}
+		return state, nil
+	}
+	if sweep == nil {
+		return State{}, fmt.Errorf("%w: interior trace sample has no rounded path certificate", ErrUnsupported)
+	}
+	a, b, err := sweep.CertifiedPosesAtInterval(t, sliceStart, sliceEnd)
+	if err != nil {
+		return State{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
+	}
+	state.entries[0].Pose, state.entries[1].Pose = a, b
+	return state, nil
 }
 
 func driftState(start State, seconds float64) (State, error) {
@@ -359,6 +410,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 			return undecided(w, fmt.Sprintf("numerical clear path returned %v", actual.Outcome)), nil
 		}
 		report.Status, report.Next, report.Trace.end = Advanced, &end, end
+		report.Trace.preSweep = actual
 		return report, nil
 	case decad.SweepInitiallyTouching:
 		if w.friction.lower.Sign() != 0 {
@@ -381,9 +433,34 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	if !finite(impactTime) || impactTime < 0 || impactTime > dt.Base() {
 		return undecided(w, "impact time is outside the step"), nil
 	}
+	eventAt := units.Seconds(impactTime)
+	fraction, duration := exactBase(first.Bracket.To.Fraction), exactBase(dt)
+	if fraction == nil || duration == nil || fraction.Sign() <= 0 ||
+		fraction.Cmp(big.NewRat(1, 1)) > 0 {
+		return undecided(w, "impact fraction is outside the step"), nil
+	}
+	if fraction.Cmp(big.NewRat(1, 1)) == 0 {
+		// The public fraction can round to one before the proved right endpoint.
+		// Confirm that the original sweep covers the exact step end first.
+		if !first.BracketEndsAtDuration() {
+			return undecided(w, "impact bracket does not reach the exact step end"), nil
+		}
+		eventAt = dt
+	} else if exactBase(eventAt).Cmp(duration) >= 0 {
+		return undecided(w, "impact time exceeds the exact step duration"), nil
+	}
 	pre, err := driftState(kicked, impactTime)
 	if err != nil {
 		return undecidedArithmetic(w, "non-finite impact pose", err)
+	}
+	roundedPrefix, err := w.sweepPoses(ctx, kicked, pre, units.Seconds(impactTime),
+		decad.StopAtInitialContact)
+	if err != nil {
+		return nil, err
+	}
+	if first.HasAffineReplayProof() &&
+		!roundedImpactPrefixAtEnd(roundedPrefix, first, w.step.PenetrationResidual) {
+		return undecided(w, "published impact prefix lacks a matching rounded endpoint bracket"), nil
 	}
 	normal, separation, bound, ok := reducedContact(first.Event.Manifold, w.step.Contact)
 	if !ok {
@@ -525,11 +602,13 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	if err != nil {
 		return undecidedArithmetic(w, "non-finite final pose", err)
 	}
+	var roundedContinuation *decad.SweepReport
 	if remaining > 0 {
 		actual, err := w.sweepPoses(ctx, post, end, units.Seconds(remaining), policy)
 		if err != nil {
 			return nil, err
 		}
+		roundedContinuation = actual
 		if (persistent && !w.persistentTrackWithin(actual, normal)) ||
 			(!persistent && actual.Outcome != decad.SweepDepartedClear) {
 			return undecided(w, fmt.Sprintf("numerical rebound path returned %v", actual.Outcome)), nil
@@ -566,7 +645,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		Kind:            ContactImpact,
 		Pair:            BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
 		Bracket:         *first.Bracket,
-		Time:            units.Seconds(impactTime),
+		Time:            eventAt,
 		Manifold:        cloneManifold(*first.Event.Manifold),
 		NormalImpulse:   impulseValue,
 		TangentImpulse:  zeroImpulseVec(),
@@ -581,7 +660,8 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		PositionChangeB: changeB,
 	}}
 	report.Trace = Trace{start: from, pre: pre, post: post, end: end, duration: dt,
-		eventAt: units.Seconds(impactTime), hasEvent: true}
+		eventAt: eventAt, hasEvent: true,
+		preSweep: roundedPrefix, postSweep: roundedContinuation}
 	return report, nil
 }
 
@@ -635,6 +715,41 @@ func (w *World) stepRotatingClear(ctx context.Context, from, kicked State,
 		Trace: Trace{start: from, end: end, duration: dt, rotationalRemainder: sweep}}, nil
 }
 
+// The original ideal right sample and the published rounded pose may straddle
+// exact touch. Admit that relation change only for the same source features
+// when their complete separation intervals fit the configured residual.
+func roundedImpactPrefixAtEnd(sweep, original *decad.SweepReport, residual units.Value) bool {
+	if sweep == nil || original == nil || sweep.Outcome != decad.SweepImpactBracket ||
+		sweep.Bracket == nil || sweep.Event == nil || original.Event == nil ||
+		sweep.Event.Manifold == nil || original.Event.Manifold == nil ||
+		len(sweep.Event.Manifold.Points) != len(original.Event.Manifold.Points) ||
+		exactBase(sweep.Bracket.To.Fraction).Cmp(exactBase(units.Scalar(1))) != 0 {
+		return false
+	}
+	for _, relation := range []decad.ContactRelation{sweep.Event.Relation, original.Event.Relation} {
+		if relation != decad.ContactTouching && relation != decad.ContactOverlapping {
+			return false
+		}
+	}
+	limit := exactBase(residual)
+	for i, point := range sweep.Event.Manifold.Points {
+		originalPoint := original.Event.Manifold.Points[i]
+		if point.FaceA != originalPoint.FaceA || point.FaceB != originalPoint.FaceB ||
+			point.FeatureA != originalPoint.FeatureA || point.FeatureB != originalPoint.FeatureB ||
+			point.Normal.Value != originalPoint.Normal.Value {
+			return false
+		}
+		difference := absRat(new(big.Rat).Sub(exactBase(point.Separation.Value),
+			exactBase(originalPoint.Separation.Value)))
+		difference.Add(difference, exactBase(point.Separation.Bound))
+		difference.Add(difference, exactBase(originalPoint.Separation.Bound))
+		if difference.Cmp(limit) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func (w *World) stepExcluded(ctx context.Context, from, kicked State, dt units.Value,
 	driver kinematicMotion) (*StepReport, error) {
 	if err := ctx.Err(); err != nil {
@@ -648,7 +763,7 @@ func (w *World) stepExcluded(ctx context.Context, from, kicked State, dt units.V
 		end.entries[driver.index].Pose = driver.path.To
 	}
 	return &StepReport{Status: Advanced, Next: &end,
-		Trace: Trace{start: from, end: end, duration: dt}}, nil
+		Trace: Trace{start: from, end: end, duration: dt, excluded: true}}, nil
 }
 
 // Compare the published float response against the exact law applied to the

@@ -23,6 +23,12 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	if !finite(chosen) || chosen <= 0 || chosen >= dt.Base() {
 		return undecided(w, "kinematic impact time is outside the interior step"), nil
 	}
+	eventAt := first.Bracket.To.Elapsed.Value
+	fraction := exactBase(first.Bracket.To.Fraction)
+	if fraction == nil || fraction.Sign() <= 0 || fraction.Cmp(big.NewRat(1, 1)) >= 0 ||
+		exactBase(eventAt).Cmp(exactBase(dt)) >= 0 {
+		return undecided(w, "kinematic impact exceeds the exact step duration"), nil
+	}
 	pre := kicked
 	found := false
 	for _, sample := range first.Samples {
@@ -34,6 +40,18 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	}
 	if !found {
 		return undecided(w, "kinematic impact has no bracket-right pose sample"), nil
+	}
+	prefixMotion := motion
+	prefixMotion.path = decad.PoseSegment{From: kicked.entries[motion.index].Pose,
+		To: pre.entries[motion.index].Pose, Duration: units.Seconds(chosen)}
+	roundedPrefix, err := w.sweepKinematicPoses(ctx, kicked, pre, units.Seconds(chosen),
+		prefixMotion, decad.StopAtInitialContact)
+	if err != nil {
+		return nil, err
+	}
+	if first.HasAffineReplayProof() &&
+		!roundedImpactPrefixAtEnd(roundedPrefix, first, w.step.PenetrationResidual) {
+		return undecided(w, "published kinematic impact prefix lacks a rounded endpoint bracket"), nil
 	}
 	contactAtRight, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
 		pre.entries[0].Pose, pre.entries[1].Pose, w.step.Contact)
@@ -211,7 +229,7 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 		Kind:            ContactImpact,
 		Pair:            BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
 		Bracket:         *first.Bracket,
-		Time:            first.Bracket.To.Elapsed.Value,
+		Time:            eventAt,
 		Manifold:        cloneManifold(*first.Event.Manifold),
 		NormalImpulse:   units.KilogramMillimetersPerSecond(impulse),
 		TangentImpulse:  zeroImpulseVec(),
@@ -226,7 +244,8 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 		PositionChangeB: changes[1],
 	}}
 	report.Trace = Trace{start: from, pre: pre, post: post, end: end, duration: dt,
-		eventAt: first.Bracket.To.Elapsed.Value, hasEvent: true}
+		eventAt: eventAt, hasEvent: true,
+		preSweep: roundedPrefix, postSweep: rounded}
 	return report, nil
 }
 
