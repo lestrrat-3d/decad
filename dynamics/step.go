@@ -40,7 +40,16 @@ type StepDiagnostic struct {
 	Reason string
 }
 
+// ContactEventKind separates an impulse-bearing contact from a geometry-only transition.
+type ContactEventKind int
+
+const (
+	ContactImpact ContactEventKind = iota + 1
+	ContactTransition
+)
+
 type ContactEvent struct {
+	Kind                             ContactEventKind
 	Pair                             BodyPair
 	Bracket                          decad.SweepInterval
 	Time                             units.Value
@@ -460,6 +469,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	report.Status = Advanced
 	report.Next = &end
 	report.Events = []ContactEvent{{
+		Kind:            ContactImpact,
 		Pair:            BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
 		Bracket:         *first.Bracket,
 		Time:            units.Seconds(impactTime),

@@ -48,6 +48,11 @@ func zeroAcceleration() dynamics.QuantityVec {
 
 func fixedBoxContactWorld(t *testing.T, doc *decad.Document, floor, box *decad.Body,
 	restitution float64) *dynamics.World {
+	return fixedBoxContactWorldWithMaxEvents(t, doc, floor, box, restitution, 2)
+}
+
+func fixedBoxContactWorldWithMaxEvents(t *testing.T, doc *decad.Document, floor, box *decad.Body,
+	restitution float64, maxEvents int) *dynamics.World {
 	t.Helper()
 	density := units.KilogramsPerCubicMillimeter(0.001)
 	material := dynamics.Material{Restitution: units.Scalar(restitution), Friction: units.Scalar(0)}
@@ -65,7 +70,7 @@ func fixedBoxContactWorld(t *testing.T, doc *decad.Document, floor, box *decad.B
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6),
 			ImpactSpeed:             units.MillimetersPerSecond(0),
-			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2,
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: maxEvents,
 		},
 	})
 	require.NoError(t, err)
@@ -119,6 +124,7 @@ func TestVerticalBoxReboundUsesProductionGeometry(t *testing.T) {
 	require.NotNil(t, report.Next)
 	require.Len(t, report.Events, 1)
 	event := report.Events[0]
+	require.Equal(t, dynamics.ContactImpact, event.Kind)
 	require.InDelta(t, 0.1, event.Time.Base(), 1e-9)
 	require.InDelta(t, 150, event.NormalImpulse.Base(), 1e-4)
 	require.NotEmpty(t, event.Manifold.Points)
@@ -243,6 +249,7 @@ func TestObliqueInitialTouchContinuesAsPersistentContact(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
 	require.Len(t, report.Events, 1)
+	require.Equal(t, dynamics.ContactImpact, report.Events[0].Kind)
 	require.InDelta(t, 100, report.Events[0].NormalImpulse.Base(), 1e-6)
 	final, ok := report.Next.Body(box)
 	require.True(t, ok)
@@ -325,7 +332,7 @@ func TestInitiallyTouchingTangentialSlideUsesProductionTrack(t *testing.T) {
 	require.Equal(t, boxBounds, afterBox)
 }
 
-func TestInitiallyTouchingSlideStopsAtContactTransition(t *testing.T) {
+func TestSlideEdgeTransitionRespectsEventLimit(t *testing.T) {
 	doc := decad.New()
 	floor := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
 	box := makeBox(t, doc, 0, 0, 10, 10, 10, 10)
@@ -344,7 +351,7 @@ func TestInitiallyTouchingSlideStopsAtContactTransition(t *testing.T) {
 			StartPolicy: decad.ContinueCertifiedTouch})
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepContactTransitionBracket, sweep.Outcome)
-	w := fixedBoxContactWorld(t, doc, floor, box, 0)
+	w := fixedBoxContactWorldWithMaxEvents(t, doc, floor, box, 0, 1)
 	start, err := w.NewState([]dynamics.BodyState{
 		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
 		{Body: box, Pose: r3.Identity(), LinearVelocity: velocity, AngularVelocity: zeroAngular(t)},
@@ -356,6 +363,200 @@ func TestInitiallyTouchingSlideStopsAtContactTransition(t *testing.T) {
 	require.Nil(t, report.Next)
 	require.Empty(t, report.Events)
 	require.Equal(t, []*decad.Body{floor, box}, doc.Bodies())
+}
+
+func TestSlideEdgeTransitionContinuesClearWithProductionGeometry(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
+	box := makeBox(t, doc, 0, 0, 10, 10, 10, 10)
+	floorBounds, err := floor.Bounds()
+	require.NoError(t, err)
+	boxBounds, err := box.Bounds()
+	require.NoError(t, err)
+	mass, err := box.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(0.001))
+	require.NoError(t, err)
+	duration := units.Seconds(3)
+	velocity := dynamics.QuantityVec{X: units.MillimetersPerSecond(5),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
+	request := decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+		NormalResolution: units.Radians(1e-6)}
+	initial, err := doc.ContactPair(t.Context(), floor, box, r3.Identity(), r3.Identity(), request)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, initial.Relation)
+	sweepRequest := decad.SweepRequest{ContactRequest: request, TimeResolution: units.Seconds(1e-9),
+		MaxPoseEvaluations: 128, StartPolicy: decad.ContinueCertifiedTouch}
+	still := decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: duration}
+	first, err := doc.SweepPair(t.Context(), floor, box, still,
+		decad.RigidDriftSegment{From: r3.Identity(), Center: mass.Center.Value,
+			LinearVelocity: velocity, AngularVelocity: zeroAngular(t), Duration: duration}, sweepRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepContactTransitionBracket, first.Outcome)
+	require.NotNil(t, first.Bracket)
+	require.NotNil(t, first.ContactTrack)
+	require.NotNil(t, first.Event)
+	require.Equal(t, decad.ContactSeparated, first.Event.Relation)
+	require.InDelta(t, 2, first.Bracket.To.Elapsed.Value.Base(), 1e-9)
+	require.Equal(t, first.Bracket.From.Fraction, first.ContactTrack.End().Fraction)
+	for _, fraction := range []units.Value{units.Scalar(0),
+		units.Scalar(first.ContactTrack.End().Fraction.Base() / 2), first.ContactTrack.End().Fraction} {
+		manifold, err := first.ContactTrack.ManifoldAt(fraction)
+		require.NoError(t, err)
+		require.NotNil(t, manifold)
+	}
+	endPose, err := r3.Translation(r3.Vec{X: 15})
+	require.NoError(t, err)
+	roundedFirst, err := doc.SweepPair(t.Context(), floor, box, still,
+		decad.PoseSegment{From: r3.Identity(), To: endPose, Duration: duration}, sweepRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepContactTransitionBracket, roundedFirst.Outcome)
+	require.NotNil(t, roundedFirst.ContactTrack)
+	require.NotNil(t, roundedFirst.Bracket)
+	chosen := duration.Base() * first.Bracket.To.Fraction.Base()
+	right, err := r3.Translation(r3.Vec{X: 5 * chosen})
+	require.NoError(t, err)
+	rightContact, err := doc.ContactPair(t.Context(), floor, box, r3.Identity(), right, request)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, rightContact.Relation)
+	remainder := units.Seconds(duration.Base() - chosen)
+	clearRequest := sweepRequest
+	clearRequest.StartPolicy = decad.StopAtInitialContact
+	ideal, err := doc.SweepPair(t.Context(), floor, box,
+		decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: remainder},
+		decad.RigidDriftSegment{From: right, Center: right.Apply(mass.Center.Value),
+			LinearVelocity: velocity, AngularVelocity: zeroAngular(t), Duration: remainder}, clearRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepClear, ideal.Outcome)
+	rounded, err := doc.SweepPair(t.Context(), floor, box,
+		decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: remainder},
+		decad.PoseSegment{From: right, To: endPose, Duration: remainder}, clearRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepClear, rounded.Outcome)
+	w := fixedBoxContactWorld(t, doc, floor, box, 0)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: r3.Identity(), LinearVelocity: velocity, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.NotNil(t, report.Next)
+	require.Len(t, report.Events, 1)
+	require.Equal(t, dynamics.ContactTransition, report.Events[0].Kind)
+	require.InDelta(t, 2, report.Events[0].Time.Base(), 1e-9)
+	require.Equal(t, units.KilogramMillimetersPerSecond(0), report.Events[0].NormalImpulse)
+	require.Empty(t, report.Events[0].Manifold.Points)
+	require.Equal(t, velocity, report.Events[0].PreVelocityB)
+	require.Equal(t, velocity, report.Events[0].PostVelocityB)
+	require.Equal(t, *first.Bracket, report.Events[0].Bracket)
+	checkpoint, err := report.Trace.Sample(report.Events[0].Time)
+	require.NoError(t, err)
+	checkpointBox, ok := checkpoint.Body(box)
+	require.True(t, ok)
+	require.Equal(t, right.Translation(), checkpointBox.Pose.Translation())
+	require.Equal(t, velocity, checkpointBox.LinearVelocity)
+	final, ok := report.Next.Body(box)
+	require.True(t, ok)
+	require.Equal(t, velocity, final.LinearVelocity)
+	require.Equal(t, endPose.Translation(), final.Pose.Translation())
+	replayed, err := report.Trace.Sample(duration)
+	require.NoError(t, err)
+	require.Equal(t, report.Next.Entries(), replayed.Entries())
+	require.Equal(t, []*decad.Body{floor, box}, doc.Bodies())
+	afterFloor, err := floor.Bounds()
+	require.NoError(t, err)
+	afterBox, err := box.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, floorBounds, afterFloor)
+	require.Equal(t, boxBounds, afterBox)
+}
+
+func TestSlideEdgeTransitionDoesNotRepeatForceKick(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
+	box := makeBox(t, doc, 0, 0, 10, 10, 10, 10)
+	w := fixedBoxContactWorld(t, doc, floor, box, 0)
+	startVelocity := dynamics.QuantityVec{X: units.MillimetersPerSecond(2),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: r3.Identity(), LinearVelocity: startVelocity, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	zeroTorque := units.KilogramSquareMillimetersPerSecondSquared(0)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{
+		Gravity: zeroAcceleration(),
+		Loads: []dynamics.BodyLoad{{Body: box, Force: dynamics.QuantityVec{
+			X: units.KilogramMillimetersPerSecondSquared(1),
+			Y: units.KilogramMillimetersPerSecondSquared(0),
+			Z: units.KilogramMillimetersPerSecondSquared(0)},
+			Torque: dynamics.QuantityVec{X: zeroTorque, Y: zeroTorque, Z: zeroTorque}}},
+	}, units.Seconds(3))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.Equal(t, dynamics.ContactTransition, report.Events[0].Kind)
+	final, ok := report.Next.Body(box)
+	require.True(t, ok)
+	require.Equal(t, units.MillimetersPerSecond(5), final.LinearVelocity.X)
+	require.Equal(t, r3.Vec{X: 15}, final.Pose.Translation())
+}
+
+func TestSlideEdgeTransitionCertifiesRoundedRightPose(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
+	box := makeBox(t, doc, 0, 0, 10, 10, 10, 10)
+	w := fixedBoxContactWorld(t, doc, floor, box, 0)
+	speed := 28.900856797231235
+	duration := units.Seconds(9.530447383534144)
+	velocity := dynamics.QuantityVec{X: units.MillimetersPerSecond(speed),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
+	mass, err := box.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(0.001))
+	require.NoError(t, err)
+	request := decad.SweepRequest{ContactRequest: decad.ContactRequest{
+		PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6)},
+		TimeResolution: units.Seconds(1e-9), MaxPoseEvaluations: 128,
+		StartPolicy: decad.ContinueCertifiedTouch}
+	still := decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: duration}
+	ideal, err := doc.SweepPair(t.Context(), floor, box, still,
+		decad.RigidDriftSegment{From: r3.Identity(), Center: mass.Center.Value,
+			LinearVelocity: velocity, AngularVelocity: zeroAngular(t), Duration: duration}, request)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepContactTransitionBracket, ideal.Outcome)
+	require.NotNil(t, ideal.Bracket)
+	wholeEnd, err := r3.Translation(r3.Vec{X: speed * duration.Base()})
+	require.NoError(t, err)
+	fullRounded, err := doc.SweepPair(t.Context(), floor, box, still,
+		decad.PoseSegment{From: r3.Identity(), To: wholeEnd, Duration: duration}, request)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepContactTransitionBracket, fullRounded.Outcome)
+	chosen := duration.Base() * ideal.Bracket.To.Fraction.Base()
+	right, err := r3.Translation(r3.Vec{X: speed * chosen})
+	require.NoError(t, err)
+	require.NotEqual(t, wholeEnd.Translation().X*ideal.Bracket.To.Fraction.Base(), right.Translation().X)
+	prefix, err := doc.SweepPair(t.Context(), floor, box,
+		decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(chosen)},
+		decad.PoseSegment{From: r3.Identity(), To: right, Duration: units.Seconds(chosen)}, request)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepContactTransitionBracket, prefix.Outcome)
+	require.NotNil(t, prefix.ContactTrack)
+	require.NotNil(t, prefix.Bracket)
+	require.Equal(t, units.Scalar(1), prefix.Bracket.To.Fraction)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: r3.Identity(), LinearVelocity: velocity, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.Equal(t, dynamics.ContactTransition, report.Events[0].Kind)
+	checkpoint, err := report.Trace.Sample(report.Events[0].Time)
+	require.NoError(t, err)
+	checkpointBox, ok := checkpoint.Body(box)
+	require.True(t, ok)
+	require.Equal(t, right.Translation(), checkpointBox.Pose.Translation())
 }
 
 func TestSuppliedMassBoxReboundUsesProductionGeometry(t *testing.T) {
