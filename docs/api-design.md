@@ -1575,6 +1575,10 @@ contract pins down:
   instead of reconstructing them.
   `docs/verification-design.md` §1.1 owns its shape.
 
+`docs/collision-dynamics-design.md` specifies pair-contact and two-body sweep
+queries and the separate dynamics subpackage. Their source-box and vertical
+rebound slices are available; other cases remain staged.
+
 Fusion answers **none** of a single validity verdict (with diagnostics), an
 explicit wall-survey outcome and interval (B-rep), a confirmed-undercut list
 with its own coverage state, or a concave-radius outcome and interval. That

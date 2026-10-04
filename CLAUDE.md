@@ -13,10 +13,9 @@ models a part here and proves it sound — watertight, correct volume, no
 interference, no wall thinner than the tool — BEFORE committing to write real
 CAD software code (e.g. an Autodesk Fusion add-in). Be wrong in the cheap place.
 
-**Current state: the public API is landing incrementally against an approved
-design.** What the package exports today is the leading edge of that surface;
-everything it does not yet export remains design-only, and every capability the
-design consumes exists in its dependencies — there is no open dependency gap.
+**Current state: the public API is landing incrementally against approved
+designs.** Unshipped APIs remain design-only. Collision dynamics has dependency
+work listed in `docs/collision-dynamics-design.md`.
 `docs/api-design.md` is the core contract for the whole surface.
 `docs/layout.md`'s Design documents table lists every companion design and what
 it owns, and names what every other file in the package owns.
@@ -27,6 +26,7 @@ it owns, and names what every other file in the package owns.
 |---|---|
 | Any file, to find what owns what | `docs/layout.md` — one row per root `.go` file and design doc |
 | Any public type | `docs/api-design.md`, and every companion design listed in `docs/layout.md` |
+| Collision geometry or rigid-body dynamics | `docs/collision-dynamics-design.md` |
 | Evaluator, topology or feature code | `docs/evaluator-design.md` |
 | Tessellation, export or mesh-boolean operands | `docs/tessellation-design.md` |
 | STEP export | `docs/step-export-design.md` |

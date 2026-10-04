@@ -22,7 +22,7 @@ func TestThickenPrismCircle(t *testing.T) {
 		thickness, volume, radius float64
 	}{
 		{"positive", decad.ThickenPositive, 2, 440, 12},
-		{"negative", decad.ThickenNegative, 2, 360, 10},
+		{testNegative, decad.ThickenNegative, 2, 360, 10},
 		{"centered", decad.ThickenCentered, 4, 800, 12},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -1,0 +1,251 @@
+package decad
+
+import (
+	"context"
+	"fmt"
+	"math"
+
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
+)
+
+// ContactRequest states the maximum position and normal error a manifold may publish.
+type ContactRequest struct {
+	PointResolution  units.Value
+	NormalResolution units.Value
+}
+
+// ContactRelation is the proven relation of the two complete occupied sets.
+type ContactRelation int
+
+const (
+	ContactUndecided ContactRelation = iota
+	ContactSeparated
+	ContactTouching
+	ContactOverlapping
+)
+
+// ContactReason explains an undecided relation or an absent manifold.
+type ContactReason int
+
+const (
+	ContactNoReason ContactReason = iota
+	ContactPayloadUnsupported
+	ContactNoGapProof
+	ContactNoNormalProof
+	ContactAmbiguousFeature
+	ContactPointTooCoarse
+)
+
+// ContactFeature names an original topological feature. The first contact
+// stage publishes face features; later stages may use edge and vertex fields.
+type ContactFeature struct {
+	Face   *Face
+	Edge   *Edge
+	Vertex *Vertex
+}
+
+// ContactPoint bounds two boundary witnesses and their A-to-B normal.
+// Separation is the signed B-minus-A distance along that normal.
+type ContactPoint struct {
+	OnA, OnB           VecMeasurement
+	Normal             VecMeasurement
+	NormalAngle        units.Value
+	Separation         Measurement
+	FaceA, FaceB       *Face
+	FeatureA, FeatureB ContactFeature
+}
+
+// ContactManifold is a deterministic reduction of the complete certified
+// contact patch. Its points are immutable once returned.
+type ContactManifold struct {
+	Points []ContactPoint
+}
+
+// ContactReport is a read-only pair result at the two caller-supplied poses.
+type ContactReport struct {
+	A, B     *Body
+	PoseA    r3.Transform
+	PoseB    r3.Transform
+	Request  ContactRequest
+	Relation ContactRelation
+	Gap      *Measurement
+	Overlap  *Measurement
+	Manifold *ContactManifold
+	Reason   ContactReason
+}
+
+// ContactPair proves the relation of two live solids at poses applied after
+// their recorded placements. Bodies and the document are not changed. This
+// first stage certifies source rectangular prisms at signed-axis poses; other
+// valid solids return ContactUndecided with ContactPayloadUnsupported.
+// Both bodies must be non-nil, distinct, live members of d.
+func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transform,
+	req ContactRequest) (*ContactReport, error) {
+	if a == b && a != nil {
+		return nil, fmt.Errorf("%w: contact requires distinct bodies", ErrDegenerate)
+	}
+	if err := d.requireLive(a); err != nil {
+		return nil, err
+	}
+	if err := d.requireLive(b); err != nil {
+		return nil, err
+	}
+	if !a.solid || a.kind != BodySolid || !b.solid || b.kind != BodySolid {
+		return nil, ErrNotSolid
+	}
+	if !poseA.IsValid() || !poseB.IsValid() {
+		return nil, fmt.Errorf("%w: contact pose is invalid", ErrDegenerate)
+	}
+	if req.PointResolution.Kind() != units.Length || req.NormalResolution.Kind() != units.Angle {
+		return nil, fmt.Errorf("%w: contact resolutions must be Length and Angle", ErrUnitKind)
+	}
+	if !finiteMeasurementValues(req.PointResolution.Base(), req.NormalResolution.Base()) {
+		return nil, fmt.Errorf("%w: contact resolution is non-finite", ErrNotFinite)
+	}
+	if req.PointResolution.Base() <= 0 || req.NormalResolution.Base() <= 0 {
+		return nil, fmt.Errorf("%w: contact resolutions must be positive", ErrDegenerate)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	report := &ContactReport{A: a, B: b, PoseA: poseA, PoseB: poseB, Request: req}
+	boxA, okA := sourceBoxAtPose(a, poseA)
+	boxB, okB := sourceBoxAtPose(b, poseB)
+	if !okA || !okB {
+		report.Reason = ContactPayloadUnsupported
+		return report, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	classifySourceBoxes(report, boxA, boxB)
+	return report, nil
+}
+
+func classifySourceBoxes(report *ContactReport, a, b sourceBoxContactProof) {
+	var gaps [3]dyadic
+	touchAxes := 0
+	overlaps := true
+	for i := range 3 {
+		switch {
+		case dyCmp(a.hi[i], b.lo[i]) < 0:
+			gaps[i] = dySubScalar(b.lo[i], a.hi[i])
+			overlaps = false
+		case dyCmp(b.hi[i], a.lo[i]) < 0:
+			gaps[i] = dySubScalar(a.lo[i], b.hi[i])
+			overlaps = false
+		case dyCmp(a.hi[i], b.lo[i]) == 0 || dyCmp(b.hi[i], a.lo[i]) == 0:
+			touchAxes++
+			overlaps = false
+		}
+	}
+	for _, gap := range gaps {
+		if gap.sign() > 0 {
+			m, ok := sourceBoxGap(gaps)
+			if !ok {
+				report.Reason = ContactNoGapProof
+				return
+			}
+			report.Relation = ContactSeparated
+			report.Gap = &m
+			return
+		}
+	}
+	if touchAxes > 0 {
+		report.Relation = ContactTouching
+		gap := Measurement{Value: units.Millimeters(0), Exactness: Exact, Bound: units.Millimeters(0)}
+		report.Gap = &gap
+		if touchAxes != 1 {
+			report.Reason = ContactAmbiguousFeature
+			return
+		}
+		for i := range 3 {
+			if dyCmp(a.hi[i], b.lo[i]) == 0 {
+				publishSourceBoxPatch(report, a, b, i, 1, dyZero())
+				return
+			}
+			if dyCmp(b.hi[i], a.lo[i]) == 0 {
+				publishSourceBoxPatch(report, a, b, i, -1, dyZero())
+				return
+			}
+		}
+	}
+	if !overlaps {
+		report.Reason = ContactPayloadUnsupported
+		return
+	}
+	report.Relation = ContactOverlapping
+	// Six directed translations move B across one of A's support planes.
+	// A unique smallest depth and two crossing faces are required for response.
+	axis, sign, depth, unique := sourceBoxTranslation(a, b)
+	if !unique {
+		report.Reason = ContactAmbiguousFeature
+		return
+	}
+	if sign > 0 {
+		if dyCmp(b.lo[axis], a.lo[axis]) <= 0 || dyCmp(b.hi[axis], a.hi[axis]) <= 0 {
+			report.Reason = ContactAmbiguousFeature
+			return
+		}
+	} else if dyCmp(b.lo[axis], a.lo[axis]) >= 0 || dyCmp(b.hi[axis], a.hi[axis]) >= 0 {
+		report.Reason = ContactAmbiguousFeature
+		return
+	}
+	publishSourceBoxPatch(report, a, b, axis, sign, dyNeg(depth))
+}
+
+func sourceBoxTranslation(a, b sourceBoxContactProof) (int, int, dyadic, bool) {
+	var best dyadic
+	axis, sign, ties := 0, 0, false
+	for i := range 3 {
+		for _, candidate := range []struct {
+			value dyadic
+			sign  int
+		}{
+			{dySubScalar(a.hi[i], b.lo[i]), 1},
+			{dySubScalar(b.hi[i], a.lo[i]), -1},
+		} {
+			if candidate.value.sign() <= 0 {
+				return 0, 0, dyadic{}, false
+			}
+			cmp := dyCmp(candidate.value, best)
+			if sign == 0 || cmp < 0 {
+				axis, sign, best, ties = i, candidate.sign, candidate.value, false
+			} else if cmp == 0 {
+				ties = true
+			}
+		}
+	}
+	return axis, sign, best, !ties
+}
+
+func sourceBoxGap(gaps [3]dyadic) (Measurement, bool) {
+	positive := 0
+	var only dyadic
+	squared := dyadic{}
+	for _, gap := range gaps {
+		if gap.sign() > 0 {
+			positive++
+			only = gap
+			squared = dyAdd(squared, dyMul(gap, gap))
+		}
+	}
+	if positive == 1 {
+		v, exact := only.float64()
+		if !finiteMeasurementValues(v) {
+			return Measurement{}, false
+		}
+		bound := dyadicFloatError(only, v)
+		return Measurement{Value: units.Millimeters(v), Exactness: exactnessOf(bound),
+			Bound: units.Millimeters(bound)}, exact || bound < v
+	}
+	lo, hi := dySqrtDown(squared), dySqrtUp(squared)
+	if !finiteMeasurementValues(lo, hi) || lo <= 0 {
+		return Measurement{}, false
+	}
+	v := lo + (hi-lo)/2
+	bound := provenUpRound(math.Max(v-lo, hi-v))
+	return Measurement{Value: units.Millimeters(v), Exactness: exactnessOf(bound),
+		Bound: units.Millimeters(bound)}, finiteMeasurementValues(v, bound)
+}

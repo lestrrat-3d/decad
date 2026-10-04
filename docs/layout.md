@@ -30,25 +30,30 @@ to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `docs/api-design.md` | The core public API contract: immediate-mode modeling, forward-compat invariants, and the feature, selector and verification surface. Points at every companion design. |
-| `docs/sketch-seam-design.md` | The recording contract at the `sketch` seam: the trim contract (`TExact`), the `CurveSegment` recording IR, and `ErrUnrecordableProfile`. |
-| `docs/verification-design.md` | How `Verify` judges every bounded result: the report and its statuses, interference cost and deadlines, `WithTolerance`, and the diameter-anchored noise floor. |
-| `docs/payload-verification-design.md` | How `Verify` covers each evaluator payload: per-payload proofs, boundary certificates, bounded validity/clearance/survey algorithms, and required tests. |
-| `docs/evaluator-design.md` | The v1 evaluator: the evaluate-from-the-record rule, topology and provenance roles, mass properties, per-feature build tables, staging via `ErrUnsupported`, and the mesh boolean. |
-| `docs/tessellation-design.md` | The tessellation contract for every payload: shared curve samples, manifold proofs, source faces, boundary certificates, and boolean handoff. |
-| `docs/clearance-design.md` | The clearance kernel: stationarity-tier candidate enumeration, the face-pair distance table, the disjointness proof, and how rows feed the report. |
-| `docs/interference-design.md` | Non-mutating pairwise overlap proof: the four-way pair relation, containment volume reuse, read-only mesh intersection, cancellation, and refusal rules. |
-| `docs/modify-design.md` | `Fillet`/`Chamfer`/`Shell` in four normative tables (receiver, refusals, result, consumers), plus the section-rewrite reduction, the exact offset, and the build-time audit. |
-| `docs/spline-design.md` | The free-form kinds: per-kind exactness tiers, refusals and their sentinels, exact rational Tier A moments and their work budget, proven brackets, and reach per capability. |
+| `docs/api-design.md` | Public API contract for modeling, features, selectors, and verification. |
+| `docs/sketch-seam-design.md` | `sketch` recording: `TExact`, `CurveSegment`, and `ErrUnrecordableProfile`. |
+| `docs/verification-design.md` | `Verify` reports, statuses, interference costs, deadlines, `WithTolerance`, and noise floor. |
+| `docs/payload-verification-design.md` | Per-payload proofs, boundary certificates, bounded validity/clearance/survey algorithms, and tests. |
+| `docs/evaluator-design.md` | Evaluator topology, payloads, mass properties, feature builds, and mesh booleans. |
+| `docs/tessellation-design.md` | Tessellation: shared curve samples, manifold proofs, source faces, boundary certificates, and boolean handoff. |
+| `docs/clearance-design.md` | Pair disjointness and bounded gap proofs. |
+| `docs/interference-design.md` | Read-only pair overlap and bounded volume proofs. |
+| `docs/modify-design.md` | `Fillet`/`Chamfer`/`Shell` tables, section rewrite, exact offset, and build audit. |
+| `docs/spline-design.md` | Free-form kinds, exactness tiers, refusals, Tier A moments, work budget, proven brackets, and reach. |
 | `docs/modify-reach-design.md` | The approved modify extension: tangent-chain expansion, asymmetric chamfers, cap-loop blends, allowed shells, proof gates, payload topology and staging. |
-| `docs/loft-design.md` | The count-free `Loft` design in five normative tables (pairing, refusals, result, consumers, chains), its exact-rational mass properties, and the wall-crossing audit. |
-| `docs/sweep-design.md` | The spatial `Path` and `Sweep` contract: rotation-minimizing transport, refusals, topology, measurements, 3D-sketch boundary, `SweepChain`'s own pairing rule, and staged downstream reach. |
+| `docs/loft-design.md` | `Loft` pairing, refusals, results, consumers, chains, mass properties, and wall-crossing audit. |
+| `docs/sweep-design.md` | `Path`/`Sweep` transport, refusals, topology, measurements, 3D-sketch boundary, `SweepChain` pairing, and reach. |
 | `docs/prism-boolean-design.md` | The analytic `Union`/`Cut`/`Intersect` reduction over co-directional coplanar or offset-plane prisms: reject-only entry gate, private `sketch` scene, displacement bounds. |
 | `docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |
 | `docs/tessellation-reach-design.md` | The tessellation reach plan: the loft restatement, free-form prism chording, revolve T2–T4 and the cap-loop chamfer tessellator, each with cells, proof terms, refusals and tests. |
-| `docs/surface-intersection-design.md` | `Trim`, `Extend` and `Split` over a pair whose sweeps share one generator: the reject-only entry gate, the private `sketch` scene reused from the prism boolean, the cut-parameter displacement. |
+| `docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps: entry gate, private `sketch` scene, and cut bounds. |
 | `docs/surface-design.md` | The sheet body and its operations: `BodyKind`, `WithSurfaceResult`, `Patch`, `Stitch`/`Unstitch`, `ExtrudeChain`/`RevolveChain`, `Offset`, and what `Verify`/export say. |
 | `docs/motion-check-design.md` | `Document.VerifyMotion`: the `Motion` set, the per-pose pair proof, the interval certificate, and `MotionReport`. |
+| `docs/collision-dynamics-design.md` | Pair contact/sweep in decad and rigid response in `dynamics`. |
+| `docs/contact-geometry-design.md` | Pair relation and contact manifold proofs. |
+| `docs/contact-sweep-design.md` | Two-body continuous sweep and first-contact brackets. |
+| `docs/dynamic-mass-design.md` | Bounded mass and inertia for rigid dynamics. |
+| `docs/rigid-dynamics-design.md` | Rigid-body steps, impulses, and reports. |
 | `docs/step-export-design.md` | Export package entry points and the AP214 faceted writer contract. |
 
 ### Seam and records
@@ -72,6 +77,7 @@ to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `moments.go` / `moments_validate.go` | The mass-property engine (evaluator §4): closed-form Green's-theorem boundary integrals for `Area`, `Centroid`, `SecondMoments`, per region. See `docs/spline-design.md` §5.2. |
+| `mass_properties.go` | Density-derived mass, center, and inertia readings. See `docs/dynamic-mass-design.md`. |
 | `moments_trig.go` | `moments.go`'s certified sine/cosine primitive: `turnSinCosInterval` proves an enclosure of sin/cos of an exact rational turn without ever comparing against π. See this file's own doc comment. |
 | `bounded.go` | The bounded-scalar vocabulary: a float64 carried beside a proven bound on its own error, its arithmetic, and the three-valued admission readers. See the file's doc comment. |
 | `dyadic.go` | The exact BINARY-SCALED arithmetic every proof over held float64 coordinates is carried in: `dyadic`, a mantissa times a power of two, and `dyV3`, its vector. See the file's doc comment. |
@@ -166,6 +172,8 @@ to the byte budget.
 | `verify_publish.go` | `Verify`'s publication assembler: turns private survey outcomes and certified readings into `Report`/`BodyReport`, deciding each survey's outcome, assessment and tolerance state. |
 | `clearance.go` | The pair kernel: `clearancePair` proves one pair's four-way relation and, when disjoint, a proven gap interval. `sheetSolidPair` decides a sheet pair too. See `docs/clearance-design.md` §1-§3/§6. |
 | `clearance_box.go` | Certifies unplaced axis-aligned rectangular prisms and bounds their gap directly from exact box planes before the general pair kernel. |
+| `contact_pair.go` | `ContactPair` input gates and pair relation report. See `docs/contact-geometry-design.md`. |
+| `contact_box.go` | Exact source-box relation and contact manifold proof. See `docs/contact-geometry-design.md` §4. |
 | `clearance_degen.go` | The degeneracy oracle every cell asks before emitting a constant/`Exact` candidate, three-valued over exact arithmetic, never a tolerance. See `docs/clearance-design.md` §4/§5 and the file's doc comment. |
 | `clearance_cells.go` | The §3 candidate sink and §4 face-interior table: stationarity tiers per face pair, admission folded into contributions, offset-surface pairs reduced to spine-pair criticals. See `docs/clearance-design.md` §3/§4. |
 | `clearance_tiers.go` | The curve and vertex tiers of §3: face-edge, edge-edge and vertex cells over §4's curve-tier table; constant-distance families emit only on the oracle's `degYes`. See `docs/clearance-design.md` §3/§4. |
@@ -178,6 +186,7 @@ to the byte budget.
 | `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's doc comment. |
 | `motion.go` / `motion_verify.go` | The `Motion` set, its options and `MotionReport`; `Document.VerifyMotion`'s swept-box exclusion, transient poses and interval certificate. See `docs/motion-check-design.md`. |
 | `motion_bound.go` | The motion certificate's exact-rational bounds: the ideal pose (a `Between`'s exact screw frame among them), its deviation η, ρ_max, travel and the swept box. See the file's doc comment. |
+| `contact_sweep.go` | Two-body paths, certified continuous box sweep, and impact bracket. See `docs/contact-sweep-design.md`. |
 
 ### Booleans
 
@@ -223,6 +232,7 @@ to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `examples/` | Executable Go examples (`Example_decad_…`, `go test`-verified `// Output:` blocks) that double as living documentation. Never `package main`. |
+| `dynamics/` | Rigid-body state and response. See `docs/rigid-dynamics-design.md`. |
 | `decadtest/` | The public test kit: comparison helpers over decad's three bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. Standard `testing` only, never testify. See `decadtest/doc.go`. |
 | `_gallery/` | Own nested module for README stills, animated hero and landing clip; keeps SolidLens out of the library. See `main.go`. |
 | `_shardgen/` | Own nested module, keeping tooling out of the library's: packs the root package's tests into cost-balanced race shards. The `_` prefix hides it from root-module tools. See its `main.go` doc comment. |

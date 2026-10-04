@@ -13,22 +13,23 @@ referenced as "core §N"), `docs/verification-design.md` ("verification §N", wh
 
 ## 1. Scope: what decad owns, and what the layer above owns
 
-**decad owns the verification half of motion: a proof that one rigidly moving set of bodies does or does not
-meet the rest of the document anywhere along a stated one-parameter path.** Core §1 lists "do these bodies
-interfere, and what is the clearance?" among the questions decad is answerable for, and core §13 settles how
+**`VerifyMotion` owns the verification half of one prescribed motion: a proof that one rigidly moving set of
+bodies does or does not meet the rest of the document anywhere along a stated one-parameter path.** Core §1
+lists "do these bodies interfere, and what is the clearance?" among the questions decad is answerable for,
+and core §13 settles how
 such a pair is positioned: interference and clearance run between explicitly placed bodies, through
 `Body.Placed(ctx, t)`, with no assembly machinery. A motion check is that same pair question asked over a
 family of placements `t(s)`, `s ∈ [From, To]`, instead of at one placement. It consumes exactly what core
 §13 already grants — a rigid motion stated by the caller as an `r3.Transform` — and adds no `Component`, no
 `Occurrence`, no joint graph, no timeline and no view state. Every v1 non-goal of core §13 stays a non-goal.
 
-Three things do NOT belong in decad, and this design keeps them out:
+Three things do not belong in `VerifyMotion`, and this design keeps them out:
 
 | Out of scope | Why | Where it goes |
 |---|---|---|
 | Animation, frame generation, rendering | Core §4 rejects GUI and view state on the geometry model; nothing here produces an image or a frame sequence | A separate module that imports decad and calls `Motion.PoseAt` (§2) for the poses it wants to draw |
-| Kinematic chains, joints, linkages, more than one independent motion | A second independent motion makes the relative motion of two movers a composition decad would have to derive; one rigid moving set has one path | The same layer above, which can call `VerifyMotion` once per relative motion it has already resolved |
-| Dynamics, contact forces, time | decad measures geometry; the parameter `s` is an angle, a length or a dimensionless fraction of the path, never a time | Out of scope |
+| Kinematic chains, joints, linkages, more than one independent motion | One rigid moving set has one path | `Document.SweepPair` checks two source-box paths; a layer above owns joints |
+| Dynamics, contact forces, time | `VerifyMotion` measures geometry; its parameter `s` is an angle, a length or a dimensionless fraction of the path, never a time | The `dynamics` subpackage; see `docs/collision-dynamics-design.md` |
 
 The layering rule holds unchanged: `decad -> sketch -> r3 -> units`. Every pose is an `r3.Transform` built by
 `r3.RotationAround`, `r3.Translation` or, for a `Between`, `r3.Transform.Screw` read once and `r3.Screw.At`
