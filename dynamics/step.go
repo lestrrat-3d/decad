@@ -360,13 +360,12 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	if len(w.excluded) != 0 {
 		return w.stepExcluded(ctx, from, kicked, dt, driver)
 	}
+	rotating := false
 	for _, entry := range kicked.entries {
-		if !zeroAngularVelocity(entry.AngularVelocity) {
-			if driver.index >= 0 {
-				return undecided(w, "rotating contact with a kinematic driver is not certified"), nil
-			}
-			return w.stepRotatingClear(ctx, from, kicked, dt)
-		}
+		rotating = rotating || !zeroAngularVelocity(entry.AngularVelocity)
+	}
+	if rotating && driver.index >= 0 {
+		return undecided(w, "rotating contact with a kinematic driver is not certified"), nil
 	}
 	if driver.index >= 0 {
 		return w.stepKinematicPush(ctx, from, kicked, dt, driver)
@@ -380,14 +379,16 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 			}
 		}
 	}
-	if !moving {
+	if !moving && !rotating {
 		return w.stepStill(ctx, from, kicked, dt)
 	}
-	for _, entry := range kicked.entries {
-		if entry.Pose.ApplyDir(r3.Vec{X: 1}) != (r3.Vec{X: 1}) ||
-			entry.Pose.ApplyDir(r3.Vec{Y: 1}) != (r3.Vec{Y: 1}) ||
-			entry.Pose.ApplyDir(r3.Vec{Z: 1}) != (r3.Vec{Z: 1}) {
-			return nil, fmt.Errorf("%w: rotated poses are not implemented", ErrUnsupported)
+	if !rotating {
+		for _, entry := range kicked.entries {
+			if entry.Pose.ApplyDir(r3.Vec{X: 1}) != (r3.Vec{X: 1}) ||
+				entry.Pose.ApplyDir(r3.Vec{Y: 1}) != (r3.Vec{Y: 1}) ||
+				entry.Pose.ApplyDir(r3.Vec{Z: 1}) != (r3.Vec{Z: 1}) {
+				return nil, fmt.Errorf("%w: rotated poses are not implemented", ErrUnsupported)
+			}
 		}
 	}
 
@@ -398,6 +399,9 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	report := &StepReport{Trace: Trace{start: from, duration: dt}}
 	switch first.Outcome {
 	case decad.SweepClear:
+		if rotating {
+			return w.stepRotatingClear(from, kicked, dt, first)
+		}
 		end, err := driftState(kicked, dt.Base())
 		if err != nil {
 			return undecidedArithmetic(w, "non-finite clear-path pose", err)
@@ -413,11 +417,21 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		report.Trace.preSweep = actual
 		return report, nil
 	case decad.SweepInitiallyTouching:
+		if rotating {
+			return undecided(w, "rotating initial contact needs a certified response track"), nil
+		}
 		if w.friction.lower.Sign() != 0 {
 			return w.stepInitialFriction(ctx, from, kicked, dt, first)
 		}
 		return w.stepInitialTouch(ctx, from, kicked, dt, first)
 	case decad.SweepImpactBracket:
+		if rotating {
+			for _, entry := range kicked.entries {
+				if entry.AngularVelocity.X.Base() != 0 || entry.AngularVelocity.Y.Base() != 0 {
+					return undecided(w, "rotating impact requires spin about the face normal"), nil
+				}
+			}
+		}
 		if w.friction.lower.Sign() != 0 {
 			return undecided(w, "frictional interior impact is not certified"), nil
 		}
@@ -453,14 +467,20 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	if err != nil {
 		return undecidedArithmetic(w, "non-finite impact pose", err)
 	}
-	roundedPrefix, err := w.sweepPoses(ctx, kicked, pre, units.Seconds(impactTime),
-		decad.StopAtInitialContact)
-	if err != nil {
-		return nil, err
+	var roundedPrefix *decad.SweepReport
+	if rotating && !rotatingImpactPoseMatches(first, pre) {
+		return undecided(w, "rotating impact pose differs from certified bracket sample"), nil
 	}
-	if first.HasAffineReplayProof() &&
-		!roundedImpactPrefixAtEnd(roundedPrefix, first, w.step.PenetrationResidual) {
-		return undecided(w, "published impact prefix lacks a matching rounded endpoint bracket"), nil
+	if !rotating {
+		roundedPrefix, err = w.sweepPoses(ctx, kicked, pre, units.Seconds(impactTime),
+			decad.StopAtInitialContact)
+		if err != nil {
+			return nil, err
+		}
+		if first.HasAffineReplayProof() &&
+			!roundedImpactPrefixAtEnd(roundedPrefix, first, w.step.PenetrationResidual) {
+			return undecided(w, "published impact prefix lacks a matching rounded endpoint bracket"), nil
+		}
 	}
 	normal, separation, bound, ok := reducedContact(first.Event.Manifold, w.step.Contact)
 	if !ok {
@@ -469,6 +489,9 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	axis, normalSign, valid := axisNormal(normal)
 	if !valid {
 		return undecided(w, "impact normal is not a supported axis"), nil
+	}
+	if rotating && axis != 2 {
+		return undecided(w, "rotating impact requires a horizontal face"), nil
 	}
 	preSpeed := [2]units.Value{
 		velocityComponent(kicked.entries[0].LinearVelocity, axis),
@@ -574,6 +597,25 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		}
 	}
 	remaining := dt.Base() - impactTime
+	if rotating && remaining > 0 && contact.Relation == decad.ContactSeparated &&
+		contact.Gap != nil && contact.Gap.Bound.Base() == 0 &&
+		contact.Gap.Value.Base() > 0 &&
+		contact.Gap.Value.Base() <= correctionAllowance {
+		candidate, err := correctPair(post, normal, -contact.Gap.Value.Base(), inverseMass)
+		if err != nil {
+			return undecidedArithmetic(w, "rotating contact correction is not finite", err)
+		}
+		if pairCorrectionWithin(pre, candidate, axis, correctionAllowance) {
+			corrected, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+				candidate.entries[0].Pose, candidate.entries[1].Pose, w.step.Contact)
+			if err != nil {
+				return nil, err
+			}
+			if corrected.Relation == decad.ContactTouching {
+				post, contact = candidate, corrected
+			}
+		}
+	}
 	postRelative := (postSpeed[1] - postSpeed[0]) * normalSign
 	if !finite(postRelative) || postRelative < -w.step.VelocityResidual.Base() {
 		return undecided(w, "impact response remains closing"), nil
@@ -588,8 +630,9 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	if persistent {
 		policy = decad.ContinueCertifiedTouch
 	}
+	var continuation *decad.SweepReport
 	if remaining > 0 {
-		continuation, err := w.sweep(ctx, post, units.Seconds(remaining), policy)
+		continuation, err = w.sweep(ctx, post, units.Seconds(remaining), policy)
 		if err != nil {
 			return nil, err
 		}
@@ -603,7 +646,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		return undecidedArithmetic(w, "non-finite final pose", err)
 	}
 	var roundedContinuation *decad.SweepReport
-	if remaining > 0 {
+	if remaining > 0 && !rotating {
 		actual, err := w.sweepPoses(ctx, post, end, units.Seconds(remaining), policy)
 		if err != nil {
 			return nil, err
@@ -613,6 +656,9 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 			(!persistent && actual.Outcome != decad.SweepDepartedClear) {
 			return undecided(w, fmt.Sprintf("numerical rebound path returned %v", actual.Outcome)), nil
 		}
+	}
+	if rotating && remaining > 0 && !rotatingEndpointMatches(continuation, end) {
+		return undecided(w, "rotating rebound endpoint differs from certified sweep"), nil
 	}
 	finalContact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
 		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
@@ -659,9 +705,27 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		PositionChangeA: changeA,
 		PositionChangeB: changeB,
 	}}
+	if rotating {
+		event := &report.Events[0]
+		event.PreAngularVelocityA, event.PreAngularVelocityB =
+			pre.entries[0].AngularVelocity, pre.entries[1].AngularVelocity
+		event.PostAngularVelocityA, event.PostAngularVelocityB =
+			post.entries[0].AngularVelocity, post.entries[1].AngularVelocity
+		event.PoseA, event.PoseB = pre.entries[0].Pose, pre.entries[1].Pose
+		event.PointImpulses = make([]ContactPointImpulse, len(event.Manifold.Points))
+		for i := range event.PointImpulses {
+			event.PointImpulses[i] = ContactPointImpulse{
+				Normal:  units.KilogramMillimetersPerSecond(impulse / float64(len(event.PointImpulses))),
+				Tangent: zeroImpulseVec(),
+			}
+		}
+	}
 	report.Trace = Trace{start: from, pre: pre, post: post, end: end, duration: dt,
 		eventAt: eventAt, hasEvent: true,
 		preSweep: roundedPrefix, postSweep: roundedContinuation}
+	if rotating {
+		report.Trace.rotationalRemainder = continuation
+	}
 	return report, nil
 }
 
@@ -683,12 +747,8 @@ func correctedEndpointGapWithin(contact *decad.ContactReport, allowance float64)
 
 // stepRotatingClear publishes a rotating endpoint only when SweepPair proves
 // the full ideal drift and its rounded samples separated.
-func (w *World) stepRotatingClear(ctx context.Context, from, kicked State,
-	dt units.Value) (*StepReport, error) {
-	sweep, err := w.sweep(ctx, kicked, dt, decad.StopAtInitialContact)
-	if err != nil {
-		return nil, err
-	}
+func (w *World) stepRotatingClear(from, kicked State, dt units.Value,
+	sweep *decad.SweepReport) (*StepReport, error) {
 	if sweep.Outcome != decad.SweepClear {
 		return undecided(w, fmt.Sprintf("rotating sweep returned %v", sweep.Outcome)), nil
 	}
@@ -748,6 +808,42 @@ func roundedImpactPrefixAtEnd(sweep, original *decad.SweepReport, residual units
 		}
 	}
 	return true
+}
+
+func rotatingEndpointMatches(sweep *decad.SweepReport, end State) bool {
+	if sweep == nil || sweep.Outcome != decad.SweepDepartedClear {
+		return false
+	}
+	found := false
+	for _, sample := range sweep.Samples {
+		if sample.At.Fraction.Base() != 1 {
+			continue
+		}
+		if found || sample.Ideal.Relation != decad.ContactSeparated ||
+			sample.FloatContact == nil || sample.FloatContact.Relation != decad.ContactSeparated ||
+			sample.PoseA != end.entries[0].Pose || sample.PoseB != end.entries[1].Pose {
+			return false
+		}
+		found = true
+	}
+	return found
+}
+
+func rotatingImpactPoseMatches(sweep *decad.SweepReport, pre State) bool {
+	if sweep == nil || sweep.Bracket == nil {
+		return false
+	}
+	found := false
+	for _, sample := range sweep.Samples {
+		if sample.At.Fraction.Base() != sweep.Bracket.To.Fraction.Base() {
+			continue
+		}
+		if found || sample.PoseA != pre.entries[0].Pose || sample.PoseB != pre.entries[1].Pose {
+			return false
+		}
+		found = true
+	}
+	return found
 }
 
 func (w *World) stepExcluded(ctx context.Context, from, kicked State, dt units.Value,

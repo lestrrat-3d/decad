@@ -9,6 +9,53 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestContactPairRotatedBoxContainedHorizontalFace(t *testing.T) {
+	doc := decad.New()
+	floor := boxBodyAtZ(t, doc, -20, -20, 20, 20, -10, 10)
+	box := boxBodyAtZ(t, doc, -5, -5, 5, 5, 0, 10)
+	turn, err := r3.RotationAround(r3.Vec{Z: 5}, r3.Vec{Z: 1}, units.Degrees(30))
+	require.NoError(t, err)
+	contact, err := doc.ContactPair(t.Context(), floor, box, r3.Identity(), turn, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, contact.Relation)
+	require.NotNil(t, contact.Manifold)
+	require.Len(t, contact.Manifold.Points, 4)
+	for _, point := range contact.Manifold.Points {
+		require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+		require.InDelta(t, 0, point.OnA.Value.Z, point.OnA.Bound.Base())
+		require.InDelta(t, 0, point.OnB.Value.Z, point.OnB.Bound.Base())
+		require.NotNil(t, point.FaceA)
+		require.NotNil(t, point.FaceB)
+	}
+	reversed, err := doc.ContactPair(t.Context(), box, floor, turn, r3.Identity(), contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, reversed.Relation)
+	require.Len(t, reversed.Manifold.Points, 4)
+	require.Equal(t, r3.Vec{Z: -1}, reversed.Manifold.Points[0].Normal.Value)
+
+	shift, err := r3.Translation(r3.Vec{Z: -0.125})
+	require.NoError(t, err)
+	overlapPose, err := turn.Then(shift)
+	require.NoError(t, err)
+	overlap, err := doc.ContactPair(t.Context(), floor, box, r3.Identity(), overlapPose, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactOverlapping, overlap.Relation)
+	require.Len(t, overlap.Manifold.Points, 4)
+	require.InDelta(t, -0.125, overlap.Manifold.Points[0].Separation.Value.Base(),
+		overlap.Manifold.Points[0].Separation.Bound.Base())
+	reverseOverlap, err := doc.ContactPair(t.Context(), box, floor, overlapPose, r3.Identity(), contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactOverlapping, reverseOverlap.Relation)
+	require.Len(t, reverseOverlap.Manifold.Points, 4)
+	require.Equal(t, r3.Vec{Z: -1}, reverseOverlap.Manifold.Points[0].Normal.Value)
+
+	narrow := boxBodyAtZ(t, doc, -5, -5, 5, 5, -10, 10)
+	unresolved, err := doc.ContactPair(t.Context(), narrow, box, r3.Identity(), turn, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, unresolved.Relation)
+	require.Nil(t, unresolved.Manifold)
+}
+
 func TestContactPairOrientedSourceBoxes(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)

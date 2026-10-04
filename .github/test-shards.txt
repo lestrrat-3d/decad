@@ -1082,6 +1082,7 @@
 4	0.00	TestContactPairAnalyticPrismTouch
 4	0.00	TestContactPairOrientedSourceBoxes
 4	0.00	TestContactPairPlacedBodyAndInputGates
+4	0.00	TestContactPairRotatedBoxContainedHorizontalFace
 4	0.00	TestContactPairShallowOverlapAndRefusals
 4	0.00	TestContactPairSignedAxisPose
 4	0.00	TestContactPairSourceBoxes

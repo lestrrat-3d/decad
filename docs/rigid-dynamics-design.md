@@ -68,9 +68,13 @@ at input, after the full-step force kick, and at completion. It also reports
 gravity, center-force, and fixed/kinematic contact impulses separately, plus
 the drift-only energy, linear momentum, and angular momentum changes.
 Torque-driven rotation advances when `SweepPair` certifies a clear full-span
-drift and its rounded endpoint. A rotating contact that lacks a sweep proof
-returns `Undecided`. Rotating kinematic drivers, broader frictional stepping,
-stacks, broader contact-transition stepping, broader spin response, and rotational
+drift and its rounded endpoint. A source box spinning about world Z can also
+rebound from a wide fixed horizontal source-box face with positive
+restitution and zero friction. Its normal impulse leaves the admitted spin
+unchanged within `AngularVelocityResidual`; the returned pose uses the
+certified rotating departure sweep. A rotating contact that lacks these
+proofs returns `Undecided`. Rotating kinematic drivers, broader frictional stepping,
+stacks, broader contact-transition stepping, broader spin response, and arbitrary
 trace sampling remain design contracts.
 
 Navigation only; the named sections own the rules:
@@ -459,6 +463,18 @@ rigid drift paths and their sweep report. It returns stored event and endpoint
 checkpoints; an interior sample requires a separate rotational replay proof.
 An absent fraction-one sample, a nonpositive endpoint gap, or a trace path
 that differs from the swept path returns `Undecided` with no `Next`.
+
+The fixed-floor Z-spin impact uses the rotating sweep's four-point horizontal
+manifold. Its spin axis is the certified contact normal, so contact-point
+spin contributes no normal speed. The bounded four-corner lever check limits
+unpublished angular impulse. The event records the pre-impact poses, pre/post
+angular velocities, and equal normal point impulses so conservation checks
+both angular momentum and rotational energy. If float position correction
+leaves a positive exact gap within the original correction allowance, move the dynamic box
+back by that gap and accept only a rechecked `Touching` relation. The
+remaining `RigidDriftSegment` must prove immediate departure and a separated
+fraction-one sample that equals the published endpoint. Zero-restitution
+spinning support still needs a contact-track proof and returns `Undecided`.
 
 The fixed/dynamic translating-box slice publishes zero spin. It bounds the
 omitted angular speed from the real manifold's patch-center offset and point

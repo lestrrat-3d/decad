@@ -116,11 +116,11 @@ func TestTorqueKickRotatesClearSourceBox(t *testing.T) {
 	require.InDelta(t, math.Sin(0.12), entry.Pose.ApplyDir(r3.Vec{X: 1}).Y, 1e-9)
 }
 
-func TestTorqueDrivenBoxApproachingFloorRequiresContactResponse(t *testing.T) {
+func TestTorqueDrivenRotatingBoxReboundsFromFixedFloor(t *testing.T) {
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
-	w := fixedBoxContactWorld(t, doc, floor, box, 0)
+	w := fixedBoxContactWorld(t, doc, floor, box, 0.5)
 	pose, err := r3.Translation(r3.Vec{Z: 10})
 	require.NoError(t, err)
 	fall := zeroVelocity()
@@ -142,17 +142,96 @@ func TestTorqueDrivenBoxApproachingFloorRequiresContactResponse(t *testing.T) {
 			NormalResolution: units.Radians(1e-6)}, TimeResolution: units.Seconds(1e-9),
 			MaxPoseEvaluations: 128, StartPolicy: decad.StopAtInitialContact})
 	require.NoError(t, err)
-	require.Equal(t, decad.SweepUndecided, sweep.Outcome)
-	require.Equal(t, decad.SweepTimeFloor, sweep.Cause)
-	require.NotNil(t, sweep.Unresolved)
-	require.InDelta(t, 0.1, sweep.Unresolved.To.Elapsed.Value.Base(), 1e-9)
+	require.Equal(t, decad.SweepImpactBracket, sweep.Outcome)
+	require.NotNil(t, sweep.Event)
+	require.NotNil(t, sweep.Event.Manifold)
+	require.Len(t, sweep.Event.Manifold.Points, 4)
+	require.InDelta(t, 0.1, sweep.Bracket.To.Elapsed.Value.Base(), 1e-9)
 	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration(),
-		Loads: []dynamics.BodyLoad{{Body: box, Force: testForce(0, 0), Torque: testTorque(100)}}},
+		Loads: []dynamics.BodyLoad{{Body: box, Force: testForce(0, 0), Torque: testTorque(50)}}},
+		units.Seconds(0.2))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.NotNil(t, report.Next)
+	require.Len(t, report.Events, 1)
+	event := report.Events[0]
+	require.InDelta(t, 0.1, event.Time.Base(), 1e-9)
+	require.InDelta(t, 50, event.PostVelocity.Z.Base(), 1e-6)
+	require.Len(t, event.PointImpulses, len(event.Manifold.Points))
+	require.InDelta(t, 0.6, event.PreAngularVelocityB.Z.Base(), 1e-9)
+	require.InDelta(t, 0.6, event.PostAngularVelocityB.Z.Base(), 1e-9)
+	require.True(t, event.PoseA.IsValid())
+	require.True(t, event.PoseB.IsValid())
+	end, ok := report.Next.Body(box)
+	require.True(t, ok)
+	require.InDelta(t, 0.6, end.AngularVelocity.Z.Base(), 1e-9)
+	require.InDelta(t, 5, end.Pose.Translation().Z, 2e-6)
+	require.InDelta(t, math.Sin(0.12), end.Pose.ApplyDir(r3.Vec{X: 1}).Y, 1e-9)
+	require.NotNil(t, report.Conservation)
+	require.InDelta(t, 10, report.Conservation.TorqueImpulse.Value.Z.Base(), 1e-8)
+	require.InDelta(t, 10, report.Conservation.Completion.AngularMomentum.Value.Z.Base(), 1e-6)
+	replayed, err := report.Trace.Sample(units.Seconds(0.2))
+	require.NoError(t, err)
+	require.Equal(t, report.Next.Entries(), replayed.Entries())
+	second, err := w.NewState(report.Next.Entries())
+	require.NoError(t, err)
+	next, err := w.Step(t.Context(), second, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.1))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, next.Status, "%+v", next.Diagnostics)
+	continued, ok := next.Next.Body(box)
+	require.True(t, ok)
+	require.InDelta(t, 10, continued.Pose.Translation().Z, 2e-6)
+	require.InDelta(t, math.Sin(0.18), continued.Pose.ApplyDir(r3.Vec{X: 1}).Y, 1e-9)
+}
+
+func TestTorqueDrivenRotatingBoxRestingContactNeedsTrack(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	w := fixedBoxContactWorld(t, doc, floor, box, 0)
+	pose, err := r3.Translation(r3.Vec{Z: 10})
+	require.NoError(t, err)
+	fall := zeroVelocity()
+	fall.Z = units.MillimetersPerSecond(-100)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: pose, LinearVelocity: fall, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration(),
+		Loads: []dynamics.BodyLoad{{Body: box, Force: testForce(0, 0), Torque: testTorque(50)}}},
 		units.Seconds(0.2))
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, report.Status)
 	require.Nil(t, report.Next)
-	require.Contains(t, report.Diagnostics[0].Reason, "rotating sweep")
+}
+
+func TestTorqueDrivenRotatingImpactUsesCertifiedNonHalfPose(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	w := fixedBoxContactWorld(t, doc, floor, box, 0.5)
+	pose, err := r3.Translation(r3.Vec{Z: 7})
+	require.NoError(t, err)
+	fall := zeroVelocity()
+	fall.Z = units.MillimetersPerSecond(-100)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: pose, LinearVelocity: fall, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration(),
+		Loads: []dynamics.BodyLoad{{Body: box, Force: testForce(0, 0), Torque: testTorque(50)}}},
+		units.Seconds(0.2))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, 0.07, report.Events[0].Time.Base(), 1e-9)
+	require.NotEqual(t, 0.5, report.Events[0].Bracket.To.Fraction.Base())
+	end, ok := report.Next.Body(box)
+	require.True(t, ok)
+	require.InDelta(t, 6.5, end.Pose.Translation().Z, 2e-6)
+	require.InDelta(t, math.Sin(0.12), end.Pose.ApplyDir(r3.Vec{X: 1}).Y, 1e-9)
 }
 
 func TestTorqueKickRejectsWideInertiaInterval(t *testing.T) {

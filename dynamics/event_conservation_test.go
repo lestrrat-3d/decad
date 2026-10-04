@@ -104,6 +104,74 @@ func TestSpinEventConservationUsesRealPointImpulses(t *testing.T) {
 		w.eventConservationFailure(changed))
 }
 
+func TestTorqueDrivenFloorImpactChecksAngularEvent(t *testing.T) {
+	doc := decad.New()
+	scene := sketch.NewWorld()
+	plane, err := scene.CreateOffsetPlane(scene.XY(), -10)
+	require.NoError(t, err)
+	profile, err := scene.CreateSketch(plane)
+	require.NoError(t, err)
+	rectangle := profile.CreateRectangle(-20, -20, 20, 20)
+	profile.Fix(rectangle.A)
+	_, err = profile.Solve(t.Context())
+	require.NoError(t, err)
+	floor, err := doc.Extrude(profile, profile.Profiles()[0], decad.Distance{
+		D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	box := conservationBox(t, doc, -5, 5)
+	density := units.KilogramsPerCubicMillimeter(.001)
+	material := Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}
+	w, err := NewWorld(t.Context(), doc, WorldConfig{
+		Bodies: []RigidBody{{Body: floor, Role: Fixed, Material: material},
+			{Body: box, Role: Dynamic, Density: &density, Material: material}},
+		Step: StepConfig{Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+			NormalResolution: units.Radians(1e-6)}, TimeResolution: units.Seconds(1e-9),
+			ContactSlop: units.Millimeters(1e-6), VelocityResidual: units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2},
+	})
+	require.NoError(t, err)
+	pose, err := r3.Translation(r3.Vec{Z: 10})
+	require.NoError(t, err)
+	zeroLinear := QuantityVec{X: units.MillimetersPerSecond(0),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
+	zeroAngular := QuantityVec{X: units.RadiansPerSecond(0),
+		Y: units.RadiansPerSecond(0), Z: units.RadiansPerSecond(0)}
+	fall := zeroLinear
+	fall.Z = units.MillimetersPerSecond(-100)
+	start, err := w.NewState([]BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroLinear, AngularVelocity: zeroAngular},
+		{Body: box, Pose: pose, LinearVelocity: fall, AngularVelocity: zeroAngular},
+	})
+	require.NoError(t, err)
+	zeroGravity := QuantityVec{X: units.MillimetersPerSecondSquared(0),
+		Y: units.MillimetersPerSecondSquared(0), Z: units.MillimetersPerSecondSquared(0)}
+	torque := QuantityVec{X: units.KilogramSquareMillimetersPerSecondSquared(0),
+		Y: units.KilogramSquareMillimetersPerSecondSquared(0),
+		Z: units.KilogramSquareMillimetersPerSecondSquared(50)}
+	force := QuantityVec{X: units.KilogramMillimetersPerSecondSquared(0),
+		Y: units.KilogramMillimetersPerSecondSquared(0),
+		Z: units.KilogramMillimetersPerSecondSquared(0)}
+	report, err := w.Step(t.Context(), start, StepInput{Gravity: zeroGravity,
+		Loads: []BodyLoad{{Body: box, Force: force, Torque: torque}}}, units.Seconds(.2))
+	require.NoError(t, err)
+	require.Equal(t, Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	event := report.Events[0]
+	require.Empty(t, w.eventConservationFailure(event))
+	require.Len(t, event.PointImpulses, len(event.Manifold.Points))
+	changed := event
+	changed.PostAngularVelocityB.Z = units.RadiansPerSecond(event.PostAngularVelocityB.Z.Base() + 1)
+	require.Equal(t, "contact event angular momentum exceeds point impulse residual",
+		w.eventConservationFailure(changed))
+	changed = event
+	changed.PointImpulses = nil
+	require.Equal(t, "contact event lacks point impulses for angular response",
+		w.eventConservationFailure(changed))
+}
+
 func TestEventConservationRejectsEnergyGainWithBalancedMomentum(t *testing.T) {
 	doc := decad.New()
 	a := conservationBox(t, doc, 0, 10)
