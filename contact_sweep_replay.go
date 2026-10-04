@@ -8,16 +8,20 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// sweepReplayProof keeps the source boxes used by the continuous sweep. A
-// replayed float pose is checked against those boxes, rather than inferred
-// from the sweep's endpoint samples.
+// sweepReplayProof keeps the source geometry used by the continuous sweep. A
+// replayed float pose is checked against it, rather than inferred from the
+// sweep's endpoint samples.
 type sweepReplayProof struct {
-	pa, pb     affinePairPath
-	boxA, boxB sourceBoxContactProof
-	request    ContactRequest
-	outcome    SweepOutcome
-	bracketLo  *big.Rat
-	bracketHi  *big.Rat
+	pa, pb                 affinePairPath
+	boxA, boxB             sourceBoxContactProof
+	sphere                 *sourceSphereContactProof
+	sphereFirst            bool
+	sphereAxis, sphereSide int
+	sphereGap, sphereSlope dyadic
+	request                ContactRequest
+	outcome                SweepOutcome
+	bracketLo              *big.Rat
+	bracketHi              *big.Rat
 }
 
 func (p *sweepReplayProof) snapshot(r *SweepReport) {
@@ -30,11 +34,11 @@ func (p *sweepReplayProof) setBracket(left, right *big.Rat) {
 }
 
 // HasAffineReplayProof reports whether this sweep can certify rounded poses
-// along its affine source-box path.
+// along its affine source-box or source-sphere path.
 func (r *SweepReport) HasAffineReplayProof() bool { return r != nil && r.replay != nil }
 
 // CertifiedPosesAt evaluates the recorded affine paths at elapsed time and
-// checks their rounded placements against the sweep's exact source-box proof.
+// checks their rounded placements against the sweep's exact source proof.
 // It reads no Document geometry and performs no new contact query. A pose whose
 // rounding can change the reported relation beyond PointResolution is refused.
 func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Transform, error) {
@@ -83,6 +87,9 @@ func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Tra
 	if err != nil {
 		return r3.Transform{}, r3.Transform{}, err
 	}
+	if r.replay.sphere != nil {
+		return r.certifiedSpherePosesAtFraction(f, poseA, poseB)
+	}
 	actualA, ok := translatedReplayBox(r.replay.boxA, r.replay.pa.from, poseA)
 	if !ok {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay pose A is not an affine translation", ErrUnsupported)
@@ -120,6 +127,109 @@ func translatedReplayBox(box sourceBoxContactProof, from, at r3.Transform) (sour
 		box.lo[i], box.hi[i] = dyAdd(box.lo[i], move), dyAdd(box.hi[i], move)
 	}
 	return box, true
+}
+
+func translatedReplaySphere(sphere sourceSphereContactProof, from, at r3.Transform) (sourceSphereContactProof, bool) {
+	if !at.IsValid() || at.Basis() != from.Basis() {
+		return sourceSphereContactProof{}, false
+	}
+	start, end := from.Translation(), at.Translation()
+	before := [3]float64{start.X, start.Y, start.Z}
+	after := [3]float64{end.X, end.Y, end.Z}
+	for i := range 3 {
+		if !finiteMeasurementValues(before[i], after[i]) {
+			return sourceSphereContactProof{}, false
+		}
+		move := dySubScalar(mustDyOf(after[i]), mustDyOf(before[i]))
+		sphere.center[i] = dyAdd(sphere.center[i], move)
+	}
+	return sphere, true
+}
+
+// The sphere producer proves one face corridor and an affine support gap.
+// Replay checks the rounded placements against both claims at the requested
+// fraction, including fractions that are not dyadic.
+func (r *SweepReport) certifiedSpherePosesAtFraction(f *big.Rat, poseA, poseB r3.Transform) (
+	r3.Transform, r3.Transform, error) {
+	p := r.replay
+	spherePath, boxPath := p.pb, p.pa
+	spherePose, boxPose := poseB, poseA
+	box := p.boxA
+	if p.sphereFirst {
+		spherePath, boxPath = p.pa, p.pb
+		spherePose, boxPose = poseA, poseB
+		box = p.boxB
+	}
+	sphere, okSphere := translatedReplaySphere(*p.sphere, spherePath.from, spherePose)
+	observedBox, okBox := translatedReplayBox(box, boxPath.from, boxPose)
+	if !okSphere || !okBox {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay pose is not an affine translation", ErrUnsupported)
+	}
+	resolution, ok := exactBaseValue(p.request.PointResolution)
+	if !ok {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay point resolution is invalid", ErrUnsupported)
+	}
+	deviation := boxPoseDeviation(box, observedBox, boxPath.delta, f)
+	for i := range 3 {
+		ideal := new(big.Rat).Add(p.sphere.center[i].rat(), new(big.Rat).Mul(spherePath.delta[i].rat(), f))
+		difference := new(big.Rat).Sub(sphere.center[i].rat(), ideal)
+		deviation.Add(deviation, difference.Abs(difference))
+		if i == p.sphereAxis {
+			continue
+		}
+		if dyCmp(dySubScalar(sphere.center[i], sphere.radius), observedBox.lo[i]) <= 0 ||
+			dyCmp(dyAdd(sphere.center[i], sphere.radius), observedBox.hi[i]) >= 0 {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded sphere leaves the certified face corridor", ErrUnsupported)
+		}
+	}
+	if deviation.Cmp(resolution) > 0 {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose exceeds point resolution", ErrUnsupported)
+	}
+	var faceDistance, oppositeDistance dyadic
+	if p.sphereSide == 1 {
+		faceDistance = dySubScalar(sphere.center[p.sphereAxis], observedBox.hi[p.sphereAxis])
+		oppositeDistance = dySubScalar(sphere.center[p.sphereAxis], observedBox.lo[p.sphereAxis])
+	} else {
+		faceDistance = dySubScalar(observedBox.lo[p.sphereAxis], sphere.center[p.sphereAxis])
+		oppositeDistance = dySubScalar(observedBox.hi[p.sphereAxis], sphere.center[p.sphereAxis])
+	}
+	if faceDistance.sign() <= 0 || dyCmp(oppositeDistance, sphere.radius) <= 0 {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded sphere changes the certified face", ErrUnsupported)
+	}
+	observedGap := dySubScalar(faceDistance, sphere.radius).rat()
+	idealGap := new(big.Rat).Add(p.sphereGap.rat(), new(big.Rat).Mul(p.sphereSlope.rat(), f))
+	difference := new(big.Rat).Sub(observedGap, idealGap)
+	if difference.Abs(difference).Cmp(resolution) > 0 || !p.sphereRelationCovered(f, idealGap, observedGap, resolution) {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded sphere changes the certified relation", ErrUnsupported)
+	}
+	return poseA, poseB, nil
+}
+
+func (p *sweepReplayProof) sphereRelationCovered(f, ideal, observed, resolution *big.Rat) bool {
+	switch p.outcome {
+	case SweepClear:
+		return ideal.Sign() > 0 && observed.Sign() > 0
+	case SweepDepartedClear:
+		if f.Sign() == 0 {
+			return ideal.Sign() == 0 && observed.Sign() == 0
+		}
+		return ideal.Sign() > 0 && observed.Sign() > 0
+	case SweepPersistentTouch:
+		return ideal.Sign() == 0 && new(big.Rat).Abs(observed).Cmp(resolution) <= 0
+	case SweepImpactBracket:
+		if p.bracketLo == nil || p.bracketHi == nil {
+			return false
+		}
+		if f.Cmp(p.bracketLo) < 0 && ideal.Sign() <= 0 {
+			return false
+		}
+		if f.Cmp(p.bracketHi) == 0 && ideal.Sign() > 0 {
+			return false
+		}
+		return true
+	default:
+		return false
+	}
 }
 
 func (r *SweepReport) replayFractionCovered(f *big.Rat) bool {
