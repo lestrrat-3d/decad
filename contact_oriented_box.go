@@ -281,7 +281,14 @@ func publishHorizontalPatchOrder(report *ContactReport, base sourceBoxContactPro
 func publishOrientedAxisPatch(report *ContactReport, a, b orientedSourceBox) {
 	var chosen *ContactPoint
 	best := dyZero()
+	_, alignedA := sourceBoxAtPose(report.A, report.PoseA)
+	_, alignedB := sourceBoxAtPose(report.B, report.PoseB)
 	for axis := range 3 {
+		// A horizontal patch against a signed-axis box needs the complete
+		// contained four-point proof above; one interior point cannot replace it.
+		if axis == 2 && (alignedA || alignedB) {
+			continue
+		}
 		for _, sign := range []int{1, -1} {
 			sideA, sideB := 1, 0
 			if sign < 0 {

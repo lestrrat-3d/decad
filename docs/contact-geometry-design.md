@@ -18,8 +18,9 @@ under arbitrary proper read poses by projecting the exact transformed corners
 on all face and edge-cross axes. It publishes a four-point manifold when one
 horizontal rotated box face lies strictly inside an axis-aligned box face.
 Two opposed axis-normal faces can also publish one bounded interior witness
-when one projected face center lies strictly inside the other face. Other
-rotated contacts publish no manifold. A full source
+when one projected face center lies strictly inside the other face. A horizontal
+patch against a signed-axis box still requires the contained four-point proof.
+Other rotated contacts publish no manifold. A full source
 semicircle sphere against a source box also receives an exact rational relation
 proof and a point manifold at one isolated face support. At identity query
 poses, the analytic clearance kernel can certify a relation for other admitted
