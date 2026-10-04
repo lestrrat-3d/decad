@@ -2,6 +2,7 @@ package dynamics
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -10,6 +11,23 @@ import (
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCrossProductErrorEnclosesArmAndNormalBounds(t *testing.T) {
+	arm := [3]*big.Rat{big.NewRat(2, 1), big.NewRat(3, 1), new(big.Rat)}
+	action := [3]*big.Rat{big.NewRat(5, 1), big.NewRat(-7, 1), new(big.Rat)}
+	armError := [3]*big.Rat{big.NewRat(1, 4), big.NewRat(1, 2), new(big.Rat)}
+	normalError := [3]*big.Rat{big.NewRat(1, 10), big.NewRat(1, 5), new(big.Rat)}
+	bound := crossProductError(arm, action, armError, normalError, 2)
+
+	// Both upper arm and normal deviations increase the magnitude of torque.
+	actual := new(big.Rat).Sub(
+		new(big.Rat).Mul(big.NewRat(9, 4), big.NewRat(-36, 5)),
+		new(big.Rat).Mul(big.NewRat(7, 2), big.NewRat(51, 10)))
+	nominal := big.NewRat(-29, 1)
+	deviation := absRat(new(big.Rat).Sub(actual, nominal))
+	require.Zero(t, deviation.Cmp(bound))
+	require.Equal(t, "101/20", bound.RatString())
+}
 
 func conservationBox(t *testing.T, doc *decad.Document, x0, x1 float64) *decad.Body {
 	t.Helper()

@@ -1,6 +1,7 @@
 package dynamics_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -103,14 +104,149 @@ func TestObliqueBoxGeometryIntegration(t *testing.T) {
 	require.InDelta(t, pair.Manifold.Points[0].OnA.Value.Y+0.25, midpoint.Points[0].OnA.Value.Y,
 		midpoint.Points[0].OnA.Bound.Base()+1e-14)
 	w := fixedBoxContactWorld(t, doc, fixed, moving, 0)
+	incoming := dynamics.QuantityVec{X: units.MillimetersPerSecond(-50),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(50)}
+	approach, err := doc.SweepPair(t.Context(), fixed, moving,
+		decad.PoseSegment{From: turn, To: turn, Duration: units.Seconds(0.01)},
+		decad.RigidDriftSegment{From: turn, Center: turn.Apply(r3.Vec{X: 15, Y: 5, Z: 5}),
+			LinearVelocity: incoming, AngularVelocity: zeroAngular(t), Duration: units.Seconds(0.01)},
+		decad.SweepRequest{ContactRequest: contact, TimeResolution: units.Seconds(1e-9),
+			MaxPoseEvaluations: 128, StartPolicy: decad.StopAtInitialContact})
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepInitiallyTouching, approach.Outcome)
+	require.NotNil(t, approach.Event.Manifold)
+	outgoing := dynamics.QuantityVec{X: units.MillimetersPerSecond(50),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(-50)}
+	departure, err := doc.SweepPair(t.Context(), fixed, moving,
+		decad.PoseSegment{From: turn, To: turn, Duration: units.Seconds(0.01)},
+		decad.RigidDriftSegment{From: turn, Center: turn.Apply(r3.Vec{X: 15, Y: 5, Z: 5}),
+			LinearVelocity: outgoing, AngularVelocity: zeroAngular(t), Duration: units.Seconds(0.01)},
+		decad.SweepRequest{ContactRequest: contact, TimeResolution: units.Seconds(1e-9),
+			MaxPoseEvaluations: 128, StartPolicy: decad.ContinueSeparatingTouch})
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepUndecided, departure.Outcome)
+	require.Equal(t, decad.SweepDepartureUnproved, departure.Cause)
+	support, err := doc.SweepPair(t.Context(), fixed, moving,
+		decad.PoseSegment{From: turn, To: turn, Duration: units.Seconds(0.01)},
+		decad.RigidDriftSegment{From: turn, Center: turn.Apply(r3.Vec{X: 15, Y: 5, Z: 5}),
+			LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t), Duration: units.Seconds(0.01)},
+		decad.SweepRequest{ContactRequest: contact, TimeResolution: units.Seconds(1e-9),
+			MaxPoseEvaluations: 128, StartPolicy: decad.ContinueCertifiedTouch})
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepPersistentTouch, support.Outcome, "cause=%v", support.Cause)
 	state, err := w.NewState([]dynamics.BodyState{
 		{Body: fixed, Pose: turn, LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
-		{Body: moving, Pose: turn, LinearVelocity: dynamics.QuantityVec{
-			X: units.MillimetersPerSecond(-50), Y: units.MillimetersPerSecond(0),
-			Z: units.MillimetersPerSecond(50)}, AngularVelocity: zeroAngular(t)},
+		{Body: moving, Pose: turn, LinearVelocity: incoming, AngularVelocity: zeroAngular(t)},
 	})
 	require.NoError(t, err)
 	step, err := w.Step(t.Context(), state, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.01))
-	require.Nil(t, step)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, step.Status, "%+v", step.Diagnostics)
+	require.Len(t, step.Events, 1)
+	require.InDelta(t, math.Sqrt(5000), step.Events[0].NormalImpulse.Base(), 1e-6)
+	require.NotNil(t, step.Conservation)
+	require.InDelta(t, 50, step.Conservation.ContactImpulse.Value.X.Base(), 1e-6)
+	final, ok := step.Next.Body(moving)
+	require.True(t, ok)
+	require.Equal(t, turn, final.Pose)
+	require.Equal(t, zeroVelocity(), final.LinearVelocity)
+	replayed, err := step.Trace.Sample(units.Seconds(0.01))
+	require.NoError(t, err)
+	replayedBox, ok := replayed.Body(moving)
+	require.True(t, ok)
+	require.Equal(t, final.Pose, replayedBox.Pose)
+	require.Equal(t, final.LinearVelocity, replayedBox.LinearVelocity)
+	_, err = step.Trace.Sample(units.Seconds(0.005))
 	require.ErrorIs(t, err, dynamics.ErrUnsupported)
+	repeated, err := w.Step(t.Context(), *step.Next,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.01))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, repeated.Status, "%+v", repeated.Diagnostics)
+	require.Empty(t, repeated.Events)
+	require.Greater(t, step.Conservation.ContactImpulse.Bound.X.Base(), 0.0)
+}
+
+func TestObliqueSupportRefusesUnresolvedMotion(t *testing.T) {
+	doc := decad.New()
+	fixed := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
+	moving := makeBox(t, doc, 10, 0, 20, 10, 0, 10)
+	turn, err := r3.Rotation(r3.Vec{Y: 1}, units.Degrees(45))
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.Vec{Y: 1})
+	require.NoError(t, err)
+	offCenter, err := turn.Then(shift)
+	require.NoError(t, err)
+	incoming := dynamics.QuantityVec{X: units.MillimetersPerSecond(-50),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(50)}
+	for _, fixture := range []struct {
+		name        string
+		pose        r3.Transform
+		velocity    dynamics.QuantityVec
+		restitution float64
+	}{
+		{name: "tangent velocity", pose: turn, velocity: dynamics.QuantityVec{
+			X: incoming.X, Y: units.MillimetersPerSecond(10), Z: incoming.Z}},
+		{name: "off-center face", pose: offCenter, velocity: incoming},
+		{name: "outward rebound", pose: turn, velocity: incoming, restitution: .5},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			w := fixedBoxContactWorld(t, doc, fixed, moving, fixture.restitution)
+			state, stateErr := w.NewState([]dynamics.BodyState{
+				{Body: fixed, Pose: turn, LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+				{Body: moving, Pose: fixture.pose, LinearVelocity: fixture.velocity,
+					AngularVelocity: zeroAngular(t)},
+			})
+			require.NoError(t, stateErr)
+			step, stepErr := w.Step(t.Context(), state,
+				dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.01))
+			require.NoError(t, stepErr)
+			require.Equal(t, dynamics.Undecided, step.Status)
+			require.Nil(t, step.Next)
+		})
+	}
+}
+
+func TestObliqueSupportReverseWorldOrder(t *testing.T) {
+	doc := decad.New()
+	dynamic := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
+	fixed := makeBox(t, doc, 10, 0, 20, 10, 0, 10)
+	turn, err := r3.Rotation(r3.Vec{Y: 1}, units.Degrees(45))
+	require.NoError(t, err)
+	density := units.KilogramsPerCubicMillimeter(.001)
+	material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
+	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{
+			{Body: dynamic, Role: dynamics.Dynamic, Density: &density, Material: material},
+			{Body: fixed, Role: dynamics.Fixed, Material: material},
+		},
+		Step: dynamics.StepConfig{
+			Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+				NormalResolution: units.Radians(1e-6)},
+			TimeResolution: units.Seconds(1e-9), ContactSlop: units.Millimeters(1e-6),
+			VelocityResidual:        units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+			PenetrationResidual:     units.Millimeters(1e-6),
+			ImpactSpeed:             units.MillimetersPerSecond(0),
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2,
+		},
+	})
+	require.NoError(t, err)
+	state, err := w.NewState([]dynamics.BodyState{
+		{Body: dynamic, Pose: turn, LinearVelocity: dynamics.QuantityVec{
+			X: units.MillimetersPerSecond(50), Y: units.MillimetersPerSecond(0),
+			Z: units.MillimetersPerSecond(-50)}, AngularVelocity: zeroAngular(t)},
+		{Body: fixed, Pose: turn, LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), state, dynamics.StepInput{Gravity: zeroAcceleration()},
+		units.Seconds(.01))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, math.Sqrt(5000), report.Events[0].NormalImpulse.Base(), 1e-6)
+	final, ok := report.Next.Body(dynamic)
+	require.True(t, ok)
+	require.Equal(t, zeroVelocity(), final.LinearVelocity)
+	require.InDelta(t, -50, report.Conservation.ContactImpulse.Value.X.Base(), 1e-6)
 }

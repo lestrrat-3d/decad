@@ -390,7 +390,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 			if entry.Pose.ApplyDir(r3.Vec{X: 1}) != (r3.Vec{X: 1}) ||
 				entry.Pose.ApplyDir(r3.Vec{Y: 1}) != (r3.Vec{Y: 1}) ||
 				entry.Pose.ApplyDir(r3.Vec{Z: 1}) != (r3.Vec{Z: 1}) {
-				return nil, fmt.Errorf("%w: rotated poses are not implemented", ErrUnsupported)
+				return w.stepObliqueSupport(ctx, from, kicked, dt)
 			}
 		}
 	}
