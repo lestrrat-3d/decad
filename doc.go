@@ -96,8 +96,8 @@
 //	Union/Cut/Intersect  prism/revolve/loft/faceted,
 //	                     crossings                            builds
 //	  faceted operand coarser than the pair tolerance         ErrUnsupported
-//	  cap-loop chamfer operand (its mesh proves no swept
-//	    volume yet)                                           ErrUnsupported
+//	  cap-loop chamfer operand whose band has a mitered
+//	    circular wall or a reflex corner                      ErrUnsupported
 //	  curved-surface tangent, facets never meet               ErrUnsupported
 //	  exact coplanar / face-on-face / point contact outside
 //	    the admitted analytic prism reduction                 ErrUnsupported

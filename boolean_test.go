@@ -3,6 +3,7 @@ package decad_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"testing"
@@ -687,6 +688,39 @@ func TestBooleanChainsWithinHeldBound(t *testing.T) {
 	requireBodyWatertight(t, twice)
 }
 
+// TestBooleanChainDepthRefusalNamesOperandAndTakesNoTolerance is
+// docs/api-design.md §8's "The chain depth" wording: three hole tools Placed
+// 16 mm down stay on the mesh path (the shared-axis arm excludes a
+// placement), and the third Cut's target holds a mesh bound coarser than the
+// pair's chord tolerance. The refusal names the target, quotes the held
+// bound, says a boolean takes no tolerance, and never tells this caller to
+// retry with one. Shown to fail: with evaluateBoolean's booleanOperandStaging
+// calls removed, the "retry with a tolerance" NotContains assertion went red
+// on the Tessellate caller's wording, which also lacks "cut's target" and
+// "a boolean takes no tolerance".
+func TestBooleanChainDepthRefusalNamesOperandAndTakesNoTolerance(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	plate := boxBody(t, doc, -48, -34, 48, 34, 16)
+	tools := []struct{ cx, r float64 }{{0, 18}, {-36, 7}, {36, 7}}
+	for i, tool := range tools[:2] {
+		var err error
+		plate, err = decad.Cut(t.Context(), plate, translated(t, discBody(t, doc, tool.cx, tool.r, 48), 0, 0, -16))
+		require.NoError(t, err, "cut %d", i+1)
+		require.True(t, anyFaceIsFaceted(plate), "cut %d takes the mesh path", i+1)
+	}
+
+	held := mustTessellate(t, plate, units.Millimeters(1)).Bound()
+	_, err := decad.Cut(t.Context(), plate, translated(t, discBody(t, doc, tools[2].cx, tools[2].r, 48), 0, 0, -16))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	var be *decad.BooleanError
+	require.False(t, errors.As(err, &be), "the chain-depth refusal is a plain ErrUnsupported, not a BooleanError")
+	require.NotContains(t, err.Error(), "retry with a tolerance")
+	require.ErrorContains(t, err, "a boolean takes no tolerance")
+	require.ErrorContains(t, err, "cut's target")
+	require.ErrorContains(t, err, fmt.Sprint(held), "the refusal quotes the target's held mesh bound")
+}
+
 // TestUnionCupOperand pins the operand admission set: booleans tessellate their
 // operands, and tessellation accepts the prism, cup and faceted payload
 // classes, so a Shell-built cup is a first-class operand
@@ -830,23 +864,24 @@ func TestCurvedRimLengthRefuses(t *testing.T) {
 	require.Positive(t, straightAnswered, `the plate's own outline rims are straight`)
 }
 
-func TestUnionOfCapBlendBodiesStagesNotContact(t *testing.T) {
+func TestUnionOfAdmittedCapBlendBodies(t *testing.T) {
 	t.Parallel()
-	// A cap-loop chamfer is a valid solid, but its mesh carries no
-	// occupied-volume proof yet, so a boolean over it is refused BEFORE any
-	// contact is examined. That is a capability/staging limit, not a contact
-	// refusal: it must surface as a plain ErrUnsupported, never a *BooleanError
-	// with BooleanUnsupportedContact.
+	// A line-line cap chamfer carries a zero occupied-volume bound, so a
+	// disjoint union must retain both bodies' exact volume.
 	doc, box := capBlendBox(t)
 	blended, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)
 	other := boxBody(t, doc, 200, 0, 210, 10, 10)
 
-	_, err = decad.Union(t.Context(), blended, other)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	var be *decad.BooleanError
-	require.False(t, errors.As(err, &be),
-		`operand staging is a capability limit, not a BooleanUnsupportedContact`)
+	blendedVolume, err := blended.Volume()
+	require.NoError(t, err)
+	got, err := decad.Union(t.Context(), blended, other)
+	require.NoError(t, err)
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, volumeMM(t, blendedVolume)+1000, volumeMM(t, vol), boundMM3(t, vol)+1e-9)
+	require.Len(t, got.Lumps(), 2)
+	requireBodyWatertight(t, got)
 }
 
 func TestUnionRejectsVertexTangentContact(t *testing.T) {

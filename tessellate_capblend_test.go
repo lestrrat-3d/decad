@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"errors"
 	"math"
 	"strings"
 	"testing"
@@ -363,46 +364,147 @@ func TestTessellateCapBlendPlacedStaysWatertight(t *testing.T) {
 	requireWatertight(t, mesh)
 	require.Positive(t, mesh.Bound().Mag(),
 		`a placed chamfer rounds every coordinate it writes, and says so`)
+	require.True(t, mesh.VolumeVerified(),
+		`placement rounding is charged into the occupied-volume proof, not a reason to withhold it`)
 }
 
-// TestCapBlendMeshIsExportOnly is the increment's boundary: the mesh exists and
-// exports, and every boolean still refuses it, because no proof of the volume
-// it and the body it stands for differ by has been built
-// (docs/tessellation-reach-design.md §7, §9).
-func TestCapBlendMeshIsExportOnly(t *testing.T) {
-	t.Parallel()
-	chamfered := chamferedPlate(t)
-	mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(1))
-	require.NoError(t, err)
-	require.NotEmpty(t, mesh.Triangles())
+// Cap-loop chamfer bodies as boolean operands (docs/tessellation-reach-design.md
+// §7). The mesh publishes the slice-wise occupied-volume proof for a band of
+// whole turns, line-line miters and exactly G1 joins, and every boolean then
+// takes the body as an operand; any other band stays export-only.
+//
+// Each leg of that proof was shown to fail: the term was deleted, the named
+// test went red, and the term was restored.
+//
+//	Mchord trimmed term (productUpper(hTrimUpper, sideSegs))
+//	    TestCapBlendChamferedPinAsTool: the result volume leaves its bound.
+//	Mchord band term (productUpper(dUpper, bandSegs))
+//	    TestCapBlendDiskIntersectBandDominated: the result volume leaves its bound.
+//	cap station enclosure (lm.capMotion[j] in the cap vertex's motion)
+//	    TestCapBlendMeshPublishesVolumeProofForAnAdmittedBand (internal).
+//	side level bound (L.bound) and cap level bound (capBandLevel(...).bound)
+//	    TestCapBlendMeshMotionCarriesEachLevelBound (internal), one assertion each.
+//	exactPrismPointRound (round in the motion)
+//	    TestCapBlendMeshMotionCarriesPlacementRounding (internal).
+//	line-line miter displacement (the bandDelta arm of capBlendCapMotion)
+//	    TestCapBlendMeshMotionCarriesTheMiterDisplacement (internal) and
+//	    TestCapBlendBooleanChargesTheMiterDisplacement: the Cut turns Exact.
+//	admission arms (whole turn, line-line miter, capJoinIsG1)
+//	    TestCapBlendFlangeCutAfterChamfer (whole turn and G1 joins) and
+//	    TestCapBlendBooleanAdmitsPlanarBand (line-line miter) refuse when the
+//	    arm is removed.
 
-	tool := boxBody(t, chamfered.Document(), 10, 10, 30, 30, 40)
+// chamferedPlateVolume is chamferedPlate's own volume: the straight slab plus
+// the integral of the eroded section over the setback.
+const chamferedPlateVolume = 100.0*60.0*(20.0-chamferedPlateSetback) +
+	(6000*chamferedPlateSetback - 320*chamferedPlateSetback*chamferedPlateSetback/2 +
+		4*chamferedPlateSetback*chamferedPlateSetback*chamferedPlateSetback/3)
+
+// planarBandOverlap is the volume chamferedPlate shares with the box
+// x∈[90,110], y∈[20,40], z∈[10,30]: over y's 20 mm, a flat 5 mm strip of the
+// full 10 mm above z = 10, then the band from x = 95 to 100 where the plate's
+// top falls from 20 to 15.
+const planarBandOverlap = 20 * (5*10 + 37.5)
+
+// TestCapBlendBooleanAdmitsPlanarBand composes an all-Plane chamfer with a box
+// crossing its band. Both operands are all-planar and every proof term is
+// zero, so each result is the exact closed form and Exact.
+func TestCapBlendBooleanAdmitsPlanarBand(t *testing.T) {
+	t.Parallel()
+	{
+		chamfered := chamferedPlate(t)
+		mesh, err := chamfered.Tessellate(t.Context(), units.Millimeters(1), decad.WithVerification(decad.VerifyAll))
+		require.NoError(t, err)
+		require.True(t, mesh.VolumeVerified(), `a band of line-line miters publishes its occupied-volume proof`)
+	}
 	for _, tc := range []struct {
 		name string
-		run  func() (*decad.Body, error)
+		want float64
+		run  func(chamfered, tool *decad.Body) (*decad.Body, error)
 	}{
-		{"union", func() (*decad.Body, error) { return decad.Union(t.Context(), chamfered, tool) }},
-		{"cut", func() (*decad.Body, error) { return decad.Cut(t.Context(), chamfered, tool) }},
-		{"intersect", func() (*decad.Body, error) { return decad.Intersect(t.Context(), chamfered, tool) }},
-		{"union as second operand", func() (*decad.Body, error) { return decad.Union(t.Context(), tool, chamfered) }},
+		{"intersect", planarBandOverlap, func(a, b *decad.Body) (*decad.Body, error) { return decad.Intersect(t.Context(), a, b) }},
+		{"cut", chamferedPlateVolume - planarBandOverlap, func(a, b *decad.Body) (*decad.Body, error) { return decad.Cut(t.Context(), a, b) }},
+		{"union", chamferedPlateVolume + 8000 - planarBandOverlap, func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), a, b) }},
+		{"union as second operand", chamferedPlateVolume + 8000 - planarBandOverlap, func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), b, a) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			body, err := tc.run()
-			require.Nil(t, body)
-			require.ErrorIs(t, err, decad.ErrUnsupported)
-			require.ErrorContains(t, err, "no proof of the volume")
+			t.Parallel()
+			chamfered := chamferedPlate(t)
+			tool := boxBodyAtZ(t, chamfered.Document(), 90, 20, 110, 40, 10, 20)
+			got, err := tc.run(chamfered, tool)
+			require.NoError(t, err)
+			vol, err := got.Volume()
+			require.NoError(t, err)
+			require.InDelta(t, tc.want, volumeMM(t, vol), 1e-9)
+			require.Equal(t, decad.Approximate, vol.Exactness)
+			require.Less(t, boundMM3(t, vol), 1e-8)
+			requireBodyWatertight(t, got)
 		})
 	}
+}
+
+// requireCapBlendBooleanRefused asserts every boolean over body refuses it as
+// a staging limit naming its loop and the given cause, never a contact
+// refusal.
+func requireCapBlendBooleanRefused(t *testing.T, build func(*testing.T) *decad.Body, cause string) {
+	t.Helper()
+	for _, tc := range []struct {
+		name string
+		run  func(body, tool *decad.Body) (*decad.Body, error)
+	}{
+		{"union", func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), a, b) }},
+		{"cut", func(a, b *decad.Body) (*decad.Body, error) { return decad.Cut(t.Context(), a, b) }},
+		{"intersect", func(a, b *decad.Body) (*decad.Body, error) { return decad.Intersect(t.Context(), a, b) }},
+		{"tool first", func(a, b *decad.Body) (*decad.Body, error) { return decad.Union(t.Context(), b, a) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			body := build(t)
+			tool := boxBodyAtZ(t, body.Document(), -5, 5, 5, 25, -5, 30)
+			got, err := tc.run(body, tool)
+			require.Nil(t, got)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.ErrorContains(t, err, "no proof of the volume")
+			require.ErrorContains(t, err, "loop 0")
+			require.ErrorContains(t, err, cause)
+			var be *decad.BooleanError
+			require.False(t, errors.As(err, &be), `an operand the proof does not cover is a staging limit, not a contact refusal`)
+		})
+	}
+}
+
+// TestCapBlendBooleanRefusesMiteredBand keeps the bands §7 does not cover out
+// of every boolean: a circular wall at a genuine miter, and a reflex corner.
+func TestCapBlendBooleanRefusesMiteredBand(t *testing.T) {
+	t.Parallel()
+	t.Run("mitered circular wall", func(t *testing.T) {
+		t.Parallel()
+		requireCapBlendBooleanRefused(t, func(t *testing.T) *decad.Body {
+			body := circularSegmentBody(t, 20, 8, 16)
+			chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(1))
+			require.NoError(t, err)
+			return chamfered
+		}, "line-line miter or an exactly tangent join")
+	})
+	t.Run("reflex corner", func(t *testing.T) {
+		t.Parallel()
+		requireCapBlendBooleanRefused(t, func(t *testing.T) *decad.Body {
+			body := reflexLBody(t)
+			chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(3))
+			require.NoError(t, err)
+			return chamfered
+		}, "reflex")
+	})
 }
 
 // TestCapBlendOverlapReadsSuspect pins the Verify half of the same boundary: a
 // pair whose overlap cannot be measured is undecided, never silently sound.
 func TestCapBlendOverlapReadsSuspect(t *testing.T) {
 	t.Parallel()
-	_, box := capBlendBox(t)
-	chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(5))
+	body := circularSegmentBody(t, 20, 8, 16)
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(1))
 	require.NoError(t, err)
-	shift, err := r3.Translation(r3.Vec{X: 20, Y: 10, Z: 0})
+	shift, err := r3.Translation(r3.Vec{X: 5, Y: 2, Z: 0})
 	require.NoError(t, err)
 	overlapping, err := chamfered.PlacedCopy(t.Context(), shift)
 	require.NoError(t, err)
@@ -419,4 +521,157 @@ func TestCapBlendOverlapReadsSuspect(t *testing.T) {
 		`a cap-loop chamfer operand names its own cause, never a tessellation limit it does not have`)
 	require.Empty(t, report.Interferences,
 		`no overlap volume may be published for a pair the boolean refuses`)
+}
+
+// TestCapBlendOverlapIsMeasured is the admitted twin: Verify measures an
+// admitted cap-blend body's overlap with a box and publishes it as an
+// Interference row.
+func TestCapBlendOverlapIsMeasured(t *testing.T) {
+	t.Parallel()
+	chamfered := chamferedPlate(t)
+	tool := boxBodyAtZ(t, chamfered.Document(), 90, 20, 110, 40, 10, 20)
+	report, err := chamfered.Document().Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Interfering, report.Status, `the pair is measured, not left undecided`)
+	require.False(t, hasDiagnostic(report, decad.DiagUnsupportedPairPayload))
+	require.Len(t, report.Interferences, 1)
+	row := report.Interferences[0]
+	require.ElementsMatch(t, []*decad.Body{chamfered, tool}, []*decad.Body{row.A, row.B})
+	require.LessOrEqual(t, math.Abs(volumeMM(t, row.Volume)-planarBandOverlap), boundMM3(t, row.Volume))
+}
+
+// chamferedFlangeBody builds the drilled filleted flange through the public
+// API in one document: a 96×68×16 plate centred at the origin, an analytic
+// Cut of an r18 bore, a 12 mm Fillet of the vertical edges and a 1 mm
+// cap-loop Chamfer on the end cap.
+func chamferedFlangeBody(t *testing.T) (*sketch.World, *decad.Body) {
+	t.Helper()
+	w := sketch.NewWorld()
+	doc := decad.New()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(-48, -34, 48, 34)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	plate, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(16), Dir: decad.Along})
+	require.NoError(t, err)
+	drilled, err := decad.Cut(t.Context(), plate, cylinderAt(t, w, doc, 0, 18))
+	require.NoError(t, err)
+	filleted, err := drilled.Fillet(t.Context(), decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1))), units.Millimeters(12))
+	require.NoError(t, err)
+	chamfered, err := filleted.Chamfer(t.Context(), capLoopEdges(filleted), units.Millimeters(1))
+	require.NoError(t, err)
+	return w, chamfered
+}
+
+// cylinderAt extrudes an r-radius disk centred at (x, 0) symmetrically 32 mm
+// each way, so it spans z ∈ [−32, 32] and neither cap lies in a 16 mm plate's
+// face.
+func cylinderAt(t *testing.T, w *sketch.World, doc *decad.Document, x, r float64) *decad.Body {
+	t.Helper()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	o := s.CreatePoint(x, 0)
+	s.Fix(o)
+	s.CreateCircle(o, r)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(32)})
+	require.NoError(t, err)
+	return body
+}
+
+// TestCapBlendFlangeCutAfterChamfer drills a bolt hole through the finished
+// flange. Its outline joins four lines to four fillet arcs at exactly tangent
+// corners and its bore is a whole turn, so the chamfered flange is an ordinary
+// operand, and the bolt circle clears every band.
+func TestCapBlendFlangeCutAfterChamfer(t *testing.T) {
+	t.Parallel()
+	w, flange := chamferedFlangeBody(t)
+	got, err := decad.Cut(t.Context(), flange, cylinderAt(t, w, flange.Document(), 36, 7))
+	require.NoError(t, err)
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	// 16·(6528 − (4 − π)·144 − 324π) is the drilled filleted slab, 116 + 30π
+	// the chamfer band removes, and 784π the r7 bolt through 16 mm.
+	want := 95116 - 3694*math.Pi
+	bound := boundMM3(t, vol)
+	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), bound)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Positive(t, bound)
+	require.Less(t, bound, 50.0, `a ceiling on the published bound, not a pin`)
+	require.Len(t, got.Faces(), 21)
+	requireBodyWatertight(t, got)
+}
+
+// TestCapBlendChamferedPinAsTool cuts a plate with a chamfered pin. The pin's
+// chamfer sits 16 mm above the plate, so the plate loses a plain cylinder; the
+// pin's trimmed wall runs 63 of its 64 mm, so its chord deficit there is what
+// the proof must charge.
+func TestCapBlendChamferedPinAsTool(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	doc := decad.New()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(-48, -34, 48, 34)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	plate, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(16), Dir: decad.Along})
+	require.NoError(t, err)
+	pin := cylinderAt(t, w, doc, 0, 10)
+	pin, err = pin.Chamfer(t.Context(), capLoopEdges(pin), units.Millimeters(1))
+	require.NoError(t, err)
+
+	got, err := decad.Cut(t.Context(), plate, pin)
+	require.NoError(t, err)
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	want := 104448 - 1600*math.Pi
+	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), boundMM3(t, vol))
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Len(t, got.Faces(), 7)
+}
+
+// TestCapBlendDiskIntersectBandDominated intersects a short chamfered disk
+// with a box enclosing it. The band is 3 mm and the trimmed wall 1 mm, so most
+// of the chording deficit sits in the band, which the proof must charge at
+// the larger of its two radii.
+func TestCapBlendDiskIntersectBandDominated(t *testing.T) {
+	t.Parallel()
+	body := circleProfile(t, 10, 4)
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(3))
+	require.NoError(t, err)
+	box := boxBodyAtZ(t, chamfered.Document(), -20, -20, 20, 20, -5, 15)
+	got, err := decad.Intersect(t.Context(), chamfered, box)
+	require.NoError(t, err)
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	// A 1 mm r10 slab under the frustum from r10 to r7 over 3 mm.
+	want := 100*math.Pi + math.Pi*(1000-343)/3
+	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), boundMM3(t, vol))
+}
+
+// TestCapBlendBooleanChargesTheMiterDisplacement cuts a through pocket in a
+// chamfered hexagon. Its miter feet sit at irrational points, held only within
+// the band's contour displacement, so the result is Approximate rather than an
+// exactness the proof never earned.
+func TestCapBlendBooleanChargesTheMiterDisplacement(t *testing.T) {
+	t.Parallel()
+	doc, hexagon := manySidedPrism(t, 6)
+	chamfered, err := hexagon.Chamfer(t.Context(), capLoopEdges(hexagon), units.Millimeters(2))
+	require.NoError(t, err)
+	before, err := chamfered.Volume()
+	require.NoError(t, err)
+	pocket := boxBodyAtZ(t, doc, -10, -10, 10, 10, -5, 30)
+	got, err := decad.Cut(t.Context(), chamfered, pocket)
+	require.NoError(t, err)
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	want := volumeMM(t, before) - 20*20*filletBoxHeight
+	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), boundMM3(t, vol)+boundMM3(t, before))
 }

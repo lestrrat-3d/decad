@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"math/big"
 
 	"github.com/lestrrat-3d/sketch"
 )
@@ -162,15 +163,14 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *workBudget, pa, 
 		return prismPayload{}, false, err
 	}
 
-	// §3.2's Intersect row, after G5's shift — provably zero once G3 holds
-	// (see prismZShift) — is applied to B's own recorded interval. Each
-	// result endpoint is one operand's own recorded float, so it carries
-	// that operand's own axial displacement; a tie takes the larger of the
-	// two, since both operands' own coordinates then equally denote it.
-	shift := prismZShift(pa, pb)
-	pbZ0, pbZ1 := pb.z0+shift, pb.z1+shift
-	z0, z0Delta := prismIntersectEnd(pa.z0, pa.z0Delta, pbZ0, pb.z0Delta, func(x, y float64) bool { return x > y })
-	z1, z1Delta := prismIntersectEnd(pa.z1, pa.z1Delta, pbZ1, pb.z1Delta, func(x, y float64) bool { return x < y })
+	// §3.2's Intersect row, after G5's exact shift (prismZShift) is applied
+	// to B's own recorded interval. Each result endpoint is A's own recorded
+	// float, or B's shifted endpoint rounded once with that rounding charged
+	// (prismIntersectEnd); a tie takes the larger of the two displacements,
+	// since both operands' own coordinates then equally denote it.
+	pbZ0, pbZ1 := prismShiftedIntervalAdmitted(pa, pb)
+	z0, z0Delta := prismIntersectEnd(pa.z0, pa.z0Delta, pbZ0, pb.z0Delta, func(c int) bool { return c > 0 })
+	z1, z1Delta := prismIntersectEnd(pa.z1, pa.z1Delta, pbZ1, pb.z1Delta, func(c int) bool { return c < 0 })
 
 	// §7/Task 4.4: the record traces to the NESTED operand alone, so only
 	// that operand's own displacement term (now including its own walk
@@ -205,33 +205,45 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *workBudget, pa, 
 // when it takes the target's own interval verbatim. A boundary case (the
 // tool's cap exactly meeting the target's) is a valid span.
 func prismCutZIntervalSpans(target, tool prismPayload) bool {
-	shift := prismZShift(target, tool)
-	return tool.z0+shift <= target.z0 && tool.z1+shift >= target.z1
+	t0, t1 := floatRat(target.z0), floatRat(target.z1)
+	z0, z1, ok := prismShiftedInterval(target, tool)
+	if t0 == nil || t1 == nil || !ok {
+		return false
+	}
+	return z0.Cmp(t0) <= 0 && z1.Cmp(t1) >= 0
 }
 
 // prismIntersectZIntervalOverlaps is G5 for Intersect (§3.2): the two
-// re-expressed intervals must overlap.
+// re-expressed intervals must overlap, compared as exact rationals.
 func prismIntersectZIntervalOverlaps(pa, pb prismPayload) bool {
-	shift := prismZShift(pa, pb)
-	return pa.z0 < pb.z1+shift && pb.z0+shift < pa.z1
+	a0, a1 := floatRat(pa.z0), floatRat(pa.z1)
+	z0, z1, ok := prismShiftedInterval(pa, pb)
+	if a0 == nil || a1 == nil || !ok {
+		return false
+	}
+	return a0.Cmp(z1) < 0 && z0.Cmp(a1) < 0
 }
 
-// prismIntersectEnd picks §3.2's Intersect result at one sweep end: whichever
-// operand's own recorded value the max (z0) or min (z1) selects, carrying
-// THAT operand's own axial displacement for the end — never the max of both,
-// since only one operand's coordinate reaches the result. better(x, y)
-// reports whether x is the value this end selects over y (> for z0's max,
-// < for z1's min); a tie takes the larger displacement, since both operands'
-// own coordinates then equally denote the result.
-func prismIntersectEnd(aVal, aDelta, bVal, bDelta float64, better func(x, y float64) bool) (float64, float64) {
+// prismIntersectEnd picks §3.2's Intersect result at one sweep end over exact
+// rationals, carrying the chosen end's own axial displacement — never the max
+// of both, since only one operand's coordinate reaches the result.
+// pickA(cmp) reports whether A's own endpoint wins given
+// cmp = floatRat(aVal).Cmp(bVal) (cmp > 0 for z0's max, cmp < 0 for z1's
+// min). A tie takes A's float with the larger displacement, since both
+// operands' own coordinates then equally denote the result. When B's SHIFTED
+// endpoint wins it is rounded to the nearest float once and
+// rationalFloatError charges that rounding into the end's axial displacement
+// beside B's own (§7).
+func prismIntersectEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64, pickA func(cmp int) bool) (float64, float64) {
+	cmp := floatRat(aVal).Cmp(bVal) // aVal is a payload level: finite by construction, G5 lifted it already
 	switch {
-	case aVal == bVal:
+	case cmp == 0:
 		return aVal, max(aDelta, bDelta)
-	case better(aVal, bVal):
+	case pickA(cmp):
 		return aVal, aDelta
-	default:
-		return bVal, bDelta
 	}
+	held, _ := bVal.Float64()
+	return held, absSumUpper(bDelta, rationalFloatError(bVal, held))
 }
 
 // prismEntityOrigin is buildPrismScene's own tag map value (§4.1's "tagged, in
@@ -401,66 +413,74 @@ func prismFindLoopMatch(budget *workBudget, profiles []*sketch.Profile, wantOute
 // authenticate it through RecordProfile, and sceneDelta is buildPrismScene's
 // own per-operand §7 walk charge.
 func resolvePrismCut(ctx context.Context, budget *workBudget, target, tool prismPayload, reexpress *prismReexpression) (*sketch.Sketch, *sketch.Profile, prismSceneDelta, bool, error) {
+	s, match, _, delta, resolved, err := resolvePrismCutWithTags(ctx, budget, target, tool, reexpress)
+	return s, match, delta, resolved, err
+}
+
+// resolvePrismCutWithTags also returns the scene's entity-origin map. A
+// stacked result uses it to retain the target's already recorded whole loops
+// while taking only the new tool hole from RecordProfile's authenticated cell.
+func resolvePrismCutWithTags(ctx context.Context, budget *workBudget, target, tool prismPayload, reexpress *prismReexpression) (*sketch.Sketch, *sketch.Profile, map[sketch.Entity]prismEntityOrigin, prismSceneDelta, bool, error) {
 	s, tags, sceneDelta, err := buildPrismScene(budget, target, tool, reexpress)
 	if err != nil {
-		return nil, nil, prismSceneDelta{}, false, err
+		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	if err := budget.err(); err != nil {
-		return nil, nil, prismSceneDelta{}, false, err
+		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	profiles, err := prismProfilesContext(ctx, s.Profiles)
 	if err != nil {
-		return nil, nil, prismSceneDelta{}, false, err
+		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	if err := budget.err(); err != nil {
-		return nil, nil, prismSceneDelta{}, false, err
+		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	if len(profiles) == 0 {
-		return nil, nil, prismSceneDelta{}, false, nil // §4.4: the scene holds no bounded cell at all
+		return nil, nil, nil, prismSceneDelta{}, false, nil // §4.4: the scene holds no bounded cell at all
 	}
 	if target.sectionDelta != 0 || tool.sectionDelta != 0 || !reexpress.identity || sceneDelta.a != 0 || sceneDelta.b != 0 {
 		split, err := prismProfilesHaveSplitBoundary(budget, profiles)
 		if err != nil {
-			return nil, nil, prismSceneDelta{}, false, err
+			return nil, nil, nil, prismSceneDelta{}, false, err
 		}
 		if split {
-			return nil, nil, prismSceneDelta{}, false, nil // §3.4, mirroring Union's own reroute
+			return nil, nil, nil, prismSceneDelta{}, false, nil // §3.4, mirroring Union's own reroute
 		}
 	}
 
 	targetOuter, err := prismLoopEntitySet(budget, tags, false, -1)
 	if err != nil {
-		return nil, nil, prismSceneDelta{}, false, err
+		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	wantHoles := make([]map[sketch.Entity]struct{}, 0, len(target.profile.Holes)+1)
 	for i := range target.profile.Holes {
 		hs, err := prismLoopEntitySet(budget, tags, false, i)
 		if err != nil {
-			return nil, nil, prismSceneDelta{}, false, err
+			return nil, nil, nil, prismSceneDelta{}, false, err
 		}
 		wantHoles = append(wantHoles, hs)
 	}
 	toolOuter, err := prismLoopEntitySet(budget, tags, true, -1)
 	if err != nil {
-		return nil, nil, prismSceneDelta{}, false, err
+		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	wantHoles = append(wantHoles, toolOuter) // the tool's own solid, as one new hole
 
 	match, resolved, err := prismFindLoopMatch(budget, profiles, targetOuter, wantHoles)
 	if err != nil {
-		return nil, nil, prismSceneDelta{}, false, err
+		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	if !resolved {
-		return nil, nil, prismSceneDelta{}, false, nil
+		return nil, nil, nil, prismSceneDelta{}, false, nil
 	}
 	if !match.Valid {
 		// RB1, matching the Union path's own behaviour: a candidate region
 		// the result depends on reports an invalid arrangement. Cut's matched
 		// profile is both its nesting proof and its result, so this one check
 		// covers both claims.
-		return nil, nil, prismSceneDelta{}, false, prismInvalidRegionErr("cut")
+		return nil, nil, nil, prismSceneDelta{}, false, prismInvalidRegionErr("cut")
 	}
-	return s, match, sceneDelta, true, nil
+	return s, match, tags, sceneDelta, true, nil
 }
 
 // resolvePrismIntersect is §4.2's clean-nesting match for Intersect(a, b):

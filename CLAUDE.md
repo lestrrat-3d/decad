@@ -24,18 +24,19 @@ it owns, and names what every other file in the package owns.
 
 | Before writing | Read |
 |---|---|
-| Any file, to find what owns what | `docs/layout.md` — one row per root `.go` file and per design doc |
-| Any public type | `docs/api-design.md`, and every companion design `docs/layout.md`'s "Design documents" table lists |
+| Any file, to find what owns what | `docs/layout.md` — one row per root `.go` file and design doc |
+| Any public type | `docs/api-design.md`, and every companion design listed in `docs/layout.md` |
 | Collision geometry or rigid-body dynamics | `docs/collision-dynamics-design.md` |
 | Evaluator, topology or feature code | `docs/evaluator-design.md` |
-| Tessellation, export or mesh-boolean operand code | `docs/tessellation-design.md` |
+| Tessellation, export or mesh-boolean operands | `docs/tessellation-design.md` |
 | STEP export | `docs/step-export-design.md` |
-| Free-form geometry or per-segment-kind dispatch | `docs/spline-design.md` |
-| Boolean dispatch or recorded-section pair code | `docs/prism-boolean-design.md` |
+| Free-form geometry or per-kind dispatch | `docs/spline-design.md` |
+| `evaluateBoolean` dispatch, `Union`/`Cut`/`Intersect`, or any code combining two recorded sections through a private `sketch` scene | `docs/prism-boolean-design.md` |
 | Any modify op, option codec or modify payload | `docs/modify-design.md`, `docs/modify-reach-design.md` |
+| `stackedPrismPayload`, blind `Cut`, slabs | `docs/stacked-prism-design.md` |
 | Sheet-body, surface-result, patch or stitch code | `docs/surface-design.md` |
 | `Trim`, `Extend` or `Split` code | `docs/surface-intersection-design.md` |
-| Anything the surrounding `.go` file already documents | that file's own doc comments |
+| Anything the surrounding `.go` file documents | its doc comments |
 
 ## Hard rules
 

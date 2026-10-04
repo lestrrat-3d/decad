@@ -898,10 +898,11 @@ admitted coplanar prism pair's overlap outright. Neither emits a
 without naming the move, so the two refusals a modelling caller actually meets
 are stated here concretely.
 
-**The coplanar contact.** `Union` admits co-directional, coplanar straight
-prisms to the analytic reduction (`docs/prism-boolean-design.md`), so their
-overlapping caps build rather than refuse. Every other operation, and every
-`Union` outside that admitted class, stays on the mesh path. There, two bodies
+**The coplanar contact.** The analytic reduction
+(`docs/prism-boolean-design.md`) admits co-directional straight prisms
+sketched on one plane, or on a datum plane and its `CreateOffsetPlane`, to
+`Union`, `Cut` and `Intersect`, so their overlapping caps build rather than
+refuse. Every pair outside that admitted class stays on the mesh path. There, two bodies
 extruded from ONE sketch plane to one end plane have coplanar caps by
 construction, and where their footprints OVERLAP those caps share positive
 area, which is the contact the boolean reads: `BooleanUnsupportedContact`.
@@ -930,7 +931,10 @@ composes from the operation that made it, while §9's chord tolerance for the ne
 pair is a fixed fraction of that pair's diameter. Where the composed bound is the
 coarser of the two, feeding the result back in as an operand is refused before
 any contact is examined — a plain `ErrUnsupported`, not a `BooleanError`, since
-the operand cannot be re-tessellated finer than the boundary it holds. Where the
+the operand cannot be re-tessellated finer than the boundary it holds. The
+refusal names the operand (`Cut`'s target or tool; the first or second operand
+otherwise), quotes its held bound and the pair's chord tolerance, and states
+that a boolean takes no tolerance: there is nothing to retry with. Where the
 held bound stays under that tolerance the result is an ordinary operand and the
 chain continues, so the comparison at each step is what limits a chain, not the
 fact that an operand came out of a boolean. At every step, the result's held

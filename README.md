@@ -1,7 +1,7 @@
 # decad
 
 <p align="center">
-  <img src="docs/images/hero.png" alt="Dimensional DECAD lettering rendered from decad solids against a pale blue-gray background" width="900">
+  <img src="docs/images/hero.gif" alt="DECAD letters assemble on a navy plate, a light sweeps across them, the logo holds, and the letters lift away" width="900">
 </p>
 
 A **headless CAD engine** for Go: the 3D modeling layer above the
@@ -12,23 +12,39 @@ A **headless CAD engine** for Go: the 3D modeling layer above the
 
 ## Why this exists
 
-decad is built to be driven by a **coding agent as a verification step before it
-commits to writing real CAD software code** — an Autodesk Fusion add-in, say.
+When a designer wanted a parametric part, they worked in a CAD app. They drew
+sketches, gave them dimensions, and added features such as extrusions and cuts.
+If a dimension changed, the app rebuilt the part from those steps. The designer
+could inspect the result and adjust the model in the same place. That workflow
+still works.
 
-3D modeling is easy to get subtly wrong: a profile that does not sweep the way
-you expect, a feature that leaves a body non-watertight or self-intersecting, a
-wall thinner than the tool that has to cut it, two components that interfere.
-Discovering that inside Fusion — after the script has run — is expensive.
+Coding agents can now make convincing 3D shapes. Some are good enough for a
+one-off render or print. But if you ask for a bevel gear built to given
+dimensions, a shape that looks like a gear is only the start. Its teeth have
+to mesh with its mate. A fresh request to the agent may also produce different
+geometry. Variation may be fine for a one-off model; it makes a dimensioned
+part hard to reproduce.
 
-So an agent reproduces the part here first and interrogates it programmatically:
+An agent can also write a CAD add-in that creates dimensioned sketches and
+ordered features. The add-in can rebuild the part from the same inputs. The
+agent still has to run it in the CAD app to learn whether a sweep failed,
+whether the body is watertight, or whether two components collide. A change to
+the construction means another run in the app.
 
-* Is the body watertight? Does it self-intersect?
-* What is its volume, its centroid, its bounding box?
-* Do these two bodies collide? Is anything thinner than my end mill?
+With [decad](https://github.com/lestrrat-3d/decad), the agent writes and runs
+that construction in Go before building the CAD add-in. decad builds 3D bodies
+from solved sketches and ordered modeling operations, and can tessellate them
+for rendering. The agent can measure volume and centroid, check whether bodies
+interfere or have enough clearance, and ask whether a wall is too thin for a
+cutting tool. It can change a dimension or feature, run the program again, and
+inspect the new body and verification report. With the program and inputs held
+fixed, **the same model can be rebuilt** without a fresh request to the agent.
 
-Only once the geometry is proven sound does the agent carry the plan into the
-CAD package. Same bet as `sketch`, one dimension up: **be wrong in the cheap
-place, not the expensive one.**
+Those modeling operations correspond to steps a CAD add-in can use. Once the
+decad construction meets the checks the agent has asked for, the agent can
+carry the steps into the CAD app to make an **editable, parametric part**. The CAD
+app may interpret those steps differently, so the agent checks the part it
+builds.
 
 ## What it builds
 
@@ -44,7 +60,10 @@ tessellates.
 | <img src="docs/images/features/shell.png" alt="An open tray: a block with its top face removed and its walls left one thickness" width="320"><br>**Shell** hollows a solid into a wall of one thickness. | <img src="docs/images/features/boolean.png" alt="A flange plate with one large central bore and two smaller bolt holes drilled through it" width="320"><br>**Union, Cut and Intersect** combine two bodies explicitly, never folded into a feature. |
 | <img src="docs/images/features/verify.png" alt="A round pin standing inside a larger bore, clearance visible all the way round" width="320"><br>**Verify** proves the gap between two bodies, so a fit is checked before anything is cut. | <img src="docs/images/features/surface.png" alt="A curved open dish of no thickness, its inner side shaded apart from its outer one" width="320"><br>**Surface result** keeps a feature's swept walls and omits the faces that exist only to close the solid, leaving a sheet body. |
 
-Regenerate every image on this page with `cd _gallery && go run .`.
+Regenerate the still images with `cd _gallery && go run .`. From `_gallery`,
+regenerate the animated hero with `go run . hero > hero-assemble.sh && sh hero-assemble.sh`.
+Its letters assemble, a light crosses them, the finished logo holds for ten
+seconds, and the letters lift away before the loop repeats.
 
 The landing-page clip animates these parts and the wordmark. Render it with
 `cd _gallery && go run . clip > assemble.sh && sh assemble.sh`: the program

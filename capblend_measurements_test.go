@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"strings"
@@ -337,6 +338,10 @@ func TestCapBlendCircularRimVerifyArea(t *testing.T) {
 // needed. The true value is 10.01 mm from what the OLD estimate published;
 // this pins the corrected value AND checks Document.Verify now reads Sound
 // at the default tolerance, the ask's own acceptance criterion.
+//
+// Shown to fail on 2026-10-04: summing every Fourier term in the whole-turn
+// arm (wholeTurnPhaseSum), not only those with k+m == 0, moved centroid X off
+// the axis.
 func TestCapBlendCircularRimCentroidIsClosedForm(t *testing.T) {
 	t.Parallel()
 	const R, H, d = 10.0, 8.0, 0.5
@@ -480,11 +485,11 @@ func TestCapBlendStartCapCentroidMirrorsEndCap(t *testing.T) {
 // of the gear's reflex root corners (the same fixture
 // TestCapBlendApexPatchAreaBoundIsTight uses): before this fix, a body this
 // size (14-21 mm across) published a centroid bound of 17.22 mm — larger
-// than the body itself. The general Cone arm's own bound
-// (conservativeValueError against its structural envelope) is a documented
-// loose term, but it must still be a decisive, order-of-magnitude
-// improvement, never above the old figure (the math.Min ceiling), and it
-// must still ENCLOSE the true centroid.
+// than the body itself. The general Cone arm's own bound is the reach of an
+// exact-rational interval with enclosed phase integrals (phaseSumInterval)
+// from its held midpoint; it must stay below that old figure, never above
+// the geometry-net ceiling (the math.Min ceiling), and it must still ENCLOSE
+// the true centroid.
 func TestCapBlendReflexCornerCentroidBoundIsTight(t *testing.T) {
 	t.Parallel()
 	const ro, ri, h, d = 10.0, 6.0, 6.0, 0.5
@@ -508,7 +513,7 @@ func TestCapBlendReflexCornerCentroidBoundIsTight(t *testing.T) {
 	require.InDelta(t, receiver.Value.Y, centroid.Value.Y, 1.0)
 
 	// Never above the geometry-net ceiling — proven sound regardless of the
-	// general Cone arm's own (documented loose) envelope.
+	// general Cone arm's own reading.
 	bounds, err := chamfered.Bounds()
 	require.NoError(t, err)
 	net := 0.0
@@ -1178,19 +1183,16 @@ func TestCapBlendErosionFamilyVolumeBoundEncloses(t *testing.T) {
 // division site). Composing the two without first scaling the volume term up
 // to flux charged it at a third of its proven size — a shortfall that grows
 // as the setback approaches the section's own inradius, which is exactly the
-// case pinned here (the audited PR-122 wide-sector repro, near the setback
-// limit). Pre-fix (swept charged as a bare volume) this body's published
-// bound was 2383.4693377126996 mm^3; correctly scaled it was
-// 5796.19196853153 mm^3 at the time of that fix.
+// case exercised here (the audited PR-122 wide-sector repro, near the setback
+// limit). The under-scaled composition publishes 2383.4693377126996 mm^3 on
+// this body.
 //
-// It reads 5675.434906518183 mm^3 now: chordLocusResidualAllow feeds this
-// patch's own patchAreaOf(g) result into chordLocusVolumeAllow as areaUpper,
-// and patchAreaOf's Cone arm has since traded its unconditional envelope for
-// a certified interval bracket on the frustum-sector area formula wherever
-// one can be built (capThAllow, capblend_contour.go), so areaUpper is
-// tighter and this term shrinks with it — soundly, since a smaller PROVEN
-// upper bound on the same area still bounds the same swept volume. This test
-// still fails if the term regresses to the under-scaled (pre-PR-122) reading.
+// The test makes two claims. The published bound must stay above that
+// under-scaled reading (the floor), and it must still enclose the residual
+// against the sector's erosion-family reference (the enclosure). It pins no
+// bound value: the reading moves whenever a term inside it tightens soundly.
+// Shown to fail on 2026-10-04: a pinned bound value here went red once the
+// Cone patch's trig terms were enclosed, which is why none is asserted.
 func TestCapBlendChordLocusVolumeAllowScalesSweptTermToFlux(t *testing.T) {
 	t.Parallel()
 	body := circularSectorBody(t, 10, 2.7, 4.953329)
@@ -1203,8 +1205,6 @@ func TestCapBlendChordLocusVolumeAllowScalesSweptTermToFlux(t *testing.T) {
 	require.Greater(t, vol.Bound.Mag(), preFixBound,
 		`the published bound (%v mm^3) must exceed the pre-fix under-scaled reading (%v mm^3): the swept-volume term must be scaled to flux before capBandVolume's own /3, not composed as a bare volume`,
 		vol.Bound.Mag(), preFixBound)
-	require.InDelta(t, 5675.434906518183, vol.Bound.Mag(), 0.01,
-		`the published bound (%v mm^3) must match the correctly-scaled reading`, vol.Bound.Mag())
 
 	erosion := sectorErosionVolume(10, 2.7, 4.953329, 4.928686)
 	residual := math.Abs(vol.Value.Mag() - erosion)
@@ -1218,10 +1218,18 @@ func TestCapBlendChordLocusVolumeAllowScalesSweptTermToFlux(t *testing.T) {
 // a straight wall and a circular wall is tangential.
 func roundedRectBody(t *testing.T, l, w, h, r float64) *decad.Body {
 	t.Helper()
+	return roundedRectBodyAt(t, 0, 0, l, w, h, r)
+}
+
+// roundedRectBodyAt is roundedRectBody with the rectangle's lower-left corner
+// drawn at (x0, y0) on the sketch plane, so every fillet's arc centre sits at
+// a chosen distance from the plane-local origin.
+func roundedRectBodyAt(t *testing.T, x0, y0, l, w, h, r float64) *decad.Body {
+	t.Helper()
 	sk := sketch.NewWorld()
 	s, err := sk.CreateSketch(sk.XY())
 	require.NoError(t, err)
-	rect := s.CreateRectangle(0, 0, l, w)
+	rect := s.CreateRectangle(x0, y0, x0+l, y0+w)
 	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
@@ -1327,18 +1335,14 @@ func TestCapBlendTangentJunctionVolumeUnaffected(t *testing.T) {
 // PR-122 audit reproductions defect-3 fixed: a shape whose every circular
 // wall meets its neighbour tangentially (so the two directrices share one
 // window, `chordLocusResidualAllow` contributes nothing, and the ONLY thing
-// left in play is the arithmetic-rounding envelope itself), and the
-// cornerless whole-turn circle. `patchRawFlux`'s poly/cross terms used to
-// read the absolute plane-local levels z0, z1 rather than the band's own z
-// origin, which left the published Bound scale with those absolute levels
-// instead of the band's own small axial extent — a restructure sound enough
-// to still enclose the residual (Bound only ever WIDENS, never wrongly
-// shrinks) but far looser than it needs to be on a body that never asked for
-// the cap-loop chamfer's own general non-tangent-miter machinery at all. The
-// ceilings below are well above the measured value (so ordinary arithmetic
-// reordering cannot flake this) and well below the values a bound regressed
-// back to reading the absolute levels would publish (audited at
-// 28386.2821001117 and 1.450768679e-08 respectively).
+// left in play is the arithmetic of each patch's own flux), and the
+// cornerless whole-turn circle. On the tangent-fillet plate every Cone
+// patch's trig terms are enclosed (conePatchFluxInterval), so the published
+// volume bound must sit at rounding level. On the whole-turn circle the bound
+// must stay below a ceiling that a bound read off the absolute plane-local
+// levels z0, z1, rather than the band's own z origin, exceeds. Both ceilings
+// sit well above the measured value, so ordinary arithmetic reordering cannot
+// flake either subtest.
 func TestCapBlendTangentJunctionAndWholeTurnBoundsStayTight(t *testing.T) {
 	t.Parallel()
 	t.Run(`tangent-fillet plate`, func(t *testing.T) {
@@ -1348,8 +1352,8 @@ func TestCapBlendTangentJunctionAndWholeTurnBoundsStayTight(t *testing.T) {
 		require.NoError(t, err)
 		vol, err := chamfered.Volume()
 		require.NoError(t, err)
-		require.Less(t, vol.Bound.Mag(), 20000.0,
-			`the tangent-junction bound (%v mm^3) must stay close to the pre-PR-122 reading (15600.0000000006 mm^3), not the audited regression (28386.2821001117 mm^3)`,
+		require.Less(t, vol.Bound.Mag(), 1e-8,
+			`the tangent-junction bound (%v mm^3) must sit at rounding level: every Cone patch's trig terms are enclosed and nothing else is in play on a tangent join`,
 			vol.Bound.Mag())
 	})
 
@@ -1362,6 +1366,132 @@ func TestCapBlendTangentJunctionAndWholeTurnBoundsStayTight(t *testing.T) {
 		require.Less(t, vol.Bound.Mag(), 5e-9,
 			`the whole-turn bound (%v mm^3) must stay close to the pre-PR-122 reading (2.743387239e-09 mm^3), not the audited regression (1.450768679e-08 mm^3)`,
 			vol.Bound.Mag())
+	})
+}
+
+// filletedPlateChamfer is the 96x68x16 plate filleted at 12 mm, drawn with
+// its lower-left corner at (x0, y0), and cap-loop chamfered at setback d:
+// every circular wall is a quarter turn meeting its straight neighbours
+// tangentially, so each band carries four partial-turn Cone patches.
+func filletedPlateChamfer(t *testing.T, x0, y0, d float64) *decad.Body {
+	t.Helper()
+	body := roundedRectBodyAt(t, x0, y0, 96, 68, 16, 12)
+	chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(d))
+	require.NoError(t, err)
+	return chamfered
+}
+
+// TestCapBlendFilletedPlateReadsSound is the cap-loop chamfer on a plate
+// whose circular walls are all partial turns. Each Cone patch's volume flux
+// and first moments are read through certified trig enclosures, so the
+// published bounds sit at rounding level, far below the material the chamfer
+// removes (about 38 mm^3 at d = 0.5), and Document.Verify reads Sound. The
+// translated rows draw the same plate a thousand millimetres from the sketch
+// origin: a bound that grows with the arc centres' distance from the
+// plane-local origin is a magnitude envelope, not the enclosure, and blows
+// through the ceilings there. Every message names the corner, so such a
+// regression is identified from the failure text.
+//
+// Shown to fail on 2026-10-04:
+//   - holding poly alone (dropping the trig terms) in the enclosure arm failed
+//     the volume against the erosion closed form on every row;
+//   - adding the magnitude envelope back into the enclosure arm failed the
+//     volume ceiling on every row, the translated d=0.5 one at about
+//     4e4 mm^3.
+func TestCapBlendFilletedPlateReadsSound(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		x0, y0, d float64
+	}{
+		{-48, -34, 0.125},
+		{-48, -34, 0.5},
+		{-48, -34, 2},
+		{952, 966, 0.5},
+		{952, 966, 2},
+	} {
+		name := fmt.Sprintf(`corner (%g, %g) d=%g`, tc.x0, tc.y0, tc.d)
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			chamfered := filletedPlateChamfer(t, tc.x0, tc.y0, tc.d)
+
+			vol, err := chamfered.Volume()
+			require.NoError(t, err)
+			require.Equal(t, decad.Approximate, vol.Exactness,
+				`%s: a band carrying a Cone patch must read Approximate`, name)
+			require.Greater(t, vol.Bound.Mag(), 0.0,
+				`%s: the volume bound must be positive`, name)
+			require.LessOrEqual(t, vol.Bound.Mag(), 1e-8,
+				`%s: the volume bound (%v mm^3) must sit at rounding level`, name, vol.Bound.Mag())
+			want := roundedRectErosionVolume(96, 68, 16, 12, tc.d)
+			require.InDelta(t, want, vol.Value.Mag(), 1e-7,
+				`%s: the volume must match the erosion-family closed form`, name)
+
+			centroid, err := chamfered.Centroid()
+			require.NoError(t, err)
+			require.LessOrEqual(t, centroid.Bound.Mag(), 1e-8,
+				`%s: the centroid bound (%v mm) must sit at rounding level`, name, centroid.Bound.Mag())
+
+			report, err := chamfered.Document().Verify(t.Context())
+			require.NoError(t, err)
+			require.Equal(t, decad.Sound, report.Status,
+				`%s: the document must read Sound at the default tolerance: %+v`, name, report.Diagnostics)
+			require.True(t, report.Passed(), `%s: Verify must pass`, name)
+		})
+	}
+}
+
+// TestCapBlendFilletedPlateCentroidIsClosedForm checks the filleted plate's
+// chamfered centroid against the erosion family's own closed form: the
+// section is symmetric about the rectangle's centre at every depth, so X and Y
+// sit there, and Z follows from integrating the eroded section's area
+// A(t) = a0 + a1·t + a2·t² over the band. X and Y exercise the Cone patches'
+// in-plane coefficients by cancellation to the centre; Z exercises the axial
+// ones by value. The whole-turn subtest holds the exact-rational whole-turn
+// arm to a rounding-level centroid bound.
+//
+// Shown to fail on 2026-10-04: dropping the sine half of every phase
+// enclosure in phaseSumInterval moved centroid Y off the rectangle's centre
+// on the translated row, and changing one integer in a Z coefficient moved
+// centroid Z off the closed form on both rows.
+func TestCapBlendFilletedPlateCentroidIsClosedForm(t *testing.T) {
+	t.Parallel()
+	const l, w, h, r, d = 96.0, 68.0, 16.0, 12.0, 0.5
+	closedFormCz := func() float64 {
+		// A slab of area a0 over [0, h-d], then the eroded section at depth t,
+		// A(t) = a0 + a1·t + a2·t², over [h-d, h].
+		a0 := l*w - (4-math.Pi)*r*r
+		a1 := -2*(l+w) + 2*(4-math.Pi)*r
+		a2 := math.Pi
+		intA := a0*d + a1*d*d/2 + a2*d*d*d/3
+		intTA := a0*d*d/2 + a1*d*d*d/3 + a2*d*d*d*d/4
+		hs := h - d
+		v := a0*hs + intA
+		mz := a0*hs*hs/2 + hs*intA + intTA
+		return mz / v
+	}
+	for _, tc := range []struct{ x0, y0 float64 }{{-48, -34}, {952, 966}} {
+		name := fmt.Sprintf(`corner (%g, %g)`, tc.x0, tc.y0)
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			chamfered := filletedPlateChamfer(t, tc.x0, tc.y0, d)
+			centroid, err := chamfered.Centroid()
+			require.NoError(t, err)
+			require.InDelta(t, tc.x0+l/2, centroid.Value.X, 1e-9, `%s: centroid X`, name)
+			require.InDelta(t, tc.y0+w/2, centroid.Value.Y, 1e-9, `%s: centroid Y`, name)
+			require.InDelta(t, closedFormCz(), centroid.Value.Z, 1e-9, `%s: centroid Z`, name)
+		})
+	}
+
+	t.Run(`whole-turn circle`, func(t *testing.T) {
+		t.Parallel()
+		body := circleProfile(t, 10, 8)
+		chamfered, err := body.Chamfer(t.Context(), capLoopEdges(body), units.Millimeters(0.5))
+		require.NoError(t, err)
+		centroid, err := chamfered.Centroid()
+		require.NoError(t, err)
+		require.LessOrEqual(t, centroid.Bound.Mag(), 1e-9,
+			`the whole-turn centroid bound (%v mm) must sit at rounding level: its sum is an exact rational`,
+			centroid.Bound.Mag())
 	})
 }
 

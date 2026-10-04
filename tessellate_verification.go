@@ -98,8 +98,9 @@ func (m *Mesh) BoundaryVerified() bool { return m.boundaryOK }
 //
 // It is false below [VerifyAll], where that proof never ran, and false at
 // [VerifyAll] too for a body whose payload class publishes no occupied-volume
-// proof at all — a cap-loop chamfer, a sheet, or a stitched body whose
-// vertices are not proven exact. A false reading is the proof's ABSENCE, never
+// proof at all — a cap-loop chamfer whose band has a mitered circular wall or
+// a reflex corner, a sheet, or a stitched body whose vertices are not proven
+// exact. A false reading is the proof's ABSENCE, never
 // a bound of zero: a zero would be the claim that the mesh occupies exactly
 // the denoted volume.
 func (m *Mesh) VolumeVerified() bool { return m.symDiffOK }

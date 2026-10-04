@@ -65,17 +65,15 @@ func wordmarkTake(ctx context.Context, ch *Channels) (*Take, error) {
 		if err != nil {
 			return nil, fmt.Errorf("letter %d: %w", i, err)
 		}
-		for j, shape := range l.shapes {
-			body, err := letterBody(ctx, shape, l.chamferCap)
-			if err != nil {
-				return nil, fmt.Errorf("letter %d shape %d: %w", i, j, err)
-			}
-			name := "letter." + strconv.Itoa(i) + "." + strconv.Itoa(j)
-			if err := scene.AddPart(name, node, body); err != nil {
-				return nil, err
-			}
-			parts[name] = matte(l.color)
+		body, err := letterBody(ctx, l.loops, l.chamferCap)
+		if err != nil {
+			return nil, fmt.Errorf("letter %d: %w", i, err)
 		}
+		name := "letter." + strconv.Itoa(i) + ".0"
+		if err := scene.AddPart(name, node, body); err != nil {
+			return nil, err
+		}
+		parts[name] = matte(l.color)
 	}
 
 	peg, err := heroPeg(ctx)

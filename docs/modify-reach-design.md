@@ -132,7 +132,7 @@ more specific SX row replaces that base refusal.
 | **SX11** | inward closed/side-opening prism shell leaves axial cavity height `h - k*t <= 0`, where `k` is kept cap count; or section cavity is empty | no cavity | `ErrDegenerate` |
 | **SX12** | cap chamfer ruled patches intersect away from shared boundaries or cannot be certified disjoint | body exists under trim kernel | `ErrUnsupported` |
 | **SX13** | a cap-loop chamfer whose setback rounds away against the level it displaces: the cap contour's offset radius rounds back onto a circular wall's own radius (`R -/+ d == R`), or the band's side level rounds back onto its own cap level (`z1 - d == z1` on the end cap, `z0 + d == z0` on the start cap) | body exists; its taper is real but finer than float64 names at that radius or at that sweep level, so the band's patches cannot be told from a cylinder or from the cap plane | `ErrUnsupported` |
-| **SX14** | a cap-loop chamfer whose denoted contour corner cannot be enclosed: the two offset carriers' interval intersection is unbounded, or the exact carriers do not meet where the float solve found a root | body exists; its offset corner is real and this evaluator cannot state where it is, so no cap-level coordinate there can publish a proven displacement | `ErrUnsupported` |
+| **SX14** | a cap-loop chamfer whose denoted contour corner cannot be enclosed: the two offset carriers' interval intersection is unbounded, or the exact carriers do not meet where the float solve found a root. A G1 join (modify §7's dead-zone rule) intersects no carriers — its corner is the shared-normal foot, enclosed as a reflex corner's feet are — so SX14 never fires on one | body exists; its offset corner is real and this evaluator cannot state where it is, so no cap-level coordinate there can publish a proven displacement | `ErrUnsupported` |
 | **SX15** | a cap-loop chamfer whose band patch's outward orientation cannot be certified: the patch's own `Face.NormalAt` refuses at the build's orientation sample point | body exists and its patches are real; the evaluator cannot evaluate its own orientation sample on this patch, so it cannot state which side of the patch is outward | `ErrUnsupported` |
 
 Gate order:
@@ -428,7 +428,11 @@ window and the narrow (cap) one, and the ruled patch's own point-for-point
 departure from the wide cone is bounded in closed form from the two windows'
 angular skew; `chordLocusVolumeAllow` composes both terms into one proven
 volume bound. The residual, and its bound, are exactly zero wherever the two
-windows already coincide: a tangent join, an apex patch, and a whole turn.
+windows already coincide: a tangent join, an apex patch, and a whole turn. A
+tangent join is modify §7's G1 row: its cap-level foot is `v + dc·n̂` and its
+ruling runs from `v` to that foot, so the ruling IS the denoted corner locus
+`v + s·dc·n̂` — affine in `s`, exactly as a reflex foot is — and the two windows
+coincide because the foot sits on the circular wall's own radial through `v`.
 
 That residual is not only a quantity: it is a difference of KIND. A straight
 ruled surface between two arcs sweeping different windows has negative
@@ -516,9 +520,10 @@ term:
   covers the chord-versus-locus excess beside its own arithmetic. The excess
   is ONE-SIDED — a chord never exceeds the curve it subtends — so the term
   only ever widens the bound upward, never the reported value, and it is
-  exactly zero at a line-line miter and at every reflex foot, because both
-  loci are affine in the offset amount there (a reflex foot rides one wall's
-  own offset carrier alone, whatever that wall's kind). A corner whose locus
+  exactly zero at a line-line miter, at every reflex foot and at every G1
+  join, because the locus is affine in the offset amount there (a reflex foot
+  rides one wall's own offset carrier alone, whatever that wall's kind, and a
+  G1 join's foot is `v + s·dc·n̂` by construction). A corner whose locus
   enclosure this evaluator cannot build refuses through `ErrUnsupported`
   rather than publish an understated bound — the same rule `Edge.Length`'s own
   doc comment (`topology.go`) already states for a boolean rim on a curved
@@ -564,6 +569,18 @@ over each trimmed patch. Parameter domains are line/circle intervals, tube
 angles, and spherical normal polygons; all integrands reduce to polynomials and
 trigonometric endpoint terms. NEVER use quadrature to claim Exact.
 
+A trigonometric endpoint term is ENCLOSED, never trusted from `math`. A `Cone`
+patch's volume flux and first moments are evaluated over exact rationals with
+the sine and cosine of each held float angle read through the certified radian
+enclosure (`normal_bound.go`'s `radSinCosInterval`, `moments_trig.go`'s series
+underneath it), so the published bound is the enclosure's reach from the held
+value — the same `intervalFloatError` discipline every certified circular
+bracket already publishes — and it neither grows with the arc centre's
+distance from the plane-local origin nor with the term's own magnitude. The
+magnitude envelope (`conservativeValueError`) stands only where no enclosure
+can be built: a non-finite coordinate. A `Cone` patch is never `Exact`: the
+enclosure always has width, and that width is the bound.
+
 Compute bounds from patch boundary extrema plus interior stationary points.
 An unisolated stationary family is `ErrUnsupported` at build, not a loose Exact
 box.
@@ -584,7 +601,13 @@ outward-rounded square roots, and report the enclosure's greatest reach from the
 float point the build holds. Interval arithmetic is inclusion-monotonic, so the
 box holds the denoted point whatever the platform's `sqrt` and `hypot` did, and
 nothing in the derivation assumes an ulp contract. Where no bounded box exists
-the call is SX14.
+the call is SX14. A G1 join's corner is not a carrier intersection: its
+denoted point is `v + dc·n̂` for the leaving wall's exact unit normal, and the
+enclosure is the hull of the two shared-normal feet (the arriving wall's and
+the leaving wall's, the same enclosure a reflex corner's two feet take), read
+against the held foot. The hull is what charges the dead zone: the two normals
+differ by at most the classification's own `|cross|`, so a join classified G1
+with a residual turn is displaced by at most what the hull spans.
 
 The readings that carry it: every cap-level vertex `bound`; every cap-level
 edge length — the corner-to-apex slants, a wall's own cap edge, a reflex
@@ -678,11 +701,14 @@ flat `Plane` patch's own first moment is exact rational, the same
 `(x_a²+x_b²+x_c²+x_a·x_b+x_b·x_c+x_c·x_a)/24` triangle identity one degree
 higher than the tetrahedron identity the volume uses; a `Cone`/apex/
 whole-turn patch's is a closed-form Fourier sum over a finite set of phases
-`k·θS+m·θC` (`|k|+|m| <= 3`), bounded by the SAME structural-envelope
-discipline (`|cos|`, `|sin|`, `|sincHalf|` never exceed 1) the volume's own
-cross term already uses, with the whole-turn window collapsing to two terms
-computed with no trigonometric call at all — the moment's own analogue of the
-volume's zero-valued eccentric origin term there. The centroid divides the
+`k·θS+m·θC` (`|k|+|m| <= 3`) whose coefficients are exact rationals in the
+patch's own held floats, each phase's integral `cos(mid)·sinc(width/2)` (and
+the sine analogue) enclosed through the same certified radian enclosure the
+volume's own eccentric origin term and ruled cross term take, so the bound is
+the enclosure's reach from the held value and never a magnitude envelope of
+the coefficients; the whole-turn window collapses to the `k+m = 0` terms,
+exact rationals with no trigonometric enclosure at all — the moment's own
+analogue of the volume's zero-valued eccentric origin term there. The centroid divides the
 summed first moment by the body's own volume and lifts the plane-local
 quotient to world through the same frame/placement lift a prism centroid
 uses, with the geometric safety-net bound (the true centroid lies within the
@@ -694,38 +720,24 @@ answer, never the whole bound.
 ### 9.1 `stackedPrismPayload`
 
 General prism shells are a finite axial stack of exact line/arc regions. One
-axial slab may contain several disconnected regions:
-
-```go
-type prismSlab struct {
-    Regions []ProfileRecord
-    Z0, Z1  float64 // evaluator coordinates, not public measurements
-}
-
-type prismSlabInterface struct {
-    Shared       []ProfileRecord // material on both sides; cancelled
-    LowerExposed []ProfileRecord // outward normal points toward +Z
-    UpperExposed []ProfileRecord // outward normal points toward -Z
-}
-
-type stackedPrismPayload struct {
-    Slabs      []prismSlab
-    Interfaces []prismSlabInterface // exactly len(Slabs)-1
-    Frame      r3.Frame
-    Xform      r3.Transform
-}
-```
+axial slab may contain several disconnected regions. `docs/stacked-prism-design.md`
+owns the payload: its record (`prismSlab`, `prismSlabInterface`,
+`stackedPrismPayload`), its invariants, its body build, its measurements, its
+tessellation and what every consumer does with it. The analytic blind `Cut`
+builds it today, over slabs of one region each and interfaces whose exposed
+material is each exclusive hole's own interior. The rules below are the shell
+cases this section adds on top of that record.
 
 Slab intervals are ordered, have positive height, and have disjoint interiors.
 Consecutive intervals meet at exactly one axial plane. Region interiors within
 one slab are pairwise disjoint. Material is the union of every region prism.
 
-This payload is evaluator-private and is built only from the shell cases in
-this section. At each shared plane, the shell construction records a certified
-partition into coincident material, exposed lower material, and exposed upper
-material. Every region on the narrower side is proven contained in its paired
-region on the wider side; any relation outside that subset/equality form is
-SX8. The payload builder therefore does not hide a general planar Boolean.
+At each shared plane, the shell construction records a certified partition into
+exposed lower material and exposed upper material; the material on both sides
+is the narrower region itself and is not stored. Every region on the narrower
+side is proven contained in its paired region on the wider side; any relation
+outside that subset/equality form is SX8. The payload builder therefore does
+not hide a general planar Boolean.
 
 Builder rules:
 
@@ -914,8 +926,8 @@ reaches only the analytic bodies at the start of a chain.
 |---|---|---|---|---|
 | **DX1** | mass properties / bounds | existing bounded path | bounded analytic patch integrals | bounded slab-region sums |
 | **DX2** | topology / structural Verify | existing builder | payload builder | slab-region union builder |
-| **DX3** | `Tessellate` / STL / OBJ | waits on revolve tessellator; feature itself still builds | patch tessellator, export-only: one count per wall walk shared by the side wall, the band patch and the cap contour (`docs/tessellation-reach-design.md` §7) | required slab-region tessellator |
-| **DX4** | mesh boolean | available once DX3 exists | available once DX3's occupied-volume proof lands (`docs/tessellation-reach-design.md` §7); export-only tessellation does not admit it | available once DX3 exists |
+| **DX3** | `Tessellate` / STL / OBJ | waits on revolve tessellator; feature itself still builds | patch tessellator: one count per wall walk shared by the side wall, the band patch and the cap contour (`docs/tessellation-reach-design.md` §7) | required slab-region tessellator |
+| **DX4** | mesh boolean | available once DX3 exists | admitted for a band whose every corner is a line-line miter or an exactly G1 join, or a whole turn (`docs/tessellation-reach-design.md` §7); a circular wall at a genuine miter or a reflex corner stays `ErrUnsupported` | available once DX3 exists |
 | **DX5** | `ThroughAll` directional extent | existing | analytic patch extrema, published beside the displacement a computed cap contour and the inherited axial levels give them (§8.4), and beside the frame, placement and endpoint-summation rounding every extent reading of this payload carries (evaluator §5); the stop charges that displacement to the level it resolves and refuses only where it straddles the sketch plane (evaluator §5) | union of slab-region extents |
 | **DX6** | clearance | existing revolve boundary reader | add trimmed patch faces to boundary model; undecidable cells stay `Suspect`; staged for the cap-loop chamfer, whose pairs read `Suspect` unless boxes already decide them | union exposed slab faces; never include cancelled interfaces |
 | **DX7** | undercut | existing revolve survey | bounded normal ranges per patch, each widened by the whole distance its own `Face.NormalAt` readings can sit from the patch's exactly enclosed normal model and by that patch's own proven departure from the surface it publishes (§8.3), a circular patch's window read through a proven enclosure rather than a float evaluation; a proven opposing point lists its patch, and a remaining straddle is undecided without removing another proven listing. The receiver's own unchanged walls and caps are not patches, and are read through the SAME three-valued rule, with the same undecided outcome — no reader may treat the receiver half as exempt | exact normal ranges per exposed face |
@@ -943,9 +955,10 @@ disagree is not watertight, and a mesh that is not watertight is a wrong answer
 rather than a coarse one. The tessellator answers that with ONE count per wall
 walk, shared by the side wall, the band patch and the cap contour, and charges
 each patch its own positional departure; the design is
-`docs/tessellation-reach-design.md` §7. DX4 stays refused on top of it: that
-mesh carries no occupied-volume proof, so it serves export while every boolean
-refuses the operand.
+`docs/tessellation-reach-design.md` §7. DX4 reads that mesh's occupied-volume
+proof where §7 states one — a band of line-line miters, exactly G1 joins and
+whole turns — and every boolean refuses the operand for any other band, which
+serves export alone.
 
 The chamfer's DX6 reading is `Suspect` for any pair its bounding boxes do not
 already decide, which is the same staging the cup payload took before its own
@@ -1076,6 +1089,15 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
   with a zero bound, and a band carrying a `Cone` patch reports `Approximate`;
 - the centroid bound encloses the true centroid, tested on a box far wider than
   it is tall — the shape whose farthest corner is neither `Min` nor `Max`;
+- a cap-loop chamfer on a tangent-filleted plate (every circular wall a
+  partial turn) reads `Sound` under `Document.Verify` at the default tolerance,
+  with a volume bound and a centroid bound orders below the material the
+  chamfer removed, drawn at the sketch origin and drawn a thousand millimetres
+  from it alike — a bound that grows with the arc centres' distance from the
+  plane-local origin is the magnitude envelope, not the enclosure;
+- the same plate's centroid matches the erosion family's own closed form, and
+  a `Cone` patch's exact-rational Fourier coefficients agree with their float
+  reference term by term;
 - bounded mass properties from independent closed forms;
 - shared-curve tessellation is watertight and bound `<= tol`;
 - selected/unselected hole loops retain correct nesting.
@@ -1115,7 +1137,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 | **B** | revolve junction rewrite + roles + surveys | cap loops; shell reach; DX3 until revolve tessellation lands |
 | **C** | multi-region `stackedPrismPayload`; migrate cups; lift base S12 through BX8; closed + side-opening prism shell; tessellation/clearance cases | cap loops; revolve shell |
 | **D** | full/partial allowed revolve shell | cap loops |
-| **E** | `capBlendPayload`; complete cap-loop chamfer; analytic integrals | complete cap-loop fillet; DX4 mesh-boolean admission; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
+| **E** | `capBlendPayload`; complete cap-loop chamfer; analytic integrals | complete cap-loop fillet; DX4 admission for a mitered circular wall or a reflex corner; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
 
 Each PR lands its result payload, structural topology, measurement path, and
 tests together. A PR may leave a DX question staged only where

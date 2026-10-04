@@ -4,8 +4,8 @@ github.com/lestrrat-3d/sketch v0.0.0-20260924052631-80849197f03e h1:+6uEyGA1AyZe
 github.com/lestrrat-3d/sketch v0.0.0-20260924052631-80849197f03e/go.mod h1:yU8fsrfp5gVwwjxD96OCgw/2R25SW4Smuz+U7iBWzT0=
 github.com/lestrrat-3d/step v0.0.0-20260925014215-3a441f17e51d h1:7r+Z9nytgyZbSzzXneAYI1oHWxxzUQDBCxlfpBWBlq8=
 github.com/lestrrat-3d/step v0.0.0-20260925014215-3a441f17e51d/go.mod h1:nMsIrTyreFVw9yx+QBFwOeoezGq8Hg8jF57UWiZzdwI=
-github.com/lestrrat-3d/units v0.0.0-20261004064137-6b11ec45b1db h1:eoPqhLHHf9gHOhOaTOVuqi0v/xV81CoTQIU5QBSElfw=
-github.com/lestrrat-3d/units v0.0.0-20261004064137-6b11ec45b1db/go.mod h1:049S7/d4khzJzx2wwbevu2vISiJ1xVxXDotMgCN6osY=
+github.com/lestrrat-3d/units v0.0.0-20261004093422-d87a1107e4c9 h1:Om6bJS1HnKe0OdlV7d63Yq5d8pCFQttadb4vkBoK2qg=
+github.com/lestrrat-3d/units v0.0.0-20261004093422-d87a1107e4c9/go.mod h1:049S7/d4khzJzx2wwbevu2vISiJ1xVxXDotMgCN6osY=
 github.com/lestrrat-go/option/v3 v3.0.0-alpha1 h1:dvdzLwm/Ba5CJUF3jQP7w/iNYSLfy7yyh9XXNa1WjxI=
 github.com/lestrrat-go/option/v3 v3.0.0-alpha1/go.mod h1:5KSg20dfsKkNJtjDmaQRLZVXuUrzuCCcz/gbDK0pfKk=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
