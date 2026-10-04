@@ -135,7 +135,9 @@ func spherePairImpactBracket(root, duration, resolution *big.Rat) (*big.Rat, *bi
 				floatRat(ratFloatNearest(left)).Cmp(left) == 0 {
 				return left, one, true
 			}
-			return nil, nil, false
+			if left.Cmp(root) >= 0 {
+				return nil, nil, false
+			}
 		}
 		grid.Lsh(grid, 1)
 	}
@@ -268,6 +270,7 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 	}
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
+	r.report.bracketRight = new(big.Rat).Set(rightF)
 	r.sortSamples()
 	return r.report, nil
 }
