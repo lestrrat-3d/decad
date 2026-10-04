@@ -84,7 +84,7 @@ type World struct {
 	step  StepConfig
 }
 
-// NewWorld admits one fixed and dynamic pair or two dynamic bodies.
+// NewWorld admits a dynamic pair, or one dynamic body with a fixed or kinematic body.
 func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World, error) {
 	if doc == nil || ctx == nil {
 		return nil, fmt.Errorf("%w: nil document or context", ErrInvalidInput)
@@ -98,7 +98,7 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 	live := doc.Bodies()
 	seen := map[*decad.Body]struct{}{}
 	w := &World{doc: doc, step: cfg.Step}
-	fixed, dynamic := 0, 0
+	fixed, kinematic, dynamic := 0, 0, 0
 	for i, entry := range cfg.Bodies {
 		if entry.Body == nil {
 			return nil, fmt.Errorf("%w: nil body", ErrInvalidInput)
@@ -151,12 +151,15 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 			}
 			w.parts[i].mass = mass
 		case Kinematic:
-			return nil, fmt.Errorf("%w: kinematic bodies are not implemented", ErrUnsupported)
+			kinematic++
+			if entry.Density != nil || entry.Supplied != nil {
+				return nil, fmt.Errorf("%w: kinematic body has mass input", ErrInvalidInput)
+			}
 		default:
 			return nil, fmt.Errorf("%w: unknown body role", ErrInvalidInput)
 		}
 	}
-	if dynamic == 0 || fixed+dynamic != 2 {
+	if dynamic == 0 || fixed+kinematic+dynamic != 2 {
 		return nil, fmt.Errorf("%w: one or two dynamic bodies required", ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
@@ -338,6 +341,10 @@ func (w *World) NewState(entries []BodyState) (State, error) {
 		if err := validateQuantityVec(entry.AngularVelocity, units.AngularVelocity); err != nil {
 			return State{}, err
 		}
+		if w.parts[idx].definition.Role == Kinematic && (entry.AngularVelocity.X.Mag() != 0 ||
+			entry.AngularVelocity.Y.Mag() != 0 || entry.AngularVelocity.Z.Mag() != 0) {
+			return State{}, fmt.Errorf("%w: kinematic body has stored angular velocity", ErrInvalidInput)
+		}
 		if entry.AngularVelocity.X.Base() != 0 || entry.AngularVelocity.Y.Base() != 0 ||
 			entry.AngularVelocity.Z.Base() != 0 {
 			return State{}, fmt.Errorf("%w: angular motion is not implemented", ErrUnsupported)
@@ -345,6 +352,10 @@ func (w *World) NewState(entries []BodyState) (State, error) {
 		if w.parts[idx].definition.Role == Fixed && (entry.LinearVelocity.X.Base() != 0 ||
 			entry.LinearVelocity.Y.Base() != 0 || entry.LinearVelocity.Z.Base() != 0) {
 			return State{}, fmt.Errorf("%w: fixed body has velocity", ErrInvalidInput)
+		}
+		if w.parts[idx].definition.Role == Kinematic && (entry.LinearVelocity.X.Mag() != 0 ||
+			entry.LinearVelocity.Y.Mag() != 0 || entry.LinearVelocity.Z.Mag() != 0) {
+			return State{}, fmt.Errorf("%w: kinematic body has stored velocity", ErrInvalidInput)
 		}
 		out.entries[idx] = entry
 	}

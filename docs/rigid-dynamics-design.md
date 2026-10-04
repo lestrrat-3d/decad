@@ -20,8 +20,11 @@ without an impulse when both full-span paths certify persistent contact. The
 first edge-exit step accepts a transition whose right bracket sample is
 separated, then certifies a clear remainder. A transition with a touching
 right sample or insufficient `MaxEvents` remains `Undecided`.
+An affine translating kinematic driver can move through a certified clear
+step or push an initially touching dynamic box with zero restitution. Its
+stored velocity remains zero while the driver derivative enters the response.
 Off-center impulses that require spin return `Undecided`. Torque loads,
-kinematic drivers, friction, stacks, broader contact-transition stepping,
+rotating kinematic drivers, friction, stacks, broader contact-transition stepping,
 external impulse reporting, and arbitrary trace sampling remain design
 contracts.
 
@@ -189,6 +192,16 @@ or nondynamic load body or a wrong-kind/non-finite vector returns
 `ErrInvalidInput`. It computes both endpoint kicks over the admitted mass
 interval and returns `Undecided` if the published velocity differs from either
 by more than `VelocityResidual`.
+
+The current kinematic slice admits one `PoseSegment` with a constant
+orientation and an exactly representable affine derivative. Its start and
+duration must exactly match the state and step. A missing, duplicate, or
+nonkinematic driver is `ErrInvalidInput`; a valid rotating path or a derivative
+that cannot meet the current exact-speed proof is `ErrUnsupported`. The first
+response path accepts an initially touching, closing kinematic/dynamic pair;
+other contact schedules remain `Undecided`. The driver's effective contact
+speed appears in the event, while `State` and `Trace` store zero kinematic
+velocity. A separated pair can complete a clear driver path without an event.
 
 `units.Angle` is dimensionally distinct from `units.Dimensionless`. At the
 physics boundary, validate every AngularVelocity component as Angle/Time,
@@ -479,6 +492,13 @@ remaining `1 s`; `MaxEvents=2` admits the step.
 The solver also sweeps the rounded prefix directly to its published right
 pose. The full-step rounded segment can sample a different pose by one ULP
 at that time; the direct prefix must certify the same separated transition.
+
+The kinematic-push fixture has two touching `10 mm` source boxes. Body A
+follows a `PoseSegment` of `+1.25 mm` in `0.125 s`; body B has mass `1 kg`
+and starts at rest. With zero restitution, friction, and gravity, the real
+initial face manifold produces a `10 kg·mm/s` impulse. The ideal driver and
+dynamic drift and their rounded paths certify persistent touch. Both bodies
+finish `1.25 mm` to the right, B moves at `10 mm/s`, and A stores zero velocity.
 
 For the sliding-friction increment, put the same `1 kg` box
 on a fixed floor wide enough for a `5 mm` slide. With gravity

@@ -16,7 +16,9 @@ density or a caller-supplied bounded mass record. One center force with zero
 torque per dynamic body contributes to the step's full-duration velocity kick.
 The first separated edge exit records a zero-impulse contact transition and
 advances through a certified clear remainder.
-Torque loads, kinematic drivers, friction, stacks, and broader payload paths
+An affine kinematic driver can push an initially touching dynamic source box
+through a certified persistent contact path. Torque loads, rotating kinematic
+drivers, friction, stacks, and broader payload paths
 remain design contracts. Each companion document owns its detail.
 
 | Design | Ownership |
