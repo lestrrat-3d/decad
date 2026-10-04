@@ -3,8 +3,8 @@
 This document owns the `dynamics` subpackage's world, state, step, response,
 and trace contracts. `docs/collision-dynamics-design.md` owns the package
 boundary; `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md` own
-geometry results. Current code steps one pair with at least one dynamic body
-using density-derived or supplied mass. An axis-aligned
+geometry results. A two-body world steps one pair with at least one dynamic
+body using density-derived or supplied mass. An axis-aligned
 certified contact normal determines the response component; tangent velocity
 continues through an oblique impact. Centered impacts of two dynamic bodies
 apply equal and opposite impulses.
