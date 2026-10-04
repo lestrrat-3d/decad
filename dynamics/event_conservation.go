@@ -3,6 +3,8 @@ package dynamics
 import (
 	"math/big"
 
+	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -23,6 +25,10 @@ func (w *World) eventConservationFailure(event ContactEvent) string {
 	if !valid {
 		return "contact event has invalid impulse or normal"
 	}
+	angularPre, angularPost, eventPoses, hasAngular, valid := eventAngularReadings(event)
+	if !valid {
+		return "contact event has invalid angular inputs"
+	}
 	if event.Kind == ContactTransition {
 		if normalImpulse.Sign() != 0 || len(event.Manifold.Points) != 0 {
 			return "contact transition changes impulse or retains a manifold"
@@ -37,6 +43,9 @@ func (w *World) eventConservationFailure(event ContactEvent) string {
 			if validateQuantityVec(pre, units.Velocity) != nil ||
 				validateQuantityVec(post, units.Velocity) != nil || pre != post {
 				return "contact transition changes velocity"
+			}
+			if hasAngular && angularPre[i] != angularPost[i] {
+				return "contact transition changes angular velocity"
 			}
 		}
 		return ""
@@ -107,6 +116,33 @@ func (w *World) eventConservationFailure(event ContactEvent) string {
 		} else {
 			energyUpper.Add(energyUpper, new(big.Rat).Mul(low, squaredChange))
 		}
+		if hasAngular {
+			_, spinUpper, ok := spinEnergyChange(part.mass.Inertia, eventPoses[i],
+				angularPre[i], angularPost[i])
+			if !ok {
+				return "contact event rotational energy cannot be enclosed"
+			}
+			energyUpper.Add(energyUpper, spinUpper)
+			if reason := w.eventAngularImpulseFailure(event, i, angularPre[i], angularPost[i],
+				eventPoses[i], impulseLimit); reason != "" {
+				return reason
+			}
+			// A velocity residual can change rotational energy by at most the
+			// inertia row ceiling times its component speed sum.
+			inertiaUpper := inertiaRowCeiling(part.mass.Inertia)
+			angularLimit := exactBase(w.step.AngularVelocityResidual)
+			if inertiaUpper == nil || angularLimit == nil {
+				return "contact event angular residual inputs are invalid"
+			}
+			for axis := range 3 {
+				speed := new(big.Rat).Add(absRat(exactBase(velocityComponent(angularPre[i], axis))),
+					absRat(exactBase(velocityComponent(angularPost[i], axis))))
+				speed.Add(speed, angularLimit)
+				energyAllowance.Add(energyAllowance, new(big.Rat).Mul(
+					new(big.Rat).Mul(big.NewRat(3, 1),
+						new(big.Rat).Mul(inertiaUpper, angularLimit)), speed))
+			}
+		}
 	}
 	energyUpper.Quo(energyUpper, big.NewRat(2, 1))
 	if hasKinematic {
@@ -122,6 +158,153 @@ func (w *World) eventConservationFailure(event ContactEvent) string {
 			return "contact event increases kinetic energy beyond numerical residual"
 		}
 		return "contact event increases kinetic energy beyond work and numerical residual"
+	}
+	return ""
+}
+
+func eventAngularReadings(event ContactEvent) ([2]QuantityVec, [2]QuantityVec,
+	[2]r3.Transform, bool, bool) {
+	pre := [2]QuantityVec{event.PreAngularVelocityA, event.PreAngularVelocityB}
+	post := [2]QuantityVec{event.PostAngularVelocityA, event.PostAngularVelocityB}
+	poses := [2]r3.Transform{event.PoseA, event.PoseB}
+	if pre == ([2]QuantityVec{}) && post == ([2]QuantityVec{}) &&
+		poses == ([2]r3.Transform{}) {
+		return pre, post, poses, false, true
+	}
+	for i := range pre {
+		if validateQuantityVec(pre[i], units.AngularVelocity) != nil ||
+			validateQuantityVec(post[i], units.AngularVelocity) != nil ||
+			!poses[i].IsValid() || poses[i].IsReflection() {
+			return pre, post, poses, true, false
+		}
+	}
+	return pre, post, poses, true, true
+}
+
+func inertiaRowCeiling(inertia decad.InertiaReading) *big.Rat {
+	components := [3][3]decad.Measurement{
+		{inertia.XX, inertia.XY, inertia.XZ},
+		{inertia.XY, inertia.YY, inertia.YZ},
+		{inertia.XZ, inertia.YZ, inertia.ZZ}}
+	maximum := new(big.Rat)
+	for _, row := range components {
+		sum := new(big.Rat)
+		for _, entry := range row {
+			value, bound := exactBase(entry.Value), exactBase(entry.Bound)
+			if value == nil || bound == nil || bound.Sign() < 0 {
+				return nil
+			}
+			sum.Add(sum, absRat(value)).Add(sum, bound)
+		}
+		if sum.Cmp(maximum) > 0 {
+			maximum = sum
+		}
+	}
+	return maximum
+}
+
+// eventAngularImpulseFailure checks the published spin change against every
+// contact point's signed torque about this body's world mass center.
+func (w *World) eventAngularImpulseFailure(event ContactEvent, body int,
+	pre, post QuantityVec, pose r3.Transform, impulseLimit *big.Rat) string {
+	if len(event.PointImpulses) != len(event.Manifold.Points) {
+		return "contact event lacks point impulses for angular response"
+	}
+	mass := w.parts[body].mass
+	center, centerError, ok := worldCenterReading(pose, mass.Center)
+	if !ok {
+		return "contact event mass center cannot be enclosed"
+	}
+	beforeSpin, ok := spinReadings(mass.Inertia, pose, pre)
+	if !ok {
+		return "contact event angular momentum cannot be enclosed"
+	}
+	afterSpin, ok := spinReadings(mass.Inertia, pose, post)
+	if !ok {
+		return "contact event angular momentum cannot be enclosed"
+	}
+	var torque, torqueError [3]*big.Rat
+	var aggregate [3]*big.Rat
+	for axis := range torque {
+		torque[axis], torqueError[axis] = new(big.Rat), new(big.Rat)
+		aggregate[axis] = new(big.Rat)
+	}
+	sign := int64(1)
+	if body == 0 {
+		sign = -1
+	}
+	for i, point := range event.Manifold.Points {
+		impulse := event.PointImpulses[i]
+		if impulse.Normal.Kind() != units.Impulse ||
+			validateQuantityVec(impulse.Tangent, units.Impulse) != nil ||
+			impulse.Normal.Base() < 0 || point.Normal.Bound.Base() != 0 ||
+			point.NormalAngle.Base() != 0 {
+			return "contact event has invalid point impulse"
+		}
+		witness := point.OnA
+		if body == 1 {
+			witness = point.OnB
+		}
+		pointBound := exactBase(witness.Bound)
+		if pointBound == nil || pointBound.Sign() < 0 {
+			return "contact event point bound is invalid"
+		}
+		var arm, action [3]*big.Rat
+		coordinates := [3]float64{witness.Value.X, witness.Value.Y, witness.Value.Z}
+		normal := [3]float64{point.Normal.Value.X, point.Normal.Value.Y, point.Normal.Value.Z}
+		for axis := range arm {
+			coordinate, direction := new(big.Rat).SetFloat64(coordinates[axis]),
+				new(big.Rat).SetFloat64(normal[axis])
+			if coordinate == nil || direction == nil {
+				return "contact event point coordinates are invalid"
+			}
+			arm[axis] = new(big.Rat).Sub(coordinate, center[axis])
+			action[axis] = new(big.Rat).Add(
+				new(big.Rat).Mul(exactBase(impulse.Normal), direction),
+				exactBase(velocityComponent(impulse.Tangent, axis)))
+			aggregate[axis].Add(aggregate[axis], action[axis])
+		}
+		for axis := range torque {
+			a, b := (axis+1)%3, (axis+2)%3
+			cross := new(big.Rat).Sub(new(big.Rat).Mul(arm[a], action[b]),
+				new(big.Rat).Mul(arm[b], action[a]))
+			torque[axis].Add(torque[axis], cross.Mul(cross, big.NewRat(sign, 1)))
+			uncertainty := new(big.Rat).Add(pointBound, centerError[a])
+			torqueError[axis].Add(torqueError[axis], new(big.Rat).Mul(uncertainty,
+				absRat(new(big.Rat).Set(action[b]))))
+			uncertainty = new(big.Rat).Add(pointBound, centerError[b])
+			torqueError[axis].Add(torqueError[axis], new(big.Rat).Mul(uncertainty,
+				absRat(new(big.Rat).Set(action[a]))))
+			torqueError[axis].Add(torqueError[axis], new(big.Rat).Mul(impulseLimit,
+				new(big.Rat).Add(absRat(new(big.Rat).Set(arm[a])),
+					absRat(new(big.Rat).Set(arm[b])))))
+		}
+	}
+	applied, ok := eventAppliedImpulse(event)
+	if !ok {
+		return "contact event aggregate impulse cannot be enclosed"
+	}
+	for axis := range aggregate {
+		if absRat(new(big.Rat).Sub(aggregate[axis], applied[axis])).Cmp(impulseLimit) > 0 {
+			return "contact event point impulses do not match aggregate impulse"
+		}
+	}
+	row := inertiaRowCeiling(mass.Inertia)
+	angularLimit := exactBase(w.step.AngularVelocityResidual)
+	if row == nil || angularLimit == nil {
+		return "contact event inertia residual cannot be enclosed"
+	}
+	for axis := range torque {
+		spin := new(big.Rat).Sub(afterSpin.value[axis], beforeSpin.value[axis])
+		low := new(big.Rat).Sub(afterSpin.low[axis], beforeSpin.high[axis])
+		high := new(big.Rat).Sub(afterSpin.high[axis], beforeSpin.low[axis])
+		residual := absRat(new(big.Rat).Sub(spin, torque[axis]))
+		allowed := new(big.Rat).Add(torqueError[axis], intervalDeviation(spin, low, high))
+		allowed.Add(allowed, new(big.Rat).Mul(big.NewRat(3, 1),
+			new(big.Rat).Mul(row, angularLimit)))
+		if residual.Cmp(allowed) > 0 {
+			return "contact event angular momentum exceeds point impulse residual"
+		}
 	}
 	return ""
 }

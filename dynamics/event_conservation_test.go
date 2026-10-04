@@ -26,6 +26,68 @@ func conservationBox(t *testing.T, doc *decad.Document, x0, x1 float64) *decad.B
 	return body
 }
 
+func TestSpinEventConservationUsesRealPointImpulses(t *testing.T) {
+	doc := decad.New()
+	a := conservationBox(t, doc, -5, 5)
+	initial := conservationBox(t, doc, -5, 5)
+	placement, err := r3.Translation(r3.Vec{Z: 10})
+	require.NoError(t, err)
+	b, err := initial.Placed(t.Context(), placement)
+	require.NoError(t, err)
+	density := units.KilogramsPerCubicMillimeter(.001)
+	material := Material{Restitution: units.Scalar(.5), Friction: units.Scalar(.5)}
+	w, err := NewWorld(t.Context(), doc, WorldConfig{
+		Bodies: []RigidBody{{Body: a, Role: Dynamic, Density: &density, Material: material},
+			{Body: b, Role: Dynamic, Density: &density, Material: material}},
+		Step: StepConfig{
+			Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+				NormalResolution: units.Radians(1e-6)},
+			TimeResolution: units.Seconds(1e-9), ContactSlop: units.Millimeters(1e-6),
+			VelocityResidual:        units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
+			MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 2,
+		},
+	})
+	require.NoError(t, err)
+	zeroLinear := QuantityVec{X: units.MillimetersPerSecond(0),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
+	zeroAngular := QuantityVec{X: units.RadiansPerSecond(0),
+		Y: units.RadiansPerSecond(0), Z: units.RadiansPerSecond(0)}
+	start, err := w.NewState([]BodyState{
+		{Body: a, Pose: r3.Identity(), LinearVelocity: zeroLinear, AngularVelocity: zeroAngular},
+		{Body: b, Pose: r3.Identity(), LinearVelocity: QuantityVec{
+			X: units.MillimetersPerSecond(100), Y: units.MillimetersPerSecond(0),
+			Z: units.MillimetersPerSecond(-100)}, AngularVelocity: zeroAngular},
+	})
+	require.NoError(t, err)
+	zeroGravity := QuantityVec{X: units.MillimetersPerSecondSquared(0),
+		Y: units.MillimetersPerSecondSquared(0), Z: units.MillimetersPerSecondSquared(0)}
+	report, err := w.Step(t.Context(), start,
+		StepInput{Gravity: zeroGravity}, units.Seconds(.1))
+	require.NoError(t, err)
+	require.Equal(t, Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	event := report.Events[0]
+	require.Empty(t, w.eventConservationFailure(event))
+	require.Len(t, event.PointImpulses, len(event.Manifold.Points))
+	require.NotZero(t, event.PostAngularVelocityB.Y.Base())
+
+	changed := event
+	changed.PostAngularVelocityB.Y = units.RadiansPerSecond(
+		event.PostAngularVelocityB.Y.Base() + 1)
+	require.Equal(t, "contact event angular momentum exceeds point impulse residual",
+		w.eventConservationFailure(changed))
+
+	changed = event
+	changed.PointImpulses = append([]ContactPointImpulse(nil), event.PointImpulses...)
+	changed.PointImpulses[0].Normal = units.KilogramMillimetersPerSecond(
+		changed.PointImpulses[0].Normal.Base() + 1)
+	require.Equal(t, "contact event point impulses do not match aggregate impulse",
+		w.eventConservationFailure(changed))
+}
+
 func TestEventConservationRejectsEnergyGainWithBalancedMomentum(t *testing.T) {
 	doc := decad.New()
 	a := conservationBox(t, doc, 0, 10)

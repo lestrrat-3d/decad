@@ -105,10 +105,6 @@ func (w *World) conservationState(state State) (ConservationState, bool) {
 		if part.definition.Role != Dynamic {
 			continue
 		}
-		angular := state.entries[i].AngularVelocity
-		if angular.X.Mag() != 0 || angular.Y.Mag() != 0 || angular.Z.Mag() != 0 {
-			return ConservationState{}, false
-		}
 		mass, bound := exactBase(part.mass.Mass.Value), exactBase(part.mass.Mass.Bound)
 		if mass == nil || bound == nil {
 			return ConservationState{}, false
@@ -154,6 +150,19 @@ func (w *World) conservationState(state State) (ConservationState, bool) {
 		energy.Add(energy, new(big.Rat).Mul(mass, speedSquared))
 		energyLow.Add(energyLow, new(big.Rat).Mul(massLow, speedSquared))
 		energyHigh.Add(energyHigh, new(big.Rat).Mul(massHigh, speedSquared))
+		spin, ok := spinReadings(part.mass.Inertia, state.entries[i].Pose,
+			state.entries[i].AngularVelocity)
+		if !ok {
+			return ConservationState{}, false
+		}
+		for axis := range angularValue {
+			angularValue[axis].Add(angularValue[axis], spin.value[axis])
+			angularLow[axis].Add(angularLow[axis], spin.low[axis])
+			angularHigh[axis].Add(angularHigh[axis], spin.high[axis])
+		}
+		energy.Add(energy, spin.energy)
+		energyLow.Add(energyLow, spin.energyLow)
+		energyHigh.Add(energyHigh, spin.energyHigh)
 	}
 	half := big.NewRat(1, 2)
 	energy.Mul(energy, half)
@@ -175,6 +184,117 @@ func (w *World) conservationState(state State) (ConservationState, bool) {
 	}
 	return ConservationState{KineticEnergy: kinetic, LinearMomentum: linear,
 		AngularMomentum: angularReading}, true
+}
+
+type spinReading struct {
+	value, low, high              [3]*big.Rat
+	energy, energyLow, energyHigh *big.Rat
+}
+
+// spinReadings evaluates I in the source axes. The held pose basis and angular
+// velocity are exact rational inputs here; only the six inertia readings carry
+// intervals. Rotating the result back to world axes preserves their signs.
+func spinReadings(inertia decad.InertiaReading, pose r3.Transform, omega QuantityVec) (spinReading, bool) {
+	reading := spinReading{energy: new(big.Rat), energyLow: new(big.Rat), energyHigh: new(big.Rat)}
+	for axis := range reading.value {
+		reading.value[axis], reading.low[axis], reading.high[axis] =
+			new(big.Rat), new(big.Rat), new(big.Rat)
+	}
+	rotation, local, ok := spinBasis(pose, omega)
+	if !ok {
+		return spinReading{}, false
+	}
+	for _, component := range inertiaComponents(inertia) {
+		quantity, errorBound := exactBase(component.reading.Value), exactBase(component.reading.Bound)
+		if quantity == nil || errorBound == nil || errorBound.Sign() < 0 {
+			return spinReading{}, false
+		}
+		coefficient := new(big.Rat).Mul(local[component.i], local[component.j])
+		if component.i != component.j {
+			coefficient.Mul(coefficient, big.NewRat(2, 1))
+		}
+		addIntervalProduct(reading.energy, reading.energyLow, reading.energyHigh,
+			quantity, errorBound, coefficient)
+		for axis := range reading.value {
+			coefficient = new(big.Rat).Mul(rotation[axis][component.i], local[component.j])
+			if component.i != component.j {
+				coefficient.Add(coefficient,
+					new(big.Rat).Mul(rotation[axis][component.j], local[component.i]))
+			}
+			addIntervalProduct(reading.value[axis], reading.low[axis], reading.high[axis],
+				quantity, errorBound, coefficient)
+		}
+	}
+	return reading, true
+}
+
+type inertiaComponent struct {
+	reading decad.Measurement
+	i, j    int
+}
+
+func inertiaComponents(inertia decad.InertiaReading) [6]inertiaComponent {
+	return [6]inertiaComponent{{inertia.XX, 0, 0}, {inertia.YY, 1, 1}, {inertia.ZZ, 2, 2},
+		{inertia.XY, 0, 1}, {inertia.XZ, 0, 2}, {inertia.YZ, 1, 2}}
+}
+
+// spinEnergyChange keeps each source inertia interval shared across the
+// before/after squared-speed difference of one impulse.
+func spinEnergyChange(inertia decad.InertiaReading, pose r3.Transform,
+	before, after QuantityVec) (*big.Rat, *big.Rat, bool) {
+	_, initial, ok := spinBasis(pose, before)
+	if !ok {
+		return nil, nil, false
+	}
+	_, final, ok := spinBasis(pose, after)
+	if !ok {
+		return nil, nil, false
+	}
+	value, upper := new(big.Rat), new(big.Rat)
+	for _, component := range inertiaComponents(inertia) {
+		quantity, bound := exactBase(component.reading.Value), exactBase(component.reading.Bound)
+		if quantity == nil || bound == nil || bound.Sign() < 0 {
+			return nil, nil, false
+		}
+		coefficient := new(big.Rat).Sub(
+			new(big.Rat).Mul(final[component.i], final[component.j]),
+			new(big.Rat).Mul(initial[component.i], initial[component.j]))
+		if component.i != component.j {
+			coefficient.Mul(coefficient, big.NewRat(2, 1))
+		}
+		contribution := new(big.Rat).Mul(quantity, coefficient)
+		value.Add(value, contribution)
+		upper.Add(upper, new(big.Rat).Add(contribution,
+			new(big.Rat).Mul(bound, absRat(coefficient))))
+	}
+	return value, upper, true
+}
+
+func spinBasis(pose r3.Transform, omega QuantityVec) ([3][3]*big.Rat, [3]*big.Rat, bool) {
+	var rotation [3][3]*big.Rat
+	var local [3]*big.Rat
+	basis := pose.Basis()
+	columns := [3]r3.Vec{basis.EX, basis.EY, basis.EZ}
+	for i, column := range columns {
+		local[i] = new(big.Rat)
+		for axis, coordinate := range [3]float64{column.X, column.Y, column.Z} {
+			rotation[axis][i] = new(big.Rat).SetFloat64(coordinate)
+			velocity := exactBase(velocityComponent(omega, axis))
+			if rotation[axis][i] == nil || velocity == nil {
+				return rotation, local, false
+			}
+			local[i].Add(local[i], new(big.Rat).Mul(rotation[axis][i], velocity))
+		}
+	}
+	return rotation, local, true
+}
+
+func addIntervalProduct(value, low, high, nominal, uncertainty, coefficient *big.Rat) {
+	value.Add(value, new(big.Rat).Mul(nominal, coefficient))
+	width := new(big.Rat).Mul(uncertainty, absRat(new(big.Rat).Set(coefficient)))
+	contribution := new(big.Rat).Mul(nominal, coefficient)
+	low.Add(low, new(big.Rat).Sub(contribution, width))
+	high.Add(high, new(big.Rat).Add(contribution, width))
 }
 
 // worldCenterReading uses r3 for the point transform, then encloses both its
@@ -243,13 +363,21 @@ func addMassProduct(sum, low, high, mass, massLow, massHigh, coefficient, coeffi
 // driftConservationChange adds each body's drift coefficients before applying
 // its one held mass interval. The source center cancels on a translation slice.
 func (w *World) driftConservationChange(kicked State, trace Trace) (ConservationState, bool) {
-	var angular, low, high [3]*big.Rat
-	for axis := range angular {
-		angular[axis], low[axis], high[axis] = new(big.Rat), new(big.Rat), new(big.Rat)
-	}
 	slices := [][2]State{{kicked, trace.end}}
 	if trace.hasEvent {
 		slices = [][2]State{{kicked, trace.pre}, {trace.post, trace.end}}
+	}
+	for _, slice := range slices {
+		for i, part := range w.parts {
+			if part.definition.Role == Dynamic && !sameOrientation(
+				slice[0].entries[i].Pose, slice[1].entries[i].Pose) {
+				return w.rotatingDriftChange(slices)
+			}
+		}
+	}
+	var angular, low, high [3]*big.Rat
+	for axis := range angular {
+		angular[axis], low[axis], high[axis] = new(big.Rat), new(big.Rat), new(big.Rat)
 	}
 	for i, part := range w.parts {
 		if part.definition.Role != Dynamic {
@@ -317,6 +445,77 @@ func (w *World) driftConservationChange(kicked State, trace Trace) (Conservation
 	}
 	return ConservationState{KineticEnergy: zero, LinearMomentum: linear,
 		AngularMomentum: angularReading}, true
+}
+
+// Rotating drift compares the independently enclosed endpoint readings.
+// This can be wider than the translation-only cancellation above but includes
+// world-frame inertia changes without attributing an event impulse to drift.
+func (w *World) rotatingDriftChange(slices [][2]State) (ConservationState, bool) {
+	var energyValue, energyLow, energyHigh big.Rat
+	var linearValue, linearLow, linearHigh, angularValue, angularLow, angularHigh [3]*big.Rat
+	for axis := range linearValue {
+		linearValue[axis], linearLow[axis], linearHigh[axis] = new(big.Rat), new(big.Rat), new(big.Rat)
+		angularValue[axis], angularLow[axis], angularHigh[axis] = new(big.Rat), new(big.Rat), new(big.Rat)
+	}
+	for _, slice := range slices {
+		for i, part := range w.parts {
+			if part.definition.Role != Dynamic {
+				continue
+			}
+			before, after := slice[0].entries[i], slice[1].entries[i]
+			if before.Body != after.Body || before.LinearVelocity != after.LinearVelocity ||
+				before.AngularVelocity != after.AngularVelocity {
+				return ConservationState{}, false
+			}
+		}
+		before, ok := w.conservationState(slice[0])
+		if !ok {
+			return ConservationState{}, false
+		}
+		after, ok := w.conservationState(slice[1])
+		if !ok {
+			return ConservationState{}, false
+		}
+		addReadingDifference(&energyValue, &energyLow, &energyHigh,
+			before.KineticEnergy, after.KineticEnergy)
+		for axis := range linearValue {
+			addReadingDifference(linearValue[axis], linearLow[axis], linearHigh[axis],
+				componentReading(before.LinearMomentum, axis), componentReading(after.LinearMomentum, axis))
+			addReadingDifference(angularValue[axis], angularLow[axis], angularHigh[axis],
+				componentReading(before.AngularMomentum, axis), componentReading(after.AngularMomentum, axis))
+		}
+	}
+	energy, ok := boundedReading(&energyValue, &energyLow, &energyHigh,
+		units.KilogramSquareMillimeterPerSecondSquared)
+	if !ok {
+		return ConservationState{}, false
+	}
+	linear, ok := boundedMomentum(linearValue, linearLow, linearHigh)
+	if !ok {
+		return ConservationState{}, false
+	}
+	angular, ok := boundedVector(angularValue, angularLow, angularHigh,
+		units.KilogramSquareMillimeterPerSecond)
+	if !ok {
+		return ConservationState{}, false
+	}
+	return ConservationState{KineticEnergy: energy, LinearMomentum: linear,
+		AngularMomentum: angular}, true
+}
+
+func componentReading(vector MomentumReading, axis int) decad.Measurement {
+	return decad.Measurement{Value: velocityComponent(vector.Value, axis),
+		Bound: velocityComponent(vector.Bound, axis)}
+}
+
+func addReadingDifference(value, low, high *big.Rat, before, after decad.Measurement) {
+	beforeValue, beforeBound := exactBase(before.Value), exactBase(before.Bound)
+	afterValue, afterBound := exactBase(after.Value), exactBase(after.Bound)
+	value.Add(value, new(big.Rat).Sub(afterValue, beforeValue))
+	low.Add(low, new(big.Rat).Sub(new(big.Rat).Sub(afterValue, afterBound),
+		new(big.Rat).Add(beforeValue, beforeBound)))
+	high.Add(high, new(big.Rat).Sub(new(big.Rat).Add(afterValue, afterBound),
+		new(big.Rat).Sub(beforeValue, beforeBound)))
 }
 
 func (w *World) forceImpulses(gravity QuantityVec, loads [2]*BodyLoad,

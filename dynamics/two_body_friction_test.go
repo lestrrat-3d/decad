@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTwoDynamicFrictionRefusesMissingSpinConservation(t *testing.T) {
+func TestTwoDynamicFrictionAdvancesWithSpinConservation(t *testing.T) {
 	doc := decad.New()
 	a := makeBox(t, doc, -5, -5, 5, 5, -10, 10)
 	b := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -49,7 +49,36 @@ func TestTwoDynamicFrictionRefusesMissingSpinConservation(t *testing.T) {
 	report, err := world.Step(t.Context(), start,
 		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.1))
 	require.NoError(t, err)
-	require.Equal(t, dynamics.Undecided, report.Status)
-	require.Nil(t, report.Next)
-	require.Contains(t, report.Diagnostics[0].Reason, "conservation readings cannot be represented")
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.NotNil(t, report.Next)
+	require.Len(t, report.Events, 1)
+	require.NotNil(t, report.Conservation)
+	event := report.Events[0]
+	require.Equal(t, dynamics.ContactImpact, event.Kind)
+	require.Len(t, event.PointImpulses, 4)
+	require.Equal(t, units.AngularVelocity, event.PostAngularVelocityA.Y.Kind())
+	require.Equal(t, units.AngularVelocity, event.PostAngularVelocityB.Y.Kind())
+	require.NotZero(t, event.PostAngularVelocityA.Y.Base())
+	require.NotZero(t, event.PostAngularVelocityB.Y.Base())
+	require.Equal(t, units.AngularMomentum, report.Conservation.Completion.AngularMomentum.Value.Y.Kind())
+	require.Equal(t, units.Torque, report.Conservation.Completion.KineticEnergy.Value.Kind())
+	require.Less(t, report.Conservation.Completion.KineticEnergy.Value.Base(),
+		report.Conservation.Input.KineticEnergy.Value.Base())
+	var translational, rotational float64
+	for _, body := range []*decad.Body{a, b} {
+		mass, massErr := body.MassProperties(t.Context(), density)
+		require.NoError(t, massErr)
+		state, present := report.Next.Body(body)
+		require.True(t, present)
+		v := state.LinearVelocity
+		translational += .5 * mass.Mass.Value.Base() *
+			(v.X.Base()*v.X.Base() + v.Y.Base()*v.Y.Base() + v.Z.Base()*v.Z.Base())
+		rotational += .5 * mass.Inertia.YY.Value.Base() *
+			state.AngularVelocity.Y.Base() * state.AngularVelocity.Y.Base()
+	}
+	require.Greater(t, rotational, 0.0)
+	require.InDelta(t, translational+rotational,
+		report.Conservation.Completion.KineticEnergy.Value.Base(), 1e-6)
+	require.Equal(t, units.AngularMomentum,
+		report.Conservation.DriftChange.AngularMomentum.Value.Y.Kind())
 }
