@@ -233,6 +233,9 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	if w == nil || ctx == nil || from.world != w || !validQuantity(dt, units.Time, true) {
 		return nil, fmt.Errorf("%w: invalid context, world, state, or duration", ErrInvalidInput)
 	}
+	if w.three != nil {
+		return w.stepThreeBodies(ctx, from, input, dt)
+	}
 	if err := validateQuantityVec(input.Gravity, units.Acceleration); err != nil {
 		return nil, err
 	}
