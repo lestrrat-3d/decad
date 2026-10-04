@@ -132,7 +132,7 @@ func (w *World) stepInitialFriction(ctx context.Context, from, kicked State, dt 
 		PostVelocityB: post.entries[1].LinearVelocity,
 	}}
 	report.Trace = Trace{start: from, pre: kicked, post: post, end: end, duration: dt,
-		eventAt: instant.Elapsed.Value, hasEvent: true}
+		eventAt: instant.Elapsed.Value, hasEvent: true, postSweep: rounded}
 	return report, nil
 }
 

@@ -157,7 +157,7 @@ func (w *World) stepKinematicPush(ctx context.Context, from, kicked State, dt un
 			return undecided(w, "kinematic clear endpoint is not separated"), nil
 		}
 		return &StepReport{Status: Advanced, Next: &end,
-			Trace: Trace{start: from, end: end, duration: dt}}, nil
+			Trace: Trace{start: from, end: end, duration: dt, preSweep: rounded}}, nil
 	}
 	if first.Outcome == decad.SweepImpactBracket {
 		return w.stepKinematicImpact(ctx, from, kicked, dt, motion, first)
@@ -268,7 +268,7 @@ func (w *World) stepKinematicPush(ctx context.Context, from, kicked State, dt un
 		PostVelocityB:  effectivePost[1],
 	}}
 	report.Trace = Trace{start: from, pre: kicked, post: post, end: end, duration: dt,
-		eventAt: instant.Elapsed.Value, hasEvent: true}
+		eventAt: instant.Elapsed.Value, hasEvent: true, postSweep: rounded}
 	return report, nil
 }
 
@@ -304,5 +304,5 @@ func (w *World) stepKinematicDeparture(ctx context.Context, from, kicked State,
 		return undecided(w, "kinematic departure endpoint is not separated"), nil
 	}
 	return &StepReport{Status: Advanced, Next: &end,
-		Trace: Trace{start: from, end: end, duration: dt}}, nil
+		Trace: Trace{start: from, end: end, duration: dt, preSweep: rounded}}, nil
 }

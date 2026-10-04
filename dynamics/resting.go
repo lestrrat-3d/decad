@@ -63,7 +63,7 @@ func (w *World) stepNoImpulse(ctx context.Context, from, kicked State, dt units.
 		return undecided(w, fmt.Sprintf("no-impulse sweep returned %v", ideal.Outcome)), nil
 	}
 	return &StepReport{Status: Advanced, Next: &end,
-		Trace: Trace{start: from, end: end, duration: dt}}, nil
+		Trace: Trace{start: from, end: end, duration: dt, preSweep: actual}}, nil
 }
 
 // stepInitialTouch solves an incoming frictionless pair at its certified
@@ -193,7 +193,7 @@ func (w *World) stepInitialTouch(ctx context.Context, from, kicked State, dt uni
 		PostVelocityB:  post.entries[1].LinearVelocity,
 	}}
 	report.Trace = Trace{start: from, pre: kicked, post: post, end: end, duration: dt,
-		eventAt: instant.Elapsed.Value, hasEvent: true}
+		eventAt: instant.Elapsed.Value, hasEvent: true, postSweep: actual}
 	return report, nil
 }
 
@@ -365,7 +365,8 @@ func (w *World) stepContactTransition(ctx context.Context, from, kicked State, d
 		PostVelocityB:  kicked.entries[1].LinearVelocity,
 	}}
 	report.Trace = Trace{start: from, pre: right, post: right, end: end, duration: dt,
-		eventAt: units.Seconds(chosen), hasEvent: true}
+		eventAt: units.Seconds(chosen), hasEvent: true,
+		preSweep: prefix, postSweep: roundedClear}
 	return report, nil
 }
 

@@ -176,6 +176,7 @@ to the byte budget.
 | `contact_box.go` | Box manifold. See `docs/contact-geometry-design.md` §4. |
 | `contact_oriented_box.go` | Rotated boxes. See `docs/contact-geometry-design.md` §4. |
 | `contact_sphere.go` / `contact_sphere_sweep.go` | Sphere-box paths. See `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md`. |
+| `contact_sweep_replay.go` | Replays an affine sweep's float poses against its cached exact source boxes. See `docs/contact-sweep-design.md` §6. |
 | `clearance_degen.go` | Degeneracy oracle. See `docs/clearance-design.md` §4/§5. |
 | `clearance_cells.go` | The §3 candidate sink and §4 face-interior table: stationarity tiers per face pair, admission folded into contributions, offset-surface pairs reduced to spine-pair criticals. See `docs/clearance-design.md` §3/§4. |
 | `clearance_tiers.go` | The curve and vertex tiers of §3: face-edge, edge-edge and vertex cells over §4's curve-tier table; constant-distance families emit only on the oracle's `degYes`. See `docs/clearance-design.md` §3/§4. |

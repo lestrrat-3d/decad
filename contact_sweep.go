@@ -204,6 +204,7 @@ type SweepReport struct {
 	Samples         []SweepSample
 	BoxExcluded     bool
 	PoseEvaluations uint64
+	replay          *sweepReplayProof
 }
 
 type affinePairPath struct {
@@ -419,9 +420,16 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			To: sweepInstant(big.NewRat(1, 1), pa.duration)}
 		return report, nil
 	}
+	report.replay = &sweepReplayProof{pa: pa, pb: pb, boxA: boxA, boxB: boxB,
+		request: req.ContactRequest}
 	run := pairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb, req: req, report: report,
 		boxA: boxA, boxB: boxB}
-	return run.execute(ctx, resolution)
+	result, err := run.execute(ctx, resolution)
+	if err != nil || result == nil {
+		return result, err
+	}
+	result.replay.snapshot(result)
+	return result, nil
 }
 
 type pairSweepRun struct {

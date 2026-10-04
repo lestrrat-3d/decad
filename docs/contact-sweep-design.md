@@ -433,7 +433,18 @@ type SweepReport struct {
     BoxExcluded     bool           // true only when both swept boxes prove clear
     PoseEvaluations uint64
 }
+
+func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Transform, error)
 ```
+
+`CertifiedPosesAt` evaluates the same affine float path used by the sweep at
+the requested elapsed time. It checks the read float poses against the cached
+exact source boxes and refuses when their total displacement exceeds
+`PointResolution` or changes a clear or departing relation. For persistent
+contact and event brackets, it accepts only a rounded relation within that
+resolution of the exact source-box relation. It does not call `ContactPair` or
+read the document. It refuses times outside the sweep or outside a certified
+event prefix.
 
 `Fraction` and the input `Duration` define the exact search time; `Elapsed`
 is a bounded convenience reading for callers. Bracket width is checked from

@@ -35,6 +35,17 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	if !found {
 		return undecided(w, "kinematic impact has no bracket-right pose sample"), nil
 	}
+	prefixMotion := motion
+	prefixMotion.path = decad.PoseSegment{From: kicked.entries[motion.index].Pose,
+		To: pre.entries[motion.index].Pose, Duration: units.Seconds(chosen)}
+	roundedPrefix, err := w.sweepKinematicPoses(ctx, kicked, pre, units.Seconds(chosen),
+		prefixMotion, decad.StopAtInitialContact)
+	if err != nil {
+		return nil, err
+	}
+	if !roundedImpactPrefixAtEnd(roundedPrefix, first) {
+		return undecided(w, "published kinematic impact prefix lacks a rounded endpoint bracket"), nil
+	}
 	contactAtRight, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
 		pre.entries[0].Pose, pre.entries[1].Pose, w.step.Contact)
 	if err != nil {
@@ -226,7 +237,8 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 		PositionChangeB: changes[1],
 	}}
 	report.Trace = Trace{start: from, pre: pre, post: post, end: end, duration: dt,
-		eventAt: first.Bracket.To.Elapsed.Value, hasEvent: true}
+		eventAt: first.Bracket.To.Elapsed.Value, hasEvent: true,
+		preSweep: roundedPrefix, postSweep: rounded}
 	return report, nil
 }
 
