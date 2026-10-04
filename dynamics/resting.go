@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
@@ -66,7 +67,7 @@ func (w *World) stepNoImpulse(ctx context.Context, from, kicked State, dt units.
 }
 
 // stepInitialTouch solves an incoming frictionless pair at its certified
-// initial face contact, then admits only a complete persistent-touch track.
+// initial face contact, or advances exact tangent motion to a proved exit.
 func (w *World) stepInitialTouch(ctx context.Context, from, kicked State, dt units.Value,
 	first *decad.SweepReport) (*StepReport, error) {
 	if first.Event == nil || first.Event.Relation != decad.ContactTouching ||
@@ -90,6 +91,9 @@ func (w *World) stepInitialTouch(ctx context.Context, from, kicked State, dt uni
 		continuation, err := w.sweep(ctx, kicked, dt, decad.ContinueCertifiedTouch)
 		if err != nil {
 			return nil, err
+		}
+		if continuation.Outcome == decad.SweepContactTransitionBracket {
+			return w.stepContactTransition(ctx, from, kicked, dt, normal, continuation)
 		}
 		if !w.persistentTrackWithin(continuation, normal) {
 			return undecided(w, fmt.Sprintf("initial slide returned %v", continuation.Outcome)), nil
@@ -174,6 +178,7 @@ func (w *World) stepInitialTouch(ctx context.Context, from, kicked State, dt uni
 	instant := first.Event.At
 	report := &StepReport{Status: Advanced, Next: &end}
 	report.Events = []ContactEvent{{
+		Kind:          ContactImpact,
 		Pair:          BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
 		Bracket:       decad.SweepInterval{From: instant, To: instant},
 		Time:          instant.Elapsed.Value,
@@ -201,6 +206,176 @@ func (w *World) persistentTrackWithin(sweep *decad.SweepReport, normal r3.Vec) b
 		return false
 	}
 	for _, fraction := range []units.Value{units.Scalar(0), units.Scalar(0.5), units.Scalar(1)} {
+		manifold, err := sweep.ContactTrack.ManifoldAt(fraction)
+		if err != nil || manifold == nil || len(manifold.Points) == 0 {
+			return false
+		}
+		checkNormal, separation, bound, ok := reducedContact(manifold, w.step.Contact)
+		if !ok || checkNormal != normal || !finite(separation, bound) ||
+			math.Abs(separation)+bound > w.step.PenetrationResidual.Base() {
+			return false
+		}
+	}
+	return true
+}
+
+// stepContactTransition advances across a certified edge exit. It requires
+// separation at the bracket's right side and clear ideal and rounded paths
+// after that time, so a later contact cannot be skipped.
+func (w *World) stepContactTransition(ctx context.Context, from, kicked State, dt units.Value,
+	normal r3.Vec, first *decad.SweepReport) (*StepReport, error) {
+	if first.Bracket == nil || first.Event == nil || first.Event.Relation != decad.ContactSeparated ||
+		!w.transitionTrackWithin(first, normal) {
+		return undecided(w, "transition lacks a bounded touching prefix and separated right sample"), nil
+	}
+	fromFraction := exactBase(first.Bracket.From.Fraction)
+	toFraction := exactBase(first.Bracket.To.Fraction)
+	if fromFraction == nil || toFraction == nil || toFraction.Cmp(fromFraction) <= 0 ||
+		fromFraction.Sign() <= 0 || toFraction.Cmp(exactBase(units.Scalar(1))) >= 0 {
+		return undecided(w, "transition bracket cannot make progress before the step end"), nil
+	}
+	chosen := dt.Base() * first.Bracket.To.Fraction.Base()
+	remaining := dt.Base() - chosen
+	if !finite(chosen, remaining) || chosen <= 0 || remaining <= 0 {
+		return undecided(w, "transition time leaves no representable clear remainder"), nil
+	}
+	if w.step.MaxEvents <= 1 {
+		return undecided(w, "transition reaches the event limit with time remaining"), nil
+	}
+	travelSpeed := 0.0
+	for axis := range 3 {
+		a := exactBase(velocityComponent(kicked.entries[0].LinearVelocity, axis))
+		b := exactBase(velocityComponent(kicked.entries[1].LinearVelocity, axis))
+		if a == nil || b == nil {
+			return undecided(w, "transition velocity cannot be bounded"), nil
+		}
+		delta := absRat(new(big.Rat).Sub(b, a))
+		speed, _ := delta.Float64()
+		travelSpeed = outwardSum(travelSpeed, math.Nextafter(speed, math.Inf(1)))
+	}
+	travel, ok := boundBracketTravel(*first.Bracket, travelSpeed)
+	if !ok || travel > w.step.ContactSlop.Base() || travel > w.step.PenetrationResidual.Base() {
+		return undecided(w, "transition bracket travel exceeds the state residual"), nil
+	}
+	wholeEnd, err := driftState(kicked, dt.Base())
+	if err != nil {
+		return undecidedArithmetic(w, "non-finite transition drift", err)
+	}
+	roundedFirst, err := w.sweepPoses(ctx, kicked, wholeEnd, dt, decad.ContinueCertifiedTouch)
+	if err != nil {
+		return nil, err
+	}
+	if roundedFirst.Outcome != decad.SweepContactTransitionBracket || roundedFirst.Bracket == nil ||
+		roundedFirst.Event == nil || roundedFirst.Event.Relation != decad.ContactSeparated ||
+		!w.transitionTrackWithin(roundedFirst, normal) ||
+		exactBase(roundedFirst.Bracket.To.Fraction).Cmp(toFraction) != 0 ||
+		exactBase(roundedFirst.Bracket.From.Fraction).Cmp(fromFraction) != 0 {
+		return undecided(w, "rounded transition lacks a matching separated prefix"), nil
+	}
+	roundedTravel, ok := boundBracketTravel(*roundedFirst.Bracket, travelSpeed)
+	if !ok || roundedTravel > w.step.ContactSlop.Base() ||
+		roundedTravel > w.step.PenetrationResidual.Base() {
+		return undecided(w, "rounded transition travel exceeds the state residual"), nil
+	}
+	right, err := driftState(kicked, chosen)
+	if err != nil {
+		return undecidedArithmetic(w, "non-finite transition right pose", err)
+	}
+	// The whole-step rounded segment may miss this pose by a floating-point ULP.
+	// Certify the actual rounded prefix ending at the state that Step publishes.
+	prefix, err := w.sweepPoses(ctx, kicked, right, units.Seconds(chosen), decad.ContinueCertifiedTouch)
+	if err != nil {
+		return nil, err
+	}
+	if prefix.Outcome != decad.SweepContactTransitionBracket || prefix.Bracket == nil ||
+		prefix.Event == nil || prefix.Event.Relation != decad.ContactSeparated ||
+		!w.transitionTrackWithin(prefix, normal) ||
+		exactBase(prefix.Bracket.To.Fraction).Cmp(exactBase(units.Scalar(1))) != 0 {
+		return undecided(w, "published rounded prefix lacks a separated transition proof"), nil
+	}
+	featureA, featureB := first.ContactTrack.Features()
+	prefixFeatureA, prefixFeatureB := prefix.ContactTrack.Features()
+	if featureA != prefixFeatureA || featureB != prefixFeatureB {
+		return undecided(w, "published rounded prefix changes contact features"), nil
+	}
+	prefixFrom := new(big.Rat).Mul(exactBase(units.Seconds(chosen)),
+		exactBase(prefix.Bracket.From.Fraction))
+	idealFrom := new(big.Rat).Mul(exactBase(dt), fromFraction)
+	if absRat(new(big.Rat).Sub(prefixFrom, idealFrom)).Cmp(exactBase(w.step.TimeResolution)) > 0 {
+		return undecided(w, "published rounded prefix has a different transition time"), nil
+	}
+	prefixTravel, ok := boundBracketTravel(*prefix.Bracket, travelSpeed)
+	if !ok || prefixTravel > w.step.ContactSlop.Base() ||
+		prefixTravel > w.step.PenetrationResidual.Base() {
+		return undecided(w, "published rounded prefix exceeds the state residual"), nil
+	}
+	rightContact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+		right.entries[0].Pose, right.entries[1].Pose, w.step.Contact)
+	if err != nil {
+		return nil, err
+	}
+	if rightContact.Relation != decad.ContactSeparated {
+		return undecided(w, "transition right pose is not separated"), nil
+	}
+	remainder := units.Seconds(remaining)
+	idealClear, err := w.sweep(ctx, right, remainder, decad.StopAtInitialContact)
+	if err != nil {
+		return nil, err
+	}
+	if idealClear.Outcome != decad.SweepClear {
+		return undecided(w, fmt.Sprintf("transition remainder returned %v", idealClear.Outcome)), nil
+	}
+	end, err := driftState(right, remaining)
+	if err != nil {
+		return undecidedArithmetic(w, "non-finite transition end pose", err)
+	}
+	roundedClear, err := w.sweepPoses(ctx, right, end, remainder, decad.StopAtInitialContact)
+	if err != nil {
+		return nil, err
+	}
+	if roundedClear.Outcome != decad.SweepClear {
+		return undecided(w, fmt.Sprintf("rounded transition remainder returned %v", roundedClear.Outcome)), nil
+	}
+	finalContact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
+	if err != nil {
+		return nil, err
+	}
+	if finalContact.Relation != decad.ContactSeparated {
+		return undecided(w, "transition endpoint is not separated"), nil
+	}
+	reportBody := 0
+	if w.parts[0].definition.Role == Fixed {
+		reportBody = 1
+	}
+	report := &StepReport{Status: Advanced, Next: &end}
+	report.Events = []ContactEvent{{
+		Kind:          ContactTransition,
+		Pair:          BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Bracket:       *first.Bracket,
+		Time:          units.Seconds(chosen),
+		NormalImpulse: units.KilogramMillimetersPerSecond(0),
+		PreVelocity:   kicked.entries[reportBody].LinearVelocity,
+		PostVelocity:  kicked.entries[reportBody].LinearVelocity,
+		PreVelocityA:  kicked.entries[0].LinearVelocity,
+		PreVelocityB:  kicked.entries[1].LinearVelocity,
+		PostVelocityA: kicked.entries[0].LinearVelocity,
+		PostVelocityB: kicked.entries[1].LinearVelocity,
+	}}
+	report.Trace = Trace{start: from, pre: right, post: right, end: end, duration: dt,
+		eventAt: units.Seconds(chosen), hasEvent: true}
+	return report, nil
+}
+
+func (w *World) transitionTrackWithin(sweep *decad.SweepReport, normal r3.Vec) bool {
+	if sweep == nil || sweep.Outcome != decad.SweepContactTransitionBracket || sweep.Bracket == nil ||
+		sweep.ContactTrack == nil || sweep.ContactTrack.Start().Fraction.Base() != 0 ||
+		exactBase(sweep.ContactTrack.End().Fraction).Cmp(exactBase(sweep.Bracket.From.Fraction)) != 0 ||
+		sweep.ContactTrack.Normal().Value != normal {
+		return false
+	}
+	end := sweep.ContactTrack.End().Fraction.Base()
+	for _, fraction := range []units.Value{units.Scalar(0), units.Scalar(end / 2), units.Scalar(end)} {
 		manifold, err := sweep.ContactTrack.ManifoldAt(fraction)
 		if err != nil || manifold == nil || len(manifold.Points) == 0 {
 			return false

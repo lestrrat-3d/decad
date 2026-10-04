@@ -17,10 +17,13 @@ tracks. Each dynamic body accepts at most one center force with zero torque;
 the mass interval must fit the kicked velocity within `VelocityResidual`.
 An initially touching pair with exactly zero relative normal speed can slide
 without an impulse when both full-span paths certify persistent contact. The
-step stops as `Undecided` at a contact-feature transition or edge exit.
+first edge-exit step accepts a transition whose right bracket sample is
+separated, then certifies a clear remainder. A transition with a touching
+right sample or insufficient `MaxEvents` remains `Undecided`.
 Off-center impulses that require spin return `Undecided`. Torque loads,
-kinematic drivers, friction, stacks, contact-transition stepping, external
-impulse reporting, and arbitrary trace sampling remain design contracts.
+kinematic drivers, friction, stacks, broader contact-transition stepping,
+external impulse reporting, and arbitrary trace sampling remain design
+contracts.
 
 Navigation only; the named sections own the rules:
 
@@ -339,6 +342,12 @@ returns `Undecided`.
 
 ## Completion, conservation, and trace
 
+`ContactEvent.Kind` distinguishes `ContactImpact` from `ContactTransition`.
+An impact carries a bounded manifold and a normal impulse. A separated
+contact transition carries its original bracket, the chosen right time,
+unchanged velocities, and zero impulse; its `Manifold` is empty because the
+right state is separated. `Trace.Sample` at that time returns the right state.
+
 ```go
 type StepStatus int // Advanced, Undecided
 
@@ -461,7 +470,15 @@ it has translated `(5, 0, 0) mm` with unchanged velocity and no contact
 event or impulse. Real ideal and rounded sweeps each return a full-span
 `SweepPersistentTouch` track, and `ContactPair` confirms both endpoints.
 A narrower floor that changes the contact patch during the step returns
-`Undecided` with no next state.
+`Undecided` when the step cannot certify the transition and remainder. The
+first implemented edge-exit case has a `10 mm` wide floor and touching box,
+with the box moving at `5 mm/s` for `3 s`. The transition brackets `2 s`,
+and a certified clear remainder ends at `x=15 mm` with unchanged velocity.
+It reports one zero-impulse transition event. `MaxEvents=1` refuses the
+remaining `1 s`; `MaxEvents=2` admits the step.
+The solver also sweeps the rounded prefix directly to its published right
+pose. The full-step rounded segment can sample a different pose by one ULP
+at that time; the direct prefix must certify the same separated transition.
 
 For the sliding-friction increment, put the same `1 kg` box
 on a fixed floor wide enough for a `5 mm` slide. With gravity
