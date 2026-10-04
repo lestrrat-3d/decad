@@ -264,9 +264,11 @@ func (w *World) eventAngularImpulseFailure(event ContactEvent, body int,
 		if pointBound == nil || pointBound.Sign() < 0 {
 			return "contact event point bound is invalid"
 		}
-		var arm, action [3]*big.Rat
+		var arm, action, armError, actionError [3]*big.Rat
 		coordinates := [3]float64{witness.Value.X, witness.Value.Y, witness.Value.Z}
 		normal := [3]float64{point.Normal.Value.X, point.Normal.Value.Y, point.Normal.Value.Z}
+		normalError := new(big.Rat).Add(exactBase(point.Normal.Bound), exactBase(point.NormalAngle))
+		normalError.Mul(normalError, exactBase(impulse.Normal))
 		for axis := range arm {
 			coordinate, direction := new(big.Rat).SetFloat64(coordinates[axis]),
 				new(big.Rat).SetFloat64(normal[axis])
@@ -279,6 +281,8 @@ func (w *World) eventAngularImpulseFailure(event ContactEvent, body int,
 				return "contact event has invalid point impulse"
 			}
 			arm[axis] = new(big.Rat).Sub(coordinate, center[axis])
+			armError[axis] = new(big.Rat).Add(pointBound, centerError[axis])
+			actionError[axis] = normalError
 			action[axis] = new(big.Rat).Add(
 				new(big.Rat).Mul(normalImpulse, direction), tangentImpulse)
 			aggregate[axis].Add(aggregate[axis], action[axis])
@@ -288,20 +292,12 @@ func (w *World) eventAngularImpulseFailure(event ContactEvent, body int,
 			cross := new(big.Rat).Sub(new(big.Rat).Mul(arm[a], action[b]),
 				new(big.Rat).Mul(arm[b], action[a]))
 			torque[axis].Add(torque[axis], cross.Mul(cross, big.NewRat(sign, 1)))
-			uncertainty := new(big.Rat).Add(pointBound, centerError[a])
-			torqueError[axis].Add(torqueError[axis], new(big.Rat).Mul(uncertainty,
-				absRat(new(big.Rat).Set(action[b]))))
-			uncertainty = new(big.Rat).Add(pointBound, centerError[b])
-			torqueError[axis].Add(torqueError[axis], new(big.Rat).Mul(uncertainty,
-				absRat(new(big.Rat).Set(action[a]))))
+			torqueError[axis].Add(torqueError[axis],
+				crossProductError(arm, action, armError, actionError, axis))
 			torqueError[axis].Add(torqueError[axis], new(big.Rat).Mul(impulseLimit,
-				new(big.Rat).Add(absRat(new(big.Rat).Set(arm[a])),
-					absRat(new(big.Rat).Set(arm[b])))))
-			normalError := new(big.Rat).Add(exactBase(point.Normal.Bound), exactBase(point.NormalAngle))
-			normalError.Mul(normalError, exactBase(impulse.Normal))
-			torqueError[axis].Add(torqueError[axis], new(big.Rat).Mul(normalError,
-				new(big.Rat).Add(absRat(new(big.Rat).Set(arm[a])),
-					absRat(new(big.Rat).Set(arm[b])))))
+				new(big.Rat).Add(
+					new(big.Rat).Add(absRat(new(big.Rat).Set(arm[a])), armError[a]),
+					new(big.Rat).Add(absRat(new(big.Rat).Set(arm[b])), armError[b]))))
 		}
 	}
 	applied, ok := eventAppliedImpulse(event)
@@ -331,6 +327,20 @@ func (w *World) eventAngularImpulseFailure(event ContactEvent, body int,
 		}
 	}
 	return ""
+}
+
+// crossProductError encloses the cross product when both the contact arm and
+// the bounded normal impulse vary, including their product term.
+func crossProductError(arm, action, armError, actionError [3]*big.Rat, axis int) *big.Rat {
+	a, b := (axis+1)%3, (axis+2)%3
+	bound := new(big.Rat)
+	bound.Add(bound, new(big.Rat).Mul(armError[a], absRat(new(big.Rat).Set(action[b]))))
+	bound.Add(bound, new(big.Rat).Mul(armError[b], absRat(new(big.Rat).Set(action[a]))))
+	bound.Add(bound, new(big.Rat).Mul(actionError[b], absRat(new(big.Rat).Set(arm[a]))))
+	bound.Add(bound, new(big.Rat).Mul(actionError[a], absRat(new(big.Rat).Set(arm[b]))))
+	bound.Add(bound, new(big.Rat).Mul(armError[a], actionError[b]))
+	bound.Add(bound, new(big.Rat).Mul(armError[b], actionError[a]))
+	return bound
 }
 
 // eventAppliedImpulse returns the exact held aggregate impulse on B. A
