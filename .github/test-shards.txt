@@ -1668,6 +1668,7 @@
 4	0.00	TestSweepDenotationHalfTurnExcess
 4	0.00	TestSweepLineStagesTessellation
 4	0.00	TestSweepLineTiltedFrameCarriesEndpointGap
+4	0.00	TestSweepPairOffCenterBoxImpactAtEndpoint
 4	0.00	TestSweepPairRotatingPathUndecided
 4	0.00	TestSweepPairSourceBoxPersistentSlide
 4	0.00	TestSweepPairSourceBoxSlideEdgeTransition
