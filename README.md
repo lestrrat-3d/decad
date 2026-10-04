@@ -31,18 +31,18 @@ agent still has to run it in the CAD app to learn whether a sweep failed,
 whether the body is watertight, or whether two components collide. A change to
 the construction means another run in the app.
 
-With decad, the agent writes and runs that construction in Go before building
-the CAD add-in. decad builds 3D bodies from solved sketches and ordered
-modeling operations, and can tessellate them for rendering. The agent can
-measure volume and centroid, check whether bodies interfere or have enough
-clearance, and ask whether a wall is too thin for a cutting tool. It can change
-a dimension or feature, run the program again, and inspect the new body and
-verification report. With the program and inputs held fixed, the same model
-can be rebuilt without a fresh request to the agent.
+With [decad](https://github.com/lestrrat-3d/decad), the agent writes and runs
+that construction in Go before building the CAD add-in. decad builds 3D bodies
+from solved sketches and ordered modeling operations, and can tessellate them
+for rendering. The agent can measure volume and centroid, check whether bodies
+interfere or have enough clearance, and ask whether a wall is too thin for a
+cutting tool. It can change a dimension or feature, run the program again, and
+inspect the new body and verification report. With the program and inputs held
+fixed, **the same model can be rebuilt** without a fresh request to the agent.
 
 Those modeling operations correspond to steps a CAD add-in can use. Once the
 decad construction meets the checks the agent has asked for, the agent can
-carry the steps into the CAD app to make an editable, parametric part. The CAD
+carry the steps into the CAD app to make an **editable, parametric part**. The CAD
 app may interpret those steps differently, so the agent checks the part it
 builds.
 
