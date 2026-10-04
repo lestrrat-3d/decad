@@ -29,7 +29,8 @@ interior impact. Departure requires ideal and rounded full-path certificates;
 a zero-restitution response requires certified persistent touch.
 The driver's stored velocity remains zero while its derivative enters the
 response. `World.Step` admits a positive effective pair friction coefficient
-for a fixed floor first and a dynamic source box second. An initial four-corner face touch
+for a fixed floor and a dynamic source box in either world order. An initial
+four-corner face touch
 with zero incoming spin, positive X slip, and closing Z speed can use the joint
 Coulomb solver. The response publishes zero Y/Z velocity, bounded corner and
 aggregate impulses, a residual report, and a persistent-touch trace after
@@ -150,9 +151,9 @@ pair skips effective material mixing; each body's material still passes input
 validation. The held exclusion is canonical in world order. `World.Excluded()`
 and `StepReport.Excluded` return separate copies.
 
-The current positive-friction slice accepts only fixed-first/dynamic-second
-worlds. Without an override, the pair coefficient is the geometric mean of
-the held body coefficients. The solver proposes impulses with a nominal
+The current positive-friction slice accepts a fixed floor and dynamic box in
+either world order. Without an override, the pair coefficient is the geometric
+mean of the held body coefficients. The solver proposes impulses with a nominal
 rounded mean, then checks the friction cone and slip law against rational
 bounds that enclose the exact mean. A zero body coefficient selects the
 frictionless response. A positive mean below the smallest positive float64 or
@@ -160,8 +161,11 @@ above the largest finite float64 returns `ErrUnsupported` at `NewWorld`.
 With an override, its exact held coefficient replaces
 the body values; a positive override goes to the patch solver even when both
 body coefficients are zero. A zero override selects the frictionless response
-even when the body coefficients differ. Reversed roles and other positive-
-friction body pairs return `ErrUnsupported` at `NewWorld` when the pair is not excluded.
+even when the body coefficients differ. Other positive-friction body pairs
+return `ErrUnsupported` at `NewWorld` when the pair is not excluded.
+The patch solver reads a floor-to-box witness in both orders, while each event
+keeps its original world-order manifold. Its normal impulse is nonnegative,
+and its tangent and point impulses describe the impulse on world-order B.
 
 ## Step input and configuration
 

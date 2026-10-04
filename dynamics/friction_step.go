@@ -15,37 +15,46 @@ import (
 // when both complete continuations certify the same touching face.
 func (w *World) stepInitialFriction(ctx context.Context, from, kicked State, dt units.Value,
 	first *decad.SweepReport) (*StepReport, error) {
+	dynamic := 1
+	if w.parts[0].definition.Role == Dynamic {
+		dynamic = 0
+	}
 	if first.Event == nil || first.Event.Relation != decad.ContactTouching ||
 		first.Event.Manifold == nil || len(first.Event.Manifold.Points) != 4 ||
 		kicked.entries[0].Pose != r3.Identity() || kicked.entries[1].Pose != r3.Identity() ||
-		!zeroAngularVelocity(kicked.entries[1].AngularVelocity) ||
-		kicked.entries[1].LinearVelocity.Y.Mag() != 0 ||
-		kicked.entries[1].LinearVelocity.Z.Base() >= -w.step.VelocityResidual.Base() {
+		!zeroAngularVelocity(kicked.entries[dynamic].AngularVelocity) ||
+		kicked.entries[dynamic].LinearVelocity.Y.Mag() != 0 ||
+		kicked.entries[dynamic].LinearVelocity.Z.Base() >= -w.step.VelocityResidual.Base() {
 		return undecided(w, "frictional contact is outside the fixed-floor patch"), nil
 	}
 	normal, separation, bound, ok := reducedContact(first.Event.Manifold, w.step.Contact)
 	penetration := outwardSum(math.Abs(separation), bound)
-	if !ok || normal != (r3.Vec{Z: 1}) || !finite(separation, bound) ||
+	expectedNormal := r3.Vec{Z: 1}
+	if dynamic == 0 {
+		expectedNormal.Z = -1
+	}
+	patch := floorToBoxManifold(first.Event.Manifold, dynamic)
+	if !ok || normal != expectedNormal || !finite(separation, bound) ||
 		!finite(penetration) || penetration > w.step.PenetrationResidual.Base() ||
-		!w.fixedFloorPatchWitnesses(first.Event.Manifold) {
+		!w.fixedFloorPatchWitnesses(&patch) {
 		return undecided(w, "frictional initial manifold exceeds its bounds"), nil
 	}
 	if w.step.MaxEvents <= 1 {
 		return undecided(w, "frictional contact reaches the event limit with time remaining"), nil
 	}
-	pre := kicked.entries[1].LinearVelocity
+	pre := kicked.entries[dynamic].LinearVelocity
 	if pre.X.Mag() == 0 {
-		return w.stepFrictionStaticSupport(ctx, from, kicked, dt, first)
+		return w.stepFrictionStaticSupport(ctx, from, kicked, dt, first, &patch, dynamic)
 	}
 	if pre.X.Base() <= 0 {
 		return undecided(w, "frictional contact has no admitted positive X slip"), nil
 	}
-	maximumLever, ok := w.frictionWholeBodyLeverWithin(first.Event.Manifold)
+	maximumLever, ok := w.frictionWholeBodyLeverWithin(&patch, dynamic)
 	if !ok {
 		return undecided(w, "frictional track can move the patch beyond audited corners"), nil
 	}
-	response, ok := solveFixedFloorFrictionPatch(first.Event.Manifold, w.parts[1].mass,
-		kicked.entries[1].Pose, pre, w.friction, w.step)
+	response, ok := solveFixedFloorFrictionPatch(&patch, w.parts[dynamic].mass,
+		kicked.entries[dynamic].Pose, pre, w.friction, w.step)
 	if !ok {
 		return undecided(w, "frictional patch residuals exceed their limits"), nil
 	}
@@ -58,8 +67,11 @@ func (w *World) stepInitialFriction(ctx context.Context, from, kicked State, dt 
 	if !ok {
 		return undecided(w, "frictional aggregate impulse cannot be published"), nil
 	}
+	if dynamic == 0 {
+		tangentImpulse, points = reversePatchTangent(tangentImpulse, points)
+	}
 	post := kicked
-	post.entries[1].LinearVelocity = response.Post
+	post.entries[dynamic].LinearVelocity = response.Post
 	ideal, err := w.sweep(ctx, post, dt, decad.ContinueCertifiedTouch)
 	if err != nil {
 		return nil, err
@@ -111,13 +123,42 @@ func (w *World) stepInitialFriction(ctx context.Context, from, kicked State, dt 
 		PreVelocity:   pre,
 		PostVelocity:  response.Post,
 		PreVelocityA:  kicked.entries[0].LinearVelocity,
-		PreVelocityB:  pre,
+		PreVelocityB:  kicked.entries[1].LinearVelocity,
 		PostVelocityA: post.entries[0].LinearVelocity,
-		PostVelocityB: response.Post,
+		PostVelocityB: post.entries[1].LinearVelocity,
 	}}
 	report.Trace = Trace{start: from, pre: kicked, post: post, end: end, duration: dt,
 		eventAt: instant.Elapsed.Value, hasEvent: true}
 	return report, nil
+}
+
+// The joint solver uses a floor-to-box +Z normal. Keep the producer's point
+// order and bounds, changing only which original body each witness names.
+func floorToBoxManifold(manifold *decad.ContactManifold, dynamic int) decad.ContactManifold {
+	patch := cloneManifold(*manifold)
+	if dynamic == 1 {
+		return patch
+	}
+	for i := range patch.Points {
+		point := &patch.Points[i]
+		point.OnA, point.OnB = point.OnB, point.OnA
+		point.FaceA, point.FaceB = point.FaceB, point.FaceA
+		point.FeatureA, point.FeatureB = point.FeatureB, point.FeatureA
+		point.Normal.Value = point.Normal.Value.Scale(-1)
+	}
+	return patch
+}
+
+// The solver's tangent is the impulse on the box. World-order B is the floor
+// when the box is A, so its event tangent has the opposite sign.
+func reversePatchTangent(tangent QuantityVec, points []ContactPointImpulse) (QuantityVec, []ContactPointImpulse) {
+	tangent.X = units.KilogramMillimetersPerSecond(-tangent.X.Base())
+	tangent.Y = units.KilogramMillimetersPerSecond(-tangent.Y.Base())
+	for i := range points {
+		points[i].Tangent.X = units.KilogramMillimetersPerSecond(-points[i].Tangent.X.Base())
+		points[i].Tangent.Y = units.KilogramMillimetersPerSecond(-points[i].Tangent.Y.Base())
+	}
+	return tangent, points
 }
 
 func (w *World) fixedFloorPatchWitnesses(manifold *decad.ContactManifold) bool {
@@ -137,9 +178,9 @@ func (w *World) fixedFloorPatchWitnesses(manifold *decad.ContactManifold) bool {
 
 // frictionWholeBodyLeverWithin ensures any later box point has no greater
 // omitted-spin speed error than the initial points audited by the solver.
-func (w *World) frictionWholeBodyLeverWithin(manifold *decad.ContactManifold) (*big.Rat, bool) {
-	mass := w.parts[1].mass
-	box, err := w.parts[1].definition.Body.Bounds()
+func (w *World) frictionWholeBodyLeverWithin(manifold *decad.ContactManifold, dynamic int) (*big.Rat, bool) {
+	mass := w.parts[dynamic].mass
+	box, err := w.parts[dynamic].definition.Body.Bounds()
 	if err != nil || box.Bound.Kind() != units.Length || !finite(box.Bound.Base(),
 		box.Min.X, box.Min.Y, box.Min.Z, box.Max.X, box.Max.Y, box.Max.Z) ||
 		box.Bound.Base() < 0 {
@@ -179,13 +220,13 @@ func (w *World) frictionWholeBodyLeverWithin(manifold *decad.ContactManifold) (*
 }
 
 func (w *World) stepFrictionStaticSupport(ctx context.Context, from, kicked State, dt units.Value,
-	first *decad.SweepReport) (*StepReport, error) {
-	mass := w.parts[1].mass
+	first *decad.SweepReport, patch *decad.ContactManifold, dynamic int) (*StepReport, error) {
+	mass := w.parts[dynamic].mass
 	if mass.Center.Bound.Mag() != 0 {
 		return undecided(w, "static friction patch has an uncertain center"), nil
 	}
 	var xTotal, yTotal big.Rat
-	for _, point := range first.Event.Manifold.Points {
+	for _, point := range patch.Points {
 		if point.OnB.Bound.Mag() != 0 {
 			return undecided(w, "static friction patch has uncertain corners"), nil
 		}
@@ -218,7 +259,11 @@ func (w *World) stepFrictionStaticSupport(ctx context.Context, from, kicked Stat
 	}
 	preSpeed := [2]units.Value{kicked.entries[0].LinearVelocity.Z, kicked.entries[1].LinearVelocity.Z}
 	postSpeed := [2]float64{event.PostVelocityA.Z.Base(), event.PostVelocityB.Z.Base()}
-	if !responsePairResidualsWithin(preSpeed, 1, units.Scalar(0), w.parts,
+	normalSign := float64(1)
+	if dynamic == 0 {
+		normalSign = -1
+	}
+	if !responsePairResidualsWithin(preSpeed, normalSign, units.Scalar(0), w.parts,
 		0, normal.Base(), postSpeed, w.step.VelocityResidual, w.step.ImpulseResidual) {
 		return undecided(w, "static support rounded corner sum exceeds response residual"), nil
 	}
