@@ -116,6 +116,121 @@ func TestVerticalBoxReboundUsesProductionGeometry(t *testing.T) {
 	require.Equal(t, originalBox, afterBox)
 }
 
+func TestTwoDynamicBoxesExchangeMomentum(t *testing.T) {
+	doc := decad.New()
+	a := makeBox(t, doc, 0, -5, 10, 5, 0, 10)
+	b := makeBox(t, doc, 35, -5, 45, 5, 0, 10)
+	originalA, err := a.Bounds()
+	require.NoError(t, err)
+	originalB, err := b.Bounds()
+	require.NoError(t, err)
+	density := units.KilogramsPerCubicMillimeter(0.001)
+	material := dynamics.Material{Restitution: units.Scalar(0.5), Friction: units.Scalar(0)}
+	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{
+			{Body: a, Role: dynamics.Dynamic, Density: &density, Material: material},
+			{Body: b, Role: dynamics.Dynamic, Density: &density, Material: material},
+		},
+		Step: dynamics.StepConfig{
+			Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+				NormalResolution: units.Radians(1e-6)},
+			TimeResolution: units.Seconds(1e-9), ContactSlop: units.Millimeters(1e-6),
+			VelocityResidual:        units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2,
+		},
+	})
+	require.NoError(t, err)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: a, Pose: r3.Identity(), LinearVelocity: dynamics.QuantityVec{
+			X: units.MillimetersPerSecond(100), Y: units.MillimetersPerSecond(0),
+			Z: units.MillimetersPerSecond(0)}, AngularVelocity: zeroAngular(t)},
+		{Body: b, Pose: r3.Identity(), LinearVelocity: dynamics.QuantityVec{
+			X: units.MillimetersPerSecond(-100), Y: units.MillimetersPerSecond(0),
+			Z: units.MillimetersPerSecond(0)}, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.25))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.NotNil(t, report.Next)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, 0.125, report.Events[0].Time.Base(), 1e-9)
+	require.InDelta(t, 150, report.Events[0].NormalImpulse.Base(), 1e-6)
+	aFinal, ok := report.Next.Body(a)
+	require.True(t, ok)
+	bFinal, ok := report.Next.Body(b)
+	require.True(t, ok)
+	require.InDelta(t, -50, aFinal.LinearVelocity.X.Base(), 1e-6)
+	require.InDelta(t, 50, bFinal.LinearVelocity.X.Base(), 1e-6)
+	require.InDelta(t, 6.25, aFinal.Pose.Translation().X, 1e-6)
+	require.InDelta(t, -6.25, bFinal.Pose.Translation().X, 1e-6)
+	require.InDelta(t, 100, report.Events[0].PreVelocityA.X.Base(), 1e-6)
+	require.InDelta(t, -100, report.Events[0].PreVelocityB.X.Base(), 1e-6)
+	require.InDelta(t, -50, report.Events[0].PostVelocityA.X.Base(), 1e-6)
+	require.InDelta(t, 50, report.Events[0].PostVelocityB.X.Base(), 1e-6)
+	replayed, err := report.Trace.Sample(units.Seconds(0.25))
+	require.NoError(t, err)
+	require.Equal(t, report.Next.Entries(), replayed.Entries())
+	require.Equal(t, []*decad.Body{a, b}, doc.Bodies())
+	afterA, err := a.Bounds()
+	require.NoError(t, err)
+	afterB, err := b.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, originalA, afterA)
+	require.Equal(t, originalB, afterB)
+}
+
+func TestTwoDynamicBoxesUseBothMasses(t *testing.T) {
+	doc := decad.New()
+	a := makeBox(t, doc, 0, -5, 10, 5, 0, 10)
+	b := makeBox(t, doc, 35, -5, 45, 5, 0, 10)
+	densityA := units.KilogramsPerCubicMillimeter(0.001)
+	densityB := units.KilogramsPerCubicMillimeter(0.002)
+	material := dynamics.Material{Restitution: units.Scalar(0.5), Friction: units.Scalar(0)}
+	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{
+			{Body: a, Role: dynamics.Dynamic, Density: &densityA, Material: material},
+			{Body: b, Role: dynamics.Dynamic, Density: &densityB, Material: material},
+		},
+		Step: dynamics.StepConfig{
+			Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+				NormalResolution: units.Radians(1e-6)},
+			TimeResolution: units.Seconds(1e-9), ContactSlop: units.Millimeters(1e-6),
+			VelocityResidual:        units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2,
+		},
+	})
+	require.NoError(t, err)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: a, Pose: r3.Identity(), LinearVelocity: dynamics.QuantityVec{
+			X: units.MillimetersPerSecond(100), Y: units.MillimetersPerSecond(0),
+			Z: units.MillimetersPerSecond(0)}, AngularVelocity: zeroAngular(t)},
+		{Body: b, Pose: r3.Identity(), LinearVelocity: dynamics.QuantityVec{
+			X: units.MillimetersPerSecond(-100), Y: units.MillimetersPerSecond(0),
+			Z: units.MillimetersPerSecond(0)}, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.25))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, 200, report.Events[0].NormalImpulse.Base(), 1e-6)
+	aFinal, ok := report.Next.Body(a)
+	require.True(t, ok)
+	bFinal, ok := report.Next.Body(b)
+	require.True(t, ok)
+	require.InDelta(t, -100, aFinal.LinearVelocity.X.Base(), 1e-6)
+	require.InDelta(t, 0, bFinal.LinearVelocity.X.Base(), 1e-6)
+	require.InDelta(t, 0, aFinal.Pose.Translation().X, 1e-6)
+	require.InDelta(t, -12.5, bFinal.Pose.Translation().X, 1e-6)
+}
+
 func TestClearIdealPathRejectsRoundedOverlappingEndpoint(t *testing.T) {
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, 10, 10)

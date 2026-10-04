@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"sort"
 
@@ -102,8 +103,53 @@ type SweepDeparture struct {
 	GapAtUntil Measurement
 }
 
-// SweepContactTrack will hold a continuous contact proof in later slices.
-type SweepContactTrack struct{}
+// SweepContactTrack owns the exact source-box intervals and affine motion of a
+// certified touching prefix. Its source face pointers are the original faces.
+type SweepContactTrack struct {
+	a, b       sourceBoxContactProof
+	deltaA     [3]dyadic
+	deltaB     [3]dyadic
+	start, end *big.Rat
+	duration   *big.Rat
+	request    ContactRequest
+	features   [2]ContactFeature
+	normal     VecMeasurement
+}
+
+func (t *SweepContactTrack) Start() SweepInstant { return sweepInstant(t.start, t.duration) }
+
+func (t *SweepContactTrack) End() SweepInstant { return sweepInstant(t.end, t.duration) }
+
+func (t *SweepContactTrack) Features() (ContactFeature, ContactFeature) {
+	return t.features[0], t.features[1]
+}
+
+func (t *SweepContactTrack) Normal() VecMeasurement { return t.normal }
+
+// ManifoldAt returns a fresh four-corner reduction of the complete exact
+// touching patch at a fraction in this track's certified interval.
+func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, error) {
+	if fraction.Kind() != units.Dimensionless {
+		return nil, fmt.Errorf("%w: contact-track fraction must be dimensionless", ErrUnitKind)
+	}
+	f, ok := exactBaseValue(fraction)
+	if !ok || !finiteMeasurementValues(fraction.Base()) {
+		return nil, fmt.Errorf("%w: nonfinite contact-track fraction", ErrNotFinite)
+	}
+	if f.Cmp(t.start) < 0 || f.Cmp(t.end) > 0 {
+		return nil, fmt.Errorf("%w: fraction is outside contact track", ErrDegenerate)
+	}
+	a, b, ok := translatedSourceBoxes(t.a, t.b, t.deltaA, t.deltaB, f)
+	if !ok {
+		return nil, fmt.Errorf("%w: fraction is not representable as a source-box translation", ErrUnsupported)
+	}
+	report := &ContactReport{Request: t.request}
+	classifySourceBoxes(report, a, b)
+	if report.Relation != ContactTouching || report.Manifold == nil {
+		return nil, fmt.Errorf("%w: contact track has no bounded face patch", ErrUnsupported)
+	}
+	return report.Manifold, nil
+}
 
 // SweepEvent reports the ideal path relation at one sampled instant.
 type SweepEvent struct {
@@ -480,6 +526,171 @@ func boxPoseDeviation(start, observed sourceBoxContactProof, delta [3]dyadic, f 
 	return total
 }
 
+func translatedSourceBoxes(a, b sourceBoxContactProof, da, db [3]dyadic,
+	f *big.Rat) (sourceBoxContactProof, sourceBoxContactProof, bool) {
+	fraction, ok := dyOfRat(f)
+	if !ok {
+		return sourceBoxContactProof{}, sourceBoxContactProof{}, false
+	}
+	for i := range 3 {
+		moveA, moveB := dyMul(da[i], fraction), dyMul(db[i], fraction)
+		a.lo[i], a.hi[i] = dyAdd(a.lo[i], moveA), dyAdd(a.hi[i], moveA)
+		b.lo[i], b.hi[i] = dyAdd(b.lo[i], moveB), dyAdd(b.hi[i], moveB)
+	}
+	return a, b, true
+}
+
+// fullSourceBoxTrack admits an entire affine face-contact span only when the
+// same source faces and clipped-patch corner owners hold on its open interval.
+// Endpoint ties at zero use their right-sided order.
+func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *SweepContactTrack {
+	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) != 4 {
+		return nil
+	}
+	normal := first.Ideal.Manifold.Points[0].Normal
+	axis, side, ok := signedAxis(normal.Value)
+	if !ok || normal.Bound.Base() != 0 ||
+		first.Ideal.Manifold.Points[0].NormalAngle.Base() != 0 ||
+		dyCmp(r.pa.delta[axis], r.pb.delta[axis]) != 0 {
+		return nil
+	}
+	if side == 1 && dyCmp(r.boxA.hi[axis], r.boxB.lo[axis]) != 0 ||
+		side == 0 && dyCmp(r.boxB.hi[axis], r.boxA.lo[axis]) != 0 {
+		return nil
+	}
+	for i := range 3 {
+		if i == axis {
+			continue
+		}
+		// Both projected overlap inequalities are affine, so strict endpoint
+		// tests prove positive overlap for every intervening time.
+		for _, f := range []*big.Rat{new(big.Rat), end} {
+			a, b, _ := translatedSourceBoxes(r.boxA, r.boxB, r.pa.delta, r.pb.delta, f)
+			if dyCmp(a.lo[i], b.hi[i]) >= 0 || dyCmp(b.lo[i], a.hi[i]) >= 0 {
+				return nil
+			}
+		}
+		// A change of the lower or upper corner owner changes the patch
+		// structure. The first full-span increment refuses those transitions.
+		if affineEqualityRootWithin(r.boxA.lo[i], r.pa.delta[i], r.boxB.lo[i], r.pb.delta[i], end) ||
+			affineEqualityRootWithin(r.boxA.hi[i], r.pa.delta[i], r.boxB.hi[i], r.pb.delta[i], end) {
+			return nil
+		}
+	}
+	if !sourceTrackPointsWithin(r.boxA, r.boxB, r.pa.delta, r.pb.delta, r.req.PointResolution.Base()) {
+		return nil
+	}
+	point := first.Ideal.Manifold.Points[0]
+	return &SweepContactTrack{
+		a: r.boxA, b: r.boxB, deltaA: r.pa.delta, deltaB: r.pb.delta,
+		start: new(big.Rat), end: new(big.Rat).Set(end), duration: new(big.Rat).Set(r.pa.duration),
+		request: r.req.ContactRequest, features: [2]ContactFeature{point.FeatureA, point.FeatureB},
+		normal: normal,
+	}
+}
+
+func affineEqualityRoot(a, da, b, db dyadic) *big.Rat {
+	delta := dySubScalar(da, db)
+	if delta.isZero() {
+		return nil
+	}
+	return new(big.Rat).Quo(dySubScalar(b, a).rat(), delta.rat())
+}
+
+func affineEqualityRootWithin(a, da, b, db dyadic, end *big.Rat) bool {
+	root := affineEqualityRoot(a, da, b, db)
+	return root != nil && root.Sign() > 0 && root.Cmp(end) <= 0
+}
+
+// sourceBoxTransitionRoot finds the first possible change of a projected
+// clipped-patch owner or the first edge-contact limit. Roots at zero use the
+// right-sided patch and do not restart the solver at its initial time.
+func (r *pairSweepRun) sourceBoxTransitionRoot(first *SweepSample) *big.Rat {
+	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) != 4 {
+		return nil
+	}
+	axis, _, ok := signedAxis(first.Ideal.Manifold.Points[0].Normal.Value)
+	if !ok {
+		return nil
+	}
+	var earliest *big.Rat
+	for i := range 3 {
+		if i == axis {
+			continue
+		}
+		for _, pair := range [][4]dyadic{
+			{r.boxA.lo[i], r.pa.delta[i], r.boxB.lo[i], r.pb.delta[i]},
+			{r.boxA.hi[i], r.pa.delta[i], r.boxB.hi[i], r.pb.delta[i]},
+			{r.boxA.lo[i], r.pa.delta[i], r.boxB.hi[i], r.pb.delta[i]},
+			{r.boxB.lo[i], r.pb.delta[i], r.boxA.hi[i], r.pa.delta[i]},
+		} {
+			root := affineEqualityRoot(pair[0], pair[1], pair[2], pair[3])
+			if root == nil || root.Sign() <= 0 || root.Cmp(big.NewRat(1, 1)) > 0 {
+				continue
+			}
+			if earliest == nil || root.Cmp(earliest) < 0 {
+				earliest = root
+			}
+		}
+	}
+	return earliest
+}
+
+func sourceContactRootBracket(root, duration, resolution *big.Rat) (*big.Rat, *big.Rat, bool) {
+	grid := big.NewInt(1)
+	for range 61 {
+		width := new(big.Rat).Quo(duration, new(big.Rat).SetInt(grid))
+		if width.Cmp(resolution) <= 0 {
+			scaled := new(big.Rat).Mul(root, new(big.Rat).SetInt(grid))
+			leftIdx := new(big.Int).Quo(scaled.Num(), scaled.Denom())
+			rightIdx := new(big.Int).Add(new(big.Int).Set(leftIdx), big.NewInt(1))
+			if scaled.IsInt() {
+				leftIdx.Sub(leftIdx, big.NewInt(1))
+				rightIdx.Sub(rightIdx, big.NewInt(1))
+			}
+			left := new(big.Rat).SetFrac(leftIdx, grid)
+			right := new(big.Rat).SetFrac(rightIdx, grid)
+			if left.Sign() < 0 || right.Cmp(big.NewRat(1, 1)) > 0 ||
+				floatRat(ratFloatNearest(left)).Cmp(left) != 0 ||
+				floatRat(ratFloatNearest(right)).Cmp(right) != 0 {
+				return nil, nil, false
+			}
+			return left, right, true
+		}
+		grid.Lsh(grid, 1)
+	}
+	return nil, nil, false
+}
+
+// Every contact coordinate lies within the start/end box endpoint envelope.
+// One ULP at its maximum magnitude safely bounds conversion of any enclosed
+// dyadic fraction to float; radius3D turns that into a point-ball radius.
+func sourceTrackPointsWithin(a, b sourceBoxContactProof, da, db [3]dyadic, resolution float64) bool {
+	maximum := new(big.Rat)
+	for _, moving := range []struct {
+		box   sourceBoxContactProof
+		delta [3]dyadic
+	}{{a, da}, {b, db}} {
+		for i := range 3 {
+			for _, endpoint := range []dyadic{moving.box.lo[i], moving.box.hi[i]} {
+				for _, value := range []dyadic{endpoint, dyAdd(endpoint, moving.delta[i])} {
+					abs := new(big.Rat).Abs(value.rat())
+					if abs.Cmp(maximum) > 0 {
+						maximum = abs
+					}
+				}
+			}
+		}
+	}
+	maxFloat := ratFloatUp(maximum)
+	if !finiteMeasurementValues(maxFloat) {
+		return false
+	}
+	ulp := math.Nextafter(maxFloat, math.Inf(1)) - maxFloat
+	bound := radius3D(ulp)
+	return finiteMeasurementValues(bound) && bound <= resolution
+}
+
 func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*SweepReport, error) {
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	first, err := r.sample(ctx, zero)
@@ -501,6 +712,51 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 			return r.report, nil
 		}
 		if !r.provesDeparture() {
+			if r.req.StartPolicy == ContinueCertifiedTouch {
+				if track := r.fullSourceBoxTrack(first, one); track != nil {
+					last, err := r.sample(ctx, one)
+					if errors.Is(err, errSweepPoseBudget) {
+						return r.undecided(zero, one, SweepPoseBudget), nil
+					}
+					if err != nil {
+						return nil, err
+					}
+					if last.Ideal.Relation == ContactTouching && last.Ideal.Manifold != nil {
+						r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, track
+						return r.report, nil
+					}
+				}
+				if root := r.sourceBoxTransitionRoot(first); root != nil {
+					leftF, rightF, ok := sourceContactRootBracket(root, r.pa.duration, resolution)
+					if !ok || leftF.Sign() == 0 {
+						return r.undecided(zero, root, SweepFractionFloor), nil
+					}
+					if track := r.fullSourceBoxTrack(first, leftF); track != nil {
+						left, err := r.sample(ctx, leftF)
+						if errors.Is(err, errSweepPoseBudget) {
+							return r.undecided(zero, leftF, SweepPoseBudget), nil
+						}
+						if err != nil {
+							return nil, err
+						}
+						right, err := r.sample(ctx, rightF)
+						if errors.Is(err, errSweepPoseBudget) {
+							return r.undecided(leftF, rightF, SweepPoseBudget), nil
+						}
+						if err != nil {
+							return nil, err
+						}
+						if left.Ideal.Relation == ContactTouching &&
+							(right.Ideal.Relation == ContactTouching || right.Ideal.Relation == ContactSeparated) {
+							r.report.Outcome, r.report.ContactTrack = SweepContactTransitionBracket, track
+							r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
+							r.report.Event = &right.Ideal
+							r.sortSamples()
+							return r.report, nil
+						}
+					}
+				}
+			}
 			cause := SweepDepartureUnproved
 			if r.req.StartPolicy == ContinueCertifiedTouch {
 				cause = SweepContactTrackUnproved

@@ -41,14 +41,17 @@ type StepDiagnostic struct {
 }
 
 type ContactEvent struct {
-	Pair           BodyPair
-	Bracket        decad.SweepInterval
-	Time           units.Value
-	Manifold       decad.ContactManifold
-	NormalImpulse  units.Value
-	PreVelocity    QuantityVec
-	PostVelocity   QuantityVec
-	PositionChange r3.Vec
+	Pair                             BodyPair
+	Bracket                          decad.SweepInterval
+	Time                             units.Value
+	Manifold                         decad.ContactManifold
+	NormalImpulse                    units.Value
+	PreVelocity                      QuantityVec
+	PostVelocity                     QuantityVec
+	PositionChange                   r3.Vec
+	PreVelocityA, PreVelocityB       QuantityVec
+	PostVelocityA, PostVelocityB     QuantityVec
+	PositionChangeA, PositionChangeB r3.Vec
 }
 
 type StepReport struct {
@@ -110,6 +113,86 @@ func translatePose(pose r3.Transform, delta r3.Vec) (r3.Transform, error) {
 	return pose.Then(translation)
 }
 
+func velocityComponent(v QuantityVec, axis int) units.Value {
+	switch axis {
+	case 0:
+		return v.X
+	case 1:
+		return v.Y
+	default:
+		return v.Z
+	}
+}
+
+func setVelocityComponent(v *QuantityVec, axis int, value units.Value) {
+	switch axis {
+	case 0:
+		v.X = value
+	case 1:
+		v.Y = value
+	default:
+		v.Z = value
+	}
+}
+
+func axisNormal(normal r3.Vec) (int, float64, bool) {
+	components := [3]float64{normal.X, normal.Y, normal.Z}
+	for axis, component := range components {
+		if math.Abs(component) != 1 {
+			continue
+		}
+		othersZero := true
+		for other, value := range components {
+			othersZero = othersZero && (other == axis || value == 0)
+		}
+		return axis, component, othersZero
+	}
+	return 0, 0, false
+}
+
+func correctPair(start State, normal r3.Vec, depth float64, inverseMass [2]float64) (State, error) {
+	out := start
+	total := inverseMass[0] + inverseMass[1]
+	if !finite(depth, total) || total <= 0 {
+		return State{}, fmt.Errorf("invalid pair correction")
+	}
+	for i, inverse := range inverseMass {
+		if inverse == 0 {
+			continue
+		}
+		signed := depth * inverse / total
+		if i == 0 {
+			signed = -signed
+		}
+		pose, err := translatePose(out.entries[i].Pose, normal.Scale(signed))
+		if err != nil {
+			return State{}, err
+		}
+		out.entries[i].Pose = pose
+	}
+	return out, nil
+}
+
+func pairCorrectionWithin(before, after State, axis int, allowance float64) bool {
+	if !finite(allowance) || allowance < 0 {
+		return false
+	}
+	actual := 0.0
+	for i := range before.entries {
+		delta := after.entries[i].Pose.Translation().Sub(before.entries[i].Pose.Translation())
+		components := [3]float64{delta.X, delta.Y, delta.Z}
+		for other, value := range components {
+			if other != axis && value != 0 {
+				return false
+			}
+		}
+		if components[axis] != 0 {
+			actual = outwardSum(actual, math.Nextafter(math.Abs(components[axis]), math.Inf(1)))
+		}
+	}
+	return finite(actual) && actual <= allowance
+}
+
 // Step advances the admitted pair with a certified first-impact bracket and frictionless impulse.
 func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.Value) (*StepReport, error) {
 	if w == nil || ctx == nil || from.world != w || !validQuantity(dt, units.Time, true) {
@@ -131,13 +214,21 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	dyn := 0
-	if w.parts[0].definition.Role != Dynamic {
-		dyn = 1
+	motionAxis := -1
+	for _, entry := range from.entries {
+		components := [3]units.Value{entry.LinearVelocity.X, entry.LinearVelocity.Y, entry.LinearVelocity.Z}
+		for axis, component := range components {
+			if component.Base() == 0 {
+				continue
+			}
+			if motionAxis >= 0 && motionAxis != axis {
+				return nil, fmt.Errorf("%w: this stage requires one translation axis", ErrUnsupported)
+			}
+			motionAxis = axis
+		}
 	}
-	velocity := from.entries[dyn].LinearVelocity
-	if velocity.X.Base() != 0 || velocity.Y.Base() != 0 || velocity.Z.Base() == 0 {
-		return nil, fmt.Errorf("%w: this stage requires nonzero vertical translation", ErrUnsupported)
+	if motionAxis < 0 {
+		return nil, fmt.Errorf("%w: this stage requires relative translation", ErrUnsupported)
 	}
 	for _, entry := range from.entries {
 		if entry.Pose.ApplyDir(r3.Vec{X: 1}) != (r3.Vec{X: 1}) ||
@@ -188,58 +279,66 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	if !ok {
 		return undecided(w, "contact normal or point is outside the admitted resolution"), nil
 	}
-	if normal.X != 0 || normal.Y != 0 || math.Abs(normal.Z) != 1 {
-		return undecided(w, "nonvertical impact requires angular response"), nil
+	axis, normalSign, valid := axisNormal(normal)
+	if !valid || axis != motionAxis {
+		return undecided(w, "impact normal differs from the translation axis"), nil
 	}
-	relativeSpeed := velocity.Z.Base() * normal.Z
-	if dyn == 0 {
-		relativeSpeed = -relativeSpeed
+	preSpeed := [2]units.Value{
+		velocityComponent(from.entries[0].LinearVelocity, axis),
+		velocityComponent(from.entries[1].LinearVelocity, axis),
 	}
+	relativeSpeed := (preSpeed[1].Base() - preSpeed[0].Base()) * normalSign
 	if relativeSpeed >= -w.step.VelocityResidual.Base() {
 		return undecided(w, "impact is not closing"), nil
 	}
-	mass := w.parts[dyn].mass.Mass.Value.Base()
+	var inverseMass [2]float64
+	for i := range w.parts {
+		if w.parts[i].definition.Role == Dynamic {
+			inverseMass[i] = 1 / w.parts[i].mass.Mass.Value.Base()
+		}
+	}
+	denominator := inverseMass[0] + inverseMass[1]
+	if !finite(denominator) || denominator <= 0 {
+		return undecided(w, "effective mass is not finite and positive"), nil
+	}
 	coefficient := w.parts[0].definition.Material.Restitution
 	if exactBase(w.parts[1].definition.Material.Restitution).Cmp(exactBase(coefficient)) < 0 {
 		coefficient = w.parts[1].definition.Material.Restitution
 	}
-	relativeSign := normal.Z
-	if dyn == 0 {
-		relativeSign = -normal.Z
-	}
-	idealRelative := exactBase(velocity.Z)
+	idealRelative := new(big.Rat).Sub(exactBase(preSpeed[1]), exactBase(preSpeed[0]))
 	idealThreshold := exactBase(w.step.ImpactSpeed)
 	if idealRelative == nil || idealThreshold == nil {
 		return undecided(w, "impact speed is not representable"), nil
 	}
-	idealRelative.Mul(idealRelative, new(big.Rat).SetInt64(int64(relativeSign)))
+	idealRelative.Mul(idealRelative, new(big.Rat).SetInt64(int64(normalSign)))
 	target := 0.0
 	effectiveCoefficient := units.Scalar(0)
 	if new(big.Rat).Neg(idealRelative).Cmp(idealThreshold) > 0 {
 		effectiveCoefficient = coefficient
 		target = -coefficient.Base() * relativeSpeed
 	}
-	impulse := (target - relativeSpeed) * mass
+	impulse := (target - relativeSpeed) / denominator
 	if !finite(impulse) || impulse <= 0 {
 		return undecided(w, "impulse is not finite and positive"), nil
 	}
-	if !responseResidualsWithin(velocity.Z, relativeSign, effectiveCoefficient,
-		w.parts[dyn].mass.Mass, target, impulse,
-		w.step.VelocityResidual, w.step.ImpulseResidual) {
+	postSpeed := [2]float64{
+		preSpeed[0].Base() - impulse*normalSign*inverseMass[0],
+		preSpeed[1].Base() + impulse*normalSign*inverseMass[1],
+	}
+	if !responsePairResidualsWithin(preSpeed, normalSign, effectiveCoefficient,
+		w.parts, target, impulse, postSpeed, w.step.VelocityResidual, w.step.ImpulseResidual) {
 		return undecided(w, "exact response bounds exceed velocity or impulse residual"), nil
 	}
-	if !omittedSpinWithin(first.Event.Manifold, pre.entries[dyn].Pose, w.parts[dyn].mass,
-		impulse, w.step.ImpulseResidual, w.step.AngularVelocityResidual) {
-		return undecided(w, "off-center impulse exceeds angular velocity residual"), nil
+	for i, part := range w.parts {
+		if part.definition.Role != Dynamic {
+			continue
+		}
+		if !omittedSpinWithin(first.Event.Manifold, pre.entries[i].Pose, part.mass,
+			i, axis, impulse, w.step.ImpulseResidual, w.step.AngularVelocityResidual) {
+			return undecided(w, "off-center impulse exceeds angular velocity residual"), nil
+		}
 	}
-	postSpeed := -target * normal.Z
-	if dyn == 1 {
-		postSpeed = target * normal.Z
-	}
-	if math.Abs(postSpeed-velocity.Z.Base()) < w.step.VelocityResidual.Base() {
-		return undecided(w, "impact did not change velocity"), nil
-	}
-	bracketTravel, valid := boundBracketTravel(*first.Bracket, velocity.Z.Base())
+	bracketTravel, valid := boundBracketTravel(*first.Bracket, preSpeed[1].Base()-preSpeed[0].Base())
 	if !valid || !finite(separation, bound) || separation > bound {
 		return undecided(w, "impact penetration or bracket travel is not certified"), nil
 	}
@@ -247,19 +346,16 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	if !finite(correctionAllowance) || -separation > correctionAllowance {
 		return undecided(w, "impact penetration exceeds its certified bracket"), nil
 	}
-	correction := -separation * normal.Z
-	if dyn == 0 {
-		correction = separation * normal.Z
-	}
-	post := pre
-	post.entries[dyn].Pose, err = translatePose(pre.entries[dyn].Pose, r3.Vec{Z: correction})
+	post, err := correctPair(pre, normal, -separation, inverseMass)
 	if err != nil {
 		return undecidedArithmetic(w, "position correction is not finite", err)
 	}
-	if !correctionWithin(pre.entries[dyn].Pose, post.entries[dyn].Pose, correctionAllowance) {
+	if !pairCorrectionWithin(pre, post, axis, correctionAllowance) {
 		return undecided(w, "actual position correction exceeds its certified allowance"), nil
 	}
-	post.entries[dyn].LinearVelocity.Z = units.MillimetersPerSecond(postSpeed)
+	for i := range post.entries {
+		setVelocityComponent(&post.entries[i].LinearVelocity, axis, units.MillimetersPerSecond(postSpeed[i]))
+	}
 	contact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
 		post.entries[0].Pose, post.entries[1].Pose, w.step.Contact)
 	if err != nil {
@@ -274,23 +370,19 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 			!finite(nextSeparation, nextBound) {
 			break
 		}
-		increment := -nextSeparation * normal.Z
-		if dyn == 0 {
-			increment = nextSeparation * normal.Z
-		}
+		increment := -nextSeparation
 		if !finite(increment) {
 			break
 		}
-		candidate, err := translatePose(post.entries[dyn].Pose, r3.Vec{Z: increment})
+		candidate, err := correctPair(post, normal, increment, inverseMass)
 		if err != nil {
 			return undecidedArithmetic(w, "position correction is not finite", err)
 		}
 		correctionAllowance = outwardSum(correctionAllowance, nextBound)
-		if !finite(correctionAllowance) || !correctionWithin(pre.entries[dyn].Pose, candidate, correctionAllowance) {
+		if !finite(correctionAllowance) || !pairCorrectionWithin(pre, candidate, axis, correctionAllowance) {
 			break
 		}
-		post.entries[dyn].Pose = candidate
-		correction += increment
+		post = candidate
 		contact, err = w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
 			post.entries[0].Pose, post.entries[1].Pose, w.step.Contact)
 		if err != nil {
@@ -298,10 +390,9 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		}
 	}
 	if contact.Relation != decad.ContactTouching {
-		return undecided(w, fmt.Sprintf("corrected impact pose has relation %v (separation %.17g, correction %.17g, pose z %.17g)",
-			contact.Relation, separation, correction, post.entries[dyn].Pose.Translation().Z)), nil
+		return undecided(w, fmt.Sprintf("corrected impact pose has relation %v (separation %.17g)",
+			contact.Relation, separation)), nil
 	}
-	correction = post.entries[dyn].Pose.Translation().Z - pre.entries[dyn].Pose.Translation().Z
 	remaining := dt.Base() - impactTime
 	if remaining > 0 {
 		continuation, err := w.sweep(ctx, post, units.Seconds(remaining), decad.ContinueSeparatingTouch)
@@ -334,17 +425,29 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		return undecided(w, "final pair relation is not proved clear"), nil
 	}
 	impulseValue := units.KilogramMillimetersPerSecond(impulse)
+	changeA := post.entries[0].Pose.Translation().Sub(pre.entries[0].Pose.Translation())
+	changeB := post.entries[1].Pose.Translation().Sub(pre.entries[1].Pose.Translation())
+	reportBody := 0
+	if w.parts[0].definition.Role == Fixed {
+		reportBody = 1
+	}
 	report.Status = Advanced
 	report.Next = &end
 	report.Events = []ContactEvent{{
-		Pair:           BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
-		Bracket:        *first.Bracket,
-		Time:           units.Seconds(impactTime),
-		Manifold:       cloneManifold(*first.Event.Manifold),
-		NormalImpulse:  impulseValue,
-		PreVelocity:    velocity,
-		PostVelocity:   post.entries[dyn].LinearVelocity,
-		PositionChange: r3.Vec{Z: correction},
+		Pair:            BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Bracket:         *first.Bracket,
+		Time:            units.Seconds(impactTime),
+		Manifold:        cloneManifold(*first.Event.Manifold),
+		NormalImpulse:   impulseValue,
+		PreVelocity:     from.entries[reportBody].LinearVelocity,
+		PostVelocity:    post.entries[reportBody].LinearVelocity,
+		PositionChange:  []r3.Vec{changeA, changeB}[reportBody],
+		PreVelocityA:    from.entries[0].LinearVelocity,
+		PreVelocityB:    from.entries[1].LinearVelocity,
+		PostVelocityA:   post.entries[0].LinearVelocity,
+		PostVelocityB:   post.entries[1].LinearVelocity,
+		PositionChangeA: changeA,
+		PositionChangeB: changeB,
 	}}
 	report.Trace = Trace{start: from, pre: pre, post: post, end: end, duration: dt,
 		eventAt: units.Seconds(impactTime), hasEvent: true}
@@ -378,6 +481,101 @@ func responseResidualsWithin(velocity units.Value, relativeSign float64, restitu
 	uncertainty := new(big.Rat).Mul(absRat(new(big.Rat).Set(factor)), massBound)
 	uncertainty.Add(uncertainty, absRat(new(big.Rat).Sub(idealImpulse, floatImpulse)))
 	return uncertainty.Cmp(jLimit) <= 0
+}
+
+func responsePairResidualsWithin(speed [2]units.Value, normalSign float64, restitution units.Value,
+	parts [2]worldBody, target, impulse float64, post [2]float64,
+	velocityLimit, impulseLimit units.Value) bool {
+	if !finite(normalSign, target, impulse, post[0], post[1]) || math.Abs(normalSign) != 1 {
+		return false
+	}
+	vA, vB := exactBase(speed[0]), exactBase(speed[1])
+	e, vLimit, jLimit := exactBase(restitution), exactBase(velocityLimit), exactBase(impulseLimit)
+	if vA == nil || vB == nil || e == nil || vLimit == nil || jLimit == nil {
+		return false
+	}
+	u := new(big.Rat).Sub(vB, vA)
+	u.Mul(u, new(big.Rat).SetInt64(int64(normalSign)))
+	idealTarget := new(big.Rat).Neg(new(big.Rat).Mul(e, u))
+	floatTarget := new(big.Rat).SetFloat64(target)
+	floatImpulse := new(big.Rat).SetFloat64(impulse)
+	if floatTarget == nil || floatImpulse == nil ||
+		absRat(new(big.Rat).Sub(floatTarget, idealTarget)).Cmp(vLimit) > 0 {
+		return false
+	}
+	factor := new(big.Rat).Sub(idealTarget, u)
+	if factor.Sign() <= 0 {
+		return false
+	}
+	var low, high [2]*big.Rat
+	for i, part := range parts {
+		if part.definition.Role != Dynamic {
+			continue
+		}
+		mass, bound := exactBase(part.mass.Mass.Value), exactBase(part.mass.Mass.Bound)
+		if mass == nil || bound == nil || bound.Sign() < 0 {
+			return false
+		}
+		low[i] = new(big.Rat).Sub(mass, bound)
+		high[i] = new(big.Rat).Add(mass, bound)
+		if low[i].Sign() <= 0 {
+			return false
+		}
+	}
+	var jLow, jHigh, aShareLow, aShareHigh, bShareLow, bShareHigh *big.Rat
+	switch {
+	case low[0] == nil:
+		jLow, jHigh = new(big.Rat).Mul(factor, low[1]), new(big.Rat).Mul(factor, high[1])
+		aShareLow, aShareHigh = new(big.Rat), new(big.Rat)
+		bShareLow, bShareHigh = big.NewRat(1, 1), big.NewRat(1, 1)
+	case low[1] == nil:
+		jLow, jHigh = new(big.Rat).Mul(factor, low[0]), new(big.Rat).Mul(factor, high[0])
+		aShareLow, aShareHigh = big.NewRat(1, 1), big.NewRat(1, 1)
+		bShareLow, bShareHigh = new(big.Rat), new(big.Rat)
+	default:
+		jLow = new(big.Rat).Mul(factor, reducedMass(low[0], low[1]))
+		jHigh = new(big.Rat).Mul(factor, reducedMass(high[0], high[1]))
+		aShareLow = massShare(high[0], low[1])
+		aShareHigh = massShare(low[0], high[1])
+		bShareLow = massShare(high[1], low[0])
+		bShareHigh = massShare(low[1], high[0])
+	}
+	if intervalDeviation(floatImpulse, jLow, jHigh).Cmp(jLimit) > 0 {
+		return false
+	}
+	sign := big.NewRat(int64(normalSign), 1)
+	aLow := new(big.Rat).Sub(vA, new(big.Rat).Mul(sign, new(big.Rat).Mul(factor, aShareHigh)))
+	aHigh := new(big.Rat).Sub(vA, new(big.Rat).Mul(sign, new(big.Rat).Mul(factor, aShareLow)))
+	bLow := new(big.Rat).Add(vB, new(big.Rat).Mul(sign, new(big.Rat).Mul(factor, bShareLow)))
+	bHigh := new(big.Rat).Add(vB, new(big.Rat).Mul(sign, new(big.Rat).Mul(factor, bShareHigh)))
+	if normalSign < 0 {
+		aLow, aHigh = aHigh, aLow
+		bLow, bHigh = bHigh, bLow
+	}
+	for i, pair := range [2][2]*big.Rat{{aLow, aHigh}, {bLow, bHigh}} {
+		published := new(big.Rat).SetFloat64(post[i])
+		if published == nil || intervalDeviation(published, pair[0], pair[1]).Cmp(vLimit) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func reducedMass(a, b *big.Rat) *big.Rat {
+	return new(big.Rat).Quo(new(big.Rat).Mul(a, b), new(big.Rat).Add(a, b))
+}
+
+func massShare(own, other *big.Rat) *big.Rat {
+	return new(big.Rat).Quo(other, new(big.Rat).Add(own, other))
+}
+
+func intervalDeviation(value, low, high *big.Rat) *big.Rat {
+	a := absRat(new(big.Rat).Sub(value, low))
+	b := absRat(new(big.Rat).Sub(value, high))
+	if a.Cmp(b) < 0 {
+		return b
+	}
+	return a
 }
 
 func exactBase(value units.Value) *big.Rat {
@@ -434,8 +632,11 @@ func certifiedInertiaLower(m decad.MassProperties) *big.Rat {
 // This slice publishes zero spin. Bound the spin omitted by that choice using
 // the full contact-point ball, center ball, response residual, and inertia floor.
 func omittedSpinWithin(manifold *decad.ContactManifold, pose r3.Transform, mass decad.MassProperties,
-	impulse float64, impulseLimit, angularLimit units.Value) bool {
+	side, axis int, impulse float64, impulseLimit, angularLimit units.Value) bool {
 	if manifold == nil || len(manifold.Points) == 0 || !finite(impulse) {
+		return false
+	}
+	if side < 0 || side > 1 || axis < 0 || axis > 2 {
 		return false
 	}
 	lower := certifiedInertiaLower(mass)
@@ -443,37 +644,57 @@ func omittedSpinWithin(manifold *decad.ContactManifold, pose r3.Transform, mass 
 	if lower == nil || lower.Sign() <= 0 || jLimit == nil || wLimit == nil || centerBound == nil {
 		return false
 	}
-	x, y, pointBound := new(big.Rat), new(big.Rat), new(big.Rat)
+	tangents := [2]int{(axis + 1) % 3, (axis + 2) % 3}
+	coordinates := [2]*big.Rat{new(big.Rat), new(big.Rat)}
+	pointBound := new(big.Rat)
 	for _, point := range manifold.Points {
-		ax, ay := new(big.Rat).SetFloat64(point.OnA.Value.X),
-			new(big.Rat).SetFloat64(point.OnA.Value.Y)
-		bx, by := new(big.Rat).SetFloat64(point.OnB.Value.X),
-			new(big.Rat).SetFloat64(point.OnB.Value.Y)
-		ab, bb := exactBase(point.OnA.Bound), exactBase(point.OnB.Bound)
-		if ax == nil || ay == nil || bx == nil || by == nil || ab == nil || bb == nil ||
-			ab.Sign() < 0 || bb.Sign() < 0 {
+		witness := point.OnA
+		if side == 1 {
+			witness = point.OnB
+		}
+		components := [3]float64{witness.Value.X, witness.Value.Y, witness.Value.Z}
+		bound := exactBase(witness.Bound)
+		if bound == nil || bound.Sign() < 0 {
 			return false
 		}
-		x.Add(x, ax).Add(x, bx)
-		y.Add(y, ay).Add(y, by)
-		pointBound.Add(pointBound, ab).Add(pointBound, bb)
+		for i, tangent := range tangents {
+			coordinate := new(big.Rat).SetFloat64(components[tangent])
+			if coordinate == nil {
+				return false
+			}
+			coordinates[i].Add(coordinates[i], coordinate)
+		}
+		pointBound.Add(pointBound, bound)
 	}
-	count := new(big.Rat).SetInt64(int64(2 * len(manifold.Points)))
-	x.Quo(x, count)
-	y.Quo(y, count)
+	count := new(big.Rat).SetInt64(int64(len(manifold.Points)))
+	for _, coordinate := range coordinates {
+		coordinate.Quo(coordinate, count)
+	}
 	pointBound.Quo(pointBound, count)
-	cx, cy := new(big.Rat).SetFloat64(mass.Center.Value.X),
-		new(big.Rat).SetFloat64(mass.Center.Value.Y)
-	px, py := new(big.Rat).SetFloat64(pose.Translation().X),
-		new(big.Rat).SetFloat64(pose.Translation().Y)
+	// Each witness bound is a spatial ball; twice its radius safely bounds
+	// the sum of the two tangential coordinate errors.
+	pointBound.Mul(pointBound, big.NewRat(2, 1))
+	center := pose.Apply(mass.Center.Value)
+	centerValues := [3]float64{center.X, center.Y, center.Z}
+	committedCenter := [3]float64{mass.Center.Value.X, mass.Center.Value.Y, mass.Center.Value.Z}
+	translation := [3]float64{pose.Translation().X, pose.Translation().Y, pose.Translation().Z}
 	j := new(big.Rat).SetFloat64(impulse)
-	if cx == nil || cy == nil || px == nil || py == nil || j == nil {
+	if j == nil {
 		return false
 	}
-	cx.Add(cx, px)
-	cy.Add(cy, py)
-	lever := absRat(x.Sub(x, cx))
-	lever.Add(lever, absRat(y.Sub(y, cy))).Add(lever, pointBound).Add(lever, centerBound)
+	lever := new(big.Rat).Set(pointBound)
+	for i, tangent := range tangents {
+		c := new(big.Rat).SetFloat64(centerValues[tangent])
+		committed := new(big.Rat).SetFloat64(committedCenter[tangent])
+		move := new(big.Rat).SetFloat64(translation[tangent])
+		if c == nil || committed == nil || move == nil {
+			return false
+		}
+		exactCenter := new(big.Rat).Add(committed, move)
+		lever.Add(lever, absRat(new(big.Rat).Sub(coordinates[i], c)))
+		lever.Add(lever, absRat(new(big.Rat).Sub(c, exactCenter)))
+	}
+	lever.Add(lever, new(big.Rat).Mul(centerBound, big.NewRat(2, 1)))
 	upperImpulse := absRat(j)
 	upperImpulse.Add(upperImpulse, jLimit)
 	spin := new(big.Rat).Mul(upperImpulse, lever)

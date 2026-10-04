@@ -1,7 +1,9 @@
 # Two-Body Contact Sweep Design
 
-This document specifies the `Document.SweepPair` contract. The first affine
-source-box slice is implemented; later paths remain planned.
+This document specifies the `Document.SweepPair` contract. Current affine
+source-box sweeps certify first impact, immediate departure, persistent face
+contact, and the first edge transition of a sliding patch. Rotating paths and
+other payloads remain design contracts.
 `docs/collision-dynamics-design.md` owns the package
 boundary and `docs/contact-geometry-design.md` owns relation and manifold
 proofs at one pose. This document owns the paths, continuous clear certificate,

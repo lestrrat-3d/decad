@@ -3,8 +3,12 @@
 This document owns the `dynamics` subpackage's world, state, step, response,
 and trace contracts. `docs/collision-dynamics-design.md` owns the package
 boundary; `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md` own
-geometry results. The first fixed/dynamic vertical rebound slice is
-implemented; the remaining response and world rules are design-only.
+geometry results. Current code steps one frictionless translating pair with
+at least one density-derived dynamic body. Centered impacts of two dynamic
+bodies apply equal and opposite impulses; off-center impulses that require
+spin return `Undecided`. Loads, kinematic drivers, friction, resting contact,
+contact-transition stepping, and arbitrary trace sampling remain design
+contracts.
 
 Navigation only; the named sections own the rules:
 
@@ -138,8 +142,9 @@ func (w *World) Step(ctx context.Context, from State,
     input StepInput, dt units.Value) (*StepReport, error)
 ```
 
-`units` must first add Time and the composed kinds used above, including
-Angle/Time, Force, Torque, and Impulse, with named units for public input.
+The pinned `units` dependency provides Time and the composed kinds used above,
+including AngularVelocity, Force, Torque, and Impulse, with named units for
+public input.
 All scalar public values use `units.Value`; no configuration tolerance or
 material coefficient is implicit. Reject wrong kinds, non-finite values,
 negative slop or impact speed, nonpositive resolutions or residual limits,

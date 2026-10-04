@@ -2,7 +2,8 @@
 
 This document owns mass, center-of-mass, and inertia readings used by rigid
 dynamics. It supplies the mass gate in `docs/collision-dynamics-design.md` §2.
-The source-box query is implemented; other payload paths remain design contracts.
+The source-box query and bounded section-moment integration for admitted
+untapered prisms are implemented. Other payload paths remain design contracts.
 `docs/evaluator-design.md` §4 owns
 the existing planar area moments; this document owns the additional volume
 moments and their use by dynamics.

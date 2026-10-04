@@ -15,6 +15,62 @@ import (
 
 const testNegative = "negative"
 
+func TestMassPropertiesTrianglePrism(t *testing.T) {
+	doc := decad.New()
+	sketch, profile := polygonSketch(t, [][2]float64{{0, 0}, {6, 0}, {0, 8}})
+	body, err := doc.Extrude(sketch, profile, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	density := units.KilogramsPerCubicMillimeter(0.001)
+	got, err := body.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	require.InDelta(t, 0.24, got.Mass.Value.Base(), 1e-14)
+	require.InDelta(t, 2, got.Center.Value.X, 1e-14)
+	require.InDelta(t, 8.0/3, got.Center.Value.Y, 1e-14)
+	require.InDelta(t, 5, got.Center.Value.Z, 1e-14)
+	densityExact := new(big.Rat).SetFloat64(density.Mag())
+	massExact := new(big.Rat).Mul(densityExact, big.NewRat(240, 1))
+	for _, entry := range []struct {
+		reading decad.Measurement
+		factor  *big.Rat
+	}{
+		{got.Inertia.XX, big.NewRat(107, 9)},
+		{got.Inertia.YY, big.NewRat(31, 3)},
+		{got.Inertia.ZZ, big.NewRat(50, 9)},
+		{got.Inertia.XY, big.NewRat(4, 3)},
+		{got.Inertia.XZ, big.NewRat(0, 1)},
+		{got.Inertia.YZ, big.NewRat(0, 1)},
+	} {
+		exact := new(big.Rat).Mul(massExact, entry.factor)
+		requireReadingCovers(t, entry.reading, exact)
+	}
+	turn, err := r3.FromBasis(r3.Basis{
+		EX: r3.NewVec(0, 1, 0),
+		EY: r3.NewVec(-1, 0, 0),
+		EZ: r3.NewVec(0, 0, 1),
+	}, r3.NewVec(30, 0, 0))
+	require.NoError(t, err)
+	placed, err := body.Placed(t.Context(), turn)
+	require.NoError(t, err)
+	rotated, err := placed.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	require.Equal(t, got.Mass, rotated.Mass)
+	require.Equal(t, got.Inertia.XX, rotated.Inertia.YY)
+	require.Equal(t, got.Inertia.YY, rotated.Inertia.XX)
+	require.InDelta(t, -got.Inertia.XY.Value.Base(), rotated.Inertia.XY.Value.Base(), 1e-14)
+}
+
+func TestMassPropertiesCircularPrism(t *testing.T) {
+	body := circleProfile(t, 3, 10)
+	got, err := body.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(0.001))
+	require.NoError(t, err)
+	mass := math.Pi * 9 * 10 * 0.001
+	require.InDelta(t, mass, got.Mass.Value.Base(), 1e-14)
+	require.InDelta(t, mass*(27+100)/12, got.Inertia.XX.Value.Base(), 1e-13)
+	require.InDelta(t, mass*(27+100)/12, got.Inertia.YY.Value.Base(), 1e-13)
+	require.InDelta(t, mass*9/2, got.Inertia.ZZ.Value.Base(), 1e-13)
+	require.InDelta(t, 0, got.Inertia.XY.Value.Base(), 1e-14)
+}
+
 func TestMassPropertiesSourceBox(t *testing.T) {
 	doc := decad.New()
 	box := boxBodyAtZ(t, doc, 0, 0, 10, 10, 10, 10)
