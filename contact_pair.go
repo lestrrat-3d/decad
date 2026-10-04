@@ -77,11 +77,12 @@ type ContactReport struct {
 
 // ContactPair proves the relation of two live solids at poses applied after
 // their recorded placements. Bodies and the document are not changed.
-// Source rectangular prisms have manifold proofs at signed-axis poses and
-// at opposed axis-normal oriented faces with a common interior witness.
-// They have relation proofs at other valid poses. Source semicircle spheres
-// against boxes or each other also have relation and face-manifold proofs at
-// signed-axis poses, when an isolated cardinal support gives a normal.
+// Source rectangular prisms have face manifolds at signed-axis poses and
+// co-oriented oblique face touches. Opposed axis-normal oriented faces can
+// publish a common interior witness. Other valid poses have relation proofs.
+// Source semicircle spheres against boxes or each other also have relation
+// and face-manifold proofs at signed-axis poses when an isolated cardinal
+// support gives a normal.
 // At identity query poses, the analytic clearance kernel can prove relations
 // for other solids without a contact manifold.
 // Both bodies must be non-nil, distinct, live members of d.
