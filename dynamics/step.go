@@ -88,11 +88,12 @@ func zeroImpulseVec() QuantityVec {
 }
 
 type StepReport struct {
-	Status      StepStatus
-	Next        *State
-	Events      []ContactEvent
-	Trace       Trace
-	Diagnostics []StepDiagnostic
+	Status       StepStatus
+	Next         *State
+	Events       []ContactEvent
+	Trace        Trace
+	Diagnostics  []StepDiagnostic
+	Conservation *StepConservation
 }
 
 // Trace keeps the certified drift and the event state for replay in this first slice.
@@ -255,6 +256,24 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	if !ok {
 		return undecided(w, "force kick exceeds the velocity residual"), nil
 	}
+	report, err := w.stepKicked(ctx, from, kicked, dt, driver)
+	if err != nil || report == nil || report.Status != Advanced {
+		return report, err
+	}
+	if report.Next == nil {
+		return undecided(w, "advanced step has no next state"), nil
+	}
+	conservation, ok := w.conservationReadings(from, kicked, *report.Next, report.Events,
+		input.Gravity, loads, dt)
+	if !ok {
+		return undecided(w, "conservation readings cannot be represented with finite bounds"), nil
+	}
+	report.Conservation = &conservation
+	return report, nil
+}
+
+func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Value,
+	driver kinematicMotion) (*StepReport, error) {
 	if driver.index >= 0 {
 		return w.stepKinematicPush(ctx, from, kicked, dt, driver)
 	}

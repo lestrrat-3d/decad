@@ -23,10 +23,12 @@ persistent-contact remainder. A fixed-first/dynamic-second source-box pair
 with equal positive friction can now slide on a wide fixed floor after a
 four-corner Coulomb response. `World.Step` requires full ideal and rounded
 persistent-contact tracks and reports normal and tangent impulses. A centered
-zero-slip box receives normal support with zero tangent impulse. Other
-frictional contacts, torque loads, rotating kinematic drivers, stacks, and
-broader payload paths
-remain design contracts. Each companion document owns its detail.
+zero-slip box receives normal support with zero tangent impulse. Every advanced
+step reports bounded dynamic-body translational energy and linear momentum at
+input, after the force kick, and at completion, plus gravity, center-force,
+and fixed/kinematic contact impulses. Other frictional contacts, torque loads,
+rotating kinematic drivers, stacks, and broader payload paths remain design
+contracts. Each companion document owns its detail.
 
 | Design | Ownership |
 |---|---|
