@@ -118,6 +118,8 @@ func TestContactPairOrientedAxisFaceWitness(t *testing.T) {
 	point := contact.Manifold.Points[0]
 	require.Equal(t, r3.Vec{X: 1}, point.Normal.Value)
 	require.InDelta(t, -.0001, point.Separation.Value.Base(), 1e-10)
+	require.InDelta(t, 19.0001, point.OnA.Value.X, 1e-10)
+	require.InDelta(t, 19, point.OnB.Value.X, 1e-10)
 	require.InDelta(t, 5, point.OnA.Value.Y, 1e-9)
 	require.InDelta(t, 5, point.OnA.Value.Z, 1e-9)
 	require.NotNil(t, point.FaceA)
@@ -128,6 +130,9 @@ func TestContactPairOrientedAxisFaceWitness(t *testing.T) {
 	require.Equal(t, decad.ContactOverlapping, reverse.Relation)
 	require.NotNil(t, reverse.Manifold)
 	require.Equal(t, r3.Vec{X: -1}, reverse.Manifold.Points[0].Normal.Value)
+	require.InDelta(t, -.0001, reverse.Manifold.Points[0].Separation.Value.Base(), 1e-10)
+	require.InDelta(t, 19, reverse.Manifold.Points[0].OnA.Value.X, 1e-10)
+	require.InDelta(t, 19.0001, reverse.Manifold.Points[0].OnB.Value.X, 1e-10)
 }
 
 func TestSweepPairRotatingPoseSegmentBracketsAxisFaceImpact(t *testing.T) {

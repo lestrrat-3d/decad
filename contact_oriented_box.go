@@ -299,15 +299,10 @@ func publishOrientedAxisPatch(report *ContactReport, a, b orientedSourceBox) {
 					continue
 				}
 			}
-			pointA, pointB := candidate, candidate
-			pointA[axis], pointB[axis] = faceA.origin[axis], faceB.origin[axis]
-			onA, readA := sourceBoxPoint(pointA)
-			onB, readB := sourceBoxPoint(pointB)
-			if !readA || !readB || onA.Bound.Base() > report.Request.PointResolution.Base() ||
-				onB.Bound.Base() > report.Request.PointResolution.Base() {
-				continue
-			}
-			separation := dySubScalar(pointB[axis], pointA[axis])
+			// Separation depends only on the two support planes. Read it before
+			// constructing and rounding the witness points, so the exact proof
+			// does not depend on a copied point surviving float publication.
+			separation := dySubScalar(faceB.origin[axis], faceA.origin[axis])
 			if sign < 0 {
 				separation = dyNeg(separation)
 			}
@@ -322,6 +317,16 @@ func publishOrientedAxisPatch(report *ContactReport, a, b orientedSourceBox) {
 			}
 			reading, ok := sourceBoxSignedReading(separation)
 			if !ok || reading.Bound.Base() > report.Request.PointResolution.Base() {
+				continue
+			}
+			pointA := candidate
+			pointB := candidate
+			pointA[axis] = faceA.origin[axis]
+			pointB[axis] = faceB.origin[axis]
+			onA, readA := sourceBoxPoint(pointA)
+			onB, readB := sourceBoxPoint(pointB)
+			if !readA || !readB || onA.Bound.Base() > report.Request.PointResolution.Base() ||
+				onB.Bound.Base() > report.Request.PointResolution.Base() {
 				continue
 			}
 			normal := r3.Vec{}
