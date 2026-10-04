@@ -21,8 +21,9 @@ first edge-exit step accepts a transition whose right bracket sample is
 separated, then certifies a clear remainder. A transition with a touching
 right sample or insufficient `MaxEvents` remains `Undecided`.
 An affine translating kinematic driver can move through a certified clear
-step or push an initially touching dynamic box with zero restitution. Its
-stored velocity remains zero while the driver derivative enters the response.
+step, push an initially touching dynamic box with a zero-restitution response,
+or cause a centered interior impact with a separating remainder. Its stored
+velocity remains zero while the driver derivative enters the response.
 Off-center impulses that require spin return `Undecided`. Torque loads,
 rotating kinematic drivers, friction, stacks, broader contact-transition stepping,
 external impulse reporting, and arbitrary trace sampling remain design
@@ -197,9 +198,13 @@ The current kinematic slice admits one `PoseSegment` with a constant
 orientation and an exactly representable affine derivative. Its start and
 duration must exactly match the state and step. A missing, duplicate, or
 nonkinematic driver is `ErrInvalidInput`; a valid rotating path or a derivative
-that cannot meet the current exact-speed proof is `ErrUnsupported`. The first
-response path accepts an initially touching, closing kinematic/dynamic pair;
-other contact schedules remain `Undecided`. The driver's effective contact
+that cannot meet the current exact-speed proof is `ErrUnsupported`. An initially
+touching, closing kinematic/dynamic pair can receive a zero-restitution
+support impulse. A centered interior impact can use the bounded bracket-right
+sample, correct only the dynamic pose, and apply the pair restitution when
+both the ideal and rounded sliced paths certify a separating remainder. The
+sliced driver derivative must equal the admitted full-step derivative exactly.
+Other contact schedules remain `Undecided`. The driver's effective contact
 speed appears in the event, while `State` and `Trace` store zero kinematic
 velocity. A separated pair can complete a clear driver path without an event.
 
@@ -499,6 +504,15 @@ and starts at rest. With zero restitution, friction, and gravity, the real
 initial face manifold produces a `10 kg·mm/s` impulse. The ideal driver and
 dynamic drift and their rounded paths certify persistent touch. Both bodies
 finish `1.25 mm` to the right, B moves at `10 mm/s`, and A stores zero velocity.
+
+The interior kinematic-impact fixture starts A at `x=[0,10] mm` and B at
+`x=[20,30] mm`. A's driver moves `+20 mm` in `0.25 s` at `80 mm/s`; B has
+mass `1 kg` and starts at rest. With restitution `0.5`, friction zero, and
+gravity zero, the real sweep brackets impact near `0.125 s`. The step consumes
+the bracket-right sample, applies `120 kg·mm/s`, and certifies departure on
+both sliced remainder paths. B ends near `x=[35,45] mm` at `120 mm/s`; A ends
+at `x=[20,30] mm` with zero stored velocity. The tiny difference from B's
+ideal final coordinates is bounded by the impact bracket and correction.
 
 For the sliding-friction increment, put the same `1 kg` box
 on a fixed floor wide enough for a `5 mm` slide. With gravity
