@@ -1084,6 +1084,7 @@
 4	0.00	TestContactPairShallowOverlapAndRefusals
 4	0.00	TestContactPairSignedAxisPose
 4	0.00	TestContactPairSourceBoxes
+4	0.00	TestContactPairSourceSphereAndBox
 4	0.00	TestContextOperationsRejectNilBeforeOperands
 4	0.00	TestConvexityCertificateChargesTheRecordWorkCounter
 4	0.00	TestConvexityCertificateSpendIncreases
@@ -1672,6 +1673,9 @@
 4	0.00	TestSweepPairRotatingPathUndecided
 4	0.00	TestSweepPairSourceBoxPersistentSlide
 4	0.00	TestSweepPairSourceBoxSlideEdgeTransition
+4	0.00	TestSweepPairSourceSphereAndBox
+4	0.00	TestSweepPairSourceSphereInitialEdgeTouch
+4	0.00	TestSweepPairSourceSphereTouchContinuation
 4	0.00	TestSweepPairTranslatedBoxesImpact
 4	0.00	TestSweepPairTwoMoversAndDeparture
 4	0.00	TestTangentJoinedOffsetsBuildBothFeatures

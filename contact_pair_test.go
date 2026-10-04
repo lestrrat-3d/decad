@@ -72,6 +72,55 @@ func TestContactPairSourceBoxes(t *testing.T) {
 	require.Equal(t, before, doc.Bodies())
 }
 
+func TestContactPairSourceSphereAndBox(t *testing.T) {
+	doc := decad.New()
+	floor := boxBodyAtZ(t, doc, -20, -20, 20, 20, -10, 10)
+	ball := ballBody(t, doc, 5)
+	before := doc.Bodies()
+	req := contactRequest()
+	for _, tc := range []struct {
+		z        float64
+		relation decad.ContactRelation
+		gap      float64
+		sep      float64
+	}{
+		{15, decad.ContactSeparated, 10, 0},
+		{5, decad.ContactTouching, 0, 0},
+		{4.5, decad.ContactOverlapping, 0, -0.5},
+	} {
+		pose := contactPose(t, r3.Vec{Z: tc.z})
+		report, err := doc.ContactPair(t.Context(), floor, ball, r3.Identity(), pose, req)
+		require.NoError(t, err)
+		require.Equal(t, tc.relation, report.Relation, "z=%v, reason=%v", tc.z, report.Reason)
+		if tc.relation == decad.ContactSeparated {
+			require.NotNil(t, report.Gap)
+			require.InDelta(t, tc.gap, report.Gap.Value.Base(), 1e-12)
+			continue
+		}
+		require.NotNil(t, report.Manifold, "z=%v, reason=%v", tc.z, report.Reason)
+		require.Len(t, report.Manifold.Points, 1)
+		point := report.Manifold.Points[0]
+		require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+		require.InDelta(t, tc.sep, point.Separation.Value.Base(), 1e-12)
+		require.Contains(t, floor.Faces(), point.FaceA)
+		require.Same(t, ball.Faces()[0], point.FaceB)
+	}
+	edge, err := doc.ContactPair(t.Context(), floor, ball, r3.Identity(),
+		contactPose(t, r3.Vec{X: 25}), req)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, edge.Relation)
+	require.Nil(t, edge.Manifold)
+	require.Equal(t, decad.ContactAmbiguousFeature, edge.Reason)
+	diagonal, err := doc.ContactPair(t.Context(), floor, ball, r3.Identity(),
+		contactPose(t, r3.Vec{X: 23, Z: 5}), req)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, diagonal.Relation)
+	require.NotNil(t, diagonal.Gap)
+	require.LessOrEqual(t, diagonal.Gap.Value.Base()-diagonal.Gap.Bound.Base(), 0.8309518948453005)
+	require.GreaterOrEqual(t, diagonal.Gap.Value.Base()+diagonal.Gap.Bound.Base(), 0.8309518948453005)
+	require.Equal(t, before, doc.Bodies())
+}
+
 func TestContactPairAnalyticPrismGap(t *testing.T) {
 	doc := decad.New()
 	a := rodBody(t, doc, 0, 0, 2, 5)

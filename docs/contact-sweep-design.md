@@ -2,8 +2,10 @@
 
 This document specifies the `Document.SweepPair` contract. Current affine
 source-box sweeps certify first impact, immediate departure, persistent face
-contact, and the first edge transition of a sliding patch. Rotating paths and
-other payloads remain design contracts.
+contact, and the first edge transition of a sliding patch. A source semicircle
+sphere against a source box certifies affine first impact and face-point
+departure or persistent touch while its projected radius remains strictly
+inside one box face. Rotating paths and other payloads remain design contracts.
 `docs/collision-dynamics-design.md` owns the package
 boundary and `docs/contact-geometry-design.md` owns relation and manifold
 proofs at one pose. This document owns the paths, continuous clear certificate,
@@ -216,6 +218,27 @@ inequality. No tolerance turns a failed strict comparison into `Clear`.
 If an endpoint is touching, overlapping, or undecided, this positive-gap
 certificate cannot use it. A different continuous geometric proof may settle
 the interval only if the contact kernel explicitly supplies one.
+
+### 4.4 Source sphere and box face corridor
+
+For the source ball admitted by contact geometry §4.2, an affine sweep can
+use one box face when the sphere center plus and minus its radius stays
+strictly inside both projected box intervals at the start and end. The four
+signed endpoint inequalities prove that containment for every intervening
+time. The normal support gap is then one exact affine function. Its positive
+sign throughout proves clear; a positive start gap and a decreasing gap give
+the exact first-contact root. Choose a dyadic bracket with a strictly clear
+left endpoint and a right endpoint beyond that root, no wider than the caller's
+time resolution. The right margin keeps the float query on the overlapping
+side when ideal and rounded poses differ by a small amount.
+
+At each sample, classify the ideal rational sphere and box independently of
+the float `ContactPair` query. Transfer the float manifold only when relation,
+source features, and normal agree; widen its two witness bounds and separation
+bound by the exact pose difference. An initial touch with an increasing normal
+gap proves immediate departure. A zero normal gap and the same face corridor
+prove a full-span point track. A path leaving the corridor returns
+`SweepUndecided`; a center sample alone cannot certify the missing span.
 
 ## 5. Earliest-event search
 

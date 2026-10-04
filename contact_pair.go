@@ -77,10 +77,10 @@ type ContactReport struct {
 
 // ContactPair proves the relation of two live solids at poses applied after
 // their recorded placements. Bodies and the document are not changed. This
-// Source rectangular prisms are certified at signed-axis poses. At identity
-// query poses, the analytic clearance kernel can also prove a relation for
-// other solids; those reports have no manifold until source contact witnesses
-// and normals can be certified.
+// Source rectangular prisms and source semicircle spheres against boxes are
+// certified at signed-axis poses. At identity query poses, the analytic
+// clearance kernel can also prove a relation for other solids; those reports
+// have no manifold until source witnesses and normals can be certified.
 // Both bodies must be non-nil, distinct, live members of d.
 func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transform,
 	req ContactRequest) (*ContactReport, error) {
@@ -114,6 +114,18 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	report := &ContactReport{A: a, B: b, PoseA: poseA, PoseB: poseB, Request: req}
 	boxA, okA := sourceBoxAtPose(a, poseA)
 	boxB, okB := sourceBoxAtPose(b, poseB)
+	if okA && !okB {
+		if sphere, ok := sourceSphereAtPose(b, poseB); ok {
+			classifySourceSphereBox(report, sphere, boxA, false)
+			return report, nil
+		}
+	}
+	if okB && !okA {
+		if sphere, ok := sourceSphereAtPose(a, poseA); ok {
+			classifySourceSphereBox(report, sphere, boxB, true)
+			return report, nil
+		}
+	}
 	if !okA || !okB {
 		if poseA == r3.Identity() && poseB == r3.Identity() {
 			if err := classifyAnalyticContact(ctx, report); err != nil {

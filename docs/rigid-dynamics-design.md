@@ -8,6 +8,9 @@ dynamic body using density-derived or supplied mass. An axis-aligned
 certified contact normal determines the response component; tangent velocity
 continues through an oblique impact. Centered impacts of two dynamic bodies
 apply equal and opposite impulses.
+A source semicircle sphere with supplied mass can rebound from a fixed source
+box on an isolated face-point contact when its affine sweep stays within that
+face corridor.
 The one world pair may be excluded; its bodies then drift independently even
 through overlap, and no pair material is mixed.
 At an initial face touch, a fixed floor and dynamic source box can receive a

@@ -14,9 +14,9 @@ import (
 
 var errSweepPoseBudget = errors.New("decad: sweep pose budget exhausted")
 
-// PairPath names one body's motion during a two-body sweep. The first
-// implementation certifies affine translations; other valid paths report an
-// undecided sweep until their continuous bound is available.
+// PairPath names one body's motion during a two-body sweep. Affine
+// translations have source-box and source-sphere face-corridor certificates;
+// other valid paths report an undecided sweep until their bound is available.
 type PairPath interface{ pairPath() }
 
 // PoseSegment joins two placements relative to the body's current placement.
@@ -103,17 +103,19 @@ type SweepDeparture struct {
 	GapAtUntil Measurement
 }
 
-// SweepContactTrack owns the exact source-box intervals and affine motion of a
+// SweepContactTrack owns the exact source geometry and affine motion of a
 // certified touching prefix. Its source face pointers are the original faces.
 type SweepContactTrack struct {
-	a, b       sourceBoxContactProof
-	deltaA     [3]dyadic
-	deltaB     [3]dyadic
-	start, end *big.Rat
-	duration   *big.Rat
-	request    ContactRequest
-	features   [2]ContactFeature
-	normal     VecMeasurement
+	a, b        sourceBoxContactProof
+	deltaA      [3]dyadic
+	deltaB      [3]dyadic
+	sphere      *sourceSphereContactProof
+	sphereFirst bool
+	start, end  *big.Rat
+	duration    *big.Rat
+	request     ContactRequest
+	features    [2]ContactFeature
+	normal      VecMeasurement
 }
 
 func (t *SweepContactTrack) Start() SweepInstant { return sweepInstant(t.start, t.duration) }
@@ -126,8 +128,8 @@ func (t *SweepContactTrack) Features() (ContactFeature, ContactFeature) {
 
 func (t *SweepContactTrack) Normal() VecMeasurement { return t.normal }
 
-// ManifoldAt returns a fresh four-corner reduction of the complete exact
-// touching patch at a fraction in this track's certified interval.
+// ManifoldAt returns a fresh reduction of the complete exact touching set at
+// a fraction in this track's certified interval.
 func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, error) {
 	if fraction.Kind() != units.Dimensionless {
 		return nil, fmt.Errorf("%w: contact-track fraction must be dimensionless", ErrUnitKind)
@@ -138,6 +140,24 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 	}
 	if f.Cmp(t.start) < 0 || f.Cmp(t.end) > 0 {
 		return nil, fmt.Errorf("%w: fraction is outside contact track", ErrDegenerate)
+	}
+	if t.sphere != nil {
+		sphereDelta, boxDelta := t.deltaB, t.deltaA
+		box := t.a
+		if t.sphereFirst {
+			sphereDelta, boxDelta, box = t.deltaA, t.deltaB, t.b
+		}
+		sphere, okSphere := translatedSphere(*t.sphere, sphereDelta, f)
+		box, okBox := translatedContactBox(box, boxDelta, f)
+		if !okSphere || !okBox {
+			return nil, fmt.Errorf("%w: contact-track fraction cannot be represented", ErrUnsupported)
+		}
+		report := &ContactReport{Request: t.request}
+		classifySourceSphereBox(report, sphere, box, t.sphereFirst)
+		if report.Relation != ContactTouching || report.Manifold == nil {
+			return nil, fmt.Errorf("%w: contact track has no bounded sphere point", ErrUnsupported)
+		}
+		return report.Manifold, nil
 	}
 	a, b, ok := translatedSourceBoxes(t.a, t.b, t.deltaA, t.deltaB, f)
 	if !ok {
@@ -321,8 +341,9 @@ func exactnessFromBound(bound float64) Exactness {
 }
 
 // SweepPair certifies the first encounter of two live solids under one shared
-// duration. Current continuous proofs cover source-certified boxes undergoing
-// pure affine translation. Unsupported paths return SweepUndecided.
+// duration. Current continuous proofs cover source-certified boxes and a
+// source sphere in a box face corridor under pure affine translation.
+// Unsupported paths return SweepUndecided.
 // Both body pointers, both paths, and ctx must be non-nil.
 func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairPath,
 	req SweepRequest) (*SweepReport, error) {
@@ -376,6 +397,18 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	boxA, okA := sourceBoxAtPose(a, pa.from)
 	boxB, okB := sourceBoxAtPose(b, pb.from)
 	if !okA || !okB {
+		if okA && !okB {
+			if sphere, ok := sourceSphereAtPose(b, pb.from); ok {
+				return (&sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
+					req: req, report: report, sphere: sphere, box: boxA}).execute(ctx, resolution)
+			}
+		}
+		if okB && !okA {
+			if sphere, ok := sourceSphereAtPose(a, pa.from); ok {
+				return (&sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
+					req: req, report: report, sphere: sphere, box: boxB, sphereFirst: true}).execute(ctx, resolution)
+			}
+		}
 		report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
 		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.duration),
 			To: sweepInstant(big.NewRat(1, 1), pa.duration)}
