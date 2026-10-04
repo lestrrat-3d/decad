@@ -79,14 +79,14 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 	if t.Kind() != units.Time || !finite(t.Base()) || t.Base() < 0 || t.Base() > tr.duration.Base() {
 		return State{}, fmt.Errorf("%w: trace time outside step", ErrInvalidInput)
 	}
+	if tr.hasEvent && t.Base() == tr.eventAt.Base() {
+		return tr.post, nil
+	}
 	if t.Base() == 0 {
 		return tr.start, nil
 	}
 	if t.Base() == tr.duration.Base() {
 		return tr.end, nil
-	}
-	if tr.hasEvent && t.Base() == tr.eventAt.Base() {
-		return tr.post, nil
 	}
 	return State{}, fmt.Errorf("%w: interior trace sample has no float-pose contact certificate", ErrUnsupported)
 }
@@ -201,9 +201,8 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	if err := validateQuantityVec(input.Gravity, units.Acceleration); err != nil {
 		return nil, err
 	}
-	if len(input.Loads) != 0 || len(input.Drivers) != 0 ||
-		input.Gravity.X.Base() != 0 || input.Gravity.Y.Base() != 0 || input.Gravity.Z.Base() != 0 {
-		return nil, fmt.Errorf("%w: gravity, loads, and drivers are not implemented", ErrUnsupported)
+	if len(input.Loads) != 0 || len(input.Drivers) != 0 {
+		return nil, fmt.Errorf("%w: loads and drivers are not implemented", ErrUnsupported)
 	}
 	live := w.doc.Bodies()
 	for _, part := range w.parts {
@@ -214,8 +213,12 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	kicked, ok := w.kickByGravity(from, input.Gravity, dt)
+	if !ok {
+		return undecided(w, "gravity kick exceeds the velocity residual"), nil
+	}
 	motionAxis := -1
-	for _, entry := range from.entries {
+	for _, entry := range kicked.entries {
 		components := [3]units.Value{entry.LinearVelocity.X, entry.LinearVelocity.Y, entry.LinearVelocity.Z}
 		for axis, component := range components {
 			if component.Base() == 0 {
@@ -228,9 +231,9 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		}
 	}
 	if motionAxis < 0 {
-		return nil, fmt.Errorf("%w: this stage requires relative translation", ErrUnsupported)
+		return w.stepStill(ctx, from, kicked, dt)
 	}
-	for _, entry := range from.entries {
+	for _, entry := range kicked.entries {
 		if entry.Pose.ApplyDir(r3.Vec{X: 1}) != (r3.Vec{X: 1}) ||
 			entry.Pose.ApplyDir(r3.Vec{Y: 1}) != (r3.Vec{Y: 1}) ||
 			entry.Pose.ApplyDir(r3.Vec{Z: 1}) != (r3.Vec{Z: 1}) {
@@ -238,18 +241,18 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		}
 	}
 
-	first, err := w.sweep(ctx, from, dt, decad.StopAtInitialContact)
+	first, err := w.sweep(ctx, kicked, dt, decad.StopAtInitialContact)
 	if err != nil {
 		return nil, err
 	}
 	report := &StepReport{Trace: Trace{start: from, duration: dt}}
 	switch first.Outcome {
 	case decad.SweepClear:
-		end, err := driftState(from, dt.Base())
+		end, err := driftState(kicked, dt.Base())
 		if err != nil {
 			return undecidedArithmetic(w, "non-finite clear-path pose", err)
 		}
-		actual, err := w.sweepPoses(ctx, from, end, dt, decad.StopAtInitialContact)
+		actual, err := w.sweepPoses(ctx, kicked, end, dt, decad.StopAtInitialContact)
 		if err != nil {
 			return nil, err
 		}
@@ -258,6 +261,8 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		}
 		report.Status, report.Next, report.Trace.end = Advanced, &end, end
 		return report, nil
+	case decad.SweepInitiallyTouching:
+		return w.stepInitialTouch(ctx, from, kicked, dt, first, motionAxis)
 	case decad.SweepImpactBracket:
 		// Continue below, consuming the geometry producer's event and manifold.
 	default:
@@ -271,7 +276,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	if !finite(impactTime) || impactTime < 0 || impactTime > dt.Base() {
 		return undecided(w, "impact time is outside the step"), nil
 	}
-	pre, err := driftState(from, impactTime)
+	pre, err := driftState(kicked, impactTime)
 	if err != nil {
 		return undecidedArithmetic(w, "non-finite impact pose", err)
 	}
@@ -284,8 +289,8 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		return undecided(w, "impact normal differs from the translation axis"), nil
 	}
 	preSpeed := [2]units.Value{
-		velocityComponent(from.entries[0].LinearVelocity, axis),
-		velocityComponent(from.entries[1].LinearVelocity, axis),
+		velocityComponent(kicked.entries[0].LinearVelocity, axis),
+		velocityComponent(kicked.entries[1].LinearVelocity, axis),
 	}
 	relativeSpeed := (preSpeed[1].Base() - preSpeed[0].Base()) * normalSign
 	if relativeSpeed >= -w.step.VelocityResidual.Base() {
@@ -394,12 +399,22 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 			contact.Relation, separation)), nil
 	}
 	remaining := dt.Base() - impactTime
+	postRelative := (postSpeed[1] - postSpeed[0]) * normalSign
+	if !finite(postRelative) || postRelative < -w.step.VelocityResidual.Base() {
+		return undecided(w, "impact response remains closing"), nil
+	}
+	policy := decad.ContinueSeparatingTouch
+	persistent := postRelative <= w.step.VelocityResidual.Base()
+	if persistent {
+		policy = decad.ContinueCertifiedTouch
+	}
 	if remaining > 0 {
-		continuation, err := w.sweep(ctx, post, units.Seconds(remaining), decad.ContinueSeparatingTouch)
+		continuation, err := w.sweep(ctx, post, units.Seconds(remaining), policy)
 		if err != nil {
 			return nil, err
 		}
-		if continuation.Outcome != decad.SweepDepartedClear {
+		if (persistent && !w.persistentTrackWithin(continuation, normal)) ||
+			(!persistent && continuation.Outcome != decad.SweepDepartedClear) {
 			return undecided(w, fmt.Sprintf("rebound departure returned %v", continuation.Outcome)), nil
 		}
 	}
@@ -408,11 +423,12 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		return undecidedArithmetic(w, "non-finite final pose", err)
 	}
 	if remaining > 0 {
-		actual, err := w.sweepPoses(ctx, post, end, units.Seconds(remaining), decad.ContinueSeparatingTouch)
+		actual, err := w.sweepPoses(ctx, post, end, units.Seconds(remaining), policy)
 		if err != nil {
 			return nil, err
 		}
-		if actual.Outcome != decad.SweepDepartedClear {
+		if (persistent && !w.persistentTrackWithin(actual, normal)) ||
+			(!persistent && actual.Outcome != decad.SweepDepartedClear) {
 			return undecided(w, fmt.Sprintf("numerical rebound path returned %v", actual.Outcome)), nil
 		}
 	}
@@ -423,6 +439,16 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	}
 	if finalContact.Relation != decad.ContactSeparated && finalContact.Relation != decad.ContactTouching {
 		return undecided(w, "final pair relation is not proved clear"), nil
+	}
+	if persistent {
+		if finalContact.Relation != decad.ContactTouching || finalContact.Manifold == nil {
+			return undecided(w, "persistent contact lacks endpoint manifold"), nil
+		}
+		finalNormal, finalSeparation, finalBound, valid := reducedContact(finalContact.Manifold, w.step.Contact)
+		if !valid || finalNormal != normal ||
+			math.Abs(finalSeparation)+finalBound > w.step.PenetrationResidual.Base() {
+			return undecided(w, "persistent endpoint exceeds penetration residual"), nil
+		}
 	}
 	impulseValue := units.KilogramMillimetersPerSecond(impulse)
 	changeA := post.entries[0].Pose.Translation().Sub(pre.entries[0].Pose.Translation())
@@ -439,11 +465,11 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		Time:            units.Seconds(impactTime),
 		Manifold:        cloneManifold(*first.Event.Manifold),
 		NormalImpulse:   impulseValue,
-		PreVelocity:     from.entries[reportBody].LinearVelocity,
+		PreVelocity:     kicked.entries[reportBody].LinearVelocity,
 		PostVelocity:    post.entries[reportBody].LinearVelocity,
 		PositionChange:  []r3.Vec{changeA, changeB}[reportBody],
-		PreVelocityA:    from.entries[0].LinearVelocity,
-		PreVelocityB:    from.entries[1].LinearVelocity,
+		PreVelocityA:    kicked.entries[0].LinearVelocity,
+		PreVelocityB:    kicked.entries[1].LinearVelocity,
 		PostVelocityA:   post.entries[0].LinearVelocity,
 		PostVelocityB:   post.entries[1].LinearVelocity,
 		PositionChangeA: changeA,
