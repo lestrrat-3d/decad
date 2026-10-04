@@ -167,6 +167,27 @@ func TestSweepPairSourceSphereTouchContinuation(t *testing.T) {
 	require.NotNil(t, report.Departure)
 }
 
+func TestSweepPairSourceSphereInitialEdgeTouch(t *testing.T) {
+	doc := decad.New()
+	floor := boxBodyAtZ(t, doc, -20, -20, 20, 20, -10, 10)
+	ball := ballBody(t, doc, 5)
+	pose := contactPose(t, r3.Vec{X: 25})
+	contact, err := doc.ContactPair(t.Context(), floor, ball, r3.Identity(), pose, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, contact.Relation)
+	require.Nil(t, contact.Manifold)
+	still := sweepDrift(r3.Vec{}, 0.1)
+	ballPath := still
+	ballPath.From = pose
+	report, err := doc.SweepPair(t.Context(), floor, ball, still, ballPath, sweepRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepInitiallyTouching, report.Outcome)
+	require.NotNil(t, report.InitialEvent)
+	require.Equal(t, decad.ContactTouching, report.InitialEvent.Relation)
+	require.Nil(t, report.InitialEvent.Manifold)
+	require.Len(t, report.Samples, 1)
+}
+
 func TestSweepPairTwoMoversAndDeparture(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)

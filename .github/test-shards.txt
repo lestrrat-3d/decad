@@ -1674,6 +1674,7 @@
 4	0.00	TestSweepPairSourceBoxPersistentSlide
 4	0.00	TestSweepPairSourceBoxSlideEdgeTransition
 4	0.00	TestSweepPairSourceSphereAndBox
+4	0.00	TestSweepPairSourceSphereInitialEdgeTouch
 4	0.00	TestSweepPairSourceSphereTouchContinuation
 4	0.00	TestSweepPairTranslatedBoxesImpact
 4	0.00	TestSweepPairTwoMoversAndDeparture

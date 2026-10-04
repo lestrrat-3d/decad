@@ -307,16 +307,18 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 	if first.Ideal.Relation != ContactSeparated && first.Ideal.Relation != ContactTouching {
 		return r.undecided(zero, zero, SweepPoseRelation), nil
 	}
-	_, _, gap, slope, ok := r.contactAxis()
-	if !ok {
-		return r.undecided(zero, one, SweepContactUnsupported), nil
-	}
 	if first.Ideal.Relation == ContactTouching {
 		r.report.InitialEvent = &first.Ideal
 		if r.req.StartPolicy == StopAtInitialContact {
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}
+	}
+	_, _, gap, slope, ok := r.contactAxis()
+	if !ok {
+		return r.undecided(zero, one, SweepContactUnsupported), nil
+	}
+	if first.Ideal.Relation == ContactTouching {
 		if slope.sign() > 0 {
 			last, err := r.sample(ctx, one)
 			if errors.Is(err, errSweepPoseBudget) {
