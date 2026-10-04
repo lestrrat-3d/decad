@@ -20,7 +20,7 @@ An affine kinematic driver can push an initially touching dynamic source box
 through a certified persistent contact path, depart without an impulse, or
 produce a centered interior impact with a certified separating or
 persistent-contact remainder. A fixed-first/dynamic-second source-box pair
-with equal positive friction can now slide on a wide fixed floor after a
+with positive effective pair friction can now slide on a wide fixed floor after a
 four-corner Coulomb response. `World.Step` requires full ideal and rounded
 persistent-contact tracks and reports normal and tangent impulses. A centered
 zero-slip box receives normal support with zero tangent impulse. Every advanced

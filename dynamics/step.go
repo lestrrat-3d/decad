@@ -373,10 +373,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	if !finite(denominator) || denominator <= 0 {
 		return undecided(w, "effective mass is not finite and positive"), nil
 	}
-	coefficient := w.parts[0].definition.Material.Restitution
-	if exactBase(w.parts[1].definition.Material.Restitution).Cmp(exactBase(coefficient)) < 0 {
-		coefficient = w.parts[1].definition.Material.Restitution
-	}
+	coefficient := w.restitution
 	idealRelative := new(big.Rat).Sub(exactBase(preSpeed[1]), exactBase(preSpeed[0]))
 	idealThreshold := exactBase(w.step.ImpactSpeed)
 	if idealRelative == nil || idealThreshold == nil {

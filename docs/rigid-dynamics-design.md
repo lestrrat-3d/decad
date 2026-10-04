@@ -26,8 +26,8 @@ depart from an initially touching box without an impulse, or cause a centered
 interior impact. Departure requires ideal and rounded full-path certificates;
 a zero-restitution response requires certified persistent touch.
 The driver's stored velocity remains zero while its derivative enters the
-response. `World.Step` admits equal positive friction coefficients for a fixed
-floor first and a dynamic source box second. An initial four-corner face touch
+response. `World.Step` admits a positive effective pair friction coefficient
+for a fixed floor first and a dynamic source box second. An initial four-corner face touch
 with zero incoming spin, positive X slip, and closing Z speed can use the joint
 Coulomb solver. The response publishes zero Y/Z velocity, bounded corner and
 aggregate impulses, a residual report, and a persistent-touch trace after
@@ -139,11 +139,20 @@ or unknown exclusions/overrides fail construction. A pair with neither body
 dynamic can still be checked when a kinematic driver moves; it cannot be
 resolved by an impulse if closing contact occurs.
 
+The current one-pair world accepts one `PairMaterial` for its two bodies in
+either pair order. `NewWorld` rejects a pair naming a body outside the world,
+including nil or repeated bodies, with `ErrInvalidInput`. It also rejects a
+second override for the same pair, including the reverse order, and applies
+the same coefficient validation as for body materials. Exclusions still return
+`ErrUnsupported`.
+
 The current positive-friction slice accepts only fixed-first/dynamic-second
-worlds whose two held friction coefficients are exactly equal. It passes that
-coefficient directly to the patch solver. Unequal coefficients, reversed
-roles, and other positive-friction body pairs return `ErrUnsupported` at
-`NewWorld`.
+worlds. Without an override, the two held body friction coefficients must be
+exactly equal and positive. With an override, its friction coefficient replaces
+the body values; a positive override goes to the patch solver even when both
+body coefficients are zero. A zero override selects the frictionless response
+even when the body coefficients differ. Reversed roles and other positive-
+friction body pairs return `ErrUnsupported` at `NewWorld`.
 
 ## Step input and configuration
 

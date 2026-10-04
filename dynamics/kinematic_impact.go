@@ -68,10 +68,7 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	if !finite(inverseMass) || inverseMass <= 0 {
 		return undecided(w, "kinematic impact effective mass is invalid"), nil
 	}
-	coefficient := w.parts[0].definition.Material.Restitution
-	if exactBase(w.parts[1].definition.Material.Restitution).Cmp(exactBase(coefficient)) < 0 {
-		coefficient = w.parts[1].definition.Material.Restitution
-	}
+	coefficient := w.restitution
 	idealRelative := new(big.Rat).Sub(exactBase(preSpeed[1]), exactBase(preSpeed[0]))
 	idealRelative.Mul(idealRelative, big.NewRat(int64(sign), 1))
 	target := 0.0
