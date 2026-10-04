@@ -438,7 +438,12 @@ have kind `units.Impulse`; angular momentum components and bounds have kind
 orbital term `mass × (world mass center × linear velocity)`. The source mass
 center's ball bound and the rounded world transform widen the reading.
 `GravityImpulse`, `LoadImpulse`, and `ContactImpulse` are separate bounded
-vectors. Contact impulse sums only events against fixed or kinematic bodies;
+vectors. `KinematicWork` is a signed bounded energy reading with kind
+`units.Torque`. For each kinematic contact event, it sums the exact held
+aggregate impulse delivered to the dynamic body dotted with the driver's
+published effective event velocity. A step without a kinematic impact has
+typed zero work. Contact impulse sums only events against fixed or kinematic
+bodies;
 the two impulses of a dynamic pair cancel in the world total. These readings
 describe the discrete step and exclude fixed/kinematic bodies' own energy and
 momentum. The contact reading encloses the published numerical event impulses;
@@ -462,7 +467,7 @@ advanced contact event checks every dynamic body's published velocity change
 against its signed aggregate normal and tangent impulse. It checks both ends
 of the body's held mass interval against `ImpulseResidual + massHigh ×
 VelocityResidual` on each component. A zero-impulse transition must preserve
-the published velocities exactly. Nonkinematic impacts also check kinetic
+the published velocities exactly. Impacts also check kinetic
 energy at the event. For each body, the code first subtracts squared pre-event
 speed from squared post-event speed, then multiplies this one difference by
 the mass endpoint that gives the largest energy change. The allowed numerical
@@ -470,9 +475,10 @@ gain is the sum, over each dynamic body and Cartesian component, of
 `(massHigh × VelocityResidual + ImpulseResidual) ×
 (|preVelocity| + |postVelocity| + VelocityResidual)`. A failed gate makes the
 step `Undecided`. The full-step force kick remains outside these event checks.
-Kinematic impacts have a momentum check but await a work reading before any
-energy check. Rotational kinetic energy, torque impulse, and kinematic work
-remain future contracts.
+For a kinematic impact, the energy gate subtracts the driver's work from the
+dynamic energy gain. It adds `ImpulseResidual` times the sum of the absolute
+driver velocity components to the numerical allowance. Rotational kinetic
+energy and torque impulse remain future contracts.
 
 `Trace` contains the starting state, each certified drift slice, each
 event's pre/post states, each position correction, and the ending state.

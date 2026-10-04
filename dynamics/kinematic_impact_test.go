@@ -80,6 +80,10 @@ func TestKinematicDriverInteriorImpactUsesProductionGeometry(t *testing.T) {
 	require.Equal(t, units.Impulse, report.Conservation.ContactImpulse.Bound.X.Kind())
 	require.InDelta(t, 120, report.Conservation.ContactImpulse.Value.X.Base(), 1e-5)
 	require.InDelta(t, 120, report.Conservation.Completion.LinearMomentum.Value.X.Base(), 1e-5)
+	require.Equal(t, units.Torque, report.Conservation.KinematicWork.Value.Kind())
+	require.Equal(t, units.Torque, report.Conservation.KinematicWork.Bound.Kind())
+	require.InDelta(t, 9600, report.Conservation.KinematicWork.Value.Base(), 1e-3)
+	require.Less(t, report.Conservation.KinematicWork.Bound.Base(), 1e-6)
 	require.Len(t, report.Events, 1)
 	event := report.Events[0]
 	require.Equal(t, dynamics.ContactImpact, event.Kind)
@@ -197,6 +201,7 @@ func TestKinematicInteriorImpactSupportsReverseWorldOrder(t *testing.T) {
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
 	require.NotNil(t, report.Conservation)
 	require.InDelta(t, -120, report.Conservation.ContactImpulse.Value.X.Base(), 1e-5)
+	require.InDelta(t, 9600, report.Conservation.KinematicWork.Value.Base(), 1e-3)
 	require.Len(t, report.Events, 1)
 	require.InDelta(t, 120, report.Events[0].NormalImpulse.Base(), 1e-5)
 	require.Equal(t, units.MillimetersPerSecond(-80), report.Events[0].PreVelocityB.X)
