@@ -8,35 +8,43 @@ A **headless CAD engine** for Go: the 3D modeling layer above the
 [sketch](https://github.com/lestrrat-3d/sketch) 2D constraint engine and the
 [r3](https://github.com/lestrrat-3d/r3) coordinate-math layer.
 
-While modern coding agents can already create 3D models, decad aims for
-**idempotent, parametric construction**. You can ask a coding agent to put
-dimensioned sketches and ordered features in code. A CAD plugin can use the
-same approach. decad checks the geometry before the agent carries those steps
-into the plugin. This coded workflow lets you rebuild the same model from the
-same inputs, while decad's verification report tells the agent whether the
-geometry passes its checks. The images below illustrate the results.
-
 > **Work in progress.** The API and supported capabilities may change.
 
 ## Why this exists
 
-decad is built to be driven by a **coding agent as a verification step before it
-commits to writing real CAD software code** — an Autodesk Fusion add-in, say.
+When a designer wanted a parametric part, they worked in a CAD app. They drew
+sketches, gave them dimensions, and added features such as extrusions and cuts.
+If a dimension changed, the app rebuilt the part from those steps. The designer
+could inspect the result and adjust the model in the same place. That workflow
+still works.
 
-3D modeling is easy to get subtly wrong: a profile that does not sweep the way
-you expect, a feature that leaves a body non-watertight or self-intersecting, a
-wall thinner than the tool that has to cut it, two components that interfere.
-Discovering that inside Fusion — after the script has run — is expensive.
+Coding agents can now make convincing 3D shapes. Some are good enough for a
+one-off render or print. But if you ask for a bevel gear built to given
+dimensions, a shape that looks like a gear is only the start. Its teeth have
+to mesh with its mate. A fresh request to the agent may also produce different
+geometry. Variation may be fine for a one-off model; it makes a dimensioned
+part hard to reproduce.
 
-So an agent reproduces the part here first and interrogates it programmatically:
+An agent can also write a CAD add-in that creates dimensioned sketches and
+ordered features. The add-in can rebuild the part from the same inputs. The
+agent still has to run it in the CAD app to learn whether a sweep failed,
+whether the body is watertight, or whether two components collide. A change to
+the construction means another run in the app.
 
-* Is the body watertight? Does it self-intersect?
-* What is its volume, its centroid, its bounding box?
-* Do these two bodies collide? Is anything thinner than my end mill?
+With [decad](https://github.com/lestrrat-3d/decad), the agent writes and runs
+that construction in Go before building the CAD add-in. decad builds 3D bodies
+from solved sketches and ordered modeling operations, and can tessellate them
+for rendering. The agent can measure volume and centroid, check whether bodies
+interfere or have enough clearance, and ask whether a wall is too thin for a
+cutting tool. It can change a dimension or feature, run the program again, and
+inspect the new body and verification report. With the program and inputs held
+fixed, **the same model can be rebuilt** without a fresh request to the agent.
 
-Only once the geometry is proven sound does the agent carry the plan into the
-CAD package. Same bet as `sketch`, one dimension up: **be wrong in the cheap
-place, not the expensive one.**
+Those modeling operations correspond to steps a CAD add-in can use. Once the
+decad construction meets the checks the agent has asked for, the agent can
+carry the steps into the CAD app to make an **editable, parametric part**. The CAD
+app may interpret those steps differently, so the agent checks the part it
+builds.
 
 ## What it builds
 
