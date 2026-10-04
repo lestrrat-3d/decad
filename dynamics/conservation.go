@@ -601,9 +601,10 @@ func (w *World) forceImpulses(gravity QuantityVec, loads [2]*BodyLoad,
 }
 
 func (w *World) externalContactImpulse(events []ContactEvent) (MomentumReading, bool) {
-	var components [3]*big.Rat
+	var components, low, high [3]*big.Rat
 	for axis := range components {
 		components[axis] = new(big.Rat)
+		low[axis], high[axis] = new(big.Rat), new(big.Rat)
 	}
 	if w.parts[0].definition.Role == Dynamic && w.parts[1].definition.Role == Dynamic {
 		return boundedMomentum(components, components, components)
@@ -631,9 +632,18 @@ func (w *World) externalContactImpulse(events []ContactEvent) (MomentumReading, 
 			return MomentumReading{}, false
 		}
 		point := event.Manifold.Points[0]
-		if point.Normal.Bound.Base() != 0 || point.NormalAngle.Base() != 0 {
-			return MomentumReading{}, false
+		normalError := new(big.Rat)
+		for _, witness := range event.Manifold.Points {
+			bound, angle := exactBase(witness.Normal.Bound), exactBase(witness.NormalAngle)
+			if bound == nil || angle == nil || bound.Sign() < 0 || angle.Sign() < 0 {
+				return MomentumReading{}, false
+			}
+			uncertainty := new(big.Rat).Add(bound, angle)
+			if uncertainty.Cmp(normalError) > 0 {
+				normalError = uncertainty
+			}
 		}
+		normalError.Mul(normalError, normalImpulse)
 		axis := [3]float64{point.Normal.Value.X, point.Normal.Value.Y, point.Normal.Value.Z}
 		for i, value := range axis {
 			normal := new(big.Rat).SetFloat64(value)
@@ -642,10 +652,13 @@ func (w *World) externalContactImpulse(events []ContactEvent) (MomentumReading, 
 				return MomentumReading{}, false
 			}
 			applied := new(big.Rat).Add(new(big.Rat).Mul(normalImpulse, normal), tangent)
-			components[i].Add(components[i], applied.Mul(applied, big.NewRat(sign, 1)))
+			applied.Mul(applied, big.NewRat(sign, 1))
+			components[i].Add(components[i], applied)
+			low[i].Add(low[i], new(big.Rat).Sub(applied, normalError))
+			high[i].Add(high[i], new(big.Rat).Add(applied, normalError))
 		}
 	}
-	return boundedMomentum(components, components, components)
+	return boundedMomentum(components, low, high)
 }
 
 func boundedMomentum(value, low, high [3]*big.Rat) (MomentumReading, bool) {

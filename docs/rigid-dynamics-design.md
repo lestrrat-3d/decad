@@ -8,6 +8,16 @@ body using density-derived or supplied mass. An axis-aligned
 certified contact normal determines the response component; tangent velocity
 continues through an oblique impact. Centered impacts of two dynamic bodies
 apply equal and opposite impulses.
+A fixed box and a dynamic source box at matching 45-degree Y poses can resolve
+an initial centered face impact with zero restitution and friction. The solver
+stops the incoming dynamic box, checks the bounded normal and four point
+impulses against its momentum and angular residuals, and requires ideal and
+rounded persistent-contact tracks for the full step. A second stationary step
+uses those same contact proofs. Tangential incoming motion, off-center contact,
+and a positive-restitution rebound return `Undecided` in this tilted-pose path.
+`Trace.Sample` returns the event and endpoint states for this path. An
+interior tilted persistent-contact sample returns `ErrUnsupported` until the
+oblique sweep supplies a replay proof.
 A source semicircle sphere with supplied mass can rebound from a fixed source
 box on an isolated face-point contact when its affine sweep stays within that
 face corridor.
@@ -708,6 +718,15 @@ certified vertical normal. At `0.2 s`, the box has velocity `(50, 0, 50) mm/s`
 and translation `(10, 0, 5) mm`. The tangent speed stays `50 mm/s`; the ideal
 and rounded departure paths are both certified.
 
+The tilted-pose fixture rotates two touching `10 mm` boxes by 45 degrees
+around world Y. One box is fixed; the `1 kg` dynamic box enters at
+`(-50, 0, 50) mm/s`. Its four-point bounded manifold and initial-touch sweep
+produce a `sqrt(5000) kg·mm/s` support impulse. The dynamic box stops and
+both the ideal and rounded sweeps prove persistent contact through `0.01 s`.
+The reported contact-impulse bound is positive; another stationary step
+advances without an event. An outward rebound has no certified one-sided
+departure and returns `Undecided`.
+
 The center-force fixture starts the same `1 kg` box `10 mm` above the floor at
 rest. A `−500 kg·mm/s²` center force over `0.2 s` gives a full-step kick of
 `−100 mm/s`. The real sweep brackets contact at `0.1 s`; the step reports a
@@ -810,5 +829,5 @@ solver in every integration check; direct impulse-equation unit tests may
 use constructed contact data but cannot claim pair-query integration.
 The first box-contact increment may end the off-center spin check at the
 impact event. A longer remainder needs a real pair-clearance certificate;
-the source-box contact path admits only signed-permutation poses and cannot
-claim a manifold for an arbitrarily rotated box.
+co-oriented oblique source-box face contact has a bounded manifold, while
+other rotated face arrangements may still return `Undecided`.

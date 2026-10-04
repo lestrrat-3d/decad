@@ -48,13 +48,25 @@ func (w *World) stepNoImpulse(ctx context.Context, from, kicked State, dt units.
 			return undecided(w, "persistent contact lacks an initial manifold"), nil
 		}
 		normal, separation, bound, ok := reducedContact(ideal.InitialEvent.Manifold, w.step.Contact)
+		oblique := false
+		if !ok {
+			normal, separation, bound, ok = boundedObliqueContact(ideal.InitialEvent.Manifold, w.step.Contact)
+			oblique = ok
+		}
+		tracksWithin := w.persistentTrackWithin(ideal, normal) && w.persistentTrackWithin(actual, normal)
+		if oblique {
+			tracksWithin = w.obliqueTrackWithin(ideal, normal) && w.obliqueTrackWithin(actual, normal)
+		}
 		if !ok || !finite(separation, bound) ||
 			math.Abs(separation)+bound > w.step.PenetrationResidual.Base() ||
-			!w.persistentTrackWithin(ideal, normal) || !w.persistentTrackWithin(actual, normal) ||
+			!tracksWithin ||
 			finalContact.Relation != decad.ContactTouching || finalContact.Manifold == nil {
 			return undecided(w, "persistent touch lacks a full bounded track"), nil
 		}
 		finalNormal, finalSeparation, finalBound, valid := reducedContact(finalContact.Manifold, w.step.Contact)
+		if oblique {
+			finalNormal, finalSeparation, finalBound, valid = boundedObliqueContact(finalContact.Manifold, w.step.Contact)
+		}
 		if !valid || finalNormal != normal ||
 			math.Abs(finalSeparation)+finalBound > w.step.PenetrationResidual.Base() {
 			return undecided(w, "persistent endpoint exceeds penetration residual"), nil
