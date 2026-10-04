@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -63,6 +64,53 @@ func TestSweepPairTranslatedBoxesImpact(t *testing.T) {
 	require.GreaterOrEqual(t, idealPoint.OnA.Bound.Base(), floatPoint.OnA.Bound.Base())
 	require.GreaterOrEqual(t, idealPoint.OnB.Bound.Base(), floatPoint.OnB.Bound.Base())
 	require.Equal(t, before, doc.Bodies())
+}
+
+func TestSweepPairOffCenterBoxImpactAtEndpoint(t *testing.T) {
+	doc := decad.New()
+	floor := boxBodyAtZ(t, doc, -5, -5, 5-1e-6, 5, -10, 20)
+	box := boxBodyAtZ(t, doc, -5, -5, 5, 5, 0, 10)
+	from, err := r3.Translation(r3.Vec{Z: 20})
+	require.NoError(t, err)
+	fall := sweepDrift(r3.Vec{Z: -80}, 0.125)
+	fall.From = from
+	report, err := doc.SweepPair(t.Context(), floor, box,
+		sweepDrift(r3.Vec{}, 0.125), fall, sweepRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, report.Outcome)
+	require.NotNil(t, report.Bracket)
+	require.Less(t, report.Bracket.From.Fraction.Base(), 1.0)
+	require.Equal(t, 1.0, report.Bracket.To.Fraction.Base())
+	require.LessOrEqual(t, report.Bracket.To.Elapsed.Value.Base()-
+		report.Bracket.From.Elapsed.Value.Base(), 1e-9)
+	require.Equal(t, decad.ContactSeparated, report.Samples[0].Ideal.Relation)
+	require.Equal(t, decad.ContactTouching, report.Event.Relation)
+	require.NotNil(t, report.Event.Manifold)
+	require.NotEmpty(t, report.Event.Manifold.Points)
+	require.Equal(t, r3.Vec{Z: 1}, report.Event.Manifold.Points[0].Normal.Value)
+
+	// The read 0.1 s duration makes the ideal drift overlap by less than one
+	// pose ULP while ContactPair sees a touching rounded endpoint. The exact
+	// source-box manifold still bounds the ideal penetration.
+	fall = sweepDrift(r3.Vec{Z: -100}, 0.1)
+	fall.From = from
+	near, err := doc.SweepPair(t.Context(), floor, box,
+		sweepDrift(r3.Vec{}, 0.1), fall, sweepRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, near.Outcome)
+	require.Equal(t, 1.0, near.Bracket.To.Fraction.Base())
+	require.Equal(t, decad.ContactOverlapping, near.Event.Relation)
+	require.Equal(t, decad.ContactTouching, near.Samples[len(near.Samples)-1].FloatContact.Relation)
+	require.NotNil(t, near.Event.Manifold)
+	require.Len(t, near.Event.Manifold.Points, 4)
+	point := near.Event.Manifold.Points[0]
+	require.Less(t, point.Separation.Value.Base(), 0.0)
+	require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+	depth := new(big.Rat).Mul(new(big.Rat).SetFloat64(0.1), big.NewRat(-100, 1))
+	depth.Add(depth, big.NewRat(10, 1))
+	errorValue := new(big.Rat).Sub(depth, new(big.Rat).SetFloat64(point.Separation.Value.Base()))
+	errorValue.Abs(errorValue)
+	require.GreaterOrEqual(t, new(big.Rat).SetFloat64(point.Separation.Bound.Base()).Cmp(errorValue), 0)
 }
 
 func TestSweepPairTwoMoversAndDeparture(t *testing.T) {

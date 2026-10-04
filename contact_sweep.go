@@ -447,14 +447,22 @@ func (r *pairSweepRun) idealContact(f *big.Rat, at SweepInstant) SweepEvent {
 // source faces and normal. The float manifold's witnesses are then widened by
 // the exact L1 pose discrepancy. Tangential clipped corners can depend on
 // either body, so each point receives the sum of both pose discrepancies.
+// When read-pose rounding changes the relation or makes that widening too
+// coarse, the exact source-box proof supplies its own bounded ideal manifold.
 func (r *pairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
 	contact *ContactReport, event *SweepEvent) {
 	ideal := event.Manifold
 	event.Manifold = nil
+	useIdeal := func() {
+		if ideal != nil {
+			event.Manifold = ideal
+			event.Reason = ContactNoReason
+		}
+	}
 	if ideal == nil || contact.Manifold == nil || event.Relation != contact.Relation ||
 		len(ideal.Points) != len(contact.Manifold.Points) {
 		if ideal != nil {
-			event.Reason = ContactNoNormalProof
+			useIdeal()
 		}
 		return
 	}
@@ -464,21 +472,21 @@ func (r *pairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
 			actual.FeatureA != idealPoint.FeatureA || actual.FeatureB != idealPoint.FeatureB ||
 			actual.Normal.Value != idealPoint.Normal.Value ||
 			actual.Normal.Bound.Base() != 0 || actual.NormalAngle.Base() != 0 {
-			event.Reason = ContactNoNormalProof
+			useIdeal()
 			return
 		}
 	}
 	observedA, okA := sourceBoxAtPose(r.a, poseA)
 	observedB, okB := sourceBoxAtPose(r.b, poseB)
 	if !okA || !okB {
-		event.Reason = ContactPayloadUnsupported
+		useIdeal()
 		return
 	}
 	deviation := boxPoseDeviation(r.boxA, observedA, r.pa.delta, f)
 	deviation.Add(deviation, boxPoseDeviation(r.boxB, observedB, r.pb.delta, f))
 	resolution, ok := exactBaseValue(r.req.PointResolution)
 	if !ok {
-		event.Reason = ContactPointTooCoarse
+		useIdeal()
 		return
 	}
 	points := append([]ContactPoint(nil), contact.Manifold.Points...)
@@ -487,12 +495,12 @@ func (r *pairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
 		for _, witness := range []*VecMeasurement{&point.OnA, &point.OnB} {
 			bound := new(big.Rat).Add(floatRat(witness.Bound.Base()), deviation)
 			if bound.Cmp(resolution) > 0 {
-				event.Reason = ContactPointTooCoarse
+				useIdeal()
 				return
 			}
 			publishedBound := ratFloatUp(bound)
 			if publishedBound > r.req.PointResolution.Base() {
-				event.Reason = ContactPointTooCoarse
+				useIdeal()
 				return
 			}
 			witness.Bound = units.Millimeters(publishedBound)
@@ -811,12 +819,23 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 	floorIdx := new(big.Int).Quo(scaled.Num(), scaled.Denom())
 	leftIdx := new(big.Int).Set(floorIdx)
 	rightIdx := new(big.Int).Add(floorIdx, big.NewInt(2))
-	if new(big.Rat).SetInt(floorIdx).Cmp(scaled) == 0 {
+	exactEntry := new(big.Rat).SetInt(floorIdx).Cmp(scaled) == 0
+	if exactEntry {
 		leftIdx.Sub(leftIdx, big.NewInt(1))
 		rightIdx.Sub(rightIdx, big.NewInt(1))
 	}
 	leftF := new(big.Rat).SetFrac(leftIdx, grid)
 	rightF := new(big.Rat).SetFrac(rightIdx, grid)
+	if rightF.Cmp(exit) > 0 || rightF.Cmp(one) > 0 {
+		// The first grid point after entry is still a valid contact sample.
+		// In particular, an impact at the path endpoint has no later sample.
+		if exactEntry {
+			rightIdx.Set(floorIdx)
+		} else {
+			rightIdx.Add(floorIdx, big.NewInt(1))
+		}
+		rightF.SetFrac(rightIdx, grid)
+	}
 	if rightF.Cmp(exit) > 0 || rightF.Cmp(one) > 0 {
 		return r.undecided(leftF, rightF, SweepTimeFloor), nil
 	}
