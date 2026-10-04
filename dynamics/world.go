@@ -81,6 +81,7 @@ type worldBody struct {
 type World struct {
 	doc         *decad.Document
 	parts       [2]worldBody
+	excluded    []BodyPair
 	step        StepConfig
 	restitution units.Value
 	friction    frictionCoefficient
@@ -94,8 +95,8 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 	if err := validateStepConfig(cfg.Step); err != nil {
 		return nil, err
 	}
-	if len(cfg.Bodies) != 2 || len(cfg.Excluded) != 0 {
-		return nil, fmt.Errorf("%w: this stage admits one pair without exclusions", ErrUnsupported)
+	if len(cfg.Bodies) != 2 {
+		return nil, fmt.Errorf("%w: this stage admits one pair", ErrUnsupported)
 	}
 	live := doc.Bodies()
 	seen := map[*decad.Body]struct{}{}
@@ -164,6 +165,25 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 	if dynamic == 0 || fixed+kinematic+dynamic != 2 {
 		return nil, fmt.Errorf("%w: one or two dynamic bodies required", ErrUnsupported)
 	}
+	for _, pair := range cfg.Excluded {
+		first, second := w.parts[0].definition.Body, w.parts[1].definition.Body
+		if (pair.A != first || pair.B != second) && (pair.A != second || pair.B != first) {
+			return nil, fmt.Errorf("%w: exclusion names an unknown pair", ErrInvalidInput)
+		}
+		if len(w.excluded) != 0 {
+			return nil, fmt.Errorf("%w: duplicate pair exclusion", ErrInvalidInput)
+		}
+		w.excluded = []BodyPair{{A: first, B: second}}
+	}
+	if len(w.excluded) != 0 && len(cfg.Overrides) != 0 {
+		return nil, fmt.Errorf("%w: excluded pair has a material override", ErrInvalidInput)
+	}
+	if len(w.excluded) != 0 {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return w, nil
+	}
 	restitutionA := w.parts[0].definition.Material.Restitution
 	restitutionB := w.parts[1].definition.Material.Restitution
 	w.restitution = restitutionA
@@ -192,6 +212,14 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 		return nil, err
 	}
 	return w, nil
+}
+
+// Excluded returns the excluded pair in world order, if one was configured.
+func (w *World) Excluded() []BodyPair {
+	if w == nil {
+		return nil
+	}
+	return append([]BodyPair(nil), w.excluded...)
 }
 
 func (w *World) setPairOverride(overrides []PairMaterial) error {

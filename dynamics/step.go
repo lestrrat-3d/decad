@@ -91,6 +91,7 @@ type StepReport struct {
 	Status       StepStatus
 	Next         *State
 	Events       []ContactEvent
+	Excluded     []BodyPair
 	Trace        Trace
 	Diagnostics  []StepDiagnostic
 	Conservation *StepConservation
@@ -257,6 +258,9 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		return undecided(w, "force kick exceeds the velocity residual"), nil
 	}
 	report, err := w.stepKicked(ctx, from, kicked, dt, driver)
+	if report != nil {
+		report.Excluded = w.Excluded()
+	}
 	if err != nil || report == nil || report.Status != Advanced {
 		return report, err
 	}
@@ -279,6 +283,9 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 
 func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Value,
 	driver kinematicMotion) (*StepReport, error) {
+	if len(w.excluded) != 0 {
+		return w.stepExcluded(ctx, from, kicked, dt, driver)
+	}
 	if driver.index >= 0 {
 		return w.stepKinematicPush(ctx, from, kicked, dt, driver)
 	}
@@ -544,6 +551,22 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	report.Trace = Trace{start: from, pre: pre, post: post, end: end, duration: dt,
 		eventAt: units.Seconds(impactTime), hasEvent: true}
 	return report, nil
+}
+
+func (w *World) stepExcluded(ctx context.Context, from, kicked State, dt units.Value,
+	driver kinematicMotion) (*StepReport, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	end, err := driftState(kicked, dt.Base())
+	if err != nil {
+		return undecidedArithmetic(w, "non-finite excluded-pair drift", err)
+	}
+	if driver.index >= 0 {
+		end.entries[driver.index].Pose = driver.path.To
+	}
+	return &StepReport{Status: Advanced, Next: &end,
+		Trace: Trace{start: from, end: end, duration: dt}}, nil
 }
 
 // Compare the published float response against the exact law applied to the
@@ -905,7 +928,7 @@ func cloneManifold(m decad.ContactManifold) decad.ContactManifold {
 }
 
 func undecided(w *World, reason string) *StepReport {
-	return &StepReport{Status: Undecided, Diagnostics: []StepDiagnostic{{
+	return &StepReport{Status: Undecided, Excluded: w.Excluded(), Diagnostics: []StepDiagnostic{{
 		Pair: BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body}, Reason: reason,
 	}}}
 }
