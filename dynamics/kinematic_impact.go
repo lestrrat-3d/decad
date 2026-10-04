@@ -3,6 +3,7 @@ package dynamics
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad"
@@ -149,21 +150,27 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	remaining := dt.Base() - chosen
 	postRelative := (postSpeed[1] - postSpeed[0]) * sign
 	if !finite(remaining, postRelative) || remaining <= 0 ||
-		postRelative <= w.step.VelocityResidual.Base() {
-		return undecided(w, "kinematic impact lacks a separating remainder"), nil
+		postRelative < -w.step.VelocityResidual.Base() {
+		return undecided(w, "kinematic impact response remains closing"), nil
+	}
+	persistent := postRelative <= w.step.VelocityResidual.Base()
+	policy := decad.ContinueSeparatingTouch
+	if persistent {
+		policy = decad.ContinueCertifiedTouch
 	}
 	remainderMotion, valid := sliceKinematicMotion(motion, post.entries[motion.index].Pose,
 		units.Seconds(remaining))
 	if !valid {
-		return undecided(w, "kinematic driver remainder exceeds its speed residual"), nil
+		return undecided(w, "kinematic driver remainder differs from its admitted speed"), nil
 	}
 	ideal, err := w.sweepKinematic(ctx, post, units.Seconds(remaining), remainderMotion,
-		decad.ContinueSeparatingTouch)
+		policy)
 	if err != nil {
 		return nil, err
 	}
-	if ideal.Outcome != decad.SweepDepartedClear {
-		return undecided(w, fmt.Sprintf("kinematic rebound returned %v", ideal.Outcome)), nil
+	if (persistent && !w.persistentTrackWithin(ideal, normal)) ||
+		(!persistent && ideal.Outcome != decad.SweepDepartedClear) {
+		return undecided(w, fmt.Sprintf("kinematic continuation returned %v", ideal.Outcome)), nil
 	}
 	end, err := driftState(post, remaining)
 	if err != nil {
@@ -171,19 +178,29 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	}
 	end.entries[motion.index].Pose = motion.path.To
 	rounded, err := w.sweepKinematicPoses(ctx, post, end, units.Seconds(remaining), remainderMotion,
-		decad.ContinueSeparatingTouch)
+		policy)
 	if err != nil {
 		return nil, err
 	}
-	if rounded.Outcome != decad.SweepDepartedClear {
-		return undecided(w, fmt.Sprintf("rounded kinematic rebound returned %v", rounded.Outcome)), nil
+	if (persistent && !w.persistentTrackWithin(rounded, normal)) ||
+		(!persistent && rounded.Outcome != decad.SweepDepartedClear) {
+		return undecided(w, fmt.Sprintf("rounded kinematic continuation returned %v", rounded.Outcome)), nil
 	}
 	finalContact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
 		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
 	}
-	if finalContact.Relation != decad.ContactSeparated {
+	if persistent {
+		if finalContact.Relation != decad.ContactTouching || finalContact.Manifold == nil {
+			return undecided(w, "kinematic persistent endpoint lacks contact"), nil
+		}
+		endNormal, endSeparation, endBound, ok := reducedContact(finalContact.Manifold, w.step.Contact)
+		if !ok || endNormal != normal || !finite(endSeparation, endBound) ||
+			math.Abs(endSeparation)+endBound > w.step.PenetrationResidual.Base() {
+			return undecided(w, "kinematic persistent endpoint exceeds penetration residual"), nil
+		}
+	} else if finalContact.Relation != decad.ContactSeparated {
 		return undecided(w, "kinematic impact endpoint is not separated"), nil
 	}
 	effectivePre := [2]QuantityVec{kicked.entries[0].LinearVelocity, kicked.entries[1].LinearVelocity}
