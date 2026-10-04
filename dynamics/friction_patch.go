@@ -41,11 +41,12 @@ type patchPoint struct {
 // This first slice admits only identity placement, so the committed mass
 // center and every contact witness share one world coordinate system.
 func solveFixedFloorFrictionPatch(manifold *decad.ContactManifold, mass decad.MassProperties,
-	pose r3.Transform, pre QuantityVec, mu units.Value, cfg StepConfig) (frictionPatchResponse, bool) {
+	pose r3.Transform, pre QuantityVec, mu frictionCoefficient, cfg StepConfig) (frictionPatchResponse, bool) {
 	if manifold == nil || len(manifold.Points) != 4 || validateMass(mass) != nil ||
 		pose != r3.Identity() ||
 		validateQuantityVec(pre, units.Velocity) != nil ||
-		!validQuantity(mu, units.Dimensionless, true) || cfg.MaxIterations <= 0 ||
+		!validQuantity(mu.nominal, units.Dimensionless, true) || mu.lower == nil || mu.upper == nil ||
+		mu.lower.Sign() <= 0 || mu.upper.Cmp(mu.lower) < 0 || cfg.MaxIterations <= 0 ||
 		!validQuantity(cfg.VelocityResidual, units.Velocity, true) ||
 		!validQuantity(cfg.AngularVelocityResidual, units.AngularVelocity, true) ||
 		!validQuantity(cfg.ImpulseResidual, units.Impulse, true) ||
@@ -109,7 +110,7 @@ func solveFixedFloorFrictionPatch(manifold *decad.ContactManifold, mass decad.Ma
 			}
 			at = v.Add(spin.Cross(r))
 			qx, qy := point.jx-at.X/lip, point.jy-at.Y/lip
-			coneLimit := mu.Base() * point.jn
+			coneLimit := mu.nominal.Base() * point.jn
 			length := math.Hypot(qx, qy)
 			if !finite(qx, qy, coneLimit, length) || coneLimit < 0 {
 				return frictionPatchResponse{}, false
@@ -135,7 +136,7 @@ func solveFixedFloorFrictionPatch(manifold *decad.ContactManifold, mass decad.Ma
 // certifyFrictionPatch uses nominal inverse inertia only through the proposed
 // impulses. It bounds their aggregate torque before publishing zero spin.
 func certifyFrictionPatch(manifold *decad.ContactManifold, mass decad.MassProperties,
-	pre QuantityVec, mu units.Value, cfg StepConfig, points [4]patchPoint,
+	pre QuantityVec, mu frictionCoefficient, cfg StepConfig, points [4]patchPoint,
 	v r3.Vec, iteration int) (frictionPatchResponse, bool) {
 	massLow := new(big.Rat).Sub(exactBase(mass.Mass.Value), exactBase(mass.Mass.Bound))
 	massHigh := new(big.Rat).Add(exactBase(mass.Mass.Value), exactBase(mass.Mass.Bound))
@@ -204,14 +205,19 @@ func certifyFrictionPatch(manifold *decad.ContactManifold, mass decad.MassProper
 		if jn == nil || jx == nil || jy == nil || jn.Sign() <= 0 || jx.Sign() >= 0 {
 			return frictionPatchResponse{}, false
 		}
-		coneLimit := new(big.Rat).Mul(exactBase(mu), jn)
-		direction := new(big.Rat).Add(jx, coneLimit)
-		direction.Abs(direction).Add(direction, absRat(new(big.Rat).Set(jy)))
+		coneLower := new(big.Rat).Mul(mu.lower, jn)
+		coneUpper := new(big.Rat).Mul(mu.upper, jn)
+		direction := absRat(new(big.Rat).Add(jx, coneLower))
+		upperDirection := absRat(new(big.Rat).Add(jx, coneUpper))
+		if upperDirection.Cmp(direction) > 0 {
+			direction = upperDirection
+		}
+		direction.Add(direction, absRat(new(big.Rat).Set(jy)))
 		if direction.Cmp(impulseLimit) > 0 {
 			return frictionPatchResponse{}, false
 		}
 		coneSquare := new(big.Rat).Add(new(big.Rat).Mul(jx, jx), new(big.Rat).Mul(jy, jy))
-		allowed := new(big.Rat).Add(coneLimit, impulseLimit)
+		allowed := new(big.Rat).Add(coneLower, impulseLimit)
 		if coneSquare.Cmp(new(big.Rat).Mul(allowed, allowed)) > 0 {
 			return frictionPatchResponse{}, false
 		}

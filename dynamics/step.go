@@ -323,12 +323,12 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		report.Status, report.Next, report.Trace.end = Advanced, &end, end
 		return report, nil
 	case decad.SweepInitiallyTouching:
-		if w.friction.Mag() != 0 {
+		if w.friction.lower.Sign() != 0 {
 			return w.stepInitialFriction(ctx, from, kicked, dt, first)
 		}
 		return w.stepInitialTouch(ctx, from, kicked, dt, first)
 	case decad.SweepImpactBracket:
-		if w.friction.Mag() != 0 {
+		if w.friction.lower.Sign() != 0 {
 			return undecided(w, "frictional interior impact is not certified"), nil
 		}
 		// Continue below, consuming the geometry producer's event and manifold.

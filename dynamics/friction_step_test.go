@@ -232,7 +232,7 @@ func TestFixedFloorFrictionRejectsUnsupportedMaterialsAndPatch(t *testing.T) {
 		{Body: floor, Role: Fixed, Material: material},
 		{Body: box, Role: Dynamic, Density: &density, Material: unequal},
 	}, Step: cfg})
-	require.ErrorIs(t, err, ErrUnsupported)
+	require.NoError(t, err)
 	_, err = NewWorld(t.Context(), doc, WorldConfig{Bodies: []RigidBody{
 		{Body: box, Role: Dynamic, Density: &density, Material: material},
 		{Body: floor, Role: Fixed, Material: material},
