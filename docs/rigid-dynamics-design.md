@@ -34,11 +34,12 @@ aggregate impulses, a residual report, and a persistent-touch trace after
 both ideal and rounded sweeps certify the full remainder. Zero X slip uses
 the centered normal support path with zero tangent impulse.
 Off-center impulses that require spin return `Undecided`. The step reports
-bounded translational kinetic energy and linear momentum for dynamic bodies
+bounded translational kinetic energy, linear momentum, and orbital angular momentum for dynamic bodies
 at input, after the full-step force kick, and at completion. It also reports
-gravity, center-force, and fixed/kinematic contact impulses separately.
+gravity, center-force, and fixed/kinematic contact impulses separately, plus
+the drift-only energy, linear momentum, and angular momentum changes.
 Torque loads, rotating kinematic drivers, broader frictional stepping, stacks,
-broader contact-transition stepping, angular momentum reporting, and arbitrary
+broader contact-transition stepping, spin response, and arbitrary
 trace sampling remain design contracts.
 
 Navigation only; the named sections own the rules:
@@ -428,10 +429,14 @@ change. The report owns copies of all slices and state data. A report with
 cannot be passed as an advanced state.
 
 `StepConservation.Input`, `AfterKick`, and `Completion` each contain a bounded
-`KineticEnergy` scalar and bounded `LinearMomentum` vector summed over dynamic
-bodies. `KineticEnergy` uses `units.Torque` because the registered torque unit
-has the same `kg·mm²/s²` dimension as energy; the field denotes energy, not a
-turning moment. Every momentum component and bound has kind `units.Impulse`.
+`KineticEnergy` scalar, `LinearMomentum` vector, and `AngularMomentum` vector
+summed over dynamic bodies. `KineticEnergy` uses `units.Torque` because the
+registered torque unit has the same `kg·mm²/s²` dimension as energy; the field
+denotes energy, not a turning moment. Linear momentum components and bounds
+have kind `units.Impulse`; angular momentum components and bounds have kind
+`units.AngularMomentum`. With zero stored spin, angular momentum is the
+orbital term `mass × (world mass center × linear velocity)`. The source mass
+center's ball bound and the rounded world transform widen the reading.
 `GravityImpulse`, `LoadImpulse`, and `ContactImpulse` are separate bounded
 vectors. Contact impulse sums only events against fixed or kinematic bodies;
 the two impulses of a dynamic pair cancel in the world total. These readings
@@ -441,6 +446,16 @@ it does not claim to enclose an uncomputed physical impulse. Mass uncertainty
 and conversion rounding widen energy, momentum, and gravity readings. A
 reading that cannot be enclosed by finite typed values makes the step
 `Undecided` with no `Next`.
+
+`StepConservation.DriftChange` contains bounded energy, linear momentum, and
+angular momentum changes over translation-only trace slices. Without an event,
+it uses `AfterKick → Completion`. With an event, it sums `AfterKick → pre-event`
+and `post-event → Completion`. It excludes the force kick, event impulse, and
+event position correction. Each body's translation and velocity coefficients
+sum before the one held mass interval is applied, so the same source-center
+uncertainty cancels across each pure-translation slice. Energy and linear
+momentum change by zero on these constant-velocity slices. A changed velocity
+or orientation within a drift slice makes the reading `Undecided`.
 
 The current code admits zero spin, so kinetic energy is translational. Each
 advanced contact event checks every dynamic body's published velocity change
@@ -456,8 +471,8 @@ gain is the sum, over each dynamic body and Cartesian component, of
 (|preVelocity| + |postVelocity| + VelocityResidual)`. A failed gate makes the
 step `Undecided`. The full-step force kick remains outside these event checks.
 Kinematic impacts have a momentum check but await a work reading before any
-energy check. Angular momentum, rotational kinetic energy, torque impulse,
-drift-only change, and kinematic work remain future contracts.
+energy check. Rotational kinetic energy, torque impulse, and kinematic work
+remain future contracts.
 
 `Trace` contains the starting state, each certified drift slice, each
 event's pre/post states, each position correction, and the ending state.

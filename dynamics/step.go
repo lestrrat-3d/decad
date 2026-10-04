@@ -268,7 +268,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 			return undecided(w, reason), nil
 		}
 	}
-	conservation, ok := w.conservationReadings(from, kicked, *report.Next, report.Events,
+	conservation, ok := w.conservationReadings(from, kicked, *report.Next, report.Trace, report.Events,
 		input.Gravity, loads, dt)
 	if !ok {
 		return undecided(w, "conservation readings cannot be represented with finite bounds"), nil
