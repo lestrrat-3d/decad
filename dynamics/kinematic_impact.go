@@ -15,9 +15,8 @@ import (
 // The driver stays prescribed; only the dynamic body receives correction and impulse.
 func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt units.Value,
 	motion kinematicMotion, first *decad.SweepReport) (*StepReport, error) {
-	if first.Bracket == nil || first.Event == nil || first.Event.Manifold == nil ||
-		len(first.Event.Manifold.Points) == 0 {
-		return undecided(w, "kinematic impact lacks a bracket and manifold"), nil
+	if first.Bracket == nil || first.Event == nil {
+		return undecided(w, "kinematic impact lacks a bracket and event"), nil
 	}
 	chosen := first.Bracket.To.Elapsed.Value.Base()
 	if !finite(chosen) || chosen <= 0 || chosen >= dt.Base() {
@@ -58,10 +57,12 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	if err != nil {
 		return nil, err
 	}
-	if contactAtRight.Relation != first.Event.Relation || contactAtRight.Manifold == nil {
+	if contactAtRight.Relation != first.Event.Relation || contactAtRight.Manifold == nil ||
+		len(contactAtRight.Manifold.Points) == 0 {
 		return undecided(w, "kinematic bracket-right pose lacks its reported contact"), nil
 	}
-	normal, separation, bound, valid := reducedContact(first.Event.Manifold, w.step.Contact)
+	manifold := contactAtRight.Manifold
+	normal, separation, bound, valid := reducedContact(manifold, w.step.Contact)
 	if !valid || !finite(separation, bound) || separation > bound {
 		return undecided(w, "kinematic impact normal or penetration is not certified"), nil
 	}
@@ -107,7 +108,7 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	}
 	if !responsePairResidualsWithin(preSpeed, sign, effectiveCoefficient, w.parts,
 		target, impulse, postSpeed, w.step.VelocityResidual, w.step.ImpulseResidual) ||
-		!omittedSpinWithin(first.Event.Manifold, pre.entries[dynamic].Pose, w.parts[dynamic].mass,
+		!omittedSpinWithin(manifold, pre.entries[dynamic].Pose, w.parts[dynamic].mass,
 			dynamic, axis, impulse, w.step.ImpulseResidual, w.step.AngularVelocityResidual) {
 		return undecided(w, "kinematic impact exceeds velocity, impulse, or spin residual"), nil
 	}
@@ -162,6 +163,13 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	if contact.Relation != decad.ContactTouching {
 		return undecided(w, fmt.Sprintf("kinematic corrected impact has relation %v", contact.Relation)), nil
 	}
+	if motion.screw != nil {
+		contactNormal, contactSeparation, contactBound, ok := reducedContact(contact.Manifold, w.step.Contact)
+		if !ok || contactNormal != normal ||
+			math.Abs(contactSeparation)+contactBound > w.step.PenetrationResidual.Base() {
+			return undecided(w, "rotating impact lacks an axis-normal touching support face"), nil
+		}
+	}
 	remaining := dt.Base() - chosen
 	postRelative := (postSpeed[1] - postSpeed[0]) * sign
 	if !finite(remaining, postRelative) || remaining <= 0 ||
@@ -169,12 +177,36 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 		return undecided(w, "kinematic impact response remains closing"), nil
 	}
 	persistent := postRelative <= w.step.VelocityResidual.Base()
+	if motion.screw != nil && persistent {
+		return undecided(w, "rotating driver lacks a persistent-contact certificate"), nil
+	}
+	if motion.screw != nil {
+		// The original prescribed screw and the sliced sweep share a cardinal
+		// support axis. Rotation about it cannot change either face's normal
+		// coordinate, so this exact gap rate certifies the original remainder.
+		pairSpeed := [2]units.Value{
+			velocityComponent(post.entries[0].LinearVelocity, axis),
+			velocityComponent(post.entries[1].LinearVelocity, axis),
+		}
+		pairSpeed[motion.index] = velocityComponent(motion.effective, axis)
+		gapRate := new(big.Rat).Sub(exactBase(pairSpeed[1]), exactBase(pairSpeed[0]))
+		gapRate.Mul(gapRate, big.NewRat(int64(sign), 1))
+		if gapRate.Cmp(exactBase(w.step.VelocityResidual)) <= 0 {
+			return undecided(w, "original rotating driver lacks a strict departure rate"), nil
+		}
+		for other := range 3 {
+			if other != axis && exactBase(velocityComponent(post.entries[dynamic].AngularVelocity,
+				other)).Sign() != 0 {
+				return undecided(w, "rotating response changes its support-plane axis"), nil
+			}
+		}
+	}
 	policy := decad.ContinueSeparatingTouch
 	if persistent {
 		policy = decad.ContinueCertifiedTouch
 	}
-	remainderMotion, valid := sliceKinematicMotion(motion, post.entries[motion.index].Pose,
-		units.Seconds(remaining))
+	remainderMotion, valid := w.sliceKinematicMotion(motion, post.entries[motion.index].Pose,
+		units.Seconds(remaining), normal, contact.Manifold)
 	if !valid {
 		return undecided(w, "kinematic driver remainder differs from its admitted speed"), nil
 	}
@@ -220,7 +252,11 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	}
 	effectivePre := [2]QuantityVec{kicked.entries[0].LinearVelocity, kicked.entries[1].LinearVelocity}
 	effectivePost := [2]QuantityVec{post.entries[0].LinearVelocity, post.entries[1].LinearVelocity}
-	effectivePre[motion.index], effectivePost[motion.index] = motion.effective, motion.effective
+	contactVelocity, ok := motion.contactVelocity(manifold, w.step.VelocityResidual)
+	if !ok {
+		return undecided(w, "kinematic impact contact-point derivative is not bounded"), nil
+	}
+	effectivePre[motion.index], effectivePost[motion.index] = contactVelocity, contactVelocity
 	change := post.entries[dynamic].Pose.Translation().Sub(pre.entries[dynamic].Pose.Translation())
 	changes := [2]r3.Vec{}
 	changes[dynamic] = change
@@ -230,7 +266,7 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 		Pair:            BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
 		Bracket:         *first.Bracket,
 		Time:            eventAt,
-		Manifold:        cloneManifold(*first.Event.Manifold),
+		Manifold:        cloneManifold(*manifold),
 		NormalImpulse:   units.KilogramMillimetersPerSecond(impulse),
 		TangentImpulse:  zeroImpulseVec(),
 		PreVelocity:     effectivePre[dynamic],
@@ -249,15 +285,96 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	return report, nil
 }
 
-// sliceKinematicMotion checks the published affine remainder against the
-// driver's admitted full-step derivative before it is used for departure.
-func sliceKinematicMotion(motion kinematicMotion, from r3.Transform, duration units.Value) (
+// sliceKinematicMotion checks the remainder's read derivative against the
+// admitted full-step derivative before it is used for departure.
+func (w *World) sliceKinematicMotion(motion kinematicMotion, from r3.Transform, duration units.Value,
+	normal r3.Vec, manifold *decad.ContactManifold) (
 	kinematicMotion, bool) {
 	if !validQuantity(duration, units.Time, true) {
 		return kinematicMotion{}, false
 	}
 	sliced := motion
 	sliced.path = decad.PoseSegment{From: from, To: motion.path.To, Duration: duration}
+	if motion.screw != nil {
+		axis, _, supported := axisNormal(normal)
+		if !supported || [3]float64{motion.screw.Axis.X, motion.screw.Axis.Y,
+			motion.screw.Axis.Z}[axis] == 0 {
+			return kinematicMotion{}, false
+		}
+		inverse, err := from.Inverse()
+		if err != nil {
+			return kinematicMotion{}, false
+		}
+		relative, err := inverse.Then(motion.path.To)
+		if err != nil {
+			return kinematicMotion{}, false
+		}
+		screw, err := relative.Screw()
+		if err != nil || screw.Axis != motion.screw.Axis {
+			return kinematicMotion{}, false
+		}
+		fullPoint := [3]float64{motion.screw.Point.X, motion.screw.Point.Y, motion.screw.Point.Z}
+		slicedPoint := [3]float64{screw.Point.X, screw.Point.Y, screw.Point.Z}
+		// Reading a screw from two rounded endpoint poses can shift its axis
+		// line. Bound that lateral displacement and the velocity it induces.
+		lineBound := new(big.Rat)
+		for coordinate := range 3 {
+			if !finite(fullPoint[coordinate], slicedPoint[coordinate]) {
+				return kinematicMotion{}, false
+			}
+			if coordinate == axis {
+				continue
+			}
+			delta := new(big.Rat).Sub(new(big.Rat).SetFloat64(slicedPoint[coordinate]),
+				new(big.Rat).SetFloat64(fullPoint[coordinate]))
+			lineBound.Add(lineBound, delta.Abs(delta))
+		}
+		if lineBound.Cmp(exactBase(w.step.Contact.PointResolution)) > 0 {
+			return kinematicMotion{}, false
+		}
+		lineSpeedError := new(big.Rat).Mul(lineBound,
+			new(big.Rat).Abs(exactBase(velocityComponent(motion.angular, axis))))
+		if lineSpeedError.Cmp(exactBase(w.step.VelocityResidual)) > 0 {
+			return kinematicMotion{}, false
+		}
+		linear, angular, ok := roundedScrewDriverRates(screw, duration)
+		if !ok {
+			return kinematicMotion{}, false
+		}
+		exactLinear := new(big.Rat).Quo(new(big.Rat).SetFloat64(screw.Slide), exactBase(duration))
+		exactAngular := new(big.Rat).Quo(exactBase(screw.Angle), exactBase(duration))
+		for axis := range 3 {
+			component := [3]float64{screw.Axis.X, screw.Axis.Y, screw.Axis.Z}[axis]
+			actualLinear := new(big.Rat).Mul(exactLinear, new(big.Rat).SetFloat64(component))
+			actualAngular := new(big.Rat).Mul(exactAngular, new(big.Rat).SetFloat64(component))
+			linearError := new(big.Rat).Abs(new(big.Rat).Sub(actualLinear,
+				exactBase(velocityComponent(motion.effective, axis))))
+			linearError.Add(linearError, new(big.Rat).Abs(new(big.Rat).Sub(actualLinear,
+				exactBase(velocityComponent(linear, axis)))))
+			angularError := new(big.Rat).Abs(new(big.Rat).Sub(actualAngular,
+				exactBase(velocityComponent(motion.angular, axis))))
+			angularError.Add(angularError, new(big.Rat).Abs(new(big.Rat).Sub(actualAngular,
+				exactBase(velocityComponent(angular, axis)))))
+			if linearError.Cmp(exactBase(w.step.VelocityResidual)) > 0 ||
+				angularError.Cmp(exactBase(w.step.AngularVelocityResidual)) > 0 {
+				return kinematicMotion{}, false
+			}
+		}
+		sliced.effective, sliced.angular, sliced.screw = linear, angular, &screw
+		originalPointSpeed, originalOK := motion.contactVelocity(manifold, w.step.VelocityResidual)
+		slicedPointSpeed, slicedOK := sliced.contactVelocity(manifold, w.step.VelocityResidual)
+		if !originalOK || !slicedOK {
+			return kinematicMotion{}, false
+		}
+		for axis := range 3 {
+			difference := new(big.Rat).Sub(exactBase(velocityComponent(slicedPointSpeed, axis)),
+				exactBase(velocityComponent(originalPointSpeed, axis)))
+			if new(big.Rat).Abs(difference).Cmp(exactBase(w.step.VelocityResidual)) > 0 {
+				return kinematicMotion{}, false
+			}
+		}
+		return sliced, true
+	}
 	start, end := from.Translation(), motion.path.To.Translation()
 	starts, ends := [3]float64{start.X, start.Y, start.Z}, [3]float64{end.X, end.Y, end.Z}
 	effective := [3]units.Value{motion.effective.X, motion.effective.Y, motion.effective.Z}

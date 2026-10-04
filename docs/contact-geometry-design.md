@@ -17,12 +17,15 @@ signed-permutation poses. An oriented source-box path also certifies relations
 under arbitrary proper read poses by projecting the exact transformed corners
 on all face and edge-cross axes. It publishes a four-point manifold when one
 horizontal rotated box face lies strictly inside an axis-aligned box face.
-Other rotated patches have no manifold. A full source semicircle sphere against
-a source box also receives an exact rational relation proof and a point manifold
-at one isolated face support. At identity query poses, the analytic clearance
-kernel can certify a relation for other admitted solids without a contact
-manifold. Other curved and faceted witness and normal proofs remain design
-contracts.
+Two opposed axis-normal faces can also publish one bounded interior witness
+when one projected face center lies strictly inside the other face. A horizontal
+patch against a signed-axis box still requires the contained four-point proof.
+Other rotated contacts publish no manifold. A full source
+semicircle sphere against a source box also receives an exact rational relation
+proof and a point manifold at one isolated face support. At identity query
+poses, the analytic clearance kernel can certify a relation for other admitted
+solids without a contact manifold. Other curved and faceted witness and normal
+proofs remain design contracts.
 
 Two full source semicircle spheres receive the exact relation proof from their
 recorded centers and radii. A one-axis center offset with crossing sphere

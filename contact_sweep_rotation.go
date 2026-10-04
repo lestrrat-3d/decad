@@ -26,6 +26,27 @@ type rotationalSweepPath struct {
 }
 
 func prepareRotationalSweepPath(ctx context.Context, body *Body, path affinePairPath) (rotationalSweepPath, bool) {
+	if path.screw != nil {
+		axis := path.screw.Axis
+		angle, ok := exactBaseValue(path.screw.Angle)
+		if !ok || path.duration.Sign() <= 0 {
+			return rotationalSweepPath{}, false
+		}
+		angular := new(big.Rat).Quo(angle, path.duration)
+		linear := new(big.Rat).Quo(floatRat(path.screw.Slide), path.duration)
+		omega, speed := ratFloatNearest(angular), ratFloatNearest(linear)
+		if !finiteMeasurementValues(omega, speed) {
+			return rotationalSweepPath{}, false
+		}
+		path.drift = &RigidDriftSegment{From: path.from, Center: path.screw.Point,
+			LinearVelocity: QuantityVec{X: units.MillimetersPerSecond(axis.X * speed),
+				Y: units.MillimetersPerSecond(axis.Y * speed),
+				Z: units.MillimetersPerSecond(axis.Z * speed)},
+			AngularVelocity: QuantityVec{X: units.RadiansPerSecond(axis.X * omega),
+				Y: units.RadiansPerSecond(axis.Y * omega),
+				Z: units.RadiansPerSecond(axis.Z * omega)},
+			Duration: units.Seconds(ratFloatNearest(path.duration))}
+	}
 	startBox, ok := sourceOrientedBoxAtPose(body, path.from)
 	if !ok {
 		return rotationalSweepPath{}, false
@@ -92,6 +113,17 @@ func prepareRotationalSweepPath(ctx context.Context, body *Body, path affinePair
 	}
 	speed := new(big.Rat).Add(floatRat(vUp), new(big.Rat).Mul(radius, prepared.omegaHigh))
 	prepared.fullTravel = new(big.Rat).Mul(speed, path.duration)
+	if path.screw != nil {
+		angle, _ := exactBaseValue(path.screw.Angle)
+		angular := new(big.Rat).Quo(angle, path.duration)
+		linear := new(big.Rat).Quo(floatRat(path.screw.Slide), path.duration)
+		for axis, component := range [3]float64{path.screw.Axis.X, path.screw.Axis.Y, path.screw.Axis.Z} {
+			prepared.velocity[axis] = new(big.Rat).Mul(floatRat(component), linear)
+		}
+		prepared.omegaLow, prepared.omegaHigh = angular, angular
+		prepared.fullTravel = new(big.Rat).Mul(new(big.Rat).Add(new(big.Rat).Abs(linear),
+			new(big.Rat).Mul(radius, angular)), path.duration)
+	}
 	return prepared, true
 }
 
@@ -155,6 +187,19 @@ func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 }
 
 func (p rotationalSweepPath) poseAt(f *big.Rat) (r3.Transform, error) {
+	if p.path.screw != nil {
+		if f.Sign() == 0 {
+			return p.path.from, nil
+		}
+		if f.Cmp(big.NewRat(1, 1)) == 0 {
+			return p.path.to, nil
+		}
+		step, err := p.path.screw.At(ratFloatNearest(f))
+		if err != nil {
+			return r3.Transform{}, err
+		}
+		return p.path.from.Then(step)
+	}
 	if p.path.drift == nil {
 		return p.path.poseAt(f)
 	}
@@ -287,7 +332,7 @@ func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSam
 			boxA, okA := sourceOrientedBoxAtPose(r.a.body, poseA)
 			boxB, okB := sourceOrientedBoxAtPose(r.b.body, poseB)
 			if okA && okB && orientedInteriorWitness(boxA, boxB, floatRat(etaA), floatRat(etaB)) {
-				event.Relation, event.Reason = ContactOverlapping, ContactNoNormalProof
+				event.Relation, event.Reason = ContactOverlapping, contact.Reason
 			}
 			if proof, ok := r.horizontalSpinContact(f, poseA, poseB, contact,
 				floatRat(etaA), floatRat(etaB)); ok {
@@ -502,6 +547,9 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 	if fraction, ok := r.horizontalSpinDepartureFraction(first); ok {
 		return fraction, true
 	}
+	if fraction, ok := r.axisFaceDepartureFraction(first); ok {
+		return fraction, true
+	}
 	if r.a.path.drift == nil || r.b.path.drift == nil || first.Ideal.Manifold == nil ||
 		len(first.Ideal.Manifold.Points) == 0 {
 		return nil, false
@@ -635,6 +683,54 @@ func (r *rotationalPairSweep) horizontalSpinDepartureFraction(first *SweepSample
 		speed.Neg(speed)
 	}
 	if speed.Sign() <= 0 {
+		return nil, false
+	}
+	return big.NewRat(1, 2), true
+}
+
+// A rotation about an axis-normal contact face does not move either support
+// plane along that axis. A strictly increasing relative plane gap certifies
+// immediate departure even when only one body rotates.
+func (r *rotationalPairSweep) axisFaceDepartureFraction(first *SweepSample) (*big.Rat, bool) {
+	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) == 0 {
+		return nil, false
+	}
+	point := first.Ideal.Manifold.Points[0]
+	axis, side, ok := signedAxis(point.Normal.Value)
+	if !ok || point.Normal.Bound.Base() != 0 || point.NormalAngle.Base() != 0 {
+		return nil, false
+	}
+	sideA, sideB := 1, 0
+	if side == 0 {
+		sideA, sideB = 0, 1
+	}
+	var faceA, faceB orientedFace
+	if !orientedAxisFace(&r.a.startBox, axis, sideA, &faceA) ||
+		!orientedAxisFace(&r.b.startBox, axis, sideB, &faceB) ||
+		dyCmp(faceA.origin[axis], faceB.origin[axis]) != 0 {
+		return nil, false
+	}
+	velocity := func(path rotationalSweepPath) (*big.Rat, bool) {
+		if path.path.drift == nil {
+			return new(big.Rat).Quo(path.path.delta[axis].rat(), path.path.duration), true
+		}
+		for other := range 3 {
+			if other != axis && path.frame.axis[other].Sign() != 0 {
+				return nil, false
+			}
+		}
+		return path.velocity[axis], true
+	}
+	vA, validA := velocity(r.a)
+	vB, validB := velocity(r.b)
+	if !validA || !validB {
+		return nil, false
+	}
+	derivative := new(big.Rat).Sub(vB, vA)
+	if side == 0 {
+		derivative.Neg(derivative)
+	}
+	if derivative.Sign() <= 0 {
 		return nil, false
 	}
 	return big.NewRat(1, 2), true

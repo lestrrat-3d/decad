@@ -132,9 +132,15 @@ func classifyOrientedSourceBoxes(report *ContactReport, a, b orientedSourceBox) 
 		report.Gap = &Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: Exact}
 		report.Reason = ContactNoNormalProof
 		publishContainedHorizontalPatch(report, a, b)
+		if report.Manifold == nil {
+			publishOrientedAxisPatch(report, &a, &b)
+		}
 	case ContactOverlapping:
 		report.Relation, report.Reason = relation, ContactNoNormalProof
 		publishContainedHorizontalPatch(report, a, b)
+		if report.Manifold == nil {
+			publishOrientedAxisPatch(report, &a, &b)
+		}
 	case ContactSeparated:
 		reading, ok := orientedBoxGap(a, b, gap, normSquared)
 		if !ok {
@@ -267,6 +273,182 @@ func publishHorizontalPatchOrder(report *ContactReport, base sourceBoxContactPro
 	report.Manifold = &ContactManifold{Points: points}
 	report.Reason = ContactNoReason
 	return true
+}
+
+// publishOrientedAxisPatch reduces two opposed axis-normal faces to one
+// certified interior witness. It leaves other oriented contacts without a
+// manifold, including edge and corner contacts.
+func publishOrientedAxisPatch(report *ContactReport, a, b *orientedSourceBox) {
+	var chosen *ContactPoint
+	best := dyZero()
+	_, alignedA := sourceBoxAtPose(report.A, report.PoseA)
+	_, alignedB := sourceBoxAtPose(report.B, report.PoseB)
+	for axis := range 3 {
+		// A horizontal patch against a signed-axis box needs the complete
+		// contained four-point proof above; one interior point cannot replace it.
+		if axis == 2 && (alignedA || alignedB) {
+			continue
+		}
+		for _, sign := range []int{1, -1} {
+			sideA, sideB := 1, 0
+			if sign < 0 {
+				sideA, sideB = 0, 1
+			}
+			var faceA, faceB orientedFace
+			if !orientedAxisFace(a, axis, sideA, &faceA) ||
+				!orientedAxisFace(b, axis, sideB, &faceB) {
+				continue
+			}
+			var candidate dyV3
+			orientedFaceCenter(&faceA, &candidate)
+			if !orientedFaceContainsProjection(&faceB, &candidate, axis) {
+				orientedFaceCenter(&faceB, &candidate)
+				if !orientedFaceContainsProjection(&faceA, &candidate, axis) {
+					continue
+				}
+			}
+			// Separation depends only on the two support planes. Read it before
+			// constructing and rounding the witness points, so the exact proof
+			// does not depend on a copied point surviving float publication.
+			separation := dySubScalar(faceB.origin[axis], faceA.origin[axis])
+			if sign < 0 {
+				separation = dyNeg(separation)
+			}
+			if separation.sign() > 0 && report.Relation != ContactSeparated {
+				continue
+			}
+			if report.Relation == ContactTouching && separation.sign() != 0 {
+				continue
+			}
+			if chosen != nil && dyCmp(dyAbs(separation), dyAbs(best)) >= 0 {
+				continue
+			}
+			reading, ok := sourceBoxSignedReading(separation)
+			if !ok || reading.Bound.Base() > report.Request.PointResolution.Base() {
+				continue
+			}
+			var pointA, pointB dyV3
+			for coordinate := range 3 {
+				pointA[coordinate] = candidate[coordinate]
+				pointB[coordinate] = candidate[coordinate]
+			}
+			pointA[axis] = faceA.origin[axis]
+			pointB[axis] = faceB.origin[axis]
+			onA, readA := sourceBoxPointAt(&pointA)
+			onB, readB := sourceBoxPointAt(&pointB)
+			if !readA || !readB || onA.Bound.Base() > report.Request.PointResolution.Base() ||
+				onB.Bound.Base() > report.Request.PointResolution.Base() {
+				continue
+			}
+			normal := r3.Vec{}
+			switch axis {
+			case 0:
+				normal.X = float64(sign)
+			case 1:
+				normal.Y = float64(sign)
+			case 2:
+				normal.Z = float64(sign)
+			}
+			fa, fb := orientedSourceFace(report.A, report.PoseA, axis, sideA),
+				orientedSourceFace(report.B, report.PoseB, axis, sideB)
+			if fa == nil || fb == nil {
+				continue
+			}
+			point := ContactPoint{
+				OnA: onA, OnB: onB,
+				Normal:      VecMeasurement{Value: normal, Exactness: Exact, Bound: units.Scalar(0)},
+				NormalAngle: units.Radians(0), Separation: reading,
+				FaceA: fa, FaceB: fb,
+				FeatureA: ContactFeature{Face: fa}, FeatureB: ContactFeature{Face: fb},
+			}
+			chosen, best = &point, separation
+		}
+	}
+	if chosen != nil {
+		report.Manifold = &ContactManifold{Points: []ContactPoint{*chosen}}
+		report.Reason = ContactNoReason
+	}
+}
+
+type orientedFace struct {
+	origin, u, v dyV3
+}
+
+func orientedAxisFace(box *orientedSourceBox, axis, side int, face *orientedFace) bool {
+	for edgeAxis := range box.edge {
+		edge := &box.edge[edgeAxis]
+		if edge[axis].sign() == 0 {
+			continue
+		}
+		for other := range 3 {
+			if other != axis && edge[other].sign() != 0 {
+				return false
+			}
+		}
+		others := [2]int{}
+		count := 0
+		for i := range 3 {
+			if i != edgeAxis {
+				if box.edge[i][axis].sign() != 0 {
+					return false
+				}
+				others[count] = i
+				count++
+			}
+		}
+		shift := (side == 1 && edge[axis].sign() > 0) ||
+			(side == 0 && edge[axis].sign() < 0)
+		for coordinate := range 3 {
+			face.origin[coordinate] = box.corner[0][coordinate]
+			if shift {
+				face.origin[coordinate] = dyAdd(face.origin[coordinate], edge[coordinate])
+			}
+			face.u[coordinate] = box.edge[others[0]][coordinate]
+			face.v[coordinate] = box.edge[others[1]][coordinate]
+		}
+		return true
+	}
+	return false
+}
+
+func orientedFaceCenter(face *orientedFace, point *dyV3) {
+	for i := range 3 {
+		point[i] = dyAdd(face.origin[i], dyShift(dyAdd(face.u[i], face.v[i]), -1))
+	}
+}
+
+func orientedFaceContainsProjection(face *orientedFace, point *dyV3, axis int) bool {
+	i, j := (axis+1)%3, (axis+2)%3
+	det := dySubScalar(dyMul(face.u[i], face.v[j]), dyMul(face.u[j], face.v[i]))
+	if det.sign() == 0 {
+		return false
+	}
+	pi, pj := dySubScalar(point[i], face.origin[i]), dySubScalar(point[j], face.origin[j])
+	u := dySubScalar(dyMul(pi, face.v[j]), dyMul(pj, face.v[i]))
+	v := dySubScalar(dyMul(face.u[i], pj), dyMul(face.u[j], pi))
+	if det.sign() < 0 {
+		det, u, v = dyNeg(det), dyNeg(u), dyNeg(v)
+	}
+	return u.sign() > 0 && v.sign() > 0 && dyCmp(u, det) < 0 && dyCmp(v, det) < 0
+}
+
+func orientedSourceFace(body *Body, pose r3.Transform, axis, side int) *Face {
+	for _, face := range body.Faces() {
+		plane, ok := face.surface.(Plane)
+		if !ok || face.normalBound != 0 {
+			continue
+		}
+		normal := plane.Frame.N()
+		if face.reversed {
+			normal = normal.Scale(-1)
+		}
+		normal = pose.ApplyDir(normal)
+		foundAxis, foundSide, ok := signedAxis(normal)
+		if ok && foundAxis == axis && foundSide == side {
+			return face
+		}
+	}
+	return nil
 }
 
 // orientedBoxGap encloses the true minimum distance. SAT supplies a lower

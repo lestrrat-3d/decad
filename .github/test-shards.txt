@@ -1080,6 +1080,7 @@
 4	0.00	TestContactPairAnalyticPrismGap
 4	0.00	TestContactPairAnalyticPrismOverlap
 4	0.00	TestContactPairAnalyticPrismTouch
+4	0.00	TestContactPairOrientedAxisFaceWitness
 4	0.00	TestContactPairOrientedSourceBoxes
 4	0.00	TestContactPairPlacedBodyAndInputGates
 4	0.00	TestContactPairRotatedBoxContainedHorizontalFace
@@ -1675,6 +1676,7 @@
 4	0.00	TestSweepPairOffCenterBoxImpactAtEndpoint
 4	0.00	TestSweepPairRotatingBoxFindsHiddenImpact
 4	0.00	TestSweepPairRotatingPathClear
+4	0.00	TestSweepPairRotatingPoseSegmentBracketsAxisFaceImpact
 4	0.00	TestSweepPairSourceBoxPersistentSlide
 4	0.00	TestSweepPairSourceBoxSlideEdgeTransition
 4	0.00	TestSweepPairSourceSphereAndBox

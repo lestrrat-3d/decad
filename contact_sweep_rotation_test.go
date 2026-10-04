@@ -100,6 +100,88 @@ func TestContactPairOrientedSourceBoxes(t *testing.T) {
 	require.Greater(t, report.Gap.Value.Base()-report.Gap.Bound.Base(), 0.0)
 }
 
+func TestContactPairOrientedAxisFaceWitness(t *testing.T) {
+	doc := decad.New()
+	driver := boxBody(t, doc, 0, 0, 10, 10, 10)
+	box := boxBody(t, doc, 19, 0, 29, 10, 10)
+	turn, err := r3.RotationAround(r3.Vec{X: 5, Y: 5, Z: 5}, r3.Vec{X: 1}, units.Degrees(45))
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.Vec{X: 9.0001})
+	require.NoError(t, err)
+	pose, err := turn.Then(shift)
+	require.NoError(t, err)
+	contact, err := doc.ContactPair(t.Context(), driver, box, pose, r3.Identity(), contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactOverlapping, contact.Relation)
+	require.NotNil(t, contact.Manifold)
+	require.Len(t, contact.Manifold.Points, 1)
+	point := contact.Manifold.Points[0]
+	require.Equal(t, r3.Vec{X: 1}, point.Normal.Value)
+	require.InDelta(t, -.0001, point.Separation.Value.Base(), 1e-10)
+	require.InDelta(t, 19.0001, point.OnA.Value.X, 1e-10)
+	require.InDelta(t, 19, point.OnB.Value.X, 1e-10)
+	require.InDelta(t, 5, point.OnA.Value.Y, 1e-9)
+	require.InDelta(t, 5, point.OnA.Value.Z, 1e-9)
+	require.NotNil(t, point.FaceA)
+	require.NotNil(t, point.FaceB)
+
+	reverse, err := doc.ContactPair(t.Context(), box, driver, r3.Identity(), pose, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactOverlapping, reverse.Relation)
+	require.NotNil(t, reverse.Manifold)
+	require.Equal(t, r3.Vec{X: -1}, reverse.Manifold.Points[0].Normal.Value)
+	require.InDelta(t, -.0001, reverse.Manifold.Points[0].Separation.Value.Base(), 1e-10)
+	require.InDelta(t, 19, reverse.Manifold.Points[0].OnA.Value.X, 1e-10)
+	require.InDelta(t, 19.0001, reverse.Manifold.Points[0].OnB.Value.X, 1e-10)
+
+	// The first face center is outside this smaller face, so the witness
+	// must come from the second face center and keep the same exact X gap.
+	small := boxBodyAtZ(t, doc, 19, 7, 29, 9, 4, 2)
+	fallback, err := doc.ContactPair(t.Context(), driver, small, pose, r3.Identity(), contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactOverlapping, fallback.Relation)
+	require.NotNil(t, fallback.Manifold)
+	require.Len(t, fallback.Manifold.Points, 1)
+	require.InDelta(t, -.0001, fallback.Manifold.Points[0].Separation.Value.Base(), 1e-10)
+	require.InDelta(t, 8, fallback.Manifold.Points[0].OnA.Value.Y, 1e-9)
+	require.InDelta(t, 5, fallback.Manifold.Points[0].OnA.Value.Z, 1e-9)
+}
+
+func TestSweepPairRotatingPoseSegmentBracketsAxisFaceImpact(t *testing.T) {
+	doc := decad.New()
+	driver := boxBody(t, doc, 0, 0, 10, 10, 10)
+	box := boxBody(t, doc, 19, 0, 29, 10, 10)
+	turn, err := r3.RotationAround(r3.Vec{X: 5, Y: 5, Z: 5}, r3.Vec{X: 1}, units.Degrees(90))
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.Vec{X: 20})
+	require.NoError(t, err)
+	endpoint, err := turn.Then(shift)
+	require.NoError(t, err)
+	path := decad.PoseSegment{From: r3.Identity(), To: endpoint, Duration: units.Seconds(1)}
+	request := sweepRequest()
+	request.MaxPoseEvaluations = 128
+	report, err := doc.SweepPair(t.Context(), driver, box, path, sweepDrift(r3.Vec{}, 1), request)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, report.Outcome)
+	require.InDelta(t, .45, report.Bracket.To.Elapsed.Value.Base(), 1e-8)
+	require.NotNil(t, report.Event)
+	require.Nil(t, report.Event.Manifold)
+	found := false
+	for _, sample := range report.Samples {
+		if sample.At.Fraction != report.Bracket.To.Fraction {
+			continue
+		}
+		relation, err := doc.ContactPair(t.Context(), driver, box, sample.PoseA, sample.PoseB,
+			contactRequest())
+		require.NoError(t, err)
+		require.Equal(t, decad.ContactOverlapping, relation.Relation)
+		require.NotNil(t, relation.Manifold)
+		require.Equal(t, r3.Vec{X: 1}, relation.Manifold.Points[0].Normal.Value)
+		found = true
+	}
+	require.True(t, found)
+}
+
 func TestSweepPairRotatingBoxFindsHiddenImpact(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)

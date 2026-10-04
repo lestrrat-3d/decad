@@ -216,6 +216,12 @@ func publishSourceBoxPatch(report *ContactReport, a, b sourceBoxContactProof, ax
 }
 
 func sourceBoxPoint(p dyV3) (VecMeasurement, bool) {
+	return sourceBoxPointAt(&p)
+}
+
+// sourceBoxPointAt reads an exact point without copying its pointer-bearing
+// dyadic components across the call boundary.
+func sourceBoxPointAt(p *dyV3) (VecMeasurement, bool) {
 	var coords [3]float64
 	bound := 0.0
 	for i := range 3 {

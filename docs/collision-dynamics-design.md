@@ -34,8 +34,11 @@ advances through a certified clear remainder.
 An affine kinematic driver can push an initially touching dynamic source box
 through a certified persistent contact path, depart without an impulse, or
 produce a centered interior impact with a certified separating or
-persistent-contact remainder. A fixed floor and dynamic source box in either
-world order with positive pair friction can slide repeatedly after a
+persistent-contact remainder. A driver with a cardinal screw axis can produce
+a centered interior face impact and a certified separating remainder. The event
+records the driver's contact-point velocity and bounded work while its stored
+velocity stays zero. A fixed floor and dynamic source box in either world order
+with positive pair friction can slide repeatedly after a
 four-corner Coulomb response. Body coefficients combine by geometric mean;
 an explicit pair coefficient replaces them. The response checks rational
 bounds around a nonexact mean. `World.Step` requires full ideal and rounded
@@ -48,8 +51,8 @@ kinematic driver work.
 Before publishing an advanced step, it
 checks every contact event's dynamic-body linear momentum against its impulse
 and rejects an impact whose kinetic energy gain exceeds its driver work plus
-the computed numerical allowance. Other frictional contacts,
-rotating kinematic drivers, stacks, and broader payload paths remain design
+the computed numerical allowance. Other frictional contacts, other rotating
+kinematic drivers, stacks, and broader payload paths remain design
 contracts. Each companion document owns its detail.
 
 | Design | Ownership |
