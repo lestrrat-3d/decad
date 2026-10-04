@@ -413,66 +413,74 @@ func prismFindLoopMatch(budget *workBudget, profiles []*sketch.Profile, wantOute
 // authenticate it through RecordProfile, and sceneDelta is buildPrismScene's
 // own per-operand §7 walk charge.
 func resolvePrismCut(ctx context.Context, budget *workBudget, target, tool prismPayload, reexpress *prismReexpression) (*sketch.Sketch, *sketch.Profile, prismSceneDelta, bool, error) {
+	s, match, _, delta, resolved, err := resolvePrismCutWithTags(ctx, budget, target, tool, reexpress)
+	return s, match, delta, resolved, err
+}
+
+// resolvePrismCutWithTags also returns the scene's entity-origin map. A
+// stacked result uses it to retain the target's already recorded whole loops
+// while taking only the new tool hole from RecordProfile's authenticated cell.
+func resolvePrismCutWithTags(ctx context.Context, budget *workBudget, target, tool prismPayload, reexpress *prismReexpression) (*sketch.Sketch, *sketch.Profile, map[sketch.Entity]prismEntityOrigin, prismSceneDelta, bool, error) {
 	s, tags, sceneDelta, err := buildPrismScene(budget, target, tool, reexpress)
 	if err != nil {
-		return nil, nil, prismSceneDelta{}, false, err
+		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	if err := budget.err(); err != nil {
-		return nil, nil, prismSceneDelta{}, false, err
+		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	profiles, err := prismProfilesContext(ctx, s.Profiles)
 	if err != nil {
-		return nil, nil, prismSceneDelta{}, false, err
+		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	if err := budget.err(); err != nil {
-		return nil, nil, prismSceneDelta{}, false, err
+		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	if len(profiles) == 0 {
-		return nil, nil, prismSceneDelta{}, false, nil // §4.4: the scene holds no bounded cell at all
+		return nil, nil, nil, prismSceneDelta{}, false, nil // §4.4: the scene holds no bounded cell at all
 	}
 	if target.sectionDelta != 0 || tool.sectionDelta != 0 || !reexpress.identity || sceneDelta.a != 0 || sceneDelta.b != 0 {
 		split, err := prismProfilesHaveSplitBoundary(budget, profiles)
 		if err != nil {
-			return nil, nil, prismSceneDelta{}, false, err
+			return nil, nil, nil, prismSceneDelta{}, false, err
 		}
 		if split {
-			return nil, nil, prismSceneDelta{}, false, nil // §3.4, mirroring Union's own reroute
+			return nil, nil, nil, prismSceneDelta{}, false, nil // §3.4, mirroring Union's own reroute
 		}
 	}
 
 	targetOuter, err := prismLoopEntitySet(budget, tags, false, -1)
 	if err != nil {
-		return nil, nil, prismSceneDelta{}, false, err
+		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	wantHoles := make([]map[sketch.Entity]struct{}, 0, len(target.profile.Holes)+1)
 	for i := range target.profile.Holes {
 		hs, err := prismLoopEntitySet(budget, tags, false, i)
 		if err != nil {
-			return nil, nil, prismSceneDelta{}, false, err
+			return nil, nil, nil, prismSceneDelta{}, false, err
 		}
 		wantHoles = append(wantHoles, hs)
 	}
 	toolOuter, err := prismLoopEntitySet(budget, tags, true, -1)
 	if err != nil {
-		return nil, nil, prismSceneDelta{}, false, err
+		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	wantHoles = append(wantHoles, toolOuter) // the tool's own solid, as one new hole
 
 	match, resolved, err := prismFindLoopMatch(budget, profiles, targetOuter, wantHoles)
 	if err != nil {
-		return nil, nil, prismSceneDelta{}, false, err
+		return nil, nil, nil, prismSceneDelta{}, false, err
 	}
 	if !resolved {
-		return nil, nil, prismSceneDelta{}, false, nil
+		return nil, nil, nil, prismSceneDelta{}, false, nil
 	}
 	if !match.Valid {
 		// RB1, matching the Union path's own behaviour: a candidate region
 		// the result depends on reports an invalid arrangement. Cut's matched
 		// profile is both its nesting proof and its result, so this one check
 		// covers both claims.
-		return nil, nil, prismSceneDelta{}, false, prismInvalidRegionErr("cut")
+		return nil, nil, nil, prismSceneDelta{}, false, prismInvalidRegionErr("cut")
 	}
-	return s, match, sceneDelta, true, nil
+	return s, match, tags, sceneDelta, true, nil
 }
 
 // resolvePrismIntersect is §4.2's clean-nesting match for Intersect(a, b):

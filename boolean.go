@@ -272,6 +272,42 @@ func performBoolean(ctx context.Context, op operationKind, a, b *Body) (*Body, e
 		d.commit(body, a, b)
 		return body, nil
 	}
+	if op == opCut {
+		if sp, ok, err := tryStackedThroughCut(ctx, a, b); err != nil {
+			if errors.Is(err, ErrUnsupported) {
+				return nil, asBooleanError(op, expectedBoolean(booleanExpectedUnsupported, err))
+			}
+			return nil, err
+		} else if ok {
+			ref := d.nextProducerID()
+			body, err := evalStackedContext(ctx, d, ref, sp)
+			if err != nil {
+				return nil, err
+			}
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			d.commit(body, a, b)
+			return body, nil
+		}
+		if sp, ok, err := tryBlindStackedCut(ctx, a, b); err != nil {
+			if errors.Is(err, ErrUnsupported) {
+				return nil, asBooleanError(op, expectedBoolean(booleanExpectedUnsupported, err))
+			}
+			return nil, err
+		} else if ok {
+			ref := d.nextProducerID()
+			body, err := evalStackedContext(ctx, d, ref, sp)
+			if err != nil {
+				return nil, err
+			}
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			d.commit(body, a, b)
+			return body, nil
+		}
+	}
 
 	eval, err := evaluateBoolean(ctx, op, a, b)
 	if err != nil {
@@ -1034,11 +1070,14 @@ func sectionDisplacementOf(b *Body) float64 {
 	if b == nil {
 		return 0
 	}
-	pp, ok := b.payload.(prismPayload)
-	if !ok {
+	switch p := b.payload.(type) {
+	case prismPayload:
+		return p.sectionDelta
+	case stackedPrismPayload:
+		return p.sectionDelta
+	default:
 		return 0
 	}
-	return pp.sectionDelta
 }
 
 // boxesWithin reports whether the two boxes come within slack of each other.

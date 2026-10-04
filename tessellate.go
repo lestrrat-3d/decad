@@ -334,6 +334,9 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	if cp, ok := b.payload.(cupPayload); ok {
 		return tessellateCup(ctx, b, cp, chord, verify)
 	}
+	if sp, ok := b.payload.(stackedPrismPayload); ok {
+		return tessellateStacked(ctx, b, sp, chord, verify)
+	}
 	if lp, ok := b.payload.(loftPayload); ok {
 		// The loft path exactly restates the payload's complete set for a
 		// solid or its recorded wall range for a sheet, with no chording

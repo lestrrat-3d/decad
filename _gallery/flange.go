@@ -57,11 +57,8 @@ type flangeShape struct {
 	chamfer float64            // the setback of the top cap loop's chamfer
 }
 
-// flangeBody builds the flange in the order decad accepts: extrude, cut,
-// fillet, then the cap-loop chamfer, which no boolean may follow. It cuts the
-// through holes first and the blind holes after them: a Cut that follows a
-// blind cutter is refused ("requested tolerance ... is below the faceted
-// body's minimum mesh bound").
+// flangeBody builds the flange by extruding, cutting the holes, filleting,
+// and chamfering the cap loop. It cuts through holes before blind holes.
 func flangeBody(ctx context.Context, shape flangeShape) (*decad.Body, error) {
 	w := sketch.NewWorld()
 	doc := decad.New()

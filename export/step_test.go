@@ -91,6 +91,43 @@ func TestNewSTEPFileBoxTopology(t *testing.T) {
 	require.Contains(t, string(data), "MANIFOLD_SOLID_BREP")
 }
 
+func TestSTEPBlindPocketOneShell(t *testing.T) {
+	t.Parallel()
+	doc := decad.New()
+	w := sketch.NewWorld()
+	plateSketch, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	plateRect := plateSketch.CreateRectangle(0, 0, 10, 10)
+	plateSketch.Fix(plateRect.A)
+	_, err = plateSketch.Solve(t.Context())
+	require.NoError(t, err)
+	plate, err := doc.Extrude(plateSketch, plateSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	toolPlane, err := w.CreateOffsetPlane(w.XY(), 6)
+	require.NoError(t, err)
+	toolSketch, err := w.CreateSketch(toolPlane)
+	require.NoError(t, err)
+	toolRect := toolSketch.CreateRectangle(3, 3, 7, 7)
+	toolSketch.Fix(toolRect.A)
+	_, err = toolSketch.Solve(t.Context())
+	require.NoError(t, err)
+	tool, err := doc.Extrude(toolSketch, toolSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	require.NoError(t, err)
+	pocket, err := decad.Cut(t.Context(), plate, tool)
+	require.NoError(t, err)
+	f, err := export.NewSTEPFile(t.Context(), pocket, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	shells := 0
+	for _, entity := range f.Entities {
+		if entity.Name == "CLOSED_SHELL" {
+			shells++
+		}
+	}
+	require.Equal(t, 1, shells)
+}
+
 func TestWriteDeterministicAndUntouchedOnInvalidHeader(t *testing.T) {
 	t.Parallel()
 	body := box(t, false)

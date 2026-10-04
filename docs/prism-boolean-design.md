@@ -144,6 +144,8 @@ of §4.5 on its existing admission gate.
 |---|---|---|
 | `Union(a, b)` | `[z0_a, z1_a] == [z0_b', z1_b']`, exactly | the common interval |
 | `Cut(target, tool)` | `z0_tool' <= z0_target && z1_tool' >= z1_target` (tool spans target) | `[z0_target, z1_target]`, unchanged |
+| `Cut(target, tool)`, blind | `z0_target < z0_tool' < z1_target && z1_tool' >= z1_target` (a pocket from the top, floor at `z0_tool'`), or `z0_tool' <= z0_target && z0_target < z1_tool' < z1_target` (a pocket from the bottom, ceiling at `z1_tool'`) | a two-slab `stackedPrismPayload` (`docs/stacked-prism-design.md`): the target's own interval, split at the tool's inner end. Both inequalities are `big.Rat` comparisons over G5's shifted interval, and the inner end is that exact rational rounded to the nearest float once, carrying the tool's own axial displacement plus `rationalFloatError` of the rounding — the same charge `Intersect`'s shifted endpoint takes |
+| `Cut(target, tool)`, stacked target | the target is a `stackedPrismPayload` and the tool spans its whole interval: `z0_tool' <= z0_first && z1_tool' >= z1_last` | the target's own slabs, each region cut by the tool |
 | `Intersect(a, b)` | `z0_a < z1_b' && z0_b' < z1_a` (intervals overlap) | `[max(z0_a, z0_b'), min(z1_a, z1_b')]` |
 
 `Union`'s equality is exact float equality — not a tolerance — matching G3's
@@ -157,12 +159,22 @@ plane 0.1 mm below a target and a tool 0.3 mm tall put B's cap at the exact
 rational `fl(0.1) + fl(0.3)`, which is no float; G5 compares it as it is, and
 only `Intersect`'s result rounds it, charged (§7).
 
-Every other relation (unequal-interval union, a cut whose tool does not fully
-span the target, disjoint intervals for intersect) is **staged, not
-refused**: it falls through the gate to the unchanged mesh path today, and
-names the future payload that would carry it in §9's increments row (a
-stacked-interval union is `stackedPrismPayload`, modify-reach §9.1; a
-non-spanning cut is a `cupPayload`-shaped pocket).
+The two blind `Cut` rows admit only the clean-nesting sub-case of §4.2: the
+tool's boundary must leave the target's loops untouched in every slab it
+reaches, and `resolvePrismCut`'s structural match is what proves it. The
+matched profile is the target's section with the tool as one more hole; the
+slab the tool does not reach takes that same record with the tool's hole
+removed, so both slabs' loops are one record and the result's walls run the
+whole height (`docs/stacked-prism-design.md` §2.3). A blind tool whose boundary
+crosses the target's, a tool strictly inside both ends (an enclosed void), a
+tool touching the target only at a cap, and a tool ending inside a stacked
+target all fall through to the mesh path. `Union` and `Intersect` with a
+stacked operand take the mesh path over that payload's own tessellation.
+
+Every other relation (unequal-interval union, disjoint intervals for
+intersect) is **staged, not refused**: it falls through the gate to the
+unchanged mesh path today, and a stacked-interval union would be carried by
+the same `stackedPrismPayload`.
 
 ### 3.3 The rotated-section problem
 
@@ -479,7 +491,10 @@ regardless of who authored the input curves it was cut from.
 | A parallel-offset pair outside G3's shared-axis arm: the operands carry different accumulated placements (one of them `Placed`, even along the shared normal), their frames' `U`/`V` differ in the stored bits (an offset of a tilted base plane re-normalises `U` one ulp apart), or the origin difference has an in-plane component (`CreatePlaneFromFrame` with an origin off A's axis) | G3, mesh path. The shared-axis arm could later admit an equal-rotation pair whose placements differ by a pure translation along `N`, by the same exact `d × N == 0` test over `(tB + oB) − (tA + oA)`; not built, since it changes the routing of every existing `Placed`-along-normal fixture |
 | A tool plane whose normal is genuinely reversed (a frame built with `V` flipped, so `N` opposes the target's), whichever way the tool is extruded | G3's co-directional requirement, mesh path. Admitting it needs a reflection of B's section (`V` reversed, arcs re-sensed) that §4's selection does not carry. A tool sketched on a same-normal offset plane above the target and extruded `Against` is not this case: `Extrude` keeps the sketch frame and records the negative interval `[−D, 0]`, so the shared-axis arm admits it with the exact shift (G3, G5) |
 | `Union` with unequal z-intervals | G5, mesh path; future `stackedPrismPayload` (modify-reach §9.1) |
-| `Cut` whose tool does not span the target | G5, mesh path; future `cupPayload`-shaped pocket |
+| `Cut` whose tool ends inside the target and whose boundary crosses the target's (a side notch) | mesh path; the walls below the floor would split at the crossing, which `docs/stacked-prism-design.md` §7 leaves unplanned |
+| `Cut` whose tool lies strictly inside both target ends (an enclosed void) | G5, mesh path; a void shell is not a stage this design admits |
+| `Cut` whose tool ends inside a stacked target (a second blind hole) | G5, mesh path; `docs/stacked-prism-design.md` §7 stage 2 |
+| `Cut` whose tool encloses one of the target's holes (a counterbore over a through hole) | unresolved by the clean-nesting match, mesh path; `docs/stacked-prism-design.md` §7 stage 2 |
 | `Intersect` with disjoint intervals | G5, mesh path (result is empty; unchanged `BooleanEmpty`) |
 | `Union` with a holed operand | G6, mesh path; §9 PR3 |
 | A split arranged boundary with a nonzero source displacement, a nonzero walk charge, or a nonidentity re-expression — any one of the three alone | §3.4 safety routing, mesh path; a future crossing-sensitivity proof may admit it |
@@ -946,6 +961,7 @@ never performs.
 | RB7 | The bounded work budget (§10) exhausts, or the private scene exceeds `prismMaxArrangementSegments`, before resolution or the audit completes | `ErrUnsupported` | No — a coarser/simpler input may clear it |
 | RB8 | `recordEdge`/`falsifyRange` rejects a surviving segment (`TExact` disproven on a merged edge — an internal `sketch` inconsistency, reported upstream per seam §3) | `ErrUnrecordableProfile` | No, but should not occur on a certified arrangement; a defensive check |
 | RB9 | The merged loop's recorded segments do not join (`falsifyLoopJoins`, seam §3) — a whole-to-whole junction the assembly restates as two segments' own defining coordinates, which the merge did not compute and so did not round to agreement. Not RB8's class: the mismatch is inherited from an operand's own record (typically one carrying `Partial` cut fragments), not an internal `sketch` inconsistency | `ErrUnrecordableProfile` | No — a differently-drawn operand may close |
+| RB10 | A stacked result's slabs fail `docs/stacked-prism-design.md` §2.2's audit after every slab's scene resolved — the per-slab reproductions of one target loop differ, or an interface is not monotone | `ErrUnsupported` | No — the audit reads the records this pair produced |
 
 None of these rows is permanent in the modify-reach SX9 sense: every one is a
 property of the specific pair's geometry, not a structural class exclusion —
@@ -1158,6 +1174,14 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    charged into the axial displacement. The mesh path's chain-depth refusal
    names the operand and states that a boolean takes no tolerance. Tests:
    §15's offset-plane rows.
+7. **PR7 — the blind `Cut`**, after the shared-axis offset-plane arm of G3
+   and the exact rational G5 it brings. §3.2's two blind rows over `resolvePrismCut`'s
+   clean-nesting match, the `stackedPrismPayload` they build, its body,
+   measurements and tessellation, and a spanning `Cut` on a stacked target
+   that runs the match once per slab. `tryPrismBoolean` returns the admitted
+   payload behind one private interface so `performBoolean` and
+   `evaluateAnalyticIntersect` build either payload the same way. Tests:
+   `docs/stacked-prism-design.md` §8. That document's §7 owns the later stages.
 
 ## 15. Required tests
 

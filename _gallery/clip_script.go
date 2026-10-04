@@ -27,9 +27,9 @@ func afterStep(t time.Duration) time.Duration {
 // landed: 36 mm in 0.45 s, so the 16 mm plate takes 0.2 s, six frames at
 // 30 fps, and the hole visibly deepens inside the see-through tool. The
 // tools start drillStagger apart, so a hole is blind (depth 0.5 to 15.5 mm)
-// from 56 to 244 ms into its drill and no two holes are blind in one frame:
-// decad refuses a Cut that follows a blind one. The tools retract together
-// from 4.1 to 5.0 s, to toolPark millimetres past their start: the bottom of a
+// from 56 to 244 ms into its drill and no two holes are blind in one frame.
+// The tools retract together from 4.1 to 5.0 s, to toolPark millimetres past
+// their start: the bottom of a
 // parked tool is then at z = 264 mm, above the act A camera at its highest
 // (about 230 mm, at the end of the tilt), so the tilted camera never sees a
 // tool.
