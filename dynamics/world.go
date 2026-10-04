@@ -83,7 +83,7 @@ type World struct {
 	parts       [2]worldBody
 	step        StepConfig
 	restitution units.Value
-	friction    units.Value
+	friction    frictionCoefficient
 }
 
 // NewWorld admits a dynamic pair, or one dynamic body with a fixed or kinematic body.
@@ -172,18 +172,19 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 	}
 	frictionA := w.parts[0].definition.Material.Friction
 	frictionB := w.parts[1].definition.Material.Friction
-	w.friction = units.Scalar(0)
+	w.friction = exactFrictionCoefficient(units.Scalar(0))
 	if len(cfg.Overrides) > 0 {
 		if err := w.setPairOverride(cfg.Overrides); err != nil {
 			return nil, err
 		}
-	} else if frictionA.Mag() != 0 || frictionB.Mag() != 0 {
-		if exactBase(frictionA).Cmp(exactBase(frictionB)) != 0 || frictionA.Base() <= 0 {
-			return nil, fmt.Errorf("%w: positive friction requires equal body coefficients", ErrUnsupported)
+	} else {
+		var ok bool
+		w.friction, ok = mixBodyFriction(frictionA, frictionB)
+		if !ok {
+			return nil, fmt.Errorf("%w: effective friction is outside the finite nonzero scalar range", ErrUnsupported)
 		}
-		w.friction = frictionA
 	}
-	if w.friction.Base() > 0 &&
+	if w.friction.lower.Sign() > 0 &&
 		(w.parts[0].definition.Role != Fixed || w.parts[1].definition.Role != Dynamic) {
 		return nil, fmt.Errorf("%w: positive friction requires fixed-first and dynamic-second bodies", ErrUnsupported)
 	}
@@ -207,7 +208,8 @@ func (w *World) setPairOverride(overrides []PairMaterial) error {
 		if err := validateMaterial(Material{Restitution: override.Restitution, Friction: override.Friction}); err != nil {
 			return err
 		}
-		w.restitution, w.friction = override.Restitution, override.Friction
+		w.restitution = override.Restitution
+		w.friction = exactFrictionCoefficient(override.Friction)
 		seen = true
 	}
 	return nil

@@ -11,6 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	overflowFriction = units.New(1.6578522501383104e308,
+		units.Define("decad-friction-overflow", units.Dimensionless, 1.0843506317962526))
+	underflowFriction = units.New(math.SmallestNonzeroFloat64,
+		units.Define("decad-friction-underflow", units.Dimensionless, .5))
+)
+
 func pairMaterialStepConfig() dynamics.StepConfig {
 	return dynamics.StepConfig{
 		Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
@@ -107,6 +114,84 @@ func TestPairMaterialOverrideDrivesFixedFloorFriction(t *testing.T) {
 	require.True(t, ok)
 	require.InDelta(t, 50, final.LinearVelocity.X.Base(), 1e-6)
 	require.InDelta(t, 5, final.Pose.Translation().X, 1e-6)
+}
+
+func TestBodyFrictionMixDrivesFixedFloorStep(t *testing.T) {
+	for _, tc := range []struct {
+		name                   string
+		floorMu, boxMu         float64
+		wantTangent, wantSpeed float64
+	}{
+		{name: "quarter then one", floorMu: .25, boxMu: 1, wantTangent: -50, wantSpeed: 50},
+		{name: "one then quarter", floorMu: 1, boxMu: .25, wantTangent: -50, wantSpeed: 50},
+		{name: "irrational root", floorMu: .2, boxMu: .3,
+			wantTangent: -100 * math.Sqrt(.2*.3), wantSpeed: 100 * (1 - math.Sqrt(.2*.3))},
+		{name: "zero then positive", floorMu: 0, boxMu: .5, wantTangent: 0, wantSpeed: 100},
+		{name: "positive then zero", floorMu: .5, boxMu: 0, wantTangent: 0, wantSpeed: 100},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := decad.New()
+			floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
+			box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+			density := units.KilogramsPerCubicMillimeter(.001)
+			world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+				Bodies: []dynamics.RigidBody{
+					{Body: floor, Role: dynamics.Fixed, Material: dynamics.Material{
+						Restitution: units.Scalar(0), Friction: units.Scalar(tc.floorMu)}},
+					{Body: box, Role: dynamics.Dynamic, Density: &density, Material: dynamics.Material{
+						Restitution: units.Scalar(0), Friction: units.Scalar(tc.boxMu)}},
+				}, Step: pairMaterialStepConfig(),
+			})
+			require.NoError(t, err)
+			start, err := world.NewState([]dynamics.BodyState{
+				{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+				{Body: box, Pose: r3.Identity(), LinearVelocity: dynamics.QuantityVec{
+					X: units.MillimetersPerSecond(100), Y: units.MillimetersPerSecond(0),
+					Z: units.MillimetersPerSecond(0)}, AngularVelocity: zeroAngular(t)},
+			})
+			require.NoError(t, err)
+			gravity := dynamics.QuantityVec{X: units.MillimetersPerSecondSquared(0),
+				Y: units.MillimetersPerSecondSquared(0), Z: units.MillimetersPerSecondSquared(-1000)}
+			report, err := world.Step(t.Context(), start, dynamics.StepInput{Gravity: gravity}, units.Seconds(.1))
+			require.NoError(t, err)
+			require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+			require.Len(t, report.Events, 1)
+			require.InDelta(t, 100, report.Events[0].NormalImpulse.Base(), 1e-6)
+			require.InDelta(t, tc.wantTangent, report.Events[0].TangentImpulse.X.Base(), 1e-5)
+			final, ok := report.Next.Body(box)
+			require.True(t, ok)
+			require.InDelta(t, tc.wantSpeed, final.LinearVelocity.X.Base(), 1e-5)
+			require.InDelta(t, .1*tc.wantSpeed, final.Pose.Translation().X, 1e-5)
+		})
+	}
+}
+
+func TestBodyFrictionMixRejectsUnrepresentableMean(t *testing.T) {
+	require.Equal(t, math.MaxFloat64, overflowFriction.Base())
+	require.Zero(t, underflowFriction.Base())
+	for _, tc := range []struct {
+		name     string
+		friction units.Value
+	}{
+		{name: "above maximum", friction: overflowFriction},
+		{name: "below minimum positive", friction: underflowFriction},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := decad.New()
+			floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
+			box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+			density := units.KilogramsPerCubicMillimeter(.001)
+			_, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+				Bodies: []dynamics.RigidBody{
+					{Body: floor, Role: dynamics.Fixed, Material: dynamics.Material{
+						Restitution: units.Scalar(0), Friction: tc.friction}},
+					{Body: box, Role: dynamics.Dynamic, Density: &density, Material: dynamics.Material{
+						Restitution: units.Scalar(0), Friction: tc.friction}},
+				}, Step: pairMaterialStepConfig(),
+			})
+			require.ErrorIs(t, err, dynamics.ErrUnsupported)
+		})
+	}
 }
 
 func TestPairMaterialOverrideValidatesPairAndCoefficients(t *testing.T) {

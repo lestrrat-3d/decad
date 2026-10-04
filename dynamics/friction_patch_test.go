@@ -61,7 +61,7 @@ func TestFixedFloorFrictionPatchKeepsExactProducerLever(t *testing.T) {
 		ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 		PenetrationResidual:     units.Millimeters(1e-6), MaxIterations: 64}
 	response, ok := solveFixedFloorFrictionPatch(contact.Manifold, mass, r3.Identity(), pre,
-		units.Scalar(.5), cfg)
+		exactFrictionCoefficient(units.Scalar(.5)), cfg)
 	require.True(t, ok)
 	require.LessOrEqual(t, response.AngularUpper.Base(), cfg.AngularVelocityResidual.Base())
 }
@@ -88,7 +88,8 @@ func TestFixedFloorFrictionPatchUsesRealManifoldAndMass(t *testing.T) {
 		AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 		ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 		PenetrationResidual:     units.Millimeters(1e-6), MaxIterations: 64}
-	response, ok := solveFixedFloorFrictionPatch(contact.Manifold, mass, r3.Identity(), pre, units.Scalar(.5), cfg)
+	response, ok := solveFixedFloorFrictionPatch(contact.Manifold, mass, r3.Identity(), pre,
+		exactFrictionCoefficient(units.Scalar(.5)), cfg)
 	require.True(t, ok)
 	require.Len(t, response.Points, 4)
 	require.InDelta(t, 50, response.Post.X.Base(), 1e-6)
@@ -114,17 +115,20 @@ func TestFixedFloorFrictionPatchUsesRealManifoldAndMass(t *testing.T) {
 	require.LessOrEqual(t, math.Abs(torque.X)+math.Abs(torque.Y)+math.Abs(torque.Z),
 		mass.Inertia.XX.Value.Base()*cfg.AngularVelocityResidual.Base())
 	cfg.MaxIterations = 8
-	_, ok = solveFixedFloorFrictionPatch(contact.Manifold, mass, r3.Identity(), pre, units.Scalar(.5), cfg)
+	_, ok = solveFixedFloorFrictionPatch(contact.Manifold, mass, r3.Identity(), pre,
+		exactFrictionCoefficient(units.Scalar(.5)), cfg)
 	require.False(t, ok)
 	cfg.MaxIterations = 64
 	widened := mass
 	widened.Mass.Bound = units.Kilograms(.01)
 	widened.Mass.Exactness = decad.Approximate
-	_, ok = solveFixedFloorFrictionPatch(contact.Manifold, widened, r3.Identity(), pre, units.Scalar(.5), cfg)
+	_, ok = solveFixedFloorFrictionPatch(contact.Manifold, widened, r3.Identity(), pre,
+		exactFrictionCoefficient(units.Scalar(.5)), cfg)
 	require.False(t, ok)
 	translated, err := r3.Translation(r3.Vec{X: 10})
 	require.NoError(t, err)
-	_, ok = solveFixedFloorFrictionPatch(contact.Manifold, mass, translated, pre, units.Scalar(.5), cfg)
+	_, ok = solveFixedFloorFrictionPatch(contact.Manifold, mass, translated, pre,
+		exactFrictionCoefficient(units.Scalar(.5)), cfg)
 	require.False(t, ok)
 	require.Equal(t, []*decad.Body{floor, box}, doc.Bodies())
 }

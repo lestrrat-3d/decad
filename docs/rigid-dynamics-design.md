@@ -147,8 +147,13 @@ the same coefficient validation as for body materials. Exclusions still return
 `ErrUnsupported`.
 
 The current positive-friction slice accepts only fixed-first/dynamic-second
-worlds. Without an override, the two held body friction coefficients must be
-exactly equal and positive. With an override, its friction coefficient replaces
+worlds. Without an override, the pair coefficient is the geometric mean of
+the held body coefficients. The solver proposes impulses with a nominal
+rounded mean, then checks the friction cone and slip law against rational
+bounds that enclose the exact mean. A zero body coefficient selects the
+frictionless response. A positive mean below the smallest positive float64 or
+above the largest finite float64 returns `ErrUnsupported` at `NewWorld`.
+With an override, its exact held coefficient replaces
 the body values; a positive override goes to the patch solver even when both
 body coefficients are zero. A zero override selects the frictionless response
 even when the body coefficients differ. Reversed roles and other positive-
