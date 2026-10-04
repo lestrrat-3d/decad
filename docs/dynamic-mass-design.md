@@ -2,8 +2,9 @@
 
 This document owns mass, center-of-mass, and inertia readings used by rigid
 dynamics. It supplies the mass gate in `docs/collision-dynamics-design.md` §2.
-The source-box query and bounded section-moment integration for admitted
-untapered prisms are implemented. Other payload paths remain design contracts.
+The source-box query, bounded section-moment integration for admitted
+untapered prisms, and exact full source-sphere integration are implemented.
+Other payload paths remain design contracts.
 `docs/evaluator-design.md` §4 owns
 the existing planar area moments; this document owns the additional volume
 moments and their use by dynamics.
@@ -107,6 +108,14 @@ segments retain their existing exactness tiers and admission rules. A sphere,
 cylinder, cone, or torus may use an equivalent closed-form primitive integral
 only when it represents that payload's exact denotation, including its cuts,
 holes, and placement.
+
+The full source-sphere path accepts a full revolution of one exact
+semicircle and its on-axis diameter when its source and closed spherical face
+prove the occupied ball. It integrates `V = 4πr³/3` and the isotropic tensor
+`I = 2Mr²/5` with the in-tree rational π enclosure. It uses the evaluator's
+bounded world centroid. Any rigid placement leaves its centroidal tensor
+unchanged; a partial revolution, cavity, or other curved source still needs
+its own certified moment path.
 
 Other analytic payloads may provide certified `V`, `P`, and `Q` directly.
 Otherwise they use §2.2 if they have a suitable occupied-volume proof. A

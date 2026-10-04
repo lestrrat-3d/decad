@@ -1,6 +1,7 @@
 package dynamics_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -44,6 +45,103 @@ func makeBall(t *testing.T, doc *decad.Document) *decad.Body {
 		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
 	require.NoError(t, err)
 	return ball
+}
+
+func TestSphereDensityMassRebound(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	ball := makeBall(t, doc)
+	density := units.KilogramsPerCubicMillimeter(0.001)
+	mass, err := ball.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	require.InDelta(t, 4*math.Pi*125*0.001/3, mass.Mass.Value.Base(), 1e-12)
+	material := dynamics.Material{Restitution: units.Scalar(0.5), Friction: units.Scalar(0)}
+	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{
+			{Body: floor, Role: dynamics.Fixed, Material: material},
+			{Body: ball, Role: dynamics.Dynamic, Density: &density, Material: material},
+		},
+		Step: dynamics.StepConfig{
+			Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+				NormalResolution: units.Radians(1e-6)},
+			TimeResolution: units.Seconds(1e-9), ContactSlop: units.Millimeters(1e-6),
+			VelocityResidual:        units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+			PenetrationResidual:     units.Millimeters(1e-6),
+			ImpactSpeed:             units.MillimetersPerSecond(0),
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2,
+		},
+	})
+	require.NoError(t, err)
+	pose, err := r3.Translation(r3.Vec{Z: 15})
+	require.NoError(t, err)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: ball, Pose: pose, LinearVelocity: dynamics.QuantityVec{
+			X: units.MillimetersPerSecond(0), Y: units.MillimetersPerSecond(0),
+			Z: units.MillimetersPerSecond(-100)}, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.2))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, mass.Mass.Value.Base()*150, report.Events[0].NormalImpulse.Base(), 1e-4)
+	final, ok := report.Next.Body(ball)
+	require.True(t, ok)
+	require.InDelta(t, 50, final.LinearVelocity.Z.Base(), 1e-6)
+}
+
+func TestSourceSpherePairDensityImpact(t *testing.T) {
+	doc := decad.New()
+	a, b := makeBall(t, doc), makeBall(t, doc)
+	density := units.KilogramsPerCubicMillimeter(0.001)
+	mass, err := a.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	material := dynamics.Material{Restitution: units.Scalar(0.5), Friction: units.Scalar(0)}
+	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{
+			{Body: a, Role: dynamics.Dynamic, Density: &density, Material: material},
+			{Body: b, Role: dynamics.Dynamic, Density: &density, Material: material},
+		},
+		Step: dynamics.StepConfig{
+			Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+				NormalResolution: units.Radians(1e-6)},
+			TimeResolution: units.Seconds(1e-9), ContactSlop: units.Millimeters(1e-6),
+			VelocityResidual:        units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+			PenetrationResidual:     units.Millimeters(1e-6),
+			ImpactSpeed:             units.MillimetersPerSecond(0),
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2,
+		},
+	})
+	require.NoError(t, err)
+	left, err := r3.Translation(r3.Vec{X: -10})
+	require.NoError(t, err)
+	right, err := r3.Translation(r3.Vec{X: 10})
+	require.NoError(t, err)
+	velocity := func(x float64) dynamics.QuantityVec {
+		return dynamics.QuantityVec{X: units.MillimetersPerSecond(x),
+			Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
+	}
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: a, Pose: left, LinearVelocity: velocity(50), AngularVelocity: zeroAngular(t)},
+		{Body: b, Pose: right, LinearVelocity: velocity(-50), AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.2))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, 75*mass.Mass.Value.Base(), report.Events[0].NormalImpulse.Base(), 1e-4)
+	finalA, ok := report.Next.Body(a)
+	require.True(t, ok)
+	finalB, ok := report.Next.Body(b)
+	require.True(t, ok)
+	require.InDelta(t, -25, finalA.LinearVelocity.X.Base(), 1e-6)
+	require.InDelta(t, 25, finalB.LinearVelocity.X.Base(), 1e-6)
 }
 
 func TestSphereReboundUsesProductionContactAndSweep(t *testing.T) {

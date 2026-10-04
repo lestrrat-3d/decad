@@ -4,9 +4,10 @@ This document is the system map and delivery order for collision-aware rigid
 motion. Current code certifies source-box contact, source sphere-to-box face
 contact, affine two-body sweeps,
 persistent face contact and its first edge transition, and mass properties for
-source boxes and admitted untapered prisms. It steps one frictionless pair with
-a fixed and dynamic body or two centered dynamic bodies. A three-body world
-with one dynamic and two fixed bodies steps one active pair when every other
+source boxes, admitted untapered prisms, and full source spheres. It steps one
+frictionless pair with a fixed and dynamic body or two centered dynamic bodies.
+A three-body world with one dynamic and two fixed bodies steps one active pair
+when every other
 pair has a certified clear path. It also steps two orthogonal, frictionless
 initial face contacts and their repeated resting response after real manifolds
 and full-span tracks certify both pairs. A source box can hit
@@ -17,8 +18,10 @@ advances without an impulse. An initially touching box can slide tangentially
 across a fixed floor without an impulse while full-span ideal and rounded
 contact tracks certify the same face patch. Each touching interval requires a
 certified contact track. A dynamic body's mass can come from
-density or a caller-supplied bounded mass record. One world-frame center force
-and torque per dynamic body contribute to the step's full-duration velocity kick.
+density or a caller-supplied bounded mass record. A full source sphere can use
+its density-derived mass and inertia in a real fixed-floor rebound. One
+world-frame center force and torque per dynamic body contribute to the step's
+full-duration velocity kick.
 Two co-oriented boxes at a 45-degree pose can resolve a centered frictionless
 initial impulse from their four-point manifold. Zero restitution requires
 full-span persistent tracks; positive restitution requires ideal and rounded
@@ -29,7 +32,8 @@ rebound from a wide fixed horizontal box face and continue spinning from the
 returned state when the real sweep certifies its impact and departure.
 The source-sphere face corridor carries a real sphere-to-box point manifold
 through an affine first-impact sweep and a centered fixed-floor rebound with
-supplied sphere mass. Two source spheres also have a cardinal point manifold,
+supplied or density-derived sphere mass. Two source spheres also have a cardinal
+point manifold,
 an affine first-impact sweep including transverse motion, and a centered
 dynamic-pair rebound when contact has a cardinal manifold.
 Other curved contact families still lack source

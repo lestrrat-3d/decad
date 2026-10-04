@@ -20,11 +20,12 @@ off-center contact return `Undecided` in this tilted-pose path.
 rounded source-box poses must stay within the cached oblique sweep's point
 resolution and keep its bounded face track; otherwise replay returns
 `ErrUnsupported`. Interior departure replay is not yet certified.
-A source semicircle sphere with supplied mass can rebound from a fixed source
-box on an isolated face-point contact when its affine sweep stays within that
-face corridor.
-Two source semicircle spheres with supplied mass can rebound as a centered
-dynamic pair when the impact has a cardinal manifold. Their approach may
+A source semicircle sphere with supplied or density-derived mass can rebound
+from a fixed source box on an isolated face-point contact when its affine sweep
+stays within that face corridor.
+Two source semicircle spheres with supplied or density-derived mass can
+rebound as a centered dynamic pair when the impact has a cardinal manifold.
+Their approach may
 include transverse motion when the sweep certifies first impact.
 A two-body world's pair may be excluded; its bodies drift independently even
 through overlap, and no pair material is mixed.

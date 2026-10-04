@@ -17,13 +17,27 @@ type sourceSphereContactProof struct {
 }
 
 func sourceSphereAtPose(b *Body, pose r3.Transform) (sourceSphereContactProof, bool) {
+	proof, ok := sourceSphereRecord(b)
+	if !ok {
+		return sourceSphereContactProof{}, false
+	}
+	rp, ok := b.payload.(revolvePayload)
+	if !ok || !signedAxisTransform(rp.xform) || !signedAxisTransform(pose) {
+		return sourceSphereContactProof{}, false
+	}
+	proof.center = exactContactTransform(pose, exactContactTransform(rp.xform, proof.center))
+	return proof, true
+}
+
+// sourceSphereRecord proves the unplaced occupied solid is one complete ball.
+// A rigid placement cannot change its radius or isotropic centroidal inertia.
+func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 	rp, ok := b.payload.(revolvePayload)
 	if !ok || !b.solid || b.kind != BodySolid || rp.surfaceResult || !rp.full ||
 		rp.sectionDelta != 0 || len(rp.profile.Holes) != 0 ||
 		len(rp.profile.Outer.Segments) != 2 ||
 		!finiteVec(rp.frame.Origin()) ||
 		!cardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) ||
-		!signedAxisTransform(rp.xform) || !signedAxisTransform(pose) ||
 		rp.ax.dU != 1 || rp.ax.dV != 0 ||
 		rp.ax.aUBound != 0 || rp.ax.aVBound != 0 ||
 		rp.ax.dUBound != 0 || rp.ax.dVBound != 0 {
@@ -68,7 +82,7 @@ func sourceSphereAtPose(b *Body, pose r3.Transform) (sourceSphereContactProof, b
 		dvAdd(dyScaleVec(dyVec(rp.frame.U()), mustDyOf(arc.Center.U)),
 			dyScaleVec(dyVec(rp.frame.V()), mustDyOf(arc.Center.V))))
 	return sourceSphereContactProof{
-		center: exactContactTransform(pose, exactContactTransform(rp.xform, local)),
+		center: local,
 		radius: radius, face: faces[0],
 	}, true
 }

@@ -1325,6 +1325,7 @@
 4	0.00	TestMassPropertiesCircularPrism
 4	0.00	TestMassPropertiesRefusals
 4	0.00	TestMassPropertiesSourceBox
+4	0.00	TestMassPropertiesSourceSphere
 4	0.00	TestMassPropertiesTrianglePrism
 4	0.00	TestMeasurement
 4	0.00	TestMidpointSplitCreatesAKnownZeroJoint
