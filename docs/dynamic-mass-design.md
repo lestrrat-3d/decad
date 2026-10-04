@@ -229,9 +229,9 @@ errors, and a mass or inertia interval that is not provably positive uses
 The pinned `units` version in `go.mod` already defines `Mass`, `Density`, and
 `MomentOfInertia`. The time-based `dynamics` API separately needs the planned
 `units` upgrade; this document does not require time for the query itself.
-The pinned `r3` version has rigid transforms but no symmetric-tensor type.
-Add that capability to `r3` and pin a release before dynamics uses it. Neither
-change is made in a sibling repository by this design.
+The pinned `r3` version has rigid transforms and a symmetric-tensor type with
+rotation, positive-definite validation, inversion, and vector action. Dynamics
+still needs to consume those operations with certified mass and inertia bounds.
 
 Computed tests must cover these results, with independent formulas or
 quadrature and assertions against the published bounds:

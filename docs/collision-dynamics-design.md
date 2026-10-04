@@ -52,8 +52,8 @@ detailed rule, the owning design controls that rule.
 
 The pinned `units` dependency provides Time, Velocity, Acceleration, AngularVelocity,
 Force, Torque, and Impulse for the public sweep and step APIs. The pinned `r3`
-dependency still needs a symmetric tensor with rotation and inversion support
-before inertia-based angular response. The dynamics API is a subpackage of
+dependency provides a symmetric tensor with rotation and inversion support;
+inertia-based angular response still needs its dynamics integration. The dynamics API is a subpackage of
 this module, so it does not need a separate module or a geometry dependency
 pointing back to it.
 
