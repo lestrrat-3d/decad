@@ -3,8 +3,8 @@
 This document owns the `dynamics` subpackage's world, state, step, response,
 and trace contracts. `docs/collision-dynamics-design.md` owns the package
 boundary; `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md` own
-geometry results. Current code steps one translating pair with at least one
-dynamic body using density-derived or supplied mass. An axis-aligned
+geometry results. A two-body world steps one pair with at least one dynamic
+body using density-derived or supplied mass. An axis-aligned
 certified contact normal determines the response component; tangent velocity
 continues through an oblique impact. Centered impacts of two dynamic bodies
 apply equal and opposite impulses.
@@ -48,13 +48,15 @@ The floor stays at identity placement. The box can start from any pure
 translation whose real four-corner track passes the same bounds, including
 the endpoint of a previous step. Its mass center is translated with exact
 rational coordinate sums for the lever and torque certificates.
-Off-center impulses that require spin return `Undecided`. The step reports
-bounded translational kinetic energy, linear momentum, and orbital angular momentum for dynamic bodies
+Off-center fixed/dynamic impulses that require spin return `Undecided`.
+An initial two-dynamic face impact can publish bounded spin when its rotational
+departure sweep certifies the full remainder. The step reports bounded
+kinetic energy, linear momentum, and angular momentum for dynamic bodies
 at input, after the full-step force kick, and at completion. It also reports
 gravity, center-force, and fixed/kinematic contact impulses separately, plus
 the drift-only energy, linear momentum, and angular momentum changes.
 Torque loads, rotating kinematic drivers, broader frictional stepping, stacks,
-broader contact-transition stepping, spin response, and arbitrary
+broader contact-transition stepping, broader spin response, and arbitrary
 trace sampling remain design contracts.
 
 Navigation only; the named sections own the rules:
@@ -166,7 +168,8 @@ reported event pairs use world order. `World.Excluded()` and
 `StepReport.Excluded` return separate copies.
 
 The current positive-friction slice accepts a fixed floor and dynamic box in
-either world order. Without an override, the pair coefficient is the geometric
+either world order, or two dynamic source boxes at an initial opposed face
+touch. Without an override, the pair coefficient is the geometric
 mean of the held body coefficients. The solver proposes impulses with a nominal
 rounded mean, then checks the friction cone and slip law against rational
 bounds that enclose the exact mean. A zero body coefficient selects the
@@ -177,8 +180,11 @@ the body values; a positive override goes to the patch solver even when both
 body coefficients are zero. A zero override selects the frictionless response
 even when the body coefficients differ. Other positive-friction body pairs
 return `ErrUnsupported` at `NewWorld` when the pair is not excluded.
-The patch solver reads a floor-to-box witness in both orders, while each event
-keeps its original world-order manifold. Its normal impulse is nonnegative,
+The fixed-body patch solver reads a floor-to-box witness in both orders. The
+two-dynamic solver applies equal and opposite impulses through both masses
+and inertias, then bounds each body's angular response. A nonzero outgoing
+spin requires a certified rotational remainder before the step publishes it.
+Each event keeps its original world-order manifold. Its normal impulse is nonnegative,
 and its tangent and point impulses describe the impulse on world-order B.
 
 ## Step input and configuration
@@ -417,14 +423,31 @@ normal bounds; a nominal solution whose uncertainty can exceed a limit is
 `Undecided`. Exact source boxes and analytic mass can make these bounds
 narrow; the arithmetic residual still applies.
 
-The frictional step uses the box's real four-corner manifold, exact-rational
-impulse and torque sums, and the mass/inertia bounds.
-It checks that the entire body cannot expose a larger contact-point lever
-than the solver audited at the initial corners. It also bounds omitted-spin
-travel over the full step. A narrow floor patch, an interior frictional
-impact, a rotating state, and a contact transition return `Undecided`.
+The fixed/dynamic frictional step uses the identity-placed box's real
+four-corner manifold, exact-rational impulse and torque sums, and the
+mass/inertia bounds. It checks that the entire body cannot expose a larger
+contact-point lever than the solver audited at the initial corners. It also
+bounds omitted-spin travel over the full step. A narrow floor patch, an
+interior frictional impact, a rotating state, and a contact transition
+return `Undecided`.
 
-The implemented translating-box slice publishes zero spin. It bounds the
+The two-dynamic solver uses the same real four-point manifold but includes
+both inverse inertias and both mass intervals in each impulse and residual.
+It publishes neither a completed state nor an event when the solved outgoing
+spin lacks a certified rotational remainder. The corresponding `World.Step`
+returns `Undecided` with `Next == nil`.
+
+For an admitted spinning response, the rotational `RigidDriftSegment` sweep
+must certify departure and every later interval through the requested end.
+`World.Step` takes each returned endpoint pose from that sweep's fraction-one
+sample. The sample's relation must be certified separated after charging its
+float-pose deviation against the ideal path. The trace records the same two
+rigid drift paths and their sweep report. It returns stored event and endpoint
+checkpoints; an interior sample requires a separate rotational replay proof.
+An absent fraction-one sample, a nonpositive endpoint gap, or a trace path
+that differs from the swept path returns `Undecided` with no `Next`.
+
+The fixed/dynamic translating-box slice publishes zero spin. It bounds the
 omitted angular speed from the real manifold's patch-center offset and point
 bounds, the mass-center bound, an impulse upper bound, and a certified lower
 inertia eigenvalue. It returns `Undecided` when that upper speed exceeds
@@ -497,9 +520,10 @@ summed over dynamic bodies. `KineticEnergy` uses `units.Torque` because the
 registered torque unit has the same `kg·mm²/s²` dimension as energy; the field
 denotes energy, not a turning moment. Linear momentum components and bounds
 have kind `units.Impulse`; angular momentum components and bounds have kind
-`units.AngularMomentum`. With zero stored spin, angular momentum is the
-orbital term `mass × (world mass center × linear velocity)`. The source mass
-center's ball bound and the rounded world transform widen the reading.
+`units.AngularMomentum`. Angular momentum sums the orbital term
+`mass × (world mass center × linear velocity)` and the rotated inertia tensor
+times world angular velocity. Source mass-center and inertia bounds widen
+the reading.
 `GravityImpulse`, `LoadImpulse`, and `ContactImpulse` are separate bounded
 vectors. `KinematicWork` is a signed bounded energy reading with kind
 `units.Torque`. For each kinematic contact event, it sums the exact held
@@ -516,17 +540,18 @@ reading that cannot be enclosed by finite typed values makes the step
 `Undecided` with no `Next`.
 
 `StepConservation.DriftChange` contains bounded energy, linear momentum, and
-angular momentum changes over translation-only trace slices. Without an event,
+angular momentum changes over recorded trace slices. Without an event,
 it uses `AfterKick → Completion`. With an event, it sums `AfterKick → pre-event`
 and `post-event → Completion`. It excludes the force kick, event impulse, and
 event position correction. Each body's translation and velocity coefficients
 sum before the one held mass interval is applied, so the same source-center
 uncertainty cancels across each pure-translation slice. Energy and linear
-momentum change by zero on these constant-velocity slices. A changed velocity
-or orientation within a drift slice makes the reading `Undecided`.
+momentum change by zero on pure-translation slices. A rotating slice subtracts
+separately enclosed endpoint readings, including rotated inertia. A changed
+velocity within a drift slice makes the reading `Undecided`.
 
-The current code admits zero spin, so kinetic energy is translational. Each
-advanced contact event checks every dynamic body's published velocity change
+Kinetic energy includes translation and spin. Each advanced contact event
+checks every dynamic body's published velocity change
 against its signed aggregate normal and tangent impulse. It checks both ends
 of the body's held mass interval against `ImpulseResidual + massHigh ×
 VelocityResidual` on each component. A zero-impulse transition must preserve
@@ -540,8 +565,11 @@ gain is the sum, over each dynamic body and Cartesian component, of
 step `Undecided`. The full-step force kick remains outside these event checks.
 For a kinematic impact, the energy gate subtracts the driver's work from the
 dynamic energy gain. It adds `ImpulseResidual` times the sum of the absolute
-driver velocity components to the numerical allowance. Rotational kinetic
-energy and torque impulse remain future contracts.
+driver velocity components to the numerical allowance. Events that publish
+angular velocity and event poses also check spin-energy change against the
+same held inertia interval and compare angular-momentum change with the
+signed torque from every published point impulse. Angular-velocity and
+contact-point residuals widen that comparison.
 
 `Trace` contains the starting state, each certified drift slice, each
 event's pre/post states, each position correction, and the ending state.
@@ -556,9 +584,12 @@ The trace never labels the chosen numerical time as an exact physical impact.
 Contact transitions appear in the trace with zero impulse unless the
 restarted solver finds a closing constraint at that transition.
 
-The implemented first slice re-sweeps every returned rounded drift endpoint
+The translating first slice re-sweeps every returned rounded drift endpoint
 as a `PoseSegment`. A numerical path that lacks `Clear` or
 `DepartedClear` proof returns `Undecided`, even if its ideal drift was clear.
+The rotational response uses the certified `RigidDriftSegment` as its stored
+path and returns that sweep's certified fraction-one float pose. It does not
+claim that an independently interpolated `PoseSegment` is clear.
 `Trace.Sample` currently returns only the stored start, impact, and end
 checkpoints. It returns `ErrUnsupported` for an interior time whose rounded
 pose has no contact certificate. Arbitrary interior replay follows when that

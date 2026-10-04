@@ -211,8 +211,9 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 	}
 	if w.friction.lower.Sign() > 0 &&
 		(w.parts[0].definition.Role != Fixed || w.parts[1].definition.Role != Dynamic) &&
-		(w.parts[0].definition.Role != Dynamic || w.parts[1].definition.Role != Fixed) {
-		return nil, fmt.Errorf("%w: positive friction requires one fixed and one dynamic body", ErrUnsupported)
+		(w.parts[0].definition.Role != Dynamic || w.parts[1].definition.Role != Fixed) &&
+		(w.parts[0].definition.Role != Dynamic || w.parts[1].definition.Role != Dynamic) {
+		return nil, fmt.Errorf("%w: positive friction requires a fixed/dynamic or dynamic/dynamic pair", ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

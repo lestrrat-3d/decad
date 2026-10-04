@@ -15,6 +15,9 @@ import (
 // when both complete continuations certify the same touching face.
 func (w *World) stepInitialFriction(ctx context.Context, from, kicked State, dt units.Value,
 	first *decad.SweepReport) (*StepReport, error) {
+	if w.parts[0].definition.Role == Dynamic && w.parts[1].definition.Role == Dynamic {
+		return w.stepInitialTwoDynamicFriction(ctx, from, kicked, dt, first)
+	}
 	dynamic := 1
 	if w.parts[0].definition.Role == Dynamic {
 		dynamic = 0
