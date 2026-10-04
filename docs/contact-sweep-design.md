@@ -143,6 +143,11 @@ times record-coordinate radius plus translation-difference form, with rational
 intervals for every operation. Both bodies contribute: the ideal pair gap
 interval is the float-pair gap interval widened by `η_A + η_B`. If either
 radius or deviation is unbounded, the pose cannot prove a gap or contact.
+For a rotating source box, compare all eight exact staged source corners under
+the read query pose with their ideal-path intervals. The largest outward-rounded
+corner distance bounds every point of the box. This uses the same staged
+placement and pose operations as `ContactPair`; a float-composed transform can
+round away an error that remains in those source corners.
 The stated screw `To` gets the motion-check §5.1 endpoint allowance against
 both the ideal end and exact `To`; a drift has no separate `To` promise.
 
@@ -487,10 +492,10 @@ func (r *SweepReport) CertifiedPosesAtInterval(time, start, end units.Value) (r3
 `BracketEndsAtDuration` compares the producer's private exact bracket right
 fraction with one. The public `Fraction` may be rounded.
 
-`CertifiedPosesAt` evaluates the same affine float path used by the sweep at
-the requested elapsed time. It checks the read float poses against the cached
-exact source boxes and refuses when their total displacement exceeds
-`PointResolution` or changes a clear or departing relation. For persistent
+`CertifiedPosesAt` evaluates the same float path used by the sweep at
+the requested elapsed time. For affine paths it checks the read float poses
+against the cached exact source boxes. It refuses when their total displacement
+exceeds `PointResolution` or changes a clear or departing relation. For persistent
 contact and event brackets, it accepts only a rounded relation within that
 resolution of the exact source-box relation. It does not call `ContactPair` or
 read the document. It refuses times outside the sweep or outside a certified
@@ -498,6 +503,12 @@ event prefix. `CertifiedPosesAtInterval` maps exact held time values in a
 specified interval onto the certified spatial path. A dynamics trace uses
 its recorded event and step endpoints for that interval, avoiding a gap
 when the rounded sweep duration differs from their exact difference.
+For a clear rotating source-box drift, the report retains the sweep's exact
+source corners and ideal-path bounds. Replay checks the rounded oriented boxes
+with the exact separating-axis test. Their positive gap must exceed the total
+bounded corner difference from the ideal poses, and that difference must fit
+`PointResolution`. Rotating impact and departure reports have no interior
+replay proof.
 
 `Fraction` and the input `Duration` define the exact search time; `Elapsed`
 is a bounded convenience reading for callers. Bracket width is checked from

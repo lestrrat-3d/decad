@@ -141,6 +141,9 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 	}
 	state := tr.end
 	sweep := tr.preSweep
+	if !tr.hasEvent && sweep == nil {
+		sweep = tr.rotationalRemainder
+	}
 	sliceStart, sliceEnd := units.Seconds(0), tr.duration
 	if tr.hasEvent {
 		if timeValue.Cmp(eventValue) < 0 {

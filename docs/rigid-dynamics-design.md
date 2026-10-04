@@ -72,15 +72,16 @@ at input, after the full-step force kick, and at completion. It also reports
 gravity, center-force, and fixed/kinematic contact impulses separately, plus
 the drift-only energy, linear momentum, and angular momentum changes.
 Torque-driven rotation advances when `SweepPair` certifies a clear full-span
-drift and its rounded endpoint. A source box spinning about world Z can also
+drift and its rounded endpoint. Its trace replays clear interior poses against
+the cached rotating source-box proof. A source box spinning about world Z can also
 rebound from a wide fixed horizontal source-box face with positive
 restitution and zero friction. Its normal impulse leaves the admitted spin
 unchanged within `AngularVelocityResidual`; the returned pose uses the
 certified rotating departure sweep. A rotating contact that lacks these
 proofs returns `Undecided`. Other rotating kinematic drivers, broader
 frictional stepping, stacks, broader contact-transition stepping, broader
-spin response, and rotational
-trace sampling remain design contracts.
+spin response, and interior trace sampling across contacts remain design
+contracts.
 
 Navigation only; the named sections own the rules:
 
@@ -652,7 +653,12 @@ It returns `ErrUnsupported` for a slice without a rounded certificate, or
 when the requested float pose exceeds the sweep's resolution. Impact prefixes
 have a separate rounded sweep ending at the published pre-event pose, so
 samples on both sides of an impact consume their own certificates.
-Rotating paths still return `ErrUnsupported` at interior sample times.
+An event-free clear rotating source-box drift also replays its interior poses.
+The sweep retains its exact held source corners and path inputs. Each requested
+rounded pose must lie within `PointResolution` of the ideal path under the
+same staged source-corner transform used by contact geometry. The
+rounded pair's exact separating-axis gap must exceed that pose error. Rotating
+departure and impact slices still return `ErrUnsupported` at interior times.
 
 Publish kinetic energy, linear momentum, and angular momentum at the input,
 after the full-step force kick, and at completion as typed numeric readings;

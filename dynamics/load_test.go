@@ -98,6 +98,23 @@ func TestTorqueKickRotatesClearSourceBox(t *testing.T) {
 	require.InDelta(t, 0.6, entry.AngularVelocity.Z.Base(), 1e-9)
 	require.InDelta(t, math.Cos(0.06), entry.Pose.ApplyDir(r3.Vec{X: 1}).X, 1e-9)
 	require.InDelta(t, math.Sin(0.06), entry.Pose.ApplyDir(r3.Vec{X: 1}).Y, 1e-9)
+	middle, err := report.Trace.Sample(units.Seconds(0.05))
+	require.NoError(t, err)
+	middleBox, ok := middle.Body(box)
+	require.True(t, ok)
+	require.InDelta(t, math.Cos(0.03), middleBox.Pose.ApplyDir(r3.Vec{X: 1}).X, 1e-9)
+	require.InDelta(t, math.Sin(0.03), middleBox.Pose.ApplyDir(r3.Vec{X: 1}).Y, 1e-9)
+	require.InDelta(t, entry.AngularVelocity.Z.Base(), middleBox.AngularVelocity.Z.Base(), 1e-12)
+	unchanged, ok := report.Next.Body(box)
+	require.True(t, ok)
+	require.Equal(t, entry.Pose, unchanged.Pose)
+	end, err := report.Trace.Sample(units.Milliseconds(100))
+	require.NoError(t, err)
+	require.Equal(t, report.Next.Entries(), end.Entries())
+	_, err = report.Trace.Sample(units.Seconds(-0.01))
+	require.ErrorIs(t, err, dynamics.ErrInvalidInput)
+	_, err = report.Trace.Sample(units.Seconds(0.11))
+	require.ErrorIs(t, err, dynamics.ErrInvalidInput)
 	require.NotNil(t, report.Conservation)
 	require.Equal(t, units.AngularMomentum, report.Conservation.TorqueImpulse.Value.Z.Kind())
 	require.InDelta(t, 10, report.Conservation.TorqueImpulse.Value.Z.Base(), 1e-9)
@@ -114,6 +131,63 @@ func TestTorqueKickRotatesClearSourceBox(t *testing.T) {
 	require.True(t, ok)
 	require.InDelta(t, 0.6, entry.AngularVelocity.Z.Base(), 1e-9)
 	require.InDelta(t, math.Sin(0.12), entry.Pose.ApplyDir(r3.Vec{X: 1}).Y, 1e-9)
+	secondMiddle, err := report.Trace.Sample(units.Milliseconds(50))
+	require.NoError(t, err)
+	secondBox, ok := secondMiddle.Body(box)
+	require.True(t, ok)
+	require.InDelta(t, math.Sin(0.09), secondBox.Pose.ApplyDir(r3.Vec{X: 1}).Y, 1e-9)
+}
+
+func TestTorqueTraceReplaysClearRotationInReverseWorldOrder(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	density := units.KilogramsPerCubicMillimeter(0.001)
+	material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
+	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{
+			{Body: box, Role: dynamics.Dynamic, Density: &density, Material: material},
+			{Body: floor, Role: dynamics.Fixed, Material: material}},
+		Step: dynamics.StepConfig{
+			Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+				NormalResolution: units.Radians(1e-6)},
+			TimeResolution: units.Seconds(1e-9), ContactSlop: units.Millimeters(1e-6),
+			VelocityResidual:        units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+			PenetrationResidual:     units.Millimeters(1e-6),
+			ImpactSpeed:             units.MillimetersPerSecond(0),
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2,
+		},
+	})
+	require.NoError(t, err)
+	pose, err := r3.Translation(r3.Vec{Z: 100})
+	require.NoError(t, err)
+	travel := dynamics.QuantityVec{X: units.MillimetersPerSecond(10),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: box, Pose: pose, LinearVelocity: travel, AngularVelocity: zeroAngular(t)},
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration(),
+		Loads: []dynamics.BodyLoad{{Body: box, Force: testForce(0, 0), Torque: testTorque(100)}}},
+		units.Seconds(0.1))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	middle, err := report.Trace.Sample(units.Milliseconds(50))
+	require.NoError(t, err)
+	entry, ok := middle.Body(box)
+	require.True(t, ok)
+	require.InDelta(t, math.Cos(0.03), entry.Pose.ApplyDir(r3.Vec{X: 1}).X, 1e-9)
+	require.InDelta(t, math.Sin(0.03), entry.Pose.ApplyDir(r3.Vec{X: 1}).Y, 1e-9)
+	require.InDelta(t, 0.5, entry.Pose.Apply(r3.Vec{X: 0, Y: 0, Z: 5}).X, 1e-9)
+	fixed, ok := middle.Body(floor)
+	require.True(t, ok)
+	require.Equal(t, r3.Identity(), fixed.Pose)
+	endpoint, err := report.Trace.Sample(units.Seconds(0.1))
+	require.NoError(t, err)
+	require.Equal(t, report.Next.Entries(), endpoint.Entries())
 }
 
 func TestTorqueDrivenRotatingBoxReboundsFromFixedFloor(t *testing.T) {
