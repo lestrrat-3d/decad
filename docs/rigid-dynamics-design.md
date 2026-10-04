@@ -31,6 +31,13 @@ Two source semicircle spheres with supplied or density-derived mass can
 rebound as a centered dynamic pair when the impact has a cardinal manifold.
 Their approach may
 include transverse motion when the sweep certifies first impact.
+An isolated frictionless off-axis sphere-pair impact also admits a bounded
+center-line normal when each supplied mass center matches its source sphere
+center and the impact has no spin. The impulse changes both velocity vectors
+along that normal. A small separated position correction within the certified
+bracket and contact slop is allowed when a full clear remainder sweep proves
+the pair cannot meet again. Unresolved tangency or a noncentral mass stops the
+step.
 A two-body world's pair may be excluded; its bodies drift independently even
 through overlap, and no pair material is mixed.
 The current three-body step admits one dynamic body and two fixed bodies.

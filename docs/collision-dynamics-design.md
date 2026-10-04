@@ -35,10 +35,10 @@ rebound from a wide fixed horizontal box face and continue spinning from the
 returned state when the real sweep certifies its impact and departure.
 The source-sphere face corridor carries a real sphere-to-box point manifold
 through an affine first-impact sweep and a centered fixed-floor rebound with
-supplied or density-derived sphere mass. Two source spheres also have a cardinal
-point manifold,
-an affine first-impact sweep including transverse motion, and a centered
-dynamic-pair rebound when contact has a cardinal manifold.
+supplied or density-derived sphere mass. Two source spheres also have a bounded
+center-line point manifold, an affine first-impact sweep including transverse
+motion, and a centered dynamic-pair rebound at cardinal or off-axis contact
+with a certified clear remainder.
 Other curved contact families still lack source
 witnesses and continuous proofs.
 The first separated edge exit records a zero-impulse contact transition and

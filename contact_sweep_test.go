@@ -270,7 +270,10 @@ func TestSweepPairSourceSpherePair(t *testing.T) {
 	transverse, err := doc.SweepPair(t.Context(), a, b, approachA, lateral, sweepRequest())
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepImpactBracket, transverse.Outcome, "cause=%v", transverse.Cause)
-	require.Nil(t, transverse.Event.Manifold)
+	require.Len(t, transverse.Event.Manifold.Points, 1)
+	require.Greater(t, transverse.Event.Manifold.Points[0].Normal.Value.Y, 0.0)
+	require.LessOrEqual(t, transverse.Event.Manifold.Points[0].NormalAngle.Base(),
+		sweepRequest().NormalResolution.Base())
 	require.Greater(t, transverse.Bracket.From.Elapsed.Value.Base(), 0.1)
 	require.LessOrEqual(t, transverse.Bracket.To.Elapsed.Value.Base()-
 		transverse.Bracket.From.Elapsed.Value.Base(), 1e-9)

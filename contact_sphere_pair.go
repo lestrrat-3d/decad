@@ -8,7 +8,7 @@ import (
 )
 
 // classifySourceSpherePair compares the complete occupied balls. A response
-// witness needs a unique cardinal center axis and two crossing sphere faces.
+// witness needs a nonzero center line and two crossing sphere faces.
 func classifySourceSpherePair(report *ContactReport, a, b sourceSphereContactProof) {
 	var delta dyV3
 	distance2 := dyZero()
@@ -54,15 +54,20 @@ func classifySourceSpherePair(report *ContactReport, a, b sourceSphereContactPro
 	default:
 		report.Relation = ContactOverlapping
 	}
-	if nonzero != 1 {
+	if nonzero == 0 {
 		report.Reason = ContactAmbiguousFeature
+		return
+	}
+	radiusDifference := dyAbs(dySubScalar(a.radius, b.radius))
+	if dyCmp(distance2, dyMul(radiusDifference, radiusDifference)) <= 0 {
+		report.Reason = ContactAmbiguousFeature
+		return
+	}
+	if nonzero != 1 {
+		publishObliqueSpherePair(report, a, b, delta, distance2, radius)
 		return
 	}
 	distance := dyAbs(delta[axis])
-	if dyCmp(distance, dyAbs(dySubScalar(a.radius, b.radius))) <= 0 {
-		report.Reason = ContactAmbiguousFeature
-		return
-	}
 	sign := 1.0
 	if delta[axis].sign() < 0 {
 		sign = -1
@@ -96,6 +101,70 @@ func classifySourceSpherePair(report *ContactReport, a, b sourceSphereContactPro
 		OnA: onA, OnB: onB,
 		Normal:      VecMeasurement{Value: normal, Bound: units.Scalar(0), Exactness: Exact},
 		NormalAngle: units.Radians(0), Separation: sep,
+		FaceA: a.face, FaceB: b.face, FeatureA: featureA, FeatureB: featureB,
+	}}}
+}
+
+// publishObliqueSpherePair retains the exact center-line direction until the
+// final bounded float witness conversion. Each point ball includes the normal
+// conversion error multiplied by its source radius.
+func publishObliqueSpherePair(report *ContactReport, a, b sourceSphereContactProof,
+	delta dyV3, distance2, radius dyadic) {
+	normal, angle, ok := orientedBoxNormal(delta)
+	if !ok || angle.Base() > report.Request.NormalResolution.Base() {
+		report.Reason = ContactNoNormalProof
+		return
+	}
+	components := [3]float64{normal.Value.X, normal.Value.Y, normal.Value.Z}
+	var pointA, pointB [3]*big.Rat
+	for i, component := range components {
+		offsetA := new(big.Rat).Mul(a.radius.rat(), floatRat(component))
+		offsetB := new(big.Rat).Mul(b.radius.rat(), floatRat(component))
+		pointA[i] = new(big.Rat).Add(a.center[i].rat(), offsetA)
+		pointB[i] = new(big.Rat).Sub(b.center[i].rat(), offsetB)
+	}
+	onA, okA := orientedBoxPoint(pointA)
+	onB, okB := orientedBoxPoint(pointB)
+	if !okA || !okB {
+		report.Reason = ContactPointTooCoarse
+		return
+	}
+	for _, witness := range []struct {
+		point  *VecMeasurement
+		radius dyadic
+	}{{&onA, a.radius}, {&onB, b.radius}} {
+		radiusFloat := ratFloatUp(witness.radius.rat())
+		bound := provenUpRound(witness.point.Bound.Base() +
+			provenUpRound(radiusFloat*normal.Bound.Base()))
+		if !finiteMeasurementValues(bound) || bound > report.Request.PointResolution.Base() {
+			report.Reason = ContactPointTooCoarse
+			return
+		}
+		witness.point.Bound = units.Millimeters(bound)
+		witness.point.Exactness = exactnessOf(bound)
+	}
+	low := new(big.Rat).Sub(floatRat(dySqrtDown(distance2)), radius.rat())
+	high := new(big.Rat).Sub(floatRat(dySqrtUp(distance2)), radius.rat())
+	value := ratFloatNearest(new(big.Rat).Quo(new(big.Rat).Add(low, high), big.NewRat(2, 1)))
+	if !finiteMeasurementValues(value) {
+		report.Reason = ContactPointTooCoarse
+		return
+	}
+	left := new(big.Rat).Sub(low, floatRat(value))
+	right := new(big.Rat).Sub(high, floatRat(value))
+	boundExact := ratMax(left.Abs(left), right.Abs(right))
+	boundExact.Add(boundExact, floatRat(onA.Bound.Base()))
+	boundExact.Add(boundExact, floatRat(onB.Bound.Base()))
+	bound := ratFloatUp(boundExact)
+	if !finiteMeasurementValues(bound) {
+		report.Reason = ContactPointTooCoarse
+		return
+	}
+	sep := Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
+		Exactness: exactnessOf(bound)}
+	featureA, featureB := ContactFeature{Face: a.face}, ContactFeature{Face: b.face}
+	report.Manifold = &ContactManifold{Points: []ContactPoint{{
+		OnA: onA, OnB: onB, Normal: normal, NormalAngle: angle, Separation: sep,
 		FaceA: a.face, FaceB: b.face, FeatureA: featureA, FeatureB: featureB,
 	}}}
 }

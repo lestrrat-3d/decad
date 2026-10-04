@@ -490,6 +490,10 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 			return undecided(w, "published impact prefix lacks a matching rounded endpoint bracket"), nil
 		}
 	}
+	if isObliqueSpherePairEvent(first.Event.Manifold) {
+		return w.stepObliqueSpherePair(ctx, from, kicked, pre, dt, eventAt,
+			impactTime, first, roundedPrefix)
+	}
 	normal, separation, bound, ok := reducedContact(first.Event.Manifold, w.step.Contact)
 	if !ok {
 		return undecided(w, "contact normal or point is outside the admitted resolution"), nil

@@ -294,8 +294,11 @@ start gap has one exact first-contact root. Bracket it with dyadic fractions,
 including a root at the final endpoint, with a clear left sample and a
 touching or overlapping right sample. The endpoint can be ideal overlap
 while the rounded pose is touch. Transfer the source manifold only when both
-queries name the same source faces and cardinal normal; add the exact center
-pose difference to witness and separation bounds.
+queries name the same source faces. For a cardinal center line, keep the exact
+normal when both queries retain the same cardinal direction. For an off-axis
+center line, bound the change in unit normal from the exact center-pose
+difference and shorter center-line length. Charge that change to normal,
+witness, angle, and separation bounds before publishing the event manifold.
 
 For a transverse relative displacement, compare the exact quadratic squared
 center distance minus squared radius sum over the held affine path. Its minimum
@@ -303,9 +306,9 @@ proves a full clear span or locates the earliest possible impact. Search the
 decreasing side with dyadic fractions; require a separated left endpoint, a
 touching or overlapping right endpoint, and width at most `TimeResolution`.
 Find a hidden pass-through before reporting clear. A tangent and an
-unrepresentable shallow overlap return `SweepUndecided`. The cardinal source
-manifold gate still applies at the right sample. A zero-gap stationary touch
-has no continuous proof for continuation.
+unrepresentable shallow overlap return `SweepUndecided`. The bounded
+center-line source manifold gate applies at the right sample. A zero-gap
+stationary touch has no continuous proof for continuation.
 
 ## 5. Earliest-event search
 
