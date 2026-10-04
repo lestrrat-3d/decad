@@ -229,6 +229,8 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 	}
 	kicked := withPairState(from, kickPair)
 	active := -1
+	var simultaneous [3]*decad.SweepReport
+	activeCount := 0
 	for key, indices := range threePairs {
 		if threePairExcluded(w.three.excluded, w.three.parts, indices) {
 			continue
@@ -253,13 +255,31 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 		if first.Outcome == decad.SweepClear {
 			continue
 		}
-		if active >= 0 {
-			return w.threeUndecided(key, "more than one three-body pair may contact during the step"), nil
-		}
 		if first.Outcome == decad.SweepUndecided {
 			return w.threeUndecided(key, "a three-body pair sweep is undecided"), nil
 		}
-		active = key
+		if active < 0 {
+			active = key
+		}
+		activeCount++
+		simultaneous[key] = first
+	}
+	if activeCount > 1 {
+		allInitial := true
+		for _, sweep := range simultaneous {
+			if sweep != nil && sweep.Outcome != decad.SweepInitiallyTouching {
+				allInitial = false
+			}
+		}
+		if !allInitial {
+			for key, sweep := range simultaneous {
+				if sweep != nil && key != active {
+					return w.threeUndecided(key, "more than one three-body pair may contact during the step"), nil
+				}
+			}
+		}
+		return w.stepThreeSimultaneousInitial(ctx, from, kicked, input.Gravity, loads,
+			dt, simultaneous, reference)
 	}
 	if active < 0 {
 		active = referenceKey
