@@ -191,7 +191,10 @@ It is not an unlabelled diagonal or an inertia about the origin. All six
 components and their bounds have kind `units.MomentOfInertia`; the mass value
 and bound have kind `units.Mass`; the center bound has kind `units.Length`.
 The lower mass endpoint and certified lower tensor eigenvalue are strictly
-positive. The mode is explicit, so a zero density value never means “use the
+positive, and their reciprocals must fit in a finite `float64`. Every reading
+has `Exact` or `Approximate` exactness; an `Exact` reading has a zero bound.
+`dynamics.World` copies the supplied record during construction. The mode is
+explicit, so a zero density value never means “use the
 supplied tensor.” The caller may use measured values that differ from the
 geometry-derived values; dynamics reports that input mode in its world
 description and does not silently replace them with geometric readings.

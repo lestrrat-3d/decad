@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"slices"
 
 	"github.com/lestrrat-3d/decad"
@@ -83,7 +84,7 @@ type World struct {
 	step  StepConfig
 }
 
-// NewWorld admits two density-derived dynamic bodies or one with a fixed body.
+// NewWorld admits one fixed and dynamic pair or two dynamic bodies.
 func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World, error) {
 	if doc == nil || ctx == nil {
 		return nil, fmt.Errorf("%w: nil document or context", ErrInvalidInput)
@@ -119,6 +120,10 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 			density := *entry.Density
 			entry.Density = &density
 		}
+		if entry.Supplied != nil {
+			supplied := *entry.Supplied
+			entry.Supplied = &supplied
+		}
 		w.parts[i].definition = entry
 		switch entry.Role {
 		case Fixed:
@@ -128,12 +133,18 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 			}
 		case Dynamic:
 			dynamic++
-			if entry.Density == nil || entry.Supplied != nil {
-				return nil, fmt.Errorf("%w: this stage requires density-derived mass", ErrUnsupported)
+			if (entry.Density == nil) == (entry.Supplied == nil) {
+				return nil, fmt.Errorf("%w: dynamic body needs exactly one mass source", ErrInvalidInput)
 			}
-			mass, err := entry.Body.MassProperties(ctx, *entry.Density)
-			if err != nil {
-				return nil, err
+			var mass decad.MassProperties
+			if entry.Supplied != nil {
+				mass = *entry.Supplied
+			} else {
+				var err error
+				mass, err = entry.Body.MassProperties(ctx, *entry.Density)
+				if err != nil {
+					return nil, err
+				}
 			}
 			if err := validateMass(mass); err != nil {
 				return nil, err
@@ -147,6 +158,9 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 	}
 	if dynamic == 0 || fixed+dynamic != 2 {
 		return nil, fmt.Errorf("%w: one or two dynamic bodies required", ErrUnsupported)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return w, nil
 }
@@ -212,6 +226,10 @@ func validateMass(m decad.MassProperties) error {
 		m.Mass.Value.Base()-m.Mass.Bound.Base() <= 0 || m.Center.Bound.Base() < 0 {
 		return fmt.Errorf("%w: nonpositive or unbounded mass", ErrInvalidMassProperties)
 	}
+	if !validMassExactness(m.Mass.Exactness, m.Mass.Bound) ||
+		!validMassExactness(m.Center.Exactness, m.Center.Bound) {
+		return fmt.Errorf("%w: inconsistent mass or center exactness", ErrInvalidMassProperties)
+	}
 	values := []decad.Measurement{m.Inertia.XX, m.Inertia.YY, m.Inertia.ZZ,
 		m.Inertia.XY, m.Inertia.XZ, m.Inertia.YZ}
 	for _, value := range values {
@@ -219,12 +237,39 @@ func validateMass(m decad.MassProperties) error {
 			!finite(value.Value.Base(), value.Bound.Base()) || value.Bound.Base() < 0 {
 			return fmt.Errorf("%w: invalid inertia component", ErrInvalidMassProperties)
 		}
+		if !validMassExactness(value.Exactness, value.Bound) {
+			return fmt.Errorf("%w: inconsistent inertia exactness", ErrInvalidMassProperties)
+		}
 	}
 	// A strict row-dominance bound proves every tensor inside the component intervals positive.
-	if lower := certifiedInertiaLower(m); lower == nil || lower.Sign() <= 0 {
+	lower := certifiedInertiaLower(m)
+	if lower == nil || lower.Sign() <= 0 {
 		return fmt.Errorf("%w: tensor positivity is not proved", ErrInvalidMassProperties)
 	}
+	massLower := new(big.Rat).Sub(exactBase(m.Mass.Value), exactBase(m.Mass.Bound))
+	if !finiteInverse(massLower) || !finiteInverse(lower) {
+		return fmt.Errorf("%w: mass or inertia inverse is not finite", ErrInvalidMassProperties)
+	}
 	return nil
+}
+
+func validMassExactness(exactness decad.Exactness, bound units.Value) bool {
+	switch exactness {
+	case decad.Exact:
+		return bound.Mag() == 0
+	case decad.Approximate:
+		return true
+	default:
+		return false
+	}
+}
+
+func finiteInverse(lower *big.Rat) bool {
+	if lower == nil || lower.Sign() <= 0 {
+		return false
+	}
+	inverse, _ := new(big.Rat).Inv(lower).Float64()
+	return finite(inverse)
 }
 
 func finite(values ...float64) bool {

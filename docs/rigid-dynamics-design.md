@@ -4,8 +4,9 @@ This document owns the `dynamics` subpackage's world, state, step, response,
 and trace contracts. `docs/collision-dynamics-design.md` owns the package
 boundary; `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md` own
 geometry results. Current code steps one frictionless, single-axis translating
-pair with at least one density-derived dynamic body. Centered impacts of two
-dynamic bodies apply equal and opposite impulses. An initial face touch between
+pair with at least one dynamic body using density-derived or supplied mass.
+Centered impacts of two dynamic bodies apply equal and opposite impulses.
+An initial face touch between
 a fixed floor and dynamic source box can receive one full-step gravity kick
 and a zero-restitution support impulse. A zero-restitution impact can continue
 as certified persistent contact, and a stationary touching pair can advance
@@ -39,7 +40,10 @@ mass properties; a dynamic body needs one of these complete sources:
   and tensor refer to the body's committed world placement, with the tensor
   about that center in committed world axes. Reject a partial supplied record.
 
-The density and supplied modes are exclusive. World construction requires
+The density and supplied modes are exclusive. World construction copies the
+selected input, including a supplied record, so later caller edits do not
+change a world. It rejects an unknown exactness value and an `Exact` reading
+with a nonzero bound. World construction requires
 mass's lower bound to be positive and a certified positive lower eigenvalue of
 the complete inertia interval tensor. A nominal positive determinant is
 insufficient. Reject inconsistent bounds, a tensor lacking that proof, or a
@@ -397,6 +401,11 @@ bottom ends at `z=5 mm`, within the stated integration/geometry tolerance.
 Initial/final kinetic energies are `5000` and `1250 kg·mm²/s²`. The document
 body set and placements are unchanged. A hand-written manifold does not
 exercise this boundary.
+
+The supplied-mass fixture passes that box's real `Body.MassProperties` result
+through `RigidBody.Supplied`, `NewWorld`, `SweepPair`, and `Step`. It has the same
+`150 kg·mm/s` impulse, `50 mm/s` outgoing speed, and `z=5 mm` final bottom.
+Changing the caller's record after world construction does not change the step.
 
 The implemented resting-contact fixture starts a `1 kg` source box at rest on
 a fixed floor and applies gravity `−1000 mm/s²` for `0.1 s`. The full-step
