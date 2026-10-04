@@ -39,7 +39,7 @@ func TestThickenPatchSides(t *testing.T) {
 		side              decad.ThickenSide
 		low, high, middle float64
 	}{
-		{"negative", decad.ThickenNegative, -2, 0, -1},
+		{testNegative, decad.ThickenNegative, -2, 0, -1},
 		{"centered", decad.ThickenCentered, -1, 1, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -120,7 +120,7 @@ func TestThickenPatchRefusals(t *testing.T) {
 		want  error
 	}{
 		{"zero", units.Millimeters(0), nil, decad.ErrDegenerate},
-		{"negative", units.Millimeters(-1), nil, decad.ErrNegativeMagnitude},
+		{testNegative, units.Millimeters(-1), nil, decad.ErrNegativeMagnitude},
 		{"wrong kind", units.SquareMillimeters(2), nil, decad.ErrUnitKind},
 		{"nil option", units.Millimeters(2), []decad.ThickenOption{nil}, decad.ErrDegenerate},
 		{"unknown side", units.Millimeters(2), []decad.ThickenOption{decad.WithThickenSide(100)}, decad.ErrDegenerate},

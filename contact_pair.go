@@ -127,7 +127,7 @@ func classifySourceBoxes(report *ContactReport, a, b sourceBoxContactProof) {
 	var gaps [3]dyadic
 	touchAxes := 0
 	overlaps := true
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		switch {
 		case dyCmp(a.hi[i], b.lo[i]) < 0:
 			gaps[i] = dySubScalar(b.lo[i], a.hi[i])
@@ -160,7 +160,7 @@ func classifySourceBoxes(report *ContactReport, a, b sourceBoxContactProof) {
 			report.Reason = ContactAmbiguousFeature
 			return
 		}
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			if dyCmp(a.hi[i], b.lo[i]) == 0 {
 				publishSourceBoxPatch(report, a, b, i, 1, dyZero())
 				return
@@ -198,7 +198,7 @@ func classifySourceBoxes(report *ContactReport, a, b sourceBoxContactProof) {
 func sourceBoxTranslation(a, b sourceBoxContactProof) (int, int, dyadic, bool) {
 	var best dyadic
 	axis, sign, ties := 0, 0, false
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		for _, candidate := range []struct {
 			value dyadic
 			sign  int

@@ -33,7 +33,10 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 	}
 	var umin, umax, vmin, vmax float64
 	for i, seg := range pp.profile.Outer.Segments {
-		line := seg.(LineSeg) // rectangularProfile already proves every segment is a line.
+		line, ok := seg.(LineSeg)
+		if !ok {
+			return sourceBoxContactProof{}, false
+		}
 		p := line.Start
 		if i == 0 {
 			umin, umax, vmin, vmax = p.U, p.U, p.V, p.V
@@ -58,7 +61,7 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 					dvAdd(dyScaleVec(fv, v[iv]), dyScaleVec(fn, z[iz]))))
 				p = exactContactTransform(pp.xform, p)
 				p = exactContactTransform(pose, p)
-				for axis := 0; axis < 3; axis++ {
+				for axis := range 3 {
 					if first || dyCmp(p[axis], box.lo[axis]) < 0 {
 						box.lo[axis] = p[axis]
 					}
@@ -70,7 +73,7 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 			}
 		}
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if dyCmp(box.lo[i], box.hi[i]) >= 0 {
 			return sourceBoxContactProof{}, false
 		}
@@ -95,7 +98,7 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 		}
 		box.faces[axis][side] = face
 	}
-	for axis := 0; axis < 3; axis++ {
+	for axis := range 3 {
 		if box.faces[axis][0] == nil || box.faces[axis][1] == nil {
 			return sourceBoxContactProof{}, false
 		}
@@ -151,7 +154,7 @@ func publishSourceBoxPatch(report *ContactReport, a, b sourceBoxContactProof, ax
 	faceA, faceB := a.faces[axis][sideA], b.faces[axis][sideB]
 	var projected [2]int
 	n := 0
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if i != axis {
 			projected[n] = i
 			n++
@@ -215,7 +218,7 @@ func publishSourceBoxPatch(report *ContactReport, a, b sourceBoxContactProof, ax
 func sourceBoxPoint(p dyV3) (VecMeasurement, bool) {
 	var coords [3]float64
 	bound := 0.0
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		coords[i], _ = p[i].float64()
 		if !finiteMeasurementValues(coords[i]) {
 			return VecMeasurement{}, false

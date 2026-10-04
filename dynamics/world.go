@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
@@ -151,25 +152,20 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 }
 
 func containsBody(bodies []*decad.Body, body *decad.Body) bool {
-	for _, candidate := range bodies {
-		if candidate == body {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(bodies, body)
 }
 
-func validQuantity(v units.Value, kind units.Kind, min float64, strict bool) bool {
+func validQuantity(v units.Value, kind units.Kind, strict bool) bool {
 	x := v.Base()
 	if v.Kind() != kind || math.IsNaN(x) || math.IsInf(x, 0) {
 		return false
 	}
-	return x > min || (!strict && x == min)
+	return x > 0 || (!strict && x == 0)
 }
 
 func validateMaterial(m Material) error {
-	if !validQuantity(m.Restitution, units.Dimensionless, 0, false) || m.Restitution.Base() > 1 ||
-		!validQuantity(m.Friction, units.Dimensionless, 0, false) {
+	if !validQuantity(m.Restitution, units.Dimensionless, false) || m.Restitution.Base() > 1 ||
+		!validQuantity(m.Friction, units.Dimensionless, false) {
 		return fmt.Errorf("%w: restitution must be in [0,1] and friction nonnegative", ErrInvalidInput)
 	}
 	if m.Friction.Base() != 0 {
@@ -196,7 +192,7 @@ func validateStepConfig(cfg StepConfig) error {
 		{"impact speed", cfg.ImpactSpeed, units.Velocity, false},
 	}
 	for _, check := range checks {
-		if !validQuantity(check.value, check.kind, 0, check.strict) {
+		if !validQuantity(check.value, check.kind, check.strict) {
 			return fmt.Errorf("%w: invalid %s", ErrInvalidInput, check.name)
 		}
 	}

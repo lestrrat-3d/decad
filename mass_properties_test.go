@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testNegative = "negative"
+
 func TestMassPropertiesSourceBox(t *testing.T) {
 	doc := decad.New()
 	box := boxBodyAtZ(t, doc, 0, 0, 10, 10, 10, 10)
@@ -99,7 +101,7 @@ func TestMassPropertiesRefusals(t *testing.T) {
 		want    error
 	}{
 		{"wrong kind", units.Kilograms(1), decad.ErrUnitKind},
-		{"negative", units.KilogramsPerCubicMillimeter(-1), decad.ErrNegativeMagnitude},
+		{testNegative, units.KilogramsPerCubicMillimeter(-1), decad.ErrNegativeMagnitude},
 		{"zero", units.KilogramsPerCubicMillimeter(0), decad.ErrDegenerate},
 		{"nonfinite", units.KilogramsPerCubicMillimeter(math.Inf(1)), decad.ErrNotFinite},
 	} {

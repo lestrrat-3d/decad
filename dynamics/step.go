@@ -112,7 +112,7 @@ func translatePose(pose r3.Transform, delta r3.Vec) (r3.Transform, error) {
 
 // Step advances the admitted pair with a certified first-impact bracket and frictionless impulse.
 func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.Value) (*StepReport, error) {
-	if w == nil || ctx == nil || from.world != w || !validQuantity(dt, units.Time, 0, true) {
+	if w == nil || ctx == nil || from.world != w || !validQuantity(dt, units.Time, true) {
 		return nil, fmt.Errorf("%w: invalid context, world, state, or duration", ErrInvalidInput)
 	}
 	if err := validateQuantityVec(input.Gravity, units.Acceleration); err != nil {
@@ -156,7 +156,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	case decad.SweepClear:
 		end, err := driftState(from, dt.Base())
 		if err != nil {
-			return undecided(w, "non-finite clear-path pose"), nil
+			return undecidedArithmetic(w, "non-finite clear-path pose", err)
 		}
 		actual, err := w.sweepPoses(ctx, from, end, dt, decad.StopAtInitialContact)
 		if err != nil {
@@ -182,9 +182,9 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	}
 	pre, err := driftState(from, impactTime)
 	if err != nil {
-		return undecided(w, "non-finite impact pose"), nil
+		return undecidedArithmetic(w, "non-finite impact pose", err)
 	}
-	_, normal, separation, bound, ok := reducedContact(first.Event.Manifold, w.step.Contact)
+	normal, separation, bound, ok := reducedContact(first.Event.Manifold, w.step.Contact)
 	if !ok {
 		return undecided(w, "contact normal or point is outside the admitted resolution"), nil
 	}
@@ -254,7 +254,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	post := pre
 	post.entries[dyn].Pose, err = translatePose(pre.entries[dyn].Pose, r3.Vec{Z: correction})
 	if err != nil {
-		return undecided(w, "position correction is not finite"), nil
+		return undecidedArithmetic(w, "position correction is not finite", err)
 	}
 	if !correctionWithin(pre.entries[dyn].Pose, post.entries[dyn].Pose, correctionAllowance) {
 		return undecided(w, "actual position correction exceeds its certified allowance"), nil
@@ -269,7 +269,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		if contact.Manifold == nil {
 			break
 		}
-		_, nextNormal, nextSeparation, nextBound, valid := reducedContact(contact.Manifold, w.step.Contact)
+		nextNormal, nextSeparation, nextBound, valid := reducedContact(contact.Manifold, w.step.Contact)
 		if !valid || nextNormal != normal || nextSeparation >= 0 ||
 			!finite(nextSeparation, nextBound) {
 			break
@@ -283,7 +283,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		}
 		candidate, err := translatePose(post.entries[dyn].Pose, r3.Vec{Z: increment})
 		if err != nil {
-			return undecided(w, "position correction is not finite"), nil
+			return undecidedArithmetic(w, "position correction is not finite", err)
 		}
 		correctionAllowance = outwardSum(correctionAllowance, nextBound)
 		if !finite(correctionAllowance) || !correctionWithin(pre.entries[dyn].Pose, candidate, correctionAllowance) {
@@ -314,7 +314,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	}
 	end, err := driftState(post, remaining)
 	if err != nil {
-		return undecided(w, "non-finite final pose"), nil
+		return undecidedArithmetic(w, "non-finite final pose", err)
 	}
 	if remaining > 0 {
 		actual, err := w.sweepPoses(ctx, post, end, units.Seconds(remaining), decad.ContinueSeparatingTouch)
@@ -556,8 +556,8 @@ func (w *World) sweepRequest(duration units.Value, policy decad.SweepStartPolicy
 		MaxPoseEvaluations: w.step.MaxPoseEvaluations, StartPolicy: policy}
 }
 
-func reducedContact(manifold *decad.ContactManifold, req decad.ContactRequest) (r3.Vec, r3.Vec, float64, float64, bool) {
-	var point, normal r3.Vec
+func reducedContact(manifold *decad.ContactManifold, req decad.ContactRequest) (r3.Vec, float64, float64, bool) {
+	var normal r3.Vec
 	var separation, bound float64
 	for _, cp := range manifold.Points {
 		if !finite(cp.OnA.Value.X, cp.OnA.Value.Y, cp.OnA.Value.Z,
@@ -568,23 +568,22 @@ func reducedContact(manifold *decad.ContactManifold, req decad.ContactRequest) (
 			cp.OnB.Bound.Base() > req.PointResolution.Base() ||
 			cp.NormalAngle.Base() > req.NormalResolution.Base() ||
 			cp.Normal.Bound.Base() != 0 || cp.NormalAngle.Base() != 0 {
-			return r3.Vec{}, r3.Vec{}, 0, 0, false
+			return r3.Vec{}, 0, 0, false
 		}
 		if len(manifold.Points) > 1 && cp.Normal.Value != manifold.Points[0].Normal.Value {
-			return r3.Vec{}, r3.Vec{}, 0, 0, false
+			return r3.Vec{}, 0, 0, false
 		}
-		point = point.Add(cp.OnA.Value.Add(cp.OnB.Value).Scale(0.5))
 		normal = normal.Add(cp.Normal.Value)
 		separation += cp.Separation.Value.Base()
 		pointBound := outwardSum(cp.Separation.Bound.Base(), cp.OnA.Bound.Base(), cp.OnB.Bound.Base())
 		if !finite(pointBound) {
-			return r3.Vec{}, r3.Vec{}, 0, 0, false
+			return r3.Vec{}, 0, 0, false
 		}
 		bound = math.Max(bound, pointBound)
 	}
 	count := float64(len(manifold.Points))
-	point, normal, separation = point.Scale(1/count), normal.Scale(1/count), separation/count
-	return point, normal, separation, bound, finite(point.X, point.Y, point.Z, normal.Z, separation)
+	normal, separation = normal.Scale(1/count), separation/count
+	return normal, separation, bound, finite(normal.X, normal.Y, normal.Z, separation)
 }
 
 func cloneManifold(m decad.ContactManifold) decad.ContactManifold {
@@ -596,4 +595,8 @@ func undecided(w *World, reason string) *StepReport {
 	return &StepReport{Status: Undecided, Diagnostics: []StepDiagnostic{{
 		Pair: BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body}, Reason: reason,
 	}}}
+}
+
+func undecidedArithmetic(w *World, reason string, err error) (*StepReport, error) {
+	return undecided(w, reason+": "+err.Error()), nil
 }

@@ -70,13 +70,20 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	// The recorded rectangle and levels are the source solid. Translation does
 	// not change its centroidal inertia, and a signed-permutation basis only
 	// reorders its three dimensions. Work in exact dyadics until division by 12.
-	first := pp.profile.Outer.Segments[0].(LineSeg).Start
+	firstLine, ok := pp.profile.Outer.Segments[0].(LineSeg)
+	if !ok {
+		return MassProperties{}, fmt.Errorf("%w: box section is not a line loop", ErrUnsupported)
+	}
+	first := firstLine.Start
 	minU, maxU, minV, maxV := first.U, first.U, first.V, first.V
 	for _, segment := range pp.profile.Outer.Segments {
 		if err := ctx.Err(); err != nil {
 			return MassProperties{}, err
 		}
-		line := segment.(LineSeg)
+		line, ok := segment.(LineSeg)
+		if !ok {
+			return MassProperties{}, fmt.Errorf("%w: box section is not a line loop", ErrUnsupported)
+		}
 		point := line.Start
 		if line.TStart == 1 {
 			point = line.End

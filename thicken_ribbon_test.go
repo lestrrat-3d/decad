@@ -50,7 +50,7 @@ func TestThickenRibbonStraight(t *testing.T) {
 		thicknes float64
 	}{
 		{"positive", decad.ThickenPositive, -2, 0, 2},
-		{"negative", decad.ThickenNegative, 0, 2, 2},
+		{testNegative, decad.ThickenNegative, 0, 2, 2},
 		{"centered 2 mm", decad.ThickenCentered, -1, 1, 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

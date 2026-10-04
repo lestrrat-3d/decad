@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"sort"
@@ -9,6 +10,8 @@ import (
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
+
+var errSweepPoseBudget = errors.New("decad: sweep pose budget exhausted")
 
 // PairPath names one body's motion during a two-body sweep. The first
 // implementation certifies affine translations; other valid paths report an
@@ -351,7 +354,7 @@ func (r *pairSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, er
 		return nil, err
 	}
 	if r.report.PoseEvaluations >= r.req.MaxPoseEvaluations {
-		return nil, nil
+		return nil, errSweepPoseBudget
 	}
 	poseA, err := r.pa.poseAt(f)
 	if err != nil {
@@ -480,11 +483,11 @@ func boxPoseDeviation(start, observed sourceBoxContactProof, delta [3]dyadic, f 
 func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*SweepReport, error) {
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	first, err := r.sample(ctx, zero)
+	if errors.Is(err, errSweepPoseBudget) {
+		return r.undecided(zero, zero, SweepPoseBudget), nil
+	}
 	if err != nil {
 		return nil, err
-	}
-	if first == nil {
-		return r.undecided(zero, zero, SweepPoseBudget), nil
 	}
 	switch first.Ideal.Relation {
 	case ContactOverlapping:
@@ -505,11 +508,11 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 			return r.undecided(zero, one, cause), nil
 		}
 		last, err := r.sample(ctx, one)
+		if errors.Is(err, errSweepPoseBudget) {
+			return r.undecided(zero, one, SweepPoseBudget), nil
+		}
 		if err != nil {
 			return nil, err
-		}
-		if last == nil {
-			return r.undecided(zero, one, SweepPoseBudget), nil
 		}
 		if last.Ideal.Relation != ContactSeparated || last.Ideal.Gap == nil {
 			return r.undecided(zero, one, SweepPoseRelation), nil
@@ -524,12 +527,12 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 	}
 	entry, exit, intersects := r.contactSpan()
 	if !intersects || entry.Cmp(one) > 0 || exit.Sign() < 0 || entry.Cmp(exit) > 0 {
-		last, err := r.sample(ctx, one)
+		_, err := r.sample(ctx, one)
+		if errors.Is(err, errSweepPoseBudget) {
+			return r.undecided(zero, one, SweepPoseBudget), nil
+		}
 		if err != nil {
 			return nil, err
-		}
-		if last == nil {
-			return r.undecided(zero, one, SweepPoseBudget), nil
 		}
 		r.report.Outcome = SweepClear
 		return r.report, nil
@@ -562,18 +565,18 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 		return r.undecided(leftF, rightF, SweepTimeFloor), nil
 	}
 	left, err := r.sample(ctx, leftF)
-	if err != nil {
-		return nil, err
-	}
-	if left == nil {
+	if errors.Is(err, errSweepPoseBudget) {
 		return r.undecided(zero, leftF, SweepPoseBudget), nil
 	}
-	right, err := r.sample(ctx, rightF)
 	if err != nil {
 		return nil, err
 	}
-	if right == nil {
+	right, err := r.sample(ctx, rightF)
+	if errors.Is(err, errSweepPoseBudget) {
 		return r.undecided(leftF, rightF, SweepPoseBudget), nil
+	}
+	if err != nil {
+		return nil, err
 	}
 	if left.Ideal.Relation != ContactSeparated ||
 		(right.Ideal.Relation != ContactTouching && right.Ideal.Relation != ContactOverlapping) {

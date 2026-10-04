@@ -34,13 +34,16 @@ func TestCorrectionAllowanceUsesElapsedBoundsAndActualPose(t *testing.T) {
 }
 
 func TestImpulseResidualIncludesEachRoundedOperation(t *testing.T) {
-	e := units.Scalar(0.9685349633503075)
-	velocity := units.MillimetersPerSecond(-5665.937607208131)
+	e := units.Scalar(math.Float64frombits(0x3feefe3d0913e87c))
+	velocity := units.MillimetersPerSecond(math.Float64frombits(0xc0b621f00706a76b))
 	mass := decad.Measurement{
 		Value: units.Kilograms(2.6875), Bound: units.Kilograms(0),
 	}
-	target := -e.Base() * velocity.Base()
-	impulse := (target - velocity.Base()) * mass.Value.Base()
+	// Hold the published float outputs fixed. The host may round the
+	// intermediate operations differently, while the exact input law and its
+	// error against these outputs must have the same answer everywhere.
+	target := math.Float64frombits(0x40b56fa89ec6df9e)
+	impulse := math.Float64frombits(0x40dd45d28f6616b9)
 	ulp := math.Nextafter(impulse, math.Inf(1)) - impulse
 
 	// The exact response differs from this nominal impulse by more than one ULP.
