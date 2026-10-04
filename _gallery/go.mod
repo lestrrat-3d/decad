@@ -10,7 +10,7 @@ require (
 	github.com/lestrrat-3d/r3 v0.0.0-20261004120949-f188fa4e203a
 	github.com/lestrrat-3d/sketch v0.0.0-20260924052631-80849197f03e
 	github.com/lestrrat-3d/solidlens v0.0.0-20260926143114-9a324f5bb98b
-	github.com/lestrrat-3d/units v0.0.0-20261004093422-d87a1107e4c9
+	github.com/lestrrat-3d/units v0.0.0-20261004172310-91d157ffd2a9
 	github.com/stretchr/testify v1.12.1
 )
 
