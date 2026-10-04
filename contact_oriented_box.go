@@ -13,6 +13,7 @@ import (
 type orientedSourceBox struct {
 	corner [8]dyV3
 	edge   [3]dyV3
+	faces  [3][2]*Face
 }
 
 func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, bool) {
@@ -58,6 +59,51 @@ func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, 
 		dvSub(box.corner[2], box.corner[0]), dvSub(box.corner[4], box.corner[0])}
 	for axis := range 3 {
 		if dvIsZero(box.edge[axis]) {
+			return orientedSourceBox{}, false
+		}
+	}
+	// The original planar faces retain their source identities after the read
+	// pose. Match them in the body's cardinal placed frame, before rotation.
+	placedEdge := [3]dyV3{}
+	for axis := range 3 {
+		placedEdge[axis] = exactContactTransform(pp.xform,
+			dyScaleVec(frame[axis], dySubScalar(values[axis][1], values[axis][0])))
+		placedEdge[axis] = dvSub(placedEdge[axis], dyVec(pp.xform.Translation()))
+	}
+	faces := body.Faces()
+	if len(faces) != 6 {
+		return orientedSourceBox{}, false
+	}
+	for _, face := range faces {
+		plane, ok := face.surface.(Plane)
+		if !ok || face.normalBound != 0 {
+			return orientedSourceBox{}, false
+		}
+		normal := plane.Frame.N()
+		if face.reversed {
+			normal = normal.Scale(-1)
+		}
+		mapped := false
+		for axis := range 3 {
+			projection := dvDot(dyVec(normal), placedEdge[axis]).sign()
+			if projection == 0 {
+				continue
+			}
+			side := 0
+			if projection > 0 {
+				side = 1
+			}
+			if mapped || box.faces[axis][side] != nil {
+				return orientedSourceBox{}, false
+			}
+			box.faces[axis][side], mapped = face, true
+		}
+		if !mapped {
+			return orientedSourceBox{}, false
+		}
+	}
+	for axis := range 3 {
+		if box.faces[axis][0] == nil || box.faces[axis][1] == nil {
 			return orientedSourceBox{}, false
 		}
 	}
@@ -133,6 +179,9 @@ func classifyOrientedSourceBoxes(report *ContactReport, a, b orientedSourceBox) 
 		report.Reason = ContactNoNormalProof
 		publishContainedHorizontalPatch(report, a, b)
 		if report.Manifold == nil {
+			publishOrientedBoxPatch(report, a, b)
+		}
+		if report.Manifold == nil && report.Reason != ContactPointTooCoarse {
 			publishOrientedAxisPatch(report, &a, &b)
 		}
 	case ContactOverlapping:

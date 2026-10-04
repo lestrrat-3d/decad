@@ -175,6 +175,7 @@ to the byte budget.
 | `contact_pair.go` | Pair gates and verdict. See `docs/contact-geometry-design.md`. |
 | `contact_box.go` | Box manifold. See `docs/contact-geometry-design.md` §4. |
 | `contact_oriented_box.go` | Rotated boxes. See `docs/contact-geometry-design.md` §4. |
+| `contact_oriented_patch.go` | Exact co-oriented oblique face patch, source faces, and bounded witnesses. See `docs/contact-geometry-design.md` §4. |
 | `contact_sphere.go` / `contact_sphere_sweep.go` | Sphere-box paths. See `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md`. |
 | `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See the contact designs. |
 | `contact_sweep_replay.go` | Replays an affine sweep's float poses against its cached exact source boxes. See `docs/contact-sweep-design.md` §6. |

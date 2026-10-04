@@ -15,17 +15,18 @@ those admission gates.
 Current code certifies relations and face manifolds for source boxes at
 signed-permutation poses. An oriented source-box path also certifies relations
 under arbitrary proper read poses by projecting the exact transformed corners
-on all face and edge-cross axes. It publishes a four-point manifold when one
-horizontal rotated box face lies strictly inside an axis-aligned box face.
-Two opposed axis-normal faces can also publish one bounded interior witness
-when one projected face center lies strictly inside the other face. A horizontal
-patch against a signed-axis box still requires the contained four-point proof.
-Other rotated contacts publish no manifold. A full source
-semicircle sphere against a source box also receives an exact rational relation
-proof and a point manifold at one isolated face support. At identity query
-poses, the analytic clearance kernel can certify a relation for other admitted
-solids without a contact manifold. Other curved and faceted witness and normal
-proofs remain design contracts.
+on all face and edge-cross axes. Two boxes whose three source edge directions
+match can publish a four-point manifold at one isolated oblique face touch.
+One horizontal rotated box face strictly inside an axis-aligned face also
+publishes a four-point manifold. Two opposed axis-normal faces can publish
+one bounded interior witness when one projected face center lies strictly
+inside the other face. A horizontal patch against a signed-axis box still
+requires the contained four-point proof. Other rotated contacts publish no
+manifold. A full source semicircle sphere against a source box also receives
+an exact rational relation proof and a point manifold at one isolated face
+support. At identity query poses, the analytic clearance kernel can certify
+a relation for other admitted solids without a contact manifold. Other curved
+and faceted witness and normal proofs remain design contracts.
 
 Two full source semicircle spheres receive the exact relation proof from their
 recorded centers and radii. A one-axis center offset with crossing sphere
@@ -256,7 +257,13 @@ separation proves `Touching`; strict projected overlap on every axis proves
 `Overlapping`. A separated report bounds the minimum distance from below by
 the largest normalized axis gap and from above by a certified vertex-to-face
 or vertex-to-vertex witness. If those bounds cannot publish a positive gap,
-the relation is `Undecided`. Other rotated face, edge, and vertex manifolds
+the relation is `Undecided`. For one opposed face equality, two boxes with
+parallel corresponding edges use the first box's rational dual basis to clip
+their complete face rectangles. Each clipped corner records its original
+face identities, a rational point with outward conversion bound, and a
+face normal with outward vector and angular bounds. A second equality axis,
+nonparallel source edges, or a request tighter than those bounds withholds
+the manifold. Other rotated face, edge, vertex, and shallow-overlap manifolds
 still need their own complete trimmed contact-set and source-feature proofs.
 
 The horizontal rotated-face path requires one source box at a signed-axis

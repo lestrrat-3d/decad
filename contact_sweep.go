@@ -15,8 +15,9 @@ import (
 var errSweepPoseBudget = errors.New("decad: sweep pose budget exhausted")
 
 // PairPath names one body's motion during a two-body sweep. Affine source-box
-// and source-sphere paths and rotating source-box rigid drifts can receive
-// continuous certificates; other valid paths report an undecided sweep.
+// and source-sphere paths, co-translating oblique source boxes, and rotating
+// source-box rigid drifts can receive continuous certificates; other valid
+// paths report an undecided sweep.
 type PairPath interface{ pairPath() }
 
 // PoseSegment joins two placements relative to the body's current placement.
@@ -105,16 +106,19 @@ type SweepDeparture struct {
 // SweepContactTrack owns the exact source geometry and affine motion of a
 // certified touching prefix. Its source face pointers are the original faces.
 type SweepContactTrack struct {
-	a, b        sourceBoxContactProof
-	deltaA      [3]dyadic
-	deltaB      [3]dyadic
-	sphere      *sourceSphereContactProof
-	sphereFirst bool
-	start, end  *big.Rat
-	duration    *big.Rat
-	request     ContactRequest
-	features    [2]ContactFeature
-	normal      VecMeasurement
+	a, b          sourceBoxContactProof
+	deltaA        [3]dyadic
+	deltaB        [3]dyadic
+	sphere        *sourceSphereContactProof
+	sphereFirst   bool
+	start, end    *big.Rat
+	duration      *big.Rat
+	request       ContactRequest
+	features      [2]ContactFeature
+	normal        VecMeasurement
+	orientedA     *orientedSourceBox
+	orientedB     *orientedSourceBox
+	orientedDelta [3]dyadic
 }
 
 func (t *SweepContactTrack) Start() SweepInstant { return sweepInstant(t.start, t.duration) }
@@ -139,6 +143,22 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 	}
 	if f.Cmp(t.start) < 0 || f.Cmp(t.end) > 0 {
 		return nil, fmt.Errorf("%w: fraction is outside contact track", ErrDegenerate)
+	}
+	if t.orientedA != nil && t.orientedB != nil {
+		a, okA := translatedOrientedBox(*t.orientedA, t.orientedDelta, f)
+		b, okB := translatedOrientedBox(*t.orientedB, t.orientedDelta, f)
+		if !okA || !okB {
+			return nil, fmt.Errorf("%w: oriented contact-track fraction cannot be represented", ErrUnsupported)
+		}
+		report := &ContactReport{Request: t.request}
+		report.Relation, _, _ = orientedBoxRelation(a, b)
+		if report.Relation == ContactTouching {
+			publishOrientedBoxPatch(report, a, b)
+		}
+		if report.Relation != ContactTouching || report.Manifold == nil {
+			return nil, fmt.Errorf("%w: oriented contact track lost its face patch", ErrUnsupported)
+		}
+		return report.Manifold, nil
 	}
 	if t.sphere != nil {
 		sphereDelta, boxDelta := t.deltaB, t.deltaA
@@ -370,10 +390,10 @@ func exactnessFromBound(bound float64) Exactness {
 }
 
 // SweepPair certifies the first encounter of two live solids under one shared
-// duration. Continuous proofs cover affine source-box paths, a source sphere
-// in a box face corridor, an axial pair of source spheres, rotating source-box
-// rigid drifts, and admitted rotating PoseSegments. Unsupported paths return
-// SweepUndecided.
+// duration. Continuous proofs cover affine source-box paths, co-translating
+// oblique source boxes, a source sphere in a box face corridor, an axial pair
+// of source spheres, rotating source-box rigid drifts, and admitted rotating
+// PoseSegments. Unsupported paths return SweepUndecided.
 // Both body pointers, both paths, and ctx must be non-nil.
 func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairPath,
 	req SweepRequest) (*SweepReport, error) {
@@ -448,6 +468,11 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			if sphere, ok := sourceSphereAtPose(a, pa.from); ok {
 				return (&sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 					req: req, report: report, sphere: sphere, box: boxB, sphereFirst: true}).execute(ctx, resolution)
+			}
+		}
+		if _, orientedA := sourceOrientedBoxAtPose(a, pa.from); orientedA {
+			if _, orientedB := sourceOrientedBoxAtPose(b, pb.from); orientedB {
+				return d.sweepRotatingPair(ctx, a, b, pa, pb, req, resolution, report)
 			}
 		}
 		report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported

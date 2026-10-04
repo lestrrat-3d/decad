@@ -484,6 +484,28 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}
+		if r.req.StartPolicy == ContinueCertifiedTouch && r.coMovingOrientedTouch(first) {
+			last, sampleErr := r.sample(ctx, one)
+			if errors.Is(sampleErr, errSweepPoseBudget) {
+				return r.undecided(zero, one, SweepPoseBudget), nil
+			}
+			if sampleErr != nil {
+				return nil, sampleErr
+			}
+			if last.Ideal.Relation != ContactTouching || last.Ideal.Manifold == nil {
+				return r.undecided(zero, one, SweepContactTrackUnproved), nil
+			}
+			r.report.ContactTrack = &SweepContactTrack{orientedA: &r.a.startBox,
+				orientedB: &r.b.startBox, orientedDelta: r.a.path.delta,
+				start: zero, end: one,
+				duration: r.a.path.duration, request: r.req.ContactRequest,
+				features: [2]ContactFeature{first.Ideal.Manifold.Points[0].FeatureA,
+					first.Ideal.Manifold.Points[0].FeatureB},
+				normal: first.Ideal.Manifold.Points[0].Normal}
+			r.report.Outcome = SweepPersistentTouch
+			r.sortSamples()
+			return r.report, nil
+		}
 		if departure, ok := r.rotationalDepartureFraction(first); ok {
 			left, sampleErr := r.sample(ctx, departure)
 			if errors.Is(sampleErr, errSweepPoseBudget) {
@@ -538,6 +560,31 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 	}
 	r.sortSamples()
 	return r.report, nil
+}
+
+func (r *rotationalPairSweep) coMovingOrientedTouch(first *SweepSample) bool {
+	if r.a.path.drift != nil || r.b.path.drift != nil || first.Ideal.Manifold == nil {
+		return false
+	}
+	for axis := range 3 {
+		if dyCmp(r.a.path.delta[axis], r.b.path.delta[axis]) != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func translatedOrientedBox(box orientedSourceBox, delta [3]dyadic, fraction *big.Rat) (orientedSourceBox, bool) {
+	for axis := range 3 {
+		step, ok := dyOfRat(new(big.Rat).Mul(delta[axis].rat(), fraction))
+		if !ok {
+			return orientedSourceBox{}, false
+		}
+		for corner := range box.corner {
+			box.corner[corner][axis] = dyAdd(box.corner[corner][axis], step)
+		}
+	}
+	return box, true
 }
 
 // A common rotation carries an initial opposed source-box support plane to

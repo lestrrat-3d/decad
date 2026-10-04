@@ -12,7 +12,9 @@ can also certify a clear path or bracket an impact after exact oriented-box
 pose relations, a bounded float-to-ideal pose difference, and whole-body
 travel bounds. An initial source-box face touch also certifies immediate
 departure when both bodies have the same angular velocity and the bounded
-normal separation rate is positive. A box spinning about world Z can also
+normal separation rate is positive. Fixed oblique poses of co-oriented source
+boxes also certify initial face touch and a persistent face patch when both
+affine paths have the same translation. A box spinning about world Z can also
 reach a contained horizontal face on a stationary box, then depart under
 positive vertical velocity. A rotating `PoseSegment` whose read screw axis is
 cardinal can certify a clear path or first impact. An axis-normal source face
