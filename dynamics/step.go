@@ -433,6 +433,22 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	if !finite(impactTime) || impactTime < 0 || impactTime > dt.Base() {
 		return undecided(w, "impact time is outside the step"), nil
 	}
+	eventAt := units.Seconds(impactTime)
+	fraction, duration := exactBase(first.Bracket.To.Fraction), exactBase(dt)
+	if fraction == nil || duration == nil || fraction.Sign() <= 0 ||
+		fraction.Cmp(big.NewRat(1, 1)) > 0 {
+		return undecided(w, "impact fraction is outside the step"), nil
+	}
+	if fraction.Cmp(big.NewRat(1, 1)) == 0 {
+		// The public fraction can round to one before the proved right endpoint.
+		// Confirm that the original sweep covers the exact step end first.
+		if !sweepCoversExactEnd(first, dt) {
+			return undecided(w, "impact bracket does not reach the exact step end"), nil
+		}
+		eventAt = dt
+	} else if exactBase(eventAt).Cmp(duration) >= 0 {
+		return undecided(w, "impact time exceeds the exact step duration"), nil
+	}
 	pre, err := driftState(kicked, impactTime)
 	if err != nil {
 		return undecidedArithmetic(w, "non-finite impact pose", err)
@@ -628,7 +644,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		Kind:            ContactImpact,
 		Pair:            BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
 		Bracket:         *first.Bracket,
-		Time:            units.Seconds(impactTime),
+		Time:            eventAt,
 		Manifold:        cloneManifold(*first.Event.Manifold),
 		NormalImpulse:   impulseValue,
 		TangentImpulse:  zeroImpulseVec(),
@@ -643,7 +659,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		PositionChangeB: changeB,
 	}}
 	report.Trace = Trace{start: from, pre: pre, post: post, end: end, duration: dt,
-		eventAt: units.Seconds(impactTime), hasEvent: true,
+		eventAt: eventAt, hasEvent: true,
 		preSweep: roundedPrefix, postSweep: roundedContinuation}
 	return report, nil
 }
@@ -696,6 +712,11 @@ func (w *World) stepRotatingClear(ctx context.Context, from, kicked State,
 	}
 	return &StepReport{Status: Advanced, Next: &end,
 		Trace: Trace{start: from, end: end, duration: dt, rotationalRemainder: sweep}}, nil
+}
+
+func sweepCoversExactEnd(sweep *decad.SweepReport, dt units.Value) bool {
+	_, _, err := sweep.CertifiedPosesAt(dt)
+	return err == nil
 }
 
 // The original ideal right sample and the published rounded pose may straddle

@@ -240,6 +240,10 @@ func (w *World) stepContactTransition(ctx context.Context, from, kicked State, d
 	if !finite(chosen, remaining) || chosen <= 0 || remaining <= 0 {
 		return undecided(w, "transition time leaves no representable clear remainder"), nil
 	}
+	eventAt := units.Seconds(chosen)
+	if exactBase(eventAt).Cmp(exactBase(dt)) >= 0 {
+		return undecided(w, "transition time exceeds the exact step duration"), nil
+	}
 	if w.step.MaxEvents <= 1 {
 		return undecided(w, "transition reaches the event limit with time remaining"), nil
 	}
@@ -354,7 +358,7 @@ func (w *World) stepContactTransition(ctx context.Context, from, kicked State, d
 		Kind:           ContactTransition,
 		Pair:           BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
 		Bracket:        *first.Bracket,
-		Time:           units.Seconds(chosen),
+		Time:           eventAt,
 		NormalImpulse:  units.KilogramMillimetersPerSecond(0),
 		TangentImpulse: zeroImpulseVec(),
 		PreVelocity:    kicked.entries[reportBody].LinearVelocity,
@@ -365,7 +369,7 @@ func (w *World) stepContactTransition(ctx context.Context, from, kicked State, d
 		PostVelocityB:  kicked.entries[1].LinearVelocity,
 	}}
 	report.Trace = Trace{start: from, pre: right, post: right, end: end, duration: dt,
-		eventAt: units.Seconds(chosen), hasEvent: true,
+		eventAt: eventAt, hasEvent: true,
 		preSweep: prefix, postSweep: roundedClear}
 	return report, nil
 }

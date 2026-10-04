@@ -606,6 +606,8 @@ claim that an independently interpolated `PoseSegment` is clear.
 `Trace.Sample` evaluates clear, departed, persistent-contact, and transition
 slices against each stored rounded sweep's cached source-box certificate.
 It compares the exact held time values when selecting an event or endpoint.
+An event at a proved final sweep fraction retains the input `dt` value;
+interior event times must lie strictly inside the exact held duration.
 For each slice it maps the exact time between its recorded global endpoints
 onto the certified rounded path fraction, so subtraction rounding leaves no
 unsampled gap before the step endpoint.

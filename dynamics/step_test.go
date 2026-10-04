@@ -245,6 +245,35 @@ func TestTraceSampleEarlyImpactNearEnd(t *testing.T) {
 	require.Equal(t, decad.ContactSeparated, contact.Relation)
 }
 
+func TestTraceSampleMillisecondEndpointImpact(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	w := fixedBoxContactWorld(t, doc, floor, box, .5)
+	gap := math.Nextafter(10, 0)
+	pose, err := r3.Translation(r3.Vec{Z: gap})
+	require.NoError(t, err)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: pose, LinearVelocity: dynamics.QuantityVec{
+			X: units.MillimetersPerSecond(0), Y: units.MillimetersPerSecond(0),
+			Z: units.MillimetersPerSecond(-100)}, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	duration := units.Milliseconds(100)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.Equal(t, units.Scalar(1), report.Events[0].Bracket.To.Fraction)
+	require.Equal(t, duration, report.Events[0].Time)
+	post, err := report.Trace.Sample(report.Events[0].Time)
+	require.NoError(t, err)
+	postBox, ok := post.Body(box)
+	require.True(t, ok)
+	require.Equal(t, units.MillimetersPerSecond(50), postBox.LinearVelocity.Z)
+}
+
 func TestObliqueBoxReboundUsesProductionGeometry(t *testing.T) {
 	doc := decad.New()
 	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
