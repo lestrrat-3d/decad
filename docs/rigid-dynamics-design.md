@@ -3,12 +3,16 @@
 This document owns the `dynamics` subpackage's world, state, step, response,
 and trace contracts. `docs/collision-dynamics-design.md` owns the package
 boundary; `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md` own
-geometry results. Current code steps one frictionless translating pair with
-at least one density-derived dynamic body. Centered impacts of two dynamic
-bodies apply equal and opposite impulses; off-center impulses that require
-spin return `Undecided`. Loads, kinematic drivers, friction, resting contact,
-contact-transition stepping, and arbitrary trace sampling remain design
-contracts.
+geometry results. Current code steps one frictionless, single-axis translating
+pair with at least one density-derived dynamic body. Centered impacts of two
+dynamic bodies apply equal and opposite impulses. An initial face touch between
+a fixed floor and dynamic source box can receive one full-step gravity kick
+and a zero-restitution support impulse. A zero-restitution impact can continue
+as certified persistent contact, and a stationary touching pair can advance
+without an impulse. These paths require full-span ideal and rounded contact
+tracks. Off-center impulses that require spin return `Undecided`. Loads,
+kinematic drivers, friction, stacks, contact-transition stepping, and
+arbitrary trace sampling remain design contracts.
 
 Navigation only; the named sections own the rules:
 
@@ -394,7 +398,23 @@ Initial/final kinetic energies are `5000` and `1250 kg·mm²/s²`. The document
 body set and placements are unchanged. A hand-written manifold does not
 exercise this boundary.
 
-For the source-box persistent-contact increment, put the same `1 kg` box
+The implemented resting-contact fixture starts a `1 kg` source box at rest on
+a fixed floor and applies gravity `−1000 mm/s²` for `0.1 s`. The full-step
+kick gives `v_z=−100 mm/s` before the zero-time contact event. The support
+impulse is `100 kg·mm/s`, and the box finishes with zero velocity and its
+bottom at `z=0 mm`. The second step repeats those results from the returned
+state. Both steps consume the real face manifold and require a full-span
+`SweepPersistentTouch` track for the ideal and rounded drift paths.
+
+The zero-restitution impact fixture drops the same box from `10 mm` above
+the floor at `100 mm/s` for `0.2 s`. It reaches contact at about `0.1 s`,
+receives `100 kg·mm/s`, and finishes at rest with its bottom at `z=0 mm`.
+The remaining drift passes ideal and rounded `SweepPersistentTouch` checks.
+The stationary-touch fixture starts with the box already on the floor, uses
+zero gravity for `0.1 s`, and returns the same pose and velocity with no
+contact event or impulse. It also checks both full-span contact tracks.
+
+For the sliding-friction increment, put the same `1 kg` box
 on a fixed floor wide enough for a `5 mm` slide. With gravity
 `−1000 mm/s²`, initial horizontal speed `100 mm/s`, friction `0.5`, and
 `dt=0.1 s`, the full-step kick gives `v_z=−100 mm/s`. The support impulse
