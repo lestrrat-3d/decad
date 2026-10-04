@@ -655,7 +655,8 @@ have a separate rounded sweep ending at the published pre-event pose, so
 samples on both sides of an impact consume their own certificates.
 An event-free clear rotating source-box drift also replays its interior poses.
 The sweep retains its exact held source corners and path inputs. Each requested
-rounded pose must lie within `PointResolution` of the ideal path, and the
+rounded pose must lie within `PointResolution` of the ideal path under the
+same staged source-corner transform used by contact geometry. The
 rounded pair's exact separating-axis gap must exceed that pose error. Rotating
 departure and impact slices still return `ErrUnsupported` at interior times.
 

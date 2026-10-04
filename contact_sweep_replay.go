@@ -138,19 +138,11 @@ func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 		if err != nil {
 			return r3.Transform{}, r3.Transform{}, err
 		}
-		composed, err := path.placement.Then(pose[i])
-		if err != nil {
-			return r3.Transform{}, r3.Transform{}, err
-		}
-		deviation[i], _ = poseDeviation(composed, path.placement, path.idealAt(f), path.record)
-		if !finiteMeasurementValues(deviation[i]) {
+		var ok bool
+		box[i], deviation[i], ok = path.roundedAt(pose[i], f)
+		if !ok {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rotating replay pose has no finite error bound", ErrUnsupported)
 		}
-		for corner := range path.sourceBox.corner {
-			box[i].corner[corner] = exactContactTransform(pose[i], path.sourceBox.corner[corner])
-		}
-		box[i].edge = [3]dyV3{dvSub(box[i].corner[1], box[i].corner[0]),
-			dvSub(box[i].corner[2], box[i].corner[0]), dvSub(box[i].corner[4], box[i].corner[0])}
 	}
 	resolution, ok := exactBaseValue(r.replay.request.PointResolution)
 	if !ok || new(big.Rat).Add(floatRat(deviation[0]), floatRat(deviation[1])).Cmp(resolution) > 0 {

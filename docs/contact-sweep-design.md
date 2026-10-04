@@ -143,6 +143,11 @@ times record-coordinate radius plus translation-difference form, with rational
 intervals for every operation. Both bodies contribute: the ideal pair gap
 interval is the float-pair gap interval widened by `η_A + η_B`. If either
 radius or deviation is unbounded, the pose cannot prove a gap or contact.
+For a rotating source box, compare all eight exact staged source corners under
+the read query pose with their ideal-path intervals. The largest outward-rounded
+corner distance bounds every point of the box. This uses the same staged
+placement and pose operations as `ContactPair`; a float-composed transform can
+round away an error that remains in those source corners.
 The stated screw `To` gets the motion-check §5.1 endpoint allowance against
 both the ideal end and exact `To`; a drift has no separate `To` promise.
 
@@ -501,7 +506,7 @@ when the rounded sweep duration differs from their exact difference.
 For a clear rotating source-box drift, the report retains the sweep's exact
 source corners and ideal-path bounds. Replay checks the rounded oriented boxes
 with the exact separating-axis test. Their positive gap must exceed the total
-bounded difference from the ideal poses, and that difference must fit
+bounded corner difference from the ideal poses, and that difference must fit
 `PointResolution`. Rotating impact and departure reports have no interior
 replay proof.
 

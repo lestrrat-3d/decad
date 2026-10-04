@@ -387,6 +387,34 @@ func TestSweepPairRotatingPathClear(t *testing.T) {
 	_, _, err = tightReport.CertifiedPosesAtInterval(units.Seconds(.037),
 		units.Seconds(0), units.Seconds(.1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
+	// The placed source corners are transformed in stages. Composing their
+	// placement with the query pose in float can hide part of their error.
+	placement, err := r3.Translation(r3.Vec{X: 1e9})
+	require.NoError(t, err)
+	placed, err := a.PlacedCopy(t.Context(), placement)
+	require.NoError(t, err)
+	motion := sweepDrift(r3.Vec{}, .1)
+	motion.Center = r3.Vec{X: 1e9 + 5, Y: 5, Z: 5}
+	motion.AngularVelocity.Z = units.RadiansPerSecond(1)
+	placedRequest := sweepRequest()
+	placedRequest.PointResolution = units.Millimeters(4e-8)
+	placedSweep, err := doc.SweepPair(t.Context(), placed, b, motion,
+		sweepDrift(r3.Vec{}, .1), placedRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepClear, placedSweep.Outcome)
+	_, _, err = placedSweep.CertifiedPosesAt(units.Seconds(.037))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	placedRequest.PointResolution = units.Millimeters(1e-6)
+	placedSweep, err = doc.SweepPair(t.Context(), placed, b, motion,
+		sweepDrift(r3.Vec{}, .1), placedRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepClear, placedSweep.Outcome)
+	placedPose, fixedPose, err := placedSweep.CertifiedPosesAt(units.Seconds(.037))
+	require.NoError(t, err)
+	placedContact, err := doc.ContactPair(t.Context(), placed, b, placedPose, fixedPose,
+		placedRequest.ContactRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, placedContact.Relation)
 }
 
 func TestSweepPairSourceBoxPersistentSlide(t *testing.T) {
