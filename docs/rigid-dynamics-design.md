@@ -32,9 +32,10 @@ rebound as a centered dynamic pair when the impact has a cardinal manifold.
 Their approach may
 include transverse motion when the sweep certifies first impact.
 An isolated frictionless off-axis sphere-pair impact also admits a bounded
-center-line normal when each supplied mass center matches its source sphere
-center and the impact has no spin. The impulse changes both velocity vectors
-along that normal. A small separated position correction within the certified
+center-line normal when each mass center exactly matches its source sphere
+center, both mass and center readings have zero bounds, and the impact has no
+spin. The impulse changes both velocity vectors along that normal. A small
+separated position correction within the certified
 bracket and contact slop is allowed when a full clear remainder sweep proves
 the pair cannot meet again. Unresolved tangency or a noncentral mass stops the
 step.
