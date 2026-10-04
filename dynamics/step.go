@@ -118,28 +118,37 @@ type Trace struct {
 // Sample evaluates a recorded rounded path and its cached source-box proof.
 // It performs no Document geometry query or response solve.
 func (tr Trace) Sample(t units.Value) (State, error) {
-	if t.Kind() != units.Time || !finite(t.Base()) || t.Base() < 0 || t.Base() > tr.duration.Base() {
+	timeValue, durationValue := exactBase(t), exactBase(tr.duration)
+	if t.Kind() != units.Time || !finite(t.Base()) || timeValue == nil || durationValue == nil ||
+		timeValue.Sign() < 0 || timeValue.Cmp(durationValue) > 0 {
 		return State{}, fmt.Errorf("%w: trace time outside step", ErrInvalidInput)
 	}
-	if tr.hasEvent && t.Base() == tr.eventAt.Base() {
+	var eventValue *big.Rat
+	if tr.hasEvent {
+		eventValue = exactBase(tr.eventAt)
+		if eventValue == nil {
+			return State{}, fmt.Errorf("%w: trace event time is invalid", ErrUnsupported)
+		}
+	}
+	if tr.hasEvent && timeValue.Cmp(eventValue) == 0 {
 		return tr.post, nil
 	}
-	if t.Base() == 0 {
+	if timeValue.Sign() == 0 {
 		return tr.start, nil
 	}
-	if t.Base() == tr.duration.Base() {
+	if timeValue.Cmp(durationValue) == 0 {
 		return tr.end, nil
 	}
 	state := tr.end
 	sweep := tr.preSweep
-	elapsed := t
+	origin := units.Seconds(0)
 	if tr.hasEvent {
-		if t.Base() < tr.eventAt.Base() {
+		if timeValue.Cmp(eventValue) < 0 {
 			state = tr.pre
 		} else {
 			state = tr.post
 			sweep = tr.postSweep
-			elapsed = units.Seconds(t.Base() - tr.eventAt.Base())
+			origin = tr.eventAt
 		}
 	}
 	if tr.excluded {
@@ -148,7 +157,7 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 			return State{}, fmt.Errorf("%w: excluded trace has an event", ErrUnsupported)
 		}
 		from, to = tr.start, tr.end
-		fraction := t.Base() / tr.duration.Base()
+		fraction, _ := new(big.Rat).Quo(timeValue, durationValue).Float64()
 		for i := range state.entries {
 			start, end := from.entries[i].Pose.Translation(), to.entries[i].Pose.Translation()
 			delta := end.Sub(start).Scale(fraction)
@@ -163,7 +172,7 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 	if sweep == nil {
 		return State{}, fmt.Errorf("%w: interior trace sample has no rounded path certificate", ErrUnsupported)
 	}
-	a, b, err := sweep.CertifiedPosesAt(elapsed)
+	a, b, err := sweep.CertifiedPosesAtSince(t, origin)
 	if err != nil {
 		return State{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
 	}

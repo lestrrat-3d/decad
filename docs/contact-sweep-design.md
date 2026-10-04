@@ -435,6 +435,7 @@ type SweepReport struct {
 }
 
 func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Transform, error)
+func (r *SweepReport) CertifiedPosesAtSince(time, origin units.Value) (r3.Transform, r3.Transform, error)
 ```
 
 `CertifiedPosesAt` evaluates the same affine float path used by the sweep at
@@ -444,7 +445,9 @@ exact source boxes and refuses when their total displacement exceeds
 contact and event brackets, it accepts only a rounded relation within that
 resolution of the exact source-box relation. It does not call `ContactPair` or
 read the document. It refuses times outside the sweep or outside a certified
-event prefix.
+event prefix. `CertifiedPosesAtSince` subtracts the exact held time values
+before computing a path fraction; callers can replay a slice after an event
+without rounding the elapsed time first.
 
 `Fraction` and the input `Duration` define the exact search time; `Elapsed`
 is a bounded convenience reading for callers. Bracket width is checked from

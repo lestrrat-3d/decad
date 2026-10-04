@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"math"
 	"math/big"
 	"testing"
 
@@ -88,6 +89,26 @@ func TestSweepPairTranslatedBoxesImpact(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, decad.SweepClear, clearReport.Outcome)
 		_, _, err = clearReport.CertifiedPosesAt(units.Seconds(.5))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+	})
+
+	t.Run("deep grid bracket", func(t *testing.T) {
+		deep := decad.New()
+		moving := boxBody(t, deep, 0, 0, 10, 10, 10)
+		stationary := boxBody(t, deep, 20, 0, 30, 10, 10)
+		request := sweepRequest()
+		request.TimeResolution = units.Seconds(math.Ldexp(1, -55))
+		report, err := deep.SweepPair(t.Context(), moving, stationary,
+			sweepDrift(r3.Vec{X: 30}, 1), sweepDrift(r3.Vec{}, 1), request)
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepImpactBracket, report.Outcome)
+		require.NotNil(t, report.Bracket)
+		grid := new(big.Int).Lsh(big.NewInt(1), 56)
+		floor := new(big.Int).Quo(grid, big.NewInt(3))
+		trueRight := new(big.Rat).SetFrac(new(big.Int).Add(floor, big.NewInt(2)), grid)
+		published := new(big.Rat).SetFloat64(report.Bracket.To.Fraction.Base())
+		require.Positive(t, published.Cmp(trueRight))
+		_, _, err = report.CertifiedPosesAt(report.Bracket.To.Elapsed.Value)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 }

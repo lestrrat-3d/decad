@@ -22,10 +22,11 @@ type sweepReplayProof struct {
 
 func (p *sweepReplayProof) snapshot(r *SweepReport) {
 	p.outcome = r.Outcome
-	if r.Bracket != nil {
-		p.bracketLo = exactReplayFraction(r.Bracket.From.Fraction)
-		p.bracketHi = exactReplayFraction(r.Bracket.To.Fraction)
-	}
+}
+
+func (p *sweepReplayProof) setBracket(left, right *big.Rat) {
+	p.bracketLo = new(big.Rat).Set(left)
+	p.bracketHi = new(big.Rat).Set(right)
 }
 
 // CertifiedPosesAt evaluates the recorded affine paths at elapsed time and
@@ -33,12 +34,24 @@ func (p *sweepReplayProof) snapshot(r *SweepReport) {
 // It reads no Document geometry and performs no new contact query. A pose whose
 // rounding can change the reported relation beyond PointResolution is refused.
 func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Transform, error) {
-	if r == nil || r.replay == nil || elapsed.Kind() != units.Time ||
-		!finiteMeasurementValues(elapsed.Base()) {
+	return r.CertifiedPosesAtSince(elapsed, units.Seconds(0))
+}
+
+// CertifiedPosesAtSince evaluates at the exact held difference between time
+// and origin. It avoids rounding their difference before selecting a sweep
+// fraction, including when the values use different Time units.
+func (r *SweepReport) CertifiedPosesAtSince(time, origin units.Value) (r3.Transform, r3.Transform, error) {
+	if r == nil || r.replay == nil || time.Kind() != units.Time || origin.Kind() != units.Time ||
+		!finiteMeasurementValues(time.Base(), origin.Base()) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sweep has no affine replay proof", ErrUnsupported)
 	}
-	t, ok := exactBaseValue(elapsed)
-	if !ok || t.Sign() < 0 || t.Cmp(r.replay.pa.duration) > 0 {
+	timeValue, timeOK := exactBaseValue(time)
+	originValue, originOK := exactBaseValue(origin)
+	if !timeOK || !originOK {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is not finite", ErrDegenerate)
+	}
+	t := new(big.Rat).Sub(timeValue, originValue)
+	if t.Sign() < 0 || t.Cmp(r.replay.pa.duration) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is outside the sweep", ErrDegenerate)
 	}
 	f := new(big.Rat).Quo(t, r.replay.pa.duration)
@@ -101,11 +114,6 @@ func (r *SweepReport) replayFractionCovered(f *big.Rat) bool {
 	default:
 		return false
 	}
-}
-
-func exactReplayFraction(v units.Value) *big.Rat {
-	f, _ := exactBaseValue(v)
-	return f
 }
 
 func (r *SweepReport) replayRelationCovered(f *big.Rat, relation ContactRelation,

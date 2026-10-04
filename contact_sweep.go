@@ -804,6 +804,7 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 							(right.Ideal.Relation == ContactTouching || right.Ideal.Relation == ContactSeparated) {
 							r.report.Outcome, r.report.ContactTrack = SweepContactTransitionBracket, track
 							r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
+							r.report.replay.setBracket(leftF, rightF)
 							r.report.Event = &right.Ideal
 							r.sortSamples()
 							return r.report, nil
@@ -905,6 +906,7 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 	}
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
+	r.report.replay.setBracket(leftF, rightF)
 	r.sortSamples()
 	return r.report, nil
 }

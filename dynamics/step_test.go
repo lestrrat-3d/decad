@@ -99,7 +99,7 @@ func TestVerticalBoxReboundUsesProductionGeometry(t *testing.T) {
 		Step: dynamics.StepConfig{
 			Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
 				NormalResolution: units.Radians(1e-6)},
-			TimeResolution: units.Seconds(1e-9), ContactSlop: units.Millimeters(1e-6),
+			TimeResolution: units.Seconds(2e-9), ContactSlop: units.Millimeters(1e-6),
 			VelocityResidual: units.MillimetersPerSecond(1e-6), ImpulseResidual: impulseLimit,
 			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
@@ -166,6 +166,17 @@ func TestVerticalBoxReboundUsesProductionGeometry(t *testing.T) {
 	preContact, err := doc.ContactPair(t.Context(), floor, box, r3.Identity(), preBox.Pose, config.Step.Contact)
 	require.NoError(t, err)
 	require.Equal(t, decad.ContactSeparated, preContact.Relation)
+	unitShifted := units.Milliseconds(event.Time.Base() * 1000)
+	require.Equal(t, event.Time.Base(), unitShifted.Base())
+	unitSample, err := report.Trace.Sample(unitShifted)
+	require.NoError(t, err)
+	unitBox, ok := unitSample.Body(box)
+	require.True(t, ok)
+	require.Equal(t, units.MillimetersPerSecond(-100), unitBox.LinearVelocity.Z)
+	beyondEnd := units.Minutes(.2 / 60)
+	require.Equal(t, units.Seconds(.2).Base(), beyondEnd.Base())
+	_, err = report.Trace.Sample(beyondEnd)
+	require.ErrorIs(t, err, dynamics.ErrInvalidInput)
 	require.Equal(t, []*decad.Body{floor, box}, doc.Bodies())
 	afterFloor, err := floor.Bounds()
 	require.NoError(t, err)
