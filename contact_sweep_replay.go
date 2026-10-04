@@ -18,6 +18,7 @@ type sweepReplayProof struct {
 	sphereFirst            bool
 	sphereAxis, sphereSide int
 	sphereGap, sphereSlope dyadic
+	rotation               *[2]rotationalSweepPath
 	request                ContactRequest
 	outcome                SweepOutcome
 	bracketLo              *big.Rat
@@ -35,22 +36,28 @@ func (p *sweepReplayProof) setBracket(left, right *big.Rat) {
 
 // HasAffineReplayProof reports whether this sweep can certify rounded poses
 // along its affine source-box or source-sphere path.
-func (r *SweepReport) HasAffineReplayProof() bool { return r != nil && r.replay != nil }
+func (r *SweepReport) HasAffineReplayProof() bool {
+	return r != nil && r.replay != nil && r.replay.rotation == nil
+}
 
-// CertifiedPosesAt evaluates the recorded affine paths at elapsed time and
-// checks their rounded placements against the sweep's exact source proof.
+// CertifiedPosesAt evaluates the recorded paths at elapsed time and checks
+// their rounded placements against the sweep's exact source proof.
 // It reads no Document geometry and performs no new contact query. A pose whose
 // rounding can change the reported relation beyond PointResolution is refused.
 func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Transform, error) {
 	if r == nil || r.replay == nil || elapsed.Kind() != units.Time ||
 		!finiteMeasurementValues(elapsed.Base()) {
-		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sweep has no affine replay proof", ErrUnsupported)
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sweep has no replay proof", ErrUnsupported)
 	}
 	t, ok := exactBaseValue(elapsed)
-	if !ok || t.Sign() < 0 || t.Cmp(r.replay.pa.duration) > 0 {
+	duration := r.replay.pa.duration
+	if r.replay.rotation != nil {
+		duration = r.replay.rotation[0].path.duration
+	}
+	if !ok || t.Sign() < 0 || t.Cmp(duration) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is outside the sweep", ErrDegenerate)
 	}
-	return r.certifiedPosesAtFraction(new(big.Rat).Quo(t, r.replay.pa.duration))
+	return r.certifiedPosesAtFraction(new(big.Rat).Quo(t, duration))
 }
 
 // CertifiedPosesAtInterval maps an exact held time from [start, end] onto the
@@ -59,7 +66,7 @@ func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Tr
 func (r *SweepReport) CertifiedPosesAtInterval(time, start, end units.Value) (r3.Transform, r3.Transform, error) {
 	if r == nil || r.replay == nil || time.Kind() != units.Time || start.Kind() != units.Time ||
 		end.Kind() != units.Time || !finiteMeasurementValues(time.Base(), start.Base(), end.Base()) {
-		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sweep has no affine replay proof", ErrUnsupported)
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sweep has no replay proof", ErrUnsupported)
 	}
 	timeValue, timeOK := exactBaseValue(time)
 	startValue, startOK := exactBaseValue(start)
@@ -78,6 +85,9 @@ func (r *SweepReport) CertifiedPosesAtInterval(time, start, end units.Value) (r3
 func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, error) {
 	if !r.replayFractionCovered(f) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is outside the certified sweep prefix", ErrUnsupported)
+	}
+	if r.replay.rotation != nil {
+		return r.certifiedRotationalPosesAtFraction(f)
 	}
 	poseA, err := r.replay.pa.poseAt(f)
 	if err != nil {
@@ -110,6 +120,55 @@ func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Tra
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose changes the certified relation", ErrUnsupported)
 	}
 	return poseA, poseB, nil
+}
+
+// A clear rotating sweep certifies the ideal source boxes over every fraction.
+// Replay only accepts the rounded poses when their exact held source corners
+// remain separated after charging the producer's pose error bound.
+func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
+	r3.Transform, r3.Transform, error) {
+	paths := r.replay.rotation
+	var pose [2]r3.Transform
+	var box [2]orientedSourceBox
+	var deviation [2]float64
+	for i := range paths {
+		path := paths[i]
+		var err error
+		pose[i], err = path.poseAt(f)
+		if err != nil {
+			return r3.Transform{}, r3.Transform{}, err
+		}
+		composed, err := path.placement.Then(pose[i])
+		if err != nil {
+			return r3.Transform{}, r3.Transform{}, err
+		}
+		deviation[i], _ = poseDeviation(composed, path.placement, path.idealAt(f), path.record)
+		if !finiteMeasurementValues(deviation[i]) {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rotating replay pose has no finite error bound", ErrUnsupported)
+		}
+		for corner := range path.sourceBox.corner {
+			box[i].corner[corner] = exactContactTransform(pose[i], path.sourceBox.corner[corner])
+		}
+		box[i].edge = [3]dyV3{dvSub(box[i].corner[1], box[i].corner[0]),
+			dvSub(box[i].corner[2], box[i].corner[0]), dvSub(box[i].corner[4], box[i].corner[0])}
+	}
+	resolution, ok := exactBaseValue(r.replay.request.PointResolution)
+	if !ok || new(big.Rat).Add(floatRat(deviation[0]), floatRat(deviation[1])).Cmp(resolution) > 0 {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating replay pose exceeds point resolution", ErrUnsupported)
+	}
+	relation, gap, normSquared := orientedBoxRelation(box[0], box[1])
+	if relation != ContactSeparated {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating replay pose is not separated", ErrUnsupported)
+	}
+	norm := ratSqrtUp(normSquared.rat())
+	if !finiteMeasurementValues(norm) || norm <= 0 {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rotating replay gap has no finite bound", ErrUnsupported)
+	}
+	lower := new(big.Rat).Quo(gap.rat(), floatRat(norm))
+	if lower.Cmp(new(big.Rat).Add(floatRat(deviation[0]), floatRat(deviation[1]))) <= 0 {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating replay gap does not exceed pose error", ErrUnsupported)
+	}
+	return pose[0], pose[1], nil
 }
 
 func translatedReplayBox(box sourceBoxContactProof, from, at r3.Transform) (sourceBoxContactProof, bool) {

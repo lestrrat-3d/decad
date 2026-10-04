@@ -367,6 +367,26 @@ func TestSweepPairRotatingPathClear(t *testing.T) {
 	require.Equal(t, decad.SweepClear, report.Outcome)
 	require.Equal(t, decad.SweepNoCause, report.Cause)
 	require.GreaterOrEqual(t, report.PoseEvaluations, uint64(2))
+	require.False(t, report.HasAffineReplayProof())
+	poseA, poseB, err := report.CertifiedPosesAtInterval(units.Seconds(.037),
+		units.Seconds(0), units.Seconds(.1))
+	require.NoError(t, err)
+	require.InDelta(t, math.Sin(.037), poseA.ApplyDir(r3.Vec{X: 1}).Y, 1e-12)
+	require.Equal(t, r3.Identity(), poseB)
+	contact, err := doc.ContactPair(t.Context(), a, b, poseA, poseB, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, contact.Relation)
+	_, _, err = report.CertifiedPosesAt(units.Seconds(.11))
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	tight := sweepRequest()
+	tight.PointResolution = units.Millimeters(1e-20)
+	tightReport, err := doc.SweepPair(t.Context(), a, b,
+		rotating, sweepDrift(r3.Vec{}, 0.1), tight)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepClear, tightReport.Outcome)
+	_, _, err = tightReport.CertifiedPosesAtInterval(units.Seconds(.037),
+		units.Seconds(0), units.Seconds(.1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
 func TestSweepPairSourceBoxPersistentSlide(t *testing.T) {

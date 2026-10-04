@@ -196,6 +196,10 @@ func TestSweepPairRotatingBoxFindsHiddenImpact(t *testing.T) {
 	report, err := doc.SweepPair(t.Context(), a, b, turn, sweepDrift(r3.Vec{}, 1), req)
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepImpactBracket, report.Outcome)
+	require.False(t, report.HasAffineReplayProof())
+	_, _, replayErr := report.CertifiedPosesAtInterval(units.Seconds(.2),
+		units.Seconds(0), units.Seconds(1))
+	require.ErrorIs(t, replayErr, decad.ErrUnsupported)
 	require.NotNil(t, report.Bracket)
 	require.False(t, report.BracketEndsAtDuration())
 	require.NotNil(t, report.Event)

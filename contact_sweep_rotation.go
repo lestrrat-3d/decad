@@ -17,6 +17,8 @@ type rotationalSweepPath struct {
 	record     float64
 	fullTravel *big.Rat
 	startBox   orientedSourceBox
+	sourceBox  orientedSourceBox
+	placement  r3.Transform
 	frame      motionFrame
 	fromRot    ivMat
 	fromT      ratVec
@@ -51,13 +53,17 @@ func prepareRotationalSweepPath(ctx context.Context, body *Body, path affinePair
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
+	sourceBox, ok := sourceOrientedBoxAtPose(body, r3.Identity())
+	if !ok {
+		return rotationalSweepPath{}, false
+	}
 	fromRot, fromT, ok := exactTransform(path.from)
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
 	prepared := rotationalSweepPath{body: body, path: path, fromRot: fromRot, fromT: fromT,
-		startBox: startBox,
-		record:   moverRecordRadius(ctx, body)}
+		startBox: startBox, sourceBox: sourceBox, placement: body.payload.transform(),
+		record: moverRecordRadius(ctx, body)}
 	if !finiteMeasurementValues(prepared.record) {
 		return rotationalSweepPath{}, false
 	}
@@ -275,7 +281,16 @@ func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
 	}
 	run := rotationalPairSweep{doc: d, a: aPath, b: bPath, req: req,
 		resolution: resolution, report: report}
-	return run.execute(ctx)
+	result, err := run.execute(ctx)
+	if err != nil || result == nil {
+		return result, err
+	}
+	if result.Outcome == SweepClear {
+		result.replay = &sweepReplayProof{rotation: &[2]rotationalSweepPath{aPath, bPath},
+			request: req.ContactRequest}
+		result.replay.snapshot(result)
+	}
+	return result, nil
 }
 
 func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSample, error) {
