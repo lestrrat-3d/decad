@@ -142,6 +142,117 @@ func TestVerticalBoxReboundUsesProductionGeometry(t *testing.T) {
 	require.Equal(t, originalBox, afterBox)
 }
 
+func TestObliqueBoxReboundUsesProductionGeometry(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
+	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	floorBounds, err := floor.Bounds()
+	require.NoError(t, err)
+	boxBounds, err := box.Bounds()
+	require.NoError(t, err)
+	density := units.KilogramsPerCubicMillimeter(0.001)
+	mass, err := box.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	require.InDelta(t, 1, mass.Mass.Value.Base(), 1e-12)
+	startPose, err := r3.Translation(r3.Vec{Z: 10})
+	require.NoError(t, err)
+	contactPose, err := r3.Translation(r3.Vec{X: 5})
+	require.NoError(t, err)
+	request := decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+		NormalResolution: units.Radians(1e-6)}
+	duration := units.Seconds(0.2)
+	velocity := dynamics.QuantityVec{X: units.MillimetersPerSecond(50),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(-100)}
+	sweep, err := doc.SweepPair(t.Context(), floor, box,
+		decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: duration},
+		decad.RigidDriftSegment{From: startPose, Center: startPose.Apply(mass.Center.Value),
+			LinearVelocity: velocity, AngularVelocity: zeroAngular(t), Duration: duration},
+		decad.SweepRequest{ContactRequest: request, TimeResolution: units.Seconds(1e-9),
+			MaxPoseEvaluations: 128})
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, sweep.Outcome)
+	contact, err := doc.ContactPair(t.Context(), floor, box, r3.Identity(), contactPose, request)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, contact.Relation)
+	require.NotNil(t, contact.Manifold)
+	w := fixedBoxContactWorld(t, doc, floor, box, 0.5)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: startPose, LinearVelocity: velocity, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, 0.1, report.Events[0].Time.Base(), 1e-9)
+	require.InDelta(t, 150, report.Events[0].NormalImpulse.Base(), 1e-4)
+	require.Equal(t, report.Events[0].PreVelocityB.X, report.Events[0].PostVelocityB.X)
+	final, ok := report.Next.Body(box)
+	require.True(t, ok)
+	require.InDelta(t, 50, final.LinearVelocity.X.Base(), 1e-6)
+	require.InDelta(t, 50, final.LinearVelocity.Z.Base(), 1e-6)
+	require.InDelta(t, 10, final.Pose.Translation().X, 2e-6)
+	require.InDelta(t, 5, final.Pose.Translation().Z, 2e-6)
+	require.Equal(t, []*decad.Body{floor, box}, doc.Bodies())
+	afterFloor, err := floor.Bounds()
+	require.NoError(t, err)
+	afterBox, err := box.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, floorBounds, afterFloor)
+	require.Equal(t, boxBounds, afterBox)
+}
+
+func TestTwoAxisBoxDriftStaysClear(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
+	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	w := fixedBoxContactWorld(t, doc, floor, box, 0.5)
+	pose, err := r3.Translation(r3.Vec{Z: 10})
+	require.NoError(t, err)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: pose, LinearVelocity: dynamics.QuantityVec{
+			X: units.MillimetersPerSecond(50), Y: units.MillimetersPerSecond(20),
+			Z: units.MillimetersPerSecond(0)}, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.2))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Empty(t, report.Events)
+	final, ok := report.Next.Body(box)
+	require.True(t, ok)
+	require.Equal(t, r3.Vec{X: 10, Y: 4, Z: 10}, final.Pose.Translation())
+	require.Equal(t, []*decad.Body{floor, box}, doc.Bodies())
+}
+
+func TestObliqueInitialTouchContinuesAsPersistentContact(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
+	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	w := fixedBoxContactWorld(t, doc, floor, box, 0.5)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: r3.Identity(), LinearVelocity: dynamics.QuantityVec{
+			X: units.MillimetersPerSecond(50), Y: units.MillimetersPerSecond(0),
+			Z: units.MillimetersPerSecond(-100)}, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.1))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, 100, report.Events[0].NormalImpulse.Base(), 1e-6)
+	final, ok := report.Next.Body(box)
+	require.True(t, ok)
+	require.InDelta(t, 50, final.LinearVelocity.X.Base(), 1e-6)
+	require.InDelta(t, 0, final.LinearVelocity.Z.Base(), 1e-6)
+	require.InDelta(t, 5, final.Pose.Translation().X, 1e-6)
+	require.InDelta(t, 0, final.Pose.Translation().Z, 1e-6)
+	require.Equal(t, []*decad.Body{floor, box}, doc.Bodies())
+}
+
 func TestSuppliedMassBoxReboundUsesProductionGeometry(t *testing.T) {
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)

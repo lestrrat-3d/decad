@@ -3,17 +3,19 @@
 This document owns the `dynamics` subpackage's world, state, step, response,
 and trace contracts. `docs/collision-dynamics-design.md` owns the package
 boundary; `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md` own
-geometry results. Current code steps one frictionless, single-axis translating
-pair with at least one dynamic body using density-derived or supplied mass.
-Centered impacts of two dynamic bodies apply equal and opposite impulses.
+geometry results. Current code steps one frictionless translating pair with at
+least one dynamic body using density-derived or supplied mass. An axis-aligned
+certified contact normal determines the response component; tangent velocity
+continues through an oblique impact. Centered impacts of two dynamic bodies
+apply equal and opposite impulses.
 At an initial face touch, a fixed floor and dynamic source box can receive a
 full-step kick from gravity and any center force, then a zero-restitution
-support impulse.
-A zero-restitution impact can continue
-as certified persistent contact, and a stationary touching pair can advance
-without an impulse. These paths require full-span ideal and rounded contact
+support impulse. A zero-restitution impact can continue as certified
+persistent contact, and a stationary touching pair can advance without an
+impulse. These paths require full-span ideal and rounded contact
 tracks. Each dynamic body accepts at most one center force with zero torque;
 the mass interval must fit the kicked velocity within `VelocityResidual`.
+An initially touching pair with only tangent motion still returns `Undecided`.
 Off-center impulses that require spin return `Undecided`. Torque loads,
 kinematic drivers, friction, stacks, contact-transition stepping, external
 impulse reporting, and arbitrary trace sampling remain design contracts.
@@ -420,6 +422,13 @@ The supplied-mass fixture passes that box's real `Body.MassProperties` result
 through `RigidBody.Supplied`, `NewWorld`, `SweepPair`, and `Step`. It has the same
 `150 kg·mm/s` impulse, `50 mm/s` outgoing speed, and `z=5 mm` final bottom.
 Changing the caller's record after world construction does not change the step.
+
+The oblique fixture uses a wide fixed floor and the same `1 kg` box, starting
+`10 mm` above the floor with velocity `(50, 0, −100) mm/s`. At `0.1 s`, the
+real sweep brackets face contact and the step applies `150 kg·mm/s` along the
+certified vertical normal. At `0.2 s`, the box has velocity `(50, 0, 50) mm/s`
+and translation `(10, 0, 5) mm`. The tangent speed stays `50 mm/s`; the ideal
+and rounded departure paths are both certified.
 
 The center-force fixture starts the same `1 kg` box `10 mm` above the floor at
 rest. A `−500 kg·mm/s²` center force over `0.2 s` gives a full-step kick of

@@ -221,20 +221,16 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	if !ok {
 		return undecided(w, "force kick exceeds the velocity residual"), nil
 	}
-	motionAxis := -1
+	moving := false
 	for _, entry := range kicked.entries {
 		components := [3]units.Value{entry.LinearVelocity.X, entry.LinearVelocity.Y, entry.LinearVelocity.Z}
-		for axis, component := range components {
-			if component.Base() == 0 {
-				continue
+		for _, component := range components {
+			if component.Mag() != 0 {
+				moving = true
 			}
-			if motionAxis >= 0 && motionAxis != axis {
-				return nil, fmt.Errorf("%w: this stage requires one translation axis", ErrUnsupported)
-			}
-			motionAxis = axis
 		}
 	}
-	if motionAxis < 0 {
+	if !moving {
 		return w.stepStill(ctx, from, kicked, dt)
 	}
 	for _, entry := range kicked.entries {
@@ -266,7 +262,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		report.Status, report.Next, report.Trace.end = Advanced, &end, end
 		return report, nil
 	case decad.SweepInitiallyTouching:
-		return w.stepInitialTouch(ctx, from, kicked, dt, first, motionAxis)
+		return w.stepInitialTouch(ctx, from, kicked, dt, first)
 	case decad.SweepImpactBracket:
 		// Continue below, consuming the geometry producer's event and manifold.
 	default:
@@ -289,8 +285,8 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		return undecided(w, "contact normal or point is outside the admitted resolution"), nil
 	}
 	axis, normalSign, valid := axisNormal(normal)
-	if !valid || axis != motionAxis {
-		return undecided(w, "impact normal differs from the translation axis"), nil
+	if !valid {
+		return undecided(w, "impact normal is not a supported axis"), nil
 	}
 	preSpeed := [2]units.Value{
 		velocityComponent(kicked.entries[0].LinearVelocity, axis),

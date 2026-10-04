@@ -4,7 +4,8 @@ This document is the system map and delivery order for collision-aware rigid
 motion. Current code certifies source-box contact, affine two-body sweeps,
 persistent face contact and its first edge transition, and mass properties for
 source boxes and admitted untapered prisms. It steps one frictionless pair with
-a fixed and dynamic body or two centered dynamic bodies. A fixed floor and
+a fixed and dynamic body or two centered dynamic bodies. A source box can hit
+a fixed floor obliquely while retaining tangential velocity. A fixed floor and
 dynamic source box can complete an initial resting contact after a full-step
 gravity kick or a zero-restitution impact. A stationary touching pair also
 advances without an impulse. Each touching path requires a certified
