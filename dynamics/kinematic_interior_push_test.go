@@ -91,6 +91,9 @@ func TestKinematicInteriorZeroRestitutionPushUsesProductionGeometry(t *testing.T
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
 	require.NotNil(t, report.Next)
+	require.NotNil(t, report.Conservation)
+	require.Equal(t, units.Torque, report.Conservation.KinematicWork.Value.Kind())
+	require.InDelta(t, 6400, report.Conservation.KinematicWork.Value.Base(), 1e-3)
 	require.Len(t, report.Events, 1)
 	event := report.Events[0]
 	require.Equal(t, dynamics.ContactImpact, event.Kind)
@@ -148,6 +151,8 @@ func TestKinematicInteriorZeroRestitutionPushSupportsReverseWorldOrder(t *testin
 			Path: decad.PoseSegment{From: r3.Identity(), To: endDriver, Duration: duration}}}}, duration)
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.NotNil(t, report.Conservation)
+	require.InDelta(t, 6400, report.Conservation.KinematicWork.Value.Base(), 1e-3)
 	require.Len(t, report.Events, 1)
 	require.InDelta(t, 80, report.Events[0].NormalImpulse.Base(), 1e-5)
 	require.Equal(t, units.MillimetersPerSecond(-80), report.Events[0].PreVelocityB.X)

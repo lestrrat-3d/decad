@@ -82,3 +82,111 @@ func TestEventConservationRejectsEnergyGainWithBalancedMomentum(t *testing.T) {
 	require.Equal(t, "contact event linear momentum exceeds impulse residual",
 		w.eventConservationFailure(event))
 }
+
+func TestKinematicEventConservationRejectsGainBeyondDriverWork(t *testing.T) {
+	doc := decad.New()
+	driver := conservationBox(t, doc, 0, 10)
+	box := conservationBox(t, doc, 20, 30)
+	density := units.KilogramsPerCubicMillimeter(.001)
+	material := Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}
+	w, err := NewWorld(t.Context(), doc, WorldConfig{
+		Bodies: []RigidBody{{Body: driver, Role: Kinematic, Material: material},
+			{Body: box, Role: Dynamic, Density: &density, Material: material}},
+		Step: StepConfig{Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+			NormalResolution: units.Radians(1e-6)}, TimeResolution: units.Seconds(1e-9),
+			ContactSlop:             units.Millimeters(1e-6),
+			VelocityResidual:        units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+			PenetrationResidual:     units.Millimeters(1e-6),
+			ImpactSpeed:             units.MillimetersPerSecond(0),
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2},
+	})
+	require.NoError(t, err)
+	zeroVelocity := QuantityVec{X: units.MillimetersPerSecond(0),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
+	zeroAngular := QuantityVec{X: units.RadiansPerSecond(0),
+		Y: units.RadiansPerSecond(0), Z: units.RadiansPerSecond(0)}
+	start, err := w.NewState([]BodyState{
+		{Body: driver, Pose: r3.Identity(), LinearVelocity: zeroVelocity, AngularVelocity: zeroAngular},
+		{Body: box, Pose: r3.Identity(), LinearVelocity: zeroVelocity, AngularVelocity: zeroAngular},
+	})
+	require.NoError(t, err)
+	endDriver, err := r3.Translation(r3.Vec{X: 20})
+	require.NoError(t, err)
+	duration := units.Seconds(.25)
+	zeroGravity := QuantityVec{X: units.MillimetersPerSecondSquared(0),
+		Y: units.MillimetersPerSecondSquared(0), Z: units.MillimetersPerSecondSquared(0)}
+	report, err := w.Step(t.Context(), start, StepInput{Gravity: zeroGravity,
+		Drivers: []KinematicDriver{{Body: driver,
+			Path: decad.PoseSegment{From: r3.Identity(), To: endDriver, Duration: duration}}}}, duration)
+	require.NoError(t, err)
+	require.Equal(t, Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	event := report.Events[0]
+	require.Empty(t, w.eventConservationFailure(event))
+	require.InDelta(t, 9600, report.Conservation.KinematicWork.Value.Base(), 1e-3)
+
+	// The changed event balances momentum but gives the box more energy than
+	// the driver's published speed and impulse can supply.
+	gaining := event
+	gaining.NormalImpulse = units.KilogramMillimetersPerSecond(250)
+	gaining.PostVelocityB.X = units.MillimetersPerSecond(250)
+	require.Equal(t, "contact event increases kinetic energy beyond work and numerical residual",
+		w.eventConservationFailure(gaining))
+
+	w.parts[1].mass.Mass.Bound = units.Kilograms(.01)
+	w.step.ImpulseResidual = units.KilogramMillimetersPerSecond(3)
+	require.Empty(t, w.eventConservationFailure(event))
+	require.Equal(t, "contact event increases kinetic energy beyond work and numerical residual",
+		w.eventConservationFailure(gaining))
+}
+
+func TestKinematicEventReportsNegativeDriverWork(t *testing.T) {
+	doc := decad.New()
+	box := conservationBox(t, doc, 0, 10)
+	driver := conservationBox(t, doc, 20, 30)
+	density := units.KilogramsPerCubicMillimeter(.001)
+	material := Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}
+	w, err := NewWorld(t.Context(), doc, WorldConfig{
+		Bodies: []RigidBody{{Body: box, Role: Dynamic, Density: &density, Material: material},
+			{Body: driver, Role: Kinematic, Material: material}},
+		Step: StepConfig{Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+			NormalResolution: units.Radians(1e-6)}, TimeResolution: units.Seconds(1e-9),
+			ContactSlop:             units.Millimeters(1e-6),
+			VelocityResidual:        units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+			PenetrationResidual:     units.Millimeters(1e-6),
+			ImpactSpeed:             units.MillimetersPerSecond(0),
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2},
+	})
+	require.NoError(t, err)
+	velocity := func(x float64) QuantityVec {
+		return QuantityVec{X: units.MillimetersPerSecond(x),
+			Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
+	}
+	angular := QuantityVec{X: units.RadiansPerSecond(0),
+		Y: units.RadiansPerSecond(0), Z: units.RadiansPerSecond(0)}
+	start, err := w.NewState([]BodyState{
+		{Body: box, Pose: r3.Identity(), LinearVelocity: velocity(160), AngularVelocity: angular},
+		{Body: driver, Pose: r3.Identity(), LinearVelocity: velocity(0), AngularVelocity: angular},
+	})
+	require.NoError(t, err)
+	endDriver, err := r3.Translation(r3.Vec{X: 20})
+	require.NoError(t, err)
+	duration := units.Seconds(.25)
+	gravity := QuantityVec{X: units.MillimetersPerSecondSquared(0),
+		Y: units.MillimetersPerSecondSquared(0), Z: units.MillimetersPerSecondSquared(0)}
+	report, err := w.Step(t.Context(), start, StepInput{Gravity: gravity,
+		Drivers: []KinematicDriver{{Body: driver,
+			Path: decad.PoseSegment{From: r3.Identity(), To: endDriver, Duration: duration}}}}, duration)
+	require.NoError(t, err)
+	require.Equal(t, Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.Empty(t, w.eventConservationFailure(report.Events[0]))
+	require.InDelta(t, 120, report.Events[0].NormalImpulse.Base(), 1e-4)
+	require.InDelta(t, -9600, report.Conservation.KinematicWork.Value.Base(), 1e-3)
+	require.Equal(t, units.Torque, report.Conservation.KinematicWork.Bound.Kind())
+	require.Less(t, report.Conservation.KinematicWork.Bound.Base(), 1e-6)
+}

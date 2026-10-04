@@ -26,11 +26,13 @@ type ConservationState struct {
 }
 
 // StepConservation describes the discrete input, kick, and completed step.
-// Fixed and kinematic bodies contribute only through ContactImpulse. No
-// reading claims the physical impulse of an unresolved continuous contact.
+// Fixed and kinematic bodies contribute through contact impulse and driver
+// work. No reading claims the physical impulse of unresolved contact.
 type StepConservation struct {
 	Input, AfterKick, Completion                ConservationState
 	GravityImpulse, LoadImpulse, ContactImpulse MomentumReading
+	// KinematicWork is the signed work delivered by prescribed drivers at contact events.
+	KinematicWork decad.Measurement
 	// DriftChange excludes the kick, every contact impulse, and position correction.
 	DriftChange ConservationState
 }
@@ -57,13 +59,37 @@ func (w *World) conservationReadings(from, kicked, end State, trace Trace, event
 	if !ok {
 		return StepConservation{}, false
 	}
+	kinematicWork, ok := w.kinematicWork(events)
+	if !ok {
+		return StepConservation{}, false
+	}
 	driftChange, ok := w.driftConservationChange(kicked, trace)
 	if !ok {
 		return StepConservation{}, false
 	}
 	return StepConservation{Input: input, AfterKick: afterKick, Completion: completion,
 		GravityImpulse: gravityImpulse, LoadImpulse: loadImpulse, ContactImpulse: contactImpulse,
-		DriftChange: driftChange}, true
+		KinematicWork: kinematicWork, DriftChange: driftChange}, true
+}
+
+func (w *World) kinematicWork(events []ContactEvent) (decad.Measurement, bool) {
+	total := new(big.Rat)
+	impulseLimit := exactBase(w.step.ImpulseResidual)
+	if impulseLimit == nil {
+		return decad.Measurement{}, false
+	}
+	for _, event := range events {
+		applied, ok := eventAppliedImpulse(event)
+		if !ok {
+			return decad.Measurement{}, false
+		}
+		work, _, ok := w.kinematicEventWork(event, applied, impulseLimit)
+		if !ok {
+			return decad.Measurement{}, false
+		}
+		total.Add(total, work)
+	}
+	return boundedReading(total, total, total, units.KilogramSquareMillimeterPerSecondSquared)
 }
 
 func (w *World) conservationState(state State) (ConservationState, bool) {

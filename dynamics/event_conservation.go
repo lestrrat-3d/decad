@@ -19,12 +19,9 @@ func (w *World) eventConservationFailure(event ContactEvent) string {
 	if normalImpulse == nil || normalImpulse.Sign() < 0 {
 		return "contact event has invalid normal impulse"
 	}
-	var applied [3]*big.Rat
-	for axis := range applied {
-		applied[axis] = exactBase(velocityComponent(event.TangentImpulse, axis))
-		if applied[axis] == nil {
-			return "contact event has invalid tangent impulse"
-		}
+	applied, valid := eventAppliedImpulse(event)
+	if !valid {
+		return "contact event has invalid impulse or normal"
 	}
 	if event.Kind == ContactTransition {
 		if normalImpulse.Sign() != 0 || len(event.Manifold.Points) != 0 {
@@ -46,18 +43,6 @@ func (w *World) eventConservationFailure(event ContactEvent) string {
 	}
 	if event.Kind != ContactImpact || normalImpulse.Sign() == 0 || len(event.Manifold.Points) == 0 {
 		return "contact impact lacks an impulse or manifold"
-	}
-	point := event.Manifold.Points[0]
-	if point.Normal.Bound.Base() != 0 || point.NormalAngle.Base() != 0 {
-		return "contact event normal is not exact"
-	}
-	components := [3]float64{point.Normal.Value.X, point.Normal.Value.Y, point.Normal.Value.Z}
-	for axis, component := range components {
-		normal := new(big.Rat).SetFloat64(component)
-		if normal == nil {
-			return "contact event normal is not finite"
-		}
-		applied[axis].Add(applied[axis], new(big.Rat).Mul(normalImpulse, normal))
 	}
 	impulseLimit, velocityLimit := exactBase(w.step.ImpulseResidual), exactBase(w.step.VelocityResidual)
 	if impulseLimit == nil || velocityLimit == nil {
@@ -123,14 +108,87 @@ func (w *World) eventConservationFailure(event ContactEvent) string {
 			energyUpper.Add(energyUpper, new(big.Rat).Mul(low, squaredChange))
 		}
 	}
-	if hasKinematic {
-		return ""
-	}
 	energyUpper.Quo(energyUpper, big.NewRat(2, 1))
+	if hasKinematic {
+		work, workAllowance, ok := w.kinematicEventWork(event, applied, impulseLimit)
+		if !ok {
+			return "contact event has invalid kinematic work inputs"
+		}
+		energyUpper.Sub(energyUpper, work)
+		energyAllowance.Add(energyAllowance, workAllowance)
+	}
 	if energyUpper.Cmp(energyAllowance) > 0 {
-		return "contact event increases kinetic energy beyond numerical residual"
+		if !hasKinematic {
+			return "contact event increases kinetic energy beyond numerical residual"
+		}
+		return "contact event increases kinetic energy beyond work and numerical residual"
 	}
 	return ""
+}
+
+// eventAppliedImpulse returns the exact held aggregate impulse on B. A
+// transition has no manifold and carries a typed zero impulse.
+func eventAppliedImpulse(event ContactEvent) ([3]*big.Rat, bool) {
+	var applied [3]*big.Rat
+	for axis := range applied {
+		applied[axis] = exactBase(velocityComponent(event.TangentImpulse, axis))
+		if applied[axis] == nil {
+			return applied, false
+		}
+	}
+	if event.Kind == ContactTransition {
+		return applied, true
+	}
+	if len(event.Manifold.Points) == 0 {
+		return applied, false
+	}
+	point := event.Manifold.Points[0]
+	if point.Normal.Bound.Base() != 0 || point.NormalAngle.Base() != 0 {
+		return applied, false
+	}
+	normalImpulse := exactBase(event.NormalImpulse)
+	if normalImpulse == nil {
+		return applied, false
+	}
+	components := [3]float64{point.Normal.Value.X, point.Normal.Value.Y, point.Normal.Value.Z}
+	for axis, component := range components {
+		normal := new(big.Rat).SetFloat64(component)
+		if normal == nil {
+			return applied, false
+		}
+		applied[axis].Add(applied[axis], new(big.Rat).Mul(normalImpulse, normal))
+	}
+	return applied, true
+}
+
+// kinematicEventWork uses the reaction impulse on the driver to calculate
+// work delivered to the dynamic body. The per-axis impulse residual widens
+// the event energy gate without changing the reported numerical work.
+func (w *World) kinematicEventWork(event ContactEvent, applied [3]*big.Rat,
+	impulseLimit *big.Rat) (*big.Rat, *big.Rat, bool) {
+	work, allowance := new(big.Rat), new(big.Rat)
+	for i, part := range w.parts {
+		if part.definition.Role != Kinematic {
+			continue
+		}
+		pre, post := eventBodyVelocities(event, i)
+		if validateQuantityVec(pre, units.Velocity) != nil || pre != post {
+			return nil, nil, false
+		}
+		sign := int64(1)
+		if i == 1 {
+			sign = -1
+		}
+		for axis, impulse := range applied {
+			speed := exactBase(velocityComponent(pre, axis))
+			if speed == nil {
+				return nil, nil, false
+			}
+			work.Add(work, new(big.Rat).Mul(new(big.Rat).Mul(impulse, speed), big.NewRat(sign, 1)))
+			allowance.Add(allowance, new(big.Rat).Mul(absRat(new(big.Rat).Set(speed)), impulseLimit))
+		}
+	}
+	return work, allowance, true
 }
 
 func eventBodyVelocities(event ContactEvent, index int) (QuantityVec, QuantityVec) {

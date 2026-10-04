@@ -26,10 +26,11 @@ persistent-contact tracks and reports normal and tangent impulses. A centered
 zero-slip box receives normal support with zero tangent impulse. Every advanced
 step reports bounded dynamic-body translational energy and linear momentum at
 input, after the force kick, and at completion, plus gravity, center-force,
-and fixed/kinematic contact impulses. Before publishing an advanced step, it
+and fixed/kinematic contact impulses, plus bounded kinematic driver work.
+Before publishing an advanced step, it
 checks every contact event's dynamic-body linear momentum against its impulse
-and rejects nonkinematic impacts whose kinetic energy gain exceeds the computed
-numerical allowance. Other frictional contacts, torque loads,
+and rejects an impact whose kinetic energy gain exceeds its driver work plus
+the computed numerical allowance. Other frictional contacts, torque loads,
 rotating kinematic drivers, stacks, and broader payload paths remain design
 contracts. Each companion document owns its detail.
 
