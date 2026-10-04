@@ -231,6 +231,87 @@ func TestReverseFixedFloorFrictionStepUsesRealGeometry(t *testing.T) {
 	}
 }
 
+func TestFixedFloorFrictionRepeatsAtTranslatedPose(t *testing.T) {
+	for _, reverse := range []bool{false, true} {
+		t.Run(map[bool]string{false: "floor-first", true: "box-first"}[reverse], func(t *testing.T) {
+			doc := decad.New()
+			floor := sourceBoxForFriction(t, doc, -100, -100, 100, 100, -10)
+			box := sourceBoxForFriction(t, doc, -5, -5, 5, 5, 0)
+			density := units.KilogramsPerCubicMillimeter(.001)
+			material := Material{Restitution: units.Scalar(0), Friction: units.Scalar(.5)}
+			cfg := StepConfig{Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+				NormalResolution: units.Radians(1e-6)}, TimeResolution: units.Seconds(1e-9),
+				ContactSlop: units.Millimeters(1e-6), VelocityResidual: units.MillimetersPerSecond(1e-6),
+				AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+				ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+				PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
+				MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 2}
+			bodies := []RigidBody{{Body: floor, Role: Fixed, Material: material},
+				{Body: box, Role: Dynamic, Density: &density, Material: material}}
+			if reverse {
+				bodies[0], bodies[1] = bodies[1], bodies[0]
+			}
+			world, err := NewWorld(t.Context(), doc, WorldConfig{Bodies: bodies, Step: cfg})
+			require.NoError(t, err)
+			zeroV := QuantityVec{X: units.MillimetersPerSecond(0), Y: units.MillimetersPerSecond(0),
+				Z: units.MillimetersPerSecond(0)}
+			zeroW := QuantityVec{X: units.RadiansPerSecond(0), Y: units.RadiansPerSecond(0),
+				Z: units.RadiansPerSecond(0)}
+			entries := []BodyState{{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroV, AngularVelocity: zeroW},
+				{Body: box, Pose: r3.Identity(), LinearVelocity: QuantityVec{
+					X: units.MillimetersPerSecond(100), Y: units.MillimetersPerSecond(0),
+					Z: units.MillimetersPerSecond(0)}, AngularVelocity: zeroW}}
+			if reverse {
+				entries[0], entries[1] = entries[1], entries[0]
+			}
+			state, err := world.NewState(entries)
+			require.NoError(t, err)
+			gravity := QuantityVec{X: units.MillimetersPerSecondSquared(0),
+				Y: units.MillimetersPerSecondSquared(0), Z: units.MillimetersPerSecondSquared(-1000)}
+			for step, wantX := range []float64{5, 6.25} {
+				duration := []float64{.1, .05}[step]
+				report, stepErr := world.Step(t.Context(), state, StepInput{Gravity: gravity}, units.Seconds(duration))
+				require.NoError(t, stepErr)
+				require.Equal(t, Advanced, report.Status, "step %d: %+v", step, report.Diagnostics)
+				require.Len(t, report.Events, 1)
+				require.InDelta(t, 100*duration/.1, report.Events[0].NormalImpulse.Base(), 1e-6)
+				wantTangent := -50 * duration / .1
+				if reverse {
+					wantTangent = -wantTangent
+				}
+				require.InDelta(t, wantTangent, report.Events[0].TangentImpulse.X.Base(), 1e-6)
+				boxState, ok := report.Next.Body(box)
+				require.True(t, ok)
+				require.InDelta(t, wantX, boxState.Pose.Translation().X, 1e-6)
+				require.InDelta(t, 50-float64(step)*25, boxState.LinearVelocity.X.Base(), 1e-6)
+				contact, contactErr := doc.ContactPair(t.Context(), floor, box, r3.Identity(), boxState.Pose, cfg.Contact)
+				require.NoError(t, contactErr)
+				require.Equal(t, decad.ContactTouching, contact.Relation)
+				state = *report.Next
+			}
+			translated, ok := state.Body(box)
+			require.True(t, ok)
+			translated.LinearVelocity = zeroV
+			for i := range entries {
+				if entries[i].Body == box {
+					entries[i] = translated
+				}
+			}
+			staticState, err := world.NewState(entries)
+			require.NoError(t, err)
+			staticReport, err := world.Step(t.Context(), staticState,
+				StepInput{Gravity: gravity}, units.Seconds(.05))
+			require.NoError(t, err)
+			require.Equal(t, Advanced, staticReport.Status, "%+v", staticReport.Diagnostics)
+			require.Len(t, staticReport.Events, 1)
+			staticBox, ok := staticReport.Next.Body(box)
+			require.True(t, ok)
+			require.Equal(t, translated.Pose, staticBox.Pose)
+			require.Equal(t, zeroV, staticBox.LinearVelocity)
+		})
+	}
+}
+
 func TestFixedFloorFrictionRejectsUnsupportedMaterialsAndPatch(t *testing.T) {
 	doc := decad.New()
 	floor := sourceBoxForFriction(t, doc, -2, -5, 2, 5, -10)

@@ -19,8 +19,8 @@ advances through a certified clear remainder.
 An affine kinematic driver can push an initially touching dynamic source box
 through a certified persistent contact path, depart without an impulse, or
 produce a centered interior impact with a certified separating or
-persistent-contact remainder. A fixed-first/dynamic-second source-box pair
-with positive pair friction can slide on a wide fixed floor after a
+persistent-contact remainder. A fixed floor and dynamic source box in either
+world order with positive pair friction can slide repeatedly after a
 four-corner Coulomb response. Body coefficients combine by geometric mean;
 an explicit pair coefficient replaces them. The response checks rational
 bounds around a nonexact mean. `World.Step` requires full ideal and rounded

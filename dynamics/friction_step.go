@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// stepInitialFriction admits the first fixed-floor, dynamic-box patch only
+// stepInitialFriction admits a fixed-floor, dynamic-box patch only
 // when both complete continuations certify the same touching face.
 func (w *World) stepInitialFriction(ctx context.Context, from, kicked State, dt units.Value,
 	first *decad.SweepReport) (*StepReport, error) {
@@ -21,7 +21,8 @@ func (w *World) stepInitialFriction(ctx context.Context, from, kicked State, dt 
 	}
 	if first.Event == nil || first.Event.Relation != decad.ContactTouching ||
 		first.Event.Manifold == nil || len(first.Event.Manifold.Points) != 4 ||
-		kicked.entries[0].Pose != r3.Identity() || kicked.entries[1].Pose != r3.Identity() ||
+		kicked.entries[1-dynamic].Pose != r3.Identity() ||
+		kicked.entries[dynamic].Pose.Basis() != r3.Identity().Basis() ||
 		!zeroAngularVelocity(kicked.entries[dynamic].AngularVelocity) ||
 		kicked.entries[dynamic].LinearVelocity.Y.Mag() != 0 ||
 		kicked.entries[dynamic].LinearVelocity.Z.Base() >= -w.step.VelocityResidual.Base() {
@@ -49,7 +50,7 @@ func (w *World) stepInitialFriction(ctx context.Context, from, kicked State, dt 
 	if pre.X.Base() <= 0 {
 		return undecided(w, "frictional contact has no admitted positive X slip"), nil
 	}
-	maximumLever, ok := w.frictionWholeBodyLeverWithin(&patch, dynamic)
+	maximumLever, ok := w.frictionWholeBodyLeverWithin(&patch, dynamic, kicked.entries[dynamic].Pose)
 	if !ok {
 		return undecided(w, "frictional track can move the patch beyond audited corners"), nil
 	}
@@ -178,7 +179,8 @@ func (w *World) fixedFloorPatchWitnesses(manifold *decad.ContactManifold) bool {
 
 // frictionWholeBodyLeverWithin ensures any later box point has no greater
 // omitted-spin speed error than the initial points audited by the solver.
-func (w *World) frictionWholeBodyLeverWithin(manifold *decad.ContactManifold, dynamic int) (*big.Rat, bool) {
+func (w *World) frictionWholeBodyLeverWithin(manifold *decad.ContactManifold,
+	dynamic int, pose r3.Transform) (*big.Rat, bool) {
 	mass := w.parts[dynamic].mass
 	box, err := w.parts[dynamic].definition.Body.Bounds()
 	if err != nil || box.Bound.Kind() != units.Length || !finite(box.Bound.Base(),
@@ -205,7 +207,7 @@ func (w *World) frictionWholeBodyLeverWithin(manifold *decad.ContactManifold, dy
 	full.Add(full, uncertainty.Mul(uncertainty, big.NewRat(3, 1)))
 	initialMaximum := new(big.Rat)
 	for _, point := range manifold.Points {
-		lever := exactPatchLever(point.OnB.Value, mass.Center.Value)
+		lever := exactTranslatedPatchLever(point.OnB.Value, mass.Center.Value, pose.Translation())
 		norm := new(big.Rat)
 		for axis := range 3 {
 			norm.Add(norm, absRat(lever[axis]))
@@ -222,6 +224,7 @@ func (w *World) frictionWholeBodyLeverWithin(manifold *decad.ContactManifold, dy
 func (w *World) stepFrictionStaticSupport(ctx context.Context, from, kicked State, dt units.Value,
 	first *decad.SweepReport, patch *decad.ContactManifold, dynamic int) (*StepReport, error) {
 	mass := w.parts[dynamic].mass
+	pose := kicked.entries[dynamic].Pose
 	if mass.Center.Bound.Mag() != 0 {
 		return undecided(w, "static friction patch has an uncertain center"), nil
 	}
@@ -230,7 +233,7 @@ func (w *World) stepFrictionStaticSupport(ctx context.Context, from, kicked Stat
 		if point.OnB.Bound.Mag() != 0 {
 			return undecided(w, "static friction patch has uncertain corners"), nil
 		}
-		lever := exactPatchLever(point.OnB.Value, mass.Center.Value)
+		lever := exactTranslatedPatchLever(point.OnB.Value, mass.Center.Value, pose.Translation())
 		xTotal.Add(&xTotal, lever[0])
 		yTotal.Add(&yTotal, lever[1])
 	}
