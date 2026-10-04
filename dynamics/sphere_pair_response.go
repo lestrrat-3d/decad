@@ -1,0 +1,281 @@
+package dynamics
+
+import (
+	"context"
+	"fmt"
+	"math"
+	"math/big"
+
+	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
+)
+
+func isObliqueSpherePairEvent(manifold *decad.ContactManifold) bool {
+	if manifold == nil || len(manifold.Points) != 1 {
+		return false
+	}
+	point := manifold.Points[0]
+	if point.FaceA == nil || point.FaceB == nil {
+		return false
+	}
+	if _, ok := point.FaceA.Surface().(decad.Sphere); !ok {
+		return false
+	}
+	if _, ok := point.FaceB.Surface().(decad.Sphere); !ok {
+		return false
+	}
+	_, _, cardinal := axisNormal(point.Normal.Value)
+	return !cardinal
+}
+
+func spherePairVelocity(v QuantityVec) r3.Vec {
+	return r3.Vec{X: v.X.Base(), Y: v.Y.Base(), Z: v.Z.Base()}
+}
+
+func spherePairQuantityVelocity(v r3.Vec) QuantityVec {
+	return QuantityVec{X: units.MillimetersPerSecond(v.X),
+		Y: units.MillimetersPerSecond(v.Y), Z: units.MillimetersPerSecond(v.Z)}
+}
+
+// stepObliqueSpherePair consumes the sphere sweep's bounded center-line
+// witness. The source center and supplied mass center must coincide, so the
+// normal impulse produces no physical torque.
+func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre State,
+	dt, eventAt units.Value, impactTime float64, first, roundedPrefix *decad.SweepReport) (*StepReport, error) {
+	point := first.Event.Manifold.Points[0]
+	if w.parts[0].definition.Role != Dynamic || w.parts[1].definition.Role != Dynamic ||
+		w.friction.lower.Sign() != 0 || !zeroAngularVelocity(pre.entries[0].AngularVelocity) ||
+		!zeroAngularVelocity(pre.entries[1].AngularVelocity) {
+		return undecided(w, "oblique sphere impact needs two frictionless nonspinning dynamic bodies"), nil
+	}
+	n := point.Normal.Value
+	if !finite(n.X, n.Y, n.Z, point.Normal.Bound.Base(), point.NormalAngle.Base(),
+		point.Separation.Value.Base(), point.Separation.Bound.Base()) ||
+		point.Normal.Bound.Base() < 0 || point.Normal.Bound.Base() > w.step.Contact.NormalResolution.Base() ||
+		point.NormalAngle.Base() > w.step.Contact.NormalResolution.Base() ||
+		point.OnA.Bound.Base() > w.step.Contact.PointResolution.Base() ||
+		point.OnB.Bound.Base() > w.step.Contact.PointResolution.Base() {
+		return undecided(w, "sphere center-line normal or witnesses exceed contact resolution"), nil
+	}
+	var inverse [2]float64
+	for i, face := range [2]*decad.Face{point.FaceA, point.FaceB} {
+		sphere, ok := face.Surface().(decad.Sphere)
+		if !ok {
+			return undecided(w, "sphere impact lacks a source sphere face"), nil
+		}
+		mass := w.parts[i].mass
+		if mass.Center.Value != sphere.Center || mass.Center.Bound.Base() != 0 ||
+			mass.Mass.Bound.Base() != 0 || mass.Mass.Value.Base() <= 0 {
+			return undecided(w, "sphere mass center or mass is not exact at its source center"), nil
+		}
+		inverse[i] = 1 / mass.Mass.Value.Base()
+	}
+	vA, vB := spherePairVelocity(pre.entries[0].LinearVelocity),
+		spherePairVelocity(pre.entries[1].LinearVelocity)
+	relative := vB.Sub(vA)
+	closing := relative.Dot(n)
+	preNorm, ok := sphereNormUpper(relative)
+	if !finite(closing) || !ok {
+		return undecided(w, "sphere closing speed cannot be bounded"), nil
+	}
+	preDot := sphereDotExact(relative, n)
+	preError := new(big.Rat).Mul(ratFloat(preNorm), exactBase(point.Normal.Bound))
+	closingUpper := new(big.Rat).Add(preDot, preError)
+	if closingUpper.Cmp(new(big.Rat).Neg(exactBase(w.step.VelocityResidual))) >= 0 {
+		return undecided(w, "sphere impact has no bounded closing normal speed"), nil
+	}
+	e := 0.0
+	approachLow := new(big.Rat).Neg(new(big.Rat).Add(preDot, preError))
+	approachHigh := new(big.Rat).Add(new(big.Rat).Neg(preDot), preError)
+	if approachLow.Cmp(exactBase(w.step.ImpactSpeed)) > 0 {
+		e = w.restitution.Base()
+	} else if approachHigh.Cmp(exactBase(w.step.ImpactSpeed)) > 0 {
+		return undecided(w, "sphere impact speed crosses the restitution threshold"), nil
+	}
+	impulse := -(1 + e) * closing / (inverse[0] + inverse[1])
+	if !finite(impulse) || impulse <= 0 {
+		return undecided(w, "sphere normal impulse is not finite and positive"), nil
+	}
+	post := pre
+	postA := vA.Sub(n.Scale(impulse * inverse[0]))
+	postB := vB.Add(n.Scale(impulse * inverse[1]))
+	if !finite(postA.X, postA.Y, postA.Z, postB.X, postB.Y, postB.Z) {
+		return undecided(w, "sphere response velocity is not finite"), nil
+	}
+	post.entries[0].LinearVelocity = spherePairQuantityVelocity(postA)
+	post.entries[1].LinearVelocity = spherePairQuantityVelocity(postB)
+	if !spherePairResponseWithin([2]r3.Vec{vA, vB}, [2]r3.Vec{postA, postB},
+		[2]float64{w.parts[0].mass.Mass.Value.Base(), w.parts[1].mass.Mass.Value.Base()},
+		n, point.Normal.Bound.Base(), impulse, e, w.step) {
+		return undecided(w, "sphere response normal residual or departure exceeds limit"), nil
+	}
+	travel, ok := boundBracketTravel(*first.Bracket, math.Hypot(relative.X,
+		math.Hypot(relative.Y, relative.Z)))
+	if !ok {
+		return undecided(w, "sphere impact bracket travel is not bounded"), nil
+	}
+	allowance := outwardSum(travel, point.Separation.Bound.Base(), w.step.ContactSlop.Base())
+	depth := -point.Separation.Value.Base() + w.step.ContactSlop.Base()/4
+	if !finite(allowance, depth) || depth < 0 || depth > allowance {
+		return undecided(w, "sphere impact penetration exceeds correction allowance"), nil
+	}
+	post, err := correctPair(post, n, depth, inverse)
+	if err != nil {
+		return undecidedArithmetic(w, "sphere position correction is not finite", err)
+	}
+	if !sphereCorrectionWithin(pre, post, allowance) {
+		return undecided(w, "sphere position correction exceeds its allowance"), nil
+	}
+	contact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+		post.entries[0].Pose, post.entries[1].Pose, w.step.Contact)
+	if err != nil {
+		return nil, err
+	}
+	if contact.Relation != decad.ContactSeparated || contact.Gap == nil ||
+		contact.Gap.Value.Base()+contact.Gap.Bound.Base() > allowance {
+		return undecided(w, fmt.Sprintf("sphere corrected impact has relation %v", contact.Relation)), nil
+	}
+	remaining := dt.Base() - impactTime
+	var actual *decad.SweepReport
+	if remaining > 0 {
+		certified, err := w.sweep(ctx, post, units.Seconds(remaining), decad.StopAtInitialContact)
+		if err != nil {
+			return nil, err
+		}
+		if certified.Outcome != decad.SweepClear {
+			return undecided(w, fmt.Sprintf("sphere separating remainder returned %v", certified.Outcome)), nil
+		}
+	}
+	end, err := driftState(post, remaining)
+	if err != nil {
+		return undecidedArithmetic(w, "sphere response endpoint is not finite", err)
+	}
+	if remaining > 0 {
+		actual, err = w.sweepPoses(ctx, post, end, units.Seconds(remaining), decad.StopAtInitialContact)
+		if err != nil {
+			return nil, err
+		}
+		if actual.Outcome != decad.SweepClear {
+			return undecided(w, fmt.Sprintf("rounded sphere remainder returned %v", actual.Outcome)), nil
+		}
+	}
+	last, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
+	if err != nil {
+		return nil, err
+	}
+	if last.Relation != decad.ContactSeparated {
+		return undecided(w, "sphere response endpoint is not proven separated"), nil
+	}
+	changeA := post.entries[0].Pose.Translation().Sub(pre.entries[0].Pose.Translation())
+	changeB := post.entries[1].Pose.Translation().Sub(pre.entries[1].Pose.Translation())
+	event := ContactEvent{Kind: ContactImpact,
+		Pair:    BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Bracket: *first.Bracket, Time: eventAt, Manifold: cloneManifold(*first.Event.Manifold),
+		NormalImpulse: units.KilogramMillimetersPerSecond(impulse), TangentImpulse: zeroImpulseVec(),
+		PreVelocity: kicked.entries[0].LinearVelocity, PostVelocity: post.entries[0].LinearVelocity,
+		PositionChange: changeA, PreVelocityA: kicked.entries[0].LinearVelocity,
+		PreVelocityB: kicked.entries[1].LinearVelocity, PostVelocityA: post.entries[0].LinearVelocity,
+		PostVelocityB: post.entries[1].LinearVelocity, PositionChangeA: changeA,
+		PositionChangeB: changeB}
+	return &StepReport{Status: Advanced, Next: &end, Events: []ContactEvent{event},
+		Trace: Trace{start: from, pre: pre, post: post, end: end, duration: dt,
+			eventAt: eventAt, hasEvent: true, preSweep: roundedPrefix, postSweep: actual}}, nil
+}
+
+func sphereDotExact(a, b r3.Vec) *big.Rat {
+	out := new(big.Rat)
+	for _, component := range [][2]float64{{a.X, b.X}, {a.Y, b.Y}, {a.Z, b.Z}} {
+		out.Add(out, new(big.Rat).Mul(ratFloat(component[0]), ratFloat(component[1])))
+	}
+	return out
+}
+
+// sphereNormUpper checks the proposed float length against the exact square
+// of the held vector before using it to charge normal-direction uncertainty.
+func sphereNormUpper(v r3.Vec) (float64, bool) {
+	squared := new(big.Rat)
+	for _, component := range []float64{v.X, v.Y, v.Z} {
+		if !finite(component) {
+			return 0, false
+		}
+		q := ratFloat(component)
+		squared.Add(squared, new(big.Rat).Mul(q, q))
+	}
+	if squared.Sign() == 0 {
+		return 0, true
+	}
+	length := math.Hypot(v.X, math.Hypot(v.Y, v.Z))
+	for range 16 {
+		if !finite(length) {
+			return 0, false
+		}
+		candidate := ratFloat(length)
+		if new(big.Rat).Mul(candidate, candidate).Cmp(squared) >= 0 {
+			return length, true
+		}
+		length = math.Nextafter(length, math.Inf(1))
+	}
+	return 0, false
+}
+
+func spherePairResponseWithin(pre, post [2]r3.Vec, mass [2]float64,
+	n r3.Vec, normalBound, impulse, restitution float64, step StepConfig) bool {
+	preRelative, postRelative := pre[1].Sub(pre[0]), post[1].Sub(post[0])
+	postNorm, ok := sphereNormUpper(postRelative)
+	if !ok {
+		return false
+	}
+	preNorm, ok := sphereNormUpper(preRelative)
+	if !ok {
+		return false
+	}
+	preDot, postDot := sphereDotExact(preRelative, n), sphereDotExact(postRelative, n)
+	nErr := ratFloat(normalBound)
+	postUncertainty := new(big.Rat).Mul(ratFloat(postNorm), nErr)
+	responseError := new(big.Rat).Add(postDot,
+		new(big.Rat).Mul(ratFloat(restitution), preDot))
+	responseError.Abs(responseError)
+	responseError.Add(responseError, postUncertainty)
+	responseError.Add(responseError, new(big.Rat).Mul(
+		new(big.Rat).Mul(ratFloat(restitution), ratFloat(preNorm)), nErr))
+	velocityLimit := exactBase(step.VelocityResidual)
+	if responseError.Cmp(velocityLimit) > 0 ||
+		new(big.Rat).Sub(postDot, postUncertainty).Cmp(velocityLimit) <= 0 {
+		return false
+	}
+	impulseLimit := exactBase(step.ImpulseResidual)
+	uncertainty := new(big.Rat).Mul(ratFloat(impulse), nErr)
+	for i := range pre {
+		sign := int64(1)
+		if i == 0 {
+			sign = -1
+		}
+		before := [3]float64{pre[i].X, pre[i].Y, pre[i].Z}
+		after := [3]float64{post[i].X, post[i].Y, post[i].Z}
+		normal := [3]float64{n.X, n.Y, n.Z}
+		for axis := range 3 {
+			change := new(big.Rat).Sub(ratFloat(after[axis]), ratFloat(before[axis]))
+			change.Mul(change, ratFloat(mass[i]))
+			applied := new(big.Rat).Mul(ratFloat(impulse), ratFloat(normal[axis]))
+			applied.Mul(applied, big.NewRat(sign, 1))
+			residual := new(big.Rat).Sub(change, applied)
+			residual.Abs(residual)
+			residual.Add(residual, uncertainty)
+			if residual.Cmp(impulseLimit) > 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func sphereCorrectionWithin(before, after State, allowance float64) bool {
+	travel := 0.0
+	for i := range before.entries {
+		delta := after.entries[i].Pose.Translation().Sub(before.entries[i].Pose.Translation())
+		travel = outwardSum(travel, math.Hypot(delta.X, math.Hypot(delta.Y, delta.Z)))
+	}
+	return finite(travel) && travel <= allowance
+}

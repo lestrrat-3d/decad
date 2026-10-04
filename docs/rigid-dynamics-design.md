@@ -31,6 +31,14 @@ Two source semicircle spheres with supplied or density-derived mass can
 rebound as a centered dynamic pair when the impact has a cardinal manifold.
 Their approach may
 include transverse motion when the sweep certifies first impact.
+An isolated frictionless off-axis sphere-pair impact also admits a bounded
+center-line normal when each mass center exactly matches its source sphere
+center, both mass and center readings have zero bounds, and the impact has no
+spin. The impulse changes both velocity vectors along that normal. A small
+separated position correction within the certified
+bracket and contact slop is allowed when a full clear remainder sweep proves
+the pair cannot meet again. Unresolved tangency or a noncentral mass stops the
+step.
 A two-body world's pair may be excluded; its bodies drift independently even
 through overlap, and no pair material is mixed.
 The current three-body step admits one dynamic body and two fixed bodies.
@@ -665,6 +673,10 @@ claim that an independently interpolated `PoseSegment` is clear.
 `Trace.Sample` evaluates clear, departed, persistent-contact, and transition
 slices against each stored rounded sweep's cached source-box or source-sphere
 certificate.
+For an off-axis sphere-pair impact, the rounded impact prefix must reach its
+own certified bracket endpoint with the same source faces, bounded normal,
+and separation within `PenetrationResidual`. Interior trace samples before
+and after the event use the corresponding sphere-pair sweep certificates.
 It compares the exact held time values when selecting an event or endpoint.
 An event at a proved final sweep fraction retains the input `dt` value;
 interior event times must lie strictly inside the exact held duration.

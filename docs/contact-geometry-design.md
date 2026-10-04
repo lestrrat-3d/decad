@@ -29,9 +29,9 @@ a relation for other admitted solids without a contact manifold. Other curved
 and faceted witness and normal proofs remain design contracts.
 
 Two full source semicircle spheres receive the exact relation proof from their
-recorded centers and radii. A one-axis center offset with crossing sphere
-surfaces publishes a cardinal point manifold; a diagonal or coincident center
-offset keeps the relation and withholds the manifold.
+recorded centers and radii. A nonzero center offset with crossing sphere
+surfaces publishes one bounded point manifold along the center line. Coincident
+centers keep the relation and withhold the manifold.
 
 ## 1. Claims and entry point
 
@@ -337,14 +337,15 @@ Admit each sphere through §4.2's source record and pose gates. Compare the
 exact squared distance between their centers with the square of the radius
 sum. A strict excess proves separation; equality proves touch; a deficit
 proves overlap. Enclose a separated gap by outward square-root conversion.
-Publish one point manifold only when the center difference has exactly one
-nonzero cardinal component and its absolute value exceeds the absolute
-radius difference. The latter gate excludes a sphere wholly inside the other.
-Both witnesses lie on the original spherical faces along the center axis.
-Their signed separation is center distance minus radius sum. A diagonal
-center line has no exact cardinal normal in this path, so it keeps its
-relation but has no manifold. Reversing body order reverses the normal and
-swaps witnesses.
+Publish one point manifold when the center difference is nonzero and its
+distance exceeds the absolute radius difference. The latter gate excludes a
+sphere wholly inside the other. Enclose the center-line unit normal by a
+bounded square root of the exact squared distance. Both witnesses lie on the
+original spherical faces along that direction, with point bounds including
+normal conversion. Their signed separation encloses center distance minus
+radius sum and both witness errors. A request tighter than the normal or point
+bounds keeps the relation but withholds the manifold. Reversing body order
+reverses the normal and swaps witnesses.
 
 ## 5. Contact cases and ordering
 

@@ -81,8 +81,8 @@ type ContactReport struct {
 // co-oriented oblique face touches. Opposed axis-normal oriented faces can
 // publish a common interior witness. Other valid poses have relation proofs.
 // Source semicircle spheres against boxes or each other also have relation
-// and face-manifold proofs at signed-axis poses when an isolated cardinal
-// support gives a normal.
+// and point-manifold proofs at signed-axis poses. Sphere-pair center lines
+// may be off-axis when their normal and witnesses meet the requested bounds.
 // At identity query poses, the analytic clearance kernel can prove relations
 // for other solids without a contact manifold.
 // Both bodies must be non-nil, distinct, live members of d.

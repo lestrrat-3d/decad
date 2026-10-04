@@ -490,6 +490,10 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 			return undecided(w, "published impact prefix lacks a matching rounded endpoint bracket"), nil
 		}
 	}
+	if isObliqueSpherePairEvent(first.Event.Manifold) {
+		return w.stepObliqueSpherePair(ctx, from, kicked, pre, dt, eventAt,
+			impactTime, first, roundedPrefix)
+	}
 	normal, separation, bound, ok := reducedContact(first.Event.Manifold, w.step.Contact)
 	if !ok {
 		return undecided(w, "contact normal or point is outside the admitted resolution"), nil
@@ -804,7 +808,7 @@ func roundedImpactPrefixAtEnd(sweep, original *decad.SweepReport, residual units
 		originalPoint := original.Event.Manifold.Points[i]
 		if point.FaceA != originalPoint.FaceA || point.FaceB != originalPoint.FaceB ||
 			point.FeatureA != originalPoint.FeatureA || point.FeatureB != originalPoint.FeatureB ||
-			point.Normal.Value != originalPoint.Normal.Value {
+			!roundedImpactNormalsMatch(point, originalPoint, original.Request.ContactRequest) {
 			return false
 		}
 		difference := absRat(new(big.Rat).Sub(exactBase(point.Separation.Value),
@@ -816,6 +820,37 @@ func roundedImpactPrefixAtEnd(sweep, original *decad.SweepReport, residual units
 		}
 	}
 	return true
+}
+
+func roundedImpactNormalsMatch(a, b decad.ContactPoint, request decad.ContactRequest) bool {
+	if a.Normal.Value == b.Normal.Value {
+		return true
+	}
+	if a.Normal.Bound.Base() == 0 && b.Normal.Bound.Base() == 0 {
+		return false
+	}
+	limit := exactBase(request.NormalResolution)
+	boundA, boundB := exactBase(a.Normal.Bound), exactBase(b.Normal.Bound)
+	angleA, angleB := exactBase(a.NormalAngle), exactBase(b.NormalAngle)
+	if limit == nil || boundA == nil || boundB == nil || angleA == nil || angleB == nil ||
+		boundA.Sign() < 0 || boundB.Sign() < 0 || angleA.Cmp(limit) > 0 || angleB.Cmp(limit) > 0 {
+		return false
+	}
+	budget := new(big.Rat).Sub(limit, boundA)
+	budget.Sub(budget, boundB)
+	if budget.Sign() < 0 {
+		return false
+	}
+	squared := new(big.Rat)
+	for _, component := range [][2]float64{{a.Normal.Value.X, b.Normal.Value.X},
+		{a.Normal.Value.Y, b.Normal.Value.Y}, {a.Normal.Value.Z, b.Normal.Value.Z}} {
+		if !finite(component[0], component[1]) {
+			return false
+		}
+		difference := new(big.Rat).Sub(ratFloat(component[0]), ratFloat(component[1]))
+		squared.Add(squared, new(big.Rat).Mul(difference, difference))
+	}
+	return squared.Cmp(new(big.Rat).Mul(budget, budget)) <= 0
 }
 
 func rotatingEndpointMatches(sweep *decad.SweepReport, end State) bool {

@@ -15,6 +15,7 @@ type sweepReplayProof struct {
 	pa, pb                 affinePairPath
 	boxA, boxB             sourceBoxContactProof
 	sphere                 *sourceSphereContactProof
+	spherePair             *[2]sourceSphereContactProof
 	sphereFirst            bool
 	sphereAxis, sphereSide int
 	sphereGap, sphereSlope dyadic
@@ -42,7 +43,13 @@ func (r *SweepReport) HasAffineReplayProof() bool {
 		return false
 	}
 	if r.replay.rotation == nil {
-		return true
+		switch r.replay.outcome {
+		case SweepClear, SweepDepartedClear, SweepPersistentTouch,
+			SweepImpactBracket, SweepContactTransitionBracket:
+			return true
+		default:
+			return false
+		}
 	}
 	return r.replay.outcome == SweepPersistentTouch && r.replay.track != nil &&
 		r.replay.rotation[0].path.drift == nil && r.replay.rotation[1].path.drift == nil
@@ -108,6 +115,9 @@ func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Tra
 	if r.replay.sphere != nil {
 		return r.certifiedSpherePosesAtFraction(f, poseA, poseB)
 	}
+	if r.replay.spherePair != nil {
+		return r.certifiedSpherePairPosesAtFraction(f, poseA, poseB)
+	}
 	actualA, ok := translatedReplayBox(r.replay.boxA, r.replay.pa.from, poseA)
 	if !ok {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay pose A is not an affine translation", ErrUnsupported)
@@ -128,6 +138,101 @@ func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Tra
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose changes the certified relation", ErrUnsupported)
 	}
 	return poseA, poseB, nil
+}
+
+// The sphere-pair producer proves the ideal center-distance quadratic over
+// its full certified interval. Replay checks the two rounded source centers
+// against that same exact path and retains the producer's relation gate.
+func (r *SweepReport) certifiedSpherePairPosesAtFraction(f *big.Rat, poseA, poseB r3.Transform) (
+	r3.Transform, r3.Transform, error) {
+	p := r.replay
+	start := p.spherePair
+	actualA, okA := translatedReplaySphere(start[0], p.pa.from, poseA)
+	actualB, okB := translatedReplaySphere(start[1], p.pb.from, poseB)
+	if !okA || !okB {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair replay pose is not affine", ErrUnsupported)
+	}
+	idealA := spherePairIdealCenter(start[0], p.pa.delta, f)
+	idealB := spherePairIdealCenter(start[1], p.pb.delta, f)
+	resolution, ok := exactBaseValue(p.request.PointResolution)
+	if !ok {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair replay resolution is invalid", ErrUnsupported)
+	}
+	deviation := new(big.Rat)
+	for _, pair := range []struct {
+		ideal    [3]*big.Rat
+		observed sourceSphereContactProof
+	}{{idealA, actualA}, {idealB, actualB}} {
+		for axis := range 3 {
+			difference := new(big.Rat).Sub(pair.observed.center[axis].rat(), pair.ideal[axis])
+			deviation.Add(deviation, difference.Abs(difference))
+		}
+	}
+	if deviation.Cmp(resolution) > 0 {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded sphere-pair pose exceeds point resolution", ErrUnsupported)
+	}
+	idealDistance2 := spherePairCenterDistance2(idealA, idealB)
+	actualDistance2 := spherePairCenterDistance2(
+		spherePairHeldCenter(actualA), spherePairHeldCenter(actualB))
+	radius := dyAdd(start[0].radius, start[1].radius).rat()
+	radius2 := new(big.Rat).Mul(radius, radius)
+	idealRelation := idealDistance2.Cmp(radius2)
+	actualRelation := actualDistance2.Cmp(radius2)
+	clearMargin := new(big.Rat).Add(radius, deviation)
+	clearMargin.Mul(clearMargin, clearMargin)
+	strictClear := actualDistance2.Cmp(clearMargin) > 0
+	switch p.outcome {
+	case SweepClear:
+		if idealRelation <= 0 || !strictClear {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded sphere-pair clear path loses its gap", ErrUnsupported)
+		}
+	case SweepDepartedClear:
+		if f.Sign() == 0 {
+			if idealRelation != 0 || actualRelation != 0 {
+				return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair departure start is not touching", ErrUnsupported)
+			}
+		} else if idealRelation <= 0 || !strictClear {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded sphere-pair departure loses its gap", ErrUnsupported)
+		}
+	case SweepImpactBracket:
+		if p.bracketLo == nil || p.bracketHi == nil {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair impact lacks its exact bracket", ErrUnsupported)
+		}
+		if f.Cmp(p.bracketLo) < 0 && (idealRelation <= 0 || !strictClear) {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair impact prefix is not clear", ErrUnsupported)
+		}
+		if f.Cmp(p.bracketHi) == 0 && (idealRelation > 0 || actualDistance2.Cmp(clearMargin) > 0) {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair impact right pose is not near contact", ErrUnsupported)
+		}
+	default:
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair outcome has no replay proof", ErrUnsupported)
+	}
+	return poseA, poseB, nil
+}
+
+func spherePairIdealCenter(s sourceSphereContactProof, delta [3]dyadic, f *big.Rat) [3]*big.Rat {
+	center := spherePairHeldCenter(s)
+	for axis := range 3 {
+		center[axis].Add(center[axis], new(big.Rat).Mul(delta[axis].rat(), f))
+	}
+	return center
+}
+
+func spherePairHeldCenter(s sourceSphereContactProof) [3]*big.Rat {
+	var center [3]*big.Rat
+	for axis := range 3 {
+		center[axis] = s.center[axis].rat()
+	}
+	return center
+}
+
+func spherePairCenterDistance2(a, b [3]*big.Rat) *big.Rat {
+	squared := new(big.Rat)
+	for axis := range 3 {
+		delta := new(big.Rat).Sub(b[axis], a[axis])
+		squared.Add(squared, new(big.Rat).Mul(delta, delta))
+	}
+	return squared
 }
 
 // A clear rotating sweep certifies the ideal source boxes over every fraction.

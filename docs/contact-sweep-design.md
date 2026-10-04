@@ -294,8 +294,11 @@ start gap has one exact first-contact root. Bracket it with dyadic fractions,
 including a root at the final endpoint, with a clear left sample and a
 touching or overlapping right sample. The endpoint can be ideal overlap
 while the rounded pose is touch. Transfer the source manifold only when both
-queries name the same source faces and cardinal normal; add the exact center
-pose difference to witness and separation bounds.
+queries name the same source faces. For a cardinal center line, keep the exact
+normal when both queries retain the same cardinal direction. For an off-axis
+center line, bound the change in unit normal from the exact center-pose
+difference and shorter center-line length. Charge that change to normal,
+witness, angle, and separation bounds before publishing the event manifold.
 
 For a transverse relative displacement, compare the exact quadratic squared
 center distance minus squared radius sum over the held affine path. Its minimum
@@ -303,9 +306,9 @@ proves a full clear span or locates the earliest possible impact. Search the
 decreasing side with dyadic fractions; require a separated left endpoint, a
 touching or overlapping right endpoint, and width at most `TimeResolution`.
 Find a hidden pass-through before reporting clear. A tangent and an
-unrepresentable shallow overlap return `SweepUndecided`. The cardinal source
-manifold gate still applies at the right sample. A zero-gap stationary touch
-has no continuous proof for continuation.
+unrepresentable shallow overlap return `SweepUndecided`. The bounded
+center-line source manifold gate applies at the right sample. A zero-gap
+stationary touch has no continuous proof for continuation.
 
 ## 5. Earliest-event search
 
@@ -516,10 +519,17 @@ fraction with one. The public `Fraction` may be rounded.
 
 `CertifiedPosesAt` evaluates the same float path used by the sweep at
 the requested elapsed time. For affine paths it checks the read float poses
-against the cached exact source boxes. It refuses when their total displacement
-exceeds `PointResolution` or changes a clear or departing relation. For persistent
-contact and event brackets, it accepts only a rounded relation within that
-resolution of the exact source-box relation. It does not call `ContactPair` or
+against the cached exact source boxes or spheres. The sphere-pair path keeps
+both source centers, radii, exact translations, and impact bracket. At an
+arbitrary interior fraction it compares both rounded centers with their ideal
+rational centers, then checks the exact squared center distance against the
+radius sum. A clear or departing sample must retain a positive gap after
+charging the center displacement; an impact prefix stays clear before the
+bracket and stays near contact at its right endpoint. A sample beyond the
+bracket is unsupported. It refuses when total displacement exceeds
+`PointResolution` or changes a clear or departing relation. For source-box
+persistent contact and event brackets, it accepts only a rounded relation
+within that resolution of the exact source-box relation. It does not call `ContactPair` or
 read the document. It refuses times outside the sweep or outside a certified
 event prefix. `CertifiedPosesAtInterval` maps exact held time values in a
 specified interval onto the certified spatial path. A dynamics trace uses

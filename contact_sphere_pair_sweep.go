@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"errors"
+	"math"
 	"math/big"
 	"sort"
 
@@ -71,8 +72,7 @@ func (r *sourceSpherePairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.
 		return
 	}
 	want, actual := ideal.Manifold.Points[0], contact.Manifold.Points[0]
-	if want.FeatureA != actual.FeatureA || want.FeatureB != actual.FeatureB ||
-		want.Normal.Value != actual.Normal.Value {
+	if want.FeatureA != actual.FeatureA || want.FeatureB != actual.FeatureB {
 		ideal.Manifold, ideal.Reason = nil, ContactNoNormalProof
 		return
 	}
@@ -94,25 +94,89 @@ func (r *sourceSpherePairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.
 			deviation.Add(deviation, diff.Abs(diff))
 		}
 	}
+	idealA, okA := translatedSphere(r.sphereA, r.pa.delta, f)
+	idealB, okB := translatedSphere(r.sphereB, r.pb.delta, f)
+	if !okA || !okB {
+		ideal.Manifold, ideal.Reason = nil, ContactPayloadUnsupported
+		return
+	}
+	minimumDistance := math.Inf(1)
+	for _, pair := range [][2]sourceSphereContactProof{{idealA, idealB}, {observedA, observedB}} {
+		squared := dyZero()
+		for i := range 3 {
+			delta := dySubScalar(pair[1].center[i], pair[0].center[i])
+			squared = dyAdd(squared, dyMul(delta, delta))
+		}
+		minimumDistance = math.Min(minimumDistance, dySqrtDown(squared))
+	}
+	if minimumDistance <= 0 || !finiteMeasurementValues(minimumDistance) {
+		ideal.Manifold, ideal.Reason = nil, ContactNoNormalProof
+		return
+	}
+	// Unit-vector normalization changes by at most twice the center-line
+	// displacement divided by the shorter center-line length.
+	normalMotion := 0.0
+	if deviation.Sign() > 0 {
+		normalMotion = provenUpRound(2 * ratFloatUp(deviation) / minimumDistance)
+	}
+	observedNormal := actual.Normal.Value
+	idealNormal := want.Normal.Value
+	if actual.Normal.Bound.Base() == 0 && want.Normal.Bound.Base() == 0 &&
+		observedNormal == idealNormal && spherePairCardinalNormal(observedNormal) {
+		normalMotion = 0
+	}
+	normalDifference := math.Hypot(observedNormal.X-idealNormal.X,
+		math.Hypot(observedNormal.Y-idealNormal.Y, observedNormal.Z-idealNormal.Z))
+	if !finiteMeasurementValues(normalMotion, normalDifference) ||
+		normalDifference > provenUpRound(actual.Normal.Bound.Base()+want.Normal.Bound.Base()+normalMotion) {
+		ideal.Manifold, ideal.Reason = nil, ContactNoNormalProof
+		return
+	}
+	if normalMotion > 0 {
+		actual.Normal.Bound = units.Scalar(provenUpRound(actual.Normal.Bound.Base() + normalMotion))
+		actual.Normal.Exactness = exactnessFromBound(actual.Normal.Bound.Base())
+		actual.NormalAngle = units.Radians(provenUpRound(actual.NormalAngle.Base() + 4*normalMotion))
+	}
+	if actual.Normal.Bound.Base() > r.req.NormalResolution.Base() ||
+		actual.NormalAngle.Base() > r.req.NormalResolution.Base() {
+		ideal.Manifold, ideal.Reason = nil, ContactNoNormalProof
+		return
+	}
 	resolution, ok := exactBaseValue(r.req.PointResolution)
 	if !ok {
 		ideal.Manifold, ideal.Reason = nil, ContactPointTooCoarse
 		return
 	}
-	for _, witness := range []*VecMeasurement{&actual.OnA, &actual.OnB} {
-		bound := new(big.Rat).Add(floatRat(witness.Bound.Base()), deviation)
+	for _, witness := range []struct {
+		point  *VecMeasurement
+		radius dyadic
+	}{{&actual.OnA, r.sphereA.radius}, {&actual.OnB, r.sphereB.radius}} {
+		bound := new(big.Rat).Add(floatRat(witness.point.Bound.Base()), deviation)
+		if normalMotion > 0 {
+			bound.Add(bound, floatRat(provenUpRound(ratFloatUp(witness.radius.rat())*normalMotion)))
+		}
 		if bound.Cmp(resolution) > 0 {
 			ideal.Manifold, ideal.Reason = nil, ContactPointTooCoarse
 			return
 		}
-		witness.Bound = units.Millimeters(ratFloatUp(bound))
-		witness.Exactness = exactnessFromBound(witness.Bound.Base())
+		witness.point.Bound = units.Millimeters(ratFloatUp(bound))
+		witness.point.Exactness = exactnessFromBound(witness.point.Bound.Base())
 	}
 	sepBound := new(big.Rat).Add(floatRat(actual.Separation.Bound.Base()), deviation)
+	if normalMotion > 0 {
+		sepBound.Add(sepBound, floatRat(provenUpRound(
+			ratFloatUp(dyAdd(r.sphereA.radius, r.sphereB.radius).rat())*normalMotion)))
+	}
 	actual.Separation.Bound = units.Millimeters(ratFloatUp(sepBound))
 	actual.Separation.Exactness = exactnessFromBound(actual.Separation.Bound.Base())
 	ideal.Manifold = &ContactManifold{Points: []ContactPoint{actual}}
 	ideal.Reason = ContactNoReason
+}
+
+func spherePairCardinalNormal(n r3.Vec) bool {
+	return n == (r3.Vec{X: 1}) || n == (r3.Vec{X: -1}) ||
+		n == (r3.Vec{Y: 1}) || n == (r3.Vec{Y: -1}) ||
+		n == (r3.Vec{Z: 1}) || n == (r3.Vec{Z: -1})
 }
 
 // At a final-instant impact the right sample is the exact path endpoint.
@@ -332,11 +396,13 @@ func (r *sourceSpherePairSweepRun) transverse(ctx context.Context, first *SweepS
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
 	r.report.bracketRight = new(big.Rat).Set(rightF)
+	r.report.replay.setBracket(leftF, rightF)
 	r.sortSamples()
 	return r.report, nil
 }
 
 func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*SweepReport, error) {
+	defer r.report.replay.snapshot(r.report)
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	first, err := r.sample(ctx, zero)
 	if errors.Is(err, errSweepPoseBudget) {
@@ -426,6 +492,7 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
 	r.report.bracketRight = new(big.Rat).Set(rightF)
+	r.report.replay.setBracket(leftF, rightF)
 	r.sortSamples()
 	return r.report, nil
 }

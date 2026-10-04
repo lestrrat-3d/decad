@@ -454,6 +454,9 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			sphereA, sphereOKA := sourceSphereAtPose(a, pa.from)
 			sphereB, sphereOKB := sourceSphereAtPose(b, pb.from)
 			if sphereOKA && sphereOKB {
+				pair := [2]sourceSphereContactProof{sphereA, sphereB}
+				report.replay = &sweepReplayProof{pa: pa, pb: pb, spherePair: &pair,
+					request: req.ContactRequest}
 				return (&sourceSpherePairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 					req: req, report: report, sphereA: sphereA, sphereB: sphereB}).execute(ctx, resolution)
 			}
