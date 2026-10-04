@@ -14,7 +14,9 @@ func TestThreeBodyImpactWithThirdClear(t *testing.T) {
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
-	remote := makeBox(t, doc, 100, 100, 110, 110, 0, 10)
+	// A fictitious one-second continuation of the incoming velocity reaches
+	// this body; the actual short correction and outgoing drift stay clear.
+	remote := makeBox(t, doc, -5, -5, 5, 5, -50, 10)
 	density := units.KilogramsPerCubicMillimeter(0.001)
 	material := dynamics.Material{Restitution: units.Scalar(0.5), Friction: units.Scalar(0)}
 	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
@@ -105,6 +107,7 @@ func TestThreeBodyRejectsSecondContact(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, report.Status)
 	require.Nil(t, report.Next)
+	require.Equal(t, dynamics.BodyPair{A: box, B: barrier}, report.Diagnostics[0].Pair)
 
 	config.Excluded = []dynamics.BodyPair{{A: barrier, B: box}}
 	w, err = dynamics.NewWorld(t.Context(), doc, config)
@@ -131,4 +134,5 @@ func TestThreeBodyRejectsSecondContact(t *testing.T) {
 	require.Equal(t, dynamics.Undecided, report.Status)
 	require.Nil(t, report.Next)
 	require.Contains(t, report.Diagnostics[0].Reason, "third-body pair lacks a clear response path")
+	require.Equal(t, dynamics.BodyPair{A: box, B: upper}, report.Diagnostics[0].Pair)
 }

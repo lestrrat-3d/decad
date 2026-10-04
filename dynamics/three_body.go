@@ -237,7 +237,7 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 				return nil, err
 			}
 			if contact.Relation != decad.ContactSeparated {
-				return undecided(w, "fixed third-body pair is not separated"), nil
+				return w.threeUndecided(key, "fixed third-body pair is not separated"), nil
 			}
 			continue
 		}
@@ -249,10 +249,10 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 			continue
 		}
 		if active >= 0 {
-			return undecided(w, "more than one three-body pair may contact during the step"), nil
+			return w.threeUndecided(key, "more than one three-body pair may contact during the step"), nil
 		}
 		if first.Outcome == decad.SweepUndecided {
-			return undecided(w, "a three-body pair sweep is undecided"), nil
+			return w.threeUndecided(key, "a three-body pair sweep is undecided"), nil
 		}
 		active = key
 	}
@@ -283,7 +283,7 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 		if ok, err := w.threeOtherPairClear(ctx, pair, kicked, result, dt); err != nil {
 			return nil, err
 		} else if !ok {
-			return undecided(w, "third-body pair lacks a clear response path"), nil
+			return w.threeUndecided(key, "third-body pair lacks a clear response path"), nil
 		}
 	}
 	result.Excluded = w.Excluded()
@@ -310,6 +310,17 @@ func threePairExcluded(excluded []BodyPair, parts [3]RigidBody, pair [2]int) boo
 	return false
 }
 
+func (w *World) threeUndecided(key int, reason string) *StepReport {
+	report := undecided(w, reason)
+	if key >= 0 && key < len(threePairs) {
+		indices := threePairs[key]
+		report.Diagnostics[0].Pair = BodyPair{
+			A: w.three.parts[indices[0]].Body, B: w.three.parts[indices[1]].Body,
+		}
+	}
+	return report
+}
+
 func (w *World) threeOtherPairClear(ctx context.Context, pair *World, kicked State,
 	active *StepReport, dt units.Value) (bool, error) {
 	start := pairState(kicked, pair)
@@ -328,7 +339,7 @@ func (w *World) threeOtherPairClear(ctx context.Context, pair *World, kicked Sta
 	}
 	// Position correction is a separate path, even though it consumes no step time.
 	if pre.entries[0].Pose != post.entries[0].Pose || pre.entries[1].Pose != post.entries[1].Pose {
-		separated, err := threeClearSegment(ctx, pair, pre, post, units.Seconds(1))
+		separated, err := threeClearCorrection(ctx, pair, pre, post)
 		if err != nil || !separated {
 			return separated, err
 		}
@@ -338,6 +349,19 @@ func (w *World) threeOtherPairClear(ctx context.Context, pair *World, kicked Sta
 		return threeClearSegment(ctx, pair, post, end, units.Seconds(remaining))
 	}
 	return threeClearEndpoint(ctx, pair, end)
+}
+
+func threeClearCorrection(ctx context.Context, pair *World, pre, post State) (bool, error) {
+	// The correction is the actual pose-to-pose path. Incoming velocity does
+	// not continue during its arbitrary sweep parameter interval.
+	sweep, err := pair.sweepPoses(ctx, pre, post, units.Seconds(1), decad.StopAtInitialContact)
+	if err != nil {
+		return false, err
+	}
+	if sweep.Outcome != decad.SweepClear {
+		return false, nil
+	}
+	return threeClearEndpoint(ctx, pair, post)
 }
 
 func threeClearSegment(ctx context.Context, pair *World, start, end State,
