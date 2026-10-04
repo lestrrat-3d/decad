@@ -12,6 +12,12 @@ owns positive-volume overlap;
 This document adds witnesses and normal certificates without weakening any of
 those admission gates.
 
+Current code certifies relations and face manifolds for source boxes at
+signed-permutation poses. At identity query poses, the analytic clearance
+kernel can also certify a relation for other admitted solids, but its result
+has no contact manifold. Witness and normal proofs for those solids remain
+design contracts.
+
 ## 1. Claims and entry point
 
 ```go

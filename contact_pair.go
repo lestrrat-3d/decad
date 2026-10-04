@@ -77,8 +77,10 @@ type ContactReport struct {
 
 // ContactPair proves the relation of two live solids at poses applied after
 // their recorded placements. Bodies and the document are not changed. This
-// first stage certifies source rectangular prisms at signed-axis poses; other
-// valid solids return ContactUndecided with ContactPayloadUnsupported.
+// Source rectangular prisms are certified at signed-axis poses. At identity
+// query poses, the analytic clearance kernel can also prove a relation for
+// other solids; those reports have no manifold until source contact witnesses
+// and normals can be certified.
 // Both bodies must be non-nil, distinct, live members of d.
 func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transform,
 	req ContactRequest) (*ContactReport, error) {
@@ -113,6 +115,12 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	boxA, okA := sourceBoxAtPose(a, poseA)
 	boxB, okB := sourceBoxAtPose(b, poseB)
 	if !okA || !okB {
+		if poseA == r3.Identity() && poseB == r3.Identity() {
+			if err := classifyAnalyticContact(ctx, report); err != nil {
+				return nil, err
+			}
+			return report, nil
+		}
 		report.Reason = ContactPayloadUnsupported
 		return report, nil
 	}
@@ -121,6 +129,38 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	}
 	classifySourceBoxes(report, boxA, boxB)
 	return report, nil
+}
+
+// classifyAnalyticContact consumes only the clearance kernel's complete-pair
+// verdict. Its candidate intervals do not retain admitted source witnesses or
+// normals, so even a proved touch or overlap cannot publish a manifold here.
+func classifyAnalyticContact(ctx context.Context, report *ContactReport) error {
+	res, err := clearancePair(ctx, report.A, report.B, false)
+	if err != nil {
+		return err
+	}
+	switch res.verdict {
+	case pairDisjoint:
+		gap := pairGapMeasurement(res)
+		if !finiteMeasurementValues(gap.Value.Base(), gap.Bound.Base()) ||
+			gap.Value.Base()-gap.Bound.Base() <= 0 {
+			report.Reason = ContactNoGapProof
+			return nil
+		}
+		report.Relation = ContactSeparated
+		report.Gap = &gap
+	case pairTouching:
+		report.Relation = ContactTouching
+		gap := Measurement{Value: units.Millimeters(0), Exactness: Exact, Bound: units.Millimeters(0)}
+		report.Gap = &gap
+		report.Reason = ContactNoNormalProof
+	case pairOverlapping:
+		report.Relation = ContactOverlapping
+		report.Reason = ContactNoNormalProof
+	default:
+		report.Reason = ContactNoGapProof
+	}
+	return nil
 }
 
 func classifySourceBoxes(report *ContactReport, a, b sourceBoxContactProof) {

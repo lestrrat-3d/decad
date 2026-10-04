@@ -1077,6 +1077,9 @@
 4	0.00	TestContactFloorUsesTrueSectionBBox
 4	0.00	TestContactMemoPromotesDenseWithoutChangingEntries
 4	0.00	TestContactMemoRepeatsTheClassifier
+4	0.00	TestContactPairAnalyticPrismGap
+4	0.00	TestContactPairAnalyticPrismOverlap
+4	0.00	TestContactPairAnalyticPrismTouch
 4	0.00	TestContactPairPlacedBodyAndInputGates
 4	0.00	TestContactPairShallowOverlapAndRefusals
 4	0.00	TestContactPairSignedAxisPose
@@ -1315,8 +1318,10 @@
 4	0.00	TestLoopCoEdgesReturnImmutableView
 4	0.01	TestLoopSignedAreaMatchesFullIntegrator
 4	0.00	TestLoopSignedAreaPreservesBudgetAndErrors
+4	0.00	TestMassPropertiesCircularPrism
 4	0.00	TestMassPropertiesRefusals
 4	0.00	TestMassPropertiesSourceBox
+4	0.00	TestMassPropertiesTrianglePrism
 4	0.00	TestMeasurement
 4	0.00	TestMidpointSplitCreatesAKnownZeroJoint
 4	0.00	TestMinRadiusPlainBlockNil
@@ -1664,6 +1669,8 @@
 4	0.00	TestSweepLineStagesTessellation
 4	0.00	TestSweepLineTiltedFrameCarriesEndpointGap
 4	0.00	TestSweepPairRotatingPathUndecided
+4	0.00	TestSweepPairSourceBoxPersistentSlide
+4	0.00	TestSweepPairSourceBoxSlideEdgeTransition
 4	0.00	TestSweepPairTranslatedBoxesImpact
 4	0.00	TestSweepPairTwoMoversAndDeparture
 4	0.00	TestTangentJoinedOffsetsBuildBothFeatures

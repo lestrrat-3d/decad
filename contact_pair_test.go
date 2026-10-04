@@ -72,6 +72,56 @@ func TestContactPairSourceBoxes(t *testing.T) {
 	require.Equal(t, before, doc.Bodies())
 }
 
+func TestContactPairAnalyticPrismGap(t *testing.T) {
+	doc := decad.New()
+	a := rodBody(t, doc, 0, 0, 2, 5)
+	b := rodBody(t, doc, 20, 0, 2, 5)
+	before := doc.Bodies()
+	id := r3.Identity()
+
+	report, err := doc.ContactPair(t.Context(), a, b, id, id, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, report.Relation)
+	require.NotNil(t, report.Gap)
+	require.LessOrEqual(t, report.Gap.Value.Base()-report.Gap.Bound.Base(), 16.0)
+	require.GreaterOrEqual(t, report.Gap.Value.Base()+report.Gap.Bound.Base(), 16.0)
+	require.Nil(t, report.Manifold)
+	require.Equal(t, decad.ContactNoReason, report.Reason)
+	require.Equal(t, before, doc.Bodies())
+}
+
+func TestContactPairAnalyticPrismTouch(t *testing.T) {
+	doc := decad.New()
+	a := rodBody(t, doc, 0, 0, 2, 5)
+	b := boxBodyAtZ(t, doc, -5, -5, 5, 5, 5, 10)
+	before := doc.Bodies()
+	id := r3.Identity()
+
+	report, err := doc.ContactPair(t.Context(), a, b, id, id, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, report.Relation)
+	require.NotNil(t, report.Gap)
+	require.Equal(t, decad.Exact, report.Gap.Exactness)
+	require.Zero(t, report.Gap.Value.Base())
+	require.Nil(t, report.Manifold)
+	require.Equal(t, decad.ContactNoNormalProof, report.Reason)
+	require.Equal(t, before, doc.Bodies())
+}
+
+func TestContactPairAnalyticPrismOverlap(t *testing.T) {
+	doc := decad.New()
+	a := rodBody(t, doc, 0, 0, 2, 5)
+	b := boxBodyAtZ(t, doc, -1, -1, 1, 1, -2, 10)
+	id := r3.Identity()
+
+	report, err := doc.ContactPair(t.Context(), a, b, id, id, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactOverlapping, report.Relation)
+	require.Nil(t, report.Gap)
+	require.Nil(t, report.Manifold)
+	require.Equal(t, decad.ContactNoNormalProof, report.Reason)
+}
+
 func TestContactPairShallowOverlapAndRefusals(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)

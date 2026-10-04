@@ -1,5 +1,5 @@
 // Package dynamics advances rigid bodies using decad's certified geometry queries.
-// The current implementation admits one frictionless translating body and one fixed body.
+// The current implementation admits one frictionless translating pair with at least one dynamic body.
 package dynamics
 
 import (
@@ -83,7 +83,7 @@ type World struct {
 	step  StepConfig
 }
 
-// NewWorld admits the first supported pair: one fixed body and one density-derived dynamic body.
+// NewWorld admits two density-derived dynamic bodies or one with a fixed body.
 func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World, error) {
 	if doc == nil || ctx == nil {
 		return nil, fmt.Errorf("%w: nil document or context", ErrInvalidInput)
@@ -92,7 +92,7 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 		return nil, err
 	}
 	if len(cfg.Bodies) != 2 || len(cfg.Excluded) != 0 || len(cfg.Overrides) != 0 {
-		return nil, fmt.Errorf("%w: this stage admits exactly one fixed/dynamic pair without exclusions", ErrUnsupported)
+		return nil, fmt.Errorf("%w: this stage admits one pair without exclusions or overrides", ErrUnsupported)
 	}
 	live := doc.Bodies()
 	seen := map[*decad.Body]struct{}{}
@@ -145,8 +145,8 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 			return nil, fmt.Errorf("%w: unknown body role", ErrInvalidInput)
 		}
 	}
-	if fixed != 1 || dynamic != 1 {
-		return nil, fmt.Errorf("%w: one fixed and one dynamic body required", ErrUnsupported)
+	if dynamic == 0 || fixed+dynamic != 2 {
+		return nil, fmt.Errorf("%w: one or two dynamic bodies required", ErrUnsupported)
 	}
 	return w, nil
 }

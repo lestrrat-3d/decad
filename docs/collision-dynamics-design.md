@@ -1,9 +1,11 @@
 # Collision and Rigid Dynamics Design
 
 This document is the system map and delivery order for collision-aware rigid
-motion. The first source-box contact, two-body sweep, mass, and vertical rebound
-slice are implemented. Later stages remain design contracts. Each companion
-document owns its detail.
+motion. Current code certifies source-box contact, affine two-body sweeps,
+persistent face contact and its first edge transition, and mass properties for
+source boxes and admitted untapered prisms. It steps one frictionless pair with
+a fixed and dynamic body or two centered dynamic bodies. The remaining response
+and payload paths are design contracts. Each companion document owns its detail.
 
 | Design | Ownership |
 |---|---|
@@ -48,12 +50,12 @@ detailed rule, the owning design controls that rule.
 
 ## 3. Required dependencies
 
-The version of `units` pinned by this repository lacks the Time, Velocity,
-and Acceleration kinds needed by the public step and sweep APIs. Update the
-pinned dependency before implementing those APIs. `r3` also needs a symmetric
-tensor with rotation and inversion support before implementing inertia-based
-angular response. The dynamics API is a subpackage of this module, so it does
-not need a separate module or a geometry dependency pointing back to it.
+The pinned `units` dependency provides Time, Velocity, Acceleration, AngularVelocity,
+Force, Torque, and Impulse for the public sweep and step APIs. The pinned `r3`
+dependency still needs a symmetric tensor with rotation and inversion support
+before inertia-based angular response. The dynamics API is a subpackage of
+this module, so it does not need a separate module or a geometry dependency
+pointing back to it.
 
 ## 4. First real integration slice
 
@@ -73,7 +75,8 @@ screw interpolation is reserved for prescribed kinematic motion.
 
 ## 5. Delivery order
 
-1. Add the required units and tensor operations, plus their focused tests.
+1. Use the pinned physical units and add the tensor operations needed for
+   angular response, plus their focused tests.
 2. Complete exact source-box contact and sweep, then run the real rebound
    fixture through `dynamics.Step` before expanding shape coverage.
 3. Add independent movers, kinematic paths, friction, resting contact, and
