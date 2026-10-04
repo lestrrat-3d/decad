@@ -279,7 +279,14 @@ func sphereImpactBracket(root, duration, resolution *big.Rat) (*big.Rat, *big.Ra
 			rightIdx := new(big.Int).Add(new(big.Int).Set(floor), big.NewInt(2))
 			left := new(big.Rat).SetFrac(leftIdx, grid)
 			right := new(big.Rat).SetFrac(rightIdx, grid)
+			if right.Cmp(big.NewRat(1, 1)) > 0 && root.Cmp(big.NewRat(1, 1)) < 0 {
+				// A prefix ending just after impact can use its real endpoint.
+				// The sampled manifold below still has to prove overlap there.
+				right = big.NewRat(1, 1)
+			}
+			span := new(big.Rat).Mul(new(big.Rat).Sub(right, left), duration)
 			if left.Sign() <= 0 || right.Cmp(big.NewRat(1, 1)) > 0 ||
+				span.Cmp(resolution) > 0 ||
 				floatRat(ratFloatNearest(left)).Cmp(left) != 0 ||
 				floatRat(ratFloatNearest(right)).Cmp(right) != 0 {
 				return nil, nil, false
@@ -315,9 +322,17 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 			return r.report, nil
 		}
 	}
-	_, _, gap, slope, ok := r.contactAxis()
+	axis, side, gap, slope, ok := r.contactAxis()
 	if !ok {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
+	}
+	r.report.replay = &sweepReplayProof{pa: r.pa, pb: r.pb, request: r.req.ContactRequest,
+		sphere: &r.sphere, sphereFirst: r.sphereFirst, sphereAxis: axis, sphereSide: side,
+		sphereGap: gap, sphereSlope: slope}
+	if r.sphereFirst {
+		r.report.replay.boxB = r.box
+	} else {
+		r.report.replay.boxA = r.box
 	}
 	if first.Ideal.Relation == ContactTouching {
 		if slope.sign() > 0 {
@@ -333,6 +348,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 			}
 			r.report.Outcome = SweepDepartedClear
 			r.report.Departure = &SweepDeparture{Until: last.At, GapAtUntil: *last.Ideal.Gap}
+			r.report.replay.snapshot(r.report)
 			return r.report, nil
 		}
 		if slope.isZero() && r.req.StartPolicy == ContinueCertifiedTouch {
@@ -347,6 +363,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 				}
 				if last.Ideal.Relation == ContactTouching && last.Ideal.Manifold != nil {
 					r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, track
+					r.report.replay.snapshot(r.report)
 					return r.report, nil
 				}
 			}
@@ -368,6 +385,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 			return r.undecided(zero, one, SweepPoseRelation), nil
 		}
 		r.report.Outcome = SweepClear
+		r.report.replay.snapshot(r.report)
 		return r.report, nil
 	}
 	root := new(big.Rat).Quo(dyNeg(gap).rat(), slope.rat())
@@ -397,6 +415,8 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
 	r.report.bracketRight = new(big.Rat).Set(rightF)
+	r.report.replay.setBracket(leftF, rightF)
+	r.report.replay.snapshot(r.report)
 	r.sortSamples()
 	return r.report, nil
 }

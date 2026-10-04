@@ -238,6 +238,15 @@ left endpoint and a right endpoint beyond that root, no wider than the caller's
 time resolution. The right margin keeps the float query on the overlapping
 side when ideal and rounded poses differ by a small amount.
 
+For a shortened impact prefix, the final fraction may replace the usual right
+dyadic sample when the root lies before that endpoint and the shortened
+bracket fits `TimeResolution`. The real endpoint sample must still report a
+matching shallow sphere manifold. Replay caches the original sphere and box,
+the face corridor, and the exact affine support gap. At an interior fraction,
+check the rounded placements against the ideal path within `PointResolution`,
+then require the same face corridor and the outcome's support-gap relation.
+Refuse replay when either check fails.
+
 At each sample, classify the ideal rational sphere and box independently of
 the float `ContactPair` query. Transfer the float manifold only when relation,
 source features, and normal agree; widen its two witness bounds and separation

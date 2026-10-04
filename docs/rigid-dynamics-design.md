@@ -604,7 +604,8 @@ The rotational response uses the certified `RigidDriftSegment` as its stored
 path and returns that sweep's certified fraction-one float pose. It does not
 claim that an independently interpolated `PoseSegment` is clear.
 `Trace.Sample` evaluates clear, departed, persistent-contact, and transition
-slices against each stored rounded sweep's cached source-box certificate.
+slices against each stored rounded sweep's cached source-box or source-sphere
+certificate.
 It compares the exact held time values when selecting an event or endpoint.
 An event at a proved final sweep fraction retains the input `dt` value;
 interior event times must lie strictly inside the exact held duration.

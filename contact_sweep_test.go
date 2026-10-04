@@ -182,10 +182,28 @@ func TestSweepPairSourceSphereAndBox(t *testing.T) {
 	require.GreaterOrEqual(t, report.Bracket.To.Elapsed.Value.Base(), 0.1)
 	require.LessOrEqual(t,
 		report.Bracket.To.Elapsed.Value.Base()-report.Bracket.From.Elapsed.Value.Base(), 1e-9)
+	require.True(t, report.HasAffineReplayProof())
+	beforeA, beforeB, err := report.CertifiedPosesAtInterval(units.Milliseconds(50),
+		units.Seconds(0), units.Seconds(0.2))
+	require.NoError(t, err)
+	require.Equal(t, r3.Identity(), beforeA)
+	require.InDelta(t, 10, beforeB.Translation().Z, 1e-12)
 	reversed, err := doc.SweepPair(t.Context(), ball, floor, drop, still, req)
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepImpactBracket, reversed.Outcome, "cause=%v", reversed.Cause)
 	require.Equal(t, r3.Vec{Z: -1}, reversed.Event.Manifold.Points[0].Normal.Value)
+	reverseA, reverseB, err := reversed.CertifiedPosesAt(units.Seconds(.05))
+	require.NoError(t, err)
+	require.InDelta(t, 10, reverseA.Translation().Z, 1e-12)
+	require.Equal(t, r3.Identity(), reverseB)
+	slow := sweepDrift(r3.Vec{Z: -10}, .2)
+	slow.From = drop.From
+	clearReport, err := doc.SweepPair(t.Context(), floor, ball, still, slow, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepClear, clearReport.Outcome)
+	_, clearBall, err := clearReport.CertifiedPosesAt(units.Seconds(.1))
+	require.NoError(t, err)
+	require.InDelta(t, 14, clearBall.Translation().Z, 1e-12)
 	require.Equal(t, before, doc.Bodies())
 }
 
@@ -207,6 +225,9 @@ func TestSweepPairSourceSphereTouchContinuation(t *testing.T) {
 	require.Len(t, manifold.Points, 1)
 	require.Equal(t, r3.Vec{Z: 1}, manifold.Points[0].Normal.Value)
 	require.Equal(t, 0.0, manifold.Points[0].Separation.Value.Base())
+	_, touchBall, err := report.CertifiedPosesAt(units.Seconds(.05))
+	require.NoError(t, err)
+	require.Equal(t, r3.Vec{Z: 5}, touchBall.Translation())
 	departing := touching
 	departing.LinearVelocity.Z = units.MillimetersPerSecond(50)
 	req.StartPolicy = decad.ContinueSeparatingTouch
@@ -214,6 +235,9 @@ func TestSweepPairSourceSphereTouchContinuation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepDepartedClear, report.Outcome, "cause=%v", report.Cause)
 	require.NotNil(t, report.Departure)
+	_, departedBall, err := report.CertifiedPosesAt(units.Seconds(.05))
+	require.NoError(t, err)
+	require.InDelta(t, 7.5, departedBall.Translation().Z, 1e-12)
 }
 
 func TestSweepPairSourceSphereInitialEdgeTouch(t *testing.T) {
@@ -235,6 +259,9 @@ func TestSweepPairSourceSphereInitialEdgeTouch(t *testing.T) {
 	require.Equal(t, decad.ContactTouching, report.InitialEvent.Relation)
 	require.Nil(t, report.InitialEvent.Manifold)
 	require.Len(t, report.Samples, 1)
+	require.False(t, report.HasAffineReplayProof())
+	_, _, err = report.CertifiedPosesAt(units.Seconds(.05))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
 func TestSweepPairTwoMoversAndDeparture(t *testing.T) {

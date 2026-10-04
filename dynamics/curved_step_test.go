@@ -52,14 +52,15 @@ func TestSphereReboundUsesProductionContactAndSweep(t *testing.T) {
 	ball := makeBall(t, doc)
 	mass := exactSphereMass()
 	material := dynamics.Material{Restitution: units.Scalar(0.5), Friction: units.Scalar(0)}
+	contactRequest := decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+		NormalResolution: units.Radians(1e-6)}
 	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
 		Bodies: []dynamics.RigidBody{
 			{Body: floor, Role: dynamics.Fixed, Material: material},
 			{Body: ball, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
 		},
 		Step: dynamics.StepConfig{
-			Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
-				NormalResolution: units.Radians(1e-6)},
+			Contact:        contactRequest,
 			TimeResolution: units.Seconds(1e-9), ContactSlop: units.Millimeters(1e-6),
 			VelocityResidual:        units.MillimetersPerSecond(1e-6),
 			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
@@ -89,8 +90,26 @@ func TestSphereReboundUsesProductionContactAndSweep(t *testing.T) {
 	require.True(t, ok)
 	require.InDelta(t, 50, final.LinearVelocity.Z.Base(), 1e-6)
 	require.InDelta(t, 10, final.Pose.Translation().Z, 2e-6)
-	_, err = report.Trace.Sample(units.Seconds(.05))
-	require.ErrorIs(t, err, dynamics.ErrUnsupported)
+	before, err := report.Trace.Sample(units.Milliseconds(50))
+	require.NoError(t, err)
+	beforeBall, ok := before.Body(ball)
+	require.True(t, ok)
+	require.InDelta(t, 10, beforeBall.Pose.Translation().Z, 1e-9)
+	require.Equal(t, units.MillimetersPerSecond(-100), beforeBall.LinearVelocity.Z)
+	beforeContact, err := doc.ContactPair(t.Context(), floor, ball, r3.Identity(), beforeBall.Pose,
+		contactRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, beforeContact.Relation)
+	after, err := report.Trace.Sample(units.Seconds(.15))
+	require.NoError(t, err)
+	afterBall, ok := after.Body(ball)
+	require.True(t, ok)
+	require.InDelta(t, 7.5, afterBall.Pose.Translation().Z, 2e-6)
+	require.Equal(t, units.MillimetersPerSecond(50), afterBall.LinearVelocity.Z)
+	afterContact, err := doc.ContactPair(t.Context(), floor, ball, r3.Identity(), afterBall.Pose,
+		contactRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, afterContact.Relation)
 	endpointDuration := units.Seconds(.1000000002)
 	endpoint, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, endpointDuration)
 	require.NoError(t, err)
@@ -98,6 +117,11 @@ func TestSphereReboundUsesProductionContactAndSweep(t *testing.T) {
 	require.Len(t, endpoint.Events, 1)
 	require.Equal(t, units.Scalar(1), endpoint.Events[0].Bracket.To.Fraction)
 	require.Equal(t, endpointDuration, endpoint.Events[0].Time)
+	beforeEndpoint, err := endpoint.Trace.Sample(units.Seconds(.1))
+	require.NoError(t, err)
+	beforeEndpointBall, ok := beforeEndpoint.Body(ball)
+	require.True(t, ok)
+	require.Equal(t, units.MillimetersPerSecond(-100), beforeEndpointBall.LinearVelocity.Z)
 	post, err := endpoint.Trace.Sample(endpoint.Events[0].Time)
 	require.NoError(t, err)
 	postBall, ok := post.Body(ball)
