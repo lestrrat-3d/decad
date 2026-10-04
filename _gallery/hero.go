@@ -35,22 +35,10 @@ const (
 )
 
 type letter struct {
-	color  solidlens.Color
-	shapes [][][]point
-	// chamferCap is true for a letter whose shapes should get a cap-loop
-	// chamfer instead of a lateral fillet. It is a per-LETTER choice, not a
-	// per-shape one: A's three strokes (aLeft, aRight, aBar) are each a
-	// single, hole-free loop, but the crossbar's own rectangle overlaps each
-	// leg's trapezoid — both occupy the same X range at crossbar height AND
-	// the same Y depth, by the original (pre-hero-rework) design of these
-	// three shapes. Two bodies that already coincide there is not itself a
-	// defect; it only became visible once each stroke got its OWN
-	// independent cap-loop chamfer: the two bevelled cap faces are different
-	// sloped surfaces at that shared depth, so whichever one the renderer
-	// resolves as farther back shows a sliver of its slope past the nearer
-	// one's edge. A lateral fillet never touches the cap face's interior, so
-	// it never exposes this — the same reason D (a hole-bearing single
-	// shape) keeps a fillet instead of a chamfer.
+	color solidlens.Color
+	loops [][]point
+	// chamferCap selects a front-face bevel instead of an outside-corner
+	// fillet. The two D letters and A have counters and keep the fillet.
 	chamferCap bool
 }
 
@@ -71,11 +59,9 @@ func heroRender() imageRender {
 // heroScene builds the masthead from five of decad's features rather than
 // extrude and fillet alone: the backing plate is a shelled shadow-box whose
 // rim carries a real wall thickness; "E" and "C" are extruded and have their
-// whole front face bevelled by a cap-loop chamfer, while "D" (an outer+inner
-// loop pair) and "A" (three separately overlapping strokes) are extruded and
-// have their outside corners filleted instead (see letter.chamferCap and
-// letterBody for why each keeps the fillet); and one accent is a revolved
-// dome rather than a plain extruded cylinder.
+// whole front face bevelled by a cap-loop chamfer, while each "D" and "A"
+// has one outer loop and one counter and gets outside-corner fillets; one
+// accent is a revolved dome rather than a plain extruded cylinder.
 func heroScene(ctx context.Context, chord units.Value) (solidlens.Scene, error) {
 	plate, err := heroPlate(ctx)
 	if err != nil {
@@ -88,17 +74,15 @@ func heroScene(ctx context.Context, chord units.Value) (solidlens.Scene, error) 
 	models := []solidlens.Model{{Mesh: base, Material: solidlens.Matte(navy)}}
 
 	for li, item := range decadLetters() {
-		for si, shape := range item.shapes {
-			body, err := letterBody(ctx, shape, item.chamferCap)
-			if err != nil {
-				return solidlens.Scene{}, fmt.Errorf("build letter %d shape %d: %w", li, si, err)
-			}
-			mesh, err := drawnMesh(ctx, body, chord)
-			if err != nil {
-				return solidlens.Scene{}, fmt.Errorf("build letter %d shape %d: %w", li, si, err)
-			}
-			models = append(models, solidlens.Model{Mesh: mesh, Material: solidlens.Matte(item.color)})
+		body, err := letterBody(ctx, item.loops, item.chamferCap)
+		if err != nil {
+			return solidlens.Scene{}, fmt.Errorf("build letter %d: %w", li, err)
 		}
+		mesh, err := drawnMesh(ctx, body, chord)
+		if err != nil {
+			return solidlens.Scene{}, fmt.Errorf("build letter %d: %w", li, err)
+		}
+		models = append(models, solidlens.Model{Mesh: mesh, Material: solidlens.Matte(item.color)})
 	}
 
 	// The left accent stays a plain extruded peg; the right one is a
@@ -226,15 +210,6 @@ func decadLetters() []letter {
 		x += width + gap
 		return placed
 	}
-	placeShapes := func(shapes ...[][]point) [][][]point {
-		placed := make([][][]point, len(shapes))
-		for i, shape := range shapes {
-			placed[i] = placeLoops(shape)
-		}
-		x += width + gap
-		return placed
-	}
-
 	dOuter := []point{
 		{0, -height / 2}, {width - stroke, -height / 2}, {width, -height/2 + stroke},
 		{width, height/2 - stroke}, {width - stroke, height / 2}, {0, height / 2},
@@ -256,16 +231,30 @@ func decadLetters() []letter {
 		{stroke, -height/2 + 2*stroke}, {stroke, height/2 - 2*stroke},
 		{2 * stroke, height/2 - stroke}, {width, height/2 - stroke},
 	}
-	aLeft := []point{{0, -height / 2}, {stroke, -height / 2}, {width/2 + stroke/2, height / 2}, {width/2 - stroke/2, height / 2}}
-	aRight := []point{{width - stroke, -height / 2}, {width, -height / 2}, {width/2 + stroke/2, height / 2}, {width/2 - stroke/2, height / 2}}
-	aBar := []point{{stroke, -stroke / 2}, {width - stroke, -stroke / 2}, {width - stroke, stroke / 2}, {stroke, stroke / 2}}
+	// The A's notch below the bar and triangular counter above it form one
+	// profile, so neither the still nor the animation draws overlapping parts.
+	aSlope := width/2 - stroke/2
+	aInnerX := func(y float64) float64 {
+		return stroke + aSlope*(y+height/2)/height
+	}
+	barBottom, barTop := -stroke/2, stroke/2
+	counterTop := -height/2 + height*(width/2-stroke)/aSlope
+	aOuter := []point{
+		{0, -height / 2}, {stroke, -height / 2},
+		{aInnerX(barBottom), barBottom}, {width - aInnerX(barBottom), barBottom},
+		{width - stroke, -height / 2}, {width, -height / 2},
+		{width/2 + stroke/2, height / 2}, {width/2 - stroke/2, height / 2},
+	}
+	aCounter := []point{
+		{aInnerX(barTop), barTop}, {width / 2, counterTop}, {width - aInnerX(barTop), barTop},
+	}
 
 	return []letter{
-		{color: cyan, shapes: [][][]point{place(dOuter, dInner)}, chamferCap: false},
-		{color: blue, shapes: [][][]point{place(e)}, chamferCap: true},
-		{color: violet, shapes: [][][]point{place(c)}, chamferCap: true},
-		{color: coral, shapes: placeShapes([][]point{aLeft}, [][]point{aRight}, [][]point{aBar}), chamferCap: false},
-		{color: gold, shapes: [][][]point{place(dOuter, dInner)}, chamferCap: false},
+		{color: cyan, loops: place(dOuter, dInner), chamferCap: false},
+		{color: blue, loops: place(e), chamferCap: true},
+		{color: violet, loops: place(c), chamferCap: true},
+		{color: coral, loops: place(aOuter, aCounter), chamferCap: false},
+		{color: gold, loops: place(dOuter, dInner), chamferCap: false},
 	}
 }
 
@@ -290,11 +279,10 @@ func xzPrism(ctx context.Context, loops [][]point, extent decad.Extent) (*decad.
 	return decad.New().Extrude(s, profile, extent) //nolint:contextcheck
 }
 
-// letterBody extrudes one letter shape letterDepth toward the camera, then
+// letterBody extrudes one letter profile letterDepth toward the camera, then
 // either fillets its outside vertical corners (chamferCap false) or bevels
 // its whole front face with a cap-loop chamfer (chamferCap true) — the
-// caller decides per LETTER, not per shape; see letter.chamferCap for why D
-// and A both keep the fillet. Chamfering D's own cap loop (an outer+inner
+// caller decides per letter. Chamfering D's own cap loop (an outer+inner
 // loop pair) panics decad's own cap-blend tessellator regardless (it indexes
 // past a band slice, decad-side), so D's shape could not take a chamfer even
 // loop-by-loop. Fillet-then-chamfer on a hole-free shape was tried too — it
