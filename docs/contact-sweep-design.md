@@ -12,7 +12,9 @@ can also certify a clear path or bracket an impact after exact oriented-box
 pose relations, a bounded float-to-ideal pose difference, and whole-body
 travel bounds. An initial source-box face touch also certifies immediate
 departure when both bodies have the same angular velocity and the bounded
-normal separation rate is positive. Unequal spins, rotating `PoseSegment`
+normal separation rate is positive. A box spinning about world Z can also
+reach a contained horizontal face on a stationary box, then depart under
+positive vertical velocity. Other unequal spins, rotating `PoseSegment`
 paths, and other payloads remain design contracts.
 `docs/collision-dynamics-design.md` owns the package
 boundary and `docs/contact-geometry-design.md` owns relation and manifold
@@ -226,6 +228,18 @@ inequality. No tolerance turns a failed strict comparison into `Clear`.
 If an endpoint is touching, overlapping, or undecided, this positive-gap
 certificate cannot use it. A different continuous geometric proof may settle
 the interval only if the contact kernel explicitly supplies one.
+
+For a Z-axis rigid drift against a stationary source box, compare the two
+exact source-box Z supports after the stated vertical displacement at each
+dyadic fraction. Rotation leaves these supports unchanged. A float-pose
+horizontal manifold transfers to the ideal path only when every rotating
+face corner stays strictly inside the stationary face after both pose
+deviations and witness bounds are charged. A negative exact support gap
+proves a shallow ideal overlap even if the rounded pose touches. A zero gap
+proves ideal touch. Widen every transferred point by both pose deviations.
+An exact initial support equality and positive vertical relative speed prove
+a whole-body open-time gap; then the usual interval bounds certify the
+remaining path. A partial patch or a tilted rotation has no such proof.
 
 ### 4.4 Source sphere and box face corridor
 

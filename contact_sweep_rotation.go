@@ -289,10 +289,17 @@ func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSam
 			if okA && okB && orientedInteriorWitness(boxA, boxB, floatRat(etaA), floatRat(etaB)) {
 				event.Relation, event.Reason = ContactOverlapping, ContactNoNormalProof
 			}
+			if proof, ok := r.horizontalSpinContact(f, poseA, poseB, contact,
+				floatRat(etaA), floatRat(etaB)); ok {
+				event = proof
+			}
 		case ContactTouching:
 			if etaA == 0 && etaB == 0 {
 				event.Relation, event.Gap, event.Manifold = ContactTouching, contact.Gap, contact.Manifold
 				event.Reason = contact.Reason
+			} else if proof, ok := r.horizontalSpinContact(f, poseA, poseB, contact,
+				floatRat(etaA), floatRat(etaB)); ok {
+				event = proof
 			}
 		}
 	}
@@ -301,6 +308,118 @@ func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSam
 	r.report.Samples = append(r.report.Samples, *sample)
 	r.report.PoseEvaluations++
 	return sample, nil
+}
+
+// horizontalSpinContact uses the invariant support height of a Z-axis spin.
+// The read face patch must remain strictly inside the stationary face after
+// charging both pose deviations. Exact ideal support heights decide the event.
+func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.Transform,
+	contact *ContactReport, etaA, etaB *big.Rat) (SweepEvent, bool) {
+	if contact.Manifold == nil || len(contact.Manifold.Points) != 4 {
+		return SweepEvent{}, false
+	}
+	stationary, spinning := -1, -1
+	paths := [2]rotationalSweepPath{r.a, r.b}
+	for i, path := range paths {
+		if path.path.drift == nil && path.path.delta == [3]dyadic{} {
+			stationary = i
+		}
+		if path.path.drift != nil && path.frame.axis[0].Sign() == 0 &&
+			path.frame.axis[1].Sign() == 0 && path.frame.axis[2].Sign() != 0 &&
+			path.velocity[0].Sign() == 0 && path.velocity[1].Sign() == 0 {
+			spinning = i
+		}
+	}
+	if stationary < 0 || spinning < 0 || stationary == spinning {
+		return SweepEvent{}, false
+	}
+	poses := [2]r3.Transform{poseA, poseB}
+	base, okBase := sourceBoxAtPose(paths[stationary].body, poses[stationary])
+	startA, okA := sourceBoxAtPose(r.a.body, r.a.path.from)
+	startB, okB := sourceBoxAtPose(r.b.body, r.b.path.from)
+	if !okBase || !okA || !okB {
+		return SweepEvent{}, false
+	}
+	normal := contact.Manifold.Points[0].Normal.Value
+	if normal != (r3.Vec{Z: 1}) && normal != (r3.Vec{Z: -1}) {
+		return SweepEvent{}, false
+	}
+	elapsed := new(big.Rat).Mul(r.a.path.duration, f)
+	travel := new(big.Rat).Mul(paths[spinning].velocity[2], elapsed)
+	loA, hiA := startA.lo[2].rat(), startA.hi[2].rat()
+	loB, hiB := startB.lo[2].rat(), startB.hi[2].rat()
+	if spinning == 0 {
+		loA.Add(loA, travel)
+		hiA.Add(hiA, travel)
+	} else {
+		loB.Add(loB, travel)
+		hiB.Add(hiB, travel)
+	}
+	gap := new(big.Rat)
+	if normal.Z > 0 {
+		gap.Sub(loB, hiA)
+		if loA.Cmp(loB) >= 0 || hiA.Cmp(hiB) >= 0 {
+			return SweepEvent{}, false
+		}
+	} else {
+		gap.Sub(loA, hiB)
+		if loB.Cmp(loA) >= 0 || hiB.Cmp(hiA) >= 0 {
+			return SweepEvent{}, false
+		}
+	}
+	if gap.Sign() > 0 {
+		return SweepEvent{}, false
+	}
+	value := ratFloatNearest(gap)
+	bound := rationalFloatError(gap, value)
+	if !finiteMeasurementValues(value, bound) {
+		return SweepEvent{}, false
+	}
+	deviation := new(big.Rat).Add(etaA, etaB)
+	points := append([]ContactPoint(nil), contact.Manifold.Points...)
+	for i := range points {
+		point := &points[i]
+		if point.Normal.Value != normal || point.Normal.Bound.Base() != 0 ||
+			point.NormalAngle.Base() != 0 {
+			return SweepEvent{}, false
+		}
+		witness := point.OnA
+		if spinning == 1 {
+			witness = point.OnB
+		}
+		margin := new(big.Rat).Add(deviation, floatRat(witness.Bound.Base()))
+		margin.Sub(margin, gap)
+		coordinates := [2]float64{witness.Value.X, witness.Value.Y}
+		for axis := range 2 {
+			value := floatRat(coordinates[axis])
+			if value.Cmp(new(big.Rat).Add(base.lo[axis].rat(), margin)) <= 0 ||
+				value.Cmp(new(big.Rat).Sub(base.hi[axis].rat(), margin)) >= 0 {
+				return SweepEvent{}, false
+			}
+		}
+		for _, position := range []*VecMeasurement{&point.OnA, &point.OnB} {
+			bound := new(big.Rat).Add(floatRat(position.Bound.Base()), deviation)
+			if bound.Cmp(floatRat(r.req.PointResolution.Base())) > 0 {
+				return SweepEvent{}, false
+			}
+			published := ratFloatUp(bound)
+			if !finiteMeasurementValues(published) || published > r.req.PointResolution.Base() {
+				return SweepEvent{}, false
+			}
+			position.Bound = units.Millimeters(published)
+			position.Exactness = exactnessFromBound(position.Bound.Base())
+		}
+		point.Separation = Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
+			Exactness: exactnessFromBound(bound)}
+	}
+	zero := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: Exact}
+	event := SweepEvent{At: sweepInstant(f, r.a.path.duration), Manifold: &ContactManifold{Points: points}}
+	if gap.Sign() == 0 {
+		event.Relation, event.Gap = ContactTouching, &zero
+	} else {
+		event.Relation = ContactOverlapping
+	}
+	return event, true
 }
 
 func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error) {
@@ -380,6 +499,9 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 // another support plane. Taylor's theorem bounds its relative plane gap below
 // by c*u - K*u²/2, using exact c and outward K over the whole step.
 func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*big.Rat, bool) {
+	if fraction, ok := r.horizontalSpinDepartureFraction(first); ok {
+		return fraction, true
+	}
 	if r.a.path.drift == nil || r.b.path.drift == nil || first.Ideal.Manifold == nil ||
 		len(first.Ideal.Manifold.Points) == 0 {
 		return nil, false
@@ -463,6 +585,59 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 		fraction = new(big.Rat).Quo(fraction, big.NewRat(2, 1))
 	}
 	return nil, false
+}
+
+// A spin around the contact normal leaves both bodies' Z supports unchanged.
+// Positive relative Z travel therefore opens a whole-body gap from exact touch.
+func (r *rotationalPairSweep) horizontalSpinDepartureFraction(first *SweepSample) (*big.Rat, bool) {
+	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) == 0 {
+		return nil, false
+	}
+	paths := [2]rotationalSweepPath{r.a, r.b}
+	stationary, spinning := -1, -1
+	for i, path := range paths {
+		if path.path.drift == nil && path.path.delta == [3]dyadic{} {
+			stationary = i
+		}
+		if path.path.drift != nil && path.frame.axis[0].Sign() == 0 &&
+			path.frame.axis[1].Sign() == 0 && path.frame.axis[2].Sign() != 0 &&
+			path.velocity[0].Sign() == 0 && path.velocity[1].Sign() == 0 {
+			spinning = i
+		}
+	}
+	if stationary < 0 || spinning < 0 || stationary == spinning {
+		return nil, false
+	}
+	normal := first.Ideal.Manifold.Points[0].Normal.Value
+	if normal != (r3.Vec{Z: 1}) && normal != (r3.Vec{Z: -1}) {
+		return nil, false
+	}
+	a, okA := sourceOrientedBoxAtPose(r.a.body, r.a.path.from)
+	b, okB := sourceOrientedBoxAtPose(r.b.body, r.b.path.from)
+	if !okA || !okB {
+		return nil, false
+	}
+	z := dyV3{dyZero(), dyZero(), mustDyOf(1)}
+	alo, ahi := orientedProjection(a, z)
+	blo, bhi := orientedProjection(b, z)
+	gap := dySubScalar(blo, ahi)
+	if normal.Z < 0 {
+		gap = dySubScalar(alo, bhi)
+	}
+	if gap.sign() != 0 {
+		return nil, false
+	}
+	speed := new(big.Rat).Set(paths[spinning].velocity[2])
+	if spinning == 0 {
+		speed.Neg(speed)
+	}
+	if normal.Z < 0 {
+		speed.Neg(speed)
+	}
+	if speed.Sign() <= 0 {
+		return nil, false
+	}
+	return big.NewRat(1, 2), true
 }
 
 func (r *rotationalPairSweep) refine(ctx context.Context, left, right *SweepSample,

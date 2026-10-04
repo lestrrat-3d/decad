@@ -15,8 +15,9 @@ those admission gates.
 Current code certifies relations and face manifolds for source boxes at
 signed-permutation poses. An oriented source-box path also certifies relations
 under arbitrary proper read poses by projecting the exact transformed corners
-on all face and edge-cross axes. It publishes no manifold when a pose rotates
-the source faces away from signed axes. A full source semicircle sphere against
+on all face and edge-cross axes. It publishes a four-point manifold when one
+horizontal rotated box face lies strictly inside an axis-aligned box face.
+Other rotated patches have no manifold. A full source semicircle sphere against
 a source box also receives an exact rational relation proof and a point manifold
 at one isolated face support. At identity query poses, the analytic clearance
 kernel can certify a relation for other admitted solids without a contact
@@ -252,8 +253,18 @@ separation proves `Touching`; strict projected overlap on every axis proves
 `Overlapping`. A separated report bounds the minimum distance from below by
 the largest normalized axis gap and from above by a certified vertex-to-face
 or vertex-to-vertex witness. If those bounds cannot publish a positive gap,
-the relation is `Undecided`. Rotated face, edge, and vertex manifolds still
-need their own complete trimmed contact-set and source-feature proofs.
+the relation is `Undecided`. Other rotated face, edge, and vertex manifolds
+still need their own complete trimmed contact-set and source-feature proofs.
+
+The horizontal rotated-face path requires one source box at a signed-axis
+pose and another under a query pose that keeps world Z fixed. Its four exact
+face corners must all lie strictly inside the first box's projected face.
+For penetration, the depth must be strictly smaller than every projected
+side margin; the two bodies must cross at their opposed Z supports rather
+than contain one another. Publish those four corners with the original
+horizontal face identities and an exact axis normal. If a corner reaches a
+side or the pose tilts either face, keep the proven relation and omit the
+manifold until a complete clipped contact-set proof exists.
 
 ### 4.1 Source-box contact set for sweeps
 

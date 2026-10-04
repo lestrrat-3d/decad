@@ -20,7 +20,9 @@ certified contact track. A dynamic body's mass can come from
 density or a caller-supplied bounded mass record. One world-frame center force
 and torque per dynamic body contribute to the step's full-duration velocity kick.
 Separated source boxes can rotate through a certified clear drift and advance
-again from the returned spinning state.
+again from the returned spinning state. A Z-axis torque-driven box can also
+rebound from a wide fixed horizontal box face and continue spinning from the
+returned state when the real sweep certifies its impact and departure.
 The source-sphere face corridor carries a real sphere-to-box point manifold
 through an affine first-impact sweep and a centered fixed-floor rebound with
 supplied sphere mass. Two source spheres also have a cardinal point manifold,

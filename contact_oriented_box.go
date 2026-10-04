@@ -131,8 +131,10 @@ func classifyOrientedSourceBoxes(report *ContactReport, a, b orientedSourceBox) 
 		report.Relation = relation
 		report.Gap = &Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: Exact}
 		report.Reason = ContactNoNormalProof
+		publishContainedHorizontalPatch(report, a, b)
 	case ContactOverlapping:
 		report.Relation, report.Reason = relation, ContactNoNormalProof
+		publishContainedHorizontalPatch(report, a, b)
 	case ContactSeparated:
 		reading, ok := orientedBoxGap(a, b, gap, normSquared)
 		if !ok {
@@ -141,6 +143,130 @@ func classifyOrientedSourceBoxes(report *ContactReport, a, b orientedSourceBox) 
 		}
 		report.Relation, report.Gap = relation, &reading
 	}
+}
+
+// publishContainedHorizontalPatch handles a complete rotating box face
+// inside an axis-aligned box face. Exact corner and side-plane comparisons
+// certify the four-point patch, including a uniquely shallow penetration.
+func publishContainedHorizontalPatch(report *ContactReport, a, b orientedSourceBox) {
+	if base, ok := sourceBoxAtPose(report.A, report.PoseA); ok &&
+		publishHorizontalPatchOrder(report, base, b, report.B, report.PoseB, true) {
+		return
+	}
+	if base, ok := sourceBoxAtPose(report.B, report.PoseB); ok {
+		publishHorizontalPatchOrder(report, base, a, report.A, report.PoseA, false)
+	}
+}
+
+func publishHorizontalPatchOrder(report *ContactReport, base sourceBoxContactProof,
+	rotated orientedSourceBox, body *Body, pose r3.Transform, baseIsA bool) bool {
+	basis := pose.Basis()
+	if basis.EX.Z != 0 || basis.EY.Z != 0 || basis.EZ != (r3.Vec{Z: 1}) {
+		return false
+	}
+	source, ok := sourceBoxAtPose(body, r3.Identity())
+	if !ok {
+		return false
+	}
+	minZ, maxZ := orientedProjection(rotated, dyV3{dyZero(), dyZero(), mustDyOf(1)})
+	baseBelow := dyCmp(base.lo[2], minZ) < 0 && dyCmp(base.hi[2], maxZ) < 0
+	baseAbove := dyCmp(base.lo[2], minZ) > 0 && dyCmp(base.hi[2], maxZ) > 0
+	if !baseBelow && !baseAbove {
+		return false
+	}
+	var faceZ, supportZ, separation dyadic
+	var baseSide, rotatedSide int
+	if baseBelow {
+		faceZ, supportZ = minZ, base.hi[2]
+		separation = dySubScalar(faceZ, supportZ)
+		baseSide, rotatedSide = 1, 0
+	} else {
+		faceZ, supportZ = maxZ, base.lo[2]
+		separation = dySubScalar(supportZ, faceZ)
+		baseSide, rotatedSide = 0, 1
+	}
+	if separation.sign() > 0 ||
+		(report.Relation == ContactTouching && separation.sign() != 0) ||
+		(report.Relation == ContactOverlapping && separation.sign() >= 0) {
+		return false
+	}
+	depth := dyNeg(separation)
+	vertical := -1
+	for axis, edge := range rotated.edge {
+		if edge[0].sign() == 0 && edge[1].sign() == 0 && edge[2].sign() != 0 {
+			if vertical >= 0 {
+				return false
+			}
+			vertical = axis
+		}
+	}
+	if vertical < 0 {
+		return false
+	}
+	start := 0
+	if dyCmp(rotated.corner[0][2], faceZ) != 0 {
+		start = 1 << vertical
+	}
+	i, j := (vertical+1)%3, (vertical+2)%3
+	indices := [4]int{start, start | (1 << i), start | (1 << i) | (1 << j), start | (1 << j)}
+	var corners [4]dyV3
+	for n, index := range indices {
+		corner := rotated.corner[index]
+		if dyCmp(corner[2], faceZ) != 0 {
+			return false
+		}
+		for axis := range 2 {
+			if dyCmp(corner[axis], dyAdd(base.lo[axis], depth)) <= 0 ||
+				dyCmp(corner[axis], dySubScalar(base.hi[axis], depth)) >= 0 {
+				return false
+			}
+		}
+		corners[n] = corner
+	}
+	if report.Relation == ContactOverlapping &&
+		((baseBelow && dyCmp(maxZ, base.hi[2]) <= 0) ||
+			(baseAbove && dyCmp(minZ, base.lo[2]) >= 0)) {
+		return false
+	}
+	reading, ok := sourceBoxSignedReading(separation)
+	if !ok {
+		return false
+	}
+	normalZ := 1.0
+	if baseAbove {
+		normalZ = -1
+	}
+	if !baseIsA {
+		normalZ = -normalZ
+	}
+	faceBase, faceRotated := base.faces[2][baseSide], source.faces[2][rotatedSide]
+	points := make([]ContactPoint, 0, len(corners))
+	for _, corner := range corners {
+		basePoint := corner
+		basePoint[2] = supportZ
+		baseReading, okBase := sourceBoxPoint(basePoint)
+		rotatedReading, okRotated := sourceBoxPoint(corner)
+		if !okBase || !okRotated ||
+			baseReading.Bound.Base() > report.Request.PointResolution.Base() ||
+			rotatedReading.Bound.Base() > report.Request.PointResolution.Base() {
+			return false
+		}
+		point := ContactPoint{Normal: VecMeasurement{Value: r3.Vec{Z: normalZ},
+			Exactness: Exact, Bound: units.Scalar(0)}, NormalAngle: units.Radians(0),
+			Separation: reading}
+		if baseIsA {
+			point.OnA, point.OnB = baseReading, rotatedReading
+			point.FaceA, point.FaceB = faceBase, faceRotated
+		} else {
+			point.OnA, point.OnB = rotatedReading, baseReading
+			point.FaceA, point.FaceB = faceRotated, faceBase
+		}
+		point.FeatureA, point.FeatureB = ContactFeature{Face: point.FaceA}, ContactFeature{Face: point.FaceB}
+		points = append(points, point)
+	}
+	report.Manifold = &ContactManifold{Points: points}
+	report.Reason = ContactNoReason
+	return true
 }
 
 // orientedBoxGap encloses the true minimum distance. SAT supplies a lower
