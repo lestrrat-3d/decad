@@ -280,17 +280,17 @@ func (r *sourceSpherePairSweepRun) transverse(ctx context.Context, first *SweepS
 	if c.sign() <= 0 {
 		return r.undecided(zero, one, SweepPoseRelation), nil
 	}
-	clear := a.sign() == 0 || b.sign() >= 0
+	isClear := a.sign() == 0 || b.sign() >= 0
 	vertex := new(big.Rat)
-	if !clear {
+	if !isClear {
 		vertex.Quo(dyNeg(b).rat(), dyAdd(a, a).rat())
 		minimum := one
 		if vertex.Cmp(one) < 0 {
 			minimum = vertex
 		}
-		clear = spherePairQuadraticAt(a, b, c, minimum).Sign() > 0
+		isClear = spherePairQuadraticAt(a, b, c, minimum).Sign() > 0
 	}
-	if clear {
+	if isClear {
 		last, err := r.sample(ctx, one)
 		if errors.Is(err, errSweepPoseBudget) {
 			return r.undecided(zero, one, SweepPoseBudget), nil

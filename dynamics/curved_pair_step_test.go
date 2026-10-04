@@ -58,9 +58,9 @@ func TestSourceSpherePairTransverseEndpointImpact(t *testing.T) {
 			ImpactSpeed:             units.MillimetersPerSecond(0), MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2},
 	})
 	require.NoError(t, err)
-	start, err := w.NewState([]dynamics.BodyState{{Body: a, Pose: pa, LinearVelocity: dynamics.QuantityVec(va),
-		AngularVelocity: dynamics.QuantityVec(zero)}, {Body: b, Pose: pb, LinearVelocity: dynamics.QuantityVec(vb),
-		AngularVelocity: dynamics.QuantityVec(zero)}})
+	start, err := w.NewState([]dynamics.BodyState{{Body: a, Pose: pa, LinearVelocity: va,
+		AngularVelocity: zero}, {Body: b, Pose: pb, LinearVelocity: vb,
+		AngularVelocity: zero}})
 	require.NoError(t, err)
 	step, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.125))
 	require.NoError(t, err)
