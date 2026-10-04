@@ -251,8 +251,9 @@ jobs:
       # -smoke renders the first frame of every shot. -probe builds and
       # tessellates the bodies of every frame, so it also catches decad
       # refusing a value partway through a parameter ramp.
-      - name: Smoke-render and probe the landing clip
+      - name: Smoke-render hero and probe the landing clip
         run: |
+          go run . hero -smoke -out "$RUNNER_TEMP/hero"
           go run . clip -smoke -out "$RUNNER_TEMP/frames"
           go run . clip -probe
 

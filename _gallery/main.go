@@ -3,7 +3,7 @@
 //
 // It lives in its own module so that SolidLens and kinetograph stay out of
 // the decad library's dependency list. Run it from this directory with `go run .`; with
-// no flags it writes the hero image and every feature-table thumbnail under
+// no flags it writes the still hero and every feature-table thumbnail under
 // the repository's docs/images, at each shot's own chord tolerance and size,
 // exactly as committed.
 //
@@ -21,6 +21,9 @@
 //     size, then exits without rendering.
 //
 // Run `go run . -h` for the full flag reference.
+//
+// The hero subcommand renders the README's animated hero frames and prints
+// the ffmpeg command that writes docs/images/hero.gif.
 //
 // The clip subcommand renders the landing-page clip instead: `go run . clip`
 // animates the boolean plate, the shapes of the feature thumbnails and the
@@ -102,18 +105,20 @@ func main() {
 	}
 }
 
-// run renders every image the README references: the hero wordmark first,
-// then one thumbnail per feature-table row, each governed by the flags parsed
-// here. A first argument of "clip" hands the rest of the arguments to
-// runClip instead.
+// run renders the hero still and each feature thumbnail. A first argument of
+// "hero" or "clip" renders the corresponding animation instead.
 func run(ctx context.Context) error {
 	if len(os.Args) > 1 && os.Args[1] == "clip" {
 		return runClip(ctx, os.Args[2:], os.Stdout)
+	}
+	if len(os.Args) > 1 && os.Args[1] == "hero" {
+		return runHero(ctx, os.Args[2:], os.Stdout)
 	}
 	flag.Usage = func() {
 		out := flag.CommandLine.Output()
 		fmt.Fprintln(out, "Usage: go run . [flags]")
 		fmt.Fprintln(out, "       go run . clip [clip flags]   (go run . clip -h lists the clip flags)")
+		fmt.Fprintln(out, "       go run . hero [hero flags]   (go run . hero -h lists the hero flags)")
 		fmt.Fprintln(out, "Flags:")
 		flag.PrintDefaults()
 	}
