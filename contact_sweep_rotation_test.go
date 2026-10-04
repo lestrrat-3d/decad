@@ -133,6 +133,18 @@ func TestContactPairOrientedAxisFaceWitness(t *testing.T) {
 	require.InDelta(t, -.0001, reverse.Manifold.Points[0].Separation.Value.Base(), 1e-10)
 	require.InDelta(t, 19, reverse.Manifold.Points[0].OnA.Value.X, 1e-10)
 	require.InDelta(t, 19.0001, reverse.Manifold.Points[0].OnB.Value.X, 1e-10)
+
+	// The first face center is outside this smaller face, so the witness
+	// must come from the second face center and keep the same exact X gap.
+	small := boxBodyAtZ(t, doc, 19, 7, 29, 9, 4, 2)
+	fallback, err := doc.ContactPair(t.Context(), driver, small, pose, r3.Identity(), contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactOverlapping, fallback.Relation)
+	require.NotNil(t, fallback.Manifold)
+	require.Len(t, fallback.Manifold.Points, 1)
+	require.InDelta(t, -.0001, fallback.Manifold.Points[0].Separation.Value.Base(), 1e-10)
+	require.InDelta(t, 8, fallback.Manifold.Points[0].OnA.Value.Y, 1e-9)
+	require.InDelta(t, 5, fallback.Manifold.Points[0].OnA.Value.Z, 1e-9)
 }
 
 func TestSweepPairRotatingPoseSegmentBracketsAxisFaceImpact(t *testing.T) {

@@ -704,9 +704,10 @@ func (r *rotationalPairSweep) axisFaceDepartureFraction(first *SweepSample) (*bi
 	if side == 0 {
 		sideA, sideB = 0, 1
 	}
-	faceA, okA := orientedAxisFace(r.a.startBox, axis, sideA)
-	faceB, okB := orientedAxisFace(r.b.startBox, axis, sideB)
-	if !okA || !okB || dyCmp(faceA.origin[axis], faceB.origin[axis]) != 0 {
+	var faceA, faceB orientedFace
+	if !orientedAxisFace(&r.a.startBox, axis, sideA, &faceA) ||
+		!orientedAxisFace(&r.b.startBox, axis, sideB, &faceB) ||
+		dyCmp(faceA.origin[axis], faceB.origin[axis]) != 0 {
 		return nil, false
 	}
 	velocity := func(path rotationalSweepPath) (*big.Rat, bool) {
