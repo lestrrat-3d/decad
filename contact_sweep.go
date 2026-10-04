@@ -354,7 +354,8 @@ func exactnessFromBound(bound float64) Exactness {
 
 // SweepPair certifies the first encounter of two live solids under one shared
 // duration. Continuous proofs cover affine source-box paths, a source sphere
-// in a box face corridor, and rotating source-box rigid drifts. Unsupported
+// in a box face corridor, an axial pair of source spheres, and rotating
+// source-box rigid drifts. Unsupported
 // paths return SweepUndecided.
 // Both body pointers, both paths, and ctx must be non-nil.
 func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairPath,
@@ -412,6 +413,14 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	boxA, okA := sourceBoxAtPose(a, pa.from)
 	boxB, okB := sourceBoxAtPose(b, pb.from)
 	if !okA || !okB {
+		if !okA && !okB {
+			sphereA, sphereOKA := sourceSphereAtPose(a, pa.from)
+			sphereB, sphereOKB := sourceSphereAtPose(b, pb.from)
+			if sphereOKA && sphereOKB {
+				return (&sourceSpherePairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
+					req: req, report: report, sphereA: sphereA, sphereB: sphereB}).execute(ctx, resolution)
+			}
+		}
 		if okA && !okB {
 			if sphere, ok := sourceSphereAtPose(b, pb.from); ok {
 				return (&sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,

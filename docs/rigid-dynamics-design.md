@@ -11,6 +11,8 @@ apply equal and opposite impulses.
 A source semicircle sphere with supplied mass can rebound from a fixed source
 box on an isolated face-point contact when its affine sweep stays within that
 face corridor.
+Two source semicircle spheres with supplied mass can rebound as a centered
+dynamic pair when their relative center path stays on one cardinal axis.
 A two-body world's pair may be excluded; its bodies drift independently even
 through overlap, and no pair material is mixed.
 The current three-body step admits one dynamic body and two fixed bodies.

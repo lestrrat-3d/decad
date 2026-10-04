@@ -2036,3 +2036,5 @@
 2	0.00	TestPrismCutOffsetPlaneExclusionsTakeMeshPath
 2	0.00	TestBooleanChainDepthRefusalNamesOperandAndTakesNoTolerance
 2	0.00	TestPrismCutAgainstToolOnOffsetPlaneIsAnalytic
+0	0.01	TestContactPairSourceSpherePair
+0	0.01	TestSweepPairSourceSpherePair
