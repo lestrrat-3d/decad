@@ -253,18 +253,19 @@ func (w *World) stepKinematicPush(ctx context.Context, from, kicked State, dt un
 	instant := first.Event.At
 	report := &StepReport{Status: Advanced, Next: &end}
 	report.Events = []ContactEvent{{
-		Kind:          ContactImpact,
-		Pair:          BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
-		Bracket:       decad.SweepInterval{From: instant, To: instant},
-		Time:          instant.Elapsed.Value,
-		Manifold:      cloneManifold(*first.Event.Manifold),
-		NormalImpulse: units.KilogramMillimetersPerSecond(impulse),
-		PreVelocity:   effectivePre[dynamic],
-		PostVelocity:  effectivePost[dynamic],
-		PreVelocityA:  effectivePre[0],
-		PreVelocityB:  effectivePre[1],
-		PostVelocityA: effectivePost[0],
-		PostVelocityB: effectivePost[1],
+		Kind:           ContactImpact,
+		Pair:           BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Bracket:        decad.SweepInterval{From: instant, To: instant},
+		Time:           instant.Elapsed.Value,
+		Manifold:       cloneManifold(*first.Event.Manifold),
+		NormalImpulse:  units.KilogramMillimetersPerSecond(impulse),
+		TangentImpulse: zeroImpulseVec(),
+		PreVelocity:    effectivePre[dynamic],
+		PostVelocity:   effectivePost[dynamic],
+		PreVelocityA:   effectivePre[0],
+		PreVelocityB:   effectivePre[1],
+		PostVelocityA:  effectivePost[0],
+		PostVelocityB:  effectivePost[1],
 	}}
 	report.Trace = Trace{start: from, pre: kicked, post: post, end: end, duration: dt,
 		eventAt: instant.Elapsed.Value, hasEvent: true}

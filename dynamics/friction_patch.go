@@ -9,8 +9,8 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// frictionPatchResponse is a private candidate for one fixed floor and one
-// translating box. Step does not consume it until full path wiring exists.
+// frictionPatchResponse is the bounded four-corner response for one fixed
+// floor and one translating box. Step consumes it only for the admitted patch.
 type frictionPatchResponse struct {
 	Points          []frictionPointImpulse
 	Post            QuantityVec

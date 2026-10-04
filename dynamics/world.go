@@ -1,5 +1,5 @@
 // Package dynamics advances rigid bodies using decad's certified geometry queries.
-// The current implementation admits one frictionless translating pair with at least one dynamic body.
+// The current implementation admits one translating pair with at least one dynamic body.
 package dynamics
 
 import (
@@ -79,9 +79,10 @@ type worldBody struct {
 
 // World holds immutable body definitions and the mass readings admitted at construction.
 type World struct {
-	doc   *decad.Document
-	parts [2]worldBody
-	step  StepConfig
+	doc      *decad.Document
+	parts    [2]worldBody
+	step     StepConfig
+	friction units.Value
 }
 
 // NewWorld admits a dynamic pair, or one dynamic body with a fixed or kinematic body.
@@ -162,6 +163,18 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 	if dynamic == 0 || fixed+kinematic+dynamic != 2 {
 		return nil, fmt.Errorf("%w: one or two dynamic bodies required", ErrUnsupported)
 	}
+	frictionA := w.parts[0].definition.Material.Friction
+	frictionB := w.parts[1].definition.Material.Friction
+	if frictionA.Mag() != 0 || frictionB.Mag() != 0 {
+		if w.parts[0].definition.Role != Fixed || w.parts[1].definition.Role != Dynamic ||
+			exactBase(frictionA).Cmp(exactBase(frictionB)) != 0 || frictionA.Base() <= 0 {
+			return nil, fmt.Errorf("%w: positive friction requires equal fixed-first and dynamic-second materials",
+				ErrUnsupported)
+		}
+		w.friction = frictionA
+	} else {
+		w.friction = units.Scalar(0)
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -181,12 +194,15 @@ func validQuantity(v units.Value, kind units.Kind, strict bool) bool {
 }
 
 func validateMaterial(m Material) error {
-	if !validQuantity(m.Restitution, units.Dimensionless, false) || m.Restitution.Base() > 1 ||
-		!validQuantity(m.Friction, units.Dimensionless, false) {
-		return fmt.Errorf("%w: restitution must be in [0,1] and friction nonnegative", ErrInvalidInput)
+	if m.Restitution.Kind() != units.Dimensionless || m.Friction.Kind() != units.Dimensionless ||
+		!finite(m.Restitution.Mag(), m.Restitution.Unit().Factor(), m.Friction.Mag(),
+			m.Friction.Unit().Factor(), m.Restitution.Base(), m.Friction.Base()) {
+		return fmt.Errorf("%w: restitution or friction is not a finite scalar", ErrInvalidInput)
 	}
-	if m.Friction.Base() != 0 {
-		return fmt.Errorf("%w: friction is not implemented", ErrUnsupported)
+	restitution, friction := exactBase(m.Restitution), exactBase(m.Friction)
+	if restitution == nil || friction == nil || restitution.Sign() < 0 ||
+		restitution.Cmp(big.NewRat(1, 1)) > 0 || friction.Sign() < 0 {
+		return fmt.Errorf("%w: restitution must be in [0,1] and friction nonnegative", ErrInvalidInput)
 	}
 	return nil
 }

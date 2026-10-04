@@ -217,6 +217,7 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 		Time:            first.Bracket.To.Elapsed.Value,
 		Manifold:        cloneManifold(*first.Event.Manifold),
 		NormalImpulse:   units.KilogramMillimetersPerSecond(impulse),
+		TangentImpulse:  zeroImpulseVec(),
 		PreVelocity:     effectivePre[dynamic],
 		PostVelocity:    effectivePost[dynamic],
 		PositionChange:  change,
