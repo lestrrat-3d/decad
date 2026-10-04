@@ -8,12 +8,14 @@ a fixed and dynamic body or two centered dynamic bodies. A source box can hit
 a fixed floor obliquely while retaining tangential velocity. A fixed floor and
 dynamic source box can complete an initial resting contact after a full-step
 gravity kick or a zero-restitution impact. A stationary touching pair also
-advances without an impulse. Each touching path requires a certified
-persistent face-contact track. A dynamic body's mass can come from density or
-a caller-supplied bounded mass record. One center force with zero torque per
-dynamic body contributes to the step's full-duration velocity kick. Torque
-loads, kinematic drivers, friction, stacks, and broader payload paths remain
-design contracts. Each companion document owns its detail.
+advances without an impulse. An initially touching box can slide tangentially
+across a fixed floor without an impulse while full-span ideal and rounded
+contact tracks certify the same face patch. Each touching path requires a
+certified persistent face-contact track. A dynamic body's mass can come from
+density or a caller-supplied bounded mass record. One center force with zero
+torque per dynamic body contributes to the step's full-duration velocity kick.
+Torque loads, kinematic drivers, friction, stacks, and broader payload paths
+remain design contracts. Each companion document owns its detail.
 
 | Design | Ownership |
 |---|---|
