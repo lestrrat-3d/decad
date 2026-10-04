@@ -8,6 +8,10 @@ body using density-derived or supplied mass. An axis-aligned
 certified contact normal determines the response component; tangent velocity
 continues through an oblique impact. Centered impacts of two dynamic bodies
 apply equal and opposite impulses.
+An initial frictionless, half-width offset face impact between two dynamic
+source boxes can produce equal Y spin. Four equal normal point impulses pass
+the bounded velocity, angular, energy, and momentum checks before a rotating
+departure sweep supplies both endpoint poses.
 A fixed box and a dynamic source box at matching 45-degree Y poses can resolve
 an initial centered frictionless face impact. The solver checks the bounded
 normal and four point impulses against its momentum and angular residuals.
@@ -483,6 +487,10 @@ return `Undecided`.
 
 The two-dynamic solver uses the same real four-point manifold but includes
 both inverse inertias and both mass intervals in each impulse and residual.
+For zero friction and zero incoming tangent speed, it proposes equal normal
+impulses at all four points. It publishes only when every point reaches its
+restitution target within `VelocityResidual`, the bounded angular laws pass,
+and the rotational remainder proves departure.
 It publishes neither a completed state nor an event when the solved outgoing
 spin lacks a certified rotational remainder. The corresponding `World.Step`
 returns `Undecided` with `Next == nil`.
