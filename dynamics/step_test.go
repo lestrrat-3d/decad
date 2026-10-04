@@ -918,6 +918,111 @@ func TestTwoDynamicBoxesExchangeMomentum(t *testing.T) {
 	require.Equal(t, originalB, afterB)
 }
 
+func TestKinematicBoxPushUsesProductionGeometry(t *testing.T) {
+	doc := decad.New()
+	driver := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
+	box := makeBox(t, doc, 10, 0, 20, 10, 0, 10)
+	beforeDriver, err := driver.Bounds()
+	require.NoError(t, err)
+	beforeBox, err := box.Bounds()
+	require.NoError(t, err)
+	density := units.KilogramsPerCubicMillimeter(0.001)
+	mass, err := box.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	require.InDelta(t, 1, mass.Mass.Value.Base(), 1e-12)
+	duration := units.Seconds(0.125)
+	endPose, err := r3.Translation(r3.Vec{X: 1.25})
+	require.NoError(t, err)
+	path := decad.PoseSegment{From: r3.Identity(), To: endPose, Duration: duration}
+	request := decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+		NormalResolution: units.Radians(1e-6)}
+	initial, err := doc.ContactPair(t.Context(), driver, box, r3.Identity(), r3.Identity(), request)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, initial.Relation)
+	require.NotNil(t, initial.Manifold)
+	sweepRequest := decad.SweepRequest{ContactRequest: request, TimeResolution: units.Seconds(1e-9),
+		MaxPoseEvaluations: 128}
+	first, err := doc.SweepPair(t.Context(), driver, box, path,
+		decad.RigidDriftSegment{From: r3.Identity(), Center: mass.Center.Value,
+			LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t), Duration: duration}, sweepRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepInitiallyTouching, first.Outcome)
+	require.NotNil(t, first.Event)
+	require.NotNil(t, first.Event.Manifold)
+	sweepRequest.StartPolicy = decad.ContinueCertifiedTouch
+	postVelocity := dynamics.QuantityVec{X: units.MillimetersPerSecond(10),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
+	ideal, err := doc.SweepPair(t.Context(), driver, box, path,
+		decad.RigidDriftSegment{From: r3.Identity(), Center: mass.Center.Value,
+			LinearVelocity: postVelocity, AngularVelocity: zeroAngular(t), Duration: duration}, sweepRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepPersistentTouch, ideal.Outcome)
+	require.NotNil(t, ideal.ContactTrack)
+	rounded, err := doc.SweepPair(t.Context(), driver, box, path, path, sweepRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepPersistentTouch, rounded.Outcome)
+	require.NotNil(t, rounded.ContactTrack)
+	material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
+	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{
+			{Body: driver, Role: dynamics.Kinematic, Material: material},
+			{Body: box, Role: dynamics.Dynamic, Density: &density, Material: material},
+		},
+		Step: dynamics.StepConfig{
+			Contact: request, TimeResolution: units.Seconds(1e-9),
+			ContactSlop: units.Millimeters(1e-6), VelocityResidual: units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2,
+		},
+	})
+	require.NoError(t, err)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: driver, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{
+		Gravity: zeroAcceleration(), Drivers: []dynamics.KinematicDriver{{Body: driver, Path: path}},
+	}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, 10, report.Events[0].NormalImpulse.Base(), 1e-6)
+	require.Equal(t, dynamics.ContactImpact, report.Events[0].Kind)
+	require.Equal(t, postVelocity, report.Events[0].PreVelocityA)
+	require.Equal(t, postVelocity, report.Events[0].PostVelocityA)
+	require.Equal(t, zeroVelocity(), report.Events[0].PreVelocityB)
+	require.Equal(t, postVelocity, report.Events[0].PostVelocityB)
+	checkpoint, err := report.Trace.Sample(units.Seconds(0))
+	require.NoError(t, err)
+	checkpointDriver, ok := checkpoint.Body(driver)
+	require.True(t, ok)
+	require.Equal(t, zeroVelocity(), checkpointDriver.LinearVelocity)
+	checkpointBox, ok := checkpoint.Body(box)
+	require.True(t, ok)
+	require.Equal(t, postVelocity, checkpointBox.LinearVelocity)
+	finalDriver, ok := report.Next.Body(driver)
+	require.True(t, ok)
+	finalBox, ok := report.Next.Body(box)
+	require.True(t, ok)
+	require.Equal(t, r3.Vec{X: 1.25}, finalDriver.Pose.Translation())
+	require.Equal(t, zeroVelocity(), finalDriver.LinearVelocity)
+	require.Equal(t, r3.Vec{X: 1.25}, finalBox.Pose.Translation())
+	require.Equal(t, postVelocity, finalBox.LinearVelocity)
+	endpoint, err := doc.ContactPair(t.Context(), driver, box, finalDriver.Pose, finalBox.Pose, request)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, endpoint.Relation)
+	require.Equal(t, []*decad.Body{driver, box}, doc.Bodies())
+	afterDriver, err := driver.Bounds()
+	require.NoError(t, err)
+	afterBox, err := box.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, beforeDriver, afterDriver)
+	require.Equal(t, beforeBox, afterBox)
+}
+
 func TestTwoDynamicBoxesUseBothMasses(t *testing.T) {
 	doc := decad.New()
 	a := makeBox(t, doc, 0, -5, 10, 5, 0, 10)

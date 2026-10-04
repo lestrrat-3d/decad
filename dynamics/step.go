@@ -202,7 +202,7 @@ func pairCorrectionWithin(before, after State, axis int, allowance float64) bool
 	return finite(actual) && actual <= allowance
 }
 
-// Step advances the admitted pair with a certified first-impact bracket and frictionless impulse.
+// Step advances the admitted pair through certified clear, contact, or edge-transition paths.
 func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.Value) (*StepReport, error) {
 	if w == nil || ctx == nil || from.world != w || !validQuantity(dt, units.Time, true) {
 		return nil, fmt.Errorf("%w: invalid context, world, state, or duration", ErrInvalidInput)
@@ -214,8 +214,9 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	if err != nil {
 		return nil, err
 	}
-	if len(input.Drivers) != 0 {
-		return nil, fmt.Errorf("%w: kinematic drivers are not implemented", ErrUnsupported)
+	driver, err := w.validateDriver(from, input.Drivers, dt)
+	if err != nil {
+		return nil, err
 	}
 	live := w.doc.Bodies()
 	for _, part := range w.parts {
@@ -229,6 +230,9 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	kicked, ok := w.kickByLoads(from, input.Gravity, loads, dt)
 	if !ok {
 		return undecided(w, "force kick exceeds the velocity residual"), nil
+	}
+	if driver.index >= 0 {
+		return w.stepKinematicPush(ctx, from, kicked, dt, driver)
 	}
 	moving := false
 	for _, entry := range kicked.entries {
