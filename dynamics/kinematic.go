@@ -181,6 +181,11 @@ func (w *World) stepKinematicPush(ctx context.Context, from, kicked State, dt un
 		velocityComponent(kicked.entries[1].LinearVelocity, axis),
 	}
 	preSpeed[motion.index] = velocityComponent(motion.effective, axis)
+	relativeExact := new(big.Rat).Sub(exactBase(preSpeed[1]), exactBase(preSpeed[0]))
+	relativeExact.Mul(relativeExact, big.NewRat(int64(sign), 1))
+	if relativeExact.Cmp(exactBase(w.step.VelocityResidual)) > 0 {
+		return w.stepKinematicDeparture(ctx, from, kicked, dt, motion)
+	}
 	closing := (preSpeed[1].Base() - preSpeed[0].Base()) * sign
 	if !finite(closing) || closing >= -w.step.VelocityResidual.Base() {
 		return undecided(w, "kinematic contact is not certified closing"), nil
@@ -264,4 +269,39 @@ func (w *World) stepKinematicPush(ctx context.Context, from, kicked State, dt un
 	report.Trace = Trace{start: from, pre: kicked, post: post, end: end, duration: dt,
 		eventAt: instant.Elapsed.Value, hasEvent: true}
 	return report, nil
+}
+
+// stepKinematicDeparture requires geometry to certify the entire path after
+// an initially touching pair starts separating. It applies no contact impulse.
+func (w *World) stepKinematicDeparture(ctx context.Context, from, kicked State,
+	dt units.Value, motion kinematicMotion) (*StepReport, error) {
+	ideal, err := w.sweepKinematic(ctx, kicked, dt, motion, decad.ContinueSeparatingTouch)
+	if err != nil {
+		return nil, err
+	}
+	if ideal.Outcome != decad.SweepDepartedClear {
+		return undecided(w, fmt.Sprintf("kinematic departure returned %v", ideal.Outcome)), nil
+	}
+	end, err := driftState(kicked, dt.Base())
+	if err != nil {
+		return undecidedArithmetic(w, "non-finite kinematic departure drift", err)
+	}
+	end.entries[motion.index].Pose = motion.path.To
+	rounded, err := w.sweepKinematicPoses(ctx, kicked, end, dt, motion, decad.ContinueSeparatingTouch)
+	if err != nil {
+		return nil, err
+	}
+	if rounded.Outcome != decad.SweepDepartedClear {
+		return undecided(w, fmt.Sprintf("rounded kinematic departure returned %v", rounded.Outcome)), nil
+	}
+	finalContact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
+	if err != nil {
+		return nil, err
+	}
+	if finalContact.Relation != decad.ContactSeparated {
+		return undecided(w, "kinematic departure endpoint is not separated"), nil
+	}
+	return &StepReport{Status: Advanced, Next: &end,
+		Trace: Trace{start: from, end: end, duration: dt}}, nil
 }

@@ -22,8 +22,9 @@ separated, then certifies a clear remainder. A transition with a touching
 right sample or insufficient `MaxEvents` remains `Undecided`.
 An affine translating kinematic driver can move through a certified clear
 step, push an initially touching dynamic box with a zero-restitution response,
-or cause a centered interior impact. A separating response requires certified
-departure; a zero-restitution response requires certified persistent touch.
+depart from an initially touching box without an impulse, or cause a centered
+interior impact. Departure requires ideal and rounded full-path certificates;
+a zero-restitution response requires certified persistent touch.
 The driver's stored velocity remains zero while its derivative enters the
 response.
 Off-center impulses that require spin return `Undecided`. Torque loads,
@@ -202,9 +203,13 @@ duration must exactly match the state and step. A missing, duplicate, or
 nonkinematic driver is `ErrInvalidInput`; a valid rotating path or a derivative
 that cannot meet the current exact-speed proof is `ErrUnsupported`. An initially
 touching, closing kinematic/dynamic pair can receive a zero-restitution
-support impulse. A centered interior impact can use the bounded bracket-right
-sample and correct only the dynamic pose. A separating response needs ideal
-and rounded sliced paths that certify departure. A zero-restitution response
+support impulse. An initially touching pair with strictly separating relative
+normal speed can advance without an event only when the initial manifold is
+bounded, both full-step sweeps certify departure, and the endpoint is separated.
+This path does not consume `MaxEvents`. A centered interior impact can use
+the bounded bracket-right sample and correct only the dynamic pose. A
+separating response needs ideal and rounded sliced paths that certify
+departure. A zero-restitution response
 needs full-span bounded persistent-contact tracks on both sliced paths and a
 bounded touching endpoint. The sliced driver derivative must equal the
 admitted full-step derivative exactly.
@@ -523,6 +528,12 @@ correction and `80 kg·mm/s` impulse give B `80 mm/s`. Both sliced remainder
 paths certify persistent face touch. B ends near `x=[30,40] mm` and A ends at
 `x=[20,30] mm`; the bracket and correction bound B's small offset from the
 ideal coordinates. A still stores zero velocity.
+
+For the no-impulse departure fixture, A starts at `x=[0,10] mm` touching B
+at `x=[10,20] mm`. A's driver moves `−5 mm` in `0.125 s`, and B starts at
+rest. Both full-step paths certify `SweepDepartedClear`. The step reports no
+event, moves A to `x=[−5,5] mm`, leaves B at `x=[10,20] mm`, and stores zero
+velocity for both. It advances with `MaxEvents=1` because no event occurs.
 
 For the sliding-friction increment, put the same `1 kg` box
 on a fixed floor wide enough for a `5 mm` slide. With gravity
