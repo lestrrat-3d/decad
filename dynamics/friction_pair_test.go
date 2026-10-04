@@ -85,6 +85,9 @@ func TestTwoDynamicPatchUsesBothBodiesMassAndInertia(t *testing.T) {
 		[2]decad.MassProperties{ma, mb}, [2]r3.Transform{r3.Identity(), r3.Identity()},
 		pre, exactFrictionCoefficient(units.Scalar(.5)), units.Scalar(.5), cfg)
 	require.True(t, ok)
+	require.InDelta(t, 60, bouncing.Post[1].X.Base()-bouncing.Post[0].X.Base(), 1e-6)
 	require.InDelta(t, 50, bouncing.Post[1].Z.Base()-bouncing.Post[0].Z.Base(), 1e-6)
+	require.InDelta(t, 6, bouncing.PostAngular[0].Y.Base(), 1e-6)
+	require.InDelta(t, bouncing.PostAngular[0].Y.Base(), bouncing.PostAngular[1].Y.Base(), 1e-6)
 	require.LessOrEqual(t, bouncing.NormalResidual.Base(), cfg.VelocityResidual.Base())
 }

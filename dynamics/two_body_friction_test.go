@@ -22,7 +22,7 @@ func TestTwoDynamicFrictionRefusesUncertifiedSpinRemainder(t *testing.T) {
 	require.Len(t, contact.Manifold.Points, 4)
 
 	density := units.KilogramsPerCubicMillimeter(.001)
-	material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(.5)}
+	material := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(.5)}
 	world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
 		Bodies: []dynamics.RigidBody{
 			{Body: a, Role: dynamics.Dynamic, Density: &density, Material: material},
