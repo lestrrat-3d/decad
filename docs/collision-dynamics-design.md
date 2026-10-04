@@ -15,12 +15,15 @@ advances without an impulse. An initially touching box can slide tangentially
 across a fixed floor without an impulse while full-span ideal and rounded
 contact tracks certify the same face patch. Each touching interval requires a
 certified contact track. A dynamic body's mass can come from
-density or a caller-supplied bounded mass record. One center force with zero
-torque per dynamic body contributes to the step's full-duration velocity kick.
+density or a caller-supplied bounded mass record. One world-frame center force
+and torque per dynamic body contribute to the step's full-duration velocity kick.
+Separated source boxes can rotate through a certified clear drift and advance
+again from the returned spinning state.
 The source-sphere face corridor carries a real sphere-to-box point manifold
 through an affine first-impact sweep and a centered fixed-floor rebound with
 supplied sphere mass. Other curved contact families still lack source
-witnesses and continuous proofs. The first separated edge exit records a zero-impulse contact transition and
+witnesses and continuous proofs.
+The first separated edge exit records a zero-impulse contact transition and
 advances through a certified clear remainder.
 An affine kinematic driver can push an initially touching dynamic source box
 through a certified persistent contact path, depart without an impulse, or
@@ -32,13 +35,14 @@ an explicit pair coefficient replaces them. The response checks rational
 bounds around a nonexact mean. `World.Step` requires full ideal and rounded
 persistent-contact tracks and reports normal and tangent impulses. A centered
 zero-slip box receives normal support with zero tangent impulse. Every advanced
-step reports bounded dynamic-body translational energy and linear momentum at
-input, after the force kick, and at completion, plus gravity, center-force,
-and fixed/kinematic contact impulses, plus bounded kinematic driver work.
+step reports bounded dynamic-body kinetic energy, linear momentum, and angular
+momentum at input, after the force kick, and at completion, plus gravity,
+center-force, torque, and fixed/kinematic contact impulses, plus bounded
+kinematic driver work.
 Before publishing an advanced step, it
 checks every contact event's dynamic-body linear momentum against its impulse
 and rejects an impact whose kinetic energy gain exceeds its driver work plus
-the computed numerical allowance. Other frictional contacts, torque loads,
+the computed numerical allowance. Other frictional contacts,
 rotating kinematic drivers, stacks, and broader payload paths remain design
 contracts. Each companion document owns its detail.
 

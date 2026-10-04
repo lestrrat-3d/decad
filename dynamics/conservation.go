@@ -31,6 +31,8 @@ type ConservationState struct {
 type StepConservation struct {
 	Input, AfterKick, Completion                ConservationState
 	GravityImpulse, LoadImpulse, ContactImpulse MomentumReading
+	// TorqueImpulse is the full-step world torque impulse on dynamic bodies.
+	TorqueImpulse MomentumReading
 	// KinematicWork is the signed work delivered by prescribed drivers at contact events.
 	KinematicWork decad.Measurement
 	// DriftChange excludes the kick, every contact impulse, and position correction.
@@ -55,6 +57,10 @@ func (w *World) conservationReadings(from, kicked, end State, trace Trace, event
 	if !ok {
 		return StepConservation{}, false
 	}
+	torqueImpulse, ok := w.torqueImpulse(loads, dt)
+	if !ok {
+		return StepConservation{}, false
+	}
 	contactImpulse, ok := w.externalContactImpulse(events)
 	if !ok {
 		return StepConservation{}, false
@@ -69,7 +75,31 @@ func (w *World) conservationReadings(from, kicked, end State, trace Trace, event
 	}
 	return StepConservation{Input: input, AfterKick: afterKick, Completion: completion,
 		GravityImpulse: gravityImpulse, LoadImpulse: loadImpulse, ContactImpulse: contactImpulse,
-		KinematicWork: kinematicWork, DriftChange: driftChange}, true
+		TorqueImpulse: torqueImpulse, KinematicWork: kinematicWork, DriftChange: driftChange}, true
+}
+
+func (w *World) torqueImpulse(loads [2]*BodyLoad, dt units.Value) (MomentumReading, bool) {
+	var value [3]*big.Rat
+	for axis := range value {
+		value[axis] = new(big.Rat)
+	}
+	duration := exactBase(dt)
+	if duration == nil || duration.Sign() <= 0 {
+		return MomentumReading{}, false
+	}
+	for i, part := range w.parts {
+		if part.definition.Role != Dynamic || loads[i] == nil {
+			continue
+		}
+		for axis := range value {
+			torque := exactBase(velocityComponent(loads[i].Torque, axis))
+			if torque == nil {
+				return MomentumReading{}, false
+			}
+			value[axis].Add(value[axis], new(big.Rat).Mul(torque, duration))
+		}
+	}
+	return boundedVector(value, value, value, units.KilogramSquareMillimeterPerSecond)
 }
 
 func (w *World) kinematicWork(events []ContactEvent) (decad.Measurement, bool) {

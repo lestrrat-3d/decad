@@ -133,9 +133,25 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 func driftState(start State, seconds float64) (State, error) {
 	out := start
 	for i := range out.entries {
+		entry := out.entries[i]
+		pose := entry.Pose
+		omega := r3.Vec{X: entry.AngularVelocity.X.Base(),
+			Y: entry.AngularVelocity.Y.Base(), Z: entry.AngularVelocity.Z.Base()}
+		if omega != (r3.Vec{}) {
+			center := pose.Apply(start.world.parts[i].mass.Center.Value)
+			rate := math.Hypot(omega.X, math.Hypot(omega.Y, omega.Z))
+			turn, err := r3.RotationAround(center, omega, units.Radians(rate*seconds))
+			if err != nil {
+				return State{}, err
+			}
+			pose, err = pose.Then(turn)
+			if err != nil {
+				return State{}, err
+			}
+		}
 		v := out.entries[i].LinearVelocity
 		delta := r3.Vec{X: v.X.Base() * seconds, Y: v.Y.Base() * seconds, Z: v.Z.Base() * seconds}
-		pose, err := translatePose(out.entries[i].Pose, delta)
+		pose, err := translatePose(pose, delta)
 		if err != nil {
 			return State{}, err
 		}
@@ -262,7 +278,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	}
 	kicked, ok := w.kickByLoads(from, input.Gravity, loads, dt)
 	if !ok {
-		return undecided(w, "force kick exceeds the velocity residual"), nil
+		return undecided(w, "force kick or torque kick exceeds its velocity residual"), nil
 	}
 	report, err := w.stepKicked(ctx, from, kicked, dt, driver)
 	if report != nil {
@@ -292,6 +308,14 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	driver kinematicMotion) (*StepReport, error) {
 	if len(w.excluded) != 0 {
 		return w.stepExcluded(ctx, from, kicked, dt, driver)
+	}
+	for _, entry := range kicked.entries {
+		if !zeroAngularVelocity(entry.AngularVelocity) {
+			if driver.index >= 0 {
+				return undecided(w, "rotating contact with a kinematic driver is not certified"), nil
+			}
+			return w.stepRotatingClear(ctx, from, kicked, dt)
+		}
 	}
 	if driver.index >= 0 {
 		return w.stepKinematicPush(ctx, from, kicked, dt, driver)
@@ -575,6 +599,40 @@ func correctedEndpointGapWithin(contact *decad.ContactReport, allowance float64)
 		return false
 	}
 	return new(big.Rat).Add(value, bound).Cmp(new(big.Rat).SetFloat64(allowance)) <= 0
+}
+
+// stepRotatingClear publishes a rotating endpoint only when SweepPair proves
+// the full ideal drift and its rounded samples separated.
+func (w *World) stepRotatingClear(ctx context.Context, from, kicked State,
+	dt units.Value) (*StepReport, error) {
+	sweep, err := w.sweep(ctx, kicked, dt, decad.StopAtInitialContact)
+	if err != nil {
+		return nil, err
+	}
+	if sweep.Outcome != decad.SweepClear {
+		return undecided(w, fmt.Sprintf("rotating sweep returned %v", sweep.Outcome)), nil
+	}
+	end, err := driftState(kicked, dt.Base())
+	if err != nil {
+		return undecidedArithmetic(w, "non-finite rotating drift", err)
+	}
+	found := false
+	for _, sample := range sweep.Samples {
+		if sample.At.Fraction.Base() != 1 {
+			continue
+		}
+		if found || sample.Ideal.Relation != decad.ContactSeparated ||
+			sample.FloatContact == nil || sample.FloatContact.Relation != decad.ContactSeparated ||
+			sample.PoseA != end.entries[0].Pose || sample.PoseB != end.entries[1].Pose {
+			return undecided(w, "rotating endpoint differs from certified sweep sample"), nil
+		}
+		found = true
+	}
+	if !found {
+		return undecided(w, "rotating sweep lacks a certified endpoint"), nil
+	}
+	return &StepReport{Status: Advanced, Next: &end,
+		Trace: Trace{start: from, end: end, duration: dt, rotationalRemainder: sweep}}, nil
 }
 
 func (w *World) stepExcluded(ctx context.Context, from, kicked State, dt units.Value,
