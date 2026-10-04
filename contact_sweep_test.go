@@ -113,6 +113,60 @@ func TestSweepPairOffCenterBoxImpactAtEndpoint(t *testing.T) {
 	require.GreaterOrEqual(t, new(big.Rat).SetFloat64(point.Separation.Bound.Base()).Cmp(errorValue), 0)
 }
 
+func TestSweepPairSourceSphereAndBox(t *testing.T) {
+	doc := decad.New()
+	floor := boxBodyAtZ(t, doc, -20, -20, 20, 20, -10, 10)
+	ball := ballBody(t, doc, 5)
+	before := doc.Bodies()
+	still := sweepDrift(r3.Vec{}, 0.2)
+	drop := sweepDrift(r3.Vec{Z: -100}, 0.2)
+	drop.From = contactPose(t, r3.Vec{Z: 15})
+	req := sweepRequest()
+	report, err := doc.SweepPair(t.Context(), floor, ball, still, drop, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, report.Outcome, "cause=%v", report.Cause)
+	require.NotNil(t, report.Event)
+	require.NotNil(t, report.Event.Manifold)
+	require.Len(t, report.Event.Manifold.Points, 1)
+	require.Equal(t, r3.Vec{Z: 1}, report.Event.Manifold.Points[0].Normal.Value)
+	require.Less(t, report.Bracket.From.Elapsed.Value.Base(), 0.1)
+	require.GreaterOrEqual(t, report.Bracket.To.Elapsed.Value.Base(), 0.1)
+	require.LessOrEqual(t,
+		report.Bracket.To.Elapsed.Value.Base()-report.Bracket.From.Elapsed.Value.Base(), 1e-9)
+	reversed, err := doc.SweepPair(t.Context(), ball, floor, drop, still, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, reversed.Outcome, "cause=%v", reversed.Cause)
+	require.Equal(t, r3.Vec{Z: -1}, reversed.Event.Manifold.Points[0].Normal.Value)
+	require.Equal(t, before, doc.Bodies())
+}
+
+func TestSweepPairSourceSphereTouchContinuation(t *testing.T) {
+	doc := decad.New()
+	floor := boxBodyAtZ(t, doc, -20, -20, 20, 20, -10, 10)
+	ball := ballBody(t, doc, 5)
+	still := sweepDrift(r3.Vec{}, 0.1)
+	touching := sweepDrift(r3.Vec{}, 0.1)
+	touching.From = contactPose(t, r3.Vec{Z: 5})
+	req := sweepRequest()
+	req.StartPolicy = decad.ContinueCertifiedTouch
+	report, err := doc.SweepPair(t.Context(), floor, ball, still, touching, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepPersistentTouch, report.Outcome, "cause=%v", report.Cause)
+	require.NotNil(t, report.ContactTrack)
+	manifold, err := report.ContactTrack.ManifoldAt(units.Scalar(0.5))
+	require.NoError(t, err)
+	require.Len(t, manifold.Points, 1)
+	require.Equal(t, r3.Vec{Z: 1}, manifold.Points[0].Normal.Value)
+	require.Equal(t, 0.0, manifold.Points[0].Separation.Value.Base())
+	departing := touching
+	departing.LinearVelocity.Z = units.MillimetersPerSecond(50)
+	req.StartPolicy = decad.ContinueSeparatingTouch
+	report, err = doc.SweepPair(t.Context(), floor, ball, still, departing, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepDepartedClear, report.Outcome, "cause=%v", report.Cause)
+	require.NotNil(t, report.Departure)
+}
+
 func TestSweepPairTwoMoversAndDeparture(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)

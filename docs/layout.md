@@ -172,9 +172,10 @@ to the byte budget.
 | `verify_publish.go` | `Verify`'s publication assembler: turns private survey outcomes and certified readings into `Report`/`BodyReport`, deciding each survey's outcome, assessment and tolerance state. |
 | `clearance.go` | The pair kernel: `clearancePair` proves one pair's four-way relation and, when disjoint, a proven gap interval. `sheetSolidPair` decides a sheet pair too. See `docs/clearance-design.md` §1-§3/§6. |
 | `clearance_box.go` | Certifies unplaced axis-aligned rectangular prisms and bounds their gap directly from exact box planes before the general pair kernel. |
-| `contact_pair.go` | `ContactPair` input gates and pair relation report. See `docs/contact-geometry-design.md`. |
-| `contact_box.go` | Exact source-box relation and contact manifold proof. See `docs/contact-geometry-design.md` §4. |
-| `clearance_degen.go` | The degeneracy oracle every cell asks before emitting a constant/`Exact` candidate, three-valued over exact arithmetic, never a tolerance. See `docs/clearance-design.md` §4/§5 and the file's doc comment. |
+| `contact_pair.go` | `ContactPair` input gates and verdict. See `docs/contact-geometry-design.md`. |
+| `contact_box.go` | Source-box relation and manifold. See `docs/contact-geometry-design.md` §4. |
+| `contact_sphere.go` / `contact_sphere_sweep.go` | Source sphere-to-box contact and affine sweep. See `docs/contact-geometry-design.md` §4.2 and `docs/contact-sweep-design.md` §4.4. |
+| `clearance_degen.go` | Exact degeneracy oracle for clearance cells. See `docs/clearance-design.md` §4/§5. |
 | `clearance_cells.go` | The §3 candidate sink and §4 face-interior table: stationarity tiers per face pair, admission folded into contributions, offset-surface pairs reduced to spine-pair criticals. See `docs/clearance-design.md` §3/§4. |
 | `clearance_tiers.go` | The curve and vertex tiers of §3: face-edge, edge-edge and vertex cells over §4's curve-tier table; constant-distance families emit only on the oracle's `degYes`. See `docs/clearance-design.md` §3/§4. |
 | `clearance_geom.go` | The kernel's boundary model: trimmed carrier faces, edges and vertices from a body's payload, `bodyGeom.delta`'s charge, and the §2 nesting ray casts. See `docs/clearance-design.md` §2/§3. |
@@ -186,7 +187,7 @@ to the byte budget.
 | `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's doc comment. |
 | `motion.go` / `motion_verify.go` | The `Motion` set, its options and `MotionReport`; `Document.VerifyMotion`'s swept-box exclusion, transient poses and interval certificate. See `docs/motion-check-design.md`. |
 | `motion_bound.go` | The motion certificate's exact-rational bounds: the ideal pose (a `Between`'s exact screw frame among them), its deviation η, ρ_max, travel and the swept box. See the file's doc comment. |
-| `contact_sweep.go` | Two-body paths, certified continuous box sweep, and impact bracket. See `docs/contact-sweep-design.md`. |
+| `contact_sweep.go` | Two-body paths, box sweep, and contact tracks. See `docs/contact-sweep-design.md`. |
 
 ### Booleans
 

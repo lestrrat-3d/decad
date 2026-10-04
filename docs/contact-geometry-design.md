@@ -12,11 +12,13 @@ owns positive-volume overlap;
 This document adds witnesses and normal certificates without weakening any of
 those admission gates.
 
-Current code certifies relations and face manifolds for source boxes at
-signed-permutation poses. At identity query poses, the analytic clearance
-kernel can also certify a relation for other admitted solids, but its result
-has no contact manifold. Witness and normal proofs for those solids remain
-design contracts.
+Current code certifies source-box relations and face manifolds at
+signed-permutation poses. It also certifies a full source semicircle sphere
+against a source box: exact rational ball-to-box distance proves the relation,
+and one isolated face support supplies a point manifold. At identity query
+poses, the analytic clearance kernel can certify a relation for other admitted
+solids, but its result has no contact manifold. Other curved and faceted
+witness and normal proofs remain design contracts.
 
 ## 1. Claims and entry point
 
@@ -268,6 +270,26 @@ separate axis has a strictly positive gap. A positive normal velocity at a
 single manifold point, sampled separated poses, a rounded near-equality,
 or a rotating path cannot substitute for these whole-box proofs. If no
 strict interval claim follows, the sweep returns its undecided outcome.
+
+### 4.2 Source semicircle sphere against a source box
+
+Admit a full-revolution solid with one untrimmed spherical face only when its
+recorded section is one complete semicircular arc and its on-axis diameter.
+The arc's center and endpoints must lie exactly on an axis with exact cardinal
+direction; the two axial radii must match as rationals. Require zero section
+displacement and signed-permutation frame, placement, and query pose. A sphere
+surface tag without this occupied-set record cannot enter this path.
+
+Map the recorded center and radius to exact rational world coordinates. Clamp
+the center to the exact box intervals and compare squared distance to squared
+radius. A strict excess proves separation, equality proves touch, and a
+strict deficit proves overlap. A separated report encloses the true gap after
+outward square-root and float conversion. A one-axis exterior center with its
+whole projected radius strictly inside the other box intervals can publish
+the opposed box face and spherical point. Shallow penetration also requires
+the sphere not to reach the opposite box face. An edge, corner, internal
+center, or wider patch keeps the proven relation but withholds the manifold.
+Reversing body order reverses the exact axis normal and witness fields.
 
 ## 5. Contact cases and ordering
 

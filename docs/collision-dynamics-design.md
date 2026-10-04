@@ -1,7 +1,8 @@
 # Collision and Rigid Dynamics Design
 
 This document is the system map and delivery order for collision-aware rigid
-motion. Current code certifies source-box contact, affine two-body sweeps,
+motion. Current code certifies source-box contact, source sphere-to-box face
+contact, affine two-body sweeps,
 persistent face contact and its first edge transition, and mass properties for
 source boxes and admitted untapered prisms. It steps one frictionless pair with
 a fixed and dynamic body or two centered dynamic bodies. A source box can hit
@@ -14,7 +15,10 @@ contact tracks certify the same face patch. Each touching interval requires a
 certified contact track. A dynamic body's mass can come from
 density or a caller-supplied bounded mass record. One center force with zero
 torque per dynamic body contributes to the step's full-duration velocity kick.
-The first separated edge exit records a zero-impulse contact transition and
+The source-sphere face corridor carries a real sphere-to-box point manifold
+through an affine first-impact sweep and a centered fixed-floor rebound with
+supplied sphere mass. Other curved contact families still lack source
+witnesses and continuous proofs. The first separated edge exit records a zero-impulse contact transition and
 advances through a certified clear remainder.
 An affine kinematic driver can push an initially touching dynamic source box
 through a certified persistent contact path, depart without an impulse, or
