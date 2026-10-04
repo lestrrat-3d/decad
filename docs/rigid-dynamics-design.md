@@ -442,9 +442,22 @@ and conversion rounding widen energy, momentum, and gravity readings. A
 reading that cannot be enclosed by finite typed values makes the step
 `Undecided` with no `Next`.
 
-The current code admits zero spin, so kinetic energy is translational. Angular
-momentum, rotational kinetic energy, torque impulse, drift-only change,
-kinematic work, and per-event conservation checks remain future contracts.
+The current code admits zero spin, so kinetic energy is translational. Each
+advanced contact event checks every dynamic body's published velocity change
+against its signed aggregate normal and tangent impulse. It checks both ends
+of the body's held mass interval against `ImpulseResidual + massHigh ×
+VelocityResidual` on each component. A zero-impulse transition must preserve
+the published velocities exactly. Nonkinematic impacts also check kinetic
+energy at the event. For each body, the code first subtracts squared pre-event
+speed from squared post-event speed, then multiplies this one difference by
+the mass endpoint that gives the largest energy change. The allowed numerical
+gain is the sum, over each dynamic body and Cartesian component, of
+`(massHigh × VelocityResidual + ImpulseResidual) ×
+(|preVelocity| + |postVelocity| + VelocityResidual)`. A failed gate makes the
+step `Undecided`. The full-step force kick remains outside these event checks.
+Kinematic impacts have a momentum check but await a work reading before any
+energy check. Angular momentum, rotational kinetic energy, torque impulse,
+drift-only change, and kinematic work remain future contracts.
 
 `Trace` contains the starting state, each certified drift slice, each
 event's pre/post states, each position correction, and the ending state.
