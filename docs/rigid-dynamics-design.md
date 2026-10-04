@@ -33,10 +33,13 @@ Coulomb solver. The response publishes zero Y/Z velocity, bounded corner and
 aggregate impulses, a residual report, and a persistent-touch trace after
 both ideal and rounded sweeps certify the full remainder. Zero X slip uses
 the centered normal support path with zero tangent impulse.
-Off-center impulses that require spin return `Undecided`. Torque loads,
-rotating kinematic drivers, broader frictional stepping, stacks, broader contact-transition stepping,
-external impulse reporting, and arbitrary trace sampling remain design
-contracts.
+Off-center impulses that require spin return `Undecided`. The step reports
+bounded translational kinetic energy and linear momentum for dynamic bodies
+at input, after the full-step force kick, and at completion. It also reports
+gravity, center-force, and fixed/kinematic contact impulses separately.
+Torque loads, rotating kinematic drivers, broader frictional stepping, stacks,
+broader contact-transition stepping, angular momentum reporting, and arbitrary
+trace sampling remain design contracts.
 
 Navigation only; the named sections own the rules:
 
@@ -408,8 +411,9 @@ type StepReport struct {
     Events      []ContactEvent
     Trace       Trace
     Diagnostics []StepDiagnostic
+    Conservation *StepConservation // non-nil for Advanced
     // Effective input/config, excluded pairs, elapsed time, residuals,
-    // energy, linear momentum, angular momentum, and external impulses.
+    // angular momentum, and other conservation diagnostics.
 }
 ```
 
@@ -423,8 +427,24 @@ change. The report owns copies of all slices and state data. A report with
 `Next == nil` may contain a diagnostic trace prefix for inspection, but it
 cannot be passed as an advanced state.
 
-The current `StepReport` omits applied force and torque impulses. Those
-readings remain part of the later conservation-report contract.
+`StepConservation.Input`, `AfterKick`, and `Completion` each contain a bounded
+`KineticEnergy` scalar and bounded `LinearMomentum` vector summed over dynamic
+bodies. `KineticEnergy` uses `units.Torque` because the registered torque unit
+has the same `kg·mm²/s²` dimension as energy; the field denotes energy, not a
+turning moment. Every momentum component and bound has kind `units.Impulse`.
+`GravityImpulse`, `LoadImpulse`, and `ContactImpulse` are separate bounded
+vectors. Contact impulse sums only events against fixed or kinematic bodies;
+the two impulses of a dynamic pair cancel in the world total. These readings
+describe the discrete step and exclude fixed/kinematic bodies' own energy and
+momentum. The contact reading encloses the published numerical event impulses;
+it does not claim to enclose an uncomputed physical impulse. Mass uncertainty
+and conversion rounding widen energy, momentum, and gravity readings. A
+reading that cannot be enclosed by finite typed values makes the step
+`Undecided` with no `Next`.
+
+The current code admits zero spin, so kinetic energy is translational. Angular
+momentum, rotational kinetic energy, torque impulse, drift-only change,
+kinematic work, and per-event conservation checks remain future contracts.
 
 `Trace` contains the starting state, each certified drift slice, each
 event's pre/post states, each position correction, and the ending state.
