@@ -79,10 +79,11 @@ type worldBody struct {
 
 // World holds immutable body definitions and the mass readings admitted at construction.
 type World struct {
-	doc      *decad.Document
-	parts    [2]worldBody
-	step     StepConfig
-	friction units.Value
+	doc         *decad.Document
+	parts       [2]worldBody
+	step        StepConfig
+	restitution units.Value
+	friction    units.Value
 }
 
 // NewWorld admits a dynamic pair, or one dynamic body with a fixed or kinematic body.
@@ -93,8 +94,8 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 	if err := validateStepConfig(cfg.Step); err != nil {
 		return nil, err
 	}
-	if len(cfg.Bodies) != 2 || len(cfg.Excluded) != 0 || len(cfg.Overrides) != 0 {
-		return nil, fmt.Errorf("%w: this stage admits one pair without exclusions or overrides", ErrUnsupported)
+	if len(cfg.Bodies) != 2 || len(cfg.Excluded) != 0 {
+		return nil, fmt.Errorf("%w: this stage admits one pair without exclusions", ErrUnsupported)
 	}
 	live := doc.Bodies()
 	seen := map[*decad.Body]struct{}{}
@@ -163,22 +164,53 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 	if dynamic == 0 || fixed+kinematic+dynamic != 2 {
 		return nil, fmt.Errorf("%w: one or two dynamic bodies required", ErrUnsupported)
 	}
+	restitutionA := w.parts[0].definition.Material.Restitution
+	restitutionB := w.parts[1].definition.Material.Restitution
+	w.restitution = restitutionA
+	if exactBase(restitutionB).Cmp(exactBase(restitutionA)) < 0 {
+		w.restitution = restitutionB
+	}
 	frictionA := w.parts[0].definition.Material.Friction
 	frictionB := w.parts[1].definition.Material.Friction
-	if frictionA.Mag() != 0 || frictionB.Mag() != 0 {
-		if w.parts[0].definition.Role != Fixed || w.parts[1].definition.Role != Dynamic ||
-			exactBase(frictionA).Cmp(exactBase(frictionB)) != 0 || frictionA.Base() <= 0 {
-			return nil, fmt.Errorf("%w: positive friction requires equal fixed-first and dynamic-second materials",
-				ErrUnsupported)
+	w.friction = units.Scalar(0)
+	if len(cfg.Overrides) > 0 {
+		if err := w.setPairOverride(cfg.Overrides); err != nil {
+			return nil, err
+		}
+	} else if frictionA.Mag() != 0 || frictionB.Mag() != 0 {
+		if exactBase(frictionA).Cmp(exactBase(frictionB)) != 0 || frictionA.Base() <= 0 {
+			return nil, fmt.Errorf("%w: positive friction requires equal body coefficients", ErrUnsupported)
 		}
 		w.friction = frictionA
-	} else {
-		w.friction = units.Scalar(0)
+	}
+	if w.friction.Base() > 0 &&
+		(w.parts[0].definition.Role != Fixed || w.parts[1].definition.Role != Dynamic) {
+		return nil, fmt.Errorf("%w: positive friction requires fixed-first and dynamic-second bodies", ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	return w, nil
+}
+
+func (w *World) setPairOverride(overrides []PairMaterial) error {
+	seen := false
+	for _, override := range overrides {
+		pair := override.Pair
+		first, second := w.parts[0].definition.Body, w.parts[1].definition.Body
+		if (pair.A != first || pair.B != second) && (pair.A != second || pair.B != first) {
+			return fmt.Errorf("%w: override names an unknown pair", ErrInvalidInput)
+		}
+		if seen {
+			return fmt.Errorf("%w: duplicate pair override", ErrInvalidInput)
+		}
+		if err := validateMaterial(Material{Restitution: override.Restitution, Friction: override.Friction}); err != nil {
+			return err
+		}
+		w.restitution, w.friction = override.Restitution, override.Friction
+		seen = true
+	}
+	return nil
 }
 
 func containsBody(bodies []*decad.Body, body *decad.Body) bool {
