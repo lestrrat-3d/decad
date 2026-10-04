@@ -277,6 +277,7 @@ func (p rotationalSweepPath) roundedAt(pose r3.Transform, f *big.Rat) (orientedS
 			maxSquared = squared
 		}
 	}
+	box.faces = p.startBox.faces
 	box.edge = [3]dyV3{dvSub(box.corner[1], box.corner[0]),
 		dvSub(box.corner[2], box.corner[0]), dvSub(box.corner[4], box.corner[0])}
 	for _, edge := range box.edge {
@@ -313,9 +314,11 @@ func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
 	if err != nil || result == nil {
 		return result, err
 	}
-	if result.Outcome == SweepClear {
+	if result.Outcome == SweepClear || result.Outcome == SweepPersistentTouch &&
+		result.ContactTrack != nil && result.ContactTrack.orientedA != nil &&
+		result.ContactTrack.orientedB != nil && aPath.path.drift == nil && bPath.path.drift == nil {
 		result.replay = &sweepReplayProof{rotation: &[2]rotationalSweepPath{aPath, bPath},
-			request: req.ContactRequest}
+			track: result.ContactTrack, request: req.ContactRequest}
 		result.replay.snapshot(result)
 	}
 	return result, nil

@@ -519,6 +519,11 @@ with the exact separating-axis test. Their positive gap must exceed the total
 bounded corner difference from the ideal poses, and that difference must fit
 `PointResolution`. Rotating impact and departure reports have no interior
 replay proof.
+For a co-moving oriented source-box persistent face track, replay uses the
+same cached source corners and exact time fraction. The rounded poses must
+fit `PointResolution` and yield a four-point patch on the producer's face
+pair within its point and normal bounds. A changed face, missing patch, or
+exceeded bound returns `ErrUnsupported`.
 
 `Fraction` and the input `Duration` define the exact search time; `Elapsed`
 is a bounded convenience reading for callers. Bracket width is checked from

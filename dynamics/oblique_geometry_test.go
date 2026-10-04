@@ -99,6 +99,12 @@ func TestObliqueBoxGeometryIntegration(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepPersistentTouch, common.Outcome, "cause=%v", common.Cause)
+	require.True(t, common.HasAffineReplayProof())
+	commonA, commonB, err := common.CertifiedPosesAtInterval(units.Seconds(.003),
+		units.Seconds(0), units.Seconds(.01))
+	require.NoError(t, err)
+	require.Equal(t, commonA, commonB)
+	require.InDelta(t, turn.Translation().Y+.15, commonA.Translation().Y, 1e-15)
 	midpoint, err = common.ContactTrack.ManifoldAt(units.Scalar(0.5))
 	require.NoError(t, err)
 	require.InDelta(t, pair.Manifold.Points[0].OnA.Value.Y+0.25, midpoint.Points[0].OnA.Value.Y,
@@ -115,6 +121,9 @@ func TestObliqueBoxGeometryIntegration(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepInitiallyTouching, approach.Outcome)
 	require.NotNil(t, approach.Event.Manifold)
+	_, _, err = approach.CertifiedPosesAtInterval(units.Seconds(.005),
+		units.Seconds(0), units.Seconds(.01))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
 	outgoing := dynamics.QuantityVec{X: units.MillimetersPerSecond(50),
 		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(-50)}
 	departure, err := doc.SweepPair(t.Context(), fixed, moving,
@@ -134,6 +143,12 @@ func TestObliqueBoxGeometryIntegration(t *testing.T) {
 			MaxPoseEvaluations: 128, StartPolicy: decad.ContinueCertifiedTouch})
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepPersistentTouch, support.Outcome, "cause=%v", support.Cause)
+	require.True(t, support.HasAffineReplayProof())
+	poseA, poseB, err := support.CertifiedPosesAtInterval(units.Seconds(.003),
+		units.Seconds(0), units.Seconds(.01))
+	require.NoError(t, err)
+	require.Equal(t, turn, poseA)
+	require.Equal(t, turn, poseB)
 	state, err := w.NewState([]dynamics.BodyState{
 		{Body: fixed, Pose: turn, LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
 		{Body: moving, Pose: turn, LinearVelocity: incoming, AngularVelocity: zeroAngular(t)},
@@ -156,8 +171,15 @@ func TestObliqueBoxGeometryIntegration(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, final.Pose, replayedBox.Pose)
 	require.Equal(t, final.LinearVelocity, replayedBox.LinearVelocity)
-	_, err = step.Trace.Sample(units.Seconds(0.005))
-	require.ErrorIs(t, err, dynamics.ErrUnsupported)
+	for _, elapsed := range []units.Value{units.Seconds(0), units.Seconds(.003),
+		units.Seconds(.005), units.Seconds(.01)} {
+		sample, sampleErr := step.Trace.Sample(elapsed)
+		require.NoError(t, sampleErr)
+		body, found := sample.Body(moving)
+		require.True(t, found)
+		require.Equal(t, turn, body.Pose)
+		require.Equal(t, zeroVelocity(), body.LinearVelocity)
+	}
 	repeated, err := w.Step(t.Context(), *step.Next,
 		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.01))
 	require.NoError(t, err)
@@ -249,4 +271,13 @@ func TestObliqueSupportReverseWorldOrder(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, zeroVelocity(), final.LinearVelocity)
 	require.InDelta(t, -50, report.Conservation.ContactImpulse.Value.X.Base(), 1e-6)
+	for _, elapsed := range []units.Value{units.Seconds(0), units.Seconds(.003),
+		units.Seconds(.005), units.Seconds(.01)} {
+		sample, sampleErr := report.Trace.Sample(elapsed)
+		require.NoError(t, sampleErr)
+		body, found := sample.Body(dynamic)
+		require.True(t, found)
+		require.Equal(t, turn, body.Pose)
+		require.Equal(t, zeroVelocity(), body.LinearVelocity)
+	}
 }
