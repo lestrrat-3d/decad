@@ -138,12 +138,43 @@ func solveTwoDynamicFrictionPatch(manifold *decad.ContactManifold, masses [2]dec
 			pairApplyImpulse(&bodies, *point, r3.Vec{X: jx - point.jx, Y: jy - point.jy})
 			point.jx, point.jy = jx, jy
 		}
+		// A common spin is a useful certified representative when the
+		// numerical responses differ only within the angular residual.
+		// The rational audit below checks both torque laws after rounding.
+		if candidate, ok := commonPairSpinCandidate(bodies, cfg.AngularVelocityResidual.Base()); ok {
+			if response, valid := certifyDynamicPairResponse(candidate, points, mu, restitution,
+				cfg, iteration); valid {
+				return response, true
+			}
+		}
 		if response, ok := certifyDynamicPairResponse(bodies, points, mu, restitution,
 			cfg, iteration); ok {
 			return response, true
 		}
 	}
 	return pairPatchResponse{}, false
+}
+
+func commonPairSpinCandidate(bodies [2]pairPatchBody, tolerance float64) ([2]pairPatchBody, bool) {
+	components := [2][3]float64{{bodies[0].spin.X, bodies[0].spin.Y, bodies[0].spin.Z},
+		{bodies[1].spin.X, bodies[1].spin.Y, bodies[1].spin.Z}}
+	if !finite(tolerance) || tolerance <= 0 {
+		return bodies, false
+	}
+	var common [3]float64
+	for axis := range common {
+		if !finite(components[0][axis], components[1][axis]) ||
+			math.Abs(components[0][axis]-components[1][axis]) > tolerance/4 {
+			return bodies, false
+		}
+		common[axis] = components[0][axis]/2 + components[1][axis]/2
+		if !finite(common[axis]) {
+			return bodies, false
+		}
+	}
+	shared := r3.Vec{X: common[0], Y: common[1], Z: common[2]}
+	bodies[0].spin, bodies[1].spin = shared, shared
+	return bodies, true
 }
 
 func pairPointVelocity(bodies [2]pairPatchBody, point pairPatchPoint) r3.Vec {

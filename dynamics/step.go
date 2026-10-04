@@ -49,21 +49,24 @@ const (
 )
 
 type ContactEvent struct {
-	Kind                             ContactEventKind
-	Pair                             BodyPair
-	Bracket                          decad.SweepInterval
-	Time                             units.Value
-	Manifold                         decad.ContactManifold
-	NormalImpulse                    units.Value
-	TangentImpulse                   QuantityVec
-	PointImpulses                    []ContactPointImpulse
-	Solver                           *ContactSolverReport
-	PreVelocity                      QuantityVec
-	PostVelocity                     QuantityVec
-	PositionChange                   r3.Vec
-	PreVelocityA, PreVelocityB       QuantityVec
-	PostVelocityA, PostVelocityB     QuantityVec
-	PositionChangeA, PositionChangeB r3.Vec
+	Kind                                       ContactEventKind
+	Pair                                       BodyPair
+	Bracket                                    decad.SweepInterval
+	Time                                       units.Value
+	Manifold                                   decad.ContactManifold
+	NormalImpulse                              units.Value
+	TangentImpulse                             QuantityVec
+	PointImpulses                              []ContactPointImpulse
+	Solver                                     *ContactSolverReport
+	PreVelocity                                QuantityVec
+	PostVelocity                               QuantityVec
+	PositionChange                             r3.Vec
+	PreVelocityA, PreVelocityB                 QuantityVec
+	PostVelocityA, PostVelocityB               QuantityVec
+	PreAngularVelocityA, PreAngularVelocityB   QuantityVec
+	PostAngularVelocityA, PostAngularVelocityB QuantityVec
+	PoseA, PoseB                               r3.Transform
+	PositionChangeA, PositionChangeB           r3.Vec
 }
 
 // ContactPointImpulse follows the matching point in ContactEvent.Manifold.
@@ -99,13 +102,14 @@ type StepReport struct {
 
 // Trace keeps the certified drift and the event state for replay in this first slice.
 type Trace struct {
-	start    State
-	pre      State
-	post     State
-	end      State
-	duration units.Value
-	eventAt  units.Value
-	hasEvent bool
+	start               State
+	pre                 State
+	post                State
+	end                 State
+	duration            units.Value
+	eventAt             units.Value
+	hasEvent            bool
+	rotationalRemainder *decad.SweepReport
 }
 
 // Sample returns recorded checkpoint states. Interior poses need a separate

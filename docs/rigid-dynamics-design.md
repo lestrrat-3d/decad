@@ -437,6 +437,16 @@ It publishes neither a completed state nor an event when the solved outgoing
 spin lacks a certified rotational remainder. The corresponding `World.Step`
 returns `Undecided` with `Next == nil`.
 
+For an admitted spinning response, the rotational `RigidDriftSegment` sweep
+must certify departure and every later interval through the requested end.
+`World.Step` takes each returned endpoint pose from that sweep's fraction-one
+sample. The sample's relation must be certified separated after charging its
+float-pose deviation against the ideal path. The trace records the same two
+rigid drift paths and their sweep report. It returns stored event and endpoint
+checkpoints; an interior sample requires a separate rotational replay proof.
+An absent fraction-one sample, a nonpositive endpoint gap, or a trace path
+that differs from the swept path returns `Undecided` with no `Next`.
+
 The implemented translating-box slice publishes zero spin. It bounds the
 omitted angular speed from the real manifold's patch-center offset and point
 bounds, the mass-center bound, an impulse upper bound, and a certified lower
@@ -569,9 +579,12 @@ The trace never labels the chosen numerical time as an exact physical impact.
 Contact transitions appear in the trace with zero impulse unless the
 restarted solver finds a closing constraint at that transition.
 
-The implemented first slice re-sweeps every returned rounded drift endpoint
+The translating first slice re-sweeps every returned rounded drift endpoint
 as a `PoseSegment`. A numerical path that lacks `Clear` or
 `DepartedClear` proof returns `Undecided`, even if its ideal drift was clear.
+The rotational response uses the certified `RigidDriftSegment` as its stored
+path and returns that sweep's certified fraction-one float pose. It does not
+claim that an independently interpolated `PoseSegment` is clear.
 `Trace.Sample` currently returns only the stored start, impact, and end
 checkpoints. It returns `ErrUnsupported` for an interior time whose rounded
 pose has no contact certificate. Arbitrary interior replay follows when that

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestTwoDynamicFrictionRefusesUncertifiedSpinRemainder(t *testing.T) {
+func TestTwoDynamicFrictionRefusesMissingSpinConservation(t *testing.T) {
 	doc := decad.New()
 	a := makeBox(t, doc, -5, -5, 5, 5, -10, 10)
 	b := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -51,5 +51,5 @@ func TestTwoDynamicFrictionRefusesUncertifiedSpinRemainder(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, report.Status)
 	require.Nil(t, report.Next)
-	require.Contains(t, report.Diagnostics[0].Reason, "spin needs a certified rotational remainder")
+	require.Contains(t, report.Diagnostics[0].Reason, "conservation readings cannot be represented")
 }
