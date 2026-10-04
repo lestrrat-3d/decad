@@ -1,6 +1,7 @@
 package dynamics_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -65,6 +66,15 @@ func TestThreeBodyImpactWithThirdClear(t *testing.T) {
 	replayed, err := report.Trace.Sample(units.Seconds(0.2))
 	require.NoError(t, err)
 	require.Equal(t, report.Next.Entries(), replayed.Entries())
+
+	gravity := zeroAcceleration()
+	gravity.Z = units.MillimetersPerSecondSquared(math.MaxFloat64)
+	report, err = w.Step(t.Context(), start, dynamics.StepInput{Gravity: gravity}, units.Seconds(10))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, report.Status)
+	require.Nil(t, report.Next)
+	require.Equal(t, dynamics.BodyPair{A: floor, B: box}, report.Diagnostics[0].Pair)
+	require.Contains(t, report.Diagnostics[0].Reason, "force kick exceeds the velocity residual")
 }
 
 func TestThreeBodyRejectsSecondContact(t *testing.T) {

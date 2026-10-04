@@ -205,11 +205,16 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 		}
 	}
 	var reference *World
-	for _, pair := range w.three.pairs {
+	referenceKey := -1
+	for key, pair := range w.three.pairs {
 		if pair != nil {
 			reference = pair
+			referenceKey = key
 			break
 		}
+	}
+	if reference == nil {
+		return nil, fmt.Errorf("%w: three-body world has no response pair", ErrUnsupported)
 	}
 	loads, err := reference.validateLoads(input.Loads)
 	if err != nil {
@@ -220,7 +225,7 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 	}
 	kickPair, ok := reference.kickByLoads(pairState(from, reference), input.Gravity, loads, dt)
 	if !ok {
-		return undecided(w, "force kick exceeds the velocity residual"), nil
+		return w.threeUndecided(referenceKey, "force kick exceeds the velocity residual"), nil
 	}
 	kicked := withPairState(from, kickPair)
 	active := -1
@@ -257,17 +262,11 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 		active = key
 	}
 	if active < 0 {
-		for key, pair := range w.three.pairs {
-			if pair != nil {
-				active = key
-				break
-			}
-		}
+		active = referenceKey
 	}
+	// NewWorld constructs two dynamic/fixed child worlds, so the selected
+	// response pair always has a child solver.
 	chosen := w.three.pairs[active]
-	if chosen == nil {
-		return undecided(w, "no three-body response pair is available"), nil
-	}
 	result, err := chosen.Step(ctx, pairState(from, chosen), input, dt)
 	if err != nil || result == nil || result.Status != Advanced || result.Next == nil {
 		if result != nil {
