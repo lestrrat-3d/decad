@@ -391,7 +391,7 @@ func exactnessFromBound(bound float64) Exactness {
 
 // SweepPair certifies the first encounter of two live solids under one shared
 // duration. Continuous proofs cover affine source-box paths, co-translating
-// oblique source boxes, a source sphere in a box face corridor, an axial pair
+// oblique source boxes, a source sphere in a box face corridor, an affine pair
 // of source spheres, rotating source-box rigid drifts, and admitted rotating
 // PoseSegments. Unsupported paths return SweepUndecided.
 // Both body pointers, both paths, and ctx must be non-nil.

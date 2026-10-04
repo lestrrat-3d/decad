@@ -181,6 +181,161 @@ func (r *sourceSpherePairSweepRun) axialGap() (dyadic, dyadic, bool) {
 	return gap, slope, true
 }
 
+// squaredGap is |centerB-centerA+f*(deltaB-deltaA)|²-(radiusA+radiusB)².
+// Its coefficients are exact over the held source coordinates and affine path.
+func (r *sourceSpherePairSweepRun) squaredGap() (dyadic, dyadic, dyadic) {
+	a, b, c := dyZero(), dyZero(), dyZero()
+	for i := range 3 {
+		p := dySubScalar(r.sphereB.center[i], r.sphereA.center[i])
+		v := dySubScalar(r.pb.delta[i], r.pa.delta[i])
+		a = dyAdd(a, dyMul(v, v))
+		b = dyAdd(b, dyMul(p, v))
+		c = dyAdd(c, dyMul(p, p))
+	}
+	radius := dyAdd(r.sphereA.radius, r.sphereB.radius)
+	return a, dyAdd(b, b), dySubScalar(c, dyMul(radius, radius))
+}
+
+func spherePairQuadraticAt(a, b, c dyadic, f *big.Rat) *big.Rat {
+	out := new(big.Rat).Mul(a.rat(), f)
+	out.Add(out, b.rat())
+	out.Mul(out, f)
+	return out.Add(out, c.rat())
+}
+
+// quadraticBracket searches only the decreasing side of the exact squared
+// distance. The right seed is already at or inside first contact, so a later
+// exit cannot be mistaken for the first encounter.
+func spherePairQuadraticBracket(a, b, c dyadic, vertex, duration, resolution *big.Rat) (
+	*big.Rat, *big.Rat, bool) {
+	zero, one := new(big.Rat), big.NewRat(1, 1)
+	right := new(big.Rat).Set(one)
+	if spherePairQuadraticAt(a, b, c, one).Sign() > 0 {
+		found := false
+		grid := big.NewInt(1)
+		for range 61 {
+			index := new(big.Int).Quo(new(big.Int).Mul(vertex.Num(), grid), vertex.Denom())
+			candidate := new(big.Rat).SetFrac(index, grid)
+			if candidate.Sign() > 0 && candidate.Cmp(one) < 0 &&
+				spherePairQuadraticAt(a, b, c, candidate).Sign() <= 0 {
+				right, found = candidate, true
+				break
+			}
+			grid.Lsh(grid, 1)
+		}
+		if !found {
+			return nil, nil, false
+		}
+	}
+	left := zero
+	for range 61 {
+		width := new(big.Rat).Sub(right, left)
+		span := new(big.Rat).Mul(width, duration)
+		if new(big.Rat).Mul(span, big.NewRat(4, 1)).Cmp(resolution) <= 0 {
+			before := new(big.Rat).Sub(left, width)
+			after := new(big.Rat).Add(right, width)
+			if after.Cmp(one) > 0 {
+				after = one
+			}
+			if before.Sign() > 0 && spherePairQuadraticAt(a, b, c, before).Sign() > 0 &&
+				spherePairQuadraticAt(a, b, c, after).Sign() <= 0 &&
+				floatRat(ratFloatNearest(before)).Cmp(before) == 0 &&
+				floatRat(ratFloatNearest(after)).Cmp(after) == 0 {
+				return before, after, true
+			}
+		}
+		mid := new(big.Rat).Add(left, right)
+		mid.Quo(mid, big.NewRat(2, 1))
+		if spherePairQuadraticAt(a, b, c, mid).Sign() > 0 {
+			left = mid
+		} else {
+			right = mid
+		}
+	}
+	return nil, nil, false
+}
+
+func (r *sourceSpherePairSweepRun) transverse(ctx context.Context, first *SweepSample,
+	resolution *big.Rat) (*SweepReport, error) {
+	zero, one := new(big.Rat), big.NewRat(1, 1)
+	a, b, c := r.squaredGap()
+	if first.Ideal.Relation == ContactTouching {
+		if b.sign() < 0 || a.sign() == 0 && b.sign() == 0 {
+			return r.undecided(zero, one, SweepContactTrackUnproved), nil
+		}
+		last, err := r.sample(ctx, one)
+		if errors.Is(err, errSweepPoseBudget) {
+			return r.undecided(zero, one, SweepPoseBudget), nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if last.Ideal.Relation != ContactSeparated || last.Ideal.Gap == nil {
+			return r.undecided(zero, one, SweepPoseRelation), nil
+		}
+		r.report.Outcome = SweepDepartedClear
+		r.report.Departure = &SweepDeparture{Until: last.At, GapAtUntil: *last.Ideal.Gap}
+		return r.report, nil
+	}
+	if c.sign() <= 0 {
+		return r.undecided(zero, one, SweepPoseRelation), nil
+	}
+	isClear := a.sign() == 0 || b.sign() >= 0
+	vertex := new(big.Rat)
+	if !isClear {
+		vertex.Quo(dyNeg(b).rat(), dyAdd(a, a).rat())
+		minimum := one
+		if vertex.Cmp(one) < 0 {
+			minimum = vertex
+		}
+		isClear = spherePairQuadraticAt(a, b, c, minimum).Sign() > 0
+	}
+	if isClear {
+		last, err := r.sample(ctx, one)
+		if errors.Is(err, errSweepPoseBudget) {
+			return r.undecided(zero, one, SweepPoseBudget), nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if last.Ideal.Relation != ContactSeparated {
+			return r.undecided(zero, one, SweepPoseRelation), nil
+		}
+		r.report.Outcome = SweepClear
+		return r.report, nil
+	}
+	if spherePairQuadraticAt(a, b, c, vertex).Sign() == 0 && vertex.Cmp(one) < 0 {
+		return r.undecided(zero, one, SweepTimeFloor), nil
+	}
+	leftF, rightF, ok := spherePairQuadraticBracket(a, b, c, vertex, r.pa.duration, resolution)
+	if !ok {
+		return r.undecided(zero, one, SweepTimeFloor), nil
+	}
+	left, err := r.sample(ctx, leftF)
+	if errors.Is(err, errSweepPoseBudget) {
+		return r.undecided(zero, leftF, SweepPoseBudget), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	right, err := r.sample(ctx, rightF)
+	if errors.Is(err, errSweepPoseBudget) {
+		return r.undecided(leftF, rightF, SweepPoseBudget), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if left.Ideal.Relation != ContactSeparated ||
+		(right.Ideal.Relation != ContactTouching && right.Ideal.Relation != ContactOverlapping) {
+		return r.undecided(leftF, rightF, SweepPoseRelation), nil
+	}
+	r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
+	r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
+	r.report.bracketRight = new(big.Rat).Set(rightF)
+	r.sortSamples()
+	return r.report, nil
+}
+
 func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*SweepReport, error) {
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	first, err := r.sample(ctx, zero)
@@ -207,7 +362,7 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 	}
 	gap, slope, ok := r.axialGap()
 	if !ok {
-		return r.undecided(zero, one, SweepContactUnsupported), nil
+		return r.transverse(ctx, first, resolution)
 	}
 	if first.Ideal.Relation == ContactTouching {
 		if slope.sign() > 0 {
