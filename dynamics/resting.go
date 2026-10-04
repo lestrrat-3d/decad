@@ -4,42 +4,11 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"math/big"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
-
-// kickByGravity applies the step's one discrete force kick before any sweep.
-func (w *World) kickByGravity(from State, gravity QuantityVec, dt units.Value) (State, bool) {
-	out := from
-	limit, duration := exactBase(w.step.VelocityResidual), exactBase(dt)
-	if limit == nil || duration == nil {
-		return State{}, false
-	}
-	for i, part := range w.parts {
-		if part.definition.Role != Dynamic {
-			continue
-		}
-		for axis := range 3 {
-			g := velocityComponent(gravity, axis)
-			if g.Base() == 0 {
-				continue
-			}
-			v := velocityComponent(from.entries[i].LinearVelocity, axis)
-			ideal := new(big.Rat).Add(exactBase(v), new(big.Rat).Mul(exactBase(g), duration))
-			published := v.Base() + g.Base()*dt.Base()
-			read := new(big.Rat).SetFloat64(published)
-			if !finite(published) || read == nil ||
-				absRat(new(big.Rat).Sub(read, ideal)).Cmp(limit) > 0 {
-				return State{}, false
-			}
-			setVelocityComponent(&out.entries[i].LinearVelocity, axis, units.MillimetersPerSecond(published))
-		}
-	}
-	return out, true
-}
 
 // stepStill accepts a stationary pair only after its full path is certified
 // clear or continuously touching. It applies no contact impulse.
