@@ -225,21 +225,6 @@ func (w *World) stepFrictionStaticSupport(ctx context.Context, from, kicked Stat
 	first *decad.SweepReport, patch *decad.ContactManifold, dynamic int) (*StepReport, error) {
 	mass := w.parts[dynamic].mass
 	pose := kicked.entries[dynamic].Pose
-	if mass.Center.Bound.Mag() != 0 {
-		return undecided(w, "static friction patch has an uncertain center"), nil
-	}
-	var xTotal, yTotal big.Rat
-	for _, point := range patch.Points {
-		if point.OnB.Bound.Mag() != 0 {
-			return undecided(w, "static friction patch has uncertain corners"), nil
-		}
-		lever := exactTranslatedPatchLever(point.OnB.Value, mass.Center.Value, pose.Translation())
-		xTotal.Add(&xTotal, lever[0])
-		yTotal.Add(&yTotal, lever[1])
-	}
-	if xTotal.Sign() != 0 || yTotal.Sign() != 0 {
-		return undecided(w, "static friction patch is not centered"), nil
-	}
 	report, err := w.stepInitialTouch(ctx, from, kicked, dt, first)
 	if err != nil || report.Status != Advanced || len(report.Events) != 1 {
 		return report, err
@@ -260,6 +245,19 @@ func (w *World) stepFrictionStaticSupport(ctx context.Context, from, kicked Stat
 		exactBase(event.NormalImpulse)).Cmp(exactBase(w.step.ImpulseResidual)) > 0 {
 		return undecided(w, "static support corners exceed impulse residual"), nil
 	}
+	angularUpper, ok := staticSupportAngularUpper(patch, mass, pose, normal, w.step.ImpulseResidual)
+	if !ok || angularUpper.Cmp(exactBase(w.step.AngularVelocityResidual)) > 0 {
+		return undecided(w, "static support corner torque exceeds angular residual"), nil
+	}
+	maximumLever, ok := w.frictionWholeBodyLeverWithin(patch, dynamic, pose)
+	if !ok {
+		return undecided(w, "static support can move the patch beyond audited corners"), nil
+	}
+	spinTravel := new(big.Rat).Mul(angularUpper, exactBase(dt))
+	spinTravel.Mul(spinTravel, maximumLever)
+	if spinTravel.Cmp(exactBase(w.step.PenetrationResidual)) > 0 {
+		return undecided(w, "static support omitted spin exceeds penetration residual"), nil
+	}
 	preSpeed := [2]units.Value{kicked.entries[0].LinearVelocity.Z, kicked.entries[1].LinearVelocity.Z}
 	postSpeed := [2]float64{event.PostVelocityA.Z.Base(), event.PostVelocityB.Z.Base()}
 	normalSign := float64(1)
@@ -272,6 +270,43 @@ func (w *World) stepFrictionStaticSupport(ctx context.Context, from, kicked Stat
 	}
 	event.NormalImpulse, event.TangentImpulse, event.PointImpulses = normal, tangent, points
 	return report, nil
+}
+
+// staticSupportAngularUpper bounds the zero-spin error from equal normal
+// corner impulses. Each witness and the center may move anywhere within its
+// published spatial bound, so both horizontal torque components are widened.
+func staticSupportAngularUpper(manifold *decad.ContactManifold, mass decad.MassProperties,
+	pose r3.Transform, normal, impulseResidual units.Value) (*big.Rat, bool) {
+	if manifold == nil || len(manifold.Points) != 4 ||
+		normal.Kind() != units.Impulse || impulseResidual.Kind() != units.Impulse ||
+		!finite(normal.Base(), impulseResidual.Base()) || normal.Base() <= 0 || impulseResidual.Base() < 0 {
+		return nil, false
+	}
+	lower := certifiedInertiaLower(mass)
+	centerBound := exactBase(mass.Center.Bound)
+	if lower == nil || lower.Sign() <= 0 || centerBound == nil || centerBound.Sign() < 0 {
+		return nil, false
+	}
+	var xTotal, yTotal big.Rat
+	pointBound := new(big.Rat)
+	for _, point := range manifold.Points {
+		bound := exactBase(point.OnB.Bound)
+		if bound == nil || bound.Sign() < 0 || !finite(point.OnB.Value.X, point.OnB.Value.Y) {
+			return nil, false
+		}
+		lever := exactTranslatedPatchLever(point.OnB.Value, mass.Center.Value, pose.Translation())
+		xTotal.Add(&xTotal, lever[0])
+		yTotal.Add(&yTotal, lever[1])
+		pointBound.Add(pointBound, bound)
+	}
+	leverUpper := new(big.Rat).Add(absRat(&xTotal), absRat(&yTotal))
+	pointBound.Add(pointBound, new(big.Rat).Mul(centerBound, big.NewRat(4, 1)))
+	leverUpper.Add(leverUpper, new(big.Rat).Mul(pointBound, big.NewRat(2, 1)))
+	impulseUpper := new(big.Rat).Add(exactBase(normal), exactBase(impulseResidual))
+	angularUpper := new(big.Rat).Mul(impulseUpper, leverUpper)
+	angularUpper.Quo(angularUpper, big.NewRat(4, 1))
+	angularUpper.Quo(angularUpper, lower)
+	return angularUpper, true
 }
 
 func zeroAngularVelocity(v QuantityVec) bool {

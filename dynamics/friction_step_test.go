@@ -312,6 +312,35 @@ func TestFixedFloorFrictionRepeatsAtTranslatedPose(t *testing.T) {
 	}
 }
 
+func TestTranslatedStaticSupportBoundsCornerUncertainty(t *testing.T) {
+	doc := decad.New()
+	floor := sourceBoxForFriction(t, doc, -100, -100, 100, 100, -10)
+	box := sourceBoxForFriction(t, doc, -5, -5, 5, 5, 0)
+	pose, err := r3.Translation(r3.Vec{X: 6.25})
+	require.NoError(t, err)
+	request := decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+		NormalResolution: units.Radians(1e-6)}
+	contact, err := doc.ContactPair(t.Context(), floor, box, r3.Identity(), pose, request)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, contact.Relation)
+	require.Len(t, contact.Manifold.Points, 4)
+	mass, err := box.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(.001))
+	require.NoError(t, err)
+	for i := range contact.Manifold.Points {
+		contact.Manifold.Points[i].OnB.Bound = units.Millimeters(1e-12)
+	}
+	limit := units.RadiansPerSecond(1e-6)
+	angular, ok := staticSupportAngularUpper(contact.Manifold, mass, pose,
+		units.KilogramMillimetersPerSecond(50), units.KilogramMillimetersPerSecond(1e-6))
+	require.True(t, ok)
+	require.LessOrEqual(t, angular.Cmp(exactBase(limit)), 0)
+	contact.Manifold.Points[0].OnB.Bound = units.Millimeters(1e-4)
+	angular, ok = staticSupportAngularUpper(contact.Manifold, mass, pose,
+		units.KilogramMillimetersPerSecond(50), units.KilogramMillimetersPerSecond(1e-6))
+	require.True(t, ok)
+	require.Greater(t, angular.Cmp(exactBase(limit)), 0)
+}
+
 func TestFixedFloorFrictionRejectsUnsupportedMaterialsAndPatch(t *testing.T) {
 	doc := decad.New()
 	floor := sourceBoxForFriction(t, doc, -2, -5, 2, 5, -10)

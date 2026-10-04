@@ -411,6 +411,12 @@ inertia eigenvalue. It returns `Undecided` when that upper speed exceeds
 `AngularVelocityResidual`. The impulse and velocity response residuals compare
 the published floats with exact rational evaluation of the held input values;
 one final arithmetic ULP does not cover all intermediate rounding.
+For zero-slip support, four equal normal corner impulses use the same bounded
+witnesses. The sum of their horizontal levers and each point and center bound
+set an upper angular speed through the certified inertia lower bound. The step
+also checks that this speed can move no box point beyond
+`PenetrationResidual` over the full duration. A bound that exceeds either
+limit returns `Undecided`.
 
 Position correction may move a dynamic body by at most the sum of certified
 geometry displacement, the sweep bracket's point-travel bound, and
