@@ -273,7 +273,7 @@ func TestKinematicDriverRejectsInvalidPaths(t *testing.T) {
 	require.NoError(t, err)
 	badStart, err := r3.Translation(r3.Vec{X: 1})
 	require.NoError(t, err)
-	rotated, err := r3.Rotation(r3.Vec{Z: 1}, units.Degrees(90))
+	rotated, err := r3.Rotation(r3.Vec{X: 1, Y: 1}, units.Degrees(90))
 	require.NoError(t, err)
 	valid := dynamics.KinematicDriver{Body: driver,
 		Path: decad.PoseSegment{From: r3.Identity(), To: endPose, Duration: duration}}
@@ -297,7 +297,7 @@ func TestKinematicDriverRejectsInvalidPaths(t *testing.T) {
 		{"invalid endpoint", []dynamics.KinematicDriver{{Body: driver,
 			Path: decad.PoseSegment{From: r3.Identity(), To: r3.Transform{}, Duration: duration}}},
 			duration, dynamics.ErrInvalidInput},
-		{"rotating endpoint", []dynamics.KinematicDriver{{Body: driver,
+		{"unsupported rotating axis", []dynamics.KinematicDriver{{Body: driver,
 			Path: decad.PoseSegment{From: r3.Identity(), To: rotated, Duration: duration}}},
 			duration, dynamics.ErrUnsupported},
 		{"unsupported path", []dynamics.KinematicDriver{{Body: driver,

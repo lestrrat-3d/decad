@@ -14,8 +14,11 @@ travel bounds. An initial source-box face touch also certifies immediate
 departure when both bodies have the same angular velocity and the bounded
 normal separation rate is positive. A box spinning about world Z can also
 reach a contained horizontal face on a stationary box, then depart under
-positive vertical velocity. Other unequal spins, rotating `PoseSegment`
-paths, and other payloads remain design contracts.
+positive vertical velocity. A rotating `PoseSegment` whose read screw axis is
+cardinal can certify a clear path or first impact. An axis-normal source face
+can also certify departure when its support-plane gap increases throughout
+the step. Other unequal spins, rotating paths, and payloads remain design
+contracts.
 `docs/collision-dynamics-design.md` owns the package
 boundary and `docs/contact-geometry-design.md` owns relation and manifold
 proofs at one pose. This document owns the paths, continuous clear certificate,

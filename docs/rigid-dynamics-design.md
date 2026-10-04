@@ -47,6 +47,10 @@ step, push an initially touching dynamic box with a zero-restitution response,
 depart from an initially touching box without an impulse, or cause a centered
 interior impact. Departure requires ideal and rounded full-path certificates;
 a zero-restitution response requires certified persistent touch.
+An axis-screw rotating driver can cross a centered source-box face and
+rebound the dynamic box when its oriented contact witness and separating
+remainder certify the step. Its event records the contact-point derivative,
+while the prescribed body's stored velocity stays zero.
 The driver's stored velocity remains zero while its derivative enters the
 response. `World.Step` admits a positive effective pair friction coefficient
 for a fixed floor and a dynamic source box in either world order. An initial
@@ -73,8 +77,9 @@ rebound from a wide fixed horizontal source-box face with positive
 restitution and zero friction. Its normal impulse leaves the admitted spin
 unchanged within `AngularVelocityResidual`; the returned pose uses the
 certified rotating departure sweep. A rotating contact that lacks these
-proofs returns `Undecided`. Rotating kinematic drivers, broader frictional stepping,
-stacks, broader contact-transition stepping, broader spin response, and arbitrary
+proofs returns `Undecided`. Other rotating kinematic drivers, broader
+frictional stepping, stacks, broader contact-transition stepping, broader
+spin response, and rotational
 trace sampling remain design contracts.
 
 Navigation only; the named sections own the rules:
@@ -272,11 +277,12 @@ mass interval and the angular kick over every admitted inertia component. A
 published kick outside `VelocityResidual` or `AngularVelocityResidual` returns
 `Undecided`.
 
-The current kinematic slice admits one `PoseSegment` with a constant
-orientation and an exactly representable affine derivative. Its start and
+The kinematic slice admits one `PoseSegment` with either constant orientation
+and an exactly representable affine derivative or a cardinal read screw axis
+with exactly representable full-step linear and angular rates. Its start and
 duration must exactly match the state and step. A missing, duplicate, or
-nonkinematic driver is `ErrInvalidInput`; a valid rotating path or a derivative
-that cannot meet the current exact-speed proof is `ErrUnsupported`. An initially
+nonkinematic driver is `ErrInvalidInput`; a rotating path outside this proof or
+a derivative that cannot meet the full-step speed proof is `ErrUnsupported`. An initially
 touching, closing kinematic/dynamic pair can receive a zero-restitution
 support impulse. An initially touching pair with strictly separating relative
 normal speed can advance without an event only when the initial manifold is
@@ -291,6 +297,15 @@ admitted full-step derivative exactly.
 Other contact schedules remain `Undecided`. The driver's effective contact
 speed appears in the event, while `State` and `Trace` store zero kinematic
 velocity. A separated pair can complete a clear driver path without an event.
+For a cardinal rotating screw, the collision uses the full path's axial
+translation rate at an axis-normal face. A bounded one-point oriented manifold
+can supply an interior impact. The event's driver velocity is the screw's
+linear derivative plus `ω×(point−axisPoint)` at that witness; the dynamic
+body receives the impulse and the kinematic body receives none. A sliced
+remainder may differ from the full-step read screw only within the configured
+linear and angular velocity residuals. Both ideal and rounded sliced sweeps
+must certify departure. A rotated persistent contact, off-axis normal, or
+unbounded contact-point derivative returns `Undecided`.
 
 `units.Angle` is dimensionally distinct from `units.Dimensionless`. At the
 physics boundary, validate every AngularVelocity component as Angle/Time,

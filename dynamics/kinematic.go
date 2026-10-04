@@ -15,11 +15,12 @@ type kinematicMotion struct {
 	index     int
 	path      decad.PoseSegment
 	effective QuantityVec
+	angular   QuantityVec
+	screw     *r3.Screw
 }
 
-// validateDriver admits one whole-step affine translation whose derivative is
-// exactly representable as a held Velocity. Other derivatives need an interval
-// response proof before they can act as collision inputs.
+// validateDriver admits exact affine translation or a cardinal rotating screw
+// with representable full-step rates. Other paths lack the response proof.
 func (w *World) validateDriver(from State, drivers []KinematicDriver,
 	dt units.Value) (kinematicMotion, error) {
 	kinematic := -1
@@ -63,7 +64,28 @@ func (w *World) validateDriver(from State, drivers []KinematicDriver,
 		return kinematicMotion{}, fmt.Errorf("%w: driver start differs from the state pose", ErrInvalidInput)
 	}
 	if !sameOrientation(path.From, path.To) {
-		return kinematicMotion{}, fmt.Errorf("%w: rotating kinematic drivers are not implemented", ErrUnsupported)
+		inverse, err := path.From.Inverse()
+		if err != nil {
+			return kinematicMotion{}, fmt.Errorf("%w: invalid rotating driver start", ErrInvalidInput)
+		}
+		relative, err := inverse.Then(path.To)
+		if err != nil {
+			return kinematicMotion{}, fmt.Errorf("%w: invalid rotating driver path", ErrInvalidInput)
+		}
+		screw, err := relative.Screw()
+		if err != nil {
+			return kinematicMotion{}, fmt.Errorf("%w: invalid rotating driver screw", ErrInvalidInput)
+		}
+		if !cardinalDriverAxis(screw.Axis) || screw.Angle.Base() <= 0 ||
+			!finite(screw.Point.X, screw.Point.Y, screw.Point.Z, screw.Slide) {
+			return kinematicMotion{}, fmt.Errorf("%w: rotating driver axis lacks a current contact proof", ErrUnsupported)
+		}
+		linear, angular, ok := screwDriverRates(screw, dt)
+		if !ok {
+			return kinematicMotion{}, fmt.Errorf("%w: rotating driver derivative exceeds the current proof", ErrUnsupported)
+		}
+		return kinematicMotion{index: kinematic, path: path, effective: linear,
+			angular: angular, screw: &screw}, nil
 	}
 	start, end := path.From.Translation(), path.To.Translation()
 	starts, ends := [3]float64{start.X, start.Y, start.Z}, [3]float64{end.X, end.Y, end.Z}
@@ -83,6 +105,103 @@ func (w *World) validateDriver(from State, drivers []KinematicDriver,
 	}
 	return kinematicMotion{index: kinematic, path: path,
 		effective: QuantityVec{X: components[0], Y: components[1], Z: components[2]}}, nil
+}
+
+func cardinalDriverAxis(axis r3.Vec) bool {
+	switch axis {
+	case r3.Vec{X: 1}, r3.Vec{X: -1}, r3.Vec{Y: 1}, r3.Vec{Y: -1},
+		r3.Vec{Z: 1}, r3.Vec{Z: -1}:
+		return true
+	}
+	return false
+}
+
+func screwDriverRates(screw r3.Screw, dt units.Value) (QuantityVec, QuantityVec, bool) {
+	angle := new(big.Rat).Quo(exactBase(screw.Angle), exactBase(dt))
+	slide := new(big.Rat).Quo(new(big.Rat).SetFloat64(screw.Slide), exactBase(dt))
+	omega, _ := angle.Float64()
+	speed, _ := slide.Float64()
+	if !finite(omega, speed) || new(big.Rat).SetFloat64(omega).Cmp(angle) != 0 ||
+		new(big.Rat).SetFloat64(speed).Cmp(slide) != 0 {
+		return QuantityVec{}, QuantityVec{}, false
+	}
+	linear := QuantityVec{X: units.MillimetersPerSecond(screw.Axis.X * speed),
+		Y: units.MillimetersPerSecond(screw.Axis.Y * speed),
+		Z: units.MillimetersPerSecond(screw.Axis.Z * speed)}
+	angular := QuantityVec{X: units.RadiansPerSecond(screw.Axis.X * omega),
+		Y: units.RadiansPerSecond(screw.Axis.Y * omega),
+		Z: units.RadiansPerSecond(screw.Axis.Z * omega)}
+	return linear, angular, true
+}
+
+func roundedScrewDriverRates(screw r3.Screw, dt units.Value) (QuantityVec, QuantityVec, bool) {
+	if !validQuantity(dt, units.Time, true) || !cardinalDriverAxis(screw.Axis) ||
+		!finite(screw.Slide, screw.Angle.Base()) {
+		return QuantityVec{}, QuantityVec{}, false
+	}
+	omega := screw.Angle.Base() / dt.Base()
+	speed := screw.Slide / dt.Base()
+	if !finite(omega, speed) {
+		return QuantityVec{}, QuantityVec{}, false
+	}
+	return QuantityVec{X: units.MillimetersPerSecond(screw.Axis.X * speed),
+			Y: units.MillimetersPerSecond(screw.Axis.Y * speed),
+			Z: units.MillimetersPerSecond(screw.Axis.Z * speed)},
+		QuantityVec{X: units.RadiansPerSecond(screw.Axis.X * omega),
+			Y: units.RadiansPerSecond(screw.Axis.Y * omega),
+			Z: units.RadiansPerSecond(screw.Axis.Z * omega)}, true
+}
+
+func (motion kinematicMotion) contactVelocity(manifold *decad.ContactManifold,
+	limit units.Value) (QuantityVec, bool) {
+	if motion.screw == nil {
+		return motion.effective, true
+	}
+	if manifold == nil || len(manifold.Points) != 1 || !validQuantity(limit, units.Velocity, true) {
+		return QuantityVec{}, false
+	}
+	witness := manifold.Points[0].OnA
+	if motion.index == 1 {
+		witness = manifold.Points[0].OnB
+	}
+	if !validQuantity(witness.Bound, units.Length, false) {
+		return QuantityVec{}, false
+	}
+	coords := [3]float64{witness.Value.X, witness.Value.Y, witness.Value.Z}
+	axisPoint := [3]float64{motion.screw.Point.X, motion.screw.Point.Y, motion.screw.Point.Z}
+	linear := [3]units.Value{motion.effective.X, motion.effective.Y, motion.effective.Z}
+	angular := [3]units.Value{motion.angular.X, motion.angular.Y, motion.angular.Z}
+	var lever, omega [3]*big.Rat
+	for axis := range 3 {
+		if !finite(coords[axis], axisPoint[axis]) {
+			return QuantityVec{}, false
+		}
+		lever[axis] = new(big.Rat).Sub(new(big.Rat).SetFloat64(coords[axis]),
+			new(big.Rat).SetFloat64(axisPoint[axis]))
+		omega[axis] = exactBase(angular[axis])
+	}
+	pointBound := exactBase(witness.Bound)
+	velocityLimit := exactBase(limit)
+	var values [3]units.Value
+	for axis := range 3 {
+		i, j := (axis+1)%3, (axis+2)%3
+		first := new(big.Rat).Mul(omega[i], lever[j])
+		second := new(big.Rat).Mul(omega[j], lever[i])
+		exact := new(big.Rat).Add(exactBase(linear[axis]),
+			new(big.Rat).Sub(first, second))
+		held, _ := exact.Float64()
+		if !finite(held) {
+			return QuantityVec{}, false
+		}
+		values[axis] = units.MillimetersPerSecond(held)
+		errorBound := new(big.Rat).Abs(new(big.Rat).Sub(exact, exactBase(values[axis])))
+		pointError := new(big.Rat).Add(new(big.Rat).Abs(omega[i]), new(big.Rat).Abs(omega[j]))
+		errorBound.Add(errorBound, pointError.Mul(pointError, pointBound))
+		if errorBound.Cmp(velocityLimit) > 0 {
+			return QuantityVec{}, false
+		}
+	}
+	return QuantityVec{X: values[0], Y: values[1], Z: values[2]}, true
 }
 
 func sameOrientation(a, b r3.Transform) bool {
@@ -249,7 +368,11 @@ func (w *World) stepKinematicPush(ctx context.Context, from, kicked State, dt un
 	}
 	effectivePre := [2]QuantityVec{kicked.entries[0].LinearVelocity, kicked.entries[1].LinearVelocity}
 	effectivePost := [2]QuantityVec{post.entries[0].LinearVelocity, post.entries[1].LinearVelocity}
-	effectivePre[motion.index], effectivePost[motion.index] = motion.effective, motion.effective
+	contactVelocity, ok := motion.contactVelocity(first.Event.Manifold, w.step.VelocityResidual)
+	if !ok {
+		return undecided(w, "kinematic contact-point derivative is not bounded"), nil
+	}
+	effectivePre[motion.index], effectivePost[motion.index] = contactVelocity, contactVelocity
 	instant := first.Event.At
 	report := &StepReport{Status: Advanced, Next: &end}
 	report.Events = []ContactEvent{{

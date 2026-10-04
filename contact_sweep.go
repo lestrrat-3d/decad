@@ -221,6 +221,7 @@ type affinePairPath struct {
 	delta     [3]dyadic // displacement over the full path, in millimetres
 	duration  *big.Rat  // exact seconds represented by the input value
 	drift     *RigidDriftSegment
+	screw     *r3.Screw
 	supported bool
 }
 
@@ -245,6 +246,22 @@ func validatePairPath(path PairPath) (affinePairPath, error) {
 			return out, err
 		}
 		if p.From.Basis() != p.To.Basis() {
+			inverse, err := p.From.Inverse()
+			if err != nil {
+				return out, err
+			}
+			relative, err := inverse.Then(p.To)
+			if err != nil {
+				return out, err
+			}
+			screw, err := relative.Screw()
+			if err != nil {
+				return out, err
+			}
+			if _, _, ok := signedAxis(screw.Axis); ok && screw.Angle.Base() > 0 &&
+				finiteMeasurementValues(screw.Point.X, screw.Point.Y, screw.Point.Z, screw.Slide) {
+				out.screw, out.supported = &screw, true
+			}
 			return out, nil
 		}
 		start, end := p.From.Translation(), p.To.Translation()
@@ -354,9 +371,9 @@ func exactnessFromBound(bound float64) Exactness {
 
 // SweepPair certifies the first encounter of two live solids under one shared
 // duration. Continuous proofs cover affine source-box paths, a source sphere
-// in a box face corridor, an axial pair of source spheres, and rotating
-// source-box rigid drifts. Unsupported
-// paths return SweepUndecided.
+// in a box face corridor, an axial pair of source spheres, rotating source-box
+// rigid drifts, and admitted rotating PoseSegments. Unsupported paths return
+// SweepUndecided.
 // Both body pointers, both paths, and ctx must be non-nil.
 func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairPath,
 	req SweepRequest) (*SweepReport, error) {
@@ -407,7 +424,7 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			To: sweepInstant(big.NewRat(1, 1), pa.duration)}
 		return report, nil
 	}
-	if pa.drift != nil || pb.drift != nil {
+	if pa.drift != nil || pb.drift != nil || pa.screw != nil || pb.screw != nil {
 		return d.sweepRotatingPair(ctx, a, b, pa, pb, req, resolution, report)
 	}
 	boxA, okA := sourceBoxAtPose(a, pa.from)
