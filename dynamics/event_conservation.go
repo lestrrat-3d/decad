@@ -235,7 +235,7 @@ func (w *World) eventAngularImpulseFailure(event ContactEvent, body int,
 	}
 	for i, point := range event.Manifold.Points {
 		impulse := event.PointImpulses[i]
-		if impulse.Normal.Kind() != units.Impulse ||
+		if impulse.Normal.Kind() != units.Impulse || !finite(impulse.Normal.Base()) ||
 			validateQuantityVec(impulse.Tangent, units.Impulse) != nil ||
 			impulse.Normal.Base() < 0 || point.Normal.Bound.Base() != 0 ||
 			point.NormalAngle.Base() != 0 {
@@ -258,10 +258,14 @@ func (w *World) eventAngularImpulseFailure(event ContactEvent, body int,
 			if coordinate == nil || direction == nil {
 				return "contact event point coordinates are invalid"
 			}
+			normalImpulse := exactBase(impulse.Normal)
+			tangentImpulse := exactBase(velocityComponent(impulse.Tangent, axis))
+			if normalImpulse == nil || tangentImpulse == nil {
+				return "contact event has invalid point impulse"
+			}
 			arm[axis] = new(big.Rat).Sub(coordinate, center[axis])
 			action[axis] = new(big.Rat).Add(
-				new(big.Rat).Mul(exactBase(impulse.Normal), direction),
-				exactBase(velocityComponent(impulse.Tangent, axis)))
+				new(big.Rat).Mul(normalImpulse, direction), tangentImpulse)
 			aggregate[axis].Add(aggregate[axis], action[axis])
 		}
 		for axis := range torque {

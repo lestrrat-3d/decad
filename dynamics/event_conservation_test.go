@@ -1,6 +1,7 @@
 package dynamics
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -85,6 +86,21 @@ func TestSpinEventConservationUsesRealPointImpulses(t *testing.T) {
 	changed.PointImpulses[0].Normal = units.KilogramMillimetersPerSecond(
 		changed.PointImpulses[0].Normal.Base() + 1)
 	require.Equal(t, "contact event point impulses do not match aggregate impulse",
+		w.eventConservationFailure(changed))
+
+	changed = event
+	changed.PointImpulses = append([]ContactPointImpulse(nil), event.PointImpulses...)
+	changed.PointImpulses[0].Normal = units.KilogramMillimetersPerSecond(math.Inf(1))
+	require.Equal(t, "contact event has invalid point impulse",
+		w.eventConservationFailure(changed))
+
+	changed.PointImpulses[0].Normal = units.KilogramMillimetersPerSecond(math.NaN())
+	require.Equal(t, "contact event has invalid point impulse",
+		w.eventConservationFailure(changed))
+
+	changed.PointImpulses[0] = event.PointImpulses[0]
+	changed.PointImpulses[0].Tangent.X = units.KilogramMillimetersPerSecond(math.Inf(1))
+	require.Equal(t, "contact event has invalid point impulse",
 		w.eventConservationFailure(changed))
 }
 
