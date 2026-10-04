@@ -292,7 +292,7 @@ the bounded bracket-right sample and correct only the dynamic pose. A
 separating response needs ideal and rounded sliced paths that certify
 departure. A zero-restitution response
 needs full-span bounded persistent-contact tracks on both sliced paths and a
-bounded touching endpoint. The sliced driver derivative must equal the
+bounded touching endpoint. A sliced affine driver derivative must equal the
 admitted full-step derivative exactly.
 Other contact schedules remain `Undecided`. The driver's effective contact
 speed appears in the event, while `State` and `Trace` store zero kinematic
@@ -303,8 +303,11 @@ can supply an interior impact. The event's driver velocity is the screw's
 linear derivative plus `ω×(point−axisPoint)` at that witness; the dynamic
 body receives the impulse and the kinematic body receives none. A sliced
 remainder may differ from the full-step read screw only within the configured
-linear and angular velocity residuals. Both ideal and rounded sliced sweeps
-must certify departure. A rotated persistent contact, off-axis normal, or
+linear and angular velocity residuals. Its axis line must lie within
+`PointResolution`, and its contact-point velocity must agree within
+`VelocityResidual`. The original screw's support-plane gap must increase
+strictly after the impact. Both ideal and rounded sliced sweeps must certify
+departure. A rotated persistent contact, off-axis normal, or
 unbounded contact-point derivative returns `Undecided`.
 
 `units.Angle` is dimensionally distinct from `units.Dimensionless`. At the

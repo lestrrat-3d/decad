@@ -40,6 +40,32 @@ func TestKinematicRotatingDriverInteriorImpactUsesProductionGeometry(t *testing.
 	require.Equal(t, decad.SweepImpactBracket, sweep.Outcome)
 	require.Nil(t, sweep.Event.Manifold)
 	require.InDelta(t, .45, sweep.Bracket.To.Elapsed.Value.Base(), 1e-8)
+	for _, sample := range sweep.Samples {
+		if sample.At.Fraction != sweep.Bracket.To.Fraction {
+			continue
+		}
+		full, readErr := path.To.Screw()
+		require.NoError(t, readErr)
+		inverse, readErr := sample.PoseA.Inverse()
+		require.NoError(t, readErr)
+		relative, readErr := inverse.Then(path.To)
+		require.NoError(t, readErr)
+		sliced, readErr := relative.Screw()
+		require.NoError(t, readErr)
+		require.Equal(t, full.Axis, sliced.Axis)
+		require.NotEqual(t, full.Point.Z, sliced.Point.Z)
+		require.InDelta(t, full.Point.Z, sliced.Point.Z, 1e-12)
+		middle := (1 + sample.At.Fraction.Base()) / 2
+		fullTurn, readErr := full.At(middle)
+		require.NoError(t, readErr)
+		originalMiddle, readErr := path.From.Then(fullTurn)
+		require.NoError(t, readErr)
+		slicedTurn, readErr := sliced.At(.5)
+		require.NoError(t, readErr)
+		slicedMiddle, readErr := sample.PoseA.Then(slicedTurn)
+		require.NoError(t, readErr)
+		require.InDelta(t, originalMiddle.Translation().X, slicedMiddle.Translation().X, 1e-8)
+	}
 
 	w := kinematicImpactWorld(t, doc, driver, box, false, 2)
 	start, err := w.NewState([]dynamics.BodyState{
