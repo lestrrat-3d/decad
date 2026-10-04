@@ -435,9 +435,13 @@ type SweepReport struct {
 }
 
 func (r *SweepReport) HasAffineReplayProof() bool
+func (r *SweepReport) BracketEndsAtDuration() bool
 func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Transform, error)
 func (r *SweepReport) CertifiedPosesAtInterval(time, start, end units.Value) (r3.Transform, r3.Transform, error)
 ```
+
+`BracketEndsAtDuration` compares the producer's private exact bracket right
+fraction with one. The public `Fraction` may be rounded.
 
 `CertifiedPosesAt` evaluates the same affine float path used by the sweep at
 the requested elapsed time. It checks the read float poses against the cached

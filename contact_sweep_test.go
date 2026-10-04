@@ -103,6 +103,7 @@ func TestSweepPairTranslatedBoxesImpact(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, decad.SweepImpactBracket, report.Outcome)
 		require.NotNil(t, report.Bracket)
+		require.False(t, report.BracketEndsAtDuration())
 		grid := new(big.Int).Lsh(big.NewInt(1), 56)
 		floor := new(big.Int).Quo(grid, big.NewInt(3))
 		trueRight := new(big.Rat).SetFrac(new(big.Int).Add(floor, big.NewInt(2)), grid)
@@ -126,6 +127,7 @@ func TestSweepPairOffCenterBoxImpactAtEndpoint(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepImpactBracket, report.Outcome)
 	require.NotNil(t, report.Bracket)
+	require.True(t, report.BracketEndsAtDuration())
 	require.Less(t, report.Bracket.From.Fraction.Base(), 1.0)
 	require.Equal(t, 1.0, report.Bracket.To.Fraction.Base())
 	require.LessOrEqual(t, report.Bracket.To.Elapsed.Value.Base()-

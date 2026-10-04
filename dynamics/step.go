@@ -442,7 +442,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	if fraction.Cmp(big.NewRat(1, 1)) == 0 {
 		// The public fraction can round to one before the proved right endpoint.
 		// Confirm that the original sweep covers the exact step end first.
-		if !sweepCoversExactEnd(first, dt) {
+		if !first.BracketEndsAtDuration() {
 			return undecided(w, "impact bracket does not reach the exact step end"), nil
 		}
 		eventAt = dt
@@ -713,11 +713,6 @@ func (w *World) stepRotatingClear(ctx context.Context, from, kicked State,
 	}
 	return &StepReport{Status: Advanced, Next: &end,
 		Trace: Trace{start: from, end: end, duration: dt, rotationalRemainder: sweep}}, nil
-}
-
-func sweepCoversExactEnd(sweep *decad.SweepReport, dt units.Value) bool {
-	_, _, err := sweep.CertifiedPosesAt(dt)
-	return err == nil
 }
 
 // The original ideal right sample and the published rounded pose may straddle

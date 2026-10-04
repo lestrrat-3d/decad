@@ -68,6 +68,7 @@ func TestSweepPairRotatingBoxFindsHiddenImpact(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepImpactBracket, report.Outcome)
 	require.NotNil(t, report.Bracket)
+	require.False(t, report.BracketEndsAtDuration())
 	require.NotNil(t, report.Event)
 	require.Equal(t, decad.ContactOverlapping, report.Event.Relation)
 	require.Nil(t, report.Event.Manifold)
