@@ -26,9 +26,13 @@ depart from an initially touching box without an impulse, or cause a centered
 interior impact. Departure requires ideal and rounded full-path certificates;
 a zero-restitution response requires certified persistent touch.
 The driver's stored velocity remains zero while its derivative enters the
-response.
+response. A private response helper now solves one four-corner, fixed-floor
+Coulomb patch from a real source-box manifold and bounded mass. It admits an
+identity-placed, initially spin-free dynamic box with a cardinal normal and
+positive X slip only after bounded corner and aggregate residuals pass.
+`World.Step` does not yet call this helper or admit frictional materials.
 Off-center impulses that require spin return `Undecided`. Torque loads,
-rotating kinematic drivers, friction, stacks, broader contact-transition stepping,
+rotating kinematic drivers, frictional stepping, stacks, broader contact-transition stepping,
 external impulse reporting, and arbitrary trace sampling remain design
 contracts.
 

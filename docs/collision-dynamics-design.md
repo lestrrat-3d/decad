@@ -19,8 +19,10 @@ advances through a certified clear remainder.
 An affine kinematic driver can push an initially touching dynamic source box
 through a certified persistent contact path, depart without an impulse, or
 produce a centered interior impact with a certified separating or
-persistent-contact remainder. Torque loads, rotating kinematic drivers,
-friction, stacks, and broader payload paths
+persistent-contact remainder. A private four-corner Coulomb patch solver now
+passes one real fixed-floor source-box fixture, but frictional `World.Step`
+admission and path certification remain pending. Torque loads, rotating
+kinematic drivers, stacks, and broader payload paths
 remain design contracts. Each companion document owns its detail.
 
 | Design | Ownership |
