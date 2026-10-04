@@ -22,8 +22,10 @@ separated, then certifies a clear remainder. A transition with a touching
 right sample or insufficient `MaxEvents` remains `Undecided`.
 An affine translating kinematic driver can move through a certified clear
 step, push an initially touching dynamic box with a zero-restitution response,
-or cause a centered interior impact with a separating remainder. Its stored
-velocity remains zero while the driver derivative enters the response.
+or cause a centered interior impact. A separating response requires certified
+departure; a zero-restitution response requires certified persistent touch.
+The driver's stored velocity remains zero while its derivative enters the
+response.
 Off-center impulses that require spin return `Undecided`. Torque loads,
 rotating kinematic drivers, friction, stacks, broader contact-transition stepping,
 external impulse reporting, and arbitrary trace sampling remain design
@@ -201,9 +203,11 @@ nonkinematic driver is `ErrInvalidInput`; a valid rotating path or a derivative
 that cannot meet the current exact-speed proof is `ErrUnsupported`. An initially
 touching, closing kinematic/dynamic pair can receive a zero-restitution
 support impulse. A centered interior impact can use the bounded bracket-right
-sample, correct only the dynamic pose, and apply the pair restitution when
-both the ideal and rounded sliced paths certify a separating remainder. The
-sliced driver derivative must equal the admitted full-step derivative exactly.
+sample and correct only the dynamic pose. A separating response needs ideal
+and rounded sliced paths that certify departure. A zero-restitution response
+needs full-span bounded persistent-contact tracks on both sliced paths and a
+bounded touching endpoint. The sliced driver derivative must equal the
+admitted full-step derivative exactly.
 Other contact schedules remain `Undecided`. The driver's effective contact
 speed appears in the event, while `State` and `Trace` store zero kinematic
 velocity. A separated pair can complete a clear driver path without an event.
@@ -513,6 +517,12 @@ the bracket-right sample, applies `120 kg·mm/s`, and certifies departure on
 both sliced remainder paths. B ends near `x=[35,45] mm` at `120 mm/s`; A ends
 at `x=[20,30] mm` with zero stored velocity. The tiny difference from B's
 ideal final coordinates is bounded by the impact bracket and correction.
+
+With the same bodies and driver but restitution zero, the bracket-right
+correction and `80 kg·mm/s` impulse give B `80 mm/s`. Both sliced remainder
+paths certify persistent face touch. B ends near `x=[30,40] mm` and A ends at
+`x=[20,30] mm`; the bracket and correction bound B's small offset from the
+ideal coordinates. A still stores zero velocity.
 
 For the sliding-friction increment, put the same `1 kg` box
 on a fixed floor wide enough for a `5 mm` slide. With gravity

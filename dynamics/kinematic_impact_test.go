@@ -119,9 +119,14 @@ func TestKinematicDriverInteriorImpactUsesProductionGeometry(t *testing.T) {
 
 func kinematicImpactWorld(t *testing.T, doc *decad.Document, driver, box *decad.Body,
 	dynamicFirst bool, maxEvents int) *dynamics.World {
+	return kinematicImpactWorldWithRestitution(t, doc, driver, box, dynamicFirst, maxEvents, .5)
+}
+
+func kinematicImpactWorldWithRestitution(t *testing.T, doc *decad.Document, driver, box *decad.Body,
+	dynamicFirst bool, maxEvents int, restitution float64) *dynamics.World {
 	t.Helper()
 	density := units.KilogramsPerCubicMillimeter(.001)
-	material := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}
+	material := dynamics.Material{Restitution: units.Scalar(restitution), Friction: units.Scalar(0)}
 	bodies := []dynamics.RigidBody{
 		{Body: driver, Role: dynamics.Kinematic, Material: material},
 		{Body: box, Role: dynamics.Dynamic, Density: &density, Material: material},
