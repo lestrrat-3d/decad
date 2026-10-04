@@ -9,15 +9,17 @@ certified contact normal determines the response component; tangent velocity
 continues through an oblique impact. Centered impacts of two dynamic bodies
 apply equal and opposite impulses.
 A fixed box and a dynamic source box at matching 45-degree Y poses can resolve
-an initial centered face impact with zero restitution and friction. The solver
-stops the incoming dynamic box, checks the bounded normal and four point
-impulses against its momentum and angular residuals, and requires ideal and
-rounded persistent-contact tracks for the full step. A second stationary step
-uses those same contact proofs. Tangential incoming motion, off-center contact,
-and a positive-restitution rebound return `Undecided` in this tilted-pose path.
-`Trace.Sample` also returns interior states for this path. The rounded
-source-box poses must stay within the cached oblique sweep's point resolution
-and keep its bounded face track; otherwise replay returns `ErrUnsupported`.
+an initial centered frictionless face impact. The solver checks the bounded
+normal and four point impulses against its momentum and angular residuals.
+Zero restitution stops the box and requires ideal and rounded persistent-contact
+tracks. Positive restitution reverses and scales its normal velocity; both
+paths must certify one-sided departure and a separated endpoint. A second step
+from that endpoint must certify a clear path. Tangential incoming motion and
+off-center contact return `Undecided` in this tilted-pose path.
+`Trace.Sample` also returns interior states on a persistent-contact path. The
+rounded source-box poses must stay within the cached oblique sweep's point
+resolution and keep its bounded face track; otherwise replay returns
+`ErrUnsupported`. Interior departure replay is not yet certified.
 A source semicircle sphere with supplied mass can rebound from a fixed source
 box on an isolated face-point contact when its affine sweep stays within that
 face corridor.
@@ -728,8 +730,10 @@ around world Y. One box is fixed; the `1 kg` dynamic box enters at
 produce a `sqrt(5000) kg·mm/s` support impulse. The dynamic box stops and
 both the ideal and rounded sweeps prove persistent contact through `0.01 s`.
 The reported contact-impulse bound is positive; another stationary step
-advances without an event. An outward rebound has no certified one-sided
-departure and returns `Undecided`.
+advances without an event. With restitution `0.5`, the initial impulse is
+`1.5 sqrt(5000) kg·mm/s`, the outgoing velocity is `(25, 0, −25) mm/s`, and
+the box translates `(0.25, 0, −0.25) mm` over `0.01 s`. Both ideal and rounded
+paths prove one-sided departure; a second step advances clear without an event.
 
 The center-force fixture starts the same `1 kg` box `10 mm` above the floor at
 rest. A `−500 kg·mm/s²` center force over `0.2 s` gives a full-step kick of

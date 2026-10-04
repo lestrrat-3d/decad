@@ -14,7 +14,9 @@ travel bounds. An initial source-box face touch also certifies immediate
 departure when both bodies have the same angular velocity and the bounded
 normal separation rate is positive. Fixed oblique poses of co-oriented source
 boxes also certify initial face touch and a persistent face patch when both
-affine paths have the same translation. A box spinning about world Z can also
+affine paths have the same translation. If their exact support-plane gap has
+positive affine slope, the sweep certifies immediate departure and checks the
+rounded endpoint against its ideal path. A box spinning about world Z can also
 reach a contained horizontal face on a stationary box, then depart under
 positive vertical velocity. A rotating `PoseSegment` whose read screw axis is
 cardinal can certify a clear path or first impact. An axis-normal source face
@@ -363,6 +365,16 @@ Either body may move. The exact source boxes and placed poses are required;
 transient AABBs with displacement bounds cannot establish the equality. A
 rotation, tangential speed on that axis, an uncertain equality, or `w <= 0`
 does not pass this source-box departure path.
+
+For co-oriented source boxes at a fixed oblique pose, use the exact dyadic
+cross product of two source edges as the common support-plane normal. A
+four-point initial face manifold and exact equality of opposed support
+projections identify the complete touching face. A positive exact dot product
+of relative affine displacement with the outward normal proves a strictly
+positive support gap for every positive path fraction. Check the chosen
+rounded departure sample with its float-to-ideal pose bound. Every later
+clear interval must keep this exact support gap positive at both endpoints;
+affine motion then proves it positive throughout the interval.
 
 After departure, mark `(0,h]` as certified clear, put a separated sample at
 `h`, and run §5's earliest-first search on `[h, Duration]`. If no later

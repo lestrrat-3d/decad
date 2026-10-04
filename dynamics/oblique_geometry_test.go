@@ -133,8 +133,10 @@ func TestObliqueBoxGeometryIntegration(t *testing.T) {
 		decad.SweepRequest{ContactRequest: contact, TimeResolution: units.Seconds(1e-9),
 			MaxPoseEvaluations: 128, StartPolicy: decad.ContinueSeparatingTouch})
 	require.NoError(t, err)
-	require.Equal(t, decad.SweepUndecided, departure.Outcome)
-	require.Equal(t, decad.SweepDepartureUnproved, departure.Cause)
+	require.Equal(t, decad.SweepDepartedClear, departure.Outcome, "cause=%v", departure.Cause)
+	require.NotNil(t, departure.Departure)
+	require.Greater(t, departure.Departure.GapAtUntil.Value.Base()-
+		departure.Departure.GapAtUntil.Bound.Base(), 0.0)
 	support, err := doc.SweepPair(t.Context(), fixed, moving,
 		decad.PoseSegment{From: turn, To: turn, Duration: units.Seconds(0.01)},
 		decad.RigidDriftSegment{From: turn, Center: turn.Apply(r3.Vec{X: 15, Y: 5, Z: 5}),
@@ -201,22 +203,26 @@ func TestObliqueSupportRefusesUnresolvedMotion(t *testing.T) {
 	incoming := dynamics.QuantityVec{X: units.MillimetersPerSecond(-50),
 		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(50)}
 	for _, fixture := range []struct {
-		name        string
-		pose        r3.Transform
-		velocity    dynamics.QuantityVec
-		restitution float64
+		name     string
+		pose     r3.Transform
+		velocity dynamics.QuantityVec
+		spin     bool
 	}{
 		{name: "tangent velocity", pose: turn, velocity: dynamics.QuantityVec{
 			X: incoming.X, Y: units.MillimetersPerSecond(10), Z: incoming.Z}},
 		{name: "off-center face", pose: offCenter, velocity: incoming},
-		{name: "outward rebound", pose: turn, velocity: incoming, restitution: .5},
+		{name: "spinning face", pose: turn, velocity: incoming, spin: true},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
-			w := fixedBoxContactWorld(t, doc, fixed, moving, fixture.restitution)
+			w := fixedBoxContactWorld(t, doc, fixed, moving, .5)
+			angular := zeroAngular(t)
+			if fixture.spin {
+				angular.Y = units.RadiansPerSecond(1)
+			}
 			state, stateErr := w.NewState([]dynamics.BodyState{
 				{Body: fixed, Pose: turn, LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
 				{Body: moving, Pose: fixture.pose, LinearVelocity: fixture.velocity,
-					AngularVelocity: zeroAngular(t)},
+					AngularVelocity: angular},
 			})
 			require.NoError(t, stateErr)
 			step, stepErr := w.Step(t.Context(), state,
@@ -226,6 +232,58 @@ func TestObliqueSupportRefusesUnresolvedMotion(t *testing.T) {
 			require.Nil(t, step.Next)
 		})
 	}
+	edge := makeBox(t, doc, 10, 10, 20, 20, 0, 10)
+	w := fixedBoxContactWorld(t, doc, fixed, edge, .5)
+	state, err := w.NewState([]dynamics.BodyState{
+		{Body: fixed, Pose: turn, LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: edge, Pose: turn, LinearVelocity: incoming, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), state,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.01))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, report.Status)
+	require.Nil(t, report.Next)
+}
+
+func TestObliqueCenteredReboundAndNextStep(t *testing.T) {
+	doc := decad.New()
+	fixed := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
+	moving := makeBox(t, doc, 10, 0, 20, 10, 0, 10)
+	turn, err := r3.Rotation(r3.Vec{Y: 1}, units.Degrees(45))
+	require.NoError(t, err)
+	w := fixedBoxContactWorld(t, doc, fixed, moving, .5)
+	incoming := dynamics.QuantityVec{X: units.MillimetersPerSecond(-50),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(50)}
+	state, err := w.NewState([]dynamics.BodyState{
+		{Body: fixed, Pose: turn, LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: moving, Pose: turn, LinearVelocity: incoming, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), state, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.01))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, 1.5*math.Sqrt(5000), report.Events[0].NormalImpulse.Base(), 1e-6)
+	require.Equal(t, 4, len(report.Events[0].PointImpulses))
+	end, ok := report.Next.Body(moving)
+	require.True(t, ok)
+	require.InDelta(t, 25, end.LinearVelocity.X.Base(), 1e-9)
+	require.InDelta(t, -25, end.LinearVelocity.Z.Base(), 1e-9)
+	require.InDelta(t, .25, end.Pose.Translation().X, 1e-9)
+	require.InDelta(t, -.25, end.Pose.Translation().Z, 1e-9)
+	require.NotNil(t, report.Conservation)
+	require.InDelta(t, 75, report.Conservation.ContactImpulse.Value.X.Base(), 1e-6)
+	require.InDelta(t, -75, report.Conservation.ContactImpulse.Value.Z.Base(), 1e-6)
+	require.InDelta(t, 625, report.Conservation.Completion.KineticEnergy.Value.Base(), 1e-6)
+	second, err := w.Step(t.Context(), *report.Next, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.01))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, second.Status, "%+v", second.Diagnostics)
+	require.Empty(t, second.Events)
+	end, ok = second.Next.Body(moving)
+	require.True(t, ok)
+	require.InDelta(t, .5, end.Pose.Translation().X, 1e-9)
+	require.InDelta(t, -.5, end.Pose.Translation().Z, 1e-9)
 }
 
 func TestObliqueSupportReverseWorldOrder(t *testing.T) {
@@ -235,7 +293,7 @@ func TestObliqueSupportReverseWorldOrder(t *testing.T) {
 	turn, err := r3.Rotation(r3.Vec{Y: 1}, units.Degrees(45))
 	require.NoError(t, err)
 	density := units.KilogramsPerCubicMillimeter(.001)
-	material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
+	material := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}
 	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
 		Bodies: []dynamics.RigidBody{
 			{Body: dynamic, Role: dynamics.Dynamic, Density: &density, Material: material},
@@ -266,18 +324,15 @@ func TestObliqueSupportReverseWorldOrder(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
 	require.Len(t, report.Events, 1)
-	require.InDelta(t, math.Sqrt(5000), report.Events[0].NormalImpulse.Base(), 1e-6)
+	require.InDelta(t, 1.5*math.Sqrt(5000), report.Events[0].NormalImpulse.Base(), 1e-6)
 	final, ok := report.Next.Body(dynamic)
 	require.True(t, ok)
-	require.Equal(t, zeroVelocity(), final.LinearVelocity)
-	require.InDelta(t, -50, report.Conservation.ContactImpulse.Value.X.Base(), 1e-6)
-	for _, elapsed := range []units.Value{units.Seconds(0), units.Seconds(.003),
-		units.Seconds(.005), units.Seconds(.01)} {
-		sample, sampleErr := report.Trace.Sample(elapsed)
-		require.NoError(t, sampleErr)
-		body, found := sample.Body(dynamic)
-		require.True(t, found)
-		require.Equal(t, turn, body.Pose)
-		require.Equal(t, zeroVelocity(), body.LinearVelocity)
-	}
+	require.InDelta(t, -25, final.LinearVelocity.X.Base(), 1e-9)
+	require.InDelta(t, 25, final.LinearVelocity.Z.Base(), 1e-9)
+	require.InDelta(t, -75, report.Conservation.ContactImpulse.Value.X.Base(), 1e-6)
+	second, err := w.Step(t.Context(), *report.Next,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.01))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, second.Status, "%+v", second.Diagnostics)
+	require.Empty(t, second.Events)
 }

@@ -20,9 +20,9 @@ certified contact track. A dynamic body's mass can come from
 density or a caller-supplied bounded mass record. One world-frame center force
 and torque per dynamic body contribute to the step's full-duration velocity kick.
 Two co-oriented boxes at a 45-degree pose can resolve a centered frictionless
-initial support impulse with zero restitution after their four-point manifold
-and full-span persistent tracks are certified. Tilted off-center impacts and
-outward rebounds remain `Undecided`.
+initial impulse from their four-point manifold. Zero restitution requires
+full-span persistent tracks; positive restitution requires ideal and rounded
+one-sided departure proofs. Tilted off-center impacts remain `Undecided`.
 Separated source boxes can rotate through a certified clear drift and advance
 again from the returned spinning state. A Z-axis torque-driven box can also
 rebound from a wide fixed horizontal box face and continue spinning from the

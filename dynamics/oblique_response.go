@@ -11,17 +11,31 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// stepObliqueSupport admits a centered zero-restitution face impact only when
-// the dynamic body can stop without tangential motion or unresolved spin.
+// stepObliqueSupport admits a centered frictionless face impact only when the
+// incoming velocity is normal to the bounded contact and no spin is needed.
 func (w *World) stepObliqueSupport(ctx context.Context, from, kicked State,
 	dt units.Value) (*StepReport, error) {
-	if w.friction.lower.Sign() != 0 || w.restitution.Base() != 0 ||
-		w.parts[0].definition.Role == w.parts[1].definition.Role {
+	if w.friction.lower.Sign() != 0 || w.parts[0].definition.Role == w.parts[1].definition.Role {
 		return undecided(w, "tilted contact needs a frictionless fixed/dynamic support pair"), nil
 	}
 	first, err := w.sweep(ctx, kicked, dt, decad.StopAtInitialContact)
 	if err != nil {
 		return nil, err
+	}
+	if first.Outcome == decad.SweepClear {
+		end, driftErr := driftState(kicked, dt.Base())
+		if driftErr != nil {
+			return undecidedArithmetic(w, "non-finite tilted clear endpoint", driftErr)
+		}
+		rounded, sweepErr := w.sweepPoses(ctx, kicked, end, dt, decad.StopAtInitialContact)
+		if sweepErr != nil {
+			return nil, sweepErr
+		}
+		if rounded.Outcome != decad.SweepClear {
+			return undecided(w, fmt.Sprintf("rounded tilted clear path returned %v", rounded.Outcome)), nil
+		}
+		return &StepReport{Status: Advanced, Next: &end, Trace: Trace{
+			start: from, pre: kicked, end: end, duration: dt, preSweep: rounded}}, nil
 	}
 	if first.Outcome != decad.SweepInitiallyTouching || first.Event == nil || first.Event.Manifold == nil {
 		return undecided(w, fmt.Sprintf("tilted initial contact returned %v", first.Outcome)), nil
@@ -44,31 +58,48 @@ func (w *World) stepObliqueSupport(ctx context.Context, from, kicked State,
 		return undecided(w, "tilted contact has no bounded closing speed"), nil
 	}
 	mass := w.parts[dynamic].mass.Mass
-	impulse := -closing * mass.Value.Base()
-	if !finite(impulse) || impulse <= 0 ||
+	stopImpulse := -closing * mass.Value.Base()
+	if !finite(stopImpulse) || stopImpulse <= 0 ||
 		!obliqueStopMomentumWithin(pre, normal, first.Event.Manifold, mass,
-			impulse, dynamic, w.step) {
+			stopImpulse, dynamic, w.step) {
 		return undecided(w, "tilted support needs tangent velocity or exceeds impulse residual"), nil
 	}
+	coefficient := 0.0
+	if -closing > w.step.ImpactSpeed.Base() {
+		coefficient = w.restitution.Base()
+	}
+	impulse := stopImpulse * (1 + coefficient)
+	if !finite(impulse) || impulse <= 0 {
+		return undecided(w, "tilted impact impulse is not finite"), nil
+	}
 	post := kicked
-	zero := units.MillimetersPerSecond(0)
-	post.entries[dynamic].LinearVelocity = QuantityVec{X: zero, Y: zero, Z: zero}
-	ideal, err := w.sweep(ctx, post, dt, decad.ContinueCertifiedTouch)
+	post.entries[dynamic].LinearVelocity = QuantityVec{
+		X: units.MillimetersPerSecond(-coefficient * pre.X.Base()),
+		Y: units.MillimetersPerSecond(-coefficient * pre.Y.Base()),
+		Z: units.MillimetersPerSecond(-coefficient * pre.Z.Base()),
+	}
+	policy := decad.ContinueCertifiedTouch
+	if coefficient > 0 {
+		policy = decad.ContinueSeparatingTouch
+	}
+	ideal, err := w.sweep(ctx, post, dt, policy)
 	if err != nil {
 		return nil, err
 	}
-	if !w.obliqueTrackWithin(ideal, normal) {
+	if coefficient == 0 && !w.obliqueTrackWithin(ideal, normal) ||
+		coefficient > 0 && !obliqueDepartureWithin(ideal) {
 		return undecided(w, fmt.Sprintf("tilted support continuation returned %v", ideal.Outcome)), nil
 	}
 	end, err := driftState(post, dt.Base())
 	if err != nil {
 		return undecidedArithmetic(w, "non-finite tilted support endpoint", err)
 	}
-	rounded, err := w.sweepPoses(ctx, post, end, dt, decad.ContinueCertifiedTouch)
+	rounded, err := w.sweepPoses(ctx, post, end, dt, policy)
 	if err != nil {
 		return nil, err
 	}
-	if !w.obliqueTrackWithin(rounded, normal) {
+	if coefficient == 0 && !w.obliqueTrackWithin(rounded, normal) ||
+		coefficient > 0 && !obliqueDepartureWithin(rounded) {
 		return undecided(w, fmt.Sprintf("rounded tilted support returned %v", rounded.Outcome)), nil
 	}
 	last, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
@@ -76,10 +107,15 @@ func (w *World) stepObliqueSupport(ctx context.Context, from, kicked State,
 	if err != nil {
 		return nil, err
 	}
-	lastNormal, lastSeparation, lastBound, lastOK := boundedObliqueContact(last.Manifold, w.step.Contact)
-	if last.Relation != decad.ContactTouching || !lastOK || lastNormal != normal ||
-		math.Abs(lastSeparation)+lastBound > w.step.PenetrationResidual.Base() {
-		return undecided(w, "tilted support endpoint lacks a bounded face contact"), nil
+	if coefficient == 0 {
+		lastNormal, lastSeparation, lastBound, lastOK := boundedObliqueContact(last.Manifold, w.step.Contact)
+		if last.Relation != decad.ContactTouching || !lastOK || lastNormal != normal ||
+			math.Abs(lastSeparation)+lastBound > w.step.PenetrationResidual.Base() {
+			return undecided(w, "tilted support endpoint lacks a bounded face contact"), nil
+		}
+	} else if last.Relation != decad.ContactSeparated || last.Gap == nil ||
+		last.Gap.Value.Base()-last.Gap.Bound.Base() <= 0 {
+		return undecided(w, "tilted rebound endpoint lacks a positive bounded gap"), nil
 	}
 	instant := first.Event.At
 	points := make([]ContactPointImpulse, len(first.Event.Manifold.Points))
@@ -105,6 +141,11 @@ func (w *World) stepObliqueSupport(ctx context.Context, from, kicked State,
 	return &StepReport{Status: Advanced, Next: &end, Events: []ContactEvent{event},
 		Trace: Trace{start: from, pre: kicked, post: post, end: end, duration: dt,
 			eventAt: instant.Elapsed.Value, hasEvent: true, postSweep: rounded}}, nil
+}
+
+func obliqueDepartureWithin(sweep *decad.SweepReport) bool {
+	return sweep != nil && sweep.Outcome == decad.SweepDepartedClear && sweep.Departure != nil &&
+		sweep.Departure.GapAtUntil.Value.Base()-sweep.Departure.GapAtUntil.Bound.Base() > 0
 }
 
 func boundedObliqueContact(manifold *decad.ContactManifold,
