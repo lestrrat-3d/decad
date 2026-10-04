@@ -212,7 +212,7 @@ func TestSweepPairTwoMoversAndDeparture(t *testing.T) {
 	require.InDelta(t, 5, departed.Departure.GapAtUntil.Value.Base(), 1e-12)
 }
 
-func TestSweepPairRotatingPathUndecided(t *testing.T) {
+func TestSweepPairRotatingPathClear(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 30, 0, 40, 10, 10)
@@ -221,8 +221,9 @@ func TestSweepPairRotatingPathUndecided(t *testing.T) {
 	report, err := doc.SweepPair(t.Context(), a, b,
 		rotating, sweepDrift(r3.Vec{}, 0.1), sweepRequest())
 	require.NoError(t, err)
-	require.Equal(t, decad.SweepUndecided, report.Outcome)
-	require.Equal(t, decad.SweepContactUnsupported, report.Cause)
+	require.Equal(t, decad.SweepClear, report.Outcome)
+	require.Equal(t, decad.SweepNoCause, report.Cause)
+	require.GreaterOrEqual(t, report.PoseEvaluations, uint64(2))
 }
 
 func TestSweepPairSourceBoxPersistentSlide(t *testing.T) {
