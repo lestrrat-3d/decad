@@ -1,7 +1,7 @@
 # decad
 
 <p align="center">
-  <img src="docs/images/hero.png" alt="Dimensional DECAD lettering rendered from decad solids against a pale blue-gray background" width="900">
+  <img src="docs/images/hero.gif" alt="DECAD letters assemble on a navy plate, a light sweeps across them, the logo holds, and the letters lift away" width="900">
 </p>
 
 A **headless CAD engine** for Go: the 3D modeling layer above the
@@ -52,7 +52,10 @@ tessellates.
 | <img src="docs/images/features/shell.png" alt="An open tray: a block with its top face removed and its walls left one thickness" width="320"><br>**Shell** hollows a solid into a wall of one thickness. | <img src="docs/images/features/boolean.png" alt="A flange plate with one large central bore and two smaller bolt holes drilled through it" width="320"><br>**Union, Cut and Intersect** combine two bodies explicitly, never folded into a feature. |
 | <img src="docs/images/features/verify.png" alt="A round pin standing inside a larger bore, clearance visible all the way round" width="320"><br>**Verify** proves the gap between two bodies, so a fit is checked before anything is cut. | <img src="docs/images/features/surface.png" alt="A curved open dish of no thickness, its inner side shaded apart from its outer one" width="320"><br>**Surface result** keeps a feature's swept walls and omits the faces that exist only to close the solid, leaving a sheet body. |
 
-Regenerate every image on this page with `cd _gallery && go run .`.
+Regenerate the still images with `cd _gallery && go run .`. From `_gallery`,
+regenerate the animated hero with `go run . hero > hero-assemble.sh && sh hero-assemble.sh`.
+Its letters assemble, a light crosses them, the finished logo holds for ten
+seconds, and the letters lift away before the loop repeats.
 
 The landing-page clip animates these parts and the wordmark. Render it with
 `cd _gallery && go run . clip > assemble.sh && sh assemble.sh`: the program
