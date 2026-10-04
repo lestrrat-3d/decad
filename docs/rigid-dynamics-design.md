@@ -23,8 +23,9 @@ full-step kick from gravity and any center force, then a zero-restitution
 support impulse. A zero-restitution impact can continue as certified
 persistent contact, and a stationary touching pair can advance without an
 impulse. These paths require full-span ideal and rounded contact
-tracks. Each dynamic body accepts at most one center force with zero torque;
-the mass interval must fit the kicked velocity within `VelocityResidual`.
+tracks. Each dynamic body accepts at most one center force and world-frame
+torque; mass and inertia intervals must fit the kicked velocities within their
+respective velocity residuals.
 An initially touching pair with exactly zero relative normal speed can slide
 without an impulse when both full-span paths certify persistent contact. The
 first edge-exit step accepts a transition whose right bracket sample is
@@ -55,8 +56,10 @@ kinetic energy, linear momentum, and angular momentum for dynamic bodies
 at input, after the full-step force kick, and at completion. It also reports
 gravity, center-force, and fixed/kinematic contact impulses separately, plus
 the drift-only energy, linear momentum, and angular momentum changes.
-Torque loads, rotating kinematic drivers, broader frictional stepping, stacks,
-broader contact-transition stepping, broader spin response, and arbitrary
+Torque-driven rotation advances when `SweepPair` certifies a clear full-span
+drift and its rounded endpoint. A rotating contact that lacks a sweep proof
+returns `Undecided`. Rotating kinematic drivers, broader frictional stepping,
+stacks, broader contact-transition stepping, broader spin response, and arbitrary
 trace sampling remain design contracts.
 
 Navigation only; the named sections own the rules:
@@ -247,13 +250,12 @@ path's time derivative, with its certified numerical bound; absent or
 unbounded derivatives make a potential contact undecided. It receives no
 impulse. A fixed body has zero contact-point velocity.
 
-The current translating-pair step accepts one typed, finite center force per
-dynamic body and requires every supplied torque component to be zero. A
-nonzero valid torque returns `ErrUnsupported`; a nil, duplicate, foreign,
-or nondynamic load body or a wrong-kind/non-finite vector returns
-`ErrInvalidInput`. It computes both endpoint kicks over the admitted mass
-interval and returns `Undecided` if the published velocity differs from either
-by more than `VelocityResidual`.
+The step accepts one typed, finite center force and torque per dynamic body.
+A nil, duplicate, foreign, or nondynamic load body or a wrong-kind/non-finite
+vector returns `ErrInvalidInput`. It bounds the linear kick over the admitted
+mass interval and the angular kick over every admitted inertia component. A
+published kick outside `VelocityResidual` or `AngularVelocityResidual` returns
+`Undecided`.
 
 The current kinematic slice admits one `PoseSegment` with a constant
 orientation and an exactly representable affine derivative. Its start and
@@ -525,7 +527,9 @@ have kind `units.Impulse`; angular momentum components and bounds have kind
 times world angular velocity. Source mass-center and inertia bounds widen
 the reading.
 `GravityImpulse`, `LoadImpulse`, and `ContactImpulse` are separate bounded
-vectors. `KinematicWork` is a signed bounded energy reading with kind
+linear vectors. `TorqueImpulse` reports the exact held world torque times
+step duration as an `AngularMomentum` vector. `KinematicWork` is a signed
+bounded energy reading with kind
 `units.Torque`. For each kinematic contact event, it sums the exact held
 aggregate impulse delivered to the dynamic body dotted with the driver's
 published effective event velocity. A step without a kinematic impact has
@@ -649,6 +653,14 @@ rest. A `−500 kg·mm/s²` center force over `0.2 s` gives a full-step kick of
 `150 kg·mm/s` contact impulse and finishes at `+50 mm/s` with its bottom at
 `z=5 mm`. A supplied mass interval of `1 ± 0.01 kg` returns `Undecided` at a
 `1e−6 mm/s` velocity residual because its kick cannot be bounded that tightly.
+
+The torque fixture starts a `1 kg`, `10×10×10 mm` source box `100 mm` above
+the floor. A `100 kg·mm²/s²` world-Z torque over `0.1 s` produces `0.6 rad/s`
+spin and a `0.06 rad` drift rotation. The real full-span rotating sweep proves
+separation; the step reports `10 kg·mm²/s` torque impulse and bounded spin
+energy and angular momentum. A second step from its rotated endpoint, with
+zero load, advances another `0.06 rad`. An approaching torque-driven box
+returns `Undecided` when the rotating sweep cannot certify the contact.
 
 The implemented resting-contact fixture starts a `1 kg` source box at rest on
 a fixed floor and applies gravity `−1000 mm/s²` for `0.1 s`. The full-step

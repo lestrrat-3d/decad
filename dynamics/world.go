@@ -444,9 +444,9 @@ func (w *World) NewState(entries []BodyState) (State, error) {
 			entry.AngularVelocity.Y.Mag() != 0 || entry.AngularVelocity.Z.Mag() != 0) {
 			return State{}, fmt.Errorf("%w: kinematic body has stored angular velocity", ErrInvalidInput)
 		}
-		if entry.AngularVelocity.X.Base() != 0 || entry.AngularVelocity.Y.Base() != 0 ||
-			entry.AngularVelocity.Z.Base() != 0 {
-			return State{}, fmt.Errorf("%w: angular motion is not implemented", ErrUnsupported)
+		if w.parts[idx].definition.Role == Fixed && (entry.AngularVelocity.X.Mag() != 0 ||
+			entry.AngularVelocity.Y.Mag() != 0 || entry.AngularVelocity.Z.Mag() != 0) {
+			return State{}, fmt.Errorf("%w: fixed body has angular velocity", ErrInvalidInput)
 		}
 		if w.parts[idx].definition.Role == Fixed && (entry.LinearVelocity.X.Base() != 0 ||
 			entry.LinearVelocity.Y.Base() != 0 || entry.LinearVelocity.Z.Base() != 0) {

@@ -15,6 +15,7 @@ import (
 var (
 	underflowForceUnit = units.Define("decad-test-force-underflow", units.Force, 1e-200)
 	underflowAccelUnit = units.Define("decad-test-acceleration-underflow", units.Acceleration, 1e-200)
+	underflowSpinUnit  = units.Define("decad-test-angular-underflow", units.AngularVelocity, 1e-200)
 )
 
 func testForce(x, z float64) dynamics.QuantityVec {
@@ -62,8 +63,6 @@ func TestStepValidatesCenterLoadsBeforeCancellation(t *testing.T) {
 			Torque: good.Torque}}, dynamics.ErrInvalidInput},
 		{"nonfinite torque", []dynamics.BodyLoad{{Body: box, Force: good.Force,
 			Torque: testTorque(math.Inf(1))}}, dynamics.ErrInvalidInput},
-		{"nonzero torque", []dynamics.BodyLoad{{Body: box, Force: good.Force, Torque: testTorque(1)}},
-			dynamics.ErrUnsupported},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
@@ -74,6 +73,207 @@ func TestStepValidatesCenterLoadsBeforeCancellation(t *testing.T) {
 			require.Nil(t, report)
 		})
 	}
+}
+
+func TestTorqueKickRotatesClearSourceBox(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	w := fixedBoxContactWorld(t, doc, floor, box, 0)
+	pose, err := r3.Translation(r3.Vec{Z: 100})
+	require.NoError(t, err)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: pose, LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration(),
+		Loads: []dynamics.BodyLoad{{Body: box, Force: testForce(0, 0), Torque: testTorque(100)}}},
+		units.Seconds(0.1))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Empty(t, report.Events)
+	entry, ok := report.Next.Body(box)
+	require.True(t, ok)
+	require.InDelta(t, 0.6, entry.AngularVelocity.Z.Base(), 1e-9)
+	require.InDelta(t, math.Cos(0.06), entry.Pose.ApplyDir(r3.Vec{X: 1}).X, 1e-9)
+	require.InDelta(t, math.Sin(0.06), entry.Pose.ApplyDir(r3.Vec{X: 1}).Y, 1e-9)
+	require.NotNil(t, report.Conservation)
+	require.Equal(t, units.AngularMomentum, report.Conservation.TorqueImpulse.Value.Z.Kind())
+	require.InDelta(t, 10, report.Conservation.TorqueImpulse.Value.Z.Base(), 1e-9)
+	require.InDelta(t, 10, report.Conservation.AfterKick.AngularMomentum.Value.Z.Base(), 1e-8)
+	require.InDelta(t, 3, report.Conservation.AfterKick.KineticEnergy.Value.Base(), 1e-8)
+	require.InDelta(t, 10, report.Conservation.Completion.AngularMomentum.Value.Z.Base(), 1e-6)
+	second, err := w.NewState(report.Next.Entries())
+	require.NoError(t, err)
+	report, err = w.Step(t.Context(), second, dynamics.StepInput{Gravity: zeroAcceleration()},
+		units.Seconds(0.1))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	entry, ok = report.Next.Body(box)
+	require.True(t, ok)
+	require.InDelta(t, 0.6, entry.AngularVelocity.Z.Base(), 1e-9)
+	require.InDelta(t, math.Sin(0.12), entry.Pose.ApplyDir(r3.Vec{X: 1}).Y, 1e-9)
+}
+
+func TestTorqueDrivenBoxApproachingFloorRequiresContactResponse(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	w := fixedBoxContactWorld(t, doc, floor, box, 0)
+	pose, err := r3.Translation(r3.Vec{Z: 10})
+	require.NoError(t, err)
+	fall := zeroVelocity()
+	fall.Z = units.MillimetersPerSecond(-100)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: pose, LinearVelocity: fall, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	mass, err := box.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(0.001))
+	require.NoError(t, err)
+	sweep, err := doc.SweepPair(t.Context(), floor, box,
+		decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(0.2)},
+		decad.RigidDriftSegment{From: pose, Center: pose.Apply(mass.Center.Value),
+			LinearVelocity: fall, AngularVelocity: dynamics.QuantityVec{
+				X: units.RadiansPerSecond(0), Y: units.RadiansPerSecond(0),
+				Z: units.RadiansPerSecond(0.6)}, Duration: units.Seconds(0.2)},
+		decad.SweepRequest{ContactRequest: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+			NormalResolution: units.Radians(1e-6)}, TimeResolution: units.Seconds(1e-9),
+			MaxPoseEvaluations: 128, StartPolicy: decad.StopAtInitialContact})
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepUndecided, sweep.Outcome)
+	require.Equal(t, decad.SweepTimeFloor, sweep.Cause)
+	require.NotNil(t, sweep.Unresolved)
+	require.InDelta(t, 0.1, sweep.Unresolved.To.Elapsed.Value.Base(), 1e-9)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration(),
+		Loads: []dynamics.BodyLoad{{Body: box, Force: testForce(0, 0), Torque: testTorque(100)}}},
+		units.Seconds(0.2))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, report.Status)
+	require.Nil(t, report.Next)
+	require.Contains(t, report.Diagnostics[0].Reason, "rotating sweep")
+}
+
+func TestTorqueKickRejectsWideInertiaInterval(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	mass, err := box.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(0.001))
+	require.NoError(t, err)
+	mass.Inertia.ZZ.Bound = units.KilogramSquareMillimeters(1)
+	mass.Inertia.ZZ.Exactness = decad.Approximate
+	material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
+	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{{Body: floor, Role: dynamics.Fixed, Material: material},
+			{Body: box, Role: dynamics.Dynamic, Supplied: &mass, Material: material}},
+		Step: dynamics.StepConfig{Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+			NormalResolution: units.Radians(1e-6)}, TimeResolution: units.Seconds(1e-9),
+			ContactSlop: units.Millimeters(1e-6), VelocityResidual: units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2},
+	})
+	require.NoError(t, err)
+	pose, err := r3.Translation(r3.Vec{Z: 100})
+	require.NoError(t, err)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: pose, LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration(),
+		Loads: []dynamics.BodyLoad{{Body: box, Force: testForce(0, 0), Torque: testTorque(100)}}},
+		units.Seconds(0.1))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, report.Status)
+	require.Nil(t, report.Next)
+	require.Contains(t, report.Diagnostics[0].Reason, "kick")
+}
+
+func TestTorqueKickUsesWorldFrameInertia(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	box := makeBox(t, doc, -5, -10, 5, 10, 0, 30)
+	w := fixedBoxContactWorld(t, doc, floor, box, 0)
+	shift, err := r3.Translation(r3.Vec{Z: 100})
+	require.NoError(t, err)
+	turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Degrees(90))
+	require.NoError(t, err)
+	rotated, err := turn.Then(shift)
+	require.NoError(t, err)
+	torque := dynamics.QuantityVec{X: units.KilogramSquareMillimetersPerSecondSquared(100),
+		Y: units.KilogramSquareMillimetersPerSecondSquared(0),
+		Z: units.KilogramSquareMillimetersPerSecondSquared(0)}
+	for _, tc := range []struct {
+		name string
+		pose r3.Transform
+		spin float64
+	}{{"source axes", shift, 10.0 / 650}, {"rotated axes", rotated, 10.0 / 500}} {
+		t.Run(tc.name, func(t *testing.T) {
+			start, err := w.NewState([]dynamics.BodyState{
+				{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+				{Body: box, Pose: tc.pose, LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+			})
+			require.NoError(t, err)
+			report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration(),
+				Loads: []dynamics.BodyLoad{{Body: box, Force: testForce(0, 0), Torque: torque}}},
+				units.Seconds(0.1))
+			require.NoError(t, err)
+			require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+			entry, ok := report.Next.Body(box)
+			require.True(t, ok)
+			require.InDelta(t, tc.spin, entry.AngularVelocity.X.Base(), 1e-8)
+		})
+	}
+}
+
+func TestFreeAsymmetricSpinIncludesGyroscopicKick(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	box := makeBox(t, doc, -5, -10, 5, 10, 0, 30)
+	w := fixedBoxContactWorld(t, doc, floor, box, 0)
+	pose, err := r3.Translation(r3.Vec{Z: 100})
+	require.NoError(t, err)
+	spin := dynamics.QuantityVec{X: units.RadiansPerSecond(1), Y: units.RadiansPerSecond(1),
+		Z: units.RadiansPerSecond(0)}
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: pose, LinearVelocity: zeroVelocity(), AngularVelocity: spin},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()},
+		units.Seconds(0.1))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	entry, ok := report.Next.Body(box)
+	require.True(t, ok)
+	require.InDelta(t, 0.06, entry.AngularVelocity.Z.Base(), 1e-8)
+	require.InDelta(t, 0, report.Conservation.TorqueImpulse.Value.Z.Base(), 1e-12)
+}
+
+func TestUnderflowedAngularDriftIsNotCertifiedClear(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	w := fixedBoxContactWorld(t, doc, floor, box, 0)
+	pose, err := r3.Translation(r3.Vec{Z: 100})
+	require.NoError(t, err)
+	spin := zeroAngular(t)
+	spin.Z = units.New(1e-200, underflowSpinUnit)
+	require.Zero(t, spin.Z.Base())
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: pose, LinearVelocity: zeroVelocity(), AngularVelocity: spin},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()},
+		units.Seconds(0.1))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, report.Status)
+	require.Nil(t, report.Next)
+	require.Contains(t, report.Diagnostics[0].Reason, "kick")
 }
 
 func TestCenterForceUsesMassIntervalForKick(t *testing.T) {
