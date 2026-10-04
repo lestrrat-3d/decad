@@ -14,9 +14,9 @@ import (
 
 var errSweepPoseBudget = errors.New("decad: sweep pose budget exhausted")
 
-// PairPath names one body's motion during a two-body sweep. Affine
-// translations have source-box and source-sphere face-corridor certificates;
-// other valid paths report an undecided sweep until their bound is available.
+// PairPath names one body's motion during a two-body sweep. Affine source-box
+// and source-sphere paths and rotating source-box rigid drifts can receive
+// continuous certificates; other valid paths report an undecided sweep.
 type PairPath interface{ pairPath() }
 
 // PoseSegment joins two placements relative to the body's current placement.
@@ -31,7 +31,6 @@ func (PoseSegment) pairPath() {}
 type QuantityVec struct{ X, Y, Z units.Value }
 
 // RigidDriftSegment moves a center linearly while its orientation rotates.
-// The current sweep slice certifies only zero angular velocity.
 type RigidDriftSegment struct {
 	From            r3.Transform
 	Center          r3.Vec
@@ -211,6 +210,7 @@ type affinePairPath struct {
 	from, to  r3.Transform
 	delta     [3]dyadic // displacement over the full path, in millimetres
 	duration  *big.Rat  // exact seconds represented by the input value
+	drift     *RigidDriftSegment
 	supported bool
 }
 
@@ -273,6 +273,8 @@ func validatePairPath(path PairPath) (affinePairPath, error) {
 			}
 		}
 		if rotating {
+			out.drift = &p
+			out.supported = true
 			return out, nil
 		}
 		for i, v := range []units.Value{p.LinearVelocity.X, p.LinearVelocity.Y, p.LinearVelocity.Z} {
@@ -341,9 +343,9 @@ func exactnessFromBound(bound float64) Exactness {
 }
 
 // SweepPair certifies the first encounter of two live solids under one shared
-// duration. Current continuous proofs cover source-certified boxes and a
-// source sphere in a box face corridor under pure affine translation.
-// Unsupported paths return SweepUndecided.
+// duration. Continuous proofs cover affine source-box paths, a source sphere
+// in a box face corridor, and rotating source-box rigid drifts. Unsupported
+// paths return SweepUndecided.
 // Both body pointers, both paths, and ctx must be non-nil.
 func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairPath,
 	req SweepRequest) (*SweepReport, error) {
@@ -393,6 +395,9 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.duration),
 			To: sweepInstant(big.NewRat(1, 1), pa.duration)}
 		return report, nil
+	}
+	if pa.drift != nil || pb.drift != nil {
+		return d.sweepRotatingPair(ctx, a, b, pa, pb, req, resolution, report)
 	}
 	boxA, okA := sourceBoxAtPose(a, pa.from)
 	boxB, okB := sourceBoxAtPose(b, pb.from)

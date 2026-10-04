@@ -12,13 +12,16 @@ owns positive-volume overlap;
 This document adds witnesses and normal certificates without weakening any of
 those admission gates.
 
-Current code certifies source-box relations and face manifolds at
-signed-permutation poses. It also certifies a full source semicircle sphere
-against a source box: exact rational ball-to-box distance proves the relation,
-and one isolated face support supplies a point manifold. At identity query
-poses, the analytic clearance kernel can certify a relation for other admitted
-solids, but its result has no contact manifold. Other curved and faceted
-witness and normal proofs remain design contracts.
+Current code certifies relations and face manifolds for source boxes at
+signed-permutation poses. An oriented source-box path also certifies relations
+under arbitrary proper read poses by projecting the exact transformed corners
+on all face and edge-cross axes. It publishes no manifold when a pose rotates
+the source faces away from signed axes. A full source semicircle sphere against
+a source box also receives an exact rational relation proof and a point manifold
+at one isolated face support. At identity query poses, the analytic clearance
+kernel can certify a relation for other admitted solids without a contact
+manifold. Other curved and faceted witness and normal proofs remain design
+contracts.
 
 ## 1. Claims and entry point
 
@@ -235,6 +238,17 @@ point conversion. A tied minimum, strict containment, edge-only projection,
 or requested point resolution below the conversion bound leaves the
 `Overlapping` relation intact and the manifold absent. This is the C1 box
 penetration path consumed by a sweep's later proven-overlap endpoint.
+
+For a source box at a general read pose, transform all eight recorded corners
+with exact dyadic operations. The resulting parallelotope is tested on both
+sets of face-normal axes and all nonzero edge-cross axes. Positive separation
+on one axis proves `Separated`; equality on at least one axis with no positive
+separation proves `Touching`; strict projected overlap on every axis proves
+`Overlapping`. A separated report bounds the minimum distance from below by
+the largest normalized axis gap and from above by a certified vertex-to-face
+or vertex-to-vertex witness. If those bounds cannot publish a positive gap,
+the relation is `Undecided`. Rotated face, edge, and vertex manifolds still
+need their own complete trimmed contact-set and source-feature proofs.
 
 ### 4.1 Source-box contact set for sweeps
 

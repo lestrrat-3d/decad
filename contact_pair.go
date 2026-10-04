@@ -76,11 +76,12 @@ type ContactReport struct {
 }
 
 // ContactPair proves the relation of two live solids at poses applied after
-// their recorded placements. Bodies and the document are not changed. This
-// Source rectangular prisms and source semicircle spheres against boxes are
-// certified at signed-axis poses. At identity query poses, the analytic
-// clearance kernel can also prove a relation for other solids; those reports
-// have no manifold until source witnesses and normals can be certified.
+// their recorded placements. Bodies and the document are not changed.
+// Source rectangular prisms have manifold proofs at signed-axis poses and
+// relation proofs at other valid poses. Source semicircle spheres against
+// boxes also have relation and face-manifold proofs at signed-axis poses.
+// At identity query poses, the analytic clearance kernel can prove relations
+// for other solids without a contact manifold.
 // Both bodies must be non-nil, distinct, live members of d.
 func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transform,
 	req ContactRequest) (*ContactReport, error) {
@@ -127,6 +128,12 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 		}
 	}
 	if !okA || !okB {
+		orientedA, orientedOKA := sourceOrientedBoxAtPose(a, poseA)
+		orientedB, orientedOKB := sourceOrientedBoxAtPose(b, poseB)
+		if orientedOKA && orientedOKB {
+			classifyOrientedSourceBoxes(report, orientedA, orientedB)
+			return report, nil
+		}
 		if poseA == r3.Identity() && poseB == r3.Identity() {
 			if err := classifyAnalyticContact(ctx, report); err != nil {
 				return nil, err

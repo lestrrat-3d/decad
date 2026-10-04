@@ -174,6 +174,7 @@ to the byte budget.
 | `clearance_box.go` | Certifies unplaced axis-aligned rectangular prisms and bounds their gap directly from exact box planes before the general pair kernel. |
 | `contact_pair.go` | `ContactPair` input gates and verdict. See `docs/contact-geometry-design.md`. |
 | `contact_box.go` | Source-box relation and manifold. See `docs/contact-geometry-design.md` §4. |
+| `contact_oriented_box.go` | Exact oriented source-box relation and distance bounds. See `docs/contact-geometry-design.md` §4. |
 | `contact_sphere.go` / `contact_sphere_sweep.go` | Source sphere-to-box contact and affine sweep. See `docs/contact-geometry-design.md` §4.2 and `docs/contact-sweep-design.md` §4.4. |
 | `clearance_degen.go` | Exact degeneracy oracle for clearance cells. See `docs/clearance-design.md` §4/§5. |
 | `clearance_cells.go` | The §3 candidate sink and §4 face-interior table: stationarity tiers per face pair, admission folded into contributions, offset-surface pairs reduced to spine-pair criticals. See `docs/clearance-design.md` §3/§4. |
@@ -188,6 +189,7 @@ to the byte budget.
 | `motion.go` / `motion_verify.go` | The `Motion` set, its options and `MotionReport`; `Document.VerifyMotion`'s swept-box exclusion, transient poses and interval certificate. See `docs/motion-check-design.md`. |
 | `motion_bound.go` | The motion certificate's exact-rational bounds: the ideal pose (a `Between`'s exact screw frame among them), its deviation η, ρ_max, travel and the swept box. See the file's doc comment. |
 | `contact_sweep.go` | Two-body paths, box sweep, and contact tracks. See `docs/contact-sweep-design.md`. |
+| `contact_sweep_rotation.go` | Rotational drift poses, travel bounds, and earliest certified impact search. See `docs/contact-sweep-design.md`. |
 
 ### Booleans
 

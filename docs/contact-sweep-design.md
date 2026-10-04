@@ -5,7 +5,13 @@ source-box sweeps certify first impact, immediate departure, persistent face
 contact, and the first edge transition of a sliding patch. A source semicircle
 sphere against a source box certifies affine first impact and face-point
 departure or persistent touch while its projected radius remains strictly
-inside one box face. Rotating paths and other payloads remain design contracts.
+inside one box face. Rotating source-box rigid drifts
+can also certify a clear path or bracket an impact after exact oriented-box
+pose relations, a bounded float-to-ideal pose difference, and whole-body
+travel bounds. An initial source-box face touch also certifies immediate
+departure when both bodies have the same angular velocity and the bounded
+normal separation rate is positive. Unequal spins, rotating `PoseSegment`
+paths, and other payloads remain design contracts.
 `docs/collision-dynamics-design.md` owns the package
 boundary and `docs/contact-geometry-design.md` owns relation and manifold
 proofs at one pose. This document owns the paths, continuous clear certificate,

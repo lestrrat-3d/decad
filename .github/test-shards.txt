@@ -1080,6 +1080,7 @@
 4	0.00	TestContactPairAnalyticPrismGap
 4	0.00	TestContactPairAnalyticPrismOverlap
 4	0.00	TestContactPairAnalyticPrismTouch
+4	0.00	TestContactPairOrientedSourceBoxes
 4	0.00	TestContactPairPlacedBodyAndInputGates
 4	0.00	TestContactPairShallowOverlapAndRefusals
 4	0.00	TestContactPairSignedAxisPose
@@ -1669,8 +1670,10 @@
 4	0.00	TestSweepDenotationHalfTurnExcess
 4	0.00	TestSweepLineStagesTessellation
 4	0.00	TestSweepLineTiltedFrameCarriesEndpointGap
+4	0.00	TestSweepPairEqualSpinDepartsFromSourceFace
 4	0.00	TestSweepPairOffCenterBoxImpactAtEndpoint
-4	0.00	TestSweepPairRotatingPathUndecided
+4	0.00	TestSweepPairRotatingBoxFindsHiddenImpact
+4	0.00	TestSweepPairRotatingPathClear
 4	0.00	TestSweepPairSourceBoxPersistentSlide
 4	0.00	TestSweepPairSourceBoxSlideEdgeTransition
 4	0.00	TestSweepPairSourceSphereAndBox
