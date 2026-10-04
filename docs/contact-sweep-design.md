@@ -6,8 +6,8 @@ contact, and the first edge transition of a sliding patch. A source semicircle
 sphere against a source box certifies affine first impact and face-point
 departure or persistent touch while its projected radius remains strictly
 inside one box face. Two source semicircle spheres certify affine first impact
-and separating departure when their relative center motion stays on one
-cardinal axis. Rotating source-box rigid drifts
+through exact squared-distance motion, including transverse crossing, and
+separating departure. Rotating source-box rigid drifts
 can also certify a clear path or bracket an impact after exact oriented-box
 pose relations, a bounded float-to-ideal pose difference, and whole-body
 travel bounds. An initial source-box face touch also certifies immediate
@@ -281,7 +281,7 @@ gap proves immediate departure. A zero normal gap and the same face corridor
 prove a full-span point track. A path leaving the corridor returns
 `SweepUndecided`; a center sample alone cannot certify the missing span.
 
-### 4.5 Axial source-sphere pair
+### 4.5 Affine source-sphere pair
 
 For two source balls admitted by contact geometry §4.3, require the relative
 center displacement and initial center difference to use the same sole
@@ -293,9 +293,17 @@ including a root at the final endpoint, with a clear left sample and a
 touching or overlapping right sample. The endpoint can be ideal overlap
 while the rounded pose is touch. Transfer the source manifold only when both
 queries name the same source faces and cardinal normal; add the exact center
-pose difference to witness and separation bounds. A transverse relative
-displacement or a zero-gap stationary touch has no continuous proof in this
-path and returns `SweepUndecided` for continuation.
+pose difference to witness and separation bounds.
+
+For a transverse relative displacement, compare the exact quadratic squared
+center distance minus squared radius sum over the held affine path. Its minimum
+proves a full clear span or locates the earliest possible impact. Search the
+decreasing side with dyadic fractions; require a separated left endpoint, a
+touching or overlapping right endpoint, and width at most `TimeResolution`.
+Find a hidden pass-through before reporting clear. A tangent and an
+unrepresentable shallow overlap return `SweepUndecided`. The cardinal source
+manifold gate still applies at the right sample. A zero-gap stationary touch
+has no continuous proof for continuation.
 
 ## 5. Earliest-event search
 

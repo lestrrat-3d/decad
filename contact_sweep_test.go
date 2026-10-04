@@ -267,10 +267,58 @@ func TestSweepPairSourceSpherePair(t *testing.T) {
 	require.Equal(t, decad.SweepDepartedClear, departed.Outcome, "cause=%v", departed.Cause)
 	lateral := approachB
 	lateral.LinearVelocity.Y = units.MillimetersPerSecond(1)
-	unsupported, err := doc.SweepPair(t.Context(), a, b, approachA, lateral, sweepRequest())
+	transverse, err := doc.SweepPair(t.Context(), a, b, approachA, lateral, sweepRequest())
 	require.NoError(t, err)
-	require.Equal(t, decad.SweepUndecided, unsupported.Outcome)
-	require.Equal(t, decad.SweepContactUnsupported, unsupported.Cause)
+	require.Equal(t, decad.SweepImpactBracket, transverse.Outcome, "cause=%v", transverse.Cause)
+	require.Nil(t, transverse.Event.Manifold)
+	require.Greater(t, transverse.Bracket.From.Elapsed.Value.Base(), 0.1)
+	require.LessOrEqual(t, transverse.Bracket.To.Elapsed.Value.Base()-
+		transverse.Bracket.From.Elapsed.Value.Base(), 1e-9)
+	reverseTransverse, err := doc.SweepPair(t.Context(), b, a, lateral, approachA, sweepRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, reverseTransverse.Outcome,
+		"cause=%v", reverseTransverse.Cause)
+	require.Equal(t, transverse.Bracket.From.Fraction, reverseTransverse.Bracket.From.Fraction)
+	require.Equal(t, transverse.Bracket.To.Fraction, reverseTransverse.Bracket.To.Fraction)
+	t.Run("transverse departure", func(t *testing.T) {
+		still := sweepDrift(r3.Vec{}, 1)
+		moving := sweepDrift(r3.Vec{Y: 1}, 1)
+		moving.From = contactPose(t, r3.Vec{X: 10})
+		req := sweepRequest()
+		req.StartPolicy = decad.ContinueSeparatingTouch
+		report, err := doc.SweepPair(t.Context(), a, b, still, moving, req)
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepDepartedClear, report.Outcome, "cause=%v", report.Cause)
+		require.Positive(t, report.Departure.GapAtUntil.Value.Base())
+	})
+	t.Run("hidden pass-through", func(t *testing.T) {
+		passing := sweepDrift(r3.Vec{X: -80, Y: -16}, .5)
+		passing.From = contactPose(t, r3.Vec{X: 20, Y: 4})
+		still := sweepDrift(r3.Vec{}, .5)
+		report, err := doc.SweepPair(t.Context(), a, b, still, passing, sweepRequest())
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepImpactBracket, report.Outcome, "cause=%v", report.Cause)
+		require.Greater(t, report.Bracket.From.Elapsed.Value.Base(), 0.0)
+		require.Less(t, report.Bracket.To.Elapsed.Value.Base(), .25)
+		end, err := doc.ContactPair(t.Context(), a, b, still.From,
+			contactPose(t, r3.Vec{X: -20, Y: -4}),
+			sweepRequest().ContactRequest)
+		require.NoError(t, err)
+		require.Equal(t, decad.ContactSeparated, end.Relation)
+	})
+	t.Run("miss and tangent", func(t *testing.T) {
+		still := sweepDrift(r3.Vec{}, 1)
+		miss := sweepDrift(r3.Vec{X: -40}, 1)
+		miss.From = contactPose(t, r3.Vec{X: 20, Y: 11})
+		clear, err := doc.SweepPair(t.Context(), a, b, still, miss, sweepRequest())
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepClear, clear.Outcome, "cause=%v", clear.Cause)
+		miss.From = contactPose(t, r3.Vec{X: 20, Y: 10})
+		grazing, err := doc.SweepPair(t.Context(), a, b, still, miss, sweepRequest())
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepUndecided, grazing.Outcome)
+		require.Equal(t, decad.SweepTimeFloor, grazing.Cause)
+	})
 	require.Equal(t, before, doc.Bodies())
 }
 
