@@ -1,5 +1,5 @@
 // Package dynamics advances rigid bodies using decad's certified geometry queries.
-// The current implementation admits one translating pair with at least one dynamic body.
+// The current implementation also admits one active pair in a three-body world.
 package dynamics
 
 import (
@@ -81,19 +81,24 @@ type worldBody struct {
 type World struct {
 	doc         *decad.Document
 	parts       [2]worldBody
+	three       *threeBodyWorld
 	excluded    []BodyPair
 	step        StepConfig
 	restitution units.Value
 	friction    frictionCoefficient
 }
 
-// NewWorld admits a dynamic pair, or one dynamic body with a fixed or kinematic body.
+// NewWorld admits a dynamic pair, a dynamic body with a fixed or kinematic
+// body, or one dynamic body with two fixed bodies.
 func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World, error) {
 	if doc == nil || ctx == nil {
 		return nil, fmt.Errorf("%w: nil document or context", ErrInvalidInput)
 	}
 	if err := validateStepConfig(cfg.Step); err != nil {
 		return nil, err
+	}
+	if len(cfg.Bodies) == 3 {
+		return newThreeBodyWorld(ctx, doc, cfg)
 	}
 	if len(cfg.Bodies) != 2 {
 		return nil, fmt.Errorf("%w: this stage admits one pair", ErrUnsupported)
@@ -219,6 +224,9 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 func (w *World) Excluded() []BodyPair {
 	if w == nil {
 		return nil
+	}
+	if w.three != nil {
+		return append([]BodyPair(nil), w.three.excluded...)
 	}
 	return append([]BodyPair(nil), w.excluded...)
 }
@@ -372,11 +380,16 @@ type BodyState struct {
 
 // State is a value snapshot bound to its source World.
 type State struct {
-	world   *World
-	entries [2]BodyState
+	world    *World
+	entries  [2]BodyState
+	third    BodyState
+	hasThird bool
 }
 
 func (s State) Entries() []BodyState {
+	if s.hasThird {
+		return []BodyState{s.entries[0], s.entries[1], s.third}
+	}
 	return []BodyState{s.entries[0], s.entries[1]}
 }
 
@@ -386,11 +399,17 @@ func (s State) Body(body *decad.Body) (BodyState, bool) {
 			return entry, true
 		}
 	}
+	if s.hasThird && s.third.Body == body {
+		return s.third, true
+	}
 	return BodyState{}, false
 }
 
 // NewState records one posed entry for each body in world order.
 func (w *World) NewState(entries []BodyState) (State, error) {
+	if w != nil && w.three != nil {
+		return w.newThreeBodyState(entries)
+	}
 	if w == nil || len(entries) != len(w.parts) {
 		return State{}, fmt.Errorf("%w: state requires exactly two bodies", ErrInvalidInput)
 	}

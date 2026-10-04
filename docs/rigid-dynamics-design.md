@@ -11,8 +11,13 @@ apply equal and opposite impulses.
 A source semicircle sphere with supplied mass can rebound from a fixed source
 box on an isolated face-point contact when its affine sweep stays within that
 face corridor.
-The one world pair may be excluded; its bodies then drift independently even
+A two-body world's pair may be excluded; its bodies drift independently even
 through overlap, and no pair material is mixed.
+The current three-body step admits one dynamic body and two fixed bodies.
+It sweeps each non-excluded dynamic/fixed pair, requires the fixed/fixed pair
+to be separated, and advances one active pair only when every other pair has
+a certified clear path through the response. An excluded pair may overlap
+or cross without a contact event or material mixing.
 At an initial face touch, a fixed floor and dynamic source box can receive a
 full-step kick from gravity and any center force, then a zero-restitution
 support impulse. A zero-restitution impact can continue as certified
@@ -149,14 +154,16 @@ or unknown exclusions/overrides fail construction. A pair with neither body
 dynamic can still be checked when a kinematic driver moves; it cannot be
 resolved by an impulse if closing contact occurs.
 
-The current one-pair world accepts one `PairMaterial` or one exclusion for its
-two bodies in either pair order. `NewWorld` rejects a pair naming a body outside
-the world, including nil or repeated bodies, with `ErrInvalidInput`. It also
-rejects a second override or exclusion for the same pair, including the reverse
-order. An override for the excluded pair returns `ErrInvalidInput`. An excluded
-pair skips effective material mixing; each body's material still passes input
-validation. The held exclusion is canonical in world order. `World.Excluded()`
-and `StepReport.Excluded` return separate copies.
+The current world accepts two bodies with at least one dynamic body, or three
+bodies with exactly one dynamic and two fixed bodies. Every pair in a
+three-body world can be excluded or given one material override. `NewWorld`
+rejects a pair naming a body outside the world, including nil or repeated
+bodies, with `ErrInvalidInput`. It also rejects a second override or exclusion
+for the same pair, including reverse order. An override for an excluded pair
+returns `ErrInvalidInput`. An excluded pair skips effective material mixing;
+each body's material still passes input validation. Held exclusions and
+reported event pairs use world order. `World.Excluded()` and
+`StepReport.Excluded` return separate copies.
 
 The current positive-friction slice accepts a fixed floor and dynamic box in
 either world order. Without an override, the pair coefficient is the geometric
@@ -316,6 +323,16 @@ driver endpoint. Do not call `SweepPair` or `ContactPair` for that pair, even
 when its source solids overlap or cross. Publish no contact event and typed
 zero contact impulse and kinematic work. The trace and conservation readings
 still describe the completed step.
+
+In a three-body world, the current response handles one dynamic/fixed pair
+while the other fixed body stays clear. Sweep both non-excluded dynamic/fixed
+pairs before choosing a response. A second possible contact returns
+`Undecided` with no `Next`. For an active response, certify the other pair's
+ideal and rounded paths before and after the event; sweep any position
+correction against it. Query the fixed/fixed pair at its constant pose.
+The response pair's conservation report includes the world's sole dynamic
+body. More than one dynamic body or a kinematic body returns `ErrUnsupported`
+at three-body world construction.
 
 A `SweepPair` `Undecided` that could precede the next event makes the step
 `Undecided`; a later undecided interval can be revisited after an earlier

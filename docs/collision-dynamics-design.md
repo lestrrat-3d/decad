@@ -5,7 +5,9 @@ motion. Current code certifies source-box contact, source sphere-to-box face
 contact, affine two-body sweeps,
 persistent face contact and its first edge transition, and mass properties for
 source boxes and admitted untapered prisms. It steps one frictionless pair with
-a fixed and dynamic body or two centered dynamic bodies. A source box can hit
+a fixed and dynamic body or two centered dynamic bodies. A three-body world
+with one dynamic and two fixed bodies steps one active pair when every other
+pair has a certified clear path. A source box can hit
 a fixed floor obliquely while retaining tangential velocity. A fixed floor and
 dynamic source box can complete an initial resting contact after a full-step
 gravity kick or a zero-restitution impact. A stationary touching pair also
