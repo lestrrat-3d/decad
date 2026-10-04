@@ -61,7 +61,7 @@ func (w *World) stepStill(ctx context.Context, from, kicked State, dt units.Valu
 // stepInitialTouch solves an incoming frictionless pair at its certified
 // initial face contact, then admits only a complete persistent-touch track.
 func (w *World) stepInitialTouch(ctx context.Context, from, kicked State, dt units.Value,
-	first *decad.SweepReport, motionAxis int) (*StepReport, error) {
+	first *decad.SweepReport) (*StepReport, error) {
 	if first.Event == nil || first.Event.Relation != decad.ContactTouching ||
 		first.Event.Manifold == nil || len(first.Event.Manifold.Points) == 0 {
 		return undecided(w, "initial touch has no certified face manifold"), nil
@@ -72,8 +72,8 @@ func (w *World) stepInitialTouch(ctx context.Context, from, kicked State, dt uni
 		return undecided(w, "initial contact exceeds the penetration residual"), nil
 	}
 	axis, sign, valid := axisNormal(normal)
-	if !valid || axis != motionAxis {
-		return undecided(w, "initial contact normal differs from translation axis"), nil
+	if !valid {
+		return undecided(w, "initial contact normal is not a supported axis"), nil
 	}
 	preSpeed := [2]units.Value{
 		velocityComponent(kicked.entries[0].LinearVelocity, axis),
