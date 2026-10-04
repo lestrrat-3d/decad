@@ -89,4 +89,6 @@ func TestSphereReboundUsesProductionContactAndSweep(t *testing.T) {
 	require.True(t, ok)
 	require.InDelta(t, 50, final.LinearVelocity.Z.Base(), 1e-6)
 	require.InDelta(t, 10, final.Pose.Translation().Z, 2e-6)
+	_, err = report.Trace.Sample(units.Seconds(.05))
+	require.ErrorIs(t, err, dynamics.ErrUnsupported)
 }

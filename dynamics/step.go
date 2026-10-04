@@ -458,7 +458,8 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	if err != nil {
 		return nil, err
 	}
-	if !roundedImpactPrefixAtEnd(roundedPrefix, first, w.step.PenetrationResidual) {
+	if first.HasAffineReplayProof() &&
+		!roundedImpactPrefixAtEnd(roundedPrefix, first, w.step.PenetrationResidual) {
 		return undecided(w, "published impact prefix lacks a matching rounded endpoint bracket"), nil
 	}
 	normal, separation, bound, ok := reducedContact(first.Event.Manifold, w.step.Contact)

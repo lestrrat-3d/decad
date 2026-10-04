@@ -434,6 +434,7 @@ type SweepReport struct {
     PoseEvaluations uint64
 }
 
+func (r *SweepReport) HasAffineReplayProof() bool
 func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Transform, error)
 func (r *SweepReport) CertifiedPosesAtInterval(time, start, end units.Value) (r3.Transform, r3.Transform, error)
 ```

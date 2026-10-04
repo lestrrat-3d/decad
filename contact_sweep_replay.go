@@ -29,6 +29,10 @@ func (p *sweepReplayProof) setBracket(left, right *big.Rat) {
 	p.bracketHi = new(big.Rat).Set(right)
 }
 
+// HasAffineReplayProof reports whether this sweep can certify rounded poses
+// along its affine source-box path.
+func (r *SweepReport) HasAffineReplayProof() bool { return r != nil && r.replay != nil }
+
 // CertifiedPosesAt evaluates the recorded affine paths at elapsed time and
 // checks their rounded placements against the sweep's exact source-box proof.
 // It reads no Document geometry and performs no new contact query. A pose whose

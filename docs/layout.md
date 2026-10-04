@@ -177,8 +177,8 @@ to the byte budget.
 | `contact_oriented_box.go` | Rotated boxes. See `docs/contact-geometry-design.md` §4. |
 | `contact_sphere.go` / `contact_sphere_sweep.go` | Sphere-box paths. See `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md`. |
 | `contact_sweep_replay.go` | Replays an affine sweep's float poses against its cached exact source boxes. See `docs/contact-sweep-design.md` §6. |
-| `clearance_degen.go` | Degeneracy oracle. See `docs/clearance-design.md` §4/§5. |
-| `clearance_cells.go` | The §3 candidate sink and §4 face-interior table: stationarity tiers per face pair, admission folded into contributions, offset-surface pairs reduced to spine-pair criticals. See `docs/clearance-design.md` §3/§4. |
+| `clearance_degen.go` | Degeneracy tests. See `docs/clearance-design.md` §4/§5. |
+| `clearance_cells.go` | Face-interior candidates. See `docs/clearance-design.md` §3/§4. |
 | `clearance_tiers.go` | The curve and vertex tiers of §3: face-edge, edge-edge and vertex cells over §4's curve-tier table; constant-distance families emit only on the oracle's `degYes`. See `docs/clearance-design.md` §3/§4. |
 | `clearance_geom.go` | The kernel's boundary model: trimmed carrier faces, edges and vertices from a body's payload, `bodyGeom.delta`'s charge, and the §2 nesting ray casts. See `docs/clearance-design.md` §2/§3. |
 | `clearance_poly.go` | The certified-bracket machinery of §4/§5: Sturm sequences over exact rationals isolate stationarity polynomials, then a proven Lipschitz bound brackets each critical value. See `docs/clearance-design.md` §4/§5. |
@@ -188,7 +188,7 @@ to the byte budget.
 | `budget.go` | `workBudget`, the shared bounded work counter read-only and pre-commit audit phases poll via `step`/`err`. It holds closures, never a stored `context.Context`. See `docs/interference-design.md` §7.2. |
 | `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's doc comment. |
 | `motion.go` / `motion_verify.go` | The `Motion` set, its options and `MotionReport`; `Document.VerifyMotion`'s swept-box exclusion, transient poses and interval certificate. See `docs/motion-check-design.md`. |
-| `motion_bound.go` | The motion certificate's exact-rational bounds: the ideal pose (a `Between`'s exact screw frame among them), its deviation η, ρ_max, travel and the swept box. See the file's doc comment. |
+| `motion_bound.go` | Exact motion bounds. See its doc comment. |
 | `contact_sweep.go` | Pair paths, sweeps, and tracks. See `docs/contact-sweep-design.md`. |
 | `contact_sweep_rotation.go` | Rotating drift sweep. See `docs/contact-sweep-design.md`. |
 
