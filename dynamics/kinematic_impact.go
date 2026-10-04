@@ -43,7 +43,7 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	if err != nil {
 		return nil, err
 	}
-	if !roundedImpactPrefixAtEnd(roundedPrefix, first) {
+	if !roundedImpactPrefixAtEnd(roundedPrefix, first, w.step.PenetrationResidual) {
 		return undecided(w, "published kinematic impact prefix lacks a rounded endpoint bracket"), nil
 	}
 	contactAtRight, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,

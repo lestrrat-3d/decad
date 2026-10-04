@@ -184,7 +184,6 @@ func TestVerticalBoxReboundUsesProductionGeometry(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, originalFloor, afterFloor)
 	require.Equal(t, originalBox, afterBox)
-
 	endpoint, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.1))
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Advanced, endpoint.Status, "%+v", endpoint.Diagnostics)
@@ -201,6 +200,49 @@ func TestVerticalBoxReboundUsesProductionGeometry(t *testing.T) {
 	require.NotNil(t, endContact.Gap)
 	require.LessOrEqual(t, endContact.Gap.Value.Base()+endContact.Gap.Bound.Base(),
 		config.Step.ContactSlop.Base())
+	beforeEndpoint, err := endpoint.Trace.Sample(units.Seconds(.1 - 1e-9))
+	require.NoError(t, err)
+	beforeBox, ok := beforeEndpoint.Body(box)
+	require.True(t, ok)
+	require.Equal(t, units.MillimetersPerSecond(-100), beforeBox.LinearVelocity.Z)
+	beforeContact, err := doc.ContactPair(t.Context(), floor, box, r3.Identity(), beforeBox.Pose,
+		config.Step.Contact)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, beforeContact.Relation)
+}
+
+func TestTraceSampleEarlyImpactNearEnd(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	w := fixedBoxContactWorld(t, doc, floor, box, .5)
+	pose, err := r3.Translation(r3.Vec{Z: 1.25})
+	require.NoError(t, err)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: pose, LinearVelocity: dynamics.QuantityVec{
+			X: units.MillimetersPerSecond(0), Y: units.MillimetersPerSecond(0),
+			Z: units.MillimetersPerSecond(-100)}, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	duration := units.Seconds(.2)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, .0125, report.Events[0].Time.Base(), 1e-9)
+	nearEnd := units.Milliseconds(200)
+	require.Equal(t, duration.Base(), nearEnd.Base())
+	sample, err := report.Trace.Sample(nearEnd)
+	require.NoError(t, err)
+	sampleBox, ok := sample.Body(box)
+	require.True(t, ok)
+	require.Equal(t, units.MillimetersPerSecond(50), sampleBox.LinearVelocity.Z)
+	require.InDelta(t, 9.375, sampleBox.Pose.Translation().Z, 1e-5)
+	contact, err := doc.ContactPair(t.Context(), floor, box, r3.Identity(), sampleBox.Pose,
+		decad.ContactRequest{PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6)})
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, contact.Relation)
 }
 
 func TestObliqueBoxReboundUsesProductionGeometry(t *testing.T) {

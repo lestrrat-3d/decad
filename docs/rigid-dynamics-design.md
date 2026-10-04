@@ -606,6 +606,9 @@ claim that an independently interpolated `PoseSegment` is clear.
 `Trace.Sample` evaluates clear, departed, persistent-contact, and transition
 slices against each stored rounded sweep's cached source-box certificate.
 It compares the exact held time values when selecting an event or endpoint.
+For each slice it maps the exact time between its recorded global endpoints
+onto the certified rounded path fraction, so subtraction rounding leaves no
+unsampled gap before the step endpoint.
 It returns `ErrUnsupported` for a slice without a rounded certificate, or
 when the requested float pose exceeds the sweep's resolution. Impact prefixes
 have a separate rounded sweep ending at the published pre-event pose, so

@@ -141,14 +141,15 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 	}
 	state := tr.end
 	sweep := tr.preSweep
-	origin := units.Seconds(0)
+	sliceStart, sliceEnd := units.Seconds(0), tr.duration
 	if tr.hasEvent {
 		if timeValue.Cmp(eventValue) < 0 {
 			state = tr.pre
+			sliceEnd = tr.eventAt
 		} else {
 			state = tr.post
 			sweep = tr.postSweep
-			origin = tr.eventAt
+			sliceStart = tr.eventAt
 		}
 	}
 	if tr.excluded {
@@ -172,7 +173,7 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 	if sweep == nil {
 		return State{}, fmt.Errorf("%w: interior trace sample has no rounded path certificate", ErrUnsupported)
 	}
-	a, b, err := sweep.CertifiedPosesAtSince(t, origin)
+	a, b, err := sweep.CertifiedPosesAtInterval(t, sliceStart, sliceEnd)
 	if err != nil {
 		return State{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
 	}
@@ -441,8 +442,8 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	if err != nil {
 		return nil, err
 	}
-	if !roundedImpactPrefixAtEnd(roundedPrefix, first) {
-		return undecided(w, "published impact prefix lacks a rounded endpoint bracket"), nil
+	if !roundedImpactPrefixAtEnd(roundedPrefix, first, w.step.PenetrationResidual) {
+		return undecided(w, "published impact prefix lacks a matching rounded endpoint bracket"), nil
 	}
 	normal, separation, bound, ok := reducedContact(first.Event.Manifold, w.step.Contact)
 	if !ok {
@@ -697,20 +698,35 @@ func (w *World) stepRotatingClear(ctx context.Context, from, kicked State,
 		Trace: Trace{start: from, end: end, duration: dt, rotationalRemainder: sweep}}, nil
 }
 
-func roundedImpactPrefixAtEnd(sweep, original *decad.SweepReport) bool {
+// The original ideal right sample and the published rounded pose may straddle
+// exact touch. Admit that relation change only for the same source features
+// when their complete separation intervals fit the configured residual.
+func roundedImpactPrefixAtEnd(sweep, original *decad.SweepReport, residual units.Value) bool {
 	if sweep == nil || original == nil || sweep.Outcome != decad.SweepImpactBracket ||
 		sweep.Bracket == nil || sweep.Event == nil || original.Event == nil ||
-		sweep.Event.Relation != original.Event.Relation ||
 		sweep.Event.Manifold == nil || original.Event.Manifold == nil ||
 		len(sweep.Event.Manifold.Points) != len(original.Event.Manifold.Points) ||
 		exactBase(sweep.Bracket.To.Fraction).Cmp(exactBase(units.Scalar(1))) != 0 {
 		return false
 	}
+	for _, relation := range []decad.ContactRelation{sweep.Event.Relation, original.Event.Relation} {
+		if relation != decad.ContactTouching && relation != decad.ContactOverlapping {
+			return false
+		}
+	}
+	limit := exactBase(residual)
 	for i, point := range sweep.Event.Manifold.Points {
 		originalPoint := original.Event.Manifold.Points[i]
 		if point.FaceA != originalPoint.FaceA || point.FaceB != originalPoint.FaceB ||
 			point.FeatureA != originalPoint.FeatureA || point.FeatureB != originalPoint.FeatureB ||
 			point.Normal.Value != originalPoint.Normal.Value {
+			return false
+		}
+		difference := absRat(new(big.Rat).Sub(exactBase(point.Separation.Value),
+			exactBase(originalPoint.Separation.Value)))
+		difference.Add(difference, exactBase(point.Separation.Bound))
+		difference.Add(difference, exactBase(originalPoint.Separation.Bound))
+		if difference.Cmp(limit) > 0 {
 			return false
 		}
 	}

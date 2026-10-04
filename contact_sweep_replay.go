@@ -34,27 +34,40 @@ func (p *sweepReplayProof) setBracket(left, right *big.Rat) {
 // It reads no Document geometry and performs no new contact query. A pose whose
 // rounding can change the reported relation beyond PointResolution is refused.
 func (r *SweepReport) CertifiedPosesAt(elapsed units.Value) (r3.Transform, r3.Transform, error) {
-	return r.CertifiedPosesAtSince(elapsed, units.Seconds(0))
+	if r == nil || r.replay == nil || elapsed.Kind() != units.Time ||
+		!finiteMeasurementValues(elapsed.Base()) {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sweep has no affine replay proof", ErrUnsupported)
+	}
+	t, ok := exactBaseValue(elapsed)
+	if !ok || t.Sign() < 0 || t.Cmp(r.replay.pa.duration) > 0 {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is outside the sweep", ErrDegenerate)
+	}
+	return r.certifiedPosesAtFraction(new(big.Rat).Quo(t, r.replay.pa.duration))
 }
 
-// CertifiedPosesAtSince evaluates at the exact held difference between time
-// and origin. It avoids rounding their difference before selecting a sweep
-// fraction, including when the values use different Time units.
-func (r *SweepReport) CertifiedPosesAtSince(time, origin units.Value) (r3.Transform, r3.Transform, error) {
-	if r == nil || r.replay == nil || time.Kind() != units.Time || origin.Kind() != units.Time ||
-		!finiteMeasurementValues(time.Base(), origin.Base()) {
+// CertifiedPosesAtInterval maps an exact held time from [start, end] onto the
+// certified spatial path. It permits a caller to replay a slice whose global
+// clock endpoints differ slightly from the rounded sweep duration.
+func (r *SweepReport) CertifiedPosesAtInterval(time, start, end units.Value) (r3.Transform, r3.Transform, error) {
+	if r == nil || r.replay == nil || time.Kind() != units.Time || start.Kind() != units.Time ||
+		end.Kind() != units.Time || !finiteMeasurementValues(time.Base(), start.Base(), end.Base()) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sweep has no affine replay proof", ErrUnsupported)
 	}
 	timeValue, timeOK := exactBaseValue(time)
-	originValue, originOK := exactBaseValue(origin)
-	if !timeOK || !originOK {
+	startValue, startOK := exactBaseValue(start)
+	endValue, endOK := exactBaseValue(end)
+	if !timeOK || !startOK || !endOK {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is not finite", ErrDegenerate)
 	}
-	t := new(big.Rat).Sub(timeValue, originValue)
-	if t.Sign() < 0 || t.Cmp(r.replay.pa.duration) > 0 {
-		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is outside the sweep", ErrDegenerate)
+	span := new(big.Rat).Sub(endValue, startValue)
+	if span.Sign() <= 0 || timeValue.Cmp(startValue) < 0 || timeValue.Cmp(endValue) > 0 {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is outside the interval", ErrDegenerate)
 	}
-	f := new(big.Rat).Quo(t, r.replay.pa.duration)
+	f := new(big.Rat).Quo(new(big.Rat).Sub(timeValue, startValue), span)
+	return r.certifiedPosesAtFraction(f)
+}
+
+func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, error) {
 	if !r.replayFractionCovered(f) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay time is outside the certified sweep prefix", ErrUnsupported)
 	}
