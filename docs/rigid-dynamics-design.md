@@ -166,7 +166,8 @@ reported event pairs use world order. `World.Excluded()` and
 `StepReport.Excluded` return separate copies.
 
 The current positive-friction slice accepts a fixed floor and dynamic box in
-either world order. Without an override, the pair coefficient is the geometric
+either world order, or two dynamic source boxes at an initial opposed face
+touch. Without an override, the pair coefficient is the geometric
 mean of the held body coefficients. The solver proposes impulses with a nominal
 rounded mean, then checks the friction cone and slip law against rational
 bounds that enclose the exact mean. A zero body coefficient selects the
@@ -177,7 +178,12 @@ the body values; a positive override goes to the patch solver even when both
 body coefficients are zero. A zero override selects the frictionless response
 even when the body coefficients differ. Other positive-friction body pairs
 return `ErrUnsupported` at `NewWorld` when the pair is not excluded.
-The patch solver reads a floor-to-box witness in both orders, while each event
+The fixed-body patch solver reads a floor-to-box witness in both orders. The
+two-dynamic solver applies equal and opposite impulses through both masses
+and inertias, then bounds the omitted angular response for each body. A
+nonzero outgoing spin requires a separately certified rotational remainder;
+this translation-only slice returns `Undecided` for either nonzero solved spin.
+Each event
 keeps its original world-order manifold. Its normal impulse is nonnegative,
 and its tangent and point impulses describe the impulse on world-order B.
 
@@ -417,12 +423,19 @@ normal bounds; a nominal solution whose uncertainty can exceed a limit is
 `Undecided`. Exact source boxes and analytic mass can make these bounds
 narrow; the arithmetic residual still applies.
 
-The frictional step uses the box's real four-corner manifold, exact-rational
-impulse and torque sums, and the mass/inertia bounds.
-It checks that the entire body cannot expose a larger contact-point lever
-than the solver audited at the initial corners. It also bounds omitted-spin
-travel over the full step. A narrow floor patch, an interior frictional
-impact, a rotating state, and a contact transition return `Undecided`.
+The fixed/dynamic frictional step uses the identity-placed box's real
+four-corner manifold, exact-rational impulse and torque sums, and the
+mass/inertia bounds. It checks that the entire body cannot expose a larger
+contact-point lever than the solver audited at the initial corners. It also
+bounds omitted-spin travel over the full step. A narrow floor patch, an
+interior frictional impact, a rotating state, and a contact transition
+return `Undecided`.
+
+The two-dynamic solver uses the same real four-point manifold but includes
+both inverse inertias and both mass intervals in each impulse and residual.
+It publishes neither a completed state nor an event when the solved outgoing
+spin lacks a certified rotational remainder. The corresponding `World.Step`
+returns `Undecided` with `Next == nil`.
 
 The implemented translating-box slice publishes zero spin. It bounds the
 omitted angular speed from the real manifold's patch-center offset and point
