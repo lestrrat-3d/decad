@@ -8,6 +8,8 @@ dynamic body using density-derived or supplied mass. An axis-aligned
 certified contact normal determines the response component; tangent velocity
 continues through an oblique impact. Centered impacts of two dynamic bodies
 apply equal and opposite impulses.
+The one world pair may be excluded; its bodies then drift independently even
+through overlap, and no pair material is mixed.
 At an initial face touch, a fixed floor and dynamic source box can receive a
 full-step kick from gravity and any center force, then a zero-restitution
 support impulse. A zero-restitution impact can continue as certified
@@ -139,12 +141,14 @@ or unknown exclusions/overrides fail construction. A pair with neither body
 dynamic can still be checked when a kinematic driver moves; it cannot be
 resolved by an impulse if closing contact occurs.
 
-The current one-pair world accepts one `PairMaterial` for its two bodies in
-either pair order. `NewWorld` rejects a pair naming a body outside the world,
-including nil or repeated bodies, with `ErrInvalidInput`. It also rejects a
-second override for the same pair, including the reverse order, and applies
-the same coefficient validation as for body materials. Exclusions still return
-`ErrUnsupported`.
+The current one-pair world accepts one `PairMaterial` or one exclusion for its
+two bodies in either pair order. `NewWorld` rejects a pair naming a body outside
+the world, including nil or repeated bodies, with `ErrInvalidInput`. It also
+rejects a second override or exclusion for the same pair, including the reverse
+order. An override for the excluded pair returns `ErrInvalidInput`. An excluded
+pair skips effective material mixing; each body's material still passes input
+validation. The held exclusion is canonical in world order. `World.Excluded()`
+and `StepReport.Excluded` return separate copies.
 
 The current positive-friction slice accepts only fixed-first/dynamic-second
 worlds. Without an override, the pair coefficient is the geometric mean of
@@ -157,7 +161,7 @@ With an override, its exact held coefficient replaces
 the body values; a positive override goes to the patch solver even when both
 body coefficients are zero. A zero override selects the frictionless response
 even when the body coefficients differ. Reversed roles and other positive-
-friction body pairs return `ErrUnsupported` at `NewWorld`.
+friction body pairs return `ErrUnsupported` at `NewWorld` when the pair is not excluded.
 
 ## Step input and configuration
 
@@ -295,6 +299,13 @@ affine patch and constant normal/velocity; unsupported varying tracks are
 undecided. `SweepContactTransitionBracket` stops the drift at the first
 feature or patch change. It is a solver restart, not necessarily an impulse.
 
+When the one world pair is excluded, validate input, driver, and force kick as
+usual. Drift each dynamic body independently; put a kinematic body at its
+driver endpoint. Do not call `SweepPair` or `ContactPair` for that pair, even
+when its source solids overlap or cross. Publish no contact event and typed
+zero contact impulse and kinematic work. The trace and conservation readings
+still describe the completed step.
+
 A `SweepPair` `Undecided` that could precede the next event makes the step
 `Undecided`; a later undecided interval can be revisited after an earlier
 event changes the drift. `Clear` permits advancement across its whole span.
@@ -424,10 +435,11 @@ type StepReport struct {
     Status      StepStatus
     Next        *State // non-nil exactly for Advanced
     Events      []ContactEvent
+    Excluded    []BodyPair // canonical world order; copied per report
     Trace       Trace
     Diagnostics []StepDiagnostic
     Conservation *StepConservation // non-nil for Advanced
-    // Effective input/config, excluded pairs, elapsed time, residuals,
+    // Effective input/config, elapsed time, residuals,
     // angular momentum, and other conservation diagnostics.
 }
 ```

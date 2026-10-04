@@ -238,5 +238,5 @@ func TestPairMaterialOverrideValidatesPairAndCoefficients(t *testing.T) {
 	config.Overrides = []dynamics.PairMaterial{valid}
 	config.Excluded = []dynamics.BodyPair{{A: floor, B: box}}
 	_, err := dynamics.NewWorld(t.Context(), doc, config)
-	require.ErrorIs(t, err, dynamics.ErrUnsupported)
+	require.ErrorIs(t, err, dynamics.ErrInvalidInput)
 }
