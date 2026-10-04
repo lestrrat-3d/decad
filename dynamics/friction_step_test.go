@@ -159,6 +159,78 @@ func TestFixedFloorFrictionStepUsesRealGeometry(t *testing.T) {
 	require.Equal(t, boxBefore, boxAfter)
 }
 
+func TestReverseFixedFloorFrictionStepUsesRealGeometry(t *testing.T) {
+	doc := decad.New()
+	floor := sourceBoxForFriction(t, doc, -100, -100, 100, 100, -10)
+	box := sourceBoxForFriction(t, doc, -5, -5, 5, 5, 0)
+	request := decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+		NormalResolution: units.Radians(1e-6)}
+	contact, err := doc.ContactPair(t.Context(), box, floor, r3.Identity(), r3.Identity(), request)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, contact.Relation)
+	require.Len(t, contact.Manifold.Points, 4)
+	for _, point := range contact.Manifold.Points {
+		require.Equal(t, r3.Vec{Z: -1}, point.Normal.Value)
+	}
+	density := units.KilogramsPerCubicMillimeter(.001)
+	material := Material{Restitution: units.Scalar(0), Friction: units.Scalar(.5)}
+	cfg := StepConfig{Contact: request, TimeResolution: units.Seconds(1e-9),
+		ContactSlop: units.Millimeters(1e-6), VelocityResidual: units.MillimetersPerSecond(1e-6),
+		AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+		ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+		PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
+		MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 2}
+	w, err := NewWorld(t.Context(), doc, WorldConfig{Bodies: []RigidBody{
+		{Body: box, Role: Dynamic, Density: &density, Material: material},
+		{Body: floor, Role: Fixed, Material: material},
+	}, Step: cfg})
+	require.NoError(t, err)
+	zeroV := QuantityVec{X: units.MillimetersPerSecond(0), Y: units.MillimetersPerSecond(0),
+		Z: units.MillimetersPerSecond(0)}
+	zeroW := QuantityVec{X: units.RadiansPerSecond(0), Y: units.RadiansPerSecond(0),
+		Z: units.RadiansPerSecond(0)}
+	gravity := QuantityVec{X: units.MillimetersPerSecondSquared(0),
+		Y: units.MillimetersPerSecondSquared(0), Z: units.MillimetersPerSecondSquared(-1000)}
+	for _, slip := range []float64{100, 0} {
+		start, stateErr := w.NewState([]BodyState{
+			{Body: box, Pose: r3.Identity(), LinearVelocity: QuantityVec{
+				X: units.MillimetersPerSecond(slip), Y: units.MillimetersPerSecond(0),
+				Z: units.MillimetersPerSecond(0)}, AngularVelocity: zeroW},
+			{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroV, AngularVelocity: zeroW},
+		})
+		require.NoError(t, stateErr)
+		report, stepErr := w.Step(t.Context(), start, StepInput{Gravity: gravity}, units.Seconds(.1))
+		require.NoError(t, stepErr)
+		require.Equal(t, Advanced, report.Status, "%+v", report.Diagnostics)
+		require.Len(t, report.Events, 1)
+		event := report.Events[0]
+		require.Equal(t, BodyPair{A: box, B: floor}, event.Pair)
+		require.Len(t, event.Manifold.Points, 4)
+		require.Len(t, event.PointImpulses, 4)
+		require.InDelta(t, 100, event.NormalImpulse.Base(), 1e-6)
+		require.InDelta(t, 50*slip/100, event.TangentImpulse.X.Base(), 1e-6)
+		require.Equal(t, zeroV, event.PostVelocityB)
+		require.InDelta(t, -50*slip/100, report.Conservation.ContactImpulse.Value.X.Base(), 1e-6)
+		require.InDelta(t, 100, report.Conservation.ContactImpulse.Value.Z.Base(), 1e-6)
+		var normal, tangent float64
+		for i, point := range event.Manifold.Points {
+			require.Equal(t, r3.Vec{Z: -1}, point.Normal.Value)
+			normal += event.PointImpulses[i].Normal.Base()
+			tangent += event.PointImpulses[i].Tangent.X.Base()
+		}
+		require.InDelta(t, event.NormalImpulse.Base(), normal, 1e-6)
+		require.InDelta(t, event.TangentImpulse.X.Base(), tangent, 1e-6)
+		final, exists := report.Next.Body(box)
+		require.True(t, exists)
+		require.InDelta(t, slip/2, final.LinearVelocity.X.Base(), 1e-6)
+		require.Zero(t, final.LinearVelocity.Z.Base())
+		require.InDelta(t, slip/20, final.Pose.Translation().X, 1e-6)
+		endContact, contactErr := doc.ContactPair(t.Context(), box, floor, final.Pose, r3.Identity(), request)
+		require.NoError(t, contactErr)
+		require.Equal(t, decad.ContactTouching, endContact.Relation)
+	}
+}
+
 func TestFixedFloorFrictionRejectsUnsupportedMaterialsAndPatch(t *testing.T) {
 	doc := decad.New()
 	floor := sourceBoxForFriction(t, doc, -2, -5, 2, 5, -10)
@@ -237,5 +309,5 @@ func TestFixedFloorFrictionRejectsUnsupportedMaterialsAndPatch(t *testing.T) {
 		{Body: box, Role: Dynamic, Density: &density, Material: material},
 		{Body: floor, Role: Fixed, Material: material},
 	}, Step: cfg})
-	require.ErrorIs(t, err, ErrUnsupported)
+	require.NoError(t, err)
 }
