@@ -622,10 +622,13 @@ func translatedOrientedBox(box orientedSourceBox, delta [3]dyadic, fraction *big
 	return box, true
 }
 
-// A common rotation carries an initial opposed source-box support plane to
-// another support plane. Taylor's theorem bounds its relative plane gap below
+// The admitted departure paths each prove an open-at-zero whole-body gap.
+// For a common rotation, Taylor's theorem bounds the support-plane gap below
 // by c*u - K*u²/2, using exact c and outward K over the whole step.
 func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*big.Rat, bool) {
+	if fraction, ok := r.obliqueAffineDepartureFraction(first); ok {
+		return fraction, true
+	}
 	if fraction, ok := r.horizontalSpinDepartureFraction(first); ok {
 		return fraction, true
 	}
@@ -713,6 +716,47 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 			return fraction, true
 		}
 		fraction = new(big.Rat).Quo(fraction, big.NewRat(2, 1))
+	}
+	return nil, false
+}
+
+// obliqueAffineDepartureFraction proves an open-at-zero gap between the
+// complete source boxes. Their common support plane is exact even though its
+// published unit normal is rounded. Translation makes the signed plane gap
+// affine, so a positive slope keeps the entire pair clear after time zero.
+func (r *rotationalPairSweep) obliqueAffineDepartureFraction(first *SweepSample) (*big.Rat, bool) {
+	if r.a.path.drift != nil || r.b.path.drift != nil || first.Ideal.Manifold == nil ||
+		len(first.Ideal.Manifold.Points) != 4 {
+		return nil, false
+	}
+	for axis := range 3 {
+		i, j := (axis+1)%3, (axis+2)%3
+		normal := dvCross(r.a.startBox.edge[i], r.a.startBox.edge[j])
+		if dvIsZero(normal) {
+			continue
+		}
+		alo, ahi := orientedProjection(r.a.startBox, normal)
+		blo, bhi := orientedProjection(r.b.startBox, normal)
+		side := 0
+		switch {
+		case dyCmp(ahi, blo) == 0:
+			side = 1
+		case dyCmp(bhi, alo) == 0:
+			side = -1
+		default:
+			continue
+		}
+		relative := dyV3{}
+		for k := range 3 {
+			relative[k] = dySubScalar(r.b.path.delta[k], r.a.path.delta[k])
+		}
+		slope := dvDot(relative, normal)
+		if side < 0 {
+			slope = dyNeg(slope)
+		}
+		if slope.sign() > 0 {
+			return big.NewRat(1, 2), true
+		}
 	}
 	return nil, false
 }
@@ -863,6 +907,9 @@ func (r *rotationalPairSweep) refine(ctx context.Context, left, right *SweepSamp
 }
 
 func (r *rotationalPairSweep) intervalClear(left, right *SweepSample, lf, rf *big.Rat) bool {
+	if r.obliqueAffineIntervalClear(lf, rf) {
+		return true
+	}
 	if r.intervalAxisSeparated(lf, rf) {
 		return true
 	}
@@ -884,6 +931,38 @@ func (r *rotationalPairSweep) intervalClear(left, right *SweepSample, lf, rf *bi
 	travel := new(big.Rat).Mul(new(big.Rat).Sub(rf, lf),
 		new(big.Rat).Add(r.a.fullTravel, r.b.fullTravel))
 	return new(big.Rat).Add(a, b).Cmp(travel) > 0
+}
+
+// An exact positive support gap at both ends of an affine interval is
+// positive throughout it. This also covers an oblique outward drift whose
+// world-axis hulls overlap after the boxes have separated.
+func (r *rotationalPairSweep) obliqueAffineIntervalClear(from, to *big.Rat) bool {
+	if r.a.path.drift != nil || r.b.path.drift != nil {
+		return false
+	}
+	a0, okA := translatedOrientedBox(r.a.startBox, r.a.path.delta, from)
+	b0, okB := translatedOrientedBox(r.b.startBox, r.b.path.delta, from)
+	a1, okC := translatedOrientedBox(r.a.startBox, r.a.path.delta, to)
+	b1, okD := translatedOrientedBox(r.b.startBox, r.b.path.delta, to)
+	if !okA || !okB || !okC || !okD {
+		return false
+	}
+	for axis := range 3 {
+		i, j := (axis+1)%3, (axis+2)%3
+		normal := dvCross(r.a.startBox.edge[i], r.a.startBox.edge[j])
+		if dvIsZero(normal) {
+			continue
+		}
+		alo0, ahi0 := orientedProjection(a0, normal)
+		blo0, bhi0 := orientedProjection(b0, normal)
+		alo1, ahi1 := orientedProjection(a1, normal)
+		blo1, bhi1 := orientedProjection(b1, normal)
+		if dyCmp(ahi0, blo0) < 0 && dyCmp(ahi1, blo1) < 0 ||
+			dyCmp(bhi0, alo0) < 0 && dyCmp(bhi1, alo1) < 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // intervalAxisSeparated encloses all eight ideal corner paths over the whole
