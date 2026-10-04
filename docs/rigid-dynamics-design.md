@@ -36,6 +36,10 @@ Coulomb solver. The response publishes zero Y/Z velocity, bounded corner and
 aggregate impulses, a residual report, and a persistent-touch trace after
 both ideal and rounded sweeps certify the full remainder. Zero X slip uses
 the centered normal support path with zero tangent impulse.
+The floor stays at identity placement. The box can start from any pure
+translation whose real four-corner track passes the same bounds, including
+the endpoint of a previous step. Its mass center is translated with exact
+rational coordinate sums for the lever and torque certificates.
 Off-center impulses that require spin return `Undecided`. The step reports
 bounded translational kinetic energy, linear momentum, and orbital angular momentum for dynamic bodies
 at input, after the full-step force kick, and at completion. It also reports
@@ -393,8 +397,8 @@ normal bounds; a nominal solution whose uncertainty can exceed a limit is
 `Undecided`. Exact source boxes and analytic mass can make these bounds
 narrow; the arithmetic residual still applies.
 
-The first frictional step uses the identity-placed box's real four-corner
-manifold, exact-rational impulse and torque sums, and the mass/inertia bounds.
+The frictional step uses the box's real four-corner manifold, exact-rational
+impulse and torque sums, and the mass/inertia bounds.
 It checks that the entire body cannot expose a larger contact-point lever
 than the solver audited at the initial corners. It also bounds omitted-spin
 travel over the full step. A narrow floor patch, an interior frictional
@@ -407,6 +411,12 @@ inertia eigenvalue. It returns `Undecided` when that upper speed exceeds
 `AngularVelocityResidual`. The impulse and velocity response residuals compare
 the published floats with exact rational evaluation of the held input values;
 one final arithmetic ULP does not cover all intermediate rounding.
+For zero-slip support, four equal normal corner impulses use the same bounded
+witnesses. The sum of their horizontal levers and each point and center bound
+set an upper angular speed through the certified inertia lower bound. The step
+also checks that this speed can move no box point beyond
+`PenetrationResidual` over the full duration. A bound that exceeds either
+limit returns `Undecided`.
 
 Position correction may move a dynamic body by at most the sum of certified
 geometry displacement, the sweep bracket's point-travel bound, and
@@ -650,9 +660,12 @@ on a fixed floor wide enough for a `5 mm` slide. With gravity
 is `100 kg·mm/s`; the friction impulse is `50 kg·mm/s` opposite motion.
 The box then slides at `50 mm/s` and moves `5 mm` horizontally while its
 bottom stays at `z=0 mm`. `SweepPersistentTouch` must certify the full
-face-contact track. A second run starting with zero horizontal velocity
-must end with zero velocity and the same bottom height. Both use the real
-contact manifold and sweep continuation, not a touching sample alone.
+face-contact track. A second `0.05 s` step from that endpoint receives a
+`50 kg·mm/s` support impulse and `25 kg·mm/s` friction impulse. It ends at
+`x=6.25 mm` with `25 mm/s` horizontal speed. A run starting with zero
+horizontal velocity must end with zero velocity and the same bottom height.
+Every run uses the real contact manifold and sweep continuation, not a
+touching sample alone.
 
 Then run focused checks for an off-center impact with spin, two independent
 moving bodies, a kinematic push, three simultaneous bodies, Coulomb stick

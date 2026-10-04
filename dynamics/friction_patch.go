@@ -38,12 +38,12 @@ type patchPoint struct {
 // published order. A fixed-order projected solve proposes impulses; exact
 // rational residuals over the mass, point, center, and inertia bounds admit
 // only a zero-spin, positive-X-slip response. Initial spin is exactly zero.
-// This first slice admits only identity placement, so the committed mass
-// center and every contact witness share one world coordinate system.
+// The dynamic pose may translate without rotating. Its held translation is
+// added exactly to the committed mass center for the response certificate.
 func solveFixedFloorFrictionPatch(manifold *decad.ContactManifold, mass decad.MassProperties,
 	pose r3.Transform, pre QuantityVec, mu frictionCoefficient, cfg StepConfig) (frictionPatchResponse, bool) {
 	if manifold == nil || len(manifold.Points) != 4 || validateMass(mass) != nil ||
-		pose != r3.Identity() ||
+		pose.Basis() != r3.Identity().Basis() ||
 		validateQuantityVec(pre, units.Velocity) != nil ||
 		!validQuantity(mu.nominal, units.Dimensionless, true) || mu.lower == nil || mu.upper == nil ||
 		mu.lower.Sign() <= 0 || mu.upper.Cmp(mu.lower) < 0 || cfg.MaxIterations <= 0 ||
@@ -79,7 +79,8 @@ func solveFixedFloorFrictionPatch(manifold *decad.ContactManifold, mass decad.Ma
 		}
 		point := patchPoint{lever: witness.OnB.Value.Sub(worldCenter),
 			bound: exactBase(witness.OnB.Bound)}
-		point.leverExact = exactPatchLever(witness.OnB.Value, worldCenter)
+		point.leverExact = exactTranslatedPatchLever(witness.OnB.Value,
+			mass.Center.Value, pose.Translation())
 		points[i] = point
 	}
 	v := r3.Vec{X: pre.X.Base(), Y: pre.Y.Base(), Z: pre.Z.Base()}
@@ -272,6 +273,18 @@ func exactPatchLever(witness, center r3.Vec) [3]*big.Rat {
 	var lever [3]*big.Rat
 	for axis := range 3 {
 		lever[axis] = new(big.Rat).Sub(ratFloat(w[axis]), ratFloat(c[axis]))
+	}
+	return lever
+}
+
+func exactTranslatedPatchLever(witness, center, translation r3.Vec) [3]*big.Rat {
+	w := [3]float64{witness.X, witness.Y, witness.Z}
+	c := [3]float64{center.X, center.Y, center.Z}
+	t := [3]float64{translation.X, translation.Y, translation.Z}
+	var lever [3]*big.Rat
+	for axis := range 3 {
+		worldCenter := new(big.Rat).Add(ratFloat(c[axis]), ratFloat(t[axis]))
+		lever[axis] = new(big.Rat).Sub(ratFloat(w[axis]), worldCenter)
 	}
 	return lever
 }
