@@ -428,9 +428,12 @@ Correct all simultaneous contacts together. Record every correction in the
 event and trace; sweep the correction path against every other pair and
 reject a new contact or undecided interval. Active contacts may remain
 touching while their penetration decreases. A post-correction `ContactPair`
-bounds residual penetration. A correction does not alter velocity and cannot claim
-to conserve mechanical energy. A failed correction or new uncertain pair
-returns `Undecided`.
+bounds residual penetration. At a separating impact at the final step time,
+a separated corrected pose is accepted only when the contact report's upper gap is within
+the same correction allowance. A nonzero remainder still requires a touching
+corrected pose and a certified continuation. A correction does not alter
+velocity and cannot claim to conserve mechanical energy. A failed correction
+or new uncertain pair returns `Undecided`.
 
 ## Completion, conservation, and trace
 
@@ -576,6 +579,9 @@ bottom ends at `z=5 mm`, within the stated integration/geometry tolerance.
 Initial/final kinetic energies are `5000` and `1250 kg·mm²/s²`. The document
 body set and placements are unchanged. A hand-written manifold does not
 exercise this boundary.
+With `dt=0.1 s`, the same real path impacts at the final fraction. Its
+`150 kg·mm/s` impulse leaves upward velocity `50 mm/s`; any separated rounded
+endpoint gap must fit the certified correction allowance.
 
 The supplied-mass fixture passes that box's real `Body.MassProperties` result
 through `RigidBody.Supplied`, `NewWorld`, `SweepPair`, and `Step`. It has the same

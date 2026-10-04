@@ -157,6 +157,23 @@ func TestVerticalBoxReboundUsesProductionGeometry(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, originalFloor, afterFloor)
 	require.Equal(t, originalBox, afterBox)
+
+	endpoint, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.1))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, endpoint.Status, "%+v", endpoint.Diagnostics)
+	require.Len(t, endpoint.Events, 1)
+	require.Equal(t, 1.0, endpoint.Events[0].Bracket.To.Fraction.Base())
+	require.InDelta(t, 0.1, endpoint.Events[0].Time.Base(), 1e-12)
+	endBox, ok := endpoint.Next.Body(box)
+	require.True(t, ok)
+	require.InDelta(t, 0, endBox.Pose.Translation().Z, 2e-6)
+	require.InDelta(t, 50, endBox.LinearVelocity.Z.Base(), 1e-6)
+	endContact, err := doc.ContactPair(t.Context(), floor, box, r3.Identity(), endBox.Pose, config.Step.Contact)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, endContact.Relation)
+	require.NotNil(t, endContact.Gap)
+	require.LessOrEqual(t, endContact.Gap.Value.Base()+endContact.Gap.Bound.Base(),
+		config.Step.ContactSlop.Base())
 }
 
 func TestObliqueBoxReboundUsesProductionGeometry(t *testing.T) {
