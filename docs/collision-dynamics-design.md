@@ -9,9 +9,10 @@ dynamic source box can complete an initial resting contact after a full-step
 gravity kick or a zero-restitution impact. A stationary touching pair also
 advances without an impulse. Each touching path requires a certified
 persistent face-contact track. A dynamic body's mass can come from density or
-a caller-supplied bounded mass record. Loads, kinematic drivers, friction,
-stacks, and broader payload paths remain design contracts. Each companion
-document owns its detail.
+a caller-supplied bounded mass record. One center force with zero torque per
+dynamic body contributes to the step's full-duration velocity kick. Torque
+loads, kinematic drivers, friction, stacks, and broader payload paths remain
+design contracts. Each companion document owns its detail.
 
 | Design | Ownership |
 |---|---|

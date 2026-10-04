@@ -201,8 +201,12 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	if err := validateQuantityVec(input.Gravity, units.Acceleration); err != nil {
 		return nil, err
 	}
-	if len(input.Loads) != 0 || len(input.Drivers) != 0 {
-		return nil, fmt.Errorf("%w: loads and drivers are not implemented", ErrUnsupported)
+	loads, err := w.validateLoads(input.Loads)
+	if err != nil {
+		return nil, err
+	}
+	if len(input.Drivers) != 0 {
+		return nil, fmt.Errorf("%w: kinematic drivers are not implemented", ErrUnsupported)
 	}
 	live := w.doc.Bodies()
 	for _, part := range w.parts {
@@ -213,9 +217,9 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	kicked, ok := w.kickByGravity(from, input.Gravity, dt)
+	kicked, ok := w.kickByLoads(from, input.Gravity, loads, dt)
 	if !ok {
-		return undecided(w, "gravity kick exceeds the velocity residual"), nil
+		return undecided(w, "force kick exceeds the velocity residual"), nil
 	}
 	motionAxis := -1
 	for _, entry := range kicked.entries {

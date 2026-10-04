@@ -6,14 +6,17 @@ boundary; `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md` o
 geometry results. Current code steps one frictionless, single-axis translating
 pair with at least one dynamic body using density-derived or supplied mass.
 Centered impacts of two dynamic bodies apply equal and opposite impulses.
-An initial face touch between
-a fixed floor and dynamic source box can receive one full-step gravity kick
-and a zero-restitution support impulse. A zero-restitution impact can continue
+At an initial face touch, a fixed floor and dynamic source box can receive a
+full-step kick from gravity and any center force, then a zero-restitution
+support impulse.
+A zero-restitution impact can continue
 as certified persistent contact, and a stationary touching pair can advance
 without an impulse. These paths require full-span ideal and rounded contact
-tracks. Off-center impulses that require spin return `Undecided`. Loads,
-kinematic drivers, friction, stacks, contact-transition stepping, and
-arbitrary trace sampling remain design contracts.
+tracks. Each dynamic body accepts at most one center force with zero torque;
+the mass interval must fit the kicked velocity within `VelocityResidual`.
+Off-center impulses that require spin return `Undecided`. Torque loads,
+kinematic drivers, friction, stacks, contact-transition stepping, external
+impulse reporting, and arbitrary trace sampling remain design contracts.
 
 Navigation only; the named sections own the rules:
 
@@ -171,6 +174,14 @@ proper rotations. The driver supplies contact-point velocity as the
 path's time derivative, with its certified numerical bound; absent or
 unbounded derivatives make a potential contact undecided. It receives no
 impulse. A fixed body has zero contact-point velocity.
+
+The current translating-pair step accepts one typed, finite center force per
+dynamic body and requires every supplied torque component to be zero. A
+nonzero valid torque returns `ErrUnsupported`; a nil, duplicate, foreign,
+or nondynamic load body or a wrong-kind/non-finite vector returns
+`ErrInvalidInput`. It computes both endpoint kicks over the admitted mass
+interval and returns `Undecided` if the published velocity differs from either
+by more than `VelocityResidual`.
 
 `units.Angle` is dimensionally distinct from `units.Dimensionless`. At the
 physics boundary, validate every AngularVelocity component as Angle/Time,
@@ -348,6 +359,9 @@ change. The report owns copies of all slices and state data. A report with
 `Next == nil` may contain a diagnostic trace prefix for inspection, but it
 cannot be passed as an advanced state.
 
+The current `StepReport` omits applied force and torque impulses. Those
+readings remain part of the later conservation-report contract.
+
 `Trace` contains the starting state, each certified drift slice, each
 event's pre/post states, each position correction, and the ending state.
 `Trace.Sample(t)` evaluates the recorded paths without running geometry or
@@ -406,6 +420,13 @@ The supplied-mass fixture passes that box's real `Body.MassProperties` result
 through `RigidBody.Supplied`, `NewWorld`, `SweepPair`, and `Step`. It has the same
 `150 kg·mm/s` impulse, `50 mm/s` outgoing speed, and `z=5 mm` final bottom.
 Changing the caller's record after world construction does not change the step.
+
+The center-force fixture starts the same `1 kg` box `10 mm` above the floor at
+rest. A `−500 kg·mm/s²` center force over `0.2 s` gives a full-step kick of
+`−100 mm/s`. The real sweep brackets contact at `0.1 s`; the step reports a
+`150 kg·mm/s` contact impulse and finishes at `+50 mm/s` with its bottom at
+`z=5 mm`. A supplied mass interval of `1 ± 0.01 kg` returns `Undecided` at a
+`1e−6 mm/s` velocity residual because its kick cannot be bounded that tightly.
 
 The implemented resting-contact fixture starts a `1 kg` source box at rest on
 a fixed floor and applies gravity `−1000 mm/s²` for `0.1 s`. The full-step
