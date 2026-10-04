@@ -55,12 +55,36 @@ type ContactEvent struct {
 	Time                             units.Value
 	Manifold                         decad.ContactManifold
 	NormalImpulse                    units.Value
+	TangentImpulse                   QuantityVec
+	PointImpulses                    []ContactPointImpulse
+	Solver                           *ContactSolverReport
 	PreVelocity                      QuantityVec
 	PostVelocity                     QuantityVec
 	PositionChange                   r3.Vec
 	PreVelocityA, PreVelocityB       QuantityVec
 	PostVelocityA, PostVelocityB     QuantityVec
 	PositionChangeA, PositionChangeB r3.Vec
+}
+
+// ContactPointImpulse follows the matching point in ContactEvent.Manifold.
+type ContactPointImpulse struct {
+	Normal  units.Value
+	Tangent QuantityVec
+}
+
+// ContactSolverReport records bounded residuals for a joint contact solve.
+type ContactSolverReport struct {
+	NormalResidual      units.Value
+	TangentResidual     units.Value
+	ConeResidual        units.Value
+	PenetrationResidual units.Value
+	AngularUpper        units.Value
+	Iterations          int
+}
+
+func zeroImpulseVec() QuantityVec {
+	zero := units.KilogramMillimetersPerSecond(0)
+	return QuantityVec{X: zero, Y: zero, Z: zero}
 }
 
 type StepReport struct {
@@ -275,8 +299,14 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		report.Status, report.Next, report.Trace.end = Advanced, &end, end
 		return report, nil
 	case decad.SweepInitiallyTouching:
+		if w.friction.Mag() != 0 {
+			return w.stepInitialFriction(ctx, from, kicked, dt, first)
+		}
 		return w.stepInitialTouch(ctx, from, kicked, dt, first)
 	case decad.SweepImpactBracket:
+		if w.friction.Mag() != 0 {
+			return undecided(w, "frictional interior impact is not certified"), nil
+		}
 		// Continue below, consuming the geometry producer's event and manifold.
 	default:
 		return undecided(w, fmt.Sprintf("first sweep returned %v", first.Outcome)), nil
@@ -479,6 +509,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		Time:            units.Seconds(impactTime),
 		Manifold:        cloneManifold(*first.Event.Manifold),
 		NormalImpulse:   impulseValue,
+		TangentImpulse:  zeroImpulseVec(),
 		PreVelocity:     kicked.entries[reportBody].LinearVelocity,
 		PostVelocity:    post.entries[reportBody].LinearVelocity,
 		PositionChange:  []r3.Vec{changeA, changeB}[reportBody],

@@ -26,13 +26,15 @@ depart from an initially touching box without an impulse, or cause a centered
 interior impact. Departure requires ideal and rounded full-path certificates;
 a zero-restitution response requires certified persistent touch.
 The driver's stored velocity remains zero while its derivative enters the
-response. A private response helper now solves one four-corner, fixed-floor
-Coulomb patch from a real source-box manifold and bounded mass. It admits an
-identity-placed, initially spin-free dynamic box with a cardinal normal and
-positive X slip only after bounded corner and aggregate residuals pass.
-`World.Step` does not yet call this helper or admit frictional materials.
+response. `World.Step` admits equal positive friction coefficients for a fixed
+floor first and a dynamic source box second. An initial four-corner face touch
+with zero incoming spin, positive X slip, and closing Z speed can use the joint
+Coulomb solver. The response publishes zero Y/Z velocity, bounded corner and
+aggregate impulses, a residual report, and a persistent-touch trace after
+both ideal and rounded sweeps certify the full remainder. Zero X slip uses
+the centered normal support path with zero tangent impulse.
 Off-center impulses that require spin return `Undecided`. Torque loads,
-rotating kinematic drivers, frictional stepping, stacks, broader contact-transition stepping,
+rotating kinematic drivers, broader frictional stepping, stacks, broader contact-transition stepping,
 external impulse reporting, and arbitrary trace sampling remain design
 contracts.
 
@@ -132,6 +134,12 @@ values for that pair. Pair names are canonicalized by world order. Duplicate
 or unknown exclusions/overrides fail construction. A pair with neither body
 dynamic can still be checked when a kinematic driver moves; it cannot be
 resolved by an impulse if closing contact occurs.
+
+The current positive-friction slice accepts only fixed-first/dynamic-second
+worlds whose two held friction coefficients are exactly equal. It passes that
+coefficient directly to the patch solver. Unequal coefficients, reversed
+roles, and other positive-friction body pairs return `ErrUnsupported` at
+`NewWorld`.
 
 ## Step input and configuration
 
@@ -352,6 +360,13 @@ normal bounds; a nominal solution whose uncertainty can exceed a limit is
 `Undecided`. Exact source boxes and analytic mass can make these bounds
 narrow; the arithmetic residual still applies.
 
+The first frictional step uses the identity-placed box's real four-corner
+manifold, exact-rational impulse and torque sums, and the mass/inertia bounds.
+It checks that the entire body cannot expose a larger contact-point lever
+than the solver audited at the initial corners. It also bounds omitted-spin
+travel over the full step. A narrow floor patch, an interior frictional
+impact, a rotating state, and a contact transition return `Undecided`.
+
 The implemented translating-box slice publishes zero spin. It bounds the
 omitted angular speed from the real manifold's patch-center offset and point
 bounds, the mass-center bound, an impulse upper bound, and a certified lower
@@ -378,6 +393,11 @@ An impact carries a bounded manifold and a normal impulse. A separated
 contact transition carries its original bracket, the chosen right time,
 unchanged velocities, and zero impulse; its `Manifold` is empty because the
 right state is separated. `Trace.Sample` at that time returns the right state.
+The frictional patch event also carries a typed aggregate tangent impulse,
+one typed impulse per cloned manifold point, and bounded solver residuals with
+the iteration count. A frictionless event and the centered static support
+event carry a typed zero tangent impulse; the static support has no joint
+solver report.
 
 ```go
 type StepStatus int // Advanced, Undecided

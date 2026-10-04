@@ -178,18 +178,19 @@ func (w *World) stepInitialTouch(ctx context.Context, from, kicked State, dt uni
 	instant := first.Event.At
 	report := &StepReport{Status: Advanced, Next: &end}
 	report.Events = []ContactEvent{{
-		Kind:          ContactImpact,
-		Pair:          BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
-		Bracket:       decad.SweepInterval{From: instant, To: instant},
-		Time:          instant.Elapsed.Value,
-		Manifold:      cloneManifold(*first.Event.Manifold),
-		NormalImpulse: units.KilogramMillimetersPerSecond(impulse),
-		PreVelocity:   kicked.entries[reportBody].LinearVelocity,
-		PostVelocity:  post.entries[reportBody].LinearVelocity,
-		PreVelocityA:  kicked.entries[0].LinearVelocity,
-		PreVelocityB:  kicked.entries[1].LinearVelocity,
-		PostVelocityA: post.entries[0].LinearVelocity,
-		PostVelocityB: post.entries[1].LinearVelocity,
+		Kind:           ContactImpact,
+		Pair:           BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Bracket:        decad.SweepInterval{From: instant, To: instant},
+		Time:           instant.Elapsed.Value,
+		Manifold:       cloneManifold(*first.Event.Manifold),
+		NormalImpulse:  units.KilogramMillimetersPerSecond(impulse),
+		TangentImpulse: zeroImpulseVec(),
+		PreVelocity:    kicked.entries[reportBody].LinearVelocity,
+		PostVelocity:   post.entries[reportBody].LinearVelocity,
+		PreVelocityA:   kicked.entries[0].LinearVelocity,
+		PreVelocityB:   kicked.entries[1].LinearVelocity,
+		PostVelocityA:  post.entries[0].LinearVelocity,
+		PostVelocityB:  post.entries[1].LinearVelocity,
 	}}
 	report.Trace = Trace{start: from, pre: kicked, post: post, end: end, duration: dt,
 		eventAt: instant.Elapsed.Value, hasEvent: true}
@@ -350,17 +351,18 @@ func (w *World) stepContactTransition(ctx context.Context, from, kicked State, d
 	}
 	report := &StepReport{Status: Advanced, Next: &end}
 	report.Events = []ContactEvent{{
-		Kind:          ContactTransition,
-		Pair:          BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
-		Bracket:       *first.Bracket,
-		Time:          units.Seconds(chosen),
-		NormalImpulse: units.KilogramMillimetersPerSecond(0),
-		PreVelocity:   kicked.entries[reportBody].LinearVelocity,
-		PostVelocity:  kicked.entries[reportBody].LinearVelocity,
-		PreVelocityA:  kicked.entries[0].LinearVelocity,
-		PreVelocityB:  kicked.entries[1].LinearVelocity,
-		PostVelocityA: kicked.entries[0].LinearVelocity,
-		PostVelocityB: kicked.entries[1].LinearVelocity,
+		Kind:           ContactTransition,
+		Pair:           BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Bracket:        *first.Bracket,
+		Time:           units.Seconds(chosen),
+		NormalImpulse:  units.KilogramMillimetersPerSecond(0),
+		TangentImpulse: zeroImpulseVec(),
+		PreVelocity:    kicked.entries[reportBody].LinearVelocity,
+		PostVelocity:   kicked.entries[reportBody].LinearVelocity,
+		PreVelocityA:   kicked.entries[0].LinearVelocity,
+		PreVelocityB:   kicked.entries[1].LinearVelocity,
+		PostVelocityA:  kicked.entries[0].LinearVelocity,
+		PostVelocityB:  kicked.entries[1].LinearVelocity,
 	}}
 	report.Trace = Trace{start: from, pre: right, post: right, end: end, duration: dt,
 		eventAt: units.Seconds(chosen), hasEvent: true}
