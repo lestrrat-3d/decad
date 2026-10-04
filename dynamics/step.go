@@ -468,10 +468,6 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 			return nil, err
 		}
 	}
-	if contact.Relation != decad.ContactTouching {
-		return undecided(w, fmt.Sprintf("corrected impact pose has relation %v (separation %.17g)",
-			contact.Relation, separation)), nil
-	}
 	remaining := dt.Base() - impactTime
 	postRelative := (postSpeed[1] - postSpeed[0]) * normalSign
 	if !finite(postRelative) || postRelative < -w.step.VelocityResidual.Base() {
@@ -479,6 +475,11 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	}
 	policy := decad.ContinueSeparatingTouch
 	persistent := postRelative <= w.step.VelocityResidual.Base()
+	if contact.Relation != decad.ContactTouching &&
+		!(remaining == 0 && !persistent && correctedEndpointGapWithin(contact, correctionAllowance)) {
+		return undecided(w, fmt.Sprintf("corrected impact pose has relation %v (separation %.17g)",
+			contact.Relation, separation)), nil
+	}
 	if persistent {
 		policy = decad.ContinueCertifiedTouch
 	}
@@ -554,6 +555,22 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	report.Trace = Trace{start: from, pre: pre, post: post, end: end, duration: dt,
 		eventAt: units.Seconds(impactTime), hasEvent: true}
 	return report, nil
+}
+
+// At the final instant, a rounded correction can put the pair just clear of
+// the ideal impact. The contact kernel must prove that the complete pair gap
+// fits the same bound that admitted the correction.
+func correctedEndpointGapWithin(contact *decad.ContactReport, allowance float64) bool {
+	if contact.Relation != decad.ContactSeparated || contact.Gap == nil ||
+		!finite(allowance) || allowance < 0 {
+		return false
+	}
+	value, bound := exactBase(contact.Gap.Value), exactBase(contact.Gap.Bound)
+	if value == nil || bound == nil || bound.Sign() < 0 ||
+		new(big.Rat).Sub(value, bound).Sign() <= 0 {
+		return false
+	}
+	return new(big.Rat).Add(value, bound).Cmp(new(big.Rat).SetFloat64(allowance)) <= 0
 }
 
 func (w *World) stepExcluded(ctx context.Context, from, kicked State, dt units.Value,
