@@ -135,6 +135,118 @@ func TestKinematicDriverMovesClearPair(t *testing.T) {
 	require.Equal(t, zeroVelocity(), finalBox.LinearVelocity)
 }
 
+func TestKinematicDriverDepartsInitiallyTouchingBox(t *testing.T) {
+	doc := decad.New()
+	driver := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
+	box := makeBox(t, doc, 10, 0, 20, 10, 0, 10)
+	beforeDriver, err := driver.Bounds()
+	require.NoError(t, err)
+	beforeBox, err := box.Bounds()
+	require.NoError(t, err)
+	density := units.KilogramsPerCubicMillimeter(.001)
+	mass, err := box.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	require.InDelta(t, 1, mass.Mass.Value.Base(), 1e-12)
+	request := decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+		NormalResolution: units.Radians(1e-6)}
+	initial, err := doc.ContactPair(t.Context(), driver, box, r3.Identity(), r3.Identity(), request)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, initial.Relation)
+	require.NotNil(t, initial.Manifold)
+	duration := units.Seconds(.125)
+	endPose, err := r3.Translation(r3.Vec{X: -5})
+	require.NoError(t, err)
+	path := decad.PoseSegment{From: r3.Identity(), To: endPose, Duration: duration}
+	still := decad.RigidDriftSegment{From: r3.Identity(), Center: mass.Center.Value,
+		LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t), Duration: duration}
+	sweepRequest := decad.SweepRequest{ContactRequest: request, TimeResolution: units.Seconds(1e-9),
+		MaxPoseEvaluations: 128}
+	first, err := doc.SweepPair(t.Context(), driver, box, path, still, sweepRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepInitiallyTouching, first.Outcome)
+	require.NotNil(t, first.Event)
+	require.NotNil(t, first.Event.Manifold)
+	sweepRequest.StartPolicy = decad.ContinueSeparatingTouch
+	ideal, err := doc.SweepPair(t.Context(), driver, box, path, still, sweepRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepDepartedClear, ideal.Outcome)
+	rounded, err := doc.SweepPair(t.Context(), driver, box, path,
+		decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: duration}, sweepRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepDepartedClear, rounded.Outcome)
+	endpoint, err := doc.ContactPair(t.Context(), driver, box, endPose, r3.Identity(), request)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, endpoint.Relation)
+
+	w := kinematicBoxWorldWithLimit(t, doc, driver, box, false, 1)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: driver, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration(),
+		Drivers: []dynamics.KinematicDriver{{Body: driver, Path: path}}}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Empty(t, report.Events)
+	require.NotNil(t, report.Next)
+	finalDriver, ok := report.Next.Body(driver)
+	require.True(t, ok)
+	finalBox, ok := report.Next.Body(box)
+	require.True(t, ok)
+	require.Equal(t, r3.Vec{X: -5}, finalDriver.Pose.Translation())
+	require.Equal(t, zeroVelocity(), finalDriver.LinearVelocity)
+	require.Equal(t, r3.Vec{}, finalBox.Pose.Translation())
+	require.Equal(t, zeroVelocity(), finalBox.LinearVelocity)
+	traceStart, err := report.Trace.Sample(units.Seconds(0))
+	require.NoError(t, err)
+	traceEnd, err := report.Trace.Sample(duration)
+	require.NoError(t, err)
+	require.Equal(t, start, traceStart)
+	require.Equal(t, *report.Next, traceEnd)
+	require.Equal(t, []*decad.Body{driver, box}, doc.Bodies())
+	afterDriver, err := driver.Bounds()
+	require.NoError(t, err)
+	afterBox, err := box.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, beforeDriver, afterDriver)
+	require.Equal(t, beforeBox, afterBox)
+}
+
+func TestKinematicDriverDepartureSupportsReverseWorldOrder(t *testing.T) {
+	doc := decad.New()
+	box := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
+	driver := makeBox(t, doc, 10, 0, 20, 10, 0, 10)
+	w := kinematicBoxWorldWithLimit(t, doc, driver, box, true, 1)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: box, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: driver, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	endPose, err := r3.Translation(r3.Vec{X: 5})
+	require.NoError(t, err)
+	duration := units.Seconds(.125)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration(),
+		Drivers: []dynamics.KinematicDriver{{Body: driver,
+			Path: decad.PoseSegment{From: r3.Identity(), To: endPose, Duration: duration}}}}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Empty(t, report.Events)
+	finalBox, ok := report.Next.Body(box)
+	require.True(t, ok)
+	require.Equal(t, r3.Vec{}, finalBox.Pose.Translation())
+	require.Equal(t, zeroVelocity(), finalBox.LinearVelocity)
+	finalDriver, ok := report.Next.Body(driver)
+	require.True(t, ok)
+	require.Equal(t, r3.Vec{X: 5}, finalDriver.Pose.Translation())
+	require.Equal(t, zeroVelocity(), finalDriver.LinearVelocity)
+	endpoint, err := doc.ContactPair(t.Context(), box, driver, finalBox.Pose, finalDriver.Pose,
+		decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+			NormalResolution: units.Radians(1e-6)})
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, endpoint.Relation)
+}
+
 func TestKinematicDriverRejectsInvalidPaths(t *testing.T) {
 	doc := decad.New()
 	driver := makeBox(t, doc, 0, 0, 10, 10, 0, 10)
