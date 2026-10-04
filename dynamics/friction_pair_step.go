@@ -11,8 +11,24 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
+// offcenterPairPatch selects a normal-impact patch whose four-point center
+// misses at least one mass center. The response still validates every witness.
+func offcenterPairPatch(event *decad.SweepEvent, a, b decad.MassProperties) bool {
+	if event == nil || event.Manifold == nil || len(event.Manifold.Points) != 4 {
+		return false
+	}
+	center := r3.Vec{}
+	for _, point := range event.Manifold.Points {
+		center = center.Add(point.OnB.Value)
+	}
+	center = center.Scale(.25)
+	return center.X != a.Center.Value.X || center.Y != a.Center.Value.Y ||
+		center.X != b.Center.Value.X || center.Y != b.Center.Value.Y
+}
+
 // stepInitialTwoDynamicFriction consumes one real initial face manifold and
-// certifies the post-impulse path for both dynamic bodies.
+// certifies the post-impulse path for both dynamic bodies. Zero friction also
+// admits an off-center normal impact whose response develops common spin.
 func (w *World) stepInitialTwoDynamicFriction(ctx context.Context, from, kicked State,
 	dt units.Value, first *decad.SweepReport) (*StepReport, error) {
 	if first.Event == nil || first.Event.Relation != decad.ContactTouching ||

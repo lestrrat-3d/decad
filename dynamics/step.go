@@ -423,6 +423,11 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		if rotating {
 			return undecided(w, "rotating initial contact needs a certified response track"), nil
 		}
+		if len(w.parts) == 2 && w.parts[0].definition.Role == Dynamic &&
+			w.parts[1].definition.Role == Dynamic && w.friction.upper.Sign() == 0 &&
+			offcenterPairPatch(first.Event, w.parts[0].mass, w.parts[1].mass) {
+			return w.stepInitialTwoDynamicFriction(ctx, from, kicked, dt, first)
+		}
 		if w.friction.lower.Sign() != 0 {
 			return w.stepInitialFriction(ctx, from, kicked, dt, first)
 		}

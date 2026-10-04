@@ -102,6 +102,16 @@ func certifyDynamicPairResponse(bodies [2]pairPatchBody, points [4]pairPatchPoin
 		if normal.Cmp(&maxNormal) > 0 {
 			maxNormal.Set(normal)
 		}
+		if mu.upper.Sign() == 0 {
+			if jx.Sign() != 0 || jy.Sign() != 0 {
+				return pairPatchResponse{}, false
+			}
+			response.Points = append(response.Points, frictionPointImpulse{
+				Normal:   units.KilogramMillimetersPerSecond(point.jn),
+				TangentX: units.KilogramMillimetersPerSecond(0),
+				TangentY: units.KilogramMillimetersPerSecond(0)})
+			continue
+		}
 		tangentError := new(big.Rat).Add(errorBound[0], errorBound[1])
 		stickResidual := new(big.Rat).Add(absRat(new(big.Rat).Set(velocity[0])),
 			absRat(new(big.Rat).Set(velocity[1])))

@@ -49,8 +49,8 @@ func solveTwoDynamicFrictionPatch(manifold *decad.ContactManifold, masses [2]dec
 	poses [2]r3.Transform, pre [2]QuantityVec, mu frictionCoefficient,
 	restitution units.Value, cfg StepConfig) (pairPatchResponse, bool) {
 	if manifold == nil || len(manifold.Points) != 4 || cfg.MaxIterations <= 0 ||
-		!validQuantity(mu.nominal, units.Dimensionless, true) || mu.lower == nil || mu.upper == nil ||
-		mu.lower.Sign() <= 0 || mu.upper.Cmp(mu.lower) < 0 ||
+		!validQuantity(mu.nominal, units.Dimensionless, false) || mu.lower == nil || mu.upper == nil ||
+		mu.lower.Sign() < 0 || mu.upper.Cmp(mu.lower) < 0 ||
 		!validQuantity(restitution, units.Dimensionless, false) || restitution.Base() > 1 {
 		return pairPatchResponse{}, false
 	}
@@ -76,7 +76,8 @@ func solveTwoDynamicFrictionPatch(manifold *decad.ContactManifold, masses [2]dec
 	}
 	if !finite(bodies[0].inverse, bodies[1].inverse) ||
 		bodies[0].inverse <= 0 || bodies[1].inverse <= 0 ||
-		pre[1].X.Base()-pre[0].X.Base() <= 0 ||
+		(mu.upper.Sign() > 0 && pre[1].X.Base()-pre[0].X.Base() <= 0) ||
+		(mu.upper.Sign() == 0 && pre[1].X.Base() != pre[0].X.Base()) ||
 		pre[1].Y.Base() != pre[0].Y.Base() ||
 		pre[1].Z.Base()-pre[0].Z.Base() >= 0 {
 		return pairPatchResponse{}, false
@@ -107,6 +108,35 @@ func solveTwoDynamicFrictionPatch(manifold *decad.ContactManifold, masses [2]dec
 		}
 	}
 	normal, tangentX, tangentY := r3.Vec{Z: 1}, r3.Vec{X: 1}, r3.Vec{Y: 1}
+	if mu.upper.Sign() == 0 {
+		// Equal point impulses preserve the complete four-point normal
+		// constraints only when the bounded response audit below proves them.
+		centroid := pairPatchPoint{}
+		for _, point := range points {
+			for i := range bodies {
+				centroid.arm[i] = centroid.arm[i].Add(point.arm[i].Scale(.25))
+			}
+		}
+		k := pairEffectiveMass(bodies, centroid, normal)
+		if !finite(k) || k <= 0 {
+			return pairPatchResponse{}, false
+		}
+		jn := (target - pairPointVelocity(bodies, centroid).Z) / k
+		if !finite(jn) || jn <= 0 {
+			return pairPatchResponse{}, false
+		}
+		for i := range points {
+			points[i].jn = jn / 4
+			pairApplyImpulse(&bodies, points[i], normal.Scale(points[i].jn))
+		}
+		if candidate, ok := commonPairSpinCandidate(bodies, cfg.AngularVelocityResidual.Base()); ok {
+			if response, valid := certifyDynamicPairResponse(candidate, points, mu, restitution,
+				cfg, 1); valid {
+				return response, true
+			}
+		}
+		return certifyDynamicPairResponse(bodies, points, mu, restitution, cfg, 1)
+	}
 	for iteration := 1; iteration <= cfg.MaxIterations; iteration++ {
 		for i := range points {
 			point := &points[i]
