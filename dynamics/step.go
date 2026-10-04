@@ -263,6 +263,11 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	if report.Next == nil {
 		return undecided(w, "advanced step has no next state"), nil
 	}
+	for _, event := range report.Events {
+		if reason := w.eventConservationFailure(event); reason != "" {
+			return undecided(w, reason), nil
+		}
+	}
 	conservation, ok := w.conservationReadings(from, kicked, *report.Next, report.Events,
 		input.Gravity, loads, dt)
 	if !ok {
