@@ -207,6 +207,73 @@ func TestSweepPairSourceSphereAndBox(t *testing.T) {
 	require.Equal(t, before, doc.Bodies())
 }
 
+func TestSweepPairSourceSpherePair(t *testing.T) {
+	doc := decad.New()
+	a, b := ballBody(t, doc, 5), ballBody(t, doc, 5)
+	before := doc.Bodies()
+	approachA := sweepDrift(r3.Vec{X: 50}, 0.2)
+	approachB := sweepDrift(r3.Vec{X: -50}, 0.2)
+	approachA.From = contactPose(t, r3.Vec{X: -10})
+	approachB.From = contactPose(t, r3.Vec{X: 10})
+	report, err := doc.SweepPair(t.Context(), a, b, approachA, approachB, sweepRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, report.Outcome, "cause=%v", report.Cause)
+	require.NotNil(t, report.Event)
+	require.NotNil(t, report.Event.Manifold)
+	require.Len(t, report.Event.Manifold.Points, 1)
+	require.Equal(t, r3.Vec{X: 1}, report.Event.Manifold.Points[0].Normal.Value)
+	require.Less(t, report.Bracket.From.Elapsed.Value.Base(), 0.1)
+	require.GreaterOrEqual(t, report.Bracket.To.Elapsed.Value.Base(), 0.1)
+	require.LessOrEqual(t, report.Bracket.To.Elapsed.Value.Base()-
+		report.Bracket.From.Elapsed.Value.Base(), 1e-9)
+	reversed, err := doc.SweepPair(t.Context(), b, a, approachB, approachA, sweepRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, reversed.Outcome)
+	require.Equal(t, r3.Vec{X: -1}, reversed.Event.Manifold.Points[0].Normal.Value)
+	passA, passB := approachA, approachB
+	passA.Duration, passB.Duration = units.Seconds(0.4), units.Seconds(0.4)
+	passThrough, err := doc.SweepPair(t.Context(), a, b, passA, passB, sweepRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, passThrough.Outcome, "cause=%v", passThrough.Cause)
+	require.InDelta(t, 0.1, passThrough.Bracket.To.Elapsed.Value.Base(), 1e-9)
+	poseA := decad.PoseSegment{From: approachA.From, To: contactPose(t, r3.Vec{}),
+		Duration: units.Seconds(0.2)}
+	poseB := decad.PoseSegment{From: approachB.From, To: contactPose(t, r3.Vec{}),
+		Duration: units.Seconds(0.2)}
+	posed, err := doc.SweepPair(t.Context(), a, b, poseA, poseB, sweepRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, posed.Outcome, "cause=%v", posed.Cause)
+	endpointA, endpointB := approachA, approachB
+	endpointA.Duration, endpointB.Duration = units.Seconds(0.1), units.Seconds(0.1)
+	endpoint, err := doc.SweepPair(t.Context(), a, b, endpointA, endpointB, sweepRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, endpoint.Outcome, "cause=%v", endpoint.Cause)
+	require.Equal(t, 1.0, endpoint.Bracket.To.Fraction.Base())
+	require.True(t, endpoint.BracketEndsAtDuration())
+	wideRequest := sweepRequest()
+	wideRequest.TimeResolution = units.Seconds(0.1)
+	wide, err := doc.SweepPair(t.Context(), a, b, endpointA, endpointB, wideRequest)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, wide.Outcome, "cause=%v", wide.Cause)
+	require.True(t, wide.BracketEndsAtDuration())
+	require.Greater(t, wide.Bracket.From.Fraction.Base(), 0.0)
+	departingA, departingB := sweepDrift(r3.Vec{X: -25}, 0.1), sweepDrift(r3.Vec{X: 25}, 0.1)
+	departingA.From = contactPose(t, r3.Vec{X: -5})
+	departingB.From = contactPose(t, r3.Vec{X: 5})
+	req := sweepRequest()
+	req.StartPolicy = decad.ContinueSeparatingTouch
+	departed, err := doc.SweepPair(t.Context(), a, b, departingA, departingB, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepDepartedClear, departed.Outcome, "cause=%v", departed.Cause)
+	lateral := approachB
+	lateral.LinearVelocity.Y = units.MillimetersPerSecond(1)
+	unsupported, err := doc.SweepPair(t.Context(), a, b, approachA, lateral, sweepRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepUndecided, unsupported.Outcome)
+	require.Equal(t, decad.SweepContactUnsupported, unsupported.Cause)
+	require.Equal(t, before, doc.Bodies())
+}
+
 func TestSweepPairSourceSphereTouchContinuation(t *testing.T) {
 	doc := decad.New()
 	floor := boxBodyAtZ(t, doc, -20, -20, 20, 20, -10, 10)

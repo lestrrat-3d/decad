@@ -79,7 +79,8 @@ type ContactReport struct {
 // their recorded placements. Bodies and the document are not changed.
 // Source rectangular prisms have manifold proofs at signed-axis poses and
 // relation proofs at other valid poses. Source semicircle spheres against
-// boxes also have relation and face-manifold proofs at signed-axis poses.
+// boxes or each other also have relation and face-manifold proofs at
+// signed-axis poses, when an isolated cardinal support gives a normal.
 // At identity query poses, the analytic clearance kernel can prove relations
 // for other solids without a contact manifold.
 // Both bodies must be non-nil, distinct, live members of d.
@@ -115,6 +116,14 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	report := &ContactReport{A: a, B: b, PoseA: poseA, PoseB: poseB, Request: req}
 	boxA, okA := sourceBoxAtPose(a, poseA)
 	boxB, okB := sourceBoxAtPose(b, poseB)
+	if !okA && !okB {
+		sphereA, sphereOKA := sourceSphereAtPose(a, poseA)
+		sphereB, sphereOKB := sourceSphereAtPose(b, poseB)
+		if sphereOKA && sphereOKB {
+			classifySourceSpherePair(report, sphereA, sphereB)
+			return report, nil
+		}
+	}
 	if okA && !okB {
 		if sphere, ok := sourceSphereAtPose(b, poseB); ok {
 			classifySourceSphereBox(report, sphere, boxA, false)

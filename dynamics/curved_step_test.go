@@ -128,3 +128,70 @@ func TestSphereReboundUsesProductionContactAndSweep(t *testing.T) {
 	require.True(t, ok)
 	require.InDelta(t, 50, postBall.LinearVelocity.Z.Base(), 1e-6)
 }
+
+func TestSourceSpherePairCenteredImpact(t *testing.T) {
+	doc := decad.New()
+	a, b := makeBall(t, doc), makeBall(t, doc)
+	mass := exactSphereMass()
+	material := dynamics.Material{Restitution: units.Scalar(0.5), Friction: units.Scalar(0)}
+	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{
+			{Body: a, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+			{Body: b, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+		},
+		Step: dynamics.StepConfig{
+			Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+				NormalResolution: units.Radians(1e-6)},
+			TimeResolution: units.Seconds(1e-9), ContactSlop: units.Millimeters(1e-6),
+			VelocityResidual:        units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+			PenetrationResidual:     units.Millimeters(1e-6),
+			ImpactSpeed:             units.MillimetersPerSecond(0),
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2,
+		},
+	})
+	require.NoError(t, err)
+	left, err := r3.Translation(r3.Vec{X: -10})
+	require.NoError(t, err)
+	right, err := r3.Translation(r3.Vec{X: 10})
+	require.NoError(t, err)
+	velocity := func(x float64) dynamics.QuantityVec {
+		return dynamics.QuantityVec{X: units.MillimetersPerSecond(x),
+			Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
+	}
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: a, Pose: left, LinearVelocity: velocity(50), AngularVelocity: zeroAngular(t)},
+		{Body: b, Pose: right, LinearVelocity: velocity(-50), AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.2))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, 75, report.Events[0].NormalImpulse.Base(), 1e-5)
+	finalA, ok := report.Next.Body(a)
+	require.True(t, ok)
+	finalB, ok := report.Next.Body(b)
+	require.True(t, ok)
+	require.InDelta(t, -25, finalA.LinearVelocity.X.Base(), 1e-6)
+	require.InDelta(t, 25, finalB.LinearVelocity.X.Base(), 1e-6)
+	require.InDelta(t, -7.5, finalA.Pose.Translation().X, 2e-6)
+	require.InDelta(t, 7.5, finalB.Pose.Translation().X, 2e-6)
+	require.NotNil(t, report.Conservation)
+	require.InDelta(t, 0, report.Conservation.Input.LinearMomentum.Value.X.Base(), 1e-9)
+	require.InDelta(t, 0, report.Conservation.Completion.LinearMomentum.Value.X.Base(), 1e-6)
+	require.InDelta(t, 2500, report.Conservation.Input.KineticEnergy.Value.Base(), 1e-6)
+	require.InDelta(t, 625, report.Conservation.Completion.KineticEnergy.Value.Base(), 1e-4)
+	require.Zero(t, report.Conservation.ContactImpulse.Value.X.Base())
+	endpoint, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.1))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, endpoint.Status, "%+v", endpoint.Diagnostics)
+	require.Len(t, endpoint.Events, 1)
+	endpointA, ok := endpoint.Next.Body(a)
+	require.True(t, ok)
+	endpointB, ok := endpoint.Next.Body(b)
+	require.True(t, ok)
+	require.InDelta(t, -5, endpointA.Pose.Translation().X, 2e-6)
+	require.InDelta(t, 5, endpointB.Pose.Translation().X, 2e-6)
+}

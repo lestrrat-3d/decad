@@ -23,7 +23,9 @@ Separated source boxes can rotate through a certified clear drift and advance
 again from the returned spinning state.
 The source-sphere face corridor carries a real sphere-to-box point manifold
 through an affine first-impact sweep and a centered fixed-floor rebound with
-supplied sphere mass. Other curved contact families still lack source
+supplied sphere mass. Two source spheres also have a cardinal point manifold,
+an axial affine first-impact sweep, and a centered dynamic-pair rebound.
+Other curved contact families still lack source
 witnesses and continuous proofs.
 The first separated edge exit records a zero-impulse contact transition and
 advances through a certified clear remainder.

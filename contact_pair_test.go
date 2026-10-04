@@ -121,6 +121,58 @@ func TestContactPairSourceSphereAndBox(t *testing.T) {
 	require.Equal(t, before, doc.Bodies())
 }
 
+func TestContactPairSourceSpherePair(t *testing.T) {
+	doc := decad.New()
+	a, b := ballBody(t, doc, 5), ballBody(t, doc, 5)
+	before := doc.Bodies()
+	for _, tc := range []struct {
+		x        float64
+		relation decad.ContactRelation
+		gap      float64
+		sep      float64
+	}{
+		{12, decad.ContactSeparated, 2, 0},
+		{10, decad.ContactTouching, 0, 0},
+		{9.5, decad.ContactOverlapping, 0, -0.5},
+	} {
+		pose := contactPose(t, r3.Vec{X: tc.x})
+		report, err := doc.ContactPair(t.Context(), a, b, r3.Identity(), pose, contactRequest())
+		require.NoError(t, err)
+		require.Equal(t, tc.relation, report.Relation, "x=%v, reason=%v", tc.x, report.Reason)
+		if tc.relation == decad.ContactSeparated {
+			require.NotNil(t, report.Gap)
+			require.InDelta(t, tc.gap, report.Gap.Value.Base(), 1e-12)
+			require.Nil(t, report.Manifold)
+			continue
+		}
+		require.NotNil(t, report.Manifold, "x=%v, reason=%v", tc.x, report.Reason)
+		require.Len(t, report.Manifold.Points, 1)
+		point := report.Manifold.Points[0]
+		require.Equal(t, r3.Vec{X: 1}, point.Normal.Value)
+		require.InDelta(t, tc.sep, point.Separation.Value.Base(), 1e-12)
+		require.Same(t, a.Faces()[0], point.FaceA)
+		require.Same(t, b.Faces()[0], point.FaceB)
+		require.Equal(t, r3.Vec{X: 5}, point.OnA.Value)
+		require.Equal(t, r3.Vec{X: tc.x - 5}, point.OnB.Value)
+		reversed, err := doc.ContactPair(t.Context(), b, a, pose, r3.Identity(), contactRequest())
+		require.NoError(t, err)
+		require.Equal(t, tc.relation, reversed.Relation)
+		require.Equal(t, r3.Vec{X: -1}, reversed.Manifold.Points[0].Normal.Value)
+		require.Equal(t, point.OnB.Value, reversed.Manifold.Points[0].OnA.Value)
+	}
+	corner, err := doc.ContactPair(t.Context(), a, b, r3.Identity(),
+		contactPose(t, r3.Vec{X: 6, Y: 8}), contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, corner.Relation)
+	require.Nil(t, corner.Manifold)
+	require.Equal(t, decad.ContactAmbiguousFeature, corner.Reason)
+	coincident, err := doc.ContactPair(t.Context(), a, b, r3.Identity(), r3.Identity(), contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactOverlapping, coincident.Relation)
+	require.Nil(t, coincident.Manifold)
+	require.Equal(t, before, doc.Bodies())
+}
+
 func TestContactPairAnalyticPrismGap(t *testing.T) {
 	doc := decad.New()
 	a := rodBody(t, doc, 0, 0, 2, 5)

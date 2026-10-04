@@ -23,6 +23,11 @@ kernel can certify a relation for other admitted solids without a contact
 manifold. Other curved and faceted witness and normal proofs remain design
 contracts.
 
+Two full source semicircle spheres receive the exact relation proof from their
+recorded centers and radii. A one-axis center offset with crossing sphere
+surfaces publishes a cardinal point manifold; a diagonal or coincident center
+offset keeps the relation and withholds the manifold.
+
 ## 1. Claims and entry point
 
 ```go
@@ -304,6 +309,21 @@ the opposed box face and spherical point. Shallow penetration also requires
 the sphere not to reach the opposite box face. An edge, corner, internal
 center, or wider patch keeps the proven relation but withholds the manifold.
 Reversing body order reverses the exact axis normal and witness fields.
+
+### 4.3 Two source semicircle spheres
+
+Admit each sphere through §4.2's source record and pose gates. Compare the
+exact squared distance between their centers with the square of the radius
+sum. A strict excess proves separation; equality proves touch; a deficit
+proves overlap. Enclose a separated gap by outward square-root conversion.
+Publish one point manifold only when the center difference has exactly one
+nonzero cardinal component and its absolute value exceeds the absolute
+radius difference. The latter gate excludes a sphere wholly inside the other.
+Both witnesses lie on the original spherical faces along the center axis.
+Their signed separation is center distance minus radius sum. A diagonal
+center line has no exact cardinal normal in this path, so it keeps its
+relation but has no manifold. Reversing body order reverses the normal and
+swaps witnesses.
 
 ## 5. Contact cases and ordering
 
