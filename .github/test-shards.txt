@@ -1034,6 +1034,10 @@
 4	0.00	TestContactFloorUsesTrueSectionBBox
 4	0.00	TestContactMemoPromotesDenseWithoutChangingEntries
 4	0.00	TestContactMemoRepeatsTheClassifier
+4	0.00	TestContactPairPlacedBodyAndInputGates
+4	0.00	TestContactPairShallowOverlapAndRefusals
+4	0.00	TestContactPairSignedAxisPose
+4	0.00	TestContactPairSourceBoxes
 4	0.00	TestConvexityCertificateChargesTheRecordWorkCounter
 4	0.00	TestConvexityCertificateSpendIncreases
 4	0.00	TestCoplanarRelationCancellationIsBounded
@@ -1267,6 +1271,8 @@
 4	0.00	TestLoopCoEdgesReturnImmutableView
 4	0.01	TestLoopSignedAreaMatchesFullIntegrator
 4	0.00	TestLoopSignedAreaPreservesBudgetAndErrors
+4	0.00	TestMassPropertiesRefusals
+4	0.00	TestMassPropertiesSourceBox
 4	0.00	TestMeasurement
 4	0.00	TestMidpointSplitCreatesAKnownZeroJoint
 4	0.00	TestMinRadiusPlainBlockNil
@@ -1612,6 +1618,9 @@
 4	0.00	TestSweepDenotationHalfTurnExcess
 4	0.00	TestSweepLineStagesTessellation
 4	0.00	TestSweepLineTiltedFrameCarriesEndpointGap
+4	0.00	TestSweepPairRotatingPathUndecided
+4	0.00	TestSweepPairTranslatedBoxesImpact
+4	0.00	TestSweepPairTwoMoversAndDeparture
 4	0.00	TestTessellateChainBuildsOneExactQuadPerWall
 4	0.00	TestTessellateChainReflectedPlacementFlipsWinding
 4	0.00	TestTessellateChainRejectsWronglyAttributedWalls

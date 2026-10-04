@@ -1,0 +1,90 @@
+# Collision and Rigid Dynamics Design
+
+This document is the system map and delivery order for collision-aware rigid
+motion. The first source-box contact, two-body sweep, mass, and vertical rebound
+slice are implemented. Later stages remain design contracts. Each companion
+document owns its detail.
+
+| Design | Ownership |
+|---|---|
+| [Contact geometry](contact-geometry-design.md) | `Document.ContactPair`, pair relation, and certified contact manifold. |
+| [Contact sweep](contact-sweep-design.md) | `Document.SweepPair`, two-body paths, continuous proof, and first-contact bracket. |
+| [Dynamic mass](dynamic-mass-design.md) | `Body.MassProperties`, bounded center and inertia, and mass admission. |
+| [Rigid dynamics](rigid-dynamics-design.md) | `dynamics.World`, state, stepping, response, and replay trace. |
+
+## 1. System boundary
+
+`decad` owns immutable solid geometry and the proof that a pair is separated,
+touching, or overlapping. It also owns a read-only sweep that finds the first
+certifiable contact interval for two moving bodies. The `dynamics` subpackage
+owns body roles, material parameters, loads, velocity changes, and the state
+produced by each step. It consumes `decad` pair reports and sweep certificates.
+The current `Document.VerifyMotion` remains a prescribed-motion verification
+API with no response calculation. A viewer such as `kinetograph` may replay a
+dynamics trace; it does not decide contact or change the solver result.
+
+The detailed designs define the report fields, input gates, units, refusal
+reasons, and numerical algorithms. If this system map omits or conflicts with a
+detailed rule, the owning design controls that rule.
+
+## 2. Shared rules
+
+- Queries and steps do not mutate a `Document`, `Body`, or evaluator payload.
+  A step returns a new state and a trace; the caller decides whether to retain
+  them.
+- Geometry certifies its claims. A numerical response may use a certified
+  manifold, but an approximate impulse cannot establish that contact occurred.
+  An unresolved pair stops a step with an explicit result and interval.
+- Clear, touching, and overlapping are distinct relations. Touching alone
+  does not prove an incoming impact. A resting or sliding pair needs its own
+  certified continuation across time.
+- Every dynamic body has a positive mass and invertible inertia with proved
+  bounds. `units.Value` carries physical scalar kinds; `decad.QuantityVec`
+  carries vectors whose components share a kind.
+- Time resolution, pose evaluation limits, and response iteration limits are
+  explicit. Running out of proof or work budget never silently means clear.
+- Physics admits proper rigid transforms. The first stage handles rigid
+  solids; joints, deformation, and fracture are outside this design.
+
+## 3. Required dependencies
+
+The version of `units` pinned by this repository lacks the Time, Velocity,
+and Acceleration kinds needed by the public step and sweep APIs. Update the
+pinned dependency before implementing those APIs. `r3` also needs a symmetric
+tensor with rotation and inversion support before implementing inertia-based
+angular response. The dynamics API is a subpackage of this module, so it does
+not need a separate module or a geometry dependency pointing back to it.
+
+## 4. First real integration slice
+
+Implement source-box contact and a two-body sweep, then pass their real
+reports into one dynamics step. The first fixture uses a fixed box with its
+top at `z=0` and a dynamic `10×10×10 mm` box starting at `z=[10,20] mm`.
+The dynamic box moves down at `100 mm/s`; restitution is `0.5`, gravity is
+zero, and the step lasts `0.2 s`. Contact occurs at `0.1 s`. The box leaves
+at `50 mm/s` upward and finishes with its bottom at `z=5 mm`. A fixture that
+constructs a manifold by hand cannot validate the geometry-to-solver boundary.
+
+The source-box proof must cover posed face contact, the immediate departure
+after rebound, and persistent planar contact for later resting and sliding
+fixtures. It must report when a feature transition ends its proof. The
+dynamic path uses linear center-of-mass travel and angular drift; endpoint
+screw interpolation is reserved for prescribed kinematic motion.
+
+## 5. Delivery order
+
+1. Add the required units and tensor operations, plus their focused tests.
+2. Complete exact source-box contact and sweep, then run the real rebound
+   fixture through `dynamics.Step` before expanding shape coverage.
+3. Add independent movers, kinematic paths, friction, resting contact, and
+   contact transitions. Keep every state transition behind a sweep or contact
+   certificate.
+4. Extend mass and contact proofs to supported curved and mesh payloads,
+   using each evaluator's existing bounds and refusal rules.
+5. Improve candidate filtering and work limits without changing certified
+   outcomes. Add replay checks against the same returned trace consumed by a
+   viewer.
+
+Each stage has focused local tests for the contracts it changes. The first
+end-to-end run must use the real producer and consumer before adding a wider
+test matrix or more payload kinds.

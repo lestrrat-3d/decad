@@ -1,0 +1,494 @@
+# Two-Body Contact Sweep Design
+
+This document specifies the `Document.SweepPair` contract. The first affine
+source-box slice is implemented; later paths remain planned.
+`docs/collision-dynamics-design.md` owns the package
+boundary and `docs/contact-geometry-design.md` owns relation and manifold
+proofs at one pose. This document owns the paths, continuous clear certificate,
+first-contact search, and sweep report. `docs/motion-check-design.md` supplies
+the existing one-mover proof pattern; its `VerifyMotion` API stays separate.
+
+Navigation only: paths and API → §1–2; pose accounting → §3; continuous bounds
+→ §4; search and report → §5–6; work and errors → §7; computed tests → §8.
+
+## 1. Claim and ownership
+
+`SweepPair` reads two live, sound solid bodies of one `Document`, each under its
+own prescribed path over one shared positive duration. It changes neither body
+nor document. It returns the earliest **certifiable** outcome:
+
+| Outcome | Claim |
+|---|---|
+| `SweepClear` | The bodies have strictly positive separation at every time in the closed step. |
+| `SweepDepartedClear` | The pair starts in certified touch, departs immediately, and has strictly positive separation at every later time in the step. |
+| `SweepPersistentTouch` | The pair stays in certified touch throughout the step, with a stable source feature set and a bounded manifold track. |
+| `SweepContactTransitionBracket` | The pair starts touching and a bracket encloses the first change in contact features, patch structure, or departure from touch. The preceding contact track is certified. |
+| `SweepImpactBracket` | The clear prefix may follow a certified departure from initial touch. The left pose is separated and the right pose certifies touch or overlap. Width is at most `TimeResolution`. |
+| `SweepInitiallyTouching` | Contact is certified at time zero. It says nothing about closing velocity or a later impact. |
+| `SweepInitiallyOverlapping` | Interior overlap is certified at time zero. |
+| `SweepUndecided` | The available proof cannot establish one of the above. The earliest unresolved interval and a structured reason are returned. |
+
+The pair order is the caller's `(a, b)` order. Normal directions in any contact
+report therefore point from A toward B. A certified relation does not imply
+that the contact kernel supplied a manifold usable for dynamics. The solver
+must inspect manifold availability separately; it never steps through an
+undecided interval or treats a later overlap sample as the first impact.
+
+## 2. Paths and entry point
+
+```go
+func (d *Document) SweepPair(ctx context.Context, a, b *Body,
+    pathA, pathB PairPath, req SweepRequest) (*SweepReport, error)
+
+// PairPath is sealed. The permitted values are PoseSegment and
+// RigidDriftSegment. Each has one Duration of Kind Time.
+type PairPath interface {
+    pairPath()
+}
+
+type PoseSegment struct {
+    From, To r3.Transform // relative to the body's current placement
+    Duration units.Value // positive Time
+}
+
+// QuantityVec belongs to decad so geometry cannot import dynamics.
+// Every component has the stated kind; all constructors validate it.
+type QuantityVec struct { X, Y, Z units.Value }
+
+type RigidDriftSegment struct {
+    From            r3.Transform // relative start pose
+    Center          r3.Vec       // world pivot at the start, millimetres
+    LinearVelocity  QuantityVec  // Velocity, world coordinates
+    AngularVelocity QuantityVec  // Angle / Time, world coordinates
+    Duration        units.Value  // positive Time
+}
+
+type SweepRequest struct {
+    ContactRequest
+    TimeResolution    units.Value // positive Time, <= Duration
+    MaxPoseEvaluations uint64     // >= 2; counts distinct pair times
+    StartPolicy       SweepStartPolicy
+}
+
+type SweepStartPolicy int // StopAtInitialContact (zero),
+                          // ContinueSeparatingTouch, ContinueCertifiedTouch
+```
+
+Both paths must name equal physical durations, compared as exact rational base
+time values read from their units, without a tolerance. Their time fraction
+`s = t / Duration` is shared; their transforms are evaluated independently at
+that fraction. A stationary path is legal. `PoseSegment{From: p, To: p}` is
+constant, and a drift with both velocity vectors zero is constant. A mixed
+handedness screw segment is invalid; two proper endpoints or two reflected
+endpoints are legal. A drift composes proper rotations onto its `From`, so a
+reflected start stays reflected. Dynamics may impose a narrower no-reflection
+gate on its own state.
+
+For a `PoseSegment`, read `rel = From.Inverse().Then(To)` and `rel.Screw()` once.
+At `s` the float pose is `From.Then(screw.At(s))`. At exactly `s = 0` and `1`,
+return the stated `From` and `To`, as `Between.PoseAt` does. `From == To` skips
+decomposition and returns `From` at every sample. A nonidentical pair whose
+read screw has zero angle and slide is likewise constant; its endpoint
+deviation still covers the stated `To`. The path takes r3's deterministic
+shorter arc, including its half-turn axis choice. A caller needing a longer
+rotation splits it into segments.
+
+For `RigidDriftSegment`, let `u` be elapsed time. Its world-space step rotates
+by `|ω|u` about the line through `Center` along `ω`, then translates by `v u`.
+The resulting pose is `From.Then(step)`, where `r3.RotationAround`,
+`r3.Translation`, and `Transform.Then` construct the float step. A zero `ω`
+uses translation alone. `Center` is a path pivot, not an inferred mass property;
+the dynamics layer ensures it matches its bounded center-of-mass state. This
+path realizes `c(u) = Center + v u` and `R(u) = Rotation(ω, u) R(0)` for an
+isolated rigid drift. Replacing it with endpoint screw interpolation would
+move the center along a different path when `v` is perpendicular to `ω`.
+
+Both variants compose onto each body's existing placement in the same order
+as `Body.Placed`. No path is constructed by subtracting one body's pose from
+the other's at the endpoints. The relative transform can have nonlinear
+motion even when both individual paths are simple.
+
+## 3. Exact path and sampled pose
+
+Treat every finite input float as the exact rational it denotes, and interpret
+its unit through the exact or outward-enclosed unit factor. For a screw path,
+the ideal transform is the exact screw of the **read** `Axis`, `Point`, `Angle`,
+and `Slide`, composed after the exact `From`, exactly as motion-check §5.1
+defines. For a drift, the ideal transform uses the stated world pivot and the
+exact typed velocity components, with the axis normalization, angle, sine,
+cosine, and any unit factor enclosed outward. The ideal body at each `s` is
+that transform composed onto the exact read current placement.
+
+The evaluator sees a float `r3.Transform` instead. For body `i` and evaluated
+fraction `s`, calculate a point-displacement allowance `η_i(s)` between the
+float placed body and its ideal body. Use motion-check §5.1's matrix-difference
+times record-coordinate radius plus translation-difference form, with rational
+intervals for every operation. Both bodies contribute: the ideal pair gap
+interval is the float-pair gap interval widened by `η_A + η_B`. If either
+radius or deviation is unbounded, the pose cannot prove a gap or contact.
+The stated screw `To` gets the motion-check §5.1 endpoint allowance against
+both the ideal end and exact `To`; a drift has no separate `To` promise.
+
+A float-pose touching result is not automatically ideal touching. The
+contact kernel must supply a certificate that survives both pose deviations
+or evaluates the exact source geometry under the stated pose. Otherwise the
+ideal relation is `Undecided`. A float-pose overlap transfers when both pose
+deviations are zero, or when its bounded volume exceeds both bodies'
+boundary-sweep allowances, using motion-check §5.1's area scaling for each.
+A separate exact source-set proof may establish overlap at the ideal pose.
+An overlap known only by a witness cannot cross a nonzero pose deviation
+without such a proof.
+Contact geometry's exact-rational source-box path provides the first placed
+box touching certificate; ordinary `bodyGeom.delta` clearance §6 alone does
+not certify touch under a displaced transient placement.
+
+`ContactPair` speaks about the exact query pose named by its two read float
+transforms. `SweepPair` separately transfers its result to the ideal paths and
+records that adapted relation in `SweepEvent`. A manifold's point and normal
+bounds must include placement and path-pose deviation before the sweep can
+publish it. The adapted relation may be certified while those bounds are too
+wide for the requested `PointResolution` or `NormalResolution`. Never infer a
+contact normal from an overlap volume or from the direction between centers.
+
+## 4. Conservative continuous bounds
+
+### 4.1 Travel of each body
+
+Read each body's `Bounds()` at its current placement, inflate its coordinates
+by its outward `Bound`, and map all eight corners through the exact `From`.
+Their coordinate hull contains the ideal start body. For a screw with axis line
+through `Point` along `Axis`, let `ρ` be the maximum distance of those mapped
+corners from that line, rooted upward. Distance from a line is convex, so no
+interior point has a larger radius. Let `θ` and `d` be the read screw's angle
+and slide. Over a fraction span `h`, every point travels at most
+
+```text
+τ_screw(h) = h (ρ θ + |d|).
+```
+
+For a drift, let `ρ` be the maximum distance of the same mapped corners from
+`Center`; this is convex too. Let `V` and `Ω` be outward bounds on the norms
+of the exact world linear and angular velocity vectors in mm/s and rad/s.
+Over elapsed span `q`, every point travels at most
+
+```text
+τ_drift(q) = q (V + ρ Ω).
+```
+
+The same radius works throughout each path: screw motion preserves distance
+to its axis; drift rotation preserves distance to its moving center, and the
+center's translation is charged separately. Reflections in `From` do not alter
+either argument. A stationary path has zero travel. Roots, products,
+trigonometric factors, and final travel are rounded outward, never merely
+evaluated in float and compared as though exact. If a finite bound cannot be
+formed, the result is `SweepUndecided`, not a clear certificate.
+
+### 4.2 Swept boxes
+
+Build one conservative box per body from the exact `From`-mapped inflated
+corner hull, expanded on every axis by its full-path travel bound. Compare
+the two boxes using exact rational extremes. Strict separation on any axis
+proves `SweepClear` without pair-pose evaluations. Box faces merely meeting
+does not prove touch, clear, or overlap. Reading the original rest boxes and
+expanding only by `To - From` is invalid when either `From` moves a body before
+the path begins. A BVH or sweep-and-prune may discard only with this strict
+box certificate; it cannot change pair or sample order.
+
+### 4.3 Time interval certificate
+
+At interval ends `l, r`, obtain proven positive lower gap bounds `g_l, g_r`
+for the **ideal** placed pair. Let `T_A(l,r)` and `T_B(l,r)` be each body's
+travel bound over the interval, and `T = T_A + T_B`, rounded upward. For every
+time `u` inside, the true pair distance is at least each endpoint's lower gap
+minus the travel from that endpoint. The interval has strictly positive gap
+throughout when
+
+```text
+g_l + g_r > T.
+```
+
+The comparison uses exact rationals with outward bounds. A conservative lower
+bound on the interval gap is `(g_l + g_r - T)/2`, rounded downward, and may be
+loose. Neither two separated endpoint samples nor touching boxes prove this
+inequality. No tolerance turns a failed strict comparison into `Clear`.
+If an endpoint is touching, overlapping, or undecided, this positive-gap
+certificate cannot use it. A different continuous geometric proof may settle
+the interval only if the contact kernel explicitly supplies one.
+
+## 5. Earliest-event search
+
+Evaluate time zero first unless swept-box exclusion has already proven the
+whole path clear. Return `InitiallyOverlapping` on certified initial overlap.
+At initial touch, the default `StopAtInitialContact` returns
+`SweepInitiallyTouching`; the two continuation policies use §5.1. If the zero
+pose is undecided, return `SweepUndecided` with its cause. Evaluate the far
+endpoint next and maintain the samples in increasing dyadic fraction order.
+
+Process intervals from left to right. A certified clear interval extends the
+clear prefix. For the first interval not certified clear:
+
+1. If it has a separated left endpoint, a certified touching or overlapping
+   right endpoint, and exact duration no greater than `TimeResolution`, return
+   `SweepImpactBracket`. Its left endpoint is the end of the clear prefix.
+2. If its duration exceeds `TimeResolution`, evaluate its dyadic midpoint and
+   process the left half before the right half. This order searches for an
+   earlier hidden contact even when the old right endpoint overlaps.
+3. If its duration is at the floor, and no right endpoint certifies contact
+   or overlap, return `SweepUndecided` for that interval.
+
+Continue only when an interval has become certified clear. If every interval
+becomes clear, return `SweepClear`, or `SweepDepartedClear` after a certified
+departure from initial touch. A tangential graze may have no overlap
+sample. It either receives a certified touching sample or leaves an undecided
+floor interval; separated samples alone cannot turn it into `Clear`.
+If midpoint arithmetic cannot produce a distinct dyadic fraction, return
+`SweepUndecided` with `SweepFractionFloor`. The search never skips an earlier
+uncertified interval to publish a later collision as the first event.
+
+The procedure also handles two moving bodies that pass through one another
+and separate between initial and final samples: their combined travel keeps
+the interval undecided until a contact sample is found or the floor reports
+uncertainty. A contact's impulse decision remains with dynamics; the sweep
+proves only the geometric continuation of the stated paths.
+
+### 5.1 Continuation from initial touch
+
+`ContinueSeparatingTouch` and `ContinueCertifiedTouch` both require a new
+one-sided certificate after an initial `Touching` relation. A private
+departure proof supplies a duration `h > 0`, a proven positive gap lower bound
+at `h`, and a global lower-gap function `L(u) > 0` for every `0 < u <= h`.
+The proof must cover the **complete** initial contact set and all other body
+features. Positive normal velocity at one manifold point is insufficient.
+A general admissible form is `L(u) >= c*u - K*u*u` with proven `c > 0`,
+`K >= 0`, and `c - K*h > 0`; a kernel may instead provide a stronger direct
+bound. Select the largest representable dyadic fraction `h/Duration` within
+the proved horizon, and evaluate its endpoint. If no positive fraction can be
+represented, return `SweepUndecided` with `SweepFractionFloor`.
+
+The initial source-box path in contact-geometry §4.1 proves departure for
+certified pure affine translations. At time zero, an opposed support axis `n`
+has equal A maximum and B minimum. An outward lower bound `w > 0` on
+`(v_B - v_A)·n` proves the **whole-body** gap at least `w*u` for every `u > 0`.
+Either body may move. The exact source boxes and placed poses are required;
+transient AABBs with displacement bounds cannot establish the equality. A
+rotation, tangential speed on that axis, an uncertain equality, or `w <= 0`
+does not pass this source-box departure path.
+
+After departure, mark `(0,h]` as certified clear, put a separated sample at
+`h`, and run §5's earliest-first search on `[h, Duration]`. If no later
+contact appears, return `SweepDepartedClear`; if later contact appears, return
+`SweepImpactBracket` with the initial touch retained separately. The clear
+claim is open at zero: neither result calls the closed `[0, Duration]` path
+strictly separated. If the departure proof fails under
+`ContinueSeparatingTouch`, return `SweepUndecided` with
+`SweepDepartureUnproved`; never discard the initial touching pose and start
+searching at a positive time by sample choice alone.
+
+`ContinueCertifiedTouch` first accepts the same departure proof. Otherwise
+it asks for a complete persistent-contact track. A valid track proves that
+the pair stays `Touching`, with opposed material sides and no overlap, at
+every instant in its interval. It must provide a bounded manifold at every
+instant that the dynamics solver will use. If the track reaches `Duration`
+without changing source features or patch structure, return
+`SweepPersistentTouch`. A stationary resting stack is this case. If no such
+track can be proved, return `SweepUndecided` with
+`SweepContactTrackUnproved`. Tangential velocity alone is no proof of
+persistent contact.
+
+For two source-certified boxes under pure affine translation, contact-geometry
+§4.1 supplies exact axis intervals. Persistent face touch requires equality
+on one opposed support axis for the whole tracked interval and strictly
+positive projected overlaps on both other axes. Each projected overlap is
+the minimum of two affine upper endpoints minus the maximum of two affine
+lower endpoints. Enumerate exact rational roots where endpoint order changes
+or projected overlap reaches zero. Between consecutive roots, the active
+source features and clipped patch vertices follow fixed affine formulas;
+check their inequalities at both ends with outward bounds. This certifies
+the complete contact set and a manifold track for resting or planar sliding.
+An endpoint-order tie at time zero is resolved by its right-sided derivative
+when the patch and normal are continuous. It is recorded in the initial
+track, rather than returning a zero-time transition that a solver would hit
+again on every restart. If the right-sided contact set or normal cannot be
+certified, return `SweepContactTrackUnproved`.
+If an edge or vertex limit occurs, classify that exact limit as touching,
+then test the next open interval for persistent contact or positive gap.
+Do not infer separation merely because the face patch shrank to zero.
+
+Return `SweepContactTransitionBracket` at the **first** root that changes a
+source feature, clipped patch structure, or touching/separated relation.
+Bracket the exact rational root by adjacent representable dyadic times with
+width at most `TimeResolution`; a dyadic root may use a zero-width bracket.
+The report certifies the contact track before the bracket and the relation
+at both bracket samples. This is a solver restart point, not an impulse by
+itself. On edge exit, an exact equality at the root and a strict projected
+gap afterward prove the one-sided departure; a later recontact is searched
+on the remaining interval after the restart. If a root cannot be bracketed
+within the resolution or budget, return `SweepUndecided` with the earliest
+unresolved interval. Curved, rotating, or non-box contact may remain
+undecided until their own contact-track proof exists.
+
+The dynamics solver invokes `ContinueSeparatingTouch` after resolving an
+impact whose next drift begins at certified touch. It invokes
+`ContinueCertifiedTouch` for supported resting or sliding contacts. It may
+advance across a contact transition bracket only when its time-travel and
+state residual gates cover the bracket; otherwise the step is undecided.
+
+## 6. Report shape and ordering
+
+```go
+type SweepOutcome int // Clear, DepartedClear, PersistentTouch,
+                      // ContactTransitionBracket, ImpactBracket,
+                      // InitiallyTouching, InitiallyOverlapping, Undecided;
+                      // zero is invalid
+
+type SweepCause int // None, PoseRelation, MissingBound, TimeFloor,
+                    // FractionFloor, PoseBudget, ContactUnsupported,
+                    // DepartureUnproved, ContactTrackUnproved
+
+type SweepInstant struct {
+    Fraction units.Value // Dimensionless dyadic fraction, canonical time
+    Elapsed  Measurement // Time, outward bound on Fraction × Duration
+}
+
+type SweepInterval struct {
+    From, To SweepInstant
+}
+
+type SweepDeparture struct {
+    Until SweepInstant
+    GapAtUntil Measurement // strictly positive lower gap at Until
+}
+
+// SweepContactTrack holds an immutable private continuous certificate.
+// Accessors return copies; no exported field can change that certificate.
+type SweepContactTrack struct { /* private source snapshot and proof */ }
+
+func (t *SweepContactTrack) Start() SweepInstant
+func (t *SweepContactTrack) End() SweepInstant
+func (t *SweepContactTrack) Features() (ContactFeature, ContactFeature)
+func (t *SweepContactTrack) Normal() VecMeasurement
+func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, error)
+
+type SweepSample struct {
+    At           SweepInstant
+    PoseA        r3.Transform
+    PoseB        r3.Transform
+    FloatContact *ContactReport // query at the two read float transforms
+    Ideal        SweepEvent     // relation transferred to the ideal paths
+}
+
+type SweepEvent struct {
+    At       SweepInstant
+    Relation ContactRelation
+    Gap      *Measurement // separated or certified touching only
+    Overlap  *Measurement // bounded ideal overlap, when proven
+    Manifold *ContactManifold
+    Reason   ContactReason // when relation or manifold is unavailable
+}
+
+type SweepReport struct {
+    A, B            *Body
+    PathA, PathB    PairPath
+    Request         SweepRequest
+    Outcome         SweepOutcome
+    Bracket         *SweepInterval // ImpactBracket or ContactTransitionBracket
+    Unresolved      *SweepInterval // only for Undecided
+    InitialEvent    *SweepEvent // certified touch/overlap at time zero
+    Event           *SweepEvent // later impact, initial event, or transition right sample
+    Departure       *SweepDeparture // only after one-sided proof
+    ContactTrack    *SweepContactTrack // complete certified touching prefix
+    Cause           SweepCause     // only for Undecided
+    Samples         []SweepSample  // increasing Fraction, no duplicate time
+    BoxExcluded     bool           // true only when both swept boxes prove clear
+    PoseEvaluations uint64
+}
+```
+
+`Fraction` and the input `Duration` define the exact search time; `Elapsed`
+is a bounded convenience reading for callers. Bracket width is checked from
+those exact fractions and the exact read duration, not by subtracting rounded
+`Elapsed.Value` fields. A solver uses the fractions and duration to make its
+own conservative time choice. `SweepSample.FloatContact` is non-nil for every
+evaluated pair pose, including an undecided one, and names the original bodies.
+Samples are sorted after refinement, independent of evaluation order. The
+bracket's right sample and `Event` are the same ideal-path finding. `InitialEvent`
+keeps the time-zero relation when continuation finds a later event. A
+`Departure` certifies positive gap on `(0, Until]`, not at time zero. A
+`ContactTrack` certifies touch from time zero through `End()`. It owns copies
+of the source geometry and proof, so changing fields in another report or
+retiring a body later cannot alter its result. `ManifoldAt` requires a
+Dimensionless fraction in `[Start().Fraction, End().Fraction]` and returns a
+fresh bounded manifold. A
+`ContactTransitionBracket` carries both `ContactTrack` and `Bracket`, and
+`Event` holds the right sample's new relation. `BoxExcluded`
+reports the whole-path shortcut; its `Samples` is empty and
+`PoseEvaluations` is zero.
+
+For an undecided pose at time zero, `Unresolved` is the zero-width interval at
+zero. For a missing continuous proof, it is the earliest floor interval. For
+budget exhaustion, it is the earliest not-yet-certified interval. The cause
+does not replace the contact kernel's structured diagnostic; `Event` is nil
+when no contact is proven. Repeated calls with identical inputs produce the
+same outcome, sample order, bracket, and diagnostic order. Any spatial index
+or parallel work must preserve that published order.
+
+## 7. Validation, cancellation, and cost
+
+Validate both bodies, both path variants, durations, request units, finite
+values, and positive limits before reading `ctx`. Reject identical body
+pointers, foreign or retired bodies, non-solid bodies, a zero/invalid
+transform, a nonpositive duration, unequal durations, mixed-handedness screw
+endpoints, a nonfinite pivot or velocity component, wrong quantity kinds, an
+invalid resolution, or `MaxPoseEvaluations < 2` with the matching existing
+sentinel (`ErrDegenerate`, `ErrForeignBody`, `ErrRetiredBody`, `ErrUnitKind`,
+`ErrNotFinite`, `ErrNegativeMagnitude`, or `ErrUnsupported`). A valid sound
+solid whose pair kernel lacks a proof returns `SweepUndecided`, not an input
+error. An internal invariant failure remains an error with no report.
+
+The dyadic grid depth is `ceil(log2(Duration / TimeResolution))`. Fully
+exploring it evaluates at most `2^depth + 1` distinct times, if that count is
+representable. `MaxPoseEvaluations` caps this work without silently relaxing
+`TimeResolution`. When the cap is reached, return `SweepUndecided` with
+`SweepPoseBudget` and the earliest unresolved interval. Reuse one contact
+result per pair time; use the existing bounded kernel work counter and
+`ctx` checks within each pose. A caller controls expensive kernel work with
+the context deadline, as interference §7.2 does. Do not claim that a pose
+budget caps each pose's geometric cost.
+
+After validation, check `ctx` before each pose and at each subdivision;
+pass it into the contact kernel. Cancellation returns `ctx.Err()` and a nil
+report, even if an earlier prefix was clear. A contact-kernel invariant error
+also returns no report. Never call public `Placed`, `PlacedCopy`, `Intersect`,
+or a commit path. Snapshot tests must show that document membership/order,
+body liveness, and next producer identity are unchanged after clear, impact,
+undecided, error, and cancellation results.
+
+## 8. Computed tests and first increment
+
+Use real decad bodies, real pose evaluation, and the real contact kernel.
+Assert computed locations, brackets, and bounds, not only enum values.
+
+| Fixture | Required assertion |
+|---|---|
+| Two 10 mm boxes: A moves `+100 mm/s` from `x=[0,10]`; B is fixed at `x=[20,30]`; duration `0.2 s` | First contact is `0.1 s`. At `0.001 s` resolution, the bracket encloses it and names the original bodies. |
+| Both boxes move: A as above, B starts at `x=[30,40]` and moves `-100 mm/s` | First contact is `0.1 s`. Dropping B's travel from the interval certificate must make the test fail. |
+| A and B both drift at `+100 mm/s` with a 10 mm initial gap | `SweepClear` holds despite both bodies moving. |
+| A box starts under `From=Translation(100,0,0)` and moves 30 mm toward a wall at `x=125` | Swept boxes cannot exclude the wall. A slab beside the original rest box at `x=[20,30]` is excluded. |
+| A thin blade rotates while a small pin moves across its path | Coarse separated samples yield `SweepUndecided`; a finer resolution finds a bracket. Neither path may be replaced by endpoint relative interpolation. |
+| A drift has `v=(10,0,0) mm/s`, `ω=(0,0,π) rad/s`, and center at the origin | At `0.5 s`, its center is `(5,0,0)` and an initial point `(1,0,0)` reaches `(5,1,0)`. Endpoint screw interpolation disagrees. |
+| Initial cap touch, initial positive overlap, and a tangent graze | Touch and overlap return their distinct initial outcomes; the graze returns certified touch or `Undecided`, never `Clear` from samples. |
+| A 10 mm box touches a fixed floor, then moves upward at `50 mm/s` for `0.1 s` | Default mode returns `InitiallyTouching`. `ContinueSeparatingTouch` returns `DepartedClear`, with a positive final gap enclosing `5 mm`. |
+| The same touching boxes slide tangentially while their face patches overlap | `ContinueSeparatingTouch` returns `Undecided`; `ContinueCertifiedTouch` returns `PersistentTouch` until the first patch-feature change. |
+| A top box starts at `x=[0,10]` on an equal fixed box, then slides `+5 mm/s` for `3 s` | The right-sided initial patch is admitted. `ContactTransitionBracket` encloses the edge exit at `2 s`; no earlier transition occurs. |
+| A rotating body starts in touch without a one-sided contact-set proof | Both continuation policies return `Undecided`; positive velocity at one witness cannot certify the complete contact set. |
+| Equal stationary segments and two same-handed reflected segments | Stationary paths are valid; reflected paths are accepted by geometry when the kernel can prove their relation. A mixed-handedness screw path returns `ErrDegenerate`. |
+| Missing contact manifold at a proven overlap endpoint | The report keeps `ImpactBracket` and marks the event manifold unavailable; dynamics refuses to consume it. |
+| Tight pose budget and cancellation during pair evaluation | The budget returns `Undecided` with earliest unresolved interval; cancellation returns `ctx.Err()` and nil report. Both preserve document state. |
+
+The first end-to-end slice uses the first box fixture. It must send the
+production sweep's certified contact event and manifold to the production
+dynamics solver, then assert the computed post-impact position and velocity
+from `docs/rigid-dynamics-design.md`'s Verification section. A hand-written
+event fixture does not prove that
+boundary. Later tests cover angular drift, graze, reflected geometry, and
+kernel staging. Root-package test names update `.github/test-shards.txt`.
