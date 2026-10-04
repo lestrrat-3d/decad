@@ -80,8 +80,8 @@ unchanged within `AngularVelocityResidual`; the returned pose uses the
 certified rotating departure sweep. A rotating contact that lacks these
 proofs returns `Undecided`. Other rotating kinematic drivers, broader
 frictional stepping, stacks, broader contact-transition stepping, broader
-spin response, and rotational
-trace sampling remain design contracts.
+spin response, and interior trace sampling across contacts remain design
+contracts.
 
 Navigation only; the named sections own the rules:
 
