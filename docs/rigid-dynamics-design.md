@@ -15,9 +15,9 @@ impulses against its momentum and angular residuals, and requires ideal and
 rounded persistent-contact tracks for the full step. A second stationary step
 uses those same contact proofs. Tangential incoming motion, off-center contact,
 and a positive-restitution rebound return `Undecided` in this tilted-pose path.
-`Trace.Sample` returns the event and endpoint states for this path. An
-interior tilted persistent-contact sample returns `ErrUnsupported` until the
-oblique sweep supplies a replay proof.
+`Trace.Sample` also returns interior states for this path. The rounded
+source-box poses must stay within the cached oblique sweep's point resolution
+and keep its bounded face track; otherwise replay returns `ErrUnsupported`.
 A source semicircle sphere with supplied mass can rebound from a fixed source
 box on an isolated face-point contact when its affine sweep stays within that
 face corridor.
@@ -668,8 +668,11 @@ An event-free clear rotating source-box drift also replays its interior poses.
 The sweep retains its exact held source corners and path inputs. Each requested
 rounded pose must lie within `PointResolution` of the ideal path under the
 same staged source-corner transform used by contact geometry. The
-rounded pair's exact separating-axis gap must exceed that pose error. Rotating
-departure and impact slices still return `ErrUnsupported` at interior times.
+rounded pair's exact separating-axis gap must exceed that pose error.
+For a co-moving oriented source-box face track, replay checks the rounded
+four-point manifold against the producer's face identities and point and
+normal bounds. Rotating departure and impact slices still return
+`ErrUnsupported` at interior times.
 
 Publish kinetic energy, linear momentum, and angular momentum at the input,
 after the full-step force kick, and at completion as typed numeric readings;

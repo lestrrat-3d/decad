@@ -19,6 +19,7 @@ type sweepReplayProof struct {
 	sphereAxis, sphereSide int
 	sphereGap, sphereSlope dyadic
 	rotation               *[2]rotationalSweepPath
+	track                  *SweepContactTrack
 	request                ContactRequest
 	outcome                SweepOutcome
 	bracketLo              *big.Rat
@@ -35,9 +36,16 @@ func (p *sweepReplayProof) setBracket(left, right *big.Rat) {
 }
 
 // HasAffineReplayProof reports whether this sweep can certify rounded poses
-// along its affine source-box or source-sphere path.
+// along an affine source-box, source-sphere, or oriented face-track path.
 func (r *SweepReport) HasAffineReplayProof() bool {
-	return r != nil && r.replay != nil && r.replay.rotation == nil
+	if r == nil || r.replay == nil {
+		return false
+	}
+	if r.replay.rotation == nil {
+		return true
+	}
+	return r.replay.outcome == SweepPersistentTouch && r.replay.track != nil &&
+		r.replay.rotation[0].path.drift == nil && r.replay.rotation[1].path.drift == nil
 }
 
 // CertifiedPosesAt evaluates the recorded paths at elapsed time and checks
@@ -148,6 +156,12 @@ func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 	if !ok || new(big.Rat).Add(floatRat(deviation[0]), floatRat(deviation[1])).Cmp(resolution) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating replay pose exceeds point resolution", ErrUnsupported)
 	}
+	if r.replay.outcome == SweepPersistentTouch {
+		if !r.certifiedOrientedTouchAtFraction(f, box[0], box[1]) {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose loses the certified face track", ErrUnsupported)
+		}
+		return pose[0], pose[1], nil
+	}
 	relation, gap, normSquared := orientedBoxRelation(box[0], box[1])
 	if relation != ContactSeparated {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating replay pose is not separated", ErrUnsupported)
@@ -161,6 +175,35 @@ func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating replay gap does not exceed pose error", ErrUnsupported)
 	}
 	return pose[0], pose[1], nil
+}
+
+// The producer proves the ideal face track for every fraction. Replay checks
+// the rounded source boxes against that same face pair and its point bounds.
+func (r *SweepReport) certifiedOrientedTouchAtFraction(f *big.Rat, a, b orientedSourceBox) bool {
+	track := r.replay.track
+	if track == nil || track.orientedA == nil || track.orientedB == nil ||
+		f.Cmp(track.start) < 0 || f.Cmp(track.end) > 0 ||
+		r.replay.rotation[0].path.drift != nil || r.replay.rotation[1].path.drift != nil {
+		return false
+	}
+	report := &ContactReport{Request: r.replay.request}
+	report.Relation, _, _ = orientedBoxRelation(a, b)
+	if report.Relation == ContactTouching {
+		publishOrientedBoxPatch(report, a, b)
+	}
+	if report.Relation != ContactTouching || report.Manifold == nil || len(report.Manifold.Points) != 4 {
+		return false
+	}
+	for _, point := range report.Manifold.Points {
+		if point.FeatureA != track.features[0] || point.FeatureB != track.features[1] ||
+			point.Normal.Value != track.normal.Value ||
+			point.OnA.Bound.Base() > track.request.PointResolution.Base() ||
+			point.OnB.Bound.Base() > track.request.PointResolution.Base() ||
+			point.NormalAngle.Base() > track.request.NormalResolution.Base() {
+			return false
+		}
+	}
+	return true
 }
 
 func translatedReplayBox(box sourceBoxContactProof, from, at r3.Transform) (sourceBoxContactProof, bool) {
