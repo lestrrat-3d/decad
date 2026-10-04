@@ -79,6 +79,9 @@ func (r imageRender) write(ctx context.Context, chord units.Value, settings soli
 	if err != nil {
 		return err
 	}
+	for i := range scene.Models {
+		scene.Models[i].Edges = solidlens.Outline(edgeColor)
+	}
 	out := filepath.Join(root, filepath.FromSlash(r.rel))
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return fmt.Errorf("create image directory: %w", err)

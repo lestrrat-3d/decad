@@ -8,7 +8,7 @@ import (
 	"github.com/lestrrat-3d/kinetograph/render"
 )
 
-// edgeColor is the outline every clip part is drawn with.
+// edgeColor is the outline every gallery image and clip part is drawn with.
 var edgeColor = solidlens.RGB(0.08, 0.08, 0.12)
 
 // clipPartChord is the chord tolerance, in millimetres, of the flange and the
