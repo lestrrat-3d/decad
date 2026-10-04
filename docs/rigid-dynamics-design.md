@@ -3,8 +3,8 @@
 This document owns the `dynamics` subpackage's world, state, step, response,
 and trace contracts. `docs/collision-dynamics-design.md` owns the package
 boundary; `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md` own
-geometry results. Current code steps one translating pair with at least one
-dynamic body using density-derived or supplied mass. An axis-aligned
+geometry results. Current code steps one pair with at least one dynamic body
+using density-derived or supplied mass. An axis-aligned
 certified contact normal determines the response component; tangent velocity
 continues through an oblique impact. Centered impacts of two dynamic bodies
 apply equal and opposite impulses.
@@ -48,13 +48,15 @@ The floor stays at identity placement. The box can start from any pure
 translation whose real four-corner track passes the same bounds, including
 the endpoint of a previous step. Its mass center is translated with exact
 rational coordinate sums for the lever and torque certificates.
-Off-center impulses that require spin return `Undecided`. The step reports
-bounded translational kinetic energy, linear momentum, and orbital angular momentum for dynamic bodies
+Off-center fixed/dynamic impulses that require spin return `Undecided`.
+An initial two-dynamic face impact can publish bounded spin when its rotational
+departure sweep certifies the full remainder. The step reports bounded
+kinetic energy, linear momentum, and angular momentum for dynamic bodies
 at input, after the full-step force kick, and at completion. It also reports
 gravity, center-force, and fixed/kinematic contact impulses separately, plus
 the drift-only energy, linear momentum, and angular momentum changes.
 Torque loads, rotating kinematic drivers, broader frictional stepping, stacks,
-broader contact-transition stepping, spin response, and arbitrary
+broader contact-transition stepping, broader spin response, and arbitrary
 trace sampling remain design contracts.
 
 Navigation only; the named sections own the rules:
@@ -180,11 +182,9 @@ even when the body coefficients differ. Other positive-friction body pairs
 return `ErrUnsupported` at `NewWorld` when the pair is not excluded.
 The fixed-body patch solver reads a floor-to-box witness in both orders. The
 two-dynamic solver applies equal and opposite impulses through both masses
-and inertias, then bounds the omitted angular response for each body. A
-nonzero outgoing spin requires a separately certified rotational remainder;
-this translation-only slice returns `Undecided` for either nonzero solved spin.
-Each event
-keeps its original world-order manifold. Its normal impulse is nonnegative,
+and inertias, then bounds each body's angular response. A nonzero outgoing
+spin requires a certified rotational remainder before the step publishes it.
+Each event keeps its original world-order manifold. Its normal impulse is nonnegative,
 and its tangent and point impulses describe the impulse on world-order B.
 
 ## Step input and configuration
@@ -447,7 +447,7 @@ checkpoints; an interior sample requires a separate rotational replay proof.
 An absent fraction-one sample, a nonpositive endpoint gap, or a trace path
 that differs from the swept path returns `Undecided` with no `Next`.
 
-The implemented translating-box slice publishes zero spin. It bounds the
+The fixed/dynamic translating-box slice publishes zero spin. It bounds the
 omitted angular speed from the real manifold's patch-center offset and point
 bounds, the mass-center bound, an impulse upper bound, and a certified lower
 inertia eigenvalue. It returns `Undecided` when that upper speed exceeds
