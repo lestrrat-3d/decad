@@ -15,7 +15,9 @@ persistent contact, and a stationary touching pair can advance without an
 impulse. These paths require full-span ideal and rounded contact
 tracks. Each dynamic body accepts at most one center force with zero torque;
 the mass interval must fit the kicked velocity within `VelocityResidual`.
-An initially touching pair with only tangent motion still returns `Undecided`.
+An initially touching pair with exactly zero relative normal speed can slide
+without an impulse when both full-span paths certify persistent contact. The
+step stops as `Undecided` at a contact-feature transition or edge exit.
 Off-center impulses that require spin return `Undecided`. Torque loads,
 kinematic drivers, friction, stacks, contact-transition stepping, external
 impulse reporting, and arbitrary trace sampling remain design contracts.
@@ -452,6 +454,14 @@ The remaining drift passes ideal and rounded `SweepPersistentTouch` checks.
 The stationary-touch fixture starts with the box already on the floor, uses
 zero gravity for `0.1 s`, and returns the same pose and velocity with no
 contact event or impulse. It also checks both full-span contact tracks.
+
+The frictionless-slide fixture starts the same `1 kg` box touching a wide
+fixed floor with `(50, 0, 0) mm/s` velocity and zero gravity. At `0.1 s`,
+it has translated `(5, 0, 0) mm` with unchanged velocity and no contact
+event or impulse. Real ideal and rounded sweeps each return a full-span
+`SweepPersistentTouch` track, and `ContactPair` confirms both endpoints.
+A narrower floor that changes the contact patch during the step returns
+`Undecided` with no next state.
 
 For the sliding-friction increment, put the same `1 kg` box
 on a fixed floor wide enough for a `5 mm` slide. With gravity

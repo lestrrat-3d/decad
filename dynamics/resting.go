@@ -17,9 +17,16 @@ func (w *World) stepStill(ctx context.Context, from, kicked State, dt units.Valu
 	if err != nil {
 		return nil, err
 	}
+	return w.stepNoImpulse(ctx, from, kicked, dt, ideal)
+}
+
+// stepNoImpulse accepts a full clear or persistent path without changing
+// velocity. Its caller can require persistent touch for a moving initial pair.
+func (w *World) stepNoImpulse(ctx context.Context, from, kicked State, dt units.Value,
+	ideal *decad.SweepReport) (*StepReport, error) {
 	end, err := driftState(kicked, dt.Base())
 	if err != nil {
-		return undecidedArithmetic(w, "non-finite stationary drift", err)
+		return undecidedArithmetic(w, "non-finite no-impulse drift", err)
 	}
 	actual, err := w.sweepPoses(ctx, kicked, end, dt, decad.ContinueCertifiedTouch)
 	if err != nil {
@@ -33,26 +40,26 @@ func (w *World) stepStill(ctx context.Context, from, kicked State, dt units.Valu
 	switch ideal.Outcome {
 	case decad.SweepClear:
 		if actual.Outcome != decad.SweepClear || finalContact.Relation != decad.ContactSeparated {
-			return undecided(w, "stationary clear path lacks a rounded clearance proof"), nil
+			return undecided(w, "clear path lacks a rounded clearance proof"), nil
 		}
 	case decad.SweepPersistentTouch:
 		if ideal.InitialEvent == nil || ideal.InitialEvent.Manifold == nil {
-			return undecided(w, "stationary contact lacks an initial manifold"), nil
+			return undecided(w, "persistent contact lacks an initial manifold"), nil
 		}
 		normal, separation, bound, ok := reducedContact(ideal.InitialEvent.Manifold, w.step.Contact)
 		if !ok || !finite(separation, bound) ||
 			math.Abs(separation)+bound > w.step.PenetrationResidual.Base() ||
 			!w.persistentTrackWithin(ideal, normal) || !w.persistentTrackWithin(actual, normal) ||
 			finalContact.Relation != decad.ContactTouching || finalContact.Manifold == nil {
-			return undecided(w, "stationary touch lacks a full bounded track"), nil
+			return undecided(w, "persistent touch lacks a full bounded track"), nil
 		}
 		finalNormal, finalSeparation, finalBound, valid := reducedContact(finalContact.Manifold, w.step.Contact)
 		if !valid || finalNormal != normal ||
 			math.Abs(finalSeparation)+finalBound > w.step.PenetrationResidual.Base() {
-			return undecided(w, "stationary endpoint exceeds penetration residual"), nil
+			return undecided(w, "persistent endpoint exceeds penetration residual"), nil
 		}
 	default:
-		return undecided(w, fmt.Sprintf("stationary sweep returned %v", ideal.Outcome)), nil
+		return undecided(w, fmt.Sprintf("no-impulse sweep returned %v", ideal.Outcome)), nil
 	}
 	return &StepReport{Status: Advanced, Next: &end,
 		Trace: Trace{start: from, end: end, duration: dt}}, nil
@@ -78,6 +85,16 @@ func (w *World) stepInitialTouch(ctx context.Context, from, kicked State, dt uni
 	preSpeed := [2]units.Value{
 		velocityComponent(kicked.entries[0].LinearVelocity, axis),
 		velocityComponent(kicked.entries[1].LinearVelocity, axis),
+	}
+	if exactBase(preSpeed[0]).Cmp(exactBase(preSpeed[1])) == 0 {
+		continuation, err := w.sweep(ctx, kicked, dt, decad.ContinueCertifiedTouch)
+		if err != nil {
+			return nil, err
+		}
+		if !w.persistentTrackWithin(continuation, normal) {
+			return undecided(w, fmt.Sprintf("initial slide returned %v", continuation.Outcome)), nil
+		}
+		return w.stepNoImpulse(ctx, from, kicked, dt, continuation)
 	}
 	closing := (preSpeed[1].Base() - preSpeed[0].Base()) * sign
 	if !finite(closing) || closing >= -w.step.VelocityResidual.Base() {
