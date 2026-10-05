@@ -1333,10 +1333,13 @@
 4	0.01	TestLoopSignedAreaMatchesFullIntegrator
 4	0.00	TestLoopSignedAreaPreservesBudgetAndErrors
 4	0.00	TestMassPropertiesCircularPrism
+4	0.00	TestMassPropertiesDisplacedLevelBox
 4	0.00	TestMassPropertiesRefusals
 4	0.00	TestMassPropertiesRevolvedCylinder
+4	0.00	TestMassPropertiesRotatedBox
 4	0.00	TestMassPropertiesSourceBox
 4	0.00	TestMassPropertiesSourceSphere
+4	0.00	TestMassPropertiesTiltedFrameBox
 4	0.00	TestMassPropertiesTrianglePrism
 4	0.00	TestMeasurement
 4	0.00	TestMidpointSplitCreatesAKnownZeroJoint
@@ -1554,6 +1557,8 @@
 4	0.00	TestRewriteLoopChargesEachWalkToBudget
 4	0.00	TestRigidRoundAllowEnclosesAPlacedCoordinate
 4	0.00	TestRigidRoundAllowIsAlwaysAFiniteBound
+4	0.00	TestRotatedPrismMassChargesDisplacement
+4	0.00	TestRotatedPrismMassMatchesCardinalPath
 4	0.00	TestRvLenUpperEnclosesTheExactNorm
 4	0.01	TestSTLPlate
 4	0.00	TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths

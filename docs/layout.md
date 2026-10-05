@@ -85,9 +85,9 @@ to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `moments.go` / `moments_validate.go` | The mass-property engine (evaluator §4): closed-form Green's-theorem boundary integrals for `Area`, `Centroid`, `SecondMoments`, per region. See `docs/spline-design.md` §5.2. |
-| `mass_properties.go` / `mass_properties_sphere.go` | Mass and inertia for prisms and source spheres. See `docs/dynamic-mass-design.md`. |
-| `mass_properties_revolved_cylinder.go` | Mass and inertia for full source cylinders made by revolving an axis-incident rectangle. See `docs/dynamic-mass-design.md`. |
-| `mass_properties_faceted.go` | Bounded mass and inertia for verified faceted Boolean solids. See `docs/dynamic-mass-design.md`. |
+| `mass_properties.go` / `mass_properties_rotated.go` | Prism mass and inertia. See `docs/dynamic-mass-design.md`. |
+| `mass_properties_sphere.go` / `mass_properties_revolved_cylinder.go` | Source sphere and revolved cylinder mass and inertia. See `docs/dynamic-mass-design.md`. |
+| `mass_properties_faceted.go` | Mass and inertia for verified faceted Booleans. See `docs/dynamic-mass-design.md`. |
 | `moments_trig.go` | `moments.go`'s certified sine/cosine primitive: `turnSinCosInterval` proves an enclosure of sin/cos of an exact rational turn without ever comparing against π. See this file's own doc comment. |
 | `bounded.go` | The bounded-scalar vocabulary and three-valued admission readers. Its rounding arithmetic lives in `internal/proof/`. See the file's doc comment. |
 | `rat_interval.go` | The `atan`/`atan2` and π enclosures, with adapters for the exact interval arithmetic in `internal/proof/`. See the file's doc comment. |

@@ -29,9 +29,10 @@ type InertiaReading struct {
 
 // MassProperties computes the properties of b for a stated positive, uniform
 // density. The density must have kind units.Density. The current evaluator
-// admits source prisms under axis-preserving rigid placements, full source
-// spheres under rigid placements, cardinal full source cylinders made by
-// revolving an axis-incident rectangle, and faceted Boolean solids with a
+// admits untapered solid prisms under any frame and rigid placement, including
+// those whose recorded section or levels carry a proven displacement, full
+// source spheres under rigid placements, cardinal full source cylinders made
+// by revolving an axis-incident rectangle, and faceted Boolean solids with a
 // certified occupied-volume bound.
 // It returns ErrUnsupported for other solids rather than estimating their inertia.
 // The receiver and context must not be nil.
@@ -73,17 +74,17 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		return facetedMassProperties(ctx, b, faceted, density)
 	}
 	pp, ok := b.payload.(prismPayload)
-	if !ok || pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
-		pp.surfaceResult ||
-		!cardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) {
+	if !ok || pp.surfaceResult {
 		return MassProperties{}, fmt.Errorf("%w: certified volume moments are unavailable for this solid", ErrUnsupported)
-	}
-	basis := pp.xform.Basis()
-	if !cardinalBasis(basis.EX, basis.EY, basis.EZ) {
-		return MassProperties{}, fmt.Errorf("%w: rotated box inertia is not yet certified", ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
 		return MassProperties{}, err
+	}
+	basis := pp.xform.Basis()
+	if pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
+		!cardinalBasis(pp.frame.U(), pp.frame.V(), pp.frame.N()) ||
+		!cardinalBasis(basis.EX, basis.EY, basis.EZ) {
+		return rotatedPrismMassProperties(ctx, pp, b.centroid, density)
 	}
 	if !rectangularProfile(pp.profile) {
 		return prismMassProperties(ctx, b, pp, density)
@@ -189,30 +190,14 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 
 // prismMassProperties integrates the evaluator's admitted section moments,
 // then its recorded axial interval. Every interval is rational, including the
-// enclosure of a curved section's published moments. The current orientation
-// gate admits exact signed-permutation axes, so no rotation coefficient can
-// silently lose a bound while mapping the local tensor to world axes.
+// enclosure of a curved section's published moments. It takes exact
+// signed-permutation axes and undisplaced records only, so mapping the local
+// tensor to world axes reorders and negates entries without new rounding;
+// every other prism takes rotatedPrismMassProperties.
 func prismMassProperties(ctx context.Context, b *Body, pp prismPayload, density units.Value) (MassProperties, error) {
-	ig, err := pp.profile.evaluatorIntegralsContext(ctx, momentSecondOrder, nil)
+	section, err := prismSectionMoments(ctx, pp)
 	if err != nil {
 		return MassProperties{}, err
-	}
-	section := [6]ratInterval{}
-	if !ig.exactDead && ig.exact.complete() {
-		for i, value := range ig.exact.fields() {
-			section[i] = pointInterval(value)
-		}
-	} else {
-		values := [6]boundedScalar{
-			{ig.area, ig.areaBound}, {ig.mu, ig.muBound}, {ig.mv, ig.mvBound},
-			{ig.muu, ig.muuBound}, {ig.muv, ig.muvBound}, {ig.mvv, ig.mvvBound},
-		}
-		for i, value := range values {
-			section[i], err = massMomentInterval(value)
-			if err != nil {
-				return MassProperties{}, err
-			}
-		}
 	}
 	a, mu, mv := section[0], section[1], section[2]
 	if a.lo.Sign() <= 0 {
