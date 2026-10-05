@@ -48,6 +48,12 @@ func (w *World) stepThreeAllDynamic(ctx context.Context, from State, input StepI
 			}
 		}
 	}
+	if report, handled, err := w.stepThreeDynamicSphereFriction(ctx, from, kicked, input, dt); handled || err != nil {
+		return report, err
+	}
+	if report, handled, err := w.stepThreeDynamicSphereClear(ctx, from, kicked, input, dt); handled || err != nil {
+		return report, err
+	}
 	report, handled, err := w.stepThreeSequential(ctx, from, kicked, input,
 		[2]*BodyLoad{}, dt, reference)
 	if handled || err != nil {

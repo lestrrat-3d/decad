@@ -57,8 +57,15 @@ each pair then needs a certified persistent or separating remainder. A source
 sphere can also touch two orthogonal fixed source-box faces while
 closing along both normals and slipping along their shared Y tangent. Exact
 mass and inertia give two coupled sticking friction impulses, and both
-rotating sphere-box proofs replay the persistent contacts. A source
-box can hit a fixed floor obliquely while retaining tangential velocity. A fixed floor and
+rotating sphere-box proofs replay the persistent contacts. Three equal
+dynamic source spheres can start with two exact orthogonal point contacts
+and a clear outer pair. A symmetric positive-friction sticking solve produces
+two coupled impulses; both active pairs certify rotating departure, and the
+outer pair certifies rotating clear motion. All three rounded pair
+certificates replay the returned state. A later all-clear step can continue
+all three spinning spheres when all three pair certificates replay. A
+source box can hit a fixed floor
+obliquely while retaining tangential velocity. A fixed floor and
 dynamic source box can complete an initial resting contact after a full-step
 gravity kick or a zero-restitution impact. A stationary touching pair also
 advances without an impulse. An initially touching box can slide tangentially
