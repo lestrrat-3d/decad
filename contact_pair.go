@@ -81,7 +81,8 @@ type ContactReport struct {
 // co-oriented oblique face touches. Opposed axis-normal oriented faces can
 // publish a common interior witness. Other valid poses have relation proofs.
 // Source semicircle spheres against boxes or each other also have relation
-// and point-manifold proofs at signed-axis poses. Sphere-pair center lines
+// and point-manifold proofs at signed-axis poses, or at proper rotating poses
+// when the sphere center is the query origin. Sphere-pair center lines
 // may be off-axis when their normal and witnesses meet the requested bounds.
 // A full source cylinder, extruded or revolved, can prove an axial gap and
 // disk-face contact against a containing box face.

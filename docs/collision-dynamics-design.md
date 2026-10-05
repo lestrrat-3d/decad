@@ -95,8 +95,13 @@ zero-slip box receives normal support with zero tangent impulse. `World.Step`
 also consumes an interior first-impact bracket for a centered translating
 source box above a fixed floor with zero restitution and positive friction.
 The corrected four-corner touch supplies a bounded normal and tangent response;
-ideal and rounded sweeps certify the remaining persistent contact. Every advanced
-step reports bounded dynamic-body kinetic energy, linear momentum, and angular
+ideal and rounded sweeps certify the remaining persistent contact.
+An initially touching source sphere with exact centered isotropic mass can
+receive a one-point Coulomb impulse from an identity-placed fixed box floor.
+The response publishes tangent impulse and Y spin, then a rotating sphere
+sweep certifies the full persistent point track and trace replay. A later
+step can apply the same response while the sphere is already spinning.
+Every advanced step reports bounded dynamic-body kinetic energy, linear momentum, and angular
 momentum at input, after the force kick, and at completion, plus gravity,
 center-force, torque, and fixed/kinematic contact impulses, plus bounded
 kinematic driver work.

@@ -3,8 +3,8 @@
 This document specifies the `Document.SweepPair` contract. Current affine
 source-box sweeps certify first impact, immediate departure, persistent face
 contact, and the first edge transition of a sliding patch. A source semicircle
-sphere against a source box certifies affine first impact and face-point
-departure or persistent touch while its projected radius remains strictly
+sphere against a source box certifies affine or centered rotating first impact
+and face-point departure or persistent touch while its projected radius remains strictly
 inside one box face. A sphere against an exactly orthogonal rotated source
 box also certifies a strict single-face affine clear span, first impact, or
 separating departure. A full source cylinder certifies a clear axial path,
@@ -312,6 +312,18 @@ bound by the exact pose difference. An initial touch with an increasing normal
 gap proves immediate departure. A zero normal gap and the same face corridor
 prove a full-span point track. A path leaving the corridor returns
 `SweepUndecided`; a center sample alone cannot certify the missing span.
+
+A `RigidDriftSegment` may rotate the sphere when its pivot equals the source
+sphere center, that center equals the query pose translation, and the other
+path is affine. Its angular velocity changes the
+sampled pose, but the occupied ball follows the exact affine center path from
+its linear velocity. Form the sampled proper rotation through `r3`, then set
+the center translation from that affine path so rotation rounding cannot turn
+an exact touch into a crossing. Use the same face-corridor, support-gap, and
+point-track proof as the translating sphere. Replay recomputes the rotating
+pose and checks its center against the cached affine path and point resolution.
+Refuse a different pivot, an unrepresentable center displacement, a rotating
+box, or a path outside the face corridor.
 
 For an exactly orthogonal rotated box, require the same exterior source face,
 strict projected disk margins, and opposite-face clearance at both affine

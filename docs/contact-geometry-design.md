@@ -364,7 +364,10 @@ Admit a full-revolution solid with one untrimmed spherical face only when its
 recorded section is one complete semicircular arc and its on-axis diameter.
 The arc's center and endpoints must lie exactly on an axis with exact cardinal
 direction; the two axial radii must match as rationals. Require zero section
-displacement and signed-permutation frame, placement, and query pose. A sphere
+displacement and signed-permutation frame and placement. A query pose with an
+arbitrary proper rotation is admitted when the placed sphere center is exactly
+the query origin; the occupied ball then depends only on the query translation.
+Other sphere query poses require a signed-permutation rotation. A sphere
 surface tag without this occupied-set record cannot enter this path.
 The exactly orthogonal rotated-box extension keeps the sphere pose gate and
 allows the source box's query pose through its exact read-corner proof.

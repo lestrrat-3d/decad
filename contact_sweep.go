@@ -16,7 +16,7 @@ var errSweepPoseBudget = errors.New("decad: sweep pose budget exhausted")
 
 // PairPath names one body's motion during a two-body sweep. Affine source-box,
 // source-sphere, and certified faceted-floor paths, co-translating oblique
-// source boxes, and rotating source-box rigid drifts can receive continuous
+// source boxes, and rotating source-box or centered-sphere rigid drifts can receive continuous
 // certificates; other valid paths report an undecided sweep.
 type PairPath interface{ pairPath() }
 
@@ -417,7 +417,7 @@ func exactnessFromBound(bound float64) Exactness {
 // duration. Continuous proofs cover affine source-box paths, one verified
 // faceted floor path, co-translating oblique source boxes, a source sphere in
 // an axis or orthogonal rotated box face corridor, an affine pair of source
-// spheres, axial source-cylinder face paths, rotating source-box rigid drifts,
+// spheres, axial source-cylinder face paths, rotating source-box and centered-sphere rigid drifts,
 // and admitted rotating PoseSegments.
 // Unsupported paths return SweepUndecided.
 // Both body pointers, both paths, and ctx must be non-nil.
@@ -471,6 +471,11 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 		return report, nil
 	}
 	if pa.drift != nil || pb.drift != nil || pa.screw != nil || pb.screw != nil {
+		if pa.screw == nil && pb.screw == nil {
+			if result, admitted, err := d.sweepRotatingSphereBox(ctx, a, b, pa, pb, req, resolution, report); admitted {
+				return result, err
+			}
+		}
 		return d.sweepRotatingPair(ctx, a, b, pa, pb, req, resolution, report)
 	}
 	boxA, okA := sourceBoxAtPose(a, pa.from)

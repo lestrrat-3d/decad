@@ -114,11 +114,17 @@ func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Tra
 	if r.replay.rotation != nil {
 		return r.certifiedRotationalPosesAtFraction(f)
 	}
-	poseA, err := r.replay.pa.poseAt(f)
+	poseAt := func(path affinePairPath) (r3.Transform, error) { return path.poseAt(f) }
+	if r.replay.sphere != nil {
+		poseAt = func(path affinePairPath) (r3.Transform, error) {
+			return sourceSpherePathPoseAt(path, f)
+		}
+	}
+	poseA, err := poseAt(r.replay.pa)
 	if err != nil {
 		return r3.Transform{}, r3.Transform{}, err
 	}
-	poseB, err := r.replay.pb.poseAt(f)
+	poseB, err := poseAt(r.replay.pb)
 	if err != nil {
 		return r3.Transform{}, r3.Transform{}, err
 	}
@@ -533,6 +539,24 @@ func translatedReplaySphere(sphere sourceSphereContactProof, from, at r3.Transfo
 	return sphere, true
 }
 
+func rotatingReplaySphere(sphere sourceSphereContactProof, path affinePairPath,
+	at r3.Transform) (sourceSphereContactProof, bool) {
+	if path.drift == nil {
+		return translatedReplaySphere(sphere, path.from, at)
+	}
+	if !at.IsValid() || at.IsReflection() || !path.from.IsValid() {
+		return sourceSphereContactProof{}, false
+	}
+	from := path.from.Translation()
+	if dyCmp(sphere.center[0], mustDyOf(from.X)) != 0 ||
+		dyCmp(sphere.center[1], mustDyOf(from.Y)) != 0 ||
+		dyCmp(sphere.center[2], mustDyOf(from.Z)) != 0 {
+		return sourceSphereContactProof{}, false
+	}
+	sphere.center = dyVec(at.Translation())
+	return sphere, true
+}
+
 // The sphere producer proves one face corridor and an affine support gap.
 // Replay checks the rounded placements against both claims at the requested
 // fraction, including fractions that are not dyadic.
@@ -547,7 +571,7 @@ func (r *SweepReport) certifiedSpherePosesAtFraction(f *big.Rat, poseA, poseB r3
 		spherePose, boxPose = poseA, poseB
 		box = p.boxB
 	}
-	sphere, okSphere := translatedReplaySphere(*p.sphere, spherePath.from, spherePose)
+	sphere, okSphere := rotatingReplaySphere(*p.sphere, spherePath, spherePose)
 	observedBox, okBox := translatedReplayBox(box, boxPath.from, boxPose)
 	if !okSphere || !okBox {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay pose is not an affine translation", ErrUnsupported)

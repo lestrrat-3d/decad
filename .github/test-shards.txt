@@ -1691,6 +1691,7 @@
 4	0.00	TestSweepPairOffCenterBoxImpactAtEndpoint
 4	0.01	TestSweepPairRealFacetedUnionClearAndImpact
 4	0.01	TestSweepPairRealFacetedUnionTouchContinuations
+4	0.00	TestSweepPairRefusesSeparatedOffOriginRotatingSphere
 4	0.00	TestSweepPairRotatingBoxFindsHiddenImpact
 4	0.00	TestSweepPairRotatingPathClear
 4	0.00	TestSweepPairRotatingPoseSegmentBracketsAxisFaceImpact
