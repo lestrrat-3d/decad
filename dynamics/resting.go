@@ -144,8 +144,8 @@ func (w *World) stepInitialTouch(ctx context.Context, from, kicked State, dt uni
 	}
 	impulse := -closing / denominator
 	postSpeed := [2]float64{
-		preSpeed[0].Base() - impulse*sign*inverseMass[0],
-		preSpeed[1].Base() + impulse*sign*inverseMass[1],
+		preSpeed[0].Base() - float64(impulse*sign*inverseMass[0]),
+		preSpeed[1].Base() + float64(impulse*sign*inverseMass[1]),
 	}
 	if w.pairs[0].restitution.Base() == 0 && w.bodies[0].definition.Role == Dynamic &&
 		w.bodies[1].definition.Role == Dynamic && w.pairs[0].friction.upper.Sign() == 0 &&
@@ -283,7 +283,7 @@ func (w *World) stepContactTransition(ctx context.Context, from, kicked State, d
 		fromFraction.Sign() <= 0 || toFraction.Cmp(exactBase(units.Scalar(1))) >= 0 {
 		return undecided(w, "transition bracket cannot make progress before the step end"), nil
 	}
-	chosen := dt.Base() * first.Bracket.To.Fraction.Base()
+	chosen := float64(dt.Base() * first.Bracket.To.Fraction.Base())
 	remaining := dt.Base() - chosen
 	if !finite(chosen, remaining) || chosen <= 0 || remaining <= 0 {
 		return undecided(w, "transition time leaves no representable clear remainder"), nil

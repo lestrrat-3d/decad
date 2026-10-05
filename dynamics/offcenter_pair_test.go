@@ -114,11 +114,19 @@ func TestOffcenterDynamicPairReboundsWithCertifiedSpin(t *testing.T) {
 	require.NoError(t, err)
 	fixedStart, err := fixedWorld.NewState(initial)
 	require.NoError(t, err)
-	refused, err := fixedWorld.Step(t.Context(), fixedStart,
+	fixedStep, err := fixedWorld.Step(t.Context(), fixedStart,
 		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.1))
 	require.NoError(t, err)
-	require.Equal(t, dynamics.Undecided, refused.Status)
-	require.Nil(t, refused.Next)
+	// With A fixed, B's mass center sits over the patch's x = 5 edge: the
+	// edge corners take the whole 1.5·100 kg·mm/s through it and B leaves at
+	// 50 mm/s without spin.
+	require.Equal(t, dynamics.Advanced, fixedStep.Status, "%+v", fixedStep.Diagnostics)
+	require.Len(t, fixedStep.Events, 1)
+	require.InDelta(t, 150, fixedStep.Events[0].NormalImpulse.Base(), 1e-6)
+	fixedB, ok := fixedStep.Next.Body(b)
+	require.True(t, ok)
+	require.InDelta(t, 50, fixedB.LinearVelocity.Z.Base(), 1e-6)
+	require.Equal(t, zeroAngular(t), fixedB.AngularVelocity)
 	reversed, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
 		Bodies: []dynamics.RigidBody{{Body: b, Role: dynamics.Dynamic, Density: &density, Material: material},
 			{Body: a, Role: dynamics.Dynamic, Density: &density, Material: material}}, Step: config})
@@ -128,6 +136,11 @@ func TestOffcenterDynamicPairReboundsWithCertifiedSpin(t *testing.T) {
 	reverseReport, err := reversed.Step(t.Context(), reverseStart,
 		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.1))
 	require.NoError(t, err)
-	require.Equal(t, dynamics.Undecided, reverseReport.Status)
-	require.Nil(t, reverseReport.Next)
+	// Reversed insertion order names the pair (b, a) and solves the same
+	// impact: 600/11 kg·mm/s, with a spinning at 90/11 rad/s.
+	require.Equal(t, dynamics.Advanced, reverseReport.Status, "%+v", reverseReport.Diagnostics)
+	require.Len(t, reverseReport.Events, 1)
+	require.Equal(t, dynamics.BodyPair{A: b, B: a}, reverseReport.Events[0].Pair)
+	require.InDelta(t, 600.0/11, reverseReport.Events[0].NormalImpulse.Base(), 1e-9)
+	require.InDelta(t, 90.0/11, reverseReport.Events[0].PostAngularVelocityB.Y.Base(), 1e-9)
 }

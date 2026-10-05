@@ -62,14 +62,14 @@ type sweepKey struct {
 // (docs/rigid-dynamics-design.md "Response").
 type warmIsland struct {
 	bodies  []int
-	pre     []BodyState    // island body order
-	drive   []*[3]*big.Rat // island body order; nil for a body without a driver velocity
-	pairs   []warmPair     // canonical order
-	lambda  []float64      // island point order
-	tangent [][2]float64   // island point order, in each point's tangent basis
-	current []nominalBody  // the proposal's final velocities, island body order
-	fixed   bool           // the last sweep changed no impulse
-	sweeps  int            // sweeps the cold solve ran
+	pre     []BodyState     // island body order
+	drive   []*driverMotion // island body order; nil for a body without a driver velocity
+	pairs   []warmPair      // canonical order
+	lambda  []float64       // island point order
+	tangent [][2]float64    // island point order, in each point's tangent basis
+	current []nominalBody   // the proposal's final velocities, island body order
+	fixed   bool            // the last sweep changed no impulse
+	sweeps  int             // sweeps the cold solve ran
 }
 
 // warmPair is one island pair's manifold as the proposal read it.
@@ -176,7 +176,7 @@ func (s *stepWork) sweepPair(ctx context.Context, key int, a, b decad.PairPath,
 
 // warmStart returns the cached island whose problem equals isl at pre with
 // drive exactly, or nil.
-func (s *stepWork) warmStart(isl island, pre State, drive map[int][3]*big.Rat) *warmIsland {
+func (s *stepWork) warmStart(isl island, pre State, drive map[int]driverMotion) *warmIsland {
 	if s.input == nil {
 		return nil
 	}
@@ -210,7 +210,7 @@ func (s *stepWork) cache(entries []BodyState) *contactCache {
 
 // newWarmIsland reads the problem of isl at pre with drive: its bodies,
 // their pre-solve entries and driver velocities, and every pair's manifold.
-func newWarmIsland(isl island, pre State, drive map[int][3]*big.Rat) *warmIsland {
+func newWarmIsland(isl island, pre State, drive map[int]driverMotion) *warmIsland {
 	out := &warmIsland{bodies: slices.Clone(isl.bodies)}
 	for _, index := range isl.bodies {
 		out.pre = append(out.pre, pre.entries[index])
@@ -219,9 +219,10 @@ func newWarmIsland(isl island, pre State, drive map[int][3]*big.Rat) *warmIsland
 			out.drive = append(out.drive, nil)
 			continue
 		}
-		var held [3]*big.Rat
-		for axis := range held {
-			held[axis] = new(big.Rat).Set(v[axis])
+		var held driverMotion
+		for axis := range 3 {
+			held.linear[axis] = new(big.Rat).Set(v.linear[axis])
+			held.angular[axis] = new(big.Rat).Set(v.angular[axis])
 		}
 		out.drive = append(out.drive, &held)
 	}
@@ -251,8 +252,8 @@ func (h *warmIsland) sameProblem(o *warmIsland) bool {
 		if v == nil {
 			continue
 		}
-		for axis := range v {
-			if v[axis].Cmp(u[axis]) != 0 {
+		for axis := range 3 {
+			if v.linear[axis].Cmp(u.linear[axis]) != 0 || v.angular[axis].Cmp(u.angular[axis]) != 0 {
 				return false
 			}
 		}

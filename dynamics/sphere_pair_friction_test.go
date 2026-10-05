@@ -245,9 +245,63 @@ func TestSpherePairInitialFrictionRefusesUnsupportedResponse(t *testing.T) {
 				require.Zero(t, endA.AngularVelocity.Z.Base())
 				return
 			}
+			if tc.name == "anisotropic inertia" {
+				// The island solves A's I_zz of 11 like any other inertia.
+				// The normal impulse is (1 + 0.5)·100/2 = 75 on 1 kg spheres.
+				// The contact sticks: 20 − Jt − 25·Jt/11 = Jt + 25·Jt/10, so
+				// Jt = 220/74.5, well inside the cone 0.5·75. A turns by
+				// −5·Jt/11 and B by −5·Jt/10 about z, and y momentum stays 20.
+				require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+				require.Len(t, report.Events, 1)
+				event := report.Events[0]
+				tangent := 220 / 74.5
+				require.InDelta(t, 75, event.NormalImpulse.Base(), 1e-9)
+				require.InDelta(t, tangent, event.TangentImpulse.Y.Base(), 1e-9)
+				endA, ok := report.Next.Body(a)
+				require.True(t, ok)
+				require.InDelta(t, -25, endA.LinearVelocity.X.Base(), 1e-9)
+				require.InDelta(t, 20-tangent, endA.LinearVelocity.Y.Base(), 1e-9)
+				require.InDelta(t, -5*tangent/11, endA.AngularVelocity.Z.Base(), 1e-9)
+				require.InDelta(t, -5*tangent/10, event.PostAngularVelocityB.Z.Base(), 1e-9)
+				require.InDelta(t, 25, event.PostVelocityB.X.Base(), 1e-9)
+				require.InDelta(t, tangent, event.PostVelocityB.Y.Base(), 1e-9)
+				return
+			}
+			if tc.name == "incoming spin" {
+				// A's incoming 1 rad/s about z adds 5 mm/s to its contact
+				// point's 20 mm/s slide. The normal impulse is 75 as above.
+				// The contact sticks: 25 − 3.5·Jt = 3.5·Jt, so Jt = 25/7, well
+				// inside the cone 0.5·75. A turns at 1 − Jt/2 and B at −Jt/2
+				// about z, and y momentum stays 20.
+				require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+				require.Len(t, report.Events, 1)
+				event := report.Events[0]
+				tangent := 25.0 / 7
+				require.InDelta(t, 75, event.NormalImpulse.Base(), 1e-9)
+				require.InDelta(t, tangent, event.TangentImpulse.Y.Base(), 1e-9)
+				endA, ok := report.Next.Body(a)
+				require.True(t, ok)
+				require.InDelta(t, -25, endA.LinearVelocity.X.Base(), 1e-9)
+				require.InDelta(t, 20-tangent, endA.LinearVelocity.Y.Base(), 1e-9)
+				require.InDelta(t, 1-tangent/2, endA.AngularVelocity.Z.Base(), 1e-9)
+				require.InDelta(t, -tangent/2, event.PostAngularVelocityB.Z.Base(), 1e-9)
+				require.InDelta(t, 25, event.PostVelocityB.X.Base(), 1e-9)
+				require.InDelta(t, tangent, event.PostVelocityB.Y.Base(), 1e-9)
+				return
+			}
 			require.Equal(t, dynamics.Undecided, report.Status, "%+v", report.Diagnostics)
 			require.Nil(t, report.Next)
-			require.Empty(t, report.Events)
+			if tc.name != "offset center" {
+				require.Empty(t, report.Events)
+				return
+			}
+			// §12: the initial impact is certified; the spinning departure that
+			// follows it has no certified sweep, so the prefix keeps the impact
+			// and stops at the step start.
+			require.Len(t, report.Events, 1)
+			require.Len(t, report.Diagnostics, 1)
+			require.Equal(t, dynamics.StepPairUndecided, report.Diagnostics[0].Code)
+			require.Equal(t, units.Seconds(0), report.Diagnostics[0].From)
 		})
 	}
 }
@@ -296,12 +350,19 @@ func TestSpherePairInteriorFrictionImpactReplaysBothSides(t *testing.T) {
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
 	require.Len(t, report.Events, 1)
 	event := report.Events[0]
-	require.Equal(t, .125, event.Time.Base())
-	require.InDelta(t, 60, event.NormalImpulse.Base(), 1e-12)
-	require.InDelta(t, 32.0/7, event.TangentImpulse.Y.Base(), 1e-12)
+	// The event lies at its bracket's right sample, at most one
+	// TimeResolution after the exact contact time 0.125 s (§5.1).
+	require.InDelta(t, .125, event.Time.Base(), config.TimeResolution.Base())
+	require.GreaterOrEqual(t, event.Time.Base(), .125)
+	// The impulses are read at the bracket's right sample, up to one
+	// TimeResolution after the exact contact, so they agree with the exact
+	// 60 and 32/7 within ImpulseResidual (docs/multibody-dynamics-design.md
+	// §14).
+	require.InDelta(t, 60, event.NormalImpulse.Base(), config.ImpulseResidual.Base())
+	require.InDelta(t, 32.0/7, event.TangentImpulse.Y.Base(), config.ImpulseResidual.Base())
 	require.Len(t, event.PointImpulses, 1)
 	require.NotNil(t, event.Solver)
-	for _, elapsed := range []units.Value{units.Seconds(.05), units.Seconds(.125), units.Seconds(.2)} {
+	for _, elapsed := range []units.Value{units.Seconds(.05), event.Time, units.Seconds(.2)} {
 		sample, sampleErr := report.Trace.Sample(elapsed)
 		require.NoError(t, sampleErr)
 		sa, ok := sample.Body(a)
@@ -310,8 +371,11 @@ func TestSpherePairInteriorFrictionImpactReplaysBothSides(t *testing.T) {
 		require.True(t, ok)
 		pair, pairErr := doc.ContactPair(t.Context(), a, b, sa.Pose, sb.Pose, config.Contact)
 		require.NoError(t, pairErr)
-		if elapsed.Base() == .125 {
-			require.Equal(t, decad.ContactTouching, pair.Relation)
+		if elapsed == event.Time {
+			// The event's post state is pushed just apart (§6.6): the
+			// spheres separate by no more than ContactSlop.
+			require.Equal(t, decad.ContactSeparated, pair.Relation)
+			require.LessOrEqual(t, pair.Gap.Value.Base()+pair.Gap.Bound.Base(), config.ContactSlop.Base())
 		} else {
 			require.Equal(t, decad.ContactSeparated, pair.Relation)
 		}
@@ -320,11 +384,15 @@ func TestSpherePairInteriorFrictionImpactReplaysBothSides(t *testing.T) {
 	require.True(t, ok)
 	endB, ok := report.Next.Body(b)
 	require.True(t, ok)
-	require.InDelta(t, -20, endA.LinearVelocity.X.Base(), 1e-12)
-	require.InDelta(t, 20, endB.LinearVelocity.X.Base(), 1e-12)
-	require.InDelta(t, -32.0/7, endA.LinearVelocity.Y.Base(), 1e-12)
-	require.InDelta(t, -192.0/7, endB.LinearVelocity.Y.Base(), 1e-12)
-	require.InDelta(t, -16.0/7, endA.AngularVelocity.Z.Base(), 1e-12)
-	require.InDelta(t, -16.0/7, endB.AngularVelocity.Z.Base(), 1e-12)
+	// The velocities follow from the bracket-right impulses, so they agree
+	// with the exact values within VelocityResidual and
+	// AngularVelocityResidual (§14).
+	velocity, spin := config.VelocityResidual.Base(), config.AngularVelocityResidual.Base()
+	require.InDelta(t, -20, endA.LinearVelocity.X.Base(), velocity)
+	require.InDelta(t, 20, endB.LinearVelocity.X.Base(), velocity)
+	require.InDelta(t, -32.0/7, endA.LinearVelocity.Y.Base(), velocity)
+	require.InDelta(t, -192.0/7, endB.LinearVelocity.Y.Base(), velocity)
+	require.InDelta(t, -16.0/7, endA.AngularVelocity.Z.Base(), spin)
+	require.InDelta(t, -16.0/7, endB.AngularVelocity.Z.Base(), spin)
 	require.NotNil(t, report.Conservation)
 }

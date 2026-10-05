@@ -1,6 +1,7 @@
 package dynamics_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -136,26 +137,59 @@ func TestThreeDynamicSimultaneousSphereFriction(t *testing.T) {
 	require.Empty(t, continued.Events)
 	_, err = continued.Trace.Sample(units.Seconds(.05))
 	require.NoError(t, err)
+	// Friction 0.05 cannot hold the sticking solution: both contacts slip on
+	// their cones. Each pair's normal law, 2N + μN = (1 + 0.5)·10, gives
+	// N = 15/2.05, and the friction is μN.
+	t.Run("cone", func(t *testing.T) {
+		config := worldConfig
+		config.Bodies = append([]dynamics.RigidBody(nil), worldConfig.Bodies...)
+		for i := range config.Bodies {
+			config.Bodies[i].Material.Friction = units.Scalar(.05)
+		}
+		otherWorld, worldErr := dynamics.NewWorld(t.Context(), doc, config)
+		require.NoError(t, worldErr)
+		otherState, stateErr := otherWorld.NewState(entries)
+		require.NoError(t, stateErr)
+		slipping, stepErr := otherWorld.Step(t.Context(), otherState,
+			dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+		require.NoError(t, stepErr)
+		require.Equal(t, dynamics.Advanced, slipping.Status, "%+v", slipping.Diagnostics)
+		require.Len(t, slipping.Events, 2)
+		normal := 15 / 2.05
+		for _, event := range slipping.Events {
+			require.InDelta(t, normal, event.NormalImpulse.Base(), 1e-9)
+			tangent := event.TangentImpulse
+			require.InDelta(t, .05*normal, math.Abs(tangent.X.Base())+math.Abs(tangent.Y.Base()), 1e-9)
+		}
+		slid, ok := slipping.Next.Body(a)
+		require.True(t, ok)
+		require.InDelta(t, 10-1.05*normal, slid.LinearVelocity.X.Base(), 1e-9)
+		require.InDelta(t, 10-1.05*normal, slid.LinearVelocity.Y.Base(), 1e-9)
+		require.InDelta(t, 0, slid.AngularVelocity.Z.Base(), 1e-9)
+	})
+	// Sticking answers of the general solve, checked by hand: each pair
+	// leaves at half its closing normal speed, both contact points stop
+	// sliding relative to each other, each friction lies inside its 0.1
+	// cone, and linear momentum is conserved. n and t are the normal and
+	// friction impulses of the (a, b) pair along X and Y, and of the (a, c)
+	// pair along Y and X; mc is c's mass.
+	type sticking struct{ n1, t1, n2, t2, mc float64 }
 	for _, tc := range []struct {
 		name   string
 		change func(*dynamics.WorldConfig, []dynamics.BodyState)
+		want   *sticking
 	}{
-		{"cone", func(config *dynamics.WorldConfig, _ []dynamics.BodyState) {
-			for i := range config.Bodies {
-				config.Bodies[i].Material.Friction = units.Scalar(.05)
-			}
-		}},
 		{"unequal-mass", func(config *dynamics.WorldConfig, _ []dynamics.BodyState) {
 			other := exactSphereMass()
 			other.Mass.Value = units.Kilograms(2)
 			config.Bodies[2].Supplied = &other
-		}},
+		}, &sticking{n1: 5525.0 / 762, t1: 25.0 / 127, n2: 3760.0 / 381, t2: 190.0 / 381, mc: 2}},
 		{"asymmetric-speed", func(_ *dynamics.WorldConfig, entries []dynamics.BodyState) {
 			entries[0].LinearVelocity.Y = units.MillimetersPerSecond(9)
-		}},
+		}, &sticking{n1: 4145.0 / 576, t1: 167.0 / 288, n2: 3721.0 / 576, t2: 175.0 / 288, mc: 1}},
 		{"event-limit", func(config *dynamics.WorldConfig, _ []dynamics.BodyState) {
 			config.Step.MaxEvents = 2
-		}},
+		}, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			config := worldConfig
@@ -169,9 +203,48 @@ func TestThreeDynamicSimultaneousSphereFriction(t *testing.T) {
 			refused, stepErr := otherWorld.Step(t.Context(), otherState,
 				dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
 			require.NoError(t, stepErr)
+			if want := tc.want; want != nil {
+				require.Equal(t, dynamics.Advanced, refused.Status, "%+v", refused.Diagnostics)
+				require.Len(t, refused.Events, 2)
+				require.InDelta(t, want.n1, refused.Events[0].NormalImpulse.Base(), 1e-9)
+				require.InDelta(t, want.t1, refused.Events[0].TangentImpulse.Y.Base(), 1e-9)
+				require.InDelta(t, want.n2, refused.Events[1].NormalImpulse.Base(), 1e-9)
+				require.InDelta(t, want.t2, refused.Events[1].TangentImpulse.X.Base(), 1e-9)
+				require.LessOrEqual(t, want.t1, .1*want.n1)
+				require.LessOrEqual(t, want.t2, .1*want.n2)
+				va := otherEntries[0].LinearVelocity
+				endA, _ := refused.Next.Body(a)
+				endB, _ := refused.Next.Body(b)
+				endC, _ := refused.Next.Body(c)
+				// Restitution 0.5 on each pair's closing normal speed.
+				require.InDelta(t, .5*va.X.Base(), endB.LinearVelocity.X.Base()-endA.LinearVelocity.X.Base(), 1e-9)
+				require.InDelta(t, .5*va.Y.Base(), endC.LinearVelocity.Y.Base()-endA.LinearVelocity.Y.Base(), 1e-9)
+				// Sticking: contact points 5 mm from each center move together.
+				spin := func(s dynamics.BodyState) float64 { return s.AngularVelocity.Z.Base() }
+				require.InDelta(t, endA.LinearVelocity.Y.Base()+5*spin(endA),
+					endB.LinearVelocity.Y.Base()-5*spin(endB), 1e-9)
+				require.InDelta(t, endA.LinearVelocity.X.Base()-5*spin(endA),
+					endC.LinearVelocity.X.Base()+5*spin(endC), 1e-9)
+				// Momentum.
+				require.InDelta(t, va.X.Base(), endA.LinearVelocity.X.Base()+endB.LinearVelocity.X.Base()+
+					want.mc*endC.LinearVelocity.X.Base(), 1e-9)
+				require.InDelta(t, va.Y.Base(), endA.LinearVelocity.Y.Base()+endB.LinearVelocity.Y.Base()+
+					want.mc*endC.LinearVelocity.Y.Base(), 1e-9)
+				return
+			}
 			require.Equal(t, dynamics.Undecided, refused.Status)
 			require.Nil(t, refused.Next)
-			require.Empty(t, refused.Events)
+			if tc.name != "event-limit" {
+				require.Empty(t, refused.Events)
+				return
+			}
+			// §12: the island's two events at the step start reach
+			// MaxEvents 2 with time remaining; the prefix keeps them.
+			require.Len(t, refused.Events, 2)
+			require.Len(t, refused.Diagnostics, 1)
+			require.Equal(t, dynamics.StepEventBudget, refused.Diagnostics[0].Code)
+			require.Equal(t, units.Scalar(2), refused.Diagnostics[0].Limit)
+			require.Equal(t, units.Seconds(0), refused.Diagnostics[0].From)
 		})
 	}
 	t.Run("equal-mass-scale", func(t *testing.T) {
@@ -195,7 +268,10 @@ func TestThreeDynamicSimultaneousSphereFriction(t *testing.T) {
 		require.Equal(t, dynamics.Advanced, resolved.Status, "%+v", resolved.Diagnostics)
 		require.InDelta(t, 14.375, resolved.Events[0].NormalImpulse.Base(), 1e-12)
 		require.InDelta(t, 1.25, resolved.Events[0].TangentImpulse.Y.Base(), 1e-12)
-		require.InDelta(t, 2.8125, resolved.Events[0].PostVelocityA.X.Base(), 1e-12)
+		// Doubling every mass and inertia doubles the impulses and leaves
+		// every velocity unchanged: A leaves at 10 − (14.375 + 1.25)/2 =
+		// 2.1875 mm/s, as at 1 kg. (2.8125 contradicted these impulses.)
+		require.InDelta(t, 2.1875, resolved.Events[0].PostVelocityA.X.Base(), 1e-12)
 		_, sampleErr := resolved.Trace.Sample(units.Seconds(.05))
 		require.NoError(t, sampleErr)
 	})

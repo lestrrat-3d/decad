@@ -21,8 +21,9 @@ import (
 type ivec = [3]proof.RatInterval
 
 // certBody is one island participant read as exact intervals. A Fixed
-// participant has zero velocity and no mass reading; a kinematic one moves at
-// its exact driver translation velocity before and after the event.
+// participant has zero velocity and no mass reading; a kinematic one moves
+// with its driver's exact velocity field (driverMotion) before and after the
+// event.
 type certBody struct {
 	index     int
 	dynamic   bool
@@ -266,14 +267,18 @@ func euclideanUpper(v ivec) *big.Rat {
 }
 
 // newCertBody reads one island participant at its event pose. A kinematic
-// participant reads its exact driver velocity from drive.
+// participant reads its driver's exact velocity field from drive: v about
+// the world origin, which is its center, and the angular part w, both
+// unchanged by the event.
 func (w *World) newCertBody(index int, entry BodyState, post BodyState,
-	drive map[int][3]*big.Rat) (certBody, bool) {
+	drive map[int]driverMotion) (certBody, bool) {
 	body := certBody{index: index, dynamic: w.bodies[index].definition.Role == Dynamic, pose: entry.Pose}
 	zero := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
 	body.v, body.w, body.vPost, body.wPost = zero, zero, zero, zero
-	if v, ok := drive[index]; ok && w.bodies[index].definition.Role == Kinematic {
-		body.kinematic, body.v, body.vPost = true, v, v
+	if motion, ok := drive[index]; ok && w.bodies[index].definition.Role == Kinematic {
+		body.kinematic = true
+		body.v, body.vPost, body.w, body.wPost = motion.linear, motion.linear, motion.angular, motion.angular
+		body.center = zeroIVec()
 	}
 	if !body.dynamic {
 		return body, true
@@ -390,10 +395,11 @@ func (b certBody) inertiaApply(x [3]*big.Rat) ivec {
 	return out
 }
 
-// pointVelocity encloses v + ω×r for a dynamic body slot; a kinematic body
-// translates at v and a Fixed body, whose v is zero, stands still.
+// pointVelocity encloses v + ω×r for a dynamic body slot (r from its mass
+// center) and for a kinematic one (r from the world origin, its driver's
+// field); a Fixed body, whose v is zero, stands still.
 func pointVelocity(body certBody, v, omega [3]*big.Rat, lever ivec) ivec {
-	if !body.dynamic {
+	if !body.dynamic && !body.kinematic {
 		return pointIVec(v)
 	}
 	return addIVec(pointIVec(v), proof.CrossInterval3(pointIVec(omega), lever))
@@ -416,10 +422,10 @@ func newCertPoint(pair, a, b int, point decad.ContactPoint, bodies []certBody,
 	}
 	p := certPoint{pair: pair, a: a, b: b, normal: normal, onA: onA, onB: onB, restitution: restitution}
 	p.rA, p.rB = zeroIVec(), zeroIVec()
-	if bodies[a].dynamic {
+	if bodies[a].dynamic || bodies[a].kinematic {
 		p.rA = subIVec(onA, bodies[a].center)
 	}
-	if bodies[b].dynamic {
+	if bodies[b].dynamic || bodies[b].kinematic {
 		p.rB = subIVec(onB, bodies[b].center)
 	}
 	return p, true
@@ -597,13 +603,19 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 		}
 		w.certifyFriction(&cert, p, bodies, impulseLimit, velocityLimit)
 		// Kinematic work: a driver on side A delivers J·V to the island, one
-		// on side B −J·V, with J = λ·n + λt the impulse on B; the energy gate
-		// admits its upper end.
+		// on side B −J·V, with J = λ·n + λt the impulse on B and V the
+		// driver's field at the contact point; the energy gate admits its
+		// upper end.
 		for side, slot := range [2]int{p.a, p.b} {
 			if !bodies[slot].kinematic {
 				continue
 			}
-			work := proof.DotInterval3(impulses[k], pointIVec(bodies[slot].v))
+			lever := p.rA
+			if side == 1 {
+				lever = p.rB
+			}
+			field := pointVelocity(bodies[slot], bodies[slot].v, bodies[slot].w, lever)
+			work := proof.DotInterval3(impulses[k], field)
 			if side == 1 {
 				work = proof.NegInterval(work)
 			}

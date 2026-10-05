@@ -288,61 +288,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	if w == nil || ctx == nil || from.world != w || !validQuantity(dt, units.Time, true) {
 		return nil, fmt.Errorf("%w: invalid context, world, state, or duration", ErrInvalidInput)
 	}
-	if w.three != nil {
-		report, err := w.stepThreeBodies(ctx, from, input, dt)
-		setDefaultEventSlices(report, dt)
-		return report, err
-	}
-	if len(w.bodies) != 2 {
-		return w.stepScheduled(ctx, from, input, dt)
-	}
-	if err := validateQuantityVec(input.Gravity, units.Acceleration); err != nil {
-		return nil, err
-	}
-	loads, err := w.validateLoads(input.Loads)
-	if err != nil {
-		return nil, err
-	}
-	driver, err := w.validateDriver(from, input.Drivers, dt)
-	if err != nil {
-		return nil, err
-	}
-	live := w.doc.Bodies()
-	for _, part := range w.bodies {
-		if !containsBody(live, part.definition.Body) {
-			return nil, fmt.Errorf("%w: world body was retired", ErrInvalidInput)
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	kicked, ok := w.kickByLoads(from, input.Gravity, loads[:], dt)
-	if !ok {
-		return undecided(w, "force kick or torque kick exceeds its velocity residual"), nil
-	}
-	report, err := w.stepKicked(ctx, from, kicked, dt, driver)
-	if report != nil {
-		report.Excluded = w.Excluded()
-		setDefaultEventSlices(report, dt)
-	}
-	if err != nil || report == nil || report.Status != Advanced {
-		return report, err
-	}
-	if report.Next == nil {
-		return undecided(w, "advanced step has no next state"), nil
-	}
-	for _, event := range report.Events {
-		if reason := w.eventConservationFailure(event); reason != "" {
-			return undecided(w, reason), nil
-		}
-	}
-	conservation, ok := w.conservationReadings(from, kicked, *report.Next, report.Trace, report.Events,
-		input.Gravity, loads[:], dt)
-	if !ok {
-		return undecided(w, "conservation readings cannot be represented with finite bounds"), nil
-	}
-	report.Conservation = &conservation
-	return report, nil
+	return w.stepScheduled(ctx, from, input, dt)
 }
 
 func setDefaultEventSlices(report *StepReport, dt units.Value) {
@@ -491,7 +437,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		len(first.Event.Manifold.Points) == 0 {
 		return undecided(w, "impact has no certified bracket and manifold"), nil
 	}
-	impactTime := dt.Base() * first.Bracket.To.Fraction.Base()
+	impactTime := float64(dt.Base() * first.Bracket.To.Fraction.Base())
 	if !finite(impactTime) || impactTime < 0 || impactTime > dt.Base() {
 		return undecided(w, "impact time is outside the step"), nil
 	}
@@ -561,7 +507,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		velocityComponent(kicked.entries[0].LinearVelocity, axis),
 		velocityComponent(kicked.entries[1].LinearVelocity, axis),
 	}
-	relativeSpeed := (preSpeed[1].Base() - preSpeed[0].Base()) * normalSign
+	relativeSpeed := float64((preSpeed[1].Base() - preSpeed[0].Base()) * normalSign)
 	if relativeSpeed >= -w.step.VelocityResidual.Base() {
 		return undecided(w, "impact is not closing"), nil
 	}
@@ -586,15 +532,15 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	effectiveCoefficient := units.Scalar(0)
 	if new(big.Rat).Neg(idealRelative).Cmp(idealThreshold) > 0 {
 		effectiveCoefficient = coefficient
-		target = -coefficient.Base() * relativeSpeed
+		target = float64(-coefficient.Base() * relativeSpeed)
 	}
 	impulse := (target - relativeSpeed) / denominator
 	if !finite(impulse) || impulse <= 0 {
 		return undecided(w, "impulse is not finite and positive"), nil
 	}
 	postSpeed := [2]float64{
-		preSpeed[0].Base() - impulse*normalSign*inverseMass[0],
-		preSpeed[1].Base() + impulse*normalSign*inverseMass[1],
+		preSpeed[0].Base() - float64(impulse*normalSign*inverseMass[0]),
+		preSpeed[1].Base() + float64(impulse*normalSign*inverseMass[1]),
 	}
 	// At zero restitution against a fixed body, the dynamic body's exact
 	// normal velocity equals the fixed body's velocity for every admitted

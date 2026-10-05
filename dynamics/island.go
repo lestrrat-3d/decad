@@ -67,7 +67,7 @@ type eventIslands struct {
 	sliceStart units.Value
 	sliceSpan  units.Value
 	gathered   []islandPair
-	drive      map[int][3]*big.Rat
+	drive      map[int]driverMotion
 	eventBase  int // events published earlier in the step
 	islandBase int // islands solved earlier in the step
 	work       *stepWork
@@ -110,7 +110,7 @@ func (w *World) manifoldWithin(manifold *decad.ContactManifold) bool {
 // its enclosed relative normal speed reaches down to VelocityResidual or
 // below. Only a pair whose every point certainly separates by more than that
 // stays out of the solve.
-func (w *World) pairActive(pair islandPair, state State, drive map[int][3]*big.Rat) (bool, bool) {
+func (w *World) pairActive(pair islandPair, state State, drive map[int]driverMotion) (bool, bool) {
 	a, okA := w.newCertBody(pair.a, state.entries[pair.a], state.entries[pair.a], drive)
 	b, okB := w.newCertBody(pair.b, state.entries[pair.b], state.entries[pair.b], drive)
 	if !okA || !okB {
@@ -221,7 +221,7 @@ func (w *World) islandBodies(isl island) []*decad.Body {
 // moved the body. The translations, and each moved body's summed allowance,
 // which also bounds a later push (correctedRelation), are returned by world
 // index.
-func (w *World) correctIsland(isl island, pre State, drive map[int][3]*big.Rat) (map[int]r3.Vec, map[int]float64,
+func (w *World) correctIsland(isl island, pre State, drive map[int]driverMotion) (map[int]r3.Vec, map[int]float64,
 	*StepDiagnostic) {
 	group := make(map[int]int, len(isl.dynamic))
 	for _, index := range isl.dynamic {
@@ -340,16 +340,14 @@ func (w *World) correctIsland(isl island, pre State, drive map[int][3]*big.Rat) 
 // closingSpeedUpper bounds from above the speed of every contact point of a
 // pair relative to the other body, from the pre-event velocities: the L1
 // norm of the linear difference plus each body's spin times its lever, both
-// L1 norms of an L2 quantity. A kinematic participant contributes its exact
-// translation velocity.
-func (w *World) closingSpeedUpper(pair islandPair, pre State, drive map[int][3]*big.Rat) float64 {
+// L1 norms of an L2 quantity. A kinematic participant contributes its
+// driver's field: the linear part at the world origin, and the angular part
+// times the lever from the world origin.
+func (w *World) closingSpeedUpper(pair islandPair, pre State, drive map[int]driverMotion) float64 {
 	velocity := func(index int) ([3]float64, [3]float64) {
-		if v, ok := drive[index]; ok {
-			var out [3]float64
-			for axis := range out {
-				out[axis], _ = v[axis].Float64()
-			}
-			return out, [3]float64{}
+		if motion, ok := drive[index]; ok {
+			v, omega := floatVec(motion.linear), floatVec(motion.angular)
+			return [3]float64{v.X, v.Y, v.Z}, [3]float64{omega.X, omega.Y, omega.Z}
 		}
 		if w.bodies[index].definition.Role != Dynamic {
 			return [3]float64{}, [3]float64{}
@@ -368,9 +366,15 @@ func (w *World) closingSpeedUpper(pair islandPair, pre State, drive map[int][3]*
 		if omega == ([3]float64{}) {
 			return 0
 		}
-		center := pre.entries[index].Pose.Apply(w.bodies[index].mass.Center.Value)
+		// A driver's field turns about the world origin; a dynamic body
+		// turns about its mass center.
+		center, centerBound := r3.Vec{}, 0.0
+		if w.bodies[index].definition.Role == Dynamic {
+			center = pre.entries[index].Pose.Apply(w.bodies[index].mass.Center.Value)
+			centerBound = 3 * w.bodies[index].mass.Center.Bound.Base()
+		}
 		lever := outwardSum(math.Abs(witness.Value.X-center.X), math.Abs(witness.Value.Y-center.Y),
-			math.Abs(witness.Value.Z-center.Z), 3*witness.Bound.Base(), 3*w.bodies[index].mass.Center.Bound.Base())
+			math.Abs(witness.Value.Z-center.Z), 3*witness.Bound.Base(), centerBound)
 		rate := outwardSum(math.Abs(omega[0]), math.Abs(omega[1]), math.Abs(omega[2]))
 		return math.Nextafter(math.Nextafter(lever*rate, math.Inf(1)), math.Inf(1))
 	}
@@ -393,8 +397,9 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 	out := &solvedEvent{post: in.pre.clone(), policies: map[int]decad.SweepStartPolicy{}, leave: map[int]struct{}{}}
 	for _, pair := range in.gathered {
 		if !w.drivenWithin(pair, in.drive) {
-			// A rotating driver's pair cannot be classified; it stays in the
-			// solve, which refuses it if an event reaches its island.
+			// A pair whose driver has no exact velocity field cannot be
+			// classified; it stays in the solve, which refuses it if an event
+			// reaches its island.
 			active = append(active, pair)
 			continue
 		}
@@ -435,7 +440,7 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 		for _, pair := range isl.pairs {
 			if !w.drivenWithin(pair, in.drive) {
 				return nil, []StepDiagnostic{scheduleDiagnostic(StepUnsupported, w.bodyPair(w.pairs[pair.key]),
-					"an island with a rotating kinematic participant has no solver yet")}, nil
+					"an island with a kinematic participant whose driver has no exact velocity field has no solver yet")}, nil
 			}
 		}
 		number := in.islandBase + len(solved)
@@ -627,9 +632,9 @@ func (w *World) continuationRelation(contact *decad.ContactReport) decad.Contact
 	return contact.Relation
 }
 
-// drivenWithin reports whether every kinematic body of a pair has the exact
-// translation velocity of its driver in drive.
-func (w *World) drivenWithin(pair islandPair, drive map[int][3]*big.Rat) bool {
+// drivenWithin reports whether every kinematic body of a pair has its
+// driver's exact velocity field in drive.
+func (w *World) drivenWithin(pair islandPair, drive map[int]driverMotion) bool {
 	for _, index := range [2]int{pair.a, pair.b} {
 		if _, ok := drive[index]; !ok && w.bodies[index].definition.Role == Kinematic {
 			return false
@@ -653,9 +658,25 @@ func (w *World) islandEvents(number int, isl island, solution islandSolution, in
 	for _, index := range isl.bodies {
 		report.Bodies = append(report.Bodies, w.bodies[index].definition.Body)
 	}
+	// A kinematic participant reports its driver's field at its pose's
+	// origin, and the field's angular velocity.
 	velocity := func(index int, published QuantityVec) QuantityVec {
-		if v, ok := in.drive[index]; ok {
-			return ratVelocity(v)
+		if motion, ok := in.drive[index]; ok {
+			at, ok := ratVec(pre.entries[index].Pose.Translation())
+			if ok {
+				return ratVelocity(motion.at(at))
+			}
+		}
+		return published
+	}
+	angular := func(index int, published QuantityVec) QuantityVec {
+		if motion, ok := in.drive[index]; ok && motion.rotates() {
+			var out QuantityVec
+			for axis, value := range motion.angular {
+				f, _ := value.Float64()
+				setVelocityComponent(&out, axis, units.RadiansPerSecond(f))
+			}
+			return out
 		}
 		return published
 	}
@@ -685,11 +706,12 @@ func (w *World) islandEvents(number int, isl island, solution islandSolution, in
 		sa, sb := slots[pair.a], slots[pair.b]
 		event.PreVelocityA = velocity(pair.a, pre.entries[pair.a].LinearVelocity)
 		event.PreVelocityB = velocity(pair.b, pre.entries[pair.b].LinearVelocity)
-		event.PreAngularVelocityA = pre.entries[pair.a].AngularVelocity
-		event.PreAngularVelocityB = pre.entries[pair.b].AngularVelocity
+		event.PreAngularVelocityA = angular(pair.a, pre.entries[pair.a].AngularVelocity)
+		event.PreAngularVelocityB = angular(pair.b, pre.entries[pair.b].AngularVelocity)
 		event.PostVelocityA = velocity(pair.a, solution.linear[sa])
 		event.PostVelocityB = velocity(pair.b, solution.linear[sb])
-		event.PostAngularVelocityA, event.PostAngularVelocityB = solution.angular[sa], solution.angular[sb]
+		event.PostAngularVelocityA = angular(pair.a, solution.angular[sa])
+		event.PostAngularVelocityB = angular(pair.b, solution.angular[sb])
 		event.PreVelocity, event.PostVelocity = event.PreVelocityB, event.PostVelocityB
 		if w.bodies[pair.b].definition.Role != Dynamic {
 			event.PreVelocity, event.PostVelocity = event.PreVelocityA, event.PostVelocityA
@@ -1115,7 +1137,7 @@ func (w *World) restInTouch(ctx context.Context, pre, post State, moves map[int]
 		return false, nil
 	}
 	for range restSearchLimit {
-		mid := overSide + (apartSide-overSide)/2
+		mid := overSide + float64((apartSide-overSide)/2)
 		if mid == overSide || mid == apartSide {
 			return false, nil
 		}
@@ -1253,7 +1275,9 @@ func (w *World) islandContactImpulse(events []ContactEvent) (MomentumReading, bo
 // islandKinematicWork sums the work kinematic drivers deliver at island
 // events: at each point, J·V for a driver on side A of the pair and −J·V on
 // side B, with J = λ·n + λt the impulse on B and V the driver's published
-// velocity. The normal ball widens the reading by λ·|V|₁·(bound + angle).
+// velocity at the point's witness: v + ω × (witness − pose origin). The
+// normal ball widens the reading by λ·|V|₁·(bound + angle), and the witness
+// ball by |J|₁·|ω|₁·3·(witness bound).
 func (w *World) islandKinematicWork(events []ContactEvent) (decad.Measurement, bool) {
 	value, low, high := new(big.Rat), new(big.Rat), new(big.Rat)
 	for _, event := range events {
@@ -1264,26 +1288,42 @@ func (w *World) islandKinematicWork(events []ContactEvent) (decad.Measurement, b
 			if w.bodies[w.index[body]].definition.Role != Kinematic {
 				continue
 			}
-			velocity := event.PreVelocityA
+			velocity, spin, pose := event.PreVelocityA, event.PreAngularVelocityA, event.PoseA
 			sign := big.NewRat(1, 1)
 			if side == 1 {
-				velocity, sign = event.PreVelocityB, big.NewRat(-1, 1)
+				velocity, spin, pose, sign = event.PreVelocityB, event.PreAngularVelocityB, event.PoseB, big.NewRat(-1, 1)
 			}
-			v, ok := quantityRats(velocity)
-			if !ok || len(event.PointImpulses) != len(event.Manifold.Points) {
+			origin, okOrigin := quantityRats(velocity)
+			omega, okOmega := quantityRats(spin)
+			at, okAt := ratVec(pose.Translation())
+			if !okOrigin || !okOmega || !okAt || len(event.PointImpulses) != len(event.Manifold.Points) {
 				return decad.Measurement{}, false
 			}
-			speed := new(big.Rat)
-			for _, component := range v {
-				speed.Add(speed, absRat(new(big.Rat).Set(component)))
+			rate := new(big.Rat)
+			for _, component := range omega {
+				rate.Add(rate, absRat(new(big.Rat).Set(component)))
 			}
 			for i, point := range event.Manifold.Points {
 				lambda := exactBase(event.PointImpulses[i].Normal)
 				bound, angle := exactBase(point.Normal.Bound), exactBase(point.NormalAngle)
 				normal, okNormal := ratVec(point.Normal.Value)
 				tangent, okTangent := quantityRats(event.PointImpulses[i].Tangent)
-				if lambda == nil || bound == nil || angle == nil || !okNormal || !okTangent {
+				witness := point.OnA
+				if side == 1 {
+					witness = point.OnB
+				}
+				x, okX := ratVec(witness.Value)
+				witnessBound := exactBase(witness.Bound)
+				if lambda == nil || bound == nil || angle == nil || !okNormal || !okTangent || !okX || witnessBound == nil {
 					return decad.Measurement{}, false
+				}
+				for axis := range x {
+					x[axis].Sub(x[axis], at[axis])
+				}
+				v := driverMotion{linear: origin, angular: omega}.at(x)
+				speed := new(big.Rat)
+				for _, component := range v {
+					speed.Add(speed, absRat(new(big.Rat).Set(component)))
 				}
 				work := new(big.Rat).Set(proof.DotInterval3(pointIVec(normal), pointIVec(v)).Lo)
 				work.Mul(work, lambda)
@@ -1291,6 +1331,13 @@ func (w *World) islandKinematicWork(events []ContactEvent) (decad.Measurement, b
 				work.Mul(work, sign)
 				width := new(big.Rat).Mul(absRat(new(big.Rat).Set(lambda)), speed)
 				width.Mul(width, new(big.Rat).Add(bound, angle))
+				impulse := absRat(new(big.Rat).Set(lambda))
+				for _, component := range tangent {
+					impulse.Add(impulse, absRat(new(big.Rat).Set(component)))
+				}
+				spread := new(big.Rat).Mul(impulse, rate)
+				spread.Mul(spread, new(big.Rat).Mul(big.NewRat(3, 1), witnessBound))
+				width.Add(width, spread)
 				value.Add(value, work)
 				low.Add(low, new(big.Rat).Sub(work, width))
 				high.Add(high, new(big.Rat).Add(work, width))

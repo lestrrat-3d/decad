@@ -123,11 +123,28 @@ func TestTwoDynamicBoxStackRestsThroughTwoGravitySteps(t *testing.T) {
 		}
 		lateralState, err := world.NewState(lateral)
 		require.NoError(t, err)
-		refused, err = world.Step(t.Context(), lateralState,
+		sliding, err := world.Step(t.Context(), lateralState,
 			dynamics.StepInput{Gravity: gravity}, units.Seconds(.05))
 		require.NoError(t, err)
-		require.Equal(t, dynamics.Undecided, refused.Status)
-		require.Nil(t, refused.Next)
+		// Without friction the lower box slides 0.5 mm under the upper one,
+		// which stays put; both supports deliver their weight kicks.
+		require.Equal(t, dynamics.Advanced, sliding.Status, "%+v", sliding.Diagnostics)
+		require.Len(t, sliding.Events, 2)
+		for _, event := range sliding.Events {
+			want := 50.0
+			if event.Pair.A == floor || event.Pair.B == floor {
+				want = 100
+			}
+			require.InDelta(t, want, event.NormalImpulse.Base(), 1e-6)
+		}
+		slid, ok := sliding.Next.Body(lower)
+		require.True(t, ok)
+		require.Equal(t, units.MillimetersPerSecond(10), slid.LinearVelocity.X)
+		require.InDelta(t, .5, slid.Pose.Translation().X, 1e-12)
+		stayed, ok := sliding.Next.Body(upper)
+		require.True(t, ok)
+		require.Equal(t, zeroVelocity(), stayed.LinearVelocity)
+		require.Equal(t, r3.Identity(), stayed.Pose)
 		bouncingBodies := append([]dynamics.RigidBody(nil), bodies...)
 		for i := range bouncingBodies {
 			bouncingBodies[i].Material.Restitution = units.Scalar(.5)
@@ -137,11 +154,27 @@ func TestTwoDynamicBoxStackRestsThroughTwoGravitySteps(t *testing.T) {
 		require.NoError(t, err)
 		bouncingState, err := bouncingWorld.NewState(state.Entries())
 		require.NoError(t, err)
-		refused, err = bouncingWorld.Step(t.Context(), bouncingState,
+		bounced, err := bouncingWorld.Step(t.Context(), bouncingState,
 			dynamics.StepInput{Gravity: gravity}, units.Seconds(.05))
 		require.NoError(t, err)
-		require.Equal(t, dynamics.Undecided, refused.Status)
-		require.Nil(t, refused.Next)
+		// The initial touches take restitution 0.5 (§6.5): the stack leaves
+		// the floor as one at 25 mm/s, the floor delivering 1.5·100 and the
+		// lower box 1.5·50 kg·mm/s.
+		require.Equal(t, dynamics.Advanced, bounced.Status, "%+v", bounced.Diagnostics)
+		require.Len(t, bounced.Events, 2)
+		for _, event := range bounced.Events {
+			want := 75.0
+			if event.Pair.A == floor || event.Pair.B == floor {
+				want = 150
+			}
+			require.InDelta(t, want, event.NormalImpulse.Base(), 1e-6)
+		}
+		for _, body := range []*decad.Body{lower, upper} {
+			entry, ok := bounced.Next.Body(body)
+			require.True(t, ok)
+			require.InDelta(t, 25, entry.LinearVelocity.Z.Base(), 1e-6)
+			require.InDelta(t, 1.25, entry.Pose.Translation().Z, 1e-6)
+		}
 	}
 	require.Equal(t, original, doc.Bodies())
 }

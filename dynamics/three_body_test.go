@@ -73,8 +73,12 @@ func TestThreeBodyImpactWithThirdClear(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, report.Status)
 	require.Nil(t, report.Next)
-	require.Equal(t, dynamics.BodyPair{A: floor, B: box}, report.Diagnostics[0].Pair)
-	require.Contains(t, report.Diagnostics[0].Reason, "force kick exceeds the velocity residual")
+	// §12: the unbounded kick refuses the whole step before any pair is
+	// read.
+	require.Len(t, report.Diagnostics, 1)
+	require.Equal(t, dynamics.StepKickUnbounded, report.Diagnostics[0].Code)
+	require.Equal(t, units.Seconds(0), report.Diagnostics[0].From)
+	require.Equal(t, units.Seconds(10), report.Diagnostics[0].To)
 }
 
 func TestThreeBodyOrdersContactsAndEnforcesEventLimit(t *testing.T) {
@@ -143,5 +147,10 @@ func TestThreeBodyOrdersContactsAndEnforcesEventLimit(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, report.Status)
 	require.Nil(t, report.Next)
-	require.Contains(t, report.Diagnostics[0].Reason, "maximum contact events reached")
+	// §12: the second event reaches MaxEvents 2 with time remaining.
+	require.Len(t, report.Events, 2)
+	require.Len(t, report.Diagnostics, 1)
+	require.Equal(t, dynamics.StepEventBudget, report.Diagnostics[0].Code)
+	require.Equal(t, units.Scalar(2), report.Diagnostics[0].Limit)
+	require.Equal(t, report.Events[1].Time, report.Diagnostics[0].From)
 }

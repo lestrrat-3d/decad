@@ -304,8 +304,19 @@ func TestTorqueDrivenRotatingBoxRestingContactNeedsTrack(t *testing.T) {
 		Loads: []dynamics.BodyLoad{{Body: box, Force: testForce(0, 0), Torque: testTorque(50)}}},
 		units.Seconds(0.2))
 	require.NoError(t, err)
-	require.Equal(t, dynamics.Undecided, report.Status)
-	require.Nil(t, report.Next)
+	// The Z torque kicks the 1 kg box to 50·0.2/(100/6) = 0.6 rad/s about the
+	// floor normal. It lands at 0.1 s; with no restitution and no friction
+	// the floor stops its fall with 100 kg·mm/s and leaves the spin, which
+	// moves no point along the normal, so the box rests spinning in place.
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, .1, report.Events[0].Time.Base(), 1e-9)
+	require.InDelta(t, 100, report.Events[0].NormalImpulse.Base(), 1e-6)
+	rested, ok := report.Next.Body(box)
+	require.True(t, ok)
+	require.Equal(t, zeroVelocity(), rested.LinearVelocity)
+	require.InDelta(t, .6, rested.AngularVelocity.Z.Base(), 1e-12)
+	require.InDelta(t, 0, rested.Pose.Translation().Z, 1e-6)
 }
 
 func TestTorqueDrivenRotatingImpactUsesCertifiedNonHalfPose(t *testing.T) {

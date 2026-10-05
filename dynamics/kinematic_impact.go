@@ -76,7 +76,7 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 		velocityComponent(kicked.entries[1].LinearVelocity, axis),
 	}
 	preSpeed[motion.index] = velocityComponent(motion.effective, axis)
-	relative := (preSpeed[1].Base() - preSpeed[0].Base()) * sign
+	relative := float64((preSpeed[1].Base() - preSpeed[0].Base()) * sign)
 	if !finite(relative) || relative >= -w.step.VelocityResidual.Base() {
 		return undecided(w, "kinematic bracket is not certified closing"), nil
 	}
@@ -94,7 +94,7 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	effectiveCoefficient := units.Scalar(0)
 	if new(big.Rat).Neg(idealRelative).Cmp(exactBase(w.step.ImpactSpeed)) > 0 {
 		effectiveCoefficient = coefficient
-		target = -coefficient.Base() * relative
+		target = float64(-coefficient.Base() * relative)
 	}
 	impulse := (target - relative) / inverseMass
 	if !finite(target, impulse) || impulse <= 0 {
@@ -102,9 +102,9 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	}
 	postSpeed := [2]float64{preSpeed[0].Base(), preSpeed[1].Base()}
 	if dynamic == 0 {
-		postSpeed[0] -= impulse * sign * inverseMass
+		postSpeed[0] -= float64(impulse * sign * inverseMass)
 	} else {
-		postSpeed[1] += impulse * sign * inverseMass
+		postSpeed[1] += float64(impulse * sign * inverseMass)
 	}
 	if !responsePairResidualsWithin(preSpeed, sign, effectiveCoefficient, w.bodies,
 		target, impulse, postSpeed, w.step.VelocityResidual, w.step.ImpulseResidual) ||

@@ -206,7 +206,7 @@ func directAccepted(points []nominalPoint, rows []directRow, k [][]float64, gap,
 	for i, row := range rows {
 		change := 0.0
 		for j := range rows {
-			change += k[i][j] * impulse[j]
+			change += float64(k[i][j] * impulse[j])
 		}
 		residual := change - gap[i] // post relative speed minus target
 		active, tangentRow := mask&(1<<row.point) != 0, seen[row.point] > 0
@@ -227,7 +227,7 @@ func directAccepted(points []nominalPoint, rows []directRow, k [][]float64, gap,
 		seen[row.point]++
 	}
 	for k, p := range points {
-		if lambda[k] < 0 || math.Hypot(tangent[k][0], tangent[k][1]) > p.mu*lambda[k]+coneSlack {
+		if lambda[k] < 0 || math.Hypot(tangent[k][0], tangent[k][1]) > float64(p.mu*lambda[k])+coneSlack {
 			return nil, nil, false
 		}
 	}
@@ -250,7 +250,7 @@ func pseudoSolve(m [][]float64, b []float64) ([]float64, bool) {
 		off := 0.0
 		for p := range n {
 			for q := p + 1; q < n; q++ {
-				off += a[p][q] * a[p][q]
+				off += float64(a[p][q] * a[p][q])
 			}
 		}
 		if off == 0 {
@@ -262,20 +262,20 @@ func pseudoSolve(m [][]float64, b []float64) ([]float64, bool) {
 					continue
 				}
 				theta := (a[q][q] - a[p][p]) / (2 * a[p][q])
-				t := math.Copysign(1, theta) / (math.Abs(theta) + math.Sqrt(theta*theta+1))
-				c := 1 / math.Sqrt(t*t+1)
+				t := math.Copysign(1, theta) / (math.Abs(theta) + math.Sqrt(float64(theta*theta)+1))
+				c := 1 / math.Sqrt(float64(t*t)+1)
 				s := t * c
 				for r := range n {
 					arp, arq := a[r][p], a[r][q]
-					a[r][p], a[r][q] = c*arp-s*arq, s*arp+c*arq
+					a[r][p], a[r][q] = float64(c*arp)-float64(s*arq), float64(s*arp)+float64(c*arq)
 				}
 				for r := range n {
 					apr, aqr := a[p][r], a[q][r]
-					a[p][r], a[q][r] = c*apr-s*aqr, s*apr+c*aqr
+					a[p][r], a[q][r] = float64(c*apr)-float64(s*aqr), float64(s*apr)+float64(c*aqr)
 				}
 				for r := range n {
 					vrp, vrq := v[r][p], v[r][q]
-					v[r][p], v[r][q] = c*vrp-s*vrq, s*vrp+c*vrq
+					v[r][p], v[r][q] = float64(c*vrp)-float64(s*vrq), float64(s*vrp)+float64(c*vrq)
 				}
 			}
 		}
@@ -294,11 +294,11 @@ func pseudoSolve(m [][]float64, b []float64) ([]float64, bool) {
 		}
 		projection := 0.0
 		for r := range n {
-			projection += v[r][e] * b[r]
+			projection += float64(v[r][e] * b[r])
 		}
 		projection /= a[e][e]
 		for r := range n {
-			x[r] += v[r][e] * projection
+			x[r] += float64(v[r][e] * projection)
 		}
 	}
 	return x, true

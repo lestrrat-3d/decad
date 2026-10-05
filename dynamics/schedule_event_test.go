@@ -1,6 +1,7 @@
 package dynamics_test
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -664,7 +665,7 @@ func TestScheduledStepDiagnosticsNameTheIsland(t *testing.T) {
 // turns a quarter turn about Z. The touching pair forms an island at the
 // step start, and a rotating driver has no single contact-point velocity, so
 // the step stops with StepUnsupported and names the pair.
-func TestScheduledStepRotatingDriverIslandRefuses(t *testing.T) {
+func TestScheduledStepTurntableTouchRefuses(t *testing.T) {
 	doc := decad.New()
 	platform := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	parkedA := makeBox(t, doc, 500, 0, 510, 10, 0, 10)
@@ -694,9 +695,38 @@ func TestScheduledStepRotatingDriverIslandRefuses(t *testing.T) {
 		Drivers: []dynamics.KinematicDriver{{Body: platform,
 			Path: decad.PoseSegment{From: r3.Identity(), To: turn, Duration: dt}}}}, dt)
 	require.NoError(t, err)
+	// The island holds the block at rest on the turning platform: the field
+	// ω × x is horizontal across the patch, so its normal speed is zero and
+	// the zero-speed island publishes no event (§6.1). The root package
+	// proves no touch track under a turning platform, so the pair's sweep
+	// refuses the whole slice.
 	require.Equal(t, dynamics.Undecided, report.Status)
+	require.Nil(t, report.Next)
+	require.Empty(t, report.Events)
 	require.Len(t, report.Diagnostics, 1)
-	require.Equal(t, dynamics.StepUnsupported, report.Diagnostics[0].Code, "%+v", report.Diagnostics)
+	require.Equal(t, dynamics.StepPairUndecided, report.Diagnostics[0].Code, "%+v", report.Diagnostics)
 	require.Equal(t, dynamics.BodyPair{A: platform, B: block}, report.Diagnostics[0].Pair)
-	require.Contains(t, report.Diagnostics[0].Reason, "rotating kinematic")
+	require.Equal(t, units.Seconds(0), report.Diagnostics[0].From)
+	require.Equal(t, dt, report.Diagnostics[0].To)
+	require.Contains(t, report.Diagnostics[0].Reason, fmt.Sprintf("(%d)", decad.SweepContactTrackUnproved))
+	// The certified prefix is the start: the block sits on the platform's
+	// top face, touching with the normal +z, and nothing past it replays.
+	held, err := report.Trace.Sample(units.Seconds(0))
+	require.NoError(t, err)
+	onPlatform, ok := held.Body(platform)
+	require.True(t, ok)
+	resting, ok := held.Body(block)
+	require.True(t, ok)
+	require.Equal(t, r3.Identity(), resting.Pose)
+	require.Zero(t, resting.LinearVelocity.Z.Base())
+	pair, err := doc.ContactPair(t.Context(), platform, block, onPlatform.Pose, resting.Pose, bounceStepConfig().Contact)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, pair.Relation)
+	require.NotEmpty(t, pair.Manifold.Points)
+	for _, point := range pair.Manifold.Points {
+		require.InDelta(t, 1, point.Normal.Value.Z, 1e-12)
+		require.InDelta(t, 0, point.OnB.Value.Z, 1e-9)
+	}
+	_, err = report.Trace.Sample(units.Seconds(1.0 / 32))
+	require.Error(t, err)
 }

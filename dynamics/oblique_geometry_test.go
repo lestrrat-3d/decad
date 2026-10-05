@@ -202,15 +202,41 @@ func TestObliqueSupportRefusesUnresolvedMotion(t *testing.T) {
 	require.NoError(t, err)
 	incoming := dynamics.QuantityVec{X: units.MillimetersPerSecond(-50),
 		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(50)}
+	// A tangent velocity along the tilted face keeps going: restitution 0.5
+	// reverses the normal approach, 1.5·√5000 kg·mm/s, and the Y slide stays.
+	t.Run("tangent velocity", func(t *testing.T) {
+		w := fixedBoxContactWorld(t, doc, fixed, moving, .5)
+		state, stateErr := w.NewState([]dynamics.BodyState{
+			{Body: fixed, Pose: turn, LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+			{Body: moving, Pose: turn, LinearVelocity: dynamics.QuantityVec{
+				X: incoming.X, Y: units.MillimetersPerSecond(10), Z: incoming.Z}, AngularVelocity: zeroAngular(t)},
+		})
+		require.NoError(t, stateErr)
+		step, stepErr := w.Step(t.Context(), state, dynamics.StepInput{Gravity: zeroAcceleration()},
+			units.Seconds(.01))
+		require.NoError(t, stepErr)
+		require.Equal(t, dynamics.Advanced, step.Status, "%+v", step.Diagnostics)
+		require.Len(t, step.Events, 1)
+		require.InDelta(t, 1.5*math.Sqrt(5000), step.Events[0].NormalImpulse.Base(), 1e-6)
+		end, ok := step.Next.Body(moving)
+		require.True(t, ok)
+		require.InDelta(t, 25, end.LinearVelocity.X.Base(), 1e-6)
+		require.Equal(t, units.MillimetersPerSecond(10), end.LinearVelocity.Y)
+		require.InDelta(t, -25, end.LinearVelocity.Z.Base(), 1e-6)
+		require.Equal(t, zeroAngular(t), end.AngularVelocity)
+	})
 	for _, fixture := range []struct {
 		name     string
 		pose     r3.Transform
 		velocity dynamics.QuantityVec
 		spin     bool
 	}{
-		{name: "tangent velocity", pose: turn, velocity: dynamics.QuantityVec{
-			X: incoming.X, Y: units.MillimetersPerSecond(10), Z: incoming.Z}},
+		// Shifted 1 mm along the face, the box's center still lies over the
+		// patch: the impulses shift toward it and no spin results.
 		{name: "off-center face", pose: offCenter, velocity: incoming},
+		// Spin about Y, which lies in the face, gives the face points normal
+		// speeds that vary linearly across it; restitution 0.5 at every
+		// point reverses both the approach and the spin by half.
 		{name: "spinning face", pose: turn, velocity: incoming, spin: true},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
@@ -228,8 +254,18 @@ func TestObliqueSupportRefusesUnresolvedMotion(t *testing.T) {
 			step, stepErr := w.Step(t.Context(), state,
 				dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.01))
 			require.NoError(t, stepErr)
-			require.Equal(t, dynamics.Undecided, step.Status)
-			require.Nil(t, step.Next)
+			require.Equal(t, dynamics.Advanced, step.Status, "%+v", step.Diagnostics)
+			require.Len(t, step.Events, 1)
+			require.InDelta(t, 1.5*math.Sqrt(5000), step.Events[0].NormalImpulse.Base(), 1e-6)
+			end, ok := step.Next.Body(moving)
+			require.True(t, ok)
+			require.InDelta(t, 25, end.LinearVelocity.X.Base(), 1e-6)
+			require.InDelta(t, -25, end.LinearVelocity.Z.Base(), 1e-6)
+			wantSpin := 0.0
+			if fixture.spin {
+				wantSpin = -.5
+			}
+			require.InDelta(t, wantSpin, end.AngularVelocity.Y.Base(), 1e-9)
 		})
 	}
 	edge := makeBox(t, doc, 10, 10, 20, 20, 0, 10)

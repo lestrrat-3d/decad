@@ -346,24 +346,95 @@ func (r *scheduleRun) trackPairs(ctx context.Context, sweeps sliceSweeps, plan s
 	return out, nil, nil
 }
 
-// driverVelocities reads the exact translation velocity of every kinematic
-// participant of the gathered pairs from its slice driver: the displacement
-// over the duration. A driver that rotates has no single contact-point
-// velocity and gets no entry; the island solve refuses it only when it
-// joins an island that holds an event.
-func (r *scheduleRun) driverVelocities(sweeps sliceSweeps, gathered []islandPair) map[int][3]*big.Rat {
-	drive := map[int][3]*big.Rat{}
+// driverMotion is a kinematic participant's exact velocity field over its
+// slice driver: a world point x moves at linear + angular × x. A translating
+// driver has a zero angular part.
+type driverMotion struct {
+	linear, angular [3]*big.Rat
+}
+
+// at is the field's velocity at the world point x.
+func (m driverMotion) at(x [3]*big.Rat) [3]*big.Rat {
+	var out [3]*big.Rat
+	for axis := range out {
+		a, b := (axis+1)%3, (axis+2)%3
+		out[axis] = new(big.Rat).Add(m.linear[axis], new(big.Rat).Sub(
+			new(big.Rat).Mul(m.angular[a], x[b]), new(big.Rat).Mul(m.angular[b], x[a])))
+	}
+	return out
+}
+
+// rotates reports whether the field has an angular part.
+func (m driverMotion) rotates() bool {
+	return m.angular[0].Sign() != 0 || m.angular[1].Sign() != 0 || m.angular[2].Sign() != 0
+}
+
+// driverVelocities reads the exact velocity field of every kinematic
+// participant of the gathered pairs from its slice driver (driverMotionOf).
+// A driver whose field cannot be read gets no entry; the island solve
+// refuses it only when it joins an island that holds an event.
+func (r *scheduleRun) driverVelocities(sweeps sliceSweeps, gathered []islandPair) map[int]driverMotion {
+	drive := map[int]driverMotion{}
 	for _, pair := range gathered {
 		for _, index := range [2]int{pair.a, pair.b} {
 			if r.w.bodies[index].definition.Role != Kinematic {
 				continue
 			}
-			if v, ok := translationVelocity(sweeps.paths[index]); ok {
-				drive[index] = v
+			if motion, ok := driverMotionOf(sweeps.paths[index]); ok {
+				drive[index] = motion
 			}
 		}
 	}
 	return drive
+}
+
+// driverMotionOf reads a slice driver's exact velocity field. A translating
+// PoseSegment moves every point by its displacement over its duration. A
+// rotating one follows the screw its endpoints define (pathPoseAt): with
+// axis a through the point p, angle θ and slide s over the duration T, read
+// as the exact rationals of their float values, a point x moves at
+// ω × (x − p) + a·s/T with ω = a·θ/T.
+func driverMotionOf(path decad.PairPath) (driverMotion, bool) {
+	zero := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
+	if v, ok := translationVelocity(path); ok {
+		return driverMotion{linear: v, angular: zero}, true
+	}
+	segment, ok := path.(decad.PoseSegment)
+	duration := exactBase(segment.Duration)
+	if !ok || duration == nil || duration.Sign() <= 0 {
+		return driverMotion{}, false
+	}
+	inverse, err := segment.From.Inverse()
+	if err != nil {
+		return driverMotion{}, false
+	}
+	relative, err := inverse.Then(segment.To)
+	if err != nil {
+		return driverMotion{}, false
+	}
+	screw, err := relative.Screw()
+	if err != nil {
+		return driverMotion{}, false
+	}
+	axis, okAxis := ratVec(screw.Axis)
+	point, okPoint := ratVec(screw.Point)
+	angle, slide := exactBase(screw.Angle), ratFloat(screw.Slide)
+	if !okAxis || !okPoint || angle == nil || slide == nil {
+		return driverMotion{}, false
+	}
+	rate := new(big.Rat).Quo(angle, duration)
+	speed := new(big.Rat).Quo(slide, duration)
+	motion := driverMotion{}
+	for i := range 3 {
+		motion.angular[i] = new(big.Rat).Mul(axis[i], rate)
+		motion.linear[i] = new(big.Rat).Mul(axis[i], speed)
+	}
+	// linear = a·s/T − ω × p, so that at(x) = ω × (x − p) + a·s/T.
+	spin := driverMotion{linear: zero, angular: motion.angular}.at(point)
+	for i := range 3 {
+		motion.linear[i].Sub(motion.linear[i], spin[i])
+	}
+	return motion, true
 }
 
 // translationVelocity is the exact velocity of a PoseSegment that only
@@ -415,7 +486,8 @@ func (r *scheduleRun) publishGrazes(sweeps sliceSweeps, plan slicePlan) []StepDi
 		}
 		at := r.state.clone()
 		at.entries[pair.a].Pose, at.entries[pair.b].Pose = poseA, poseB
-		drive := map[int][3]*big.Rat{}
+		drive := map[int]driverMotion{}
+		zero := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
 		for _, index := range [2]int{pair.a, pair.b} {
 			if w.bodies[index].definition.Role != Kinematic {
 				continue
@@ -424,7 +496,7 @@ func (r *scheduleRun) publishGrazes(sweeps sliceSweeps, plan slicePlan) []StepDi
 			if !ok {
 				return diagnostic("a graze with a rotating kinematic body has no solver yet")
 			}
-			drive[index] = v
+			drive[index] = driverMotion{linear: v, angular: zero}
 		}
 		item := islandPair{key: key, a: pair.a, b: pair.b, manifold: *sweep.Event.Manifold}
 		if !w.grazeSpeedWithin(item, at, drive) {
@@ -443,7 +515,7 @@ func (r *scheduleRun) publishGrazes(sweeps sliceSweeps, plan slicePlan) []StepDi
 // grazeSpeedWithin encloses the pair's relative normal speed at every
 // manifold point and requires each enclosure within VelocityResidual of
 // zero.
-func (w *World) grazeSpeedWithin(pair islandPair, state State, drive map[int][3]*big.Rat) bool {
+func (w *World) grazeSpeedWithin(pair islandPair, state State, drive map[int]driverMotion) bool {
 	a, okA := w.newCertBody(pair.a, state.entries[pair.a], state.entries[pair.a], drive)
 	b, okB := w.newCertBody(pair.b, state.entries[pair.b], state.entries[pair.b], drive)
 	if !okA || !okB {
