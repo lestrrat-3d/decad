@@ -697,12 +697,12 @@ Where the general path and a closed form answer differently, the parity run foll
   prefix and names the general path's reason.
 - A test that calls a deleted responder directly is replaced by a test of the same fixture through the
   general path that asserts the same computed quantities.
-- An initially touching cardinal box face rests with zero restitution in the two- and three-body steps,
-  while an initially touching sphere pair or tilted face takes its restitution; no rule on the approach
-  speed or `ImpactSpeed` separates the two, and the general path applies §6.2's restitution target to
-  every initial touch. `TestObliqueInitialTouchContinuesAsPersistentContact`,
-  `TestRestingBoxUsesPersistentContactTrack` and `TestThreeBodySimultaneousCornerImpact` hold the
-  cardinal-face rule.
+- An initially touching pair takes §6.2's restitution target like any other contact. The two- and
+  three-body steps rest an initially touching cardinal box face with zero restitution while an initially
+  touching sphere pair or tilted face takes its restitution, and no rule on the approach speed or
+  `ImpactSpeed` separates the two, so the assertions of `TestObliqueInitialTouchContinuesAsPersistentContact`,
+  `TestRestingBoxUsesPersistentContactTrack` and `TestThreeBodySimultaneousCornerImpact` that encode the
+  cardinal-face rest are rewritten to the restitution answer.
 
 ### 6.6 Position correction across an island
 
@@ -721,7 +721,26 @@ linear velocity difference plus each body's spin times its lever, both L1 norms)
 translation length may not exceed the summed allowances of the pairs that moved it, plus the band depth
 `ε` of §10.3 when the slice ended on a band track. Island pairs with a moved
 body must still be `Touching` at the corrected poses; every other scheduled pair with a moved body is swept
-over the correction. The corrections of one island are applied together, then every
+over the correction.
+
+A translation along a float normal rarely lands two curved bodies in exact touch, so an island pair that
+still overlaps after the correction is PUSHED just apart when its solve separates it (every point leaves
+faster than `VelocityResidual`, §5.2): its dynamic bodies move along the deepest point's normal by that
+point's depth plus its separation bound, split by inverse mass, the share doubled until it moves the
+rounded pose, and the pair is checked again, for at most four passes over the event's islands. It must
+end `Touching` or `Separated`, and each pushed body's whole translation from its pre-event pose, measured
+as the correction's, must stay within its correction allowance; a separated corrected pose within that
+allowance is what rigid-dynamics "Response" admits at a separating impact. Its next slice sweeps it under
+`ContinueSeparatingTouch` from the pushed poses. A pair the solve does not separate is never pushed and
+may not end separated, since its continuation needs exact touch: a resting curved pair whose correction
+leaves an ulp of overlap is `Undecided` with `StepCorrectionFailed`.
+
+A sphere pair that continues in persistent touch after an interior impact is refused at its next replay:
+the root package's sphere-pair persistent replay requires the two rounded centers to stay exactly one
+radius sum apart at every replayed fraction, and centers corrected at the bracket's right sample are not
+dyadic enough for both translations to round alike. No correction makes that hold in general (two centers
+in different binades round the same displacement differently), and the certificate is not weakened to
+admit it, so `TestThreeBodyTwoDynamicSphereZeroRestitutionImpact` does not pass through the general path. The corrections of one island are applied together, then every
 candidate pair touching a corrected body is swept over the correction as a `PoseSegment` of zero
 duration-independent travel (the usual §4.2 swept-box exclusion applies first). A new contact, a lost
 relation or an undecided interval is `Undecided` with `StepCorrectionFailed`. Corrections are recorded in
@@ -1446,9 +1465,10 @@ lines below do not repeat it.
   fixtures. So do §6.2's direct start and lever-bounded spin snap, §6.1's silent zero-speed island,
   §5's certificate-replayed slice poses and `MaxEvents` rule, and §6.3's `AngularUpper`, with
   `dynamics/island_direct.go` and `dynamics/island_direct_test.go`: a two-box stack in eight sweeps, a
-  frictional face impact that friction stops exactly, and a sphere rolling in a corner. Routing the two-
-  and three-body worlds through the general step, the assertion rewrites of §6.5 and the deletions
-  remain.
+  frictional face impact that friction stops exactly, and a sphere rolling in a corner. §6.6's
+  separating push ships with `dynamics/island_push_test.go`: a sphere bouncing off a tilted face, its
+  allowance, and a resting sphere the push leaves alone. Routing the two- and three-body worlds through
+  the general step, the assertion rewrites of §6.5 and the deletions remain.
 
 ### PR 6 (Phase 1) — multi-event `Trace`, `Timeline`, typed diagnostics
 

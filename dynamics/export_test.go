@@ -125,3 +125,31 @@ func WithoutCache(s State) State {
 	s.cache = nil
 	return s
 }
+
+// PushApart runs correctedRelation's passes on the pair (a, b) of state,
+// which the solve is taken to separate, with the moved body given the allowance.
+// pre is the state before the correction. It returns the refusal reason, or
+// "" and the pushed state when the push fits.
+func PushApart(ctx context.Context, w *World, pre, state State, a, b *decad.Body, moved *decad.Body,
+	allowance units.Value) (string, State, error) {
+	key, ok := lookupPair(w.index, BodyPair{A: a, B: b})
+	if !ok {
+		return "", State{}, ErrInvalidInput
+	}
+	post := state.clone()
+	moves := map[int]r3.Vec{}
+	push := correctionPush{allowance: map[int]float64{w.index[moved]: allowance.Base()},
+		separating: map[int]struct{}{key: {}}}
+	for pass := 0; ; pass++ {
+		done, diagnostic, err := w.correctedRelation(ctx, pre, post, moves, key, push, pass < pushLimit)
+		if err != nil {
+			return "", State{}, err
+		}
+		if diagnostic != nil {
+			return diagnostic.Reason, State{}, nil
+		}
+		if done {
+			return "", post, nil
+		}
+	}
+}
