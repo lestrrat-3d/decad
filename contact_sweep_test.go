@@ -522,6 +522,29 @@ func TestSweepPairSourceSphereTouchContinuation(t *testing.T) {
 	require.InDelta(t, 7.5, departedBall.Translation().Z, 1e-12)
 }
 
+func TestSweepPairRefusesSeparatedOffOriginRotatingSphere(t *testing.T) {
+	doc := decad.New()
+	floor := boxBodyAtZ(t, doc, -20, -20, 20, 20, -10, 10)
+	ball := ballBody(t, doc, 5)
+	ball, err := ball.Placed(t.Context(), contactPose(t, r3.Vec{X: 2}))
+	require.NoError(t, err)
+	from := contactPose(t, r3.Vec{Z: 25})
+	contact, err := doc.ContactPair(t.Context(), floor, ball, r3.Identity(), from,
+		contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, contact.Relation)
+	still := sweepDrift(r3.Vec{}, .1)
+	rotating := still
+	rotating.From = from
+	rotating.Center = r3.Vec{X: 2, Z: 25}
+	rotating.AngularVelocity.Y = units.RadiansPerSecond(10)
+	report, err := doc.SweepPair(t.Context(), floor, ball, still, rotating, sweepRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepUndecided, report.Outcome)
+	require.Equal(t, decad.SweepContactUnsupported, report.Cause)
+	require.False(t, report.HasAffineReplayProof())
+}
+
 func TestSweepPairSourceSphereInitialEdgeTouch(t *testing.T) {
 	doc := decad.New()
 	floor := boxBodyAtZ(t, doc, -20, -20, 20, 20, -10, 10)
