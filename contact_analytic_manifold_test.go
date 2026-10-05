@@ -3,6 +3,7 @@ package decad_test
 import (
 	"context"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -304,4 +305,276 @@ func verticalCylinder(t *testing.T, doc *decad.Document, cx, cy, r float64) *dec
 	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 	return body
+}
+
+// The placed-pose fixtures of docs/contact-geometry-design.md §4.5: a radius-10
+// source cylinder along world X lies on a floor whose top face is z = −10, at
+// query poses other than the identity. Every coordinate is dyadic. A
+// signed-axis pose proves an exact touch or gap; any other pose stages the
+// section through a float basis that is orthonormal only to rounding, and the
+// relation is a gap or a ContactBand.
+//
+// Each band, ball and separation is checked against the true occupied set of
+// the float pose, computed here in 512-bit arithmetic from the pose's own
+// entries: an end disk's least height along Z is c_z − r·ρ with
+// ρ = |(B_zy, B_zz)|, at the point c − (r/ρ)·(B_zy·EY + B_zz·EZ).
+//
+// Legs shown to fail (each deleted or zeroed in turn, fixture red, then
+// restored):
+//   - the gram term of sectionDrift: "long roll" publishes a band that misses
+//     the true least height;
+//   - the α² term of sectionDrift: "tilted" publishes a separation bound the
+//     rising end's true least height exceeds;
+//   - the end heights max|H±| in the band: "tilted" publishes a band below its
+//     rising end;
+//   - the gram term of rimDrift: "long roll" publishes rim balls that miss the
+//     true lowest points;
+//   - the α term of rimDrift: "tilted" publishes rim balls that miss them;
+//   - the foot check: "off the face" reads Touching;
+//   - the threshold's gram term: "long roll" reads a gap or nothing instead of
+//     its band, and its tilt term |α|·L: "lifted tilt" reads Separated.
+//
+// The gram ≤ 1/16 gate cannot fail for a valid pose: Transform.IsValid holds
+// every column within 1e-9 of unit length and every pair within 1e-9 of
+// orthogonal, so gram stays below 1e-8.
+
+// rolledPose turns n times by angle about world X through the origin, the
+// float composition a long roll accumulates: its basis drifts from
+// orthonormal by about n ulps.
+func rolledPose(t *testing.T, n int, angle float64) r3.Transform {
+	t.Helper()
+	step, err := r3.Rotation(r3.Vec{X: 1}, units.Radians(angle))
+	require.NoError(t, err)
+	pose := r3.Identity()
+	for range n {
+		pose, err = pose.Then(step)
+		require.NoError(t, err)
+	}
+	return pose
+}
+
+// tiltedPose tips the cylinder about world Y by phi and lifts it so its +X
+// end center sits at the height lift, to rounding.
+func tiltedPose(t *testing.T, phi, lift float64) r3.Transform {
+	t.Helper()
+	turn, err := r3.Rotation(r3.Vec{Y: 1}, units.Radians(phi))
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.Vec{Z: lift - turn.Apply(r3.Vec{X: 15}).Z})
+	require.NoError(t, err)
+	pose, err := turn.Then(shift)
+	require.NoError(t, err)
+	return pose
+}
+
+const bigPrecision = 512
+
+func bigOf(v float64) *big.Float { return new(big.Float).SetPrec(bigPrecision).SetFloat64(v) }
+
+// trueRim is the exact least height above z = −10 of the end disk whose
+// identity center is (x, axisY, 0), radius 10, under pose, and its lowest
+// point.
+func trueRim(pose r3.Transform, x, axisY float64) (*big.Float, [3]*big.Float) {
+	b := pose.Basis()
+	at := pose.Translation()
+	cols := [3][3]float64{{b.EX.X, b.EX.Y, b.EX.Z}, {b.EY.X, b.EY.Y, b.EY.Z}, {b.EZ.X, b.EZ.Y, b.EZ.Z}}
+	trans := [3]float64{at.X, at.Y, at.Z}
+	var center, point [3]*big.Float
+	for k := range 3 {
+		center[k] = bigOf(trans[k])
+		center[k].Add(center[k], new(big.Float).Mul(bigOf(x), bigOf(cols[0][k])))
+		center[k].Add(center[k], new(big.Float).Mul(bigOf(axisY), bigOf(cols[1][k])))
+	}
+	rho := new(big.Float).Add(new(big.Float).Mul(bigOf(cols[1][2]), bigOf(cols[1][2])),
+		new(big.Float).Mul(bigOf(cols[2][2]), bigOf(cols[2][2])))
+	rho.Sqrt(rho)
+	scale := new(big.Float).Quo(bigOf(10), rho)
+	for k := range 3 {
+		offset := new(big.Float).Add(new(big.Float).Mul(bigOf(cols[1][2]), bigOf(cols[1][k])),
+			new(big.Float).Mul(bigOf(cols[2][2]), bigOf(cols[2][k])))
+		point[k] = new(big.Float).Sub(center[k], offset.Mul(offset, scale))
+	}
+	height := new(big.Float).Add(center[2], bigOf(10))
+	height.Sub(height, new(big.Float).Mul(bigOf(10), rho))
+	return height, point
+}
+
+// requireWithin checks |value| <= bound exactly.
+func requireWithin(t *testing.T, value *big.Float, bound float64, msg string) {
+	t.Helper()
+	require.LessOrEqual(t, new(big.Float).Abs(value).Cmp(bigOf(bound)), 0, "%s: %v beyond %v", msg, value, bound)
+}
+
+// requireBallHolds checks that point lies in the ball exactly.
+func requireBallHolds(t *testing.T, ball decad.VecMeasurement, point [3]*big.Float, msg string) {
+	t.Helper()
+	squared := new(big.Float).SetPrec(bigPrecision)
+	for k, v := range [3]float64{ball.Value.X, ball.Value.Y, ball.Value.Z} {
+		d := new(big.Float).Sub(point[k], bigOf(v))
+		squared.Add(squared, d.Mul(d, d))
+	}
+	limit := bigOf(ball.Bound.Base())
+	require.LessOrEqual(t, squared.Cmp(limit.Mul(limit, limit)), 0, "%s: point outside ball %+v", msg, ball)
+}
+
+// requirePlacedBand checks a band report against the true occupied set at
+// the cylinder's pose: the gap band holds the least height, and each
+// published end holds its true lowest point, its foot and its height.
+func requirePlacedBand(t *testing.T, report *decad.ContactReport, pose r3.Transform, axisY float64,
+	floorFirst bool) {
+	t.Helper()
+	require.Equal(t, decad.ContactBand, report.Relation, "reason=%v", report.Reason)
+	require.NotNil(t, report.Gap)
+	require.Zero(t, report.Gap.Value.Base())
+	require.NotNil(t, report.Manifold, "reason=%v", report.Reason)
+	require.Len(t, report.Manifold.Points, 2)
+	normal := r3.Vec{Z: 1}
+	if !floorFirst {
+		normal = normal.Scale(-1)
+	}
+	for i, x := range []float64{-15, 15} {
+		height, rim := trueRim(pose, x, axisY)
+		requireWithin(t, height, report.Gap.Bound.Base(), "gap band")
+		point := report.Manifold.Points[i]
+		onFloor, onCylinder := point.OnA, point.OnB
+		if !floorFirst {
+			onFloor, onCylinder = point.OnB, point.OnA
+		}
+		requireBallHolds(t, onCylinder, rim, "rim")
+		requireBallHolds(t, onFloor, [3]*big.Float{rim[0], rim[1], bigOf(-10)}, "foot")
+		requireWithin(t, height, point.Separation.Bound.Base(), "separation")
+		require.Zero(t, point.Separation.Value.Base())
+		require.Equal(t, normal, point.Normal.Value)
+		require.Zero(t, point.NormalAngle.Base())
+	}
+}
+
+func TestContactPairPlacedRuling(t *testing.T) {
+	floorScene := func(t *testing.T, axisY, x0 float64) (*decad.Document, *decad.Body, *decad.Body) {
+		doc := decad.New()
+		cylinder := revolvedCylinder(t, doc, -15, 15, axisY, 10)
+		floor := boxBodyAtZ(t, doc, x0, -200, 100, 200, -20, 10)
+		return doc, floor, cylinder
+	}
+	pair := func(t *testing.T, doc *decad.Document, floor, cylinder *decad.Body, pose r3.Transform,
+		req decad.ContactRequest, floorFirst bool) *decad.ContactReport {
+		t.Helper()
+		a, b, poseA, poseB := floor, cylinder, r3.Identity(), pose
+		if !floorFirst {
+			a, b, poseA, poseB = cylinder, floor, pose, r3.Identity()
+		}
+		report, err := doc.ContactPair(t.Context(), a, b, poseA, poseB, req)
+		require.NoError(t, err)
+		return report
+	}
+	wide := contactRequest()
+	wide.PointResolution = units.Millimeters(.05)
+
+	for _, floorFirst := range []bool{true, false} {
+		t.Run(map[bool]string{true: "floor first", false: "cylinder first"}[floorFirst], func(t *testing.T) {
+			t.Run("translated", func(t *testing.T) {
+				// A signed-axis pose keeps the section a true disk: the rims
+				// touch the floor exactly at (−14, 5.375, −10) and (16, 5.375, −10).
+				doc, floor, cylinder := floorScene(t, rollingAxisY, -100)
+				wall := surfaceFace[decad.Cylinder](t, cylinder, func(*decad.Face) bool { return true })
+				top := surfaceFace[decad.Plane](t, floor, func(face *decad.Face) bool {
+					reading, err := face.NormalAt(r3.Vec{Z: -10})
+					return err == nil && reading.Value == r3.Vec{Z: 1}
+				})
+				report := pair(t, doc, floor, cylinder, contactPose(t, r3.Vec{X: 1, Y: 2}), contactRequest(), floorFirst)
+				require.Equal(t, decad.ContactTouching, report.Relation, "reason=%v", report.Reason)
+				require.Equal(t, decad.Exact, report.Gap.Exactness)
+				require.Zero(t, report.Gap.Value.Base())
+				require.NotNil(t, report.Manifold)
+				require.Len(t, report.Manifold.Points, 2)
+				for i, end := range []r3.Vec{{X: -14, Y: 5.375, Z: -10}, {X: 16, Y: 5.375, Z: -10}} {
+					point := report.Manifold.Points[i]
+					require.Equal(t, end, point.OnA.Value)
+					require.Equal(t, end, point.OnB.Value)
+					require.Zero(t, point.OnA.Bound.Base())
+					require.Zero(t, point.OnB.Bound.Base())
+					require.Equal(t, decad.Exact, point.Separation.Exactness)
+					onFloor, onCylinder := point.FaceA, point.FaceB
+					normal := r3.Vec{Z: 1}
+					if !floorFirst {
+						onFloor, onCylinder, normal = point.FaceB, point.FaceA, normal.Scale(-1)
+					}
+					require.Same(t, top, onFloor)
+					require.Same(t, wall, onCylinder)
+					require.Equal(t, normal, point.Normal.Value)
+				}
+				lifted := pair(t, doc, floor, cylinder, contactPose(t, r3.Vec{X: 1, Z: .5}), contactRequest(), floorFirst)
+				require.Equal(t, decad.ContactSeparated, lifted.Relation)
+				require.Equal(t, .5, lifted.Gap.Value.Base())
+				require.Zero(t, lifted.Gap.Bound.Base())
+				sunk := pair(t, doc, floor, cylinder, contactPose(t, r3.Vec{X: 1, Z: -.5}), contactRequest(), floorFirst)
+				require.Equal(t, decad.ContactUndecided, sunk.Relation)
+				require.Nil(t, sunk.Manifold)
+			})
+			t.Run("quarter turn", func(t *testing.T) {
+				// A quarter turn about X carries the axis y = 3.375 to z = 3.375;
+				// the translation puts it back on the floor exactly.
+				doc, floor, cylinder := floorScene(t, rollingAxisY, -100)
+				pose, err := r3.FromBasis(r3.Basis{EX: r3.Vec{X: 1}, EY: r3.Vec{Z: 1}, EZ: r3.Vec{Y: -1}},
+					r3.Vec{Y: rollingAxisY, Z: -rollingAxisY})
+				require.NoError(t, err)
+				report := pair(t, doc, floor, cylinder, pose, contactRequest(), floorFirst)
+				require.Equal(t, decad.ContactTouching, report.Relation, "reason=%v", report.Reason)
+				require.NotNil(t, report.Manifold)
+				require.Equal(t, r3.Vec{X: -15, Y: rollingAxisY, Z: -10}, report.Manifold.Points[0].OnA.Value)
+			})
+			t.Run("long roll", func(t *testing.T) {
+				// 65536 turns of 0.7 rad leave a basis some 1e-12 off
+				// orthonormal: the section is no longer a true disk, its least
+				// height is off zero by about r times that, and its lowest
+				// point drifts off c − r·n̂ by as much.
+				doc, floor, cylinder := floorScene(t, 0, -100)
+				pose := rolledPose(t, 1<<16, .7)
+				report := pair(t, doc, floor, cylinder, pose, contactRequest(), floorFirst)
+				requirePlacedBand(t, report, pose, 0, floorFirst)
+				// The band is negligible against every request in this suite.
+				require.Less(t, report.Gap.Bound.Base(), 1e-9)
+				height, _ := trueRim(pose, 15, 0)
+				require.NotZero(t, height.Sign(), "the fixture must leave the true least height off zero")
+				deeper, err := pose.Then(contactPose(t, r3.Vec{Z: -1e-6}))
+				require.NoError(t, err)
+				sunk := pair(t, doc, floor, cylinder, deeper, contactRequest(), floorFirst)
+				require.Equal(t, decad.ContactUndecided, sunk.Relation)
+			})
+			t.Run("tilted", func(t *testing.T) {
+				// Tipped by 2^-10 rad about Y with its +X end center at the
+				// floor: the −X end center rises 30·sin φ, about 0.029 mm, and
+				// the tipped disks reach r·(1 − cos φ) below their centers less r.
+				doc, floor, cylinder := floorScene(t, 0, -100)
+				pose := tiltedPose(t, math.Ldexp(1, -10), 0)
+				requirePlacedBand(t, pair(t, doc, floor, cylinder, pose, wide, floorFirst), pose, 0, floorFirst)
+			})
+			t.Run("lifted tilt", func(t *testing.T) {
+				// Lifted 0.02 mm, the pair still touches within the tilt's
+				// reach |α|·L, about 0.029 mm; lifted 0.04 mm it is apart.
+				doc, floor, cylinder := floorScene(t, 0, -100)
+				near := tiltedPose(t, math.Ldexp(1, -10), .02)
+				requirePlacedBand(t, pair(t, doc, floor, cylinder, near, wide, floorFirst), near, 0, floorFirst)
+				far := tiltedPose(t, math.Ldexp(1, -10), .04)
+				report := pair(t, doc, floor, cylinder, far, wide, floorFirst)
+				require.Equal(t, decad.ContactSeparated, report.Relation)
+				height, _ := trueRim(far, 15, 0)
+				gap := new(big.Float).Sub(height, bigOf(report.Gap.Value.Base()))
+				requireWithin(t, gap, report.Gap.Bound.Base(), "gap")
+			})
+			t.Run("off the face", func(t *testing.T) {
+				// The floor ends at x = −10, inside the ruling's x∈[−14, 16].
+				doc, floor, cylinder := floorScene(t, rollingAxisY, -10)
+				report := pair(t, doc, floor, cylinder, contactPose(t, r3.Vec{X: 1}), contactRequest(), floorFirst)
+				require.Equal(t, decad.ContactUndecided, report.Relation)
+				require.Nil(t, report.Manifold)
+			})
+			t.Run("standing", func(t *testing.T) {
+				// An axis along the normal has no ruling on the floor.
+				doc, floor, cylinder := floorScene(t, 0, -100)
+				pose := tiltedPose(t, math.Pi/2, 0)
+				report := pair(t, doc, floor, cylinder, pose, contactRequest(), floorFirst)
+				require.Equal(t, decad.ContactUndecided, report.Relation)
+			})
+		})
+	}
 }

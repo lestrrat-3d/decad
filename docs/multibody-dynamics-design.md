@@ -14,8 +14,8 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18 and 19 have shipped, and so
-has the root part of PR 20. `dynamics.World` holds any number of bodies, the canonical pair table and
+Current state: §13 PRs 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19 and 20 have
+shipped. `dynamics.World` holds any number of bodies, the canonical pair table and
 per-pair material of §3.1, and the slice-backed `State` of §3.2. Its step resolves two bodies, or three bodies with one, two or three dynamic bodies and
 every other body fixed, through the closed-form responses `docs/rigid-dynamics-design.md` lists. A world of four or more
 bodies takes the scheduled step of §4.3 and §5: one kick, then slices of drift from event to event. Initial
@@ -46,8 +46,8 @@ well. §9.1–§9.4 ship for prisms over whole `LineSeg` sections and for zero-b
 Booleans, directly or through a translation-only placement; stitched solids and lofts are not admitted yet.
 §10.1, §10.2 and §10.3 ship for the same bodies, and §10.4 for positive-bound faceted Booleans and
 all-planar cap-loop chamfers. A box tipped over from its edge does not yet come to rest flat (§13 PR
-13). §10.4's rolling band track ships for a full source cylinder on an exact planar body; no `dynamics`
-test rolls a cylinder yet (§13 PR 20). Everything else is design-only until the PR table in §13 says
+13). §10.4's rolling band track ships for a full source cylinder on an exact planar body from any start
+pose, and the scheduled step rolls such a cylinder (§13 PR 20). Everything else is design-only until the PR table in §13 says
 otherwise.
 
 Navigation only; the named sections own the rules:
@@ -1387,35 +1387,51 @@ certified ruling feet of `docs/clearance-design.md` §6 (contact-geometry §4.5)
 `Face.NormalAt`. Their delivery is §13's last three PRs.
 
 **Rolling.** A cylinder rolling on a floor takes §10.3's track with the ruling's two ends as the
-contact set (`contact_sweep_rolling.go`). `SweepPair` admits a full source cylinder `M` at a
-signed-axis start pose whose path rotates, against an exact planar body `S` with zero `δ` whose path
-only translates; `ContactPair` must prove the start a ruling touch, which needs identity query poses
-today (contact-geometry §4.5). The support plane is a face plane of `S` whose normal `n̂` is a signed
-axis across the cylinder's axis `â`, with every vertex of `S` on or behind it and both rims on it. A
-cylinder has no vertices, so the proof reads the centers `c±` of its end disks, material points on
-its axis. Over a disk of radius `r` and unit axis `a` the least height is `n̂·c − r·s`,
-`s = √(1 − (n̂·a)²)`, and the cylinder's is the lesser of its two disks', since height is linear
-along the axis. With `H = n̂·c − d − r` for the plane at offset `d`, each rim's least height is
-`g = H + r·(1 − s)`, and
+contact set (`contact_sweep_rolling.go`). `SweepPair` admits a full source cylinder `M` at any start
+pose with a positive determinant whose path rotates, against an exact planar body `S` with zero `δ`
+whose path only translates; `ContactPair` must prove the start a ruling touch or the placed band of
+contact-geometry §4.5. The support plane is the plane that section picks: a face plane of `S` whose
+normal `n̂` is a signed axis, with every vertex of `S` on or behind it and the cylinder's axis nearly
+across it. A cylinder has no vertices, so the proof reads the centers `c±` of its end disks, material
+points on its axis, staged exactly through the start pose's float basis `B`. That basis is orthonormal
+only to rounding, so the start body's section is the disk's image under `B`, with `gram` and
+`α = n̂·Bâ` as in contact-geometry §4.5, `â` the identity axis. Over an end disk the least height is
+`n̂·c − r·|P·Bᵀ(u)n̂|`, `B(u) = R(u)·B`, and the cylinder's is the lesser of its two disks', since
+height is affine along the axis. With `H = n̂·c − d − r` for the plane at offset `d`, each rim's least
+height is `g = H + r·(1 − |P·Bᵀ(u)n̂|)`, and with `ã = Bâ`
 
 ```text
 H'(0)  = n̂·(v_M − v_S + ω×(c − c_M))                      exact
 |H''| <= |ω|·|ω×(c − c_M)|                                 c'' = R(u)·(ω×(ω×(c − c_M)))
-0     <= 1 − s <= (n̂·a)² <= |ω×â|²·u²                      |a(u) − â| <= |ω×â|·u
+|r − r·|P·Bᵀ(u)n̂|| <= r·(gram + α(u)²)                     |P·Bᵀ(u)n̂|² ∈ [1 − gram − α(u)², 1 + gram]
+|α(u)| <= |α| + β·u                                        β = |ω×ã|, |R(u)ã − ã| <= β·u
 ```
 
-so `|g(u)| <= |H'(0)|·u + (K + r·|ω×â|²)·u²`, `K` half the curvature bound, and `Depth` is that bound
-at the track end over both ends; `BandAt` reads it at a prefix's end. Each rim's lowest point lies within `√2·r·|ω×â|·u` of `c − r·n̂`,
-charged as `(3/2)·r·|ω×â|·u`: one foot box spanning both ends' ideal path boxes, grown by the depth
-and that drift, must stay inside `S`'s face, so the whole ruling does, and `ManifoldAt` grows both
-balls of each end by it beside the pose deviations. `M`'s pose deviation reads the eight corners of
-its identity disk-by-interval box, whose hull holds the cylinder. The track publishes `S`'s exact face
-normal, as §10.3 does; the axis tilt that would turn the cylinder's own normal is charged into the
-band instead. A cylinder rolling without slip about its own axis has zero depth and is an exact
-`SweepPersistentTouch` over a whole turn. Replay checks each rounded end center's height less `r`
-against `Depth` widened by both pose deviations. A start `ContactPair` does not prove touching stays
-`Undecided`: a separated start with `SweepMissingBound`, since no clear search covers a rotating
-cylinder.
+so `|g(u)| <= c₀ + (|H'(0)| + 2·r·β·|α|)·u + (K + r·β²)·u²` with `c₀ = |H(0)| + r·(gram + α²)`, `K`
+half the curvature bound, each term the larger over both ends, and `Depth` is that bound at the track
+end; `BandAt` reads it at a prefix's end. A signed-axis start with `α = 0` has `gram = c₀ = 0`, and
+the bound is `|H'(0)|·u + (K + r·|ω×â|²)·u²`. Each rim's lowest point lies within
+`r·(3·gram + (3/2)·|α(u)|)` of `c − r·n̂` while `|α(u)| <= 1/4` (contact-geometry §4.5), so a start
+other than an exact one ends its track where `|α| + β·t` reaches `1/4`; an exact start's drift
+`r·√(2·(1 − s)) <= (3/2)·r·β·u` holds with no gate. One foot box spanning both ends' ideal path boxes,
+grown by the depth and that drift, must stay inside `S`'s face, so the whole ruling does, and
+`ManifoldAt` grows both balls of each end by it beside the pose deviations. `M`'s pose deviation reads
+the eight corners of its identity disk-by-interval box, whose hull holds the cylinder. The track
+publishes `S`'s exact face normal, as §10.3 does; the axis tilt that would turn the cylinder's own
+normal is charged into the band instead. A cylinder rolling without slip about its own axis from a
+signed-axis start has zero depth and is an exact `SweepPersistentTouch` over a whole turn; from any
+other start its depth is `c₀`, the rounding of the start basis, about `1e-15 mm` after a few turns.
+Replay checks each rounded end center's height less `r` against `Depth` widened by both pose
+deviations. A start `ContactPair` does not prove touching or banded stays `Undecided`: a separated
+start with `SweepMissingBound`, since no clear search covers a rotating cylinder.
+
+`dynamics` rolls such a cylinder with no rolling-specific step code. Under gravity each kick takes the
+pair out of the contact set, so every step opens with the initial contact of the ruling's two ends at
+time zero, whose island solve stops the kick and whose friction rows leave the contact point at rest,
+and the pair then continues on the track under `ContinueCertifiedTouch`. Without a kick the contact set
+carries the pair into the next step on its band track. The first step from a signed-axis pose rolls on
+an exact touch track; every later step starts at a turned pose and rolls on a band track whose depth
+`PenetrationResidual` admits.
 
 ## 11. Kinetograph interface and gallery
 
@@ -1823,24 +1839,29 @@ lines below do not repeat it.
 - Test (root): `contact_analytic_manifold_test.go`: a cylinder on its side against a floor publishes
   the ruling's two endpoints with the computed normal ball.
 - Depends on: nothing.
-- Shipped, at identity query poses. The gate the ruling certificates read is
+- Shipped, at identity query poses; PR 20 adds the plane/cylinder ruling at placed poses
+  (contact-geometry §4.5). The gate the ruling certificates read is
   `docs/clearance-design.md` §6's carrier displacement, so a full revolve's end-angle term does not refuse
   them.
 
 ### PR 20 (Phase 3) — rolling band tracks
 
 - Delivers §10.4's rolling track.
-- Files: `contact_sweep_faceted.go`, new `contact_sweep_rolling.go`.
+- Files: `contact_sweep_faceted.go`, new `contact_sweep_rolling.go`, `contact_analytic_manifold.go`,
+  `contact_pair.go`.
 - Test: `dynamics/rolling_test.go`: the cylinder rolls `π·20 mm` in one turn at `ω = 2π rad/s` with
   contact-point speed within `VelocityResidual` of zero.
 - Depends on: PRs 13, 19.
-- Ships in two parts. The root part has shipped: the rolling track, its manifold, `BandAt` and
-  replay in new `contact_sweep_rolling.go`, dispatched from `contact_sweep_faceted.go` and read through
-  `contact_sweep.go` and `contact_sweep_replay.go`, with `contact_sweep_rolling_test.go`: a `Ø20`
-  cylinder rolls `π·20 mm` in one turn at `2π rad/s` as an exact touch track whose contact point is at
-  rest within its published ball, and sinking, orbiting and tilting drifts publish their computed
-  depths. The `dynamics` part, `dynamics/rolling_test.go`, has not shipped; it lands in a later
-  `dynamics` PR.
+- Shipped. The rolling track, its manifold, `BandAt` and replay live in `contact_sweep_rolling.go`,
+  dispatched from `contact_sweep_faceted.go` and read through `contact_sweep.go` and
+  `contact_sweep_replay.go`; the placed-pose ruling that lets a turned cylinder start a track lives in
+  `contact_analytic_manifold.go`, dispatched from `contact_pair.go`. Root tests:
+  `contact_sweep_rolling_test.go` rolls a `Ø20` cylinder `π·20 mm` in one turn at `2π rad/s` as an
+  exact touch track whose contact point is at rest within its published ball, publishes the computed
+  depths of sinking, orbiting and tilting drifts, and starts tracks from translated, long-rolled and
+  tipped poses; `contact_analytic_manifold_test.go` checks each placed band, ball and gap against the
+  float pose's true occupied set in 512-bit arithmetic. `dynamics/rolling_test.go` rolls the cylinder
+  sixteen steps of `1/16 s` in a four-body world, with and without gravity, in both body orders.
 
 ### PR 21 (Phase 3) — `parts-bin`
 

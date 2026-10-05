@@ -79,7 +79,8 @@ from recorded gap bounds and pose deviations. A body whose held mesh carries
 a positive displacement takes the same run with §10.4's band: an impact
 brackets onto a `ContactBand` sample, a band start never departs, and its
 track's depth widens by twice the displacement. A full source cylinder whose
-ruling touches a face of an exact planar body continues, under
+ruling touches a face of an exact planar body, or lies in the placed band of
+contact-geometry §4.5 at a turned start, continues, under
 `ContinueCertifiedTouch` and a spinning drift, with §10.4's rolling band
 track over the ruling's two ends. Other unequal spins, rotating paths, and
 payloads remain design contracts.
