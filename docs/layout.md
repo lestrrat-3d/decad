@@ -204,14 +204,15 @@ to the byte budget.
 | `clearance_geom.go` | Boundary carriers and nesting rays for clearance. See `docs/clearance-design.md` §2–§3. |
 | `clearance_poly.go` | Certified brackets: Sturm isolation of stationarity polynomials and Lipschitz brackets of critical values. See `docs/clearance-design.md` §4/§5. |
 | `survey.go` | The analytic wall, undercut, and min-radius surveys on prism, revolve, and cup payloads. An undecided answer reads `Suspect`, never a silent pass. See `docs/verification-design.md` §6. |
-| `survey_undercut.go` | The exact three-valued receiver-face undercut reader `prismUndercuts`/`cupUndercuts`/`capBlendUndercuts` share, decided over the rationals, no float allowance. See the file's doc comment. |
-| `survey2d.go` | The 2D closed-form inscribed-disk kernel behind the wall survey, shared with the modify section audit via `elemOf`; exact candidates for line/arc boundaries. See `docs/verification-design.md` §6. |
-| `budget.go` | `workBudget`, the shared bounded work counter audit phases poll via `step`/`err`. It holds closures, never a stored `context.Context`. See `docs/interference-design.md` §7.2. |
+| `survey_undercut.go` | The exact three-valued receiver-face undercut reader the surveys share, decided over the rationals. See the file's doc comment. |
+| `survey2d.go` | The 2D closed-form inscribed-disk kernel behind the wall survey and the modify section audit. See `docs/verification-design.md` §6. |
+| `budget.go` | `workBudget`, the shared bounded work counter audit phases poll via `step`/`err`. It holds closures, never a `context.Context`. See `docs/interference-design.md` §7.2. |
 | `interference.go` | The pairwise overlap measurement behind `Verify`. See `docs/interference-design.md` §4-§8 and the file's doc comment. |
 | `motion.go` / `motion_verify.go` | The `Motion` set, its options and `MotionReport`; `Document.VerifyMotion`'s swept-box exclusion, transient poses and interval certificate. See `docs/motion-check-design.md`. |
 | `motion_bound.go` | Exact motion bounds. See its doc comment. |
 | `contact_sweep.go` | Pair paths, sweeps, and tracks. See `docs/contact-sweep-design.md`. |
 | `contact_sweep_rotation.go` / `contact_sweep_faceted.go` | Rotating drift sweep, over source boxes or exact planar bodies. See `docs/contact-sweep-design.md`. |
+| `contact_sweep_band.go` | Planar departure from touch and band tracks. See `docs/multibody-dynamics-design.md` §10.2–§10.3. |
 | `swept_box.go` | `Document.SweptBox`: an exact whole-path box. See `docs/multibody-dynamics-design.md` §4.2. |
 
 ### Booleans

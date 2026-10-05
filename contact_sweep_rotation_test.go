@@ -307,17 +307,23 @@ func TestSweepPairFixedFloorTangentialSpinDeparts(t *testing.T) {
 	_, _, err = shortHorizon.CertifiedPosesAt(units.Seconds(.075))
 	require.NoError(t, err)
 
+	// At 5 mm/s the corners over x = 15 hold their height, so the box proof
+	// against the floor face fails. The general planar proof
+	// (docs/multibody-dynamics-design.md §10.2) takes the box's lower face as
+	// the support plane instead, and every floor vertex falls away from it.
 	path.LinearVelocity.Z = units.MillimetersPerSecond(5)
 	tooSlow, err := doc.SweepPair(t.Context(), floor, box, sweepDrift(r3.Vec{}, .1), path, req)
 	require.NoError(t, err)
-	require.Equal(t, decad.SweepUndecided, tooSlow.Outcome)
-	require.Equal(t, decad.SweepDepartureUnproved, tooSlow.Cause)
+	require.Equal(t, decad.SweepDepartedClear, tooSlow.Outcome, "cause=%v", tooSlow.Cause)
 	path.LinearVelocity.Z = units.MillimetersPerSecond(100)
 	path.AngularVelocity.Y = units.RadiansPerSecond(30)
-	tooFast, err := doc.SweepPair(t.Context(), floor, box, sweepDrift(r3.Vec{}, .1), path, req)
+	// A fast spin fails the box proof too; against the box's lower face the
+	// general proof departs, over a horizon its 900 rad²/s² curvature keeps
+	// short.
+	fastSpin, err := doc.SweepPair(t.Context(), floor, box, sweepDrift(r3.Vec{}, .1), path, req)
 	require.NoError(t, err)
-	require.Equal(t, decad.SweepUndecided, tooFast.Outcome)
-	require.Equal(t, decad.SweepDepartureUnproved, tooFast.Cause)
+	require.Equal(t, decad.SweepDepartedClear, fastSpin.Outcome, "cause=%v", fastSpin.Cause)
+	require.Less(t, fastSpin.Departure.Until.Elapsed.Value.Base(), .01)
 	path.AngularVelocity.Y = units.RadiansPerSecond(1)
 	path.Center.X = -100
 	badPivot, err := doc.SweepPair(t.Context(), floor, box, sweepDrift(r3.Vec{}, .1), path, req)

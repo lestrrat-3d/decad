@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"math/big"
+	"sort"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -47,7 +48,160 @@ func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
 	run := rotationalPairSweep{doc: d, a: aPath, b: bPath, req: req,
 		resolution: resolution, report: report, planar: true}
 	result, err := run.execute(ctx)
-	return result, true, err
+	if err != nil || result == nil {
+		return result, true, err
+	}
+	result.replay = run.planarReplayProof(result)
+	return result, true, nil
+}
+
+// planarContinuation reruns a source-box pair whose box continuation proofs
+// could not settle an initial touch as two exact planar bodies, whose §10.2
+// and §10.3 proofs read every vertex. It reports false, and the box report
+// stands, when the planar run is not admitted or settles nothing either.
+func (d *Document) planarContinuation(ctx context.Context, boxes *SweepReport,
+	pa, pb affinePairPath, resolution *big.Rat) (*SweepReport, bool, error) {
+	if boxes.Outcome != SweepUndecided || boxes.InitialEvent == nil ||
+		boxes.InitialEvent.Relation != ContactTouching ||
+		boxes.Cause != SweepDepartureUnproved && boxes.Cause != SweepContactTrackUnproved {
+		return nil, false, nil
+	}
+	fresh := &SweepReport{A: boxes.A, B: boxes.B, PathA: boxes.PathA, PathB: boxes.PathB, Request: boxes.Request}
+	result, admitted, err := d.sweepPlanarPair(ctx, boxes.A, boxes.B, pa, pb, boxes.Request, resolution, fresh)
+	if err != nil {
+		return nil, true, err
+	}
+	if !admitted || result == nil || result.Outcome == SweepUndecided {
+		return nil, false, nil
+	}
+	return result, true, nil
+}
+
+// planarReplay is the replay certificate of a planar sweep. It never reruns
+// the pair relation: a rounded pose is accepted when its vertex deviation from
+// the ideal path stays below a lower bound on the ideal separation that the
+// sweep already proved, so each replay costs one pass over both vertex sets.
+type planarReplay struct {
+	departure *planarDepartureProof // (0, until], when the sweep departed
+	spans     []planarClearSpan     // the certified clear intervals, in order
+	travel    *big.Rat              // both bodies' travel bound per unit fraction
+}
+
+// planarClearSpan is one interval the search certified clear: by its two
+// ends' lower gaps and the §4.3 travel bound, or by separated vertex hulls.
+type planarClearSpan struct {
+	from, to    *big.Rat
+	left, right *big.Rat // lower gaps at the two ends, nil when unproved
+	axis        *big.Rat // hull gap over the span, nil when the hulls meet
+}
+
+// lowerGap bounds the ideal separation at f from below, or returns nil when
+// no recorded certificate covers f.
+func (p *planarReplay) lowerGap(f *big.Rat) *big.Rat {
+	if p.departure != nil && f.Sign() > 0 && f.Cmp(p.departure.until) <= 0 {
+		return p.departure.lowerGap(f)
+	}
+	for _, span := range p.spans {
+		if f.Cmp(span.from) < 0 || f.Cmp(span.to) > 0 {
+			continue
+		}
+		var best *big.Rat
+		candidates := []*big.Rat{span.axis}
+		if span.left != nil {
+			candidates = append(candidates, new(big.Rat).Sub(span.left,
+				new(big.Rat).Mul(new(big.Rat).Sub(f, span.from), p.travel)))
+		}
+		if span.right != nil {
+			candidates = append(candidates, new(big.Rat).Sub(span.right,
+				new(big.Rat).Mul(new(big.Rat).Sub(span.to, f), p.travel)))
+		}
+		for _, candidate := range candidates {
+			if candidate != nil && (best == nil || candidate.Cmp(best) > 0) {
+				best = candidate
+			}
+		}
+		return best
+	}
+	return nil
+}
+
+// planarReplayProof records what replay needs from a finished planar run:
+// the track, or the departure and every certified clear interval up to the
+// end of the clear prefix. It returns nil when the outcome has no replay.
+func (r *rotationalPairSweep) planarReplayProof(result *SweepReport) *sweepReplayProof {
+	proof := &sweepReplayProof{rotation: &[2]rotationalSweepPath{r.a, r.b},
+		request: r.req.ContactRequest, outcome: result.Outcome}
+	planar := &planarReplay{departure: r.departure,
+		travel: new(big.Rat).Add(r.a.fullTravel, r.b.fullTravel)}
+	proof.planar = planar
+	start, end := new(big.Rat), big.NewRat(1, 1)
+	switch result.Outcome {
+	case SweepPersistentTouch, SweepPersistentBand:
+		if result.ContactTrack == nil || result.ContactTrack.planar == nil {
+			return nil
+		}
+		proof.track = result.ContactTrack
+		return proof
+	case SweepImpactBracket:
+		if result.Bracket == nil {
+			return nil
+		}
+		left, leftOK := exactBaseValue(result.Bracket.From.Fraction)
+		right, rightOK := exactBaseValue(result.Bracket.To.Fraction)
+		if !leftOK || !rightOK || left.Cmp(right) >= 0 {
+			return nil
+		}
+		proof.setBracket(left, right)
+		end = left
+	case SweepClear, SweepDepartedClear:
+	default:
+		return nil
+	}
+	if r.departure != nil {
+		start = r.departure.until
+	}
+	samples := append([]SweepSample(nil), result.Samples...)
+	sort.Slice(samples, func(i, j int) bool { return samples[i].exactFraction.Cmp(samples[j].exactFraction) < 0 })
+	covered := new(big.Rat).Set(start)
+	for i := 0; i+1 < len(samples); i++ {
+		from, to := samples[i].exactFraction, samples[i+1].exactFraction
+		if from.Cmp(start) < 0 || to.Cmp(end) > 0 {
+			continue
+		}
+		if from.Cmp(covered) != 0 {
+			return nil
+		}
+		span := planarClearSpan{from: from, to: to, left: sampleLowerGap(&samples[i]),
+			right: sampleLowerGap(&samples[i+1]), axis: r.intervalAxisGap(from, to)}
+		travel := new(big.Rat).Mul(new(big.Rat).Sub(to, from), planar.travel)
+		if span.axis == nil && (span.left == nil || span.right == nil ||
+			new(big.Rat).Add(span.left, span.right).Cmp(travel) <= 0) {
+			return nil
+		}
+		planar.spans = append(planar.spans, span)
+		covered = to
+	}
+	if covered.Cmp(end) != 0 {
+		return nil
+	}
+	return proof
+}
+
+// sampleLowerGap is a separated sample's proven positive lower gap, or nil.
+func sampleLowerGap(sample *SweepSample) *big.Rat {
+	if sample.Ideal.Relation != ContactSeparated || sample.Ideal.Gap == nil {
+		return nil
+	}
+	value, okValue := exactBaseValue(sample.Ideal.Gap.Value)
+	bound, okBound := exactBaseValue(sample.Ideal.Gap.Bound)
+	if !okValue || !okBound {
+		return nil
+	}
+	lower := new(big.Rat).Sub(value, bound)
+	if lower.Sign() <= 0 {
+		return nil
+	}
+	return lower
 }
 
 // preparePlanarSweepPath pairs a body's ideal motion with its identity-pose

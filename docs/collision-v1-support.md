@@ -20,7 +20,7 @@ shows a box impact and computed rebound.
 | Full source cylinder and source box | Axial disk in a wide face; vertical extruded sidewall against a broad face | Centered frictionless rebound |
 | Verified faceted Boolean and source-box floor | One exact rectangular lower face, vertical affine path, contained footprint | Frictionless rebound or rest |
 | Full source cylinder sidewall, against a planar face or a parallel full source cylinder | Two-end ruling line at identity query poses only | None yet |
-| Two exact planar solids | Gap, touch, or overlap at any pose with a positive-determinant basis; a manifold when one is convex; a clear path or first impact under rotating or affine paths | None yet |
+| Two exact planar solids | Gap, touch, or overlap at any pose with a positive-determinant basis; a manifold when one is convex; a clear path, first impact, departure from touch, or persistent touch or band track under rotating or affine paths | None yet |
 
 The source-box path starts from rectangular source prisms. Signed-axis
 face patches cover affine approach, persistent contact, and the first edge
@@ -110,10 +110,24 @@ face rests on an edge of a non-convex body. No step response uses it yet.
 `SweepPair` checks two such solids under any path, spinning or not, when no
 narrower path admits them. It proves a clear path, or brackets the first
 impact within `TimeResolution` onto a sample where one body's corner is
-provably inside the other. A pair that starts touching returns
-`SweepUndecided` unless the caller stops at initial contact, and the report
-has no replay proof. [Planar sweep tests](../contact_sweep_faceted_test.go)
+provably inside the other. [Planar sweep tests](../contact_sweep_faceted_test.go)
 check a tumbling wedge's first corner impact against its exact time.
+
+A pair that starts touching continues when one body's face plane holds that
+whole body behind it and the other body's corners on or in front of it. If
+every touching corner moves away from the plane, the sweep proves a
+departure over a stated time and searches the rest. Otherwise, under
+`ContinueCertifiedTouch`, a plane body that does not spin carries a band
+track: every touching corner stays within the published `Band()` depth of
+the plane, the other corners stay clear, and the touching corners stay over
+the face. A box tipping about its resting edge is such a track. With zero
+depth through the whole step the track is an exact `SweepPersistentTouch`.
+Source boxes whose own proofs cannot continue a touch take this path too.
+Touches no such plane covers, such as two crossing edges or a box in a tray
+corner, stay `SweepUndecided`. These reports replay rounded poses without
+rerunning the pair test. No step consumes a band track yet.
+[Band and departure tests](../contact_sweep_band_test.go) check the depth
+and the departure time against their closed forms.
 
 ## Bodies and response
 
