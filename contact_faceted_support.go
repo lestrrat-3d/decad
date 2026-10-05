@@ -7,6 +7,77 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
+// boundedFacetedExtent encloses the true boundary by the held vertex extrema
+// and the payload's two-sided boundary displacement. It does not identify a
+// support face, so callers may use it only for strict separation.
+type boundedFacetedExtent struct {
+	box   sourceBoxContactProof
+	bound dyadic
+}
+
+func sourceBoundedFacetedExtent(ctx context.Context, b *Body,
+	pose r3.Transform) (boundedFacetedExtent, bool, error) {
+	if b == nil || !b.solid || b.kind != BodySolid || !signedAxisTransform(pose) {
+		return boundedFacetedExtent{}, false, nil
+	}
+	pp, ok := b.payload.(facetedPayload)
+	if !ok || len(pp.verts) == 0 || !finiteMeasurementValues(pp.meshBound, pp.volSymDiff) ||
+		pp.meshBound < 0 || pp.volSymDiff < 0 {
+		return boundedFacetedExtent{}, false, nil
+	}
+	budget := newWorkBudget(ctx)
+	var proof boundedFacetedExtent
+	proof.bound = mustDyOf(pp.meshBound)
+	for i, v := range pp.verts {
+		if err := budget.step(); err != nil {
+			return boundedFacetedExtent{}, false, err
+		}
+		if !finiteVec(v) {
+			return boundedFacetedExtent{}, false, nil
+		}
+		placed := exactContactTransform(pose, dyVec(v))
+		for axis := range 3 {
+			if i == 0 || dyCmp(placed[axis], proof.box.lo[axis]) < 0 {
+				proof.box.lo[axis] = placed[axis]
+			}
+			if i == 0 || dyCmp(placed[axis], proof.box.hi[axis]) > 0 {
+				proof.box.hi[axis] = placed[axis]
+			}
+		}
+	}
+	return proof, true, budget.err()
+}
+
+func boundedFacetedInsideFloor(extent boundedFacetedExtent, floor sourceBoxContactProof) bool {
+	for axis := range 2 {
+		if dyCmp(dySubScalar(extent.box.lo[axis], extent.bound), floor.lo[axis]) <= 0 ||
+			dyCmp(dyAdd(extent.box.hi[axis], extent.bound), floor.hi[axis]) >= 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func boundedFacetedFloorGap(extent boundedFacetedExtent,
+	floor sourceBoxContactProof) (Measurement, bool) {
+	held := dySubScalar(extent.box.lo[2], floor.hi[2])
+	if dyCmp(held, extent.bound) <= 0 {
+		return Measurement{}, false
+	}
+	reading, ok := sourceBoxSignedReading(held)
+	if !ok {
+		return Measurement{}, false
+	}
+	boundaryBound, _ := extent.bound.float64()
+	bound := absSumUpper(reading.Bound.Base(), boundaryBound)
+	if !finiteMeasurementValues(bound) || reading.Value.Base()-bound <= 0 {
+		return Measurement{}, false
+	}
+	reading.Bound = units.Millimeters(bound)
+	reading.Exactness = exactnessOf(bound)
+	return reading, true
+}
+
 // facetedAxisSupport is one complete rectangular extremal face of an exact
 // faceted solid. The coordinates and footprint are exact dyadics; face is the
 // original body's Face, not a face of a transient placed body.
@@ -196,6 +267,15 @@ func classifyFacetedFloorBox(ctx context.Context, report *ContactReport, faceted
 		return err
 	}
 	if !ok {
+		extent, bounded, err := sourceBoundedFacetedExtent(ctx, faceted, pose)
+		if err != nil {
+			return err
+		}
+		if bounded && extent.bound.sign() > 0 && boundedFacetedInsideFloor(extent, floor) {
+			if gap, measured := boundedFacetedFloorGap(extent, floor); measured {
+				report.Relation, report.Gap, report.Reason = ContactSeparated, &gap, ContactNoReason
+			}
+		}
 		return nil
 	}
 	for j := range 2 {

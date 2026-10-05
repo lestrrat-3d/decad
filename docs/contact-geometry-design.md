@@ -42,6 +42,15 @@ support-plane equality proves `Touching` and publishes all four footprint
 corners with the original faceted Face and an exact vertical normal. Positive
 axial separation publishes the exact gap. A crossing support plane, floor
 edge, lateral approach, or missing support proof remains `Undecided`.
+When a faceted Boolean carries a positive finite boundary displacement, a
+signed-axis pose can still prove strict separation above a source-box floor.
+The held vertex extrema bound the whole held solid, and the certified two-sided
+boundary displacement widens each extent. The widened X and Y extents must lie
+strictly inside the floor face. The held lower Z extent minus the displacement
+must stay strictly above the floor's upper face. The resulting gap reading
+charges the boundary displacement and its own float conversion. This path
+publishes no support face or manifold; near touch and crossing remain
+`Undecided`.
 
 A full circular source prism at a signed-axis pose can certify separation
 from a source box across one axial face. Its complete projected disk must lie

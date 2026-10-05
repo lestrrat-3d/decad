@@ -414,8 +414,9 @@ func exactnessFromBound(bound float64) Exactness {
 }
 
 // SweepPair certifies the first encounter of two live solids under one shared
-// duration. Continuous proofs cover affine source-box paths, one verified
-// faceted floor path, co-translating oblique source boxes, a source sphere in
+// duration. Continuous proofs cover affine source-box paths, exact faceted
+// floor contact and bounded faceted floor clearance, co-translating oblique
+// source boxes, a source sphere in
 // an axis or orthogonal rotated box face corridor, an affine pair of source
 // spheres, axial source-cylinder face paths, rotating source-box and centered-sphere rigid drifts,
 // and admitted rotating PoseSegments.

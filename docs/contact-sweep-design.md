@@ -21,6 +21,15 @@ the sweep returns `Undecided`. A bracket ending after support-plane crossing,
 a lateral path, an unproved support face, and a footprint reaching the floor
 edge also return `Undecided`. The contact track retains the original faceted
 Face. Rounded replay checks the exact support-plane path and footprint proof.
+A positive-bound faceted Boolean solid can certify only a strict clear span
+above a source-box floor. Both signed-axis paths must have zero angular and
+transverse motion. The held vertex extrema, widened by the certified boundary
+displacement, stay inside the floor's projected face. The lower Z gap is affine;
+both endpoints must exceed the displacement, including conversion error.
+Both real endpoint contact queries must report separation. Replay charges the
+rounded pose deviation and requires the widened actual extents to stay inside
+the floor face with a positive gap. A path reaching the boundary allowance,
+moving transversely, or rotating returns `SweepUndecided`.
 Two source semicircle spheres certify affine first impact
 through exact squared-distance motion, including transverse crossing, and
 separating departure. Their exact isolated interior tangent publishes a

@@ -16,6 +16,8 @@ type sweepReplayProof struct {
 	boxA, boxB                 sourceBoxContactProof
 	sphere                     *sourceSphereContactProof
 	spherePair                 *[2]sourceSphereContactProof
+	facetedClear               *boundedFacetedExtent
+	facetedFirst               bool
 	cylinder                   *sourceCylinderContactProof
 	cylinderFirst              bool
 	clearAxis, clearSign       int
@@ -46,8 +48,8 @@ func (p *sweepReplayProof) setBracket(left, right *big.Rat) {
 }
 
 // HasAffineReplayProof reports whether this sweep can certify rounded poses
-// along an affine source-box, source-sphere, extruded or revolved
-// source-cylinder, or oriented face-track path.
+// along an affine source-box, source-sphere, faceted clear, extruded or
+// revolved source-cylinder, or oriented face-track path.
 func (r *SweepReport) HasAffineReplayProof() bool {
 	if r == nil || r.replay == nil {
 		return false
@@ -140,6 +142,9 @@ func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Tra
 	if r.replay.orientedSphere != nil {
 		return r.certifiedOrientedSpherePosesAtFraction(f, poseA, poseB)
 	}
+	if r.replay.facetedClear != nil {
+		return r.certifiedBoundedFacetedPosesAtFraction(f, poseA, poseB)
+	}
 	actualA, ok := translatedReplayBox(r.replay.boxA, r.replay.pa.from, poseA)
 	if !ok {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: replay pose A is not an affine translation", ErrUnsupported)
@@ -158,6 +163,26 @@ func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Tra
 	classifySourceBoxes(contact, actualA, actualB)
 	if !r.replayRelationCovered(f, contact.Relation, actualA, actualB, resolution) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose changes the certified relation", ErrUnsupported)
+	}
+	return poseA, poseB, nil
+}
+
+func (r *SweepReport) certifiedBoundedFacetedPosesAtFraction(f *big.Rat,
+	poseA, poseB r3.Transform) (r3.Transform, r3.Transform, error) {
+	p := r.replay
+	floor := p.boxA
+	if p.facetedFirst {
+		floor = p.boxB
+	}
+	observedFloor, observedExtent, deviation, ok := boundedFacetedReplayBoxes(
+		floor, *p.facetedClear, p.pa, p.pb, poseA, poseB, f, p.facetedFirst)
+	resolution, valid := exactBaseValue(p.request.PointResolution)
+	if !ok || !valid || deviation.Cmp(resolution) > 0 ||
+		!boundedFacetedInsideFloor(observedExtent, observedFloor) {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: bounded faceted replay leaves its clear corridor", ErrUnsupported)
+	}
+	if _, proved := boundedFacetedFloorGap(observedExtent, observedFloor); !proved {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded bounded faceted replay loses its clear gap", ErrUnsupported)
 	}
 	return poseA, poseB, nil
 }
