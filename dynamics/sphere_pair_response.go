@@ -210,7 +210,7 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 	post := pre
 	postA := vA.Sub(n.Scale(impulse * inverse[0]))
 	postB := vB.Add(n.Scale(impulse * inverse[1]))
-	if initial && e == 0 {
+	if e == 0 {
 		common, commonOK := spherePairCommonVelocity(vA, vB, postA, postB,
 			w.parts[0].mass, w.parts[1].mass, w.step.VelocityResidual.Base())
 		if commonOK {
@@ -224,7 +224,7 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 	post.entries[1].LinearVelocity = spherePairQuantityVelocity(postB)
 	if !spherePairResponseWithin([2]r3.Vec{vA, vB}, [2]r3.Vec{postA, postB},
 		[2]decad.MassProperties{w.parts[0].mass, w.parts[1].mass},
-		n, point.Normal.Bound.Base(), impulse, e, initial && e == 0,
+		n, point.Normal.Bound.Base(), impulse, e, e == 0,
 		w.step, omittedSpeed, omittedEnergy) {
 		return undecided(w, "sphere response normal residual or departure exceeds limit"), nil
 	}

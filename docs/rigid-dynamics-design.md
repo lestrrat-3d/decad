@@ -87,6 +87,13 @@ separated position correction within the certified
 bracket and contact slop is allowed when a full clear remainder sweep proves
 the pair cannot meet again. Unresolved tangency or a noncentral mass stops the
 step when its angular response exceeds that residual.
+At zero restitution, an interior first-impact bracket may leave zero
+normal departure speed. The response admits that speed within
+`VelocityResidual`, including one exactly shared velocity when the bounded
+impulse, momentum, and energy checks admit it. The bounded correction must
+produce a separated pair, and both ideal and rounded remainder sweeps must
+certify `SweepClear`. The trace replays the rounded impact prefix and clear
+remainder; a failed correction or sweep returns `Undecided` without a state.
 When two dynamic source spheres start at one certified off-axis point touch,
 have zero spin and friction, and have bounded closing normal speed, the
 bounded two-body impulse admits positive or zero restitution. The event has
