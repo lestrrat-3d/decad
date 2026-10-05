@@ -396,7 +396,11 @@ overlap their box patches leave without a manifold takes the planar one
 (`docs/multibody-dynamics-design.md` §9.3) when that relation agrees and
 every point is an edge or vertex in, on or crossing the other box: an edge
 of a rotated box on a floor, or that edge poking slightly through it. Face
-pairs stay with the box patches, which withhold the degenerate ones.
+pairs stay with the box patches, which withhold the degenerate ones. A
+convex body's corner or edge poking through one face of a non-convex planar
+body, a tray's floor, takes the face-local patch of that document's §9.6:
+the one crossed face, its deepest feature, the sunk part over the face, and
+a clear column above it, each proved exactly.
 
 The horizontal rotated-face path requires one source box at a signed-axis
 pose and another whose transformed source edges keep one face horizontal.
