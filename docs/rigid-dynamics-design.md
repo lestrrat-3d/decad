@@ -61,6 +61,13 @@ point speed over the complete source body, rotational energy, and travel over
 the full step. A supplied center 5 mm off the source axis with inertia
 1e8 kg·mm² fails the point-motion bound even when its angular speed meets
 `AngularVelocityResidual`.
+A vertical full circular source prism can also strike the side of a broad
+fixed source box along its cylindrical wall. The line-contact proof supplies
+one centered witness and an exact horizontal normal. A frictionless positive
+restitution response uses density-derived mass, bounds omitted whole-body
+spin travel, and requires ideal and rounded separating sweeps before its
+trace replays the approach and rebound. A line reaching the box-face edge or
+relative axial translation returns `Undecided` on this path.
 A verified faceted Boolean union with one complete rectangular lower support
 face can hit a fixed source-box floor vertically with supplied mass and zero
 spin. Its four-point source-face manifold and exact affine first-impact

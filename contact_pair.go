@@ -85,7 +85,8 @@ type ContactReport struct {
 // when the sphere center is the query origin. Sphere-pair center lines
 // may be off-axis when their normal and witnesses meet the requested bounds.
 // A full source cylinder, extruded or revolved, can prove an axial gap and
-// disk-face contact against a containing box face.
+// disk-face contact against a containing box face. A vertical full circular
+// source prism can also prove a horizontal sidewall gap and line contact.
 // A zero-bound faceted solid, or its translation-only placed copy with an
 // exact source mesh, can prove lower support face contact or an axial gap
 // against a source-box floor that strictly contains its support footprint.

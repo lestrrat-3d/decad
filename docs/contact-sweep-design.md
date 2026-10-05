@@ -9,7 +9,9 @@ inside one box face. A sphere against an exactly orthogonal rotated source
 box also certifies a strict single-face affine clear span, first impact, or
 separating departure. A full source cylinder certifies a clear path,
 first face impact, and separating departure inside a source-box face, including
-transverse translation that stays inside the face.
+transverse translation that stays inside the face. A full circular vertical
+source prism also certifies the same outcomes at its sidewall when its complete
+axial contact line stays inside a broad source-box face.
 One zero-bound faceted Boolean solid with a certified rectangular lower face
 can certify an affine vertical clear path, first exact face touch, separating
 departure, or persistent face contact against a containing source-box floor.
@@ -437,7 +439,7 @@ An initial touch follows §5.1, regardless of later motion. If a different
 pair kernel cannot prove the full two-sided relation, it returns
 `SweepUndecided` rather than this outcome.
 
-### 4.6 Source-cylinder axial face path
+### 4.6 Source-cylinder box-face path
 
 For a full circular source prism or axis-incident rectangular full revolve
 and one source box at signed-axis poses, construct exact outer boxes from the
@@ -472,6 +474,17 @@ inside the rounded box face and the pose difference must fit
 Departure requires exact touch at the start and positive ideal and rounded
 gaps afterward. Before an impact bracket, replay requires a positive gap;
 inside the bracket, the ideal support gap must fit `PointResolution`.
+
+For one full circular source prism with a vertical cylinder axis, the same
+affine proof may select a horizontal axis instead of the cylinder axis. Its
+relative axial displacement must be zero. Its complete axial interval
+and other transverse diameter must stay strictly inside the box face at
+both endpoints. The contact query supplies the source cylindrical Face,
+box Face, one bounded midpoint on the complete axial contact line, and the
+exact transverse normal. The selected circle support is the exact outer-box
+extremum, so its signed gap is affine and the impact, departure, and replay
+checks above apply. A revolved sidewall, rotating cylinder, or line reaching
+the face edge returns `SweepUndecided` on this path.
 
 ## 5. Earliest-event search
 

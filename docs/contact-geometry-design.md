@@ -72,9 +72,13 @@ and radius; the resulting solid has two planar disks and one cylindrical wall.
 Both source paths identify their original planar disk faces by exact signed
 world normals. At axial touch, each publishes a bounded disk-center witness
 and the opposed original face identities. A shallow crossing of the opposed
-axial supports also proves overlap and publishes the same witnesses. An
-embedded cylinder, side approach, or projected disk reaching a face edge
-returns `Undecided`.
+axial supports also proves overlap and publishes the same witnesses. A full
+circular vertical source prism can also meet a broad box face along its
+sidewall when the complete axial line and transverse diameter lie inside that
+face. The
+source cylindrical Face and box Face give one midpoint witness and an exact
+transverse normal. Embedded cylinders, edge contact, revolved sidewalls, and
+tilted axes remain `Undecided` on this source path.
 
 Two full source semicircle spheres receive the exact relation proof from their
 recorded centers and radii. A nonzero center offset with crossing sphere
@@ -456,10 +460,19 @@ The disk center is an exact interior point of both opposed faces and supplies
 one bounded representative witness per body. The private disk and axial
 interval certify the complete contact set. Reverse body order by swapping
 the witnesses and reversing the normal. Withhold the manifold if a face
-identity, point bound, or shallow-crossing proof fails. This source path
-returns `Undecided` for lateral edges, tilted axes, tangency, and an embedded
-cylinder; the identity-pose analytic fallback may prove a relation without a
-manifold.
+identity, point bound, or shallow-crossing proof fails.
+
+For the full circular source prism's sidewall with vertical cylinder axis,
+require its complete axial interval and other transverse diameter strictly
+inside one box face. The
+exact circle support on that face's normal axis identifies the complete
+axial contact line and the source cylindrical Face. Publish one bounded
+midpoint witness on the line, the opposed original Face identities, and the
+exact transverse normal. A shallow crossing must leave the far support
+outside the same box face and the near support outside the opposite face.
+Lateral edge contact, tilted axes, revolved sidewalls, and an embedded
+cylinder return `Undecided`; the identity-pose analytic fallback may prove a
+relation without a manifold.
 
 ## 5. Contact cases and ordering
 
