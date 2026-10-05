@@ -21,6 +21,7 @@ import (
 // participant has zero inverse mass and inertia and zero velocity.
 type nominalBody struct {
 	dynamic    bool
+	kinematic  bool // moves with its driver's field: v + w×r about the world origin
 	invMass    float64
 	invInertia r3.SymmetricTensor // world axes at the event pose
 	center     r3.Vec
@@ -69,12 +70,13 @@ func vecOf(q QuantityVec) r3.Vec {
 
 // nominalBodies reads each island participant's float64 inverse mass, world
 // inverse inertia through r3, world mass center and pre-solve velocities. A
-// translating kinematic participant moves at its driver velocity.
-func (w *World) nominalBodies(isl island, pre State, drive map[int][3]*big.Rat) ([]nominalBody, *islandFailure) {
+// kinematic participant moves with its driver's velocity field, which it
+// reads about the world origin.
+func (w *World) nominalBodies(isl island, pre State, drive map[int]driverMotion) ([]nominalBody, *islandFailure) {
 	out := make([]nominalBody, len(isl.bodies))
 	for slot, index := range isl.bodies {
-		if v, ok := drive[index]; ok {
-			out[slot].v = vecOf(ratVelocity(v))
+		if motion, ok := drive[index]; ok {
+			out[slot] = nominalBody{kinematic: true, v: floatVec(motion.linear), w: floatVec(motion.angular)}
 			continue
 		}
 		if w.bodies[index].definition.Role != Dynamic {
@@ -101,13 +103,23 @@ func (w *World) nominalBodies(isl island, pre State, drive map[int][3]*big.Rat) 
 	return out, nil
 }
 
-// pointVelocity is v + ω×r for a dynamic body, the driver velocity of a
-// kinematic one and zero for a fixed one.
+// pointVelocity is v + ω×r for a dynamic body (r from its mass center) and
+// for a kinematic one (r from the world origin, its driver's field), and
+// zero for a fixed one.
 func (b nominalBody) pointVelocity(r r3.Vec) r3.Vec {
-	if !b.dynamic {
+	if !b.dynamic && !b.kinematic {
 		return b.v
 	}
 	return b.v.Add(b.w.Cross(r))
+}
+
+// floatVec rounds an exact vector to its nearest float components.
+func floatVec(x [3]*big.Rat) r3.Vec {
+	var out [3]float64
+	for axis, value := range x {
+		out[axis], _ = value.Float64()
+	}
+	return r3.Vec{X: out[0], Y: out[1], Z: out[2]}
 }
 
 // apply adds the impulse j at lever r to a dynamic body.
@@ -166,10 +178,10 @@ func (w *World) nominalPoints(isl island, slots map[int]int, bodies []nominalBod
 		a, b := slots[pair.a], slots[pair.b]
 		for _, point := range pair.manifold.Points {
 			p := nominalPoint{a: a, b: b, n: point.Normal.Value}
-			if bodies[a].dynamic {
+			if bodies[a].dynamic || bodies[a].kinematic {
 				p.rA = point.OnA.Value.Sub(bodies[a].center)
 			}
-			if bodies[b].dynamic {
+			if bodies[b].dynamic || bodies[b].kinematic {
 				p.rB = point.OnB.Value.Sub(bodies[b].center)
 			}
 			p.k = bodies[a].invMass + bodies[b].invMass + bodies[a].angularMass(p.rA, p.n) +
@@ -220,7 +232,7 @@ func (w *World) nominalPoints(isl island, slots map[int]int, bodies []nominalBod
 // its sweep count, since further sweeps would move it. Either way the
 // certificate judges the proposal afresh. Every certified island is kept for
 // the next step's cache.
-func (w *World) solveIsland(isl island, pre State, drive map[int][3]*big.Rat,
+func (w *World) solveIsland(isl island, pre State, drive map[int]driverMotion,
 	work *stepWork) (islandSolution, *islandFailure) {
 	slots := make(map[int]int, len(isl.bodies))
 	for slot, index := range isl.bodies {
@@ -368,7 +380,7 @@ func tangentRow(p nominalPoint, current []nominalBody, normal float64, held *[2]
 // velocity (commonVelocities); the certificate then judges the published
 // values, never the unrounded ones.
 func (w *World) publishIsland(isl island, pre State, bodies []nominalBody, points []nominalPoint,
-	lambda []float64, tangent [][2]float64, drive map[int][3]*big.Rat) (islandSolution, islandCertificate, *islandFailure) {
+	lambda []float64, tangent [][2]float64, drive map[int]driverMotion) (islandSolution, islandCertificate, *islandFailure) {
 	snap := func(v r3.Vec, limit float64) r3.Vec {
 		for _, c := range []*float64{&v.X, &v.Y, &v.Z} {
 			if math.Abs(*c) <= limit {
@@ -431,7 +443,7 @@ func (w *World) publishIsland(isl island, pre State, bodies []nominalBody, point
 		for range pair.manifold.Points {
 			published := func(slot int, r r3.Vec) r3.Vec {
 				if !post[slot].dynamic {
-					return post[slot].v
+					return post[slot].pointVelocity(r)
 				}
 				return vecOf(solution.linear[slot]).Add(vecOf(solution.angular[slot]).Cross(r))
 			}
@@ -530,7 +542,7 @@ func (w *World) commonVelocities(isl island, solution islandSolution) {
 // certifyProposal reads a published proposal and its inputs as exact
 // intervals and runs the certificate over them.
 func (w *World) certifyProposal(isl island, pre State, points []nominalPoint,
-	solution islandSolution, drive map[int][3]*big.Rat) (islandCertificate, *islandFailure) {
+	solution islandSolution, drive map[int]driverMotion) (islandCertificate, *islandFailure) {
 	certBodies := make([]certBody, len(isl.bodies))
 	for slot, index := range isl.bodies {
 		after := pre.entries[index]

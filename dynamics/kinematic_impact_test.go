@@ -166,19 +166,21 @@ func kinematicImpactWorldWithRestitution(t *testing.T, doc *decad.Document, driv
 		bodies[0], bodies[1] = bodies[1], bodies[0]
 	}
 	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
-		Bodies: bodies,
-		Step: dynamics.StepConfig{Contact: decad.ContactRequest{
-			PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6)},
-			TimeResolution: units.Seconds(1e-9), ContactSlop: units.Millimeters(1e-6),
-			VelocityResidual:        units.MillimetersPerSecond(1e-6),
-			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
-			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
-			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: maxEvents, MaxPairSweeps: 4096,
-		},
-	})
+		Bodies: bodies, Step: kinematicImpactConfig(maxEvents)})
 	require.NoError(t, err)
 	return w
+}
+
+func kinematicImpactConfig(maxEvents int) dynamics.StepConfig {
+	return dynamics.StepConfig{Contact: decad.ContactRequest{
+		PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6)},
+		TimeResolution: units.Seconds(1e-9), ContactSlop: units.Millimeters(1e-6),
+		VelocityResidual:        units.MillimetersPerSecond(1e-6),
+		AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+		ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+		PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
+		MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: maxEvents, MaxPairSweeps: 4096,
+	}
 }
 
 func TestKinematicInteriorImpactRespectsEventLimit(t *testing.T) {

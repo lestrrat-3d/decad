@@ -220,7 +220,9 @@ func TestSpherePairInteriorOffAxisFrictionReplaysBothSides(t *testing.T) {
 	impact := report.Events[0].Time
 	require.InDelta(t, .125, impact.Base(), cfg.TimeResolution.Base())
 	require.GreaterOrEqual(t, impact.Base(), .125)
-	require.InDelta(t, 33, report.Events[0].NormalImpulse.Base(), 1e-9)
+	// Read at the bracket's right sample, the impulse agrees with the exact
+	// 33 within ImpulseResidual (docs/multibody-dynamics-design.md §14).
+	require.InDelta(t, 33, report.Events[0].NormalImpulse.Base(), cfg.ImpulseResidual.Base())
 	for _, elapsed := range []units.Value{units.Seconds(.0625), impact, units.Seconds(.1875), duration} {
 		sample, sampleErr := report.Trace.Sample(elapsed)
 		require.NoError(t, sampleErr)
@@ -231,7 +233,10 @@ func TestSpherePairInteriorOffAxisFrictionReplaysBothSides(t *testing.T) {
 		pair, pairErr := doc.ContactPair(t.Context(), a, b, sa.Pose, sb.Pose, cfg.Contact)
 		require.NoError(t, pairErr)
 		if elapsed == impact {
-			require.Equal(t, decad.ContactTouching, pair.Relation)
+			// The event's post state is pushed just apart (§6.6): the
+			// spheres separate by no more than ContactSlop.
+			require.Equal(t, decad.ContactSeparated, pair.Relation)
+			require.LessOrEqual(t, pair.Gap.Value.Base()+pair.Gap.Bound.Base(), cfg.ContactSlop.Base())
 		} else {
 			require.Equal(t, decad.ContactSeparated, pair.Relation)
 		}

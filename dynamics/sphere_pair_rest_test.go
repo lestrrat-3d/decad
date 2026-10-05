@@ -318,7 +318,13 @@ func TestSpherePairInteriorZeroRestitutionRest(t *testing.T) {
 				require.True(t, ok)
 				pair, pairErr := doc.ContactPair(t.Context(), a, b, sa.Pose, sb.Pose, config.Contact)
 				require.NoError(t, pairErr)
-				require.Equal(t, decad.ContactSeparated, pair.Relation)
+				if elapsed.Base() < step.Events[0].Time.Base() {
+					require.Equal(t, decad.ContactSeparated, pair.Relation)
+					continue
+				}
+				// §6.6 corrects the resting pair into exact touch, which it
+				// keeps while both spheres stand still.
+				require.Equal(t, decad.ContactTouching, pair.Relation)
 			}
 		})
 	}

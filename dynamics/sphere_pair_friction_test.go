@@ -310,8 +310,12 @@ func TestSpherePairInteriorFrictionImpactReplaysBothSides(t *testing.T) {
 	// TimeResolution after the exact contact time 0.125 s (§5.1).
 	require.InDelta(t, .125, event.Time.Base(), config.TimeResolution.Base())
 	require.GreaterOrEqual(t, event.Time.Base(), .125)
-	require.InDelta(t, 60, event.NormalImpulse.Base(), 1e-12)
-	require.InDelta(t, 32.0/7, event.TangentImpulse.Y.Base(), 1e-12)
+	// The impulses are read at the bracket's right sample, up to one
+	// TimeResolution after the exact contact, so they agree with the exact
+	// 60 and 32/7 within ImpulseResidual (docs/multibody-dynamics-design.md
+	// §14).
+	require.InDelta(t, 60, event.NormalImpulse.Base(), config.ImpulseResidual.Base())
+	require.InDelta(t, 32.0/7, event.TangentImpulse.Y.Base(), config.ImpulseResidual.Base())
 	require.Len(t, event.PointImpulses, 1)
 	require.NotNil(t, event.Solver)
 	for _, elapsed := range []units.Value{units.Seconds(.05), event.Time, units.Seconds(.2)} {
@@ -324,7 +328,10 @@ func TestSpherePairInteriorFrictionImpactReplaysBothSides(t *testing.T) {
 		pair, pairErr := doc.ContactPair(t.Context(), a, b, sa.Pose, sb.Pose, config.Contact)
 		require.NoError(t, pairErr)
 		if elapsed == event.Time {
-			require.Equal(t, decad.ContactTouching, pair.Relation)
+			// The event's post state is pushed just apart (§6.6): the
+			// spheres separate by no more than ContactSlop.
+			require.Equal(t, decad.ContactSeparated, pair.Relation)
+			require.LessOrEqual(t, pair.Gap.Value.Base()+pair.Gap.Bound.Base(), config.ContactSlop.Base())
 		} else {
 			require.Equal(t, decad.ContactSeparated, pair.Relation)
 		}
@@ -333,11 +340,15 @@ func TestSpherePairInteriorFrictionImpactReplaysBothSides(t *testing.T) {
 	require.True(t, ok)
 	endB, ok := report.Next.Body(b)
 	require.True(t, ok)
-	require.InDelta(t, -20, endA.LinearVelocity.X.Base(), 1e-12)
-	require.InDelta(t, 20, endB.LinearVelocity.X.Base(), 1e-12)
-	require.InDelta(t, -32.0/7, endA.LinearVelocity.Y.Base(), 1e-12)
-	require.InDelta(t, -192.0/7, endB.LinearVelocity.Y.Base(), 1e-12)
-	require.InDelta(t, -16.0/7, endA.AngularVelocity.Z.Base(), 1e-12)
-	require.InDelta(t, -16.0/7, endB.AngularVelocity.Z.Base(), 1e-12)
+	// The velocities follow from the bracket-right impulses, so they agree
+	// with the exact values within VelocityResidual and
+	// AngularVelocityResidual (§14).
+	velocity, spin := config.VelocityResidual.Base(), config.AngularVelocityResidual.Base()
+	require.InDelta(t, -20, endA.LinearVelocity.X.Base(), velocity)
+	require.InDelta(t, 20, endB.LinearVelocity.X.Base(), velocity)
+	require.InDelta(t, -32.0/7, endA.LinearVelocity.Y.Base(), velocity)
+	require.InDelta(t, -192.0/7, endB.LinearVelocity.Y.Base(), velocity)
+	require.InDelta(t, -16.0/7, endA.AngularVelocity.Z.Base(), spin)
+	require.InDelta(t, -16.0/7, endB.AngularVelocity.Z.Base(), spin)
 	require.NotNil(t, report.Conservation)
 }

@@ -1,6 +1,7 @@
 package dynamics_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -149,4 +150,95 @@ func TestKinematicRotatingDriverInteriorImpactReverseWorldOrder(t *testing.T) {
 	finalDriver, ok := report.Next.Body(driver)
 	require.True(t, ok)
 	require.Equal(t, path.To, finalDriver.Pose)
+}
+
+// TestKinematicHingedPaddleStrikesWithItsField drives a paddle about a hinge
+// at (5, 0) on the z axis, clockwise at 0.1 rad/s. Its tip edge strikes the
+// face of a free 2 kg box 0.1 mm away, about 0.025 s in. The struck point
+// moves at the field ω × (x − hinge), about 4 mm/s along the face normal,
+// not at the paddle's center, so the closed-form impulse is
+// (1 + e)·v_n / (1/m + (r × n)_z²/I_zz), with r the lever from the box's
+// mass center, and the driver delivers that impulse times v_n as work. The
+// root package proves no departure of an edge from a face while the driver
+// turns, so the step keeps the impact as its certified prefix and stops
+// with StepPairUndecided.
+//
+// Legs of the rotating driver's field (docs/multibody-dynamics-design.md
+// §6.4), each shown to fail by deleting it, watching this test go red, then
+// restoring it:
+//   - driverMotionOf's −ω × p term, which moves the field's axis from the
+//     hinge to the world origin: the driver's reported velocity misses the
+//     field at its pose origin by 0.5 mm/s.
+//   - the kinematic lever in nominalPoints and in the certificate's
+//     constraint, and the kinematic branch of both pointVelocity readings:
+//     the proposal or the certificate reads the field at the world origin,
+//     where the paddle moves at 0.5 mm/s along y only, and no impact is
+//     published.
+//   - newCertBody's angular part of the field, and the certificate's
+//     kinematic work at the contact point: the certificate refuses the
+//     proposal and no impact is published.
+//   - islandKinematicWork's field at the contact point: the work reading
+//     misses λ·v_n.
+//   - the event's driver spin (PreAngularVelocityA): the reported spin is
+//     zero.
+//
+// Legs not shown to fail: the witness spread of islandKinematicWork and the
+// driver spin term of closingSpeedUpper only widen a bound, so deleting one
+// tightens it and can never admit a value; the angular comparison of the
+// warm-start cache only refuses a restart, and a restarted proposal is
+// certified again.
+func TestKinematicHingedPaddleStrikesWithItsField(t *testing.T) {
+	doc := decad.New()
+	paddle := makeBox(t, doc, 0, 0, 10, 40, 0, 10)
+	box := makeBox(t, doc, 10.1, 30, 20.1, 50, 0, 10)
+	hinge := r3.Vec{X: 5}
+	turn, err := r3.RotationAround(hinge, r3.Vec{Z: -1}, units.Radians(.01))
+	require.NoError(t, err)
+	path := decad.PoseSegment{From: r3.Identity(), To: turn, Duration: units.Seconds(.1)}
+	w := kinematicImpactWorld(t, doc, paddle, box, false, 2)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: paddle, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: box, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration(),
+		Drivers: []dynamics.KinematicDriver{{Body: paddle, Path: path}}}, path.Duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, report.Status)
+	require.Nil(t, report.Next)
+	require.Len(t, report.Events, 1)
+	event := report.Events[0]
+	require.Equal(t, dynamics.BodyPair{A: paddle, B: box}, event.Pair)
+	// The tip reaches the face when 5·cos θ + 40·sin θ = 5.1, at
+	// θ ≈ 0.0025 rad, a quarter of the turn.
+	require.InDelta(t, .025, event.Time.Base(), .001)
+	require.Len(t, report.Diagnostics, 1)
+	require.Equal(t, dynamics.StepPairUndecided, report.Diagnostics[0].Code)
+	require.Equal(t, event.Time, report.Diagnostics[0].From)
+	require.Contains(t, report.Diagnostics[0].Reason, fmt.Sprintf("(%d)", decad.SweepDepartureUnproved))
+
+	omega := r3.Vec{Z: -.1}
+	field := func(x r3.Vec) r3.Vec { return omega.Cross(x.Sub(hinge)) }
+	const mass, restitution, inertia = 2.0, .5, 2 * (100 + 400) / 12.0
+	center := r3.Vec{X: 15.1, Y: 40, Z: 5}
+	require.Len(t, event.Manifold.Points, 2)
+	normal := event.Manifold.Points[0].Normal.Value
+	require.InDelta(t, 1, normal.X, 1e-12)
+	// The tip edge meets the face along z at one height, so both points
+	// share one speed and one lever about z.
+	tip := event.Manifold.Points[0].OnA.Value
+	speed := field(tip).Dot(normal)
+	require.InDelta(t, 4, speed, .01)
+	lever := tip.Sub(center).Cross(normal).Z
+	impulse := (1 + restitution) * speed / (1/mass + lever*lever/inertia)
+	const tolerance = 1e-6 // the world's ImpulseResidual
+	require.InDelta(t, impulse, event.NormalImpulse.Base(), tolerance)
+	require.InDelta(t, impulse/mass, event.PostVelocityB.X.Base(), 1e-6)
+	require.InDelta(t, impulse*lever/inertia, event.PostAngularVelocityB.Z.Base(), 1e-6)
+	require.InDelta(t, field(event.PoseA.Translation()).X, event.PreVelocityA.X.Base(), 1e-12)
+	require.InDelta(t, field(event.PoseA.Translation()).Y, event.PreVelocityA.Y.Base(), 1e-12)
+	require.InDelta(t, -.1, event.PreAngularVelocityA.Z.Base(), 1e-15)
+	work, ok := dynamics.KinematicWork(w, report.Events)
+	require.True(t, ok)
+	require.InDelta(t, impulse*speed, work.Value.Base(), 1e-6)
 }

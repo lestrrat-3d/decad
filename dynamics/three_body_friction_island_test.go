@@ -124,7 +124,20 @@ func TestThreeBodyFrictionIslandRealPath(t *testing.T) {
 	require.Equal(t, dynamics.Advanced, reversedReport.Status, "%+v", reversedReport.Diagnostics)
 	reversedBall, found := reversedReport.Next.Body(ball)
 	require.True(t, found)
-	require.Equal(t, final, reversedBall)
+	// The reversed world sums the island's rows in another order, so its
+	// float results may differ from the forward ones in the last few ulps.
+	const orderSlack = 1e-12
+	require.Equal(t, final.LinearVelocity, reversedBall.LinearVelocity)
+	for axis, pair := range [3][2]float64{
+		{final.AngularVelocity.X.Base(), reversedBall.AngularVelocity.X.Base()},
+		{final.AngularVelocity.Y.Base(), reversedBall.AngularVelocity.Y.Base()},
+		{final.AngularVelocity.Z.Base(), reversedBall.AngularVelocity.Z.Base()}} {
+		require.InDelta(t, pair[0], pair[1], orderSlack, "spin axis %d", axis)
+	}
+	require.InDelta(t, 0, final.Pose.Translation().Sub(reversedBall.Pose.Translation()).Len(), orderSlack)
+	for _, axis := range []r3.Vec{{X: 1}, {Y: 1}, {Z: 1}} {
+		require.InDelta(t, 0, final.Pose.ApplyDir(axis).Sub(reversedBall.Pose.ApplyDir(axis)).Len(), orderSlack)
+	}
 	_, err = reversedReport.Trace.Sample(units.Seconds(.05))
 	require.NoError(t, err)
 

@@ -193,3 +193,10 @@ func TraceSliceTimes(tr Trace) [][3]units.Value {
 	}
 	return out
 }
+
+// KinematicWork is the driver work reading islandKinematicWork makes of
+// published events, the reading an advanced step reports as
+// StepConservation.KinematicWork.
+func KinematicWork(w *World, events []ContactEvent) (decad.Measurement, bool) {
+	return w.islandKinematicWork(events)
+}
