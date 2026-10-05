@@ -119,7 +119,7 @@ type Trace struct {
 	excluded            bool
 }
 
-// Sample evaluates a recorded rounded path and its cached source-box proof.
+// Sample evaluates a recorded rounded path and its cached geometry proof.
 // It performs no Document geometry query or response solve.
 func (tr Trace) Sample(t units.Value) (State, error) {
 	timeValue, durationValue := exactBase(t), exactBase(tr.duration)
