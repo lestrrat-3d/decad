@@ -40,6 +40,11 @@ cutting tool. It can change a dimension or feature, run the program again, and
 inspect the new body and verification report. With the program and inputs held
 fixed, **the same model can be rebuilt** without a fresh request to the agent.
 
+For certified shape and motion paths, decad can detect a collision and compute
+the resulting rigid-body motion. The [current support guide](docs/collision-v1-support.md)
+names those paths, and the [box collision example](examples/dynamics_box_collision_example_test.go)
+runs an impact through its replayable trace.
+
 Those modeling operations correspond to steps a CAD add-in can use. Once the
 decad construction meets the checks the agent has asked for, the agent can
 carry the steps into the CAD app to make an **editable, parametric part**. The CAD
