@@ -201,6 +201,14 @@ heights, the rim, and a tray's floor and wall, and
 end and depth over the support set, and the departure, band track, wall
 impact and rim refusal on a tray's floor.
 
+In a scheduled world, a pair that an event leaves inside such a band
+continues on its band track. It leaves the contact set once its event poses
+read separated. The [tumble rest test](../dynamics/tumble_rest_test.go) drops
+a hexagonal prism on a vertex and checks that it rests flat on its cap. A body
+that the solve leaves resting on corners above the face while it still turns
+can stop with `StepEventBudget`. Each band end then comes sooner than the last
+and never reaches the step's end.
+
 ## Bodies and response
 
 `NewWorld` admits two or more sound solids and lists every body pair in

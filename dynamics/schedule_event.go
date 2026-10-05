@@ -41,12 +41,12 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 				return nil, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(pair),
 					"band track has no manifold within the contact request at its end")}, nil
 			}
-			item.manifold, item.band = cloneManifold(*manifold), depth
-			rounded, diagnostics, err := r.roundedDepth(ctx, key, pre)
+			item.manifold, item.band, item.bandEnd = cloneManifold(*manifold), depth, true
+			rounded, relation, diagnostics, err := r.roundedDepth(ctx, key, pre)
 			if err != nil || len(diagnostics) != 0 {
 				return nil, diagnostics, err
 			}
-			item.depth = rounded
+			item.depth, item.rounded = rounded, relation
 			if rounded != nil && w.step.Contact.SupportBand.Base() > 0 {
 				// §10.5: a track ends before a vertex reaches the plane, so at
 				// its end that vertex lies within a grid step of the plane. The
@@ -72,11 +72,11 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 			// §6.6 removes the penetration the rounded event poses show; the
 			// manifold the producer certified at the bracket's right sample
 			// carries the solve.
-			rounded, diagnostics, err := r.roundedDepth(ctx, key, pre)
+			rounded, relation, diagnostics, err := r.roundedDepth(ctx, key, pre)
 			if err != nil || len(diagnostics) != 0 {
 				return nil, diagnostics, err
 			}
-			item.depth = rounded
+			item.depth, item.rounded = rounded, relation
 			switch {
 			case w.manifoldWithin(sweep.Event.Manifold):
 				item.manifold = cloneManifold(*sweep.Event.Manifold)
@@ -125,6 +125,11 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 		return nil, diagnostics, err
 	}
 	maps.Copy(r.policies, solved.policies)
+	for key := range solved.leave {
+		// §10.7: a pair whose event poses read Separated leaves the contact
+		// set; its next slice starts clear, under StopAtInitialContact.
+		delete(r.policies, key)
+	}
 	if transitions == 0 && len(solved.events) == 0 {
 		return nil, nil, nil
 	}
@@ -138,36 +143,37 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 }
 
 // roundedDepth reads a gathered pair at the rounded event poses, the poses
-// the step publishes: §6.6 removes the penetration they show. A separated
-// pair returns no manifold; a touching or overlapping one, or a ContactBand
-// within PenetrationResidual (§10.4), returns its bounded manifold. Any other
+// the step publishes: §6.6 removes the penetration they show, and §5.2 reads
+// the relation for the pair's continuation policy. A separated pair returns
+// no manifold; a touching or overlapping one, or a ContactBand within
+// PenetrationResidual (§10.4), returns its bounded manifold. Any other
 // relation stops the step.
 func (r *scheduleRun) roundedDepth(ctx context.Context, key int, pre State) (*decad.ContactManifold,
-	[]StepDiagnostic, error) {
+	decad.ContactRelation, []StepDiagnostic, error) {
 	w := r.w
 	pair := w.pairs[key]
 	if err := ctx.Err(); err != nil {
-		return nil, nil, err
+		return nil, decad.ContactUndecided, nil, err
 	}
 	contact, err := w.doc.ContactPair(ctx, w.bodies[pair.a].definition.Body,
 		w.bodies[pair.b].definition.Body, pre.entries[pair.a].Pose, pre.entries[pair.b].Pose, w.step.Contact)
 	if err != nil {
-		return nil, nil, err
+		return nil, decad.ContactUndecided, nil, err
 	}
 	switch {
 	case contact.Relation == decad.ContactSeparated:
-		return nil, nil, nil
+		return nil, contact.Relation, nil, nil
 	case contact.Relation == decad.ContactBand && !w.contactBandWithin(contact.Gap):
 		d := scheduleDiagnostic(StepPairUndecided, w.bodyPair(pair),
 			"rounded event poses show a contact band beyond the penetration residual")
 		d.Limit = w.step.PenetrationResidual
-		return nil, []StepDiagnostic{d}, nil
+		return nil, decad.ContactUndecided, []StepDiagnostic{d}, nil
 	case (contact.Relation == decad.ContactTouching || contact.Relation == decad.ContactOverlapping ||
 		contact.Relation == decad.ContactBand) && w.manifoldWithin(contact.Manifold):
 		depth := cloneManifold(*contact.Manifold)
-		return &depth, nil, nil
+		return &depth, contact.Relation, nil, nil
 	default:
-		return nil, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(pair),
+		return nil, decad.ContactUndecided, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(pair),
 			fmt.Sprintf("rounded event poses have relation %v without a bounded manifold", contact.Relation))}, nil
 	}
 }

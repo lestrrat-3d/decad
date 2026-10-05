@@ -156,7 +156,8 @@ func settlePair(ctx context.Context, w *World, pre, state State, a, b *decad.Bod
 	post := state.clone()
 	moves := map[int]r3.Vec{}
 	push := correctionPush{allowance: map[int]float64{}, separating: map[int]struct{}{},
-		policies: map[int]decad.SweepStartPolicy{key: decad.ContinueCertifiedTouch}, untouched: map[int]struct{}{}}
+		policies: map[int]decad.SweepStartPolicy{key: decad.ContinueCertifiedTouch}, untouched: map[int]struct{}{},
+		relations: map[int]decad.ContactRelation{}}
 	if separating {
 		push.separating[key] = struct{}{}
 	}
