@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -55,21 +56,23 @@ func classifyExactPlanarPair(ctx context.Context, report *ContactReport) (bool, 
 			gap := Measurement{Value: units.Millimeters(0), Exactness: Exact, Bound: units.Millimeters(0)}
 			report.Gap = &gap
 		}
-		// §9.3 needs one convex side for a manifold; this stage publishes
-		// none, so the reason names which certificate is missing.
-		report.Reason = ContactNoNormalProof
+		// §9.3 needs one convex side for a manifold; without one the reason
+		// names the missing certificate.
 		convexA, err := planarConvexity(ctx, budget, report.A)
 		if err != nil {
 			return false, err
 		}
-		if !convexA {
-			convexB, err := planarConvexity(ctx, budget, report.B)
-			if err != nil {
-				return false, err
-			}
-			if !convexB {
-				report.Reason = ContactNonConvex
-			}
+		convexB, err := planarConvexity(ctx, budget, report.B)
+		if err != nil {
+			return false, err
+		}
+		if !convexA && !convexB {
+			report.Reason = ContactNonConvex
+			break
+		}
+		report.Reason = ContactNoNormalProof
+		if err := publishPlanarManifold(budget, report, &a, &b, result, convexA, convexB); err != nil {
+			return false, err
 		}
 	default:
 		if report.Reason == ContactNoReason {
@@ -113,7 +116,7 @@ func planarSolidAtPose(ctx context.Context, budget *workBudget, b *Body,
 	var err error
 	switch payload := b.payload.(type) {
 	case prismPayload:
-		solid, ok, err = planarPrismSolid(ctx, budget, payload)
+		solid, ok, err = planarPrismSolid(ctx, budget, payload, prismFaceIndex(b))
 	case facetedPayload:
 		solid, ok, err = planarFacetedSolid(budget, payload)
 	default:
@@ -150,13 +153,27 @@ func positiveAffine(t r3.Transform) bool {
 	return proofarith.DvDot(ex, proofarith.DvCross(ey, ez)).Sign() > 0
 }
 
+// prismFaceIndex maps a prism face's provenance role to its index in the
+// body's Faces order, the roles evalPrism gives its caps and side walls.
+func prismFaceIndex(b *Body) map[string]int {
+	index := make(map[string]int)
+	for i, face := range b.Faces() {
+		for _, origin := range face.Origins() {
+			index[origin.Role] = i
+		}
+	}
+	return index
+}
+
 // planarPrismSolid lifts an all-LineSeg section through its frame and sweep
 // levels. The caps reuse the tessellator's triangulation, which this function
 // then proves: every cap triangle is exactly counterclockwise and, through the
 // closed-mesh audit, the caps' boundary chain is the section loops, so the
-// triangles tile the section exactly.
+// triangles tile the section exactly. Each triangle records its face from
+// the roles in faceIndex: the start cap at z0, the end cap at z1, and
+// side(loop, segment) for a wall; a missing role leaves Faces unset.
 func planarPrismSolid(ctx context.Context, budget *workBudget,
-	pp prismPayload) (pair.PlanarSolid, bool, error) {
+	pp prismPayload, faceIndex map[string]int) (pair.PlanarSolid, bool, error) {
 	if pp.surfaceResult || pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
 		!finiteMeasurementValues(pp.z0, pp.z1) || pp.z0 >= pp.z1 || !positiveAffine(pp.xform) ||
 		!finiteVec(pp.frame.Origin()) || !finiteVec(pp.frame.U()) ||
@@ -212,11 +229,23 @@ func planarPrismSolid(ctx context.Context, budget *workBudget,
 		solid.Tris = append(solid.Tris, [3]int{tri[0], tri[2], tri[1]},
 			[3]int{n + tri[0], n + tri[1], n + tri[2]})
 	}
-	for _, loop := range loops {
+	start, okStart := faceIndex[roleCapStart]
+	end, okEnd := faceIndex[roleCapEnd]
+	mapped := okStart && okEnd
+	for range caps {
+		solid.Faces = append(solid.Faces, start, end)
+	}
+	for li, loop := range loops {
 		for i, from := range loop {
 			to := loop[(i+1)%len(loop)]
 			solid.Tris = append(solid.Tris, [3]int{from, to, n + to}, [3]int{from, n + to, n + from})
+			side, ok := faceIndex[fmt.Sprintf("side(%d,%d)", li, i)]
+			mapped = mapped && ok
+			solid.Faces = append(solid.Faces, side, side)
 		}
+	}
+	if !mapped {
+		solid.Faces = nil
 	}
 	return solid, true, nil
 }
@@ -306,6 +335,9 @@ func planarFacetedSolid(budget *workBudget, pp facetedPayload) (pair.PlanarSolid
 	}
 	solid := pair.PlanarSolid{Verts: make([]proofarith.DyV3, len(source)),
 		Tris: append([][3]int(nil), pp.tris...)}
+	if len(pp.faceOf) == len(pp.tris) {
+		solid.Faces = append([]int(nil), pp.faceOf...)
+	}
 	bound := proofarith.MustDyOf(pp.meshBound)
 	for i, v := range source {
 		if err := budget.step(); err != nil {

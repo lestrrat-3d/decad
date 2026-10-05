@@ -185,12 +185,13 @@ to the byte budget.
 | `clearance_box.go` | Certifies unplaced axis-aligned rectangular prisms and bounds their gap directly from exact box planes before the general pair kernel. |
 | `contact_pair.go` | Pair gates and public reports. Box classification lives in `internal/pair/`. See `docs/contact-geometry-design.md`. |
 | `contact_box.go` | Source-box admission and public face/measurement mapping. See `docs/contact-geometry-design.md` §4. |
-| `contact_faceted_pair.go` | Exact planar solid admission, snapshots and cached convexity. See `docs/multibody-dynamics-design.md` §9. |
+| `contact_faceted_pair.go` | Exact planar admission and convexity. See `docs/multibody-dynamics-design.md` §9. |
+| `contact_faceted_manifold.go` / `contact_faceted_patch.go` | Planar manifold faces and witnesses. See multibody §9. |
 | `contact_faceted_support.go` | Exact faceted support-face proof and bounded strict separation. See `docs/contact-geometry-design.md` §4. |
 | `contact_faceted_sweep.go` | Faceted floor sweeps: affine exact support face, and bounded clearance by swept boxes. See `docs/contact-sweep-design.md`. |
 | `contact_oriented_box.go` | Rotated boxes. See `docs/contact-geometry-design.md` §4. |
 | `contact_oriented_patch.go` | Exact co-oriented oblique face patch, source faces, and bounded witnesses. See `docs/contact-geometry-design.md` §4. |
-| `contact_clipped_patch.go` | Exact horizontal clipping of one rotated source-box face against an axis-aligned face. See `docs/contact-geometry-design.md` §4. |
+| `contact_clipped_patch.go` | Exact horizontal clip of a rotated source-box face on an axis-aligned one. See `docs/contact-geometry-design.md` §4. |
 | `contact_sphere.go` / `contact_sphere_sweep.go` | Axis sphere-box path, including centered rotating sphere drift. See the contact designs. |
 | `contact_cylinder.go` / `contact_cylinder_sweep.go` | Source-cylinder axial and circular-sidewall contact and sweeps. See the contact designs. |
 | `contact_analytic_manifold.go` | Ruling manifolds from clearance ruling certificates. See `docs/contact-geometry-design.md` §4.5. |

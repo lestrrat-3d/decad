@@ -35,9 +35,12 @@ import (
 // PlanarSolid is the exact closed boundary of an admitted planar solid at one
 // pose: every vertex an exact dyadic point and every triangle wound
 // counterclockwise seen from outside, so (b-a)×(c-a) is its outward normal.
+// Faces, when set, names per triangle the original face that owns it; the
+// relation never reads it, and a manifold (planar_manifold.go) needs it.
 type PlanarSolid struct {
 	Verts []proof.DyV3
 	Tris  [][3]int
+	Faces []int
 }
 
 // FeatureKind names the dimension of a boundary feature.
