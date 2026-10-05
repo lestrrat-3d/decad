@@ -213,9 +213,12 @@ type frictionStackScene struct {
 	state               dynamics.State
 }
 
+// frictionStackConfig lets the stack's two events at the step start and the
+// solve's zero-time continuation stay within MaxEvents with time remaining.
 func frictionStackConfig() dynamics.StepConfig {
 	config := pairMaterialStepConfig()
 	config.MaxIterations = 4096
+	config.MaxEvents = 3
 	return config
 }
 

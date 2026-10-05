@@ -389,8 +389,9 @@ func TestScheduledStepSolvesAnInteriorImpact(t *testing.T) {
 
 func TestScheduledStepSolvesMeetingBoxes(t *testing.T) {
 	// Two still boxes that merely meet touch from the start with zero
-	// relative normal speed. The pair forms one island whose four
-	// certified impulses are zero, and it rests on a persistent track.
+	// relative normal speed. The pair's island certifies four zero impulses
+	// and changes no velocity, so it publishes nothing (§6.1), and the pair
+	// rests on a persistent track.
 	meeting := sixBoxMotions
 	meeting[0].velocity, meeting[1].velocity = r3.Vec{}, r3.Vec{}
 	meeting[1].x0 = 10
@@ -398,15 +399,8 @@ func TestScheduledStepSolvesMeetingBoxes(t *testing.T) {
 	report, err := scene.step(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
-	require.Len(t, report.Islands, 1)
-	require.Equal(t, []*decad.Body{scene.bodies[0], scene.bodies[1]}, report.Islands[0].Bodies)
-	require.Len(t, report.Events, 1)
-	event := report.Events[0]
-	require.Equal(t, dynamics.BodyPair{A: scene.bodies[0], B: scene.bodies[1]}, event.Pair)
-	require.Len(t, event.PointImpulses, 4)
-	for _, point := range event.PointImpulses {
-		require.Zero(t, point.Normal.Base())
-	}
+	require.Empty(t, report.Islands)
+	require.Empty(t, report.Events)
 	for _, i := range []int{0, 1} {
 		entry, ok := report.Next.Body(scene.bodies[i])
 		require.True(t, ok)

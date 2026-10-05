@@ -35,8 +35,8 @@ is stated in already exists as one package: `internal/proof` (`Dyadic`, `DyV3`, 
 rounding bounds), which the root package imports today and which `dynamics` can import as well, since an
 `internal/` package is visible to every package of this module. §3.1, §3.2, §4 and §8.1–§8.8 describe
 shipped code, except `State.cache` and the `MaxPairSweeps` charge (§13 PR 8). For worlds of four or more
-bodies, §5 without §5.3's reuse and step 2's cache, §6.1–§6.4, §6.6, §7, §3.3's `IslandReport`, `StepReport.Islands` and `ContactEvent.Island`, §3.4, and §12 without
-`MaxPairSweeps` ship as well. §9.1–§9.4 ship for prisms over whole `LineSeg` sections and for zero-bound
+bodies, §5 without §5.3's reuse and step 2's cache, §6.1–§6.4, §6.6, §7, §3.3's `IslandReport`,
+`StepReport.Islands` and `ContactEvent.Island`, §3.4, and §12 without `MaxPairSweeps` ship as well. §9.1–§9.4 ship for prisms over whole `LineSeg` sections and for zero-bound
 Booleans, directly or through a translation-only placement; stitched solids and lofts are not admitted yet.
 §10.1, §10.2 and §10.3's sweep certificate ship for the same bodies; `dynamics` does not consume band
 tracks yet. Everything else is design-only until the PR table in §13 says otherwise.
@@ -353,16 +353,17 @@ full-step kick, then event-driven drift — and generalizes the body count. In o
    contact set at the completed poses, reject a relation other than separated, touching, or overlapping
    with a bounded manifold whose penetration lies within `PenetrationResidual` (two co-moving bodies drift
    on separately rounded translations and may overlap by an ulp), record the final slice, and publish.
-6. **Advance** every body to `f_e` on its certified path: the pose `pathPoseAt` evaluates with the float
-   operations the sweep replay uses, which every swept pair's report must replay exactly at `f_e`. Every
-   candidate records its full report, re-sliced to `[t, t_e]` through `CertifiedPosesAtInterval`; an
+6. **Advance** every body to `f_e` on its certified path: a swept body takes the pose its pair reports
+   replay at `f_e` through `CertifiedPosesAtInterval`, and every report covering it must replay the same
+   pose; a body no sweep covers takes the pose `pathPoseAt` evaluates on its own path (§5.4), as
+   `Trace.Sample` does. Every candidate records its full report, re-sliced to `[t, t_e]` through `CertifiedPosesAtInterval`; an
    event pair's own report covers its prefix through the bracket's right fraction, so it needs no separate
    prefix sweep. A rotating pair's impact bracket replays only through its left end, so its impact is
    `StepPairUndecided`. Every box-excluded pair is checked at the rounded poses (§7.1). The event's held time
    `t_e` is the exact `t + f_e·(dt − t)` when that is a float, else the float just below it, so every time
    the prefix replays maps to a fraction at or below `f_e`; a label that does not pass `t` is
    `StepUnsupported`. Each graze before `f_e` publishes a zero-impulse `ContactGraze` at its instant, after
-   its pair's report replays the rounded poses there and its enclosed relative normal speed lies within
+   its pair's report replays its poses there and its enclosed relative normal speed at them lies within
    `VelocityResidual` of zero; its pair's report replays the whole slice, so the graze needs no cut. A
    graze at exactly `f_e` is `StepUnsupported`.
 7. **Islands.** A transition publishes a zero-impulse `ContactTransition` and its pair leaves the contact
@@ -375,8 +376,10 @@ full-step kick, then event-driven drift — and generalizes the body count. In o
 8. Update the contact set: pairs the solve left touching with a nonpositive relative normal speed stay
    in; pairs every solved normal speed exceeds `VelocityResidual` leave it; a departing pair leaves it
    once its departure completes at or before `t_e`, a clear pair and a pair the broad phase drops leave it
-   at once. Count the published events against `MaxEvents`. Set `t = t_e` and go to step 3; an event at
-   `dt` itself completes the step from the post-event state.
+   at once. Set `t = t_e`. When the published events reach `MaxEvents` and `t_e < dt`, the step stops
+   with `StepEventBudget` after this event, which stays in the certified prefix (§12); a graze that
+   reaches `MaxEvents` stops it the same way. Otherwise go to step 3; an event at `dt` itself completes
+   the step from the post-event state.
 
 ### 5.1 Zero-time repeats and Zeno sequences
 
@@ -445,6 +448,13 @@ speed, enclosed over the mass-center, witness and normal balls, is at most `Velo
 entering pair's points then join the solve; a pair whose every point certainly separates faster than that
 keeps no constraint and continues under `ContinueSeparatingTouch`.
 
+A solved island that changes nothing publishes nothing: when every point's enclosed pre-solve normal speed
+lies within `VelocityResidual` of zero, every certified normal and tangent impulse is exactly zero, every
+dynamic body keeps its exact pre-solve velocities and §6.6 moves no body, the island publishes no event and
+no `IslandReport`, and its pairs join the contact set under `ContinueCertifiedTouch`. A stationary or
+sliding touch at the step start therefore continues on its track without an event, as in the two- and
+three-body steps.
+
 Islands are the connected components of the graph whose vertices are DYNAMIC bodies and whose edges are
 active constraints between two dynamic bodies; a constraint against a Fixed or Kinematic body attaches
 that body to the dynamic body's island without joining islands through it (a floor under two separate
@@ -474,17 +484,35 @@ nothing; `μ_k` here is the nominal mean the pair's `frictionCoefficient` carrie
 is not finite, or a closing constraint whose nominal `K_nn,k <= 0` or `L_k <= 0`, is `Undecided` with
 `StepIslandDegenerate`.
 
-The tangent rows of positive-friction pairs join the sweeps once a sweep of the normal rows alone changes
-no impulse in `float64`. Friction then starts from the frictionless contact state: a resting patch has
-stopped spinning there, so its sticking corners do not turn the transient spin of the first normal sweeps
-into self-cancelling corner friction. The sweeps run until one changes no impulse in `float64`, or
-`MaxIterations` have run; an island whose normal rows reach no fixed point within the budget is
-certified without friction and refused by its stick rows if any point slides. Each point's world tangent
+An island of at most eight manifold points starts the sweeps from a DIRECT solution of its contact
+problem at the pre-solve velocities. Active point sets are tried from the largest to the smallest, ties
+by bit order, and each solves `K_AA·λ_A = target_A − w_A` for its rows by the minimum-norm pseudo-inverse
+of the symmetric `K_AA` (a cyclic Jacobi eigen-decomposition dropping eigenvalues at or below `2⁻⁴⁰` of
+the largest, so an indeterminate patch such as a box face's four corners takes the even split). A set is
+accepted when its normal impulses are nonnegative and every row meets its target within
+`VelocityResidual/16`, an inactive normal row at or above it. When a point has friction, the STICKING
+solution is tried first: each active friction point adds its two tangent rows with target zero, and each
+point's tangent impulse must lie in its nominal disk within `ImpulseResidual/16`. When the minimum-norm
+split leaves a corner outside its disk, the friction of each patch (points sharing their bodies and
+normal) is split again in proportion to the points' normal impulses, and the rows are rechecked. A
+sticking start that no set admits falls back to the frictionless one. The direct start proves nothing: it
+only lets a small island reach a solution the certificate accepts within a few sweeps, as the closed
+forms do in one.
+
+Without a direct start, the tangent rows of positive-friction pairs join the sweeps once a sweep of the
+normal rows alone changes no impulse in `float64`; with one, they run from the first sweep. Friction then
+starts from the frictionless or sticking contact state: a resting patch has stopped spinning there, so
+its sticking corners do not turn the transient spin of the first normal sweeps into self-cancelling corner
+friction. The sweeps run until one changes no impulse in `float64`, or `MaxIterations` have run; an
+island whose normal rows reach no fixed point within the budget is certified without friction and refused
+by its stick rows if any point slides. Each point's world tangent
 impulse `λt_k` is published as `t1·λt1 + t2·λt2`, rounded once, with a component within `1/16` of
 `ImpulseResidual` of zero published as exactly zero. The published post velocities are then recomputed
 once from the pre-solve velocities and the final normal and published tangent impulses in the fixed
 order, and a component within `1/16` of its residual (`VelocityResidual` or `AngularVelocityResidual`) of
-zero is published as exactly zero. Co-moving dynamic bodies then publish one common velocity: two dynamic
+zero is published as exactly zero; a spin component snaps only while it is also within `VelocityResidual/16`
+divided by the body's longest island lever, so a body rolling at a few rad/s under a coarse
+`AngularVelocityResidual` keeps the spin its sticking contacts need. Co-moving dynamic bodies then publish one common velocity: two dynamic
 bodies of an island pair are co-moving when their published spins are equal and every component of their
 linear velocities differs by at most `VelocityResidual/8`; each connected group of them whose every member
 lies within `VelocityResidual/16` of the group's mass-weighted mean, per component, publishes that mean for
@@ -538,7 +566,9 @@ value of each gate as its residual, plus the sweep count: `NormalResidual` for n
 complementarity, `TangentResidual` for the stick row's `‖w'_k,t‖`, `ConeResidual` for the cone's excess
 `‖λt_k‖ − μ_lo·λn_k`, `LinearResidual`, `AngularResidual`, `MomentumResidual` and
 `AngularMomentumResidual` for the laws and the island momentum, and `EnergyResidual` as the signed upper
-end of the island's kinetic-energy change; the slip row passes or refuses and publishes no residual. A pre-solve normal speed
+end of the island's kinetic-energy change; the slip row passes or refuses and publishes no residual.
+`AngularUpper` is an upper bound on the largest published post-solve angular speed of the island's
+dynamic bodies. A pre-solve normal speed
 whose enclosure straddles `−ImpactSpeed` selects neither target; with a positive restitution that is the
 `restitution target` refusal. The two momentum rows are implied by the per-body laws: the island sum of
 `m·Δv − ΣJ` cancels each dynamic pair's impulses, and the sum of `I·Δω + c×m·Δv` is the sum of the
@@ -587,6 +617,27 @@ closed-form responders: `three_body.go` and every `three_body_*.go` (`all_dynami
 `oblique_sphere_step.go`, `fixed_offcenter.go`, `cylinder_impact.go`. `grazing_step.go` stays, since a
 graze is a schedule outcome, not a solve; `resting.go`, `kinematic*.go`, `load.go`, `material_mix.go`
 and the conservation files are inputs and readings, not responders, and stay.
+
+Where the general path and a closed form answer differently, the parity run follows these rules:
+
+- A fixture whose closed form refuses an event the general path certifies keeps the general answer, and
+  its assertion asserts the certified computed values instead of the refusal: the falling frictional
+  box face of `TestFixedFloorFrictionRejectsUnsupportedMaterialsAndPatch`, the rotating driver of
+  `TestKinematicDriverRejectsInvalidPaths`, the tangent approach of
+  `TestObliqueSupportRefusesUnresolvedMotion` and the overlapping brackets of
+  `TestThreeBodyTwoDynamicOverlappingPairEventsRemainUndecided`.
+- A zero-speed touch publishes no event (§6.1), and `MaxEvents` stops a step when the published events
+  reach it with time remaining (§5 step 8).
+- Refusal wording and report shape follow §12: an `Undecided` report carries the events of its certified
+  prefix and names the general path's reason.
+- A test that calls a deleted responder directly is replaced by a test of the same fixture through the
+  general path that asserts the same computed quantities.
+- An initially touching cardinal box face rests with zero restitution in the two- and three-body steps,
+  while an initially touching sphere pair or tilted face takes its restitution; no rule on the approach
+  speed or `ImpactSpeed` separates the two, and the general path applies §6.2's restitution target to
+  every initial touch. `TestObliqueInitialTouchContinuesAsPersistentContact`,
+  `TestRestingBoxUsesPersistentContactTrack` and `TestThreeBodySimultaneousCornerImpact` hold the
+  cardinal-face rule.
 
 ### 6.6 Position correction across an island
 
@@ -1324,7 +1375,12 @@ lines below do not repeat it.
 - The cone, stick and slip rows ship for worlds of four or more bodies, with
   `dynamics/island_friction_test.go`: the four-corner slide of `friction_step_test.go` in both body
   orders, a box slipping across a dynamic box the floor holds by sticking, and the three rows' tamper
-  fixtures. The parity run and the deletions remain.
+  fixtures. So do §6.2's direct start and lever-bounded spin snap, §6.1's silent zero-speed island,
+  §5's certificate-replayed slice poses and `MaxEvents` rule, and §6.3's `AngularUpper`, with
+  `dynamics/island_direct.go` and `dynamics/island_direct_test.go`: a two-box stack in eight sweeps, a
+  frictional face impact that friction stops exactly, and a sphere rolling in a corner. Routing the two-
+  and three-body worlds through the general step, the assertion rewrites of §6.5 and the deletions
+  remain.
 
 ### PR 6 (Phase 1) — multi-event `Trace`, `Timeline`, typed diagnostics
 
@@ -1502,7 +1558,7 @@ hand-written manifold, event or pose (CLAUDE.md "Correctness must be observable"
   world insertion order and asserts identical events up to pair naming.
 - **Budgets and cancellation.** Each new loop has a test that exhausts its budget (`Undecided` with the
   named reason, document unchanged) and one that cancels mid-loop (`ctx.Err()`, nil report).
-- **Parity.** PR 5 keeps every shipped response test byte-for-byte in its assertions; a loosened slack
-  there is a review refusal.
+- **Parity.** PR 5 keeps every shipped response test byte-for-byte in its assertions, except for the
+  rewrites §6.5 lists; a loosened slack there is a review refusal.
 - **Scene tests** run in both modules (§11.3); the gallery test is the one that also renders a smoke
   frame.

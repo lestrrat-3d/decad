@@ -106,11 +106,11 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 	return event, nil, nil
 }
 
-// eventBudget is §12's StepEventBudget: the published events exceed
+// eventBudget is §12's StepEventBudget: the published events reach
 // MaxEvents with time remaining.
 func (r *scheduleRun) eventBudget(at units.Value) StepDiagnostic {
 	d := scheduleDiagnostic(StepEventBudget, BodyPair{},
-		fmt.Sprintf("%d events exceed MaxEvents %d", len(r.published), r.w.step.MaxEvents))
+		fmt.Sprintf("%d events reach MaxEvents %d with time remaining", len(r.published), r.w.step.MaxEvents))
 	d.From, d.To, d.Limit = at, r.dt, units.Scalar(float64(r.w.step.MaxEvents))
 	return d
 }
@@ -223,8 +223,8 @@ func translationVelocity(path decad.PairPath) ([3]*big.Rat, bool) {
 // publishGrazes publishes each graze before the cut as a zero-impulse
 // ContactGraze. A graze ends no slice: its pair's sweep replays the whole
 // slice, through the touch and the separation after it. The pair must be
-// frictionless, its rounded poses at the graze must be the ones its sweep
-// replays, and its enclosed relative normal speed there must lie within
+// frictionless, its poses at the graze are the ones its sweep replays, and
+// its enclosed relative normal speed there must lie within
 // VelocityResidual of zero, as the two-body graze requires.
 func (r *scheduleRun) publishGrazes(sweeps sliceSweeps, plan slicePlan) []StepDiagnostic {
 	w := r.w
@@ -243,18 +243,12 @@ func (r *scheduleRun) publishGrazes(sweeps sliceSweeps, plan slicePlan) []StepDi
 		if !w.manifoldWithin(sweep.Event.Manifold) {
 			return diagnostic("graze has no manifold within the contact request")
 		}
-		at := r.state.clone()
-		for _, index := range [2]int{pair.a, pair.b} {
-			pose, err := pathPoseAt(sweeps.paths[index], f)
-			if err != nil {
-				return diagnostic(fmt.Sprintf("graze pose is not finite: %v", err))
-			}
-			at.entries[index].Pose = pose
-		}
 		poseA, poseB, err := sweep.CertifiedPosesAtInterval(units.Seconds(fraction), units.Seconds(0), units.Seconds(1))
-		if err != nil || poseA != at.entries[pair.a].Pose || poseB != at.entries[pair.b].Pose {
-			return diagnostic("rounded graze poses differ from the pair certificate")
+		if err != nil {
+			return diagnostic(fmt.Sprintf("rounded graze poses lack the pair certificate: %v", err))
 		}
+		at := r.state.clone()
+		at.entries[pair.a].Pose, at.entries[pair.b].Pose = poseA, poseB
 		drive := map[int][3]*big.Rat{}
 		for _, index := range [2]int{pair.a, pair.b} {
 			if w.bodies[index].definition.Role != Kinematic {
@@ -273,7 +267,7 @@ func (r *scheduleRun) publishGrazes(sweeps sliceSweeps, plan slicePlan) []StepDi
 		r.published = append(r.published, w.zeroImpulseEvent(ContactGraze, key, sweep, at,
 			decad.SweepInterval{From: sweep.Event.At, To: sweep.Event.At}, r.sliceTime(units.Scalar(fraction)),
 			r.at, sweeps.paths[pair.a]))
-		if len(r.published) > w.step.MaxEvents {
+		if len(r.published) >= w.step.MaxEvents {
 			return []StepDiagnostic{r.eventBudget(r.sliceTime(units.Scalar(fraction)))}
 		}
 	}

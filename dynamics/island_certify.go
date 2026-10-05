@@ -133,11 +133,12 @@ func (g islandGate) String() string {
 
 // islandCertificate holds the largest attained value of each gate (the
 // signed upper end of the kinetic-energy change; the cone's excess over
-// μ_lo·λn; a sticking point's tangent speed), every refused gate, and the
-// first refused gate in evaluation order.
+// μ_lo·λn; a sticking point's tangent speed), the largest published
+// post-solve angular speed, every refused gate, and the first refused gate
+// in evaluation order.
 type islandCertificate struct {
 	linear, angular, normal, energy, momentum, angularMomentum *big.Rat
-	cone, tangent                                              *big.Rat
+	cone, tangent, spin                                        *big.Rat
 	failed                                                     islandGate
 	value, limit                                               *big.Rat
 	refused                                                    map[islandGate]struct{}
@@ -451,7 +452,7 @@ func restitutionTarget(c proof.RatInterval, e, impactSpeed *big.Rat) (*big.Rat, 
 func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCertificate {
 	cert := islandCertificate{linear: new(big.Rat), angular: new(big.Rat), normal: new(big.Rat),
 		energy: new(big.Rat), momentum: new(big.Rat), angularMomentum: new(big.Rat),
-		cone: new(big.Rat), tangent: new(big.Rat)}
+		cone: new(big.Rat), tangent: new(big.Rat), spin: new(big.Rat)}
 	impulseLimit, velocityLimit := exactBase(w.step.ImpulseResidual), exactBase(w.step.VelocityResidual)
 	angularLimit, impactSpeed := exactBase(w.step.AngularVelocityResidual), exactBase(w.step.ImpactSpeed)
 	// The island's largest lever bound ρ.
@@ -476,6 +477,7 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 		if !body.dynamic {
 			continue
 		}
+		raise(&cert.spin, euclideanUpper(pointIVec(body.wPost)))
 		var dv, dw [3]*big.Rat
 		for axis := range 3 {
 			dv[axis] = new(big.Rat).Sub(body.vPost[axis], body.v[axis])
@@ -806,15 +808,15 @@ func solverReport(cert islandCertificate, penetration *big.Rat, iterations int) 
 	}
 	tangent, tangentErr := up(cert.tangent)
 	cone, coneErr := up(cert.cone)
-	if tangentErr != nil {
-		err = tangentErr
-	}
-	if coneErr != nil {
-		err = coneErr
+	spin, spinErr := up(cert.spin)
+	for _, readErr := range []error{tangentErr, coneErr, spinErr} {
+		if readErr != nil {
+			err = readErr
+		}
 	}
 	out.TangentResidual = units.MillimetersPerSecond(tangent)
 	out.ConeResidual = units.KilogramMillimetersPerSecond(cone)
-	out.AngularUpper = units.RadiansPerSecond(0)
+	out.AngularUpper = units.RadiansPerSecond(spin)
 	out.Iterations = iterations
 	return out, err
 }

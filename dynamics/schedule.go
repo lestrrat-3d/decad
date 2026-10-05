@@ -416,6 +416,11 @@ func (r *scheduleRun) advance(ctx context.Context, sweeps sliceSweeps, plan slic
 		r.state = pre
 	}
 	r.at = label
+	// §12: reaching MaxEvents with time remaining stops the step after the
+	// event that reached it, which stays in the certified prefix.
+	if len(r.published) >= r.w.step.MaxEvents && exactBase(label).Cmp(exactBase(r.dt)) < 0 {
+		return []StepDiagnostic{r.eventBudget(label)}, nil
+	}
 	return nil, nil
 }
 
@@ -507,11 +512,13 @@ func (w *World) sweepSlice(ctx context.Context, paths []decad.PairPath, duration
 	return out, nil, nil
 }
 
-// slicePoses publishes every body's pose at the exact slice fraction f on its
-// slice path and requires each swept pair's certificate to replay exactly
-// those poses there (§4.3, §5 step 6). Every pair the swept boxes excluded
-// must keep its bounds strictly apart at the rounded poses (§7.1). It returns
-// the state at f and every scheduled pair's proof.
+// slicePoses publishes every body's pose at the exact slice fraction f
+// (§4.3, §5 step 6): a swept body takes the pose its pair certificates
+// replay there, and every certificate covering it must replay the same one;
+// a body no sweep covers drifts on its own slice path (§5.4), as Trace.Sample
+// replays it. Every pair the swept boxes excluded must keep its bounds
+// strictly apart at the rounded poses (§7.1). It returns the state at f and
+// every scheduled pair's proof.
 func (w *World) slicePoses(ctx context.Context, state State, sweeps sliceSweeps, f *big.Rat,
 	scheduled map[int]struct{}) (State, []pairProof, []StepDiagnostic, error) {
 	fraction, _ := f.Float64()
@@ -520,14 +527,7 @@ func (w *World) slicePoses(ctx context.Context, state State, sweeps sliceSweeps,
 			"event fraction is not a float")}, nil
 	}
 	out := state.clone()
-	for i := range out.entries {
-		pose, err := pathPoseAt(sweeps.paths[i], f)
-		if err != nil {
-			return State{}, nil, []StepDiagnostic{scheduleDiagnostic(StepUnsupported, BodyPair{},
-				fmt.Sprintf("body %d has a non-finite slice pose: %v", i, err))}, nil
-		}
-		out.entries[i].Pose = pose
-	}
+	covered := make([]bool, len(out.entries))
 	proofs := make([]pairProof, 0, len(scheduled))
 	for key := range w.pairs {
 		if _, ok := scheduled[key]; !ok {
@@ -539,18 +539,36 @@ func (w *World) slicePoses(ctx context.Context, state State, sweeps sliceSweeps,
 			continue
 		}
 		// The published pose of every swept body is the one its pair
-		// certificate replays; a refused or different pose stops the step.
+		// certificates replay; a refused or disagreeing pose stops the step.
 		pair := w.pairs[key]
 		poseA, poseB, err := sweep.CertifiedPosesAtInterval(units.Seconds(fraction), units.Seconds(0),
 			units.Seconds(1))
-		if err != nil || poseA != out.entries[pair.a].Pose || poseB != out.entries[pair.b].Pose {
-			reason := "rounded slice poses differ from the pair certificate"
-			if err != nil {
-				reason = fmt.Sprintf("rounded slice poses lack the pair certificate: %v", err)
+		if err != nil {
+			return State{}, nil, []StepDiagnostic{scheduleDiagnostic(StepPairUndecided, w.bodyPair(pair),
+				fmt.Sprintf("rounded slice poses lack the pair certificate: %v", err))}, nil
+		}
+		for _, side := range [2]struct {
+			body int
+			pose r3.Transform
+		}{{pair.a, poseA}, {pair.b, poseB}} {
+			if covered[side.body] && out.entries[side.body].Pose != side.pose {
+				return State{}, nil, []StepDiagnostic{scheduleDiagnostic(StepPairUndecided, w.bodyPair(pair),
+					"pair certificates replay different slice poses for one body")}, nil
 			}
-			return State{}, nil, []StepDiagnostic{scheduleDiagnostic(StepPairUndecided, w.bodyPair(pair), reason)}, nil
+			out.entries[side.body].Pose, covered[side.body] = side.pose, true
 		}
 		proofs = append(proofs, pairProof{pair: key, sweep: sweep})
+	}
+	for i := range out.entries {
+		if covered[i] {
+			continue
+		}
+		pose, err := pathPoseAt(sweeps.paths[i], f)
+		if err != nil {
+			return State{}, nil, []StepDiagnostic{scheduleDiagnostic(StepUnsupported, BodyPair{},
+				fmt.Sprintf("body %d has a non-finite slice pose: %v", i, err))}, nil
+		}
+		out.entries[i].Pose = pose
 	}
 	key, err := w.boxExclusionsHold(ctx, out, proofs)
 	if err != nil {
