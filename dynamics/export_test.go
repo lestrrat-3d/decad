@@ -133,31 +133,51 @@ func WithoutCache(s State) State {
 // refusal reason, or "" and the pushed state when the push fits.
 func PushApart(ctx context.Context, w *World, pre, state State, a, b *decad.Body,
 	allowances map[*decad.Body]units.Value, normal r3.Vec) (string, State, error) {
+	reason, post, _, err := settlePair(ctx, w, pre, state, a, b, allowances, normal, true, false)
+	return reason, post, err
+}
+
+// SettleResting runs correctedRelation's passes on the pair (a, b) of state
+// as PushApart does, for a pair the solve leaves resting (it does not
+// separate it), continued on a persistent track when track is set. It also
+// reports whether the pair stays in the contact set (false when it ends
+// apart and leaves it).
+func SettleResting(ctx context.Context, w *World, pre, state State, a, b *decad.Body,
+	allowances map[*decad.Body]units.Value, normal r3.Vec, track bool) (string, State, bool, error) {
+	return settlePair(ctx, w, pre, state, a, b, allowances, normal, false, track)
+}
+
+func settlePair(ctx context.Context, w *World, pre, state State, a, b *decad.Body,
+	allowances map[*decad.Body]units.Value, normal r3.Vec, separating, track bool) (string, State, bool, error) {
 	key, ok := lookupPair(w.index, BodyPair{A: a, B: b})
 	if !ok {
-		return "", State{}, ErrInvalidInput
+		return "", State{}, false, ErrInvalidInput
 	}
 	post := state.clone()
 	moves := map[int]r3.Vec{}
-	push := correctionPush{allowance: map[int]float64{}, separating: map[int]struct{}{key: {}},
-		policies: map[int]decad.SweepStartPolicy{}}
+	push := correctionPush{allowance: map[int]float64{}, separating: map[int]struct{}{},
+		policies: map[int]decad.SweepStartPolicy{key: decad.ContinueCertifiedTouch}, untouched: map[int]struct{}{}}
+	if separating {
+		push.separating[key] = struct{}{}
+	}
 	for body, allowance := range allowances {
 		push.allowance[w.index[body]] = allowance.Base()
 	}
-	pair := islandPair{key: key, a: w.pairs[key].a, b: w.pairs[key].b}
+	pair := islandPair{key: key, a: w.pairs[key].a, b: w.pairs[key].b, track: track}
 	if normal != (r3.Vec{}) {
 		pair.manifold.Points = []decad.ContactPoint{{Normal: decad.VecMeasurement{Value: normal}}}
 	}
 	for pass := 0; ; pass++ {
 		done, diagnostic, err := w.correctedRelation(ctx, pre, post, moves, pair, push, pass < pushLimit)
 		if err != nil {
-			return "", State{}, err
+			return "", State{}, false, err
 		}
 		if diagnostic != nil {
-			return diagnostic.Reason, State{}, nil
+			return diagnostic.Reason, State{}, false, nil
 		}
 		if done {
-			return "", post, nil
+			_, kept := push.policies[key]
+			return "", post, kept, nil
 		}
 	}
 }

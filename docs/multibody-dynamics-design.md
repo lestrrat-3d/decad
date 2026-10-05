@@ -745,25 +745,51 @@ translation length may not exceed the summed allowances of the pairs that moved 
 body must still be `Touching` at the corrected poses; every other scheduled pair with a moved body is swept
 over the correction.
 
-A translation along a float normal rarely lands two curved bodies in exact touch, so an island pair whose
-solve separates it (every point leaves faster than `VelocityResidual`, §5.2) is PUSHED just apart when the
-corrected poses leave it either way:
+A translation along a float normal rarely lands two curved bodies in exact touch. Two spheres whose center
+line is off every axis never do: their center difference is dyadic, and three dyadic coordinates whose
+squares sum to the square of a dyadic radius sum have at most one nonzero (a sum of three squares equal to
+`4^k` has all three even). An island pair the correction leaves overlapping or apart is therefore settled
+in one of three ways. A PUSHABLE body is a dynamic one with a correction allowance; a body the correction
+held in place (an anchored group, or a body no penetration moved) has none and moves in none of them, so
+a body landing on a resting one is pushed alone and the resting one keeps its exact touch with its support.
 
-- still overlapping: its dynamic bodies move along the deepest point's normal by that point's depth plus
-  its separation bound, split by inverse mass, the share doubled until it moves the rounded pose;
-- apart by less than `ContactPair` can prove (`Undecided` with `ContactNoGapProof`): its dynamic bodies
-  move apart along the event manifold's normal, split by inverse mass, by one ulp of their largest
-  coordinate and then twice as far each time, until `ContactPair` proves the pair separated or touching.
+- A pair the solve leaves RESTING (some point leaves no faster than `VelocityResidual`, §5.2) is first
+  placed back in touch: its pushable bodies move along the event manifold's normal, split by inverse mass,
+  apart when the pair overlaps and together when it stands apart. The search steps by the overlap's depth
+  plus its bound (or the gap plus its bound, or one ulp of the larger body coordinate when the gap cannot
+  be proved), doubling until the relation changes, then halves the interval between the last overlapping
+  and the last non-overlapping amount until the two are adjacent floats. The first pose `ContactPair`
+  proves `Touching`, or in a `ContactBand` within `PenetrationResidual` (§10.4), is kept, and the pair
+  stays in the contact set. A disk resting on a face has that pose (its height is a float), so a disk a
+  correction rounds an ulp into the floor rests again.
+- A resting pair the search cannot place in touch, unless it continues on a persistent track, and a pair
+  the solve separates (every point leaves faster than `VelocityResidual`) are PUSHED apart:
+  - still overlapping: the pushable bodies move along the deepest point's normal by that point's depth
+    plus its separation bound plus the pair's margin, split by inverse mass, the share doubled until it
+    moves the rounded pose;
+  - apart by less than `ContactPair` can prove (`Undecided` with `ContactNoGapProof`): they move apart along
+    the event manifold's normal, split by inverse mass, by the margin or one ulp of their largest
+    coordinate, whichever is larger, and then twice as far each time, until `ContactPair` proves the pair
+    separated or touching;
+  - a resting pair apart by less than its margin is pushed along the event manifold's normal by the
+    shortfall of its proved gap.
+
+  A separating pair has no margin and ends just apart. A resting pair's margin is half of `ContactSlop`,
+  which every pair's allowance carries: at an ulp apart, the smallest correction of a neighbor later in
+  the same step would reach it, as when a sphere rests between two others and each of its pairs lands
+  separately.
+- A resting pair on a persistent track the search cannot place in touch is refused: its track needs exact
+  touch.
 
 The pair is then checked again, for at most four passes over the event's islands. It must end `Touching`
-or `Separated`, and each pushed body's whole translation from its pre-event pose, measured as the
-correction's, must stay within its correction allowance; a separated corrected pose within that allowance
-is what rigid-dynamics "Response" admits at a separating impact. A pair that ends touching continues under
-`ContinueSeparatingTouch`; one that ends separated leaves the contact set, so its next slice starts under
-`StopAtInitialContact`, since the rotating sphere-pair sweep needs a touching start for a departure. A
-pair the solve does not separate is never pushed and may not end separated, since its continuation needs
-exact touch: a resting curved pair whose correction leaves an ulp of overlap is `Undecided` with
-`StepCorrectionFailed`.
+(or in the band) or `Separated`, and each moved body's whole translation from its pre-event pose, measured
+as the correction's, must stay within its correction allowance; a separated corrected pose within that
+allowance is what rigid-dynamics "Response" admits. A pushed pair that ends touching continues under
+`ContinueSeparatingTouch` when the solve separates it; one that ends separated leaves the contact set, so
+its next slice starts under `StopAtInitialContact`, since the rotating sphere-pair sweep needs a touching
+start for a departure and a resting pair needs exact touch to continue. A resting pair placed in touch
+continues under `ContinueCertifiedTouch`. A resting pair apart takes the next step's kick as a new impact,
+as a step that starts in touch does.
 
 Two spheres a glancing frictional impact sets spinning meet again through the root package's rotating
 sphere-pair sweep: from that clear start it brackets their next impact from the exact affine paths of
@@ -1599,7 +1625,10 @@ lines below do not repeat it.
   `dynamics/island_direct.go` and `dynamics/island_direct_test.go`: a two-box stack in eight sweeps, a
   frictional face impact that friction stops exactly, and a sphere rolling in a corner. §6.6's
   separating push ships with `dynamics/island_push_test.go`: a sphere bouncing off a tilted face, its
-  allowance, and a resting sphere the push leaves alone; its sub-ulp-gap push and the anchored correction
+  allowance, and a resting sphere pushed apart by its margin; the resting search, margin and anchored push
+  with `dynamics/island_rest_test.go`: a disk an ulp into a floor placed back in touch, a tilted face with
+  no touching pose, and the sphere column resting on itself off center; its sub-ulp-gap push and the
+  anchored correction
   with `dynamics/island_sphere_landing_test.go`: the stack-and-drop sphere column landing on itself, a
   glancing landing whose spinning spheres meet again, and a gap no float can prove. Routing the two- and
   three-body worlds through the general step, the assertion rewrites of §6.5 and the deletions remain.

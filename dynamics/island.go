@@ -408,7 +408,8 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 	}
 	var solved []island
 	moves := map[int]r3.Vec{}
-	push := correctionPush{allowance: map[int]float64{}, separating: map[int]struct{}{}, policies: out.policies}
+	push := correctionPush{allowance: map[int]float64{}, separating: map[int]struct{}{}, policies: out.policies,
+		untouched: map[int]struct{}{}}
 	for _, isl := range islands {
 		if !slices.ContainsFunc(isl.pairs, func(p islandPair) bool { return !p.track }) {
 			for _, pair := range isl.pairs {
@@ -618,7 +619,7 @@ func ratVelocity(v [3]*big.Rat) QuantityVec {
 
 // checkCorrections proves §6.6's corrections lose no relation and create no
 // contact: every island pair with a moved body must still touch at the
-// corrected poses, or, when its solve separates it, be pushed just apart
+// corrected poses, or, unless it rests on a persistent track, be pushed apart
 // (correctedRelation), and every other scheduled pair with a moved body must
 // sweep clear over the correction, after the swept-box exclusion.
 func (w *World) checkCorrections(ctx context.Context, work *stepWork, pre, post State, islands []island,
@@ -708,38 +709,54 @@ func (w *World) checkCorrections(ctx context.Context, work *stepWork, pre, post 
 const pushLimit = 4
 
 // correctionPush is what correctedRelation needs to push a pair apart: each
-// corrected body's correction allowance, the island pairs whose every point the
-// solve separates, and the contact-set policies, which a separated pair
-// leaves.
+// corrected body's correction allowance (a body without one is not pushed),
+// the island pairs whose every point the solve separates, and the
+// contact-set policies, which a separated pair leaves.
 type correctionPush struct {
 	allowance  map[int]float64
 	separating map[int]struct{}
 	policies   map[int]decad.SweepStartPolicy
+	untouched  map[int]struct{} // resting pairs restInTouch found no touch for
 }
 
 // correctedRelation checks one island pair at the corrected poses. A
 // touching pair passes. A translation along a float normal rarely lands two
-// curved bodies in exact touch, so a pair the solve separates is pushed just
-// apart (rigid-dynamics "Response": a separated corrected pose within the
-// correction allowance) when it reads either of two ways:
-//   - it still overlaps: its dynamic bodies move along the deepest point's
-//     normal by that point's depth plus its separation bound, split by
-//     inverse mass and doubled until it moves the rounded pose, and the
-//     caller checks the island again;
+// curved bodies in exact touch (two spheres whose center line is not along an
+// axis never touch exactly at float centers), so a pair the solve leaves
+// resting is first placed back in touch where a touching pose exists
+// (restInTouch). A pair the solve separates, and a resting pair with no
+// touching pose that does not continue on a persistent track, is pushed apart
+// (rigid-dynamics "Response": a separated corrected pose within the
+// correction allowance) when it reads any of three ways:
+//   - it still overlaps: its pushable bodies move along the deepest point's
+//     normal by that point's depth plus its separation bound plus the pair's
+//     margin, split by inverse mass and doubled until it moves the rounded
+//     pose, and the caller checks the island again;
 //   - it is apart by less than ContactPair can prove (Undecided with
-//     ContactNoGapProof): its dynamic bodies move apart along the event
-//     manifold's normal, split by inverse mass, by one ulp of their largest
-//     coordinate and then twice as far each time, until ContactPair proves
-//     the pair separated or touching.
+//     ContactNoGapProof): its pushable bodies move apart along the event
+//     manifold's normal, split by inverse mass, by the pair's margin or one
+//     ulp of their largest coordinate, whichever is larger, and then twice as
+//     far each time, until ContactPair proves the pair separated or touching;
+//   - it is resting and apart by less than its margin: its pushable bodies
+//     move along the event manifold's normal by the shortfall of the proved
+//     gap.
+//
+// A pair the solve separates has no margin and ends just apart. A resting
+// pair's margin is half of ContactSlop, which every pair's allowance carries:
+// at an ulp apart, the smallest correction of a neighbor later in the step
+// would reach it. A pushable body is a dynamic one with a correction
+// allowance; a body the correction held in place (an anchored group, or a
+// body no penetration moved) carries none and is not pushed either.
 //
 // A pushed pair that ends touching continues under ContinueSeparatingTouch;
 // one that ends separated leaves the contact set, so its next slice starts
-// under StopAtInitialContact. A pair the solve does not separate is never pushed and may not end
-// separated: its continuation needs exact touch. Every pushed body's whole
-// translation from its pre-event pose, measured as the correction's is, must
-// stay within its correction allowance. It reports false when it pushed, so the
-// caller checks the island again; allowed is false on the last pass, where a
-// pair that still needs a push is refused.
+// under StopAtInitialContact. A resting pair on a persistent track is never
+// pushed apart and may not end separated: its track needs exact touch. Every
+// moved body's whole translation from its pre-event pose, measured as the
+// correction's is, must stay within its correction allowance. It reports
+// false when it moved a body, so the caller checks the island again; allowed
+// is false on the last pass, where a pair that still needs a move is refused
+// (a resting pair apart by less than its margin is then left as it is).
 func (w *World) correctedRelation(ctx context.Context, pre, post State, moves map[int]r3.Vec, pair islandPair,
 	push correctionPush, allowed bool) (bool, *StepDiagnostic, error) {
 	fail := func(reason string) (bool, *StepDiagnostic, error) {
@@ -750,22 +767,46 @@ func (w *World) correctedRelation(ctx context.Context, pre, post State, moves ma
 	if err != nil {
 		return true, nil, err
 	}
-	_, separating := push.separating[pair.key]
-	switch {
-	case contact.Relation == decad.ContactTouching,
-		contact.Relation == decad.ContactBand && w.contactBandWithin(contact.Gap):
-		// §10.4: a band within PenetrationResidual is a touch.
+	if w.touchWithin(contact) {
 		return true, nil, nil
-	case contact.Relation == decad.ContactSeparated && separating:
+	}
+	_, separating := push.separating[pair.key]
+	_, untouched := push.untouched[pair.key]
+	if !separating && !untouched && allowed && len(pair.manifold.Points) != 0 {
+		touched, err := w.restInTouch(ctx, pre, post, moves, pair, push, contact)
+		if err != nil || touched {
+			return !touched, nil, err
+		}
+		push.untouched[pair.key] = struct{}{}
+	}
+	pushable := separating || !pair.track
+	margin := 0.0
+	if !separating {
+		margin = w.step.ContactSlop.Base() / 2
+	}
+	switch {
+	case contact.Relation == decad.ContactSeparated && pushable && margin > 0 && allowed &&
+		len(pair.manifold.Points) != 0 && contact.Gap != nil &&
+		contact.Gap.Value.Base()-contact.Gap.Bound.Base() < margin:
+		// A resting pair the correction left apart by less than its margin
+		// is pushed out to it along the event manifold's normal.
+		poses, diagnostic := w.pushPoses(pre, post, pair, pair.manifold.Points[0].Normal.Value,
+			margin-(contact.Gap.Value.Base()-contact.Gap.Bound.Base()), push, true)
+		if diagnostic != nil {
+			return true, diagnostic, nil
+		}
+		applyPoses(pre, post, moves, poses)
+		return false, nil, nil
+	case contact.Relation == decad.ContactSeparated && pushable:
 		// A separated pair leaves the contact set: its next slice starts
 		// clear, under StopAtInitialContact, where ContinueSeparatingTouch
 		// needs a touching start.
 		delete(push.policies, pair.key)
 		return true, nil, nil
 	case contact.Relation == decad.ContactUndecided && contact.Reason == decad.ContactNoGapProof &&
-		separating && allowed && len(pair.manifold.Points) != 0:
-		return w.pushProvablyApart(ctx, pre, post, moves, pair, push)
-	case contact.Relation != decad.ContactOverlapping || !separating || !allowed ||
+		pushable && allowed && len(pair.manifold.Points) != 0:
+		return w.pushProvablyApart(ctx, pre, post, moves, pair, push, margin)
+	case contact.Relation != decad.ContactOverlapping || !pushable || !allowed ||
 		!w.manifoldWithin(contact.Manifold):
 		return fail(fmt.Sprintf("corrected pair relation is %v, not touching", contact.Relation))
 	}
@@ -776,32 +817,30 @@ func (w *World) correctedRelation(ctx context.Context, pre, post State, moves ma
 		}
 	}
 	if !finite(depth) || depth <= 0 {
-		return fail("an overlapping separating pair has no push")
+		return fail("an overlapping pushable pair has no push")
 	}
-	poses, diagnostic := w.pushPoses(pre, post, pair, normal, depth, push, true)
+	poses, diagnostic := w.pushPoses(pre, post, pair, normal, outwardSum(depth, margin), push, true)
 	if diagnostic != nil {
 		return true, diagnostic, nil
 	}
-	for index, pose := range poses {
-		post.entries[index].Pose = pose
-		moves[index] = pose.Translation().Sub(pre.entries[index].Pose.Translation())
-	}
+	applyPoses(pre, post, moves, poses)
 	return false, nil, nil
 }
 
 // pushProvablyApart moves a pair that is apart by less than ContactPair can
-// prove along its event manifold's normal, by one ulp of the larger body
-// coordinate and then twice as far each time, until ContactPair proves it
-// separated or touching. It reports false when it pushed.
+// prove along its event manifold's normal, by margin or one ulp of the larger
+// body coordinate, whichever is larger, and then twice as far each time, until
+// ContactPair proves it separated or touching. It reports false when it
+// pushed.
 func (w *World) pushProvablyApart(ctx context.Context, pre, post State, moves map[int]r3.Vec, pair islandPair,
-	push correctionPush) (bool, *StepDiagnostic, error) {
+	push correctionPush, margin float64) (bool, *StepDiagnostic, error) {
 	normal := pair.manifold.Points[0].Normal.Value
 	largest := 0.0
 	for _, index := range [2]int{pair.a, pair.b} {
 		t := post.entries[index].Pose.Translation()
 		largest = math.Max(largest, math.Max(math.Abs(t.X), math.Max(math.Abs(t.Y), math.Abs(t.Z))))
 	}
-	amount := math.Nextafter(largest, math.Inf(1)) - largest
+	amount := math.Max(math.Nextafter(largest, math.Inf(1))-largest, margin)
 	trial := post.clone()
 	for range 64 {
 		poses, diagnostic := w.pushPoses(pre, post, pair, normal, amount, push, false)
@@ -820,10 +859,7 @@ func (w *World) pushProvablyApart(ctx context.Context, pre, post State, moves ma
 		}
 		switch contact.Relation {
 		case decad.ContactSeparated, decad.ContactTouching:
-			for index, pose := range poses {
-				post.entries[index].Pose = pose
-				moves[index] = pose.Translation().Sub(pre.entries[index].Pose.Translation())
-			}
+			applyPoses(pre, post, moves, poses)
 			return false, nil, nil
 		case decad.ContactUndecided:
 			amount *= 2
@@ -838,18 +874,181 @@ func (w *World) pushProvablyApart(ctx context.Context, pre, post State, moves ma
 	return true, &d, nil
 }
 
+// applyPoses sets pushed poses in post and records each moved body's whole
+// translation from its pre-event pose.
+func applyPoses(pre, post State, moves map[int]r3.Vec, poses map[int]r3.Transform) {
+	for index, pose := range poses {
+		post.entries[index].Pose = pose
+		moves[index] = pose.Translation().Sub(pre.entries[index].Pose.Translation())
+	}
+}
+
+// touchWithin reports whether a contact report is a touch: Touching, or a
+// band within PenetrationResidual (§10.4).
+func (w *World) touchWithin(contact *decad.ContactReport) bool {
+	return contact.Relation == decad.ContactTouching ||
+		contact.Relation == decad.ContactBand && w.contactBandWithin(contact.Gap)
+}
+
+// restSearchLimit bounds the probes of each half of restInTouch's search.
+const restSearchLimit = 128
+
+// restInTouch places a resting pair whose corrected poses overlap or stand
+// apart back in touch: it moves the pair's pushable bodies along the event
+// manifold's normal, split by inverse mass as pushPoses does (apart for a
+// positive amount, together for a negative one), and asks ContactPair at
+// each trial. From the corrected poses it steps away from their relation —
+// apart by the overlap's depth plus its bound when they overlap, together by
+// the gap plus its bound (or one ulp of the larger body coordinate when the
+// gap cannot be proved) when they do not — doubling the step until the
+// relation changes, then halves the interval between the last overlapping
+// and the last non-overlapping amount until the two are adjacent floats. The
+// first trial ContactPair proves touching ends the search: it is applied and
+// reported true. A trial outside the correction allowance, or of any other
+// relation, ends it unapplied. Two curved bodies may have no touching pose
+// at float coordinates at all (two spheres whose center line is off every
+// axis never do); the search then reports false and moves nothing.
+func (w *World) restInTouch(ctx context.Context, pre, post State, moves map[int]r3.Vec, pair islandPair,
+	push correctionPush, contact *decad.ContactReport) (bool, error) {
+	normal := pair.manifold.Points[0].Normal.Value
+	const (
+		over = iota
+		apart
+		touch
+		other
+	)
+	classify := func(report *decad.ContactReport) int {
+		switch {
+		case w.touchWithin(report):
+			return touch
+		case report.Relation == decad.ContactOverlapping:
+			return over
+		case report.Relation == decad.ContactSeparated,
+			report.Relation == decad.ContactUndecided && report.Reason == decad.ContactNoGapProof:
+			return apart
+		}
+		return other
+	}
+	trial := post.clone()
+	var found map[int]r3.Transform
+	probe := func(amount float64) (int, error) {
+		poses, diagnostic := w.pushPoses(pre, post, pair, normal, amount, push, false)
+		if diagnostic != nil {
+			return other, nil
+		}
+		for index := range poses {
+			trial.entries[index].Pose = poses[index]
+		}
+		if err := ctx.Err(); err != nil {
+			return other, err
+		}
+		report, err := w.contactAt(ctx, pair, trial)
+		for index := range poses {
+			trial.entries[index].Pose = post.entries[index].Pose
+		}
+		if err != nil {
+			return other, err
+		}
+		class := classify(report)
+		if class == touch {
+			found = poses
+		}
+		return class, nil
+	}
+	start := classify(contact)
+	var step float64
+	switch start {
+	case over:
+		if !w.manifoldWithin(contact.Manifold) {
+			return false, nil
+		}
+		for _, p := range contact.Manifold.Points {
+			step = math.Max(step, outwardSum(-p.Separation.Value.Base(), p.Separation.Bound.Base()))
+		}
+	case apart:
+		if contact.Gap != nil {
+			step = -outwardSum(contact.Gap.Value.Base(), contact.Gap.Bound.Base())
+		}
+		if !(step < 0) {
+			largest := 0.0
+			for _, index := range [2]int{pair.a, pair.b} {
+				t := post.entries[index].Pose.Translation()
+				largest = math.Max(largest, math.Max(math.Abs(t.X), math.Max(math.Abs(t.Y), math.Abs(t.Z))))
+			}
+			step = largest - math.Nextafter(largest, math.Inf(1))
+		}
+	default:
+		return false, nil
+	}
+	if !finite(step) || step == 0 {
+		return false, nil
+	}
+	// overSide and apartSide hold the last amounts of each relation.
+	overSide, apartSide := 0.0, 0.0
+	for range restSearchLimit {
+		class, err := probe(step)
+		if err != nil {
+			return true, err
+		}
+		if class == other {
+			return false, nil
+		}
+		if class == touch {
+			applyPoses(pre, post, moves, found)
+			return true, nil
+		}
+		if class != start {
+			if class == over {
+				overSide = step
+			} else {
+				apartSide = step
+			}
+			break
+		}
+		step *= 2
+	}
+	if overSide == apartSide {
+		return false, nil
+	}
+	for range restSearchLimit {
+		mid := overSide + (apartSide-overSide)/2
+		if mid == overSide || mid == apartSide {
+			return false, nil
+		}
+		class, err := probe(mid)
+		if err != nil {
+			return true, err
+		}
+		switch class {
+		case touch:
+			applyPoses(pre, post, moves, found)
+			return true, nil
+		case over:
+			overSide = mid
+		case apart:
+			apartSide = mid
+		default:
+			return false, nil
+		}
+	}
+	return false, nil
+}
+
 // contactAt queries ContactPair for an island pair at a state's poses.
 func (w *World) contactAt(ctx context.Context, pair islandPair, state State) (*decad.ContactReport, error) {
 	return w.doc.ContactPair(ctx, w.bodies[pair.a].definition.Body, w.bodies[pair.b].definition.Body,
 		state.entries[pair.a].Pose, state.entries[pair.b].Pose, w.step.Contact)
 }
 
-// pushPoses moves a pair's dynamic bodies apart along normal by amount,
-// split by inverse mass (A against the normal, B along it). With grow set a
-// share too small to move a rounded pose doubles until it does. Every moved
-// body's whole translation from its pre-event pose, measured as the
-// correction's is, must stay within its correction allowance. It returns the new
-// pose of each moved body by world index.
+// pushPoses moves a pair's pushable bodies apart along normal by amount,
+// split by inverse mass (A against the normal, B along it). A pushable body
+// is a dynamic one with a correction allowance: a body the correction held
+// in place, such as an anchored group whose exact touch with its support a
+// move would break, carries none and stays put. With grow set a share too
+// small to move a rounded pose doubles until it does. Every moved body's
+// whole translation from its pre-event pose, measured as the correction's
+// is, must stay within its correction allowance. It returns the new pose of
+// each moved body by world index.
 func (w *World) pushPoses(pre, post State, pair islandPair, normal r3.Vec, amount float64, push correctionPush,
 	grow bool) (map[int]r3.Transform, *StepDiagnostic) {
 	fail := func(reason string, limit units.Value) (map[int]r3.Transform, *StepDiagnostic) {
@@ -859,13 +1058,13 @@ func (w *World) pushPoses(pre, post State, pair islandPair, normal r3.Vec, amoun
 	}
 	var inverse [2]float64
 	for side, index := range [2]int{pair.a, pair.b} {
-		if w.bodies[index].definition.Role == Dynamic {
+		if _, ok := push.allowance[index]; ok && w.bodies[index].definition.Role == Dynamic {
 			inverse[side] = 1 / w.bodies[index].mass.Mass.Value.Base()
 		}
 	}
 	total := inverse[0] + inverse[1]
-	if !finite(amount, total) || amount <= 0 || total <= 0 {
-		return fail("a separating pair has no push", units.Value{})
+	if !finite(amount, total) || amount == 0 || total <= 0 {
+		return fail("a pushed pair has no body free to move", units.Value{})
 	}
 	out := map[int]r3.Transform{}
 	for side, index := range [2]int{pair.a, pair.b} {
