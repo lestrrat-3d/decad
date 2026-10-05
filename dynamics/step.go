@@ -605,6 +605,10 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		}
 	}
 	if w.friction.lower.Sign() != 0 {
+		if isSourceSpherePairEvent(first.Event.Manifold) &&
+			w.parts[0].definition.Role == Dynamic && w.parts[1].definition.Role == Dynamic {
+			return w.stepInteriorSpherePairFriction(ctx, from, kicked, dt, first)
+		}
 		if w.sphereFloorFrictionCandidate(first.Event) {
 			return w.stepInteriorSphereFloorFriction(ctx, from, kicked, pre, dt,
 				eventAt, impactTime, first, roundedPrefix)

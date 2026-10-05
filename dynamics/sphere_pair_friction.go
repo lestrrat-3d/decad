@@ -276,3 +276,96 @@ func (w *World) stepInitialSpherePairFriction(ctx context.Context, from, kicked 
 		Trace: Trace{start: from, pre: kicked, post: post, end: end, duration: dt,
 			eventAt: instant.Elapsed.Value, hasEvent: true, rotationalRemainder: ideal}}, nil
 }
+
+// stepInteriorSpherePairFriction admits a bracket containing an exactly
+// representable source-sphere touch. The new contact and prefix sweeps certify
+// that point before the initial-touch Coulomb response runs on the remainder.
+func (w *World) stepInteriorSpherePairFriction(ctx context.Context, from, kicked State,
+	dt units.Value, first *decad.SweepReport) (*StepReport, error) {
+	if first == nil || first.Outcome != decad.SweepImpactBracket || first.Bracket == nil ||
+		first.Event == nil || first.Event.Manifold == nil || len(first.Event.Manifold.Points) != 1 ||
+		!first.HasAffineReplayProof() || w.restitution.Base() <= 0 ||
+		!zeroAngularVelocity(kicked.entries[0].AngularVelocity) ||
+		!zeroAngularVelocity(kicked.entries[1].AngularVelocity) {
+		return undecided(w, "sphere-pair friction lacks a bounded interior impact"), nil
+	}
+	fraction, ok := firstInteriorDyadic(*first.Bracket)
+	if !ok {
+		return undecided(w, "sphere-pair friction bracket has no representable contact candidate"), nil
+	}
+	eventAt := units.Seconds(dt.Base() * fraction.Base())
+	remaining := units.Seconds(dt.Base() - eventAt.Base())
+	if !finite(eventAt.Base(), remaining.Base()) || eventAt.Base() <= 0 ||
+		remaining.Base() <= 0 ||
+		exactBase(eventAt).Cmp(new(big.Rat).Mul(exactBase(dt), exactBase(fraction))) != 0 ||
+		exactBase(remaining).Cmp(new(big.Rat).Sub(exactBase(dt), exactBase(eventAt))) != 0 {
+		return undecided(w, "sphere-pair friction impact time cannot be replayed exactly"), nil
+	}
+	contactState, err := driftState(kicked, eventAt.Base())
+	if err != nil {
+		return undecidedArithmetic(w, "sphere-pair friction impact pose is not finite", err)
+	}
+	prefix, err := w.sweepPoses(ctx, kicked, contactState, eventAt, decad.StopAtInitialContact)
+	if err != nil {
+		return nil, err
+	}
+	if !prefix.HasAffineReplayProof() ||
+		!roundedImpactPrefixAtEnd(prefix, first, w.step.PenetrationResidual) {
+		return undecided(w, "sphere-pair friction impact prefix lacks a matching source point"), nil
+	}
+	contact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body,
+		w.parts[1].definition.Body, contactState.entries[0].Pose,
+		contactState.entries[1].Pose, w.step.Contact)
+	if err != nil {
+		return nil, err
+	}
+	if contact.Relation != decad.ContactTouching || contact.Manifold == nil ||
+		len(contact.Manifold.Points) != 1 {
+		return undecided(w, "sphere-pair friction candidate is not a certified point touch"), nil
+	}
+	initial, err := w.sweep(ctx, contactState, remaining, decad.StopAtInitialContact)
+	if err != nil {
+		return nil, err
+	}
+	if initial.Outcome != decad.SweepInitiallyTouching || initial.Event == nil ||
+		initial.Event.Manifold == nil || len(initial.Event.Manifold.Points) != 1 ||
+		initial.Event.Manifold.Points[0].FaceA != contact.Manifold.Points[0].FaceA ||
+		initial.Event.Manifold.Points[0].FaceB != contact.Manifold.Points[0].FaceB {
+		return undecided(w, "sphere-pair friction impact changes its source point"), nil
+	}
+	report, err := w.stepInitialSpherePairFriction(ctx, contactState, contactState, remaining, initial)
+	if err != nil || report == nil || report.Status != Advanced {
+		return report, err
+	}
+	event := &report.Events[0]
+	event.Bracket, event.Time = *first.Bracket, eventAt
+	report.Trace = Trace{start: from, pre: contactState, post: report.Trace.post,
+		end: *report.Next, duration: dt, eventAt: eventAt, hasEvent: true,
+		preSweep: prefix, rotationalRemainder: report.Trace.rotationalRemainder}
+	return report, nil
+}
+
+// The coarsest interior dyadic is a deterministic candidate. ContactPair and
+// SweepPair must independently prove it is the true source-sphere touch.
+func firstInteriorDyadic(bracket decad.SweepInterval) (units.Value, bool) {
+	left, right := exactBase(bracket.From.Fraction), exactBase(bracket.To.Fraction)
+	if left == nil || right == nil || left.Sign() < 0 || left.Cmp(right) >= 0 ||
+		right.Cmp(big.NewRat(1, 1)) > 0 {
+		return units.Value{}, false
+	}
+	for exponent := uint(1); exponent <= 53; exponent++ {
+		denominator := new(big.Int).Lsh(big.NewInt(1), exponent)
+		scaled := new(big.Rat).Mul(left, new(big.Rat).SetInt(denominator))
+		numerator := new(big.Int).Quo(scaled.Num(), scaled.Denom())
+		numerator.Add(numerator, big.NewInt(1))
+		candidate := new(big.Rat).SetFrac(numerator, denominator)
+		if candidate.Cmp(right) >= 0 || candidate.Cmp(big.NewRat(1, 1)) >= 0 {
+			continue
+		}
+		value, _ := candidate.Float64()
+		if finite(value) && ratFloat(value).Cmp(candidate) == 0 {
+			return units.Scalar(value), true
+		}
+	}
+	return units.Value{}, false
+}
