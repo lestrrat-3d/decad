@@ -1,4 +1,4 @@
-// Package export writes decad bodies as STL, OBJ, and AP214 STEP files.
+// Package export writes decad bodies as STL, OBJ, 3MF, and AP214 STEP files.
 package export
 
 import (
