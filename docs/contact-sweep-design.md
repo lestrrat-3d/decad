@@ -626,7 +626,9 @@ fails. The rounded horizon sample must retain a positive gap after pose
 deviation, and later intervals need their own continuous clear certificates.
 The same `c`, `K` form over every vertex of any exact planar body, with both
 bodies moving, is `docs/multibody-dynamics-design.md` §10.2; its band track
-for a contact whose `c` is zero within the solver's residual is §10.3.
+for a contact whose `c` is zero within the solver's residual is §10.3, and
+a start within the request's `SupportBand` continues over the support set
+of §10.5.
 
 After departure, mark `(0,h]` as certified clear, put a separated sample at
 `h`, and run §5's earliest-first search on `[h, Duration]`. If no later
