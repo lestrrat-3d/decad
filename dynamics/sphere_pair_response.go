@@ -43,15 +43,33 @@ func spherePairQuantityVelocity(v r3.Vec) QuantityVec {
 // only when its omitted angular response fits the configured residual.
 func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre State,
 	dt, eventAt units.Value, impactTime float64, first, roundedPrefix *decad.SweepReport) (*StepReport, error) {
+	initial := first.Outcome == decad.SweepInitiallyTouching
 	point := first.Event.Manifold.Points[0]
-	if roundedPrefix == nil || roundedPrefix.Event == nil || roundedPrefix.Event.Manifold == nil ||
-		len(roundedPrefix.Event.Manifold.Points) != 1 || !first.HasAffineReplayProof() ||
-		!roundedImpactPrefixAtEnd(roundedPrefix, first, w.step.PenetrationResidual) {
-		return undecided(w, "sphere impact lacks a rounded contact witness"), nil
+	roundedPoint := point
+	if initial {
+		if eventAt != units.Seconds(0) || impactTime != 0 ||
+			first.Event.At.Fraction != units.Scalar(0) || len(first.Samples) == 0 ||
+			first.Samples[0].FloatContact == nil ||
+			first.Samples[0].FloatContact.Relation != decad.ContactTouching ||
+			first.Samples[0].FloatContact.Manifold == nil ||
+			len(first.Samples[0].FloatContact.Manifold.Points) != 1 {
+			return undecided(w, "sphere initial touch lacks a rounded contact witness"), nil
+		}
+		roundedPoint = first.Samples[0].FloatContact.Manifold.Points[0]
+		if roundedPoint.FaceA != point.FaceA || roundedPoint.FaceB != point.FaceB ||
+			roundedPoint.FeatureA != point.FeatureA || roundedPoint.FeatureB != point.FeatureB {
+			return undecided(w, "sphere initial touch changes its source features"), nil
+		}
+	} else {
+		if roundedPrefix == nil || roundedPrefix.Event == nil || roundedPrefix.Event.Manifold == nil ||
+			len(roundedPrefix.Event.Manifold.Points) != 1 || !first.HasAffineReplayProof() ||
+			!roundedImpactPrefixAtEnd(roundedPrefix, first, w.step.PenetrationResidual) {
+			return undecided(w, "sphere impact lacks a rounded contact witness"), nil
+		}
+		roundedPoint = roundedPrefix.Event.Manifold.Points[0]
 	}
-	roundedPoint := roundedPrefix.Event.Manifold.Points[0]
 	if w.parts[0].definition.Role != Dynamic || w.parts[1].definition.Role != Dynamic ||
-		w.friction.lower.Sign() != 0 || !zeroAngularVelocity(pre.entries[0].AngularVelocity) ||
+		w.friction.upper.Sign() != 0 || !zeroAngularVelocity(pre.entries[0].AngularVelocity) ||
 		!zeroAngularVelocity(pre.entries[1].AngularVelocity) {
 		return undecided(w, "oblique sphere impact needs two frictionless nonspinning dynamic bodies"), nil
 	}
@@ -63,6 +81,10 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 		point.OnA.Bound.Base() > w.step.Contact.PointResolution.Base() ||
 		point.OnB.Bound.Base() > w.step.Contact.PointResolution.Base() {
 		return undecided(w, "sphere center-line normal or witnesses exceed contact resolution"), nil
+	}
+	if initial && math.Abs(point.Separation.Value.Base())+point.Separation.Bound.Base() >
+		w.step.PenetrationResidual.Base() {
+		return undecided(w, "sphere initial touch exceeds penetration residual"), nil
 	}
 	var inverse [2]float64
 	var spheres [2]decad.Sphere
@@ -101,6 +123,9 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 	} else if approachHigh.Cmp(exactBase(w.step.ImpactSpeed)) > 0 {
 		return undecided(w, "sphere impact speed crosses the restitution threshold"), nil
 	}
+	if initial && e <= 0 {
+		return undecided(w, "sphere initial impact needs positive restitution"), nil
+	}
 	impulse := -(1 + e) * closing / (inverse[0] + inverse[1])
 	if !finite(impulse) || impulse <= 0 {
 		return undecided(w, "sphere normal impulse is not finite and positive"), nil
@@ -132,40 +157,47 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 		n, point.Normal.Bound.Base(), impulse, e, w.step, omittedSpeed, omittedEnergy) {
 		return undecided(w, "sphere response normal residual or departure exceeds limit"), nil
 	}
-	travel, ok := boundBracketTravel(*first.Bracket, math.Hypot(relative.X,
-		math.Hypot(relative.Y, relative.Z)))
-	if !ok {
-		return undecided(w, "sphere impact bracket travel is not bounded"), nil
-	}
-	allowance := outwardSum(travel, point.Separation.Bound.Base(), w.step.ContactSlop.Base())
-	depth := -point.Separation.Value.Base() + w.step.ContactSlop.Base()/4
-	if !finite(allowance, depth) || depth < 0 || depth > allowance {
-		return undecided(w, "sphere impact penetration exceeds correction allowance"), nil
-	}
-	post, err := correctPair(post, n, depth, inverse)
-	if err != nil {
-		return undecidedArithmetic(w, "sphere position correction is not finite", err)
-	}
-	if !sphereCorrectionWithin(pre, post, allowance) {
-		return undecided(w, "sphere position correction exceeds its allowance"), nil
-	}
-	contact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
-		post.entries[0].Pose, post.entries[1].Pose, w.step.Contact)
-	if err != nil {
-		return nil, err
-	}
-	if contact.Relation != decad.ContactSeparated || contact.Gap == nil ||
-		contact.Gap.Value.Base()+contact.Gap.Bound.Base() > allowance {
-		return undecided(w, fmt.Sprintf("sphere corrected impact has relation %v", contact.Relation)), nil
-	}
-	remaining := dt.Base() - impactTime
-	var actual *decad.SweepReport
-	if remaining > 0 {
-		certified, err := w.sweep(ctx, post, units.Seconds(remaining), decad.StopAtInitialContact)
+	if !initial {
+		travel, ok := boundBracketTravel(*first.Bracket, math.Hypot(relative.X,
+			math.Hypot(relative.Y, relative.Z)))
+		if !ok {
+			return undecided(w, "sphere impact bracket travel is not bounded"), nil
+		}
+		allowance := outwardSum(travel, point.Separation.Bound.Base(), w.step.ContactSlop.Base())
+		depth := -point.Separation.Value.Base() + w.step.ContactSlop.Base()/4
+		if !finite(allowance, depth) || depth < 0 || depth > allowance {
+			return undecided(w, "sphere impact penetration exceeds correction allowance"), nil
+		}
+		var err error
+		post, err = correctPair(post, n, depth, inverse)
+		if err != nil {
+			return undecidedArithmetic(w, "sphere position correction is not finite", err)
+		}
+		if !sphereCorrectionWithin(pre, post, allowance) {
+			return undecided(w, "sphere position correction exceeds its allowance"), nil
+		}
+		contact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+			post.entries[0].Pose, post.entries[1].Pose, w.step.Contact)
 		if err != nil {
 			return nil, err
 		}
-		if certified.Outcome != decad.SweepClear {
+		if contact.Relation != decad.ContactSeparated || contact.Gap == nil ||
+			contact.Gap.Value.Base()+contact.Gap.Bound.Base() > allowance {
+			return undecided(w, fmt.Sprintf("sphere corrected impact has relation %v", contact.Relation)), nil
+		}
+	}
+	remaining := dt.Base() - impactTime
+	policy, outcome := decad.StopAtInitialContact, decad.SweepClear
+	if initial {
+		policy, outcome = decad.ContinueSeparatingTouch, decad.SweepDepartedClear
+	}
+	var actual *decad.SweepReport
+	if remaining > 0 {
+		certified, err := w.sweep(ctx, post, units.Seconds(remaining), policy)
+		if err != nil {
+			return nil, err
+		}
+		if certified.Outcome != outcome {
 			return undecided(w, fmt.Sprintf("sphere separating remainder returned %v", certified.Outcome)), nil
 		}
 	}
@@ -174,11 +206,11 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 		return undecidedArithmetic(w, "sphere response endpoint is not finite", err)
 	}
 	if remaining > 0 {
-		actual, err = w.sweepPoses(ctx, post, end, units.Seconds(remaining), decad.StopAtInitialContact)
+		actual, err = w.sweepPoses(ctx, post, end, units.Seconds(remaining), policy)
 		if err != nil {
 			return nil, err
 		}
-		if actual.Outcome != decad.SweepClear {
+		if actual.Outcome != outcome {
 			return undecided(w, fmt.Sprintf("rounded sphere remainder returned %v", actual.Outcome)), nil
 		}
 	}
@@ -192,9 +224,13 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 	}
 	changeA := post.entries[0].Pose.Translation().Sub(pre.entries[0].Pose.Translation())
 	changeB := post.entries[1].Pose.Translation().Sub(pre.entries[1].Pose.Translation())
+	bracket := decad.SweepInterval{From: first.Event.At, To: first.Event.At}
+	if !initial {
+		bracket = *first.Bracket
+	}
 	event := ContactEvent{Kind: ContactImpact,
 		Pair:    BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
-		Bracket: *first.Bracket, Time: eventAt, Manifold: cloneManifold(*first.Event.Manifold),
+		Bracket: bracket, Time: eventAt, Manifold: cloneManifold(*first.Event.Manifold),
 		NormalImpulse: units.KilogramMillimetersPerSecond(impulse), TangentImpulse: zeroImpulseVec(),
 		PreVelocity: kicked.entries[0].LinearVelocity, PostVelocity: post.entries[0].LinearVelocity,
 		PositionChange: changeA, PreVelocityA: kicked.entries[0].LinearVelocity,
