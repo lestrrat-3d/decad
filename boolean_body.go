@@ -53,6 +53,10 @@ type facetedPayload struct {
 	// Boolean results and non-translation placements carry neither record.
 	exactSourceVerts []r3.Vec
 	exactSourceTris  [][3]int
+	// lowerSupport survives one mesh Union only when an exact source box owns
+	// the lower face and the other operand is certified strictly above it.
+	// Placement drops this proof until source-frame transfer is certified.
+	lowerSupport *facetedLowerSupport
 
 	// meshBound is the proven vertex-level bound (mm): no point of the true
 	// result boundary is farther than this from the held mesh's
@@ -104,6 +108,7 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	}
 	next := fp
 	next.xform = composed
+	next.lowerSupport = nil
 	if !facetedTranslationOnly(delta) || !facetedTranslationOnly(composed) {
 		next.exactSourceVerts, next.exactSourceTris = nil, nil
 	} else if len(fp.exactSourceVerts) == 0 && fp.meshBound == 0 && fp.volSymDiff == 0 &&

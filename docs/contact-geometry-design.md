@@ -43,6 +43,15 @@ The reader checks that every rebuilt vertex lies within the published bound of
 its exact source position and maps the support triangles to one placed Face.
 An inherited positive bound, non-translation placement, or mismatched mesh
 provenance cannot use this proof.
+One mesh `Union` can instead retain an exact source-box lower face even when
+its own boundary and occupied-volume bounds are positive. The other operand's
+`Bounds` lower Z reading minus its position bound must lie strictly above the
+box's exact lower plane. The result's lower-plane facets must all map to the
+source box's lower-face group and one live faceted Face, with exact triangle
+area and footprint equal to the source rectangle. The mesh bound widens the
+rest of the result's held extents before the floor-footprint check. A later
+`Placed` drops this source-box certificate; a tool reaching the lower plane
+never receives it.
 `ContactPair` uses the lower Z support against the upper face of a source-box
 floor when the support rectangle lies strictly inside the floor face. Exact
 support-plane equality proves `Touching` and publishes all four footprint
@@ -50,7 +59,7 @@ corners with the original faceted Face and an exact vertical normal. Positive
 axial separation publishes the exact gap. A crossing support plane, floor
 edge, lateral approach, or missing support proof remains `Undecided`.
 When a faceted Boolean carries a positive finite boundary displacement without
-that exact source proof, a signed-axis pose can still prove strict separation
+an exact lower support proof, a signed-axis pose can still prove strict separation
 above a source-box floor.
 The held vertex extrema bound the whole held solid, and the certified two-sided
 boundary displacement widens each extent. The widened X and Y extents must lie

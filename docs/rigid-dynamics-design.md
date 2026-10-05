@@ -79,6 +79,9 @@ requires ideal and rounded separating sweeps; zero restitution requires ideal
 and rounded persistent-contact tracks. The trace replays both impact sides
 from those certificates. A mass-center bound that permits an omitted spin
 above `AngularVelocityResidual` stops the step.
+At zero restitution against one fixed body, the dynamic body's published
+normal velocity equals the fixed body's exactly after the bounded response
+check, so floating-point cancellation cannot turn rest into departure.
 A translation-only placed copy of that zero-bound union may carry positive
 held-mesh and occupied-volume bounds while preserving the exact lower face.
 With density-derived bounded mass and center readings, zero spin, zero friction,
@@ -86,6 +89,12 @@ and positive restitution, the same fixed-floor response consumes its exact
 axial impact bracket. Ideal and rounded departure sweeps certify the rebound;
 the trace replays the approach, touch, and separating remainder. A placed
 Boolean without the exact source-face proof returns `Undecided` at impact.
+A mesh `Union` with positive boundary and occupied-volume bounds can also
+rebound or rest on the fixed floor when its exact source-box lower face survives
+an operand certified strictly above that face. Its four-point live faceted
+manifold and vertical sweep enter the same response with density-derived mass.
+The configured impulse and angular residuals must contain the mass and center
+bounds; otherwise the step returns `Undecided`.
 Two source semicircle spheres with supplied or density-derived mass can
 rebound as a centered dynamic pair when the impact has a cardinal manifold.
 Their approach may

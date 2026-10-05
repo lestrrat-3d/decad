@@ -319,6 +319,11 @@ func performBoolean(ctx context.Context, op operationKind, a, b *Body) (*Body, e
 	if err != nil {
 		return nil, asBooleanError(op, err)
 	}
+	if op == opUnion {
+		if err := certifyFacetedUnionLowerSupport(ctx, body, a, b); err != nil {
+			return nil, err
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

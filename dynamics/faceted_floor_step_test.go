@@ -6,9 +6,148 @@ import (
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/decad/dynamics"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func positiveBoundFacetedFloorFixture(t *testing.T) (*decad.Document, *decad.Body, *decad.Body) {
+	t.Helper()
+	doc := decad.New()
+	base := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	s.CreateCircle(center, 2)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	upper, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{
+		D: units.Millimeters(4), Dir: decad.Along,
+	})
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.Vec{Z: 8})
+	require.NoError(t, err)
+	upper, err = upper.Placed(t.Context(), shift)
+	require.NoError(t, err)
+	union, err := decad.Union(t.Context(), base, upper)
+	require.NoError(t, err)
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	return doc, floor, union
+}
+
+func positiveBoundFacetedStepConfig() dynamics.StepConfig {
+	config := facetedFloorStepConfig()
+	config.ImpulseResidual = units.KilogramMillimetersPerSecond(.01)
+	config.AngularVelocityResidual = units.RadiansPerSecond(.03)
+	return config
+}
+
+func TestPositiveBoundFacetedFloorDensityImpactAndTrace(t *testing.T) {
+	doc, floor, body := positiveBoundFacetedFloorFixture(t)
+	density := units.KilogramsPerCubicMillimeter(.001)
+	mass, err := body.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	require.Positive(t, mass.Mass.Bound.Base())
+	require.Positive(t, mass.Center.Bound.Base())
+	request := facetedFloorStepConfig().Contact
+	contact, err := doc.ContactPair(t.Context(), floor, body, r3.Identity(), r3.Identity(), request)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, contact.Relation)
+	require.Len(t, contact.Manifold.Points, 4)
+	material := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}
+	world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{Bodies: []dynamics.RigidBody{
+		{Body: floor, Role: dynamics.Fixed, Material: material},
+		{Body: body, Role: dynamics.Dynamic, Density: &density, Material: material},
+	}, Step: positiveBoundFacetedStepConfig()})
+	require.NoError(t, err)
+	pose, err := r3.Translation(r3.Vec{Z: 10})
+	require.NoError(t, err)
+	fall := zeroVelocity()
+	fall.Z = units.MillimetersPerSecond(-160)
+	start, err := world.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: body, Pose: pose, LinearVelocity: fall, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	duration := units.Seconds(.125)
+	still := decad.PairPath(decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: duration})
+	moving := decad.PairPath(decad.RigidDriftSegment{From: pose, Center: pose.Apply(mass.Center.Value),
+		LinearVelocity: fall, AngularVelocity: zeroAngular(t), Duration: duration})
+	sweep, err := doc.SweepPair(t.Context(), floor, body, still, moving, decad.SweepRequest{
+		ContactRequest: request, TimeResolution: units.Seconds(1e-9), MaxPoseEvaluations: 128})
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, sweep.Outcome, "cause=%v", sweep.Cause)
+	report, err := world.Step(t.Context(), start,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, .0625, report.Events[0].Time.Base(), 1e-12)
+	require.InDelta(t, 80, report.Events[0].PostVelocity.Z.Base(), 1e-6)
+	for _, sample := range []struct{ time, z, speed float64 }{
+		{0, 10, -160}, {.03125, 5, -160}, {.0625, 0, 80}, {.09375, 2.5, 80}, {.125, 5, 80},
+	} {
+		replayed, sampleErr := report.Trace.Sample(units.Seconds(sample.time))
+		require.NoError(t, sampleErr)
+		state, ok := replayed.Body(body)
+		require.True(t, ok)
+		require.InDelta(t, sample.z, state.Pose.Translation().Z, 1e-6)
+		require.InDelta(t, sample.speed, state.LinearVelocity.Z.Base(), 1e-6)
+	}
+}
+
+func TestPositiveBoundFacetedFloorDensityRestAndTrace(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		density float64
+	}{{"original density", .001}, {"alternate density", .0015612}} {
+		t.Run(tc.name, func(t *testing.T) {
+			positiveBoundFacetedFloorDensityRestAndTrace(t, tc.density)
+		})
+	}
+}
+
+func positiveBoundFacetedFloorDensityRestAndTrace(t *testing.T, densityValue float64) {
+	t.Helper()
+	doc, floor, body := positiveBoundFacetedFloorFixture(t)
+	density := units.KilogramsPerCubicMillimeter(densityValue)
+	material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
+	world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{Bodies: []dynamics.RigidBody{
+		{Body: floor, Role: dynamics.Fixed, Material: material},
+		{Body: body, Role: dynamics.Dynamic, Density: &density, Material: material},
+	}, Step: positiveBoundFacetedStepConfig()})
+	require.NoError(t, err)
+	pose, err := r3.Translation(r3.Vec{Z: 10})
+	require.NoError(t, err)
+	fall := zeroVelocity()
+	fall.Z = units.MillimetersPerSecond(-160)
+	start, err := world.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: body, Pose: pose, LinearVelocity: fall, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := world.Step(t.Context(), start,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.125))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, .0625, report.Events[0].Time.Base(), 1e-12)
+	require.Zero(t, report.Events[0].PostVelocity.Z.Base())
+	for _, time := range []float64{.0625, .09375, .125} {
+		replayed, sampleErr := report.Trace.Sample(units.Seconds(time))
+		require.NoError(t, sampleErr)
+		state, ok := replayed.Body(body)
+		require.True(t, ok)
+		require.InDelta(t, 0, state.Pose.Translation().Z, 1e-6)
+		require.Zero(t, state.LinearVelocity.Z.Base())
+		contact, contactErr := doc.ContactPair(t.Context(), floor, body,
+			r3.Identity(), state.Pose, positiveBoundFacetedStepConfig().Contact)
+		require.NoError(t, contactErr)
+		require.Equal(t, decad.ContactTouching, contact.Relation)
+	}
+}
 
 func facetedFloorStepFixture(t *testing.T) (*decad.Document, *decad.Body, *decad.Body,
 	decad.MassProperties) {

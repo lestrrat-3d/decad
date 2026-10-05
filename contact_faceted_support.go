@@ -8,6 +8,58 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
+// facetedLowerSupport records one exact source-box lower face retained by a
+// mesh Union. The other operand's certified lower bound is strictly higher,
+// so the Boolean's true lower support set is exactly this source rectangle.
+type facetedLowerSupport struct {
+	plane          proofarith.Dyadic
+	footLo, footHi [2]proofarith.Dyadic
+	sourceGroup    int
+}
+
+func certifyFacetedUnionLowerSupport(ctx context.Context, result, a, b *Body) error {
+	pp, ok := result.payload.(facetedPayload)
+	if !ok || pp.meshBound <= 0 || len(pp.exactSourceVerts) != 0 {
+		return nil
+	}
+	for candidate, operands := range [][2]*Body{{a, b}, {b, a}} {
+		base, upper := operands[0], operands[1]
+		box, exact := sourceBoxAtPose(base, r3.Identity())
+		if !exact {
+			continue
+		}
+		bounds, err := upper.Bounds()
+		if err != nil || bounds.Bound.Kind() != units.Length ||
+			!finiteMeasurementValues(bounds.Min.Z, bounds.Bound.Base()) || bounds.Bound.Base() < 0 ||
+			proofarith.DyCmp(proofarith.DySubScalar(proofarith.MustDyOf(bounds.Min.Z),
+				proofarith.MustDyOf(bounds.Bound.Base())), box.lo[2]) <= 0 {
+			continue
+		}
+		faces := base.Faces()
+		for i, face := range faces {
+			if face != box.faces[2][0] {
+				continue
+			}
+			sourceGroup := i + candidate*len(a.Faces())
+			pp.lowerSupport = &facetedLowerSupport{plane: box.lo[2], sourceGroup: sourceGroup,
+				footLo: [2]proofarith.Dyadic{box.lo[0], box.lo[1]},
+				footHi: [2]proofarith.Dyadic{box.hi[0], box.hi[1]}}
+			result.payload = pp
+			_, proven, err := sourceFacetedAxisSupport(ctx, result, r3.Identity(), 2, 0)
+			if err != nil {
+				return err
+			}
+			if proven {
+				return nil
+			}
+			pp.lowerSupport = nil
+			result.payload = pp
+			break
+		}
+	}
+	return nil
+}
+
 // boundedFacetedExtent encloses the true boundary by the held vertex extrema
 // and the payload's two-sided boundary displacement. It does not identify a
 // support face, so callers may use it only for strict separation.
@@ -97,7 +149,8 @@ type facetedAxisSupport struct {
 // one rectangular, outward-facing source Face. A zero-bound Boolean is read
 // directly. A translation-only placement may instead read its saved exact
 // source mesh, after checking that the rebuilt mesh stays within its bound.
-// Other positive-bound meshes cannot identify a true support plane.
+// A positive-bound Union can also use its exact source-box lower face when
+// its other operand is certified strictly above that face.
 func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 	axis, side int) (facetedAxisSupport, bool, error) {
 	if b == nil || axis < 0 || axis > 2 || (side != 0 && side != 1) ||
@@ -112,18 +165,26 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 	}
 	sourceVerts := pp.verts
 	placedFromSource := false
+	certifiedUnion := pp.lowerSupport != nil && pp.xform == r3.Identity() &&
+		axis == 2 && side == 0 && facetedTranslationOnly(pose)
+	if certifiedUnion && (len(pp.src) != len(pp.tris) || pp.lowerSupport.sourceGroup < 0 ||
+		pp.lowerSupport.sourceGroup >= len(pp.groups)) {
+		return facetedAxisSupport{}, false, nil
+	}
 	if pp.meshBound != 0 || pp.volSymDiff != 0 {
-		if !facetedTranslationOnly(pp.xform) ||
-			len(pp.exactSourceVerts) != len(pp.verts) ||
-			len(pp.exactSourceTris) != len(pp.tris) {
-			return facetedAxisSupport{}, false, nil
-		}
-		for i, tri := range pp.tris {
-			if tri != pp.exactSourceTris[i] {
+		if !certifiedUnion {
+			if !facetedTranslationOnly(pp.xform) ||
+				len(pp.exactSourceVerts) != len(pp.verts) ||
+				len(pp.exactSourceTris) != len(pp.tris) {
 				return facetedAxisSupport{}, false, nil
 			}
+			for i, tri := range pp.tris {
+				if tri != pp.exactSourceTris[i] {
+					return facetedAxisSupport{}, false, nil
+				}
+			}
+			sourceVerts, placedFromSource = pp.exactSourceVerts, true
 		}
-		sourceVerts, placedFromSource = pp.exactSourceVerts, true
 	}
 	budget := newWorkBudget(ctx)
 	if err := budget.err(); err != nil {
@@ -166,6 +227,17 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 	if side == 1 {
 		proof.plane, sign = proof.outerHi[axis], 1
 	}
+	if certifiedUnion {
+		proof.plane = proofarith.DyAdd(pp.lowerSupport.plane, proofarith.MustDyOf(pose.Translation().Z))
+		bound := proofarith.MustDyOf(pp.meshBound)
+		if proofarith.DyCmp(proofarith.DyAdd(proof.outerLo[2], bound), proof.plane) < 0 {
+			return facetedAxisSupport{}, false, nil
+		}
+		for j := range 3 {
+			proof.outerLo[j] = proofarith.DySubScalar(proof.outerLo[j], bound)
+			proof.outerHi[j] = proofarith.DyAdd(proof.outerHi[j], bound)
+		}
+	}
 	windingSign := sign
 	if pose.IsReflection() {
 		windingSign = -windingSign
@@ -198,6 +270,9 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 			proofarith.DyCmp(placed[tri[1]][axis], proof.plane) != 0 ||
 			proofarith.DyCmp(placed[tri[2]][axis], proof.plane) != 0 {
 			continue
+		}
+		if certifiedUnion && pp.src[i] != pp.lowerSupport.sourceGroup {
+			return facetedAxisSupport{}, false, nil
 		}
 		face := faces[faceIndex]
 		if !face.heldPlanar || face.surface.Kind() != KindFaceted ||
@@ -232,6 +307,14 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 	if proof.face == nil || proofarith.DyCmp(proof.footLo[0], proof.footHi[0]) >= 0 ||
 		proofarith.DyCmp(proof.footLo[1], proof.footHi[1]) >= 0 {
 		return facetedAxisSupport{}, false, nil
+	}
+	if certifiedUnion {
+		for j := range 2 {
+			if proofarith.DyCmp(proof.footLo[j], pp.lowerSupport.footLo[j]) != 0 ||
+				proofarith.DyCmp(proof.footHi[j], pp.lowerSupport.footHi[j]) != 0 {
+				return facetedAxisSupport{}, false, nil
+			}
+		}
 	}
 	// The source Face must name this support patch in full, rather than also
 	// naming a different-level facet that the solver would falsely include.

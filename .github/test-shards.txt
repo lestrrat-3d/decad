@@ -1397,6 +1397,8 @@
 4	0.03	TestPlacedPrismChargesEveryFaceItsPlacementRounding
 4	0.00	TestPointInBodyCancellationReachesTorusRootPath
 4	0.00	TestPositiveAreaGateConsultsExactRational
+4	0.20	TestPositiveBoundFacetedUnionRefusesToolBelowLowerFace
+4	0.20	TestPositiveBoundFacetedUnionRetainsExactLowerFace
 4	0.00	TestPrepRefusesACollapsedOperandFacet
 4	0.00	TestPrincipalCircleEdgeGapBoundsAndFallback
 4	0.00	TestPrismBooleanGateG1RequiresBothOperandsPrismPayload
