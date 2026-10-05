@@ -75,7 +75,9 @@ func TestFixedFloorInteriorSlidingImpactUsesRealGeometry(t *testing.T) {
 	var summedNormal, summedTangent float64
 	for _, point := range event.PointImpulses {
 		require.Positive(t, point.Normal.Base())
-		require.LessOrEqual(t, math.Abs(point.Tangent.X.Base()), .25*point.Normal.Base()+1e-6)
+		require.LessOrEqual(t, math.Hypot(point.Tangent.X.Base(), point.Tangent.Y.Base()),
+			.25*point.Normal.Base()+1e-6)
+		require.LessOrEqual(t, math.Abs(point.Tangent.Y.Base()), 1e-6)
 		require.InDelta(t, -.25*point.Normal.Base(), point.Tangent.X.Base(), 1e-6)
 		summedNormal += point.Normal.Base()
 		summedTangent += point.Tangent.X.Base()
@@ -83,6 +85,12 @@ func TestFixedFloorInteriorSlidingImpactUsesRealGeometry(t *testing.T) {
 	require.InDelta(t, event.NormalImpulse.Base(), summedNormal, 1e-6)
 	require.InDelta(t, event.TangentImpulse.X.Base(), summedTangent, 1e-6)
 	require.NotNil(t, report.Conservation)
+	require.Equal(t, units.Torque, report.Conservation.Input.KineticEnergy.Value.Kind())
+	require.Equal(t, units.Torque, report.Conservation.Completion.KineticEnergy.Value.Kind())
+	require.GreaterOrEqual(t, report.Conservation.Input.KineticEnergy.Bound.Base(), 0.0)
+	require.GreaterOrEqual(t, report.Conservation.Completion.KineticEnergy.Bound.Base(), 0.0)
+	require.InDelta(t, 32800, report.Conservation.Input.KineticEnergy.Value.Base(), 1e-5)
+	require.InDelta(t, 12800, report.Conservation.Completion.KineticEnergy.Value.Base(), 1e-5)
 	require.InDelta(t, -40, report.Conservation.ContactImpulse.Value.X.Base(), 1e-6)
 	require.InDelta(t, 160, report.Conservation.ContactImpulse.Value.Z.Base(), 1e-6)
 	final, ok := report.Next.Body(box)
