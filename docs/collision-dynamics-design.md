@@ -28,8 +28,11 @@ solver consumes that first-impact bracket, rebounds or rests on the floor, and
 replays the rounded path on either side of impact.
 The same zero-bound Boolean can retain its exact lower-face proof after
 translation-only `Placed` widens its held mesh. `ContactPair` recognizes that
-placed face at floor touch; its positive-bound sweep currently certifies only
-strict clear motion.
+placed face at floor touch. Its exact-source sweep brackets first axial impact
+and certifies separating departure. A density-backed dynamic placed union
+with centered frictionless motion and positive restitution rebounds from a
+fixed floor; its trace replays the rounded approach and departure. Other
+positive-bound faceted bodies can certify only strict clear motion here.
 It also steps two orthogonal, frictionless
 initial face contacts and their repeated resting response after real manifolds
 and full-span tracks certify both pairs. A dynamic source sphere can touch

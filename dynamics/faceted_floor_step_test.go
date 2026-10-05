@@ -293,6 +293,87 @@ func TestFacetedFloorImpactUsesDensityMass(t *testing.T) {
 	require.InDelta(t, 80, report.Events[0].PostVelocity.Z.Base(), 1e-6)
 }
 
+func TestPlacedFacetedFloorDensityImpactAndTrace(t *testing.T) {
+	doc, floor, source, _ := facetedFloorStepFixture(t)
+	shift, err := r3.Translation(r3.Vec{X: .1})
+	require.NoError(t, err)
+	faceted, err := source.Placed(t.Context(), shift)
+	require.NoError(t, err)
+	density := units.KilogramsPerCubicMillimeter(.001)
+	mass, err := faceted.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	require.Positive(t, mass.Mass.Bound.Base())
+	require.Positive(t, mass.Center.Bound.Base())
+	material := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}
+	world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{
+			{Body: floor, Role: dynamics.Fixed, Material: material},
+			{Body: faceted, Role: dynamics.Dynamic, Density: &density, Material: material},
+		},
+		Step: facetedFloorStepConfig(),
+	})
+	require.NoError(t, err)
+	pose, err := r3.Translation(r3.Vec{Z: 10})
+	require.NoError(t, err)
+	velocity := zeroVelocity()
+	velocity.Z = units.MillimetersPerSecond(-160)
+	start, err := world.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: faceted, Pose: pose, LinearVelocity: velocity, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	request := facetedFloorStepConfig().Contact
+	initial, err := doc.ContactPair(t.Context(), floor, faceted, r3.Identity(), pose, request)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, initial.Relation)
+	atFloor, err := doc.ContactPair(t.Context(), floor, faceted, r3.Identity(), r3.Identity(), request)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, atFloor.Relation)
+	require.Len(t, atFloor.Manifold.Points, 4)
+	duration := units.Seconds(.125)
+	still := decad.PairPath(decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: duration})
+	moving := decad.PairPath(decad.RigidDriftSegment{From: pose,
+		Center: pose.Apply(mass.Center.Value), LinearVelocity: velocity,
+		AngularVelocity: zeroAngular(t), Duration: duration})
+	sweep, err := doc.SweepPair(t.Context(), floor, faceted, still, moving,
+		decad.SweepRequest{ContactRequest: request, TimeResolution: units.Seconds(1e-9),
+			MaxPoseEvaluations: 128})
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, sweep.Outcome, "cause=%v", sweep.Cause)
+	require.Equal(t, decad.ContactTouching, sweep.Event.Relation)
+	report, err := world.Step(t.Context(), start,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, .0625, report.Events[0].Time.Base(), 1e-12)
+	require.InDelta(t, 80, report.Events[0].PostVelocity.Z.Base(), 1e-6)
+	require.Len(t, report.Events[0].Manifold.Points, 4)
+	for _, sample := range []struct {
+		at, z, speed float64
+		relation     decad.ContactRelation
+	}{
+		{0, 10, -160, decad.ContactSeparated},
+		{.03125, 5, -160, decad.ContactSeparated},
+		{.0625, 0, 80, decad.ContactTouching},
+		{.09375, 2.5, 80, decad.ContactSeparated},
+		{.125, 5, 80, decad.ContactSeparated},
+	} {
+		replayed, sampleErr := report.Trace.Sample(units.Seconds(sample.at))
+		require.NoError(t, sampleErr)
+		body, ok := replayed.Body(faceted)
+		require.True(t, ok)
+		require.InDelta(t, sample.z, body.Pose.Translation().Z, 1e-6)
+		require.InDelta(t, sample.speed, body.LinearVelocity.Z.Base(), 1e-6)
+		floorState, ok := replayed.Body(floor)
+		require.True(t, ok)
+		contact, contactErr := doc.ContactPair(t.Context(), floor, faceted,
+			floorState.Pose, body.Pose, request)
+		require.NoError(t, contactErr)
+		require.Equal(t, sample.relation, contact.Relation)
+	}
+}
+
 func TestFacetedFloorImpactRefusesUncertifiedResponse(t *testing.T) {
 	doc, floor, faceted, mass := facetedFloorStepFixture(t)
 	for _, tc := range []struct {

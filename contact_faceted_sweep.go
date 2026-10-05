@@ -19,14 +19,17 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 	if facetedFirst {
 		faceted, pose, facetedDelta, floorDelta = a, pa.from, pa.delta, pb.delta
 	}
-	if pp, ok := faceted.payload.(facetedPayload); ok && pp.meshBound > 0 {
-		return d.sweepBoundedFacetedFloorClear(ctx, a, b, pa, pb, req, report, floor, facetedFirst)
-	}
 	support, ok, err := sourceFacetedAxisSupport(ctx, faceted, pose, 2, 0)
 	if err != nil {
 		return nil, err
 	}
-	if !ok || dyCmp(support.outerHi[2], support.plane) <= 0 ||
+	if !ok {
+		if pp, facetedPayloadOK := faceted.payload.(facetedPayload); facetedPayloadOK && pp.meshBound > 0 {
+			return d.sweepBoundedFacetedFloorClear(ctx, a, b, pa, pb, req, report, floor, facetedFirst)
+		}
+		return facetedSweepUndecided(report, pa.duration), nil
+	}
+	if dyCmp(support.outerHi[2], support.plane) <= 0 ||
 		dyCmp(facetedDelta[0], floorDelta[0]) != 0 ||
 		dyCmp(facetedDelta[1], floorDelta[1]) != 0 {
 		return facetedSweepUndecided(report, pa.duration), nil
@@ -85,8 +88,8 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 	return result, nil
 }
 
-// sweepBoundedFacetedFloorClear uses only the Boolean boundary displacement.
-// A positive bound cannot establish a support face or a touching instant.
+// sweepBoundedFacetedFloorClear uses only the Boolean boundary displacement
+// when no exact source support-face proof survives placement.
 func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body,
 	pa, pb affinePairPath, req SweepRequest, report *SweepReport,
 	floor sourceBoxContactProof, facetedFirst bool) (*SweepReport, error) {

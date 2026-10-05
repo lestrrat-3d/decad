@@ -167,11 +167,26 @@ func TestSweepPairFacetedFloorRefusesUnprovedPath(t *testing.T) {
 		facetedSweepRequest(ContinueCertifiedTouch))
 	require.NoError(t, err)
 	require.Equal(t, SweepUndecided, edge.Outcome)
-	inexact := facetedSweepPose(t, r3.Vec{X: 0.1})
-	widened, err := union.Placed(t.Context(), inexact)
+	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{Y: 1}, r3.Vec{Z: 1})
 	require.NoError(t, err)
-	report, err := doc.SweepPair(t.Context(), floor, widened, still, still,
-		facetedSweepRequest(ContinueCertifiedTouch))
+	reflection, err := r3.Reflection(frame)
 	require.NoError(t, err)
-	require.Equal(t, SweepUndecided, report.Outcome)
+	reflected, err := union.Placed(t.Context(), reflection)
+	require.NoError(t, err)
+	require.Positive(t, reflected.payload.(facetedPayload).meshBound)
+	require.Empty(t, reflected.payload.(facetedPayload).exactSourceVerts)
+	unproved, err := doc.SweepPair(t.Context(), floor, reflected, still,
+		facetedSweepPath(start, facetedSweepPose(t, r3.Vec{Z: -10})),
+		facetedSweepRequest(StopAtInitialContact))
+	require.NoError(t, err)
+	require.Equal(t, SweepUndecided, unproved.Outcome)
+	require.False(t, unproved.HasAffineReplayProof())
+	clearReport, err := doc.SweepPair(t.Context(), floor, reflected, still,
+		facetedSweepPath(start, facetedSweepPose(t, r3.Vec{Z: 5})),
+		facetedSweepRequest(StopAtInitialContact))
+	require.NoError(t, err)
+	require.Equal(t, SweepClear, clearReport.Outcome)
+	require.True(t, clearReport.HasAffineReplayProof())
+	_, _, err = clearReport.CertifiedPosesAt(units.Seconds(.5))
+	require.NoError(t, err)
 }
