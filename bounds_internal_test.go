@@ -678,6 +678,30 @@ func TestOutwardRoundingNeverPublishesAFlushedZero(t *testing.T) {
 		}
 	})
 
+	t.Run("swept volume", func(t *testing.T) {
+		require.Zero(t, tiny*0.25, `the raw product must flush to zero`)
+		require.Equal(t, tiny, sweptVolumeAllow(tiny, 0.25))
+		require.Zero(t, sweptVolumeAllow(0, 0.25))
+		require.Zero(t, sweptVolumeAllow(tiny, 0))
+	})
+
+	t.Run("rational reading", func(t *testing.T) {
+		offset := new(big.Rat).Quo(new(big.Rat).SetFloat64(tiny), big.NewRat(4, 1))
+		exact := new(big.Rat).Add(big.NewRat(1, 1), offset)
+		require.Equal(t, tiny, rationalFloatError(exact, 1))
+		got := ratAbsDiff(exact, 1)
+		require.Positive(t, got)
+		require.GreaterOrEqual(t, new(big.Rat).SetFloat64(got).Cmp(offset), 0)
+		require.Zero(t, ratAbsDiff(big.NewRat(1, 1), 1))
+	})
+
+	t.Run("faceted centroid", func(t *testing.T) {
+		require.Zero(t, tiny*0.25, `the raw numerator must flush to zero`)
+		require.GreaterOrEqual(t, facetedCentroidAllowance(tiny, 0.25, 0.125), 2*tiny)
+		require.Zero(t, facetedCentroidAllowance(0, 0.25, 0.125))
+		require.Equal(t, 0.25, facetedCentroidAllowance(tiny, 0.25, 0))
+	})
+
 	t.Run("quotient", func(t *testing.T) {
 		for _, tc := range []struct {
 			name     string

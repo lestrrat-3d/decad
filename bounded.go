@@ -82,6 +82,11 @@ func rationalFloatError(exact *big.Rat, held float64) float64 {
 	d := new(big.Rat).Sub(exact, heldRat)
 	d.Abs(d)
 	out, exactFloat := d.Float64()
+	// Float64 can report exact even when a positive subnormal fraction flushed
+	// to zero. The rational sign is the proof that this bound cannot be zero.
+	if d.Sign() > 0 && out == 0 {
+		return math.SmallestNonzeroFloat64
+	}
 	if !exactFloat {
 		out = math.Nextafter(out, math.Inf(1))
 	}

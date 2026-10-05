@@ -458,16 +458,18 @@ func TestStitchChargesTheFacetsTheWeldDrops(t *testing.T) {
 }
 
 func TestBooleanRoundingUnderflowKeepsProofPositive(t *testing.T) {
-	// The sloped edge intersects y=0.5 at x=SmallestNonzeroFloat64/2.
+	// The sloped edge intersects y=scale/2 at x=SmallestNonzeroFloat64/2.
 	// That exact crossing rounds to zero, but still moves the held vertex.
+	// Scaling the solids makes the positive swept volume flush to zero as float64.
+	const scale = 1.0 / 64
 	doc := New()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
 	points := [3]*sketch.Point{
 		s.CreatePoint(0, 0),
-		s.CreatePoint(math.SmallestNonzeroFloat64, 1),
-		s.CreatePoint(1, 0),
+		s.CreatePoint(math.SmallestNonzeroFloat64, scale),
+		s.CreatePoint(scale, 0),
 	}
 	s.Fix(points[0])
 	for i := range points {
@@ -475,16 +477,16 @@ func TestBooleanRoundingUnderflowKeepsProofPositive(t *testing.T) {
 	}
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
-	wedge, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	wedge, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10 * scale), Dir: Along})
 	require.NoError(t, err)
 
 	s2, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
-	rect := s2.CreateRectangle(-1, 0.5, 1, 1.5)
+	rect := s2.CreateRectangle(-scale, 0.5*scale, scale, 1.5*scale)
 	s2.Fix(rect.A)
 	_, err = s2.Solve(t.Context())
 	require.NoError(t, err)
-	bar, err := doc.Extrude(s2, s2.Profiles()[0], Symmetric{D: units.Millimeters(5)})
+	bar, err := doc.Extrude(s2, s2.Profiles()[0], Symmetric{D: units.Millimeters(5 * scale)})
 	require.NoError(t, err)
 	for _, operand := range []*Body{wedge, bar} {
 		mesh, meshErr := tessellateContext(t.Context(), operand, units.Millimeters(1), VerifyAll)
@@ -492,7 +494,7 @@ func TestBooleanRoundingUnderflowKeepsProofPositive(t *testing.T) {
 		require.Zero(t, mesh.bound)
 		require.Zero(t, mesh.volSymDiff)
 		if operand == wedge {
-			require.Contains(t, mesh.vertices, r3.Vec{X: math.SmallestNonzeroFloat64, Y: 1})
+			require.Contains(t, mesh.vertices, r3.Vec{X: math.SmallestNonzeroFloat64, Y: scale})
 		}
 	}
 
@@ -500,9 +502,13 @@ func TestBooleanRoundingUnderflowKeepsProofPositive(t *testing.T) {
 	require.NoError(t, err)
 	proof, ok := union.payload.(facetedPayload)
 	require.True(t, ok)
-	require.Contains(t, proof.verts, r3.Vec{Y: 0.5})
+	require.Contains(t, proof.verts, r3.Vec{Y: 0.5 * scale})
 	require.Positive(t, proof.meshBound)
 	require.Positive(t, proof.volSymDiff)
+	volume, err := union.Volume()
+	require.NoError(t, err)
+	require.Positive(t, volume.Bound.Base())
+	require.Equal(t, Approximate, volume.Exactness)
 }
 
 func TestStitchRoundingUnderflowKeepsPositiveBound(t *testing.T) {
@@ -527,6 +533,7 @@ func TestStitchRoundingUnderflowKeepsPositiveBound(t *testing.T) {
 	require.Positive(t, got.round)
 	require.GreaterOrEqual(t, new(big.Rat).SetFloat64(got.round).Cmp(offset), 0)
 	require.Positive(t, sweptVolumeAllow(got.round, got.preArea))
+	require.Positive(t, pointRoundBound(d2, r3.NewVec(2, 2, 9)))
 }
 
 // TestBooleanVolumesAreUnchangedByTheKernelRewrite is fu163's end-to-end

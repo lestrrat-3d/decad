@@ -560,7 +560,7 @@ func sweptVolumeAllow(delta, areaUpper float64) float64 {
 	if delta <= 0 || areaUpper <= 0 {
 		return 0
 	}
-	return upRound(delta * areaUpper)
+	return productUpper(delta, areaUpper)
 }
 
 // cellChordCurveAreaUpper bounds the AREA of EVERY surface ONE loft wall
