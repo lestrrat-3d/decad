@@ -115,7 +115,7 @@ func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Tra
 		return r.certifiedRotationalPosesAtFraction(f)
 	}
 	poseAt := func(path affinePairPath) (r3.Transform, error) { return path.poseAt(f) }
-	if r.replay.sphere != nil {
+	if r.replay.sphere != nil || r.replay.spherePair != nil {
 		poseAt = func(path affinePairPath) (r3.Transform, error) {
 			return sourceSpherePathPoseAt(path, f)
 		}
@@ -237,8 +237,8 @@ func (r *SweepReport) certifiedSpherePairPosesAtFraction(f *big.Rat, poseA, pose
 	r3.Transform, r3.Transform, error) {
 	p := r.replay
 	start := p.spherePair
-	actualA, okA := translatedReplaySphere(start[0], p.pa.from, poseA)
-	actualB, okB := translatedReplaySphere(start[1], p.pb.from, poseB)
+	actualA, okA := rotatingReplaySphere(start[0], p.pa, poseA)
+	actualB, okB := rotatingReplaySphere(start[1], p.pb, poseB)
 	if !okA || !okB {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair replay pose is not affine", ErrUnsupported)
 	}
