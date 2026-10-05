@@ -9,16 +9,14 @@ require (
 	github.com/lestrrat-3d/kinetograph v0.0.0-20261003132252-088884573cf6
 	github.com/lestrrat-3d/r3 v0.0.0-20261004120949-f188fa4e203a
 	github.com/lestrrat-3d/sketch v0.0.0-20260924052631-80849197f03e
-	github.com/lestrrat-3d/solidlens v0.0.0-20260926143114-9a324f5bb98b
+	github.com/lestrrat-3d/solidlens v0.0.0-20261005044356-f626e847eb51
 	github.com/lestrrat-3d/units v0.0.0-20261004172310-91d157ffd2a9
 	github.com/stretchr/testify v1.12.1
 )
 
 require (
-	github.com/lestrrat-go/3mf v0.0.0-20260904080955-978cc39ea83e // indirect
-	github.com/lestrrat-go/helium v0.8.0 // indirect
+	github.com/lestrrat-go/3mf v0.0.0-20261005042850-6101195a51c8 // indirect
 	github.com/lestrrat-go/option/v3 v3.0.0-alpha1 // indirect
 	github.com/lestrrat-go/stl v0.0.0-20260904080308-f2792ffa3582 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/text v0.41.0 // indirect
 )
