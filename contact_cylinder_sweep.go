@@ -9,10 +9,9 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// sourceCylinderAxialSweep first tries full-span separation. Otherwise it
-// brackets an axis-aligned face impact with contained lateral drift or proves
-// one-sided departure.
-func (d *Document) sourceCylinderAxialSweep(ctx context.Context, a, b *Body,
+// sourceCylinderFaceSweep uses one complete axial-disk or circular-sidewall
+// box-face corridor for clear motion, first impact, and one-sided departure.
+func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 	pa, pb affinePairPath, req SweepRequest, report *SweepReport,
 	cylinder sourceCylinderContactProof, box sourceBoxContactProof, cylinderFirst bool) (*SweepReport, error) {
 	firstBox, secondBox := box, cylinder.box
@@ -21,7 +20,10 @@ func (d *Document) sourceCylinderAxialSweep(ctx context.Context, a, b *Body,
 	}
 	fullA, fullB := sweptAffineBox(firstBox, pa.delta), sweptAffineBox(secondBox, pb.delta)
 	resolution, _ := exactBaseValue(req.PointResolution)
-	axis := cylinder.axis
+	axis, _, signedGap, selected := sourceCylinderBoxFace(cylinder, box)
+	if !selected || signedGap.Sign() < 0 {
+		return cylinderSweepUndecided(report, pa.duration), nil
+	}
 	axisGap := func(a, b sourceBoxContactProof) (int, *big.Rat, bool) {
 		if gap := new(big.Rat).Sub(b.lo[axis].Rat(), a.hi[axis].Rat()); gap.Cmp(resolution) > 0 {
 			return 1, gap, true
@@ -38,6 +40,9 @@ func (d *Document) sourceCylinderAxialSweep(ctx context.Context, a, b *Body,
 		startCylinder, startBox = firstBox, secondBox
 		cylinderDelta, boxDelta = pa.delta, pb.delta
 	}
+	if axis != cylinder.axis && dyCmp(cylinderDelta[2], boxDelta[2]) != 0 {
+		return cylinderSweepUndecided(report, pa.duration), nil
+	}
 	endCylinder := translatedAffineBox(startCylinder, cylinderDelta)
 	endBox := translatedAffineBox(startBox, boxDelta)
 	// Every transverse edge difference is affine. Strict containment at both
@@ -49,7 +54,7 @@ func (d *Document) sourceCylinderAxialSweep(ctx context.Context, a, b *Body,
 	if !ok {
 		return (&sourceCylinderImpactRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 			req: req, report: report, cylinder: cylinder, box: box,
-			cylinderFirst: cylinderFirst}).execute(ctx)
+			cylinderFirst: cylinderFirst, axis: axis}).execute(ctx)
 	}
 	startA, startB := pa.from, pb.from
 	endA, err := pa.poseAt(big.NewRat(1, 1))
@@ -235,7 +240,6 @@ func matchingCylinderManifold(actual, ideal *ContactManifold) bool {
 
 func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, error) {
 	zero, one := new(big.Rat), big.NewRat(1, 1)
-	r.axis = r.cylinder.axis
 	cylinderDelta, boxDelta := r.pb.delta, r.pa.delta
 	if r.cylinderFirst {
 		cylinderDelta, boxDelta = r.pa.delta, r.pb.delta

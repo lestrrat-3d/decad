@@ -11,7 +11,7 @@ import (
 var threePairs = [3][2]int{{0, 1}, {0, 2}, {1, 2}}
 
 // threeBodyWorld keeps each possible response pair in world order. The current
-// three-body step admits one or two dynamic bodies; every other active pair
+// three-body step admits one, two, or three dynamic bodies; every other active pair
 // must have a certified clear path before a result is published.
 type threeBodyWorld struct {
 	parts        [3]RigidBody
@@ -77,9 +77,6 @@ func newThreeBodyWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig
 	}
 	if three.dynamicCount == 0 {
 		return nil, fmt.Errorf("%w: three-body world needs a dynamic body", ErrUnsupported)
-	}
-	if three.dynamicCount > 2 {
-		return nil, fmt.Errorf("%w: three-body world needs a fixed body", ErrUnsupported)
 	}
 	excluded := make(map[int]struct{}, len(cfg.Excluded))
 	for _, pair := range cfg.Excluded {
@@ -252,6 +249,9 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 	}
 	if w.three.dynamicCount == 2 {
 		return w.stepThreeTwoDynamic(ctx, from, input, dt, reference)
+	}
+	if w.three.dynamicCount == 3 {
+		return w.stepThreeAllDynamic(ctx, from, input, dt, reference)
 	}
 	loads, err := reference.validateLoads(input.Loads)
 	if err != nil {

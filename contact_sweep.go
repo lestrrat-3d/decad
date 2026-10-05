@@ -418,7 +418,7 @@ func exactnessFromBound(bound float64) Exactness {
 // floor contact and bounded faceted floor clearance, co-translating oblique
 // source boxes, a source sphere in
 // an axis or orthogonal rotated box face corridor, an affine pair of source
-// spheres, axial source-cylinder face paths, rotating source-box and centered-sphere rigid drifts,
+// spheres, source-cylinder face paths, rotating source-box and centered-sphere rigid drifts,
 // and admitted rotating PoseSegments.
 // Unsupported paths return SweepUndecided.
 // Both body pointers, both paths, and ctx must be non-nil.
@@ -512,7 +512,7 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 					req: req, report: report, sphere: sphere, box: boxA}).execute(ctx, resolution)
 			}
 			if cylinder, ok := sourceCylinderAtPose(b, pb.from); ok {
-				return d.sourceCylinderAxialSweep(ctx, a, b, pa, pb, req, report, cylinder, boxA, false)
+				return d.sourceCylinderFaceSweep(ctx, a, b, pa, pb, req, report, cylinder, boxA, false)
 			}
 		}
 		if okB && !okA {
@@ -521,7 +521,7 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 					req: req, report: report, sphere: sphere, box: boxB, sphereFirst: true}).execute(ctx, resolution)
 			}
 			if cylinder, ok := sourceCylinderAtPose(a, pa.from); ok {
-				return d.sourceCylinderAxialSweep(ctx, a, b, pa, pb, req, report, cylinder, boxB, true)
+				return d.sourceCylinderFaceSweep(ctx, a, b, pa, pb, req, report, cylinder, boxB, true)
 			}
 		}
 		if sphere, sphereOK := sourceSphereAtPose(a, pa.from); sphereOK {

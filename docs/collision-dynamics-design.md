@@ -7,7 +7,7 @@ persistent face contact and its first edge transition, and mass properties for
 source boxes, admitted untapered prisms, full source spheres, and full
 source cylinders revolved from axis-incident rectangles. It steps one
 frictionless pair with a fixed and dynamic body or two centered dynamic bodies.
-A three-body world with one or two dynamic bodies steps one active pair
+A three-body world with one, two, or three dynamic bodies steps one active pair
 when every other pair has a certified clear path. It also orders separated
 frictionless positive-restitution source-box face impacts, re-sweeps active pairs after each response,
 and replays the rounded path between events. A full circular source prism or a full
@@ -19,6 +19,11 @@ density-derived mass. The sweep and step replay the clear path before and after
 impact. The revolved
 cylinder publishes an axial disk-face manifold at a contained source-box
 floor touch or shallow crossing.
+A vertical full circular source prism also proves its sidewall's axial line
+contact against a broad source-box wall. Its exact transverse support gap
+brackets a horizontal first impact and certifies separating departure. A
+density-backed, centered, frictionless cylinder rebounds from the fixed wall
+with positive restitution; the trace replays the rounded approach and rebound.
 A fixed source-box floor can hold two centered dynamic source boxes stacked
 vertically. With zero friction and restitution, one gravity kick is followed
 by a coupled two-contact response; all three pair paths receive continuous

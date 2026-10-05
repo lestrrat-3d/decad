@@ -70,7 +70,7 @@ func (tr Trace) sampleThreeSlices(t units.Value, timeValue *big.Rat) (State, err
 				entry.Body == tr.start.world.three.parts[tr.start.world.three.dynamic].Body {
 				return State{}, fmt.Errorf("%w: moving body has no replay proof", ErrUnsupported)
 			}
-			if tr.start.world.three.dynamicCount == 2 {
+			if tr.start.world.three.dynamicCount >= 2 {
 				for key, indices := range threePairs {
 					inPair := tr.start.world.three.parts[indices[0]].Body == entry.Body ||
 						tr.start.world.three.parts[indices[1]].Body == entry.Body
@@ -301,7 +301,7 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 				return report, true, stepErr
 			}
 			end := withPairState(current, endPair)
-			if w.three.dynamicCount == 2 {
+			if w.three.dynamicCount >= 2 {
 				end, err = w.threeDriftState(current, remaining.Base())
 				if err != nil {
 					// The report carries the unsupported arithmetic outcome.
@@ -329,10 +329,14 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 				threeSlices: slices, threeEvents: boundaries}
 			var conservation StepConservation
 			var valid bool
-			if w.three.dynamicCount == 2 {
+			switch w.three.dynamicCount {
+			case 3:
+				conservation, valid = w.threeAllDynamicConservation(from, kicked, end, trace,
+					events, input, dt)
+			case 2:
 				conservation, valid = w.threeTwoDynamicConservation(from, kicked, end, trace,
 					events, input, dt)
-			} else {
+			default:
 				conservation, valid = w.threeSequentialConservation(reference, from, kicked, end,
 					trace, events, input.Gravity, loads, dt)
 			}
@@ -407,7 +411,7 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 			return w.threeUndecided(selected, "adjusted event time is outside the step"), true, nil
 		}
 		pre := withPairState(current, child.Trace.pre)
-		if w.three.dynamicCount == 2 {
+		if w.three.dynamicCount >= 2 {
 			pre, err = w.threeDriftState(current, localAt.Base())
 			if err != nil {
 				// The report carries the unsupported arithmetic outcome.
@@ -488,10 +492,14 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 		threeSlices: slices, threeEvents: boundaries}
 	var conservation StepConservation
 	var ok bool
-	if w.three.dynamicCount == 2 {
+	switch w.three.dynamicCount {
+	case 3:
+		conservation, ok = w.threeAllDynamicConservation(from, kicked, current, trace,
+			events, input, dt)
+	case 2:
 		conservation, ok = w.threeTwoDynamicConservation(from, kicked, current, trace,
 			events, input, dt)
-	} else {
+	default:
 		conservation, ok = w.threeSequentialConservation(reference, from, kicked, current,
 			trace, events, input.Gravity, loads, dt)
 	}
