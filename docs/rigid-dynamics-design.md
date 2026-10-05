@@ -202,6 +202,19 @@ linear and angular results against their configured residuals and the cone.
 Publish the Y spin and one point impulse in world order. A rotating source
 sphere sweep must prove the full persistent contact track and replayable
 endpoint before the step advances. A later step can reuse the returned spin.
+The same point response admits an interior first-impact bracket for a
+translated, nonspinning source sphere with X velocity, negative Z velocity,
+and zero Y velocity. The sweep and a separate rounded prefix must identify
+the same sphere and floor features. Correct the bracket-right pose only within
+the certified normal travel and `ContactSlop`, then query `ContactPair` for a
+touching point with those features. The exact mass, isotropic inertia,
+restitution, friction, and point gates above still apply. The one-point
+normal and Coulomb impulses stop Z velocity and change X velocity and Y spin.
+The rotating sphere sweep must certify persistent contact and its replayable
+endpoint for the remaining time. `Trace.Sample` uses the rounded prefix before
+the event and that rotating certificate afterward. A bracket that cannot be
+corrected to touch, a changed contact feature, insufficient event budget, or
+a failed remainder returns `Undecided` without a next state.
 An interior first-impact bracket admits the same centered fixed-floor box with
 zero restitution, positive X and negative Z velocity, zero initial spin, and
 zero Y velocity. Correct the bracket's touching pose within the certified

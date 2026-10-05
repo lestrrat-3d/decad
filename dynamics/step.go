@@ -595,6 +595,10 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		}
 	}
 	if w.friction.lower.Sign() != 0 {
+		if w.sphereFloorFrictionCandidate(first.Event) {
+			return w.stepInteriorSphereFloorFriction(ctx, from, kicked, pre, dt,
+				eventAt, impactTime, first, roundedPrefix)
+		}
 		return w.stepInteriorFriction(ctx, from, kicked, pre, dt, eventAt, impactTime,
 			first, roundedPrefix)
 	}
