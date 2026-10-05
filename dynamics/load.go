@@ -1,44 +1,12 @@
 package dynamics
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
-
-func (w *World) validateLoads(entries []BodyLoad) ([2]*BodyLoad, error) {
-	var loads [2]*BodyLoad
-	for i := range entries {
-		load := &entries[i]
-		if load.Body == nil {
-			return loads, fmt.Errorf("%w: nil load body", ErrInvalidInput)
-		}
-		index := -1
-		for j, part := range w.bodies {
-			if part.definition.Body == load.Body {
-				index = j
-				break
-			}
-		}
-		if index < 0 || w.bodies[index].definition.Role != Dynamic {
-			return loads, fmt.Errorf("%w: load body is not a dynamic member of this world", ErrInvalidInput)
-		}
-		if loads[index] != nil {
-			return loads, fmt.Errorf("%w: duplicate load body", ErrInvalidInput)
-		}
-		if err := validateQuantityVec(load.Force, units.Force); err != nil {
-			return loads, err
-		}
-		if err := validateQuantityVec(load.Torque, units.Torque); err != nil {
-			return loads, err
-		}
-		loads[index] = load
-	}
-	return loads, nil
-}
 
 // kickByLoads applies one bounded force, gravity, and torque kick before any sweep.
 func (w *World) kickByLoads(from State, gravity QuantityVec, loads []*BodyLoad, dt units.Value) (State, bool) {
@@ -105,6 +73,11 @@ func (w *World) kickByLoads(from State, gravity QuantityVec, loads []*BodyLoad, 
 		}
 	}
 	return out, true
+}
+
+// zeroAngularVelocity reports whether every component of v is zero.
+func zeroAngularVelocity(v QuantityVec) bool {
+	return v.X.Mag() == 0 && v.Y.Mag() == 0 && v.Z.Mag() == 0
 }
 
 // kickAngular applies the initial-orientation Euler kick. The residual is

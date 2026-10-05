@@ -1,7 +1,6 @@
 package dynamics
 
 import (
-	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -45,6 +44,12 @@ func sphereIslandTestSphere(t *testing.T, doc *decad.Document) *decad.Body {
 	return body
 }
 
+// A ball rests on the floor under a fixed upper sphere and strikes both at
+// (200, 0, −100) mm/s. Its mass center sits at (0.6, 0, 1.8) in its frame,
+// off the line of either contact, so both contact impulses turn it the same
+// way about Y. The island applies both torques to the one body together:
+// the ball's spin is the sum of both torque impulses over I_yy, larger than
+// either alone, and the certificate's AngularUpper covers it.
 func TestSphereIslandCombinedSpinChargesAlignedContactTorques(t *testing.T) {
 	doc := decad.New()
 	floor := sphereIslandTestFloor(t, doc)
@@ -53,32 +58,6 @@ func TestSphereIslandCombinedSpinChargesAlignedContactTorques(t *testing.T) {
 	require.NoError(t, err)
 	upperPose, err := r3.Translation(r3.Vec{X: 6, Z: 13})
 	require.NoError(t, err)
-	zeroLinear := decad.QuantityVec{X: units.MillimetersPerSecond(0),
-		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
-	zeroAngular := decad.QuantityVec{X: units.RadiansPerSecond(0),
-		Y: units.RadiansPerSecond(0), Z: units.RadiansPerSecond(0)}
-	path := func(pose r3.Transform) decad.RigidDriftSegment {
-		return decad.RigidDriftSegment{From: pose, LinearVelocity: zeroLinear,
-			AngularVelocity: zeroAngular, Duration: units.Seconds(.1)}
-	}
-	request := decad.SweepRequest{ContactRequest: decad.ContactRequest{
-		PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6)},
-		TimeResolution: units.Seconds(1e-9), MaxPoseEvaluations: 128}
-	floorSweep, err := doc.SweepPair(t.Context(), floor, ball,
-		path(r3.Identity()), path(ballPose), request)
-	require.NoError(t, err)
-	require.Equal(t, decad.SweepInitiallyTouching, floorSweep.Outcome)
-	upperSweep, err := doc.SweepPair(t.Context(), ball, upper,
-		path(ballPose), path(upperPose), request)
-	require.NoError(t, err)
-	require.Equal(t, decad.SweepInitiallyTouching, upperSweep.Outcome)
-	floorPoint := floorSweep.Event.Manifold.Points[0]
-	upperPoint := upperSweep.Event.Manifold.Points[0]
-	center := r3.Vec{X: .6, Z: 6.8}
-	floorTorque := floorPoint.OnB.Value.Sub(center).Cross(floorPoint.Normal.Value)
-	upperTorque := upperPoint.OnA.Value.Sub(center).Cross(upperPoint.Normal.Value.Scale(-1))
-	require.Greater(t, floorTorque.Y, 0.0)
-	require.Greater(t, upperTorque.Y, 0.0)
 	reading := func(value units.Value) decad.Measurement {
 		return decad.Measurement{Value: value, Bound: units.New(0, value.Unit()), Exactness: decad.Exact}
 	}
@@ -91,23 +70,52 @@ func TestSphereIslandCombinedSpinChargesAlignedContactTorques(t *testing.T) {
 		Inertia: decad.InertiaReading{XX: inertia, YY: inertia, ZZ: inertia,
 			XY: zeroInertia, XZ: zeroInertia, YZ: zeroInertia},
 	}
-	step := StepConfig{ImpulseResidual: units.KilogramMillimetersPerSecond(1e-6),
-		AngularVelocityResidual: units.RadiansPerSecond(1e-3)}
-	sphere, ok := floorPoint.FaceB.Surface().(decad.Sphere)
-	require.True(t, ok)
-	floorSpin, ok := sphereOmittedSpinBounds(floorPoint, floorPoint, 1, ballPose,
-		mass, sphere.Radius, 1100.0/3, units.Seconds(.1), step)
-	require.True(t, ok)
-	upperSpin, ok := sphereOmittedSpinBounds(upperPoint, upperPoint, 0, ballPose,
-		mass, sphere.Radius, 1000.0/3, units.Seconds(.1), step)
-	require.True(t, ok)
-	angular, combined, ok := sphereIslandCombinedSpin(mass, []sphereOmittedBounds{floorSpin, upperSpin})
-	require.True(t, ok)
-	require.Equal(t, 0, angular.Cmp(new(big.Rat).Add(floorSpin.angularSpeed, upperSpin.angularSpeed)))
-	separate := new(big.Rat).Add(floorSpin.twiceEnergy, upperSpin.twiceEnergy)
-	require.Greater(t, combined.Cmp(separate), 0)
-	cross := new(big.Rat).Mul(floorSpin.angularSpeed, upperSpin.angularSpeed)
-	cross.Mul(cross, inertiaRowCeiling(mass.Inertia))
-	cross.Mul(cross, big.NewRat(2, 1))
-	require.Equal(t, 0, new(big.Rat).Sub(combined, separate).Cmp(cross))
+	material := Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
+	cfg := StepConfig{Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+		NormalResolution: units.Radians(1e-6)}, TimeResolution: units.Seconds(1e-9),
+		ContactSlop: units.Millimeters(1e-6), VelocityResidual: units.MillimetersPerSecond(1e-6),
+		AngularVelocityResidual: units.RadiansPerSecond(1e-3),
+		ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+		PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
+		MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 4, MaxPairSweeps: 4096}
+	w, err := NewWorld(t.Context(), doc, WorldConfig{Bodies: []RigidBody{
+		{Body: floor, Role: Fixed, Material: material},
+		{Body: ball, Role: Dynamic, Supplied: &mass, Material: material},
+		{Body: upper, Role: Fixed, Material: material},
+	}, Step: cfg})
+	require.NoError(t, err)
+	still := QuantityVec{X: units.MillimetersPerSecond(0), Y: units.MillimetersPerSecond(0),
+		Z: units.MillimetersPerSecond(0)}
+	zeroW := QuantityVec{X: units.RadiansPerSecond(0), Y: units.RadiansPerSecond(0),
+		Z: units.RadiansPerSecond(0)}
+	start, err := w.NewState([]BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: still, AngularVelocity: zeroW},
+		{Body: ball, Pose: ballPose, LinearVelocity: QuantityVec{X: units.MillimetersPerSecond(200),
+			Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(-100)}, AngularVelocity: zeroW},
+		{Body: upper, Pose: upperPose, LinearVelocity: still, AngularVelocity: zeroW},
+	})
+	require.NoError(t, err)
+	gravity := QuantityVec{X: units.MillimetersPerSecondSquared(0),
+		Y: units.MillimetersPerSecondSquared(0), Z: units.MillimetersPerSecondSquared(0)}
+	report, err := w.Step(t.Context(), start, StepInput{Gravity: gravity}, units.Seconds(.1))
+	require.NoError(t, err)
+	require.NotEmpty(t, report.Events, "%+v", report.Diagnostics)
+	floorEvent, upperEvent := report.Events[0], report.Events[1]
+	require.Equal(t, BodyPair{A: floor, B: ball}, floorEvent.Pair)
+	require.Equal(t, BodyPair{A: ball, B: upper}, upperEvent.Pair)
+	require.Equal(t, floorEvent.Time, upperEvent.Time)
+	center := ballPose.Apply(mass.Center.Value)
+	floorPoint, upperPoint := floorEvent.Manifold.Points[0], upperEvent.Manifold.Points[0]
+	// The floor's impulse acts on the ball (B) along the normal; the upper
+	// sphere's acts on the ball (A) against it.
+	floorTorque := floorPoint.OnB.Value.Sub(center).Cross(floorPoint.Normal.Value).Scale(floorEvent.NormalImpulse.Base())
+	upperTorque := upperPoint.OnA.Value.Sub(center).Cross(upperPoint.Normal.Value.Scale(-1)).Scale(upperEvent.NormalImpulse.Base())
+	require.Positive(t, floorTorque.Y)
+	require.Positive(t, upperTorque.Y)
+	combined := (floorTorque.Y + upperTorque.Y) / inertia.Value.Base()
+	spin := upperEvent.PostAngularVelocityA.Y.Base()
+	require.InDelta(t, combined, spin, 1e-15)
+	require.Greater(t, spin, floorTorque.Y/inertia.Value.Base())
+	require.Greater(t, spin, upperTorque.Y/inertia.Value.Base())
+	require.GreaterOrEqual(t, upperEvent.Solver.AngularUpper.Base(), spin)
 }

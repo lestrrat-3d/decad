@@ -15,8 +15,7 @@ import (
 )
 
 // This file forms islands (docs/multibody-dynamics-design.md §6.1), corrects
-// their positions (§6.6) and publishes their events for the step of a world
-// of four or more bodies.
+// their positions (§6.6) and publishes their events for the step.
 
 // IslandReport is one simultaneous solve: the bodies and pairs that shared
 // constraints at one event time, and the certified residuals of that solve.
@@ -521,8 +520,7 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 // enclosed pre-solve normal speed lies within VelocityResidual of zero, every
 // normal and tangent impulse is exactly zero, and every dynamic body keeps
 // its exact pre-solve velocities. Its pairs join the contact set under
-// ContinueCertifiedTouch without an event, as a stationary or sliding touch
-// does in the two-body step.
+// ContinueCertifiedTouch without an event.
 func (w *World) silentIsland(isl island, solution islandSolution, in eventIslands) bool {
 	for _, lambda := range solution.lambda {
 		if lambda != 0 {

@@ -9,8 +9,8 @@ import (
 	"github.com/lestrrat-3d/decad"
 )
 
-// This file is the reuse cache and the work budget of the step of a world of
-// four or more bodies (docs/multibody-dynamics-design.md §3.2, §3.3, §5.3,
+// This file is the reuse cache and the work budget of the step
+// (docs/multibody-dynamics-design.md §3.2, §3.3, §5.3,
 // §6.2 and §12): every SweptBox and SweepPair call the step makes passes
 // through one stepWork, which serves a call whose inputs it has seen before
 // from the step's own record or from the input state's cache, and charges

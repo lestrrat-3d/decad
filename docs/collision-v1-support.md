@@ -228,8 +228,7 @@ the other.
 
 `NewWorld` admits two or more sound solids and lists every body pair in
 canonical world order (`World.Pairs`), with an exclusion or a material
-override per pair. `World.Step` resolves two- and three-body worlds with at
-least one dynamic body. Each dynamic body uses either density-derived mass and inertia or a complete
+override per pair, in any role mix. Each dynamic body uses either density-derived mass and inertia or a complete
 caller-supplied bounded record. Density-derived properties currently cover
 source boxes, admitted untapered prisms under any frame or rigid placement,
 full source spheres, qualifying revolved cylinders, full or partial revolves
@@ -326,9 +325,8 @@ box pyramid resting under friction while three spheres land on the floor and
 on each other and roll away, and a cylinder lands on its end disk; the `_gallery` module
 renders the same timeline frame by frame.
 
-Two- and three-body worlds take the same step. `NewWorld` still refuses a
-two- or three-body world with no dynamic body and a three-body world with a
-kinematic body. [Kinematic impact tests](../dynamics/kinematic_impact_test.go)
+Two- and three-body worlds take the same step as larger ones.
+[Kinematic impact tests](../dynamics/kinematic_impact_test.go)
 check driver work and replay, and the
 [rotating driver tests](../dynamics/kinematic_rotation_test.go) strike a box
 with a turning driver and check the impulse its velocity field gives.
@@ -353,7 +351,7 @@ impact and the refusal.
 | `SweepPair` | `SweepUndecided` with a cause and unresolved interval |
 | `SweptBox` | `decad.ErrUnsupported` when the body's bounds or the path's travel bound are not finite |
 | `Body.MassProperties` | `decad.ErrUnsupported` when density-derived bounded mass or inertia is unavailable |
-| `NewWorld` | `dynamics.ErrUnsupported` for fewer than two bodies, a two- or three-body world with no dynamic body, or a three-body kinematic world |
+| `NewWorld` | `dynamics.ErrUnsupported` for fewer than two bodies, positive friction on a pair with a kinematic body, or an effective friction outside the finite range |
 | `World.Step` | `dynamics.Undecided` with `Next == nil` when contact, response, or replay lacks proof, and for an island gate beyond its limit, an uncorrectable overlap, events reaching `MaxEvents` with time remaining, calls beyond `MaxPairSweeps`, or a rounded pose a box exclusion no longer covers |
 | `Trace.Sample` | `dynamics.ErrUnsupported` if a rounded pose loses its cached proof or a box exclusion; `dynamics.ErrInvalidInput` for time outside the step or its certified prefix |
 | `Timeline.Advance` | `dynamics.ErrTimelineStopped` after an `Undecided` step stopped the timeline |

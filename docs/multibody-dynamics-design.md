@@ -14,7 +14,7 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19 and 20 have
+Current state: §13 PRs 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19 and 20 have
 shipped. `dynamics.World` holds any number of bodies, the canonical pair table and
 per-pair material of §3.1, and the slice-backed `State` of §3.2. Every world, whatever its body count,
 takes the scheduled step of §4.3 and §5: one kick, then slices of drift from event to event. Initial
@@ -36,9 +36,8 @@ broad phase reads it. A source cylinder that lands on its end disk rests on cont
 disk track. The gallery bridge of §11 films a `Timeline` through kinetograph's driven node, and §2's Phase 1
 scene, `stack-and-drop`, runs its full `2 s` in `dynamics/scene_test.go` and `_gallery`.
 `docs/collision-v1-support.md` is the inventory of the shape pairs, responses and refusals that ship, and
-this document does not restate it. The closed-form responder files §6.5 lists stay in the tree until §13
-PR 5 deletes them; no step calls them, and `.golangci.yml` excludes them from the `unused` linter until
-then. The exact arithmetic every certificate below
+this document does not restate it. No closed-form responder remains in `dynamics` (§6.5). The exact
+arithmetic every certificate below
 is stated in already exists as one package: `internal/proof` (`Dyadic`, `DyV3`, `RatInterval` and the float
 rounding bounds), which the root package imports today and which `dynamics` can import as well, since an
 `internal/` package is visible to every package of this module. §3.1, §3.2, §4 and §8.1–§8.8 describe
@@ -167,10 +166,8 @@ the rolling cylinder's trace carries a rotating band track with its contact-poin
 
 ### 3.1 World and pairs
 
-`WorldConfig` is unchanged. `NewWorld` admits `len(cfg.Bodies) >= 2`. Until §13 PR 5 deletes the
-closed-form responders it keeps refusing the two- and three-body role mixes they could not take, and a
-three-body world still builds its `threeBodyWorld` container, which no step reads; both go away with the
-responder files. Every world takes the scheduled step of §4.3 and §5. Internally:
+`WorldConfig` is unchanged. `NewWorld` admits `len(cfg.Bodies) >= 2` in any role mix, and every world
+takes the scheduled step of §4.3 and §5. Internally:
 
 ```go
 type worldBody struct {
@@ -702,8 +699,7 @@ upgrades one.
 
 ### 6.4 Friction families per phase
 
-The cone, stick and slip gates make friction generic, so no per-shape friction solver remains after
-§13 PR 5. What limits friction per phase is the manifold producer: a pair needs a bounded manifold with
+The cone, stick and slip gates make friction generic, so no per-shape friction solver remains. What limits friction per phase is the manifold producer: a pair needs a bounded manifold with
 point and normal balls that keep the slip and cone intervals inside the limits. Phase 1 families all
 publish such manifolds; a positive-friction pair whose family publishes relation only (no manifold) is
 refused at `NewWorld` with `ErrUnsupported`, as today.
@@ -714,7 +710,7 @@ contact: a sphere striking a floor and a wall together with restitution 0.5 and 
 twice the frictionless normal impulse at each (`TestThreeBodyFrictionIslandRealPath`, "restitution"). This
 is a known property of the model, not a solver error.
 
-### 6.5 Parity with the closed-form responders
+### 6.5 Parity with the closed-form fixtures
 
 Every shipped response fixture in `dynamics/*_test.go` — the `150 kg·mm/s` box rebound, the
 `sqrt(5000)` tilted support, the four-corner Coulomb slide, the two-sphere `37.5 kg·mm/s` impact, the
@@ -731,14 +727,7 @@ impulses, velocities and poses within its existing `InDelta` slack, except for t
 below. A single-point island converges in
 one sweep to the isolated formula exactly in float; the four-point and two-pair islands converge to the
 same solutions the closed forms publish because those solutions satisfy the same complementarity
-system. Every world takes the general step, and §13 PR 5 then deletes the closed-form responders: `three_body.go` and every `three_body_*.go` (`all_dynamic`, `dynamic_friction`,
-`friction_island`, `island`, `sequential`, `sphere_island`, `stack`, `two_dynamic`), `friction_patch.go`,
-`friction_pair.go`, `friction_pair_certificate.go`, `friction_pair_step.go`, `friction_step.go`,
-`friction_impact.go`, `sphere_floor_friction.go`, `sphere_pair_friction.go`,
-`sphere_pair_offaxis_friction.go`, `sphere_pair_response.go`, `oblique_response.go`,
-`oblique_sphere_step.go`, `fixed_offcenter.go`, `cylinder_impact.go`. `grazing_step.go` stays, since a
-graze is a schedule outcome, not a solve; `resting.go`, `kinematic*.go`, `load.go`, `material_mix.go`
-and the conservation files are inputs and readings, not responders, and stay.
+system. Every world takes the general step, and no closed-form responder remains in `dynamics`.
 
 Where the general path and a closed form answer differently, the parity run follows these rules:
 
@@ -779,8 +768,13 @@ Where the general path and a closed form answer differently, the parity run foll
   reach it with time remaining (§5 step 8).
 - Refusal wording and report shape follow §12: an `Undecided` report carries the events of its certified
   prefix and names the general path's reason.
-- A test that calls a deleted responder directly is replaced by a test of the same fixture through the
-  general path that asserts the same computed quantities.
+- A test of a closed-form responder's internals is a test of the same fixture through the general step,
+  asserting the same computed impulses, velocities and spins. A responder's own bound or residual
+  helper (its cross-product error, its correction and impulse residual gates, its rotating-driver
+  slice, its combined sphere spin) has no counterpart in the exact island certificate, whose legs
+  `island_test.go` and `island_friction_test.go` record, so its fixture keeps only those computed
+  quantities, and the event-conservation tampers become island-certificate tampers
+  (`TestSpinEventConservationUsesRealPointImpulses`).
 - An initially touching pair takes §6.2's restitution target like any other contact. The two- and
   three-body steps rest an initially touching cardinal box face with zero restitution while an initially
   touching sphere pair or tilted face takes its restitution, and no rule on the approach speed or
@@ -2219,7 +2213,7 @@ lines below do not repeat it.
 ### PR 5 (Phase 1) — Coulomb friction and parity
 
 - Delivers the cone, stick and slip rows of §6.3, the parity run of §6.5, and the deletion of the
-  closed-form responders §6.5 lists.
+  closed-form responders.
 - Files: `dynamics/island_solve.go`, `dynamics/island_certify.go`; the deleted files.
 - Test: every existing `dynamics` response test passes through the general solver with its original
   assertions, `friction_patch_test.go`'s slide and the stack fixture included, except for the rewrites
@@ -2240,8 +2234,13 @@ lines below do not repeat it.
   with `dynamics/island_sphere_landing_test.go`: the stack-and-drop sphere column landing on itself, a
   glancing landing whose spinning spheres meet again, and a gap no float can prove. Every world routes
   through the general step, with §6.5's assertion rewrites and §6.1's rotating drivers in islands
-  (`TestKinematicHingedPaddleStrikesWithItsField`, whose legs are each shown to fail). The deletions
-  remain.
+  (`TestKinematicHingedPaddleStrikesWithItsField`, whose legs are each shown to fail). The closed-form
+  responders (`three_body*.go`, `friction_patch.go`, `friction_pair*.go`, `friction_step.go`,
+  `friction_impact.go`, the `sphere_floor_friction.go` and `sphere_pair_*.go` responders, `oblique_*.go`,
+  `fixed_offcenter.go`, `cylinder_impact.go`), the two-body steps of `step.go`, `resting.go`,
+  `grazing_step.go`, `kinematic.go` and `kinematic_impact.go` with their `Trace` slots, and `NewWorld`'s two-
+  and three-body role-mix refusals are deleted, and `.golangci.yml` holds no `unused` exclusion.
+- Shipped.
 
 ### PR 6 (Phase 1) — multi-event `Trace`, `Timeline`, typed diagnostics
 
@@ -2682,10 +2681,9 @@ hand-written manifold, event or pose (CLAUDE.md "Correctness must be observable"
   turn a touching outcome into a separating one. Every float product `dynamics` writes that feeds an add
   or a subtract on a published or certified path is rounded explicitly with `float64(...)`, which the
   spec says forbids the fusion. `r3` follows the same rule in every vector, tensor, frame and transform
-  product, so the general step publishes the same bits on amd64, `GOAMD64=v3` builds and arm64. The
-  closed-form responder files §6.5 lists keep their fused products until §13 PR 5 deletes them.
+  product, so the general step publishes the same bits on amd64, `GOAMD64=v3` builds and arm64.
   `GOARCH=arm64 go build -gcflags='github.com/lestrrat-3d/decad/dynamics=-d=fmahash=vy'` lists every
-  fused site that remains.
+  fused site in `dynamics`, and it lists none.
 - **No pinned bound literals.** Bounds are asserted negligible against a slack figure with a comment
   saying why; values are `InDelta` at a stated slack. FMA contraction differs between hosts.
 - **Dyadic inputs.** Fixture coordinates, velocities and times are dyadic so exact comparisons (event
