@@ -43,8 +43,8 @@ func (p *sweepReplayProof) setBracket(left, right *big.Rat) {
 }
 
 // HasAffineReplayProof reports whether this sweep can certify rounded poses
-// along an affine source-box, source-sphere, source-cylinder clear, or oriented
-// face-track path.
+// along an affine source-box, source-sphere, extruded or revolved source-cylinder
+// clear, or oriented face-track path.
 func (r *SweepReport) HasAffineReplayProof() bool {
 	if r == nil || r.replay == nil {
 		return false

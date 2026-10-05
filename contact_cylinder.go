@@ -5,15 +5,18 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// sourceCylinderContactProof encloses the complete circular prism from its
-// recorded full-circle section and exact axial limits. Its box is an outer
-// bound only; it never establishes cylinder touch or overlap.
+// sourceCylinderContactProof encloses a complete source cylinder from either
+// a full-circle prism or a full revolve of an axis-incident rectangle. Its box
+// is an outer bound only; it never establishes cylinder touch or overlap.
 type sourceCylinderContactProof struct {
 	box  sourceBoxContactProof
 	axis int
 }
 
 func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProof, bool) {
+	if cylinder, ok := sourceRevolvedCylinderAtPose(b, pose); ok {
+		return cylinder, true
+	}
 	pp, ok := b.payload.(prismPayload)
 	if !ok || !b.solid || b.kind != BodySolid || pp.surfaceResult ||
 		pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||
@@ -70,6 +73,89 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 		if i != axis {
 			box.lo[i] = dySubScalar(box.lo[i], radius)
 			box.hi[i] = dyAdd(box.hi[i], radius)
+		}
+	}
+	return sourceCylinderContactProof{box: box, axis: axis}, true
+}
+
+// sourceRevolvedCylinderAtPose reads the full recorded meridian, not the
+// body's outer bounds. A rectangle with one edge exactly on a cardinal axis
+// sweeps one complete disk at every level of its axial interval.
+func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProof, bool) {
+	rp, ok := b.payload.(revolvePayload)
+	if !ok || !b.solid || b.kind != BodySolid || rp.surfaceResult || !rp.full ||
+		rp.sectionDelta != 0 || !rectangularProfile(rp.profile) ||
+		!cardinalBasis(rp.frame.U(), rp.frame.V(), rp.frame.N()) ||
+		!signedAxisTransform(rp.xform) || !signedAxisTransform(pose) ||
+		!finiteVec(rp.frame.Origin()) ||
+		rp.ax.aUBound != 0 || rp.ax.aVBound != 0 ||
+		rp.ax.dUBound != 0 || rp.ax.dVBound != 0 {
+		return sourceCylinderContactProof{}, false
+	}
+	if _, _, ok := signedAxis(r3.Vec{X: rp.ax.dU, Y: rp.ax.dV}); !ok {
+		return sourceCylinderContactProof{}, false
+	}
+	if !finiteMeasurementValues(rp.ax.aU, rp.ax.aV) {
+		return sourceCylinderContactProof{}, false
+	}
+	var zlo, zhi, rhoLo, rhoHi dyadic
+	for i, seg := range rp.profile.Outer.Segments {
+		line, ok := seg.(LineSeg)
+		if !ok || !finiteMeasurementValues(line.Start.U, line.Start.V) {
+			return sourceCylinderContactProof{}, false
+		}
+		du := dySubScalar(mustDyOf(line.Start.U), mustDyOf(rp.ax.aU))
+		dv := dySubScalar(mustDyOf(line.Start.V), mustDyOf(rp.ax.aV))
+		z := dyAdd(dyMul(du, mustDyOf(rp.ax.dU)), dyMul(dv, mustDyOf(rp.ax.dV)))
+		rho := dySubScalar(dyMul(dv, mustDyOf(rp.ax.dU)), dyMul(du, mustDyOf(rp.ax.dV)))
+		if i == 0 {
+			zlo, zhi, rhoLo, rhoHi = z, z, rho, rho
+		} else {
+			zlo, zhi = dyMin(zlo, z), dyMax(zhi, z)
+			rhoLo, rhoHi = dyMin(rhoLo, rho), dyMax(rhoHi, rho)
+		}
+	}
+	if !rhoLo.isZero() || rhoHi.sign() <= 0 || dyCmp(zlo, zhi) >= 0 {
+		return sourceCylinderContactProof{}, false
+	}
+	faces := b.Faces()
+	if len(faces) != 3 || len(b.Edges()) != 2 {
+		return sourceCylinderContactProof{}, false
+	}
+	planes, walls := 0, 0
+	for _, face := range faces {
+		if face.normalBound != 0 {
+			return sourceCylinderContactProof{}, false
+		}
+		switch face.surface.(type) {
+		case Plane:
+			planes++
+		case Cylinder:
+			walls++
+		default:
+			return sourceCylinderContactProof{}, false
+		}
+	}
+	if planes != 2 || walls != 1 {
+		return sourceCylinderContactProof{}, false
+	}
+	anchor := dvAdd(dyVec(rp.frame.Origin()), dvAdd(
+		dyScaleVec(dyVec(rp.frame.U()), mustDyOf(rp.ax.aU)),
+		dyScaleVec(dyVec(rp.frame.V()), mustDyOf(rp.ax.aV))))
+	w := dvAdd(dyScaleVec(dyVec(rp.frame.U()), mustDyOf(rp.ax.dU)),
+		dyScaleVec(dyVec(rp.frame.V()), mustDyOf(rp.ax.dV)))
+	low := exactContactTransform(pose, exactContactTransform(rp.xform, dvAdd(anchor, dyScaleVec(w, zlo))))
+	high := exactContactTransform(pose, exactContactTransform(rp.xform, dvAdd(anchor, dyScaleVec(w, zhi))))
+	axis, _, ok := signedAxis(pose.ApplyDir(rp.xform.ApplyDir(rp.basis().w)))
+	if !ok {
+		return sourceCylinderContactProof{}, false
+	}
+	var box sourceBoxContactProof
+	for i := range 3 {
+		box.lo[i], box.hi[i] = dyMin(low[i], high[i]), dyMax(low[i], high[i])
+		if i != axis {
+			box.lo[i] = dySubScalar(box.lo[i], rhoHi)
+			box.hi[i] = dyAdd(box.hi[i], rhoHi)
 		}
 	}
 	return sourceCylinderContactProof{box: box, axis: axis}, true

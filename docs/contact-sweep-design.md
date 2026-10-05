@@ -27,6 +27,13 @@ cardinal can certify a clear path or first impact. An axis-normal source face
 can also certify departure when its support-plane gap increases throughout
 the step. Other unequal spins, rotating paths, and payloads remain design
 contracts.
+An extruded circular source prism or a full revolve of an axis-incident
+rectangular half-profile can certify a strictly separated axial affine path
+against a containing source-box face. The sweep uses the source-derived outer
+disk box at both endpoints and over the full translation, and replay charges
+the rounded pose deviation before returning a clear sample. Near contact,
+crossing, lateral motion outside the containing face, partial revolutions,
+and other revolved profiles return `Undecided` on this path.
 `docs/collision-dynamics-design.md` owns the package
 boundary and `docs/contact-geometry-design.md` owns relation and manifold
 proofs at one pose. This document owns the paths, continuous clear certificate,

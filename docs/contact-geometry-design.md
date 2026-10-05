@@ -36,6 +36,11 @@ A full circular source prism at a signed-axis pose can certify separation
 from a source box across one axial face. Its complete projected disk must lie
 strictly inside that box face. The source circle, prism extent, and placement
 produce an exact outer box, and the axial support gap is the true pair gap.
+The same proof admits a full revolve of a rectangular half-profile whose
+inner radial edge lies exactly on the resolved axis. It requires exact
+cardinal frame and axis readings, zero section displacement, and signed-axis
+placements. The recorded rectangle and axis determine the exact axial limits
+and radius; the resulting solid has two planar disks and one cylindrical wall.
 An overlapping outer box, side approach, or projected disk reaching a face
 edge returns `Undecided`; this path publishes no cylinder manifold.
 

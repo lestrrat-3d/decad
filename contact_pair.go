@@ -83,7 +83,8 @@ type ContactReport struct {
 // Source semicircle spheres against boxes or each other also have relation
 // and point-manifold proofs at signed-axis poses. Sphere-pair center lines
 // may be off-axis when their normal and witnesses meet the requested bounds.
-// A full source cylinder can prove an axial gap from a containing box face.
+// A full source cylinder, extruded or revolved, can prove an axial gap from a
+// containing box face.
 // An exactly orthogonal rotated source box can give a sphere a bounded point
 // on one interior face.
 // At identity query poses, the analytic clearance kernel can prove relations
