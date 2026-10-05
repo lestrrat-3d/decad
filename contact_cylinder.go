@@ -126,7 +126,7 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 			rhoLo, rhoHi = dyMin(rhoLo, rho), dyMax(rhoHi, rho)
 		}
 	}
-	if !rhoLo.isZero() || rhoHi.sign() <= 0 || dyCmp(zlo, zhi) >= 0 {
+	if !rhoLo.IsZero() || rhoHi.Sign() <= 0 || dyCmp(zlo, zhi) >= 0 {
 		return sourceCylinderContactProof{}, false
 	}
 	anchor := dvAdd(dyVec(rp.frame.Origin()), dvAdd(
@@ -209,7 +209,7 @@ func classifySourceCylinderBox(report *ContactReport, cylinder sourceCylinderCon
 		report.Reason = ContactAmbiguousFeature
 		return
 	}
-	if signedGap.sign() > 0 {
+	if signedGap.Sign() > 0 {
 		var gaps [3]dyadic
 		gaps[axis] = signedGap
 		gap, ok := sourceBoxGap(gaps)
@@ -224,7 +224,7 @@ func classifySourceCylinderBox(report *ContactReport, cylinder sourceCylinderCon
 		report.Reason = ContactNoGapProof
 		return
 	}
-	if signedGap.isZero() {
+	if signedGap.IsZero() {
 		report.Relation = ContactTouching
 		gap := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: Exact}
 		report.Gap = &gap

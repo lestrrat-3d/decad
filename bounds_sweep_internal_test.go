@@ -363,7 +363,7 @@ func TestCellAllowsOfMatchesThePerBoundHelpers(t *testing.T) {
 func rawNormIsBelowExact(a, b r3.Vec) bool {
 	raw := ratOfFloat(naiveNorm(a.Sub(b)))
 	d := dvSub(dyVec(a), dyVec(b))
-	return new(big.Rat).Mul(raw, raw).Cmp(dvDot(d, d).rat()) < 0
+	return new(big.Rat).Mul(raw, raw).Cmp(dvDot(d, d).Rat()) < 0
 }
 
 // edgeProductRow is one corner set for the two raw-norm regressions below,
@@ -901,7 +901,7 @@ func exactCellTwistVolume(vLo, vHi, wLo, wHi r3.Vec) *big.Rat {
 	a := heldDelta(vHi, vLo)
 	b := heldDelta(wLo, vLo)
 	twist := dvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
-	det := dyAbs(dvDot(a, dvCross(twist, b))).rat()
+	det := dyAbs(dvDot(a, dvCross(twist, b))).Rat()
 	return det.Quo(det, big.NewRat(12, 1))
 }
 

@@ -122,7 +122,7 @@ func (k *pairKernel) perpendicularSeg(a, b, n r3.Vec) degState {
 		return degUnknown
 	}
 	rel := dvSub(dyVec(b), dyVec(a))
-	if dvDot(rel, dyVec(n)).sign() == 0 {
+	if dvDot(rel, dyVec(n)).Sign() == 0 {
 		return degYes
 	}
 	if math.Abs(fRel.Dot(n)) > clrAngTol*lr*ln {

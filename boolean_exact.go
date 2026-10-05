@@ -212,15 +212,15 @@ func xhpOf(v r3.Vec) xhp {
 	dx, dy, dz := mustDyOf(v.X), mustDyOf(v.Y), mustDyOf(v.Z)
 	base := 0
 	for _, d := range [3]dyadic{dx, dy, dz} {
-		if !d.isZero() && d.exp < base {
-			base = d.exp
+		if !d.IsZero() && d.Exp() < base {
+			base = d.Exp()
 		}
 	}
 	coord := func(d dyadic) *big.Int {
-		if d.isZero() {
+		if d.IsZero() {
 			return new(big.Int)
 		}
-		return new(big.Int).Lsh(d.mant, uint(d.exp-base))
+		return new(big.Int).Lsh(d.Mant(), uint(d.Exp()-base))
 	}
 	return xhp{
 		x: coord(dx),

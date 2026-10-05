@@ -148,9 +148,9 @@ func (r *sourceSpherePairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.
 		delta           [3]dyadic
 	}{{r.sphereA, observedA, r.pa.delta}, {r.sphereB, observedB, r.pb.delta}} {
 		for i := range 3 {
-			center := new(big.Rat).Add(moving.start.center[i].rat(),
-				new(big.Rat).Mul(moving.delta[i].rat(), f))
-			diff := new(big.Rat).Sub(moving.observed.center[i].rat(), center)
+			center := new(big.Rat).Add(moving.start.center[i].Rat(),
+				new(big.Rat).Mul(moving.delta[i].Rat(), f))
+			diff := new(big.Rat).Sub(moving.observed.center[i].Rat(), center)
 			deviation.Add(deviation, diff.Abs(diff))
 		}
 	}
@@ -213,7 +213,7 @@ func (r *sourceSpherePairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.
 	}{{&actual.OnA, r.sphereA.radius}, {&actual.OnB, r.sphereB.radius}} {
 		bound := new(big.Rat).Add(floatRat(witness.point.Bound.Base()), deviation)
 		if normalMotion > 0 {
-			bound.Add(bound, floatRat(provenUpRound(ratFloatUp(witness.radius.rat())*normalMotion)))
+			bound.Add(bound, floatRat(provenUpRound(ratFloatUp(witness.radius.Rat())*normalMotion)))
 		}
 		if bound.Cmp(resolution) > 0 {
 			ideal.Manifold, ideal.Reason = nil, ContactPointTooCoarse
@@ -225,7 +225,7 @@ func (r *sourceSpherePairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.
 	sepBound := new(big.Rat).Add(floatRat(actual.Separation.Bound.Base()), deviation)
 	if normalMotion > 0 {
 		sepBound.Add(sepBound, floatRat(provenUpRound(
-			ratFloatUp(dyAdd(r.sphereA.radius, r.sphereB.radius).rat())*normalMotion)))
+			ratFloatUp(dyAdd(r.sphereA.radius, r.sphereB.radius).Rat())*normalMotion)))
 	}
 	actual.Separation.Bound = units.Millimeters(ratFloatUp(sepBound))
 	actual.Separation.Exactness = exactnessFromBound(actual.Separation.Bound.Base())
@@ -289,8 +289,8 @@ func (r *sourceSpherePairSweepRun) axialGap() (dyadic, dyadic, bool) {
 	for i := range 3 {
 		start := dySubScalar(r.sphereB.center[i], r.sphereA.center[i])
 		travel := dySubScalar(r.pb.delta[i], r.pa.delta[i])
-		if start.sign() != 0 || travel.sign() != 0 {
-			axis, sign, nonzero = i, start.sign(), nonzero+1
+		if start.Sign() != 0 || travel.Sign() != 0 {
+			axis, sign, nonzero = i, start.Sign(), nonzero+1
 		}
 	}
 	if nonzero != 1 || sign == 0 {
@@ -321,10 +321,10 @@ func (r *sourceSpherePairSweepRun) squaredGap() (dyadic, dyadic, dyadic) {
 }
 
 func spherePairQuadraticAt(a, b, c dyadic, f *big.Rat) *big.Rat {
-	out := new(big.Rat).Mul(a.rat(), f)
-	out.Add(out, b.rat())
+	out := new(big.Rat).Mul(a.Rat(), f)
+	out.Add(out, b.Rat())
 	out.Mul(out, f)
-	return out.Add(out, c.rat())
+	return out.Add(out, c.Rat())
 }
 
 // grazingTouch accepts only an exactly representable interior double root.
@@ -430,7 +430,7 @@ func (r *sourceSpherePairSweepRun) transverse(ctx context.Context, first *SweepS
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	a, b, c := r.squaredGap()
 	if first.Ideal.Relation == ContactTouching {
-		if b.sign() < 0 || a.sign() == 0 && b.sign() == 0 {
+		if b.Sign() < 0 || a.Sign() == 0 && b.Sign() == 0 {
 			return r.undecided(zero, one, SweepContactTrackUnproved), nil
 		}
 		last, err := r.sample(ctx, one)
@@ -447,13 +447,13 @@ func (r *sourceSpherePairSweepRun) transverse(ctx context.Context, first *SweepS
 		r.report.Departure = &SweepDeparture{Until: last.At, GapAtUntil: *last.Ideal.Gap}
 		return r.report, nil
 	}
-	if c.sign() <= 0 {
+	if c.Sign() <= 0 {
 		return r.undecided(zero, one, SweepPoseRelation), nil
 	}
-	isClear := a.sign() == 0 || b.sign() >= 0
+	isClear := a.Sign() == 0 || b.Sign() >= 0
 	vertex := new(big.Rat)
 	if !isClear {
-		vertex.Quo(dyNeg(b).rat(), dyAdd(a, a).rat())
+		vertex.Quo(dyNeg(b).Rat(), dyAdd(a, a).Rat())
 		minimum := one
 		if vertex.Cmp(one) < 0 {
 			minimum = vertex
@@ -474,11 +474,11 @@ func (r *sourceSpherePairSweepRun) transverse(ctx context.Context, first *SweepS
 		r.report.Outcome = SweepClear
 		return r.report, nil
 	}
-	if a.sign() > 0 && vertex.Cmp(one) == 0 &&
+	if a.Sign() > 0 && vertex.Cmp(one) == 0 &&
 		spherePairQuadraticAt(a, b, c, one).Sign() == 0 {
 		return r.undecided(zero, one, SweepTimeFloor), nil
 	}
-	if a.sign() > 0 && vertex.Sign() > 0 && vertex.Cmp(one) < 0 &&
+	if a.Sign() > 0 && vertex.Sign() > 0 && vertex.Cmp(one) < 0 &&
 		spherePairQuadraticAt(a, b, c, vertex).Sign() == 0 {
 		return r.grazingTouch(ctx, first, vertex)
 	}
@@ -525,7 +525,7 @@ func (r *sourceSpherePairSweepRun) persistentTrack(first *SweepSample) *SweepCon
 		}
 	}
 	a, b, c := r.squaredGap()
-	if !a.isZero() || !b.isZero() || !c.isZero() {
+	if !a.IsZero() || !b.IsZero() || !c.IsZero() {
 		return nil
 	}
 	point := first.Ideal.Manifold.Points[0]
@@ -591,7 +591,7 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 		return r.transverse(ctx, first, resolution)
 	}
 	if first.Ideal.Relation == ContactTouching {
-		if slope.sign() > 0 {
+		if slope.Sign() > 0 {
 			last, err := r.sample(ctx, one)
 			if errors.Is(err, errSweepPoseBudget) {
 				return r.undecided(zero, one, SweepPoseBudget), nil
@@ -608,10 +608,10 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 		}
 		return r.undecided(zero, one, SweepContactTrackUnproved), nil
 	}
-	if gap.sign() <= 0 {
+	if gap.Sign() <= 0 {
 		return r.undecided(zero, one, SweepPoseRelation), nil
 	}
-	if slope.sign() >= 0 || dyAdd(gap, slope).sign() > 0 {
+	if slope.Sign() >= 0 || dyAdd(gap, slope).Sign() > 0 {
 		last, err := r.sample(ctx, one)
 		if errors.Is(err, errSweepPoseBudget) {
 			return r.undecided(zero, one, SweepPoseBudget), nil
@@ -625,7 +625,7 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 		r.report.Outcome = SweepClear
 		return r.report, nil
 	}
-	root := new(big.Rat).Quo(dyNeg(gap).rat(), slope.rat())
+	root := new(big.Rat).Quo(dyNeg(gap).Rat(), slope.Rat())
 	leftF, rightF, ok := spherePairImpactBracket(root, r.pa.duration, resolution)
 	if !ok || leftF.Sign() <= 0 || rightF.Cmp(one) > 0 {
 		return r.undecided(zero, one, SweepTimeFloor), nil

@@ -282,7 +282,7 @@ func meshOrientationSign(verts []r3.Vec, tris [][3]int, anchor r3.Vec) int {
 		c := dvSub(dyVec(verts[t[2]]), xa)
 		sum = dyAdd(sum, dvDot(a, dvCross(b, c)))
 	}
-	return sum.sign()
+	return sum.Sign()
 }
 
 // loftVertex builds a vertex at a recorded (or lifted-from-recorded)

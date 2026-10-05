@@ -913,7 +913,7 @@ func ratSquaredDistance3(a0, a1, a2, b0, b1, b2 float64) *big.Rat {
 	if !ok {
 		return nil
 	}
-	return d.rat()
+	return d.Rat()
 }
 
 // straightEdgeBound is the proven bound on a straight cap-level edge's held

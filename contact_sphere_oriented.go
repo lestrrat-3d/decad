@@ -19,7 +19,7 @@ func closestOrientedBoxPoint(center dyV3, box orientedSourceBox) (*big.Rat, bool
 		count := 0
 		point := [3]*big.Rat{}
 		for k := range 3 {
-			point[k] = box.corner[0][k].rat()
+			point[k] = box.corner[0][k].Rat()
 		}
 		for axis := range 3 {
 			side := status % 3
@@ -31,7 +31,7 @@ func closestOrientedBoxPoint(center dyV3, box orientedSourceBox) (*big.Rat, bool
 			value[axis] = big.NewRat(int64(side), 1)
 			if side == 1 {
 				for k := range 3 {
-					point[k].Add(point[k], box.edge[axis][k].rat())
+					point[k].Add(point[k], box.edge[axis][k].Rat())
 				}
 			}
 		}
@@ -40,13 +40,13 @@ func closestOrientedBoxPoint(center dyV3, box orientedSourceBox) (*big.Rat, bool
 			for i := range count {
 				matrix[i] = make([]*big.Rat, count+1)
 				for j := range count {
-					matrix[i][j] = dvDot(box.edge[free[i]], box.edge[free[j]]).rat()
+					matrix[i][j] = dvDot(box.edge[free[i]], box.edge[free[j]]).Rat()
 				}
 				matrix[i][count] = new(big.Rat)
 				for k := range 3 {
-					term := new(big.Rat).Sub(center[k].rat(), point[k])
+					term := new(big.Rat).Sub(center[k].Rat(), point[k])
 					matrix[i][count].Add(matrix[i][count],
-						new(big.Rat).Mul(box.edge[free[i]][k].rat(), term))
+						new(big.Rat).Mul(box.edge[free[i]][k].Rat(), term))
 				}
 			}
 			if !solvePositiveGram(matrix) {
@@ -67,11 +67,11 @@ func closestOrientedBoxPoint(center dyV3, box orientedSourceBox) (*big.Rat, bool
 		}
 		distance2 := new(big.Rat)
 		for k := range 3 {
-			coordinate := box.corner[0][k].rat()
+			coordinate := box.corner[0][k].Rat()
 			for axis := range 3 {
-				coordinate.Add(coordinate, new(big.Rat).Mul(value[axis], box.edge[axis][k].rat()))
+				coordinate.Add(coordinate, new(big.Rat).Mul(value[axis], box.edge[axis][k].Rat()))
 			}
-			delta := new(big.Rat).Sub(center[k].rat(), coordinate)
+			delta := new(big.Rat).Sub(center[k].Rat(), coordinate)
 			distance2.Add(distance2, new(big.Rat).Mul(delta, delta))
 		}
 		if best == nil || distance2.Cmp(best) < 0 {
@@ -116,10 +116,10 @@ func orientedSphereFace(sphere sourceSphereContactProof, box orientedSourceBox) 
 		i, j := (axis+1)%3, (axis+2)%3
 		dual := dvCross(box.edge[i], box.edge[j])
 		denom := dvDot(box.edge[axis], dual)
-		if denom.sign() == 0 {
+		if denom.Sign() == 0 {
 			return 0, 0, dyV3{}, [3]*big.Rat{}, nil, false
 		}
-		if denom.sign() < 0 {
+		if denom.Sign() < 0 {
 			for k := range 3 {
 				dual[k] = dyNeg(dual[k])
 			}
@@ -127,10 +127,10 @@ func orientedSphereFace(sphere sourceSphereContactProof, box orientedSourceBox) 
 		}
 		var coordinate [3]*big.Rat
 		for k := range 3 {
-			denominator := orientedDenominator(box, k).rat()
+			denominator := orientedDenominator(box, k).Rat()
 			denominator.Abs(denominator)
 			coordinate[k] = new(big.Rat).Quo(dvDot(dvSub(sphere.center, box.corner[0]),
-				orientedDual(box, k)).rat(), denominator)
+				orientedDual(box, k)).Rat(), denominator)
 		}
 		side := -1
 		if coordinate[axis].Sign() < 0 {
@@ -141,10 +141,10 @@ func orientedSphereFace(sphere sourceSphereContactProof, box orientedSourceBox) 
 		if side < 0 {
 			continue
 		}
-		norm2 := dvDot(dual, dual).rat()
-		plane := new(big.Rat).Mul(coordinate[axis], denom.rat())
+		norm2 := dvDot(dual, dual).Rat()
+		plane := new(big.Rat).Mul(coordinate[axis], denom.Rat())
 		if side == 1 {
-			plane.Sub(plane, denom.rat())
+			plane.Sub(plane, denom.Rat())
 		} else {
 			plane.Neg(plane)
 		}
@@ -170,7 +170,7 @@ func orientedSphereFace(sphere sourceSphereContactProof, box orientedSourceBox) 
 func orientedDual(box orientedSourceBox, axis int) dyV3 {
 	i, j := (axis+1)%3, (axis+2)%3
 	dual := dvCross(box.edge[i], box.edge[j])
-	if orientedDenominator(box, axis).sign() < 0 {
+	if orientedDenominator(box, axis).Sign() < 0 {
 		for k := range 3 {
 			dual[k] = dyNeg(dual[k])
 		}
@@ -188,7 +188,7 @@ func orientedSphereMargin(radius dyadic, box orientedSourceBox, axis int, coordi
 		return false
 	}
 	dual := orientedDual(box, axis)
-	denom := orientedDenominator(box, axis).rat()
+	denom := orientedDenominator(box, axis).Rat()
 	margin := new(big.Rat).Set(coordinate)
 	remaining := new(big.Rat).Sub(big.NewRat(1, 1), coordinate)
 	if remaining.Cmp(margin) < 0 {
@@ -196,8 +196,8 @@ func orientedSphereMargin(radius dyadic, box orientedSourceBox, axis int, coordi
 	}
 	left := new(big.Rat).Mul(margin, margin)
 	left.Mul(left, new(big.Rat).Mul(denom, denom))
-	right := new(big.Rat).Mul(radius.rat(), radius.rat())
-	right.Mul(right, dvDot(dual, dual).rat())
+	right := new(big.Rat).Mul(radius.Rat(), radius.Rat())
+	right.Mul(right, dvDot(dual, dual).Rat())
 	return left.Cmp(right) > 0
 }
 
@@ -212,7 +212,7 @@ func classifySourceSphereOrientedBox(report *ContactReport, sphere sourceSphereC
 		report.Reason = ContactPayloadUnsupported
 		return
 	}
-	radius2 := dyMul(sphere.radius, sphere.radius).rat()
+	radius2 := dyMul(sphere.radius, sphere.radius).Rat()
 	switch distance2.Cmp(radius2) {
 	case 1:
 		gap, valid := orientedSphereSignedReading(distance2, sphere.radius)
@@ -236,13 +236,13 @@ func classifySourceSphereOrientedBox(report *ContactReport, sphere sourceSphereC
 	// A shallow overlap must still leave the opposite face outside the ball.
 	opposite := new(big.Rat).Set(coordinate[axis])
 	if side == 1 {
-		opposite = new(big.Rat).Mul(coordinate[axis], orientedDenominator(box, axis).rat())
+		opposite = new(big.Rat).Mul(coordinate[axis], orientedDenominator(box, axis).Rat())
 	} else {
 		opposite.Sub(big.NewRat(1, 1), opposite)
-		opposite.Mul(opposite, orientedDenominator(box, axis).rat())
+		opposite.Mul(opposite, orientedDenominator(box, axis).Rat())
 	}
 	if new(big.Rat).Mul(opposite, opposite).Cmp(new(big.Rat).Mul(radius2,
-		dvDot(outward, outward).rat())) <= 0 {
+		dvDot(outward, outward).Rat())) <= 0 {
 		report.Reason = ContactAmbiguousFeature
 		return
 	}
@@ -264,13 +264,13 @@ func classifySourceSphereOrientedBox(report *ContactReport, sphere sourceSphereC
 	}
 	foot := [3]*big.Rat{}
 	for k := range 3 {
-		foot[k] = box.corner[0][k].rat()
+		foot[k] = box.corner[0][k].Rat()
 		for edge := range 3 {
 			value := coordinate[edge]
 			if edge == axis {
 				value = big.NewRat(int64(side), 1)
 			}
-			foot[k].Add(foot[k], new(big.Rat).Mul(value, box.edge[edge][k].rat()))
+			foot[k].Add(foot[k], new(big.Rat).Mul(value, box.edge[edge][k].Rat()))
 		}
 	}
 	boxPoint, boxOK := orientedBoxPoint(foot)
@@ -301,7 +301,7 @@ func classifySourceSphereOrientedBox(report *ContactReport, sphere sourceSphereC
 func orthogonalSourceBox(box orientedSourceBox) bool {
 	for i := range 3 {
 		for j := i + 1; j < 3; j++ {
-			if !dvDot(box.edge[i], box.edge[j]).isZero() {
+			if !dvDot(box.edge[i], box.edge[j]).IsZero() {
 				return false
 			}
 		}
@@ -314,8 +314,8 @@ func orientedSphereSignedReading(distance2 *big.Rat, radius dyadic) (Measurement
 	if !finiteMeasurementValues(lower, upper) {
 		return Measurement{}, false
 	}
-	low := new(big.Rat).Sub(floatRat(lower), radius.rat())
-	high := new(big.Rat).Sub(floatRat(upper), radius.rat())
+	low := new(big.Rat).Sub(floatRat(lower), radius.Rat())
+	high := new(big.Rat).Sub(floatRat(upper), radius.Rat())
 	value := ratFloatNearest(new(big.Rat).Quo(new(big.Rat).Add(low, high), big.NewRat(2, 1)))
 	bound := ratFloatUp(ratMax(new(big.Rat).Sub(floatRat(value), low),
 		new(big.Rat).Sub(high, floatRat(value))))
@@ -327,7 +327,7 @@ func orientedSphereSignedReading(distance2 *big.Rat, radius dyadic) (Measurement
 }
 
 func orientedSpherePoint(sphere sourceSphereContactProof, outward dyV3) (VecMeasurement, bool) {
-	squared := dvDot(outward, outward).rat()
+	squared := dvDot(outward, outward).Rat()
 	low, high := ratSqrtDown(squared), ratSqrtUp(squared)
 	if low <= 0 || !finiteMeasurementValues(low, high) {
 		return VecMeasurement{}, false
@@ -335,10 +335,10 @@ func orientedSpherePoint(sphere sourceSphereContactProof, outward dyV3) (VecMeas
 	var value [3]float64
 	maxError := new(big.Rat)
 	for k := range 3 {
-		a := new(big.Rat).Quo(outward[k].rat(), floatRat(low))
-		b := new(big.Rat).Quo(outward[k].rat(), floatRat(high))
-		first := new(big.Rat).Sub(sphere.center[k].rat(), new(big.Rat).Mul(sphere.radius.rat(), a))
-		second := new(big.Rat).Sub(sphere.center[k].rat(), new(big.Rat).Mul(sphere.radius.rat(), b))
+		a := new(big.Rat).Quo(outward[k].Rat(), floatRat(low))
+		b := new(big.Rat).Quo(outward[k].Rat(), floatRat(high))
+		first := new(big.Rat).Sub(sphere.center[k].Rat(), new(big.Rat).Mul(sphere.radius.Rat(), a))
+		second := new(big.Rat).Sub(sphere.center[k].Rat(), new(big.Rat).Mul(sphere.radius.Rat(), b))
 		value[k] = ratFloatNearest(new(big.Rat).Quo(new(big.Rat).Add(first, second), big.NewRat(2, 1)))
 		if !finiteMeasurementValues(value[k]) {
 			return VecMeasurement{}, false

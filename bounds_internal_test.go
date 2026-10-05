@@ -936,7 +936,7 @@ func refFloat(x float64) *big.Float { return new(big.Float).SetPrec(refPrec).Set
 
 // refLen is the EXACT length of an exactly-represented vector, to refPrec bits.
 func refLen(u dyV3) *big.Float {
-	return new(big.Float).SetPrec(refPrec).Sqrt(new(big.Float).SetPrec(refPrec).SetRat(dvDot(u, u).rat()))
+	return new(big.Float).SetPrec(refPrec).Sqrt(new(big.Float).SetPrec(refPrec).SetRat(dvDot(u, u).Rat()))
 }
 
 func refAdd(a, b *big.Float) *big.Float { return new(big.Float).SetPrec(refPrec).Add(a, b) }

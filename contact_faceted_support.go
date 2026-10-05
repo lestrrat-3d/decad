@@ -68,7 +68,7 @@ func boundedFacetedFloorGap(extent boundedFacetedExtent,
 	if !ok {
 		return Measurement{}, false
 	}
-	boundaryBound, _ := extent.bound.float64()
+	boundaryBound, _ := extent.bound.Float64()
 	bound := absSumUpper(reading.Bound.Base(), boundaryBound)
 	if !finiteMeasurementValues(bound) || reading.Value.Base()-bound <= 0 {
 		return Measurement{}, false
@@ -206,8 +206,8 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 		proof.face = face
 		cross := dvCross(dvSub(placed[tri[1]], placed[tri[0]]),
 			dvSub(placed[tri[2]], placed[tri[0]]))
-		if cross[axis].sign() != windingSign ||
-			!cross[projected[0]].isZero() || !cross[projected[1]].isZero() {
+		if cross[axis].Sign() != windingSign ||
+			!cross[projected[0]].IsZero() || !cross[projected[1]].IsZero() {
 			return facetedAxisSupport{}, false, nil
 		}
 		if windingSign < 0 {
@@ -298,7 +298,7 @@ func classifyFacetedFloorBox(ctx context.Context, report *ContactReport, faceted
 		if err != nil {
 			return err
 		}
-		if bounded && extent.bound.sign() > 0 && boundedFacetedInsideFloor(extent, floor) {
+		if bounded && extent.bound.Sign() > 0 && boundedFacetedInsideFloor(extent, floor) {
 			if gap, measured := boundedFacetedFloorGap(extent, floor); measured {
 				report.Relation, report.Gap, report.Reason = ContactSeparated, &gap, ContactNoReason
 			}
@@ -312,10 +312,10 @@ func classifyFacetedFloorBox(ctx context.Context, report *ContactReport, faceted
 		}
 	}
 	gap := dySubScalar(support.plane, floor.hi[2])
-	if gap.sign() < 0 {
+	if gap.Sign() < 0 {
 		return nil
 	}
-	if gap.sign() > 0 {
+	if gap.Sign() > 0 {
 		var gaps [3]dyadic
 		gaps[2] = gap
 		m, measured := sourceBoxGap(gaps)

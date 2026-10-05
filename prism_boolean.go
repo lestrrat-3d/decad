@@ -440,7 +440,7 @@ func prismSharedAxisOf(pa, pb prismPayload) prismSharedAxis {
 	if comps[i] == 0 {
 		return prismSharedAxis{}
 	}
-	return prismSharedAxis{ok: true, shift: new(big.Rat).Quo(d[i].rat(), nd[i].rat())}
+	return prismSharedAxis{ok: true, shift: new(big.Rat).Quo(d[i].Rat(), nd[i].Rat())}
 }
 
 // prismZShift is G5's shift s as an exact rational (§3.1): the shared-axis

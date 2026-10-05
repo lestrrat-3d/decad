@@ -435,7 +435,7 @@ func provePatchChainPlaneExact(edges []*Edge) error {
 	originDy := dyVec(origin)
 	for _, v := range verts {
 		rel := dvSub(dyVec(v.position), originDy)
-		if !dvDot(normalDy, rel).isZero() {
+		if !dvDot(normalDy, rel).IsZero() {
 			return fmt.Errorf(`%w: a Body.Patch chain is not planar (docs/surface-design.md Table R row R6)`, ErrUnsupported)
 		}
 	}
@@ -448,7 +448,7 @@ func provePatchChainPlaneExact(edges []*Edge) error {
 			return fmt.Errorf(`%w: a Body.Patch chain edge's carrier plane does not match the chain's plane (docs/surface-design.md Table R row R6)`, ErrUnsupported)
 		}
 		rel := dvSub(dyVec(center), originDy)
-		if !dvDot(normalDy, rel).isZero() {
+		if !dvDot(normalDy, rel).IsZero() {
 			return fmt.Errorf(`%w: a Body.Patch chain edge's carrier plane does not match the chain's plane (docs/surface-design.md Table R row R6)`, ErrUnsupported)
 		}
 	}

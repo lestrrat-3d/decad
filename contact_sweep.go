@@ -384,9 +384,9 @@ func (p affinePairPath) poseAt(f *big.Rat) (r3.Transform, error) {
 	if f.Cmp(big.NewRat(1, 1)) == 0 && p.to.IsValid() {
 		return p.to, nil
 	}
-	d := r3.NewVec(ratFloatNearest(new(big.Rat).Mul(p.delta[0].rat(), f)),
-		ratFloatNearest(new(big.Rat).Mul(p.delta[1].rat(), f)),
-		ratFloatNearest(new(big.Rat).Mul(p.delta[2].rat(), f)))
+	d := r3.NewVec(ratFloatNearest(new(big.Rat).Mul(p.delta[0].Rat(), f)),
+		ratFloatNearest(new(big.Rat).Mul(p.delta[1].Rat(), f)),
+		ratFloatNearest(new(big.Rat).Mul(p.delta[2].Rat(), f)))
 	step, err := r3.Translation(d)
 	if err != nil {
 		return r3.Transform{}, err
@@ -702,11 +702,11 @@ func (r *pairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
 func boxPoseDeviation(start, observed sourceBoxContactProof, delta [3]dyadic, f *big.Rat) *big.Rat {
 	total := new(big.Rat)
 	for i := range 3 {
-		move := new(big.Rat).Mul(delta[i].rat(), f)
-		idealLo := new(big.Rat).Add(start.lo[i].rat(), move)
-		idealHi := new(big.Rat).Add(start.hi[i].rat(), move)
-		lo := new(big.Rat).Sub(observed.lo[i].rat(), idealLo)
-		hi := new(big.Rat).Sub(observed.hi[i].rat(), idealHi)
+		move := new(big.Rat).Mul(delta[i].Rat(), f)
+		idealLo := new(big.Rat).Add(start.lo[i].Rat(), move)
+		idealHi := new(big.Rat).Add(start.hi[i].Rat(), move)
+		lo := new(big.Rat).Sub(observed.lo[i].Rat(), idealLo)
+		hi := new(big.Rat).Sub(observed.hi[i].Rat(), idealHi)
 		lo.Abs(lo)
 		hi.Abs(hi)
 		if hi.Cmp(lo) > 0 {
@@ -782,10 +782,10 @@ func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *Swe
 
 func affineEqualityRoot(a, da, b, db dyadic) *big.Rat {
 	delta := dySubScalar(da, db)
-	if delta.isZero() {
+	if delta.IsZero() {
 		return nil
 	}
-	return new(big.Rat).Quo(dySubScalar(b, a).rat(), delta.rat())
+	return new(big.Rat).Quo(dySubScalar(b, a).Rat(), delta.Rat())
 }
 
 func affineEqualityRootWithin(a, da, b, db dyadic, end *big.Rat) bool {
@@ -865,7 +865,7 @@ func sourceTrackPointsWithin(a, b sourceBoxContactProof, da, db [3]dyadic, resol
 		for i := range 3 {
 			for _, endpoint := range []dyadic{moving.box.lo[i], moving.box.hi[i]} {
 				for _, value := range []dyadic{endpoint, dyAdd(endpoint, moving.delta[i])} {
-					abs := new(big.Rat).Abs(value.rat())
+					abs := new(big.Rat).Abs(value.Rat())
 					if abs.Cmp(maximum) > 0 {
 						maximum = abs
 					}
@@ -1076,12 +1076,12 @@ func (r *pairSweepRun) undecided(from, to *big.Rat, cause SweepCause) *SweepRepo
 func (r *pairSweepRun) provesDeparture() bool {
 	for axis := range 3 {
 		if dyCmp(r.boxA.hi[axis], r.boxB.lo[axis]) == 0 {
-			if dySubScalar(r.pb.delta[axis], r.pa.delta[axis]).sign() > 0 {
+			if dySubScalar(r.pb.delta[axis], r.pa.delta[axis]).Sign() > 0 {
 				return true
 			}
 		}
 		if dyCmp(r.boxB.hi[axis], r.boxA.lo[axis]) == 0 {
-			if dySubScalar(r.pa.delta[axis], r.pb.delta[axis]).sign() > 0 {
+			if dySubScalar(r.pa.delta[axis], r.pb.delta[axis]).Sign() > 0 {
 				return true
 			}
 		}
@@ -1100,17 +1100,17 @@ func (r *pairSweepRun) contactSpan() (*big.Rat, *big.Rat, bool) {
 		}
 		for _, c := range constraints {
 			start, slope := c[0], c[1]
-			if slope.isZero() {
-				if start.sign() < 0 {
+			if slope.IsZero() {
+				if start.Sign() < 0 {
 					return entry, exit, false
 				}
 				continue
 			}
-			root := new(big.Rat).Quo(dyNeg(start).rat(), slope.rat())
-			if slope.sign() > 0 && root.Cmp(entry) > 0 {
+			root := new(big.Rat).Quo(dyNeg(start).Rat(), slope.Rat())
+			if slope.Sign() > 0 && root.Cmp(entry) > 0 {
 				entry = root
 			}
-			if slope.sign() < 0 && root.Cmp(exit) < 0 {
+			if slope.Sign() < 0 && root.Cmp(exit) < 0 {
 				exit = root
 			}
 		}

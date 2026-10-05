@@ -820,7 +820,7 @@ func cellTwistVolume(vLo, vHi, wLo, wHi r3.Vec) *big.Rat {
 	b := heldDelta(wLo, vLo)
 	twist := dvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
 	det := dvDot(a, dvCross(twist, b))
-	return new(big.Rat).Quo(det.rat(), big.NewRat(12, 1))
+	return new(big.Rat).Quo(det.Rat(), big.NewRat(12, 1))
 }
 
 // ratV3 is a triple of exact RATIONALS, for the one family of readings in this
@@ -906,18 +906,18 @@ func momentPolyMul(a, b momentPoly) momentPoly {
 
 func bilinearPatchMomentIntegral(q0, a, b, twist dyV3, axis int) *big.Rat {
 	q := momentPoly{
-		{0, 0}: q0[axis].rat(),
-		{1, 0}: a[axis].rat(),
-		{0, 1}: b[axis].rat(),
-		{1, 1}: twist[axis].rat(),
+		{0, 0}: q0[axis].Rat(),
+		{1, 0}: a[axis].Rat(),
+		{0, 1}: b[axis].Rat(),
+		{1, 1}: twist[axis].Rat(),
 	}
 	n0 := dvCross(a, b)
 	ns := dvCross(a, twist)
 	nr := dvCross(twist, b)
 	n := momentPoly{
-		{0, 0}: n0[axis].rat(),
-		{1, 0}: ns[axis].rat(),
-		{0, 1}: nr[axis].rat(),
+		{0, 0}: n0[axis].Rat(),
+		{1, 0}: ns[axis].Rat(),
+		{0, 1}: nr[axis].Rat(),
 	}
 	integrand := momentPolyMul(momentPolyMul(q, q), n)
 	out := new(big.Rat)
@@ -932,12 +932,12 @@ func triangleMomentIntegral(q0, q1, q2 dyV3, axis int) *big.Rat {
 	e1 := dvSub(q1, q0)
 	e2 := dvSub(q2, q0)
 	q := momentPoly{
-		{0, 0}: q0[axis].rat(),
-		{1, 0}: e1[axis].rat(),
-		{0, 1}: e2[axis].rat(),
+		{0, 0}: q0[axis].Rat(),
+		{1, 0}: e1[axis].Rat(),
+		{0, 1}: e2[axis].Rat(),
 	}
 	q2Poly := momentPolyMul(q, q)
-	n := dvCross(e1, e2)[axis].rat()
+	n := dvCross(e1, e2)[axis].Rat()
 	out := new(big.Rat)
 	for degree, coefficient := range q2Poly {
 		// Integral over s>=0, r>=0, s+r<=1 of s^i*r^j is
@@ -1274,7 +1274,7 @@ func cellBilinearArea(vLo, vHi, wLo, wHi r3.Vec) (float64, float64) {
 	integralHi = dyShift(integralHi, -(2*divShift + 2))
 
 	mid := dyShift(dyAdd(integralLo, integralHi), -1)
-	value, _ := mid.float64()
+	value, _ := mid.Float64()
 	valueDy, ok := dyOf(value)
 	if !ok {
 		return 0, math.Inf(1)
@@ -1341,7 +1341,7 @@ func cellTwistAreaQuadraticAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 
 	numerator := dyAdd(dvDot(a, a), dvDot(b, b))
 	numerator = dyAdd(numerator, dyMul(dyInt(3), dvDot(diff, diff)))
-	if numerator.isZero() {
+	if numerator.IsZero() {
 		return 0
 	}
 
@@ -1359,7 +1359,7 @@ func cellTwistAreaQuadraticAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	// a bracketed norm is no power of two — so this is where the exact vector
 	// arithmetic hands over to a general fraction (dyadic.go's own boundary).
 	denominator := new(big.Rat).Mul(big.NewRat(12, 1), centerLenRat)
-	return ratFloatUp(new(big.Rat).Quo(numerator.rat(), denominator))
+	return ratFloatUp(new(big.Rat).Quo(numerator.Rat(), denominator))
 }
 
 // uniformSpeedTangentEnergyUpper is the per-side TANGENT-DEVIATION ENERGY
@@ -1471,7 +1471,7 @@ func cellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 		sum = dvAdd(sum, c)
 	}
 	sumLen2 := dvDot(sum, sum)
-	if sumLen2.sign() <= 0 {
+	if sumLen2.Sign() <= 0 {
 		return 0
 	}
 	minDot := dvDot(corners[0], sum)
@@ -1480,7 +1480,7 @@ func cellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 			minDot = d
 		}
 	}
-	if minDot.sign() <= 0 {
+	if minDot.Sign() <= 0 {
 		return 0
 	}
 	lenUp := dySqrtUp(sumLen2)
@@ -1493,7 +1493,7 @@ func cellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	}
 	// Dividing by a bracketed norm leaves the dyadic set, so the quotient is
 	// taken as a general fraction (dyadic.go's own boundary).
-	lower := ratFloatDown(new(big.Rat).Quo(minDot.rat(), lenRat))
+	lower := ratFloatDown(new(big.Rat).Quo(minDot.Rat(), lenRat))
 	if isNonFinite(lower) || lower <= 0 {
 		return 0
 	}

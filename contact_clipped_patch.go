@@ -25,7 +25,7 @@ func axisAlignedOrientedBox(box orientedSourceBox) (sourceBoxContactProof, bool)
 	for sourceAxis, edge := range box.edge {
 		worldAxis := -1
 		for axis := range 3 {
-			if edge[axis].sign() != 0 {
+			if edge[axis].Sign() != 0 {
 				if worldAxis >= 0 {
 					return sourceBoxContactProof{}, false
 				}
@@ -38,7 +38,7 @@ func axisAlignedOrientedBox(box orientedSourceBox) (sourceBoxContactProof, bool)
 		used[worldAxis] = true
 		for side := range 2 {
 			worldSide := side
-			if edge[worldAxis].sign() < 0 {
+			if edge[worldAxis].Sign() < 0 {
 				worldSide = 1 - side
 			}
 			aligned.faces[worldAxis][worldSide] = box.faces[sourceAxis][side]
@@ -61,7 +61,7 @@ func publishClippedHorizontalPatchOrder(report *ContactReport, base sourceBoxCon
 	}
 	vertical := -1
 	for axis, edge := range rotated.edge {
-		if edge[0].sign() == 0 && edge[1].sign() == 0 && edge[2].sign() != 0 {
+		if edge[0].Sign() == 0 && edge[1].Sign() == 0 && edge[2].Sign() != 0 {
 			if vertical >= 0 {
 				return false
 			}
@@ -97,11 +97,11 @@ func publishClippedHorizontalPatchOrder(report *ContactReport, base sourceBoxCon
 		if dyCmp(corner[2], faceZ) != 0 {
 			return false
 		}
-		polygon = append(polygon, [2]*big.Rat{corner[0].rat(), corner[1].rat()})
+		polygon = append(polygon, [2]*big.Rat{corner[0].Rat(), corner[1].Rat()})
 	}
 	for axis := range 2 {
-		polygon = clipHorizontalPolygon(polygon, axis, base.lo[axis].rat(), false)
-		polygon = clipHorizontalPolygon(polygon, axis, base.hi[axis].rat(), true)
+		polygon = clipHorizontalPolygon(polygon, axis, base.lo[axis].Rat(), false)
+		polygon = clipHorizontalPolygon(polygon, axis, base.hi[axis].Rat(), true)
 	}
 	polygon = deduplicateHorizontalPolygon(polygon)
 	if len(polygon) < 3 || horizontalPolygonDoubleArea(polygon).Sign() == 0 {
@@ -116,7 +116,7 @@ func publishClippedHorizontalPatchOrder(report *ContactReport, base sourceBoxCon
 	}
 	points := make([]ContactPoint, 0, len(polygon))
 	for _, vertex := range polygon {
-		world := [3]*big.Rat{vertex[0], vertex[1], faceZ.rat()}
+		world := [3]*big.Rat{vertex[0], vertex[1], faceZ.Rat()}
 		witness, valid := orientedBoxPoint(world)
 		if !valid || witness.Bound.Base() > report.Request.PointResolution.Base() {
 			report.Reason = ContactPointTooCoarse

@@ -66,7 +66,7 @@ func (r *orientedSphereSweepRun) sourceCorridor() bool {
 	}
 	r.start = dvDot(dvSub(r.sphere.center, face), r.outward)
 	r.slope = dvDot(dvSub(sphereDelta, boxDelta), r.outward)
-	return r.start.sign() > 0
+	return r.start.Sign() > 0
 }
 
 func sameDyV3(a, b dyV3) bool {
@@ -79,13 +79,13 @@ func sameDyV3(a, b dyV3) bool {
 }
 
 func (r *orientedSphereSweepRun) signedAt(f *big.Rat) int {
-	d := new(big.Rat).Add(r.start.rat(), new(big.Rat).Mul(r.slope.rat(), f))
+	d := new(big.Rat).Add(r.start.Rat(), new(big.Rat).Mul(r.slope.Rat(), f))
 	if d.Sign() <= 0 {
 		return -1
 	}
-	radius2 := dyMul(r.sphere.radius, r.sphere.radius).rat()
+	radius2 := dyMul(r.sphere.radius, r.sphere.radius).Rat()
 	return new(big.Rat).Mul(d, d).Cmp(new(big.Rat).Mul(radius2,
-		dvDot(r.outward, r.outward).rat()))
+		dvDot(r.outward, r.outward).Rat()))
 }
 
 func (r *orientedSphereSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent {
@@ -173,9 +173,9 @@ func (r *orientedSphereSweepRun) poseDeviation(f *big.Rat, poseA, poseB r3.Trans
 	}
 	deviation := orientedBoxPoseDeviation(r.box, observedBox, boxDelta, f)
 	for k := range 3 {
-		expected := new(big.Rat).Add(r.sphere.center[k].rat(),
-			new(big.Rat).Mul(sphereDelta[k].rat(), f))
-		diff := new(big.Rat).Sub(observedSphere.center[k].rat(), expected)
+		expected := new(big.Rat).Add(r.sphere.center[k].Rat(),
+			new(big.Rat).Mul(sphereDelta[k].Rat(), f))
+		diff := new(big.Rat).Sub(observedSphere.center[k].Rat(), expected)
 		deviation.Add(deviation, diff.Abs(diff))
 	}
 	return deviation
@@ -263,7 +263,7 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 		orientedSphere: &r.sphere, orientedSphereBox: &r.box, sphereFirst: r.sphereFirst,
 		sphereAxis: r.axis, sphereSide: r.side, sphereGap: r.start, sphereSlope: r.slope}
 	if first.Ideal.Relation == ContactTouching {
-		if r.slope.sign() <= 0 {
+		if r.slope.Sign() <= 0 {
 			return r.undecided(zero, one, SweepDepartureUnproved), nil
 		}
 		last, sampleErr := r.sample(ctx, one)
@@ -354,9 +354,9 @@ func orientedBoxPoseDeviation(start, observed orientedSourceBox, delta [3]dyadic
 	for i := range start.corner {
 		sum := new(big.Rat)
 		for k := range 3 {
-			expected := new(big.Rat).Add(start.corner[i][k].rat(),
-				new(big.Rat).Mul(delta[k].rat(), f))
-			difference := new(big.Rat).Sub(observed.corner[i][k].rat(), expected)
+			expected := new(big.Rat).Add(start.corner[i][k].Rat(),
+				new(big.Rat).Mul(delta[k].Rat(), f))
+			difference := new(big.Rat).Sub(observed.corner[i][k].Rat(), expected)
 			sum.Add(sum, difference.Abs(difference))
 		}
 		if sum.Cmp(maximum) > 0 {

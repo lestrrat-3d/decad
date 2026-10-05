@@ -18,7 +18,7 @@ func publishOrientedBoxPatch(report *ContactReport, a, b orientedSourceBox) {
 	for axis := range 3 {
 		i, j := (axis+1)%3, (axis+2)%3
 		dual[axis] = dvCross(a.edge[i], a.edge[j])
-		denominator[axis] = dvDot(a.edge[axis], dual[axis]).rat()
+		denominator[axis] = dvDot(a.edge[axis], dual[axis]).Rat()
 		if denominator[axis].Sign() == 0 {
 			report.Reason = ContactNoNormalProof
 			return
@@ -53,7 +53,7 @@ func publishOrientedBoxPatch(report *ContactReport, a, b orientedSourceBox) {
 	for axis := range 3 {
 		alo[axis], ahi[axis] = big.NewRat(0, 1), big.NewRat(1, 1)
 		for _, corner := range b.corner {
-			coordinate := new(big.Rat).Quo(dvDot(dvSub(corner, a.corner[0]), dual[axis]).rat(),
+			coordinate := new(big.Rat).Quo(dvDot(dvSub(corner, a.corner[0]), dual[axis]).Rat(),
 				denominator[axis])
 			if blo[axis] == nil || coordinate.Cmp(blo[axis]) < 0 {
 				blo[axis] = coordinate
@@ -114,7 +114,7 @@ func publishOrientedBoxPatch(report *ContactReport, a, b orientedSourceBox) {
 		aSide = 1
 	}
 	bSide := 0
-	if dvDot(b.edge[bAxis[contactAxis]], dual[contactAxis]).sign()*sign > 0 {
+	if dvDot(b.edge[bAxis[contactAxis]], dual[contactAxis]).Sign()*sign > 0 {
 		bSide = 0
 	} else {
 		bSide = 1
@@ -146,10 +146,10 @@ func publishOrientedBoxPatch(report *ContactReport, a, b orientedSourceBox) {
 		}
 		var point [3]*big.Rat
 		for k := range 3 {
-			point[k] = a.corner[0][k].rat()
+			point[k] = a.corner[0][k].Rat()
 			for axis := range 3 {
 				point[k] = new(big.Rat).Add(point[k],
-					new(big.Rat).Mul(a.edge[axis][k].rat(), coordinates[axis]))
+					new(big.Rat).Mul(a.edge[axis][k].Rat(), coordinates[axis]))
 			}
 		}
 		witness, valid := orientedBoxPoint(point)
@@ -189,7 +189,7 @@ func orientedBoxPoint(point [3]*big.Rat) (VecMeasurement, bool) {
 }
 
 func orientedBoxNormal(axis dyV3) (VecMeasurement, units.Value, bool) {
-	squared := dvDot(axis, axis).rat()
+	squared := dvDot(axis, axis).Rat()
 	if squared.Sign() <= 0 {
 		return VecMeasurement{}, units.Value{}, false
 	}
@@ -198,9 +198,9 @@ func orientedBoxNormal(axis dyV3) (VecMeasurement, units.Value, bool) {
 		return VecMeasurement{}, units.Value{}, false
 	}
 	raw := r3.Vec{}
-	raw.X, _ = axis[0].float64()
-	raw.Y, _ = axis[1].float64()
-	raw.Z, _ = axis[2].float64()
+	raw.X, _ = axis[0].Float64()
+	raw.Y, _ = axis[1].Float64()
+	raw.Z, _ = axis[2].Float64()
 	value, ok := raw.Normalize()
 	if !ok || !finiteVec(value) {
 		return VecMeasurement{}, units.Value{}, false
@@ -208,8 +208,8 @@ func orientedBoxNormal(axis dyV3) (VecMeasurement, units.Value, bool) {
 	components := [3]float64{value.X, value.Y, value.Z}
 	maxError := new(big.Rat)
 	for k := range 3 {
-		first := new(big.Rat).Quo(axis[k].rat(), floatRat(low))
-		second := new(big.Rat).Quo(axis[k].rat(), floatRat(high))
+		first := new(big.Rat).Quo(axis[k].Rat(), floatRat(low))
+		second := new(big.Rat).Quo(axis[k].Rat(), floatRat(high))
 		for _, endpoint := range []*big.Rat{first, second} {
 			deviation := new(big.Rat).Sub(floatRat(components[k]), endpoint)
 			deviation.Abs(deviation)

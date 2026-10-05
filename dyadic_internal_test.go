@@ -29,12 +29,12 @@ var dyadicProbeFloats = []float64{
 // bug shared by construction and conversion cannot hide behind itself.
 func ratOfDyadic(t *testing.T, d dyadic) *big.Rat {
 	t.Helper()
-	if d.mant == nil {
+	if d.Mant() == nil {
 		return new(big.Rat)
 	}
-	out := new(big.Rat).SetInt(d.mant)
-	scale := new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), uint(abs(d.exp))))
-	if d.exp >= 0 {
+	out := new(big.Rat).SetInt(d.Mant())
+	scale := new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), uint(abs(d.Exp()))))
+	if d.Exp() >= 0 {
 		return out.Mul(out, scale)
 	}
 	return out.Quo(out, scale)
@@ -58,14 +58,14 @@ func TestDyadicLiftsEveryFloatExactly(t *testing.T) {
 		require.True(t, ok, "%v is finite and must lift", f)
 		if f != 0 {
 			reused := dyOfFiniteInto(f, &reusedMant)
-			require.Equal(t, d.exp, reused.exp, "reused exponent for %v", f)
-			require.Equal(t, d.mant, reused.mant, "reused mantissa for %v", f)
-			require.Same(t, &reusedMant, reused.mant, "the lift writes into caller storage for %v", f)
+			require.Equal(t, d.Exp(), reused.Exp(), "reused exponent for %v", f)
+			require.Equal(t, d.Mant(), reused.Mant(), "reused mantissa for %v", f)
+			require.Same(t, &reusedMant, reused.Mant(), "the lift writes into caller storage for %v", f)
 		}
 		require.Zero(t, ratOfDyadic(t, d).Cmp(floatRat(f)), "the lift of %v must equal its exact rational", f)
-		require.Zero(t, d.rat().Cmp(floatRat(f)), "rat must return the same number the lift holds, for %v", f)
+		require.Zero(t, d.Rat().Cmp(floatRat(f)), "rat must return the same number the lift holds, for %v", f)
 
-		back, exact := d.float64()
+		back, exact := d.Float64()
 		require.True(t, exact, "a value lifted from a float64 must convert back exactly, for %v", f)
 		require.Equal(t, f, back, "the round trip must return the same float, for %v", f)
 	}
@@ -105,11 +105,11 @@ func TestDyadicStaysReduced(t *testing.T) {
 	t.Parallel()
 	reduced := func(d dyadic, what string) {
 		t.Helper()
-		if d.mant == nil || d.mant.Sign() == 0 {
-			require.Zero(t, d.exp, "%s: a zero must carry exponent 0", what)
+		if d.Mant() == nil || d.Mant().Sign() == 0 {
+			require.Zero(t, d.Exp(), "%s: a zero must carry exponent 0", what)
 			return
 		}
-		require.Zero(t, d.mant.TrailingZeroBits(), "%s: a non-zero mantissa must be odd", what)
+		require.Zero(t, d.Mant().TrailingZeroBits(), "%s: a non-zero mantissa must be odd", what)
 	}
 	for _, f := range dyadicProbeFloats {
 		reduced(mustDyOf(f), "the lift of a float")
@@ -124,8 +124,8 @@ func TestDyadicStaysReduced(t *testing.T) {
 
 	// A cancelling sum is exactly zero, not a zero mantissa at some exponent.
 	z := dySubScalar(mustDyOf(math.Pi), mustDyOf(math.Pi))
-	require.True(t, z.isZero())
-	require.Zero(t, z.exp)
+	require.True(t, z.IsZero())
+	require.Zero(t, z.Exp())
 }
 
 // TestDyadicArithmeticMatchesBigRat is the substitution's whole justification:
@@ -145,7 +145,7 @@ func TestDyadicArithmeticMatchesBigRat(t *testing.T) {
 			require.Zero(t, ratOfDyadic(t, dyMul(da, db)).Cmp(new(big.Rat).Mul(ra, rb)),
 				"%v * %v", a, b)
 			require.Equal(t, ra.Cmp(rb), dyCmp(da, db), "cmp(%v, %v)", a, b)
-			require.Equal(t, ra.Sign(), da.sign(), "sign(%v)", a)
+			require.Equal(t, ra.Sign(), da.Sign(), "sign(%v)", a)
 			require.Zero(t, ratOfDyadic(t, dyAbs(da)).Cmp(new(big.Rat).Abs(ra)), "abs(%v)", a)
 			require.Zero(t, ratOfDyadic(t, dyNeg(da)).Cmp(new(big.Rat).Neg(ra)), "neg(%v)", a)
 		}
@@ -312,17 +312,17 @@ func TestDyadicOfRatAcceptsOnlyBinaryFractions(t *testing.T) {
 func TestDyadicZeroValueIsUsable(t *testing.T) {
 	t.Parallel()
 	var d dyadic
-	require.True(t, d.isZero())
-	require.Zero(t, d.sign())
-	require.Zero(t, d.rat().Sign())
+	require.True(t, d.IsZero())
+	require.Zero(t, d.Sign())
+	require.Zero(t, d.Rat().Sign())
 
 	var v dyV3
 	require.True(t, dvIsZero(v))
 	require.True(t, dvIsZero(dvCross(v, dyVec(r3.Vec{X: 1, Y: 2, Z: 3}))))
-	require.True(t, dvDot(v, dyVec(r3.Vec{X: 1, Y: 2, Z: 3})).isZero())
+	require.True(t, dvDot(v, dyVec(r3.Vec{X: 1, Y: 2, Z: 3})).IsZero())
 
 	one := mustDyOf(1)
 	require.Zero(t, dyCmp(dyAdd(d, one), one), "adding the zero value changes nothing")
 	require.Zero(t, dyCmp(dySubScalar(one, d), one), "subtracting it changes nothing")
-	require.True(t, dyMul(d, one).isZero(), "multiplying by it gives zero")
+	require.True(t, dyMul(d, one).IsZero(), "multiplying by it gives zero")
 }

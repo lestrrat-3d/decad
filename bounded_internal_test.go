@@ -41,7 +41,7 @@ func TestFloatRatMatchesSetFloat64(t *testing.T) {
 
 		d, ok := dyOf(f)
 		require.True(t, ok, "%v is finite and must lift", f)
-		dr := d.rat()
+		dr := d.Rat()
 		require.Equal(t, 0, want.Cmp(dr), "dyadic value %v", f)
 		require.Equal(t, want.Num().String(), dr.Num().String(), "dyadic numerator %v", f)
 		require.Equal(t, want.Denom().String(), dr.Denom().String(), "dyadic denominator %v", f)
@@ -49,7 +49,7 @@ func TestFloatRatMatchesSetFloat64(t *testing.T) {
 		// A dyadic no float holds, with a mantissa wider than 53 bits, reads
 		// back as the test's own independent composition of it.
 		wide := dyAdd(dyMul(d, d), dyShift(mustDyOf(1), -1080))
-		wr, ww := wide.rat(), ratOfDyadic(t, wide)
+		wr, ww := wide.Rat(), ratOfDyadic(t, wide)
 		require.Equal(t, ww.Num().String(), wr.Num().String(), "widened numerator %v", f)
 		require.Equal(t, ww.Denom().String(), wr.Denom().String(), "widened denominator %v", f)
 

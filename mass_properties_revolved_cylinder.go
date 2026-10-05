@@ -16,7 +16,7 @@ func sourceRevolvedCylinderMassProperties(ctx context.Context, b *Body,
 	cylinder sourceCylinderContactProof, density units.Value) (MassProperties, error) {
 	axis := cylinder.axis
 	height := dySubScalar(cylinder.box.hi[axis], cylinder.box.lo[axis])
-	if height.sign() <= 0 {
+	if height.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: source cylinder has no positive height", ErrUnsupported)
 	}
 	var radius dyadic
@@ -25,19 +25,19 @@ func sourceRevolvedCylinderMassProperties(ctx context.Context, b *Body,
 			continue
 		}
 		width := dySubScalar(cylinder.box.hi[i], cylinder.box.lo[i])
-		if width.sign() <= 0 {
+		if width.Sign() <= 0 {
 			return MassProperties{}, fmt.Errorf("%w: source cylinder has no positive radius", ErrUnsupported)
 		}
 		candidate := dyMul(width, mustDyOf(0.5))
-		if radius.sign() != 0 && dyCmp(radius, candidate) != 0 {
+		if radius.Sign() != 0 && dyCmp(radius, candidate) != 0 {
 			return MassProperties{}, fmt.Errorf("%w: source cylinder radial extents disagree", ErrUnsupported)
 		}
 		radius = candidate
 	}
-	radius2 := dyMul(radius, radius).rat()
-	height2 := dyMul(height, height).rat()
+	radius2 := dyMul(radius, radius).Rat()
+	height2 := dyMul(height, height).Rat()
 	rho := new(big.Rat).Mul(floatRat(density.Mag()), floatRat(density.Unit().Factor()))
-	massFactor := new(big.Rat).Mul(rho, height.rat())
+	massFactor := new(big.Rat).Mul(rho, height.Rat())
 	massFactor.Mul(massFactor, radius2)
 	massInterval := intervalScale(interval(piLower, piUpper), massFactor)
 	if massInterval.lo.Sign() <= 0 {

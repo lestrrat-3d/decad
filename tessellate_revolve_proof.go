@@ -649,7 +649,7 @@ func revolveSeparated(a, b revolveAuditTri, delta float64) bool {
 		if other := dySubScalar(aLo, bHi); dyCmp(other, gap) > 0 {
 			gap = other
 		}
-		if gap.sign() <= 0 {
+		if gap.Sign() <= 0 {
 			continue
 		}
 		// The cheap bound is at least the exact one, so a gap that clears it
@@ -874,7 +874,7 @@ type revolveSepAxis struct {
 // shared feature, so the offset is measured from a shared corner.
 func (ax revolveSepAxis) sideOf(offset dyV3, offsetLen, offsetDrift float64) (int, bool) {
 	h := dvDot(ax.g, offset)
-	if h.isZero() {
+	if h.IsZero() {
 		return 0, false
 	}
 	allow := perturbBilinearAllow(ax.length, offsetLen, ax.drift, offsetDrift)
@@ -885,7 +885,7 @@ func (ax revolveSepAxis) sideOf(offset dyV3, offsetLen, offsetDrift float64) (in
 	if !ok || dyCmp(dyAbs(h), bound) <= 0 {
 		return 0, false
 	}
-	return h.sign(), true
+	return h.Sign(), true
 }
 
 // perturbBilinearAllow bounds |a'∘b' − a∘b| for a dot or cross product when a

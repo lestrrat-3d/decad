@@ -123,7 +123,7 @@ func exactPlanePatchMoment(v0, v1, v2, v3 r3.Vec) (mx, my, mz *big.Rat, ok bool)
 			)
 			// The twenty-fourth is the one step that leaves the dyadic set, so
 			// the product converts here and nowhere earlier (dyadic.go).
-			out[i] = new(big.Rat).Quo(dyMul(n[i], sq).rat(), big.NewRat(24, 1))
+			out[i] = new(big.Rat).Quo(dyMul(n[i], sq).Rat(), big.NewRat(24, 1))
 		}
 		return out
 	}

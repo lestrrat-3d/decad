@@ -559,7 +559,7 @@ Four gates, in this order, and each is reject-only:
    degree-over-all-uses reading admits and the "two other edges" reading did
    not. Any vertex at a degree other than 2 is `ErrDegenerate` (R5).
 3. **Each chain is planar, proven exactly.** Every chain vertex lies on one
-   plane, decided over the exact rational lift of `dyadic.go` — a zero
+   plane, decided over the exact rational lift of `internal/proof/dyadic.go` — a zero
    determinant, never a residual against a fitted plane. Three or more chain
    vertices that are not all collinear give the plane a determinant to take
    directly; under three independent vertices — a lone closed circular edge

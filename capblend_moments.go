@@ -964,7 +964,7 @@ func exactPlanePatchFlux(v0, v1, v2, v3 r3.Vec) (*big.Rat, bool) {
 	// Halving is a shift, so the whole flux stays inside the dyadic set and
 	// converts once, at the caller's boundary (dyadic.go).
 	sum := dyAdd(dvDot(r0, dvCross(r1, r2)), dvDot(r0, dvCross(r2, r3v)))
-	return dyShift(sum, -1).rat(), true
+	return dyShift(sum, -1).Rat(), true
 }
 
 // tripleProductUpper bounds |a·(b×c)| and every intermediate the float

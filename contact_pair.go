@@ -265,7 +265,7 @@ func classifySourceBoxes(report *ContactReport, a, b sourceBoxContactProof) {
 		}
 	}
 	for _, gap := range gaps {
-		if gap.sign() > 0 {
+		if gap.Sign() > 0 {
 			m, ok := sourceBoxGap(gaps)
 			if !ok {
 				report.Reason = ContactNoGapProof
@@ -330,7 +330,7 @@ func sourceBoxTranslation(a, b sourceBoxContactProof) (int, int, dyadic, bool) {
 			{dySubScalar(a.hi[i], b.lo[i]), 1},
 			{dySubScalar(b.hi[i], a.lo[i]), -1},
 		} {
-			if candidate.value.sign() <= 0 {
+			if candidate.value.Sign() <= 0 {
 				return 0, 0, dyadic{}, false
 			}
 			cmp := dyCmp(candidate.value, best)
@@ -349,14 +349,14 @@ func sourceBoxGap(gaps [3]dyadic) (Measurement, bool) {
 	var only dyadic
 	squared := dyadic{}
 	for _, gap := range gaps {
-		if gap.sign() > 0 {
+		if gap.Sign() > 0 {
 			positive++
 			only = gap
 			squared = dyAdd(squared, dyMul(gap, gap))
 		}
 	}
 	if positive == 1 {
-		v, exact := only.float64()
+		v, exact := only.Float64()
 		if !finiteMeasurementValues(v) {
 			return Measurement{}, false
 		}

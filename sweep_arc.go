@@ -108,7 +108,7 @@ func deriveSweepArc(pathRecord pathSegmentRecord, plane PlaneRecord) (sweepArcGe
 	start := pathRecord.start
 	normal := dvCross(dyVec(plane.U), dyVec(plane.V))
 	relStart := dvSub(dyVec(start), dyVec(plane.Origin))
-	if !dvDot(relStart, normal).isZero() {
+	if !dvDot(relStart, normal).IsZero() {
 		return sweepArcGeometry{}, fmt.Errorf(`%w: the sweep path must start in the profile plane`, ErrDegenerate)
 	}
 
@@ -293,7 +293,7 @@ func sweepRatVecOf(v r3.Vec) sweepRatVec {
 }
 
 func sweepRatFromDyadic(v dyV3) sweepRatVec {
-	return sweepRatVec{v[0].rat(), v[1].rat(), v[2].rat()}
+	return sweepRatVec{v[0].Rat(), v[1].Rat(), v[2].Rat()}
 }
 
 func sweepRatAdd(vectors ...sweepRatVec) sweepRatVec {

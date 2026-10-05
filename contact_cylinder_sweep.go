@@ -23,10 +23,10 @@ func (d *Document) sourceCylinderAxialSweep(ctx context.Context, a, b *Body,
 	resolution, _ := exactBaseValue(req.PointResolution)
 	axis := cylinder.axis
 	axisGap := func(a, b sourceBoxContactProof) (int, *big.Rat, bool) {
-		if gap := new(big.Rat).Sub(b.lo[axis].rat(), a.hi[axis].rat()); gap.Cmp(resolution) > 0 {
+		if gap := new(big.Rat).Sub(b.lo[axis].Rat(), a.hi[axis].Rat()); gap.Cmp(resolution) > 0 {
 			return 1, gap, true
 		}
-		if gap := new(big.Rat).Sub(a.lo[axis].rat(), b.hi[axis].rat()); gap.Cmp(resolution) > 0 {
+		if gap := new(big.Rat).Sub(a.lo[axis].Rat(), b.hi[axis].Rat()); gap.Cmp(resolution) > 0 {
 			return -1, gap, true
 		}
 		return 0, nil, false
@@ -278,7 +278,7 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 		boxA: firstBox, boxB: secondBox, clearAxis: r.axis,
 		cylinderSide: r.side, cylinderGap: r.gap, cylinderSlope: r.slope}
 	if first.Ideal.Relation == ContactTouching {
-		if r.slope.sign() <= 0 || r.req.StartPolicy != ContinueSeparatingTouch ||
+		if r.slope.Sign() <= 0 || r.req.StartPolicy != ContinueSeparatingTouch ||
 			first.Ideal.Manifold == nil {
 			return cylinderSweepUndecided(r.report, r.pa.duration), nil
 		}
@@ -294,11 +294,11 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 		r.report.replay.snapshot(r.report)
 		return r.report, nil
 	}
-	if r.gap.sign() <= 0 || r.slope.sign() >= 0 ||
-		dyAdd(r.gap, r.slope).sign() > 0 {
+	if r.gap.Sign() <= 0 || r.slope.Sign() >= 0 ||
+		dyAdd(r.gap, r.slope).Sign() > 0 {
 		return cylinderSweepUndecided(r.report, r.pa.duration), nil
 	}
-	root := new(big.Rat).Quo(dyNeg(r.gap).rat(), r.slope.rat())
+	root := new(big.Rat).Quo(dyNeg(r.gap).Rat(), r.slope.Rat())
 	resolution, _ := exactBaseValue(r.req.TimeResolution)
 	leftF, rightF, ok := spherePairImpactBracket(root, r.pa.duration, resolution)
 	if !ok || leftF.Sign() <= 0 || rightF.Cmp(one) > 0 {
@@ -324,7 +324,7 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 		return cylinderSweepUndecided(r.report, r.pa.duration), nil
 	}
 	pointResolution, _ := exactBaseValue(r.req.PointResolution)
-	rightGap := new(big.Rat).Add(r.gap.rat(), new(big.Rat).Mul(r.slope.rat(), rightF))
+	rightGap := new(big.Rat).Add(r.gap.Rat(), new(big.Rat).Mul(r.slope.Rat(), rightF))
 	if new(big.Rat).Abs(rightGap).Cmp(pointResolution) > 0 {
 		return cylinderSweepUndecided(r.report, r.pa.duration), nil
 	}
@@ -369,7 +369,7 @@ func translatedAffineBox(start sourceBoxContactProof, delta [3]dyadic) sourceBox
 
 func outerBoxGapExceeds(a, b sourceBoxContactProof, axis, sign int, minimum *big.Rat) bool {
 	if sign > 0 {
-		return new(big.Rat).Sub(b.lo[axis].rat(), a.hi[axis].rat()).Cmp(minimum) > 0
+		return new(big.Rat).Sub(b.lo[axis].Rat(), a.hi[axis].Rat()).Cmp(minimum) > 0
 	}
-	return new(big.Rat).Sub(a.lo[axis].rat(), b.hi[axis].rat()).Cmp(minimum) > 0
+	return new(big.Rat).Sub(a.lo[axis].Rat(), b.hi[axis].Rat()).Cmp(minimum) > 0
 }

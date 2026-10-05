@@ -1395,7 +1395,7 @@ func cellBilinearAreaUncached(vLo, vHi, wLo, wHi r3.Vec) (float64, float64) {
 	integralLo = dyShift(integralLo, -2*divShift)
 	integralHi = dyShift(integralHi, -(2*divShift + 2))
 	mid := dyShift(dyAdd(integralLo, integralHi), -1)
-	value, _ := mid.float64()
+	value, _ := mid.Float64()
 	valueDy, ok := dyOf(value)
 	if !ok {
 		return 0, math.Inf(1)

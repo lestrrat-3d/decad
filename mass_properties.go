@@ -115,12 +115,12 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	u := dySubScalar(mustDyOf(maxU), mustDyOf(minU))
 	v := dySubScalar(mustDyOf(maxV), mustDyOf(minV))
 	z := dySubScalar(mustDyOf(pp.z1), mustDyOf(pp.z0))
-	if u.sign() <= 0 || v.sign() <= 0 || z.sign() <= 0 {
+	if u.Sign() <= 0 || v.Sign() <= 0 || z.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: source box has no positive volume", ErrUnsupported)
 	}
 	densityBase := dyMul(mustDyOf(density.Mag()), mustDyOf(density.Unit().Factor()))
 	mass := dyMul(densityBase, dyMul(u, dyMul(v, z)))
-	if mass.sign() <= 0 {
+	if mass.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: mass is not positive", ErrUnsupported)
 	}
 
@@ -148,7 +148,7 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	}
 	inertia := func(a, c dyadic) *big.Rat {
 		numerator := dyMul(mass, dyAdd(a, c))
-		return new(big.Rat).Quo(numerator.rat(), big.NewRat(12, 1))
+		return new(big.Rat).Quo(numerator.Rat(), big.NewRat(12, 1))
 	}
 	readings := [3]*big.Rat{
 		inertia(squared[1], squared[2]),
@@ -157,7 +157,7 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	}
 	result := MassProperties{Center: b.centroid}
 	var err error
-	result.Mass, err = massReading(mass.rat(), units.Kilogram)
+	result.Mass, err = massReading(mass.Rat(), units.Kilogram)
 	if err != nil {
 		return MassProperties{}, err
 	}

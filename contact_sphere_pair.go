@@ -16,7 +16,7 @@ func classifySourceSpherePair(report *ContactReport, a, b sourceSphereContactPro
 	for i := range 3 {
 		delta[i] = dySubScalar(b.center[i], a.center[i])
 		distance2 = dyAdd(distance2, dyMul(delta[i], delta[i]))
-		if delta[i].sign() != 0 {
+		if delta[i].Sign() != 0 {
 			axis, nonzero = i, nonzero+1
 		}
 	}
@@ -24,8 +24,8 @@ func classifySourceSpherePair(report *ContactReport, a, b sourceSphereContactPro
 	radius2 := dyMul(radius, radius)
 	switch dyCmp(distance2, radius2) {
 	case 1:
-		lower := new(big.Rat).Sub(floatRat(dySqrtDown(distance2)), radius.rat())
-		upper := new(big.Rat).Sub(floatRat(dySqrtUp(distance2)), radius.rat())
+		lower := new(big.Rat).Sub(floatRat(dySqrtDown(distance2)), radius.Rat())
+		upper := new(big.Rat).Sub(floatRat(dySqrtUp(distance2)), radius.Rat())
 		lo, hi := ratFloatDown(lower), ratFloatUp(upper)
 		if !finiteMeasurementValues(lo, hi) || lo <= 0 || hi < lo {
 			report.Reason = ContactNoGapProof
@@ -69,7 +69,7 @@ func classifySourceSpherePair(report *ContactReport, a, b sourceSphereContactPro
 	}
 	distance := dyAbs(delta[axis])
 	sign := 1.0
-	if delta[axis].sign() < 0 {
+	if delta[axis].Sign() < 0 {
 		sign = -1
 	}
 	normal := r3.Vec{}
@@ -118,10 +118,10 @@ func publishObliqueSpherePair(report *ContactReport, a, b sourceSphereContactPro
 	components := [3]float64{normal.Value.X, normal.Value.Y, normal.Value.Z}
 	var pointA, pointB [3]*big.Rat
 	for i, component := range components {
-		offsetA := new(big.Rat).Mul(a.radius.rat(), floatRat(component))
-		offsetB := new(big.Rat).Mul(b.radius.rat(), floatRat(component))
-		pointA[i] = new(big.Rat).Add(a.center[i].rat(), offsetA)
-		pointB[i] = new(big.Rat).Sub(b.center[i].rat(), offsetB)
+		offsetA := new(big.Rat).Mul(a.radius.Rat(), floatRat(component))
+		offsetB := new(big.Rat).Mul(b.radius.Rat(), floatRat(component))
+		pointA[i] = new(big.Rat).Add(a.center[i].Rat(), offsetA)
+		pointB[i] = new(big.Rat).Sub(b.center[i].Rat(), offsetB)
 	}
 	onA, okA := orientedBoxPoint(pointA)
 	onB, okB := orientedBoxPoint(pointB)
@@ -133,7 +133,7 @@ func publishObliqueSpherePair(report *ContactReport, a, b sourceSphereContactPro
 		point  *VecMeasurement
 		radius dyadic
 	}{{&onA, a.radius}, {&onB, b.radius}} {
-		radiusFloat := ratFloatUp(witness.radius.rat())
+		radiusFloat := ratFloatUp(witness.radius.Rat())
 		bound := provenUpRound(witness.point.Bound.Base() +
 			provenUpRound(radiusFloat*normal.Bound.Base()))
 		if !finiteMeasurementValues(bound) || bound > report.Request.PointResolution.Base() {
@@ -143,8 +143,8 @@ func publishObliqueSpherePair(report *ContactReport, a, b sourceSphereContactPro
 		witness.point.Bound = units.Millimeters(bound)
 		witness.point.Exactness = exactnessOf(bound)
 	}
-	low := new(big.Rat).Sub(floatRat(dySqrtDown(distance2)), radius.rat())
-	high := new(big.Rat).Sub(floatRat(dySqrtUp(distance2)), radius.rat())
+	low := new(big.Rat).Sub(floatRat(dySqrtDown(distance2)), radius.Rat())
+	high := new(big.Rat).Sub(floatRat(dySqrtUp(distance2)), radius.Rat())
 	value := ratFloatNearest(new(big.Rat).Quo(new(big.Rat).Add(low, high), big.NewRat(2, 1)))
 	if !finiteMeasurementValues(value) {
 		report.Reason = ContactPointTooCoarse

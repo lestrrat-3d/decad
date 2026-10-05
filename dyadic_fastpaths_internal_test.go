@@ -59,36 +59,36 @@ func TestDyadicFastPathsPreserveInputs(t *testing.T) {
 	}
 	for _, a := range values {
 		for _, b := range values {
-			aExp, bExp := a.exp, b.exp
+			aExp, bExp := a.Exp(), b.Exp()
 			am, bm := new(big.Int), new(big.Int)
-			if a.mant != nil {
-				am.Set(a.mant)
+			if a.Mant() != nil {
+				am.Set(a.Mant())
 			}
-			if b.mant != nil {
-				bm.Set(b.mant)
+			if b.Mant() != nil {
+				bm.Set(b.Mant())
 			}
 			dyAdd(a, b)
 			dySubScalar(a, b)
 			dyCmp(a, b)
-			if a.mant != nil {
-				require.Equal(t, 0, a.mant.Cmp(am))
+			if a.Mant() != nil {
+				require.Equal(t, 0, a.Mant().Cmp(am))
 			}
-			if b.mant != nil {
-				require.Equal(t, 0, b.mant.Cmp(bm))
+			if b.Mant() != nil {
+				require.Equal(t, 0, b.Mant().Cmp(bm))
 			}
-			require.Equal(t, aExp, a.exp)
-			require.Equal(t, bExp, b.exp)
+			require.Equal(t, aExp, a.Exp())
+			require.Equal(t, bExp, b.Exp())
 		}
 	}
 }
 
 func independentDyadicRat(d dyadic) *big.Rat {
-	if d.mant == nil {
+	if d.Mant() == nil {
 		return new(big.Rat)
 	}
-	out := new(big.Rat).SetInt(d.mant)
-	if d.exp >= 0 {
-		return out.Mul(out, new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), uint(d.exp))))
+	out := new(big.Rat).SetInt(d.Mant())
+	if d.Exp() >= 0 {
+		return out.Mul(out, new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), uint(d.Exp()))))
 	}
-	return out.Quo(out, new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), uint(-d.exp))))
+	return out.Quo(out, new(big.Rat).SetInt(new(big.Int).Lsh(big.NewInt(1), uint(-d.Exp()))))
 }

@@ -1,4 +1,4 @@
-package decad
+package proof
 
 import (
 	"math"
@@ -7,34 +7,34 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is the package's exact BINARY-SCALED arithmetic: dyadic, the exact
-// scalar every proof over held float64 coordinates is carried in, and dyV3, the
+// This file is the package's exact BINARY-SCALED arithmetic: Dyadic, the exact
+// scalar every proof over held float64 coordinates is carried in, and DyV3, the
 // exact vector built on it.
 //
-// Every float64 is exactly a dyadic rational — a mantissa times a power of two
+// Every float64 is exactly a Dyadic rational — a mantissa times a power of two
 // (math.Frexp) — and the closure of that set under +, − and × is itself. So a
 // determinant, a cross product, a dot product or any other polynomial in held
-// coordinates is dyadic too, and needs no general fraction to represent it.
+// coordinates is Dyadic too, and needs no general fraction to represent it.
 //
 // big.Rat represents such a value correctly but pays for generality it never
 // uses: it reduces to lowest terms after EVERY operation, and that reduction is
-// a Lehmer GCD over the full numerator and denominator. On a dyadic value the
+// a Lehmer GCD over the full numerator and denominator. On a Dyadic value the
 // answer is always a power of two, so the GCD computes something the exponent
 // already states. Stripping the mantissa's trailing zero bits reaches the same
 // reduced form with a bit count and a shift (norm).
 //
 // So the rule this file exists to enforce: a quantity whose whole derivation is
-// +, − and × over held floats is a dyadic, never a big.Rat. A quantity that
+// +, − and × over held floats is a Dyadic, never a big.Rat. A quantity that
 // genuinely LEAVES that set — a moment integral's division by (i+1)(j+1), a
 // factorial denominator, any ratio of two computed values — converts at exactly
 // the point it divides (rat), and every such point is the boundary between this
 // file's arithmetic and math/big's.
 //
 // Nothing here is a tolerance, an approximation or a widened float path. A
-// dyadic holds the same number big.Rat held, bit for bit, and every comparison
+// Dyadic holds the same number big.Rat held, bit for bit, and every comparison
 // it answers is the comparison big.Rat answered.
 
-// dyadic is an exact binary-scaled rational: mant × 2^exp, with mant an
+// Dyadic is an exact binary-scaled rational: mant × 2^exp, with mant an
 // arbitrary-precision integer and exp a binary exponent.
 //
 // The representation is kept REDUCED — a non-zero mant is odd — so that two
@@ -42,19 +42,19 @@ import (
 // with an even mantissa, held as mant 0 at exp 0.
 //
 // The zero VALUE of the struct (a nil mant) is a valid zero, which is what lets
-// a dyV3 be declared with var and filled in component by component the way its
+// a DyV3 be declared with var and filled in component by component the way its
 // big.Rat predecessor could be.
-type dyadic struct {
+type Dyadic struct {
 	mant *big.Int
 	exp  int
 }
 
-// dyZero is the additive identity, and what a dyadic's zero value denotes.
-func dyZero() dyadic { return dyadic{} }
+// DyZero is the additive identity, and what a Dyadic's zero value denotes.
+func DyZero() Dyadic { return Dyadic{} }
 
 // sign reports the value's sign, which is its mantissa's: the scale factor
 // 2^exp is positive for every exp.
-func (d dyadic) sign() int {
+func (d Dyadic) Sign() int {
 	if d.mant == nil {
 		return 0
 	}
@@ -62,15 +62,15 @@ func (d dyadic) sign() int {
 }
 
 // isZero reports whether the value is exactly zero.
-func (d dyadic) isZero() bool { return d.sign() == 0 }
+func (d Dyadic) IsZero() bool { return d.Sign() == 0 }
 
 // norm reduces d to the canonical form this type promises: a zero mantissa
 // carries exponent 0, and a non-zero one is made odd by shifting its trailing
 // zero bits into the exponent. It mutates d's own mantissa, so it is called
 // only on a mantissa this package just allocated.
-func (d dyadic) norm() dyadic {
+func (d Dyadic) norm() Dyadic {
 	if d.mant == nil || d.mant.Sign() == 0 {
-		return dyadic{}
+		return Dyadic{}
 	}
 	if shift := d.mant.TrailingZeroBits(); shift > 0 {
 		d.mant.Rsh(d.mant, shift)
@@ -79,30 +79,30 @@ func (d dyadic) norm() dyadic {
 	return d
 }
 
-// dyOf lifts a float64 exactly, reporting false for a NaN or an infinity, which
+// DyOf lifts a float64 exactly, reporting false for a NaN or an infinity, which
 // no exact proof may consume. The lift is exact by construction: math.Frexp
 // splits the value into a fraction in [0.5, 1) and a binary exponent, and
 // scaling that fraction by 2^53 makes it an integer without moving a bit.
-func dyOf(f float64) (dyadic, bool) {
+func DyOf(f float64) (Dyadic, bool) {
 	if math.IsNaN(f) || math.IsInf(f, 0) {
-		return dyadic{}, false
+		return Dyadic{}, false
 	}
 	if f == 0 {
-		return dyadic{}, true
+		return Dyadic{}, true
 	}
-	return dyOfFiniteInto(f, new(big.Int)), true
+	return DyOfFiniteInto(f, new(big.Int)), true
 }
 
-// dyOfFiniteInto lifts a finite, nonzero float into caller-owned integer
+// DyOfFiniteInto lifts a finite, nonzero float into caller-owned integer
 // storage. Its callers gate zero and non-finite inputs before reaching it.
-// Reusing mant changes only storage; the Frexp scale and norm match dyOf.
-func dyOfFiniteInto(f float64, mant *big.Int) dyadic {
+// Reusing mant changes only storage; the Frexp scale and norm match DyOf.
+func DyOfFiniteInto(f float64, mant *big.Int) Dyadic {
 	frac, exp := math.Frexp(f)
 	mant.SetInt64(int64(frac * (1 << 53)))
-	return dyadic{mant: mant, exp: exp - 53}.norm()
+	return Dyadic{mant: mant, exp: exp - 53}.norm()
 }
 
-// mustDyOf is dyOf for a value the caller has already proven finite
+// MustDyOf is DyOf for a value the caller has already proven finite
 // (finiteVec), which every caller of it does.
 //
 // A non-finite value reaching it is a missing gate in the CALLER, and it panics
@@ -112,70 +112,70 @@ func dyOfFiniteInto(f float64, mant *big.Int) dyadic {
 // names the caller that built the bad value instead — the same contract
 // mustRatOf held, and the one ~/.claude/docs/go.md's nil-argument rule states
 // for a broken caller claim.
-func mustDyOf(f float64) dyadic {
-	d, ok := dyOf(f)
+func MustDyOf(f float64) Dyadic {
+	d, ok := DyOf(f)
 	if !ok {
-		panic("decad: exact dyadic lift requires a finite float")
+		panic("decad: exact Dyadic lift requires a finite float")
 	}
 	return d
 }
 
-// dyAdd returns a + b exactly.
-func dyAdd(a, b dyadic) dyadic {
+// DyAdd returns a + b exactly.
+func DyAdd(a, b Dyadic) Dyadic {
 	switch {
-	case a.isZero() && b.isZero():
-		return dyadic{}
-	case a.isZero():
-		return dyadic{mant: new(big.Int).Set(b.mant), exp: b.exp}
-	case b.isZero():
-		return dyadic{mant: new(big.Int).Set(a.mant), exp: a.exp}
+	case a.IsZero() && b.IsZero():
+		return Dyadic{}
+	case a.IsZero():
+		return Dyadic{mant: new(big.Int).Set(b.mant), exp: b.exp}
+	case b.IsZero():
+		return Dyadic{mant: new(big.Int).Set(a.mant), exp: a.exp}
 	case a.exp == b.exp:
-		return dyadic{mant: new(big.Int).Add(a.mant, b.mant), exp: a.exp}.norm()
+		return Dyadic{mant: new(big.Int).Add(a.mant, b.mant), exp: a.exp}.norm()
 	case a.exp > b.exp:
 		out := new(big.Int).Lsh(a.mant, uint(a.exp-b.exp))
-		return dyadic{mant: out.Add(out, b.mant), exp: b.exp}.norm()
+		return Dyadic{mant: out.Add(out, b.mant), exp: b.exp}.norm()
 	default:
 		out := new(big.Int).Lsh(b.mant, uint(b.exp-a.exp))
-		return dyadic{mant: out.Add(a.mant, out), exp: a.exp}.norm()
+		return Dyadic{mant: out.Add(a.mant, out), exp: a.exp}.norm()
 	}
 }
 
-// dySubScalar returns a − b exactly.
-func dySubScalar(a, b dyadic) dyadic {
+// DySubScalar returns a − b exactly.
+func DySubScalar(a, b Dyadic) Dyadic {
 	switch {
-	case a.isZero() && b.isZero():
-		return dyadic{}
-	case a.isZero():
-		return dyadic{mant: new(big.Int).Neg(b.mant), exp: b.exp}
-	case b.isZero():
-		return dyadic{mant: new(big.Int).Set(a.mant), exp: a.exp}
+	case a.IsZero() && b.IsZero():
+		return Dyadic{}
+	case a.IsZero():
+		return Dyadic{mant: new(big.Int).Neg(b.mant), exp: b.exp}
+	case b.IsZero():
+		return Dyadic{mant: new(big.Int).Set(a.mant), exp: a.exp}
 	case a.exp == b.exp:
-		return dyadic{mant: new(big.Int).Sub(a.mant, b.mant), exp: a.exp}.norm()
+		return Dyadic{mant: new(big.Int).Sub(a.mant, b.mant), exp: a.exp}.norm()
 	case a.exp > b.exp:
 		out := new(big.Int).Lsh(a.mant, uint(a.exp-b.exp))
-		return dyadic{mant: out.Sub(out, b.mant), exp: b.exp}.norm()
+		return Dyadic{mant: out.Sub(out, b.mant), exp: b.exp}.norm()
 	default:
 		out := new(big.Int).Lsh(b.mant, uint(b.exp-a.exp))
-		return dyadic{mant: out.Sub(a.mant, out), exp: a.exp}.norm()
+		return Dyadic{mant: out.Sub(a.mant, out), exp: a.exp}.norm()
 	}
 }
 
-// dyMul returns a × b exactly. Exponents add, so no alignment is needed and the
+// DyMul returns a × b exactly. Exponents add, so no alignment is needed and the
 // product of two reduced mantissas is already reduced.
-func dyMul(a, b dyadic) dyadic {
-	if a.isZero() || b.isZero() {
-		return dyadic{}
+func DyMul(a, b Dyadic) Dyadic {
+	if a.IsZero() || b.IsZero() {
+		return Dyadic{}
 	}
-	return dyadic{mant: new(big.Int).Mul(a.mant, b.mant), exp: a.exp + b.exp}
+	return Dyadic{mant: new(big.Int).Mul(a.mant, b.mant), exp: a.exp + b.exp}
 }
 
-// dyCmp compares a against b, returning -1, 0 or +1 the way big.Rat.Cmp does.
-func dyCmp(a, b dyadic) int {
+// DyCmp compares a against b, returning -1, 0 or +1 the way big.Rat.Cmp does.
+func DyCmp(a, b Dyadic) int {
 	switch {
-	case a.isZero():
-		return -b.sign()
-	case b.isZero():
-		return a.sign()
+	case a.IsZero():
+		return -b.Sign()
+	case b.IsZero():
+		return a.Sign()
 	case a.exp == b.exp:
 		return a.mant.Cmp(b.mant)
 	case a.exp > b.exp:
@@ -185,24 +185,24 @@ func dyCmp(a, b dyadic) int {
 	}
 }
 
-// dyAbs returns |d|.
-func dyAbs(d dyadic) dyadic {
+// DyAbs returns |d|.
+func DyAbs(d Dyadic) Dyadic {
 	if d.mant == nil {
-		return dyadic{}
+		return Dyadic{}
 	}
-	return dyadic{mant: new(big.Int).Abs(d.mant), exp: d.exp}
+	return Dyadic{mant: new(big.Int).Abs(d.mant), exp: d.exp}
 }
 
-// dyNeg returns −d.
-func dyNeg(d dyadic) dyadic {
+// DyNeg returns −d.
+func DyNeg(d Dyadic) Dyadic {
 	if d.mant == nil {
-		return dyadic{}
+		return Dyadic{}
 	}
-	return dyadic{mant: new(big.Int).Neg(d.mant), exp: d.exp}
+	return Dyadic{mant: new(big.Int).Neg(d.mant), exp: d.exp}
 }
 
 // rat converts to big.Rat, for the callers whose arithmetic genuinely leaves
-// the dyadic set — a moment integral dividing by (i+1)(j+1), a factorial
+// the Dyadic set — a moment integral dividing by (i+1)(j+1), a factorial
 // denominator. It is the ONE boundary between this file and math/big's general
 // fractions, and it is exact: a non-negative exponent scales an integer, and a
 // negative one puts an odd mantissa over a power of two, which is already in
@@ -210,7 +210,7 @@ func dyNeg(d dyadic) dyadic {
 // documented reference into the receiver rather than handed to SetFrac, whose
 // GCD would only rediscover that it is 1; after SetInt the denominator is an
 // initialised 1, so Denom returns the receiver's own.
-func (d dyadic) rat() *big.Rat {
+func (d Dyadic) Rat() *big.Rat {
 	if d.mant == nil || d.mant.Sign() == 0 {
 		return new(big.Rat)
 	}
@@ -223,26 +223,26 @@ func (d dyadic) rat() *big.Rat {
 	return r
 }
 
-// dyOfRat lifts a big.Rat this package knows to be dyadic — one whose
+// DyOfRat lifts a big.Rat this package knows to be Dyadic — one whose
 // denominator is a power of two. It reports false for any other fraction rather
 // than rounding one, since a rounded value would be a proof about a number the
 // caller never held.
-func dyOfRat(r *big.Rat) (dyadic, bool) {
+func DyOfRat(r *big.Rat) (Dyadic, bool) {
 	if r == nil {
-		return dyadic{}, false
+		return Dyadic{}, false
 	}
 	den := r.Denom()
 	shift := den.TrailingZeroBits()
 	if den.BitLen() != int(shift)+1 {
-		return dyadic{}, false
+		return Dyadic{}, false
 	}
-	return dyadic{mant: new(big.Int).Set(r.Num()), exp: -int(shift)}.norm(), true
+	return Dyadic{mant: new(big.Int).Set(r.Num()), exp: -int(shift)}.norm(), true
 }
 
 // float64 returns the value as a float64 plus whether that conversion was
 // exact, matching big.Rat.Float64's own contract so a caller rounding outward
 // can tell whether it must.
-func (d dyadic) float64() (float64, bool) {
+func (d Dyadic) Float64() (float64, bool) {
 	if d.mant == nil || d.mant.Sign() == 0 {
 		return 0, true
 	}
@@ -257,65 +257,65 @@ func (d dyadic) float64() (float64, bool) {
 	return out, acc == big.Exact
 }
 
-// dyV3 is a vector of the payload's own floats taken EXACTLY — the only
-// arithmetic allowed to prove a degeneracy. It is dyadic's vector, component
+// DyV3 is a vector of the payload's own floats taken EXACTLY — the only
+// arithmetic allowed to prove a degeneracy. It is Dyadic's vector, component
 // for component, and it replaced a [3]*big.Rat whose every operation paid a
 // Lehmer GCD to rediscover an exponent this representation states.
-type dyV3 [3]dyadic
+type DyV3 [3]Dyadic
 
-// dyVec lifts a held vector exactly. Its caller has already proven the vector
+// DyVec lifts a held vector exactly. Its caller has already proven the vector
 // finite (finiteVec), which is what makes the per-component lift total.
-func dyVec(v r3.Vec) dyV3 {
-	return dyV3{mustDyOf(v.X), mustDyOf(v.Y), mustDyOf(v.Z)}
+func DyVec(v r3.Vec) DyV3 {
+	return DyV3{MustDyOf(v.X), MustDyOf(v.Y), MustDyOf(v.Z)}
 }
 
-// dvSub returns a − b componentwise.
-func dvSub(a, b dyV3) dyV3 {
-	var out dyV3
+// DvSub returns a − b componentwise.
+func DvSub(a, b DyV3) DyV3 {
+	var out DyV3
 	for i := range out {
-		out[i] = dySubScalar(a[i], b[i])
+		out[i] = DySubScalar(a[i], b[i])
 	}
 	return out
 }
 
-// dvAdd returns a + b componentwise.
-func dvAdd(a, b dyV3) dyV3 {
-	var out dyV3
+// DvAdd returns a + b componentwise.
+func DvAdd(a, b DyV3) DyV3 {
+	var out DyV3
 	for i := range out {
-		out[i] = dyAdd(a[i], b[i])
+		out[i] = DyAdd(a[i], b[i])
 	}
 	return out
 }
 
-// dvCross returns a × b exactly.
-func dvCross(a, b dyV3) dyV3 {
-	return dyV3{
-		dySubScalar(dyMul(a[1], b[2]), dyMul(a[2], b[1])),
-		dySubScalar(dyMul(a[2], b[0]), dyMul(a[0], b[2])),
-		dySubScalar(dyMul(a[0], b[1]), dyMul(a[1], b[0])),
+// DvCross returns a × b exactly.
+func DvCross(a, b DyV3) DyV3 {
+	return DyV3{
+		DySubScalar(DyMul(a[1], b[2]), DyMul(a[2], b[1])),
+		DySubScalar(DyMul(a[2], b[0]), DyMul(a[0], b[2])),
+		DySubScalar(DyMul(a[0], b[1]), DyMul(a[1], b[0])),
 	}
 }
 
-// dvDot returns a · b exactly.
-func dvDot(a, b dyV3) dyadic {
-	out := dyZero()
+// DvDot returns a · b exactly.
+func DvDot(a, b DyV3) Dyadic {
+	out := DyZero()
 	for i := range a {
-		out = dyAdd(out, dyMul(a[i], b[i]))
+		out = DyAdd(out, DyMul(a[i], b[i]))
 	}
 	return out
 }
 
-// dvIsZero reports whether every component is exactly zero.
-func dvIsZero(a dyV3) bool {
-	return a[0].isZero() && a[1].isZero() && a[2].isZero()
+// DvIsZero reports whether every component is exactly zero.
+func DvIsZero(a DyV3) bool {
+	return a[0].IsZero() && a[1].IsZero() && a[2].IsZero()
 }
 
-// dySqrtSeed is ratSqrtSeed over a dyadic: a float64 near sqrt(d), used only to
+// DySqrtSeed is ratSqrtSeed over a Dyadic: a float64 near sqrt(d), used only to
 // START the directed walks below, never to decide them. It carries the same
-// even-exponent trick its rational twin does — a dyadic already holds its
+// even-exponent trick its rational twin does — a Dyadic already holds its
 // binary exponent, so the split the rational version had to compute is a field
 // read here.
-func dySqrtSeed(d dyadic) float64 {
+func DySqrtSeed(d Dyadic) float64 {
 	// The mantissa is normalised into [0.5, 1) first and its own exponent
 	// folded into the total, so a value near either end of the float64 range
 	// roots from a fraction rather than from an integer the conversion would
@@ -332,40 +332,40 @@ func dySqrtSeed(d dyadic) float64 {
 	return math.Ldexp(math.Sqrt(m), exp/2)
 }
 
-// dySquareAtMost reports whether f² <= d, decided exactly.
-func dySquareAtMost(f float64, d dyadic) bool {
-	square, ok := dyOf(f)
+// DySquareAtMost reports whether f² <= d, decided exactly.
+func DySquareAtMost(f float64, d Dyadic) bool {
+	square, ok := DyOf(f)
 	if !ok {
 		return false
 	}
-	return dyCmp(dyMul(square, square), d) <= 0
+	return DyCmp(DyMul(square, square), d) <= 0
 }
 
-// dySquareEquals reports whether f² == d, decided exactly.
-func dySquareEquals(f float64, d dyadic) bool {
-	square, ok := dyOf(f)
+// DySquareEquals reports whether f² == d, decided exactly.
+func DySquareEquals(f float64, d Dyadic) bool {
+	square, ok := DyOf(f)
 	if !ok {
 		return false
 	}
-	return dyCmp(dyMul(square, square), d) == 0
+	return DyCmp(DyMul(square, square), d) == 0
 }
 
-// dySqrtDown returns a float f with f*f <= d, proven by exact comparison —
+// DySqrtDown returns a float f with f*f <= d, proven by exact comparison —
 // ratSqrtDown's contract, over this file's arithmetic. The float sqrt seeds the
 // answer; the exact test decides it, so no platform's sqrt accuracy can widen
 // or invert the bracket.
-func dySqrtDown(d dyadic) float64 {
-	if d.sign() <= 0 {
+func DySqrtDown(d Dyadic) float64 {
+	if d.Sign() <= 0 {
 		return 0
 	}
-	f := dySqrtSeed(d)
+	f := DySqrtSeed(d)
 	if isNonFinite(f) {
 		// sqrt(d) is at or beyond the top of the range, so the largest float
 		// there starts the walk; the exact test still decides it.
 		f = math.MaxFloat64
 	}
-	for range sqrtAdjustLimit {
-		if dySquareAtMost(f, d) {
+	for range SqrtAdjustLimit {
+		if DySquareAtMost(f, d) {
 			return f
 		}
 		f = math.Nextafter(f, 0)
@@ -373,19 +373,19 @@ func dySqrtDown(d dyadic) float64 {
 	return 0
 }
 
-// dySqrtUp returns a float f with f*f >= d, proven by exact comparison —
+// DySqrtUp returns a float f with f*f >= d, proven by exact comparison —
 // ratSqrtUp's contract, over this file's arithmetic. It returns +Inf only where
 // sqrt(d) genuinely exceeds MaxFloat64.
-func dySqrtUp(d dyadic) float64 {
-	if d.sign() <= 0 {
+func DySqrtUp(d Dyadic) float64 {
+	if d.Sign() <= 0 {
 		return 0
 	}
-	f := dySqrtSeed(d)
+	f := DySqrtSeed(d)
 	if isNonFinite(f) {
 		f = math.MaxFloat64
 	}
-	for range sqrtAdjustLimit {
-		if !dySquareAtMost(f, d) || dySquareEquals(f, d) {
+	for range SqrtAdjustLimit {
+		if !DySquareAtMost(f, d) || DySquareEquals(f, d) {
 			return f
 		}
 		f = math.Nextafter(f, math.Inf(1))
@@ -393,121 +393,132 @@ func dySqrtUp(d dyadic) float64 {
 	return math.Inf(1)
 }
 
-// dyInt lifts an integer exactly.
-func dyInt(v int64) dyadic {
+// DyInt lifts an integer exactly.
+func DyInt(v int64) Dyadic {
 	if v == 0 {
-		return dyadic{}
+		return Dyadic{}
 	}
-	return dyadic{mant: big.NewInt(v), exp: 0}.norm()
+	return Dyadic{mant: big.NewInt(v), exp: 0}.norm()
 }
 
-// dyShift returns d × 2^n. It is the only scaling this arithmetic performs
+// DyShift returns d × 2^n. It is the only scaling this arithmetic performs
 // without a multiplication, and the only division it performs at all: a
 // division by a power of two is a negative n, which is why a quadrature whose
-// nodes and weights are binary fractions never leaves the dyadic set.
-func dyShift(d dyadic, n int) dyadic {
+// nodes and weights are binary fractions never leaves the Dyadic set.
+func DyShift(d Dyadic, n int) Dyadic {
 	if d.mant == nil || d.mant.Sign() == 0 {
-		return dyadic{}
+		return Dyadic{}
 	}
-	return dyadic{mant: new(big.Int).Set(d.mant), exp: d.exp + n}
+	return Dyadic{mant: new(big.Int).Set(d.mant), exp: d.exp + n}
 }
 
-// dyFloatDown returns the largest float64 at or below d, or the value unchanged
+// DyFloatDown returns the largest float64 at or below d, or the value unchanged
 // where it is already a float — ratFloatDown's contract, over this file's
 // arithmetic. A saturating infinity is returned as it stands, a REFUSAL rather
 // than a bound, exactly as its rational twin does.
-func dyFloatDown(d dyadic) float64 {
-	f, exact := d.float64()
+func DyFloatDown(d Dyadic) float64 {
+	f, exact := d.Float64()
 	if isNonFinite(f) || exact {
 		return f
 	}
-	if fr, ok := dyOf(f); ok && dyCmp(fr, d) <= 0 {
+	if fr, ok := DyOf(f); ok && DyCmp(fr, d) <= 0 {
 		return f
 	}
 	return math.Nextafter(f, math.Inf(-1))
 }
 
-// dyFloatUp returns the smallest float64 at or above d — ratFloatUp's contract,
+// DyFloatUp returns the smallest float64 at or above d — ratFloatUp's contract,
 // over this file's arithmetic.
-func dyFloatUp(d dyadic) float64 {
-	f, exact := d.float64()
+func DyFloatUp(d Dyadic) float64 {
+	f, exact := d.Float64()
 	if isNonFinite(f) || exact {
 		return f
 	}
-	if fr, ok := dyOf(f); ok && dyCmp(fr, d) >= 0 {
+	if fr, ok := DyOf(f); ok && DyCmp(fr, d) >= 0 {
 		return f
 	}
 	return math.Nextafter(f, math.Inf(1))
 }
 
-// dyadicFloatError returns |exact − held| rounded upward — rationalFloatError's
+// DyadicFloatError returns |exact − held| rounded upward — rationalFloatError's
 // contract, over this file's arithmetic. A held value that does not lift is an
 // unbounded error, never a zero.
-func dyadicFloatError(exact dyadic, held float64) float64 {
-	heldDy, ok := dyOf(held)
+func DyadicFloatError(exact Dyadic, held float64) float64 {
+	heldDy, ok := DyOf(held)
 	if !ok {
 		return math.Inf(1)
 	}
-	return dyFloatUp(dyAbs(dySubScalar(exact, heldDy)))
+	return DyFloatUp(DyAbs(DySubScalar(exact, heldDy)))
 }
 
-// dyNearestUp converts d to the NEAREST float64 and steps it one ulp toward
+// DyNearestUp converts d to the NEAREST float64 and steps it one ulp toward
 // +Inf when that conversion was inexact — the publication rule
 // rationalFloatError and ratL1Upper apply to a big.Rat, bit for bit. It is not
-// dyFloatUp, the tight ceiling: where the nearest float already lies above d,
-// this answer is one ulp above dyFloatUp's, and a caller that must reproduce
+// DyFloatUp, the tight ceiling: where the nearest float already lies above d,
+// this answer is one ulp above DyFloatUp's, and a caller that must reproduce
 // the rational twins' published value needs this one.
-func dyNearestUp(d dyadic) float64 {
-	f, exact := d.float64()
+func DyNearestUp(d Dyadic) float64 {
+	f, exact := d.Float64()
 	if !exact {
 		f = math.Nextafter(f, math.Inf(1))
 	}
 	return f
 }
 
-// dyRoundedFloatError returns |exact − held| under dyNearestUp's rounding —
+// DyRoundedFloatError returns |exact − held| under DyNearestUp's rounding —
 // rationalFloatError's contract and published value over this file's
 // arithmetic. A held value that does not lift is an unbounded error, never a
 // zero.
-func dyRoundedFloatError(exact dyadic, held float64) float64 {
-	heldDy, ok := dyOf(held)
+func DyRoundedFloatError(exact Dyadic, held float64) float64 {
+	heldDy, ok := DyOf(held)
 	if !ok {
 		return math.Inf(1)
 	}
-	return dyNearestUp(dyAbs(dySubScalar(exact, heldDy)))
+	return DyNearestUp(DyAbs(DySubScalar(exact, heldDy)))
 }
 
-// dyLerp is ratLerp over this file's arithmetic: the exact value of
+// DyLerp is ratLerp over this file's arithmetic: the exact value of
 // P(t) = start + t·(end − start), a polynomial in three held floats and hence
-// a dyadic. At the two natural bounds the answer is the record's own
+// a Dyadic. At the two natural bounds the answer is the record's own
 // coordinate, exactly as ratLerp and lerp2 read it, and a non-finite far
 // endpoint still refuses there. ok is false exactly where ratLerp answers nil.
-func dyLerp(start, end, t float64) (dyadic, bool) {
+func DyLerp(start, end, t float64) (Dyadic, bool) {
 	if t == 0 || t == 1 {
 		near, far := start, end
 		if t == 1 {
 			near, far = end, start
 		}
 		if math.IsNaN(far) || math.IsInf(far, 0) {
-			return dyadic{}, false
+			return Dyadic{}, false
 		}
-		return dyOf(near)
+		return DyOf(near)
 	}
-	s, okS := dyOf(start)
-	e, okE := dyOf(end)
-	dt, okT := dyOf(t)
+	s, okS := DyOf(start)
+	e, okE := DyOf(end)
+	dt, okT := DyOf(t)
 	if !okS || !okE || !okT {
-		return dyadic{}, false
+		return Dyadic{}, false
 	}
-	return dyAdd(s, dyMul(dt, dySubScalar(e, s))), true
+	return DyAdd(s, DyMul(dt, DySubScalar(e, s))), true
 }
 
-// dyL1Upper is ratL1Upper over this file's arithmetic: the exact sum of the
-// values' magnitudes, published through dyNearestUp.
-func dyL1Upper(values ...dyadic) float64 {
-	total := dyZero()
+// DyL1Upper is ratL1Upper over this file's arithmetic: the exact sum of the
+// values' magnitudes, published through DyNearestUp.
+func DyL1Upper(values ...Dyadic) float64 {
+	total := DyZero()
 	for _, value := range values {
-		total = dyAdd(total, dyAbs(value))
+		total = DyAdd(total, DyAbs(value))
 	}
-	return dyNearestUp(total)
+	return DyNearestUp(total)
 }
+
+// Mant returns the held mantissa for internal proof consumers.
+func (d Dyadic) Mant() *big.Int { return d.mant }
+
+// Exp returns the binary exponent for internal proof consumers.
+func (d Dyadic) Exp() int { return d.exp }
+
+func isNonFinite(f float64) bool { return !finite(f) }
+
+// SqrtAdjustLimit bounds directed rounding from a correctly rounded square root.
+const SqrtAdjustLimit = 8

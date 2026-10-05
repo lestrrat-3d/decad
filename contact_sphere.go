@@ -30,7 +30,7 @@ func sourceSphereAtPose(b *Body, pose r3.Transform) (sourceSphereContactProof, b
 		// A read rotation cannot move a ball centered at the query origin.
 		// Other centers need an exact rotation of their offset before admission.
 		for _, component := range center {
-			if component.sign() != 0 {
+			if component.Sign() != 0 {
 				return sourceSphereContactProof{}, false
 			}
 		}
@@ -111,9 +111,9 @@ func classifySourceSphereBox(report *ContactReport, sphere sourceSphereContactPr
 		nearest[i] = dyMax(box.lo[i], dyMin(sphere.center[i], box.hi[i]))
 		d := dySubScalar(sphere.center[i], nearest[i])
 		distance2 = dyAdd(distance2, dyMul(d, d))
-		if d.sign() != 0 {
+		if d.Sign() != 0 {
 			outsideAxis, outsideCount = i, outsideCount+1
-			if d.sign() > 0 {
+			if d.Sign() > 0 {
 				outsideSide = 1
 			}
 		}
@@ -121,8 +121,8 @@ func classifySourceSphereBox(report *ContactReport, sphere sourceSphereContactPr
 	r2 := dyMul(sphere.radius, sphere.radius)
 	switch dyCmp(distance2, r2) {
 	case 1:
-		lo := ratFloatDown(new(big.Rat).Sub(floatRat(dySqrtDown(distance2)), sphere.radius.rat()))
-		hi := ratFloatUp(new(big.Rat).Sub(floatRat(dySqrtUp(distance2)), sphere.radius.rat()))
+		lo := ratFloatDown(new(big.Rat).Sub(floatRat(dySqrtDown(distance2)), sphere.radius.Rat()))
+		hi := ratFloatUp(new(big.Rat).Sub(floatRat(dySqrtUp(distance2)), sphere.radius.Rat()))
 		if !finiteMeasurementValues(lo, hi) || lo <= 0 || hi < lo {
 			report.Reason = ContactNoGapProof
 			return

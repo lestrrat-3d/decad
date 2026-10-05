@@ -74,8 +74,8 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 		}
 		startGap := dySubScalar(patch.lo[2], floor.hi[2])
 		slope := dySubScalar(facetedDelta[2], floorDelta[2])
-		endGap := new(big.Rat).Add(startGap.rat(),
-			new(big.Rat).Mul(slope.rat(), result.bracketRight))
+		endGap := new(big.Rat).Add(startGap.Rat(),
+			new(big.Rat).Mul(slope.Rat(), result.bracketRight))
 		if endGap.Sign() != 0 {
 			result.Outcome, result.Cause = SweepUndecided, SweepContactUnsupported
 			result.Unresolved = result.Bracket
@@ -98,7 +98,7 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 		faceted, pose, facetedDelta, floorDelta = a, pa.from, pa.delta, pb.delta
 	}
 	for axis := range 2 {
-		if !facetedDelta[axis].isZero() || !floorDelta[axis].isZero() {
+		if !facetedDelta[axis].IsZero() || !floorDelta[axis].IsZero() {
 			return facetedSweepUndecided(report, pa.duration), nil
 		}
 	}

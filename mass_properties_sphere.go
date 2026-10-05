@@ -13,7 +13,7 @@ import (
 // later rigid placement changes the center but no tensor component.
 func sourceSphereMassProperties(ctx context.Context, b *Body, sphere sourceSphereContactProof,
 	density units.Value) (MassProperties, error) {
-	radius := sphere.radius.rat()
+	radius := sphere.radius.Rat()
 	if radius.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: source sphere has no positive radius", ErrUnsupported)
 	}

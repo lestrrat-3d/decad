@@ -225,7 +225,7 @@ func sourceBoxPointAt(p *dyV3) (VecMeasurement, bool) {
 	var coords [3]float64
 	bound := 0.0
 	for i := range 3 {
-		coords[i], _ = p[i].float64()
+		coords[i], _ = p[i].Float64()
 		if !finiteMeasurementValues(coords[i]) {
 			return VecMeasurement{}, false
 		}
@@ -240,7 +240,7 @@ func sourceBoxPointAt(p *dyV3) (VecMeasurement, bool) {
 }
 
 func sourceBoxSignedReading(v dyadic) (Measurement, bool) {
-	held, _ := v.float64()
+	held, _ := v.Float64()
 	if !finiteMeasurementValues(held) {
 		return Measurement{}, false
 	}

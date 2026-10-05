@@ -64,7 +64,7 @@ func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSwee
 	if path.drift == nil {
 		travelSquared := new(big.Rat)
 		for _, component := range path.delta {
-			value := component.rat()
+			value := component.Rat()
 			travelSquared.Add(travelSquared, new(big.Rat).Mul(value, value))
 		}
 		bound := ratSqrtUp(travelSquared)
@@ -163,12 +163,12 @@ func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 		mapped := exactContactTransform(from, corner)
 		delta := dvSub(mapped, pivot)
 		cross := [3]*big.Rat{
-			new(big.Rat).Sub(new(big.Rat).Mul(delta[1].rat(), axis[2]),
-				new(big.Rat).Mul(delta[2].rat(), axis[1])),
-			new(big.Rat).Sub(new(big.Rat).Mul(delta[2].rat(), axis[0]),
-				new(big.Rat).Mul(delta[0].rat(), axis[2])),
-			new(big.Rat).Sub(new(big.Rat).Mul(delta[0].rat(), axis[1]),
-				new(big.Rat).Mul(delta[1].rat(), axis[0])),
+			new(big.Rat).Sub(new(big.Rat).Mul(delta[1].Rat(), axis[2]),
+				new(big.Rat).Mul(delta[2].Rat(), axis[1])),
+			new(big.Rat).Sub(new(big.Rat).Mul(delta[2].Rat(), axis[0]),
+				new(big.Rat).Mul(delta[0].Rat(), axis[2])),
+			new(big.Rat).Sub(new(big.Rat).Mul(delta[0].Rat(), axis[1]),
+				new(big.Rat).Mul(delta[1].Rat(), axis[0])),
 		}
 		squared := new(big.Rat)
 		for k := range 3 {
@@ -233,7 +233,7 @@ func (p rotationalSweepPath) idealAt(f *big.Rat) idealPose {
 		shift := pointVec(p.fromT)
 		for axis := range 3 {
 			shift[axis] = intervalAdd(shift[axis],
-				pointInterval(new(big.Rat).Mul(p.path.delta[axis].rat(), f)))
+				pointInterval(new(big.Rat).Mul(p.path.delta[axis].Rat(), f)))
 		}
 		return idealPose{rot: p.fromRot, pivot: ivVec{zero, zero, zero}, shift: shift}
 	}
@@ -268,9 +268,9 @@ func (p rotationalSweepPath) roundedAt(pose r3.Transform, f *big.Rat) (orientedS
 	for i, corner := range p.sourceBox.corner {
 		actual := exactContactTransform(pose, corner)
 		box.corner[i] = actual
-		point := pointVec(ratVec{corner[0].rat(), corner[1].rat(), corner[2].rat()})
+		point := pointVec(ratVec{corner[0].Rat(), corner[1].Rat(), corner[2].Rat()})
 		idealPoint := ivVecAdd(ivVecAdd(ideal.rot.apply(ivVecSub(point, ideal.pivot)), ideal.pivot), ideal.shift)
-		observed := pointVec(ratVec{actual[0].rat(), actual[1].rat(), actual[2].rat()})
+		observed := pointVec(ratVec{actual[0].Rat(), actual[1].Rat(), actual[2].Rat()})
 		difference := ivVecSub(observed, idealPoint)
 		squared := magnitudeSquaredUpper(difference[:]...)
 		if squared.Cmp(maxSquared) > 0 {
@@ -437,8 +437,8 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 	}
 	elapsed := new(big.Rat).Mul(r.a.path.duration, f)
 	travel := new(big.Rat).Mul(paths[spinning].velocity[2], elapsed)
-	loA, hiA := startA.lo[2].rat(), startA.hi[2].rat()
-	loB, hiB := startB.lo[2].rat(), startB.hi[2].rat()
+	loA, hiA := startA.lo[2].Rat(), startA.hi[2].Rat()
+	loB, hiB := startB.lo[2].Rat(), startB.hi[2].Rat()
 	if spinning == 0 {
 		loA.Add(loA, travel)
 		hiA.Add(hiA, travel)
@@ -483,8 +483,8 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 		coordinates := [2]float64{witness.Value.X, witness.Value.Y}
 		for axis := range 2 {
 			value := floatRat(coordinates[axis])
-			if value.Cmp(new(big.Rat).Add(base.lo[axis].rat(), margin)) <= 0 ||
-				value.Cmp(new(big.Rat).Sub(base.hi[axis].rat(), margin)) >= 0 {
+			if value.Cmp(new(big.Rat).Add(base.lo[axis].Rat(), margin)) <= 0 ||
+				value.Cmp(new(big.Rat).Sub(base.hi[axis].Rat(), margin)) >= 0 {
 				return SweepEvent{}, false
 			}
 		}
@@ -628,7 +628,7 @@ func (r *rotationalPairSweep) coMovingOrientedTouch(first *SweepSample) bool {
 
 func translatedOrientedBox(box orientedSourceBox, delta [3]dyadic, fraction *big.Rat) (orientedSourceBox, bool) {
 	for axis := range 3 {
-		step, ok := dyOfRat(new(big.Rat).Mul(delta[axis].rat(), fraction))
+		step, ok := dyOfRat(new(big.Rat).Mul(delta[axis].Rat(), fraction))
 		if !ok {
 			return orientedSourceBox{}, false
 		}
@@ -774,7 +774,7 @@ func (r *rotationalPairSweep) obliqueAffineDepartureFraction(first *SweepSample)
 		if side < 0 {
 			slope = dyNeg(slope)
 		}
-		if slope.sign() > 0 {
+		if slope.Sign() > 0 {
 			return big.NewRat(1, 2), true
 		}
 	}
@@ -818,7 +818,7 @@ func (r *rotationalPairSweep) horizontalSpinDepartureFraction(first *SweepSample
 	if normal.Z < 0 {
 		gap = dySubScalar(alo, bhi)
 	}
-	if gap.sign() != 0 {
+	if gap.Sign() != 0 {
 		return nil, false
 	}
 	speed := new(big.Rat).Set(paths[spinning].velocity[2])
@@ -895,8 +895,8 @@ func (r *rotationalPairSweep) tangentAxisSpinDepartureFraction(first *SweepSampl
 	minimum, curvature := new(big.Rat), new(big.Rat)
 	for i := range moving.corner {
 		corner := &moving.corner[i]
-		dx := new(big.Rat).Sub(corner[0].rat(), path.frame.center[0])
-		dz := new(big.Rat).Sub(corner[2].rat(), path.frame.center[2])
+		dx := new(big.Rat).Sub(corner[0].Rat(), path.frame.center[0])
+		dz := new(big.Rat).Sub(corner[2].Rat(), path.frame.center[2])
 		derivative := new(big.Rat).Sub(path.velocity[2], new(big.Rat).Mul(omega, dx))
 		derivative.Mul(derivative, big.NewRat(sign, 1))
 		if i == 0 || derivative.Cmp(minimum) < 0 {
@@ -946,7 +946,7 @@ func (r *rotationalPairSweep) axisFaceDepartureFraction(first *SweepSample) (*bi
 	}
 	velocity := func(path rotationalSweepPath) (*big.Rat, bool) {
 		if path.path.drift == nil {
-			return new(big.Rat).Quo(path.path.delta[axis].rat(), path.path.duration), true
+			return new(big.Rat).Quo(path.path.delta[axis].Rat(), path.path.duration), true
 		}
 		for other := range 3 {
 			if other != axis && path.frame.axis[other].Sign() != 0 {
@@ -1107,9 +1107,9 @@ func (p rotationalSweepPath) cornerSpan(from, to *big.Rat) [8]ivVec {
 	if p.path.drift == nil {
 		for index, corner := range p.startBox.corner {
 			for axis := range 3 {
-				start := corner[axis].rat()
-				lo := new(big.Rat).Mul(p.path.delta[axis].rat(), from)
-				hi := new(big.Rat).Mul(p.path.delta[axis].rat(), to)
+				start := corner[axis].Rat()
+				lo := new(big.Rat).Mul(p.path.delta[axis].Rat(), from)
+				hi := new(big.Rat).Mul(p.path.delta[axis].Rat(), to)
 				if lo.Cmp(hi) > 0 {
 					lo, hi = hi, lo
 				}
@@ -1132,7 +1132,7 @@ func (p rotationalSweepPath) cornerSpan(from, to *big.Rat) [8]ivVec {
 	halfDuration := new(big.Rat).Quo(new(big.Rat).Sub(highTime, lowTime), big.NewRat(2, 1))
 	pivot := pointVec(p.frame.center)
 	for index, corner := range p.startBox.corner {
-		start := ratVec{corner[0].rat(), corner[1].rat(), corner[2].rat()}
+		start := ratVec{corner[0].Rat(), corner[1].Rat(), corner[2].Rat()}
 		relative := ivVecSub(pointVec(start), pivot)
 		spanRelative := rotationSpan.apply(relative)
 		point := ivVecAdd(rotationMid.apply(relative), pivot)
