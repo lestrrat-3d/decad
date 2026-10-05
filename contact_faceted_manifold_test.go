@@ -496,6 +496,46 @@ func TestContactPairPlanarManifoldPenetration(t *testing.T) {
 	require.Nil(t, nested.Manifold)
 }
 
+// TestPlanarManifoldStitchedVertexTouch publishes the stitched tetrahedron's
+// manifolds on a source-box floor whose top face is z = 0
+// (docs/multibody-dynamics-design.md §13 PR 14b). Deleting the stitched
+// solid's face map (Faces nil) was shown to fail: the apex keeps
+// ContactTouching with no manifold.
+func TestPlanarManifoldStitchedVertexTouch(t *testing.T) {
+	doc := decad.New()
+	tetrahedron, a := stitchedTetrahedron(t, doc)
+	floor := boxBodyAtZ(t, doc, -40, -40, 40, 40, -10, 10)
+	id := r3.Identity()
+
+	// Turned 50° about (1, -1, 0), every edge from the corner at the origin
+	// rises (each other corner's height is a positive mix of cos 50° and
+	// sin 50°), so that corner stands alone on the floor at its staged
+	// position, the pose's translation.
+	at := r3.Vec{X: 3, Y: -2}
+	apex := contactBothWays(t, doc, floor, tetrahedron, id, rotationPose(t, r3.Vec{X: 1, Y: -1}, 50, at),
+		contactRequest())
+	require.Equal(t, decad.ContactTouching, apex.Relation, "reason=%v", apex.Reason)
+	requireManifoldAt(t, apex, []ratPoint{ratAt(3, -2, 0)})
+	point := apex.Manifold.Points[0]
+	require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+	require.Zero(t, point.NormalAngle.Base())
+	require.Contains(t, floor.Faces(), point.FaceA)
+	require.Nil(t, point.FaceB, "a vertex has no single owning face")
+	require.NotNil(t, point.FeatureB.Vertex)
+	require.Contains(t, tetrahedron.Vertices(), point.FeatureB.Vertex)
+	require.Equal(t, r3.Vec{}, point.FeatureB.Vertex.Position().Value, "the live apex")
+
+	// On its XY face: the clip is the whole face, its three corners.
+	face := contactBothWays(t, doc, floor, tetrahedron, id, id, contactRequest())
+	require.Equal(t, decad.ContactTouching, face.Relation, "reason=%v", face.Reason)
+	requireManifoldAt(t, face, []ratPoint{ratAt(a, 0, 0), ratAt(0, 0, 0), ratAt(0, a, 0)})
+	for _, point := range face.Manifold.Points {
+		require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+		require.Contains(t, floor.Faces(), point.FaceA)
+		require.Contains(t, tetrahedron.Faces(), point.FaceB)
+	}
+}
+
 func TestContactPairPlanarManifoldCancels(t *testing.T) {
 	doc := decad.New()
 	floor := rotatedFloorBody(t, doc)

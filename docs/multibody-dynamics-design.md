@@ -64,6 +64,8 @@ Navigation only; the named sections own the rules:
 | Which mass properties extend, in what order? | §8 Mass-property extensions |
 | How does an arbitrary planar solid get a contact manifold? | §9 Exact planar faceted contact |
 | How does an arbitrary solid sweep while rotating, rest while rotating, and come to rest flat? | §10 General rotating sweep and band tracks |
+| How does a convex body poke through one face of a tray, and rest on or depart from that face? | §9.6 Shallow penetration through a face, §10.6 Face-local support planes |
+| How does a pair inside the `SupportBand` continue after an event? | §10.7 Continuation inside the band |
 | What does the viewer need, and how does the gallery film a trace? | §11 Kinetograph interface and gallery |
 | What stops a step, and how is that reported? | §12 Work budgets, cancellation and `Undecided` |
 | Which PR lands what, in what order, proven by which test? | §13 Delivery order |
@@ -143,8 +145,9 @@ operand's planes off the dyadic grid, which leaves a positive mesh bound that §
 proper rotations about `(1, 1, 0)` by `30°`, `45°`, `60°`, `75°` and spin `(2, 1, 0) rad/s`; one
 hexagonal prism (`20 mm` across flats, `12 mm` tall) released on a vertex; one triangular wedge; one
 stitched tetrahedron. Material as above, `3 s`. Exit criterion: the timeline reaches `3 s`; each body's
-final pose is a face-down rest (every dynamic body's velocity within `VelocityResidual` of zero and at
-least one band or persistent track per body in the last step); the trace carries at least one
+final pose is a face-down rest (every dynamic body's velocity within `VelocityResidual` of zero, and in
+the last step each body's floor pair either rides a band or persistent track or is excluded by swept
+boxes strictly apart while the body hovers inside the `SupportBand`, §10.5); the trace carries at least one
 `ContactImpact` whose manifold has a single point (vertex impact), one with two points (edge impact) and
 one with four or more (face impact); each box's first impact time matches the exact drift of its lowest
 corner within `TimeResolution`.
@@ -471,10 +474,13 @@ most `k·TimeResolution` after its closed-form time.
 | Pair state at the slice start | Policy |
 |---|---|
 | Not in the contact set | `StopAtInitialContact` |
-| In the contact set, every solved normal speed `> VelocityResidual` at the last solve | `ContinueSeparatingTouch` |
-| In the contact set otherwise | `ContinueCertifiedTouch` |
+| In the contact set, every solved normal speed `> VelocityResidual` at the last solve, and the event's post poses read exactly `Touching` | `ContinueSeparatingTouch` |
+| In the contact set otherwise: a resting solve, or any event whose post poses read a `ContactBand` within `PenetrationResidual`, whatever the solved speeds (§10.7) | `ContinueCertifiedTouch` |
 
-These are the three policies `docs/contact-sweep-design.md` §5.1 defines; nothing here adds one.
+These are the three policies `docs/contact-sweep-design.md` §5.1 defines; nothing here adds one. A pair
+gathered at a band end or from a track that enters no solve, because every point separates faster than
+`VelocityResidual` (§6.1), keeps `ContinueCertifiedTouch` when its rounded event poses read `Touching` or
+a `ContactBand` within the residual, and leaves the contact set when they read `Separated` (§10.7).
 
 ### 5.3 Reusing a certificate across slices and steps
 
@@ -1000,6 +1006,17 @@ section is all `LineSeg` with zero deltas, at any proper pose; a stitched all-pl
 `delta`; a zero-bound Boolean or its translation-only placement; a loft whose stations are exact
 (`delta == 0`). A body with a positive boundary displacement is Phase 3 (§10.4).
 
+A stitched solid is read off its own audited triangle set (`stitchPayload.tris` over `verts`, with
+`triFaces` naming each triangle's live face), which `Stitch` assembles only for a closed all-planar weld
+whose crossing audit passed (`auditClean`); a curved or mixed stitch holds no triangle set and is not
+admitted, nor is an open sheet. Its vertices are the welded table's floats, exact dyadics, and its
+displacement is the largest per-vertex weld bound (`vertBound`, each the class bound with the placement
+rounding `delta` already added), and at least `delta`: zero for a weld built at the identity whose every
+class is zero-bound, which is then a §9
+body, and positive for a placed or certificate-welded stitch, which is a §10.4 held mesh with that δ. The
+scene's tetrahedron is the former: four patches on the `XY`, `XZ`, slanted and diagonal planes, welded at
+the identity, every vertex bound zero, every face planar (`contact_faceted_pair.go`, §13 PR 14b).
+
 ### 9.1 Relation for two exact planar bodies
 
 The relation of two such bodies at exact poses is decided by exact rational tests over their triangle
@@ -1014,6 +1031,9 @@ cap triangle is counterclockwise; with the closed-mesh audit, that proves the tr
 exactly. The tests are:
 
 - a certified transversal crossing of two facets (`boolean_exact.go`'s predicates) proves `Overlapping`;
+  the kernel records every crossing it finds, an edge of one body through a facet of the other or two
+  coplanar facets of positive overlap, as `PlanarResult.Crossings`, each naming the facet and the edge's
+  two facets, so §9.6 can tell which faces a shallow overlap passes through;
 - with no crossing, one nesting cast per shell (`docs/clearance-design.md` §2's ray ladder, closed-form
   for planes) proves containment, hence `Overlapping`, or mutual outsideness;
 - with no crossing and no nesting, the exact minimum over facet pairs of the squared distance
@@ -1100,8 +1120,9 @@ edge, are published as §9.3's support row publishes a touching edge or vertex, 
 on the face's plane, the edge clipped to the face and every piece reaching the face's interior, at the
 same depth. This is the shape a rotating pair's impact shows at its bracket's right sample: a turned box
 lands an edge or a corner first, never a face. A tied minimum, an edge-cross axis, bodies that do not
-cross along that axis (one holding the other), or a non-convex body keeps `Overlapping` and withholds
-the manifold.
+cross along that axis (one holding the other), or a non-convex body keeps `Overlapping` on this path;
+§9.6 then publishes the patch of a convex body poking through one face of any planar body, convex or
+not, and only a pair neither path covers withholds the manifold.
 
 ### 9.4 The planar patch by exact rational clipping
 
@@ -1191,6 +1212,56 @@ then `B` face order, then exact coordinate (contact-geometry §5). A requested `
 point ball keeps the relation and withholds the manifold with `ContactPointTooCoarse`. Every refusal is
 typed; an inconsistent face map is an evaluator error.
 
+### 9.6 Shallow penetration through a face of any planar body
+
+§9.3's shallow-penetration patch separates two convex bodies along a global separating axis. A convex
+body `M` whose corner or edge pokes through one face of a non-convex body `S` — a turned box landing on
+the floor of a `Cut` tray, which every rotating impact's right sample shows (§10.1) — has no such axis:
+the separating-axis argument needs both bodies convex, and `S`'s walls rise past any floor-normal axis.
+The FACE-LOCAL patch publishes that overlap from the one face it passes through. With `h` a flat face of
+`S` (every triangle coplanar, one outward normal `n`, exact), the kernel
+(`internal/pair/planar_face_penetration.go`, `PlanarFacePenetration`) publishes a manifold when all of
+the following hold, each an exact rational test:
+
+1. **One crossed face.** Every crossing §9.1 recorded between `M` and `S` lies in a triangle of `h`, or
+   in an edge of `S` both of whose triangles belong to `h`; a crossing in any other face of `S`, or no
+   crossing at all (one body nested in the other), publishes nothing. Two faces crossed — a corner in a
+   tray's inner corner — withhold the manifold with `ContactAmbiguousFeature`, as §9.3's tied minimum
+   does.
+2. **One deepest feature.** The vertices of `M` at the least height `n·(p − q)` below `h`'s plane
+   (`q` a vertex of `h`), at depth `d = −min/|n| > 0`, are one vertex or the two ends of one edge; the
+   deepest set with a triangle of `M` in it is a face, which this path does not publish.
+3. **The sunk part lies over the face.** Every vertex of `M` behind the plane, and the exact point where
+   each edge of `M` crosses the plane, projects along `n` strictly inside `h`'s region (§9.3's `locate`
+   test, holes included), and no edge of `M`'s sunk part, nor any edge of the plane's cut polygon,
+   projects onto a boundary edge of `h`. `M` is convex, so its sunk part is the hull of those points,
+   and this places the whole sunk part over `h`'s material.
+4. **The column is clear.** Every triangle of `S` with a vertex strictly in front of `h`'s plane
+   projects along `n` strictly apart from the projection of `M`'s vertex hull (§10.6's column test with
+   a zero margin). Material of `S` in front of the plane therefore meets no part of `M`, so `M ∩ S` is
+   exactly the sunk part within `h`'s slab, of depth `d` along `n`; a triangle of `S` that `M` swallows
+   whole, which §9.1's crossings cannot see, is refused here.
+
+The published points are §9.3's shallow row: each deepest vertex paired with its exact foot on `h`'s
+plane (the feet of an edge clipped to `h`'s region, each piece reaching the interior), `Separation` an
+exact enclosure of `−d`, the normal `h`'s exact outward normal oriented `A` toward `B`, and the features
+the vertex's or edge's faces and `h`. Under a positive `SupportBand` the lifted set of `h` follows
+(§10.5's `Overlapping` row, `PlanarSupportSet` with `overlap` set). Reversal swaps sides as §9.5 states.
+`publishPlanarManifold` runs this path when §9.3's convex-convex path publishes nothing and exactly one
+body carries the convexity certificate, or when both do and the convex-convex path withholds for a tied
+minimum or an edge-cross axis. A non-convex `M` keeps `ContactNonConvex`.
+
+The claim is local and §6.6 consumes it locally: the correction translates the pair apart by `d` along
+`n`, and `ContactPair` at the corrected poses, which must read `Touching` or a `ContactBand`, is what
+admits the result (reject-only; rigid-dynamics "Response"). Condition 4 is what makes the published
+contact set complete: without it a bump of `S` inside `M` would leave the event's manifold claiming
+one vertex while the bodies also meet elsewhere.
+
+Rejected: reading the deepest vertex against every face plane of `S` and publishing the shallowest.
+A non-convex `S` has face planes that cut through its own material (a wall's plane crosses the floor
+slab), so "shallowest over all planes" is not a penetration depth of `S`; only a face the overlap
+passes through has one.
+
 ## 10. General rotating sweep and band tracks
 
 ### 10.1 Rotating drift over exact planar bodies
@@ -1260,16 +1331,20 @@ positive `h_p(0)` and the same derivative bound. This is the proof `tangentAxisS
 already runs for a box spinning about `Y` with `K = ω_y²·(|Δx| + |Δz|)`, stated for any vertex set and
 both bodies moving.
 
-The plane is a SUPPORT PLANE: a face plane of `B` with every vertex of `B` on or behind it and every
-vertex of `A` on or in front of it, the contact set being `A`'s vertices on it. Each body lies in its
-vertices' hull, so the least vertex height bounds the pair's separation below, whatever the shapes. The
+The plane is a SUPPORT PLANE: the plane of a flat face of `B` with every vertex of `A` on or in front of
+it, the contact set being `A`'s vertices on it, and with `B`'s material in front of the plane kept
+laterally clear of `A` by §10.6's column test; a convex `B`, every vertex of which lies on or behind the
+plane, passes that test with nothing to check. Each body lies in its vertices' hull, so the least vertex
+height bounds the pair's separation below, whatever the shapes, until it exceeds the column's lateral
+clearance (§10.6). The
 run tries `B` then `A` as the plane's owner, each over its triangles in order, and takes the first plane
 whose every contact rate is positive. The horizon is the largest fraction on the sweep's dyadic grid
 (`TimeResolution`, capped at 52 levels so it stays a float) at which `c − K·h > 0` and every non-contact
 bound `h_p(0) + h_p'(0)·h − K·h²` is positive; both are monotone in `h`, so a binary search over the
-grid finds it. A touch no support plane covers — two crossing edges, or a box in a tray corner, whose
-floor plane does not hold the walls — stays `Undecided`. After the horizon, §5's search continues on the
-remainder as today.
+grid finds it. A touch no support plane covers — two crossing edges, or a box in a tray corner, which
+touches two faces whose planes each hold part of the box behind them — stays `Undecided`; a box on a
+tray's floor, away from its walls, has the floor's face-local plane (§10.6). After the horizon, §5's
+search continues on the remainder as today.
 
 ### 10.3 Band tracks: resting and rolling at constant `ω`
 
@@ -1581,10 +1656,13 @@ plane and enter the support set at the next slice. The wedge and the tetrahedron
 boxes rest on four points. Every such rest is a `ContactBand` rest: no correction lands a feature in exact
 touch under a rotation about `(1, 1, 0)`, and no float pose makes a side face of the hexagonal prism, the
 wedge's slanted face or any face of the tetrahedron coplanar with the floor. A bounce under the scene's
-restitution `0.3` separates the pair at its solve; §6.6 pushes it and the exact pair's band start departs
-(above). A body touching the tray floor and a wall is a touch no single support plane covers, which §10.3
+restitution `0.3` separates the pair at its solve; §6.6 pushes it, and when the push leaves the exact pair
+inside the band it continues on a band track under `ContinueCertifiedTouch` (§10.7), which ends where
+the band leaves the residual or where the next vertex arrives. A body touching the tray floor and a wall
+is a touch no single support plane covers, which §10.3
 leaves `SweepUndecided`; PR 15's releases place every body so that none reaches a wall within its `3 s`, and a
-scene that needs a wall rest needs a multi-plane track, which this design does not include.
+scene that needs a wall rest needs a multi-plane track, which this design does not include. The floor of
+the tray itself is a face-local support plane (§10.6).
 
 **Rejected alternatives.**
 
@@ -1607,6 +1685,116 @@ scene that needs a wall rest needs a multi-plane track, which this design does n
 - Letting an arriving lifted vertex penetrate to the residual before the band ends, as a contact vertex may.
   The correction then lifts the pivot edge to the band's rim, the next step kicks the cube on one edge again, and
   the rest alternates between the edges at the residual's scale.
+
+### 10.6 Face-local support planes and the column clearance
+
+§10.2's support plane requires every vertex of its owner `S` on or behind it, which no face of a `Cut`
+tray satisfies: its walls rise above its floor and its rim faces lie above its walls' feet. The
+scene's bodies all rest on, depart from and tip over the tray's floor, so `planarSupportOf`
+(`contact_sweep_band.go`) admits a FACE-LOCAL support plane instead: the plane of a flat face `h` of
+`S` (one `Face`, every triangle coplanar with one outward normal `n`, as `planarSupportFace` already
+requires) such that
+
+- every vertex of `M` lies on or in front of the plane, the contact and lifted sets being §10.2's and
+  §10.5's as today;
+- the COLUMN TEST holds over the horizon: with `B(f)` the coordinate box of every `M` vertex's ideal path
+  over `[0, f]` (`cornerSpan`), less `S`'s own translation, and `P` the projection along `n` onto the
+  plane's frame (the axis of `n`'s largest component dropped, §9.4's frame), every triangle of `S` with
+  a vertex strictly in front of the plane has `P(triangle)` strictly apart from `P(B(f))`, decided by
+  the separating axes of the projected box and the triangle's three edge normals in exact rational
+  arithmetic (`planarSegmentMeetsBox`'s form);
+- the LATERAL CLEARANCE `m(f)` is the least, over those triangles, of the largest separating-axis gap
+  between `P(triangle)` and `P(B(f))`, each gap divided by an upper bound on its axis's length
+  (`ratSqrtUp`), so that `m(f)` is a lower bound on the in-plane distance, and the projection shortens
+  no distance, on the true one; a convex `S`, every vertex of which lies on or behind the plane, has
+  no such triangle and `m = +∞`.
+
+`B(f)` grows with `f`, so the column test and `m(f)` are monotone and the grid search of §10.2 and
+§10.3 reads them as it reads `clearAt` and `contains`: the departure's horizon and the band track's end
+are the largest grid fractions through which every test holds. Soundness: every point of `M` lies in
+its vertices' hull, hence in the column over `P(B(f))`; material of `S` behind the plane is at least
+the least vertex height away along `n`; material of `S` in front of the plane projects at least `m(f)`
+away, hence is at least `m(f)` away. The pair's separation on `(0, f]` is therefore at least
+`min(least vertex height bound / |n|_hi, m(f))`, and that minimum is what `planarDepartureProof.lowerGap`
+publishes to the replay (§10.1) and to `departureGap`. A band track's overlap claim (§10.3) needs
+nothing about what lies behind the plane: material of `S` in front of the plane meets no part of `M`,
+so every point of `M ∩ S` lies behind the plane, and every point of `M` lies at height at least
+`−Depth`, so the overlap along `n` is at most `Depth` whatever `S` holds behind the face, a slab thinner
+than `Depth` included. The column test is shared with §9.6's condition 4 (`internal/pair`,
+`PlanarColumnClear`), which calls it with `f = 0` and no margin.
+
+Limits, stated rather than solved: a body that overhangs a wall's top rim while resting on the floor
+fails the column test, because the rim's triangles lie in front of the floor's plane and project under
+the body; a box in a tray corner touches two faces and has no single plane (§10.2). Both stay
+`SweepUndecided`. PR 15 keeps every release at least `20 mm` inside the walls.
+
+### 10.7 Continuation inside the band
+
+Three ways a `tumble` body stops on a plain convex floor share one cause, which the policy table of §5.2
+closes. Each is a record of the exploration run in `dynamics/tumble_explore_test.go` (§13 PR 15's
+fixture) with the §2 material (`e = 0.3`, `μ = 0.4`), `dt = 1/256 s`, `TimeResolution = 1 ns`,
+`PenetrationResidual = 1 µm` and `SupportBand = 0.5 µm`:
+
+- The spinning `20 mm` box lands on an edge, the solve leaves both edge corners rising at about
+  `3·10⁻³ mm/s` (the edge is the instantaneous axis of the tip that follows), and the pair rides a band
+  track that ends `2.8 µs` later where the corners' quadratic lower height bound reaches zero. Nothing
+  closes at that band end, so §6.1 enters no solve and the pair takes `ContinueSeparatingTouch`. The next
+  sweep departs for `6.7 µs` and then cannot certify the pair clear: inside the band its samples read
+  `ContactBand`, whose published `Gap` is `[0 ± g]` with no lower end, and §4.3's travel certificate needs
+  `g_l + g_r` above the travel per grid step, `270 mm/s × 1 ns ≈ 2.7·10⁻⁷ mm` for this box against
+  corners `10⁻⁸` to `6·10⁻⁸ mm` up. The search bisects to the time floor, `SweepTimeFloor`, and the
+  oriented-box report that the planar rerun fell back from says `SweepDepartureUnproved`.
+- The hexagonal prism bounces off three vertices with `+21`, `+5.5` and `+5.5 mm/s` while its pivot vertex,
+  `6·10⁻⁷ mm` up, descends at `41 mm/s`. The solve separates the pair, the push leaves it a `ContactBand`,
+  and under `ContinueSeparatingTouch` the departure ends `14.6 ns` later at the pivot's arrival with the pair
+  still inside the band. An impact bracket needs a `Separated` left end, so the bracket of the pivot's
+  touch, `[ContactBand, Overlapping]`, is `SweepTimeFloor`.
+- The wedge bounces off one vertex at `39 mm/s` while another, `1.2·10⁻³ mm` up, descends at `72 mm/s`;
+  the same bracket shape stops it `17 µs` later.
+
+The cause is the policy, not the certificates: a pair that stands inside the `SupportBand` after an event
+is a contact for the step (§10.5 admits the band as a touch within the residual), and the band track over
+the support set is the certificate that carries such a pair whatever its vertices do — a lifted vertex
+may rise, since `Depth` grows with `max(0, h'(0))·t`, and a clear vertex may arrive, since the track
+ends before it reaches the plane — while `ContinueSeparatingTouch` asks for a departure and a clear
+search that no certificate can finish while the pair is apart by less than the travel per grid step.
+`ContinueSeparatingTouch` is therefore assigned only to a pair the solve separates whose post-event poses
+read exactly `Touching`, which §6.6's push can produce for curved pairs and for exact planar touches,
+and whose §10.2 departure then has a positive gap to open. Every pair an event leaves in a `ContactBand`
+within the residual continues under `ContinueCertifiedTouch`, and a pair gathered at a band end or from a
+track that enters no solve keeps `ContinueCertifiedTouch` while its rounded event poses read `Touching` or
+such a band, and leaves the contact set when they read `Separated`; its next slice then starts
+`Separated` by more than the band, which exceeds the travel per grid step whenever
+`SupportBand >= (|v| + ρ·|ω|)·TimeResolution` for the pair's faster body, a relation the scene's
+`0.5 µm` band and `1 ns` resolution satisfy up to about `500 mm/s`. A pair that leaves the band slower
+than that stops at the time floor, as a pair starting apart by less than its travel per grid step does
+today; the band and the resolution are the caller's.
+
+Under this rule each run above continues: the box's band ends chain, each a slice, while the resting
+edge's corners rise through the band (their lower bound grows with each restart, since the restart reads
+the heights and rates at the band end), and the pair leaves the contact set once they stand above the
+band; the prism's and the wedge's band tracks end at the arriving vertex, one grid step before it
+reaches the floor, where it stands inside the band and the support set read at the rounded event poses
+holds it beside the bounced vertices, so the island solves all of them together. A zero `SupportBand`
+never publishes a `ContactBand` for an exact pair, so every shipped zero-band fixture keeps its policy
+and its numbers; a §10.4 band pair that a solve separates, which `ContinueSeparatingTouch` could never
+depart (§10.4), now continues on its band track as well.
+
+Rejected alternatives:
+
+- Letting an exact pair's `ContactBand` sample carry the exact relation's lower gap, so the clear search
+  and the impact bracket could read a band sample as a separated one. It closes the prism and the wedge,
+  whose bracket then reads `[ContactBand, Overlapping]`, but not the box: no lower gap below the travel
+  per grid step certifies an interval clear, so the slow lift out of the band still ends at the time
+  floor. It also changes the first impact of every falling body from the band's entry to the exact
+  touch, and with it the landing fixtures of §13 PR 14a.
+- Chaining §10.2's departure proof inside one sweep, restarting the quadratic bound at each horizon from
+  the enclosed ideal heights and rates there. It certifies the box's lift, but it is the band-end chain
+  the step already runs, done inside the sweep with interval starts instead of exact ones, and it leaves
+  the prism and the wedge to the bracket change above.
+- A band track returned under `ContinueSeparatingTouch` when the departure's search fails. It moves a
+  policy decision into the sweep, which would then publish a track under a policy whose contract
+  (`docs/contact-sweep-design.md` §5.1) asks for a departure.
 
 ## 11. Kinetograph interface and gallery
 
@@ -2007,13 +2195,114 @@ lines below do not repeat it.
   enters the band only in the track's last grid step, and the resting cube hovers inside the band with its
   swept boxes strictly apart, so no band track runs while it rests.
 
+### PR 14b (Phase 2) — stitched planar solids in the exact pair
+
+- Delivers §9's admission of a closed all-planar stitched solid: `planarSolidAtPose` reads
+  `stitchPayload.tris`, `verts` and `triFaces` (the face map through `Body.Faces()`), refuses a nil
+  triangle set, an open sheet or a failed crossing audit, and returns the largest `vertBound`, at least
+  `delta`, as the displacement, zero for the scene's tetrahedron.
+- Files: `contact_faceted_pair.go`; `docs/collision-v1-support.md`.
+- Test (root): `contact_faceted_pair_test.go` gains `TestExactPlanarPairAdmitsStitchedSolid`: the §2
+  tetrahedron (four patches welded at the identity) `5 mm` above a source-box floor reads
+  `Separated` with `Gap` exactly `5 mm`; resting on its `XY` face it reads `Touching`, and the pair's
+  reverse order the same; the tetrahedron carries the convexity certificate. `contact_faceted_manifold_test.go`
+  gains `TestPlanarManifoldStitchedVertexTouch`: the tetrahedron turned to stand on its apex publishes one
+  point at the apex's exact staged coordinate with `Normal` `(0, 0, 1)` and `FeatureB.Vertex` the live
+  apex, and on its `XY` face the three face corners at their exact coordinates. Legs shown to fail: the
+  face map deleted (`Faces` nil), the apex fixture keeps `Touching` with no manifold; the `delta` reading
+  deleted, a placed copy of the tetrahedron (positive `delta`) reads an exact `Touching` where §10.4
+  requires a `ContactBand`. The `vertBound` widening has no identity-placed fixture: only a
+  certificate-welded stitch (`docs/surface-design.md` §6.2) carries a positive class bound at the
+  identity, and the test file records that the term is the same per-vertex bound `tessellate_stitch.go`
+  publishes per face, read back rather than proved twice. `.github/test-shards.txt` lists both tests.
+- Depends on: PRs 10, 11. PR 14 for the scene's mass only.
+- Shipped. The tests also read the tetrahedron on the `Cut` tray's floor, whose manifold needs the
+  tetrahedron's certificate since the tray has none, and assert the placed copy's band against twice its
+  largest live vertex bound.
+
+### PR 14c (Phase 2) — face-local support planes
+
+- Delivers §10.6: `planarSupportOf` admits a plane whose owner has material in front of it, under the
+  column test and lateral clearance; `planarDepartureProof.lowerGap` and the replay read the clearance;
+  `PlanarColumnClear` in `internal/pair` owns the projected box-triangle test and the gap.
+- Files: `contact_sweep_band.go`, `contact_sweep_faceted.go`, `contact_sweep_replay.go`, new
+  `internal/pair/planar_column.go`.
+- Test (root): `contact_sweep_band_test.go` gains three tests over the §2 `Cut` tray and the `8 mm` cube
+  of `contact_support_band_test.go`, each in both body orders: `TestSweepPairDepartsFromTrayFloor`, the
+  cube rising from the tray's floor at `100 mm/s` with `ω = (0, 1, 0) rad/s`, `DepartedClear`, its
+  `Departure.GapAtUntil` within its ball of the cube's lowest staged corner height at the horizon;
+  `TestSweepPairBandTrackOnTrayFloor`, the cube on its edge on the tray's floor turning about that edge,
+  a `SweepPersistentBand` whose `Band()` equals the `K·h²` closed form `contact_sweep_band_test.go`
+  already checks on a plain floor; and `TestSweepPairColumnEndsDepartureAtWall`, the cube rising while
+  sliding at `200 mm/s` toward a wall `1 mm` away, whose departure horizon is the last grid fraction before
+  the cube's path box reaches the wall's projection and whose later search brackets the wall impact within
+  `TimeResolution` of the exact drift. Legs shown to fail: the column test deleted, the wall fixture's
+  horizon runs past the wall and the sweep is `SweepUndecided` with `SweepDepartureUnproved`; the
+  lateral clearance deleted from `lowerGap`, `contact_sweep_band_internal_test.go`'s
+  `TestPlanarDepartureLowerGapIsBoundedByLateralClearance`, the cube rising `1 µm` from a wall, publishes a
+  lower gap above `1 µm`. `internal/pair/planar_column_test.go` checks the projected gap of a triangle
+  diagonal to a box against its closed form and that a triangle behind the plane is not read.
+  `.github/test-shards.txt` lists the root tests.
+- Depends on: PR 14a.
+
+### PR 14d (Phase 2) — face-local shallow penetration
+
+- Delivers §9.6 and §9.1's crossing set: `ClassifyPlanar` records `PlanarResult.Crossings`,
+  `PlanarFacePenetration` publishes the patch through one face, and `publishPlanarManifold` runs it
+  when §9.3's convex-convex path publishes nothing.
+- Files: `internal/pair/planar.go`, new `internal/pair/planar_face_penetration.go`,
+  `contact_faceted_manifold.go`; `docs/collision-v1-support.md`.
+- Test (root): `contact_faceted_manifold_test.go` gains, each in both body orders, over the §2 tray:
+  `TestPlanarManifoldCornerThroughTrayFloor`, the `8 mm` cube turned `30°` about `Y` and sunk so one
+  corner stands exactly `2⁻²⁰ mm` below the floor, publishing one point whose `OnB` is the corner's exact
+  staged coordinate, whose `OnA` is its foot on `z = 0`, whose `Separation` is exactly `−2⁻²⁰` with zero
+  bound and whose `Normal` is `(0, 0, 1)`, and under `SupportBand = 2⁻¹⁹ mm` the lifted corners after it
+  at their exact heights; `TestPlanarManifoldEdgeThroughTrayFloor`, the cube on an edge sunk by `2⁻²⁰ mm`,
+  two points at the edge's ends; `TestPlanarManifoldWithholdsCornerThroughTwoFaces`, the corner sunk into
+  the floor and a wall at once, `Overlapping` with `ContactAmbiguousFeature` and no manifold. Legs shown
+  to fail: condition 1 deleted, the two-face fixture publishes the floor's point; condition 4 deleted,
+  `internal/pair/planar_face_penetration_test.go`'s snapshot of the tray with a second shell, a `1 mm`
+  cube standing on the floor wholly inside the sunk cube (no crossing, so §9.1's nesting cast never runs
+  and only the column test sees it), publishes one corner. `internal/pair/planar_test.go`
+  gains `TestClassifyPlanarRecordsCrossings`: the sunk corner's crossings name the floor's two triangles
+  and the cube's three edges, and a cube crossing floor and wall names both faces. `.github/test-shards.txt`
+  lists the root tests.
+- Depends on: PRs 11, 14a, 14c.
+
+### PR 14e (Phase 2) — continuation inside the band
+
+- Delivers §10.7 and the §5.2 table: `solveIslands` assigns `ContinueSeparatingTouch` only to a solved
+  pair whose post-event poses read exactly `Touching`, keeps a band-end or track pair that enters no solve
+  under `ContinueCertifiedTouch` while its rounded poses read `Touching` or a band within the residual,
+  and drops it from the contact set when they read `Separated`; `solveEvent` passes the rounded relation
+  of each gathered pair to the solve.
+- Files: `dynamics/island.go`, `dynamics/schedule_event.go`.
+- Test (`dynamics`): new `dynamics/tumble_rest_test.go`, each fixture a four-body world (a `240 mm` source-box
+  floor, the body, two far boxes) under the §2 material, `dt`, residuals and `SupportBand`, run through
+  `Timeline`: `TestBoxBouncesOnEdgeAndRestsFlat`, the §13 PR 14a cube released `30°` about `(1, 1, 0)` with
+  spin `(2, 1, 0) rad/s` from `40 mm`, every step `Advanced` for `1 s`, its final velocities exactly zero
+  and every corner's exact staged height in `[0, PenetrationResidual]`, at least one slice whose sweep
+  follows a band end with `Request.StartPolicy == ContinueCertifiedTouch` and whose start sample reads
+  `ContactBand`, and every event's impulses meeting the discrete linear and angular laws
+  (`requireTipEventLaws`'s form with the island's inertia); `TestHexagonalPrismRestsFromVertex` and
+  `TestWedgeRestsFromVertex`, the §2 prism and wedge at their §2 releases, the same rest criterion, with
+  the trace carrying a one-point, a two-point and a three-or-more-point `ContactImpact`. Legs shown to
+  fail: the band rule deleted, each fixture stops `StepPairUndecided` at the step and time §10.7 records
+  (`SweepDepartureUnproved` for the box, `SweepTimeFloor` for the prism and the wedge); the `Separated`
+  drop deleted, the box's pair stays under `ContinueCertifiedTouch` after leaving the band and its next
+  slice is `StepTrackUnproved`. Every zero-band fixture of the package is unchanged.
+- Depends on: PR 14a.
+
+PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d follows 14c, whose
+`PlanarColumnClear` it calls.
+
 ### PR 15 (Phase 2) — `tumble`
 
 - Delivers the Phase 2 exit scene of §2.
 - Files: `_gallery/dynamics_clip.go`, `dynamics/scene_test.go`.
 - Test: the Phase 2 exit criteria; every release is placed so that no body reaches a tray wall within `3 s`
-  (§10.5).
-- Depends on: PRs 9, 13, 14, 14a.
+  and no body's swept box reaches a wall's projection (§10.5, §10.6).
+- Depends on: PRs 9, 13, 14, 14a, 14b, 14c, 14d, 14e.
 
 ### PR 16 (Phase 3) — third-order section moments and the general revolve
 

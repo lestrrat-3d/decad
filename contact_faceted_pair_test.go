@@ -176,6 +176,73 @@ func TestContactPairExactPlanarNonConvex(t *testing.T) {
 	require.Equal(t, 2.0, lifted.Gap.Value.Base())
 }
 
+// TestExactPlanarPairAdmitsStitchedSolid reads mass_properties_mesh_test.go's
+// stitched tetrahedron, four patches welded at the identity with every corner
+// exact, through the exact pair (docs/multibody-dynamics-design.md §13 PR
+// 14b), against a source-box floor whose top face is z = 0.
+//
+// Legs shown to fail (each deleted in turn, fixture red, then restored):
+//   - the delta reading (planarStitchSolid returning a zero displacement):
+//     the placed copy below reads an exact ContactTouching where §10.4
+//     requires ContactBand;
+//   - the face map (TestPlanarManifoldStitchedVertexTouch).
+//
+// The vertBound widening has no identity-placed fixture: only a
+// certificate-welded stitch (docs/surface-design.md §6.2) carries a positive
+// class bound at the identity. The term is the per-vertex bound Stitch
+// stamps on each live Vertex, the one tessellate_stitch.go publishes per
+// face, read back rather than proved twice; the placed copy's band below is
+// asserted against it.
+func TestExactPlanarPairAdmitsStitchedSolid(t *testing.T) {
+	doc := decad.New()
+	tetrahedron, a := stitchedTetrahedron(t, doc)
+	for _, vertex := range tetrahedron.Vertices() {
+		require.Zero(t, vertex.Position().Bound.Base(), "premise: an identity weld of exact corners is zero-bound")
+	}
+	floor := boxBodyAtZ(t, doc, -40, -40, 40, 40, -10, 10)
+	id := r3.Identity()
+
+	// Lifted 5 mm, the XY face is the nearest feature: the gap is exact.
+	above := contactBothOrders(t, doc, floor, tetrahedron, id, contactPose(t, r3.Vec{Z: 5}))
+	require.Equal(t, decad.ContactSeparated, above.Relation, "reason=%v", above.Reason)
+	require.NotNil(t, above.Gap)
+	require.Equal(t, 5.0, above.Gap.Value.Base())
+	require.Zero(t, above.Gap.Bound.Base())
+
+	// Resting on its XY face: an exact touch.
+	resting := contactBothOrders(t, doc, floor, tetrahedron, id, id)
+	require.Equal(t, decad.ContactTouching, resting.Relation, "reason=%v", resting.Reason)
+	require.Equal(t, decad.Exact, resting.Gap.Exactness)
+	require.Zero(t, resting.Gap.Value.Base())
+	require.Equal(t, decad.ContactNoReason, resting.Reason)
+
+	// The tray is not convex, so a manifold on its floor needs the
+	// tetrahedron's own convexity certificate (§9.2); without it the touch
+	// would name ContactNonConvex.
+	tray := trayBody(t, doc)
+	inTray := contactBothOrders(t, doc, tray, tetrahedron, id, id)
+	require.Equal(t, decad.ContactTouching, inTray.Relation, "reason=%v", inTray.Reason)
+	requireManifoldAt(t, inTray, []ratPoint{ratAt(a, 0, 0), ratAt(0, 0, 0), ratAt(0, a, 0)})
+
+	// A placed copy carries the placement rounding as its displacement, so
+	// the same held touch is a band (§10.4). Lifting by 1 mm and posing back
+	// down moves no held corner: every coordinate below 8 keeps its ulp.
+	lift, err := r3.Translation(r3.Vec{Z: 1})
+	require.NoError(t, err)
+	placed, err := tetrahedron.Placed(t.Context(), lift)
+	require.NoError(t, err)
+	var widest float64
+	for _, vertex := range placed.Vertices() {
+		widest = math.Max(widest, vertex.Position().Bound.Base())
+	}
+	require.Positive(t, widest, "premise: a placed stitch is not zero-bound")
+	band := contactBothOrders(t, doc, floor, placed, id, contactPose(t, r3.Vec{Z: -1}))
+	require.Equal(t, decad.ContactBand, band.Relation, "reason=%v", band.Reason)
+	require.NotNil(t, band.Gap)
+	require.Zero(t, band.Gap.Value.Base())
+	require.GreaterOrEqual(t, band.Gap.Bound.Base(), 2*widest, "the band is twice the largest vertex bound")
+}
+
 func TestContactPairExactPlanarCancels(t *testing.T) {
 	doc := decad.New()
 	tray := trayBody(t, doc)

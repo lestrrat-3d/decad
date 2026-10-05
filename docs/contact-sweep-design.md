@@ -628,7 +628,9 @@ The same `c`, `K` form over every vertex of any exact planar body, with both
 bodies moving, is `docs/multibody-dynamics-design.md` §10.2; its band track
 for a contact whose `c` is zero within the solver's residual is §10.3, and
 a start within the request's `SupportBand` continues over the support set
-of §10.5.
+of §10.5. The support plane may be one face of an owner with material in
+front of it, a tray's floor, under the column test of that document's §10.6,
+which also caps the lower-gap function by the lateral clearance.
 
 After departure, mark `(0,h]` as certified clear, put a separated sample at
 `h`, and run §5's earliest-first search on `[h, Duration]`. If no later
