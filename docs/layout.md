@@ -180,8 +180,8 @@ to the byte budget.
 | `verify_publish.go` | Builds `Verify` reports from private survey results. See `docs/verification-design.md`. |
 | `clearance.go` | The pair kernel: `clearancePair` proves one pair's four-way relation and, when disjoint, a proven gap interval. `sheetSolidPair` decides a sheet pair too. See `docs/clearance-design.md` §1-§3/§6. |
 | `clearance_box.go` | Certifies unplaced axis-aligned rectangular prisms and bounds their gap directly from exact box planes before the general pair kernel. |
-| `contact_pair.go` | Pair gates and verdict. See `docs/contact-geometry-design.md`. |
-| `contact_box.go` | Box manifold. See `docs/contact-geometry-design.md` §4. |
+| `contact_pair.go` | Pair gates and public reports. Box classification lives in `internal/pair/`. See `docs/contact-geometry-design.md`. |
+| `contact_box.go` | Source-box admission and public face/measurement mapping. See `docs/contact-geometry-design.md` §4. |
 | `contact_faceted_support.go` | Exact rectangular support-face proof for zero-bound and translation-placed faceted contact, plus bounded strict separation. See `docs/contact-geometry-design.md` §4. |
 | `contact_faceted_sweep.go` | Affine vertical support-face sweep for exact-source faceted solids and bounded strict clearance against a source-box floor. See `docs/contact-sweep-design.md`. |
 | `contact_oriented_box.go` | Rotated boxes. See `docs/contact-geometry-design.md` §4. |
@@ -254,6 +254,7 @@ to the byte budget.
 | `dynamics/` | Rigid-body state and response, including fixed-box edge impulses in `fixed_offcenter.go`. See `docs/rigid-dynamics-design.md`. |
 | `decadtest/` | The public test kit: comparison helpers over decad's three bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. Standard `testing` only, never testify. See `decadtest/doc.go`. |
 | `internal/proof/` | Exact dyadic arithmetic, rational interval operations, float rounding bounds, and their arithmetic tests. |
+| `internal/pair/` | Source-box relation, gap, and face-patch calculation over exact intervals. |
 | `_gallery/` | Own nested module for README stills, animated hero and landing clip; keeps SolidLens out of the library. See `main.go`. |
 | `_shardgen/` | Own nested module, keeping tooling out of the library's: packs the root package's tests into cost-balanced race shards. The `_` prefix hides it from root-module tools. See its `main.go` doc comment. |
 | `.github/workflows/` | `ci.yml` runs lint, tests, tidy and vulnerability checks; root race shards depend on `race-binary`. `codeql.yml`. `test-shards.txt` beside it records which shard runs each root test. |
