@@ -27,6 +27,7 @@ func TestSphereFloorInteriorFrictionUsesRealBracketAndTrace(t *testing.T) {
 		{name: "slip", mu: .1, wantTangent: -10, wantX: 40, wantSpin: 5},
 		{name: "reverse stick", mu: .5, reverse: true, wantTangent: 100.0 / 7,
 			wantX: 250.0 / 7, wantSpin: 50.0 / 7},
+		{name: "reverse slip", mu: .1, reverse: true, wantTangent: 10, wantX: 40, wantSpin: 5},
 		{name: "bounded mass", mu: .5, boundedMass: true, refuse: true},
 		{name: "positive restitution", mu: .5, restitution: .5, refuse: true},
 		{name: "insufficient events", mu: .5, maxEvents: 1, refuse: true},
