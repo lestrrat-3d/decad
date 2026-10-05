@@ -585,20 +585,18 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	cx := centroidCoord(mx, tf, volRat)
 	cy := centroidCoord(my, tf, volRat)
 	cz := centroidCoord(mz, tf, volRat)
-	cenBound := pp.dPair
-	if rem := volFloor(volRat, pp.volSymDiff); rem > 0 {
-		cenBound = math.Min(cenBound, pp.volSymDiff*pp.dPair/rem)
-	}
+	cenBound := facetedCentroidAllowance(pp.volSymDiff, pp.dPair, volFloor(volRat, pp.volSymDiff))
 	cxF, _ := cx.Float64()
 	cyF, _ := cy.Float64()
 	czF, _ := cz.Float64()
 	// The three coordinates round independently, and the VecMeasurement bound
 	// is a 3D radius (bounds.go, radius3D).
 	cenRound := radius3D(math.Max(ratAbsDiff(cx, cxF), math.Max(ratAbsDiff(cy, cyF), ratAbsDiff(cz, czF))))
+	centroidBound := absSumUpper(cenBound, cenRound)
 	body.centroid = VecMeasurement{
 		Value:     r3.Vec{X: cxF, Y: cyF, Z: czF},
-		Exactness: exactnessOf(cenBound + cenRound),
-		Bound:     units.Millimeters(cenBound + cenRound),
+		Exactness: exactnessOf(centroidBound),
+		Bound:     units.Millimeters(centroidBound),
 	}
 
 	lo, hi := verts[0], verts[0]
@@ -686,7 +684,7 @@ func meshVolumeMeasurement(ctx context.Context, xverts []xpt, tris [][3]int, vol
 		return Measurement{}, nil, fmt.Errorf(`%w: the boolean result encloses no volume`, ErrBooleanFailed)
 	}
 	volF, _ := volRat.Float64()
-	bound := volSymDiff + ratAbsDiff(volRat, volF)
+	bound := absSumUpper(volSymDiff, ratAbsDiff(volRat, volF))
 	return Measurement{
 		Value:     units.CubicMillimeters(volF),
 		Exactness: exactnessOf(bound),
@@ -713,13 +711,7 @@ func exactnessOf(bound float64) Exactness {
 
 // ratAbsDiff is |r − f| rounded up to float64.
 func ratAbsDiff(r *big.Rat, f float64) float64 {
-	d := new(big.Rat).Sub(r, mustRatOf(f))
-	d.Abs(d)
-	out, _ := d.Float64()
-	if out > 0 {
-		out = math.Nextafter(out, math.Inf(1))
-	}
-	return out
+	return rationalFloatError(r, f)
 }
 
 // centroidCoord is (moment/24) / volume, exact.
@@ -740,6 +732,15 @@ func volFloor(vol *big.Rat, sym float64) float64 {
 		return 0
 	}
 	return rem
+}
+
+// facetedCentroidAllowance keeps a positive occupied-volume displacement
+// positive even when its product with the pair diameter underflows.
+func facetedCentroidAllowance(sym, diameter, volumeFloor float64) float64 {
+	if volumeFloor <= 0 {
+		return diameter
+	}
+	return math.Min(diameter, divUpper(productUpper(sym, diameter), volumeFloor))
 }
 
 // buildFacetedTopology chains the face-boundary mesh edges into topological

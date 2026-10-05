@@ -1017,8 +1017,11 @@ func pointRoundBound(p xpt, pf r3.Vec) float64 {
 			worst = d
 		}
 	}
+	if worst.Sign() == 0 {
+		return 0
+	}
 	w, _ := worst.Float64()
-	return radius3D(upRound(w))
+	return radius3D(provenUpRound(w))
 }
 
 // faceFacets is one analytic face of an operand: its facets, and the chord

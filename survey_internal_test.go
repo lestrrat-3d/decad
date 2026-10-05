@@ -178,21 +178,28 @@ func TestWallKernelBudgetedRunKeepsNormalResult(t *testing.T) {
 // consumer restates, and the aggregate, which no candidate decides alone.
 func TestWallKernelPublishesDiameterBounds(t *testing.T) {
 	t.Parallel()
-	// A 100×60 outline with two r=1 circular holes 3√2 apart: the web between
-	// them is the arcArcCands centreline candidate, whose division carries a
-	// nonzero radius bound.
+	// The diagonal pair's web wins by held diameter. The horizontal pair's
+	// slightly wider web has a 1 µm radius bound, so its lower endpoint reaches
+	// below the held winner's interval.
 	elems := func() []surveyElem {
 		pts := [][2]float64{{0, 0}, {100, 0}, {100, 60}, {0, 60}}
-		out := make([]surveyElem, 0, len(pts)+2)
+		out := make([]surveyElem, 0, len(pts)+4)
 		for i := range pts {
 			e, ok := lineElem(pts[i][0], pts[i][1], pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1])
 			require.True(t, ok)
 			out = append(out, e)
 		}
-		for _, c := range [][2]float64{{48.5, 28.5}, {51.5, 31.5}} {
+		horizontalGap := 3*math.Sqrt(2) + 1e-4
+		for i, c := range [][2]float64{
+			{20, 15}, {20 + horizontalGap, 15},
+			{48.5, 28.5}, {51.5, 31.5},
+		} {
 			// Reversed angle order: a hole keeps the material on its left.
 			e, ok := arcElem(c[0], c[1], 1, 2*math.Pi, 0, true)
 			require.True(t, ok)
+			if i == 1 {
+				e.rrBound = 1e-3
+			}
 			out = append(out, e)
 		}
 		return out
@@ -239,10 +246,11 @@ func TestWallKernelPublishesDiameterBounds(t *testing.T) {
 	require.Equal(t, wantSpan, out.span)
 	require.Equal(t, wantBound, out.spanBound)
 
-	// The fixture must discriminate: a winner-only reduction — the smallest
-	// held diameter beside that one candidate's own bound — must publish a
-	// DIFFERENT interval here, or the assertion above would hold under the
-	// defective rule too.
+	// The rival changes the lower endpoint, so a winner-only reduction must
+	// publish a different interval, not merely round the same interval wider.
+	winnerLo := new(big.Rat).Sub(floatRat(winnerValue), floatRat(winnerBound))
+	require.Less(t, agg.lo.Cmp(winnerLo), 0,
+		`the rival's lower endpoint must reach below the held winner's interval`)
 	require.NotEqual(t, winnerBound, out.spanBound,
 		`the population must contain a rival whose bound the winner's own does not cover`)
 }
@@ -803,19 +811,28 @@ func TestWallKernelValidateReadsTheCandidateInterval(t *testing.T) {
 // winning held value is exactly what a comparison of held values cannot see.
 func TestWallKernelInradiusAggregatesRivalCandidates(t *testing.T) {
 	t.Parallel()
-	// A 100×60 plate holding one r=22 circular hole: the trig-derived
-	// angle-limit candidates around the hole carry bounds far above the
-	// kernel's declared slack, so the population really does have rivals.
+	// Two near-r=20 holes have competing empty disks. The left hole's held
+	// radius is 0.1 µm larger and carries a 1 µm bound, so a rival's upper
+	// endpoint exceeds the held winner's interval.
 	pts := [][2]float64{{0, 0}, {100, 0}, {100, 60}, {0, 60}}
-	elems := make([]surveyElem, 0, len(pts)+1)
+	elems := make([]surveyElem, 0, len(pts)+2)
 	for i := range pts {
 		e, ok := lineElem(pts[i][0], pts[i][1], pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1])
 		require.True(t, ok)
 		elems = append(elems, e)
 	}
-	hole, ok := arcElem(50, 30, 22, 2*math.Pi, 0, true)
-	require.True(t, ok)
-	elems = append(elems, hole)
+	for i, x := range []float64{30, 70} {
+		radius := 20.0
+		if i == 0 {
+			radius += 1e-4
+		}
+		hole, ok := arcElem(x, 30, radius, 2*math.Pi, 0, true)
+		require.True(t, ok)
+		if i == 0 {
+			hole.rrBound = 1e-3
+		}
+		elems = append(elems, hole)
+	}
 
 	out := newWallKernel(elems, pts, math.Inf(1)).run()
 	require.True(t, out.ok)
@@ -841,9 +858,11 @@ func TestWallKernelInradiusAggregatesRivalCandidates(t *testing.T) {
 	require.Equal(t, wantValue, out.inradius)
 	require.Equal(t, wantBound, out.inradiusBound)
 
-	// The fixture must discriminate: reducing by held value alone — the
-	// greatest held radius beside that one candidate's own bound — publishes a
-	// different interval here.
+	// The rival changes the upper endpoint, so reducing by held value alone
+	// publishes a different interval rather than merely rounding it wider.
+	winnerHi := new(big.Rat).Add(floatRat(heldMax), floatRat(heldMaxBound))
+	require.Greater(t, agg.hi.Cmp(winnerHi), 0,
+		`the rival's upper endpoint must reach above the held winner's interval`)
 	require.NotEqual(t, heldMaxBound, out.inradiusBound,
 		`the population must contain a rival the winner's own bound does not cover`)
 	require.Greater(t, out.inradiusBound, 0.0)
