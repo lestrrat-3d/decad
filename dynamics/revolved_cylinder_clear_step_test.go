@@ -143,7 +143,7 @@ func runRevolvedCylinderClearStep(t *testing.T, reverse bool) {
 
 func TestRevolvedCylinderAxialFloorImpact(t *testing.T) {
 	for _, reverse := range []bool{false, true} {
-		t.Run(map[bool]string{false: "floor first", true: "cylinder first"}[reverse], func(t *testing.T) {
+		t.Run(map[bool]string{false: "interior floor first", true: "interior cylinder first"}[reverse], func(t *testing.T) {
 			revolvedCylinderAxialFloorImpact(t, reverse, .2, 10)
 		})
 	}
@@ -151,7 +151,7 @@ func TestRevolvedCylinderAxialFloorImpact(t *testing.T) {
 
 func TestRevolvedCylinderAxialEndpointImpact(t *testing.T) {
 	for _, reverse := range []bool{false, true} {
-		t.Run(map[bool]string{false: "floor first", true: "cylinder first"}[reverse], func(t *testing.T) {
+		t.Run(map[bool]string{false: "endpoint floor first", true: "endpoint cylinder first"}[reverse], func(t *testing.T) {
 			revolvedCylinderAxialFloorImpact(t, reverse, .125, 8)
 		})
 	}
