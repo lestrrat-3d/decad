@@ -844,7 +844,9 @@ func (r *rotationalPairSweep) tangentAxisSpinDepartureFraction(first *SweepSampl
 	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) != 4 {
 		return nil, false
 	}
-	paths := [2]rotationalSweepPath{r.a, r.b}
+	// Read the prepared paths through pointers so the duration and exact
+	// corner storage stay in their original records.
+	paths := [2]*rotationalSweepPath{&r.a, &r.b}
 	stationary, spinning := -1, -1
 	for i, path := range paths {
 		if path.path.drift == nil && path.path.delta == [3]dyadic{} {
@@ -859,10 +861,15 @@ func (r *rotationalPairSweep) tangentAxisSpinDepartureFraction(first *SweepSampl
 	if stationary < 0 || spinning < 0 || stationary == spinning {
 		return nil, false
 	}
-	static, moving := paths[stationary].startBox, paths[spinning].startBox
-	z := dyV3{dyZero(), dyZero(), mustDyOf(1)}
-	staticLow, staticHigh := orientedProjection(static, z)
-	movingLow, movingHigh := orientedProjection(moving, z)
+	static, moving := &paths[stationary].startBox, &paths[spinning].startBox
+	staticLow, staticHigh := static.corner[0][2], static.corner[0][2]
+	movingLow, movingHigh := moving.corner[0][2], moving.corner[0][2]
+	for i := 1; i < len(static.corner); i++ {
+		staticLow = dyMin(staticLow, static.corner[i][2])
+		staticHigh = dyMax(staticHigh, static.corner[i][2])
+		movingLow = dyMin(movingLow, moving.corner[i][2])
+		movingHigh = dyMax(movingHigh, moving.corner[i][2])
+	}
 	sign := int64(0)
 	if dyCmp(staticHigh, movingLow) == 0 {
 		sign = 1
@@ -886,7 +893,8 @@ func (r *rotationalPairSweep) tangentAxisSpinDepartureFraction(first *SweepSampl
 	omega := path.frame.axis[1]
 	omegaSquared := new(big.Rat).Mul(omega, omega)
 	minimum, curvature := new(big.Rat), new(big.Rat)
-	for i, corner := range moving.corner {
+	for i := range moving.corner {
+		corner := &moving.corner[i]
 		dx := new(big.Rat).Sub(corner[0].rat(), path.frame.center[0])
 		dz := new(big.Rat).Sub(corner[2].rat(), path.frame.center[2])
 		derivative := new(big.Rat).Sub(path.velocity[2], new(big.Rat).Mul(omega, dx))
@@ -905,7 +913,7 @@ func (r *rotationalPairSweep) tangentAxisSpinDepartureFraction(first *SweepSampl
 	}
 	fraction := big.NewRat(1, 1)
 	for range 60 {
-		until := new(big.Rat).Mul(fraction, path.path.duration)
+		until := new(big.Rat).Mul(fraction, r.a.path.duration)
 		if new(big.Rat).Mul(curvature, until).Cmp(minimum) < 0 {
 			return fraction, true
 		}
