@@ -33,7 +33,10 @@ type IslandReport struct {
 // instant of that manifold. An interior impact keeps its bracket, whose
 // travel widens the correction allowance, and the manifold its rounded event
 // poses show, whose penetration the correction removes; a pair the contact
-// set continued on a persistent track is marked track.
+// set continued on a persistent track is marked track. rounded is the
+// relation ContactPair reads at the rounded event poses, ContactUndecided
+// when the gather did not read it; §5.2 assigns the pair's continuation
+// policy from it (§10.7).
 type islandPair struct {
 	key      int
 	a, b     int
@@ -42,7 +45,9 @@ type islandPair struct {
 	bracket  *decad.SweepInterval
 	depth    *decad.ContactManifold
 	track    bool
+	bandEnd  bool    // a band track ended the slice at the event (§10.3)
 	band     float64 // the band depth through the event when a band track ended the slice there (§10.3)
+	rounded  decad.ContactRelation
 }
 
 // island is one connected component of the dynamic-body contact graph.
@@ -69,13 +74,15 @@ type eventIslands struct {
 }
 
 // solvedEvent is the outcome of one event time's islands: the post-event
-// state, the published events and island reports, and the continuation
-// policy of every gathered pair.
+// state, the published events and island reports, the continuation policy of
+// every gathered pair, and the pairs that leave the contact set because their
+// post-event poses read Separated (§10.7).
 type solvedEvent struct {
 	post     State
 	events   []ContactEvent
 	islands  []IslandReport
 	policies map[int]decad.SweepStartPolicy
+	leave    map[int]struct{}
 }
 
 // manifoldWithin reports whether every point of a gathered manifold is
@@ -379,11 +386,11 @@ func (w *World) closingSpeedUpper(pair islandPair, pre State, drive map[int][3]*
 // §6.3), corrected (§6.6), and published as one event per solved pair and one
 // IslandReport per island. An island made only of pairs the contact set
 // continued on persistent tracks holds no event and is left to drift. Every
-// gathered pair receives its continuation policy (§5.2).
+// gathered pair receives its continuation policy (§5.2, continuations).
 func (w *World) solveIslands(ctx context.Context, in eventIslands,
 	scheduled map[int]struct{}) (*solvedEvent, []StepDiagnostic, error) {
-	var active []islandPair
-	out := &solvedEvent{post: in.pre.clone(), policies: map[int]decad.SweepStartPolicy{}}
+	var active, quiet, separated []islandPair
+	out := &solvedEvent{post: in.pre.clone(), policies: map[int]decad.SweepStartPolicy{}, leave: map[int]struct{}{}}
 	for _, pair := range in.gathered {
 		if !w.drivenWithin(pair, in.drive) {
 			// A rotating driver's pair cannot be classified; it stays in the
@@ -398,6 +405,7 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 		}
 		if !ok {
 			out.policies[pair.key] = decad.ContinueSeparatingTouch
+			quiet = append(quiet, pair)
 			continue
 		}
 		active = append(active, pair)
@@ -409,7 +417,7 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 	var solved []island
 	moves := map[int]r3.Vec{}
 	push := correctionPush{allowance: map[int]float64{}, separating: map[int]struct{}{}, policies: out.policies,
-		untouched: map[int]struct{}{}}
+		untouched: map[int]struct{}{}, relations: map[int]decad.ContactRelation{}}
 	for _, isl := range islands {
 		if !slices.ContainsFunc(isl.pairs, func(p islandPair) bool { return !p.track }) {
 			for _, pair := range isl.pairs {
@@ -466,14 +474,16 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 		out.islands = append(out.islands, w.islandEvents(number, isl, solution, in, &out.events))
 		solved = append(solved, isl)
 		// §5.2: a solved pair whose every point leaves faster than
-		// VelocityResidual continues under ContinueSeparatingTouch, which
-		// proves the departure itself; every other one under
+		// VelocityResidual may continue under ContinueSeparatingTouch, which
+		// proves the departure itself, once its corrected poses read exactly
+		// Touching (continuations); every other one continues under
 		// ContinueCertifiedTouch.
 		for i, pair := range isl.pairs {
 			out.policies[pair.key] = decad.ContinueCertifiedTouch
 			if solution.separating[i] {
 				out.policies[pair.key] = decad.ContinueSeparatingTouch
 				push.separating[pair.key] = struct{}{}
+				separated = append(separated, pair)
 			}
 		}
 	}
@@ -486,6 +496,9 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 	diagnostics, err := w.checkCorrections(ctx, in.work, in.pre, out.post, solved, moves, scheduled, push)
 	if err != nil || len(diagnostics) != 0 {
 		return nil, diagnostics, err
+	}
+	if err := w.continuations(ctx, out, quiet, separated, moves, push.relations); err != nil {
+		return nil, nil, err
 	}
 	for i := range out.events {
 		e := &out.events[i]
@@ -525,6 +538,89 @@ func (w *World) silentIsland(isl island, solution islandSolution, in eventIsland
 		}
 	}
 	return true
+}
+
+// continuations completes §5.2's policies for the pairs whose continuation
+// the relation at their post-event poses decides (docs/multibody-dynamics-design.md
+// §10.7). A pair standing inside a ContactBand within PenetrationResidual is a
+// contact for the step, and a band track over its support set is the only
+// certificate that carries it, so:
+//   - a solved pair the solve separates keeps ContinueSeparatingTouch only
+//     when its corrected poses read exactly Touching; a ContactBand continues
+//     it under ContinueCertifiedTouch, and Separated takes it out of the
+//     contact set;
+//   - a pair gathered at a band end or from a track that enters no solve
+//     keeps ContinueCertifiedTouch while its rounded event poses read
+//     Touching or such a band, and leaves the contact set when they read
+//     Separated;
+//   - any other pair that enters no solve continues under
+//     ContinueCertifiedTouch when its rounded event poses read such a band.
+//
+// Every other reading keeps the policy solveIslands assigned. A body the
+// correction moved reads the relation checkCorrections recorded at its final
+// poses; an unmoved pair reads the relation the gather recorded at the rounded
+// event poses, or ContactPair at them when the gather recorded none.
+func (w *World) continuations(ctx context.Context, out *solvedEvent, quiet, separated []islandPair,
+	moves map[int]r3.Vec, relations map[int]decad.ContactRelation) error {
+	read := func(pair islandPair) (decad.ContactRelation, error) {
+		_, movedA := moves[pair.a]
+		_, movedB := moves[pair.b]
+		if relation, ok := relations[pair.key]; ok && (movedA || movedB) {
+			return relation, nil
+		}
+		if pair.rounded != decad.ContactUndecided && !movedA && !movedB {
+			return pair.rounded, nil
+		}
+		if err := ctx.Err(); err != nil {
+			return decad.ContactUndecided, err
+		}
+		contact, err := w.contactAt(ctx, pair, out.post)
+		if err != nil {
+			return decad.ContactUndecided, err
+		}
+		return w.continuationRelation(contact), nil
+	}
+	for _, pair := range separated {
+		if out.policies[pair.key] != decad.ContinueSeparatingTouch {
+			continue
+		}
+		relation, err := read(pair)
+		if err != nil {
+			return err
+		}
+		switch relation {
+		case decad.ContactBand:
+			out.policies[pair.key] = decad.ContinueCertifiedTouch
+		case decad.ContactSeparated:
+			delete(out.policies, pair.key)
+			out.leave[pair.key] = struct{}{}
+		}
+	}
+	for _, pair := range quiet {
+		relation, err := read(pair)
+		if err != nil {
+			return err
+		}
+		continued := pair.track || pair.bandEnd
+		switch {
+		case relation == decad.ContactBand, continued && relation == decad.ContactTouching:
+			out.policies[pair.key] = decad.ContinueCertifiedTouch
+		case continued && relation == decad.ContactSeparated:
+			delete(out.policies, pair.key)
+			out.leave[pair.key] = struct{}{}
+		}
+	}
+	return nil
+}
+
+// continuationRelation is the relation §5.2 reads off a contact report: a
+// ContactBand counts only within PenetrationResidual (§10.4), and any band
+// beyond it reads ContactUndecided, which keeps the assigned policy.
+func (w *World) continuationRelation(contact *decad.ContactReport) decad.ContactRelation {
+	if contact.Relation == decad.ContactBand && !w.contactBandWithin(contact.Gap) {
+		return decad.ContactUndecided
+	}
+	return contact.Relation
 }
 
 // drivenWithin reports whether every kinematic body of a pair has the exact
@@ -716,7 +812,8 @@ type correctionPush struct {
 	allowance  map[int]float64
 	separating map[int]struct{}
 	policies   map[int]decad.SweepStartPolicy
-	untouched  map[int]struct{} // resting pairs restInTouch found no touch for
+	untouched  map[int]struct{}              // resting pairs restInTouch found no touch for
+	relations  map[int]decad.ContactRelation // each checked pair's last corrected relation (continuations)
 }
 
 // correctedRelation checks one island pair at the corrected poses. A
@@ -767,6 +864,9 @@ func (w *World) correctedRelation(ctx context.Context, pre, post State, moves ma
 	if err != nil {
 		return true, nil, err
 	}
+	// A pass that moves nothing reads every checked pair at its final poses,
+	// so the last reading is the post-event relation §5.2 continues from.
+	push.relations[pair.key] = w.continuationRelation(contact)
 	if w.touchWithin(contact) {
 		return true, nil, nil
 	}

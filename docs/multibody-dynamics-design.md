@@ -1770,15 +1770,28 @@ such a band, and leaves the contact set when they read `Separated`; its next sli
 than that stops at the time floor, as a pair starting apart by less than its travel per grid step does
 today; the band and the resolution are the caller's.
 
-Under this rule each run above continues: the box's band ends chain, each a slice, while the resting
-edge's corners rise through the band (their lower bound grows with each restart, since the restart reads
-the heights and rates at the band end), and the pair leaves the contact set once they stand above the
-band; the prism's and the wedge's band tracks end at the arriving vertex, one grid step before it
-reaches the floor, where it stands inside the band and the support set read at the rounded event poses
-holds it beside the bounced vertices, so the island solves all of them together. A zero `SupportBand`
-never publishes a `ContactBand` for an exact pair, so every shipped zero-band fixture keeps its policy
-and its numbers; a §10.4 band pair that a solve separates, which `ContinueSeparatingTouch` could never
-depart (§10.4), now continues on its band track as well.
+Under this rule each run above passes the stop recorded for it. The prism's band track ends at the
+arriving vertex, one grid step before it reaches the floor, where it stands inside the band and the
+support set read at the rounded event poses holds it beside the bounced vertex, so the island solves
+three vertices of its hexagonal cap together; every later step absorbs its kick on all six, and the
+prism rests with exactly zero velocities through `1 s`. A zero `SupportBand` never publishes a
+`ContactBand` for an exact pair, so every shipped zero-band fixture keeps its policy and its numbers; a
+§10.4 band pair that a solve separates, which `ContinueSeparatingTouch` could never depart (§10.4),
+continues on its band track as well. Dropping a `Separated` pair from the contact set changes no
+certified outcome of an exact planar pair: a planar sweep that starts `Separated` runs the same clear
+search under every start policy, so the drop only keeps the §5.3 reuse key and the contact set honest.
+
+The box and the wedge rest is an open limit of the band track. Each reaches a state in which the solve
+leaves it resting on one or two lifted vertices, so the pair reads `ContactBand` and continues on a band
+track that ends where a lifted vertex's lower height bound `h0 − K·t²` reaches zero. Under the body's
+rotation the true descent of that vertex is only `7`–`14 %` of what `K` allows, so at each band end the
+vertex stands at about `0.86`–`0.93` of its previous height; the solve removes a closing speed of a few
+`µm/s` or less, and the vertex arrives again sooner. The band ends shrink geometrically and never reach
+the step's end, and the step stops with `StepEventBudget` (MaxEvents `64`): the `30°` box in its step
+`39`, the wedge in its step `29`, the `45°` and `60°` boxes in steps `80` and `48`. No `dynamics` rule
+closes the cycle, since no correction lands a rotated vertex in exact touch and a sweep that starts
+`Overlapping` is `SweepInitiallyOverlapping`; it needs a change to the band track itself
+(`contact_sweep_band.go`).
 
 Rejected alternatives:
 
@@ -2277,21 +2290,22 @@ lines below do not repeat it.
   and drops it from the contact set when they read `Separated`; `solveEvent` passes the rounded relation
   of each gathered pair to the solve.
 - Files: `dynamics/island.go`, `dynamics/schedule_event.go`.
-- Test (`dynamics`): new `dynamics/tumble_rest_test.go`, each fixture a four-body world (a `240 mm` source-box
-  floor, the body, two far boxes) under the §2 material, `dt`, residuals and `SupportBand`, run through
-  `Timeline`: `TestBoxBouncesOnEdgeAndRestsFlat`, the §13 PR 14a cube released `30°` about `(1, 1, 0)` with
-  spin `(2, 1, 0) rad/s` from `40 mm`, every step `Advanced` for `1 s`, its final velocities exactly zero
-  and every corner's exact staged height in `[0, PenetrationResidual]`, at least one slice whose sweep
-  follows a band end with `Request.StartPolicy == ContinueCertifiedTouch` and whose start sample reads
-  `ContactBand`, and every event's impulses meeting the discrete linear and angular laws
-  (`requireTipEventLaws`'s form with the island's inertia); `TestHexagonalPrismRestsFromVertex` and
-  `TestWedgeRestsFromVertex`, the §2 prism and wedge at their §2 releases, the same rest criterion, with
-  the trace carrying a one-point, a two-point and a three-or-more-point `ContactImpact`. Legs shown to
-  fail: the band rule deleted, each fixture stops `StepPairUndecided` at the step and time §10.7 records
-  (`SweepDepartureUnproved` for the box, `SweepTimeFloor` for the prism and the wedge); the `Separated`
-  drop deleted, the box's pair stays under `ContinueCertifiedTouch` after leaving the band and its next
-  slice is `StepTrackUnproved`. Every zero-band fixture of the package is unchanged.
+- Test (`dynamics`): new `dynamics/tumble_rest_test.go`, `TestHexagonalPrismRestsFromVertex`: a four-body
+  world (a `240 mm` source-box floor, the §2 prism at its §2 release, two far boxes) under the §2 material,
+  `dt`, residuals and `SupportBand = PenetrationResidual/2`, run through `Timeline` for `1 s`, every step
+  `Advanced`; every impact's impulses meet the discrete linear law; the trace carries a one-point and a
+  three-or-more-point `ContactImpact` (the prism lands on a vertex and the band end at the next arrival
+  solves three cap vertices at once, so no two-point impact occurs); the last step's one event holds six
+  points; the final velocities are exactly zero, every vertex's exact staged height is at or above the
+  floor and at least three lie within `PenetrationResidual`, and the last slice certifies the pair by swept
+  boxes strictly apart or a band track through the step's end. Legs shown to fail: the band rule deleted,
+  and its separated-solve rule alone deleted, each stops the prism in its step `30`, `65.8 µs` in,
+  `StepPairUndecided` with `SweepTimeFloor`. The `Separated` drop deleted changes nothing in the run, since
+  a planar sweep that starts `Separated` runs the same clear search under every start policy (§10.7).
+  Every zero-band fixture of the package is unchanged.
 - Depends on: PR 14a.
+- Shipped without the box and wedge rests, which stop `StepEventBudget` on the band-end cycle §10.7
+  records as an open limit.
 
 PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d follows 14c, whose
 `PlanarColumnClear` it calls.
