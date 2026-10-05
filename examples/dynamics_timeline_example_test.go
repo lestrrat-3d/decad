@@ -64,7 +64,7 @@ func Example_dynamics_timeline() {
 		PenetrationResidual:     units.Millimeters(1e-6),
 		// An incoming speed of 16 mm/s or less no longer bounces.
 		ImpactSpeed:        units.MillimetersPerSecond(16),
-		MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 8,
+		MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 8, MaxPairSweeps: 4096,
 	}}
 	for i, body := range bodies {
 		entry := dynamics.RigidBody{Body: body, Role: dynamics.Fixed, Material: material}

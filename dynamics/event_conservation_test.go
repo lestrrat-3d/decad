@@ -66,7 +66,7 @@ func TestSpinEventConservationUsesRealPointImpulses(t *testing.T) {
 			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-			MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 2,
+			MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 2, MaxPairSweeps: 4096,
 		},
 	})
 	require.NoError(t, err)
@@ -148,7 +148,7 @@ func TestTorqueDrivenFloorImpactChecksAngularEvent(t *testing.T) {
 			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2},
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096},
 	})
 	require.NoError(t, err)
 	pose, err := r3.Translation(r3.Vec{Z: 10})
@@ -208,7 +208,7 @@ func TestEventConservationRejectsEnergyGainWithBalancedMomentum(t *testing.T) {
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6),
 			ImpactSpeed:             units.MillimetersPerSecond(0),
-			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2,
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096,
 		},
 	})
 	require.NoError(t, err)
@@ -264,7 +264,7 @@ func TestKinematicEventConservationRejectsGainBeyondDriverWork(t *testing.T) {
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6),
 			ImpactSpeed:             units.MillimetersPerSecond(0),
-			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2},
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096},
 	})
 	require.NoError(t, err)
 	zeroVelocity := QuantityVec{X: units.MillimetersPerSecond(0),
@@ -323,7 +323,7 @@ func TestKinematicEventReportsNegativeDriverWork(t *testing.T) {
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6),
 			ImpactSpeed:             units.MillimetersPerSecond(0),
-			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2},
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096},
 	})
 	require.NoError(t, err)
 	velocity := func(x float64) QuantityVec {

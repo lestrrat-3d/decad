@@ -87,7 +87,7 @@ func TestSphereFloorInteriorFrictionUsesRealBracketAndTrace(t *testing.T) {
 					ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 					PenetrationResidual:     units.Millimeters(1e-6),
 					ImpactSpeed:             units.MillimetersPerSecond(0), MaxPoseEvaluations: 128,
-					MaxIterations: 64, MaxEvents: maxEvents},
+					MaxIterations: 64, MaxEvents: maxEvents, MaxPairSweeps: 4096},
 			})
 			require.NoError(t, err)
 			start, err := world.NewState(states)

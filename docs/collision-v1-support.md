@@ -175,8 +175,15 @@ island's bodies and the exceeded limit, and its `Trace` replays the certified
 prefix. `dynamics.Timeline` chains steps from one state, stops at the first
 `Undecided` step, and samples any time up to its certified end, from many
 goroutines at once.
+A step's `Next` state carries the pairs resting at its end. The next step
+continues each pair whose bodies the kick leaves unchanged with no solve;
+a kicked pair is solved again. `Next` also carries the step's swept boxes, pair sweeps and island
+solves, and a later step reuses any whose inputs repeat exactly, with the
+same published result. `MaxPairSweeps` caps the `SweptBox` and `SweepPair`
+calls a step makes.
 [Schedule tests](../dynamics/schedule_test.go) check the swept pairs, the
-drift poses and trace samples. [Event tests](../dynamics/schedule_event_test.go)
+drift poses and trace samples, and the reuse across a resting pyramid's
+steps. [Event tests](../dynamics/schedule_event_test.go)
 bounce a sphere five times in one step, bounce a box stack, lift a sphere on
 a kinematic platform, and graze and slide off an edge.
 [Island tests](../dynamics/island_test.go) rest a 3-2-1 box pyramid under
@@ -227,7 +234,7 @@ sliding impulses, and unproved pair paths return `dynamics.Undecided`.
 | `SweptBox` | `decad.ErrUnsupported` when the body's bounds or the path's travel bound are not finite |
 | `Body.MassProperties` | `decad.ErrUnsupported` when density-derived bounded mass or inertia is unavailable |
 | `NewWorld` | `dynamics.ErrUnsupported` for fewer than two bodies, a two- or three-body world with no dynamic body, or a three-body kinematic world |
-| `World.Step` | `dynamics.Undecided` with `Next == nil` when contact, response, or replay lacks proof, and for an island gate beyond its limit, an uncorrectable overlap, events reaching `MaxEvents` with time remaining, or a rounded pose a box exclusion no longer covers in a world of four or more bodies |
+| `World.Step` | `dynamics.Undecided` with `Next == nil` when contact, response, or replay lacks proof, and for an island gate beyond its limit, an uncorrectable overlap, events reaching `MaxEvents` with time remaining, calls beyond `MaxPairSweeps`, or a rounded pose a box exclusion no longer covers in a world of four or more bodies |
 | `Trace.Sample` | `dynamics.ErrUnsupported` if a rounded pose loses its cached proof or a box exclusion; `dynamics.ErrInvalidInput` for time outside the step or its certified prefix |
 | `Timeline.Advance` | `dynamics.ErrTimelineStopped` after an `Undecided` step stopped the timeline |
 | `Timeline.Sample` | `dynamics.ErrUnsupported` for a time below zero or beyond `End()` |

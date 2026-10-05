@@ -210,7 +210,18 @@ func (w *World) nominalPoints(isl island, slots map[int]int, bodies []nominalBod
 // resting island publish exactly zero velocities, which its continuation
 // sweeps need to prove persistent touch. A certificate that fails refuses
 // the island with the failing gate and its limit.
-func (w *World) solveIsland(isl island, pre State, drive map[int][3]*big.Rat) (islandSolution, *islandFailure) {
+//
+// An island whose problem equals one in the input state's cache restarts
+// from that island's final impulses and velocities (§6.2's warm start). When
+// the cold solve ended at a fixed point, the restart's first sweep is that
+// solve's last one, so it changes no impulse and the solve publishes the
+// cold solve's proposal after one sweep. When the cold solve ran to
+// MaxIterations instead, its proposal is published again as it stands, with
+// its sweep count, since further sweeps would move it. Either way the
+// certificate judges the proposal afresh. Every certified island is kept for
+// the next step's cache.
+func (w *World) solveIsland(isl island, pre State, drive map[int][3]*big.Rat,
+	work *stepWork) (islandSolution, *islandFailure) {
 	slots := make(map[int]int, len(isl.bodies))
 	for slot, index := range isl.bodies {
 		slots[index] = slot
@@ -233,10 +244,29 @@ func (w *World) solveIsland(isl island, pre State, drive map[int][3]*big.Rat) (i
 	// sweeps into self-cancelling corner friction. An island with no
 	// positive-friction point has no tangent rows to hold back.
 	tangentRows := !slices.ContainsFunc(points, func(p nominalPoint) bool { return p.mu > 0 })
-	// A small island starts from its direct solution (island_direct.go):
-	// the sticking solution when one exists, which the tangent rows refine,
-	// or else the frictionless state the delay would reach.
-	if start, held, ok := w.directStart(points, bodies); ok {
+	warm := work.warmStart(isl, pre, drive)
+	if warm != nil && !warm.fixed {
+		// A cold solve that ran to MaxIterations is republished as it stands.
+		solution, cert, failure := w.publishIsland(isl, pre, bodies, points, warm.lambda, warm.tangent, drive)
+		if failure == nil && cert.failed == 0 {
+			if report, err := solverReport(cert, islandPenetration(isl), warm.sweeps); err == nil {
+				solution.report = report
+				work.keep(warm)
+				return solution, nil
+			}
+		}
+		// The cached proposal no longer certifies: solve cold.
+		warm = nil
+	}
+	if warm != nil {
+		copy(current, warm.current)
+		copy(lambda, warm.lambda)
+		copy(tangent, warm.tangent)
+		tangentRows = true
+	} else if start, held, ok := w.directStart(points, bodies); ok {
+		// A small island starts from its direct solution (island_direct.go):
+		// the sticking solution when one exists, which the tangent rows
+		// refine, or else the frictionless state the delay would reach.
 		for k, p := range points {
 			lambda[k], tangent[k] = start[k], held[k]
 			j := p.n.Scale(start[k]).Add(p.t1.Scale(held[k][0])).Add(p.t2.Scale(held[k][1]))
@@ -282,6 +312,11 @@ func (w *World) solveIsland(isl island, pre State, drive map[int][3]*big.Rat) (i
 				return islandSolution{}, &islandFailure{code: StepIslandResidual, reason: err.Error()}
 			}
 			solution.report = report
+			held := newWarmIsland(isl, pre, drive)
+			held.lambda, held.tangent = slices.Clone(lambda), slices.Clone(tangent)
+			held.current = slices.Clone(current)
+			held.fixed, held.sweeps = largest == 0 && tangentRows, sweep
+			work.keep(held)
 			return solution, nil
 		}
 		if sweep == w.step.MaxIterations {

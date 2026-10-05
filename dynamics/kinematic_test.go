@@ -42,7 +42,7 @@ func kinematicBoxWorldWithLimit(t *testing.T, doc *decad.Document, driver, box *
 			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: maxEvents,
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: maxEvents, MaxPairSweeps: 4096,
 		},
 	})
 	require.NoError(t, err)

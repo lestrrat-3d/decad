@@ -31,7 +31,7 @@ func TestFixedFloorFrictionStepUsesRealGeometry(t *testing.T) {
 		AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 		ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 		PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-		MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 2}
+		MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 2, MaxPairSweeps: 4096}
 	w, err := NewWorld(t.Context(), doc, WorldConfig{Bodies: []RigidBody{
 		{Body: floor, Role: Fixed, Material: material},
 		{Body: box, Role: Dynamic, Density: &density, Material: material},
@@ -179,7 +179,7 @@ func TestReverseFixedFloorFrictionStepUsesRealGeometry(t *testing.T) {
 		AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 		ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 		PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-		MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 2}
+		MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 2, MaxPairSweeps: 4096}
 	w, err := NewWorld(t.Context(), doc, WorldConfig{Bodies: []RigidBody{
 		{Body: box, Role: Dynamic, Density: &density, Material: material},
 		{Body: floor, Role: Fixed, Material: material},
@@ -245,7 +245,7 @@ func TestFixedFloorFrictionRepeatsAtTranslatedPose(t *testing.T) {
 				AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 				ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 				PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-				MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 2}
+				MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 2, MaxPairSweeps: 4096}
 			bodies := []RigidBody{{Body: floor, Role: Fixed, Material: material},
 				{Body: box, Role: Dynamic, Density: &density, Material: material}}
 			if reverse {
@@ -353,7 +353,7 @@ func TestFixedFloorFrictionRejectsUnsupportedMaterialsAndPatch(t *testing.T) {
 		AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 		ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 		PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-		MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 2}
+		MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 2, MaxPairSweeps: 4096}
 	contact, err := doc.ContactPair(t.Context(), floor, box, r3.Identity(), r3.Identity(), cfg.Contact)
 	require.NoError(t, err)
 	require.Equal(t, decad.ContactTouching, contact.Relation)

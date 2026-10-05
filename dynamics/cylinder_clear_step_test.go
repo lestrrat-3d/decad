@@ -113,7 +113,7 @@ func TestCylinderClearStepUsesProductionSweep(t *testing.T) {
 					AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 					ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 					PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-					MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2}})
+					MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096}})
 			require.NoError(t, err)
 			start, err := world.NewState(states)
 			require.NoError(t, err)
@@ -407,7 +407,7 @@ func cylinderAxialFloorImpact(t *testing.T, reverse bool, duration, speed float6
 			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2}})
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096}})
 	require.NoError(t, err)
 	start, err := world.NewState(states)
 	require.NoError(t, err)
@@ -468,7 +468,7 @@ func TestCylinderSlowOffCenterSpinUndecided(t *testing.T) {
 			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2}})
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096}})
 	require.NoError(t, err)
 	start, err := world.NewState([]dynamics.BodyState{
 		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular},

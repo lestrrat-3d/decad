@@ -55,7 +55,7 @@ func TestThreeBodySphereFloorSphereCoupledInitialResponse(t *testing.T) {
 		AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 		ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 		PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-		MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 4}
+		MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 4, MaxPairSweeps: 4096}
 	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
 		Bodies: []dynamics.RigidBody{
 			{Body: floor, Role: dynamics.Fixed, Material: material},

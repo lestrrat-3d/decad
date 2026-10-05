@@ -70,7 +70,7 @@ func TestSourceSpherePairDiagonalImpact(t *testing.T) {
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6),
 			ImpactSpeed:             units.MillimetersPerSecond(0), MaxPoseEvaluations: 128,
-			MaxIterations: 8, MaxEvents: 2},
+			MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096},
 	})
 	require.NoError(t, err)
 	start, err := w.NewState([]dynamics.BodyState{{Body: a, Pose: pa, LinearVelocity: va,
@@ -157,7 +157,7 @@ func TestSourceSpherePairDiagonalImpact(t *testing.T) {
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6),
 			ImpactSpeed:             units.MillimetersPerSecond(0), MaxPoseEvaluations: 128,
-			MaxIterations: 8, MaxEvents: 2},
+			MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096},
 	})
 	require.NoError(t, err)
 	backward, err := wReverse.NewState([]dynamics.BodyState{{Body: b, Pose: pb, LinearVelocity: vb,
@@ -188,7 +188,7 @@ func TestSourceSpherePairDiagonalImpact(t *testing.T) {
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6),
 			ImpactSpeed:             units.MillimetersPerSecond(0), MaxPoseEvaluations: 128,
-			MaxIterations: 8, MaxEvents: 2},
+			MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096},
 	})
 	require.NoError(t, err)
 	shifted, err := wNoncentral.NewState([]dynamics.BodyState{{Body: a, Pose: pa, LinearVelocity: va,
@@ -267,7 +267,7 @@ func TestSourceSpherePairInitialDiagonalImpact(t *testing.T) {
 			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2},
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096},
 	}
 	w, err := dynamics.NewWorld(t.Context(), doc, cfg)
 	require.NoError(t, err)

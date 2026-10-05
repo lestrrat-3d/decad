@@ -60,7 +60,7 @@ func TestThreeBodyThreeDynamicIsolatedSphereImpact(t *testing.T) {
 		ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 		PenetrationResidual:     units.Millimeters(1e-6),
 		ImpactSpeed:             units.MillimetersPerSecond(0), MaxPoseEvaluations: 128,
-		MaxIterations: 8, MaxEvents: 2}
+		MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096}
 	config := dynamics.WorldConfig{Bodies: []dynamics.RigidBody{
 		{Body: a, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
 		{Body: b, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
