@@ -318,6 +318,7 @@
 1	0.01	TestLoftTessellate
 1	0.83	TestLoftWalkResolutionChargesOncePerSegment
 1	0.03	TestMeasuredInterferenceFallsBackToMeshWhenAnalyticNotAdmitted
+1	3.85	TestMeshMassLadderRefinesUntilPositive
 1	0.01	TestMinRadiusHolePlate
 1	0.00	TestMotionBasisSigmaUpper
 1	0.00	TestMotionBetweenFrameReachesTo
@@ -1337,15 +1338,20 @@
 4	0.01	TestLoopSignedAreaMatchesFullIntegrator
 4	0.00	TestLoopSignedAreaPreservesBudgetAndErrors
 4	0.00	TestMassPropertiesCircularPrism
+4	0.01	TestMassPropertiesCupFallback
 4	0.00	TestMassPropertiesDisplacedLevelBox
+4	0.03	TestMassPropertiesLoftOctagons
 4	0.00	TestMassPropertiesRefusals
 4	0.00	TestMassPropertiesRevolvedCylinder
 4	0.00	TestMassPropertiesRotatedBox
 4	0.00	TestMassPropertiesSourceBox
 4	0.00	TestMassPropertiesSourceSphere
+4	0.01	TestMassPropertiesStitchedTetrahedron
 4	0.00	TestMassPropertiesTiltedFrameBox
 4	0.00	TestMassPropertiesTrianglePrism
 4	0.00	TestMeasurement
+4	0.07	TestMeshMassFirstMomentLegCoversQuarterTurn
+4	0.10	TestMeshMassReadsARevolveTheAnalyticPathRefuses
 4	0.00	TestMidpointSplitCreatesAKnownZeroJoint
 4	0.00	TestMinRadiusPlainBlockNil
 4	0.00	TestMintCurveNeverRepeats
@@ -2068,6 +2074,7 @@
 2	0.00	TestBooleanChainDepthRefusalNamesOperandAndTakesNoTolerance
 2	0.00	TestPrismCutAgainstToolOnOffsetPlaneIsAnalytic
 0	0.01	TestContactPairSourceSpherePair
+0	5.21	TestMeshMassLadderNarrowsSphereTensor
 0	0.01	TestSweepPairSourceSpherePair
 1	0.01	TestCircularMonomialsAgreeWithClosedForms
 3	0.01	TestCircularThirdMomentWholeCircle

@@ -88,7 +88,7 @@ to the byte budget.
 | `mass_properties.go` / `mass_properties_rotated.go` | Prism mass and inertia. See `docs/dynamic-mass-design.md`. |
 | `mass_properties_sphere.go` / `mass_properties_revolved_cylinder.go` | Source sphere and revolved cylinder mass and inertia. See `docs/dynamic-mass-design.md`. |
 | `mass_properties_revolve.go` | General revolve mass and inertia. See `docs/multibody-dynamics-design.md` §8.6. |
-| `mass_properties_faceted.go` | Mass and inertia for verified faceted Booleans. See `docs/dynamic-mass-design.md`. |
+| `mass_properties_faceted.go` / `mass_properties_mesh.go` | Mass and inertia read off verified meshes. See `docs/dynamic-mass-design.md`. |
 | `moments_trig.go` | `moments.go`'s certified sine/cosine primitive: `turnSinCosInterval` proves an enclosure of sin/cos of an exact rational turn without ever comparing against π. See this file's own doc comment. |
 | `bounded.go` | The bounded-scalar vocabulary and three-valued admission readers. Its rounding arithmetic lives in `internal/proof/`. See the file's doc comment. |
 | `rat_interval.go` | The `atan`/`atan2` and π enclosures, with adapters for the exact interval arithmetic in `internal/proof/`. See the file's doc comment. |

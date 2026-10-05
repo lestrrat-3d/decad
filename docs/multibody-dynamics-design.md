@@ -14,7 +14,7 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 3, 7, 16 and 19 have shipped. `dynamics.World` holds any number of bodies, the
+Current state: §13 PRs 1, 2, 3, 7, 14, 16 and 19 have shipped. `dynamics.World` holds any number of bodies, the
 canonical pair table and per-pair material of §3.1, and the slice-backed `State` of §3.2. Its step resolves
 two bodies, or three bodies with one, two or three dynamic bodies and every other body fixed, through the
 closed-form responses `docs/rigid-dynamics-design.md` lists. A world of four or more bodies takes the
@@ -27,7 +27,7 @@ this document does not restate it. The two- and three-body steps query their pai
 phase, and their `Trace` holds fixed two- and three-body slots. The exact arithmetic every certificate below
 is stated in already exists as one package: `internal/proof` (`Dyadic`, `DyV3`, `RatInterval` and the float
 rounding bounds), which the root package imports today and which `dynamics` can import as well, since an
-`internal/` package is visible to every package of this module. §3.1, §3.2, §4, §8.1, §8.2 and §8.6 describe
+`internal/` package is visible to every package of this module. §3.1, §3.2, §4 and §8.1–§8.6 describe
 shipped code, except `State.cache` and the `MaxPairSweeps` charge (§13 PR 8). For worlds of four or more
 bodies, §5 without islands, §7.1, §3.4's `traceSlice` and `pairProof`, and §12's `StepReason` with
 `StepDiagnostic.Code` ship as well. Everything else is design-only until the PR table in §13 says otherwise.
@@ -598,23 +598,38 @@ deltas.
 
 ### 8.3 Loft
 
-`loft_moments.go` gains the second-moment accumulator `q [6]*big.Rat` over the same signed tetrahedra
-(the `/120` form, shared with `mass_properties_faceted.go` through one `tetraMoments` helper), widened by
-the payload `delta` as dynamic-mass §2.2 states. Volume and centroid already exist there.
+A solid loft's mesh is the exact restatement of its held triangles
+(`docs/tessellation-design.md` §2's `loftPayload` row), so its mass takes §8.5's path and settles at
+the ladder's first step: `mass_properties_mesh.go` integrates the held triangles through the
+`tetraMoments` sums (the `/120` form) it shares with `mass_properties_faceted.go`, widened by the
+mesh proof's `volSymDiff` as dynamic-mass §2.2 states. `loft_moments.go`'s accumulator is not
+reused: its Volume and Centroid apply the exact twist corrections of chorded cells, which have no
+second-moment counterpart, while the restated triangles are uncorrected and their four-leg
+`volSymDiff` covers that gap.
 
 ### 8.4 Stitched planar solid, zero-bound Boolean, translation-placed Boolean
 
-The faceted path of `mass_properties_faceted.go` over the payload's own held triangle set and bound.
-`stitchPayload` carries its triangles and `delta`; the Boolean path exists.
+The Boolean path is `mass_properties_faceted.go`'s, over the payload's own held triangle set and
+bound. A stitched solid takes §8.5's path over its restated triangles. Its mesh carries an
+occupied-volume proof only when it is closed, all-planar and zero-bound at every vertex
+(tessellation §2's `stitchPayload` row), so a placed or certificate-welded stitched solid returns
+`ErrUnsupported`.
 
 ### 8.5 Generic `VerifyAll` fallback
 
 For any payload whose `Tessellate(ctx, tol, VerifyAll)` reports `VolumeVerified()`: the dynamic-mass
-§2.2 curved path over the mesh with `E = volSymDiff`. The tolerance ladder is deterministic,
-`tol_k = diameter · 2^−k` for `k = 8 … 14`; integration stops at the first `k` whose tensor interval
-passes the positivity proof, and an exhausted ladder is `ErrUnsupported`. This covers cap blends
-(tessellation-reach §7's proof), curved stitched solids, chain payloads and any revolve the analytic path
-refuses.
+§2.2 curved path over the mesh with `E = volSymDiff`, after the shell closure, orientation,
+vertex-link and exact facet-crossing audits rerun on its triangles (the crossing audit is skipped
+only where the tessellation ran its own facet-contact audit). The widening is per axis: with
+`|x_i − O_i| ≤ R_i` over both the mesh and the denoted solid, `V` widens by `E`, `P_i` by `R_i·E`
+and `Q_ij` by `R_i·R_j·E`. The tolerance ladder is deterministic, `tol_k = diameter · 2^−k` for
+`k = 8 … 14`, `diameter` the body box's diagonal; integration stops at the first `k` whose volume
+and tensor intervals pass the positivity proof. A mesh without an occupied-volume proof, a failed
+audit or a tessellation refusal ends the ladder with that refusal, and an exhausted ladder is
+`ErrUnsupported`. A revolve mesh reaches `k = 10` at most: its facet-contact audit refuses a finer
+mesh at the fixed facet-pair ceiling. This covers lofts, exact stitched solids, cups, cap blends
+whose band publishes tessellation-reach §7's proof, and any revolve the analytic path refuses; chain
+payloads and curved stitched solids publish no occupied-volume proof and return `ErrUnsupported`.
 
 ### 8.6 General revolve, full or partial, any admitted section
 
@@ -1168,10 +1183,12 @@ lines below do not repeat it.
 ### PR 14 (Phase 2) — loft, stitched and fallback mass
 
 - Delivers §8.3, §8.4 and §8.5.
-- Files: `loft_moments.go`, `mass_properties.go`, new `mass_properties_mesh.go`.
+- Files: `mass_properties.go`, `mass_properties_faceted.go`, new `mass_properties_mesh.go`.
 - Test (root): `mass_properties_mesh_test.go`: the stitched tetrahedron's tensor against the closed
-  form; a loft between an exact square and octagon; the fallback's ladder narrows a sphere's tensor
-  interval at each `k`.
+  form; a loft between two exact octagons, one a square with its edge midpoints pushed out (a loft
+  pairs equal segment counts and its cap triangulator refuses collinear corners); a cup against its
+  closed form. `mass_properties_mesh_internal_test.go`: the ladder narrows a sphere's tensor interval
+  at each `k` a revolve mesh reaches, and a revolve the analytic path refuses is read off its mesh.
 - Depends on: nothing.
 
 ### PR 15 (Phase 2) — `tumble`
