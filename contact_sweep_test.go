@@ -294,6 +294,71 @@ func TestSweepPairSourceSpherePair(t *testing.T) {
 		require.Equal(t, decad.SweepDepartedClear, report.Outcome, "cause=%v", report.Cause)
 		require.Positive(t, report.Departure.GapAtUntil.Value.Base())
 	})
+	t.Run("stationary touching pair", func(t *testing.T) {
+		stillA := sweepDrift(r3.Vec{}, 0.1)
+		stillB := sweepDrift(r3.Vec{}, 0.1)
+		stillB.From = contactPose(t, r3.Vec{X: 10})
+		contact, err := doc.ContactPair(t.Context(), a, b, stillA.From, stillB.From, contactRequest())
+		require.NoError(t, err)
+		require.Equal(t, decad.ContactTouching, contact.Relation)
+		require.Len(t, contact.Manifold.Points, 1)
+		req := sweepRequest()
+		req.StartPolicy = decad.ContinueCertifiedTouch
+		persistent, err := doc.SweepPair(t.Context(), a, b, stillA, stillB, req)
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepPersistentTouch, persistent.Outcome, "cause=%v", persistent.Cause)
+		require.NotNil(t, persistent.ContactTrack)
+		mid, err := persistent.ContactTrack.ManifoldAt(units.Scalar(.5))
+		require.NoError(t, err)
+		require.Equal(t, contact.Manifold.Points[0].Normal.Value, mid.Points[0].Normal.Value)
+		poseA, poseB, err := persistent.CertifiedPosesAt(units.Seconds(.05))
+		require.NoError(t, err)
+		interior, err := doc.ContactPair(t.Context(), a, b, poseA, poseB, contactRequest())
+		require.NoError(t, err)
+		require.Equal(t, decad.ContactTouching, interior.Relation)
+		require.Equal(t, r3.Vec{X: 5}, mid.Points[0].OnA.Value)
+		require.Equal(t, r3.Vec{X: 5}, mid.Points[0].OnB.Value)
+		require.Equal(t, 0.0, mid.Points[0].Separation.Value.Base())
+		reversed, err := doc.SweepPair(t.Context(), b, a, stillB, stillA, req)
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepPersistentTouch, reversed.Outcome, "cause=%v", reversed.Cause)
+		reversedPoint, err := reversed.ContactTrack.ManifoldAt(units.Scalar(.5))
+		require.NoError(t, err)
+		require.Equal(t, r3.Vec{X: -1}, reversedPoint.Points[0].Normal.Value)
+		require.Equal(t, mid.Points[0].OnA.Value, reversedPoint.Points[0].OnB.Value)
+		_, _, err = reversed.CertifiedPosesAt(units.Seconds(.05))
+		require.NoError(t, err)
+		movingA, movingB := stillA, stillB
+		movingA.LinearVelocity.X = units.MillimetersPerSecond(1)
+		movingB.LinearVelocity.X = units.MillimetersPerSecond(1)
+		unproved, err := doc.SweepPair(t.Context(), a, b, movingA, movingB, req)
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepUndecided, unproved.Outcome)
+		require.Equal(t, decad.SweepContactTrackUnproved, unproved.Cause)
+	})
+	t.Run("stationary oblique touch", func(t *testing.T) {
+		stillA := sweepDrift(r3.Vec{}, 0.1)
+		stillB := sweepDrift(r3.Vec{}, 0.1)
+		stillB.From = contactPose(t, r3.Vec{X: 6, Y: 8})
+		req := sweepRequest()
+		req.StartPolicy = decad.ContinueCertifiedTouch
+		for _, pair := range []struct {
+			first, second *decad.Body
+			pathA, pathB  decad.RigidDriftSegment
+			sign          float64
+		}{{a, b, stillA, stillB, 1}, {b, a, stillB, stillA, -1}} {
+			report, err := doc.SweepPair(t.Context(), pair.first, pair.second,
+				pair.pathA, pair.pathB, req)
+			require.NoError(t, err)
+			require.Equal(t, decad.SweepPersistentTouch, report.Outcome, "cause=%v", report.Cause)
+			manifold, err := report.ContactTrack.ManifoldAt(units.Scalar(.5))
+			require.NoError(t, err)
+			require.InDelta(t, pair.sign*.6, manifold.Points[0].Normal.Value.X, 1e-14)
+			require.InDelta(t, pair.sign*.8, manifold.Points[0].Normal.Value.Y, 1e-14)
+			_, _, err = report.CertifiedPosesAt(units.Seconds(.05))
+			require.NoError(t, err)
+		}
+	})
 	t.Run("hidden pass-through", func(t *testing.T) {
 		passing := sweepDrift(r3.Vec{X: -80, Y: -16}, .5)
 		passing.From = contactPose(t, r3.Vec{X: 20, Y: 4})

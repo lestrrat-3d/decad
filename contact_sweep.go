@@ -110,6 +110,7 @@ type SweepContactTrack struct {
 	deltaA        [3]dyadic
 	deltaB        [3]dyadic
 	sphere        *sourceSphereContactProof
+	spherePair    *[2]sourceSphereContactProof
 	sphereFirst   bool
 	start, end    *big.Rat
 	duration      *big.Rat
@@ -180,6 +181,17 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 		classifySourceSphereBox(report, sphere, box, t.sphereFirst)
 		if report.Relation != ContactTouching || report.Manifold == nil {
 			return nil, fmt.Errorf("%w: contact track has no bounded sphere point", ErrUnsupported)
+		}
+		return report.Manifold, nil
+	}
+	if t.spherePair != nil {
+		report := &ContactReport{Request: t.request}
+		classifySourceSpherePair(report, t.spherePair[0], t.spherePair[1])
+		if report.Relation != ContactTouching || report.Manifold == nil ||
+			len(report.Manifold.Points) != 1 ||
+			report.Manifold.Points[0].FeatureA != t.features[0] ||
+			report.Manifold.Points[0].FeatureB != t.features[1] {
+			return nil, fmt.Errorf("%w: sphere-pair contact track lost its point", ErrUnsupported)
 		}
 		return report.Manifold, nil
 	}
