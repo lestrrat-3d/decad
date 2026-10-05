@@ -53,19 +53,21 @@ func IslandProposalGates(ctx context.Context, w *World, from State, gravity Quan
 	if !ok {
 		return nil, ErrUnsupported
 	}
-	sweeps, report, err := w.sweepSlice(ctx, kicked, make([]decad.PoseSegment, len(w.bodies)), dt,
-		w.pairSchedule(), nil)
-	if err != nil || report != nil {
-		return nil, ErrUnsupported
-	}
-	gathered, diagnostics := w.gatherInitialContacts(sweeps)
-	if len(diagnostics) != 0 {
+	paths := w.slicePaths(kicked, make([]decad.PoseSegment, len(w.bodies)), dt)
+	sweeps, diagnostics, err := w.sweepSlice(ctx, paths, dt, w.pairSchedule(), nil)
+	if err != nil || len(diagnostics) != 0 {
 		return nil, ErrUnsupported
 	}
 	var active []islandPair
-	for _, pair := range gathered {
-		if ok, valid := w.pairActive(pair, kicked); ok && valid {
-			active = append(active, pair)
+	for _, key := range sweeps.candidates {
+		sweep, pair := sweeps.swept[key], w.pairs[key]
+		if sweep.Outcome != decad.SweepInitiallyTouching && sweep.Outcome != decad.SweepInitiallyOverlapping {
+			continue
+		}
+		item := islandPair{key: key, a: pair.a, b: pair.b, manifold: cloneManifold(*sweep.InitialEvent.Manifold),
+			at: sweep.InitialEvent.At}
+		if ok, valid := w.pairActive(item, kicked, nil); ok && valid {
+			active = append(active, item)
 		}
 	}
 	islands, diagnostic := w.formIslands(active)
@@ -73,7 +75,7 @@ func IslandProposalGates(ctx context.Context, w *World, from State, gravity Quan
 		return nil, ErrUnsupported
 	}
 	isl := islands[0]
-	solution, failure := w.solveIsland(isl, kicked)
+	solution, failure := w.solveIsland(isl, kicked, nil)
 	if failure != nil {
 		return nil, ErrUnsupported
 	}
@@ -84,7 +86,7 @@ func IslandProposalGates(ctx context.Context, w *World, from State, gravity Quan
 		slots[index] = slot
 		proposal.Bodies = append(proposal.Bodies, w.bodies[index].definition.Body)
 	}
-	bodies, failure := w.nominalBodies(isl, kicked)
+	bodies, failure := w.nominalBodies(isl, kicked, nil)
 	if failure != nil {
 		return nil, ErrUnsupported
 	}
@@ -94,7 +96,7 @@ func IslandProposalGates(ctx context.Context, w *World, from State, gravity Quan
 	}
 	tamper(&proposal)
 	solution.linear, solution.angular, solution.lambda = proposal.Linear, proposal.Angular, proposal.Lambda
-	cert, failure := w.certifyProposal(isl, kicked, points, solution)
+	cert, failure := w.certifyProposal(isl, kicked, points, solution, nil)
 	if failure != nil {
 		return nil, ErrUnsupported
 	}

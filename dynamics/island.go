@@ -8,19 +8,20 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// This file forms islands (docs/multibody-dynamics-design.md §6.1) and
-// corrects their positions (§6.6) for the step of a world of four or more
-// bodies.
+// This file forms islands (docs/multibody-dynamics-design.md §6.1), corrects
+// their positions (§6.6) and publishes their events for the step of a world
+// of four or more bodies.
 
 // IslandReport is one simultaneous solve: the bodies and pairs that shared
 // constraints at one event time, and the certified residuals of that solve.
 type IslandReport struct {
 	Time   units.Value   // from the start of the step
-	Bodies []*decad.Body // world order; Fixed participants included
+	Bodies []*decad.Body // world order; Fixed and Kinematic participants included
 	Pairs  []BodyPair    // world order
 	Events []int         // indices into StepReport.Events
 	Solver ContactSolverReport
@@ -28,20 +29,50 @@ type IslandReport struct {
 
 // islandPair is one gathered pair at an event: its canonical key, its
 // world-order bodies, the manifold its producer certified, and the sweep
-// instant of that manifold.
+// instant of that manifold. An interior impact keeps its bracket, whose
+// travel widens the correction allowance, and the manifold its rounded event
+// poses show, whose penetration the correction removes; a pair the contact
+// set continued on a persistent track is marked track.
 type islandPair struct {
 	key      int
 	a, b     int
 	manifold decad.ContactManifold
 	at       decad.SweepInstant
+	bracket  *decad.SweepInterval
+	depth    *decad.ContactManifold
+	track    bool
 }
 
 // island is one connected component of the dynamic-body contact graph.
-// Fixed participants attach to it without joining two islands.
+// Fixed and Kinematic participants attach to it without joining two islands.
 type island struct {
 	dynamic []int        // world order
-	bodies  []int        // world order, Fixed participants included
+	bodies  []int        // world order, Fixed and Kinematic participants included
 	pairs   []islandPair // canonical order
+}
+
+// eventIslands is the input of one event time's solve: the state at the
+// event, the gathered pairs, the exact velocity of every translating
+// kinematic participant, and where the event sits in the step.
+type eventIslands struct {
+	pre        State
+	at         units.Value // held time from the step start
+	sliceStart units.Value
+	sliceSpan  units.Value
+	gathered   []islandPair
+	drive      map[int][3]*big.Rat
+	eventBase  int // events published earlier in the step
+	islandBase int // islands solved earlier in the step
+}
+
+// solvedEvent is the outcome of one event time's islands: the post-event
+// state, the published events and island reports, and the continuation
+// policy of every gathered pair.
+type solvedEvent struct {
+	post     State
+	events   []ContactEvent
+	islands  []IslandReport
+	policies map[int]decad.SweepStartPolicy
 }
 
 // manifoldWithin reports whether every point of a gathered manifold is
@@ -65,13 +96,13 @@ func (w *World) manifoldWithin(manifold *decad.ContactManifold) bool {
 	return true
 }
 
-// pairActive reports whether any point of an initially touching pair may be
-// closing: its enclosed relative normal speed reaches down to
-// VelocityResidual or below. Only a pair whose every point certainly
-// separates by more than that stays out of the solve.
-func (w *World) pairActive(pair islandPair, state State) (bool, bool) {
-	a, okA := w.newCertBody(pair.a, state.entries[pair.a], state.entries[pair.a])
-	b, okB := w.newCertBody(pair.b, state.entries[pair.b], state.entries[pair.b])
+// pairActive reports whether any point of a gathered pair may be closing:
+// its enclosed relative normal speed reaches down to VelocityResidual or
+// below. Only a pair whose every point certainly separates by more than that
+// stays out of the solve.
+func (w *World) pairActive(pair islandPair, state State, drive map[int][3]*big.Rat) (bool, bool) {
+	a, okA := w.newCertBody(pair.a, state.entries[pair.a], state.entries[pair.a], drive)
+	b, okB := w.newCertBody(pair.b, state.entries[pair.b], state.entries[pair.b], drive)
 	if !okA || !okB {
 		return false, false
 	}
@@ -150,26 +181,64 @@ func (w *World) formIslands(pairs []islandPair) ([]island, *StepDiagnostic) {
 		isl := byRoot[root]
 		slices.Sort(isl.bodies)
 		slices.Sort(isl.dynamic)
+		slices.SortFunc(isl.pairs, func(a, b islandPair) int { return a.key - b.key })
 		out = append(out, *isl)
 	}
 	return out, nil
 }
 
-// correctIsland is §6.6 at an initial contact: each dynamic body receives one
-// translation, the sum over the island's pairs of its inverse-mass share of
-// the pair's deepest penetration along the pair normal; a Fixed body takes
-// no share. A pair's penetration may not exceed its allowance,
-// ContactSlop plus the point's certified geometry displacement (separation
-// and witness bounds); at an initial contact there is no bracket travel.
-// Each translation's length is bounded by the summed allowances of the
-// pairs that moved the body. The translations are returned by world index.
-func (w *World) correctIsland(isl island) (map[int]r3.Vec, *StepDiagnostic) {
-	out := map[int]r3.Vec{}
+// islandBodies names an island's bodies for a diagnostic.
+func (w *World) islandBodies(isl island) []*decad.Body {
+	out := make([]*decad.Body, 0, len(isl.bodies))
+	for _, index := range isl.bodies {
+		out = append(out, w.bodies[index].definition.Body)
+	}
+	return out
+}
+
+// correctIsland is §6.6: each dynamic body receives one translation, the sum
+// over the island's pairs of its inverse-mass share of the pair's deepest
+// penetration along the pair normal; a Fixed or Kinematic body takes no
+// share. Bodies joined by pairs the contact set continued on persistent
+// tracks move as one: their touch is exact and their velocities equal, so
+// they take one translation with their summed mass, which keeps that touch.
+// The penetration is the one the pair's rounded event poses show. It may not
+// exceed its allowance: ContactSlop, plus the point's certified geometry
+// displacement (separation and witness bounds), plus, for an interior
+// impact, the travel its bracket allows at the pair's closing speed. Each
+// translation's length is bounded by the summed allowances of the pairs that
+// moved the body. The translations are returned by world index.
+func (w *World) correctIsland(isl island, pre State, drive map[int][3]*big.Rat) (map[int]r3.Vec, *StepDiagnostic) {
+	group := make(map[int]int, len(isl.dynamic))
+	for _, index := range isl.dynamic {
+		group[index] = index
+	}
+	find := func(i int) int {
+		for group[i] != i {
+			i = group[i]
+		}
+		return i
+	}
+	dynamic := func(i int) bool { return w.bodies[i].definition.Role == Dynamic }
+	for _, pair := range isl.pairs {
+		if pair.track && dynamic(pair.a) && dynamic(pair.b) {
+			ra, rb := find(pair.a), find(pair.b)
+			group[max(ra, rb)] = min(ra, rb)
+		}
+	}
+	groupMass := map[int]float64{}
+	for _, index := range isl.dynamic {
+		groupMass[find(index)] += w.bodies[index].mass.Mass.Value.Base()
+	}
+	moves := map[int]r3.Vec{}
 	allowances := map[int]float64{}
 	for _, pair := range isl.pairs {
+		if pair.depth == nil || dynamic(pair.a) && dynamic(pair.b) && find(pair.a) == find(pair.b) {
+			continue
+		}
 		depth, geometry := 0.0, 0.0
-		normal := pair.manifold.Points[0].Normal.Value
-		for _, p := range pair.manifold.Points {
+		normal := pair.depth.Points[0].Normal.Value
+		for _, p := range pair.depth.Points {
 			depth = math.Max(depth, -p.Separation.Value.Base())
 			geometry = math.Max(geometry, outwardSum(p.Separation.Bound.Base(), p.OnA.Bound.Base(), p.OnB.Bound.Base()))
 			if depth > 0 && p.Normal.Value != normal {
@@ -182,15 +251,25 @@ func (w *World) correctIsland(isl island) (map[int]r3.Vec, *StepDiagnostic) {
 			continue
 		}
 		allowance := outwardSum(w.step.ContactSlop.Base(), geometry)
+		if pair.bracket != nil {
+			travel, ok := boundBracketTravel(*pair.bracket, w.closingSpeedUpper(pair, pre, drive))
+			if !ok {
+				d := scheduleDiagnostic(StepCorrectionFailed, w.bodyPair(w.pairs[pair.key]),
+					"impact bracket travel is not bounded")
+				return nil, &d
+			}
+			allowance = outwardSum(allowance, travel)
+		}
 		if !finite(depth, allowance) || depth > allowance {
 			d := scheduleDiagnostic(StepCorrectionFailed, w.bodyPair(w.pairs[pair.key]),
-				fmt.Sprintf("initial penetration %g exceeds its correction allowance %g", depth, allowance))
+				fmt.Sprintf("penetration %g exceeds its correction allowance %g", depth, allowance))
+			d.Limit = units.Millimeters(allowance)
 			return nil, &d
 		}
 		var inverse [2]float64
 		for side, index := range [2]int{pair.a, pair.b} {
-			if w.bodies[index].definition.Role == Dynamic {
-				inverse[side] = 1 / w.bodies[index].mass.Mass.Value.Base()
+			if dynamic(index) {
+				inverse[side] = 1 / groupMass[find(index)]
 			}
 		}
 		total := inverse[0] + inverse[1]
@@ -202,148 +281,207 @@ func (w *World) correctIsland(isl island) (map[int]r3.Vec, *StepDiagnostic) {
 			if side == 0 {
 				share = -share
 			}
-			out[index] = out[index].Add(normal.Scale(share))
-			allowances[index] = outwardSum(allowances[index], allowance)
+			root := find(index)
+			moves[root] = moves[root].Add(normal.Scale(share))
+			allowances[root] = outwardSum(allowances[root], allowance)
 		}
 	}
+	out := map[int]r3.Vec{}
 	for _, index := range isl.dynamic {
-		move, ok := out[index]
+		root := find(index)
+		move, ok := moves[root]
 		if !ok {
 			continue
 		}
 		length := math.Nextafter(math.Abs(move.X)+math.Abs(move.Y)+math.Abs(move.Z), math.Inf(1))
-		if !finite(length) || length > allowances[index] {
+		if !finite(length) || length > allowances[root] {
 			d := scheduleDiagnostic(StepCorrectionFailed, BodyPair{},
 				fmt.Sprintf("correction of body %d exceeds its allowance", index))
+			d.Bodies, d.Limit = w.islandBodies(isl), units.Millimeters(allowances[root])
 			return nil, &d
 		}
+		out[index] = move
 	}
 	return out, nil
 }
 
-// initialIslands is the event at the step start: §6.1's islands over the
-// gathered initial contacts, solved and certified in island order (§6.2,
-// §6.3), corrected (§6.6), and published as one event per gathered pair
-// and one IslandReport per island. It returns that event record, holding the
-// post-event state and the contact-set policy of every gathered pair, or an
-// Undecided report.
-func (w *World) initialIslands(ctx context.Context, kicked State, dt units.Value,
-	gathered []islandPair, scheduled map[int]struct{}) (*initialEvent, *StepReport, error) {
+// closingSpeedUpper bounds from above the speed of every contact point of a
+// pair relative to the other body, from the pre-event velocities: the L1
+// norm of the linear difference plus each body's spin times its lever, both
+// L1 norms of an L2 quantity. A kinematic participant contributes its exact
+// translation velocity.
+func (w *World) closingSpeedUpper(pair islandPair, pre State, drive map[int][3]*big.Rat) float64 {
+	velocity := func(index int) ([3]float64, [3]float64) {
+		if v, ok := drive[index]; ok {
+			var out [3]float64
+			for axis := range out {
+				out[axis], _ = v[axis].Float64()
+			}
+			return out, [3]float64{}
+		}
+		if w.bodies[index].definition.Role != Dynamic {
+			return [3]float64{}, [3]float64{}
+		}
+		entry := pre.entries[index]
+		v, omega := vecOf(entry.LinearVelocity), vecOf(entry.AngularVelocity)
+		return [3]float64{v.X, v.Y, v.Z}, [3]float64{omega.X, omega.Y, omega.Z}
+	}
+	vA, wA := velocity(pair.a)
+	vB, wB := velocity(pair.b)
+	speed := 0.0
+	for axis := range 3 {
+		speed = outwardSum(speed, math.Abs(vB[axis]-vA[axis]))
+	}
+	spin := func(omega [3]float64, index int, witness decad.VecMeasurement) float64 {
+		if omega == ([3]float64{}) {
+			return 0
+		}
+		center := pre.entries[index].Pose.Apply(w.bodies[index].mass.Center.Value)
+		lever := outwardSum(math.Abs(witness.Value.X-center.X), math.Abs(witness.Value.Y-center.Y),
+			math.Abs(witness.Value.Z-center.Z), 3*witness.Bound.Base(), 3*w.bodies[index].mass.Center.Bound.Base())
+		rate := outwardSum(math.Abs(omega[0]), math.Abs(omega[1]), math.Abs(omega[2]))
+		return math.Nextafter(math.Nextafter(lever*rate, math.Inf(1)), math.Inf(1))
+	}
+	largest := 0.0
+	for _, point := range pair.manifold.Points {
+		largest = math.Max(largest, outwardSum(spin(wA, pair.a, point.OnA), spin(wB, pair.b, point.OnB)))
+	}
+	return outwardSum(speed, largest)
+}
+
+// solveIslands is §5 step 7 at one event time: §6.1's islands over the
+// active gathered pairs, solved and certified in island order (§6.2,
+// §6.3), corrected (§6.6), and published as one event per solved pair and one
+// IslandReport per island. An island made only of pairs the contact set
+// continued on persistent tracks holds no event and is left to drift. Every
+// gathered pair receives its continuation policy (§5.2).
+func (w *World) solveIslands(ctx context.Context, in eventIslands,
+	scheduled map[int]struct{}) (*solvedEvent, []StepDiagnostic, error) {
 	var active []islandPair
-	policies := map[int]decad.SweepStartPolicy{}
-	for _, pair := range gathered {
-		roles := [2]BodyRole{w.bodies[pair.a].definition.Role, w.bodies[pair.b].definition.Role}
-		if roles[0] == Kinematic || roles[1] == Kinematic {
-			return nil, w.scheduleUndecided(scheduleDiagnostic(StepUnsupported, w.bodyPair(w.pairs[pair.key]),
-				"an island with a kinematic participant has no solver yet")), nil
-		}
+	out := &solvedEvent{post: in.pre.clone(), policies: map[int]decad.SweepStartPolicy{}}
+	for _, pair := range in.gathered {
 		if upper := w.pairs[pair.key].friction.upper; upper != nil && upper.Sign() > 0 {
-			return nil, w.scheduleUndecided(scheduleDiagnostic(StepUnsupported, w.bodyPair(w.pairs[pair.key]),
-				"a positive-friction island pair has no solver yet")), nil
+			return nil, []StepDiagnostic{scheduleDiagnostic(StepUnsupported, w.bodyPair(w.pairs[pair.key]),
+				"a positive-friction island pair has no solver yet")}, nil
 		}
-		ok, valid := w.pairActive(pair, kicked)
+		ok, valid := w.pairActive(pair, in.pre, in.drive)
 		if !valid {
-			return nil, w.scheduleUndecided(scheduleDiagnostic(StepManifoldMissing, w.bodyPair(w.pairs[pair.key]),
-				"initial manifold cannot be read as exact intervals")), nil
+			return nil, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(w.pairs[pair.key]),
+				"event manifold cannot be read as exact intervals")}, nil
 		}
 		if !ok {
-			policies[pair.key] = decad.ContinueSeparatingTouch
+			out.policies[pair.key] = decad.ContinueSeparatingTouch
 			continue
 		}
 		active = append(active, pair)
 	}
 	islands, diagnostic := w.formIslands(active)
 	if diagnostic != nil {
-		return nil, w.scheduleUndecided(*diagnostic), nil
+		return nil, []StepDiagnostic{*diagnostic}, nil
 	}
-	event := &initialEvent{pre: kicked, post: kicked.clone(), policies: policies}
+	var solved []island
 	moves := map[int]r3.Vec{}
-	for number, isl := range islands {
+	for _, isl := range islands {
+		if !slices.ContainsFunc(isl.pairs, func(p islandPair) bool { return !p.track }) {
+			for _, pair := range isl.pairs {
+				out.policies[pair.key] = decad.ContinueCertifiedTouch
+			}
+			continue
+		}
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
 		}
-		solution, failure := w.solveIsland(isl, kicked)
+		number := in.islandBase + len(solved)
+		solution, failure := w.solveIsland(isl, in.pre, in.drive)
 		if failure != nil {
-			return nil, w.scheduleUndecided(scheduleDiagnostic(failure.code, w.bodyPair(w.pairs[isl.pairs[0].key]),
-				fmt.Sprintf("island %d: %s", number, failure.reason))), nil
+			d := scheduleDiagnostic(failure.code, w.bodyPair(w.pairs[isl.pairs[0].key]),
+				fmt.Sprintf("island %d: %s", number, failure.reason))
+			d.Bodies, d.Limit = w.islandBodies(isl), failure.limit
+			return nil, []StepDiagnostic{d}, nil
 		}
-		corrections, diagnostic := w.correctIsland(isl)
+		corrections, diagnostic := w.correctIsland(isl, in.pre, in.drive)
 		if diagnostic != nil {
-			return nil, w.scheduleUndecided(*diagnostic), nil
+			return nil, []StepDiagnostic{*diagnostic}, nil
 		}
 		for slot, index := range isl.bodies {
 			if w.bodies[index].definition.Role != Dynamic {
 				continue
 			}
-			entry := &event.post.entries[index]
+			entry := &out.post.entries[index]
 			entry.LinearVelocity, entry.AngularVelocity = solution.linear[slot], solution.angular[slot]
 			if move, ok := corrections[index]; ok {
 				pose, err := translatePose(entry.Pose, move)
 				if err != nil {
-					return nil, w.scheduleUndecided(scheduleDiagnostic(StepCorrectionFailed, BodyPair{},
-						fmt.Sprintf("corrected pose of body %d is not finite: %v", index, err))), nil
+					d := scheduleDiagnostic(StepCorrectionFailed, BodyPair{},
+						fmt.Sprintf("corrected pose of body %d is not finite: %v", index, err))
+					d.Bodies = w.islandBodies(isl)
+					return nil, []StepDiagnostic{d}, nil
 				}
 				entry.Pose = pose
-				moves[index] = pose.Translation().Sub(kicked.entries[index].Pose.Translation())
+				moves[index] = pose.Translation().Sub(in.pre.entries[index].Pose.Translation())
 			}
 		}
-		event.islands = append(event.islands, w.islandEvents(number, isl, solution, kicked, &event.events, dt))
+		out.islands = append(out.islands, w.islandEvents(number, isl, solution, in, &out.events))
+		solved = append(solved, isl)
 		// §5.2: a solved pair whose every point leaves faster than
 		// VelocityResidual continues under ContinueSeparatingTouch, which
 		// proves the departure itself; every other one under
 		// ContinueCertifiedTouch.
 		for i, pair := range isl.pairs {
-			policies[pair.key] = decad.ContinueCertifiedTouch
+			out.policies[pair.key] = decad.ContinueCertifiedTouch
 			if solution.separating[i] {
-				policies[pair.key] = decad.ContinueSeparatingTouch
+				out.policies[pair.key] = decad.ContinueSeparatingTouch
 			}
 		}
 	}
-	for i := range event.events {
-		e := &event.events[i]
+	for i := range out.events {
+		e := &out.events[i]
 		e.PositionChangeA, e.PositionChangeB = moves[w.index[e.Pair.A]], moves[w.index[e.Pair.B]]
 	}
-	if len(event.events) > w.step.MaxEvents {
-		return nil, w.scheduleUndecided(scheduleDiagnostic(StepEventBudget, BodyPair{},
-			fmt.Sprintf("%d events exceed MaxEvents %d", len(event.events), w.step.MaxEvents))), nil
+	if count := in.eventBase + len(out.events); count > w.step.MaxEvents {
+		d := scheduleDiagnostic(StepEventBudget, BodyPair{},
+			fmt.Sprintf("%d events exceed MaxEvents %d", count, w.step.MaxEvents))
+		d.Limit = units.Scalar(float64(w.step.MaxEvents))
+		return nil, []StepDiagnostic{d}, nil
 	}
-	diagnostics, err := w.checkCorrections(ctx, event, islands, moves, scheduled, dt)
-	if err != nil {
-		return nil, nil, err
+	diagnostics, err := w.checkCorrections(ctx, in.pre, out.post, solved, moves, scheduled)
+	if err != nil || len(diagnostics) != 0 {
+		return nil, diagnostics, err
 	}
-	if len(diagnostics) != 0 {
-		return nil, w.scheduleUndecided(diagnostics...), nil
-	}
-	return event, nil, nil
-}
-
-// initialEvent is the published event at the step start.
-type initialEvent struct {
-	pre, post State
-	events    []ContactEvent
-	islands   []IslandReport
-	policies  map[int]decad.SweepStartPolicy
+	return out, nil, nil
 }
 
 // islandEvents publishes one ContactEvent per island pair and the island's
 // report. Point impulses follow each manifold's point order; the aggregate
-// normal impulse is their sum.
-func (w *World) islandEvents(number int, isl island, solution islandSolution, pre State,
-	events *[]ContactEvent, dt units.Value) IslandReport {
+// normal impulse is their sum. A kinematic participant reports its driver
+// velocity before and after the event.
+func (w *World) islandEvents(number int, isl island, solution islandSolution, in eventIslands,
+	events *[]ContactEvent) IslandReport {
 	slots := make(map[int]int, len(isl.bodies))
 	for slot, index := range isl.bodies {
 		slots[index] = slot
 	}
-	report := IslandReport{Time: units.Seconds(0), Solver: solution.report}
+	pre := in.pre
+	report := IslandReport{Time: in.at, Solver: solution.report}
 	for _, index := range isl.bodies {
 		report.Bodies = append(report.Bodies, w.bodies[index].definition.Body)
+	}
+	velocity := func(index int, published QuantityVec) QuantityVec {
+		if v, ok := in.drive[index]; ok {
+			return ratVelocity(v)
+		}
+		return published
 	}
 	k := 0
 	for _, pair := range isl.pairs {
 		solver := solution.report
+		bracket := decad.SweepInterval{From: pair.at, To: pair.at}
+		if pair.bracket != nil {
+			bracket = *pair.bracket
+		}
 		event := ContactEvent{Kind: ContactImpact, Pair: w.bodyPair(w.pairs[pair.key]),
-			Bracket: decad.SweepInterval{From: pair.at, To: pair.at}, SliceStart: units.Seconds(0),
-			SliceDuration: dt, Time: units.Seconds(0), Manifold: cloneManifold(pair.manifold),
+			Bracket: bracket, SliceStart: in.sliceStart, SliceDuration: in.sliceSpan,
+			Time: in.at, Manifold: cloneManifold(pair.manifold),
 			TangentImpulse: zeroImpulseVec(), Solver: &solver, Island: number,
 			PoseA: pre.entries[pair.a].Pose, PoseB: pre.entries[pair.b].Pose}
 		total := 0.0
@@ -355,28 +493,40 @@ func (w *World) islandEvents(number int, isl island, solution islandSolution, pr
 		}
 		event.NormalImpulse = units.KilogramMillimetersPerSecond(total)
 		sa, sb := slots[pair.a], slots[pair.b]
-		event.PreVelocityA, event.PreVelocityB = pre.entries[pair.a].LinearVelocity, pre.entries[pair.b].LinearVelocity
+		event.PreVelocityA = velocity(pair.a, pre.entries[pair.a].LinearVelocity)
+		event.PreVelocityB = velocity(pair.b, pre.entries[pair.b].LinearVelocity)
 		event.PreAngularVelocityA = pre.entries[pair.a].AngularVelocity
 		event.PreAngularVelocityB = pre.entries[pair.b].AngularVelocity
-		event.PostVelocityA, event.PostVelocityB = solution.linear[sa], solution.linear[sb]
+		event.PostVelocityA = velocity(pair.a, solution.linear[sa])
+		event.PostVelocityB = velocity(pair.b, solution.linear[sb])
 		event.PostAngularVelocityA, event.PostAngularVelocityB = solution.angular[sa], solution.angular[sb]
 		event.PreVelocity, event.PostVelocity = event.PreVelocityB, event.PostVelocityB
 		if w.bodies[pair.b].definition.Role != Dynamic {
 			event.PreVelocity, event.PostVelocity = event.PreVelocityA, event.PostVelocityA
 		}
 		report.Pairs = append(report.Pairs, event.Pair)
-		report.Events = append(report.Events, len(*events))
+		report.Events = append(report.Events, in.eventBase+len(*events))
 		*events = append(*events, event)
 	}
 	return report
+}
+
+// ratVelocity publishes an exact velocity at the nearest float components.
+func ratVelocity(v [3]*big.Rat) QuantityVec {
+	var out QuantityVec
+	for axis, value := range v {
+		f, _ := value.Float64()
+		setVelocityComponent(&out, axis, units.MillimetersPerSecond(f))
+	}
+	return out
 }
 
 // checkCorrections proves §6.6's corrections lose no relation and create no
 // contact: every island pair with a moved body must still touch at the
 // corrected poses, and every other scheduled pair with a moved body must
 // sweep clear over the correction, after the swept-box exclusion.
-func (w *World) checkCorrections(ctx context.Context, event *initialEvent, islands []island,
-	moves map[int]r3.Vec, scheduled map[int]struct{}, dt units.Value) ([]StepDiagnostic, error) {
+func (w *World) checkCorrections(ctx context.Context, pre, post State, islands []island,
+	moves map[int]r3.Vec, scheduled map[int]struct{}) ([]StepDiagnostic, error) {
 	if len(moves) == 0 {
 		return nil, nil
 	}
@@ -396,13 +546,15 @@ func (w *World) checkCorrections(ctx context.Context, event *initialEvent, islan
 				return nil, err
 			}
 			contact, err := w.doc.ContactPair(ctx, w.bodies[pair.a].definition.Body, w.bodies[pair.b].definition.Body,
-				event.post.entries[pair.a].Pose, event.post.entries[pair.b].Pose, w.step.Contact)
+				post.entries[pair.a].Pose, post.entries[pair.b].Pose, w.step.Contact)
 			if err != nil {
 				return nil, err
 			}
 			if contact.Relation != decad.ContactTouching {
-				return []StepDiagnostic{scheduleDiagnostic(StepCorrectionFailed, w.bodyPair(w.pairs[pair.key]),
-					fmt.Sprintf("corrected pair relation is %v, not touching", contact.Relation))}, nil
+				d := scheduleDiagnostic(StepCorrectionFailed, w.bodyPair(w.pairs[pair.key]),
+					fmt.Sprintf("corrected pair relation is %v, not touching", contact.Relation))
+				d.Bodies = w.islandBodies(isl)
+				return []StepDiagnostic{d}, nil
 			}
 		}
 	}
@@ -419,9 +571,10 @@ func (w *World) checkCorrections(ctx context.Context, event *initialEvent, islan
 		pair := w.pairs[key]
 		paths := [2]decad.PairPath{}
 		var boxes [2]decad.SweptBox
+		duration := units.Seconds(1)
 		for side, index := range [2]int{pair.a, pair.b} {
-			paths[side] = decad.PoseSegment{From: event.pre.entries[index].Pose,
-				To: event.post.entries[index].Pose, Duration: dt}
+			paths[side] = decad.PoseSegment{From: pre.entries[index].Pose, To: post.entries[index].Pose,
+				Duration: duration}
 			box, err := w.doc.SweptBox(ctx, w.bodies[index].definition.Body, paths[side])
 			if err != nil {
 				return nil, err
@@ -432,7 +585,7 @@ func (w *World) checkCorrections(ctx context.Context, event *initialEvent, islan
 			continue
 		}
 		sweep, err := w.doc.SweepPair(ctx, w.bodies[pair.a].definition.Body, w.bodies[pair.b].definition.Body,
-			paths[0], paths[1], w.sweepRequest(dt, decad.StopAtInitialContact))
+			paths[0], paths[1], w.sweepRequest(duration, decad.StopAtInitialContact))
 		if err != nil {
 			return nil, err
 		}
@@ -445,14 +598,18 @@ func (w *World) checkCorrections(ctx context.Context, event *initialEvent, islan
 }
 
 // islandContactImpulse sums the impulses island events deliver from Fixed
-// bodies to dynamic ones, each point's normal widened by its normal ball.
-// A dynamic pair's two impulses cancel in the world total.
+// and Kinematic bodies to dynamic ones, each point's normal widened by its
+// normal ball. A dynamic pair's two impulses cancel in the world total, and
+// a graze or transition delivers none.
 func (w *World) islandContactImpulse(events []ContactEvent) (MomentumReading, bool) {
 	var value, low, high [3]*big.Rat
 	for axis := range value {
 		value[axis], low[axis], high[axis] = new(big.Rat), new(big.Rat), new(big.Rat)
 	}
 	for _, event := range events {
+		if event.Kind != ContactImpact {
+			continue
+		}
 		a, b := w.index[event.Pair.A], w.index[event.Pair.B]
 		dynamicA, dynamicB := w.bodies[a].definition.Role == Dynamic, w.bodies[b].definition.Role == Dynamic
 		if dynamicA == dynamicB || len(event.PointImpulses) != len(event.Manifold.Points) {
@@ -482,4 +639,51 @@ func (w *World) islandContactImpulse(events []ContactEvent) (MomentumReading, bo
 		}
 	}
 	return boundedMomentum(value, low, high)
+}
+
+// islandKinematicWork sums the work kinematic drivers deliver at island
+// events: at each point, λ·(n·V) for a driver on side A of the pair and
+// −λ·(n·V) on side B, with V the driver's published velocity. The normal
+// ball widens the reading by λ·|V|₁·(bound + angle).
+func (w *World) islandKinematicWork(events []ContactEvent) (decad.Measurement, bool) {
+	value, low, high := new(big.Rat), new(big.Rat), new(big.Rat)
+	for _, event := range events {
+		if event.Kind != ContactImpact {
+			continue
+		}
+		for side, body := range [2]*decad.Body{event.Pair.A, event.Pair.B} {
+			if w.bodies[w.index[body]].definition.Role != Kinematic {
+				continue
+			}
+			velocity := event.PreVelocityA
+			sign := big.NewRat(1, 1)
+			if side == 1 {
+				velocity, sign = event.PreVelocityB, big.NewRat(-1, 1)
+			}
+			v, ok := quantityRats(velocity)
+			if !ok || len(event.PointImpulses) != len(event.Manifold.Points) {
+				return decad.Measurement{}, false
+			}
+			speed := new(big.Rat)
+			for _, component := range v {
+				speed.Add(speed, absRat(new(big.Rat).Set(component)))
+			}
+			for i, point := range event.Manifold.Points {
+				lambda := exactBase(event.PointImpulses[i].Normal)
+				bound, angle := exactBase(point.Normal.Bound), exactBase(point.NormalAngle)
+				normal, okNormal := ratVec(point.Normal.Value)
+				if lambda == nil || bound == nil || angle == nil || !okNormal {
+					return decad.Measurement{}, false
+				}
+				work := new(big.Rat).Set(proof.DotInterval3(pointIVec(normal), pointIVec(v)).Lo)
+				work.Mul(work, lambda).Mul(work, sign)
+				width := new(big.Rat).Mul(absRat(new(big.Rat).Set(lambda)), speed)
+				width.Mul(width, new(big.Rat).Add(bound, angle))
+				value.Add(value, work)
+				low.Add(low, new(big.Rat).Sub(work, width))
+				high.Add(high, new(big.Rat).Add(work, width))
+			}
+		}
+	}
+	return boundedReading(value, low, high, units.KilogramSquareMillimeterPerSecondSquared)
 }

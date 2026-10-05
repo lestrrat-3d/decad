@@ -14,19 +14,20 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 3, 4, 7, 10, 11, 12, 14, 16, 17 and 19 have shipped. `dynamics.World` holds any
-number of bodies, the canonical pair table and per-pair material of §3.1, and the slice-backed `State` of
-§3.2. Its step resolves two bodies, or three bodies with one, two or three dynamic bodies and every other
-body fixed, through the closed-form responses `docs/rigid-dynamics-design.md` lists. A world of four or more
-bodies takes the scheduled step of §4.3 and §5 with one event time, the step start: one kick; the pairs that
-touch or shallowly overlap at the start form §6.1's islands, which §6.2 proposes, §6.3's frictionless rows
-certify and §6.6 corrects, publishing one `IslandReport` per island and one event per pair; then one drift
-slice over the whole step from the post-event state, whose candidate pairs must sweep `Clear`,
-`DepartedClear` or, for a pair continued in touch, `SweepPersistentTouch` over the whole slice. An event
-inside the slice (an impact or transition bracket, a graze, a track that ends early), an island with a
-kinematic participant and a positive-friction island pair are `Undecided` with `StepUnsupported` until PRs 5
-and 6. `Document.SweptBox` (§4.2) is public; the cylinder and bounded-faceted clear sweeps certify with it,
-and the scheduled step's broad phase reads it.
+Current state: §13 PRs 1, 2, 3, 4, 6, 7, 10, 11, 12, 14, 16, 17 and 19 have shipped. `dynamics.World`
+holds any number of bodies, the canonical pair table and per-pair material of §3.1, and the slice-backed
+`State` of §3.2. Its step resolves two bodies, or three bodies with one, two or three dynamic bodies and
+every other body fixed, through the closed-form responses `docs/rigid-dynamics-design.md` lists. A world of four or more
+bodies takes the scheduled step of §4.3 and §5: one kick, then slices of drift from event to event. Initial
+contacts, impact brackets and transition brackets cut a slice at their exact fraction; every body advances
+there on its certified path; the touching and impacting pairs, with the contact-set pairs their bodies rest
+on, form §6.1's islands, which §6.2 proposes, §6.3's frictionless rows certify and §6.6 corrects, publishing
+one `IslandReport` per island and one event per pair; the next slice starts from the post-event state. A
+graze publishes its event without cutting the slice. Kinematic bodies with translating drivers join
+islands. A positive-friction island pair is `Undecided` with `StepUnsupported` until PR 5. The multi-event
+`Trace` of §3.4 and §7.1, the `Timeline` of §7.2 and §12's typed diagnostics ship. `Document.SweptBox`
+(§4.2) is public; the cylinder and bounded-faceted clear sweeps certify with it, and the scheduled step's
+broad phase reads it.
 `docs/collision-v1-support.md` is the inventory of the shape pairs, responses and refusals that ship, and
 this document does not restate it. The two- and three-body steps query their pairs one by one with no broad
 phase, and their `Trace` holds fixed two- and three-body slots. The exact arithmetic every certificate below
@@ -34,12 +35,11 @@ is stated in already exists as one package: `internal/proof` (`Dyadic`, `DyV3`, 
 rounding bounds), which the root package imports today and which `dynamics` can import as well, since an
 `internal/` package is visible to every package of this module. §3.1, §3.2, §4 and §8.1–§8.8 describe
 shipped code, except `State.cache` and the `MaxPairSweeps` charge (§13 PR 8). For worlds of four or more
-bodies, §5 with that one event time, §6.1–§6.3 without the cone, stick and slip rows, §6.6, §7.1, §3.3's
-`IslandReport`, `StepReport.Islands` and `ContactEvent.Island`, §3.4's `traceSlice`, `pairProof` and
-`traceEvent`, and §12's `StepReason` with `StepDiagnostic.Code` ship as well. §9.1–§9.4 ship for prisms
-over whole `LineSeg` sections and for zero-bound Booleans, directly or through a translation-only placement;
-stitched solids and lofts are not admitted yet. §10.1 ships for the same bodies. Everything else is
-design-only until the PR table in §13 says otherwise.
+bodies, §5 without §5.3's reuse and step 2's cache, §6.1–§6.3 without the cone, stick and slip rows,
+§6.6, §7, §3.3's `IslandReport`, `StepReport.Islands` and `ContactEvent.Island`, §3.4, and §12 without
+`MaxPairSweeps` ship as well. §9.1–§9.4 ship for prisms over whole `LineSeg` sections and for zero-bound
+Booleans, directly or through a translation-only placement; stitched solids and lofts are not admitted yet.
+§10.1 ships for the same bodies. Everything else is design-only until the PR table in §13 says otherwise.
 
 Navigation only; the named sections own the rules:
 
@@ -205,7 +205,8 @@ MaxPairSweeps uint64 // positive; counts SweepPair calls per step across every s
 ```
 
 `StepReport` gains `Islands []IslandReport`; `ContactEvent` gains `Island int`, the index of the island
-that published it; `StepDiagnostic` gains typed fields (§12).
+that published it, or `-1` for a graze or transition, which enters no solve; `StepDiagnostic` gains typed
+fields (§12).
 
 ```go
 // IslandReport is one simultaneous solve: the bodies and pairs that shared
@@ -231,9 +232,12 @@ type Trace struct {
 
 // traceSlice is one event-free interval of the step. Every body drifts on
 // paths[i]; every scheduled pair carries the rounded certificate that proves
-// those paths, or the swept-box exclusion that made no sweep necessary.
+// those paths, or the swept-box exclusion that made no sweep necessary. The
+// paths and certificates run over [start, span], span being the step's end;
+// an event at end cuts the slice, and only its prefix is replayed.
 type traceSlice struct {
     start, end units.Value       // held times from the step start, compared exactly
+    span       units.Value       // held end of the paths and certificates
     from, to   State
     paths      []decad.PairPath  // world order: Fixed or Kinematic PoseSegment, Dynamic RigidDriftSegment
     proofs     []pairProof       // scheduled pairs, canonical order
@@ -329,40 +333,65 @@ full-step kick, then event-driven drift — and generalizes the body count. In o
 2. Set `t = 0`. Set the CONTACT SET to every scheduled pair whose previous step ended on a persistent or
    band track in the input state's cache, or empty when there is no cache.
 3. **Slice.** Build each body's path for `[t, dt]`: a Fixed body a constant `PoseSegment`, a Kinematic
-   body its driver sliced to the remaining time, a Dynamic body a `RigidDriftSegment` from its current
-   pose, world mass center and velocities. Run §4.3 to get the candidates. For each candidate that §5.3
-   does not reuse, call `SweepPair` with the policy §5.2 assigns.
-4. **Classify.** A candidate whose report is `SweepUndecided` with an unresolved interval starting at or
-   before the earliest event below makes the step `Undecided` with `StepPairUndecided`; one whose
-   unresolved interval starts strictly later is revisited after that event. Collect events: an
-   `ImpactBracket` or `ContactTransitionBracket` at its bracket's exact right fraction, a `GrazingTouch`
-   at its exact instant, a persistent or band track that ends before `dt` at its end. Choose the
-   earliest exact event time `t_e` in canonical pair order, then gather every event whose uncertainty
-   interval (bracket, or zero width) overlaps `t_e` (rigid-dynamics "Step and event schedule").
+   body its driver sliced to the remaining time (from its current pose to the driver's end pose), a
+   Dynamic body a `RigidDriftSegment` from its current pose, world mass center and velocities. Run §4.3 to
+   get the candidates. For each candidate that §5.3 does not reuse, call `SweepPair` with the policy §5.2
+   assigns. The paths' duration is `dt − t`, at the nearest float when that difference is not one: a slice
+   and its certificates replay over the held span `[t, dt]` through `CertifiedPosesAtInterval`, so the
+   duration parameterizes the spatial path and the held times label it.
+4. **Classify.** A candidate whose report is `SweepUndecided` makes the step `Undecided` with
+   `StepPairUndecided`, wherever its unresolved interval starts: an undecided report replays no prefix, so
+   it cannot certify the slice up to a later event either. A persistent track that does not span the slice
+   within `PenetrationResidual`, or a pair continued in contact whose sweep starts touching or overlapping,
+   is `StepTrackUnproved`. The CUTTING events are an initial contact (only under `StopAtInitialContact`)
+   at fraction zero, and an `ImpactBracket` or `ContactTransitionBracket` at its bracket's exact right
+   fraction; a touch that ends inside a slice reaches the step as a transition bracket. Choose the
+   earliest cutting fraction `f_e`, and gather the cutting events at exactly `f_e`. A bracket that only
+   overlaps `f_e` is not gathered: its pair is swept again from `t_e`, as an initial contact when it
+   touches there. A `GrazingTouch` cuts nothing (step 6).
 5. **No event.** Advance every body to `dt` on its certified path, run `ContactPair` on every pair in the
-   contact set at the completed poses, reject penetration beyond `PenetrationResidual`, record the final
-   slice, and publish.
-6. **Advance** every body to `t_e` on its certified path. Record the slice `[t, t_e]` with each candidate
-   pair's rounded certificate: a pair with an event at `t_e` records its rounded prefix sweep (the sweep
-   up to the bracket right pose, as the two-body impact path does today); every other candidate records
-   its full report, re-sliced to `[t, t_e]` through `CertifiedPosesAtInterval`.
-7. **Islands.** Form islands over the active constraints at `t_e` (§6.1), correct positions per island
+   contact set at the completed poses, reject a relation other than separated, touching, or overlapping
+   with a bounded manifold whose penetration lies within `PenetrationResidual` (two co-moving bodies drift
+   on separately rounded translations and may overlap by an ulp), record the final slice, and publish.
+6. **Advance** every body to `f_e` on its certified path: the pose `pathPoseAt` evaluates with the float
+   operations the sweep replay uses, which every swept pair's report must replay exactly at `f_e`. Every
+   candidate records its full report, re-sliced to `[t, t_e]` through `CertifiedPosesAtInterval`; an
+   event pair's own report covers its prefix through the bracket's right fraction, so it needs no separate
+   prefix sweep. A rotating pair's impact bracket replays only through its left end, so its impact is
+   `StepPairUndecided`. Every box-excluded pair is checked at the rounded poses (§7.1). The event's held time
+   `t_e` is the exact `t + f_e·(dt − t)` when that is a float, else the float just below it, so every time
+   the prefix replays maps to a fraction at or below `f_e`; a label that does not pass `t` is
+   `StepUnsupported`. Each graze before `f_e` publishes a zero-impulse `ContactGraze` at its instant, after
+   its pair's report replays the rounded poses there and its enclosed relative normal speed lies within
+   `VelocityResidual` of zero; its pair's report replays the whole slice, so the graze needs no cut. A
+   graze at exactly `f_e` is `StepUnsupported`.
+7. **Islands.** A transition publishes a zero-impulse `ContactTransition` and its pair leaves the contact
+   set without entering a solve. The impact and initial-contact pairs, with every contact-set pair whose
+   persistent track covers `f_e` (its manifold read through `ManifoldAt(f_e)`), form islands over the
+   active constraints at `t_e` (§6.1); only the islands an impact or initial contact reaches are solved,
+   so a resting stack elsewhere keeps drifting and publishes nothing. Correct positions per island
    (§6.6), solve and certify each island in world order (§6.2–§6.4), publish one `IslandReport` and the
-   island's events. A `ContactGraze` and a separated `ContactTransition` publish their zero-impulse
-   events without entering a solve.
+   island's events.
 8. Update the contact set: pairs the solve left touching with a nonpositive relative normal speed stay
-   in; pairs every solved normal speed exceeds `VelocityResidual` leave it. Count the published events
-   against `MaxEvents`. Set `t = t_e` and go to step 3.
+   in; pairs every solved normal speed exceeds `VelocityResidual` leave it; a departing pair leaves it
+   once its departure completes at or before `t_e`, a clear pair and a pair the broad phase drops leave it
+   at once. Count the published events against `MaxEvents`. Set `t = t_e` and go to step 3; an event at
+   `dt` itself completes the step from the post-event state.
 
 ### 5.1 Zero-time repeats and Zeno sequences
 
 A repeated event at the same `t_e` is legal only as a resting solve: a pair that is still touching and
 closing after an island solve re-enters §5.2's `ContinueCertifiedTouch` policy on the next slice, which
-either certifies a persistent or band track (no event) or brackets a transition. A pair that bounces with
+either certifies a persistent or band track (no event) or brackets a transition. A third event time at one
+clock reading has made no progress and is `Undecided` with `StepUnsupported`. A pair that bounces with
 restitution produces one `ContactImpact` per bounce; `ImpactSpeed` is the guard that ends such a sequence,
 because an incoming normal speed at or above `-ImpactSpeed` targets zero post-impact speed
 (rigid-dynamics "Response") and the pair then rests. A scene whose bounces do not fall under `ImpactSpeed`
 before `MaxEvents` is `Undecided` with `StepEventBudget`; that is the stated limit, not a defect.
+
+Each impact lies at its bracket's right sample, at most one `TimeResolution` after the slice's exact
+contact time, and §6.6 puts the pair back in exact touch there, so the `k`-th impact of a bounce lies at
+most `k·TimeResolution` after its closed-form time.
 
 ### 5.2 Start policies
 
@@ -405,7 +434,9 @@ An ACTIVE CONSTRAINT at `t_e` is one manifold point of: an `ImpactBracket` event
 an initially touching pair's `InitialEvent.Manifold` whose relative normal speed is closing or zero within
 `VelocityResidual`; a persistent or band track's `ContactTrack.ManifoldAt(fraction)` at `t_e`; a
 kinematic/dynamic contact of any of those forms, with the driver's contact-point velocity as
-rigid-dynamics "Step input and configuration" defines it. A pair gathered for the event with no
+rigid-dynamics "Step input and configuration" defines it. A kinematic participant's driver slice must
+translate, and its exact velocity is the slice's displacement over its duration; a rotating driver in an
+island is `Undecided` with `StepUnsupported`. A pair gathered for the event with no
 consumable manifold (`Manifold == nil`, or point or normal bounds wider than `StepConfig.Contact`) makes
 the step `Undecided` with `StepManifoldMissing`.
 
@@ -442,9 +473,17 @@ constraint whose nominal `K_nn,k <= 0`, is `Undecided` with `StepIslandDegenerat
 The sweeps run until one changes no impulse in `float64`, or `MaxIterations` have run. The published post
 velocities are then recomputed once from the pre-solve velocities and the final impulses in the fixed
 order, and a component within `1/16` of its residual (`VelocityResidual` or `AngularVelocityResidual`) of
-zero is published as exactly zero. Both choices serve the continuation: a resting island must publish
-exactly equal normal velocities on its touching pairs, and exactly zero spin, before `SweepPair` can prove
-a persistent touch from it. Neither choice is a claim; the certificate judges the published values.
+zero is published as exactly zero. Co-moving dynamic bodies then publish one common velocity: two dynamic
+bodies of an island pair are co-moving when their published spins are equal and every component of their
+linear velocities differs by at most `VelocityResidual/8`; each connected group of them whose every member
+lies within `VelocityResidual/16` of the group's mass-weighted mean, per component, publishes that mean for
+every member. Float rounding leaves a bouncing or resting stack's bodies about `1e-14` to `1e-7 mm/s`
+apart, and only exactly equal velocities let `SweepPair` prove the touch that continues the stack, as the
+two-body sphere path's common zero-restitution velocity does for one pair. These choices serve the
+continuation: a resting island must publish exactly equal normal velocities on its touching pairs, and
+exactly zero spin, before `SweepPair` can prove a persistent touch from it. None of them is a claim; the
+certificate judges the published values, so a common velocity whose change from a member's own fails the
+linear law within `ImpulseResidual + m_hi·VelocityResidual` is refused like any other proposal.
 
 ### 6.3 Certification
 
@@ -457,12 +496,13 @@ that file lacks, a three-component interval dot product and cross product, are a
 (§13 PR 4) so the root package and `dynamics` share one implementation; no interval code lives in
 `dynamics`.
 
-Inputs read as intervals: each dynamic body's mass `[m_lo, m_hi]` and six inertia components, rotated
-into world axes with the pose basis read as exact rationals and widened by the basis's orthonormality
-defect (`docs/dynamic-mass-design.md` §4); each manifold point's `OnA`, `OnB` and `Normal` with their
-balls; the pair's `frictionCoefficient` interval `[μ_lo, μ_hi]`; the published pre-solve velocities as
-exact rationals. The proposal's published outputs are the per-point impulses `(λn_k, λt_k)` and each
-body's post velocities `(v', ω')`, rounded to `float64` and read back as exact rationals.
+Inputs read as intervals: each dynamic body's mass `[m_lo, m_hi]` and six inertia components, rotated into
+world axes with the pose basis read as exact rationals and widened by the basis's orthonormality defect
+(`docs/dynamic-mass-design.md` §4); each manifold point's `OnA`, `OnB` and `Normal` with their balls; the
+pair's `frictionCoefficient` interval `[μ_lo, μ_hi]`; the published pre-solve velocities as exact rationals;
+and each kinematic participant's exact driver velocity, which the event does not change. The proposal's
+published outputs are the per-point impulses `(λn_k, λt_k)` and each body's post velocities `(v', ω')`,
+rounded to `float64` and read back as exact rationals.
 
 The certificate then checks, every comparison over the full interval:
 
@@ -476,7 +516,7 @@ The certificate then checks, every comparison over the full interval:
 | Cone | `‖λt_k‖ − μ_lo·λn_k` | `<= ImpulseResidual` |
 | Stick | if `‖λt_k‖ < μ_lo·λn_k − ImpulseResidual`: `‖w'_k,t‖` upper end | `<= VelocityResidual` |
 | Slip | otherwise: `λt_k·w'_k,t + ‖λt_k‖·‖w'_k,t‖` upper end | `<= ImpulseResidual·‖w'_k,t‖ + VelocityResidual·‖λt_k‖` |
-| Energy | island kinetic energy after minus before, over the mass and inertia intervals | the allowance rigid-dynamics "Completion, conservation, and trace" states, summed over the island's bodies, minus kinematic work |
+| Energy | island kinetic energy after minus before, over the mass and inertia intervals, minus kinematic work: at each point a driver on side `A` delivers `λn·(n·V)` and one on side `B` `−λn·(n·V)`, taken at the upper end over the normal ball | the allowance rigid-dynamics "Completion, conservation, and trace" states, summed over the island's bodies |
 | Momentum | the per-event linear and angular momentum checks of the same section, applied to the island as one event set | as stated there |
 
 `ContactSolverReport` publishes the largest attained value of each gate as its residual, plus the sweep
@@ -538,9 +578,16 @@ Rigid-dynamics "Response" bounds one pair's correction by certified geometry dis
 travel plus `ContactSlop`, and requires every correction to be swept against every other pair. Across an
 island: each dynamic body receives one translation, the sum over its island pairs of its inverse-mass share
 of the pair's deepest point penetration along the pair normal (a Fixed or Kinematic body takes no share; a
-penetrating pair whose points disagree on the normal is refused). A pair's penetration may not exceed its
-allowance above, and a body's translation length may not exceed the summed allowances of the pairs that
-moved it, plus the band depth `ε` of §10.3 when the slice ended on a band track. Island pairs with a moved
+penetrating pair whose points disagree on the normal is refused). The penetration is the one the rounded
+event poses show: `ContactPair` at those poses for an interior impact, whose solve still uses the manifold
+the sweep certified at the bracket's right sample, and the gathered manifold itself for an initial contact
+or a track. Dynamic bodies joined by contact-set pairs on persistent tracks move as one: their touch is
+exact and their velocities equal (§6.2), so they take one translation computed with their summed mass,
+which keeps that touch. A pair's penetration may not exceed its allowance above, its bracket travel bounded
+by the bracket's elapsed width times an upper bound on the pair's contact-point speed (the L1 norm of the
+linear velocity difference plus each body's spin times its lever, both L1 norms), and a body's
+translation length may not exceed the summed allowances of the pairs that moved it, plus the band depth
+`ε` of §10.3 when the slice ended on a band track. Island pairs with a moved
 body must still be `Touching` at the corrected poses; every other scheduled pair with a moved body is swept
 over the correction. The corrections of one island are applied together, then every
 candidate pair touching a corrected body is swept over the correction as a `PoseSegment` of zero
@@ -553,17 +600,25 @@ the event and the trace and never claim to conserve energy.
 ### 7.1 Sampling one step
 
 `Trace.Sample(t)` keeps its signature. It compares the exact held `t` against the slice boundaries
-(`big.Rat`), returns `start` at `0`, `end` at `duration`, and an event's `post` state at an exact event
-time. Inside a slice it produces every body's pose:
+(`big.Rat`), returns an event's `post` state at an exact event time, `start` at `0` and `end` at
+`duration`. Inside a slice it produces every body's pose at the fraction `(t − start)/(span − start)` of
+the slice's paths and certificates:
 
-- a body in at least one `pairProof` with a sweep: `sweep.CertifiedPosesAtInterval(t, start, end)`;
+- a body in at least one `pairProof` with a sweep: `sweep.CertifiedPosesAtInterval(t, start, span)`;
   when two proofs cover the same body, their rounded poses must be identical (`ErrUnsupported`
   otherwise), which holds when both evaluate the same float path at the same exact fraction;
 - a body whose candidate pairs are all `boxClear`, or that is in no candidate pair: its own `bodyPath`
   evaluated at the mapped fraction (`RigidDriftSegment` through `r3.RotationAround` and
-  `r3.Translation` exactly as the sweep evaluates it); the swept-box certificate covers the whole slice,
-  so no per-sample relation check is needed;
+  `r3.Translation` exactly as the sweep evaluates it);
 - a Fixed body: its constant pose.
+
+The swept boxes that excluded a pair enclose its ideal path, but a rounded pose may leave that path by an
+ulp, so a pair whose exact gap is below an ulp could land in contact no certificate covers. Every
+box-excluded pair is therefore checked at the sampled poses: the two bodies' bounds, mapped exactly
+through those poses by `Document.SweptBox` along a stationary `PoseSegment`, must be strictly disjoint, or
+`Sample` returns `ErrUnsupported`. The step runs the same check at every pose it publishes, a slice end or
+an event's advance, and refuses with `StepPairUndecided`. The check reads the document, so the document
+must not change while a trace is sampled.
 
 Velocities inside a slice are the slice's `from` velocities. A sample a rounded certificate refuses
 (`CertifiedPosesAtInterval` returns `ErrUnsupported` when the rounded pose leaves the certified relation)
@@ -589,8 +644,11 @@ func (tl *Timeline) Sample(t units.Value) (State, error)
 
 `Advance` runs `World.Step` from the last `Next`; on `Advanced` it appends; on `Undecided` it records the
 report as `stop` and returns it with a nil error (the step is not an error); a later `Advance` returns
-`ErrTimelineStopped`. `Sample(t)` locates the step by exact cumulative time and delegates to that step's
-`Trace.Sample` with the local time. `t` equal to `End()` returns the last advanced step's `end` state,
+`ErrTimelineStopped`; a step error leaves the timeline unchanged. `Sample(t)` locates the step by exact
+cumulative time and delegates to that step's `Trace.Sample` with the local time, `t` less the step's exact
+start; when that difference is not a float, the nearest float inside the step labels it, and the pose
+returned is the certified pose at that label. `End()` is the exact sum at the nearest float when the sum
+is not one. `t` equal to `End()` returns the last advanced step's `end` state,
 which that step's certificate covers; `t` below zero or beyond `End()` is `ErrUnsupported`, and the
 same test, "beyond `End()`", is the one §11.2's track applies. A step boundary belongs to the later
 step's `start`, which is the earlier step's `end` by construction. The gallery reads only `Timeline`; it
@@ -1142,11 +1200,18 @@ type StepDiagnostic struct {
 ```
 
 A report with `Undecided` carries every diagnostic that applied at the stopping time, in canonical pair
-then island order, and `Next == nil`; its `Trace` holds the certified prefix for inspection.
+then island order, and `Next == nil`; its `Trace` holds the certified prefix for inspection, its `Events`
+and `Islands` those the prefix published. The prefix ends at the last certified time: the start of the
+step, an event's post state, or the pre-event state when the event's solve refused, and its `duration` is
+that time, so `Trace.Sample` replays exactly the certified part.
 
-`StepReason` and `StepDiagnostic.Code` ship with §13 PR 3: the scheduled step of a world of four or more
-bodies sets `Code`, and the two- and three-body steps leave it `StepNoReason`. `Bodies`, `From`, `To`,
-`Limit` and the certified prefix `Trace` of an `Undecided` report land with PR 6.
+The scheduled step of a world of four or more bodies fills every field: `From` and `To` bound the slice a
+pair diagnostic covers (an undecided sweep's unresolved interval, mapped onto the step clock), or name the
+event time of a refusal raised there; `StepEventBudget` runs from that event to the end of the step.
+`Limit` holds the refused gate's limit for `StepIslandResidual` (in the gate's own kind), the correction
+allowance for `StepCorrectionFailed`, `PenetrationResidual` for `StepTrackUnproved`, and `MaxEvents` as a
+dimensionless scalar for `StepEventBudget`. The two- and three-body steps leave `Code` `StepNoReason` and
+set only `Pair` and `Reason`.
 
 ## 13. Delivery order
 
@@ -1198,10 +1263,8 @@ lines below do not repeat it.
   path as a four-body world, the touching pair plus two spheres the broad phase excludes, so the public
   `World.Step` reaches the island solver with the real producers and asserts the two-body fixture's numbers.
 - Depends on: PR 3.
-- Shipped, with one event time: the step start. The pyramid uses `dt = 1/256 s`, so the kick is exact,
-  and `ImpactSpeed = 64 mm/s`, so its restitution `0.3` targets zero and the stack rests. An event inside
-  the slice, a kinematic island participant and a positive-friction island pair stay `Undecided` with
-  `StepUnsupported`; the multi-event trace that interior events need is PR 6.
+- Shipped. The pyramid uses `dt = 1/256 s`, so the kick is exact, and `ImpactSpeed = 64 mm/s`, so its
+  restitution `0.3` targets zero and the stack rests.
 
 ### PR 5 (Phase 1) — Coulomb friction and parity
 
@@ -1220,6 +1283,12 @@ lines below do not repeat it.
   bounce times match the closed-form sequence; `Timeline.Sample` across a step boundary; a forced
   `Undecided` stops the timeline with `StepEventBudget` and `Advance` then returns `ErrTimelineStopped`.
 - Depends on: PR 4.
+- Shipped, with §5's interior events (impacts, transitions, grazes, zero-time repeats), kinematic island
+  participants, §6.2's common velocity, §6.6's group correction and §7.1's per-sample check. Its tests add
+  `dynamics/schedule_event_test.go`: five bounces between a floor and a ceiling in one step ending in rest
+  under `ImpactSpeed`, a box stack bouncing as one, a kinematic platform's impact and work, a graze, an
+  edge transition, the event budget's certified prefix, and the box-exclusion check at a slice end and at
+  a sample.
 
 ### PR 7 (Phase 1) — rotated and displaced prism mass
 

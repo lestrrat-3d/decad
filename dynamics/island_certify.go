@@ -21,13 +21,15 @@ import (
 type ivec = [3]proof.RatInterval
 
 // certBody is one island participant read as exact intervals. A Fixed
-// participant has zero velocity and no mass reading.
+// participant has zero velocity and no mass reading; a kinematic one moves at
+// its exact driver translation velocity before and after the event.
 type certBody struct {
-	index    int
-	dynamic  bool
-	mass     proof.RatInterval
-	inertia  [3][3]proof.RatInterval
-	rotation [3][3]*big.Rat // pose basis, rotation[row][column]
+	index     int
+	dynamic   bool
+	kinematic bool
+	mass      proof.RatInterval
+	inertia   [3][3]proof.RatInterval
+	rotation  [3][3]*big.Rat // pose basis, rotation[row][column]
 	// defect widens every world inertia component by 3·d·(2+d)·m, with d the
 	// entrywise absolute sum of RᵀR − I and m the local tensor's largest
 	// magnitude (§8.1's orthonormality-defect bound).
@@ -68,6 +70,30 @@ const (
 	gateLinearMomentum
 	gateAngularMomentum
 )
+
+// limitValue publishes a gate's exact limit as a quantity of the gate's kind,
+// rounded up.
+func (g islandGate) limitValue(limit *big.Rat) units.Value {
+	if limit == nil {
+		return units.Value{}
+	}
+	f, _ := limit.Float64()
+	if ratFloat(f) != nil && ratFloat(f).Cmp(limit) < 0 {
+		f = math.Nextafter(f, math.Inf(1))
+	}
+	switch g {
+	case gateLinearLaw, gateLinearMomentum:
+		return units.KilogramMillimetersPerSecond(f)
+	case gateAngularLaw, gateAngularMomentum:
+		return units.New(f, units.KilogramSquareMillimeterPerSecond)
+	case gateEnergy:
+		return units.New(f, units.KilogramSquareMillimeterPerSecondSquared)
+	case gateNormalSign:
+		return units.KilogramMillimetersPerSecond(f)
+	default:
+		return units.MillimetersPerSecond(f)
+	}
+}
 
 func (g islandGate) String() string {
 	switch g {
@@ -225,11 +251,16 @@ func euclideanUpper(v ivec) *big.Rat {
 	}
 }
 
-// newCertBody reads one island participant at its event pose.
-func (w *World) newCertBody(index int, entry BodyState, post BodyState) (certBody, bool) {
+// newCertBody reads one island participant at its event pose. A kinematic
+// participant reads its exact driver velocity from drive.
+func (w *World) newCertBody(index int, entry BodyState, post BodyState,
+	drive map[int][3]*big.Rat) (certBody, bool) {
 	body := certBody{index: index, dynamic: w.bodies[index].definition.Role == Dynamic, pose: entry.Pose}
 	zero := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
 	body.v, body.w, body.vPost, body.wPost = zero, zero, zero, zero
+	if v, ok := drive[index]; ok && w.bodies[index].definition.Role == Kinematic {
+		body.kinematic, body.v, body.vPost = true, v, v
+	}
 	if !body.dynamic {
 		return body, true
 	}
@@ -345,10 +376,11 @@ func (b certBody) inertiaApply(x [3]*big.Rat) ivec {
 	return out
 }
 
-// pointVelocity encloses v + ω×r for a body slot, zero for a Fixed body.
+// pointVelocity encloses v + ω×r for a dynamic body slot; a kinematic body
+// translates at v and a Fixed body, whose v is zero, stands still.
 func pointVelocity(body certBody, v, omega [3]*big.Rat, lever ivec) ivec {
 	if !body.dynamic {
-		return zeroIVec()
+		return pointIVec(v)
 	}
 	return addIVec(pointIVec(v), proof.CrossInterval3(pointIVec(omega), lever))
 }
@@ -425,7 +457,7 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 	}
 	linearMomentum, angularMomentum := zeroIVec(), zeroIVec()
 	linearMomentumLimit, angularMomentumLimit := new(big.Rat), new(big.Rat)
-	energyUpper, energyAllowance := new(big.Rat), new(big.Rat)
+	energyUpper, energyAllowance, kinematicWork := new(big.Rat), new(big.Rat), new(big.Rat)
 	for slot, body := range bodies {
 		if !body.dynamic {
 			continue
@@ -547,7 +579,19 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 		} else if q.Lo.Sign() < 0 {
 			raise(&cert.normal, new(big.Rat).Neg(q.Lo))
 		}
-		// External impulses: those a Fixed body delivers. A dynamic pair's
+		// Kinematic work: a driver on side A delivers λ·(n·V) to the island,
+		// one on side B −λ·(n·V); the energy gate admits its upper end.
+		for side, slot := range [2]int{p.a, p.b} {
+			if !bodies[slot].kinematic {
+				continue
+			}
+			work := proof.ScaleInterval(proof.DotInterval3(p.normal, pointIVec(bodies[slot].v)), p.lambda)
+			if side == 1 {
+				work = proof.NegInterval(work)
+			}
+			kinematicWork.Add(kinematicWork, work.Hi)
+		}
+		// External impulses: those a Fixed or Kinematic body delivers. A dynamic pair's
 		// two sides read the same λ and normal interval and cancel exactly in
 		// the linear sum; their torques about the origin use each side's own
 		// witness and so stay in the angular sum.
@@ -571,6 +615,8 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 	}
 	energyUpper.Quo(energyUpper, big.NewRat(2, 1))
 	cert.energy = energyUpper
+	// The island's kinetic energy may grow by the work its drivers deliver.
+	energyAllowance.Add(energyAllowance, kinematicWork)
 	if energyUpper.Cmp(energyAllowance) > 0 {
 		cert.fail(gateEnergy, energyUpper, energyAllowance)
 	}

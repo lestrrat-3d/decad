@@ -57,9 +57,23 @@ const (
 	StepUnsupported                   // the current phase has no solver for this event family
 )
 
+// StepDiagnostic says why a step is Undecided. The step of a world of four
+// or more bodies fills the typed fields (docs/multibody-dynamics-design.md
+// §12); the two- and three-body steps set Pair and Reason only.
 type StepDiagnostic struct {
-	Code   StepReason
-	Pair   BodyPair
+	Code StepReason
+	// Pair is the responsible pair, when one is.
+	Pair BodyPair
+	// Bodies lists the responsible island's bodies in world order, when an
+	// island is responsible.
+	Bodies []*decad.Body
+	// From and To bound the time interval the diagnostic applies to, from the
+	// start of the step.
+	From, To units.Value
+	// Limit is the configured limit a residual, allowance or budget exceeded,
+	// when one did. A count limit such as MaxEvents is a dimensionless scalar.
+	Limit units.Value
+	// Reason is a human-readable message; callers branch on Code.
 	Reason string
 }
 
@@ -95,7 +109,8 @@ type ContactEvent struct {
 	PoseA, PoseB                               r3.Transform
 	PositionChangeA, PositionChangeB           r3.Vec
 	// Island is the index into StepReport.Islands of the island that
-	// published this event, in a world of four or more bodies.
+	// published this event, in a world of four or more bodies; a graze or a
+	// transition enters no solve there and carries -1.
 	Island int
 }
 
@@ -141,157 +156,6 @@ type StepReport struct {
 	// Islands lists the simultaneous solves of a world of four or more
 	// bodies, in solve order.
 	Islands []IslandReport
-}
-
-// Trace keeps the rounded sweep certificates and the event states for replay.
-type Trace struct {
-	start               State
-	pre                 State
-	post                State
-	end                 State
-	preSweep            *decad.SweepReport
-	postSweep           *decad.SweepReport
-	grazingSweep        *decad.SweepReport
-	rotationalPrefix    *decad.SweepReport
-	rotationalRemainder *decad.SweepReport
-	threeSweeps         [3]*decad.SweepReport
-	threeSlices         []threeTraceSlice
-	threeEvents         []threeTraceEvent
-	slices              []traceSlice // a world of four or more bodies, docs/multibody-dynamics-design.md §3.4
-	events              []traceEvent // the events between those slices
-	duration            units.Value
-	eventAt             units.Value
-	hasEvent            bool
-	excluded            bool
-}
-
-// Sample evaluates a recorded rounded path and its cached geometry proof.
-// It performs no Document geometry query or response solve.
-func (tr Trace) Sample(t units.Value) (State, error) {
-	timeValue, durationValue := exactBase(t), exactBase(tr.duration)
-	if t.Kind() != units.Time || !finite(t.Base()) || timeValue == nil || durationValue == nil ||
-		timeValue.Sign() < 0 || timeValue.Cmp(durationValue) > 0 {
-		return State{}, fmt.Errorf("%w: trace time outside step", ErrInvalidInput)
-	}
-	if len(tr.slices) != 0 {
-		return tr.sampleSlices(t, timeValue, durationValue)
-	}
-	if len(tr.threeSlices) != 0 {
-		return tr.sampleThreeSlices(t, timeValue)
-	}
-	var eventValue *big.Rat
-	if tr.hasEvent {
-		eventValue = exactBase(tr.eventAt)
-		if eventValue == nil {
-			return State{}, fmt.Errorf("%w: trace event time is invalid", ErrUnsupported)
-		}
-	}
-	if tr.hasEvent && timeValue.Cmp(eventValue) == 0 {
-		return tr.post, nil
-	}
-	if timeValue.Sign() == 0 {
-		return tr.start, nil
-	}
-	if timeValue.Cmp(durationValue) == 0 {
-		return tr.end, nil
-	}
-	if tr.grazingSweep != nil {
-		state := tr.post.clone()
-		a, b, err := tr.grazingSweep.CertifiedPosesAtInterval(t, units.Seconds(0), tr.duration)
-		if err != nil {
-			return State{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
-		}
-		state.entries[0].Pose, state.entries[1].Pose = a, b
-		return state, nil
-	}
-	if len(tr.start.entries) == 3 && tr.threeSweeps != ([3]*decad.SweepReport{}) {
-		if tr.start.world == nil || tr.start.world.three == nil {
-			return State{}, fmt.Errorf("%w: three-body trace has no world", ErrUnsupported)
-		}
-		state := tr.post
-		poses := make(map[*decad.Body]r3.Transform, 3)
-		for key, sweep := range tr.threeSweeps {
-			if sweep == nil {
-				continue
-			}
-			a, b, err := sweep.CertifiedPosesAtInterval(t, units.Seconds(0), tr.duration)
-			if err != nil {
-				return State{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
-			}
-			pair := tr.start.world.three.pairs[key]
-			for side, pose := range [2]r3.Transform{a, b} {
-				body := pair.bodies[side].definition.Body
-				if held, seen := poses[body]; seen && held != pose {
-					return State{}, fmt.Errorf("%w: three-body sweeps disagree on a shared pose", ErrUnsupported)
-				}
-				poses[body] = pose
-			}
-		}
-		if len(poses) != 3 {
-			return State{}, fmt.Errorf("%w: three-body trace lacks a pair certificate", ErrUnsupported)
-		}
-		for body, pose := range poses {
-			entry, ok := state.Body(body)
-			if !ok {
-				return State{}, fmt.Errorf("%w: three-body trace names an unknown body", ErrUnsupported)
-			}
-			entry.Pose = pose
-			state = withBodyState(state, entry)
-		}
-		return state, nil
-	}
-	state := tr.end
-	sweep := tr.preSweep
-	if !tr.hasEvent && sweep == nil {
-		sweep = tr.rotationalRemainder
-	}
-	sliceStart, sliceEnd := units.Seconds(0), tr.duration
-	if tr.hasEvent {
-		if timeValue.Cmp(eventValue) < 0 {
-			state = tr.pre
-			sliceEnd = tr.eventAt
-			if sweep == nil {
-				// The impact prefix is the original full-step rotating sweep.
-				sweep, sliceEnd = tr.rotationalPrefix, tr.duration
-			}
-		} else {
-			state = tr.post
-			sweep = tr.postSweep
-			sliceStart = tr.eventAt
-			if sweep == nil {
-				sweep = tr.rotationalRemainder
-			}
-		}
-	}
-	if tr.excluded {
-		var from, to State
-		if tr.hasEvent {
-			return State{}, fmt.Errorf("%w: excluded trace has an event", ErrUnsupported)
-		}
-		from, to = tr.start, tr.end
-		fraction, _ := new(big.Rat).Quo(timeValue, durationValue).Float64()
-		state = state.clone()
-		for i := range state.entries {
-			start, end := from.entries[i].Pose.Translation(), to.entries[i].Pose.Translation()
-			delta := end.Sub(start).Scale(fraction)
-			pose, err := translatePose(from.entries[i].Pose, delta)
-			if err != nil {
-				return State{}, fmt.Errorf("%w: excluded replay pose is not finite: %v", ErrUnsupported, err)
-			}
-			state.entries[i].Pose = pose
-		}
-		return state, nil
-	}
-	if sweep == nil {
-		return State{}, fmt.Errorf("%w: interior trace sample has no rounded path certificate", ErrUnsupported)
-	}
-	a, b, err := sweep.CertifiedPosesAtInterval(t, sliceStart, sliceEnd)
-	if err != nil {
-		return State{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
-	}
-	state = state.clone()
-	state.entries[0].Pose, state.entries[1].Pose = a, b
-	return state, nil
 }
 
 func driftState(start State, seconds float64) (State, error) {
@@ -413,11 +277,12 @@ func pairCorrectionWithin(before, after State, axis int, allowance float64) bool
 }
 
 // Step advances the admitted pair through certified clear, contact, or edge-transition paths.
-// A world of four or more bodies solves the pairs touching at the step start as
-// certified frictionless islands, then drifts every body over the step on paths
-// whose candidate pairs the broad phase selects and SweepPair proves clear,
-// departed or in persistent touch; a contact event inside the step leaves it
-// Undecided with StepUnsupported (docs/multibody-dynamics-design.md §5, §6).
+// A world of four or more bodies drifts every body from event to event on
+// paths whose candidate pairs the broad phase selects and SweepPair certifies;
+// at each event time it solves the touching and impacting pairs as certified
+// frictionless islands and continues (docs/multibody-dynamics-design.md §5,
+// §6). Its Undecided report carries typed diagnostics and the certified prefix
+// in its Trace.
 func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.Value) (*StepReport, error) {
 	if w == nil || ctx == nil || from.world != w || !validQuantity(dt, units.Time, true) {
 		return nil, fmt.Errorf("%w: invalid context, world, state, or duration", ErrInvalidInput)
