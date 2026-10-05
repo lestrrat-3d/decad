@@ -535,7 +535,8 @@ relation without a manifold.
 
 ### 4.5 Analytic ruling contact
 
-At identity query poses, `ContactPair` reads the clearance kernel's verdict.
+At identity query poses, `ContactPair` reads the clearance kernel's verdict;
+placed poses take the direct proof at the end of this section.
 A touch the kernel proves with a ruling certificate (`docs/clearance-design.md`
 §6) keeps the two carriers, the exact separating plane and the exact ends of
 the ruling segment on it: a plane face against a cylinder face along the
@@ -569,6 +570,40 @@ proven touch with `ContactPayloadUnsupported`; an unmatched face or end gives
 `ContactAmbiguousFeature`; a point or normal bound beyond the request gives
 `ContactPointTooCoarse` or `ContactNoNormalProof`. Reversing body order swaps
 faces and reverses the normal; the ends keep their order.
+
+**Placed poses.** Elsewhere, a full source cylinder `M` at any pose with a
+positive determinant against an exact planar body `S` with zero held
+displacement (multibody §9, §10.4), at its own pose, reads the plane/cylinder
+ruling directly (`classifyPlacedRuling`). `M`'s identity record gives its
+axis `â`, radius `r`, length `L` and end-disk centers; the query pose maps
+the centers exactly to `c±`. The pose's float basis `B` is orthonormal only
+to rounding, so the occupied set is the identity cylinder's image under the
+exact float map, whose section is the disk's image under `B`. With `gram`
+the largest absolute row sum of `BᵀB − I`, every unit `m` has `|Bᵀm|²` in
+`[1 − gram, 1 + gram]`; `gram` must be at most `1/16`, which every valid
+`r3.Transform` meets. The support plane is the face plane of `S` whose
+outward normal `n̂` is a signed axis, with every vertex of `S` on or behind
+it, `|α| <= 1/4` for `α = n̂·Bâ`, and its triangles in one face, whose larger
+`|H±|` is least, `H± = n̂·c± − d − r`; the first in triangle order wins a tie.
+Height is affine along the axis, so `M`'s least height above the plane is the
+lesser of its end disks', each `n̂·c± − d − r·ρ` with `ρ = |P·Bᵀn̂|`, `P`
+removing `â`. A signed-axis pose has `ρ = 1` and `α = 0` exactly, so the
+least height is the lesser `H±` and proves `Touching` or `Separated` exactly.
+At any other pose, `|ρ² − 1| <= gram + α²` gives
+`|r − r·ρ| <= r·(gram + α²)`; with `δ = r·(gram + α²) + |α|·L`, a least
+height above `δ` is `Separated` with its interval as the gap, and one within
+`δ` of zero is `ContactBand` with `Gap = [−c₀, c₀]`,
+`c₀ = max|H±| + r·(gram + α²)`. A depth beyond `δ` stays `Undecided`. Each
+end's true lowest point lies within `r·(3·gram + (3/2)·|α|)` of `c± − r·n̂`
+(with `AAᵀ = I + E`, `‖E‖ <= gram`, the lowest point is `c − r·Ay/|y|`,
+`y = P·Aᵀn̂`, and `|Ay − |y|·n̂| <= 2·gram + α² + |α|·√(1 + gram)` over
+`|y| >= √(7/8)`), and both points' feet, grown by that drift, must lie inside
+`S`'s face, so the plane holds the whole contact ruling and the gap is the
+least height. The manifold publishes the two points in exact coordinate
+order, each with that drift as its ball and its foot on the plane as the `S`
+witness; the normal is `S`'s exact face normal, which is `M`'s own normal at
+its true lowest point, and `Separation` is the band, or an exact zero for a
+touch. Reversing body order swaps witnesses and reverses the normal.
 
 ## 5. Contact cases and ordering
 

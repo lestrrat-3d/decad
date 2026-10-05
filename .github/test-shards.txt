@@ -1096,6 +1096,7 @@
 4	0.00	TestContactPairOrientedSourceBoxes
 4	0.00	TestContactPairPlacedBodyAndInputGates
 4	0.01	TestContactPairPlacedFacetedFloorExactTouch
+4	0.04	TestContactPairPlacedRuling
 4	0.05	TestContactPairPlanarManifoldCancels
 4	0.05	TestContactPairPlanarManifoldEdgeCrossing
 4	0.05	TestContactPairPlanarManifoldHexagonOverhang
@@ -1733,6 +1734,7 @@
 4	0.00	TestSweepPairRefusesSeparatedOffOriginRotatingSphere
 4	0.10	TestSweepPairRollingCylinder
 4	0.01	TestSweepPairRollingLeavesFace
+4	0.07	TestSweepPairRollingPlacedStart
 4	0.01	TestSweepPairRollingRefusals
 4	0.00	TestSweepPairRollingReplayResolution
 4	0.00	TestSweepPairRollingTravel

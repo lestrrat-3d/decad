@@ -118,6 +118,10 @@ type ContactReport struct {
 // At identity query poses, the analytic clearance kernel can prove relations
 // for other solids. Only its ruling touches publish a manifold: the two ends
 // of a full source cylinder's ruling on a planar face or another cylinder.
+// At other poses a full source cylinder lying along a signed-axis face of an
+// exact planar body proves a touch or gap at a signed-axis pose, and at any
+// other pose a gap, or a ContactBand whose width charges the pose basis's
+// rounding, each with the two lowest rim points as its manifold.
 // Both bodies must be non-nil, distinct, live members of d.
 func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transform,
 	req ContactRequest) (*ContactReport, error) {
@@ -175,11 +179,8 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 		}
 		if cylinder, ok := sourceCylinderAtPose(b, poseB); ok {
 			classifySourceCylinderBox(report, cylinder, boxA, false)
-			if report.Relation == ContactUndecided && poseA == r3.Identity() && poseB == r3.Identity() {
-				report.Reason = ContactNoReason
-				if err := classifyAnalyticContact(ctx, report); err != nil {
-					return nil, err
-				}
+			if err := classifyUndecidedCylinder(ctx, report); err != nil {
+				return nil, err
 			}
 			return report, nil
 		}
@@ -200,11 +201,8 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 		}
 		if cylinder, ok := sourceCylinderAtPose(a, poseA); ok {
 			classifySourceCylinderBox(report, cylinder, boxB, true)
-			if report.Relation == ContactUndecided && poseA == r3.Identity() && poseB == r3.Identity() {
-				report.Reason = ContactNoReason
-				if err := classifyAnalyticContact(ctx, report); err != nil {
-					return nil, err
-				}
+			if err := classifyUndecidedCylinder(ctx, report); err != nil {
+				return nil, err
 			}
 			return report, nil
 		}
@@ -238,7 +236,17 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 		if planar && report.Relation != ContactUndecided {
 			return report, nil
 		}
-		if poseA == r3.Identity() && poseB == r3.Identity() {
+		identity := poseA == r3.Identity() && poseB == r3.Identity()
+		if !planar && !identity {
+			placed, err := classifyPlacedRuling(ctx, report)
+			if err != nil {
+				return nil, err
+			}
+			if placed {
+				return report, nil
+			}
+		}
+		if identity {
 			report.Reason = ContactNoReason
 			if err := classifyAnalyticContact(ctx, report); err != nil {
 				return nil, err
@@ -303,6 +311,21 @@ func classifyPlanarManifold(ctx context.Context, report *ContactReport) error {
 	}
 	*report = trial
 	return nil
+}
+
+// classifyUndecidedCylinder completes a source cylinder report the box
+// proofs left undecided: at identity query poses the analytic kernel's
+// verdict, elsewhere the placed ruling of classifyPlacedRuling.
+func classifyUndecidedCylinder(ctx context.Context, report *ContactReport) error {
+	if report.Relation != ContactUndecided {
+		return nil
+	}
+	if report.PoseA == r3.Identity() && report.PoseB == r3.Identity() {
+		report.Reason = ContactNoReason
+		return classifyAnalyticContact(ctx, report)
+	}
+	_, err := classifyPlacedRuling(ctx, report)
+	return err
 }
 
 // classifyAnalyticContact consumes the clearance kernel's complete-pair

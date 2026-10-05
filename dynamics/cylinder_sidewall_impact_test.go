@@ -155,20 +155,44 @@ func TestCylinderSidewallImpactReversesPairNormal(t *testing.T) {
 	require.InDelta(t, 5, entry.LinearVelocity.X.Base(), 1e-6)
 }
 
+// requireRulingEnds checks a ruling touch whose two published ends lie on
+// both bodies exactly.
+func requireRulingEnds(t *testing.T, report *decad.ContactReport, ends [2]r3.Vec) {
+	t.Helper()
+	require.Equal(t, decad.ContactTouching, report.Relation, "reason=%v", report.Reason)
+	require.NotNil(t, report.Manifold)
+	require.Len(t, report.Manifold.Points, 2)
+	for i, point := range report.Manifold.Points {
+		require.Equal(t, ends[i], point.OnA.Value)
+		require.Equal(t, ends[i], point.OnB.Value)
+		require.Zero(t, point.OnA.Bound.Base())
+	}
+}
+
 func TestCylinderSidewallRefusesUnprovedCorridors(t *testing.T) {
 	doc := decad.New()
 	narrowWall := makeBox(t, doc, -10, -5, 0, 5, -10, 30)
+	shortWall := makeBox(t, doc, -10, -20, 0, 20, -10, 15)
 	broadWall := makeBox(t, doc, -10, -20, 0, 20, -10, 30)
 	cylinder := makeCylinder(t, doc)
 	req := decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
 		NormalResolution: units.Radians(1e-6)}
 	touch, err := r3.Translation(r3.Vec{X: 5})
 	require.NoError(t, err)
+	// The sidewall corridor needs the transverse diameter strictly inside
+	// the wall face, which the narrow wall's edges meet; the placed ruling
+	// (docs/contact-geometry-design.md §4.5) needs only the contact ruling
+	// inside it, so it proves the touch along x = 0, z ∈ [0, 10].
 	nearEdge, err := doc.ContactPair(t.Context(), narrowWall, cylinder,
 		r3.Identity(), touch, req)
 	require.NoError(t, err)
-	require.Equal(t, decad.ContactUndecided, nearEdge.Relation)
-	require.Nil(t, nearEdge.Manifold)
+	requireRulingEnds(t, nearEdge, [2]r3.Vec{{}, {Z: 10}})
+	// A wall whose face ends at z = 5 holds only half the ruling.
+	overhang, err := doc.ContactPair(t.Context(), shortWall, cylinder,
+		r3.Identity(), touch, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactUndecided, overhang.Relation)
+	require.Nil(t, overhang.Manifold)
 	start, err := r3.Translation(r3.Vec{X: 6})
 	require.NoError(t, err)
 	duration := units.Seconds(.2)
@@ -184,11 +208,19 @@ func TestCylinderSidewallRefusesUnprovedCorridors(t *testing.T) {
 	require.Equal(t, decad.SweepUndecided, verticalDrift.Outcome)
 	require.Equal(t, decad.SweepContactUnsupported, verticalDrift.Cause)
 
+	// A revolved sidewall has no box corridor; the placed ruling proves its
+	// touch along y = 0, z = 0, x ∈ [0, 10], and refuses a wall face that
+	// starts at x = 2.
 	revolvedWall := makeBox(t, doc, -10, -10, 20, 0, -20, 40)
+	shortRevolvedWall := makeBox(t, doc, 2, -10, 20, 0, -20, 40)
 	revolved := makeRevolvedCylinder(t, doc, decad.FullRevolution{}, 0)
 	revolvedTouch, err := r3.Translation(r3.Vec{Y: 5})
 	require.NoError(t, err)
-	unproved, err := doc.ContactPair(t.Context(), revolvedWall, revolved,
+	proved, err := doc.ContactPair(t.Context(), revolvedWall, revolved,
+		r3.Identity(), revolvedTouch, req)
+	require.NoError(t, err)
+	requireRulingEnds(t, proved, [2]r3.Vec{{}, {X: 10}})
+	unproved, err := doc.ContactPair(t.Context(), shortRevolvedWall, revolved,
 		r3.Identity(), revolvedTouch, req)
 	require.NoError(t, err)
 	require.Equal(t, decad.ContactUndecided, unproved.Relation)

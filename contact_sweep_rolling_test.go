@@ -361,16 +361,20 @@ func TestSweepPairRollingRefusals(t *testing.T) {
 		require.Equal(t, decad.SweepMissingBound, report.Cause)
 		require.Nil(t, report.ContactTrack)
 	})
-	t.Run("placed start", func(t *testing.T) {
-		// ContactPair proves the ruling touch only at identity query poses.
+	t.Run("sunk placed start", func(t *testing.T) {
+		// A long-rolled start a micrometre into the floor is beyond its band,
+		// so ContactPair proves no start relation.
 		doc := decad.New()
-		floor, cylinder := rollingScene(t, doc, 15, -100)
-		path := roll.path()
-		path.From = contactPose(t, r3.Vec{X: 1})
-		path.Center.X = 1
+		cylinder := revolvedCylinder(t, doc, -15, 15, 0, 10)
+		floor := boxBodyAtZ(t, doc, -100, -200, 100, 200, -20, 10)
+		path := placedRoll(t, rolledPose(t, 1<<16, .7))
+		var err error
+		path.From, err = path.From.Then(contactPose(t, r3.Vec{Z: -1e-6}))
+		require.NoError(t, err)
 		report, err := doc.SweepPair(t.Context(), floor, cylinder, sweepDrift(r3.Vec{}, 1), path, bandRequest())
 		require.NoError(t, err)
 		require.Equal(t, decad.SweepUndecided, report.Outcome)
+		require.Equal(t, decad.SweepPoseRelation, report.Cause)
 		require.Nil(t, report.ContactTrack)
 	})
 	t.Run("standing cylinder", func(t *testing.T) {
@@ -394,3 +398,200 @@ func TestSweepPairRollingRefusals(t *testing.T) {
 		require.Nil(t, report)
 	})
 }
+
+// placedRoll rolls a radius-10 cylinder whose axis is the world X axis at its
+// identity pose one turn at 2π rad/s from the given start pose, about the
+// pose's image of the origin.
+func placedRoll(t *testing.T, from r3.Transform) decad.RigidDriftSegment {
+	t.Helper()
+	omega := 2 * math.Pi
+	path := rollingCase{omega: r3.Vec{X: omega}, v: r3.Vec{Y: -omega * 10}, center: from.Translation(),
+		seconds: 1}.path()
+	path.From = from
+	return path
+}
+
+// The placed starts of docs/multibody-dynamics-design.md §10.4 ("Rolling"):
+// a start pose other than the identity. A signed-axis start is an exact
+// touch, as at the identity. Any other start is ContactPair's band of the
+// pose basis's rounding (contact_analytic_manifold_test.go), and the track
+// charges it: its depth starts at max|H±| + r·gram + r·α², and its rim balls
+// at r·(3·gram + (3/2)·|α|), α the staged axis column's normal component.
+//
+// Legs shown to fail (each deleted or zeroed in turn, fixture red, then
+// restored):
+//   - the start heights max|H±| in the depth: "tilted" publishes a band below
+//     its rising end at the start;
+//   - the section term r·gram + r·α² in the depth: "long roll" publishes a
+//     start band that misses the true least height;
+//   - the rim balls' start drift: "long roll" and "tilted" publish start balls
+//     that miss the true lowest rim points;
+//   - the |α| + β·t <= 1/4 gate on the rim drift: "gate" outlasts it.
+//
+// The rate's cross term 2·r·β·|α| cannot be shown failing: the section term
+// reads 1 − √(1 − x) <= x, about twice the true r·(1 − |y|) for small x, and
+// within the 1/4 gate r·α² + r·β²·t² covers the true term to within 2% of
+// r·α², which the other terms' slack absorbs in every fixture. It stays as
+// the bound the derivation needs.
+func TestSweepPairRollingPlacedStart(t *testing.T) {
+	const slack = 1e-9
+	scene := func(t *testing.T) (*decad.Document, *decad.Body, *decad.Body) {
+		doc := decad.New()
+		cylinder := revolvedCylinder(t, doc, -15, 15, 0, 10)
+		floor := boxBodyAtZ(t, doc, -100, -200, 100, 200, -20, 10)
+		return doc, floor, cylinder
+	}
+	sweep := func(t *testing.T, doc *decad.Document, floor, cylinder *decad.Body, path decad.RigidDriftSegment,
+		req decad.SweepRequest, order int) *decad.SweepReport {
+		t.Helper()
+		a, b := floor, cylinder
+		pathA, pathB := decad.PairPath(sweepDrift(r3.Vec{}, pathDurationOf(path))), decad.PairPath(path)
+		if order == 1 {
+			a, b, pathA, pathB = cylinder, floor, pathB, pathA
+		}
+		report, err := doc.SweepPair(t.Context(), a, b, pathA, pathB, req)
+		require.NoError(t, err)
+		return report
+	}
+	// requireStart checks the track's start against the true occupied set of
+	// the start pose: the band holds both ends' least heights, and each rim
+	// ball its true lowest point.
+	requireStart := func(t *testing.T, track *decad.SweepContactTrack, from r3.Transform, order int) {
+		t.Helper()
+		band, err := track.BandAt(units.Scalar(0))
+		require.NoError(t, err)
+		require.NotNil(t, band)
+		manifold, err := track.ManifoldAt(units.Scalar(0))
+		require.NoError(t, err)
+		require.Len(t, manifold.Points, 2)
+		for i, x := range []float64{-15, 15} {
+			height, rim := trueRim(from, x, 0)
+			requireWithin(t, height, band.Value.Base()+band.Bound.Base(), "start band")
+			onCylinder := manifold.Points[i].OnB
+			if order == 1 {
+				onCylinder = manifold.Points[i].OnA
+			}
+			requireBallHolds(t, onCylinder, rim, "start rim")
+		}
+	}
+
+	for order := range 2 {
+		t.Run(map[int]string{0: "floor first", 1: "cylinder first"}[order], func(t *testing.T) {
+			t.Run("translated", func(t *testing.T) {
+				// A signed-axis start is the exact touch of the identity case:
+				// one turn rolls the contact point π·20 mm along −y.
+				doc, floor, cylinder := scene(t)
+				path := placedRoll(t, contactPose(t, r3.Vec{X: 1, Y: 2}))
+				report := sweep(t, doc, floor, cylinder, path, bandRequest(), order)
+				require.Equal(t, decad.SweepPersistentTouch, report.Outcome, "cause=%v", report.Cause)
+				require.Equal(t, decad.ContactTouching, report.InitialEvent.Relation)
+				start, err := report.ContactTrack.ManifoldAt(units.Scalar(0))
+				require.NoError(t, err)
+				end, err := report.ContactTrack.ManifoldAt(units.Scalar(1))
+				require.NoError(t, err)
+				for i := range start.Points {
+					from, to := start.Points[i].OnB, end.Points[i].OnB
+					if order == 1 {
+						from, to = start.Points[i].OnA, end.Points[i].OnA
+					}
+					require.Equal(t, r3.Vec{X: float64(2*i-1)*15 + 1, Y: 2, Z: -10}, from.Value)
+					require.InDelta(t, math.Pi*20, from.Value.Y-to.Value.Y, from.Bound.Base()+to.Bound.Base()+1e-12)
+				}
+			})
+			t.Run("long roll", func(t *testing.T) {
+				// The start pose of 65536 turns of 0.7 rad: ContactPair's band
+				// of the basis's drift starts the track, which rolls one more
+				// turn within it.
+				doc, floor, cylinder := scene(t)
+				from := rolledPose(t, 1<<16, .7)
+				report := sweep(t, doc, floor, cylinder, placedRoll(t, from), bandRequest(), order)
+				require.Equal(t, decad.SweepPersistentBand, report.Outcome, "cause=%v", report.Cause)
+				require.Equal(t, decad.ContactBand, report.InitialEvent.Relation)
+				track := report.ContactTrack
+				require.Equal(t, 1.0, track.End().Fraction.Base())
+				requireStart(t, track, from, order)
+				// The band is the basis's drift: negligible against the request.
+				band := track.Band()
+				require.NotNil(t, band)
+				require.Less(t, band.Value.Base()+band.Bound.Base(), 1e-9)
+				for _, fraction := range []float64{.25, .5, 1} {
+					_, _, err := report.CertifiedPosesAt(units.Seconds(fraction))
+					require.NoError(t, err, "fraction %v", fraction)
+					manifold, err := track.ManifoldAt(units.Scalar(fraction))
+					require.NoError(t, err)
+					for i, point := range manifold.Points {
+						onCylinder := point.OnB
+						if order == 1 {
+							onCylinder = point.OnA
+						}
+						// The rim rolls with the axis: it stays at y = −20π·t,
+						// z = −10, within the ball and the slack of this float
+						// closed form.
+						want := r3.Vec{X: float64(2*i-1) * 15, Y: -math.Pi * 20 * fraction, Z: -10}
+						require.InDelta(t, 0, onCylinder.Value.Sub(want).Len(), onCylinder.Bound.Base()+slack)
+					}
+				}
+			})
+			t.Run("tilted", func(t *testing.T) {
+				// The "tilt" drift of TestSweepPairRollingCylinder from a start
+				// tipped 2^-10 rad about Y: the −X end starts about 0.029 mm
+				// up, and the tip about Y raises the tilt as the disc turns.
+				doc, floor, cylinder := scene(t)
+				from := tiltedPose(t, math.Ldexp(1, -10), 0)
+				path := rollingCase{omega: r3.Vec{Y: .5}, center: from.Translation(), seconds: .25}.path()
+				path.From = from
+				req := bandRequest()
+				req.PointResolution = units.Millimeters(2)
+				report := sweep(t, doc, floor, cylinder, path, req, order)
+				require.Equal(t, decad.SweepPersistentBand, report.Outcome, "cause=%v", report.Cause)
+				require.Equal(t, decad.ContactBand, report.InitialEvent.Relation)
+				track := report.ContactTrack
+				require.Equal(t, 1.0, track.End().Fraction.Base())
+				requireStart(t, track, from, order)
+				axis0 := from.ApplyDir(r3.Vec{X: 1})
+				for _, fraction := range []float64{.25, .5, .75, 1} {
+					elapsed := fraction * .25
+					band, err := track.BandAt(units.Scalar(fraction))
+					require.NoError(t, err)
+					manifold, err := track.ManifoldAt(units.Scalar(fraction))
+					require.NoError(t, err)
+					axis := rotate(axis0, r3.Vec{Y: .5}, elapsed)
+					w := r3.Vec{Z: 1}.Sub(axis.Scale(axis.Z))
+					w = w.Scale(1 / w.Len())
+					for i, x := range []float64{-15, 15} {
+						end := rotate(from.Apply(r3.Vec{X: x}).Sub(from.Translation()), r3.Vec{Y: .5}, elapsed).
+							Add(from.Translation())
+						rim := end.Sub(w.Scale(10))
+						require.LessOrEqual(t, math.Abs(rim.Z+10), band.Value.Base()+band.Bound.Base()+slack,
+							"fraction %v end %d", fraction, i)
+						onCylinder := manifold.Points[i].OnB
+						if order == 1 {
+							onCylinder = manifold.Points[i].OnA
+						}
+						require.InDelta(t, 0, onCylinder.Value.Sub(rim).Len(), onCylinder.Bound.Base()+slack,
+							"fraction %v end %d", fraction, i)
+					}
+				}
+			})
+			t.Run("gate", func(t *testing.T) {
+				// Over a whole second the tip would raise |α| past 1/4, where
+				// the rim drift bound stops holding: the track ends where
+				// |α| + β·t reaches it, about 0.498 s.
+				doc, floor, cylinder := scene(t)
+				from := tiltedPose(t, math.Ldexp(1, -10), 0)
+				path := rollingCase{omega: r3.Vec{Y: .5}, center: from.Translation(), seconds: 1}.path()
+				path.From = from
+				req := bandRequest()
+				req.PointResolution = units.Millimeters(16)
+				report := sweep(t, doc, floor, cylinder, path, req, order)
+				require.Equal(t, decad.SweepPersistentBand, report.Outcome, "cause=%v", report.Cause)
+				gate := (.25 - math.Sin(math.Ldexp(1, -10))) / .5
+				end := report.ContactTrack.End().Elapsed.Value.Base()
+				require.LessOrEqual(t, end, gate)
+				require.Greater(t, end, gate-.01)
+			})
+		})
+	}
+}
+
+func pathDurationOf(path decad.RigidDriftSegment) float64 { return path.Duration.Base() }
