@@ -105,6 +105,15 @@ func (w *World) threeAllDynamicConservation(from, kicked, end State, trace Trace
 		for _, slice := range trace.threeSlices {
 			slices = append(slices, [2]State{pairState(slice.from, pair), pairState(slice.to, pair)})
 		}
+		if len(slices) == 0 {
+			if trace.hasEvent {
+				slices = append(slices,
+					[2]State{pairState(kicked, pair), pairState(trace.pre, pair)},
+					[2]State{pairState(trace.post, pair), pairState(end, pair)})
+			} else {
+				slices = append(slices, [2]State{pairState(kicked, pair), pairState(end, pair)})
+			}
+		}
 		parts[key].DriftChange, ok = pair.driftConservationSlices(slices)
 		if !ok {
 			return StepConservation{}, false

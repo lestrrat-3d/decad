@@ -200,3 +200,47 @@ func TestThreeDynamicSimultaneousSphereFriction(t *testing.T) {
 		require.NoError(t, sampleErr)
 	})
 }
+
+func TestThreeDynamicRotatingClearDriftConservation(t *testing.T) {
+	doc := decad.New()
+	a, b, c := makeBall(t, doc), makeBall(t, doc), makeBall(t, doc)
+	mass := exactSphereMass()
+	material := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(.1)}
+	cfg := sphereRestConfig()
+	cfg.MaxEvents = 3
+	world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{Bodies: []dynamics.RigidBody{
+		{Body: a, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+		{Body: b, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+		{Body: c, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+	}, Step: cfg})
+	require.NoError(t, err)
+	poseA, err := r3.Translation(r3.Vec{X: 1000})
+	require.NoError(t, err)
+	poseB, err := r3.Translation(r3.Vec{X: 1020})
+	require.NoError(t, err)
+	poseC, err := r3.Translation(r3.Vec{X: 1000, Y: 20})
+	require.NoError(t, err)
+	spin := func(z float64) dynamics.QuantityVec {
+		return dynamics.QuantityVec{X: units.RadiansPerSecond(0),
+			Y: units.RadiansPerSecond(0), Z: units.RadiansPerSecond(z)}
+	}
+	state, err := world.NewState([]dynamics.BodyState{
+		{Body: a, Pose: poseA, LinearVelocity: sphereRestVelocity(r3.Vec{X: .1, Y: .3}),
+			AngularVelocity: spin(.1)},
+		{Body: b, Pose: poseB, LinearVelocity: sphereRestVelocity(r3.Vec{X: .2, Y: .4}),
+			AngularVelocity: spin(-.2)},
+		{Body: c, Pose: poseC, LinearVelocity: sphereRestVelocity(r3.Vec{X: .3, Y: .1}),
+			AngularVelocity: spin(.3)},
+	})
+	require.NoError(t, err)
+	report, err := world.Step(t.Context(), state,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.03))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Empty(t, report.Events)
+	require.NotNil(t, report.Conservation)
+	require.Positive(t, report.Conservation.DriftChange.AngularMomentum.Bound.Z.Base())
+	require.GreaterOrEqual(t, report.Conservation.DriftChange.AngularMomentum.Bound.Z.Base(),
+		report.Conservation.AfterKick.AngularMomentum.Bound.Z.Base()+
+			report.Conservation.Completion.AngularMomentum.Bound.Z.Base())
+}
