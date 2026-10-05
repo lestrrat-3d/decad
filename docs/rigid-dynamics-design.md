@@ -255,8 +255,22 @@ retains the after-kick velocity when no contact impulse occurs.
 The two ordered events describe arithmetic stages of one simultaneous solve.
 The combined momentum and kinetic-energy checks cover both impulses together;
 an intermediate stage can gain energy while the completed island loses it.
-Later simultaneous impacts, other coupled normals, and simultaneous friction
-return `Undecided`. An excluded pair may overlap or cross without a contact
+An initial source sphere touching two fixed, orthogonal source-box faces can also
+resolve two positive-friction point impulses together. Both fixed poses are
+identity, the sphere has exact centered isotropic mass, and the two exact
+normals point along positive X and Z toward its center. It starts without spin,
+closes along both normals, and slips along Y. Both pairs have zero restitution
+and exact positive friction. The joint sticking solution uses the same linear
+mass and spherical inertia for both contacts. Each normal impulse stops its
+closing component, while both Y impulses share the Y speed and create X and Z
+spin. It accepts the solution only when each impulse fits its Coulomb disk,
+both rounded contact-point speeds fit `VelocityResidual`, and the combined
+linear, angular, and energy readings fit their configured residuals. Each
+rotating sweep certifies its ideal persistent track and rounded pose replay.
+Both certificates must yield the same exact endpoint sphere pose, which the
+step publishes. The trace replays both rounded paths. A sliding joint
+solution, later simultaneous impacts, and other coupled normals return
+`Undecided`. An excluded pair may overlap or cross without a contact
 event or material mixing.
 At an initial face touch, a fixed floor and dynamic source box can receive a
 full-step kick from gravity and any center force, then a zero-restitution

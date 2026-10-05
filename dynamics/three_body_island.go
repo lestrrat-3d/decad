@@ -28,6 +28,11 @@ type initialConstraint struct {
 func (w *World) stepThreeSimultaneousInitial(ctx context.Context, from, kicked State,
 	gravity QuantityVec, loads [2]*BodyLoad, dt units.Value, sweeps [3]*decad.SweepReport,
 	reference *World) (*StepReport, error) {
+	for key, sweep := range sweeps {
+		if sweep != nil && w.three.pairs[key].friction.upper.Sign() > 0 {
+			return w.stepThreeFrictionIsland(ctx, from, kicked, gravity, loads, dt, sweeps, reference)
+		}
+	}
 	if threeHasSpherePair(sweeps) {
 		return w.stepThreeSphereIsland(ctx, from, kicked, gravity, loads, dt, sweeps, reference)
 	}

@@ -48,6 +48,10 @@ and full-span tracks certify both pairs. A dynamic source sphere can touch
 a fixed floor and source sphere at the same initial instant when its two
 frictionless zero-restitution normal impulses pass one coupled response check;
 each pair then needs a certified persistent or separating remainder. A source
+sphere can also touch two orthogonal fixed source-box faces while
+closing along both normals and slipping along their shared Y tangent. Exact
+mass and inertia give two coupled sticking friction impulses, and both
+rotating sphere-box proofs replay the persistent contacts. A source
 box can hit a fixed floor obliquely while retaining tangential velocity. A fixed floor and
 dynamic source box can complete an initial resting contact after a full-step
 gravity kick or a zero-restitution impact. A stationary touching pair also
@@ -142,7 +146,7 @@ kinematic driver work.
 Before publishing an advanced step, isolated responses check each contact
 event's dynamic-body linear momentum against its impulse and reject an impact
 whose kinetic energy gain exceeds its driver work plus the computed numerical
-allowance. The coupled sphere island and centered two-box stack check their
+allowance. The coupled sphere islands and centered two-box stack check their
 simultaneous impulses together. Other frictional contacts, other rotating
 kinematic drivers, broader stacks, and payload paths remain design
 contracts. Each companion document owns its detail.
