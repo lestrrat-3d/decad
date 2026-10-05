@@ -283,7 +283,7 @@ func (w *World) stepContactTransition(ctx context.Context, from, kicked State, d
 		fromFraction.Sign() <= 0 || toFraction.Cmp(exactBase(units.Scalar(1))) >= 0 {
 		return undecided(w, "transition bracket cannot make progress before the step end"), nil
 	}
-	chosen := dt.Base() * first.Bracket.To.Fraction.Base()
+	chosen := float64(dt.Base() * first.Bracket.To.Fraction.Base())
 	remaining := dt.Base() - chosen
 	if !finite(chosen, remaining) || chosen <= 0 || remaining <= 0 {
 		return undecided(w, "transition time leaves no representable clear remainder"), nil

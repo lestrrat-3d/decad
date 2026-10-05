@@ -206,7 +206,7 @@ func directAccepted(points []nominalPoint, rows []directRow, k [][]float64, gap,
 	for i, row := range rows {
 		change := 0.0
 		for j := range rows {
-			change += k[i][j] * impulse[j]
+			change += float64(k[i][j] * impulse[j])
 		}
 		residual := change - gap[i] // post relative speed minus target
 		active, tangentRow := mask&(1<<row.point) != 0, seen[row.point] > 0
@@ -227,7 +227,7 @@ func directAccepted(points []nominalPoint, rows []directRow, k [][]float64, gap,
 		seen[row.point]++
 	}
 	for k, p := range points {
-		if lambda[k] < 0 || math.Hypot(tangent[k][0], tangent[k][1]) > p.mu*lambda[k]+coneSlack {
+		if lambda[k] < 0 || math.Hypot(tangent[k][0], tangent[k][1]) > float64(p.mu*lambda[k])+coneSlack {
 			return nil, nil, false
 		}
 	}

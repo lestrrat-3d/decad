@@ -2683,9 +2683,10 @@ hand-written manifold, event or pose (CLAUDE.md "Correctness must be observable"
   or a subtract on a published or certified path is rounded explicitly with `float64(...)`, which the
   spec says forbids the fusion. The products inside `r3`'s `Vec.Dot`, `Vec.Add` of a `Vec.Scale`,
   `SymmetricTensor.MulVec` and `Transform.Apply` still fuse where they inline into `dynamics`, so their
-  last bits can still differ between CPUs. `GOAMD64=v3` builds fuse on amd64, and the suite passes
-  under both builds; `go build -gcflags='github.com/lestrrat-3d/decad/dynamics=-d=fmahash=vy'` lists
-  every remaining fused site.
+  last bits can still differ between CPUs: on arm64 the fused `Vec.Dot` in the island solve's sweep
+  turns `TestSpherePairInitialZeroRestitutionTangentialDeparture`'s departure into an unproved touch
+  track. `GOAMD64=v3` builds fuse on amd64, and `GOARCH=arm64 go build
+  -gcflags='github.com/lestrrat-3d/decad/dynamics=-d=fmahash=vy'` lists every fused site arm64 keeps.
 - **No pinned bound literals.** Bounds are asserted negligible against a slack figure with a comment
   saying why; values are `InDelta` at a stated slack. FMA contraction differs between hosts.
 - **Dyadic inputs.** Fixture coordinates, velocities and times are dyadic so exact comparisons (event

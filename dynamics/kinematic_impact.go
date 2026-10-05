@@ -94,7 +94,7 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	effectiveCoefficient := units.Scalar(0)
 	if new(big.Rat).Neg(idealRelative).Cmp(exactBase(w.step.ImpactSpeed)) > 0 {
 		effectiveCoefficient = coefficient
-		target = -coefficient.Base() * relative
+		target = float64(-coefficient.Base() * relative)
 	}
 	impulse := (target - relative) / inverseMass
 	if !finite(target, impulse) || impulse <= 0 {

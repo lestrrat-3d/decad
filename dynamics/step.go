@@ -437,7 +437,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		len(first.Event.Manifold.Points) == 0 {
 		return undecided(w, "impact has no certified bracket and manifold"), nil
 	}
-	impactTime := dt.Base() * first.Bracket.To.Fraction.Base()
+	impactTime := float64(dt.Base() * first.Bracket.To.Fraction.Base())
 	if !finite(impactTime) || impactTime < 0 || impactTime > dt.Base() {
 		return undecided(w, "impact time is outside the step"), nil
 	}
@@ -532,7 +532,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	effectiveCoefficient := units.Scalar(0)
 	if new(big.Rat).Neg(idealRelative).Cmp(idealThreshold) > 0 {
 		effectiveCoefficient = coefficient
-		target = -coefficient.Base() * relativeSpeed
+		target = float64(-coefficient.Base() * relativeSpeed)
 	}
 	impulse := (target - relativeSpeed) / denominator
 	if !finite(impulse) || impulse <= 0 {
