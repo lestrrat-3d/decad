@@ -206,9 +206,6 @@ const (
 	// unitRoundoff is float64's u = 2⁻⁵³: the relative error a single
 	// round-to-nearest operation can commit.
 	unitRoundoff = 1.1102230246251565e-16
-	// sqrt3Up is √3 rounded UP, so a per-coordinate bound scaled by it stays
-	// an upper bound on the 3D corner distance.
-	sqrt3Up = 1.7320508075688774
 )
 
 // upRound nudges a positive bound to the next representable float64, so the
@@ -250,10 +247,7 @@ func upRound(x float64) float64 {
 // A caller whose operands are NOT proven positive keeps upRound: a zero that
 // is honestly zero must stay zero.
 func provenUpRound(x float64) float64 {
-	if r := upRound(x); r != 0 {
-		return r
-	}
-	return math.SmallestNonzeroFloat64
+	return proofarith.ProvenUpRound(x)
 }
 
 // divUpper is productUpper's division twin: it carries the same "a positive
@@ -285,10 +279,7 @@ func divUpper(num, den float64) float64 {
 // up to √3 times the per-coordinate bound away (core §5.2 — a coordinate's
 // error bound is a radius, not an axis extent).
 func radius3D(perCoord float64) float64 {
-	if perCoord <= 0 {
-		return 0
-	}
-	return upRound(perCoord * sqrt3Up)
+	return proofarith.Radius3D(perCoord)
 }
 
 // heldDelta is the EXACT difference a − b of two held corners, taken over

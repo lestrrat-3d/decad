@@ -40,6 +40,14 @@ func TestContactPairSourceBoxes(t *testing.T) {
 	require.Equal(t, decad.Exact, separated.Gap.Exactness)
 	require.Equal(t, 3.0, separated.Gap.Value.Base())
 	require.Nil(t, separated.Manifold)
+	diagonal, err := doc.ContactPair(t.Context(), a, b, id,
+		contactPose(t, r3.Vec{X: 13, Y: 14}), req)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, diagonal.Relation)
+	require.NotNil(t, diagonal.Gap)
+	require.LessOrEqual(t, diagonal.Gap.Value.Base()-diagonal.Gap.Bound.Base(), 5.0)
+	require.GreaterOrEqual(t, diagonal.Gap.Value.Base()+diagonal.Gap.Bound.Base(), 5.0)
+	require.Nil(t, diagonal.Manifold)
 
 	touching, err := doc.ContactPair(t.Context(), a, b, id, contactPose(t, r3.Vec{Z: 10}), req)
 	require.NoError(t, err)
@@ -69,7 +77,25 @@ func TestContactPairSourceBoxes(t *testing.T) {
 		require.Equal(t, touching.Manifold.Points[i].OnA.Value, point.OnB.Value)
 		require.Equal(t, r3.Vec{Z: -1}, point.Normal.Value)
 	}
+	edge, err := doc.ContactPair(t.Context(), a, b, id,
+		contactPose(t, r3.Vec{X: 10, Z: 10}), req)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, edge.Relation)
+	require.Nil(t, edge.Manifold)
+	require.Equal(t, decad.ContactAmbiguousFeature, edge.Reason)
 	require.Equal(t, before, doc.Bodies())
+
+	fractional := boxBody(t, doc, 0.2, 0, 10.2, 10, 10)
+	beforeFractional := doc.Bodies()
+	coarseReq := req
+	coarseReq.PointResolution = units.Millimeters(1e-20)
+	coarse, err := doc.ContactPair(t.Context(), a, fractional, id,
+		contactPose(t, r3.Vec{X: 0.1, Z: 10}), coarseReq)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, coarse.Relation)
+	require.Nil(t, coarse.Manifold)
+	require.Equal(t, decad.ContactPointTooCoarse, coarse.Reason)
+	require.Equal(t, beforeFractional, doc.Bodies())
 }
 
 func TestContactPairSourceSphereAndBox(t *testing.T) {

@@ -145,4 +145,30 @@ func DivRoundError(a, b, held float64) float64 {
 	return RationalFloatError(new(big.Rat).Quo(ra, rb), held)
 }
 
+// ProvenUpRound rounds a proven positive bound outward. A positive value that
+// flushed to zero must still publish a positive bound.
+func ProvenUpRound(value float64) float64 {
+	if value > 0 {
+		return math.Nextafter(value, math.Inf(1))
+	}
+	if value == 0 {
+		return math.SmallestNonzeroFloat64
+	}
+	return value
+}
+
+// Radius3D turns a per-coordinate error into a bound on three-dimensional
+// distance. The constant is sqrt(3) rounded upward.
+func Radius3D(perCoord float64) float64 {
+	if perCoord <= 0 {
+		return 0
+	}
+	const sqrt3Up = 1.7320508075688774
+	product := perCoord * sqrt3Up
+	if product > 0 {
+		return math.Nextafter(product, math.Inf(1))
+	}
+	return product
+}
+
 func finite(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }

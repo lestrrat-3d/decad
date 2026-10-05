@@ -3,9 +3,8 @@ package decad
 import (
 	"context"
 	"fmt"
-	"math"
 
-	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/pair"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -250,128 +249,72 @@ func classifyAnalyticContact(ctx context.Context, report *ContactReport) error {
 }
 
 func classifySourceBoxes(report *ContactReport, a, b sourceBoxContactProof) {
-	var gaps [3]proofarith.Dyadic
-	touchAxes := 0
-	overlaps := true
-	for i := range 3 {
-		switch {
-		case proofarith.DyCmp(a.hi[i], b.lo[i]) < 0:
-			gaps[i] = proofarith.DySubScalar(b.lo[i], a.hi[i])
-			overlaps = false
-		case proofarith.DyCmp(b.hi[i], a.lo[i]) < 0:
-			gaps[i] = proofarith.DySubScalar(a.lo[i], b.hi[i])
-			overlaps = false
-		case proofarith.DyCmp(a.hi[i], b.lo[i]) == 0 || proofarith.DyCmp(b.hi[i], a.lo[i]) == 0:
-			touchAxes++
-			overlaps = false
-		}
-	}
-	for _, gap := range gaps {
-		if gap.Sign() > 0 {
-			m, ok := sourceBoxGap(gaps)
-			if !ok {
-				report.Reason = ContactNoGapProof
-				return
-			}
-			report.Relation = ContactSeparated
-			report.Gap = &m
-			return
-		}
-	}
-	if touchAxes > 0 {
+	result := pair.ClassifyAxisBoxes(
+		pair.AxisBox{Lo: a.lo, Hi: a.hi},
+		pair.AxisBox{Lo: b.lo, Hi: b.hi},
+		pair.AxisBoxRequest{PointResolutionMM: report.Request.PointResolution.Base()},
+	)
+	switch result.Relation {
+	case pair.Separated:
+		report.Relation = ContactSeparated
+	case pair.Touching:
 		report.Relation = ContactTouching
-		gap := Measurement{Value: units.Millimeters(0), Exactness: Exact, Bound: units.Millimeters(0)}
+	case pair.Overlapping:
+		report.Relation = ContactOverlapping
+	default:
+		report.Relation = ContactUndecided
+	}
+	report.Reason = sourceBoxReason(result.Reason)
+	if result.Gap != nil {
+		gap := sourceBoxScalar(*result.Gap)
 		report.Gap = &gap
-		if touchAxes != 1 {
-			report.Reason = ContactAmbiguousFeature
-			return
-		}
-		for i := range 3 {
-			if proofarith.DyCmp(a.hi[i], b.lo[i]) == 0 {
-				publishSourceBoxPatch(report, a, b, i, 1, proofarith.DyZero())
-				return
-			}
-			if proofarith.DyCmp(b.hi[i], a.lo[i]) == 0 {
-				publishSourceBoxPatch(report, a, b, i, -1, proofarith.DyZero())
-				return
-			}
-		}
 	}
-	if !overlaps {
-		report.Reason = ContactPayloadUnsupported
+	if result.Patch == nil {
 		return
 	}
-	report.Relation = ContactOverlapping
-	// Six directed translations move B across one of A's support planes.
-	// A unique smallest depth and two crossing faces are required for response.
-	axis, sign, depth, unique := sourceBoxTranslation(a, b)
-	if !unique {
-		report.Reason = ContactAmbiguousFeature
-		return
-	}
-	if sign > 0 {
-		if proofarith.DyCmp(b.lo[axis], a.lo[axis]) <= 0 || proofarith.DyCmp(b.hi[axis], a.hi[axis]) <= 0 {
-			report.Reason = ContactAmbiguousFeature
-			return
-		}
-	} else if proofarith.DyCmp(b.lo[axis], a.lo[axis]) >= 0 || proofarith.DyCmp(b.hi[axis], a.hi[axis]) >= 0 {
-		report.Reason = ContactAmbiguousFeature
-		return
-	}
-	publishSourceBoxPatch(report, a, b, axis, sign, proofarith.DyNeg(depth))
+	publishAxisBoxPatch(report, a, b, result.Patch)
 }
 
-func sourceBoxTranslation(a, b sourceBoxContactProof) (int, int, proofarith.Dyadic, bool) {
-	var best proofarith.Dyadic
-	axis, sign, ties := 0, 0, false
-	for i := range 3 {
-		for _, candidate := range []struct {
-			value proofarith.Dyadic
-			sign  int
-		}{
-			{proofarith.DySubScalar(a.hi[i], b.lo[i]), 1},
-			{proofarith.DySubScalar(b.hi[i], a.lo[i]), -1},
-		} {
-			if candidate.value.Sign() <= 0 {
-				return 0, 0, proofarith.Dyadic{}, false
-			}
-			cmp := proofarith.DyCmp(candidate.value, best)
-			if sign == 0 || cmp < 0 {
-				axis, sign, best, ties = i, candidate.sign, candidate.value, false
-			} else if cmp == 0 {
-				ties = true
-			}
-		}
+func sourceBoxReason(reason pair.Reason) ContactReason {
+	switch reason {
+	case pair.NoGapProof:
+		return ContactNoGapProof
+	case pair.AmbiguousFeature:
+		return ContactAmbiguousFeature
+	case pair.PointTooCoarse:
+		return ContactPointTooCoarse
+	case pair.PayloadUnsupported:
+		return ContactPayloadUnsupported
+	default:
+		return ContactNoReason
 	}
-	return axis, sign, best, !ties
 }
 
-func sourceBoxGap(gaps [3]proofarith.Dyadic) (Measurement, bool) {
-	positive := 0
-	var only proofarith.Dyadic
-	squared := proofarith.Dyadic{}
-	for _, gap := range gaps {
-		if gap.Sign() > 0 {
-			positive++
-			only = gap
-			squared = proofarith.DyAdd(squared, proofarith.DyMul(gap, gap))
-		}
+func publishAxisBoxPatch(report *ContactReport, a, b sourceBoxContactProof, patch *pair.AxisBoxPatch) {
+	faceA := a.faces[patch.FaceA.Axis][patch.FaceA.Side]
+	faceB := b.faces[patch.FaceB.Axis][patch.FaceB.Side]
+	var normal r3.Vec
+	switch patch.NormalAxis {
+	case 0:
+		normal.X = float64(patch.NormalSign)
+	case 1:
+		normal.Y = float64(patch.NormalSign)
+	case 2:
+		normal.Z = float64(patch.NormalSign)
 	}
-	if positive == 1 {
-		v, exact := only.Float64()
-		if !finiteMeasurementValues(v) {
-			return Measurement{}, false
-		}
-		bound := proofarith.DyadicFloatError(only, v)
-		return Measurement{Value: units.Millimeters(v), Exactness: exactnessOf(bound),
-			Bound: units.Millimeters(bound)}, exact || bound < v
+	separation := sourceBoxScalar(patch.Separation)
+	points := make([]ContactPoint, 0, len(patch.Points))
+	for _, point := range patch.Points {
+		points = append(points, ContactPoint{
+			OnA:         sourceBoxPointMeasurement(point.OnA),
+			OnB:         sourceBoxPointMeasurement(point.OnB),
+			Normal:      VecMeasurement{Value: normal, Exactness: Exact, Bound: units.Scalar(0)},
+			NormalAngle: units.Radians(0),
+			Separation:  separation,
+			FaceA:       faceA, FaceB: faceB,
+			FeatureA: ContactFeature{Face: faceA},
+			FeatureB: ContactFeature{Face: faceB},
+		})
 	}
-	lo, hi := proofarith.DySqrtDown(squared), proofarith.DySqrtUp(squared)
-	if !finiteMeasurementValues(lo, hi) || lo <= 0 {
-		return Measurement{}, false
-	}
-	v := lo + (hi-lo)/2
-	bound := provenUpRound(math.Max(v-lo, hi-v))
-	return Measurement{Value: units.Millimeters(v), Exactness: exactnessOf(bound),
-		Bound: units.Millimeters(bound)}, finiteMeasurementValues(v, bound)
+	report.Manifold = &ContactManifold{Points: points}
 }

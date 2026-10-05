@@ -3,6 +3,7 @@ package decad
 import (
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -144,110 +145,56 @@ func signedAxis(v r3.Vec) (int, int, bool) {
 	}
 }
 
+// The root package maps neutral pair readings to public units and topology.
 func publishSourceBoxPatch(report *ContactReport, a, b sourceBoxContactProof, axis, sign int,
 	separation proofarith.Dyadic) {
-	var sideA, sideB int
-	if sign > 0 {
-		sideA, sideB = 1, 0
-	} else {
-		sideA, sideB = 0, 1
+	patch, reason := pair.FacePatch(
+		pair.AxisBox{Lo: a.lo, Hi: a.hi}, pair.AxisBox{Lo: b.lo, Hi: b.hi},
+		axis, sign, separation,
+		pair.AxisBoxRequest{PointResolutionMM: report.Request.PointResolution.Base()},
+	)
+	report.Reason = sourceBoxReason(reason)
+	if patch != nil {
+		publishAxisBoxPatch(report, a, b, patch)
 	}
-	faceA, faceB := a.faces[axis][sideA], b.faces[axis][sideB]
-	var projected [2]int
-	n := 0
-	for i := range 3 {
-		if i != axis {
-			projected[n] = i
-			n++
-		}
-	}
-	var low, high [2]proofarith.Dyadic
-	for i, ax := range projected {
-		low[i], high[i] = dyMax(a.lo[ax], b.lo[ax]), dyMin(a.hi[ax], b.hi[ax])
-		if proofarith.DyCmp(low[i], high[i]) >= 0 {
-			report.Reason = ContactAmbiguousFeature
-			return
-		}
-	}
-	sep, ok := sourceBoxSignedReading(separation)
+}
+
+func sourceBoxScalar(reading pair.ScalarReading) Measurement {
+	return Measurement{Value: units.Millimeters(reading.ValueMM),
+		Bound: units.Millimeters(reading.BoundMM), Exactness: exactnessOf(reading.BoundMM)}
+}
+
+func sourceBoxPointMeasurement(reading pair.PointReading) VecMeasurement {
+	return VecMeasurement{Value: reading.Value, Bound: units.Millimeters(reading.BoundMM),
+		Exactness: exactnessOf(reading.BoundMM)}
+}
+
+func sourceBoxGap(gaps [3]proofarith.Dyadic) (Measurement, bool) {
+	reading, ok := pair.AxisGap(gaps)
 	if !ok {
-		report.Reason = ContactPointTooCoarse
-		return
-	}
-	var normal r3.Vec
-	switch axis {
-	case 0:
-		normal.X = float64(sign)
-	case 1:
-		normal.Y = float64(sign)
-	case 2:
-		normal.Z = float64(sign)
-	}
-	points := make([]ContactPoint, 0, 4)
-	for _, corner := range [][2]int{{0, 0}, {1, 0}, {1, 1}, {0, 1}} {
-		var pA, pB proofarith.DyV3
-		for i, ax := range projected {
-			coord := low[i]
-			if corner[i] == 1 {
-				coord = high[i]
-			}
-			pA[ax], pB[ax] = coord, coord
-		}
-		if sign > 0 {
-			pA[axis], pB[axis] = a.hi[axis], b.lo[axis]
-		} else {
-			pA[axis], pB[axis] = a.lo[axis], b.hi[axis]
-		}
-		ma, oka := sourceBoxPoint(pA)
-		mb, okb := sourceBoxPoint(pB)
-		if !oka || !okb || ma.Bound.Base() > report.Request.PointResolution.Base() ||
-			mb.Bound.Base() > report.Request.PointResolution.Base() {
-			report.Reason = ContactPointTooCoarse
-			return
-		}
-		points = append(points, ContactPoint{
-			OnA: ma, OnB: mb,
-			Normal:      VecMeasurement{Value: normal, Exactness: Exact, Bound: units.Scalar(0)},
-			NormalAngle: units.Radians(0), Separation: sep,
-			FaceA: faceA, FaceB: faceB,
-			FeatureA: ContactFeature{Face: faceA}, FeatureB: ContactFeature{Face: faceB},
-		})
-	}
-	report.Manifold = &ContactManifold{Points: points}
-}
-
-func sourceBoxPoint(p proofarith.DyV3) (VecMeasurement, bool) {
-	return sourceBoxPointAt(&p)
-}
-
-// sourceBoxPointAt reads an exact point without copying its pointer-bearing
-// dyadic components across the call boundary.
-func sourceBoxPointAt(p *proofarith.DyV3) (VecMeasurement, bool) {
-	var coords [3]float64
-	bound := 0.0
-	for i := range 3 {
-		coords[i], _ = p[i].Float64()
-		if !finiteMeasurementValues(coords[i]) {
-			return VecMeasurement{}, false
-		}
-		bound = math.Max(bound, proofarith.DyadicFloatError(p[i], coords[i]))
-	}
-	bound = radius3D(bound)
-	if !finiteMeasurementValues(bound) {
-		return VecMeasurement{}, false
-	}
-	return VecMeasurement{Value: r3.Vec{X: coords[0], Y: coords[1], Z: coords[2]},
-		Exactness: exactnessOf(bound), Bound: units.Millimeters(bound)}, true
-}
-
-func sourceBoxSignedReading(v proofarith.Dyadic) (Measurement, bool) {
-	held, _ := v.Float64()
-	if !finiteMeasurementValues(held) {
 		return Measurement{}, false
 	}
-	bound := proofarith.DyadicFloatError(v, held)
-	return Measurement{Value: units.Millimeters(held), Exactness: exactnessOf(bound),
-		Bound: units.Millimeters(bound)}, finiteMeasurementValues(bound)
+	return sourceBoxScalar(reading), true
+}
+
+func sourceBoxPoint(point proofarith.DyV3) (VecMeasurement, bool) {
+	return sourceBoxPointAt(&point)
+}
+
+func sourceBoxPointAt(point *proofarith.DyV3) (VecMeasurement, bool) {
+	reading, ok := pair.ReadPointAt(point)
+	if !ok {
+		return VecMeasurement{}, false
+	}
+	return sourceBoxPointMeasurement(reading), true
+}
+
+func sourceBoxSignedReading(value proofarith.Dyadic) (Measurement, bool) {
+	reading, ok := pair.SignedReading(value)
+	if !ok {
+		return Measurement{}, false
+	}
+	return sourceBoxScalar(reading), true
 }
 
 func dyMax(a, b proofarith.Dyadic) proofarith.Dyadic {
