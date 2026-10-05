@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -35,6 +36,10 @@ type InertiaReading struct {
 // by revolving an axis-incident rectangle, full and partial revolves of any
 // integrated section about an exact in-plane axis under any frame and rigid
 // placement, and faceted Boolean solids with a certified occupied-volume bound.
+// Every other solid is integrated over its VerifyAll mesh when that mesh
+// carries an occupied-volume proof, refining the mesh until the tensor
+// interval proves positive: lofts, exact stitched solids, cups and curved
+// payloads the analytic arms refuse.
 // It returns ErrUnsupported for other solids rather than estimating their inertia.
 // The receiver and context must not be nil.
 func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassProperties, error) {
@@ -72,13 +77,22 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		return sourceRevolvedCylinderMassProperties(ctx, b, cylinder, density)
 	}
 	if revolve, ok := b.payload.(revolvePayload); ok {
-		return revolveMassProperties(ctx, b, revolve, density)
+		result, err := revolveMassProperties(ctx, b, revolve, density)
+		if err == nil || !errors.Is(err, ErrUnsupported) || ctx.Err() != nil {
+			return result, err
+		}
+		// A term the analytic path does not charge leaves the revolve to its
+		// verified mesh (docs/multibody-dynamics-design.md §8.5).
+		return verifiedMeshMassProperties(ctx, b, density)
 	}
 	if faceted, ok := b.payload.(facetedPayload); ok {
 		return facetedMassProperties(ctx, b, faceted, density)
 	}
 	pp, ok := b.payload.(prismPayload)
-	if !ok || pp.surfaceResult {
+	if !ok {
+		return verifiedMeshMassProperties(ctx, b, density)
+	}
+	if pp.surfaceResult {
 		return MassProperties{}, fmt.Errorf("%w: certified volume moments are unavailable for this solid", ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {

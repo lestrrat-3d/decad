@@ -10,7 +10,8 @@ third-order section-moment integration for a full or partial revolve about
 an exact in-plane axis under any frame and rigid placement. Faceted
 Boolean solids with verified occupied-volume bounds publish density-derived
 mass and inertia when their resulting volume and tensor intervals pass the
-positive admission gates.
+positive admission gates, and so does every other solid whose `VerifyAll`
+mesh carries an occupied-volume proof, through §2.2's curved path.
 Other payload paths remain design contracts; `docs/multibody-dynamics-design.md`
 §8 owns the order in which they land and which of §2.1 or §2.2 each takes.
 `docs/evaluator-design.md` §4 owns
@@ -170,10 +171,12 @@ occupied-volume proofs. It reruns shell closure and orientation, vertex-link,
 and exact facet-crossing audits on the held triangles. A failed or capped audit
 returns `ErrUnsupported`. It integrates held `V`, `P`, and `Q` as exact rationals
 anchored at one held vertex. The body's bounded box and all held vertices give
-an exact rational L1 radius `R` enclosing both occupied regions. The payload's
-certified `volSymDiff = E` widens held `V`, each `P_i`, and each `Q_ij` by
-`E`, `R E`, and `R² E`. Interval division forms the center and centroidal
-tensor; final readings round outward. A volume interval containing zero or a
+an exact rational extent `R_i` per axis with `|x_i - O_i| <= R_i` over both
+occupied regions. The payload's certified `volSymDiff = E` widens held `V`,
+each `P_i`, and each `Q_ij` by `E`, `R_i E`, and `R_i R_j E`, which never
+exceeds the `R E` and `R² E` of any radius `R` enclosing both regions.
+Interval division forms the center and centroidal tensor; final readings
+round outward. A volume interval containing zero or a
 tensor interval without a positive row-dominance proof returns
 `ErrUnsupported`. A faceted payload without a matching verified mesh or finite
 `E` and `R` also returns `ErrUnsupported`.
@@ -189,7 +192,9 @@ coordinate-construction terms. These are componentwise absolute bounds;
 signed-volume closeness and a two-sided boundary distance alone do not imply
 them. Refine the tessellation when permitted and useful. If the payload does
 not publish an occupied-volume proof, or a finite `R` or finite moment bound
-cannot be certified, return `ErrUnsupported`.
+cannot be certified, return `ErrUnsupported`. The implemented curved path
+anchors at the body box's midpoint, widens per axis as the faceted arm does,
+and refines along `docs/multibody-dynamics-design.md` §8.5's tolerance ladder.
 
 `VolumeVerified()` is a proof about the mesh and its source body, not a license
 to use its triangles without the embedding and provenance audits. A render

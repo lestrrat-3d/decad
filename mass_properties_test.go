@@ -292,4 +292,14 @@ func TestMassPropertiesRefusals(t *testing.T) {
 	got, err = box.MassProperties(ctx, units.KilogramsPerCubicMillimeter(1))
 	require.True(t, errors.Is(err, context.Canceled))
 	require.Equal(t, decad.MassProperties{}, got)
+
+	// A placed stitched box's mesh carries no occupied-volume proof, so no
+	// path admits it.
+	shift, err := r3.Translation(r3.NewVec(.1, 0, 0))
+	require.NoError(t, err)
+	placed, err := stitchedBox(t, decad.New()).Placed(t.Context(), shift)
+	require.NoError(t, err)
+	got, err = placed.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Equal(t, decad.MassProperties{}, got)
 }
