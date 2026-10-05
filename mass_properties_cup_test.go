@@ -123,3 +123,64 @@ func quarterDiskPrism(pi *big.Rat, corner [2]int64, lo, hi *big.Rat) massMoments
 	}
 	return m.shifted(ratVec(cx, cy, 0))
 }
+
+// TestCupInchWallEnclosesDenotedCup shells two plates with a 0.1 in wall.
+// The denoted thickness is that magnitude rescaled to millimetres in exact
+// rationals, and the denoted cavity is the plate eroded by it. The offset
+// section the shell records is computed in floats, and its corners land a few
+// units in the last place away from the denoted ones, so every reading the
+// cup publishes — Volume, Centroid and MassProperties — must still enclose the
+// exact closed form of the denoted cup.
+func TestCupInchWallEnclosesDenotedCup(t *testing.T) {
+	thickness := units.Inches(0.1)
+	wall := new(big.Rat).Quo(
+		new(big.Rat).Mul(new(big.Rat).SetFloat64(thickness.Mag()), new(big.Rat).SetFloat64(thickness.Unit().Factor())),
+		new(big.Rat).SetFloat64(units.Millimeter.Factor()))
+	density := units.KilogramsPerCubicMillimeter(cupDensity)
+	rho := new(big.Rat).SetFloat64(cupDensity)
+	for _, plate := range [][2]int64{{16, 8}, {100, 60}} {
+		box := boxBody(t, decad.New(), 0, 0, float64(plate[0]), float64(plate[1]), 10)
+		cup, err := box.Shell(t.Context(), topCap(box), thickness)
+		require.NoError(t, err)
+
+		hi := ratVec(plate[0], plate[1], 10)
+		lo := [3]*big.Rat{wall, wall, wall}
+		cavityHi := [3]*big.Rat{new(big.Rat).Sub(hi[0], wall), new(big.Rat).Sub(hi[1], wall), hi[2]}
+		want := exactBoxMoments(ratVec(0, 0, 0), hi).plus(exactBoxMoments(lo, cavityHi), -1)
+
+		volume, err := cup.Volume()
+		require.NoError(t, err)
+		requireReadingCovers(t, volume, want.volume)
+		centroid, err := cup.Centroid()
+		require.NoError(t, err)
+		requireCenterCovers(t, centroid, want)
+
+		got, err := cup.MassProperties(t.Context(), density)
+		require.NoError(t, err)
+		requireReadingCovers(t, got.Mass, ratProduct(rho, want.volume))
+		requireCenterCovers(t, got.Center, want)
+		exact := want.inertia(rho)
+		for _, entry := range []struct {
+			reading decad.Measurement
+			i, j    int
+		}{
+			{got.Inertia.XX, 0, 0}, {got.Inertia.YY, 1, 1}, {got.Inertia.ZZ, 2, 2},
+			{got.Inertia.XY, 0, 1}, {got.Inertia.XZ, 0, 2}, {got.Inertia.YZ, 1, 2},
+		} {
+			requireReadingCovers(t, entry.reading, exact[entry.i][entry.j])
+		}
+	}
+}
+
+// requireCenterCovers checks that every component of a centroid reading lies
+// within its bound of the exact center of m, compared in exact rationals.
+func requireCenterCovers(t *testing.T, reading decad.VecMeasurement, m massMoments) {
+	t.Helper()
+	held := [3]float64{reading.Value.X, reading.Value.Y, reading.Value.Z}
+	bound := new(big.Rat).SetFloat64(reading.Bound.Base())
+	for i := range held {
+		exact := new(big.Rat).Quo(m.first[i], m.volume)
+		deviation := new(big.Rat).Abs(new(big.Rat).Sub(exact, new(big.Rat).SetFloat64(held[i])))
+		require.LessOrEqual(t, deviation.Cmp(bound), 0, "center component %d misses its bound", i)
+	}
+}

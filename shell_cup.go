@@ -51,6 +51,18 @@ import (
 // this one is the reading cupWall publishes when the shell-wall theorem holds
 // exactly on the payload's own morphology — the number the theorem's t is
 // held in, not the theorem itself (docs/payload-verification-design.md §4.1).
+//
+// offsetDelta is the OFFSET region's section displacement — the cavity
+// inward, the outer region outward: the proven upper bound offsetSectionDelta
+// (shell_offset.go) states on how far any recorded boundary point of that
+// region sits from the boundary of P ⊖ t* or P ⊕ t* the shell denotes, t* the
+// caller's thickness in exact millimetres. It covers the thickness conversion
+// and the offset solve's own rounding together. The other region is the
+// receiver's own section and carries none. outerPrism and cavityPrism hand it
+// to the offset region's prism as its sectionDelta, so every prism reading
+// built on that region — its walls' vertices and lengths, Bounds, the mass
+// path — charges it there, and evalCup charges it into the areas and moments
+// it composes itself (docs/modify-design.md §9, §10).
 type cupPayload struct {
 	outer          ProfileRecord
 	cavity         ProfileRecord
@@ -63,6 +75,7 @@ type cupPayload struct {
 	zCavDelta      float64
 	thickness      float64
 	thicknessDelta float64
+	offsetDelta    float64
 	sense          ShellSense
 	xform          r3.Transform
 }
@@ -117,12 +130,23 @@ func (cp cupPayload) prismBetween(a, b boundedScalar) prismPayload {
 	}
 }
 
+// outerPrism and cavityPrism are the cup's two prisms, without their
+// profiles. The offset region's prism carries offsetDelta as its section
+// displacement: the outer one outward, the cavity inward.
 func (cp cupPayload) outerPrism() prismPayload {
-	return cp.prismBetween(cp.outerScalar(), cp.openScalar())
+	pp := cp.prismBetween(cp.outerScalar(), cp.openScalar())
+	if cp.sense == Outward {
+		pp.sectionDelta = cp.offsetDelta
+	}
+	return pp
 }
 
 func (cp cupPayload) cavityPrism() prismPayload {
-	return cp.prismBetween(cp.cavityScalar(), cp.openScalar())
+	pp := cp.prismBetween(cp.cavityScalar(), cp.openScalar())
+	if cp.sense != Outward {
+		pp.sectionDelta = cp.offsetDelta
+	}
+	return pp
 }
 
 // extentAlong is the cup's extent interval along an arbitrary world direction
@@ -131,19 +155,29 @@ func (cp cupPayload) cavityPrism() prismPayload {
 // no farther than the outer region, so the outward extent is the solid outer
 // prism's, read by the same prismPayload.extentAlong the outer prism's bounds
 // already use. This is what a through-all stop consults when a cup is a live
-// body in the sweep's path.
+// body in the sweep's path. An outward cup's outer region is the offset one:
+// its recorded extent is read, and its offsetDelta joins the displacement the
+// ends carry — moving every boundary point by at most offsetDelta moves an
+// extreme along g by at most offsetDelta·|g|, and |g| ≤ its L1 norm.
 func (cp cupPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 	outer := cp.outerPrism()
 	outer.profile = cp.outer
-	return outer.extentAlong(g)
+	displaced := outer.sectionDelta
+	outer.sectionDelta = 0
+	lo, hi, delta, err := outer.extentAlong(g)
+	if err != nil || displaced == 0 {
+		return lo, hi, delta, err
+	}
+	return lo, hi, absSumUpper(delta, productUpper(displaced, vecL1(g))), nil
 }
 
 // cupPayloadFor assembles the cup record from the receiver prism, its offset
-// section and the shell sense/opening (docs/modify-design.md §9). removedEnd
+// section with that section's proven displacement, and the shell
+// sense/opening (docs/modify-design.md §9). removedEnd
 // opens the cup at the top (z1); a removed start opens it at the bottom (z0),
 // its mirror. Inward, O is the original section P and C the erosion Q; outward,
 // O is the dilation Q and C the original P.
-func cupPayloadFor(pp prismPayload, offset ProfileRecord, s, t, tDelta float64, removedEnd bool) cupPayload {
+func cupPayloadFor(pp prismPayload, offset ProfileRecord, s, t, tDelta, offsetDelta float64, removedEnd bool) cupPayload {
 	z0, z1 := pp.z0, pp.z1
 	o, c := pp.profile, offset
 	if s < 0 {
@@ -159,6 +193,7 @@ func cupPayloadFor(pp prismPayload, offset ProfileRecord, s, t, tDelta float64, 
 		frame:          pp.frame,
 		thickness:      t,
 		thicknessDelta: tDelta,
+		offsetDelta:    offsetDelta,
 		sense:          sense,
 		xform:          pp.xform,
 	}
@@ -259,6 +294,7 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 	ppO := cp.outerPrism()
 	var faces []*Face
 	perimO := boundedScalar{}
+	loopPerimO := make([]boundedScalar, len(oLoops))
 	oFloor := make([][]coedge, len(oLoops))
 	oOpen := make([][]coedge, len(oLoops))
 	for i, loop := range oLoops {
@@ -271,6 +307,7 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 		}
 		faces = append(faces, sf...)
 		perimO = boundedAdd(perimO, ll)
+		loopPerimO[i] = ll
 		oFloor[i], oOpen[i] = floorOpen(bottom, top)
 	}
 
@@ -280,6 +317,7 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 	// shellSide(i,j) via renameCavityRoles.
 	ppC := cp.cavityPrism()
 	perimC := boundedScalar{}
+	loopPerimC := make([]boundedScalar, len(cLoops))
 	cFloor := make([][]coedge, len(cLoops))
 	cOpen := make([][]coedge, len(cLoops))
 	var cavFaces []*Face
@@ -297,6 +335,7 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 		}
 		cavFaces = append(cavFaces, sf...)
 		perimC = boundedAdd(perimC, ll)
+		loopPerimC[i] = ll
 		cFloor[i], cOpen[i] = floorOpen(bottom, top)
 	}
 	if err := renameCavityRoles(ctx, cavFaces, ref); err != nil {
@@ -306,6 +345,22 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 		return nil, err
 	}
 	faces = append(faces, cavFaces...)
+
+	// The offset region's recorded boundary sits within offsetDelta of the one
+	// the cup denotes, so its area and first moments move by the displacement
+	// area that boundary can sweep (bounds.go's sectionDisplacementArea), the
+	// moments by that area times the largest coordinate it can reach. Its walls
+	// already took the displacement through their prism's sectionDelta.
+	if cp.offsetDelta > 0 {
+		if cp.sense == Outward {
+			igO, err = displacedRegionIntegrals(igO, cp.outer, perimO, cp.offsetDelta, work)
+		} else {
+			igC, err = displacedRegionIntegrals(igC, cp.cavity, perimC, cp.offsetDelta, work)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// The planar faces. capFrame orients each normal outward via its flip;
 	// capStart faces away from the material, shellCap into the pocket, the rim
@@ -378,6 +433,12 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 		outerLoop, holeLoop := oLoop, cLoop
 		if !oIsOuter {
 			outerLoop, holeLoop = cLoop, oLoop
+		}
+		// The offset loop's own enclosed area moves with its boundary.
+		if cp.sense == Outward {
+			aO.bound = absSumUpper(aO.bound, loopDisplacementArea(cp.offsetDelta, oLoops[i], loopPerimO[i]))
+		} else {
+			aC.bound = absSumUpper(aC.bound, loopDisplacementArea(cp.offsetDelta, cLoops[i], loopPerimC[i]))
 		}
 		rimArea := boundedAbs(boundedSub(aO, aC))
 		rims[i] = &Face{
@@ -460,6 +521,15 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 	if err != nil {
 		return nil, err
 	}
+	// That envelope is read off the RECORDED outer region and levels; the
+	// denoted body reaches up to the outer region's section displacement
+	// farther in the plane and each level's axial one along the normal, and
+	// the rigid map carries each through the same 3·L1 factor the envelope
+	// uses.
+	geometryBound = absSumUpper(geometryBound, productUpper(3, absSumUpper(
+		productUpper(absSumUpper(vecL1(outerPrism.frame.U()), vecL1(outerPrism.frame.V())), outerPrism.sectionDelta),
+		productUpper(vecL1(outerPrism.frame.N()), cp.axialDelta()),
+	)))
 	centroidBound = math.Min(centroidBound, geometryBound)
 	body.centroid = VecMeasurement{
 		Value:     centroidValue,
@@ -595,4 +665,33 @@ func loopEnclosedMomentsContext(ctx context.Context, l LoopRecord) (area, mu, mv
 	return measuredScalar(orient*ig.area, ig.areaBound),
 		measuredScalar(orient*ig.mu, ig.muBound),
 		measuredScalar(orient*ig.mv, ig.mvBound), nil
+}
+
+// displacedRegionIntegrals widens a region's area and first-moment bounds by
+// what a boundary displaced by at most delta can move them: the displacement
+// area sectionDisplacementArea proves over the region's segments and proven
+// perimeter, and that area times the largest coordinate magnitude any point
+// of the symmetric difference can have — the region's own envelope plus
+// delta.
+func displacedRegionIntegrals(ig regionIntegrals, profile ProfileRecord, perim boundedScalar, delta float64, work *freeformWork) (regionIntegrals, error) {
+	segments := len(profile.Outer.Segments)
+	for _, hole := range profile.Holes {
+		segments += len(hole.Segments)
+	}
+	area := sectionDisplacementArea(delta, segments, absSumUpper(perim.value, perim.bound))
+	coord, err := profileCoordinateEnvelope(profile, work, nil)
+	if err != nil {
+		return regionIntegrals{}, err
+	}
+	moment := productUpper(area, absSumUpper(coord, delta))
+	ig.areaBound = absSumUpper(ig.areaBound, area)
+	ig.muBound = absSumUpper(ig.muBound, moment)
+	ig.mvBound = absSumUpper(ig.mvBound, moment)
+	return ig, nil
+}
+
+// loopDisplacementArea is sectionDisplacementArea over one loop: how far the
+// area that loop encloses can move when its boundary moves by at most delta.
+func loopDisplacementArea(delta float64, loop LoopRecord, perim boundedScalar) float64 {
+	return sectionDisplacementArea(delta, len(loop.Segments), absSumUpper(perim.value, perim.bound))
 }

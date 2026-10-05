@@ -1342,7 +1342,7 @@
 4	0.01	TestLoopSignedAreaMatchesFullIntegrator
 4	0.00	TestLoopSignedAreaPreservesBudgetAndErrors
 4	0.00	TestMassPropertiesCircularPrism
-4	0.01	TestMassPropertiesCupFallback
+4	0.01	TestMassPropertiesCapChamferFallback
 4	0.00	TestMassPropertiesDisplacedLevelBox
 4	0.03	TestMassPropertiesLoftOctagons
 4	0.00	TestMassPropertiesRefusals
@@ -2099,3 +2099,10 @@
 0	0.01	TestMassPropertiesCupOutward
 1	0.01	TestCupMassChargesDisplacement
 2	0.01	TestRotateVolumeMomentsChargesDefect
+0	0.01	TestCupInchWallEnclosesDenotedCup
+1	0.02	TestOffsetSectionDeltaEnclosesDenotedOffset
+2	0.01	TestEvalCupChargesOffsetDisplacement
+3	0.01	TestDisplacedCupGateAndIdentity
+5	0.01	TestDisplacedCupMinRadius
+0	0.01	TestDisplacedCupMesh
+1	0.01	TestDisplacedCupCentroidMoment

@@ -375,11 +375,18 @@ func ivCircleCircle(a, b ivCarrier) ([]ivPoint, bool) {
 // arithmetic leaves undecided joins the hull, so a near-tangency reports one
 // wide honest displacement rather than a branch nothing decided.
 func ivNearest(cands []ivPoint, vU, vV float64) (ivPoint, bool) {
-	if len(cands) == 0 {
-		return ivPoint{}, false
-	}
 	corner, ok := ivExactPoint(vU, vV)
 	if !ok {
+		return ivPoint{}, false
+	}
+	return ivNearestTo(cands, corner)
+}
+
+// ivNearestTo is ivNearest about an enclosed corner: a candidate is dropped
+// only when its squared distance to EVERY corner the box holds is proven
+// beyond another candidate's farthest.
+func ivNearestTo(cands []ivPoint, corner ivPoint) (ivPoint, bool) {
+	if len(cands) == 0 {
 		return ivPoint{}, false
 	}
 	d2 := make([]ratInterval, len(cands))

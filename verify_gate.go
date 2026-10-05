@@ -627,10 +627,14 @@ func fallbackGateDiameter(budget *workBudget, body *Body) (float64, bool, error)
 // cavity alike — sits inside pl.outer's own full-height prism: the cavity
 // never reaches farther than the outer region, the same containment
 // cupPayload.extentAlong already relies on. Both are CONTAINING shapes, so
-// each can only overstate the true diameter as a shape; both read a section
-// that is its own denotation, because every modify op refuses a receiver
-// carrying a section displacement (fillet.go's requireExactSection), so the
-// only displacement their witnesses carry is the axial one.
+// each can only overstate the true diameter as a shape. The receiver's own
+// section is its own denotation, because every modify op refuses a receiver
+// carrying a section displacement (fillet.go's requireExactSection), so a
+// cap blend's and an inward cup's witnesses carry only the axial
+// displacement. An outward cup's outer region is the OFFSET one, recorded
+// within the cup's offsetDelta of the region it denotes (shell_cup.go), so
+// its witnesses carry that displacement beside the axial one, composed the
+// way the displaced-prism arm below composes its own.
 //
 // A prismPayload whose own sectionDelta is nonzero (docs/prism-boolean-design.md
 // §7's re-expressed or cut section — every analytic Union whose merge cut a
@@ -664,7 +668,9 @@ func gateWitnessPrism(payload featurePayload) (prismPayload, float64, bool) {
 	case cupPayload:
 		witness := pl.outerPrism()
 		witness.profile = pl.outer
-		return witness, witness.axialDelta(), true
+		displacement := absSumUpper(witness.sectionDelta, witness.axialDelta())
+		witness.sectionDelta = 0
+		return witness, displacement, true
 	case stackedPrismPayload:
 		witness := pl.outerPrism()
 		displacement := absSumUpper(pl.sectionDelta, pl.axialDelta())

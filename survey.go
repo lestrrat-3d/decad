@@ -1316,7 +1316,11 @@ func cupUndercuts(b *Body, cp cupPayload, pull r3.Vec) undercutOutcome {
 // placed with the same walk sense evalCup builds it in, so prismMinRadius reads
 // concavity off the walk direction, exactly as on a prism. The sharp concave
 // edge where a wall meets the floor carries no radius — the survey reads faces'
-// principal radii, not edges.
+// principal radii, not edges. The offset region's arcs are recorded within the
+// cup's offsetDelta of the arcs it denotes: each shares its centre with the
+// denoted arc and its start sits within that displacement of the denoted
+// circle, so every recorded radius is within offsetDelta of its denoted one
+// and the reading's bound takes it.
 func cupMinRadius(cp cupPayload) (radiusOutcome, bool) {
 	profile := ProfileRecord{Outer: cp.outer.Outer}
 	profile.Holes = append(profile.Holes, cp.outer.Holes...)
@@ -1328,7 +1332,11 @@ func cupMinRadius(cp cupPayload) (radiusOutcome, bool) {
 		}
 		profile.Holes = append(profile.Holes, crev)
 	}
-	return prismMinRadius(prismPayload{profile: profile})
+	out, ok := prismMinRadius(prismPayload{profile: profile})
+	if ok && out.ok && out.reading != nil && cp.offsetDelta > 0 {
+		out.bound = absSumUpper(out.bound, cp.offsetDelta)
+	}
+	return out, ok
 }
 
 // surveyResults is runSurveys' return record: the raw private outcome for
