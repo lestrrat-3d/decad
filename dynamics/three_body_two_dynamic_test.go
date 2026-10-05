@@ -412,3 +412,117 @@ func TestThreeBodyTwoDynamicOverlappingPairEventsRemainUndecided(t *testing.T) {
 	require.Nil(t, report.Next)
 	require.Empty(t, report.Events)
 }
+
+func TestThreeBodyTwoDynamicSequentialFloorImpacts(t *testing.T) {
+	doc := decad.New()
+	a, b := makeBall(t, doc), makeBall(t, doc)
+	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
+	pa, err := r3.Translation(r3.Vec{X: -40, Z: 15})
+	require.NoError(t, err)
+	pb, err := r3.Translation(r3.Vec{X: 40, Z: 25})
+	require.NoError(t, err)
+	falling := dynamics.QuantityVec{X: units.MillimetersPerSecond(0),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(-100)}
+	request := decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+		NormalResolution: units.Radians(1e-6)}
+	material := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}
+	mass := exactSphereMass()
+	step := dynamics.StepConfig{Contact: request, TimeResolution: units.Seconds(1e-9),
+		ContactSlop: units.Millimeters(1e-6), VelocityResidual: units.MillimetersPerSecond(1e-6),
+		AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+		ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+		PenetrationResidual:     units.Millimeters(1e-6),
+		ImpactSpeed:             units.MillimetersPerSecond(0), MaxPoseEvaluations: 128,
+		MaxIterations: 8}
+	makeWorld := func(maxEvents int) (*dynamics.World, dynamics.State) {
+		step.MaxEvents = maxEvents
+		world, worldErr := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+			Bodies: []dynamics.RigidBody{
+				{Body: a, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+				{Body: b, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+				{Body: floor, Role: dynamics.Fixed, Material: material},
+			}, Step: step,
+		})
+		require.NoError(t, worldErr)
+		state, stateErr := world.NewState([]dynamics.BodyState{
+			{Body: a, Pose: pa, LinearVelocity: falling, AngularVelocity: zeroAngular(t)},
+			{Body: b, Pose: pb, LinearVelocity: falling, AngularVelocity: zeroAngular(t)},
+			{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(),
+				AngularVelocity: zeroAngular(t)},
+		})
+		require.NoError(t, stateErr)
+		return world, state
+	}
+	for _, target := range []struct {
+		body  *decad.Body
+		x, at float64
+	}{{a, -40, .1}, {b, 40, .2}} {
+		atContact, poseErr := r3.Translation(r3.Vec{X: target.x, Z: 5})
+		require.NoError(t, poseErr)
+		contact, contactErr := doc.ContactPair(t.Context(), target.body, floor,
+			atContact, r3.Identity(), request)
+		require.NoError(t, contactErr)
+		require.Equal(t, decad.ContactTouching, contact.Relation)
+		startPose := pa
+		if target.body == b {
+			startPose = pb
+		}
+		sweep, sweepErr := doc.SweepPair(t.Context(), target.body, floor,
+			decad.RigidDriftSegment{From: startPose, LinearVelocity: falling,
+				AngularVelocity: zeroAngular(t), Duration: units.Seconds(.3)},
+			decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(.3)},
+			decad.SweepRequest{ContactRequest: request, TimeResolution: units.Seconds(1e-9),
+				MaxPoseEvaluations: 128})
+		require.NoError(t, sweepErr)
+		require.Equal(t, decad.SweepImpactBracket, sweep.Outcome)
+		require.InDelta(t, target.at, sweep.Bracket.To.Elapsed.Value.Base(), 1e-9)
+	}
+	separate, err := doc.SweepPair(t.Context(), a, b,
+		decad.RigidDriftSegment{From: pa, LinearVelocity: falling,
+			AngularVelocity: zeroAngular(t), Duration: units.Seconds(.3)},
+		decad.RigidDriftSegment{From: pb, LinearVelocity: falling,
+			AngularVelocity: zeroAngular(t), Duration: units.Seconds(.3)},
+		decad.SweepRequest{ContactRequest: request, TimeResolution: units.Seconds(1e-9),
+			MaxPoseEvaluations: 128})
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepClear, separate.Outcome)
+	limited, limitedStart := makeWorld(2)
+	refused, err := limited.Step(t.Context(), limitedStart,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.3))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, refused.Status)
+	require.Nil(t, refused.Next)
+	require.Empty(t, refused.Events)
+	require.Len(t, refused.Diagnostics, 1)
+	require.Contains(t, refused.Diagnostics[0].Reason, "maximum contact events reached")
+
+	world, start := makeWorld(3)
+	report, err := world.Step(t.Context(), start,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.3))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 2)
+	require.Equal(t, dynamics.BodyPair{A: a, B: floor}, report.Events[0].Pair)
+	require.Equal(t, dynamics.BodyPair{A: b, B: floor}, report.Events[1].Pair)
+	require.InDelta(t, .1, report.Events[0].Time.Base(), 1e-9)
+	require.InDelta(t, .2, report.Events[1].Time.Base(), 1e-9)
+	for _, sample := range []struct{ at, az, bz, avz, bvz float64 }{
+		{.05, 10, 20, -100, -100}, {.15, 7.5, 10, 50, -100},
+		{.25, 12.5, 7.5, 50, 50}, {.3, 15, 10, 50, 50},
+	} {
+		replayed, replayErr := report.Trace.Sample(units.Seconds(sample.at))
+		require.NoError(t, replayErr)
+		stateA, _ := replayed.Body(a)
+		stateB, _ := replayed.Body(b)
+		fixed, _ := replayed.Body(floor)
+		require.InDelta(t, sample.az, stateA.Pose.Translation().Z, 2e-6)
+		require.InDelta(t, sample.bz, stateB.Pose.Translation().Z, 2e-6)
+		require.InDelta(t, sample.avz, stateA.LinearVelocity.Z.Base(), 1e-6)
+		require.InDelta(t, sample.bvz, stateB.LinearVelocity.Z.Base(), 1e-6)
+		require.Equal(t, r3.Identity(), fixed.Pose)
+	}
+	require.NotNil(t, report.Conservation)
+	require.InDelta(t, 10000, report.Conservation.Input.KineticEnergy.Value.Base(), 1e-5)
+	require.InDelta(t, 2500, report.Conservation.Completion.KineticEnergy.Value.Base(), 1e-5)
+	require.InDelta(t, 300, report.Conservation.ContactImpulse.Value.Z.Base(), 1e-5)
+}

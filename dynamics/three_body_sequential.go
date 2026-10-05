@@ -200,6 +200,8 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 	var boundaries []threeTraceEvent
 	var policy [3]decad.SweepStartPolicy
 	for exactBase(at).Cmp(exactBase(dt)) < 0 {
+		// MaxEvents is the full-step proof budget. The design refuses any
+		// remaining time once the recorded event count reaches that limit.
 		if len(events) >= w.step.MaxEvents {
 			return w.threeUndecided(-1, "maximum contact events reached before step end"), true, nil
 		}
