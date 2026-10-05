@@ -32,11 +32,33 @@ type pairProof struct {
 	boxClear bool
 }
 
-// stepScheduled is the step of a world of four or more bodies: one full-step
-// kick, then one drift slice over [0, dt] whose candidate pairs must all be
-// proved clear (docs/multibody-dynamics-design.md §5 without islands). Any
-// event stops the step as Undecided with StepUnsupported; islands and their
-// solver are §13 PR 4.
+// traceEvent is one event of a step of a world of four or more bodies: its
+// exact time from the step start, the states on both sides of it, and the
+// islands that published it (docs/multibody-dynamics-design.md §3.4).
+type traceEvent struct {
+	at        *big.Rat
+	pre, post State
+	islands   []int // indices into StepReport.Islands
+}
+
+// sliceSweeps is one slice's broad phase and pair sweeps: every body's path,
+// the candidate pairs in canonical order, and each candidate's sweep.
+type sliceSweeps struct {
+	paths      []decad.PairPath
+	candidates []int
+	swept      map[int]*decad.SweepReport
+}
+
+// stepScheduled is the step of a world of four or more bodies
+// (docs/multibody-dynamics-design.md §5): one full-step kick, then a drift
+// slice over [0, dt]. Pairs that touch at the step start form islands
+// (§6.1) that are solved, certified (§6.2, §6.3) and corrected (§6.6) as one
+// event at time zero; the slice is then swept again from the post-event
+// state, each solved pair under its §5.2 continuation policy. Every other
+// candidate must be proved clear or departed over the slice. An event inside
+// the slice (an impact or transition bracket, a graze, a track that ends)
+// stops the step as Undecided with StepUnsupported until the multi-event
+// trace of §13 PR 6.
 func (w *World) stepScheduled(ctx context.Context, from State, input StepInput,
 	dt units.Value) (*StepReport, error) {
 	if err := validateQuantityVec(input.Gravity, units.Acceleration); err != nil {
@@ -70,57 +92,166 @@ func (w *World) stepScheduled(ctx context.Context, from State, input StepInput,
 		}
 		return w.scheduleUndecided(diagnostics...), nil
 	}
-	paths := w.slicePaths(kicked, drivers, dt)
-	boxes := make([]decad.SweptBox, len(w.bodies))
-	for i, body := range w.bodies {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		box, err := w.doc.SweptBox(ctx, body.definition.Body, paths[i])
-		if errors.Is(err, decad.ErrUnsupported) {
-			return w.scheduleUndecided(scheduleDiagnostic(StepTravelUnbounded, BodyPair{},
-				fmt.Sprintf("swept box of body %d is unbounded: %v", i, err))), nil
-		}
-		if err != nil {
-			return nil, err
-		}
-		boxes[i] = box
-	}
 	scheduled := w.pairSchedule()
-	candidates := broadPhaseCandidates(boxes, scheduled)
-	swept := make(map[int]*decad.SweepReport, len(candidates))
-	var diagnostics []StepDiagnostic
-	for _, key := range candidates {
-		if err := ctx.Err(); err != nil {
-			return nil, err
+	sweeps, report, err := w.sweepSlice(ctx, kicked, drivers, dt, scheduled, nil)
+	if report != nil || err != nil {
+		return report, err
+	}
+	gathered, diagnostics := w.gatherInitialContacts(sweeps)
+	if len(diagnostics) != 0 {
+		return w.scheduleUndecided(diagnostics...), nil
+	}
+	if len(gathered) == 0 {
+		end, proofs, report := w.finishSlice(kicked, sweeps, dt, scheduled)
+		if report != nil {
+			return report, nil
 		}
-		pair := w.pairs[key]
-		sweep, err := w.doc.SweepPair(ctx, w.bodies[pair.a].definition.Body, w.bodies[pair.b].definition.Body,
-			paths[pair.a], paths[pair.b], w.sweepRequest(dt, decad.StopAtInitialContact))
-		if err != nil {
-			return nil, err
-		}
-		swept[key] = sweep
+		trace := Trace{start: from, end: end, duration: dt, slices: []traceSlice{{
+			start: units.Seconds(0), end: dt, from: kicked, to: end, paths: sweeps.paths, proofs: proofs,
+		}}}
+		return w.publishScheduled(from, kicked, end, trace, nil, nil, [][2]State{{kicked, end}},
+			input.Gravity, loads, dt), nil
+	}
+	event, report, err := w.initialIslands(ctx, kicked, dt, gathered, scheduled)
+	if report != nil || err != nil {
+		return report, err
+	}
+	sweeps, report, err = w.sweepSlice(ctx, event.post, drivers, dt, scheduled, event.policies)
+	if report != nil || err != nil {
+		return report, err
+	}
+	for _, key := range sweeps.candidates {
+		sweep, pair := sweeps.swept[key], w.pairs[key]
 		switch sweep.Outcome {
 		case decad.SweepClear, decad.SweepDepartedClear:
+		case decad.SweepPersistentTouch:
+			if event.policies[key] != decad.ContinueCertifiedTouch || !w.fullTrackWithin(sweep) {
+				diagnostics = append(diagnostics, scheduleDiagnostic(StepTrackUnproved, w.bodyPair(pair),
+					"persistent track does not span the slice within the penetration residual"))
+			}
 		case decad.SweepUndecided:
 			diagnostics = append(diagnostics, scheduleDiagnostic(StepPairUndecided, w.bodyPair(pair),
-				fmt.Sprintf("candidate pair sweep is undecided (%v)", sweep.Cause)))
+				fmt.Sprintf("continuation sweep is undecided (%v)", sweep.Cause)))
 		default:
 			diagnostics = append(diagnostics, scheduleDiagnostic(StepUnsupported, w.bodyPair(pair),
-				fmt.Sprintf("candidate pair sweep returned %v; the N-body step has no island solver yet",
+				fmt.Sprintf("continuation sweep returned %v; an event inside a slice needs the multi-event trace",
 					sweep.Outcome)))
 		}
 	}
 	if len(diagnostics) != 0 {
 		return w.scheduleUndecided(diagnostics...), nil
 	}
-	end := kicked.clone()
-	for i := range end.entries {
-		pose, err := pathPoseAt(paths[i], big.NewRat(1, 1))
+	end, proofs, report := w.finishSlice(event.post, sweeps, dt, scheduled)
+	if report != nil {
+		return report, nil
+	}
+	diagnostics, err = w.completedContacts(ctx, end, event.policies)
+	if err != nil {
+		return nil, err
+	}
+	if len(diagnostics) != 0 {
+		return w.scheduleUndecided(diagnostics...), nil
+	}
+	islands := make([]int, len(event.islands))
+	for i := range islands {
+		islands[i] = i
+	}
+	trace := Trace{start: from, end: end, duration: dt,
+		slices: []traceSlice{{start: units.Seconds(0), end: dt, from: event.post, to: end, paths: sweeps.paths,
+			proofs: proofs}},
+		events: []traceEvent{{at: new(big.Rat), pre: kicked, post: event.post, islands: islands}}}
+	return w.publishScheduled(from, kicked, end, trace, event.events, event.islands,
+		[][2]State{{event.post, end}}, input.Gravity, loads, dt), nil
+}
+
+// gatherInitialContacts classifies a slice's candidate sweeps at the step
+// start: clear and departed pairs need nothing, initially touching or
+// overlapping pairs are gathered with their manifolds (§6.1), and every
+// other outcome is a diagnostic.
+func (w *World) gatherInitialContacts(sweeps sliceSweeps) ([]islandPair, []StepDiagnostic) {
+	var gathered []islandPair
+	var diagnostics []StepDiagnostic
+	for _, key := range sweeps.candidates {
+		sweep, pair := sweeps.swept[key], w.pairs[key]
+		switch sweep.Outcome {
+		case decad.SweepClear, decad.SweepDepartedClear:
+		case decad.SweepInitiallyTouching, decad.SweepInitiallyOverlapping:
+			event := sweep.InitialEvent
+			if event == nil {
+				event = sweep.Event
+			}
+			if event == nil || !w.manifoldWithin(event.Manifold) {
+				diagnostics = append(diagnostics, scheduleDiagnostic(StepManifoldMissing, w.bodyPair(pair),
+					"initial contact has no manifold within the contact request"))
+				continue
+			}
+			gathered = append(gathered, islandPair{key: key, a: pair.a, b: pair.b,
+				manifold: cloneManifold(*event.Manifold), at: event.At})
+		case decad.SweepUndecided:
+			diagnostics = append(diagnostics, scheduleDiagnostic(StepPairUndecided, w.bodyPair(pair),
+				fmt.Sprintf("candidate pair sweep is undecided (%v)", sweep.Cause)))
+		default:
+			diagnostics = append(diagnostics, scheduleDiagnostic(StepUnsupported, w.bodyPair(pair),
+				fmt.Sprintf("candidate pair sweep returned %v; an event inside a slice needs the multi-event trace",
+					sweep.Outcome)))
+		}
+	}
+	return gathered, diagnostics
+}
+
+// sweepSlice runs §4.3's broad phase over every body's slice path from state
+// and sweeps each candidate pair under its start policy: the contact-set
+// policy in policies, or StopAtInitialContact.
+func (w *World) sweepSlice(ctx context.Context, state State, drivers []decad.PoseSegment, dt units.Value,
+	scheduled map[int]struct{}, policies map[int]decad.SweepStartPolicy) (sliceSweeps, *StepReport, error) {
+	paths := w.slicePaths(state, drivers, dt)
+	boxes := make([]decad.SweptBox, len(w.bodies))
+	for i, body := range w.bodies {
+		if err := ctx.Err(); err != nil {
+			return sliceSweeps{}, nil, err
+		}
+		box, err := w.doc.SweptBox(ctx, body.definition.Body, paths[i])
+		if errors.Is(err, decad.ErrUnsupported) {
+			return sliceSweeps{}, w.scheduleUndecided(scheduleDiagnostic(StepTravelUnbounded, BodyPair{},
+				fmt.Sprintf("swept box of body %d is unbounded: %v", i, err))), nil
+		}
 		if err != nil {
-			return w.scheduleUndecided(scheduleDiagnostic(StepUnsupported, BodyPair{},
-				fmt.Sprintf("body %d has a non-finite end pose: %v", i, err))), nil
+			return sliceSweeps{}, nil, err
+		}
+		boxes[i] = box
+	}
+	out := sliceSweeps{paths: paths, candidates: broadPhaseCandidates(boxes, scheduled),
+		swept: make(map[int]*decad.SweepReport)}
+	for _, key := range out.candidates {
+		if err := ctx.Err(); err != nil {
+			return sliceSweeps{}, nil, err
+		}
+		policy, ok := policies[key]
+		if !ok {
+			policy = decad.StopAtInitialContact
+		}
+		pair := w.pairs[key]
+		sweep, err := w.doc.SweepPair(ctx, w.bodies[pair.a].definition.Body, w.bodies[pair.b].definition.Body,
+			paths[pair.a], paths[pair.b], w.sweepRequest(dt, policy))
+		if err != nil {
+			return sliceSweeps{}, nil, err
+		}
+		out.swept[key] = sweep
+	}
+	return out, nil, nil
+}
+
+// finishSlice publishes every body's end pose on its slice path and requires
+// each swept pair's certificate to replay exactly those poses at the slice
+// end (§4.3). It returns the end state and every scheduled pair's proof.
+func (w *World) finishSlice(state State, sweeps sliceSweeps, dt units.Value,
+	scheduled map[int]struct{}) (State, []pairProof, *StepReport) {
+	end := state.clone()
+	for i := range end.entries {
+		pose, err := pathPoseAt(sweeps.paths[i], big.NewRat(1, 1))
+		if err != nil {
+			return State{}, nil, w.scheduleUndecided(scheduleDiagnostic(StepUnsupported, BodyPair{},
+				fmt.Sprintf("body %d has a non-finite end pose: %v", i, err)))
 		}
 		end.entries[i].Pose = pose
 	}
@@ -129,7 +260,7 @@ func (w *World) stepScheduled(ctx context.Context, from State, input StepInput,
 		if _, ok := scheduled[key]; !ok {
 			continue
 		}
-		sweep, ok := swept[key]
+		sweep, ok := sweeps.swept[key]
 		if !ok {
 			proofs = append(proofs, pairProof{pair: key, boxClear: true})
 			continue
@@ -143,20 +274,92 @@ func (w *World) stepScheduled(ctx context.Context, from State, input StepInput,
 			if err != nil {
 				reason = fmt.Sprintf("rounded end poses lack the pair certificate: %v", err)
 			}
-			return w.scheduleUndecided(scheduleDiagnostic(StepPairUndecided, w.bodyPair(pair), reason)), nil
+			return State{}, nil, w.scheduleUndecided(scheduleDiagnostic(StepPairUndecided, w.bodyPair(pair), reason))
 		}
 		proofs = append(proofs, pairProof{pair: key, sweep: sweep})
 	}
-	trace := Trace{start: from, end: end, duration: dt, slices: []traceSlice{{
-		start: units.Seconds(0), end: dt, from: kicked, to: end, paths: paths, proofs: proofs,
-	}}}
-	conservation, ok := w.conservationReadings(from, kicked, end, trace, nil, input.Gravity, loads, dt)
-	if !ok {
-		return w.scheduleUndecided(scheduleDiagnostic(StepConservationFailed, BodyPair{},
-			"conservation readings cannot be represented with finite bounds")), nil
+	return end, proofs, nil
+}
+
+// fullTrackWithin requires a persistent track over the whole slice whose
+// manifold, read at both ends and the middle, stays within the contact
+// request and PenetrationResidual.
+func (w *World) fullTrackWithin(sweep *decad.SweepReport) bool {
+	track := sweep.ContactTrack
+	if track == nil || track.Start().Fraction.Base() != 0 || track.End().Fraction.Base() != 1 {
+		return false
 	}
-	return &StepReport{Status: Advanced, Next: &end, Excluded: w.Excluded(), Trace: trace,
-		Conservation: &conservation}, nil
+	for _, fraction := range []units.Value{units.Scalar(0), units.Scalar(0.5), units.Scalar(1)} {
+		manifold, err := track.ManifoldAt(fraction)
+		if err != nil || !w.manifoldWithin(manifold) || !w.penetrationWithin(manifold) {
+			return false
+		}
+	}
+	return true
+}
+
+// penetrationWithin bounds every point's separation, value and bound, by
+// PenetrationResidual.
+func (w *World) penetrationWithin(manifold *decad.ContactManifold) bool {
+	for _, p := range manifold.Points {
+		if outwardSum(math.Abs(p.Separation.Value.Base()), p.Separation.Bound.Base()) >
+			w.step.PenetrationResidual.Base() {
+			return false
+		}
+	}
+	return true
+}
+
+// completedContacts is §5 step 5 for the pairs that continued in touch: at
+// the completed poses each must be separated, or touching with its
+// penetration within PenetrationResidual.
+func (w *World) completedContacts(ctx context.Context, end State,
+	policies map[int]decad.SweepStartPolicy) ([]StepDiagnostic, error) {
+	for key := range w.pairs {
+		if policies[key] != decad.ContinueCertifiedTouch {
+			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		pair := w.pairs[key]
+		contact, err := w.doc.ContactPair(ctx, w.bodies[pair.a].definition.Body, w.bodies[pair.b].definition.Body,
+			end.entries[pair.a].Pose, end.entries[pair.b].Pose, w.step.Contact)
+		if err != nil {
+			return nil, err
+		}
+		switch {
+		case contact.Relation == decad.ContactSeparated:
+		case contact.Relation == decad.ContactTouching && contact.Manifold != nil && w.penetrationWithin(contact.Manifold):
+		default:
+			return []StepDiagnostic{scheduleDiagnostic(StepTrackUnproved, w.bodyPair(pair),
+				fmt.Sprintf("completed contact relation is %v beyond the penetration residual", contact.Relation))}, nil
+		}
+	}
+	return nil, nil
+}
+
+// publishScheduled attaches the conservation readings of an advanced step.
+// drift lists the recorded slices' end states; events are the island events.
+func (w *World) publishScheduled(from, kicked, end State, trace Trace, events []ContactEvent,
+	islands []IslandReport, drift [][2]State, gravity QuantityVec, loads []*BodyLoad, dt units.Value) *StepReport {
+	input, okInput := w.conservationState(from)
+	afterKick, okKick := w.conservationState(kicked)
+	completion, okEnd := w.conservationState(end)
+	gravityImpulse, loadImpulse, okForce := w.forceImpulses(gravity, loads, dt)
+	torqueImpulse, okTorque := w.torqueImpulse(loads, dt)
+	contactImpulse, okContact := w.islandContactImpulse(events)
+	driftChange, okDrift := w.driftConservationSlices(drift)
+	kinematicWork, okWork := boundedReading(new(big.Rat), new(big.Rat), new(big.Rat),
+		units.KilogramSquareMillimeterPerSecondSquared)
+	if !okInput || !okKick || !okEnd || !okForce || !okTorque || !okContact || !okDrift || !okWork {
+		return w.scheduleUndecided(scheduleDiagnostic(StepConservationFailed, BodyPair{},
+			"conservation readings cannot be represented with finite bounds"))
+	}
+	return &StepReport{Status: Advanced, Next: &end, Events: events, Islands: islands, Excluded: w.Excluded(),
+		Trace: trace, Conservation: &StepConservation{Input: input, AfterKick: afterKick, Completion: completion,
+			GravityImpulse: gravityImpulse, LoadImpulse: loadImpulse, ContactImpulse: contactImpulse,
+			TorqueImpulse: torqueImpulse, KinematicWork: kinematicWork, DriftChange: driftChange}}
 }
 
 func scheduleDiagnostic(code StepReason, pair BodyPair, reason string) StepDiagnostic {
@@ -384,6 +587,11 @@ func translateByRat(pose r3.Transform, delta [3]*big.Rat) (r3.Transform, error) 
 // exclusions cover it. Velocities inside a slice are the slice's from
 // velocities.
 func (tr Trace) sampleSlices(t units.Value, timeValue, durationValue *big.Rat) (State, error) {
+	for _, event := range tr.events {
+		if timeValue.Cmp(event.at) == 0 {
+			return event.post, nil
+		}
+	}
 	if timeValue.Sign() == 0 {
 		return tr.start, nil
 	}

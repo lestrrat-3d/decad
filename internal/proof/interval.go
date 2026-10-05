@@ -94,6 +94,30 @@ func MulInterval(a, b RatInterval) RatInterval {
 	return OwnedInterval(loA, hiA)
 }
 
+// DotInterval3 encloses the dot product of two three-component interval
+// vectors: the sum of the three componentwise interval products. Each
+// component is enclosed separately, so a value shared by both operands is
+// treated as two independent intervals.
+func DotInterval3(a, b [3]RatInterval) RatInterval {
+	sum := MulInterval(a[0], b[0])
+	for axis := 1; axis < 3; axis++ {
+		sum = AddInterval(sum, MulInterval(a[axis], b[axis]))
+	}
+	return sum
+}
+
+// CrossInterval3 encloses the cross product a×b of two three-component
+// interval vectors, each component as the interval difference of two
+// interval products.
+func CrossInterval3(a, b [3]RatInterval) [3]RatInterval {
+	var out [3]RatInterval
+	for axis := range out {
+		j, k := (axis+1)%3, (axis+2)%3
+		out[axis] = SubInterval(MulInterval(a[j], b[k]), MulInterval(a[k], b[j]))
+	}
+	return out
+}
+
 func IntervalFloatError(a RatInterval, held float64) float64 {
 	return math.Max(
 		RationalFloatError(a.Lo, held),

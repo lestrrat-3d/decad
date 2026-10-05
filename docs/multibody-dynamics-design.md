@@ -14,13 +14,18 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 3, 7, 10, 14, 16, 17 and 19 have shipped. `dynamics.World` holds any number of bodies, the
-canonical pair table and per-pair material of §3.1, and the slice-backed `State` of §3.2. Its step resolves
-two bodies, or three bodies with one, two or three dynamic bodies and every other body fixed, through the
-closed-form responses `docs/rigid-dynamics-design.md` lists. A world of four or more bodies takes the
-scheduled step of §4.3 and §5 without islands: one kick, one drift slice over the whole step whose candidate
-pairs must all sweep `Clear` or `DepartedClear`, and `Undecided` with `StepUnsupported` at any contact
-event. `Document.SweptBox` (§4.2) is public; the cylinder and bounded-faceted clear sweeps certify with it,
+Current state: §13 PRs 1, 2, 3, 4, 7, 10, 14, 16, 17 and 19 have shipped. `dynamics.World` holds any
+number of bodies, the canonical pair table and per-pair material of §3.1, and the slice-backed `State` of
+§3.2. Its step resolves two bodies, or three bodies with one, two or three dynamic bodies and every other
+body fixed, through the closed-form responses `docs/rigid-dynamics-design.md` lists. A world of four or more
+bodies takes the scheduled step of §4.3 and §5 with one event time, the step start: one kick; the pairs that
+touch or shallowly overlap at the start form §6.1's islands, which §6.2 proposes, §6.3's frictionless rows
+certify and §6.6 corrects, publishing one `IslandReport` per island and one event per pair; then one drift
+slice over the whole step from the post-event state, whose candidate pairs must sweep `Clear`,
+`DepartedClear` or, for a pair continued in touch, `SweepPersistentTouch` over the whole slice. An event
+inside the slice (an impact or transition bracket, a graze, a track that ends early), an island with a
+kinematic participant and a positive-friction island pair are `Undecided` with `StepUnsupported` until PRs 5
+and 6. `Document.SweptBox` (§4.2) is public; the cylinder and bounded-faceted clear sweeps certify with it,
 and the scheduled step's broad phase reads it.
 `docs/collision-v1-support.md` is the inventory of the shape pairs, responses and refusals that ship, and
 this document does not restate it. The two- and three-body steps query their pairs one by one with no broad
@@ -29,10 +34,12 @@ is stated in already exists as one package: `internal/proof` (`Dyadic`, `DyV3`, 
 rounding bounds), which the root package imports today and which `dynamics` can import as well, since an
 `internal/` package is visible to every package of this module. §3.1, §3.2, §4 and §8.1–§8.8 describe
 shipped code, except `State.cache` and the `MaxPairSweeps` charge (§13 PR 8). For worlds of four or more
-bodies, §5 without islands, §7.1, §3.4's `traceSlice` and `pairProof`, and §12's `StepReason` with
-`StepDiagnostic.Code` ship as well. §9.1 and §9.2 ship for prisms over whole `LineSeg` sections and for
-zero-bound Booleans, directly or through a translation-only placement; stitched solids and lofts are not
-admitted yet. Everything else is design-only until the PR table in §13 says otherwise.
+bodies, §5 with that one event time, §6.1–§6.3 without the cone, stick and slip rows, §6.6, §7.1, §3.3's
+`IslandReport`, `StepReport.Islands` and `ContactEvent.Island`, §3.4's `traceSlice`, `pairProof` and
+`traceEvent`, and §12's `StepReason` with `StepDiagnostic.Code` ship as well. §9.1 and §9.2 ship for prisms
+over whole `LineSeg` sections and for zero-bound Booleans, directly or through a translation-only placement;
+stitched solids and lofts are not admitted yet. Everything else is design-only until the PR table in §13
+says otherwise.
 
 Navigation only; the named sections own the rules:
 
@@ -402,11 +409,16 @@ rigid-dynamics "Step input and configuration" defines it. A pair gathered for th
 consumable manifold (`Manifold == nil`, or point or normal bounds wider than `StepConfig.Contact`) makes
 the step `Undecided` with `StepManifoldMissing`.
 
+A pair enters the solve when any of its points is active: the lower end of that point's relative normal
+speed, enclosed over the mass-center, witness and normal balls, is at most `VelocityResidual`. All of an
+entering pair's points then join the solve; a pair whose every point certainly separates faster than that
+keeps no constraint and continues under `ContinueSeparatingTouch`.
+
 Islands are the connected components of the graph whose vertices are DYNAMIC bodies and whose edges are
 active constraints between two dynamic bodies; a constraint against a Fixed or Kinematic body attaches
 that body to the dynamic body's island without joining islands through it (a floor under two separate
-stacks does not couple the stacks). Components are numbered by the smallest world index they contain and
-solved in that order. An island with no dynamic body cannot occur; a closing constraint with no dynamic
+stacks does not couple the stacks). Components are numbered by the smallest world index of their dynamic
+bodies and solved in that order. An island with no dynamic body cannot occur; a closing constraint with no dynamic
 participant is `Undecided` with `StepIslandDegenerate`, as rigid-dynamics "Response" requires.
 
 ### 6.2 Unknowns and proposal
@@ -427,10 +439,17 @@ inverse world inertia. The proposal is a nominal solution and proves nothing; `�
 mean the pair's `frictionCoefficient` carries. A nominal proposal that is not finite, or a closing
 constraint whose nominal `K_nn,k <= 0`, is `Undecided` with `StepIslandDegenerate`.
 
+The sweeps run until one changes no impulse in `float64`, or `MaxIterations` have run. The published post
+velocities are then recomputed once from the pre-solve velocities and the final impulses in the fixed
+order, and a component within `1/16` of its residual (`VelocityResidual` or `AngularVelocityResidual`) of
+zero is published as exactly zero. Both choices serve the continuation: a resting island must publish
+exactly equal normal velocities on its touching pairs, and exactly zero spin, before `SweepPair` can prove
+a persistent touch from it. Neither choice is a claim; the certificate judges the published values.
+
 ### 6.3 Certification
 
-After the last sweep (and, cheaply, after every sweep once the proposal stops changing beyond
-`ImpulseResidual`), the solver certifies the proposal in exact rational interval arithmetic, forward only:
+After the last sweep the solver certifies the published proposal in exact rational interval arithmetic,
+forward only:
 it never inverts an interval tensor. The interval vocabulary is `internal/proof/interval.go`'s
 `RatInterval` with `AddInterval`, `SubInterval`, `NegInterval`, `MulInterval`, `ScaleInterval` and
 `PointInterval`; `dynamics` imports that package directly. The two vector forms this section needs and
@@ -461,7 +480,14 @@ The certificate then checks, every comparison over the full interval:
 | Momentum | the per-event linear and angular momentum checks of the same section, applied to the island as one event set | as stated there |
 
 `ContactSolverReport` publishes the largest attained value of each gate as its residual, plus the sweep
-count. A gate that fails at `MaxIterations` is `Undecided` with `StepIslandResidual`, naming the island,
+count: `NormalResidual` for non-penetration and complementarity, `LinearResidual`, `AngularResidual`,
+`MomentumResidual` and `AngularMomentumResidual` for the laws and the island momentum, and
+`EnergyResidual` as the signed upper end of the island's kinetic-energy change. A pre-solve normal speed
+whose enclosure straddles `−ImpactSpeed` selects neither target; with a positive restitution that is the
+`restitution target` refusal. The two momentum rows are implied by the per-body laws: the island sum of
+`m·Δv − ΣJ` cancels each dynamic pair's impulses, and the sum of `I·Δω + c×m·Δv` is the sum of the
+angular-law residuals plus each `c×` its linear-law residual, which the angular-momentum limit covers term by
+term. A gate that fails at `MaxIterations` is `Undecided` with `StepIslandResidual`, naming the island,
 the gate and the limit. Residuals are decided over intervals, so a proposal whose nominal value passes
 but whose interval does not is refused; narrow source intervals keep the arithmetic residual the binding
 one, exactly as rigid-dynamics "Response" states.
@@ -510,10 +536,13 @@ and the conservation files are inputs and readings, not responders, and stay.
 
 Rigid-dynamics "Response" bounds one pair's correction by certified geometry displacement plus bracket
 travel plus `ContactSlop`, and requires every correction to be swept against every other pair. Across an
-island: each dynamic body receives one translation, the sum over its active constraints of its mass-share
-of each constraint's penetration depth along the constraint normal (a Fixed or Kinematic body takes no
-share); the translation's length is bounded by the allowance above, plus the band depth `ε` of §10.3
-when the slice ended on a band track. The corrections of one island are applied together, then every
+island: each dynamic body receives one translation, the sum over its island pairs of its inverse-mass share
+of the pair's deepest point penetration along the pair normal (a Fixed or Kinematic body takes no share; a
+penetrating pair whose points disagree on the normal is refused). A pair's penetration may not exceed its
+allowance above, and a body's translation length may not exceed the summed allowances of the pairs that
+moved it, plus the band depth `ε` of §10.3 when the slice ended on a band track. Island pairs with a moved
+body must still be `Touching` at the corrected poses; every other scheduled pair with a moved body is swept
+over the correction. The corrections of one island are applied together, then every
 candidate pair touching a corrected body is swept over the correction as a `PoseSegment` of zero
 duration-independent travel (the usual §4.2 swept-box exclusion applies first). A new contact, a lost
 relation or an undecided interval is `Undecided` with `StepCorrectionFailed`. Corrections are recorded in
@@ -1126,10 +1155,16 @@ lines below do not repeat it.
 - Files: new `dynamics/island.go`, `dynamics/island_solve.go`, `dynamics/island_certify.go`;
   `internal/proof/interval.go` gains the three-component interval dot and cross products of §6.3, with
   their tests in `internal/proof/interval_test.go`.
-- Test: `dynamics/island_test.go`: the `3-2-1` pyramid rests under gravity through one island of ten
-  constraints with every normal impulse computed and the bridging patches' impulses summing to the
-  supported weight; the two-sphere `37.5 kg·mm/s` fixture runs through the general path.
+- Test: `dynamics/island_test.go`: the `3-2-1` pyramid rests under gravity through one island of nine
+  pairs and 36 manifold-point constraints with every normal impulse computed and the bridging patches'
+  impulses summing to the supported weight; the two-sphere `37.5 kg·mm/s` fixture runs through the general
+  path as a four-body world, the touching pair plus two spheres the broad phase excludes, so the public
+  `World.Step` reaches the island solver with the real producers and asserts the two-body fixture's numbers.
 - Depends on: PR 3.
+- Shipped, with one event time: the step start. The pyramid uses `dt = 1/256 s`, so the kick is exact,
+  and `ImpactSpeed = 64 mm/s`, so its restitution `0.3` targets zero and the stack rests. An event inside
+  the slice, a kinematic island participant and a positive-friction island pair stay `Undecided` with
+  `StepUnsupported`; the multi-event trace that interior events need is PR 6.
 
 ### PR 5 (Phase 1) — Coulomb friction and parity
 

@@ -124,6 +124,75 @@ func TestRatIntervalConstructorsCopyBorrowedEndpoints(t *testing.T) {
 	require.Zero(t, value.Cmp(big.NewRat(13, 1)))
 }
 
+// TestRatIntervalVectorProducts checks the three-component dot and cross
+// products against every corner of the operand boxes: each corner's exact
+// product must lie inside the enclosure, and the enclosure endpoints must be
+// attained by some corner, since every component is a sum of products of
+// independent intervals. Dropping any one component's term moves a corner
+// outside the enclosure.
+func TestRatIntervalVectorProducts(t *testing.T) {
+	t.Parallel()
+	a := [3]proof.RatInterval{
+		proof.Interval(big.NewRat(-3, 2), big.NewRat(5, 4)),
+		proof.Interval(big.NewRat(7, 8), big.NewRat(9, 4)),
+		proof.Interval(big.NewRat(-11, 4), big.NewRat(-1, 8)),
+	}
+	b := [3]proof.RatInterval{
+		proof.Interval(big.NewRat(1, 2), big.NewRat(3, 2)),
+		proof.Interval(big.NewRat(-5, 2), big.NewRat(1, 4)),
+		proof.Interval(big.NewRat(-1, 1), big.NewRat(13, 8)),
+	}
+	dot := proof.DotInterval3(a, b)
+	cross := proof.CrossInterval3(a, b)
+	pick := func(iv proof.RatInterval, hi bool) *big.Rat {
+		if hi {
+			return iv.Hi
+		}
+		return iv.Lo
+	}
+	// Componentwise extremes: for the dot product each product term is
+	// independent, so the sum of each term's extreme corner is attained.
+	wantDotLo, wantDotHi := new(big.Rat), new(big.Rat)
+	for axis := range 3 {
+		term := proof.MulInterval(a[axis], b[axis])
+		wantDotLo.Add(wantDotLo, term.Lo)
+		wantDotHi.Add(wantDotHi, term.Hi)
+	}
+	require.Zero(t, dot.Lo.Cmp(wantDotLo))
+	require.Zero(t, dot.Hi.Cmp(wantDotHi))
+	for corner := range 64 {
+		var x, y [3]*big.Rat
+		for axis := range 3 {
+			x[axis] = pick(a[axis], corner&(1<<axis) != 0)
+			y[axis] = pick(b[axis], corner&(1<<(axis+3)) != 0)
+		}
+		value := new(big.Rat)
+		for axis := range 3 {
+			value.Add(value, new(big.Rat).Mul(x[axis], y[axis]))
+		}
+		require.True(t, dot.Lo.Cmp(value) <= 0 && value.Cmp(dot.Hi) <= 0, "dot corner %d", corner)
+		for axis := range 3 {
+			j, k := (axis+1)%3, (axis+2)%3
+			component := new(big.Rat).Sub(new(big.Rat).Mul(x[j], y[k]), new(big.Rat).Mul(x[k], y[j]))
+			require.True(t, cross[axis].Lo.Cmp(component) <= 0 && component.Cmp(cross[axis].Hi) <= 0,
+				"cross axis %d corner %d", axis, corner)
+		}
+	}
+	// Point operands reduce both products to exact rational vector algebra.
+	p := [3]proof.RatInterval{proof.PointInterval(big.NewRat(1, 1)), proof.PointInterval(big.NewRat(2, 1)),
+		proof.PointInterval(big.NewRat(3, 1))}
+	q := [3]proof.RatInterval{proof.PointInterval(big.NewRat(-4, 1)), proof.PointInterval(big.NewRat(5, 1)),
+		proof.PointInterval(big.NewRat(1, 2))}
+	pointDot := proof.DotInterval3(p, q)
+	require.Zero(t, pointDot.Lo.Cmp(big.NewRat(15, 2)))
+	require.Zero(t, pointDot.Hi.Cmp(big.NewRat(15, 2)))
+	pointCross := proof.CrossInterval3(p, q)
+	for axis, want := range []*big.Rat{big.NewRat(-14, 1), big.NewRat(-25, 2), big.NewRat(13, 1)} {
+		require.Zero(t, pointCross[axis].Lo.Cmp(want), "axis %d", axis)
+		require.Zero(t, pointCross[axis].Hi.Cmp(want), "axis %d", axis)
+	}
+}
+
 var ratIntervalBenchmarkSink proof.RatInterval
 
 func BenchmarkRatIntervalArithmetic(b *testing.B) {
