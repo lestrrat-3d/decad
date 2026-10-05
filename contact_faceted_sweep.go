@@ -3,6 +3,8 @@ package decad
 import (
 	"context"
 	"math/big"
+
+	"github.com/lestrrat-3d/r3"
 )
 
 // sweepFacetedFloor uses the complete lower support face of one verified
@@ -16,6 +18,9 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 	faceted, pose, facetedDelta, floorDelta := b, pb.from, pb.delta, pa.delta
 	if facetedFirst {
 		faceted, pose, facetedDelta, floorDelta = a, pa.from, pa.delta, pb.delta
+	}
+	if pp, ok := faceted.payload.(facetedPayload); ok && pp.meshBound > 0 {
+		return d.sweepBoundedFacetedFloorClear(ctx, a, b, pa, pb, req, report, floor, facetedFirst)
 	}
 	support, ok, err := sourceFacetedAxisSupport(ctx, faceted, pose, 2, 0)
 	if err != nil {
@@ -78,6 +83,105 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 	}
 	result.replay.snapshot(result)
 	return result, nil
+}
+
+// sweepBoundedFacetedFloorClear uses only the Boolean boundary displacement.
+// A positive bound cannot establish a support face or a touching instant.
+func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body,
+	pa, pb affinePairPath, req SweepRequest, report *SweepReport,
+	floor sourceBoxContactProof, facetedFirst bool) (*SweepReport, error) {
+	faceted, pose, facetedDelta, floorDelta := b, pb.from, pb.delta, pa.delta
+	if facetedFirst {
+		faceted, pose, facetedDelta, floorDelta = a, pa.from, pa.delta, pb.delta
+	}
+	for axis := range 2 {
+		if !facetedDelta[axis].isZero() || !floorDelta[axis].isZero() {
+			return facetedSweepUndecided(report, pa.duration), nil
+		}
+	}
+	extent, ok, err := sourceBoundedFacetedExtent(ctx, faceted, pose)
+	if err != nil {
+		return nil, err
+	}
+	if !ok || !boundedFacetedInsideFloor(extent, floor) {
+		return facetedSweepUndecided(report, pa.duration), nil
+	}
+	endExtent := extent
+	endExtent.box = translatedAffineBox(extent.box, facetedDelta)
+	endFloor := translatedAffineBox(floor, floorDelta)
+	if _, ok := boundedFacetedFloorGap(extent, floor); !ok {
+		return facetedSweepUndecided(report, pa.duration), nil
+	}
+	if _, ok := boundedFacetedFloorGap(endExtent, endFloor); !ok {
+		return facetedSweepUndecided(report, pa.duration), nil
+	}
+	for index, fraction := range []*big.Rat{new(big.Rat), big.NewRat(1, 1)} {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		poseA, err := pa.poseAt(fraction)
+		if err != nil {
+			return nil, err
+		}
+		poseB, err := pb.poseAt(fraction)
+		if err != nil {
+			return nil, err
+		}
+		contact, err := d.ContactPair(ctx, a, b, poseA, poseB, req.ContactRequest)
+		if err != nil {
+			return nil, err
+		}
+		if contact.Relation != ContactSeparated {
+			return facetedSweepUndecided(report, pa.duration), nil
+		}
+		observedFloor, observedExtent, deviation, ok := boundedFacetedReplayBoxes(
+			floor, extent, pa, pb, poseA, poseB, fraction, facetedFirst)
+		resolution, _ := exactBaseValue(req.PointResolution)
+		if !ok || deviation.Cmp(resolution) > 0 ||
+			!boundedFacetedInsideFloor(observedExtent, observedFloor) {
+			return facetedSweepUndecided(report, pa.duration), nil
+		}
+		if _, ok := boundedFacetedFloorGap(observedExtent, observedFloor); !ok {
+			return facetedSweepUndecided(report, pa.duration), nil
+		}
+		idealExtent, idealFloor := extent, floor
+		if index == 1 {
+			idealExtent, idealFloor = endExtent, endFloor
+		}
+		gap, _ := boundedFacetedFloorGap(idealExtent, idealFloor)
+		at := sweepInstant(fraction, pa.duration)
+		report.Samples = append(report.Samples, SweepSample{At: at, PoseA: poseA, PoseB: poseB,
+			FloatContact: contact, Ideal: SweepEvent{At: at, Relation: ContactSeparated, Gap: &gap},
+			exactFraction: fraction})
+		report.PoseEvaluations++
+	}
+	report.Outcome, report.BoxExcluded = SweepClear, true
+	report.replay = &sweepReplayProof{pa: pa, pb: pb, request: req.ContactRequest,
+		boxA: floor, boxB: extent.box, facetedClear: &extent, facetedFirst: facetedFirst}
+	if facetedFirst {
+		report.replay.boxA, report.replay.boxB = extent.box, floor
+	}
+	report.replay.snapshot(report)
+	return report, nil
+}
+
+func boundedFacetedReplayBoxes(floor sourceBoxContactProof, extent boundedFacetedExtent,
+	pa, pb affinePairPath, poseA, poseB r3.Transform, f *big.Rat,
+	facetedFirst bool) (sourceBoxContactProof, boundedFacetedExtent, *big.Rat, bool) {
+	facetedPath, floorPath := pb, pa
+	facetedPose, floorPose := poseB, poseA
+	if facetedFirst {
+		facetedPath, floorPath, facetedPose, floorPose = pa, pb, poseA, poseB
+	}
+	observedFloor, okFloor := translatedReplayBox(floor, floorPath.from, floorPose)
+	observedFacet, okFacet := translatedReplayBox(extent.box, facetedPath.from, facetedPose)
+	if !okFloor || !okFacet {
+		return sourceBoxContactProof{}, boundedFacetedExtent{}, nil, false
+	}
+	deviation := boxPoseDeviation(floor, observedFloor, floorPath.delta, f)
+	deviation.Add(deviation, boxPoseDeviation(extent.box, observedFacet, facetedPath.delta, f))
+	extent.box = observedFacet
+	return observedFloor, extent, deviation, true
 }
 
 func facetedSweepUndecided(report *SweepReport, duration *big.Rat) *SweepReport {

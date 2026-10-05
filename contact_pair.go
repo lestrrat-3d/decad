@@ -88,6 +88,8 @@ type ContactReport struct {
 // disk-face contact against a containing box face.
 // A zero-bound faceted solid can prove a lower support face contact or axial
 // gap against a source-box floor that strictly contains its support footprint.
+// A positive-bound faceted solid can prove a strict axial gap with its
+// boundary displacement charged, but cannot publish a contact manifold.
 // An exactly orthogonal rotated source box can give a sphere a bounded point
 // on one interior face.
 // At identity query poses, the analytic clearance kernel can prove relations

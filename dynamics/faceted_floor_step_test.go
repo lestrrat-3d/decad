@@ -83,6 +83,57 @@ func TestBoundedFacetedMassAdmitsDynamicWorld(t *testing.T) {
 	require.Len(t, state.Entries(), 2)
 }
 
+func TestBoundedFacetedMassClearStepAndTrace(t *testing.T) {
+	doc := decad.New()
+	base := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	upper := makeBox(t, doc, -2, -2, 2, 2, 8, 4)
+	union, err := decad.Union(t.Context(), base, upper)
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.Vec{X: .1})
+	require.NoError(t, err)
+	placed, err := union.Placed(t.Context(), shift)
+	require.NoError(t, err)
+	floor := makeBox(t, doc, -20, -20, 20, 20, -100, 10)
+	density := units.KilogramsPerCubicMillimeter(.001)
+	mass, err := placed.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	require.Positive(t, mass.Mass.Bound.Base())
+	material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
+	world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{
+			{Body: floor, Role: dynamics.Fixed, Material: material},
+			{Body: placed, Role: dynamics.Dynamic, Density: &density, Material: material},
+		},
+		Step: facetedFloorStepConfig(),
+	})
+	require.NoError(t, err)
+	velocity := zeroVelocity()
+	velocity.Z = units.MillimetersPerSecond(-1)
+	start, err := world.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: placed, Pose: r3.Identity(), LinearVelocity: velocity, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	contact, err := doc.ContactPair(t.Context(), floor, placed, r3.Identity(), r3.Identity(),
+		facetedFloorStepConfig().Contact)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, contact.Relation)
+	report, err := world.Step(t.Context(), start,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.1))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Empty(t, report.Events)
+	require.NotNil(t, report.Next)
+	for _, sample := range []struct{ time, z float64 }{{0, 0}, {.05, -.05}, {.1, -.1}} {
+		state, sampleErr := report.Trace.Sample(units.Seconds(sample.time))
+		require.NoError(t, sampleErr)
+		body, ok := state.Body(placed)
+		require.True(t, ok)
+		require.InDelta(t, sample.z, body.Pose.Translation().Z, 1e-10)
+		require.Equal(t, velocity, body.LinearVelocity)
+	}
+}
+
 func facetedFloorWorld(t *testing.T, doc *decad.Document, floor, faceted *decad.Body,
 	mass decad.MassProperties, restitution float64, reversed bool,
 	startHeight, velocity float64) (*dynamics.World, dynamics.State) {

@@ -1082,6 +1082,7 @@
 4	0.00	TestContactPairAnalyticPrismGap
 4	0.00	TestContactPairAnalyticPrismOverlap
 4	0.00	TestContactPairAnalyticPrismTouch
+4	0.01	TestContactPairBoundedFacetedFloorStrictClear
 4	0.01	TestContactPairFacetedFloorRefusesMultipleSupportFaces
 4	0.01	TestContactPairFacetedFloorRefusesUnprovedPatches
 4	0.00	TestContactPairOrientedAxisFaceWitness
@@ -1690,6 +1691,7 @@
 4	0.00	TestSweepLineStagesTessellation
 4	0.00	TestSweepLineTiltedFrameCarriesEndpointGap
 4	0.00	TestSweepPairEqualSpinDepartsFromSourceFace
+4	0.01	TestSweepPairBoundedFacetedFloorStrictClearReplay
 4	0.01	TestSweepPairFacetedFloorRefusesUnprovedPath
 4	0.00	TestSweepPairFixedFloorTangentialSpinDeparts
 4	0.00	TestSweepPairOffCenterBoxImpactAtEndpoint
