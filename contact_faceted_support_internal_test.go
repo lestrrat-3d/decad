@@ -264,8 +264,24 @@ func TestContactPairFacetedFloorRefusesUnprovedPatches(t *testing.T) {
 	require.NoError(t, err)
 	report, err := doc.ContactPair(t.Context(), floor, widened, r3.Identity(), r3.Identity(), req)
 	require.NoError(t, err)
-	require.Equal(t, ContactUndecided, report.Relation)
-	require.Nil(t, report.Manifold)
+	require.Equal(t, ContactTouching, report.Relation)
+	require.Equal(t, ContactNoReason, report.Reason)
+	require.Equal(t, Measurement{Value: units.Millimeters(0), Exactness: Exact,
+		Bound: units.Millimeters(0)}, *report.Gap)
+	require.NotNil(t, report.Manifold)
+	require.Len(t, report.Manifold.Points, 4)
+	for i, want := range []r3.Vec{{X: .1}, {X: 10.1}, {X: 10.1, Y: 10}, {X: .1, Y: 10}} {
+		point := report.Manifold.Points[i]
+		require.InDelta(t, want.X, point.OnA.Value.X, req.PointResolution.Base())
+		require.InDelta(t, want.Y, point.OnA.Value.Y, req.PointResolution.Base())
+		require.Equal(t, point.OnA, point.OnB)
+		require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+		require.Zero(t, point.Separation.Value.Base())
+		require.Contains(t, widened.Faces(), point.FaceB)
+		require.Same(t, point.FaceB, point.FeatureB.Face)
+		require.Contains(t, floor.Faces(), point.FaceA)
+		require.Same(t, point.FaceA, point.FeatureA.Face)
+	}
 }
 
 func TestContactPairFacetedFloorRefusesMultipleSupportFaces(t *testing.T) {
