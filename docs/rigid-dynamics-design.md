@@ -167,7 +167,10 @@ coefficient. The contact response uses the remaining duration and its rotating
 departure sweep. The event retains the original bracket and exact touch time;
 the trace replays the prefix and remainder from separate cached proofs. A
 candidate without exact touch returns `Undecided` without an event or state.
-Other positive-friction sphere-pair inputs return `Undecided`.
+An initially touching off-axis pair with exactly shared linear velocity and
+zero spin keeps a full-span certified persistent track without an impulse,
+including when effective friction is positive. Other positive-friction
+sphere-pair inputs outside these paths return `Undecided`.
 A two-body world's pair may be excluded; its bodies drift independently even
 through overlap, and no pair material is mixed.
 The current three-body step admits one dynamic body and two fixed bodies, two
