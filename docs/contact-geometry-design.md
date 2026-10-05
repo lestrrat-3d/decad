@@ -108,8 +108,10 @@ convexity certificate, a touch or overlap has no manifold and the reason
 face patches, edge ends and vertices inside a face with that face's normal,
 and crease crossings, or `ContactAmbiguousFeature` when a contact falls
 outside that table. An overlap of two convex bodies publishes the patch at
-depth through one unique shallowest pair of crossing faces; any other overlap
-keeps `ContactNoNormalProof`. When the faceted floor-support proof leaves a
+depth through one unique shallowest pair of crossing faces, or, when only one
+body has a face across that shallowest push, the other body's deepest edge
+or vertex with its feet on that face; any other overlap keeps
+`ContactNoNormalProof`. When the faceted floor-support proof leaves a
 pair undecided, this relation decides it.
 
 A positive-bound faceted Boolean that no exact source mesh covers, and a
@@ -385,8 +387,12 @@ their complete face rectangles. Each clipped corner records its original
 face identities, a rational point with outward conversion bound, and a
 face normal with outward vector and angular bounds. A second equality axis,
 nonparallel source edges, or a request tighter than those bounds withholds
-the manifold. Other rotated face, edge, vertex, and shallow-overlap manifolds
-still need their own complete trimmed contact-set and source-feature proofs.
+the manifold. Two oriented boxes are also exact planar solids, so a touch or
+overlap their box patches leave without a manifold takes the planar one
+(`docs/multibody-dynamics-design.md` §9.3) when that relation agrees and
+every point is an edge or vertex in, on or crossing the other box: an edge
+of a rotated box on a floor, or that edge poking slightly through it. Face
+pairs stay with the box patches, which withhold the degenerate ones.
 
 The horizontal rotated-face path requires one source box at a signed-axis
 pose and another whose transformed source edges keep one face horizontal.

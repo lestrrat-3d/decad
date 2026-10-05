@@ -221,9 +221,13 @@ func TestTorqueDrivenRotatingBoxReboundsFromFixedFloor(t *testing.T) {
 	require.NotNil(t, sweep.Event.Manifold)
 	require.Len(t, sweep.Event.Manifold.Points, 4)
 	require.InDelta(t, 0.1, sweep.Bracket.To.Elapsed.Value.Base(), 1e-9)
+	// Inside the rotating bracket the replay certifies the rounded pair
+	// within PointResolution of the separated left edge (§10.1): the box
+	// face lands no deeper than that.
 	bracketMiddle := (sweep.Bracket.From.Fraction.Base() + sweep.Bracket.To.Fraction.Base()) / 2
-	_, _, err = sweep.CertifiedPosesAt(units.Seconds(0.2 * bracketMiddle))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	_, middlePose, err := sweep.CertifiedPosesAt(units.Seconds(0.2 * bracketMiddle))
+	require.NoError(t, err)
+	require.InDelta(t, 0, middlePose.Translation().Z, 1e-6)
 	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration(),
 		Loads: []dynamics.BodyLoad{{Body: box, Force: testForce(0, 0), Torque: testTorque(50)}}},
 		units.Seconds(0.2))
@@ -264,8 +268,6 @@ func TestTorqueDrivenRotatingBoxReboundsFromFixedFloor(t *testing.T) {
 	require.InDelta(t, 2.5, afterBox.Pose.Translation().Z, 2e-6)
 	require.InDelta(t, math.Sin(0.09), afterBox.Pose.ApplyDir(r3.Vec{X: 1}).Y, 1e-9)
 	require.Equal(t, event.PostVelocity.Z, afterBox.LinearVelocity.Z)
-	_, err = report.Trace.Sample(units.Seconds(0.2 * bracketMiddle))
-	require.ErrorIs(t, err, dynamics.ErrUnsupported)
 	for _, sample := range []dynamics.BodyState{beforeBox, afterBox} {
 		contact, contactErr := doc.ContactPair(t.Context(), floor, box, r3.Identity(), sample.Pose,
 			decad.ContactRequest{PointResolution: units.Millimeters(1e-6),

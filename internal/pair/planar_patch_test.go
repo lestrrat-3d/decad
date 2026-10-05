@@ -21,7 +21,12 @@ import (
 //     wrong point (a division by its zero z component);
 //   - the pass-through vertex removal in the published corners:
 //     TestPlanarTouchManifoldFacePatch publishes the vertex inside a face
-//     edge.
+//     edge;
+//   - the shallow support's clip of the edge's feet to the face:
+//     TestPlanarPenetrationManifoldEdge's wedge past the floor's rim
+//     publishes a foot off the face;
+//   - the shallow support's lift onto the face plane: the same test's feet
+//     sit at the wedge's own depth.
 
 func rat(num, den int64) *big.Rat { return big.NewRat(num, den) }
 
@@ -254,4 +259,79 @@ func TestPlanarManifoldsPoll(t *testing.T) {
 			require.ErrorIs(t, err, stop, "%s limit=%d", name, limit)
 		}
 	}
+}
+
+// facedWedge is a prism along y over [y0, y1] whose section, in (x, z), is
+// the triangle (1, 0.75), (2, 2), (0, 2): its lower edge points down. Its
+// faces are the two caps and the three sides.
+func facedWedge(y0, y1 float64) pair.PlanarSolid {
+	section := [][2]float64{{1, .75}, {2, 2}, {0, 2}}
+	var s pair.PlanarSolid
+	for _, y := range []float64{y0, y1} {
+		for _, p := range section {
+			s.Verts = append(s.Verts, vec(p[0], y, p[1]))
+		}
+	}
+	// The section runs counterclockwise in (x, z), so seen from +y it runs
+	// clockwise: the y0 cap faces −y with the order 0, 1, 2.
+	s.Tris = [][3]int{{0, 1, 2}, {3, 5, 4}, {0, 3, 4}, {0, 4, 1}, {1, 4, 5}, {1, 5, 2}, {2, 5, 3}, {2, 3, 0}}
+	s.Faces = []int{0, 1, 2, 2, 3, 3, 4, 4}
+	return s
+}
+
+func TestPlanarPenetrationManifoldEdge(t *testing.T) {
+	// The wedge's lower edge pokes 1/4 mm into the floor's top face z = 1.
+	// No wedge face is parallel to it, so §9.3 publishes the edge's two ends,
+	// each with its foot on the face, at depth 1/4, in both orders.
+	floor := facedBox([3]float64{0, 0, 0}, [3]float64{4, 4, 1})
+	wedge := facedWedge(1, 2)
+	ok, err := pair.CheckPlanarSolid(&wedge, noPoll)
+	require.NoError(t, err)
+	require.True(t, ok, "the wedge is a closed outward-wound solid")
+	for order := range 2 {
+		a, b := floor, wedge
+		if order == 1 {
+			a, b = wedge, floor
+		}
+		points, err := pair.PlanarPenetrationManifold(&a, &b, noPoll)
+		require.NoError(t, err)
+		require.Len(t, points, 2, "order %d", order)
+		var ys []float64
+		for _, point := range points {
+			onFloor, onWedge, floorFeature, wedgeFeature := point.OnA, point.OnB, point.A, point.B
+			normal := 1
+			if order == 1 {
+				onFloor, onWedge, floorFeature, wedgeFeature = point.OnB, point.OnA, point.B, point.A
+				normal = -1
+			}
+			require.Zero(t, onFloor[0].Cmp(rat(1, 1)))
+			require.Zero(t, onFloor[2].Cmp(rat(1, 1)), "the foot lies on the face plane")
+			require.Zero(t, onWedge[2].Cmp(rat(3, 4)))
+			require.Zero(t, onFloor[1].Cmp(onWedge[1]))
+			y, _ := onWedge[1].Float64()
+			ys = append(ys, y)
+			require.Equal(t, -0.25, point.Separation.ValueMM)
+			require.Zero(t, point.Separation.BoundMM)
+			require.Equal(t, normal, point.Normal[2].Sign())
+			require.Zero(t, point.Normal[0].Sign())
+			require.Equal(t, pair.FeatureFacet, floorFeature.Kind)
+			require.Equal(t, []int{5}, floorFeature.Faces)
+			require.Equal(t, pair.FeatureEdge, wedgeFeature.Kind)
+			require.Equal(t, []int{2, 4}, wedgeFeature.Faces, "the sides through the lower edge")
+		}
+		require.ElementsMatch(t, []float64{1, 2}, ys)
+	}
+
+	// The same wedge reaching past the floor's y = 4 rim publishes only the
+	// part of its edge whose feet lie on the face: y from 3 to 4.
+	past := facedWedge(3, 5)
+	points, err := pair.PlanarPenetrationManifold(&floor, &past, noPoll)
+	require.NoError(t, err)
+	require.Len(t, points, 2)
+	var ys []float64
+	for _, point := range points {
+		y, _ := point.OnA[1].Float64()
+		ys = append(ys, y)
+	}
+	require.ElementsMatch(t, []float64{3, 4}, ys)
 }

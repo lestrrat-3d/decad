@@ -1585,6 +1585,7 @@
 4	0.00	TestRigidRoundAllowIsAlwaysAFiniteBound
 4	0.00	TestRotatedPrismMassChargesDisplacement
 4	0.00	TestRotatedPrismMassMatchesCardinalPath
+4	0.00	TestRotatingBracketDepthChargesTravelAndDeviation
 4	0.00	TestRvLenUpperEnclosesTheExactNorm
 4	0.01	TestSTLPlate
 4	0.00	TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths

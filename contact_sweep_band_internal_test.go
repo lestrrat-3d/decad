@@ -24,3 +24,28 @@ func TestPlanarReplayLowerGapChargesTravel(t *testing.T) {
 	require.Zero(t, big.NewRat(1, 8).Cmp(replay.lowerGap(big.NewRat(3, 4))))
 	require.Nil(t, (&planarReplay{}).lowerGap(big.NewRat(1, 2)))
 }
+
+// TestRotatingBracketDepthChargesTravelAndDeviation reads the replay inside a
+// rotating impact bracket directly (bracketDepthWithin): a fraction f past the
+// left edge lo replays when (f − lo)·T − g + deviation, the farthest the
+// rounded pair can lie inside a separated one, fits PointResolution. A public
+// fixture's bracket travel and pose rounding sit far below any useful
+// resolution, so this one shows both charges failing: deleting the travel
+// charge accepts f = 3/4 at resolution 3/4, and deleting the deviation
+// accepts f = 1/2 at resolution −1/4. The left gap g is a credit, not a
+// charge: deleting it only refuses more.
+func TestRotatingBracketDepthChargesTravelAndDeviation(t *testing.T) {
+	proof := sweepReplayProof{bracketLo: big.NewRat(1, 2), bracketHi: big.NewRat(1, 1),
+		bracketGap: big.NewRat(1, 4), bracketTravel: big.NewRat(4, 1)}
+	deviation := big.NewRat(1, 8)
+	// (3/4 − 1/2)·4 − 1/4 + 1/8 = 7/8.
+	require.True(t, proof.bracketDepthWithin(big.NewRat(3, 4), deviation, big.NewRat(7, 8)))
+	require.False(t, proof.bracketDepthWithin(big.NewRat(3, 4), deviation, big.NewRat(3, 4)))
+	// At the left edge the gap alone remains: −1/4 + 1/8 = −1/8.
+	require.True(t, proof.bracketDepthWithin(big.NewRat(1, 2), deviation, new(big.Rat)))
+	require.False(t, proof.bracketDepthWithin(big.NewRat(1, 2), deviation, big.NewRat(-1, 4)))
+	// Past the right edge nothing replays.
+	require.False(t, proof.bracketDepthWithin(big.NewRat(9, 8), deviation, big.NewRat(100, 1)))
+	require.False(t, (&sweepReplayProof{bracketLo: big.NewRat(1, 2), bracketHi: big.NewRat(1, 1)}).
+		bracketDepthWithin(big.NewRat(3, 4), deviation, big.NewRat(100, 1)))
+}

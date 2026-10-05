@@ -363,6 +363,7 @@ func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
 				result.replay = nil
 			} else {
 				result.replay.setBracket(left, right)
+				result.replay.setRotatingBracketGap(result, new(big.Rat).Add(aPath.fullTravel, bPath.fullTravel))
 			}
 		}
 	}

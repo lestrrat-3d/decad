@@ -153,6 +153,7 @@ func (r *rotationalPairSweep) planarReplayProof(result *SweepReport) *sweepRepla
 			return nil
 		}
 		proof.setBracket(left, right)
+		proof.bracketTravel = planar.travel
 		end = left
 	case SweepClear, SweepDepartedClear:
 	default:
@@ -184,6 +185,9 @@ func (r *rotationalPairSweep) planarReplayProof(result *SweepReport) *sweepRepla
 	}
 	if covered.Cmp(end) != 0 {
 		return nil
+	}
+	if proof.bracketLo != nil {
+		proof.bracketGap = planar.lowerGap(proof.bracketLo)
 	}
 	return proof
 }

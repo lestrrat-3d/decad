@@ -31,7 +31,9 @@ import (
 //     |ω_S|²·D with each of D's terms: TestSweepPairPlanarDepartureRotatingSupport
 //     moves its horizon;
 //   - the band's contact-rate term: TestSweepPairPlanarBandTrack's closing
-//     case publishes K·h² alone;
+//     case publishes K·h² alone, in Band() and in BandAt();
+//   - BandAt's curvature term: TestSweepPairPlanarBandTrack's prefix band
+//     reads |c|·u alone;
 //   - the band's clearance of the other vertices: TestSweepPairPlanarBandTrack's
 //     one-second track reaches the duration;
 //   - the band's face containment: TestSweepPairPlanarBandLeavesFace reaches
@@ -163,6 +165,20 @@ func TestSweepPairPlanarBandTrack(t *testing.T) {
 				require.NotNil(t, band)
 				require.Equal(t, units.Length, band.Value.Kind())
 				require.InDelta(t, math.Abs(tc.vz)*h+k*h*h, band.Value.Base(), band.Bound.Base()+slack)
+				// BandAt bounds the band over a prefix of the track: the same
+				// closed form at half its length, and Band() at its end.
+				half := track.End().Fraction.Base() / 2
+				prefix, err := track.BandAt(units.Scalar(half))
+				require.NoError(t, err)
+				u := half * tc.seconds
+				require.InDelta(t, math.Abs(tc.vz)*u+k*u*u, prefix.Value.Base(), prefix.Bound.Base()+slack)
+				whole, err := track.BandAt(track.End().Fraction)
+				require.NoError(t, err)
+				require.Equal(t, band.Value, whole.Value)
+				if tc.end < 1 {
+					_, err = track.BandAt(units.Scalar(1))
+					require.ErrorIs(t, err, decad.ErrDegenerate)
+				}
 
 				normal := 1.0
 				if order == 1 {

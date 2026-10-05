@@ -26,7 +26,9 @@ shows a box impact and computed rebound.
 The source-box path starts from rectangular source prisms. Signed-axis
 face patches cover affine approach, persistent contact, and the first edge
 exit. Selected co-oriented oblique faces, clipped horizontal patches, and
-rotating drifts have separate proofs. Fixed-floor friction and selected
+rotating drifts have separate proofs. A rotated box's edge or corner inside
+another box's face, which those patches do not cover, takes the planar
+manifold below. Fixed-floor friction and selected
 two-dynamic face impulses can change linear velocity and spin.
 [Box step tests](../dynamics/step_test.go) and
 [friction tests](../dynamics/friction_step_test.go) exercise these responses.
@@ -109,9 +111,12 @@ or the corner, with that face's normal. Two edges crossing publish their
 crossing point. A box in a tray corner publishes each face's part with its
 own normal. Two convex bodies that overlap slightly publish the patch at
 depth when one shallowest push separates them through two opposed faces.
-The manifold is withheld with `ContactAmbiguousFeature` when a corner or edge
-meets only a face's rim, when a hole cuts into the patch, or when a convex
-face rests on an edge of a non-convex body. No step response uses it yet.
+When only one of them has a face across that push, the other's deepest edge
+or corner pokes through it: its ends, or the corner, are published with
+their feet on the face, at that depth. The manifold is withheld with
+`ContactAmbiguousFeature` when a corner or edge meets only a face's rim, when
+a hole cuts into the patch, or when a convex face rests on an edge of a
+non-convex body. The four-body step's islands use it.
 [Planar manifold tests](../contact_faceted_manifold_test.go) check each case.
 
 `SweepPair` checks two such solids under any path, spinning or not, when no
@@ -132,9 +137,11 @@ depth through the whole step the track is an exact `SweepPersistentTouch`.
 Source boxes whose own proofs cannot continue a touch take this path too.
 Touches no such plane covers, such as two crossing edges or a box in a tray
 corner, stay `SweepUndecided`. These reports replay rounded poses without
-rerunning the pair test. No step consumes a band track yet.
-[Band and departure tests](../contact_sweep_band_test.go) check the depth
-and the departure time against their closed forms.
+rerunning the pair test. A rotating impact replays its bracket too, up to
+its right end: the rounded pair lies within `PointResolution` of the left
+end's proven gap less the travel since. `BandAt` reads a band track's depth
+over any prefix. [Band and departure tests](../contact_sweep_band_test.go)
+check the depth and the departure time against their closed forms.
 
 A positive-bound faceted Boolean, and a cap-loop chamfer whose every face is
 flat, are checked through their held triangle meshes. The true surface lies
@@ -147,8 +154,8 @@ held one with each point's ball grown by its body's δ, and it is published
 only when a face of a body with no displacement supplies the normal.
 `SweepPair` brackets a first impact onto a band sample; a pair that starts
 in its band never departs, and under `ContinueCertifiedTouch` it carries a
-band track whose `Band()` adds twice the summed δ. No step consumes a band
-yet. [Band tests](../contact_band_test.go) check the band, the charges, and
+band track whose `Band()` adds twice the summed δ.
+[Band tests](../contact_band_test.go) check the band, the charges, and
 each refusal.
 
 ## Bodies and response
@@ -194,7 +201,14 @@ A transition or a graze publishes a zero-impulse event, and the step then
 continues from the event; a graze of a positive-friction pair returns
 `dynamics.Undecided` with `StepUnsupported`.
 A pair that touches at zero speed and needs no impulse joins the contact set
-without an event. A bounce sequence ends when an incoming speed falls to
+without an event. A pair in the contact set may ride a band track: it
+continues while the track's depth stays within `PenetrationResidual`, and
+the slice ends at the last grid time it does, where the pair enters an
+island again. A rotating pair's impact advances to its bracket's right end,
+and its island takes the manifold the rounded poses there show. A
+`ContactBand` is a touch whose band must lie within `PenetrationResidual`;
+a wider one leaves the step `dynamics.Undecided`, and so does a fixed pair
+in such a band, with `StepFixedPairRelation`. A bounce sequence ends when an incoming speed falls to
 `ImpactSpeed`; one whose events reach `MaxEvents` with time remaining stops
 the step after the event that reached it. Kinematic bodies take
 `PoseSegment` drivers, and an island admits one only while its driver
@@ -220,6 +234,13 @@ gravity and rerun the two-sphere impact through the island solver.
 four-corner Coulomb slide and slide a box across a box the floor holds.
 [Timeline tests](../dynamics/timeline_test.go) bounce a sphere over three
 steps against the closed-form bounce times.
+[Tip tests](../dynamics/tip_test.go) tip a box from its edge through band
+slices and rotating impacts until it lands on its far edge; there it rocks
+between its two bottom edges, and the step stops `Undecided` once a far edge
+closes within one grid step of the near edge's touch. A box therefore does
+not yet come to rest flat after tipping over.
+[Band rest tests](../dynamics/contact_band_test.go) rest a body on a
+displaced one within `PenetrationResidual` and stop below its band.
 
 Two-body worlds admit a fixed or kinematic body against a dynamic body, or
 two dynamic bodies. An affine kinematic box driver and selected cardinal

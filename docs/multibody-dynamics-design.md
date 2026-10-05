@@ -14,8 +14,8 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 3, 4, 6, 7, 8, 10, 11, 12, 14, 16, 17 and 19 have shipped, and so have the
-root parts of PRs 13 and 18. `dynamics.World` holds any number of bodies, the canonical pair table and
+Current state: §13 PRs 1, 2, 3, 4, 6, 7, 8, 10, 11, 12, 13, 14, 16, 17, 18 and 19 have shipped.
+`dynamics.World` holds any number of bodies, the canonical pair table and
 per-pair material of §3.1, and the slice-backed `State` of §3.2. Its step resolves two bodies, or three bodies with one, two or three dynamic bodies and
 every other body fixed, through the closed-form responses `docs/rigid-dynamics-design.md` lists. A world of four or more
 bodies takes the scheduled step of §4.3 and §5: one kick, then slices of drift from event to event. Initial
@@ -23,7 +23,9 @@ contacts, impact brackets and transition brackets cut a slice at their exact fra
 there on its certified path; the touching and impacting pairs, with the contact-set pairs their bodies rest
 on, form §6.1's islands, which §6.2 proposes, §6.3's rows certify and §6.6 corrects, publishing
 one `IslandReport` per island and one event per pair; the next slice starts from the post-event state. A
-graze publishes its event without cutting the slice. Kinematic bodies with translating drivers join
+graze publishes its event without cutting the slice. A rotating pair's impact advances to its
+bracket's right end, and a contact-set pair on a band track continues while its band stays within
+`PenetrationResidual` (§10.3); a `ContactBand` is a touch within that residual (§10.4). Kinematic bodies with translating drivers join
 islands, and a positive-friction pair takes the Coulomb rows of §6.2 and §6.3. The published state
 carries the step's contact set and reuse cache (§3.2), so a later step continues a resting pair with no
 solve, reuses every certificate whose inputs repeat (§5.3), and restarts a repeated island at its fixed
@@ -41,10 +43,9 @@ rounding bounds), which the root package imports today and which `dynamics` can 
 shipped code. For worlds of four or more bodies, §5, §6.1–§6.4, §6.6, §7, §3.3, §3.4 and §12 ship as
 well. §9.1–§9.4 ship for prisms over whole `LineSeg` sections and for zero-bound
 Booleans, directly or through a translation-only placement; stitched solids and lofts are not admitted yet.
-§10.1, §10.2 and §10.3's sweep certificate ship for the same bodies; `dynamics` does not consume band
-tracks yet. §10.4's `ContactBand`, its sweep and its replay ship for positive-bound faceted Booleans and
-all-planar cap-loop chamfers; `dynamics` does not consume a band yet. Everything else is design-only
-until the PR table in §13 says otherwise.
+§10.1, §10.2 and §10.3 ship for the same bodies, and §10.4 for positive-bound faceted Booleans and
+all-planar cap-loop chamfers. A box tipped over from its edge does not yet come to rest flat (§13 PR
+13). Everything else is design-only until the PR table in §13 says otherwise.
 
 Navigation only; the named sections own the rules:
 
@@ -185,8 +186,9 @@ Pair material mixes per pair exactly as `docs/rigid-dynamics-design.md` "World a
 Fixed/Fixed pair enters no response, so a friction mean outside the finite nonzero range is refused only for a
 pair with a moving body. `NewWorld` returns `ErrUnsupported` for a positive-friction pair with a moving body
 whose family §6.4 cannot certify in the current phase. A non-excluded Fixed/Fixed pair is queried once per
-`Step` at its constant poses by `ContactPair`; an `Overlapping` or `Undecided` relation makes the step
-`Undecided` with `StepFixedPairRelation` (§12). Exclude such pairs, or model a tray as one body, as the exit
+`Step` at its constant poses by `ContactPair`; an `Overlapping` or `Undecided` relation, or a `ContactBand`
+whose band exceeds `PenetrationResidual` (§10.4), makes the step `Undecided` with `StepFixedPairRelation`
+(§12). Exclude such pairs, or model a tray as one body, as the exit
 scenes do.
 
 ### 3.2 State
@@ -380,9 +382,14 @@ full-step kick, then event-driven drift — and generalizes the body count. In o
    `StepPairUndecided`, wherever its unresolved interval starts: an undecided report replays no prefix, so
    it cannot certify the slice up to a later event either. A persistent track that does not span the slice
    within `PenetrationResidual`, or a pair continued in contact whose sweep starts touching or overlapping,
-   is `StepTrackUnproved`. The CUTTING events are an initial contact (only under `StopAtInitialContact`)
-   at fraction zero, and an `ImpactBracket` or `ContactTransitionBracket` at its bracket's exact right
-   fraction; a touch that ends inside a slice reaches the step as a transition bracket. Choose the
+   is `StepTrackUnproved`. A `SweepPersistentBand` of a pair continued under `ContinueCertifiedTouch`
+   continues it while its band stays within `PenetrationResidual` (§10.3): a track from the slice start
+   to its end whose `Band()` lies within the residual cuts nothing; otherwise the BAND END is the last
+   fraction of the sweep's own dyadic grid, no later than the track's end, through which `BandAt` lies
+   within the residual, and a track with no positive such fraction is `StepTrackUnproved`. The CUTTING
+   events are an initial contact (only under `StopAtInitialContact`) at fraction zero, an `ImpactBracket`
+   or `ContactTransitionBracket` at its bracket's exact right fraction, and a band end at its fraction; a
+   touch that ends inside a slice reaches the step as a transition bracket. Choose the
    earliest cutting fraction `f_e`, and gather the cutting events at exactly `f_e`. A bracket that only
    overlaps `f_e` is not gathered: its pair is swept again from `t_e`, as an initial contact when it
    touches there. A `GrazingTouch` cuts nothing (step 6).
@@ -390,15 +397,16 @@ full-step kick, then event-driven drift — and generalizes the body count. In o
    contact set at the completed poses, reject a relation other than separated, touching, or overlapping
    with a bounded manifold whose penetration lies within `PenetrationResidual` (two co-moving bodies drift
    on separately rounded translations and may overlap by an ulp), record the final slice, and publish.
-   The published state's contact set is every pair continued under `ContinueCertifiedTouch` whose final
-   sweep is a persistent track through `dt`.
+   A `ContactBand` there must lie within `PenetrationResidual` (§10.4). The published state's contact set
+   is every pair continued under `ContinueCertifiedTouch` whose final sweep is a persistent touch track
+   through `dt`, or a band track that continues the pair through `dt` (step 4).
 6. **Advance** every body to `f_e` on its certified path: a swept body takes the pose its pair reports
    replay at `f_e` through `CertifiedPosesAtInterval`, and every report covering it must replay the same
    pose; a body no sweep covers takes the pose `pathPoseAt` evaluates on its own path (§5.4), as
    `Trace.Sample` does. Every candidate records its full report, re-sliced to `[t, t_e]` through `CertifiedPosesAtInterval`; an
    event pair's own report covers its prefix through the bracket's right fraction, so it needs no separate
-   prefix sweep. A rotating pair's impact bracket replays only through its left end, so its impact is
-   `StepPairUndecided`. Every box-excluded pair is checked at the rounded poses (§7.1). The event's held time
+   prefix sweep; a rotating pair's impact replays its bracket through the right end by the travel from its
+   left end's proven gap (§10.1). Every box-excluded pair is checked at the rounded poses (§7.1). The event's held time
    `t_e` is the exact `t + f_e·(dt − t)` when that is a float, else the float just below it, so every time
    the prefix replays maps to a fraction at or below `f_e`; a label that does not pass `t` is
    `StepUnsupported`. Each graze before `f_e` publishes a zero-impulse `ContactGraze` at its instant, after
@@ -406,10 +414,16 @@ full-step kick, then event-driven drift — and generalizes the body count. In o
    `VelocityResidual` of zero; its pair's report replays the whole slice, so the graze needs no cut. A
    graze at exactly `f_e` is `StepUnsupported`.
 7. **Islands.** A transition publishes a zero-impulse `ContactTransition` and its pair leaves the contact
-   set without entering a solve. The impact and initial-contact pairs, with every contact-set pair whose
-   persistent track covers `f_e` (its manifold read through `ManifoldAt(f_e)`), form islands over the
-   active constraints at `t_e` (§6.1); only the islands an impact or initial contact reaches are solved,
-   so a resting stack elsewhere keeps drifting and publishes nothing. Correct positions per island
+   set without entering a solve. The impact, initial-contact and band-end pairs, with every contact-set
+   pair whose persistent or band track covers `f_e` (its manifold read through `ManifoldAt(f_e)`), form
+   islands over the active constraints at `t_e` (§6.1); only the islands an impact, initial contact or
+   band end reaches are solved, so a resting stack elsewhere keeps drifting and publishes nothing. An
+   impact solves on the manifold its sweep certified at the bracket's right sample; a rotating pair's
+   right sample deviates from its ideal pose and so carries none, and its solve takes the manifold
+   `ContactPair` publishes at the rounded event poses, which are the poses the step publishes. A band end
+   solves on its track's manifold at `f_e`. Each impact and band end reads `ContactPair` at the rounded
+   event poses for §6.6; a `ContactBand` there must lie within `PenetrationResidual`, else
+   `StepPairUndecided`, as must an initial contact's band. Correct positions per island
    (§6.6), solve and certify each island in world order (§6.2–§6.4), publish one `IslandReport` and the
    island's events.
 8. Update the contact set: pairs the solve left touching with a nonpositive relative normal speed stay
@@ -715,8 +729,8 @@ island: each dynamic body receives one translation, the sum over its island pair
 of the pair's deepest point penetration along the pair normal (a Fixed or Kinematic body takes no share; a
 penetrating pair whose points disagree on the normal is refused). The penetration is the one the rounded
 event poses show: `ContactPair` at those poses for an interior impact, whose solve still uses the manifold
-the sweep certified at the bracket's right sample, and the gathered manifold itself for an initial contact
-or a track. Dynamic bodies joined by contact-set pairs on persistent tracks move as one: their touch is
+the sweep certified at the bracket's right sample when it has one, and for a band end, and the gathered
+manifold itself for an initial contact or a track. Dynamic bodies joined by contact-set pairs on persistent tracks move as one: their touch is
 exact and their velocities equal (§6.2), so they take one translation computed with their summed mass,
 which keeps that touch. A group resting on a Fixed or Kinematic body through a persistent track is
 anchored and takes no share either, so a body landing on a resting one is corrected alone and the
@@ -1037,8 +1051,14 @@ faces cross publishes the patch at depth, exactly as contact-geometry §4's box 
 The selected faces are `A`'s face with outward normal along the translation and `B`'s face against it;
 `B`'s face moves by the translation onto `A`'s plane and is clipped there (§9.4), each corner pairing its
 point on `A`'s face with its translate on `B`'s face, and `Separation` is minus the translation length.
-A tied minimum, an edge-cross axis, faces that do not cross (one body holding the other along that
-axis), or a non-convex body keeps `Overlapping` and withholds the manifold.
+When only one body has a face across the translation, the other pokes through that face with an edge or
+a vertex: its deepest vertices along the translation, which must be one vertex or the two ends of one
+edge, are published as §9.3's support row publishes a touching edge or vertex, each paired with its foot
+on the face's plane, the edge clipped to the face and every piece reaching the face's interior, at the
+same depth. This is the shape a rotating pair's impact shows at its bracket's right sample: a turned box
+lands an edge or a corner first, never a face. A tied minimum, an edge-cross axis, bodies that do not
+cross along that axis (one holding the other), or a non-convex body keeps `Overlapping` and withholds
+the manifold.
 
 ### 9.4 The planar patch by exact rational clipping
 
@@ -1091,6 +1111,11 @@ algorithm with the clip polygon an axis-aligned rectangle (four axis-parallel ha
 `XY` plane, and `contact_oriented_patch.go` is the case of two rectangles with parallel edges, clipped
 in `A`'s rational dual basis. Both stay as they are and keep their dispatch for source boxes; PR 11's
 parity test runs their fixtures through the general clip and requires point-for-point identical output.
+A touch or overlap of two oriented source boxes that their patches leave without a manifold takes this
+section's manifold when the exact planar relation agrees and every published point is an edge or a
+vertex in, on or crossing the other box (§9.3's support and crossing rows and the shallow edge or
+vertex): a turned box on its edge. Face pairs stay with the box patches, which withhold the degenerate
+ones.
 
 **Positive-displacement bodies.** A body whose held boundary carries `δ > 0` never reaches this path in
 Phase 2 (§9's admission). In Phase 3 it reaches it only under §10.4's `ContactBand`: the clip runs on
@@ -1157,8 +1182,14 @@ costs one pass over both vertex sets: the deviation of every staged vertex from 
 must fit `PointResolution`, and then one check. In a clear interval the larger of the hull gap and each
 end's lower gap less the §4.3 travel to the fraction must exceed the summed deviation; inside a departure
 its lower-gap function must; the initial touch replays only at zero deviation; a track's rounded vertex
-heights must stay above minus its depth widened by that deviation. Beyond an impact bracket's left edge
-or a track's end, replay refuses.
+heights must stay above minus its depth widened by that deviation. Inside an impact bracket, after its
+left edge `lo` and through its right edge, every ideal vertex lies within `(f − lo)·T` of its place at
+`lo`, `T` the two travel bounds per unit fraction, where the pair was the left end's lower gap `g` apart;
+the fraction replays when `(f − lo)·T − g` plus the summed deviation fits `PointResolution`, so the
+rounded pair lies within that resolution of a separated one, the claim the affine source-box replay makes
+inside its bracket. The rotating source-box replay does the same with its left sample's lower gap, so a
+rotating pair's impact advances to the bracket's right end (§5 step 6). Beyond a bracket's right edge or
+a track's end, replay refuses.
 
 ### 10.2 Departure from touch under rotation
 
@@ -1230,13 +1261,22 @@ pose and publishes it with its exact foot on `B`'s rounded plane; both balls car
 (`B` only translates, so its plane keeps its normal), `Separation` is `[−Depth, Depth]`, and the normal
 is the face normal.
 
-`dynamics` consumes a band track as a persistent contact when `Depth <= PenetrationResidual`: the pair
-stays in the contact set, its points enter the next island at the track end or the next event, and the
-next correction (§6.6) removes the accumulated depth within the allowance widened by `Depth`. A track
-whose `Depth` exceeds the residual ends the slice at the time the bound reaches the residual (an exact
-rational root of the quadratic, bracketed on the dyadic grid as a `ContactTransitionBracket`), so a slow
-tip proceeds through several short band tracks and corrections, each certified. Replay inside a band
-slice checks the rounded pose's exact vertex heights against `[−Depth − deviation, …]`.
+`BandAt(fraction)` publishes the same bound over the track's prefix through `fraction`: `r·t + K(t)·t²`
+at `t` the fraction's elapsed time, over `|n|`'s lower bound, widened by §10.4's `2δ`. `K(t)` covers
+`[0, t]` and the track's clearance and face checks hold through its end, so the prefix bound holds at
+every earlier instant; at the track's end it is `Band()`, and it grows with the fraction.
+
+`dynamics` consumes a band track as a persistent contact while its depth stays within
+`PenetrationResidual` (§5 step 4): a track that spans the slice within the residual continues the pair,
+which stays in the contact set. Otherwise the slice ends at the BAND END, the last fraction of the
+sweep's own dyadic grid, no later than the track's end, through which `BandAt` lies within the residual;
+`BandAt` grows with the fraction, so a binary search over the grid finds it. The pair then enters an
+island at the band end with its track's manifold there, the correction (§6.6) removes the depth the
+rounded poses show within the allowance widened by the band, and the next slice continues it afresh, so a
+slow tip proceeds through several short band tracks, each certified. A band end is a grid fraction rather
+than the exact root of the band's quadratic: the root is in general not a float, and §5 step 6 refuses
+an event fraction that is not one. Replay inside a band slice checks the rounded pose's exact vertex
+heights against `[−Depth − deviation, …]`.
 
 ### 10.4 Positive-displacement bodies (Phase 3)
 
@@ -1293,9 +1333,13 @@ of its held body, and the rounded and ideal linear parts move that offset by at 
 replay keeps reading the held depth against the held vertices.
 
 **Dynamics.** `dynamics` treats `ContactBand` as a touching relation whose penetration bound is
-`Gap.Bound`, admitted when `Gap.Bound + Depth <= PenetrationResidual`. A positive-`δ` body therefore needs a
-`PenetrationResidual` above `2δ`, which the caller sets; a tighter residual leaves the pair `Undecided`,
-never silently touching.
+`Gap.Bound`, admitted when `Gap.Bound <= PenetrationResidual`, and a band track by §10.3's
+`BandAt`, whose depth already carries the `2δ`. An initial contact or rounded event poses in a band
+beyond the residual are `StepPairUndecided`, a completed contact-set pair is `StepTrackUnproved`, a
+corrected island pair must touch or lie in an admitted band, and a non-excluded Fixed/Fixed pair in a
+band beyond the residual is `StepFixedPairRelation` (§3.1), each with `PenetrationResidual` as its
+`Limit`. A positive-`δ` body therefore needs a `PenetrationResidual` above `2δ`, which the caller sets; a
+tighter residual leaves the pair `Undecided`, never silently touching.
 
 Curved source families with their own exact occupied sets (sphere, axial cylinder) keep their exact
 paths; curved families without one (a cylinder rolling on its side, cone, torus) enter contact-geometry
@@ -1612,16 +1656,33 @@ lines below do not repeat it.
 
 ### PR 13 (Phase 2) — generalized departure and band tracks
 
-- Delivers §10.2, `SweepPersistentBand` and `Band()` (§10.3); `dynamics` consumes band tracks.
-- Files: `contact_sweep_faceted.go`, `contact_sweep.go`, `dynamics/schedule.go`, `dynamics/island.go`.
+- Delivers §10.2, `SweepPersistentBand`, `Band()` and `BandAt()` (§10.3); `dynamics` consumes band
+  tracks and advances through a rotating pair's impact (§5 steps 4, 6 and 7).
+- Files: `contact_sweep_faceted.go`, `contact_sweep.go`, new `contact_sweep_band.go`,
+  `contact_sweep_replay.go`, `contact_sweep_rotation.go`, `contact_pair.go`,
+  `internal/pair/planar_manifold.go`, `dynamics/schedule.go`, new `dynamics/schedule_band.go`,
+  `dynamics/schedule_event.go`, `dynamics/island.go`.
 - Test (root): `contact_sweep_band_test.go`: a box resting on an edge with `ω = (0,1,0) rad/s`
-  publishes a band track whose `Depth` equals `K·h²` for the computed `K`. `dynamics/tip_test.go`: the
-  box tips flat over `0.5 s` in short band slices and rests on four points.
+  publishes a band track whose `Depth` equals `K·h²` for the computed `K`, and `BandAt` the same closed
+  form over a prefix; `contact_sweep_band_internal_test.go` shows the rotating bracket replay's travel
+  and deviation charges; `contact_sweep_rotation_test.go` publishes a turned box's edge poking through a
+  face, and `internal/pair/planar_patch_test.go` a wedge's, clipped to the face. `dynamics/tip_test.go`: a
+  cube on its edge, turned `30°` with its center of mass beyond the edge, tips over in a few steps; each
+  step lands the edge as a rotating impact, rides a band track to the band end, and lifts clear; every
+  impulse meets the discrete linear and angular laws, every band end is the last grid fraction within
+  `PenetrationResidual`, and the trace replays every rotating bracket. The cube lands on its far edge.
 - Depends on: PR 12.
-- Ships in two parts, split around PR 6's rewrite of `dynamics/schedule.go`, `island.go` and `step.go`.
-  The root part has shipped: §10.2 and §10.3 in new `contact_sweep_band.go`, and §10.1's replay proof in
-  `contact_sweep_faceted.go` and `contact_sweep_replay.go`, with `contact_sweep_band_test.go`. The
-  `dynamics` part, band-track consumption and `dynamics/tip_test.go`, has not shipped.
+- Shipped, without the flat rest. A cube landing on its far edge is turned by a float rotation that is
+  never exactly flat, so the exact relation sees one edge in touch and the other a little above, and with
+  restitution zero the cube rocks between its two bottom edges with a shrinking tilt. Once the far edge
+  closes within one grid step of the near edge's touch, no certificate covers the pair: the band track
+  ends before the first grid fraction, and a sweep that starts in touch cannot bracket another vertex's
+  impact. `dynamics/tip_test.go` asserts that stop, `StepPairUndecided` in the landing step, with its
+  certified prefix through the landing. A flat rest needs a continuation that carries a band on one
+  support while bracketing another vertex's impact, or a manifold that admits a near-flat face; neither
+  is designed yet. Tip times also differ from the design's `0.5 s`: the one-kick step with the edge's
+  support solved at the start of each step tips a near-balanced cube within about `16` steps of
+  `1/256 s`.
 
 ### PR 14 (Phase 2) — loft, stitched and fallback mass
 
@@ -1639,7 +1700,7 @@ lines below do not repeat it.
 - Delivers the Phase 2 exit scene of §2.
 - Files: `_gallery/dynamics_clip.go`, `dynamics/scene_test.go`.
 - Test: the Phase 2 exit criteria.
-- Depends on: PRs 9, 13, 14.
+- Depends on: PRs 9, 13, 14, and a flat rest after a tip, which PR 13 leaves open.
 
 ### PR 16 (Phase 3) — third-order section moments and the general revolve
 
@@ -1661,21 +1722,19 @@ lines below do not repeat it.
 ### PR 18 (Phase 3) — `ContactBand` for positive-displacement bodies
 
 - Delivers §10.4.
-- Files: `contact_faceted_pair.go`, `contact_sweep_faceted.go`, `dynamics/island.go`.
-- Test (root): `contact_band_test.go`: a chamfered block with `δ = 1e-9 mm` publishes `ContactBand`
-  with `Gap.Bound = 2δ` on the floor, rests in `dynamics` at `PenetrationResidual = 1e-6 mm`, and is
-  `Undecided` at `1e-10 mm`.
+- Files: `contact_faceted_pair.go`, `contact_sweep_faceted.go`, `contact_sweep_rotation.go`,
+  `contact_sweep_band.go`, `contact_sweep_replay.go`, `dynamics/schedule.go`, `dynamics/schedule_band.go`,
+  `dynamics/schedule_event.go`, `dynamics/island.go`.
+- Test (root): `contact_band_test.go` and `contact_band_internal_test.go`: the band, its charges and
+  each refusal over a cap-loop chamfered block, whose `δ` read through `Tessellate` is its contour's
+  rounding (about `1e-15 mm`), and a box `Union` a chorded disc, whose `δ` is the chord sagitta (about
+  `4e-4 mm`) and places held gaps inside and outside the band. `dynamics/contact_band_test.go`: an
+  octagonal prism rests on that knob's disc in its band (`2δ` about `7.3e-4 mm`) at
+  `PenetrationResidual = 1e-3 mm`, the disc delivering each kick's momentum and a band track carrying
+  each step, and the contact set carries the band pair into a step without gravity; at `1e-4 mm` the
+  landing is `StepPairUndecided`, and the same pair fixed is `StepFixedPairRelation`.
 - Depends on: PR 13.
-- Ships in two parts, so the root part does not touch `dynamics/schedule.go` and `island*.go` while PRs 5
-  and 8 rewrite them. The root part has shipped: §10.4's admission, relation and manifold charge in
-  `contact_faceted_pair.go`, its sweep transfer, band track and replay in `contact_sweep_faceted.go`,
-  `contact_sweep_rotation.go`, `contact_sweep_band.go` and `contact_sweep_replay.go`, with
-  `contact_band_test.go` and `contact_band_internal_test.go`. No real producer publishes `δ = 1e-9 mm`:
-  the chamfered block is a cap-loop chamfer whose `δ`, read through `Tessellate`, is its contour's
-  rounding (about `1e-15 mm`), and a box `Union` a chorded disc (`δ` about `4e-4 mm`) places held gaps
-  inside and outside the band. The `dynamics` part, band consumption in `dynamics/island.go` with the
-  rest and `Undecided` residuals, lands with PR 13's `dynamics` part and picks its two residuals around
-  its fixture's real `2δ`.
+- Shipped.
 
 ### PR 19 (Phase 3) — curved analytic manifolds (C2)
 
