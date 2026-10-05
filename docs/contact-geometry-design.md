@@ -69,8 +69,8 @@ boundary displacement widens each extent. The widened X and Y extents must lie
 strictly inside the floor face. The held lower Z extent minus the displacement
 must stay strictly above the floor's upper face. The resulting gap reading
 charges the boundary displacement and its own float conversion. This path
-publishes no support face or manifold; near touch and crossing remain
-`Undecided`.
+publishes no support face or manifold; a near touch or crossing it leaves
+undecided falls to the band rule below.
 
 A full circular source prism at a signed-axis pose can certify separation
 from a source box across one axial face. Its complete projected disk must lie
@@ -111,6 +111,17 @@ outside that table. An overlap of two convex bodies publishes the patch at
 depth through one unique shallowest pair of crossing faces; any other overlap
 keeps `ContactNoNormalProof`. When the faceted floor-support proof leaves a
 pair undecided, this relation decides it.
+
+A positive-bound faceted Boolean that no exact source mesh covers, and a
+cap-loop chamfer whose every face is planar, enter the same relation
+through their held meshes. Each held mesh is exact, and its true boundary
+lies within the mesh's two-sided displacement δ of it. The held relation
+becomes the published one by `docs/multibody-dynamics-design.md` §10.4: a
+held gap past the summed δ is a gap with δ charged, a held vertex deeper
+than δ proves overlap, and a held touch, gap or shallow depth within δ is
+`ContactBand` with `Gap` [−2δ, 2δ]. A band's manifold is the held one with
+each witness ball widened by its body's δ, published only where an exact
+face of a body with no displacement supplies the normal.
 
 ## 1. Claims and entry point
 

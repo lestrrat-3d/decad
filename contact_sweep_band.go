@@ -375,8 +375,10 @@ type planarTrackProof struct {
 	origin    int             // an S vertex on the plane
 	direction VecMeasurement  // the published A-to-B normal
 	angle     units.Value
-	depth     *big.Rat // millimetres, outward
+	heldDepth *big.Rat // millimetres: the held vertices' band, which replay checks
+	depth     *big.Rat // millimetres, outward: heldDepth widened by 2δ (§10.4)
 	depthUp   float64
+	deltaM    *big.Rat // M's held displacement δ (§10.4); S's is zero
 	band      *Measurement
 	nHigh     *big.Rat
 }
@@ -386,6 +388,13 @@ type planarTrackProof struct {
 // contact vertex's foot must stay inside S's face for the whole track. A
 // track with zero depth that reaches the duration is an exact persistent
 // touch.
+//
+// §10.4 runs the same proof over the held vertices of a positive-displacement
+// body M and charges δ afterwards: the published depth is the held depth
+// widened by 2δ, δ the summed displacement, and each foot's box grows by M's
+// δ, since a true contact point lies within it of a held vertex. S must carry
+// no displacement, because the track publishes S's held face normal as the
+// true one.
 func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrack, bool, error) {
 	budget := newWorkBudget(ctx)
 	supports, err := r.planarSupports(budget.step)
@@ -394,7 +403,7 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 	}
 	for i := range supports {
 		support := &supports[i]
-		if support.motionS.rotating || support.pathS.path.drift != nil {
+		if support.motionS.rotating || support.pathS.path.drift != nil || support.pathS.delta.Sign() != 0 {
 			continue
 		}
 		face, ok := planarSupportFace(support)
@@ -420,7 +429,7 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 			if !ok || !support.clearAt(t, k) {
 				return false, nil
 			}
-			return face.contains(support, f, depthAt(t, k), budget.step)
+			return face.contains(support, f, new(big.Rat).Add(depthAt(t, k), support.pathM.delta.Rat()), budget.step)
 		}
 		end, ok, err := r.gridHorizon(holds)
 		if err != nil {
@@ -443,9 +452,10 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 }
 
 // planarTrack builds the public track of a proven band and checks that its
-// manifold publishes at the start.
+// manifold publishes at the start. depth is the held vertices' band; the
+// published one adds 2δ.
 func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFace,
-	end, depth *big.Rat) (*SweepContactTrack, bool, error) {
+	end, heldDepth *big.Rat) (*SweepContactTrack, bool, error) {
 	solids := [2]*pair.PlanarSolid{r.a.solid, r.b.solid}
 	features, err := newPlanarFeatureMap(r.a.body, r.b.body, solids[0], solids[1])
 	if err != nil {
@@ -483,9 +493,12 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 	if !ok || angle.Base() > r.req.NormalResolution.Base() {
 		return nil, false, nil
 	}
+	widening := ratMul(big.NewRat(2, 1), proofarith.DyAdd(r.a.delta, r.b.delta).Rat())
+	depth := new(big.Rat).Add(heldDepth, widening)
 	proof := &planarTrackProof{paths: [2]rotationalSweepPath{r.a, r.b}, m: support.m, s: support.s,
 		featureS: featureS, normal: support.normal, origin: r.solidTriVertex(support),
-		direction: normal, angle: angle, depth: depth, depthUp: ratFloatUp(depth), nHigh: support.nHigh}
+		direction: normal, angle: angle, heldDepth: heldDepth, depth: depth, depthUp: ratFloatUp(depth),
+		deltaM: support.pathM.delta.Rat(), nHigh: support.nHigh}
 	if !finiteMeasurementValues(proof.depthUp) {
 		return nil, false, nil
 	}
@@ -697,7 +710,9 @@ func planarSegmentMeetsBox(a, b, lo, hi [2]*big.Rat) bool {
 // stages it, and published with its foot on S's rounded plane. The rounded
 // and ideal vertex differ by at most M's pose deviation, and the two feet by
 // at most both deviations, because S only translates and the plane keeps its
-// normal. The separation is the band's two-sided bound.
+// normal. A true contact point of a positive-displacement M lies within its
+// δ of the held vertex, and its foot within δ of the held foot, so both balls
+// also carry M's δ. The separation is the band's two-sided bound.
 func (p *planarTrackProof) planarManifoldAt(f *big.Rat, req ContactRequest) (*ContactManifold, error) {
 	verts, eta, ok := p.roundedVertices(f)
 	if !ok {
@@ -720,8 +735,8 @@ func (p *planarTrackProof) planarManifoldAt(f *big.Rat, req ContactRequest) (*Co
 		for k := range 3 {
 			foot[k] = new(big.Rat).Sub(vertex[k], new(big.Rat).Mul(height, n[k]))
 		}
-		onM, okM := planarTrackPoint([3]*big.Rat(vertex), eta[p.m], resolution)
-		onS, okS := planarTrackPoint(foot, new(big.Rat).Add(eta[p.m], eta[p.s]), resolution)
+		onM, okM := planarTrackPoint([3]*big.Rat(vertex), new(big.Rat).Add(eta[p.m], p.deltaM), resolution)
+		onS, okS := planarTrackPoint(foot, ratAdd(eta[p.m], eta[p.s], p.deltaM), resolution)
 		if !okM || !okS {
 			return nil, fmt.Errorf("%w: planar contact track point exceeds point resolution", ErrUnsupported)
 		}
@@ -779,16 +794,19 @@ func (p *planarTrackProof) roundedVertices(f *big.Rat) ([2][]proofarith.DyV3, [2
 	return verts, eta, true
 }
 
-// replayHeights is the band's replay check: every M vertex of the rounded
-// pose stays above −(depth + both deviations) on S's rounded plane. It can
-// only refuse; the producer's certificate covers the ideal path.
+// replayHeights is the band's replay check: every held M vertex of the
+// rounded pose stays above −(held depth + both deviations) on S's rounded
+// plane. It reads the held depth, not the published one: the held vertices
+// are what it measures, and the true pair then lies within the published
+// band widened by the deviations. It can only refuse; the producer's
+// certificate covers the ideal path.
 func (p *planarTrackProof) replayHeights(f *big.Rat) (*big.Rat, bool) {
 	verts, eta, ok := p.roundedVertices(f)
 	if !ok {
 		return nil, false
 	}
 	deviation := new(big.Rat).Add(eta[0], eta[1])
-	floor := new(big.Rat).Neg(ratMul(new(big.Rat).Add(p.depth, deviation), p.nHigh))
+	floor := new(big.Rat).Neg(ratMul(new(big.Rat).Add(p.heldDepth, deviation), p.nHigh))
 	q := verts[p.s][p.origin]
 	for _, v := range verts[p.m] {
 		if proofarith.DvDot(p.normal, proofarith.DvSub(v, q)).Rat().Cmp(floor) < 0 {

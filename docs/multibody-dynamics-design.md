@@ -14,9 +14,9 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 3, 4, 6, 7, 8, 10, 11, 12, 14, 16, 17 and 19 have shipped, and so has PR
-13's root part. `dynamics.World` holds any number of bodies, the canonical pair table and per-pair
-material of §3.1, and the slice-backed `State` of §3.2. Its step resolves two bodies, or three bodies with one, two or three dynamic bodies and
+Current state: §13 PRs 1, 2, 3, 4, 6, 7, 8, 10, 11, 12, 14, 16, 17 and 19 have shipped, and so have the
+root parts of PRs 13 and 18. `dynamics.World` holds any number of bodies, the canonical pair table and
+per-pair material of §3.1, and the slice-backed `State` of §3.2. Its step resolves two bodies, or three bodies with one, two or three dynamic bodies and
 every other body fixed, through the closed-form responses `docs/rigid-dynamics-design.md` lists. A world of four or more
 bodies takes the scheduled step of §4.3 and §5: one kick, then slices of drift from event to event. Initial
 contacts, impact brackets and transition brackets cut a slice at their exact fraction; every body advances
@@ -41,7 +41,9 @@ shipped code. For worlds of four or more bodies, §5, §6.1–§6.4, §6.6, §7,
 well. §9.1–§9.4 ship for prisms over whole `LineSeg` sections and for zero-bound
 Booleans, directly or through a translation-only placement; stitched solids and lofts are not admitted yet.
 §10.1, §10.2 and §10.3's sweep certificate ship for the same bodies; `dynamics` does not consume band
-tracks yet. Everything else is design-only until the PR table in §13 says otherwise.
+tracks yet. §10.4's `ContactBand`, its sweep and its replay ship for positive-bound faceted Booleans and
+all-planar cap-loop chamfers; `dynamics` does not consume a band yet. Everything else is design-only
+until the PR table in §13 says otherwise.
 
 Navigation only; the named sections own the rules:
 
@@ -1207,18 +1209,57 @@ chamfer with non-dyadic feet, a placed loft) cannot certify an exact touch: cont
 that relation `Undecided`. §10.3's band is the honest replacement, with `δ` charged:
 
 ```go
-// ContactBand (appended after ContactUndecided): interiors are disjoint except
-// possibly within a band of width Gap.Bound around the published Gap.Value,
-// which contains zero; the manifold's Separation intervals carry the same band.
+// ContactBand (appended after ContactOverlapping): interiors are disjoint
+// except possibly within a band of width Gap.Bound around the published
+// Gap.Value, which is zero; the manifold's Separation intervals carry the
+// same band.
 ```
 
-`ContactPair` publishes `ContactBand` for a §9-shaped held mesh with `δ > 0` when the exact held relation
-is `Touching` or a shallow `Overlapping`/`Separated` within `2δ`, with `Gap = [−2δ, 2δ]` and every point
-ball widened by `δ`. `SweepPair` publishes `SweepPersistentBand` with `Depth` widened by `2δ` and a first
-impact as an `ImpactBracket` whose right sample is `ContactBand`. `dynamics` treats `ContactBand` as a
-touching relation whose penetration bound is `Gap.Bound`, admitted when `Gap.Bound + Depth <=
-PenetrationResidual`. A positive-`δ` body therefore needs a `PenetrationResidual` above `2δ`, which the
-caller sets; a tighter residual leaves the pair `Undecided`, never silently touching.
+**Admission.** Two held meshes are admitted, each exact (§9's dyadic vertices) and standing for its true
+boundary within `δ`: a positive-bound faceted Boolean that the exact-source path of §9 does not cover,
+read off its payload with `δ` its mesh bound, and a cap-loop chamfer whose every face is planar, read off
+its own tessellation with `δ` that mesh's `Bound` (zero when nothing rounds, which admits it to §9 as an
+exact body). A held mesh moves through the exact float query pose, whose linear part is orthonormal only
+to rounding, so `δ` at a pose is the body's figure times `s = max(1, (1 + g)/2)`, `g` the largest
+absolute row sum of the basis's exact Gram matrix, an upper bound on the pose's stretch. Prisms with a
+positive section or level displacement and lofts are not admitted yet.
+
+**Relation.** With `δ` the two bodies' displacements summed at the query poses, every true boundary
+point lies within `δ` of the held pair's. `ContactPair` reads §9.1's exact held relation:
+
+| Held relation | Published |
+|---|---|
+| `Separated`, gap lower end above `δ` | `Separated`, the held gap with `δ` added to its bound |
+| `Touching`, or `Separated` with gap upper end at most `δ` | `ContactBand`, `Gap = [−2δ, 2δ]` |
+| `Overlapping` with a vertex deeper than `δ` inside the other body (`pair.PlanarDeepVertex`) | `Overlapping`, no manifold |
+| `Overlapping` of two convex bodies whose §9.3 shallow patch has depth at most `δ` | `ContactBand`, `Gap = [−2δ, 2δ]` |
+| anything else | `Undecided` |
+
+A band from a held touch or shallow patch carries that held manifold charged afterwards (§9.4): each
+witness ball grows by its own body's `δ`, and every `Separation` is the band. The normal is published only
+when, at every point, it is the exact face normal of a body with zero `δ` read at a face that holds the
+point; a held face of a displaced body only approximates its true face's direction, so otherwise the
+manifold is withheld with `ContactNoNormalProof`, as it is for a band from a held gap.
+
+**Sweep.** §10.1's samples transfer as there, over the held vertices: a band widens by both pose
+deviations and drops its manifold, as a touch would; an overlap needs a vertex deeper than both
+deviations plus both displacements at the rounded poses; a vertex-hull gap counts only past `δ`. The
+ideal pose is a rigid motion, so it moves each true body within its `δ` of its held one. A first impact
+brackets onto a band sample like onto a touch. A pair that starts in its band is an initial contact: no
+departure is published, since the true pair may stay in the band however fast the held pair separates,
+and `ContinueCertifiedTouch` takes §10.3's track over the held touch with three charges. The support
+plane's owner must carry zero `δ`, since the track publishes its face normal; each contact foot's box grows
+by the touching body's `δ` before the face-containment check; and `SweepPersistentBand`'s `Depth` is the
+held depth widened by `2δ`, so a band pair never publishes an exact touch track. `ManifoldAt` grows both
+balls of each point by that `δ`. Replay of a clear span needs the proven lower gap to exceed the summed
+pose deviation plus `(s + 1)·δ` for each body, `s` the rounded pose's stretch: a true point lies within `δ`
+of its held body, and the rounded and ideal linear parts move that offset by at most `s` and one. A track
+replay keeps reading the held depth against the held vertices.
+
+**Dynamics.** `dynamics` treats `ContactBand` as a touching relation whose penetration bound is
+`Gap.Bound`, admitted when `Gap.Bound + Depth <= PenetrationResidual`. A positive-`δ` body therefore needs a
+`PenetrationResidual` above `2δ`, which the caller sets; a tighter residual leaves the pair `Undecided`,
+never silently touching.
 
 Curved source families with their own exact occupied sets (sphere, axial cylinder) keep their exact
 paths; curved families without one (a cylinder rolling on its side, cone, torus) enter contact-geometry
@@ -1586,6 +1627,16 @@ lines below do not repeat it.
   with `Gap.Bound = 2δ` on the floor, rests in `dynamics` at `PenetrationResidual = 1e-6 mm`, and is
   `Undecided` at `1e-10 mm`.
 - Depends on: PR 13.
+- Ships in two parts, so the root part does not touch `dynamics/schedule.go` and `island*.go` while PRs 5
+  and 8 rewrite them. The root part has shipped: §10.4's admission, relation and manifold charge in
+  `contact_faceted_pair.go`, its sweep transfer, band track and replay in `contact_sweep_faceted.go`,
+  `contact_sweep_rotation.go`, `contact_sweep_band.go` and `contact_sweep_replay.go`, with
+  `contact_band_test.go` and `contact_band_internal_test.go`. No real producer publishes `δ = 1e-9 mm`:
+  the chamfered block is a cap-loop chamfer whose `δ`, read through `Tessellate`, is its contour's
+  rounding (about `1e-15 mm`), and a box `Union` a chorded disc (`δ` about `4e-4 mm`) places held gaps
+  inside and outside the band. The `dynamics` part, band consumption in `dynamics/island.go` with the
+  rest and `Undecided` residuals, lands with PR 13's `dynamics` part and picks its two residuals around
+  its fixture's real `2δ`.
 
 ### PR 19 (Phase 3) — curved analytic manifolds (C2)
 

@@ -67,7 +67,10 @@ func positiveBoundFacetedUnionRetainsExactLowerFace(t *testing.T, reverse bool) 
 	uncertain, err := doc.ContactPair(t.Context(), floor, placed, r3.Identity(), r3.Identity(),
 		ContactRequest{PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6)})
 	require.NoError(t, err)
-	require.Equal(t, ContactUndecided, uncertain.Relation)
+	// Without the exact support certificate the held mesh decides the pair,
+	// and its mesh bound turns the held touch into the §10.4 band.
+	require.Equal(t, ContactBand, uncertain.Relation)
+	require.Equal(t, 2*placed.payload.(facetedPayload).meshBound, uncertain.Gap.Bound.Base())
 }
 
 func TestPositiveBoundFacetedUnionRefusesToolBelowLowerFace(t *testing.T) {

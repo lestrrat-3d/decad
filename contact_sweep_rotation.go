@@ -26,6 +26,7 @@ type rotationalSweepPath struct {
 	startPoints  []proofarith.DyV3 // exact source points under the path's From
 	sourcePoints []proofarith.DyV3 // exact source points at the identity query pose
 	solid        *pair.PlanarSolid // the identity-pose planar snapshot, planar paths only
+	delta        proofarith.Dyadic // the snapshot's held displacement δ (§10.4), planar paths only
 	frame        motionFrame
 	fromRot      ivMat
 	fromT        ratVec
@@ -675,6 +676,28 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 			}
 		}
 		return r.undecided(zero, one, r.continuationCause()), nil
+	case ContactBand:
+		// §10.4: a positive-displacement pair that starts inside its band is
+		// an initial contact. No departure is published, since the true pair
+		// may stay inside the band however fast the held pair separates; a
+		// certified continuation is §10.3's band track over the held touch.
+		r.report.InitialEvent = &first.Ideal
+		if r.req.StartPolicy == StopAtInitialContact {
+			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
+			return r.report, nil
+		}
+		if r.planar && r.req.StartPolicy == ContinueCertifiedTouch {
+			track, ok, bandErr := r.planarBand(ctx)
+			if bandErr != nil {
+				return nil, bandErr
+			}
+			if ok {
+				r.report.ContactTrack, r.report.Outcome = track, SweepPersistentBand
+				r.sortSamples()
+				return r.report, nil
+			}
+		}
+		return r.undecided(zero, one, r.continuationCause()), nil
 	case ContactSeparated:
 	default:
 		return r.undecided(zero, zero, SweepPoseRelation), nil
@@ -1070,8 +1093,8 @@ func (r *rotationalPairSweep) refine(ctx context.Context, left, right *SweepSamp
 	}
 	width := new(big.Rat).Mul(new(big.Rat).Sub(rf, lf), r.a.path.duration)
 	if width.Cmp(r.resolution) <= 0 {
-		if left.Ideal.Relation == ContactSeparated &&
-			(right.Ideal.Relation == ContactTouching || right.Ideal.Relation == ContactOverlapping) {
+		if left.Ideal.Relation == ContactSeparated && (right.Ideal.Relation == ContactTouching ||
+			right.Ideal.Relation == ContactOverlapping || right.Ideal.Relation == ContactBand) {
 			r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 			r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
 			r.report.bracketRight = new(big.Rat).Set(right.exactFraction)
@@ -1172,19 +1195,21 @@ func (r *rotationalPairSweep) intervalAxisSeparated(from, to *big.Rat) bool {
 }
 
 // intervalAxisGap is the widest strict gap between the two coordinate hulls
-// over the span, a lower bound on the pair's separation throughout it, or
-// nil when the hulls meet on every axis.
+// over the span, less both held displacements (§10.4), a lower bound on the
+// pair's separation throughout it, or nil when no such gap stays positive.
 func (r *rotationalPairSweep) intervalAxisGap(from, to *big.Rat) *big.Rat {
 	a := r.a.cornerSpan(from, to)
 	b := r.b.cornerSpan(from, to)
 	if len(a) == 0 || len(b) == 0 {
 		return nil
 	}
+	displacement := proofarith.DyAdd(r.a.delta, r.b.delta).Rat()
 	var widest *big.Rat
 	for axis := range 3 {
 		aLow, aHigh := spanHull(a, axis)
 		bLow, bHigh := spanHull(b, axis)
 		for _, gap := range []*big.Rat{new(big.Rat).Sub(bLow, aHigh), new(big.Rat).Sub(aLow, bHigh)} {
+			gap.Sub(gap, displacement)
 			if gap.Sign() > 0 && (widest == nil || gap.Cmp(widest) > 0) {
 				widest = gap
 			}

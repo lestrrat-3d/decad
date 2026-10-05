@@ -23,6 +23,12 @@ const (
 	ContactSeparated
 	ContactTouching
 	ContactOverlapping
+	// ContactBand is published for a body whose held boundary carries a
+	// positive displacement (docs/multibody-dynamics-design.md §10.4): the
+	// interiors are disjoint except possibly within a band of width
+	// Gap.Bound around Gap.Value, which is zero. A manifold's Separation
+	// intervals carry the same band.
+	ContactBand
 )
 
 // ContactReason explains an undecided relation or an absent manifold.
@@ -105,7 +111,10 @@ type ContactReport struct {
 // clipped face patches, edges and vertices inside a face, and edge
 // crossings, and two convex bodies that overlap slightly publish the patch
 // at depth. A touching or overlapping pair names ContactNonConvex when
-// neither body is convex.
+// neither body is convex. A positive-bound faceted Boolean and an all-planar
+// cap-loop chamfer are admitted through their held meshes with the mesh's
+// boundary displacement δ charged: a held touch, or a held gap or depth
+// within the summed δ, is ContactBand with Gap [−2δ, 2δ].
 // At identity query poses, the analytic clearance kernel can prove relations
 // for other solids. Only its ruling touches publish a manifold: the two ends
 // of a full source cylinder's ruling on a planar face or another cylinder.

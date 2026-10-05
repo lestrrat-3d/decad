@@ -73,7 +73,10 @@ touch or overlap; the general rotating sweep, §10.1 there, owns it. From an
 initial touch it proves §10.2's departure or, under `ContinueCertifiedTouch`,
 §10.3's persistent touch or band track; two source boxes whose box proofs
 cannot continue a touch rerun on that path. Its reports replay rounded poses
-from recorded gap bounds and pose deviations. Other unequal spins, rotating
+from recorded gap bounds and pose deviations. A body whose held mesh carries
+a positive displacement takes the same run with §10.4's band: an impact
+brackets onto a `ContactBand` sample, a band start never departs, and its
+track's depth widens by twice the displacement. Other unequal spins, rotating
 paths, and payloads remain design contracts.
 An extruded circular source prism or a full revolve of an axis-incident
 rectangular half-profile can certify a strictly separated axial affine path
@@ -800,8 +803,9 @@ without rerunning the pair relation, so its cost is one pass over both
 vertex sets. Both rounded poses must fit `PointResolution` of their ideal
 poses. On a clear interval or a departure the rounded pair must keep a gap:
 the sweep's proven lower gap at that time must exceed the summed vertex
-deviation. A touch or band track checks every rounded vertex height against
-the band widened by that deviation.
+deviation, plus each positive-displacement body's displacement times its
+rounded pose's stretch plus one. A touch or band track checks every rounded
+held vertex height against the held band widened by that deviation.
 
 `Fraction` and the input `Duration` define the exact search time; `Elapsed`
 is a bounded convenience reading for callers. Bracket width is checked from

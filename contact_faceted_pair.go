@@ -2,7 +2,9 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -13,7 +15,15 @@ import (
 // This file admits exact planar solids to the general pair relation of
 // docs/multibody-dynamics-design.md §9.1 and caches each body's §9.2
 // convexity certificate. internal/pair decides the relation over the exact
-// snapshots built here; this file owns admission and the public report.
+// snapshots built here; this file owns admission and the public report. A
+// body whose held mesh is exact but stands for a true boundary up to a
+// positive displacement δ is admitted too, and §10.4's band rule turns the
+// held relation into the published one.
+
+// planarHeldChord is the chord tolerance an all-planar cap-loop chamfer is
+// tessellated at for its held mesh. Nothing on an all-planar body is chorded,
+// so the value only keys the body's tessellation cache.
+const planarHeldChord = 1.0
 
 // planarConvexityEntry is a body's cached convexity certificate. It is read
 // at the identity pose: every admitted pose is an affine map with a positive
@@ -30,11 +40,11 @@ func classifyExactPlanarPair(ctx context.Context, report *ContactReport) (bool, 
 	if err := budget.err(); err != nil {
 		return false, err
 	}
-	a, okA, err := planarSolidAtPose(ctx, budget, report.A, report.PoseA)
+	a, deltaA, okA, err := planarSolidAtPose(ctx, budget, report.A, report.PoseA)
 	if err != nil || !okA {
 		return false, err
 	}
-	b, okB, err := planarSolidAtPose(ctx, budget, report.B, report.PoseB)
+	b, deltaB, okB, err := planarSolidAtPose(ctx, budget, report.B, report.PoseB)
 	if err != nil || !okB {
 		return false, err
 	}
@@ -44,6 +54,13 @@ func classifyExactPlanarPair(ctx context.Context, report *ContactReport) (bool, 
 	}
 	report.Relation, report.Gap, report.Overlap, report.Manifold = ContactUndecided, nil, nil, nil
 	report.Reason = sourceBoxReason(result.Reason)
+	if deltaA.Sign() > 0 || deltaB.Sign() > 0 {
+		band := planarBandPair{a: &a, b: &b, deltaA: deltaA, deltaB: deltaB}
+		if err := band.classify(ctx, budget, report, result); err != nil {
+			return false, err
+		}
+		return true, budget.err()
+	}
 	switch result.Relation {
 	case pair.Separated:
 		report.Relation = ContactSeparated
@@ -83,12 +100,13 @@ func classifyExactPlanarPair(ctx context.Context, report *ContactReport) (bool, 
 }
 
 // planarConvexity returns the body's cached §9.2 certificate, computing it at
-// the identity pose on first use. A canceled computation caches nothing.
+// the identity pose on first use. A canceled computation caches nothing. A
+// positive-displacement body's certificate is its held mesh's.
 func planarConvexity(ctx context.Context, budget *workBudget, b *Body) (bool, error) {
 	if entry := b.planarConvexity.Load(); entry != nil {
 		return entry.convex, nil
 	}
-	solid, ok, err := planarSolidAtPose(ctx, budget, b, r3.Identity())
+	solid, _, ok, err := planarSolidAtPose(ctx, budget, b, r3.Identity())
 	if err != nil || !ok {
 		return false, err
 	}
@@ -100,42 +118,81 @@ func planarConvexity(ctx context.Context, budget *workBudget, b *Body) (bool, er
 	return convex, nil
 }
 
-// planarSolidAtPose builds the exact boundary of an admitted planar solid
-// under a query pose (§9): a prism whose section is all whole LineSeg edges
-// with zero deltas, or a zero-bound faceted Boolean, either directly or
+// planarSolidAtPose builds the exact held boundary of an admitted planar
+// solid under a query pose (§9): a prism whose section is all whole LineSeg
+// edges with zero deltas, or a zero-bound faceted Boolean, either directly or
 // through its saved exact mesh and a translation-only placement. Every vertex
 // is the exact dyadic image of recorded coordinates under the recorded
 // placement and the pose; nothing is read from a rounded transient body.
+//
+// §10.4 admits two held meshes whose true boundary lies within a positive
+// two-sided displacement δ of them: a positive-bound faceted Boolean, read
+// off its payload with δ its mesh bound, and a cap-loop chamfer whose every
+// face is planar, read off its tessellation with δ that mesh's Bound. The
+// returned displacement is δ at the query pose: the body-frame figure times
+// an upper bound on the pose's stretch (planarPoseScale). It is zero for an
+// exact body.
 func planarSolidAtPose(ctx context.Context, budget *workBudget, b *Body,
-	pose r3.Transform) (pair.PlanarSolid, bool, error) {
+	pose r3.Transform) (pair.PlanarSolid, proofarith.Dyadic, bool, error) {
+	none := proofarith.DyZero()
 	if b == nil || !b.solid || b.kind != BodySolid || !positiveAffine(pose) {
-		return pair.PlanarSolid{}, false, nil
+		return pair.PlanarSolid{}, none, false, nil
 	}
 	var solid pair.PlanarSolid
+	delta := proofarith.DyZero()
 	var ok bool
 	var err error
 	switch payload := b.payload.(type) {
 	case prismPayload:
 		solid, ok, err = planarPrismSolid(ctx, budget, payload, prismFaceIndex(b))
 	case facetedPayload:
-		solid, ok, err = planarFacetedSolid(budget, payload)
+		solid, delta, ok, err = planarFacetedSolid(budget, payload)
+	case capBlendPayload:
+		solid, delta, ok, err = planarCapBlendSolid(ctx, budget, b)
 	default:
-		return pair.PlanarSolid{}, false, nil
+		return pair.PlanarSolid{}, none, false, nil
 	}
 	if err != nil || !ok {
-		return pair.PlanarSolid{}, false, err
+		return pair.PlanarSolid{}, none, false, err
 	}
 	for i, v := range solid.Verts {
 		if err := budget.step(); err != nil {
-			return pair.PlanarSolid{}, false, err
+			return pair.PlanarSolid{}, none, false, err
 		}
 		solid.Verts[i] = exactContactTransform(pose, v)
 	}
 	audited, err := pair.CheckPlanarSolid(&solid, budget.step)
 	if err != nil || !audited {
-		return pair.PlanarSolid{}, false, err
+		return pair.PlanarSolid{}, none, false, err
 	}
-	return solid, true, nil
+	if delta.Sign() > 0 {
+		delta = proofarith.DyMul(delta, planarPoseScale(pose))
+	}
+	return solid, delta, true, nil
+}
+
+// planarPoseScale is an exact upper bound, at least one, on how far the
+// linear part L of an admitted transform stretches any length. The largest
+// absolute row sum g of the Gram matrix LᵀL bounds its largest eigenvalue,
+// which is |L|², and (1 + g)/2 bounds √g from above. A valid r3 transform is
+// orthonormal to rounding, so the bound sits a hair above one; it is charged
+// all the same, since the held mesh and its displacement move through the
+// exact float map, not through a rotation.
+func planarPoseScale(t r3.Transform) proofarith.Dyadic {
+	basis := t.Basis()
+	columns := [3]proofarith.DyV3{proofarith.DyVec(basis.EX), proofarith.DyVec(basis.EY), proofarith.DyVec(basis.EZ)}
+	one := proofarith.DyInt(1)
+	g := one
+	for i := range 3 {
+		row := proofarith.DyZero()
+		for j := range 3 {
+			row = proofarith.DyAdd(row, proofarith.DyAbs(proofarith.DvDot(columns[i], columns[j])))
+		}
+		if proofarith.DyCmp(row, g) > 0 {
+			g = row
+		}
+	}
+	return proofarith.DyShift(proofarith.DyAdd(one, g), -1)
 }
 
 // positiveAffine admits a finite transform whose exact basis determinant is
@@ -310,45 +367,56 @@ func planarCross2(a, b, c Point2) proofarith.Dyadic {
 	return proofarith.DySubScalar(proofarith.DyMul(bu, cv), proofarith.DyMul(bv, cu))
 }
 
-// planarFacetedSolid reads a zero-bound Boolean's held mesh, which is its
+// planarFacetedSolid reads a Boolean's held mesh. A zero-bound mesh is its
 // exact boundary. A translation-only placement reads the saved exact source
 // mesh moved by the exact placement translation, after a reject-only check
-// that every rebuilt vertex lies within the published bound of it.
-func planarFacetedSolid(budget *workBudget, pp facetedPayload) (pair.PlanarSolid, bool, error) {
+// that every rebuilt vertex lies within the published bound of it. Any other
+// positive-bound mesh is read as held, with its mesh bound returned as the
+// displacement δ of §10.4.
+func planarFacetedSolid(budget *workBudget, pp facetedPayload) (pair.PlanarSolid, proofarith.Dyadic, bool, error) {
+	none := proofarith.DyZero()
 	if len(pp.verts) == 0 || len(pp.tris) == 0 {
+		return pair.PlanarSolid{}, none, false, nil
+	}
+	if pp.meshBound != 0 || pp.volSymDiff != 0 {
+		if !finiteMeasurementValues(pp.meshBound) || pp.meshBound < 0 {
+			return pair.PlanarSolid{}, none, false, nil
+		}
+		solid, ok, err := planarFacetedSourceSolid(budget, pp)
+		if err != nil || ok {
+			return solid, none, ok, err
+		}
+		if pp.meshBound == 0 {
+			return pair.PlanarSolid{}, none, false, nil
+		}
+	}
+	solid, ok, err := planarHeldSolid(budget, pp.verts, pp.tris, pp.faceOf)
+	if err != nil || !ok {
+		return pair.PlanarSolid{}, none, false, err
+	}
+	return solid, proofarith.MustDyOf(pp.meshBound), true, nil
+}
+
+// planarFacetedSourceSolid is the saved exact source mesh of a zero-bound
+// Boolean moved by a translation-only placement.
+func planarFacetedSourceSolid(budget *workBudget, pp facetedPayload) (pair.PlanarSolid, bool, error) {
+	if !facetedTranslationOnly(pp.xform) || len(pp.exactSourceVerts) != len(pp.verts) ||
+		len(pp.exactSourceTris) != len(pp.tris) {
 		return pair.PlanarSolid{}, false, nil
 	}
-	source := pp.verts
-	placed := false
-	if pp.meshBound != 0 || pp.volSymDiff != 0 {
-		if !finiteMeasurementValues(pp.meshBound) || pp.meshBound < 0 ||
-			!facetedTranslationOnly(pp.xform) || len(pp.exactSourceVerts) != len(pp.verts) ||
-			len(pp.exactSourceTris) != len(pp.tris) {
+	for i, tri := range pp.tris {
+		if tri != pp.exactSourceTris[i] {
 			return pair.PlanarSolid{}, false, nil
 		}
-		for i, tri := range pp.tris {
-			if tri != pp.exactSourceTris[i] {
-				return pair.PlanarSolid{}, false, nil
-			}
-		}
-		source, placed = pp.exactSourceVerts, true
 	}
-	solid := pair.PlanarSolid{Verts: make([]proofarith.DyV3, len(source)),
-		Tris: append([][3]int(nil), pp.tris...)}
-	if len(pp.faceOf) == len(pp.tris) {
-		solid.Faces = append([]int(nil), pp.faceOf...)
+	solid, ok, err := planarHeldSolid(budget, pp.exactSourceVerts, pp.tris, pp.faceOf)
+	if err != nil || !ok {
+		return pair.PlanarSolid{}, false, err
 	}
 	bound := proofarith.MustDyOf(pp.meshBound)
-	for i, v := range source {
+	for i := range solid.Verts {
 		if err := budget.step(); err != nil {
 			return pair.PlanarSolid{}, false, err
-		}
-		if !finiteVec(v) {
-			return pair.PlanarSolid{}, false, nil
-		}
-		solid.Verts[i] = proofarith.DyVec(v)
-		if !placed {
-			continue
 		}
 		if !finiteVec(pp.verts[i]) {
 			return pair.PlanarSolid{}, false, nil
@@ -360,4 +428,268 @@ func planarFacetedSolid(budget *workBudget, pp facetedPayload) (pair.PlanarSolid
 		}
 	}
 	return solid, true, nil
+}
+
+// planarHeldSolid lifts a held triangle mesh to an exact snapshot. faceOf
+// names each triangle's face; a length mismatch leaves Faces unset.
+func planarHeldSolid(budget *workBudget, verts []r3.Vec, tris [][3]int, faceOf []int) (pair.PlanarSolid, bool, error) {
+	solid := pair.PlanarSolid{Verts: make([]proofarith.DyV3, len(verts)),
+		Tris: append([][3]int(nil), tris...)}
+	if len(faceOf) == len(tris) {
+		solid.Faces = append([]int(nil), faceOf...)
+	}
+	for i, v := range verts {
+		if err := budget.step(); err != nil {
+			return pair.PlanarSolid{}, false, err
+		}
+		if !finiteVec(v) {
+			return pair.PlanarSolid{}, false, nil
+		}
+		solid.Verts[i] = proofarith.DyVec(v)
+	}
+	return solid, true, nil
+}
+
+// planarCapBlendSolid reads a cap-loop chamfer whose every face is planar
+// through its tessellation, the body's own held mesh at its placement, and
+// returns that mesh's Bound as its displacement. A body with a curved face,
+// or one the tessellator refuses, is not admitted.
+func planarCapBlendSolid(ctx context.Context, budget *workBudget, b *Body) (pair.PlanarSolid, proofarith.Dyadic, bool, error) {
+	none := proofarith.DyZero()
+	faces := b.Faces()
+	faceAt := make(map[*Face]int, len(faces))
+	for i, face := range faces {
+		if !face.isPlanar() {
+			return pair.PlanarSolid{}, none, false, nil
+		}
+		faceAt[face] = i
+	}
+	mesh, err := tessellateContext(ctx, b, units.Millimeters(planarHeldChord), VerifyAll)
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return pair.PlanarSolid{}, none, false, ctxErr
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return pair.PlanarSolid{}, none, false, err
+		}
+		return pair.PlanarSolid{}, none, false, nil
+	}
+	if !finiteMeasurementValues(mesh.bound) || mesh.bound < 0 || len(mesh.source) != len(mesh.triangles) {
+		return pair.PlanarSolid{}, none, false, nil
+	}
+	faceOf := make([]int, len(mesh.triangles))
+	for t, face := range mesh.source {
+		at, ok := faceAt[face]
+		if !ok {
+			return pair.PlanarSolid{}, none, false, nil
+		}
+		faceOf[t] = at
+	}
+	solid, ok, err := planarHeldSolid(budget, mesh.vertices, mesh.triangles, faceOf)
+	if err != nil || !ok {
+		return pair.PlanarSolid{}, none, false, err
+	}
+	return solid, proofarith.MustDyOf(mesh.bound), true, nil
+}
+
+// planarBandPair is one admitted pair at least one of whose held meshes
+// carries a positive displacement, with both displacements at the query
+// poses (docs/multibody-dynamics-design.md §10.4).
+type planarBandPair struct {
+	a, b           *pair.PlanarSolid
+	deltaA, deltaB proofarith.Dyadic
+}
+
+// classify turns the exact held relation into §10.4's published one. With δ
+// the summed displacement, every true boundary point lies within δ of the
+// held pair's: a held gap whose lower end exceeds δ is a true gap with δ
+// charged; a held touch, or a held gap or penetration depth at most δ, puts
+// the true signed separation in [−2δ, 2δ], ContactBand; a held vertex deeper
+// than δ inside the other held body is a true overlap (pair.PlanarDeepVertex).
+// Anything between is undecided.
+func (p *planarBandPair) classify(ctx context.Context, budget *workBudget, report *ContactReport,
+	result pair.PlanarResult) error {
+	delta := proofarith.DyAdd(p.deltaA, p.deltaB).Rat()
+	switch result.Relation {
+	case pair.Separated:
+		value, bound := proofarith.FloatRat(result.Gap.ValueMM), proofarith.FloatRat(result.Gap.BoundMM)
+		charged := new(big.Rat).Add(bound, delta)
+		if published := ratFloatUp(charged); finiteMeasurementValues(published) &&
+			value.Cmp(proofarith.FloatRat(published)) > 0 {
+			report.Relation, report.Reason = ContactSeparated, ContactNoReason
+			report.Gap = &Measurement{Value: units.Millimeters(result.Gap.ValueMM),
+				Bound: units.Millimeters(published), Exactness: exactnessFromBound(published)}
+			return nil
+		}
+		if new(big.Rat).Add(value, bound).Cmp(delta) <= 0 {
+			return p.publishBand(ctx, budget, report, nil)
+		}
+		report.Reason = ContactNoGapProof
+	case pair.Touching:
+		convexA, convexB, err := p.convexity(ctx, budget, report)
+		if err != nil {
+			return err
+		}
+		if !convexA && !convexB {
+			if err := p.publishBand(ctx, budget, report, nil); err != nil {
+				return err
+			}
+			report.Reason = ContactNonConvex
+			return nil
+		}
+		manifold, err := pair.PlanarTouchManifold(p.a, p.b, result.Contacts, convexA, convexB, budget.step)
+		if err != nil {
+			return err
+		}
+		if err := p.publishBand(ctx, budget, report, manifold.Points); err != nil {
+			return err
+		}
+		if manifold.Points == nil {
+			report.Reason = sourceBoxReason(manifold.Reason)
+		}
+	case pair.Overlapping:
+		deep, err := pair.PlanarDeepVertex(p.a, p.b, proofarith.DyAdd(p.deltaA, p.deltaB), budget.step)
+		if err != nil {
+			return err
+		}
+		if deep {
+			report.Relation, report.Reason = ContactOverlapping, ContactNoNormalProof
+			return nil
+		}
+		report.Reason = ContactNoGapProof
+		convexA, convexB, err := p.convexity(ctx, budget, report)
+		if err != nil || !convexA || !convexB {
+			return err
+		}
+		points, err := pair.PlanarPenetrationManifold(p.a, p.b, budget.step)
+		if err != nil || points == nil {
+			return err
+		}
+		for _, point := range points {
+			// The held depth is minus the separation's lower end.
+			depth := new(big.Rat).Sub(proofarith.FloatRat(point.Separation.BoundMM),
+				proofarith.FloatRat(point.Separation.ValueMM))
+			if depth.Cmp(delta) > 0 {
+				return nil
+			}
+		}
+		return p.publishBand(ctx, budget, report, points)
+	}
+	return nil
+}
+
+func (p *planarBandPair) convexity(ctx context.Context, budget *workBudget,
+	report *ContactReport) (bool, bool, error) {
+	convexA, err := planarConvexity(ctx, budget, report.A)
+	if err != nil {
+		return false, false, err
+	}
+	convexB, err := planarConvexity(ctx, budget, report.B)
+	return convexA, convexB, err
+}
+
+// publishBand publishes ContactBand with Gap [−2δ, 2δ] and, when points is
+// not nil, the held manifold charged with the band (bandManifold).
+func (p *planarBandPair) publishBand(ctx context.Context, budget *workBudget, report *ContactReport,
+	points []pair.PatchPoint) error {
+	band := ratFloatUp(new(big.Rat).Mul(big.NewRat(2, 1), proofarith.DyAdd(p.deltaA, p.deltaB).Rat()))
+	if !finiteMeasurementValues(band) {
+		report.Reason = ContactNoGapProof
+		return nil
+	}
+	report.Relation, report.Reason = ContactBand, ContactNoNormalProof
+	report.Gap = &Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(band),
+		Exactness: exactnessFromBound(band)}
+	if points == nil {
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	manifold, reason, err := p.bandManifold(budget, report, points, band)
+	if err != nil {
+		return err
+	}
+	report.Manifold, report.Reason = manifold, reason
+	return nil
+}
+
+// bandManifold charges the held manifold with the band, as §9.4 states for a
+// positive-displacement body: the clip and its points are the held pair's,
+// each witness ball grows by its own body's δ, and every Separation is the
+// band. The normal must be the exact face normal of a body with no
+// displacement, read at a face of that body that holds the point: a held
+// face of a displaced body only approximates the true face's direction, so
+// a point whose normal no exact face supplies withholds the manifold with
+// ContactNoNormalProof.
+func (p *planarBandPair) bandManifold(budget *workBudget, report *ContactReport, points []pair.PatchPoint,
+	band float64) (*ContactManifold, ContactReason, error) {
+	exact := -1
+	switch {
+	case p.deltaA.Sign() == 0:
+		exact = 0
+	case p.deltaB.Sign() == 0:
+		exact = 1
+	}
+	if exact < 0 {
+		return nil, ContactNoNormalProof, nil
+	}
+	solids := [2]*pair.PlanarSolid{p.a, p.b}
+	for _, point := range points {
+		if err := budget.step(); err != nil {
+			return nil, ContactNoReason, err
+		}
+		feature := point.A
+		if exact == 1 {
+			feature = point.B
+		}
+		normal, ok := planarFaceNormal(solids[exact], feature)
+		if !ok || !proofarith.DvIsZero(proofarith.DvCross(normal, point.Normal)) {
+			return nil, ContactNoNormalProof, nil
+		}
+	}
+	features, err := newPlanarFeatureMap(report.A, report.B, p.a, p.b)
+	if err != nil {
+		return nil, ContactNoReason, err
+	}
+	manifold, reason := planarPatchManifold(report.Request, points, features)
+	if manifold == nil {
+		return nil, reason, nil
+	}
+	resolution := proofarith.FloatRat(report.Request.PointResolution.Base())
+	separation := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(band),
+		Exactness: exactnessFromBound(band)}
+	for i := range manifold.Points {
+		point := &manifold.Points[i]
+		for side, position := range []*VecMeasurement{&point.OnA, &point.OnB} {
+			delta := p.deltaA
+			if side == 1 {
+				delta = p.deltaB
+			}
+			bound := new(big.Rat).Add(proofarith.FloatRat(position.Bound.Base()), delta.Rat())
+			published := ratFloatUp(bound)
+			if !finiteMeasurementValues(published) || proofarith.FloatRat(published).Cmp(resolution) > 0 {
+				return nil, ContactPointTooCoarse, nil
+			}
+			position.Bound, position.Exactness = units.Millimeters(published), exactnessFromBound(published)
+		}
+		point.Separation = separation
+	}
+	return manifold, ContactNoReason, nil
+}
+
+// planarFaceNormal is the exact outward normal of the one face a facet
+// feature names, read off the first triangle that face owns.
+func planarFaceNormal(solid *pair.PlanarSolid, feature pair.PatchFeature) (proofarith.DyV3, bool) {
+	if feature.Kind != pair.FeatureFacet || len(feature.Faces) != 1 || len(solid.Faces) != len(solid.Tris) {
+		return proofarith.DyV3{}, false
+	}
+	for t, tri := range solid.Tris {
+		if solid.Faces[t] != feature.Faces[0] {
+			continue
+		}
+		a := solid.Verts[tri[0]]
+		return proofarith.DvCross(proofarith.DvSub(solid.Verts[tri[1]], a), proofarith.DvSub(solid.Verts[tri[2]], a)), true
+	}
+	return proofarith.DyV3{}, false
 }
