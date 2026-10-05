@@ -1137,7 +1137,7 @@ func (w *World) restInTouch(ctx context.Context, pre, post State, moves map[int]
 		return false, nil
 	}
 	for range restSearchLimit {
-		mid := overSide + (apartSide-overSide)/2
+		mid := overSide + float64((apartSide-overSide)/2)
 		if mid == overSide || mid == apartSide {
 			return false, nil
 		}

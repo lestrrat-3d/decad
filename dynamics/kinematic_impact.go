@@ -102,9 +102,9 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	}
 	postSpeed := [2]float64{preSpeed[0].Base(), preSpeed[1].Base()}
 	if dynamic == 0 {
-		postSpeed[0] -= impulse * sign * inverseMass
+		postSpeed[0] -= float64(impulse * sign * inverseMass)
 	} else {
-		postSpeed[1] += impulse * sign * inverseMass
+		postSpeed[1] += float64(impulse * sign * inverseMass)
 	}
 	if !responsePairResidualsWithin(preSpeed, sign, effectiveCoefficient, w.bodies,
 		target, impulse, postSpeed, w.step.VelocityResidual, w.step.ImpulseResidual) ||

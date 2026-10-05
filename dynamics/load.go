@@ -92,7 +92,7 @@ func (w *World) kickByLoads(from State, gravity QuantityVec, loads []*BodyLoad, 
 				new(big.Rat).Mul(new(big.Rat).Add(gravityValue, forceLow), duration))
 			high := new(big.Rat).Add(velocityValue,
 				new(big.Rat).Mul(new(big.Rat).Add(gravityValue, forceHigh), duration))
-			published := v.Base() + (g.Base()+force.Base()/part.mass.Mass.Value.Base())*dt.Base()
+			published := v.Base() + float64((g.Base()+force.Base()/part.mass.Mass.Value.Base())*dt.Base())
 			read := new(big.Rat).SetFloat64(published)
 			if !finite(published) || read == nil ||
 				intervalDeviation(read, low, high).Cmp(limit) > 0 {

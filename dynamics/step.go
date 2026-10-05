@@ -539,8 +539,8 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		return undecided(w, "impulse is not finite and positive"), nil
 	}
 	postSpeed := [2]float64{
-		preSpeed[0].Base() - impulse*normalSign*inverseMass[0],
-		preSpeed[1].Base() + impulse*normalSign*inverseMass[1],
+		preSpeed[0].Base() - float64(impulse*normalSign*inverseMass[0]),
+		preSpeed[1].Base() + float64(impulse*normalSign*inverseMass[1]),
 	}
 	// At zero restitution against a fixed body, the dynamic body's exact
 	// normal velocity equals the fixed body's velocity for every admitted

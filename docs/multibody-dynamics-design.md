@@ -2677,6 +2677,15 @@ hand-written manifold, event or pose (CLAUDE.md "Correctness must be observable"
   term was deleted or zeroed and the fixture went red, or states the argument for why a leg is provably
   redundant. A fixture whose offset, rotation or displacement is zero cannot exercise the term, so each
   fixture is built with the term nonzero.
+- **Deterministic rounding.** The Go spec lets a compiler fuse `x*y + z` into one fused multiply-add,
+  and arm64 does where amd64 does not, so an unrounded product can move a published float by an ulp and
+  turn a touching outcome into a separating one. Every float product `dynamics` writes that feeds an add
+  or a subtract on a published or certified path is rounded explicitly with `float64(...)`, which the
+  spec says forbids the fusion. The products inside `r3`'s `Vec.Dot`, `Vec.Add` of a `Vec.Scale`,
+  `SymmetricTensor.MulVec` and `Transform.Apply` still fuse where they inline into `dynamics`, so their
+  last bits can still differ between CPUs. `GOAMD64=v3` builds fuse on amd64, and the suite passes
+  under both builds; `go build -gcflags='github.com/lestrrat-3d/decad/dynamics=-d=fmahash=vy'` lists
+  every remaining fused site.
 - **No pinned bound literals.** Bounds are asserted negligible against a slack figure with a comment
   saying why; values are `InDelta` at a stated slack. FMA contraction differs between hosts.
 - **Dyadic inputs.** Fixture coordinates, velocities and times are dyadic so exact comparisons (event
