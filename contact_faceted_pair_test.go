@@ -129,13 +129,19 @@ func TestContactPairExactPlanarHexagonOnTray(t *testing.T) {
 	require.Equal(t, r3.Vec{Z: 1}, touch.Manifold.Points[0].Normal.Value)
 	require.NotNil(t, touch.Manifold.Points[0].FeatureB.Vertex)
 
-	// Half a millimetre lower, the corner's edges cross the floor's face.
-	// The tray is not convex, so there is no penetration patch.
+	// Half a millimetre lower, the corner's edges cross the floor's face
+	// alone. The tray is not convex, so §9.3's patch does not apply, and the
+	// face-local patch (§9.6) publishes the corner at depth with its foot on
+	// the floor.
 	crossing := contactBothOrders(t, doc, tray, hex, id, hexPose(t, r3.Vec{X: -10, Z: -0.5}))
 	require.Equal(t, decad.ContactOverlapping, crossing.Relation, "reason=%v", crossing.Reason)
 	require.Nil(t, crossing.Gap)
-	require.Nil(t, crossing.Manifold)
-	require.Equal(t, decad.ContactNoNormalProof, crossing.Reason)
+	require.NotNil(t, crossing.Manifold, "reason=%v", crossing.Reason)
+	require.Len(t, crossing.Manifold.Points, 1)
+	require.Equal(t, r3.Vec{X: -10}, crossing.Manifold.Points[0].OnA.Value)
+	require.Equal(t, r3.Vec{X: -10, Z: -0.5}, crossing.Manifold.Points[0].OnB.Value)
+	require.Equal(t, -0.5, crossing.Manifold.Points[0].Separation.Value.Base())
+	require.Zero(t, crossing.Manifold.Points[0].Separation.Bound.Base())
 
 	require.Equal(t, before, doc.Bodies(), "a contact query changes no document state")
 }

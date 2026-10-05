@@ -135,10 +135,15 @@ own normal. Two convex bodies that overlap slightly publish the patch at
 depth when one shallowest push separates them through two opposed faces.
 When only one of them has a face across that push, the other's deepest edge
 or corner pokes through it: its ends, or the corner, are published with
-their feet on the face, at that depth. The manifold is withheld with
-`ContactAmbiguousFeature` when a corner or edge meets only a face's rim, when
-a hole cuts into the patch, or when a convex face rests on an edge of a
-non-convex body. The four-body step's islands use it.
+their feet on the face, at that depth. A convex body whose corner or edge
+pokes through one flat face of any planar body, such as a turned box landing
+on a `Cut` tray's floor, publishes the same points when the overlap crosses
+that face alone, the sunk part lies over the face, and no part of the other
+body in front of the face reaches the convex body. The manifold is withheld
+with `ContactAmbiguousFeature` when a corner or edge meets only a face's rim,
+when a hole cuts into the patch, when a convex face rests on an edge of a
+non-convex body, or when an overlap crosses two faces, such as a corner
+driven into a tray's floor and wall at once. The four-body step's islands use it.
 [Planar manifold tests](../contact_faceted_manifold_test.go) check each case.
 
 `SweepPair` checks two such solids under any path, spinning or not, when no

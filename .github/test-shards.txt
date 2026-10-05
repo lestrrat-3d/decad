@@ -1766,6 +1766,9 @@
 4	0.25	TestSweepPairColumnEndsDepartureAtWall
 4	0.10	TestSweepPairColumnRefusesTrackOverRim
 4	0.05	TestSweepPairDepartsFromTrayFloor
+4	0.03	TestPlanarManifoldCornerThroughTrayFloor
+4	0.01	TestPlanarManifoldEdgeThroughTrayFloor
+4	0.01	TestPlanarManifoldWithholdsCornerThroughTwoFaces
 4	0.00	TestSweepPairTranslatedBoxesImpact
 4	0.00	TestDocumentSweptBoxContainsThePath
 4	0.00	TestSweptBoxStrictlyDisjoint

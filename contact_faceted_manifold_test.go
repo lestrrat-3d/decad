@@ -563,3 +563,153 @@ func TestContactPairPlanarManifoldCancels(t *testing.T) {
 	}
 	require.Equal(t, before, doc.Bodies())
 }
+
+// The fixtures of docs/multibody-dynamics-design.md §13 PR 14d: §9.6's
+// face-local patch of the 8 mm cube poking through the §2 tray's floor, whose
+// top face is z = 0. The tray is not convex, so §9.3's patch never runs; the
+// cube is. Each runs in both body orders.
+//
+// Legs shown to fail (each deleted in turn, fixture red, then restored):
+//   - condition 1, one crossed face:
+//     TestPlanarManifoldWithholdsCornerThroughTwoFaces reads
+//     ContactNoNormalProof instead of ContactAmbiguousFeature (the corner's
+//     foot lies past the floor and the cube reaches over the wall's foot, so
+//     conditions 3 and 4 still refuse it); internal/pair's cavity fixture
+//     shows the leg publishing a corner;
+//   - the lifted set under a positive SupportBand:
+//     TestPlanarManifoldCornerThroughTrayFloor's barely turned cube publishes
+//     its sunk corner alone.
+//
+// Conditions 2 to 4 are shown to fail at the snapshot level
+// (internal/pair/planar_face_penetration_test.go and its internal test).
+
+// trayCubeTwoWays runs ContactPair over the §2 tray at the identity and the
+// cube at pose in both body orders and returns the report with the tray as A.
+func trayCubeTwoWays(t *testing.T, doc *decad.Document, tray, cube *decad.Body, pose r3.Transform,
+	req decad.ContactRequest) *decad.ContactReport {
+	t.Helper()
+	return contactBothWays(t, doc, tray, cube, r3.Identity(), pose, req)
+}
+
+// requireSunkPoint checks one published point of the cube poking through
+// the floor: the cube's witness is the exact point at, the tray's its foot on
+// z = 0, the normal is the floor's +z and Separation is exactly at's height.
+func requireSunkPoint(t *testing.T, point decad.ContactPoint, at r3.Vec) {
+	t.Helper()
+	require.Equal(t, at, point.OnB.Value)
+	require.Zero(t, point.OnB.Bound.Base())
+	require.Equal(t, r3.Vec{X: at.X, Y: at.Y}, point.OnA.Value)
+	require.Zero(t, point.OnA.Bound.Base())
+	require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+	require.Zero(t, point.NormalAngle.Base())
+	require.Equal(t, at.Z, point.Separation.Value.Base())
+	require.Zero(t, point.Separation.Bound.Base())
+	require.NotNil(t, point.FaceA)
+	require.Equal(t, point.FaceA, point.FeatureA.Face)
+}
+
+func TestPlanarManifoldCornerThroughTrayFloor(t *testing.T) {
+	const depth = 1.0 / (1 << 20)
+	doc := decad.New()
+	tray := sceneTrayBody(t, doc)
+	cube := boxBody(t, doc, 0, 0, 8, 8, 8)
+	at := r3.Vec{X: 1, Y: 2, Z: -depth}
+
+	// Turned 30° about (1, -1, 0), every edge from the corner at the cube's
+	// origin rises, so that corner, staged exactly at at, is the one deepest
+	// vertex, 2⁻²⁰ mm below the floor.
+	pose := rotationPose(t, r3.Vec{X: 1, Y: -1}, 30, at)
+	for _, req := range []decad.ContactRequest{contactRequest(), supportBandRequest(2 * depth)} {
+		report := trayCubeTwoWays(t, doc, tray, cube, pose, req)
+		require.Equal(t, decad.ContactOverlapping, report.Relation)
+		require.NotNil(t, report.Manifold, "reason=%v", report.Reason)
+		require.Equal(t, decad.ContactNoReason, report.Reason)
+		// Every other corner stands millimetres up, outside any band.
+		require.Len(t, report.Manifold.Points, 1)
+		point := report.Manifold.Points[0]
+		requireSunkPoint(t, point, at)
+		require.Contains(t, tray.Faces(), point.FaceA)
+		require.Nil(t, point.FaceB, "a vertex has no single owning face")
+		require.NotNil(t, point.FeatureB.Vertex)
+		require.Equal(t, r3.Vec{}, point.FeatureB.Vertex.Position().Value, "the live corner")
+	}
+
+	// Barely turned, the same corner is still the deepest, and the cube's
+	// other three bottom corners stand within 2⁻¹⁹ mm of the floor. A
+	// positive band publishes them after the sunk corner, each at its exact
+	// height, read off the posed basis.
+	slight := rotationPose(t, r3.Vec{X: 1, Y: -1}, 5e-6, at)
+	alone := trayCubeTwoWays(t, doc, tray, cube, slight, contactRequest())
+	require.NotNil(t, alone.Manifold, "reason=%v", alone.Reason)
+	require.Len(t, alone.Manifold.Points, 1)
+	requireSunkPoint(t, alone.Manifold.Points[0], at)
+
+	banded := trayCubeTwoWays(t, doc, tray, cube, slight, supportBandRequest(2*depth))
+	require.NotNil(t, banded.Manifold, "reason=%v", banded.Reason)
+	require.Len(t, banded.Manifold.Points, 4)
+	requireSunkPoint(t, banded.Manifold.Points[0], at)
+	basis := slight.Basis()
+	var want []*big.Rat
+	for _, corner := range [][2]float64{{8, 0}, {0, 8}, {8, 8}} {
+		height := new(big.Rat).SetFloat64(at.Z)
+		height.Add(height, new(big.Rat).Mul(new(big.Rat).SetFloat64(corner[0]), new(big.Rat).SetFloat64(basis.EX.Z)))
+		height.Add(height, new(big.Rat).Mul(new(big.Rat).SetFloat64(corner[1]), new(big.Rat).SetFloat64(basis.EY.Z)))
+		require.Positive(t, height.Cmp(new(big.Rat).SetFloat64(at.Z)), "above the sunk corner")
+		require.Negative(t, height.Cmp(new(big.Rat).SetFloat64(2*depth)), "inside the band")
+		want = append(want, height)
+	}
+	used := make([]bool, len(want))
+	for _, point := range banded.Manifold.Points[1:] {
+		require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+		require.NotNil(t, point.FeatureB.Vertex)
+		value := new(big.Rat).SetFloat64(point.Separation.Value.Base())
+		bound := new(big.Rat).SetFloat64(point.Separation.Bound.Base())
+		match := -1
+		for i, w := range want {
+			if !used[i] && new(big.Rat).Abs(new(big.Rat).Sub(value, w)).Cmp(bound) <= 0 {
+				match = i
+				break
+			}
+		}
+		require.GreaterOrEqual(t, match, 0, "lifted point at %v matches no corner height", point.Separation.Value)
+		used[match] = true
+	}
+}
+
+func TestPlanarManifoldEdgeThroughTrayFloor(t *testing.T) {
+	const depth = 1.0 / (1 << 20)
+	doc := decad.New()
+	tray := sceneTrayBody(t, doc)
+	cube := boxBody(t, doc, 0, -4, 8, 4, 8)
+	at := r3.Vec{X: 1, Y: 2, Z: -depth}
+	// Turned 30° about -y, the cube's edge x = z = 0 stays level, staged
+	// at the pose's origin ± 4 along y, and the rest rises.
+	c, s := math.Cos(math.Pi/6), math.Sin(math.Pi/6)
+	pose := basisPose(t, r3.Vec{X: c, Z: s}, r3.Vec{Y: 1}, r3.Vec{X: -s, Z: c}, at)
+	report := trayCubeTwoWays(t, doc, tray, cube, pose, contactRequest())
+	require.Equal(t, decad.ContactOverlapping, report.Relation)
+	require.NotNil(t, report.Manifold, "reason=%v", report.Reason)
+	require.Len(t, report.Manifold.Points, 2)
+	ends := []r3.Vec{{X: 1, Y: -2, Z: -depth}, {X: 1, Y: 6, Z: -depth}}
+	for _, point := range report.Manifold.Points {
+		require.Contains(t, ends, point.OnB.Value)
+		requireSunkPoint(t, point, point.OnB.Value)
+		require.NotNil(t, point.FeatureB.Edge)
+		require.Contains(t, cube.Edges(), point.FeatureB.Edge)
+	}
+	require.NotEqual(t, report.Manifold.Points[0].OnB.Value, report.Manifold.Points[1].OnB.Value)
+}
+
+func TestPlanarManifoldWithholdsCornerThroughTwoFaces(t *testing.T) {
+	const depth = 1.0 / (1 << 20)
+	doc := decad.New()
+	tray := sceneTrayBody(t, doc)
+	cube := boxBody(t, doc, 0, 0, 8, 8, 8)
+	// The corner below the floor and past the wall x = -80, in the material
+	// where the two meet: the cube crosses both faces.
+	pose := rotationPose(t, r3.Vec{X: 1, Y: -1}, 30, r3.Vec{X: -80 - depth, Z: -depth})
+	report := trayCubeTwoWays(t, doc, tray, cube, pose, contactRequest())
+	require.Equal(t, decad.ContactOverlapping, report.Relation)
+	require.Nil(t, report.Manifold)
+	require.Equal(t, decad.ContactAmbiguousFeature, report.Reason)
+}
