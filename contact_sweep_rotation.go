@@ -320,7 +320,8 @@ type rotationalPairSweep struct {
 	req        SweepRequest
 	resolution *big.Rat
 	report     *SweepReport
-	planar     bool // both paths carry exact planar vertex sets (contact_sweep_faceted.go)
+	planar     bool                  // both paths carry exact planar vertex sets (contact_sweep_faceted.go)
+	departure  *planarDepartureProof // a planar pair's §10.2 departure, when proved
 }
 
 func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
@@ -342,6 +343,9 @@ func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
 	result, err := run.execute(ctx)
 	if err != nil || result == nil {
 		return result, err
+	}
+	if planar, ok, planarErr := d.planarContinuation(ctx, result, pa, pb, resolution); planarErr != nil || ok {
+		return planar, planarErr
 	}
 	if result.Outcome == SweepClear || result.Outcome == SweepDepartedClear ||
 		result.Outcome == SweepImpactBracket && result.Bracket != nil ||
@@ -589,12 +593,7 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}
-		if r.planar {
-			// The departure and track proofs below read source boxes; a planar
-			// pair has neither yet (docs/multibody-dynamics-design.md §10.2).
-			return r.undecided(zero, one, r.continuationCause()), nil
-		}
-		if r.req.StartPolicy == ContinueCertifiedTouch && r.coMovingOrientedTouch(first) {
+		if !r.planar && r.req.StartPolicy == ContinueCertifiedTouch && r.coMovingOrientedTouch(first) {
 			last, sampleErr := r.sample(ctx, one)
 			if errors.Is(sampleErr, errSweepPoseBudget) {
 				return r.undecided(zero, one, SweepPoseBudget), nil
@@ -617,7 +616,17 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 			r.sortSamples()
 			return r.report, nil
 		}
-		if departure, ok := r.rotationalDepartureFraction(first); ok {
+		var departure *big.Rat
+		var departs bool
+		if r.planar {
+			departure, departs, err = r.planarDepartureFraction(ctx)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			departure, departs = r.rotationalDepartureFraction(first)
+		}
+		if departs {
 			left, sampleErr := r.sample(ctx, departure)
 			if errors.Is(sampleErr, errSweepPoseBudget) {
 				return r.undecided(zero, departure, SweepPoseBudget), nil
@@ -650,6 +659,20 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 			}
 			r.sortSamples()
 			return r.report, nil
+		}
+		if r.planar && r.req.StartPolicy == ContinueCertifiedTouch {
+			track, ok, bandErr := r.planarBand(ctx)
+			if bandErr != nil {
+				return nil, bandErr
+			}
+			if ok {
+				r.report.ContactTrack, r.report.Outcome = track, SweepPersistentBand
+				if track.planar.band == nil {
+					r.report.Outcome = SweepPersistentTouch
+				}
+				r.sortSamples()
+				return r.report, nil
+			}
 		}
 		return r.undecided(zero, one, r.continuationCause()), nil
 	case ContactSeparated:
@@ -1145,19 +1168,29 @@ func (r *rotationalPairSweep) obliqueAffineIntervalClear(from, to *big.Rat) bool
 // fraction span. Each body lies in the hull of its source points, so strict
 // separation of the two coordinate hulls proves clear.
 func (r *rotationalPairSweep) intervalAxisSeparated(from, to *big.Rat) bool {
+	return r.intervalAxisGap(from, to) != nil
+}
+
+// intervalAxisGap is the widest strict gap between the two coordinate hulls
+// over the span, a lower bound on the pair's separation throughout it, or
+// nil when the hulls meet on every axis.
+func (r *rotationalPairSweep) intervalAxisGap(from, to *big.Rat) *big.Rat {
 	a := r.a.cornerSpan(from, to)
 	b := r.b.cornerSpan(from, to)
 	if len(a) == 0 || len(b) == 0 {
-		return false
+		return nil
 	}
+	var widest *big.Rat
 	for axis := range 3 {
 		aLow, aHigh := spanHull(a, axis)
 		bLow, bHigh := spanHull(b, axis)
-		if aHigh.Cmp(bLow) < 0 || bHigh.Cmp(aLow) < 0 {
-			return true
+		for _, gap := range []*big.Rat{new(big.Rat).Sub(bLow, aHigh), new(big.Rat).Sub(aLow, bHigh)} {
+			if gap.Sign() > 0 && (widest == nil || gap.Cmp(widest) > 0) {
+				widest = gap
+			}
 		}
 	}
-	return false
+	return widest
 }
 
 func spanHull(spans []ivVec, axis int) (*big.Rat, *big.Rat) {

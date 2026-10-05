@@ -31,6 +31,7 @@ type sweepReplayProof struct {
 	sphereAxis, sphereSide     int
 	sphereGap, sphereSlope     proofarith.Dyadic
 	rotation                   *[2]rotationalSweepPath
+	planar                     *planarReplay // a general planar sweep (contact_sweep_faceted.go)
 	track                      *SweepContactTrack
 	request                    ContactRequest
 	outcome                    SweepOutcome
@@ -456,6 +457,9 @@ func (p *sweepReplayProof) orientedSphereRelationCovered(f *big.Rat, ideal, obse
 // remain separated after charging the producer's pose error bound.
 func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 	r3.Transform, r3.Transform, error) {
+	if r.replay.planar != nil {
+		return r.certifiedPlanarPosesAtFraction(f)
+	}
 	paths := r.replay.rotation
 	var pose [2]r3.Transform
 	var box [2]orientedSourceBox
@@ -670,6 +674,9 @@ func (p *sweepReplayProof) sphereRelationCovered(f, ideal, observed, resolution 
 }
 
 func (r *SweepReport) replayFractionCovered(f *big.Rat) bool {
+	if r.replay.track != nil && r.replay.track.planar != nil {
+		return f.Sign() >= 0 && f.Cmp(r.replay.track.end) <= 0
+	}
 	if r.replay.rotation != nil && r.replay.outcome == SweepImpactBracket {
 		// The producer proves clear intervals only through the left bracket edge.
 		return r.replay.bracketLo != nil && f.Cmp(r.replay.bracketLo) <= 0
@@ -727,4 +734,49 @@ func boxRelationDistanceWithin(a, b sourceBoxContactProof, limit *big.Rat) bool 
 		}
 	}
 	return distance != nil && distance.Cmp(limit) <= 0
+}
+
+// certifiedPlanarPosesAtFraction replays a general planar sweep without
+// rerunning the pair relation. Both rounded poses must fit PointResolution
+// of their ideal poses. A track replay checks the rounded vertex heights
+// against the band; a clear or departing replay needs the proven lower gap at
+// f to exceed the summed deviation, so the rounded pair is separated too. The
+// initial touch of a departure replays only at zero deviation.
+func (r *SweepReport) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, error) {
+	p := r.replay
+	var poses [2]r3.Transform
+	deviation := new(big.Rat)
+	for i, path := range p.rotation {
+		pose, err := path.poseAt(f)
+		if err != nil {
+			return r3.Transform{}, r3.Transform{}, err
+		}
+		_, bound, ok, _ := path.pointDeviation(pose, f, noSweepPoll)
+		if !ok {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: planar replay pose has no finite error bound", ErrUnsupported)
+		}
+		poses[i] = pose
+		deviation.Add(deviation, proofarith.FloatRat(bound))
+	}
+	resolution, ok := exactBaseValue(p.request.PointResolution)
+	if !ok || deviation.Cmp(resolution) > 0 {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded planar replay pose exceeds point resolution", ErrUnsupported)
+	}
+	if p.track != nil {
+		if _, ok := p.track.planar.replayHeights(f); !ok {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded planar replay pose leaves the certified band", ErrUnsupported)
+		}
+		return poses[0], poses[1], nil
+	}
+	if f.Sign() == 0 && p.planar.departure != nil {
+		if deviation.Sign() != 0 {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: planar departure start is not the exact touch", ErrUnsupported)
+		}
+		return poses[0], poses[1], nil
+	}
+	lower := p.planar.lowerGap(f)
+	if lower == nil || lower.Cmp(deviation) <= 0 {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded planar replay gap does not exceed pose error", ErrUnsupported)
+	}
+	return poses[0], poses[1], nil
 }

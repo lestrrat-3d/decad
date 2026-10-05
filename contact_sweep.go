@@ -74,6 +74,14 @@ const (
 	SweepInitiallyOverlapping
 	SweepUndecided
 	SweepGrazingTouch
+	// SweepPersistentBand: the pair stays within a certified band of one
+	// normal through its contact track. At every instant of the track the
+	// signed separation along Normal() of every contact-set point lies in
+	// [−Depth, Depth], the interiors overlap by at most Depth along that
+	// normal, every other vertex of the touching body stays strictly in
+	// front of the support plane, and the source features are stable. Depth
+	// is the track's Band(). The track may end before the duration.
+	SweepPersistentBand
 )
 
 // SweepCause explains why a continuous claim was not proved.
@@ -125,6 +133,7 @@ type SweepContactTrack struct {
 	orientedA     *orientedSourceBox
 	orientedB     *orientedSourceBox
 	orientedDelta [3]proofarith.Dyadic
+	planar        *planarTrackProof // general planar touch or band (contact_sweep_band.go)
 }
 
 func (t *SweepContactTrack) Start() SweepInstant { return sweepInstant(t.start, t.duration) }
@@ -136,6 +145,18 @@ func (t *SweepContactTrack) Features() (ContactFeature, ContactFeature) {
 }
 
 func (t *SweepContactTrack) Normal() VecMeasurement { return t.normal }
+
+// Band returns the depth of a band track (docs/multibody-dynamics-design.md
+// §10.3), a Length Measurement whose Value plus Bound bounds every contact
+// point's separation in both directions and the interiors' overlap along
+// Normal(). It is nil for an exact touch track.
+func (t *SweepContactTrack) Band() *Measurement {
+	if t.planar == nil || t.planar.band == nil {
+		return nil
+	}
+	band := *t.planar.band
+	return &band
+}
 
 // ManifoldAt returns a fresh reduction of the complete exact touching set at
 // a fraction in this track's certified interval.
@@ -149,6 +170,9 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 	}
 	if f.Cmp(t.start) < 0 || f.Cmp(t.end) > 0 {
 		return nil, fmt.Errorf("%w: fraction is outside contact track", ErrDegenerate)
+	}
+	if t.planar != nil {
+		return t.planar.planarManifoldAt(f, t.request)
 	}
 	if t.orientedA != nil && t.orientedB != nil {
 		a, okA := translatedOrientedBox(*t.orientedA, t.orientedDelta, f)
@@ -426,7 +450,8 @@ func exactnessFromBound(bound float64) Exactness {
 // and admitted rotating PoseSegments. Two exact planar solids — prisms over
 // whole LineSeg sections and zero-bound faceted Booleans — that no narrower
 // path admits receive a clear path or a first-impact bracket under any rotating
-// or affine path, with no replay proof.
+// or affine path, and from an initial touch a departure or a persistent touch
+// or band track (docs/multibody-dynamics-design.md §10.2, §10.3).
 // Unsupported paths return SweepUndecided.
 // Both body pointers, both paths, and ctx must be non-nil.
 func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairPath,

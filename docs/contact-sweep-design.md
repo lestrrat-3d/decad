@@ -69,10 +69,12 @@ through the certified interval. Two exact planar solids
 (`docs/multibody-dynamics-design.md` §9) that no path above admits run the
 same search over every vertex under any rotating or affine path: a clear
 path, a first impact bracketed onto an overlapping sample, or an initial
-touch or overlap; the general rotating sweep, §10.1 there, owns it. Its
-report has no replay proof, and a continuation from initial touch returns
-`SweepUndecided`. Other unequal spins, rotating paths, and payloads remain
-design contracts.
+touch or overlap; the general rotating sweep, §10.1 there, owns it. From an
+initial touch it proves §10.2's departure or, under `ContinueCertifiedTouch`,
+§10.3's persistent touch or band track; two source boxes whose box proofs
+cannot continue a touch rerun on that path. Its reports replay rounded poses
+from recorded gap bounds and pose deviations. Other unequal spins, rotating
+paths, and payloads remain design contracts.
 An extruded circular source prism or a full revolve of an axis-incident
 rectangular half-profile can certify a strictly separated axial affine path
 against a containing source-box face. The sweep uses the source-derived outer
@@ -793,6 +795,13 @@ same cached source corners and exact time fraction. The rounded poses must
 fit `PointResolution` and yield a four-point patch on the producer's face
 pair within its point and normal bounds. A changed face, missing patch, or
 exceeded bound returns `ErrUnsupported`.
+A general planar sweep (`docs/multibody-dynamics-design.md` §10.1) replays
+without rerunning the pair relation, so its cost is one pass over both
+vertex sets. Both rounded poses must fit `PointResolution` of their ideal
+poses. On a clear interval or a departure the rounded pair must keep a gap:
+the sweep's proven lower gap at that time must exceed the summed vertex
+deviation. A touch or band track checks every rounded vertex height against
+the band widened by that deviation.
 
 `Fraction` and the input `Duration` define the exact search time; `Elapsed`
 is a bounded convenience reading for callers. Bracket width is checked from

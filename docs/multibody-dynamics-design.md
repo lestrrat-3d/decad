@@ -14,9 +14,9 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 3, 4, 6, 7, 10, 11, 12, 14, 16, 17 and 19 have shipped. `dynamics.World`
-holds any number of bodies, the canonical pair table and per-pair material of §3.1, and the slice-backed
-`State` of §3.2. Its step resolves two bodies, or three bodies with one, two or three dynamic bodies and
+Current state: §13 PRs 1, 2, 3, 4, 6, 7, 10, 11, 12, 14, 16, 17 and 19 have shipped, and so has PR 13's
+root part. `dynamics.World` holds any number of bodies, the canonical pair table and per-pair material
+of §3.1, and the slice-backed `State` of §3.2. Its step resolves two bodies, or three bodies with one, two or three dynamic bodies and
 every other body fixed, through the closed-form responses `docs/rigid-dynamics-design.md` lists. A world of four or more
 bodies takes the scheduled step of §4.3 and §5: one kick, then slices of drift from event to event. Initial
 contacts, impact brackets and transition brackets cut a slice at their exact fraction; every body advances
@@ -38,7 +38,8 @@ shipped code, except `State.cache` and the `MaxPairSweeps` charge (§13 PR 8). F
 bodies, §5 without §5.3's reuse and step 2's cache, §6.1–§6.4, §6.6, §7, §3.3's `IslandReport`, `StepReport.Islands` and `ContactEvent.Island`, §3.4, and §12 without
 `MaxPairSweeps` ship as well. §9.1–§9.4 ship for prisms over whole `LineSeg` sections and for zero-bound
 Booleans, directly or through a translation-only placement; stitched solids and lofts are not admitted yet.
-§10.1 ships for the same bodies. Everything else is design-only until the PR table in §13 says otherwise.
+§10.1, §10.2 and §10.3's sweep certificate ship for the same bodies; `dynamics` does not consume band
+tracks yet. Everything else is design-only until the PR table in §13 says otherwise.
 
 Navigation only; the named sections own the rules:
 
@@ -990,9 +991,20 @@ lies inside the other farther than the summed deviations from its boundary (`int
 `PlanarDeepVertex`): the ball of that radius stays inside the moved body, so the moved vertex does too. A
 touch cannot survive a nonzero deviation and stays `Undecided`, so a first impact brackets onto an
 overlapping right sample. The clear certificate is §4.3's `g_l + g_r > T` or the strict separation of the
-coordinate hulls of every vertex's ideal path over the interval. An initial touch under either
-continuation policy stays `Undecided` until §10.2 ships. The run keeps no replay proof, so
-`CertifiedPosesAt` refuses its report.
+coordinate hulls of every vertex's ideal path over the interval. An initial touch continues by §10.2 or
+§10.3; two source boxes whose box proofs (contact-sweep §5.1) leave a touch `Undecided` rerun as §9
+bodies on this path.
+
+The report keeps a replay proof that never reruns §9.1's relation, because replay has no context to
+poll and a relation costs work quadratic in the triangle counts. It holds both prepared paths with their
+vertex snapshots, and per certified clear interval its end samples' lower gaps and its vertex-hull gap;
+a departure adds its §10.2 vertex heights and rates, and a track its §10.3 plane. A replayed fraction
+costs one pass over both vertex sets: the deviation of every staged vertex from its ideal position, which
+must fit `PointResolution`, and then one check. In a clear interval the larger of the hull gap and each
+end's lower gap less the §4.3 travel to the fraction must exceed the summed deviation; inside a departure
+its lower-gap function must; the initial touch replays only at zero deviation; a track's rounded vertex
+heights must stay above minus its depth widened by that deviation. Beyond an impact bracket's left edge
+or a track's end, replay refuses.
 
 ### 10.2 Departure from touch under rotation
 
@@ -1010,15 +1022,26 @@ h_p'(0)  = n · ((v_A + ω_A×(p − c_A)) − (v_B + ω_B×(q − c_B)))
 ```
 
 with `ρ` each body's largest vertex distance from its pivot and `D` an outward bound on `|p − q|` over
-the horizon: `ρ_A + ρ_B + |c_A − c_B| + (V_A + V_B)·h`. The `h_p'(0)` form drops the `n'·(p − q)` term
-because `p − q` is along `n` at `u = 0`. For a stationary or translating `B` (every floor, tray and
+the horizon: `ρ_A + ρ_B + |c_A − c_B| + |v_A − v_B|·h`. Here `q` is the foot of `B`'s pivot on the
+plane: it moves rigidly with `B`, lies within `ρ_B` of the pivot because the plane holds a vertex of `B`,
+and `h_p(u) = n(u)·(p(u) − q(u))` for every `p`. The `h_p'(0)` form, `n·(v_A − v_B + ω_A×(p − c_A) −
+ω_B×(p − c_B))`, is exact for every vertex. For a stationary or translating `B` (every floor, tray and
 fixed body) only the first line remains, `|ω_A|²·ρ_A`. Take `c` as the exact minimum of `h_p'(0)` over
-the vertices of the contact set and `K` as half the bound above, both over rational intervals; a
-non-contact vertex contributes its positive `h_p(0)` and the same derivative bound. This is the proof
-`tangentAxisSpinDepartureFraction` already runs for a box spinning about `Y` with `K = ω_y²·(|Δx| + |Δz|)`,
-stated for any vertex set and both bodies moving. A face of `A` on a vertex or edge of `B` uses the same
-form with the roles swapped; two crossing edges use the cross-product normal with both edges' endpoint
-derivatives. After the horizon, §5's search continues on the remainder as today.
+the vertices of the contact set and `K` as half the bound above; a non-contact vertex contributes its
+positive `h_p(0)` and the same derivative bound. This is the proof `tangentAxisSpinDepartureFraction`
+already runs for a box spinning about `Y` with `K = ω_y²·(|Δx| + |Δz|)`, stated for any vertex set and
+both bodies moving.
+
+The plane is a SUPPORT PLANE: a face plane of `B` with every vertex of `B` on or behind it and every
+vertex of `A` on or in front of it, the contact set being `A`'s vertices on it. Each body lies in its
+vertices' hull, so the least vertex height bounds the pair's separation below, whatever the shapes. The
+run tries `B` then `A` as the plane's owner, each over its triangles in order, and takes the first plane
+whose every contact rate is positive. The horizon is the largest fraction on the sweep's dyadic grid
+(`TimeResolution`, capped at 52 levels so it stays a float) at which `c − K·h > 0` and every non-contact
+bound `h_p(0) + h_p'(0)·h − K·h²` is positive; both are monotone in `h`, so a binary search over the
+grid finds it. A touch no support plane covers — two crossing edges, or a box in a tray corner, whose
+floor plane does not hold the walls — stays `Undecided`. After the horizon, §5's search continues on the
+remainder as today.
 
 ### 10.3 Band tracks: resting and rolling at constant `ω`
 
@@ -1030,19 +1053,28 @@ The new outcome states what IS exact:
 ```go
 // SweepPersistentBand: the pair stays within a certified band of one normal.
 // At every instant of the track the signed separation along Normal() of every
-// contact-set point lies in [−Depth, 0], interiors overlap by at most that depth
-// along that normal, no other feature pair comes within the band, and the
-// source features are stable. Depth is a Length Measurement.
+// contact-set point lies in [−Depth, Depth], interiors overlap by at most
+// Depth along that normal, every other vertex of the touching body stays
+// strictly in front of the support plane, and the source features are
+// stable. Depth is the track's Band(), a Length Measurement. The track may
+// end before the duration.
 ```
 
-`SweepContactTrack` gains `Band() *Measurement` (nil for an exact touch track). The certificate: with
-`c` and `K` as in §10.2 but `c` now bounded BELOW by `−c_res` (the solver leaves contact-point normal
-speeds within `VelocityResidual` of zero, so `c` is an exact rational within that residual of zero),
-every contact-set vertex satisfies `h_p(u) >= −(c_res·u + K·u²)` for `0 <= u <= h`, and `Depth` is that
-bound at `h`, rounded outward. Every non-contact vertex keeps `h_p(u) > 0` by the same bound from its
-positive `h_p(0)`. Opposed material sides come from the initial touch certificate. The track publishes
-`ManifoldAt(fraction)` by re-evaluating the exact vertex heights at the rounded pose, with `Separation`
-intervals inside `[−Depth, 0]`.
+`SweepContactTrack` gains `Band() *Measurement` (nil for an exact touch track). The certificate reads a
+§10.2 support plane whose owner `B` does not rotate, so its normal is constant. With `r` the largest
+`|h_p'(0)|` over the contact set (the solver leaves those speeds within `VelocityResidual` of zero, so
+`r` is small) and `K` as in §10.2, every contact-set vertex satisfies `|h_p(u)| <= r·u + K·u²` for
+`0 <= u <= h`, and `Depth` is that bound at `h`, its exact value enclosed by the published Value and
+Bound. Every non-contact vertex keeps `h_p(u) > 0` by §10.2's bound from its positive `h_p(0)`, and
+`A` in front of the plane with `B` behind it bounds the overlap. Every contact vertex's foot must stay
+inside `B`'s face: the vertex's ideal path box over `[0, h]`, less `B`'s translation and grown by `Depth`,
+is projected along the axis of the normal's largest component, and must meet no bounding edge of the face
+with a corner inside one of its triangles. The face's triangles must belong to one `Face`. The track ends
+at the largest grid fraction where both checks hold. A track with zero depth that reaches the duration is
+an exact `SweepPersistentTouch`. `ManifoldAt(fraction)` stages each contact vertex through the rounded
+pose and publishes it with its exact foot on `B`'s rounded plane; both balls carry the pose deviations
+(`B` only translates, so its plane keeps its normal), `Separation` is `[−Depth, Depth]`, and the normal
+is the face normal.
 
 `dynamics` consumes a band track as a persistent contact when `Depth <= PenetrationResidual`: the pair
 stays in the contact set, its points enter the next island at the track end or the next event, and the
@@ -1364,8 +1396,7 @@ lines below do not repeat it.
 - Test (root): `contact_sweep_faceted_test.go`: a wedge tumbling toward a floor brackets its first
   vertex impact at the exact drift time within `TimeResolution`; the deviation leg is shown to fail.
 - Depends on: PRs 10, 11.
-- Shipped, with the deep-vertex overlap witness in new `internal/pair/planar_depth.go` and no replay
-  proof (§10.1).
+- Shipped, with the deep-vertex overlap witness in new `internal/pair/planar_depth.go`.
 
 ### PR 13 (Phase 2) — generalized departure and band tracks
 
@@ -1375,6 +1406,10 @@ lines below do not repeat it.
   publishes a band track whose `Depth` equals `K·h²` for the computed `K`. `dynamics/tip_test.go`: the
   box tips flat over `0.5 s` in short band slices and rests on four points.
 - Depends on: PR 12.
+- Ships in two parts, split around PR 6's rewrite of `dynamics/schedule.go`, `island.go` and `step.go`.
+  The root part has shipped: §10.2 and §10.3 in new `contact_sweep_band.go`, and §10.1's replay proof in
+  `contact_sweep_faceted.go` and `contact_sweep_replay.go`, with `contact_sweep_band_test.go`. The
+  `dynamics` part, band-track consumption and `dynamics/tip_test.go`, has not shipped.
 
 ### PR 14 (Phase 2) — loft, stitched and fallback mass
 
