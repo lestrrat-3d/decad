@@ -19,6 +19,10 @@ density-derived mass. The sweep and step replay the clear path before and after
 impact. The revolved
 cylinder publishes an axial disk-face manifold at a contained source-box
 floor touch or shallow crossing.
+A fixed source-box floor can hold two centered dynamic source boxes stacked
+vertically. With zero friction and restitution, one gravity kick is followed
+by a coupled two-contact response; all three pair paths receive continuous
+proofs, and the trace replays two repeated resting steps.
 A zero-bound faceted Boolean union with one certified rectangular lower face
 can sweep vertically toward a wide source-box floor, depart from initial
 touch, or retain a persistent face track. Its sweep can certify the first
@@ -124,12 +128,12 @@ Every advanced step reports bounded dynamic-body kinetic energy, linear momentum
 momentum at input, after the force kick, and at completion, plus gravity,
 center-force, torque, and fixed/kinematic contact impulses, plus bounded
 kinematic driver work.
-Before publishing an advanced step, it
-checks every contact event's dynamic-body linear momentum against its impulse
-and rejects an impact whose kinetic energy gain exceeds its driver work plus
-the computed numerical allowance. The coupled sphere island checks its two
+Before publishing an advanced step, isolated responses check each contact
+event's dynamic-body linear momentum against its impulse and reject an impact
+whose kinetic energy gain exceeds its driver work plus the computed numerical
+allowance. The coupled sphere island and centered two-box stack check their
 simultaneous impulses together. Other frictional contacts, other rotating
-kinematic drivers, stacks, and broader payload paths remain design
+kinematic drivers, broader stacks, and payload paths remain design
 contracts. Each companion document owns its detail.
 
 | Design | Ownership |

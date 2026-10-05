@@ -56,6 +56,9 @@ func (w *World) stepThreeTwoDynamic(ctx context.Context, from State, input StepI
 			}
 		}
 	}
+	if report, handled, err := w.stepThreeBoxStack(ctx, from, kicked, input, dt); handled || err != nil {
+		return report, err
+	}
 	report, handled, err := w.stepThreeSequential(ctx, from, kicked, input, [2]*BodyLoad{}, dt, reference)
 	if handled || err != nil {
 		return report, err

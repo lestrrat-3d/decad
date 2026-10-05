@@ -222,10 +222,16 @@ func (w *World) threeUndecidedArithmetic(key int, reason string, err error) (*St
 // The source box and center bounds enclose the largest body-point lever.
 func simultaneousAngularBudget(w *World, mass decad.MassProperties, dt units.Value,
 	pose r3.Transform, count int) (units.Value, bool) {
+	return simultaneousAngularBudgetForBody(w, w.three.parts[w.three.dynamic].Body,
+		mass, dt, pose, count)
+}
+
+func simultaneousAngularBudgetForBody(w *World, body *decad.Body,
+	mass decad.MassProperties, dt units.Value, pose r3.Transform, count int) (units.Value, bool) {
 	if pose.Basis() != r3.Identity().Basis() || count <= 0 {
 		return units.Value{}, false
 	}
-	box, err := w.three.parts[w.three.dynamic].Body.Bounds()
+	box, err := body.Bounds()
 	if err != nil || box.Bound.Kind() != units.Length ||
 		!finite(box.Min.X, box.Min.Y, box.Min.Z, box.Max.X, box.Max.Y, box.Max.Z,
 			box.Bound.Base(), mass.Center.Value.X, mass.Center.Value.Y, mass.Center.Value.Z,
