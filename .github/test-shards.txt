@@ -1695,6 +1695,7 @@
 4	0.00	TestSweepPairRotatingBoxFindsHiddenImpact
 4	0.00	TestSweepPairRotatingPathClear
 4	0.00	TestSweepPairRotatingPoseSegmentBracketsAxisFaceImpact
+4	0.00	TestSweepPairRotatingSourceSpheresClear
 4	0.00	TestSweepPairRotatingSourceSpheresDepart
 4	0.00	TestSweepPairSourceBoxPersistentSlide
 4	0.00	TestSweepPairSourceBoxSlideEdgeTransition
