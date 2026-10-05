@@ -1,0 +1,619 @@
+package decad
+
+import (
+	"context"
+	"fmt"
+	"math/big"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
+)
+
+// This file is the rolling band track of docs/multibody-dynamics-design.md
+// §10.4 ("Rolling"): a full source cylinder M lying on
+// its side on an exact planar body S, M drifting at constant ω and S only
+// translating, keeps a §10.3 track whose contact set is the two ends of the
+// contact ruling.
+//
+// A cylinder is no vertex hull, so the proof reads the centers c± of its two
+// end disks, material points on its axis. Over a disk of radius r and unit
+// axis a, the least height along the unit normal n̂ is n̂·c − r·√(1 − (n̂·a)²);
+// over the solid cylinder it is the lesser of its two disks', since height is
+// linear along the axis. With S's plane at offset d and H(u) = n̂·c(u) − d − r,
+// each rim's least height is g(u) = H(u) + r·(1 − s(u)), s = √(1 − (n̂·a)²).
+// The start is a ruling touch: the axis â lies parallel to the plane and both
+// rims touch it, so H(0) = 0 and n̂·a(0) = 0. Then
+//
+//	H'(0) = n̂·(v_M − v_S + ω×(c − c_M))        exact
+//	|H''| <= |ω|·|ω×(c − c_M)|                 c'' = R(u)·(ω×(ω×(c − c_M))); S only translates
+//	0 <= 1 − s <= (n̂·a)² <= |ω×â|²·u²          |a(u) − â| <= |ω×â|·u
+//
+// so each end satisfies |g(u)| <= |H'(0)|·u + (K + r·|ω×â|²)·u² on [0, h], K
+// half the curvature bound, and the band depth is that bound at h for the
+// larger coefficients of the two ends. The cylinder's lowest point is one of
+// the two rims', so the whole body stays above −depth. Each rim's lowest
+// point lies within r·√(2·(1 − s)) <= √2·r·|ω×â|·u of c − r·n̂; the foot check
+// and ManifoldAt charge that drift as (3/2)·r·|ω×â|·u.
+
+// rollingTrackProof is the private certificate of a rolling band or exact
+// rolling touch track. It owns copies of both prepared paths. M's source
+// points are the eight corners of its identity disk-by-interval box, whose
+// hull holds the whole cylinder, so their deviation bounds every cylinder
+// point's.
+type rollingTrackProof struct {
+	paths     [2]rotationalSweepPath
+	m, s      int
+	ends      [2]proofarith.DyV3 // M's end-disk centers at the identity pose, in published order
+	radius    *big.Rat
+	normal    proofarith.DyV3 // S's exact unit outward normal, a signed axis
+	origin    int             // an S vertex on the plane
+	featureM  ContactFeature
+	featureS  ContactFeature
+	direction VecMeasurement // the published A-to-B normal
+	angle     units.Value
+	lateral   *big.Rat // mm/s: (3/2)·r·|ω×â|, the rim point's drift off c − r·n̂
+	rate      *big.Rat // mm/s: the largest |H'(0)|
+	quadratic *big.Rat // mm/s²: the largest K plus r·|ω×â|²
+	depth     *big.Rat // mm
+	depthUp   float64
+	band      *Measurement
+}
+
+// rollingPairSweep continues a source cylinder's ruling touch on an exact
+// planar body. paths are in sweep order.
+type rollingPairSweep struct {
+	doc        *Document
+	paths      [2]rotationalSweepPath
+	m, s       int
+	cylinder   sourceCylinderContactProof // M at its start pose
+	wall       *Face                      // M's one cylindrical face
+	sourceEnds [2]proofarith.DyV3         // M's end-disk centers at the identity pose
+	req        SweepRequest
+	report     *SweepReport
+	resolution *big.Rat
+}
+
+// sweepRollingPair runs the rolling track when one body is a full source
+// cylinder whose path rotates and the other an exact planar body with no
+// held displacement whose path only translates. It reports false, leaving
+// report untouched, when the pair is not one.
+//
+// The two sides are named locals, not a local array indexed by m: Go 1.26's
+// compiler kept pointers it made into such an array live while the array
+// itself was neither live nor a stack object, so the collector freed a
+// path's duration that nothing else held.
+func (d *Document) sweepRollingPair(ctx context.Context, a, b *Body,
+	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
+	report *SweepReport) (*SweepReport, bool, error) {
+	m, bodyM, bodyS, pathM, pathS := 0, a, b, pa, pb
+	start, ok := sourceCylinderAtPose(a, pa.from)
+	if !ok {
+		m, bodyM, bodyS, pathM, pathS = 1, b, a, pb, pa
+		if start, ok = sourceCylinderAtPose(b, pb.from); !ok {
+			return nil, false, nil
+		}
+	}
+	if pathM.drift == nil || pathM.screw != nil || pathS.drift != nil || pathS.screw != nil {
+		return nil, false, nil
+	}
+	source, ok := sourceCylinderAtPose(bodyM, r3.Identity())
+	if !ok {
+		return nil, false, nil
+	}
+	// Both source-cylinder readers admit exactly one cylindrical face.
+	var wall *Face
+	for _, face := range bodyM.Faces() {
+		if _, curved := face.surface.(Cylinder); curved {
+			wall = face
+		}
+	}
+	solid, delta, ok, err := planarSolidAtPose(ctx, newWorkBudget(ctx), bodyS, r3.Identity())
+	if err != nil {
+		return nil, true, err
+	}
+	if !ok || delta.Sign() != 0 {
+		return nil, false, nil
+	}
+	preparedM, okM := prepareRollingSweepPath(bodyM, pathM, source)
+	preparedS, okS := preparePlanarSweepPath(bodyS, pathS, &solid, delta)
+	if !okM || !okS {
+		report.Outcome, report.Cause = SweepUndecided, SweepMissingBound
+		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.duration),
+			To: sweepInstant(big.NewRat(1, 1), pa.duration)}
+		return report, true, nil
+	}
+	run := &rollingPairSweep{doc: d, m: m, s: 1 - m, cylinder: start, wall: wall,
+		sourceEnds: rollingEnds(source), req: req, report: report, resolution: resolution}
+	run.paths[run.m], run.paths[run.s] = preparedM, preparedS
+	result, err := run.execute(ctx)
+	if err != nil || result == nil {
+		return result, true, err
+	}
+	if result.ContactTrack != nil {
+		result.replay = &sweepReplayProof{rotation: &[2]rotationalSweepPath{run.paths[0], run.paths[1]},
+			track: result.ContactTrack, request: req.ContactRequest, outcome: result.Outcome}
+	}
+	return result, true, nil
+}
+
+// prepareRollingSweepPath pairs the cylinder's ideal motion with the eight
+// corners of its identity box as source points and its two end-disk centers
+// at the path's From as start points.
+func prepareRollingSweepPath(body *Body, path affinePairPath,
+	source sourceCylinderContactProof) (rotationalSweepPath, bool) {
+	prepared, ok := prepareSweepMotion(body, path)
+	if !ok {
+		return rotationalSweepPath{}, false
+	}
+	box := source.box
+	for i := range 8 {
+		var corner proofarith.DyV3
+		for k := range 3 {
+			corner[k] = box.lo[k]
+			if i&(1<<k) != 0 {
+				corner[k] = box.hi[k]
+			}
+		}
+		prepared.sourcePoints = append(prepared.sourcePoints, corner)
+	}
+	for _, end := range rollingEnds(source) {
+		prepared.startPoints = append(prepared.startPoints, exactContactTransform(path.from, end))
+	}
+	return prepared, true
+}
+
+// rollingEnds are the centers of a source cylinder's two end disks.
+func rollingEnds(c sourceCylinderContactProof) [2]proofarith.DyV3 {
+	half := proofarith.MustDyOf(.5)
+	var center proofarith.DyV3
+	for k := range 3 {
+		center[k] = proofarith.DyMul(proofarith.DyAdd(c.box.lo[k], c.box.hi[k]), half)
+	}
+	ends := [2]proofarith.DyV3{center, center}
+	ends[0][c.axis], ends[1][c.axis] = c.box.lo[c.axis], c.box.hi[c.axis]
+	return ends
+}
+
+func (r *rollingPairSweep) execute(ctx context.Context) (*SweepReport, error) {
+	zero, one := new(big.Rat), big.NewRat(1, 1)
+	first, err := r.sample(ctx)
+	if err != nil {
+		return nil, err
+	}
+	switch first.Ideal.Relation {
+	case ContactOverlapping:
+		r.report.Outcome, r.report.InitialEvent, r.report.Event =
+			SweepInitiallyOverlapping, &first.Ideal, &first.Ideal
+		return r.report, nil
+	case ContactTouching:
+		r.report.InitialEvent = &first.Ideal
+		switch r.req.StartPolicy {
+		case StopAtInitialContact:
+			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
+			return r.report, nil
+		case ContinueCertifiedTouch:
+			track, ok, err := r.band(ctx, first)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				return r.undecided(zero, one, SweepContactTrackUnproved), nil
+			}
+			r.report.ContactTrack, r.report.Outcome = track, SweepPersistentBand
+			if track.rolling.band == nil {
+				r.report.Outcome = SweepPersistentTouch
+			}
+			return r.report, nil
+		default:
+			return r.undecided(zero, one, SweepDepartureUnproved), nil
+		}
+	case ContactSeparated:
+		// No clear search covers a rotating cylinder.
+		return r.undecided(zero, one, SweepMissingBound), nil
+	default:
+		return r.undecided(zero, zero, SweepPoseRelation), nil
+	}
+}
+
+// sample reads the start relation through ContactPair at both From poses. At
+// the start both rounded poses are the ideal ones, which pointDeviation
+// confirms before the relation transfers whole.
+func (r *rollingPairSweep) sample(ctx context.Context) (*SweepSample, error) {
+	zero := new(big.Rat)
+	var poses [2]r3.Transform
+	exact := true
+	for i := range r.paths {
+		pose, err := r.paths[i].poseAt(zero)
+		if err != nil {
+			return nil, err
+		}
+		_, bound, ok, _ := r.paths[i].pointDeviation(pose, zero, noSweepPoll)
+		exact = exact && ok && bound == 0
+		poses[i] = pose
+	}
+	contact, err := r.doc.ContactPair(ctx, r.paths[0].body, r.paths[1].body, poses[0], poses[1], r.req.ContactRequest)
+	if err != nil {
+		return nil, err
+	}
+	at := sweepInstant(zero, r.paths[0].path.duration)
+	event := SweepEvent{At: at, Relation: ContactUndecided, Reason: contact.Reason}
+	if exact {
+		event.Relation, event.Gap, event.Overlap = contact.Relation, contact.Gap, contact.Overlap
+		event.Manifold = contact.Manifold
+	}
+	sample := &SweepSample{At: at, PoseA: poses[0], PoseB: poses[1], FloatContact: contact,
+		Ideal: event, exactFraction: zero}
+	r.report.Samples = append(r.report.Samples, *sample)
+	r.report.PoseEvaluations++
+	return sample, nil
+}
+
+func (r *rollingPairSweep) undecided(from, to *big.Rat, cause SweepCause) *SweepReport {
+	duration := r.paths[0].path.duration
+	r.report.Outcome, r.report.Cause = SweepUndecided, cause
+	r.report.Unresolved = &SweepInterval{From: sweepInstant(from, duration), To: sweepInstant(to, duration)}
+	return r.report
+}
+
+// rollingSupport is the exact plane of S the cylinder's ruling rests on.
+type rollingSupport struct {
+	normal proofarith.DyV3 // unit, a signed axis
+	axis   int             // the normal's axis
+	origin int             // an S vertex on the plane
+	radius *big.Rat
+	face   planarFace
+}
+
+// support finds the first face plane of S, in S's triangle order, whose
+// normal is a signed axis across the cylinder's axis, that holds every S
+// vertex on or behind it and both cylinder rims on it.
+func (r *rollingPairSweep) support(poll func() error) (rollingSupport, bool, error) {
+	S, M := &r.paths[r.s], &r.paths[r.m]
+	var tried []planarSupport
+	for _, tri := range S.solid.Tris {
+		if err := poll(); err != nil {
+			return rollingSupport{}, false, err
+		}
+		origin := S.startPoints[tri[0]]
+		n := proofarith.DvCross(proofarith.DvSub(S.startPoints[tri[1]], origin),
+			proofarith.DvSub(S.startPoints[tri[2]], origin))
+		axis, unit, ok := dyUnitAxis(n)
+		if !ok || axis == r.cylinder.axis || planarPlaneTried(tried, unit, origin) {
+			continue
+		}
+		tried = append(tried, planarSupport{normal: unit, origin: origin})
+		behind := true
+		for _, v := range S.startPoints {
+			if proofarith.DvDot(unit, proofarith.DvSub(v, origin)).Sign() > 0 {
+				behind = false
+				break
+			}
+		}
+		if !behind {
+			continue
+		}
+		width := proofarith.DySubScalar(r.cylinder.box.hi[axis], r.cylinder.box.lo[axis])
+		radius := proofarith.DyMul(width, proofarith.MustDyOf(.5))
+		touching := true
+		for _, c := range M.startPoints {
+			if proofarith.DyCmp(proofarith.DvDot(unit, proofarith.DvSub(c, origin)), radius) != 0 {
+				touching = false
+			}
+		}
+		if !touching {
+			continue
+		}
+		face, ok := planarSupportFace(&planarSupport{normal: unit, origin: origin, pathS: S})
+		if !ok {
+			continue
+		}
+		return rollingSupport{normal: unit, axis: axis, origin: tri[0], radius: radius.Rat(), face: face}, true, nil
+	}
+	return rollingSupport{}, false, nil
+}
+
+// dyUnitAxis reads an exact vector with exactly one nonzero component as its
+// axis and the matching signed unit vector.
+func dyUnitAxis(n proofarith.DyV3) (int, proofarith.DyV3, bool) {
+	axis := -1
+	for k := range 3 {
+		if n[k].Sign() == 0 {
+			continue
+		}
+		if axis >= 0 {
+			return 0, proofarith.DyV3{}, false
+		}
+		axis = k
+	}
+	if axis < 0 {
+		return 0, proofarith.DyV3{}, false
+	}
+	var unit proofarith.DyV3
+	unit[axis] = proofarith.DyInt(int64(n[axis].Sign()))
+	return axis, unit, true
+}
+
+// rollingCoefficients are the depth bound's terms: the largest |H'(0)| over
+// the two ends, the largest K plus the tilt term r·|ω×â|², and the lateral
+// drift rate (3/2)·r·|ω×â|.
+type rollingCoefficients struct {
+	rate, quadratic, lateral *big.Rat
+}
+
+func (r *rollingPairSweep) coefficients(support rollingSupport) (rollingCoefficients, bool) {
+	motionM, okM := planarMotionOf(&r.paths[r.m])
+	motionS, okS := planarMotionOf(&r.paths[r.s])
+	if !okM || !okS || motionS.rotating {
+		return rollingCoefficients{}, false
+	}
+	normal := ratOfDyV3(support.normal)
+	relative := ratSub3(motionM.velocity, motionS.velocity)
+	out := rollingCoefficients{rate: new(big.Rat), quadratic: new(big.Rat)}
+	for _, c := range r.paths[r.m].startPoints {
+		lever := ratCross3(motionM.omega, ratSub3(ratOfDyV3(c), motionM.center))
+		rate := ratDot3(normal, ratAdd3(relative, lever))
+		if rate.Abs(rate).Cmp(out.rate) > 0 {
+			out.rate = rate
+		}
+		curvature, ok := ratSqrtUpRat(ratMul(motionM.omegaSq, ratDot3(lever, lever)))
+		if !ok {
+			return rollingCoefficients{}, false
+		}
+		if k := ratMul(curvature, big.NewRat(1, 2)); k.Cmp(out.quadratic) > 0 {
+			out.quadratic = k
+		}
+	}
+	// |ω×â|² = |ω|² − ω_a², â the start axis, an exact unit axis.
+	axial := motionM.omega[r.cylinder.axis]
+	tiltSq := new(big.Rat).Sub(motionM.omegaSq, new(big.Rat).Mul(axial, axial))
+	tilt, ok := ratSqrtUpRat(tiltSq)
+	if !ok {
+		return rollingCoefficients{}, false
+	}
+	out.quadratic = ratAdd(out.quadratic, ratMul(support.radius, tiltSq))
+	out.lateral = ratMul(big.NewRat(3, 2), support.radius, tilt)
+	return out, true
+}
+
+// at is the band depth and the lateral drift at t seconds.
+func (c rollingCoefficients) at(t *big.Rat) (*big.Rat, *big.Rat) {
+	return ratAdd(ratMul(c.rate, t), ratMul(c.quadratic, t, t)), ratMul(c.lateral, t)
+}
+
+// band proves the rolling track. Each end's foot must stay inside S's face:
+// the end centers' ideal path boxes over [0, f], less S's translation and
+// grown by the depth and the lateral drift, hold every rim point near the
+// plane, and their union holds the ruling between the ends. Projected along
+// the normal's axis, the union must meet no bounding edge of the face and
+// have a corner inside one of its triangles.
+func (r *rollingPairSweep) band(ctx context.Context, first *SweepSample) (*SweepContactTrack, bool, error) {
+	budget := newWorkBudget(ctx)
+	support, ok, err := r.support(budget.step)
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	coefficients, ok := r.coefficients(support)
+	if !ok {
+		return nil, false, nil
+	}
+	duration := r.paths[r.m].path.duration
+	holds := func(f *big.Rat) (bool, error) {
+		if err := budget.step(); err != nil {
+			return false, err
+		}
+		depth, lateral := coefficients.at(new(big.Rat).Mul(f, duration))
+		return r.footInside(support, f, ratAdd(depth, lateral)), nil
+	}
+	end, ok, err := sweepGridHorizon(r.resolution, duration, holds)
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	depth, _ := coefficients.at(new(big.Rat).Mul(end, duration))
+	return r.track(first, support, coefficients, end, depth)
+}
+
+func (r *rollingPairSweep) footInside(support rollingSupport, f, growth *big.Rat) bool {
+	S := &r.paths[r.s]
+	spans := r.paths[r.m].cornerSpan(new(big.Rat), f)
+	axes := [2]int{(support.axis + 1) % 3, (support.axis + 2) % 3}
+	var lo, hi [2]*big.Rat
+	for slot, axis := range axes {
+		low, high := spanHull(spans, axis)
+		shift := new(big.Rat).Mul(S.path.delta[axis].Rat(), f)
+		shiftLo, shiftHi := ratMin(shift, new(big.Rat)), ratMax(shift, new(big.Rat))
+		lo[slot] = ratAdd(low, new(big.Rat).Neg(shiftHi), new(big.Rat).Neg(growth))
+		hi[slot] = ratAdd(high, new(big.Rat).Neg(shiftLo), growth)
+	}
+	inside := false
+	for _, tri := range support.face.tris {
+		if planarPointInTriangle(lo, tri) {
+			inside = true
+			break
+		}
+	}
+	if !inside {
+		return false
+	}
+	for _, edge := range support.face.edges {
+		if planarSegmentMeetsBox(edge[0], edge[1], lo, hi) {
+			return false
+		}
+	}
+	return true
+}
+
+// track builds the public track. The start manifold ContactPair published
+// must name the same two faces, and the track's own start manifold must
+// publish.
+func (r *rollingPairSweep) track(first *SweepSample, support rollingSupport,
+	coefficients rollingCoefficients, end, depth *big.Rat) (*SweepContactTrack, bool, error) {
+	S, M := &r.paths[r.s], &r.paths[r.m]
+	faces := S.body.Faces()
+	if support.face.id < 0 || support.face.id >= len(faces) {
+		return nil, false, nil
+	}
+	featureS := ContactFeature{Face: faces[support.face.id]}
+	featureM := ContactFeature{Face: r.wall}
+	if first.Ideal.Manifold != nil {
+		for _, point := range first.Ideal.Manifold.Points {
+			onM, onS := point.FeatureB, point.FeatureA
+			if r.m == 0 {
+				onM, onS = point.FeatureA, point.FeatureB
+			}
+			if onM.Face != featureM.Face || onS.Face != featureS.Face {
+				return nil, false, nil
+			}
+		}
+	}
+	direction := support.normal
+	if r.m == 0 {
+		direction = proofarith.DvSub(proofarith.DyV3{}, direction)
+	}
+	normal, angle, ok := planarNormal(direction)
+	if !ok || angle.Base() > r.req.NormalResolution.Base() {
+		return nil, false, nil
+	}
+	// The ends publish in the exact coordinate order of their start rims, as
+	// ContactPair publishes the ruling; a rigid motion keeps that pairing.
+	ends := r.sourceEnds
+	starts := [2]proofarith.DyV3{M.startPoints[0], M.startPoints[1]}
+	if ordered := orderedRulingEnds(starts); !sameDyV3(ordered[0], starts[0]) {
+		ends = [2]proofarith.DyV3{ends[1], ends[0]}
+	}
+	proof := &rollingTrackProof{paths: r.paths, m: r.m, s: r.s, ends: ends, radius: support.radius,
+		normal: support.normal, origin: support.origin, featureM: featureM, featureS: featureS,
+		direction: normal, angle: angle, lateral: coefficients.lateral, rate: coefficients.rate,
+		quadratic: coefficients.quadratic, depth: depth, depthUp: ratFloatUp(depth)}
+	if !finiteMeasurementValues(proof.depthUp) {
+		return nil, false, nil
+	}
+	if depth.Sign() > 0 || end.Cmp(big.NewRat(1, 1)) < 0 {
+		value := ratFloatNearest(depth)
+		bound := proofarith.RationalFloatError(depth, value)
+		proof.band = &Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
+			Exactness: exactnessFromBound(bound)}
+	}
+	track := &SweepContactTrack{start: new(big.Rat), end: new(big.Rat).Set(end), duration: M.path.duration,
+		request: r.req.ContactRequest, normal: normal, rolling: proof, pointCount: len(ends)}
+	track.features[r.m], track.features[r.s] = featureM, featureS
+	// A track whose start manifold is refused is not published; the refusal
+	// is the answer.
+	if _, refused := track.ManifoldAt(units.Scalar(0)); refused != nil {
+		return nil, false, nil //nolint:nilerr // a refused manifold withholds the track, it is no failure
+	}
+	return track, true, nil
+}
+
+// depthThrough is the band depth over [0, f]: both coefficients' terms are
+// nondecreasing in time, so their value at f bounds every earlier instant.
+func (p *rollingTrackProof) depthThrough(f *big.Rat) *big.Rat {
+	t := new(big.Rat).Mul(f, p.paths[p.m].path.duration)
+	depth, _ := rollingCoefficients{rate: p.rate, quadratic: p.quadratic, lateral: p.lateral}.at(t)
+	return depth
+}
+
+// rounded stages both bodies through their float poses at f and returns each
+// pose with its deviation and S's staged vertices. S must keep its start
+// basis, so its rounded plane keeps its normal.
+func (p *rollingTrackProof) rounded(f *big.Rat) ([2]r3.Transform, [2]*big.Rat, []proofarith.DyV3, bool) {
+	var poses [2]r3.Transform
+	var eta [2]*big.Rat
+	var vertsS []proofarith.DyV3
+	for i := range p.paths {
+		pose, err := p.paths[i].poseAt(f)
+		if err != nil {
+			return poses, eta, nil, false
+		}
+		if i == p.s && pose.Basis() != p.paths[i].path.from.Basis() {
+			return poses, eta, nil, false
+		}
+		points, bound, ok, _ := p.paths[i].pointDeviation(pose, f, noSweepPoll)
+		if !ok {
+			return poses, eta, nil, false
+		}
+		if i == p.s {
+			vertsS = points
+		}
+		poses[i], eta[i] = pose, proofarith.FloatRat(bound)
+	}
+	return poses, eta, vertsS, true
+}
+
+// manifoldAt publishes the two ruling ends at an exact fraction. Each end
+// center is staged through M's rounded pose and lowered by r along the
+// normal; the true rim point lies within M's pose deviation plus the lateral
+// drift of it, and its foot on S's rounded plane within S's deviation more.
+// The separation is the band's two-sided bound.
+func (p *rollingTrackProof) manifoldAt(f *big.Rat, req ContactRequest) (*ContactManifold, error) {
+	poses, eta, vertsS, ok := p.rounded(f)
+	if !ok {
+		return nil, fmt.Errorf("%w: rolling contact track pose has no finite bound", ErrUnsupported)
+	}
+	resolution, okResolution := exactBaseValue(req.PointResolution)
+	if !okResolution {
+		return nil, fmt.Errorf("%w: rolling contact track resolution is invalid", ErrUnsupported)
+	}
+	n := ratOfDyV3(p.normal)
+	q := ratOfDyV3(vertsS[p.origin])
+	lateral := ratMul(p.lateral, f, p.paths[p.m].path.duration)
+	separation := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(p.depthUp),
+		Exactness: exactnessFromBound(p.depthUp)}
+	points := make([]ContactPoint, 0, len(p.ends))
+	for _, end := range p.ends {
+		center := ratOfDyV3(exactContactTransform(poses[p.m], end))
+		var rim, foot [3]*big.Rat
+		for k := range 3 {
+			rim[k] = new(big.Rat).Sub(center[k], new(big.Rat).Mul(p.radius, n[k]))
+		}
+		height := ratDot3(n, ratSub3(ratVec(rim), q))
+		for k := range 3 {
+			foot[k] = new(big.Rat).Sub(rim[k], new(big.Rat).Mul(height, n[k]))
+		}
+		onM, okM := planarTrackPoint(rim, ratAdd(eta[p.m], lateral), resolution)
+		onS, okS := planarTrackPoint(foot, ratAdd(eta[p.m], eta[p.s], lateral), resolution)
+		if !okM || !okS {
+			return nil, fmt.Errorf("%w: rolling contact track point exceeds point resolution", ErrUnsupported)
+		}
+		point := ContactPoint{Normal: p.direction, NormalAngle: p.angle, Separation: separation}
+		if p.m == 0 {
+			point.OnA, point.OnB = onM, onS
+			point.FeatureA, point.FeatureB = p.featureM, p.featureS
+		} else {
+			point.OnA, point.OnB = onS, onM
+			point.FeatureA, point.FeatureB = p.featureS, p.featureM
+		}
+		point.FaceA, point.FaceB = point.FeatureA.Face, point.FeatureB.Face
+		points = append(points, point)
+	}
+	return &ContactManifold{Points: points}, nil
+}
+
+// certifiedRollingPosesAtFraction replays a rolling track without rerunning
+// the pair relation. Both rounded poses must fit PointResolution of their
+// ideal poses, and each rounded end center's height less r above S's rounded
+// plane must stay within the depth widened by both deviations: the ideal one
+// lies within the depth, and the deviations bound the move to the rounded
+// one. It can only refuse; the producer's certificate covers the ideal path.
+func (r *SweepReport) certifiedRollingPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, error) {
+	p := r.replay.track.rolling
+	poses, eta, vertsS, ok := p.rounded(f)
+	if !ok {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rolling replay pose has no finite error bound", ErrUnsupported)
+	}
+	deviation := new(big.Rat).Add(eta[0], eta[1])
+	resolution, ok := exactBaseValue(r.replay.request.PointResolution)
+	if !ok || deviation.Cmp(resolution) > 0 {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rolling replay pose exceeds point resolution", ErrUnsupported)
+	}
+	limit := new(big.Rat).Add(p.depth, deviation)
+	q := vertsS[p.origin]
+	for _, end := range p.ends {
+		height := proofarith.DvDot(p.normal, proofarith.DvSub(exactContactTransform(poses[p.m], end), q)).Rat()
+		height.Sub(height, p.radius)
+		if height.Abs(height).Cmp(limit) > 0 {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rolling replay pose leaves the certified band", ErrUnsupported)
+		}
+	}
+	return poses[0], poses[1], nil
+}

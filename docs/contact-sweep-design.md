@@ -78,8 +78,11 @@ cannot continue a touch rerun on that path. Its reports replay rounded poses
 from recorded gap bounds and pose deviations. A body whose held mesh carries
 a positive displacement takes the same run with §10.4's band: an impact
 brackets onto a `ContactBand` sample, a band start never departs, and its
-track's depth widens by twice the displacement. Other unequal spins, rotating
-paths, and payloads remain design contracts.
+track's depth widens by twice the displacement. A full source cylinder whose
+ruling touches a face of an exact planar body continues, under
+`ContinueCertifiedTouch` and a spinning drift, with §10.4's rolling band
+track over the ruling's two ends. Other unequal spins, rotating paths, and
+payloads remain design contracts.
 An extruded circular source prism or a full revolve of an axis-incident
 rectangular half-profile can certify a strictly separated axial affine path
 against a containing source-box face. The sweep uses the source-derived outer

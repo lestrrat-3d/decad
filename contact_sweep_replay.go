@@ -485,6 +485,9 @@ func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 	if r.replay.planar != nil {
 		return r.certifiedPlanarPosesAtFraction(f)
 	}
+	if r.replay.track != nil && r.replay.track.rolling != nil {
+		return r.certifiedRollingPosesAtFraction(f)
+	}
 	paths := r.replay.rotation
 	var pose [2]r3.Transform
 	var box [2]orientedSourceBox
@@ -706,7 +709,7 @@ func (p *sweepReplayProof) sphereRelationCovered(f, ideal, observed, resolution 
 }
 
 func (r *SweepReport) replayFractionCovered(f *big.Rat) bool {
-	if r.replay.track != nil && r.replay.track.planar != nil {
+	if r.replay.track != nil && (r.replay.track.planar != nil || r.replay.track.rolling != nil) {
 		return f.Sign() >= 0 && f.Cmp(r.replay.track.end) <= 0
 	}
 	if r.replay.rotation != nil && r.replay.outcome == SweepImpactBracket {

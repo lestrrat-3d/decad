@@ -40,7 +40,7 @@ type planarMotion struct {
 }
 
 func planarMotionOf(p *rotationalSweepPath) (planarMotion, bool) {
-	if p.path.screw != nil || len(p.startPoints) == 0 || p.solid == nil {
+	if p.path.screw != nil || len(p.startPoints) == 0 {
 		return planarMotion{}, false
 	}
 	m := planarMotion{omega: ratVec{new(big.Rat), new(big.Rat), new(big.Rat)},
@@ -258,12 +258,19 @@ func (s *planarSupport) clearAt(t, k *big.Rat) bool {
 // levels so every fraction is a float. holds must be monotone: true at a
 // fraction implies true at every smaller one.
 func (r *rotationalPairSweep) gridHorizon(holds func(f *big.Rat) (bool, error)) (*big.Rat, bool, error) {
+	return sweepGridHorizon(r.resolution, r.a.path.duration, holds)
+}
+
+// sweepGridHorizon is gridHorizon for a sweep of the given time resolution
+// and duration.
+func sweepGridHorizon(resolution, duration *big.Rat,
+	holds func(f *big.Rat) (bool, error)) (*big.Rat, bool, error) {
 	ok, err := holds(big.NewRat(1, 1))
 	if err != nil || ok {
 		return big.NewRat(1, 1), ok, err
 	}
 	depth := uint(0)
-	for depth < 52 && new(big.Rat).Mul(r.resolution, new(big.Rat).SetInt64(int64(1)<<depth)).Cmp(r.a.path.duration) < 0 {
+	for depth < 52 && new(big.Rat).Mul(resolution, new(big.Rat).SetInt64(int64(1)<<depth)).Cmp(duration) < 0 {
 		depth++
 	}
 	low, high := int64(0), int64(1)<<depth
