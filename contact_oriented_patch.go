@@ -115,7 +115,14 @@ func publishOrientedBoxPatch(report *ContactReport, a, b orientedSourceBox) {
 		aSide = 1
 	}
 	bSide := 0
-	if proofarith.DvDot(b.edge[bAxis[contactAxis]], dual[contactAxis]).Sign()*sign > 0 {
+	// Copy the contact axis into a named local before the call below, rather
+	// than reading dual[contactAxis] on both sides of it: Go's compiler
+	// (CSE of OpLocalAddr, Go 1.24 through 1.27) reuses the element pointer
+	// it took for the first use after the call, while dual is no longer live
+	// and is not a stack object, so the collector frees the *big.Int
+	// mantissas that only dual reached.
+	normalAxis := dual[contactAxis]
+	if proofarith.DvDot(b.edge[bAxis[contactAxis]], normalAxis).Sign()*sign > 0 {
 		bSide = 0
 	} else {
 		bSide = 1
@@ -125,7 +132,6 @@ func publishOrientedBoxPatch(report *ContactReport, a, b orientedSourceBox) {
 		report.Reason = ContactNoNormalProof
 		return
 	}
-	normalAxis := dual[contactAxis]
 	if sign < 0 {
 		for k := range 3 {
 			normalAxis[k] = proofarith.DyNeg(normalAxis[k])
