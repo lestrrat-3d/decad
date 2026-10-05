@@ -45,6 +45,10 @@ the complete step; an off-center patch requiring spin remains `Undecided`.
 Two equal-mass source boxes with a half-width offset face patch can rebound
 as a frictionless dynamic pair with equal nonzero Y spin when the rotating
 sweep proves departure.
+A fixed source box and a dynamic half-offset source box can also rebound with
+Y spin when supplied mass places the dynamic center beyond the patch edge.
+Two edge vertices receive the impulse, and a rotating sweep proves the
+separating remainder.
 Separated source boxes can rotate through a certified clear drift and advance
 again from the returned spinning state. A Z-axis torque-driven box can also
 rebound from a wide fixed horizontal box face and continue spinning from the

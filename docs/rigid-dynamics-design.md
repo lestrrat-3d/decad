@@ -144,7 +144,14 @@ The floor stays at identity placement. The box can start from any pure
 translation whose real four-corner track passes the same bounds, including
 the endpoint of a previous step. Its mass center is translated with exact
 rational coordinate sums for the lever and torque certificates.
-Off-center fixed/dynamic impulses that require spin return `Undecided`.
+An initial horizontal fixed/dynamic source-box patch can resolve a frictionless
+off-center impact when supplied mass puts the dynamic center beyond one patch
+edge. Two symmetric vertices on that edge receive the normal impulse; the
+other vertices must separate at or above the restitution target. The bounded
+linear and angular response, event conservation, rotating departure sweep,
+and interior trace replay must pass. A centered mass at the patch edge, a
+mass or inertia interval exceeding the configured residual, and a remainder
+without certified departure return `Undecided`.
 An initial two-dynamic face impact can publish bounded spin when its rotational
 departure sweep certifies the full remainder. The step reports bounded
 kinetic energy, linear momentum, and angular momentum for dynamic bodies
@@ -556,6 +563,18 @@ and the rotational remainder proves departure.
 It publishes neither a completed state nor an event when the solved outgoing
 spin lacks a certified rotational remainder. The corresponding `World.Step`
 returns `Undecided` with `Next == nil`.
+
+The fixed/dynamic off-center solver accepts a horizontal four-point patch,
+fixed body A, dynamic body B, zero incoming spin and tangent velocity, zero
+friction, positive restitution, and identity poses. The dynamic mass center
+must lie strictly beyond the patch's positive-X edge. Two vertices on that
+edge must be symmetric about the mass center's Y coordinate. The solver splits
+one normal impulse equally between them, bounds the complete supplied mass
+and inertia response, checks the restitution target at both active vertices,
+and checks nonclosing speed at the other two. The event publishes all four
+point impulses, including zero at inactive vertices. The full
+`RigidDriftSegment` and fixed `PoseSegment` must prove one-sided departure and
+a separated fraction-one sample before the step publishes an endpoint.
 
 For an admitted spinning response, the rotational `RigidDriftSegment` sweep
 must certify departure and every later interval through the requested end.
