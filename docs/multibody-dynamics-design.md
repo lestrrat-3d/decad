@@ -14,7 +14,7 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 3, 4, 6, 7, 8, 10, 11, 12, 13, 14, 16, 17, 18 and 19 have shipped, and so
+Current state: §13 PRs 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18 and 19 have shipped, and so
 has the root part of PR 20. `dynamics.World` holds any number of bodies, the canonical pair table and
 per-pair material of §3.1, and the slice-backed `State` of §3.2. Its step resolves two bodies, or three bodies with one, two or three dynamic bodies and
 every other body fixed, through the closed-form responses `docs/rigid-dynamics-design.md` lists. A world of four or more
@@ -33,7 +33,8 @@ point (§6.2); `MaxPairSweeps` bounds the rest. The multi-event
 `Trace` of §3.4 and §7.1, the `Timeline` of §7.2 and §12's typed diagnostics ship. `Document.SweptBox`
 (§4.2) is public; the cylinder and bounded-faceted clear sweeps certify with it, and the scheduled step's
 broad phase reads it. A source cylinder that lands on its end disk rests on contact-sweep §4.6's persistent
-disk track.
+disk track. The gallery bridge of §11 films a `Timeline` through kinetograph's driven node, and §2's Phase 1
+scene, `stack-and-drop`, runs its full `2 s` in `dynamics/scene_test.go` and `_gallery`.
 `docs/collision-v1-support.md` is the inventory of the shape pairs, responses and refusals that ship, and
 this document does not restate it. The two- and three-body steps query their pairs one by one with no broad
 phase, and their `Trace` holds fixed two- and three-body slots. The exact arithmetic every certificate below
@@ -112,17 +113,28 @@ gallery renders it with `go run . dynamics -scene <name>`.
 | 2 | Any exact planar solid (zero boundary displacement) under any proper rotation; convex dynamic bodies, any planar fixed body | `tumble` | Face, edge and vertex impacts under rotation; a tumbling body comes to rest through band tracks. |
 | 3 | Every remaining solid payload: curved source families, positive-displacement bodies, lofts, sweeps, cups, cap blends, stitched solids | `parts-bin` | Mass for every payload; banded contact for positive-displacement bodies; curved rolling contact. |
 
-**Phase 1 — `stack-and-drop`.** A fixed source-box floor `200×200×10 mm`, top at `z = 0`. Six `20 mm`
+**Phase 1 — `stack-and-drop`.** A fixed source-box floor with its top at `z = 0`. Six `20 mm`
 source boxes in a `3-2-1` pyramid: three on the floor at `x = 0, 25, 50`, two bridging the gaps on top,
 one on the top row. Three radius-`8 mm` source spheres with centers released at `z = 60, 90, 120 mm`
-over `x = 120`, offset in `y` so the second lands on the first and the third on both. One source cylinder (`Ø20 × 30 mm`, axis along `z`)
-released axially at `z = 80 mm` over `x = 160`. Gravity `-9810 mm/s²`, box restitution `0.3`, sphere
-restitution `0.6`, friction `0.4` everywhere, density `0.001 kg/mm³`, `dt = 1/240 s`, `2 s` of motion,
-rendered at `60 fps`. Exit criterion: `Timeline.End()` equals `2 s` (no `Undecided`); the six pyramid
-boxes end within `PenetrationResidual` of their start poses; every step's conservation gate passes; the
-bridging boxes' two half-face patches each carry their share of the support impulse; the first sphere's
-first floor impact occurs at the free-fall time `sqrt(2·(60−8)/9810) s` within `TimeResolution`; the clip
-renders `120` frames.
+over `x = 120`, offset in `y` so the second lands on the first and the third on them (`y = 10, 14, 6`).
+One source cylinder (`Ø20 × 30 mm`, axis along `z`) released axially with its lower disk at `z = 80 mm`
+over `(160, 10)`. The floor is `360×2000×10 mm`, spanning `x = −60…300`, `y = −990…1010`: the glancing
+sphere impacts leave the spheres rolling along `y` at up to about `410 mm/s` (no rolling resistance is
+modeled), up to `766 mm` from their drop line by `2 s`, and the sphere-box contact needs each sphere's
+contact inside the floor's top face. Gravity `-9810 mm/s²`, box and floor
+restitution `0.3`, sphere restitution `0.6`, so a pair takes the smaller (rigid-dynamics "World and State"):
+`0.3` against the floor and the boxes, `0.6` between spheres. The cylinder takes the boxes' material.
+Friction `0.4` everywhere, density `0.001 kg/mm³`, `dt = 1/256 s` so every kick `−9810/256 mm/s` is exact,
+`ImpactSpeed = 64 mm/s`, above that kick, so a body resting under gravity targets zero speed each step and a
+bounce sequence ends, `2 s` of motion (512 steps), rendered at `60 fps`. Exit criterion: `Timeline.End()`
+equals `2 s` (no `Undecided`); the six pyramid boxes end within `PenetrationResidual` of their start poses;
+every step's conservation readings balance (the linear momentum change equals the gravity and contact
+impulses within the readings' bounds and the islands' linear-law limits); the bridging boxes' two half-face
+patches each carry a positive share of the support impulse, summing to the top box's weight; the first
+sphere's first floor impact occurs at the free-fall time of the step's discrete law (one exact kick per
+step, then drift) and at most `TimeResolution` after it; the cylinder ends at rest on its disk; each sphere
+ends rolling on the floor with its contact-point speed within `VelocityResidual` of zero; the clip
+renders `120` frames, each showing the certified poses at its time.
 
 **Phase 2 — `tumble`.** The floor plus a fixed tray built as a zero-bound Boolean `Cut`: an outer source
 box minus an inner source box that opens its top, leaving a floor and four walls inside `160×160 mm`. A
@@ -1465,7 +1477,6 @@ the gallery adapts a `dynamics.Timeline` to it.
 type timelineTrack struct {
     timeline *dynamics.Timeline
     body     *decad.Body
-    base     r3.Transform // the body's committed placement; the part frame is the body as modeled
 }
 
 func (t timelineTrack) At(d time.Duration) (r3.Transform, error)
@@ -1474,7 +1485,9 @@ func (t timelineTrack) At(d time.Duration) (r3.Transform, error)
 `At` converts the frame time to `units.Seconds(float64(d) / 1e9)` — this rounds the TIME LABEL by at
 most one ulp of a second; the pose returned is the certified pose at the rounded time, which is what the
 frame shows, so no geometric claim moves — then calls `Timeline.Sample` and returns the sampled
-`BodyState.Pose` composed onto the body's placement. A sample beyond `Timeline.End()` (§7.2), or one the
+`BodyState.Pose` as it is: a dynamics pose maps the body as modeled, its placement included, to world, and
+that is the frame of the part kinetograph tessellates, so a driven node directly under the root needs no
+other transform. A sample beyond `Timeline.End()` (§7.2), or one the
 replay refuses, returns the error; kinetograph fails the frame, and the gallery command fails with the
 `StepDiagnostic` of the stopped step printed. The gallery never freezes the last certified pose and never
 extrapolates. kinetograph's half-open frame times keep every frame strictly before the clip length, so a
@@ -1483,11 +1496,14 @@ mutable state and `Timeline.Sample` is safe for concurrent calls (§7.2), so `At
 under `Sequence`'s workers.
 
 `_gallery/dynamics_clip.go` holds the scene builders (`stackAndDropScene`, `tumbleScene`,
-`partsBinScene`), each returning the document, the `WorldConfig`, the start `State`, the per-step
-`StepInput`, `dt` and the clip length. `main.go` gains `go run . dynamics -scene <name> [-out -fps -width
--height -workers -smoke]`, which advances the timeline to the clip length, builds one kinetograph scene
-with a `Driven` node per body and the still camera and lights of `scene.go`, and renders through
-`render.New` as `clip.go` does. The gallery module stays the only module that imports kinetograph.
+`partsBinScene`), each returning the document, the `WorldConfig`, the world and its start `State`, the
+per-step `StepInput`, `dt`, the clip length, the parts' colors and a still camera that frames the scene.
+`main.go` gains `go run . dynamics -scene <name> [-out -fps -width -height -workers -smoke]`, which advances
+the timeline to the clip length, builds one kinetograph scene with a `Driven` node per body, the scene's
+camera and the directional lights of `scene.go`, and renders through `render.New` as `clip.go` does. When the
+timeline stops early, the frames before its certified end render and the command fails at the first frame
+past it, naming the stopped step's diagnostics. `-smoke` advances the whole timeline and renders the first
+frame alone at `160×90`. The gallery module stays the only module that imports kinetograph.
 
 ### 11.3 Scene tests
 
@@ -1681,6 +1697,10 @@ lines below do not repeat it.
   `_gallery/go.mod` (kinetograph bump), new `dynamics/scene_test.go`.
 - Test: `_gallery/dynamics_clip_test.go` and `dynamics/scene_test.go` assert the Phase 1 exit criteria.
 - Depends on: PRs 6, 7, 8 and the upstream `Driven` node.
+- Shipped, against kinetograph's `Driven` node (its decision D12). The scene's steps are `1/256 s` and its
+  `ImpactSpeed` `64 mm/s`, as the pyramid fixtures use (§2). Both scene tests replay all 512 steps; the
+  gallery's also checks every frame's poses against `Timeline.Sample`, evaluates the clip from concurrent
+  goroutines, renders the first frame, and fails a frame past a shortened timeline's certified end.
 
 ### PR 10 (Phase 2) — exact planar pair relation and convexity
 

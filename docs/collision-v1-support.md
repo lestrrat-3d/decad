@@ -256,6 +256,10 @@ closes within one grid step of the near edge's touch. A box therefore does
 not yet come to rest flat after tipping over.
 [Band rest tests](../dynamics/contact_band_test.go) rest a body on a
 displaced one within `PenetrationResidual` and stop below its band.
+The [stack-and-drop scene test](../dynamics/scene_test.go) runs 2 s of a
+box pyramid resting under friction while three spheres land on the floor and
+on each other and roll away, and a cylinder lands on its end disk; the `_gallery` module
+renders the same timeline frame by frame.
 
 Two-body worlds admit a fixed or kinematic body against a dynamic body, or
 two dynamic bodies. An affine kinematic box driver and selected cardinal

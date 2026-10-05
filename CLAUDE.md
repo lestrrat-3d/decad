@@ -105,7 +105,7 @@ each owns.
     - `github.com/lestrrat-3d/solidlens` — pure-Go mesh rasterizer; README
       images.
     - `github.com/lestrrat-3d/kinetograph` — animates decad bodies; landing
-      clip (`go run . clip`).
+      clip (`go run . clip`) and dynamics scenes (`go run . dynamics`).
 - **Tooling lives in its own nested module.** `_gallery/` renders the README
   images and landing clip, and `_shardgen/` packs the race shards. Both carry
   their own `go.mod` and an `_` prefix, so the root module, its linter and
