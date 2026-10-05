@@ -471,7 +471,8 @@ the near-zero gate on its own terms (§1).
 
 Every one of these certificates is an EXACT material-side claim about where
 the two boundaries lie, so it runs only when BOTH bodies' `bodyGeom.delta`
-(§2) are exactly zero. A body whose carriers are displaced — placed,
+(§2) are exactly zero, or for a ruling certificate their carrier part
+(below). A body whose carriers are displaced — placed,
 swept off a non-axis-aligned sketch plane, or stitched from a bounded
 topology — cannot honestly certify that its carrier plane IS the boundary it
 would be certifying against, and a displaced certificate has nothing to widen:
@@ -479,6 +480,26 @@ the blessed answer here is an `Exact` zero, and there is no such thing as an
 approximate one (§1). Such a pair therefore reads undecided — `Suspect`, no
 row — rather than a zero the widening cannot stand behind. This is a
 refusal, not a narrower answer.
+
+The kernel certifies the coplanar plane pair and the two ruling families
+today; the sphere and cone contacts stay undecided. A ruling certificate
+proves a separating plane whose exact unit normal is a signed coordinate
+axis, the only exactly unit direction with dyadic components. Both bodies'
+complete extents along it (`payloadExtent`) must lie on their own sides. For
+`Plane` × `Cylinder`, the axis is exactly parallel to the plane at exactly
+the radius on the plane's outward side, and the whole tangent ruling lies
+inside the plane trim. For `Cylinder` × `Cylinder`, the axes are exactly
+parallel, their offset is exactly the radius sum along the normal, and the
+two axial windows overlap with positive length. Each tangent azimuth must lie
+inside its cylinder's angular trim with margin, so a ruling on a trim edge
+stays undecided. The kernel keeps the two faces, the separating plane and the
+exact ruling ends for the contact manifold
+(`docs/contact-geometry-design.md` §4.5). A ruling certificate reads only
+carriers and exact payload extents, so its gate is each body's carrier
+displacement rather than the whole `bodyGeom.delta`: a full revolve's
+end-angle displacement places only seams and witnesses on its complete
+surface of revolution and moves no carrier, so it does not refuse the
+certificate. Every other displacement term still does.
 
 ## 7. Feeding the report
 

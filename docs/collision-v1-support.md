@@ -19,6 +19,7 @@ shows a box impact and computed rebound.
 | Two source spheres | Center-line point, affine center paths, centered rotating departure | Rebound, rest, graze, and admitted planar Coulomb impact |
 | Full source cylinder and source box | Axial disk in a wide face; vertical extruded sidewall against a broad face | Centered frictionless rebound |
 | Verified faceted Boolean and source-box floor | One exact rectangular lower face, vertical affine path, contained footprint | Frictionless rebound or rest |
+| Full source cylinder sidewall, against a planar face or a parallel full source cylinder | Two-end ruling line at identity query poses only | None yet |
 
 The source-box path starts from rectangular source prisms. Signed-axis
 face patches cover affine approach, persistent contact, and the first edge
@@ -63,6 +64,16 @@ face under signed-axis, zero-spin translation. A vertical circular
 The solver admits centered frictionless rebound with supplied or
 density-derived mass. [Cylinder impact tests](../dynamics/cylinder_sidewall_impact_test.go)
 pass real contact and sweep reports through the step and trace.
+
+A full source cylinder's sidewall, including a revolved cylinder on its
+side, uses the clearance kernel's ruling certificate at identity query poses.
+Its carriers must be exact: an unplaced full revolve or extruded circle,
+sketched on an XY plane. It must touch a planar face along its whole tangent
+ruling, or touch a parallel full source cylinder with positive axial overlap.
+The manifold publishes the ruling's two exact ends with the faces'
+`Face.NormalAt` normals. No sweep or step consumes this contact yet. The
+[ruling manifold tests](../contact_analytic_manifold_test.go) check both
+contacts and their refusals.
 
 The faceted floor path requires one complete rectangular lower face with
 an exact source plane and a live Face identity. The proof admits a zero-bound
@@ -134,7 +145,7 @@ sliding impulses, and unproved pair paths return `dynamics.Undecided`.
 
 A generic positive-bound faceted body can prove strict clearance above a
 floor without proving a touching support face. Sphere contacts at box edges,
-tilted cylinders, revolved-cylinder sidewalls, and other rotating contacts
-also stop at their first missing proof. The detailed gates and algorithms are
+tilted cylinders, posed or swept cylinders on their sides, and other rotating
+contacts also stop at their first missing proof. The detailed gates and algorithms are
 in the [collision design](collision-dynamics-design.md) and its linked
 contact, sweep, mass, and rigid-dynamics designs.

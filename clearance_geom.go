@@ -901,6 +901,10 @@ type bodyGeom struct {
 	shellWit []r3.Vec // one witness per shell, void shells included (§2)
 	supports []r3.Vec // support points for the pair-D reading (§7)
 	delta    float64
+	// carrierDelta is the part of delta that can move a carrier the ruling
+	// certificates read. It equals delta except on a full revolve, whose
+	// angular term charges end angles that no carrier of a full turn reads.
+	carrierDelta float64
 }
 
 // perpTo returns a deterministic unit vector perpendicular to a unit vector.
@@ -977,6 +981,7 @@ func newBodyGeomBudget(budget *workBudget, b *Body) (*bodyGeom, bool, error) {
 		}
 		if ok, err = g.addStitchFaces(budget, b, pl); ok && err == nil {
 			g.delta = maxVertexBound
+			g.carrierDelta = maxVertexBound
 		}
 	default:
 		return nil, false, nil
@@ -1244,6 +1249,7 @@ func (g *bodyGeom) addPrismFaces(budget *workBudget, pp prismPayload) (bool, err
 	// prism, which is what keeps an ordinary extrude's Clearance rows Exact.
 	pointTerm := frameAndPlacementRoundAllow(pp.frame, pp.xform, math.Max(maxCoordUpper, math.Max(math.Abs(pp.z0), math.Abs(pp.z1))))
 	g.delta = absSumUpper(pointTerm, pp.axialDelta(), bodyFaceTiltDelta(g.faces, pp.frame, pp.xform))
+	g.carrierDelta = g.delta
 	return true, nil
 }
 
@@ -1465,7 +1471,15 @@ func (g *bodyGeom) addRevolveFaces(budget *workBudget, rp revolvePayload) (bool,
 	// ordinary revolve's Clearance rows Exact.
 	pointTerm := revolveVertexFrameLiftAllow(rp, maxAxisRadiusUpper)
 	angularTerm := productUpper(maxAxisRadiusUpper, rp.angularDelta())
-	g.delta = absSumUpper(pointTerm, angularTerm, bodyFaceTiltDelta(g.faces, rp.frame, rp.xform))
+	tiltTerm := bodyFaceTiltDelta(g.faces, rp.frame, rp.xform)
+	g.delta = absSumUpper(pointTerm, angularTerm, tiltTerm)
+	g.carrierDelta = g.delta
+	if rp.full {
+		// A full turn builds no cap faces and gives every carrier the full
+		// angular window, so the end angles the angular term charges place
+		// only seams and witnesses on the complete surface of revolution.
+		g.carrierDelta = absSumUpper(pointTerm, tiltTerm)
+	}
 	return true, nil
 }
 

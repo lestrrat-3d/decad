@@ -1083,6 +1083,8 @@
 4	0.00	TestContactPairAnalyticPrismOverlap
 4	0.00	TestContactPairAnalyticPrismTouch
 4	0.01	TestContactPairBoundedFacetedFloorStrictClear
+4	0.00	TestContactPairCylinderPairRuling
+4	0.00	TestContactPairCylinderRulingOnFloor
 4	0.01	TestContactPairFacetedFloorRefusesMultipleSupportFaces
 4	0.01	TestContactPairFacetedFloorRefusesUnprovedPatches
 4	0.00	TestContactPairOrientedAxisFaceWitness
@@ -1093,6 +1095,8 @@
 4	0.00	TestContactPairRevolvedCylinderAxialDiskFace
 4	0.00	TestContactPairRevolvedCylinderRefusesUnprovedDiskCorridor
 4	0.00	TestContactPairRotatedBoxContainedHorizontalFace
+4	0.00	TestContactPairRulingRefusals
+4	0.00	TestContactPairRulingResolutionGates
 4	0.00	TestContactPairShallowOverlapAndRefusals
 4	0.00	TestContactPairSignedAxisPose
 4	0.00	TestContactPairSourceBoxes
