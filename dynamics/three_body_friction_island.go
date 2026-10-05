@@ -30,7 +30,7 @@ func (w *World) stepThreeFrictionIsland(ctx context.Context, from, kicked State,
 	if w.three.dynamicCount != 1 || w.step.MaxEvents <= 2 {
 		return w.threeUndecided(-1, "friction island needs one sphere and room for two events"), nil
 	}
-	pre, _ := kicked.Body(w.three.parts[w.three.dynamic].Body)
+	pre, _ := kicked.Body(w.bodies[w.three.dynamic].definition.Body)
 	if pre.Pose.Basis() != r3.Identity().Basis() || !zeroAngularVelocity(pre.AngularVelocity) ||
 		pre.LinearVelocity.X.Base() >= -w.step.VelocityResidual.Base() ||
 		pre.LinearVelocity.Z.Base() >= -w.step.VelocityResidual.Base() ||
@@ -47,13 +47,13 @@ func (w *World) stepThreeFrictionIsland(ctx context.Context, from, kicked State,
 		if sweep.Outcome != decad.SweepInitiallyTouching || sweep.Event == nil ||
 			sweep.Event.Relation != decad.ContactTouching || sweep.Event.Manifold == nil ||
 			len(sweep.Event.Manifold.Points) != 1 || sweep.Event.At.Fraction.Base() != 0 ||
-			pair.restitution.Base() != 0 || pair.friction.lower == nil ||
-			pair.friction.upper == nil || pair.friction.lower.Sign() <= 0 ||
-			pair.friction.lower.Cmp(pair.friction.upper) != 0 {
+			pair.pairs[0].restitution.Base() != 0 || pair.pairs[0].friction.lower == nil ||
+			pair.pairs[0].friction.upper == nil || pair.pairs[0].friction.lower.Sign() <= 0 ||
+			pair.pairs[0].friction.lower.Cmp(pair.pairs[0].friction.upper) != 0 {
 			return w.threeUndecided(key, "friction island needs two exact positive-friction initial points"), nil
 		}
 		dynamic := 0
-		if pair.parts[1].definition.Role == Dynamic {
+		if pair.bodies[1].definition.Role == Dynamic {
 			dynamic = 1
 		}
 		fixedState := pairState(kicked, pair).entries[1-dynamic]
@@ -86,12 +86,12 @@ func (w *World) stepThreeFrictionIsland(ctx context.Context, from, kicked State,
 		}
 		contacts = append(contacts, sphereCornerContact{key: key, pair: pair, sweep: sweep,
 			point: point, normal: normal, outward: outward, dynamic: dynamic,
-			mu: pair.friction.lower})
+			mu: pair.pairs[0].friction.lower})
 	}
 	if len(contacts) != 2 {
 		return w.threeUndecided(-1, "friction island needs two source-box contacts"), nil
 	}
-	mass, moment, radius, ok := exactSphereFloorMass(w.three.mass[w.three.dynamic], sphere)
+	mass, moment, radius, ok := exactSphereFloorMass(w.bodies[w.three.dynamic].mass, sphere)
 	if !ok || !sphereCornerWitnesses(pre.Pose.Apply(sphere.Center), radius, contacts) {
 		return w.threeUndecided(-1, "friction island mass center or contact arms are unproved"), nil
 	}
@@ -126,8 +126,8 @@ func (w *World) stepThreeFrictionIsland(ctx context.Context, from, kicked State,
 		impulse := units.KilogramMillimetersPerSecond(normal)
 		instant := contact.sweep.Event.At
 		events = append(events, ContactEvent{Kind: ContactImpact,
-			Pair: BodyPair{A: contact.pair.parts[0].definition.Body,
-				B: contact.pair.parts[1].definition.Body},
+			Pair: BodyPair{A: contact.pair.bodies[0].definition.Body,
+				B: contact.pair.bodies[1].definition.Body},
 			Bracket: decad.SweepInterval{From: instant, To: instant}, Time: instant.Elapsed.Value,
 			Manifold:      cloneManifold(*contact.sweep.Event.Manifold),
 			NormalImpulse: impulse, TangentImpulse: tangent,
@@ -206,8 +206,8 @@ func (w *World) stepThreeFrictionIsland(ctx context.Context, from, kicked State,
 		}
 		rounded[contact.key] = ideal
 		endPair := pairState(end, contact.pair)
-		endpoint, contactErr := w.doc.ContactPair(ctx, contact.pair.parts[0].definition.Body,
-			contact.pair.parts[1].definition.Body, endPair.entries[0].Pose,
+		endpoint, contactErr := w.doc.ContactPair(ctx, contact.pair.bodies[0].definition.Body,
+			contact.pair.bodies[1].definition.Body, endPair.entries[0].Pose,
 			endPair.entries[1].Pose, w.step.Contact)
 		if contactErr != nil {
 			return nil, contactErr
@@ -384,9 +384,9 @@ func sphereCornerResponseWithin(before QuantityVec, response *sphereCornerRespon
 func sphereCornerStage(state State, body *decad.Body, contact sphereCornerContact,
 	response sphereCornerResponse) State {
 	entry, _ := state.Body(body)
-	mass := contact.pair.parts[contact.dynamic].mass.Mass.Value.Base()
-	moment := contact.pair.parts[contact.dynamic].mass.Inertia.XX.Value.Base()
-	radius := contact.point.OnA.Value.Sub(entry.Pose.Apply(contact.pair.parts[contact.dynamic].mass.Center.Value))
+	mass := contact.pair.bodies[contact.dynamic].mass.Mass.Value.Base()
+	moment := contact.pair.bodies[contact.dynamic].mass.Inertia.XX.Value.Base()
+	radius := contact.point.OnA.Value.Sub(entry.Pose.Apply(contact.pair.bodies[contact.dynamic].mass.Center.Value))
 	jn := response.normalX
 	if contact.outward.Z == 1 {
 		jn = response.normalZ
@@ -413,7 +413,7 @@ func sphereCornerEventMomentumWithin(event ContactEvent, pair *World, dynamic in
 	if !ok {
 		return false
 	}
-	mass := exactBase(pair.parts[dynamic].mass.Mass.Value)
+	mass := exactBase(pair.bodies[dynamic].mass.Mass.Value)
 	if mass == nil || mass.Sign() <= 0 {
 		return false
 	}

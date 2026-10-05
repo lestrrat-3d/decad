@@ -53,7 +53,7 @@ func (tr Trace) sampleThreeSlices(t units.Value, timeValue *big.Rat) (State, err
 			}
 			pair := tr.start.world.three.pairs[key]
 			for side, pose := range [2]r3.Transform{a, b} {
-				body := pair.parts[side].definition.Body
+				body := pair.bodies[side].definition.Body
 				if held, seen := poses[body]; seen && held != pose {
 					return State{}, fmt.Errorf("%w: pair replay poses disagree", ErrUnsupported)
 				}
@@ -67,16 +67,15 @@ func (tr Trace) sampleThreeSlices(t units.Value, timeValue *big.Rat) (State, err
 				continue
 			}
 			if tr.start.world.three.dynamicCount == 1 &&
-				entry.Body == tr.start.world.three.parts[tr.start.world.three.dynamic].Body {
+				entry.Body == tr.start.world.bodies[tr.start.world.three.dynamic].definition.Body {
 				return State{}, fmt.Errorf("%w: moving body has no replay proof", ErrUnsupported)
 			}
 			if tr.start.world.three.dynamicCount >= 2 {
 				for key, indices := range threePairs {
-					inPair := tr.start.world.three.parts[indices[0]].Body == entry.Body ||
-						tr.start.world.three.parts[indices[1]].Body == entry.Body
+					inPair := tr.start.world.bodies[indices[0]].definition.Body == entry.Body ||
+						tr.start.world.bodies[indices[1]].definition.Body == entry.Body
 					if inPair && slice.proofs[key] == nil &&
-						!threePairExcluded(tr.start.world.three.excluded,
-							tr.start.world.three.parts, indices) {
+						!tr.start.world.pairs[key].excluded {
 						return State{}, fmt.Errorf("%w: moving pair has no replay proof", ErrUnsupported)
 					}
 				}
@@ -126,9 +125,9 @@ func (w *World) sequentialSphereRestCandidate(key int, sweep *decad.SweepReport)
 		return false
 	}
 	pair := w.three.pairs[key]
-	if pair == nil || pair.parts[0].definition.Role != Dynamic ||
-		pair.parts[1].definition.Role != Dynamic || pair.restitution.Base() != 0 ||
-		pair.friction.upper.Sign() != 0 {
+	if pair == nil || pair.bodies[0].definition.Role != Dynamic ||
+		pair.bodies[1].definition.Role != Dynamic || pair.pairs[0].restitution.Base() != 0 ||
+		pair.pairs[0].friction.upper.Sign() != 0 {
 		return false
 	}
 	point := sweep.Event.Manifold.Points[0]
@@ -152,7 +151,7 @@ func (w *World) sequentialNoEventProof(key int, sweep *decad.SweepReport,
 		return policy == decad.ContinueSeparatingTouch || policy == decad.ContinueCertifiedTouch
 	case decad.SweepPersistentTouch:
 		return policy == decad.ContinueCertifiedTouch && persistent != nil &&
-			w.three.pairs[key].friction.upper.Sign() == 0 &&
+			w.three.pairs[key].pairs[0].friction.upper.Sign() == 0 &&
 			spherePairContinuationWithin(sweep, decad.SweepPersistentTouch, *persistent, w.step)
 	default:
 		return false
@@ -169,18 +168,18 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 		if pair == nil {
 			continue
 		}
-		if threePairExcluded(w.three.excluded, w.three.parts, threePairs[key]) {
+		if w.pairs[key].excluded {
 			if w.three.dynamicCount == 1 {
 				return nil, false, nil
 			}
 			continue
 		}
 		if w.three.dynamicCount == 1 &&
-			(pair.friction.lower.Sign() != 0 || pair.friction.upper.Sign() != 0) {
+			(pair.pairs[0].friction.lower.Sign() != 0 || pair.pairs[0].friction.upper.Sign() != 0) {
 			return nil, false, nil
 		}
 		if w.three.dynamicCount == 1 &&
-			(pair.restitution.Base() <= 0 || w.step.ImpactSpeed.Base() != 0) {
+			(pair.pairs[0].restitution.Base() <= 0 || w.step.ImpactSpeed.Base() != 0) {
 			return nil, false, nil
 		}
 		keys = append(keys, key)
@@ -218,12 +217,11 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 		return nil, false, nil
 	}
 	for key, indices := range threePairs {
-		if w.three.pairs[key] != nil ||
-			threePairExcluded(w.three.excluded, w.three.parts, indices) {
+		if w.three.pairs[key] != nil || w.pairs[key].excluded {
 			continue
 		}
-		a, _ := kicked.Body(w.three.parts[indices[0]].Body)
-		b, _ := kicked.Body(w.three.parts[indices[1]].Body)
+		a, _ := kicked.Body(w.bodies[indices[0]].definition.Body)
+		b, _ := kicked.Body(w.bodies[indices[1]].definition.Body)
 		contact, err := w.doc.ContactPair(ctx, a.Body, b.Body, a.Pose, b.Pose, w.step.Contact)
 		if err != nil {
 			return nil, true, err
@@ -274,7 +272,7 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 				continue
 			}
 			if !w.sequentialCandidate(sweep) ||
-				w.three.dynamicCount == 2 && w.three.pairs[key].restitution.Base() <= 0 &&
+				w.three.dynamicCount == 2 && w.three.pairs[key].pairs[0].restitution.Base() <= 0 &&
 					!w.sequentialSphereRestCandidate(key, sweep) {
 				return w.threeUndecided(key, "sequential pair has no supported first impact"), true, nil
 			}
@@ -380,7 +378,7 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 			return w.threeUndecided(selected, "pair response lacks a certified event prefix"), true, nil
 		}
 		if child.Events[0].Kind != ContactImpact || child.Events[0].Pair != (BodyPair{
-			A: pair.parts[0].definition.Body, B: pair.parts[1].definition.Body,
+			A: pair.bodies[0].definition.Body, B: pair.bodies[1].definition.Body,
 		}) || child.Events[0].Bracket != *reports[selected].Bracket {
 			return w.threeUndecided(selected, "pair response changed the selected impact"), true, nil
 		}
@@ -624,8 +622,8 @@ func (w *World) threeSequentialContactImpulse(events []ContactEvent) (MomentumRe
 	for _, event := range events {
 		var pair *World
 		for key, indices := range threePairs {
-			if event.Pair == (BodyPair{A: w.three.parts[indices[0]].Body,
-				B: w.three.parts[indices[1]].Body}) {
+			if event.Pair == (BodyPair{A: w.bodies[indices[0]].definition.Body,
+				B: w.bodies[indices[1]].definition.Body}) {
 				pair = w.three.pairs[key]
 				break
 			}

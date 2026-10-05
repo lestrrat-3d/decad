@@ -14,7 +14,7 @@ import (
 // off-axis torque could cause over the entire source body.
 func (w *World) omittedCylinderMotionWithin(manifold *decad.ContactManifold, pose r3.Transform,
 	dynamic, axis int, impulse float64, duration units.Value) bool {
-	body := w.parts[dynamic].definition.Body
+	body := w.bodies[dynamic].definition.Body
 	if manifold == nil || len(manifold.Points) == 0 || !finite(impulse) {
 		return false
 	}
@@ -29,7 +29,7 @@ func (w *World) omittedCylinderMotionWithin(manifold *decad.ContactManifold, pos
 	if len(manifold.Points) != 1 {
 		return false
 	}
-	mass := w.parts[dynamic].mass
+	mass := w.bodies[dynamic].mass
 	center, centerError, ok := worldCenterReading(pose, mass.Center)
 	pointBound, inertia := exactBase(witness.Bound), certifiedInertiaLower(mass)
 	impulseLimit, angularLimit := exactBase(w.step.ImpulseResidual),

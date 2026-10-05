@@ -14,15 +14,17 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: the shipped `dynamics.World` admits exactly two bodies, or three bodies with one, two or
-three dynamic bodies and every other body fixed, and resolves contact through the closed-form responses
-`docs/rigid-dynamics-design.md` lists; `docs/collision-v1-support.md` is the inventory of the shape pairs,
-responses and refusals that ship, and this document does not restate it. Every pair query is pairwise, no
-broad phase exists, and `Trace` holds fixed two- and three-body slots. The exact arithmetic every
-certificate below is stated in already exists as one package: `internal/proof` (`Dyadic`, `DyV3`,
-`RatInterval` and the float rounding bounds), which the root package imports today and which `dynamics`
-can import as well, since an `internal/` package is visible to every package of this module.
-Everything below is design-only until the PR table in §13 says otherwise.
+Current state: §13 PR 1 has shipped. `dynamics.World` holds any number of bodies, the canonical pair table
+and per-pair material of §3.1, and the slice-backed `State` of §3.2. Its step resolves two bodies, or three
+bodies with one, two or three dynamic bodies and every other body fixed, through the closed-form responses
+`docs/rigid-dynamics-design.md` lists, and returns `Undecided` for a world of four or more bodies.
+`docs/collision-v1-support.md` is the inventory of the shape pairs, responses and refusals that ship, and
+this document does not restate it. Every pair query is pairwise, no broad phase exists, and `Trace` holds
+fixed two- and three-body slots. The exact arithmetic every certificate below is stated in already exists
+as one package: `internal/proof` (`Dyadic`, `DyV3`, `RatInterval` and the float rounding bounds), which the
+root package imports today and which `dynamics` can import as well, since an `internal/` package is visible
+to every package of this module. §3.1 and §3.2 describe shipped code, except `State.cache` (§13 PR 8);
+everything else is design-only until the PR table in §13 says otherwise.
 
 Navigation only; the named sections own the rules:
 
@@ -122,8 +124,11 @@ the rolling cylinder's trace carries a rotating band track with its contact-poin
 
 ### 3.1 World and pairs
 
-`WorldConfig` is unchanged. `NewWorld` admits `len(cfg.Bodies) >= 2`; the two- and three-body limits and
-the `threeBodyWorld` container go away (§13 PR 5). Internally:
+`WorldConfig` is unchanged. `NewWorld` admits `len(cfg.Bodies) >= 2`. Until §13 PR 5 it keeps refusing the
+two- and three-body role mixes the shipped step cannot take, and a three-body world keeps its
+`threeBodyWorld` container, whose per-pair response worlds are built from this table's entries; both go away
+in PR 5. Until §13 PR 3, `Step` on a world of four or more bodies validates its input and returns
+`Undecided`. Internally:
 
 ```go
 type worldBody struct {
@@ -153,11 +158,13 @@ func (w *World) Pairs() []BodyPair     // every pair in canonical order, exclude
 ```
 
 Pair material mixes per pair exactly as `docs/rigid-dynamics-design.md` "World and State" states; the
-`frictionCoefficient` interval lives on the pair, never on the world. `NewWorld` rejects the same inputs
-it rejects today and additionally `ErrUnsupported` for a positive-friction pair whose family §6.4 cannot
-certify in the current phase. A non-excluded Fixed/Fixed pair is queried once per `Step` at its constant
-poses by `ContactPair`; an `Overlapping` or `Undecided` relation makes the step `Undecided` with
-`StepFixedPairRelation` (§12). Exclude such pairs, or model a tray as one body, as the exit scenes do.
+`frictionCoefficient` interval lives on the pair, never on the world. An excluded pair is not mixed. A
+Fixed/Fixed pair enters no response, so a friction mean outside the finite nonzero range is refused only for a
+pair with a moving body. `NewWorld` returns `ErrUnsupported` for a positive-friction pair with a moving body
+whose family §6.4 cannot certify in the current phase. A non-excluded Fixed/Fixed pair is queried once per
+`Step` at its constant poses by `ContactPair`; an `Overlapping` or `Undecided` relation makes the step
+`Undecided` with `StepFixedPairRelation` (§12). Exclude such pairs, or model a tray as one body, as the exit
+scenes do.
 
 ### 3.2 State
 

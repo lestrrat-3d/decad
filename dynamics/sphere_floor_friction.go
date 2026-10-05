@@ -13,12 +13,12 @@ import (
 
 func (w *World) sphereFloorFrictionCandidate(event *decad.SweepEvent) bool {
 	if event == nil || event.Manifold == nil || len(event.Manifold.Points) != 1 ||
-		(w.parts[0].definition.Role != Fixed || w.parts[1].definition.Role != Dynamic) &&
-			(w.parts[0].definition.Role != Dynamic || w.parts[1].definition.Role != Fixed) {
+		(w.bodies[0].definition.Role != Fixed || w.bodies[1].definition.Role != Dynamic) &&
+			(w.bodies[0].definition.Role != Dynamic || w.bodies[1].definition.Role != Fixed) {
 		return false
 	}
 	dynamic := 1
-	if w.parts[0].definition.Role == Dynamic {
+	if w.bodies[0].definition.Role == Dynamic {
 		dynamic = 0
 	}
 	point := event.Manifold.Points[0]
@@ -80,14 +80,14 @@ func sphereRatFloat(value *big.Rat) float64 {
 func (w *World) stepInteriorSphereFloorFriction(ctx context.Context, from, kicked, pre State,
 	dt, eventAt units.Value, impactTime float64, first, prefix *decad.SweepReport) (*StepReport, error) {
 	dynamic := 1
-	if w.parts[0].definition.Role == Dynamic {
+	if w.bodies[0].definition.Role == Dynamic {
 		dynamic = 0
 	}
 	if first == nil || first.Bracket == nil || first.Event == nil ||
 		first.Event.Manifold == nil || len(first.Event.Manifold.Points) != 1 ||
 		!first.HasAffineReplayProof() || prefix == nil || !prefix.HasAffineReplayProof() ||
 		!roundedImpactPrefixAtEnd(prefix, first, w.step.PenetrationResidual) ||
-		w.parts[1-dynamic].definition.Role != Fixed ||
+		w.bodies[1-dynamic].definition.Role != Fixed ||
 		kicked.entries[1-dynamic].Pose != r3.Identity() ||
 		kicked.entries[dynamic].Pose.Basis() != r3.Identity().Basis() ||
 		!zeroAngularVelocity(kicked.entries[dynamic].AngularVelocity) ||
@@ -113,7 +113,7 @@ func (w *World) stepInteriorSphereFloorFriction(ctx context.Context, from, kicke
 		return undecided(w, "sphere-floor impact penetration exceeds its bracket"), nil
 	}
 	var inverseMass [2]float64
-	inverseMass[dynamic] = 1 / w.parts[dynamic].mass.Mass.Value.Base()
+	inverseMass[dynamic] = 1 / w.bodies[dynamic].mass.Mass.Value.Base()
 	at, err := correctPair(pre, normal, -separation, inverseMass)
 	if err != nil {
 		return undecidedArithmetic(w, "sphere-floor impact correction is not finite", err)
@@ -121,7 +121,7 @@ func (w *World) stepInteriorSphereFloorFriction(ctx context.Context, from, kicke
 	if !pairCorrectionWithin(pre, at, 2, allowance) {
 		return undecided(w, "sphere-floor impact correction exceeds its allowance"), nil
 	}
-	contact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	contact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		at.entries[0].Pose, at.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -143,7 +143,7 @@ func (w *World) stepInteriorSphereFloorFriction(ctx context.Context, from, kicke
 			break
 		}
 		at = candidate
-		contact, err = w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+		contact, err = w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 			at.entries[0].Pose, at.entries[1].Pose, w.step.Contact)
 		if err != nil {
 			return nil, err
@@ -185,7 +185,7 @@ func (w *World) stepSphereFloorFriction(ctx context.Context, from, kicked, prePo
 	dt, eventAt units.Value, first, prefix *decad.SweepReport,
 	manifold *decad.ContactManifold) (*StepReport, error) {
 	dynamic := 1
-	if w.parts[0].definition.Role == Dynamic {
+	if w.bodies[0].definition.Role == Dynamic {
 		dynamic = 0
 	}
 	if manifold == nil || len(manifold.Points) != 1 {
@@ -198,11 +198,11 @@ func (w *World) stepSphereFloorFriction(ctx context.Context, from, kicked, prePo
 	}
 	sphere, ok := face.Surface().(decad.Sphere)
 	if !ok ||
-		w.parts[1-dynamic].definition.Role != Fixed ||
+		w.bodies[1-dynamic].definition.Role != Fixed ||
 		at.entries[1-dynamic].Pose != r3.Identity() ||
-		w.step.MaxEvents < 2 || w.restitution.Base() != 0 ||
-		w.friction.lower == nil || w.friction.upper == nil ||
-		w.friction.lower.Sign() <= 0 || w.friction.lower.Cmp(w.friction.upper) != 0 {
+		w.step.MaxEvents < 2 || w.pairs[0].restitution.Base() != 0 ||
+		w.pairs[0].friction.lower == nil || w.pairs[0].friction.upper == nil ||
+		w.pairs[0].friction.lower.Sign() <= 0 || w.pairs[0].friction.lower.Cmp(w.pairs[0].friction.upper) != 0 {
 		return undecided(w, "sphere-floor friction needs an exact point and coefficient"), nil
 	}
 	normal, separation, bound, ok := reducedContact(manifold, w.step.Contact)
@@ -216,7 +216,7 @@ func (w *World) stepSphereFloorFriction(ctx context.Context, from, kicked, prePo
 		point.Normal.Bound.Base() != 0 || point.NormalAngle.Base() != 0 {
 		return undecided(w, "sphere-floor point exceeds its contact bounds"), nil
 	}
-	massRecord := w.parts[dynamic].mass
+	massRecord := w.bodies[dynamic].mass
 	mass, moment, radius, ok := exactSphereFloorMass(massRecord, sphere)
 	if !ok {
 		return undecided(w, "sphere-floor friction needs exact centered isotropic mass"), nil
@@ -244,7 +244,7 @@ func (w *World) stepSphereFloorFriction(ctx context.Context, from, kicked, prePo
 	tangentMass := new(big.Rat).Add(inverseMass,
 		new(big.Rat).Quo(new(big.Rat).Mul(radius, radius), moment))
 	tangentImpulse := new(big.Rat).Neg(new(big.Rat).Quo(slip, tangentMass))
-	cone := new(big.Rat).Mul(w.friction.lower, normalImpulse)
+	cone := new(big.Rat).Mul(w.pairs[0].friction.lower, normalImpulse)
 	if absRat(new(big.Rat).Set(tangentImpulse)).Cmp(cone) > 0 {
 		tangentImpulse = new(big.Rat).Set(cone)
 		if slip.Sign() > 0 {
@@ -267,7 +267,7 @@ func (w *World) stepSphereFloorFriction(ctx context.Context, from, kicked, prePo
 	actualSlip := new(big.Rat).Sub(ratFloat(velocity), new(big.Rat).Mul(radius, ratFloat(angular)))
 	tangentResidual := absRat(new(big.Rat).Sub(actualSlip, idealSlip))
 	coneResidual := new(big.Rat).Sub(absRat(ratFloat(impulseT)),
-		new(big.Rat).Mul(w.friction.lower, ratFloat(impulseN)))
+		new(big.Rat).Mul(w.pairs[0].friction.lower, ratFloat(impulseN)))
 	if coneResidual.Sign() < 0 {
 		coneResidual = new(big.Rat)
 	}
@@ -281,7 +281,7 @@ func (w *World) stepSphereFloorFriction(ctx context.Context, from, kicked, prePo
 		!finite(tangentResidualValue, coneResidualValue, angularUpperValue) {
 		return undecided(w, "sphere-floor tangent or cone residual exceeds its limit"), nil
 	}
-	post := at
+	post := at.clone()
 	post.entries[dynamic].LinearVelocity = QuantityVec{X: units.MillimetersPerSecond(velocity),
 		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
 	post.entries[dynamic].AngularVelocity = QuantityVec{X: units.RadiansPerSecond(0),
@@ -303,9 +303,9 @@ func (w *World) stepSphereFloorFriction(ctx context.Context, from, kicked, prePo
 		//nolint:nilerr
 		return undecided(w, "sphere-floor rotating endpoint lacks replay proof"), nil
 	}
-	end := post
+	end := post.clone()
 	end.entries[0].Pose, end.entries[1].Pose = poseA, poseB
-	endpoint, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	endpoint, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		poseA, poseB, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -338,7 +338,7 @@ func (w *World) stepSphereFloorFriction(ctx context.Context, from, kicked, prePo
 		changeB = change
 	}
 	event := ContactEvent{Kind: ContactImpact,
-		Pair:    BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Pair:    BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body},
 		Bracket: bracket, Time: eventAt,
 		Manifold:      cloneManifold(*manifold),
 		NormalImpulse: units.KilogramMillimetersPerSecond(impulseN), TangentImpulse: pointTangent,

@@ -13,7 +13,7 @@ import (
 // full-step force kick. Each body's one mass interval is shared by its pre
 // and post velocities, including in the kinetic-energy difference.
 func (w *World) eventConservationFailure(event ContactEvent) string {
-	if event.Pair != (BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body}) ||
+	if event.Pair != (BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body}) ||
 		event.NormalImpulse.Kind() != units.Impulse ||
 		validateQuantityVec(event.TangentImpulse, units.Impulse) != nil {
 		return "contact event has invalid conservation inputs"
@@ -39,7 +39,7 @@ func (w *World) eventConservationFailure(event ContactEvent) string {
 				return "contact transition carries a tangent impulse"
 			}
 		}
-		for i := range w.parts {
+		for i := range w.bodies {
 			pre, post := eventBodyVelocities(event, i)
 			if validateQuantityVec(pre, units.Velocity) != nil ||
 				validateQuantityVec(post, units.Velocity) != nil || pre != post {
@@ -93,7 +93,7 @@ func (w *World) eventConservationFailure(event ContactEvent) string {
 				return "grazing event has a point tangent impulse"
 			}
 		}
-		for i := range w.parts {
+		for i := range w.bodies {
 			pre, post := eventBodyVelocities(event, i)
 			if validateQuantityVec(pre, units.Velocity) != nil ||
 				validateQuantityVec(post, units.Velocity) != nil || pre != post ||
@@ -103,7 +103,7 @@ func (w *World) eventConservationFailure(event ContactEvent) string {
 			}
 		}
 		reportBody := 1
-		if w.parts[1].definition.Role == Fixed {
+		if w.bodies[1].definition.Role == Fixed {
 			reportBody = 0
 		}
 		selected, _ := eventBodyVelocities(event, reportBody)
@@ -136,7 +136,7 @@ func (w *World) eventConservationFailure(event ContactEvent) string {
 	}
 	energyUpper, energyAllowance := new(big.Rat), new(big.Rat)
 	hasKinematic := false
-	for i, part := range w.parts {
+	for i, part := range w.bodies {
 		if part.definition.Role == Kinematic {
 			hasKinematic = true
 		}
@@ -289,7 +289,7 @@ func (w *World) eventAngularImpulseFailure(event ContactEvent, body int,
 	if len(event.PointImpulses) != len(event.Manifold.Points) {
 		return "contact event lacks point impulses for angular response"
 	}
-	mass := w.parts[body].mass
+	mass := w.bodies[body].mass
 	center, centerError, ok := worldCenterReading(pose, mass.Center)
 	if !ok {
 		return "contact event mass center cannot be enclosed"
@@ -444,7 +444,7 @@ func eventAppliedImpulse(event ContactEvent) ([3]*big.Rat, bool) {
 func (w *World) kinematicEventWork(event ContactEvent, applied [3]*big.Rat,
 	impulseLimit *big.Rat) (*big.Rat, *big.Rat, bool) {
 	work, allowance := new(big.Rat), new(big.Rat)
-	for i, part := range w.parts {
+	for i, part := range w.bodies {
 		if part.definition.Role != Kinematic {
 			continue
 		}

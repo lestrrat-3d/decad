@@ -46,17 +46,17 @@ func (w *World) stepThreeSphereIsland(ctx context.Context, from, kicked State,
 		pair := w.three.pairs[key]
 		if sweep.Outcome != decad.SweepInitiallyTouching || sweep.Event == nil ||
 			sweep.Event.Relation != decad.ContactTouching || sweep.Event.Manifold == nil ||
-			len(sweep.Event.Manifold.Points) != 1 || pair.friction.upper.Sign() != 0 ||
-			pair.restitution.Base() != 0 {
+			len(sweep.Event.Manifold.Points) != 1 || pair.pairs[0].friction.upper.Sign() != 0 ||
+			pair.pairs[0].restitution.Base() != 0 {
 			return w.threeUndecided(key, "sphere island needs one frictionless zero-restitution point per pair"), nil
 		}
 		dynamic := 0
-		if pair.parts[1].definition.Role == Dynamic {
+		if pair.bodies[1].definition.Role == Dynamic {
 			dynamic = 1
 		}
 		point := sweep.Event.Manifold.Points[0]
 		if !sphereFaceOnBody([]*decad.Face{point.FaceA, point.FaceB}[dynamic],
-			pair.parts[dynamic].definition.Body) {
+			pair.bodies[dynamic].definition.Body) {
 			return w.threeUndecided(key, "sphere island lacks the dynamic source sphere witness"), nil
 		}
 		isPair := isObliqueSpherePairEvent(sweep.Event.Manifold)
@@ -68,7 +68,7 @@ func (w *World) stepThreeSphereIsland(ctx context.Context, from, kicked State,
 			normal, separation, bound, ok = boundedObliqueSphereContact(point, w.step.Contact)
 		} else {
 			fixedFace := []*decad.Face{point.FaceB, point.FaceA}[dynamic]
-			if !boxFaceOnBody(fixedFace, pair.parts[1-dynamic].definition.Body) {
+			if !boxFaceOnBody(fixedFace, pair.bodies[1-dynamic].definition.Body) {
 				return w.threeUndecided(key, "sphere island needs a source box face"), nil
 			}
 			normal, separation, bound, ok = reducedContact(sweep.Event.Manifold, w.step.Contact)
@@ -90,11 +90,11 @@ func (w *World) stepThreeSphereIsland(ctx context.Context, from, kicked State,
 	if len(contacts) != 2 || spherePairs != 1 {
 		return w.threeUndecided(0, "sphere island needs one sphere pair and one sphere face pair"), nil
 	}
-	preDynamic, _ := kicked.Body(w.three.parts[w.three.dynamic].Body)
+	preDynamic, _ := kicked.Body(w.bodies[w.three.dynamic].definition.Body)
 	if !zeroAngularVelocity(preDynamic.AngularVelocity) {
 		return w.threeUndecided(contacts[0].key, "sphere island starts with unresolved spin"), nil
 	}
-	mass := contacts[0].pair.parts[contacts[0].dynamic].mass
+	mass := contacts[0].pair.bodies[contacts[0].dynamic].mass
 	massValue, massBound := mass.Mass.Value.Base(), mass.Mass.Bound.Base()
 	if !finite(massValue, massBound) || massValue-massBound <= 0 {
 		return w.threeUndecided(contacts[0].key, "sphere island mass is not positive and finite"), nil
@@ -169,14 +169,14 @@ func (w *World) stepThreeSphereIsland(ctx context.Context, from, kicked State,
 			current = after
 		}
 		beforePair := pairState(kicked, contact.pair)
-		afterPair := beforePair
+		afterPair := beforePair.clone()
 		beforePair.entries[contact.dynamic].LinearVelocity = spherePairQuantityVelocity(previous)
 		afterPair.entries[contact.dynamic].LinearVelocity = spherePairQuantityVelocity(current)
 		impulseValue := units.KilogramMillimetersPerSecond(contact.impulse)
 		instant := contact.sweep.Event.At
 		events = append(events, ContactEvent{
-			Kind: ContactImpact, Pair: BodyPair{A: contact.pair.parts[0].definition.Body,
-				B: contact.pair.parts[1].definition.Body},
+			Kind: ContactImpact, Pair: BodyPair{A: contact.pair.bodies[0].definition.Body,
+				B: contact.pair.bodies[1].definition.Body},
 			Bracket: decad.SweepInterval{From: instant, To: instant},
 			Time:    instant.Elapsed.Value, Manifold: cloneManifold(*contact.sweep.Event.Manifold),
 			NormalImpulse: impulseValue, TangentImpulse: zeroImpulseVec(),
@@ -239,8 +239,8 @@ func (w *World) stepThreeSphereIsland(ctx context.Context, from, kicked State,
 				fmt.Sprintf("sphere island rounded remainder returned %v", actual.Outcome)), nil
 		}
 		rounded[contact.key] = actual
-		final, contactErr := w.doc.ContactPair(ctx, contact.pair.parts[0].definition.Body,
-			contact.pair.parts[1].definition.Body, endPair.entries[0].Pose,
+		final, contactErr := w.doc.ContactPair(ctx, contact.pair.bodies[0].definition.Body,
+			contact.pair.bodies[1].definition.Body, endPair.entries[0].Pose,
 			endPair.entries[1].Pose, w.step.Contact)
 		if contactErr != nil {
 			return nil, contactErr
@@ -290,14 +290,11 @@ func (w *World) stepThreeSphereIsland(ctx context.Context, from, kicked State,
 }
 
 func withBodyState(state State, entry BodyState) State {
-	out := state
+	out := state.clone()
 	for i := range out.entries {
 		if out.entries[i].Body == entry.Body {
 			out.entries[i] = entry
 		}
-	}
-	if out.third.Body == entry.Body {
-		out.third = entry
 	}
 	return out
 }

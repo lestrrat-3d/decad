@@ -507,12 +507,14 @@ or unknown exclusions/overrides fail construction. A pair with neither body
 dynamic can still be checked when a kinematic driver moves; it cannot be
 resolved by an impulse if closing contact occurs.
 
-The shipped world accepts two bodies with at least one dynamic body, or three
-bodies with one, two, or three dynamic bodies and every other body fixed; the
-N-body world, its canonical pair table and per-pair material, and the typed
-`StepDiagnostic` fields are `docs/multibody-dynamics-design.md` §3 and §12.
-Every pair in a
-three-body world can be excluded or given one material override. `NewWorld`
+`NewWorld` accepts two or more bodies and holds every body pair, with its
+exclusion and effective material, in a canonical pair table
+(`docs/multibody-dynamics-design.md` §3.1). The shipped step resolves two
+bodies with at least one dynamic body, or three bodies with one, two, or three
+dynamic bodies and every other body fixed; `NewWorld` refuses other two- and
+three-body role mixes, and `Step` on a larger world returns `Undecided`. The
+typed `StepDiagnostic` fields are `docs/multibody-dynamics-design.md` §12.
+Every pair of a world can be excluded or given one material override. `NewWorld`
 rejects a pair naming a body outside the world, including nil or repeated
 bodies, with `ErrInvalidInput`. It also rejects a second override or exclusion
 for the same pair, including reverse order. An override for an excluded pair
@@ -529,7 +531,9 @@ mean of the held body coefficients. The solver proposes impulses with a nominal
 rounded mean, then checks the friction cone and slip law against rational
 bounds that enclose the exact mean. A zero body coefficient selects the
 frictionless response. A positive mean below the smallest positive float64 or
-above the largest finite float64 returns `ErrUnsupported` at `NewWorld`.
+above the largest finite float64 returns `ErrUnsupported` at `NewWorld` for a
+pair with a non-fixed body; a fixed/fixed pair enters no response, so its mean
+is not refused.
 With an override, its exact held coefficient replaces
 the body values; a positive override goes to the patch solver even when both
 body coefficients are zero. A zero override selects the frictionless response

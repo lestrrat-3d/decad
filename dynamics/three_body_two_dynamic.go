@@ -22,14 +22,14 @@ func (w *World) stepThreeTwoDynamic(ctx context.Context, from State, input StepI
 	}
 	kicked := from
 	fixed := -1
-	for i, part := range w.three.parts {
-		if part.Role == Fixed {
+	for i, part := range w.bodies {
+		if part.definition.Role == Fixed {
 			fixed = i
 			break
 		}
 	}
-	for key, part := range w.three.parts {
-		if part.Role != Dynamic {
+	for key, part := range w.bodies {
+		if part.definition.Role != Dynamic {
 			continue
 		}
 		pairKey := -1
@@ -41,8 +41,8 @@ func (w *World) stepThreeTwoDynamic(ctx context.Context, from State, input StepI
 		}
 		pair := w.three.pairs[pairKey]
 		var pairLoads [2]*BodyLoad
-		for side, item := range pair.parts {
-			if item.definition.Body == part.Body {
+		for side, item := range pair.bodies {
+			if item.definition.Body == part.definition.Body {
 				pairLoads[side] = loads[key]
 			}
 		}
@@ -51,7 +51,7 @@ func (w *World) stepThreeTwoDynamic(ctx context.Context, from State, input StepI
 			return w.threeUndecided(pairKey, "force kick or torque kick exceeds its residual"), nil
 		}
 		for _, entry := range advanced.entries {
-			if entry.Body == part.Body {
+			if entry.Body == part.definition.Body {
 				kicked = withBodyState(kicked, entry)
 			}
 		}
@@ -71,13 +71,13 @@ func (w *World) validateThreeLoads(entries []BodyLoad) ([3]*BodyLoad, error) {
 	for i := range entries {
 		load := &entries[i]
 		index := -1
-		for j, part := range w.three.parts {
-			if load.Body == part.Body {
+		for j, part := range w.bodies {
+			if load.Body == part.definition.Body {
 				index = j
 				break
 			}
 		}
-		if index < 0 || w.three.parts[index].Role != Dynamic {
+		if index < 0 || w.bodies[index].definition.Role != Dynamic {
 			return loads, fmt.Errorf("%w: load body is not a dynamic member of this world", ErrInvalidInput)
 		}
 		if loads[index] != nil {
@@ -181,8 +181,8 @@ func (w *World) threeTwoDynamicConservation(from, kicked, end State, trace Trace
 	}
 	var individual [2]StepConservation
 	count := 0
-	for worldIndex, part := range w.three.parts {
-		if part.Role != Dynamic {
+	for worldIndex, part := range w.bodies {
+		if part.definition.Role != Dynamic {
 			continue
 		}
 		var pair *World
@@ -194,7 +194,7 @@ func (w *World) threeTwoDynamicConservation(from, kicked, end State, trace Trace
 			if other == worldIndex {
 				other = indices[1]
 			}
-			if w.three.parts[other].Role == Fixed {
+			if w.bodies[other].definition.Role == Fixed {
 				pair = w.three.pairs[key]
 				break
 			}
@@ -203,8 +203,8 @@ func (w *World) threeTwoDynamicConservation(from, kicked, end State, trace Trace
 			return StepConservation{}, false
 		}
 		var pairLoads [2]*BodyLoad
-		for side, entry := range pair.parts {
-			if entry.definition.Body == part.Body {
+		for side, entry := range pair.bodies {
+			if entry.definition.Body == part.definition.Body {
 				pairLoads[side] = loads[worldIndex]
 			}
 		}

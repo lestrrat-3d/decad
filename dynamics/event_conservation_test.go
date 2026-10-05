@@ -242,7 +242,7 @@ func TestEventConservationRejectsEnergyGainWithBalancedMomentum(t *testing.T) {
 		w.eventConservationFailure(gaining))
 
 	// A wider held mass interval must not excuse the same numerical impulse.
-	w.parts[0].mass.Mass.Bound = units.Kilograms(.1)
+	w.bodies[0].mass.Mass.Bound = units.Kilograms(.1)
 	require.Equal(t, "contact event linear momentum exceeds impulse residual",
 		w.eventConservationFailure(event))
 }
@@ -299,7 +299,7 @@ func TestKinematicEventConservationRejectsGainBeyondDriverWork(t *testing.T) {
 	require.Equal(t, "contact event increases kinetic energy beyond work and numerical residual",
 		w.eventConservationFailure(gaining))
 
-	w.parts[1].mass.Mass.Bound = units.Kilograms(.01)
+	w.bodies[1].mass.Mass.Bound = units.Kilograms(.01)
 	w.step.ImpulseResidual = units.KilogramMillimetersPerSecond(3)
 	require.Empty(t, w.eventConservationFailure(event))
 	require.Equal(t, "contact event increases kinetic energy beyond work and numerical residual",

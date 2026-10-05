@@ -14,7 +14,7 @@ import (
 // affine paths certify the same isolated sphere-pair touch.
 func (w *World) stepGrazingTouch(ctx context.Context, from, kicked State, dt units.Value,
 	first *decad.SweepReport) (*StepReport, error) {
-	if w.friction.upper.Sign() != 0 || first == nil || first.Event == nil ||
+	if w.pairs[0].friction.upper.Sign() != 0 || first == nil || first.Event == nil ||
 		first.Event.Relation != decad.ContactTouching || first.Event.Manifold == nil ||
 		len(first.Event.Manifold.Points) != 1 || first.Bracket != nil {
 		return undecided(w, "grazing touch lacks a frictionless point event"), nil
@@ -65,7 +65,7 @@ func (w *World) stepGrazingTouch(ctx context.Context, from, kicked State, dt uni
 	if poseA != end.entries[0].Pose || poseB != end.entries[1].Pose {
 		return undecided(w, "rounded grazing endpoint differs from drift"), nil
 	}
-	final, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	final, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -75,11 +75,11 @@ func (w *World) stepGrazingTouch(ctx context.Context, from, kicked State, dt uni
 	}
 	zero := units.KilogramMillimetersPerSecond(0)
 	reportBody := 1
-	if w.parts[1].definition.Role == Fixed {
+	if w.bodies[1].definition.Role == Fixed {
 		reportBody = 0
 	}
 	event := ContactEvent{
-		Kind: ContactGraze, Pair: BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Kind: ContactGraze, Pair: BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body},
 		Bracket: decad.SweepInterval{From: rounded.Event.At, To: rounded.Event.At}, Time: eventAt,
 		Manifold:      cloneManifold(*rounded.Event.Manifold),
 		NormalImpulse: zero, TangentImpulse: zeroImpulseVec(),

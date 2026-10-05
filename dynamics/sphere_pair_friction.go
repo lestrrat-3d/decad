@@ -15,8 +15,8 @@ import (
 // source geometry continue through the existing frictionless response.
 func (w *World) exactSpherePairFrictionCandidate(kicked State,
 	manifold *decad.ContactManifold) bool {
-	if !isSourceSpherePairEvent(manifold) || w.parts[0].definition.Role != Dynamic ||
-		w.parts[1].definition.Role != Dynamic {
+	if !isSourceSpherePairEvent(manifold) || w.bodies[0].definition.Role != Dynamic ||
+		w.bodies[1].definition.Role != Dynamic {
 		return false
 	}
 	point := manifold.Points[0]
@@ -27,7 +27,7 @@ func (w *World) exactSpherePairFrictionCandidate(kicked State,
 		return false
 	}
 	for i, face := range [2]*decad.Face{point.FaceA, point.FaceB} {
-		if w.parts[i].definition.Supplied == nil ||
+		if w.bodies[i].definition.Supplied == nil ||
 			kicked.entries[i].Pose.Basis() != r3.Identity().Basis() ||
 			!zeroAngularVelocity(kicked.entries[i].AngularVelocity) ||
 			kicked.entries[i].LinearVelocity.Z.Base() != 0 {
@@ -37,7 +37,7 @@ func (w *World) exactSpherePairFrictionCandidate(kicked State,
 		if !ok || sphere.Center != (r3.Vec{}) {
 			return false
 		}
-		_, _, _, ok = exactSphereFloorMass(w.parts[i].mass, sphere)
+		_, _, _, ok = exactSphereFloorMass(w.bodies[i].mass, sphere)
 		if !ok {
 			return false
 		}
@@ -56,10 +56,10 @@ func (w *World) stepInitialSpherePairFriction(ctx context.Context, from, kicked 
 		first.Samples[0].FloatContact.Relation != decad.ContactTouching ||
 		first.Samples[0].FloatContact.Manifold == nil ||
 		len(first.Samples[0].FloatContact.Manifold.Points) != 1 ||
-		w.parts[0].definition.Role != Dynamic || w.parts[1].definition.Role != Dynamic ||
-		w.step.MaxEvents <= 1 || w.restitution.Base() <= 0 ||
-		w.friction.lower == nil || w.friction.upper == nil ||
-		w.friction.lower.Sign() < 0 || w.friction.lower.Cmp(w.friction.upper) != 0 {
+		w.bodies[0].definition.Role != Dynamic || w.bodies[1].definition.Role != Dynamic ||
+		w.step.MaxEvents <= 1 || w.pairs[0].restitution.Base() <= 0 ||
+		w.pairs[0].friction.lower == nil || w.pairs[0].friction.upper == nil ||
+		w.pairs[0].friction.lower.Sign() < 0 || w.pairs[0].friction.lower.Cmp(w.pairs[0].friction.upper) != 0 {
 		return undecided(w, "sphere-pair friction needs an initial exact dynamic point and coefficient"), nil
 	}
 	point := first.Event.Manifold.Points[0]
@@ -81,7 +81,7 @@ func (w *World) stepInitialSpherePairFriction(ctx context.Context, from, kicked 
 	}
 	var mass, moment, radius [2]*big.Rat
 	for i, face := range [2]*decad.Face{point.FaceA, point.FaceB} {
-		if face == nil || w.parts[i].definition.Supplied == nil ||
+		if face == nil || w.bodies[i].definition.Supplied == nil ||
 			kicked.entries[i].Pose.Basis() != r3.Identity().Basis() ||
 			!zeroAngularVelocity(kicked.entries[i].AngularVelocity) ||
 			kicked.entries[i].LinearVelocity.Z.Base() != 0 {
@@ -91,7 +91,7 @@ func (w *World) stepInitialSpherePairFriction(ctx context.Context, from, kicked 
 		if !source || sphere.Center != (r3.Vec{}) {
 			return undecided(w, "sphere-pair friction needs a centered source sphere"), nil
 		}
-		mass[i], moment[i], radius[i], ok = exactSphereFloorMass(w.parts[i].mass, sphere)
+		mass[i], moment[i], radius[i], ok = exactSphereFloorMass(w.bodies[i].mass, sphere)
 		if !ok {
 			return undecided(w, "sphere-pair friction needs exact centered isotropic mass"), nil
 		}
@@ -118,7 +118,7 @@ func (w *World) stepInitialSpherePairFriction(ctx context.Context, from, kicked 
 	}
 	inverseA, inverseB := new(big.Rat).Inv(mass[0]), new(big.Rat).Inv(mass[1])
 	inverseSum := new(big.Rat).Add(inverseA, inverseB)
-	restitution := exactBase(w.restitution)
+	restitution := exactBase(w.pairs[0].restitution)
 	jn := new(big.Rat).Neg(new(big.Rat).Quo(
 		new(big.Rat).Mul(new(big.Rat).Add(big.NewRat(1, 1), restitution), preNormal), inverseSum))
 	slip := new(big.Rat).Sub(exactBase(pre[1].Y), exactBase(pre[0].Y))
@@ -126,7 +126,7 @@ func (w *World) stepInitialSpherePairFriction(ctx context.Context, from, kicked 
 		new(big.Rat).Add(new(big.Rat).Quo(new(big.Rat).Mul(radius[0], radius[0]), moment[0]),
 			new(big.Rat).Quo(new(big.Rat).Mul(radius[1], radius[1]), moment[1])))
 	jt := new(big.Rat).Neg(new(big.Rat).Quo(slip, tangentInverse))
-	cone := new(big.Rat).Mul(w.friction.lower, jn)
+	cone := new(big.Rat).Mul(w.pairs[0].friction.lower, jn)
 	sliding := absRat(new(big.Rat).Set(jt)).Cmp(cone) > 0
 	if sliding {
 		jt.Set(cone)
@@ -157,7 +157,7 @@ func (w *World) stepInitialSpherePairFriction(ctx context.Context, from, kicked 
 		!rationalRoundedWithin(jt, jtFloat, w.step.ImpulseResidual) {
 		return undecided(w, "sphere-pair friction impulse exceeds its rounding residual"), nil
 	}
-	post := kicked
+	post := kicked.clone()
 	for i := range post.entries {
 		vx, vy, spin := sphereRatFloat(postIdeal[i][0]), sphereRatFloat(postIdeal[i][1]),
 			sphereRatFloat(postIdeal[i][2])
@@ -189,7 +189,7 @@ func (w *World) stepInitialSpherePairFriction(ctx context.Context, from, kicked 
 			return undecided(w, "sphere-pair friction sliding direction is unresolved"), nil
 		}
 		impulseResidual := absRat(new(big.Rat).Add(ratFloat(jtFloat),
-			new(big.Rat).Mul(w.friction.lower, new(big.Rat).Mul(ratFloat(jnFloat),
+			new(big.Rat).Mul(w.pairs[0].friction.lower, new(big.Rat).Mul(ratFloat(jnFloat),
 				big.NewRat(int64(slip.Sign()), 1)))))
 		if impulseResidual.Cmp(exactBase(w.step.ImpulseResidual)) > 0 {
 			return undecided(w, "sphere-pair friction sliding impulse exceeds residual"), nil
@@ -200,7 +200,7 @@ func (w *World) stepInitialSpherePairFriction(ctx context.Context, from, kicked 
 		}
 	}
 	coneResidual := new(big.Rat).Sub(absRat(ratFloat(jtFloat)),
-		new(big.Rat).Mul(w.friction.lower, ratFloat(jnFloat)))
+		new(big.Rat).Mul(w.pairs[0].friction.lower, ratFloat(jnFloat)))
 	if coneResidual.Sign() < 0 {
 		coneResidual.SetInt64(0)
 	}
@@ -222,7 +222,7 @@ func (w *World) stepInitialSpherePairFriction(ctx context.Context, from, kicked 
 		//nolint:nilerr
 		return undecided(w, "sphere-pair friction endpoint lacks replay proof"), nil
 	}
-	end := post
+	end := post.clone()
 	end.entries[0].Pose, end.entries[1].Pose = poseA, poseB
 	lastSample := ideal.Samples[len(ideal.Samples)-1]
 	if lastSample.At.Fraction != units.Scalar(1) || lastSample.FloatContact == nil ||
@@ -231,7 +231,7 @@ func (w *World) stepInitialSpherePairFriction(ctx context.Context, from, kicked 
 		lastSample.PoseA != poseA || lastSample.PoseB != poseB {
 		return undecided(w, "sphere-pair friction rounded endpoint lacks separation proof"), nil
 	}
-	last, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	last, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		poseA, poseB, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -253,7 +253,7 @@ func (w *World) stepInitialSpherePairFriction(ctx context.Context, from, kicked 
 	}
 	instant := first.Event.At
 	event := ContactEvent{Kind: ContactImpact,
-		Pair:    BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Pair:    BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body},
 		Bracket: decad.SweepInterval{From: instant, To: instant}, Time: instant.Elapsed.Value,
 		Manifold:      cloneManifold(*first.Event.Manifold),
 		NormalImpulse: units.KilogramMillimetersPerSecond(jnFloat), TangentImpulse: tangent,
@@ -284,7 +284,7 @@ func (w *World) stepInteriorSpherePairFriction(ctx context.Context, from, kicked
 	dt units.Value, first *decad.SweepReport) (*StepReport, error) {
 	if first == nil || first.Outcome != decad.SweepImpactBracket || first.Bracket == nil ||
 		first.Event == nil || first.Event.Manifold == nil || len(first.Event.Manifold.Points) != 1 ||
-		!first.HasAffineReplayProof() || w.restitution.Base() <= 0 ||
+		!first.HasAffineReplayProof() || w.pairs[0].restitution.Base() <= 0 ||
 		!zeroAngularVelocity(kicked.entries[0].AngularVelocity) ||
 		!zeroAngularVelocity(kicked.entries[1].AngularVelocity) {
 		return undecided(w, "sphere-pair friction lacks a bounded interior impact"), nil
@@ -313,8 +313,8 @@ func (w *World) stepInteriorSpherePairFriction(ctx context.Context, from, kicked
 		!roundedImpactPrefixAtEnd(prefix, first, w.step.PenetrationResidual) {
 		return undecided(w, "sphere-pair friction impact prefix lacks a matching source point"), nil
 	}
-	contact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body,
-		w.parts[1].definition.Body, contactState.entries[0].Pose,
+	contact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body,
+		w.bodies[1].definition.Body, contactState.entries[0].Pose,
 		contactState.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err

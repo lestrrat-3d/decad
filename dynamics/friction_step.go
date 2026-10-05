@@ -15,11 +15,11 @@ import (
 // when both complete continuations certify the same touching face.
 func (w *World) stepInitialFriction(ctx context.Context, from, kicked State, dt units.Value,
 	first *decad.SweepReport) (*StepReport, error) {
-	if w.parts[0].definition.Role == Dynamic && w.parts[1].definition.Role == Dynamic {
+	if w.bodies[0].definition.Role == Dynamic && w.bodies[1].definition.Role == Dynamic {
 		return w.stepInitialTwoDynamicFriction(ctx, from, kicked, dt, first)
 	}
 	dynamic := 1
-	if w.parts[0].definition.Role == Dynamic {
+	if w.bodies[0].definition.Role == Dynamic {
 		dynamic = 0
 	}
 	if first.Event == nil || first.Event.Relation != decad.ContactTouching ||
@@ -57,8 +57,8 @@ func (w *World) stepInitialFriction(ctx context.Context, from, kicked State, dt 
 	if !ok {
 		return undecided(w, "frictional track can move the patch beyond audited corners"), nil
 	}
-	response, ok := solveFixedFloorFrictionPatch(&patch, w.parts[dynamic].mass,
-		kicked.entries[dynamic].Pose, pre, w.friction, w.step)
+	response, ok := solveFixedFloorFrictionPatch(&patch, w.bodies[dynamic].mass,
+		kicked.entries[dynamic].Pose, pre, w.pairs[0].friction, w.step)
 	if !ok {
 		return undecided(w, "frictional patch residuals exceed their limits"), nil
 	}
@@ -74,7 +74,7 @@ func (w *World) stepInitialFriction(ctx context.Context, from, kicked State, dt 
 	if dynamic == 0 {
 		tangentImpulse, points = reversePatchTangent(tangentImpulse, points)
 	}
-	post := kicked
+	post := kicked.clone()
 	post.entries[dynamic].LinearVelocity = response.Post
 	ideal, err := w.sweep(ctx, post, dt, decad.ContinueCertifiedTouch)
 	if err != nil {
@@ -94,7 +94,7 @@ func (w *World) stepInitialFriction(ctx context.Context, from, kicked State, dt 
 	if !w.persistentTrackWithin(rounded, normal) {
 		return undecided(w, fmt.Sprintf("frictional rounded continuation returned %v", rounded.Outcome)), nil
 	}
-	endpoint, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	endpoint, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -113,7 +113,7 @@ func (w *World) stepInitialFriction(ctx context.Context, from, kicked State, dt 
 	report := &StepReport{Status: Advanced, Next: &end}
 	report.Events = []ContactEvent{{
 		Kind:           ContactImpact,
-		Pair:           BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Pair:           BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body},
 		Bracket:        decad.SweepInterval{From: instant, To: instant},
 		Time:           instant.Elapsed.Value,
 		Manifold:       manifold,
@@ -184,8 +184,8 @@ func (w *World) fixedFloorPatchWitnesses(manifold *decad.ContactManifold) bool {
 // omitted-spin speed error than the initial points audited by the solver.
 func (w *World) frictionWholeBodyLeverWithin(manifold *decad.ContactManifold,
 	dynamic int, pose r3.Transform) (*big.Rat, bool) {
-	mass := w.parts[dynamic].mass
-	box, err := w.parts[dynamic].definition.Body.Bounds()
+	mass := w.bodies[dynamic].mass
+	box, err := w.bodies[dynamic].definition.Body.Bounds()
 	if err != nil || box.Bound.Kind() != units.Length || !finite(box.Bound.Base(),
 		box.Min.X, box.Min.Y, box.Min.Z, box.Max.X, box.Max.Y, box.Max.Z) ||
 		box.Bound.Base() < 0 {
@@ -226,7 +226,7 @@ func (w *World) frictionWholeBodyLeverWithin(manifold *decad.ContactManifold,
 
 func (w *World) stepFrictionStaticSupport(ctx context.Context, from, kicked State, dt units.Value,
 	first *decad.SweepReport, patch *decad.ContactManifold, dynamic int) (*StepReport, error) {
-	mass := w.parts[dynamic].mass
+	mass := w.bodies[dynamic].mass
 	pose := kicked.entries[dynamic].Pose
 	report, err := w.stepInitialTouch(ctx, from, kicked, dt, first)
 	if err != nil || report.Status != Advanced || len(report.Events) != 1 {
@@ -267,7 +267,7 @@ func (w *World) stepFrictionStaticSupport(ctx context.Context, from, kicked Stat
 	if dynamic == 0 {
 		normalSign = -1
 	}
-	if !responsePairResidualsWithin(preSpeed, normalSign, units.Scalar(0), w.parts,
+	if !responsePairResidualsWithin(preSpeed, normalSign, units.Scalar(0), w.bodies,
 		0, normal.Base(), postSpeed, w.step.VelocityResidual, w.step.ImpulseResidual) {
 		return undecided(w, "static support rounded corner sum exceeds response residual"), nil
 	}

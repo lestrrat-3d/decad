@@ -33,7 +33,7 @@ func (w *World) stepNoImpulse(ctx context.Context, from, kicked State, dt units.
 	if err != nil {
 		return nil, err
 	}
-	finalContact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	finalContact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -133,7 +133,7 @@ func (w *World) stepInitialTouch(ctx context.Context, from, kicked State, dt uni
 		return undecided(w, "initial contact has no certified closing speed"), nil
 	}
 	var inverseMass [2]float64
-	for i, part := range w.parts {
+	for i, part := range w.bodies {
 		if part.definition.Role == Dynamic {
 			inverseMass[i] = 1 / part.mass.Mass.Value.Base()
 		}
@@ -147,13 +147,13 @@ func (w *World) stepInitialTouch(ctx context.Context, from, kicked State, dt uni
 		preSpeed[0].Base() - impulse*sign*inverseMass[0],
 		preSpeed[1].Base() + impulse*sign*inverseMass[1],
 	}
-	if w.restitution.Base() == 0 && w.parts[0].definition.Role == Dynamic &&
-		w.parts[1].definition.Role == Dynamic && w.friction.upper.Sign() == 0 &&
+	if w.pairs[0].restitution.Base() == 0 && w.bodies[0].definition.Role == Dynamic &&
+		w.bodies[1].definition.Role == Dynamic && w.pairs[0].friction.upper.Sign() == 0 &&
 		isSourceSpherePairEvent(first.Event.Manifold) {
 		// Persistent sphere contact needs identical normal displacement.
 		// Round the mass-weighted velocity once, then check both bounded
 		// response intervals below against that published value.
-		massA, massB := exactBase(w.parts[0].mass.Mass.Value), exactBase(w.parts[1].mass.Mass.Value)
+		massA, massB := exactBase(w.bodies[0].mass.Mass.Value), exactBase(w.bodies[1].mass.Mass.Value)
 		speedA, speedB := exactBase(preSpeed[0]), exactBase(preSpeed[1])
 		if massA == nil || massB == nil || speedA == nil || speedB == nil {
 			return undecided(w, "sphere momentum velocity is not representable"), nil
@@ -168,11 +168,11 @@ func (w *World) stepInitialTouch(ctx context.Context, from, kicked State, dt uni
 		postSpeed = [2]float64{common, common}
 	}
 	if !finite(impulse, postSpeed[0], postSpeed[1]) || impulse <= 0 ||
-		!responsePairResidualsWithin(preSpeed, sign, units.Scalar(0), w.parts,
+		!responsePairResidualsWithin(preSpeed, sign, units.Scalar(0), w.bodies,
 			0, impulse, postSpeed, w.step.VelocityResidual, w.step.ImpulseResidual) {
 		return undecided(w, "initial contact response exceeds velocity or impulse residual"), nil
 	}
-	for i, part := range w.parts {
+	for i, part := range w.bodies {
 		if part.definition.Role != Dynamic {
 			continue
 		}
@@ -181,7 +181,7 @@ func (w *World) stepInitialTouch(ctx context.Context, from, kicked State, dt uni
 			return undecided(w, "initial contact requires angular response"), nil
 		}
 	}
-	post := kicked
+	post := kicked.clone()
 	for i := range post.entries {
 		setVelocityComponent(&post.entries[i].LinearVelocity, axis, units.MillimetersPerSecond(postSpeed[i]))
 	}
@@ -206,7 +206,7 @@ func (w *World) stepInitialTouch(ctx context.Context, from, kicked State, dt uni
 	if !w.persistentTrackWithin(actual, normal) {
 		return undecided(w, fmt.Sprintf("numerical resting path returned %v", actual.Outcome)), nil
 	}
-	finalContact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	finalContact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -220,14 +220,14 @@ func (w *World) stepInitialTouch(ctx context.Context, from, kicked State, dt uni
 		return undecided(w, "resting endpoint exceeds penetration residual"), nil
 	}
 	reportBody := 0
-	if w.parts[0].definition.Role == Fixed {
+	if w.bodies[0].definition.Role == Fixed {
 		reportBody = 1
 	}
 	instant := first.Event.At
 	report := &StepReport{Status: Advanced, Next: &end}
 	report.Events = []ContactEvent{{
 		Kind:           ContactImpact,
-		Pair:           BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Pair:           BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body},
 		Bracket:        decad.SweepInterval{From: instant, To: instant},
 		Time:           instant.Elapsed.Value,
 		Manifold:       cloneManifold(*first.Event.Manifold),
@@ -362,7 +362,7 @@ func (w *World) stepContactTransition(ctx context.Context, from, kicked State, d
 		prefixTravel > w.step.PenetrationResidual.Base() {
 		return undecided(w, "published rounded prefix exceeds the state residual"), nil
 	}
-	rightContact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	rightContact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		right.entries[0].Pose, right.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -389,7 +389,7 @@ func (w *World) stepContactTransition(ctx context.Context, from, kicked State, d
 	if roundedClear.Outcome != decad.SweepClear {
 		return undecided(w, fmt.Sprintf("rounded transition remainder returned %v", roundedClear.Outcome)), nil
 	}
-	finalContact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	finalContact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -398,13 +398,13 @@ func (w *World) stepContactTransition(ctx context.Context, from, kicked State, d
 		return undecided(w, "transition endpoint is not separated"), nil
 	}
 	reportBody := 0
-	if w.parts[0].definition.Role == Fixed {
+	if w.bodies[0].definition.Role == Fixed {
 		reportBody = 1
 	}
 	report := &StepReport{Status: Advanced, Next: &end}
 	report.Events = []ContactEvent{{
 		Kind:           ContactTransition,
-		Pair:           BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Pair:           BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body},
 		Bracket:        *first.Bracket,
 		Time:           eventAt,
 		NormalImpulse:  units.KilogramMillimetersPerSecond(0),

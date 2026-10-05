@@ -17,18 +17,18 @@ import (
 // must be followed by two real clear-path sweeps before the step advances.
 func (w *World) stepObliqueSphereImpact(ctx context.Context, from, kicked State,
 	dt units.Value, first *decad.SweepReport) (*StepReport, error) {
-	if w.friction.upper.Sign() != 0 || first.Bracket == nil || first.Event == nil ||
+	if w.pairs[0].friction.upper.Sign() != 0 || first.Bracket == nil || first.Event == nil ||
 		first.Event.Manifold == nil || len(first.Event.Manifold.Points) != 1 ||
 		!first.HasAffineReplayProof() {
 		return undecided(w, "tilted sphere impact lacks a frictionless point proof"), nil
 	}
 	dynamic := -1
-	for i, part := range w.parts {
+	for i, part := range w.bodies {
 		if part.definition.Role == Dynamic {
 			dynamic = i
 		}
 	}
-	if dynamic < 0 || w.parts[1-dynamic].definition.Role != Fixed {
+	if dynamic < 0 || w.bodies[1-dynamic].definition.Role != Fixed {
 		return undecided(w, "tilted sphere impact needs one fixed box"), nil
 	}
 	point := first.Event.Manifold.Points[0]
@@ -37,8 +37,8 @@ func (w *World) stepObliqueSphereImpact(ctx context.Context, from, kicked State,
 		sphereFace, boxFace = point.FaceB, point.FaceA
 	}
 	if sphereFace == nil || boxFace == nil ||
-		!sphereFaceOnBody(sphereFace, w.parts[dynamic].definition.Body) ||
-		!boxFaceOnBody(boxFace, w.parts[1-dynamic].definition.Body) {
+		!sphereFaceOnBody(sphereFace, w.bodies[dynamic].definition.Body) ||
+		!boxFaceOnBody(boxFace, w.bodies[1-dynamic].definition.Body) {
 		return undecided(w, "tilted impact does not name the source sphere and box face"), nil
 	}
 	normal, separation, bound, ok := boundedObliqueSphereContact(point, w.step.Contact)
@@ -87,7 +87,7 @@ func (w *World) stepObliqueSphereImpact(ctx context.Context, from, kicked State,
 	if closingUpper.Cmp(new(big.Rat).Neg(exactBase(w.step.VelocityResidual))) >= 0 {
 		return undecided(w, "tilted sphere impact is not closing"), nil
 	}
-	mass := w.parts[dynamic].mass.Mass
+	mass := w.bodies[dynamic].mass.Mass
 	stopImpulse := -closing * mass.Value.Base()
 	if !finite(stopImpulse) || stopImpulse <= 0 {
 		return undecided(w, "tilted sphere stopping impulse is not finite"), nil
@@ -101,7 +101,7 @@ func (w *World) stepObliqueSphereImpact(ctx context.Context, from, kicked State,
 	}
 	restitution := 0.0
 	if approachLow.Cmp(threshold) > 0 {
-		restitution = w.restitution.Base()
+		restitution = w.pairs[0].restitution.Base()
 	}
 	if restitution <= 0 {
 		return undecided(w, "tilted sphere impact needs positive restitution"), nil
@@ -126,7 +126,7 @@ func (w *World) stepObliqueSphereImpact(ctx context.Context, from, kicked State,
 		return undecided(w, "tilted sphere impulse exceeds momentum residual"), nil
 	}
 	if !obliqueSphereNormalResponseWithin(preVec, postVec, normal, delta,
-		sign, point, w.restitution, w.step.VelocityResidual) {
+		sign, point, w.pairs[0].restitution, w.step.VelocityResidual) {
 		return undecided(w, "tilted sphere normal or tangent response exceeds velocity residual"), nil
 	}
 	bracketTravel, ok := boundBracketTravel(*first.Bracket, math.Abs(closing))
@@ -155,7 +155,7 @@ func (w *World) stepObliqueSphereImpact(ctx context.Context, from, kicked State,
 		return undecidedArithmetic(w, "tilted sphere correction is not finite", err)
 	}
 	post.entries[dynamic].LinearVelocity = postVelocity
-	contact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	contact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		post.entries[0].Pose, post.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -187,7 +187,7 @@ func (w *World) stepObliqueSphereImpact(ctx context.Context, from, kicked State,
 	if rounded.Outcome != decad.SweepClear || !rounded.HasAffineReplayProof() {
 		return undecided(w, fmt.Sprintf("rounded tilted sphere rebound returned %v", rounded.Outcome)), nil
 	}
-	finalContact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	finalContact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -198,7 +198,7 @@ func (w *World) stepObliqueSphereImpact(ctx context.Context, from, kicked State,
 	}
 	change := post.entries[dynamic].Pose.Translation().Sub(pre.entries[dynamic].Pose.Translation())
 	event := ContactEvent{Kind: ContactImpact,
-		Pair:    BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Pair:    BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body},
 		Bracket: *first.Bracket, Time: eventAt, Manifold: cloneManifold(*first.Event.Manifold),
 		NormalImpulse: units.KilogramMillimetersPerSecond(impulse), TangentImpulse: zeroImpulseVec(),
 		PointImpulses: []ContactPointImpulse{{Normal: units.KilogramMillimetersPerSecond(impulse),
@@ -257,7 +257,7 @@ func boxFaceOnBody(face *decad.Face, body *decad.Body) bool {
 // supplied mass center is far from the spherical contact point.
 func (w *World) omittedSphereRotationWithin(point decad.ContactPoint, pose r3.Transform,
 	dynamic int, normal r3.Vec, impulse float64, dt units.Value) bool {
-	mass := w.parts[dynamic].mass
+	mass := w.bodies[dynamic].mass
 	witness := point.OnA
 	if dynamic == 1 {
 		witness = point.OnB

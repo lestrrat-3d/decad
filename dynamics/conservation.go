@@ -87,7 +87,7 @@ func (w *World) torqueImpulse(loads [2]*BodyLoad, dt units.Value) (MomentumReadi
 	if duration == nil || duration.Sign() <= 0 {
 		return MomentumReading{}, false
 	}
-	for i, part := range w.parts {
+	for i, part := range w.bodies {
 		if part.definition.Role != Dynamic || loads[i] == nil {
 			continue
 		}
@@ -131,7 +131,7 @@ func (w *World) conservationState(state State) (ConservationState, bool) {
 		momentum[axis], low[axis], high[axis] = new(big.Rat), new(big.Rat), new(big.Rat)
 		angularValue[axis], angularLow[axis], angularHigh[axis] = new(big.Rat), new(big.Rat), new(big.Rat)
 	}
-	for i, part := range w.parts {
+	for i, part := range w.bodies {
 		if part.definition.Role != Dynamic {
 			continue
 		}
@@ -402,7 +402,7 @@ func (w *World) driftConservationChange(kicked State, trace Trace) (Conservation
 
 func (w *World) driftConservationSlices(slices [][2]State) (ConservationState, bool) {
 	for _, slice := range slices {
-		for i, part := range w.parts {
+		for i, part := range w.bodies {
 			if part.definition.Role == Dynamic && !sameOrientation(
 				slice[0].entries[i].Pose, slice[1].entries[i].Pose) {
 				return w.rotatingDriftChange(slices)
@@ -413,7 +413,7 @@ func (w *World) driftConservationSlices(slices [][2]State) (ConservationState, b
 	for axis := range angular {
 		angular[axis], low[axis], high[axis] = new(big.Rat), new(big.Rat), new(big.Rat)
 	}
-	for i, part := range w.parts {
+	for i, part := range w.bodies {
 		if part.definition.Role != Dynamic {
 			continue
 		}
@@ -492,7 +492,7 @@ func (w *World) rotatingDriftChange(slices [][2]State) (ConservationState, bool)
 		angularValue[axis], angularLow[axis], angularHigh[axis] = new(big.Rat), new(big.Rat), new(big.Rat)
 	}
 	for _, slice := range slices {
-		for i, part := range w.parts {
+		for i, part := range w.bodies {
 			if part.definition.Role != Dynamic {
 				continue
 			}
@@ -563,7 +563,7 @@ func (w *World) forceImpulses(gravity QuantityVec, loads [2]*BodyLoad,
 	if duration == nil || duration.Sign() <= 0 {
 		return MomentumReading{}, MomentumReading{}, false
 	}
-	for i, part := range w.parts {
+	for i, part := range w.bodies {
 		if part.definition.Role != Dynamic {
 			continue
 		}
@@ -610,12 +610,12 @@ func (w *World) externalContactImpulse(events []ContactEvent) (MomentumReading, 
 		components[axis] = new(big.Rat)
 		low[axis], high[axis] = new(big.Rat), new(big.Rat)
 	}
-	if w.parts[0].definition.Role == Dynamic && w.parts[1].definition.Role == Dynamic {
+	if w.bodies[0].definition.Role == Dynamic && w.bodies[1].definition.Role == Dynamic {
 		return boundedMomentum(components, components, components)
 	}
 	// A contact impulse acts along A-to-B on B and oppositely on A.
 	sign := int64(1)
-	if w.parts[0].definition.Role == Dynamic {
+	if w.bodies[0].definition.Role == Dynamic {
 		sign = -1
 	}
 	for _, event := range events {

@@ -10,212 +10,52 @@ import (
 
 var threePairs = [3][2]int{{0, 1}, {0, 2}, {1, 2}}
 
-// threeBodyWorld keeps each possible response pair in world order. The current
-// three-body step admits one, two, or three dynamic bodies; every other active pair
-// must have a certified clear path before a result is published.
+// threeBodyWorld keeps one two-body response world per pair-table entry with a
+// dynamic body, keyed by canonical pair index. The current three-body step
+// admits one, two, or three dynamic bodies; every other active pair must have
+// a certified clear path before a result is published.
 type threeBodyWorld struct {
-	parts        [3]RigidBody
-	mass         [3]decad.MassProperties
 	pairs        [3]*World
-	excluded     []BodyPair
 	dynamic      int
 	dynamicCount int
 }
 
-func newThreeBodyWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World, error) {
+// newThreeBodyWorld reads the admitted bodies and the pair table of a
+// three-body world. A Fixed/Fixed pair gets no response world; the step still
+// queries it with ContactPair.
+func newThreeBodyWorld(w *World) *threeBodyWorld {
 	three := &threeBodyWorld{dynamic: -1}
-	copy(three.parts[:], cfg.Bodies)
-	live := doc.Bodies()
-	indices := make(map[*decad.Body]int, 3)
-	for i, part := range three.parts {
-		if part.Body == nil {
-			return nil, fmt.Errorf("%w: nil body", ErrInvalidInput)
-		}
-		if part.Body.Document() != doc || !containsBody(live, part.Body) {
-			return nil, fmt.Errorf("%w: body is foreign or retired", ErrInvalidInput)
-		}
-		if _, duplicate := indices[part.Body]; duplicate {
-			return nil, fmt.Errorf("%w: duplicate body", ErrInvalidInput)
-		}
-		indices[part.Body] = i
-		if part.Body.Kind() != decad.BodySolid || !part.Body.IsSolid() {
-			return nil, fmt.Errorf("%w: body is not a sound solid", ErrInvalidInput)
-		}
-		if err := validateMaterial(part.Material); err != nil {
-			return nil, err
-		}
-		if part.Role == Dynamic {
-			if (part.Density == nil) == (part.Supplied == nil) {
-				return nil, fmt.Errorf("%w: dynamic body needs exactly one mass source", ErrInvalidInput)
-			}
-			if part.Density != nil {
-				density := *part.Density
-				part.Density = &density
-				mass, err := part.Body.MassProperties(ctx, density)
-				if err != nil {
-					return nil, err
-				}
-				three.mass[i] = mass
-			} else {
-				supplied := *part.Supplied
-				part.Supplied = &supplied
-				three.mass[i] = supplied
-			}
-			if err := validateMass(three.mass[i]); err != nil {
-				return nil, err
-			}
-			three.parts[i] = part
-			if three.dynamic < 0 {
-				three.dynamic = i
-			}
-			three.dynamicCount++
-		} else if part.Role != Fixed {
-			return nil, fmt.Errorf("%w: three-body kinematic response", ErrUnsupported)
-		} else if part.Density != nil || part.Supplied != nil {
-			return nil, fmt.Errorf("%w: fixed body has mass input", ErrInvalidInput)
-		}
-	}
-	if three.dynamicCount == 0 {
-		return nil, fmt.Errorf("%w: three-body world needs a dynamic body", ErrUnsupported)
-	}
-	excluded := make(map[int]struct{}, len(cfg.Excluded))
-	for _, pair := range cfg.Excluded {
-		key, ok := threePairIndex(indices, pair)
-		if !ok {
-			return nil, fmt.Errorf("%w: exclusion names an unknown pair", ErrInvalidInput)
-		}
-		if _, duplicate := excluded[key]; duplicate {
-			return nil, fmt.Errorf("%w: duplicate pair exclusion", ErrInvalidInput)
-		}
-		excluded[key] = struct{}{}
-	}
-	overrides := make(map[int]PairMaterial, len(cfg.Overrides))
-	for _, override := range cfg.Overrides {
-		key, ok := threePairIndex(indices, override.Pair)
-		if !ok {
-			return nil, fmt.Errorf("%w: override names an unknown pair", ErrInvalidInput)
-		}
-		if _, duplicate := overrides[key]; duplicate {
-			return nil, fmt.Errorf("%w: duplicate pair override", ErrInvalidInput)
-		}
-		if _, hidden := excluded[key]; hidden {
-			return nil, fmt.Errorf("%w: excluded pair has a material override", ErrInvalidInput)
-		}
-		if err := validateMaterial(Material{Restitution: override.Restitution, Friction: override.Friction}); err != nil {
-			return nil, err
-		}
-		overrides[key] = override
-	}
-	for key, pair := range threePairs {
-		a, b := three.parts[pair[0]], three.parts[pair[1]]
-		canonical := BodyPair{A: a.Body, B: b.Body}
-		if _, skip := excluded[key]; skip {
-			three.excluded = append(three.excluded, canonical)
-		}
-		if a.Role != Dynamic && b.Role != Dynamic {
+	for i, body := range w.bodies {
+		if body.definition.Role != Dynamic {
 			continue
 		}
-		pairCfg := WorldConfig{Bodies: []RigidBody{a, b}, Step: cfg.Step}
-		for side, worldIndex := range pair {
-			if pairCfg.Bodies[side].Role == Dynamic {
-				mass := three.mass[worldIndex]
-				pairCfg.Bodies[side].Density = nil
-				pairCfg.Bodies[side].Supplied = &mass
-			}
+		if three.dynamic < 0 {
+			three.dynamic = i
 		}
-		if _, skip := excluded[key]; skip {
-			pairCfg.Excluded = []BodyPair{canonical}
-		}
-		if override, present := overrides[key]; present {
-			pairCfg.Overrides = []PairMaterial{override}
-		}
-		child, err := NewWorld(ctx, doc, pairCfg)
-		if err != nil {
-			return nil, err
-		}
-		three.pairs[key] = child
+		three.dynamicCount++
 	}
-	// Every body belongs to a validated dynamic/fixed child world. The fixed
-	// pair still receives a real ContactPair query during each step.
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	return &World{doc: doc, step: cfg.Step, three: three}, nil
-}
-
-func threePairIndex(indices map[*decad.Body]int, pair BodyPair) (int, bool) {
-	a, okA := indices[pair.A]
-	b, okB := indices[pair.B]
-	if !okA || !okB || a == b {
-		return 0, false
-	}
-	for key, ordered := range threePairs {
-		if ordered == [2]int{a, b} || ordered == [2]int{b, a} {
-			return key, true
-		}
-	}
-	return 0, false
-}
-
-func (w *World) newThreeBodyState(entries []BodyState) (State, error) {
-	if len(entries) != 3 {
-		return State{}, fmt.Errorf("%w: state requires exactly three bodies", ErrInvalidInput)
-	}
-	byBody := make(map[*decad.Body]BodyState, 3)
-	for _, entry := range entries {
-		if entry.Body == nil {
-			return State{}, fmt.Errorf("%w: nil state body", ErrInvalidInput)
-		}
-		if _, duplicate := byBody[entry.Body]; duplicate {
-			return State{}, fmt.Errorf("%w: duplicate state body", ErrInvalidInput)
-		}
-		byBody[entry.Body] = entry
-	}
-	if len(byBody) != 3 {
-		return State{}, fmt.Errorf("%w: state body count", ErrInvalidInput)
-	}
-	ordered := State{world: w, hasThird: true}
-	for i, part := range w.three.parts {
-		entry, present := byBody[part.Body]
-		if !present {
-			return State{}, fmt.Errorf("%w: state contains an unknown body", ErrInvalidInput)
-		}
-		if i < 2 {
-			ordered.entries[i] = entry
-		} else {
-			ordered.third = entry
-		}
-	}
-	for _, pair := range w.three.pairs {
-		if pair == nil {
+	for key, pair := range w.pairs {
+		if w.bodies[pair.a].definition.Role != Dynamic && w.bodies[pair.b].definition.Role != Dynamic {
 			continue
 		}
-		_, err := pair.NewState([]BodyState{
-			byBody[pair.parts[0].definition.Body], byBody[pair.parts[1].definition.Body],
-		})
-		if err != nil {
-			return State{}, err
-		}
+		three.pairs[key] = w.pairWorld(key)
 	}
-	return ordered, nil
+	return three
 }
 
 func pairState(state State, pair *World) State {
-	first, _ := state.Body(pair.parts[0].definition.Body)
-	second, _ := state.Body(pair.parts[1].definition.Body)
-	return State{world: pair, entries: [2]BodyState{first, second}}
+	first, _ := state.Body(pair.bodies[0].definition.Body)
+	second, _ := state.Body(pair.bodies[1].definition.Body)
+	return State{world: pair, entries: []BodyState{first, second}}
 }
 
 func withPairState(original State, pairState State) State {
-	out := original
+	out := original.clone()
 	for _, entry := range pairState.entries {
 		for i := range out.entries {
 			if out.entries[i].Body == entry.Body {
 				out.entries[i] = entry
 			}
-		}
-		if out.third.Body == entry.Body {
-			out.third = entry
 		}
 	}
 	return out
@@ -230,8 +70,8 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 		return nil, fmt.Errorf("%w: this world has no kinematic body", ErrInvalidInput)
 	}
 	live := w.doc.Bodies()
-	for _, part := range w.three.parts {
-		if !containsBody(live, part.Body) {
+	for _, part := range w.bodies {
+		if !containsBody(live, part.definition.Body) {
 			return nil, fmt.Errorf("%w: world body was retired", ErrInvalidInput)
 		}
 	}
@@ -274,13 +114,13 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 	var simultaneous [3]*decad.SweepReport
 	activeCount := 0
 	for key, indices := range threePairs {
-		if threePairExcluded(w.three.excluded, w.three.parts, indices) {
+		if w.pairs[key].excluded {
 			continue
 		}
 		pair := w.three.pairs[key]
 		if pair == nil {
-			a, _ := kicked.Body(w.three.parts[indices[0]].Body)
-			b, _ := kicked.Body(w.three.parts[indices[1]].Body)
+			a, _ := kicked.Body(w.bodies[indices[0]].definition.Body)
+			b, _ := kicked.Body(w.bodies[indices[1]].definition.Body)
 			contact, err := w.doc.ContactPair(ctx, a.Body, b.Body, a.Pose, b.Pose, w.step.Contact)
 			if err != nil {
 				return nil, err
@@ -337,8 +177,7 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 		return result, err
 	}
 	for key, pair := range w.three.pairs {
-		if pair == nil || key == active ||
-			threePairExcluded(w.three.excluded, w.three.parts, threePairs[key]) {
+		if pair == nil || key == active || w.pairs[key].excluded {
 			continue
 		}
 		if ok, err := w.threeOtherPairClear(ctx, pair, kicked, result, dt); err != nil {
@@ -361,23 +200,10 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 	return result, nil
 }
 
-func threePairExcluded(excluded []BodyPair, parts [3]RigidBody, pair [2]int) bool {
-	a, b := parts[pair[0]].Body, parts[pair[1]].Body
-	for _, item := range excluded {
-		if item.A == a && item.B == b {
-			return true
-		}
-	}
-	return false
-}
-
 func (w *World) threeUndecided(key int, reason string) *StepReport {
 	report := undecided(w, reason)
 	if key >= 0 && key < len(threePairs) {
-		indices := threePairs[key]
-		report.Diagnostics[0].Pair = BodyPair{
-			A: w.three.parts[indices[0]].Body, B: w.three.parts[indices[1]].Body,
-		}
+		report.Diagnostics[0].Pair = w.bodyPair(w.pairs[key])
 	}
 	return report
 }
@@ -445,8 +271,8 @@ func threeClearSegment(ctx context.Context, pair *World, start, end State,
 }
 
 func threeClearEndpoint(ctx context.Context, pair *World, state State) (bool, error) {
-	contact, err := pair.doc.ContactPair(ctx, pair.parts[0].definition.Body,
-		pair.parts[1].definition.Body, state.entries[0].Pose, state.entries[1].Pose,
+	contact, err := pair.doc.ContactPair(ctx, pair.bodies[0].definition.Body,
+		pair.bodies[1].definition.Body, state.entries[0].Pose, state.entries[1].Pose,
 		pair.step.Contact)
 	if err != nil {
 		return false, err
