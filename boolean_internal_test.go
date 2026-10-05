@@ -536,6 +536,48 @@ func TestStitchRoundingUnderflowKeepsPositiveBound(t *testing.T) {
 	require.Positive(t, pointRoundBound(d2, r3.NewVec(2, 2, 9)))
 }
 
+func TestFacetedMeasurementSumsEncloseSmallAllowances(t *testing.T) {
+	const tiny = math.SmallestNonzeroFloat64
+	t.Run("volume", func(t *testing.T) {
+		gap := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 54))
+		exactVolume := new(big.Rat).Add(big.NewRat(1, 1), gap)
+		x := new(big.Rat).Mul(exactVolume, big.NewRat(6, 1))
+		verts := []xpt{
+			xptOf(r3.Vec{}),
+			xptFromRat(x, big.NewRat(0, 1), big.NewRat(0, 1)),
+			xptOf(r3.NewVec(0, 1, 0)),
+			xptOf(r3.NewVec(0, 0, 1)),
+		}
+		tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
+		reading, gotVolume, err := meshVolumeMeasurement(t.Context(), verts, tris, tiny)
+		require.NoError(t, err)
+		require.Equal(t, 0, exactVolume.Cmp(gotVolume))
+		wantBound := new(big.Rat).Add(gap, new(big.Rat).SetFloat64(tiny))
+		require.GreaterOrEqual(t, new(big.Rat).SetFloat64(reading.Bound.Base()).Cmp(wantBound), 0)
+	})
+
+	t.Run("centroid", func(t *testing.T) {
+		width := math.Ldexp(1, -52)
+		verts := []r3.Vec{{X: 1}, {X: 1 + width}, {X: 1, Y: 1}, {X: 1, Z: 1}}
+		tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
+		payload := facetedPayload{
+			verts: verts, tris: tris, src: []int{0, 1, 2, 3},
+			groups:     []facetGroup{{planar: true}, {planar: true}, {planar: true}, {planar: true}},
+			volSymDiff: tiny, dPair: 2, xform: r3.Identity(),
+		}
+		body, err := buildFacetedBody(t.Context(), New(), producerID(0), payload)
+		require.NoError(t, err)
+		require.Equal(t, 1.0, body.centroid.Value.X)
+		trueCenterX := new(big.Rat).Add(big.NewRat(1, 1),
+			new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 54)))
+		round := radius3D(ratAbsDiff(trueCenterX, body.centroid.Value.X))
+		volume := new(big.Rat).Quo(new(big.Rat).SetFloat64(width), big.NewRat(6, 1))
+		allowance := facetedCentroidAllowance(tiny, payload.dPair, volFloor(volume, tiny))
+		wantBound := new(big.Rat).Add(new(big.Rat).SetFloat64(round), new(big.Rat).SetFloat64(allowance))
+		require.GreaterOrEqual(t, new(big.Rat).SetFloat64(body.centroid.Bound.Base()).Cmp(wantBound), 0)
+	})
+}
+
 // TestBooleanVolumesAreUnchangedByTheKernelRewrite is fu163's end-to-end
 // proof: the mesh boolean's reported volume, centroid and bounds must be
 // bit-identical to what the math/big.Rat kernel this change replaces

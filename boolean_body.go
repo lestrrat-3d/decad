@@ -592,10 +592,11 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	// The three coordinates round independently, and the VecMeasurement bound
 	// is a 3D radius (bounds.go, radius3D).
 	cenRound := radius3D(math.Max(ratAbsDiff(cx, cxF), math.Max(ratAbsDiff(cy, cyF), ratAbsDiff(cz, czF))))
+	centroidBound := absSumUpper(cenBound, cenRound)
 	body.centroid = VecMeasurement{
 		Value:     r3.Vec{X: cxF, Y: cyF, Z: czF},
-		Exactness: exactnessOf(cenBound + cenRound),
-		Bound:     units.Millimeters(cenBound + cenRound),
+		Exactness: exactnessOf(centroidBound),
+		Bound:     units.Millimeters(centroidBound),
 	}
 
 	lo, hi := verts[0], verts[0]
@@ -683,7 +684,7 @@ func meshVolumeMeasurement(ctx context.Context, xverts []xpt, tris [][3]int, vol
 		return Measurement{}, nil, fmt.Errorf(`%w: the boolean result encloses no volume`, ErrBooleanFailed)
 	}
 	volF, _ := volRat.Float64()
-	bound := volSymDiff + ratAbsDiff(volRat, volF)
+	bound := absSumUpper(volSymDiff, ratAbsDiff(volRat, volF))
 	return Measurement{
 		Value:     units.CubicMillimeters(volF),
 		Exactness: exactnessOf(bound),

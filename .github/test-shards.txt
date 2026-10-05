@@ -1190,6 +1190,7 @@
 4	0.00	TestFacetedAxisSupportProvesRealUnionFloorFace
 4	0.00	TestFacetedAxisSupportRefusesHoledFootprint
 4	0.00	TestFacetedAxisSupportRefusesTwoLowestFaces
+4	0.00	TestFacetedMeasurementSumsEncloseSmallAllowances
 4	0.85	TestFacetedPlaced
 4	0.00	TestFacetedPlacementRebuildsCachedDiameter
 4	0.01	TestFilletBoundaryContactRefused
