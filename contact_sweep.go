@@ -135,7 +135,8 @@ type SweepContactTrack struct {
 	orientedA     *orientedSourceBox
 	orientedB     *orientedSourceBox
 	orientedDelta [3]proofarith.Dyadic
-	planar        *planarTrackProof // general planar touch or band (contact_sweep_band.go)
+	planar        *planarTrackProof  // general planar touch or band (contact_sweep_band.go)
+	rolling       *rollingTrackProof // rolling cylinder touch or band (contact_sweep_rolling.go)
 }
 
 func (t *SweepContactTrack) Start() SweepInstant { return sweepInstant(t.start, t.duration) }
@@ -153,11 +154,18 @@ func (t *SweepContactTrack) Normal() VecMeasurement { return t.normal }
 // point's separation in both directions and the interiors' overlap along
 // Normal(). It is nil for an exact touch track.
 func (t *SweepContactTrack) Band() *Measurement {
-	if t.planar == nil || t.planar.band == nil {
+	var band *Measurement
+	switch {
+	case t.planar != nil:
+		band = t.planar.band
+	case t.rolling != nil:
+		band = t.rolling.band
+	}
+	if band == nil {
 		return nil
 	}
-	band := *t.planar.band
-	return &band
+	out := *band
+	return &out
 }
 
 // BandAt returns the depth of a band track over its prefix through fraction
@@ -178,12 +186,16 @@ func (t *SweepContactTrack) BandAt(fraction units.Value) (*Measurement, error) {
 	if f.Cmp(t.start) < 0 || f.Cmp(t.end) > 0 {
 		return nil, fmt.Errorf("%w: fraction is outside contact track", ErrDegenerate)
 	}
-	if t.planar == nil || t.planar.band == nil {
+	var depth *big.Rat
+	switch {
+	case t.planar != nil && t.planar.band != nil:
+		if depth, ok = t.planar.depthThrough(f); !ok {
+			return nil, fmt.Errorf("%w: band depth has no finite bound", ErrUnsupported)
+		}
+	case t.rolling != nil && t.rolling.band != nil:
+		depth = t.rolling.depthThrough(f)
+	default:
 		return nil, nil //nolint:nilnil // an exact touch track has no band, as Band() reports
-	}
-	depth, ok := t.planar.depthThrough(f)
-	if !ok {
-		return nil, fmt.Errorf("%w: band depth has no finite bound", ErrUnsupported)
 	}
 	value := ratFloatNearest(depth)
 	bound := proofarith.RationalFloatError(depth, value)
@@ -209,6 +221,9 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 	}
 	if t.planar != nil {
 		return t.planar.planarManifoldAt(f, t.request)
+	}
+	if t.rolling != nil {
+		return t.rolling.manifoldAt(f, t.request)
 	}
 	if t.cylinder != nil {
 		return t.cylinderTrackManifold(f)
@@ -494,7 +509,9 @@ func exactnessFromBound(bound float64) Exactness {
 // positive-bound faceted Boolean or all-planar cap-loop chamfer takes the
 // same run through its held mesh under §10.4: a first impact brackets onto a
 // ContactBand sample, and a band start never departs but may carry a band
-// track widened by twice the displacement.
+// track widened by twice the displacement. A full source cylinder whose
+// ruling touches a face of an exact planar body that only translates may,
+// under a spinning drift, carry §10.4's rolling touch or band track.
 // Unsupported paths return SweepUndecided.
 // Both body pointers, both paths, and ctx must be non-nil.
 func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairPath,

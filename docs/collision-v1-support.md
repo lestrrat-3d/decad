@@ -19,7 +19,7 @@ shows a box impact and computed rebound.
 | Two source spheres | Center-line point, affine center paths, centered rotating departure | Rebound, rest, graze, and admitted planar Coulomb impact |
 | Full source cylinder and source box | Axial disk in a wide face, including a disk resting or sliding on it; vertical extruded sidewall against a broad face | Centered frictionless rebound; rest on an end disk |
 | Verified faceted Boolean and source-box floor | One exact rectangular lower face, vertical affine path, contained footprint | Frictionless rebound or rest |
-| Full source cylinder sidewall, against a planar face or a parallel full source cylinder | Two-end ruling line at identity query poses only | None yet |
+| Full source cylinder sidewall, against a planar face or a parallel full source cylinder | Two-end ruling line at identity query poses only; on an exact planar solid, a rolling touch or band track from such a start | None yet |
 | Two exact planar solids | Gap, touch, or overlap at any pose with a positive-determinant basis; a manifold when one is convex; a clear path, first impact, departure from touch, or persistent touch or band track under rotating or affine paths | None yet |
 | A planar solid and a positive-bound faceted Boolean or flat-faced cap-loop chamfer | Gap, overlap, or `ContactBand` with the held mesh's displacement charged; a manifold against a face of a body with no displacement; a clear path, first impact onto the band, or band track | None yet |
 
@@ -81,9 +81,19 @@ Its carriers must be exact: an unplaced full revolve or extruded circle,
 sketched on an XY plane. It must touch a planar face along its whole tangent
 ruling, or touch a parallel full source cylinder with positive axial overlap.
 The manifold publishes the ruling's two exact ends with the faces'
-`Face.NormalAt` normals. No sweep or step consumes this contact yet. The
+`Face.NormalAt` normals. The
 [ruling manifold tests](../contact_analytic_manifold_test.go) check both
 contacts and their refusals.
+
+A cylinder lying on a face of an exact planar solid that only translates,
+from such a ruling touch, can roll. Under `ContinueCertifiedTouch` and a
+spinning drift, `SweepPair` carries a track whose two ruling ends stay within
+the published `Band()` depth of the face and over it. Rolling about its own
+axis without slip is an exact `SweepPersistentTouch` over a whole turn. A
+sink, an off-axis pivot or a tilt of the axis adds its own computed depth.
+The track's points, normal and replay follow the planar band track. No step
+consumes it yet. [Rolling tests](../contact_sweep_rolling_test.go) check the
+ruling ends, the depth and the contact point's speed.
 
 The faceted floor path requires one complete rectangular lower face with
 an exact source plane and a live Face identity. The proof admits a zero-bound

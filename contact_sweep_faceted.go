@@ -20,9 +20,10 @@ import (
 // a zero angular term.
 
 // sweepPlanarPair runs the general sweep when both bodies are admitted §9
-// planar solids. It reports false, leaving report untouched, when either is
-// not. A path whose ideal motion or travel bound cannot be formed is
-// SweepUndecided with SweepMissingBound.
+// planar solids. When either is not, a source cylinder rolling on a planar
+// body takes sweepRollingPair (contact_sweep_rolling.go); any other pair
+// reports false, leaving report untouched. A path whose ideal motion or
+// travel bound cannot be formed is SweepUndecided with SweepMissingBound.
 func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
 	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
 	report *SweepReport) (*SweepReport, bool, error) {
@@ -36,7 +37,7 @@ func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
 		return nil, true, err
 	}
 	if !okA || !okB {
-		return nil, false, nil
+		return d.sweepRollingPair(ctx, a, b, pa, pb, req, resolution, report)
 	}
 	aPath, okA := preparePlanarSweepPath(a, pa, &solidA, deltaA)
 	bPath, okB := preparePlanarSweepPath(b, pb, &solidB, deltaB)
