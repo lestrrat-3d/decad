@@ -262,3 +262,66 @@ func TestSweepPairEqualSpinDepartsFromSourceFace(t *testing.T) {
 	_, _, err = undecided.CertifiedPosesAt(units.Seconds(.05))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
+
+func TestSweepPairFixedFloorTangentialSpinDeparts(t *testing.T) {
+	doc := decad.New()
+	floor := boxBodyAtZ(t, doc, 0, -5, 10, 5, -10, 10)
+	box := boxBodyAtZ(t, doc, 5, -5, 15, 5, 0, 10)
+	contact, err := doc.ContactPair(t.Context(), floor, box, r3.Identity(), r3.Identity(), contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, contact.Relation)
+	require.Len(t, contact.Manifold.Points, 4)
+
+	path := sweepDrift(r3.Vec{Z: 100}, .1)
+	path.Center = r3.Vec{X: 10, Z: 5}
+	path.AngularVelocity.Y = units.RadiansPerSecond(1)
+	req := sweepRequest()
+	req.StartPolicy = decad.ContinueSeparatingTouch
+	req.MaxPoseEvaluations = 128
+	report, err := doc.SweepPair(t.Context(), floor, box, sweepDrift(r3.Vec{}, .1), path, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepDepartedClear, report.Outcome, "cause=%v", report.Cause)
+	require.NotNil(t, report.Departure)
+	require.Equal(t, .1, report.Departure.Until.Elapsed.Value.Base())
+	require.Greater(t, report.Departure.GapAtUntil.Value.Base()-report.Departure.GapAtUntil.Bound.Base(), 0.0)
+	for _, elapsed := range []float64{1e-8, .025, .1} {
+		poseFloor, poseBox, replayErr := report.CertifiedPosesAt(units.Seconds(elapsed))
+		require.NoError(t, replayErr, "time=%v", elapsed)
+		separated, contactErr := doc.ContactPair(t.Context(), floor, box, poseFloor, poseBox, contactRequest())
+		require.NoError(t, contactErr)
+		require.Equal(t, decad.ContactSeparated, separated.Relation, "time=%v", elapsed)
+	}
+
+	reversed, err := doc.SweepPair(t.Context(), box, floor, path, sweepDrift(r3.Vec{}, .1), req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepDepartedClear, reversed.Outcome, "cause=%v", reversed.Cause)
+	require.NotNil(t, reversed.Departure)
+	_, _, err = reversed.CertifiedPosesAt(units.Seconds(.025))
+	require.NoError(t, err)
+
+	path.LinearVelocity.Z = units.MillimetersPerSecond(6)
+	shortHorizon, err := doc.SweepPair(t.Context(), floor, box, sweepDrift(r3.Vec{}, .1), path, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepDepartedClear, shortHorizon.Outcome, "cause=%v", shortHorizon.Cause)
+	require.Equal(t, .05, shortHorizon.Departure.Until.Elapsed.Value.Base())
+	_, _, err = shortHorizon.CertifiedPosesAt(units.Seconds(.075))
+	require.NoError(t, err)
+
+	path.LinearVelocity.Z = units.MillimetersPerSecond(5)
+	tooSlow, err := doc.SweepPair(t.Context(), floor, box, sweepDrift(r3.Vec{}, .1), path, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepUndecided, tooSlow.Outcome)
+	require.Equal(t, decad.SweepDepartureUnproved, tooSlow.Cause)
+	path.LinearVelocity.Z = units.MillimetersPerSecond(100)
+	path.AngularVelocity.Y = units.RadiansPerSecond(30)
+	tooFast, err := doc.SweepPair(t.Context(), floor, box, sweepDrift(r3.Vec{}, .1), path, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepUndecided, tooFast.Outcome)
+	require.Equal(t, decad.SweepDepartureUnproved, tooFast.Cause)
+	path.AngularVelocity.Y = units.RadiansPerSecond(1)
+	path.Center.X = -100
+	badPivot, err := doc.SweepPair(t.Context(), floor, box, sweepDrift(r3.Vec{}, .1), path, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepUndecided, badPivot.Outcome)
+	require.Equal(t, decad.SweepDepartureUnproved, badPivot.Cause)
+}

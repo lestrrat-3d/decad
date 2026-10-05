@@ -28,8 +28,10 @@ reach a contained horizontal face on a stationary box, then depart under
 positive vertical velocity. A rotating `PoseSegment` whose read screw axis is
 cardinal can certify a clear path or first impact. An axis-normal source face
 can also certify departure when its support-plane gap increases throughout
-the step. Other unequal spins, rotating paths, and payloads remain design
-contracts.
+the step. A source box spinning about Y can depart from a stationary horizontal
+source-box face when every source corner has a positive bounded outward height
+through the certified interval. Other unequal spins, rotating paths, and
+payloads remain design contracts.
 An extruded circular source prism or a full revolve of an axis-incident
 rectangular half-profile can certify a strictly separated axial affine path
 against a containing source-box face. The sweep uses the source-derived outer
@@ -442,6 +444,21 @@ positive support gap for every positive path fraction. Check the chosen
 rounded departure sample with its float-to-ideal pose bound. Every later
 clear interval must keep this exact support gap positive at both endpoints;
 affine motion then proves it positive throughout the interval.
+
+For a stationary horizontal source-box face and a moving source box whose
+only angular component is about world Y, read all eight exact staged moving
+corners and the exact drift pivot. The initial four-point manifold must have
+the same exact vertical normal at every point, and opposed full-box Z supports
+must be equal. For each corner, bound its outward height derivative by the
+exact `sign * (v_z - omega_y * (corner.x - center.x))`. Require the minimum
+derivative `c` over all eight corners to be strictly positive. Bound the
+absolute height acceleration of each corner by
+`omega_y^2 * (abs(corner.x - center.x) + abs(corner.z - center.z))` and use the
+maximum as `K`. The stationary support plane and the initially nonnegative
+corner heights then give a full-body gap at least `c*u - K*u*u/2`. Admit a
+dyadic horizon only when `K*h < c`; reduce the horizon when the full duration
+fails. The rounded horizon sample must retain a positive gap after pose
+deviation, and later intervals need their own continuous clear certificates.
 
 After departure, mark `(0,h]` as certified clear, put a separated sample at
 `h`, and run §5's earliest-first search on `[h, Duration]`. If no later
