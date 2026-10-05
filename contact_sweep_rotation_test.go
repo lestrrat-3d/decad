@@ -222,8 +222,14 @@ func TestSweepPairRotatingBoxFindsHiddenImpact(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.ContactSeparated, contact.Relation)
 	require.NotNil(t, report.Bracket)
+	// The sweep narrowed the bracket until its right edge replays, so the
+	// whole bracket replays, and a time past it refuses.
 	bracketMiddle := (report.Bracket.From.Fraction.Base() + report.Bracket.To.Fraction.Base()) / 2
 	_, _, replayErr = report.CertifiedPosesAt(units.Seconds(bracketMiddle))
+	require.NoError(t, replayErr)
+	_, _, replayErr = report.CertifiedPosesAt(units.Seconds(report.Bracket.To.Fraction.Base()))
+	require.NoError(t, replayErr)
+	_, _, replayErr = report.CertifiedPosesAt(units.Seconds(report.Bracket.To.Fraction.Base() + req.TimeResolution.Base()))
 	require.ErrorIs(t, replayErr, decad.ErrUnsupported)
 	require.False(t, report.BracketEndsAtDuration())
 	require.NotNil(t, report.Event)

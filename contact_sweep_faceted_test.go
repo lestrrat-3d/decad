@@ -197,3 +197,87 @@ func TestSweepPairPlanarWedgeStops(t *testing.T) {
 	require.NotNil(t, touching.InitialEvent)
 	require.Equal(t, decad.ContactTouching, touching.InitialEvent.Relation)
 }
+
+// TestSweepPairPlanarTumblingTetrahedronReplaysImpact drops
+// mass_properties_mesh_test.go's stitched tetrahedron into the tray while it
+// turns, the tumble scene's first impact in minimal form
+// (docs/multibody-dynamics-design.md §10.1). The tetrahedron starts 10 mm
+// above the tray floor, z = 0, falling at 20 mm/s and turning at 2 rad/s
+// about Y through (3, 1, 11). Its travel bound T is above 20 mm per unit
+// fraction, so a bracket TimeResolution wide carries more than 2e-5 mm of
+// travel from its left edge, far above the left gap plus PointResolution
+// (1e-6 mm). A step cuts the impact at the bracket's right edge, which
+// replays only once the sweep has narrowed the bracket below that width.
+//
+// Legs shown to fail (each removed in turn, fixture red, then restored):
+//   - the narrowing itself (narrowBracket returning its input): the right
+//     edge's replay refuses with "rounded planar impact pose leaves the point
+//     resolution of contact";
+//   - the travel term of bracketRightReplays (T zeroed): narrowing stops at
+//     once, with the same refusal;
+//   - the pose-budget fallback (narrowBracket passing the budget error on):
+//     the shorter budget below fails the sweep with that error.
+//
+// The gap and deviation terms only stop narrowing earlier when they grow;
+// zeroing either narrows further, which replay still accepts, so neither can
+// turn this fixture red. Replay's own check (bracketDepthWithin) stays the
+// only admission, and TestRotatingBracketDepthChargesTravelAndDeviation
+// covers each of its legs.
+func TestSweepPairPlanarTumblingTetrahedronReplaysImpact(t *testing.T) {
+	doc := decad.New()
+	tray := trayBody(t, doc)
+	tetrahedron, _ := stitchedTetrahedron(t, doc)
+	trayPath := sweepDrift(r3.Vec{}, 1)
+	tetPath := sweepDrift(r3.Vec{Z: -20}, 1)
+	tetPath.From = contactPose(t, r3.Vec{Z: 10})
+	tetPath.Center = r3.Vec{X: 3, Y: 1, Z: 11}
+	tetPath.AngularVelocity.Y = units.RadiansPerSecond(2)
+	req := tumbleRequest()
+	resolution := req.PointResolution.Base()
+
+	var brackets [2][2]float64
+	for order, pair := range [][2]*decad.Body{{tray, tetrahedron}, {tetrahedron, tray}} {
+		pathA, pathB := decad.PairPath(trayPath), decad.PairPath(tetPath)
+		if order == 1 {
+			pathA, pathB = pathB, pathA
+		}
+		report, err := doc.SweepPair(t.Context(), pair[0], pair[1], pathA, pathB, req)
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepImpactBracket, report.Outcome, "order %d cause=%v", order, report.Cause)
+		require.NotNil(t, report.Bracket)
+		left := report.Bracket.From.Fraction.Base()
+		right := report.Bracket.To.Fraction.Base()
+		require.Less(t, left, right)
+		brackets[order] = [2]float64{left, right}
+
+		// Narrowing samples last, so one evaluation fewer drops only its
+		// final midpoint: the wider bracket stands, never an undecided one.
+		short := req
+		short.MaxPoseEvaluations = report.PoseEvaluations - 1
+		wider, err := doc.SweepPair(t.Context(), pair[0], pair[1], pathA, pathB, short)
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepImpactBracket, wider.Outcome, "order %d cause=%v", order, wider.Cause)
+		require.Greater(t, wider.Bracket.To.Fraction.Base()-wider.Bracket.From.Fraction.Base(), right-left)
+
+		// The step's cut: the right edge, replayed the way dynamics replays
+		// a slice fraction.
+		poseA, poseB, err := report.CertifiedPosesAtInterval(units.Seconds(right), units.Seconds(0), units.Seconds(1))
+		require.NoError(t, err, "order %d", order)
+		pose := poseB
+		if order == 1 {
+			pose = poseA
+		}
+		lowest := math.Inf(1)
+		for _, vertex := range tetrahedron.Vertices() {
+			lowest = math.Min(lowest, pose.Apply(vertex.Position().Value).Z)
+		}
+		// The replay places the pair within PointResolution of a separated
+		// one, and the right edge meets the floor. Applying the float pose to
+		// coordinates below 16 rounds far below this slack.
+		const slack = 1e-12
+		require.GreaterOrEqual(t, lowest, -resolution-slack, "order %d", order)
+		require.LessOrEqual(t, lowest, slack, "order %d", order)
+		require.Less(t, right-left, req.TimeResolution.Base(), "order %d: the bracket narrows below TimeResolution", order)
+	}
+	require.Equal(t, brackets[0], brackets[1])
+}

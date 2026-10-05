@@ -165,8 +165,9 @@ Touches no such plane covers, such as two crossing edges or a box in a tray
 corner, stay `SweepUndecided`. These reports replay rounded poses without
 rerunning the pair test. A rotating impact replays its bracket too, up to
 its right end: the rounded pair lies within `PointResolution` of the left
-end's proven gap less the travel since. `BandAt` reads a band track's depth
-over any prefix. [Band and departure tests](../contact_sweep_band_test.go)
+end's proven gap less the travel since. A fast body's bracket narrows
+below `TimeResolution` until that holds at its right end. `BandAt` reads a
+band track's depth over any prefix. [Band and departure tests](../contact_sweep_band_test.go)
 check the depth and the departure time against their closed forms.
 
 A positive-bound faceted Boolean, a placed or certificate-welded closed

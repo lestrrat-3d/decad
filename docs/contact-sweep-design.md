@@ -826,7 +826,17 @@ travel bound per unit fraction, and `η` the rounded pose's deviation. Every
 ideal point lies within `(f − lo)·T` of its place at `lo`, where the pair was
 `g` apart, so the rounded pair lies within that bound of a separated pair,
 the claim the affine source-box replay makes inside its bracket. A left
-sample without a positive gap replays only through `lo`.
+sample without a positive gap replays only through `lo`. `T` bounds every
+point's travel in any direction, so for a fast or far-reaching body a bracket
+`TimeResolution` wide can carry more travel than `g` plus `PointResolution`,
+and its right edge would refuse. The rotating search therefore narrows a
+found bracket below `TimeResolution` while its right edge fails that check,
+read with the deviation replay will charge there: a meeting midpoint becomes
+the right edge, and a separated one the clear certificate joins to the left
+edge becomes the left edge. The bracket found stands when narrowing reaches
+the float floor or the pose budget, or meets a midpoint that settles neither,
+so narrowing never turns a bracket into `SweepUndecided`. The check that
+stops narrowing admits nothing; replay's own check stays the gate.
 Rotating departure reports replay their separated interior after the
 producer's one-sided departure proof. Both paths check the exact oriented-box
 gap against their staged corner deviation before returning a rounded pose.

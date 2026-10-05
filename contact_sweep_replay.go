@@ -799,14 +799,13 @@ func (r *SweepReport) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, 
 		if err != nil {
 			return r3.Transform{}, r3.Transform{}, err
 		}
-		_, bound, ok, _ := path.pointDeviation(pose, f, noSweepPoll)
+		bound, moved, ok := path.replayDeviation(pose, f)
 		if !ok {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: planar replay pose has no finite error bound", ErrUnsupported)
 		}
 		poses[i] = pose
-		deviation.Add(deviation, proofarith.FloatRat(bound))
-		stretch := proofarith.DyAdd(planarPoseScale(pose), proofarith.DyInt(1))
-		displacement.Add(displacement, proofarith.DyMul(path.delta, stretch).Rat())
+		deviation.Add(deviation, bound)
+		displacement.Add(displacement, moved)
 	}
 	resolution, ok := exactBaseValue(p.request.PointResolution)
 	if !ok || deviation.Cmp(resolution) > 0 {
