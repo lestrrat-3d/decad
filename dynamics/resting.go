@@ -147,6 +147,26 @@ func (w *World) stepInitialTouch(ctx context.Context, from, kicked State, dt uni
 		preSpeed[0].Base() - impulse*sign*inverseMass[0],
 		preSpeed[1].Base() + impulse*sign*inverseMass[1],
 	}
+	if w.restitution.Base() == 0 && w.parts[0].definition.Role == Dynamic &&
+		w.parts[1].definition.Role == Dynamic && w.friction.upper.Sign() == 0 &&
+		isSourceSpherePairEvent(first.Event.Manifold) {
+		// Persistent sphere contact needs identical normal displacement.
+		// Round the mass-weighted velocity once, then check both bounded
+		// response intervals below against that published value.
+		massA, massB := exactBase(w.parts[0].mass.Mass.Value), exactBase(w.parts[1].mass.Mass.Value)
+		speedA, speedB := exactBase(preSpeed[0]), exactBase(preSpeed[1])
+		if massA == nil || massB == nil || speedA == nil || speedB == nil {
+			return undecided(w, "sphere momentum velocity is not representable"), nil
+		}
+		denominator := new(big.Rat).Add(massA, massB)
+		if denominator.Sign() <= 0 {
+			return undecided(w, "sphere mass sum is not positive"), nil
+		}
+		momentum := new(big.Rat).Add(new(big.Rat).Mul(massA, speedA),
+			new(big.Rat).Mul(massB, speedB))
+		common, _ := new(big.Rat).Quo(momentum, denominator).Float64()
+		postSpeed = [2]float64{common, common}
+	}
 	if !finite(impulse, postSpeed[0], postSpeed[1]) || impulse <= 0 ||
 		!responsePairResidualsWithin(preSpeed, sign, units.Scalar(0), w.parts,
 			0, impulse, postSpeed, w.step.VelocityResidual, w.step.ImpulseResidual) {

@@ -73,6 +73,10 @@ Two source semicircle spheres with supplied or density-derived mass can
 rebound as a centered dynamic pair when the impact has a cardinal manifold.
 Their approach may
 include transverse motion when the sweep certifies first impact.
+At an initial cardinal touch with zero restitution, publish one shared
+mass-weighted normal velocity only when the bounded pair impulse and both
+response intervals admit it. The ideal and rounded persistent-contact sweeps
+must still certify the full step.
 An isolated frictionless off-axis sphere-pair impact also admits a bounded
 center-line normal with density-derived or supplied bounded mass and center
 readings when neither body starts with spin. The solver checks both mass

@@ -515,7 +515,10 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		if rotating {
 			return undecided(w, "rotating initial contact needs a certified response track"), nil
 		}
-		if first.Event != nil && isObliqueSpherePairEvent(first.Event.Manifold) {
+		if first.Event != nil && (isObliqueSpherePairEvent(first.Event.Manifold) ||
+			(w.restitution.Base() > 0 && w.parts[0].definition.Role == Dynamic &&
+				w.parts[1].definition.Role == Dynamic && w.friction.upper.Sign() == 0 &&
+				isSourceSpherePairEvent(first.Event.Manifold))) {
 			if spherePairVelocity(kicked.entries[0].LinearVelocity) ==
 				spherePairVelocity(kicked.entries[1].LinearVelocity) {
 				continuation, continuationErr := w.sweep(ctx, kicked, dt, decad.ContinueCertifiedTouch)
