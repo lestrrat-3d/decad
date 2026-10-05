@@ -28,6 +28,9 @@ type initialConstraint struct {
 func (w *World) stepThreeSimultaneousInitial(ctx context.Context, from, kicked State,
 	gravity QuantityVec, loads [2]*BodyLoad, dt units.Value, sweeps [3]*decad.SweepReport,
 	reference *World) (*StepReport, error) {
+	if threeHasSpherePair(sweeps) {
+		return w.stepThreeSphereIsland(ctx, from, kicked, gravity, loads, dt, sweeps, reference)
+	}
 	constraints := make([]initialConstraint, 0, 2)
 	for key, sweep := range sweeps {
 		if sweep == nil {

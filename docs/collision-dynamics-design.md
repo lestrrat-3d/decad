@@ -19,8 +19,11 @@ The revolved cylinder can use its density-derived mass in the certified clear
 axial step and interior trace replay.
 It also steps two orthogonal, frictionless
 initial face contacts and their repeated resting response after real manifolds
-and full-span tracks certify both pairs. A source box can hit
-a fixed floor obliquely while retaining tangential velocity. A fixed floor and
+and full-span tracks certify both pairs. A dynamic source sphere can touch
+a fixed floor and source sphere at the same initial instant when its two
+frictionless zero-restitution normal impulses pass one coupled response check;
+each pair then needs a certified persistent or separating remainder. A source
+box can hit a fixed floor obliquely while retaining tangential velocity. A fixed floor and
 dynamic source box can complete an initial resting contact after a full-step
 gravity kick or a zero-restitution impact. A stationary touching pair also
 advances without an impulse. An initially touching box can slide tangentially
@@ -79,7 +82,8 @@ kinematic driver work.
 Before publishing an advanced step, it
 checks every contact event's dynamic-body linear momentum against its impulse
 and rejects an impact whose kinetic energy gain exceeds its driver work plus
-the computed numerical allowance. Other frictional contacts, other rotating
+the computed numerical allowance. The coupled sphere island checks its two
+simultaneous impulses together. Other frictional contacts, other rotating
 kinematic drivers, stacks, and broader payload paths remain design
 contracts. Each companion document owns its detail.
 

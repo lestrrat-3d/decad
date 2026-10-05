@@ -110,6 +110,7 @@ type Trace struct {
 	postSweep           *decad.SweepReport
 	rotationalPrefix    *decad.SweepReport
 	rotationalRemainder *decad.SweepReport
+	threeSweeps         [3]*decad.SweepReport
 	duration            units.Value
 	eventAt             units.Value
 	hasEvent            bool
@@ -139,6 +140,45 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 	}
 	if timeValue.Cmp(durationValue) == 0 {
 		return tr.end, nil
+	}
+	if tr.start.hasThird && tr.threeSweeps != ([3]*decad.SweepReport{}) {
+		if tr.start.world == nil || tr.start.world.three == nil {
+			return State{}, fmt.Errorf("%w: three-body trace has no world", ErrUnsupported)
+		}
+		state := tr.post
+		if !tr.hasEvent {
+			state = tr.start
+		}
+		poses := make(map[*decad.Body]r3.Transform, 3)
+		for key, sweep := range tr.threeSweeps {
+			if sweep == nil {
+				continue
+			}
+			a, b, err := sweep.CertifiedPosesAtInterval(t, units.Seconds(0), tr.duration)
+			if err != nil {
+				return State{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
+			}
+			pair := tr.start.world.three.pairs[key]
+			for side, pose := range [2]r3.Transform{a, b} {
+				body := pair.parts[side].definition.Body
+				if held, seen := poses[body]; seen && held != pose {
+					return State{}, fmt.Errorf("%w: three-body sweeps disagree on a shared pose", ErrUnsupported)
+				}
+				poses[body] = pose
+			}
+		}
+		if len(poses) != 3 {
+			return State{}, fmt.Errorf("%w: three-body trace lacks a pair certificate", ErrUnsupported)
+		}
+		for body, pose := range poses {
+			entry, ok := state.Body(body)
+			if !ok {
+				return State{}, fmt.Errorf("%w: three-body trace names an unknown body", ErrUnsupported)
+			}
+			entry.Pose = pose
+			state = withBodyState(state, entry)
+		}
+		return state, nil
 	}
 	state := tr.end
 	sweep := tr.preSweep
