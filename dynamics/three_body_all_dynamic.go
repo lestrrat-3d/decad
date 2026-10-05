@@ -48,6 +48,12 @@ func (w *World) stepThreeAllDynamic(ctx context.Context, from State, input StepI
 			}
 		}
 	}
+	if report, handled, err := w.stepThreeDynamicSphereFriction(ctx, from, kicked, input, dt); handled || err != nil {
+		return report, err
+	}
+	if report, handled, err := w.stepThreeDynamicSphereClear(ctx, from, kicked, input, dt); handled || err != nil {
+		return report, err
+	}
 	report, handled, err := w.stepThreeSequential(ctx, from, kicked, input,
 		[2]*BodyLoad{}, dt, reference)
 	if handled || err != nil {
@@ -98,6 +104,15 @@ func (w *World) threeAllDynamicConservation(from, kicked, end State, trace Trace
 		slices := make([][2]State, 0, len(trace.threeSlices))
 		for _, slice := range trace.threeSlices {
 			slices = append(slices, [2]State{pairState(slice.from, pair), pairState(slice.to, pair)})
+		}
+		if len(slices) == 0 {
+			if trace.hasEvent {
+				slices = append(slices,
+					[2]State{pairState(kicked, pair), pairState(trace.pre, pair)},
+					[2]State{pairState(trace.post, pair), pairState(end, pair)})
+			} else {
+				slices = append(slices, [2]State{pairState(kicked, pair), pairState(end, pair)})
+			}
 		}
 		parts[key].DriftChange, ok = pair.driftConservationSlices(slices)
 		if !ok {

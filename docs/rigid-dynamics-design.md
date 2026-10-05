@@ -211,6 +211,32 @@ remaining pair paths are certified again over the global time slice. A second
 possible contact during that resting continuation returns `Undecided`.
 This first two-dynamic path returns `Undecided` for other initial contacts and
 nonzero angular velocity.
+Three dynamic source spheres also resolve one symmetric simultaneous
+positive-friction island at the initial time. Body zero touches body one on
+its positive X side and body two on its positive Y side; the outer pair has
+a certified clear full-step path. All three use equal exact centered isotropic
+supplied masses and equal source radii. They start without spin or Z motion.
+After the full-step force kick, the outer spheres are still, and body zero
+has equal positive X and Y speeds. Both exact one-point manifolds have zero
+normal and witness bounds. The effective materials have equal exact positive
+friction, equal restitution strictly between zero and one, and a sticking
+solution inside both Coulomb cones.
+For mass `m`, inertia `I`, radius `r`, closing speed `v`, and restitution
+`e`, the two equal normal impulses `N` and tangent impulses `T` satisfy
+`2N+T=m(1+e)v` and `N+(2+mr²/I)T=mv`. The step checks rounded per-body
+linear and angular impulse equations, both restitution speeds, both zero-slip
+point speeds, and whole-island kinetic energy. It records two ordered events
+for the simultaneous solve; `MaxEvents` must exceed two. The two active
+rotating sphere-pair sweeps must certify departure, and the rotating outer
+pair sweep must certify clear motion. Their replay certificates must agree
+exactly on each shared body pose. The trace uses those three certificates.
+On a later step, three exact centered source spheres with admitted supplied
+mass can continue spinning without another contact when all three real pair
+sweeps certify clear motion and their replay endpoints agree on every body.
+The clear step records no event and keeps each kicked linear and angular
+velocity while the three rounded certificates replay the complete drift.
+Asymmetric speeds, unequal masses or radii, sliding impulses, and unproved
+pair paths return `Undecided` without a next state.
 Two dynamic source boxes can start in a centered vertical stack on a fixed
 source-box floor. Both face pairs must start at certified four-point contact,
 and the floor-to-upper pair must be clear. After the single full-step force
