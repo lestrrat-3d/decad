@@ -100,3 +100,64 @@ func TestSweepPairRotatingSourceSpheresDepart(t *testing.T) {
 		require.False(t, report.HasAffineReplayProof())
 	})
 }
+
+func TestSweepPairRotatingSourceSpheresClear(t *testing.T) {
+	doc := decad.New()
+	b, c := ballBody(t, doc, 5), ballBody(t, doc, 5)
+	pathB := sweepDrift(r3.Vec{X: 7.1875, Y: .625}, .1)
+	pathC := sweepDrift(r3.Vec{X: .625, Y: 7.1875}, .1)
+	pathB.From = contactPose(t, r3.Vec{X: 10})
+	pathC.From = contactPose(t, r3.Vec{Y: 10})
+	pathB.Center = r3.Vec{X: 10}
+	pathC.Center = r3.Vec{Y: 10}
+	pathB.AngularVelocity.Z = units.RadiansPerSecond(-.3125)
+	pathC.AngularVelocity.Z = units.RadiansPerSecond(.3125)
+	req := sweepRequest()
+	req.StartPolicy = decad.StopAtInitialContact
+
+	initial, err := doc.ContactPair(t.Context(), b, c, pathB.From, pathC.From, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, initial.Relation)
+	report, err := doc.SweepPair(t.Context(), b, c, pathB, pathC, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepClear, report.Outcome, "cause=%v", report.Cause)
+	require.True(t, report.HasAffineReplayProof())
+	for _, elapsed := range []float64{0, .025, .1} {
+		poseB, poseC, replayErr := report.CertifiedPosesAt(units.Seconds(elapsed))
+		require.NoError(t, replayErr, "time=%v", elapsed)
+		observed, contactErr := doc.ContactPair(t.Context(), b, c, poseB, poseC, contactRequest())
+		require.NoError(t, contactErr)
+		require.Equal(t, decad.ContactSeparated, observed.Relation)
+		require.Positive(t, observed.Gap.Value.Base()-observed.Gap.Bound.Base())
+	}
+	intervalB, intervalC, err := report.CertifiedPosesAtInterval(
+		units.Seconds(.05), units.Seconds(0), units.Seconds(.1))
+	require.NoError(t, err)
+	intervalContact, err := doc.ContactPair(t.Context(), b, c, intervalB, intervalC, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, intervalContact.Relation)
+
+	reversed, err := doc.SweepPair(t.Context(), c, b, pathC, pathB, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepClear, reversed.Outcome)
+	_, _, err = reversed.CertifiedPosesAt(units.Seconds(.05))
+	require.NoError(t, err)
+
+	t.Run("off-center pivot", func(t *testing.T) {
+		bad := pathB
+		bad.Center.X = 11
+		undecided, err := doc.SweepPair(t.Context(), b, c, bad, pathC, req)
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepUndecided, undecided.Outcome)
+		require.False(t, undecided.HasAffineReplayProof())
+	})
+	t.Run("possible impact", func(t *testing.T) {
+		closing := pathB
+		closing.LinearVelocity.X = units.MillimetersPerSecond(-40)
+		closing.LinearVelocity.Y = units.MillimetersPerSecond(40)
+		undecided, err := doc.SweepPair(t.Context(), b, c, closing, pathC, req)
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepUndecided, undecided.Outcome)
+		require.False(t, undecided.HasAffineReplayProof())
+	})
+}

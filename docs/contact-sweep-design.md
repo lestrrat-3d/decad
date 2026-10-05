@@ -395,14 +395,21 @@ rounded pair. Unequal displacements remain undecided for persistent
 continuation.
 
 A centered rotating `RigidDriftSegment` may enter this sphere-pair proof after
-initial point touch when `StartPolicy` is `ContinueSeparatingTouch`. Require
+initial point touch when `StartPolicy` is `ContinueSeparatingTouch`, or after
+initial separation when `StartPolicy` is `StopAtInitialContact`. Require
 each rotating sphere's exact source center to equal both its query translation
 and stated pivot. Require each full linear displacement to be representable as
-a dyadic rational. Rotation then leaves the occupied ball unchanged; use the
-same exact squared center-distance polynomial to prove an open-time gap and
-sample both real rotating endpoint poses. An off-center pivot, a separated or
-overlapping start, and an unresolved or closing departure return
-`SweepUndecided`. This path does not publish a rotating graze or impact.
+a dyadic rational. Rotation then leaves the occupied ball unchanged. For an
+initially separated pair under `StopAtInitialContact`, the exact squared
+center-distance polynomial must stay strictly positive over the whole closed
+step; both real rotating endpoint poses must remain separated. This publishes
+`SweepClear` and a replay proof that checks rounded poses against the same
+polynomial. An off-center pivot or any possible touch returns
+`SweepUndecided`. For an initially touching pair under
+`ContinueSeparatingTouch`, use the same polynomial to prove an open-time gap
+and sample both real rotating endpoint poses. A separated or overlapping
+start, or an unresolved or closing departure, returns `SweepUndecided` under
+that policy. This path does not publish a rotating graze or impact.
 
 ### 4.5.1 Isolated sphere-pair graze
 
