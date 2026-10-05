@@ -223,10 +223,10 @@ func TestThreeBodyTwoDynamicSphereZeroRestitutionImpact(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, r3.Identity(), fixed.Pose)
 		for _, sphere := range []dynamics.BodyState{sa, sb} {
-			clear, clearErr := doc.ContactPair(t.Context(), sphere.Body, remote,
+			fixedContact, clearErr := doc.ContactPair(t.Context(), sphere.Body, remote,
 				sphere.Pose, fixed.Pose, step.Contact)
 			require.NoError(t, clearErr)
-			require.Equal(t, decad.ContactSeparated, clear.Relation)
+			require.Equal(t, decad.ContactSeparated, fixedContact.Relation)
 		}
 	}
 	require.NotNil(t, report.Conservation)
