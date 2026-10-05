@@ -475,6 +475,26 @@ func TestSweepPairSourceSphereTouchContinuation(t *testing.T) {
 	_, touchBall, err := report.CertifiedPosesAt(units.Seconds(.05))
 	require.NoError(t, err)
 	require.Equal(t, r3.Vec{Z: 5}, touchBall.Translation())
+	rotating := touching
+	rotating.Center = r3.Vec{Z: 5}
+	rotating.LinearVelocity.X = units.MillimetersPerSecond(50)
+	rotating.AngularVelocity.Y = units.RadiansPerSecond(10)
+	report, err = doc.SweepPair(t.Context(), floor, ball, still, rotating, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepPersistentTouch, report.Outcome, "cause=%v", report.Cause)
+	_, rotatedBall, err := report.CertifiedPosesAt(units.Seconds(.05))
+	require.NoError(t, err)
+	require.Equal(t, r3.Vec{X: 2.5, Z: 5}, rotatedBall.Translation())
+	require.NotEqual(t, r3.Identity().Basis(), rotatedBall.Basis())
+	rotatedContact, err := doc.ContactPair(t.Context(), floor, ball, r3.Identity(), rotatedBall,
+		contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, rotatedContact.Relation)
+	badPivot := rotating
+	badPivot.Center.Z = 6
+	refused, err := doc.SweepPair(t.Context(), floor, ball, still, badPivot, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepUndecided, refused.Outcome)
 	departing := touching
 	departing.LinearVelocity.Z = units.MillimetersPerSecond(50)
 	req.StartPolicy = decad.ContinueSeparatingTouch

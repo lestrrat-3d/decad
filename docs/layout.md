@@ -181,7 +181,7 @@ to the byte budget.
 | `contact_oriented_box.go` | Rotated boxes. See `docs/contact-geometry-design.md` §4. |
 | `contact_oriented_patch.go` | Exact co-oriented oblique face patch, source faces, and bounded witnesses. See `docs/contact-geometry-design.md` §4. |
 | `contact_clipped_patch.go` | Exact horizontal clipping of one rotated source-box face against an axis-aligned face. See `docs/contact-geometry-design.md` §4. |
-| `contact_sphere.go` / `contact_sphere_sweep.go` | Axis sphere-box path. See the contact designs. |
+| `contact_sphere.go` / `contact_sphere_sweep.go` | Axis sphere-box path, including centered rotating sphere drift. See the contact designs. |
 | `contact_cylinder.go` / `contact_cylinder_sweep.go` | Source-cylinder axial contact and sweeps. See the contact designs. |
 | `contact_sphere_oriented.go` / `contact_sphere_oriented_sweep.go` | Rotated sphere-box path. See the contact designs. |
 | `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See the contact designs. |

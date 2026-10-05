@@ -22,6 +22,71 @@ type sourceSphereSweepRun struct {
 	sphereFirst bool
 }
 
+// A rotating ball has the same occupied set as its translating center when
+// its drift pivot is the proved sphere center. Keep the real rotating path for
+// sampled poses and replay, while the support gap uses its exact center drift.
+func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
+	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
+	report *SweepReport) (*SweepReport, bool, error) {
+	if (pa.drift == nil) == (pb.drift == nil) {
+		return nil, false, nil
+	}
+	sphereBody, spherePath, boxBody, boxPath, sphereFirst := b, &pb, a, pa, false
+	if pa.drift != nil {
+		sphereBody, spherePath, boxBody, boxPath, sphereFirst = a, &pa, b, pb, true
+	}
+	if boxPath.drift != nil || boxPath.screw != nil {
+		return nil, false, nil
+	}
+	sphere, sphereOK := sourceSphereAtPose(sphereBody, spherePath.from)
+	box, boxOK := sourceBoxAtPose(boxBody, boxPath.from)
+	if !sphereOK || !boxOK {
+		return nil, false, nil
+	}
+	center := spherePath.drift.Center
+	for axis, value := range [3]float64{center.X, center.Y, center.Z} {
+		if dyCmp(sphere.center[axis], mustDyOf(value)) != 0 {
+			return nil, false, nil
+		}
+	}
+	velocity := [3]units.Value{spherePath.drift.LinearVelocity.X,
+		spherePath.drift.LinearVelocity.Y, spherePath.drift.LinearVelocity.Z}
+	for axis, value := range velocity {
+		speed, ok := exactBaseValue(value)
+		if !ok {
+			return nil, false, nil
+		}
+		displacement := new(big.Rat).Mul(speed, spherePath.duration)
+		component, ok := dyOfRat(displacement)
+		if !ok {
+			return nil, false, nil
+		}
+		spherePath.delta[axis] = component
+	}
+	run := &sourceSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
+		req: req, report: report, sphere: sphere, box: box, sphereFirst: sphereFirst}
+	result, err := run.execute(ctx, resolution)
+	return result, true, err
+}
+
+func sourceSpherePathPoseAt(path affinePairPath, f *big.Rat) (r3.Transform, error) {
+	if path.drift != nil {
+		pose, err := (rotationalSweepPath{path: path}).poseAt(f)
+		if err != nil {
+			return r3.Transform{}, err
+		}
+		if f.Sign() == 0 {
+			return pose, nil
+		}
+		start := path.from.Translation()
+		center := r3.Vec{X: start.X + ratFloatNearest(new(big.Rat).Mul(path.delta[0].rat(), f)),
+			Y: start.Y + ratFloatNearest(new(big.Rat).Mul(path.delta[1].rat(), f)),
+			Z: start.Z + ratFloatNearest(new(big.Rat).Mul(path.delta[2].rat(), f))}
+		return r3.FromBasis(pose.Basis(), center)
+	}
+	return path.poseAt(f)
+}
+
 func translatedContactBox(box sourceBoxContactProof, delta [3]dyadic,
 	f *big.Rat) (sourceBoxContactProof, bool) {
 	fraction, ok := dyOfRat(f)
@@ -62,11 +127,11 @@ func (r *sourceSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSa
 	if r.report.PoseEvaluations >= r.req.MaxPoseEvaluations {
 		return nil, errSweepPoseBudget
 	}
-	poseA, err := r.pa.poseAt(f)
+	poseA, err := sourceSpherePathPoseAt(r.pa, f)
 	if err != nil {
 		return nil, err
 	}
-	poseB, err := r.pb.poseAt(f)
+	poseB, err := sourceSpherePathPoseAt(r.pb, f)
 	if err != nil {
 		return nil, err
 	}

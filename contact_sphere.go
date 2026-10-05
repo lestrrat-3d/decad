@@ -22,10 +22,22 @@ func sourceSphereAtPose(b *Body, pose r3.Transform) (sourceSphereContactProof, b
 		return sourceSphereContactProof{}, false
 	}
 	rp, ok := b.payload.(revolvePayload)
-	if !ok || !signedAxisTransform(rp.xform) || !signedAxisTransform(pose) {
+	if !ok || !signedAxisTransform(rp.xform) || !pose.IsValid() || pose.IsReflection() {
 		return sourceSphereContactProof{}, false
 	}
-	proof.center = exactContactTransform(pose, exactContactTransform(rp.xform, proof.center))
+	center := exactContactTransform(rp.xform, proof.center)
+	if !signedAxisTransform(pose) {
+		// A read rotation cannot move a ball centered at the query origin.
+		// Other centers need an exact rotation of their offset before admission.
+		for _, component := range center {
+			if component.sign() != 0 {
+				return sourceSphereContactProof{}, false
+			}
+		}
+		proof.center = dyVec(pose.Translation())
+		return proof, true
+	}
+	proof.center = exactContactTransform(pose, center)
 	return proof, true
 }
 

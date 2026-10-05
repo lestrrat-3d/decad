@@ -509,6 +509,9 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		}
 		return w.stepGrazingTouch(ctx, from, kicked, dt, first)
 	case decad.SweepInitiallyTouching:
+		if w.friction.lower.Sign() != 0 && w.sphereFloorFrictionCandidate(first.Event) {
+			return w.stepInitialSphereFloorFriction(ctx, from, kicked, dt, first)
+		}
 		if rotating {
 			return undecided(w, "rotating initial contact needs a certified response track"), nil
 		}

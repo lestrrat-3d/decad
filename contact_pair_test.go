@@ -105,6 +105,14 @@ func TestContactPairSourceSphereAndBox(t *testing.T) {
 		require.Contains(t, floor.Faces(), point.FaceA)
 		require.Same(t, ball.Faces()[0], point.FaceB)
 	}
+	turn, err := r3.Rotation(r3.Vec{Y: 1}, units.Radians(1))
+	require.NoError(t, err)
+	spinning, err := r3.FromBasis(turn.Basis(), r3.Vec{Z: 5})
+	require.NoError(t, err)
+	rotated, err := doc.ContactPair(t.Context(), floor, ball, r3.Identity(), spinning, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, rotated.Relation)
+	require.Len(t, rotated.Manifold.Points, 1)
 	edge, err := doc.ContactPair(t.Context(), floor, ball, r3.Identity(),
 		contactPose(t, r3.Vec{X: 25}), req)
 	require.NoError(t, err)

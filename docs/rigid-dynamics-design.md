@@ -172,6 +172,18 @@ The floor stays at identity placement. The box can start from any pure
 translation whose real four-corner track passes the same bounds, including
 the endpoint of a previous step. Its mass center is translated with exact
 rational coordinate sums for the lever and torque certificates.
+A centered source sphere can instead receive one point impulse on an
+identity-placed fixed box floor when the source sphere center is its query
+origin, mass and isotropic inertia have exact zero bounds, restitution is zero,
+and the positive pair friction coefficient has exact equal bounds. The
+initial contact may have incoming Y spin. A full-step gravity kick must give
+negative Z speed, with Y linear speed and X/Z spin zero. The normal impulse
+stops Z motion. The tangent impulse opposes X contact-point slip and is the
+smaller of the exact sticking impulse and the Coulomb limit. Check its rounded
+linear and angular results against their configured residuals and the cone.
+Publish the Y spin and one point impulse in world order. A rotating source
+sphere sweep must prove the full persistent contact track and replayable
+endpoint before the step advances. A later step can reuse the returned spin.
 An interior first-impact bracket admits the same centered fixed-floor box with
 zero restitution, positive X and negative Z velocity, zero initial spin, and
 zero Y velocity. Correct the bracket's touching pose within the certified
@@ -319,9 +331,9 @@ each body's material still passes input validation. Held exclusions and
 reported event pairs use world order. `World.Excluded()` and
 `StepReport.Excluded` return separate copies.
 
-The current positive-friction slice accepts a fixed floor and dynamic box in
-either world order, or two dynamic source boxes at an initial opposed face
-touch. Without an override, the pair coefficient is the geometric
+The current positive-friction slice accepts a fixed floor and dynamic box or
+source sphere in either world order, or two dynamic source boxes at an initial
+opposed face touch. Without an override, the pair coefficient is the geometric
 mean of the held body coefficients. The solver proposes impulses with a nominal
 rounded mean, then checks the friction cone and slip law against rational
 bounds that enclose the exact mean. A zero body coefficient selects the
