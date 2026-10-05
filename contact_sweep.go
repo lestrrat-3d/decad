@@ -451,7 +451,11 @@ func exactnessFromBound(bound float64) Exactness {
 // whole LineSeg sections and zero-bound faceted Booleans — that no narrower
 // path admits receive a clear path or a first-impact bracket under any rotating
 // or affine path, and from an initial touch a departure or a persistent touch
-// or band track (docs/multibody-dynamics-design.md §10.2, §10.3).
+// or band track (docs/multibody-dynamics-design.md §10.2, §10.3). A
+// positive-bound faceted Boolean or all-planar cap-loop chamfer takes the
+// same run through its held mesh under §10.4: a first impact brackets onto a
+// ContactBand sample, and a band start never departs but may carry a band
+// track widened by twice the displacement.
 // Unsupported paths return SweepUndecided.
 // Both body pointers, both paths, and ctx must be non-nil.
 func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairPath,

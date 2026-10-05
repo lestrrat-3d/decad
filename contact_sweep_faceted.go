@@ -8,6 +8,7 @@ import (
 	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 // This file is the general rotating sweep of docs/multibody-dynamics-design.md
@@ -26,19 +27,19 @@ func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
 	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
 	report *SweepReport) (*SweepReport, bool, error) {
 	budget := newWorkBudget(ctx)
-	solidA, okA, err := planarSolidAtPose(ctx, budget, a, r3.Identity())
+	solidA, deltaA, okA, err := planarSolidAtPose(ctx, budget, a, r3.Identity())
 	if err != nil {
 		return nil, true, err
 	}
-	solidB, okB, err := planarSolidAtPose(ctx, budget, b, r3.Identity())
+	solidB, deltaB, okB, err := planarSolidAtPose(ctx, budget, b, r3.Identity())
 	if err != nil {
 		return nil, true, err
 	}
 	if !okA || !okB {
 		return nil, false, nil
 	}
-	aPath, okA := preparePlanarSweepPath(a, pa, &solidA)
-	bPath, okB := preparePlanarSweepPath(b, pb, &solidB)
+	aPath, okA := preparePlanarSweepPath(a, pa, &solidA, deltaA)
+	bPath, okB := preparePlanarSweepPath(b, pb, &solidB, deltaB)
 	if !okA || !okB {
 		report.Outcome, report.Cause = SweepUndecided, SweepMissingBound
 		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.duration),
@@ -205,16 +206,18 @@ func sampleLowerGap(sample *SweepSample) *big.Rat {
 }
 
 // preparePlanarSweepPath pairs a body's ideal motion with its identity-pose
-// planar snapshot. The snapshot's vertices are the source points: ContactPair
-// stages the same vertices through the query pose, and the body is their hull's
+// planar snapshot and its held displacement δ (§10.4, zero for an exact
+// body). The snapshot's vertices are the source points: ContactPair stages
+// the same vertices through the query pose, and the held body is their hull's
 // subset, so they bound its deviation (pointDeviation) and its coordinate span
-// (cornerSpan).
-func preparePlanarSweepPath(body *Body, path affinePairPath, solid *pair.PlanarSolid) (rotationalSweepPath, bool) {
+// (cornerSpan); the true body lies within δ of that hull.
+func preparePlanarSweepPath(body *Body, path affinePairPath, solid *pair.PlanarSolid,
+	delta proofarith.Dyadic) (rotationalSweepPath, bool) {
 	prepared, ok := prepareSweepMotion(body, path)
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
-	prepared.solid = solid
+	prepared.solid, prepared.delta = solid, delta
 	prepared.sourcePoints = solid.Verts
 	prepared.startPoints = make([]proofarith.DyV3, len(solid.Verts))
 	for i, v := range solid.Verts {
@@ -227,9 +230,14 @@ func preparePlanarSweepPath(body *Body, path affinePairPath, solid *pair.PlanarS
 // (contact-sweep §3). With zero deviation on both bodies the rounded pose is
 // the ideal pose and the report transfers whole. Otherwise a gap transfers
 // with both deviations charged; an overlap transfers only through a vertex of
-// one body that lies inside the other farther than both deviations from its
-// boundary (pair.PlanarDeepVertex); a touch cannot survive a nonzero
-// deviation and stays undecided.
+// one body that lies inside the other farther than both deviations and both
+// held displacements at the rounded poses from its boundary
+// (pair.PlanarDeepVertex); a touch cannot survive a nonzero deviation and
+// stays undecided. A §10.4 band transfers with both deviations added to its
+// width and its manifold dropped, as a touch's would be. The ideal pose is a
+// rigid motion, so it moves each true body within its δ of its held one; the
+// rounded pose's ContactPair report already charged δ, stretched by that
+// pose's own scale, which is at least one.
 func (r *rotationalPairSweep) planarIdealEvent(ctx context.Context, f *big.Rat, at SweepInstant,
 	poseA, poseB r3.Transform, contact *ContactReport) (SweepEvent, error) {
 	event := SweepEvent{At: at, Relation: ContactUndecided, Reason: contact.Reason}
@@ -245,8 +253,8 @@ func (r *rotationalPairSweep) planarIdealEvent(ctx context.Context, f *big.Rat, 
 	if !okA || !okB {
 		return event, nil
 	}
-	if etaA == 0 && etaB == 0 &&
-		(contact.Relation == ContactTouching || contact.Relation == ContactOverlapping) {
+	if etaA == 0 && etaB == 0 && (contact.Relation == ContactTouching ||
+		contact.Relation == ContactOverlapping || contact.Relation == ContactBand) {
 		event.Relation, event.Gap, event.Overlap = contact.Relation, contact.Gap, contact.Overlap
 		event.Manifold = contact.Manifold
 		return event, nil
@@ -261,6 +269,8 @@ func (r *rotationalPairSweep) planarIdealEvent(ctx context.Context, f *big.Rat, 
 			return event, nil
 		}
 		margin := proofarith.DyAdd(proofarith.MustDyOf(etaA), proofarith.MustDyOf(etaB))
+		margin = proofarith.DyAdd(margin, proofarith.DyMul(r.a.delta, planarPoseScale(poseA)))
+		margin = proofarith.DyAdd(margin, proofarith.DyMul(r.b.delta, planarPoseScale(poseB)))
 		a := pair.PlanarSolid{Verts: vertsA, Tris: r.a.solid.Tris}
 		b := pair.PlanarSolid{Verts: vertsB, Tris: r.b.solid.Tris}
 		deep, err := pair.PlanarDeepVertex(&a, &b, margin, budget.step)
@@ -270,6 +280,19 @@ func (r *rotationalPairSweep) planarIdealEvent(ctx context.Context, f *big.Rat, 
 		if deep {
 			event.Relation = ContactOverlapping
 		}
+	case ContactBand:
+		if contact.Gap == nil {
+			return event, nil
+		}
+		width := new(big.Rat).Add(proofarith.FloatRat(contact.Gap.Bound.Base()),
+			new(big.Rat).Add(proofarith.FloatRat(etaA), proofarith.FloatRat(etaB)))
+		published := ratFloatUp(width)
+		if !finiteMeasurementValues(published) {
+			return event, nil
+		}
+		event.Relation, event.Reason = ContactBand, ContactNoNormalProof
+		event.Gap = &Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(published),
+			Exactness: exactnessFromBound(published)}
 	}
 	return event, nil
 }

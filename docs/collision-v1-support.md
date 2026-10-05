@@ -21,6 +21,7 @@ shows a box impact and computed rebound.
 | Verified faceted Boolean and source-box floor | One exact rectangular lower face, vertical affine path, contained footprint | Frictionless rebound or rest |
 | Full source cylinder sidewall, against a planar face or a parallel full source cylinder | Two-end ruling line at identity query poses only | None yet |
 | Two exact planar solids | Gap, touch, or overlap at any pose with a positive-determinant basis; a manifold when one is convex; a clear path, first impact, departure from touch, or persistent touch or band track under rotating or affine paths | None yet |
+| A planar solid and a positive-bound faceted Boolean or flat-faced cap-loop chamfer | Gap, overlap, or `ContactBand` with the held mesh's displacement charged; a manifold against a face of a body with no displacement; a clear path, first impact onto the band, or band track | None yet |
 
 The source-box path starts from rectangular source prisms. Signed-axis
 face patches cover affine approach, persistent contact, and the first edge
@@ -128,6 +129,21 @@ corner, stay `SweepUndecided`. These reports replay rounded poses without
 rerunning the pair test. No step consumes a band track yet.
 [Band and departure tests](../contact_sweep_band_test.go) check the depth
 and the departure time against their closed forms.
+
+A positive-bound faceted Boolean, and a cap-loop chamfer whose every face is
+flat, are checked through their held triangle meshes. The true surface lies
+within the mesh's `Bound`, δ, of the held one. A held gap wider than the two
+bodies' δ summed is a true gap with that δ added to its bound, and a corner
+deeper than it inside the other body is a true overlap. A held touch, or a
+held gap or shallow depth within it, is `ContactBand`: the true pair lies
+within `Gap.Bound`, twice the summed δ, of touching. Its manifold is the
+held one with each point's ball grown by its body's δ, and it is published
+only when a face of a body with no displacement supplies the normal.
+`SweepPair` brackets a first impact onto a band sample; a pair that starts
+in its band never departs, and under `ContinueCertifiedTouch` it carries a
+band track whose `Band()` adds twice the summed δ. No step consumes a band
+yet. [Band tests](../contact_band_test.go) check the band, the charges, and
+each refusal.
 
 ## Bodies and response
 

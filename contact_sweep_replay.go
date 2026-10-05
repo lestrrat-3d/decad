@@ -742,10 +742,16 @@ func boxRelationDistanceWithin(a, b sourceBoxContactProof, limit *big.Rat) bool 
 // against the band; a clear or departing replay needs the proven lower gap at
 // f to exceed the summed deviation, so the rounded pair is separated too. The
 // initial touch of a departure replays only at zero deviation.
+//
+// The vertex deviation bounds the held bodies' move from ideal to rounded. A
+// true point of a positive-displacement body (§10.4) lies within δ of its held
+// body, and the rounded and ideal linear parts move that offset by at most
+// (s + 1)·δ, s the rounded pose's stretch (planarPoseScale) and one the ideal
+// rotation's, so the lower gap must also exceed that for each body.
 func (r *SweepReport) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, r3.Transform, error) {
 	p := r.replay
 	var poses [2]r3.Transform
-	deviation := new(big.Rat)
+	deviation, displacement := new(big.Rat), new(big.Rat)
 	for i, path := range p.rotation {
 		pose, err := path.poseAt(f)
 		if err != nil {
@@ -757,6 +763,8 @@ func (r *SweepReport) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, 
 		}
 		poses[i] = pose
 		deviation.Add(deviation, proofarith.FloatRat(bound))
+		stretch := proofarith.DyAdd(planarPoseScale(pose), proofarith.DyInt(1))
+		displacement.Add(displacement, proofarith.DyMul(path.delta, stretch).Rat())
 	}
 	resolution, ok := exactBaseValue(p.request.PointResolution)
 	if !ok || deviation.Cmp(resolution) > 0 {
@@ -775,7 +783,7 @@ func (r *SweepReport) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, 
 		return poses[0], poses[1], nil
 	}
 	lower := p.planar.lowerGap(f)
-	if lower == nil || lower.Cmp(deviation) <= 0 {
+	if lower == nil || lower.Cmp(new(big.Rat).Add(deviation, displacement)) <= 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded planar replay gap does not exceed pose error", ErrUnsupported)
 	}
 	return poses[0], poses[1], nil

@@ -150,7 +150,7 @@ to the byte budget.
 
 | Path | Responsibility |
 |---|---|
-| `fillet.go` | `Body.Fillet` rewrites a straight prism's section into a tangent arc at each selected corner and rebuilds through `evalPrism`. It also owns the `cornerBlend` machinery Chamfer reuses. See `docs/modify-design.md` §6. |
+| `fillet.go` | `Body.Fillet` rewrites a straight prism's section with a tangent arc at each selected corner and rebuilds through `evalPrism`. It owns the `cornerBlend` Chamfer reuses. See `docs/modify-design.md` §6. |
 | `chamfer.go` | `Body.Chamfer` bevels a straight prism's lateral corners with a chord between setback feet, sharing `cornerBlend` with `fillet.go`; a cap-loop selection routes to `capblend.go`. See `docs/modify-design.md` §7. |
 | `fillet_audit.go` | Fillet, Chamfer and Shell section audits. See `docs/modify-design.md` §5. |
 | `shell.go` | `Body.Shell` offsets a prism into a tube or cup. See modify §8. |
@@ -185,7 +185,7 @@ to the byte budget.
 | `clearance_box.go` | Certifies unplaced axis-aligned rectangular prisms and bounds their gap directly from exact box planes before the general pair kernel. |
 | `contact_pair.go` | Pair gates and public reports. Box classification lives in `internal/pair/`. See `docs/contact-geometry-design.md`. |
 | `contact_box.go` | Source-box admission and public face/measurement mapping. See `docs/contact-geometry-design.md` §4. |
-| `contact_faceted_pair.go` | Exact planar admission and convexity. See `docs/multibody-dynamics-design.md` §9. |
+| `contact_faceted_pair.go` | Planar admission, convexity and the band. See `docs/multibody-dynamics-design.md` §9, §10.4. |
 | `contact_faceted_manifold.go` / `contact_faceted_patch.go` | Planar manifold faces and witnesses. See multibody §9. |
 | `contact_faceted_support.go` | Exact faceted support-face proof and bounded strict separation. See `docs/contact-geometry-design.md` §4. |
 | `contact_faceted_sweep.go` | Faceted floor sweeps: exact support face, or clearance by swept boxes. See `docs/contact-sweep-design.md`. |

@@ -2127,3 +2127,14 @@
 5	0.01	TestDisplacedCupMinRadius
 0	0.01	TestDisplacedCupMesh
 1	0.01	TestDisplacedCupCentroidMoment
+2	4.56	TestSweepPairBandReplayChargesDisplacement
+3	1.06	TestContactPairBandChargesHeldGap
+5	0.85	TestSweepPairBandFootStaysInsideFace
+1	0.53	TestPlanarOverlapTransferChargesDisplacement
+0	0.10	TestSweepPairBandImpact
+1	0.09	TestPlanarHullGapChargesDisplacement
+0	0.03	TestContactPairBandCancels
+3	0.03	TestSweepPairBandTrack
+5	0.01	TestContactPairBandChamferedBlockOnFloor
+0	0.01	TestContactPairBandNeedsAnExactFace
+1	0.01	TestPlanarBandTransferChargesDeviation
