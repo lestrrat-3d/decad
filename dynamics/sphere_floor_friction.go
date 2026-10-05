@@ -189,6 +189,8 @@ func (w *World) stepInitialSphereFloorFriction(ctx context.Context, from, kicked
 	}
 	poseA, poseB, err := continuation.CertifiedPosesAt(dt)
 	if err != nil {
+		// The report carries the unsupported replay outcome.
+		//nolint:nilerr
 		return undecided(w, "sphere-floor rotating endpoint lacks replay proof"), nil
 	}
 	end := post
