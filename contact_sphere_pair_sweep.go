@@ -13,15 +13,17 @@ import (
 )
 
 type sourceSpherePairSweepRun struct {
-	doc           *Document
-	a, b          *Body
-	pa, pb        affinePairPath
-	req           SweepRequest
-	report        *SweepReport
-	sphereA       sourceSphereContactProof
-	sphereB       sourceSphereContactProof
-	departureOnly bool
-	clearOnly     bool
+	doc     *Document
+	a, b    *Body
+	pa, pb  affinePairPath
+	req     SweepRequest
+	report  *SweepReport
+	sphereA sourceSphereContactProof
+	sphereB sourceSphereContactProof
+	// rotating marks a centered spinning drift. Its real start pose must
+	// report the ideal relation and a clear path's real end pose separation;
+	// ContinueSeparatingTouch needs a touching start.
+	rotating bool
 }
 
 // A source ball centered at its query origin is unchanged by its own spin.
@@ -72,9 +74,7 @@ func (d *Document) sweepRotatingSpherePair(ctx context.Context, a, b *Body,
 	report.replay = &sweepReplayProof{pa: pa, pb: pb, spherePair: &pair,
 		request: req.ContactRequest}
 	run := &sourceSpherePairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
-		req: req, report: report, sphereA: sphereA, sphereB: sphereB,
-		departureOnly: req.StartPolicy == ContinueSeparatingTouch,
-		clearOnly:     req.StartPolicy == StopAtInitialContact}
+		req: req, report: report, sphereA: sphereA, sphereB: sphereB, rotating: true}
 	result, err := run.execute(ctx, resolution)
 	return result, true, err
 }
@@ -474,14 +474,11 @@ func (r *sourceSpherePairSweepRun) transverse(ctx context.Context, first *SweepS
 			return nil, err
 		}
 		if last.Ideal.Relation != ContactSeparated ||
-			r.clearOnly && last.FloatContact.Relation != ContactSeparated {
+			r.rotating && last.FloatContact.Relation != ContactSeparated {
 			return r.undecided(zero, one, SweepPoseRelation), nil
 		}
 		r.report.Outcome = SweepClear
 		return r.report, nil
-	}
-	if r.clearOnly {
-		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
 	if a.Sign() > 0 && vertex.Cmp(one) == 0 &&
 		spherePairQuadraticAt(a, b, c, one).Sign() == 0 {
@@ -558,13 +555,10 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 	if err != nil {
 		return nil, err
 	}
-	if r.departureOnly && first.Ideal.Relation != ContactTouching {
+	if r.rotating && r.req.StartPolicy == ContinueSeparatingTouch && first.Ideal.Relation != ContactTouching {
 		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
-	if r.clearOnly && first.Ideal.Relation != ContactSeparated {
-		return r.undecided(zero, one, SweepContactUnsupported), nil
-	}
-	if r.clearOnly && first.FloatContact.Relation != ContactSeparated {
+	if r.rotating && first.Ideal.Relation != first.FloatContact.Relation {
 		return r.undecided(zero, one, SweepPoseRelation), nil
 	}
 	if first.Ideal.Relation == ContactOverlapping {
@@ -635,14 +629,11 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 			return nil, err
 		}
 		if last.Ideal.Relation != ContactSeparated ||
-			r.clearOnly && last.FloatContact.Relation != ContactSeparated {
+			r.rotating && last.FloatContact.Relation != ContactSeparated {
 			return r.undecided(zero, one, SweepPoseRelation), nil
 		}
 		r.report.Outcome = SweepClear
 		return r.report, nil
-	}
-	if r.clearOnly {
-		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
 	root := new(big.Rat).Quo(proofarith.DyNeg(gap).Rat(), slope.Rat())
 	leftF, rightF, ok := spherePairImpactBracket(root, r.pa.duration, resolution)

@@ -51,14 +51,15 @@ exactly timed interior touch can then change both velocities and Z spins.
 check the complete response and replay.
 
 For a **separated rotating sphere pair**, `SweepPair` also proves a clear
-path when each sphere rotates about its exact source center, its full
-translation is exactly representable, and the exact center-distance path
-stays strictly separated. It replays rounded poses. An off-center pivot or
-possible touch returns `SweepUndecided` on this path. The
-[rotating clear-sweep test](../contact_sphere_pair_sweep_test.go)
-checks the pair query. A three-dynamic world also consumes this proof for
-the clear outer pair after a coupled sphere impact and for a later event-free
-spinning step. Its [integration test](../dynamics/three_body_dynamic_friction_test.go)
+path, a first-impact bracket, or an isolated graze when each sphere rotates
+about its exact source center and its full translation is exactly
+representable. The exact center-distance path of the affine centers decides
+the outcome, and the event manifold bounds the exact ideal pair. It replays
+rounded poses. An off-center pivot returns `SweepUndecided` on this path. The
+[rotating sphere-pair tests](../contact_sphere_pair_sweep_test.go)
+check the pair query against the closed-form impact time. A three-dynamic
+world also consumes this proof for the clear outer pair after a coupled
+sphere impact and for a later event-free spinning step. Its [integration test](../dynamics/three_body_dynamic_friction_test.go)
 samples both traces.
 
 The cylinder path accepts a full circular extrusion or a full revolve of
@@ -195,8 +196,9 @@ ends apart by less than can be proved, is pushed provably clear within the
 same allowance; a resting curved pair the correction cannot place in exact
 touch returns `dynamics.Undecided`. A body landing on a body that rests on a
 fixed support is corrected alone. Two spheres spinning after a glancing
-frictional impact stop the step at their next impact. Co-moving bodies
-leave with one exact common velocity, so a stack can bounce and land as one.
+frictional impact meet again through the rotating sphere-pair impact
+bracket. Co-moving bodies leave with one exact common velocity, so a stack
+can bounce and land as one.
 A transition or a graze publishes a zero-impulse event, and the step then
 continues from the event; a graze of a positive-friction pair returns
 `dynamics.Undecided` with `StepUnsupported`.

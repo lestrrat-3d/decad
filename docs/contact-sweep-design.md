@@ -46,9 +46,10 @@ through exact squared-distance motion, including transverse crossing, and
 separating departure. Their exact isolated interior tangent publishes a
 bounded point with strict separation on both sides. A touching source-sphere
 pair with equal exact affine displacement certifies a full-span point track.
-Two touching source spheres can also certify separating departure when one or
-both follow centered rotating rigid drifts. Their sampled poses retain spin;
-the occupied balls follow exact affine center paths.
+When one or both source spheres follow rigid drifts that spin about their own
+centers, the same proofs certify a clear path, first impact, isolated graze,
+and separating departure. Their sampled poses retain spin; the occupied balls
+follow exact affine center paths.
 Rotating source-box rigid drifts can also certify a clear path or bracket an
 impact after exact oriented-box pose relations, a bounded float-to-ideal pose
 difference, and whole-body travel bounds. An initial source-box face touch also certifies immediate
@@ -415,22 +416,25 @@ reduces them to a bounded point manifold. Replay requires exact touch of the
 rounded pair. Unequal displacements remain undecided for persistent
 continuation.
 
-A centered rotating `RigidDriftSegment` may enter this sphere-pair proof after
-initial point touch when `StartPolicy` is `ContinueSeparatingTouch`, or after
-initial separation when `StartPolicy` is `StopAtInitialContact`. Require
-each rotating sphere's exact source center to equal both its query translation
-and stated pivot. Require each full linear displacement to be representable as
-a dyadic rational. Rotation then leaves the occupied ball unchanged. For an
-initially separated pair under `StopAtInitialContact`, the exact squared
-center-distance polynomial must stay strictly positive over the whole closed
-step; both real rotating endpoint poses must remain separated. This publishes
-`SweepClear` and a replay proof that checks rounded poses against the same
-polynomial. An off-center pivot or any possible touch returns
-`SweepUndecided`. For an initially touching pair under
-`ContinueSeparatingTouch`, use the same polynomial to prove an open-time gap
-and sample both real rotating endpoint poses. A separated or overlapping
-start, or an unresolved or closing departure, returns `SweepUndecided` under
-that policy. This path does not publish a rotating graze or impact.
+A centered rotating `RigidDriftSegment` may enter this sphere-pair proof under
+`StopAtInitialContact`, or after initial point touch under
+`ContinueSeparatingTouch`. Require each rotating sphere's exact source center
+to equal both its query translation and stated pivot. Require each full linear
+displacement to be representable as a dyadic rational. §2's drift rotates
+about the line through its pivot and then translates, so a pivot at the ball's
+center moves that center along exactly `Center + v u`; the rotation leaves the
+occupied ball unchanged. An off-center pivot moves the center on a circle and
+returns `SweepUndecided`. The exact squared center-distance polynomial of the
+affine paths then decides every outcome above: a clear path, an initial touch
+or overlap, a first-impact bracket, an isolated graze by §4.5.1, or a
+departure. Each sample keeps the real rotation and rebuilds its center from
+the exact affine path, rounding each coordinate once, so rotation rounding
+cannot move it. The usual float-to-ideal manifold transfer charges the
+remaining center difference. The real start pose must report the ideal
+relation, and a clear path's real end pose separation. Replay checks rounded
+poses against the same polynomial.
+A separated or overlapping start under `ContinueSeparatingTouch`, and an
+unresolved or closing departure, return `SweepUndecided`.
 
 ### 4.5.1 Isolated sphere-pair graze
 
@@ -461,9 +465,9 @@ be published, `SweepPoseBudget` when a required pose cannot be evaluated,
 `SweepContactUnsupported` when the event manifold cannot be transferred.
 The unresolved interval contains `s*` and no later event is published.
 
-This outcome applies to affine `PoseSegment` and zero-angular-velocity
-`RigidDriftSegment` paths admitted by §4.5. It does not infer a graze for a
-rotating path, source-box pair, sphere-box pair, nonrepresentable minimum,
+This outcome applies to affine `PoseSegment` and `RigidDriftSegment` paths
+admitted by §4.5, including centered spinning drifts. It does not infer a
+graze for another rotating path, source-box pair, sphere-box pair, nonrepresentable minimum,
 initial touch, or final-instant touch. A positive quadratic minimum is
 `SweepClear`; a negative minimum enters the existing earliest-impact search.
 An initial touch follows §5.1, regardless of later motion. If a different
@@ -778,7 +782,7 @@ The sphere-pair path keeps
 both source centers, radii, exact translations, and impact bracket. At an
 arbitrary interior fraction it compares both rounded centers with their ideal
 rational centers, then checks the exact squared center distance against the
-radius sum. For centered rotating departure, it evaluates the recorded rigid
+radius sum. For a centered rotating drift, it evaluates the recorded rigid
 rotation and exact affine center displacement before the same comparison. A
 clear or departing sample must retain a positive gap after
 charging the center displacement; an impact prefix stays clear before the
@@ -909,6 +913,7 @@ Assert computed locations, brackets, and bounds, not only enum values.
 | Initial cap touch, initial positive overlap, and an unsupported tangent graze | Touch and overlap return their distinct initial outcomes; the graze returns `Undecided`, never `Clear` from samples. |
 | Two radius-5 mm source spheres: A stays at `(0,0,0)`, B starts at `(20,10,0)` and moves `(-40,0,0)` mm in 1 s | The exact polynomial is `1600(s−1/2)²`; `SweepGrazingTouch` reports a bounded point at `s=1/2`, separated endpoints, no bracket, and full-span interior replay. Reverse pair order and compare event time and reversed normal. |
 | The same pair with B starting at `y=11`, `y=9`, or `y=10` and `x=20` moving to `x=0` at the final instant | The first path is `SweepClear`; the second enters impact search; the endpoint tangent remains `Undecided` in this increment. |
+| Two radius-5 source spheres spin about their own off-grid centers while their centers close transversely or along X | The bracket holds the closed-form root of the affine center paths, and the event's witnesses, normal and separation bound the exact ideal pair. Replay keeps spin and refuses past the bracket; an off-center pivot is `Undecided`. |
 | A graze with an event fraction or elapsed time that `units.Value` cannot represent exactly, a rounded event pose that loses exact touch, or a two-pose budget | Return `SweepUndecided` with the earliest interval and specific cause; never publish `SweepClear` or a false graze. |
 | A 10 mm box touches a fixed floor, then moves upward at `50 mm/s` for `0.1 s` | Default mode returns `InitiallyTouching`. `ContinueSeparatingTouch` returns `DepartedClear`, with a positive final gap enclosing `5 mm`. |
 | The same touching boxes slide tangentially while their face patches overlap | `ContinueSeparatingTouch` returns `Undecided`; `ContinueCertifiedTouch` returns `PersistentTouch` until the first patch-feature change. |
