@@ -1693,7 +1693,8 @@ tray satisfies: its walls rise above its floor and its rim faces lie above its w
 scene's bodies all rest on, depart from and tip over the tray's floor, so `planarSupportOf`
 (`contact_sweep_band.go`) admits a FACE-LOCAL support plane instead: the plane of a flat face `h` of
 `S` (one `Face`, every triangle coplanar with one outward normal `n`, as `planarSupportFace` already
-requires) such that
+requires) whose owner only translates, so the column test reads `S`'s start triangles less that
+translation, such that
 
 - every vertex of `M` lies on or in front of the plane, the contact and lifted sets being §10.2's and
   §10.5's as today;
@@ -1716,7 +1717,8 @@ its vertices' hull, hence in the column over `P(B(f))`; material of `S` behind t
 the least vertex height away along `n`; material of `S` in front of the plane projects at least `m(f)`
 away, hence is at least `m(f)` away. The pair's separation on `(0, f]` is therefore at least
 `min(least vertex height bound / |n|_hi, m(f))`, and that minimum is what `planarDepartureProof.lowerGap`
-publishes to the replay (§10.1) and to `departureGap`. A band track's overlap claim (§10.3) needs
+publishes to the replay (§10.1); `departureGap` keeps reading `ContactPair`'s exact gap at the
+departure's end sample. A band track's overlap claim (§10.3) needs
 nothing about what lies behind the plane: material of `S` in front of the plane meets no part of `M`,
 so every point of `M ∩ S` lies behind the plane, and every point of `M` lies at height at least
 `−Depth`, so the overlap along `n` is at most `Depth` whatever `S` holds behind the face, a slab thinner
@@ -2244,6 +2246,10 @@ lines below do not repeat it.
   diagonal to a box against its closed form and that a triangle behind the plane is not read.
   `.github/test-shards.txt` lists the root tests.
 - Depends on: PR 14a.
+- Shipped. The wall fixture spins the cube at `2⁻¹⁶ rad/s` about `Z`, since an axis-aligned source box
+  that only translates against a faceted body takes the faceted-floor sweep; the band track's column
+  leg is shown by `TestSweepPairColumnRefusesTrackOverRim`, a box on its edge leaning over a `2 mm`
+  wall's rim, whose track without the leg runs into the rim.
 
 ### PR 14d (Phase 2) — face-local shallow penetration
 

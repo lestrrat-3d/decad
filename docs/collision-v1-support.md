@@ -148,7 +148,11 @@ provably inside the other. [Planar sweep tests](../contact_sweep_faceted_test.go
 check a tumbling wedge's first corner impact against its exact time.
 
 A pair that starts touching continues when one body's face plane holds that
-whole body behind it and the other body's corners on or in front of it. If
+whole body behind it and the other body's corners on or in front of it. A
+face of a body with material in front of it, such as a tray's floor, serves
+too when that body only translates and every part of it in front of the
+plane stays laterally clear of the other body's path, at least the clearance
+the sweep publishes; a body leaning over a wall's rim fails that test. If
 every touching corner moves away from the plane, the sweep proves a
 departure over a stated time and searches the rest. Otherwise, under
 `ContinueCertifiedTouch`, a plane body that does not spin carries a band
@@ -194,7 +198,8 @@ and an exact pair whose corners all rise departs from a band start.
 [Support set tests](../contact_support_band_test.go) check the published
 heights, the rim, and a tray's floor and wall, and
 [band and departure tests](../contact_sweep_band_test.go) check the track's
-end and depth over the support set.
+end and depth over the support set, and the departure, band track, wall
+impact and rim refusal on a tray's floor.
 
 ## Bodies and response
 

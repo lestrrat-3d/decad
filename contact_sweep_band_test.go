@@ -586,3 +586,259 @@ func TestSweepPairSupportSetArrivalEndsTrack(t *testing.T) {
 	_, _, err = report.CertifiedPosesAt(units.Seconds(supportSweepSeconds / 2))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
+
+// The sweep fixtures of docs/multibody-dynamics-design.md §13 PR 14c: §10.6's
+// face-local support plane. The §2 tray's walls rise above its floor, so no
+// face of the tray holds the whole tray behind it; its floor carries the
+// departure and the band track through the column test, which keeps every
+// tray triangle in front of the floor's plane laterally clear of the 8 mm
+// cube's ideal path box.
+//
+// Legs shown to fail (each deleted in turn, fixture red, then restored):
+//   - the column test in the departure's grid search:
+//     TestSweepPairColumnEndsDepartureAtWall departs over the whole sweep,
+//     past the wall, and its departure's end sample overlaps the wall, so the
+//     sweep is SweepUndecided with SweepDepartureUnproved;
+//   - the lateral clearance in the departure's lower gap:
+//     contact_sweep_band_internal_test.go's
+//     TestPlanarDepartureLowerGapIsBoundedByLateralClearance publishes the
+//     rising cube's height, far above its 2⁻¹⁰ mm clearance from the wall;
+//   - the column test in the band track's grid search:
+//     TestSweepPairColumnRefusesTrackOverRim publishes a quarter-second band
+//     track through which the box sinks into a low wall's rim.
+
+// sceneTrayBody is the §2 tray: a floor and four walls around the inside
+// [-80, 80]², the floor's top face at z = 0 and the walls rising to z = 40.
+// The inner box's side diagonals cross the rim's plane at dyadic points, so
+// the Boolean is exact (zero-bound), which §9 requires.
+func sceneTrayBody(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	return cutOf(t, doc, [6]float64{-90, -90, 90, 90, -10, 50}, [6]float64{-80, -80, 80, 80, 0, 50})
+}
+
+// lowestCornerHeight stages the 8 mm cube's corners through pose in float64
+// and returns the least z.
+func lowestCornerHeight(pose r3.Transform) float64 {
+	lowest := math.Inf(1)
+	for _, x := range []float64{0, 8} {
+		for _, y := range []float64{-4, 4} {
+			for _, z := range []float64{0, 8} {
+				lowest = math.Min(lowest, pose.Apply(r3.Vec{X: x, Y: y, Z: z}).Z)
+			}
+		}
+	}
+	return lowest
+}
+
+func TestSweepPairDepartsFromTrayFloor(t *testing.T) {
+	// The cube rests flat on the tray's floor around the origin, rises at
+	// 100 mm/s and turns at 1 rad/s about Y through its center. Its bottom
+	// corners rise at 100 ∓ 4 mm/s, so §10.2 departs over the whole
+	// sixteenth of a second, and its path stays far from every wall.
+	const seconds = 1.0 / 16
+	doc := decad.New()
+	tray := sceneTrayBody(t, doc)
+	cube := boxBody(t, doc, 0, -4, 8, 4, 8)
+	trayPath := sweepDrift(r3.Vec{}, seconds)
+	cubePath := sweepDrift(r3.Vec{Z: 100}, seconds)
+	cubePath.From = contactPose(t, r3.Vec{X: -4})
+	cubePath.Center = r3.Vec{Z: 4}
+	cubePath.AngularVelocity.Y = units.RadiansPerSecond(1)
+	req := tumbleRequest()
+	req.StartPolicy = decad.ContinueSeparatingTouch
+	for order := range 2 {
+		a, b := tray, cube
+		pathA, pathB := decad.PairPath(trayPath), decad.PairPath(cubePath)
+		if order == 1 {
+			a, b, pathA, pathB = cube, tray, pathB, pathA
+		}
+		report, err := doc.SweepPair(t.Context(), a, b, pathA, pathB, req)
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepDepartedClear, report.Outcome, "order %d cause=%v", order, report.Cause)
+		require.Equal(t, decad.ContactTouching, report.InitialEvent.Relation)
+		require.NotNil(t, report.Departure)
+		until := report.Departure.Until
+		require.Equal(t, 1.0, until.Fraction.Base())
+		poseA, poseB, err := report.CertifiedPosesAt(until.Elapsed.Value)
+		require.NoError(t, err)
+		cubePose := poseB
+		if order == 1 {
+			cubePose = poseA
+		}
+		// The published gap is the exact relation's at the rounded poses: the
+		// lowest corner's height. Staging the corners in float64 rounds each
+		// coordinate by about an ULP of 10 mm, which 1e-12 mm covers.
+		gap := report.Departure.GapAtUntil
+		require.Greater(t, gap.Value.Base()-gap.Bound.Base(), 0.0)
+		require.InDelta(t, lowestCornerHeight(cubePose), gap.Value.Base(), gap.Bound.Base()+1e-12)
+
+		// Inside the departure the rounded pair replays separated.
+		poseA, poseB, err = report.CertifiedPosesAt(units.Seconds(seconds / 2))
+		require.NoError(t, err)
+		contact, err := doc.ContactPair(t.Context(), a, b, poseA, poseB, contactRequest())
+		require.NoError(t, err)
+		require.Equal(t, decad.ContactSeparated, contact.Relation, "order %d", order)
+	}
+}
+
+func TestSweepPairBandTrackOnTrayFloor(t *testing.T) {
+	// The edge box of TestSweepPairPlanarBandTrack, turning about its resting
+	// edge on the tray's floor instead of a plain floor, both moved
+	// tumbleOffset along X: the quarter-second track covers the sweep with
+	// the same K·h² depth.
+	const seconds = .25
+	// The closed form runs in float64 over values below 20.
+	const slack = 1e-12
+	doc := decad.New()
+	_, box, _, boxPath := edgeBoxScene(t, doc, r3.Vec{}, seconds)
+	tray := sceneTrayBody(t, doc)
+	trayPath := sweepDrift(r3.Vec{}, seconds)
+	trayPath.From = contactPose(t, r3.Vec{X: tumbleOffset})
+	k := edgeBoxCurvature()
+	for order := range 2 {
+		a, b := tray, box
+		pathA, pathB := decad.PairPath(trayPath), decad.PairPath(boxPath)
+		if order == 1 {
+			a, b, pathA, pathB = box, tray, pathB, pathA
+		}
+		report, err := doc.SweepPair(t.Context(), a, b, pathA, pathB, bandRequest())
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepPersistentBand, report.Outcome, "order %d cause=%v", order, report.Cause)
+		track := report.ContactTrack
+		require.Equal(t, 1.0, track.End().Fraction.Base())
+		h := track.End().Elapsed.Value.Base()
+		band := track.Band()
+		require.NotNil(t, band)
+		require.InDelta(t, k*h*h, band.Value.Base(), band.Bound.Base()+slack)
+		prefix, err := track.BandAt(units.Scalar(.5))
+		require.NoError(t, err)
+		u := h / 2
+		require.InDelta(t, k*u*u, prefix.Value.Base(), prefix.Bound.Base()+slack)
+		normal := 1.0
+		if order == 1 {
+			normal = -1
+		}
+		require.Equal(t, r3.Vec{Z: normal}, track.Normal().Value)
+		manifold, err := track.ManifoldAt(units.Scalar(.5))
+		require.NoError(t, err)
+		require.Len(t, manifold.Points, 2)
+		replayA, replayB, err := report.CertifiedPosesAt(units.Seconds(h / 2))
+		require.NoError(t, err)
+		contact, err := doc.ContactPair(t.Context(), a, b, replayA, replayB, contactRequest())
+		require.NoError(t, err)
+		require.NotEqual(t, decad.ContactSeparated, contact.Relation)
+	}
+}
+
+func TestSweepPairColumnEndsDepartureAtWall(t *testing.T) {
+	// The cube rests flat on the tray's floor with its +X face 1 mm from the
+	// wall at x = 80, rises at 16 mm/s and slides toward the wall at
+	// 200 mm/s. A slow spin about Z, 2⁻¹⁶ rad/s through the cube's center,
+	// leaves every corner height alone and routes the pair to the general
+	// planar sweep: an axis-aligned source box that only translates against
+	// a faceted body takes the faceted-floor sweep, which does not read a
+	// tray. Every contact rate stays at 16 mm/s, so only the column test ends
+	// the departure: at the last grid fraction before the cube's path box,
+	// whose +X side the spin moves by under 1e-6 mm, reaches the wall's
+	// projection at 79 + 200·t = 80.
+	const seconds = 1.0 / 64
+	// The grid step of a 2⁻⁶ s sweep at the 2⁻²⁰ s resolution.
+	const step = 1.0 / (1 << 14)
+	const spin = 1.0 / (1 << 16)
+	doc := decad.New()
+	tray := sceneTrayBody(t, doc)
+	cube := boxBody(t, doc, 0, -4, 8, 4, 8)
+	trayPath := sweepDrift(r3.Vec{}, seconds)
+	cubePath := sweepDrift(r3.Vec{X: 200, Z: 16}, seconds)
+	cubePath.From = contactPose(t, r3.Vec{X: 71})
+	cubePath.Center = r3.Vec{X: 75, Z: 4}
+	cubePath.AngularVelocity.Z = units.RadiansPerSecond(spin)
+	// The exact drift's impact: the leading corner reaches x = 80 when
+	// 79 + 200·t + 4·(cos ωt − 1) + 4·sin ωt = 80, increasing in t.
+	lo, hi := 0.0, seconds
+	for range 200 {
+		mid := (lo + hi) / 2
+		if 79+200*mid+4*(math.Cos(spin*mid)-1)+4*math.Sin(spin*mid) < 80 {
+			lo = mid
+		} else {
+			hi = mid
+		}
+	}
+	impact := lo
+	req := tumbleRequest()
+	req.StartPolicy = decad.ContinueSeparatingTouch
+	resolution := req.TimeResolution.Base()
+	for order := range 2 {
+		a, b := tray, cube
+		pathA, pathB := decad.PairPath(trayPath), decad.PairPath(cubePath)
+		if order == 1 {
+			a, b, pathA, pathB = cube, tray, pathB, pathA
+		}
+		report, err := doc.SweepPair(t.Context(), a, b, pathA, pathB, req)
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepImpactBracket, report.Outcome, "order %d cause=%v", order, report.Cause)
+		require.NotNil(t, report.Departure)
+		until := report.Departure.Until.Fraction.Base()
+		// The spin's enclosure moves the box's +X side by far less than the
+		// 0.88 grid step, about 1.7e-4 mm, that separates the last fraction
+		// before 79 + 200·t = 80 from the root.
+		require.Equal(t, gridFloor(1.0/200/seconds, step), until)
+		require.Less(t, 79+200*until*seconds, 80.0)
+		gap := report.Departure.GapAtUntil
+		require.Greater(t, gap.Value.Base()-gap.Bound.Base(), 0.0)
+		from := report.Bracket.From.Elapsed.Value.Base()
+		to := report.Bracket.To.Elapsed.Value.Base()
+		require.LessOrEqual(t, to-from, resolution)
+		require.InDelta(t, impact, from, resolution)
+		require.InDelta(t, impact, to, resolution)
+		// The departure replays separated, its end included.
+		poseA, poseB, err := report.CertifiedPosesAt(report.Departure.Until.Elapsed.Value)
+		require.NoError(t, err)
+		contact, err := doc.ContactPair(t.Context(), a, b, poseA, poseB, contactRequest())
+		require.NoError(t, err)
+		require.Equal(t, decad.ContactSeparated, contact.Relation, "order %d", order)
+	}
+}
+
+func TestSweepPairColumnRefusesTrackOverRim(t *testing.T) {
+	// A low tray, its walls 2 mm high, holds the edge box of
+	// TestSweepPairPlanarBandTrack with its resting edge 3 mm inside the wall
+	// at x = 80. The box's lower +X face leans over the wall's top, 1 mm above
+	// it where it crosses x = 80, and the spin about its edge lowers that
+	// face onto the rim within the quarter second. The contact edge's feet
+	// stay well inside the floor's face, so only the column test refuses the
+	// track: the box's path box lies over the rim's projection from the
+	// start. Deleting it publishes a quarter-second band track through which
+	// the box sinks into the rim.
+	const seconds = .25
+	doc := decad.New()
+	_, box, _, boxPath := edgeBoxScene(t, doc, r3.Vec{}, seconds)
+	boxPath.From = edgeBoxPose(t, r3.Vec{X: tumbleOffset + 77})
+	boxPath.Center.X += 77
+	tray := cutOf(t, doc, [6]float64{-90, -90, 90, 90, -10, 12}, [6]float64{-80, -80, 80, 80, 0, 4})
+	trayPath := sweepDrift(r3.Vec{}, seconds)
+	trayPath.From = contactPose(t, r3.Vec{X: tumbleOffset})
+	start, err := doc.ContactPair(t.Context(), tray, box, trayPath.From, boxPath.From, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, start.Relation)
+	for order := range 2 {
+		a, b := tray, box
+		pathA, pathB := decad.PairPath(trayPath), decad.PairPath(boxPath)
+		if order == 1 {
+			a, b, pathA, pathB = box, tray, pathB, pathA
+		}
+		report, err := doc.SweepPair(t.Context(), a, b, pathA, pathB, bandRequest())
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepUndecided, report.Outcome, "order %d", order)
+		require.Equal(t, decad.SweepContactTrackUnproved, report.Cause, "order %d", order)
+	}
+	// Turned by the quarter radian, the box's lower +X face crosses x = 80
+	// about 1.78 mm up, inside the 2 mm wall: a track over the whole sweep
+	// would hide that overlap.
+	c, cos, sin := math.Sqrt2/2, math.Cos(seconds), math.Sin(seconds)
+	turned := basisPose(t, r3.Vec{X: c * (cos + sin), Z: c * (cos - sin)}, r3.Vec{Y: 1},
+		r3.Vec{X: c * (sin - cos), Z: c * (sin + cos)}, r3.Vec{X: tumbleOffset + 77})
+	end, err := doc.ContactPair(t.Context(), tray, box, trayPath.From, turned, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactOverlapping, end.Relation)
+}

@@ -780,8 +780,10 @@ func boxRelationDistanceWithin(a, b sourceBoxContactProof, limit *big.Rat) bool 
 // rerunning the pair relation. Both rounded poses must fit PointResolution
 // of their ideal poses. A track replay checks the rounded vertex heights
 // against the band; a clear or departing replay needs the proven lower gap at
-// f to exceed the summed deviation, so the rounded pair is separated too. The
-// initial touch of a departure replays only at zero deviation.
+// f to exceed the summed deviation, so the rounded pair is separated too; a
+// departure from a face-local plane (§10.6) reads that gap no larger than its
+// lateral clearance. The initial touch of a departure replays only at zero
+// deviation.
 //
 // The vertex deviation bounds the held bodies' move from ideal to rounded. A
 // true point of a positive-displacement body (§10.4) lies within δ of its held
