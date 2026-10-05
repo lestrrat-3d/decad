@@ -512,6 +512,13 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		if w.friction.lower.Sign() != 0 && w.sphereFloorFrictionCandidate(first.Event) {
 			return w.stepInitialSphereFloorFriction(ctx, from, kicked, dt, first)
 		}
+		if first.Event != nil && w.restitution.Base() > 0 &&
+			(w.friction.lower.Sign() > 0 && isSourceSpherePairEvent(first.Event.Manifold) &&
+				math.Abs(first.Event.Manifold.Points[0].Normal.Value.X) == 1 ||
+				w.friction.upper.Sign() == 0 &&
+					w.exactSpherePairFrictionCandidate(kicked, first.Event.Manifold)) {
+			return w.stepInitialSpherePairFriction(ctx, from, kicked, dt, first)
+		}
 		if rotating {
 			return undecided(w, "rotating initial contact needs a certified response track"), nil
 		}

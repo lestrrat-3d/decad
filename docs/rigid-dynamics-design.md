@@ -111,6 +111,23 @@ when their bounded impulse, momentum, energy, and contact-point residuals
 admit that value. Both paths use the real ideal drift and rounded endpoint
 sweep. A missing initial float witness, a failed response bound, or an
 unproved continuation returns `Undecided` with no event or `Next`.
+An initial cardinal X point touch between two dynamic source spheres can
+also receive a positive-restitution one-point impulse with zero or positive
+friction.
+Both source centers, exact supplied mass centers, and query translations
+must coincide; both exact inertia tensors must be positive and isotropic.
+The pair starts without spin or Z velocity, and the effective friction
+coefficient must have equal exact bounds. The rational response first solves
+the normal restitution impulse, then applies the smaller of the tangent
+sticking impulse and the Coulomb limit. It rounds and checks both linear
+velocities, both Z spins, restitution, tangent slip or sliding direction,
+the friction cone, and each point impulse against configured residuals.
+Zero friction leaves the tangent velocities and spin unchanged. A zero-friction,
+zero-restitution pair uses the existing response. The event records equal
+and opposite linear impulses and both spin responses. The
+rotating `SweepDepartedClear` report must prove ideal and rounded separation
+at its endpoint and certify trace replay. Other positive-friction sphere-pair
+inputs return `Undecided`.
 A two-body world's pair may be excluded; its bodies drift independently even
 through overlap, and no pair material is mixed.
 The current three-body step admits one dynamic body and two fixed bodies, or
@@ -374,8 +391,9 @@ reported event pairs use world order. `World.Excluded()` and
 `StepReport.Excluded` return separate copies.
 
 The current positive-friction slice accepts a fixed floor and dynamic box or
-source sphere in either world order, or two dynamic source boxes at an initial
-opposed face touch. Without an override, the pair coefficient is the geometric
+source sphere in either world order, two dynamic source boxes at an initial
+opposed face touch, or the initial cardinal sphere pair above. Without an
+override, the pair coefficient is the geometric
 mean of the held body coefficients. The solver proposes impulses with a nominal
 rounded mean, then checks the friction cone and slip law against rational
 bounds that enclose the exact mean. A zero body coefficient selects the
