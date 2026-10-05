@@ -104,10 +104,11 @@ least one dynamic body. Each dynamic body uses either density-derived mass and i
 caller-supplied bounded record. Density-derived properties currently cover
 source boxes, admitted untapered prisms under any frame or rigid placement,
 full source spheres, qualifying revolved cylinders, full or partial revolves
-about an exact in-plane axis, and verified faceted Booleans. Every other solid
+about an exact in-plane axis, sweeps and cups built from those prisms and
+revolves, and verified faceted Booleans. Every other solid
 whose `VerifyAll` mesh carries an occupied-volume proof is integrated over
-that mesh: solid lofts, unplaced exact stitched solids, cups, and revolves the
-analytic path refuses, refined until the tensor interval proves positive. A
+that mesh: solid lofts, unplaced exact stitched solids, and sweeps, cups and
+revolves the analytic paths refuse, refined until the tensor interval proves positive. A
 placed or certificate-welded stitched solid, and any payload whose mesh
 carries no such proof, returns `decad.ErrUnsupported`. Those payloads may need
 supplied properties, but those properties cannot replace a missing contact

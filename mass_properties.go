@@ -35,11 +35,13 @@ type InertiaReading struct {
 // source spheres under rigid placements, cardinal full source cylinders made
 // by revolving an axis-incident rectangle, full and partial revolves of any
 // integrated section about an exact in-plane axis under any frame and rigid
-// placement, and faceted Boolean solids with a certified occupied-volume bound.
-// Every other solid is integrated over its VerifyAll mesh when that mesh
+// placement, sweeps whose spans those prism and revolve paths admit, cups
+// whose outer and cavity prisms they admit, and faceted Boolean solids with a
+// certified occupied-volume bound. Every other solid, and a sweep or cup the
+// analytic arms refuse, is integrated over its VerifyAll mesh when that mesh
 // carries an occupied-volume proof, refining the mesh until the tensor
-// interval proves positive: lofts, exact stitched solids, cups and curved
-// payloads the analytic arms refuse.
+// interval proves positive: lofts, exact stitched solids and curved payloads
+// the analytic arms refuse.
 // It returns ErrUnsupported for other solids rather than estimating their inertia.
 // The receiver and context must not be nil.
 func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassProperties, error) {
@@ -87,6 +89,14 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	}
 	if faceted, ok := b.payload.(facetedPayload); ok {
 		return facetedMassProperties(ctx, b, faceted, density)
+	}
+	if sweep, ok := b.payload.(sweepPayload); ok {
+		result, err := sweepMassProperties(ctx, b, sweep, density)
+		return analyticOrMeshMassProperties(ctx, b, density, result, err)
+	}
+	if cup, ok := b.payload.(cupPayload); ok {
+		result, err := cupMassProperties(ctx, b, cup, density)
+		return analyticOrMeshMassProperties(ctx, b, density, result, err)
 	}
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
@@ -204,6 +214,16 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		return MassProperties{}, err
 	}
 	return result, nil
+}
+
+// analyticOrMeshMassProperties keeps an analytic arm's result unless that arm
+// refused with ErrUnsupported, in which case the body takes its verified mesh
+// (docs/multibody-dynamics-design.md §8.5).
+func analyticOrMeshMassProperties(ctx context.Context, b *Body, density units.Value, result MassProperties, err error) (MassProperties, error) {
+	if err == nil || !errors.Is(err, ErrUnsupported) || ctx.Err() != nil {
+		return result, err
+	}
+	return verifiedMeshMassProperties(ctx, b, density)
 }
 
 // prismMassProperties integrates the evaluator's admitted section moments,

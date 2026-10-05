@@ -2091,3 +2091,11 @@
 5	0.01	TestRevolveMassPropertiesRefusesUnchargedTerms
 1	0.01	TestThirdOrderMomentsOfASector
 3	0.01	TestMassPropertiesRevolveRotated
+0	0.01	TestMassPropertiesCompositeSweepSumsSpans
+1	0.01	TestMassPropertiesCompositeSweepPlaced
+2	0.01	TestMassPropertiesCompositeSweepTurnedFrame
+3	0.01	TestMassPropertiesOneSpanSweeps
+5	0.01	TestMassPropertiesCupOuterMinusCavity
+0	0.01	TestMassPropertiesCupOutward
+1	0.01	TestCupMassChargesDisplacement
+2	0.01	TestRotateVolumeMomentsChargesDefect

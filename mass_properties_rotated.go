@@ -29,6 +29,11 @@ import (
 //     largest local tensor magnitude: ‖M − Q‖_F ≤ d, so
 //     |(Q I Qᵀ − M I Mᵀ)_ij| ≤ ‖M − Q‖(‖I‖ + ‖M‖‖I‖) ≤ d(2+d)‖I‖_2 and
 //     ‖I‖_2 ≤ ‖I‖_F ≤ 3m.
+//
+// The volume-moment helpers here (prismVolumeMoments, shiftVolumeMoments,
+// rotateVolumeMoments) are shared with the sweep and cup paths, which
+// combine several solids' V, P and Q about one anchor before forming a
+// tensor.
 
 // rotatedPrismMassProperties integrates pp's admitted section moments over
 // its axial interval, charges any recorded displacement, and rotates the
@@ -36,58 +41,11 @@ import (
 // solid prism; this path takes every frame and placement basis, cardinal ones
 // included.
 func rotatedPrismMassProperties(ctx context.Context, pp prismPayload, center VecMeasurement, density units.Value) (MassProperties, error) {
-	if !nonNegativeFinite(pp.sectionDelta) || !nonNegativeFinite(pp.z0Delta) || !nonNegativeFinite(pp.z1Delta) {
-		return MassProperties{}, fmt.Errorf("%w: prism displacement has no finite bound", ErrUnsupported)
-	}
-	section, err := prismSectionMoments(ctx, pp)
+	moments, err := prismVolumeMoments(ctx, pp)
 	if err != nil {
 		return MassProperties{}, err
 	}
-	a, mu, mv := section[0], section[1], section[2]
-	if a.lo.Sign() <= 0 {
-		return MassProperties{}, fmt.Errorf("%w: section area interval does not prove positive volume", ErrUnsupported)
-	}
-	z0, z1 := proofarith.FloatRat(pp.z0), proofarith.FloatRat(pp.z1)
-	if z0 == nil || z1 == nil {
-		return MassProperties{}, fmt.Errorf("%w: prism levels are not finite", ErrNotFinite)
-	}
-	h := new(big.Rat).Sub(z1, z0)
-	if h.Sign() <= 0 {
-		return MassProperties{}, fmt.Errorf("%w: axial interval does not prove positive volume", ErrUnsupported)
-	}
-
-	// Volume moments about (0, 0, zm). The axial interval is symmetric about
-	// zm, so every first or mixed moment in z vanishes exactly.
-	zero := pointInterval(new(big.Rat))
-	volume := intervalScale(a, h)
-	first := [3]ratInterval{intervalScale(mu, h), intervalScale(mv, h), zero}
-	h3Over12 := new(big.Rat).Quo(new(big.Rat).Mul(h, new(big.Rat).Mul(h, h)), big.NewRat(12, 1))
-	second := [3][3]ratInterval{
-		{intervalScale(section[3], h), intervalScale(section[4], h), zero},
-		{intervalScale(section[4], h), intervalScale(section[5], h), zero},
-		{zero, zero, intervalScale(a, h3Over12)},
-	}
-	if pp.sectionDelta > 0 || pp.z0Delta > 0 || pp.z1Delta > 0 {
-		e, r, err := prismOccupiedVolumeError(ctx, pp, a, h)
-		if err != nil {
-			return MassProperties{}, err
-		}
-		re := new(big.Rat).Mul(r, e)
-		r2e := new(big.Rat).Mul(r, re)
-		volume = intervalWiden(volume, e)
-		for i := range first {
-			first[i] = intervalWiden(first[i], re)
-			for j := range second[i] {
-				second[i][j] = intervalWiden(second[i][j], r2e)
-			}
-		}
-	}
-	if volume.lo.Sign() <= 0 {
-		return MassProperties{}, fmt.Errorf("%w: volume interval does not prove positive volume", ErrUnsupported)
-	}
-	if err := ctx.Err(); err != nil {
-		return MassProperties{}, err
-	}
+	volume, first, second := moments.volume, moments.first, moments.second
 
 	// Centroidal second moment S = Q - P Pᵀ/V and the local inertia
 	// ρ(trace(S)δ - S), all from the one V, P, Q enclosure (dynamic-mass §3).
@@ -170,6 +128,162 @@ func rotatedPrismMassProperties(ctx context.Context, pp prismPayload, center Vec
 		return MassProperties{}, err
 	}
 	return result, nil
+}
+
+// volumeMoments is one solid's V = ∫dV, P_i = ∫q_i dV and Q_ij = ∫q_i·q_j dV
+// as rational intervals, q the coordinates about the anchor the producer
+// names (docs/dynamic-mass-design.md §2). second is filled symmetrically.
+type volumeMoments struct {
+	volume ratInterval
+	first  [3]ratInterval
+	second [3][3]ratInterval
+}
+
+// prismVolumeMoments integrates pp's admitted section moments over its axial
+// interval in the frame-local coordinates q = (u, v, z - zm), zm the recorded
+// mid level, and charges any recorded displacement as E, R·E and R²·E.
+func prismVolumeMoments(ctx context.Context, pp prismPayload) (volumeMoments, error) {
+	if !nonNegativeFinite(pp.sectionDelta) || !nonNegativeFinite(pp.z0Delta) || !nonNegativeFinite(pp.z1Delta) {
+		return volumeMoments{}, fmt.Errorf("%w: prism displacement has no finite bound", ErrUnsupported)
+	}
+	section, err := prismSectionMoments(ctx, pp)
+	if err != nil {
+		return volumeMoments{}, err
+	}
+	a, mu, mv := section[0], section[1], section[2]
+	if a.lo.Sign() <= 0 {
+		return volumeMoments{}, fmt.Errorf("%w: section area interval does not prove positive volume", ErrUnsupported)
+	}
+	z0, z1 := proofarith.FloatRat(pp.z0), proofarith.FloatRat(pp.z1)
+	if z0 == nil || z1 == nil {
+		return volumeMoments{}, fmt.Errorf("%w: prism levels are not finite", ErrNotFinite)
+	}
+	h := new(big.Rat).Sub(z1, z0)
+	if h.Sign() <= 0 {
+		return volumeMoments{}, fmt.Errorf("%w: axial interval does not prove positive volume", ErrUnsupported)
+	}
+
+	// The axial interval is symmetric about zm, so every first or mixed
+	// moment in z vanishes exactly.
+	zero := pointInterval(new(big.Rat))
+	volume := intervalScale(a, h)
+	first := [3]ratInterval{intervalScale(mu, h), intervalScale(mv, h), zero}
+	h3Over12 := new(big.Rat).Quo(new(big.Rat).Mul(h, new(big.Rat).Mul(h, h)), big.NewRat(12, 1))
+	second := [3][3]ratInterval{
+		{intervalScale(section[3], h), intervalScale(section[4], h), zero},
+		{intervalScale(section[4], h), intervalScale(section[5], h), zero},
+		{zero, zero, intervalScale(a, h3Over12)},
+	}
+	if pp.sectionDelta > 0 || pp.z0Delta > 0 || pp.z1Delta > 0 {
+		e, r, err := prismOccupiedVolumeError(ctx, pp, a, h)
+		if err != nil {
+			return volumeMoments{}, err
+		}
+		re := new(big.Rat).Mul(r, e)
+		r2e := new(big.Rat).Mul(r, re)
+		volume = intervalWiden(volume, e)
+		for i := range first {
+			first[i] = intervalWiden(first[i], re)
+			for j := range second[i] {
+				second[i][j] = intervalWiden(second[i][j], r2e)
+			}
+		}
+	}
+	if volume.lo.Sign() <= 0 {
+		return volumeMoments{}, fmt.Errorf("%w: volume interval does not prove positive volume", ErrUnsupported)
+	}
+	if err := ctx.Err(); err != nil {
+		return volumeMoments{}, err
+	}
+	return volumeMoments{volume: volume, first: first, second: second}, nil
+}
+
+// prismMidLevel is zm = (z0 + z1)/2, the anchor level of prismVolumeMoments,
+// as an exact rational.
+func prismMidLevel(pp prismPayload) (*big.Rat, error) {
+	z0, z1 := proofarith.FloatRat(pp.z0), proofarith.FloatRat(pp.z1)
+	if z0 == nil || z1 == nil {
+		return nil, fmt.Errorf("%w: prism levels are not finite", ErrNotFinite)
+	}
+	return new(big.Rat).Quo(new(big.Rat).Add(z0, z1), big.NewRat(2, 1)), nil
+}
+
+// shiftVolumeMoments re-anchors m from anchor a to anchor a − s: with
+// q' = q + s, P' = P + V·s and Q'_ij = Q_ij + s_i·P_j + P_i·s_j + V·s_i·s_j.
+// s is exact and the map is a polynomial in V, P and Q, so its interval
+// evaluation encloses the re-anchored moments of every solid the input
+// encloses. It is an exact change of anchor, not a parallel-axis estimate.
+func shiftVolumeMoments(m volumeMoments, s [3]*big.Rat) volumeMoments {
+	out := volumeMoments{volume: m.volume}
+	for i := range out.first {
+		out.first[i] = intervalAdd(m.first[i], intervalScale(m.volume, s[i]))
+	}
+	for i := range out.second {
+		for j := range out.second[i] {
+			term := intervalAdd(m.second[i][j], intervalScale(m.first[j], s[i]))
+			term = intervalAdd(term, intervalScale(m.first[i], s[j]))
+			out.second[i][j] = intervalAdd(term, intervalScale(m.volume, new(big.Rat).Mul(s[i], s[j])))
+		}
+	}
+	return out
+}
+
+// rotateVolumeMoments carries m through the rigid rotation Q nearest the
+// exact rational matrix f (its polar factor), f's column k the image of
+// local axis k. With d = orthonormalityDefect(f) ≥ ‖f − Q‖_F:
+//
+//   - each (Q·P)_i lies within d·‖P‖₁ of (f·P)_i, since
+//     |((Q − f)P)_i| ≤ ‖Q − f‖₂‖P‖₂ ≤ d·‖P‖₁;
+//   - each (Q·Q_m·Qᵀ)_ij lies within 3·d·(2+d)·m of (f·Q_m·fᵀ)_ij, m the
+//     largest entry magnitude of Q_m, by the bound this file's header states
+//     for the inertia tensor, which holds for any 3×3 matrix.
+func rotateVolumeMoments(m volumeMoments, f [3][3]*big.Rat) volumeMoments {
+	defect := orthonormalityDefect(f)
+	firstNorm := new(big.Rat)
+	for _, component := range m.first {
+		firstNorm.Add(firstNorm, intervalAbsUpper(component))
+	}
+	firstWiden := new(big.Rat).Mul(defect, firstNorm)
+	out := volumeMoments{volume: m.volume}
+	for i := range out.first {
+		sum := pointInterval(new(big.Rat))
+		for k := range m.first {
+			sum = intervalAdd(sum, intervalScale(m.first[k], f[i][k]))
+		}
+		out.first[i] = intervalWiden(sum, firstWiden)
+	}
+	secondWiden := new(big.Rat).Mul(big.NewRat(3, 1), defect)
+	secondWiden.Mul(secondWiden, new(big.Rat).Add(big.NewRat(2, 1), defect))
+	secondWiden.Mul(secondWiden, tensorMagnitude(m.second))
+	out.second = rotateTensorInterval(f, m.second)
+	for i := range out.second {
+		for j := range out.second[i] {
+			out.second[i][j] = intervalWiden(out.second[i][j], secondWiden)
+		}
+	}
+	return out
+}
+
+// addVolumeMoments and subVolumeMoments combine two solids' moments about one
+// anchor. Each operand keeps its own outward interval, so an uncertainty
+// never cancels against a neighbor's (docs/dynamic-mass-design.md §2).
+func addVolumeMoments(a, b volumeMoments) volumeMoments {
+	return combineVolumeMoments(a, b, intervalAdd)
+}
+
+func subVolumeMoments(a, b volumeMoments) volumeMoments {
+	return combineVolumeMoments(a, b, intervalSub)
+}
+
+func combineVolumeMoments(a, b volumeMoments, op func(ratInterval, ratInterval) ratInterval) volumeMoments {
+	out := volumeMoments{volume: op(a.volume, b.volume)}
+	for i := range out.first {
+		out.first[i] = op(a.first[i], b.first[i])
+		for j := range out.second[i] {
+			out.second[i][j] = op(a.second[i][j], b.second[i][j])
+		}
+	}
+	return out
 }
 
 // prismSectionMoments reads the section's area, first and second moments as

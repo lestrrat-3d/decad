@@ -14,7 +14,7 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 3, 7, 10, 14, 16 and 19 have shipped. `dynamics.World` holds any number of bodies, the
+Current state: §13 PRs 1, 2, 3, 7, 10, 14, 16, 17 and 19 have shipped. `dynamics.World` holds any number of bodies, the
 canonical pair table and per-pair material of §3.1, and the slice-backed `State` of §3.2. Its step resolves
 two bodies, or three bodies with one, two or three dynamic bodies and every other body fixed, through the
 closed-form responses `docs/rigid-dynamics-design.md` lists. A world of four or more bodies takes the
@@ -27,7 +27,7 @@ this document does not restate it. The two- and three-body steps query their pai
 phase, and their `Trace` holds fixed two- and three-body slots. The exact arithmetic every certificate below
 is stated in already exists as one package: `internal/proof` (`Dyadic`, `DyV3`, `RatInterval` and the float
 rounding bounds), which the root package imports today and which `dynamics` can import as well, since an
-`internal/` package is visible to every package of this module. §3.1, §3.2, §4 and §8.1–§8.6 describe
+`internal/` package is visible to every package of this module. §3.1, §3.2, §4 and §8.1–§8.8 describe
 shipped code, except `State.cache` and the `MaxPairSweeps` charge (§13 PR 8). For worlds of four or more
 bodies, §5 without islands, §7.1, §3.4's `traceSlice` and `pairProof`, and §12's `StepReason` with
 `StepDiagnostic.Code` ship as well. §9.1 and §9.2 ship for prisms over whole `LineSeg` sections and for
@@ -652,15 +652,26 @@ undenoted sweep end and a section displacement, none of which it charges.
 
 ### 8.7 Sweep
 
-A single straight span takes 8.1/8.2; a single arc span takes 8.6 over the arc's partial revolve. A
-composite sweep integrates each `sweepSpanPayload` about one shared anchor and sums; no parallel-axis
-shortcut per span, since `P` and `Q` already refer to the shared anchor.
+Analytic, in `mass_properties_sweep.go`. A single straight span takes 8.1/8.2; a single arc span takes
+8.6 over the arc's partial revolve. A composite sweep integrates each `sweepSpanPayload` in its own local
+coordinates and sums `V`, `P` and `Q` about one shared anchor; no parallel-axis shortcut per span, since
+`P` and `Q` already refer to the shared anchor. Each span reaches the composite's unplaced coordinates
+through its own rigid motion: the exact image of its local origin and the rotation nearest its held frame
+matrix `F`, with `d` its orthonormality defect, widening each `P_i` by `d·‖P‖₁` and each `Q_ij` by
+`3·d·(2+d)·m` as 8.1 does. The sum reaches world axes through the one placement every span shares, by
+8.1's rotation, and positivity is proved as in 8.6. A span placement that differs from the first span's,
+or a span either path refuses (an arc span whose axis is not exact in its transported plane), leaves the
+sweep to 8.5.
 
 ### 8.8 Cup
 
-Outer prism minus cavity prism (both 8.1/8.2), subtracted at the `V, P, Q` level with each contribution's
-own outward interval (dynamic-mass §2, §3). `cupPayload` holds both sections and the three levels with
-their deltas.
+Analytic, in `mass_properties_cup.go`. Outer prism minus cavity prism (both 8.1/8.2), subtracted at the
+`V, P, Q` level with each contribution's own outward interval (dynamic-mass §2, §3), the cavity re-anchored
+exactly onto the outer prism's mid level first. `cupPayload` holds both sections and the three levels with
+their deltas; each level delta is charged on its prism, and the thickness's own conversion displacement is
+charged as the offset section's `sectionDelta`, on the cavity for an inward cup and on the outer region for
+an outward one. The difference reaches world axes by 8.1's rotation and positivity is proved as in 8.6. A
+cup either prism refuses leaves the cup to 8.5.
 
 A dynamic body whose payload matches no item returns `ErrUnsupported` from `Body.MassProperties`, and
 `NewWorld` rejects it with that error; a Fixed or Kinematic body never needs mass.

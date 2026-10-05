@@ -46,34 +46,45 @@ import (
 // its orthonormality defect so the reading refers to the rigid rotation
 // nearest it.
 func revolveMassProperties(ctx context.Context, b *Body, rp revolvePayload, density units.Value) (MassProperties, error) {
-	if rp.sectionDelta != 0 {
-		return MassProperties{}, fmt.Errorf("%w: revolve section carries a displacement the mass path does not charge", ErrUnsupported)
-	}
-	ax := rp.ax
-	if ax.aUBound != 0 || ax.aVBound != 0 || ax.dUBound != 0 || ax.dVBound != 0 {
-		return MassProperties{}, fmt.Errorf("%w: revolve axis is not exact", ErrUnsupported)
-	}
-	if ax.radialAdmitAllow != 0 || ax.snap != (regionSnapAllow{}) {
-		return MassProperties{}, fmt.Errorf("%w: revolve axis snap is not charged by the mass path", ErrUnsupported)
-	}
-	if !rp.den.phi0.valid() || !rp.den.phi1.valid() {
-		return MassProperties{}, fmt.Errorf("%w: revolve sweep has no exact denotation", ErrUnsupported)
+	moments, err := revolveVolumeMoments(ctx, rp)
+	if err != nil {
+		return MassProperties{}, err
 	}
 	rotation, err := revolveRotation(rp)
 	if err != nil {
 		return MassProperties{}, err
 	}
+	return rigidMassProperties(ctx, b.centroid, moments, rotation, density)
+}
+
+// revolveVolumeMoments integrates the revolve's V, P and Q about the axis
+// anchor a3 in the local basis (w, e0, e1), refusing every term it does not
+// charge.
+func revolveVolumeMoments(ctx context.Context, rp revolvePayload) (volumeMoments, error) {
+	if rp.sectionDelta != 0 {
+		return volumeMoments{}, fmt.Errorf("%w: revolve section carries a displacement the mass path does not charge", ErrUnsupported)
+	}
+	ax := rp.ax
+	if ax.aUBound != 0 || ax.aVBound != 0 || ax.dUBound != 0 || ax.dVBound != 0 {
+		return volumeMoments{}, fmt.Errorf("%w: revolve axis is not exact", ErrUnsupported)
+	}
+	if ax.radialAdmitAllow != 0 || ax.snap != (regionSnapAllow{}) {
+		return volumeMoments{}, fmt.Errorf("%w: revolve axis snap is not charged by the mass path", ErrUnsupported)
+	}
+	if !rp.den.phi0.valid() || !rp.den.phi1.valid() {
+		return volumeMoments{}, fmt.Errorf("%w: revolve sweep has no exact denotation", ErrUnsupported)
+	}
 	if err := ctx.Err(); err != nil {
-		return MassProperties{}, err
+		return volumeMoments{}, err
 	}
 
 	ig, err := rp.profile.evaluatorIntegralsContext(ctx, momentThirdOrder, nil)
 	if err != nil {
-		return MassProperties{}, err
+		return volumeMoments{}, err
 	}
 	plane, err := revolveSectionMoments(ig)
 	if err != nil {
-		return MassProperties{}, err
+		return volumeMoments{}, err
 	}
 	axisMoment := revolveAxisMoments(plane, ax)
 	r1 := axisMoment(0, 1)
@@ -85,15 +96,15 @@ func revolveMassProperties(ctx context.Context, b *Body, rp revolvePayload, dens
 
 	angular, ok := revolveAngularFactors(rp)
 	if !ok {
-		return MassProperties{}, fmt.Errorf("%w: revolve sweep has no certified angular factors", ErrUnsupported)
+		return volumeMoments{}, fmt.Errorf("%w: revolve sweep has no certified angular factors", ErrUnsupported)
 	}
 	if err := ctx.Err(); err != nil {
-		return MassProperties{}, err
+		return volumeMoments{}, err
 	}
 
 	volume := intervalMul(angular.width, r1)
 	if volume.lo.Sign() <= 0 {
-		return MassProperties{}, fmt.Errorf("%w: revolve volume interval does not prove positive volume", ErrUnsupported)
+		return volumeMoments{}, fmt.Errorf("%w: revolve volume interval does not prove positive volume", ErrUnsupported)
 	}
 	first := [3]ratInterval{
 		intervalMul(angular.width, zr),
@@ -107,12 +118,50 @@ func revolveMassProperties(ctx context.Context, b *Body, rp revolvePayload, dens
 	second[1][1] = intervalMul(angular.cos2, r3m)
 	second[1][2] = intervalMul(angular.sinCos, r3m)
 	second[2][2] = intervalMul(angular.sin2, r3m)
+	second[1][0], second[2][0], second[2][1] = second[0][1], second[0][2], second[1][2]
+	return volumeMoments{volume: volume, first: first, second: second}, nil
+}
+
+// revolveAnchor is the axis anchor a3 = o + aU·U + aV·V before placement, the
+// origin of revolveVolumeMoments' coordinates, as exact rationals read from
+// the held floats.
+func revolveAnchor(rp revolvePayload) ([3]*big.Rat, error) {
+	aU, aV := proofarith.FloatRat(rp.ax.aU), proofarith.FloatRat(rp.ax.aV)
+	if aU == nil || aV == nil {
+		return [3]*big.Rat{}, fmt.Errorf("%w: revolve axis anchor is not finite", ErrNotFinite)
+	}
+	origin, u, v := rp.frame.Origin(), rp.frame.U(), rp.frame.V()
+	var out [3]*big.Rat
+	for i := range out {
+		o := proofarith.FloatRat(vecComponent(origin, i))
+		ui, vi := proofarith.FloatRat(vecComponent(u, i)), proofarith.FloatRat(vecComponent(v, i))
+		if o == nil || ui == nil || vi == nil {
+			return [3]*big.Rat{}, fmt.Errorf("%w: revolve frame is not finite", ErrNotFinite)
+		}
+		out[i] = ratAdd(o, ratMul(aU, ui), ratMul(aV, vi))
+	}
+	return out, nil
+}
+
+// rigidMassProperties publishes the mass properties of a solid whose local
+// moments are m and whose local axes reach world axes through the rigid
+// rotation nearest the exact rational matrix rotation (its column k the
+// world image of local axis k). It forms the centroidal tensor from the one
+// V, P, Q enclosure, rotates it with docs/multibody-dynamics-design.md §8.1's
+// orthonormality-defect widening, and proves the PUBLISHED tensor positive
+// definite by its leading principal minors. center is the evaluator's own
+// bounded world centroid of the same solid.
+func rigidMassProperties(ctx context.Context, center VecMeasurement, m volumeMoments, rotation [3][3]*big.Rat, density units.Value) (MassProperties, error) {
+	volume, first, second := m.volume, m.first, m.second
+	if volume.lo.Sign() <= 0 {
+		return MassProperties{}, fmt.Errorf("%w: volume interval does not prove positive volume", ErrUnsupported)
+	}
 	var centroidal [3][3]ratInterval
 	for i := range 3 {
 		for j := i; j < 3; j++ {
 			shift, ok := intervalQuo(intervalMul(first[i], first[j]), volume)
 			if !ok {
-				return MassProperties{}, fmt.Errorf("%w: revolve volume interval does not prove positive volume", ErrUnsupported)
+				return MassProperties{}, fmt.Errorf("%w: volume interval does not prove positive volume", ErrUnsupported)
 			}
 			centroidal[i][j] = intervalSub(second[i][j], shift)
 			centroidal[j][i] = centroidal[i][j]
@@ -145,13 +194,14 @@ func revolveMassProperties(ctx context.Context, b *Body, rp revolvePayload, dens
 		return MassProperties{}, err
 	}
 
-	result := MassProperties{Center: b.centroid}
+	result := MassProperties{Center: center}
+	var err error
 	result.Mass, err = massIntervalReading(intervalScale(volume, rho), units.Kilogram)
 	if err != nil {
 		return MassProperties{}, err
 	}
 	if result.Mass.Bound.Base() >= result.Mass.Value.Base() {
-		return MassProperties{}, fmt.Errorf("%w: revolve mass reading is not positive", ErrUnsupported)
+		return MassProperties{}, fmt.Errorf("%w: mass reading is not positive", ErrUnsupported)
 	}
 	entries := []struct {
 		iv      ratInterval

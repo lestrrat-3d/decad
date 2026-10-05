@@ -7,7 +7,8 @@ untapered prisms under any frame and rigid placement, including displaced
 section and level records, full source-sphere integration, and full source-cylinder
 integration for a revolved axis-incident rectangle are implemented, as is
 third-order section-moment integration for a full or partial revolve about
-an exact in-plane axis under any frame and rigid placement. Faceted
+an exact in-plane axis under any frame and rigid placement, and the sweeps and
+cups those prism and revolve integrals compose. Faceted
 Boolean solids with verified occupied-volume bounds publish density-derived
 mass and inertia when their resulting volume and tensor intervals pass the
 positive admission gates, and so does every other solid whose `VerifyAll`
