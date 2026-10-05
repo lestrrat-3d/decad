@@ -37,13 +37,15 @@ rebound as a centered dynamic pair when the impact has a cardinal manifold.
 Their approach may
 include transverse motion when the sweep certifies first impact.
 An isolated frictionless off-axis sphere-pair impact also admits a bounded
-center-line normal when each mass center exactly matches its source sphere
-center, both mass and center readings have zero bounds, and the impact has no
-spin. The impulse changes both velocity vectors along that normal. A small
+center-line normal with density-derived or supplied bounded mass and center
+readings when neither body starts with spin. The solver checks both mass
+interval endpoints against the impulse law and bounds torque from the contact
+witness, center, and normal intervals against `AngularVelocityResidual`.
+The impulse changes both velocity vectors along that normal. A small
 separated position correction within the certified
 bracket and contact slop is allowed when a full clear remainder sweep proves
 the pair cannot meet again. Unresolved tangency or a noncentral mass stops the
-step.
+step when its angular response exceeds that residual.
 A two-body world's pair may be excluded; its bodies drift independently even
 through overlap, and no pair material is mixed.
 The current three-body step admits one dynamic body and two fixed bodies.
