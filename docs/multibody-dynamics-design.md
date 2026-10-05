@@ -1870,8 +1870,8 @@ zero; it ends where `Depth` leaves the residual (§5 step 4), where a clear or u
 reach the plane, or where a foot leaves the face. §10.2's departure is unchanged and keeps every vertex
 outside the contact set positive, rested or not: a departure claims strict separation. `ManifoldAt` publishes
 a rested vertex as before, with `Separation = [0 ± Depth]`, and `replayHeights` reads the held depth as
-before. A `RestSpeed` that is not a `Velocity`, is negative or is not finite is `ErrInvalidInput` at
-`SweepPair`; the field is part of the request, so §5.3's reuse key carries it. `dynamics` fills `RestSpeed`
+before. A `RestSpeed` that is not a `Velocity`, is negative or is not finite is an input error at
+`SweepPair`, as a bad `SupportBand` is (`ErrUnitKind`, `ErrDegenerate`, `ErrNotFinite`); the field is part of the request, so §5.3's reuse key carries it. `dynamics` fills `RestSpeed`
 with `VelocityResidual` in `sweepRequest` (`dynamics/step.go`): §6.3 leaves a resting point's normal speed
 within that residual of zero, so a vertex the solve just rested is rested on the next slice, a vertex that
 arrives faster is not, and an arriving lifted vertex still ends its track one grid step before the plane
@@ -2484,14 +2484,17 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   (`sweepRequest`), `dynamics/schedule_event.go` (`solveEvent`, `trackPairs`), `dynamics/island.go`
   (`solveIslands`), `.github/test-shards.txt`.
 - Test (root): `contact_sweep_test.go` rejects a negative, non-finite or non-`Velocity` `RestSpeed` with
-  `ErrInvalidInput`. `contact_sweep_band_test.go` gains `TestSweepPairRestedVertexHoldsTwoSided`: the §13
+  `SupportBand`'s errors. `contact_sweep_band_test.go` gains `TestSweepPairRestedVertexHoldsTwoSided`: the §13
   PR 14a tilted cube, its far edge `2⁻²¹ mm` up, turning about its near edge so the far edge descends at
   `8·cos θ mm/s`, swept under `ContinueCertifiedTouch` with `RestSpeed = 10 mm/s`: the track reaches the
   duration, the far corners' exact staged heights at its end are negative, `BandAt` encloses each far
   corner's exact height at every sampled fraction, and replay accepts every fraction through the end; with
   `RestSpeed = 1 mm/s` or the zero Value the track ends at the arrival as `TestSweepPairSupportSetArrivalEndsTrack`'s
   does; under `ContinueSeparatingTouch` with `RestSpeed = 10 mm/s` the departure's horizon is the one-sided
-  root (the departure rests nothing). Legs shown to fail: the rested skip deleted from `clearAt`, the track
+  root (the departure rests nothing): over `2⁻⁹ s` the cube rises at `8 + 2⁻⁸ mm/s`, so its far edge rises
+  slowly, is rested, and still ends the departure where `2⁻²¹ − K_p·u²` and its rate reach zero; a slow spin
+  about `Z` routes the pair past the source-box departure, and the far edge, out of the band by then, lets
+  the clear search finish the sweep. Legs shown to fail: the rested skip deleted from `clearAt`, the track
   ends at the arrival; the rested skip copied into the departure, the horizon reaches the duration with a
   corner below the plane. `TestSweepPairPerVertexCurvature`: the edge box of `edgeBoxScene` turning about
   its resting edge publishes `SweepPersistentTouch` with a nil `Band()` in both orders, and the same box
@@ -2511,18 +2514,21 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   Legs shown to fail: `RestSpeed` left the zero Value in `sweepRequest`, the wedge stops `StepEventBudget`
   in its step `29` on the chain of §10.7; the cut rule deleted (`trackPairs` gathers every covering band
   track as a track pair), the wedge stops `StepTrackUnproved` in step `29`, `701.7 µs` in, at the prism's
-  impact. `TestBoxSpinsOnCornerInsideBand`, the `60°` box at its §2 release and spin, shipped residuals, 256
-  steps every one `Advanced`, with some step's published pose holding a lower corner at a negative exact
-  height within `PenetrationResidual`. Legs shown to fail: the overlapping initial contact deleted, step `49`
+  impact. `TestBoxSpinsOnCornerInsideBand`, the `60°` box at its §2 release and spin, shipped residuals, 50
+  steps every one `Advanced` (the run then rocks on the corner with six events a step at about `0.8 s` a
+  step, which 256 steps would carry past the `dynamics` package's race budget), with some step's published
+  pose holding a lower corner at a negative exact height within `PenetrationResidual` and none lower. Legs shown to fail: the overlapping initial contact deleted, step `49`
   `StepManifoldMissing`; `K_p` replaced by the global `K`, step `48` `StepEventBudget` with band ends `46` to
   `62 µs` apart. `TestBoxBouncesOnEdgeAndRestsFlat`, the `30°` box at its §2 release and spin with
   `PenetrationResidual = 10 µm` and `SupportBand = 5 µm`, 256 steps every one `Advanced`; the trace carries a
   one-point, a two-point and a four-point `ContactImpact`; at least one slice follows a band end with
   `Request.StartPolicy == ContinueCertifiedTouch` and a `ContactBand` start sample; every step from the
-  `46th` publishes one four-point event; the final velocities are exactly zero and each lower corner's exact
-  staged height lies in `[0, PenetrationResidual]`. Leg shown to fail: `SupportBand = 0.5 nm` with
-  `PenetrationResidual = 1 nm`, 256 steps `Advanced` with five or six events each and a final vertical
-  velocity of `1.26 mm/s` (§10.8). Every shipped `dynamics` fixture, the prism's included, is unchanged.
+  `65th` publishes one four-point event (the run records the `46th`; the margin covers another
+  architecture's rounding); the final velocities are exactly zero and each lower corner's exact staged
+  height lies in `[0, PenetrationResidual]`. Leg shown to fail: `SupportBand = 0.5 nm` with
+  `PenetrationResidual = 1 nm`, the box still rocking with six events in its step `64` (§10.8). The island
+  rule that sends an `Overlapping` gathered pair into the solve when nothing closes changes none of these
+  runs when deleted: every overlapping pair they gather has a closing point. Every shipped `dynamics` fixture, the prism's included, is unchanged.
 - Depends on: PRs 14a, 14e.
 
 ### PR 15 (Phase 2) — `tumble`
