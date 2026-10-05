@@ -88,8 +88,11 @@ func TestThreeBodySimultaneousCornerImpact(t *testing.T) {
 	endBox, ok = report.Next.Body(box)
 	require.True(t, ok)
 	require.Equal(t, r3.Identity(), endBox.Pose)
-	require.Equal(t, dynamics.QuantityVec{X: units.MillimetersPerSecond(-25), Y: units.MillimetersPerSecond(0),
-		Z: units.MillimetersPerSecond(25)}, endBox.LinearVelocity)
+	// Fused multiply-adds (arm64) move the solve's last ulps, so the
+	// velocity compares within 1e-12 of the exact (−25, 0, 25) mm/s.
+	require.InDelta(t, -25, endBox.LinearVelocity.X.Base(), 1e-12)
+	require.InDelta(t, 0, endBox.LinearVelocity.Y.Base(), 1e-12)
+	require.InDelta(t, 25, endBox.LinearVelocity.Z.Base(), 1e-12)
 
 	report, err = w.Step(t.Context(), *report.Next,
 		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.1))
