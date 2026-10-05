@@ -26,6 +26,9 @@ through exact squared-distance motion, including transverse crossing, and
 separating departure. Their exact isolated interior tangent publishes a
 bounded point with strict separation on both sides. A touching source-sphere
 pair with equal exact affine displacement certifies a full-span point track.
+Two touching source spheres can also certify separating departure when one or
+both follow centered rotating rigid drifts. Their sampled poses retain spin;
+the occupied balls follow exact affine center paths.
 Rotating source-box rigid drifts can also certify a clear path or bracket an
 impact after exact oriented-box pose relations, a bounded float-to-ideal pose
 difference, and whole-body travel bounds. An initial source-box face touch also certifies immediate
@@ -373,6 +376,16 @@ reduces them to a bounded point manifold. Replay requires exact touch of the
 rounded pair. Unequal displacements remain undecided for persistent
 continuation.
 
+A centered rotating `RigidDriftSegment` may enter this sphere-pair proof after
+initial point touch when `StartPolicy` is `ContinueSeparatingTouch`. Require
+each rotating sphere's exact source center to equal both its query translation
+and stated pivot. Require each full linear displacement to be representable as
+a dyadic rational. Rotation then leaves the occupied ball unchanged; use the
+same exact squared center-distance polynomial to prove an open-time gap and
+sample both real rotating endpoint poses. An off-center pivot, a separated or
+overlapping start, and an unresolved or closing departure return
+`SweepUndecided`. This path does not publish a rotating graze or impact.
+
 ### 4.5.1 Isolated sphere-pair graze
 
 For a separated affine source-sphere pair, form the exact rational polynomial
@@ -688,7 +701,9 @@ The sphere-pair path keeps
 both source centers, radii, exact translations, and impact bracket. At an
 arbitrary interior fraction it compares both rounded centers with their ideal
 rational centers, then checks the exact squared center distance against the
-radius sum. A clear or departing sample must retain a positive gap after
+radius sum. For centered rotating departure, it evaluates the recorded rigid
+rotation and exact affine center displacement before the same comparison. A
+clear or departing sample must retain a positive gap after
 charging the center displacement; an impact prefix stays clear before the
 bracket and stays near contact at its right endpoint. A sample beyond the
 bracket is unsupported. It refuses when total displacement exceeds

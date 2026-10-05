@@ -12,13 +12,73 @@ import (
 )
 
 type sourceSpherePairSweepRun struct {
-	doc     *Document
-	a, b    *Body
-	pa, pb  affinePairPath
-	req     SweepRequest
-	report  *SweepReport
-	sphereA sourceSphereContactProof
-	sphereB sourceSphereContactProof
+	doc           *Document
+	a, b          *Body
+	pa, pb        affinePairPath
+	req           SweepRequest
+	report        *SweepReport
+	sphereA       sourceSphereContactProof
+	sphereB       sourceSphereContactProof
+	departureOnly bool
+}
+
+// A source ball centered at its query origin is unchanged by its own spin.
+// A center-pivot drift therefore has the same exact occupied-set path as an
+// affine translation, while sampled poses still carry the requested rotation.
+func (d *Document) sweepRotatingSpherePair(ctx context.Context, a, b *Body,
+	pa, pb affinePairPath, req SweepRequest, resolution *big.Rat,
+	report *SweepReport) (*SweepReport, bool, error) {
+	if pa.drift == nil && pb.drift == nil || req.StartPolicy != ContinueSeparatingTouch {
+		return nil, false, nil
+	}
+	sphereA, okA := sourceSphereAtPose(a, pa.from)
+	sphereB, okB := sourceSphereAtPose(b, pb.from)
+	if !okA || !okB {
+		return nil, false, nil
+	}
+	for _, moving := range []struct {
+		path   *affinePairPath
+		sphere sourceSphereContactProof
+	}{{&pa, sphereA}, {&pb, sphereB}} {
+		if moving.path.drift == nil {
+			continue
+		}
+		start := moving.path.from.Translation()
+		pivot := moving.path.drift.Center
+		for axis, pair := range [3][2]float64{{start.X, pivot.X}, {start.Y, pivot.Y}, {start.Z, pivot.Z}} {
+			if dyCmp(moving.sphere.center[axis], mustDyOf(pair[0])) != 0 ||
+				dyCmp(moving.sphere.center[axis], mustDyOf(pair[1])) != 0 {
+				return report.undecidedRotatingSpherePair(pa.duration), true, nil
+			}
+		}
+		for axis, velocity := range [3]units.Value{moving.path.drift.LinearVelocity.X,
+			moving.path.drift.LinearVelocity.Y, moving.path.drift.LinearVelocity.Z} {
+			speed, ok := exactBaseValue(velocity)
+			if !ok {
+				return report.undecidedRotatingSpherePair(pa.duration), true, nil
+			}
+			full := new(big.Rat).Mul(speed, moving.path.duration)
+			component, ok := dyOfRat(full)
+			if !ok {
+				return report.undecidedRotatingSpherePair(pa.duration), true, nil
+			}
+			moving.path.delta[axis] = component
+		}
+	}
+	pair := [2]sourceSphereContactProof{sphereA, sphereB}
+	report.replay = &sweepReplayProof{pa: pa, pb: pb, spherePair: &pair,
+		request: req.ContactRequest}
+	run := &sourceSpherePairSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
+		req: req, report: report, sphereA: sphereA, sphereB: sphereB, departureOnly: true}
+	result, err := run.execute(ctx, resolution)
+	return result, true, err
+}
+
+func (r *SweepReport) undecidedRotatingSpherePair(duration *big.Rat) *SweepReport {
+	r.Outcome, r.Cause = SweepUndecided, SweepContactUnsupported
+	r.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), duration),
+		To: sweepInstant(big.NewRat(1, 1), duration)}
+	return r
 }
 
 func (r *sourceSpherePairSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent {
@@ -40,11 +100,11 @@ func (r *sourceSpherePairSweepRun) sample(ctx context.Context, f *big.Rat) (*Swe
 	if r.report.PoseEvaluations >= r.req.MaxPoseEvaluations {
 		return nil, errSweepPoseBudget
 	}
-	poseA, err := r.pa.poseAt(f)
+	poseA, err := sourceSpherePathPoseAt(r.pa, f)
 	if err != nil {
 		return nil, err
 	}
-	poseB, err := r.pb.poseAt(f)
+	poseB, err := sourceSpherePathPoseAt(r.pb, f)
 	if err != nil {
 		return nil, err
 	}
@@ -488,6 +548,9 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 	}
 	if err != nil {
 		return nil, err
+	}
+	if r.departureOnly && first.Ideal.Relation != ContactTouching {
+		return r.undecided(zero, one, SweepContactUnsupported), nil
 	}
 	if first.Ideal.Relation == ContactOverlapping {
 		r.report.InitialEvent, r.report.Event = &first.Ideal, &first.Ideal

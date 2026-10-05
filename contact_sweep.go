@@ -472,6 +472,9 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	}
 	if pa.drift != nil || pb.drift != nil || pa.screw != nil || pb.screw != nil {
 		if pa.screw == nil && pb.screw == nil {
+			if result, admitted, err := d.sweepRotatingSpherePair(ctx, a, b, pa, pb, req, resolution, report); admitted {
+				return result, err
+			}
 			if result, admitted, err := d.sweepRotatingSphereBox(ctx, a, b, pa, pb, req, resolution, report); admitted {
 				return result, err
 			}
