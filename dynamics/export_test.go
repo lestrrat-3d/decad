@@ -161,3 +161,14 @@ func PushApart(ctx context.Context, w *World, pre, state State, a, b *decad.Body
 		}
 	}
 }
+
+// TraceSliceTimes returns each slice's held start, end and span (the end of
+// its paths and certificates) of a trace of a world of four or more bodies,
+// in slice order.
+func TraceSliceTimes(tr Trace) [][3]units.Value {
+	out := make([][3]units.Value, len(tr.slices))
+	for i, slice := range tr.slices {
+		out[i] = [3]units.Value{slice.start, slice.end, slice.span}
+	}
+	return out
+}

@@ -36,7 +36,7 @@ import (
 //   - the exact-face rule for the band's normal: TestContactPairBandNeedsAnExactFace
 //     publishes a held face's normal;
 //   - the track's 2δ widening: TestSweepPairBandTrack publishes an exact
-//     SweepPersistentTouch;
+//     SweepPersistentTouch; in BandAt alone, its prefix band reads zero;
 //   - δ on the track's witness balls: TestSweepPairBandFootStaysInsideFace's
 //     points carry the bare pose deviation, zero at its dyadic poses;
 //   - the track's exact-support rule: TestSweepPairBandTrack's stacked
@@ -286,6 +286,9 @@ func TestSweepPairBandTrack(t *testing.T) {
 		band := track.Band()
 		require.NotNil(t, band)
 		require.InDelta(t, 2*delta, band.Value.Base(), band.Bound.Base())
+		prefix, err := track.BandAt(units.Scalar(.5))
+		require.NoError(t, err)
+		require.InDelta(t, 2*delta, prefix.Value.Base(), prefix.Bound.Base())
 		manifold, err := track.ManifoldAt(units.Scalar(.5))
 		require.NoError(t, err)
 		require.Len(t, manifold.Points, 4)

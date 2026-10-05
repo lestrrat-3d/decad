@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -82,8 +83,24 @@ func TestContactPairOrientedSourceBoxes(t *testing.T) {
 			require.InDelta(t, test.gap, report.Gap.Value.Base(),
 				report.Gap.Bound.Base()+1e-12)
 		} else {
-			require.Nil(t, report.Manifold)
-			require.Equal(t, decad.ContactNoNormalProof, report.Reason)
+			// At 45 degrees the turned box pokes its vertical edge at
+			// x = 5 + 5·√2 through b's x = 12 face: §9.3's shallow
+			// penetration publishes that edge's two ends, each paired with
+			// its foot on the face, at depth 5 + 5·√2 − 12.
+			require.NotNil(t, report.Manifold, "reason=%v", report.Reason)
+			require.Len(t, report.Manifold.Points, 2)
+			depth := 5 + 5*math.Sqrt2 - 12
+			for _, point := range report.Manifold.Points {
+				require.Equal(t, r3.Vec{X: 1}, point.Normal.Value)
+				require.InDelta(t, 12+depth, point.OnA.Value.X, point.OnA.Bound.Base()+1e-12)
+				require.Equal(t, 12.0, point.OnB.Value.X)
+				require.Equal(t, point.OnA.Value.Z, point.OnB.Value.Z)
+				require.InDelta(t, -depth, point.Separation.Value.Base(), point.Separation.Bound.Base()+1e-12)
+				require.NotNil(t, point.FeatureA.Edge)
+				require.NotNil(t, point.FeatureB.Face)
+			}
+			require.ElementsMatch(t, []float64{0, 10},
+				[]float64{report.Manifold.Points[0].OnA.Value.Z, report.Manifold.Points[1].OnA.Value.Z})
 		}
 	}
 

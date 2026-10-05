@@ -42,6 +42,7 @@ type islandPair struct {
 	bracket  *decad.SweepInterval
 	depth    *decad.ContactManifold
 	track    bool
+	band     float64 // the band depth through the event when a band track ended the slice there (§10.3)
 }
 
 // island is one connected component of the dynamic-body contact graph.
@@ -269,7 +270,7 @@ func (w *World) correctIsland(isl island, pre State, drive map[int][3]*big.Rat) 
 		if depth <= 0 {
 			continue
 		}
-		allowance := outwardSum(w.step.ContactSlop.Base(), geometry)
+		allowance := outwardSum(w.step.ContactSlop.Base(), geometry, pair.band)
 		if pair.bracket != nil {
 			travel, ok := boundBracketTravel(*pair.bracket, w.closingSpeedUpper(pair, pre, drive))
 			if !ok {
@@ -751,7 +752,9 @@ func (w *World) correctedRelation(ctx context.Context, pre, post State, moves ma
 	}
 	_, separating := push.separating[pair.key]
 	switch {
-	case contact.Relation == decad.ContactTouching:
+	case contact.Relation == decad.ContactTouching,
+		contact.Relation == decad.ContactBand && w.contactBandWithin(contact.Gap):
+		// §10.4: a band within PenetrationResidual is a touch.
 		return true, nil, nil
 	case contact.Relation == decad.ContactSeparated && separating:
 		// A separated pair leaves the contact set: its next slice starts

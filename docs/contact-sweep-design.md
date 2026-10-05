@@ -716,6 +716,7 @@ func (t *SweepContactTrack) Features() (ContactFeature, ContactFeature)
 func (t *SweepContactTrack) Normal() VecMeasurement
 func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, error)
 func (t *SweepContactTrack) Band() *Measurement // nil for an exact touch track; multibody §10.3
+func (t *SweepContactTrack) BandAt(fraction units.Value) (*Measurement, error) // the band over [start, fraction]; nil for an exact touch track
 
 type SweepSample struct {
     At           SweepInstant
@@ -805,8 +806,15 @@ For a clear rotating source-box drift, the report retains the sweep's exact
 source corners and ideal-path bounds. Replay checks the rounded oriented boxes
 with the exact separating-axis test. Their positive gap must exceed the total
 bounded corner difference from the ideal poses, and that difference must fit
-`PointResolution`. Rotating impact reports replay only the certified clear
-prefix through the bracket's left edge; the unresolved bracket is refused.
+`PointResolution`. A rotating impact report replays its certified clear
+prefix through the bracket's left edge `lo`, and inside the bracket through
+its right edge it replays a fraction `f` when `(f − lo)·T − g + η` fits
+`PointResolution`: `g` the left sample's proven lower gap, `T` both bodies'
+travel bound per unit fraction, and `η` the rounded pose's deviation. Every
+ideal point lies within `(f − lo)·T` of its place at `lo`, where the pair was
+`g` apart, so the rounded pair lies within that bound of a separated pair,
+the claim the affine source-box replay makes inside its bracket. A left
+sample without a positive gap replays only through `lo`.
 Rotating departure reports replay their separated interior after the
 producer's one-sided departure proof. Both paths check the exact oriented-box
 gap against their staged corner deviation before returning a rounded pose.
@@ -821,8 +829,10 @@ vertex sets. Both rounded poses must fit `PointResolution` of their ideal
 poses. On a clear interval or a departure the rounded pair must keep a gap:
 the sweep's proven lower gap at that time must exceed the summed vertex
 deviation, plus each positive-displacement body's displacement times its
-rounded pose's stretch plus one. A touch or band track checks every rounded
-held vertex height against the held band widened by that deviation.
+rounded pose's stretch plus one. Inside an impact bracket the bracket bound
+above applies with that deviation and displacement charge as `η`. A touch or
+band track checks every rounded held vertex height against the held band
+widened by that deviation.
 
 `Fraction` and the input `Duration` define the exact search time; `Elapsed`
 is a bounded convenience reading for callers. Bracket width is checked from
@@ -906,7 +916,7 @@ Assert computed locations, brackets, and bounds, not only enum values.
 | A top box starts at `x=[0,10]` on an equal fixed box, then slides `+5 mm/s` for `3 s` | The right-sided initial patch is admitted. `ContactTransitionBracket` encloses the edge exit at `2 s`; no earlier transition occurs. |
 | A rotating body starts in touch without a one-sided contact-set proof | Both continuation policies return `Undecided`; positive velocity at one witness cannot certify the complete contact set. |
 | Equal stationary segments and two same-handed reflected segments | Stationary paths are valid; reflected paths are accepted by geometry when the kernel can prove their relation. A mixed-handedness screw path returns `ErrDegenerate`. |
-| Missing contact manifold at a proven overlap endpoint | The report keeps `ImpactBracket` and marks the event manifold unavailable; dynamics refuses to consume it. |
+| Missing contact manifold at a proven overlap endpoint | The report keeps `ImpactBracket` and marks the event manifold unavailable. The four-body step takes the manifold `ContactPair` publishes at the rounded right-end poses, the poses it publishes (multibody §5 step 7), and refuses when that has none either. |
 | Tight pose budget and cancellation during pair evaluation | The budget returns `Undecided` with earliest unresolved interval; cancellation returns `ctx.Err()` and nil report. Both preserve document state. |
 
 The first end-to-end slice uses the first box fixture. It must send the

@@ -226,6 +226,9 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 		}
 		if orientedOKA && orientedOKB {
 			classifyOrientedSourceBoxes(report, orientedA, orientedB)
+			if err := classifyPlanarManifold(ctx, report); err != nil {
+				return nil, err
+			}
 			return report, nil
 		}
 		planar, err := classifyExactPlanarPair(ctx, report)
@@ -269,6 +272,36 @@ func classifyPlanarFallback(ctx context.Context, report *ContactReport) error {
 	if planar && trial.Relation != ContactUndecided {
 		*report = trial
 	}
+	return nil
+}
+
+// classifyPlanarManifold completes an oriented source-box report whose box
+// patches publish no manifold for a touching or overlapping pair: both boxes
+// are exact planar bodies (docs/multibody-dynamics-design.md §9), so §9.3's
+// manifold replaces the report when the exact planar relation agrees and
+// every published point is an edge or vertex of one box on, in or crossing
+// the other, the rows the box patches do not cover. Face pairs stay with the
+// box patches (§9.4), and a report the planar path cannot complete stands.
+func classifyPlanarManifold(ctx context.Context, report *ContactReport) error {
+	if report.Manifold != nil || report.Reason == ContactPointTooCoarse ||
+		report.Relation != ContactTouching && report.Relation != ContactOverlapping {
+		return nil
+	}
+	trial := ContactReport{A: report.A, B: report.B, PoseA: report.PoseA, PoseB: report.PoseB,
+		Request: report.Request}
+	planar, err := classifyExactPlanarPair(ctx, &trial)
+	if err != nil {
+		return err
+	}
+	if !planar || trial.Relation != report.Relation || trial.Manifold == nil {
+		return nil
+	}
+	for _, point := range trial.Manifold.Points {
+		if point.FeatureA.Face != nil && point.FeatureB.Face != nil {
+			return nil
+		}
+	}
+	*report = trial
 	return nil
 }
 

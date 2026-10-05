@@ -37,6 +37,8 @@ type sweepReplayProof struct {
 	outcome                    SweepOutcome
 	bracketLo                  *big.Rat
 	bracketHi                  *big.Rat
+	bracketGap                 *big.Rat // a rotating bracket's proven lower gap at its left edge
+	bracketTravel              *big.Rat // both bodies' travel bound per unit fraction, rotating brackets
 	grazingAt                  *big.Rat
 }
 
@@ -47,6 +49,23 @@ func (p *sweepReplayProof) snapshot(r *SweepReport) {
 func (p *sweepReplayProof) setBracket(left, right *big.Rat) {
 	p.bracketLo = new(big.Rat).Set(left)
 	p.bracketHi = new(big.Rat).Set(right)
+}
+
+// setRotatingBracketGap records what bracketDepthWithin needs from a
+// rotating source-box impact: the left sample's certified lower gap and both
+// bodies' travel bound per unit fraction. A left sample without a positive
+// gap leaves the bracket replayable only through its left edge.
+func (p *sweepReplayProof) setRotatingBracketGap(r *SweepReport, travel *big.Rat) {
+	for i := range r.Samples {
+		sample := &r.Samples[i]
+		if sample.exactFraction == nil || sample.exactFraction.Cmp(p.bracketLo) != 0 {
+			continue
+		}
+		if gap := sampleLowerGap(sample); gap != nil {
+			p.bracketGap, p.bracketTravel = gap, travel
+		}
+		return
+	}
 }
 
 // HasAffineReplayProof reports whether this sweep can certify rounded poses
@@ -487,6 +506,13 @@ func (r *SweepReport) certifiedRotationalPosesAtFraction(f *big.Rat) (
 	if !ok || new(big.Rat).Add(proofarith.FloatRat(deviation[0]), proofarith.FloatRat(deviation[1])).Cmp(resolution) > 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating replay pose exceeds point resolution", ErrUnsupported)
 	}
+	if r.replay.outcome == SweepImpactBracket && r.replay.bracketLo != nil && f.Cmp(r.replay.bracketLo) > 0 {
+		deviation := new(big.Rat).Add(proofarith.FloatRat(deviation[0]), proofarith.FloatRat(deviation[1]))
+		if !r.replay.bracketDepthWithin(f, deviation, resolution) {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotating impact pose leaves the point resolution of contact", ErrUnsupported)
+		}
+		return pose[0], pose[1], nil
+	}
 	if r.replay.outcome == SweepPersistentTouch {
 		if !r.certifiedOrientedTouchAtFraction(f, box[0], box[1]) {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose loses the certified face track", ErrUnsupported)
@@ -684,7 +710,12 @@ func (r *SweepReport) replayFractionCovered(f *big.Rat) bool {
 		return f.Sign() >= 0 && f.Cmp(r.replay.track.end) <= 0
 	}
 	if r.replay.rotation != nil && r.replay.outcome == SweepImpactBracket {
-		// The producer proves clear intervals only through the left bracket edge.
+		// The producer proves clear intervals only through the left bracket
+		// edge; the bracket itself, through its right edge, replays by the
+		// travel from the left edge's proven gap (bracketDepthWithin).
+		if r.replay.bracketGap != nil && r.replay.bracketHi != nil {
+			return r.replay.bracketLo != nil && f.Cmp(r.replay.bracketHi) <= 0
+		}
 		return r.replay.bracketLo != nil && f.Cmp(r.replay.bracketLo) <= 0
 	}
 	switch r.replay.outcome {
@@ -788,9 +819,34 @@ func (r *SweepReport) certifiedPlanarPosesAtFraction(f *big.Rat) (r3.Transform, 
 		}
 		return poses[0], poses[1], nil
 	}
+	if p.bracketLo != nil && f.Cmp(p.bracketLo) > 0 {
+		if !p.bracketDepthWithin(f, new(big.Rat).Add(deviation, displacement), resolution) {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded planar impact pose leaves the point resolution of contact", ErrUnsupported)
+		}
+		return poses[0], poses[1], nil
+	}
 	lower := p.planar.lowerGap(f)
 	if lower == nil || lower.Cmp(new(big.Rat).Add(deviation, displacement)) <= 0 {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded planar replay gap does not exceed pose error", ErrUnsupported)
 	}
 	return poses[0], poses[1], nil
+}
+
+// bracketDepthWithin decides a fraction inside a rotating impact bracket,
+// after its left edge lo and through its right one, where the pair meets. The
+// left edge's certified lower gap g and the §4.3 travel bound T per unit
+// fraction place every ideal point within (f − lo)·T of its position at the
+// left edge, where the pair was separated by g; the rounded pose adds its
+// deviation, which for a displaced body (§10.4) carries its charge. The
+// rounded pair therefore lies within (f − lo)·T − g + deviation of a
+// separated pair, and replay requires that within PointResolution, the claim
+// the affine source-box replay makes inside its bracket.
+func (p *sweepReplayProof) bracketDepthWithin(f, deviation, resolution *big.Rat) bool {
+	if p.bracketGap == nil || p.bracketTravel == nil || p.bracketHi == nil || f.Cmp(p.bracketHi) > 0 {
+		return false
+	}
+	depth := new(big.Rat).Mul(new(big.Rat).Sub(f, p.bracketLo), p.bracketTravel)
+	depth.Sub(depth, p.bracketGap)
+	depth.Add(depth, deviation)
+	return depth.Cmp(resolution) <= 0
 }

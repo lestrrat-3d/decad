@@ -202,11 +202,12 @@ type slicePlan struct {
 	at        []int              // candidate keys whose cutting event lies at cut, canonical order
 	grazes    []int              // candidate keys whose graze lies before cut, canonical order
 	fractions map[int]*big.Rat
+	bands     map[int]struct{} // candidate keys whose cutting event is a band track's end (§10.3)
 }
 
 // classify reads every candidate sweep of a slice (§5 step 4).
 func (r *scheduleRun) classify(sweeps sliceSweeps) (slicePlan, []StepDiagnostic) {
-	plan := slicePlan{fractions: map[int]*big.Rat{}}
+	plan := slicePlan{fractions: map[int]*big.Rat{}, bands: map[int]struct{}{}}
 	var diagnostics []StepDiagnostic
 	var cutting, grazing []int
 	one := big.NewRat(1, 1)
@@ -222,6 +223,24 @@ func (r *scheduleRun) classify(sweeps sliceSweeps) (slicePlan, []StepDiagnostic)
 				d.Limit = r.w.step.PenetrationResidual
 				diagnostics = append(diagnostics, d)
 			}
+		case decad.SweepPersistentBand:
+			// §10.3: a band track continues the pair while its depth stays
+			// within PenetrationResidual; the slice ends where it no longer
+			// does, or at the track's end, and the pair enters an island there.
+			cut, full, ok := r.w.bandEnd(sweep)
+			if policy != decad.ContinueCertifiedTouch || !ok {
+				d := r.diagnostic(StepTrackUnproved, pair,
+					"band track does not stay within the penetration residual for any positive time")
+				d.Limit = r.w.step.PenetrationResidual
+				diagnostics = append(diagnostics, d)
+				continue
+			}
+			if full {
+				continue
+			}
+			plan.fractions[key] = cut
+			plan.bands[key] = struct{}{}
+			cutting = append(cutting, key)
 		case decad.SweepInitiallyTouching, decad.SweepInitiallyOverlapping:
 			if policy != decad.StopAtInitialContact {
 				diagnostics = append(diagnostics, r.diagnostic(StepTrackUnproved, pair,
@@ -273,9 +292,13 @@ func (r *scheduleRun) classify(sweeps sliceSweeps) (slicePlan, []StepDiagnostic)
 		}
 		if len(plan.at) == 0 {
 			sweep := sweeps.swept[key]
-			plan.instant = sweep.Event.At
-			if sweep.Bracket != nil {
+			switch _, band := plan.bands[key]; {
+			case band:
+				plan.instant = fractionInstant(plan.cut, pathDuration(sweep.PathA))
+			case sweep.Bracket != nil:
 				plan.instant = sweep.Bracket.To
+			default:
+				plan.instant = sweep.Event.At
 			}
 		}
 		plan.at = append(plan.at, key)
@@ -381,7 +404,8 @@ func (r *scheduleRun) complete(ctx context.Context, end State, last *sliceSweeps
 
 // restingContacts is the contact set the next step reads (§5 step 2): every
 // pair continued under ContinueCertifiedTouch whose final sweep is a
-// persistent track through the end of the step, or, when an event at the
+// persistent touch track through the end of the step, or a band track that
+// spans it within PenetrationResidual (§10.3), or, when an event at the
 // end completed the step, every pair that event left under
 // ContinueCertifiedTouch. Keys are in canonical order.
 func (r *scheduleRun) restingContacts(last *sliceSweeps) []int {
@@ -392,7 +416,7 @@ func (r *scheduleRun) restingContacts(last *sliceSweeps) []int {
 		}
 		if last != nil {
 			sweep, ok := last.swept[key]
-			if !ok || sweep.Outcome != decad.SweepPersistentTouch {
+			if !ok || !r.w.continuesTrack(sweep) {
 				continue
 			}
 		}
@@ -694,7 +718,8 @@ func (w *World) completedContacts(ctx context.Context, end State,
 		}
 		switch {
 		case contact.Relation == decad.ContactSeparated:
-		case (contact.Relation == decad.ContactTouching || contact.Relation == decad.ContactOverlapping) &&
+		case (contact.Relation == decad.ContactTouching || contact.Relation == decad.ContactOverlapping ||
+			contact.Relation == decad.ContactBand && w.contactBandWithin(contact.Gap)) &&
 			w.manifoldWithin(contact.Manifold) && w.penetrationWithin(contact.Manifold):
 		default:
 			d := scheduleDiagnostic(StepTrackUnproved, w.bodyPair(pair),
@@ -739,9 +764,16 @@ func (w *World) fixedPairRelations(ctx context.Context, state State) ([]StepDiag
 		if err != nil {
 			return nil, err
 		}
-		if contact.Relation == decad.ContactOverlapping || contact.Relation == decad.ContactUndecided {
-			diagnostics = append(diagnostics, scheduleDiagnostic(StepFixedPairRelation, w.bodyPair(pair),
-				fmt.Sprintf("fixed pair relation is %v", contact.Relation)))
+		// §10.4: a fixed pair in a ContactBand may overlap by its gap band,
+		// so the band must lie within PenetrationResidual.
+		if contact.Relation == decad.ContactOverlapping || contact.Relation == decad.ContactUndecided ||
+			contact.Relation == decad.ContactBand && !w.contactBandWithin(contact.Gap) {
+			d := scheduleDiagnostic(StepFixedPairRelation, w.bodyPair(pair),
+				fmt.Sprintf("fixed pair relation is %v", contact.Relation))
+			if contact.Relation == decad.ContactBand {
+				d.Limit = w.step.PenetrationResidual
+			}
+			diagnostics = append(diagnostics, d)
 		}
 	}
 	return diagnostics, nil

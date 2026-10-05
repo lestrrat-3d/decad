@@ -160,6 +160,40 @@ func (t *SweepContactTrack) Band() *Measurement {
 	return &band
 }
 
+// BandAt returns the depth of a band track over its prefix through fraction
+// (docs/multibody-dynamics-design.md §10.3): a Length Measurement whose Value
+// plus Bound bounds every contact point's separation in both directions and
+// the interiors' overlap along Normal() at every instant from the track's
+// start through fraction. At the track's end it is at most Band(); it grows
+// with fraction, so a caller can end a slice where the band reaches its own
+// residual. It is nil for an exact touch track.
+func (t *SweepContactTrack) BandAt(fraction units.Value) (*Measurement, error) {
+	if fraction.Kind() != units.Dimensionless {
+		return nil, fmt.Errorf("%w: contact-track fraction must be dimensionless", ErrUnitKind)
+	}
+	f, ok := exactBaseValue(fraction)
+	if !ok || !finiteMeasurementValues(fraction.Base()) {
+		return nil, fmt.Errorf("%w: nonfinite contact-track fraction", ErrNotFinite)
+	}
+	if f.Cmp(t.start) < 0 || f.Cmp(t.end) > 0 {
+		return nil, fmt.Errorf("%w: fraction is outside contact track", ErrDegenerate)
+	}
+	if t.planar == nil || t.planar.band == nil {
+		return nil, nil //nolint:nilnil // an exact touch track has no band, as Band() reports
+	}
+	depth, ok := t.planar.depthThrough(f)
+	if !ok {
+		return nil, fmt.Errorf("%w: band depth has no finite bound", ErrUnsupported)
+	}
+	value := ratFloatNearest(depth)
+	bound := proofarith.RationalFloatError(depth, value)
+	if !finiteMeasurementValues(value, bound) {
+		return nil, fmt.Errorf("%w: band depth has no finite bound", ErrUnsupported)
+	}
+	return &Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
+		Exactness: exactnessFromBound(bound)}, nil
+}
+
 // ManifoldAt returns a fresh reduction of the complete exact touching set at
 // a fraction in this track's certified interval.
 func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, error) {

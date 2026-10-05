@@ -29,6 +29,27 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 	for _, key := range plan.at {
 		sweep, pair := sweeps.swept[key], w.pairs[key]
 		item := islandPair{key: key, a: pair.a, b: pair.b, at: plan.instant}
+		if _, band := plan.bands[key]; band {
+			// §10.3: the band track ends the slice here. Its manifold at the
+			// cut enters the island, the rounded poses show the penetration
+			// the correction removes, and the band's depth widens that
+			// correction's allowance (§6.6).
+			manifold, err := sweep.ContactTrack.ManifoldAt(units.Scalar(fraction))
+			depth, okDepth := bandDepth(sweep.ContactTrack, fraction)
+			if err != nil || !okDepth || !w.manifoldWithin(manifold) {
+				//nolint:nilerr // a refused manifold is the step's refusal, not a failure
+				return nil, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(pair),
+					"band track has no manifold within the contact request at its end")}, nil
+			}
+			item.manifold, item.band = cloneManifold(*manifold), depth
+			rounded, diagnostics, err := r.roundedDepth(ctx, key, pre)
+			if err != nil || len(diagnostics) != 0 {
+				return nil, diagnostics, err
+			}
+			item.depth = rounded
+			gathered = append(gathered, item)
+			continue
+		}
 		switch sweep.Outcome {
 		case decad.SweepContactTransitionBracket:
 			// A transition ends the pair's track and enters no solve; the next
@@ -39,36 +60,38 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 			transitions++
 			continue
 		case decad.SweepImpactBracket:
-			if !w.manifoldWithin(sweep.Event.Manifold) {
-				return nil, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(pair),
-					"impact has no manifold within the contact request")}, nil
-			}
-			item.manifold, item.bracket = cloneManifold(*sweep.Event.Manifold), sweep.Bracket
+			item.bracket = sweep.Bracket
 			// §6.6 removes the penetration the rounded event poses show; the
 			// manifold the producer certified at the bracket's right sample
 			// carries the solve.
-			if err := ctx.Err(); err != nil {
-				return nil, nil, err
+			rounded, diagnostics, err := r.roundedDepth(ctx, key, pre)
+			if err != nil || len(diagnostics) != 0 {
+				return nil, diagnostics, err
 			}
-			contact, err := w.doc.ContactPair(ctx, w.bodies[pair.a].definition.Body,
-				w.bodies[pair.b].definition.Body, pre.entries[pair.a].Pose, pre.entries[pair.b].Pose, w.step.Contact)
-			if err != nil {
-				return nil, nil, err
-			}
+			item.depth = rounded
 			switch {
-			case contact.Relation == decad.ContactSeparated:
-			case (contact.Relation == decad.ContactTouching || contact.Relation == decad.ContactOverlapping) &&
-				w.manifoldWithin(contact.Manifold):
-				depth := cloneManifold(*contact.Manifold)
-				item.depth = &depth
+			case w.manifoldWithin(sweep.Event.Manifold):
+				item.manifold = cloneManifold(*sweep.Event.Manifold)
+			case rounded != nil:
+				// A rotating pair's right sample deviates from its ideal pose,
+				// so the producer publishes no manifold there; the solve takes
+				// the one the rounded event poses show, which are the poses the
+				// step publishes.
+				item.manifold = cloneManifold(*rounded)
 			default:
 				return nil, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(pair),
-					fmt.Sprintf("rounded impact poses have relation %v without a bounded manifold", contact.Relation))}, nil
+					"impact has no manifold within the contact request")}, nil
 			}
 		default:
 			event := sweep.InitialEvent
 			if event == nil {
 				event = sweep.Event
+			}
+			if event != nil && event.Relation == decad.ContactBand && !w.contactBandWithin(event.Gap) {
+				d := scheduleDiagnostic(StepPairUndecided, w.bodyPair(pair),
+					"initial contact band exceeds the penetration residual")
+				d.Limit = w.step.PenetrationResidual
+				return nil, []StepDiagnostic{d}, nil
 			}
 			if event == nil || !w.manifoldWithin(event.Manifold) {
 				return nil, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(pair),
@@ -106,6 +129,41 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 	return event, nil, nil
 }
 
+// roundedDepth reads a gathered pair at the rounded event poses, the poses
+// the step publishes: §6.6 removes the penetration they show. A separated
+// pair returns no manifold; a touching or overlapping one, or a ContactBand
+// within PenetrationResidual (§10.4), returns its bounded manifold. Any other
+// relation stops the step.
+func (r *scheduleRun) roundedDepth(ctx context.Context, key int, pre State) (*decad.ContactManifold,
+	[]StepDiagnostic, error) {
+	w := r.w
+	pair := w.pairs[key]
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	contact, err := w.doc.ContactPair(ctx, w.bodies[pair.a].definition.Body,
+		w.bodies[pair.b].definition.Body, pre.entries[pair.a].Pose, pre.entries[pair.b].Pose, w.step.Contact)
+	if err != nil {
+		return nil, nil, err
+	}
+	switch {
+	case contact.Relation == decad.ContactSeparated:
+		return nil, nil, nil
+	case contact.Relation == decad.ContactBand && !w.contactBandWithin(contact.Gap):
+		d := scheduleDiagnostic(StepPairUndecided, w.bodyPair(pair),
+			"rounded event poses show a contact band beyond the penetration residual")
+		d.Limit = w.step.PenetrationResidual
+		return nil, []StepDiagnostic{d}, nil
+	case (contact.Relation == decad.ContactTouching || contact.Relation == decad.ContactOverlapping ||
+		contact.Relation == decad.ContactBand) && w.manifoldWithin(contact.Manifold):
+		depth := cloneManifold(*contact.Manifold)
+		return &depth, nil, nil
+	default:
+		return nil, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(pair),
+			fmt.Sprintf("rounded event poses have relation %v without a bounded manifold", contact.Relation))}, nil
+	}
+}
+
 // eventBudget is §12's StepEventBudget: the published events reach
 // MaxEvents with time remaining.
 func (r *scheduleRun) eventBudget(at units.Value) StepDiagnostic {
@@ -128,7 +186,7 @@ func (r *scheduleRun) keepContactSet(sweeps sliceSweeps, plan slicePlan) {
 			continue
 		}
 		switch sweep.Outcome {
-		case decad.SweepPersistentTouch, decad.SweepContactTransitionBracket:
+		case decad.SweepPersistentTouch, decad.SweepPersistentBand, decad.SweepContactTransitionBracket:
 		case decad.SweepDepartedClear:
 			if sweep.Departure == nil {
 				delete(r.policies, key)

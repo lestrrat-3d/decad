@@ -381,6 +381,25 @@ type planarTrackProof struct {
 	deltaM    *big.Rat // M's held displacement δ (§10.4); S's is zero
 	band      *Measurement
 	nHigh     *big.Rat
+	support   planarSupport // the support plane the band was proved on
+	rate      *big.Rat      // the largest |h'(0)| over the contact set
+	widening  *big.Rat      // 2δ (§10.4)
+}
+
+// depthThrough is the band's published depth over [0, f]: the §10.3 bound
+// (r·t + K(t)·t²)/|n|_lo at t = f·duration, widened by 2δ. K(t) bounds the
+// height curvature over [0, t], so the bound holds at every earlier instant,
+// and f lies inside the track, whose clearance and face containment hold
+// through its end and so through f.
+func (p *planarTrackProof) depthThrough(f *big.Rat) (*big.Rat, bool) {
+	t := new(big.Rat).Mul(f, p.support.duration)
+	k, ok := p.support.curvature(t)
+	if !ok {
+		return nil, false
+	}
+	depth := ratAdd(ratMul(p.rate, t), ratMul(k, t, t))
+	depth.Quo(depth, p.support.nLow)
+	return depth.Add(depth, p.widening), true
 }
 
 // planarBand proves §10.3's band track on the first support plane that
@@ -440,7 +459,7 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 		}
 		t := new(big.Rat).Mul(end, support.duration)
 		k, _ := support.curvature(t)
-		track, ok, err := r.planarTrack(support, face, end, depthAt(t, k))
+		track, ok, err := r.planarTrack(support, face, end, depthAt(t, k), rate)
 		if err != nil {
 			return nil, false, err
 		}
@@ -455,7 +474,7 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 // manifold publishes at the start. depth is the held vertices' band; the
 // published one adds 2δ.
 func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFace,
-	end, heldDepth *big.Rat) (*SweepContactTrack, bool, error) {
+	end, heldDepth, rate *big.Rat) (*SweepContactTrack, bool, error) {
 	solids := [2]*pair.PlanarSolid{r.a.solid, r.b.solid}
 	features, err := newPlanarFeatureMap(r.a.body, r.b.body, solids[0], solids[1])
 	if err != nil {
@@ -498,7 +517,7 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 	proof := &planarTrackProof{paths: [2]rotationalSweepPath{r.a, r.b}, m: support.m, s: support.s,
 		featureS: featureS, normal: support.normal, origin: r.solidTriVertex(support),
 		direction: normal, angle: angle, heldDepth: heldDepth, depth: depth, depthUp: ratFloatUp(depth),
-		deltaM: support.pathM.delta.Rat(), nHigh: support.nHigh}
+		deltaM: support.pathM.delta.Rat(), nHigh: support.nHigh, support: *support, rate: rate, widening: widening}
 	if !finiteMeasurementValues(proof.depthUp) {
 		return nil, false, nil
 	}
