@@ -181,7 +181,7 @@ func (r *SweepReport) certifiedBoundedFacetedPosesAtFraction(f *big.Rat,
 		!boundedFacetedInsideFloor(observedExtent, observedFloor) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: bounded faceted replay leaves its clear corridor", ErrUnsupported)
 	}
-	if _, clear := boundedFacetedFloorGap(observedExtent, observedFloor); !clear {
+	if _, proved := boundedFacetedFloorGap(observedExtent, observedFloor); !proved {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded bounded faceted replay loses its clear gap", ErrUnsupported)
 	}
 	return poseA, poseB, nil
