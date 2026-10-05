@@ -4,7 +4,8 @@ This document is the system map and delivery order for collision-aware rigid
 motion. Current code certifies source-box contact, source sphere-to-box face
 contact, affine two-body sweeps,
 persistent face contact and its first edge transition, and mass properties for
-source boxes, admitted untapered prisms, and full source spheres. It steps one
+source boxes, admitted untapered prisms, full source spheres, and full
+source cylinders revolved from axis-incident rectangles. It steps one
 frictionless pair with a fixed and dynamic body or two centered dynamic bodies.
 A three-body world with one dynamic and two fixed bodies steps one active pair
 when every other
@@ -14,6 +15,8 @@ axial path above or below a source-box face and replay that clear path. The
 extruded cylinder can also contact a wide source-box face along its axis,
 bracket its first impact, and rebound from that fixed face using supplied
 mass. The sweep and step replay the clear path before and after the impact.
+The revolved cylinder can use its density-derived mass in the certified clear
+axial step and interior trace replay.
 It also steps two orthogonal, frictionless
 initial face contacts and their repeated resting response after real manifolds
 and full-span tracks certify both pairs. A source box can hit

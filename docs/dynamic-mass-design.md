@@ -3,7 +3,8 @@
 This document owns mass, center-of-mass, and inertia readings used by rigid
 dynamics. It supplies the mass gate in `docs/collision-dynamics-design.md` §2.
 The source-box query, bounded section-moment integration for admitted
-untapered prisms, and exact full source-sphere integration are implemented.
+untapered prisms, full source-sphere integration, and full source-cylinder
+integration for a revolved axis-incident rectangle are implemented.
 Other payload paths remain design contracts.
 `docs/evaluator-design.md` §4 owns
 the existing planar area moments; this document owns the additional volume
@@ -116,6 +117,15 @@ prove the occupied ball. It integrates `V = 4πr³/3` and the isotropic tensor
 bounded world centroid. Any rigid placement leaves its centroidal tensor
 unchanged; a partial revolution, cavity, or other curved source still needs
 its own certified moment path.
+
+The full source-cylinder path accepts a full revolution of an axis-incident
+rectangular half-profile when its source, cardinal axis, and closed faces
+prove the occupied cylinder. Its exact axial and radial extrema give `r` and
+`h`; the in-tree π enclosure bounds `M = ρπr²h`, axial inertia `Mr²/2`, and
+transverse inertia `M(3r²+h²)/12`. The evaluator's bounded centroid supplies
+the world center. Cardinal rigid placements reorder the tensor entries.
+Partial, annular, toroidal, and obliquely placed revolves still need their
+own certified moment path.
 
 Other analytic payloads may provide certified `V`, `P`, and `Q` directly.
 Otherwise they use §2.2 if they have a suitable occupied-volume proof. A

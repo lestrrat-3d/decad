@@ -187,6 +187,79 @@ func TestMassPropertiesSourceSphere(t *testing.T) {
 	require.Equal(t, decad.MassProperties{}, partial)
 }
 
+func TestMassPropertiesRevolvedCylinder(t *testing.T) {
+	doc := decad.New()
+	sketch, profile := solidSketch(t)
+	body, err := doc.Revolve(sketch, profile, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	density := units.KilogramsPerCubicMillimeter(.001)
+	got, err := body.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	pi, ok := new(big.Rat).SetString("3.14159265358979323846264338327950288419716939937510582097494459230781640628620899")
+	require.True(t, ok)
+	mass := new(big.Rat).Mul(new(big.Rat).SetFloat64(density.Mag()), big.NewRat(640, 1))
+	mass.Mul(mass, pi)
+	requireReadingCovers(t, got.Mass, mass)
+	transverse := new(big.Rat).Mul(mass, big.NewRat(73, 3)) // (3·8² + 10²)/12
+	axial := new(big.Rat).Mul(mass, big.NewRat(32, 1))      // 8²/2
+	requireReadingCovers(t, got.Inertia.XX, axial)
+	requireReadingCovers(t, got.Inertia.YY, transverse)
+	requireReadingCovers(t, got.Inertia.ZZ, transverse)
+	for _, mixed := range []decad.Measurement{got.Inertia.XY, got.Inertia.XZ, got.Inertia.YZ} {
+		require.Equal(t, decad.Exact, mixed.Exactness)
+		require.Zero(t, mixed.Value.Base())
+		require.Zero(t, mixed.Bound.Base())
+	}
+	require.InDelta(t, 5, got.Center.Value.X, got.Center.Bound.Base())
+	require.InDelta(t, 0, got.Center.Value.Y, got.Center.Bound.Base())
+	require.InDelta(t, 0, got.Center.Value.Z, got.Center.Bound.Base())
+
+	cardinal, err := r3.FromBasis(r3.Basis{
+		EX: r3.NewVec(0, 1, 0), EY: r3.NewVec(-1, 0, 0), EZ: r3.NewVec(0, 0, 1),
+	}, r3.NewVec(2, 3, 4))
+	require.NoError(t, err)
+	placed, err := body.PlacedCopy(t.Context(), cardinal)
+	require.NoError(t, err)
+	turned, err := placed.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	require.Equal(t, got.Mass, turned.Mass)
+	require.Equal(t, got.Inertia.XX, turned.Inertia.YY)
+	require.Equal(t, got.Inertia.YY, turned.Inertia.XX)
+	require.Equal(t, got.Inertia.ZZ, turned.Inertia.ZZ)
+	require.InDelta(t, 2, turned.Center.Value.X, turned.Center.Bound.Base())
+	require.InDelta(t, 8, turned.Center.Value.Y, turned.Center.Bound.Base())
+	require.InDelta(t, 4, turned.Center.Value.Z, turned.Center.Bound.Base())
+	again, err := body.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	require.Equal(t, got, again)
+
+	partial, err := doc.Revolve(sketch, profile, uAxis,
+		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+	sheet, err := doc.Revolve(sketch, profile, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
+	require.NoError(t, err)
+	reading, err := sheet.MassProperties(t.Context(), density)
+	require.ErrorIs(t, err, decad.ErrNotSolid)
+	require.Equal(t, decad.MassProperties{}, reading)
+	annularSketch, annularProfile := annularSketch(t)
+	annular, err := doc.Revolve(annularSketch, annularProfile, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	obliquePose, err := r3.RotationAround(r3.Vec{}, r3.NewVec(0, 0, 1), units.Degrees(37))
+	require.NoError(t, err)
+	oblique, err := body.PlacedCopy(t.Context(), obliquePose)
+	require.NoError(t, err)
+	for _, unsupported := range []*decad.Body{partial, annular, torusBody(t, doc, 10, 3), oblique} {
+		reading, massErr := unsupported.MassProperties(t.Context(), density)
+		require.ErrorIs(t, massErr, decad.ErrUnsupported)
+		require.Equal(t, decad.MassProperties{}, reading)
+	}
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	reading, err = body.MassProperties(canceled, density)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, decad.MassProperties{}, reading)
+}
+
 func requireReadingCovers(t *testing.T, reading decad.Measurement, exact *big.Rat) {
 	t.Helper()
 	held := new(big.Rat).SetFloat64(reading.Value.Base())
