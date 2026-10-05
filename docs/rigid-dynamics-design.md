@@ -41,8 +41,10 @@ center-line normal with density-derived or supplied bounded mass and center
 readings when neither body starts with spin. The solver checks both mass
 interval endpoints against the impulse law and bounds torque from the contact
 witness, center, and normal intervals against `AngularVelocityResidual`.
-The omitted spin must also keep contact-point speed within `VelocityResidual`
-and rotational energy within the impulse-times-residual allowance.
+The center restitution error plus both omitted contact-point speeds must fit
+one `VelocityResidual` budget. Both omitted rotational energies share the
+impulse-times-remaining-residual allowance, and their full-step point travel
+shares one `PointResolution` budget.
 The impulse changes both velocity vectors along that normal. A small
 separated position correction within the certified
 bracket and contact slop is allowed when a full clear remainder sweep proves

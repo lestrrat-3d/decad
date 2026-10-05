@@ -105,11 +105,19 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 	if !finite(impulse) || impulse <= 0 {
 		return undecided(w, "sphere normal impulse is not finite and positive"), nil
 	}
+	omittedSpeed, omittedEnergy, omittedTravel := new(big.Rat), new(big.Rat), new(big.Rat)
 	for i, sphere := range spheres {
-		if !sphereOmittedSpinWithin(roundedPoint, point, i, pre.entries[i].Pose, w.parts[i].mass,
-			sphere.Radius, impulse, dt, w.step) {
+		bounds, ok := sphereOmittedSpinBounds(roundedPoint, point, i, pre.entries[i].Pose,
+			w.parts[i].mass, sphere.Radius, impulse, dt, w.step)
+		if !ok {
 			return undecided(w, "sphere omitted angular response exceeds its residual"), nil
 		}
+		omittedSpeed.Add(omittedSpeed, bounds.pointSpeed)
+		omittedEnergy.Add(omittedEnergy, bounds.twiceEnergy)
+		omittedTravel.Add(omittedTravel, bounds.travel)
+	}
+	if omittedTravel.Cmp(exactBase(w.step.Contact.PointResolution)) > 0 {
+		return undecided(w, "sphere omitted pair rotation exceeds contact resolution"), nil
 	}
 	post := pre
 	postA := vA.Sub(n.Scale(impulse * inverse[0]))
@@ -121,7 +129,7 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 	post.entries[1].LinearVelocity = spherePairQuantityVelocity(postB)
 	if !spherePairResponseWithin([2]r3.Vec{vA, vB}, [2]r3.Vec{postA, postB},
 		[2]decad.MassProperties{w.parts[0].mass, w.parts[1].mass},
-		n, point.Normal.Bound.Base(), impulse, e, w.step) {
+		n, point.Normal.Bound.Base(), impulse, e, w.step, omittedSpeed, omittedEnergy) {
 		return undecided(w, "sphere response normal residual or departure exceeds limit"), nil
 	}
 	travel, ok := boundBracketTravel(*first.Bracket, math.Hypot(relative.X,
@@ -235,7 +243,8 @@ func sphereNormUpper(v r3.Vec) (float64, bool) {
 }
 
 func spherePairResponseWithin(pre, post [2]r3.Vec, mass [2]decad.MassProperties,
-	n r3.Vec, normalBound, impulse, restitution float64, step StepConfig) bool {
+	n r3.Vec, normalBound, impulse, restitution float64, step StepConfig,
+	omittedSpeed, omittedTwiceEnergy *big.Rat) bool {
 	preRelative, postRelative := pre[1].Sub(pre[0]), post[1].Sub(post[0])
 	postNorm, ok := sphereNormUpper(postRelative)
 	if !ok {
@@ -255,11 +264,21 @@ func spherePairResponseWithin(pre, post [2]r3.Vec, mass [2]decad.MassProperties,
 	responseError.Add(responseError, new(big.Rat).Mul(
 		new(big.Rat).Mul(ratFloat(restitution), ratFloat(preNorm)), nErr))
 	velocityLimit := exactBase(step.VelocityResidual)
-	if responseError.Cmp(velocityLimit) > 0 ||
-		new(big.Rat).Sub(postDot, postUncertainty).Cmp(velocityLimit) <= 0 {
+	if omittedSpeed == nil || omittedTwiceEnergy == nil || omittedSpeed.Sign() < 0 ||
+		omittedTwiceEnergy.Sign() < 0 || responseError.Cmp(velocityLimit) > 0 {
+		return false
+	}
+	remainingVelocity := new(big.Rat).Sub(velocityLimit, responseError)
+	if omittedSpeed.Cmp(remainingVelocity) > 0 ||
+		new(big.Rat).Sub(new(big.Rat).Sub(postDot, postUncertainty),
+			omittedSpeed).Cmp(velocityLimit) <= 0 {
 		return false
 	}
 	impulseLimit := exactBase(step.ImpulseResidual)
+	upperImpulse := new(big.Rat).Add(ratFloat(impulse), impulseLimit)
+	if omittedTwiceEnergy.Cmp(new(big.Rat).Mul(upperImpulse, remainingVelocity)) > 0 {
+		return false
+	}
 	uncertainty := new(big.Rat).Mul(ratFloat(impulse), nErr)
 	for i := range pre {
 		center, bound := exactBase(mass[i].Mass.Value), exactBase(mass[i].Mass.Bound)
@@ -297,13 +316,18 @@ func spherePairResponseWithin(pre, post [2]r3.Vec, mass [2]decad.MassProperties,
 	return true
 }
 
-// sphereOmittedSpinWithin encloses the torque from the bounded witness and
+type sphereOmittedBounds struct {
+	pointSpeed, twiceEnergy, travel *big.Rat
+}
+
+// sphereOmittedSpinBounds encloses the torque from the bounded witness and
 // mass center, including the uncertain normal. The row-dominance inertia
 // floor turns that torque into an upper angular-speed bound.
-func sphereOmittedSpinWithin(witnessPoint, impulsePoint decad.ContactPoint, side int, pose r3.Transform,
-	mass decad.MassProperties, radius units.Value, impulse float64, duration units.Value, step StepConfig) bool {
+func sphereOmittedSpinBounds(witnessPoint, impulsePoint decad.ContactPoint, side int, pose r3.Transform,
+	mass decad.MassProperties, radius units.Value, impulse float64, duration units.Value,
+	step StepConfig) (sphereOmittedBounds, bool) {
 	if side < 0 || side > 1 || !finite(impulse) || impulse <= 0 {
-		return false
+		return sphereOmittedBounds{}, false
 	}
 	witness := witnessPoint.OnA
 	if side == 1 {
@@ -317,7 +341,7 @@ func sphereOmittedSpinWithin(witnessPoint, impulsePoint decad.ContactPoint, side
 	if !ok || lower == nil || lower.Sign() <= 0 || pointError == nil || normalError == nil ||
 		roundedNormalError == nil || pointError.Sign() < 0 || normalError.Sign() < 0 ||
 		roundedNormalError.Sign() < 0 || impulseLimit == nil || angularLimit == nil {
-		return false
+		return sphereOmittedBounds{}, false
 	}
 	normalError.Add(normalError, roundedNormalError)
 	witnessValue := [3]float64{witness.Value.X, witness.Value.Y, witness.Value.Z}
@@ -329,7 +353,7 @@ func sphereOmittedSpinWithin(witnessPoint, impulsePoint decad.ContactPoint, side
 	armUpper := new(big.Rat)
 	for axis := range 3 {
 		if !finite(witnessValue[axis], normalValue[axis], roundedNormal[axis]) {
-			return false
+			return sphereOmittedBounds{}, false
 		}
 		normalError.Add(normalError, absRat(new(big.Rat).Sub(ratFloat(normalValue[axis]),
 			ratFloat(roundedNormal[axis]))))
@@ -356,26 +380,22 @@ func sphereOmittedSpinWithin(witnessPoint, impulsePoint decad.ContactPoint, side
 	upperImpulse := new(big.Rat).Add(ratFloat(impulse), impulseLimit)
 	spin := new(big.Rat).Quo(new(big.Rat).Mul(upperImpulse, torqueLever), lower)
 	if spin.Cmp(angularLimit) > 0 {
-		return false
+		return sphereOmittedBounds{}, false
 	}
-	velocityLimit := exactBase(step.VelocityResidual)
 	inertiaUpper := inertiaRowCeiling(mass.Inertia)
-	if velocityLimit == nil || inertiaUpper == nil ||
-		new(big.Rat).Mul(spin, armUpper).Cmp(velocityLimit) > 0 {
-		return false
+	if inertiaUpper == nil {
+		return sphereOmittedBounds{}, false
 	}
-	// The 1/2 factors on rotational energy and impulse times the allowed
-	// contact-point speed cancel in this comparison.
-	energy := new(big.Rat).Mul(inertiaUpper, new(big.Rat).Mul(spin, spin))
-	if energy.Cmp(new(big.Rat).Mul(upperImpulse, velocityLimit)) > 0 {
-		return false
-	}
+	pointSpeed := new(big.Rat).Mul(spin, armUpper)
+	// Twice the omitted kinetic energy lets the pair-wide check cancel its
+	// 1/2 factor against the impulse-times-velocity allowance.
+	twiceEnergy := new(big.Rat).Mul(inertiaUpper, new(big.Rat).Mul(spin, spin))
 	// The contact witness can lie on the near side of the center of mass.
 	// Adding two radii also covers the opposite extreme of the source ball.
 	armUpper.Add(armUpper, new(big.Rat).Mul(big.NewRat(2, 1), exactBase(radius)))
 	travel := new(big.Rat).Mul(spin, exactBase(duration))
 	travel.Mul(travel, armUpper)
-	return travel.Cmp(exactBase(step.Contact.PointResolution)) <= 0
+	return sphereOmittedBounds{pointSpeed: pointSpeed, twiceEnergy: twiceEnergy, travel: travel}, true
 }
 
 func sphereCorrectionWithin(before, after State, allowance float64) bool {

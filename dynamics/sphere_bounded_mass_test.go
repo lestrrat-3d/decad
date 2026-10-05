@@ -157,4 +157,27 @@ func TestDiagonalSphereImpactWithDensityMass(t *testing.T) {
 			require.Nil(t, unsupported.Next)
 		})
 	}
+	t.Run("combined omitted point speed", func(t *testing.T) {
+		offset := mass
+		offset.Center.Value.X = .25
+		offset.Inertia.XX.Value = units.KilogramSquareMillimeters(8e7)
+		offset.Inertia.YY.Value = units.KilogramSquareMillimeters(8e7)
+		offset.Inertia.ZZ.Value = units.KilogramSquareMillimeters(8e7)
+		cfg.Bodies = []dynamics.RigidBody{
+			{Body: a, Role: dynamics.Dynamic, Supplied: &offset, Material: mat},
+			{Body: b, Role: dynamics.Dynamic, Supplied: &offset, Material: mat},
+		}
+		pairWorld, worldErr := dynamics.NewWorld(t.Context(), doc, cfg)
+		require.NoError(t, worldErr)
+		pairStart, stateErr := pairWorld.NewState([]dynamics.BodyState{
+			{Body: a, Pose: pa, LinearVelocity: va, AngularVelocity: zero},
+			{Body: b, Pose: pb, LinearVelocity: vb, AngularVelocity: zero},
+		})
+		require.NoError(t, stateErr)
+		pairReport, stepErr := pairWorld.Step(t.Context(), pairStart,
+			dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.2))
+		require.NoError(t, stepErr)
+		require.Equal(t, dynamics.Undecided, pairReport.Status, "%+v", pairReport.Diagnostics)
+		require.Nil(t, pairReport.Next)
+	})
 }
