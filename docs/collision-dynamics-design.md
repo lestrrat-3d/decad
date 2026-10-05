@@ -170,6 +170,7 @@ contracts. Each companion document owns its detail.
 | [Contact sweep](contact-sweep-design.md) | `Document.SweepPair`, two-body paths, continuous proof, and first-contact bracket. |
 | [Dynamic mass](dynamic-mass-design.md) | `Body.MassProperties`, bounded center and inertia, and mass admission. |
 | [Rigid dynamics](rigid-dynamics-design.md) | `dynamics.World`, state, stepping, response, and replay trace. |
+| [Multibody dynamics](multibody-dynamics-design.md) | The N-body program: pair schedule and certified broad phase, islands and solver certification, `Timeline`, the extension order for mass, manifolds and sweeps, band tracks, the kinetograph bridge, and the phased PR order. |
 
 ## 1. System boundary
 
@@ -180,7 +181,10 @@ owns body roles, material parameters, loads, velocity changes, and the state
 produced by each step. It consumes `decad` pair reports and sweep certificates.
 The current `Document.VerifyMotion` remains a prescribed-motion verification
 API with no response calculation. A viewer such as `kinetograph` may replay a
-dynamics trace; it does not decide contact or change the solver result.
+dynamics trace; it does not decide contact or change the solver result. The
+`_gallery` module replays a `dynamics.Timeline` through the kinetograph node
+kind `docs/multibody-dynamics-design.md` §11 specifies; the viewer shows the
+certified pose at each frame time and blends none.
 
 The detailed designs define the report fields, input gates, units, refusal
 reasons, and numerical algorithms. If this system map omits or conflicts with a
@@ -244,6 +248,10 @@ screw interpolation is reserved for prescribed kinematic motion.
 5. Improve candidate filtering and work limits without changing certified
    outcomes. Add replay checks against the same returned trace consumed by a
    viewer.
+6. Generalize from pairs to N bodies in three phases — source primitives, exact
+   planar solids under rotation, every remaining payload — each ending in one
+   filmable scene. `docs/multibody-dynamics-design.md` §2 owns the phases and
+   §13 the PR order; stages 4 and 5 above land inside those PRs.
 
 Each stage has focused local tests for the contracts it changes. The first
 end-to-end run must use the real producer and consumer before adding a wider

@@ -1,0 +1,1205 @@
+# Multibody Dynamics Design
+
+This document owns the program that takes decad's pair contact proofs and the `dynamics` subpackage from
+narrowly gated two- and three-body slices to N-body certified replay: the N-body world, state and trace; pair
+enumeration and the certified broad phase; island formation and the certification of the general projected
+solver; the multi-step `Timeline`; the order in which mass properties, contact manifolds and sweeps extend to
+every solid payload; the interface the `_gallery` module needs from `kinetograph` to film a trace; and the
+phases, filmable exit scenes and PR order that deliver all of it.
+
+It owns the N-body ALGORITHMS and their certificates. The response law, step configuration and conservation
+readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and `SweepPair` make stay with
+`docs/contact-geometry-design.md` and `docs/contact-sweep-design.md`; the mass integrals stay with
+`docs/dynamic-mass-design.md`; the system map stays with `docs/collision-dynamics-design.md`. Where this
+document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
+carries the addition and points here for the algorithm.
+
+Current state: the shipped `dynamics.World` admits exactly two bodies, or three bodies with one, two or
+three dynamic bodies and every other body fixed, and resolves contact through the closed-form responses
+`docs/rigid-dynamics-design.md` lists; `docs/collision-v1-support.md` is the inventory of the shape pairs,
+responses and refusals that ship, and this document does not restate it. Every pair query is pairwise, no
+broad phase exists, and `Trace` holds fixed two- and three-body slots. The exact arithmetic every
+certificate below is stated in already exists as one package: `internal/proof` (`Dyadic`, `DyV3`,
+`RatInterval` and the float rounding bounds), which the root package imports today and which `dynamics`
+can import as well, since an `internal/` package is visible to every package of this module.
+Everything below is design-only until the PR table in §13 says otherwise.
+
+Navigation only; the named sections own the rules:
+
+| Question | Section |
+|---|---|
+| What is in scope, and what is deliberately not? | §1 Goals and non-goals |
+| Which scene proves each phase done? | §2 Phases and exit scenes |
+| What do an N-body `World`, `State`, `StepReport` and `Trace` hold? | §3 N-body data model |
+| How are pairs enumerated and which are swept? | §4 Pair schedule and certified broad phase |
+| How does a step advance through many events? | §5 Event schedule |
+| How are simultaneous contacts solved and certified? | §6 Islands and the certified projected solver |
+| How is a many-event, many-body trace replayed? | §7 Trace and `Timeline` |
+| Which mass properties extend, in what order? | §8 Mass-property extensions |
+| How does an arbitrary planar solid get a contact manifold? | §9 Exact planar faceted contact |
+| How does an arbitrary solid sweep while rotating, and rest while rotating? | §10 General rotating sweep and band tracks |
+| What does the viewer need, and how does the gallery film a trace? | §11 Kinetograph interface and gallery |
+| What stops a step, and how is that reported? | §12 Work budgets, cancellation and `Undecided` |
+| Which PR lands what, in what order, proven by which test? | §13 Delivery order |
+| How is each capability tested? | §14 Test and fixture strategy |
+
+## 1. Goals and non-goals
+
+The goal is a certified replay: a scene of N decad solids, stepped by `dynamics`, whose every published
+pose at every sampled time is backed by a geometry certificate, filmed through `kinetograph` in the
+`_gallery` module. Four decisions fix the shape of the program:
+
+1. **Phased by shape family.** N-body support lands first for the source primitives the contact kernel
+   already certifies (source boxes at signed-permutation poses, source spheres, source cylinders on an
+   axial disk or a vertical sidewall, faceted floors with an exact source-box lower face), then arbitrary
+   exact planar solids under any proper rotation, then the remaining payloads. §2 names the phases.
+2. **Certified replay only.** Every step is ideal-plus-rounded certified exactly as the shipped two-body
+   step is. A step the proofs cannot settle returns `Undecided` with a typed reason (§12) and the
+   `Timeline` stops there; no "best effort" integrator exists anywhere, the gallery included.
+3. **The viewer bridge is a new kinetograph node kind** that takes a time-varying transform (§11).
+   kinetograph's own implementation of that node is outside this document.
+4. **One general island solver.** The fixed-order projected iterative solve that
+   `docs/rigid-dynamics-design.md` "Response" specifies replaces the closed-form responders. Every shipped
+   closed-form fixture becomes a regression fixture of the general solver and keeps producing the same
+   certified numbers (§6.5).
+
+Non-goals, each with the reason it is out:
+
+| Not in this program | Why |
+|---|---|
+| Joints, deformation, fracture | `docs/collision-dynamics-design.md` §2 limits the first stage to rigid solids; nothing here needs more. |
+| Sleeping or deactivation | A sleeping body publishes poses no certificate backs; a resting island costs one persistent track per pair and stays certified. |
+| A continuous-force integrator between events | The step's force law is the one semi-implicit kick `docs/rigid-dynamics-design.md` "Step and event schedule" defines; the caller picks `dt`. A tumbling body therefore moves at constant `ω` between kicks, and §10.3's band track is what lets it rest. |
+| Non-convex dynamic bodies with a manifold | §9 proves a manifold for a convex body against any planar face. A non-convex DYNAMIC body gets a relation and no manifold (`ContactNonConvex`); a non-convex FIXED or kinematic body is fine, since only its faces enter. |
+| kinetograph interpolating between certified poses | §11: the viewer asks for a pose at a frame time and shows that pose; it never blends two. |
+| Uncertified mass from a render mesh | `docs/dynamic-mass-design.md` §2.2: a `VerifyNone`/`VerifyBoundary` mesh never supplies inertia. |
+
+## 2. Phases and exit scenes
+
+Each phase ends with one filmable scene that runs through the real producers (`Body.MassProperties`,
+`ContactPair`, `SweepPair`, `World.Step`, `Timeline`, the gallery bridge) with no hand-written manifold,
+event or pose anywhere. The scene is a `_gallery` test (§11.3) AND a `dynamics` integration test; the
+gallery renders it with `go run . dynamics -scene <name>`.
+
+| Phase | Shape families | Exit scene | What the scene proves |
+|---|---|---|---|
+| 1 | Source boxes at signed-permutation poses, source spheres, source cylinders (axial disk or vertical sidewall), faceted floors with an exact source-box lower face (contact-geometry §2) | `stack-and-drop` | N-body world, broad phase, islands, friction and resting stacks, multi-event trace, viewer bridge. |
+| 2 | Any exact planar solid (zero boundary displacement) under any proper rotation; convex dynamic bodies, any planar fixed body | `tumble` | Face, edge and vertex impacts under rotation; a tumbling body comes to rest through band tracks. |
+| 3 | Every remaining solid payload: curved source families, positive-displacement bodies, lofts, sweeps, cups, cap blends, stitched solids | `parts-bin` | Mass for every payload; banded contact for positive-displacement bodies; curved rolling contact. |
+
+**Phase 1 — `stack-and-drop`.** A fixed source-box floor `200×200×10 mm`, top at `z = 0`. Six `20 mm`
+source boxes in a `3-2-1` pyramid: three on the floor at `x = 0, 25, 50`, two bridging the gaps on top,
+one on the top row. Three radius-`8 mm` source spheres with centers released at `z = 60, 90, 120 mm`
+over `x = 120`, offset in `y` so the second lands on the first and the third on both. One source cylinder (`Ø20 × 30 mm`, axis along `z`)
+released axially at `z = 80 mm` over `x = 160`. Gravity `-9810 mm/s²`, box restitution `0.3`, sphere
+restitution `0.6`, friction `0.4` everywhere, density `0.001 kg/mm³`, `dt = 1/240 s`, `2 s` of motion,
+rendered at `60 fps`. Exit criterion: `Timeline.End()` equals `2 s` (no `Undecided`); the six pyramid
+boxes end within `PenetrationResidual` of their start poses; every step's conservation gate passes; the
+bridging boxes' two half-face patches each carry their share of the support impulse; the first sphere's
+first floor impact occurs at the free-fall time `sqrt(2·(60−8)/9810) s` within `TimeResolution`; the clip
+renders `120` frames.
+
+**Phase 2 — `tumble`.** The floor plus a fixed tray built as a zero-bound Boolean union of five source
+boxes (floor and four walls, inside `160×160 mm`). Dynamic: four `20 mm` source boxes released with
+proper rotations about `(1, 1, 0)` by `30°`, `45°`, `60°`, `75°` and spin `(2, 1, 0) rad/s`; one
+hexagonal prism (`20 mm` across flats, `12 mm` tall) released on a vertex; one triangular wedge; one
+stitched tetrahedron. Material as above, `3 s`. Exit criterion: the timeline reaches `3 s`; each body's
+final pose is a face-down rest (every dynamic body's velocity within `VelocityResidual` of zero and at
+least one band or persistent track per body in the last step); the trace carries at least one
+`ContactImpact` whose manifold has a single point (vertex impact), one with two points (edge impact) and
+one with four or more (face impact); each box's first impact time matches the exact drift of its lowest
+corner within `TimeResolution`.
+
+**Phase 3 — `parts-bin`.** The tray plus: a shelled box (`cupPayload`), a `12 mm` cap-loop chamfered
+block (positive displacement), a square-to-octagon loft, a straight sweep of a hexagon, a revolved
+bottle (full revolve of a line-and-arc half-profile), and a source cylinder released on its side so it
+rolls. `4 s`. Exit criterion: `Body.MassProperties` publishes for every body; the timeline reaches `4 s`;
+the rolling cylinder's trace carries a rotating band track with its contact-point speed within
+`VelocityResidual` of zero (rolling without slip under friction `0.4`); the chamfered block rests on a
+`ContactBand` track whose published depth is at most its boundary displacement plus `PenetrationResidual`.
+
+## 3. N-body data model
+
+### 3.1 World and pairs
+
+`WorldConfig` is unchanged. `NewWorld` admits `len(cfg.Bodies) >= 2`; the two- and three-body limits and
+the `threeBodyWorld` container go away (§13 PR 5). Internally:
+
+```go
+type worldBody struct {
+    definition RigidBody
+    mass       decad.MassProperties // valid only for Dynamic
+}
+
+// worldPair is one unordered body pair in canonical world order (a < b).
+type worldPair struct {
+    a, b        int
+    excluded    bool
+    moving      bool               // at least one body is not Fixed
+    restitution units.Value        // effective pair value, rigid-dynamics "World and State"
+    friction    frictionCoefficient
+}
+
+type World struct {
+    doc    *decad.Document
+    bodies []worldBody   // insertion order
+    pairs  []worldPair   // canonical order: (0,1), (0,2), …, (1,2), …
+    index  map[*decad.Body]int
+    step   StepConfig
+}
+
+func (w *World) Bodies() []RigidBody   // copies, world order
+func (w *World) Pairs() []BodyPair     // every pair in canonical order, excluded ones included
+```
+
+Pair material mixes per pair exactly as `docs/rigid-dynamics-design.md` "World and State" states; the
+`frictionCoefficient` interval lives on the pair, never on the world. `NewWorld` rejects the same inputs
+it rejects today and additionally `ErrUnsupported` for a positive-friction pair whose family §6.4 cannot
+certify in the current phase. A non-excluded Fixed/Fixed pair is queried once per `Step` at its constant
+poses by `ContactPair`; an `Overlapping` or `Undecided` relation makes the step `Undecided` with
+`StepFixedPairRelation` (§12). Exclude such pairs, or model a tray as one body, as the exit scenes do.
+
+### 3.2 State
+
+```go
+type State struct {
+    world   *World
+    entries []BodyState // world order
+    cache   *contactCache // immutable warm-start cache, nil until §13 PR 8
+}
+```
+
+`Entries()` and `Body()` keep their contracts. `NewState` requires exactly one entry per world body.
+
+### 3.3 Step configuration and report
+
+`StepConfig` gains one field:
+
+```go
+MaxPairSweeps uint64 // positive; counts SweepPair calls per step across every slice
+```
+
+`StepReport` gains `Islands []IslandReport`; `ContactEvent` gains `Island int`, the index of the island
+that published it; `StepDiagnostic` gains typed fields (§12).
+
+```go
+// IslandReport is one simultaneous solve: the bodies and pairs that shared
+// constraints at one event time, and the certified residuals of that solve.
+type IslandReport struct {
+    Time   units.Value     // from the start of the step
+    Bodies []*decad.Body   // world order; Fixed and Kinematic participants included
+    Pairs  []BodyPair      // world order
+    Events []int           // indices into StepReport.Events
+    Solver ContactSolverReport
+}
+```
+
+### 3.4 Trace
+
+```go
+type Trace struct {
+    start, end State
+    duration   units.Value
+    slices     []traceSlice
+    events     []traceEvent
+}
+
+// traceSlice is one event-free interval of the step. Every body drifts on
+// paths[i]; every candidate pair carries the rounded certificate that proves
+// those paths, or the swept-box exclusion that made no sweep necessary.
+type traceSlice struct {
+    start, end *big.Rat          // exact, from the step's held time values
+    from, to   State
+    paths      []bodyPath        // world order: fixed, kinematic or RigidDriftSegment
+    proofs     []pairProof       // candidate pairs only, canonical order
+}
+
+type pairProof struct {
+    pair     int                  // index into World.pairs
+    sweep    *decad.SweepReport   // rounded certificate over [start, end]
+    boxClear bool                 // §4.2: both swept boxes strictly disjoint; sweep is nil
+}
+
+type traceEvent struct {
+    at        *big.Rat
+    pre, post State
+    islands   []int // indices into StepReport.Islands
+}
+```
+
+§7 owns how `Sample` reads these.
+
+## 4. Pair schedule and certified broad phase
+
+### 4.1 The schedule
+
+A step's pair schedule is the list of `worldPair` entries that are not excluded and whose `moving` flag
+is set, in canonical order. Fixed/Fixed pairs are outside the schedule (§3.1). The schedule is fixed for
+the step; what changes per slice is which scheduled pairs are CANDIDATES, decided by §4.2, and which
+candidates need a fresh sweep, decided by §5.3.
+
+### 4.2 Swept boxes in decad
+
+The whole-path swept box of `docs/contact-sweep-design.md` §4.2 becomes a public read-only query so one
+implementation owns the certificate and `dynamics` consumes it:
+
+```go
+// SweptBox encloses every point a body occupies at any time of its path: the
+// body's bounded Bounds() at its placement, mapped through the path's From,
+// expanded on every axis by the path's whole-duration travel bound
+// (contact-sweep §4.1). Its extremes are exact dyadic rationals.
+type SweptBox struct { /* lo, hi [3]proof.Dyadic (internal/proof); body *Body */ }
+
+func (d *Document) SweptBox(ctx context.Context, b *Body, path PairPath) (SweptBox, error)
+
+// StrictlyDisjoint reports a positive gap on at least one axis, compared exactly.
+// Boxes that merely meet are not disjoint.
+func (s SweptBox) StrictlyDisjoint(o SweptBox) bool
+func (s SweptBox) Box() Box // outward float conversion of the exact extremes
+```
+
+`SweptBox` validates the body and path as `SweepPair` does and returns `ErrUnsupported` when the travel
+bound is not finite (contact-sweep §4.1: an unbounded radius or velocity). A `PoseSegment` path and a
+`RigidDriftSegment` path both take the §4.1 formula; a stationary path has zero travel. The existing
+private `sweptAffineBox` (`contact_cylinder_sweep.go`) and the swept box inside `sweepBoundedFacetedFloorClear`
+move onto this one implementation.
+
+### 4.3 Sort-and-sweep in dynamics
+
+Per slice, `dynamics` computes one `SweptBox` per body on its slice path (a Fixed body's box is computed
+once per step and reused). It sorts bodies by exact `lo.x`, ties by world index, and walks the sorted
+list keeping an active set: a pair whose `x` intervals overlap is then tested with `StrictlyDisjoint` on
+all three axes. A scheduled pair is a candidate when it is not strictly disjoint. The candidate list is
+sorted into canonical pair order before use, so no sort tie or walk order reaches a published result;
+`docs/contact-sweep-design.md` §4.2 already permits a sweep-and-prune that discards only by the strict
+box certificate and changes no order. A pair the boxes exclude is recorded in the slice as
+`pairProof{boxClear: true}` and is never swept.
+
+Cost per slice is `O(N log N)` box work plus one `SweepPair` per candidate that §5.3 cannot reuse. The
+step charges each `SweptBox` call and each `SweepPair` call against `MaxPairSweeps` (§12).
+
+## 5. Event schedule
+
+The step keeps the structure `docs/rigid-dynamics-design.md` "Step and event schedule" specifies — one
+full-step kick, then event-driven drift — and generalizes the body count. In order:
+
+1. Validate inputs, drivers and loads; reject before reading `ctx`. Kick every dynamic body once.
+2. Set `t = 0`. Set the CONTACT SET to every scheduled pair whose previous step ended on a persistent or
+   band track in the input state's cache, or empty when there is no cache.
+3. **Slice.** Build each body's path for `[t, dt]`: a Fixed body a constant `PoseSegment`, a Kinematic
+   body its driver sliced to the remaining time, a Dynamic body a `RigidDriftSegment` from its current
+   pose, world mass center and velocities. Run §4.3 to get the candidates. For each candidate that §5.3
+   does not reuse, call `SweepPair` with the policy §5.2 assigns.
+4. **Classify.** A candidate whose report is `SweepUndecided` with an unresolved interval starting at or
+   before the earliest event below makes the step `Undecided` with `StepPairUndecided`; one whose
+   unresolved interval starts strictly later is revisited after that event. Collect events: an
+   `ImpactBracket` or `ContactTransitionBracket` at its bracket's exact right fraction, a `GrazingTouch`
+   at its exact instant, a persistent or band track that ends before `dt` at its end. Choose the
+   earliest exact event time `t_e` in canonical pair order, then gather every event whose uncertainty
+   interval (bracket, or zero width) overlaps `t_e` (rigid-dynamics "Step and event schedule").
+5. **No event.** Advance every body to `dt` on its certified path, run `ContactPair` on every pair in the
+   contact set at the completed poses, reject penetration beyond `PenetrationResidual`, record the final
+   slice, and publish.
+6. **Advance** every body to `t_e` on its certified path. Record the slice `[t, t_e]` with each candidate
+   pair's rounded certificate: a pair with an event at `t_e` records its rounded prefix sweep (the sweep
+   up to the bracket right pose, as the two-body impact path does today); every other candidate records
+   its full report, re-sliced to `[t, t_e]` through `CertifiedPosesAtInterval`.
+7. **Islands.** Form islands over the active constraints at `t_e` (§6.1), correct positions per island
+   (§6.6), solve and certify each island in world order (§6.2–§6.4), publish one `IslandReport` and the
+   island's events. A `ContactGraze` and a separated `ContactTransition` publish their zero-impulse
+   events without entering a solve.
+8. Update the contact set: pairs the solve left touching with a nonpositive relative normal speed stay
+   in; pairs every solved normal speed exceeds `VelocityResidual` leave it. Count the published events
+   against `MaxEvents`. Set `t = t_e` and go to step 3.
+
+### 5.1 Zero-time repeats and Zeno sequences
+
+A repeated event at the same `t_e` is legal only as a resting solve: a pair that is still touching and
+closing after an island solve re-enters §5.2's `ContinueCertifiedTouch` policy on the next slice, which
+either certifies a persistent or band track (no event) or brackets a transition. A pair that bounces with
+restitution produces one `ContactImpact` per bounce; `ImpactSpeed` is the guard that ends such a sequence,
+because an incoming normal speed at or above `-ImpactSpeed` targets zero post-impact speed
+(rigid-dynamics "Response") and the pair then rests. A scene whose bounces do not fall under `ImpactSpeed`
+before `MaxEvents` is `Undecided` with `StepEventBudget`; that is the stated limit, not a defect.
+
+### 5.2 Start policies
+
+| Pair state at the slice start | Policy |
+|---|---|
+| Not in the contact set | `StopAtInitialContact` |
+| In the contact set, every solved normal speed `> VelocityResidual` at the last solve | `ContinueSeparatingTouch` |
+| In the contact set otherwise | `ContinueCertifiedTouch` |
+
+These are the three policies `docs/contact-sweep-design.md` §5.1 defines; nothing here adds one.
+
+### 5.3 Reusing a certificate across slices
+
+A candidate pair's report from the previous slice is reused, with no new `SweepPair` call, when both of
+its bodies' paths are unchanged (neither body was in an island at the last event and neither is
+kinematic) and the report's outcome covers the remaining interval: `SweepClear`, `SweepDepartedClear`,
+`SweepPersistentTouch` or `SweepPersistentBand` through `dt`, or an `ImpactBracket`, transition bracket or
+graze whose exact time lies after `t`. The slice record maps the exact `[t, t_e]` onto the report through
+`CertifiedPosesAtInterval`; the report itself is immutable. Every other candidate is swept again from the
+new slice start. A kinematic body's path is sliced, so every pair containing one is swept again, as the
+two-body kinematic step does today.
+
+### 5.4 Bodies outside every candidate pair
+
+A body none of whose scheduled pairs is a candidate in a slice drifts on its own path; the swept-box
+exclusions of its pairs are its certificate for the slice, and `Trace.Sample` evaluates its path directly
+(§7.1). It still receives its kick and appears in the conservation readings.
+
+## 6. Islands and the certified projected solver
+
+`docs/rigid-dynamics-design.md` "Response" owns the law: the relative velocity, the restitution target
+with `ImpactSpeed`, nonnegative normal impulses, complementarity, the Coulomb disk, the deterministic
+tangent basis, fixed processing order, no hidden tolerance, and residual gating at `MaxIterations`. This
+section owns how an island is formed, how the solve proposes impulses, and how every published number is
+certified in exact arithmetic over the admitted intervals.
+
+### 6.1 Island formation
+
+An ACTIVE CONSTRAINT at `t_e` is one manifold point of: an `ImpactBracket` event's `SweepEvent.Manifold`;
+an initially touching pair's `InitialEvent.Manifold` whose relative normal speed is closing or zero within
+`VelocityResidual`; a persistent or band track's `ContactTrack.ManifoldAt(fraction)` at `t_e`; a
+kinematic/dynamic contact of any of those forms, with the driver's contact-point velocity as
+rigid-dynamics "Step input and configuration" defines it. A pair gathered for the event with no
+consumable manifold (`Manifold == nil`, or point or normal bounds wider than `StepConfig.Contact`) makes
+the step `Undecided` with `StepManifoldMissing`.
+
+Islands are the connected components of the graph whose vertices are DYNAMIC bodies and whose edges are
+active constraints between two dynamic bodies; a constraint against a Fixed or Kinematic body attaches
+that body to the dynamic body's island without joining islands through it (a floor under two separate
+stacks does not couple the stacks). Components are numbered by the smallest world index they contain and
+solved in that order. An island with no dynamic body cannot occur; a closing constraint with no dynamic
+participant is `Undecided` with `StepIslandDegenerate`, as rigid-dynamics "Response" requires.
+
+### 6.2 Unknowns and proposal
+
+Per active constraint `k` the unknowns are `λn_k >= 0` and a tangent pair `λt_k ∈ R²` in the
+deterministic basis of rigid-dynamics "Response". Let `u` be each body's pre-solve velocity (kicked plus
+earlier events this step). The proposal runs projected Gauss–Seidel in `float64`, in the fixed order
+islands → pairs (canonical) → manifold points (manifold order), for at most `MaxIterations` sweeps:
+
+```text
+w_k        = relative contact velocity at k from the current velocities
+Δλn        = max(0, λn_k + (target_k − w_k·n_k) / K_nn,k) − λn_k;   apply ±Δλn·n_k and r×(Δλn·n_k)
+Δλt        = −K_tt,k⁻¹ · w_k,t;   λt_k += Δλt;   project λt_k onto the disk of radius μ_k·λn_k;  apply
+```
+
+`K_nn,k` and the 2×2 `K_tt,k` are the usual effective-mass terms from the nominal inverse mass and
+inverse world inertia. The proposal is a nominal solution and proves nothing; `μ_k` here is the nominal
+mean the pair's `frictionCoefficient` carries. A nominal proposal that is not finite, or a closing
+constraint whose nominal `K_nn,k <= 0`, is `Undecided` with `StepIslandDegenerate`.
+
+### 6.3 Certification
+
+After the last sweep (and, cheaply, after every sweep once the proposal stops changing beyond
+`ImpulseResidual`), the solver certifies the proposal in exact rational interval arithmetic, forward only:
+it never inverts an interval tensor. The interval vocabulary is `internal/proof/interval.go`'s
+`RatInterval` with `AddInterval`, `SubInterval`, `NegInterval`, `MulInterval`, `ScaleInterval` and
+`PointInterval`; `dynamics` imports that package directly. The two vector forms this section needs and
+that file lacks, a three-component interval dot product and cross product, are added to the same file
+(§13 PR 4) so the root package and `dynamics` share one implementation; no interval code lives in
+`dynamics`.
+
+Inputs read as intervals: each dynamic body's mass `[m_lo, m_hi]` and six inertia components, rotated
+into world axes with the pose basis read as exact rationals and widened by the basis's orthonormality
+defect (`docs/dynamic-mass-design.md` §4); each manifold point's `OnA`, `OnB` and `Normal` with their
+balls; the pair's `frictionCoefficient` interval `[μ_lo, μ_hi]`; the published pre-solve velocities as
+exact rationals. The proposal's published outputs are the per-point impulses `(λn_k, λt_k)` and each
+body's post velocities `(v', ω')`, rounded to `float64` and read back as exact rationals.
+
+The certificate then checks, every comparison over the full interval:
+
+| Gate | Exact statement | Limit |
+|---|---|---|
+| Linear law | `m·(v' − v) − ΣJ` per component, over both mass endpoints | `ImpulseResidual + m_hi·VelocityResidual` |
+| Angular law | `I_world·(ω' − ω) − Σ r×J` per component, over the inertia and point intervals | `ImpulseResidual·ρ + λ_lo(I)·AngularVelocityResidual`, with `ρ` the island's largest lever bound and `λ_lo(I)` the certified lower eigenvalue (rigid-dynamics "World and State") |
+| Normal sign | `λn_k >= 0` exactly | none |
+| Non-penetration | `w'_k·n_k − target_k` lower end | `>= −VelocityResidual` |
+| Complementarity | if `λn_k > 0`: `|w'_k·n_k − target_k|` upper end | `<= VelocityResidual` |
+| Cone | `‖λt_k‖ − μ_lo·λn_k` | `<= ImpulseResidual` |
+| Stick | if `‖λt_k‖ < μ_lo·λn_k − ImpulseResidual`: `‖w'_k,t‖` upper end | `<= VelocityResidual` |
+| Slip | otherwise: `λt_k·w'_k,t + ‖λt_k‖·‖w'_k,t‖` upper end | `<= ImpulseResidual·‖w'_k,t‖ + VelocityResidual·‖λt_k‖` |
+| Energy | island kinetic energy after minus before, over the mass and inertia intervals | the allowance rigid-dynamics "Completion, conservation, and trace" states, summed over the island's bodies, minus kinematic work |
+| Momentum | the per-event linear and angular momentum checks of the same section, applied to the island as one event set | as stated there |
+
+`ContactSolverReport` publishes the largest attained value of each gate as its residual, plus the sweep
+count. A gate that fails at `MaxIterations` is `Undecided` with `StepIslandResidual`, naming the island,
+the gate and the limit. Residuals are decided over intervals, so a proposal whose nominal value passes
+but whose interval does not is refused; narrow source intervals keep the arithmetic residual the binding
+one, exactly as rigid-dynamics "Response" states.
+
+These gates are the solver's CLAIM, not an admission of a geometric fact: the published state is defined
+as "velocities that satisfy the discrete law within the stated residuals", and the certificate proves that
+definition holds. CLAUDE.md's reject-only rule governs geometric claims decad is handed; every geometric
+input here (manifold, mass, normal) arrives already certified by its producer, and nothing in this table
+upgrades one.
+
+### 6.4 Friction families per phase
+
+The cone, stick and slip gates make friction generic, so no per-shape friction solver remains after
+§13 PR 5. What limits friction per phase is the manifold producer: a pair needs a bounded manifold with
+point and normal balls that keep the slip and cone intervals inside the limits. Phase 1 families all
+publish such manifolds; a positive-friction pair whose family publishes relation only (no manifold) is
+refused at `NewWorld` with `ErrUnsupported`, as today.
+
+### 6.5 Parity with the closed-form responders
+
+Every shipped response fixture in `dynamics/*_test.go` — the `150 kg·mm/s` box rebound, the
+`sqrt(5000)` tilted support, the four-corner Coulomb slide, the two-sphere `37.5 kg·mm/s` impact, the
+coupled stack `JU = −mU·vU`, the sphere island active-set cases, the off-center `Iyy` tip, the sphere-floor
+`Y` spin, the graze, the planar off-axis sphere-pair Coulomb impact and its interior-time form
+(`sphere_pair_offaxis_friction_test.go`), the sphere sticking to two fixed orthogonal box faces
+(`three_body_friction_island_test.go`), the isolated three-dynamic `75 kg·mm/s` sphere impact
+(`three_body_all_dynamic_test.go`), the symmetric three-dynamic friction island with `2N+T=m(1+e)v` and
+`N+(2+mr²/I)T=mv` and its later all-clear spinning step (`three_body_dynamic_friction_test.go`), the
+cylinder sidewall rebound (`cylinder_sidewall_impact_test.go`), the rotated sphere's tangential impact
+(`oblique_sphere_tangent_test.go`), and the positive-bound union's floor impact and rest
+(`faceted_floor_step_test.go`) — runs unchanged through the general island solver and asserts the same
+impulses, velocities and poses within its existing `InDelta` slack. A single-point island converges in
+one sweep to the isolated formula exactly in float; the four-point and two-pair islands converge to the
+same solutions the closed forms publish because those solutions satisfy the same complementarity
+system. A fixture that does not pass through the general solver blocks §13 PR 5, which deletes the
+closed-form responders: `three_body.go` and every `three_body_*.go` (`all_dynamic`, `dynamic_friction`,
+`friction_island`, `island`, `sequential`, `sphere_island`, `stack`, `two_dynamic`), `friction_patch.go`,
+`friction_pair.go`, `friction_pair_certificate.go`, `friction_pair_step.go`, `friction_step.go`,
+`friction_impact.go`, `sphere_floor_friction.go`, `sphere_pair_friction.go`,
+`sphere_pair_offaxis_friction.go`, `sphere_pair_response.go`, `oblique_response.go`,
+`oblique_sphere_step.go`, `fixed_offcenter.go`, `cylinder_impact.go`. `grazing_step.go` stays, since a
+graze is a schedule outcome, not a solve; `resting.go`, `kinematic*.go`, `load.go`, `material_mix.go`
+and the conservation files are inputs and readings, not responders, and stay.
+
+### 6.6 Position correction across an island
+
+Rigid-dynamics "Response" bounds one pair's correction by certified geometry displacement plus bracket
+travel plus `ContactSlop`, and requires every correction to be swept against every other pair. Across an
+island: each dynamic body receives one translation, the sum over its active constraints of its mass-share
+of each constraint's penetration depth along the constraint normal (a Fixed or Kinematic body takes no
+share); the translation's length is bounded by the allowance above, plus the band depth `ε` of §10.3
+when the slice ended on a band track. The corrections of one island are applied together, then every
+candidate pair touching a corrected body is swept over the correction as a `PoseSegment` of zero
+duration-independent travel (the usual §4.2 swept-box exclusion applies first). A new contact, a lost
+relation or an undecided interval is `Undecided` with `StepCorrectionFailed`. Corrections are recorded in
+the event and the trace and never claim to conserve energy.
+
+## 7. Trace and `Timeline`
+
+### 7.1 Sampling one step
+
+`Trace.Sample(t)` keeps its signature. It compares the exact held `t` against the slice boundaries
+(`big.Rat`), returns `start` at `0`, `end` at `duration`, and an event's `post` state at an exact event
+time. Inside a slice it produces every body's pose:
+
+- a body in at least one `pairProof` with a sweep: `sweep.CertifiedPosesAtInterval(t, start, end)`;
+  when two proofs cover the same body, their rounded poses must be identical (`ErrUnsupported`
+  otherwise), which holds when both evaluate the same float path at the same exact fraction;
+- a body whose candidate pairs are all `boxClear`, or that is in no candidate pair: its own `bodyPath`
+  evaluated at the mapped fraction (`RigidDriftSegment` through `r3.RotationAround` and
+  `r3.Translation` exactly as the sweep evaluates it); the swept-box certificate covers the whole slice,
+  so no per-sample relation check is needed;
+- a Fixed body: its constant pose.
+
+Velocities inside a slice are the slice's `from` velocities. A sample a rounded certificate refuses
+(`CertifiedPosesAtInterval` returns `ErrUnsupported` when the rounded pose leaves the certified relation)
+makes `Sample` return `ErrUnsupported`, as today.
+
+### 7.2 `Timeline`
+
+```go
+// Timeline chains the steps of one world from one start state. Its certified
+// end is the completed time of the last Advanced step; it stops at the first
+// Undecided step and never advances past it.
+type Timeline struct { /* world; start State; steps []timelineStep; stop *StepReport */ }
+
+var ErrTimelineStopped = errors.New("dynamics: timeline stopped at an undecided step")
+
+func NewTimeline(w *World, start State) (*Timeline, error)
+func (tl *Timeline) Advance(ctx context.Context, input StepInput, dt units.Value) (*StepReport, error)
+func (tl *Timeline) End() units.Value           // exact sum of advanced durations
+func (tl *Timeline) Steps() []*StepReport        // copies, in order
+func (tl *Timeline) Stopped() *StepReport        // the Undecided report, or nil
+func (tl *Timeline) Sample(t units.Value) (State, error)
+```
+
+`Advance` runs `World.Step` from the last `Next`; on `Advanced` it appends; on `Undecided` it records the
+report as `stop` and returns it with a nil error (the step is not an error); a later `Advance` returns
+`ErrTimelineStopped`. `Sample(t)` locates the step by exact cumulative time and delegates to that step's
+`Trace.Sample` with the local time. `t` equal to `End()` returns the last advanced step's `end` state,
+which that step's certificate covers; `t` below zero or beyond `End()` is `ErrUnsupported`, and the
+same test, "beyond `End()`", is the one §11.2's track applies. A step boundary belongs to the later
+step's `start`, which is the earlier step's `end` by construction. The gallery reads only `Timeline`; it
+never calls `Step` itself.
+
+`Sample` is safe for concurrent calls and returns the same `State` for the same `t`: it reads `steps`
+and `stop` and writes nothing, and every `Trace`, `pairProof` and sweep certificate it consults is
+read-only once `Advance` has returned. `Advance` is the only writer; it must not run concurrently with
+`Sample` or with another `Advance`. The gallery advances the timeline to the clip length before it
+builds the scene (§11.2), so no render worker ever overlaps an `Advance`.
+
+## 8. Mass-property extensions
+
+`docs/dynamic-mass-design.md` owns the integrals and admission gates; this section fixes which payload
+lands when and through which path, in the order below. Each item ships with the computed test of
+dynamic-mass §6 for that shape.
+
+### 8.1 Prism with a non-cardinal frame or placement basis
+
+Analytic: frame-local `V, P, Q` from `momentSecondOrder` section moments as today, then `R S Rᵀ` with `R`
+the product of the placement and frame bases read as exact rationals. Widen each world component by the
+orthonormality defect `‖RᵀR − I‖_F` times the tensor's largest magnitude, outward. This lifts the
+`rotated box inertia is not yet certified` refusal in `mass_properties.go`.
+
+### 8.2 Prism with positive `z0Delta`, `z1Delta` or `sectionDelta`
+
+Analytic plus an occupied-volume error `E = A_upper·sectionDelta + Area_cap_upper·(z0Delta + z1Delta)`,
+charged as `E`, `R·E`, `R²·E` per dynamic-mass §2.2. Phase 3's cap-blend and chamfer bodies need it;
+Phase 1 bodies have zero deltas.
+
+### 8.3 Loft
+
+`loft_moments.go` gains the second-moment accumulator `q [6]*big.Rat` over the same signed tetrahedra
+(the `/120` form, shared with `mass_properties_faceted.go` through one `tetraMoments` helper), widened by
+the payload `delta` as dynamic-mass §2.2 states. Volume and centroid already exist there.
+
+### 8.4 Stitched planar solid, zero-bound Boolean, translation-placed Boolean
+
+The faceted path of `mass_properties_faceted.go` over the payload's own held triangle set and bound.
+`stitchPayload` carries its triangles and `delta`; the Boolean path exists.
+
+### 8.5 Generic `VerifyAll` fallback
+
+For any payload whose `Tessellate(ctx, tol, VerifyAll)` reports `VolumeVerified()`: the dynamic-mass
+§2.2 curved path over the mesh with `E = volSymDiff`. The tolerance ladder is deterministic,
+`tol_k = diameter · 2^−k` for `k = 8 … 14`; integration stops at the first `k` whose tensor interval
+passes the positivity proof, and an exhausted ladder is `ErrUnsupported`. This covers cap blends
+(tessellation-reach §7's proof), curved stitched solids, chain payloads and any revolve the analytic path
+refuses.
+
+### 8.6 General revolve, full or partial, any admitted section
+
+`moments.go` gains `momentThirdOrder` (`∫u³`, `∫u²v`, `∫uv²`, `∫v³` over lines, with the arc terms in
+`moments_circular.go` and the span terms in `spline_moments.go`), then the angular factors `∫cos²θ`,
+`∫sinθcosθ`, `∫cosθ` over `[φ0, φ1]` enclosed through `radianSinCos`/`turnSinCosInterval`, with full
+turns taking the `π` enclosures. Dynamic-mass §2.1 names exactly these terms; partial turns keep their
+mixed components.
+
+### 8.7 Sweep
+
+A single straight span takes 8.1/8.2; a single arc span takes 8.6 over the arc's partial revolve. A
+composite sweep integrates each `sweepSpanPayload` about one shared anchor and sums; no parallel-axis
+shortcut per span, since `P` and `Q` already refer to the shared anchor.
+
+### 8.8 Cup
+
+Outer prism minus cavity prism (both 8.1/8.2), subtracted at the `V, P, Q` level with each contribution's
+own outward interval (dynamic-mass §2, §3). `cupPayload` holds both sections and the three levels with
+their deltas.
+
+A dynamic body whose payload matches no item returns `ErrUnsupported` from `Body.MassProperties`, and
+`NewWorld` rejects it with that error; a Fixed or Kinematic body never needs mass.
+
+## 9. Exact planar faceted contact
+
+This is `docs/contact-geometry-design.md` §7's stage C3 made concrete for the solids whose held boundary
+is exact: every vertex an exact dyadic rational at the query pose (the recorded coordinates times the
+placement and query transforms with exact products and sums, as `sourceOrientedBoxAtPose` does for a
+box) and every face planar with a source normal read exactly off its vertices. That is: a prism whose
+section is all `LineSeg` with zero deltas, at any proper pose; a stitched all-planar solid with zero
+`delta`; a zero-bound Boolean or its translation-only placement; a loft whose stations are exact
+(`delta == 0`). A body with a positive boundary displacement is Phase 3 (§10.4).
+
+### 9.1 Relation for two exact planar bodies
+
+The relation of two such bodies at exact poses is decided by exact rational tests over their triangle
+sets, prefiltered by per-triangle boxes as `meshBoolean` does and charged to the shared `workBudget`
+with `ctx` polled every `workPollInterval` operations. The split follows the one `contact_box.go` and
+`internal/pair/axis_box.go` already make: `internal/pair/planar.go` takes the two exact vertex and
+triangle snapshots and returns the relation, gap and feature pairs over `proof.Dyadic`; the root
+`contact_faceted_pair.go` admits the bodies, builds the snapshots at the query poses, maps feature
+indices back to live `*Face` values and publishes the typed report. The tests are:
+
+- a certified transversal crossing of two facets (`boolean_exact.go`'s predicates) proves `Overlapping`;
+- with no crossing, one nesting cast per shell (`docs/clearance-design.md` §2's ray ladder, closed-form
+  for planes) proves containment, hence `Overlapping`, or mutual outsideness;
+- with no crossing and no nesting, the exact minimum over facet pairs of the squared distance
+  (vertex-face and edge-edge candidates, rational) is either positive, proving `Separated` with the gap
+  enclosed by `proof.DySqrtDown`/`proof.DySqrtUp`, or zero, proving `Touching` when every zero-distance feature pair
+  has opposed material sides.
+
+A convex body's relation against a convex body may shortcut through separating axes (face normals and
+edge cross products) exactly as `classifyOrientedSourceBoxes` does; the triangle path is the general one.
+
+### 9.2 Convexity certificate
+
+A body is CONVEX when every held vertex lies on or behind every facet plane, tested as exact rational
+signed volumes, and its mesh passes the solid audits of `docs/tessellation-design.md` §1. The certificate
+is computed once per body at its placement and cached on the payload (it is pose-invariant under a
+proper rigid transform). A dynamic body without it publishes relations only, with the appended reason
+`ContactNonConvex` on an absent manifold. A Fixed or Kinematic body needs no certificate.
+
+### 9.3 Manifold
+
+At a certified touch of convex `A` against planar-faced `B` (either order), the contact set is a union of
+feature pairs at zero distance. Publish a manifold only when the set is one of:
+
+| Contact set | Points published | Normal |
+|---|---|---|
+| Face of `A` coplanar and opposed to a face of `B`, positive area | every extremal vertex of the planar patch, §9.4 | the `B` face normal (exact), oriented `A` toward `B` |
+| Edge of `A` in a face of `B` (or a face of `A` on an edge of `B`) | the clipped segment's two endpoints | the face normal |
+| Vertex of `A` in a face of `B` (or the reverse) | one point | the face normal |
+| Edge of `A` crossing an edge of `B`, non-parallel | one point | the normalized cross product of the edge directions, oriented by material side; its ball from the exact cross product's `proof.DySqrtDown`/`proof.DySqrtUp` length |
+| Several of the above on distinct faces of `B` (a box in a tray corner) | the union, each entry carrying its own face and normal | per entry |
+
+The normal rule is contact-geometry §3's cone rule applied: at an edge or vertex of `A` the admissible
+normals form a cone, and the touching certificate proves the `B` face plane supports `A` there, so the
+face normal is the one direction the solver may use and is published as a unique normal. Two edges
+crossing have one normal up to sign. Vertex-on-vertex, vertex-on-edge and parallel edge-on-edge contacts
+leave the manifold absent with `ContactAmbiguousFeature`. Every published point carries its two original
+`Face`s (or the edge's faces through `ContactFeature`), a point ball from the exact-to-float conversion,
+`NormalAngle` zero for an exact face normal, and a `Separation` interval containing zero.
+
+Shallow penetration, which a bracket's right sample may show: for convex `A` against convex `B`, the six
+directed translations of the box path generalize to the minimum-translation axis among `A`'s and `B`'s
+face normals and the edge cross products; a unique strictly smallest positive translation whose selected
+faces cross publishes the patch at depth, exactly as contact-geometry §4's box penetration path does. A
+tied minimum, or a non-convex `B` whose penetrated face is not unique, keeps `Overlapping` and withholds
+the manifold.
+
+### 9.4 The planar patch by exact rational clipping
+
+The patch of a coplanar face pair is computed inside decad, in exact rational arithmetic: the clip
+itself in `internal/pair/planar_patch.go` over the two exact loops, the lifting and witness publication
+in the root `contact_faceted_patch.go`, the same split §9.1 makes. This is a decad-side 2D answer under CLAUDE.md's "Ask `sketch` for 2D answers
+by default" rule, which admits one where it clearly wins on performance or correctness and asks the
+owning design to state the reason. Both reasons apply here. Performance: a manifold is asked at every
+bracket sample, track end and replay check of every touching pair, and building, arranging and reading
+back a private scene per request costs far more than clipping two polygons. Correctness: both loops are
+polygons over exact rational vertices, so the clip samples no cut parameter, curve crossing or region
+membership and the only rounding is the final witness conversion; the shipped rectangle clips already
+work this way.
+
+**Inputs.** The face of convex `A` and the face of `B` that §9.1's touch certificate put on one plane with
+opposed normals: every vertex of both loops is an exact rational at the query pose (§9), `B`'s face has
+an exact outward normal `n` read off its vertices, and the two plane equations agree exactly (the touch
+certificate proves every `A` vertex of the contact set has zero signed height). The shared plane frame
+is the coordinate plane obtained by dropping the axis `k` with the largest `|n_k|`: the map from the
+plane to `(x_i, x_j)` is an exact rational bijection whose inverse `x_k = (n·q − n_i·x_i − n_j·x_j) / n_k`
+(`q` any vertex of the `B` face) lifts a clipped vertex back to 3D without rounding. The dropped axis
+is chosen, not fixed to `z`, so a vertical wall pair clips in a nondegenerate frame. Both projected
+loops are oriented counterclockwise by the sign of their exact double area before clipping.
+
+**Algorithm.** Sutherland–Hodgman: `B`'s face loop is the subject, and each edge of `A`'s face in turn
+is a closed half-plane that the subject is clipped against, with every crossing vertex an exact rational
+intersection of the two edge lines. Sutherland–Hodgman is chosen over half-plane intersection because
+it needs only the CLIP polygon convex, and that is the one side §9.2's certificate already proves (every
+face of a convex body is a convex polygon); `B`'s face may be any simple polygon. The output is passed
+through consecutive-duplicate removal and the exact shoelace double area; a result with fewer than three
+vertices or zero double area is not a face patch and falls to §9.3's edge and vertex rows. A hole loop
+of the `B` face is clipped the same way: a hole clip with positive double area means material is
+missing inside the patch, and the manifold is withheld with `ContactAmbiguousFeature`. A non-convex `B`
+face may give a patch of several components joined in the output by zero-width edges; the published
+points are the union of the components' vertices. The clip takes a poll function, as
+`integrateMomentRecordWithPoll` does, that the root adapter builds from the shared `workBudget`; every
+rational operation is charged through it, and the loop polls `ctx` every `workPollInterval` operations.
+
+**Published points.** Each output vertex is lifted to 3D exactly, then converted once to a float
+witness with an outward ball through `orientedBoxPoint`, exactly as the shipped clips do. The ball is
+the single source of inexactness: a witness whose ball exceeds `PointResolution` withholds the manifold
+with `ContactPointTooCoarse`, and no other refusal exists on this path. The normal is `B`'s exact face
+normal oriented `A` toward `B`, `NormalAngle` is zero and `Separation` is an exact zero interval.
+
+**The shipped clips as special cases.** `contact_clipped_patch.go`'s `clipHorizontalPolygon` is this
+algorithm with the clip polygon an axis-aligned rectangle (four axis-parallel half-planes) in the world
+`XY` plane, and `contact_oriented_patch.go` is the case of two rectangles with parallel edges, clipped
+in `A`'s rational dual basis. Both stay as they are and keep their dispatch for source boxes; PR 11's
+parity test runs their fixtures through the general clip and requires point-for-point identical output.
+
+**Positive-displacement bodies.** A body whose held boundary carries `δ > 0` never reaches this path in
+Phase 2 (§9's admission). In Phase 3 it reaches it only under §10.4's `ContactBand`: the clip runs on
+the held vertices, which are exact rationals at the pose, and the band is charged afterwards exactly as
+§10.4 states — every point ball widened by `δ` and `Separation` carrying the band instead of an exact
+zero. The clip itself is unchanged; only the published bounds differ.
+
+**Tests** (`contact_faceted_manifold_test.go`, PR 11), every one asserting computed coordinates:
+
+- A hexagonal prism face overhanging one corner of a rotated floor face publishes seven points, each
+  compared against its hand-computed rational coordinate within the ball, with the patch's double area
+  equal to the hand-computed rational.
+- Parity: the rotated-box-on-floor fixture that publishes eight clipped points today produces the same
+  eight points, bit for bit, through the general clip.
+- A box spanning the notch of an L-shaped zero-bound union floor publishes the union of both components'
+  vertices; a box covering a through-hole of a plate is withheld with `ContactAmbiguousFeature`, and the
+  same box beside the hole publishes its four corners.
+- Two vertical wall faces touching (normal along `x`) publish the clipped patch; fixing the dropped axis
+  to `z` is shown to fail (zero area).
+- A `B` face recorded with reversed loop order publishes the same patch; skipping the orientation step
+  is shown to fail (empty output).
+- A crossing vertex at the non-dyadic coordinate `1/3 mm` publishes at a `PointResolution` above its
+  conversion ball and withholds with `ContactPointTooCoarse` below it.
+- A hexagon vertex on a floor corner yields zero clipped area and publishes §9.3's single vertex point.
+
+### 9.5 Reversal, order and refusal
+
+Reversing `A` and `B` swaps point and face fields and negates normals. Points sort by `A` face order,
+then `B` face order, then exact coordinate (contact-geometry §5). A requested `PointResolution` below a
+point ball keeps the relation and withholds the manifold with `ContactPointTooCoarse`. Every refusal is
+typed; an inconsistent face map is an evaluator error.
+
+## 10. General rotating sweep and band tracks
+
+### 10.1 Rotating drift over exact planar bodies
+
+`contact_sweep_rotation.go`'s `rotationalPairSweep` already carries the general machinery for a rigid
+drift: `prepareRotationalSweepPath` builds the ideal path and travel bound, `refine` is contact-sweep
+§5's left-first dyadic search, `intervalClear` is §4.3's `g_l + g_r > T` certificate, and `roundedAt`
+bounds the float-to-ideal pose deviation from the body's exact corners. It is limited to source boxes by
+its eight-corner inputs. `contact_sweep_faceted.go` generalizes it to any §9 body: the exact vertex set
+replaces the corners, the per-sample relation and gap come from §9.1 at the rounded pose, and the
+deviation is the largest outward corner distance over all vertices. `SweepPair` dispatches to it when
+either path rotates and both bodies are §9 bodies; affine paths of §9 bodies take the same run with a
+zero angular term. The `Clear`, `ImpactBracket`, `InitiallyTouching`, `InitiallyOverlapping` and
+`Undecided` outcomes follow unchanged.
+
+### 10.2 Departure from touch under rotation
+
+Contact-sweep §5.1 asks a departure proof for a lower-gap function `L(u) >= c·u − K·u²` with proven
+`c > 0`, `K >= 0`. For a §9 body `A` touching a planar face of `B` with outward normal `n`, under drifts
+`(v_A, ω_A, c_A)` and `(v_B, ω_B, c_B)`, each vertex `p` of `A` has signed height `h_p(u)` above the
+moving face plane with
+
+```text
+h_p(u)   = n(u) · (p(u) − q(u))                        q: a point of B's face, n: its outward normal
+h_p'(0)  = n · ((v_A + ω_A×(p − c_A)) − (v_B + ω_B×(q − c_B)))
+|h_p''|  <= |ω_A|²·ρ_A + |ω_B|²·ρ_B                                      from p'' and q''
+          + 2·|ω_B|·(|v_A − v_B| + |ω_A|·ρ_A + |ω_B|·ρ_B)                 from 2·n'·(p' − q')
+          + |ω_B|²·D                                                      from n''·(p − q)
+```
+
+with `ρ` each body's largest vertex distance from its pivot and `D` an outward bound on `|p − q|` over
+the horizon: `ρ_A + ρ_B + |c_A − c_B| + (V_A + V_B)·h`. The `h_p'(0)` form drops the `n'·(p − q)` term
+because `p − q` is along `n` at `u = 0`. For a stationary or translating `B` (every floor, tray and
+fixed body) only the first line remains, `|ω_A|²·ρ_A`. Take `c` as the exact minimum of `h_p'(0)` over
+the vertices of the contact set and `K` as half the bound above, both over rational intervals; a
+non-contact vertex contributes its positive `h_p(0)` and the same derivative bound. This is the proof
+`tangentAxisSpinDepartureFraction` already runs for a box spinning about `Y` with `K = ω_y²·(|Δx| + |Δz|)`,
+stated for any vertex set and both bodies moving. A face of `A` on a vertex or edge of `B` uses the same
+form with the roles swapped; two crossing edges use the cross-product normal with both edges' endpoint
+derivatives. After the horizon, §5's search continues on the remainder as today.
+
+### 10.3 Band tracks: resting and rolling at constant `ω`
+
+A body resting on an edge while rotating, or a cylinder rolling, is a persistent contact whose contact
+points do not stay exactly on the support plane under a constant-`ω` drift: their height is second
+order in `u`. `SweepPersistentTouch` cannot certify it, because touch is not exact at interior times.
+The new outcome states what IS exact:
+
+```go
+// SweepPersistentBand: the pair stays within a certified band of one normal.
+// At every instant of the track the signed separation along Normal() of every
+// contact-set point lies in [−Depth, 0], interiors overlap by at most that depth
+// along that normal, no other feature pair comes within the band, and the
+// source features are stable. Depth is a Length Measurement.
+```
+
+`SweepContactTrack` gains `Band() *Measurement` (nil for an exact touch track). The certificate: with
+`c` and `K` as in §10.2 but `c` now bounded BELOW by `−c_res` (the solver leaves contact-point normal
+speeds within `VelocityResidual` of zero, so `c` is an exact rational within that residual of zero),
+every contact-set vertex satisfies `h_p(u) >= −(c_res·u + K·u²)` for `0 <= u <= h`, and `Depth` is that
+bound at `h`, rounded outward. Every non-contact vertex keeps `h_p(u) > 0` by the same bound from its
+positive `h_p(0)`. Opposed material sides come from the initial touch certificate. The track publishes
+`ManifoldAt(fraction)` by re-evaluating the exact vertex heights at the rounded pose, with `Separation`
+intervals inside `[−Depth, 0]`.
+
+`dynamics` consumes a band track as a persistent contact when `Depth <= PenetrationResidual`: the pair
+stays in the contact set, its points enter the next island at the track end or the next event, and the
+next correction (§6.6) removes the accumulated depth within the allowance widened by `Depth`. A track
+whose `Depth` exceeds the residual ends the slice at the time the bound reaches the residual (an exact
+rational root of the quadratic, bracketed on the dyadic grid as a `ContactTransitionBracket`), so a slow
+tip proceeds through several short band tracks and corrections, each certified. Replay inside a band
+slice checks the rounded pose's exact vertex heights against `[−Depth − deviation, …]`.
+
+### 10.4 Positive-displacement bodies (Phase 3)
+
+A body whose held boundary carries a positive two-sided displacement `δ` (a tessellated curved face, a
+chamfer with non-dyadic feet, a placed loft) cannot certify an exact touch: contact-geometry §2 makes
+that relation `Undecided`. §10.3's band is the honest replacement, with `δ` charged:
+
+```go
+// ContactBand (appended after ContactUndecided): interiors are disjoint except
+// possibly within a band of width Gap.Bound around the published Gap.Value,
+// which contains zero; the manifold's Separation intervals carry the same band.
+```
+
+`ContactPair` publishes `ContactBand` for a §9-shaped held mesh with `δ > 0` when the exact held relation
+is `Touching` or a shallow `Overlapping`/`Separated` within `2δ`, with `Gap = [−2δ, 2δ]` and every point
+ball widened by `δ`. `SweepPair` publishes `SweepPersistentBand` with `Depth` widened by `2δ` and a first
+impact as an `ImpactBracket` whose right sample is `ContactBand`. `dynamics` treats `ContactBand` as a
+touching relation whose penetration bound is `Gap.Bound`, admitted when `Gap.Bound + Depth <=
+PenetrationResidual`. A positive-`δ` body therefore needs a `PenetrationResidual` above `2δ`, which the
+caller sets; a tighter residual leaves the pair `Undecided`, never silently touching.
+
+Curved source families with their own exact occupied sets (sphere, axial cylinder) keep their exact
+paths; curved families without one (a cylinder rolling on its side, cone, torus) enter contact-geometry
+§7 stage C2 through the clearance kernel's face-pair table for the relation, with manifolds from the
+certified stationary feet of `docs/clearance-design.md` §3 and normals from `Face.NormalAt`; a rolling
+cylinder's band track takes §10.3 with the ruling's two endpoints as the contact set and the cylinder's
+`Face.NormalAt` ball charged into the band. Their delivery is §13's last three PRs.
+
+## 11. Kinetograph interface and gallery
+
+### 11.1 What decad needs from kinetograph
+
+kinetograph's `Node` kinds are `Fixed`, which takes one constant transform, and `Revolute` and
+`Prismatic`, each driven by a scalar keyframe `Channel`; no kind takes a transform that varies with time,
+and its design (D1) interpolates no orientation. A certified trace must not be re-expressed as keyframes:
+a keyframed channel blends between two poses, and the blend is a pose no certificate backs. The interface
+this program needs upstream, which kinetograph records as its design decision D12 (a driven node shows a
+caller-supplied transform at each time and is never interpolated, held or cached across times):
+
+```go
+// kinetograph root package: a node whose local transform is supplied per time.
+type TransformTrack interface {
+    // At returns the node's local transform at t. kinetograph calls it any
+    // number of times for one t, concurrently from several goroutines, and
+    // uses each result as Local(t); it never blends two results. At must
+    // return the same transform for the same t and be safe for concurrent
+    // calls.
+    At(t time.Duration) (r3.Transform, error)
+}
+
+// Driven adds a child whose Local(t) is track.At(t). Driven(nil) returns
+// ErrNilTrack. An error from At fails every evaluation of that frame with
+// the track's error wrapped.
+func (n *Node) Driven(track TransformTrack) (*Node, error)
+```
+
+The contract the gallery relies on:
+
+- `At` returns the LOCAL transform. `Node.World` composes it as `Local(t).Then(parent.World(t))`, so a
+  driven node may sit under any parent and any node kind may sit under it. The gallery puts each body's
+  driven node directly under the root, so the local transform is the body's world pose.
+- `At` is called once per part, light and camera on the node for every evaluation of a frame, again in
+  the gallery's probe pass, and from `Sequence`'s concurrent render workers. kinetograph keeps no cache
+  per `(node, t)`; a track with a costly `At` caches on its own side.
+- Each result is validated as `Fixed` validates its argument: an invalid transform is
+  `ErrInvalidTransform` and a reflection is `ErrReflection`, both wrapped with `t`.
+- An error from `At` fails the frame on every path with `errors.Is` and `errors.As` intact:
+  `Node.Local`/`World` return it wrapped; `Scene.At`/`AtCached` wrap it with the part, camera or light
+  name and the time, or return `ctx.Err()` when `ctx` is done; `Clip.Frame`/`FrameCached` return it
+  unchanged; `render.Renderer.Frame` and `Sequence` return a `*render.FrameError` for that frame index,
+  and `Sequence` writes no file for that frame and none after it. kinetograph never substitutes the last
+  good pose for a failed one; the gallery depends on that failure to stop the render when the timeline
+  stops.
+
+That is the whole dependency: one interface, one node constructor, one sentinel and the error path.
+Everything else kinetograph does (parts on nodes, tessellation at `VerifyNone` for rendering only,
+per-frame vertex transform by the renderer, integer-nanosecond frame times passed to `At` unchanged)
+already fits. kinetograph imports nothing from `dynamics`; `TransformTrack` lives in its root package and
+the gallery adapts a `dynamics.Timeline` to it.
+
+### 11.2 The gallery bridge
+
+`_gallery/dynamics_track.go` adapts a `dynamics.Timeline` to one `TransformTrack` per body:
+
+```go
+type timelineTrack struct {
+    timeline *dynamics.Timeline
+    body     *decad.Body
+    base     r3.Transform // the body's committed placement; the part frame is the body as modeled
+}
+
+func (t timelineTrack) At(d time.Duration) (r3.Transform, error)
+```
+
+`At` converts the frame time to `units.Seconds(float64(d) / 1e9)` — this rounds the TIME LABEL by at
+most one ulp of a second; the pose returned is the certified pose at the rounded time, which is what the
+frame shows, so no geometric claim moves — then calls `Timeline.Sample` and returns the sampled
+`BodyState.Pose` composed onto the body's placement. A sample beyond `Timeline.End()` (§7.2), or one the
+replay refuses, returns the error; kinetograph fails the frame, and the gallery command fails with the
+`StepDiagnostic` of the stopped step printed. The gallery never freezes the last certified pose and never
+extrapolates. kinetograph's half-open frame times keep every frame strictly before the clip length, so a
+timeline advanced to the clip length is never sampled at `End()` itself. `timelineTrack` holds no
+mutable state and `Timeline.Sample` is safe for concurrent calls (§7.2), so `At` meets §11.1's contract
+under `Sequence`'s workers.
+
+`_gallery/dynamics_clip.go` holds the scene builders (`stackAndDropScene`, `tumbleScene`,
+`partsBinScene`), each returning the document, the `WorldConfig`, the start `State`, the per-step
+`StepInput`, `dt` and the clip length. `main.go` gains `go run . dynamics -scene <name> [-out -fps -width
+-height -workers -smoke]`, which advances the timeline to the clip length, builds one kinetograph scene
+with a `Driven` node per body and the still camera and lights of `scene.go`, and renders through
+`render.New` as `clip.go` does. The gallery module stays the only module that imports kinetograph.
+
+### 11.3 Scene tests
+
+`_gallery/dynamics_clip_test.go` runs each exit scene's timeline (without rendering) and asserts the
+§2 exit criteria on the trace: certified end time, final poses, event kinds and times, conservation.
+`dynamics/scene_test.go` asserts the same scene from inside the module so CI runs it without the
+gallery's toolchain. Both use the real producers end to end.
+
+## 12. Work budgets, cancellation and `Undecided`
+
+Validation runs before `ctx` is read; afterwards every loop that calls into decad — the box pass,
+each `SweepPair`, each `ContactPair`, each island sweep, each correction sweep — checks `ctx` before the
+call, and cancellation returns `ctx.Err()` with a nil report, as the two-body step does. Within decad,
+the new kernels (§9.1, §9.4, §10.1) charge a `workBudget` from `newWorkBudget(ctx)` and poll it per
+`docs/interference-design.md` §7.2.
+
+Three budgets bound a step's work without changing any certified outcome: `MaxPairSweeps` (§3.3) over
+`SweptBox` and `SweepPair` calls, `MaxEvents` over published events, `MaxIterations` per island sweep.
+Each `SweepPair` call carries `MaxPoseEvaluations` as today. Exhausting any budget with time remaining
+is `Undecided`.
+
+```go
+type StepReason int
+
+const (
+    StepNoReason           StepReason = iota
+    StepPairUndecided                 // a candidate sweep is Undecided before the next event
+    StepManifoldMissing               // an event pair has no manifold within StepConfig.Contact
+    StepIslandDegenerate              // a closing constraint with no dynamic body, or K <= 0, or a non-finite proposal
+    StepIslandResidual                // a §6.3 gate exceeds its limit at MaxIterations
+    StepCorrectionFailed              // §6.6 correction exceeds its allowance or loses a relation
+    StepTrackUnproved                 // a contact-set pair has neither a persistent nor a band track
+    StepKickUnbounded                 // the force kick cannot be bounded within the velocity residuals
+    StepConservationFailed            // an island or step conservation gate fails
+    StepEventBudget                   // MaxEvents reached with time remaining
+    StepPairBudget                    // MaxPairSweeps reached
+    StepTravelUnbounded               // SweptBox returned ErrUnsupported for a body
+    StepFixedPairRelation             // a non-excluded Fixed/Fixed pair is Overlapping or Undecided
+    StepUnsupported                   // the current phase has no solver for this event family
+)
+
+type StepDiagnostic struct {
+    Code     StepReason
+    Pair     BodyPair        // the pair, when one is responsible
+    Bodies   []*decad.Body   // the island's bodies, when an island is responsible
+    From, To units.Value     // the time interval, from the step start
+    Limit    units.Value     // the configured limit a residual exceeded, when one did
+    Reason   string          // human-readable message; callers branch on Code
+}
+```
+
+A report with `Undecided` carries every diagnostic that applied at the stopping time, in canonical pair
+then island order, and `Next == nil`; its `Trace` holds the certified prefix for inspection.
+
+## 13. Delivery order
+
+Each PR is one branch, one review, one merge, and carries the test that proves it. "Root tests" means
+`.github/test-shards.txt` must list every new root-package test name; `dynamics` tests are not sharded.
+Dependencies are listed; PRs with no edge between them may land in either order. Phase 1 is PRs 1–9,
+Phase 2 is PRs 10–15, Phase 3 is PRs 16–21. PR 9 waits on the upstream node of §11.1; PRs 1–8 do not.
+A PR that changes what ships — a body count `NewWorld` admits, a shape pair, a response, a refusal —
+also updates `docs/collision-v1-support.md`, the user-facing inventory, in the same PR; the "Files"
+lines below do not repeat it.
+
+### PR 1 (Phase 1) — N-body `World` and `State`
+
+- Delivers §3.1 and §3.2: the pair table, per-pair material, `Bodies()`/`Pairs()`, `NewState` over a
+  slice; the shipped two- and three-body steps read through the table.
+- Files: `dynamics/world.go`, new `dynamics/pairs.go`, `dynamics/three_body.go`.
+- Test: `dynamics/world_test.go` constructs a five-body world, asserts canonical pair order and every
+  exclusion and override rule; every existing fixture is unchanged.
+- Depends on: nothing.
+
+### PR 2 (Phase 1) — `Document.SweptBox`
+
+- Delivers §4.2: `SweptBox`, `StrictlyDisjoint`, `Box()`; the cylinder and bounded-faceted sweeps consume it.
+- Files: new `swept_box.go`, `contact_cylinder_sweep.go`, `contact_faceted_sweep.go`.
+- Test (root): `swept_box_test.go`: a rotating box's swept box contains its exact corners at fractions
+  `0`, `1/3` and `1`; dropping the travel term lets a corner escape (shown to fail); meeting boxes are
+  not disjoint.
+- Depends on: nothing.
+
+### PR 3 (Phase 1) — N-body drift step with the broad phase
+
+- Delivers §4.3 and §5 without islands: every candidate pair must be `Clear` or `DepartedClear`; an
+  event is `Undecided` with `StepUnsupported` until PR 4.
+- Files: new `dynamics/broadphase.go`, `dynamics/schedule.go`; `dynamics/step.go`.
+- Test: `dynamics/schedule_test.go`: six separated boxes, two rotating, drift `0.1 s`; only the three
+  near pairs are swept (`PoseEvaluations` is zero on box-excluded pairs); `Trace.Sample` at interior
+  times matches the exact drift.
+- Depends on: PRs 1, 2.
+
+### PR 4 (Phase 1) — islands and the frictionless certified solver
+
+- Delivers §6.1–§6.3 without the cone, stick and slip rows, and §6.6 per-island correction.
+- Files: new `dynamics/island.go`, `dynamics/island_solve.go`, `dynamics/island_certify.go`;
+  `internal/proof/interval.go` gains the three-component interval dot and cross products of §6.3, with
+  their tests in `internal/proof/interval_test.go`.
+- Test: `dynamics/island_test.go`: the `3-2-1` pyramid rests under gravity through one island of ten
+  constraints with every normal impulse computed and the bridging patches' impulses summing to the
+  supported weight; the two-sphere `37.5 kg·mm/s` fixture runs through the general path.
+- Depends on: PR 3.
+
+### PR 5 (Phase 1) — Coulomb friction and parity
+
+- Delivers the cone, stick and slip rows of §6.3, the parity run of §6.5, and the deletion of the
+  closed-form responders §6.5 lists.
+- Files: `dynamics/island_solve.go`, `dynamics/island_certify.go`; the deleted files.
+- Test: every existing `dynamics` response test passes through the general solver with its original
+  assertions, `friction_patch_test.go`'s slide and the stack fixture included.
+- Depends on: PR 4.
+
+### PR 6 (Phase 1) — multi-event `Trace`, `Timeline`, typed diagnostics
+
+- Delivers §3.4, §7.1, §7.2 and §12.
+- Files: `dynamics/step.go`, new `dynamics/trace.go`, `dynamics/timeline.go`.
+- Test: `dynamics/timeline_test.go`: a sphere bouncing on a floor with `e = 0.5` over three steps; the
+  bounce times match the closed-form sequence; `Timeline.Sample` across a step boundary; a forced
+  `Undecided` stops the timeline with `StepEventBudget` and `Advance` then returns `ErrTimelineStopped`.
+- Depends on: PR 4.
+
+### PR 7 (Phase 1) — rotated and displaced prism mass
+
+- Delivers §8.1 and §8.2.
+- Files: `mass_properties.go`, new `mass_properties_rotated.go`.
+- Test (root): `mass_properties_rotated_test.go`: a box rotated `30°` about `(1,1,1)` encloses
+  `R I Rᵀ` in every component; the orthonormality-defect leg is shown to fail.
+- Depends on: nothing.
+
+### PR 8 (Phase 1) — budgets, certificate reuse, warm start
+
+- Delivers `MaxPairSweeps` (§3.3), reuse (§5.3) and the warm-start `contactCache` keyed by pair and
+  `ContactFeature` (rigid-dynamics "Response"), with no change to any certified outcome.
+- Files: `dynamics/world.go`, `dynamics/schedule.go`, new `dynamics/contact_cache.go`.
+- Test: `dynamics/schedule_test.go`: the pyramid's second step performs no `SweepPair` on pairs whose
+  bodies did not move and converges in one sweep from the cache; outcomes are bit-identical with the
+  cache disabled.
+- Depends on: PR 6.
+
+### PR 9 (Phase 1) — gallery bridge and `stack-and-drop`
+
+- Delivers §11 and the Phase 1 exit scene.
+- Files: `_gallery/dynamics_track.go`, `_gallery/dynamics_clip.go`, `_gallery/main.go`,
+  `_gallery/go.mod` (kinetograph bump), new `dynamics/scene_test.go`.
+- Test: `_gallery/dynamics_clip_test.go` and `dynamics/scene_test.go` assert the Phase 1 exit criteria.
+- Depends on: PRs 6, 7, 8 and the upstream `Driven` node.
+
+### PR 10 (Phase 2) — exact planar pair relation and convexity
+
+- Delivers §9.1 and §9.2.
+- Files: new `internal/pair/planar.go` and `contact_faceted_pair.go`; `contact_pair.go`.
+- Test (root): `contact_faceted_pair_test.go`, with the snapshot-level cases in
+  `internal/pair/planar_test.go`: a hexagonal prism at a `37°` pose against a tray reads a
+  `3 mm` gap enclosed, a vertex touch and a shallow crossing; a small box nested in a hollow union is
+  `Overlapping`; the non-convex union reports `ContactNonConvex`.
+- Depends on: nothing.
+
+### PR 11 (Phase 2) — faceted manifolds and the exact-clipped patch
+
+- Delivers §9.3, §9.4 and the shallow-penetration patch.
+- Files: new `internal/pair/planar_patch.go`, `contact_faceted_manifold.go`, `contact_faceted_patch.go`.
+- Test (root): `contact_faceted_manifold_test.go`: a rotated box on a face publishes one point at a
+  vertex touch, two at an edge touch, and the clipped hexagon's seven extremal vertices at a face
+  touch, each at its exact coordinate; §9.4's parity, wall, reversed-loop, hole and
+  `ContactPointTooCoarse` fixtures, with the wall and reversed-loop legs shown to fail.
+- Depends on: PR 10.
+
+### PR 12 (Phase 2) — general rotating sweep
+
+- Delivers §10.1.
+- Files: new `contact_sweep_faceted.go`; `contact_sweep.go`, `contact_sweep_rotation.go`.
+- Test (root): `contact_sweep_faceted_test.go`: a wedge tumbling toward a floor brackets its first
+  vertex impact at the exact drift time within `TimeResolution`; the deviation leg is shown to fail.
+- Depends on: PRs 10, 11.
+
+### PR 13 (Phase 2) — generalized departure and band tracks
+
+- Delivers §10.2, `SweepPersistentBand` and `Band()` (§10.3); `dynamics` consumes band tracks.
+- Files: `contact_sweep_faceted.go`, `contact_sweep.go`, `dynamics/schedule.go`, `dynamics/island.go`.
+- Test (root): `contact_sweep_band_test.go`: a box resting on an edge with `ω = (0,1,0) rad/s`
+  publishes a band track whose `Depth` equals `K·h²` for the computed `K`. `dynamics/tip_test.go`: the
+  box tips flat over `0.5 s` in short band slices and rests on four points.
+- Depends on: PR 12.
+
+### PR 14 (Phase 2) — loft, stitched and fallback mass
+
+- Delivers §8.3, §8.4 and §8.5.
+- Files: `loft_moments.go`, `mass_properties.go`, new `mass_properties_mesh.go`.
+- Test (root): `mass_properties_mesh_test.go`: the stitched tetrahedron's tensor against the closed
+  form; a loft between an exact square and octagon; the fallback's ladder narrows a sphere's tensor
+  interval at each `k`.
+- Depends on: nothing.
+
+### PR 15 (Phase 2) — `tumble`
+
+- Delivers the Phase 2 exit scene of §2.
+- Files: `_gallery/dynamics_clip.go`, `dynamics/scene_test.go`.
+- Test: the Phase 2 exit criteria.
+- Depends on: PRs 9, 13, 14.
+
+### PR 16 (Phase 3) — third-order section moments and the general revolve
+
+- Delivers §8.6.
+- Files: `moments.go`, `moments_circular.go`, `spline_moments.go`, new `mass_properties_revolve.go`.
+- Test (root): `mass_properties_revolve_test.go`: a quarter revolve of an off-axis rectangle encloses
+  the independently integrated `r³`, `r²z` and `rz²` terms in its mixed components; a full torus
+  against the closed form.
+- Depends on: nothing.
+
+### PR 17 (Phase 3) — sweep and cup mass
+
+- Delivers §8.7 and §8.8.
+- Files: new `mass_properties_sweep.go`, `mass_properties_cup.go`.
+- Test (root): a composite sweep against the sum of its spans; the cup against outer minus cavity.
+- Depends on: PRs 7, 16.
+
+### PR 18 (Phase 3) — `ContactBand` for positive-displacement bodies
+
+- Delivers §10.4.
+- Files: `contact_faceted_pair.go`, `contact_sweep_faceted.go`, `dynamics/island.go`.
+- Test (root): `contact_band_test.go`: a chamfered block with `δ = 1e-9 mm` publishes `ContactBand`
+  with `Gap.Bound = 2δ` on the floor, rests in `dynamics` at `PenetrationResidual = 1e-6 mm`, and is
+  `Undecided` at `1e-10 mm`.
+- Depends on: PR 13.
+
+### PR 19 (Phase 3) — curved analytic manifolds (C2)
+
+- Delivers plane/cylinder ruling and cylinder/cylinder manifolds from clearance's certified feet with
+  `Face.NormalAt` balls.
+- Files: new `contact_analytic_manifold.go`; `clearance_tiers.go`.
+- Test (root): `contact_analytic_manifold_test.go`: a cylinder on its side against a floor publishes
+  the ruling's two endpoints with the computed normal ball.
+- Depends on: nothing.
+
+### PR 20 (Phase 3) — rolling band tracks
+
+- Delivers the last paragraph of §10.4.
+- Files: `contact_sweep_faceted.go`, new `contact_sweep_rolling.go`.
+- Test: `dynamics/rolling_test.go`: the cylinder rolls `π·20 mm` in one turn at `ω = 2π rad/s` with
+  contact-point speed within `VelocityResidual` of zero.
+- Depends on: PRs 13, 19.
+
+### PR 21 (Phase 3) — `parts-bin`
+
+- Delivers the Phase 3 exit scene of §2.
+- Files: `_gallery/dynamics_clip.go`, `dynamics/scene_test.go`.
+- Test: the Phase 3 exit criteria.
+- Depends on: PRs 15, 17, 18, 20.
+
+## 14. Test and fixture strategy
+
+Every PR's test asserts computed geometry and dynamics — impulses, velocities, poses, event times, gaps,
+tensor components — through the real producer and the real consumer, never an enum alone and never a
+hand-written manifold, event or pose (CLAUDE.md "Correctness must be observable";
+`docs/contact-sweep-design.md` §8; `docs/rigid-dynamics-design.md` "Verification"). Beyond that:
+
+- **Every bound leg is shown to fail.** For each new certificate (travel bound, pose deviation, band
+  depth, orthonormality defect, cone and slip gates, `E·R²` widening) the test file records that each
+  term was deleted or zeroed and the fixture went red, or states the argument for why a leg is provably
+  redundant. A fixture whose offset, rotation or displacement is zero cannot exercise the term, so each
+  fixture is built with the term nonzero.
+- **No pinned bound literals.** Bounds are asserted negligible against a slack figure with a comment
+  saying why; values are `InDelta` at a stated slack. FMA contraction differs between hosts.
+- **Dyadic inputs.** Fixture coordinates, velocities and times are dyadic so exact comparisons (event
+  fractions, touch equalities) are platform-independent.
+- **Reversal and order.** Every pair kernel test runs both body orders; every schedule test permutes
+  world insertion order and asserts identical events up to pair naming.
+- **Budgets and cancellation.** Each new loop has a test that exhausts its budget (`Undecided` with the
+  named reason, document unchanged) and one that cancels mid-loop (`ctx.Err()`, nil report).
+- **Parity.** PR 5 keeps every shipped response test byte-for-byte in its assertions; a loosened slack
+  there is a review refusal.
+- **Scene tests** run in both modules (§11.3); the gallery test is the one that also renders a smoke
+  frame.

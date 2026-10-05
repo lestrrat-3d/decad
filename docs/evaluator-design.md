@@ -151,8 +151,8 @@ Rules:
 
 ## 4. Mass properties — decad's own, on decad's own records
 
-The hard rule "NEVER re-derive a 2D answer" forbids re-deciding what sketch
-has decided: closure, validity, cuts, intersections, projections. It does
+The hard rule "Ask `sketch` for 2D answers by default" forbids re-deciding what
+sketch has decided: closure, validity, cuts, intersections, projections. It does
 **not** put the recorded region's *mass properties* out of reach — once
 recorded, the region is decad's own geometry, and volumes, centroids and
 areas of the bodies built from it are decad's 3D job. The boundary is:

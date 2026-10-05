@@ -94,6 +94,7 @@ nor document. It returns the earliest **certifiable** outcome:
 | `SweepClear` | The bodies have strictly positive separation at every time in the closed step. |
 | `SweepDepartedClear` | The pair starts in certified touch, departs immediately, and has strictly positive separation at every later time in the step. |
 | `SweepPersistentTouch` | The pair stays in certified touch throughout the step, with a stable source feature set and a bounded manifold track. |
+| `SweepPersistentBand` | Appended after `SweepGrazingTouch`. The pair stays within a published depth of one certified normal throughout the track, with stable source features and a bounded manifold track; `docs/multibody-dynamics-design.md` §10.3 owns the certificate. |
 | `SweepContactTransitionBracket` | The pair starts touching and a bracket encloses the first change in contact features, patch structure, or departure from touch. The preceding contact track is certified. |
 | `SweepImpactBracket` | The clear prefix may follow a certified departure from initial touch. The left pose is separated and the right pose certifies touch or overlap. Width is at most `TimeResolution`. |
 | `SweepGrazingTouch` | One exact interior instant has certified touch. Both open sides of the closed step are strictly separated; no overlap or other touch occurs. |
@@ -270,7 +271,10 @@ proves `SweepClear` without pair-pose evaluations. Box faces merely meeting
 does not prove touch, clear, or overlap. Reading the original rest boxes and
 expanding only by `To - From` is invalid when either `From` moves a body before
 the path begins. A BVH or sweep-and-prune may discard only with this strict
-box certificate; it cannot change pair or sample order.
+box certificate; it cannot change pair or sample order. The box is a public
+read-only query, `Document.SweptBox`, with `SweptBox.StrictlyDisjoint`;
+`docs/multibody-dynamics-design.md` §4.2 owns its shape and §4.3 the
+sort-and-sweep `dynamics` runs over it.
 
 ### 4.3 Time interval certificate
 
@@ -580,6 +584,9 @@ corner heights then give a full-body gap at least `c*u - K*u*u/2`. Admit a
 dyadic horizon only when `K*h < c`; reduce the horizon when the full duration
 fails. The rounded horizon sample must retain a positive gap after pose
 deviation, and later intervals need their own continuous clear certificates.
+The same `c`, `K` form over every vertex of any exact planar body, with both
+bodies moving, is `docs/multibody-dynamics-design.md` §10.2; its band track
+for a contact whose `c` is zero within the solver's residual is §10.3.
 
 After departure, mark `(0,h]` as certified clear, put a separated sample at
 `h`, and run §5's earliest-first search on `[h, Duration]`. If no later
@@ -646,7 +653,7 @@ state residual gates cover the bracket; otherwise the step is undecided.
 type SweepOutcome int // Clear, DepartedClear, PersistentTouch,
                       // ContactTransitionBracket, ImpactBracket,
                       // InitiallyTouching, InitiallyOverlapping, Undecided,
-                      // GrazingTouch; zero is invalid
+                      // GrazingTouch, PersistentBand; zero is invalid
 
 type SweepCause int // None, PoseRelation, MissingBound, TimeFloor,
                     // FractionFloor, PoseBudget, ContactUnsupported,
@@ -676,6 +683,7 @@ func (t *SweepContactTrack) End() SweepInstant
 func (t *SweepContactTrack) Features() (ContactFeature, ContactFeature)
 func (t *SweepContactTrack) Normal() VecMeasurement
 func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, error)
+func (t *SweepContactTrack) Band() *Measurement // nil for an exact touch track; multibody §10.3
 
 type SweepSample struct {
     At           SweepInstant

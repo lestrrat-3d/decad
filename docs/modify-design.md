@@ -230,8 +230,8 @@ order.
 ## 5. Where the 2D work lives, and what proves it
 
 The section rewrite computes tangent points, offset curves and their crossings —
-2D geometry, in a repository whose first hard rule is **never re-derive a 2D
-answer**. The line is the one evaluator §4 already draws for the mass
+2D geometry, in a repository whose first hard rule is **ask `sketch` for 2D
+answers by default**. The line is the one evaluator §4 already draws for the mass
 properties, and it is drawn by *whose claim it is*:
 
 - **`sketch` decides the sketch**: what closes, what is valid, where the

@@ -54,6 +54,7 @@ to the byte budget.
 | `docs/contact-sweep-design.md` | Two-body continuous sweep and first-contact brackets. |
 | `docs/dynamic-mass-design.md` | Bounded mass and inertia for rigid dynamics. |
 | `docs/rigid-dynamics-design.md` | Rigid-body steps, impulses, and reports. |
+| `docs/multibody-dynamics-design.md` | N-body dynamics, islands, `Timeline`. |
 | `docs/step-export-design.md` | Export package entry points and the AP214 faceted writer contract. |
 | `docs/3mf-export-design.md` | The 3MF writer's package parts, mesh mapping, and error contract. |
 

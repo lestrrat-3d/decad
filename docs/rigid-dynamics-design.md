@@ -3,7 +3,11 @@
 This document owns the `dynamics` subpackage's world, state, step, response,
 and trace contracts. `docs/collision-dynamics-design.md` owns the package
 boundary; `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md` own
-geometry results. A two-body world steps one pair with at least one dynamic
+geometry results. `docs/multibody-dynamics-design.md` owns the N-body world,
+pair schedule, island formation, the certification of the projected solver
+this document's "Response" section specifies, the multi-event trace and
+`Timeline`; the shipped slices below are the fixtures that solver must
+reproduce. A two-body world steps one pair with at least one dynamic
 body using density-derived or supplied mass. An axis-aligned
 certified contact normal determines the response component; tangent velocity
 continues through an oblique impact. Centered impacts of two dynamic bodies
@@ -503,8 +507,10 @@ or unknown exclusions/overrides fail construction. A pair with neither body
 dynamic can still be checked when a kinematic driver moves; it cannot be
 resolved by an impulse if closing contact occurs.
 
-The current world accepts two bodies with at least one dynamic body, or three
-bodies with one, two, or three dynamic bodies and every other body fixed.
+The shipped world accepts two bodies with at least one dynamic body, or three
+bodies with one, two, or three dynamic bodies and every other body fixed; the
+N-body world, its canonical pair table and per-pair material, and the typed
+`StepDiagnostic` fields are `docs/multibody-dynamics-design.md` §3 and §12.
 Every pair in a
 three-body world can be excluded or given one material override. `NewWorld`
 rejects a pair naming a body outside the world, including nil or repeated
@@ -849,7 +855,9 @@ Publish the maximum normal-velocity, tangent-velocity, friction-cone
 island. `VelocityResidual`, `ImpulseResidual`, and
 `PenetrationResidual` gate success. If a residual exceeds its limit when
 `MaxIterations` is reached, return `Undecided`. Use no random ordering or
-solver tolerance hidden from `StepConfig`. Resting contact uses zero
+solver tolerance hidden from `StepConfig`. Island formation, the proposal
+order, and the exact-interval statement of every gate above are
+`docs/multibody-dynamics-design.md` §6. Resting contact uses zero
 restitution, persists in the state cache, and passes the same gate every
 step. The initial off-axis sphere-pair impact above also admits zero
 restitution when its full continuation is certified.
@@ -1047,7 +1055,9 @@ contact-point residuals widen that comparison.
 `Trace` contains the starting state, each certified drift slice, each
 event's pre/post states, each position correction, and the ending state.
 `Trace.Sample(t)` evaluates the recorded paths without running geometry or
-the solver. At a numerical event time it returns the post-event velocity
+the solver. The N-body slice record, how a sample reads a body covered by
+several pair certificates or by none, and the multi-step `Timeline` are
+`docs/multibody-dynamics-design.md` §3.4 and §7. At a numerical event time it returns the post-event velocity
 and pose; an event exposes the pre-event values separately. Its event stores
 the pair's original bodies, the sweep time bracket, chosen numerical time,
 certified manifold and its bounds, impulses, residuals, and pre/post
