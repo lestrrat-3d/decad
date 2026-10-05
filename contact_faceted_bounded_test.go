@@ -111,7 +111,7 @@ func TestSweepPairBoundedFacetedFloorStrictClearReplay(t *testing.T) {
 		Distance{D: units.Millimeters(10), Dir: Along})
 	near, err := doc.SweepPair(t.Context(), nearFloor, placed, still, move, req)
 	require.NoError(t, err)
-	require.Equal(t, SweepUndecided, near.Outcome)
+	require.Equal(t, SweepInitiallyTouching, near.Outcome)
 	require.False(t, near.HasAffineReplayProof())
 	transverse := facetedSweepPath(r3.Identity(), facetedSweepPose(t, r3.Vec{X: 1}))
 	lateral, err := doc.SweepPair(t.Context(), floor, placed, still, transverse, req)
@@ -128,4 +128,65 @@ func TestSweepPairBoundedFacetedFloorStrictClearReplay(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, SweepUndecided, rotating.Outcome)
 	require.False(t, rotating.HasAffineReplayProof())
+}
+
+func TestSweepPairPlacedFacetedFloorImpactAndDeparture(t *testing.T) {
+	doc, _, placed := boundedFacetedFloorFixture(t)
+	floor := internalOffsetBox(t, doc, -20, -20, 20, 20, -10,
+		Distance{D: units.Millimeters(10), Dir: Along})
+	still := facetedSweepPath(r3.Identity(), r3.Identity())
+	start := facetedSweepPose(t, r3.Vec{Z: 10})
+	end := facetedSweepPose(t, r3.Vec{Z: -10})
+	up := facetedSweepPose(t, r3.Vec{Z: 5})
+	for _, reversed := range []bool{false, true} {
+		a, b := floor, placed
+		impactA, impactB := PairPath(still), PairPath(facetedSweepPath(start, end))
+		departA, departB := PairPath(still), PairPath(facetedSweepPath(r3.Identity(), up))
+		if reversed {
+			a, b = placed, floor
+			impactA, impactB = impactB, impactA
+			departA, departB = departB, departA
+		}
+		impact, err := doc.SweepPair(t.Context(), a, b, impactA, impactB,
+			facetedSweepRequest(StopAtInitialContact))
+		require.NoError(t, err)
+		require.Equal(t, SweepImpactBracket, impact.Outcome, "cause=%v", impact.Cause)
+		require.True(t, impact.HasAffineReplayProof())
+		require.InDelta(t, .5, impact.Event.At.Fraction.Base(), 1e-12)
+		require.Equal(t, ContactTouching, impact.Event.Relation)
+		require.Len(t, impact.Event.Manifold.Points, 4)
+		for _, point := range impact.Event.Manifold.Points {
+			face := point.FaceB
+			if reversed {
+				face = point.FaceA
+			}
+			require.Contains(t, placed.Faces(), face)
+		}
+		for _, at := range []float64{0, .25, .5} {
+			poseA, poseB, replayErr := impact.CertifiedPosesAt(units.Seconds(at))
+			require.NoError(t, replayErr)
+			contact, contactErr := doc.ContactPair(t.Context(), a, b, poseA, poseB,
+				facetedSweepRequest(StopAtInitialContact).ContactRequest)
+			require.NoError(t, contactErr)
+			if at < .5 {
+				require.Equal(t, ContactSeparated, contact.Relation)
+			} else {
+				require.Equal(t, ContactTouching, contact.Relation)
+			}
+		}
+		departure, err := doc.SweepPair(t.Context(), a, b, departA, departB,
+			facetedSweepRequest(ContinueSeparatingTouch))
+		require.NoError(t, err)
+		require.Equal(t, SweepDepartedClear, departure.Outcome, "cause=%v", departure.Cause)
+		require.True(t, departure.HasAffineReplayProof())
+		for _, at := range []float64{0, .25, 1} {
+			_, _, replayErr := departure.CertifiedPosesAt(units.Seconds(at))
+			require.NoError(t, replayErr)
+		}
+	}
+	persistent, err := doc.SweepPair(t.Context(), floor, placed, still, still,
+		facetedSweepRequest(ContinueCertifiedTouch))
+	require.NoError(t, err)
+	require.Equal(t, SweepPersistentTouch, persistent.Outcome)
+	require.True(t, persistent.HasAffineReplayProof())
 }

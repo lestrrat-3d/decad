@@ -13,6 +13,9 @@ transverse translation that stays inside the face.
 One zero-bound faceted Boolean solid with a certified rectangular lower face
 can certify an affine vertical clear path, first exact face touch, separating
 departure, or persistent face contact against a containing source-box floor.
+The same path accepts a translation-only `Placed` copy when its saved exact
+source mesh proves the complete lower face despite positive held-mesh and
+occupied-volume bounds. The event and replay retain the placed body's Face.
 Both bodies must translate equally in X and Y, so the complete support patch
 stays strictly inside the floor face. The lower support plane must start at or
 above the floor's upper plane. A first-impact bracket ends at exact touch;
@@ -21,9 +24,10 @@ the sweep returns `Undecided`. A bracket ending after support-plane crossing,
 a lateral path, an unproved support face, and a footprint reaching the floor
 edge also return `Undecided`. The contact track retains the original faceted
 Face. Rounded replay checks the exact support-plane path and footprint proof.
-A positive-bound faceted Boolean solid can certify only a strict clear span
-above a source-box floor. Both signed-axis paths must have zero angular and
-transverse motion. The held vertex extrema, widened by the certified boundary
+A positive-bound faceted Boolean without that exact source proof can certify
+only a strict clear span above a source-box floor. Both signed-axis paths must
+have zero angular and transverse motion. The held vertex extrema, widened by
+the certified boundary
 displacement, stay inside the floor's projected face. The lower Z gap is affine;
 both endpoints must exceed the displacement, including conversion error.
 Both real endpoint contact queries must report separation. Replay charges the

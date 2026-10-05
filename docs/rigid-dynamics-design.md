@@ -69,6 +69,13 @@ requires ideal and rounded separating sweeps; zero restitution requires ideal
 and rounded persistent-contact tracks. The trace replays both impact sides
 from those certificates. A mass-center bound that permits an omitted spin
 above `AngularVelocityResidual` stops the step.
+A translation-only placed copy of that zero-bound union may carry positive
+held-mesh and occupied-volume bounds while preserving the exact lower face.
+With density-derived bounded mass and center readings, zero spin, zero friction,
+and positive restitution, the same fixed-floor response consumes its exact
+axial impact bracket. Ideal and rounded departure sweeps certify the rebound;
+the trace replays the approach, touch, and separating remainder. A placed
+Boolean without the exact source-face proof returns `Undecided` at impact.
 Two source semicircle spheres with supplied or density-derived mass can
 rebound as a centered dynamic pair when the impact has a cardinal manifold.
 Their approach may
