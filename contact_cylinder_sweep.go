@@ -10,7 +10,8 @@ import (
 )
 
 // sourceCylinderAxialSweep first tries full-span separation. Otherwise it
-// brackets a strictly axial face impact or proves one-sided departure.
+// brackets an axis-aligned face impact with contained lateral drift or proves
+// one-sided departure.
 func (d *Document) sourceCylinderAxialSweep(ctx context.Context, a, b *Body,
 	pa, pb affinePairPath, req SweepRequest, report *SweepReport,
 	cylinder sourceCylinderContactProof, box sourceBoxContactProof, cylinderFirst bool) (*SweepReport, error) {
