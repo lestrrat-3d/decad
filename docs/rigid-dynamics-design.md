@@ -154,7 +154,8 @@ two dynamic bodies and one fixed body. With two dynamic bodies, it kicks both
 once, sweeps every non-excluded pair, and advances one certified impact at a
 time. Every other pair needs a certified clear ideal and rounded path through
 the event prefix, any correction, and each remainder. Overlapping candidate
-brackets or simultaneous initial contacts return `Undecided` with no `Next`.
+brackets and simultaneous initial contacts outside the centered stack below
+return `Undecided` with no `Next`.
 The trace replays non-excluded pairs from rounded certificates and any body
 outside those pairs by independent drift. The conservation report sums both
 dynamic bodies. An excluded pair is not queried and
@@ -166,8 +167,30 @@ tracks. If global event-time rounding changes the remaining drift endpoint,
 the child response's endpoint is used only within `PointResolution`, and all
 remaining pair paths are certified again over the global time slice. A second
 possible contact during that resting continuation returns `Undecided`.
-This first two-dynamic path returns `Undecided` for initial contact and nonzero
-angular velocity.
+This first two-dynamic path returns `Undecided` for other initial contacts and
+nonzero angular velocity.
+Two dynamic source boxes can start in a centered vertical stack on a fixed
+source-box floor. Both face pairs must start at certified four-point contact,
+and the floor-to-upper pair must be clear. After the single full-step force
+kick, both boxes must move strictly downward without lateral velocity or spin.
+Both contact pairs have zero effective friction and restitution. The
+floor-to-lower and lower-to-upper normals must point upward in physical stack
+order.
+Let `mL`, `mU` be the two mass readings and `vL`, `vU` their kicked vertical
+velocities. The simultaneous normal impulses are `JU = −mU vU` from lower to
+upper and `JF = −mL vL + JU` from floor to lower. The published zero final
+velocities and both impulses must pass the mass-interval and impulse residual
+checks. Four equal point impulses per face must pass the bounded angular
+residual and whole-step omitted-spin travel checks. Two initial-time events
+share one coupled response; their intermediate velocity records account for
+each impulse, while the energy check applies to the full coupled result.
+With time remaining, `MaxEvents` must exceed two. Both ideal and rounded
+face paths must report full-span persistent contact with bounded manifolds;
+the floor-to-upper path must remain clear. Endpoint `ContactPair` calls must
+confirm both touches and the gap. `Trace.Sample` replays all three rounded
+pair sweeps. A second gravity step repeats the same response from the resting
+state. Other source-box stacks, lateral motion, spin, positive friction or
+restitution, and three dynamic bodies remain unsupported.
 With one dynamic body, it sweeps each non-excluded dynamic/fixed pair. One active pair advances only
 when every other pair has a certified clear path through the response. Two
 strictly ordered, frictionless positive-restitution source-box face impacts can advance within one
