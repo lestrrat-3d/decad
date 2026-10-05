@@ -229,3 +229,171 @@ func TestSourceSpherePairDiagonalRefusals(t *testing.T) {
 	require.NotNil(t, sweep.Unresolved)
 	require.Nil(t, sweep.Event)
 }
+
+func TestSourceSpherePairInitialDiagonalImpact(t *testing.T) {
+	doc := decad.New()
+	a, b := makeBall(t, doc), makeBall(t, doc)
+	poseB, err := r3.Translation(r3.Vec{X: 6, Y: 8})
+	require.NoError(t, err)
+	req := decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+		NormalResolution: units.Radians(1e-6)}
+	contact, err := doc.ContactPair(t.Context(), a, b, r3.Identity(), poseB, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, contact.Relation)
+	require.Len(t, contact.Manifold.Points, 1)
+	require.InDelta(t, .6, contact.Manifold.Points[0].Normal.Value.X, 1e-14)
+	require.InDelta(t, .8, contact.Manifold.Points[0].Normal.Value.Y, 1e-14)
+	velocity := dynamics.QuantityVec{X: units.MillimetersPerSecond(-30),
+		Y: units.MillimetersPerSecond(-40), Z: units.MillimetersPerSecond(0)}
+	zero := zeroVelocity()
+	angular := zeroAngular(t)
+	dt := units.Seconds(.1)
+	sweep, err := doc.SweepPair(t.Context(), a, b,
+		decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: dt},
+		decad.RigidDriftSegment{From: poseB, Center: poseB.Translation(),
+			LinearVelocity: velocity, AngularVelocity: angular, Duration: dt},
+		decad.SweepRequest{ContactRequest: req, TimeResolution: units.Seconds(1e-9),
+			MaxPoseEvaluations: 128})
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepInitiallyTouching, sweep.Outcome)
+	require.Len(t, sweep.Event.Manifold.Points, 1)
+	mass := exactSphereMass()
+	mat := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}
+	cfg := dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{{Body: a, Role: dynamics.Dynamic, Supplied: &mass, Material: mat},
+			{Body: b, Role: dynamics.Dynamic, Supplied: &mass, Material: mat}},
+		Step: dynamics.StepConfig{Contact: req, TimeResolution: units.Seconds(1e-9),
+			ContactSlop: units.Millimeters(1e-6), VelocityResidual: units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2},
+	}
+	w, err := dynamics.NewWorld(t.Context(), doc, cfg)
+	require.NoError(t, err)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: a, Pose: r3.Identity(), LinearVelocity: zero, AngularVelocity: angular},
+		{Body: b, Pose: poseB, LinearVelocity: velocity, AngularVelocity: angular},
+	})
+	require.NoError(t, err)
+	step, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, dt)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, step.Status, "%+v", step.Diagnostics)
+	require.Len(t, step.Events, 1)
+	require.Equal(t, dynamics.ContactImpact, step.Events[0].Kind)
+	require.Equal(t, units.Seconds(0), step.Events[0].Time)
+	require.Equal(t, step.Events[0].Bracket.From, step.Events[0].Bracket.To)
+	require.InDelta(t, 37.5, step.Events[0].NormalImpulse.Base(), 1e-6)
+	require.NotNil(t, step.Conservation)
+	require.InDelta(t, -30, step.Conservation.Completion.LinearMomentum.Value.X.Base(), 1e-6)
+	require.InDelta(t, -40, step.Conservation.Completion.LinearMomentum.Value.Y.Base(), 1e-6)
+	postAtZero, err := step.Trace.Sample(units.Seconds(0))
+	require.NoError(t, err)
+	postStateA, found := postAtZero.Body(a)
+	require.True(t, found)
+	postStateB, found := postAtZero.Body(b)
+	require.True(t, found)
+	ideal, err := doc.SweepPair(t.Context(), a, b,
+		decad.RigidDriftSegment{From: postStateA.Pose,
+			LinearVelocity: postStateA.LinearVelocity, AngularVelocity: angular, Duration: dt},
+		decad.RigidDriftSegment{From: postStateB.Pose,
+			LinearVelocity: postStateB.LinearVelocity, AngularVelocity: angular, Duration: dt},
+		decad.SweepRequest{ContactRequest: req, TimeResolution: units.Seconds(1e-9),
+			StartPolicy: decad.ContinueSeparatingTouch, MaxPoseEvaluations: 128})
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepDepartedClear, ideal.Outcome)
+	finalA, found := step.Next.Body(a)
+	require.True(t, found)
+	finalB, found := step.Next.Body(b)
+	require.True(t, found)
+	rounded, err := doc.SweepPair(t.Context(), a, b,
+		decad.PoseSegment{From: postStateA.Pose, To: finalA.Pose, Duration: dt},
+		decad.PoseSegment{From: postStateB.Pose, To: finalB.Pose, Duration: dt},
+		decad.SweepRequest{ContactRequest: req, TimeResolution: units.Seconds(1e-9),
+			StartPolicy: decad.ContinueSeparatingTouch, MaxPoseEvaluations: 128})
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepDepartedClear, rounded.Outcome)
+	for _, sample := range []struct {
+		at        float64
+		positionA r3.Vec
+		positionB r3.Vec
+	}{{0, r3.Vec{}, r3.Vec{X: 6, Y: 8}},
+		{.05, r3.Vec{X: -1.125, Y: -1.5}, r3.Vec{X: 5.625, Y: 7.5}},
+		{.1, r3.Vec{X: -2.25, Y: -3}, r3.Vec{X: 5.25, Y: 7}}} {
+		state, err := step.Trace.Sample(units.Seconds(sample.at))
+		require.NoError(t, err)
+		stateA, ok := state.Body(a)
+		require.True(t, ok)
+		stateB, ok := state.Body(b)
+		require.True(t, ok)
+		require.InDelta(t, sample.positionA.X, stateA.Pose.Translation().X, 1e-8)
+		require.InDelta(t, sample.positionA.Y, stateA.Pose.Translation().Y, 1e-8)
+		require.InDelta(t, sample.positionB.X, stateB.Pose.Translation().X, 1e-8)
+		require.InDelta(t, sample.positionB.Y, stateB.Pose.Translation().Y, 1e-8)
+		require.InDelta(t, -22.5, stateA.LinearVelocity.X.Base(), 1e-6)
+		require.InDelta(t, -30, stateA.LinearVelocity.Y.Base(), 1e-6)
+		require.InDelta(t, -7.5, stateB.LinearVelocity.X.Base(), 1e-6)
+		require.InDelta(t, -10, stateB.LinearVelocity.Y.Base(), 1e-6)
+		if sample.at > 0 {
+			pair, err := doc.ContactPair(t.Context(), a, b, stateA.Pose, stateB.Pose, req)
+			require.NoError(t, err)
+			require.Equal(t, decad.ContactSeparated, pair.Relation)
+			if sample.at == .1 {
+				require.InDelta(t, 2.5, pair.Gap.Value.Base(), 1e-8)
+			}
+		}
+	}
+	require.Equal(t, []*decad.Body{a, b}, doc.Bodies())
+	cfg.Bodies[0], cfg.Bodies[1] = cfg.Bodies[1], cfg.Bodies[0]
+	reversed, err := dynamics.NewWorld(t.Context(), doc, cfg)
+	require.NoError(t, err)
+	reversedStart, err := reversed.NewState([]dynamics.BodyState{
+		{Body: b, Pose: poseB, LinearVelocity: velocity, AngularVelocity: angular},
+		{Body: a, Pose: r3.Identity(), LinearVelocity: zero, AngularVelocity: angular},
+	})
+	require.NoError(t, err)
+	reversedStep, err := reversed.Step(t.Context(), reversedStart,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, dt)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, reversedStep.Status, "%+v", reversedStep.Diagnostics)
+	require.Len(t, reversedStep.Events, 1)
+	require.InDelta(t, -.6, reversedStep.Events[0].Manifold.Points[0].Normal.Value.X, 1e-14)
+	require.InDelta(t, -.8, reversedStep.Events[0].Manifold.Points[0].Normal.Value.Y, 1e-14)
+	reversedSample, err := reversedStep.Trace.Sample(units.Seconds(.05))
+	require.NoError(t, err)
+	reversedA, ok := reversedSample.Body(a)
+	require.True(t, ok)
+	require.InDelta(t, -1.125, reversedA.Pose.Translation().X, 1e-8)
+	shiftedMass := mass
+	shiftedMass.Center.Value = r3.Vec{X: .25}
+	cfg.Bodies[0].Supplied = &shiftedMass
+	unproved, err := dynamics.NewWorld(t.Context(), doc, cfg)
+	require.NoError(t, err)
+	unprovedStart, err := unproved.NewState([]dynamics.BodyState{
+		{Body: b, Pose: poseB, LinearVelocity: velocity, AngularVelocity: angular},
+		{Body: a, Pose: r3.Identity(), LinearVelocity: zero, AngularVelocity: angular},
+	})
+	require.NoError(t, err)
+	unprovedStep, err := unproved.Step(t.Context(), unprovedStart,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, dt)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, unprovedStep.Status)
+	require.Nil(t, unprovedStep.Next)
+	require.Empty(t, unprovedStep.Events)
+	cfg.Bodies[0].Supplied = &mass
+	cfg.Bodies[0].Material.Restitution = units.Scalar(0)
+	cfg.Bodies[1].Material.Restitution = units.Scalar(0)
+	withoutRebound, err := dynamics.NewWorld(t.Context(), doc, cfg)
+	require.NoError(t, err)
+	withoutReboundStart, err := withoutRebound.NewState([]dynamics.BodyState{
+		{Body: b, Pose: poseB, LinearVelocity: velocity, AngularVelocity: angular},
+		{Body: a, Pose: r3.Identity(), LinearVelocity: zero, AngularVelocity: angular},
+	})
+	require.NoError(t, err)
+	withoutReboundStep, err := withoutRebound.Step(t.Context(), withoutReboundStart,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, dt)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, withoutReboundStep.Status)
+	require.Nil(t, withoutReboundStep.Next)
+	require.Empty(t, withoutReboundStep.Events)
+}

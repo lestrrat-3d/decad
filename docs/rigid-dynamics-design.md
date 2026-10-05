@@ -87,6 +87,14 @@ separated position correction within the certified
 bracket and contact slop is allowed when a full clear remainder sweep proves
 the pair cannot meet again. Unresolved tangency or a noncentral mass stops the
 step when its angular response exceeds that residual.
+When two dynamic source spheres start at one certified off-axis point touch,
+have zero spin and friction, and have bounded closing normal speed, positive
+restitution uses the same bounded two-body impulse. The event has time zero
+and a zero-width bracket at the initial `SweepInstant`. No position correction
+is made. Both the ideal drift and the rounded endpoint path must return
+`SweepDepartedClear` over the complete step, and the final pair must be
+certified separated. A missing initial float witness, a failed response
+bound, or an unproved departure returns `Undecided` with no event or `Next`.
 A two-body world's pair may be excluded; its bodies drift independently even
 through overlap, and no pair material is mixed.
 The current three-body step admits one dynamic body and two fixed bodies.
@@ -627,9 +635,10 @@ Publish the maximum normal-velocity, tangent-velocity, friction-cone
 island. `VelocityResidual`, `ImpulseResidual`, and
 `PenetrationResidual` gate success. If a residual exceeds its limit when
 `MaxIterations` is reached, return `Undecided`. Use no random ordering or
-solver tolerance hidden from `StepConfig`. Initial/resting contact uses zero
+solver tolerance hidden from `StepConfig`. Resting contact uses zero
 restitution, persists in the state cache, and passes the same gate every
-step. A closing contact with no dynamic participant is undecided because
+step. The initial off-axis sphere-pair impact above uses positive restitution.
+A closing contact with no dynamic participant is undecided because
 its prescribed trajectory cannot receive an impulse.
 Evaluate each residual over the admitted mass/inertia, contact-point, and
 normal bounds; a nominal solution whose uncertainty can exceed a limit is
@@ -848,6 +857,10 @@ For an off-axis sphere-pair impact, the rounded impact prefix must reach its
 own certified bracket endpoint with the same source faces, bounded normal,
 and separation within `PenetrationResidual`. Interior trace samples before
 and after the event use the corresponding sphere-pair sweep certificates.
+For an off-axis sphere-pair impact at time zero, no prefix is needed.
+`Trace.Sample(0)` returns the post-impact state; each positive interior time
+uses the certified rounded `SweepDepartedClear` path, and `Trace.Sample(dt)`
+returns `Next`.
 It compares the exact held time values when selecting an event or endpoint.
 An event at a proved final sweep fraction retains the input `dt` value;
 interior event times must lie strictly inside the exact held duration.
@@ -892,6 +905,20 @@ These numeric checks apply to this discrete integrator; they are not
 certified bounds on real continuous-force motion.
 
 ## Verification
+
+Two real radius-5 mm source spheres start with centers at `(0,0,0)` and
+`(6,8,0)` mm. Both have supplied mass `1 kg` and zero spin. B approaches at
+`(-30,-40,0) mm/s`, A starts still, restitution is `0.5`, friction is zero,
+and `dt=0.1 s`. The real `ContactPair` must return a bounded point touch,
+and `SweepPair` must return `SweepInitiallyTouching`. `World.Step` must publish
+one time-zero impact with a zero-width bracket and normal impulse
+`37.5 kg·mm/s`; A leaves at `(-22.5,-30,0) mm/s`, and B leaves at
+`(-7.5,-10,0) mm/s` within the stated response residuals. The ideal and
+rounded full-span sweeps must both return `SweepDepartedClear`. The final
+centers are `(-2.25,-3,0)` and `(5.25,7,0)` mm, 12.5 mm apart. `Trace.Sample`
+at zero, an interior time, and `dt` must return the certified post-impact
+velocities and poses. Reverse world order and reject an off-center supplied
+mass whose omitted spin exceeds `AngularVelocityResidual`.
 
 The isolated-graze fixture uses two real radius-5 mm source spheres. A stays
 at `(0,0,0)` and B starts at `(20,10,0)` with velocity `(-40,0,0) mm/s`

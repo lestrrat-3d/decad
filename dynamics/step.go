@@ -489,6 +489,10 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		if rotating {
 			return undecided(w, "rotating initial contact needs a certified response track"), nil
 		}
+		if first.Event != nil && isObliqueSpherePairEvent(first.Event.Manifold) {
+			return w.stepObliqueSpherePair(ctx, from, kicked, kicked, dt,
+				units.Seconds(0), 0, first, nil)
+		}
 		if w.fixedOffcenterPatch(first.Event) {
 			return w.stepFixedOffcenter(ctx, from, kicked, dt, first)
 		}
