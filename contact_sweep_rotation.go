@@ -565,6 +565,11 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 				return r.undecided(zero, departure, SweepDepartureUnproved), nil
 			}
 			r.report.Departure = &SweepDeparture{Until: left.At, GapAtUntil: *left.Ideal.Gap}
+			if departure.Cmp(one) == 0 {
+				r.report.Outcome = SweepDepartedClear
+				r.sortSamples()
+				return r.report, nil
+			}
 			last, sampleErr := r.sample(ctx, one)
 			if errors.Is(sampleErr, errSweepPoseBudget) {
 				return r.undecided(departure, one, SweepPoseBudget), nil
@@ -642,6 +647,9 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 		return fraction, true
 	}
 	if fraction, ok := r.horizontalSpinDepartureFraction(first); ok {
+		return fraction, true
+	}
+	if fraction, ok := r.tangentAxisSpinDepartureFraction(first); ok {
 		return fraction, true
 	}
 	if fraction, ok := r.axisFaceDepartureFraction(first); ok {
@@ -824,6 +832,94 @@ func (r *rotationalPairSweep) horizontalSpinDepartureFraction(first *SweepSample
 		return nil, false
 	}
 	return big.NewRat(1, 2), true
+}
+
+// A stationary horizontal source face and a source box spinning about Y
+// separate when every moving corner has a positive outward derivative. The
+// second derivative of each corner's height is bounded by
+// omega²*(|corner.X-center.X|+|corner.Z-center.Z|). Taylor's theorem then
+// proves one positive support gap for the complete bodies through the chosen
+// duration, including every time immediately after zero.
+func (r *rotationalPairSweep) tangentAxisSpinDepartureFraction(first *SweepSample) (*big.Rat, bool) {
+	if first.Ideal.Manifold == nil || len(first.Ideal.Manifold.Points) != 4 {
+		return nil, false
+	}
+	// Read the prepared paths through pointers so the duration and exact
+	// corner storage stay in their original records.
+	paths := [2]*rotationalSweepPath{&r.a, &r.b}
+	stationary, spinning := -1, -1
+	for i, path := range paths {
+		if path.path.drift == nil && path.path.delta == [3]dyadic{} {
+			stationary = i
+		}
+		if path.path.drift != nil && path.path.screw == nil &&
+			path.frame.axis[0].Sign() == 0 && path.frame.axis[1].Sign() != 0 &&
+			path.frame.axis[2].Sign() == 0 {
+			spinning = i
+		}
+	}
+	if stationary < 0 || spinning < 0 || stationary == spinning {
+		return nil, false
+	}
+	static, moving := &paths[stationary].startBox, &paths[spinning].startBox
+	staticLow, staticHigh := static.corner[0][2], static.corner[0][2]
+	movingLow, movingHigh := moving.corner[0][2], moving.corner[0][2]
+	for i := 1; i < len(static.corner); i++ {
+		staticLow = dyMin(staticLow, static.corner[i][2])
+		staticHigh = dyMax(staticHigh, static.corner[i][2])
+		movingLow = dyMin(movingLow, moving.corner[i][2])
+		movingHigh = dyMax(movingHigh, moving.corner[i][2])
+	}
+	sign := int64(0)
+	if dyCmp(staticHigh, movingLow) == 0 {
+		sign = 1
+	} else if dyCmp(movingHigh, staticLow) == 0 {
+		sign = -1
+	}
+	if sign == 0 {
+		return nil, false
+	}
+	wantNormal := float64(sign)
+	if spinning == 0 {
+		wantNormal = -wantNormal
+	}
+	for _, point := range first.Ideal.Manifold.Points {
+		if point.Normal.Value != (r3.Vec{Z: wantNormal}) ||
+			point.Normal.Bound.Base() != 0 || point.NormalAngle.Base() != 0 {
+			return nil, false
+		}
+	}
+	path := paths[spinning]
+	omega := path.frame.axis[1]
+	omegaSquared := new(big.Rat).Mul(omega, omega)
+	minimum, curvature := new(big.Rat), new(big.Rat)
+	for i := range moving.corner {
+		corner := &moving.corner[i]
+		dx := new(big.Rat).Sub(corner[0].rat(), path.frame.center[0])
+		dz := new(big.Rat).Sub(corner[2].rat(), path.frame.center[2])
+		derivative := new(big.Rat).Sub(path.velocity[2], new(big.Rat).Mul(omega, dx))
+		derivative.Mul(derivative, big.NewRat(sign, 1))
+		if i == 0 || derivative.Cmp(minimum) < 0 {
+			minimum = derivative
+		}
+		cornerCurvature := new(big.Rat).Mul(omegaSquared,
+			new(big.Rat).Add(new(big.Rat).Abs(dx), new(big.Rat).Abs(dz)))
+		if cornerCurvature.Cmp(curvature) > 0 {
+			curvature = cornerCurvature
+		}
+	}
+	if minimum.Sign() <= 0 {
+		return nil, false
+	}
+	fraction := big.NewRat(1, 1)
+	for range 60 {
+		until := new(big.Rat).Mul(fraction, r.a.path.duration)
+		if new(big.Rat).Mul(curvature, until).Cmp(minimum) < 0 {
+			return fraction, true
+		}
+		fraction.Quo(fraction, big.NewRat(2, 1))
+	}
+	return nil, false
 }
 
 // A rotation about an axis-normal contact face does not move either support
