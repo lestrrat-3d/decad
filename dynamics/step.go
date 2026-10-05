@@ -509,9 +509,6 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 				}
 			}
 		}
-		if w.friction.lower.Sign() != 0 {
-			return undecided(w, "frictional interior impact is not certified"), nil
-		}
 		// Continue below, consuming the geometry producer's event and manifold.
 	default:
 		return undecided(w, fmt.Sprintf("first sweep returned %v", first.Outcome)), nil
@@ -558,6 +555,10 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 			!roundedImpactPrefixAtEnd(roundedPrefix, first, w.step.PenetrationResidual) {
 			return undecided(w, "published impact prefix lacks a matching rounded endpoint bracket"), nil
 		}
+	}
+	if w.friction.lower.Sign() != 0 {
+		return w.stepInteriorFriction(ctx, from, kicked, pre, dt, eventAt, impactTime,
+			first, roundedPrefix)
 	}
 	if isObliqueSpherePairEvent(first.Event.Manifold) {
 		return w.stepObliqueSpherePair(ctx, from, kicked, pre, dt, eventAt,

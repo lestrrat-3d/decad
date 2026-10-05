@@ -155,6 +155,19 @@ The floor stays at identity placement. The box can start from any pure
 translation whose real four-corner track passes the same bounds, including
 the endpoint of a previous step. Its mass center is translated with exact
 rational coordinate sums for the lever and torque certificates.
+An interior first-impact bracket admits the same centered fixed-floor box with
+zero restitution, positive X and negative Z velocity, zero initial spin, and
+zero Y velocity. Correct the bracket's touching pose within the certified
+penetration allowance, then use its real four-corner manifold. A symmetric
+pressure distribution gives positive point normal impulses and tangential
+impulses within each Coulomb cone. It shifts the normal pressure toward the
+direction of motion so the friction torque and normal torque cancel. The
+rational mass, point, impulse, and torque certificate must bound zero outgoing
+spin and the outgoing X velocity; the response can stick or keep positive X
+slip. Both ideal and rounded full-span persistent tracks must certify the
+remainder, and the event's rounded prefix must certify interior trace replay.
+Positive restitution, a nonrectangular or off-center patch, insufficient
+event budget, or a failed response or path bound returns `Undecided`.
 An initial horizontal fixed/dynamic source-box patch can resolve a frictionless
 off-center impact when supplied mass puts the dynamic center beyond one patch
 edge. Two symmetric vertices on that edge receive the normal impulse; the
@@ -623,12 +636,12 @@ normal bounds; a nominal solution whose uncertainty can exceed a limit is
 `Undecided`. Exact source boxes and analytic mass can make these bounds
 narrow; the arithmetic residual still applies.
 
-The fixed/dynamic frictional step uses the identity-placed box's real
+The fixed/dynamic frictional step uses the identity-placed floor's real
 four-corner manifold, exact-rational impulse and torque sums, and the
 mass/inertia bounds. It checks that the entire body cannot expose a larger
-contact-point lever than the solver audited at the initial corners. It also
+contact-point lever than the solver audited at the contact corners. It also
 bounds omitted-spin travel over the full step. A narrow floor patch, an
-interior frictional impact, a rotating state, and a contact transition
+off-center interior frictional impact, a rotating state, and a contact transition
 return `Undecided`.
 
 The two-dynamic solver uses the same real four-point manifold but includes
