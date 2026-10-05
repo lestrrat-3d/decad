@@ -127,21 +127,29 @@ func WithoutCache(s State) State {
 }
 
 // PushApart runs correctedRelation's passes on the pair (a, b) of state,
-// which the solve is taken to separate, with the moved body given the allowance.
-// pre is the state before the correction. It returns the refusal reason, or
-// "" and the pushed state when the push fits.
-func PushApart(ctx context.Context, w *World, pre, state State, a, b *decad.Body, moved *decad.Body,
-	allowance units.Value) (string, State, error) {
+// which the solve is taken to separate, with each body of allowances given
+// that correction allowance. normal, when nonzero, is the event manifold's
+// normal (A to B). pre is the state before the correction. It returns the
+// refusal reason, or "" and the pushed state when the push fits.
+func PushApart(ctx context.Context, w *World, pre, state State, a, b *decad.Body,
+	allowances map[*decad.Body]units.Value, normal r3.Vec) (string, State, error) {
 	key, ok := lookupPair(w.index, BodyPair{A: a, B: b})
 	if !ok {
 		return "", State{}, ErrInvalidInput
 	}
 	post := state.clone()
 	moves := map[int]r3.Vec{}
-	push := correctionPush{allowance: map[int]float64{w.index[moved]: allowance.Base()},
-		separating: map[int]struct{}{key: {}}}
+	push := correctionPush{allowance: map[int]float64{}, separating: map[int]struct{}{key: {}},
+		policies: map[int]decad.SweepStartPolicy{}}
+	for body, allowance := range allowances {
+		push.allowance[w.index[body]] = allowance.Base()
+	}
+	pair := islandPair{key: key, a: w.pairs[key].a, b: w.pairs[key].b}
+	if normal != (r3.Vec{}) {
+		pair.manifold.Points = []decad.ContactPoint{{Normal: decad.VecMeasurement{Value: normal}}}
+	}
 	for pass := 0; ; pass++ {
-		done, diagnostic, err := w.correctedRelation(ctx, pre, post, moves, key, push, pass < pushLimit)
+		done, diagnostic, err := w.correctedRelation(ctx, pre, post, moves, pair, push, pass < pushLimit)
 		if err != nil {
 			return "", State{}, err
 		}

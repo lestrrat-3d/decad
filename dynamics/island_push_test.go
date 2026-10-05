@@ -160,7 +160,7 @@ func TestCorrectedRelationPushRespectsAllowance(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.ContactOverlapping, contact.Relation)
 	reason, pushed, err := dynamics.PushApart(t.Context(), scene.world, state, state, scene.face, scene.ball,
-		scene.ball, units.Millimeters(1e-11))
+		map[*decad.Body]units.Value{scene.ball: units.Millimeters(1e-11)}, r3.Vec{})
 	require.NoError(t, err)
 	require.Empty(t, reason)
 	ball, _ := pushed.Body(scene.ball)
@@ -170,7 +170,7 @@ func TestCorrectedRelationPushRespectsAllowance(t *testing.T) {
 	moved := ball.Pose.Translation().Sub(sunk.Translation()).Dot(scene.normal)
 	require.InDelta(t, 0x1p-40, moved, 0x1p-42)
 	reason, _, err = dynamics.PushApart(t.Context(), scene.world, state, state, scene.face, scene.ball,
-		scene.ball, units.Millimeters(1e-13))
+		map[*decad.Body]units.Value{scene.ball: units.Millimeters(1e-13)}, r3.Vec{})
 	require.NoError(t, err)
 	require.Contains(t, reason, "exceeds its correction allowance")
 }

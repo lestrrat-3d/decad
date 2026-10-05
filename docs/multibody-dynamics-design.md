@@ -718,7 +718,10 @@ event poses show: `ContactPair` at those poses for an interior impact, whose sol
 the sweep certified at the bracket's right sample, and the gathered manifold itself for an initial contact
 or a track. Dynamic bodies joined by contact-set pairs on persistent tracks move as one: their touch is
 exact and their velocities equal (§6.2), so they take one translation computed with their summed mass,
-which keeps that touch. A pair's penetration may not exceed its allowance above, its bracket travel bounded
+which keeps that touch. A group resting on a Fixed or Kinematic body through a persistent track is
+anchored and takes no share either, so a body landing on a resting one is corrected alone and the
+resting body keeps its exact touch with its support; a penetrating pair with no free body is refused. A
+pair's penetration may not exceed its allowance above, its bracket travel bounded
 by the bracket's elapsed width times an upper bound on the pair's contact-point speed (the L1 norm of the
 linear velocity difference plus each body's spin times its lever, both L1 norms), and a body's
 translation length may not exceed the summed allowances of the pairs that moved it, plus the band depth
@@ -726,17 +729,30 @@ translation length may not exceed the summed allowances of the pairs that moved 
 body must still be `Touching` at the corrected poses; every other scheduled pair with a moved body is swept
 over the correction.
 
-A translation along a float normal rarely lands two curved bodies in exact touch, so an island pair that
-still overlaps after the correction is PUSHED just apart when its solve separates it (every point leaves
-faster than `VelocityResidual`, §5.2): its dynamic bodies move along the deepest point's normal by that
-point's depth plus its separation bound, split by inverse mass, the share doubled until it moves the
-rounded pose, and the pair is checked again, for at most four passes over the event's islands. It must
-end `Touching` or `Separated`, and each pushed body's whole translation from its pre-event pose, measured
-as the correction's, must stay within its correction allowance; a separated corrected pose within that
-allowance is what rigid-dynamics "Response" admits at a separating impact. Its next slice sweeps it under
-`ContinueSeparatingTouch` from the pushed poses. A pair the solve does not separate is never pushed and
-may not end separated, since its continuation needs exact touch: a resting curved pair whose correction
-leaves an ulp of overlap is `Undecided` with `StepCorrectionFailed`.
+A translation along a float normal rarely lands two curved bodies in exact touch, so an island pair whose
+solve separates it (every point leaves faster than `VelocityResidual`, §5.2) is PUSHED just apart when the
+corrected poses leave it either way:
+
+- still overlapping: its dynamic bodies move along the deepest point's normal by that point's depth plus
+  its separation bound, split by inverse mass, the share doubled until it moves the rounded pose;
+- apart by less than `ContactPair` can prove (`Undecided` with `ContactNoGapProof`): its dynamic bodies
+  move apart along the event manifold's normal, split by inverse mass, by one ulp of their largest
+  coordinate and then twice as far each time, until `ContactPair` proves the pair separated or touching.
+
+The pair is then checked again, for at most four passes over the event's islands. It must end `Touching`
+or `Separated`, and each pushed body's whole translation from its pre-event pose, measured as the
+correction's, must stay within its correction allowance; a separated corrected pose within that allowance
+is what rigid-dynamics "Response" admits at a separating impact. A pair that ends touching continues under
+`ContinueSeparatingTouch`; one that ends separated leaves the contact set, so its next slice starts under
+`StopAtInitialContact`, since the rotating sphere-pair sweep needs a touching start for a departure. A
+pair the solve does not separate is never pushed and may not end separated, since its continuation needs
+exact touch: a resting curved pair whose correction leaves an ulp of overlap is `Undecided` with
+`StepCorrectionFailed`.
+
+The root package's rotating sphere-pair sweep proves only clear and departing paths: two spinning spheres
+whose clear start leads to another impact inside the slice return `SweepUndecided` with
+`SweepContactUnsupported`, so two spheres a glancing frictional impact sets spinning stop the step at
+their next impact (`StepPairUndecided`).
 
 A sphere pair that continues in persistent touch after an interior impact is refused at its next replay:
 the root package's sphere-pair persistent replay requires the two rounded centers to stay exactly one
@@ -1509,7 +1525,9 @@ lines below do not repeat it.
   `dynamics/island_direct.go` and `dynamics/island_direct_test.go`: a two-box stack in eight sweeps, a
   frictional face impact that friction stops exactly, and a sphere rolling in a corner. §6.6's
   separating push ships with `dynamics/island_push_test.go`: a sphere bouncing off a tilted face, its
-  allowance, and a resting sphere the push leaves alone. Routing the two- and three-body worlds through
+  allowance, and a resting sphere the push leaves alone; its sub-ulp-gap push and the anchored correction
+  with `dynamics/island_sphere_landing_test.go`: the stack-and-drop sphere column landing on itself, a
+  glancing landing, and a gap no float can prove. Routing the two- and three-body worlds through
   the general step, the assertion rewrites of §6.5 and the deletions remain.
 
 ### PR 6 (Phase 1) — multi-event `Trace`, `Timeline`, typed diagnostics
