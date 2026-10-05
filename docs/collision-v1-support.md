@@ -89,15 +89,22 @@ exercise density-backed impact, rest, and trace replay.
 `NewWorld` admits two or more sound solids and lists every body pair in
 canonical world order (`World.Pairs`), with an exclusion or a material
 override per pair. `World.Step` resolves two- and three-body worlds with at
-least one dynamic body; a world of four or more bodies builds its pair table
-and validates its step input, and `World.Step` returns `dynamics.Undecided`
-for it. Each dynamic body uses either density-derived mass and inertia or a complete
+least one dynamic body. Each dynamic body uses either density-derived mass and inertia or a complete
 caller-supplied bounded record. Density-derived properties currently cover
 source boxes, admitted untapered prisms under any frame or rigid placement,
 full source spheres, qualifying revolved cylinders, full or partial revolves
 about an exact in-plane axis, and verified faceted Booleans. Other payloads may need
 supplied properties, but those properties cannot replace a missing contact
 proof.
+
+A world of four or more bodies, in any role mix, kicks every dynamic body
+once and moves every body along its drift or driver over the step. Its broad
+phase sweeps only the pairs whose `SweptBox` values are not strictly
+disjoint, and the step advances only when every swept pair is proved clear;
+a contact event returns `dynamics.Undecided` with `StepUnsupported`. Its
+kinematic bodies take `PoseSegment` drivers.
+[Schedule tests](../dynamics/schedule_test.go) check the swept pairs, the
+drift poses and trace samples.
 
 Two-body worlds admit a fixed or kinematic body against a dynamic body, or
 two dynamic bodies. An affine kinematic box driver and selected cardinal
@@ -140,7 +147,7 @@ sliding impulses, and unproved pair paths return `dynamics.Undecided`.
 | `SweptBox` | `decad.ErrUnsupported` when the body's bounds or the path's travel bound are not finite |
 | `Body.MassProperties` | `decad.ErrUnsupported` when density-derived bounded mass or inertia is unavailable |
 | `NewWorld` | `dynamics.ErrUnsupported` for fewer than two bodies, a two- or three-body world with no dynamic body, or a three-body kinematic world |
-| `World.Step` | `dynamics.Undecided` with `Next == nil` when contact, response, or replay lacks proof, and for a world of four or more bodies |
+| `World.Step` | `dynamics.Undecided` with `Next == nil` when contact, response, or replay lacks proof, and for any contact event in a world of four or more bodies |
 | `Trace.Sample` | `dynamics.ErrUnsupported` if a rounded pose loses its cached proof; `dynamics.ErrInvalidInput` for time outside the step |
 
 A generic positive-bound faceted body can prove strict clearance above a

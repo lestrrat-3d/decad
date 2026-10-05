@@ -276,7 +276,7 @@ func (w *World) stepThreeSphereIsland(ctx context.Context, from, kicked State,
 		post: pairState(post, reference), end: pairState(end, reference), duration: dt,
 		eventAt: units.Seconds(0), hasEvent: len(events) > 0}
 	conservation, ok := reference.conservationReadings(childTrace.start, childTrace.pre,
-		childTrace.end, childTrace, nil, gravity, loads, dt)
+		childTrace.end, childTrace, nil, gravity, loads[:], dt)
 	if !ok {
 		return w.threeUndecided(contacts[0].key, "sphere island conservation is not finite"), nil
 	}

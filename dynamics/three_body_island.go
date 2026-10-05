@@ -206,7 +206,7 @@ func (w *World) stepThreeSimultaneousInitial(ctx context.Context, from, kicked S
 		end: pairState(end, reference), duration: dt,
 		eventAt: units.Seconds(0), hasEvent: len(events) > 0}
 	conservation, ok := reference.conservationReadings(childTrace.start, childTrace.pre,
-		childTrace.end, childTrace, nil, gravity, loads, dt)
+		childTrace.end, childTrace, nil, gravity, loads[:], dt)
 	if !ok {
 		return w.threeUndecided(constraints[0].key, "simultaneous conservation is not finite"), nil
 	}

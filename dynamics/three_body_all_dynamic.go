@@ -38,7 +38,7 @@ func (w *World) stepThreeAllDynamic(ctx context.Context, from State, input StepI
 				pairLoads[side] = loads[worldIndex]
 			}
 		}
-		advanced, ok := pair.kickByLoads(pairState(from, pair), input.Gravity, pairLoads, dt)
+		advanced, ok := pair.kickByLoads(pairState(from, pair), input.Gravity, pairLoads[:], dt)
 		if !ok {
 			return w.threeUndecided(pairKey, "force kick or torque kick exceeds its residual"), nil
 		}
@@ -93,11 +93,11 @@ func (w *World) threeAllDynamicConservation(from, kicked, end State, trace Trace
 			return StepConservation{}, false
 		}
 		parts[key].GravityImpulse, parts[key].LoadImpulse, ok =
-			pair.forceImpulses(input.Gravity, pairLoads, dt)
+			pair.forceImpulses(input.Gravity, pairLoads[:], dt)
 		if !ok {
 			return StepConservation{}, false
 		}
-		parts[key].TorqueImpulse, ok = pair.torqueImpulse(pairLoads, dt)
+		parts[key].TorqueImpulse, ok = pair.torqueImpulse(pairLoads[:], dt)
 		if !ok {
 			return StepConservation{}, false
 		}
