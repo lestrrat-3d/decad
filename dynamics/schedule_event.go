@@ -86,10 +86,7 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 		}
 		gathered = append(gathered, tracks...)
 	}
-	drive, diagnostics := r.driverVelocities(sweeps, gathered)
-	if len(diagnostics) != 0 {
-		return nil, diagnostics, nil
-	}
+	drive := r.driverVelocities(sweeps, gathered)
 	solved, diagnostics, err := w.solveIslands(ctx, eventIslands{pre: pre, at: label, sliceStart: r.at,
 		sliceSpan: r.remaining(), gathered: gathered, drive: drive, eventBase: len(r.published),
 		islandBase: len(r.islands)}, r.scheduled)
@@ -186,24 +183,21 @@ func (r *scheduleRun) trackPairs(sweeps sliceSweeps, plan slicePlan, fraction fl
 // driverVelocities reads the exact translation velocity of every kinematic
 // participant of the gathered pairs from its slice driver: the displacement
 // over the duration. A driver that rotates has no single contact-point
-// velocity and is refused.
-func (r *scheduleRun) driverVelocities(sweeps sliceSweeps, gathered []islandPair) (map[int][3]*big.Rat,
-	[]StepDiagnostic) {
+// velocity and gets no entry; the island solve refuses it only when it
+// joins an island that holds an event.
+func (r *scheduleRun) driverVelocities(sweeps sliceSweeps, gathered []islandPair) map[int][3]*big.Rat {
 	drive := map[int][3]*big.Rat{}
 	for _, pair := range gathered {
 		for _, index := range [2]int{pair.a, pair.b} {
 			if r.w.bodies[index].definition.Role != Kinematic {
 				continue
 			}
-			v, ok := translationVelocity(sweeps.paths[index])
-			if !ok {
-				return nil, []StepDiagnostic{scheduleDiagnostic(StepUnsupported, r.w.bodyPair(r.w.pairs[pair.key]),
-					"an island with a rotating kinematic participant has no solver yet")}
+			if v, ok := translationVelocity(sweeps.paths[index]); ok {
+				drive[index] = v
 			}
-			drive[index] = v
 		}
 	}
-	return drive, nil
+	return drive
 }
 
 // translationVelocity is the exact velocity of a PoseSegment that only

@@ -662,3 +662,45 @@ func TestScheduledStepDiagnosticsNameTheIsland(t *testing.T) {
 	_, err = report.Trace.Sample(units.Seconds(.05))
 	require.ErrorIs(t, err, dynamics.ErrInvalidInput)
 }
+
+// TestScheduledStepRotatingDriverIslandRefuses rests a 10 mm box on the
+// kinematic platform of TestScheduledStepKinematicIsland while the platform
+// turns a quarter turn about Z. The touching pair forms an island at the
+// step start, and a rotating driver has no single contact-point velocity, so
+// the step stops with StepUnsupported and names the pair.
+func TestScheduledStepRotatingDriverIslandRefuses(t *testing.T) {
+	doc := decad.New()
+	platform := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	parkedA := makeBox(t, doc, 500, 0, 510, 10, 0, 10)
+	parkedB := makeBox(t, doc, 600, 0, 610, 10, 0, 10)
+	block := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	density := units.KilogramsPerCubicMillimeter(0.001)
+	material := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}
+	world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{Step: bounceStepConfig(),
+		Bodies: []dynamics.RigidBody{
+			{Body: platform, Role: dynamics.Kinematic, Material: material},
+			{Body: parkedA, Role: dynamics.Fixed, Material: material},
+			{Body: parkedB, Role: dynamics.Fixed, Material: material},
+			{Body: block, Role: dynamics.Dynamic, Density: &density, Material: material},
+		}})
+	require.NoError(t, err)
+	turn, err := r3.Rotation(r3.Vec{Z: 1}, units.Degrees(90))
+	require.NoError(t, err)
+	state, err := world.NewState([]dynamics.BodyState{
+		{Body: platform, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: parkedA, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: parkedB, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: block, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	dt := units.Seconds(1.0 / 16)
+	report, err := world.Step(t.Context(), state, dynamics.StepInput{Gravity: zeroAcceleration(),
+		Drivers: []dynamics.KinematicDriver{{Body: platform,
+			Path: decad.PoseSegment{From: r3.Identity(), To: turn, Duration: dt}}}}, dt)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, report.Status)
+	require.Len(t, report.Diagnostics, 1)
+	require.Equal(t, dynamics.StepUnsupported, report.Diagnostics[0].Code, "%+v", report.Diagnostics)
+	require.Equal(t, dynamics.BodyPair{A: platform, B: block}, report.Diagnostics[0].Pair)
+	require.Contains(t, report.Diagnostics[0].Reason, "rotating kinematic")
+}

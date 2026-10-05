@@ -364,6 +364,12 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 			return nil, []StepDiagnostic{scheduleDiagnostic(StepUnsupported, w.bodyPair(w.pairs[pair.key]),
 				"a positive-friction island pair has no solver yet")}, nil
 		}
+		if !w.drivenWithin(pair, in.drive) {
+			// A rotating driver's pair cannot be classified; it stays in the
+			// solve, which refuses it if an event reaches its island.
+			active = append(active, pair)
+			continue
+		}
 		ok, valid := w.pairActive(pair, in.pre, in.drive)
 		if !valid {
 			return nil, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(w.pairs[pair.key]),
@@ -390,6 +396,12 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 		}
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
+		}
+		for _, pair := range isl.pairs {
+			if !w.drivenWithin(pair, in.drive) {
+				return nil, []StepDiagnostic{scheduleDiagnostic(StepUnsupported, w.bodyPair(w.pairs[pair.key]),
+					"an island with a rotating kinematic participant has no solver yet")}, nil
+			}
 		}
 		number := in.islandBase + len(solved)
 		solution, failure := w.solveIsland(isl, in.pre, in.drive)
@@ -449,6 +461,17 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 		return nil, diagnostics, err
 	}
 	return out, nil, nil
+}
+
+// drivenWithin reports whether every kinematic body of a pair has the exact
+// translation velocity of its driver in drive.
+func (w *World) drivenWithin(pair islandPair, drive map[int][3]*big.Rat) bool {
+	for _, index := range [2]int{pair.a, pair.b} {
+		if _, ok := drive[index]; !ok && w.bodies[index].definition.Role == Kinematic {
+			return false
+		}
+	}
+	return true
 }
 
 // islandEvents publishes one ContactEvent per island pair and the island's
