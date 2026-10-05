@@ -14,7 +14,9 @@ travel bounds. An initial source-box face touch also certifies immediate
 departure when both bodies have the same angular velocity and the bounded
 normal separation rate is positive. Fixed oblique poses of co-oriented source
 boxes also certify initial face touch and a persistent face patch when both
-affine paths have the same translation. If their exact support-plane gap has
+affine paths have the same translation. A partly overhanging horizontal
+source-box face also certifies initial touch and a persistent clipped polygon
+under the same translation. If their exact support-plane gap has
 positive affine slope, the sweep certifies immediate departure and checks the
 rounded endpoint against its ideal path. A box spinning about world Z can also
 reach a contained horizontal face on a stationary box, then depart under

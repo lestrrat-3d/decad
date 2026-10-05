@@ -545,6 +545,7 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 				orientedB: &r.b.startBox, orientedDelta: r.a.path.delta,
 				start: zero, end: one,
 				duration: r.a.path.duration, request: r.req.ContactRequest,
+				pointCount: len(first.Ideal.Manifold.Points),
 				features: [2]ContactFeature{first.Ideal.Manifold.Points[0].FeatureA,
 					first.Ideal.Manifold.Points[0].FeatureB},
 				normal: first.Ideal.Manifold.Points[0].Normal}

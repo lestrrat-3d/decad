@@ -65,9 +65,9 @@ to the byte budget.
 | `measurement.go` | The bounded-result shapes: `Exactness`, `Measurement`, `VecMeasurement`, `Box`. See `docs/api-design.md` §5.3, §6. |
 | `identity.go` | Private document-local producer identities, the boolean evaluator's operation kind, and the shared zero-vector predicate. |
 | `record.go` | The profile-analysis records: `PlaneRecord`, `ProfileRecord`, `ChainRecord`, `LoopRecord` and the ten sealed `CurveSegment` variants; NURBS validation on its own functions. See `docs/sketch-seam-design.md` §2. |
-| `seam.go` | The seam conversions `RecordProfile`/`RecordChain`: admit, authenticate and record a profile or open chain, then the `TExact` gate and the reject-only range and closure falsifiers. See `docs/sketch-seam-design.md` §1, §7. |
+| `seam.go` | `RecordProfile`/`RecordChain`, `TExact` admission, and reject-only range and closure checks. See `docs/sketch-seam-design.md` §1, §7. |
 | `path.go` | The immutable spatial `Path` and its sealed `LineTo` / `ArcThrough` segment vocabulary. See `docs/sweep-design.md` §2–§3. |
-| `extent.go` | The extent vocabulary: the sealed linear `Extent`/`SideExtent` and angular `AngularExtent`/`SideAngular` tiers, disjoint by design; `ToFace`/`ToFaceAngular` name live bodies. See `docs/api-design.md` §8.1. |
+| `extent.go` | Linear and angular extent types; `ToFace`/`ToFaceAngular` references. See `docs/api-design.md` §8.1. |
 | `selector.go` | Selectors: `EdgeQuery`/`FaceQuery`, predicate conjunction and `Exactly`/`AtLeast` cardinality, resolved by filtering live topology; a failure returns a `SelectionError`. See `docs/api-design.md` §9. |
 | `selection_error.go` | `SelectionError` (wraps `ErrNoMatch`/`ErrCardinality`) and the canonical `*Query.String()` rendering it and a verification `Diagnostic` both reuse. See `docs/api-design.md` §9. |
 | `codec_error.go` | Internal path-aware validation errors for structural curve records. |
@@ -97,7 +97,7 @@ to the byte budget.
 |---|---|
 | `topology.go` | The topology model: `Body`→`Lump`→`Shell`→`Face`→`Loop`→`CoEdge`→`Edge`→`Vertex`, plus sealed `Surface`/`Curve` variant sets. See the types' own doc comments and `docs/evaluator-design.md` §3. |
 | `normal_bound.go` | The proof behind every `Face.NormalAt` bound: rational-interval enclosures of each arm's exact unit normal, and the radian sine/cosine enclosure the `Cone` arm needs. See the file's doc comment. |
-| `document.go` | `Document` (`New`/`Bodies`), its atomic commit tail, provenance identities and liveness gates. `Body.Placed`/`Duplicate`/`PlacedCopy` rebuild the payload under a composed motion; see their doc comments and evaluator §8. |
+| `document.go` | `Document`, commit, identity and liveness gates; body placement and duplication. See its doc comments and evaluator §8. |
 | `surface.go` | `WithSurfaceResult`, sheet refusal, and shared shell/lump helpers. See surface §2-§4, §7, §11. |
 | `patch.go` | Builds a single planar face from a recorded profile. See surface §5.1. |
 | `thicken.go` | `Body.Thicken` grows an admitted sheet into a solid. See surface §16. |
@@ -111,14 +111,14 @@ to the byte budget.
 | `stitch_flux.go` | The per-surface flux integral for a curved closed boundary: Rule S, the hoisted vertex-link audit call, and the `Plane`/`Cylinder` volume and centroid arms. See `docs/surface-design.md` §6.4. |
 | `unstitch.go` | `Unstitch`: splits a body into one free single-face sheet per face, reusing `stitch.go`'s placement machinery per face. See `docs/surface-design.md` §6.5. |
 | `extrude.go` | `Document.Extrude`: the public entry point, `WithTaper`, and linear-extent resolution into a `linearSweep`. See `docs/evaluator-design.md` §5 and the file's doc comment. |
-| `sweep.go` | `Document.Sweep` and `SweepChain`, common path gates, `WithSurfaceResult` parsing, and the replayable payloads for line and arc spans. See `docs/sweep-design.md` PR 1–4 and §15, `docs/surface-design.md` §4. |
+| `sweep.go` | `Document.Sweep`/`SweepChain`, path gates, and span payloads. See `docs/sweep-design.md` and `docs/surface-design.md` §4. |
 | `sweep_arc.go` | The one-span `ArcThrough` reduction: exact circumcircle and tangent gates, bounded axis/angle publication and Revolve reuse. See `docs/sweep-design.md` PR 3. |
 | `sweep_composite.go` | Composite Sweep shared join topology, its manifold-with-boundary audit, and the outer-cap omission a surface result takes. See `docs/sweep-design.md` PR 4, `docs/surface-design.md` §4. |
 | `sweep_composite_measure.go` | Composite Sweep span replay and combined body measurements. See `docs/sweep-design.md` PR 4. |
 | `sweep_audit.go` | Composite Sweep adjacent-span and remote-span separation proofs. See `docs/sweep-design.md` §7. |
 | `sweep_transport.go` | Rotation-minimizing endpoint-frame transport over exact path records, with rational enclosures of each held frame. See `docs/sweep-design.md` §3.2. |
 | `prism_payload.go` | `prismPayload` and its coordinate readings: a world point, its proven bound, and the coordinate envelopes later bounds charge against. See `docs/evaluator-design.md` §5, `docs/prism-boolean-design.md` §7. |
-| `prism_build.go` | Builds a straight extrude's body: `evalPrismContext`, the caps, and `buildLoopSidesAs`'s per-loop side walk; each face carries the displacement its surface was built from. See `docs/evaluator-design.md` §5. |
+| `prism_build.go` | `evalPrismContext`, caps, and side faces with displacement bounds. See `docs/evaluator-design.md` §5. |
 | `segment_walk.go` | The profile-boundary walk extrude, revolve and loft read a `CurveSegment` through: `segmentWalk`, `profileWalks` and the per-kind builders; a kind with no stated bound refuses. See the file's doc comment. |
 | `prism_extent.go` | A finished prism's extent readings, reach along a direction and the containing box, each a bounded interval charging the frame, section and axial terms. See `docs/evaluator-design.md` §5. |
 | `revolve.go` | `Document.Revolve` (evaluator §6): the sealed `Axis` vocabulary, `EdgeAxis` and `WithSurfaceResult` parsing, angular-extent resolution. Axis, build and extent readings: the other `revolve_*.go` files. |
@@ -132,7 +132,7 @@ to the byte budget.
 | `loft_pairing.go` | `docs/loft-design.md` Table P: which from-segment walls to which to-segment. A pair the table does not decide is refused outright, never matched to the nearest one. See §5, §5.1. |
 | `loft_stations.go` | Places the stations a loft's wall chords run between and proves each chain's departure from its curve, under one shared chord target and a station cap. See `docs/loft-design.md` §5.2. |
 | `loft_topology.go` | Assembles the paired stations into the flat-triangle solid the payload holds, and builds the `Body` topology over it. See `docs/loft-design.md` §5.1, §7 and the file's doc comment. |
-| `loft_audit.go` | `docs/loft-design.md` §6's build-time crossing audit: `loftCrossingAudit` proves the assembled triangle set manifold and watertight, reusing `boolean_exact.go`/`boolean_mesh.go`'s `triTriClassify` unchanged. |
+| `loft_audit.go` | `loftCrossingAudit` proves the assembled triangles manifold and watertight. See `docs/loft-design.md` §6. |
 | `loft_moments.go` | `docs/loft-design.md` §8's mass-property engine: `loftMassAccumulator`, an exact-rational tetrahedron sum over the assembled triangle set, publishing Volume/Centroid/Bounds/Area. See §8, §12. |
 
 ### Modify
@@ -141,7 +141,7 @@ to the byte budget.
 |---|---|
 | `fillet.go` | `Body.Fillet` rewrites a straight prism's section into a tangent arc at each selected corner and rebuilds through `evalPrism`. It also owns the `cornerBlend` machinery Chamfer reuses. See `docs/modify-design.md` §6. |
 | `chamfer.go` | `Body.Chamfer` bevels a straight prism's lateral corners with a chord between setback feet, sharing `cornerBlend` with `fillet.go`; a cap-loop selection routes to `capblend.go`. See `docs/modify-design.md` §7. |
-| `fillet_audit.go` | The shared §5 audit of a rewritten section — orientation, self-consuming trim, crossing/contact, nesting — run by Fillet and Chamfer and reused by Shell's offset audit. See `docs/modify-design.md` §5. |
+| `fillet_audit.go` | Fillet, Chamfer and Shell section audits. See `docs/modify-design.md` §5. |
 | `shell.go` | `Body.Shell` offsets a prism into a tube or cup. See modify §8. |
 | `shell_offset.go` | The exact per-feature section offset (`P ⊖ t` / `P ⊕ t`) behind `Shell`, plus the §5 audit wrapper run on the offset section. See `docs/modify-design.md` §7-§8. |
 | `shell_cup.go` | `cupPayload` and `evalCup`: the two-co-directional-prism body a one-cap `Shell` builds, with Exact mass properties and roles. See `docs/modify-design.md` §9; clearance stays staged (§12 D6). |
@@ -176,6 +176,7 @@ to the byte budget.
 | `contact_box.go` | Box manifold. See `docs/contact-geometry-design.md` §4. |
 | `contact_oriented_box.go` | Rotated boxes. See `docs/contact-geometry-design.md` §4. |
 | `contact_oriented_patch.go` | Exact co-oriented oblique face patch, source faces, and bounded witnesses. See `docs/contact-geometry-design.md` §4. |
+| `contact_clipped_patch.go` | Exact horizontal clipping of one rotated source-box face against an axis-aligned face. See `docs/contact-geometry-design.md` §4. |
 | `contact_sphere.go` / `contact_sphere_sweep.go` | Sphere-box paths. See `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md`. |
 | `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See the contact designs. |
 | `contact_sweep_replay.go` | Replays affine and clear rotating sweeps against their cached exact source geometry. See `docs/contact-sweep-design.md` §6. |
@@ -211,7 +212,7 @@ to the byte budget.
 | `boolean_cut.go` | Per-facet exact subdivision along contact segments into classified regions, in rational 2D on the facet's own plane. See the file's doc comment. |
 | `boolean_exact.go` | The exact-arithmetic kernel behind the mesh boolean: adaptive orient3d, rational predicates, and the reject-only pre-filters. See each filter's own doc comment. |
 | `boolean_body.go` | Builds a `facetedPayload` into a `Body`: face/loop/edge topology from the stitched mesh, measurements integrated exactly with composed bounds. See the file's doc comment and `docs/evaluator-design.md` §9. |
-| `bounds.go` | The single owner of every proven error bound a faceted measurement reports, one helper per mechanism, including `docs/prism-boolean-design.md` §7's section-displacement terms. See the file's doc comment. |
+| `bounds.go` | Faceted measurement error bounds. See its doc comment and `docs/prism-boolean-design.md` §7. |
 
 ### Output
 

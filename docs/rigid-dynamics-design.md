@@ -20,6 +20,11 @@ tracks. Positive restitution reverses and scales its normal velocity; both
 paths must certify one-sided departure and a separated endpoint. A second step
 from that endpoint must certify a clear path. Tangential incoming motion and
 off-center contact return `Undecided` in this tilted-pose path.
+At a horizontal partly overhanging source-box face, a centered frictionless
+fixed/dynamic pair with zero restitution can stop against the exact clipped
+polygon. The response checks omitted spin and requires an ideal and rounded
+persistent-contact track. An off-center patch requiring spin returns
+`Undecided`.
 `Trace.Sample` also returns interior states on a persistent-contact path. The
 rounded source-box poses must stay within the cached oblique sweep's point
 resolution and keep its bounded face track; otherwise replay returns

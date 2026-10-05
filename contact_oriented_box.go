@@ -179,6 +179,9 @@ func classifyOrientedSourceBoxes(report *ContactReport, a, b orientedSourceBox) 
 		report.Reason = ContactNoNormalProof
 		publishContainedHorizontalPatch(report, a, b)
 		if report.Manifold == nil {
+			publishClippedHorizontalPatch(report, a, b)
+		}
+		if report.Manifold == nil && report.Reason != ContactPointTooCoarse {
 			publishOrientedBoxPatch(report, a, b)
 		}
 		if report.Manifold == nil && report.Reason != ContactPointTooCoarse {

@@ -17,11 +17,12 @@ signed-permutation poses. An oriented source-box path also certifies relations
 under arbitrary proper read poses by projecting the exact transformed corners
 on all face and edge-cross axes. Two boxes whose three source edge directions
 match can publish a four-point manifold at one isolated oblique face touch.
-One horizontal rotated box face strictly inside an axis-aligned face also
-publishes a four-point manifold. Two opposed axis-normal faces can publish
+One horizontal rotated box face strictly inside an axis-aligned face publishes
+a four-point manifold. At isolated touch, a partly overhanging horizontal
+face publishes every vertex of its exact clipped polygon. Two opposed
+axis-normal faces can publish
 one bounded interior witness when one projected face center lies strictly
-inside the other face. A horizontal patch against a signed-axis box still
-requires the contained four-point proof. Other rotated contacts publish no
+inside the other face. Other rotated contacts publish no
 manifold. A full source semicircle sphere against a source box also receives
 an exact rational relation proof and a point manifold at one isolated face
 support. At identity query poses, the analytic clearance kernel can certify
@@ -267,14 +268,20 @@ the manifold. Other rotated face, edge, vertex, and shallow-overlap manifolds
 still need their own complete trimmed contact-set and source-feature proofs.
 
 The horizontal rotated-face path requires one source box at a signed-axis
-pose and another under a query pose that keeps world Z fixed. Its four exact
-face corners must all lie strictly inside the first box's projected face.
-For penetration, the depth must be strictly smaller than every projected
-side margin; the two bodies must cross at their opposed Z supports rather
-than contain one another. Publish those four corners with the original
-horizontal face identities and an exact axis normal. If a corner reaches a
-side or the pose tilts either face, keep the proven relation and omit the
-manifold until a complete clipped contact-set proof exists.
+pose and another whose transformed source edges keep one face horizontal.
+At isolated touch, clip the rotated face's exact dyadic corners against all
+four signed-axis face half-planes with exact rational intersections. Publish
+every distinct polygon vertex when its signed area is nonzero and every
+rounded witness meets `PointResolution`. Preserve both original face
+identities and the exact vertical material normal. A zero-area projected
+intersection keeps the proven relation without a manifold.
+
+For penetration, the existing contained-face path requires all four rotated
+corners strictly inside the other projected face. Its depth must be strictly
+smaller than every side margin, and the bodies must cross at opposed Z
+supports rather than contain one another. It publishes the four rotated
+corners. A partly overhanging penetration or tilted face keeps its proven
+relation without a clipped manifold.
 
 ### 4.1 Source-box contact set for sweeps
 
