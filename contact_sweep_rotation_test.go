@@ -197,10 +197,16 @@ func TestSweepPairRotatingBoxFindsHiddenImpact(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepImpactBracket, report.Outcome)
 	require.False(t, report.HasAffineReplayProof())
-	_, _, replayErr := report.CertifiedPosesAtInterval(units.Seconds(.2),
+	replayedA, replayedB, replayErr := report.CertifiedPosesAtInterval(units.Seconds(.2),
 		units.Seconds(0), units.Seconds(1))
-	require.ErrorIs(t, replayErr, decad.ErrUnsupported)
+	require.NoError(t, replayErr)
+	contact, err := doc.ContactPair(t.Context(), a, b, replayedA, replayedB, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, contact.Relation)
 	require.NotNil(t, report.Bracket)
+	bracketMiddle := (report.Bracket.From.Fraction.Base() + report.Bracket.To.Fraction.Base()) / 2
+	_, _, replayErr = report.CertifiedPosesAt(units.Seconds(bracketMiddle))
+	require.ErrorIs(t, replayErr, decad.ErrUnsupported)
 	require.False(t, report.BracketEndsAtDuration())
 	require.NotNil(t, report.Event)
 	require.Equal(t, decad.ContactOverlapping, report.Event.Relation)
@@ -241,10 +247,17 @@ func TestSweepPairEqualSpinDepartsFromSourceFace(t *testing.T) {
 	require.Greater(t, report.Departure.GapAtUntil.Value.Base()-
 		report.Departure.GapAtUntil.Bound.Base(), 0.0)
 	require.Equal(t, decad.ContactSeparated, report.Samples[len(report.Samples)-1].Ideal.Relation)
+	replayedA, replayedB, err := report.CertifiedPosesAt(units.Seconds(.05))
+	require.NoError(t, err)
+	replayedContact, err := doc.ContactPair(t.Context(), lower, upper, replayedA, replayedB, contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, replayedContact.Relation)
 
 	upperPath.AngularVelocity.Y = units.RadiansPerSecond(-6)
 	undecided, err := doc.SweepPair(t.Context(), lower, upper, lowerPath, upperPath, req)
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepUndecided, undecided.Outcome)
 	require.Equal(t, decad.SweepDepartureUnproved, undecided.Cause)
+	_, _, err = undecided.CertifiedPosesAt(units.Seconds(.05))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
 }

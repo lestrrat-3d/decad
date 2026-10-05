@@ -539,8 +539,11 @@ For a clear rotating source-box drift, the report retains the sweep's exact
 source corners and ideal-path bounds. Replay checks the rounded oriented boxes
 with the exact separating-axis test. Their positive gap must exceed the total
 bounded corner difference from the ideal poses, and that difference must fit
-`PointResolution`. Rotating impact and departure reports have no interior
-replay proof.
+`PointResolution`. Rotating impact reports replay only the certified clear
+prefix through the bracket's left edge; the unresolved bracket is refused.
+Rotating departure reports replay their separated interior after the
+producer's one-sided departure proof. Both paths check the exact oriented-box
+gap against their staged corner deviation before returning a rounded pose.
 For a co-moving oriented source-box persistent face track, replay uses the
 same cached source corners and exact time fraction. The rounded poses must
 fit `PointResolution` and yield a four-point patch on the producer's face

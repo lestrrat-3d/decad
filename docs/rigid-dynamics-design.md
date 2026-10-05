@@ -686,7 +686,9 @@ unsampled gap before the step endpoint.
 It returns `ErrUnsupported` for a slice without a rounded certificate, or
 when the requested float pose exceeds the sweep's resolution. Impact prefixes
 have a separate rounded sweep ending at the published pre-event pose, so
-samples on both sides of an impact consume their own certificates.
+samples on both sides of an impact consume their own certificates. The
+spinning source-box impact uses the original full-step rotating sweep for its
+clear prefix and maps pre-event trace time against the full step duration.
 An event-free clear rotating source-box drift also replays its interior poses.
 The sweep retains its exact held source corners and path inputs. Each requested
 rounded pose must lie within `PointResolution` of the ideal path under the
@@ -694,8 +696,10 @@ same staged source-corner transform used by contact geometry. The
 rounded pair's exact separating-axis gap must exceed that pose error.
 For a co-moving oriented source-box face track, replay checks the rounded
 four-point manifold against the producer's face identities and point and
-normal bounds. Rotating departure and impact slices still return
-`ErrUnsupported` at interior times.
+normal bounds. A fixed-floor spinning impact replays clear times before its
+unresolved bracket from the original full-step sweep. Its separating
+remainder replays from the cached departure sweep. Samples inside the
+unresolved bracket return `ErrUnsupported`.
 
 Publish kinetic energy, linear momentum, and angular momentum at the input,
 after the full-step force kick, and at completion as typed numeric readings;

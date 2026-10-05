@@ -314,12 +314,23 @@ func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
 	if err != nil || result == nil {
 		return result, err
 	}
-	if result.Outcome == SweepClear || result.Outcome == SweepPersistentTouch &&
-		result.ContactTrack != nil && result.ContactTrack.orientedA != nil &&
-		result.ContactTrack.orientedB != nil && aPath.path.drift == nil && bPath.path.drift == nil {
+	if result.Outcome == SweepClear || result.Outcome == SweepDepartedClear ||
+		result.Outcome == SweepImpactBracket && result.Bracket != nil ||
+		result.Outcome == SweepPersistentTouch &&
+			result.ContactTrack != nil && result.ContactTrack.orientedA != nil &&
+			result.ContactTrack.orientedB != nil && aPath.path.drift == nil && bPath.path.drift == nil {
 		result.replay = &sweepReplayProof{rotation: &[2]rotationalSweepPath{aPath, bPath},
 			track: result.ContactTrack, request: req.ContactRequest}
 		result.replay.snapshot(result)
+		if result.Outcome == SweepImpactBracket {
+			left, leftOK := exactBaseValue(result.Bracket.From.Fraction)
+			right, rightOK := exactBaseValue(result.Bracket.To.Fraction)
+			if !leftOK || !rightOK || left.Cmp(right) >= 0 {
+				result.replay = nil
+			} else {
+				result.replay.setBracket(left, right)
+			}
+		}
 	}
 	return result, nil
 }
