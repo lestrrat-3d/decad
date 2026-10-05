@@ -116,8 +116,9 @@ in X and Y, with zero spin. [Faceted floor tests](../dynamics/faceted_floor_step
 exercise density-backed impact, rest, and trace replay.
 
 Two exact planar solids are prisms over straight-edged sections with no
-recorded displacement, or zero-bound faceted Booleans, directly or after a
-translation-only `Placed`. `ContactPair` proves their relation under any
+recorded displacement, zero-bound faceted Booleans, directly or after a
+translation-only `Placed`, or closed all-planar `Stitch` solids welded in
+place with every vertex bound zero. `ContactPair` proves their relation under any
 rotation: an enclosed gap, a touch at a vertex, edge or face, or an overlap,
 including one body nested in the other's material. The report names
 `ContactNonConvex` when neither body is convex. A touch it cannot resolve
@@ -164,9 +165,11 @@ end's proven gap less the travel since. `BandAt` reads a band track's depth
 over any prefix. [Band and departure tests](../contact_sweep_band_test.go)
 check the depth and the departure time against their closed forms.
 
-A positive-bound faceted Boolean, and a cap-loop chamfer whose every face is
-flat, are checked through their held triangle meshes. The true surface lies
-within the mesh's `Bound`, δ, of the held one. A held gap wider than the two
+A positive-bound faceted Boolean, a placed or certificate-welded closed
+all-planar `Stitch` solid, and a cap-loop chamfer whose every face is flat
+are checked through their held triangle meshes. The true surface lies
+within δ of the held one: the mesh's `Bound`, or for a stitched solid its
+largest vertex bound. A held gap wider than the two
 bodies' δ summed is a true gap with that δ added to its bound, and a corner
 deeper than it inside the other body is a true overlap. A held touch, or a
 held gap or shallow depth within it, is `ContactBand`: the true pair lies

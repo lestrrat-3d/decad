@@ -1167,6 +1167,7 @@
 4	0.00	TestEvalLoftUnitBoxMeasurements
 4	0.00	TestEvalLoftWholeShellOrientationCorrectsSign
 4	0.00	TestEvalPrismRejectsOverflowedMeasurements
+4	0.02	TestExactPlanarPairAdmitsStitchedSolid
 4	0.00	TestExactRigidPointRoundIsZeroOnlyForAnExactPlacement
 4	0.00	TestExactness
 4	0.00	TestExtendFullDomainSceneSharesTheRecordParameterisation
@@ -1431,6 +1432,7 @@
 4	0.02	TestPlacedCopyPreservesFilletRoles
 4	0.03	TestPlacedPrismChargesEveryFaceItsPlacementRounding
 4	0.05	TestPlanarManifoldMatchesClippedBoxPatch
+4	0.01	TestPlanarManifoldStitchedVertexTouch
 4	0.00	TestPlanarReplayLowerGapChargesTravel
 4	0.00	TestPointInBodyCancellationReachesTorusRootPath
 4	0.00	TestPositiveAreaGateConsultsExactRational

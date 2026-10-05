@@ -124,15 +124,19 @@ func planarConvexity(ctx context.Context, budget *workBudget, b *Body) (bool, er
 
 // planarSolidAtPose builds the exact held boundary of an admitted planar
 // solid under a query pose (§9): a prism whose section is all whole LineSeg
-// edges with zero deltas, or a zero-bound faceted Boolean, either directly or
-// through its saved exact mesh and a translation-only placement. Every vertex
-// is the exact dyadic image of recorded coordinates under the recorded
-// placement and the pose; nothing is read from a rounded transient body.
+// edges with zero deltas, a zero-bound faceted Boolean, either directly or
+// through its saved exact mesh and a translation-only placement, or a closed
+// all-planar stitched solid welded at the identity with every vertex bound
+// zero. Every vertex is the exact dyadic image of recorded coordinates under
+// the recorded placement and the pose; nothing is read from a rounded
+// transient body.
 //
-// §10.4 admits two held meshes whose true boundary lies within a positive
+// §10.4 admits three held meshes whose true boundary lies within a positive
 // two-sided displacement δ of them: a positive-bound faceted Boolean, read
-// off its payload with δ its mesh bound, and a cap-loop chamfer whose every
-// face is planar, read off its tessellation with δ that mesh's Bound. The
+// off its payload with δ its mesh bound, a placed or certificate-welded
+// stitched solid, read off its triangle set with δ its largest vertex bound,
+// and a cap-loop chamfer whose every face is planar, read off its
+// tessellation with δ that mesh's Bound. The
 // returned displacement is δ at the query pose: the body-frame figure times
 // an upper bound on the pose's stretch (planarPoseScale). It is zero for an
 // exact body.
@@ -153,6 +157,8 @@ func planarSolidAtPose(ctx context.Context, budget *workBudget, b *Body,
 		solid, delta, ok, err = planarFacetedSolid(budget, payload)
 	case capBlendPayload:
 		solid, delta, ok, err = planarCapBlendSolid(ctx, budget, b)
+	case stitchPayload:
+		solid, delta, ok, err = planarStitchSolid(budget, b, payload)
 	default:
 		return pair.PlanarSolid{}, none, false, nil
 	}
@@ -452,6 +458,56 @@ func planarHeldSolid(budget *workBudget, verts []r3.Vec, tris [][3]int, faceOf [
 		solid.Verts[i] = proofarith.DyVec(v)
 	}
 	return solid, true, nil
+}
+
+// planarStitchSolid reads a closed all-planar stitched solid off its own
+// audited triangle set (§9). Stitch records tris, triFaces and vertBound only
+// for an all-planar weld, and auditClean only when the crossing audit ran and
+// passed, so a curved or mixed stitch (nil tris) and a failed audit are not
+// admitted; planarSolidAtPose has already refused an open sheet, which is
+// not a solid. The vertices are the welded table's floats at the stitch's
+// placement, triFaces names each triangle's live face, and a face missing
+// from b.Faces() leaves the snapshot's face map unset.
+//
+// The displacement is the largest per-vertex weld bound, and at least the
+// placement rounding delta. Each vertBound entry is the bound vertexForClass
+// stamps on its live Vertex, the weld class bound with delta already added,
+// and every held triangle point is a convex combination of its corners, so
+// no true boundary point lies farther than that bound from the held mesh. It
+// is zero for a weld built at the identity whose every class is zero-bound,
+// which is then an exact §9 body.
+func planarStitchSolid(budget *workBudget, b *Body, sp stitchPayload) (pair.PlanarSolid, proofarith.Dyadic, bool, error) {
+	none := proofarith.DyZero()
+	if !sp.auditClean || len(sp.tris) == 0 || len(sp.triFaces) != len(sp.tris) ||
+		len(sp.vertBound) != len(sp.verts) || !finiteMeasurementValues(sp.delta) || sp.delta < 0 {
+		return pair.PlanarSolid{}, none, false, nil
+	}
+	displacement := sp.delta
+	for _, bound := range sp.vertBound {
+		if !finiteMeasurementValues(bound) || bound < 0 {
+			return pair.PlanarSolid{}, none, false, nil
+		}
+		displacement = max(displacement, bound)
+	}
+	faces := b.Faces()
+	faceAt := make(map[*Face]int, len(faces))
+	for i, face := range faces {
+		faceAt[face] = i
+	}
+	faceOf := make([]int, len(sp.tris))
+	for t, face := range sp.triFaces {
+		at, ok := faceAt[face]
+		if !ok {
+			faceOf = nil
+			break
+		}
+		faceOf[t] = at
+	}
+	solid, ok, err := planarHeldSolid(budget, sp.verts, sp.tris, faceOf)
+	if err != nil || !ok {
+		return pair.PlanarSolid{}, none, false, err
+	}
+	return solid, proofarith.MustDyOf(displacement), true, nil
 }
 
 // planarCapBlendSolid reads a cap-loop chamfer whose every face is planar

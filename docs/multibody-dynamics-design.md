@@ -1010,8 +1010,9 @@ A stitched solid is read off its own audited triangle set (`stitchPayload.tris` 
 `triFaces` naming each triangle's live face), which `Stitch` assembles only for a closed all-planar weld
 whose crossing audit passed (`auditClean`); a curved or mixed stitch holds no triangle set and is not
 admitted, nor is an open sheet. Its vertices are the welded table's floats, exact dyadics, and its
-displacement is the placement rounding `delta` widened by the largest per-vertex weld bound
-(`vertBound`): zero for a weld built at the identity whose every class is zero-bound, which is then a §9
+displacement is the largest per-vertex weld bound (`vertBound`, each the class bound with the placement
+rounding `delta` already added), and at least `delta`: zero for a weld built at the identity whose every
+class is zero-bound, which is then a §9
 body, and positive for a placed or certificate-welded stitch, which is a §10.4 held mesh with that δ. The
 scene's tetrahedron is the former: four patches on the `XY`, `XZ`, slanted and diagonal planes, welded at
 the identity, every vertex bound zero, every face planar (`contact_faceted_pair.go`, §13 PR 14b).
@@ -2198,8 +2199,8 @@ lines below do not repeat it.
 
 - Delivers §9's admission of a closed all-planar stitched solid: `planarSolidAtPose` reads
   `stitchPayload.tris`, `verts` and `triFaces` (the face map through `Body.Faces()`), refuses a nil
-  triangle set, an open sheet or a failed crossing audit, and returns `delta` widened by the largest
-  `vertBound` as the displacement, zero for the scene's tetrahedron.
+  triangle set, an open sheet or a failed crossing audit, and returns the largest `vertBound`, at least
+  `delta`, as the displacement, zero for the scene's tetrahedron.
 - Files: `contact_faceted_pair.go`; `docs/collision-v1-support.md`.
 - Test (root): `contact_faceted_pair_test.go` gains `TestExactPlanarPairAdmitsStitchedSolid`: the §2
   tetrahedron (four patches welded at the identity) `5 mm` above a source-box floor reads
@@ -2215,6 +2216,9 @@ lines below do not repeat it.
   identity, and the test file records that the term is the same per-vertex bound `tessellate_stitch.go`
   publishes per face, read back rather than proved twice. `.github/test-shards.txt` lists both tests.
 - Depends on: PRs 10, 11. PR 14 for the scene's mass only.
+- Shipped. The tests also read the tetrahedron on the `Cut` tray's floor, whose manifold needs the
+  tetrahedron's certificate since the tray has none, and assert the placed copy's band against twice its
+  largest live vertex bound.
 
 ### PR 14c (Phase 2) — face-local support planes
 
