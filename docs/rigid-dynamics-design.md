@@ -105,6 +105,10 @@ through overlap, and no pair material is mixed.
 The current three-body step admits one dynamic body and two fixed bodies.
 It sweeps each non-excluded dynamic/fixed pair. One active pair advances only
 when every other pair has a certified clear path through the response. Two
+strictly ordered, frictionless positive-restitution source-box face impacts can advance within one
+step. The full-duration force kick occurs once. Each impact restarts both pair
+sweeps, and every drift slice stores both rounded pair certificates for replay.
+An overlapping later impact bracket remains `Undecided`. Two
 simultaneous initial face contacts also advance when their certified normals
 lie on distinct coordinate axes, both effective pair friction coefficients
 are zero, and the fixed/fixed pair is separated or excluded. It applies each
@@ -845,6 +849,13 @@ certified manifold and its bounds, impulses, residuals, and pre/post
 velocities. `Trace.Sample` refuses a time outside `[0, dt]`. Feed `Next` to
 the next `Step` for deterministic replay with the same inputs and config.
 The trace never labels the chosen numerical time as an exact physical impact.
+`ContactEvent.Bracket` retains the producing pair sweep's local fraction and
+elapsed readings. `SliceStart` and `SliceDuration` state that sweep's global
+start and requested duration; `ContactEvent.Time` is measured from the start
+of the complete step. Compare bracket order using exact held values:
+`SliceStart + Bracket.<end>.Fraction × SliceDuration`. A rounded global event
+time must stay within that bracket and its rounded pose must pass the same
+contact transfer checks before the event is published.
 Contact transitions appear in the trace with zero impulse unless the
 restarted solver finds a closing constraint at that transition.
 

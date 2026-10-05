@@ -77,7 +77,7 @@ func TestThreeBodyImpactWithThirdClear(t *testing.T) {
 	require.Contains(t, report.Diagnostics[0].Reason, "force kick exceeds the velocity residual")
 }
 
-func TestThreeBodyRejectsSecondContact(t *testing.T) {
+func TestThreeBodyOrdersContactsAndEnforcesEventLimit(t *testing.T) {
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
@@ -115,9 +115,9 @@ func TestThreeBodyRejectsSecondContact(t *testing.T) {
 	require.NoError(t, err)
 	report, err := w.Step(t.Context(), state, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.2))
 	require.NoError(t, err)
-	require.Equal(t, dynamics.Undecided, report.Status)
-	require.Nil(t, report.Next)
-	require.Equal(t, dynamics.BodyPair{A: box, B: barrier}, report.Diagnostics[0].Pair)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.Equal(t, dynamics.BodyPair{A: box, B: barrier}, report.Events[0].Pair)
 
 	config.Excluded = []dynamics.BodyPair{{A: barrier, B: box}}
 	w, err = dynamics.NewWorld(t.Context(), doc, config)
@@ -143,6 +143,5 @@ func TestThreeBodyRejectsSecondContact(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, report.Status)
 	require.Nil(t, report.Next)
-	require.Contains(t, report.Diagnostics[0].Reason, "third-body pair lacks a clear response path")
-	require.Equal(t, dynamics.BodyPair{A: box, B: upper}, report.Diagnostics[0].Pair)
+	require.Contains(t, report.Diagnostics[0].Reason, "maximum contact events reached")
 }
