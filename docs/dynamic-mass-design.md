@@ -4,9 +4,10 @@ This document owns mass, center-of-mass, and inertia readings used by rigid
 dynamics. It supplies the mass gate in `docs/collision-dynamics-design.md` §2.
 The source-box query, bounded section-moment integration for admitted
 untapered prisms, full source-sphere integration, and full source-cylinder
-integration for a revolved axis-incident rectangle are implemented. A faceted
-Boolean solid with zero boundary and occupied-volume error also publishes
-density-derived mass and inertia after held-mesh audits.
+integration for a revolved axis-incident rectangle are implemented. Faceted
+Boolean solids with verified occupied-volume bounds publish density-derived
+mass and inertia when their resulting volume and tensor intervals pass the
+positive admission gates.
 Other payload paths remain design contracts.
 `docs/evaluator-design.md` §4 owns
 the existing planar area moments; this document owns the additional volume
@@ -145,13 +146,18 @@ the solid topology audit. The faceted body may also carry a separate
 displacement from its held triangles to its denoted solid; charge that
 displacement through a certified occupied-volume error.
 
-The implemented faceted arm admits a Boolean payload only when its boundary
-displacement and occupied-volume symmetric-difference allowance are both zero.
-It reruns shell closure and orientation, vertex-link, and exact facet-crossing
-audits on the held triangles. A failed or capped audit returns `ErrUnsupported`.
-It integrates `V`, `P`, and `Q` as exact rationals anchored at one held vertex,
-then bounds only conversion to public readings. Any nonzero inherited error
-returns `ErrUnsupported` until the interval widening below is implemented.
+The implemented faceted arm requires a `VerifyAll` mesh with both boundary and
+occupied-volume proofs. It reruns shell closure and orientation, vertex-link,
+and exact facet-crossing audits on the held triangles. A failed or capped audit
+returns `ErrUnsupported`. It integrates held `V`, `P`, and `Q` as exact rationals
+anchored at one held vertex. The body's bounded box and all held vertices give
+an exact rational L1 radius `R` enclosing both occupied regions. The payload's
+certified `volSymDiff = E` widens held `V`, each `P_i`, and each `Q_ij` by
+`E`, `R E`, and `R² E`. Interval division forms the center and centroidal
+tensor; final readings round outward. A volume interval containing zero or a
+tensor interval without a positive row-dominance proof returns
+`ErrUnsupported`. A faceted payload without a matching verified mesh or finite
+`E` and `R` also returns `ErrUnsupported`.
 
 For a curved or approximated body, request a `VerifyAll` tessellation with
 `BoundaryVerified()` and `VolumeVerified()`. Read its private certified
@@ -276,7 +282,7 @@ quadrature and assertions against the published bounds:
 | Partial revolve with an off-axis section | At least one nonzero mixed component agrees with independently integrated `r³`, `r²z`, and `rz²` terms. |
 | Two separated equal boxes in one body | Common-center inertia includes the `m d²` parallel-axis contribution; no per-lump tensor is returned as the body tensor. |
 | Hollow solid with a centered cavity | Mass and tensor equal outer solid minus cavity integrals; cavity material contributes no positive mass. |
-| Zero-error faceted Boolean over boxes | Overlapping, disjoint, and cavity results enclose the independent box inclusion-exclusion mass and all tensor components. |
+| Faceted Boolean over boxes, with zero or certified positive error | Overlapping, disjoint, cavity, and placed results enclose independent box inclusion-exclusion mass, center, and all tensor components. |
 | Verified faceted box and a curved body at coarse and fine tessellation | True mass and every true tensor component lie in both reported intervals; refined proof narrows at least one bound. |
 | Curved body without occupied-volume proof | Query returns `ErrUnsupported`; a render mesh never supplies an inertia estimate. |
 | Bad density, sheet, cancellation, and ill-conditioned tensor interval | Each returns the specified typed refusal and publishes no partial properties. |

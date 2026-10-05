@@ -72,9 +72,43 @@ func TestFacetedMassPropertiesUnionAndRefusals(t *testing.T) {
 	require.NoError(t, err)
 	placed, err := union.Placed(t.Context(), shift)
 	require.NoError(t, err)
+	placedVolume, err := placed.Volume()
+	require.NoError(t, err)
+	require.Positive(t, placedVolume.Bound.Base())
+	placedMesh, err := placed.Tessellate(t.Context(), units.Millimeters(1),
+		decad.WithVerification(decad.VerifyAll))
+	require.NoError(t, err)
+	require.True(t, placedMesh.BoundaryVerified())
+	require.True(t, placedMesh.VolumeVerified())
+	require.Positive(t, placedMesh.Bound().Base())
 	reading, err := placed.MassProperties(t.Context(), density)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Equal(t, decad.MassProperties{}, reading)
+	require.NoError(t, err)
+	requireReadingCovers(t, reading.Mass, wantMass)
+	for _, component := range []struct {
+		reading decad.Measurement
+		exact   *big.Rat
+	}{
+		{reading.Inertia.XX, wantIxx}, {reading.Inertia.YY, wantIxx},
+		{reading.Inertia.ZZ, wantIzz},
+		{reading.Inertia.XY, big.NewRat(0, 1)},
+		{reading.Inertia.XZ, big.NewRat(0, 1)},
+		{reading.Inertia.YZ, big.NewRat(0, 1)},
+	} {
+		requireReadingCovers(t, component.reading, component.exact)
+	}
+	for _, coordinate := range []struct {
+		held  float64
+		exact *big.Rat
+	}{
+		{reading.Center.Value.X, new(big.Rat).SetFloat64(.1)},
+		{reading.Center.Value.Y, big.NewRat(0, 1)},
+		{reading.Center.Value.Z, wantCenter},
+	} {
+		difference := new(big.Rat).Sub(new(big.Rat).SetFloat64(coordinate.held), coordinate.exact)
+		difference.Abs(difference)
+		require.LessOrEqual(t, difference.Cmp(new(big.Rat).SetFloat64(reading.Center.Bound.Base())), 0)
+	}
+	require.Greater(t, reading.Mass.Bound.Base(), got.Mass.Bound.Base())
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
 	reading, err = union.MassProperties(canceled, density)
