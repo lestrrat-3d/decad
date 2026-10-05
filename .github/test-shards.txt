@@ -940,6 +940,7 @@
 4	5.20	TestBooleanCutWasherThroughDiscKeepsStandingPost
 4	14.88	TestBooleanDegenerateClusterSoundness
 4	0.06	TestBooleanRejections
+4	0.01	TestBooleanRoundingUnderflowKeepsProofPositive
 4	0.00	TestBoundaryExtremesBoundedContextCancellation
 4	0.00	TestBoundaryExtremesBoundedNonFiniteDirectionRefuses
 4	0.00	TestBoundaryExtremesKeepAProvenZero
@@ -1632,6 +1633,7 @@
 4	0.00	TestStitchRefusesAWeldedAwayComponent
 4	0.01	TestStitchRefusesIdenticalBoundedRimsWithNoSharedDenotation
 4	0.02	TestStitchRefusesTwoBoxesPinchedAtOneVertex
+4	0.00	TestStitchRoundingUnderflowKeepsPositiveBound
 4	0.00	TestStitchRuleSRefusesMultipleSourceBodies
 4	0.00	TestStitchSphereFluxDerivesRadiusFromAreaNotBareField
 4	0.00	TestStitchSphereFluxRefusesFaceWithABoundaryLoop

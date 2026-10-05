@@ -457,6 +457,78 @@ func TestStitchChargesTheFacetsTheWeldDrops(t *testing.T) {
 	require.Greater(t, sweptVolumeAllow(got.round, got.preArea), sweptVolumeAllow(got.round, held))
 }
 
+func TestBooleanRoundingUnderflowKeepsProofPositive(t *testing.T) {
+	// The sloped edge intersects y=0.5 at x=SmallestNonzeroFloat64/2.
+	// That exact crossing rounds to zero, but still moves the held vertex.
+	doc := New()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	points := [3]*sketch.Point{
+		s.CreatePoint(0, 0),
+		s.CreatePoint(math.SmallestNonzeroFloat64, 1),
+		s.CreatePoint(1, 0),
+	}
+	s.Fix(points[0])
+	for i := range points {
+		s.CreateLine(points[i], points[(i+1)%len(points)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	wedge, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(10), Dir: Along})
+	require.NoError(t, err)
+
+	s2, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s2.CreateRectangle(-1, 0.5, 1, 1.5)
+	s2.Fix(rect.A)
+	_, err = s2.Solve(t.Context())
+	require.NoError(t, err)
+	bar, err := doc.Extrude(s2, s2.Profiles()[0], Symmetric{D: units.Millimeters(5)})
+	require.NoError(t, err)
+	for _, operand := range []*Body{wedge, bar} {
+		mesh, meshErr := tessellateContext(t.Context(), operand, units.Millimeters(1), VerifyAll)
+		require.NoError(t, meshErr)
+		require.Zero(t, mesh.bound)
+		require.Zero(t, mesh.volSymDiff)
+		if operand == wedge {
+			require.Contains(t, mesh.vertices, r3.Vec{X: math.SmallestNonzeroFloat64, Y: 1})
+		}
+	}
+
+	union, err := Union(t.Context(), wedge, bar)
+	require.NoError(t, err)
+	proof, ok := union.payload.(facetedPayload)
+	require.True(t, ok)
+	require.Contains(t, proof.verts, r3.Vec{Y: 0.5})
+	require.Positive(t, proof.meshBound)
+	require.Positive(t, proof.volSymDiff)
+}
+
+func TestStitchRoundingUnderflowKeepsPositiveBound(t *testing.T) {
+	// One exact apex is a quarter of the smallest subnormal away from its
+	// held float. The rational-to-float reading of that displacement is zero.
+	subnormal := new(big.Rat).SetFloat64(math.SmallestNonzeroFloat64)
+	offset := new(big.Rat).Quo(subnormal, big.NewRat(4, 1))
+	a, b, c := xptOf(r3.NewVec(0, 0, 0)), xptOf(r3.NewVec(10, 0, 0)), xptOf(r3.NewVec(0, 10, 0))
+	d1 := xptOf(r3.NewVec(2, 2, 9))
+	d2 := xptFromRat(new(big.Rat).Add(big.NewRat(2, 1), offset), big.NewRat(2, 1), big.NewRat(9, 1))
+	kept := []keptFacet{
+		{v: [3]xpt{a, c, b}},
+		{v: [3]xpt{a, b, d1}},
+		{v: [3]xpt{b, c, d2}},
+		{v: [3]xpt{c, a, d2}},
+		{v: [3]xpt{b, d2, d1}},
+		{v: [3]xpt{a, d1, d2}},
+	}
+	got, err := stitchFacetsContext(t.Context(), kept)
+	require.NoError(t, err)
+	require.Len(t, got.tris, 4)
+	require.Positive(t, got.round)
+	require.GreaterOrEqual(t, new(big.Rat).SetFloat64(got.round).Cmp(offset), 0)
+	require.Positive(t, sweptVolumeAllow(got.round, got.preArea))
+}
+
 // TestBooleanVolumesAreUnchangedByTheKernelRewrite is fu163's end-to-end
 // proof: the mesh boolean's reported volume, centroid and bounds must be
 // bit-identical to what the math/big.Rat kernel this change replaces

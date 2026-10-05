@@ -1422,11 +1422,14 @@ func stitchFacetsContext(ctx context.Context, kept []keptFacet) (*stitchedMesh, 
 			worst = d
 		}
 	}
-	w, _ := worst.Float64()
 	// worst is the max PER-COORDINATE rounding; the consumers read a 3D
 	// distance bound, and all three coordinates can round at once (bounds.go,
-	// radius3D).
-	out.round = radius3D(upRound(w))
+	// radius3D). A positive rational error can round to zero as float64, so
+	// preserve that proof before widening it to a 3D radius.
+	if worst.Sign() > 0 {
+		w, _ := worst.Float64()
+		out.round = radius3D(provenUpRound(w))
+	}
 
 	dropped := make([]bool, len(tris))
 	welded := make([][3]int, len(tris))
