@@ -23,6 +23,8 @@ func TestSpherePairInitialCardinalRestitution(t *testing.T) {
 		{name: "density reverse order", reverse: true, densityMass: true, restitution: .5},
 		{name: "supplied source order", restitution: .5},
 		{name: "supplied reverse order", reverse: true, restitution: .5},
+		{name: "supplied resting"},
+		{name: "supplied resting reverse", reverse: true},
 		{name: "density resting", densityMass: true},
 		{name: "unequal density resting", densityMass: true, massRatio: 2, incomingB: -25},
 		{name: "unequal density resting reverse", reverse: true, densityMass: true, massRatio: 2, incomingB: -25},
