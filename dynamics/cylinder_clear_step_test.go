@@ -1,6 +1,7 @@
 package dynamics_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -26,20 +27,6 @@ func makeCylinder(t *testing.T, doc *decad.Document) *decad.Body {
 	})
 	require.NoError(t, err)
 	return cylinder
-}
-
-func cylinderMass() decad.MassProperties {
-	reading := func(value units.Value) decad.Measurement {
-		return decad.Measurement{Value: value, Bound: units.New(0, value.Unit()), Exactness: decad.Exact}
-	}
-	inertia := reading(units.KilogramSquareMillimeters(10))
-	zero := reading(units.KilogramSquareMillimeters(0))
-	return decad.MassProperties{
-		Mass:   reading(units.Kilograms(1)),
-		Center: decad.VecMeasurement{Value: r3.Vec{Z: 5}, Bound: units.Millimeters(0), Exactness: decad.Exact},
-		Inertia: decad.InertiaReading{XX: inertia, YY: inertia, ZZ: inertia,
-			XY: zero, XZ: zero, YZ: zero},
-	}
 }
 
 func TestCylinderClearStepUsesProductionSweep(t *testing.T) {
@@ -86,9 +73,18 @@ func TestCylinderClearStepUsesProductionSweep(t *testing.T) {
 			}
 			require.InDelta(t, 1.5, cylinderReplay.Translation().Z, 1e-9)
 			material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
-			mass := cylinderMass()
+			density := units.KilogramsPerCubicMillimeter(0.001)
+			mass, err := cylinder.MassProperties(t.Context(), density)
+			require.NoError(t, err)
+			require.InDelta(t, math.Pi*25*10*density.Base(), mass.Mass.Value.Base(), 1e-12)
+			require.InDelta(t, 0.5*mass.Mass.Value.Base()*25, mass.Inertia.ZZ.Value.Base(), 1e-12)
+			require.InDelta(t, mass.Mass.Value.Base()*175/12, mass.Inertia.XX.Value.Base(), 1e-12)
+			require.InDelta(t, mass.Inertia.XX.Value.Base(), mass.Inertia.YY.Value.Base(), 1e-12)
+			require.LessOrEqual(t, math.Abs(mass.Inertia.XY.Value.Base()), mass.Inertia.XY.Bound.Base())
+			require.Less(t, mass.Mass.Bound.Base(), mass.Mass.Value.Base())
+			require.InDelta(t, 5, mass.Center.Value.Z, 1e-12)
 			defs := []dynamics.RigidBody{{Body: floor, Role: dynamics.Fixed, Material: material},
-				{Body: cylinder, Role: dynamics.Dynamic, Supplied: &mass, Material: material}}
+				{Body: cylinder, Role: dynamics.Dynamic, Density: &density, Material: material}}
 			states := []dynamics.BodyState{{Body: floor, Pose: r3.Identity(),
 				LinearVelocity: zeroLinear, AngularVelocity: zeroAngular},
 				{Body: cylinder, Pose: pose, LinearVelocity: up, AngularVelocity: zeroAngular}}
@@ -111,6 +107,11 @@ func TestCylinderClearStepUsesProductionSweep(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, dynamics.Advanced, step.Status, "%+v", step.Diagnostics)
 			require.Empty(t, step.Events)
+			require.NotNil(t, step.Conservation)
+			require.InDelta(t, mass.Mass.Value.Base(),
+				step.Conservation.Input.LinearMomentum.Value.Z.Base(), 1e-12)
+			require.InDelta(t, mass.Mass.Value.Base()/2,
+				step.Conservation.Input.KineticEnergy.Value.Base(), 1e-12)
 			final, ok := step.Next.Body(cylinder)
 			require.True(t, ok)
 			require.InDelta(t, 2, final.Pose.Translation().Z, 1e-9)
