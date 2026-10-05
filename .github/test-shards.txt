@@ -1706,6 +1706,9 @@
 4	0.00	TestSweepPairSourceSphereInitialEdgeTouch
 4	0.00	TestSweepPairSourceSphereTouchContinuation
 4	0.00	TestSweepPairTranslatedBoxesImpact
+4	0.00	TestDocumentSweptBoxContainsThePath
+4	0.00	TestSweptBoxStrictlyDisjoint
+4	0.00	TestDocumentSweptBoxRefusals
 4	0.00	TestSweepPairTwoMoversAndDeparture
 4	0.00	TestTangentJoinedOffsetsBuildBothFeatures
 4	0.00	TestTangentJoinedSlotChamferAtOffsetOrigin

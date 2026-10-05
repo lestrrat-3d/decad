@@ -267,6 +267,7 @@ type affinePairPath struct {
 	duration  *big.Rat             // exact seconds represented by the input value
 	drift     *RigidDriftSegment
 	screw     *r3.Screw
+	read      *r3.Screw // the read screw of a rotating PoseSegment, admitted or not
 	supported bool
 }
 
@@ -303,6 +304,7 @@ func validatePairPath(path PairPath) (affinePairPath, error) {
 			if err != nil {
 				return out, err
 			}
+			out.read = &screw
 			if _, _, ok := signedAxis(screw.Axis); ok && screw.Angle.Base() > 0 &&
 				finiteMeasurementValues(screw.Point.X, screw.Point.Y, screw.Point.Z, screw.Slide) {
 				out.screw, out.supported = &screw, true

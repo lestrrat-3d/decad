@@ -175,7 +175,7 @@ to the byte budget.
 |---|---|
 | `verify.go` | `Document.Verify`: resolves the options, verifies each body via `verify_publish.go`, and partitions body pairs for interference. See `docs/verification-design.md` §1-§3 and the file's doc comment. |
 | `report.go` | `Verify`'s report vocabulary: `Status`, `ReadingKind`, `DiagnosticCode`, `SurveyKind`, `DiagnosticPair`, `Diagnostic`, `Interference`, `Clearance`. Types only. See `docs/verification-design.md` §1-§3. |
-| `verify_tolerance.go` | `Verify`'s tolerance gate: which readings meet the caller's relative tolerance against the body's reference, and a `Diagnostic` for each that does not. See `docs/verification-design.md` §2-§3. |
+| `verify_tolerance.go` | `Verify`'s tolerance gate: readings against the caller's relative tolerance, with a `Diagnostic` for each miss. See `docs/verification-design.md` §2-§3. |
 | `verify_gate.go` | Proves the reference diameter the tolerance gate is anchored on, per payload. With no provable diameter it withholds the gate rather than guess. See `docs/verification-design.md` §3. |
 | `verify_result.go` | The result vocabulary `Verify`'s report is written in: `Report`, `BodyReport`, and every per-survey result record. Types and `Passed`/`ForBody` only; `verify_publish.go` builds the values. |
 | `verify_publish.go` | Builds `Verify` reports from private survey results. See `docs/verification-design.md`. |
@@ -184,7 +184,7 @@ to the byte budget.
 | `contact_pair.go` | Pair gates and public reports. Box classification lives in `internal/pair/`. See `docs/contact-geometry-design.md`. |
 | `contact_box.go` | Source-box admission and public face/measurement mapping. See `docs/contact-geometry-design.md` §4. |
 | `contact_faceted_support.go` | Exact rectangular support-face proof for zero-bound and translation-placed faceted contact, plus bounded strict separation. See `docs/contact-geometry-design.md` §4. |
-| `contact_faceted_sweep.go` | Affine vertical support-face sweep for exact-source faceted solids and bounded strict clearance against a source-box floor. See `docs/contact-sweep-design.md`. |
+| `contact_faceted_sweep.go` | Faceted floor sweeps: affine exact support face, and bounded clearance by swept boxes. See `docs/contact-sweep-design.md`. |
 | `contact_oriented_box.go` | Rotated boxes. See `docs/contact-geometry-design.md` §4. |
 | `contact_oriented_patch.go` | Exact co-oriented oblique face patch, source faces, and bounded witnesses. See `docs/contact-geometry-design.md` §4. |
 | `contact_clipped_patch.go` | Exact horizontal clipping of one rotated source-box face against an axis-aligned face. See `docs/contact-geometry-design.md` §4. |
@@ -197,7 +197,7 @@ to the byte budget.
 | `clearance_cells.go` | Face-interior candidates. See `docs/clearance-design.md` §3/§4. |
 | `clearance_tiers.go` | The curve and vertex tiers of §3: face-edge, edge-edge and vertex cells over §4's curve-tier table; constant-distance families emit only on the oracle's `degYes`. See `docs/clearance-design.md` §3/§4. |
 | `clearance_geom.go` | Boundary carriers and nesting rays for clearance. See `docs/clearance-design.md` §2–§3. |
-| `clearance_poly.go` | The certified-bracket machinery of §4/§5: Sturm sequences over exact rationals isolate stationarity polynomials, then a proven Lipschitz bound brackets each critical value. See `docs/clearance-design.md` §4/§5. |
+| `clearance_poly.go` | Certified brackets: Sturm isolation of stationarity polynomials over exact rationals, then a Lipschitz bracket per critical value. See `docs/clearance-design.md` §4/§5. |
 | `survey.go` | The analytic wall, undercut, and min-radius surveys on prism, revolve, and cup payloads. An undecided answer reads `Suspect`, never a silent pass. See `docs/verification-design.md` §6. |
 | `survey_undercut.go` | The exact three-valued receiver-face undercut reader `prismUndercuts`/`cupUndercuts`/`capBlendUndercuts` share, decided over the rationals, no float allowance. See the file's doc comment. |
 | `survey2d.go` | The 2D closed-form inscribed-disk kernel behind the wall survey, shared with the modify section audit via `elemOf`; exact candidates for line/arc boundaries. See `docs/verification-design.md` §6. |
@@ -207,6 +207,7 @@ to the byte budget.
 | `motion_bound.go` | Exact motion bounds. See its doc comment. |
 | `contact_sweep.go` | Pair paths, sweeps, and tracks. See `docs/contact-sweep-design.md`. |
 | `contact_sweep_rotation.go` | Rotating drift sweep. See `docs/contact-sweep-design.md`. |
+| `swept_box.go` | `Document.SweptBox`: an exact whole-path box. See `docs/multibody-dynamics-design.md` §4.2. |
 
 ### Booleans
 

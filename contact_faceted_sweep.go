@@ -110,15 +110,17 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 	if !ok || !boundedFacetedInsideFloor(extent, floor) {
 		return facetedSweepUndecided(report, pa.duration), nil
 	}
+	// The swept boxes enclose both bodies over the whole path, so their
+	// strict separation is the clear certificate; the endpoint gaps below are
+	// the published readings.
+	sweptA, okA := sweptBoxOf(a, pa)
+	sweptB, okB := sweptBoxOf(b, pb)
+	if !okA || !okB || !sweptA.StrictlyDisjoint(sweptB) {
+		return facetedSweepUndecided(report, pa.duration), nil
+	}
 	endExtent := extent
 	endExtent.box = translatedAffineBox(extent.box, facetedDelta)
 	endFloor := translatedAffineBox(floor, floorDelta)
-	if _, ok := boundedFacetedFloorGap(extent, floor); !ok {
-		return facetedSweepUndecided(report, pa.duration), nil
-	}
-	if _, ok := boundedFacetedFloorGap(endExtent, endFloor); !ok {
-		return facetedSweepUndecided(report, pa.duration), nil
-	}
 	for index, fraction := range []*big.Rat{new(big.Rat), big.NewRat(1, 1)} {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -152,7 +154,10 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 		if index == 1 {
 			idealExtent, idealFloor = endExtent, endFloor
 		}
-		gap, _ := boundedFacetedFloorGap(idealExtent, idealFloor)
+		gap, ok := boundedFacetedFloorGap(idealExtent, idealFloor)
+		if !ok {
+			return facetedSweepUndecided(report, pa.duration), nil
+		}
 		at := sweepInstant(fraction, pa.duration)
 		report.Samples = append(report.Samples, SweepSample{At: at, PoseA: poseA, PoseB: poseB,
 			FloatContact: contact, Ideal: SweepEvent{At: at, Relation: ContactSeparated, Gap: &gap},
