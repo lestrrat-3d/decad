@@ -750,7 +750,7 @@ Where the general path and a closed form answer differently, the parity run foll
   the tangent approach, off-center face and spinning face of `TestObliqueSupportRefusesUnresolvedMotion`;
   the fixed-A and reversed off-center pairs of `offcenter_pair_test.go`; the lateral slide and bouncing
   stack of `three_body_stack_test.go`; the unequal-mass and asymmetric-speed islands of
-  `TestThreeDynamicSimultaneousSphereFriction`; the anisotropic inertia of
+  `TestThreeDynamicSimultaneousSphereFriction`; the anisotropic inertia and incoming spin of
   `TestSpherePairInitialFrictionRefusesUnsupportedResponse`; the friction-cone and restitution corners of
   `TestThreeBodyFrictionIslandRealPath` (§6.4); and the overlapping brackets of
   `TestThreeBodyTwoDynamicOverlappingPairEventsRemainUndecided`.

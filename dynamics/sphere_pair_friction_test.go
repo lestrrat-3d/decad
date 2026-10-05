@@ -267,6 +267,28 @@ func TestSpherePairInitialFrictionRefusesUnsupportedResponse(t *testing.T) {
 				require.InDelta(t, tangent, event.PostVelocityB.Y.Base(), 1e-9)
 				return
 			}
+			if tc.name == "incoming spin" {
+				// A's incoming 1 rad/s about z adds 5 mm/s to its contact
+				// point's 20 mm/s slide. The normal impulse is 75 as above.
+				// The contact sticks: 25 − 3.5·Jt = 3.5·Jt, so Jt = 25/7, well
+				// inside the cone 0.5·75. A turns at 1 − Jt/2 and B at −Jt/2
+				// about z, and y momentum stays 20.
+				require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+				require.Len(t, report.Events, 1)
+				event := report.Events[0]
+				tangent := 25.0 / 7
+				require.InDelta(t, 75, event.NormalImpulse.Base(), 1e-9)
+				require.InDelta(t, tangent, event.TangentImpulse.Y.Base(), 1e-9)
+				endA, ok := report.Next.Body(a)
+				require.True(t, ok)
+				require.InDelta(t, -25, endA.LinearVelocity.X.Base(), 1e-9)
+				require.InDelta(t, 20-tangent, endA.LinearVelocity.Y.Base(), 1e-9)
+				require.InDelta(t, 1-tangent/2, endA.AngularVelocity.Z.Base(), 1e-9)
+				require.InDelta(t, -tangent/2, event.PostAngularVelocityB.Z.Base(), 1e-9)
+				require.InDelta(t, 25, event.PostVelocityB.X.Base(), 1e-9)
+				require.InDelta(t, tangent, event.PostVelocityB.Y.Base(), 1e-9)
+				return
+			}
 			require.Equal(t, dynamics.Undecided, report.Status, "%+v", report.Diagnostics)
 			require.Nil(t, report.Next)
 			if tc.name != "offset center" {
