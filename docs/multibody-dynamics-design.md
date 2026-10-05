@@ -21,10 +21,10 @@ every other body fixed, through the closed-form responses `docs/rigid-dynamics-d
 bodies takes the scheduled step of §4.3 and §5: one kick, then slices of drift from event to event. Initial
 contacts, impact brackets and transition brackets cut a slice at their exact fraction; every body advances
 there on its certified path; the touching and impacting pairs, with the contact-set pairs their bodies rest
-on, form §6.1's islands, which §6.2 proposes, §6.3's frictionless rows certify and §6.6 corrects, publishing
+on, form §6.1's islands, which §6.2 proposes, §6.3's rows certify and §6.6 corrects, publishing
 one `IslandReport` per island and one event per pair; the next slice starts from the post-event state. A
 graze publishes its event without cutting the slice. Kinematic bodies with translating drivers join
-islands. A positive-friction island pair is `Undecided` with `StepUnsupported` until PR 5. The multi-event
+islands, and a positive-friction pair takes the Coulomb rows of §6.2 and §6.3. The multi-event
 `Trace` of §3.4 and §7.1, the `Timeline` of §7.2 and §12's typed diagnostics ship. `Document.SweptBox`
 (§4.2) is public; the cylinder and bounded-faceted clear sweeps certify with it, and the scheduled step's
 broad phase reads it.
@@ -35,8 +35,7 @@ is stated in already exists as one package: `internal/proof` (`Dyadic`, `DyV3`, 
 rounding bounds), which the root package imports today and which `dynamics` can import as well, since an
 `internal/` package is visible to every package of this module. §3.1, §3.2, §4 and §8.1–§8.8 describe
 shipped code, except `State.cache` and the `MaxPairSweeps` charge (§13 PR 8). For worlds of four or more
-bodies, §5 without §5.3's reuse and step 2's cache, §6.1–§6.3 without the cone, stick and slip rows,
-§6.6, §7, §3.3's `IslandReport`, `StepReport.Islands` and `ContactEvent.Island`, §3.4, and §12 without
+bodies, §5 without §5.3's reuse and step 2's cache, §6.1–§6.4, §6.6, §7, §3.3's `IslandReport`, `StepReport.Islands` and `ContactEvent.Island`, §3.4, and §12 without
 `MaxPairSweeps` ship as well. §9.1–§9.4 ship for prisms over whole `LineSeg` sections and for zero-bound
 Booleans, directly or through a translation-only placement; stitched solids and lofts are not admitted yet.
 §10.1 ships for the same bodies. Everything else is design-only until the PR table in §13 says otherwise.
@@ -462,16 +461,27 @@ islands → pairs (canonical) → manifold points (manifold order), for at most 
 ```text
 w_k        = relative contact velocity at k from the current velocities
 Δλn        = max(0, λn_k + (target_k − w_k·n_k) / K_nn,k) − λn_k;   apply ±Δλn·n_k and r×(Δλn·n_k)
-Δλt        = −K_tt,k⁻¹ · w_k,t;   λt_k += Δλt;   project λt_k onto the disk of radius μ_k·λn_k;  apply
+Δλt        = −w_k,t / L_k;   λt_k += Δλt;   project λt_k onto the disk of radius μ_k·λn_k;  apply
 ```
 
 `K_nn,k` and the 2×2 `K_tt,k` are the usual effective-mass terms from the nominal inverse mass and
-inverse world inertia. The proposal is a nominal solution and proves nothing; `μ_k` here is the nominal
-mean the pair's `frictionCoefficient` carries. A nominal proposal that is not finite, or a closing
-constraint whose nominal `K_nn,k <= 0`, is `Undecided` with `StepIslandDegenerate`.
+inverse world inertia, and `L_k = max(K_t1t1, K_t2t2) + |K_t1t2|` bounds the largest eigenvalue of
+`K_tt,k`. The tangent row steps by that scalar rather than by `K_tt,k⁻¹`: at a fixed point on the disk's
+rim the impulse is then opposite the slip `w_k,t` itself, which the slip gate of §6.3 requires, where a
+`K_tt,k⁻¹` step would leave it opposite `K_tt,k⁻¹·w_k,t`. The proposal is a nominal solution and proves
+nothing; `μ_k` here is the nominal mean the pair's `frictionCoefficient` carries. A nominal proposal that
+is not finite, or a closing constraint whose nominal `K_nn,k <= 0` or `L_k <= 0`, is `Undecided` with
+`StepIslandDegenerate`.
 
-The sweeps run until one changes no impulse in `float64`, or `MaxIterations` have run. The published post
-velocities are then recomputed once from the pre-solve velocities and the final impulses in the fixed
+The tangent rows of positive-friction pairs join the sweeps once a sweep of the normal rows alone changes
+no impulse in `float64`. Friction then starts from the frictionless contact state: a resting patch has
+stopped spinning there, so its sticking corners do not turn the transient spin of the first normal sweeps
+into self-cancelling corner friction. The sweeps run until one changes no impulse in `float64`, or
+`MaxIterations` have run; an island whose normal rows reach no fixed point within the budget is
+certified without friction and refused by its stick rows if any point slides. Each point's world tangent
+impulse `λt_k` is published as `t1·λt1 + t2·λt2`, rounded once, with a component within `1/16` of
+`ImpulseResidual` of zero published as exactly zero. The published post velocities are then recomputed
+once from the pre-solve velocities and the final normal and published tangent impulses in the fixed
 order, and a component within `1/16` of its residual (`VelocityResidual` or `AngularVelocityResidual`) of
 zero is published as exactly zero. Co-moving dynamic bodies then publish one common velocity: two dynamic
 bodies of an island pair are co-moving when their published spins are equal and every component of their
@@ -519,10 +529,15 @@ The certificate then checks, every comparison over the full interval:
 | Energy | island kinetic energy after minus before, over the mass and inertia intervals, minus kinematic work: at each point a driver on side `A` delivers `λn·(n·V)` and one on side `B` `−λn·(n·V)`, taken at the upper end over the normal ball | the allowance rigid-dynamics "Completion, conservation, and trace" states, summed over the island's bodies |
 | Momentum | the per-event linear and angular momentum checks of the same section, applied to the island as one event set | as stated there |
 
-`ContactSolverReport` publishes the largest attained value of each gate as its residual, plus the sweep
-count: `NormalResidual` for non-penetration and complementarity, `LinearResidual`, `AngularResidual`,
-`MomentumResidual` and `AngularMomentumResidual` for the laws and the island momentum, and
-`EnergyResidual` as the signed upper end of the island's kinetic-energy change. A pre-solve normal speed
+The friction rows read `λt_k` as the published world tangent impulse, so `‖λt_k‖²` is exact: the cone
+and the stick condition compare squares exactly, `w'_k,t = w'_k − (w'_k·n_k)·n_k` is enclosed over the
+normal ball and the levers, and the slip row takes `‖λt_k‖` and `‖w'_k,t‖` at their upper ends on its
+left side and at their lower ends on its right. `ContactSolverReport` publishes the largest attained
+value of each gate as its residual, plus the sweep count: `NormalResidual` for non-penetration and
+complementarity, `TangentResidual` for the stick row's `‖w'_k,t‖`, `ConeResidual` for the cone's excess
+`‖λt_k‖ − μ_lo·λn_k`, `LinearResidual`, `AngularResidual`, `MomentumResidual` and
+`AngularMomentumResidual` for the laws and the island momentum, and `EnergyResidual` as the signed upper
+end of the island's kinetic-energy change; the slip row passes or refuses and publishes no residual. A pre-solve normal speed
 whose enclosure straddles `−ImpactSpeed` selects neither target; with a positive restitution that is the
 `restitution target` refusal. The two momentum rows are implied by the per-body laws: the island sum of
 `m·Δv − ΣJ` cancels each dynamic pair's impulses, and the sum of `I·Δω + c×m·Δv` is the sum of the
@@ -1274,6 +1289,10 @@ lines below do not repeat it.
 - Test: every existing `dynamics` response test passes through the general solver with its original
   assertions, `friction_patch_test.go`'s slide and the stack fixture included.
 - Depends on: PR 4.
+- The cone, stick and slip rows ship for worlds of four or more bodies, with
+  `dynamics/island_friction_test.go`: the four-corner slide of `friction_step_test.go` in both body
+  orders, a box slipping across a dynamic box the floor holds by sticking, and the three rows' tamper
+  fixtures. The parity run and the deletions remain.
 
 ### PR 6 (Phase 1) — multi-event `Trace`, `Timeline`, typed diagnostics
 

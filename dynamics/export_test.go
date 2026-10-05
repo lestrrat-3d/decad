@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -32,13 +33,15 @@ func TraceSliceProofs(tr Trace) [][]TracePairProof {
 
 // IslandProposal is the published proposal of one island, in the island's
 // body order (world order, Fixed participants included) and point order
-// (canonical pair order, then manifold order). A tamper function may change
-// any value before the certificate reads it.
+// (canonical pair order, then manifold order); Tangent holds each point's
+// world tangent impulse on B. A tamper function may change any value before
+// the certificate reads it.
 type IslandProposal struct {
 	Bodies  []*decad.Body
 	Linear  []QuantityVec
 	Angular []QuantityVec
 	Lambda  []float64
+	Tangent []r3.Vec
 }
 
 // IslandProposalGates runs a step's kick and first slice through the real
@@ -81,7 +84,7 @@ func IslandProposalGates(ctx context.Context, w *World, from State, gravity Quan
 	}
 	slots := make(map[int]int, len(isl.bodies))
 	proposal := IslandProposal{Linear: slices.Clone(solution.linear), Angular: slices.Clone(solution.angular),
-		Lambda: slices.Clone(solution.lambda)}
+		Lambda: slices.Clone(solution.lambda), Tangent: slices.Clone(solution.tangent)}
 	for slot, index := range isl.bodies {
 		slots[index] = slot
 		proposal.Bodies = append(proposal.Bodies, w.bodies[index].definition.Body)
@@ -96,6 +99,7 @@ func IslandProposalGates(ctx context.Context, w *World, from State, gravity Quan
 	}
 	tamper(&proposal)
 	solution.linear, solution.angular, solution.lambda = proposal.Linear, proposal.Angular, proposal.Lambda
+	solution.tangent = proposal.Tangent
 	cert, failure := w.certifyProposal(isl, kicked, points, solution, nil)
 	if failure != nil {
 		return nil, ErrUnsupported

@@ -360,10 +360,6 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 	var active []islandPair
 	out := &solvedEvent{post: in.pre.clone(), policies: map[int]decad.SweepStartPolicy{}}
 	for _, pair := range in.gathered {
-		if upper := w.pairs[pair.key].friction.upper; upper != nil && upper.Sign() > 0 {
-			return nil, []StepDiagnostic{scheduleDiagnostic(StepUnsupported, w.bodyPair(w.pairs[pair.key]),
-				"a positive-friction island pair has no solver yet")}, nil
-		}
 		if !w.drivenWithin(pair, in.drive) {
 			// A rotating driver's pair cannot be classified; it stays in the
 			// solve, which refuses it if an event reaches its island.
@@ -508,13 +504,16 @@ func (w *World) islandEvents(number int, isl island, solution islandSolution, in
 			TangentImpulse: zeroImpulseVec(), Solver: &solver, Island: number,
 			PoseA: pre.entries[pair.a].Pose, PoseB: pre.entries[pair.b].Pose}
 		total := 0.0
+		var tangent r3.Vec
 		for range pair.manifold.Points {
 			total += solution.lambda[k]
+			tangent = tangent.Add(solution.tangent[k])
 			event.PointImpulses = append(event.PointImpulses, ContactPointImpulse{
-				Normal: units.KilogramMillimetersPerSecond(solution.lambda[k]), Tangent: zeroImpulseVec()})
+				Normal: units.KilogramMillimetersPerSecond(solution.lambda[k]), Tangent: impulseVec(solution.tangent[k])})
 			k++
 		}
 		event.NormalImpulse = units.KilogramMillimetersPerSecond(total)
+		event.TangentImpulse = impulseVec(tangent)
 		sa, sb := slots[pair.a], slots[pair.b]
 		event.PreVelocityA = velocity(pair.a, pre.entries[pair.a].LinearVelocity)
 		event.PreVelocityB = velocity(pair.b, pre.entries[pair.b].LinearVelocity)
@@ -532,6 +531,12 @@ func (w *World) islandEvents(number int, isl island, solution islandSolution, in
 		*events = append(*events, event)
 	}
 	return report
+}
+
+// impulseVec publishes a world impulse vector.
+func impulseVec(v r3.Vec) QuantityVec {
+	return QuantityVec{X: units.KilogramMillimetersPerSecond(v.X), Y: units.KilogramMillimetersPerSecond(v.Y),
+		Z: units.KilogramMillimetersPerSecond(v.Z)}
 }
 
 // ratVelocity publishes an exact velocity at the nearest float components.
@@ -621,9 +626,10 @@ func (w *World) checkCorrections(ctx context.Context, pre, post State, islands [
 }
 
 // islandContactImpulse sums the impulses island events deliver from Fixed
-// and Kinematic bodies to dynamic ones, each point's normal widened by its
-// normal ball. A dynamic pair's two impulses cancel in the world total, and
-// a graze or transition delivers none.
+// and Kinematic bodies to dynamic ones: each point's normal impulse widened
+// by its normal ball, plus its exact published tangent impulse. A dynamic
+// pair's two impulses cancel in the world total, and a graze or transition
+// delivers none.
 func (w *World) islandContactImpulse(events []ContactEvent) (MomentumReading, bool) {
 	var value, low, high [3]*big.Rat
 	for axis := range value {
@@ -649,12 +655,14 @@ func (w *World) islandContactImpulse(events []ContactEvent) (MomentumReading, bo
 			lambda := exactBase(event.PointImpulses[i].Normal)
 			bound, angle := exactBase(point.Normal.Bound), exactBase(point.NormalAngle)
 			normal, ok := ratVec(point.Normal.Value)
-			if lambda == nil || bound == nil || angle == nil || !ok {
+			tangent, okTangent := quantityRats(event.PointImpulses[i].Tangent)
+			if lambda == nil || bound == nil || angle == nil || !ok || !okTangent {
 				return MomentumReading{}, false
 			}
 			width := new(big.Rat).Mul(lambda, new(big.Rat).Add(bound, angle))
 			for axis := range value {
-				applied := new(big.Rat).Mul(new(big.Rat).Mul(lambda, normal[axis]), sign)
+				applied := new(big.Rat).Add(new(big.Rat).Mul(lambda, normal[axis]), tangent[axis])
+				applied.Mul(applied, sign)
 				value[axis].Add(value[axis], applied)
 				low[axis].Add(low[axis], new(big.Rat).Sub(applied, width))
 				high[axis].Add(high[axis], new(big.Rat).Add(applied, width))
@@ -665,9 +673,9 @@ func (w *World) islandContactImpulse(events []ContactEvent) (MomentumReading, bo
 }
 
 // islandKinematicWork sums the work kinematic drivers deliver at island
-// events: at each point, λ·(n·V) for a driver on side A of the pair and
-// −λ·(n·V) on side B, with V the driver's published velocity. The normal
-// ball widens the reading by λ·|V|₁·(bound + angle).
+// events: at each point, J·V for a driver on side A of the pair and −J·V on
+// side B, with J = λ·n + λt the impulse on B and V the driver's published
+// velocity. The normal ball widens the reading by λ·|V|₁·(bound + angle).
 func (w *World) islandKinematicWork(events []ContactEvent) (decad.Measurement, bool) {
 	value, low, high := new(big.Rat), new(big.Rat), new(big.Rat)
 	for _, event := range events {
@@ -695,11 +703,14 @@ func (w *World) islandKinematicWork(events []ContactEvent) (decad.Measurement, b
 				lambda := exactBase(event.PointImpulses[i].Normal)
 				bound, angle := exactBase(point.Normal.Bound), exactBase(point.NormalAngle)
 				normal, okNormal := ratVec(point.Normal.Value)
-				if lambda == nil || bound == nil || angle == nil || !okNormal {
+				tangent, okTangent := quantityRats(event.PointImpulses[i].Tangent)
+				if lambda == nil || bound == nil || angle == nil || !okNormal || !okTangent {
 					return decad.Measurement{}, false
 				}
 				work := new(big.Rat).Set(proof.DotInterval3(pointIVec(normal), pointIVec(v)).Lo)
-				work.Mul(work, lambda).Mul(work, sign)
+				work.Mul(work, lambda)
+				work.Add(work, proof.DotInterval3(pointIVec(tangent), pointIVec(v)).Lo)
+				work.Mul(work, sign)
 				width := new(big.Rat).Mul(absRat(new(big.Rat).Set(lambda)), speed)
 				width.Mul(width, new(big.Rat).Add(bound, angle))
 				value.Add(value, work)

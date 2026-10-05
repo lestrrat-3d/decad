@@ -1,9 +1,8 @@
 // Package dynamics advances rigid bodies using decad's certified geometry queries.
 // A world holds any number of bodies and their canonical pair table. Two- and
 // three-body worlds step through their closed-form responses; a world of four
-// or more bodies steps through the certified broad phase, solves the contacts
-// that touch at the step start as certified frictionless islands, and stops as
-// Undecided at a contact event inside the step.
+// or more bodies drifts from event to event through the certified broad phase
+// and solves the contacts at each event time as certified Coulomb islands.
 package dynamics
 
 import (
