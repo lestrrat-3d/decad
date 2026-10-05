@@ -22,7 +22,7 @@ floor touch or shallow crossing.
 A zero-bound faceted Boolean union with one certified rectangular lower face
 can sweep vertically toward a wide source-box floor, depart from initial
 touch, or retain a persistent face track. Its sweep can certify the first
-exact touch. With supplied or zero-error density-derived mass and centered
+exact touch. With supplied or density-derived mass and centered
 frictionless motion, the rigid
 solver consumes that first-impact bracket, rebounds or rests on the floor, and
 replays the rounded path on either side of impact.

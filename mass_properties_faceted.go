@@ -10,12 +10,20 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// facetedMassProperties integrates a Boolean result only when its held solid
-// has zero occupied-volume error. Equality almost everywhere then transfers
-// all polynomial volume moments from the audited held mesh to the true body.
-func facetedMassProperties(ctx context.Context, pp facetedPayload, density units.Value) (MassProperties, error) {
-	if pp.meshBound != 0 || pp.volSymDiff != 0 || len(pp.verts) == 0 || len(pp.tris) == 0 {
-		return MassProperties{}, fmt.Errorf("%w: faceted mass needs a zero-error occupied-volume proof", ErrUnsupported)
+// facetedMassProperties integrates an audited Boolean mesh and widens its
+// volume moments by the payload's certified occupied-volume difference.
+func facetedMassProperties(ctx context.Context, b *Body, pp facetedPayload, density units.Value) (MassProperties, error) {
+	if len(pp.verts) == 0 || len(pp.tris) == 0 || isNonFinite(pp.meshBound) || pp.meshBound < 0 ||
+		isNonFinite(pp.volSymDiff) || pp.volSymDiff < 0 {
+		return MassProperties{}, fmt.Errorf("%w: faceted mass has no finite occupied-volume certificate", ErrUnsupported)
+	}
+	mesh, err := b.Tessellate(ctx, units.Millimeters(math.Max(1, pp.meshBound)), WithVerification(VerifyAll))
+	if err != nil {
+		return MassProperties{}, err
+	}
+	if !mesh.BoundaryVerified() || !mesh.VolumeVerified() ||
+		mesh.volSymDiff != pp.volSymDiff || mesh.bound != pp.meshBound {
+		return MassProperties{}, fmt.Errorf("%w: faceted mass has no matching verified mesh certificate", ErrUnsupported)
 	}
 	if _, err := auditFacetedMesh(ctx, pp.verts, pp.tris); err != nil {
 		if ctx.Err() != nil {
@@ -42,6 +50,7 @@ func facetedMassProperties(ctx context.Context, pp facetedPayload, density units
 	anchorExact := xptOf(anchor)
 	vertices := make([][3]*big.Rat, len(pp.verts))
 	lifted := make([]xpt, len(pp.verts))
+	maxMesh := [3]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat)}
 	budget := newWorkBudget(ctx)
 	for i, v := range pp.verts {
 		if err := budget.step(); err != nil {
@@ -53,6 +62,12 @@ func facetedMassProperties(ctx context.Context, pp facetedPayload, density units
 		lifted[i] = xsub(xptOf(v), anchorExact)
 		x, y, z := xhpRat(xhp(lifted[i]))
 		vertices[i] = [3]*big.Rat{x, y, z}
+		for axis, coord := range vertices[i] {
+			magnitude := new(big.Rat).Abs(coord)
+			if magnitude.Cmp(maxMesh[axis]) > 0 {
+				maxMesh[axis] = magnitude
+			}
+		}
 	}
 	volume6 := new(big.Rat)
 	var first [3]*big.Rat
@@ -95,33 +110,51 @@ func facetedMassProperties(ctx context.Context, pp facetedPayload, density units
 			second[i][j].Quo(second[i][j], big.NewRat(120, 1))
 		}
 	}
-
-	var center [3]*big.Rat
-	var central [3][3]*big.Rat
-	for i, origin := range []*big.Rat{floatRat(anchor.X), floatRat(anchor.Y), floatRat(anchor.Z)} {
-		center[i] = new(big.Rat).Add(origin, new(big.Rat).Quo(first[i], volume))
+	radius, err := facetedMassRadius(b.bounds, anchor, maxMesh)
+	if err != nil {
+		return MassProperties{}, err
+	}
+	volumeError := floatRat(pp.volSymDiff)
+	firstError := new(big.Rat).Mul(radius, volumeError)
+	secondError := new(big.Rat).Mul(new(big.Rat).Mul(radius, radius), volumeError)
+	volumeIV := facetedMomentInterval(volume, volumeError)
+	if volumeIV.lo.Sign() <= 0 {
+		return MassProperties{}, fmt.Errorf("%w: faceted volume interval includes zero", ErrUnsupported)
+	}
+	var firstIV [3]ratInterval
+	var secondIV [3][3]ratInterval
+	for i := range 3 {
+		firstIV[i] = facetedMomentInterval(first[i], firstError)
 		for j := i; j < 3; j++ {
-			shift := new(big.Rat).Quo(new(big.Rat).Mul(first[i], first[j]), volume)
-			central[i][j] = new(big.Rat).Sub(second[i][j], shift)
+			secondIV[i][j] = facetedMomentInterval(second[i][j], secondError)
 		}
 	}
-	trace := new(big.Rat).Add(central[0][0], central[1][1])
-	trace.Add(trace, central[2][2])
+
+	var center [3]ratInterval
+	var central [3][3]ratInterval
+	for i, origin := range []*big.Rat{floatRat(anchor.X), floatRat(anchor.Y), floatRat(anchor.Z)} {
+		offset, _ := intervalQuo(firstIV[i], volumeIV)
+		center[i] = intervalAdd(pointInterval(origin), offset)
+		for j := i; j < 3; j++ {
+			shift, _ := intervalQuo(intervalMul(firstIV[i], firstIV[j]), volumeIV)
+			central[i][j] = intervalSub(secondIV[i][j], shift)
+		}
+	}
+	trace := intervalAdd(intervalAdd(central[0][0], central[1][1]), central[2][2])
 	rho := new(big.Rat).Mul(floatRat(density.Mag()), floatRat(density.Unit().Factor()))
 	result := MassProperties{}
-	var err error
-	result.Mass, err = massReading(new(big.Rat).Mul(rho, volume), units.Kilogram)
+	result.Mass, err = massIntervalReading(intervalScale(volumeIV, rho), units.Kilogram)
 	if err != nil {
 		return MassProperties{}, err
 	}
 	var centerValue [3]float64
 	centerBound := 0.0
-	for i, exact := range center {
-		centerValue[i], _ = exact.Float64()
+	for i, enclosure := range center {
+		centerValue[i], _ = intervalMid(enclosure).Float64()
 		if isNonFinite(centerValue[i]) {
 			return MassProperties{}, fmt.Errorf("%w: faceted mass center is nonfinite", ErrNotFinite)
 		}
-		centerBound = math.Max(centerBound, rationalFloatError(exact, centerValue[i]))
+		centerBound = math.Max(centerBound, intervalFloatError(enclosure, centerValue[i]))
 	}
 	centerBound = radius3D(centerBound)
 	if isNonFinite(centerBound) {
@@ -136,11 +169,11 @@ func facetedMassProperties(ctx context.Context, pp facetedPayload, density units
 	indices := [6][2]int{{0, 0}, {1, 1}, {2, 2}, {0, 1}, {0, 2}, {1, 2}}
 	for k, pair := range indices {
 		i, j := pair[0], pair[1]
-		term := new(big.Rat).Neg(central[i][j])
+		term := intervalNeg(central[i][j])
 		if i == j {
-			term.Add(term, trace)
+			term = intervalSub(trace, central[i][j])
 		}
-		*components[k], err = massReading(new(big.Rat).Mul(rho, term), units.KilogramSquareMillimeter)
+		*components[k], err = massIntervalReading(intervalScale(term, rho), units.KilogramSquareMillimeter)
 		if err != nil {
 			return MassProperties{}, err
 		}
@@ -152,6 +185,40 @@ func facetedMassProperties(ctx context.Context, pp facetedPayload, density units
 		return MassProperties{}, err
 	}
 	return result, nil
+}
+
+// facetedMassRadius bounds |x-O| by its L1 norm for both the held mesh and
+// the denoted solid. Box.Bound widens each true coordinate from its held
+// extreme; the exact rational sum introduces no new rounding allowance.
+func facetedMassRadius(box Box, anchor r3.Vec, maxMesh [3]*big.Rat) (*big.Rat, error) {
+	allow := box.Bound.Base()
+	if box.Bound.Kind() != units.Length || isNonFinite(allow) || allow < 0 ||
+		!finiteVec(box.Min) || !finiteVec(box.Max) {
+		return nil, fmt.Errorf("%w: faceted mass has no finite spatial bound", ErrUnsupported)
+	}
+	radius := new(big.Rat)
+	ends := [3][3]float64{
+		{box.Min.X, box.Max.X, anchor.X},
+		{box.Min.Y, box.Max.Y, anchor.Y},
+		{box.Min.Z, box.Max.Z, anchor.Z},
+	}
+	for axis, end := range ends {
+		lo := new(big.Rat).Abs(new(big.Rat).Sub(floatRat(end[0]), floatRat(end[2])))
+		hi := new(big.Rat).Abs(new(big.Rat).Sub(floatRat(end[1]), floatRat(end[2])))
+		if hi.Cmp(lo) > 0 {
+			lo = hi
+		}
+		lo.Add(lo, floatRat(allow))
+		if maxMesh[axis].Cmp(lo) > 0 {
+			lo = maxMesh[axis]
+		}
+		radius.Add(radius, lo)
+	}
+	return radius, nil
+}
+
+func facetedMomentInterval(value, bound *big.Rat) ratInterval {
+	return intervalOwned(new(big.Rat).Sub(value, bound), new(big.Rat).Add(value, bound))
 }
 
 // A positive row-dominance margin certifies every tensor in the six rounded
