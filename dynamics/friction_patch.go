@@ -34,6 +34,67 @@ type patchPoint struct {
 	jy         float64
 }
 
+// solveCenteredInteriorFrictionPatch divides one centered face impulse among
+// the four real corners. The normal center of pressure balances the torque
+// from tangential friction. The rational certificate audits every held impulse
+// and the omitted angular motion before the step uses this response.
+func solveCenteredInteriorFrictionPatch(manifold *decad.ContactManifold, mass decad.MassProperties,
+	pose r3.Transform, pre QuantityVec, mu frictionCoefficient, cfg StepConfig) (frictionPatchResponse, bool) {
+	if manifold == nil || len(manifold.Points) != 4 || validateMass(mass) != nil ||
+		pose.Basis() != r3.Identity().Basis() ||
+		validateQuantityVec(pre, units.Velocity) != nil ||
+		pre.X.Base() <= 0 || pre.Y.Base() != 0 || pre.Z.Base() >= 0 ||
+		mu.lower == nil || mu.upper == nil || mu.lower.Sign() <= 0 ||
+		mass.Center.Bound.Base() != 0 || !finite(mu.nominal.Base()) {
+		return frictionPatchResponse{}, false
+	}
+	center := pose.Apply(mass.Center.Value)
+	first := manifold.Points[0].OnB.Value.Sub(center)
+	halfX, halfY, height := math.Abs(first.X), math.Abs(first.Y), first.Z
+	if !finite(halfX, halfY, height) || halfX <= 0 || halfY <= 0 || height >= 0 {
+		return frictionPatchResponse{}, false
+	}
+	var points [4]patchPoint
+	var corners [2][2]bool
+	for i, witness := range manifold.Points {
+		if witness.OnA.Value != witness.OnB.Value || witness.OnA.Bound.Base() != 0 ||
+			witness.OnB.Bound.Base() != 0 || witness.Normal.Value != (r3.Vec{Z: 1}) ||
+			witness.Normal.Bound.Base() != 0 || witness.NormalAngle.Base() != 0 {
+			return frictionPatchResponse{}, false
+		}
+		lever := witness.OnB.Value.Sub(center)
+		if math.Abs(lever.X) != halfX || math.Abs(lever.Y) != halfY || lever.Z != height {
+			return frictionPatchResponse{}, false
+		}
+		x, y := 0, 0
+		if lever.X > 0 {
+			x = 1
+		}
+		if lever.Y > 0 {
+			y = 1
+		}
+		if corners[x][y] {
+			return frictionPatchResponse{}, false
+		}
+		corners[x][y] = true
+		points[i] = patchPoint{lever: lever, leverExact: exactTranslatedPatchLever(
+			witness.OnB.Value, mass.Center.Value, pose.Translation()),
+			bound: exactBase(witness.OnB.Bound)}
+	}
+	jn := -pre.Z.Base() * mass.Mass.Value.Base()
+	jt := -math.Min(pre.X.Base()*mass.Mass.Value.Base(), mu.nominal.Base()*jn)
+	pressure := height * jt / jn
+	if !finite(jn, jt, pressure) || jn <= 0 || jt >= 0 || math.Abs(pressure) >= halfX {
+		return frictionPatchResponse{}, false
+	}
+	for i := range points {
+		points[i].jn = jn * (1 + pressure*points[i].lever.X/(halfX*halfX)) / 4
+		points[i].jx = points[i].jn * jt / jn
+	}
+	postX := pre.X.Base() + jt/mass.Mass.Value.Base()
+	return certifyFrictionPatch(manifold, mass, pre, mu, cfg, points, r3.Vec{X: postX}, 1)
+}
+
 // solveFixedFloorFrictionPatch uses the real four-corner manifold in its
 // published order. A fixed-order projected solve proposes impulses; exact
 // rational residuals over the mass, point, center, and inertia bounds admit
@@ -149,6 +210,9 @@ func certifyFrictionPatch(manifold *decad.ContactManifold, mass decad.MassProper
 	// Publish the constrained directions exactly. The interval check below
 	// charges the change from the nominal iterate to the held impulse law.
 	post := [3]float64{v.X, 0, 0}
+	if math.Abs(post[0]) <= cfg.VelocityResidual.Base() {
+		post[0] = 0
+	}
 	var total, torque, torqueError [3]*big.Rat
 	for i := range 3 {
 		total[i], torque[i], torqueError[i] = new(big.Rat), new(big.Rat), new(big.Rat)
@@ -203,27 +267,28 @@ func certifyFrictionPatch(manifold *decad.ContactManifold, mass decad.MassProper
 	velocityLimit := exactBase(cfg.VelocityResidual)
 	for _, point := range points {
 		jn, jx, jy := ratFloat(point.jn), ratFloat(point.jx), ratFloat(point.jy)
-		if jn == nil || jx == nil || jy == nil || jn.Sign() <= 0 || jx.Sign() >= 0 {
+		if jn == nil || jx == nil || jy == nil || jn.Sign() <= 0 || jx.Sign() > 0 {
 			return frictionPatchResponse{}, false
 		}
 		coneLower := new(big.Rat).Mul(mu.lower, jn)
 		coneUpper := new(big.Rat).Mul(mu.upper, jn)
-		direction := absRat(new(big.Rat).Add(jx, coneLower))
-		upperDirection := absRat(new(big.Rat).Add(jx, coneUpper))
-		if upperDirection.Cmp(direction) > 0 {
-			direction = upperDirection
-		}
-		direction.Add(direction, absRat(new(big.Rat).Set(jy)))
-		if direction.Cmp(impulseLimit) > 0 {
-			return frictionPatchResponse{}, false
-		}
 		coneSquare := new(big.Rat).Add(new(big.Rat).Mul(jx, jx), new(big.Rat).Mul(jy, jy))
 		allowed := new(big.Rat).Add(coneLower, impulseLimit)
 		if coneSquare.Cmp(new(big.Rat).Mul(allowed, allowed)) > 0 {
 			return frictionPatchResponse{}, false
 		}
-		if direction.Cmp(maxCone) > 0 {
-			maxCone = direction
+		_, coneNormUpper, ok := positiveSqrtBracket(coneSquare)
+		if !ok {
+			return frictionPatchResponse{}, false
+		}
+		coneResidual := new(big.Rat).Sub(coneNormUpper, coneLower)
+		if coneResidual.Sign() > 0 {
+			if coneResidual.Cmp(impulseLimit) > 0 {
+				return frictionPatchResponse{}, false
+			}
+			if coneResidual.Cmp(maxCone) > 0 {
+				maxCone = coneResidual
+			}
 		}
 		lever := absRat(new(big.Rat).Set(point.leverExact[0]))
 		lever.Add(lever, absRat(new(big.Rat).Set(point.leverExact[1])))
@@ -237,16 +302,36 @@ func certifyFrictionPatch(manifold *decad.ContactManifold, mass decad.MassProper
 		if normal.Cmp(velocityLimit) > 0 || tangent.Cmp(velocityLimit) > 0 {
 			return frictionPatchResponse{}, false
 		}
-		slipLower := new(big.Rat).Sub(ratFloat(post[0]), linearError[0])
-		slipLower.Sub(slipLower, pointError)
-		if slipLower.Sign() <= 0 {
-			return frictionPatchResponse{}, false
-		}
 		if normal.Cmp(maxNormal) > 0 {
 			maxNormal = normal
 		}
 		if tangent.Cmp(maxTangent) > 0 {
 			maxTangent = tangent
+		}
+		slipLower := new(big.Rat).Sub(ratFloat(post[0]), linearError[0])
+		slipLower.Sub(slipLower, pointError)
+		if slipLower.Sign() <= 0 {
+			sticking := new(big.Rat).Add(absRat(ratFloat(post[0])), linearError[0])
+			sticking.Add(sticking, pointError)
+			if sticking.Cmp(velocityLimit) > 0 {
+				return frictionPatchResponse{}, false
+			}
+			if sticking.Cmp(maxTangent) > 0 {
+				maxTangent = sticking
+			}
+			continue
+		}
+		direction := absRat(new(big.Rat).Add(jx, coneLower))
+		upperDirection := absRat(new(big.Rat).Add(jx, coneUpper))
+		if upperDirection.Cmp(direction) > 0 {
+			direction = upperDirection
+		}
+		direction.Add(direction, absRat(new(big.Rat).Set(jy)))
+		if direction.Cmp(impulseLimit) > 0 {
+			return frictionPatchResponse{}, false
+		}
+		if direction.Cmp(maxCone) > 0 {
+			maxCone = direction
 		}
 	}
 	response := frictionPatchResponse{Post: QuantityVec{X: units.MillimetersPerSecond(post[0]),

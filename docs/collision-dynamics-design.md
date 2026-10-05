@@ -86,7 +86,11 @@ four-corner Coulomb response. Body coefficients combine by geometric mean;
 an explicit pair coefficient replaces them. The response checks rational
 bounds around a nonexact mean. `World.Step` requires full ideal and rounded
 persistent-contact tracks and reports normal and tangent impulses. A centered
-zero-slip box receives normal support with zero tangent impulse. Every advanced
+zero-slip box receives normal support with zero tangent impulse. `World.Step`
+also consumes an interior first-impact bracket for a centered translating
+source box above a fixed floor with zero restitution and positive friction.
+The corrected four-corner touch supplies a bounded normal and tangent response;
+ideal and rounded sweeps certify the remaining persistent contact. Every advanced
 step reports bounded dynamic-body kinetic energy, linear momentum, and angular
 momentum at input, after the force kick, and at completion, plus gravity,
 center-force, torque, and fixed/kinematic contact impulses, plus bounded
