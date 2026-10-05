@@ -16,12 +16,16 @@ func TestSpherePairInitialCardinalRestitution(t *testing.T) {
 		reverse     bool
 		densityMass bool
 		restitution float64
+		massRatio   float64
+		incomingB   float64
 	}{
 		{name: "density source order", densityMass: true, restitution: .5},
 		{name: "density reverse order", reverse: true, densityMass: true, restitution: .5},
 		{name: "supplied source order", restitution: .5},
 		{name: "supplied reverse order", reverse: true, restitution: .5},
 		{name: "density resting", densityMass: true},
+		{name: "unequal density resting", densityMass: true, massRatio: 2, incomingB: -25},
+		{name: "unequal density resting reverse", reverse: true, densityMass: true, massRatio: 2, incomingB: -25},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := decad.New()
@@ -33,8 +37,12 @@ func TestSpherePairInitialCardinalRestitution(t *testing.T) {
 			contact, err := doc.ContactPair(t.Context(), a, b, poseA, poseB, cfg.Contact)
 			require.NoError(t, err)
 			require.Equal(t, decad.ContactTouching, contact.Relation)
+			incomingB := -50.0
+			if tc.incomingB != 0 {
+				incomingB = tc.incomingB
+			}
 			velocityA, velocityB := sphereRestVelocity(r3.Vec{X: 50}),
-				sphereRestVelocity(r3.Vec{X: -50})
+				sphereRestVelocity(r3.Vec{X: incomingB})
 			period := units.Seconds(.1)
 			path := func(pose r3.Transform, velocity dynamics.QuantityVec) decad.RigidDriftSegment {
 				return decad.RigidDriftSegment{From: pose, LinearVelocity: velocity,
@@ -46,19 +54,26 @@ func TestSpherePairInitialCardinalRestitution(t *testing.T) {
 					MaxPoseEvaluations: cfg.MaxPoseEvaluations})
 			require.NoError(t, err)
 			require.Equal(t, decad.SweepInitiallyTouching, sweep.Outcome)
-			density := units.KilogramsPerCubicMillimeter(.001)
-			mass, err := a.MassProperties(t.Context(), density)
+			densityA := units.KilogramsPerCubicMillimeter(.001)
+			densityB := densityA
+			if tc.massRatio > 0 {
+				densityB = units.KilogramsPerCubicMillimeter(.001 * tc.massRatio)
+			}
+			massA, err := a.MassProperties(t.Context(), densityA)
 			require.NoError(t, err)
-			require.Positive(t, mass.Mass.Bound.Base())
+			massB, err := b.MassProperties(t.Context(), densityB)
+			require.NoError(t, err)
+			require.Positive(t, massA.Mass.Bound.Base())
+			require.Positive(t, massB.Mass.Bound.Base())
 			material := dynamics.Material{Restitution: units.Scalar(tc.restitution), Friction: units.Scalar(0)}
 			bodies := []dynamics.RigidBody{
 				{Body: a, Role: dynamics.Dynamic, Material: material},
 				{Body: b, Role: dynamics.Dynamic, Material: material},
 			}
 			if tc.densityMass {
-				bodies[0].Density, bodies[1].Density = &density, &density
+				bodies[0].Density, bodies[1].Density = &densityA, &densityB
 			} else {
-				bodies[0].Supplied, bodies[1].Supplied = &mass, &mass
+				bodies[0].Supplied, bodies[1].Supplied = &massA, &massB
 			}
 			states := []dynamics.BodyState{
 				{Body: a, Pose: poseA, LinearVelocity: velocityA, AngularVelocity: zeroAngular(t)},
@@ -78,8 +93,11 @@ func TestSpherePairInitialCardinalRestitution(t *testing.T) {
 			require.Equal(t, dynamics.Advanced, step.Status, "%+v", step.Diagnostics)
 			require.Len(t, step.Events, 1)
 			require.Equal(t, units.Seconds(0), step.Events[0].Time)
-			require.InDelta(t, 50*(1+tc.restitution)*mass.Mass.Value.Base(),
-				step.Events[0].NormalImpulse.Base(), 1e-5)
+			mA, mB := massA.Mass.Value.Base(), massB.Mass.Value.Base()
+			expectedImpulse := (50 - incomingB) * (1 + tc.restitution) * mA * mB / (mA + mB)
+			expectedA := 50 - expectedImpulse/mA
+			expectedB := incomingB + expectedImpulse/mB
+			require.InDelta(t, expectedImpulse, step.Events[0].NormalImpulse.Base(), 1e-5)
 			for _, sampleAt := range []units.Value{units.Seconds(0), units.Seconds(.05), period} {
 				sample, sampleErr := step.Trace.Sample(sampleAt)
 				require.NoError(t, sampleErr)
@@ -87,12 +105,16 @@ func TestSpherePairInitialCardinalRestitution(t *testing.T) {
 				require.True(t, found)
 				sb, found := sample.Body(b)
 				require.True(t, found)
-				require.InDelta(t, -50*tc.restitution, sa.LinearVelocity.X.Base(), 1e-6)
-				require.InDelta(t, 50*tc.restitution, sb.LinearVelocity.X.Base(), 1e-6)
+				require.InDelta(t, expectedA, sa.LinearVelocity.X.Base(), 1e-6)
+				require.InDelta(t, expectedB, sb.LinearVelocity.X.Base(), 1e-6)
+				if tc.restitution == 0 {
+					require.Equal(t, sa.LinearVelocity.X, sb.LinearVelocity.X)
+				}
 			}
 			require.NotNil(t, step.Conservation)
-			require.InDelta(t, 0, step.Conservation.Completion.LinearMomentum.Value.X.Base(), 1e-6)
-			require.InDelta(t, 2500*tc.restitution*tc.restitution*mass.Mass.Value.Base(),
+			require.InDelta(t, 50*mA+incomingB*mB,
+				step.Conservation.Completion.LinearMomentum.Value.X.Base(), 1e-6)
+			require.InDelta(t, .5*(mA*expectedA*expectedA+mB*expectedB*expectedB),
 				step.Conservation.Completion.KineticEnergy.Value.Base(), 1e-4)
 			second, err := world.Step(t.Context(), *step.Next,
 				dynamics.StepInput{Gravity: zeroAcceleration()}, period)
