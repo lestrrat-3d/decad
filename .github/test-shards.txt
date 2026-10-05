@@ -1717,6 +1717,9 @@
 4	0.00	TestSweepPairFixedFloorTangentialSpinDeparts
 4	0.00	TestSweepPairOffCenterBoxImpactAtEndpoint
 4	0.02	TestSweepPairPlacedFacetedFloorImpactAndDeparture
+4	0.02	TestSweepPairPlanarAffineWedgeTouchesFloor
+4	0.11	TestSweepPairPlanarTumblingWedge
+4	0.01	TestSweepPairPlanarWedgeStops
 4	0.01	TestSweepPairRealFacetedUnionClearAndImpact
 4	0.01	TestSweepPairRealFacetedUnionTouchContinuations
 4	0.00	TestSweepPairRefusesSeparatedOffOriginRotatingSphere
