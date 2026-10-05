@@ -177,7 +177,7 @@ to the byte budget.
 | `clearance_box.go` | Certifies unplaced axis-aligned rectangular prisms and bounds their gap directly from exact box planes before the general pair kernel. |
 | `contact_pair.go` | Pair gates and verdict. See `docs/contact-geometry-design.md`. |
 | `contact_box.go` | Box manifold. See `docs/contact-geometry-design.md` §4. |
-| `contact_faceted_support.go` | Exact rectangular support-face proof for zero-bound faceted contact, plus boundary-bound strict floor separation. See `docs/contact-geometry-design.md` §4. |
+| `contact_faceted_support.go` | Exact rectangular support-face proof for zero-bound and translation-placed faceted contact, plus bounded strict separation. See `docs/contact-geometry-design.md` §4. |
 | `contact_faceted_sweep.go` | Affine vertical support-face sweep and positive-bound strict clear sweep against a source-box floor. See `docs/contact-sweep-design.md`. |
 | `contact_oriented_box.go` | Rotated boxes. See `docs/contact-geometry-design.md` §4. |
 | `contact_oriented_patch.go` | Exact co-oriented oblique face patch, source faces, and bounded witnesses. See `docs/contact-geometry-design.md` §4. |

@@ -78,8 +78,8 @@ func TestFacetedAxisSupportProvesRealUnionFloorFace(t *testing.T) {
 	require.Equal(t, 0, dyCmp(moved.footLo[0], mustDyOf(2)))
 	require.Equal(t, 0, dyCmp(moved.footLo[1], mustDyOf(3)))
 
-	// Rebuilding a faceted body through an inexact translation widens its
-	// source boundary. A triangle's plane cannot then certify the true normal.
+	// Rebuilding through an inexact translation widens the held mesh, while
+	// the saved zero-bound source still certifies the true support plane.
 	inexactShift, err := r3.Translation(r3.Vec{X: 0.1})
 	require.NoError(t, err)
 	widened, err := union.Placed(t.Context(), inexactShift)
@@ -87,7 +87,44 @@ func TestFacetedAxisSupportProvesRealUnionFloorFace(t *testing.T) {
 	widenedPayload, ok := widened.payload.(facetedPayload)
 	require.True(t, ok)
 	require.Positive(t, widenedPayload.meshBound)
-	_, ok, err = sourceFacetedAxisSupport(t.Context(), widened, r3.Identity(), 2, 0)
+	widenedProof, ok, err := sourceFacetedAxisSupport(t.Context(), widened, r3.Identity(), 2, 0)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, 0, dyCmp(widenedProof.plane, mustDyOf(0)))
+	require.Equal(t, 0, dyCmp(widenedProof.footLo[0], mustDyOf(.1)))
+	require.Contains(t, widened.Faces(), widenedProof.face)
+}
+
+func TestFacetedAxisSupportRejectsMalformedPlacementProvenance(t *testing.T) {
+	_, _, placed := boundedFacetedFloorFixture(t)
+	valid := placed.payload.(facetedPayload)
+	require.NotEmpty(t, valid.exactSourceVerts)
+	require.NotEmpty(t, valid.exactSourceTris)
+	missing := valid
+	missing.exactSourceVerts = nil
+	wrongTris := valid
+	wrongTris.exactSourceTris = append([][3]int(nil), valid.exactSourceTris...)
+	wrongTris.exactSourceTris[0][0] = -1
+	wrongVerts := valid
+	wrongVerts.exactSourceVerts = append([]r3.Vec(nil), valid.exactSourceVerts...)
+	wrongVerts.exactSourceVerts[0].X += 1
+	for _, corrupt := range []facetedPayload{missing, wrongTris, wrongVerts} {
+		body := &Body{lumps: placed.lumps, solid: placed.solid, kind: placed.kind, payload: corrupt}
+		_, ok, err := sourceFacetedAxisSupport(t.Context(), body, r3.Identity(), 2, 0)
+		require.NoError(t, err)
+		require.False(t, ok)
+	}
+
+	doc, _, source := facetedFloorSweepFixture(t)
+	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{Y: 1}, r3.Vec{Z: 1})
+	require.NoError(t, err)
+	reflection, err := r3.Reflection(frame)
+	require.NoError(t, err)
+	reflected, err := source.Placed(t.Context(), reflection)
+	require.NoError(t, err)
+	require.Same(t, doc, reflected.Document())
+	require.Empty(t, reflected.payload.(facetedPayload).exactSourceVerts)
+	_, ok, err := sourceFacetedAxisSupport(t.Context(), reflected, r3.Identity(), 2, 0)
 	require.NoError(t, err)
 	require.False(t, ok)
 }
@@ -227,8 +264,24 @@ func TestContactPairFacetedFloorRefusesUnprovedPatches(t *testing.T) {
 	require.NoError(t, err)
 	report, err := doc.ContactPair(t.Context(), floor, widened, r3.Identity(), r3.Identity(), req)
 	require.NoError(t, err)
-	require.Equal(t, ContactUndecided, report.Relation)
-	require.Nil(t, report.Manifold)
+	require.Equal(t, ContactTouching, report.Relation)
+	require.Equal(t, ContactNoReason, report.Reason)
+	require.Equal(t, Measurement{Value: units.Millimeters(0), Exactness: Exact,
+		Bound: units.Millimeters(0)}, *report.Gap)
+	require.NotNil(t, report.Manifold)
+	require.Len(t, report.Manifold.Points, 4)
+	for i, want := range []r3.Vec{{X: .1}, {X: 10.1}, {X: 10.1, Y: 10}, {X: .1, Y: 10}} {
+		point := report.Manifold.Points[i]
+		require.InDelta(t, want.X, point.OnA.Value.X, req.PointResolution.Base())
+		require.InDelta(t, want.Y, point.OnA.Value.Y, req.PointResolution.Base())
+		require.Equal(t, point.OnA, point.OnB)
+		require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+		require.Zero(t, point.Separation.Value.Base())
+		require.Contains(t, widened.Faces(), point.FaceB)
+		require.Same(t, point.FaceB, point.FeatureB.Face)
+		require.Contains(t, floor.Faces(), point.FaceA)
+		require.Same(t, point.FaceA, point.FeatureA.Face)
+	}
 }
 
 func TestContactPairFacetedFloorRefusesMultipleSupportFaces(t *testing.T) {

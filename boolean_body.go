@@ -46,6 +46,13 @@ type facetedPayload struct {
 	// Faces() order; buildFacetedBody sets it, Tessellate reads it.
 	faceOf []int
 
+	// exactSourceVerts and exactSourceTris name the zero-bound Boolean mesh
+	// before translation-only placement rounded its held coordinates. They
+	// certify its true occupied boundary under xform; ordinary positive-bound
+	// Boolean results and non-translation placements carry neither record.
+	exactSourceVerts []r3.Vec
+	exactSourceTris  [][3]int
+
 	// meshBound is the proven vertex-level bound (mm): no point of the true
 	// result boundary is farther than this from the held mesh's
 	// corresponding piece. volSymDiff bounds the volume of the symmetric
@@ -73,6 +80,10 @@ type facetedPayload struct {
 // transform is the accumulated rigid placement.
 func (fp facetedPayload) transform() r3.Transform { return fp.xform }
 
+func facetedTranslationOnly(t r3.Transform) bool {
+	return t.IsValid() && finiteVec(t.Translation()) && t.Basis() == r3.Identity().Basis()
+}
+
 // placed re-evaluates the held mesh under the composed motion: the vertices
 // move through the delta motion (float rounding is folded into the proven
 // bounds — the geometry is never silently trusted), a reflection flips the
@@ -92,6 +103,13 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	}
 	next := fp
 	next.xform = composed
+	if !facetedTranslationOnly(delta) || !facetedTranslationOnly(composed) {
+		next.exactSourceVerts, next.exactSourceTris = nil, nil
+	} else if len(fp.exactSourceVerts) == 0 && fp.meshBound == 0 && fp.volSymDiff == 0 &&
+		fp.xform == r3.Identity() {
+		next.exactSourceVerts = append([]r3.Vec(nil), fp.verts...)
+		next.exactSourceTris = append([][3]int(nil), fp.tris...)
+	}
 	next.verts = make([]r3.Vec, len(fp.verts))
 	// The rounding a rigid motion commits is committed at the magnitude of the
 	// INPUT coordinate and of the translation — inside the products and sums —

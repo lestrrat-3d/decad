@@ -1089,6 +1089,7 @@
 4	0.00	TestContactPairOrientedAxisFaceWitness
 4	0.00	TestContactPairOrientedSourceBoxes
 4	0.00	TestContactPairPlacedBodyAndInputGates
+4	0.01	TestContactPairPlacedFacetedFloorExactTouch
 4	0.01	TestContactPairRealFacetedUnionOnFloor
 4	0.00	TestContactPairRevolvedCylinderAxialDiskFace
 4	0.00	TestContactPairRevolvedCylinderRefusesUnprovedDiskCorridor
@@ -1191,6 +1192,7 @@
 4	0.00	TestFacetFaceIndicesMapsConsistentFaces
 4	0.00	TestFacetFaceIndicesRejectsUnmappedFacet
 4	0.00	TestFacetedAxisSupportProvesRealUnionFloorFace
+4	0.01	TestFacetedAxisSupportRejectsMalformedPlacementProvenance
 4	0.00	TestFacetedAxisSupportRefusesHoledFootprint
 4	0.00	TestFacetedAxisSupportRefusesTwoLowestFaces
 4	0.01	TestFacetedMassPropertiesLumpsAndVoid

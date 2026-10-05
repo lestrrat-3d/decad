@@ -86,10 +86,11 @@ type ContactReport struct {
 // may be off-axis when their normal and witnesses meet the requested bounds.
 // A full source cylinder, extruded or revolved, can prove an axial gap and
 // disk-face contact against a containing box face.
-// A zero-bound faceted solid can prove a lower support face contact or axial
-// gap against a source-box floor that strictly contains its support footprint.
-// A positive-bound faceted solid can prove a strict axial gap with its
-// boundary displacement charged, but cannot publish a contact manifold.
+// A zero-bound faceted solid, or its translation-only placed copy with an
+// exact source mesh, can prove lower support face contact or an axial gap
+// against a source-box floor that strictly contains its support footprint.
+// Other positive-bound faceted solids can prove a strict axial gap with their
+// boundary displacement charged, but publish no contact manifold.
 // An exactly orthogonal rotated source box can give a sphere a bounded point
 // on one interior face.
 // At identity query poses, the analytic clearance kernel can prove relations
