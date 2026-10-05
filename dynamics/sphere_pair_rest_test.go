@@ -225,8 +225,11 @@ func TestSpherePairInitialZeroRestitutionTangentialDeparture(t *testing.T) {
 func TestSpherePairInitialZeroRestitutionRefusesUnboundedSpin(t *testing.T) {
 	massA, massB := exactSphereMass(), exactSphereMass()
 	massA.Center.Value = r3.Vec{Z: 2}
-	_, world, _, _, _, state, _ := spherePairRestFixture(t,
+	doc, world, a, b, _, state, _ := spherePairRestFixture(t,
 		r3.Vec{X: 6, Y: 8}, r3.Vec{X: -6, Y: -8}, massA, massB, false)
+	require.NotNil(t, doc)
+	require.NotNil(t, a)
+	require.NotNil(t, b)
 	step, err := world.Step(t.Context(), state, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.1))
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, step.Status)
