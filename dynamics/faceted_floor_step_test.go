@@ -15,8 +15,8 @@ func facetedFloorStepFixture(t *testing.T) (*decad.Document, *decad.Body, *decad
 	t.Helper()
 	doc := decad.New()
 	base := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
-	cap := makeBox(t, doc, -2, -2, 2, 2, 8, 4)
-	faceted, err := decad.Union(t.Context(), base, cap)
+	upperCap := makeBox(t, doc, -2, -2, 2, 2, 8, 4)
+	faceted, err := decad.Union(t.Context(), base, upperCap)
 	require.NoError(t, err)
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	center, err := faceted.Centroid()
@@ -82,7 +82,7 @@ func facetedFloorWorld(t *testing.T, doc *decad.Document, floor, faceted *decad.
 func TestFacetedFloorImpactUsesRealUnionSweepAndTrace(t *testing.T) {
 	for _, reversed := range []bool{false, true} {
 		for _, restitution := range []float64{0, .5} {
-			t.Run(map[bool]string{false: "floor first", true: "faceted first"}[reversed]+
+			t.Run(map[bool]string{false: "fixed floor before union", true: "union before fixed floor"}[reversed]+
 				map[bool]string{false: " resting", true: " rebounding"}[restitution > 0], func(t *testing.T) {
 				doc, floor, faceted, mass := facetedFloorStepFixture(t)
 				world, start := facetedFloorWorld(t, doc, floor, faceted, mass, restitution,
