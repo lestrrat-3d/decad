@@ -142,6 +142,76 @@ func unionFindRoot(parent map[*Face]*Face, f *Face) *Face {
 	return f
 }
 
+// freeChainCountsByFace groups the body's own recorded free Edges by their
+// single adjacent face and counts, per face, the CONNECTED COMPONENTS its
+// free Edges form over their own Vertex pointers — one boundary CHAIN per
+// component, not one per Edge object. A coalesced wall's rim is usually one
+// recorded curve, a single segment or several merged collinear ones, so it
+// is usually one Edge object AND one chain. But two of a face's free Edges
+// that share an interned Vertex — a revolve wall's two rims meeting at a pole
+// the payload interns between them — are still only ONE chain: the two
+// Edges are two chords of the same connected boundary walk, exactly as
+// internal/tessellation.RequireSheetBoundary reads the mesh side of the same
+// face by connected component rather than by directed-edge count.
+func freeChainCountsByFace(b *Body) map[*Face]int {
+	byFace := map[*Face][][2]*Vertex{}
+	for _, e := range b.Edges() {
+		if !e.IsFree() {
+			continue
+		}
+		faces := e.Faces()
+		if len(faces) != 1 {
+			continue // IsFree already guarantees exactly one; defensive only
+		}
+		byFace[faces[0]] = append(byFace[faces[0]], [2]*Vertex{e.Start(), e.End()})
+	}
+	counts := make(map[*Face]int, len(byFace))
+	for face, edges := range byFace {
+		counts[face] = countVertexChains(edges)
+	}
+	return counts
+}
+
+// countVertexChains counts the connected components of the undirected graph
+// one face's free Edges form over their own Vertex pointers, mirroring
+// surface.go's splitConnectedFaces/unionFindRoot shape — the same
+// union-find over pointer identity, keyed on *Vertex here instead of *Face.
+func countVertexChains(edges [][2]*Vertex) int {
+	parent := map[*Vertex]*Vertex{}
+	for _, e := range edges {
+		if _, ok := parent[e[0]]; !ok {
+			parent[e[0]] = e[0]
+		}
+		if _, ok := parent[e[1]]; !ok {
+			parent[e[1]] = e[1]
+		}
+	}
+	for _, e := range edges {
+		ra, rb := vertexChainRoot(parent, e[0]), vertexChainRoot(parent, e[1])
+		if ra != rb {
+			parent[ra] = rb
+		}
+	}
+	roots := map[*Vertex]struct{}{}
+	for v := range parent {
+		roots[vertexChainRoot(parent, v)] = struct{}{}
+	}
+	return len(roots)
+}
+
+// vertexChainRoot is countVertexChains's own path-compressing find, a
+// top-level function rather than a closure over parent for the same reason
+// surface.go's unionFindRoot is: a self-referential closure cannot be
+// declared and assigned in one statement (staticcheck S1021 does not account
+// for the recursion).
+func vertexChainRoot(parent map[*Vertex]*Vertex, v *Vertex) *Vertex {
+	for parent[v] != v {
+		parent[v] = parent[parent[v]]
+		v = parent[v]
+	}
+	return v
+}
+
 // sheetLumps builds one Lump per connected piece of faces, each holding one
 // Shell whose IsOpen is shellIsOpen's own reading and whose IsVoid stays
 // false — a sheet bounds no cavity (docs/surface-design.md §2.2), so nothing

@@ -53,7 +53,7 @@ func revolveWallTriangleCount(t *testing.T, solid *decad.Body, solidMesh *decad.
 // directed edges form over its vertex indices — the boundary CHAIN count
 // docs/tessellation-design.md §1.2 reads by connected component, never by
 // edge count. This is the exact fixture the sheet chain-count fix
-// (PR #292, requireSheetVertexLinks) was required before: a revolve wall
+// (PR #292, tessellation.RequireSheetVertexLinks) was required before: a revolve wall
 // meeting the axis shares an interned pole vertex between two rims that are
 // nonetheless ONE chain.
 func meshFreeChainCount(t *testing.T, mesh *decad.Mesh) int {
@@ -85,7 +85,7 @@ func meshFreeChainCount(t *testing.T, mesh *decad.Mesh) int {
 // top-level function rather than a closure over parent: a self-referential
 // closure cannot be declared and assigned in one statement (staticcheck
 // S1021 does not account for the recursion), the same reason
-// tessellate_sheet.go's own chainRoot/vertexChainRoot are top-level
+// surface.go's own vertexChainRoot is a top-level
 // functions instead of closures.
 func meshFreeChainRoot(parent map[int]int, v int) int {
 	if _, ok := parent[v]; !ok {

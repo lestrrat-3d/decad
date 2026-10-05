@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -449,4 +450,19 @@ func TestTessellatePrismReusesPublishedWalks(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, resolvedAgain, reused, "the reused resolution must chord to the same mesh")
+}
+
+// TestLiftTessellationError pins the root's mapping of an internal audit
+// refusal: the sentinel decides errors.Is, the detail follows it verbatim,
+// and anything else, a cancelled context above all, is returned as itself.
+func TestLiftTessellationError(t *testing.T) {
+	t.Parallel()
+	require.NoError(t, liftTessellationError(nil))
+	require.Equal(t, context.Canceled, liftTessellationError(context.Canceled))
+	degenerate := liftTessellationError(&tessellation.AuditError{Sentinel: tessellation.Degenerate, Detail: "the detail"})
+	require.ErrorIs(t, degenerate, ErrDegenerate)
+	require.Equal(t, "decad: degenerate input: the detail", degenerate.Error())
+	unsupported := liftTessellationError(&tessellation.AuditError{Sentinel: tessellation.Unsupported, Detail: "the detail"})
+	require.ErrorIs(t, unsupported, ErrUnsupported)
+	require.Equal(t, "decad: not supported by the current evaluator: the detail", unsupported.Error())
 }

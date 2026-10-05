@@ -2,11 +2,13 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
@@ -341,7 +343,7 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 	if lp, ok := b.payload.(loftPayload); ok {
 		// The loft path exactly restates the payload's complete set for a
 		// solid or its recorded wall range for a sheet, with no chording
-		// (tessellate_loft.go's own doc comment owns why).
+		// (internal/tessellation.RestateLoft's own doc comment owns why).
 		return tessellateLoft(ctx, b, lp)
 	}
 	if rp, ok := b.payload.(revolvePayload); ok {
@@ -702,20 +704,66 @@ func tessellateBodyContext(ctx context.Context, b *Body, chord float64, verify V
 
 // requireMeshAudit dispatches docs/tessellation-design.md §1's mandatory
 // mesh audit by body kind: a BodySolid keeps §1's closed-mesh audit
-// (requireClosedMesh) verbatim, and a BodySheet runs §1.2's manifold-with-
-// boundary audit (requireSheetMesh) plus its own vertex-link safety net
-// (requireSheetVertexLinks) in its place — both in tessellate_sheet.go. This
-// is the one place a surface-result build reaches either sheet audit, so the
-// prism sheet path today and the revolve sheet path once it lands both get
-// them from here.
+// (tessellation.RequireClosedMesh) verbatim, and a BodySheet runs §1.2's
+// manifold-with-boundary audit (requireSheetMesh) plus its own vertex-link
+// safety net (tessellation.RequireSheetVertexLinks) in its place. Both audits
+// live in internal/tessellation. This is the one place a surface-result build
+// reaches either sheet audit, so the prism, revolve, chain and stitch sheet
+// paths all get them from here.
 func requireMeshAudit(ctx context.Context, sheet bool, b *Body, m *Mesh) error {
 	if sheet {
 		if err := requireSheetMesh(ctx, b, m); err != nil {
 			return err
 		}
-		return requireSheetVertexLinks(ctx, m)
+		return liftTessellationError(tessellation.RequireSheetVertexLinks(ctx, len(m.vertices), m.triangles))
 	}
-	return requireClosedMesh(m)
+	return liftTessellationError(tessellation.RequireClosedMesh(m.triangles))
+}
+
+// requireSheetMesh is the root side of docs/tessellation-design.md §1.2's
+// free-boundary attribution audit: it numbers the body's faces in Body.Faces
+// order, carries each mesh triangle's source face and the body's own recorded
+// free-edge chains over as those numbers, and lets internal/tessellation
+// compare the two sides. A source face the body does not carry keeps its own
+// fresh number, so pointer identity decides the grouping exactly as before.
+func requireSheetMesh(ctx context.Context, b *Body, m *Mesh) error {
+	faces := b.Faces()
+	number := make(map[*Face]int, len(faces))
+	for i, f := range faces {
+		number[f] = i
+	}
+	source := make([]int, len(m.source))
+	for k, f := range m.source {
+		i, ok := number[f]
+		if !ok {
+			i = len(number)
+			number[f] = i
+		}
+		source[k] = i
+	}
+	counts := freeChainCountsByFace(b)
+	byNumber := make(map[int]int, len(counts))
+	for f, n := range counts {
+		byNumber[number[f]] = n
+	}
+	return liftTessellationError(tessellation.RequireSheetBoundary(ctx, tessellation.SheetBoundary{
+		Triangles: m.triangles, SourceFaces: source, FreeChainCounts: byNumber,
+	}))
+}
+
+// liftTessellationError maps an internal/tessellation refusal onto the public
+// sentinel it names and keeps the audit's own text after it, so the published
+// message is unchanged. Every other error, a cancelled context above all,
+// passes through untouched.
+func liftTessellationError(err error) error {
+	var audit *tessellation.AuditError
+	if !errors.As(err, &audit) {
+		return err
+	}
+	if audit.Sentinel == tessellation.Unsupported {
+		return fmt.Errorf(`%w: %s`, ErrUnsupported, audit.Detail)
+	}
+	return fmt.Errorf(`%w: %s`, ErrDegenerate, audit.Detail)
 }
 
 // requireDerivableStore folds the per-vertex store displacements into the
@@ -1452,7 +1500,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, v
 	// walls and floors close by construction; this proves the assembled mesh is
 	// watertight and refuses a cracked one rather than return it, a safety net
 	// against any residual chording pathology (core §11, never a wrong mesh).
-	if err := requireClosedMesh(&mesh); err != nil {
+	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.triangles)); err != nil {
 		return nil, err
 	}
 	// A cup records its own section verbatim — no analytic reduction re-expresses
@@ -1494,24 +1542,6 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, v
 		return nil, err
 	}
 	return &mesh, nil
-}
-
-// requireClosedMesh proves the mesh is a closed 2-manifold — every directed
-// edge is matched by its reverse — refusing a mesh the cap triangulator could
-// not close.
-func requireClosedMesh(m *Mesh) error {
-	directed := make(map[[2]int]int, 3*len(m.triangles))
-	for _, tri := range m.triangles {
-		for k := range 3 {
-			directed[[2]int{tri[k], tri[(k+1)%3]}]++
-		}
-	}
-	for e := range directed {
-		if directed[e] != 1 || directed[[2]int{e[1], e[0]}] != 1 {
-			return fmt.Errorf(`%w: the chorded boundary could not be triangulated into a watertight mesh`, ErrDegenerate)
-		}
-	}
-	return nil
 }
 
 // walkAreaSlack is the proven chord-versus-arc area slack one circular walk

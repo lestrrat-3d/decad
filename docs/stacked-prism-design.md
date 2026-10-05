@@ -183,7 +183,7 @@ per planar patch):
   upper-only column's bottom ring with the hole's winding reversed (`+N`), and
   each ceiling from its lower-only column's top ring, reversed, emitted
   reversed (`-N`). Every planar patch indexes the already allocated ring
-  vertices, so the mesh closes by construction and `requireClosedMesh` proves it.
+  vertices, so the mesh closes by construction and `internal/tessellation.RequireClosedMesh` proves it.
 - Face bounds: a wall's largest sagitta plus the larger of its column's two
   level displacements; a planar patch's largest bounding-loop sagitta plus its
   own level's displacement; `composeFaceBounds` adds every vertex's store term

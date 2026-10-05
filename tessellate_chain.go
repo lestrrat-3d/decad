@@ -11,7 +11,7 @@ import (
 // docs/tessellation-design.md §1.2's manifold-with-boundary audit, which this
 // sheet runs in the closed-mesh audit's place. A chain-fed feature mints no
 // cap at all — §13's own decision, "no face to close anything" — so there is
-// nothing this restatement drops the way tessellate_loft.go's own
+// nothing this restatement drops the way internal/tessellation.RestateLoft's
 // restatement drops the cap triangles by provenance range: every wall this
 // file emits is a mesh face, and the ribbon's free boundary is both rims plus
 // one sweep edge per free end (Table G).
@@ -19,7 +19,7 @@ import (
 // This increment tessellates a chain of LINE segments only, Table G's Plane
 // row: each wall is already an exact planar quad the build placed directly on
 // the recorded boundary, so there is no chord to choose and no tolerance for
-// one to bind — the identical reading tessellate_loft.go's own doc comment
+// one to bind — the identical reading RestateLoft's own doc comment
 // states for a loft's exact restatement. A chain holding a curved
 // (CircleSeg/ArcSeg fragment) or free-form segment builds a Cylinder or
 // NURBSSurface wall this file has no chording arm for yet, staged for the
@@ -113,13 +113,9 @@ func tessellateChain(ctx context.Context, b *Body, pp chainPayload) (*Mesh, erro
 	}
 
 	// A chain-fed body is a BodySheet by construction, always (Table G), so
-	// the manifold-with-boundary audit runs unconditionally rather than
-	// branching on b.Kind() the way requireMeshAudit's generic dispatch does
-	// for a payload that can build either kind.
-	if err := requireSheetMesh(ctx, b, &mesh); err != nil {
-		return nil, err
-	}
-	if err := requireSheetVertexLinks(ctx, &mesh); err != nil {
+	// requireMeshAudit takes its sheet arm unconditionally rather than
+	// branching on b.Kind() the way a payload that can build either kind does.
+	if err := requireMeshAudit(ctx, true, b, &mesh); err != nil {
 		return nil, err
 	}
 	// A sheet encloses no region, so there is no occupied volume to prove:

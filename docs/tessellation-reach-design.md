@@ -188,9 +188,13 @@ re-evaluates, so nothing stored can disagree with the records.
 `loftChordedAllow` gains `twistAreaAllow`, the sum of `cellTwistAreaAllow(vLo, vHi, wLo, wHi)` over the same
 chorded cells `computeLoftChordedAllow` already walks (gated on `p.matchedDelta[j] > 0`, never on kind).
 
-### `tessellateLoft(ctx, b, lp, chord)`
+### `tessellateLoft(ctx, b, lp)` and `internal/tessellation.RestateLoft`
 
-1. Build `byRole` from `b.Faces()` as the prism does. For `k < walls`: face of role
+`tessellateLoft` (`loft_build.go`) is the adapter: it numbers `b.Faces()` in order, maps each provenance
+role to its face number, and hands `RestateLoft` the payload's triangle set, split and proof record. It
+maps the returned face numbers back to live faces and calls `setFaceBound`. `RestateLoft` does steps 1-4.
+
+1. Build the role-to-face map from `b.Faces()` as the prism does. For `k < walls`: face of role
    `side(cell[k][0], cell[k][1], side[k])`. For a solid, `capStartCount` triangles → `capStart`,
    rest → `capEnd`. A missing role is `ErrDegenerate` (tess §4).
 2. Copy `verts` and the selected triangle range (fresh slices — `Mesh` accessors already copy, but payload slices must not
@@ -199,12 +203,12 @@ chorded cells `computeLoftChordedAllow` already walks (gated on `p.matchedDelta[
    reverses once" rule is discharged by the payload. Assert the tetrahedron sum positive in the audit below.
 3. `faceBound[f] = proof.facetDeparture` for every face; `bound = facetDeparture`; `areaSlack` from `proof`.
    A solid also publishes `volSymDiff` and `symDiffOK = true`.
-4. A solid runs `requireClosedMesh` and the signed-volume audit. Either failing is `ErrUnsupported` (tess §12).
+4. A solid runs `RequireClosedMesh` and the signed-volume audit. Either failing is `ErrUnsupported` (tess §12).
 
 A surface-result sheet copies only `tris[:walls]`, using the recorded split
 rather than a geometric cap test. Its live `side(i,j,k)` faces supply sources;
-the absent cap roles are never looked up. It runs `requireSheetMesh` and
-`requireSheetVertexLinks`, and keeps `symDiffOK` false. The payload's
+the absent cap roles are never looked up. It runs `RequireSheetBoundary` and
+`RequireSheetVertexLinks`, and keeps `symDiffOK` false. The payload's
 `areaSlack` includes nonnegative cap allowances and remains conservative over
 the retained wall triangles. Its open triangle set cannot use the signed-volume
 audit, because that sum depends on the anchor without caps.
@@ -427,7 +431,7 @@ its derivation, and is the authority on both.
 | positive-radius ring collapse; erased generator | `revolveMeridianSamples`, `tessellateRevolve`'s own cell loop |
 | meridian simplicity/nesting/clearance | `requireLoopClearance`, `requireWalkClearance` after refinement exhausts |
 | non-adjacent facets intersect; homotopy sign not fixed | `revolveContactAudit` |
-| directed-edge / link / zero area | `requireClosedMesh`, `requireVertexLinks` |
+| directed-edge / link / zero area | `tessellation.RequireClosedMesh`, `requireVertexLinks` |
 | a payload class with no occupied-volume proof in a boolean | `requireVolumeProvingPayload` before the mesh, `operandSymDiff` (R0) after it |
 
 ### Tests
@@ -723,7 +727,7 @@ Ordered. Each is independently reviewable. "Pattern" names the file whose existi
    `sectionDelta` doc comment paragraph §8 names. **Depends on:** 7. **Tests:** internal: `proof.facetDeparture
    == delta` for a placed `LineSeg`-only loft; `== 0` unplaced pinned; `> sectionDelta` for a chorded pair
    with twist.
-9. **Files:** `tessellate.go`, new `tessellate_loft.go`. **What:** `tessellateLoft` per §4; dispatch in
+9. **Files:** `tessellate.go`, `loft_build.go`, `internal/tessellation/loft.go`. **What:** `tessellateLoft` per §4; dispatch in
    `tessellateContext`; update `Body.Tessellate`'s doc comment. **Pattern:** `tessellateFaceted`.
    **Depends on:** 6, 8. **Tests:** §4's list in `loft_test.go` and `export_test.go`.
 10. **Files:** `docs/loft-design.md` §9 Table D rows D1/D2 (status cells become current state), `doc.go`'s

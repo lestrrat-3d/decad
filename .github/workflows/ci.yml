@@ -160,7 +160,7 @@ jobs:
           - os: ubuntu-latest
             race: "-race"
             shard: ""
-            packages: "./examples/ ./decadtest/ ./export/ ./dynamics/ ./internal/proof/ ./internal/pair/"
+            packages: "./examples/ ./decadtest/ ./export/ ./dynamics/ ./internal/proof/ ./internal/pair/ ./internal/tessellation/"
           - os: macos-latest
             race: ""
             shard: ""

@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -220,7 +221,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 		}
 	}
 
-	if err := requireClosedMesh(&mesh); err != nil {
+	if err := tessellation.RequireClosedMesh(mesh.triangles); err != nil {
 		return nil, fmt.Errorf(`%w: this cap-loop chamfer's cells do not close into a watertight boundary`, ErrUnsupported)
 	}
 	if err := requireVertexLinks(ctx, &mesh); err != nil {
@@ -229,7 +230,7 @@ func tessellateCapBlend(ctx context.Context, b *Body, cbp capBlendPayload, chord
 	if err := requireCapBlendFacetAreas(&mesh); err != nil {
 		return nil, err
 	}
-	if meshOrientationSign(mesh.vertices, mesh.triangles, pl.point(0, 0, cbp.z0)) <= 0 {
+	if tessellation.OrientationSign(mesh.vertices, mesh.triangles, pl.point(0, 0, cbp.z0)) <= 0 {
 		return nil, fmt.Errorf(`%w: this cap-loop chamfer's assembled cells do not enclose a positive volume`, ErrUnsupported)
 	}
 

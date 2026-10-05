@@ -1242,6 +1242,7 @@
 4	0.00	TestInterferencePairDiameterUsesAllFacetedPayloadVertices
 4	0.00	TestInteriorCuspFoldsToAStrictSignWithoutRegularity
 4	0.00	TestKnotInsertionDemandMatchesRationalWalk
+4	0.00	TestLiftTessellationError
 4	0.00	TestLineCircleBracketsAcceptsFinitePolynomial
 4	0.00	TestLineCircleBracketsRejectsNonFinitePolynomial
 4	0.00	TestLineCircleLocusSpeedUpperExactAtPersistentTangency
@@ -1494,9 +1495,6 @@
 4	0.00	TestRequireSheetMeshAndVertexLinksAdmitAClosedSheet
 4	0.00	TestRequireSheetMeshCatchesADuplicatedDirectedEdge
 4	0.00	TestRequireSheetMeshRejectsBrokenFreeEdgeAttribution
-4	0.00	TestRequireSheetVertexLinksAdmitsAnOpenPathFan
-4	0.00	TestRequireSheetVertexLinksRefusesAForkedLink
-4	0.00	TestRequireSheetVertexLinksRefusesTwoConesSharingAnApex
 4	0.00	TestRequireVertexLinksRejectsAPinchedVertex
 4	0.00	TestRequireWalkClearanceGatesTheSagittaTubes
 4	0.00	TestResolveThroughAllComposesEveryFarEndInterval

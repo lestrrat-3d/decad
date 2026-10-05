@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -80,7 +81,7 @@ type loftAssembly struct {
 // rigidRoundAllow term.
 func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, plane0 PlaneRecord, xform r3.Transform, stationRound float64) (loftAssembly, error) {
 	// S13, decided before the first coordinate is lifted into an exact
-	// dyadic: meshOrientationSign lifts the orientation anchor first, so its
+	// dyadic: tessellation.OrientationSign lifts the orientation anchor first, so its
 	// finiteness is the gate's first question.
 	anchor := xform.Apply(plane0.Origin)
 	if !finiteVec(anchor) {
@@ -188,7 +189,7 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 		tris = append(tris, [3]int{pts1ToV[t[0]], pts1ToV[t[1]], pts1ToV[t[2]]})
 	}
 
-	reversed := meshOrientationSign(verts, tris, anchor) < 0
+	reversed := tessellation.OrientationSign(verts, tris, anchor) < 0
 	if reversed {
 		for i, t := range tris {
 			tris[i] = [3]int{t[0], t[2], t[1]}
@@ -244,7 +245,7 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 // validateLoftBodyMeasurements already owns that second case.
 //
 // The gate runs BEFORE the first exact-dyadic lift, never after it:
-// meshOrientationSign lifts the anchor and every vertex through dyVec, whose
+// tessellation.OrientationSign lifts the anchor and every vertex through dyVec, whose
 // mustDyOf PANICS on a non-finite float, so a check placed any later is a
 // panic out of a public method rather than a returned error.
 func errLoftPointUnrepresentable(what string) error {
@@ -264,26 +265,6 @@ func wrapLoftTriangulationError(err error) error {
 		return err
 	}
 	return fmt.Errorf(`%w: the loft cap triangulator could not state this profile: %s`, ErrUnsupported, err)
-}
-
-// meshOrientationSign is the sign of the signed tetrahedron sum
-// docs/loft-design.md §8 defines, over the complete triangle set anchored at
-// anchor — the same identity §5's whole-shell orientation rule reads, computed
-// once directly over exact dyadics rather than through the full
-// loftMassAccumulator (which also folds in the area/bounds bookkeeping this
-// sign check does not need). It reads nothing loft-specific, so
-// docs/tessellation-design.md §4's signed-volume audit runs on it too, for
-// every payload class that assembles its own triangle set.
-func meshOrientationSign(verts []r3.Vec, tris [][3]int, anchor r3.Vec) int {
-	xa := proofarith.DyVec(anchor)
-	sum := proofarith.DyZero()
-	for _, t := range tris {
-		a := proofarith.DvSub(proofarith.DyVec(verts[t[0]]), xa)
-		b := proofarith.DvSub(proofarith.DyVec(verts[t[1]]), xa)
-		c := proofarith.DvSub(proofarith.DyVec(verts[t[2]]), xa)
-		sum = proofarith.DyAdd(sum, proofarith.DvDot(a, proofarith.DvCross(b, c)))
-	}
-	return sum.Sign()
 }
 
 // loftVertex builds a vertex at a recorded (or lifted-from-recorded)

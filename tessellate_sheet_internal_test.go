@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -191,54 +192,6 @@ func TestFreeChainCountsByFaceCountsConnectedComponentsNotEdges(t *testing.T) {
 	require.Equal(t, 1, counts[face], `two free edges sharing an interned vertex form one connected chain, not two`)
 }
 
-// TestRequireSheetVertexLinksAdmitsAnOpenPathFan is defect 2's own positive
-// case: a fan of triangles around a center vertex, none of them closing the
-// fan into a full disk, gives that center an OPEN-PATH link — exactly the
-// shape every boundary vertex of a sound open sheet has, and exactly what
-// requireVertexLinks' cycle-only rule would refuse.
-func TestRequireSheetVertexLinksAdmitsAnOpenPathFan(t *testing.T) {
-	t.Parallel()
-	verts := []r3.Vec{{}, {X: 1}, {X: 0, Y: 1}, {X: -1}, {X: 0, Y: -1}}
-	tris := [][3]int{{0, 1, 2}, {0, 2, 3}, {0, 3, 4}}
-	m := &Mesh{vertices: verts, triangles: tris}
-	require.NoError(t, requireSheetVertexLinks(t.Context(), m), `a fan's center vertex has a sound open-path link`)
-}
-
-// TestRequireSheetVertexLinksRefusesAForkedLink adds one triangle to the fan
-// above that gives link vertex 2 a THIRD link edge — a fork, neither a cycle
-// nor a path — which requireSheetVertexLinks must still refuse.
-func TestRequireSheetVertexLinksRefusesAForkedLink(t *testing.T) {
-	t.Parallel()
-	verts := []r3.Vec{{}, {X: 1}, {X: 0, Y: 1}, {X: -1}, {X: 0, Y: -1}, {Y: 2}}
-	tris := [][3]int{{0, 1, 2}, {0, 2, 3}, {0, 3, 4}, {0, 2, 5}}
-	m := &Mesh{vertices: verts, triangles: tris}
-	err := requireSheetVertexLinks(t.Context(), m)
-	require.ErrorIs(t, err, ErrUnsupported)
-	require.Contains(t, err.Error(), "forked link")
-}
-
-// TestRequireSheetVertexLinksRefusesTwoConesSharingAnApex reuses
-// tessellate_revolve_internal_test.go's own pinched-apex fixture (two
-// tetrahedral cones meeting at vertex 0): each cone alone has a sound
-// closed-cycle link, but together apex 0's link is two disjoint cycles, one
-// connected component short of the one this audit requires.
-func TestRequireSheetVertexLinksRefusesTwoConesSharingAnApex(t *testing.T) {
-	t.Parallel()
-	verts := []r3.Vec{
-		{X: 0, Y: 0, Z: 0},
-		{X: 1, Y: 0, Z: 1}, {X: -1, Y: 1, Z: 1}, {X: -1, Y: -1, Z: 1},
-		{X: 1, Y: 0, Z: -1}, {X: -1, Y: 1, Z: -1}, {X: -1, Y: -1, Z: -1},
-	}
-	tris := [][3]int{
-		{0, 1, 2}, {0, 2, 3}, {0, 3, 1}, {1, 3, 2},
-		{0, 5, 4}, {0, 6, 5}, {0, 4, 6}, {4, 5, 6},
-	}
-	m := &Mesh{vertices: verts, triangles: tris}
-	err := requireSheetVertexLinks(t.Context(), m)
-	require.ErrorIs(t, err, ErrUnsupported)
-	require.Contains(t, err.Error(), "more than one connected component")
-}
-
 // TestRequireSheetMeshAndVertexLinksAdmitAClosedSheet is
 // docs/tessellation-design.md §1.2's closed-sheet sentence: with no free
 // edge, every directed edge has its reverse, so the manifold-with-boundary
@@ -250,7 +203,7 @@ func TestRequireSheetMeshAndVertexLinksAdmitAClosedSheet(t *testing.T) {
 	verts := []r3.Vec{{}, {X: 1}, {Y: 1}, {Z: 1}}
 	tris := [][3]int{{0, 1, 2}, {0, 2, 3}, {0, 3, 1}, {1, 3, 2}}
 	mesh := &Mesh{vertices: verts, triangles: tris, source: []*Face{{}, {}, {}, {}}}
-	require.NoError(t, requireClosedMesh(mesh), `premise: a tetrahedron is a closed mesh`)
+	require.NoError(t, tessellation.RequireClosedMesh(mesh.triangles), `premise: a tetrahedron is a closed mesh`)
 
 	faceA, faceB := &Face{}, &Face{}
 	sharedEdge := &Edge{faces: []*Face{faceA, faceB}}
@@ -260,5 +213,5 @@ func TestRequireSheetMeshAndVertexLinksAdmitAClosedSheet(t *testing.T) {
 	require.Empty(t, freeChainCountsByFace(body), `premise: this body records no free edge`)
 
 	require.NoError(t, requireSheetMesh(t.Context(), body, mesh), `no free edge on either side: the manifold-with-boundary audit passes for the same reason the closed-mesh audit would`)
-	require.NoError(t, requireSheetVertexLinks(t.Context(), mesh))
+	require.NoError(t, tessellation.RequireSheetVertexLinks(t.Context(), len(mesh.vertices), mesh.triangles))
 }
