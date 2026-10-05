@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,15 +30,15 @@ func ratLineWalkTangentBound(seg LineSeg, heldU, heldV float64) float64 {
 		return math.Inf(1)
 	}
 	return math.Max(
-		rationalFloatError(new(big.Rat).Sub(u1, u0), heldU),
-		rationalFloatError(new(big.Rat).Sub(v1, v0), heldV),
+		proofarith.RationalFloatError(new(big.Rat).Sub(u1, u0), heldU),
+		proofarith.RationalFloatError(new(big.Rat).Sub(v1, v0), heldV),
 	)
 }
 
 func ratLineWalkEndBound(seg LineSeg, t, heldU, heldV float64) walkEndBound {
 	return walkEndBound{
-		u: rationalFloatError(ratLerp(seg.Start.U, seg.End.U, t), heldU),
-		v: rationalFloatError(ratLerp(seg.Start.V, seg.End.V, t), heldV),
+		u: proofarith.RationalFloatError(ratLerp(seg.Start.U, seg.End.U, t), heldU),
+		v: proofarith.RationalFloatError(ratLerp(seg.Start.V, seg.End.V, t), heldV),
 	}
 }
 
@@ -55,7 +56,7 @@ func ratLineWalkBounds(seg LineSeg, held float64) (float64, float64, float64) {
 		new(big.Rat).Mul(du, du),
 		new(big.Rat).Mul(dv, dv),
 	)
-	heldRat := floatRat(held)
+	heldRat := proofarith.FloatRat(held)
 	coordUpper := math.Max(ratL1Upper(u0, v0), ratL1Upper(u1, v1))
 	if heldRat != nil && new(big.Rat).Mul(heldRat, heldRat).Cmp(lengthSquared) == 0 {
 		return 0, held, coordUpper
@@ -73,7 +74,7 @@ func ratLineWalkBounds(seg LineSeg, held float64) (float64, float64, float64) {
 // before the dyadic rewrite, kept verbatim as the oracle the line-walk and
 // straight-edge comparisons read.
 func ratSqrtIntervalError(lengthSquared *big.Rat, held float64) float64 {
-	lo, hi := floatRat(ratSqrtDown(lengthSquared)), floatRat(ratSqrtUp(lengthSquared))
+	lo, hi := proofarith.FloatRat(ratSqrtDown(lengthSquared)), proofarith.FloatRat(ratSqrtUp(lengthSquared))
 	if lo == nil || hi == nil {
 		return math.Inf(1)
 	}

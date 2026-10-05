@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -555,7 +556,7 @@ func patchRawFlux(g capPatchGeom) boundedScalar {
 		v3 := r3.NewVec(g.capA.U, g.capA.V, g.capZ)
 		if exact, ok := exactPlanePatchFlux(v0, v1, v2, v3); ok {
 			held, _ := exact.Float64()
-			return measuredScalar(held, rationalFloatError(exact, held))
+			return measuredScalar(held, proofarith.RationalFloatError(exact, held))
 		}
 		tri := func(a, b, c r3.Vec) float64 { return a.Dot(b.Cross(c)) }
 		value := 0.5*tri(v0, v1, v2) + 0.5*tri(v0, v2, v3)
@@ -877,11 +878,11 @@ func phaseIntegralInterval(a0, a1 *big.Rat) (cosIv, sinIv ratInterval, ok bool) 
 // for a non-whole-turn patch: radSinCosInterval answers a non-point interval
 // for every nonzero rational, so a Cone patch stays Approximate.
 func conePatchFluxInterval(g capPatchGeom) (ratInterval, bool) {
-	R0, R1 := floatRat(g.sideRadius), floatRat(g.capRadius)
-	z0, z1 := floatRat(g.sideZ), floatRat(g.capZ)
-	thS0, thS1 := floatRat(g.th0), floatRat(g.th1)
-	thC0, thC1 := floatRat(g.capTh0), floatRat(g.capTh1)
-	cU, cV := floatRat(g.cU), floatRat(g.cV)
+	R0, R1 := proofarith.FloatRat(g.sideRadius), proofarith.FloatRat(g.capRadius)
+	z0, z1 := proofarith.FloatRat(g.sideZ), proofarith.FloatRat(g.capZ)
+	thS0, thS1 := proofarith.FloatRat(g.th0), proofarith.FloatRat(g.th1)
+	thC0, thC1 := proofarith.FloatRat(g.capTh0), proofarith.FloatRat(g.capTh1)
+	cU, cV := proofarith.FloatRat(g.cU), proofarith.FloatRat(g.cV)
 	for _, r := range []*big.Rat{R0, R1, z0, z1, thS0, thS1, thC0, thC1, cU, cV} {
 		if r == nil {
 			return ratInterval{}, false
@@ -945,14 +946,14 @@ func conePatchFluxInterval(g capPatchGeom) (ratInterval, bool) {
 // bound, never abort, and its caller has a float evaluation to fall back on
 // that is no worse.
 func exactPlanePatchFlux(v0, v1, v2, v3 r3.Vec) (*big.Rat, bool) {
-	lift := func(v r3.Vec) (dyV3, bool) {
-		x, okX := dyOf(v.X)
-		y, okY := dyOf(v.Y)
-		z, okZ := dyOf(v.Z)
+	lift := func(v r3.Vec) (proofarith.DyV3, bool) {
+		x, okX := proofarith.DyOf(v.X)
+		y, okY := proofarith.DyOf(v.Y)
+		z, okZ := proofarith.DyOf(v.Z)
 		if !okX || !okY || !okZ {
-			return dyV3{}, false
+			return proofarith.DyV3{}, false
 		}
-		return dyV3{x, y, z}, true
+		return proofarith.DyV3{x, y, z}, true
 	}
 	r0, ok0 := lift(v0)
 	r1, ok1 := lift(v1)
@@ -963,8 +964,8 @@ func exactPlanePatchFlux(v0, v1, v2, v3 r3.Vec) (*big.Rat, bool) {
 	}
 	// Halving is a shift, so the whole flux stays inside the dyadic set and
 	// converts once, at the caller's boundary (dyadic.go).
-	sum := dyAdd(dvDot(r0, dvCross(r1, r2)), dvDot(r0, dvCross(r2, r3v)))
-	return dyShift(sum, -1).rat(), true
+	sum := proofarith.DyAdd(proofarith.DvDot(r0, proofarith.DvCross(r1, r2)), proofarith.DvDot(r0, proofarith.DvCross(r2, r3v)))
+	return proofarith.DyShift(sum, -1).Rat(), true
 }
 
 // tripleProductUpper bounds |a·(b×c)| and every intermediate the float
@@ -1149,7 +1150,7 @@ func patchDisplacementAreaAllow(g capPatchGeom) float64 {
 	h := g.capZ - g.sideZ
 	dth := math.Abs(g.capTh1 - g.capTh0)
 	return absSumUpper(g.contourAllow, bandLevelAreaAllow(
-		absSumUpper(g.levelDelta, addRoundError(g.capZ, -g.sideZ, h)),
+		absSumUpper(g.levelDelta, proofarith.AddRoundError(g.capZ, -g.sideZ, h)),
 		productUpper(absSumUpper(dth, g.capThAllow), absSumUpper(g.sideRadius, g.capRadius)),
 	))
 }
@@ -1200,9 +1201,9 @@ func coneFrustumAreaBracket(R0, R1, H, dth, dthAllow, held float64) float64 {
 	if isNonFinite(dthAllow) {
 		return math.Inf(1)
 	}
-	rR0, rR1 := floatRat(R0), floatRat(R1)
-	rH := floatRat(H)
-	rdth, rAllow := floatRat(dth), floatRat(dthAllow)
+	rR0, rR1 := proofarith.FloatRat(R0), proofarith.FloatRat(R1)
+	rH := proofarith.FloatRat(H)
+	rdth, rAllow := proofarith.FloatRat(dth), proofarith.FloatRat(dthAllow)
 	if rR0 == nil || rR1 == nil || rH == nil || rdth == nil || rAllow == nil {
 		return math.Inf(1)
 	}

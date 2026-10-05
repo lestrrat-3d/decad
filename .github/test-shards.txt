@@ -572,7 +572,6 @@
 2	0.12	TestPrismUnionG1FallsBackWithUnchangedBehavior
 2	0.69	TestPrismUnionRotatedToothFallback
 2	0.01	TestPrismUnionTrimmedSourceSegmentChargesItsWalkedEndpoint
-2	0.02	TestRatIntervalMulSignCases
 2	0.04	TestReconstructionIsChargedBeforeItRuns
 2	0.05	TestRecordLoopsCancellationIsBounded
 2	0.01	TestRecordProfileRecordsMixedWholeAndCertifiedPartialJoin
@@ -1127,18 +1126,10 @@
 4	0.00	TestDirectedSqrtBracketsAtExtremeScale
 4	0.00	TestDirectedSqrtBracketsIrrationalLength
 4	0.01	TestDuplicate
-4	0.05	TestDyadicArithmeticMatchesBigRat
 4	0.00	TestDyadicDirectedRoundingMatchesTheRationalOnes
-4	0.00	TestDyadicFastPathsPreserveInputs
-4	0.00	TestDyadicLiftsEveryFloatExactly
-4	0.00	TestDyadicOfRatAcceptsOnlyBinaryFractions
-4	0.00	TestDyadicRefusesNonFiniteFloats
-4	0.00	TestDyadicShiftAndIntAreExact
 4	0.00	TestDyadicSplitChargesItselfAndRefusesBeforeSplitting
 4	0.00	TestDyadicSplitOpsCountsEveryOperationOneBisectionRuns
 4	0.00	TestDyadicSqrtBracketsMatchTheRationalOnes
-4	0.00	TestDyadicStaysReduced
-4	0.00	TestDyadicZeroValueIsUsable
 4	0.00	TestEndpointCuspEscapesAHalfOpenRootCount
 4	0.00	TestErrorVocabulary
 4	0.00	TestEvalLoftCancellation
@@ -1352,7 +1343,6 @@
 4	0.00	TestMintCurveNeverRepeats
 4	0.00	TestMixedCurvatureAtTheSubdivisionDepthCapRefusesR19
 4	0.03	TestModifyRefusalLeadsWithItsReason
-4	0.00	TestMustDyOfPanicsOnANonFiniteFloat
 4	0.00	TestNURBSCurveSealsIntoCurve
 4	0.08	TestNURBSLiftChargePrecedesTheContentScan
 4	0.00	TestNURBSSurfaceReportsKindNURBS
@@ -1458,9 +1448,7 @@
 4	0.00	TestQueryStringRendering
 4	0.00	TestR3IdentityApplyIsBitIdentical
 4	0.00	TestRPFromBernsteinMatchesLiteralExpansion
-4	0.00	TestRatIntervalArithmeticOwnsFreshEndpoints
 4	0.00	TestRatIntervalCachedPiCopiesRemainIndependent
-4	0.00	TestRatIntervalConstructorsCopyBorrowedEndpoints
 4	0.00	TestRatLenAtLeastDecidesExactly
 4	0.00	TestRatLerpEndpointReturnsAFreshRational
 4	0.00	TestRatPolyOfRejectsNonFiniteCoefficient
@@ -1897,8 +1885,6 @@
 5	0.01	TestCupWallRequiresExactMorphology
 5	0.67	TestCurvedRimLengthRefuses
 5	0.03	TestCutBlindTrenchSplitsCapIntoTwoFaces
-5	0.06	TestDyadicFastPathsRandomizedMatchesBigRat
-5	0.08	TestDyadicVectorMatchesBigRatVector
 5	0.01	TestEvalCupIgnoresUnusedOverflowedSecondMoments
 5	0.02	TestEvalLoftHoleRimIsConcave
 5	0.01	TestEvalLoftUnitBoxTopology

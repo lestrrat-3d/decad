@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1525,7 +1526,7 @@ func TestSpanMatchedDeltaUpperNeverUnderflowsASubnormalGapToZero(t *testing.T) {
 				"the true parameter-matched deviation is eps/2 > 0, so the published bound must be positive too")
 
 			trueDeviation := new(big.Rat).Quo(eps, big.NewRat(2, 1))
-			published := floatRat(matched)
+			published := proofarith.FloatRat(matched)
 			require.NotNil(t, published)
 			require.GreaterOrEqual(t, published.Cmp(trueDeviation), 0,
 				"the published bound must enclose the exact deviation eps/2")

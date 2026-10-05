@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // This file is docs/spline-design.md §6.1: the arc length of a free-form curve
@@ -504,16 +506,16 @@ func (s dyadicSpan) squaredDistance(a, b dyadicPoint) *big.Rat {
 // reduction. A finite float is an integer mantissa times a power of two, so
 // multiplying by the shared denSq and shifting preserves the exact ordering.
 func spanSquareCmp(f float64, d spanSquaredDistance) int {
-	square, ok := dyOf(f)
+	square, ok := proofarith.DyOf(f)
 	if !ok {
 		return 1
 	}
-	if square.isZero() {
+	if square.IsZero() {
 		return -d.num.Sign()
 	}
-	lhs := new(big.Int).Mul(square.mant, square.mant)
+	lhs := new(big.Int).Mul(square.Mant(), square.Mant())
 	lhs.Mul(lhs, d.denSq)
-	shift := 2 * (square.exp + int(d.exp))
+	shift := 2 * (square.Exp() + int(d.exp))
 	if shift >= 0 {
 		return lhs.Lsh(lhs, uint(shift)).Cmp(d.num)
 	}
@@ -527,10 +529,10 @@ func spanSquareCmpScratch(f float64, d spanSquaredDistance, scratch *lengthDista
 	if f == 0 {
 		return -d.num.Sign()
 	}
-	square := dyOfFiniteInto(f, &scratch.squareMant)
-	scratch.lhs.Mul(square.mant, square.mant)
+	square := proofarith.DyOfFiniteInto(f, &scratch.squareMant)
+	scratch.lhs.Mul(square.Mant(), square.Mant())
 	scratch.lhs.Mul(&scratch.lhs, d.denSq)
-	shift := 2 * (square.exp + int(d.exp))
+	shift := 2 * (square.Exp() + int(d.exp))
 	if shift >= 0 {
 		return scratch.lhs.Lsh(&scratch.lhs, uint(shift)).Cmp(d.num)
 	}
@@ -710,14 +712,11 @@ func ratSqrtUp(q *big.Rat) float64 {
 	return math.Inf(1)
 }
 
-// sqrtAdjustLimit bounds the directed-rounding walk. A correctly-rounded sqrt
-// lands within one ulp, so a handful of steps always suffices; the limit exists
-// so a pathological implementation cannot spin, and reaching it returns the
-// safe outward extreme rather than a value that might not bound.
-const sqrtAdjustLimit = 8
+// The exact arithmetic package owns the shared directed-rounding walk limit.
+const sqrtAdjustLimit = proofarith.SqrtAdjustLimit
 
 func ratSquareAtMost(f float64, q *big.Rat) bool {
-	square := floatRat(f)
+	square := proofarith.FloatRat(f)
 	if square == nil {
 		return false
 	}
@@ -726,7 +725,7 @@ func ratSquareAtMost(f float64, q *big.Rat) bool {
 }
 
 func ratSquareEquals(f float64, q *big.Rat) bool {
-	square := floatRat(f)
+	square := proofarith.FloatRat(f)
 	if square == nil {
 		return false
 	}

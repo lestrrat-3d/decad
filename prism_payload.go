@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -124,11 +125,11 @@ func vecMaxAbs(v r3.Vec) float64 {
 func exactPrismPointRound(pp prismPayload, u, v, z float64, held r3.Vec) float64 {
 	triple := func(x, y, z *big.Rat) [3]*big.Rat { return [3]*big.Rat{x, y, z} }
 	ratOfVec := func(value r3.Vec) [3]*big.Rat {
-		return triple(floatRat(value.X), floatRat(value.Y), floatRat(value.Z))
+		return triple(proofarith.FloatRat(value.X), proofarith.FloatRat(value.Y), proofarith.FloatRat(value.Z))
 	}
 	origin := ratOfVec(pp.frame.Origin())
 	fu, fv, fn := ratOfVec(pp.frame.U()), ratOfVec(pp.frame.V()), ratOfVec(pp.frame.N())
-	ru, rv, rz := floatRat(u), floatRat(v), floatRat(z)
+	ru, rv, rz := proofarith.FloatRat(u), proofarith.FloatRat(v), proofarith.FloatRat(z)
 	if ru == nil || rv == nil || rz == nil {
 		return math.Inf(1)
 	}
@@ -160,9 +161,9 @@ func exactPrismPointRound(pp prismPayload, u, v, z float64, held r3.Vec) float64
 		)
 	}
 	perCoord := max(
-		rationalFloatError(exact[0], held.X),
-		rationalFloatError(exact[1], held.Y),
-		rationalFloatError(exact[2], held.Z),
+		proofarith.RationalFloatError(exact[0], held.X),
+		proofarith.RationalFloatError(exact[1], held.Y),
+		proofarith.RationalFloatError(exact[2], held.Z),
 	)
 	return radius3D(perCoord)
 }

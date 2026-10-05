@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -66,9 +67,9 @@ func planePatchMoment(g capPatchGeom) (mu, mv, mz boundedScalar) {
 		hx, _ := ex.Float64()
 		hy, _ := ey.Float64()
 		hz, _ := ez.Float64()
-		return measuredScalar(hx, rationalFloatError(ex, hx)),
-			measuredScalar(hy, rationalFloatError(ey, hy)),
-			measuredScalar(hz, rationalFloatError(ez, hz))
+		return measuredScalar(hx, proofarith.RationalFloatError(ex, hx)),
+			measuredScalar(hy, proofarith.RationalFloatError(ey, hy)),
+			measuredScalar(hz, proofarith.RationalFloatError(ez, hz))
 	}
 	return floatPlanePatchMoment(v0, v1, v2, v3)
 }
@@ -97,14 +98,14 @@ func planePatchMoment(g capPatchGeom) (mu, mv, mz boundedScalar) {
 // lift, mirroring exactPlanePatchFlux: a public measurement must refuse or
 // bound, never abort.
 func exactPlanePatchMoment(v0, v1, v2, v3 r3.Vec) (mx, my, mz *big.Rat, ok bool) {
-	lift := func(v r3.Vec) (dyV3, bool) {
-		x, okX := dyOf(v.X)
-		y, okY := dyOf(v.Y)
-		z, okZ := dyOf(v.Z)
+	lift := func(v r3.Vec) (proofarith.DyV3, bool) {
+		x, okX := proofarith.DyOf(v.X)
+		y, okY := proofarith.DyOf(v.Y)
+		z, okZ := proofarith.DyOf(v.Z)
 		if !okX || !okY || !okZ {
-			return dyV3{}, false
+			return proofarith.DyV3{}, false
 		}
-		return dyV3{x, y, z}, true
+		return proofarith.DyV3{x, y, z}, true
 	}
 	r0, ok0 := lift(v0)
 	r1, ok1 := lift(v1)
@@ -113,17 +114,17 @@ func exactPlanePatchMoment(v0, v1, v2, v3 r3.Vec) (mx, my, mz *big.Rat, ok bool)
 	if !ok0 || !ok1 || !ok2 || !ok3 {
 		return nil, nil, nil, false
 	}
-	tri := func(a, b, c dyV3) [3]*big.Rat {
-		n := dvCross(dvSub(b, a), dvSub(c, a))
+	tri := func(a, b, c proofarith.DyV3) [3]*big.Rat {
+		n := proofarith.DvCross(proofarith.DvSub(b, a), proofarith.DvSub(c, a))
 		var out [3]*big.Rat
 		for i := range out {
-			sq := dyAdd(
-				dyAdd(dyAdd(dyMul(a[i], a[i]), dyMul(b[i], b[i])), dyMul(c[i], c[i])),
-				dyAdd(dyAdd(dyMul(a[i], b[i]), dyMul(b[i], c[i])), dyMul(c[i], a[i])),
+			sq := proofarith.DyAdd(
+				proofarith.DyAdd(proofarith.DyAdd(proofarith.DyMul(a[i], a[i]), proofarith.DyMul(b[i], b[i])), proofarith.DyMul(c[i], c[i])),
+				proofarith.DyAdd(proofarith.DyAdd(proofarith.DyMul(a[i], b[i]), proofarith.DyMul(b[i], c[i])), proofarith.DyMul(c[i], a[i])),
 			)
 			// The twenty-fourth is the one step that leaves the dyadic set, so
 			// the product converts here and nowhere earlier (dyadic.go).
-			out[i] = new(big.Rat).Quo(dyMul(n[i], sq).rat(), big.NewRat(24, 1))
+			out[i] = new(big.Rat).Quo(proofarith.DyMul(n[i], sq).Rat(), big.NewRat(24, 1))
 		}
 		return out
 	}
@@ -331,11 +332,11 @@ func wholeTurnPhaseSum(terms []phaseTerm) *big.Rat {
 // the patch's actual orientation only while its own walk runs
 // counter-clockwise.
 func conePatchMoment(g capPatchGeom) (mu, mv, mz boundedScalar) {
-	R0, R1 := floatRat(g.sideRadius), floatRat(g.capRadius)
-	z0, z1 := floatRat(g.sideZ), floatRat(g.capZ)
-	thS0, thS1 := floatRat(g.th0), floatRat(g.th1)
-	thC0, thC1 := floatRat(g.capTh0), floatRat(g.capTh1)
-	cU, cV := floatRat(g.cU), floatRat(g.cV)
+	R0, R1 := proofarith.FloatRat(g.sideRadius), proofarith.FloatRat(g.capRadius)
+	z0, z1 := proofarith.FloatRat(g.sideZ), proofarith.FloatRat(g.capZ)
+	thS0, thS1 := proofarith.FloatRat(g.th0), proofarith.FloatRat(g.th1)
+	thC0, thC1 := proofarith.FloatRat(g.capTh0), proofarith.FloatRat(g.capTh1)
+	cU, cV := proofarith.FloatRat(g.cU), proofarith.FloatRat(g.cV)
 	for _, r := range []*big.Rat{R0, R1, z0, z1, thS0, thS1, thC0, thC1, cU, cV} {
 		if r == nil {
 			unproven := measuredScalar(0, math.Inf(1))
@@ -351,7 +352,7 @@ func conePatchMoment(g capPatchGeom) (mu, mv, mz boundedScalar) {
 		if g.wholeTurn {
 			exact := wholeTurnPhaseSum(terms)
 			held, _ := exact.Float64()
-			return measuredScalar(held, rationalFloatError(exact, held))
+			return measuredScalar(held, proofarith.RationalFloatError(exact, held))
 		}
 		iv, ok := phaseSumInterval(terms, thS0, thS1, thC0, thC1, phases)
 		if !ok {

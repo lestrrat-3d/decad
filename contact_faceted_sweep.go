@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -29,14 +30,14 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 		}
 		return facetedSweepUndecided(report, pa.duration), nil
 	}
-	if dyCmp(support.outerHi[2], support.plane) <= 0 ||
-		dyCmp(facetedDelta[0], floorDelta[0]) != 0 ||
-		dyCmp(facetedDelta[1], floorDelta[1]) != 0 {
+	if proofarith.DyCmp(support.outerHi[2], support.plane) <= 0 ||
+		proofarith.DyCmp(facetedDelta[0], floorDelta[0]) != 0 ||
+		proofarith.DyCmp(facetedDelta[1], floorDelta[1]) != 0 {
 		return facetedSweepUndecided(report, pa.duration), nil
 	}
 	for i := range 2 {
-		if dyCmp(floor.lo[i], support.footLo[i]) >= 0 ||
-			dyCmp(support.footHi[i], floor.hi[i]) >= 0 {
+		if proofarith.DyCmp(floor.lo[i], support.footLo[i]) >= 0 ||
+			proofarith.DyCmp(support.footHi[i], floor.hi[i]) >= 0 {
 			return facetedSweepUndecided(report, pa.duration), nil
 		}
 	}
@@ -72,10 +73,10 @@ func (d *Document) sweepFacetedFloor(ctx context.Context, a, b *Body,
 		if facetedFirst {
 			floorDelta, facetedDelta = pb.delta, pa.delta
 		}
-		startGap := dySubScalar(patch.lo[2], floor.hi[2])
-		slope := dySubScalar(facetedDelta[2], floorDelta[2])
-		endGap := new(big.Rat).Add(startGap.rat(),
-			new(big.Rat).Mul(slope.rat(), result.bracketRight))
+		startGap := proofarith.DySubScalar(patch.lo[2], floor.hi[2])
+		slope := proofarith.DySubScalar(facetedDelta[2], floorDelta[2])
+		endGap := new(big.Rat).Add(startGap.Rat(),
+			new(big.Rat).Mul(slope.Rat(), result.bracketRight))
 		if endGap.Sign() != 0 {
 			result.Outcome, result.Cause = SweepUndecided, SweepContactUnsupported
 			result.Unresolved = result.Bracket
@@ -98,7 +99,7 @@ func (d *Document) sweepBoundedFacetedFloorClear(ctx context.Context, a, b *Body
 		faceted, pose, facetedDelta, floorDelta = a, pa.from, pa.delta, pb.delta
 	}
 	for axis := range 2 {
-		if !facetedDelta[axis].isZero() || !floorDelta[axis].isZero() {
+		if !facetedDelta[axis].IsZero() || !floorDelta[axis].IsZero() {
 			return facetedSweepUndecided(report, pa.duration), nil
 		}
 	}

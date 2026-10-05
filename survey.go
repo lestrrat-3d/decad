@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"strings"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -388,7 +389,7 @@ func prismWall(budget *workBudget, pp prismPayload, alpha float64) (wallOutcome,
 // rational difference the same way boolean_body.go's own volume/centroid
 // readings measure a held float against its exact rational.
 func heightArmBound(pp prismPayload) float64 {
-	z0R, z1R := floatRat(pp.z0), floatRat(pp.z1)
+	z0R, z1R := proofarith.FloatRat(pp.z0), proofarith.FloatRat(pp.z1)
 	if z0R == nil || z1R == nil {
 		return math.Inf(1)
 	}
@@ -828,7 +829,7 @@ func maxAggregate() extremeAggregate { return extremeAggregate{maximum: true} }
 // all, so it refuses the aggregate rather than dropping silently out of the
 // comparison.
 func (ra *extremeAggregate) take(value, bound float64) {
-	v, b := floatRat(value), floatRat(math.Abs(bound))
+	v, b := proofarith.FloatRat(value), proofarith.FloatRat(math.Abs(bound))
 	if v == nil || b == nil {
 		ra.unbounded = true
 		return

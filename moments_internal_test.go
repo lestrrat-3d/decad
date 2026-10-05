@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -202,7 +203,7 @@ func TestMomentValidationCancellationIsBounded(t *testing.T) {
 // endpoint case added to ratLerp can be checked against the general formula
 // it now bypasses at t == 0 and t == 1.
 func ratLerpGeneral(start, end, t float64) *big.Rat {
-	rs, re, rt := floatRat(start), floatRat(end), floatRat(t)
+	rs, re, rt := proofarith.FloatRat(start), proofarith.FloatRat(end), proofarith.FloatRat(t)
 	if rs == nil || re == nil || rt == nil {
 		return nil
 	}
@@ -329,19 +330,19 @@ func TestAtanSmallIntervalContainsExactSeries(t *testing.T) {
 
 	var args []*big.Rat
 	for range 20 {
-		x := floatRat(rng.Float64() * 0.5)
+		x := proofarith.FloatRat(rng.Float64() * 0.5)
 		args = append(args, x, new(big.Rat).Neg(x))
 	}
 	for range 20 {
-		a := floatRat(rng.Float64())
-		b := floatRat(float64(2 + rng.IntN(999))) // [2, 1000]
+		a := proofarith.FloatRat(rng.Float64())
+		b := proofarith.FloatRat(float64(2 + rng.IntN(999))) // [2, 1000]
 		q := new(big.Rat).Quo(a, b)
 		args = append(args, q, new(big.Rat).Neg(q))
 	}
-	tiny := floatRat(1e-9)
+	tiny := proofarith.FloatRat(1e-9)
 	args = append(args,
 		tiny, new(big.Rat).Neg(tiny),
-		floatRat(1.0009765625e-9), new(big.Rat).Neg(floatRat(1.0009765625e-9)),
+		proofarith.FloatRat(1.0009765625e-9), new(big.Rat).Neg(proofarith.FloatRat(1.0009765625e-9)),
 	)
 	require.GreaterOrEqualf(t, len(args), 60, "need at least 60 arguments")
 
@@ -379,14 +380,14 @@ func TestAtanSmallIntervalEnclosesMathAtan(t *testing.T) {
 	}
 
 	for _, x64 := range args {
-		x := floatRat(x64)
+		x := proofarith.FloatRat(x64)
 		require.NotNilf(t, x, "x=%v", x64)
 		got := atanSmallInterval(x)
 		require.LessOrEqualf(t, got.lo.Cmp(got.hi), 0, "x=%v: interval inverted", x64)
 
 		truth := math.Atan(x64)
-		truthRat := floatRat(truth)
-		ulp := new(big.Rat).Sub(floatRat(math.Nextafter(truth, math.Inf(1))), truthRat)
+		truthRat := proofarith.FloatRat(truth)
+		ulp := new(big.Rat).Sub(proofarith.FloatRat(math.Nextafter(truth, math.Inf(1))), truthRat)
 		if ulp.Sign() < 0 {
 			ulp.Neg(ulp)
 		}
@@ -429,7 +430,7 @@ func TestAtanSmallIntervalDegenerateArguments(t *testing.T) {
 func BenchmarkAtanSmallInterval(b *testing.B) {
 	args := make([]*big.Rat, 20)
 	for i := range args {
-		args[i] = floatRat(0.5 * float64(i+1) / 21.0)
+		args[i] = proofarith.FloatRat(0.5 * float64(i+1) / 21.0)
 	}
 	b.ReportAllocs()
 	for b.Loop() {
@@ -449,7 +450,7 @@ func BenchmarkAtan2Interval(b *testing.B) {
 	var pairs []pair
 	for _, y := range ys {
 		for _, x := range xs {
-			pairs = append(pairs, pair{floatRat(y), floatRat(x)})
+			pairs = append(pairs, pair{proofarith.FloatRat(y), proofarith.FloatRat(x)})
 		}
 	}
 	b.ReportAllocs()

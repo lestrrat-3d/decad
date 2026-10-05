@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -480,8 +481,8 @@ func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64,
 						return 0, false, nil
 					}
 					bound := walkEndBound{
-						u: rationalFloatError(cp.u, held.U),
-						v: rationalFloatError(cp.v, held.V),
+						u: proofarith.RationalFloatError(cp.u, held.U),
+						v: proofarith.RationalFloatError(cp.v, held.V),
 					}
 					if !addWitness(held.U, held.V, bound) {
 						return 0, false, nil
@@ -778,7 +779,7 @@ func pointSetDiameterWithBudget(budget *workBudget, points []r3.Vec) (float64, b
 func exactPairDistanceDown(a, b r3.Vec) (float64, bool) {
 	total := new(big.Rat)
 	for _, axis := range [3][2]float64{{a.X, b.X}, {a.Y, b.Y}, {a.Z, b.Z}} {
-		ra, rb := floatRat(axis[0]), floatRat(axis[1])
+		ra, rb := proofarith.FloatRat(axis[0]), proofarith.FloatRat(axis[1])
 		if ra == nil || rb == nil {
 			return 0, false
 		}

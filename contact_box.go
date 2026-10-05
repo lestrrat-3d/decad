@@ -3,6 +3,7 @@ package decad
 import (
 	"math"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -11,7 +12,7 @@ import (
 // rectangular prism under a read pose. The sweep uses the full intervals for
 // one-sided departure and persistent-contact proofs.
 type sourceBoxContactProof struct {
-	lo, hi [3]dyadic
+	lo, hi [3]proofarith.Dyadic
 	// faces[axis][0] is the original minimum-support face; [1] is maximum.
 	faces [3][2]*Face
 }
@@ -47,25 +48,25 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 	if !finiteMeasurementValues(umin, umax, vmin, vmax) || pp.z0 >= pp.z1 {
 		return sourceBoxContactProof{}, false
 	}
-	u := [2]dyadic{mustDyOf(umin), mustDyOf(umax)}
-	v := [2]dyadic{mustDyOf(vmin), mustDyOf(vmax)}
-	z := [2]dyadic{mustDyOf(pp.z0), mustDyOf(pp.z1)}
-	origin := dyVec(pp.frame.Origin())
-	fu, fv, fn := dyVec(pp.frame.U()), dyVec(pp.frame.V()), dyVec(pp.frame.N())
+	u := [2]proofarith.Dyadic{proofarith.MustDyOf(umin), proofarith.MustDyOf(umax)}
+	v := [2]proofarith.Dyadic{proofarith.MustDyOf(vmin), proofarith.MustDyOf(vmax)}
+	z := [2]proofarith.Dyadic{proofarith.MustDyOf(pp.z0), proofarith.MustDyOf(pp.z1)}
+	origin := proofarith.DyVec(pp.frame.Origin())
+	fu, fv, fn := proofarith.DyVec(pp.frame.U()), proofarith.DyVec(pp.frame.V()), proofarith.DyVec(pp.frame.N())
 	var box sourceBoxContactProof
 	first := true
 	for iu := range u {
 		for iv := range v {
 			for iz := range z {
-				p := dvAdd(origin, dvAdd(dyScaleVec(fu, u[iu]),
-					dvAdd(dyScaleVec(fv, v[iv]), dyScaleVec(fn, z[iz]))))
+				p := proofarith.DvAdd(origin, proofarith.DvAdd(dyScaleVec(fu, u[iu]),
+					proofarith.DvAdd(dyScaleVec(fv, v[iv]), dyScaleVec(fn, z[iz]))))
 				p = exactContactTransform(pp.xform, p)
 				p = exactContactTransform(pose, p)
 				for axis := range 3 {
-					if first || dyCmp(p[axis], box.lo[axis]) < 0 {
+					if first || proofarith.DyCmp(p[axis], box.lo[axis]) < 0 {
 						box.lo[axis] = p[axis]
 					}
-					if first || dyCmp(p[axis], box.hi[axis]) > 0 {
+					if first || proofarith.DyCmp(p[axis], box.hi[axis]) > 0 {
 						box.hi[axis] = p[axis]
 					}
 				}
@@ -74,7 +75,7 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 		}
 	}
 	for i := range 3 {
-		if dyCmp(box.lo[i], box.hi[i]) >= 0 {
+		if proofarith.DyCmp(box.lo[i], box.hi[i]) >= 0 {
 			return sourceBoxContactProof{}, false
 		}
 	}
@@ -106,14 +107,14 @@ func sourceBoxAtPose(b *Body, pose r3.Transform) (sourceBoxContactProof, bool) {
 	return box, true
 }
 
-func dyScaleVec(v dyV3, s dyadic) dyV3 {
-	return dyV3{dyMul(v[0], s), dyMul(v[1], s), dyMul(v[2], s)}
+func dyScaleVec(v proofarith.DyV3, s proofarith.Dyadic) proofarith.DyV3 {
+	return proofarith.DyV3{proofarith.DyMul(v[0], s), proofarith.DyMul(v[1], s), proofarith.DyMul(v[2], s)}
 }
 
-func exactContactTransform(t r3.Transform, p dyV3) dyV3 {
+func exactContactTransform(t r3.Transform, p proofarith.DyV3) proofarith.DyV3 {
 	b := t.Basis()
-	return dvAdd(dyVec(t.Translation()), dvAdd(dyScaleVec(dyVec(b.EX), p[0]),
-		dvAdd(dyScaleVec(dyVec(b.EY), p[1]), dyScaleVec(dyVec(b.EZ), p[2]))))
+	return proofarith.DvAdd(proofarith.DyVec(t.Translation()), proofarith.DvAdd(dyScaleVec(proofarith.DyVec(b.EX), p[0]),
+		proofarith.DvAdd(dyScaleVec(proofarith.DyVec(b.EY), p[1]), dyScaleVec(proofarith.DyVec(b.EZ), p[2]))))
 }
 
 func signedAxisTransform(t r3.Transform) bool {
@@ -144,7 +145,7 @@ func signedAxis(v r3.Vec) (int, int, bool) {
 }
 
 func publishSourceBoxPatch(report *ContactReport, a, b sourceBoxContactProof, axis, sign int,
-	separation dyadic) {
+	separation proofarith.Dyadic) {
 	var sideA, sideB int
 	if sign > 0 {
 		sideA, sideB = 1, 0
@@ -160,10 +161,10 @@ func publishSourceBoxPatch(report *ContactReport, a, b sourceBoxContactProof, ax
 			n++
 		}
 	}
-	var low, high [2]dyadic
+	var low, high [2]proofarith.Dyadic
 	for i, ax := range projected {
 		low[i], high[i] = dyMax(a.lo[ax], b.lo[ax]), dyMin(a.hi[ax], b.hi[ax])
-		if dyCmp(low[i], high[i]) >= 0 {
+		if proofarith.DyCmp(low[i], high[i]) >= 0 {
 			report.Reason = ContactAmbiguousFeature
 			return
 		}
@@ -184,7 +185,7 @@ func publishSourceBoxPatch(report *ContactReport, a, b sourceBoxContactProof, ax
 	}
 	points := make([]ContactPoint, 0, 4)
 	for _, corner := range [][2]int{{0, 0}, {1, 0}, {1, 1}, {0, 1}} {
-		var pA, pB dyV3
+		var pA, pB proofarith.DyV3
 		for i, ax := range projected {
 			coord := low[i]
 			if corner[i] == 1 {
@@ -215,21 +216,21 @@ func publishSourceBoxPatch(report *ContactReport, a, b sourceBoxContactProof, ax
 	report.Manifold = &ContactManifold{Points: points}
 }
 
-func sourceBoxPoint(p dyV3) (VecMeasurement, bool) {
+func sourceBoxPoint(p proofarith.DyV3) (VecMeasurement, bool) {
 	return sourceBoxPointAt(&p)
 }
 
 // sourceBoxPointAt reads an exact point without copying its pointer-bearing
 // dyadic components across the call boundary.
-func sourceBoxPointAt(p *dyV3) (VecMeasurement, bool) {
+func sourceBoxPointAt(p *proofarith.DyV3) (VecMeasurement, bool) {
 	var coords [3]float64
 	bound := 0.0
 	for i := range 3 {
-		coords[i], _ = p[i].float64()
+		coords[i], _ = p[i].Float64()
 		if !finiteMeasurementValues(coords[i]) {
 			return VecMeasurement{}, false
 		}
-		bound = math.Max(bound, dyadicFloatError(p[i], coords[i]))
+		bound = math.Max(bound, proofarith.DyadicFloatError(p[i], coords[i]))
 	}
 	bound = radius3D(bound)
 	if !finiteMeasurementValues(bound) {
@@ -239,25 +240,25 @@ func sourceBoxPointAt(p *dyV3) (VecMeasurement, bool) {
 		Exactness: exactnessOf(bound), Bound: units.Millimeters(bound)}, true
 }
 
-func sourceBoxSignedReading(v dyadic) (Measurement, bool) {
-	held, _ := v.float64()
+func sourceBoxSignedReading(v proofarith.Dyadic) (Measurement, bool) {
+	held, _ := v.Float64()
 	if !finiteMeasurementValues(held) {
 		return Measurement{}, false
 	}
-	bound := dyadicFloatError(v, held)
+	bound := proofarith.DyadicFloatError(v, held)
 	return Measurement{Value: units.Millimeters(held), Exactness: exactnessOf(bound),
 		Bound: units.Millimeters(bound)}, finiteMeasurementValues(bound)
 }
 
-func dyMax(a, b dyadic) dyadic {
-	if dyCmp(a, b) >= 0 {
+func dyMax(a, b proofarith.Dyadic) proofarith.Dyadic {
+	if proofarith.DyCmp(a, b) >= 0 {
 		return a
 	}
 	return b
 }
 
-func dyMin(a, b dyadic) dyadic {
-	if dyCmp(a, b) <= 0 {
+func dyMin(a, b proofarith.Dyadic) proofarith.Dyadic {
+	if proofarith.DyCmp(a, b) <= 0 {
 		return a
 	}
 	return b

@@ -82,9 +82,8 @@ to the byte budget.
 | `mass_properties_revolved_cylinder.go` | Mass and inertia for full source cylinders made by revolving an axis-incident rectangle. See `docs/dynamic-mass-design.md`. |
 | `mass_properties_faceted.go` | Bounded mass and inertia for verified faceted Boolean solids. See `docs/dynamic-mass-design.md`. |
 | `moments_trig.go` | `moments.go`'s certified sine/cosine primitive: `turnSinCosInterval` proves an enclosure of sin/cos of an exact rational turn without ever comparing against π. See this file's own doc comment. |
-| `bounded.go` | The bounded-scalar vocabulary: a float64 carried beside a proven bound on its own error, its arithmetic, and the three-valued admission readers. See the file's doc comment. |
-| `dyadic.go` | The exact BINARY-SCALED arithmetic every proof over held float64 coordinates is carried in: `dyadic`, a mantissa times a power of two, and `dyV3`, its vector. See the file's doc comment. |
-| `rat_interval.go` | The exact rational interval arithmetic every certified reading is proven in, plus the `atan`/`atan2` and π enclosures no single rational can state. See the file's doc comment. |
+| `bounded.go` | The bounded-scalar vocabulary and three-valued admission readers. Its rounding arithmetic lives in `internal/proof/`. See the file's doc comment. |
+| `rat_interval.go` | The `atan`/`atan2` and π enclosures, with adapters for the exact interval arithmetic in `internal/proof/`. See the file's doc comment. |
 | `moments_circular.go` | Exact rational arc/circle integration for `moments.go`'s boundary sums and `revolve_build.go`'s axis moment. See the file's doc comment. |
 | `spline_bezier.go` | The exact reduction of `docs/spline-design.md` §5.1: a recorded free-form curve to piecewise polynomial Bézier control points over `big.Rat`, with no rounding. Owns the §5.2 work-budget charges. |
 | `spline_length.go` | Bounded free-form arc length. See `docs/spline-design.md` §6.1. |
@@ -107,7 +106,7 @@ to the byte budget.
 | `thicken_prism.go` | Builds the certified wall of a prism sheet. See surface §16.2. |
 | `thicken_axis.go` | Certifies exact axis-parallel offsets and interval separation. See surface §16.2. |
 | `offset.go` | `Body.Offset` builds a second sheet at a stated normal distance, leaving the receiver live. See surface §17. |
-| `patch_body.go` | `Body.Patch`: partitions a free-edge selection into closed chains, proves each planar via `dyadic.go` or a shared level token, and fills each with its own face. See `docs/surface-design.md` §5.2. |
+| `patch_body.go` | `Body.Patch`: partitions a free-edge selection into closed chains, proves each planar via `internal/proof/dyadic.go` or a shared level token, and fills each with its own face. See `docs/surface-design.md` §5.2. |
 | `denotation.go` | The shared-denotation certificate's two halves: a minted plane identity (LEVEL) and a minted curve/point identity (CURVE). See `docs/surface-design.md` §5.2, §6.2. |
 | `stitch_weld.go` | Table J's admission: the shared vertex table and which free edge pairs weld. See `docs/surface-design.md` §6.2. |
 | `stitch.go` | `Stitch`: rebuilds fresh topology over the weld plan, derives orientation, and decides Table C's outcome and measurements. See `docs/surface-design.md` §6. |
@@ -248,6 +247,7 @@ to the byte budget.
 | `examples/` | Executable Go examples (`Example_decad_…`, `go test`-verified `// Output:` blocks) that double as living documentation. Never `package main`. |
 | `dynamics/` | Rigid-body state and response, including fixed-box edge impulses in `fixed_offcenter.go`. See `docs/rigid-dynamics-design.md`. |
 | `decadtest/` | The public test kit: comparison helpers over decad's three bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. Standard `testing` only, never testify. See `decadtest/doc.go`. |
+| `internal/proof/` | Exact dyadic arithmetic, rational interval operations, float rounding bounds, and their arithmetic tests. |
 | `_gallery/` | Own nested module for README stills, animated hero and landing clip; keeps SolidLens out of the library. See `main.go`. |
 | `_shardgen/` | Own nested module, keeping tooling out of the library's: packs the root package's tests into cost-balanced race shards. The `_` prefix hides it from root-module tools. See its `main.go` doc comment. |
 | `.github/workflows/` | `ci.yml` runs lint, tests, tidy and vulnerability checks; root race shards depend on `race-binary`. `codeql.yml`. `test-shards.txt` beside it records which shard runs each root test. |

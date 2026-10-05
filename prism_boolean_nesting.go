@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -205,7 +206,7 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *workBudget, pa, 
 // when it takes the target's own interval verbatim. A boundary case (the
 // tool's cap exactly meeting the target's) is a valid span.
 func prismCutZIntervalSpans(target, tool prismPayload) bool {
-	t0, t1 := floatRat(target.z0), floatRat(target.z1)
+	t0, t1 := proofarith.FloatRat(target.z0), proofarith.FloatRat(target.z1)
 	z0, z1, ok := prismShiftedInterval(target, tool)
 	if t0 == nil || t1 == nil || !ok {
 		return false
@@ -216,7 +217,7 @@ func prismCutZIntervalSpans(target, tool prismPayload) bool {
 // prismIntersectZIntervalOverlaps is G5 for Intersect (§3.2): the two
 // re-expressed intervals must overlap, compared as exact rationals.
 func prismIntersectZIntervalOverlaps(pa, pb prismPayload) bool {
-	a0, a1 := floatRat(pa.z0), floatRat(pa.z1)
+	a0, a1 := proofarith.FloatRat(pa.z0), proofarith.FloatRat(pa.z1)
 	z0, z1, ok := prismShiftedInterval(pa, pb)
 	if a0 == nil || a1 == nil || !ok {
 		return false
@@ -235,7 +236,7 @@ func prismIntersectZIntervalOverlaps(pa, pb prismPayload) bool {
 // rationalFloatError charges that rounding into the end's axial displacement
 // beside B's own (§7).
 func prismIntersectEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64, pickA func(cmp int) bool) (float64, float64) {
-	cmp := floatRat(aVal).Cmp(bVal) // aVal is a payload level: finite by construction, G5 lifted it already
+	cmp := proofarith.FloatRat(aVal).Cmp(bVal) // aVal is a payload level: finite by construction, G5 lifted it already
 	switch {
 	case cmp == 0:
 		return aVal, max(aDelta, bDelta)
@@ -243,7 +244,7 @@ func prismIntersectEnd(aVal, aDelta float64, bVal *big.Rat, bDelta float64, pick
 		return aVal, aDelta
 	}
 	held, _ := bVal.Float64()
-	return held, absSumUpper(bDelta, rationalFloatError(bVal, held))
+	return held, absSumUpper(bDelta, proofarith.RationalFloatError(bVal, held))
 }
 
 // prismEntityOrigin is buildPrismScene's own tag map value (§4.1's "tagged, in

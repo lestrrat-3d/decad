@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -543,7 +544,7 @@ func sweepExtremes(c0, c1, phi0, phi1 float64, full bool) (float64, float64) {
 // proven under 2π — does the enclosure widen to the global amplitude bound on
 // both ends (valid for ANY φ, critical or not).
 func sweepExtremeBounds(c0, c1, phi0, phi1 float64, den sweepDenotation, heldLo, heldHi float64, full bool) (float64, float64) {
-	c0R, c1R := floatRat(c0), floatRat(c1)
+	c0R, c1R := proofarith.FloatRat(c0), proofarith.FloatRat(c1)
 	if c0R == nil || c1R == nil {
 		return math.Inf(1), math.Inf(1)
 	}
@@ -552,7 +553,7 @@ func sweepExtremeBounds(c0, c1, phi0, phi1 float64, den sweepDenotation, heldLo,
 	if isNonFinite(ampLoF) || isNonFinite(ampHiF) {
 		return math.Inf(1), math.Inf(1)
 	}
-	ampLoR, ampHiR := floatRat(ampLoF), floatRat(ampHiF)
+	ampLoR, ampHiR := proofarith.FloatRat(ampLoF), proofarith.FloatRat(ampHiF)
 	if ampLoR == nil || ampHiR == nil {
 		return math.Inf(1), math.Inf(1)
 	}

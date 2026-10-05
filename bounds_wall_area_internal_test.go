@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -613,18 +614,18 @@ func TestLoftCertifiedChordLowerRefusesTheHeldWalkFloats(t *testing.T) {
 	}
 
 	r2Start := new(big.Rat).Add(
-		new(big.Rat).Mul(floatRat(seg.Start.U), floatRat(seg.Start.U)),
-		new(big.Rat).Mul(floatRat(seg.Start.V), floatRat(seg.Start.V)),
+		new(big.Rat).Mul(proofarith.FloatRat(seg.Start.U), proofarith.FloatRat(seg.Start.U)),
+		new(big.Rat).Mul(proofarith.FloatRat(seg.Start.V), proofarith.FloatRat(seg.Start.V)),
 	)
 	r2End := new(big.Rat).Add(
-		new(big.Rat).Mul(floatRat(seg.End.U), floatRat(seg.End.U)),
-		new(big.Rat).Mul(floatRat(seg.End.V), floatRat(seg.End.V)),
+		new(big.Rat).Mul(proofarith.FloatRat(seg.End.U), proofarith.FloatRat(seg.End.U)),
+		new(big.Rat).Mul(proofarith.FloatRat(seg.End.V), proofarith.FloatRat(seg.End.V)),
 	)
 	require.Zero(t, r2Start.Cmp(r2End),
 		"the fixture's two endpoints must be exactly equidistant from Center, or |End-Start| is not the true chord")
 
-	du := new(big.Rat).Sub(floatRat(seg.End.U), floatRat(seg.Start.U))
-	dv := new(big.Rat).Sub(floatRat(seg.End.V), floatRat(seg.Start.V))
+	du := new(big.Rat).Sub(proofarith.FloatRat(seg.End.U), proofarith.FloatRat(seg.Start.U))
+	dv := new(big.Rat).Sub(proofarith.FloatRat(seg.End.V), proofarith.FloatRat(seg.Start.V))
 	chord2 := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
 	trueChordUpper := ratSqrtUp(chord2)
 
@@ -757,8 +758,8 @@ func recomposeCellAllow(a, b ruledArc) (float64, float64, float64, float64, floa
 	if nMin <= 0 {
 		return free, free, 0, 0, 0
 	}
-	twist := dvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
-	pCrossT := math.Max(dvLenUpper(dvCross(da, twist)), dvLenUpper(dvCross(db, twist)))
+	twist := proofarith.DvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	pCrossT := math.Max(dvLenUpper(proofarith.DvCross(da, twist)), dvLenUpper(proofarith.DvCross(db, twist)))
 	oscW := absSumUpper(dvLenUpper(twist), upRound(productUpper(eB, pCrossT)/nMin))
 	oscTerm := productUpper(oscW, iMax)
 	mdTerm := productUpper(productUpper(2, md), absSumUpper(cMax, iMax))

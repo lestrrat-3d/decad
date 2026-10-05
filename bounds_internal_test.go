@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -246,7 +247,7 @@ func TestPerturbedTriangleAreaAllowEnclosesBruteForceSweep(t *testing.T) {
 // the same operand, which would only compare one evaluation with itself.
 func requireEnclosesSqrt(t *testing.T, q *big.Rat, got boundedScalar) {
 	t.Helper()
-	v, b := floatRat(got.value), floatRat(got.bound)
+	v, b := proofarith.FloatRat(got.value), proofarith.FloatRat(got.bound)
 	require.NotNil(t, v)
 	require.NotNil(t, b)
 	lo := new(big.Rat).Sub(v, b)
@@ -311,7 +312,7 @@ func TestBoundedSqrtWidensABoundedOperand(t *testing.T) {
 	require.Greater(t, got.bound, 0.0)
 
 	one := big.NewRat(1, 1)
-	tiny := floatRat(1e-17)
+	tiny := proofarith.FloatRat(1e-17)
 	requireEnclosesSqrt(t, new(big.Rat).Add(one, tiny), got)
 	requireEnclosesSqrt(t, new(big.Rat).Sub(one, tiny), got)
 
@@ -319,7 +320,7 @@ func TestBoundedSqrtWidensABoundedOperand(t *testing.T) {
 	wide := boundedSqrt(measuredScalar(4, 1e-6))
 	require.Greater(t, wide.bound, 0.0)
 	four := big.NewRat(4, 1)
-	micro := floatRat(1e-6)
+	micro := proofarith.FloatRat(1e-6)
 	requireEnclosesSqrt(t, new(big.Rat).Add(four, micro), wide)
 	requireEnclosesSqrt(t, new(big.Rat).Sub(four, micro), wide)
 }
@@ -341,7 +342,7 @@ func boundedSqrtBracketOracle(x boundedScalar) boundedScalar {
 		}
 		hi = math.Nextafter(hi, math.Inf(1))
 	}
-	loR, hiR := floatRat(lo), floatRat(hi)
+	loR, hiR := proofarith.FloatRat(lo), proofarith.FloatRat(hi)
 	if loR == nil || hiR == nil {
 		return measuredScalar(value, math.Inf(1))
 	}
@@ -358,7 +359,7 @@ func boundedSqrtBracketOracle(x boundedScalar) boundedScalar {
 // exactly. It is the test's own ground truth and shares no code with
 // exactFloatSquare.
 func ratIsFloatSquare(root, value float64) bool {
-	r, v := floatRat(root), floatRat(value)
+	r, v := proofarith.FloatRat(root), proofarith.FloatRat(value)
 	if r == nil || v == nil || root < 0 {
 		return false
 	}
@@ -398,7 +399,7 @@ func TestBoundedSqrtExactSquareMatchesBracket(t *testing.T) {
 				require.LessOrEqual(t, want.bound, upRound(ulpOf(got.value)),
 					"the oracle may miss an exact square %v by one ulp at most", x.value)
 			}
-			if exactFloatSquare(got.value, x.value) {
+			if proofarith.ExactFloatSquare(got.value, x.value) {
 				shortcut++
 			} else if got.value != 0 {
 				belowGate++
@@ -408,7 +409,7 @@ func TestBoundedSqrtExactSquareMatchesBracket(t *testing.T) {
 		requireSameFloatBits(t, want.bound, got.bound, "the bound on the root of %v", x)
 		if x.bound == 0 && x.value >= 0 && !isNonFinite(x.value) {
 			require.Positive(t, got.bound, "%v is not the square of %v and must not read exact", x.value, got.value)
-			requireEnclosesSqrt(t, floatRat(x.value), got)
+			requireEnclosesSqrt(t, proofarith.FloatRat(x.value), got)
 			if got.value*got.value == x.value {
 				fmaRejected++
 			}
@@ -427,9 +428,9 @@ func TestBoundedSqrtExactSquareMatchesBracket(t *testing.T) {
 
 		got := boundedSqrt(exactScalar(value))
 		require.Positive(t, got.bound)
-		requireEnclosesSqrt(t, floatRat(value), got)
+		requireEnclosesSqrt(t, proofarith.FloatRat(value), got)
 		check(t, exactScalar(value))
-		require.False(t, exactFloatSquare(root, value))
+		require.False(t, proofarith.ExactFloatSquare(root, value))
 	})
 
 	t.Run("FMA fixture", func(t *testing.T) {
@@ -443,7 +444,7 @@ func TestBoundedSqrtExactSquareMatchesBracket(t *testing.T) {
 		require.Positive(t, got.bound)
 		requireEnclosesSqrt(t, big.NewRat(11, 1), got)
 		check(t, exactScalar(11))
-		require.False(t, exactFloatSquare(root, 11))
+		require.False(t, proofarith.ExactFloatSquare(root, 11))
 	})
 
 	t.Run("edge operands", func(t *testing.T) {
@@ -688,7 +689,7 @@ func TestOutwardRoundingNeverPublishesAFlushedZero(t *testing.T) {
 	t.Run("rational reading", func(t *testing.T) {
 		offset := new(big.Rat).Quo(new(big.Rat).SetFloat64(tiny), big.NewRat(4, 1))
 		exact := new(big.Rat).Add(big.NewRat(1, 1), offset)
-		require.Equal(t, tiny, rationalFloatError(exact, 1))
+		require.Equal(t, tiny, proofarith.RationalFloatError(exact, 1))
 		got := ratAbsDiff(exact, 1)
 		require.Positive(t, got)
 		require.GreaterOrEqual(t, new(big.Rat).SetFloat64(got).Cmp(offset), 0)
@@ -748,16 +749,16 @@ func TestOutwardRoundingNeverPublishesAFlushedZero(t *testing.T) {
 	t.Run("addition and multiplication keep their exact rounding errors", func(t *testing.T) {
 		check := func(a, b, held float64) {
 			var addWant, mulWant float64
-			ra, rb, rh := floatRat(a), floatRat(b), floatRat(held)
+			ra, rb, rh := proofarith.FloatRat(a), proofarith.FloatRat(b), proofarith.FloatRat(held)
 			if ra == nil || rb == nil || rh == nil {
 				addWant, mulWant = math.Inf(1), math.Inf(1)
 			} else {
-				addWant = rationalFloatError(new(big.Rat).Add(ra, rb), held)
-				mulWant = rationalFloatError(new(big.Rat).Mul(ra, rb), held)
+				addWant = proofarith.RationalFloatError(new(big.Rat).Add(ra, rb), held)
+				mulWant = proofarith.RationalFloatError(new(big.Rat).Mul(ra, rb), held)
 			}
-			require.Equal(t, math.Float64bits(addWant), math.Float64bits(addRoundError(a, b, held)),
+			require.Equal(t, math.Float64bits(addWant), math.Float64bits(proofarith.AddRoundError(a, b, held)),
 				"addition: a=%g b=%g held=%g", a, b, held)
-			require.Equal(t, math.Float64bits(mulWant), math.Float64bits(mulRoundError(a, b, held)),
+			require.Equal(t, math.Float64bits(mulWant), math.Float64bits(proofarith.MulRoundError(a, b, held)),
 				"multiplication: a=%g b=%g held=%g", a, b, held)
 		}
 
@@ -935,8 +936,8 @@ const refPrec = 600
 func refFloat(x float64) *big.Float { return new(big.Float).SetPrec(refPrec).SetFloat64(x) }
 
 // refLen is the EXACT length of an exactly-represented vector, to refPrec bits.
-func refLen(u dyV3) *big.Float {
-	return new(big.Float).SetPrec(refPrec).Sqrt(new(big.Float).SetPrec(refPrec).SetRat(dvDot(u, u).rat()))
+func refLen(u proofarith.DyV3) *big.Float {
+	return new(big.Float).SetPrec(refPrec).Sqrt(new(big.Float).SetPrec(refPrec).SetRat(proofarith.DvDot(u, u).Rat()))
 }
 
 func refAdd(a, b *big.Float) *big.Float { return new(big.Float).SetPrec(refPrec).Add(a, b) }
@@ -1105,7 +1106,7 @@ func provenNormFixtures() []cellQuad {
 // refTwistAreaProduct is |T|·(eA+eB) computed exactly from the cell's own
 // corners, the quantity the linear fallback arm publishes.
 func refTwistAreaProduct(c cellQuad) *big.Float {
-	twist := dvSub(heldDelta(c.vLo, c.vHi), heldDelta(c.wLo, c.wHi))
+	twist := proofarith.DvSub(heldDelta(c.vLo, c.vHi), heldDelta(c.wLo, c.wHi))
 	eA := refMax(refLen(heldDelta(c.vHi, c.vLo)), refLen(heldDelta(c.wHi, c.wLo)))
 	eB := refMax(refLen(heldDelta(c.wLo, c.vLo)), refLen(heldDelta(c.wHi, c.vHi)))
 	return refMul(refLen(twist), refAdd(eA, eB))
@@ -1222,8 +1223,8 @@ func refChordCurveAreaAllow(c cellQuad, arcA, arcB, md, energyA, energyB float64
 		return free
 	}
 	nMinF := refFloat(nMin)
-	twist := dvSub(heldDelta(c.vLo, c.vHi), heldDelta(c.wLo, c.wHi))
-	pCrossT := refMax(refLen(dvCross(da, twist)), refLen(dvCross(db, twist)))
+	twist := proofarith.DvSub(heldDelta(c.vLo, c.vHi), heldDelta(c.wLo, c.wHi))
+	pCrossT := refMax(refLen(proofarith.DvCross(da, twist)), refLen(proofarith.DvCross(db, twist)))
 	oscW := refAdd(refLen(twist), refQuo(refMul(eB, pCrossT), nMinF))
 	lin := refAdd(refMul(oscW, iMax), refMul(refMul(two, mdF), refAdd(cMax, iMax)))
 	quad := refQuo(
@@ -1336,13 +1337,13 @@ func TestRatLenAtLeastDecidesExactly(t *testing.T) {
 func ratExactSumRound(held float64, terms ...float64) float64 {
 	sum := new(big.Rat)
 	for _, term := range terms {
-		r := floatRat(term)
+		r := proofarith.FloatRat(term)
 		if r == nil {
 			return math.Inf(1)
 		}
 		sum.Add(sum, r)
 	}
-	return rationalFloatError(sum, held)
+	return proofarith.RationalFloatError(sum, held)
 }
 
 // TestExactSumRoundDyadicMatchesRational pins exactSumRound, computed over

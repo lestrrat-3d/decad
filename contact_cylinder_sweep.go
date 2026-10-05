@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -21,14 +22,14 @@ func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 	fullA, fullB := sweptAffineBox(firstBox, pa.delta), sweptAffineBox(secondBox, pb.delta)
 	resolution, _ := exactBaseValue(req.PointResolution)
 	axis, _, signedGap, selected := sourceCylinderBoxFace(cylinder, box)
-	if !selected || signedGap.sign() < 0 {
+	if !selected || signedGap.Sign() < 0 {
 		return cylinderSweepUndecided(report, pa.duration), nil
 	}
 	axisGap := func(a, b sourceBoxContactProof) (int, *big.Rat, bool) {
-		if gap := new(big.Rat).Sub(b.lo[axis].rat(), a.hi[axis].rat()); gap.Cmp(resolution) > 0 {
+		if gap := new(big.Rat).Sub(b.lo[axis].Rat(), a.hi[axis].Rat()); gap.Cmp(resolution) > 0 {
 			return 1, gap, true
 		}
-		if gap := new(big.Rat).Sub(a.lo[axis].rat(), b.hi[axis].rat()); gap.Cmp(resolution) > 0 {
+		if gap := new(big.Rat).Sub(a.lo[axis].Rat(), b.hi[axis].Rat()); gap.Cmp(resolution) > 0 {
 			return -1, gap, true
 		}
 		return 0, nil, false
@@ -40,7 +41,7 @@ func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 		startCylinder, startBox = firstBox, secondBox
 		cylinderDelta, boxDelta = pa.delta, pb.delta
 	}
-	if axis != cylinder.axis && dyCmp(cylinderDelta[2], boxDelta[2]) != 0 {
+	if axis != cylinder.axis && proofarith.DyCmp(cylinderDelta[2], boxDelta[2]) != 0 {
 		return cylinderSweepUndecided(report, pa.duration), nil
 	}
 	endCylinder := translatedAffineBox(startCylinder, cylinderDelta)
@@ -108,7 +109,7 @@ type sourceCylinderImpactRun struct {
 	box           sourceBoxContactProof
 	cylinderFirst bool
 	side, axis    int
-	gap, slope    dyadic
+	gap, slope    proofarith.Dyadic
 }
 
 func (r *sourceCylinderImpactRun) boxesAt(f *big.Rat) (sourceCylinderContactProof,
@@ -199,7 +200,7 @@ func (r *sourceCylinderImpactRun) transferManifold(f *big.Rat, poseA, poseB r3.T
 	}
 	point := actual.Manifold.Points[0]
 	for _, witness := range []*VecMeasurement{&point.OnA, &point.OnB} {
-		bound := new(big.Rat).Add(floatRat(witness.Bound.Base()), deviation)
+		bound := new(big.Rat).Add(proofarith.FloatRat(witness.Bound.Base()), deviation)
 		if bound.Cmp(resolution) > 0 {
 			ideal.Manifold = nil
 			ideal.Reason = ContactPointTooCoarse
@@ -208,7 +209,7 @@ func (r *sourceCylinderImpactRun) transferManifold(f *big.Rat, poseA, poseB r3.T
 		witness.Bound = units.Millimeters(ratFloatUp(bound))
 		witness.Exactness = exactnessFromBound(witness.Bound.Base())
 	}
-	separationBound := new(big.Rat).Add(floatRat(point.Separation.Bound.Base()), deviation)
+	separationBound := new(big.Rat).Add(proofarith.FloatRat(point.Separation.Bound.Base()), deviation)
 	point.Separation.Bound = units.Millimeters(ratFloatUp(separationBound))
 	point.Separation.Exactness = exactnessFromBound(point.Separation.Bound.Base())
 	ideal.Manifold = &ContactManifold{Points: []ContactPoint{point}}
@@ -245,14 +246,14 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 		cylinderDelta, boxDelta = r.pa.delta, r.pb.delta
 	}
 	switch {
-	case dyCmp(r.cylinder.box.lo[r.axis], r.box.hi[r.axis]) >= 0:
+	case proofarith.DyCmp(r.cylinder.box.lo[r.axis], r.box.hi[r.axis]) >= 0:
 		r.side = 1
-		r.gap = dySubScalar(r.cylinder.box.lo[r.axis], r.box.hi[r.axis])
-		r.slope = dySubScalar(cylinderDelta[r.axis], boxDelta[r.axis])
-	case dyCmp(r.cylinder.box.hi[r.axis], r.box.lo[r.axis]) <= 0:
+		r.gap = proofarith.DySubScalar(r.cylinder.box.lo[r.axis], r.box.hi[r.axis])
+		r.slope = proofarith.DySubScalar(cylinderDelta[r.axis], boxDelta[r.axis])
+	case proofarith.DyCmp(r.cylinder.box.hi[r.axis], r.box.lo[r.axis]) <= 0:
 		r.side = 0
-		r.gap = dySubScalar(r.box.lo[r.axis], r.cylinder.box.hi[r.axis])
-		r.slope = dySubScalar(boxDelta[r.axis], cylinderDelta[r.axis])
+		r.gap = proofarith.DySubScalar(r.box.lo[r.axis], r.cylinder.box.hi[r.axis])
+		r.slope = proofarith.DySubScalar(boxDelta[r.axis], cylinderDelta[r.axis])
 	default:
 		return cylinderSweepUndecided(r.report, r.pa.duration), nil
 	}
@@ -282,7 +283,7 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 		boxA: firstBox, boxB: secondBox, clearAxis: r.axis,
 		cylinderSide: r.side, cylinderGap: r.gap, cylinderSlope: r.slope}
 	if first.Ideal.Relation == ContactTouching {
-		if r.slope.sign() <= 0 || r.req.StartPolicy != ContinueSeparatingTouch ||
+		if r.slope.Sign() <= 0 || r.req.StartPolicy != ContinueSeparatingTouch ||
 			first.Ideal.Manifold == nil {
 			return cylinderSweepUndecided(r.report, r.pa.duration), nil
 		}
@@ -298,11 +299,11 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 		r.report.replay.snapshot(r.report)
 		return r.report, nil
 	}
-	if r.gap.sign() <= 0 || r.slope.sign() >= 0 ||
-		dyAdd(r.gap, r.slope).sign() > 0 {
+	if r.gap.Sign() <= 0 || r.slope.Sign() >= 0 ||
+		proofarith.DyAdd(r.gap, r.slope).Sign() > 0 {
 		return cylinderSweepUndecided(r.report, r.pa.duration), nil
 	}
-	root := new(big.Rat).Quo(dyNeg(r.gap).rat(), r.slope.rat())
+	root := new(big.Rat).Quo(proofarith.DyNeg(r.gap).Rat(), r.slope.Rat())
 	resolution, _ := exactBaseValue(r.req.TimeResolution)
 	leftF, rightF, ok := spherePairImpactBracket(root, r.pa.duration, resolution)
 	if !ok || leftF.Sign() <= 0 || rightF.Cmp(one) > 0 {
@@ -328,7 +329,7 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 		return cylinderSweepUndecided(r.report, r.pa.duration), nil
 	}
 	pointResolution, _ := exactBaseValue(r.req.PointResolution)
-	rightGap := new(big.Rat).Add(r.gap.rat(), new(big.Rat).Mul(r.slope.rat(), rightF))
+	rightGap := new(big.Rat).Add(r.gap.Rat(), new(big.Rat).Mul(r.slope.Rat(), rightF))
 	if new(big.Rat).Abs(rightGap).Cmp(pointResolution) > 0 {
 		return cylinderSweepUndecided(r.report, r.pa.duration), nil
 	}
@@ -353,27 +354,27 @@ func cylinderSweepUndecided(report *SweepReport, duration *big.Rat) *SweepReport
 	return report
 }
 
-func sweptAffineBox(start sourceBoxContactProof, delta [3]dyadic) sourceBoxContactProof {
+func sweptAffineBox(start sourceBoxContactProof, delta [3]proofarith.Dyadic) sourceBoxContactProof {
 	for axis := range 3 {
-		endLo := dyAdd(start.lo[axis], delta[axis])
-		endHi := dyAdd(start.hi[axis], delta[axis])
+		endLo := proofarith.DyAdd(start.lo[axis], delta[axis])
+		endHi := proofarith.DyAdd(start.hi[axis], delta[axis])
 		start.lo[axis] = dyMin(start.lo[axis], endLo)
 		start.hi[axis] = dyMax(start.hi[axis], endHi)
 	}
 	return start
 }
 
-func translatedAffineBox(start sourceBoxContactProof, delta [3]dyadic) sourceBoxContactProof {
+func translatedAffineBox(start sourceBoxContactProof, delta [3]proofarith.Dyadic) sourceBoxContactProof {
 	for axis := range 3 {
-		start.lo[axis] = dyAdd(start.lo[axis], delta[axis])
-		start.hi[axis] = dyAdd(start.hi[axis], delta[axis])
+		start.lo[axis] = proofarith.DyAdd(start.lo[axis], delta[axis])
+		start.hi[axis] = proofarith.DyAdd(start.hi[axis], delta[axis])
 	}
 	return start
 }
 
 func outerBoxGapExceeds(a, b sourceBoxContactProof, axis, sign int, minimum *big.Rat) bool {
 	if sign > 0 {
-		return new(big.Rat).Sub(b.lo[axis].rat(), a.hi[axis].rat()).Cmp(minimum) > 0
+		return new(big.Rat).Sub(b.lo[axis].Rat(), a.hi[axis].Rat()).Cmp(minimum) > 0
 	}
-	return new(big.Rat).Sub(a.lo[axis].rat(), b.hi[axis].rat()).Cmp(minimum) > 0
+	return new(big.Rat).Sub(a.lo[axis].Rat(), b.hi[axis].Rat()).Cmp(minimum) > 0
 }

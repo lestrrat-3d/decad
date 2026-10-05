@@ -7,6 +7,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -165,16 +166,16 @@ func TestCellChordCurveAreaUpperRefusesNonFiniteCorners(t *testing.T) {
 // representation only. They exist as REFERENCES for those tests and for
 // nothing else; no bound reads them.
 func ratSpanUpper(a, b r3.Vec) float64 {
-	d := dvSub(dyVec(a), dyVec(b))
-	return dySqrtUp(dvDot(d, d))
+	d := proofarith.DvSub(proofarith.DyVec(a), proofarith.DyVec(b))
+	return proofarith.DySqrtUp(proofarith.DvDot(d, d))
 }
 
 func ratTwistQuarterUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
-	t := dvSub(dvSub(dyVec(vLo), dyVec(vHi)), dvSub(dyVec(wLo), dyVec(wHi)))
-	if dvIsZero(t) {
+	t := proofarith.DvSub(proofarith.DvSub(proofarith.DyVec(vLo), proofarith.DyVec(vHi)), proofarith.DvSub(proofarith.DyVec(wLo), proofarith.DyVec(wHi)))
+	if proofarith.DvIsZero(t) {
 		return 0
 	}
-	return dySqrtUp(dyShift(dvDot(t, t), -4))
+	return proofarith.DySqrtUp(proofarith.DyShift(proofarith.DvDot(t, t), -4))
 }
 
 // TestCellExactReadingsMatchTheRationalReference pins that carrying the two
@@ -362,8 +363,8 @@ func TestCellAllowsOfMatchesThePerBoundHelpers(t *testing.T) {
 // r3's own implementation — see naiveNorm's own comment for why.
 func rawNormIsBelowExact(a, b r3.Vec) bool {
 	raw := ratOfFloat(naiveNorm(a.Sub(b)))
-	d := dvSub(dyVec(a), dyVec(b))
-	return new(big.Rat).Mul(raw, raw).Cmp(dvDot(d, d).rat()) < 0
+	d := proofarith.DvSub(proofarith.DyVec(a), proofarith.DyVec(b))
+	return new(big.Rat).Mul(raw, raw).Cmp(proofarith.DvDot(d, d).Rat()) < 0
 }
 
 // edgeProductRow is one corner set for the two raw-norm regressions below,
@@ -900,8 +901,8 @@ func exactCellTwistFactors(vLo, vHi, wLo, wHi r3.Vec) (*big.Rat, *big.Rat) {
 func exactCellTwistVolume(vLo, vHi, wLo, wHi r3.Vec) *big.Rat {
 	a := heldDelta(vHi, vLo)
 	b := heldDelta(wLo, vLo)
-	twist := dvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
-	det := dyAbs(dvDot(a, dvCross(twist, b))).rat()
+	twist := proofarith.DvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	det := proofarith.DyAbs(proofarith.DvDot(a, proofarith.DvCross(twist, b))).Rat()
 	return det.Quo(det, big.NewRat(12, 1))
 }
 

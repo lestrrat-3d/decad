@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -12,7 +13,7 @@ import (
 // support face, so callers may use it only for strict separation.
 type boundedFacetedExtent struct {
 	box   sourceBoxContactProof
-	bound dyadic
+	bound proofarith.Dyadic
 }
 
 func sourceBoundedFacetedExtent(ctx context.Context, b *Body,
@@ -27,7 +28,7 @@ func sourceBoundedFacetedExtent(ctx context.Context, b *Body,
 	}
 	budget := newWorkBudget(ctx)
 	var proof boundedFacetedExtent
-	proof.bound = mustDyOf(pp.meshBound)
+	proof.bound = proofarith.MustDyOf(pp.meshBound)
 	for i, v := range pp.verts {
 		if err := budget.step(); err != nil {
 			return boundedFacetedExtent{}, false, err
@@ -35,12 +36,12 @@ func sourceBoundedFacetedExtent(ctx context.Context, b *Body,
 		if !finiteVec(v) {
 			return boundedFacetedExtent{}, false, nil
 		}
-		placed := exactContactTransform(pose, dyVec(v))
+		placed := exactContactTransform(pose, proofarith.DyVec(v))
 		for axis := range 3 {
-			if i == 0 || dyCmp(placed[axis], proof.box.lo[axis]) < 0 {
+			if i == 0 || proofarith.DyCmp(placed[axis], proof.box.lo[axis]) < 0 {
 				proof.box.lo[axis] = placed[axis]
 			}
-			if i == 0 || dyCmp(placed[axis], proof.box.hi[axis]) > 0 {
+			if i == 0 || proofarith.DyCmp(placed[axis], proof.box.hi[axis]) > 0 {
 				proof.box.hi[axis] = placed[axis]
 			}
 		}
@@ -50,8 +51,8 @@ func sourceBoundedFacetedExtent(ctx context.Context, b *Body,
 
 func boundedFacetedInsideFloor(extent boundedFacetedExtent, floor sourceBoxContactProof) bool {
 	for axis := range 2 {
-		if dyCmp(dySubScalar(extent.box.lo[axis], extent.bound), floor.lo[axis]) <= 0 ||
-			dyCmp(dyAdd(extent.box.hi[axis], extent.bound), floor.hi[axis]) >= 0 {
+		if proofarith.DyCmp(proofarith.DySubScalar(extent.box.lo[axis], extent.bound), floor.lo[axis]) <= 0 ||
+			proofarith.DyCmp(proofarith.DyAdd(extent.box.hi[axis], extent.bound), floor.hi[axis]) >= 0 {
 			return false
 		}
 	}
@@ -60,15 +61,15 @@ func boundedFacetedInsideFloor(extent boundedFacetedExtent, floor sourceBoxConta
 
 func boundedFacetedFloorGap(extent boundedFacetedExtent,
 	floor sourceBoxContactProof) (Measurement, bool) {
-	held := dySubScalar(extent.box.lo[2], floor.hi[2])
-	if dyCmp(held, extent.bound) <= 0 {
+	held := proofarith.DySubScalar(extent.box.lo[2], floor.hi[2])
+	if proofarith.DyCmp(held, extent.bound) <= 0 {
 		return Measurement{}, false
 	}
 	reading, ok := sourceBoxSignedReading(held)
 	if !ok {
 		return Measurement{}, false
 	}
-	boundaryBound, _ := extent.bound.float64()
+	boundaryBound, _ := extent.bound.Float64()
 	bound := absSumUpper(reading.Bound.Base(), boundaryBound)
 	if !finiteMeasurementValues(bound) || reading.Value.Base()-bound <= 0 {
 		return Measurement{}, false
@@ -84,10 +85,10 @@ func boundedFacetedFloorGap(extent boundedFacetedExtent,
 type facetedAxisSupport struct {
 	face             *Face
 	axis, side       int
-	plane            dyadic
-	footLo, footHi   [2]dyadic
-	outerLo, outerHi [3]dyadic
-	corners          [4]dyV3
+	plane            proofarith.Dyadic
+	footLo, footHi   [2]proofarith.Dyadic
+	outerLo, outerHi [3]proofarith.Dyadic
+	corners          [4]proofarith.DyV3
 	normal           r3.Vec
 }
 
@@ -128,7 +129,7 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 	if err := budget.err(); err != nil {
 		return facetedAxisSupport{}, false, err
 	}
-	placed := make([]dyV3, len(pp.verts))
+	placed := make([]proofarith.DyV3, len(pp.verts))
 	var proof facetedAxisSupport
 	proof.axis, proof.side = axis, side
 	for i, v := range sourceVerts {
@@ -138,24 +139,24 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 		if !finiteVec(v) {
 			return facetedAxisSupport{}, false, nil
 		}
-		source := dyVec(v)
+		source := proofarith.DyVec(v)
 		if placedFromSource {
 			if !finiteVec(pp.verts[i]) {
 				return facetedAxisSupport{}, false, nil
 			}
 			source = exactContactTransform(pp.xform, source)
-			difference := dvSub(source, dyVec(pp.verts[i]))
-			bound := mustDyOf(pp.meshBound)
-			if dyCmp(dvDot(difference, difference), dyMul(bound, bound)) > 0 {
+			difference := proofarith.DvSub(source, proofarith.DyVec(pp.verts[i]))
+			bound := proofarith.MustDyOf(pp.meshBound)
+			if proofarith.DyCmp(proofarith.DvDot(difference, difference), proofarith.DyMul(bound, bound)) > 0 {
 				return facetedAxisSupport{}, false, nil
 			}
 		}
 		placed[i] = exactContactTransform(pose, source)
 		for j := range 3 {
-			if i == 0 || dyCmp(placed[i][j], proof.outerLo[j]) < 0 {
+			if i == 0 || proofarith.DyCmp(placed[i][j], proof.outerLo[j]) < 0 {
 				proof.outerLo[j] = placed[i][j]
 			}
-			if i == 0 || dyCmp(placed[i][j], proof.outerHi[j]) > 0 {
+			if i == 0 || proofarith.DyCmp(placed[i][j], proof.outerHi[j]) > 0 {
 				proof.outerHi[j] = placed[i][j]
 			}
 		}
@@ -178,7 +179,7 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 	}
 	faces := b.Faces()
 	covered := make([]bool, len(placed))
-	var area2 dyadic
+	var area2 proofarith.Dyadic
 	first := true
 	for i, tri := range pp.tris {
 		if err := budget.step(); err != nil {
@@ -193,9 +194,9 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 		if faceIndex < 0 || faceIndex >= len(faces) {
 			return facetedAxisSupport{}, false, nil
 		}
-		if dyCmp(placed[tri[0]][axis], proof.plane) != 0 ||
-			dyCmp(placed[tri[1]][axis], proof.plane) != 0 ||
-			dyCmp(placed[tri[2]][axis], proof.plane) != 0 {
+		if proofarith.DyCmp(placed[tri[0]][axis], proof.plane) != 0 ||
+			proofarith.DyCmp(placed[tri[1]][axis], proof.plane) != 0 ||
+			proofarith.DyCmp(placed[tri[2]][axis], proof.plane) != 0 {
 			continue
 		}
 		face := faces[faceIndex]
@@ -204,32 +205,32 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 			return facetedAxisSupport{}, false, nil
 		}
 		proof.face = face
-		cross := dvCross(dvSub(placed[tri[1]], placed[tri[0]]),
-			dvSub(placed[tri[2]], placed[tri[0]]))
-		if cross[axis].sign() != windingSign ||
-			!cross[projected[0]].isZero() || !cross[projected[1]].isZero() {
+		cross := proofarith.DvCross(proofarith.DvSub(placed[tri[1]], placed[tri[0]]),
+			proofarith.DvSub(placed[tri[2]], placed[tri[0]]))
+		if cross[axis].Sign() != windingSign ||
+			!cross[projected[0]].IsZero() || !cross[projected[1]].IsZero() {
 			return facetedAxisSupport{}, false, nil
 		}
 		if windingSign < 0 {
-			area2 = dySubScalar(area2, cross[axis])
+			area2 = proofarith.DySubScalar(area2, cross[axis])
 		} else {
-			area2 = dyAdd(area2, cross[axis])
+			area2 = proofarith.DyAdd(area2, cross[axis])
 		}
 		for _, vertex := range tri {
 			covered[vertex] = true
 			for j, coord := range projected {
-				if first || dyCmp(placed[vertex][coord], proof.footLo[j]) < 0 {
+				if first || proofarith.DyCmp(placed[vertex][coord], proof.footLo[j]) < 0 {
 					proof.footLo[j] = placed[vertex][coord]
 				}
-				if first || dyCmp(placed[vertex][coord], proof.footHi[j]) > 0 {
+				if first || proofarith.DyCmp(placed[vertex][coord], proof.footHi[j]) > 0 {
 					proof.footHi[j] = placed[vertex][coord]
 				}
 			}
 			first = false
 		}
 	}
-	if proof.face == nil || dyCmp(proof.footLo[0], proof.footHi[0]) >= 0 ||
-		dyCmp(proof.footLo[1], proof.footHi[1]) >= 0 {
+	if proof.face == nil || proofarith.DyCmp(proof.footLo[0], proof.footHi[0]) >= 0 ||
+		proofarith.DyCmp(proof.footLo[1], proof.footHi[1]) >= 0 {
 		return facetedAxisSupport{}, false, nil
 	}
 	// The source Face must name this support patch in full, rather than also
@@ -242,7 +243,7 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 			continue
 		}
 		for _, vertex := range tri {
-			if dyCmp(placed[vertex][axis], proof.plane) != 0 {
+			if proofarith.DyCmp(placed[vertex][axis], proof.plane) != 0 {
 				return facetedAxisSupport{}, false, nil
 			}
 		}
@@ -251,13 +252,13 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 		if err := budget.step(); err != nil {
 			return facetedAxisSupport{}, false, err
 		}
-		if dyCmp(placed[i][axis], proof.plane) == 0 && !covered[i] {
+		if proofarith.DyCmp(placed[i][axis], proof.plane) == 0 && !covered[i] {
 			return facetedAxisSupport{}, false, nil
 		}
 	}
-	width := dySubScalar(proof.footHi[0], proof.footLo[0])
-	height := dySubScalar(proof.footHi[1], proof.footLo[1])
-	if dyCmp(area2, dyMul(mustDyOf(2), dyMul(width, height))) != 0 {
+	width := proofarith.DySubScalar(proof.footHi[0], proof.footLo[0])
+	height := proofarith.DySubScalar(proof.footHi[1], proof.footLo[1])
+	if proofarith.DyCmp(area2, proofarith.DyMul(proofarith.MustDyOf(2), proofarith.DyMul(width, height))) != 0 {
 		return facetedAxisSupport{}, false, nil
 	}
 	for i, corner := range [][2]int{{0, 0}, {1, 0}, {1, 1}, {0, 1}} {
@@ -298,7 +299,7 @@ func classifyFacetedFloorBox(ctx context.Context, report *ContactReport, faceted
 		if err != nil {
 			return err
 		}
-		if bounded && extent.bound.sign() > 0 && boundedFacetedInsideFloor(extent, floor) {
+		if bounded && extent.bound.Sign() > 0 && boundedFacetedInsideFloor(extent, floor) {
 			if gap, measured := boundedFacetedFloorGap(extent, floor); measured {
 				report.Relation, report.Gap, report.Reason = ContactSeparated, &gap, ContactNoReason
 			}
@@ -306,17 +307,17 @@ func classifyFacetedFloorBox(ctx context.Context, report *ContactReport, faceted
 		return nil
 	}
 	for j := range 2 {
-		if dyCmp(floor.lo[j], support.footLo[j]) >= 0 ||
-			dyCmp(support.footHi[j], floor.hi[j]) >= 0 {
+		if proofarith.DyCmp(floor.lo[j], support.footLo[j]) >= 0 ||
+			proofarith.DyCmp(support.footHi[j], floor.hi[j]) >= 0 {
 			return nil
 		}
 	}
-	gap := dySubScalar(support.plane, floor.hi[2])
-	if gap.sign() < 0 {
+	gap := proofarith.DySubScalar(support.plane, floor.hi[2])
+	if gap.Sign() < 0 {
 		return nil
 	}
-	if gap.sign() > 0 {
-		var gaps [3]dyadic
+	if gap.Sign() > 0 {
+		var gaps [3]proofarith.Dyadic
 		gaps[2] = gap
 		m, measured := sourceBoxGap(gaps)
 		if !measured {
@@ -336,9 +337,9 @@ func classifyFacetedFloorBox(ctx context.Context, report *ContactReport, faceted
 		patch.lo[j], patch.hi[j] = support.footLo[j], support.footHi[j]
 	}
 	if facetedIsA {
-		publishSourceBoxPatch(report, patch, floor, 2, -1, dyZero())
+		publishSourceBoxPatch(report, patch, floor, 2, -1, proofarith.DyZero())
 	} else {
-		publishSourceBoxPatch(report, floor, patch, 2, 1, dyZero())
+		publishSourceBoxPatch(report, floor, patch, 2, 1, proofarith.DyZero())
 	}
 	if report.Manifold != nil {
 		report.Reason = ContactNoReason

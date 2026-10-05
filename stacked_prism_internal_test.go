@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -90,11 +91,11 @@ func TestBlindStackedLevelChargesExactOffsetSum(t *testing.T) {
 	pocket, err := Cut(t.Context(), plate, tool)
 	require.NoError(t, err)
 	sp := pocket.payload.(stackedPrismPayload)
-	inner := new(big.Rat).Add(floatRat(0.1), floatRat(0.3))
+	inner := new(big.Rat).Add(proofarith.FloatRat(0.1), proofarith.FloatRat(0.3))
 	held, _ := inner.Float64()
 	require.Equal(t, held, sp.slabs[0].z1)
 	require.Positive(t, sp.slabs[0].z1Delta)
-	require.Equal(t, rationalFloatError(inner, held), sp.slabs[0].z1Delta)
+	require.Equal(t, proofarith.RationalFloatError(inner, held), sp.slabs[0].z1Delta)
 	require.Equal(t, sp.slabs[0].z1Delta, sp.slabs[1].z0Delta)
 }
 

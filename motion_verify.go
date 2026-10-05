@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"slices"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -147,11 +148,11 @@ func (s motionSpec) defaultResolution() (units.Value, bool) {
 		// two distinct endpoints to the same float in From's unit.
 		d = new(big.Rat).Sub(s.toP.base, s.fromP.base)
 		d.Abs(d)
-		d.Quo(d, floatRat(s.from.Unit().Factor()))
+		d.Quo(d, proofarith.FloatRat(s.from.Unit().Factor()))
 	} else {
-		from := floatRat(s.from.Mag())
+		from := proofarith.FloatRat(s.from.Mag())
 		toMag, err := s.to.In(s.from.Unit())
-		to := floatRat(toMag)
+		to := proofarith.FloatRat(toMag)
 		if err != nil || from == nil || to == nil {
 			return units.New(0, s.from.Unit()), false
 		}
@@ -208,9 +209,9 @@ func (s motionSpec) label(f *big.Rat) units.Value {
 	case f.Cmp(big.NewRat(1, 1)) == 0:
 		return s.to
 	}
-	from := floatRat(s.from.Mag())
+	from := proofarith.FloatRat(s.from.Mag())
 	toMag, err := s.to.In(s.from.Unit())
-	to := floatRat(toMag)
+	to := proofarith.FloatRat(toMag)
 	if err != nil || from == nil || to == nil {
 		// Unreachable for a validated motion, whose endpoints both convert;
 		// the exact parameter still governs every bound if it were reached.
@@ -559,7 +560,7 @@ func (r *motionRun) meetsMinimum(clearance *Measurement) bool {
 	if clearance == nil {
 		return true
 	}
-	return floatRat(clearance.Value.Base()).Cmp(r.cfg.minimumMM) >= 0
+	return proofarith.FloatRat(clearance.Value.Base()).Cmp(r.cfg.minimumMM) >= 0
 }
 
 func anyViolated(poses []*motionPose) bool {
@@ -775,7 +776,7 @@ func transferredOverlap(volume Measurement, measured bool, allowance float64) (M
 	if !measured || isNonFinite(allowance) {
 		return Measurement{}, false
 	}
-	value, bound := floatRat(volume.Value.Base()), floatRat(volume.Bound.Base())
+	value, bound := proofarith.FloatRat(volume.Value.Base()), proofarith.FloatRat(volume.Bound.Base())
 	if value == nil || bound == nil {
 		return Measurement{}, false
 	}
@@ -818,7 +819,7 @@ func (r *motionRun) recordGap(mp *motionPose, i, j int, res pairResult, eta floa
 	mp.pairs[i][j] = motionPairPose{hasGap: true, lo: lo, hi: hi, diam: res.diam}
 	gap := pairGapMeasurement(pairResult{lo: lo, hi: hi, exact: exact})
 	mp.result.Clearances = append(mp.result.Clearances, Clearance{A: mover, B: static, Gap: gap})
-	if r.cfg.minimumMM != nil && floatRat(hi).Cmp(r.cfg.minimumMM) < 0 {
+	if r.cfg.minimumMM != nil && proofarith.FloatRat(hi).Cmp(r.cfg.minimumMM) < 0 {
 		// The proven upper end of the ideal pose's gap lies below the spec:
 		// the margin is disproven here, whatever the reading's precision.
 		mp.violated = true
@@ -878,7 +879,7 @@ func (r *motionRun) intervalOutcome(a, b *motionPose) (IntervalOutcome, *Measure
 		for j := range r.statics {
 			pair := r.pairs[i][j]
 			if pair.excluded {
-				lowest = minRat(lowest, floatRat(pair.lower))
+				lowest = minRat(lowest, proofarith.FloatRat(pair.lower))
 				continue
 			}
 			pa, pb := a.pairs[i][j], b.pairs[i][j]
@@ -889,7 +890,7 @@ func (r *motionRun) intervalOutcome(a, b *motionPose) (IntervalOutcome, *Measure
 			if tau == nil {
 				return IntervalUndecided, nil
 			}
-			sum := new(big.Rat).Add(floatRat(pa.lo), floatRat(pb.lo))
+			sum := new(big.Rat).Add(proofarith.FloatRat(pa.lo), proofarith.FloatRat(pb.lo))
 			if sum.Cmp(tau) <= 0 {
 				return IntervalUndecided, nil
 			}

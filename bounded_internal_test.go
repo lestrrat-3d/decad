@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,10 +29,10 @@ func TestFloatRatMatchesSetFloat64(t *testing.T) {
 		t.Helper()
 		want := new(big.Rat)
 		if want.SetFloat64(f) == nil {
-			require.Nil(t, floatRat(f), "%v has no rational", f)
+			require.Nil(t, proofarith.FloatRat(f), "%v has no rational", f)
 			return
 		}
-		got := floatRat(f)
+		got := proofarith.FloatRat(f)
 		require.NotNil(t, got, "%v", f)
 		require.Equal(t, 0, want.Cmp(got), "value %v", f)
 		require.Equal(t, want.Num().String(), got.Num().String(), "numerator %v", f)
@@ -39,17 +40,17 @@ func TestFloatRatMatchesSetFloat64(t *testing.T) {
 		require.Equal(t, want.String(), got.String(), "%v", f)
 		require.Equal(t, want.IsInt(), got.IsInt(), "%v", f)
 
-		d, ok := dyOf(f)
+		d, ok := proofarith.DyOf(f)
 		require.True(t, ok, "%v is finite and must lift", f)
-		dr := d.rat()
+		dr := d.Rat()
 		require.Equal(t, 0, want.Cmp(dr), "dyadic value %v", f)
 		require.Equal(t, want.Num().String(), dr.Num().String(), "dyadic numerator %v", f)
 		require.Equal(t, want.Denom().String(), dr.Denom().String(), "dyadic denominator %v", f)
 
 		// A dyadic no float holds, with a mantissa wider than 53 bits, reads
 		// back as the test's own independent composition of it.
-		wide := dyAdd(dyMul(d, d), dyShift(mustDyOf(1), -1080))
-		wr, ww := wide.rat(), ratOfDyadic(t, wide)
+		wide := proofarith.DyAdd(proofarith.DyMul(d, d), proofarith.DyShift(proofarith.MustDyOf(1), -1080))
+		wr, ww := wide.Rat(), ratOfDyadic(t, wide)
 		require.Equal(t, ww.Num().String(), wr.Num().String(), "widened numerator %v", f)
 		require.Equal(t, ww.Denom().String(), wr.Denom().String(), "widened denominator %v", f)
 

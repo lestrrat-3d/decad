@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -114,7 +115,7 @@ func facetedMassProperties(ctx context.Context, b *Body, pp facetedPayload, dens
 	if err != nil {
 		return MassProperties{}, err
 	}
-	volumeError := floatRat(pp.volSymDiff)
+	volumeError := proofarith.FloatRat(pp.volSymDiff)
 	firstError := new(big.Rat).Mul(radius, volumeError)
 	secondError := new(big.Rat).Mul(new(big.Rat).Mul(radius, radius), volumeError)
 	volumeIV := facetedMomentInterval(volume, volumeError)
@@ -132,7 +133,7 @@ func facetedMassProperties(ctx context.Context, b *Body, pp facetedPayload, dens
 
 	var center [3]ratInterval
 	var central [3][3]ratInterval
-	for i, origin := range []*big.Rat{floatRat(anchor.X), floatRat(anchor.Y), floatRat(anchor.Z)} {
+	for i, origin := range []*big.Rat{proofarith.FloatRat(anchor.X), proofarith.FloatRat(anchor.Y), proofarith.FloatRat(anchor.Z)} {
 		offset, _ := intervalQuo(firstIV[i], volumeIV)
 		center[i] = intervalAdd(pointInterval(origin), offset)
 		for j := i; j < 3; j++ {
@@ -141,7 +142,7 @@ func facetedMassProperties(ctx context.Context, b *Body, pp facetedPayload, dens
 		}
 	}
 	trace := intervalAdd(intervalAdd(central[0][0], central[1][1]), central[2][2])
-	rho := new(big.Rat).Mul(floatRat(density.Mag()), floatRat(density.Unit().Factor()))
+	rho := new(big.Rat).Mul(proofarith.FloatRat(density.Mag()), proofarith.FloatRat(density.Unit().Factor()))
 	result := MassProperties{}
 	result.Mass, err = massIntervalReading(intervalScale(volumeIV, rho), units.Kilogram)
 	if err != nil {
@@ -203,12 +204,12 @@ func facetedMassRadius(box Box, anchor r3.Vec, maxMesh [3]*big.Rat) (*big.Rat, e
 		{box.Min.Z, box.Max.Z, anchor.Z},
 	}
 	for axis, end := range ends {
-		lo := new(big.Rat).Abs(new(big.Rat).Sub(floatRat(end[0]), floatRat(end[2])))
-		hi := new(big.Rat).Abs(new(big.Rat).Sub(floatRat(end[1]), floatRat(end[2])))
+		lo := new(big.Rat).Abs(new(big.Rat).Sub(proofarith.FloatRat(end[0]), proofarith.FloatRat(end[2])))
+		hi := new(big.Rat).Abs(new(big.Rat).Sub(proofarith.FloatRat(end[1]), proofarith.FloatRat(end[2])))
 		if hi.Cmp(lo) > 0 {
 			lo = hi
 		}
-		lo.Add(lo, floatRat(allow))
+		lo.Add(lo, proofarith.FloatRat(allow))
 		if maxMesh[axis].Cmp(lo) > 0 {
 			lo = maxMesh[axis]
 		}
@@ -231,12 +232,12 @@ func facetedMassReadingsPositive(m MassProperties) bool {
 	off := [3]Measurement{m.Inertia.XY, m.Inertia.XZ, m.Inertia.YZ}
 	var offUpper [3]*big.Rat
 	for i, v := range off {
-		magnitude := floatRat(v.Value.Base())
+		magnitude := proofarith.FloatRat(v.Value.Base())
 		magnitude.Abs(magnitude)
-		offUpper[i] = new(big.Rat).Add(magnitude, floatRat(v.Bound.Base()))
+		offUpper[i] = new(big.Rat).Add(magnitude, proofarith.FloatRat(v.Bound.Base()))
 	}
 	for i, v := range diagonal {
-		lower := new(big.Rat).Sub(floatRat(v.Value.Base()), floatRat(v.Bound.Base()))
+		lower := new(big.Rat).Sub(proofarith.FloatRat(v.Value.Base()), proofarith.FloatRat(v.Bound.Base()))
 		switch i {
 		case 0:
 			lower.Sub(lower, offUpper[0]).Sub(lower, offUpper[1])

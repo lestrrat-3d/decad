@@ -3,6 +3,7 @@ package decad
 import (
 	"fmt"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -86,9 +87,9 @@ func NewPath(start r3.Vec, segments ...PathSegment) (*Path, error) {
 			if segment.Through == current || segment.End == current || segment.Through == segment.End {
 				return nil, fmt.Errorf(`%w: path segment %d repeats an arc point`, ErrDegenerate, i)
 			}
-			fromStart := dvSub(dyVec(segment.Through), dyVec(current))
-			toEnd := dvSub(dyVec(segment.End), dyVec(current))
-			if dvIsZero(dvCross(fromStart, toEnd)) {
+			fromStart := proofarith.DvSub(proofarith.DyVec(segment.Through), proofarith.DyVec(current))
+			toEnd := proofarith.DvSub(proofarith.DyVec(segment.End), proofarith.DyVec(current))
+			if proofarith.DvIsZero(proofarith.DvCross(fromStart, toEnd)) {
 				return nil, fmt.Errorf(`%w: path segment %d has collinear arc points`, ErrDegenerate, i)
 			}
 			record, err := recordSweepArc(current, segment.Through, segment.End)

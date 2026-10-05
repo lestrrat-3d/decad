@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -337,7 +338,7 @@ func buildCapBand(ctx context.Context, body *Body, ref producerID, cbp capBlendP
 	// the identical level, and it rides onto every patch's own capPatchGeom,
 	// where patchAreaOf charges it against the patch's area
 	// (capblend_moments.go).
-	levelDelta := absSumUpper(cbp.dDelta, addRoundError(capZ, matSign*d, sideZ))
+	levelDelta := absSumUpper(cbp.dDelta, proofarith.AddRoundError(capZ, matSign*d, sideZ))
 	// capDelta is the inherited displacement of the cap level itself. The cap
 	// contour moves only in the cap plane, so its delta does not cover this
 	// independent axial term.
@@ -949,7 +950,7 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 	seamU := cu + r
 	seam := &Vertex{
 		position: pl.point(seamU, cv, z),
-		bound:    units.Millimeters(absSumUpper(delta, addRoundError(cu, r, seamU))),
+		bound:    units.Millimeters(absSumUpper(delta, proofarith.AddRoundError(cu, r, seamU))),
 	}
 	axis := pl.dir(0, 0, 1)
 	if !ccw {

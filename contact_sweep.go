@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"sort"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -109,8 +110,8 @@ type SweepDeparture struct {
 // certified touching prefix. Its source face pointers are the original faces.
 type SweepContactTrack struct {
 	a, b          sourceBoxContactProof
-	deltaA        [3]dyadic
-	deltaB        [3]dyadic
+	deltaA        [3]proofarith.Dyadic
+	deltaB        [3]proofarith.Dyadic
 	sphere        *sourceSphereContactProof
 	spherePair    *[2]sourceSphereContactProof
 	sphereFirst   bool
@@ -122,7 +123,7 @@ type SweepContactTrack struct {
 	pointCount    int
 	orientedA     *orientedSourceBox
 	orientedB     *orientedSourceBox
-	orientedDelta [3]dyadic
+	orientedDelta [3]proofarith.Dyadic
 }
 
 func (t *SweepContactTrack) Start() SweepInstant { return sweepInstant(t.start, t.duration) }
@@ -262,15 +263,15 @@ func (r *SweepReport) BracketEndsAtDuration() bool {
 
 type affinePairPath struct {
 	from, to  r3.Transform
-	delta     [3]dyadic // displacement over the full path, in millimetres
-	duration  *big.Rat  // exact seconds represented by the input value
+	delta     [3]proofarith.Dyadic // displacement over the full path, in millimetres
+	duration  *big.Rat             // exact seconds represented by the input value
 	drift     *RigidDriftSegment
 	screw     *r3.Screw
 	supported bool
 }
 
 func exactBaseValue(v units.Value) (*big.Rat, bool) {
-	m, f := floatRat(v.Mag()), floatRat(v.Unit().Factor())
+	m, f := proofarith.FloatRat(v.Mag()), proofarith.FloatRat(v.Unit().Factor())
 	if m == nil || f == nil {
 		return nil, false
 	}
@@ -309,8 +310,8 @@ func validatePairPath(path PairPath) (affinePairPath, error) {
 			return out, nil
 		}
 		start, end := p.From.Translation(), p.To.Translation()
-		out.delta = [3]dyadic{dySubScalar(mustDyOf(end.X), mustDyOf(start.X)),
-			dySubScalar(mustDyOf(end.Y), mustDyOf(start.Y)), dySubScalar(mustDyOf(end.Z), mustDyOf(start.Z))}
+		out.delta = [3]proofarith.Dyadic{proofarith.DySubScalar(proofarith.MustDyOf(end.X), proofarith.MustDyOf(start.X)),
+			proofarith.DySubScalar(proofarith.MustDyOf(end.Y), proofarith.MustDyOf(start.Y)), proofarith.DySubScalar(proofarith.MustDyOf(end.Z), proofarith.MustDyOf(start.Z))}
 		out.supported = true
 	case RigidDriftSegment:
 		out.from = p.From
@@ -354,7 +355,7 @@ func validatePairPath(path PairPath) (affinePairPath, error) {
 				return out, fmt.Errorf("%w: nonfinite drift velocity", ErrNotFinite)
 			}
 			full := new(big.Rat).Mul(base, out.duration)
-			d, ok := dyOfRat(full)
+			d, ok := proofarith.DyOfRat(full)
 			if !ok {
 				return out, fmt.Errorf("%w: drift displacement is not dyadic", ErrUnsupported)
 			}
@@ -384,9 +385,9 @@ func (p affinePairPath) poseAt(f *big.Rat) (r3.Transform, error) {
 	if f.Cmp(big.NewRat(1, 1)) == 0 && p.to.IsValid() {
 		return p.to, nil
 	}
-	d := r3.NewVec(ratFloatNearest(new(big.Rat).Mul(p.delta[0].rat(), f)),
-		ratFloatNearest(new(big.Rat).Mul(p.delta[1].rat(), f)),
-		ratFloatNearest(new(big.Rat).Mul(p.delta[2].rat(), f)))
+	d := r3.NewVec(ratFloatNearest(new(big.Rat).Mul(p.delta[0].Rat(), f)),
+		ratFloatNearest(new(big.Rat).Mul(p.delta[1].Rat(), f)),
+		ratFloatNearest(new(big.Rat).Mul(p.delta[2].Rat(), f)))
 	step, err := r3.Translation(d)
 	if err != nil {
 		return r3.Transform{}, err
@@ -399,7 +400,7 @@ func ratFloatNearest(v *big.Rat) float64 { f, _ := v.Float64(); return f }
 func sweepInstant(f, duration *big.Rat) SweepInstant {
 	t := new(big.Rat).Mul(f, duration)
 	value := ratFloatNearest(t)
-	bound := rationalFloatError(t, value)
+	bound := proofarith.RationalFloatError(t, value)
 	return SweepInstant{
 		Fraction: units.Scalar(ratFloatNearest(f)),
 		Elapsed:  Measurement{Value: units.Seconds(value), Bound: units.Seconds(bound), Exactness: exactnessFromBound(bound)},
@@ -601,15 +602,15 @@ func (r *pairSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, er
 // Its manifold is an internal feature proof. transferManifold publishes either
 // that bounded proof or a matching real ContactPair manifold.
 func (r *pairSweepRun) idealContact(f *big.Rat, at SweepInstant) SweepEvent {
-	fraction, ok := dyOfRat(f)
+	fraction, ok := proofarith.DyOfRat(f)
 	if !ok {
 		return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 	}
 	a, b := r.boxA, r.boxB
 	for i := range 3 {
-		moveA, moveB := dyMul(r.pa.delta[i], fraction), dyMul(r.pb.delta[i], fraction)
-		a.lo[i], a.hi[i] = dyAdd(a.lo[i], moveA), dyAdd(a.hi[i], moveA)
-		b.lo[i], b.hi[i] = dyAdd(b.lo[i], moveB), dyAdd(b.hi[i], moveB)
+		moveA, moveB := proofarith.DyMul(r.pa.delta[i], fraction), proofarith.DyMul(r.pb.delta[i], fraction)
+		a.lo[i], a.hi[i] = proofarith.DyAdd(a.lo[i], moveA), proofarith.DyAdd(a.hi[i], moveA)
+		b.lo[i], b.hi[i] = proofarith.DyAdd(b.lo[i], moveB), proofarith.DyAdd(b.hi[i], moveB)
 	}
 	report := &ContactReport{A: r.a, B: r.b, Request: r.req.ContactRequest}
 	if r.facetedFloor {
@@ -617,7 +618,7 @@ func (r *pairSweepRun) idealContact(f *big.Rat, at SweepInstant) SweepEvent {
 		if _, ok := r.a.payload.(facetedPayload); ok {
 			floor, faceted = b, a
 		}
-		if dyCmp(faceted.lo[2], floor.hi[2]) < 0 {
+		if proofarith.DyCmp(faceted.lo[2], floor.hi[2]) < 0 {
 			return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
 		}
 	}
@@ -676,7 +677,7 @@ func (r *pairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
 	for i := range points {
 		point := &points[i]
 		for _, witness := range []*VecMeasurement{&point.OnA, &point.OnB} {
-			bound := new(big.Rat).Add(floatRat(witness.Bound.Base()), deviation)
+			bound := new(big.Rat).Add(proofarith.FloatRat(witness.Bound.Base()), deviation)
 			if bound.Cmp(resolution) > 0 {
 				useIdeal()
 				return
@@ -689,7 +690,7 @@ func (r *pairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
 			witness.Bound = units.Millimeters(publishedBound)
 			witness.Exactness = exactnessFromBound(witness.Bound.Base())
 		}
-		separationBound := new(big.Rat).Add(floatRat(point.Separation.Bound.Base()), deviation)
+		separationBound := new(big.Rat).Add(proofarith.FloatRat(point.Separation.Bound.Base()), deviation)
 		point.Separation.Bound = units.Millimeters(ratFloatUp(separationBound))
 		point.Separation.Exactness = exactnessFromBound(point.Separation.Bound.Base())
 	}
@@ -699,14 +700,14 @@ func (r *pairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Transform,
 
 // boxPoseDeviation bounds the L1 distance between a float-pose source box and
 // the ideal affine box. Each support endpoint is compared as an exact rational.
-func boxPoseDeviation(start, observed sourceBoxContactProof, delta [3]dyadic, f *big.Rat) *big.Rat {
+func boxPoseDeviation(start, observed sourceBoxContactProof, delta [3]proofarith.Dyadic, f *big.Rat) *big.Rat {
 	total := new(big.Rat)
 	for i := range 3 {
-		move := new(big.Rat).Mul(delta[i].rat(), f)
-		idealLo := new(big.Rat).Add(start.lo[i].rat(), move)
-		idealHi := new(big.Rat).Add(start.hi[i].rat(), move)
-		lo := new(big.Rat).Sub(observed.lo[i].rat(), idealLo)
-		hi := new(big.Rat).Sub(observed.hi[i].rat(), idealHi)
+		move := new(big.Rat).Mul(delta[i].Rat(), f)
+		idealLo := new(big.Rat).Add(start.lo[i].Rat(), move)
+		idealHi := new(big.Rat).Add(start.hi[i].Rat(), move)
+		lo := new(big.Rat).Sub(observed.lo[i].Rat(), idealLo)
+		hi := new(big.Rat).Sub(observed.hi[i].Rat(), idealHi)
 		lo.Abs(lo)
 		hi.Abs(hi)
 		if hi.Cmp(lo) > 0 {
@@ -717,16 +718,16 @@ func boxPoseDeviation(start, observed sourceBoxContactProof, delta [3]dyadic, f 
 	return total
 }
 
-func translatedSourceBoxes(a, b sourceBoxContactProof, da, db [3]dyadic,
+func translatedSourceBoxes(a, b sourceBoxContactProof, da, db [3]proofarith.Dyadic,
 	f *big.Rat) (sourceBoxContactProof, sourceBoxContactProof, bool) {
-	fraction, ok := dyOfRat(f)
+	fraction, ok := proofarith.DyOfRat(f)
 	if !ok {
 		return sourceBoxContactProof{}, sourceBoxContactProof{}, false
 	}
 	for i := range 3 {
-		moveA, moveB := dyMul(da[i], fraction), dyMul(db[i], fraction)
-		a.lo[i], a.hi[i] = dyAdd(a.lo[i], moveA), dyAdd(a.hi[i], moveA)
-		b.lo[i], b.hi[i] = dyAdd(b.lo[i], moveB), dyAdd(b.hi[i], moveB)
+		moveA, moveB := proofarith.DyMul(da[i], fraction), proofarith.DyMul(db[i], fraction)
+		a.lo[i], a.hi[i] = proofarith.DyAdd(a.lo[i], moveA), proofarith.DyAdd(a.hi[i], moveA)
+		b.lo[i], b.hi[i] = proofarith.DyAdd(b.lo[i], moveB), proofarith.DyAdd(b.hi[i], moveB)
 	}
 	return a, b, true
 }
@@ -742,11 +743,11 @@ func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *Swe
 	axis, side, ok := signedAxis(normal.Value)
 	if !ok || normal.Bound.Base() != 0 ||
 		first.Ideal.Manifold.Points[0].NormalAngle.Base() != 0 ||
-		dyCmp(r.pa.delta[axis], r.pb.delta[axis]) != 0 {
+		proofarith.DyCmp(r.pa.delta[axis], r.pb.delta[axis]) != 0 {
 		return nil
 	}
-	if side == 1 && dyCmp(r.boxA.hi[axis], r.boxB.lo[axis]) != 0 ||
-		side == 0 && dyCmp(r.boxB.hi[axis], r.boxA.lo[axis]) != 0 {
+	if side == 1 && proofarith.DyCmp(r.boxA.hi[axis], r.boxB.lo[axis]) != 0 ||
+		side == 0 && proofarith.DyCmp(r.boxB.hi[axis], r.boxA.lo[axis]) != 0 {
 		return nil
 	}
 	for i := range 3 {
@@ -757,7 +758,7 @@ func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *Swe
 		// tests prove positive overlap for every intervening time.
 		for _, f := range []*big.Rat{new(big.Rat), end} {
 			a, b, _ := translatedSourceBoxes(r.boxA, r.boxB, r.pa.delta, r.pb.delta, f)
-			if dyCmp(a.lo[i], b.hi[i]) >= 0 || dyCmp(b.lo[i], a.hi[i]) >= 0 {
+			if proofarith.DyCmp(a.lo[i], b.hi[i]) >= 0 || proofarith.DyCmp(b.lo[i], a.hi[i]) >= 0 {
 				return nil
 			}
 		}
@@ -780,15 +781,15 @@ func (r *pairSweepRun) fullSourceBoxTrack(first *SweepSample, end *big.Rat) *Swe
 	}
 }
 
-func affineEqualityRoot(a, da, b, db dyadic) *big.Rat {
-	delta := dySubScalar(da, db)
-	if delta.isZero() {
+func affineEqualityRoot(a, da, b, db proofarith.Dyadic) *big.Rat {
+	delta := proofarith.DySubScalar(da, db)
+	if delta.IsZero() {
 		return nil
 	}
-	return new(big.Rat).Quo(dySubScalar(b, a).rat(), delta.rat())
+	return new(big.Rat).Quo(proofarith.DySubScalar(b, a).Rat(), delta.Rat())
 }
 
-func affineEqualityRootWithin(a, da, b, db dyadic, end *big.Rat) bool {
+func affineEqualityRootWithin(a, da, b, db proofarith.Dyadic, end *big.Rat) bool {
 	root := affineEqualityRoot(a, da, b, db)
 	return root != nil && root.Sign() > 0 && root.Cmp(end) <= 0
 }
@@ -809,7 +810,7 @@ func (r *pairSweepRun) sourceBoxTransitionRoot(first *SweepSample) *big.Rat {
 		if i == axis {
 			continue
 		}
-		for _, pair := range [][4]dyadic{
+		for _, pair := range [][4]proofarith.Dyadic{
 			{r.boxA.lo[i], r.pa.delta[i], r.boxB.lo[i], r.pb.delta[i]},
 			{r.boxA.hi[i], r.pa.delta[i], r.boxB.hi[i], r.pb.delta[i]},
 			{r.boxA.lo[i], r.pa.delta[i], r.boxB.hi[i], r.pb.delta[i]},
@@ -842,8 +843,8 @@ func sourceContactRootBracket(root, duration, resolution *big.Rat) (*big.Rat, *b
 			left := new(big.Rat).SetFrac(leftIdx, grid)
 			right := new(big.Rat).SetFrac(rightIdx, grid)
 			if left.Sign() < 0 || right.Cmp(big.NewRat(1, 1)) > 0 ||
-				floatRat(ratFloatNearest(left)).Cmp(left) != 0 ||
-				floatRat(ratFloatNearest(right)).Cmp(right) != 0 {
+				proofarith.FloatRat(ratFloatNearest(left)).Cmp(left) != 0 ||
+				proofarith.FloatRat(ratFloatNearest(right)).Cmp(right) != 0 {
 				return nil, nil, false
 			}
 			return left, right, true
@@ -856,16 +857,16 @@ func sourceContactRootBracket(root, duration, resolution *big.Rat) (*big.Rat, *b
 // Every contact coordinate lies within the start/end box endpoint envelope.
 // One ULP at its maximum magnitude safely bounds conversion of any enclosed
 // dyadic fraction to float; radius3D turns that into a point-ball radius.
-func sourceTrackPointsWithin(a, b sourceBoxContactProof, da, db [3]dyadic, resolution float64) bool {
+func sourceTrackPointsWithin(a, b sourceBoxContactProof, da, db [3]proofarith.Dyadic, resolution float64) bool {
 	maximum := new(big.Rat)
 	for _, moving := range []struct {
 		box   sourceBoxContactProof
-		delta [3]dyadic
+		delta [3]proofarith.Dyadic
 	}{{a, da}, {b, db}} {
 		for i := range 3 {
-			for _, endpoint := range []dyadic{moving.box.lo[i], moving.box.hi[i]} {
-				for _, value := range []dyadic{endpoint, dyAdd(endpoint, moving.delta[i])} {
-					abs := new(big.Rat).Abs(value.rat())
+			for _, endpoint := range []proofarith.Dyadic{moving.box.lo[i], moving.box.hi[i]} {
+				for _, value := range []proofarith.Dyadic{endpoint, proofarith.DyAdd(endpoint, moving.delta[i])} {
+					abs := new(big.Rat).Abs(value.Rat())
 					if abs.Cmp(maximum) > 0 {
 						maximum = abs
 					}
@@ -1075,13 +1076,13 @@ func (r *pairSweepRun) undecided(from, to *big.Rat, cause SweepCause) *SweepRepo
 
 func (r *pairSweepRun) provesDeparture() bool {
 	for axis := range 3 {
-		if dyCmp(r.boxA.hi[axis], r.boxB.lo[axis]) == 0 {
-			if dySubScalar(r.pb.delta[axis], r.pa.delta[axis]).sign() > 0 {
+		if proofarith.DyCmp(r.boxA.hi[axis], r.boxB.lo[axis]) == 0 {
+			if proofarith.DySubScalar(r.pb.delta[axis], r.pa.delta[axis]).Sign() > 0 {
 				return true
 			}
 		}
-		if dyCmp(r.boxB.hi[axis], r.boxA.lo[axis]) == 0 {
-			if dySubScalar(r.pa.delta[axis], r.pb.delta[axis]).sign() > 0 {
+		if proofarith.DyCmp(r.boxB.hi[axis], r.boxA.lo[axis]) == 0 {
+			if proofarith.DySubScalar(r.pa.delta[axis], r.pb.delta[axis]).Sign() > 0 {
 				return true
 			}
 		}
@@ -1094,23 +1095,23 @@ func (r *pairSweepRun) provesDeparture() bool {
 func (r *pairSweepRun) contactSpan() (*big.Rat, *big.Rat, bool) {
 	entry, exit := new(big.Rat), big.NewRat(1, 1)
 	for axis := range 3 {
-		constraints := [2][2]dyadic{
-			{dySubScalar(r.boxA.hi[axis], r.boxB.lo[axis]), dySubScalar(r.pa.delta[axis], r.pb.delta[axis])},
-			{dySubScalar(r.boxB.hi[axis], r.boxA.lo[axis]), dySubScalar(r.pb.delta[axis], r.pa.delta[axis])},
+		constraints := [2][2]proofarith.Dyadic{
+			{proofarith.DySubScalar(r.boxA.hi[axis], r.boxB.lo[axis]), proofarith.DySubScalar(r.pa.delta[axis], r.pb.delta[axis])},
+			{proofarith.DySubScalar(r.boxB.hi[axis], r.boxA.lo[axis]), proofarith.DySubScalar(r.pb.delta[axis], r.pa.delta[axis])},
 		}
 		for _, c := range constraints {
 			start, slope := c[0], c[1]
-			if slope.isZero() {
-				if start.sign() < 0 {
+			if slope.IsZero() {
+				if start.Sign() < 0 {
 					return entry, exit, false
 				}
 				continue
 			}
-			root := new(big.Rat).Quo(dyNeg(start).rat(), slope.rat())
-			if slope.sign() > 0 && root.Cmp(entry) > 0 {
+			root := new(big.Rat).Quo(proofarith.DyNeg(start).Rat(), slope.Rat())
+			if slope.Sign() > 0 && root.Cmp(entry) > 0 {
 				entry = root
 			}
-			if slope.sign() < 0 && root.Cmp(exit) < 0 {
+			if slope.Sign() < 0 && root.Cmp(exit) < 0 {
 				exit = root
 			}
 		}

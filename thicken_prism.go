@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -152,7 +153,7 @@ func thickenCircleSection(profile ProfileRecord, circle CircleSeg, side ThickenS
 		// The whole swept family is the concentric circles of radius at most
 		// outerRadius about one fixed center, so the least radius any of them
 		// reaches from the axis is the center's own less that outermost radius.
-		least := new(big.Rat).Sub(radial.rho(floatRat(circle.Center.U), floatRat(circle.Center.V)), floatRat(outerRadius))
+		least := new(big.Rat).Sub(radial.rho(proofarith.FloatRat(circle.Center.U), proofarith.FloatRat(circle.Center.V)), proofarith.FloatRat(outerRadius))
 		if err := radial.require(least); err != nil {
 			return thickenSection{}, err
 		}
@@ -177,13 +178,13 @@ func prismCircleOffset(budget *workBudget, source ProfileRecord, radius, sense, 
 	if err != nil || delta != 0 {
 		return ProfileRecord{}, fmt.Errorf(`%w: the generated circle radius is not exact`, ErrUnsupported)
 	}
-	want := new(big.Rat).Set(floatRat(radius))
+	want := new(big.Rat).Set(proofarith.FloatRat(radius))
 	if sense < 0 {
-		want.Add(want, floatRat(amount))
+		want.Add(want, proofarith.FloatRat(amount))
 	} else {
-		want.Sub(want, floatRat(amount))
+		want.Sub(want, proofarith.FloatRat(amount))
 	}
-	if want.Sign() <= 0 || rationalFloatError(want, got) != 0 {
+	if want.Sign() <= 0 || proofarith.RationalFloatError(want, got) != 0 {
 		return ProfileRecord{}, fmt.Errorf(`%w: the circle offset is not exactly representable`, ErrUnsupported)
 	}
 	if err := thickenAuditRefusal(auditOffsetSectionBudget(budget, source, offset)); err != nil {

@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -210,7 +211,7 @@ func validateSweepOptions(opts []SweepOption) (bool, error) {
 
 func validateSweepPathGeometry(path *Path, plane PlaneRecord) error {
 	start := path.Start()
-	normal := sweepRatFromDyadic(dvCross(dyVec(plane.U), dyVec(plane.V)))
+	normal := sweepRatFromDyadic(proofarith.DvCross(proofarith.DyVec(plane.U), proofarith.DyVec(plane.V)))
 	relStart := sweepRatSub(sweepRatVecOf(start), sweepRatVecOf(plane.Origin))
 	if sweepRatDot(relStart, normal).Sign() != 0 {
 		return fmt.Errorf(`%w: the sweep path must start in the profile plane`, ErrDegenerate)
@@ -246,7 +247,7 @@ func validateStraightSweepPath(path *Path, frame r3.Frame) (float64, float64, er
 		return 0, 0, fmt.Errorf(`%w: the sweep path span is not straight`, ErrUnsupported)
 	}
 
-	tangent := dvSub(dyVec(line.End), dyVec(start))
+	tangent := proofarith.DvSub(proofarith.DyVec(line.End), proofarith.DyVec(start))
 
 	delta := line.End.Sub(start)
 	if !finiteVec(delta) {
@@ -258,13 +259,13 @@ func validateStraightSweepPath(path *Path, frame r3.Frame) (float64, float64, er
 	}
 	// The squared length is the recorded tangent's own exact dot product; both
 	// endpoints are finite (dyVec's precondition), so it always states one.
-	lengthBound := straightEdgeBound(height, dvDot(tangent, tangent), true)
+	lengthBound := straightEdgeBound(height, proofarith.DvDot(tangent, tangent), true)
 	heldSweep := frame.N().Scale(height)
 	bound := absSumUpper(
 		lengthBound,
-		dyadicFloatError(tangent[0], heldSweep.X),
-		dyadicFloatError(tangent[1], heldSweep.Y),
-		dyadicFloatError(tangent[2], heldSweep.Z),
+		proofarith.DyadicFloatError(tangent[0], heldSweep.X),
+		proofarith.DyadicFloatError(tangent[1], heldSweep.Y),
+		proofarith.DyadicFloatError(tangent[2], heldSweep.Z),
 	)
 	if math.IsInf(bound, 0) || math.IsNaN(bound) {
 		return 0, 0, fmt.Errorf(`%w: the sweep line's length has no finite error bound`, ErrUnsupported)

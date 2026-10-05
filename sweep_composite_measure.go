@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -196,9 +197,9 @@ func compositeLineSweepSpan(
 	heldSweep := frame.N().Scale(height)
 	heightBound = absSumUpper(
 		heightBound,
-		rationalFloatError(tangent[0], heldSweep.X),
-		rationalFloatError(tangent[1], heldSweep.Y),
-		rationalFloatError(tangent[2], heldSweep.Z),
+		proofarith.RationalFloatError(tangent[0], heldSweep.X),
+		proofarith.RationalFloatError(tangent[1], heldSweep.Y),
+		proofarith.RationalFloatError(tangent[2], heldSweep.Z),
 	)
 	if math.IsInf(heightBound, 0) || math.IsNaN(heightBound) {
 		return sweepSpanPayload{}, fmt.Errorf(`%w: the sweep line's length has no finite error bound`, ErrUnsupported)

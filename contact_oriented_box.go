@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -11,8 +12,8 @@ import (
 // orientedSourceBox is the exact parallelotope obtained by applying the read
 // placement and pose entries to a source-certified rectangular prism.
 type orientedSourceBox struct {
-	corner [8]dyV3
-	edge   [3]dyV3
+	corner [8]proofarith.DyV3
+	edge   [3]proofarith.DyV3
 	faces  [3][2]*Face
 }
 
@@ -43,32 +44,32 @@ func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, 
 		umin >= umax || vmin >= vmax || pp.z0 >= pp.z1 {
 		return orientedSourceBox{}, false
 	}
-	values := [3][2]dyadic{{mustDyOf(umin), mustDyOf(umax)},
-		{mustDyOf(vmin), mustDyOf(vmax)}, {mustDyOf(pp.z0), mustDyOf(pp.z1)}}
-	frame := [3]dyV3{dyVec(pp.frame.U()), dyVec(pp.frame.V()), dyVec(pp.frame.N())}
-	origin := dyVec(pp.frame.Origin())
+	values := [3][2]proofarith.Dyadic{{proofarith.MustDyOf(umin), proofarith.MustDyOf(umax)},
+		{proofarith.MustDyOf(vmin), proofarith.MustDyOf(vmax)}, {proofarith.MustDyOf(pp.z0), proofarith.MustDyOf(pp.z1)}}
+	frame := [3]proofarith.DyV3{proofarith.DyVec(pp.frame.U()), proofarith.DyVec(pp.frame.V()), proofarith.DyVec(pp.frame.N())}
+	origin := proofarith.DyVec(pp.frame.Origin())
 	var box orientedSourceBox
 	for index := range box.corner {
 		point := origin
 		for axis := range 3 {
-			point = dvAdd(point, dyScaleVec(frame[axis], values[axis][(index>>axis)&1]))
+			point = proofarith.DvAdd(point, dyScaleVec(frame[axis], values[axis][(index>>axis)&1]))
 		}
 		box.corner[index] = exactContactTransform(pose, exactContactTransform(pp.xform, point))
 	}
-	box.edge = [3]dyV3{dvSub(box.corner[1], box.corner[0]),
-		dvSub(box.corner[2], box.corner[0]), dvSub(box.corner[4], box.corner[0])}
+	box.edge = [3]proofarith.DyV3{proofarith.DvSub(box.corner[1], box.corner[0]),
+		proofarith.DvSub(box.corner[2], box.corner[0]), proofarith.DvSub(box.corner[4], box.corner[0])}
 	for axis := range 3 {
-		if dvIsZero(box.edge[axis]) {
+		if proofarith.DvIsZero(box.edge[axis]) {
 			return orientedSourceBox{}, false
 		}
 	}
 	// The original planar faces retain their source identities after the read
 	// pose. Match them in the body's cardinal placed frame, before rotation.
-	placedEdge := [3]dyV3{}
+	placedEdge := [3]proofarith.DyV3{}
 	for axis := range 3 {
 		placedEdge[axis] = exactContactTransform(pp.xform,
-			dyScaleVec(frame[axis], dySubScalar(values[axis][1], values[axis][0])))
-		placedEdge[axis] = dvSub(placedEdge[axis], dyVec(pp.xform.Translation()))
+			dyScaleVec(frame[axis], proofarith.DySubScalar(values[axis][1], values[axis][0])))
+		placedEdge[axis] = proofarith.DvSub(placedEdge[axis], proofarith.DyVec(pp.xform.Translation()))
 	}
 	faces := body.Faces()
 	if len(faces) != 6 {
@@ -85,7 +86,7 @@ func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, 
 		}
 		mapped := false
 		for axis := range 3 {
-			projection := dvDot(dyVec(normal), placedEdge[axis]).sign()
+			projection := proofarith.DvDot(proofarith.DyVec(normal), placedEdge[axis]).Sign()
 			if projection == 0 {
 				continue
 			}
@@ -112,59 +113,59 @@ func sourceOrientedBoxAtPose(body *Body, pose r3.Transform) (orientedSourceBox, 
 
 // orientedBoxRelation applies the complete separating-axis test. Every axis
 // and projection is a polynomial of held float entries, hence exact dyadic.
-func orientedBoxRelation(a, b orientedSourceBox) (ContactRelation, dyadic, dyadic) {
-	faceAxes := func(box orientedSourceBox) [3]dyV3 {
-		return [3]dyV3{dvCross(box.edge[1], box.edge[2]),
-			dvCross(box.edge[2], box.edge[0]), dvCross(box.edge[0], box.edge[1])}
+func orientedBoxRelation(a, b orientedSourceBox) (ContactRelation, proofarith.Dyadic, proofarith.Dyadic) {
+	faceAxes := func(box orientedSourceBox) [3]proofarith.DyV3 {
+		return [3]proofarith.DyV3{proofarith.DvCross(box.edge[1], box.edge[2]),
+			proofarith.DvCross(box.edge[2], box.edge[0]), proofarith.DvCross(box.edge[0], box.edge[1])}
 	}
 	axisA, axisB := faceAxes(a), faceAxes(b)
-	axes := make([]dyV3, 0, 15)
+	axes := make([]proofarith.DyV3, 0, 15)
 	axes = append(axes, axisA[:]...)
 	axes = append(axes, axisB[:]...)
 	for _, ea := range a.edge {
 		for _, eb := range b.edge {
-			axes = append(axes, dvCross(ea, eb))
+			axes = append(axes, proofarith.DvCross(ea, eb))
 		}
 	}
 	touch := false
-	bestGap, bestNormSquared := dyZero(), dyZero()
+	bestGap, bestNormSquared := proofarith.DyZero(), proofarith.DyZero()
 	for _, axis := range axes {
-		if dvIsZero(axis) {
+		if proofarith.DvIsZero(axis) {
 			continue
 		}
 		alo, ahi := orientedProjection(a, axis)
 		blo, bhi := orientedProjection(b, axis)
-		gap := dyZero()
-		if dyCmp(ahi, blo) < 0 {
-			gap = dySubScalar(blo, ahi)
-		} else if dyCmp(bhi, alo) < 0 {
-			gap = dySubScalar(alo, bhi)
-		} else if dyCmp(ahi, blo) == 0 || dyCmp(bhi, alo) == 0 {
+		gap := proofarith.DyZero()
+		if proofarith.DyCmp(ahi, blo) < 0 {
+			gap = proofarith.DySubScalar(blo, ahi)
+		} else if proofarith.DyCmp(bhi, alo) < 0 {
+			gap = proofarith.DySubScalar(alo, bhi)
+		} else if proofarith.DyCmp(ahi, blo) == 0 || proofarith.DyCmp(bhi, alo) == 0 {
 			touch = true
 		}
-		if gap.sign() <= 0 {
+		if gap.Sign() <= 0 {
 			continue
 		}
-		normSquared := dvDot(axis, axis)
-		if bestGap.sign() == 0 ||
-			new(big.Rat).Quo(dyMul(gap, gap).rat(), normSquared.rat()).Cmp(
-				new(big.Rat).Quo(dyMul(bestGap, bestGap).rat(), bestNormSquared.rat())) > 0 {
+		normSquared := proofarith.DvDot(axis, axis)
+		if bestGap.Sign() == 0 ||
+			new(big.Rat).Quo(proofarith.DyMul(gap, gap).Rat(), normSquared.Rat()).Cmp(
+				new(big.Rat).Quo(proofarith.DyMul(bestGap, bestGap).Rat(), bestNormSquared.Rat())) > 0 {
 			bestGap, bestNormSquared = gap, normSquared
 		}
 	}
-	if bestGap.sign() > 0 {
+	if bestGap.Sign() > 0 {
 		return ContactSeparated, bestGap, bestNormSquared
 	}
 	if touch {
-		return ContactTouching, dyZero(), dyZero()
+		return ContactTouching, proofarith.DyZero(), proofarith.DyZero()
 	}
-	return ContactOverlapping, dyZero(), dyZero()
+	return ContactOverlapping, proofarith.DyZero(), proofarith.DyZero()
 }
 
-func orientedProjection(box orientedSourceBox, axis dyV3) (dyadic, dyadic) {
-	lo, hi := dvDot(box.corner[0], axis), dvDot(box.corner[0], axis)
+func orientedProjection(box orientedSourceBox, axis proofarith.DyV3) (proofarith.Dyadic, proofarith.Dyadic) {
+	lo, hi := proofarith.DvDot(box.corner[0], axis), proofarith.DvDot(box.corner[0], axis)
 	for _, point := range box.corner[1:] {
-		value := dvDot(point, axis)
+		value := proofarith.DvDot(point, axis)
 		lo, hi = dyMin(lo, value), dyMax(hi, value)
 	}
 	return lo, hi
@@ -226,32 +227,32 @@ func publishHorizontalPatchOrder(report *ContactReport, base sourceBoxContactPro
 	if !ok {
 		return false
 	}
-	minZ, maxZ := orientedProjection(rotated, dyV3{dyZero(), dyZero(), mustDyOf(1)})
-	baseBelow := dyCmp(base.lo[2], minZ) < 0 && dyCmp(base.hi[2], maxZ) < 0
-	baseAbove := dyCmp(base.lo[2], minZ) > 0 && dyCmp(base.hi[2], maxZ) > 0
+	minZ, maxZ := orientedProjection(rotated, proofarith.DyV3{proofarith.DyZero(), proofarith.DyZero(), proofarith.MustDyOf(1)})
+	baseBelow := proofarith.DyCmp(base.lo[2], minZ) < 0 && proofarith.DyCmp(base.hi[2], maxZ) < 0
+	baseAbove := proofarith.DyCmp(base.lo[2], minZ) > 0 && proofarith.DyCmp(base.hi[2], maxZ) > 0
 	if !baseBelow && !baseAbove {
 		return false
 	}
-	var faceZ, supportZ, separation dyadic
+	var faceZ, supportZ, separation proofarith.Dyadic
 	var baseSide, rotatedSide int
 	if baseBelow {
 		faceZ, supportZ = minZ, base.hi[2]
-		separation = dySubScalar(faceZ, supportZ)
+		separation = proofarith.DySubScalar(faceZ, supportZ)
 		baseSide, rotatedSide = 1, 0
 	} else {
 		faceZ, supportZ = maxZ, base.lo[2]
-		separation = dySubScalar(supportZ, faceZ)
+		separation = proofarith.DySubScalar(supportZ, faceZ)
 		baseSide, rotatedSide = 0, 1
 	}
-	if separation.sign() > 0 ||
-		(report.Relation == ContactTouching && separation.sign() != 0) ||
-		(report.Relation == ContactOverlapping && separation.sign() >= 0) {
+	if separation.Sign() > 0 ||
+		(report.Relation == ContactTouching && separation.Sign() != 0) ||
+		(report.Relation == ContactOverlapping && separation.Sign() >= 0) {
 		return false
 	}
-	depth := dyNeg(separation)
+	depth := proofarith.DyNeg(separation)
 	vertical := -1
 	for axis, edge := range rotated.edge {
-		if edge[0].sign() == 0 && edge[1].sign() == 0 && edge[2].sign() != 0 {
+		if edge[0].Sign() == 0 && edge[1].Sign() == 0 && edge[2].Sign() != 0 {
 			if vertical >= 0 {
 				return false
 			}
@@ -262,28 +263,28 @@ func publishHorizontalPatchOrder(report *ContactReport, base sourceBoxContactPro
 		return false
 	}
 	start := 0
-	if dyCmp(rotated.corner[0][2], faceZ) != 0 {
+	if proofarith.DyCmp(rotated.corner[0][2], faceZ) != 0 {
 		start = 1 << vertical
 	}
 	i, j := (vertical+1)%3, (vertical+2)%3
 	indices := [4]int{start, start | (1 << i), start | (1 << i) | (1 << j), start | (1 << j)}
-	var corners [4]dyV3
+	var corners [4]proofarith.DyV3
 	for n, index := range indices {
 		corner := rotated.corner[index]
-		if dyCmp(corner[2], faceZ) != 0 {
+		if proofarith.DyCmp(corner[2], faceZ) != 0 {
 			return false
 		}
 		for axis := range 2 {
-			if dyCmp(corner[axis], dyAdd(base.lo[axis], depth)) <= 0 ||
-				dyCmp(corner[axis], dySubScalar(base.hi[axis], depth)) >= 0 {
+			if proofarith.DyCmp(corner[axis], proofarith.DyAdd(base.lo[axis], depth)) <= 0 ||
+				proofarith.DyCmp(corner[axis], proofarith.DySubScalar(base.hi[axis], depth)) >= 0 {
 				return false
 			}
 		}
 		corners[n] = corner
 	}
 	if report.Relation == ContactOverlapping &&
-		((baseBelow && dyCmp(maxZ, base.hi[2]) <= 0) ||
-			(baseAbove && dyCmp(minZ, base.lo[2]) >= 0)) {
+		((baseBelow && proofarith.DyCmp(maxZ, base.hi[2]) <= 0) ||
+			(baseAbove && proofarith.DyCmp(minZ, base.lo[2]) >= 0)) {
 		return false
 	}
 	reading, ok := sourceBoxSignedReading(separation)
@@ -332,7 +333,7 @@ func publishHorizontalPatchOrder(report *ContactReport, base sourceBoxContactPro
 // manifold, including edge and corner contacts.
 func publishOrientedAxisPatch(report *ContactReport, a, b *orientedSourceBox) {
 	var chosen *ContactPoint
-	best := dyZero()
+	best := proofarith.DyZero()
 	_, alignedA := sourceBoxAtPose(report.A, report.PoseA)
 	_, alignedB := sourceBoxAtPose(report.B, report.PoseB)
 	for axis := range 3 {
@@ -351,7 +352,7 @@ func publishOrientedAxisPatch(report *ContactReport, a, b *orientedSourceBox) {
 				!orientedAxisFace(b, axis, sideB, &faceB) {
 				continue
 			}
-			var candidate dyV3
+			var candidate proofarith.DyV3
 			orientedFaceCenter(&faceA, &candidate)
 			if !orientedFaceContainsProjection(&faceB, &candidate, axis) {
 				orientedFaceCenter(&faceB, &candidate)
@@ -362,24 +363,24 @@ func publishOrientedAxisPatch(report *ContactReport, a, b *orientedSourceBox) {
 			// Separation depends only on the two support planes. Read it before
 			// constructing and rounding the witness points, so the exact proof
 			// does not depend on a copied point surviving float publication.
-			separation := dySubScalar(faceB.origin[axis], faceA.origin[axis])
+			separation := proofarith.DySubScalar(faceB.origin[axis], faceA.origin[axis])
 			if sign < 0 {
-				separation = dyNeg(separation)
+				separation = proofarith.DyNeg(separation)
 			}
-			if separation.sign() > 0 && report.Relation != ContactSeparated {
+			if separation.Sign() > 0 && report.Relation != ContactSeparated {
 				continue
 			}
-			if report.Relation == ContactTouching && separation.sign() != 0 {
+			if report.Relation == ContactTouching && separation.Sign() != 0 {
 				continue
 			}
-			if chosen != nil && dyCmp(dyAbs(separation), dyAbs(best)) >= 0 {
+			if chosen != nil && proofarith.DyCmp(proofarith.DyAbs(separation), proofarith.DyAbs(best)) >= 0 {
 				continue
 			}
 			reading, ok := sourceBoxSignedReading(separation)
 			if !ok || reading.Bound.Base() > report.Request.PointResolution.Base() {
 				continue
 			}
-			var pointA, pointB dyV3
+			var pointA, pointB proofarith.DyV3
 			for coordinate := range 3 {
 				pointA[coordinate] = candidate[coordinate]
 				pointB[coordinate] = candidate[coordinate]
@@ -423,17 +424,17 @@ func publishOrientedAxisPatch(report *ContactReport, a, b *orientedSourceBox) {
 }
 
 type orientedFace struct {
-	origin, u, v dyV3
+	origin, u, v proofarith.DyV3
 }
 
 func orientedAxisFace(box *orientedSourceBox, axis, side int, face *orientedFace) bool {
 	for edgeAxis := range box.edge {
 		edge := &box.edge[edgeAxis]
-		if edge[axis].sign() == 0 {
+		if edge[axis].Sign() == 0 {
 			continue
 		}
 		for other := range 3 {
-			if other != axis && edge[other].sign() != 0 {
+			if other != axis && edge[other].Sign() != 0 {
 				return false
 			}
 		}
@@ -441,19 +442,19 @@ func orientedAxisFace(box *orientedSourceBox, axis, side int, face *orientedFace
 		count := 0
 		for i := range 3 {
 			if i != edgeAxis {
-				if box.edge[i][axis].sign() != 0 {
+				if box.edge[i][axis].Sign() != 0 {
 					return false
 				}
 				others[count] = i
 				count++
 			}
 		}
-		shift := (side == 1 && edge[axis].sign() > 0) ||
-			(side == 0 && edge[axis].sign() < 0)
+		shift := (side == 1 && edge[axis].Sign() > 0) ||
+			(side == 0 && edge[axis].Sign() < 0)
 		for coordinate := range 3 {
 			face.origin[coordinate] = box.corner[0][coordinate]
 			if shift {
-				face.origin[coordinate] = dyAdd(face.origin[coordinate], edge[coordinate])
+				face.origin[coordinate] = proofarith.DyAdd(face.origin[coordinate], edge[coordinate])
 			}
 			face.u[coordinate] = box.edge[others[0]][coordinate]
 			face.v[coordinate] = box.edge[others[1]][coordinate]
@@ -463,25 +464,25 @@ func orientedAxisFace(box *orientedSourceBox, axis, side int, face *orientedFace
 	return false
 }
 
-func orientedFaceCenter(face *orientedFace, point *dyV3) {
+func orientedFaceCenter(face *orientedFace, point *proofarith.DyV3) {
 	for i := range 3 {
-		point[i] = dyAdd(face.origin[i], dyShift(dyAdd(face.u[i], face.v[i]), -1))
+		point[i] = proofarith.DyAdd(face.origin[i], proofarith.DyShift(proofarith.DyAdd(face.u[i], face.v[i]), -1))
 	}
 }
 
-func orientedFaceContainsProjection(face *orientedFace, point *dyV3, axis int) bool {
+func orientedFaceContainsProjection(face *orientedFace, point *proofarith.DyV3, axis int) bool {
 	i, j := (axis+1)%3, (axis+2)%3
-	det := dySubScalar(dyMul(face.u[i], face.v[j]), dyMul(face.u[j], face.v[i]))
-	if det.sign() == 0 {
+	det := proofarith.DySubScalar(proofarith.DyMul(face.u[i], face.v[j]), proofarith.DyMul(face.u[j], face.v[i]))
+	if det.Sign() == 0 {
 		return false
 	}
-	pi, pj := dySubScalar(point[i], face.origin[i]), dySubScalar(point[j], face.origin[j])
-	u := dySubScalar(dyMul(pi, face.v[j]), dyMul(pj, face.v[i]))
-	v := dySubScalar(dyMul(face.u[i], pj), dyMul(face.u[j], pi))
-	if det.sign() < 0 {
-		det, u, v = dyNeg(det), dyNeg(u), dyNeg(v)
+	pi, pj := proofarith.DySubScalar(point[i], face.origin[i]), proofarith.DySubScalar(point[j], face.origin[j])
+	u := proofarith.DySubScalar(proofarith.DyMul(pi, face.v[j]), proofarith.DyMul(pj, face.v[i]))
+	v := proofarith.DySubScalar(proofarith.DyMul(face.u[i], pj), proofarith.DyMul(face.u[j], pi))
+	if det.Sign() < 0 {
+		det, u, v = proofarith.DyNeg(det), proofarith.DyNeg(u), proofarith.DyNeg(v)
 	}
-	return u.sign() > 0 && v.sign() > 0 && dyCmp(u, det) < 0 && dyCmp(v, det) < 0
+	return u.Sign() > 0 && v.Sign() > 0 && proofarith.DyCmp(u, det) < 0 && proofarith.DyCmp(v, det) < 0
 }
 
 func orientedSourceFace(body *Body, pose r3.Transform, axis, side int) *Face {
@@ -505,12 +506,12 @@ func orientedSourceFace(body *Body, pose r3.Transform, axis, side int) *Face {
 
 // orientedBoxGap encloses the true minimum distance. SAT supplies a lower
 // bound; actual vertex/face point pairs supply upper bounds.
-func orientedBoxGap(a, b orientedSourceBox, gap, normSquared dyadic) (Measurement, bool) {
-	normUp := ratSqrtUp(normSquared.rat())
+func orientedBoxGap(a, b orientedSourceBox, gap, normSquared proofarith.Dyadic) (Measurement, bool) {
+	normUp := ratSqrtUp(normSquared.Rat())
 	if !finiteMeasurementValues(normUp) || normUp <= 0 {
 		return Measurement{}, false
 	}
-	lower := new(big.Rat).Quo(gap.rat(), floatRat(normUp))
+	lower := new(big.Rat).Quo(gap.Rat(), proofarith.FloatRat(normUp))
 	if lower.Sign() <= 0 {
 		return Measurement{}, false
 	}
@@ -522,8 +523,8 @@ func orientedBoxGap(a, b orientedSourceBox, gap, normSquared dyadic) (Measuremen
 	}
 	for _, va := range a.corner {
 		for _, vb := range b.corner {
-			delta := dvSub(va, vb)
-			consider(dvDot(delta, delta).rat())
+			delta := proofarith.DvSub(va, vb)
+			consider(proofarith.DvDot(delta, delta).Rat())
 		}
 		for axis := range 3 {
 			for side := range 2 {
@@ -545,7 +546,7 @@ func orientedBoxGap(a, b orientedSourceBox, gap, normSquared dyadic) (Measuremen
 	if !finiteMeasurementValues(upperFloat) {
 		return Measurement{}, false
 	}
-	upper := floatRat(upperFloat)
+	upper := proofarith.FloatRat(upperFloat)
 	if upper.Cmp(lower) < 0 {
 		return Measurement{}, false
 	}
@@ -554,7 +555,7 @@ func orientedBoxGap(a, b orientedSourceBox, gap, normSquared dyadic) (Measuremen
 	if !finiteMeasurementValues(value) {
 		return Measurement{}, false
 	}
-	held := floatRat(value)
+	held := proofarith.FloatRat(value)
 	deviation := new(big.Rat).Sub(held, lower)
 	deviation.Abs(deviation)
 	other := new(big.Rat).Sub(upper, held)
@@ -563,36 +564,36 @@ func orientedBoxGap(a, b orientedSourceBox, gap, normSquared dyadic) (Measuremen
 		deviation = other
 	}
 	bound := ratFloatUp(deviation)
-	if !finiteMeasurementValues(bound) || new(big.Rat).Sub(held, floatRat(bound)).Sign() <= 0 {
+	if !finiteMeasurementValues(bound) || new(big.Rat).Sub(held, proofarith.FloatRat(bound)).Sign() <= 0 {
 		return Measurement{}, false
 	}
 	return Measurement{Value: units.Millimeters(value), Bound: units.Millimeters(bound),
 		Exactness: exactnessOf(bound)}, true
 }
 
-func orientedVertexFaceDistanceSquared(vertex dyV3, box orientedSourceBox, axis, side int) *big.Rat {
+func orientedVertexFaceDistanceSquared(vertex proofarith.DyV3, box orientedSourceBox, axis, side int) *big.Rat {
 	_, distance := orientedVertexFaceFoot(vertex, box, axis, side)
 	return distance
 }
 
-func orientedVertexFaceFoot(vertex dyV3, box orientedSourceBox, axis, side int) ([3]*big.Rat, *big.Rat) {
+func orientedVertexFaceFoot(vertex proofarith.DyV3, box orientedSourceBox, axis, side int) ([3]*big.Rat, *big.Rat) {
 	i, j := (axis+1)%3, (axis+2)%3
 	face := box.corner[0]
 	if side == 1 {
-		face = dvAdd(face, box.edge[axis])
+		face = proofarith.DvAdd(face, box.edge[axis])
 	}
 	a, b := box.edge[i], box.edge[j]
-	normal := dvCross(a, b)
-	normSquared := dvDot(normal, normal).rat()
+	normal := proofarith.DvCross(a, b)
+	normSquared := proofarith.DvDot(normal, normal).Rat()
 	if normSquared.Sign() == 0 {
 		return [3]*big.Rat{}, nil
 	}
-	w := dvSub(vertex, face)
-	distanceNumerator := dvDot(w, normal).rat()
+	w := proofarith.DvSub(vertex, face)
+	distanceNumerator := proofarith.DvDot(w, normal).Rat()
 	point := [3]*big.Rat{}
 	for k := range 3 {
-		point[k] = new(big.Rat).Sub(w[k].rat(),
-			new(big.Rat).Quo(new(big.Rat).Mul(normal[k].rat(), distanceNumerator), normSquared))
+		point[k] = new(big.Rat).Sub(w[k].Rat(),
+			new(big.Rat).Quo(new(big.Rat).Mul(normal[k].Rat(), distanceNumerator), normSquared))
 	}
 	dot := func(u, v [3]*big.Rat) *big.Rat {
 		result := new(big.Rat)
@@ -601,8 +602,8 @@ func orientedVertexFaceFoot(vertex dyV3, box orientedSourceBox, axis, side int) 
 		}
 		return result
 	}
-	ar, br := [3]*big.Rat{a[0].rat(), a[1].rat(), a[2].rat()},
-		[3]*big.Rat{b[0].rat(), b[1].rat(), b[2].rat()}
+	ar, br := [3]*big.Rat{a[0].Rat(), a[1].Rat(), a[2].Rat()},
+		[3]*big.Rat{b[0].Rat(), b[1].Rat(), b[2].Rat()}
 	aa, bb, ab := dot(ar, ar), dot(br, br), dot(ar, br)
 	det := new(big.Rat).Sub(new(big.Rat).Mul(aa, bb), new(big.Rat).Mul(ab, ab))
 	if det.Sign() <= 0 {
@@ -618,7 +619,7 @@ func orientedVertexFaceFoot(vertex dyV3, box orientedSourceBox, axis, side int) 
 	}
 	var foot [3]*big.Rat
 	for k := range 3 {
-		foot[k] = new(big.Rat).Add(face[k].rat(), point[k])
+		foot[k] = new(big.Rat).Add(face[k].Rat(), point[k])
 	}
 	return foot, new(big.Rat).Quo(new(big.Rat).Mul(distanceNumerator, distanceNumerator), normSquared)
 }
@@ -632,9 +633,9 @@ func orientedInteriorWitness(a, b orientedSourceBox, etaA, etaB *big.Rat) bool {
 	center := func(box orientedSourceBox) [3]*big.Rat {
 		var result [3]*big.Rat
 		for k := range 3 {
-			result[k] = new(big.Rat).Add(box.corner[0][k].rat(),
-				new(big.Rat).Quo(new(big.Rat).Add(box.edge[0][k].rat(),
-					new(big.Rat).Add(box.edge[1][k].rat(), box.edge[2][k].rat())), big.NewRat(2, 1)))
+			result[k] = new(big.Rat).Add(box.corner[0][k].Rat(),
+				new(big.Rat).Quo(new(big.Rat).Add(box.edge[0][k].Rat(),
+					new(big.Rat).Add(box.edge[1][k].Rat(), box.edge[2][k].Rat())), big.NewRat(2, 1)))
 		}
 		return result
 	}
@@ -652,7 +653,7 @@ func orientedInteriorWitness(a, b orientedSourceBox, etaA, etaB *big.Rat) bool {
 					}
 					var candidate [3]*big.Rat
 					for k := range 3 {
-						candidate[k] = new(big.Rat).Quo(new(big.Rat).Add(vertex[k].rat(), foot[k]),
+						candidate[k] = new(big.Rat).Quo(new(big.Rat).Add(vertex[k].Rat(), foot[k]),
 							big.NewRat(2, 1))
 					}
 					if try(candidate) {
@@ -665,17 +666,17 @@ func orientedInteriorWitness(a, b orientedSourceBox, etaA, etaB *big.Rat) bool {
 	return false
 }
 
-func orientedWitnessSamples(box orientedSourceBox) []dyV3 {
-	samples := make([]dyV3, 0, 26)
+func orientedWitnessSamples(box orientedSourceBox) []proofarith.DyV3 {
+	samples := make([]proofarith.DyV3, 0, 26)
 	samples = append(samples, box.corner[:]...)
-	average := func(indices ...int) dyV3 {
-		var point dyV3
+	average := func(indices ...int) proofarith.DyV3 {
+		var point proofarith.DyV3
 		for axis := range 3 {
-			sum := dyZero()
+			sum := proofarith.DyZero()
 			for _, index := range indices {
-				sum = dyAdd(sum, box.corner[index][axis])
+				sum = proofarith.DyAdd(sum, box.corner[index][axis])
 			}
-			point[axis], _ = dyOfRat(new(big.Rat).Quo(sum.rat(), big.NewRat(int64(len(indices)), 1)))
+			point[axis], _ = proofarith.DyOfRat(new(big.Rat).Quo(sum.Rat(), big.NewRat(int64(len(indices)), 1)))
 		}
 		return point
 	}
@@ -701,31 +702,31 @@ func orientedWitnessSamples(box orientedSourceBox) []dyV3 {
 func orientedPointInside(box orientedSourceBox, point [3]*big.Rat, eta *big.Rat) bool {
 	for axis := range 3 {
 		i, j := (axis+1)%3, (axis+2)%3
-		normal := dvCross(box.edge[i], box.edge[j])
-		if dvDot(normal, box.edge[axis]).sign() < 0 {
+		normal := proofarith.DvCross(box.edge[i], box.edge[j])
+		if proofarith.DvDot(normal, box.edge[axis]).Sign() < 0 {
 			for k := range 3 {
-				normal[k] = dyNeg(normal[k])
+				normal[k] = proofarith.DyNeg(normal[k])
 			}
 		}
-		normUp := ratSqrtUp(dvDot(normal, normal).rat())
+		normUp := ratSqrtUp(proofarith.DvDot(normal, normal).Rat())
 		if !finiteMeasurementValues(normUp) || normUp <= 0 {
 			return false
 		}
-		margin := new(big.Rat).Mul(eta, floatRat(normUp))
+		margin := new(big.Rat).Mul(eta, proofarith.FloatRat(normUp))
 		for side := range 2 {
 			face := box.corner[0]
 			signed := normal
 			if side == 1 {
-				face = dvAdd(face, box.edge[axis])
+				face = proofarith.DvAdd(face, box.edge[axis])
 			} else {
 				for k := range 3 {
-					signed[k] = dyNeg(signed[k])
+					signed[k] = proofarith.DyNeg(signed[k])
 				}
 			}
-			bound := dvDot(signed, face).rat()
+			bound := proofarith.DvDot(signed, face).Rat()
 			projected := new(big.Rat)
 			for k := range 3 {
-				projected.Add(projected, new(big.Rat).Mul(signed[k].rat(), point[k]))
+				projected.Add(projected, new(big.Rat).Mul(signed[k].Rat(), point[k]))
 			}
 			if new(big.Rat).Sub(bound, projected).Cmp(margin) <= 0 {
 				return false

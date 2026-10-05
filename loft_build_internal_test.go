@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -1352,60 +1353,60 @@ func cellBilinearAreaUncached(vLo, vHi, wLo, wHi r3.Vec) (float64, float64) {
 	}
 	da := heldDelta(vHi, vLo)
 	g := heldDelta(wLo, vLo)
-	twist := dvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
-	n0 := dvCross(da, g)
-	a := dvCross(da, twist)
-	b := dvCross(twist, g)
-	at := func(s, r dyadic) dyV3 {
-		var out dyV3
+	twist := proofarith.DvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	n0 := proofarith.DvCross(da, g)
+	a := proofarith.DvCross(da, twist)
+	b := proofarith.DvCross(twist, g)
+	at := func(s, r proofarith.Dyadic) proofarith.DyV3 {
+		var out proofarith.DyV3
 		for k := range out {
-			out[k] = dyAdd(dyAdd(n0[k], dyMul(s, a[k])), dyMul(r, b[k]))
+			out[k] = proofarith.DyAdd(proofarith.DyAdd(n0[k], proofarith.DyMul(s, a[k])), proofarith.DyMul(r, b[k]))
 		}
 		return out
 	}
-	normEnd := func(v dyV3, up bool) (dyadic, bool) {
-		f := dySqrtDown(dvDot(v, v))
+	normEnd := func(v proofarith.DyV3, up bool) (proofarith.Dyadic, bool) {
+		f := proofarith.DySqrtDown(proofarith.DvDot(v, v))
 		if up {
-			f = dySqrtUp(dvDot(v, v))
+			f = proofarith.DySqrtUp(proofarith.DvDot(v, v))
 		}
-		return dyOf(f)
+		return proofarith.DyOf(f)
 	}
 	const divShift = 2
-	integralLo := dyZero()
-	integralHi := dyZero()
+	integralLo := proofarith.DyZero()
+	integralHi := proofarith.DyZero()
 	for i := range divisions {
 		for j := range divisions {
-			sMid := dyShift(dyInt(int64(2*i+1)), -(divShift + 1))
-			rMid := dyShift(dyInt(int64(2*j+1)), -(divShift + 1))
+			sMid := proofarith.DyShift(proofarith.DyInt(int64(2*i+1)), -(divShift + 1))
+			rMid := proofarith.DyShift(proofarith.DyInt(int64(2*j+1)), -(divShift + 1))
 			lo, ok := normEnd(at(sMid, rMid), false)
 			if !ok {
 				return 0, math.Inf(1)
 			}
-			integralLo = dyAdd(integralLo, lo)
+			integralLo = proofarith.DyAdd(integralLo, lo)
 			for _, p := range [][2]int{{i, j}, {i + 1, j}, {i, j + 1}, {i + 1, j + 1}} {
-				node := func(v int) dyadic { return dyShift(dyInt(int64(v)), -divShift) }
+				node := func(v int) proofarith.Dyadic { return proofarith.DyShift(proofarith.DyInt(int64(v)), -divShift) }
 				hi, ok := normEnd(at(node(p[0]), node(p[1])), true)
 				if !ok {
 					return 0, math.Inf(1)
 				}
-				integralHi = dyAdd(integralHi, hi)
+				integralHi = proofarith.DyAdd(integralHi, hi)
 			}
 		}
 	}
-	integralLo = dyShift(integralLo, -2*divShift)
-	integralHi = dyShift(integralHi, -(2*divShift + 2))
-	mid := dyShift(dyAdd(integralLo, integralHi), -1)
-	value, _ := mid.float64()
-	valueDy, ok := dyOf(value)
+	integralLo = proofarith.DyShift(integralLo, -2*divShift)
+	integralHi = proofarith.DyShift(integralHi, -(2*divShift + 2))
+	mid := proofarith.DyShift(proofarith.DyAdd(integralLo, integralHi), -1)
+	value, _ := mid.Float64()
+	valueDy, ok := proofarith.DyOf(value)
 	if !ok {
 		return 0, math.Inf(1)
 	}
-	dLo := dyAbs(dySubScalar(valueDy, integralLo))
-	dHi := dyAbs(dySubScalar(integralHi, valueDy))
-	if dyCmp(dHi, dLo) > 0 {
+	dLo := proofarith.DyAbs(proofarith.DySubScalar(valueDy, integralLo))
+	dHi := proofarith.DyAbs(proofarith.DySubScalar(integralHi, valueDy))
+	if proofarith.DyCmp(dHi, dLo) > 0 {
 		dLo = dHi
 	}
-	return value, dyFloatUp(dLo)
+	return value, proofarith.DyFloatUp(dLo)
 }
 
 func TestCellBilinearAreaMatchesUncachedBits(t *testing.T) {
@@ -1435,9 +1436,9 @@ func TestCellBilinearAreaMatchesUncachedBits(t *testing.T) {
 			case "A zero taper", "B zero taper", "one ulp from A zero", "one ulp from B zero":
 				da := heldDelta(tc.vHi, tc.vLo)
 				g := heldDelta(tc.wLo, tc.vLo)
-				twist := dvSub(heldDelta(tc.vLo, tc.vHi), heldDelta(tc.wLo, tc.wHi))
-				aZero := dvIsZero(dvCross(da, twist))
-				bZero := dvIsZero(dvCross(twist, g))
+				twist := proofarith.DvSub(heldDelta(tc.vLo, tc.vHi), heldDelta(tc.wLo, tc.wHi))
+				aZero := proofarith.DvIsZero(proofarith.DvCross(da, twist))
+				bZero := proofarith.DvIsZero(proofarith.DvCross(twist, g))
 				switch tc.name {
 				case "A zero taper":
 					require.True(t, aZero)

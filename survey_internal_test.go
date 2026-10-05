@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -248,7 +249,7 @@ func TestWallKernelPublishesDiameterBounds(t *testing.T) {
 
 	// The rival changes the lower endpoint, so a winner-only reduction must
 	// publish a different interval, not merely round the same interval wider.
-	winnerLo := new(big.Rat).Sub(floatRat(winnerValue), floatRat(winnerBound))
+	winnerLo := new(big.Rat).Sub(proofarith.FloatRat(winnerValue), proofarith.FloatRat(winnerBound))
 	require.Less(t, agg.lo.Cmp(winnerLo), 0,
 		`the rival's lower endpoint must reach below the held winner's interval`)
 	require.NotEqual(t, winnerBound, out.spanBound,
@@ -490,7 +491,7 @@ func TestSolve3LinearBoundCoversCramerArithmetic(t *testing.T) {
 // answer to the very system the kernel solved, never against another float64
 // evaluation of it.
 func exactCramerRadius(l []circEq) *big.Rat {
-	r := func(v boundedScalar) *big.Rat { return floatRat(v.value) }
+	r := func(v boundedScalar) *big.Rat { return proofarith.FloatRat(v.value) }
 	minor := func(p, q, s, t *big.Rat) *big.Rat {
 		return new(big.Rat).Sub(new(big.Rat).Mul(p, t), new(big.Rat).Mul(s, q))
 	}
@@ -860,7 +861,7 @@ func TestWallKernelInradiusAggregatesRivalCandidates(t *testing.T) {
 
 	// The rival changes the upper endpoint, so reducing by held value alone
 	// publishes a different interval rather than merely rounding it wider.
-	winnerHi := new(big.Rat).Add(floatRat(heldMax), floatRat(heldMaxBound))
+	winnerHi := new(big.Rat).Add(proofarith.FloatRat(heldMax), proofarith.FloatRat(heldMaxBound))
 	require.Greater(t, agg.hi.Cmp(winnerHi), 0,
 		`the rival's upper endpoint must reach above the held winner's interval`)
 	require.NotEqual(t, heldMaxBound, out.inradiusBound,
@@ -1438,7 +1439,7 @@ func exactWallComponentSquared(w sideWalk, m placedFrameMap, pull r3.Vec) (num, 
 	if !okP {
 		return nil, nil, nil, false
 	}
-	tu, tv := floatRat(w.tanInU), floatRat(w.tanInV)
+	tu, tv := proofarith.FloatRat(w.tanInU), proofarith.FloatRat(w.tanInV)
 	if tu == nil || tv == nil {
 		return nil, nil, nil, false
 	}

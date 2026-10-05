@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -974,7 +975,7 @@ func TestBooleanProofBoundsEncloseExactTermSums(t *testing.T) {
 	} {
 		want := new(big.Rat).Add(big.NewRat(1, 1),
 			new(big.Rat).Mul(big.NewRat(tc.tinyTerms, 1), new(big.Rat).SetFloat64(tiny)))
-		require.GreaterOrEqual(t, floatRat(tc.got).Cmp(want), 0)
+		require.GreaterOrEqual(t, proofarith.FloatRat(tc.got).Cmp(want), 0)
 	}
 }
 
@@ -1017,7 +1018,7 @@ func TestFacetedPlacementEnclosesExactPriorAndMotionBounds(t *testing.T) {
 	} {
 		require.Positive(t, tc.increment)
 		want := new(big.Rat).Add(new(big.Rat).SetFloat64(tiny), new(big.Rat).SetFloat64(tc.increment))
-		require.GreaterOrEqual(t, floatRat(tc.got).Cmp(want), 0)
+		require.GreaterOrEqual(t, proofarith.FloatRat(tc.got).Cmp(want), 0)
 	}
 }
 

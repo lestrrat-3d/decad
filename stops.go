@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"slices"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -83,18 +84,18 @@ func stopLevelRound(faceOrigin, planeOrigin, n r3.Vec, travel, offset, held floa
 	normal := [3]float64{n.X, n.Y, n.Z}
 	terms := make([]*big.Rat, 0, 4)
 	for i := range face {
-		f, p, nn := floatRat(face[i]), floatRat(plane[i]), floatRat(normal[i])
+		f, p, nn := proofarith.FloatRat(face[i]), proofarith.FloatRat(plane[i]), proofarith.FloatRat(normal[i])
 		if f == nil || p == nil || nn == nil {
 			return math.Inf(1)
 		}
 		terms = append(terms, ratMul(new(big.Rat).Sub(f, p), nn))
 	}
-	t, o := floatRat(travel), floatRat(offset)
+	t, o := proofarith.FloatRat(travel), proofarith.FloatRat(offset)
 	if t == nil || o == nil {
 		return math.Inf(1)
 	}
 	terms = append(terms, ratMul(t, o))
-	return rationalFloatError(ratAdd(terms...), held)
+	return proofarith.RationalFloatError(ratAdd(terms...), held)
 }
 
 // throughStopRound is stopLevelRound's through-all analogue: travel·(hi −
@@ -108,17 +109,17 @@ func throughStopRound(origin, dir r3.Vec, hi, travel, held float64) float64 {
 	g := [3]float64{dir.X, dir.Y, dir.Z}
 	base := new(big.Rat)
 	for i := range o {
-		oi, gi := floatRat(o[i]), floatRat(g[i])
+		oi, gi := proofarith.FloatRat(o[i]), proofarith.FloatRat(g[i])
 		if oi == nil || gi == nil {
 			return math.Inf(1)
 		}
 		base.Add(base, ratMul(oi, gi))
 	}
-	h, t := floatRat(hi), floatRat(travel)
+	h, t := proofarith.FloatRat(hi), proofarith.FloatRat(travel)
 	if h == nil || t == nil {
 		return math.Inf(1)
 	}
-	return rationalFloatError(new(big.Rat).Mul(t, new(big.Rat).Sub(h, base)), held)
+	return proofarith.RationalFloatError(new(big.Rat).Mul(t, new(big.Rat).Sub(h, base)), held)
 }
 
 // relStopTol is stopTol scaled to the magnitudes in play.

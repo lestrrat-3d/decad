@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -450,7 +451,7 @@ func TestPatchAreaOfChargesTheSideLevelRounding(t *testing.T) {
 	t.Parallel()
 	const capZ, d = 1e15, 0.2
 	sideZ := capZ - d
-	levelDelta := addRoundError(capZ, -d, sideZ)
+	levelDelta := proofarith.AddRoundError(capZ, -d, sideZ)
 	require.Greater(t, levelDelta, 0.0,
 		"the premise: a 1e15 mm sweep really does round the side level")
 

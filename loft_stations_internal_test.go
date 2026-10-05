@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -1183,8 +1184,8 @@ func TestCircularStationChainDeltaBoundsEveryGeneratedStation(t *testing.T) {
 		// the point inside it is the wider of its two ends' gaps — the same
 		// reading intervalFloatError takes, spelled out here so this assertion
 		// does not borrow the production helper it is checking.
-		gapU := math.Max(rationalFloatError(uIv.lo, stations[k].U), rationalFloatError(uIv.hi, stations[k].U))
-		gapV := math.Max(rationalFloatError(vIv.lo, stations[k].V), rationalFloatError(vIv.hi, stations[k].V))
+		gapU := math.Max(proofarith.RationalFloatError(uIv.lo, stations[k].U), proofarith.RationalFloatError(uIv.hi, stations[k].U))
+		gapV := math.Max(proofarith.RationalFloatError(vIv.lo, stations[k].V), proofarith.RationalFloatError(vIv.hi, stations[k].V))
 		require.LessOrEqual(t, math.Hypot(gapU, gapV), delta,
 			"station %d sits %g from the point the record denotes at its own parameter, past the published delta of %g", k, math.Hypot(gapU, gapV), delta)
 		worst = math.Max(worst, radius2D(gapU, gapV))

@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"reflect"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -633,16 +634,16 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 // rounded outward. A lerp that is not representable as a rational yields +Inf
 // — the underivable bound consumers refuse on.
 func lineWalkTangentBound(seg LineSeg, heldU, heldV float64) float64 {
-	u0, okU0 := dyLerp(seg.Start.U, seg.End.U, seg.TStart)
-	v0, okV0 := dyLerp(seg.Start.V, seg.End.V, seg.TStart)
-	u1, okU1 := dyLerp(seg.Start.U, seg.End.U, seg.TEnd)
-	v1, okV1 := dyLerp(seg.Start.V, seg.End.V, seg.TEnd)
+	u0, okU0 := proofarith.DyLerp(seg.Start.U, seg.End.U, seg.TStart)
+	v0, okV0 := proofarith.DyLerp(seg.Start.V, seg.End.V, seg.TStart)
+	u1, okU1 := proofarith.DyLerp(seg.Start.U, seg.End.U, seg.TEnd)
+	v1, okV1 := proofarith.DyLerp(seg.Start.V, seg.End.V, seg.TEnd)
 	if !okU0 || !okV0 || !okU1 || !okV1 {
 		return math.Inf(1)
 	}
 	return math.Max(
-		dyRoundedFloatError(dySubScalar(u1, u0), heldU),
-		dyRoundedFloatError(dySubScalar(v1, v0), heldV),
+		proofarith.DyRoundedFloatError(proofarith.DySubScalar(u1, u0), heldU),
+		proofarith.DyRoundedFloatError(proofarith.DySubScalar(v1, v0), heldV),
 	)
 }
 
@@ -659,11 +660,11 @@ func lineWalkTangentBound(seg LineSeg, heldU, heldV float64) float64 {
 // bound consumers refuse on.
 func lineWalkEndBound(seg LineSeg, t, heldU, heldV float64) walkEndBound {
 	out := walkEndBound{u: math.Inf(1), v: math.Inf(1)}
-	if u, ok := dyLerp(seg.Start.U, seg.End.U, t); ok {
-		out.u = dyRoundedFloatError(u, heldU)
+	if u, ok := proofarith.DyLerp(seg.Start.U, seg.End.U, t); ok {
+		out.u = proofarith.DyRoundedFloatError(u, heldU)
 	}
-	if v, ok := dyLerp(seg.Start.V, seg.End.V, t); ok {
-		out.v = dyRoundedFloatError(v, heldV)
+	if v, ok := proofarith.DyLerp(seg.Start.V, seg.End.V, t); ok {
+		out.v = proofarith.DyRoundedFloatError(v, heldV)
 	}
 	return out
 }
@@ -681,7 +682,7 @@ func lineWalkEndBound(seg LineSeg, t, heldU, heldV float64) walkEndBound {
 // An enclosure the recorded data cannot state yields +Inf — an underivable
 // bound, which every consumer refuses on rather than publishes.
 func circularWalkEndBound(seg CurveSegment, t, heldU, heldV float64) walkEndBound {
-	rt := floatRat(t)
+	rt := proofarith.FloatRat(t)
 	if rt == nil {
 		return walkEndBound{u: math.Inf(1), v: math.Inf(1)}
 	}
@@ -921,21 +922,21 @@ func circularWalk(cu, cv, r, th0, th1, radiusUpper, sweepUpper float64) segmentW
 // magnitude envelope, without assuming a Hypot ulp guarantee. It also returns
 // an L1 coordinate envelope for later revolution bounds.
 func lineWalkBounds(seg LineSeg, held float64) (float64, float64, float64) {
-	u0, okU0 := dyLerp(seg.Start.U, seg.End.U, seg.TStart)
-	v0, okV0 := dyLerp(seg.Start.V, seg.End.V, seg.TStart)
-	u1, okU1 := dyLerp(seg.Start.U, seg.End.U, seg.TEnd)
-	v1, okV1 := dyLerp(seg.Start.V, seg.End.V, seg.TEnd)
+	u0, okU0 := proofarith.DyLerp(seg.Start.U, seg.End.U, seg.TStart)
+	v0, okV0 := proofarith.DyLerp(seg.Start.V, seg.End.V, seg.TStart)
+	u1, okU1 := proofarith.DyLerp(seg.Start.U, seg.End.U, seg.TEnd)
+	v1, okV1 := proofarith.DyLerp(seg.Start.V, seg.End.V, seg.TEnd)
 	if !okU0 || !okV0 || !okU1 || !okV1 {
 		return math.Inf(1), math.Inf(1), math.Inf(1)
 	}
-	du := dySubScalar(u1, u0)
-	dv := dySubScalar(v1, v0)
-	lengthSquared := dyAdd(dyMul(du, du), dyMul(dv, dv))
-	coordUpper := math.Max(dyL1Upper(u0, v0), dyL1Upper(u1, v1))
-	if dySquareEquals(held, lengthSquared) {
+	du := proofarith.DySubScalar(u1, u0)
+	dv := proofarith.DySubScalar(v1, v0)
+	lengthSquared := proofarith.DyAdd(proofarith.DyMul(du, du), proofarith.DyMul(dv, dv))
+	coordUpper := math.Max(proofarith.DyL1Upper(u0, v0), proofarith.DyL1Upper(u1, v1))
+	if proofarith.DySquareEquals(held, lengthSquared) {
 		return 0, held, coordUpper
 	}
-	upper := dyL1Upper(du, dv)
+	upper := proofarith.DyL1Upper(du, dv)
 	bound := math.Min(conservativeValueError(held, upper), dySqrtIntervalError(lengthSquared, held))
 	return bound, upper, coordUpper
 }
@@ -947,13 +948,13 @@ func lineWalkBounds(seg LineSeg, held float64) (float64, float64, float64) {
 // dyRoundedFloatError — intervalFloatError's rule over this arithmetic. It
 // returns +Inf when the bracket cannot be built (an end past MaxFloat64), so a
 // math.Min against it can only ever keep the caller's own bound.
-func dySqrtIntervalError(lengthSquared dyadic, held float64) float64 {
-	lo, okLo := dyOf(dySqrtDown(lengthSquared))
-	hi, okHi := dyOf(dySqrtUp(lengthSquared))
+func dySqrtIntervalError(lengthSquared proofarith.Dyadic, held float64) float64 {
+	lo, okLo := proofarith.DyOf(proofarith.DySqrtDown(lengthSquared))
+	hi, okHi := proofarith.DyOf(proofarith.DySqrtUp(lengthSquared))
 	if !okLo || !okHi {
 		return math.Inf(1)
 	}
-	return math.Max(dyRoundedFloatError(lo, held), dyRoundedFloatError(hi, held))
+	return math.Max(proofarith.DyRoundedFloatError(lo, held), proofarith.DyRoundedFloatError(hi, held))
 }
 
 func ratL1Upper(values ...*big.Rat) float64 {

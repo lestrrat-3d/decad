@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -188,8 +189,8 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 // (floatRat). It returns nil only for a non-finite component; every caller
 // here has already validated its vectors finite.
 func ratVecDot(a, b r3.Vec) *big.Rat {
-	ax, ay, az := floatRat(a.X), floatRat(a.Y), floatRat(a.Z)
-	bx, by, bz := floatRat(b.X), floatRat(b.Y), floatRat(b.Z)
+	ax, ay, az := proofarith.FloatRat(a.X), proofarith.FloatRat(a.Y), proofarith.FloatRat(a.Z)
+	bx, by, bz := proofarith.FloatRat(b.X), proofarith.FloatRat(b.Y), proofarith.FloatRat(b.Z)
 	if ax == nil || ay == nil || az == nil || bx == nil || by == nil || bz == nil {
 		return nil
 	}
@@ -200,15 +201,15 @@ func ratVecDot(a, b r3.Vec) *big.Rat {
 }
 
 func sketchAxisDirectionBounds(a SketchLine, heldLength, heldU, heldV float64) (float64, float64) {
-	u0, v0 := floatRat(a.Start.U), floatRat(a.Start.V)
-	u1, v1 := floatRat(a.End.U), floatRat(a.End.V)
+	u0, v0 := proofarith.FloatRat(a.Start.U), proofarith.FloatRat(a.Start.V)
+	u1, v1 := proofarith.FloatRat(a.End.U), proofarith.FloatRat(a.End.V)
 	if u0 == nil || v0 == nil || u1 == nil || v1 == nil {
 		return conservativeValueError(heldU, 1), conservativeValueError(heldV, 1)
 	}
 	du := new(big.Rat).Sub(u1, u0)
 	dv := new(big.Rat).Sub(v1, v0)
 	fallbackU, fallbackV := axisDirectionSqrtBracket(du, dv, heldU, heldV)
-	length := floatRat(heldLength)
+	length := proofarith.FloatRat(heldLength)
 	if length == nil || length.Sign() == 0 {
 		return fallbackU, fallbackV
 	}
@@ -225,7 +226,7 @@ func sketchAxisDirectionBounds(a SketchLine, heldLength, heldU, heldV float64) (
 	// to a point (its own float division still rounds).
 	exactComponent := func(delta *big.Rat, held, fallback float64) float64 {
 		exact := new(big.Rat).Quo(delta, length)
-		heldRat := floatRat(held)
+		heldRat := proofarith.FloatRat(held)
 		if heldRat != nil && exact.Cmp(heldRat) == 0 {
 			return 0
 		}

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // This file is docs/tessellation-design.md §13's increment T3
@@ -61,8 +63,8 @@ type revArcCell struct {
 // angles shifted by the axis rotation, so their difference is the recorded
 // sweep and chord k spans [θ0 + k·Δθ, θ0 + (k+1)·Δθ] exactly.
 func revolveArcChordCell(w segmentWalk, k, n int) (*revArcCell, bool) {
-	cV, radius := floatRat(w.cV), floatRat(w.radius)
-	th0, th1 := floatRat(w.th0), floatRat(w.th1)
+	cV, radius := proofarith.FloatRat(w.cV), proofarith.FloatRat(w.radius)
+	th0, th1 := proofarith.FloatRat(w.th0), proofarith.FloatRat(w.th1)
 	if cV == nil || radius == nil || th0 == nil || th1 == nil || n <= 0 || radius.Sign() < 0 {
 		return nil, false
 	}
@@ -255,7 +257,7 @@ func revolveArcFanSlack(cell revArcCell, poleFirst bool, step, twoArea ratInterv
 // curvature argument because a displacement of the true meridian is not
 // required to be smooth.
 func revolveArcScale(cell revArcCell, step ratInterval, slack float64) (ratInterval, []ratInterval, *big.Rat, bool) { //nolint:unparam // scale is the density factor this function's own doc comment names as part of what it composes; both callers now read it pre-multiplied into the returned rho nodes rather than by name.
-	s := floatRat(slack)
+	s := proofarith.FloatRat(slack)
 	if s == nil || s.Sign() < 0 || cell.radius.Sign() < 0 {
 		return ratInterval{}, nil, nil, false
 	}

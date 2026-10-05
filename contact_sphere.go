@@ -3,6 +3,7 @@ package decad
 import (
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -11,8 +12,8 @@ import (
 // of one semicircle and its on-axis diameter. A tagged spherical face alone
 // cannot establish the occupied set: the axis resolver admits small snaps.
 type sourceSphereContactProof struct {
-	center dyV3
-	radius dyadic
+	center proofarith.DyV3
+	radius proofarith.Dyadic
 	face   *Face
 }
 
@@ -30,11 +31,11 @@ func sourceSphereAtPose(b *Body, pose r3.Transform) (sourceSphereContactProof, b
 		// A read rotation cannot move a ball centered at the query origin.
 		// Other centers need an exact rotation of their offset before admission.
 		for _, component := range center {
-			if component.sign() != 0 {
+			if component.Sign() != 0 {
 				return sourceSphereContactProof{}, false
 			}
 		}
-		proof.center = dyVec(pose.Translation())
+		proof.center = proofarith.DyVec(pose.Translation())
 		return proof, true
 	}
 	proof.center = exactContactTransform(pose, center)
@@ -78,8 +79,8 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 		!finiteMeasurementValues(arc.Center.U, arc.Center.V, arc.Start.U, arc.End.U) {
 		return sourceSphereContactProof{}, false
 	}
-	radius := dySubScalar(mustDyOf(arc.Start.U), mustDyOf(arc.Center.U))
-	if dyCmp(radius, dySubScalar(mustDyOf(arc.Center.U), mustDyOf(arc.End.U))) != 0 {
+	radius := proofarith.DySubScalar(proofarith.MustDyOf(arc.Start.U), proofarith.MustDyOf(arc.Center.U))
+	if proofarith.DyCmp(radius, proofarith.DySubScalar(proofarith.MustDyOf(arc.Center.U), proofarith.MustDyOf(arc.End.U))) != 0 {
 		return sourceSphereContactProof{}, false
 	}
 	faces := b.Faces()
@@ -90,9 +91,9 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 	if _, ok := faces[0].surface.(Sphere); !ok {
 		return sourceSphereContactProof{}, false
 	}
-	local := dvAdd(dyVec(rp.frame.Origin()),
-		dvAdd(dyScaleVec(dyVec(rp.frame.U()), mustDyOf(arc.Center.U)),
-			dyScaleVec(dyVec(rp.frame.V()), mustDyOf(arc.Center.V))))
+	local := proofarith.DvAdd(proofarith.DyVec(rp.frame.Origin()),
+		proofarith.DvAdd(dyScaleVec(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(arc.Center.U)),
+			dyScaleVec(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(arc.Center.V))))
 	return sourceSphereContactProof{
 		center: local,
 		radius: radius, face: faces[0],
@@ -104,38 +105,38 @@ func sourceSphereRecord(b *Body) (sourceSphereContactProof, bool) {
 // sphere's projected disk stays inside the other two face intervals.
 func classifySourceSphereBox(report *ContactReport, sphere sourceSphereContactProof,
 	box sourceBoxContactProof, sphereFirst bool) {
-	var nearest dyV3
-	distance2 := dyZero()
+	var nearest proofarith.DyV3
+	distance2 := proofarith.DyZero()
 	outsideAxis, outsideSide, outsideCount := 0, 0, 0
 	for i := range 3 {
 		nearest[i] = dyMax(box.lo[i], dyMin(sphere.center[i], box.hi[i]))
-		d := dySubScalar(sphere.center[i], nearest[i])
-		distance2 = dyAdd(distance2, dyMul(d, d))
-		if d.sign() != 0 {
+		d := proofarith.DySubScalar(sphere.center[i], nearest[i])
+		distance2 = proofarith.DyAdd(distance2, proofarith.DyMul(d, d))
+		if d.Sign() != 0 {
 			outsideAxis, outsideCount = i, outsideCount+1
-			if d.sign() > 0 {
+			if d.Sign() > 0 {
 				outsideSide = 1
 			}
 		}
 	}
-	r2 := dyMul(sphere.radius, sphere.radius)
-	switch dyCmp(distance2, r2) {
+	r2 := proofarith.DyMul(sphere.radius, sphere.radius)
+	switch proofarith.DyCmp(distance2, r2) {
 	case 1:
-		lo := ratFloatDown(new(big.Rat).Sub(floatRat(dySqrtDown(distance2)), sphere.radius.rat()))
-		hi := ratFloatUp(new(big.Rat).Sub(floatRat(dySqrtUp(distance2)), sphere.radius.rat()))
+		lo := ratFloatDown(new(big.Rat).Sub(proofarith.FloatRat(proofarith.DySqrtDown(distance2)), sphere.radius.Rat()))
+		hi := ratFloatUp(new(big.Rat).Sub(proofarith.FloatRat(proofarith.DySqrtUp(distance2)), sphere.radius.Rat()))
 		if !finiteMeasurementValues(lo, hi) || lo <= 0 || hi < lo {
 			report.Reason = ContactNoGapProof
 			return
 		}
 		value := lo + (hi-lo)/2
-		left := new(big.Rat).Sub(floatRat(value), floatRat(lo))
-		right := new(big.Rat).Sub(floatRat(hi), floatRat(value))
+		left := new(big.Rat).Sub(proofarith.FloatRat(value), proofarith.FloatRat(lo))
+		right := new(big.Rat).Sub(proofarith.FloatRat(hi), proofarith.FloatRat(value))
 		if right.Cmp(left) > 0 {
 			left = right
 		}
 		bound := ratFloatUp(left)
 		if !finiteMeasurementValues(value, bound) ||
-			new(big.Rat).Sub(floatRat(value), floatRat(bound)).Sign() <= 0 {
+			new(big.Rat).Sub(proofarith.FloatRat(value), proofarith.FloatRat(bound)).Sign() <= 0 {
 			report.Reason = ContactNoGapProof
 			return
 		}
@@ -159,8 +160,8 @@ func classifySourceSphereBox(report *ContactReport, sphere sourceSphereContactPr
 		if i == axis {
 			continue
 		}
-		if dyCmp(dySubScalar(sphere.center[i], sphere.radius), box.lo[i]) <= 0 ||
-			dyCmp(dyAdd(sphere.center[i], sphere.radius), box.hi[i]) >= 0 {
+		if proofarith.DyCmp(proofarith.DySubScalar(sphere.center[i], sphere.radius), box.lo[i]) <= 0 ||
+			proofarith.DyCmp(proofarith.DyAdd(sphere.center[i], sphere.radius), box.hi[i]) >= 0 {
 			report.Reason = ContactAmbiguousFeature
 			return
 		}
@@ -170,7 +171,7 @@ func classifySourceSphereBox(report *ContactReport, sphere sourceSphereContactPr
 		if outsideSide == 0 {
 			opposite = box.hi[axis]
 		}
-		if dyCmp(dyAbs(dySubScalar(sphere.center[axis], opposite)), sphere.radius) <= 0 {
+		if proofarith.DyCmp(proofarith.DyAbs(proofarith.DySubScalar(sphere.center[axis], opposite)), sphere.radius) <= 0 {
 			report.Reason = ContactAmbiguousFeature
 			return
 		}
@@ -198,10 +199,10 @@ func classifySourceSphereBox(report *ContactReport, sphere sourceSphereContactPr
 		normal.Z = sign
 	}
 	witnessSphere := sphere.center
-	witnessSphere[axis] = dySubScalar(sphere.center[axis],
-		dyMul(mustDyOf(signIfBoxSide(outsideSide)), sphere.radius))
+	witnessSphere[axis] = proofarith.DySubScalar(sphere.center[axis],
+		proofarith.DyMul(proofarith.MustDyOf(signIfBoxSide(outsideSide)), sphere.radius))
 	witnessBox := nearest
-	var pA, pB dyV3
+	var pA, pB proofarith.DyV3
 	var featureA, featureB ContactFeature
 	if sphereFirst {
 		pA, pB = witnessSphere, witnessBox
@@ -217,8 +218,8 @@ func classifySourceSphereBox(report *ContactReport, sphere sourceSphereContactPr
 		report.Reason = ContactPointTooCoarse
 		return
 	}
-	distance := dyAbs(dySubScalar(sphere.center[axis], nearest[axis]))
-	sep, ok := sourceBoxSignedReading(dySubScalar(distance, sphere.radius))
+	distance := proofarith.DyAbs(proofarith.DySubScalar(sphere.center[axis], nearest[axis]))
+	sep, ok := sourceBoxSignedReading(proofarith.DySubScalar(distance, sphere.radius))
 	if !ok {
 		report.Reason = ContactPointTooCoarse
 		return
@@ -238,13 +239,13 @@ func signIfBoxSide(side int) float64 {
 	return -1
 }
 
-func translatedSphere(s sourceSphereContactProof, delta [3]dyadic, f *big.Rat) (sourceSphereContactProof, bool) {
-	fraction, ok := dyOfRat(f)
+func translatedSphere(s sourceSphereContactProof, delta [3]proofarith.Dyadic, f *big.Rat) (sourceSphereContactProof, bool) {
+	fraction, ok := proofarith.DyOfRat(f)
 	if !ok {
 		return sourceSphereContactProof{}, false
 	}
 	for i := range 3 {
-		s.center[i] = dyAdd(s.center[i], dyMul(delta[i], fraction))
+		s.center[i] = proofarith.DyAdd(s.center[i], proofarith.DyMul(delta[i], fraction))
 	}
 	return s, true
 }

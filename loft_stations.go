@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // This file places the stations a loft's wall chords run between, and proves
@@ -831,7 +833,7 @@ func arcNaturalEndRadialUpper(seg CurveSegment) float64 {
 	}
 	diff.Abs(diff)
 
-	den := new(big.Rat).Add(floatRat(ratSqrtDown(r0)), floatRat(ratSqrtDown(r1)))
+	den := new(big.Rat).Add(proofarith.FloatRat(ratSqrtDown(r0)), proofarith.FloatRat(ratSqrtDown(r1)))
 	if den.Sign() <= 0 {
 		return math.Inf(1)
 	}
@@ -862,7 +864,7 @@ func circularSegmentRange(seg CurveSegment) (*big.Rat, *big.Rat, bool) {
 	default:
 		return nil, nil, false
 	}
-	start := floatRat(tStart)
+	start := proofarith.FloatRat(tStart)
 	if start == nil {
 		return nil, nil, false
 	}

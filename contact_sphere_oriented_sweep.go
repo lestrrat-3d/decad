@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"sort"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -20,11 +21,11 @@ type orientedSphereSweepRun struct {
 	box          orientedSourceBox
 	sphereFirst  bool
 	axis, side   int
-	outward      dyV3
-	start, slope dyadic // unnormalized signed center-to-face support
+	outward      proofarith.DyV3
+	start, slope proofarith.Dyadic // unnormalized signed center-to-face support
 }
 
-func (r *orientedSphereSweepRun) deltas() ([3]dyadic, [3]dyadic) {
+func (r *orientedSphereSweepRun) deltas() ([3]proofarith.Dyadic, [3]proofarith.Dyadic) {
 	if r.sphereFirst {
 		return r.pa.delta, r.pb.delta
 	}
@@ -47,31 +48,31 @@ func (r *orientedSphereSweepRun) sourceCorridor() bool {
 		// The opposite support stays beyond the ball throughout the affine path.
 		face := box.corner[0]
 		if side == 1 {
-			face = dvAdd(face, box.edge[axis])
+			face = proofarith.DvAdd(face, box.edge[axis])
 		}
-		d := dvDot(dvSub(sphere.center, face), outward)
-		thickness := dvDot(box.edge[axis], outward)
+		d := proofarith.DvDot(proofarith.DvSub(sphere.center, face), outward)
+		thickness := proofarith.DvDot(box.edge[axis], outward)
 		if side == 0 {
-			thickness = dyNeg(thickness)
+			thickness = proofarith.DyNeg(thickness)
 		}
-		opposite := dyAdd(d, thickness)
-		if dyCmp(dyMul(opposite, opposite), dyMul(dyMul(sphere.radius, sphere.radius),
-			dvDot(outward, outward))) <= 0 {
+		opposite := proofarith.DyAdd(d, thickness)
+		if proofarith.DyCmp(proofarith.DyMul(opposite, opposite), proofarith.DyMul(proofarith.DyMul(sphere.radius, sphere.radius),
+			proofarith.DvDot(outward, outward))) <= 0 {
 			return false
 		}
 	}
 	face := r.box.corner[0]
 	if r.side == 1 {
-		face = dvAdd(face, r.box.edge[r.axis])
+		face = proofarith.DvAdd(face, r.box.edge[r.axis])
 	}
-	r.start = dvDot(dvSub(r.sphere.center, face), r.outward)
-	r.slope = dvDot(dvSub(sphereDelta, boxDelta), r.outward)
-	return r.start.sign() > 0
+	r.start = proofarith.DvDot(proofarith.DvSub(r.sphere.center, face), r.outward)
+	r.slope = proofarith.DvDot(proofarith.DvSub(sphereDelta, boxDelta), r.outward)
+	return r.start.Sign() > 0
 }
 
-func sameDyV3(a, b dyV3) bool {
+func sameDyV3(a, b proofarith.DyV3) bool {
 	for k := range 3 {
-		if dyCmp(a[k], b[k]) != 0 {
+		if proofarith.DyCmp(a[k], b[k]) != 0 {
 			return false
 		}
 	}
@@ -79,13 +80,13 @@ func sameDyV3(a, b dyV3) bool {
 }
 
 func (r *orientedSphereSweepRun) signedAt(f *big.Rat) int {
-	d := new(big.Rat).Add(r.start.rat(), new(big.Rat).Mul(r.slope.rat(), f))
+	d := new(big.Rat).Add(r.start.Rat(), new(big.Rat).Mul(r.slope.Rat(), f))
 	if d.Sign() <= 0 {
 		return -1
 	}
-	radius2 := dyMul(r.sphere.radius, r.sphere.radius).rat()
+	radius2 := proofarith.DyMul(r.sphere.radius, r.sphere.radius).Rat()
 	return new(big.Rat).Mul(d, d).Cmp(new(big.Rat).Mul(radius2,
-		dvDot(r.outward, r.outward).rat()))
+		proofarith.DvDot(r.outward, r.outward).Rat()))
 }
 
 func (r *orientedSphereSweepRun) idealAt(f *big.Rat, at SweepInstant) SweepEvent {
@@ -134,7 +135,7 @@ func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*Sweep
 			point := contact.Manifold.Points[0]
 			resolution, _ := exactBaseValue(r.req.PointResolution)
 			for _, witness := range []*VecMeasurement{&point.OnA, &point.OnB} {
-				bound := new(big.Rat).Add(floatRat(witness.Bound.Base()), deviation)
+				bound := new(big.Rat).Add(proofarith.FloatRat(witness.Bound.Base()), deviation)
 				if bound.Cmp(resolution) > 0 {
 					ideal.Manifold, ideal.Reason = nil, ContactPointTooCoarse
 					break
@@ -143,7 +144,7 @@ func (r *orientedSphereSweepRun) sample(ctx context.Context, f *big.Rat) (*Sweep
 				witness.Exactness = exactnessFromBound(witness.Bound.Base())
 			}
 			if ideal.Manifold != nil {
-				bound := new(big.Rat).Add(floatRat(point.Separation.Bound.Base()), deviation)
+				bound := new(big.Rat).Add(proofarith.FloatRat(point.Separation.Bound.Base()), deviation)
 				point.Separation.Bound = units.Millimeters(ratFloatUp(bound))
 				point.Separation.Exactness = exactnessFromBound(point.Separation.Bound.Base())
 				ideal.Manifold = &ContactManifold{Points: []ContactPoint{point}}
@@ -173,9 +174,9 @@ func (r *orientedSphereSweepRun) poseDeviation(f *big.Rat, poseA, poseB r3.Trans
 	}
 	deviation := orientedBoxPoseDeviation(r.box, observedBox, boxDelta, f)
 	for k := range 3 {
-		expected := new(big.Rat).Add(r.sphere.center[k].rat(),
-			new(big.Rat).Mul(sphereDelta[k].rat(), f))
-		diff := new(big.Rat).Sub(observedSphere.center[k].rat(), expected)
+		expected := new(big.Rat).Add(r.sphere.center[k].Rat(),
+			new(big.Rat).Mul(sphereDelta[k].Rat(), f))
+		diff := new(big.Rat).Sub(observedSphere.center[k].Rat(), expected)
 		deviation.Add(deviation, diff.Abs(diff))
 	}
 	return deviation
@@ -263,7 +264,7 @@ func (r *orientedSphereSweepRun) execute(ctx context.Context, resolution *big.Ra
 		orientedSphere: &r.sphere, orientedSphereBox: &r.box, sphereFirst: r.sphereFirst,
 		sphereAxis: r.axis, sphereSide: r.side, sphereGap: r.start, sphereSlope: r.slope}
 	if first.Ideal.Relation == ContactTouching {
-		if r.slope.sign() <= 0 {
+		if r.slope.Sign() <= 0 {
 			return r.undecided(zero, one, SweepDepartureUnproved), nil
 		}
 		last, sampleErr := r.sample(ctx, one)
@@ -340,23 +341,23 @@ func translatedReplayOrientedBox(box orientedSourceBox, from, at r3.Transform) (
 		if !finiteMeasurementValues(before[k], after[k]) {
 			return orientedSourceBox{}, false
 		}
-		move := dySubScalar(mustDyOf(after[k]), mustDyOf(before[k]))
+		move := proofarith.DySubScalar(proofarith.MustDyOf(after[k]), proofarith.MustDyOf(before[k]))
 		for i := range box.corner {
-			box.corner[i][k] = dyAdd(box.corner[i][k], move)
+			box.corner[i][k] = proofarith.DyAdd(box.corner[i][k], move)
 		}
 	}
 	return box, true
 }
 
-func orientedBoxPoseDeviation(start, observed orientedSourceBox, delta [3]dyadic,
+func orientedBoxPoseDeviation(start, observed orientedSourceBox, delta [3]proofarith.Dyadic,
 	f *big.Rat) *big.Rat {
 	maximum := new(big.Rat)
 	for i := range start.corner {
 		sum := new(big.Rat)
 		for k := range 3 {
-			expected := new(big.Rat).Add(start.corner[i][k].rat(),
-				new(big.Rat).Mul(delta[k].rat(), f))
-			difference := new(big.Rat).Sub(observed.corner[i][k].rat(), expected)
+			expected := new(big.Rat).Add(start.corner[i][k].Rat(),
+				new(big.Rat).Mul(delta[k].Rat(), f))
+			difference := new(big.Rat).Sub(observed.corner[i][k].Rat(), expected)
 			sum.Add(sum, difference.Abs(difference))
 		}
 		if sum.Cmp(maximum) > 0 {

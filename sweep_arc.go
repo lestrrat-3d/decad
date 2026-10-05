@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"strings"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -106,9 +107,9 @@ func evalArcSweepContext(
 
 func deriveSweepArc(pathRecord pathSegmentRecord, plane PlaneRecord) (sweepArcGeometry, error) {
 	start := pathRecord.start
-	normal := dvCross(dyVec(plane.U), dyVec(plane.V))
-	relStart := dvSub(dyVec(start), dyVec(plane.Origin))
-	if !dvDot(relStart, normal).isZero() {
+	normal := proofarith.DvCross(proofarith.DyVec(plane.U), proofarith.DyVec(plane.V))
+	relStart := proofarith.DvSub(proofarith.DyVec(start), proofarith.DyVec(plane.Origin))
+	if !proofarith.DvDot(relStart, normal).IsZero() {
 		return sweepArcGeometry{}, fmt.Errorf(`%w: the sweep path must start in the profile plane`, ErrDegenerate)
 	}
 
@@ -264,7 +265,7 @@ func sweepRatHeld(value *big.Rat) (float64, float64, bool) {
 	if math.IsNaN(held) || math.IsInf(held, 0) {
 		return 0, 0, false
 	}
-	bound := rationalFloatError(value, held)
+	bound := proofarith.RationalFloatError(value, held)
 	return held, bound, !math.IsNaN(bound) && !math.IsInf(bound, 0)
 }
 
@@ -289,11 +290,11 @@ func sweepNormalizedRat2(u, v, lengthSquared *big.Rat) (float64, float64, bool) 
 }
 
 func sweepRatVecOf(v r3.Vec) sweepRatVec {
-	return sweepRatVec{floatRat(v.X), floatRat(v.Y), floatRat(v.Z)}
+	return sweepRatVec{proofarith.FloatRat(v.X), proofarith.FloatRat(v.Y), proofarith.FloatRat(v.Z)}
 }
 
-func sweepRatFromDyadic(v dyV3) sweepRatVec {
-	return sweepRatVec{v[0].rat(), v[1].rat(), v[2].rat()}
+func sweepRatFromDyadic(v proofarith.DyV3) sweepRatVec {
+	return sweepRatVec{v[0].Rat(), v[1].Rat(), v[2].Rat()}
 }
 
 func sweepRatAdd(vectors ...sweepRatVec) sweepRatVec {

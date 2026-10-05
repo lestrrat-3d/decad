@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -112,25 +113,25 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 		minU, maxU = math.Min(minU, point.U), math.Max(maxU, point.U)
 		minV, maxV = math.Min(minV, point.V), math.Max(maxV, point.V)
 	}
-	u := dySubScalar(mustDyOf(maxU), mustDyOf(minU))
-	v := dySubScalar(mustDyOf(maxV), mustDyOf(minV))
-	z := dySubScalar(mustDyOf(pp.z1), mustDyOf(pp.z0))
-	if u.sign() <= 0 || v.sign() <= 0 || z.sign() <= 0 {
+	u := proofarith.DySubScalar(proofarith.MustDyOf(maxU), proofarith.MustDyOf(minU))
+	v := proofarith.DySubScalar(proofarith.MustDyOf(maxV), proofarith.MustDyOf(minV))
+	z := proofarith.DySubScalar(proofarith.MustDyOf(pp.z1), proofarith.MustDyOf(pp.z0))
+	if u.Sign() <= 0 || v.Sign() <= 0 || z.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: source box has no positive volume", ErrUnsupported)
 	}
-	densityBase := dyMul(mustDyOf(density.Mag()), mustDyOf(density.Unit().Factor()))
-	mass := dyMul(densityBase, dyMul(u, dyMul(v, z)))
-	if mass.sign() <= 0 {
+	densityBase := proofarith.DyMul(proofarith.MustDyOf(density.Mag()), proofarith.MustDyOf(density.Unit().Factor()))
+	mass := proofarith.DyMul(densityBase, proofarith.DyMul(u, proofarith.DyMul(v, z)))
+	if mass.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: mass is not positive", ErrUnsupported)
 	}
 
-	var dimensions [3]dyadic
+	var dimensions [3]proofarith.Dyadic
 	for i, axis := range []r3.Vec{
 		pp.xform.ApplyDir(pp.frame.U()),
 		pp.xform.ApplyDir(pp.frame.V()),
 		pp.xform.ApplyDir(pp.frame.N()),
 	} {
-		dimension := []dyadic{u, v, z}[i]
+		dimension := []proofarith.Dyadic{u, v, z}[i]
 		switch {
 		case math.Abs(axis.X) == 1 && axis.Y == 0 && axis.Z == 0:
 			dimensions[0] = dimension
@@ -142,13 +143,13 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 			return MassProperties{}, fmt.Errorf("%w: box orientation has no exact cardinal axes", ErrUnsupported)
 		}
 	}
-	squared := [3]dyadic{}
+	squared := [3]proofarith.Dyadic{}
 	for i, length := range dimensions {
-		squared[i] = dyMul(length, length)
+		squared[i] = proofarith.DyMul(length, length)
 	}
-	inertia := func(a, c dyadic) *big.Rat {
-		numerator := dyMul(mass, dyAdd(a, c))
-		return new(big.Rat).Quo(numerator.rat(), big.NewRat(12, 1))
+	inertia := func(a, c proofarith.Dyadic) *big.Rat {
+		numerator := proofarith.DyMul(mass, proofarith.DyAdd(a, c))
+		return new(big.Rat).Quo(numerator.Rat(), big.NewRat(12, 1))
 	}
 	readings := [3]*big.Rat{
 		inertia(squared[1], squared[2]),
@@ -157,7 +158,7 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 	}
 	result := MassProperties{Center: b.centroid}
 	var err error
-	result.Mass, err = massReading(mass.rat(), units.Kilogram)
+	result.Mass, err = massReading(mass.Rat(), units.Kilogram)
 	if err != nil {
 		return MassProperties{}, err
 	}
@@ -217,11 +218,11 @@ func prismMassProperties(ctx context.Context, b *Body, pp prismPayload, density 
 	if a.lo.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: section area interval does not prove positive volume", ErrUnsupported)
 	}
-	h := new(big.Rat).Sub(floatRat(pp.z1), floatRat(pp.z0))
+	h := new(big.Rat).Sub(proofarith.FloatRat(pp.z1), proofarith.FloatRat(pp.z0))
 	if h.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: axial interval does not prove positive volume", ErrUnsupported)
 	}
-	rho := new(big.Rat).Mul(floatRat(density.Mag()), floatRat(density.Unit().Factor()))
+	rho := new(big.Rat).Mul(proofarith.FloatRat(density.Mag()), proofarith.FloatRat(density.Unit().Factor()))
 	rhoH := new(big.Rat).Mul(rho, h)
 	massIv := intervalScale(a, rhoH)
 	mu2OverA, _ := intervalQuo(intervalMul(mu, mu), a)
@@ -310,7 +311,7 @@ func massMomentInterval(value boundedScalar) (ratInterval, error) {
 	if isNonFinite(value.value) || isNonFinite(value.bound) || value.bound < 0 {
 		return ratInterval{}, fmt.Errorf("%w: section moment has no finite enclosure", ErrNotFinite)
 	}
-	held, bound := floatRat(value.value), floatRat(value.bound)
+	held, bound := proofarith.FloatRat(value.value), proofarith.FloatRat(value.bound)
 	return intervalOwned(new(big.Rat).Sub(held, bound), new(big.Rat).Add(held, bound)), nil
 }
 
@@ -328,7 +329,7 @@ func massIntervalReading(iv ratInterval, unit units.Unit) (Measurement, error) {
 
 func massReading(exact *big.Rat, unit units.Unit) (Measurement, error) {
 	value, _ := exact.Float64()
-	bound := rationalFloatError(exact, value)
+	bound := proofarith.RationalFloatError(exact, value)
 	if isNonFinite(value) || isNonFinite(bound) {
 		return Measurement{}, fmt.Errorf("%w: mass property cannot be represented finitely", ErrNotFinite)
 	}

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -206,8 +207,8 @@ func TestPrismBooleanGateG3RequiresCoDirectionalSharedAxisPlanes(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, fa.N(), fb.N(), "premise: the rebuilt normals agree, so G3's normal check passes")
 		require.NotEqual(t, [2]r3.Vec{fa.U(), fa.V()}, [2]r3.Vec{fb.U(), fb.V()}, "premise: the rebuilt U/V differ in the stored bits")
-		d := dvSub(dyVec(fb.Origin()), dyVec(fa.Origin()))
-		require.True(t, dvIsZero(dvCross(d, dyVec(fa.N()))), "premise: the origin difference lies exactly along N")
+		d := proofarith.DvSub(proofarith.DyVec(fb.Origin()), proofarith.DyVec(fa.Origin()))
+		require.True(t, proofarith.DvIsZero(proofarith.DvCross(d, proofarith.DyVec(fa.N()))), "premise: the origin difference lies exactly along N")
 		tiltedA := pp
 		tiltedA.frame = fa
 		tiltedB := pp
@@ -313,7 +314,7 @@ func TestPrismBooleanGateG5ShiftIsExactRational(t *testing.T) {
 		tool := payload(offsetBy(t, 0.4), -1, 15.6)
 		z1, shift := 15.6, 0.4
 		require.Equal(t, 16.0, z1+shift, "premise: the float sum rounds onto the target's cap")
-		require.Negative(t, new(big.Rat).Add(floatRat(z1), floatRat(shift)).Cmp(big.NewRat(16, 1)),
+		require.Negative(t, new(big.Rat).Add(proofarith.FloatRat(z1), proofarith.FloatRat(shift)).Cmp(big.NewRat(16, 1)),
 			"premise: the exact sum falls short of the target's cap")
 		require.False(t, prismCutZIntervalSpans(target, tool))
 	})
@@ -357,15 +358,15 @@ func TestPrismIntersectShiftedEndpointChargesItsRounding(t *testing.T) {
 	require.Equal(t, 0.1, result.z0, "B's shifted z0 is 0 + fl(0.1), itself a float")
 	require.Zero(t, result.z0Delta)
 
-	exact := new(big.Rat).Add(floatRat(0.3), floatRat(0.1))
+	exact := new(big.Rat).Add(proofarith.FloatRat(0.3), proofarith.FloatRat(0.1))
 	nearest, isFloat := exact.Float64()
 	require.False(t, isFloat, "premise: fl(0.1) + fl(0.3) is no float")
 	require.Equal(t, nearest, result.z1)
 	require.Positive(t, result.z1Delta)
 	// B's incoming z1Delta is 0, so the published term is the rounding charge
 	// folded through absSumUpper's outward rounding.
-	require.GreaterOrEqual(t, result.z1Delta, rationalFloatError(exact, result.z1))
-	require.Equal(t, absSumUpper(0, rationalFloatError(exact, result.z1)), result.z1Delta)
+	require.GreaterOrEqual(t, result.z1Delta, proofarith.RationalFloatError(exact, result.z1))
+	require.Equal(t, absSumUpper(0, proofarith.RationalFloatError(exact, result.z1)), result.z1Delta)
 
 	body, err := evalPrism(New(), producerID(0), result, newFreeformWork())
 	require.NoError(t, err)
@@ -375,9 +376,9 @@ func TestPrismIntersectShiftedEndpointChargesItsRounding(t *testing.T) {
 	require.NoError(t, err)
 	bound, err := vol.Bound.In(units.CubicMillimeter)
 	require.NoError(t, err)
-	want := new(big.Rat).Mul(big.NewRat(16, 1), floatRat(0.3))
-	gap := new(big.Rat).Sub(floatRat(value), want)
-	require.LessOrEqual(t, gap.Abs(gap).Cmp(floatRat(bound)), 0,
+	want := new(big.Rat).Mul(big.NewRat(16, 1), proofarith.FloatRat(0.3))
+	gap := new(big.Rat).Sub(proofarith.FloatRat(value), want)
+	require.LessOrEqual(t, gap.Abs(gap).Cmp(proofarith.FloatRat(bound)), 0,
 		"the published volume bound contains the exact rational volume 16·fl(0.3)")
 }
 

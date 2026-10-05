@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -422,9 +423,9 @@ func prismSharedAxisOf(pa, pb prismPayload) prismSharedAxis {
 	if !finiteVec(oa) || !finiteVec(ob) || !finiteVec(n) {
 		return prismSharedAxis{}
 	}
-	d := dvSub(dyVec(ob), dyVec(oa))
-	nd := dyVec(n)
-	if !dvIsZero(dvCross(d, nd)) {
+	d := proofarith.DvSub(proofarith.DyVec(ob), proofarith.DyVec(oa))
+	nd := proofarith.DyVec(n)
+	if !proofarith.DvIsZero(proofarith.DvCross(d, nd)) {
 		return prismSharedAxis{}
 	}
 	// d = s·N exactly, so any component with N_i != 0 gives s; the largest
@@ -440,7 +441,7 @@ func prismSharedAxisOf(pa, pb prismPayload) prismSharedAxis {
 	if comps[i] == 0 {
 		return prismSharedAxis{}
 	}
-	return prismSharedAxis{ok: true, shift: new(big.Rat).Quo(d[i].rat(), nd[i].rat())}
+	return prismSharedAxis{ok: true, shift: new(big.Rat).Quo(d[i].Rat(), nd[i].Rat())}
 }
 
 // prismZShift is G5's shift s as an exact rational (§3.1): the shared-axis
@@ -458,7 +459,7 @@ func prismZShift(pa, pb prismPayload) *big.Rat {
 // axis exactly: floatRat(z) + s per end. ok is false when a level does not
 // lift (non-finite), which every G5 check treats as a miss.
 func prismShiftedInterval(pa, pb prismPayload) (*big.Rat, *big.Rat, bool) {
-	b0, b1 := floatRat(pb.z0), floatRat(pb.z1)
+	b0, b1 := proofarith.FloatRat(pb.z0), proofarith.FloatRat(pb.z1)
 	if b0 == nil || b1 == nil {
 		return nil, nil, false
 	}
@@ -481,7 +482,7 @@ func prismShiftedIntervalAdmitted(pa, pb prismPayload) (*big.Rat, *big.Rat) {
 // re-expressed onto operand A's normal axis by prismShiftedInterval, and Union
 // requires the two intervals to match exactly, compared as rationals.
 func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
-	a0, a1 := floatRat(pa.z0), floatRat(pa.z1)
+	a0, a1 := proofarith.FloatRat(pa.z0), proofarith.FloatRat(pa.z1)
 	z0, z1, ok := prismShiftedInterval(pa, pb)
 	if a0 == nil || a1 == nil || !ok {
 		return false
@@ -723,7 +724,7 @@ func carrierSpeedUpper(seg CurveSegment) (float64, error) {
 // Euclidean norm because the L1 norm never falls below it. A non-finite
 // coordinate has no separation to state and answers +Inf.
 func point2SeparationUpper(a, b Point2) float64 {
-	au, av, bu, bv := floatRat(a.U), floatRat(a.V), floatRat(b.U), floatRat(b.V)
+	au, av, bu, bv := proofarith.FloatRat(a.U), proofarith.FloatRat(a.V), proofarith.FloatRat(b.U), proofarith.FloatRat(b.V)
 	if au == nil || av == nil || bu == nil || bv == nil {
 		return math.Inf(1)
 	}

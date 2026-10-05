@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +18,7 @@ import (
 func ratSquaredDistance3Oracle(a0, a1, a2, b0, b1, b2 float64) *big.Rat {
 	sum := new(big.Rat)
 	for _, pair := range [3][2]float64{{a0, b0}, {a1, b1}, {a2, b2}} {
-		x, y := floatRat(pair[0]), floatRat(pair[1])
+		x, y := proofarith.FloatRat(pair[0]), proofarith.FloatRat(pair[1])
 		if x == nil || y == nil {
 			return nil
 		}
@@ -96,8 +97,8 @@ func TestStraightEdgeBoundDyadicMatchesRational(t *testing.T) {
 		} else {
 			require.Equal(t, want.Num().String(), gotRat.Num().String(), "squared numerator of %v and %v", a, b)
 			require.Equal(t, want.Denom().String(), gotRat.Denom().String(), "squared denominator of %v and %v", a, b)
-			tangent := dvSub(dyVec(b), dyVec(a))
-			require.Zero(t, dyCmp(dvDot(tangent, tangent), squared), "the tangent's dot product of %v and %v", a, b)
+			tangent := proofarith.DvSub(proofarith.DyVec(b), proofarith.DyVec(a))
+			require.Zero(t, proofarith.DyCmp(proofarith.DvDot(tangent, tangent), squared), "the tangent's dot product of %v and %v", a, b)
 		}
 
 		// A held length of 1 stands apart from the pair: against a non-finite
@@ -145,7 +146,7 @@ func TestStraightEdgeBoundExactSquareSkipsTheBracket(t *testing.T) {
 		squared, ok := dySquaredDistance3(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
 		got := straightEdgeBound(held, squared, ok, delta, delta)
 		old := ratStraightEdgeBound(held, want, delta, delta)
-		if want != nil && held >= 0 && new(big.Rat).Mul(floatRat(held), floatRat(held)).Cmp(want) == 0 {
+		if want != nil && held >= 0 && new(big.Rat).Mul(proofarith.FloatRat(held), proofarith.FloatRat(held)).Cmp(want) == 0 {
 			requireSameFloatBits(t, absSumUpper(0, delta, delta), got,
 				"an exact length %v from %v to %v must read no square-root term", held, a, b)
 			require.LessOrEqual(t, old, absSumUpper(upRound(ulpOf(held)), delta, delta),
@@ -173,7 +174,7 @@ func TestStraightEdgeBoundExactSquareSkipsTheBracket(t *testing.T) {
 		// -5 squares to 25 exactly, and the true length is 5, ten away.
 		pyth := r3.Vec{X: 3, Y: 4}
 		check(t, pyth, r3.Vec{}, -5, 0)
-		require.GreaterOrEqual(t, straightEdgeBound(-5, dyInt(25), true), 10.0,
+		require.GreaterOrEqual(t, straightEdgeBound(-5, proofarith.DyInt(25), true), 10.0,
 			"a negated length is off by twice its magnitude")
 		check(t, pyth, r3.Vec{}, 5, 1e-9)
 	})

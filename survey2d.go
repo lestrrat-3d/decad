@@ -3,6 +3,8 @@ package decad
 import (
 	"errors"
 	"math"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // This file is the 2D kernel behind the analytic wall survey
@@ -82,7 +84,7 @@ const piRoundGuard = 1e-15
 // only that the enclosure it returns contains the true sine/cosine of x.
 func radianTrigBounds(x float64) (boundedScalar, boundedScalar) {
 	heldSin, heldCos := math.Sin(x), math.Cos(x)
-	xR := floatRat(x)
+	xR := proofarith.FloatRat(x)
 	if xR == nil {
 		return measuredScalar(heldSin, math.Inf(1)), measuredScalar(heldCos, math.Inf(1))
 	}
@@ -90,7 +92,7 @@ func radianTrigBounds(x float64) (boundedScalar, boundedScalar) {
 	if !ok {
 		return measuredScalar(heldSin, math.Inf(1)), measuredScalar(heldCos, math.Inf(1))
 	}
-	guard := floatRat(piRoundGuard)
+	guard := proofarith.FloatRat(piRoundGuard)
 	sinIv, cosIv = intervalWiden(sinIv, guard), intervalWiden(cosIv, guard)
 	return measuredScalar(heldSin, intervalFloatError(sinIv, heldSin)),
 		measuredScalar(heldCos, intervalFloatError(cosIv, heldCos))

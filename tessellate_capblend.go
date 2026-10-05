@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -750,8 +751,8 @@ func emitCapBlendSamples(budget *workBudget, cbp capBlendPayload, lm *capBlendLo
 // (docs/tessellation-design.md §12) — never a zero.
 func capStationBound(cU, cV, radius, theta, heldU, heldV float64) walkEndBound {
 	underivable := walkEndBound{u: math.Inf(1), v: math.Inf(1)}
-	rt, rr := floatRat(theta), floatRat(radius)
-	ru, rv := floatRat(cU), floatRat(cV)
+	rt, rr := proofarith.FloatRat(theta), proofarith.FloatRat(radius)
+	ru, rv := proofarith.FloatRat(cU), proofarith.FloatRat(cV)
 	if rt == nil || rr == nil || ru == nil || rv == nil {
 		return underivable
 	}
@@ -822,7 +823,7 @@ func emitCapBand(budget *workBudget, m *Mesh, cbp capBlendPayload, lm *capBlendL
 	if !ok {
 		return fmt.Errorf(`%w: the payload states no contour displacement for the chamfer band on loop %d`, ErrDegenerate, lm.li)
 	}
-	levelDelta := absSumUpper(cbp.dDelta, addRoundError(capZ, matSign*cbp.d, sideZ))
+	levelDelta := absSumUpper(cbp.dDelta, proofarith.AddRoundError(capZ, matSign*cbp.d, sideZ))
 	axial := cbp.capBandLevel(capZ, matSign).bound
 	n := len(lm.walks)
 
@@ -953,7 +954,7 @@ func emitCapBand(budget *workBudget, m *Mesh, cbp capBlendPayload, lm *capBlendL
 			if w.th1 < w.th0 {
 				inside = -1
 			}
-			radiusRound = addRoundError(w.radius, -inside*cbp.d, lm.capRadius[i])
+			radiusRound = proofarith.AddRoundError(w.radius, -inside*cbp.d, lm.capRadius[i])
 		}
 		patchDelta := absSumUpper(twist, sagitta, productUpper(g.capRadius, skew), locus, radiusRound)
 		bump(face, absSumUpper(patchDelta, delta, levelDelta, axial))
@@ -1175,9 +1176,9 @@ func requireCapBlendFacetAreas(m *Mesh) error {
 func capBlendTwiceAreaSq(a, b, c r3.Vec) *big.Rat {
 	sub := func(p, q r3.Vec) [3]*big.Rat {
 		return [3]*big.Rat{
-			new(big.Rat).Sub(floatRat(p.X), floatRat(q.X)),
-			new(big.Rat).Sub(floatRat(p.Y), floatRat(q.Y)),
-			new(big.Rat).Sub(floatRat(p.Z), floatRat(q.Z)),
+			new(big.Rat).Sub(proofarith.FloatRat(p.X), proofarith.FloatRat(q.X)),
+			new(big.Rat).Sub(proofarith.FloatRat(p.Y), proofarith.FloatRat(q.Y)),
+			new(big.Rat).Sub(proofarith.FloatRat(p.Z), proofarith.FloatRat(q.Z)),
 		}
 	}
 	u, v := sub(b, a), sub(c, a)

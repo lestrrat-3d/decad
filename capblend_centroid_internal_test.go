@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
 
@@ -49,8 +50,8 @@ func TestCapBlendConeMomentCoefficientsMatchReference(t *testing.T) {
 		}
 	}
 	for _, tc := range tuples {
-		R0, R1, H := floatRat(tc.R0), floatRat(tc.R1), floatRat(tc.H)
-		c, dS, dC := floatRat(tc.c), floatRat(tc.dS), floatRat(tc.dC)
+		R0, R1, H := proofarith.FloatRat(tc.R0), proofarith.FloatRat(tc.R1), proofarith.FloatRat(tc.H)
+		c, dS, dC := proofarith.FloatRat(tc.c), proofarith.FloatRat(tc.dS), proofarith.FloatRat(tc.dC)
 		label := fmt.Sprintf(`%+v`, tc)
 		check(t, label+` X`, coneMomentTermsX(R0, R1, H, c, dS, dC),
 			referenceMomentTermsX(tc.R0, tc.R1, tc.H, tc.c, tc.dS, tc.dC))
@@ -60,7 +61,7 @@ func TestCapBlendConeMomentCoefficientsMatchReference(t *testing.T) {
 		// about 3e-10 relative to cancellation of its z0² terms, while the
 		// rational stays exact.
 		for _, z0 := range []float64{15.5, -1000} {
-			check(t, fmt.Sprintf(`%s Z z0=%g`, label, z0), coneMomentTermsZ(R0, R1, H, floatRat(z0), dS, dC),
+			check(t, fmt.Sprintf(`%s Z z0=%g`, label, z0), coneMomentTermsZ(R0, R1, H, proofarith.FloatRat(z0), dS, dC),
 				referenceMomentTermsZ(tc.R0, tc.R1, tc.H, z0, tc.dS, tc.dC))
 		}
 	}

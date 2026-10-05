@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -209,18 +210,18 @@ type xhp struct{ x, y, z, w *big.Int }
 // directly gives one shared power-of-two denominator without constructing
 // three big.Rat values or multiplying their denominators.
 func xhpOf(v r3.Vec) xhp {
-	dx, dy, dz := mustDyOf(v.X), mustDyOf(v.Y), mustDyOf(v.Z)
+	dx, dy, dz := proofarith.MustDyOf(v.X), proofarith.MustDyOf(v.Y), proofarith.MustDyOf(v.Z)
 	base := 0
-	for _, d := range [3]dyadic{dx, dy, dz} {
-		if !d.isZero() && d.exp < base {
-			base = d.exp
+	for _, d := range [3]proofarith.Dyadic{dx, dy, dz} {
+		if !d.IsZero() && d.Exp() < base {
+			base = d.Exp()
 		}
 	}
-	coord := func(d dyadic) *big.Int {
-		if d.isZero() {
+	coord := func(d proofarith.Dyadic) *big.Int {
+		if d.IsZero() {
 			return new(big.Int)
 		}
-		return new(big.Int).Lsh(d.mant, uint(d.exp-base))
+		return new(big.Int).Lsh(d.Mant(), uint(d.Exp()-base))
 	}
 	return xhp{
 		x: coord(dx),

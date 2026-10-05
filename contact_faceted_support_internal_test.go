@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -27,26 +28,26 @@ func TestFacetedAxisSupportProvesRealUnionFloorFace(t *testing.T) {
 	proof, ok, err := sourceFacetedAxisSupport(t.Context(), union, r3.Identity(), 2, 0)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, 0, dyCmp(proof.plane, mustDyOf(0)))
-	require.Equal(t, 0, dyCmp(proof.footLo[0], mustDyOf(0)))
-	require.Equal(t, 0, dyCmp(proof.footLo[1], mustDyOf(0)))
-	require.Equal(t, 0, dyCmp(proof.footHi[0], mustDyOf(10)))
-	require.Equal(t, 0, dyCmp(proof.footHi[1], mustDyOf(10)))
+	require.Equal(t, 0, proofarith.DyCmp(proof.plane, proofarith.MustDyOf(0)))
+	require.Equal(t, 0, proofarith.DyCmp(proof.footLo[0], proofarith.MustDyOf(0)))
+	require.Equal(t, 0, proofarith.DyCmp(proof.footLo[1], proofarith.MustDyOf(0)))
+	require.Equal(t, 0, proofarith.DyCmp(proof.footHi[0], proofarith.MustDyOf(10)))
+	require.Equal(t, 0, proofarith.DyCmp(proof.footHi[1], proofarith.MustDyOf(10)))
 	require.Equal(t, r3.Vec{Z: -1}, proof.normal)
 	require.Contains(t, union.Faces(), proof.face)
 	for i, want := range []r3.Vec{{}, {X: 10}, {X: 10, Y: 10}, {Y: 10}} {
-		require.Equal(t, dyVec(want), proof.corners[i])
+		require.Equal(t, proofarith.DyVec(want), proof.corners[i])
 	}
-	require.Equal(t, 0, dyCmp(proof.outerHi[0], mustDyOf(15)))
-	require.Equal(t, 0, dyCmp(proof.outerHi[1], mustDyOf(15)))
-	require.Equal(t, 0, dyCmp(proof.outerHi[2], mustDyOf(12)))
+	require.Equal(t, 0, proofarith.DyCmp(proof.outerHi[0], proofarith.MustDyOf(15)))
+	require.Equal(t, 0, proofarith.DyCmp(proof.outerHi[1], proofarith.MustDyOf(15)))
+	require.Equal(t, 0, proofarith.DyCmp(proof.outerHi[2], proofarith.MustDyOf(12)))
 
 	top, ok, err := sourceFacetedAxisSupport(t.Context(), union, r3.Identity(), 2, 1)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, 0, dyCmp(top.plane, mustDyOf(12)))
-	require.Equal(t, 0, dyCmp(top.footLo[0], mustDyOf(5)))
-	require.Equal(t, 0, dyCmp(top.footHi[0], mustDyOf(15)))
+	require.Equal(t, 0, proofarith.DyCmp(top.plane, proofarith.MustDyOf(12)))
+	require.Equal(t, 0, proofarith.DyCmp(top.footLo[0], proofarith.MustDyOf(5)))
+	require.Equal(t, 0, proofarith.DyCmp(top.footHi[0], proofarith.MustDyOf(15)))
 	require.Equal(t, r3.Vec{Z: 1}, top.normal)
 	require.Contains(t, union.Faces(), top.face)
 	require.NotSame(t, proof.face, top.face)
@@ -55,8 +56,8 @@ func TestFacetedAxisSupportProvesRealUnionFloorFace(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, r3.Vec{X: -1}, left.normal)
-	require.Equal(t, 0, dyCmp(left.footHi[0], mustDyOf(10)))
-	require.Equal(t, 0, dyCmp(left.footHi[1], mustDyOf(10)))
+	require.Equal(t, 0, proofarith.DyCmp(left.footHi[0], proofarith.MustDyOf(10)))
+	require.Equal(t, 0, proofarith.DyCmp(left.footHi[1], proofarith.MustDyOf(10)))
 	require.Contains(t, union.Faces(), left.face)
 	mirrorFrame, err := r3.NewFrame(r3.Vec{}, r3.Vec{Y: 1}, r3.Vec{Z: 1})
 	require.NoError(t, err)
@@ -74,9 +75,9 @@ func TestFacetedAxisSupportProvesRealUnionFloorFace(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Same(t, proof.face, moved.face)
-	require.Equal(t, 0, dyCmp(moved.plane, mustDyOf(20)))
-	require.Equal(t, 0, dyCmp(moved.footLo[0], mustDyOf(2)))
-	require.Equal(t, 0, dyCmp(moved.footLo[1], mustDyOf(3)))
+	require.Equal(t, 0, proofarith.DyCmp(moved.plane, proofarith.MustDyOf(20)))
+	require.Equal(t, 0, proofarith.DyCmp(moved.footLo[0], proofarith.MustDyOf(2)))
+	require.Equal(t, 0, proofarith.DyCmp(moved.footLo[1], proofarith.MustDyOf(3)))
 
 	// Rebuilding through an inexact translation widens the held mesh, while
 	// the saved zero-bound source still certifies the true support plane.
@@ -90,8 +91,8 @@ func TestFacetedAxisSupportProvesRealUnionFloorFace(t *testing.T) {
 	widenedProof, ok, err := sourceFacetedAxisSupport(t.Context(), widened, r3.Identity(), 2, 0)
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, 0, dyCmp(widenedProof.plane, mustDyOf(0)))
-	require.Equal(t, 0, dyCmp(widenedProof.footLo[0], mustDyOf(.1)))
+	require.Equal(t, 0, proofarith.DyCmp(widenedProof.plane, proofarith.MustDyOf(0)))
+	require.Equal(t, 0, proofarith.DyCmp(widenedProof.footLo[0], proofarith.MustDyOf(.1)))
 	require.Contains(t, widened.Faces(), widenedProof.face)
 }
 

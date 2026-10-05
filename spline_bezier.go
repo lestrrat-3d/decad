@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/sketch/geom"
 )
 
@@ -1151,8 +1152,8 @@ func freeformEndpointBounds(spans []bezierSpan, reversed bool, start, end Point2
 	}
 	bound := func(p ratPoint, held Point2) walkEndBound {
 		return walkEndBound{
-			u: rationalFloatError(p.u, held.U),
-			v: rationalFloatError(p.v, held.V),
+			u: proofarith.RationalFloatError(p.u, held.U),
+			v: proofarith.RationalFloatError(p.v, held.V),
 		}
 	}
 	return bound(first, start), bound(last, end)
@@ -1209,7 +1210,7 @@ func freeformEndTangents(spans []bezierSpan, reversed bool) (endTangents, error)
 		if isNonFinite(u) || isNonFinite(v) {
 			return 0, 0, 0, false
 		}
-		bound := math.Max(rationalFloatError(du, u), rationalFloatError(dv, v))
+		bound := math.Max(proofarith.RationalFloatError(du, u), proofarith.RationalFloatError(dv, v))
 		return u, v, bound, true
 	}
 	inU, inV, inBound, okIn := leg(first[0], first[1], len(first)-1)

@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -1225,7 +1226,7 @@ func revolveCellSlack(b revolveBasis3Iv, angular revolveAngular, lo, hi revMerid
 		}
 	}
 
-	dz, drho := floatRat(hi.z-lo.z), floatRat(hi.rho-lo.rho)
+	dz, drho := proofarith.FloatRat(hi.z-lo.z), proofarith.FloatRat(hi.rho-lo.rho)
 	if dz == nil || drho == nil {
 		return 0, errRevolveCellSlack
 	}

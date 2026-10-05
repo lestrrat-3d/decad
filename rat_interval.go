@@ -1,14 +1,13 @@
 package decad
 
 import (
-	"math"
 	"math/big"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
-// This file is the exact rational interval arithmetic the certified readings
-// are proven in: an enclosure [lo, hi] over big.Rat, its four operations, and
-// the transcendental enclosures (atan, atan2, and the pi constants) that
-// cannot be stated as a single rational.
+// This file owns the atan, atan2, and pi enclosures used by certified readings.
+// Basic rational interval operations live in internal/proof/interval.go.
 //
 // Every constant here is a PROVEN enclosure rather than a rounded literal, so
 // a value computed through these operations encloses the true answer no
@@ -19,6 +18,52 @@ import (
 type ratInterval struct {
 	lo *big.Rat
 	hi *big.Rat
+}
+
+// The trigonometric enclosures retain private endpoints in the root package.
+// Arithmetic delegates to the exact interval operations in internal/proof.
+func toProofInterval(a ratInterval) proofarith.RatInterval {
+	return proofarith.RatInterval{Lo: a.lo, Hi: a.hi}
+}
+
+func fromProofInterval(a proofarith.RatInterval) ratInterval {
+	return ratInterval{lo: a.Lo, hi: a.Hi}
+}
+
+func interval(lo, hi *big.Rat) ratInterval {
+	return fromProofInterval(proofarith.Interval(lo, hi))
+}
+
+func intervalOwned(lo, hi *big.Rat) ratInterval {
+	return fromProofInterval(proofarith.OwnedInterval(lo, hi))
+}
+
+func pointInterval(value *big.Rat) ratInterval {
+	return fromProofInterval(proofarith.PointInterval(value))
+}
+
+func intervalAdd(a, b ratInterval) ratInterval {
+	return fromProofInterval(proofarith.AddInterval(toProofInterval(a), toProofInterval(b)))
+}
+
+func intervalNeg(a ratInterval) ratInterval {
+	return fromProofInterval(proofarith.NegInterval(toProofInterval(a)))
+}
+
+func intervalSub(a, b ratInterval) ratInterval {
+	return fromProofInterval(proofarith.SubInterval(toProofInterval(a), toProofInterval(b)))
+}
+
+func intervalScale(a ratInterval, scale *big.Rat) ratInterval {
+	return fromProofInterval(proofarith.ScaleInterval(toProofInterval(a), scale))
+}
+
+func intervalMul(a, b ratInterval) ratInterval {
+	return fromProofInterval(proofarith.MulInterval(toProofInterval(a), toProofInterval(b)))
+}
+
+func intervalFloatError(a ratInterval, held float64) float64 {
+	return proofarith.IntervalFloatError(toProofInterval(a), held)
 }
 
 var (
@@ -52,96 +97,6 @@ func mustRatDecimal(value string) *big.Rat {
 		panic("decad: invalid in-tree rational constant")
 	}
 	return out
-}
-
-func interval(lo, hi *big.Rat) ratInterval {
-	return ratInterval{lo: new(big.Rat).Set(lo), hi: new(big.Rat).Set(hi)}
-}
-
-// intervalOwned takes ownership of two freshly allocated endpoints. Callers
-// must not pass endpoints that alias an input interval or a cached value.
-func intervalOwned(lo, hi *big.Rat) ratInterval {
-	return ratInterval{lo: lo, hi: hi}
-}
-
-func intervalAdd(a, b ratInterval) ratInterval {
-	return intervalOwned(new(big.Rat).Add(a.lo, b.lo), new(big.Rat).Add(a.hi, b.hi))
-}
-
-func intervalNeg(a ratInterval) ratInterval {
-	return intervalOwned(new(big.Rat).Neg(a.hi), new(big.Rat).Neg(a.lo))
-}
-
-func intervalSub(a, b ratInterval) ratInterval {
-	return intervalOwned(new(big.Rat).Sub(a.lo, b.hi), new(big.Rat).Sub(a.hi, b.lo))
-}
-
-func intervalScale(a ratInterval, scale *big.Rat) ratInterval {
-	if scale.Sign() < 0 {
-		return intervalOwned(
-			new(big.Rat).Mul(a.hi, scale),
-			new(big.Rat).Mul(a.lo, scale),
-		)
-	}
-	return intervalOwned(
-		new(big.Rat).Mul(a.lo, scale),
-		new(big.Rat).Mul(a.hi, scale),
-	)
-}
-
-func pointInterval(value *big.Rat) ratInterval {
-	return interval(value, value)
-}
-
-// intervalMul multiplies two rational-bounded intervals. Endpoint signs
-// identify the two extreme products unless both intervals cross zero; that
-// case compares four products. Both result endpoints are owned independently.
-func intervalMul(a, b ratInterval) ratInterval {
-	if a.lo.Sign() >= 0 {
-		switch {
-		case b.lo.Sign() >= 0:
-			return intervalOwned(new(big.Rat).Mul(a.lo, b.lo), new(big.Rat).Mul(a.hi, b.hi))
-		case b.hi.Sign() <= 0:
-			return intervalOwned(new(big.Rat).Mul(a.hi, b.lo), new(big.Rat).Mul(a.lo, b.hi))
-		default:
-			return intervalOwned(new(big.Rat).Mul(a.hi, b.lo), new(big.Rat).Mul(a.hi, b.hi))
-		}
-	}
-	if a.hi.Sign() <= 0 {
-		switch {
-		case b.lo.Sign() >= 0:
-			return intervalOwned(new(big.Rat).Mul(a.lo, b.hi), new(big.Rat).Mul(a.hi, b.lo))
-		case b.hi.Sign() <= 0:
-			return intervalOwned(new(big.Rat).Mul(a.hi, b.hi), new(big.Rat).Mul(a.lo, b.lo))
-		default:
-			return intervalOwned(new(big.Rat).Mul(a.lo, b.hi), new(big.Rat).Mul(a.lo, b.lo))
-		}
-	}
-	if b.lo.Sign() >= 0 {
-		return intervalOwned(new(big.Rat).Mul(a.lo, b.hi), new(big.Rat).Mul(a.hi, b.hi))
-	}
-	if b.hi.Sign() <= 0 {
-		return intervalOwned(new(big.Rat).Mul(a.hi, b.lo), new(big.Rat).Mul(a.lo, b.lo))
-	}
-
-	loA := new(big.Rat).Mul(a.lo, b.hi)
-	loB := new(big.Rat).Mul(a.hi, b.lo)
-	hiA := new(big.Rat).Mul(a.lo, b.lo)
-	hiB := new(big.Rat).Mul(a.hi, b.hi)
-	if loB.Cmp(loA) < 0 {
-		loA = loB
-	}
-	if hiB.Cmp(hiA) > 0 {
-		hiA = hiB
-	}
-	return intervalOwned(loA, hiA)
-}
-
-func intervalFloatError(a ratInterval, held float64) float64 {
-	return math.Max(
-		rationalFloatError(a.lo, held),
-		rationalFloatError(a.hi, held),
-	)
 }
 
 // fixedMulDown multiplies two non-negative fixed-point values and rounds the

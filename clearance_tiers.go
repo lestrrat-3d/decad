@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -614,21 +615,21 @@ func (k *pairKernel) principalCircleEdgeGap(ea, eb *cEdge, sink *cellSink) bool 
 	var radial r3.Vec
 	switch {
 	case ea.center.Y == eb.center.Y && ea.center.X != eb.center.X:
-		offset.Sub(floatRat(eb.center.X), floatRat(ea.center.X))
+		offset.Sub(proofarith.FloatRat(eb.center.X), proofarith.FloatRat(ea.center.X))
 		radial = r3.NewVec(1, 0, 0)
 	case ea.center.X == eb.center.X && ea.center.Y != eb.center.Y:
-		offset.Sub(floatRat(eb.center.Y), floatRat(ea.center.Y))
+		offset.Sub(proofarith.FloatRat(eb.center.Y), proofarith.FloatRat(ea.center.Y))
 		radial = r3.NewVec(0, 1, 0)
 	default:
 		return false
 	}
 	sign := float64(offset.Sign())
 	offset.Abs(&offset)
-	gap := new(big.Rat).Sub(&offset, new(big.Rat).Add(floatRat(ea.radius), floatRat(eb.radius)))
+	gap := new(big.Rat).Sub(&offset, new(big.Rat).Add(proofarith.FloatRat(ea.radius), proofarith.FloatRat(eb.radius)))
 	if gap.Sign() <= 0 {
 		return false
 	}
-	dz := new(big.Rat).Sub(floatRat(ea.center.Z), floatRat(eb.center.Z))
+	dz := new(big.Rat).Sub(proofarith.FloatRat(ea.center.Z), proofarith.FloatRat(eb.center.Z))
 	square := new(big.Rat).Mul(gap, gap)
 	square.Add(square, new(big.Rat).Mul(dz, dz))
 	lo, hi := ratSqrtDown(square), ratSqrtUp(square)

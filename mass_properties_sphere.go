@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -13,13 +14,13 @@ import (
 // later rigid placement changes the center but no tensor component.
 func sourceSphereMassProperties(ctx context.Context, b *Body, sphere sourceSphereContactProof,
 	density units.Value) (MassProperties, error) {
-	radius := sphere.radius.rat()
+	radius := sphere.radius.Rat()
 	if radius.Sign() <= 0 {
 		return MassProperties{}, fmt.Errorf("%w: source sphere has no positive radius", ErrUnsupported)
 	}
 	radius2 := new(big.Rat).Mul(radius, radius)
 	radius3 := new(big.Rat).Mul(radius2, radius)
-	rho := new(big.Rat).Mul(floatRat(density.Mag()), floatRat(density.Unit().Factor()))
+	rho := new(big.Rat).Mul(proofarith.FloatRat(density.Mag()), proofarith.FloatRat(density.Unit().Factor()))
 	massFactor := new(big.Rat).Mul(rho, radius3)
 	massFactor.Mul(massFactor, big.NewRat(4, 3))
 	massInterval := intervalScale(interval(piLower, piUpper), massFactor)

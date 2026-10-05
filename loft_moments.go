@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -337,7 +338,7 @@ func (m *loftMassAccumulator) volume(verts []r3.Vec, tris [][3]int) Measurement 
 		vol.Add(vol, m.chorded.twistVolumeCorrection)
 	}
 	value, _ := vol.Float64()
-	bound := rationalFloatError(vol, value)
+	bound := proofarith.RationalFloatError(vol, value)
 	if m.delta > 0 {
 		areaUpper := perturbedAreaUpper(verts, tris, m.delta)
 		bound = absSumUpper(bound, sweptVolumeAllow(m.delta, areaUpper))
@@ -407,9 +408,9 @@ func (m *loftMassAccumulator) centroid(verts []r3.Vec, tris [][3]int) (VecMeasur
 	fx, _ := cx.Float64()
 	fy, _ := cy.Float64()
 	fz, _ := cz.Float64()
-	bx := rationalFloatError(cx, fx)
-	by := rationalFloatError(cy, fy)
-	bz := rationalFloatError(cz, fz)
+	bx := proofarith.RationalFloatError(cx, fx)
+	by := proofarith.RationalFloatError(cy, fy)
+	bz := proofarith.RationalFloatError(cz, fz)
 
 	if m.delta > 0 || m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
 		vol := new(big.Rat).Quo(vol6, big.NewRat(6, 1))
@@ -529,7 +530,7 @@ func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 		}
 	}
 	capFloat, _ := capTotal.Float64()
-	capBound := rationalFloatError(capTotal, capFloat)
+	capBound := proofarith.RationalFloatError(capTotal, capFloat)
 
 	wallValue := m.wallAreaSum
 	wallBound := m.wallBound()
@@ -539,12 +540,12 @@ func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 			wallBound,
 			m.chorded.areaCorrectionBound,
 			m.chorded.bilinearAreaBound,
-			addRoundError(wallValue, m.chorded.areaCorrection, corrected),
+			proofarith.AddRoundError(wallValue, m.chorded.areaCorrection, corrected),
 		)
 		wallValue = corrected
 	}
 	value := wallValue + capFloat
-	addBound := addRoundError(wallValue, capFloat, value)
+	addBound := proofarith.AddRoundError(wallValue, capFloat, value)
 	bound := absSumUpper(wallBound, capBound, addBound)
 	// The per-triangle allowance covers both directions at once: the base wall
 	// accumulator is over held triangles and the cap term is the denoted region's
@@ -932,7 +933,7 @@ func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r
 		capVolumeUpper:        capVolumeUpper,
 		seamAllow:             seamAllow,
 		areaCorrection:        areaCorrectionValue,
-		areaCorrectionBound:   rationalFloatError(areaCorrection, areaCorrectionValue),
+		areaCorrectionBound:   proofarith.RationalFloatError(areaCorrection, areaCorrectionValue),
 		bilinearAreaBound:     bilinearAreaBound,
 		areaExcess:            areaExcess,
 		twistAreaAllow:        twistAreaAllow,

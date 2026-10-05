@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -159,7 +160,7 @@ func wallNormalDecision(w sideWalk, m placedFrameMap, pull r3.Vec) (pullVerdict,
 	dv := ivVec3Dot(m.dv, pv).lo
 
 	if !w.isCircular() {
-		tu, tv := floatRat(w.tanInU), floatRat(w.tanInV)
+		tu, tv := proofarith.FloatRat(w.tanInU), proofarith.FloatRat(w.tanInV)
 		if tu == nil || tv == nil {
 			return pullUndecided, false
 		}
@@ -192,7 +193,7 @@ func wallNormalDecision(w sideWalk, m placedFrameMap, pull r3.Vec) (pullVerdict,
 // against a wall's own tangent length squared.
 func capNormalDecision(m placedFrameMap, pull r3.Vec, sign float64) (pullVerdict, bool) {
 	pv, okP := ivVec3Of(pull)
-	rSign := floatRat(sign)
+	rSign := proofarith.FloatRat(sign)
 	if !okP || rSign == nil {
 		return pullUndecided, false
 	}
@@ -226,7 +227,7 @@ func capNormalDecision(m placedFrameMap, pull r3.Vec, sign float64) (pullVerdict
 // an exact input into an interval one for no reason, since a and b already
 // hold everywhere over [lo, hi] with no anchor at all.
 func circularNormalRange(a, b *big.Rat, lo, hi float64, wholeTurn bool) (minLo, minHi, maxLo, maxHi *big.Rat, ok bool) {
-	rlo, rhi := floatRat(lo), floatRat(hi)
+	rlo, rhi := proofarith.FloatRat(lo), proofarith.FloatRat(hi)
 	if rlo == nil || rhi == nil {
 		return nil, nil, nil, nil, false
 	}
