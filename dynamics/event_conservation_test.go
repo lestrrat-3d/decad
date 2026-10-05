@@ -234,8 +234,7 @@ func TestEventConservationRejectsEnergyGainWithBalancedMomentum(t *testing.T) {
 
 	// This changed pair retains total momentum and each body's stated impulse.
 	// Its post-event energy exceeds the real event's pre-event energy.
-	gaining := event
-	gaining.NormalImpulse = units.KilogramMillimetersPerSecond(250)
+	gaining := scaledImpulses(event, 250)
 	gaining.PostVelocityA = velocity(-150)
 	gaining.PostVelocityB = velocity(150)
 	require.Equal(t, "contact event increases kinetic energy beyond numerical residual",
@@ -293,8 +292,7 @@ func TestKinematicEventConservationRejectsGainBeyondDriverWork(t *testing.T) {
 
 	// The changed event balances momentum but gives the box more energy than
 	// the driver's published speed and impulse can supply.
-	gaining := event
-	gaining.NormalImpulse = units.KilogramMillimetersPerSecond(250)
+	gaining := scaledImpulses(event, 250)
 	gaining.PostVelocityB.X = units.MillimetersPerSecond(250)
 	require.Equal(t, "contact event increases kinetic energy beyond work and numerical residual",
 		w.eventConservationFailure(gaining))
@@ -353,4 +351,19 @@ func TestKinematicEventReportsNegativeDriverWork(t *testing.T) {
 	require.InDelta(t, -9600, report.Conservation.KinematicWork.Value.Base(), 1e-3)
 	require.Equal(t, units.Torque, report.Conservation.KinematicWork.Bound.Kind())
 	require.Less(t, report.Conservation.KinematicWork.Bound.Base(), 1e-6)
+}
+
+// scaledImpulses returns event with its aggregate normal impulse set to total
+// and every point impulse scaled to match, so a tampered event stays
+// internally consistent.
+func scaledImpulses(event ContactEvent, total float64) ContactEvent {
+	scale := total / event.NormalImpulse.Base()
+	out := event
+	out.NormalImpulse = units.KilogramMillimetersPerSecond(total)
+	out.PointImpulses = make([]ContactPointImpulse, len(event.PointImpulses))
+	for i, point := range event.PointImpulses {
+		out.PointImpulses[i] = ContactPointImpulse{Normal: units.KilogramMillimetersPerSecond(point.Normal.Base() * scale),
+			Tangent: point.Tangent}
+	}
+	return out
 }

@@ -196,10 +196,10 @@ func TestVerticalBoxReboundUsesProductionGeometry(t *testing.T) {
 	require.InDelta(t, 50, endBox.LinearVelocity.Z.Base(), 1e-6)
 	endContact, err := doc.ContactPair(t.Context(), floor, box, r3.Identity(), endBox.Pose, config.Step.Contact)
 	require.NoError(t, err)
-	require.Equal(t, decad.ContactSeparated, endContact.Relation)
-	require.NotNil(t, endContact.Gap)
-	require.LessOrEqual(t, endContact.Gap.Value.Base()+endContact.Gap.Bound.Base(),
-		config.Step.ContactSlop.Base())
+	// The impact at the step end is corrected into exact touch (§6.6); the
+	// box leaves it at 50 mm/s on the next step.
+	require.Equal(t, decad.ContactTouching, endContact.Relation)
+	require.Zero(t, endBox.Pose.Translation().Z)
 	beforeEndpoint, err := endpoint.Trace.Sample(units.Seconds(.1 - 1e-9))
 	require.NoError(t, err)
 	beforeBox, ok := beforeEndpoint.Body(box)
@@ -385,13 +385,16 @@ func TestObliqueInitialTouchContinuesAsPersistentContact(t *testing.T) {
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
 	require.Len(t, report.Events, 1)
 	require.Equal(t, dynamics.ContactImpact, report.Events[0].Kind)
-	require.InDelta(t, 100, report.Events[0].NormalImpulse.Base(), 1e-6)
+	// An initial touch takes its restitution target like any contact
+	// (docs/multibody-dynamics-design.md §6.5): restitution 0.5 sends the box
+	// up at 50 mm/s with 1.5·100 kg·mm/s, and it keeps its 50 mm/s slide.
+	require.InDelta(t, 150, report.Events[0].NormalImpulse.Base(), 1e-6)
 	final, ok := report.Next.Body(box)
 	require.True(t, ok)
 	require.InDelta(t, 50, final.LinearVelocity.X.Base(), 1e-6)
-	require.InDelta(t, 0, final.LinearVelocity.Z.Base(), 1e-6)
+	require.InDelta(t, 50, final.LinearVelocity.Z.Base(), 1e-6)
 	require.InDelta(t, 5, final.Pose.Translation().X, 1e-6)
-	require.InDelta(t, 0, final.Pose.Translation().Z, 1e-6)
+	require.InDelta(t, 5, final.Pose.Translation().Z, 1e-6)
 	require.Equal(t, []*decad.Body{floor, box}, doc.Bodies())
 }
 
@@ -502,7 +505,13 @@ func TestSlideEdgeTransitionRespectsEventLimit(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, report.Status)
 	require.Nil(t, report.Next)
-	require.Empty(t, report.Events)
+	// §12: the impact reaches MaxEvents 1 with time remaining; the certified
+	// prefix keeps its event and stops there.
+	require.Len(t, report.Events, 1)
+	require.Len(t, report.Diagnostics, 1)
+	require.Equal(t, dynamics.StepEventBudget, report.Diagnostics[0].Code)
+	require.Equal(t, units.Scalar(1), report.Diagnostics[0].Limit)
+	require.Equal(t, report.Events[0].Time, report.Diagnostics[0].From)
 	require.Equal(t, []*decad.Body{floor, box}, doc.Bodies())
 }
 
@@ -898,20 +907,27 @@ func TestRestingBoxUsesPersistentContactTrack(t *testing.T) {
 	require.NoError(t, err)
 	gravity := zeroAcceleration()
 	gravity.Z = units.MillimetersPerSecondSquared(-1000)
-	for step := range 2 {
+	// The initial touch takes its restitution 0.5 like any contact
+	// (docs/multibody-dynamics-design.md §6.5): the first step's kick of
+	// −100 mm/s bounces the box up at 50 mm/s, 5 mm by the step end; the
+	// second step's kick turns that into −50 mm/s, which lands it back on the
+	// floor exactly at the step end, where it bounces at 25 mm/s.
+	for step, want := range []struct {
+		at, impulse, pre, post, z float64
+	}{{0, 150, -100, 50, 5}, {.1, 75, -50, 25, 0}} {
 		report, err := w.Step(t.Context(), state, dynamics.StepInput{Gravity: gravity}, duration)
 		require.NoError(t, err)
 		require.Equal(t, dynamics.Advanced, report.Status, "step %d: %+v", step, report.Diagnostics)
 		require.NotNil(t, report.Next)
 		require.Len(t, report.Events, 1)
-		require.InDelta(t, 0, report.Events[0].Time.Base(), 1e-12)
-		require.InDelta(t, 100, report.Events[0].NormalImpulse.Base(), 1e-6)
-		require.InDelta(t, -100, report.Events[0].PreVelocityB.Z.Base(), 1e-6)
-		require.InDelta(t, 0, report.Events[0].PostVelocityB.Z.Base(), 1e-6)
+		require.InDelta(t, want.at, report.Events[0].Time.Base(), 1e-9)
+		require.InDelta(t, want.impulse, report.Events[0].NormalImpulse.Base(), 1e-6)
+		require.InDelta(t, want.pre, report.Events[0].PreVelocityB.Z.Base(), 1e-6)
+		require.InDelta(t, want.post, report.Events[0].PostVelocityB.Z.Base(), 1e-6)
 		final, ok := report.Next.Body(box)
 		require.True(t, ok)
-		require.InDelta(t, 0, final.LinearVelocity.Z.Base(), 1e-6)
-		require.InDelta(t, 0, final.Pose.Translation().Z, 1e-9)
+		require.InDelta(t, want.post, final.LinearVelocity.Z.Base(), 1e-6)
+		require.InDelta(t, want.z, final.Pose.Translation().Z, 1e-9)
 		replayed, err := report.Trace.Sample(duration)
 		require.NoError(t, err)
 		require.Equal(t, report.Next.Entries(), replayed.Entries())
@@ -1350,7 +1366,21 @@ func TestOffCenterBoxImpactRefusesOmittedSpin(t *testing.T) {
 	require.NoError(t, err)
 	report, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.2))
 	require.NoError(t, err)
-	require.Equal(t, dynamics.Undecided, report.Status)
-	require.Nil(t, report.Next)
-	require.Contains(t, report.Diagnostics[0].Reason, "off-center impulse")
+	// The patch's corners sit 1e-6 mm off-center; the solve splits the
+	// impulse unevenly so its pressure center stays under the mass center,
+	// and the 1e9 kg box leaves at 0.5·100 mm/s with no spin.
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	event := report.Events[0]
+	require.InDelta(t, .1, event.Time.Base(), config.Step.TimeResolution.Base())
+	require.InDelta(t, 1.5e11, event.NormalImpulse.Base(), 1e-2)
+	moment := 0.0
+	for i, point := range event.PointImpulses {
+		moment += point.Normal.Base() * event.Manifold.Points[i].OnB.Value.X
+	}
+	require.InDelta(t, 0, moment, 1e-1)
+	final, ok := report.Next.Body(box)
+	require.True(t, ok)
+	require.InDelta(t, 50, final.LinearVelocity.Z.Base(), 1e-6)
+	require.Equal(t, zeroAngular(t), final.AngularVelocity)
 }

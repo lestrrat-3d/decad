@@ -209,8 +209,14 @@ func TestSourceSphereRotatedBoxFace(t *testing.T) {
 		require.NoError(t, stepErr)
 		require.Equal(t, dynamics.Undecided, thresholdStep.Status)
 		require.Nil(t, thresholdStep.Next)
+		// §12: the island's restitution-target gate refuses the speed whose
+		// enclosure straddles −ImpactSpeed, at the impact time, with
+		// ImpactSpeed as its limit.
 		require.Len(t, thresholdStep.Diagnostics, 1)
-		require.Contains(t, thresholdStep.Diagnostics[0].Reason, "threshold")
+		require.Equal(t, dynamics.StepIslandResidual, thresholdStep.Diagnostics[0].Code)
+		require.Contains(t, thresholdStep.Diagnostics[0].Reason, "restitution target")
+		require.Equal(t, cfg.Step.ImpactSpeed, thresholdStep.Diagnostics[0].Limit)
+		require.InDelta(t, .05, thresholdStep.Diagnostics[0].From.Base(), cfg.Step.TimeResolution.Base())
 	})
 }
 
@@ -259,8 +265,11 @@ func TestRotatedSphereBoxOffCenterMassNeedsPointMotionProof(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, step.Status)
 	require.Nil(t, step.Next)
+	// §12: the off-center sphere's spinning departure has no certified sweep
+	// after its impact at 0.05 s.
 	require.Len(t, step.Diagnostics, 1)
-	require.Contains(t, step.Diagnostics[0].Reason, "omitted rotation")
+	require.Equal(t, dynamics.StepPairUndecided, step.Diagnostics[0].Code)
+	require.InDelta(t, .05, step.Diagnostics[0].From.Base(), 1e-8)
 }
 
 func TestSphereDensityMassRebound(t *testing.T) {

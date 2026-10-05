@@ -144,8 +144,18 @@ func TestFixedFloorInteriorFrictionImpactUsesRealGeometry(t *testing.T) {
 			require.NoError(t, err)
 			bouncyStep, err := bouncyWorld.Step(t.Context(), bouncyState, StepInput{Gravity: gravity}, dt)
 			require.NoError(t, err)
-			require.Equal(t, Undecided, bouncyStep.Status)
-			require.Nil(t, bouncyStep.Next)
+			// Restitution 0.5 sends the box up at 80 mm/s with 1.5·160 kg·mm/s;
+			// friction 0.25·240 could take 60, and 40 stops the slide.
+			require.Equal(t, Advanced, bouncyStep.Status, "%+v", bouncyStep.Diagnostics)
+			require.Len(t, bouncyStep.Events, 1)
+			require.InDelta(t, .0625, bouncyStep.Events[0].Time.Base(), 1e-9)
+			require.InDelta(t, 240, bouncyStep.Events[0].NormalImpulse.Base(), 1e-6)
+			require.InDelta(t, tangent, bouncyStep.Events[0].TangentImpulse.X.Base(), 1e-6)
+			bounced, ok := bouncyStep.Next.Body(box)
+			require.True(t, ok)
+			require.Zero(t, bounced.LinearVelocity.X.Base())
+			require.InDelta(t, 80, bounced.LinearVelocity.Z.Base(), 1e-6)
+			require.Equal(t, zeroW, bounced.AngularVelocity)
 		})
 	}
 }

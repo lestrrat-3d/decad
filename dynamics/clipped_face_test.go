@@ -135,6 +135,21 @@ func TestClippedRotatedFaceRefusesUnprovedContacts(t *testing.T) {
 	response, err := w.Step(t.Context(), state,
 		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.01))
 	require.NoError(t, err)
-	require.Equal(t, dynamics.Undecided, response.Status)
-	require.Nil(t, response.Next)
+	// The turned, shifted box lands on the clipped eight-point patch, whose
+	// pressure center sits under its mass center at x = 1: with no
+	// restitution the patch stops it with 50 kg·mm/s and no spin.
+	require.Equal(t, dynamics.Advanced, response.Status, "%+v", response.Diagnostics)
+	require.Len(t, response.Events, 1)
+	require.Len(t, response.Events[0].PointImpulses, 8)
+	require.InDelta(t, 50, response.Events[0].NormalImpulse.Base(), 1e-6)
+	moment := 0.0
+	for i, point := range response.Events[0].PointImpulses {
+		moment += point.Normal.Base() * response.Events[0].Manifold.Points[i].OnB.Value.X
+	}
+	require.InDelta(t, 50, moment, 1e-6)
+	landed, ok := response.Next.Body(box)
+	require.True(t, ok)
+	require.Equal(t, zeroVelocity(), landed.LinearVelocity)
+	require.Equal(t, zeroAngular(t), landed.AngularVelocity)
+	require.Equal(t, offCenter, landed.Pose)
 }

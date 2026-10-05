@@ -546,7 +546,17 @@ func TestThreeBodyTwoDynamicOverlappingPairEventsRemainUndecided(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, report.Status)
 	require.Nil(t, report.Next)
-	require.Empty(t, report.Events)
+	// The three overlapping brackets are gathered at one fraction and solved
+	// as one island at 0.1 s; their three events reach MaxEvents 3 with time
+	// remaining, so the certified prefix ends there (§12).
+	require.Len(t, report.Events, 3)
+	for _, event := range report.Events {
+		require.InDelta(t, .1, event.Time.Base(), 1e-9)
+	}
+	require.Len(t, report.Diagnostics, 1)
+	require.Equal(t, dynamics.StepEventBudget, report.Diagnostics[0].Code)
+	require.Equal(t, units.Scalar(3), report.Diagnostics[0].Limit)
+	require.InDelta(t, .1, report.Diagnostics[0].From.Base(), 1e-9)
 }
 
 func TestThreeBodyTwoDynamicSequentialFloorImpacts(t *testing.T) {
@@ -628,9 +638,13 @@ func TestThreeBodyTwoDynamicSequentialFloorImpacts(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, refused.Status)
 	require.Nil(t, refused.Next)
-	require.Empty(t, refused.Events)
+	// §12: the impact reaches MaxEvents 2 with time remaining; the certified
+	// prefix keeps its event and stops there.
+	require.Len(t, refused.Events, 2)
 	require.Len(t, refused.Diagnostics, 1)
-	require.Contains(t, refused.Diagnostics[0].Reason, "maximum contact events reached")
+	require.Equal(t, dynamics.StepEventBudget, refused.Diagnostics[0].Code)
+	require.Equal(t, units.Scalar(2), refused.Diagnostics[0].Limit)
+	require.Equal(t, refused.Events[1].Time, refused.Diagnostics[0].From)
 
 	world, start := makeWorld(3)
 	report, err := world.Step(t.Context(), start,

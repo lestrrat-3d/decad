@@ -1,6 +1,7 @@
 package dynamics_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -136,15 +137,40 @@ func TestThreeDynamicSimultaneousSphereFriction(t *testing.T) {
 	require.Empty(t, continued.Events)
 	_, err = continued.Trace.Sample(units.Seconds(.05))
 	require.NoError(t, err)
+	// Friction 0.05 cannot hold the sticking solution: both contacts slip on
+	// their cones. Each pair's normal law, 2N + μN = (1 + 0.5)·10, gives
+	// N = 15/2.05, and the friction is μN.
+	t.Run("cone", func(t *testing.T) {
+		config := worldConfig
+		config.Bodies = append([]dynamics.RigidBody(nil), worldConfig.Bodies...)
+		for i := range config.Bodies {
+			config.Bodies[i].Material.Friction = units.Scalar(.05)
+		}
+		otherWorld, worldErr := dynamics.NewWorld(t.Context(), doc, config)
+		require.NoError(t, worldErr)
+		otherState, stateErr := otherWorld.NewState(entries)
+		require.NoError(t, stateErr)
+		slipping, stepErr := otherWorld.Step(t.Context(), otherState,
+			dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+		require.NoError(t, stepErr)
+		require.Equal(t, dynamics.Advanced, slipping.Status, "%+v", slipping.Diagnostics)
+		require.Len(t, slipping.Events, 2)
+		normal := 15 / 2.05
+		for _, event := range slipping.Events {
+			require.InDelta(t, normal, event.NormalImpulse.Base(), 1e-9)
+			tangent := event.TangentImpulse
+			require.InDelta(t, .05*normal, math.Abs(tangent.X.Base())+math.Abs(tangent.Y.Base()), 1e-9)
+		}
+		slid, ok := slipping.Next.Body(a)
+		require.True(t, ok)
+		require.InDelta(t, 10-1.05*normal, slid.LinearVelocity.X.Base(), 1e-9)
+		require.InDelta(t, 10-1.05*normal, slid.LinearVelocity.Y.Base(), 1e-9)
+		require.InDelta(t, 0, slid.AngularVelocity.Z.Base(), 1e-9)
+	})
 	for _, tc := range []struct {
 		name   string
 		change func(*dynamics.WorldConfig, []dynamics.BodyState)
 	}{
-		{"cone", func(config *dynamics.WorldConfig, _ []dynamics.BodyState) {
-			for i := range config.Bodies {
-				config.Bodies[i].Material.Friction = units.Scalar(.05)
-			}
-		}},
 		{"unequal-mass", func(config *dynamics.WorldConfig, _ []dynamics.BodyState) {
 			other := exactSphereMass()
 			other.Mass.Value = units.Kilograms(2)
@@ -171,7 +197,17 @@ func TestThreeDynamicSimultaneousSphereFriction(t *testing.T) {
 			require.NoError(t, stepErr)
 			require.Equal(t, dynamics.Undecided, refused.Status)
 			require.Nil(t, refused.Next)
-			require.Empty(t, refused.Events)
+			if tc.name != "event-limit" {
+				require.Empty(t, refused.Events)
+				return
+			}
+			// §12: the island's two events at the step start reach
+			// MaxEvents 2 with time remaining; the prefix keeps them.
+			require.Len(t, refused.Events, 2)
+			require.Len(t, refused.Diagnostics, 1)
+			require.Equal(t, dynamics.StepEventBudget, refused.Diagnostics[0].Code)
+			require.Equal(t, units.Scalar(2), refused.Diagnostics[0].Limit)
+			require.Equal(t, units.Seconds(0), refused.Diagnostics[0].From)
 		})
 	}
 	t.Run("equal-mass-scale", func(t *testing.T) {

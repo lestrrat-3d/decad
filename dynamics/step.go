@@ -288,61 +288,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	if w == nil || ctx == nil || from.world != w || !validQuantity(dt, units.Time, true) {
 		return nil, fmt.Errorf("%w: invalid context, world, state, or duration", ErrInvalidInput)
 	}
-	if w.three != nil {
-		report, err := w.stepThreeBodies(ctx, from, input, dt)
-		setDefaultEventSlices(report, dt)
-		return report, err
-	}
-	if len(w.bodies) != 2 {
-		return w.stepScheduled(ctx, from, input, dt)
-	}
-	if err := validateQuantityVec(input.Gravity, units.Acceleration); err != nil {
-		return nil, err
-	}
-	loads, err := w.validateLoads(input.Loads)
-	if err != nil {
-		return nil, err
-	}
-	driver, err := w.validateDriver(from, input.Drivers, dt)
-	if err != nil {
-		return nil, err
-	}
-	live := w.doc.Bodies()
-	for _, part := range w.bodies {
-		if !containsBody(live, part.definition.Body) {
-			return nil, fmt.Errorf("%w: world body was retired", ErrInvalidInput)
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	kicked, ok := w.kickByLoads(from, input.Gravity, loads[:], dt)
-	if !ok {
-		return undecided(w, "force kick or torque kick exceeds its velocity residual"), nil
-	}
-	report, err := w.stepKicked(ctx, from, kicked, dt, driver)
-	if report != nil {
-		report.Excluded = w.Excluded()
-		setDefaultEventSlices(report, dt)
-	}
-	if err != nil || report == nil || report.Status != Advanced {
-		return report, err
-	}
-	if report.Next == nil {
-		return undecided(w, "advanced step has no next state"), nil
-	}
-	for _, event := range report.Events {
-		if reason := w.eventConservationFailure(event); reason != "" {
-			return undecided(w, reason), nil
-		}
-	}
-	conservation, ok := w.conservationReadings(from, kicked, *report.Next, report.Trace, report.Events,
-		input.Gravity, loads[:], dt)
-	if !ok {
-		return undecided(w, "conservation readings cannot be represented with finite bounds"), nil
-	}
-	report.Conservation = &conservation
-	return report, nil
+	return w.stepScheduled(ctx, from, input, dt)
 }
 
 func setDefaultEventSlices(report *StepReport, dt units.Value) {

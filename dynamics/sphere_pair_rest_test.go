@@ -234,9 +234,13 @@ func TestSpherePairInitialZeroRestitutionRefusesUnboundedSpin(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, step.Status)
 	require.Nil(t, step.Next)
-	require.Empty(t, step.Events)
+	// §12: the initial impact is certified; the spinning departure that
+	// follows it has no certified sweep, so the prefix keeps the impact and
+	// stops at the step start.
+	require.Len(t, step.Events, 1)
 	require.Len(t, step.Diagnostics, 1)
-	require.Equal(t, "sphere omitted angular response exceeds its residual", step.Diagnostics[0].Reason)
+	require.Equal(t, dynamics.StepPairUndecided, step.Diagnostics[0].Code)
+	require.Equal(t, units.Seconds(0), step.Diagnostics[0].From)
 }
 
 func TestSpherePairInteriorZeroRestitutionRest(t *testing.T) {

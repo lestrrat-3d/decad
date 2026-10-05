@@ -68,7 +68,13 @@ func TestKinematicPushRespectsEventLimit(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, report.Status)
 	require.Nil(t, report.Next)
-	require.Empty(t, report.Events)
+	// §12: the impact reaches MaxEvents 1 with time remaining; the certified
+	// prefix keeps its event and stops there.
+	require.Len(t, report.Events, 1)
+	require.Len(t, report.Diagnostics, 1)
+	require.Equal(t, dynamics.StepEventBudget, report.Diagnostics[0].Code)
+	require.Equal(t, units.Scalar(1), report.Diagnostics[0].Limit)
+	require.Equal(t, report.Events[0].Time, report.Diagnostics[0].From)
 	require.Equal(t, []*decad.Body{driver, box}, doc.Bodies())
 }
 
@@ -297,9 +303,6 @@ func TestKinematicDriverRejectsInvalidPaths(t *testing.T) {
 		{"invalid endpoint", []dynamics.KinematicDriver{{Body: driver,
 			Path: decad.PoseSegment{From: r3.Identity(), To: r3.Transform{}, Duration: duration}}},
 			duration, dynamics.ErrInvalidInput},
-		{"unsupported rotating axis", []dynamics.KinematicDriver{{Body: driver,
-			Path: decad.PoseSegment{From: r3.Identity(), To: rotated, Duration: duration}}},
-			duration, dynamics.ErrUnsupported},
 		{"unsupported path", []dynamics.KinematicDriver{{Body: driver,
 			Path: decad.RigidDriftSegment{From: r3.Identity(), Center: r3.Vec{},
 				LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t), Duration: duration}}},
@@ -318,6 +321,19 @@ func TestKinematicDriverRejectsInvalidPaths(t *testing.T) {
 			require.ErrorIs(t, err, tc.want)
 		})
 	}
+	// A driver turning about (1, 1, 0) is a valid input; the touching box's
+	// sweep cannot follow its screw, so the step stops at its start.
+	turning, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration(),
+		Drivers: []dynamics.KinematicDriver{{Body: driver,
+			Path: decad.PoseSegment{From: r3.Identity(), To: rotated, Duration: duration}}}}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, turning.Status)
+	require.Nil(t, turning.Next)
+	require.Len(t, turning.Diagnostics, 1)
+	require.Equal(t, dynamics.StepPairUndecided, turning.Diagnostics[0].Code)
+	require.Equal(t, dynamics.BodyPair{A: driver, B: box}, turning.Diagnostics[0].Pair)
+	require.Equal(t, units.Seconds(0), turning.Diagnostics[0].From)
+	require.Equal(t, duration, turning.Diagnostics[0].To)
 	_, err = w.NewState([]dynamics.BodyState{
 		{Body: driver, Pose: r3.Identity(), LinearVelocity: dynamics.QuantityVec{
 			X: units.MillimetersPerSecond(1), Y: units.MillimetersPerSecond(0),

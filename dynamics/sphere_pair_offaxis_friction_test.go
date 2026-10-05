@@ -138,7 +138,13 @@ func TestSpherePairOffAxisFrictionRefusesNoncentralMass(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, report.Status)
 	require.Nil(t, report.Next)
-	require.Empty(t, report.Events)
+	// §12: the initial impact is certified; the spinning departure that
+	// follows it has no certified sweep, so the prefix keeps the impact and
+	// stops at the step start.
+	require.Len(t, report.Events, 1)
+	require.Len(t, report.Diagnostics, 1)
+	require.Equal(t, dynamics.StepPairUndecided, report.Diagnostics[0].Code)
+	require.Equal(t, units.Seconds(0), report.Diagnostics[0].From)
 }
 
 func TestSpherePairOffAxisFrictionSharedVelocityKeepsPersistentTouch(t *testing.T) {
@@ -209,9 +215,13 @@ func TestSpherePairInteriorOffAxisFrictionReplaysBothSides(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
 	require.Len(t, report.Events, 1)
-	require.InDelta(t, .125, report.Events[0].Time.Base(), 1e-12)
+	// The event lies at its bracket's right sample, at most one
+	// TimeResolution after the exact contact time 0.125 s (§5.1).
+	impact := report.Events[0].Time
+	require.InDelta(t, .125, impact.Base(), cfg.TimeResolution.Base())
+	require.GreaterOrEqual(t, impact.Base(), .125)
 	require.InDelta(t, 33, report.Events[0].NormalImpulse.Base(), 1e-9)
-	for _, elapsed := range []units.Value{units.Seconds(.0625), units.Seconds(.125), units.Seconds(.1875), duration} {
+	for _, elapsed := range []units.Value{units.Seconds(.0625), impact, units.Seconds(.1875), duration} {
 		sample, sampleErr := report.Trace.Sample(elapsed)
 		require.NoError(t, sampleErr)
 		sa, ok := sample.Body(a)
@@ -220,7 +230,7 @@ func TestSpherePairInteriorOffAxisFrictionReplaysBothSides(t *testing.T) {
 		require.True(t, ok)
 		pair, pairErr := doc.ContactPair(t.Context(), a, b, sa.Pose, sb.Pose, cfg.Contact)
 		require.NoError(t, pairErr)
-		if elapsed.Base() == .125 {
+		if elapsed == impact {
 			require.Equal(t, decad.ContactTouching, pair.Relation)
 		} else {
 			require.Equal(t, decad.ContactSeparated, pair.Relation)

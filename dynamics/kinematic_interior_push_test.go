@@ -191,5 +191,11 @@ func TestKinematicInteriorZeroRestitutionPushRespectsEventLimit(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, report.Status)
 	require.Nil(t, report.Next)
-	require.Empty(t, report.Events)
+	// §12: the impact reaches MaxEvents 1 with time remaining; the certified
+	// prefix keeps its event and stops there.
+	require.Len(t, report.Events, 1)
+	require.Len(t, report.Diagnostics, 1)
+	require.Equal(t, dynamics.StepEventBudget, report.Diagnostics[0].Code)
+	require.Equal(t, units.Scalar(1), report.Diagnostics[0].Limit)
+	require.Equal(t, report.Events[0].Time, report.Diagnostics[0].From)
 }

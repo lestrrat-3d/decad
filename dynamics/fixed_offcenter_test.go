@@ -132,9 +132,24 @@ func TestFixedOffcenterSuppliedMassReboundsWithCertifiedSpin(t *testing.T) {
 		{Body: floor, Pose: r3.Identity(), LinearVelocity: idle, AngularVelocity: zeroAngular(t)},
 		{Body: box, Pose: r3.Identity(), LinearVelocity: initial, AngularVelocity: zeroAngular(t)}})
 	require.NoError(t, err)
-	refused, err = centeredWorld.Step(t.Context(), centeredStart,
+	centeredStep, err := centeredWorld.Step(t.Context(), centeredStart,
 		dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
 	require.NoError(t, err)
-	require.Equal(t, dynamics.Undecided, refused.Status)
-	require.Nil(t, refused.Next)
+	// With the mass center over the patch edge x = 5 the edge corners carry
+	// the whole elastic impulse, 200 kg·mm/s, through the center: the box
+	// leaves at +100 mm/s with no spin.
+	require.Equal(t, dynamics.Advanced, centeredStep.Status, "%+v", centeredStep.Diagnostics)
+	require.Len(t, centeredStep.Events, 1)
+	require.InDelta(t, 200, centeredStep.Events[0].NormalImpulse.Base(), 1e-6)
+	for i, impulse := range centeredStep.Events[0].PointImpulses {
+		edge := 0.0
+		if centeredStep.Events[0].Manifold.Points[i].OnB.Value.X == 5 {
+			edge = 100
+		}
+		require.InDelta(t, edge, impulse.Normal.Base(), 1e-6, "point %d", i)
+	}
+	rebound, ok := centeredStep.Next.Body(box)
+	require.True(t, ok)
+	require.InDelta(t, 100, rebound.LinearVelocity.Z.Base(), 1e-6)
+	require.Equal(t, zeroAngular(t), rebound.AngularVelocity)
 }

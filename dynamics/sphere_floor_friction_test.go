@@ -136,13 +136,38 @@ func TestSphereFloorSlidingFrictionUsesContactSweepStepAndTrace(t *testing.T) {
 	require.InDelta(t, 5, slipFinal.AngularVelocity.Y.Base(), 1e-6)
 	_, err = slipping.Trace.Sample(units.Seconds(.05))
 	require.NoError(t, err)
+	// With restitution 0.5 the initial touch bounces: the floor delivers
+	// 1.5·100 kg·mm/s and the ball leaves at 50 mm/s, while friction −200/7
+	// kg·mm/s, inside the 75 kg·mm/s cone, sets it rolling.
+	t.Run("restitution", func(t *testing.T) {
+		bouncy := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(.5)}
+		world, worldErr := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+			Bodies: []dynamics.RigidBody{
+				{Body: floor, Role: dynamics.Fixed, Material: bouncy},
+				{Body: ball, Role: dynamics.Dynamic, Supplied: &mass, Material: bouncy},
+			}, Step: cfg,
+		})
+		require.NoError(t, worldErr)
+		bouncyStart, stateErr := world.NewState(start.Entries())
+		require.NoError(t, stateErr)
+		result, stepErr := world.Step(t.Context(), bouncyStart, dynamics.StepInput{Gravity: gravity},
+			units.Seconds(.1))
+		require.NoError(t, stepErr)
+		require.Equal(t, dynamics.Advanced, result.Status, "%+v", result.Diagnostics)
+		require.Len(t, result.Events, 1)
+		require.InDelta(t, 150, result.Events[0].NormalImpulse.Base(), 1e-6)
+		require.InDelta(t, -200.0/7, result.Events[0].TangentImpulse.X.Base(), 1e-6)
+		rolling, ok := result.Next.Body(ball)
+		require.True(t, ok)
+		require.InDelta(t, 500.0/7, rolling.LinearVelocity.X.Base(), 1e-6)
+		require.InDelta(t, 50, rolling.LinearVelocity.Z.Base(), 1e-6)
+		require.InDelta(t, 100.0/7, rolling.AngularVelocity.Y.Base(), 1e-6)
+	})
 	for _, tc := range []struct {
 		name     string
 		material dynamics.Material
 		mass     decad.MassProperties
 	}{
-		{name: "restitution", material: dynamics.Material{
-			Restitution: units.Scalar(.5), Friction: units.Scalar(.5)}, mass: mass},
 		{name: "bounded mass", material: material, mass: func() decad.MassProperties {
 			changed := mass
 			changed.Mass.Exactness = decad.Approximate

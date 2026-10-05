@@ -29,7 +29,8 @@ func TestSphereFloorInteriorFrictionUsesRealBracketAndTrace(t *testing.T) {
 			wantX: 250.0 / 7, wantSpin: 50.0 / 7},
 		{name: "reverse slip", mu: .1, reverse: true, wantTangent: 10, wantX: 40, wantSpin: 5},
 		{name: "bounded mass", mu: .5, boundedMass: true, refuse: true},
-		{name: "positive restitution", mu: .5, restitution: .5, refuse: true},
+		{name: "positive restitution", mu: .5, restitution: .5, wantTangent: -100.0 / 7, wantX: 250.0 / 7,
+			wantSpin: 50.0 / 7},
 		{name: "insufficient events", mu: .5, maxEvents: 1, refuse: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -98,13 +99,36 @@ func TestSphereFloorInteriorFrictionUsesRealBracketAndTrace(t *testing.T) {
 			if tc.refuse {
 				require.Equal(t, dynamics.Undecided, report.Status)
 				require.Nil(t, report.Next)
-				require.Empty(t, report.Events)
+				if tc.maxEvents == 0 {
+					require.Empty(t, report.Events)
+					return
+				}
+				// The impact at 0.1 s reaches MaxEvents with time remaining: the
+				// certified prefix keeps its event and stops there (§12).
+				require.Len(t, report.Events, 1)
+				require.InDelta(t, .1, report.Events[0].Time.Base(), 1e-8)
+				require.InDelta(t, 100, report.Events[0].NormalImpulse.Base(), 1e-6)
+				require.Len(t, report.Diagnostics, 1)
+				require.Equal(t, dynamics.StepEventBudget, report.Diagnostics[0].Code)
+				require.InDelta(t, .1, report.Diagnostics[0].From.Base(), 1e-8)
 				return
 			}
 			require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
 			require.Len(t, report.Events, 1)
 			event := report.Events[0]
 			require.InDelta(t, .1, event.Time.Base(), 1e-8)
+			if tc.restitution > 0 {
+				// The ball bounces at 0.5·100 mm/s, 150 kg·mm/s, and friction
+				// −100/7 kg·mm/s inside the 75 kg·mm/s cone sets it rolling.
+				require.InDelta(t, 150, event.NormalImpulse.Base(), 1e-6)
+				require.InDelta(t, tc.wantTangent, event.TangentImpulse.X.Base(), 1e-6)
+				bounced, ok := report.Next.Body(ball)
+				require.True(t, ok)
+				require.InDelta(t, tc.wantX, bounced.LinearVelocity.X.Base(), 1e-6)
+				require.InDelta(t, 50, bounced.LinearVelocity.Z.Base(), 1e-6)
+				require.InDelta(t, tc.wantSpin, bounced.AngularVelocity.Y.Base(), 1e-6)
+				return
+			}
 			require.Len(t, event.Manifold.Points, 1)
 			require.InDelta(t, 100, event.NormalImpulse.Base(), 1e-6)
 			require.InDelta(t, tc.wantTangent, event.TangentImpulse.X.Base(), 1e-6)

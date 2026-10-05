@@ -379,7 +379,13 @@ func TestSourceSpherePairInitialDiagonalImpact(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, unprovedStep.Status)
 	require.Nil(t, unprovedStep.Next)
-	require.Empty(t, unprovedStep.Events)
+	// §12: the initial impact is certified; the spinning departure that
+	// follows it has no certified sweep, so the prefix keeps the impact and
+	// stops at the step start.
+	require.Len(t, unprovedStep.Events, 1)
+	require.Len(t, unprovedStep.Diagnostics, 1)
+	require.Equal(t, dynamics.StepPairUndecided, unprovedStep.Diagnostics[0].Code)
+	require.Equal(t, units.Seconds(0), unprovedStep.Diagnostics[0].From)
 	cfg.Bodies[0].Supplied = &mass
 	cfg.Bodies[0].Material.Restitution = units.Scalar(0)
 	cfg.Bodies[1].Material.Restitution = units.Scalar(0)

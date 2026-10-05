@@ -518,12 +518,13 @@ func TestFacetedFloorImpactRefusesUncertifiedResponse(t *testing.T) {
 	for _, tc := range []struct {
 		name, reason    string
 		bound, duration float64
-		velocity        float64
+		velocity, from  float64
+		code            dynamics.StepReason
 	}{
 		{name: "mass center uncertainty", bound: .1, duration: .125, velocity: -160,
-			reason: "off-center impulse"},
+			code: dynamics.StepIslandResidual, reason: "angular law", from: .0625},
 		{name: "unrepresented impact time", duration: .2, velocity: -100,
-			reason: "first sweep returned"},
+			code: dynamics.StepPairUndecided, from: 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			uncertain := mass
@@ -540,7 +541,9 @@ func TestFacetedFloorImpactRefusesUncertifiedResponse(t *testing.T) {
 			require.Nil(t, report.Next)
 			require.Empty(t, report.Events)
 			require.Len(t, report.Diagnostics, 1)
+			require.Equal(t, tc.code, report.Diagnostics[0].Code)
 			require.Contains(t, report.Diagnostics[0].Reason, tc.reason)
+			require.InDelta(t, tc.from, report.Diagnostics[0].From.Base(), 1e-8)
 		})
 	}
 }

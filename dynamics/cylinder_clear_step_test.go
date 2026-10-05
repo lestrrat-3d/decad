@@ -478,5 +478,9 @@ func TestCylinderSlowOffCenterSpinUndecided(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, step.Status)
 	require.Nil(t, step.Next)
-	require.Contains(t, step.Diagnostics[0].Reason, "omitted cylinder point motion")
+	// §12: the slowly spinning cylinder's sweep after its impact at 0.1 s
+	// has no certified bound.
+	require.Len(t, step.Diagnostics, 1)
+	require.Equal(t, dynamics.StepPairUndecided, step.Diagnostics[0].Code)
+	require.InDelta(t, .1, step.Diagnostics[0].From.Base(), 1e-8)
 }

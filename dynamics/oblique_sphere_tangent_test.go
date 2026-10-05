@@ -158,7 +158,13 @@ func TestRotatedSphereFrictionlessTangentialImpact(t *testing.T) {
 	require.Equal(t, dynamics.Undecided, thresholdStep.Status)
 	require.Nil(t, thresholdStep.Next)
 	require.Empty(t, thresholdStep.Events)
-	require.Contains(t, thresholdStep.Diagnostics[0].Reason, "threshold")
+	// §12: the island's restitution-target gate refuses the straddling speed
+	// at the impact time, with ImpactSpeed as its limit.
+	require.Len(t, thresholdStep.Diagnostics, 1)
+	require.Equal(t, dynamics.StepIslandResidual, thresholdStep.Diagnostics[0].Code)
+	require.Contains(t, thresholdStep.Diagnostics[0].Reason, "restitution target")
+	require.Equal(t, thresholdCfg.Step.ImpactSpeed, thresholdStep.Diagnostics[0].Limit)
+	require.InDelta(t, .05, thresholdStep.Diagnostics[0].From.Base(), thresholdCfg.Step.TimeResolution.Base())
 
 	tightCfg := cfg
 	tightCfg.Step.VelocityResidual = units.MillimetersPerSecond(1e-15)
@@ -175,5 +181,10 @@ func TestRotatedSphereFrictionlessTangentialImpact(t *testing.T) {
 	require.Equal(t, dynamics.Undecided, tightStep.Status)
 	require.Nil(t, tightStep.Next)
 	require.Empty(t, tightStep.Events)
-	require.Contains(t, tightStep.Diagnostics[0].Reason, "residual")
+	// §12: a 1e-15 mm/s VelocityResidual is below the island's rounding, so
+	// a velocity gate refuses at the impact with that residual as its limit.
+	require.Len(t, tightStep.Diagnostics, 1)
+	require.Equal(t, dynamics.StepIslandResidual, tightStep.Diagnostics[0].Code)
+	require.Equal(t, tightCfg.Step.VelocityResidual, tightStep.Diagnostics[0].Limit)
+	require.InDelta(t, .05, tightStep.Diagnostics[0].From.Base(), tightCfg.Step.TimeResolution.Base())
 }

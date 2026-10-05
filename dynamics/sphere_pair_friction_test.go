@@ -247,7 +247,17 @@ func TestSpherePairInitialFrictionRefusesUnsupportedResponse(t *testing.T) {
 			}
 			require.Equal(t, dynamics.Undecided, report.Status, "%+v", report.Diagnostics)
 			require.Nil(t, report.Next)
-			require.Empty(t, report.Events)
+			if tc.name != "offset center" {
+				require.Empty(t, report.Events)
+				return
+			}
+			// §12: the initial impact is certified; the spinning departure that
+			// follows it has no certified sweep, so the prefix keeps the impact
+			// and stops at the step start.
+			require.Len(t, report.Events, 1)
+			require.Len(t, report.Diagnostics, 1)
+			require.Equal(t, dynamics.StepPairUndecided, report.Diagnostics[0].Code)
+			require.Equal(t, units.Seconds(0), report.Diagnostics[0].From)
 		})
 	}
 }
@@ -296,12 +306,15 @@ func TestSpherePairInteriorFrictionImpactReplaysBothSides(t *testing.T) {
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
 	require.Len(t, report.Events, 1)
 	event := report.Events[0]
-	require.Equal(t, .125, event.Time.Base())
+	// The event lies at its bracket's right sample, at most one
+	// TimeResolution after the exact contact time 0.125 s (§5.1).
+	require.InDelta(t, .125, event.Time.Base(), config.TimeResolution.Base())
+	require.GreaterOrEqual(t, event.Time.Base(), .125)
 	require.InDelta(t, 60, event.NormalImpulse.Base(), 1e-12)
 	require.InDelta(t, 32.0/7, event.TangentImpulse.Y.Base(), 1e-12)
 	require.Len(t, event.PointImpulses, 1)
 	require.NotNil(t, event.Solver)
-	for _, elapsed := range []units.Value{units.Seconds(.05), units.Seconds(.125), units.Seconds(.2)} {
+	for _, elapsed := range []units.Value{units.Seconds(.05), event.Time, units.Seconds(.2)} {
 		sample, sampleErr := report.Trace.Sample(elapsed)
 		require.NoError(t, sampleErr)
 		sa, ok := sample.Body(a)
@@ -310,7 +323,7 @@ func TestSpherePairInteriorFrictionImpactReplaysBothSides(t *testing.T) {
 		require.True(t, ok)
 		pair, pairErr := doc.ContactPair(t.Context(), a, b, sa.Pose, sb.Pose, config.Contact)
 		require.NoError(t, pairErr)
-		if elapsed.Base() == .125 {
+		if elapsed == event.Time {
 			require.Equal(t, decad.ContactTouching, pair.Relation)
 		} else {
 			require.Equal(t, decad.ContactSeparated, pair.Relation)

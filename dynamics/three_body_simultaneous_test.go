@@ -52,18 +52,22 @@ func TestThreeBodySimultaneousCornerImpact(t *testing.T) {
 	require.Len(t, report.Events, 2)
 	require.Equal(t, dynamics.BodyPair{A: floor, B: box}, report.Events[0].Pair)
 	require.Equal(t, dynamics.BodyPair{A: box, B: wall}, report.Events[1].Pair)
+	// Both initial touches take restitution 0.5 like any contact
+	// (docs/multibody-dynamics-design.md §6.5): each face delivers
+	// 1.5·100 kg·mm/s and the box leaves the corner at (−50, 0, 50) mm/s.
 	for _, event := range report.Events {
-		require.InDelta(t, 100, event.NormalImpulse.Base(), 1e-6)
+		require.InDelta(t, 150, event.NormalImpulse.Base(), 1e-6)
 		require.NotEmpty(t, event.Manifold.Points)
 		require.NotNil(t, event.Solver)
 	}
 	endBox, ok := report.Next.Body(box)
 	require.True(t, ok)
-	require.Equal(t, r3.Identity(), endBox.Pose)
-	require.Equal(t, zeroVelocity(), endBox.LinearVelocity)
+	require.Equal(t, r3.Vec{X: -5, Z: 5}, endBox.Pose.Translation())
+	require.Equal(t, dynamics.QuantityVec{X: units.MillimetersPerSecond(-50), Y: units.MillimetersPerSecond(0),
+		Z: units.MillimetersPerSecond(50)}, endBox.LinearVelocity)
 	require.NotNil(t, report.Conservation)
-	require.InDelta(t, -100, report.Conservation.ContactImpulse.Value.X.Base(), 1e-6)
-	require.InDelta(t, 100, report.Conservation.ContactImpulse.Value.Z.Base(), 1e-6)
+	require.InDelta(t, -150, report.Conservation.ContactImpulse.Value.X.Base(), 1e-6)
+	require.InDelta(t, 150, report.Conservation.ContactImpulse.Value.Z.Base(), 1e-6)
 	replayed, err := report.Trace.Sample(units.Seconds(0.1))
 	require.NoError(t, err)
 	require.Equal(t, report.Next.Entries(), replayed.Entries())
@@ -74,11 +78,18 @@ func TestThreeBodySimultaneousCornerImpact(t *testing.T) {
 	report, err = w.Step(t.Context(), *report.Next, dynamics.StepInput{Gravity: gravity}, units.Seconds(0.1))
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	// The kick turns the box back into the corner, which it reaches exactly
+	// at the step end and leaves again at half its (50, 0, −50) mm/s.
 	require.Len(t, report.Events, 2)
+	for _, event := range report.Events {
+		require.InDelta(t, .1, event.Time.Base(), 1e-9)
+		require.InDelta(t, 75, event.NormalImpulse.Base(), 1e-6)
+	}
 	endBox, ok = report.Next.Body(box)
 	require.True(t, ok)
 	require.Equal(t, r3.Identity(), endBox.Pose)
-	require.Equal(t, zeroVelocity(), endBox.LinearVelocity)
+	require.Equal(t, dynamics.QuantityVec{X: units.MillimetersPerSecond(-25), Y: units.MillimetersPerSecond(0),
+		Z: units.MillimetersPerSecond(25)}, endBox.LinearVelocity)
 
 	report, err = w.Step(t.Context(), *report.Next,
 		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(0.1))
@@ -106,7 +117,8 @@ func TestThreeBodySimultaneousCornerImpact(t *testing.T) {
 	require.Equal(t, dynamics.BodyPair{A: floor, B: box}, reversedReport.Events[1].Pair)
 	reversedBox, ok := reversedReport.Next.Body(box)
 	require.True(t, ok)
-	require.Equal(t, zeroVelocity(), reversedBox.LinearVelocity)
+	require.Equal(t, dynamics.QuantityVec{X: units.MillimetersPerSecond(-50), Y: units.MillimetersPerSecond(0),
+		Z: units.MillimetersPerSecond(50)}, reversedBox.LinearVelocity)
 	require.Equal(t, originalBodies, doc.Bodies())
 
 	step.MaxEvents = 2

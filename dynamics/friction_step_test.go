@@ -407,8 +407,17 @@ func TestFixedFloorFrictionRejectsUnsupportedMaterialsAndPatch(t *testing.T) {
 	impactReport, err := w.Step(t.Context(), impactStart,
 		StepInput{Gravity: zeroGravity}, units.Seconds(.2))
 	require.NoError(t, err)
-	require.Equal(t, Undecided, impactReport.Status)
-	require.Nil(t, impactReport.Next)
+	// The falling box lands centered over the narrow patch at 0.1 s; with no
+	// restitution the patch stops it with 100 kg·mm/s and no spin.
+	require.Equal(t, Advanced, impactReport.Status, "%+v", impactReport.Diagnostics)
+	require.Len(t, impactReport.Events, 1)
+	require.InDelta(t, .1, impactReport.Events[0].Time.Base(), cfg.TimeResolution.Base())
+	require.InDelta(t, 100, impactReport.Events[0].NormalImpulse.Base(), 1e-6)
+	landed, ok := impactReport.Next.Body(box)
+	require.True(t, ok)
+	require.Equal(t, zeroV, landed.LinearVelocity)
+	require.Equal(t, zeroW, landed.AngularVelocity)
+	require.InDelta(t, 0, landed.Pose.Translation().Z, 1e-6)
 	unequal := Material{Restitution: units.Scalar(0), Friction: units.Scalar(.25)}
 	_, err = NewWorld(t.Context(), doc, WorldConfig{Bodies: []RigidBody{
 		{Body: floor, Role: Fixed, Material: material},
