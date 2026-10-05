@@ -12,25 +12,27 @@ import (
 // replayed float pose is checked against it, rather than inferred from the
 // sweep's endpoint samples.
 type sweepReplayProof struct {
-	pa, pb                 affinePairPath
-	boxA, boxB             sourceBoxContactProof
-	sphere                 *sourceSphereContactProof
-	spherePair             *[2]sourceSphereContactProof
-	cylinder               *sourceCylinderContactProof
-	cylinderFirst          bool
-	clearAxis, clearSign   int
-	clearGap               *big.Rat
-	orientedSphere         *sourceSphereContactProof
-	orientedSphereBox      *orientedSourceBox
-	sphereFirst            bool
-	sphereAxis, sphereSide int
-	sphereGap, sphereSlope dyadic
-	rotation               *[2]rotationalSweepPath
-	track                  *SweepContactTrack
-	request                ContactRequest
-	outcome                SweepOutcome
-	bracketLo              *big.Rat
-	bracketHi              *big.Rat
+	pa, pb                     affinePairPath
+	boxA, boxB                 sourceBoxContactProof
+	sphere                     *sourceSphereContactProof
+	spherePair                 *[2]sourceSphereContactProof
+	cylinder                   *sourceCylinderContactProof
+	cylinderFirst              bool
+	clearAxis, clearSign       int
+	clearGap                   *big.Rat
+	cylinderGap, cylinderSlope dyadic
+	cylinderSide               int
+	orientedSphere             *sourceSphereContactProof
+	orientedSphereBox          *orientedSourceBox
+	sphereFirst                bool
+	sphereAxis, sphereSide     int
+	sphereGap, sphereSlope     dyadic
+	rotation                   *[2]rotationalSweepPath
+	track                      *SweepContactTrack
+	request                    ContactRequest
+	outcome                    SweepOutcome
+	bracketLo                  *big.Rat
+	bracketHi                  *big.Rat
 }
 
 func (p *sweepReplayProof) snapshot(r *SweepReport) {
@@ -43,8 +45,8 @@ func (p *sweepReplayProof) setBracket(left, right *big.Rat) {
 }
 
 // HasAffineReplayProof reports whether this sweep can certify rounded poses
-// along an affine source-box, source-sphere, extruded or revolved source-cylinder
-// clear, or oriented face-track path.
+// along an affine source-box, source-sphere, extruded or revolved
+// source-cylinder, or oriented face-track path.
 func (r *SweepReport) HasAffineReplayProof() bool {
 	if r == nil || r.replay == nil {
 		return false
@@ -162,8 +164,8 @@ func (r *SweepReport) certifiedCylinderPosesAtFraction(f *big.Rat, poseA, poseB 
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder replay pose is not affine", ErrUnsupported)
 	}
 	resolution, ok := exactBaseValue(p.request.PointResolution)
-	if !ok || p.clearGap == nil || p.clearGap.Cmp(resolution) <= 0 {
-		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder replay has no clear margin", ErrUnsupported)
+	if !ok {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder replay has no resolution", ErrUnsupported)
 	}
 	deviation := boxPoseDeviation(p.boxA, actualA, p.pa.delta, f)
 	deviation.Add(deviation, boxPoseDeviation(p.boxB, actualB, p.pb.delta, f))
@@ -172,9 +174,51 @@ func (r *SweepReport) certifiedCylinderPosesAtFraction(f *big.Rat, poseA, poseB 
 		actualCylinder, actualBox = actualA, actualB
 	}
 	if deviation.Cmp(resolution) > 0 ||
-		!cylinderInsideBoxFace(actualCylinder, actualBox, p.clearAxis) ||
-		!outerBoxGapExceeds(actualA, actualB, p.clearAxis, p.clearSign, deviation) {
+		!cylinderInsideBoxFace(actualCylinder, actualBox, p.clearAxis) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder replay loses its separated outer boxes", ErrUnsupported)
+	}
+	if p.outcome == SweepClear {
+		if p.clearGap == nil || p.clearGap.Cmp(resolution) <= 0 ||
+			!outerBoxGapExceeds(actualA, actualB, p.clearAxis, p.clearSign, deviation) {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder replay loses its clear gap", ErrUnsupported)
+		}
+		return poseA, poseB, nil
+	}
+	axis := p.clearAxis
+	var actualGap *big.Rat
+	if p.cylinderSide == 1 {
+		actualGap = new(big.Rat).Sub(actualCylinder.lo[axis].rat(), actualBox.hi[axis].rat())
+	} else {
+		actualGap = new(big.Rat).Sub(actualBox.lo[axis].rat(), actualCylinder.hi[axis].rat())
+	}
+	idealGap := new(big.Rat).Add(p.cylinderGap.rat(),
+		new(big.Rat).Mul(p.cylinderSlope.rat(), f))
+	difference := new(big.Rat).Sub(actualGap, idealGap)
+	if new(big.Rat).Abs(difference).Cmp(deviation) > 0 {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder replay exceeds affine path", ErrUnsupported)
+	}
+	switch p.outcome {
+	case SweepDepartedClear:
+		if f.Sign() == 0 {
+			if idealGap.Sign() != 0 || actualGap.Sign() != 0 {
+				return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder departure does not start at touch", ErrUnsupported)
+			}
+		} else if idealGap.Sign() <= 0 || actualGap.Cmp(deviation) <= 0 {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder departure loses its gap", ErrUnsupported)
+		}
+	case SweepImpactBracket:
+		if p.bracketLo == nil || p.bracketHi == nil {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder impact has no bracket", ErrUnsupported)
+		}
+		if f.Cmp(p.bracketLo) < 0 {
+			if idealGap.Sign() <= 0 || actualGap.Cmp(deviation) <= 0 {
+				return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder impact prefix loses its gap", ErrUnsupported)
+			}
+		} else if new(big.Rat).Abs(idealGap).Cmp(resolution) > 0 {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder impact bracket exceeds point resolution", ErrUnsupported)
+		}
+	default:
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder replay outcome is unsupported", ErrUnsupported)
 	}
 	return poseA, poseB, nil
 }

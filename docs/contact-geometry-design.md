@@ -41,8 +41,10 @@ inner radial edge lies exactly on the resolved axis. It requires exact
 cardinal frame and axis readings, zero section displacement, and signed-axis
 placements. The recorded rectangle and axis determine the exact axial limits
 and radius; the resulting solid has two planar disks and one cylindrical wall.
-An overlapping outer box, side approach, or projected disk reaching a face
-edge returns `Undecided`; this path publishes no cylinder manifold.
+The revolved source path publishes no manifold. For the extruded source,
+a shallow crossing of the opposed axial supports also proves overlap and
+publishes the original planar face identities. An embedded cylinder, side
+approach, or projected disk reaching a face edge returns `Undecided`.
 
 Two full source semicircle spheres receive the exact relation proof from their
 recorded centers and radii. A nonzero center offset with crossing sphere
@@ -385,6 +387,27 @@ normal conversion. Their signed separation encloses center distance minus
 radius sum and both witness errors. A request tighter than the normal or point
 bounds keeps the relation but withholds the manifold. Reversing body order
 reverses the normal and swaps witnesses.
+
+### 4.4 Source cylinder against a box face
+
+Admit the full circular source prism of the source-cylinder path only at
+signed-axis poses. Its occupied set is the exact product of the recorded disk
+and axial interval. Require the complete projected disk to lie strictly inside
+both projected intervals of one source-box face. An axial support gap then
+measures the true minimum distance. Equality proves the complete circular
+face touching the box face. Strict crossing of the near supports proves
+overlap only while the cylinder's far support remains beyond the same box
+face and its near support remains outside the opposite box face.
+
+Identify the original planar cylinder end face by its signed world normal.
+The disk center is an exact interior point of both opposed faces and supplies
+one bounded representative witness per body. The private disk and axial
+interval certify the complete contact set. Reverse body order by swapping
+the witnesses and reversing the normal. Withhold the manifold if a face
+identity, point bound, or shallow-crossing proof fails. This source path
+returns `Undecided` for lateral edges, tilted axes, tangency, and an embedded
+cylinder; the identity-pose analytic fallback may prove a relation without a
+manifold.
 
 ## 5. Contact cases and ordering
 

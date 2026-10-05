@@ -6,11 +6,12 @@ import (
 )
 
 // sourceCylinderContactProof encloses a complete source cylinder from either
-// a full-circle prism or a full revolve of an axis-incident rectangle. Its box
-// is an outer bound only; it never establishes cylinder touch or overlap.
+// a full-circle prism or a full revolve of an axis-incident rectangle. Its
+// box is an outer bound; the strict face corridor makes axial support exact.
 type sourceCylinderContactProof struct {
-	box  sourceBoxContactProof
-	axis int
+	box   sourceBoxContactProof
+	axis  int
+	faces [2]*Face
 }
 
 func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProof, bool) {
@@ -34,25 +35,39 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 		circle.Radius.Base() <= 0 {
 		return sourceCylinderContactProof{}, false
 	}
+	axis, _, ok := signedAxis(pose.ApplyDir(pp.xform.ApplyDir(pp.frame.N())))
+	if !ok {
+		return sourceCylinderContactProof{}, false
+	}
 	faces := b.Faces()
 	if len(faces) != 3 || len(b.Edges()) != 2 {
 		return sourceCylinderContactProof{}, false
 	}
 	planes, walls := 0, 0
+	var endFaces [2]*Face
 	for _, face := range faces {
 		if face.normalBound != 0 {
 			return sourceCylinderContactProof{}, false
 		}
-		switch face.surface.(type) {
+		switch surface := face.surface.(type) {
 		case Plane:
 			planes++
+			normal := surface.Frame.N()
+			if face.reversed {
+				normal = normal.Scale(-1)
+			}
+			faceAxis, side, valid := signedAxis(pose.ApplyDir(normal))
+			if !valid || endFaces[side] != nil || faceAxis != axis {
+				return sourceCylinderContactProof{}, false
+			}
+			endFaces[side] = face
 		case Cylinder:
 			walls++
 		default:
 			return sourceCylinderContactProof{}, false
 		}
 	}
-	if planes != 2 || walls != 1 {
+	if planes != 2 || walls != 1 || endFaces[0] == nil || endFaces[1] == nil {
 		return sourceCylinderContactProof{}, false
 	}
 	center := dvAdd(dyVec(pp.frame.Origin()), dvAdd(
@@ -62,10 +77,6 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 	high := dvAdd(center, dyScaleVec(dyVec(pp.frame.N()), mustDyOf(pp.z1)))
 	low = exactContactTransform(pose, exactContactTransform(pp.xform, low))
 	high = exactContactTransform(pose, exactContactTransform(pp.xform, high))
-	axis, _, ok := signedAxis(pose.ApplyDir(pp.xform.ApplyDir(pp.frame.N())))
-	if !ok {
-		return sourceCylinderContactProof{}, false
-	}
 	radius := mustDyOf(circle.Radius.Base())
 	var box sourceBoxContactProof
 	for i := range 3 {
@@ -75,7 +86,7 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 			box.hi[i] = dyAdd(box.hi[i], radius)
 		}
 	}
-	return sourceCylinderContactProof{box: box, axis: axis}, true
+	return sourceCylinderContactProof{box: box, axis: axis, faces: endFaces}, true
 }
 
 // sourceRevolvedCylinderAtPose reads the full recorded meridian, not the
@@ -161,31 +172,108 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 	return sourceCylinderContactProof{box: box, axis: axis}, true
 }
 
-// A disjoint outer box proves cylinder separation. Its other relations make
-// no statement about the curved occupied set.
+// The disk-inside-face corridor makes axial support comparisons exact for
+// separation. The extruded source's original end faces also certify planar
+// touch and shallow crossing of the opposed faces.
 func classifySourceCylinderBox(report *ContactReport, cylinder sourceCylinderContactProof,
-	box sourceBoxContactProof) {
-	var gaps [3]dyadic
+	box sourceBoxContactProof, cylinderFirst bool) {
 	if !cylinderInsideBoxFace(cylinder.box, box, cylinder.axis) {
 		report.Reason = ContactNoGapProof
 		return
 	}
 	axis := cylinder.axis
+	var side int
+	var signedGap dyadic
 	switch {
-	case dyCmp(cylinder.box.hi[axis], box.lo[axis]) < 0:
-		gaps[axis] = dySubScalar(box.lo[axis], cylinder.box.hi[axis])
-	case dyCmp(box.hi[axis], cylinder.box.lo[axis]) < 0:
-		gaps[axis] = dySubScalar(cylinder.box.lo[axis], box.hi[axis])
+	case dyCmp(cylinder.box.lo[axis], box.hi[axis]) >= 0:
+		side, signedGap = 1, dySubScalar(cylinder.box.lo[axis], box.hi[axis])
+	case dyCmp(cylinder.box.hi[axis], box.lo[axis]) <= 0:
+		side, signedGap = 0, dySubScalar(box.lo[axis], cylinder.box.hi[axis])
+	case dyCmp(cylinder.box.lo[axis], box.lo[axis]) > 0 &&
+		dyCmp(cylinder.box.hi[axis], box.hi[axis]) > 0:
+		side, signedGap = 1, dySubScalar(cylinder.box.lo[axis], box.hi[axis])
+	case dyCmp(cylinder.box.hi[axis], box.hi[axis]) < 0 &&
+		dyCmp(cylinder.box.lo[axis], box.lo[axis]) < 0:
+		side, signedGap = 0, dySubScalar(box.lo[axis], cylinder.box.hi[axis])
 	default:
+		report.Reason = ContactAmbiguousFeature
+		return
+	}
+	if signedGap.sign() > 0 {
+		var gaps [3]dyadic
+		gaps[axis] = signedGap
+		gap, ok := sourceBoxGap(gaps)
+		if !ok {
+			report.Reason = ContactNoGapProof
+			return
+		}
+		report.Relation, report.Gap = ContactSeparated, &gap
+		return
+	}
+	if cylinder.faces[0] == nil || cylinder.faces[1] == nil {
 		report.Reason = ContactNoGapProof
 		return
 	}
-	gap, ok := sourceBoxGap(gaps)
+	if signedGap.isZero() {
+		report.Relation = ContactTouching
+		gap := Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(0), Exactness: Exact}
+		report.Gap = &gap
+	} else {
+		report.Relation = ContactOverlapping
+	}
+	boxFace, cylinderFace := box.faces[axis][side], cylinder.faces[1-side]
+	if boxFace == nil || cylinderFace == nil {
+		report.Reason = ContactNoNormalProof
+		return
+	}
+	var boxPoint, cylinderPoint dyV3
+	for i := range 3 {
+		if i == axis {
+			if side == 1 {
+				boxPoint[i], cylinderPoint[i] = box.hi[i], cylinder.box.lo[i]
+			} else {
+				boxPoint[i], cylinderPoint[i] = box.lo[i], cylinder.box.hi[i]
+			}
+			continue
+		}
+		center := dyMul(dyAdd(cylinder.box.lo[i], cylinder.box.hi[i]), mustDyOf(.5))
+		boxPoint[i], cylinderPoint[i] = center, center
+	}
+	boxWitness, okBox := sourceBoxPointAt(&boxPoint)
+	cylinderWitness, okCylinder := sourceBoxPointAt(&cylinderPoint)
+	if !okBox || !okCylinder ||
+		boxWitness.Bound.Base() > report.Request.PointResolution.Base() ||
+		cylinderWitness.Bound.Base() > report.Request.PointResolution.Base() {
+		report.Reason = ContactPointTooCoarse
+		return
+	}
+	separation, ok := sourceBoxSignedReading(signedGap)
 	if !ok {
-		report.Reason = ContactNoGapProof
+		report.Reason = ContactPointTooCoarse
 		return
 	}
-	report.Relation, report.Gap = ContactSeparated, &gap
+	sign := signIfBoxSide(side)
+	point := ContactPoint{OnA: boxWitness, OnB: cylinderWitness,
+		FaceA: boxFace, FaceB: cylinderFace,
+		FeatureA: ContactFeature{Face: boxFace}, FeatureB: ContactFeature{Face: cylinderFace},
+		NormalAngle: units.Radians(0), Separation: separation}
+	if cylinderFirst {
+		point.OnA, point.OnB = point.OnB, point.OnA
+		point.FaceA, point.FaceB = point.FaceB, point.FaceA
+		point.FeatureA, point.FeatureB = point.FeatureB, point.FeatureA
+		sign = -sign
+	}
+	var normal r3.Vec
+	switch axis {
+	case 0:
+		normal.X = sign
+	case 1:
+		normal.Y = sign
+	case 2:
+		normal.Z = sign
+	}
+	point.Normal = VecMeasurement{Value: normal, Bound: units.Scalar(0), Exactness: Exact}
+	report.Manifold = &ContactManifold{Points: []ContactPoint{point}}
 }
 
 func cylinderInsideBoxFace(cylinder, box sourceBoxContactProof, axial int) bool {

@@ -564,6 +564,10 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 			i, axis, impulse, w.step.ImpulseResidual, w.step.AngularVelocityResidual) {
 			return undecided(w, "off-center impulse exceeds angular velocity residual"), nil
 		}
+		if !w.omittedCylinderMotionWithin(first.Event.Manifold, pre.entries[i].Pose,
+			i, axis, impulse, dt) {
+			return undecided(w, "omitted cylinder point motion exceeds residual"), nil
+		}
 	}
 	bracketTravel, valid := boundBracketTravel(*first.Bracket, preSpeed[1].Base()-preSpeed[0].Base())
 	if !valid || !finite(separation, bound) || separation > bound {

@@ -51,6 +51,13 @@ requires ideal and rounded clear sweeps for the full rebound remainder.
 `Trace.Sample` replays both sides from those cached rounded sweeps. Zero
 restitution, edge/corner approach, skew read rotation, incoming spin, and
 unresolved tangent motion return `Undecided` in this path.
+A full circular source prism with supplied mass can rebound from a fixed
+source-box face when its affine sweep proves the first axial face impact and
+separating remainder. The zero-spin response bounds omitted angular speed,
+point speed over the complete source body, rotational energy, and travel over
+the full step. A supplied center 5 mm off the source axis with inertia
+1e8 kg·mm² fails the point-motion bound even when its angular speed meets
+`AngularVelocityResidual`.
 Two source semicircle spheres with supplied or density-derived mass can
 rebound as a centered dynamic pair when the impact has a cardinal manifold.
 Their approach may
