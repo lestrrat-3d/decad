@@ -1,6 +1,7 @@
 package dynamics_test
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -209,26 +210,112 @@ func TestPushApartProvesASubUlpGap(t *testing.T) {
 // −4 mm): the upper sphere strikes the lower one off its center line, so
 // friction sets both spinning, and the pair separates. The correction leaves
 // the pair apart, out of the contact set, so the next slice sweeps it from a
-// clear start. The first 30 steps (0.117 s) advance; the next glancing
-// impact of the two spinning spheres is beyond the root package's rotating
-// sphere-pair sweep, which proves only clear paths.
+// clear start. The two spinning spheres then meet again, and the top sphere
+// lands on both: each of these impacts between spinning spheres is
+// bracketed by the root package's rotating sphere-pair sweep. A spinning
+// ball's center follows its drift's straight line, so the exact first-touch
+// time of the two center lines must lie inside the event's bracket. The
+// first 80 steps (0.3125 s) advance; the top sphere then rolls off the
+// floor's edge.
 func TestIslandSphereGlancesOffSphere(t *testing.T) {
 	scene := newSphereColumn(t, [3]float64{0, 4, -4})
-	spun := false
-	for step := range 30 {
+	spheres := map[*decad.Body]struct{}{scene.lower: {}, scene.upper: {}, scene.top: {}}
+	spun, spinning := false, 0
+	previous, err := scene.timeline.Sample(units.Seconds(0))
+	require.NoError(t, err)
+	for step := range 80 {
 		report, err := scene.timeline.Advance(t.Context(), dynamics.StepInput{Gravity: gravityZ(-9810)},
 			units.Seconds(1.0/256))
 		require.NoError(t, err)
 		require.Equal(t, dynamics.Advanced, report.Status, "step %d: %+v", step, report.Diagnostics)
 		for _, event := range report.Events {
-			if event.Pair == (dynamics.BodyPair{A: scene.lower, B: scene.upper}) && event.Kind == dynamics.ContactImpact &&
+			_, sphereA := spheres[event.Pair.A]
+			_, sphereB := spheres[event.Pair.B]
+			if !sphereA || !sphereB || event.Kind != dynamics.ContactImpact {
+				continue
+			}
+			if event.Pair == (dynamics.BodyPair{A: scene.lower, B: scene.upper}) && !spun &&
 				event.PostAngularVelocityB.X.Base() != 0 {
 				spun = true
 				// Friction spins both spheres the same way about X.
 				require.Equal(t, event.PostAngularVelocityA.X.Base() > 0, event.PostAngularVelocityB.X.Base() > 0)
 				require.NotZero(t, event.TangentImpulse.Y.Base())
+				continue
+			}
+			if event.PreAngularVelocityA.X.Base() == 0 || event.PreAngularVelocityB.X.Base() == 0 ||
+				event.SliceStart.Base() != 0 {
+				continue
+			}
+			spinning++
+			// Gravity kicks both spheres alike, so the relative center path
+			// over the slice is the step-start offset plus the relative
+			// drift velocity.
+			startA, ok := previous.Body(event.Pair.A)
+			require.True(t, ok)
+			startB, ok := previous.Body(event.Pair.B)
+			require.True(t, ok)
+			root := sphereFirstTouch(startA.Pose.Translation(), startB.Pose.Translation(),
+				event.PreVelocityA, event.PreVelocityB, 16)
+			require.Equal(t, -1, exactSceneFloat(event.Bracket.From.Elapsed.Value.Base()).Cmp(root), "step %d", step)
+			require.LessOrEqual(t, root.Cmp(exactSceneFloat(event.Bracket.To.Elapsed.Value.Base())), 0, "step %d", step)
+			require.Len(t, event.Manifold.Points, 1)
+			normal := event.Manifold.Points[0].Normal.Value
+			relative := func(a, b dynamics.QuantityVec) float64 {
+				return (b.X.Base()-a.X.Base())*normal.X + (b.Y.Base()-a.Y.Base())*normal.Y +
+					(b.Z.Base()-a.Z.Base())*normal.Z
+			}
+			before := relative(event.PreVelocityA, event.PreVelocityB)
+			require.Negative(t, before, "step %d", step)
+			if -before > scene.config.ImpactSpeed.Base() {
+				require.InDelta(t, -.6*before, relative(event.PostVelocityA, event.PostVelocityB), 1e-5, "step %d", step)
 			}
 		}
+		for first := range spheres {
+			for second := range spheres {
+				if first == second {
+					continue
+				}
+				a, ok := report.Next.Body(first)
+				require.True(t, ok)
+				b, ok := report.Next.Body(second)
+				require.True(t, ok)
+				require.GreaterOrEqual(t, b.Pose.Translation().Sub(a.Pose.Translation()).Len()-16,
+					-scene.config.PenetrationResidual.Base(), "step %d", step)
+			}
+		}
+		previous = *report.Next
 	}
 	require.True(t, spun)
+	require.GreaterOrEqual(t, spinning, 2)
+}
+
+func exactSceneFloat(v float64) *big.Float { return new(big.Float).SetPrec(600).SetFloat64(v) }
+
+// sphereFirstTouch is the closed-form earliest time at which the center
+// lines a+vA·t and b+vB·t come within distance of each other.
+func sphereFirstTouch(a, b r3.Vec, velocityA, velocityB dynamics.QuantityVec, distance float64) *big.Float {
+	p := [3]*big.Float{exactSceneFloat(b.X), exactSceneFloat(b.Y), exactSceneFloat(b.Z)}
+	w := [3]*big.Float{exactSceneFloat(velocityB.X.Base()), exactSceneFloat(velocityB.Y.Base()),
+		exactSceneFloat(velocityB.Z.Base())}
+	for i, v := range [3]float64{a.X, a.Y, a.Z} {
+		p[i].Sub(p[i], exactSceneFloat(v))
+	}
+	for i, v := range [3]float64{velocityA.X.Base(), velocityA.Y.Base(), velocityA.Z.Base()} {
+		w[i].Sub(w[i], exactSceneFloat(v))
+	}
+	dot := func(x, y [3]*big.Float) *big.Float {
+		sum := exactSceneFloat(0)
+		for i := range 3 {
+			sum.Add(sum, new(big.Float).SetPrec(600).Mul(x[i], y[i]))
+		}
+		return sum
+	}
+	qa, qb := dot(w, w), dot(p, w)
+	qc := new(big.Float).SetPrec(600).Sub(dot(p, p), exactSceneFloat(distance*distance))
+	root := new(big.Float).SetPrec(600).Sub(new(big.Float).SetPrec(600).Mul(qb, qb),
+		new(big.Float).SetPrec(600).Mul(qa, qc))
+	root.Sqrt(root)
+	root.Add(root, qb)
+	root.Neg(root)
+	return root.Quo(root, qa)
 }

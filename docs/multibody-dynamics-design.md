@@ -763,10 +763,9 @@ pair the solve does not separate is never pushed and may not end separated, sinc
 exact touch: a resting curved pair whose correction leaves an ulp of overlap is `Undecided` with
 `StepCorrectionFailed`.
 
-The root package's rotating sphere-pair sweep proves only clear and departing paths: two spinning spheres
-whose clear start leads to another impact inside the slice return `SweepUndecided` with
-`SweepContactUnsupported`, so two spheres a glancing frictional impact sets spinning stop the step at
-their next impact (`StepPairUndecided`).
+Two spheres a glancing frictional impact sets spinning meet again through the root package's rotating
+sphere-pair sweep: from that clear start it brackets their next impact from the exact affine paths of
+their centers, which their spin about those centers does not move (contact-sweep §4.5).
 
 A sphere pair that continues in persistent touch after an interior impact is refused at its next replay:
 the root package's sphere-pair persistent replay requires the two rounded centers to stay exactly one
@@ -1571,8 +1570,8 @@ lines below do not repeat it.
   separating push ships with `dynamics/island_push_test.go`: a sphere bouncing off a tilted face, its
   allowance, and a resting sphere the push leaves alone; its sub-ulp-gap push and the anchored correction
   with `dynamics/island_sphere_landing_test.go`: the stack-and-drop sphere column landing on itself, a
-  glancing landing, and a gap no float can prove. Routing the two- and three-body worlds through
-  the general step, the assertion rewrites of §6.5 and the deletions remain.
+  glancing landing whose spinning spheres meet again, and a gap no float can prove. Routing the two- and
+  three-body worlds through the general step, the assertion rewrites of §6.5 and the deletions remain.
 
 ### PR 6 (Phase 1) — multi-event `Trace`, `Timeline`, typed diagnostics
 
