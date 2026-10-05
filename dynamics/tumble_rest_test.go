@@ -319,7 +319,9 @@ func requirePublishedHeights(t *testing.T, scene tumbleRestScene, body *decad.Bo
 // VelocityResidual, so a lifted vertex the solve rested is held on both
 // sides of the floor; the band track reads §10.8's per-vertex curvature K_p;
 // an overlapping initial contact solves on the manifold ContactPair publishes
-// at the slice-start poses; and a band track that another pair's event cuts
+// at the slice-start poses; an initial contact the previous step left in its
+// contact set may correct the penetration that step admitted; and a band
+// track that another pair's event cuts
 // where its rounded poses read Overlapping is gathered as a band end. The
 // step and time records below are amd64 runs; each assertion leaves slack
 // for another architecture's rounding.
@@ -332,6 +334,10 @@ func requirePublishedHeights(t *testing.T, scene tumbleRestScene, body *decad.Bo
 //     step 29, 701.7 µs in, at the prism's impact;
 //   - the overlapping initial contact (solveEvent): TestBoxSpinsOnCornerInsideBand
 //     stops StepManifoldMissing in its step 49;
+//   - the carried allowance (carriedPenetration returning zero):
+//     TestBoxSpinsOnCornerInsideBand stops StepCorrectionFailed in its step
+//     49, the corner the previous step left 4e-11 mm below the floor beyond
+//     its 1e-12 mm ContactSlop;
 //   - K_p replaced by §10.2's global K: TestBoxSpinsOnCornerInsideBand stops
 //     StepEventBudget in its step 48, its band ends 46 to 62 µs apart;
 //   - the §2 band itself, SupportBand = 0.5 nm with PenetrationResidual =
@@ -385,8 +391,13 @@ func TestBoxSpinsOnCornerInsideBand(t *testing.T) {
 	// show it there. The run records the overlapping initial contact in step
 	// 49 and a corner below the floor in steps 48 and 49. Fifty steps cover
 	// both legs; the corner then rocks with six events a step for the rest of
-	// a 256-step run, at 0.8 s a step, past the package's race budget.
-	scene := newTumbleScene(t, tumbleRestConfig(), tumbleBody{body: tumbleBoxBody(t),
+	// a 256-step run, at 0.8 s a step, past the package's race budget. A
+	// ContactSlop of 1e-12 mm, below that corner's 4e-11 mm depth at the start
+	// of step 49, leaves its correction to the allowance the previous step
+	// carries (carriedPenetration).
+	config := tumbleRestConfig()
+	config.ContactSlop = units.Millimeters(1e-12)
+	scene := newTumbleScene(t, config, tumbleBody{body: tumbleBoxBody(t),
 		pose: tumbleRelease(t, r3.Vec{X: 1, Y: 1}, 60, r3.Vec{X: -45, Y: 45, Z: 40}), spin: tumbleBoxSpin()})
 	below := false
 	impacts, _ := runTumbleRest(t, scene, 50, func(step int, report *dynamics.StepReport) {

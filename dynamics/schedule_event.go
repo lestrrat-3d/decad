@@ -102,6 +102,7 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 				}
 				item.manifold, item.at = cloneManifold(*rounded), event.At
 				item.depth, item.rounded = rounded, relation
+				item.band = r.carriedPenetration(key, pre)
 				gathered = append(gathered, item)
 				continue
 			}
@@ -111,6 +112,7 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 			}
 			item.manifold, item.at = cloneManifold(*event.Manifold), event.At
 			item.depth = &item.manifold
+			item.band = r.carriedPenetration(key, pre)
 		}
 		gathered = append(gathered, item)
 	}
@@ -144,6 +146,21 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 	r.published = append(r.published, solved.events...)
 	r.islands = append(r.islands, solved.islands...)
 	return event, nil, nil
+}
+
+// carriedPenetration widens an initial contact's correction allowance
+// (§6.6) by PenetrationResidual when the pair ended the previous step in its
+// contact set and both bodies still stand at the poses that step published:
+// §5 step 5 admitted the pair there with a penetration within the residual,
+// which a rested vertex held below the plane by its band track leaves
+// (§10.8). Any other initial contact carries nothing.
+func (r *scheduleRun) carriedPenetration(key int, pre State) float64 {
+	pair := r.w.pairs[key]
+	if !slices.Contains(r.from.contacts, key) || pre.entries[pair.a].Pose != r.from.entries[pair.a].Pose ||
+		pre.entries[pair.b].Pose != r.from.entries[pair.b].Pose {
+		return 0
+	}
+	return r.w.step.PenetrationResidual.Base()
 }
 
 // bandEndPair completes a pair gathered at a band end (§10.3): the band

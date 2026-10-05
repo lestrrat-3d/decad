@@ -216,7 +216,8 @@ continues on its band track. It leaves the contact set once its event poses
 read separated. The step's `RestSpeed` is `VelocityResidual`, so a corner the
 solve left resting stays on the track. A corner held below the face is
 corrected at the next event, and a slice that starts there solves on the
-contact at its start poses. The [tumble rest tests](../dynamics/tumble_rest_test.go)
+contact at its start poses, correcting up to the penetration the previous
+step admitted. The [tumble rest tests](../dynamics/tumble_rest_test.go)
 drop a hexagonal prism and a wedge on a vertex and check that each rests flat
 on its cap, spin a box on its corner inside the band, and rest a box on its
 face at a `5 µm` band. At a `0.5 nm` band a tumbling box does not rest: it

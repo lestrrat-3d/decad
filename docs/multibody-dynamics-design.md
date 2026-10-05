@@ -447,7 +447,8 @@ full-step kick, then event-driven drift — and generalizes the body count. In o
    event poses for §6.6; a `ContactBand` there must lie within `PenetrationResidual`, else
    `StepPairUndecided`, as must an initial contact's band. An initial contact whose `InitialEvent` reads
    `Overlapping` with no manifold within the request solves on the manifold `ContactPair` publishes at the
-   slice-start poses, and a contact-set pair on a band track with positive `Band()` covering `f_e` whose
+   slice-start poses, an initial contact that the previous step's contact set held at the same poses
+   corrects the penetration step 5 admitted there, and a contact-set pair on a band track with positive `Band()` covering `f_e` whose
    rounded poses there read `Overlapping` is gathered as a band end at `f_e` (§10.8); a gathered pair whose
    rounded poses read `Overlapping` enters the solve whether or not a point closes. Correct positions per island
    (§6.6), solve and certify each island in world order (§6.2–§6.4), publish one `IslandReport` and the
@@ -768,7 +769,8 @@ pair's penetration may not exceed its allowance above, its bracket travel bounde
 by the bracket's elapsed width times an upper bound on the pair's contact-point speed (the L1 norm of the
 linear velocity difference plus each body's spin times its lever, both L1 norms), and a body's
 translation length may not exceed the summed allowances of the pairs that moved it, plus the band depth
-`ε` of §10.3 when the slice ended on a band track. Island pairs with a moved
+`ε` of §10.3 when the slice ended on a band track, or `PenetrationResidual` for an initial contact that
+the previous step's contact set held at the same poses (§10.8). Island pairs with a moved
 body must still be `Touching` at the corrected poses; every other scheduled pair with a moved body is swept
 over the correction.
 
@@ -1936,10 +1938,17 @@ change no outcome of the box and wedge runs (each rests without them); they stay
 wedge at the shipped residuals shows and §13 PR 14f pins. The `1 nm` residual of §13 PR 14e's prism fixture
 and of every earlier fixture is unchanged.
 
-With the tray (the §2 scene itself) the `10 µm` run stops in step `41`: the `30°` box's rounded event poses
-read `Overlapping` against the tray with `ContactNoNormalProof` and no manifold, while the plain floor
-publishes one at the same pose. That is §9.6's shallow penetration through the tray's floor, PR 15's
-concern, not the band track's.
+A rested vertex may also stand below the plane when a step ends, within the residual §5 step 5 admits,
+and the next step's kick takes the pair out of the contact set, so it starts that step as an initial
+contact whose penetration exceeds `ContactSlop`. Its correction allowance (§6.6) is therefore widened by
+`PenetrationResidual` when the pair ended the previous step in the contact set and both bodies still stand
+at the poses that step published (`carriedPenetration`, `dynamics/schedule_event.go`): the penetration is
+the one step 5 admitted there. Any other initial contact keeps the plain allowance. Without it the tray
+scene below stops in step `42`, `StepCorrectionFailed`, the `30°` box `1.25 nm` into the tray's floor
+against a `1 nm` allowance.
+
+With the tray (the §2 scene itself, §9.6's face-local shallow penetration included) the `10 µm` run of all
+eight bodies goes 256 steps `Advanced`, every body resting on one face from its step on, seven events a step.
 
 Rejected alternatives:
 
@@ -2478,10 +2487,10 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 ### PR 14f (Phase 2) — rest inside the band
 
 - Delivers §10.8: `SweepRequest.RestSpeed` and the two-sided hold of a rested vertex, the per-vertex
-  curvature `K_p`, the overlapping initial contact and the cut band track of §5 step 7, and the §2 residuals
-  of the `tumble` scene.
+  curvature `K_p`, the overlapping initial contact, the carried correction allowance and the cut band track
+  of §5 step 7 and §6.6, and the §2 residuals of the `tumble` scene.
 - Files: `contact_sweep.go` (the field and its validation), `contact_sweep_band.go`, `dynamics/step.go`
-  (`sweepRequest`), `dynamics/schedule_event.go` (`solveEvent`, `trackPairs`), `dynamics/island.go`
+  (`sweepRequest`), `dynamics/schedule_event.go` (`solveEvent`, `trackPairs`, `carriedPenetration`), `dynamics/island.go`
   (`solveIslands`), `.github/test-shards.txt`.
 - Test (root): `contact_sweep_test.go` rejects a negative, non-finite or non-`Velocity` `RestSpeed` with
   `SupportBand`'s errors. `contact_sweep_band_test.go` gains `TestSweepPairRestedVertexHoldsTwoSided`: the §13
@@ -2517,8 +2526,10 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   impact. `TestBoxSpinsOnCornerInsideBand`, the `60°` box at its §2 release and spin, shipped residuals, 50
   steps every one `Advanced` (the run then rocks on the corner with six events a step at about `0.8 s` a
   step, which 256 steps would carry past the `dynamics` package's race budget), with some step's published
-  pose holding a lower corner at a negative exact height within `PenetrationResidual` and none lower. Legs shown to fail: the overlapping initial contact deleted, step `49`
-  `StepManifoldMissing`; `K_p` replaced by the global `K`, step `48` `StepEventBudget` with band ends `46` to
+  pose holding a lower corner at a negative exact height within `PenetrationResidual` and none lower, at a
+  `ContactSlop` of `1e-12 mm`. Legs shown to fail: the carried allowance deleted, step `49`
+  `StepCorrectionFailed`, the corner `4e-11 mm` below the floor at the step's start; the overlapping initial
+  contact deleted, step `49` `StepManifoldMissing`; `K_p` replaced by the global `K`, step `48` `StepEventBudget` with band ends `46` to
   `62 µs` apart. `TestBoxBouncesOnEdgeAndRestsFlat`, the `30°` box at its §2 release and spin with
   `PenetrationResidual = 10 µm` and `SupportBand = 5 µm`, 256 steps every one `Advanced`; the trace carries a
   one-point, a two-point and a four-point `ContactImpact`; at least one slice follows a band end with
@@ -2537,9 +2548,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
 - Files: `_gallery/dynamics_clip.go`, `dynamics/scene_test.go`.
 - Test: the Phase 2 exit criteria at §2's residuals; every release is placed so that no body reaches a tray
   wall within `3 s` and no body's swept box reaches a wall's projection (§10.5, §10.6). The exploration run
-  with the tray at those residuals stops in step `41` on the `30°` box, `StepManifoldMissing`, its rounded
-  event poses `Overlapping` against the tray with `ContactNoNormalProof` (§10.8): §9.6's shallow
-  penetration through the tray's floor must publish that manifold before the scene runs.
+  with the tray at those residuals goes 256 steps `Advanced` with every body resting (§10.8).
 - Depends on: PRs 9, 13, 14, 14a, 14b, 14c, 14d, 14e, 14f.
 
 ### PR 16 (Phase 3) — third-order section moments and the general revolve
