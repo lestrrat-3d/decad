@@ -176,7 +176,10 @@ friction is positive, Coulomb friction impulses, and certified in exact
 interval arithmetic: every friction impulse lies in its cone, a sticking
 point stops sliding, and a slipping point's friction opposes its slide.
 Shallow overlaps within `ContactSlop` and the impact bracket's travel are
-corrected, and bodies resting on one another move together. Co-moving bodies
+corrected, and bodies resting on one another move together. A curved pair
+that bounces apart and still overlaps by an ulp after the correction is
+pushed just clear within the same allowance; a resting curved pair the
+correction cannot place in exact touch returns `dynamics.Undecided`. Co-moving bodies
 leave with one exact common velocity, so a stack can bounce and land as one.
 A transition or a graze publishes a zero-impulse event, and the step then
 continues from the event; a graze of a positive-friction pair returns
