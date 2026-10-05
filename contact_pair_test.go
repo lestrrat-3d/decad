@@ -214,8 +214,12 @@ func TestContactPairAnalyticPrismTouch(t *testing.T) {
 	require.NotNil(t, report.Gap)
 	require.Equal(t, decad.Exact, report.Gap.Exactness)
 	require.Zero(t, report.Gap.Value.Base())
-	require.Nil(t, report.Manifold)
-	require.Equal(t, decad.ContactNoNormalProof, report.Reason)
+	require.NotNil(t, report.Manifold)
+	require.Len(t, report.Manifold.Points, 1)
+	require.Equal(t, r3.Vec{Z: 1}, report.Manifold.Points[0].Normal.Value)
+	require.NotNil(t, report.Manifold.Points[0].FaceA)
+	require.NotNil(t, report.Manifold.Points[0].FaceB)
+	require.Equal(t, decad.ContactNoReason, report.Reason)
 	require.Equal(t, before, doc.Bodies())
 }
 

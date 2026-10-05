@@ -7,7 +7,9 @@ sphere against a source box certifies affine first impact and face-point
 departure or persistent touch while its projected radius remains strictly
 inside one box face. A sphere against an exactly orthogonal rotated source
 box also certifies a strict single-face affine clear span, first impact, or
-separating departure. Two source semicircle spheres certify affine first impact
+separating departure. A full source cylinder certifies a clear axial path,
+first circular-face impact, and separating departure inside a source-box face.
+Two source semicircle spheres certify affine first impact
 through exact squared-distance motion, including transverse crossing, and
 separating departure. Rotating source-box rigid drifts
 can also certify a clear path or bracket an impact after exact oriented-box
@@ -334,7 +336,7 @@ unrepresentable shallow overlap return `SweepUndecided`. The bounded
 center-line source manifold gate applies at the right sample. A zero-gap
 stationary touch has no continuous proof for continuation.
 
-### 4.6 Separated source-cylinder axial path
+### 4.6 Source-cylinder axial face path
 
 For a full circular source prism and one source box at signed-axis poses,
 construct exact outer boxes from the source circle, axial limits, and recorded
@@ -343,13 +345,26 @@ disk stays strictly inside the box face at both path endpoints. Check that
 one axial gap between the complete swept outer boxes exceeds
 `PointResolution`. The two endpoint `ContactPair` queries must also prove
 separation, and their rounded pose differences must fit `PointResolution`.
-An outer-box intersection, near gap, or lateral edge approach returns
-`SweepUndecided`; this path does not bracket a cylinder impact.
+An outer-box intersection enters the axial impact path only when relative
+translation has zero components across the face, the initial axial support
+gap is nonnegative, and the complete disk stays inside the same box face.
+The signed axial support gap is affine. A decreasing positive gap supplies
+its exact first-contact root. Use a dyadic bracket with a separated left
+sample and a touching or shallow-overlapping right sample whose original
+face identities and signed normal match the posed `ContactPair` query.
+Transfer that query's bounded witness to the ideal path by charging the
+rounded pose difference. An initial touch with increasing support gap proves
+immediate departure. A stationary touch, near gap without a clear margin,
+lateral translation during impact, or a path leaving the face corridor returns
+`SweepUndecided`.
 
 Replay translates the cached source outer boxes with the held affine paths.
 At each requested fraction, the rounded cylinder projection must remain
-inside the rounded box face, the axial gap must exceed the rounded pose
-difference, and that difference must fit `PointResolution`.
+inside the rounded box face and the pose difference must fit
+`PointResolution`. A clear path keeps a support gap above that difference.
+Departure requires exact touch at the start and positive ideal and rounded
+gaps afterward. Before an impact bracket, replay requires a positive gap;
+inside the bracket, the ideal support gap must fit `PointResolution`.
 
 ## 5. Earliest-event search
 

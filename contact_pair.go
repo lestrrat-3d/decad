@@ -84,7 +84,7 @@ type ContactReport struct {
 // and point-manifold proofs at signed-axis poses. Sphere-pair center lines
 // may be off-axis when their normal and witnesses meet the requested bounds.
 // A full source cylinder, extruded or revolved, can prove an axial gap from a
-// containing box face.
+// containing box face. An extruded cylinder can also prove face contact.
 // An exactly orthogonal rotated source box can give a sphere a bounded point
 // on one interior face.
 // At identity query poses, the analytic clearance kernel can prove relations
@@ -136,7 +136,7 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 			return report, nil
 		}
 		if cylinder, ok := sourceCylinderAtPose(b, poseB); ok {
-			classifySourceCylinderBox(report, cylinder, boxA)
+			classifySourceCylinderBox(report, cylinder, boxA, false)
 			if report.Relation == ContactUndecided && poseA == r3.Identity() && poseB == r3.Identity() {
 				report.Reason = ContactNoReason
 				if err := classifyAnalyticContact(ctx, report); err != nil {
@@ -152,7 +152,7 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 			return report, nil
 		}
 		if cylinder, ok := sourceCylinderAtPose(a, poseA); ok {
-			classifySourceCylinderBox(report, cylinder, boxB)
+			classifySourceCylinderBox(report, cylinder, boxB, true)
 			if report.Relation == ContactUndecided && poseA == r3.Identity() && poseB == r3.Identity() {
 				report.Reason = ContactNoReason
 				if err := classifyAnalyticContact(ctx, report); err != nil {
