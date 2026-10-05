@@ -2138,3 +2138,6 @@
 5	0.01	TestContactPairBandChamferedBlockOnFloor
 0	0.01	TestContactPairBandNeedsAnExactFace
 1	0.01	TestPlanarBandTransferChargesDeviation
+4	0.00	TestSweepPairCylinderDiskTrack
+4	0.00	TestSweepPairCylinderDiskDeparture
+4	0.00	TestSweepPairCylinderDiskTrackRefusals

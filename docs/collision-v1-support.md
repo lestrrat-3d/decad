@@ -17,7 +17,7 @@ shows a box impact and computed rebound.
 | Source boxes | Face patches under affine motion; selected oblique and rotating paths | Rebound, rest, sliding friction, edge exit, selected spin |
 | Source sphere and source box | Point strictly inside one box-face corridor; selected centered sphere rotation or orthogonal box pose | Frictionless rebound and fixed-floor Coulomb response |
 | Two source spheres | Center-line point, affine center paths, centered rotating departure | Rebound, rest, graze, and admitted planar Coulomb impact |
-| Full source cylinder and source box | Axial disk in a wide face; vertical extruded sidewall against a broad face | Centered frictionless rebound |
+| Full source cylinder and source box | Axial disk in a wide face, including a disk resting or sliding on it; vertical extruded sidewall against a broad face | Centered frictionless rebound; rest on an end disk |
 | Verified faceted Boolean and source-box floor | One exact rectangular lower face, vertical affine path, contained footprint | Frictionless rebound or rest |
 | Full source cylinder sidewall, against a planar face or a parallel full source cylinder | Two-end ruling line at identity query poses only | None yet |
 | Two exact planar solids | Gap, touch, or overlap at any pose with a positive-determinant basis; a manifold when one is convex; a clear path, first impact, departure from touch, or persistent touch or band track under rotating or affine paths | None yet |
@@ -66,6 +66,12 @@ face under signed-axis, zero-spin translation. A vertical circular
 The solver admits centered frictionless rebound with supplied or
 density-derived mass. [Cylinder impact tests](../dynamics/cylinder_sidewall_impact_test.go)
 pass real contact and sweep reports through the step and trace.
+An end disk touching a box face also continues on a persistent track while
+the disk stays inside the face and neither body moves along the face normal
+relative to the other. A world of four or more bodies uses it to land a
+cylinder on its end and keep it resting. The [disk track tests](../contact_cylinder_sweep_test.go)
+and the [cylinder rest test](../dynamics/cylinder_rest_test.go) check the
+track's point and the resting trace.
 
 A full source cylinder's sidewall, including a revolved cylinder on its
 side, uses the clearance kernel's ruling certificate at identity query poses.
