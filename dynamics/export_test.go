@@ -57,7 +57,7 @@ func IslandProposalGates(ctx context.Context, w *World, from State, gravity Quan
 		return nil, ErrUnsupported
 	}
 	paths := w.slicePaths(kicked, make([]decad.PoseSegment, len(w.bodies)), dt)
-	sweeps, diagnostics, err := w.sweepSlice(ctx, paths, dt, w.pairSchedule(), nil)
+	sweeps, diagnostics, err := w.sweepSlice(ctx, directWork(w), paths, dt, w.pairSchedule(), nil)
 	if err != nil || len(diagnostics) != 0 {
 		return nil, ErrUnsupported
 	}
@@ -78,7 +78,7 @@ func IslandProposalGates(ctx context.Context, w *World, from State, gravity Quan
 		return nil, ErrUnsupported
 	}
 	isl := islands[0]
-	solution, failure := w.solveIsland(isl, kicked, nil)
+	solution, failure := w.solveIsland(isl, kicked, nil, directWork(w))
 	if failure != nil {
 		return nil, ErrUnsupported
 	}
@@ -111,4 +111,17 @@ func IslandProposalGates(ctx context.Context, w *World, from State, gravity Quan
 		}
 	}
 	return names, nil
+}
+
+// TracePairCalls is the number of SweptBox and SweepPair calls the step that
+// recorded a trace made, reused certificates excluded.
+func TracePairCalls(tr Trace) uint64 {
+	return tr.pairCalls
+}
+
+// WithoutCache returns s without its reuse cache; its contact set stays. A
+// step from it recomputes every certificate and solves every island cold.
+func WithoutCache(s State) State {
+	s.cache = nil
+	return s
 }

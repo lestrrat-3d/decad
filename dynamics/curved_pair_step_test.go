@@ -28,7 +28,7 @@ func TestSourceSpherePairStationaryTouchStep(t *testing.T) {
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6),
 			ImpactSpeed:             units.MillimetersPerSecond(0), MaxPoseEvaluations: 128,
-			MaxIterations: 8, MaxEvents: 2},
+			MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096},
 	})
 	require.NoError(t, err)
 	initial, err := w.NewState([]dynamics.BodyState{{Body: fixed, Pose: r3.Identity(),
@@ -86,7 +86,7 @@ func TestSourceSpherePairGrazingStep(t *testing.T) {
 		AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 		ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 		PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-		MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2}
+		MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096}
 	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
 		Bodies: []dynamics.RigidBody{{Body: fixed, Role: dynamics.Fixed, Material: material},
 			{Body: moving, Role: dynamics.Dynamic, Supplied: &mass, Material: material}},
@@ -218,7 +218,8 @@ func TestSourceSpherePairTransverseEndpointImpact(t *testing.T) {
 			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6),
-			ImpactSpeed:             units.MillimetersPerSecond(0), MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2},
+			ImpactSpeed:             units.MillimetersPerSecond(0), MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2,
+			MaxPairSweeps: 4096},
 	})
 	require.NoError(t, err)
 	start, err := w.NewState([]dynamics.BodyState{{Body: a, Pose: pa, LinearVelocity: va,

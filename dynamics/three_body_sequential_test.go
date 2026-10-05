@@ -32,7 +32,7 @@ func TestThreeBodySequentialBoxImpacts(t *testing.T) {
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6),
 			ImpactSpeed:             units.MillimetersPerSecond(0),
-			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 3,
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 3, MaxPairSweeps: 4096,
 		},
 	}
 	w, err := dynamics.NewWorld(t.Context(), doc, config)

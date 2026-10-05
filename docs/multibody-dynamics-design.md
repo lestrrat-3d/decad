@@ -14,9 +14,9 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 3, 4, 6, 7, 10, 11, 12, 14, 16, 17 and 19 have shipped, and so has PR 13's
-root part. `dynamics.World` holds any number of bodies, the canonical pair table and per-pair material
-of §3.1, and the slice-backed `State` of §3.2. Its step resolves two bodies, or three bodies with one, two or three dynamic bodies and
+Current state: §13 PRs 1, 2, 3, 4, 6, 7, 8, 10, 11, 12, 14, 16, 17 and 19 have shipped, and so has PR
+13's root part. `dynamics.World` holds any number of bodies, the canonical pair table and per-pair
+material of §3.1, and the slice-backed `State` of §3.2. Its step resolves two bodies, or three bodies with one, two or three dynamic bodies and
 every other body fixed, through the closed-form responses `docs/rigid-dynamics-design.md` lists. A world of four or more
 bodies takes the scheduled step of §4.3 and §5: one kick, then slices of drift from event to event. Initial
 contacts, impact brackets and transition brackets cut a slice at their exact fraction; every body advances
@@ -24,7 +24,10 @@ there on its certified path; the touching and impacting pairs, with the contact-
 on, form §6.1's islands, which §6.2 proposes, §6.3's rows certify and §6.6 corrects, publishing
 one `IslandReport` per island and one event per pair; the next slice starts from the post-event state. A
 graze publishes its event without cutting the slice. Kinematic bodies with translating drivers join
-islands, and a positive-friction pair takes the Coulomb rows of §6.2 and §6.3. The multi-event
+islands, and a positive-friction pair takes the Coulomb rows of §6.2 and §6.3. The published state
+carries the step's contact set and reuse cache (§3.2), so a later step continues a resting pair with no
+solve, reuses every certificate whose inputs repeat (§5.3), and restarts a repeated island at its fixed
+point (§6.2); `MaxPairSweeps` bounds the rest. The multi-event
 `Trace` of §3.4 and §7.1, the `Timeline` of §7.2 and §12's typed diagnostics ship. `Document.SweptBox`
 (§4.2) is public; the cylinder and bounded-faceted clear sweeps certify with it, and the scheduled step's
 broad phase reads it.
@@ -34,9 +37,8 @@ phase, and their `Trace` holds fixed two- and three-body slots. The exact arithm
 is stated in already exists as one package: `internal/proof` (`Dyadic`, `DyV3`, `RatInterval` and the float
 rounding bounds), which the root package imports today and which `dynamics` can import as well, since an
 `internal/` package is visible to every package of this module. §3.1, §3.2, §4 and §8.1–§8.8 describe
-shipped code, except `State.cache` and the `MaxPairSweeps` charge (§13 PR 8). For worlds of four or more
-bodies, §5 without §5.3's reuse and step 2's cache, §6.1–§6.4, §6.6, §7, §3.3's `IslandReport`,
-`StepReport.Islands` and `ContactEvent.Island`, §3.4, and §12 without `MaxPairSweeps` ship as well. §9.1–§9.4 ship for prisms over whole `LineSeg` sections and for zero-bound
+shipped code. For worlds of four or more bodies, §5, §6.1–§6.4, §6.6, §7, §3.3, §3.4 and §12 ship as
+well. §9.1–§9.4 ship for prisms over whole `LineSeg` sections and for zero-bound
 Booleans, directly or through a translation-only placement; stitched solids and lofts are not admitted yet.
 §10.1, §10.2 and §10.3's sweep certificate ship for the same bodies; `dynamics` does not consume band
 tracks yet. Everything else is design-only until the PR table in §13 says otherwise.
@@ -188,21 +190,49 @@ scenes do.
 
 ```go
 type State struct {
-    world   *World
-    entries []BodyState // world order
-    cache   *contactCache // immutable warm-start cache, nil until §13 PR 8
+    world    *World
+    entries  []BodyState   // world order
+    contacts []int         // canonical keys of the pairs resting on a persistent track here
+    cache    *contactCache // immutable reuse cache, nil without one
 }
 ```
 
-`Entries()` and `Body()` keep their contracts. `NewState` requires exactly one entry per world body.
+`Entries()` and `Body()` keep their contracts. `NewState` requires exactly one entry per world body and
+sets neither of the last two fields. The scheduled step sets both on the state it publishes as `Next`,
+which is also its trace's end; every state derived from another by changing an entry carries neither,
+since both describe one set of entries.
+
+The CONTACT SET is part of the physical state, like a velocity: it names the pairs whose last certified
+relation is a persistent track through the end of the step (§5 step 8), and §5 step 2 reads it. It lives
+on `State`, not in the cache and not in the `Trace`: a step reads only its input state, the next step
+needs it, and it decides a pair's start policy rather than repeating a computation. `World` stays
+immutable configuration and every per-step datum stays in the run, the published state or the report,
+so concurrent steps from one state share nothing mutable.
+
+One rule keeps a resting or continuing contact silent: it publishes an event only when a solve changes
+something. A pair the contact set carries (§5 step 2) continues on its track from the step start with no
+solve. A touch met afresh, a pair the input state's contact set does not hold, stops the first slice at
+zero, and its island is silent when it changes nothing (§6.1); it then joins the contact set the same
+way. The two paths publish
+the same events; the carried one saves the stop, its `StopAtInitialContact` sweep and the solve. A kicked
+pair is never carried, so a stack resting under gravity is solved every step and publishes its support
+impulses, as the two- and three-body steps do.
+
+The cache is pure reuse: dropping it changes no published value except `Solver.Iterations`. It holds
+every `SweptBox` and `SweepPair` result the step used, keyed by their exact inputs (§5.3), and every
+island the step certified, with its exact problem and final proposal state (§6.2). A
+step reads it only when its entries equal the input state's entries.
 
 ### 3.3 Step configuration and report
 
 `StepConfig` gains one field:
 
 ```go
-MaxPairSweeps uint64 // positive; counts SweepPair calls per step across every slice
+MaxPairSweeps uint64 // positive; counts SweptBox and SweepPair calls per step across every slice
 ```
+
+A call the step answers from its own record or the input state's cache (§5.3) is not charged. `NewWorld`
+refuses a zero `MaxPairSweeps` for every world; only the scheduled step charges it.
 
 `StepReport` gains `Islands []IslandReport`; `ContactEvent` gains `Island int`, the index of the island
 that published it, or `-1` for a graze or transition, which enters no solve; `StepDiagnostic` gains typed
@@ -330,8 +360,12 @@ The step keeps the structure `docs/rigid-dynamics-design.md` "Step and event sch
 full-step kick, then event-driven drift — and generalizes the body count. In order:
 
 1. Validate inputs, drivers and loads; reject before reading `ctx`. Kick every dynamic body once.
-2. Set `t = 0`. Set the CONTACT SET to every scheduled pair whose previous step ended on a persistent or
-   band track in the input state's cache, or empty when there is no cache.
+2. Set `t = 0`. Set the CONTACT SET to the input state's contact set (§3.2), less every pair with a
+   kinematic body and every pair the kick changed: a pair stays only when the kick left both bodies'
+   entries exactly as the previous step published them, so the track that ended that step continues
+   under the same velocities. A kicked pair starts under `StopAtInitialContact` and reaches its island as
+   an initial contact, as a resting stack under gravity does every step. A state from `NewState` has an
+   empty contact set.
 3. **Slice.** Build each body's path for `[t, dt]`: a Fixed body a constant `PoseSegment`, a Kinematic
    body its driver sliced to the remaining time (from its current pose to the driver's end pose), a
    Dynamic body a `RigidDriftSegment` from its current pose, world mass center and velocities. Run §4.3 to
@@ -353,6 +387,8 @@ full-step kick, then event-driven drift — and generalizes the body count. In o
    contact set at the completed poses, reject a relation other than separated, touching, or overlapping
    with a bounded manifold whose penetration lies within `PenetrationResidual` (two co-moving bodies drift
    on separately rounded translations and may overlap by an ulp), record the final slice, and publish.
+   The published state's contact set is every pair continued under `ContinueCertifiedTouch` whose final
+   sweep is a persistent track through `dt`.
 6. **Advance** every body to `f_e` on its certified path: a swept body takes the pose its pair reports
    replay at `f_e` through `CertifiedPosesAtInterval`, and every report covering it must replay the same
    pose; a body no sweep covers takes the pose `pathPoseAt` evaluates on its own path (§5.4), as
@@ -379,7 +415,8 @@ full-step kick, then event-driven drift — and generalizes the body count. In o
    at once. Set `t = t_e`. When the published events reach `MaxEvents` and `t_e < dt`, the step stops
    with `StepEventBudget` after this event, which stays in the certified prefix (§12); a graze that
    reaches `MaxEvents` stops it the same way. Otherwise go to step 3; an event at `dt` itself completes
-   the step from the post-event state.
+   the step from the post-event state, whose contact set is every pair the event left under
+   `ContinueCertifiedTouch`.
 
 ### 5.1 Zero-time repeats and Zeno sequences
 
@@ -406,16 +443,27 @@ most `k·TimeResolution` after its closed-form time.
 
 These are the three policies `docs/contact-sweep-design.md` §5.1 defines; nothing here adds one.
 
-### 5.3 Reusing a certificate across slices
+### 5.3 Reusing a certificate across slices and steps
 
-A candidate pair's report from the previous slice is reused, with no new `SweepPair` call, when both of
-its bodies' paths are unchanged (neither body was in an island at the last event and neither is
-kinematic) and the report's outcome covers the remaining interval: `SweepClear`, `SweepDepartedClear`,
-`SweepPersistentTouch` or `SweepPersistentBand` through `dt`, or an `ImpactBracket`, transition bracket or
-graze whose exact time lies after `t`. The slice record maps the exact `[t, t_e]` onto the report through
-`CertifiedPosesAtInterval`; the report itself is immutable. Every other candidate is swept again from the
-new slice start. A kinematic body's path is sliced, so every pair containing one is swept again, as the
-two-body kinematic step does today.
+`SweepPair` and `SweptBox` are pure functions of their bodies, paths and request, so a call whose inputs
+repeat exactly returns the report it returned before. The step reuses such a report with no new call:
+a `SweepPair` whose pair, both paths and request (duration-derived `TimeResolution` and start policy
+included) equal an earlier call's, and a `SweptBox` whose body and path do; a stationary `PoseSegment`'s
+box depends on its pose alone, so a Fixed body's box is computed once. The earlier call may lie in an
+earlier slice of the same step or in the previous step, through the input state's cache (§3.2). Inputs
+repeat when an event at a slice's start leaves a body's state unchanged (a zero-time event, or an
+initial contact elsewhere) and when a resting body starts a step where it started the last one: the
+resting pyramid's every step after the first calls neither for its pairs. A reused report is the
+report a new call would return, so reuse changes no certified outcome, no published pose and no trace
+sample, and costs nothing against `MaxPairSweeps`.
+
+Every other candidate is swept again from the new slice start. Mapping the remaining interval onto an
+earlier slice's report through `CertifiedPosesAtInterval`, keeping the bodies outside the event on their
+earlier paths, would save more calls but change the published poses: a body moved along its earlier path
+lands on different rounded poses than one moved along a path rebuilt at the event, and an event fraction
+mapped onto the earlier report is in general not a float, which §5 step 6 refuses. The step therefore
+reuses only exact repeats. A kinematic body's path is sliced, so a pair containing one repeats only when
+an event at the slice start leaves its driver slice unchanged.
 
 ### 5.4 Bodies outside every candidate pair
 
@@ -453,7 +501,7 @@ lies within `VelocityResidual` of zero, every certified normal and tangent impul
 dynamic body keeps its exact pre-solve velocities and §6.6 moves no body, the island publishes no event and
 no `IslandReport`, and its pairs join the contact set under `ContinueCertifiedTouch`. A stationary or
 sliding touch at the step start therefore continues on its track without an event, as in the two- and
-three-body steps.
+three-body steps; in a later step the carried contact set continues it without this solve (§3.2).
 
 Islands are the connected components of the graph whose vertices are DYNAMIC bodies and whose edges are
 active constraints between two dynamic bodies; a constraint against a Fixed or Kinematic body attaches
@@ -523,6 +571,23 @@ continuation: a resting island must publish exactly equal normal velocities on i
 exactly zero spin, before `SweepPair` can prove a persistent touch from it. None of them is a claim; the
 certificate judges the published values, so a common velocity whose change from a member's own fails the
 linear law within `ImpulseResidual + m_hi·VelocityResidual` is refused like any other proposal.
+
+WARM START. The input state's cache (§3.2) holds every island the previous step certified: its problem
+(bodies, their pre-solve entries and driver velocities, and each pair's manifold points, whose
+`ContactFeature` pairs are part of the match, so nothing keys by a topology slice index), the final
+state of the sweeps (each point's normal and tangent impulses and each body's nominal velocities), the
+sweep count, and whether the last sweep changed no impulse. An island whose problem equals a cached one
+exactly restarts from that state. When the cold solve ended at a fixed point, the restart's first sweep
+is the cold solve's last sweep, which changed no impulse, so the solve publishes the cold solve's
+proposal after one sweep; `Solver.Iterations` is the only published difference. When the cold solve
+ran to `MaxIterations` without one, further sweeps would move the proposal, so the restart publishes
+that proposal as it stands, with its sweep count. Whether a solve reaches an exact fixed point before
+`MaxIterations` depends on the host's float contraction: the pyramid's does on amd64 and need not on
+arm64. Either way the certificate judges the republished proposal afresh. An island whose problem
+differs in any bit starts cold. Restarting such an island from the cached impulses of matching
+pairs and features would move a statically indeterminate island, such as a four-corner patch, to a
+different split of the same total, and the published impulses would depend on the cache; the cache never
+changes a published impulse.
 
 ### 6.3 Certification
 
@@ -1264,8 +1329,10 @@ the new kernels (§9.1, §9.4, §10.1) charge a `workBudget` from `newWorkBudget
 
 Three budgets bound a step's work without changing any certified outcome: `MaxPairSweeps` (§3.3) over
 `SweptBox` and `SweepPair` calls, `MaxEvents` over published events, `MaxIterations` per island sweep.
-Each `SweepPair` call carries `MaxPoseEvaluations` as today. Exhausting any budget with time remaining
-is `Undecided`.
+`MaxPairSweeps` counts every call the step makes — the broad phase, the pair sweeps, the box-exclusion
+checks of §7.1 and the correction sweeps of §6.6 — and not a call §5.3 reuses; `Trace.Sample`'s own
+checks are not charged. Each `SweepPair` call carries `MaxPoseEvaluations` as today. Exhausting any
+budget with time remaining is `Undecided`.
 
 ```go
 type StepReason int
@@ -1307,8 +1374,9 @@ The scheduled step of a world of four or more bodies fills every field: `From` a
 pair diagnostic covers (an undecided sweep's unresolved interval, mapped onto the step clock), or name the
 event time of a refusal raised there; `StepEventBudget` runs from that event to the end of the step.
 `Limit` holds the refused gate's limit for `StepIslandResidual` (in the gate's own kind), the correction
-allowance for `StepCorrectionFailed`, `PenetrationResidual` for `StepTrackUnproved`, and `MaxEvents` as a
-dimensionless scalar for `StepEventBudget`. The two- and three-body steps leave `Code` `StepNoReason` and
+allowance for `StepCorrectionFailed`, `PenetrationResidual` for `StepTrackUnproved`, `MaxEvents` as a
+dimensionless scalar for `StepEventBudget`, and `MaxPairSweeps` likewise for `StepPairBudget`, whose
+interval runs from the last certified time to the end of the step. The two- and three-body steps leave `Code` `StepNoReason` and
 set only `Pair` and `Reason`.
 
 ## 13. Delivery order
@@ -1414,6 +1482,14 @@ lines below do not repeat it.
   bodies did not move and converges in one sweep from the cache; outcomes are bit-identical with the
   cache disabled.
 - Depends on: PR 6.
+- Shipped, with the contact set carried on `State` (§3.2, §5 step 2), so a later step continues a
+  resting pair with no zero-time stop or solve, and the solver's restart in `dynamics/island_solve.go`. Its tests in
+  `dynamics/schedule_test.go`: `TestScheduledStepReusesCertificates` (the pyramid beside two drifting
+  boxes: the second step reuses every pyramid report and box, sweeps only the drifting pair, restarts
+  the island in one sweep where its cold solve settles, and matches the cache-free step bit for bit),
+  `TestScheduledStepRepublishesUnsettledIsland` (the same island capped at 64 sweeps),
+  `TestScheduledStepPairBudget`, and the meeting boxes' second step, which continues the carried pair
+  with one `SweepPair` call fewer than a state rebuilt without the contact set.
 
 ### PR 9 (Phase 1) — gallery bridge and `stack-and-drop`
 

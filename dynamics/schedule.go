@@ -44,7 +44,8 @@ type scheduleRun struct {
 	at       units.Value // held start of the current slice, from the step start
 	state    State       // the certified state at the slice start
 	policies map[int]decad.SweepStartPolicy
-	stalled  int // consecutive event times that did not advance the clock
+	stalled  int       // consecutive event times that did not advance the clock
+	work     *stepWork // the step's SweptBox and SweepPair calls, reuse and budget
 
 	// The certified prefix: slices and event times, the published events and
 	// islands, the drift slices for the conservation readings, and the last
@@ -84,13 +85,14 @@ func (w *World) stepScheduled(ctx context.Context, from State, input StepInput,
 	}
 	run := &scheduleRun{w: w, from: from, dt: dt, drivers: drivers, scheduled: w.pairSchedule(),
 		gravity: input.Gravity, loads: loads, at: units.Seconds(0), policies: map[int]decad.SweepStartPolicy{},
-		prefixAt: units.Seconds(0), prefixEnd: from}
+		prefixAt: units.Seconds(0), prefixEnd: from, work: newStepWork(w, from)}
 	kicked, ok := w.kickByLoads(from, input.Gravity, loads, dt)
 	if !ok {
 		return run.undecided(run.diagnostic(StepKickUnbounded, BodyPair{},
 			"force kick or torque kick exceeds its velocity residual")), nil
 	}
 	run.kicked, run.state = kicked, kicked
+	run.policies = w.carriedContacts(from, kicked)
 	diagnostics, err := w.fixedPairRelations(ctx, kicked)
 	if err != nil {
 		return nil, err
@@ -101,7 +103,33 @@ func (w *World) stepScheduled(ctx context.Context, from State, input StepInput,
 		}
 		return run.undecided(diagnostics...), nil
 	}
-	return run.execute(ctx)
+	report, err := run.execute(ctx)
+	if errors.Is(err, errPairBudget) {
+		d := scheduleDiagnostic(StepPairBudget, BodyPair{},
+			fmt.Sprintf("SweptBox and SweepPair calls exceed MaxPairSweeps %d", w.step.MaxPairSweeps))
+		d.From, d.To, d.Limit = run.prefixAt, dt, units.Scalar(float64(w.step.MaxPairSweeps))
+		return run.undecided(d), nil
+	}
+	return report, err
+}
+
+// carriedContacts is §5 step 2: the contact set of the input state, less
+// every pair the kick changed. A pair stays when neither body is Kinematic
+// and the kick left both bodies' entries as the previous step published
+// them, so the persistent track that ended that step continues under the
+// same velocities; a kicked pair starts afresh under StopAtInitialContact
+// and reaches its island as an initial contact.
+func (w *World) carriedContacts(from, kicked State) map[int]decad.SweepStartPolicy {
+	policies := make(map[int]decad.SweepStartPolicy, len(from.contacts))
+	for _, key := range from.contacts {
+		pair := w.pairs[key]
+		if w.bodies[pair.a].definition.Role == Kinematic || w.bodies[pair.b].definition.Role == Kinematic ||
+			kicked.entries[pair.a] != from.entries[pair.a] || kicked.entries[pair.b] != from.entries[pair.b] {
+			continue
+		}
+		policies[key] = decad.ContinueCertifiedTouch
+	}
+	return policies
 }
 
 // execute runs slices until the step completes or stops.
@@ -109,11 +137,11 @@ func (r *scheduleRun) execute(ctx context.Context) (*StepReport, error) {
 	for {
 		if exactBase(r.at).Cmp(exactBase(r.dt)) >= 0 {
 			// An event at the step end leaves no time to drift.
-			return r.complete(ctx, r.state)
+			return r.complete(ctx, r.state, nil)
 		}
 		remaining := r.remaining()
 		paths := r.w.slicePaths(r.state, r.sliceDrivers(remaining), remaining)
-		sweeps, diagnostics, err := r.w.sweepSlice(ctx, paths, remaining, r.scheduled, r.policies)
+		sweeps, diagnostics, err := r.w.sweepSlice(ctx, r.work, paths, remaining, r.scheduled, r.policies)
 		if err != nil {
 			return nil, err
 		}
@@ -318,7 +346,7 @@ func (r *scheduleRun) eventLabel(f *big.Rat) (units.Value, bool) {
 // finish completes a slice that holds no cutting event: every body reaches
 // the end of the step on its certified path (§5 step 5).
 func (r *scheduleRun) finish(ctx context.Context, sweeps sliceSweeps, plan slicePlan) (*StepReport, error) {
-	end, proofs, diagnostics, err := r.w.slicePoses(ctx, r.state, sweeps, big.NewRat(1, 1), r.scheduled)
+	end, proofs, diagnostics, err := r.w.slicePoses(ctx, r.work, r.state, sweeps, big.NewRat(1, 1), r.scheduled)
 	if err != nil {
 		return nil, err
 	}
@@ -329,11 +357,14 @@ func (r *scheduleRun) finish(ctx context.Context, sweeps sliceSweeps, plan slice
 		return r.undecided(diagnostics...), nil
 	}
 	r.recordSlice(sweeps, proofs, r.dt, end)
-	return r.complete(ctx, end)
+	return r.complete(ctx, end, &sweeps)
 }
 
-// complete checks the contact set at the completed poses and publishes.
-func (r *scheduleRun) complete(ctx context.Context, end State) (*StepReport, error) {
+// complete checks the contact set at the completed poses and publishes. The
+// published state carries the contact set that rests at the end of the step
+// and the step's cache (§3.2): last holds the final slice's sweeps, or is
+// nil when an event at the step's end completed it.
+func (r *scheduleRun) complete(ctx context.Context, end State, last *sliceSweeps) (*StepReport, error) {
 	diagnostics, err := r.w.completedContacts(ctx, end, r.policies)
 	if err != nil {
 		return nil, err
@@ -341,8 +372,34 @@ func (r *scheduleRun) complete(ctx context.Context, end State) (*StepReport, err
 	if len(diagnostics) != 0 {
 		return r.undecided(r.timed(diagnostics)...), nil
 	}
-	trace := Trace{start: r.from, end: end, duration: r.dt, slices: r.slices, events: r.events, scheduled: true}
+	end.contacts = r.restingContacts(last)
+	end.cache = r.work.cache(end.entries)
+	trace := Trace{start: r.from, end: end, duration: r.dt, slices: r.slices, events: r.events, scheduled: true,
+		pairCalls: r.work.calls}
 	return r.publish(end, trace), nil
+}
+
+// restingContacts is the contact set the next step reads (§5 step 2): every
+// pair continued under ContinueCertifiedTouch whose final sweep is a
+// persistent track through the end of the step, or, when an event at the
+// end completed the step, every pair that event left under
+// ContinueCertifiedTouch. Keys are in canonical order.
+func (r *scheduleRun) restingContacts(last *sliceSweeps) []int {
+	var out []int
+	for key, policy := range r.policies {
+		if policy != decad.ContinueCertifiedTouch {
+			continue
+		}
+		if last != nil {
+			sweep, ok := last.swept[key]
+			if !ok || sweep.Outcome != decad.SweepPersistentTouch {
+				continue
+			}
+		}
+		out = append(out, key)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // recordSlice appends the slice from the current state to end, at held time
@@ -369,7 +426,7 @@ func (r *scheduleRun) advance(ctx context.Context, sweeps sliceSweeps, plan slic
 		var proofs []pairProof
 		var diagnostics []StepDiagnostic
 		var err error
-		pre, proofs, diagnostics, err = r.w.slicePoses(ctx, r.state, sweeps, plan.cut, r.scheduled)
+		pre, proofs, diagnostics, err = r.w.slicePoses(ctx, r.work, r.state, sweeps, plan.cut, r.scheduled)
 		if err != nil {
 			return nil, err
 		}
@@ -446,7 +503,7 @@ func (r *scheduleRun) undecided(diagnostics ...StepDiagnostic) *StepReport {
 	return &StepReport{Status: Undecided, Excluded: r.w.Excluded(), Diagnostics: diagnostics,
 		Events: r.published, Islands: r.islands,
 		Trace: Trace{start: r.from, end: r.prefixEnd, duration: r.prefixAt, slices: r.slices, events: r.events,
-			scheduled: true}}
+			scheduled: true, pairCalls: r.work.calls}}
 }
 
 // publish attaches the conservation readings of an advanced step.
@@ -473,15 +530,16 @@ func (r *scheduleRun) publish(end State, trace Trace) *StepReport {
 
 // sweepSlice runs §4.3's broad phase over every body's slice path and sweeps
 // each candidate pair under its start policy: the contact-set policy in
-// policies, or StopAtInitialContact.
-func (w *World) sweepSlice(ctx context.Context, paths []decad.PairPath, duration units.Value,
+// policies, or StopAtInitialContact. Every swept box and sweep goes through
+// work, which reuses a call it has seen and charges every other one.
+func (w *World) sweepSlice(ctx context.Context, work *stepWork, paths []decad.PairPath, duration units.Value,
 	scheduled map[int]struct{}, policies map[int]decad.SweepStartPolicy) (sliceSweeps, []StepDiagnostic, error) {
 	boxes := make([]decad.SweptBox, len(w.bodies))
-	for i, body := range w.bodies {
+	for i := range w.bodies {
 		if err := ctx.Err(); err != nil {
 			return sliceSweeps{}, nil, err
 		}
-		box, err := w.doc.SweptBox(ctx, body.definition.Body, paths[i])
+		box, err := work.sweptBox(ctx, i, paths[i])
 		if errors.Is(err, decad.ErrUnsupported) {
 			return sliceSweeps{}, []StepDiagnostic{scheduleDiagnostic(StepTravelUnbounded, BodyPair{},
 				fmt.Sprintf("swept box of body %d is unbounded: %v", i, err))}, nil
@@ -502,8 +560,7 @@ func (w *World) sweepSlice(ctx context.Context, paths []decad.PairPath, duration
 			policy = decad.StopAtInitialContact
 		}
 		pair := w.pairs[key]
-		sweep, err := w.doc.SweepPair(ctx, w.bodies[pair.a].definition.Body, w.bodies[pair.b].definition.Body,
-			paths[pair.a], paths[pair.b], w.sweepRequest(duration, policy))
+		sweep, err := work.sweepPair(ctx, key, paths[pair.a], paths[pair.b], w.sweepRequest(duration, policy))
 		if err != nil {
 			return sliceSweeps{}, nil, err
 		}
@@ -519,7 +576,7 @@ func (w *World) sweepSlice(ctx context.Context, paths []decad.PairPath, duration
 // replays it. Every pair the swept boxes excluded must keep its bounds
 // strictly apart at the rounded poses (§7.1). It returns the state at f and
 // every scheduled pair's proof.
-func (w *World) slicePoses(ctx context.Context, state State, sweeps sliceSweeps, f *big.Rat,
+func (w *World) slicePoses(ctx context.Context, work *stepWork, state State, sweeps sliceSweeps, f *big.Rat,
 	scheduled map[int]struct{}) (State, []pairProof, []StepDiagnostic, error) {
 	fraction, _ := f.Float64()
 	if ratFloat(fraction).Cmp(f) != 0 {
@@ -570,7 +627,7 @@ func (w *World) slicePoses(ctx context.Context, state State, sweeps sliceSweeps,
 		}
 		out.entries[i].Pose = pose
 	}
-	key, err := w.boxExclusionsHold(ctx, out, proofs)
+	key, err := w.boxExclusionsHold(ctx, work, out, proofs)
 	if err != nil {
 		return State{}, nil, nil, err
 	}

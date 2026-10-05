@@ -63,6 +63,7 @@ type eventIslands struct {
 	drive      map[int][3]*big.Rat
 	eventBase  int // events published earlier in the step
 	islandBase int // islands solved earlier in the step
+	work       *stepWork
 }
 
 // solvedEvent is the outcome of one event time's islands: the post-event
@@ -400,7 +401,7 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 			}
 		}
 		number := in.islandBase + len(solved)
-		solution, failure := w.solveIsland(isl, in.pre, in.drive)
+		solution, failure := w.solveIsland(isl, in.pre, in.drive, in.work)
 		if failure != nil {
 			d := scheduleDiagnostic(failure.code, w.bodyPair(w.pairs[isl.pairs[0].key]),
 				fmt.Sprintf("island %d: %s", number, failure.reason))
@@ -458,7 +459,7 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 		d.Limit = units.Scalar(float64(w.step.MaxEvents))
 		return nil, []StepDiagnostic{d}, nil
 	}
-	diagnostics, err := w.checkCorrections(ctx, in.pre, out.post, solved, moves, scheduled)
+	diagnostics, err := w.checkCorrections(ctx, in.work, in.pre, out.post, solved, moves, scheduled)
 	if err != nil || len(diagnostics) != 0 {
 		return nil, diagnostics, err
 	}
@@ -592,7 +593,7 @@ func ratVelocity(v [3]*big.Rat) QuantityVec {
 // contact: every island pair with a moved body must still touch at the
 // corrected poses, and every other scheduled pair with a moved body must
 // sweep clear over the correction, after the swept-box exclusion.
-func (w *World) checkCorrections(ctx context.Context, pre, post State, islands []island,
+func (w *World) checkCorrections(ctx context.Context, work *stepWork, pre, post State, islands []island,
 	moves map[int]r3.Vec, scheduled map[int]struct{}) ([]StepDiagnostic, error) {
 	if len(moves) == 0 {
 		return nil, nil
@@ -642,7 +643,7 @@ func (w *World) checkCorrections(ctx context.Context, pre, post State, islands [
 		for side, index := range [2]int{pair.a, pair.b} {
 			paths[side] = decad.PoseSegment{From: pre.entries[index].Pose, To: post.entries[index].Pose,
 				Duration: duration}
-			box, err := w.doc.SweptBox(ctx, w.bodies[index].definition.Body, paths[side])
+			box, err := work.sweptBox(ctx, index, paths[side])
 			if err != nil {
 				return nil, err
 			}
@@ -651,8 +652,7 @@ func (w *World) checkCorrections(ctx context.Context, pre, post State, islands [
 		if boxes[0].StrictlyDisjoint(boxes[1]) {
 			continue
 		}
-		sweep, err := w.doc.SweepPair(ctx, w.bodies[pair.a].definition.Body, w.bodies[pair.b].definition.Body,
-			paths[0], paths[1], w.sweepRequest(duration, decad.StopAtInitialContact))
+		sweep, err := work.sweepPair(ctx, key, paths[0], paths[1], w.sweepRequest(duration, decad.StopAtInitialContact))
 		if err != nil {
 			return nil, err
 		}

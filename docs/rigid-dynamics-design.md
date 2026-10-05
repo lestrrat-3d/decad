@@ -572,6 +572,7 @@ type StepConfig struct {
     MaxPoseEvaluations  uint64      // >= 2, per pair sweep
     MaxIterations       int         // positive, per event
     MaxEvents           int         // positive, per step
+    MaxPairSweeps       uint64      // positive, SweptBox and SweepPair calls per step
 }
 
 type BodyLoad struct {
@@ -863,7 +864,10 @@ world axis and `n`. Use a fixed-order projected iterative solve over the
 whole contact island. Process islands, pairs, and manifold features in world
 and source-feature order. Warm-start only from the input state's immutable
 contact cache, keyed by body pair and certified source features; do not
-key by topology slice index. Clamp a reused impulse to the current cone.
+key by topology slice index. Restart only an island whose whole problem
+matches a cached one exactly, from that island's final proposal state, so
+the warm start never changes a published impulse
+(`docs/multibody-dynamics-design.md` §6.2).
 
 Publish the maximum normal-velocity, tangent-velocity, friction-cone
 (Impulse kind), and penetration residuals, plus iteration count, for each
@@ -873,7 +877,7 @@ island. `VelocityResidual`, `ImpulseResidual`, and
 solver tolerance hidden from `StepConfig`. Island formation, the proposal
 order, and the exact-interval statement of every gate above are
 `docs/multibody-dynamics-design.md` §6. Resting contact uses zero
-restitution, persists in the state cache, and passes the same gate every
+restitution, persists in the state's contact set, and passes the same gate every
 step. The initial off-axis sphere-pair impact above also admits zero
 restitution when its full continuation is certified.
 A closing contact with no dynamic participant is undecided because

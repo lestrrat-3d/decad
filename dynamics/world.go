@@ -67,6 +67,11 @@ type StepConfig struct {
 	MaxPoseEvaluations      uint64
 	MaxIterations           int
 	MaxEvents               int
+	// MaxPairSweeps bounds the SweptBox and SweepPair calls one step of a
+	// world of four or more bodies makes, across every slice
+	// (docs/multibody-dynamics-design.md §3.3, §12). A certificate the step
+	// reuses costs nothing. It must be positive.
+	MaxPairSweeps uint64
 }
 
 type WorldConfig struct {
@@ -264,7 +269,7 @@ func validateStepConfig(cfg StepConfig) error {
 			return fmt.Errorf("%w: invalid %s", ErrInvalidInput, check.name)
 		}
 	}
-	if cfg.MaxPoseEvaluations < 2 || cfg.MaxIterations <= 0 || cfg.MaxEvents <= 0 {
+	if cfg.MaxPoseEvaluations < 2 || cfg.MaxIterations <= 0 || cfg.MaxEvents <= 0 || cfg.MaxPairSweeps == 0 {
 		return fmt.Errorf("%w: work limits must be positive", ErrInvalidInput)
 	}
 	return nil
@@ -410,9 +415,16 @@ type BodyState struct {
 // State is a value snapshot bound to its source World. Its entries slice is
 // never shared between two States that may diverge: code that derives a new
 // State by changing an entry starts from clone.
+//
+// A State that a step of a world of four or more bodies published also
+// carries that step's contact set and its reuse cache
+// (docs/multibody-dynamics-design.md §3.2). Both are immutable and describe
+// exactly these entries; a State derived from it by clone drops them.
 type State struct {
-	world   *World
-	entries []BodyState // world order
+	world    *World
+	entries  []BodyState   // world order
+	contacts []int         // canonical keys of the pairs resting on a persistent track at this state
+	cache    *contactCache // immutable reuse cache, nil without one
 }
 
 func (s State) Entries() []BodyState {
@@ -428,9 +440,12 @@ func (s State) Body(body *decad.Body) (BodyState, bool) {
 	return BodyState{}, false
 }
 
-// clone returns a State with its own copy of the entries.
+// clone returns a State with its own copy of the entries, for code that
+// derives a new state from s. The copy carries neither a contact set nor a
+// cache: both describe s's entries only.
 func (s State) clone() State {
 	s.entries = slices.Clone(s.entries)
+	s.contacts, s.cache = nil, nil
 	return s
 }
 

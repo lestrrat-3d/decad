@@ -66,7 +66,7 @@ func TestThreeBodyTwoDynamicSphereImpact(t *testing.T) {
 		ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 		PenetrationResidual:     units.Millimeters(1e-6),
 		ImpactSpeed:             units.MillimetersPerSecond(0), MaxPoseEvaluations: 128,
-		MaxIterations: 8, MaxEvents: 2}
+		MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096}
 	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
 		Bodies: []dynamics.RigidBody{
 			{Body: a, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
@@ -324,7 +324,7 @@ func TestThreeBodyTwoDynamicLoadsKickBothBodiesOnce(t *testing.T) {
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6),
 			ImpactSpeed:             units.MillimetersPerSecond(0), MaxPoseEvaluations: 128,
-			MaxIterations: 8, MaxEvents: 2},
+			MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096},
 	})
 	require.NoError(t, err)
 	start, err := w.NewState([]dynamics.BodyState{
@@ -392,7 +392,7 @@ func TestThreeBodyTwoDynamicFixedImpactKeepsOtherBodyMoving(t *testing.T) {
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6),
 			ImpactSpeed:             units.MillimetersPerSecond(0), MaxPoseEvaluations: 128,
-			MaxIterations: 8, MaxEvents: 2},
+			MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096},
 	})
 	require.NoError(t, err)
 	start, err := w.NewState([]dynamics.BodyState{
@@ -450,7 +450,7 @@ func TestThreeBodyTwoDynamicAllExcludedDriftsIndependently(t *testing.T) {
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6),
 			ImpactSpeed:             units.MillimetersPerSecond(0), MaxPoseEvaluations: 128,
-			MaxIterations: 8, MaxEvents: 1},
+			MaxIterations: 8, MaxEvents: 1, MaxPairSweeps: 4096},
 	})
 	require.NoError(t, err)
 	start, err := w.NewState([]dynamics.BodyState{
@@ -533,7 +533,7 @@ func TestThreeBodyTwoDynamicOverlappingPairEventsRemainUndecided(t *testing.T) {
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6),
 			ImpactSpeed:             units.MillimetersPerSecond(0),
-			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 3},
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 3, MaxPairSweeps: 4096},
 	})
 	require.NoError(t, err)
 	start, err := w.NewState([]dynamics.BodyState{
@@ -569,7 +569,7 @@ func TestThreeBodyTwoDynamicSequentialFloorImpacts(t *testing.T) {
 		ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 		PenetrationResidual:     units.Millimeters(1e-6),
 		ImpactSpeed:             units.MillimetersPerSecond(0), MaxPoseEvaluations: 128,
-		MaxIterations: 8}
+		MaxIterations: 8, MaxPairSweeps: 4096}
 	makeWorld := func(maxEvents int) (*dynamics.World, dynamics.State) {
 		step.MaxEvents = maxEvents
 		world, worldErr := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{

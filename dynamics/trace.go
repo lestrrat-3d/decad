@@ -30,6 +30,7 @@ type Trace struct {
 	slices              []traceSlice // a world of four or more bodies, docs/multibody-dynamics-design.md §3.4
 	events              []traceEvent // the events between those slices
 	scheduled           bool         // slices and events hold the whole record, even when both are empty
+	pairCalls           uint64       // SweptBox and SweepPair calls the step made, reused ones excluded
 	duration            units.Value
 	eventAt             units.Value
 	hasEvent            bool
@@ -218,6 +219,11 @@ func (tr Trace) sampleExcluded(timeValue, durationValue *big.Rat) (State, error)
 // or from its own path when only swept-box exclusions cover it. Velocities
 // inside a slice are the slice's from velocities.
 func (tr Trace) sampleSlices(t units.Value, timeValue, durationValue *big.Rat) (State, error) {
+	// The end comes first: an event at the step's end leaves its post state
+	// as the end, which carries the step's contact set and cache.
+	if timeValue.Cmp(durationValue) == 0 && timeValue.Sign() > 0 {
+		return tr.end, nil
+	}
 	for _, event := range tr.events {
 		if timeValue.Cmp(event.at) == 0 {
 			return event.post, nil
@@ -283,7 +289,7 @@ func (slice traceSlice) sample(t units.Value, timeValue, start *big.Rat) (State,
 	// §7.1: a pair the swept boxes exclude was never swept, and the rounded
 	// poses may leave the exact path by an ulp. Their bounds must still be
 	// strictly apart at the sampled poses.
-	key, err := world.boxExclusionsHold(context.Background(), state, slice.proofs)
+	key, err := world.boxExclusionsHold(context.Background(), directWork(world), state, slice.proofs)
 	if err != nil {
 		return State{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
 	}
@@ -300,15 +306,14 @@ func (slice traceSlice) sample(t units.Value, timeValue, start *big.Rat) (State,
 // pose can leave that path by an ulp, so the exclusion alone does not cover
 // it. It returns the first pair key whose bounds are not strictly apart, or
 // -1 when every exclusion holds.
-func (w *World) boxExclusionsHold(ctx context.Context, state State, proofs []pairProof) (int, error) {
+func (w *World) boxExclusionsHold(ctx context.Context, work *stepWork, state State, proofs []pairProof) (int, error) {
 	boxes := make(map[int]decad.SweptBox)
 	boxOf := func(index int) (decad.SweptBox, error) {
 		if box, ok := boxes[index]; ok {
 			return box, nil
 		}
 		pose := state.entries[index].Pose
-		box, err := w.doc.SweptBox(ctx, w.bodies[index].definition.Body,
-			decad.PoseSegment{From: pose, To: pose, Duration: units.Seconds(1)})
+		box, err := work.sweptBox(ctx, index, decad.PoseSegment{From: pose, To: pose, Duration: units.Seconds(1)})
 		if err != nil {
 			return decad.SweptBox{}, err
 		}

@@ -412,6 +412,51 @@ func TestScheduledStepSolvesMeetingBoxes(t *testing.T) {
 			require.Equal(t, decad.SweepPersistentTouch, proof.Sweep.Outcome)
 		}
 	}
+
+	// The published state carries the pair in its contact set (§5 step 2),
+	// and no kick changes it: the next step continues the pair on its
+	// persistent track from the start, with no initial-contact stop at zero.
+	// A state rebuilt from the same entries has no contact set, so its step
+	// meets the touch afresh: it sweeps the pair under StopAtInitialContact,
+	// solves its silent island, and then continues it the same way. Both
+	// publish nothing; the carried step makes exactly one SweepPair call
+	// fewer, without its cache as well. The spinning boxes are stopped here,
+	// so the second step sweeps nothing but the meeting pair.
+	meeting[2].spin, meeting[5].spin = r3.Vec{}, r3.Vec{}
+	scene = newSixBoxScene(t, meeting, [6]int{0, 1, 2, 3, 4, 5}, pairMaterialStepConfig())
+	report, err = scene.step(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Empty(t, report.Events)
+	rebuilt, err := scene.world.NewState(report.Next.Entries())
+	require.NoError(t, err)
+	var calls [2]uint64
+	for k, tc := range []struct {
+		name string
+		from dynamics.State
+	}{{"carried", dynamics.WithoutCache(*report.Next)}, {"rebuilt", rebuilt}} {
+		second, err := scene.world.Step(t.Context(), tc.from, dynamics.StepInput{Gravity: zeroAcceleration()},
+			sixBoxDt())
+		require.NoError(t, err, tc.name)
+		require.Equal(t, dynamics.Advanced, second.Status, "%s: %+v", tc.name, second.Diagnostics)
+		require.Empty(t, second.Events, tc.name)
+		require.Empty(t, second.Islands, tc.name)
+		proofs := dynamics.TraceSliceProofs(second.Trace)
+		require.Len(t, proofs, 1, tc.name)
+		for _, proof := range proofs[0] {
+			if scene.pairOf(proof.Pair) == [2]int{0, 1} {
+				require.NotNil(t, proof.Sweep, tc.name)
+				require.Equal(t, decad.SweepPersistentTouch, proof.Sweep.Outcome, tc.name)
+			}
+		}
+		for _, i := range []int{0, 1} {
+			entry, ok := second.Next.Body(scene.bodies[i])
+			require.True(t, ok)
+			require.Equal(t, r3.Identity(), entry.Pose, tc.name)
+		}
+		calls[k] = dynamics.TracePairCalls(second.Trace)
+	}
+	require.Equal(t, calls[0]+1, calls[1])
 }
 
 func TestScheduledStepPoseBudget(t *testing.T) {
@@ -478,4 +523,251 @@ func TestScheduledStepCancellation(t *testing.T) {
 		require.ErrorIs(t, err, context.Canceled, "cancelled at poll %d of %d", limit, polls)
 		require.Nil(t, report, "cancelled at poll %d of %d", limit, polls)
 	}
+}
+
+// cachePyramid is the 3-2-1 pyramid of island_test.go plus two 10 mm boxes
+// drifting at 8 mm/s along X far from it, 1/64 mm apart. Their swept boxes
+// overlap, so their pair is swept every slice; gravity changes their paths
+// every step, while the resting pyramid repeats the same paths.
+type cachePyramid struct {
+	pyramidScene
+	drift [2]*decad.Body
+}
+
+func newCachePyramid(t *testing.T, config dynamics.StepConfig) cachePyramid {
+	t.Helper()
+	scene := cachePyramid{pyramidScene: pyramidScene{doc: decad.New(),
+		density: units.KilogramsPerCubicMillimeter(0.001)}}
+	scene.floor = makeBox(t, scene.doc, -65, -90, 135, 110, -10, 10)
+	for i, corner := range pyramidBoxes {
+		scene.boxes[i] = makeBox(t, scene.doc, corner[0], corner[1], corner[0]+20, corner[1]+20, corner[2], 20)
+	}
+	scene.drift[0] = makeBox(t, scene.doc, 160, 0, 170, 10, 100, 10)
+	scene.drift[1] = makeBox(t, scene.doc, 170+1.0/64, 0, 180+1.0/64, 10, 100, 10)
+	material := dynamics.Material{Restitution: units.Scalar(0.3), Friction: units.Scalar(0)}
+	bodies := []dynamics.RigidBody{{Body: scene.floor, Role: dynamics.Fixed, Material: material}}
+	entries := []dynamics.BodyState{{Body: scene.floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(),
+		AngularVelocity: zeroAngular(t)}}
+	for _, box := range scene.boxes {
+		bodies = append(bodies, dynamics.RigidBody{Body: box, Role: dynamics.Dynamic, Density: &scene.density,
+			Material: material})
+		entries = append(entries, dynamics.BodyState{Body: box, Pose: r3.Identity(), LinearVelocity: zeroVelocity(),
+			AngularVelocity: zeroAngular(t)})
+	}
+	for _, box := range scene.drift {
+		bodies = append(bodies, dynamics.RigidBody{Body: box, Role: dynamics.Dynamic, Density: &scene.density,
+			Material: material})
+		entries = append(entries, dynamics.BodyState{Body: box, Pose: r3.Identity(),
+			LinearVelocity: dynamics.QuantityVec{X: units.MillimetersPerSecond(8), Y: units.MillimetersPerSecond(0),
+				Z: units.MillimetersPerSecond(0)}, AngularVelocity: zeroAngular(t)})
+	}
+	var err error
+	scene.world, err = dynamics.NewWorld(t.Context(), scene.doc, dynamics.WorldConfig{Bodies: bodies, Step: config})
+	require.NoError(t, err)
+	scene.state, err = scene.world.NewState(entries)
+	require.NoError(t, err)
+	return scene
+}
+
+func (s cachePyramid) stepFrom(ctx context.Context, from dynamics.State) (*dynamics.StepReport, error) {
+	return s.world.Step(ctx, from, dynamics.StepInput{Gravity: gravityZ(-9810)}, pyramidDt())
+}
+
+// withoutIterations clears the sweep count of every island report and every
+// event's solver report, the one published value a warm start changes, and
+// drops the trace and the next state, which the callers compare by samples
+// and entries.
+func withoutIterations(report *dynamics.StepReport) *dynamics.StepReport {
+	out := *report
+	out.Islands = append([]dynamics.IslandReport(nil), report.Islands...)
+	for i := range out.Islands {
+		out.Islands[i].Solver.Iterations = 0
+	}
+	out.Events = append([]dynamics.ContactEvent(nil), report.Events...)
+	for i := range out.Events {
+		if out.Events[i].Solver != nil {
+			solver := *out.Events[i].Solver
+			solver.Iterations = 0
+			out.Events[i].Solver = &solver
+		}
+	}
+	// The next state holds the step's cache, which records the sweep count;
+	// callers compare its entries.
+	out.Trace, out.Next = dynamics.Trace{}, nil
+	return &out
+}
+
+// TestScheduledStepReusesCertificates is §13 PR 8's fixture. The resting
+// pyramid's second step repeats the first: the same kick from the same
+// poses gives every body the same slice paths, so every pyramid pair's
+// report is the first step's report (§5.3) and the island's problem is the
+// first step's problem, whose proposal restarts at its fixed point (§6.2).
+// The drifting pair's paths change with the kick, so it alone is swept
+// again. Without the cache the second step makes every call again and solves
+// the island cold, and publishes the same bits.
+func TestScheduledStepReusesCertificates(t *testing.T) {
+	scene := newCachePyramid(t, islandStepConfig())
+	first, err := scene.stepFrom(t.Context(), scene.state)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, first.Status, "%+v", first.Diagnostics)
+	require.Len(t, first.Islands, 1)
+	require.Len(t, first.Events, 9)
+	require.Greater(t, first.Islands[0].Solver.Iterations, 1)
+	firstCalls := dynamics.TracePairCalls(first.Trace)
+	require.Positive(t, firstCalls)
+
+	second, err := scene.stepFrom(t.Context(), *first.Next)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, second.Status, "%+v", second.Diagnostics)
+	require.Len(t, second.Islands, 1)
+	require.Len(t, second.Events, 9)
+	// A cold solve that reached a fixed point restarts there and confirms it
+	// in one sweep. Whether float rounding lets the pyramid's sweeps reach an
+	// exact fixed point before MaxIterations depends on the host's FMA use; a
+	// solve that ran to MaxIterations republishes its proposal with its own
+	// sweep count (TestScheduledStepRepublishesUnsettledIsland).
+	if first.Islands[0].Solver.Iterations < islandStepConfig().MaxIterations {
+		require.Equal(t, 1, second.Islands[0].Solver.Iterations, "the island restarts at its fixed point")
+	} else {
+		require.Equal(t, first.Islands[0].Solver.Iterations, second.Islands[0].Solver.Iterations)
+	}
+
+	// Every pyramid pair holds the first step's report in each slice; the
+	// drifting pair holds a new one, the only SweepPair call of the step.
+	drift := dynamics.BodyPair{A: scene.drift[0], B: scene.drift[1]}
+	firstProofs, secondProofs := dynamics.TraceSliceProofs(first.Trace), dynamics.TraceSliceProofs(second.Trace)
+	require.Len(t, secondProofs, len(firstProofs))
+	reused, fresh := 0, 0
+	for i := range secondProofs {
+		require.Len(t, secondProofs[i], len(firstProofs[i]))
+		for k, proof := range secondProofs[i] {
+			require.Equal(t, firstProofs[i][k].Pair, proof.Pair)
+			require.Equal(t, firstProofs[i][k].BoxClear, proof.BoxClear, "pair %v", proof.Pair)
+			if proof.Sweep == nil {
+				continue
+			}
+			if proof.Pair == drift {
+				require.NotSame(t, firstProofs[i][k].Sweep, proof.Sweep, "slice %d", i)
+				require.Equal(t, decad.SweepClear, proof.Sweep.Outcome)
+				fresh++
+				continue
+			}
+			require.Same(t, firstProofs[i][k].Sweep, proof.Sweep, "slice %d pair %v", i, proof.Pair)
+			reused++
+		}
+	}
+	// The trace records one slice: the initial contacts cut a slice of zero
+	// length at the start, which replays nothing, and the rest follows the
+	// island's solve. Its nine pyramid pairs rest on reused tracks.
+	require.Len(t, secondProofs, 1)
+	require.Equal(t, 9, reused)
+	require.Equal(t, 1, fresh)
+	// The second step calls decad only for the drifting boxes: one swept box
+	// each and one sweep of their pair, which the slice after the event at
+	// zero reuses, and each box's stationary box at its new end pose for the
+	// box-exclusion check. Every other box and sweep is the first step's.
+	require.Equal(t, uint64(5), dynamics.TracePairCalls(second.Trace))
+
+	// Without the cache the second step repeats the first step's calls and
+	// cold solve, and publishes the same events, islands, state and readings.
+	cold, err := scene.stepFrom(t.Context(), dynamics.WithoutCache(*first.Next))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, cold.Status, "%+v", cold.Diagnostics)
+	require.Equal(t, firstCalls, dynamics.TracePairCalls(cold.Trace))
+	require.Equal(t, first.Islands[0].Solver.Iterations, cold.Islands[0].Solver.Iterations)
+	require.Equal(t, withoutIterations(cold), withoutIterations(second))
+	require.Equal(t, cold.Next.Entries(), second.Next.Entries())
+	for _, seconds := range []float64{0, 1.0 / 1024, 1.0 / 512, 1.0 / 256} {
+		want, err := cold.Trace.Sample(units.Seconds(seconds))
+		require.NoError(t, err, "sample at %g s", seconds)
+		got, err := second.Trace.Sample(units.Seconds(seconds))
+		require.NoError(t, err, "sample at %g s", seconds)
+		require.Equal(t, want.Entries(), got.Entries(), "sample at %g s", seconds)
+	}
+
+	// Cancelling the cached step at any poll returns the context error.
+	var calls atomic.Int64
+	_, err = scene.stepFrom(countdownContext{Context: t.Context(), calls: &calls, limit: math.MaxInt64}, *first.Next)
+	require.NoError(t, err)
+	polls := calls.Load()
+	for limit := range polls {
+		var calls atomic.Int64
+		report, err := scene.stepFrom(countdownContext{Context: t.Context(), calls: &calls, limit: limit}, *first.Next)
+		require.ErrorIs(t, err, context.Canceled, "cancelled at poll %d of %d", limit, polls)
+		require.Nil(t, report, "cancelled at poll %d of %d", limit, polls)
+	}
+}
+
+// TestScheduledStepRepublishesUnsettledIsland caps the pyramid's sweeps at
+// 64, fewer than its solve needs to reach a fixed point on any host, where
+// the certificate already passes. The second step's island matches the
+// first exactly, so it republishes the first step's proposal with its 64
+// sweeps rather than sweeping on from it, and every published value matches
+// the cache-free step.
+func TestScheduledStepRepublishesUnsettledIsland(t *testing.T) {
+	config := islandStepConfig()
+	config.MaxIterations = 64
+	scene := newCachePyramid(t, config)
+	first, err := scene.stepFrom(t.Context(), scene.state)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, first.Status, "%+v", first.Diagnostics)
+	require.Len(t, first.Islands, 1)
+	require.Equal(t, 64, first.Islands[0].Solver.Iterations)
+	second, err := scene.stepFrom(t.Context(), *first.Next)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, second.Status, "%+v", second.Diagnostics)
+	require.Equal(t, 64, second.Islands[0].Solver.Iterations)
+	cold, err := scene.stepFrom(t.Context(), dynamics.WithoutCache(*first.Next))
+	require.NoError(t, err)
+	require.Equal(t, withoutIterations(cold), withoutIterations(second))
+	require.Equal(t, cold.Islands[0].Solver, second.Islands[0].Solver)
+	require.Equal(t, cold.Next.Entries(), second.Next.Entries())
+}
+
+// TestScheduledStepPairBudget charges MaxPairSweeps with every SweptBox and
+// SweepPair call (§3.3, §12). A budget one call short of the first step's
+// stops it with StepPairBudget, its limit as a scalar, and the document
+// unchanged; a budget of exactly that many calls advances, and the second
+// step, which reuses the first step's certificates, fits in it as well.
+func TestScheduledStepPairBudget(t *testing.T) {
+	reference := newCachePyramid(t, islandStepConfig())
+	first, err := reference.stepFrom(t.Context(), reference.state)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, first.Status, "%+v", first.Diagnostics)
+	calls := dynamics.TracePairCalls(first.Trace)
+
+	config := islandStepConfig()
+	config.MaxPairSweeps = calls - 1
+	scene := newCachePyramid(t, config)
+	bodies := scene.doc.Bodies()
+	report, err := scene.stepFrom(t.Context(), scene.state)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, report.Status)
+	require.Nil(t, report.Next)
+	require.Len(t, report.Diagnostics, 1)
+	diagnostic := report.Diagnostics[0]
+	require.Equal(t, dynamics.StepPairBudget, diagnostic.Code, "%+v", diagnostic)
+	require.Equal(t, units.Scalar(float64(calls-1)), diagnostic.Limit)
+	require.Equal(t, pyramidDt(), diagnostic.To)
+	require.Equal(t, calls-1, dynamics.TracePairCalls(report.Trace))
+	require.Equal(t, bodies, scene.doc.Bodies())
+
+	config.MaxPairSweeps = calls
+	scene = newCachePyramid(t, config)
+	report, err = scene.stepFrom(t.Context(), scene.state)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	second, err := scene.stepFrom(t.Context(), *report.Next)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, second.Status, "%+v", second.Diagnostics)
+	require.Less(t, dynamics.TracePairCalls(second.Trace), calls)
+
+	_, err = dynamics.NewWorld(t.Context(), scene.doc, dynamics.WorldConfig{Bodies: []dynamics.RigidBody{
+		{Body: scene.floor, Role: dynamics.Fixed}, {Body: scene.boxes[0], Role: dynamics.Dynamic,
+			Density: &scene.density}}, Step: func() dynamics.StepConfig {
+		config := islandStepConfig()
+		config.MaxPairSweeps = 0
+		return config
+	}()})
+	require.ErrorIs(t, err, dynamics.ErrInvalidInput)
 }

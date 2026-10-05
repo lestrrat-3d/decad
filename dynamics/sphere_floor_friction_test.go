@@ -41,7 +41,7 @@ func TestSphereFloorSlidingFrictionUsesContactSweepStepAndTrace(t *testing.T) {
 		AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 		ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 		PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-		MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 2}
+		MaxPoseEvaluations: 128, MaxIterations: 64, MaxEvents: 2, MaxPairSweeps: 4096}
 	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
 		Bodies: []dynamics.RigidBody{
 			{Body: floor, Role: dynamics.Fixed, Material: material},

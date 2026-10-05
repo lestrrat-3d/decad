@@ -70,7 +70,7 @@ func fixedBoxContactWorldWithMaxEvents(t *testing.T, doc *decad.Document, floor,
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6),
 			ImpactSpeed:             units.MillimetersPerSecond(0),
-			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: maxEvents,
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: maxEvents, MaxPairSweeps: 4096,
 		},
 	})
 	require.NoError(t, err)
@@ -103,7 +103,7 @@ func TestVerticalBoxReboundUsesProductionGeometry(t *testing.T) {
 			VelocityResidual: units.MillimetersPerSecond(1e-6), ImpulseResidual: impulseLimit,
 			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2,
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096,
 		},
 	}
 	w, err := dynamics.NewWorld(t.Context(), doc, config)
@@ -752,7 +752,7 @@ func TestSuppliedMassBoxReboundUsesProductionGeometry(t *testing.T) {
 			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2,
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096,
 		},
 	})
 	require.NoError(t, err)
@@ -887,7 +887,7 @@ func TestRestingBoxUsesPersistentContactTrack(t *testing.T) {
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6),
 			ImpactSpeed:             units.MillimetersPerSecond(0),
-			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2,
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096,
 		},
 	})
 	require.NoError(t, err)
@@ -1038,7 +1038,7 @@ func TestTwoDynamicBoxesExchangeMomentum(t *testing.T) {
 			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2,
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096,
 		},
 	})
 	require.NoError(t, err)
@@ -1144,7 +1144,7 @@ func TestKinematicBoxPushUsesProductionGeometry(t *testing.T) {
 			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2,
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096,
 		},
 	})
 	require.NoError(t, err)
@@ -1213,7 +1213,7 @@ func TestTwoDynamicBoxesUseBothMasses(t *testing.T) {
 			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2,
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096,
 		},
 	})
 	require.NoError(t, err)
@@ -1261,7 +1261,7 @@ func TestClearIdealPathRejectsRoundedOverlappingEndpoint(t *testing.T) {
 			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
 			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
-			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2,
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096,
 		},
 	}
 	w, err := dynamics.NewWorld(t.Context(), doc, config)
@@ -1333,7 +1333,7 @@ func TestOffCenterBoxImpactRefusesOmittedSpin(t *testing.T) {
 			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-2),
 			PenetrationResidual:     units.Millimeters(1e-6),
 			ImpactSpeed:             units.MillimetersPerSecond(0),
-			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2,
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2, MaxPairSweeps: 4096,
 		},
 	}
 	w, err := dynamics.NewWorld(t.Context(), doc, config)

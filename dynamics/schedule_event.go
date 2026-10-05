@@ -89,7 +89,7 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 	drive := r.driverVelocities(sweeps, gathered)
 	solved, diagnostics, err := w.solveIslands(ctx, eventIslands{pre: pre, at: label, sliceStart: r.at,
 		sliceSpan: r.remaining(), gathered: gathered, drive: drive, eventBase: len(r.published),
-		islandBase: len(r.islands)}, r.scheduled)
+		islandBase: len(r.islands), work: r.work}, r.scheduled)
 	if err != nil || len(diagnostics) != 0 {
 		return nil, diagnostics, err
 	}
