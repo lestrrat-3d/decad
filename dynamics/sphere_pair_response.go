@@ -358,6 +358,18 @@ func sphereOmittedSpinWithin(witnessPoint, impulsePoint decad.ContactPoint, side
 	if spin.Cmp(angularLimit) > 0 {
 		return false
 	}
+	velocityLimit := exactBase(step.VelocityResidual)
+	inertiaUpper := inertiaRowCeiling(mass.Inertia)
+	if velocityLimit == nil || inertiaUpper == nil ||
+		new(big.Rat).Mul(spin, armUpper).Cmp(velocityLimit) > 0 {
+		return false
+	}
+	// The 1/2 factors on rotational energy and impulse times the allowed
+	// contact-point speed cancel in this comparison.
+	energy := new(big.Rat).Mul(inertiaUpper, new(big.Rat).Mul(spin, spin))
+	if energy.Cmp(new(big.Rat).Mul(upperImpulse, velocityLimit)) > 0 {
+		return false
+	}
 	// The contact witness can lie on the near side of the center of mass.
 	// Adding two radii also covers the opposite extreme of the source ball.
 	armUpper.Add(armUpper, new(big.Rat).Mul(big.NewRat(2, 1), exactBase(radius)))

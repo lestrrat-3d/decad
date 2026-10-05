@@ -129,6 +129,12 @@ func TestDiagonalSphereImpactWithDensityMass(t *testing.T) {
 	}{
 		{"wide mass", func(m *decad.MassProperties) { m.Mass.Bound = units.Kilograms(.1) }},
 		{"wide center", func(m *decad.MassProperties) { m.Center.Bound = units.Millimeters(.01) }},
+		{"off-center with large inertia", func(m *decad.MassProperties) {
+			m.Center.Value.X = .25
+			m.Inertia.XX.Value = units.KilogramSquareMillimeters(4e7)
+			m.Inertia.YY.Value = units.KilogramSquareMillimeters(4e7)
+			m.Inertia.ZZ.Value = units.KilogramSquareMillimeters(4e7)
+		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			uncertain := mass
