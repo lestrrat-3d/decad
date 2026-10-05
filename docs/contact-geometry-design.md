@@ -31,6 +31,12 @@ proof and a bounded point manifold inside one rotated face. At identity query
 poses, the analytic clearance kernel can certify
 a relation for other admitted solids without a contact manifold. Other curved
 and faceted witness and normal proofs remain design contracts.
+An internal reader can certify one complete rectangular axis support face of a
+zero-bound faceted Boolean result. It requires zero boundary displacement,
+zero occupied-volume difference, one outward-oriented planar source Face at
+the extremum, and exact triangle area equal to the footprint rectangle. A
+second support patch, nonrectangular footprint, or nonzero bound is refused.
+This reader does not yet publish a `ContactPair` manifold or relation.
 
 A full circular source prism at a signed-axis pose can certify separation
 from a source box across one axial face. Its complete projected disk must lie
