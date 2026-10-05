@@ -302,6 +302,8 @@ func TestRevolvedCylinderClearSweepReverseAndRefusals(t *testing.T) {
 		{name: "crossing", body: full, start: 1, velocity: -2,
 			relation: decad.ContactSeparated, outcome: decad.SweepImpactBracket},
 		{name: "lateral crossing", body: full, start: 1, velocity: -2, lateralVelocity: .25,
+			relation: decad.ContactSeparated, outcome: decad.SweepImpactBracket},
+		{name: "lateral face exit", body: full, start: 1, velocity: -2, lateralVelocity: 16,
 			relation: decad.ContactSeparated, outcome: decad.SweepUndecided},
 		{name: "floor edge", body: full, y: 15, start: 1, velocity: -2,
 			relation: decad.ContactUndecided, outcome: decad.SweepUndecided},

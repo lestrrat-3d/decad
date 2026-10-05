@@ -7,8 +7,9 @@ sphere against a source box certifies affine or centered rotating first impact
 and face-point departure or persistent touch while its projected radius remains strictly
 inside one box face. A sphere against an exactly orthogonal rotated source
 box also certifies a strict single-face affine clear span, first impact, or
-separating departure. A full source cylinder certifies a clear axial path,
-first face impact, and separating departure inside a source-box face.
+separating departure. A full source cylinder certifies a clear path,
+first face impact, and separating departure inside a source-box face, including
+transverse translation that stays inside the face.
 One zero-bound faceted Boolean solid with a certified rectangular lower face
 can certify an affine vertical clear path, first exact face touch, separating
 departure, or persistent face contact against a containing source-box floor.
@@ -49,7 +50,7 @@ rectangular half-profile can certify a strictly separated axial affine path
 against a containing source-box face. The sweep uses the source-derived outer
 disk box at both endpoints and over the full translation, and replay charges
 the rounded pose deviation before returning a clear sample. Both sources
-can also certify an axial first impact and separating departure. Near contact,
+can also certify a first face impact and separating departure. Near contact,
 lateral motion outside the containing face, partial revolutions, and other
 revolved profiles return `Undecided` on this path.
 `docs/collision-dynamics-design.md` owns the package
@@ -421,9 +422,11 @@ one axial gap between the complete swept outer boxes exceeds
 `PointResolution`. The two endpoint `ContactPair` queries must also prove
 separation, and their rounded pose differences must fit `PointResolution`.
 Both admitted source cylinders enter the axial impact path after an
-outer-box intersection. The impact path requires relative translation to have zero
-components across the face, the initial axial support
-gap is nonnegative, and the complete disk stays inside the same box face.
+outer-box intersection. The impact path admits transverse relative translation
+when the cylinder's outer disk box stays strictly inside the same box face at
+both endpoints. Each transverse edge difference is affine, so strict endpoint
+containment proves containment throughout the interval. The initial axial
+support gap must be nonnegative.
 The signed axial support gap is affine. A decreasing positive gap supplies
 its exact first-contact root, including equality at the final endpoint. Use a
 dyadic bracket with a separated left
@@ -432,7 +435,7 @@ face identities and signed normal match the posed `ContactPair` query.
 Transfer that query's bounded witness to the ideal path by charging the
 rounded pose difference. An initial touch with increasing support gap proves
 immediate departure. A stationary touch, near gap without a clear margin,
-lateral translation during impact, or a path leaving the face corridor returns
+or a path leaving the face corridor returns
 `SweepUndecided`. Exhausting the pose budget at the bracket's right sample
 returns `SweepUndecided` with `SweepPoseBudget` and the unresolved bracket.
 
