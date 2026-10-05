@@ -70,10 +70,11 @@ func TestNewSTEPFileBoxTopology(t *testing.T) {
 		}
 	}
 	require.Equal(t, 8, counts["VERTEX_POINT"])
-	require.Equal(t, 8, counts["CARTESIAN_POINT"])
-	require.Equal(t, 18, counts["EDGE_CURVE"])
-	require.Equal(t, 36, counts["ORIENTED_EDGE"])
-	require.Equal(t, 12, counts["ADVANCED_FACE"])
+	require.Equal(t, 14, counts["CARTESIAN_POINT"])
+	require.Equal(t, 12, counts["EDGE_CURVE"])
+	require.Equal(t, 24, counts["ORIENTED_EDGE"])
+	require.Equal(t, 6, counts["ADVANCED_FACE"])
+	require.Equal(t, 6, counts["PLANE"])
 	require.Equal(t, 1, counts["CLOSED_SHELL"])
 	require.Equal(t, 1, counts["MANIFOLD_SOLID_BREP"])
 	require.Equal(t, 1, counts["ADVANCED_BREP_SHAPE_REPRESENTATION"])
@@ -89,6 +90,125 @@ func TestNewSTEPFileBoxTopology(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(data), "FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));")
 	require.Contains(t, string(data), "MANIFOLD_SOLID_BREP")
+}
+
+func TestNewSTEPFilePlateWithHoleAnalytic(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 30, 40)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(20, 15), 5)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var profile *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			profile = p
+		}
+	}
+	require.NotNil(t, profile)
+	body, err := decad.New().Extrude(s, profile, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	require.NoError(t, err)
+	f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	counts := map[string]int{}
+	uses := map[step.Reference][]step.Enumeration{}
+	points := map[[3]step.Real]struct{}{}
+	for _, entity := range f.Entities {
+		counts[entity.Name]++
+		switch entity.Name {
+		case "CARTESIAN_POINT":
+			xyz := entity.Parameters[1].(step.List)
+			points[[3]step.Real{xyz[0].(step.Real), xyz[1].(step.Real), xyz[2].(step.Real)}] = struct{}{}
+		case "CIRCLE", "CYLINDRICAL_SURFACE":
+			require.Equal(t, step.Real(5), entity.Parameters[2])
+		case "ORIENTED_EDGE":
+			edge := entity.Parameters[3].(step.Reference)
+			uses[edge] = append(uses[edge], entity.Parameters[4].(step.Enumeration))
+		}
+	}
+	require.Equal(t, 7, counts["ADVANCED_FACE"])
+	require.Equal(t, 6, counts["PLANE"])
+	require.Equal(t, 1, counts["CYLINDRICAL_SURFACE"])
+	require.Equal(t, 2, counts["CIRCLE"])
+	require.Equal(t, 15, counts["EDGE_CURVE"])
+	require.Equal(t, 10, counts["VERTEX_POINT"])
+	require.Equal(t, 2, counts["FACE_BOUND"])
+	for _, xyz := range [][3]step.Real{{0, 0, 0}, {30, 40, 8}, {20, 15, 0}, {20, 15, 8}} {
+		_, ok := points[xyz]
+		require.Truef(t, ok, "missing STEP point %v", xyz)
+	}
+	for _, senses := range uses {
+		require.ElementsMatch(t, []step.Enumeration{"T", "F"}, senses)
+	}
+	_, err = f.Marshal()
+	require.NoError(t, err)
+}
+
+func TestNewSTEPFileCylinderAnalytic(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.CreateCircle(center, 5)
+	s.Fix(center)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := decad.New().Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	require.NoError(t, err)
+	f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.1), header())
+	require.NoError(t, err)
+	counts := map[string]int{}
+	uses := map[step.Reference][]step.Enumeration{}
+	for _, entity := range f.Entities {
+		counts[entity.Name]++
+		if entity.Name == "ORIENTED_EDGE" {
+			edge := entity.Parameters[3].(step.Reference)
+			uses[edge] = append(uses[edge], entity.Parameters[4].(step.Enumeration))
+		}
+	}
+	require.Equal(t, 3, counts["ADVANCED_FACE"])
+	require.Equal(t, 2, counts["PLANE"])
+	require.Equal(t, 1, counts["CYLINDRICAL_SURFACE"])
+	require.Equal(t, 2, counts["CIRCLE"])
+	require.Equal(t, 3, counts["EDGE_CURVE"])
+	for _, senses := range uses {
+		require.ElementsMatch(t, []step.Enumeration{"T", "F"}, senses)
+	}
+}
+
+func TestNewSTEPFileConeUsesFacetedFallback(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	origin := s.CreatePoint(0, 0)
+	s.Fix(origin)
+	apex := s.CreatePoint(10, 0)
+	top := s.CreatePoint(0, 5)
+	s.CreateLine(origin, apex)
+	s.CreateLine(apex, top)
+	s.CreateLine(top, origin)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	axis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+	body, err := decad.New().Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{})
+	require.NoError(t, err)
+	f, err := export.NewSTEPFile(t.Context(), body, units.Millimeters(0.5), header())
+	require.NoError(t, err)
+	counts := map[string]int{}
+	for _, entity := range f.Entities {
+		counts[entity.Name]++
+	}
+	require.Greater(t, counts["ADVANCED_FACE"], 3)
+	require.Equal(t, counts["ADVANCED_FACE"], counts["PLANE"])
+	require.Zero(t, counts["CYLINDRICAL_SURFACE"])
+	data, err := f.Marshal()
+	require.NoError(t, err)
+	require.Contains(t, string(data), "faceted decad solid")
 }
 
 func TestSTEPBlindPocketOneShell(t *testing.T) {
@@ -141,8 +261,8 @@ func TestWriteDeterministicAndUntouchedOnInvalidHeader(t *testing.T) {
 	require.NoError(t, export.STEP(t.Context(), &first, body, units.Millimeters(0.1), opts...))
 	require.NoError(t, export.STEP(t.Context(), &second, body, units.Millimeters(0.1), opts...))
 	require.Equal(t, first.Bytes(), second.Bytes())
-	require.Equal(t, 12, strings.Count(first.String(), "=ADVANCED_FACE("))
-	require.Contains(t, first.String(), "faceted decad solid")
+	require.Equal(t, 6, strings.Count(first.String(), "=ADVANCED_FACE("))
+	require.Contains(t, first.String(), "analytic decad solid")
 	require.Contains(t, first.String(), "decad export")
 
 	full := header()
@@ -153,7 +273,7 @@ func TestWriteDeterministicAndUntouchedOnInvalidHeader(t *testing.T) {
 	require.Contains(t, overridden.String(), "override.step")
 	require.Contains(t, overridden.String(), "faceted AP214 test")
 	require.Contains(t, overridden.String(), "FILE_DESCRIPTION(('faceted AP214 test')")
-	require.NotContains(t, overridden.String(), "FILE_DESCRIPTION(('faceted decad solid')")
+	require.NotContains(t, overridden.String(), "FILE_DESCRIPTION(('decad solid')")
 
 	bad := header()
 	bad.Timestamp = time.Time{}

@@ -233,7 +233,7 @@ to the byte budget.
 | `tessellate_chain.go` | A chain ribbon's exact-quad mesh off its wall topology. `docs/surface-design.md` §13.4. |
 | `tessellate_capblend.go` | `tessellateCapBlend`: the cap-loop chamfer mesh, one chord count per wall walk shared three ways. See `docs/tessellation-reach-design.md` §7. |
 | `triangulate.go` | The cap triangulator behind `Tessellate`: hole bridging plus reflex-blocked ear clipping, correct for non-convex outlines with holes. See the file's doc comment. |
-| `export/` | STL and OBJ mesh writers and the faceted AP214 writer. See `docs/step-export-design.md`. |
+| `export/` | STL and OBJ mesh writers and the analytic/faceted AP214 writer. See `docs/step-export-design.md`. |
 
 ### Repository
 

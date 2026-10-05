@@ -1,4 +1,4 @@
-// Package export writes decad bodies as STL, OBJ, and faceted AP214 STEP files.
+// Package export writes decad bodies as STL, OBJ, and AP214 STEP files.
 package export
 
 import (
@@ -58,11 +58,11 @@ func WithSTEPOrganization(organization string) STEPOption {
 	return stepOption{option.New(identSTEPOrganization{}, organization)}
 }
 
-// NewSTEPFile builds an AP214 file from one solid's boundary-verified mesh.
+// NewSTEPFile builds an AP214 file from one boundary-verified solid.
 // tol is Body.Tessellate's chord tolerance. The caller supplies the mandatory
 // header fields, including a timestamp; AP214's schema replaces Header.Schemas.
-// The result contains one planar ADVANCED_FACE per mesh triangle. It is a
-// faceted approximation, and cannot preserve analytic cylinders or splines.
+// Supported plane and full-cylinder boundaries retain analytic faces, lines,
+// and circles. Other boundaries use one planar ADVANCED_FACE per mesh triangle.
 // Sheets and bodies with multiple shells are refused. ctx and body must not be nil.
 func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header step.Header) (step.File, error) {
 	if ctx == nil {
@@ -94,6 +94,14 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 		return step.File{}, err
 	}
 
+	analytic, err := supportsAnalyticSTEP(ctx, body)
+	if err != nil {
+		return step.File{}, err
+	}
+	productDescription := "faceted decad solid"
+	if analytic {
+		productDescription = "analytic decad solid"
+	}
 	b := &fileBuilder{}
 	millimetre := b.add(ap214.Millimetre(0))
 	radian := b.add(ap214.Radian(0))
@@ -102,34 +110,42 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 	app := b.add(ap214.ApplicationContext(0, "automotive design"))
 	b.add(ap214.ApplicationProtocolDefinition(0, "international standard", 2003, app))
 	productContext := b.add(ap214.ProductContext(0, "mechanical parts", app, "mechanical"))
-	product := b.add(ap214.Product(0, "1", header.Name, "faceted decad solid", productContext))
+	product := b.add(ap214.Product(0, "1", header.Name, productDescription, productContext))
 	b.add(ap214.ProductRelatedProductCategory(0, "part", product))
 	formation := b.add(ap214.ProductDefinitionFormation(0, "1", "", product))
 	definitionContext := b.add(ap214.ProductDefinitionContext(0, "part definition", app, "design"))
 	definition := b.add(ap214.ProductDefinition(0, "design", "", formation, definitionContext))
 	shape := b.add(ap214.ProductDefinitionShape(0, "shape", "", definition))
 
-	pointRefs := make([]step.Reference, len(vertices))
-	vertexRefs := make([]step.Reference, len(vertices))
-	for i, p := range vertices {
-		if err := ctx.Err(); err != nil {
-			return step.File{}, err
-		}
-		pointRefs[i] = b.add(ap214.CartesianPoint(0, "", real3(p)))
-		vertexRefs[i] = b.add(ap214.VertexPoint(0, "", pointRefs[i]))
-	}
-
-	edges := make(map[edgeKey]step.Reference, len(triangles)*3/2)
-	faces := make([]step.Reference, 0, len(triangles))
-	for i, tri := range triangles {
-		if err := ctx.Err(); err != nil {
-			return step.File{}, err
-		}
-		face, err := b.addTriangle(tri, vertices, pointRefs, vertexRefs, edges)
+	var faces []step.Reference
+	if analytic {
+		faces, err = b.addAnalyticFaces(ctx, body)
 		if err != nil {
-			return step.File{}, fmt.Errorf("export: STEP triangle %d: %w", i, err)
+			return step.File{}, err
 		}
-		faces = append(faces, face)
+	} else {
+		pointRefs := make([]step.Reference, len(vertices))
+		vertexRefs := make([]step.Reference, len(vertices))
+		for i, p := range vertices {
+			if err := ctx.Err(); err != nil {
+				return step.File{}, err
+			}
+			pointRefs[i] = b.add(ap214.CartesianPoint(0, "", real3(p)))
+			vertexRefs[i] = b.add(ap214.VertexPoint(0, "", pointRefs[i]))
+		}
+
+		edges := make(map[edgeKey]step.Reference, len(triangles)*3/2)
+		faces = make([]step.Reference, 0, len(triangles))
+		for i, tri := range triangles {
+			if err := ctx.Err(); err != nil {
+				return step.File{}, err
+			}
+			face, err := b.addTriangle(tri, vertices, pointRefs, vertexRefs, edges)
+			if err != nil {
+				return step.File{}, fmt.Errorf("export: STEP triangle %d: %w", i, err)
+			}
+			faces = append(faces, face)
+		}
 	}
 	shell := b.add(ap214.ClosedShell(0, "", faces...))
 	brep := b.add(ap214.ManifoldSolidBrep(0, header.Name, shell))
@@ -141,7 +157,7 @@ func NewSTEPFile(ctx context.Context, body *decad.Body, tol units.Value, header 
 	return ap214.NewFile(header, b.entities...), nil
 }
 
-// STEP writes one faceted AP214 file. Supply the name, author, and organization
+// STEP writes one AP214 file. Supply the name, author, and organization
 // as options, or use WithSTEPHeader for a complete step.Header. When no
 // timestamp option is supplied, STEP uses the current UTC time.
 // Geometry and references are built before the writer is touched. Invalid
@@ -190,7 +206,7 @@ func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, o
 		header = *fullHeader
 	} else {
 		header = step.Header{
-			Description:         []string{"faceted decad solid"},
+			Description:         []string{"decad solid"},
 			Timestamp:           time.Now().UTC(),
 			PreprocessorVersion: "decad export",
 			OriginatingSystem:   "decad",
