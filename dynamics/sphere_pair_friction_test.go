@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func spherePairFrictionFixture(t *testing.T, coefficient float64, reverse bool,
+func spherePairFrictionFixture(t *testing.T, coefficient, restitution, tangentAY float64, reverse bool,
 	massA, massB decad.MassProperties, spinA dynamics.QuantityVec) (*decad.Document,
 	*dynamics.World, *decad.Body, *decad.Body, dynamics.State, dynamics.StepConfig) {
 	t.Helper()
@@ -21,13 +21,13 @@ func spherePairFrictionFixture(t *testing.T, coefficient float64, reverse bool,
 	require.NoError(t, err)
 	poseB, err := r3.Translation(r3.Vec{X: 5})
 	require.NoError(t, err)
-	material := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(coefficient)}
+	material := dynamics.Material{Restitution: units.Scalar(restitution), Friction: units.Scalar(coefficient)}
 	bodies := []dynamics.RigidBody{
 		{Body: a, Role: dynamics.Dynamic, Supplied: &massA, Material: material},
 		{Body: b, Role: dynamics.Dynamic, Supplied: &massB, Material: material},
 	}
 	states := []dynamics.BodyState{
-		{Body: a, Pose: poseA, LinearVelocity: sphereRestVelocity(r3.Vec{X: 50, Y: 20}),
+		{Body: a, Pose: poseA, LinearVelocity: sphereRestVelocity(r3.Vec{X: 50, Y: tangentAY}),
 			AngularVelocity: spinA},
 		{Body: b, Pose: poseB, LinearVelocity: sphereRestVelocity(r3.Vec{X: -50}),
 			AngularVelocity: zeroAngular(t)},
@@ -56,7 +56,7 @@ func TestSpherePairInitialFrictionImpactReplaysRotatingDeparture(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			mass := exactSphereMass()
-			doc, world, a, b, state, cfg := spherePairFrictionFixture(t, tc.mu, tc.reverse,
+			doc, world, a, b, state, cfg := spherePairFrictionFixture(t, tc.mu, .5, 20, tc.reverse,
 				mass, mass, zeroAngular(t))
 			duration := units.Seconds(.1)
 			initialA, _ := state.Body(a)
@@ -122,6 +122,90 @@ func TestSpherePairInitialFrictionImpactReplaysRotatingDeparture(t *testing.T) {
 	}
 }
 
+func TestSpherePairInitialZeroFrictionZeroRestitutionKeepsPersistentTouch(t *testing.T) {
+	mass := exactSphereMass()
+	doc, world, a, b, state, cfg := spherePairFrictionFixture(t, 0, 0, 0, false,
+		mass, mass, zeroAngular(t))
+	duration := units.Seconds(.1)
+	report, err := world.Step(t.Context(), state, dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, 50, report.Events[0].NormalImpulse.Base(), 1e-12)
+	for _, body := range []*decad.Body{a, b} {
+		end, ok := report.Next.Body(body)
+		require.True(t, ok)
+		require.Zero(t, end.LinearVelocity.X.Base())
+	}
+	for _, elapsed := range []units.Value{units.Seconds(0), units.Seconds(.05), duration} {
+		sample, sampleErr := report.Trace.Sample(elapsed)
+		require.NoError(t, sampleErr)
+		sa, ok := sample.Body(a)
+		require.True(t, ok)
+		sb, ok := sample.Body(b)
+		require.True(t, ok)
+		contact, pairErr := doc.ContactPair(t.Context(), a, b, sa.Pose, sb.Pose, cfg.Contact)
+		require.NoError(t, pairErr)
+		require.Equal(t, decad.ContactTouching, contact.Relation)
+	}
+	second, err := world.Step(t.Context(), *report.Next,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, second.Status, "%+v", second.Diagnostics)
+	require.Empty(t, second.Events)
+}
+
+func TestSpherePairInitialZeroFrictionKeepsDensityMassResponse(t *testing.T) {
+	doc := decad.New()
+	a, b := makeBall(t, doc), makeBall(t, doc)
+	density := units.KilogramsPerCubicMillimeter(.001)
+	material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
+	cfg := sphereRestConfig()
+	world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{
+			{Body: a, Role: dynamics.Dynamic, Density: &density, Material: material},
+			{Body: b, Role: dynamics.Dynamic, Density: &density, Material: material}},
+		Step: cfg})
+	require.NoError(t, err)
+	poseA, err := r3.Translation(r3.Vec{X: -5})
+	require.NoError(t, err)
+	poseB, err := r3.Translation(r3.Vec{X: 5})
+	require.NoError(t, err)
+	state, err := world.NewState([]dynamics.BodyState{
+		{Body: a, Pose: poseA, LinearVelocity: sphereRestVelocity(r3.Vec{X: 50}),
+			AngularVelocity: zeroAngular(t)},
+		{Body: b, Pose: poseB, LinearVelocity: sphereRestVelocity(r3.Vec{X: -50}),
+			AngularVelocity: zeroAngular(t)}})
+	require.NoError(t, err)
+	report, err := world.Step(t.Context(), state, dynamics.StepInput{Gravity: zeroAcceleration()},
+		units.Seconds(.1))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	sampled, err := report.Trace.Sample(units.Seconds(.05))
+	require.NoError(t, err)
+	sa, ok := sampled.Body(a)
+	require.True(t, ok)
+	sb, ok := sampled.Body(b)
+	require.True(t, ok)
+	contact, err := doc.ContactPair(t.Context(), a, b, sa.Pose, sb.Pose, cfg.Contact)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, contact.Relation)
+	material.Restitution = units.Scalar(.5)
+	reboundWorld, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{
+			{Body: a, Role: dynamics.Dynamic, Density: &density, Material: material},
+			{Body: b, Role: dynamics.Dynamic, Density: &density, Material: material}},
+		Step: cfg})
+	require.NoError(t, err)
+	reboundState, err := reboundWorld.NewState(state.Entries())
+	require.NoError(t, err)
+	rebound, err := reboundWorld.Step(t.Context(), reboundState,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.1))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, rebound.Status, "%+v", rebound.Diagnostics)
+}
+
 func TestSpherePairInitialFrictionRefusesUnsupportedResponse(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -147,7 +231,7 @@ func TestSpherePairInitialFrictionRefusesUnsupportedResponse(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			massB := exactSphereMass()
-			_, world, a, _, state, _ := spherePairFrictionFixture(t, tc.mu, false,
+			_, world, a, _, state, _ := spherePairFrictionFixture(t, tc.mu, .5, 20, false,
 				tc.mass, massB, tc.spin)
 			report, err := world.Step(t.Context(), state, dynamics.StepInput{Gravity: zeroAcceleration()},
 				units.Seconds(.1))

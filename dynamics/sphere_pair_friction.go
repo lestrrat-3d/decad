@@ -11,6 +11,40 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
+// The zero-friction route uses this narrow gate so unsupported mass and
+// source geometry continue through the existing frictionless response.
+func (w *World) exactSpherePairFrictionCandidate(kicked State,
+	manifold *decad.ContactManifold) bool {
+	if !isSourceSpherePairEvent(manifold) || w.parts[0].definition.Role != Dynamic ||
+		w.parts[1].definition.Role != Dynamic {
+		return false
+	}
+	point := manifold.Points[0]
+	if math.Abs(point.Normal.Value.X) != 1 || point.Normal.Value.Y != 0 ||
+		point.Normal.Value.Z != 0 || point.Normal.Bound.Base() != 0 ||
+		point.NormalAngle.Base() != 0 || point.OnA.Bound.Base() != 0 ||
+		point.OnB.Bound.Base() != 0 || point.OnA.Value != point.OnB.Value {
+		return false
+	}
+	for i, face := range [2]*decad.Face{point.FaceA, point.FaceB} {
+		if w.parts[i].definition.Supplied == nil ||
+			kicked.entries[i].Pose.Basis() != r3.Identity().Basis() ||
+			!zeroAngularVelocity(kicked.entries[i].AngularVelocity) ||
+			kicked.entries[i].LinearVelocity.Z.Base() != 0 {
+			return false
+		}
+		sphere, ok := face.Surface().(decad.Sphere)
+		if !ok || sphere.Center != (r3.Vec{}) {
+			return false
+		}
+		_, _, _, ok = exactSphereFloorMass(w.parts[i].mass, sphere)
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
 // stepInitialSpherePairFriction resolves one exact cardinal point. The exact
 // centered mass and witness gates keep the normal and tangent laws scalar.
 func (w *World) stepInitialSpherePairFriction(ctx context.Context, from, kicked State,

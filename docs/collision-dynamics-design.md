@@ -80,6 +80,7 @@ centered supplied mass can resolve a positive-restitution one-point friction
 impulse. The response changes both linear velocities and both Z spins, then
 the rotating sphere-pair sweep certifies separation and trace replay. Zero
 friction retains the tangent velocities and zero spin on the same path.
+A zero-friction, zero-restitution pair uses the existing response.
 An exactly orthogonal source box at a 45-degree Y pose also gives the sphere a
 bounded oblique point, an affine first-impact sweep, and a centered
 positive-restitution rebound with interior trace replay.

@@ -122,11 +122,12 @@ the normal restitution impulse, then applies the smaller of the tangent
 sticking impulse and the Coulomb limit. It rounds and checks both linear
 velocities, both Z spins, restitution, tangent slip or sliding direction,
 the friction cone, and each point impulse against configured residuals.
-Zero friction leaves the tangent velocities and spin unchanged. The event
-records equal and opposite linear impulses and both spin responses. The
+Zero friction leaves the tangent velocities and spin unchanged. A zero-friction,
+zero-restitution pair uses the existing response. The event records equal
+and opposite linear impulses and both spin responses. The
 rotating `SweepDepartedClear` report must prove ideal and rounded separation
-at its endpoint and certify trace replay. Other sphere-pair friction inputs
-return `Undecided`.
+at its endpoint and certify trace replay. Other positive-friction sphere-pair
+inputs return `Undecided`.
 A two-body world's pair may be excluded; its bodies drift independently even
 through overlap, and no pair material is mixed.
 The current three-body step admits one dynamic body and two fixed bodies, or
