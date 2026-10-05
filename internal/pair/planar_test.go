@@ -15,6 +15,10 @@ import (
 // Legs shown to fail (each deleted or inverted in turn, fixture red, then
 // restored):
 //   - the transversal crossing certificate: TestClassifyPlanarCrossingBars;
+//   - the full crossing scan, stopped at the first crossing instead:
+//     TestClassifyPlanarRecordsCrossings names one edge, and the face-local
+//     patch publishes the cavity and two-face corners of
+//     planar_face_penetration_test.go;
 //   - the matching coplanar overlap: TestClassifyPlanarMatchingCoplanarOverlap;
 //   - the parity cast, skipped or inverted: TestClassifyPlanarNesting;
 //   - either side's fan vertex sign under a separating plane, and the
@@ -475,4 +479,82 @@ func TestClassifyPlanarPollsAndStops(t *testing.T) {
 		return nil
 	})
 	require.ErrorIs(t, err, stop)
+}
+
+// crossingSets gathers what the crossings name: the faces of tray's
+// triangles, the box's edges, and the tray's edges.
+func crossingSets(t *testing.T, result pair.PlanarResult, tray pair.PlanarSolid) (map[int]struct{},
+	map[[2]int]struct{}, map[[2]int]struct{}) {
+	t.Helper()
+	faces := make(map[int]struct{})
+	boxEdges := make(map[[2]int]struct{})
+	trayEdges := make(map[[2]int]struct{})
+	for _, crossing := range result.Crossings {
+		box, onTray := crossing.A, crossing.B
+		require.True(t, box.Edge != onTray.Edge, "an edge crosses a facet: %+v", crossing)
+		for _, f := range onTray.Facets {
+			faces[tray.Faces[f]] = struct{}{}
+		}
+		if box.Edge {
+			boxEdges[box.Ends] = struct{}{}
+		}
+		if onTray.Edge {
+			trayEdges[onTray.Ends] = struct{}{}
+		}
+	}
+	return faces, boxEdges, trayEdges
+}
+
+func TestClassifyPlanarRecordsCrossings(t *testing.T) {
+	tray := faceTray()
+	// The corner sits 2⁻²⁰ below the floor, 2⁻²² off its diagonal y = x:
+	// its edges along u and v cross the floor on either side of the
+	// diagonal, which itself passes through the box's sunk corner.
+	box := cornerDown([3]float64{3, 3 + 1.0/(1<<22), -tiny})
+	result := classify(t, box, tray)
+	require.Equal(t, pair.Overlapping, result.Relation)
+	require.NotEmpty(t, result.Crossings)
+	faces, boxEdges, trayEdges := crossingSets(t, result, tray)
+	require.Equal(t, map[int]struct{}{trayFloor: {}}, faces)
+	var floorTris []int
+	for tri, face := range tray.Faces {
+		if face == trayFloor {
+			floorTris = append(floorTris, tri)
+		}
+	}
+	named := make(map[int]struct{})
+	for _, crossing := range result.Crossings {
+		if !crossing.B.Edge {
+			named[crossing.B.Facets[0]] = struct{}{}
+		}
+	}
+	require.Equal(t, map[int]struct{}{floorTris[0]: {}, floorTris[1]: {}}, named, "both floor triangles")
+	// Every crossing box edge leaves the sunk corner: its three edges, and
+	// the diagonals of its three faces, which run inside one face each.
+	creases := make(map[[2]int]struct{})
+	for _, crossing := range result.Crossings {
+		if part := crossing.A; part.Edge && box.Faces[part.Facets[0]] != box.Faces[part.Facets[1]] {
+			creases[part.Ends] = struct{}{}
+		}
+	}
+	require.Equal(t, map[[2]int]struct{}{{0, 1}: {}, {0, 2}: {}, {0, 4}: {}}, creases, "the corner's three edges")
+	require.Len(t, boxEdges, 6)
+	for edge := range boxEdges {
+		require.Zero(t, edge[0], "edge %v leaves the corner", edge)
+	}
+	require.Equal(t, map[[2]int]struct{}{{12, 14}: {}}, trayEdges, "the floor's diagonal")
+
+	reversed, err := pair.ClassifyPlanar(&tray, &box, noPoll)
+	require.NoError(t, err)
+	require.Len(t, reversed.Crossings, len(result.Crossings))
+	for _, crossing := range reversed.Crossings {
+		require.Contains(t, result.Crossings, pair.PlanarCrossing{A: crossing.B, B: crossing.A})
+	}
+
+	// Below the floor and past the wall x = 12, the corner crosses both.
+	wall := parallelepiped([3]float64{12 + 1.0/1024, 0, -1.0 / 1024},
+		[3]float64{-4, 0, 1}, [3]float64{0, 4, 1}, [3]float64{-1, -1, 4})
+	faces, _, _ = crossingSets(t, classify(t, wall, tray), tray)
+	require.Contains(t, faces, trayFloor)
+	require.Contains(t, faces, 7, "the inner wall x = 12")
 }

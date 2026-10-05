@@ -1231,11 +1231,15 @@ the following hold, each an exact rational test:
 2. **One deepest feature.** The vertices of `M` at the least height `n·(p − q)` below `h`'s plane
    (`q` a vertex of `h`), at depth `d = −min/|n| > 0`, are one vertex or the two ends of one edge; the
    deepest set with a triangle of `M` in it is a face, which this path does not publish.
-3. **The sunk part lies over the face.** Every vertex of `M` behind the plane, and the exact point where
-   each edge of `M` crosses the plane, projects along `n` strictly inside `h`'s region (§9.3's `locate`
-   test, holes included), and no edge of `M`'s sunk part, nor any edge of the plane's cut polygon,
-   projects onto a boundary edge of `h`. `M` is convex, so its sunk part is the hull of those points,
-   and this places the whole sunk part over `h`'s material.
+3. **The sunk part lies over the face.** Every vertex of `M` on or behind the plane, and the exact point
+   where each edge of `M` crosses the plane, projects along `n` strictly inside `h`'s region (§9.3's
+   `locate` test, holes included); no edge of those projections' convex hull meets a loop of `h`; and
+   no loop vertex of `h` lies in that hull. The first two put the hull's boundary in the region's
+   interior, so a loop can reach the hull only by lying wholly inside it, which the third refuses (a
+   hole under the sunk part). `M` is convex, so its sunk part is the hull of those points, and this
+   places the whole sunk part over `h`'s material. A sunk part that leaves `h` in general position
+   also crosses `h`'s rim, which condition 1 refuses first; this test covers the crossings through a
+   vertex or along an edge that §9.1 does not record.
 4. **The column is clear.** Every triangle of `S` with a vertex strictly in front of `h`'s plane
    projects along `n` strictly apart from the projection of `M`'s vertex hull (§10.6's column test with
    a zero margin). Material of `S` in front of the plane therefore meets no part of `M`, so `M ∩ S` is
@@ -1247,9 +1251,12 @@ plane (the feet of an edge clipped to `h`'s region, each piece reaching the inte
 exact enclosure of `−d`, the normal `h`'s exact outward normal oriented `A` toward `B`, and the features
 the vertex's or edge's faces and `h`. Under a positive `SupportBand` the lifted set of `h` follows
 (§10.5's `Overlapping` row, `PlanarSupportSet` with `overlap` set). Reversal swaps sides as §9.5 states.
-`publishPlanarManifold` runs this path when §9.3's convex-convex path publishes nothing and exactly one
-body carries the convexity certificate, or when both do and the convex-convex path withholds for a tied
-minimum or an edge-cross axis. A non-convex `M` keeps `ContactNonConvex`.
+`publishPlanarManifold` runs this path whenever §9.3's convex-convex path publishes nothing, including
+for a pair §9.3 never reads because only one body carries the convexity certificate. Each certified
+body in turn is tried as `M` against the other as `S`; the patch is published when exactly one order
+publishes, and two publishing orders withhold it with `ContactAmbiguousFeature`, so the two query orders
+agree. A pair with no certified body keeps `ContactNonConvex`, and a patch the four tests refuse for any
+reason but condition 1's keeps the reason `ContactPair` already carries.
 
 The claim is local and §6.6 consumes it locally: the correction translates the pair apart by `d` along
 `n`, and `ContactPair` at the corrected poses, which must read `Touching` or a `ContactBand`, is what
@@ -2272,21 +2279,30 @@ lines below do not repeat it.
 - Files: `internal/pair/planar.go`, new `internal/pair/planar_face_penetration.go`,
   `contact_faceted_manifold.go`; `docs/collision-v1-support.md`.
 - Test (root): `contact_faceted_manifold_test.go` gains, each in both body orders, over the §2 tray:
-  `TestPlanarManifoldCornerThroughTrayFloor`, the `8 mm` cube turned `30°` about `Y` and sunk so one
-  corner stands exactly `2⁻²⁰ mm` below the floor, publishing one point whose `OnB` is the corner's exact
-  staged coordinate, whose `OnA` is its foot on `z = 0`, whose `Separation` is exactly `−2⁻²⁰` with zero
-  bound and whose `Normal` is `(0, 0, 1)`, and under `SupportBand = 2⁻¹⁹ mm` the lifted corners after it
-  at their exact heights; `TestPlanarManifoldEdgeThroughTrayFloor`, the cube on an edge sunk by `2⁻²⁰ mm`,
-  two points at the edge's ends; `TestPlanarManifoldWithholdsCornerThroughTwoFaces`, the corner sunk into
-  the floor and a wall at once, `Overlapping` with `ContactAmbiguousFeature` and no manifold. Legs shown
-  to fail: condition 1 deleted, the two-face fixture publishes the floor's point; condition 4 deleted,
-  `internal/pair/planar_face_penetration_test.go`'s snapshot of the tray with a second shell, a `1 mm`
-  cube standing on the floor wholly inside the sunk cube (no crossing, so §9.1's nesting cast never runs
-  and only the column test sees it), publishes one corner. `internal/pair/planar_test.go`
-  gains `TestClassifyPlanarRecordsCrossings`: the sunk corner's crossings name the floor's two triangles
-  and the cube's three edges, and a cube crossing floor and wall names both faces. `.github/test-shards.txt`
+  `TestPlanarManifoldCornerThroughTrayFloor`, the `8 mm` cube turned `30°` about `(1, −1, 0)` and sunk so
+  one corner stands exactly `2⁻²⁰ mm` below the floor, publishing one point whose `OnB` is the corner's
+  exact staged coordinate, whose `OnA` is its foot on `z = 0`, whose `Separation` is exactly `−2⁻²⁰` with
+  zero bound and whose `Normal` is `(0, 0, 1)`, the same under `SupportBand = 2⁻¹⁹ mm`, and the cube
+  barely turned so its other bottom corners stand within that band publishing them after the sunk
+  corner at their exact heights; `TestPlanarManifoldEdgeThroughTrayFloor`, the cube turned `30°` about
+  `−Y` onto an edge sunk by `2⁻²⁰ mm`, two points at the edge's ends;
+  `TestPlanarManifoldWithholdsCornerThroughTwoFaces`, the corner sunk into the floor and a wall at once,
+  `Overlapping` with `ContactAmbiguousFeature` and no manifold. Legs shown to fail: condition 1 deleted,
+  the two-face fixture reads `ContactNoNormalProof` (conditions 3 and 4 still refuse it), and
+  `internal/pair/planar_face_penetration_test.go`'s corner sunk through a floor's thin skin into a cavity
+  below publishes the corner at its full depth; condition 4 deleted, that file's snapshot of a tray with a
+  second shell, a `1 mm` cube standing on the floor wholly inside the sunk box (no crossing, so §9.1's
+  nesting cast never runs and only the column test sees it), publishes one corner; each part of
+  condition 3 deleted, its region helper accepts a point set over a hole, across an L's notch or around a
+  hole (`planar_face_penetration_internal_test.go`); the lifted set deleted, the barely turned cube
+  publishes its sunk corner alone. `internal/pair/planar_test.go` gains
+  `TestClassifyPlanarRecordsCrossings`: the sunk corner's crossings name the floor's two triangles, its
+  three edges with its faces' diagonals, and the floor's diagonal, and a box crossing floor and wall
+  names both faces; stopping the scan at the first crossing is shown to fail. `.github/test-shards.txt`
   lists the root tests.
 - Depends on: PRs 11, 14a, 14c.
+- Shipped. A pair of two certified bodies tries both orders as `M` (§9.6), and the hexagonal prism of
+  `contact_faceted_pair_test.go` sunk `0.5 mm` into the `Cut` tray's floor now publishes its corner.
 
 ### PR 14e (Phase 2) — continuation inside the band
 

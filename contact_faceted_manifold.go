@@ -17,11 +17,14 @@ import (
 // contact_faceted_patch.go turns them into bounded public witnesses.
 
 // publishPlanarManifold computes the manifold of a Touching pair, or the
-// shallow-penetration patch of an Overlapping convex pair, and publishes it
-// on report. A withheld manifold leaves report.Manifold nil with its reason:
-// AmbiguousFeature for a contact set outside §9.3's table, PointTooCoarse
-// or NoNormalProof for a witness or normal over the request. A penetration
-// that the patch cannot certify keeps the reason report already carries.
+// shallow-penetration patch of an Overlapping pair, and publishes it on
+// report. An Overlapping pair of two convex bodies tries §9.3's patch first;
+// when that publishes nothing, a convex body poking through one face of the
+// other takes §9.6's face-local patch. A withheld manifold leaves
+// report.Manifold nil with its reason: AmbiguousFeature for a contact set
+// outside §9.3's table or an overlap through two faces, PointTooCoarse or
+// NoNormalProof for a witness or normal over the request. A penetration that
+// neither patch can certify otherwise keeps the reason report already carries.
 // A positive band appends the lifted set of each support plane after the
 // exact points (docs/multibody-dynamics-design.md §10.5).
 func publishPlanarManifold(budget *workBudget, report *ContactReport, a, b *pair.PlanarSolid,
@@ -41,14 +44,27 @@ func publishPlanarManifold(budget *workBudget, report *ContactReport, a, b *pair
 		}
 		points, planes = manifold.Points, manifold.Supports
 	case pair.Overlapping:
-		if !convexA || !convexB {
-			return nil
-		}
 		var plane *pair.SupportPlane
-		var err error
-		points, plane, err = pair.PlanarPenetrationSupport(a, b, budget.step)
-		if err != nil || points == nil {
-			return err
+		if convexA && convexB {
+			var err error
+			points, plane, err = pair.PlanarPenetrationSupport(a, b, budget.step)
+			if err != nil {
+				return err
+			}
+		}
+		if points == nil {
+			// §9.6: a convex body poking through one face of any planar body.
+			local, err := pair.PlanarFacePenetration(a, b, result.Crossings, convexA, convexB, budget.step)
+			if err != nil {
+				return err
+			}
+			if local.Points == nil {
+				if local.Reason != pair.NoReason {
+					report.Reason = sourceBoxReason(local.Reason)
+				}
+				return nil
+			}
+			points, plane = local.Points, &local.Supports[0]
 		}
 		if plane != nil {
 			planes, overlap = []pair.SupportPlane{*plane}, true

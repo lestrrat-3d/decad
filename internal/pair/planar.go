@@ -17,7 +17,9 @@ import (
 //     transversally proves Overlapping: just past the crossing, the edge's
 //     material wedge lies inside the other solid's material half-space. Two
 //     coplanar triangles with matching outward normals and a positive-area
-//     overlap prove it the same way.
+//     overlap prove it the same way. Every such crossing is recorded, so the
+//     face-local penetration patch (planar_face_penetration.go) can tell
+//     which faces an overlap passes through.
 //  2. One parity cast per shell, from a vertex that is not on the other
 //     solid's boundary, proves that shell inside (Overlapping) or outside.
 //     A shell with no such vertex meets the contact set, which step 4 covers.
@@ -67,14 +69,33 @@ type PlanarContact struct {
 	A, B PlanarFeature
 }
 
+// CrossingPart is one solid's part of a certified crossing: a facet, or an
+// edge (Ends, its vertex indices in ascending order) with the two facets that
+// hold it. Facets names the facet twice when Edge is false.
+type CrossingPart struct {
+	Edge   bool
+	Ends   [2]int
+	Facets [2]int
+}
+
+// PlanarCrossing is one certified crossing of the relation's first step: an
+// edge of one solid through the interior of a facet of the other, or two
+// coplanar facets with matching outward normals and a positive-area overlap.
+type PlanarCrossing struct {
+	A, B CrossingPart
+}
+
 // PlanarResult is the proven relation of two planar solids. Gap is set for
 // Separated and Touching; Contacts lists every zero-distance feature pair of a
-// Touching relation in scan order.
+// Touching relation in scan order. Crossings lists, in scan order, every
+// certified crossing behind an Overlapping relation; it is empty when the
+// overlap was proven by nesting alone.
 type PlanarResult struct {
-	Relation Relation
-	Reason   Reason
-	Gap      *ScalarReading
-	Contacts []PlanarContact
+	Relation  Relation
+	Reason    Reason
+	Gap       *ScalarReading
+	Contacts  []PlanarContact
+	Crossings []PlanarCrossing
 }
 
 // CheckPlanarSolid audits a snapshot before any relation reads it: indices in
@@ -149,9 +170,11 @@ func PlanarConvex(s *PlanarSolid, poll func() error) (bool, error) {
 func ClassifyPlanar(a, b *PlanarSolid, poll func() error) (PlanarResult, error) {
 	pa, pb := preparePlanar(a), preparePlanar(b)
 	k := &planarKernel{a: pa, b: pb, poll: poll}
-	overlap, err := k.crossings()
-	if err != nil || overlap {
-		return PlanarResult{Relation: Overlapping}, err
+	if err := k.crossings(); err != nil {
+		return PlanarResult{}, err
+	}
+	if len(k.crossed) > 0 {
+		return PlanarResult{Relation: Overlapping, Crossings: k.crossed}, nil
 	}
 	for _, side := range [][2]*planarPrep{{pa, pb}, {pb, pa}} {
 		inside, decided, err := k.shellsInside(side[0], side[1])
@@ -204,13 +227,14 @@ func ClassifyPlanar(a, b *PlanarSolid, poll func() error) (PlanarResult, error) 
 }
 
 // planarPrep holds one solid's derived exact data: outward normals, per
-// triangle and per edge boxes, the unique undirected edges, and the shell of
-// every vertex.
+// triangle and per edge boxes, the unique undirected edges with the two
+// triangles holding each, and the shell of every vertex.
 type planarPrep struct {
 	s              *PlanarSolid
 	normal         []proof.DyV3
 	triLo, triHi   [][3]proof.Dyadic
 	edges          [][2]int
+	edgeFacets     [][2]int
 	edgeLo, edgeHi [][3]proof.Dyadic
 	shellOf        []int
 	shells         int
@@ -230,7 +254,7 @@ func preparePlanar(s *PlanarSolid) *planarPrep {
 		}
 		return v
 	}
-	seen := make(map[[2]int]struct{}, 3*len(s.Tris)/2)
+	seen := make(map[[2]int]int, 3*len(s.Tris)/2)
 	for t, tri := range s.Tris {
 		a := s.Verts[tri[0]]
 		p.normal[t] = proof.DvCross(proof.DvSub(s.Verts[tri[1]], a), proof.DvSub(s.Verts[tri[2]], a))
@@ -239,11 +263,14 @@ func preparePlanar(s *PlanarSolid) *planarPrep {
 			u, w := tri[i], tri[(i+1)%3]
 			parent[find(u)] = find(w)
 			key := [2]int{min(u, w), max(u, w)}
-			if _, ok := seen[key]; ok {
+			if e, ok := seen[key]; ok {
+				// An audited solid holds each edge in exactly two triangles.
+				p.edgeFacets[e][1] = t
 				continue
 			}
-			seen[key] = struct{}{}
+			seen[key] = len(p.edges)
 			p.edges = append(p.edges, key)
+			p.edgeFacets = append(p.edgeFacets, [2]int{t, t})
 			lo, hi := pointBox(s.Verts, key[:])
 			p.edgeLo, p.edgeHi = append(p.edgeLo, lo), append(p.edgeHi, hi)
 		}
@@ -382,6 +409,7 @@ type planarKernel struct {
 	hasBest bool
 	sites   []contactSite
 	seen    map[PlanarContact]struct{}
+	crossed []PlanarCrossing
 }
 
 func orientSign(p *planarPrep, t int, v proof.DyV3) int {
@@ -394,24 +422,32 @@ func edgeSide(normal, u, w proof.DyV3, x hpoint) int {
 	return proof.DvDot(proof.DvCross(proof.DvSub(w, u), x.from(u)), normal).Sign()
 }
 
-// crossings looks for a certified transversal crossing in both directions and
-// records every coplanar edge-in-facet chord and opposed coplanar facet pair
-// as a contact site. It reports true on a proven overlap.
-func (k *planarKernel) crossings() (bool, error) {
+// crossings records every certified transversal crossing in both directions
+// and every matching coplanar facet overlap in k.crossed, and every coplanar
+// edge-in-facet chord and opposed coplanar facet pair as a contact site. Any
+// recorded crossing proves an overlap.
+func (k *planarKernel) crossings() error {
 	for _, side := range [][2]*planarPrep{{k.a, k.b}, {k.b, k.a}} {
 		edges, tris := side[0], side[1]
 		for e, edge := range edges.edges {
 			p, q := edges.s.Verts[edge[0]], edges.s.Verts[edge[1]]
 			for t := range tris.s.Tris {
 				if err := k.poll(); err != nil {
-					return false, err
+					return err
 				}
 				if boxGapSquared(edges.edgeLo[e], edges.edgeHi[e], tris.triLo[t], tris.triHi[t]).Sign() > 0 {
 					continue
 				}
 				sp, sq := orientSign(tris, t, p), orientSign(tris, t, q)
 				if sp*sq < 0 && edgeThroughInterior(tris, t, p, q) {
-					return true, nil
+					edgePart := CrossingPart{Edge: true, Ends: edge, Facets: edges.edgeFacets[e]}
+					facetPart := CrossingPart{Facets: [2]int{t, t}}
+					crossing := PlanarCrossing{A: edgePart, B: facetPart}
+					if edges == k.b {
+						crossing = PlanarCrossing{A: facetPart, B: edgePart}
+					}
+					k.crossed = append(k.crossed, crossing)
+					continue
 				}
 				if sp == 0 && sq == 0 {
 					k.edgeInFacet(edges, edge, tris, t)
@@ -422,7 +458,7 @@ func (k *planarKernel) crossings() (bool, error) {
 	for ta := range k.a.s.Tris {
 		for tb := range k.b.s.Tris {
 			if err := k.poll(); err != nil {
-				return false, err
+				return err
 			}
 			if boxGapSquared(k.a.triLo[ta], k.a.triHi[ta], k.b.triLo[tb], k.b.triHi[tb]).Sign() > 0 {
 				continue
@@ -438,7 +474,11 @@ func (k *planarKernel) crossings() (bool, error) {
 				continue
 			}
 			if proof.DvDot(k.a.normal[ta], k.b.normal[tb]).Sign() > 0 {
-				return true, nil
+				k.crossed = append(k.crossed, PlanarCrossing{
+					A: CrossingPart{Facets: [2]int{ta, ta}},
+					B: CrossingPart{Facets: [2]int{tb, tb}},
+				})
+				continue
 			}
 			// Opposed coplanar facets put the two materials on opposite
 			// sides of one plane; their shared interior needs no local test.
@@ -448,7 +488,7 @@ func (k *planarKernel) crossings() (bool, error) {
 			}, skipLocal: true})
 		}
 	}
-	return false, nil
+	return nil
 }
 
 // edgeThroughInterior reports whether the line pq passes strictly inside
