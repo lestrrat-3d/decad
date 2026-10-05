@@ -65,8 +65,10 @@ The source-sphere face corridor carries a real sphere-to-box point manifold
 through an affine first-impact sweep and a centered fixed-floor rebound with
 supplied or density-derived sphere mass. Two source spheres also have a bounded
 center-line point manifold, an affine first-impact sweep including transverse
-motion, and a centered dynamic-pair rebound at cardinal or off-axis contact
-with a certified clear remainder. An exact isolated sphere-pair graze records
+motion, and a centered dynamic-pair response at cardinal or off-axis contact
+with a certified clear remainder. An interior off-axis impact can also advance
+at zero restitution when its corrected gap and both remainder sweeps certify
+separation. An exact isolated sphere-pair graze records
 one zero-impulse event and replays the separated path on both sides.
 An initially touching off-axis pair of dynamic source spheres rebounds under
 positive restitution or resolves zero restitution to persistent touch or

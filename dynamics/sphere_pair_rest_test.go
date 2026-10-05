@@ -238,3 +238,84 @@ func TestSpherePairInitialZeroRestitutionRefusesUnboundedSpin(t *testing.T) {
 	require.Len(t, step.Diagnostics, 1)
 	require.Equal(t, "sphere omitted angular response exceeds its residual", step.Diagnostics[0].Reason)
 }
+
+func TestSpherePairInteriorZeroRestitutionRest(t *testing.T) {
+	for _, reverse := range []bool{false, true} {
+		t.Run(map[bool]string{false: "forward", true: "reverse"}[reverse], func(t *testing.T) {
+			doc := decad.New()
+			a, b := makeBall(t, doc), makeBall(t, doc)
+			poseA, err := r3.Translation(r3.Vec{X: -6, Y: -8})
+			require.NoError(t, err)
+			poseB, err := r3.Translation(r3.Vec{X: 6, Y: 8})
+			require.NoError(t, err)
+			velA, velB := sphereRestVelocity(r3.Vec{X: 30, Y: 40}),
+				sphereRestVelocity(r3.Vec{X: -30, Y: -40})
+			config := sphereRestConfig()
+			initial, err := doc.ContactPair(t.Context(), a, b, poseA, poseB, config.Contact)
+			require.NoError(t, err)
+			require.Equal(t, decad.ContactSeparated, initial.Relation)
+			touchA, err := r3.Translation(r3.Vec{X: -3, Y: -4})
+			require.NoError(t, err)
+			touchB, err := r3.Translation(r3.Vec{X: 3, Y: 4})
+			require.NoError(t, err)
+			contact, err := doc.ContactPair(t.Context(), a, b, touchA, touchB, config.Contact)
+			require.NoError(t, err)
+			require.Equal(t, decad.ContactTouching, contact.Relation)
+			duration := units.Seconds(.2)
+			path := func(pose r3.Transform, velocity dynamics.QuantityVec) decad.RigidDriftSegment {
+				return decad.RigidDriftSegment{From: pose, LinearVelocity: velocity,
+					AngularVelocity: zeroAngular(t), Duration: duration}
+			}
+			sweep, err := doc.SweepPair(t.Context(), a, b, path(poseA, velA), path(poseB, velB),
+				decad.SweepRequest{ContactRequest: config.Contact, TimeResolution: config.TimeResolution,
+					MaxPoseEvaluations: config.MaxPoseEvaluations})
+			require.NoError(t, err)
+			require.Equal(t, decad.SweepImpactBracket, sweep.Outcome)
+			require.NotNil(t, sweep.Bracket)
+			require.InDelta(t, .5, sweep.Bracket.To.Fraction.Base(), 1e-8)
+			mass := exactSphereMass()
+			material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
+			definitions := []dynamics.RigidBody{
+				{Body: a, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+				{Body: b, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+			}
+			entries := []dynamics.BodyState{
+				{Body: a, Pose: poseA, LinearVelocity: velA, AngularVelocity: zeroAngular(t)},
+				{Body: b, Pose: poseB, LinearVelocity: velB, AngularVelocity: zeroAngular(t)},
+			}
+			if reverse {
+				definitions[0], definitions[1] = definitions[1], definitions[0]
+				entries[0], entries[1] = entries[1], entries[0]
+			}
+			world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+				Bodies: definitions, Step: config})
+			require.NoError(t, err)
+			state, err := world.NewState(entries)
+			require.NoError(t, err)
+			step, err := world.Step(t.Context(), state,
+				dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+			require.NoError(t, err)
+			require.Equal(t, dynamics.Advanced, step.Status, "%+v", step.Diagnostics)
+			require.Len(t, step.Events, 1)
+			require.InDelta(t, .1, step.Events[0].Time.Base(), 1e-8)
+			require.InDelta(t, 50, step.Events[0].NormalImpulse.Base(), 1e-6)
+			for _, body := range []*decad.Body{a, b} {
+				end, ok := step.Next.Body(body)
+				require.True(t, ok)
+				require.InDelta(t, 0, end.LinearVelocity.X.Base(), 1e-12)
+				require.InDelta(t, 0, end.LinearVelocity.Y.Base(), 1e-12)
+			}
+			for _, elapsed := range []units.Value{units.Seconds(.05), units.Seconds(.15), duration} {
+				sample, sampleErr := step.Trace.Sample(elapsed)
+				require.NoError(t, sampleErr)
+				sa, ok := sample.Body(a)
+				require.True(t, ok)
+				sb, ok := sample.Body(b)
+				require.True(t, ok)
+				pair, pairErr := doc.ContactPair(t.Context(), a, b, sa.Pose, sb.Pose, config.Contact)
+				require.NoError(t, pairErr)
+				require.Equal(t, decad.ContactSeparated, pair.Relation)
+			}
+		})
+	}
+}
