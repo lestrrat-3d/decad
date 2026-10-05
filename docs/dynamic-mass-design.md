@@ -8,7 +8,8 @@ integration for a revolved axis-incident rectangle are implemented. Faceted
 Boolean solids with verified occupied-volume bounds publish density-derived
 mass and inertia when their resulting volume and tensor intervals pass the
 positive admission gates.
-Other payload paths remain design contracts.
+Other payload paths remain design contracts; `docs/multibody-dynamics-design.md`
+§8 owns the order in which they land and which of §2.1 or §2.2 each takes.
 `docs/evaluator-design.md` §4 owns
 the existing planar area moments; this document owns the additional volume
 moments and their use by dynamics.

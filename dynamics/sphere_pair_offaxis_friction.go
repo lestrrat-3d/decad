@@ -51,10 +51,10 @@ func (w *World) stepInitialOffAxisSpherePairFriction(ctx context.Context, from, 
 		first.Samples[0].FloatContact.Relation != decad.ContactTouching ||
 		first.Samples[0].FloatContact.Manifold == nil ||
 		len(first.Samples[0].FloatContact.Manifold.Points) != 1 ||
-		w.parts[0].definition.Role != Dynamic || w.parts[1].definition.Role != Dynamic ||
-		w.step.MaxEvents <= 1 || w.restitution.Base() <= 0 ||
-		w.friction.lower == nil || w.friction.upper == nil ||
-		w.friction.lower.Sign() <= 0 || w.friction.lower.Cmp(w.friction.upper) != 0 {
+		w.bodies[0].definition.Role != Dynamic || w.bodies[1].definition.Role != Dynamic ||
+		w.step.MaxEvents <= 1 || w.pairs[0].restitution.Base() <= 0 ||
+		w.pairs[0].friction.lower == nil || w.pairs[0].friction.upper == nil ||
+		w.pairs[0].friction.lower.Sign() <= 0 || w.pairs[0].friction.lower.Cmp(w.pairs[0].friction.upper) != 0 {
 		return undecided(w, "off-axis sphere friction needs an initial exact dynamic point and coefficient"), nil
 	}
 	point := first.Event.Manifold.Points[0]
@@ -70,7 +70,7 @@ func (w *World) stepInitialOffAxisSpherePairFriction(ctx context.Context, from, 
 	var mass, moment, radius [2]*big.Rat
 	var center [2]sphereRatVec2
 	for i, face := range [2]*decad.Face{point.FaceA, point.FaceB} {
-		if face == nil || w.parts[i].definition.Supplied == nil ||
+		if face == nil || w.bodies[i].definition.Supplied == nil ||
 			kicked.entries[i].Pose.Basis() != r3.Identity().Basis() ||
 			!zeroAngularVelocity(kicked.entries[i].AngularVelocity) ||
 			kicked.entries[i].LinearVelocity.Z.Base() != 0 ||
@@ -82,7 +82,7 @@ func (w *World) stepInitialOffAxisSpherePairFriction(ctx context.Context, from, 
 			return undecided(w, "off-axis sphere friction needs centered source spheres"), nil
 		}
 		var ok bool
-		mass[i], moment[i], radius[i], ok = exactSphereFloorMass(w.parts[i].mass, sphere)
+		mass[i], moment[i], radius[i], ok = exactSphereFloorMass(w.bodies[i].mass, sphere)
 		if !ok {
 			return undecided(w, "off-axis sphere friction needs exact centered isotropic mass"), nil
 		}
@@ -120,14 +120,14 @@ func (w *World) stepInitialOffAxisSpherePairFriction(ctx context.Context, from, 
 	}
 	inverse := [2]*big.Rat{new(big.Rat).Inv(mass[0]), new(big.Rat).Inv(mass[1])}
 	inverseSum := new(big.Rat).Add(inverse[0], inverse[1])
-	restitution := exactBase(w.restitution)
+	restitution := exactBase(w.pairs[0].restitution)
 	jn := new(big.Rat).Neg(new(big.Rat).Quo(new(big.Rat).Mul(
 		new(big.Rat).Add(big.NewRat(1, 1), restitution), preNormal), inverseSum))
 	tangentInverse := new(big.Rat).Add(inverseSum,
 		new(big.Rat).Add(new(big.Rat).Quo(new(big.Rat).Mul(radius[0], radius[0]), moment[0]),
 			new(big.Rat).Quo(new(big.Rat).Mul(radius[1], radius[1]), moment[1])))
 	jt := new(big.Rat).Neg(new(big.Rat).Quo(slip, tangentInverse))
-	cone := new(big.Rat).Mul(w.friction.lower, jn)
+	cone := new(big.Rat).Mul(w.pairs[0].friction.lower, jn)
 	sliding := absRat(new(big.Rat).Set(jt)).Cmp(cone) > 0
 	if sliding {
 		jt.Set(cone)
@@ -152,7 +152,7 @@ func (w *World) stepInitialOffAxisSpherePairFriction(ctx context.Context, from, 
 		!rationalRoundedWithin(jt, jtFloat, w.step.ImpulseResidual) {
 		return undecided(w, "off-axis sphere friction impulse exceeds rounding residual"), nil
 	}
-	post := kicked
+	post := kicked.clone()
 	for i := range post.entries {
 		vx, vy, spin := sphereRatFloat(postIdeal[i].x), sphereRatFloat(postIdeal[i].y),
 			sphereRatFloat(spinIdeal[i])
@@ -184,14 +184,14 @@ func (w *World) stepInitialOffAxisSpherePairFriction(ctx context.Context, from, 
 	}
 	if sliding {
 		impulseResidual := absRat(new(big.Rat).Add(ratFloat(jtFloat),
-			new(big.Rat).Mul(w.friction.lower, new(big.Rat).Mul(ratFloat(jnFloat),
+			new(big.Rat).Mul(w.pairs[0].friction.lower, new(big.Rat).Mul(ratFloat(jnFloat),
 				big.NewRat(int64(slip.Sign()), 1)))))
 		if impulseResidual.Cmp(exactBase(w.step.ImpulseResidual)) > 0 {
 			return undecided(w, "off-axis sphere friction sliding impulse exceeds residual"), nil
 		}
 	}
 	coneResidual := new(big.Rat).Sub(absRat(ratFloat(jtFloat)),
-		new(big.Rat).Mul(w.friction.lower, ratFloat(jnFloat)))
+		new(big.Rat).Mul(w.pairs[0].friction.lower, ratFloat(jnFloat)))
 	if coneResidual.Sign() < 0 {
 		coneResidual.SetInt64(0)
 	}
@@ -212,7 +212,7 @@ func (w *World) stepInitialOffAxisSpherePairFriction(ctx context.Context, from, 
 		//nolint:nilerr // A missing replay proof is a supported Undecided outcome.
 		return undecided(w, "off-axis sphere friction endpoint lacks replay proof"), nil
 	}
-	end := post
+	end := post.clone()
 	end.entries[0].Pose, end.entries[1].Pose = poseA, poseB
 	lastSample := ideal.Samples[len(ideal.Samples)-1]
 	if lastSample.At.Fraction != units.Scalar(1) || lastSample.FloatContact == nil ||
@@ -221,7 +221,7 @@ func (w *World) stepInitialOffAxisSpherePairFriction(ctx context.Context, from, 
 		lastSample.PoseA != poseA || lastSample.PoseB != poseB {
 		return undecided(w, "off-axis sphere friction rounded endpoint lacks separation proof"), nil
 	}
-	last, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	last, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		poseA, poseB, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -249,7 +249,7 @@ func (w *World) stepInitialOffAxisSpherePairFriction(ctx context.Context, from, 
 		Y: units.KilogramMillimetersPerSecond(impulseY), Z: units.KilogramMillimetersPerSecond(0)}
 	instant := first.Event.At
 	event := ContactEvent{Kind: ContactImpact,
-		Pair:    BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Pair:    BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body},
 		Bracket: decad.SweepInterval{From: instant, To: instant}, Time: instant.Elapsed.Value,
 		Manifold:      cloneManifold(*first.Event.Manifold),
 		NormalImpulse: units.KilogramMillimetersPerSecond(jnFloat), TangentImpulse: tangentImpulse,

@@ -17,11 +17,11 @@ import (
 func (w *World) stepInteriorFriction(ctx context.Context, from, kicked, pre State,
 	dt, eventAt units.Value, impactTime float64, first, prefix *decad.SweepReport) (*StepReport, error) {
 	dynamic := 1
-	if w.parts[0].definition.Role == Dynamic {
+	if w.bodies[0].definition.Role == Dynamic {
 		dynamic = 0
 	}
-	if w.parts[1-dynamic].definition.Role != Fixed || w.parts[dynamic].definition.Role != Dynamic ||
-		w.restitution.Base() != 0 || first.Bracket == nil || first.Event == nil ||
+	if w.bodies[1-dynamic].definition.Role != Fixed || w.bodies[dynamic].definition.Role != Dynamic ||
+		w.pairs[0].restitution.Base() != 0 || first.Bracket == nil || first.Event == nil ||
 		first.Event.Manifold == nil || len(first.Event.Manifold.Points) != 4 ||
 		!first.HasAffineReplayProof() ||
 		!roundedImpactPrefixAtEnd(prefix, first, w.step.PenetrationResidual) ||
@@ -51,7 +51,7 @@ func (w *World) stepInteriorFriction(ctx context.Context, from, kicked, pre Stat
 		return undecided(w, "frictional impact penetration exceeds its bracket"), nil
 	}
 	var inverseMass [2]float64
-	inverseMass[dynamic] = 1 / w.parts[dynamic].mass.Mass.Value.Base()
+	inverseMass[dynamic] = 1 / w.bodies[dynamic].mass.Mass.Value.Base()
 	post, err := correctPair(pre, normal, -separation, inverseMass)
 	if err != nil {
 		return undecidedArithmetic(w, "frictional impact correction is not finite", err)
@@ -59,7 +59,7 @@ func (w *World) stepInteriorFriction(ctx context.Context, from, kicked, pre Stat
 	if !pairCorrectionWithin(pre, post, 2, allowance) {
 		return undecided(w, "frictional impact correction exceeds its allowance"), nil
 	}
-	contact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	contact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		post.entries[0].Pose, post.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func (w *World) stepInteriorFriction(ctx context.Context, from, kicked, pre Stat
 			break
 		}
 		post = candidate
-		contact, err = w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+		contact, err = w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 			post.entries[0].Pose, post.entries[1].Pose, w.step.Contact)
 		if err != nil {
 			return nil, err
@@ -108,8 +108,8 @@ func (w *World) stepInteriorFriction(ctx context.Context, from, kicked, pre Stat
 	if !valid {
 		return undecided(w, "frictional impact patch exceeds its audited corner lever"), nil
 	}
-	response, valid := solveCenteredInteriorFrictionPatch(&patch, w.parts[dynamic].mass,
-		post.entries[dynamic].Pose, kicked.entries[dynamic].LinearVelocity, w.friction, w.step)
+	response, valid := solveCenteredInteriorFrictionPatch(&patch, w.bodies[dynamic].mass,
+		post.entries[dynamic].Pose, kicked.entries[dynamic].LinearVelocity, w.pairs[0].friction, w.step)
 	if !valid {
 		return undecided(w, "frictional interior response exceeds solver residuals"), nil
 	}
@@ -150,7 +150,7 @@ func (w *World) stepInteriorFriction(ctx context.Context, from, kicked, pre Stat
 			return undecided(w, fmt.Sprintf("frictional rounded remainder returned %v", rounded.Outcome)), nil
 		}
 	}
-	endpoint, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	endpoint, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -172,7 +172,7 @@ func (w *World) stepInteriorFriction(ctx context.Context, from, kicked, pre Stat
 		changeB = change
 	}
 	event := ContactEvent{Kind: ContactImpact,
-		Pair:    BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Pair:    BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body},
 		Bracket: *first.Bracket, Time: eventAt, Manifold: cloneManifold(*contact.Manifold),
 		NormalImpulse: normalImpulse, TangentImpulse: tangentImpulse, PointImpulses: points,
 		Solver: &ContactSolverReport{NormalResidual: response.NormalResidual,

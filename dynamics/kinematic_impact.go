@@ -28,7 +28,7 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 		exactBase(eventAt).Cmp(exactBase(dt)) >= 0 {
 		return undecided(w, "kinematic impact exceeds the exact step duration"), nil
 	}
-	pre := kicked
+	pre := kicked.clone()
 	found := false
 	for _, sample := range first.Samples {
 		if exactBase(sample.At.Fraction).Cmp(exactBase(first.Bracket.To.Fraction)) == 0 {
@@ -52,7 +52,7 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 		!roundedImpactPrefixAtEnd(roundedPrefix, first, w.step.PenetrationResidual) {
 		return undecided(w, "published kinematic impact prefix lacks a rounded endpoint bracket"), nil
 	}
-	contactAtRight, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	contactAtRight, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		pre.entries[0].Pose, pre.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -83,11 +83,11 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	if w.step.MaxEvents <= 1 {
 		return undecided(w, "kinematic impact reaches the event limit with time remaining"), nil
 	}
-	inverseMass := 1 / w.parts[dynamic].mass.Mass.Value.Base()
+	inverseMass := 1 / w.bodies[dynamic].mass.Mass.Value.Base()
 	if !finite(inverseMass) || inverseMass <= 0 {
 		return undecided(w, "kinematic impact effective mass is invalid"), nil
 	}
-	coefficient := w.restitution
+	coefficient := w.pairs[0].restitution
 	idealRelative := new(big.Rat).Sub(exactBase(preSpeed[1]), exactBase(preSpeed[0]))
 	idealRelative.Mul(idealRelative, big.NewRat(int64(sign), 1))
 	target := 0.0
@@ -106,9 +106,9 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	} else {
 		postSpeed[1] += impulse * sign * inverseMass
 	}
-	if !responsePairResidualsWithin(preSpeed, sign, effectiveCoefficient, w.parts,
+	if !responsePairResidualsWithin(preSpeed, sign, effectiveCoefficient, w.bodies,
 		target, impulse, postSpeed, w.step.VelocityResidual, w.step.ImpulseResidual) ||
-		!omittedSpinWithin(manifold, pre.entries[dynamic].Pose, w.parts[dynamic].mass,
+		!omittedSpinWithin(manifold, pre.entries[dynamic].Pose, w.bodies[dynamic].mass,
 			dynamic, axis, impulse, w.step.ImpulseResidual, w.step.AngularVelocityResidual) {
 		return undecided(w, "kinematic impact exceeds velocity, impulse, or spin residual"), nil
 	}
@@ -131,7 +131,7 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	}
 	setVelocityComponent(&post.entries[dynamic].LinearVelocity, axis,
 		units.MillimetersPerSecond(postSpeed[dynamic]))
-	contact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	contact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		post.entries[0].Pose, post.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -154,7 +154,7 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 			break
 		}
 		post = candidate
-		contact, err = w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+		contact, err = w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 			post.entries[0].Pose, post.entries[1].Pose, w.step.Contact)
 		if err != nil {
 			return nil, err
@@ -233,7 +233,7 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 		(!persistent && rounded.Outcome != decad.SweepDepartedClear) {
 		return undecided(w, fmt.Sprintf("rounded kinematic continuation returned %v", rounded.Outcome)), nil
 	}
-	finalContact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	finalContact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -263,7 +263,7 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 	report := &StepReport{Status: Advanced, Next: &end}
 	report.Events = []ContactEvent{{
 		Kind:            ContactImpact,
-		Pair:            BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Pair:            BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body},
 		Bracket:         *first.Bracket,
 		Time:            eventAt,
 		Manifold:        cloneManifold(*manifold),

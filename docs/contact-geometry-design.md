@@ -105,7 +105,8 @@ type ContactRequest struct {
     NormalResolution units.Value // positive Angle
 }
 
-type ContactRelation int // Separated, Touching, Overlapping, Undecided
+type ContactRelation int // Separated, Touching, Overlapping, Undecided,
+                         // ContactBand (appended; multibody §10.4)
 
 type ContactReport struct {
     A, B       *Body
@@ -140,9 +141,15 @@ crossing or containment witness alone may prove the relation. `Undecided`
 asserts none of those three relations and has no gap or manifold. A known
 relation may still have no usable manifold. `Reason` then names the missing
 certificate, for example `ContactNoNormalProof`, `ContactAmbiguousFeature`,
-`ContactPointTooCoarse`, or `ContactPayloadUnsupported`; callers branch on
+`ContactPointTooCoarse`, `ContactPayloadUnsupported`, or `ContactNonConvex`
+(appended; a dynamic body without `docs/multibody-dynamics-design.md` §9.2's
+convexity certificate); callers branch on
 that code, not its message. Do not reuse `Diagnostic` or `Verify.Status` as
-the pair verdict.
+the pair verdict. `ContactBand` is the one relation that is neither of the
+three exact relations nor `Undecided`: it states a published band around zero
+that the pair's separation lies in, for a body whose held boundary carries a
+positive displacement. `docs/multibody-dynamics-design.md` §10.4 owns when it
+is published and what `Gap` and the manifold carry.
 
 `ContactPair` always asks the analytic distance kernel for a gap on a
 separated pair; box separation alone does not supply a minimum. If the
@@ -246,7 +253,12 @@ only if a unique direction or a bounded cone meets `NormalResolution` and
 the solver can consume all its admissible directions. Otherwise omit the
 manifold with `ContactAmbiguousFeature`. A concave rim, multiple simultaneous
 features, and zero-area coplanar trims follow this rule. Normal orientation
-comes from body material sides, not triangle winding alone.
+comes from body material sides, not triangle winding alone. Where one side
+of the contact is a face interior and the touching certificate proves that
+face's plane supports the other body at the feature, the face normal is the
+unique admissible direction and is published, whatever the other side's
+cone; two non-parallel crossing edges have one direction up to sign.
+`docs/multibody-dynamics-design.md` §9.3 owns the per-feature table.
 
 An overlapping pair may have a usable manifold only when the kernel proves
 the boundary contact features and a bounded penetration direction/depth
@@ -536,7 +548,7 @@ under the existing `Document.Verify` concurrency rule.
 |---|---|---|
 | C1 | Exact posed source boxes and read-only pair report | Check 3 mm gap, face touch, shallow overlap, containment refusal, tied depth, and document state. |
 | C2 | Analytic prism/revolve contact families | Check point, ruling, patch, void-wall orientation, and near-tangent refusal against calculated geometry. |
-| C3 | Verified faceted source witnesses and certified normal cones | A curved source lies within each point ball; its analytic normal lies within the angular cone; a render-only mesh and a displacement bound without normal proof yield no manifold. |
+| C3 | Verified faceted source witnesses and certified normal cones; the exact planar algorithm is `docs/multibody-dynamics-design.md` §9 | A curved source lies within each point ball; its analytic normal lies within the angular cone; a render-only mesh and a displacement bound without normal proof yield no manifold. |
 | C4 | Remaining shipped solid payloads and cost pass | Each payload computes certified contact or gives its typed missing-proof reason. |
 
 C1 uses two 10 mm boxes 3 mm apart and reads a 3 mm gap. A face touch

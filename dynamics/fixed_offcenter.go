@@ -14,12 +14,12 @@ import (
 // The later response gate checks all four witnesses and the supplied inertia.
 func (w *World) fixedOffcenterPatch(event *decad.SweepEvent) bool {
 	if event == nil || event.Manifold == nil || len(event.Manifold.Points) != 4 ||
-		w.parts[0].definition.Role != Fixed || w.parts[1].definition.Role != Dynamic ||
-		w.parts[1].definition.Supplied == nil || w.friction.upper.Sign() != 0 ||
-		w.restitution.Base() <= 0 || event.Manifold.Points[0].Normal.Value != (r3.Vec{Z: 1}) {
+		w.bodies[0].definition.Role != Fixed || w.bodies[1].definition.Role != Dynamic ||
+		w.bodies[1].definition.Supplied == nil || w.pairs[0].friction.upper.Sign() != 0 ||
+		w.pairs[0].restitution.Base() <= 0 || event.Manifold.Points[0].Normal.Value != (r3.Vec{Z: 1}) {
 		return false
 	}
-	center := w.parts[1].mass.Center.Value.X
+	center := w.bodies[1].mass.Center.Value.X
 	maximum := event.Manifold.Points[0].OnB.Value.X
 	for _, point := range event.Manifold.Points {
 		maximum = math.Max(maximum, point.OnB.Value.X)
@@ -49,7 +49,7 @@ func (w *World) stepFixedOffcenter(ctx context.Context, from, kicked State, dt u
 		!w.fixedFloorPatchWitnesses(manifold) {
 		return undecided(w, "fixed off-center manifold exceeds its witness bounds"), nil
 	}
-	mass := w.parts[1].mass
+	mass := w.bodies[1].mass
 	if mass.Inertia.XY.Value.Base() != 0 || mass.Inertia.XZ.Value.Base() != 0 ||
 		mass.Inertia.YZ.Value.Base() != 0 || mass.Inertia.YY.Value.Base() <= 0 {
 		return undecided(w, "fixed off-center mass needs a bounded principal Y inertia"), nil
@@ -96,7 +96,7 @@ func (w *World) stepFixedOffcenter(ctx context.Context, from, kicked State, dt u
 	}
 	inverseMass, inverseInertia := 1/mass.Mass.Value.Base(), 1/mass.Inertia.YY.Value.Base()
 	effective := inverseMass + arm*arm*inverseInertia
-	impulse := -(1 + w.restitution.Base()) * preZ / effective
+	impulse := -(1 + w.pairs[0].restitution.Base()) * preZ / effective
 	postZ := preZ + impulse*inverseMass
 	spinY := impulse * arm * inverseInertia
 	if !finite(effective, impulse, postZ, spinY) || effective <= 0 || impulse <= 0 || spinY <= 0 {
@@ -107,11 +107,11 @@ func (w *World) stepFixedOffcenter(ctx context.Context, from, kicked State, dt u
 	}
 	angularError, normalResidual, valid := fixedOffcenterResiduals(mass,
 		manifold, points, postZ, spinY, kicked.entries[1].LinearVelocity.Z,
-		w.restitution, w.step)
+		w.pairs[0].restitution, w.step)
 	if !valid {
 		return undecided(w, "fixed off-center response exceeds solver residuals"), nil
 	}
-	post := kicked
+	post := kicked.clone()
 	post.entries[1].LinearVelocity.Z = units.MillimetersPerSecond(postZ)
 	post.entries[1].AngularVelocity.Y = units.RadiansPerSecond(spinY)
 	ideal, err := w.sweep(ctx, post, dt, decad.ContinueSeparatingTouch)
@@ -122,7 +122,7 @@ func (w *World) stepFixedOffcenter(ctx context.Context, from, kicked State, dt u
 	if !valid {
 		return undecided(w, "fixed off-center spin needs a certified departure remainder"), nil
 	}
-	end := post
+	end := post.clone()
 	end.entries[0].Pose, end.entries[1].Pose = poses[0], poses[1]
 	pointImpulses := make([]ContactPointImpulse, 4)
 	for i := range pointImpulses {
@@ -134,7 +134,7 @@ func (w *World) stepFixedOffcenter(ctx context.Context, from, kicked State, dt u
 	report := &StepReport{Status: Advanced, Next: &end}
 	report.Events = []ContactEvent{{
 		Kind:           ContactImpact,
-		Pair:           BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Pair:           BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body},
 		Bracket:        decad.SweepInterval{From: instant, To: instant},
 		Time:           instant.Elapsed.Value,
 		Manifold:       cloneManifold(*manifold),
@@ -229,7 +229,7 @@ func (w *World) fixedOffcenterEndpoint(post State, dt units.Value,
 	drift, driftOK := sweep.PathB.(decad.RigidDriftSegment)
 	if !fixedOK || !driftOK || fixed.From != post.entries[0].Pose || fixed.To != fixed.From ||
 		fixed.Duration != dt || drift.From != post.entries[1].Pose ||
-		drift.Center != post.entries[1].Pose.Apply(w.parts[1].mass.Center.Value) ||
+		drift.Center != post.entries[1].Pose.Apply(w.bodies[1].mass.Center.Value) ||
 		drift.LinearVelocity != post.entries[1].LinearVelocity ||
 		drift.AngularVelocity != post.entries[1].AngularVelocity || drift.Duration != dt {
 		return poses, false

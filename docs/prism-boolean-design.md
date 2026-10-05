@@ -90,8 +90,14 @@ making booleans this shape will ever observe.
 - **Decad builds its own 2D regularized-boolean kernel** (the investigation's
   "candidate B", predating the upstream `sketch` fixes) — rejected now that
   the two `sketch` asks it needed for the gear's normal case landed anyway;
-  building a second intersection kernel duplicates work `sketch` already does
-  and durably contradicts the hard rule rather than complying with it.
+  building a second intersection kernel duplicates work `sketch` already does,
+  with no performance or correctness win over it that CLAUDE.md's "Ask
+  `sketch` for 2D answers by default" rule would accept as the reason for a
+  decad-side 2D answer. The coplanar contact patch of two exact planar faces
+  (`docs/multibody-dynamics-design.md` §9.4) is such a decad-side answer: a
+  convex-polygon clip over rational vertices, with no arcs, circles or
+  regions, and §9.4 states its reason; this design's section combination
+  stays with `sketch`.
 - **General exact analytic B-rep boolean** (arbitrary curved-surface pairs,
   algebraic root isolation) — the eventual vN destination (api-design §2.1),
   multi-quarter scope; this design's gate/audit/authentication pattern is its

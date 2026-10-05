@@ -29,7 +29,7 @@ func (w *World) stepThreeSimultaneousInitial(ctx context.Context, from, kicked S
 	gravity QuantityVec, loads [2]*BodyLoad, dt units.Value, sweeps [3]*decad.SweepReport,
 	reference *World) (*StepReport, error) {
 	for key, sweep := range sweeps {
-		if sweep != nil && w.three.pairs[key].friction.upper.Sign() > 0 {
+		if sweep != nil && w.three.pairs[key].pairs[0].friction.upper.Sign() > 0 {
 			return w.stepThreeFrictionIsland(ctx, from, kicked, gravity, loads, dt, sweeps, reference)
 		}
 	}
@@ -53,11 +53,11 @@ func (w *World) stepThreeSimultaneousInitial(ctx context.Context, from, kicked S
 			outwardSum(math.Abs(separation), bound) > w.step.PenetrationResidual.Base() {
 			return w.threeUndecided(key, "simultaneous manifold exceeds contact bounds"), nil
 		}
-		if pair.friction.lower.Sign() != 0 {
+		if pair.pairs[0].friction.lower.Sign() != 0 {
 			return w.threeUndecided(key, "simultaneous friction needs a joint tangent solve"), nil
 		}
 		dynamic := 0
-		if pair.parts[1].definition.Role == Dynamic {
+		if pair.bodies[1].definition.Role == Dynamic {
 			dynamic = 1
 		}
 		if dynamic == 0 {
@@ -75,11 +75,11 @@ func (w *World) stepThreeSimultaneousInitial(ctx context.Context, from, kicked S
 		return w.threeUndecided(constraints[1].key, "coupled contact normals need a wider island solve"), nil
 	}
 	post := kicked
-	preDynamic, _ := kicked.Body(w.three.parts[w.three.dynamic].Body)
+	preDynamic, _ := kicked.Body(w.bodies[w.three.dynamic].definition.Body)
 	if !zeroAngularVelocity(preDynamic.AngularVelocity) {
 		return w.threeUndecided(constraints[0].key, "simultaneous rotating response is not certified"), nil
 	}
-	mass := constraints[0].pair.parts[constraints[0].dynamic].mass
+	mass := constraints[0].pair.bodies[constraints[0].dynamic].mass
 	massValue := mass.Mass.Value.Base()
 	if !finite(massValue) || massValue <= 0 {
 		return w.threeUndecided(constraints[0].key, "simultaneous mass is not finite"), nil
@@ -118,13 +118,13 @@ func (w *World) stepThreeSimultaneousInitial(ctx context.Context, from, kicked S
 		}
 		afterSpeed[c.dynamic] = postSpeed
 		originalSign := c.normal.X + c.normal.Y + c.normal.Z
-		if !responsePairResidualsWithin(preSpeed, originalSign, units.Scalar(0), c.pair.parts,
+		if !responsePairResidualsWithin(preSpeed, originalSign, units.Scalar(0), c.pair.bodies,
 			0, c.impulse, afterSpeed, w.step.VelocityResidual, w.step.ImpulseResidual) ||
 			!omittedSpinWithin(c.sweep.Event.Manifold, beforePair.entries[c.dynamic].Pose,
 				mass, c.dynamic, c.axis, c.impulse, w.step.ImpulseResidual, angularBudget) {
 			return w.threeUndecided(c.key, "simultaneous impulse or omitted spin exceeds residual"), nil
 		}
-		afterPair := beforePair
+		afterPair := beforePair.clone()
 		setVelocityComponent(&afterPair.entries[c.dynamic].LinearVelocity, c.axis,
 			units.MillimetersPerSecond(postSpeed))
 		post = withPairState(post, afterPair)
@@ -132,8 +132,8 @@ func (w *World) stepThreeSimultaneousInitial(ctx context.Context, from, kicked S
 		instant := c.sweep.Event.At
 		reportBody := c.dynamic
 		event := ContactEvent{
-			Kind: ContactImpact, Pair: BodyPair{A: c.pair.parts[0].definition.Body,
-				B: c.pair.parts[1].definition.Body},
+			Kind: ContactImpact, Pair: BodyPair{A: c.pair.bodies[0].definition.Body,
+				B: c.pair.bodies[1].definition.Body},
 			Bracket: decad.SweepInterval{From: instant, To: instant},
 			Time:    instant.Elapsed.Value, Manifold: cloneManifold(*c.sweep.Event.Manifold),
 			NormalImpulse: impulseValue, TangentImpulse: zeroImpulseVec(),
@@ -184,8 +184,8 @@ func (w *World) stepThreeSimultaneousInitial(ctx context.Context, from, kicked S
 		if !c.pair.persistentTrackWithin(actual, c.normal) {
 			return w.threeUndecided(c.key, fmt.Sprintf("simultaneous rounded path returned %v", actual.Outcome)), nil
 		}
-		contact, err := w.doc.ContactPair(ctx, c.pair.parts[0].definition.Body,
-			c.pair.parts[1].definition.Body, pairEnd.entries[0].Pose,
+		contact, err := w.doc.ContactPair(ctx, c.pair.bodies[0].definition.Body,
+			c.pair.bodies[1].definition.Body, pairEnd.entries[0].Pose,
 			pairEnd.entries[1].Pose, w.step.Contact)
 		if err != nil {
 			return nil, err
@@ -227,7 +227,7 @@ func (w *World) threeUndecidedArithmetic(key int, reason string, err error) (*St
 // The source box and center bounds enclose the largest body-point lever.
 func simultaneousAngularBudget(w *World, mass decad.MassProperties, dt units.Value,
 	pose r3.Transform, count int) (units.Value, bool) {
-	return simultaneousAngularBudgetForBody(w, w.three.parts[w.three.dynamic].Body,
+	return simultaneousAngularBudgetForBody(w, w.bodies[w.three.dynamic].definition.Body,
 		mass, dt, pose, count)
 }
 

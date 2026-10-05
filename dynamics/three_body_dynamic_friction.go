@@ -15,7 +15,7 @@ import (
 // accounts for the velocity change that either impulse causes at the other.
 func (w *World) stepThreeDynamicSphereFriction(ctx context.Context, from, kicked State,
 	input StepInput, dt units.Value) (*StepReport, bool, error) {
-	if w.three.dynamicCount != 3 || w.step.MaxEvents <= 2 || len(w.three.excluded) != 0 {
+	if w.three.dynamicCount != 3 || w.step.MaxEvents <= 2 || w.hasExcluded() {
 		return nil, false, nil
 	}
 	var first [3]*decad.SweepReport
@@ -55,7 +55,7 @@ func (w *World) stepThreeDynamicSphereFriction(ctx context.Context, from, kicked
 	}
 	var mass, moment, radius *big.Rat
 	for i, entry := range kicked.Entries() {
-		if w.three.parts[i].Supplied == nil || entry.Pose.Basis() != r3.Identity().Basis() ||
+		if w.bodies[i].definition.Supplied == nil || entry.Pose.Basis() != r3.Identity().Basis() ||
 			!zeroAngularVelocity(entry.AngularVelocity) || entry.LinearVelocity.Z.Base() != 0 {
 			return w.threeUndecided(i, "three-dynamic friction needs nonspinning centered supplied spheres"), true, nil
 		}
@@ -71,7 +71,7 @@ func (w *World) stepThreeDynamicSphereFriction(ctx context.Context, from, kicked
 		if !ok || sphere.Center != (r3.Vec{}) {
 			return w.threeUndecided(i, "three-dynamic friction needs centered source spheres"), true, nil
 		}
-		m, inertia, r, ok := exactSphereFloorMass(w.three.mass[i], sphere)
+		m, inertia, r, ok := exactSphereFloorMass(w.bodies[i].mass, sphere)
 		if !ok || i != 0 && (m.Cmp(mass) != 0 || inertia.Cmp(moment) != 0 || r.Cmp(radius) != 0) {
 			return w.threeUndecided(i, "three-dynamic friction needs equal exact masses and radii"), true, nil
 		}
@@ -116,17 +116,17 @@ func (w *World) stepThreeDynamicSphereFriction(ctx context.Context, from, kicked
 		return w.threeUndecided(0, "three-dynamic friction needs symmetric closing velocities"), true, nil
 	}
 	firstPair, secondPair := w.three.pairs[0], w.three.pairs[1]
-	if firstPair.restitution.Base() <= 0 || firstPair.restitution.Base() >= 1 ||
-		firstPair.restitution != secondPair.restitution ||
-		firstPair.friction.lower == nil || firstPair.friction.upper == nil ||
-		secondPair.friction.lower == nil || secondPair.friction.upper == nil ||
-		firstPair.friction.lower.Cmp(firstPair.friction.upper) != 0 ||
-		firstPair.friction.lower.Cmp(secondPair.friction.lower) != 0 ||
-		secondPair.friction.lower.Cmp(secondPair.friction.upper) != 0 ||
-		firstPair.friction.lower.Sign() <= 0 {
+	if firstPair.pairs[0].restitution.Base() <= 0 || firstPair.pairs[0].restitution.Base() >= 1 ||
+		firstPair.pairs[0].restitution != secondPair.pairs[0].restitution ||
+		firstPair.pairs[0].friction.lower == nil || firstPair.pairs[0].friction.upper == nil ||
+		secondPair.pairs[0].friction.lower == nil || secondPair.pairs[0].friction.upper == nil ||
+		firstPair.pairs[0].friction.lower.Cmp(firstPair.pairs[0].friction.upper) != 0 ||
+		firstPair.pairs[0].friction.lower.Cmp(secondPair.pairs[0].friction.lower) != 0 ||
+		secondPair.pairs[0].friction.lower.Cmp(secondPair.pairs[0].friction.upper) != 0 ||
+		firstPair.pairs[0].friction.lower.Sign() <= 0 {
 		return w.threeUndecided(0, "three-dynamic friction needs matching exact impact materials"), true, nil
 	}
-	restitution := exactBase(firstPair.restitution)
+	restitution := exactBase(firstPair.pairs[0].restitution)
 	// 2N+T=m(1+e)v and N+(2+mr²/I)T=mv. The second equation
 	// enforces zero slip at both points, including the outer spheres' spins.
 	radiusSquared := new(big.Rat).Mul(radius, radius)
@@ -139,14 +139,14 @@ func (w *World) stepThreeDynamicSphereFriction(ctx context.Context, from, kicked
 		new(big.Rat).Mul(new(big.Rat).Add(big.NewRat(1, 1), restitution),
 			new(big.Rat).Mul(mass, velocity)), tangent), big.NewRat(2, 1))
 	if normal.Sign() <= 0 || tangent.Sign() <= 0 ||
-		tangent.Cmp(new(big.Rat).Mul(firstPair.friction.lower, normal)) > 0 {
+		tangent.Cmp(new(big.Rat).Mul(firstPair.pairs[0].friction.lower, normal)) > 0 {
 		return w.threeUndecided(0, "three-dynamic friction impulse leaves the Coulomb cone"), true, nil
 	}
 	n, t := sphereRatFloat(normal), sphereRatFloat(tangent)
 	if !finite(n, t) || !rationalRoundedWithin(normal, n, w.step.ImpulseResidual) ||
 		!rationalRoundedWithin(tangent, t, w.step.ImpulseResidual) ||
 		new(big.Rat).Sub(ratFloat(t),
-			new(big.Rat).Mul(firstPair.friction.lower, ratFloat(n))).Cmp(
+			new(big.Rat).Mul(firstPair.pairs[0].friction.lower, ratFloat(n))).Cmp(
 			exactBase(w.step.ImpulseResidual)) > 0 {
 		return w.threeUndecided(0, "three-dynamic friction impulse exceeds rounding residual"), true, nil
 	}
@@ -206,7 +206,7 @@ func (w *World) stepThreeDynamicSphereFriction(ctx context.Context, from, kicked
 			return w.threeUndecided(key, "three-dynamic friction endpoint lacks replay proof"), true, nil
 		}
 		for side, pose := range [2]r3.Transform{poseA, poseB} {
-			body := pair.parts[side].definition.Body
+			body := pair.bodies[side].definition.Body
 			if held, seen := poses[body]; seen && held != pose {
 				return w.threeUndecided(key, "three-dynamic friction shared replay poses disagree"), true, nil
 			}
@@ -224,8 +224,8 @@ func (w *World) stepThreeDynamicSphereFriction(ctx context.Context, from, kicked
 	}
 	for key, pair := range w.three.pairs {
 		pairEnd := pairState(end, pair)
-		contact, err := w.doc.ContactPair(ctx, pair.parts[0].definition.Body,
-			pair.parts[1].definition.Body, pairEnd.entries[0].Pose,
+		contact, err := w.doc.ContactPair(ctx, pair.bodies[0].definition.Body,
+			pair.bodies[1].definition.Body, pairEnd.entries[0].Pose,
 			pairEnd.entries[1].Pose, w.step.Contact)
 		if err != nil {
 			return nil, true, err
@@ -362,7 +362,7 @@ func (w *World) threeDynamicFrictionEvents(pre, post State, sweeps [3]*decad.Swe
 		at := sweeps[key].Event.At
 		pair := w.three.pairs[key]
 		events = append(events, ContactEvent{Kind: ContactImpact,
-			Pair:    BodyPair{A: pair.parts[0].definition.Body, B: pair.parts[1].definition.Body},
+			Pair:    BodyPair{A: pair.bodies[0].definition.Body, B: pair.bodies[1].definition.Body},
 			Bracket: decad.SweepInterval{From: at, To: at}, Time: at.Elapsed.Value,
 			Manifold:      cloneManifold(*sweeps[key].Event.Manifold),
 			NormalImpulse: units.KilogramMillimetersPerSecond(normal), TangentImpulse: impulses[key],
@@ -389,13 +389,13 @@ func (w *World) threeDynamicFrictionEvents(pre, post State, sweeps [3]*decad.Swe
 // island while every real pair sweep certifies strict clear motion.
 func (w *World) stepThreeDynamicSphereClear(ctx context.Context, from, kicked State,
 	input StepInput, dt units.Value) (*StepReport, bool, error) {
-	if w.three.dynamicCount != 3 || len(w.three.excluded) != 0 {
+	if w.three.dynamicCount != 3 || w.hasExcluded() {
 		return nil, false, nil
 	}
 	spinning := false
 	for i, entry := range kicked.Entries() {
 		spinning = spinning || !zeroAngularVelocity(entry.AngularVelocity)
-		if w.three.parts[i].Supplied == nil {
+		if w.bodies[i].definition.Supplied == nil {
 			return nil, false, nil
 		}
 		faces := entry.Body.Faces()
@@ -406,7 +406,7 @@ func (w *World) stepThreeDynamicSphereClear(ctx context.Context, from, kicked St
 		if !ok || sphere.Center != (r3.Vec{}) {
 			return nil, false, nil
 		}
-		if _, _, _, ok := exactSphereFloorMass(w.three.mass[i], sphere); !ok {
+		if _, _, _, ok := exactSphereFloorMass(w.bodies[i].mass, sphere); !ok {
 			return nil, false, nil
 		}
 	}
@@ -430,7 +430,7 @@ func (w *World) stepThreeDynamicSphereClear(ctx context.Context, from, kicked St
 			return w.threeUndecided(key, "rotating clear sphere endpoint lacks replay proof"), true, nil
 		}
 		for side, pose := range [2]r3.Transform{poseA, poseB} {
-			body := pair.parts[side].definition.Body
+			body := pair.bodies[side].definition.Body
 			if held, seen := poses[body]; seen && held != pose {
 				return w.threeUndecided(key, "rotating clear sphere replay poses disagree"), true, nil
 			}

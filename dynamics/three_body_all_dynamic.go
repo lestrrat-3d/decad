@@ -20,7 +20,7 @@ func (w *World) stepThreeAllDynamic(ctx context.Context, from State, input StepI
 		return nil, err
 	}
 	kicked := from
-	for worldIndex, part := range w.three.parts {
+	for worldIndex, part := range w.bodies {
 		var pair *World
 		pairKey := -1
 		for key, indices := range threePairs {
@@ -33,8 +33,8 @@ func (w *World) stepThreeAllDynamic(ctx context.Context, from State, input StepI
 			return w.threeUndecided(pairKey, "dynamic body has no validated pair"), nil
 		}
 		var pairLoads [2]*BodyLoad
-		for side, member := range pair.parts {
-			if member.definition.Body == part.Body {
+		for side, member := range pair.bodies {
+			if member.definition.Body == part.definition.Body {
 				pairLoads[side] = loads[worldIndex]
 			}
 		}
@@ -43,7 +43,7 @@ func (w *World) stepThreeAllDynamic(ctx context.Context, from State, input StepI
 			return w.threeUndecided(pairKey, "force kick or torque kick exceeds its residual"), nil
 		}
 		for _, entry := range advanced.entries {
-			if entry.Body == part.Body {
+			if entry.Body == part.definition.Body {
 				kicked = withBodyState(kicked, entry)
 			}
 		}

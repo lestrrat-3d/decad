@@ -50,13 +50,13 @@ func (w *World) stepInitialTwoDynamicFriction(ctx context.Context, from, kicked 
 	var mass [2]decad.MassProperties
 	var pose [2]r3.Transform
 	var pre [2]QuantityVec
-	for i := range w.parts {
-		mass[i] = w.parts[i].mass
+	for i := range w.bodies {
+		mass[i] = w.bodies[i].mass
 		pose[i] = kicked.entries[i].Pose
 		pre[i] = kicked.entries[i].LinearVelocity
 	}
-	response, ok := solveTwoDynamicFrictionPatch(manifold, mass, pose, pre, w.friction,
-		w.restitution, w.step)
+	response, ok := solveTwoDynamicFrictionPatch(manifold, mass, pose, pre, w.pairs[0].friction,
+		w.pairs[0].restitution, w.step)
 	if !ok {
 		return undecided(w, "two-dynamic friction response exceeds solver residuals"), nil
 	}
@@ -65,7 +65,7 @@ func (w *World) stepInitialTwoDynamicFriction(ctx context.Context, from, kicked 
 		spinning = spinning || !zeroAngularVelocity(spin)
 	}
 	angularUpper := response.AngularUpper[0]
-	for i := range w.parts {
+	for i := range w.bodies {
 		if response.AngularUpper[i].Base() > angularUpper.Base() {
 			angularUpper = response.AngularUpper[i]
 		}
@@ -74,7 +74,7 @@ func (w *World) stepInitialTwoDynamicFriction(ctx context.Context, from, kicked 
 	if !ok {
 		return undecided(w, "two-dynamic aggregate impulse cannot be published"), nil
 	}
-	post := kicked
+	post := kicked.clone()
 	for i := range post.entries {
 		post.entries[i].LinearVelocity = response.Post[i]
 		post.entries[i].AngularVelocity = response.PostAngular[i]
@@ -90,12 +90,12 @@ func (w *World) stepInitialTwoDynamicFriction(ctx context.Context, from, kicked 
 		if !valid {
 			return undecided(w, "two-dynamic frictional spin needs a certified rotational remainder"), nil
 		}
-		end = post
+		end = post.clone()
 		end.entries[0].Pose, end.entries[1].Pose = poses[0], poses[1]
 		rotationalRemainder = ideal
 	} else {
 		var whole [2]*big.Rat
-		for i := range w.parts {
+		for i := range w.bodies {
 			witnesses := cloneManifold(*manifold)
 			if i == 0 {
 				for j := range witnesses.Points {
@@ -131,7 +131,7 @@ func (w *World) stepInitialTwoDynamicFriction(ctx context.Context, from, kicked 
 		if !w.persistentTrackWithin(rounded, normal) {
 			return undecided(w, fmt.Sprintf("two-dynamic rounded continuation returned %v", rounded.Outcome)), nil
 		}
-		endpoint, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+		endpoint, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 			end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
 		if err != nil {
 			return nil, err
@@ -150,7 +150,7 @@ func (w *World) stepInitialTwoDynamicFriction(ctx context.Context, from, kicked 
 	report := &StepReport{Status: Advanced, Next: &end}
 	report.Events = []ContactEvent{{
 		Kind:           ContactImpact,
-		Pair:           BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Pair:           BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body},
 		Bracket:        decad.SweepInterval{From: instant, To: instant},
 		Time:           instant.Elapsed.Value,
 		Manifold:       cloneManifold(*manifold),
@@ -194,7 +194,7 @@ func (w *World) twoDynamicRotationalEndpoint(post State, dt units.Value,
 	for i, path := range paths {
 		drift, ok := path.(decad.RigidDriftSegment)
 		if !ok || drift.From != post.entries[i].Pose ||
-			drift.Center != post.entries[i].Pose.Apply(w.parts[i].mass.Center.Value) ||
+			drift.Center != post.entries[i].Pose.Apply(w.bodies[i].mass.Center.Value) ||
 			drift.LinearVelocity != post.entries[i].LinearVelocity ||
 			drift.AngularVelocity != post.entries[i].AngularVelocity || drift.Duration != dt {
 			return poses, false

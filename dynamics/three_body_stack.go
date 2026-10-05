@@ -14,7 +14,7 @@ import (
 // The first return flag reports whether the real sweeps identified this stack.
 func (w *World) stepThreeBoxStack(ctx context.Context, from, kicked State,
 	input StepInput, dt units.Value) (*StepReport, bool, error) {
-	if len(w.three.excluded) != 0 {
+	if w.hasExcluded() {
 		return nil, false, nil
 	}
 	var first [3]*decad.SweepReport
@@ -41,8 +41,8 @@ func (w *World) stepThreeBoxStack(ctx context.Context, from, kicked State,
 		return nil, false, nil
 	}
 	fixed := -1
-	for i, part := range w.three.parts {
-		if part.Role == Fixed {
+	for i, part := range w.bodies {
+		if part.definition.Role == Fixed {
 			fixed = i
 			break
 		}
@@ -59,12 +59,12 @@ func (w *World) stepThreeBoxStack(ctx context.Context, from, kicked State,
 			lower = indices[0]
 		}
 	}
-	if lower < 0 || w.three.parts[lower].Role != Dynamic {
+	if lower < 0 || w.bodies[lower].definition.Role != Dynamic {
 		return nil, false, nil
 	}
 	upper := -1
-	for i, part := range w.three.parts {
-		if i != fixed && i != lower && part.Role == Dynamic {
+	for i, part := range w.bodies {
+		if i != fixed && i != lower && part.definition.Role == Dynamic {
 			upper = i
 		}
 	}
@@ -79,7 +79,7 @@ func (w *World) stepThreeBoxStack(ctx context.Context, from, kicked State,
 	}
 	for _, key := range touching {
 		pair := w.three.pairs[key]
-		if pair.restitution.Base() != 0 || pair.friction.upper.Sign() != 0 {
+		if pair.pairs[0].restitution.Base() != 0 || pair.pairs[0].friction.upper.Sign() != 0 {
 			return w.threeUndecided(key, "stack needs zero restitution and friction"), true, nil
 		}
 	}
@@ -88,15 +88,15 @@ func (w *World) stepThreeBoxStack(ctx context.Context, from, kicked State,
 			return w.threeUndecided(-1, "stack starts with spin"), true, nil
 		}
 	}
-	lowerState, _ := kicked.Body(w.three.parts[lower].Body)
-	upperState, _ := kicked.Body(w.three.parts[upper].Body)
+	lowerState, _ := kicked.Body(w.bodies[lower].definition.Body)
+	upperState, _ := kicked.Body(w.bodies[upper].definition.Body)
 	for _, entry := range []BodyState{lowerState, upperState} {
 		if entry.LinearVelocity.X.Base() != 0 || entry.LinearVelocity.Y.Base() != 0 {
 			return w.threeUndecided(-1, "stack needs vertical center motion"), true, nil
 		}
 	}
 	vl, vu := lowerState.LinearVelocity.Z.Base(), upperState.LinearVelocity.Z.Base()
-	ml, mu := w.three.mass[lower].Mass.Value.Base(), w.three.mass[upper].Mass.Value.Base()
+	ml, mu := w.bodies[lower].mass.Mass.Value.Base(), w.bodies[upper].mass.Mass.Value.Base()
 	ju, jf := -mu*vu, -ml*vl-mu*vu
 	mid := ju / ml
 	if !finite(vl, vu, ml, mu, ju, jf, mid) || ml <= 0 || mu <= 0 ||
@@ -122,9 +122,9 @@ func (w *World) stepThreeBoxStack(ctx context.Context, from, kicked State,
 		if index == lower {
 			count = 2
 		}
-		entry, _ := kicked.Body(w.three.parts[index].Body)
+		entry, _ := kicked.Body(w.bodies[index].definition.Body)
 		limit, bounded := simultaneousAngularBudgetForBody(w, entry.Body,
-			w.three.mass[index], dt, entry.Pose, count)
+			w.bodies[index].mass, dt, entry.Pose, count)
 		if !bounded {
 			return w.threeUndecided(-1, "stack omitted spin travel cannot be bounded"), true, nil
 		}
@@ -134,12 +134,12 @@ func (w *World) stepThreeBoxStack(ctx context.Context, from, kicked State,
 		if !w.stackEventMomentumWithin(events[i], contact.pair) {
 			return w.threeUndecided(contact.key, "stack point or linear impulse exceeds its bounds"), true, nil
 		}
-		for side, part := range contact.pair.parts {
+		for side, part := range contact.pair.bodies {
 			if part.definition.Role != Dynamic {
 				continue
 			}
 			event := events[i]
-			worldIndex := stackWorldIndex(w.three.parts, part.definition.Body)
+			worldIndex := w.bodyIndex(part.definition.Body)
 			if worldIndex < 0 || !omittedSpinWithin(contact.sweep.Event.Manifold,
 				[]r3.Transform{event.PoseA, event.PoseB}[side], part.mass, side, 2,
 				event.NormalImpulse.Base(), w.step.ImpulseResidual, angularLimits[worldIndex]) {
@@ -190,8 +190,8 @@ func (w *World) stepThreeBoxStack(ctx context.Context, from, kicked State,
 			}
 		}
 		rounded[key] = actual
-		endpoint, contactErr := w.doc.ContactPair(ctx, pair.parts[0].definition.Body,
-			pair.parts[1].definition.Body, endPair.entries[0].Pose, endPair.entries[1].Pose,
+		endpoint, contactErr := w.doc.ContactPair(ctx, pair.bodies[0].definition.Body,
+			pair.bodies[1].definition.Body, endPair.entries[0].Pose, endPair.entries[1].Pose,
 			w.step.Contact)
 		if contactErr != nil {
 			return nil, true, contactErr
@@ -245,15 +245,6 @@ func stackPairKey(a, b int) int {
 	return -1
 }
 
-func stackWorldIndex(parts [3]RigidBody, body *decad.Body) int {
-	for i, part := range parts {
-		if part.Body == body {
-			return i
-		}
-	}
-	return -1
-}
-
 func (w *World) stackContact(sweep *decad.SweepReport, key, below, above int) (stackFaceContact, bool) {
 	contact := stackFaceContact{key: key, pair: w.three.pairs[key], sweep: sweep}
 	if sweep == nil || sweep.Outcome != decad.SweepInitiallyTouching || sweep.Event == nil ||
@@ -273,8 +264,8 @@ func (w *World) stackContact(sweep *decad.SweepReport, key, below, above int) (s
 		return contact, false
 	}
 	for _, point := range sweep.Event.Manifold.Points {
-		if !boxFaceOnBody(point.FaceA, contact.pair.parts[0].definition.Body) ||
-			!boxFaceOnBody(point.FaceB, contact.pair.parts[1].definition.Body) {
+		if !boxFaceOnBody(point.FaceA, contact.pair.bodies[0].definition.Body) ||
+			!boxFaceOnBody(point.FaceB, contact.pair.bodies[1].definition.Body) {
 			return contact, false
 		}
 	}
@@ -283,8 +274,8 @@ func (w *World) stackContact(sweep *decad.SweepReport, key, below, above int) (s
 }
 
 func (w *World) stackImpulseWithin(lower, upper int, vl, vu, jf, ju float64) bool {
-	ml, bl := exactBase(w.three.mass[lower].Mass.Value), exactBase(w.three.mass[lower].Mass.Bound)
-	mu, bu := exactBase(w.three.mass[upper].Mass.Value), exactBase(w.three.mass[upper].Mass.Bound)
+	ml, bl := exactBase(w.bodies[lower].mass.Mass.Value), exactBase(w.bodies[lower].mass.Mass.Bound)
+	mu, bu := exactBase(w.bodies[upper].mass.Mass.Value), exactBase(w.bodies[upper].mass.Mass.Bound)
 	if ml == nil || bl == nil || mu == nil || bu == nil || bl.Sign() < 0 || bu.Sign() < 0 ||
 		new(big.Rat).Sub(ml, bl).Sign() <= 0 || new(big.Rat).Sub(mu, bu).Sign() <= 0 {
 		return false
@@ -317,7 +308,7 @@ func (w *World) stackEventMomentumWithin(event ContactEvent, pair *World) bool {
 			normalError = bound
 		}
 	}
-	for side, part := range pair.parts {
+	for side, part := range pair.bodies {
 		if part.definition.Role != Dynamic {
 			continue
 		}
@@ -361,11 +352,11 @@ func (w *World) stackEvent(contact stackFaceContact, before, after State, impuls
 	}
 	instant := contact.sweep.Event.At
 	reportSide := 1
-	if contact.pair.parts[1].definition.Role == Fixed {
+	if contact.pair.bodies[1].definition.Role == Fixed {
 		reportSide = 0
 	}
 	return ContactEvent{Kind: ContactImpact,
-		Pair:    BodyPair{A: contact.pair.parts[0].definition.Body, B: contact.pair.parts[1].definition.Body},
+		Pair:    BodyPair{A: contact.pair.bodies[0].definition.Body, B: contact.pair.bodies[1].definition.Body},
 		Bracket: decad.SweepInterval{From: instant, To: instant}, Time: instant.Elapsed.Value,
 		Manifold:      cloneManifold(*contact.sweep.Event.Manifold),
 		NormalImpulse: units.KilogramMillimetersPerSecond(impulse), TangentImpulse: zeroImpulseVec(),

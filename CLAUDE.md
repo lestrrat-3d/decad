@@ -14,11 +14,11 @@ interference, no wall thinner than the tool — BEFORE committing to write real
 CAD software code (e.g. an Autodesk Fusion add-in). Be wrong in the cheap place.
 
 **Current state: the public API is landing incrementally against approved
-designs.** Unshipped APIs remain design-only. Collision dynamics has dependency
-work listed in `docs/collision-dynamics-design.md`.
+designs.** Unshipped APIs remain design-only. Collision dynamics:
+`docs/collision-dynamics-design.md`.
 `docs/api-design.md` is the core contract for the whole surface.
-`docs/layout.md`'s Design documents table lists every companion design and what
-it owns, and names what every other file in the package owns.
+`docs/layout.md` lists every companion design and every root file with what
+each owns.
 
 ## Read before you write
 
@@ -26,7 +26,7 @@ it owns, and names what every other file in the package owns.
 |---|---|
 | Any file, to find what owns what | `docs/layout.md` — one row per root `.go` file and design doc |
 | Any public type | `docs/api-design.md`, and every companion design listed in `docs/layout.md` |
-| Collision geometry or rigid-body dynamics | `docs/collision-dynamics-design.md` |
+| Collision geometry or rigid-body dynamics | `docs/collision-dynamics-design.md`, `docs/multibody-dynamics-design.md` |
 | Evaluator, topology or feature code | `docs/evaluator-design.md` |
 | Tessellation, export or mesh-boolean operands | `docs/tessellation-design.md` |
 | STEP export | `docs/step-export-design.md` |
@@ -42,21 +42,22 @@ it owns, and names what every other file in the package owns.
 
 - **Layering is `decad -> sketch -> r3 -> units`.** decad imports all three
   directly. NEVER import decad from any of them; they do not know it exists.
-- **NEVER re-derive a 2D answer.** Profile closure, DOF, constraint conflicts,
-  sketch validity, an intersection, a cut parameter, a projection onto a curve →
-  ask `sketch`, consume its answer. Where `sketch` reports its own answer
-  approximate — a `Partial` fragment whose cut is sampled, or an uncertified
-  `Partial` fragment (`BoundaryEdge.TExact` false;
-  `docs/sketch-seam-design.md`) — decad **rejects**. It never repairs,
+- **Ask `sketch` for 2D answers by default.** Profile closure, DOF, constraint
+  conflicts, sketch validity, an intersection, a cut parameter, a projection
+  onto a curve → ask `sketch`, consume its answer. decad computes a 2D answer
+  itself only where that clearly wins on performance or correctness, and the
+  design doc owning that code states the reason (e.g. the coplanar contact
+  patch of two exact planar faces, clipped in exact rational arithmetic:
+  `docs/multibody-dynamics-design.md` §9.4). Building a private `sketch` scene
+  from decad's OWN recorded entities and asking it to arrange them is the
+  default's usual shape (`moments_validate.go`,
+  `docs/prism-boolean-design.md`, `docs/surface-intersection-design.md`):
+  decad selects among the regions, chains and cells `sketch` returns. The
+  soundness half is absolute: where `sketch` reports its own answer
+  approximate — an uncertified `Partial` fragment (`BoundaryEdge.TExact`
+  false; `docs/sketch-seam-design.md`) — decad **rejects**. It never repairs,
   projects, fits, or infers the exact answer. A whole (non-`Partial`) edge
-  records from the entity's own data and never consults `TExact`. Building a
-  private `sketch` scene from decad's OWN recorded entities and asking it to
-  arrange them is not re-deriving an answer — the moments engine already does
-  this for authentication (`moments_validate.go`), and
-  `docs/prism-boolean-design.md` extends it to combining two recorded sections
-  and `docs/surface-intersection-design.md` to a sheet-involving pair: decad
-  selects among the regions, chains and cells `sketch` returns; it never
-  computes the crossing, cut parameter, or containment itself.
+  records from the entity's own data and never consults `TExact`.
 - **A decad-side check may only FALSIFY an upstream claim, never bless one.**
   Admission is decided by what `sketch` says — `BoundaryEdge.TExact` for a
   `Partial` fragment — never by a test decad runs on the
@@ -91,9 +92,9 @@ it owns, and names what every other file in the package owns.
   - `github.com/lestrrat-3d/r3` — 3D coordinate math (`Vec`, `Frame`,
     `Transform`).
   - `github.com/lestrrat-3d/units` — typed quantities (`Value`, `Kind`).
-    Direct: decad's model inputs and `Measurement` quantities are `units.Value`.
-    It is the same module `sketch` uses for its dimensions (`sketch` has no
-    in-tree units package), so there is no parallel unit system to reconcile.
+    decad's model inputs and `Measurement` quantities are `units.Value`, the
+    same module `sketch` uses for its dimensions, so there is no parallel unit
+    system to reconcile.
   - `github.com/lestrrat-3d/step` — AP214; `export` package only.
   - `github.com/lestrrat-go/option/v3` — functional options (house library). Used
     by feature options.

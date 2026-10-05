@@ -1,5 +1,6 @@
 // Package dynamics advances rigid bodies using decad's certified geometry queries.
-// The current implementation also admits one active pair in a three-body world.
+// A world holds any number of bodies and their canonical pair table; the
+// current step resolves two- and three-body worlds.
 package dynamics
 
 import (
@@ -74,22 +75,24 @@ type WorldConfig struct {
 
 type worldBody struct {
 	definition RigidBody
-	mass       decad.MassProperties
+	mass       decad.MassProperties // valid only for Dynamic
 }
 
-// World holds immutable body definitions and the mass readings admitted at construction.
+// World holds immutable body definitions, the mass readings admitted at
+// construction, and the canonical pair table with each pair's material.
 type World struct {
-	doc         *decad.Document
-	parts       [2]worldBody
-	three       *threeBodyWorld
-	excluded    []BodyPair
-	step        StepConfig
-	restitution units.Value
-	friction    frictionCoefficient
+	doc    *decad.Document
+	bodies []worldBody // insertion order
+	pairs  []worldPair // canonical order: (0,1), (0,2), …, (1,2), …
+	index  map[*decad.Body]int
+	step   StepConfig
+	three  *threeBodyWorld
 }
 
-// NewWorld admits a dynamic pair, a dynamic body with a fixed or kinematic
-// body, or three bodies with one to three dynamic bodies and all others fixed.
+// NewWorld admits two or more bodies and builds the canonical pair table.
+// A two-body world needs a dynamic body; a three-body world needs a dynamic
+// body and no kinematic body. A larger world is admitted for inspection, and
+// its Step reports Undecided until the N-body step ships.
 func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World, error) {
 	if doc == nil || ctx == nil {
 		return nil, fmt.Errorf("%w: nil document or context", ErrInvalidInput)
@@ -97,32 +100,52 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 	if err := validateStepConfig(cfg.Step); err != nil {
 		return nil, err
 	}
-	if len(cfg.Bodies) == 3 {
-		return newThreeBodyWorld(ctx, doc, cfg)
+	if len(cfg.Bodies) < 2 {
+		return nil, fmt.Errorf("%w: a world needs at least two bodies", ErrUnsupported)
 	}
-	if len(cfg.Bodies) != 2 {
-		return nil, fmt.Errorf("%w: this stage admits one pair", ErrUnsupported)
-	}
-	live := doc.Bodies()
-	seen := map[*decad.Body]struct{}{}
 	w := &World{doc: doc, step: cfg.Step}
-	fixed, kinematic, dynamic := 0, 0, 0
-	for i, entry := range cfg.Bodies {
+	if err := w.admitBodies(ctx, cfg.Bodies); err != nil {
+		return nil, err
+	}
+	if err := w.admitShape(); err != nil {
+		return nil, err
+	}
+	pairs, err := buildPairTable(w.bodies, w.index, cfg.Excluded, cfg.Overrides)
+	if err != nil {
+		return nil, err
+	}
+	w.pairs = pairs
+	if len(w.bodies) == 3 {
+		w.three = newThreeBodyWorld(w)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return w, nil
+}
+
+// admitBodies validates and copies each body definition and reads the mass
+// of every dynamic body once.
+func (w *World) admitBodies(ctx context.Context, entries []RigidBody) error {
+	live := w.doc.Bodies()
+	w.bodies = make([]worldBody, len(entries))
+	w.index = make(map[*decad.Body]int, len(entries))
+	for i, entry := range entries {
 		if entry.Body == nil {
-			return nil, fmt.Errorf("%w: nil body", ErrInvalidInput)
+			return fmt.Errorf("%w: nil body", ErrInvalidInput)
 		}
-		if entry.Body.Document() != doc || !containsBody(live, entry.Body) {
-			return nil, fmt.Errorf("%w: body is foreign or retired", ErrInvalidInput)
+		if entry.Body.Document() != w.doc || !containsBody(live, entry.Body) {
+			return fmt.Errorf("%w: body is foreign or retired", ErrInvalidInput)
 		}
-		if _, ok := seen[entry.Body]; ok {
-			return nil, fmt.Errorf("%w: duplicate body", ErrInvalidInput)
+		if _, ok := w.index[entry.Body]; ok {
+			return fmt.Errorf("%w: duplicate body", ErrInvalidInput)
 		}
-		seen[entry.Body] = struct{}{}
+		w.index[entry.Body] = i
 		if entry.Body.Kind() != decad.BodySolid || !entry.Body.IsSolid() {
-			return nil, fmt.Errorf("%w: body is not a sound solid", ErrInvalidInput)
+			return fmt.Errorf("%w: body is not a sound solid", ErrInvalidInput)
 		}
 		if err := validateMaterial(entry.Material); err != nil {
-			return nil, err
+			return err
 		}
 		if entry.Density != nil {
 			density := *entry.Density
@@ -132,17 +155,15 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 			supplied := *entry.Supplied
 			entry.Supplied = &supplied
 		}
-		w.parts[i].definition = entry
+		w.bodies[i].definition = entry
 		switch entry.Role {
-		case Fixed:
-			fixed++
+		case Fixed, Kinematic:
 			if entry.Density != nil || entry.Supplied != nil {
-				return nil, fmt.Errorf("%w: fixed body has mass input", ErrInvalidInput)
+				return fmt.Errorf("%w: fixed or kinematic body has mass input", ErrInvalidInput)
 			}
 		case Dynamic:
-			dynamic++
 			if (entry.Density == nil) == (entry.Supplied == nil) {
-				return nil, fmt.Errorf("%w: dynamic body needs exactly one mass source", ErrInvalidInput)
+				return fmt.Errorf("%w: dynamic body needs exactly one mass source", ErrInvalidInput)
 			}
 			var mass decad.MassProperties
 			if entry.Supplied != nil {
@@ -151,104 +172,44 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 				var err error
 				mass, err = entry.Body.MassProperties(ctx, *entry.Density)
 				if err != nil {
-					return nil, err
+					return err
 				}
 			}
 			if err := validateMass(mass); err != nil {
-				return nil, err
+				return err
 			}
-			w.parts[i].mass = mass
+			w.bodies[i].mass = mass
+		default:
+			return fmt.Errorf("%w: unknown body role", ErrInvalidInput)
+		}
+	}
+	return nil
+}
+
+// admitShape refuses the two- and three-body role mixes the shipped steps
+// cannot take. Larger worlds carry no role limit here.
+func (w *World) admitShape() error {
+	kinematic, dynamic := 0, 0
+	for _, body := range w.bodies {
+		switch body.definition.Role {
 		case Kinematic:
 			kinematic++
-			if entry.Density != nil || entry.Supplied != nil {
-				return nil, fmt.Errorf("%w: kinematic body has mass input", ErrInvalidInput)
-			}
-		default:
-			return nil, fmt.Errorf("%w: unknown body role", ErrInvalidInput)
+		case Dynamic:
+			dynamic++
 		}
 	}
-	if dynamic == 0 || fixed+kinematic+dynamic != 2 {
-		return nil, fmt.Errorf("%w: one or two dynamic bodies required", ErrUnsupported)
-	}
-	for _, pair := range cfg.Excluded {
-		first, second := w.parts[0].definition.Body, w.parts[1].definition.Body
-		if (pair.A != first || pair.B != second) && (pair.A != second || pair.B != first) {
-			return nil, fmt.Errorf("%w: exclusion names an unknown pair", ErrInvalidInput)
+	switch len(w.bodies) {
+	case 2:
+		if dynamic == 0 {
+			return fmt.Errorf("%w: one or two dynamic bodies required", ErrUnsupported)
 		}
-		if len(w.excluded) != 0 {
-			return nil, fmt.Errorf("%w: duplicate pair exclusion", ErrInvalidInput)
+	case 3:
+		if kinematic != 0 {
+			return fmt.Errorf("%w: three-body kinematic response", ErrUnsupported)
 		}
-		w.excluded = []BodyPair{{A: first, B: second}}
-	}
-	if len(w.excluded) != 0 && len(cfg.Overrides) != 0 {
-		return nil, fmt.Errorf("%w: excluded pair has a material override", ErrInvalidInput)
-	}
-	if len(w.excluded) != 0 {
-		if err := ctx.Err(); err != nil {
-			return nil, err
+		if dynamic == 0 {
+			return fmt.Errorf("%w: three-body world needs a dynamic body", ErrUnsupported)
 		}
-		return w, nil
-	}
-	restitutionA := w.parts[0].definition.Material.Restitution
-	restitutionB := w.parts[1].definition.Material.Restitution
-	w.restitution = restitutionA
-	if exactBase(restitutionB).Cmp(exactBase(restitutionA)) < 0 {
-		w.restitution = restitutionB
-	}
-	frictionA := w.parts[0].definition.Material.Friction
-	frictionB := w.parts[1].definition.Material.Friction
-	w.friction = exactFrictionCoefficient(units.Scalar(0))
-	if len(cfg.Overrides) > 0 {
-		if err := w.setPairOverride(cfg.Overrides); err != nil {
-			return nil, err
-		}
-	} else {
-		var ok bool
-		w.friction, ok = mixBodyFriction(frictionA, frictionB)
-		if !ok {
-			return nil, fmt.Errorf("%w: effective friction is outside the finite nonzero scalar range", ErrUnsupported)
-		}
-	}
-	if w.friction.lower.Sign() > 0 &&
-		(w.parts[0].definition.Role != Fixed || w.parts[1].definition.Role != Dynamic) &&
-		(w.parts[0].definition.Role != Dynamic || w.parts[1].definition.Role != Fixed) &&
-		(w.parts[0].definition.Role != Dynamic || w.parts[1].definition.Role != Dynamic) {
-		return nil, fmt.Errorf("%w: positive friction requires a fixed/dynamic or dynamic/dynamic pair", ErrUnsupported)
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	return w, nil
-}
-
-// Excluded returns the excluded pair in world order, if one was configured.
-func (w *World) Excluded() []BodyPair {
-	if w == nil {
-		return nil
-	}
-	if w.three != nil {
-		return append([]BodyPair(nil), w.three.excluded...)
-	}
-	return append([]BodyPair(nil), w.excluded...)
-}
-
-func (w *World) setPairOverride(overrides []PairMaterial) error {
-	seen := false
-	for _, override := range overrides {
-		pair := override.Pair
-		first, second := w.parts[0].definition.Body, w.parts[1].definition.Body
-		if (pair.A != first || pair.B != second) && (pair.A != second || pair.B != first) {
-			return fmt.Errorf("%w: override names an unknown pair", ErrInvalidInput)
-		}
-		if seen {
-			return fmt.Errorf("%w: duplicate pair override", ErrInvalidInput)
-		}
-		if err := validateMaterial(Material{Restitution: override.Restitution, Friction: override.Friction}); err != nil {
-			return err
-		}
-		w.restitution = override.Restitution
-		w.friction = exactFrictionCoefficient(override.Friction)
-		seen = true
 	}
 	return nil
 }
@@ -379,19 +340,16 @@ type BodyState struct {
 	AngularVelocity QuantityVec
 }
 
-// State is a value snapshot bound to its source World.
+// State is a value snapshot bound to its source World. Its entries slice is
+// never shared between two States that may diverge: code that derives a new
+// State by changing an entry starts from clone.
 type State struct {
-	world    *World
-	entries  [2]BodyState
-	third    BodyState
-	hasThird bool
+	world   *World
+	entries []BodyState // world order
 }
 
 func (s State) Entries() []BodyState {
-	if s.hasThird {
-		return []BodyState{s.entries[0], s.entries[1], s.third}
-	}
-	return []BodyState{s.entries[0], s.entries[1]}
+	return slices.Clone(s.entries)
 }
 
 func (s State) Body(body *decad.Body) (BodyState, bool) {
@@ -400,22 +358,22 @@ func (s State) Body(body *decad.Body) (BodyState, bool) {
 			return entry, true
 		}
 	}
-	if s.hasThird && s.third.Body == body {
-		return s.third, true
-	}
 	return BodyState{}, false
+}
+
+// clone returns a State with its own copy of the entries.
+func (s State) clone() State {
+	s.entries = slices.Clone(s.entries)
+	return s
 }
 
 // NewState records one posed entry for each body in world order.
 func (w *World) NewState(entries []BodyState) (State, error) {
-	if w != nil && w.three != nil {
-		return w.newThreeBodyState(entries)
+	if w == nil || len(entries) != len(w.bodies) {
+		return State{}, fmt.Errorf("%w: state requires exactly one entry per world body", ErrInvalidInput)
 	}
-	if w == nil || len(entries) != len(w.parts) {
-		return State{}, fmt.Errorf("%w: state requires exactly two bodies", ErrInvalidInput)
-	}
-	out := State{world: w}
-	seen := map[*decad.Body]struct{}{}
+	out := State{world: w, entries: make([]BodyState, len(w.bodies))}
+	seen := make(map[*decad.Body]struct{}, len(entries))
 	for _, entry := range entries {
 		if entry.Body == nil || !entry.Pose.IsValid() || entry.Pose.IsReflection() {
 			return State{}, fmt.Errorf("%w: invalid body or pose", ErrInvalidInput)
@@ -424,14 +382,8 @@ func (w *World) NewState(entries []BodyState) (State, error) {
 			return State{}, fmt.Errorf("%w: duplicate body", ErrInvalidInput)
 		}
 		seen[entry.Body] = struct{}{}
-		idx := -1
-		for i := range w.parts {
-			if w.parts[i].definition.Body == entry.Body {
-				idx = i
-				break
-			}
-		}
-		if idx < 0 {
+		idx, ok := w.index[entry.Body]
+		if !ok {
 			return State{}, fmt.Errorf("%w: body not in world", ErrInvalidInput)
 		}
 		if err := validateQuantityVec(entry.LinearVelocity, units.Velocity); err != nil {
@@ -440,19 +392,20 @@ func (w *World) NewState(entries []BodyState) (State, error) {
 		if err := validateQuantityVec(entry.AngularVelocity, units.AngularVelocity); err != nil {
 			return State{}, err
 		}
-		if w.parts[idx].definition.Role == Kinematic && (entry.AngularVelocity.X.Mag() != 0 ||
+		role := w.bodies[idx].definition.Role
+		if role == Kinematic && (entry.AngularVelocity.X.Mag() != 0 ||
 			entry.AngularVelocity.Y.Mag() != 0 || entry.AngularVelocity.Z.Mag() != 0) {
 			return State{}, fmt.Errorf("%w: kinematic body has stored angular velocity", ErrInvalidInput)
 		}
-		if w.parts[idx].definition.Role == Fixed && (entry.AngularVelocity.X.Mag() != 0 ||
+		if role == Fixed && (entry.AngularVelocity.X.Mag() != 0 ||
 			entry.AngularVelocity.Y.Mag() != 0 || entry.AngularVelocity.Z.Mag() != 0) {
 			return State{}, fmt.Errorf("%w: fixed body has angular velocity", ErrInvalidInput)
 		}
-		if w.parts[idx].definition.Role == Fixed && (entry.LinearVelocity.X.Base() != 0 ||
+		if role == Fixed && (entry.LinearVelocity.X.Base() != 0 ||
 			entry.LinearVelocity.Y.Base() != 0 || entry.LinearVelocity.Z.Base() != 0) {
 			return State{}, fmt.Errorf("%w: fixed body has velocity", ErrInvalidInput)
 		}
-		if w.parts[idx].definition.Role == Kinematic && (entry.LinearVelocity.X.Mag() != 0 ||
+		if role == Kinematic && (entry.LinearVelocity.X.Mag() != 0 ||
 			entry.LinearVelocity.Y.Mag() != 0 || entry.LinearVelocity.Z.Mag() != 0) {
 			return State{}, fmt.Errorf("%w: kinematic body has stored velocity", ErrInvalidInput)
 		}

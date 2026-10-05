@@ -15,7 +15,7 @@ import (
 // incoming velocity is normal to the bounded contact and no spin is needed.
 func (w *World) stepObliqueSupport(ctx context.Context, from, kicked State,
 	dt units.Value) (*StepReport, error) {
-	if w.friction.lower.Sign() != 0 || w.parts[0].definition.Role == w.parts[1].definition.Role {
+	if w.pairs[0].friction.lower.Sign() != 0 || w.bodies[0].definition.Role == w.bodies[1].definition.Role {
 		return undecided(w, "tilted contact needs a frictionless fixed/dynamic support pair"), nil
 	}
 	first, err := w.sweep(ctx, kicked, dt, decad.StopAtInitialContact)
@@ -44,8 +44,8 @@ func (w *World) stepObliqueSupport(ctx context.Context, from, kicked State,
 		return undecided(w, fmt.Sprintf("tilted initial contact returned %v", first.Outcome)), nil
 	}
 	if normal, _, _, ok := reducedContact(first.Event.Manifold, w.step.Contact); ok {
-		if _, _, axis := axisNormal(normal); axis && w.restitution.Base() == 0 &&
-			w.friction.upper.Sign() == 0 {
+		if _, _, axis := axisNormal(normal); axis && w.pairs[0].restitution.Base() == 0 &&
+			w.pairs[0].friction.upper.Sign() == 0 {
 			return w.stepInitialTouch(ctx, from, kicked, dt, first)
 		}
 	}
@@ -54,7 +54,7 @@ func (w *World) stepObliqueSupport(ctx context.Context, from, kicked State,
 		return undecided(w, "tilted initial contact exceeds its geometry residual"), nil
 	}
 	dynamic := 0
-	if w.parts[1].definition.Role == Dynamic {
+	if w.bodies[1].definition.Role == Dynamic {
 		dynamic = 1
 	}
 	pre := kicked.entries[dynamic].LinearVelocity
@@ -66,7 +66,7 @@ func (w *World) stepObliqueSupport(ctx context.Context, from, kicked State,
 	if !finite(closing) || closing >= -w.step.VelocityResidual.Base() {
 		return undecided(w, "tilted contact has no bounded closing speed"), nil
 	}
-	mass := w.parts[dynamic].mass.Mass
+	mass := w.bodies[dynamic].mass.Mass
 	stopImpulse := -closing * mass.Value.Base()
 	if !finite(stopImpulse) || stopImpulse <= 0 ||
 		!obliqueStopMomentumWithin(pre, normal, first.Event.Manifold, mass,
@@ -75,13 +75,13 @@ func (w *World) stepObliqueSupport(ctx context.Context, from, kicked State,
 	}
 	coefficient := 0.0
 	if -closing > w.step.ImpactSpeed.Base() {
-		coefficient = w.restitution.Base()
+		coefficient = w.pairs[0].restitution.Base()
 	}
 	impulse := stopImpulse * (1 + coefficient)
 	if !finite(impulse) || impulse <= 0 {
 		return undecided(w, "tilted impact impulse is not finite"), nil
 	}
-	post := kicked
+	post := kicked.clone()
 	post.entries[dynamic].LinearVelocity = QuantityVec{
 		X: units.MillimetersPerSecond(-coefficient * pre.X.Base()),
 		Y: units.MillimetersPerSecond(-coefficient * pre.Y.Base()),
@@ -111,7 +111,7 @@ func (w *World) stepObliqueSupport(ctx context.Context, from, kicked State,
 		coefficient > 0 && !obliqueDepartureWithin(rounded) {
 		return undecided(w, fmt.Sprintf("rounded tilted support returned %v", rounded.Outcome)), nil
 	}
-	last, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	last, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -134,7 +134,7 @@ func (w *World) stepObliqueSupport(ctx context.Context, from, kicked State,
 			Tangent: zeroImpulseVec()}
 	}
 	event := ContactEvent{Kind: ContactImpact,
-		Pair:    BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Pair:    BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body},
 		Bracket: decad.SweepInterval{From: instant, To: instant}, Time: instant.Elapsed.Value,
 		Manifold:       cloneManifold(*first.Event.Manifold),
 		NormalImpulse:  units.KilogramMillimetersPerSecond(impulse),

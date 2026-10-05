@@ -17,13 +17,13 @@ func (w *World) validateLoads(entries []BodyLoad) ([2]*BodyLoad, error) {
 			return loads, fmt.Errorf("%w: nil load body", ErrInvalidInput)
 		}
 		index := -1
-		for j, part := range w.parts {
+		for j, part := range w.bodies {
 			if part.definition.Body == load.Body {
 				index = j
 				break
 			}
 		}
-		if index < 0 || w.parts[index].definition.Role != Dynamic {
+		if index < 0 || w.bodies[index].definition.Role != Dynamic {
 			return loads, fmt.Errorf("%w: load body is not a dynamic member of this world", ErrInvalidInput)
 		}
 		if loads[index] != nil {
@@ -42,12 +42,12 @@ func (w *World) validateLoads(entries []BodyLoad) ([2]*BodyLoad, error) {
 
 // kickByLoads applies one bounded force, gravity, and torque kick before any sweep.
 func (w *World) kickByLoads(from State, gravity QuantityVec, loads [2]*BodyLoad, dt units.Value) (State, bool) {
-	out := from
+	out := from.clone()
 	limit, duration := exactBase(w.step.VelocityResidual), exactBase(dt)
 	if limit == nil || duration == nil {
 		return State{}, false
 	}
-	for i, part := range w.parts {
+	for i, part := range w.bodies {
 		if part.definition.Role != Dynamic {
 			continue
 		}

@@ -73,8 +73,12 @@ exercise density-backed impact, rest, and trace replay.
 
 ## Bodies and response
 
-`NewWorld` admits two or three sound solids with at least one dynamic body.
-Each dynamic body uses either density-derived mass and inertia or a complete
+`NewWorld` admits two or more sound solids and lists every body pair in
+canonical world order (`World.Pairs`), with an exclusion or a material
+override per pair. `World.Step` resolves two- and three-body worlds with at
+least one dynamic body; a world of four or more bodies builds its pair table
+and validates its step input, and `World.Step` returns `dynamics.Undecided`
+for it. Each dynamic body uses either density-derived mass and inertia or a complete
 caller-supplied bounded record. Density-derived properties currently cover
 source boxes, admitted untapered prisms, full source spheres, qualifying
 revolved cylinders, and verified faceted Booleans. Other payloads may need
@@ -120,8 +124,8 @@ sliding impulses, and unproved pair paths return `dynamics.Undecided`.
 | `ContactPair` | `ContactUndecided`, or a proved relation with no manifold and a reason such as `ContactNoNormalProof` |
 | `SweepPair` | `SweepUndecided` with a cause and unresolved interval |
 | `Body.MassProperties` | `decad.ErrUnsupported` when density-derived bounded mass or inertia is unavailable |
-| `NewWorld` | `dynamics.ErrUnsupported` for four or more bodies or a three-body kinematic world |
-| `World.Step` | `dynamics.Undecided` with `Next == nil` when contact, response, or replay lacks proof |
+| `NewWorld` | `dynamics.ErrUnsupported` for fewer than two bodies, a two- or three-body world with no dynamic body, or a three-body kinematic world |
+| `World.Step` | `dynamics.Undecided` with `Next == nil` when contact, response, or replay lacks proof, and for a world of four or more bodies |
 | `Trace.Sample` | `dynamics.ErrUnsupported` if a rounded pose loses its cached proof; `dynamics.ErrInvalidInput` for time outside the step |
 
 A generic positive-bound faceted body can prove strict clearance above a

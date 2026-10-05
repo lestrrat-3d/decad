@@ -152,7 +152,7 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 		return tr.end, nil
 	}
 	if tr.grazingSweep != nil {
-		state := tr.post
+		state := tr.post.clone()
 		a, b, err := tr.grazingSweep.CertifiedPosesAtInterval(t, units.Seconds(0), tr.duration)
 		if err != nil {
 			return State{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
@@ -160,7 +160,7 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 		state.entries[0].Pose, state.entries[1].Pose = a, b
 		return state, nil
 	}
-	if tr.start.hasThird && tr.threeSweeps != ([3]*decad.SweepReport{}) {
+	if len(tr.start.entries) == 3 && tr.threeSweeps != ([3]*decad.SweepReport{}) {
 		if tr.start.world == nil || tr.start.world.three == nil {
 			return State{}, fmt.Errorf("%w: three-body trace has no world", ErrUnsupported)
 		}
@@ -176,7 +176,7 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 			}
 			pair := tr.start.world.three.pairs[key]
 			for side, pose := range [2]r3.Transform{a, b} {
-				body := pair.parts[side].definition.Body
+				body := pair.bodies[side].definition.Body
 				if held, seen := poses[body]; seen && held != pose {
 					return State{}, fmt.Errorf("%w: three-body sweeps disagree on a shared pose", ErrUnsupported)
 				}
@@ -226,6 +226,7 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 		}
 		from, to = tr.start, tr.end
 		fraction, _ := new(big.Rat).Quo(timeValue, durationValue).Float64()
+		state = state.clone()
 		for i := range state.entries {
 			start, end := from.entries[i].Pose.Translation(), to.entries[i].Pose.Translation()
 			delta := end.Sub(start).Scale(fraction)
@@ -244,19 +245,20 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 	if err != nil {
 		return State{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
 	}
+	state = state.clone()
 	state.entries[0].Pose, state.entries[1].Pose = a, b
 	return state, nil
 }
 
 func driftState(start State, seconds float64) (State, error) {
-	out := start
+	out := start.clone()
 	for i := range out.entries {
 		entry := out.entries[i]
 		pose := entry.Pose
 		omega := r3.Vec{X: entry.AngularVelocity.X.Base(),
 			Y: entry.AngularVelocity.Y.Base(), Z: entry.AngularVelocity.Z.Base()}
 		if omega != (r3.Vec{}) {
-			center := pose.Apply(start.world.parts[i].mass.Center.Value)
+			center := pose.Apply(start.world.bodies[i].mass.Center.Value)
 			rate := math.Hypot(omega.X, math.Hypot(omega.Y, omega.Z))
 			turn, err := r3.RotationAround(center, omega, units.Radians(rate*seconds))
 			if err != nil {
@@ -324,7 +326,7 @@ func axisNormal(normal r3.Vec) (int, float64, bool) {
 }
 
 func correctPair(start State, normal r3.Vec, depth float64, inverseMass [2]float64) (State, error) {
-	out := start
+	out := start.clone()
 	total := inverseMass[0] + inverseMass[1]
 	if !finite(depth, total) || total <= 0 {
 		return State{}, fmt.Errorf("invalid pair correction")
@@ -376,6 +378,9 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		setDefaultEventSlices(report, dt)
 		return report, err
 	}
+	if len(w.bodies) != 2 {
+		return w.stepWithoutSolver(ctx, input)
+	}
 	if err := validateQuantityVec(input.Gravity, units.Acceleration); err != nil {
 		return nil, err
 	}
@@ -388,7 +393,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		return nil, err
 	}
 	live := w.doc.Bodies()
-	for _, part := range w.parts {
+	for _, part := range w.bodies {
 		if !containsBody(live, part.definition.Body) {
 			return nil, fmt.Errorf("%w: world body was retired", ErrInvalidInput)
 		}
@@ -425,6 +430,64 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	return report, nil
 }
 
+// stepWithoutSolver validates the input of a step on a world of four or more
+// bodies and reports Undecided: the current step resolves two- and three-body
+// worlds only (docs/multibody-dynamics-design.md §13).
+func (w *World) stepWithoutSolver(ctx context.Context, input StepInput) (*StepReport, error) {
+	if err := validateQuantityVec(input.Gravity, units.Acceleration); err != nil {
+		return nil, err
+	}
+	loaded := make(map[*decad.Body]struct{}, len(input.Loads))
+	for _, load := range input.Loads {
+		i, ok := w.index[load.Body]
+		if !ok || w.bodies[i].definition.Role != Dynamic {
+			return nil, fmt.Errorf("%w: load body is not a dynamic member of this world", ErrInvalidInput)
+		}
+		if _, duplicate := loaded[load.Body]; duplicate {
+			return nil, fmt.Errorf("%w: duplicate load body", ErrInvalidInput)
+		}
+		loaded[load.Body] = struct{}{}
+		if err := validateQuantityVec(load.Force, units.Force); err != nil {
+			return nil, err
+		}
+		if err := validateQuantityVec(load.Torque, units.Torque); err != nil {
+			return nil, err
+		}
+	}
+	driven := make(map[*decad.Body]struct{}, len(input.Drivers))
+	for _, driver := range input.Drivers {
+		i, ok := w.index[driver.Body]
+		if !ok || w.bodies[i].definition.Role != Kinematic {
+			return nil, fmt.Errorf("%w: driver body is not kinematic", ErrInvalidInput)
+		}
+		if _, duplicate := driven[driver.Body]; duplicate {
+			return nil, fmt.Errorf("%w: duplicate driver body", ErrInvalidInput)
+		}
+		if driver.Path == nil {
+			return nil, fmt.Errorf("%w: nil kinematic path", ErrInvalidInput)
+		}
+		driven[driver.Body] = struct{}{}
+	}
+	live := w.doc.Bodies()
+	for _, body := range w.bodies {
+		if body.definition.Role == Kinematic {
+			if _, ok := driven[body.definition.Body]; !ok {
+				return nil, fmt.Errorf("%w: exactly one driver is required for each kinematic body", ErrInvalidInput)
+			}
+		}
+		if !containsBody(live, body.definition.Body) {
+			return nil, fmt.Errorf("%w: world body was retired", ErrInvalidInput)
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return &StepReport{Status: Undecided, Excluded: w.Excluded(), Diagnostics: []StepDiagnostic{{
+		Reason: fmt.Sprintf("unsupported: the current step resolves two- and three-body worlds; this world has %d bodies",
+			len(w.bodies)),
+	}}}, nil
+}
+
 func setDefaultEventSlices(report *StepReport, dt units.Value) {
 	if report == nil {
 		return
@@ -439,7 +502,7 @@ func setDefaultEventSlices(report *StepReport, dt units.Value) {
 
 func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Value,
 	driver kinematicMotion) (*StepReport, error) {
-	if len(w.excluded) != 0 {
+	if w.pairs[0].excluded {
 		return w.stepExcluded(ctx, from, kicked, dt, driver)
 	}
 	rotating := false
@@ -509,19 +572,19 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		}
 		return w.stepGrazingTouch(ctx, from, kicked, dt, first)
 	case decad.SweepInitiallyTouching:
-		if w.friction.lower.Sign() != 0 && w.sphereFloorFrictionCandidate(first.Event) {
+		if w.pairs[0].friction.lower.Sign() != 0 && w.sphereFloorFrictionCandidate(first.Event) {
 			return w.stepInitialSphereFloorFriction(ctx, from, kicked, dt, first)
 		}
-		if first.Event != nil && w.friction.lower.Sign() > 0 &&
+		if first.Event != nil && w.pairs[0].friction.lower.Sign() > 0 &&
 			isObliqueSpherePairEvent(first.Event.Manifold) &&
 			spherePairVelocity(kicked.entries[0].LinearVelocity) !=
 				spherePairVelocity(kicked.entries[1].LinearVelocity) {
 			return w.stepInitialOffAxisSpherePairFriction(ctx, from, kicked, dt, first)
 		}
-		if first.Event != nil && w.restitution.Base() > 0 &&
-			(w.friction.lower.Sign() > 0 && isSourceSpherePairEvent(first.Event.Manifold) &&
+		if first.Event != nil && w.pairs[0].restitution.Base() > 0 &&
+			(w.pairs[0].friction.lower.Sign() > 0 && isSourceSpherePairEvent(first.Event.Manifold) &&
 				math.Abs(first.Event.Manifold.Points[0].Normal.Value.X) == 1 ||
-				w.friction.upper.Sign() == 0 &&
+				w.pairs[0].friction.upper.Sign() == 0 &&
 					w.exactSpherePairFrictionCandidate(kicked, first.Event.Manifold)) {
 			return w.stepInitialSpherePairFriction(ctx, from, kicked, dt, first)
 		}
@@ -529,8 +592,8 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 			return undecided(w, "rotating initial contact needs a certified response track"), nil
 		}
 		if first.Event != nil && (isObliqueSpherePairEvent(first.Event.Manifold) ||
-			(w.restitution.Base() > 0 && w.parts[0].definition.Role == Dynamic &&
-				w.parts[1].definition.Role == Dynamic && w.friction.upper.Sign() == 0 &&
+			(w.pairs[0].restitution.Base() > 0 && w.bodies[0].definition.Role == Dynamic &&
+				w.bodies[1].definition.Role == Dynamic && w.pairs[0].friction.upper.Sign() == 0 &&
 				isSourceSpherePairEvent(first.Event.Manifold))) {
 			if spherePairVelocity(kicked.entries[0].LinearVelocity) ==
 				spherePairVelocity(kicked.entries[1].LinearVelocity) {
@@ -546,12 +609,12 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		if w.fixedOffcenterPatch(first.Event) {
 			return w.stepFixedOffcenter(ctx, from, kicked, dt, first)
 		}
-		if len(w.parts) == 2 && w.parts[0].definition.Role == Dynamic &&
-			w.parts[1].definition.Role == Dynamic && w.friction.upper.Sign() == 0 &&
-			offcenterPairPatch(first.Event, w.parts[0].mass, w.parts[1].mass) {
+		if len(w.bodies) == 2 && w.bodies[0].definition.Role == Dynamic &&
+			w.bodies[1].definition.Role == Dynamic && w.pairs[0].friction.upper.Sign() == 0 &&
+			offcenterPairPatch(first.Event, w.bodies[0].mass, w.bodies[1].mass) {
 			return w.stepInitialTwoDynamicFriction(ctx, from, kicked, dt, first)
 		}
-		if w.friction.lower.Sign() != 0 {
+		if w.pairs[0].friction.lower.Sign() != 0 {
 			return w.stepInitialFriction(ctx, from, kicked, dt, first)
 		}
 		return w.stepInitialTouch(ctx, from, kicked, dt, first)
@@ -610,9 +673,9 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 			return undecided(w, "published impact prefix lacks a matching rounded endpoint bracket"), nil
 		}
 	}
-	if w.friction.lower.Sign() != 0 {
+	if w.pairs[0].friction.lower.Sign() != 0 {
 		if isSourceSpherePairEvent(first.Event.Manifold) &&
-			w.parts[0].definition.Role == Dynamic && w.parts[1].definition.Role == Dynamic {
+			w.bodies[0].definition.Role == Dynamic && w.bodies[1].definition.Role == Dynamic {
 			return w.stepInteriorSpherePairFriction(ctx, from, kicked, dt, first)
 		}
 		if w.sphereFloorFrictionCandidate(first.Event) {
@@ -646,16 +709,16 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		return undecided(w, "impact is not closing"), nil
 	}
 	var inverseMass [2]float64
-	for i := range w.parts {
-		if w.parts[i].definition.Role == Dynamic {
-			inverseMass[i] = 1 / w.parts[i].mass.Mass.Value.Base()
+	for i := range w.bodies {
+		if w.bodies[i].definition.Role == Dynamic {
+			inverseMass[i] = 1 / w.bodies[i].mass.Mass.Value.Base()
 		}
 	}
 	denominator := inverseMass[0] + inverseMass[1]
 	if !finite(denominator) || denominator <= 0 {
 		return undecided(w, "effective mass is not finite and positive"), nil
 	}
-	coefficient := w.restitution
+	coefficient := w.pairs[0].restitution
 	idealRelative := new(big.Rat).Sub(exactBase(preSpeed[1]), exactBase(preSpeed[0]))
 	idealThreshold := exactBase(w.step.ImpactSpeed)
 	if idealRelative == nil || idealThreshold == nil {
@@ -682,17 +745,17 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	// persistent face contact into an artificial separating sweep.
 	if effectiveCoefficient.Base() == 0 {
 		switch {
-		case w.parts[0].definition.Role == Fixed && w.parts[1].definition.Role == Dynamic:
+		case w.bodies[0].definition.Role == Fixed && w.bodies[1].definition.Role == Dynamic:
 			postSpeed[1] = preSpeed[0].Base()
-		case w.parts[1].definition.Role == Fixed && w.parts[0].definition.Role == Dynamic:
+		case w.bodies[1].definition.Role == Fixed && w.bodies[0].definition.Role == Dynamic:
 			postSpeed[0] = preSpeed[1].Base()
 		}
 	}
 	if !responsePairResidualsWithin(preSpeed, normalSign, effectiveCoefficient,
-		w.parts, target, impulse, postSpeed, w.step.VelocityResidual, w.step.ImpulseResidual) {
+		w.bodies, target, impulse, postSpeed, w.step.VelocityResidual, w.step.ImpulseResidual) {
 		return undecided(w, "exact response bounds exceed velocity or impulse residual"), nil
 	}
-	for i, part := range w.parts {
+	for i, part := range w.bodies {
 		if part.definition.Role != Dynamic {
 			continue
 		}
@@ -723,7 +786,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	for i := range post.entries {
 		setVelocityComponent(&post.entries[i].LinearVelocity, axis, units.MillimetersPerSecond(postSpeed[i]))
 	}
-	contact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	contact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		post.entries[0].Pose, post.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -750,7 +813,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 			break
 		}
 		post = candidate
-		contact, err = w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+		contact, err = w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 			post.entries[0].Pose, post.entries[1].Pose, w.step.Contact)
 		if err != nil {
 			return nil, err
@@ -766,7 +829,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 			return undecidedArithmetic(w, "rotating contact correction is not finite", err)
 		}
 		if pairCorrectionWithin(pre, candidate, axis, correctionAllowance) {
-			corrected, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+			corrected, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 				candidate.entries[0].Pose, candidate.entries[1].Pose, w.step.Contact)
 			if err != nil {
 				return nil, err
@@ -820,7 +883,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	if rotating && remaining > 0 && !rotatingEndpointMatches(continuation, end) {
 		return undecided(w, "rotating rebound endpoint differs from certified sweep"), nil
 	}
-	finalContact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	finalContact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -842,14 +905,14 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	changeA := post.entries[0].Pose.Translation().Sub(pre.entries[0].Pose.Translation())
 	changeB := post.entries[1].Pose.Translation().Sub(pre.entries[1].Pose.Translation())
 	reportBody := 0
-	if w.parts[0].definition.Role == Fixed {
+	if w.bodies[0].definition.Role == Fixed {
 		reportBody = 1
 	}
 	report.Status = Advanced
 	report.Next = &end
 	report.Events = []ContactEvent{{
 		Kind:            ContactImpact,
-		Pair:            BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Pair:            BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body},
 		Bracket:         *first.Bracket,
 		Time:            eventAt,
 		Manifold:        cloneManifold(*first.Event.Manifold),
@@ -1084,7 +1147,7 @@ func responseResidualsWithin(velocity units.Value, relativeSign float64, restitu
 }
 
 func responsePairResidualsWithin(speed [2]units.Value, normalSign float64, restitution units.Value,
-	parts [2]worldBody, target, impulse float64, post [2]float64,
+	parts []worldBody, target, impulse float64, post [2]float64,
 	velocityLimit, impulseLimit units.Value) bool {
 	if !finite(normalSign, target, impulse, post[0], post[1]) || math.Abs(normalSign) != 1 {
 		return false
@@ -1346,23 +1409,23 @@ func (w *World) sweep(ctx context.Context, state State, duration units.Value,
 	policy decad.SweepStartPolicy) (*decad.SweepReport, error) {
 	var paths [2]decad.PairPath
 	for i, entry := range state.entries {
-		if w.parts[i].definition.Role == Fixed {
+		if w.bodies[i].definition.Role == Fixed {
 			paths[i] = decad.PoseSegment{From: entry.Pose, To: entry.Pose, Duration: duration}
 			continue
 		}
 		paths[i] = decad.RigidDriftSegment{
-			From: entry.Pose, Center: entry.Pose.Apply(w.parts[i].mass.Center.Value),
+			From: entry.Pose, Center: entry.Pose.Apply(w.bodies[i].mass.Center.Value),
 			LinearVelocity: entry.LinearVelocity, AngularVelocity: entry.AngularVelocity,
 			Duration: duration,
 		}
 	}
-	return w.doc.SweepPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	return w.doc.SweepPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		paths[0], paths[1], w.sweepRequest(duration, policy))
 }
 
 func (w *World) sweepPoses(ctx context.Context, from, to State, duration units.Value,
 	policy decad.SweepStartPolicy) (*decad.SweepReport, error) {
-	return w.doc.SweepPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	return w.doc.SweepPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		decad.PoseSegment{From: from.entries[0].Pose, To: to.entries[0].Pose, Duration: duration},
 		decad.PoseSegment{From: from.entries[1].Pose, To: to.entries[1].Pose, Duration: duration},
 		w.sweepRequest(duration, policy))
@@ -1412,9 +1475,15 @@ func cloneManifold(m decad.ContactManifold) decad.ContactManifold {
 	return m
 }
 
+// undecided names the world's only pair in a two-body world; a larger world
+// leaves the pair to the caller that knows which pair stopped the step.
 func undecided(w *World, reason string) *StepReport {
+	var pair BodyPair
+	if len(w.bodies) == 2 {
+		pair = w.bodyPair(w.pairs[0])
+	}
 	return &StepReport{Status: Undecided, Excluded: w.Excluded(), Diagnostics: []StepDiagnostic{{
-		Pair: BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body}, Reason: reason,
+		Pair: pair, Reason: reason,
 	}}}
 }
 

@@ -141,8 +141,8 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 		}
 		roundedPoint = roundedPrefix.Event.Manifold.Points[0]
 	}
-	if w.parts[0].definition.Role != Dynamic || w.parts[1].definition.Role != Dynamic ||
-		w.friction.upper.Sign() != 0 || !zeroAngularVelocity(pre.entries[0].AngularVelocity) ||
+	if w.bodies[0].definition.Role != Dynamic || w.bodies[1].definition.Role != Dynamic ||
+		w.pairs[0].friction.upper.Sign() != 0 || !zeroAngularVelocity(pre.entries[0].AngularVelocity) ||
 		!zeroAngularVelocity(pre.entries[1].AngularVelocity) {
 		return undecided(w, "oblique sphere impact needs two frictionless nonspinning dynamic bodies"), nil
 	}
@@ -167,7 +167,7 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 			return undecided(w, "sphere impact lacks a source sphere face"), nil
 		}
 		spheres[i] = sphere
-		mass := w.parts[i].mass
+		mass := w.bodies[i].mass
 		if mass.Mass.Value.Base()-mass.Mass.Bound.Base() <= 0 ||
 			!finite(mass.Mass.Value.Base(), mass.Mass.Bound.Base()) {
 			return undecided(w, "sphere mass interval is not positive and finite"), nil
@@ -192,7 +192,7 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 	approachLow := new(big.Rat).Neg(new(big.Rat).Add(preDot, preError))
 	approachHigh := new(big.Rat).Add(new(big.Rat).Neg(preDot), preError)
 	if approachLow.Cmp(exactBase(w.step.ImpactSpeed)) > 0 {
-		e = w.restitution.Base()
+		e = w.pairs[0].restitution.Base()
 	} else if approachHigh.Cmp(exactBase(w.step.ImpactSpeed)) > 0 {
 		return undecided(w, "sphere impact speed crosses the restitution threshold"), nil
 	}
@@ -203,7 +203,7 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 	omittedSpeed, omittedEnergy, omittedTravel := new(big.Rat), new(big.Rat), new(big.Rat)
 	for i, sphere := range spheres {
 		bounds, ok := sphereOmittedSpinBounds(roundedPoint, point, i, pre.entries[i].Pose,
-			w.parts[i].mass, sphere.Radius, impulse, dt, w.step)
+			w.bodies[i].mass, sphere.Radius, impulse, dt, w.step)
 		if !ok {
 			return undecided(w, "sphere omitted angular response exceeds its residual"), nil
 		}
@@ -214,12 +214,12 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 	if omittedTravel.Cmp(exactBase(w.step.Contact.PointResolution)) > 0 {
 		return undecided(w, "sphere omitted pair rotation exceeds contact resolution"), nil
 	}
-	post := pre
+	post := pre.clone()
 	postA := vA.Sub(n.Scale(impulse * inverse[0]))
 	postB := vB.Add(n.Scale(impulse * inverse[1]))
 	if e == 0 {
 		common, commonOK := spherePairCommonVelocity(vA, vB, postA, postB,
-			w.parts[0].mass, w.parts[1].mass, w.step.VelocityResidual.Base())
+			w.bodies[0].mass, w.bodies[1].mass, w.step.VelocityResidual.Base())
 		if commonOK {
 			postA, postB = common, common
 		}
@@ -230,7 +230,7 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 	post.entries[0].LinearVelocity = spherePairQuantityVelocity(postA)
 	post.entries[1].LinearVelocity = spherePairQuantityVelocity(postB)
 	if !spherePairResponseWithin([2]r3.Vec{vA, vB}, [2]r3.Vec{postA, postB},
-		[2]decad.MassProperties{w.parts[0].mass, w.parts[1].mass},
+		[2]decad.MassProperties{w.bodies[0].mass, w.bodies[1].mass},
 		n, point.Normal.Bound.Base(), impulse, e, e == 0,
 		w.step, omittedSpeed, omittedEnergy) {
 		return undecided(w, "sphere response normal residual or departure exceeds limit"), nil
@@ -254,7 +254,7 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 		if !sphereCorrectionWithin(pre, post, allowance) {
 			return undecided(w, "sphere position correction exceeds its allowance"), nil
 		}
-		contact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+		contact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 			post.entries[0].Pose, post.entries[1].Pose, w.step.Contact)
 		if err != nil {
 			return nil, err
@@ -298,7 +298,7 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 			return undecided(w, fmt.Sprintf("rounded sphere remainder returned %v", actual.Outcome)), nil
 		}
 	}
-	last, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	last, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -317,7 +317,7 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 		bracket = *first.Bracket
 	}
 	event := ContactEvent{Kind: ContactImpact,
-		Pair:    BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Pair:    BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body},
 		Bracket: bracket, Time: eventAt, Manifold: cloneManifold(*first.Event.Manifold),
 		NormalImpulse: units.KilogramMillimetersPerSecond(impulse), TangentImpulse: zeroImpulseVec(),
 		PreVelocity: kicked.entries[0].LinearVelocity, PostVelocity: post.entries[0].LinearVelocity,

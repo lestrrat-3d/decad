@@ -24,7 +24,7 @@ type kinematicMotion struct {
 func (w *World) validateDriver(from State, drivers []KinematicDriver,
 	dt units.Value) (kinematicMotion, error) {
 	kinematic := -1
-	for i, part := range w.parts {
+	for i, part := range w.bodies {
 		if part.definition.Role == Kinematic {
 			kinematic = i
 		}
@@ -35,7 +35,7 @@ func (w *World) validateDriver(from State, drivers []KinematicDriver,
 		}
 		return kinematicMotion{index: -1}, nil
 	}
-	if len(drivers) != 1 || drivers[0].Body != w.parts[kinematic].definition.Body {
+	if len(drivers) != 1 || drivers[0].Body != w.bodies[kinematic].definition.Body {
 		return kinematicMotion{}, fmt.Errorf("%w: exactly one driver is required for the kinematic body", ErrInvalidInput)
 	}
 	if drivers[0].Path == nil {
@@ -222,10 +222,10 @@ func (w *World) sweepKinematic(ctx context.Context, state State, dt units.Value,
 			continue
 		}
 		paths[i] = decad.RigidDriftSegment{From: entry.Pose,
-			Center:         entry.Pose.Apply(w.parts[i].mass.Center.Value),
+			Center:         entry.Pose.Apply(w.bodies[i].mass.Center.Value),
 			LinearVelocity: entry.LinearVelocity, AngularVelocity: entry.AngularVelocity, Duration: dt}
 	}
-	return w.doc.SweepPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	return w.doc.SweepPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		paths[0], paths[1], w.sweepRequest(dt, policy))
 }
 
@@ -239,7 +239,7 @@ func (w *World) sweepKinematicPoses(ctx context.Context, from, to State, dt unit
 		}
 		paths[i] = decad.PoseSegment{From: from.entries[i].Pose, To: to.entries[i].Pose, Duration: dt}
 	}
-	return w.doc.SweepPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	return w.doc.SweepPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		paths[0], paths[1], w.sweepRequest(dt, policy))
 }
 
@@ -267,7 +267,7 @@ func (w *World) stepKinematicPush(ctx context.Context, from, kicked State, dt un
 		if rounded.Outcome != decad.SweepClear {
 			return undecided(w, "rounded kinematic drift lacks a clear path"), nil
 		}
-		finalContact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+		finalContact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 			end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
 		if err != nil {
 			return nil, err
@@ -312,7 +312,7 @@ func (w *World) stepKinematicPush(ctx context.Context, from, kicked State, dt un
 	if w.step.MaxEvents <= 1 {
 		return undecided(w, "kinematic contact reaches the event limit with time remaining"), nil
 	}
-	inverseMass := 1 / w.parts[dynamic].mass.Mass.Value.Base()
+	inverseMass := 1 / w.bodies[dynamic].mass.Mass.Value.Base()
 	impulse := -closing / inverseMass
 	if !finite(inverseMass, impulse) || inverseMass <= 0 || impulse <= 0 {
 		return undecided(w, "kinematic response has invalid effective mass"), nil
@@ -323,13 +323,13 @@ func (w *World) stepKinematicPush(ctx context.Context, from, kicked State, dt un
 	} else {
 		postSpeed[1] += impulse * sign * inverseMass
 	}
-	if !responsePairResidualsWithin(preSpeed, sign, units.Scalar(0), w.parts,
+	if !responsePairResidualsWithin(preSpeed, sign, units.Scalar(0), w.bodies,
 		0, impulse, postSpeed, w.step.VelocityResidual, w.step.ImpulseResidual) ||
-		!omittedSpinWithin(first.Event.Manifold, kicked.entries[dynamic].Pose, w.parts[dynamic].mass,
+		!omittedSpinWithin(first.Event.Manifold, kicked.entries[dynamic].Pose, w.bodies[dynamic].mass,
 			dynamic, axis, impulse, w.step.ImpulseResidual, w.step.AngularVelocityResidual) {
 		return undecided(w, "kinematic response exceeds velocity, impulse, or spin residual"), nil
 	}
-	post := kicked
+	post := kicked.clone()
 	setVelocityComponent(&post.entries[dynamic].LinearVelocity, axis, units.MillimetersPerSecond(postSpeed[dynamic]))
 	if math.Abs((postSpeed[1]-postSpeed[0])*sign) > w.step.VelocityResidual.Base() {
 		return undecided(w, "kinematic post-contact speed exceeds residual"), nil
@@ -353,7 +353,7 @@ func (w *World) stepKinematicPush(ctx context.Context, from, kicked State, dt un
 	if !w.persistentTrackWithin(rounded, normal) {
 		return undecided(w, fmt.Sprintf("rounded kinematic continuation returned %v", rounded.Outcome)), nil
 	}
-	finalContact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	finalContact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
@@ -377,7 +377,7 @@ func (w *World) stepKinematicPush(ctx context.Context, from, kicked State, dt un
 	report := &StepReport{Status: Advanced, Next: &end}
 	report.Events = []ContactEvent{{
 		Kind:           ContactImpact,
-		Pair:           BodyPair{w.parts[0].definition.Body, w.parts[1].definition.Body},
+		Pair:           BodyPair{w.bodies[0].definition.Body, w.bodies[1].definition.Body},
 		Bracket:        decad.SweepInterval{From: instant, To: instant},
 		Time:           instant.Elapsed.Value,
 		Manifold:       cloneManifold(*first.Event.Manifold),
@@ -418,7 +418,7 @@ func (w *World) stepKinematicDeparture(ctx context.Context, from, kicked State,
 	if rounded.Outcome != decad.SweepDepartedClear {
 		return undecided(w, fmt.Sprintf("rounded kinematic departure returned %v", rounded.Outcome)), nil
 	}
-	finalContact, err := w.doc.ContactPair(ctx, w.parts[0].definition.Body, w.parts[1].definition.Body,
+	finalContact, err := w.doc.ContactPair(ctx, w.bodies[0].definition.Body, w.bodies[1].definition.Body,
 		end.entries[0].Pose, end.entries[1].Pose, w.step.Contact)
 	if err != nil {
 		return nil, err
