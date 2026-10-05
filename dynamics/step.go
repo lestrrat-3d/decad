@@ -513,7 +513,9 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 			return w.stepInitialSphereFloorFriction(ctx, from, kicked, dt, first)
 		}
 		if first.Event != nil && w.friction.lower.Sign() > 0 &&
-			isObliqueSpherePairEvent(first.Event.Manifold) {
+			isObliqueSpherePairEvent(first.Event.Manifold) &&
+			spherePairVelocity(kicked.entries[0].LinearVelocity) !=
+				spherePairVelocity(kicked.entries[1].LinearVelocity) {
 			return w.stepInitialOffAxisSpherePairFriction(ctx, from, kicked, dt, first)
 		}
 		if first.Event != nil && w.restitution.Base() > 0 &&

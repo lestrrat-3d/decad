@@ -141,6 +141,35 @@ func TestSpherePairOffAxisFrictionRefusesNoncentralMass(t *testing.T) {
 	require.Empty(t, report.Events)
 }
 
+func TestSpherePairOffAxisFrictionSharedVelocityKeepsPersistentTouch(t *testing.T) {
+	mass := exactSphereMass()
+	doc, world, a, b, initial, cfg := offAxisSphereFrictionFixture(t, .5, false, mass)
+	entries := initial.Entries()
+	shared := sphereRestVelocity(r3.Vec{X: 8, Y: 16})
+	for i := range entries {
+		entries[i].LinearVelocity = shared
+	}
+	state, err := world.NewState(entries)
+	require.NoError(t, err)
+	duration := units.Seconds(.125)
+	report, err := world.Step(t.Context(), state,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Empty(t, report.Events)
+	for _, elapsed := range []units.Value{units.Seconds(0), units.Seconds(.0625), duration} {
+		sample, sampleErr := report.Trace.Sample(elapsed)
+		require.NoError(t, sampleErr)
+		sa, ok := sample.Body(a)
+		require.True(t, ok)
+		sb, ok := sample.Body(b)
+		require.True(t, ok)
+		pair, pairErr := doc.ContactPair(t.Context(), a, b, sa.Pose, sb.Pose, cfg.Contact)
+		require.NoError(t, pairErr)
+		require.Equal(t, decad.ContactTouching, pair.Relation)
+	}
+}
+
 func TestSpherePairInteriorOffAxisFrictionReplaysBothSides(t *testing.T) {
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
