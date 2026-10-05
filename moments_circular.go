@@ -998,3 +998,201 @@ func circularSecondMomentInterval(seg CurveSegment, anchor Point2) (ratInterval,
 		return ratInterval{}, ratInterval{}, ratInterval{}, false
 	}
 }
+
+// circularMomentWalk is one recorded circular walk stated for circularMonomials: the
+// centre (cU, cV) and r² as exact rationals, the signed swept angle θ1 − θ0 as
+// an enclosure, and the RADIUS-SCALED endpoint offsets (X, Y) = r·(cos θ, sin θ)
+// at the walk's two ends. Scaling by r is what keeps an ArcSeg's endpoint
+// terms rational: its Start offset is a recorded coordinate difference, so no
+// sine, cosine or square-root radius ever enters them. closed reports that the
+// two ends are the same point exactly — a whole number of CircleSeg turns —
+// so every endpoint difference vanishes exactly rather than as the width of
+// two equal enclosures subtracted.
+type circularMomentWalk struct {
+	cU, cV         *big.Rat
+	r2             *big.Rat
+	dtheta         ratInterval
+	x0, y0, x1, y1 ratInterval
+	closed         bool
+}
+
+// circularMomentWalkOf states seg for circularMonomials under the admission every
+// circular moment enclosure in this file shares: a CircleSeg over any recorded
+// range, whole or fractional, and an ArcSeg only over its own full recorded
+// range (forward or reverse), never a trimmed fragment, whose actual end the
+// record alone does not state. A CircleSeg's endpoints come from
+// quarterTurnSinCos (exact at every quarter turn); an ArcSeg's Start is its
+// recorded offset and its End is ρ·(End − Center) through arcEndRadialRatio,
+// with the swept angle bracketed by atan2Interval under the same +2π branch
+// correction circularWalkEnclosures applies.
+func circularMomentWalkOf(seg CurveSegment) (circularMomentWalk, bool) {
+	switch seg := seg.(type) {
+	case CircleSeg:
+		radius, err := seg.Radius.In(units.Millimeter)
+		if err != nil {
+			return circularMomentWalk{}, false
+		}
+		r := proofarith.FloatRat(radius)
+		cU, cV := proofarith.FloatRat(seg.Center.U), proofarith.FloatRat(seg.Center.V)
+		t0, t1 := proofarith.FloatRat(seg.TStart), proofarith.FloatRat(seg.TEnd)
+		if r == nil || cU == nil || cV == nil || t0 == nil || t1 == nil {
+			return circularMomentWalk{}, false
+		}
+		dt := new(big.Rat).Sub(t1, t0)
+		s0, c0 := quarterTurnSinCos(t0)
+		s1, c1 := quarterTurnSinCos(t1)
+		return circularMomentWalk{
+			cU: cU, cV: cV,
+			r2:     ratMul(r, r),
+			dtheta: intervalScale(twoPiInterval(), dt),
+			x0:     intervalScale(c0, r), y0: intervalScale(s0, r),
+			x1: intervalScale(c1, r), y1: intervalScale(s1, r),
+			closed: dt.IsInt(),
+		}, true
+	case ArcSeg:
+		forward := seg.TStart == 0 && seg.TEnd == 1
+		reverse := seg.TStart == 1 && seg.TEnd == 0
+		if !forward && !reverse {
+			return circularMomentWalk{}, false
+		}
+		cU, cV := proofarith.FloatRat(seg.Center.U), proofarith.FloatRat(seg.Center.V)
+		if cU == nil || cV == nil {
+			return circularMomentWalk{}, false
+		}
+		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
+		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
+		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
+		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
+		r2 := ratAdd(ratMul(dx0, dx0), ratMul(dy0, dy0))
+		rho, ok := arcEndRadialRatio(r2, ratAdd(ratMul(dx1, dx1), ratMul(dy1, dy1)))
+		if !ok {
+			return circularMomentWalk{}, false
+		}
+		heldDY0 := seg.Start.V - seg.Center.V
+		heldDY1 := seg.End.V - seg.Center.V
+		a0 := atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
+		a1 := atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
+		sweep := intervalSub(a1, a0)
+		if math.Atan2(heldDY1, seg.End.U-seg.Center.U)-math.Atan2(heldDY0, seg.Start.U-seg.Center.U) <= 0 {
+			sweep = intervalAdd(sweep, twoPiInterval())
+		}
+		walk := circularMomentWalk{
+			cU: cU, cV: cV, r2: r2, dtheta: sweep,
+			x0: pointInterval(dx0), y0: pointInterval(dy0),
+			x1: intervalScale(rho, dx1), y1: intervalScale(rho, dy1),
+		}
+		if reverse {
+			walk.x0, walk.y0, walk.x1, walk.y1 = walk.x1, walk.y1, walk.x0, walk.y0
+			walk.dtheta = intervalNeg(sweep)
+		}
+		return walk, true
+	default:
+		return circularMomentWalk{}, false
+	}
+}
+
+// intervalPow is x^n by repeated outward multiplication; x^0 is the exact 1.
+func intervalPow(x ratInterval, n int) ratInterval {
+	out := pointInterval(big.NewRat(1, 1))
+	for range n {
+		out = intervalMul(out, x)
+	}
+	return out
+}
+
+// circularMonomials returns J[a][b] = ∫ X^a·Y^b dθ over the walk for every
+// a + b ≤ degree, where X = r·cos θ and Y = r·sin θ. It is the trig-power
+// reduction ∫cos^a·sin^b dθ scaled by r^(a+b), which is what lets every term
+// stay an endpoint product of X and Y or a power of the exact r²:
+//
+//	J(0,0) = θ1 − θ0          J(1,0) = [Y]    J(0,1) = −[X]    J(1,1) = [Y²]/2
+//	J(a,b) =  [X^(a−1)·Y^(b+1)]/(a+b) + (a−1)·r²·J(a−2, b)/(a+b)   a ≥ 2
+//	J(a,b) = −[X^(a+1)·Y^(b−1)]/(a+b) + (b−1)·r²·J(a, b−2)/(a+b)   b ≥ 2
+//
+// with [g] = g(θ1) − g(θ0). Both reductions are the product rule on
+// cos^(a∓1)·sin^(b±1) with sin² + cos² = 1, and hold for a signed sweep of
+// any length. A closed walk's [g] is the exact zero.
+func circularMonomials(walk circularMomentWalk, degree int) [][]ratInterval {
+	endpoint := func(m, n int) ratInterval {
+		if walk.closed {
+			return pointInterval(new(big.Rat))
+		}
+		return intervalSub(
+			intervalMul(intervalPow(walk.x1, m), intervalPow(walk.y1, n)),
+			intervalMul(intervalPow(walk.x0, m), intervalPow(walk.y0, n)),
+		)
+	}
+	j := make([][]ratInterval, degree+1)
+	for a := range j {
+		j[a] = make([]ratInterval, degree+1-a)
+	}
+	for total := 0; total <= degree; total++ {
+		for a := 0; a <= total; a++ {
+			b := total - a
+			switch {
+			case a == 0 && b == 0:
+				j[0][0] = walk.dtheta
+			case a == 1 && b == 0:
+				j[1][0] = endpoint(0, 1)
+			case a == 0 && b == 1:
+				j[0][1] = intervalNeg(endpoint(1, 0))
+			case a == 1 && b == 1:
+				j[1][1] = intervalScale(endpoint(0, 2), big.NewRat(1, 2))
+			case a >= 2:
+				boundary := intervalScale(endpoint(a-1, b+1), big.NewRat(1, int64(total)))
+				lower := intervalScale(j[a-2][b], ratScale(walk.r2, int64(a-1), int64(total)))
+				j[a][b] = intervalAdd(boundary, lower)
+			default:
+				boundary := intervalScale(endpoint(a+1, b-1), big.NewRat(-1, int64(total)))
+				lower := intervalScale(j[a][b-2], ratScale(walk.r2, int64(b-1), int64(total)))
+				j[a][b] = intervalAdd(boundary, lower)
+			}
+		}
+	}
+	return j
+}
+
+// circularGreenMoment encloses one circular walk's contribution to
+// ∫u^p·v^q dA through the boundary form (1/(p+1))·∮u^(p+1)·v^q dv, about the
+// plane origin. With u = cU + X, v = cV + Y and dv = X dθ, the binomial
+// expansion leaves only the J monomials circularMonomials enclosed:
+//
+//	Σ C(p+1,i)·cU^(p+1−i)·C(q,k)·cV^(q−k)·J(i+1, k) / (p+1)
+func circularGreenMoment(walk circularMomentWalk, j [][]ratInterval, p, q int) ratInterval {
+	sum := pointInterval(new(big.Rat))
+	for i := 0; i <= p+1; i++ {
+		cuPow := new(big.Rat).SetInt64(1)
+		for range p + 1 - i {
+			cuPow.Mul(cuPow, walk.cU)
+		}
+		for k := 0; k <= q; k++ {
+			cvPow := new(big.Rat).SetInt64(1)
+			for range q - k {
+				cvPow.Mul(cvPow, walk.cV)
+			}
+			coefficient := ratMul(binomialRat(p+1, i), binomialRat(q, k), cuPow, cvPow)
+			sum = intervalAdd(sum, intervalScale(j[i+1][k], coefficient))
+		}
+	}
+	return intervalScale(sum, big.NewRat(1, int64(p+1)))
+}
+
+// circularThirdMomentInterval encloses one circular walk's third-order
+// contributions (∫u³ dA, ∫u²v dA, ∫uv² dA, ∫v³ dA) about the plane origin,
+// under circularMomentWalkOf's admission. The boundary form is the dv one for all
+// four, the same form moments.go's line and spline_moments.go's span
+// contributions take, so a loop mixing the three kinds sums one consistent
+// Green's-theorem integral.
+func circularThirdMomentInterval(seg CurveSegment) ([4]ratInterval, bool) {
+	walk, ok := circularMomentWalkOf(seg)
+	if !ok {
+		return [4]ratInterval{}, false
+	}
+	j := circularMonomials(walk, 5)
+	return [4]ratInterval{
+		circularGreenMoment(walk, j, 3, 0),
+		circularGreenMoment(walk, j, 2, 1),
+		circularGreenMoment(walk, j, 1, 2),
+		circularGreenMoment(walk, j, 0, 3),
+	}, true
+}

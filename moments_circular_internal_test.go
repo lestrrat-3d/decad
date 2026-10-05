@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -148,4 +149,98 @@ func TestCircularMomentIntervalsExactArcKeepPointRadialRatio(t *testing.T) {
 	_, muv, _, ok := circularSecondMomentInterval(seg, anchor)
 	require.True(t, ok)
 	requirePointInterval(t, "muv", muv)
+}
+
+func requireIntervalsOverlap(t *testing.T, name string, a, b ratInterval) {
+	t.Helper()
+	require.LessOrEqual(t, a.lo.Cmp(b.hi), 0, "%s: [%s, %s] lies above [%s, %s]", name,
+		a.lo.FloatString(20), a.hi.FloatString(20), b.lo.FloatString(20), b.hi.FloatString(20))
+	require.LessOrEqual(t, b.lo.Cmp(a.hi), 0, "%s: [%s, %s] lies below [%s, %s]", name,
+		a.lo.FloatString(20), a.hi.FloatString(20), b.lo.FloatString(20), b.hi.FloatString(20))
+}
+
+// TestCircularMonomialsAgreeWithClosedForms cross-checks circularMonomials'
+// generic trig-power reduction against the hand-expanded first- and
+// second-moment enclosures, over the forms both evaluate the same way
+// (∫u dA = ½∮u²dv, ∫u² dA = ⅓∮u³dv, ∫uv dA = ½∮u²v dv): a fractional
+// CircleSeg, a whole one, and the drifted ArcSeg walked both ways. Two sound
+// enclosures of one value must overlap.
+//
+// Shown-to-fail: dropping the a ≥ 2 reduction's (a−1)·r² lower term
+// separates every case. These forms never reach the b ≥ 2 reduction;
+// TestThirdOrderMomentsOfASector covers it.
+func TestCircularMonomialsAgreeWithClosedForms(t *testing.T) {
+	t.Parallel()
+	drifted, _, _ := driftedArcFixture(t)
+	reversed := drifted
+	reversed.TStart, reversed.TEnd = 1, 0
+	for name, seg := range map[string]CurveSegment{
+		"fractional circle": CircleSeg{Center: Point2{U: 5, V: -3}, Radius: units.Millimeters(2),
+			TStart: 0.125, TEnd: 0.4375, CCW: true},
+		"whole circle": CircleSeg{Center: Point2{U: 5, V: -3}, Radius: units.Millimeters(2),
+			TStart: 0, TEnd: 1, CCW: true},
+		"forward arc": drifted,
+		"reverse arc": reversed,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			walk, ok := circularMomentWalkOf(seg)
+			require.True(t, ok)
+			j := circularMonomials(walk, 5)
+			mu, _, ok := circularFirstMomentInterval(seg, Point2{})
+			require.True(t, ok)
+			muu, muv, _, ok := circularSecondMomentInterval(seg, Point2{})
+			require.True(t, ok)
+			for _, check := range []struct {
+				name string
+				p, q int
+				want ratInterval
+			}{{"mu", 1, 0, mu}, {"muu", 2, 0, muu}, {"muv", 1, 1, muv}} {
+				got := circularGreenMoment(walk, j, check.p, check.q)
+				requireIntervalsOverlap(t, check.name, got, check.want)
+				requireIntervalWidthAtMost(t, check.name, got, 1e-9)
+			}
+		})
+	}
+}
+
+// TestCircularThirdMomentWholeCircle checks a whole CCW circle's third-order
+// contributions against the disc's own: about its centre ∫x² dA = πr⁴/4 and
+// every odd moment vanishes, so ∫u³ = π(cU³r² + 3cU·r⁴/4),
+// ∫u²v = π(cU²cV·r² + cV·r⁴/4), ∫uv² = π(cU·cV²·r² + cU·r⁴/4) and
+// ∫v³ = π(cV³r² + 3cV·r⁴/4). The turn starting at 1/8 has endpoint sine and
+// cosine enclosures of series width; the whole-turn closure is what keeps
+// them out of the result, leaving only 2π's enclosure.
+//
+// Shown-to-fail: always clearing circularMomentWalk.closed widens the
+// 1/8-turn walk's intervals past the width ceiling; dropping J(0,0)'s sweep
+// separates all four intervals from the closed form.
+func TestCircularThirdMomentWholeCircle(t *testing.T) {
+	t.Parallel()
+	cU, cV := big.NewRat(3, 1), big.NewRat(-2, 1)
+	r2, r4 := big.NewRat(4, 1), big.NewRat(16, 1)
+	quarterR4 := ratScale(r4, 1, 4)
+	pi := interval(piLower, piUpper)
+	want := [4]*big.Rat{
+		ratAdd(ratMul(cU, cU, cU, r2), ratMul(big.NewRat(3, 1), cU, quarterR4)),
+		ratAdd(ratMul(cU, cU, cV, r2), ratMul(cV, quarterR4)),
+		ratAdd(ratMul(cU, cV, cV, r2), ratMul(cU, quarterR4)),
+		ratAdd(ratMul(cV, cV, cV, r2), ratMul(big.NewRat(3, 1), cV, quarterR4)),
+	}
+	for _, start := range []float64{0, 0.125} {
+		seg := CircleSeg{Center: Point2{U: 3, V: -2}, Radius: units.Millimeters(2),
+			TStart: start, TEnd: start + 1, CCW: true}
+		got, ok := circularThirdMomentInterval(seg)
+		require.True(t, ok)
+		for i, coefficient := range want {
+			name := []string{"u³", "u²v", "uv²", "v³"}[i]
+			requireIntervalsOverlap(t, name, got[i], intervalScale(pi, coefficient))
+			requireIntervalWidthAtMost(t, name, got[i], 1e-65)
+		}
+	}
+
+	trimmed, _, _ := driftedArcFixture(t)
+	trimmed.TEnd = 0.5
+	_, ok := circularThirdMomentInterval(trimmed)
+	require.False(t, ok, `a trimmed ArcSeg fragment has no third-order enclosure`)
 }

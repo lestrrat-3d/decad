@@ -233,26 +233,22 @@ func TestMassPropertiesRevolvedCylinder(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, got, again)
 
-	partial, err := doc.Revolve(sketch, profile, uAxis,
-		decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
-	require.NoError(t, err)
 	sheet, err := doc.Revolve(sketch, profile, uAxis, decad.FullRevolution{}, decad.WithSurfaceResult())
 	require.NoError(t, err)
 	reading, err := sheet.MassProperties(t.Context(), density)
 	require.ErrorIs(t, err, decad.ErrNotSolid)
 	require.Equal(t, decad.MassProperties{}, reading)
-	annularSketch, annularProfile := annularSketch(t)
-	annular, err := doc.Revolve(annularSketch, annularProfile, uAxis, decad.FullRevolution{})
-	require.NoError(t, err)
 	obliquePose, err := r3.RotationAround(r3.Vec{}, r3.NewVec(0, 0, 1), units.Degrees(37))
 	require.NoError(t, err)
 	oblique, err := body.PlacedCopy(t.Context(), obliquePose)
 	require.NoError(t, err)
-	for _, unsupported := range []*decad.Body{partial, annular, torusBody(t, doc, 10, 3), oblique} {
-		reading, massErr := unsupported.MassProperties(t.Context(), density)
-		require.ErrorIs(t, massErr, decad.ErrUnsupported)
-		require.Equal(t, decad.MassProperties{}, reading)
-	}
+	// An oblique placement leaves the source-cylinder path for the general
+	// revolve path, whose rotation keeps the mass and, about Z, the
+	// transverse ZZ.
+	reading, err = oblique.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	requireReadingCovers(t, reading.Mass, mass)
+	requireReadingCovers(t, reading.Inertia.ZZ, transverse)
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
 	reading, err = body.MassProperties(canceled, density)
@@ -295,10 +291,5 @@ func TestMassPropertiesRefusals(t *testing.T) {
 	cancel()
 	got, err = box.MassProperties(ctx, units.KilogramsPerCubicMillimeter(1))
 	require.True(t, errors.Is(err, context.Canceled))
-	require.Equal(t, decad.MassProperties{}, got)
-
-	torus := torusBody(t, decad.New(), 10, 3)
-	got, err = torus.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, decad.MassProperties{}, got)
 }

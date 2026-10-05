@@ -606,3 +606,49 @@ func BenchmarkTurnSinCosInterval(b *testing.B) {
 		turnSinCosInterval(turns[i%len(turns)])
 	}
 }
+
+// TestThirdOrderMomentsOfASector integrates the sector of radius 5 about the
+// origin between the angles of (4, 3) and (0, 5) — two lines through the
+// origin and one ArcSeg — at momentThirdOrder. In polar form
+// ∫u^p·v^q dA = (5⁵/5)·∫cos^p θ·sin^q θ dθ for p + q = 3, and every odd trig
+// power has a polynomial antiderivative, so the expected values are exact
+// rationals from the endpoints' own cos/sin (4/5, 3/5) and (0, 1). The lines
+// contribute through the same dv form as the arc, so only the region's sum is
+// comparable, not a single segment.
+//
+// Shown-to-fail: flipping the sign of circularMonomials' b ≥ 2 boundary term
+// separates the third-order sum from its values.
+func TestThirdOrderMomentsOfASector(t *testing.T) {
+	t.Parallel()
+	record := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+		LineSeg{Start: Point2{}, End: Point2{U: 4, V: 3}, TEnd: 1},
+		ArcSeg{Center: Point2{}, Start: Point2{U: 4, V: 3}, End: Point2{U: 0, V: 5}, TEnd: 1},
+		LineSeg{Start: Point2{U: 0, V: 5}, End: Point2{}, TEnd: 1},
+	}}}
+	ig, err := record.evaluatorIntegralsContext(t.Context(), momentThirdOrder, newFreeformWork())
+	require.NoError(t, err)
+	got, ok := ig.thirdMoments()
+	require.True(t, ok)
+
+	c0, s0 := big.NewRat(4, 5), big.NewRat(3, 5)
+	c1, s1 := new(big.Rat), big.NewRat(1, 1)
+	cube := func(x *big.Rat) *big.Rat { return ratMul(x, x, x) }
+	third := func(x *big.Rat) *big.Rat { return ratScale(x, 1, 3) }
+	trig := [4]*big.Rat{
+		new(big.Rat).Sub(new(big.Rat).Sub(s1, third(cube(s1))), new(big.Rat).Sub(s0, third(cube(s0)))),
+		third(new(big.Rat).Sub(cube(c0), cube(c1))),
+		third(new(big.Rat).Sub(cube(s1), cube(s0))),
+		new(big.Rat).Sub(new(big.Rat).Sub(third(cube(c1)), c1), new(big.Rat).Sub(third(cube(c0)), c0)),
+	}
+	for i, factor := range trig {
+		name := []string{"u³", "u²v", "uv²", "v³"}[i]
+		want := ratMul(big.NewRat(625, 1), factor)
+		requireIntervalsOverlap(t, name, got[i], pointInterval(want))
+		requireIntervalWidthAtMost(t, name, got[i], 1e-9)
+	}
+
+	second, err := record.evaluatorIntegralsContext(t.Context(), momentSecondOrder, newFreeformWork())
+	require.NoError(t, err)
+	_, ok = second.thirdMoments()
+	require.False(t, ok, `a second-order integration carries no third-order sum`)
+}

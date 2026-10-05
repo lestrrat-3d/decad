@@ -2069,3 +2069,14 @@
 2	0.00	TestPrismCutAgainstToolOnOffsetPlaneIsAnalytic
 0	0.01	TestContactPairSourceSpherePair
 0	0.01	TestSweepPairSourceSpherePair
+1	0.01	TestCircularMonomialsAgreeWithClosedForms
+3	0.01	TestCircularThirdMomentWholeCircle
+5	0.01	TestFreeformThirdMomentsParabolicRegion
+1	0.01	TestMassPropertiesRevolveArcWedge
+3	0.01	TestMassPropertiesRevolvePartialTriangle
+5	0.01	TestMassPropertiesRevolveQuarterRectangle
+1	0.01	TestMassPropertiesRevolveRefusals
+3	0.01	TestMassPropertiesRevolveTorus
+5	0.01	TestRevolveMassPropertiesRefusesUnchargedTerms
+1	0.01	TestThirdOrderMomentsOfASector
+3	0.01	TestMassPropertiesRevolveRotated
