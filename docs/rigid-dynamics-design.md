@@ -35,8 +35,18 @@ stays within that face corridor.
 A centered sphere can also hit a fixed source box rotated 45 degrees about Y.
 Its one-point manifold, exact affine first-impact bracket, mass and inertia
 bounds, and frictionless positive-restitution response must all pass. The
-solver limits incoming tangent momentum and omitted spin by its configured
-residuals, corrects the shallow overlap to a bounded positive gap, then
+solver bounds incoming normal speed on both sides of `ImpactSpeed` before
+choosing restitution. An interval crossing that threshold returns
+`Undecided`. The source-sphere response also bounds omitted angular speed,
+contact-point speed, rotational energy, and full-step displacement. Its
+angular-energy allowance is the dynamic mass upper bound times half the
+squared `VelocityResidual`; full-step displacement must fit
+`PointResolution`, `ContactSlop`, and `PenetrationResidual`. A supplied mass
+center 2 mm off the source center with inertia 5e8 kg·mm² is refused because
+its omitted point speed exceeds `VelocityResidual`, even though the omitted
+angular speed fits `AngularVelocityResidual`. The solver limits incoming
+tangent momentum by `VelocityResidual`, corrects the shallow overlap to a
+bounded positive gap, then
 requires ideal and rounded clear sweeps for the full rebound remainder.
 `Trace.Sample` replays both sides from those cached rounded sweeps. Zero
 restitution, edge/corner approach, skew read rotation, incoming spin, and

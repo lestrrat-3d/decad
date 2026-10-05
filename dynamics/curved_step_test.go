@@ -190,6 +190,73 @@ func TestSourceSphereRotatedBoxFace(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.ContactUndecided, unsupported.Relation)
 	require.Equal(t, decad.ContactPayloadUnsupported, unsupported.Reason)
+	t.Run("impact speed straddles threshold", func(t *testing.T) {
+		cfg.Bodies[0], cfg.Bodies[1] = cfg.Bodies[1], cfg.Bodies[0]
+		cfg.Step.ImpactSpeed = units.MillimetersPerSecond(math.Nextafter(100, math.Inf(-1)))
+		thresholdWorld, worldErr := dynamics.NewWorld(t.Context(), doc, cfg)
+		require.NoError(t, worldErr)
+		thresholdStart, stateErr := thresholdWorld.NewState([]dynamics.BodyState{
+			{Body: floor, Pose: turn, LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+			{Body: ball, Pose: startPose, LinearVelocity: velocity, AngularVelocity: zeroAngular(t)},
+		})
+		require.NoError(t, stateErr)
+		thresholdStep, stepErr := thresholdWorld.Step(t.Context(), thresholdStart,
+			dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.06))
+		require.NoError(t, stepErr)
+		require.Equal(t, dynamics.Undecided, thresholdStep.Status)
+		require.Nil(t, thresholdStep.Next)
+		require.Len(t, thresholdStep.Diagnostics, 1)
+		require.Contains(t, thresholdStep.Diagnostics[0].Reason, "threshold")
+	})
+}
+
+func TestRotatedSphereBoxOffCenterMassNeedsPointMotionProof(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 20)
+	ball := makeBall(t, doc)
+	turn, err := r3.Rotation(r3.Vec{Y: 1}, units.Degrees(45))
+	require.NoError(t, err)
+	normal := turn.ApplyDir(r3.Vec{Z: 1})
+	pose, err := r3.Translation(normal.Scale(20))
+	require.NoError(t, err)
+	mass := exactSphereMass()
+	mass.Center.Value = r3.Vec{Y: 2}
+	mass.Inertia.XX.Value = units.KilogramSquareMillimeters(5e8)
+	mass.Inertia.YY.Value = units.KilogramSquareMillimeters(5e8)
+	mass.Inertia.ZZ.Value = units.KilogramSquareMillimeters(5e8)
+	material := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}
+	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{
+			{Body: floor, Role: dynamics.Fixed, Material: material},
+			{Body: ball, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+		},
+		Step: dynamics.StepConfig{
+			Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+				NormalResolution: units.Radians(1e-6)},
+			TimeResolution: units.Seconds(1e-9), ContactSlop: units.Millimeters(1e-6),
+			VelocityResidual:        units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+			PenetrationResidual:     units.Millimeters(1e-6),
+			ImpactSpeed:             units.MillimetersPerSecond(0),
+			MaxPoseEvaluations:      128, MaxIterations: 8, MaxEvents: 2,
+		},
+	})
+	require.NoError(t, err)
+	start, err := w.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: turn, LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: ball, Pose: pose, LinearVelocity: dynamics.QuantityVec{
+			X: units.MillimetersPerSecond(-100 * normal.X),
+			Y: units.MillimetersPerSecond(0),
+			Z: units.MillimetersPerSecond(-100 * normal.Z)}, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	step, err := w.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.06))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, step.Status)
+	require.Nil(t, step.Next)
+	require.Len(t, step.Diagnostics, 1)
+	require.Contains(t, step.Diagnostics[0].Reason, "omitted rotation")
 }
 
 func TestSphereDensityMassRebound(t *testing.T) {
