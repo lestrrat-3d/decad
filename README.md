@@ -76,6 +76,11 @@ writes each shot's PNG frames under `_gallery/out/` and prints the two ffmpeg
 commands, which the script runs to write `out/decad-landing.mp4` and
 `out/decad-landing.gif`.
 
+The `stack-and-drop` dynamics scene drops spheres and a cylinder beside a
+resting box pyramid, every frame a certified pose of a `dynamics.Timeline`.
+Render it with `cd _gallery && go run . dynamics -scene stack-and-drop`; the
+frames go under `_gallery/out/`.
+
 ## Layering
 
 ```

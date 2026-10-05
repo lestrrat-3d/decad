@@ -34,6 +34,13 @@
 // flags (-out, -width, -height, -fps, -workers, -only, -smoke, -probe) follow
 // the subcommand; runClip documents them and the shots. The flags above do
 // not apply to it.
+//
+// The dynamics subcommand films one exit scene of the multibody dynamics
+// program: `go run . dynamics -scene stack-and-drop` advances the scene's
+// certified dynamics.Timeline to the clip length and renders it with one
+// kinetograph driven node per body under out/. Its flags (-scene, -out, -fps,
+// -width, -height, -workers, -smoke) follow the subcommand; runDynamics
+// documents them.
 package main
 
 import (
@@ -109,8 +116,11 @@ func main() {
 }
 
 // run renders the hero still and each feature thumbnail. A first argument of
-// "hero" or "clip" renders the corresponding animation instead.
+// "hero", "clip" or "dynamics" renders the corresponding animation instead.
 func run(ctx context.Context) error {
+	if len(os.Args) > 1 && os.Args[1] == "dynamics" {
+		return runDynamics(ctx, os.Args[2:], os.Stderr)
+	}
 	if len(os.Args) > 1 && os.Args[1] == "clip" {
 		return runClip(ctx, os.Args[2:], os.Stdout)
 	}
@@ -122,6 +132,7 @@ func run(ctx context.Context) error {
 		fmt.Fprintln(out, "Usage: go run . [flags]")
 		fmt.Fprintln(out, "       go run . clip [clip flags]   (go run . clip -h lists the clip flags)")
 		fmt.Fprintln(out, "       go run . hero [hero flags]   (go run . hero -h lists the hero flags)")
+		fmt.Fprintln(out, "       go run . dynamics -scene <name> [dynamics flags]   (go run . dynamics -h lists them)")
 		fmt.Fprintln(out, "Flags:")
 		flag.PrintDefaults()
 	}
@@ -142,7 +153,7 @@ func run(ctx context.Context) error {
 	list := flag.Bool("list", false, "print each shot's name, default chord tolerance and default size, then exit")
 	flag.Parse()
 	if flag.NArg() > 0 {
-		return fmt.Errorf("unexpected argument %q; the one subcommand is clip, and it must come first", flag.Arg(0))
+		return fmt.Errorf("unexpected argument %q; the subcommands are clip, hero and dynamics, and one must come first", flag.Arg(0))
 	}
 
 	renders := append([]imageRender{heroRender()}, featureRenders()...)
