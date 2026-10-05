@@ -4,7 +4,9 @@ This document owns mass, center-of-mass, and inertia readings used by rigid
 dynamics. It supplies the mass gate in `docs/collision-dynamics-design.md` §2.
 The source-box query, bounded section-moment integration for admitted
 untapered prisms, full source-sphere integration, and full source-cylinder
-integration for a revolved axis-incident rectangle are implemented.
+integration for a revolved axis-incident rectangle are implemented. A faceted
+Boolean solid with zero boundary and occupied-volume error also publishes
+density-derived mass and inertia after held-mesh audits.
 Other payload paths remain design contracts.
 `docs/evaluator-design.md` §4 owns
 the existing planar area moments; this document owns the additional volume
@@ -143,6 +145,14 @@ the solid topology audit. The faceted body may also carry a separate
 displacement from its held triangles to its denoted solid; charge that
 displacement through a certified occupied-volume error.
 
+The implemented faceted arm admits a Boolean payload only when its boundary
+displacement and occupied-volume symmetric-difference allowance are both zero.
+It reruns shell closure and orientation, vertex-link, and exact facet-crossing
+audits on the held triangles. A failed or capped audit returns `ErrUnsupported`.
+It integrates `V`, `P`, and `Q` as exact rationals anchored at one held vertex,
+then bounds only conversion to public readings. Any nonzero inherited error
+returns `ErrUnsupported` until the interval widening below is implemented.
+
 For a curved or approximated body, request a `VerifyAll` tessellation with
 `BoundaryVerified()` and `VolumeVerified()`. Read its private certified
 `volSymDiff = E`, where `E` bounds the occupied volume of
@@ -266,6 +276,7 @@ quadrature and assertions against the published bounds:
 | Partial revolve with an off-axis section | At least one nonzero mixed component agrees with independently integrated `r³`, `r²z`, and `rz²` terms. |
 | Two separated equal boxes in one body | Common-center inertia includes the `m d²` parallel-axis contribution; no per-lump tensor is returned as the body tensor. |
 | Hollow solid with a centered cavity | Mass and tensor equal outer solid minus cavity integrals; cavity material contributes no positive mass. |
+| Zero-error faceted Boolean over boxes | Overlapping, disjoint, and cavity results enclose the independent box inclusion-exclusion mass and all tensor components. |
 | Verified faceted box and a curved body at coarse and fine tessellation | True mass and every true tensor component lie in both reported intervals; refined proof narrows at least one bound. |
 | Curved body without occupied-volume proof | Query returns `ErrUnsupported`; a render mesh never supplies an inertia estimate. |
 | Bad density, sheet, cancellation, and ill-conditioned tensor interval | Each returns the specified typed refusal and publishes no partial properties. |

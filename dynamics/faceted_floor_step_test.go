@@ -177,6 +177,39 @@ func TestFacetedFloorImpactUsesRealUnionSweepAndTrace(t *testing.T) {
 	}
 }
 
+func TestFacetedFloorImpactUsesDensityMass(t *testing.T) {
+	doc, floor, faceted, _ := facetedFloorStepFixture(t)
+	density := units.KilogramsPerCubicMillimeter(.001)
+	mass, err := faceted.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	require.InDelta(t, 1.032, mass.Mass.Value.Base(), mass.Mass.Bound.Base()+1e-15)
+	material := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}
+	world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{
+			{Body: floor, Role: dynamics.Fixed, Material: material},
+			{Body: faceted, Role: dynamics.Dynamic, Density: &density, Material: material},
+		},
+		Step: facetedFloorStepConfig(),
+	})
+	require.NoError(t, err)
+	pose, err := r3.Translation(r3.Vec{Z: 10})
+	require.NoError(t, err)
+	fall := zeroVelocity()
+	fall.Z = units.MillimetersPerSecond(-160)
+	start, err := world.NewState([]dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: faceted, Pose: pose, LinearVelocity: fall, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := world.Step(t.Context(), start,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.125))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, .0625, report.Events[0].Time.Base(), 1e-12)
+	require.InDelta(t, 80, report.Events[0].PostVelocity.Z.Base(), 1e-6)
+}
+
 func TestFacetedFloorImpactRefusesUncertifiedResponse(t *testing.T) {
 	doc, floor, faceted, mass := facetedFloorStepFixture(t)
 	for _, tc := range []struct {
