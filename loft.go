@@ -504,7 +504,7 @@ func evalChainLoftContext(ctx context.Context, d *Document, ref producerID, lp c
 	}
 
 	// S13, decided before the first coordinate is lifted into an exact dyadic,
-	// exactly as assembleLoft decides it: meshOrientationSign is not run here,
+	// exactly as assembleLoft decides it: tessellation.OrientationSign is not run here,
 	// but the mass accumulator and the audit both lift every vertex through
 	// dyVec, whose mustDyOf PANICS on a non-finite float.
 	anchor := lp.xform.Apply(lp.plane0.Origin)

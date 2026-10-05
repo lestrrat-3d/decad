@@ -1859,8 +1859,9 @@ sheet, where that sum is anchor-dependent and decides nothing.
 A surface-result **loft** sheet tessellates and exports its recorded wall
 triangles. The payload holds walls before both cap ranges, so `tessellateLoft`
 copies only `tris[:walls]` and attributes each triangle to its live
-`side(i,j,k)` face (§4.2). `requireSheetMesh` matches the exposed section rims
-to the body's recorded free edges, and `requireSheetVertexLinks` checks the
+`side(i,j,k)` face (§4.2). `requireSheetMesh` hands the mesh and the body's recorded free edges to
+`internal/tessellation.RequireSheetBoundary`, which matches the exposed section rims
+to them, and `internal/tessellation.RequireSheetVertexLinks` checks the
 open boundary vertices. The complete held set still supplies the build-time
 crossing and whole-shell orientation proofs; the open mesh does not run the
 signed-volume audit, whose sum depends on the anchor when caps are absent.
@@ -1886,9 +1887,10 @@ the one it triangulated to check its own perturbed area sum (§6.4) and, until
 this increment, discarded afterward. It runs
 `docs/tessellation-design.md` §1.2's manifold-with-boundary audit in the
 closed-mesh audit's place, exactly as a surface-result prism or revolve
-sheet's own mesh does above: `requireSheetMesh` proves every free directed
+sheet's own mesh does above: `requireSheetMesh` has
+`internal/tessellation.RequireSheetBoundary` prove every free directed
 edge attributes, face by face and chain count by chain count, to the body's
-own recorded free `Edge`s, and `requireSheetVertexLinks` is its own
+own recorded free `Edge`s, and `internal/tessellation.RequireSheetVertexLinks` is its own
 vertex-link safety net for an open boundary vertex's path-shaped link.
 Attribution holds with no role lookup at all —
 `docs/tessellation-design.md` §4's own point about a stitched body's
@@ -1960,9 +1962,9 @@ At `VerifyNone`, the source revolve contact audit is skipped and
 `VerifyAll` passes that audit. An open sheet also keeps
 `VolumeVerified() == false` at every level.
 
-A closed result runs `requireClosedMesh` and `requireVertexLinks` on the
+A closed result runs `internal/tessellation.RequireClosedMesh` and `requireVertexLinks` on the
 reattributed set. An open result runs `requireSheetMesh` and
-`requireSheetVertexLinks` instead. A curved free `Edge` can contribute
+`internal/tessellation.RequireSheetVertexLinks` instead. A curved free `Edge` can contribute
 several free directed mesh edges: `requireSheetMesh` compares connected
 boundary chains per live face, not edge counts. Both sides use the same
 live `*Face` pointer, and a source rim's consecutive chord segments stay
@@ -2609,7 +2611,7 @@ The row-9 curved-mesh obligations are:
 | T58 | T3's stitched box (`stitchBoxSheets`), `Tessellate(0.1 mm)` | exactly 12 triangles and 8 vertices; every vertex bit-equal to one of the box's 8 corners; `len(SourceFaces()) == 12` over exactly 6 distinct faces, 2 triangles each; `Bound()` exactly zero; the tetrahedron sum over the mesh equals 60000 mm³ to the bit; every directed edge occurs once with its reverse once |
 | T59 | T58's box `Placed` by a translation far from the origin, then a rotation | `Bound()` is strictly positive and equals the body's own largest `Vertex.Bound()`; 12 triangles unchanged; the mesh's integrated volume encloses 60000 mm³ within the published bound — the placement-delta route to a nonzero per-face bound |
 | T60 | T42's bounded-rim stitched solid (`TestStitchClosesABoundedPatchedWallWithChargedVolumeBound`'s fixture: a `Symmetric` surface-extruded wall, `Body.Patch`-capped, welded by the CURVE certificate) at identity, no placement in play | `Bound()` strictly positive and equal to the largest vertex bound; `areaSlack` strictly positive — the independent, class-bound route to a nonzero per-face bound, which T59 alone cannot distinguish from a placement-only charge |
-| T61 | T4's displaced-patch stitched sheet (`TestStitchDisplacedPatchStaysASheet`'s fixture, open, all faces planar), `Tessellate(0.1 mm)` | the mesh's free directed edges attribute to exactly the 5 faces the body reports free `Edge`s on (the 4 wall faces and the displaced patch), one boundary chain per face on both sides; `requireSheetVertexLinks` passes; `Volume()` is still `ErrNotSolid`; `Union` with a plain solid block refuses |
+| T61 | T4's displaced-patch stitched sheet (`TestStitchDisplacedPatchStaysASheet`'s fixture, open, all faces planar), `Tessellate(0.1 mm)` | the mesh's free directed edges attribute to exactly the 5 faces the body reports free `Edge`s on (the 4 wall faces and the displaced patch), one boundary chain per face on both sides; `RequireSheetVertexLinks` passes; `Volume()` is still `ErrNotSolid`; `Union` with a plain solid block refuses |
 | T62 | each of T46's frustum, T50's ball and T53's torus body, stitched | `Tessellate`, `STL` and `OBJ` succeed through §10.1; each mesh has a positive bound and no occupied-volume proof; the body's analytic `Volume`/`Centroid` read bit-identically before and after export |
 | T63 | T58's box tessellated twice at two different tolerances | equal vertex order, triangle order and source-face order; byte-identical STL and byte-identical OBJ; mutating the returned `Vertices()`/`Triangles()` slices changes nothing on a later call |
 | T64 | `Union` of T58's box with a plain `Extrude` block | this fixture's own outcome changes from T71 onward, once the occupied-volume proof lifts for a CLOSED, all-planar, zero-vertex-bound stitched solid; a stitched operand this proof does not cover (placed, or certificate-welded) keeps this row's own `ErrUnsupported`, the volume-proof refusal (`operandSymDiff`'s wording, via `requireVolumeProvingPayload`'s own `stitchPayload` arm), not the payload-class one — T73, T74 |

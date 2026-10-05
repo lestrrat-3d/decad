@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -118,7 +119,7 @@ func TestRevolveSheetAreaSlackBelowSolidOnCircularMeridian(t *testing.T) {
 
 // TestRevolveSheetOrientationSignIsAnchorDependent is the falsifier for the
 // signed-volume orientation guard (tessellate_revolve.go's `!sheet ||
-// rp.full` arm around meshOrientationSign). No Table W fixture's own
+// rp.full` arm around tessellation.OrientationSign). No Table W fixture's own
 // default anchor (rp.xform.Apply(p.basis.a3)) happens to flip sign when
 // that guard is dropped, so a test built from that call alone would never
 // catch its removal — the guard cannot be justified by any fixture's
@@ -137,16 +138,16 @@ func TestRevolveSheetOrientationSignIsAnchorDependent(t *testing.T) {
 	open := internalOffAxisArcBody(t, true)
 	openMesh, err := open.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.NoError(t, err)
-	openSignA := meshOrientationSign(openMesh.vertices, openMesh.triangles, anchorA)
-	openSignB := meshOrientationSign(openMesh.vertices, openMesh.triangles, anchorB)
+	openSignA := tessellation.OrientationSign(openMesh.vertices, openMesh.triangles, anchorA)
+	openSignB := tessellation.OrientationSign(openMesh.vertices, openMesh.triangles, anchorB)
 	require.NotEqual(t, openSignA, openSignB,
 		`an open sheet mesh's signed-volume sum must be anchor-dependent, or the orientation guard protects against nothing`)
 
 	closed := internalOffAxisArcFullTurnBody(t, true)
 	closedMesh, err := closed.Tessellate(t.Context(), units.Millimeters(0.5))
 	require.NoError(t, err)
-	closedSignA := meshOrientationSign(closedMesh.vertices, closedMesh.triangles, anchorA)
-	closedSignB := meshOrientationSign(closedMesh.vertices, closedMesh.triangles, anchorB)
+	closedSignA := tessellation.OrientationSign(closedMesh.vertices, closedMesh.triangles, anchorA)
+	closedSignB := tessellation.OrientationSign(closedMesh.vertices, closedMesh.triangles, anchorB)
 	require.Equal(t, closedSignA, closedSignB,
 		`a closed sheet mesh's signed-volume sum must agree at every anchor, since it is the true enclosed volume`)
 }

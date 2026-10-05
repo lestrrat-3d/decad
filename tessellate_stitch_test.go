@@ -431,12 +431,12 @@ func TestStitchPlacedSolidTessellateBoundReadsVertexBound(t *testing.T) {
 // every face planar — restates its own triangle set exactly as a closed
 // stitched solid's mesh does (TestStitchSolidTessellatesItsOwnTriangleSet,
 // above), running docs/tessellation-design.md §1.2's manifold-with-boundary
-// audit (requireSheetMesh, requireSheetVertexLinks) in the closed-mesh
+// audit (requireSheetMesh, tessellation.RequireSheetVertexLinks) in the closed-mesh
 // audit's place. The free-boundary attribution needs no role at all: the
 // mesh side and the body side agree by the identical live face pointer
 // stitchPayload records and Body.Edges() reads back
 // (docs/tessellation-design.md §1.2), which meshFreeChainsByFace and
-// bodyFreeChainsByFace below check independently of tessellate_sheet.go's
+// bodyFreeChainsByFace below check independently of internal/tessellation's
 // own audit, over the SAME connected-component-by-chain reading that audit
 // uses.
 func TestStitchDisplacedPatchSheetTessellatesItsOwnTriangleSet(t *testing.T) {
@@ -472,8 +472,8 @@ func TestStitchDisplacedPatchSheetTessellatesItsOwnTriangleSet(t *testing.T) {
 // reverse is absent — by the face SourceFaces names for the triangle it
 // belongs to, then counts the connected components (chains) each face's own
 // free edges form over the mesh's vertex indices. It is an independent
-// reading of the same shape tessellate_sheet.go's freeSheetEdgesByFace and
-// countChains compute internally, built from Mesh's public accessors alone.
+// reading of the same shape internal/tessellation.RequireSheetBoundary
+// computes internally, built from Mesh's public accessors alone.
 func meshFreeChainsByFace(mesh *decad.Mesh) map[*decad.Face]int {
 	directed := map[[2]int]int{}
 	for _, tri := range mesh.Triangles() {
@@ -507,7 +507,7 @@ func meshFreeChainsByFace(mesh *decad.Mesh) map[*decad.Face]int {
 // bodyFreeChainsByFace groups a body's own recorded free Edges by their
 // single adjacent face, then counts the connected components (chains) each
 // face's own free Edges form over their own Vertex pointers — an
-// independent reading of tessellate_sheet.go's freeChainCountsByFace, built
+// independent reading of surface.go's freeChainCountsByFace, built
 // from Body's public accessors alone.
 func bodyFreeChainsByFace(body *decad.Body) map[*decad.Face]int {
 	byFace := map[*decad.Face]map[*decad.Vertex]*decad.Vertex{}

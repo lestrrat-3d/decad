@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -506,4 +507,76 @@ func loftMeshProofOf(a loftAssembly, m *loftMassAccumulator, sectionMatchedDelta
 			),
 		),
 	}
+}
+
+// tessellateLoft restates a lofted body's held triangle set as a Mesh
+// (docs/tessellation-design.md §2's "loftPayload exact restatement", §4's
+// source-face table; docs/tessellation-reach-design.md §4).
+// internal/tessellation.RestateLoft copies the set, names each triangle's
+// face by its provenance role, publishes the payload's own proof record and
+// audits the result; this adapter numbers the live faces for it and maps the
+// numbers back to *Face.
+//
+// It takes no chord tolerance, and that is the design's own reading rather
+// than an omission: the path adds no chording of its own, so the whole
+// published Bound is inherited payload displacement, which §1's Tolerance row
+// lets ride above tol exactly as a prism's per-end axial displacement does.
+// Orientation needs no work either: docs/loft-design.md §5's whole-shell step
+// already turned every triangle outward, and placed re-runs that step, so
+// repeating it would reverse a mirrored shell twice. A solid runs closure and
+// signed-volume audits; a sheet runs the manifold-with-boundary and
+// vertex-link audits instead, because the signed sum is anchor-dependent
+// without caps. A missing source role is ErrDegenerate because the live
+// topology contradicts its payload.
+func tessellateLoft(ctx context.Context, b *Body, lp loftPayload) (*Mesh, error) {
+	faces := b.Faces()
+	number := make(map[*Face]int, len(faces))
+	faceOfRole := map[string]int{}
+	for i, f := range faces {
+		number[f] = i
+		for _, o := range f.Origins() {
+			faceOfRole[o.Role] = i
+		}
+	}
+	sheet := b.Kind() == BodySheet
+	in := tessellation.LoftInput{
+		Vertices: lp.verts, Triangles: lp.tris,
+		WallCount: lp.walls, StartCapCount: lp.capStartCount,
+		WallCell: lp.cell, WallSide: lp.side,
+		Sheet:      sheet,
+		FaceOfRole: faceOfRole, StartCapRole: roleCapStart, EndCapRole: roleCapEnd,
+		FacetDepartureMM: lp.proof.facetDeparture,
+		AreaSlackMM2:     lp.proof.areaSlack,
+		VolumeSymDiffMM3: lp.proof.volSymDiff,
+	}
+	if sheet {
+		counts := freeChainCountsByFace(b)
+		in.FreeChainCounts = make(map[int]int, len(counts))
+		for f, n := range counts {
+			in.FreeChainCounts[number[f]] = n
+		}
+	} else {
+		// The same anchor evalLoft used (docs/loft-design.md §5's whole-shell
+		// orientation rule).
+		in.Anchor = lp.xform.Apply(lp.plane0.Origin)
+	}
+	out, err := tessellation.RestateLoft(ctx, in)
+	if err != nil {
+		return nil, liftTessellationError(err)
+	}
+	src := make([]*Face, len(out.SourceFaces))
+	for k, i := range out.SourceFaces {
+		src[k] = faces[i]
+	}
+	mesh := &Mesh{vertices: out.Vertices, triangles: out.Triangles, source: src}
+	for _, f := range src {
+		mesh.setFaceBound(f, out.BoundMM)
+	}
+	mesh.bound = out.BoundMM
+	mesh.areaSlack = out.AreaSlackMM2
+	if out.VolumeProof {
+		mesh.volSymDiff = out.VolumeSymDiffMM3
+		mesh.symDiffOK = true
+	}
+	return mesh, nil
 }

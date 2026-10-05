@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -652,14 +653,14 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// its own cycle-or-path vertex-link safety net in their place
 	// (requireMeshAudit, tessellate.go — the same dispatch the prism sheet
 	// path already reaches). A full revolution's sheet carries no free edge
-	// at all, so requireSheetMesh agrees with requireClosedMesh with no arm
+	// at all, so requireSheetMesh agrees with tessellation.RequireClosedMesh with no arm
 	// of its own (docs/surface-design.md §14).
 	if sheet {
 		if err := requireMeshAudit(ctx, sheet, p.body, mesh); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := requireClosedMesh(mesh); err != nil {
+		if err := tessellation.RequireClosedMesh(mesh.triangles); err != nil {
 			return nil, fmt.Errorf(`%w: this revolve's cells do not close into a watertight boundary`, ErrUnsupported)
 		}
 		if err := requireVertexLinks(ctx, mesh); err != nil {
@@ -696,7 +697,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// sheet — which carries no free edge at all — is closed and keeps it.
 	if !sheet || rp.full {
 		anchor := rp.xform.Apply(p.basis.a3)
-		if !finiteVec(anchor) || meshOrientationSign(mesh.vertices, mesh.triangles, anchor) <= 0 {
+		if !finiteVec(anchor) || tessellation.OrientationSign(mesh.vertices, mesh.triangles, anchor) <= 0 {
 			return nil, fmt.Errorf(`%w: this revolve's assembled cells do not enclose a positive volume`, ErrUnsupported)
 		}
 	}

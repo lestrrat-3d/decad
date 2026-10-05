@@ -1180,7 +1180,7 @@ func stitchTestClosedBoxVerts(base r3.Vec) [8]r3.Vec {
 // 12-triangle closure, each face wound outward and both triangles of a face
 // sharing one diagonal, offset so its indices run [off, off+8) — every
 // directed edge occurs exactly once, and its reverse exactly once, the
-// identical invariant requireClosedMesh checks (tessellate.go).
+// identical invariant tessellation.RequireClosedMesh checks.
 func stitchTestClosedBoxTriangles(off int) [12][3]int {
 	v := func(i int) int { return off + i }
 	return [12][3]int{

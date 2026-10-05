@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -199,7 +200,7 @@ func tessellateStacked(ctx context.Context, b *Body, sp stackedPrismPayload, cho
 			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
 		}
 	}
-	if err := requireClosedMesh(&mesh); err != nil {
+	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.triangles)); err != nil {
 		return nil, err
 	}
 	if err := composeFaceBounds(&mesh, faceTrim, faceAxial, vertexStore, sp.sectionDelta); err != nil {

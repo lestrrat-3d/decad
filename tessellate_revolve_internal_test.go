@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/tessellation"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -214,7 +215,7 @@ func TestRequireVertexLinksRejectsAPinchedVertex(t *testing.T) {
 		{0, 5, 4}, {0, 6, 5}, {0, 4, 6}, {4, 5, 6},
 	}
 	m := &Mesh{vertices: verts, triangles: tris}
-	require.NoError(t, requireClosedMesh(m), `the directed-edge audit passes, which is why the link audit exists`)
+	require.NoError(t, tessellation.RequireClosedMesh(m.triangles), `the directed-edge audit passes, which is why the link audit exists`)
 	err := requireVertexLinks(t.Context(), m)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "cycles rather than one")

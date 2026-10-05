@@ -201,7 +201,7 @@ pair a `VerifyAll` one does.
 §12's "a vertex link is not one connected cycle" refusal row assumes one
 runs.** Today only the revolve, cap-loop chamfer and stitched-solid
 restatement paths (§2's `stitchPayload` row, `tessellate_stitch.go`) actually
-call `requireVertexLinks` on their solid branch, beside `requireClosedMesh`:
+call `requireVertexLinks` on their solid branch, beside `internal/tessellation.RequireClosedMesh`:
 each welds or joins independently walked or independently authored geometry,
 where nothing upstream already proves a pinched vertex cannot occur the way a
 single swept prism or cup section's own construction does.
@@ -213,13 +213,15 @@ face it created. `stitchPayload.triFaces` names the live rebuilt `*Face` of
 an all-planar triangle directly. T10's source-to-live pairing names that
 face for a revolve-backed triangle. `Body.Edges()`'s own `Faces()` reads that
 identical pointer back off the same rebuilt topology
-(`docs/surface-design.md` §10), so `freeSheetEdgesByFace`'s per-triangle
-grouping and `freeChainCountsByFace`'s per-`Edge` grouping agree by pointer
-identity — never by a role that two independently welded operands could
+(`docs/surface-design.md` §10), so the root's `requireSheetMesh` numbers
+`Body.Faces()` in order and hands both the per-triangle grouping and
+`freeChainCountsByFace`'s per-`Edge` grouping to
+`internal/tessellation.RequireSheetBoundary` as those numbers, and pointer
+identity is what still groups them — never by a role that two independently welded operands could
 share (§4). This audit's own admission gate is unmodified for a stitched
 face set: it was written against a role-keyed attribution and holds
-unchanged against a pointer-keyed one, since it only ever compares `*Face`
-values, never a role string.
+unchanged against a pointer-keyed one, since it only ever compares face
+identities, never a role string.
 
 **A sheet mesh carries no occupied-volume proof, so §11 never admits it to a
 boolean.** That follows from §11's own rule rather than adding one: admission

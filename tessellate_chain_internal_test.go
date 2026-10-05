@@ -61,9 +61,8 @@ func TestTessellateChainBuildsOneExactQuadPerWall(t *testing.T) {
 // SourceFaces to prove requireSheetMesh actually refuses a wrongly chorded
 // wall set rather than passing vacuously.
 //
-// requireMatchingFreeAttribution compares CHAIN counts per face
-// (tessellate_sheet.go), not raw edge identity, so reassigning a triangle to
-// an ADJACENT wall can leave both faces' own chain counts unchanged — the
+// internal/tessellation.RequireSheetBoundary compares CHAIN counts per face,
+// not raw edge identity, so reassigning a triangle to an ADJACENT wall can leave both faces' own chain counts unchanged — the
 // stolen edge merely merges into a chain that is already there on one side,
 // and the chain it leaves behind on the other stays one chain regardless.
 // The corruption below instead moves a triangle to a wall that shares NO
