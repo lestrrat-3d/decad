@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 // facetedAxisSupport is one complete rectangular extremal face of an exact
@@ -179,4 +180,61 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 		proof.normal.Z = float64(sign)
 	}
 	return proof, true, budget.err()
+}
+
+// classifyFacetedFloorBox admits a faceted body only when its complete lower
+// support patch lies strictly inside a source-box floor's upper face. The
+// certified support plane separates the whole occupied sets at and above it.
+func classifyFacetedFloorBox(ctx context.Context, report *ContactReport, faceted *Body,
+	pose r3.Transform, floor sourceBoxContactProof, facetedIsA bool) error {
+	report.Reason = ContactPayloadUnsupported
+	support, ok, err := sourceFacetedAxisSupport(ctx, faceted, pose, 2, 0)
+	if err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	for j := range 2 {
+		if dyCmp(floor.lo[j], support.footLo[j]) >= 0 ||
+			dyCmp(support.footHi[j], floor.hi[j]) >= 0 {
+			return nil
+		}
+	}
+	gap := dySubScalar(support.plane, floor.hi[2])
+	if gap.sign() < 0 {
+		return nil
+	}
+	if gap.sign() > 0 {
+		var gaps [3]dyadic
+		gaps[2] = gap
+		m, measured := sourceBoxGap(gaps)
+		if !measured {
+			report.Reason = ContactNoGapProof
+			return nil
+		}
+		report.Relation, report.Gap, report.Reason = ContactSeparated, &m, ContactNoReason
+		return nil
+	}
+	report.Relation = ContactTouching
+	exactZero := Measurement{Value: units.Millimeters(0), Exactness: Exact, Bound: units.Millimeters(0)}
+	report.Gap = &exactZero
+	patch := sourceBoxContactProof{}
+	patch.lo[2], patch.hi[2] = support.plane, support.outerHi[2]
+	patch.faces[2][0] = support.face
+	for j := range 2 {
+		patch.lo[j], patch.hi[j] = support.footLo[j], support.footHi[j]
+	}
+	if facetedIsA {
+		publishSourceBoxPatch(report, patch, floor, 2, -1, dyZero())
+	} else {
+		publishSourceBoxPatch(report, floor, patch, 2, 1, dyZero())
+	}
+	if report.Manifold != nil {
+		report.Reason = ContactNoReason
+	}
+	return nil
 }

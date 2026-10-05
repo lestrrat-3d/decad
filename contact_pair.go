@@ -85,6 +85,8 @@ type ContactReport struct {
 // may be off-axis when their normal and witnesses meet the requested bounds.
 // A full source cylinder, extruded or revolved, can prove an axial gap from a
 // containing box face. An extruded cylinder can also prove face contact.
+// A zero-bound faceted solid can prove a lower support face contact or axial
+// gap against a source-box floor that strictly contains its support footprint.
 // An exactly orthogonal rotated source box can give a sphere a bounded point
 // on one interior face.
 // At identity query poses, the analytic clearance kernel can prove relations
@@ -131,6 +133,12 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 		}
 	}
 	if okA && !okB {
+		if _, faceted := b.payload.(facetedPayload); faceted {
+			if err := classifyFacetedFloorBox(ctx, report, b, poseB, boxA, false); err != nil {
+				return nil, err
+			}
+			return report, nil
+		}
 		if sphere, ok := sourceSphereAtPose(b, poseB); ok {
 			classifySourceSphereBox(report, sphere, boxA, false)
 			return report, nil
@@ -147,6 +155,12 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 		}
 	}
 	if okB && !okA {
+		if _, faceted := a.payload.(facetedPayload); faceted {
+			if err := classifyFacetedFloorBox(ctx, report, a, poseA, boxB, true); err != nil {
+				return nil, err
+			}
+			return report, nil
+		}
 		if sphere, ok := sourceSphereAtPose(a, poseA); ok {
 			classifySourceSphereBox(report, sphere, boxB, true)
 			return report, nil

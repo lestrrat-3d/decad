@@ -30,13 +30,18 @@ parallelotope, the source sphere also gets an exact complete-box distance
 proof and a bounded point manifold inside one rotated face. At identity query
 poses, the analytic clearance kernel can certify
 a relation for other admitted solids without a contact manifold. Other curved
-and faceted witness and normal proofs remain design contracts.
+and broader faceted witness and normal proofs remain design contracts.
 An internal reader can certify one complete rectangular axis support face of a
 zero-bound faceted Boolean result. It requires zero boundary displacement,
 zero occupied-volume difference, one outward-oriented planar source Face at
 the extremum, and exact triangle area equal to the footprint rectangle. A
 second support patch, nonrectangular footprint, or nonzero bound is refused.
-This reader does not yet publish a `ContactPair` manifold or relation.
+`ContactPair` uses the lower Z support against the upper face of a source-box
+floor when the support rectangle lies strictly inside the floor face. Exact
+support-plane equality proves `Touching` and publishes all four footprint
+corners with the original faceted Face and an exact vertical normal. Positive
+axial separation publishes the exact gap. A crossing support plane, floor
+edge, lateral approach, or missing support proof remains `Undecided`.
 
 A full circular source prism at a signed-axis pose can certify separation
 from a source box across one axial face. Its complete projected disk must lie
@@ -248,6 +253,16 @@ with no report. Refine tessellation when a chord bound covers possible
 contact and point/normal bounds may yet meet the request. At the deterministic
 work or resolution floor, return an explicit undecided relation or absent
 manifold according to which proof is missing.
+
+The exact faceted lower-support path reads the Boolean payload's zero boundary
+and occupied-volume bounds and its complete source Face map. It checks every
+held vertex against the support plane, every support triangle's oriented
+normal, and exact area coverage of one rectangular footprint. The source-box
+floor's complete occupied interval lies on the opposite side of that plane.
+The strict footprint containment gate makes the shared support rectangle the
+whole contact set and supplies both original Face identities. Witness rounding
+must fit `PointResolution`; failure keeps the proven `Touching` relation but
+omits the manifold with `ContactPointTooCoarse`.
 
 For two admitted rational boxes, compare all three axis intervals exactly.
 A positive gap on any axis excludes contact, but a global minimum distance

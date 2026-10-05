@@ -131,3 +131,118 @@ func TestFacetedAxisSupportRefusesHoledFootprint(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ok)
 }
+
+func TestContactPairRealFacetedUnionOnFloor(t *testing.T) {
+	doc := New()
+	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
+	b := internalOffsetBox(t, doc, 5, 5, 15, 15, 4,
+		Distance{D: units.Millimeters(8), Dir: Along})
+	union, err := Union(t.Context(), a, b)
+	require.NoError(t, err)
+	floor := internalOffsetBox(t, doc, -20, -20, 20, 20, -10,
+		Distance{D: units.Millimeters(10), Dir: Along})
+	before := doc.Bodies()
+	req := ContactRequest{PointResolution: units.Millimeters(1e-6), NormalResolution: units.Degrees(1)}
+	report, err := doc.ContactPair(t.Context(), floor, union, r3.Identity(), r3.Identity(), req)
+	require.NoError(t, err)
+	require.Equal(t, ContactTouching, report.Relation, "reason=%v", report.Reason)
+	require.Same(t, floor, report.A)
+	require.Same(t, union, report.B)
+	require.Equal(t, ContactNoReason, report.Reason)
+	require.Equal(t, Measurement{Value: units.Millimeters(0), Exactness: Exact,
+		Bound: units.Millimeters(0)}, *report.Gap)
+	require.NotNil(t, report.Manifold)
+	require.Len(t, report.Manifold.Points, 4)
+	face, ok, err := sourceFacetedAxisSupport(t.Context(), union, r3.Identity(), 2, 0)
+	require.NoError(t, err)
+	require.True(t, ok)
+	for i, want := range []r3.Vec{{}, {X: 10}, {X: 10, Y: 10}, {Y: 10}} {
+		point := report.Manifold.Points[i]
+		require.Equal(t, want, point.OnA.Value)
+		require.Equal(t, want, point.OnB.Value)
+		require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+		require.Zero(t, point.Normal.Bound.Base())
+		require.Zero(t, point.NormalAngle.Base())
+		require.Zero(t, point.Separation.Value.Base())
+		require.Zero(t, point.OnA.Bound.Base())
+		require.Zero(t, point.OnB.Bound.Base())
+		require.Same(t, face.face, point.FaceB)
+		require.Same(t, face.face, point.FeatureB.Face)
+		require.Contains(t, floor.Faces(), point.FaceA)
+		require.Same(t, point.FaceA, point.FeatureA.Face)
+	}
+	reversed, err := doc.ContactPair(t.Context(), union, floor, r3.Identity(), r3.Identity(), req)
+	require.NoError(t, err)
+	require.Equal(t, ContactTouching, reversed.Relation)
+	require.Len(t, reversed.Manifold.Points, 4)
+	for i, point := range reversed.Manifold.Points {
+		require.Equal(t, report.Manifold.Points[i].OnB, point.OnA)
+		require.Equal(t, report.Manifold.Points[i].OnA, point.OnB)
+		require.Equal(t, r3.Vec{Z: -1}, point.Normal.Value)
+		require.Same(t, face.face, point.FaceA)
+		require.Contains(t, floor.Faces(), point.FaceB)
+	}
+	up, err := r3.Translation(r3.Vec{Z: 3})
+	require.NoError(t, err)
+	separated, err := doc.ContactPair(t.Context(), floor, union, r3.Identity(), up, req)
+	require.NoError(t, err)
+	require.Equal(t, ContactSeparated, separated.Relation)
+	require.Equal(t, Measurement{Value: units.Millimeters(3), Exactness: Exact,
+		Bound: units.Millimeters(0)}, *separated.Gap)
+	require.Nil(t, separated.Manifold)
+	require.Equal(t, before, doc.Bodies())
+}
+
+func TestContactPairFacetedFloorRefusesUnprovedPatches(t *testing.T) {
+	doc := New()
+	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
+	b := internalOffsetBox(t, doc, 5, 5, 15, 15, 4,
+		Distance{D: units.Millimeters(8), Dir: Along})
+	union, err := Union(t.Context(), a, b)
+	require.NoError(t, err)
+	floor := internalOffsetBox(t, doc, -20, -20, 20, 20, -10,
+		Distance{D: units.Millimeters(10), Dir: Along})
+	req := ContactRequest{PointResolution: units.Millimeters(1e-6), NormalResolution: units.Degrees(1)}
+	for _, pose := range []r3.Vec{{X: 10}, {X: 25}, {Z: -1}} {
+		placed, err := r3.Translation(pose)
+		require.NoError(t, err)
+		report, err := doc.ContactPair(t.Context(), floor, union, r3.Identity(), placed, req)
+		require.NoError(t, err)
+		require.Equal(t, ContactUndecided, report.Relation, "pose=%v", pose)
+		require.Nil(t, report.Manifold)
+		require.Nil(t, report.Gap)
+	}
+	shifted, err := r3.Translation(r3.Vec{X: 0.1})
+	require.NoError(t, err)
+	tight := req
+	tight.PointResolution = units.Millimeters(1e-20)
+	coarse, err := doc.ContactPair(t.Context(), floor, union, r3.Identity(), shifted, tight)
+	require.NoError(t, err)
+	require.Equal(t, ContactTouching, coarse.Relation)
+	require.Nil(t, coarse.Manifold)
+	require.Equal(t, ContactPointTooCoarse, coarse.Reason)
+	shift, err := r3.Translation(r3.Vec{X: 0.1})
+	require.NoError(t, err)
+	widened, err := union.Placed(t.Context(), shift)
+	require.NoError(t, err)
+	report, err := doc.ContactPair(t.Context(), floor, widened, r3.Identity(), r3.Identity(), req)
+	require.NoError(t, err)
+	require.Equal(t, ContactUndecided, report.Relation)
+	require.Nil(t, report.Manifold)
+}
+
+func TestContactPairFacetedFloorRefusesMultipleSupportFaces(t *testing.T) {
+	doc := New()
+	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
+	b := internalBoxBody(t, doc, 20, 0, 30, 10, 8)
+	union, err := Union(t.Context(), a, b)
+	require.NoError(t, err)
+	floor := internalOffsetBox(t, doc, -20, -20, 40, 20, -10,
+		Distance{D: units.Millimeters(10), Dir: Along})
+	req := ContactRequest{PointResolution: units.Millimeters(1e-6), NormalResolution: units.Degrees(1)}
+	report, err := doc.ContactPair(t.Context(), floor, union, r3.Identity(), r3.Identity(), req)
+	require.NoError(t, err)
+	require.Equal(t, ContactUndecided, report.Relation)
+	require.Nil(t, report.Manifold)
+	require.Nil(t, report.Gap)
+}
