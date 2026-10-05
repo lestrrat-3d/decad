@@ -382,3 +382,179 @@ func TestNewWorldAdmitsRotatedDensityBox(t *testing.T) {
 	require.Len(t, w.Bodies(), 2)
 	require.Equal(t, dynamics.Dynamic, w.Bodies()[1].Role)
 }
+
+// elongatedObliqueBox builds a 60×10×10 mm box turned 45° about (1,1,0)
+// through its center and reads its density-derived mass from decad.
+func elongatedObliqueBox(t *testing.T, doc *decad.Document) (*decad.Body, decad.MassProperties) {
+	t.Helper()
+	box := makeBox(t, doc, -30, -5, 30, 5, 95, 10)
+	pose, err := r3.RotationAround(r3.NewVec(0, 0, 100), r3.NewVec(1, 1, 0), units.Degrees(45))
+	require.NoError(t, err)
+	turned, err := box.Placed(t.Context(), pose)
+	require.NoError(t, err)
+	mass, err := turned.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(0.001))
+	require.NoError(t, err)
+	return turned, mass
+}
+
+// TestNewWorldAdmitsElongatedObliqueBox feeds a body whose products of
+// inertia outweigh a diagonal entry through the real decad producer into
+// NewWorld. Row dominance cannot prove this tensor positive; the leading
+// principal minors over the published intervals can.
+func TestNewWorldAdmitsElongatedObliqueBox(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
+	turned, mass := elongatedObliqueBox(t, doc)
+
+	// The 6 kg box has principal moments 100 (long axis) and 1850 kg·mm².
+	// With u the long axis after the turn, the world tensor is
+	// 1850·I − 1750·u·uᵀ, and Rodrigues' formula gives u = (½+√2/4, ½−√2/4, −½).
+	// The slack covers decad's published bounds and float rounding of the
+	// expectation.
+	u := r3.NewVec(0.5+math.Sqrt2/4, 0.5-math.Sqrt2/4, -0.5)
+	expected := map[string]struct {
+		got  decad.Measurement
+		want float64
+	}{
+		"XX": {mass.Inertia.XX, 1850 - 1750*u.X*u.X},
+		"YY": {mass.Inertia.YY, 1850 - 1750*u.Y*u.Y},
+		"ZZ": {mass.Inertia.ZZ, 1850 - 1750*u.Z*u.Z},
+		"XY": {mass.Inertia.XY, -1750 * u.X * u.Y},
+		"XZ": {mass.Inertia.XZ, -1750 * u.X * u.Z},
+		"YZ": {mass.Inertia.YZ, -1750 * u.Y * u.Z},
+	}
+	for name, entry := range expected {
+		got, err := entry.got.Value.In(units.KilogramSquareMillimeter)
+		require.NoError(t, err)
+		require.InDelta(t, entry.want, got, 1e-6, name)
+	}
+	// Row X fails dominance by hundreds of kg·mm², far beyond every bound.
+	dominance := mass.Inertia.XX.Value.Base() - mass.Inertia.XX.Bound.Base() -
+		math.Abs(mass.Inertia.XY.Value.Base()) - mass.Inertia.XY.Bound.Base() -
+		math.Abs(mass.Inertia.XZ.Value.Base()) - mass.Inertia.XZ.Bound.Base()
+	require.Negative(t, dominance)
+
+	w := fixedBoxContactWorld(t, doc, floor, turned, 0)
+	require.Equal(t, dynamics.Dynamic, w.Bodies()[1].Role)
+
+	material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
+	config := dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{
+			{Body: floor, Role: dynamics.Fixed, Material: material},
+			{Body: turned, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+		},
+		Step: pairMaterialStepConfig(),
+	}
+	_, err := dynamics.NewWorld(t.Context(), doc, config)
+	require.NoError(t, err, "the supplied record takes the same proof")
+}
+
+// TestNewWorldInertiaPositivityProof drives supplied records derived from
+// the elongated oblique box through NewWorld. None of the refused fixtures
+// passes row dominance, so each refusal rests on the leading-minor proof.
+//
+// Each leg below was weakened in world.go's principalMinorFloor or
+// validateMass, watched to turn its fixture's case red (wrongly admitted),
+// and restored:
+//   - Building each entry from its value instead of value ± bound admits
+//     "interval reaches a singular tensor".
+//   - Dropping the 3×3 determinant check admits "interval reaches a singular
+//     tensor".
+//   - Dropping the 2×2 minor check admits "negative second minor".
+//   - Dropping the 1×1 minor check admits "negative first minor".
+//   - Dropping the finite-inverse check on the floor, or taking the smallest
+//     diagonal lower end as the floor, admits "eigenvalue floor inverse
+//     overflows".
+//
+// The positive-trace guard is redundant: three positive minors already prove
+// every member positive definite, so its trace is positive. It only keeps the
+// floor's division defined. Using the trace's lower end in place of its upper
+// end is not separately exercised: these fixtures' trace intervals are too
+// narrow for the two ends to reach different verdicts.
+func TestNewWorldInertiaPositivityProof(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -100, -100, 100, 100, -10, 10)
+	turned, source := elongatedObliqueBox(t, doc)
+	mm2 := func(m decad.Measurement) float64 {
+		value, err := m.Value.In(units.KilogramSquareMillimeter)
+		require.NoError(t, err)
+		return value
+	}
+	in := source.Inertia
+	xx, yy, zz := mm2(in.XX), mm2(in.YY), mm2(in.ZZ)
+	xy, xz, yz := mm2(in.XY), mm2(in.XZ), mm2(in.YZ)
+	// The determinant is linear in XX with slope cofYZ, so widening XX's
+	// bound past det/cofYZ puts a singular tensor inside the intervals while
+	// the published values stay positive definite.
+	cofYZ := yy*zz - yz*yz
+	det := xx*cofYZ - xy*(xy*zz-yz*xz) + xz*(xy*yz-yy*xz)
+	require.Positive(t, det)
+	singularReach := det / cofYZ
+	require.Less(t, singularReach, xx/2, "XX's lower end and the 2×2 minor stay positive")
+
+	widenXX := func(factor float64) func(*decad.InertiaReading) {
+		return func(r *decad.InertiaReading) {
+			r.XX.Exactness = decad.Approximate
+			r.XX.Bound = units.KilogramSquareMillimeters(factor * singularReach)
+		}
+	}
+	diagonal := func(x, y, z float64) func(*decad.InertiaReading) {
+		return func(r *decad.InertiaReading) {
+			exact := func(v float64) decad.Measurement {
+				return decad.Measurement{Value: units.KilogramSquareMillimeters(v), Exactness: decad.Exact,
+					Bound: units.KilogramSquareMillimeters(0)}
+			}
+			*r = decad.InertiaReading{XX: exact(x), YY: exact(y), ZZ: exact(z),
+				XY: exact(0), XZ: exact(0), YZ: exact(0)}
+		}
+	}
+	// Scaling by a power of two keeps the tensor positive definite: values
+	// below float64's normal range lose at most a few parts in 10^16, far
+	// inside the 100:1850 eigenvalue spread. The floor 4·det/trace² is about
+	// 94.8 kg·mm² before scaling, against a smallest eigenvalue of 100 and a
+	// smallest diagonal near 575. At 2^-1032 the floor's reciprocal is near
+	// 4e308, past float64's 1.8e308, while the smallest diagonal's is near
+	// 6.5e307. At 2^-1028 the floor's reciprocal is near 2.5e307 and fits.
+	scale := func(exponent int) func(*decad.InertiaReading) {
+		return func(r *decad.InertiaReading) {
+			for _, m := range []*decad.Measurement{&r.XX, &r.YY, &r.ZZ, &r.XY, &r.XZ, &r.YZ} {
+				m.Value = units.KilogramSquareMillimeters(math.Ldexp(mm2(*m), exponent))
+				m.Bound = units.KilogramSquareMillimeters(math.Ldexp(m.Bound.Mag(), exponent))
+			}
+		}
+	}
+	material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
+	for _, tc := range []struct {
+		name   string
+		change func(*decad.InertiaReading)
+		admit  bool
+	}{
+		// 0.99 leaves det·0.01 of margin, far above the other components'
+		// published bounds, so the proof admits just short of singular.
+		{"interval stops short of a singular tensor", widenXX(0.99), true},
+		{"interval reaches a singular tensor", widenXX(1.01), false},
+		// Both diagonals keep a positive determinant (10) and trace (8), so
+		// only the named minor can refuse them.
+		{"negative second minor", diagonal(10, -1, -1), false},
+		{"negative first minor", diagonal(-1, -1, 10), false},
+		{"eigenvalue floor inverse fits", scale(-1028), true},
+		{"eigenvalue floor inverse overflows", scale(-1032), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			supplied := source
+			tc.change(&supplied.Inertia)
+			_, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+				Bodies: []dynamics.RigidBody{
+					{Body: floor, Role: dynamics.Fixed, Material: material},
+					{Body: turned, Role: dynamics.Dynamic, Supplied: &supplied, Material: material},
+				},
+				Step: pairMaterialStepConfig(),
+			})
+			if tc.admit {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, dynamics.ErrInvalidMassProperties)
+		})
+	}
+}

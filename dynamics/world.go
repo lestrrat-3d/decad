@@ -14,6 +14,7 @@ import (
 	"slices"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -294,8 +295,7 @@ func validateMass(m decad.MassProperties) error {
 			return fmt.Errorf("%w: inconsistent inertia exactness", ErrInvalidMassProperties)
 		}
 	}
-	// A strict row-dominance bound proves every tensor inside the component intervals positive.
-	lower := certifiedInertiaLower(m)
+	lower := certifiedInertiaFloor(m)
 	if lower == nil || lower.Sign() <= 0 {
 		return fmt.Errorf("%w: tensor positivity is not proved", ErrInvalidMassProperties)
 	}
@@ -304,6 +304,72 @@ func validateMass(m decad.MassProperties) error {
 		return fmt.Errorf("%w: mass or inertia inverse is not finite", ErrInvalidMassProperties)
 	}
 	return nil
+}
+
+// certifiedInertiaFloor proves every tensor inside the six published inertia
+// intervals (value ± bound) positive definite and returns a positive lower
+// bound on its smallest eigenvalue, or nil or a nonpositive value when
+// neither proof holds. Row dominance and the leading principal minors are
+// both sound, so the larger of the floors they prove is used.
+func certifiedInertiaFloor(m decad.MassProperties) *big.Rat {
+	floor := certifiedInertiaLower(m)
+	minors := principalMinorFloor(m.Inertia)
+	if minors != nil && (floor == nil || minors.Cmp(floor) > 0) {
+		return minors
+	}
+	return floor
+}
+
+// principalMinorFloor proves the interval tensor positive definite by
+// Sylvester's criterion in exact rational interval arithmetic: each leading
+// principal minor is a polynomial in the entries, so its interval evaluation
+// encloses the minor of every member, and a positive lower end holds for all
+// of them at once. For a positive definite tensor with eigenvalues
+// λ1 ≤ λ2 ≤ λ3, λ1 = det/(λ2·λ3) and λ2·λ3 ≤ (trace/2)², so
+// 4·det_lo/trace_hi² bounds λ1 from below. It returns nil without a proof.
+func principalMinorFloor(inertia decad.InertiaReading) *big.Rat {
+	entry := func(component decad.Measurement) (proof.RatInterval, bool) {
+		value, bound := exactBase(component.Value), exactBase(component.Bound)
+		if value == nil || bound == nil || bound.Sign() < 0 {
+			return proof.RatInterval{}, false
+		}
+		return proof.OwnedInterval(new(big.Rat).Sub(value, bound), new(big.Rat).Add(value, bound)), true
+	}
+	components := [6]decad.Measurement{inertia.XX, inertia.YY, inertia.ZZ, inertia.XY, inertia.XZ, inertia.YZ}
+	var held [6]proof.RatInterval
+	for i, component := range components {
+		interval, ok := entry(component)
+		if !ok {
+			return nil
+		}
+		held[i] = interval
+	}
+	xx, yy, zz, xy, xz, yz := held[0], held[1], held[2], held[3], held[4], held[5]
+	if xx.Lo.Sign() <= 0 {
+		return nil
+	}
+	cofactor := func(a, b, c, d proof.RatInterval) proof.RatInterval {
+		return proof.SubInterval(proof.MulInterval(a, b), proof.MulInterval(c, d))
+	}
+	if cofactor(xx, yy, xy, xy).Lo.Sign() <= 0 {
+		return nil
+	}
+	det := proof.AddInterval(
+		proof.SubInterval(
+			proof.MulInterval(xx, cofactor(yy, zz, yz, yz)),
+			proof.MulInterval(xy, cofactor(xy, zz, yz, xz)),
+		),
+		proof.MulInterval(xz, cofactor(xy, yz, yy, xz)),
+	)
+	if det.Lo.Sign() <= 0 {
+		return nil
+	}
+	trace := proof.AddInterval(proof.AddInterval(xx, yy), zz)
+	if trace.Hi.Sign() <= 0 {
+		return nil
+	}
+	floor := new(big.Rat).Mul(big.NewRat(4, 1), det.Lo)
+	return floor.Quo(floor, new(big.Rat).Mul(trace.Hi, trace.Hi))
 }
 
 func validMassExactness(exactness decad.Exactness, bound units.Value) bool {
