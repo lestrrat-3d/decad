@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"slices"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
@@ -278,10 +279,10 @@ func magnitudeInBounded(v units.Value, kind units.Kind, unit units.Unit, what st
 // and so an exact rational, so the comparison is the conversion's true error,
 // whatever sequence of float operations produced the held value.
 func conversionRound(v units.Value, unit units.Unit, held float64) float64 {
-	mag, from, to := floatRat(v.Mag()), floatRat(v.Unit().Factor()), floatRat(unit.Factor())
+	mag, from, to := proofarith.FloatRat(v.Mag()), proofarith.FloatRat(v.Unit().Factor()), proofarith.FloatRat(unit.Factor())
 	if mag == nil || from == nil || to == nil || to.Sign() == 0 {
 		return math.Inf(1)
 	}
 	exact := new(big.Rat).Quo(new(big.Rat).Mul(mag, from), to)
-	return rationalFloatError(exact, held)
+	return proofarith.RationalFloatError(exact, held)
 }

@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -734,12 +735,12 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 
 	// residual >= |r1^2 - r0^2| / (r1_up + r0_up), every step exact.
 	num := new(big.Rat).Abs(new(big.Rat).Sub(r1, r0))
-	den := new(big.Rat).Add(floatRat(ratSqrtUp(r0)), floatRat(ratSqrtUp(r1)))
+	den := new(big.Rat).Add(proofarith.FloatRat(ratSqrtUp(r0)), proofarith.FloatRat(ratSqrtUp(r1)))
 	require.Positive(t, den.Sign())
 	want := new(big.Rat).Quo(num, den)
 
 	charged := arcNaturalEndRadialUpper(arc)
-	require.GreaterOrEqual(t, floatRat(charged).Cmp(want), 0,
+	require.GreaterOrEqual(t, proofarith.FloatRat(charged).Cmp(want), 0,
 		"the charged arc-end radial residual must dominate the record's own proven radial gap")
 
 	p := ProfileRecord{Outer: loop}
@@ -756,7 +757,7 @@ func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
 
 	loaded, ok := body.payload.(loftPayload)
 	require.True(t, ok)
-	require.GreaterOrEqual(t, floatRat(loaded.delta).Cmp(want), 0,
+	require.GreaterOrEqual(t, proofarith.FloatRat(loaded.delta).Cmp(want), 0,
 		"delta must dominate the drifted arc end's own proven radial displacement; a zero here is the defect this test guards")
 
 	// delta > 0 now, so bodyGateDiameter must SHRINK rather than take the

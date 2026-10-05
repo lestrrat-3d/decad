@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -130,10 +131,10 @@ func (cbp capBlendPayload) capBandLevel(capZ, matSign float64) boundedScalar {
 func (cbp capBlendPayload) axialDelta() float64 {
 	z0Delta, z1Delta := cbp.z0Delta, cbp.z1Delta
 	if len(cbp.startLoops) != 0 {
-		z0Delta = absSumUpper(z0Delta, cbp.dDelta, addRoundError(cbp.z0, cbp.d, cbp.z0+cbp.d))
+		z0Delta = absSumUpper(z0Delta, cbp.dDelta, proofarith.AddRoundError(cbp.z0, cbp.d, cbp.z0+cbp.d))
 	}
 	if len(cbp.endLoops) != 0 {
-		z1Delta = absSumUpper(z1Delta, cbp.dDelta, addRoundError(cbp.z1, -cbp.d, cbp.z1-cbp.d))
+		z1Delta = absSumUpper(z1Delta, cbp.dDelta, proofarith.AddRoundError(cbp.z1, -cbp.d, cbp.z1-cbp.d))
 	}
 	return math.Max(z0Delta, z1Delta)
 }
@@ -236,11 +237,11 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		hiAllow := productUpper(axial, cbp.z1Delta)
 		if onStart {
 			zLo = cbp.z0 + cbp.d
-			loAllow = absSumUpper(loAllow, productUpper(axial, absSumUpper(cbp.dDelta, addRoundError(cbp.z0, cbp.d, zLo))))
+			loAllow = absSumUpper(loAllow, productUpper(axial, absSumUpper(cbp.dDelta, proofarith.AddRoundError(cbp.z0, cbp.d, zLo))))
 		}
 		if onEnd {
 			zHi = cbp.z1 - cbp.d
-			hiAllow = absSumUpper(hiAllow, productUpper(axial, absSumUpper(cbp.dDelta, addRoundError(cbp.z1, -cbp.d, zHi))))
+			hiAllow = absSumUpper(hiAllow, productUpper(axial, absSumUpper(cbp.dDelta, proofarith.AddRoundError(cbp.z1, -cbp.d, zHi))))
 		}
 		// The boundary scan states its own displacement per candidate — nonzero
 		// wherever a circular candidate's apex is not exactly representable

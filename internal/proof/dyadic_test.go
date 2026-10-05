@@ -1,4 +1,4 @@
-package decad
+package proof_test
 
 import (
 	"math"
@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"testing"
 
+	"github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -24,10 +25,10 @@ var dyadicProbeFloats = []float64{
 	math.Nextafter(1, 2), math.Nextafter(1, 0),
 }
 
-// ratOfDyadic is the test's own independent reading of a dyadic: mant × 2^exp
+// ratOfDyadic is the test's own independent reading of a proof.Dyadic: mant × 2^exp
 // composed through big.Rat rather than through the type's own rat method, so a
 // bug shared by construction and conversion cannot hide behind itself.
-func ratOfDyadic(t *testing.T, d dyadic) *big.Rat {
+func ratOfDyadic(t *testing.T, d proof.Dyadic) *big.Rat {
 	t.Helper()
 	if d.Mant() == nil {
 		return new(big.Rat)
@@ -48,22 +49,22 @@ func abs(v int) int {
 }
 
 // TestDyadicLiftsEveryFloatExactly is the representation's own premise: a
-// float64 IS a dyadic rational, so the lift loses nothing and reads back as the
+// float64 IS a proof.Dyadic rational, so the lift loses nothing and reads back as the
 // number big.Rat holds for it.
 func TestDyadicLiftsEveryFloatExactly(t *testing.T) {
 	t.Parallel()
 	var reusedMant big.Int
 	for _, f := range dyadicProbeFloats {
-		d, ok := dyOf(f)
+		d, ok := proof.DyOf(f)
 		require.True(t, ok, "%v is finite and must lift", f)
 		if f != 0 {
-			reused := dyOfFiniteInto(f, &reusedMant)
+			reused := proof.DyOfFiniteInto(f, &reusedMant)
 			require.Equal(t, d.Exp(), reused.Exp(), "reused exponent for %v", f)
 			require.Equal(t, d.Mant(), reused.Mant(), "reused mantissa for %v", f)
 			require.Same(t, &reusedMant, reused.Mant(), "the lift writes into caller storage for %v", f)
 		}
-		require.Zero(t, ratOfDyadic(t, d).Cmp(floatRat(f)), "the lift of %v must equal its exact rational", f)
-		require.Zero(t, d.Rat().Cmp(floatRat(f)), "rat must return the same number the lift holds, for %v", f)
+		require.Zero(t, ratOfDyadic(t, d).Cmp(proof.FloatRat(f)), "the lift of %v must equal its exact rational", f)
+		require.Zero(t, d.Rat().Cmp(proof.FloatRat(f)), "rat must return the same number the lift holds, for %v", f)
 
 		back, exact := d.Float64()
 		require.True(t, exact, "a value lifted from a float64 must convert back exactly, for %v", f)
@@ -76,7 +77,7 @@ func TestDyadicLiftsEveryFloatExactly(t *testing.T) {
 func TestDyadicRefusesNonFiniteFloats(t *testing.T) {
 	t.Parallel()
 	for _, f := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
-		_, ok := dyOf(f)
+		_, ok := proof.DyOf(f)
 		require.False(t, ok, "%v must not lift", f)
 	}
 }
@@ -90,10 +91,10 @@ func TestDyadicRefusesNonFiniteFloats(t *testing.T) {
 func TestMustDyOfPanicsOnANonFiniteFloat(t *testing.T) {
 	t.Parallel()
 	for _, f := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
-		require.Panics(t, func() { mustDyOf(f) }, "%v must not lift silently", f)
+		require.Panics(t, func() { proof.MustDyOf(f) }, "%v must not lift silently", f)
 	}
-	require.NotPanics(t, func() { mustDyOf(math.MaxFloat64) }, "a finite value still lifts")
-	require.Panics(t, func() { dyVec(r3.Vec{X: 1, Y: math.Inf(1), Z: 3}) },
+	require.NotPanics(t, func() { proof.MustDyOf(math.MaxFloat64) }, "a finite value still lifts")
+	require.Panics(t, func() { proof.DyVec(r3.Vec{X: 1, Y: math.Inf(1), Z: 3}) },
 		"a vector carrying a non-finite component must not lift silently either")
 }
 
@@ -103,7 +104,7 @@ func TestMustDyOfPanicsOnANonFiniteFloat(t *testing.T) {
 // mantissas would grow with every alignment.
 func TestDyadicStaysReduced(t *testing.T) {
 	t.Parallel()
-	reduced := func(d dyadic, what string) {
+	reduced := func(d proof.Dyadic, what string) {
 		t.Helper()
 		if d.Mant() == nil || d.Mant().Sign() == 0 {
 			require.Zero(t, d.Exp(), "%s: a zero must carry exponent 0", what)
@@ -112,42 +113,42 @@ func TestDyadicStaysReduced(t *testing.T) {
 		require.Zero(t, d.Mant().TrailingZeroBits(), "%s: a non-zero mantissa must be odd", what)
 	}
 	for _, f := range dyadicProbeFloats {
-		reduced(mustDyOf(f), "the lift of a float")
+		reduced(proof.MustDyOf(f), "the lift of a float")
 	}
 	// 3 + 5 = 8 is the case that forces the point: both operands are odd and
 	// their sum is a pure power of two, so an unreduced result would carry a
 	// mantissa three bits wider than it needs.
-	reduced(dyAdd(mustDyOf(3), mustDyOf(5)), "3+5")
-	reduced(dySubScalar(mustDyOf(8), mustDyOf(7)), "8-7")
-	reduced(dyAdd(mustDyOf(0.5), mustDyOf(0.5)), "0.5+0.5")
-	reduced(dySubScalar(mustDyOf(1), mustDyOf(1)), "1-1")
+	reduced(proof.DyAdd(proof.MustDyOf(3), proof.MustDyOf(5)), "3+5")
+	reduced(proof.DySubScalar(proof.MustDyOf(8), proof.MustDyOf(7)), "8-7")
+	reduced(proof.DyAdd(proof.MustDyOf(0.5), proof.MustDyOf(0.5)), "0.5+0.5")
+	reduced(proof.DySubScalar(proof.MustDyOf(1), proof.MustDyOf(1)), "1-1")
 
 	// A cancelling sum is exactly zero, not a zero mantissa at some exponent.
-	z := dySubScalar(mustDyOf(math.Pi), mustDyOf(math.Pi))
+	z := proof.DySubScalar(proof.MustDyOf(math.Pi), proof.MustDyOf(math.Pi))
 	require.True(t, z.IsZero())
 	require.Zero(t, z.Exp())
 }
 
 // TestDyadicArithmeticMatchesBigRat is the substitution's whole justification:
-// over a spread of held floats, every dyadic operation returns the number
+// over a spread of held floats, every proof.Dyadic operation returns the number
 // big.Rat returns for it, compared EXACTLY rather than within a tolerance.
 func TestDyadicArithmeticMatchesBigRat(t *testing.T) {
 	t.Parallel()
 	for _, a := range dyadicProbeFloats {
 		for _, b := range dyadicProbeFloats {
-			da, db := mustDyOf(a), mustDyOf(b)
-			ra, rb := floatRat(a), floatRat(b)
+			da, db := proof.MustDyOf(a), proof.MustDyOf(b)
+			ra, rb := proof.FloatRat(a), proof.FloatRat(b)
 
-			require.Zero(t, ratOfDyadic(t, dyAdd(da, db)).Cmp(new(big.Rat).Add(ra, rb)),
+			require.Zero(t, ratOfDyadic(t, proof.DyAdd(da, db)).Cmp(new(big.Rat).Add(ra, rb)),
 				"%v + %v", a, b)
-			require.Zero(t, ratOfDyadic(t, dySubScalar(da, db)).Cmp(new(big.Rat).Sub(ra, rb)),
+			require.Zero(t, ratOfDyadic(t, proof.DySubScalar(da, db)).Cmp(new(big.Rat).Sub(ra, rb)),
 				"%v - %v", a, b)
-			require.Zero(t, ratOfDyadic(t, dyMul(da, db)).Cmp(new(big.Rat).Mul(ra, rb)),
+			require.Zero(t, ratOfDyadic(t, proof.DyMul(da, db)).Cmp(new(big.Rat).Mul(ra, rb)),
 				"%v * %v", a, b)
-			require.Equal(t, ra.Cmp(rb), dyCmp(da, db), "cmp(%v, %v)", a, b)
+			require.Equal(t, ra.Cmp(rb), proof.DyCmp(da, db), "cmp(%v, %v)", a, b)
 			require.Equal(t, ra.Sign(), da.Sign(), "sign(%v)", a)
-			require.Zero(t, ratOfDyadic(t, dyAbs(da)).Cmp(new(big.Rat).Abs(ra)), "abs(%v)", a)
-			require.Zero(t, ratOfDyadic(t, dyNeg(da)).Cmp(new(big.Rat).Neg(ra)), "neg(%v)", a)
+			require.Zero(t, ratOfDyadic(t, proof.DyAbs(da)).Cmp(new(big.Rat).Abs(ra)), "abs(%v)", a)
+			require.Zero(t, ratOfDyadic(t, proof.DyNeg(da)).Cmp(new(big.Rat).Neg(ra)), "neg(%v)", a)
 		}
 	}
 }
@@ -172,7 +173,7 @@ func TestDyadicVectorMatchesBigRatVector(t *testing.T) {
 	// own independent oracle so the comparison is against math/big's answer
 	// and not against another copy of the code under test.
 	type ratRef [3]*big.Rat
-	refVec := func(v r3.Vec) ratRef { return ratRef{floatRat(v.X), floatRat(v.Y), floatRat(v.Z)} }
+	refVec := func(v r3.Vec) ratRef { return ratRef{proof.FloatRat(v.X), proof.FloatRat(v.Y), proof.FloatRat(v.Z)} }
 	refSub := func(a, b ratRef) ratRef {
 		var out ratRef
 		for i := range out {
@@ -198,71 +199,28 @@ func TestDyadicVectorMatchesBigRatVector(t *testing.T) {
 
 	for range 300 {
 		va, vb := vec(), vec()
-		da, db := dyVec(va), dyVec(vb)
+		da, db := proof.DyVec(va), proof.DyVec(vb)
 		ra, rb := refVec(va), refVec(vb)
 
-		require.Zero(t, ratOfDyadic(t, dvDot(da, db)).Cmp(refDot(ra, rb)), "dot of %v and %v", va, vb)
+		require.Zero(t, ratOfDyadic(t, proof.DvDot(da, db)).Cmp(refDot(ra, rb)), "dot of %v and %v", va, vb)
 
-		gotCross, wantCross := dvCross(da, db), refCross(ra, rb)
+		gotCross, wantCross := proof.DvCross(da, db), refCross(ra, rb)
 		for i := range gotCross {
 			require.Zero(t, ratOfDyadic(t, gotCross[i]).Cmp(wantCross[i]),
 				"cross component %d of %v and %v", i, va, vb)
 		}
-		gotSub, wantSub := dvSub(da, db), refSub(ra, rb)
+		gotSub, wantSub := proof.DvSub(da, db), refSub(ra, rb)
 		for i := range gotSub {
 			require.Zero(t, ratOfDyadic(t, gotSub[i]).Cmp(wantSub[i]),
 				"difference component %d of %v and %v", i, va, vb)
 		}
-		gotAdd := dvAdd(da, db)
+		gotAdd := proof.DvAdd(da, db)
 		for i := range gotAdd {
 			require.Zero(t, ratOfDyadic(t, gotAdd[i]).Cmp(new(big.Rat).Add(ra[i], rb[i])),
 				"sum component %d of %v and %v", i, va, vb)
 		}
-		require.True(t, dvIsZero(dvSub(da, da)), "a self-difference is zero")
-		require.False(t, dvIsZero(dvSub(da, db)), "two distinct random vectors differ")
-	}
-}
-
-// TestDyadicSqrtBracketsMatchTheRationalOnes pins the directed square-root
-// walks against the rational ones they restate: the same float, proven by the
-// same exact comparison, for a spread of magnitudes.
-func TestDyadicSqrtBracketsMatchTheRationalOnes(t *testing.T) {
-	t.Parallel()
-	for _, f := range dyadicProbeFloats {
-		if f <= 0 {
-			continue
-		}
-		d, q := mustDyOf(f), floatRat(f)
-		require.Equal(t, ratSqrtDown(q), dySqrtDown(d), "sqrt down of %v", f)
-		require.Equal(t, ratSqrtUp(q), dySqrtUp(d), "sqrt up of %v", f)
-
-		// The bracket is PROVEN, not merely close: the down leg squares to at
-		// most the value and the up leg to at least it, decided exactly.
-		require.True(t, dySquareAtMost(dySqrtDown(d), d), "the down leg must square to at most %v", f)
-		if up := dySqrtUp(d); !isNonFinite(up) {
-			require.False(t, dyCmp(dyMul(mustDyOf(up), mustDyOf(up)), d) < 0,
-				"the up leg must square to at least %v", f)
-		}
-	}
-	require.Zero(t, dySqrtDown(mustDyOf(-1)), "a negative value brackets at zero, as its rational twin does")
-	require.Zero(t, dySqrtUp(mustDyOf(-1)))
-}
-
-// TestDyadicDirectedRoundingMatchesTheRationalOnes pins dyFloatDown/dyFloatUp
-// against ratFloatDown/ratFloatUp on values that are deliberately NOT floats:
-// a mid-ulp third of a sum is where a directed rounding either steps or does
-// not, and where an off-by-one would show.
-func TestDyadicDirectedRoundingMatchesTheRationalOnes(t *testing.T) {
-	t.Parallel()
-	for _, f := range dyadicProbeFloats {
-		d := mustDyOf(f)
-		// A value needing more than 53 significant bits: the float itself plus
-		// one ulp of its own smallest neighbour, which no float64 holds.
-		wide := dyAdd(dyMul(d, d), dyShift(mustDyOf(1), -1080))
-		require.Equal(t, ratFloatDown(ratOfDyadic(t, wide)), dyFloatDown(wide), "float down of the widened %v", f)
-		require.Equal(t, ratFloatUp(ratOfDyadic(t, wide)), dyFloatUp(wide), "float up of the widened %v", f)
-		require.Equal(t, f, dyFloatDown(d), "a value that IS a float rounds to itself, for %v", f)
-		require.Equal(t, f, dyFloatUp(d), "a value that IS a float rounds to itself, for %v", f)
+		require.True(t, proof.DvIsZero(proof.DvSub(da, da)), "a self-difference is zero")
+		require.False(t, proof.DvIsZero(proof.DvSub(da, db)), "two distinct random vectors differ")
 	}
 }
 
@@ -271,12 +229,12 @@ func TestDyadicDirectedRoundingMatchesTheRationalOnes(t *testing.T) {
 func TestDyadicShiftAndIntAreExact(t *testing.T) {
 	t.Parallel()
 	for _, v := range []int64{0, 1, -1, 3, -7, 24, 1 << 40, -(1 << 40)} {
-		require.Zero(t, ratOfDyadic(t, dyInt(v)).Cmp(new(big.Rat).SetInt64(v)), "lift of %d", v)
+		require.Zero(t, ratOfDyadic(t, proof.DyInt(v)).Cmp(new(big.Rat).SetInt64(v)), "lift of %d", v)
 	}
 	for _, n := range []int{-1080, -8, -1, 0, 1, 8, 1080} {
 		for _, f := range dyadicProbeFloats {
-			d := dyShift(mustDyOf(f), n)
-			want := new(big.Rat).Mul(floatRat(f), new(big.Rat).SetFrac(
+			d := proof.DyShift(proof.MustDyOf(f), n)
+			want := new(big.Rat).Mul(proof.FloatRat(f), new(big.Rat).SetFrac(
 				new(big.Int).Lsh(big.NewInt(1), uint(max(n, 0))),
 				new(big.Int).Lsh(big.NewInt(1), uint(max(-n, 0)))))
 			require.Zero(t, ratOfDyadic(t, d).Cmp(want), "%v shifted by %d", f, n)
@@ -285,44 +243,44 @@ func TestDyadicShiftAndIntAreExact(t *testing.T) {
 }
 
 // TestDyadicOfRatAcceptsOnlyBinaryFractions pins the inbound boundary: a
-// big.Rat whose denominator is a power of two is a dyadic and lifts exactly; a
+// big.Rat whose denominator is a power of two is a proof.Dyadic and lifts exactly; a
 // third is not, and is REFUSED rather than rounded, since a rounded lift would
 // make a proof about a number the caller never held.
 func TestDyadicOfRatAcceptsOnlyBinaryFractions(t *testing.T) {
 	t.Parallel()
 	for _, r := range []*big.Rat{
 		big.NewRat(1, 2), big.NewRat(-7, 8), big.NewRat(5, 1), new(big.Rat),
-		floatRat(0.1), floatRat(math.MaxFloat64),
+		proof.FloatRat(0.1), proof.FloatRat(math.MaxFloat64),
 	} {
-		d, ok := dyOfRat(r)
+		d, ok := proof.DyOfRat(r)
 		require.True(t, ok, "%s has a power-of-two denominator", r.RatString())
 		require.Zero(t, ratOfDyadic(t, d).Cmp(r), "%s must lift exactly", r.RatString())
 	}
 	for _, r := range []*big.Rat{big.NewRat(1, 3), big.NewRat(2, 6), big.NewRat(-5, 12)} {
-		_, ok := dyOfRat(r)
+		_, ok := proof.DyOfRat(r)
 		require.False(t, ok, "%s is not a binary fraction and must be refused", r.RatString())
 	}
-	_, ok := dyOfRat(nil)
+	_, ok := proof.DyOfRat(nil)
 	require.False(t, ok, "a nil rational is not a number to lift")
 }
 
 // TestDyadicZeroValueIsUsable pins the property the port depends on: the
-// struct's zero value is a valid exact zero, so a dyV3 can be declared with var
+// struct's zero value is a valid exact zero, so a proof.DyV3 can be declared with var
 // and filled in component by component the way its big.Rat predecessor could.
 func TestDyadicZeroValueIsUsable(t *testing.T) {
 	t.Parallel()
-	var d dyadic
+	var d proof.Dyadic
 	require.True(t, d.IsZero())
 	require.Zero(t, d.Sign())
 	require.Zero(t, d.Rat().Sign())
 
-	var v dyV3
-	require.True(t, dvIsZero(v))
-	require.True(t, dvIsZero(dvCross(v, dyVec(r3.Vec{X: 1, Y: 2, Z: 3}))))
-	require.True(t, dvDot(v, dyVec(r3.Vec{X: 1, Y: 2, Z: 3})).IsZero())
+	var v proof.DyV3
+	require.True(t, proof.DvIsZero(v))
+	require.True(t, proof.DvIsZero(proof.DvCross(v, proof.DyVec(r3.Vec{X: 1, Y: 2, Z: 3}))))
+	require.True(t, proof.DvDot(v, proof.DyVec(r3.Vec{X: 1, Y: 2, Z: 3})).IsZero())
 
-	one := mustDyOf(1)
-	require.Zero(t, dyCmp(dyAdd(d, one), one), "adding the zero value changes nothing")
-	require.Zero(t, dyCmp(dySubScalar(one, d), one), "subtracting it changes nothing")
-	require.True(t, dyMul(d, one).IsZero(), "multiplying by it gives zero")
+	one := proof.MustDyOf(1)
+	require.Zero(t, proof.DyCmp(proof.DyAdd(d, one), one), "adding the zero value changes nothing")
+	require.Zero(t, proof.DyCmp(proof.DySubScalar(one, d), one), "subtracting it changes nothing")
+	require.True(t, proof.DyMul(d, one).IsZero(), "multiplying by it gives zero")
 }

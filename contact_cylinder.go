@@ -1,6 +1,7 @@
 package decad
 
 import (
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -73,20 +74,20 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 	if planes != 2 || walls != 1 || endFaces[0] == nil || endFaces[1] == nil {
 		return sourceCylinderContactProof{}, false
 	}
-	center := dvAdd(dyVec(pp.frame.Origin()), dvAdd(
-		dyScaleVec(dyVec(pp.frame.U()), mustDyOf(circle.Center.U)),
-		dyScaleVec(dyVec(pp.frame.V()), mustDyOf(circle.Center.V))))
-	low := dvAdd(center, dyScaleVec(dyVec(pp.frame.N()), mustDyOf(pp.z0)))
-	high := dvAdd(center, dyScaleVec(dyVec(pp.frame.N()), mustDyOf(pp.z1)))
+	center := proofarith.DvAdd(proofarith.DyVec(pp.frame.Origin()), proofarith.DvAdd(
+		dyScaleVec(proofarith.DyVec(pp.frame.U()), proofarith.MustDyOf(circle.Center.U)),
+		dyScaleVec(proofarith.DyVec(pp.frame.V()), proofarith.MustDyOf(circle.Center.V))))
+	low := proofarith.DvAdd(center, dyScaleVec(proofarith.DyVec(pp.frame.N()), proofarith.MustDyOf(pp.z0)))
+	high := proofarith.DvAdd(center, dyScaleVec(proofarith.DyVec(pp.frame.N()), proofarith.MustDyOf(pp.z1)))
 	low = exactContactTransform(pose, exactContactTransform(pp.xform, low))
 	high = exactContactTransform(pose, exactContactTransform(pp.xform, high))
-	radius := mustDyOf(circle.Radius.Base())
+	radius := proofarith.MustDyOf(circle.Radius.Base())
 	var box sourceBoxContactProof
 	for i := range 3 {
 		box.lo[i], box.hi[i] = dyMin(low[i], high[i]), dyMax(low[i], high[i])
 		if i != axis {
-			box.lo[i] = dySubScalar(box.lo[i], radius)
-			box.hi[i] = dyAdd(box.hi[i], radius)
+			box.lo[i] = proofarith.DySubScalar(box.lo[i], radius)
+			box.hi[i] = proofarith.DyAdd(box.hi[i], radius)
 		}
 	}
 	return sourceCylinderContactProof{box: box, axis: axis, faces: endFaces, wall: wallFace}, true
@@ -112,16 +113,16 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 	if !finiteMeasurementValues(rp.ax.aU, rp.ax.aV) {
 		return sourceCylinderContactProof{}, false
 	}
-	var zlo, zhi, rhoLo, rhoHi dyadic
+	var zlo, zhi, rhoLo, rhoHi proofarith.Dyadic
 	for i, seg := range rp.profile.Outer.Segments {
 		line, ok := seg.(LineSeg)
 		if !ok || !finiteMeasurementValues(line.Start.U, line.Start.V) {
 			return sourceCylinderContactProof{}, false
 		}
-		du := dySubScalar(mustDyOf(line.Start.U), mustDyOf(rp.ax.aU))
-		dv := dySubScalar(mustDyOf(line.Start.V), mustDyOf(rp.ax.aV))
-		z := dyAdd(dyMul(du, mustDyOf(rp.ax.dU)), dyMul(dv, mustDyOf(rp.ax.dV)))
-		rho := dySubScalar(dyMul(dv, mustDyOf(rp.ax.dU)), dyMul(du, mustDyOf(rp.ax.dV)))
+		du := proofarith.DySubScalar(proofarith.MustDyOf(line.Start.U), proofarith.MustDyOf(rp.ax.aU))
+		dv := proofarith.DySubScalar(proofarith.MustDyOf(line.Start.V), proofarith.MustDyOf(rp.ax.aV))
+		z := proofarith.DyAdd(proofarith.DyMul(du, proofarith.MustDyOf(rp.ax.dU)), proofarith.DyMul(dv, proofarith.MustDyOf(rp.ax.dV)))
+		rho := proofarith.DySubScalar(proofarith.DyMul(dv, proofarith.MustDyOf(rp.ax.dU)), proofarith.DyMul(du, proofarith.MustDyOf(rp.ax.dV)))
 		if i == 0 {
 			zlo, zhi, rhoLo, rhoHi = z, z, rho, rho
 		} else {
@@ -129,16 +130,16 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 			rhoLo, rhoHi = dyMin(rhoLo, rho), dyMax(rhoHi, rho)
 		}
 	}
-	if !rhoLo.IsZero() || rhoHi.Sign() <= 0 || dyCmp(zlo, zhi) >= 0 {
+	if !rhoLo.IsZero() || rhoHi.Sign() <= 0 || proofarith.DyCmp(zlo, zhi) >= 0 {
 		return sourceCylinderContactProof{}, false
 	}
-	anchor := dvAdd(dyVec(rp.frame.Origin()), dvAdd(
-		dyScaleVec(dyVec(rp.frame.U()), mustDyOf(rp.ax.aU)),
-		dyScaleVec(dyVec(rp.frame.V()), mustDyOf(rp.ax.aV))))
-	w := dvAdd(dyScaleVec(dyVec(rp.frame.U()), mustDyOf(rp.ax.dU)),
-		dyScaleVec(dyVec(rp.frame.V()), mustDyOf(rp.ax.dV)))
-	low := exactContactTransform(pose, exactContactTransform(rp.xform, dvAdd(anchor, dyScaleVec(w, zlo))))
-	high := exactContactTransform(pose, exactContactTransform(rp.xform, dvAdd(anchor, dyScaleVec(w, zhi))))
+	anchor := proofarith.DvAdd(proofarith.DyVec(rp.frame.Origin()), proofarith.DvAdd(
+		dyScaleVec(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(rp.ax.aU)),
+		dyScaleVec(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.aV))))
+	w := proofarith.DvAdd(dyScaleVec(proofarith.DyVec(rp.frame.U()), proofarith.MustDyOf(rp.ax.dU)),
+		dyScaleVec(proofarith.DyVec(rp.frame.V()), proofarith.MustDyOf(rp.ax.dV)))
+	low := exactContactTransform(pose, exactContactTransform(rp.xform, proofarith.DvAdd(anchor, dyScaleVec(w, zlo))))
+	high := exactContactTransform(pose, exactContactTransform(rp.xform, proofarith.DvAdd(anchor, dyScaleVec(w, zhi))))
 	axis, _, ok := signedAxis(pose.ApplyDir(rp.xform.ApplyDir(rp.basis().w)))
 	if !ok {
 		return sourceCylinderContactProof{}, false
@@ -147,8 +148,8 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 	for i := range 3 {
 		box.lo[i], box.hi[i] = dyMin(low[i], high[i]), dyMax(low[i], high[i])
 		if i != axis {
-			box.lo[i] = dySubScalar(box.lo[i], rhoHi)
-			box.hi[i] = dyAdd(box.hi[i], rhoHi)
+			box.lo[i] = proofarith.DySubScalar(box.lo[i], rhoHi)
+			box.hi[i] = proofarith.DyAdd(box.hi[i], rhoHi)
 		}
 	}
 	faces := b.Faces()
@@ -196,7 +197,7 @@ func classifySourceCylinderBox(report *ContactReport, cylinder sourceCylinderCon
 		return
 	}
 	if signedGap.Sign() > 0 {
-		var gaps [3]dyadic
+		var gaps [3]proofarith.Dyadic
 		gaps[axis] = signedGap
 		gap, ok := sourceBoxGap(gaps)
 		if !ok {
@@ -225,7 +226,7 @@ func classifySourceCylinderBox(report *ContactReport, cylinder sourceCylinderCon
 		report.Reason = ContactNoNormalProof
 		return
 	}
-	var boxPoint, cylinderPoint dyV3
+	var boxPoint, cylinderPoint proofarith.DyV3
 	for i := range 3 {
 		if i == axis {
 			if side == 1 {
@@ -235,7 +236,7 @@ func classifySourceCylinderBox(report *ContactReport, cylinder sourceCylinderCon
 			}
 			continue
 		}
-		center := dyMul(dyAdd(cylinder.box.lo[i], cylinder.box.hi[i]), mustDyOf(.5))
+		center := proofarith.DyMul(proofarith.DyAdd(cylinder.box.lo[i], cylinder.box.hi[i]), proofarith.MustDyOf(.5))
 		boxPoint[i], cylinderPoint[i] = center, center
 	}
 	boxWitness, okBox := sourceBoxPointAt(&boxPoint)
@@ -280,10 +281,10 @@ func classifySourceCylinderBox(report *ContactReport, cylinder sourceCylinderCon
 // box; the other transverse coordinate and the full axial interval stay
 // strictly within the source-box face.
 func sourceCylinderBoxFace(cylinder sourceCylinderContactProof,
-	box sourceBoxContactProof) (int, int, dyadic, bool) {
+	box sourceBoxContactProof) (int, int, proofarith.Dyadic, bool) {
 	selected := -1
 	var selectedSide int
-	var selectedGap dyadic
+	var selectedGap proofarith.Dyadic
 	for axis := range 3 {
 		if axis != cylinder.axis && (cylinder.wall == nil || cylinder.axis != 2) {
 			continue
@@ -292,23 +293,23 @@ func sourceCylinderBoxFace(cylinder sourceCylinderContactProof,
 			continue
 		}
 		var side int
-		var gap dyadic
+		var gap proofarith.Dyadic
 		switch {
-		case dyCmp(cylinder.box.lo[axis], box.hi[axis]) >= 0:
-			side, gap = 1, dySubScalar(cylinder.box.lo[axis], box.hi[axis])
-		case dyCmp(cylinder.box.hi[axis], box.lo[axis]) <= 0:
-			side, gap = 0, dySubScalar(box.lo[axis], cylinder.box.hi[axis])
-		case dyCmp(cylinder.box.lo[axis], box.lo[axis]) > 0 &&
-			dyCmp(cylinder.box.hi[axis], box.hi[axis]) > 0:
-			side, gap = 1, dySubScalar(cylinder.box.lo[axis], box.hi[axis])
-		case dyCmp(cylinder.box.hi[axis], box.hi[axis]) < 0 &&
-			dyCmp(cylinder.box.lo[axis], box.lo[axis]) < 0:
-			side, gap = 0, dySubScalar(box.lo[axis], cylinder.box.hi[axis])
+		case proofarith.DyCmp(cylinder.box.lo[axis], box.hi[axis]) >= 0:
+			side, gap = 1, proofarith.DySubScalar(cylinder.box.lo[axis], box.hi[axis])
+		case proofarith.DyCmp(cylinder.box.hi[axis], box.lo[axis]) <= 0:
+			side, gap = 0, proofarith.DySubScalar(box.lo[axis], cylinder.box.hi[axis])
+		case proofarith.DyCmp(cylinder.box.lo[axis], box.lo[axis]) > 0 &&
+			proofarith.DyCmp(cylinder.box.hi[axis], box.hi[axis]) > 0:
+			side, gap = 1, proofarith.DySubScalar(cylinder.box.lo[axis], box.hi[axis])
+		case proofarith.DyCmp(cylinder.box.hi[axis], box.hi[axis]) < 0 &&
+			proofarith.DyCmp(cylinder.box.lo[axis], box.lo[axis]) < 0:
+			side, gap = 0, proofarith.DySubScalar(box.lo[axis], cylinder.box.hi[axis])
 		default:
 			continue
 		}
 		if selected >= 0 {
-			return 0, 0, dyadic{}, false
+			return 0, 0, proofarith.Dyadic{}, false
 		}
 		selected, selectedSide, selectedGap = axis, side, gap
 	}
@@ -320,8 +321,8 @@ func cylinderInsideBoxFace(cylinder, box sourceBoxContactProof, normalAxis int) 
 		if axis == normalAxis {
 			continue
 		}
-		if dyCmp(cylinder.lo[axis], box.lo[axis]) <= 0 ||
-			dyCmp(cylinder.hi[axis], box.hi[axis]) >= 0 {
+		if proofarith.DyCmp(cylinder.lo[axis], box.lo[axis]) <= 0 ||
+			proofarith.DyCmp(cylinder.hi[axis], box.hi[axis]) >= 0 {
 			return false
 		}
 	}

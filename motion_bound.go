@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -43,14 +44,14 @@ type motionParam struct {
 // exactMotionParam reads v's exact denotation. It fails only on a non-finite
 // magnitude or factor.
 func exactMotionParam(v units.Value) (motionParam, bool) {
-	mag := floatRat(v.Mag())
+	mag := proofarith.FloatRat(v.Mag())
 	if mag == nil {
 		return motionParam{}, false
 	}
 	if v.Unit() == units.Degree {
 		return motionParam{turn: new(big.Rat).Quo(mag, big.NewRat(360, 1)), base: new(big.Rat)}, true
 	}
-	factor := floatRat(v.Unit().Factor())
+	factor := proofarith.FloatRat(v.Unit().Factor())
 	if factor == nil {
 		return motionParam{}, false
 	}
@@ -140,7 +141,7 @@ func paramSinCos(p motionParam) (ratInterval, ratInterval) {
 type ratVec [3]*big.Rat
 
 func ratVecOf(v r3.Vec) (ratVec, bool) {
-	x, y, z := floatRat(v.X), floatRat(v.Y), floatRat(v.Z)
+	x, y, z := proofarith.FloatRat(v.X), proofarith.FloatRat(v.Y), proofarith.FloatRat(v.Z)
 	if x == nil || y == nil || z == nil {
 		return ratVec{}, false
 	}
@@ -200,7 +201,7 @@ func unitScaleInterval(a ratVec) (ratInterval, bool) {
 	if !(down > 0) || isNonFinite(up) {
 		return ratInterval{}, false
 	}
-	lo, hi := floatRat(up), floatRat(down)
+	lo, hi := proofarith.FloatRat(up), proofarith.FloatRat(down)
 	return intervalOwned(new(big.Rat).Inv(lo), new(big.Rat).Inv(hi)), true
 }
 
@@ -288,7 +289,7 @@ func newMotionFrame(spec motionSpec) (motionFrame, bool) {
 		return mf, true
 	}
 	theta, okT := exactMotionParam(spec.screw.Angle)
-	slide := floatRat(spec.screw.Slide)
+	slide := proofarith.FloatRat(spec.screw.Slide)
 	fromRot, fromT, okF := exactTransform(spec.between.From)
 	toRot, toT, okTo := exactTransform(spec.between.To)
 	if !okT || slide == nil || !okF || !okTo {
@@ -511,7 +512,7 @@ func basisDefectUpper(t r3.Transform) (*big.Rat, bool) {
 	if sq.Sign() == 0 {
 		return new(big.Rat), true
 	}
-	e := floatRat(ratSqrtUp(sq))
+	e := proofarith.FloatRat(ratSqrtUp(sq))
 	return e, e != nil
 }
 
@@ -630,7 +631,7 @@ func moverRecordRadius(ctx context.Context, b *Body) float64 {
 func boxCornersExact(box Box, extra *big.Rat) (lo, hi ratVec, ok bool) {
 	minV, okMin := ratVecOf(box.Min)
 	maxV, okMax := ratVecOf(box.Max)
-	bound := floatRat(box.Bound.Base())
+	bound := proofarith.FloatRat(box.Bound.Base())
 	if !okMin || !okMax || bound == nil {
 		return ratVec{}, ratVec{}, false
 	}
@@ -718,7 +719,7 @@ func moverTravel(mf motionFrame, rho float64, p, q motionParam) *big.Rat {
 	if mf.kind == motionPrismatic {
 		return span
 	}
-	r := floatRat(rho)
+	r := proofarith.FloatRat(rho)
 	if r == nil {
 		return nil
 	}

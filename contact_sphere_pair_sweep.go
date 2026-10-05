@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"sort"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -46,8 +47,8 @@ func (d *Document) sweepRotatingSpherePair(ctx context.Context, a, b *Body,
 		start := moving.path.from.Translation()
 		pivot := moving.path.drift.Center
 		for axis, pair := range [3][2]float64{{start.X, pivot.X}, {start.Y, pivot.Y}, {start.Z, pivot.Z}} {
-			if dyCmp(moving.sphere.center[axis], mustDyOf(pair[0])) != 0 ||
-				dyCmp(moving.sphere.center[axis], mustDyOf(pair[1])) != 0 {
+			if proofarith.DyCmp(moving.sphere.center[axis], proofarith.MustDyOf(pair[0])) != 0 ||
+				proofarith.DyCmp(moving.sphere.center[axis], proofarith.MustDyOf(pair[1])) != 0 {
 				return report.undecidedRotatingSpherePair(pa.duration), true, nil
 			}
 		}
@@ -58,7 +59,7 @@ func (d *Document) sweepRotatingSpherePair(ctx context.Context, a, b *Body,
 				return report.undecidedRotatingSpherePair(pa.duration), true, nil
 			}
 			full := new(big.Rat).Mul(speed, moving.path.duration)
-			component, ok := dyOfRat(full)
+			component, ok := proofarith.DyOfRat(full)
 			if !ok {
 				return report.undecidedRotatingSpherePair(pa.duration), true, nil
 			}
@@ -145,7 +146,7 @@ func (r *sourceSpherePairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.
 	deviation := new(big.Rat)
 	for _, moving := range []struct {
 		start, observed sourceSphereContactProof
-		delta           [3]dyadic
+		delta           [3]proofarith.Dyadic
 	}{{r.sphereA, observedA, r.pa.delta}, {r.sphereB, observedB, r.pb.delta}} {
 		for i := range 3 {
 			center := new(big.Rat).Add(moving.start.center[i].Rat(),
@@ -162,12 +163,12 @@ func (r *sourceSpherePairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.
 	}
 	minimumDistance := math.Inf(1)
 	for _, pair := range [][2]sourceSphereContactProof{{idealA, idealB}, {observedA, observedB}} {
-		squared := dyZero()
+		squared := proofarith.DyZero()
 		for i := range 3 {
-			delta := dySubScalar(pair[1].center[i], pair[0].center[i])
-			squared = dyAdd(squared, dyMul(delta, delta))
+			delta := proofarith.DySubScalar(pair[1].center[i], pair[0].center[i])
+			squared = proofarith.DyAdd(squared, proofarith.DyMul(delta, delta))
 		}
-		minimumDistance = math.Min(minimumDistance, dySqrtDown(squared))
+		minimumDistance = math.Min(minimumDistance, proofarith.DySqrtDown(squared))
 	}
 	if minimumDistance <= 0 || !finiteMeasurementValues(minimumDistance) {
 		ideal.Manifold, ideal.Reason = nil, ContactNoNormalProof
@@ -209,11 +210,11 @@ func (r *sourceSpherePairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.
 	}
 	for _, witness := range []struct {
 		point  *VecMeasurement
-		radius dyadic
+		radius proofarith.Dyadic
 	}{{&actual.OnA, r.sphereA.radius}, {&actual.OnB, r.sphereB.radius}} {
-		bound := new(big.Rat).Add(floatRat(witness.point.Bound.Base()), deviation)
+		bound := new(big.Rat).Add(proofarith.FloatRat(witness.point.Bound.Base()), deviation)
 		if normalMotion > 0 {
-			bound.Add(bound, floatRat(provenUpRound(ratFloatUp(witness.radius.Rat())*normalMotion)))
+			bound.Add(bound, proofarith.FloatRat(provenUpRound(ratFloatUp(witness.radius.Rat())*normalMotion)))
 		}
 		if bound.Cmp(resolution) > 0 {
 			ideal.Manifold, ideal.Reason = nil, ContactPointTooCoarse
@@ -222,10 +223,10 @@ func (r *sourceSpherePairSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.
 		witness.point.Bound = units.Millimeters(ratFloatUp(bound))
 		witness.point.Exactness = exactnessFromBound(witness.point.Bound.Base())
 	}
-	sepBound := new(big.Rat).Add(floatRat(actual.Separation.Bound.Base()), deviation)
+	sepBound := new(big.Rat).Add(proofarith.FloatRat(actual.Separation.Bound.Base()), deviation)
 	if normalMotion > 0 {
-		sepBound.Add(sepBound, floatRat(provenUpRound(
-			ratFloatUp(dyAdd(r.sphereA.radius, r.sphereB.radius).Rat())*normalMotion)))
+		sepBound.Add(sepBound, proofarith.FloatRat(provenUpRound(
+			ratFloatUp(proofarith.DyAdd(r.sphereA.radius, r.sphereB.radius).Rat())*normalMotion)))
 	}
 	actual.Separation.Bound = units.Millimeters(ratFloatUp(sepBound))
 	actual.Separation.Exactness = exactnessFromBound(actual.Separation.Bound.Base())
@@ -256,7 +257,7 @@ func spherePairImpactBracket(root, duration, resolution *big.Rat) (*big.Rat, *bi
 		if width.Cmp(resolution) <= 0 {
 			left = new(big.Rat).Sub(one, new(big.Rat).SetFrac(big.NewInt(1), grid))
 			if left.Sign() > 0 && left.Cmp(root) < 0 &&
-				floatRat(ratFloatNearest(left)).Cmp(left) == 0 {
+				proofarith.FloatRat(ratFloatNearest(left)).Cmp(left) == 0 {
 				return left, one, true
 			}
 			if left.Cmp(root) >= 0 {
@@ -284,43 +285,43 @@ func (r *sourceSpherePairSweepRun) sortSamples() {
 
 // axialGap proves that both center paths share one unchanged transverse
 // coordinate pair. The signed support gap is then affine until first touch.
-func (r *sourceSpherePairSweepRun) axialGap() (dyadic, dyadic, bool) {
+func (r *sourceSpherePairSweepRun) axialGap() (proofarith.Dyadic, proofarith.Dyadic, bool) {
 	axis, sign, nonzero := 0, 0, 0
 	for i := range 3 {
-		start := dySubScalar(r.sphereB.center[i], r.sphereA.center[i])
-		travel := dySubScalar(r.pb.delta[i], r.pa.delta[i])
+		start := proofarith.DySubScalar(r.sphereB.center[i], r.sphereA.center[i])
+		travel := proofarith.DySubScalar(r.pb.delta[i], r.pa.delta[i])
 		if start.Sign() != 0 || travel.Sign() != 0 {
 			axis, sign, nonzero = i, start.Sign(), nonzero+1
 		}
 	}
 	if nonzero != 1 || sign == 0 {
-		return dyadic{}, dyadic{}, false
+		return proofarith.Dyadic{}, proofarith.Dyadic{}, false
 	}
-	initial := dyAbs(dySubScalar(r.sphereB.center[axis], r.sphereA.center[axis]))
-	gap := dySubScalar(initial, dyAdd(r.sphereA.radius, r.sphereB.radius))
-	slope := dySubScalar(r.pb.delta[axis], r.pa.delta[axis])
+	initial := proofarith.DyAbs(proofarith.DySubScalar(r.sphereB.center[axis], r.sphereA.center[axis]))
+	gap := proofarith.DySubScalar(initial, proofarith.DyAdd(r.sphereA.radius, r.sphereB.radius))
+	slope := proofarith.DySubScalar(r.pb.delta[axis], r.pa.delta[axis])
 	if sign < 0 {
-		slope = dyNeg(slope)
+		slope = proofarith.DyNeg(slope)
 	}
 	return gap, slope, true
 }
 
 // squaredGap is |centerB-centerA+f*(deltaB-deltaA)|²-(radiusA+radiusB)².
 // Its coefficients are exact over the held source coordinates and affine path.
-func (r *sourceSpherePairSweepRun) squaredGap() (dyadic, dyadic, dyadic) {
-	a, b, c := dyZero(), dyZero(), dyZero()
+func (r *sourceSpherePairSweepRun) squaredGap() (proofarith.Dyadic, proofarith.Dyadic, proofarith.Dyadic) {
+	a, b, c := proofarith.DyZero(), proofarith.DyZero(), proofarith.DyZero()
 	for i := range 3 {
-		p := dySubScalar(r.sphereB.center[i], r.sphereA.center[i])
-		v := dySubScalar(r.pb.delta[i], r.pa.delta[i])
-		a = dyAdd(a, dyMul(v, v))
-		b = dyAdd(b, dyMul(p, v))
-		c = dyAdd(c, dyMul(p, p))
+		p := proofarith.DySubScalar(r.sphereB.center[i], r.sphereA.center[i])
+		v := proofarith.DySubScalar(r.pb.delta[i], r.pa.delta[i])
+		a = proofarith.DyAdd(a, proofarith.DyMul(v, v))
+		b = proofarith.DyAdd(b, proofarith.DyMul(p, v))
+		c = proofarith.DyAdd(c, proofarith.DyMul(p, p))
 	}
-	radius := dyAdd(r.sphereA.radius, r.sphereB.radius)
-	return a, dyAdd(b, b), dySubScalar(c, dyMul(radius, radius))
+	radius := proofarith.DyAdd(r.sphereA.radius, r.sphereB.radius)
+	return a, proofarith.DyAdd(b, b), proofarith.DySubScalar(c, proofarith.DyMul(radius, radius))
 }
 
-func spherePairQuadraticAt(a, b, c dyadic, f *big.Rat) *big.Rat {
+func spherePairQuadraticAt(a, b, c proofarith.Dyadic, f *big.Rat) *big.Rat {
 	out := new(big.Rat).Mul(a.Rat(), f)
 	out.Add(out, b.Rat())
 	out.Mul(out, f)
@@ -335,11 +336,11 @@ func (r *sourceSpherePairSweepRun) grazingTouch(ctx context.Context, first *Swee
 	if vertex.Sign() <= 0 || vertex.Cmp(one) >= 0 {
 		return r.undecided(zero, one, SweepTimeFloor), nil
 	}
-	if floatRat(ratFloatNearest(vertex)).Cmp(vertex) != 0 {
+	if proofarith.FloatRat(ratFloatNearest(vertex)).Cmp(vertex) != 0 {
 		return r.undecided(zero, one, SweepEventUnrepresentable), nil
 	}
 	eventTime := new(big.Rat).Mul(vertex, r.pa.duration)
-	if floatRat(ratFloatNearest(eventTime)).Cmp(eventTime) != 0 {
+	if proofarith.FloatRat(ratFloatNearest(eventTime)).Cmp(eventTime) != 0 {
 		return r.undecided(zero, one, SweepEventUnrepresentable), nil
 	}
 	touch, err := r.sample(ctx, vertex)
@@ -376,7 +377,7 @@ func (r *sourceSpherePairSweepRun) grazingTouch(ctx context.Context, first *Swee
 // quadraticBracket searches only the decreasing side of the exact squared
 // distance. The right seed is already at or inside first contact, so a later
 // exit cannot be mistaken for the first encounter.
-func spherePairQuadraticBracket(a, b, c dyadic, vertex, duration, resolution *big.Rat) (
+func spherePairQuadraticBracket(a, b, c proofarith.Dyadic, vertex, duration, resolution *big.Rat) (
 	*big.Rat, *big.Rat, bool) {
 	zero, one := new(big.Rat), big.NewRat(1, 1)
 	right := new(big.Rat).Set(one)
@@ -409,8 +410,8 @@ func spherePairQuadraticBracket(a, b, c dyadic, vertex, duration, resolution *bi
 			}
 			if before.Sign() > 0 && spherePairQuadraticAt(a, b, c, before).Sign() > 0 &&
 				spherePairQuadraticAt(a, b, c, after).Sign() <= 0 &&
-				floatRat(ratFloatNearest(before)).Cmp(before) == 0 &&
-				floatRat(ratFloatNearest(after)).Cmp(after) == 0 {
+				proofarith.FloatRat(ratFloatNearest(before)).Cmp(before) == 0 &&
+				proofarith.FloatRat(ratFloatNearest(after)).Cmp(after) == 0 {
 				return before, after, true
 			}
 		}
@@ -453,7 +454,7 @@ func (r *sourceSpherePairSweepRun) transverse(ctx context.Context, first *SweepS
 	isClear := a.Sign() == 0 || b.Sign() >= 0
 	vertex := new(big.Rat)
 	if !isClear {
-		vertex.Quo(dyNeg(b).Rat(), dyAdd(a, a).Rat())
+		vertex.Quo(proofarith.DyNeg(b).Rat(), proofarith.DyAdd(a, a).Rat())
 		minimum := one
 		if vertex.Cmp(one) < 0 {
 			minimum = vertex
@@ -520,7 +521,7 @@ func (r *sourceSpherePairSweepRun) persistentTrack(first *SweepSample) *SweepCon
 		return nil
 	}
 	for i := range 3 {
-		if dyCmp(r.pa.delta[i], r.pb.delta[i]) != 0 {
+		if proofarith.DyCmp(r.pa.delta[i], r.pb.delta[i]) != 0 {
 			return nil
 		}
 	}
@@ -611,7 +612,7 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 	if gap.Sign() <= 0 {
 		return r.undecided(zero, one, SweepPoseRelation), nil
 	}
-	if slope.Sign() >= 0 || dyAdd(gap, slope).Sign() > 0 {
+	if slope.Sign() >= 0 || proofarith.DyAdd(gap, slope).Sign() > 0 {
 		last, err := r.sample(ctx, one)
 		if errors.Is(err, errSweepPoseBudget) {
 			return r.undecided(zero, one, SweepPoseBudget), nil
@@ -625,7 +626,7 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 		r.report.Outcome = SweepClear
 		return r.report, nil
 	}
-	root := new(big.Rat).Quo(dyNeg(gap).Rat(), slope.Rat())
+	root := new(big.Rat).Quo(proofarith.DyNeg(gap).Rat(), slope.Rat())
 	leftF, rightF, ok := spherePairImpactBracket(root, r.pa.duration, resolution)
 	if !ok || leftF.Sign() <= 0 || rightF.Cmp(one) > 0 {
 		return r.undecided(zero, one, SweepTimeFloor), nil

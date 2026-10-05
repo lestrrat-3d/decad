@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -100,7 +101,7 @@ func (d angleDenotation) enclosureFor(held float64) (ratInterval, bool) {
 	if enc, ok := d.enclosure(); ok {
 		return enc, true
 	}
-	r := floatRat(held)
+	r := proofarith.FloatRat(held)
 	if r == nil {
 		return ratInterval{}, false
 	}
@@ -135,7 +136,7 @@ func (d angleDenotation) sinCosFor(held float64) (sin, cos ratInterval, ok bool)
 		sin, cos = quarterTurnSinCos(d.turn)
 		return sin, cos, true
 	default:
-		r := floatRat(held)
+		r := proofarith.FloatRat(held)
 		if r == nil {
 			return ratInterval{}, ratInterval{}, false
 		}
@@ -171,7 +172,7 @@ type sweepDenotation struct{ phi0, phi1 angleDenotation }
 // value denotes its own magnitude exactly; a degree value denotes mag/360 of
 // an exact turn; any other angle unit denotes nothing here.
 func angleDenotationFromValue(v units.Value) angleDenotation {
-	mag := floatRat(v.Mag())
+	mag := proofarith.FloatRat(v.Mag())
 	if mag == nil {
 		return angleDenotation{}
 	}

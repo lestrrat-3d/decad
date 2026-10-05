@@ -3,6 +3,7 @@ package decad
 import (
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -71,21 +72,21 @@ func publishClippedHorizontalPatchOrder(report *ContactReport, base sourceBoxCon
 	if vertical < 0 {
 		return false
 	}
-	minZ, maxZ := orientedProjection(rotated, dyV3{dyZero(), dyZero(), mustDyOf(1)})
-	var faceZ dyadic
+	minZ, maxZ := orientedProjection(rotated, proofarith.DyV3{proofarith.DyZero(), proofarith.DyZero(), proofarith.MustDyOf(1)})
+	var faceZ proofarith.Dyadic
 	baseSide := 0
 	normalZ := -1.0
 	switch {
-	case dyCmp(base.hi[2], minZ) == 0 && dyCmp(base.lo[2], minZ) < 0:
+	case proofarith.DyCmp(base.hi[2], minZ) == 0 && proofarith.DyCmp(base.lo[2], minZ) < 0:
 		faceZ, baseSide, normalZ = minZ, 1, 1
-	case dyCmp(maxZ, base.lo[2]) == 0 && dyCmp(base.hi[2], maxZ) > 0:
+	case proofarith.DyCmp(maxZ, base.lo[2]) == 0 && proofarith.DyCmp(base.hi[2], maxZ) > 0:
 		faceZ, baseSide = maxZ, 0
 	default:
 		return false
 	}
 	start := 0
 	rotatedSide := 0
-	if dyCmp(rotated.corner[0][2], faceZ) != 0 {
+	if proofarith.DyCmp(rotated.corner[0][2], faceZ) != 0 {
 		start = 1 << vertical
 		rotatedSide = 1
 	}
@@ -94,7 +95,7 @@ func publishClippedHorizontalPatchOrder(report *ContactReport, base sourceBoxCon
 	polygon := make([][2]*big.Rat, 0, 4)
 	for _, index := range indices {
 		corner := rotated.corner[index]
-		if dyCmp(corner[2], faceZ) != 0 {
+		if proofarith.DyCmp(corner[2], faceZ) != 0 {
 			return false
 		}
 		polygon = append(polygon, [2]*big.Rat{corner[0].Rat(), corner[1].Rat()})

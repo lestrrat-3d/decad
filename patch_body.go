@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -431,11 +432,11 @@ func provePatchChainPlaneExact(edges []*Edge) error {
 		return fmt.Errorf(`%w: a Body.Patch chain has too few independent points to determine a plane (docs/surface-design.md Table R row R6)`, ErrUnsupported)
 	}
 
-	normalDy := dyVec(normal)
-	originDy := dyVec(origin)
+	normalDy := proofarith.DyVec(normal)
+	originDy := proofarith.DyVec(origin)
 	for _, v := range verts {
-		rel := dvSub(dyVec(v.position), originDy)
-		if !dvDot(normalDy, rel).IsZero() {
+		rel := proofarith.DvSub(proofarith.DyVec(v.position), originDy)
+		if !proofarith.DvDot(normalDy, rel).IsZero() {
 			return fmt.Errorf(`%w: a Body.Patch chain is not planar (docs/surface-design.md Table R row R6)`, ErrUnsupported)
 		}
 	}
@@ -444,11 +445,11 @@ func provePatchChainPlaneExact(edges []*Edge) error {
 		if !curved {
 			continue
 		}
-		if !dvIsZero(dvCross(dyVec(axis), normalDy)) {
+		if !proofarith.DvIsZero(proofarith.DvCross(proofarith.DyVec(axis), normalDy)) {
 			return fmt.Errorf(`%w: a Body.Patch chain edge's carrier plane does not match the chain's plane (docs/surface-design.md Table R row R6)`, ErrUnsupported)
 		}
-		rel := dvSub(dyVec(center), originDy)
-		if !dvDot(normalDy, rel).IsZero() {
+		rel := proofarith.DvSub(proofarith.DyVec(center), originDy)
+		if !proofarith.DvDot(normalDy, rel).IsZero() {
 			return fmt.Errorf(`%w: a Body.Patch chain edge's carrier plane does not match the chain's plane (docs/surface-design.md Table R row R6)`, ErrUnsupported)
 		}
 	}
@@ -527,18 +528,18 @@ func patchPlaneFromVertices(verts []*Vertex) (normal, origin r3.Vec, ok bool) {
 		return r3.Vec{}, r3.Vec{}, false
 	}
 	v0 := verts[0].position
-	d0 := dyVec(v0)
+	d0 := proofarith.DyVec(v0)
 	for i := 1; i < len(verts); i++ {
 		vi := verts[i].position
-		di := dvSub(dyVec(vi), d0)
-		if dvIsZero(di) {
+		di := proofarith.DvSub(proofarith.DyVec(vi), d0)
+		if proofarith.DvIsZero(di) {
 			continue
 		}
 		for j := i + 1; j < len(verts); j++ {
 			vj := verts[j].position
-			dj := dvSub(dyVec(vj), d0)
-			cross := dvCross(di, dj)
-			if !dvIsZero(cross) {
+			dj := proofarith.DvSub(proofarith.DyVec(vj), d0)
+			cross := proofarith.DvCross(di, dj)
+			if !proofarith.DvIsZero(cross) {
 				return vi.Sub(v0).Cross(vj.Sub(v0)), v0, true
 			}
 		}

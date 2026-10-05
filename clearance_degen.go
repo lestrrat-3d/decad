@@ -3,6 +3,7 @@ package decad
 import (
 	"math"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -69,12 +70,12 @@ func finiteVec(v r3.Vec) bool {
 // float forms (fa, fb) supplying the disproof threshold: an exactly zero cross
 // product proves parallelism outright, a cross clearly above the kernel's
 // angular noise disproves it, and the band between is undecided.
-func (k *pairKernel) parallelExact(ra, rb dyV3, fa, fb r3.Vec) degState {
+func (k *pairKernel) parallelExact(ra, rb proofarith.DyV3, fa, fb r3.Vec) degState {
 	la, lb := fa.Len(), fb.Len()
 	if !finiteVec(fa) || !finiteVec(fb) || la == 0 || lb == 0 {
 		return degUnknown
 	}
-	if dvIsZero(dvCross(ra, rb)) {
+	if proofarith.DvIsZero(proofarith.DvCross(ra, rb)) {
 		return degYes
 	}
 	if fa.Cross(fb).Len() > clrAngTol*la*lb {
@@ -88,7 +89,7 @@ func (k *pairKernel) parallel(a, b r3.Vec) degState {
 	if !finiteVec(a) || !finiteVec(b) {
 		return degUnknown
 	}
-	return k.parallelExact(dyVec(a), dyVec(b), a, b)
+	return k.parallelExact(proofarith.DyVec(a), proofarith.DyVec(b), a, b)
 }
 
 // parallelSeg decides (b − a) ∥ d, with the difference taken exactly (a float
@@ -98,7 +99,7 @@ func (k *pairKernel) parallelSeg(a, b, d r3.Vec) degState {
 	if !finiteVec(a) || !finiteVec(b) || !finiteVec(d) {
 		return degUnknown
 	}
-	return k.parallelExact(dvSub(dyVec(b), dyVec(a)), dyVec(d), b.Sub(a), d)
+	return k.parallelExact(proofarith.DvSub(proofarith.DyVec(b), proofarith.DyVec(a)), proofarith.DyVec(d), b.Sub(a), d)
 }
 
 // parallelSegs decides (b1 − a1) ∥ (b2 − a2).
@@ -106,7 +107,7 @@ func (k *pairKernel) parallelSegs(a1, b1, a2, b2 r3.Vec) degState {
 	if !finiteVec(a1) || !finiteVec(b1) || !finiteVec(a2) || !finiteVec(b2) {
 		return degUnknown
 	}
-	return k.parallelExact(dvSub(dyVec(b1), dyVec(a1)), dvSub(dyVec(b2), dyVec(a2)),
+	return k.parallelExact(proofarith.DvSub(proofarith.DyVec(b1), proofarith.DyVec(a1)), proofarith.DvSub(proofarith.DyVec(b2), proofarith.DyVec(a2)),
 		b1.Sub(a1), b2.Sub(a2))
 }
 
@@ -121,8 +122,8 @@ func (k *pairKernel) perpendicularSeg(a, b, n r3.Vec) degState {
 	if !finiteVec(fRel) || !finiteVec(n) || lr == 0 || ln == 0 {
 		return degUnknown
 	}
-	rel := dvSub(dyVec(b), dyVec(a))
-	if dvDot(rel, dyVec(n)).Sign() == 0 {
+	rel := proofarith.DvSub(proofarith.DyVec(b), proofarith.DyVec(a))
+	if proofarith.DvDot(rel, proofarith.DyVec(n)).Sign() == 0 {
 		return degYes
 	}
 	if math.Abs(fRel.Dot(n)) > clrAngTol*lr*ln {
@@ -140,8 +141,8 @@ func (k *pairKernel) onAxis(p, anchor, axis r3.Vec) degState {
 	if !finiteVec(p) || !finiteVec(anchor) || !finiteVec(axis) {
 		return degUnknown
 	}
-	rel := dvSub(dyVec(p), dyVec(anchor))
-	if dvIsZero(rel) || dvIsZero(dvCross(rel, dyVec(axis))) {
+	rel := proofarith.DvSub(proofarith.DyVec(p), proofarith.DyVec(anchor))
+	if proofarith.DvIsZero(rel) || proofarith.DvIsZero(proofarith.DvCross(rel, proofarith.DyVec(axis))) {
 		return degYes
 	}
 	fRel := p.Sub(anchor)
@@ -156,7 +157,7 @@ func (k *pairKernel) coincident(p, q r3.Vec) degState {
 	if !finiteVec(p) || !finiteVec(q) {
 		return degUnknown
 	}
-	if dvIsZero(dvSub(dyVec(p), dyVec(q))) {
+	if proofarith.DvIsZero(proofarith.DvSub(proofarith.DyVec(p), proofarith.DyVec(q))) {
 		return degYes
 	}
 	if p.Sub(q).Len() > k.tol {

@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
@@ -1065,8 +1066,8 @@ func freeformWalkStations(w sideWalk, chain freeformChain) ([]Point2, []walkEndB
 			return nil, nil, fmt.Errorf(`%w: a free-form chord station has no representable plane coordinate`, ErrUnsupported)
 		}
 		bound := walkEndBound{
-			u: rationalFloatError(station.u, p.U),
-			v: rationalFloatError(station.v, p.V),
+			u: proofarith.RationalFloatError(station.u, p.U),
+			v: proofarith.RationalFloatError(station.v, p.V),
 		}
 		if !bound.derivable() {
 			return nil, nil, fmt.Errorf(`%w: a free-form chord station states no bound on the rounding its held plane coordinates commit`, ErrUnsupported)
@@ -1796,7 +1797,7 @@ func chordSagitta(radius, sweep float64, n int) float64 {
 // outward, which answers the smallest positive float64 — never zero — for a
 // bound too small for float64 to represent.
 func exactChordSagitta(radius, sweep float64, n int) float64 {
-	num := new(big.Rat).Mul(floatRat(radius), new(big.Rat).Mul(floatRat(sweep), floatRat(sweep)))
+	num := new(big.Rat).Mul(proofarith.FloatRat(radius), new(big.Rat).Mul(proofarith.FloatRat(sweep), proofarith.FloatRat(sweep)))
 	nRat := new(big.Rat).SetInt64(int64(n))
 	denom := new(big.Rat).Mul(new(big.Rat).SetInt64(8), new(big.Rat).Mul(nRat, nRat))
 	return ratFloatUp(num.Quo(num, denom))

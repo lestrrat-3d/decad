@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
 )
@@ -487,10 +488,10 @@ func shellRectCircleWitness(budget *workBudget, profile ProfileRecord, loops [][
 		if radius != w.radius || isNonFinite(radiusDelta) {
 			return false, nil
 		}
-		radiusUpper := new(big.Rat).Add(floatRat(radius), floatRat(radiusDelta))
-		holes = append(holes, circle{floatRat(w.cU), floatRat(w.cV), radiusUpper})
+		radiusUpper := new(big.Rat).Add(proofarith.FloatRat(radius), proofarith.FloatRat(radiusDelta))
+		holes = append(holes, circle{proofarith.FloatRat(w.cU), proofarith.FloatRat(w.cV), radiusUpper})
 	}
-	xlo, xhi, ylo, yhi := floatRat(minX), floatRat(maxX), floatRat(minY), floatRat(maxY)
+	xlo, xhi, ylo, yhi := proofarith.FloatRat(minX), proofarith.FloatRat(maxX), proofarith.FloatRat(minY), proofarith.FloatRat(maxY)
 	width := new(big.Rat).Sub(xhi, xlo)
 	height := new(big.Rat).Sub(yhi, ylo)
 	upper := new(big.Rat).Set(width)
@@ -504,8 +505,8 @@ func shellRectCircleWitness(budget *workBudget, profile ProfileRecord, loops [][
 	// Inradius is at most half the rectangle's narrower side. This threshold
 	// therefore includes the full shellTol margin even though the true
 	// inradius has not been computed.
-	need := new(big.Rat).Add(floatRat(thickness), floatRat(thicknessDelta))
-	need.Add(need, new(big.Rat).Mul(floatRat(shellTol), upper))
+	need := new(big.Rat).Add(proofarith.FloatRat(thickness), proofarith.FloatRat(thicknessDelta))
+	need.Add(need, new(big.Rat).Mul(proofarith.FloatRat(shellTol), upper))
 	quarters := [...]*big.Rat{big.NewRat(1, 4), big.NewRat(1, 2), big.NewRat(3, 4)}
 	for _, u := range quarters {
 		x := new(big.Rat).Add(xlo, new(big.Rat).Mul(width, u))

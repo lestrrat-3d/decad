@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -165,7 +166,7 @@ func cupPayloadFor(pp prismPayload, offset ProfileRecord, s, t, tDelta float64, 
 	// displacement, the thickness conversion, and this float sum's rounding.
 	step := func(from, delta, by float64) (float64, float64) {
 		to := from + by
-		return to, absSumUpper(delta, tDelta, addRoundError(from, by, to))
+		return to, absSumUpper(delta, tDelta, proofarith.AddRoundError(from, by, to))
 	}
 	if removedEnd { // open at the top
 		cp.zOpen = z1
@@ -486,8 +487,8 @@ func evalCupContext(ctx context.Context, d *Document, ref producerID, cp cupPayl
 
 func exactWeightedPointRound(a r3.Vec, wa float64, b r3.Vec, wb float64, held r3.Vec) float64 {
 	coordinateError := func(av, bv, hv float64) float64 {
-		ra, rwa := floatRat(av), floatRat(wa)
-		rb, rwb := floatRat(bv), floatRat(wb)
+		ra, rwa := proofarith.FloatRat(av), proofarith.FloatRat(wa)
+		rb, rwb := proofarith.FloatRat(bv), proofarith.FloatRat(wb)
 		if ra == nil || rwa == nil || rb == nil || rwb == nil {
 			return math.Inf(1)
 		}
@@ -495,7 +496,7 @@ func exactWeightedPointRound(a r3.Vec, wa float64, b r3.Vec, wb float64, held r3
 			new(big.Rat).Mul(ra, rwa),
 			new(big.Rat).Mul(rb, rwb),
 		)
-		return rationalFloatError(exact, hv)
+		return proofarith.RationalFloatError(exact, hv)
 	}
 	return radius3D(max(
 		coordinateError(a.X, b.X, held.X),

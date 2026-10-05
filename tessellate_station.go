@@ -3,6 +3,8 @@ package decad
 import (
 	"math"
 	"math/big"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // This file owns the proven bound on ONE interior chord station of a circular
@@ -100,7 +102,7 @@ func capOffsetStationBound(seg CurveSegment, k, n int, radiusOffset *big.Rat, he
 // sign offsetRadius and ivExactOffsetRadius take. A setback that is not finite
 // answers nil, which capOffsetStationBound refuses on.
 func capWallRadiusOffset(w sideWalk, d float64) *big.Rat {
-	rd := floatRat(d)
+	rd := proofarith.FloatRat(d)
 	if rd == nil {
 		return nil
 	}

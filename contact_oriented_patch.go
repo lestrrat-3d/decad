@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -12,26 +13,26 @@ import (
 // edge directions. Their complete contact set is a rectangle in A's exact
 // dual basis, even when the read rotation's dyadic entries are slightly skew.
 func publishOrientedBoxPatch(report *ContactReport, a, b orientedSourceBox) {
-	var dual [3]dyV3
+	var dual [3]proofarith.DyV3
 	var denominator [3]*big.Rat
 	var bAxis [3]int
 	for axis := range 3 {
 		i, j := (axis+1)%3, (axis+2)%3
-		dual[axis] = dvCross(a.edge[i], a.edge[j])
-		denominator[axis] = dvDot(a.edge[axis], dual[axis]).Rat()
+		dual[axis] = proofarith.DvCross(a.edge[i], a.edge[j])
+		denominator[axis] = proofarith.DvDot(a.edge[axis], dual[axis]).Rat()
 		if denominator[axis].Sign() == 0 {
 			report.Reason = ContactNoNormalProof
 			return
 		}
 		if denominator[axis].Sign() < 0 {
 			for k := range 3 {
-				dual[axis][k] = dyNeg(dual[axis][k])
+				dual[axis][k] = proofarith.DyNeg(dual[axis][k])
 			}
 			denominator[axis].Neg(denominator[axis])
 		}
 		bAxis[axis] = -1
 		for candidate := range 3 {
-			if !dvIsZero(dvCross(a.edge[axis], b.edge[candidate])) {
+			if !proofarith.DvIsZero(proofarith.DvCross(a.edge[axis], b.edge[candidate])) {
 				continue
 			}
 			if bAxis[axis] >= 0 {
@@ -53,7 +54,7 @@ func publishOrientedBoxPatch(report *ContactReport, a, b orientedSourceBox) {
 	for axis := range 3 {
 		alo[axis], ahi[axis] = big.NewRat(0, 1), big.NewRat(1, 1)
 		for _, corner := range b.corner {
-			coordinate := new(big.Rat).Quo(dvDot(dvSub(corner, a.corner[0]), dual[axis]).Rat(),
+			coordinate := new(big.Rat).Quo(proofarith.DvDot(proofarith.DvSub(corner, a.corner[0]), dual[axis]).Rat(),
 				denominator[axis])
 			if blo[axis] == nil || coordinate.Cmp(blo[axis]) < 0 {
 				blo[axis] = coordinate
@@ -114,7 +115,7 @@ func publishOrientedBoxPatch(report *ContactReport, a, b orientedSourceBox) {
 		aSide = 1
 	}
 	bSide := 0
-	if dvDot(b.edge[bAxis[contactAxis]], dual[contactAxis]).Sign()*sign > 0 {
+	if proofarith.DvDot(b.edge[bAxis[contactAxis]], dual[contactAxis]).Sign()*sign > 0 {
 		bSide = 0
 	} else {
 		bSide = 1
@@ -127,7 +128,7 @@ func publishOrientedBoxPatch(report *ContactReport, a, b orientedSourceBox) {
 	normalAxis := dual[contactAxis]
 	if sign < 0 {
 		for k := range 3 {
-			normalAxis[k] = dyNeg(normalAxis[k])
+			normalAxis[k] = proofarith.DyNeg(normalAxis[k])
 		}
 	}
 	normal, angle, ok := orientedBoxNormal(normalAxis)
@@ -174,7 +175,7 @@ func orientedBoxPoint(point [3]*big.Rat) (VecMeasurement, bool) {
 		if !finiteMeasurementValues(coordinate[axis]) {
 			return VecMeasurement{}, false
 		}
-		deviation := new(big.Rat).Sub(point[axis], floatRat(coordinate[axis]))
+		deviation := new(big.Rat).Sub(point[axis], proofarith.FloatRat(coordinate[axis]))
 		deviation.Abs(deviation)
 		if deviation.Cmp(maxError) > 0 {
 			maxError = deviation
@@ -188,8 +189,8 @@ func orientedBoxPoint(point [3]*big.Rat) (VecMeasurement, bool) {
 		Bound: units.Millimeters(bound), Exactness: exactnessOf(bound)}, true
 }
 
-func orientedBoxNormal(axis dyV3) (VecMeasurement, units.Value, bool) {
-	squared := dvDot(axis, axis).Rat()
+func orientedBoxNormal(axis proofarith.DyV3) (VecMeasurement, units.Value, bool) {
+	squared := proofarith.DvDot(axis, axis).Rat()
 	if squared.Sign() <= 0 {
 		return VecMeasurement{}, units.Value{}, false
 	}
@@ -208,10 +209,10 @@ func orientedBoxNormal(axis dyV3) (VecMeasurement, units.Value, bool) {
 	components := [3]float64{value.X, value.Y, value.Z}
 	maxError := new(big.Rat)
 	for k := range 3 {
-		first := new(big.Rat).Quo(axis[k].Rat(), floatRat(low))
-		second := new(big.Rat).Quo(axis[k].Rat(), floatRat(high))
+		first := new(big.Rat).Quo(axis[k].Rat(), proofarith.FloatRat(low))
+		second := new(big.Rat).Quo(axis[k].Rat(), proofarith.FloatRat(high))
 		for _, endpoint := range []*big.Rat{first, second} {
-			deviation := new(big.Rat).Sub(floatRat(components[k]), endpoint)
+			deviation := new(big.Rat).Sub(proofarith.FloatRat(components[k]), endpoint)
 			deviation.Abs(deviation)
 			if deviation.Cmp(maxError) > 0 {
 				maxError = deviation

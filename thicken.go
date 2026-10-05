@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -148,7 +149,7 @@ func thickenRadialOf(ax axisFrame) (thickenRadial, error) {
 	if ax.aUBound != 0 || ax.aVBound != 0 || ax.dUBound != 0 || ax.dVBound != 0 {
 		return thickenRadial{}, fmt.Errorf(`%w: the revolve axis is not stated exactly in the sketch plane`, ErrUnsupported)
 	}
-	aU, aV, dU, dV := floatRat(ax.aU), floatRat(ax.aV), floatRat(ax.dU), floatRat(ax.dV)
+	aU, aV, dU, dV := proofarith.FloatRat(ax.aU), proofarith.FloatRat(ax.aV), proofarith.FloatRat(ax.dU), proofarith.FloatRat(ax.dV)
 	if aU == nil || aV == nil || dU == nil || dV == nil {
 		return thickenRadial{}, fmt.Errorf(`%w: the revolve axis has a non-finite plane-local coordinate`, ErrUnsupported)
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/sketch/geom"
 	"github.com/stretchr/testify/require"
 )
@@ -743,8 +744,8 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 			return math.Ldexp((rng.Float64()*2)-1, exp)
 		}
 		span := bezierSpan{
-			{u: floatRat(coord()), v: floatRat(coord())},
-			{u: floatRat(coord()), v: floatRat(coord())},
+			{u: proofarith.FloatRat(coord()), v: proofarith.FloatRat(coord())},
+			{u: proofarith.FloatRat(coord()), v: proofarith.FloatRat(coord())},
 		}
 		s, err := dyadicSpanOf(nil, span)
 		require.NoError(t, err)
@@ -768,9 +769,9 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 	factor := new(big.Int).Lsh(new(big.Int).Exp(big.NewInt(3), big.NewInt(128), nil), 4096)
 	for _, q := range []*big.Rat{
 		big.NewRat(1, 3),
-		new(big.Rat).Mul(floatRat(math.SmallestNonzeroFloat64), floatRat(math.SmallestNonzeroFloat64)),
-		new(big.Rat).Mul(floatRat(math.MaxFloat64), floatRat(math.MaxFloat64)),
-		new(big.Rat).Add(floatRat(1), floatRat(math.SmallestNonzeroFloat64)),
+		new(big.Rat).Mul(proofarith.FloatRat(math.SmallestNonzeroFloat64), proofarith.FloatRat(math.SmallestNonzeroFloat64)),
+		new(big.Rat).Mul(proofarith.FloatRat(math.MaxFloat64), proofarith.FloatRat(math.MaxFloat64)),
+		new(big.Rat).Add(proofarith.FloatRat(1), proofarith.FloatRat(math.SmallestNonzeroFloat64)),
 	} {
 		d := spanSquaredDistance{
 			num:   new(big.Int).Lsh(new(big.Int).Mul(q.Num(), factor), 34),
@@ -788,7 +789,7 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 			0, math.SmallestNonzeroFloat64, -math.SmallestNonzeroFloat64,
 			1, -1, math.MaxFloat64, -math.MaxFloat64,
 		} {
-			sq := new(big.Rat).Mul(floatRat(f), floatRat(f))
+			sq := new(big.Rat).Mul(proofarith.FloatRat(f), proofarith.FloatRat(f))
 			require.Equal(t, sq.Cmp(q), spanSquareCmp(f, d), "large common factor square comparison")
 			require.Equal(t, spanSquareCmp(f, d), spanSquareCmpScratch(f, d, scratch),
 				"large common factor scratch square comparison")

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -599,7 +600,7 @@ type revLoopParts struct {
 // either cannot be stated as an exact rational — a non-finite ρBound is the
 // refusal shape every consumer below already turns into its own envelope.
 func junctionRadiusInterval(rho, rhoBound float64) (ratInterval, bool) {
-	r, b := floatRat(rho), floatRat(math.Abs(rhoBound))
+	r, b := proofarith.FloatRat(rho), proofarith.FloatRat(math.Abs(rhoBound))
 	if r == nil || b == nil {
 		return ratInterval{}, false
 	}

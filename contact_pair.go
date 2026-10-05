@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -249,18 +250,18 @@ func classifyAnalyticContact(ctx context.Context, report *ContactReport) error {
 }
 
 func classifySourceBoxes(report *ContactReport, a, b sourceBoxContactProof) {
-	var gaps [3]dyadic
+	var gaps [3]proofarith.Dyadic
 	touchAxes := 0
 	overlaps := true
 	for i := range 3 {
 		switch {
-		case dyCmp(a.hi[i], b.lo[i]) < 0:
-			gaps[i] = dySubScalar(b.lo[i], a.hi[i])
+		case proofarith.DyCmp(a.hi[i], b.lo[i]) < 0:
+			gaps[i] = proofarith.DySubScalar(b.lo[i], a.hi[i])
 			overlaps = false
-		case dyCmp(b.hi[i], a.lo[i]) < 0:
-			gaps[i] = dySubScalar(a.lo[i], b.hi[i])
+		case proofarith.DyCmp(b.hi[i], a.lo[i]) < 0:
+			gaps[i] = proofarith.DySubScalar(a.lo[i], b.hi[i])
 			overlaps = false
-		case dyCmp(a.hi[i], b.lo[i]) == 0 || dyCmp(b.hi[i], a.lo[i]) == 0:
+		case proofarith.DyCmp(a.hi[i], b.lo[i]) == 0 || proofarith.DyCmp(b.hi[i], a.lo[i]) == 0:
 			touchAxes++
 			overlaps = false
 		}
@@ -286,12 +287,12 @@ func classifySourceBoxes(report *ContactReport, a, b sourceBoxContactProof) {
 			return
 		}
 		for i := range 3 {
-			if dyCmp(a.hi[i], b.lo[i]) == 0 {
-				publishSourceBoxPatch(report, a, b, i, 1, dyZero())
+			if proofarith.DyCmp(a.hi[i], b.lo[i]) == 0 {
+				publishSourceBoxPatch(report, a, b, i, 1, proofarith.DyZero())
 				return
 			}
-			if dyCmp(b.hi[i], a.lo[i]) == 0 {
-				publishSourceBoxPatch(report, a, b, i, -1, dyZero())
+			if proofarith.DyCmp(b.hi[i], a.lo[i]) == 0 {
+				publishSourceBoxPatch(report, a, b, i, -1, proofarith.DyZero())
 				return
 			}
 		}
@@ -309,32 +310,32 @@ func classifySourceBoxes(report *ContactReport, a, b sourceBoxContactProof) {
 		return
 	}
 	if sign > 0 {
-		if dyCmp(b.lo[axis], a.lo[axis]) <= 0 || dyCmp(b.hi[axis], a.hi[axis]) <= 0 {
+		if proofarith.DyCmp(b.lo[axis], a.lo[axis]) <= 0 || proofarith.DyCmp(b.hi[axis], a.hi[axis]) <= 0 {
 			report.Reason = ContactAmbiguousFeature
 			return
 		}
-	} else if dyCmp(b.lo[axis], a.lo[axis]) >= 0 || dyCmp(b.hi[axis], a.hi[axis]) >= 0 {
+	} else if proofarith.DyCmp(b.lo[axis], a.lo[axis]) >= 0 || proofarith.DyCmp(b.hi[axis], a.hi[axis]) >= 0 {
 		report.Reason = ContactAmbiguousFeature
 		return
 	}
-	publishSourceBoxPatch(report, a, b, axis, sign, dyNeg(depth))
+	publishSourceBoxPatch(report, a, b, axis, sign, proofarith.DyNeg(depth))
 }
 
-func sourceBoxTranslation(a, b sourceBoxContactProof) (int, int, dyadic, bool) {
-	var best dyadic
+func sourceBoxTranslation(a, b sourceBoxContactProof) (int, int, proofarith.Dyadic, bool) {
+	var best proofarith.Dyadic
 	axis, sign, ties := 0, 0, false
 	for i := range 3 {
 		for _, candidate := range []struct {
-			value dyadic
+			value proofarith.Dyadic
 			sign  int
 		}{
-			{dySubScalar(a.hi[i], b.lo[i]), 1},
-			{dySubScalar(b.hi[i], a.lo[i]), -1},
+			{proofarith.DySubScalar(a.hi[i], b.lo[i]), 1},
+			{proofarith.DySubScalar(b.hi[i], a.lo[i]), -1},
 		} {
 			if candidate.value.Sign() <= 0 {
-				return 0, 0, dyadic{}, false
+				return 0, 0, proofarith.Dyadic{}, false
 			}
-			cmp := dyCmp(candidate.value, best)
+			cmp := proofarith.DyCmp(candidate.value, best)
 			if sign == 0 || cmp < 0 {
 				axis, sign, best, ties = i, candidate.sign, candidate.value, false
 			} else if cmp == 0 {
@@ -345,15 +346,15 @@ func sourceBoxTranslation(a, b sourceBoxContactProof) (int, int, dyadic, bool) {
 	return axis, sign, best, !ties
 }
 
-func sourceBoxGap(gaps [3]dyadic) (Measurement, bool) {
+func sourceBoxGap(gaps [3]proofarith.Dyadic) (Measurement, bool) {
 	positive := 0
-	var only dyadic
-	squared := dyadic{}
+	var only proofarith.Dyadic
+	squared := proofarith.Dyadic{}
 	for _, gap := range gaps {
 		if gap.Sign() > 0 {
 			positive++
 			only = gap
-			squared = dyAdd(squared, dyMul(gap, gap))
+			squared = proofarith.DyAdd(squared, proofarith.DyMul(gap, gap))
 		}
 	}
 	if positive == 1 {
@@ -361,11 +362,11 @@ func sourceBoxGap(gaps [3]dyadic) (Measurement, bool) {
 		if !finiteMeasurementValues(v) {
 			return Measurement{}, false
 		}
-		bound := dyadicFloatError(only, v)
+		bound := proofarith.DyadicFloatError(only, v)
 		return Measurement{Value: units.Millimeters(v), Exactness: exactnessOf(bound),
 			Bound: units.Millimeters(bound)}, exact || bound < v
 	}
-	lo, hi := dySqrtDown(squared), dySqrtUp(squared)
+	lo, hi := proofarith.DySqrtDown(squared), proofarith.DySqrtUp(squared)
 	if !finiteMeasurementValues(lo, hi) || lo <= 0 {
 		return Measurement{}, false
 	}

@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
@@ -167,7 +168,7 @@ func TestLoftMassAccumulatorVolumeApproximate(t *testing.T) {
 	require.False(t, exact, "1/6 must not be representable in float64 for this test to mean anything")
 	require.Equal(t, wantFloat, vol.Value.Base())
 	require.Equal(t, Approximate, vol.Exactness)
-	require.Equal(t, rationalFloatError(wantRat, wantFloat), vol.Bound.Base())
+	require.Equal(t, proofarith.RationalFloatError(wantRat, wantFloat), vol.Bound.Base())
 	require.Greater(t, vol.Bound.Base(), 0.0)
 }
 
@@ -208,9 +209,9 @@ func TestLoftMassAccumulatorCentroidApproximate(t *testing.T) {
 	require.Equal(t, r3.NewVec(fx, fy, fz), c.Value)
 	require.Equal(t, Approximate, c.Exactness)
 
-	bx := rationalFloatError(wantCX, fx)
-	by := rationalFloatError(wantCY, fy)
-	bz := rationalFloatError(wantCZ, fz)
+	bx := proofarith.RationalFloatError(wantCX, fx)
+	by := proofarith.RationalFloatError(wantCY, fy)
+	bz := proofarith.RationalFloatError(wantCZ, fz)
 	require.Equal(t, 0.0, bz)
 	require.Equal(t, radius3D(math.Max(bx, by)), c.Bound.Base())
 	require.Greater(t, c.Bound.Base(), 0.0)

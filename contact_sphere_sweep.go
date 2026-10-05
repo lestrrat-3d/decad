@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"sort"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -48,7 +49,7 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 	// exactly at the query origin before rotation.
 	from := spherePath.from.Translation()
 	for axis, value := range [3]float64{from.X, from.Y, from.Z} {
-		if dyCmp(sphere.center[axis], mustDyOf(value)) != 0 {
+		if proofarith.DyCmp(sphere.center[axis], proofarith.MustDyOf(value)) != 0 {
 			report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
 			report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.duration),
 				To: sweepInstant(big.NewRat(1, 1), pa.duration)}
@@ -57,7 +58,7 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 	}
 	center := spherePath.drift.Center
 	for axis, value := range [3]float64{center.X, center.Y, center.Z} {
-		if dyCmp(sphere.center[axis], mustDyOf(value)) != 0 {
+		if proofarith.DyCmp(sphere.center[axis], proofarith.MustDyOf(value)) != 0 {
 			return nil, false, nil
 		}
 	}
@@ -69,7 +70,7 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 			return nil, false, nil
 		}
 		displacement := new(big.Rat).Mul(speed, spherePath.duration)
-		component, ok := dyOfRat(displacement)
+		component, ok := proofarith.DyOfRat(displacement)
 		if !ok {
 			return nil, false, nil
 		}
@@ -99,20 +100,20 @@ func sourceSpherePathPoseAt(path affinePairPath, f *big.Rat) (r3.Transform, erro
 	return path.poseAt(f)
 }
 
-func translatedContactBox(box sourceBoxContactProof, delta [3]dyadic,
+func translatedContactBox(box sourceBoxContactProof, delta [3]proofarith.Dyadic,
 	f *big.Rat) (sourceBoxContactProof, bool) {
-	fraction, ok := dyOfRat(f)
+	fraction, ok := proofarith.DyOfRat(f)
 	if !ok {
 		return sourceBoxContactProof{}, false
 	}
 	for i := range 3 {
-		move := dyMul(delta[i], fraction)
-		box.lo[i], box.hi[i] = dyAdd(box.lo[i], move), dyAdd(box.hi[i], move)
+		move := proofarith.DyMul(delta[i], fraction)
+		box.lo[i], box.hi[i] = proofarith.DyAdd(box.lo[i], move), proofarith.DyAdd(box.hi[i], move)
 	}
 	return box, true
 }
 
-func (r *sourceSphereSweepRun) deltas() ([3]dyadic, [3]dyadic) {
+func (r *sourceSphereSweepRun) deltas() ([3]proofarith.Dyadic, [3]proofarith.Dyadic) {
 	if r.sphereFirst {
 		return r.pa.delta, r.pb.delta
 	}
@@ -209,7 +210,7 @@ func (r *sourceSphereSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Tran
 		return
 	}
 	for _, witness := range []*VecMeasurement{&actual.OnA, &actual.OnB} {
-		bound := new(big.Rat).Add(floatRat(witness.Bound.Base()), deviation)
+		bound := new(big.Rat).Add(proofarith.FloatRat(witness.Bound.Base()), deviation)
 		if bound.Cmp(resolution) > 0 {
 			ideal.Manifold = nil
 			ideal.Reason = ContactPointTooCoarse
@@ -218,7 +219,7 @@ func (r *sourceSphereSweepRun) transferManifold(f *big.Rat, poseA, poseB r3.Tran
 		witness.Bound = units.Millimeters(ratFloatUp(bound))
 		witness.Exactness = exactnessFromBound(witness.Bound.Base())
 	}
-	sepBound := new(big.Rat).Add(floatRat(actual.Separation.Bound.Base()), deviation)
+	sepBound := new(big.Rat).Add(proofarith.FloatRat(actual.Separation.Bound.Base()), deviation)
 	actual.Separation.Bound = units.Millimeters(ratFloatUp(sepBound))
 	actual.Separation.Exactness = exactnessFromBound(actual.Separation.Bound.Base())
 	ideal.Manifold = &ContactManifold{Points: []ContactPoint{actual}}
@@ -265,8 +266,8 @@ func (r *sourceSphereSweepRun) faceCorridor(axis int) bool {
 			sphere, okSphere := translatedSphere(r.sphere, sphereDelta, f)
 			box, okBox := translatedContactBox(r.box, boxDelta, f)
 			if !okSphere || !okBox ||
-				dyCmp(dySubScalar(sphere.center[i], sphere.radius), box.lo[i]) <= 0 ||
-				dyCmp(dyAdd(sphere.center[i], sphere.radius), box.hi[i]) >= 0 {
+				proofarith.DyCmp(proofarith.DySubScalar(sphere.center[i], sphere.radius), box.lo[i]) <= 0 ||
+				proofarith.DyCmp(proofarith.DyAdd(sphere.center[i], sphere.radius), box.hi[i]) >= 0 {
 				return false
 			}
 		}
@@ -274,27 +275,27 @@ func (r *sourceSphereSweepRun) faceCorridor(axis int) bool {
 	return true
 }
 
-func (r *sourceSphereSweepRun) contactAxis() (int, int, dyadic, dyadic, bool) {
+func (r *sourceSphereSweepRun) contactAxis() (int, int, proofarith.Dyadic, proofarith.Dyadic, bool) {
 	sphereDelta, boxDelta := r.deltas()
 	for i := range 3 {
-		if dyCmp(r.sphere.center[i], r.box.hi[i]) > 0 {
-			gap := dySubScalar(dySubScalar(r.sphere.center[i], r.box.hi[i]), r.sphere.radius)
+		if proofarith.DyCmp(r.sphere.center[i], r.box.hi[i]) > 0 {
+			gap := proofarith.DySubScalar(proofarith.DySubScalar(r.sphere.center[i], r.box.hi[i]), r.sphere.radius)
 			if gap.Sign() < 0 {
-				return 0, 0, dyadic{}, dyadic{}, false
+				return 0, 0, proofarith.Dyadic{}, proofarith.Dyadic{}, false
 			}
-			slope := dySubScalar(sphereDelta[i], boxDelta[i])
+			slope := proofarith.DySubScalar(sphereDelta[i], boxDelta[i])
 			return i, 1, gap, slope, r.faceCorridor(i)
 		}
-		if dyCmp(r.sphere.center[i], r.box.lo[i]) < 0 {
-			gap := dySubScalar(dySubScalar(r.box.lo[i], r.sphere.center[i]), r.sphere.radius)
+		if proofarith.DyCmp(r.sphere.center[i], r.box.lo[i]) < 0 {
+			gap := proofarith.DySubScalar(proofarith.DySubScalar(r.box.lo[i], r.sphere.center[i]), r.sphere.radius)
 			if gap.Sign() < 0 {
-				return 0, 0, dyadic{}, dyadic{}, false
+				return 0, 0, proofarith.Dyadic{}, proofarith.Dyadic{}, false
 			}
-			slope := dySubScalar(boxDelta[i], sphereDelta[i])
+			slope := proofarith.DySubScalar(boxDelta[i], sphereDelta[i])
 			return i, -1, gap, slope, r.faceCorridor(i)
 		}
 	}
-	return 0, 0, dyadic{}, dyadic{}, false
+	return 0, 0, proofarith.Dyadic{}, proofarith.Dyadic{}, false
 }
 
 func (r *sourceSphereSweepRun) track(first *SweepSample) *SweepContactTrack {
@@ -306,14 +307,14 @@ func (r *sourceSphereSweepRun) track(first *SweepSample) *SweepContactTrack {
 	maximum := new(big.Rat)
 	sphereDelta, boxDelta := r.deltas()
 	for i := range 3 {
-		for _, v := range []dyadic{r.sphere.center[i],
-			dyAdd(r.sphere.center[i], sphereDelta[i]),
-			dyAdd(r.sphere.center[i], r.sphere.radius),
-			dySubScalar(r.sphere.center[i], r.sphere.radius),
-			dyAdd(dyAdd(r.sphere.center[i], sphereDelta[i]), r.sphere.radius),
-			dySubScalar(dyAdd(r.sphere.center[i], sphereDelta[i]), r.sphere.radius),
+		for _, v := range []proofarith.Dyadic{r.sphere.center[i],
+			proofarith.DyAdd(r.sphere.center[i], sphereDelta[i]),
+			proofarith.DyAdd(r.sphere.center[i], r.sphere.radius),
+			proofarith.DySubScalar(r.sphere.center[i], r.sphere.radius),
+			proofarith.DyAdd(proofarith.DyAdd(r.sphere.center[i], sphereDelta[i]), r.sphere.radius),
+			proofarith.DySubScalar(proofarith.DyAdd(r.sphere.center[i], sphereDelta[i]), r.sphere.radius),
 			r.box.lo[i], r.box.hi[i],
-			dyAdd(r.box.lo[i], boxDelta[i]), dyAdd(r.box.hi[i], boxDelta[i])} {
+			proofarith.DyAdd(r.box.lo[i], boxDelta[i]), proofarith.DyAdd(r.box.hi[i], boxDelta[i])} {
 			abs := new(big.Rat).Abs(v.Rat())
 			if abs.Cmp(maximum) > 0 {
 				maximum = abs
@@ -364,8 +365,8 @@ func sphereImpactBracket(root, duration, resolution *big.Rat) (*big.Rat, *big.Ra
 			span := new(big.Rat).Mul(new(big.Rat).Sub(right, left), duration)
 			if left.Sign() <= 0 || right.Cmp(big.NewRat(1, 1)) > 0 ||
 				span.Cmp(resolution) > 0 ||
-				floatRat(ratFloatNearest(left)).Cmp(left) != 0 ||
-				floatRat(ratFloatNearest(right)).Cmp(right) != 0 {
+				proofarith.FloatRat(ratFloatNearest(left)).Cmp(left) != 0 ||
+				proofarith.FloatRat(ratFloatNearest(right)).Cmp(right) != 0 {
 				return nil, nil, false
 			}
 			return left, right, true
@@ -450,7 +451,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 	if gap.Sign() <= 0 {
 		return r.undecided(zero, one, SweepPoseRelation), nil
 	}
-	if slope.Sign() >= 0 || dyAdd(gap, slope).Sign() > 0 {
+	if slope.Sign() >= 0 || proofarith.DyAdd(gap, slope).Sign() > 0 {
 		last, err := r.sample(ctx, one)
 		if errors.Is(err, errSweepPoseBudget) {
 			return r.undecided(zero, one, SweepPoseBudget), nil
@@ -465,7 +466,7 @@ func (r *sourceSphereSweepRun) execute(ctx context.Context, resolution *big.Rat)
 		r.report.replay.snapshot(r.report)
 		return r.report, nil
 	}
-	root := new(big.Rat).Quo(dyNeg(gap).Rat(), slope.Rat())
+	root := new(big.Rat).Quo(proofarith.DyNeg(gap).Rat(), slope.Rat())
 	leftF, rightF, ok := sphereImpactBracket(root, r.pa.duration, resolution)
 	if !ok || leftF.Sign() <= 0 || rightF.Cmp(one) > 0 {
 		return r.undecided(zero, one, SweepTimeFloor), nil

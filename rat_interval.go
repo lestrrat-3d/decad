@@ -1,6 +1,10 @@
 package decad
 
-import "math/big"
+import (
+	"math/big"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
+)
 
 // This file owns the atan, atan2, and pi enclosures used by certified readings.
 // Basic rational interval operations live in internal/proof/interval.go.
@@ -14,6 +18,52 @@ import "math/big"
 type ratInterval struct {
 	lo *big.Rat
 	hi *big.Rat
+}
+
+// The trigonometric enclosures retain private endpoints in the root package.
+// Arithmetic delegates to the exact interval operations in internal/proof.
+func toProofInterval(a ratInterval) proofarith.RatInterval {
+	return proofarith.RatInterval{Lo: a.lo, Hi: a.hi}
+}
+
+func fromProofInterval(a proofarith.RatInterval) ratInterval {
+	return ratInterval{lo: a.Lo, hi: a.Hi}
+}
+
+func interval(lo, hi *big.Rat) ratInterval {
+	return fromProofInterval(proofarith.Interval(lo, hi))
+}
+
+func intervalOwned(lo, hi *big.Rat) ratInterval {
+	return fromProofInterval(proofarith.OwnedInterval(lo, hi))
+}
+
+func pointInterval(value *big.Rat) ratInterval {
+	return fromProofInterval(proofarith.PointInterval(value))
+}
+
+func intervalAdd(a, b ratInterval) ratInterval {
+	return fromProofInterval(proofarith.AddInterval(toProofInterval(a), toProofInterval(b)))
+}
+
+func intervalNeg(a ratInterval) ratInterval {
+	return fromProofInterval(proofarith.NegInterval(toProofInterval(a)))
+}
+
+func intervalSub(a, b ratInterval) ratInterval {
+	return fromProofInterval(proofarith.SubInterval(toProofInterval(a), toProofInterval(b)))
+}
+
+func intervalScale(a ratInterval, scale *big.Rat) ratInterval {
+	return fromProofInterval(proofarith.ScaleInterval(toProofInterval(a), scale))
+}
+
+func intervalMul(a, b ratInterval) ratInterval {
+	return fromProofInterval(proofarith.MulInterval(toProofInterval(a), toProofInterval(b)))
+}
+
+func intervalFloatError(a ratInterval, held float64) float64 {
+	return proofarith.IntervalFloatError(toProofInterval(a), held)
 }
 
 var (

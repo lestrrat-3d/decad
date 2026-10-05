@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -213,9 +214,9 @@ var (
 // reading, which is the whole point of asserting it this way.
 func requireEnclosesTruth(t *testing.T, held, bound float64, truth *big.Rat, what string) {
 	t.Helper()
-	gap := new(big.Rat).Sub(floatRat(held), truth)
+	gap := new(big.Rat).Sub(proofarith.FloatRat(held), truth)
 	gap.Abs(gap)
-	require.LessOrEqual(t, gap.Cmp(floatRat(bound)), 0,
+	require.LessOrEqual(t, gap.Cmp(proofarith.FloatRat(bound)), 0,
 		`%s: the held %.20f sits %s from the value the record denotes, past the published bound %g`,
 		what, held, gap.FloatString(22), bound)
 }
@@ -286,7 +287,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 			TStart: 0.3, TEnd: 1,
 		}
 		truth := ratLerp(seg.Start.U, seg.End.U, seg.TStart)
-		require.NotEqual(t, 0, truth.Cmp(floatRat(0.3*0.1)),
+		require.NotEqual(t, 0, truth.Cmp(proofarith.FloatRat(0.3*0.1)),
 			`premise: this trimmed line endpoint is not exactly representable`)
 
 		w, err := walkOf(seg, nil)
@@ -299,7 +300,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 		require.NoError(t, err)
 		require.Positive(t, bound)
 		requireEnclosesTruth(t, lo, bound, truth, `the minimum along (1, 0)`)
-		requireEnclosesTruth(t, hi, bound, floatRat(seg.End.U), `the maximum along (1, 0)`)
+		requireEnclosesTruth(t, hi, bound, proofarith.FloatRat(seg.End.U), `the maximum along (1, 0)`)
 	})
 
 	// An endpoint whose displacement no arithmetic here can state refuses the

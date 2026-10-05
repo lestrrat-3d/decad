@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -114,7 +115,7 @@ func TestRevolveAngularHomotopyFactorEnclosesTheAngularIntegral(t *testing.T) {
 	// The angular factor alone is the triple integral of a cell whose meridian
 	// chord has |z'| = 1 and ρ ≡ 1, since ∫ρ² dt is then 1.
 	for _, dphi := range []float64{2 * math.Pi / 3, 2 * math.Pi / 8, 2 * math.Pi / 40, 1.0, 3.0, 5.5} {
-		g, err := revolveAngularHomotopyFactor(pointInterval(floatRat(dphi)))
+		g, err := revolveAngularHomotopyFactor(pointInterval(proofarith.FloatRat(dphi)))
 		require.NoError(t, err)
 		got := ratFloatUp(g)
 		want := tripleIntegralReference(0, 1, 1, 1, dphi, 60)
@@ -129,9 +130,9 @@ func TestRevolveAngularHomotopyFactorFollowsTheCubeOfTheStep(t *testing.T) {
 	// A small angular step's factor is dφ³/12 to leading order — which is what
 	// makes Σ Icell reproduce a chorded cylinder's own volume deficit — so
 	// halving the step must divide the factor by very nearly eight.
-	coarse, err := revolveAngularHomotopyFactor(pointInterval(floatRat(2 * math.Pi / 40)))
+	coarse, err := revolveAngularHomotopyFactor(pointInterval(proofarith.FloatRat(2 * math.Pi / 40)))
 	require.NoError(t, err)
-	fine, err := revolveAngularHomotopyFactor(pointInterval(floatRat(2 * math.Pi / 80)))
+	fine, err := revolveAngularHomotopyFactor(pointInterval(proofarith.FloatRat(2 * math.Pi / 80)))
 	require.NoError(t, err)
 	ratio := ratFloatUp(coarse) / ratFloatUp(fine)
 	require.InDelta(t, 8.0, ratio, 0.05)
@@ -145,7 +146,7 @@ func TestRevolveAngularHomotopyFactorFollowsTheCubeOfTheStep(t *testing.T) {
 
 func mustAngularFactor(t *testing.T, dphi float64) *big.Rat {
 	t.Helper()
-	g, err := revolveAngularHomotopyFactor(pointInterval(floatRat(dphi)))
+	g, err := revolveAngularHomotopyFactor(pointInterval(proofarith.FloatRat(dphi)))
 	require.NoError(t, err)
 	return g
 }
@@ -176,8 +177,8 @@ func TestRevolveCellSweptVolumeBoundsTheCellIntegral(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			g := mustAngularFactor(t, tc.dphi)
-			lo := revMeridian{zIv: pointInterval(floatRat(tc.z0)), rhoIv: pointInterval(floatRat(tc.rho0))}
-			hi := revMeridian{zIv: pointInterval(floatRat(tc.z1)), rhoIv: pointInterval(floatRat(tc.rho1))}
+			lo := revMeridian{zIv: pointInterval(proofarith.FloatRat(tc.z0)), rhoIv: pointInterval(proofarith.FloatRat(tc.rho0))}
+			hi := revMeridian{zIv: pointInterval(proofarith.FloatRat(tc.z1)), rhoIv: pointInterval(proofarith.FloatRat(tc.rho1))}
 			got := ratFloatUp(revolveCellSweptVolume(lo, hi, g))
 			want := tripleIntegralReference(tc.z0, tc.rho0, tc.z1, tc.rho1, tc.dphi, 60)
 			require.Positive(t, want)
@@ -193,8 +194,8 @@ func TestRevolveCellSweptVolumeIsZeroForAnAxisLevelCell(t *testing.T) {
 	// homotopy moves nothing along the axis and sweeps no volume at all: |z'|
 	// is the factor that vanishes.
 	g := mustAngularFactor(t, 2*math.Pi/32)
-	lo := revMeridian{zIv: pointInterval(floatRat(3)), rhoIv: pointInterval(new(big.Rat))}
-	hi := revMeridian{zIv: pointInterval(floatRat(3)), rhoIv: pointInterval(floatRat(8))}
+	lo := revMeridian{zIv: pointInterval(proofarith.FloatRat(3)), rhoIv: pointInterval(new(big.Rat))}
+	hi := revMeridian{zIv: pointInterval(proofarith.FloatRat(3)), rhoIv: pointInterval(proofarith.FloatRat(8))}
 	require.Zero(t, revolveCellSweptVolume(lo, hi, g).Sign())
 }
 
@@ -325,7 +326,7 @@ func TestAngularHomotopyBulgesBoundTheSecondDerivatives(t *testing.T) {
 	n := int64(revolveAngularIntegralSteps)
 	scale := float64(8 * n * n)
 	for _, d := range []float64{2 * math.Pi / 3, 2 * math.Pi / 40, 1.0, 3.0, 5.5} {
-		bp, bq := angularHomotopyBulges(pointInterval(floatRat(d)), n)
+		bp, bq := angularHomotopyBulges(pointInterval(proofarith.FloatRat(d)), n)
 		require.Positive(t, ratFloatUp(bp))
 		require.Positive(t, ratFloatUp(bq))
 		const h = 1e-4

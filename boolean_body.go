@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -745,7 +746,7 @@ func exactnessOf(bound float64) Exactness {
 
 // ratAbsDiff is |r − f| rounded up to float64.
 func ratAbsDiff(r *big.Rat, f float64) float64 {
-	return rationalFloatError(r, f)
+	return proofarith.RationalFloatError(r, f)
 }
 
 // centroidCoord is (moment/24) / volume, exact.

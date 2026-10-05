@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"sort"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -33,7 +34,7 @@ func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSwee
 			return rotationalSweepPath{}, false
 		}
 		angular := new(big.Rat).Quo(angle, path.duration)
-		linear := new(big.Rat).Quo(floatRat(path.screw.Slide), path.duration)
+		linear := new(big.Rat).Quo(proofarith.FloatRat(path.screw.Slide), path.duration)
 		omega, speed := ratFloatNearest(angular), ratFloatNearest(linear)
 		if !finiteMeasurementValues(omega, speed) {
 			return rotationalSweepPath{}, false
@@ -71,7 +72,7 @@ func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSwee
 		if !finiteMeasurementValues(bound) {
 			return rotationalSweepPath{}, false
 		}
-		prepared.fullTravel = floatRat(bound)
+		prepared.fullTravel = proofarith.FloatRat(bound)
 		return prepared, true
 	}
 	drift := path.drift
@@ -89,8 +90,8 @@ func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSwee
 	if omegaSquared.Sign() <= 0 {
 		return rotationalSweepPath{}, false
 	}
-	prepared.omegaLow = floatRat(ratSqrtDown(omegaSquared))
-	prepared.omegaHigh = floatRat(ratSqrtUp(omegaSquared))
+	prepared.omegaLow = proofarith.FloatRat(ratSqrtDown(omegaSquared))
+	prepared.omegaHigh = proofarith.FloatRat(ratSqrtUp(omegaSquared))
 	if prepared.omegaLow == nil || prepared.omegaHigh == nil || prepared.omegaHigh.Sign() <= 0 {
 		return rotationalSweepPath{}, false
 	}
@@ -111,14 +112,14 @@ func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSwee
 	if !finiteMeasurementValues(vUp) {
 		return rotationalSweepPath{}, false
 	}
-	speed := new(big.Rat).Add(floatRat(vUp), new(big.Rat).Mul(radius, prepared.omegaHigh))
+	speed := new(big.Rat).Add(proofarith.FloatRat(vUp), new(big.Rat).Mul(radius, prepared.omegaHigh))
 	prepared.fullTravel = new(big.Rat).Mul(speed, path.duration)
 	if path.screw != nil {
 		angle, _ := exactBaseValue(path.screw.Angle)
 		angular := new(big.Rat).Quo(angle, path.duration)
-		linear := new(big.Rat).Quo(floatRat(path.screw.Slide), path.duration)
+		linear := new(big.Rat).Quo(proofarith.FloatRat(path.screw.Slide), path.duration)
 		for axis, component := range [3]float64{path.screw.Axis.X, path.screw.Axis.Y, path.screw.Axis.Z} {
-			prepared.velocity[axis] = new(big.Rat).Mul(floatRat(component), linear)
+			prepared.velocity[axis] = new(big.Rat).Mul(proofarith.FloatRat(component), linear)
 		}
 		prepared.omegaLow, prepared.omegaHigh = angular, angular
 		prepared.fullTravel = new(big.Rat).Mul(new(big.Rat).Add(new(big.Rat).Abs(linear),
@@ -137,16 +138,16 @@ func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 	}
 	minimum := [3]float64{box.Min.X, box.Min.Y, box.Min.Z}
 	maximum := [3]float64{box.Max.X, box.Max.Y, box.Max.Z}
-	var extremes [3][2]dyadic
-	bound := mustDyOf(box.Bound.Base())
+	var extremes [3][2]proofarith.Dyadic
+	bound := proofarith.MustDyOf(box.Bound.Base())
 	for axis := range 3 {
 		if minimum[axis] > maximum[axis] {
 			return nil, false
 		}
-		extremes[axis] = [2]dyadic{dySubScalar(mustDyOf(minimum[axis]), bound),
-			dyAdd(mustDyOf(maximum[axis]), bound)}
+		extremes[axis] = [2]proofarith.Dyadic{proofarith.DySubScalar(proofarith.MustDyOf(minimum[axis]), bound),
+			proofarith.DyAdd(proofarith.MustDyOf(maximum[axis]), bound)}
 	}
-	pivot := dyVec(center)
+	pivot := proofarith.DyVec(center)
 	axisSquared := new(big.Rat)
 	for k := range 3 {
 		axisSquared.Add(axisSquared, new(big.Rat).Mul(axis[k], axis[k]))
@@ -156,12 +157,12 @@ func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 	}
 	best := new(big.Rat)
 	for index := range 8 {
-		var corner dyV3
+		var corner proofarith.DyV3
 		for axis := range 3 {
 			corner[axis] = extremes[axis][(index>>axis)&1]
 		}
 		mapped := exactContactTransform(from, corner)
-		delta := dvSub(mapped, pivot)
+		delta := proofarith.DvSub(mapped, pivot)
 		cross := [3]*big.Rat{
 			new(big.Rat).Sub(new(big.Rat).Mul(delta[1].Rat(), axis[2]),
 				new(big.Rat).Mul(delta[2].Rat(), axis[1])),
@@ -183,7 +184,7 @@ func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 	if !finiteMeasurementValues(radius) {
 		return nil, false
 	}
-	return floatRat(radius), true
+	return proofarith.FloatRat(radius), true
 }
 
 func (p rotationalSweepPath) poseAt(f *big.Rat) (r3.Transform, error) {
@@ -278,10 +279,10 @@ func (p rotationalSweepPath) roundedAt(pose r3.Transform, f *big.Rat) (orientedS
 		}
 	}
 	box.faces = p.startBox.faces
-	box.edge = [3]dyV3{dvSub(box.corner[1], box.corner[0]),
-		dvSub(box.corner[2], box.corner[0]), dvSub(box.corner[4], box.corner[0])}
+	box.edge = [3]proofarith.DyV3{proofarith.DvSub(box.corner[1], box.corner[0]),
+		proofarith.DvSub(box.corner[2], box.corner[0]), proofarith.DvSub(box.corner[4], box.corner[0])}
 	for _, edge := range box.edge {
-		if dvIsZero(edge) {
+		if proofarith.DvIsZero(edge) {
 			return orientedSourceBox{}, 0, false
 		}
 	}
@@ -364,11 +365,11 @@ func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSam
 			if contact.Gap != nil {
 				value, _ := exactBaseValue(contact.Gap.Value)
 				bound, _ := exactBaseValue(contact.Gap.Bound)
-				charge := new(big.Rat).Add(floatRat(etaA), floatRat(etaB))
+				charge := new(big.Rat).Add(proofarith.FloatRat(etaA), proofarith.FloatRat(etaB))
 				newBound := new(big.Rat).Add(bound, charge)
 				if new(big.Rat).Sub(value, newBound).Sign() > 0 {
 					published := ratFloatUp(newBound)
-					if finiteMeasurementValues(published) && value.Cmp(floatRat(published)) > 0 {
+					if finiteMeasurementValues(published) && value.Cmp(proofarith.FloatRat(published)) > 0 {
 						gap := *contact.Gap
 						gap.Bound = units.Millimeters(published)
 						gap.Exactness = exactnessFromBound(published)
@@ -377,11 +378,11 @@ func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSam
 				}
 			}
 		case ContactOverlapping:
-			if orientedInteriorWitness(boxA, boxB, floatRat(etaA), floatRat(etaB)) {
+			if orientedInteriorWitness(boxA, boxB, proofarith.FloatRat(etaA), proofarith.FloatRat(etaB)) {
 				event.Relation, event.Reason = ContactOverlapping, contact.Reason
 			}
 			if proof, ok := r.horizontalSpinContact(f, poseA, poseB, contact,
-				floatRat(etaA), floatRat(etaB)); ok {
+				proofarith.FloatRat(etaA), proofarith.FloatRat(etaB)); ok {
 				event = proof
 			}
 		case ContactTouching:
@@ -389,7 +390,7 @@ func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSam
 				event.Relation, event.Gap, event.Manifold = ContactTouching, contact.Gap, contact.Manifold
 				event.Reason = contact.Reason
 			} else if proof, ok := r.horizontalSpinContact(f, poseA, poseB, contact,
-				floatRat(etaA), floatRat(etaB)); ok {
+				proofarith.FloatRat(etaA), proofarith.FloatRat(etaB)); ok {
 				event = proof
 			}
 		}
@@ -412,7 +413,7 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 	stationary, spinning := -1, -1
 	paths := [2]rotationalSweepPath{r.a, r.b}
 	for i, path := range paths {
-		if path.path.drift == nil && path.path.delta == [3]dyadic{} {
+		if path.path.drift == nil && path.path.delta == [3]proofarith.Dyadic{} {
 			stationary = i
 		}
 		if path.path.drift != nil && path.frame.axis[0].Sign() == 0 &&
@@ -462,7 +463,7 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 		return SweepEvent{}, false
 	}
 	value := ratFloatNearest(gap)
-	bound := rationalFloatError(gap, value)
+	bound := proofarith.RationalFloatError(gap, value)
 	if !finiteMeasurementValues(value, bound) {
 		return SweepEvent{}, false
 	}
@@ -478,19 +479,19 @@ func (r *rotationalPairSweep) horizontalSpinContact(f *big.Rat, poseA, poseB r3.
 		if spinning == 1 {
 			witness = point.OnB
 		}
-		margin := new(big.Rat).Add(deviation, floatRat(witness.Bound.Base()))
+		margin := new(big.Rat).Add(deviation, proofarith.FloatRat(witness.Bound.Base()))
 		margin.Sub(margin, gap)
 		coordinates := [2]float64{witness.Value.X, witness.Value.Y}
 		for axis := range 2 {
-			value := floatRat(coordinates[axis])
+			value := proofarith.FloatRat(coordinates[axis])
 			if value.Cmp(new(big.Rat).Add(base.lo[axis].Rat(), margin)) <= 0 ||
 				value.Cmp(new(big.Rat).Sub(base.hi[axis].Rat(), margin)) >= 0 {
 				return SweepEvent{}, false
 			}
 		}
 		for _, position := range []*VecMeasurement{&point.OnA, &point.OnB} {
-			bound := new(big.Rat).Add(floatRat(position.Bound.Base()), deviation)
-			if bound.Cmp(floatRat(r.req.PointResolution.Base())) > 0 {
+			bound := new(big.Rat).Add(proofarith.FloatRat(position.Bound.Base()), deviation)
+			if bound.Cmp(proofarith.FloatRat(r.req.PointResolution.Base())) > 0 {
 				return SweepEvent{}, false
 			}
 			published := ratFloatUp(bound)
@@ -619,21 +620,21 @@ func (r *rotationalPairSweep) coMovingOrientedTouch(first *SweepSample) bool {
 		return false
 	}
 	for axis := range 3 {
-		if dyCmp(r.a.path.delta[axis], r.b.path.delta[axis]) != 0 {
+		if proofarith.DyCmp(r.a.path.delta[axis], r.b.path.delta[axis]) != 0 {
 			return false
 		}
 	}
 	return true
 }
 
-func translatedOrientedBox(box orientedSourceBox, delta [3]dyadic, fraction *big.Rat) (orientedSourceBox, bool) {
+func translatedOrientedBox(box orientedSourceBox, delta [3]proofarith.Dyadic, fraction *big.Rat) (orientedSourceBox, bool) {
 	for axis := range 3 {
-		step, ok := dyOfRat(new(big.Rat).Mul(delta[axis].Rat(), fraction))
+		step, ok := proofarith.DyOfRat(new(big.Rat).Mul(delta[axis].Rat(), fraction))
 		if !ok {
 			return orientedSourceBox{}, false
 		}
 		for corner := range box.corner {
-			box.corner[corner][axis] = dyAdd(box.corner[corner][axis], step)
+			box.corner[corner][axis] = proofarith.DyAdd(box.corner[corner][axis], step)
 		}
 	}
 	return box, true
@@ -667,8 +668,8 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 	boxA, okA := sourceBoxAtPose(r.a.body, r.a.path.from)
 	boxB, okB := sourceBoxAtPose(r.b.body, r.b.path.from)
 	if !okA || !okB ||
-		(side == 1 && dyCmp(boxA.hi[axis], boxB.lo[axis]) != 0) ||
-		(side == 0 && dyCmp(boxB.hi[axis], boxA.lo[axis]) != 0) {
+		(side == 1 && proofarith.DyCmp(boxA.hi[axis], boxB.lo[axis]) != 0) ||
+		(side == 0 && proofarith.DyCmp(boxB.hi[axis], boxA.lo[axis]) != 0) {
 		return nil, false
 	}
 	var omega, difference, velocity [3]*big.Rat
@@ -684,7 +685,7 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 		case 2:
 			centers = [2]float64{r.a.path.drift.Center.Z, r.b.path.drift.Center.Z}
 		}
-		difference[i] = new(big.Rat).Sub(floatRat(centers[1]), floatRat(centers[0]))
+		difference[i] = new(big.Rat).Sub(proofarith.FloatRat(centers[1]), proofarith.FloatRat(centers[0]))
 		velocity[i] = new(big.Rat).Sub(r.b.velocity[i], r.a.velocity[i])
 	}
 	sign := int64(1)
@@ -717,7 +718,7 @@ func (r *rotationalPairSweep) rotationalDepartureFraction(first *SweepSample) (*
 		if !finiteMeasurementValues(root) {
 			return nil
 		}
-		return floatRat(root)
+		return proofarith.FloatRat(root)
 	}
 	dNorm, vNorm := normUpper(difference), normUpper(velocity)
 	if dNorm == nil || vNorm == nil {
@@ -751,28 +752,28 @@ func (r *rotationalPairSweep) obliqueAffineDepartureFraction(first *SweepSample)
 	}
 	for axis := range 3 {
 		i, j := (axis+1)%3, (axis+2)%3
-		normal := dvCross(r.a.startBox.edge[i], r.a.startBox.edge[j])
-		if dvIsZero(normal) {
+		normal := proofarith.DvCross(r.a.startBox.edge[i], r.a.startBox.edge[j])
+		if proofarith.DvIsZero(normal) {
 			continue
 		}
 		alo, ahi := orientedProjection(r.a.startBox, normal)
 		blo, bhi := orientedProjection(r.b.startBox, normal)
 		side := 0
 		switch {
-		case dyCmp(ahi, blo) == 0:
+		case proofarith.DyCmp(ahi, blo) == 0:
 			side = 1
-		case dyCmp(bhi, alo) == 0:
+		case proofarith.DyCmp(bhi, alo) == 0:
 			side = -1
 		default:
 			continue
 		}
-		relative := dyV3{}
+		relative := proofarith.DyV3{}
 		for k := range 3 {
-			relative[k] = dySubScalar(r.b.path.delta[k], r.a.path.delta[k])
+			relative[k] = proofarith.DySubScalar(r.b.path.delta[k], r.a.path.delta[k])
 		}
-		slope := dvDot(relative, normal)
+		slope := proofarith.DvDot(relative, normal)
 		if side < 0 {
-			slope = dyNeg(slope)
+			slope = proofarith.DyNeg(slope)
 		}
 		if slope.Sign() > 0 {
 			return big.NewRat(1, 2), true
@@ -790,7 +791,7 @@ func (r *rotationalPairSweep) horizontalSpinDepartureFraction(first *SweepSample
 	paths := [2]rotationalSweepPath{r.a, r.b}
 	stationary, spinning := -1, -1
 	for i, path := range paths {
-		if path.path.drift == nil && path.path.delta == [3]dyadic{} {
+		if path.path.drift == nil && path.path.delta == [3]proofarith.Dyadic{} {
 			stationary = i
 		}
 		if path.path.drift != nil && path.frame.axis[0].Sign() == 0 &&
@@ -811,12 +812,12 @@ func (r *rotationalPairSweep) horizontalSpinDepartureFraction(first *SweepSample
 	if !okA || !okB {
 		return nil, false
 	}
-	z := dyV3{dyZero(), dyZero(), mustDyOf(1)}
+	z := proofarith.DyV3{proofarith.DyZero(), proofarith.DyZero(), proofarith.MustDyOf(1)}
 	alo, ahi := orientedProjection(a, z)
 	blo, bhi := orientedProjection(b, z)
-	gap := dySubScalar(blo, ahi)
+	gap := proofarith.DySubScalar(blo, ahi)
 	if normal.Z < 0 {
-		gap = dySubScalar(alo, bhi)
+		gap = proofarith.DySubScalar(alo, bhi)
 	}
 	if gap.Sign() != 0 {
 		return nil, false
@@ -849,7 +850,7 @@ func (r *rotationalPairSweep) tangentAxisSpinDepartureFraction(first *SweepSampl
 	paths := [2]*rotationalSweepPath{&r.a, &r.b}
 	stationary, spinning := -1, -1
 	for i, path := range paths {
-		if path.path.drift == nil && path.path.delta == [3]dyadic{} {
+		if path.path.drift == nil && path.path.delta == [3]proofarith.Dyadic{} {
 			stationary = i
 		}
 		if path.path.drift != nil && path.path.screw == nil &&
@@ -871,9 +872,9 @@ func (r *rotationalPairSweep) tangentAxisSpinDepartureFraction(first *SweepSampl
 		movingHigh = dyMax(movingHigh, moving.corner[i][2])
 	}
 	sign := int64(0)
-	if dyCmp(staticHigh, movingLow) == 0 {
+	if proofarith.DyCmp(staticHigh, movingLow) == 0 {
 		sign = 1
-	} else if dyCmp(movingHigh, staticLow) == 0 {
+	} else if proofarith.DyCmp(movingHigh, staticLow) == 0 {
 		sign = -1
 	}
 	if sign == 0 {
@@ -941,7 +942,7 @@ func (r *rotationalPairSweep) axisFaceDepartureFraction(first *SweepSample) (*bi
 	var faceA, faceB orientedFace
 	if !orientedAxisFace(&r.a.startBox, axis, sideA, &faceA) ||
 		!orientedAxisFace(&r.b.startBox, axis, sideB, &faceB) ||
-		dyCmp(faceA.origin[axis], faceB.origin[axis]) != 0 {
+		proofarith.DyCmp(faceA.origin[axis], faceB.origin[axis]) != 0 {
 		return nil, false
 	}
 	velocity := func(path rotationalSweepPath) (*big.Rat, bool) {
@@ -972,7 +973,7 @@ func (r *rotationalPairSweep) axisFaceDepartureFraction(first *SweepSample) (*bi
 
 func (r *rotationalPairSweep) refine(ctx context.Context, left, right *SweepSample,
 	depth int) (bool, error) {
-	lf, rf := floatRat(left.At.Fraction.Base()), floatRat(right.At.Fraction.Base())
+	lf, rf := proofarith.FloatRat(left.At.Fraction.Base()), proofarith.FloatRat(right.At.Fraction.Base())
 	if left.Ideal.Relation == ContactSeparated && right.Ideal.Relation == ContactSeparated &&
 		r.intervalClear(left, right, lf, rf) {
 		return false, nil
@@ -1057,16 +1058,16 @@ func (r *rotationalPairSweep) obliqueAffineIntervalClear(from, to *big.Rat) bool
 	}
 	for axis := range 3 {
 		i, j := (axis+1)%3, (axis+2)%3
-		normal := dvCross(r.a.startBox.edge[i], r.a.startBox.edge[j])
-		if dvIsZero(normal) {
+		normal := proofarith.DvCross(r.a.startBox.edge[i], r.a.startBox.edge[j])
+		if proofarith.DvIsZero(normal) {
 			continue
 		}
 		alo0, ahi0 := orientedProjection(a0, normal)
 		blo0, bhi0 := orientedProjection(b0, normal)
 		alo1, ahi1 := orientedProjection(a1, normal)
 		blo1, bhi1 := orientedProjection(b1, normal)
-		if dyCmp(ahi0, blo0) < 0 && dyCmp(ahi1, blo1) < 0 ||
-			dyCmp(bhi0, alo0) < 0 && dyCmp(bhi1, alo1) < 0 {
+		if proofarith.DyCmp(ahi0, blo0) < 0 && proofarith.DyCmp(ahi1, blo1) < 0 ||
+			proofarith.DyCmp(bhi0, alo0) < 0 && proofarith.DyCmp(bhi1, alo1) < 0 {
 			return true
 		}
 	}

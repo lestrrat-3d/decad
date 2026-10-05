@@ -2,6 +2,8 @@ package decad
 
 import (
 	"math/big"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // This file is docs/spline-design.md §5.1's exact integration: the
@@ -200,7 +202,7 @@ func (ig *regionIntegrals) addFreeformTo(spans []bezierSpan, reversed bool, orde
 	}
 	for _, moment := range moments {
 		held, _ := moment.exact.Float64()
-		accumulateMoment(moment.value, moment.bound, held, rationalFloatError(moment.exact, held))
+		accumulateMoment(moment.value, moment.bound, held, proofarith.RationalFloatError(moment.exact, held))
 	}
 	ig.addExact(exact)
 }

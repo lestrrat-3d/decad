@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // This file owns the CAP CONTOUR's displacement — the one term every cap-level
@@ -60,7 +62,7 @@ type ivPoint struct{ u, v ratInterval }
 
 // ivExactPoint lifts a pair of float64 coordinates, which are exact rationals.
 func ivExactPoint(u, v float64) (ivPoint, bool) {
-	ru, rv := floatRat(u), floatRat(v)
+	ru, rv := proofarith.FloatRat(u), proofarith.FloatRat(v)
 	if ru == nil || rv == nil {
 		return ivPoint{}, false
 	}
@@ -84,7 +86,7 @@ func (e ivPoint) reach(p Point2) float64 {
 // ivAxisSpread is max(|lo − c|, |hi − c|), the furthest the interval reaches
 // from c along one axis.
 func ivAxisSpread(iv ratInterval, c float64) (*big.Rat, bool) {
-	rc := floatRat(c)
+	rc := proofarith.FloatRat(c)
 	if rc == nil || iv.lo == nil || iv.hi == nil {
 		return nil, false
 	}
@@ -170,7 +172,7 @@ func intervalSqrt(a ratInterval) (ratInterval, bool) {
 		lo = ratSqrtDown(a.lo)
 	}
 	hi := ratSqrtUp(a.hi)
-	rlo, rhi := floatRat(lo), floatRat(hi)
+	rlo, rhi := proofarith.FloatRat(lo), proofarith.FloatRat(hi)
 	if rlo == nil || rhi == nil {
 		return ratInterval{}, false
 	}
@@ -181,7 +183,7 @@ func intervalSqrt(a ratInterval) (ratInterval, bool) {
 // normalize2 rounds. The pair itself is exact, so the only widening is the
 // length's own outward-rounded square root.
 func ivUnitVec(x, y float64) (ivPoint, bool) {
-	rx, ry := floatRat(x), floatRat(y)
+	rx, ry := proofarith.FloatRat(x), proofarith.FloatRat(y)
 	if rx == nil || ry == nil {
 		return ivPoint{}, false
 	}
@@ -210,7 +212,7 @@ func ivOffsetFoot(vU, vV, tu, tv, d float64) (ivPoint, bool) {
 		return ivPoint{}, false
 	}
 	v, okV := ivExactPoint(vU, vV)
-	rd := floatRat(d)
+	rd := proofarith.FloatRat(d)
 	if !okV || rd == nil {
 		return ivPoint{}, false
 	}
@@ -260,7 +262,7 @@ func ivExactOffsetRadius(w sideWalk, d float64) (*big.Rat, bool) {
 	if w.th1 < w.th0 { // a clockwise walk has its material outside the circle
 		inside = -1.0
 	}
-	rr, rd := floatRat(w.radius), floatRat(inside*d)
+	rr, rd := proofarith.FloatRat(w.radius), proofarith.FloatRat(inside*d)
 	if rr == nil || rd == nil {
 		return nil, false
 	}
@@ -444,7 +446,7 @@ func capContourDelta(walks []sideWalk, joins []cornerJoin, d float64) (float64, 
 		// The emitted arc sits at the float radius about the exact centre while
 		// the denoted one sits at the exact radius about it, so the radial gap
 		// between them IS the displacement of every point of that arc.
-		delta = math.Max(delta, rationalFloatError(exact, held))
+		delta = math.Max(delta, proofarith.RationalFloatError(exact, held))
 	}
 	n := len(walks)
 	for i, j := range joins {
@@ -526,7 +528,7 @@ func ivOffsetFootRange(vU, vV, tu, tv float64, tRange ratInterval) (ivPoint, boo
 // At t0 == t1 == d it reduces to ivCarrierOf(w, d)'s own enclosure, since
 // both build the offset amount from the identical closed form.
 func ivCarrierOverRange(w sideWalk, t0, t1 float64) (ivCarrier, bool) {
-	rt0, rt1 := floatRat(t0), floatRat(t1)
+	rt0, rt1 := proofarith.FloatRat(t0), proofarith.FloatRat(t1)
 	if rt0 == nil || rt1 == nil {
 		return ivCarrier{}, false
 	}
@@ -539,7 +541,7 @@ func ivCarrierOverRange(w sideWalk, t0, t1 float64) (ivCarrier, bool) {
 		}
 		return ivCarrier{isLine: true, p: p, dir: dir}, true
 	}
-	rr := floatRat(w.radius)
+	rr := proofarith.FloatRat(w.radius)
 	if rr == nil {
 		return ivCarrier{}, false
 	}
@@ -756,9 +758,9 @@ func lineCircleLocusSpeedUpper(line, circle sideWalk, t0, t1 float64) (float64, 
 	if !ok {
 		return 0, false
 	}
-	cx, cy := floatRat(circle.cU), floatRat(circle.cV)
-	radius := floatRat(circle.radius)
-	anchorU, anchorV := floatRat(frame.anchorU), floatRat(frame.anchorV)
+	cx, cy := proofarith.FloatRat(circle.cU), proofarith.FloatRat(circle.cV)
+	radius := proofarith.FloatRat(circle.radius)
+	anchorU, anchorV := proofarith.FloatRat(frame.anchorU), proofarith.FloatRat(frame.anchorV)
 	if cx == nil || cy == nil || radius == nil || anchorU == nil || anchorV == nil {
 		return 0, false
 	}
@@ -788,7 +790,7 @@ func lineCircleLocusSpeedUpper(line, circle sideWalk, t0, t1 float64) (float64, 
 		return nMagUpper, true
 	}
 
-	rt0, rt1 := floatRat(t0), floatRat(t1)
+	rt0, rt1 := proofarith.FloatRat(t0), proofarith.FloatRat(t1)
 	if rt0 == nil || rt1 == nil {
 		return 0, false
 	}
@@ -861,7 +863,7 @@ func capWholeCircleDelta(w sideWalk, d float64) (float64, error) {
 	if !ok {
 		return 0, errCapContourUnbounded
 	}
-	return rationalFloatError(exact, held), nil
+	return proofarith.RationalFloatError(exact, held), nil
 }
 
 // loopContourDelta re-derives one loop's contour displacement from the loop
@@ -891,16 +893,16 @@ func loopContourDelta(ctx context.Context, loop LoopRecord, d float64) (float64,
 // true square of the length the float evaluation approximated.
 // dySqrtIntervalError then reports what that evaluation committed. ok is false
 // where a coordinate is not finite, which states no distance at all.
-func dySquaredDistance3(a0, a1, a2, b0, b1, b2 float64) (dyadic, bool) {
-	sum := dyZero()
+func dySquaredDistance3(a0, a1, a2, b0, b1, b2 float64) (proofarith.Dyadic, bool) {
+	sum := proofarith.DyZero()
 	for _, pair := range [3][2]float64{{a0, b0}, {a1, b1}, {a2, b2}} {
-		x, okX := dyOf(pair[0])
-		y, okY := dyOf(pair[1])
+		x, okX := proofarith.DyOf(pair[0])
+		y, okY := proofarith.DyOf(pair[1])
 		if !okX || !okY {
-			return dyadic{}, false
+			return proofarith.Dyadic{}, false
 		}
-		diff := dySubScalar(x, y)
-		sum = dyAdd(sum, dyMul(diff, diff))
+		diff := proofarith.DySubScalar(x, y)
+		sum = proofarith.DyAdd(sum, proofarith.DyMul(diff, diff))
 	}
 	return sum, true
 }
@@ -929,12 +931,12 @@ func ratSquaredDistance3(a0, a1, a2, b0, b1, b2 float64) *big.Rat {
 // square-root term is zero and the bracket is not built. A negative held
 // length never takes that shortcut: its square can match while the length
 // itself is off by twice its magnitude, and the bracket measures that gap.
-func straightEdgeBound(held float64, squared dyadic, ok bool, endpointDeltas ...float64) float64 {
+func straightEdgeBound(held float64, squared proofarith.Dyadic, ok bool, endpointDeltas ...float64) float64 {
 	if !ok {
 		return math.Inf(1)
 	}
 	sqrtErr := 0.0
-	if held < 0 || !dySquareEquals(held, squared) {
+	if held < 0 || !proofarith.DySquareEquals(held, squared) {
 		sqrtErr = dySqrtIntervalError(squared, held)
 	}
 	return absSumUpper(append([]float64{sqrtErr}, endpointDeltas...)...)
@@ -968,9 +970,9 @@ func arcSweepAllow(radius, delta float64) (float64, bool) {
 // account for.
 func capApexArcBound(j cornerJoin, d, held float64, wraps int, delta float64) float64 {
 	fallback := conservativeValueError(held, productUpper(twoPiUpper(), math.Abs(d)))
-	aU, aV := floatRat(j.pA.U-j.vU), floatRat(j.pA.V-j.vV)
-	bU, bV := floatRat(j.pB.U-j.vU), floatRat(j.pB.V-j.vV)
-	rd := floatRat(d)
+	aU, aV := proofarith.FloatRat(j.pA.U-j.vU), proofarith.FloatRat(j.pA.V-j.vV)
+	bU, bV := proofarith.FloatRat(j.pB.U-j.vU), proofarith.FloatRat(j.pB.V-j.vV)
+	rd := proofarith.FloatRat(d)
 	if aU == nil || aV == nil || bU == nil || bV == nil || rd == nil {
 		return fallback
 	}
@@ -985,10 +987,10 @@ func capApexArcBound(j cornerJoin, d, held float64, wraps int, delta float64) fl
 	// direction the angle is read from just as the contour itself does.
 	shift := absSumUpper(
 		delta,
-		addRoundError(j.pA.U, -j.vU, j.pA.U-j.vU),
-		addRoundError(j.pA.V, -j.vV, j.pA.V-j.vV),
-		addRoundError(j.pB.U, -j.vU, j.pB.U-j.vU),
-		addRoundError(j.pB.V, -j.vV, j.pB.V-j.vV),
+		proofarith.AddRoundError(j.pA.U, -j.vU, j.pA.U-j.vU),
+		proofarith.AddRoundError(j.pA.V, -j.vV, j.pA.V-j.vV),
+		proofarith.AddRoundError(j.pB.U, -j.vU, j.pB.U-j.vU),
+		proofarith.AddRoundError(j.pB.V, -j.vV, j.pB.V-j.vV),
 	)
 	turn, ok := arcSweepAllow(d, shift)
 	if !ok {
@@ -1020,8 +1022,8 @@ func capCircleLengthBound(exactRadius *big.Rat, held float64) float64 {
 // directly) both build from, so the two readers of one wall's cap-level
 // sweep are never told two different enclosures of it.
 func capSweepBracket(cU, cV float64, start, end Point2, wraps int, delta float64) (ratInterval, float64, bool) {
-	aU, aV := floatRat(start.U-cU), floatRat(start.V-cV)
-	bU, bV := floatRat(end.U-cU), floatRat(end.V-cV)
+	aU, aV := proofarith.FloatRat(start.U-cU), proofarith.FloatRat(start.V-cV)
+	bU, bV := proofarith.FloatRat(end.U-cU), proofarith.FloatRat(end.V-cV)
 	if aU == nil || aV == nil || bU == nil || bV == nil {
 		return ratInterval{}, 0, false
 	}
@@ -1036,10 +1038,10 @@ func capSweepBracket(cU, cV float64, start, end Point2, wraps int, delta float64
 	// direction the angle is read from just as the contour itself does.
 	shift := absSumUpper(
 		delta,
-		addRoundError(start.U, -cU, start.U-cU),
-		addRoundError(start.V, -cV, start.V-cV),
-		addRoundError(end.U, -cU, end.U-cU),
-		addRoundError(end.V, -cV, end.V-cV),
+		proofarith.AddRoundError(start.U, -cU, start.U-cU),
+		proofarith.AddRoundError(start.V, -cV, start.V-cV),
+		proofarith.AddRoundError(end.U, -cU, end.U-cU),
+		proofarith.AddRoundError(end.V, -cV, end.V-cV),
 	)
 	return sweep, shift, true
 }
@@ -1064,7 +1066,7 @@ func capWallArcBound(cU, cV float64, start, end Point2, capRadius, held float64,
 	if !ok {
 		return fallback
 	}
-	rd := floatRat(capRadius)
+	rd := proofarith.FloatRat(capRadius)
 	if rd == nil {
 		return fallback
 	}

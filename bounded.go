@@ -2,6 +2,8 @@ package decad
 
 import (
 	"math"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // This file is the package's bounded-scalar vocabulary: a float64 value
@@ -38,7 +40,7 @@ func measuredScalar(value, bound float64) boundedScalar {
 
 func boundedAdd(a, b boundedScalar) boundedScalar {
 	value := a.value + b.value
-	bound := absSumUpper(a.bound, b.bound, addRoundError(a.value, b.value, value))
+	bound := absSumUpper(a.bound, b.bound, proofarith.AddRoundError(a.value, b.value, value))
 	return measuredScalar(value, bound)
 }
 
@@ -85,7 +87,7 @@ func boundedMul(a, b boundedScalar) boundedScalar {
 		productUpper(math.Abs(a.value), b.bound),
 		productUpper(math.Abs(b.value), a.bound),
 		productUpper(a.bound, b.bound),
-		mulRoundError(a.value, b.value, value),
+		proofarith.MulRoundError(a.value, b.value, value),
 	)
 	return measuredScalar(value, bound)
 }
@@ -96,7 +98,7 @@ func boundedQuotient(num float64, numBound float64, den float64, denBound float6
 	if clearance <= 0 {
 		return measuredScalar(value, math.Inf(1))
 	}
-	centralRound := divRoundError(num, den, value)
+	centralRound := proofarith.DivRoundError(num, den, value)
 	centralUpper := absSumUpper(value, centralRound)
 	numerator := absSumUpper(numBound, productUpper(centralUpper, denBound))
 	bound := upRound(numerator / clearance)

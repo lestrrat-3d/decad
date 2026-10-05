@@ -3,6 +3,8 @@ package decad
 import (
 	"fmt"
 	"math/big"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // This file decides whether docs/tessellation-reach-design.md §7's slice-wise
@@ -156,7 +158,7 @@ func capBlendSquaredRadius(p, c Point2) *big.Rat {
 
 // capBlendRatSub is a − b over the rationals, or nil for a non-finite operand.
 func capBlendRatSub(a, b float64) *big.Rat {
-	ra, rb := floatRat(a), floatRat(b)
+	ra, rb := proofarith.FloatRat(a), proofarith.FloatRat(b)
 	if ra == nil || rb == nil {
 		return nil
 	}
@@ -206,7 +208,7 @@ type capJoinEnd struct {
 // capJoinIsG1 does not pair or a coordinate that denotes no rational.
 func capJoinEnds(seg CurveSegment) (capJoinEnd, bool) {
 	ratPoint := func(p Point2) ([2]*big.Rat, bool) {
-		u, v := floatRat(p.U), floatRat(p.V)
+		u, v := proofarith.FloatRat(p.U), proofarith.FloatRat(p.V)
 		return [2]*big.Rat{u, v}, u != nil && v != nil
 	}
 	switch s := seg.(type) {

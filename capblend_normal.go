@@ -3,6 +3,7 @@ package decad
 import (
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -112,8 +113,8 @@ func capPatchNormalModel(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (ca
 	if !okM {
 		return capPatchModel{}, false
 	}
-	cU, cV, capZ := floatRat(g.cU), floatRat(g.cV), floatRat(g.capZ)
-	radius, th0 := floatRat(g.capRadius), floatRat(g.th0)
+	cU, cV, capZ := proofarith.FloatRat(g.cU), proofarith.FloatRat(g.cV), proofarith.FloatRat(g.capZ)
+	radius, th0 := proofarith.FloatRat(g.capRadius), proofarith.FloatRat(g.th0)
 	if cU == nil || cV == nil || capZ == nil || radius == nil || th0 == nil {
 		return capPatchModel{}, false
 	}
@@ -179,7 +180,7 @@ func coneTagTerms(f *Face) (ratInterval, ratInterval, r3.Vec, r3.Vec, bool) {
 		if err != nil {
 			return ratInterval{}, ratInterval{}, r3.Vec{}, r3.Vec{}, false
 		}
-		rHalf := floatRat(half)
+		rHalf := proofarith.FloatRat(half)
 		if rHalf == nil {
 			return ratInterval{}, ratInterval{}, r3.Vec{}, r3.Vec{}, false
 		}

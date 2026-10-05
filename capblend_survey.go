@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -261,8 +262,8 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 	c := (f0 + f180) / 2
 	a := f0 - c
 	b := f90 - c
-	ra, rb, rc := floatRat(a), floatRat(b), floatRat(c)
-	rth0, rth1 := floatRat(g.th0), floatRat(g.th1)
+	ra, rb, rc := proofarith.FloatRat(a), proofarith.FloatRat(b), proofarith.FloatRat(c)
+	rth0, rth1 := proofarith.FloatRat(g.th0), proofarith.FloatRat(g.th1)
 	if ra == nil || rb == nil || rc == nil || rth0 == nil || rth1 == nil {
 		return 0, 0, 0, false
 	}
@@ -272,7 +273,7 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 		return 0, 0, 0, false
 	}
 	lo, hi := ratFloatDown(ext.minLo), ratFloatUp(ext.maxHi)
-	rlo, rhi := floatRat(lo), floatRat(hi)
+	rlo, rhi := proofarith.FloatRat(lo), proofarith.FloatRat(hi)
 	if rlo == nil || rhi == nil {
 		return 0, 0, 0, false
 	}

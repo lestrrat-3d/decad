@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -19,7 +20,7 @@ func sourceSphereMassProperties(ctx context.Context, b *Body, sphere sourceSpher
 	}
 	radius2 := new(big.Rat).Mul(radius, radius)
 	radius3 := new(big.Rat).Mul(radius2, radius)
-	rho := new(big.Rat).Mul(floatRat(density.Mag()), floatRat(density.Unit().Factor()))
+	rho := new(big.Rat).Mul(proofarith.FloatRat(density.Mag()), proofarith.FloatRat(density.Unit().Factor()))
 	massFactor := new(big.Rat).Mul(rho, radius3)
 	massFactor.Mul(massFactor, big.NewRat(4, 3))
 	massInterval := intervalScale(interval(piLower, piUpper), massFactor)

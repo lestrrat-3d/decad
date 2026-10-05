@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -20,7 +21,7 @@ import (
 // standing in for one the record could not state.
 
 func exactCoordinateDelta(a, b float64) *big.Rat {
-	return new(big.Rat).Sub(floatRat(a), floatRat(b))
+	return new(big.Rat).Sub(proofarith.FloatRat(a), proofarith.FloatRat(b))
 }
 
 // arcEndRadialRatio brackets ρ = |Start − Center| / |End − Center| for a recorded
@@ -40,7 +41,7 @@ func arcEndRadialRatio(r2, endR2 *big.Rat) (ratInterval, bool) {
 		return pointInterval(big.NewRat(1, 1)), true
 	}
 	q := new(big.Rat).Quo(r2, endR2)
-	lo, hi := floatRat(ratSqrtDown(q)), floatRat(ratSqrtUp(q))
+	lo, hi := proofarith.FloatRat(ratSqrtDown(q)), proofarith.FloatRat(ratSqrtUp(q))
 	if lo == nil || hi == nil {
 		return ratInterval{}, false
 	}
@@ -63,7 +64,7 @@ func arcEndRadialRatio(r2, endR2 *big.Rat) (ratInterval, bool) {
 // sine/cosine values come from (an exact ratio there, a certified bracket
 // here, because a CircleSeg's endpoints are not recorded coordinates).
 func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
-	anchorU, anchorV := floatRat(anchor.U), floatRat(anchor.V)
+	anchorU, anchorV := proofarith.FloatRat(anchor.U), proofarith.FloatRat(anchor.V)
 	if anchorU == nil || anchorV == nil {
 		return ratInterval{}, false
 	}
@@ -74,7 +75,7 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
 		if err != nil {
 			return ratInterval{}, false
 		}
-		r := floatRat(radius)
+		r := proofarith.FloatRat(radius)
 		if r == nil {
 			return ratInterval{}, false
 		}
@@ -84,14 +85,14 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
 			scale := new(big.Rat).Mul(dt, new(big.Rat).Mul(r, r))
 			return intervalScale(interval(piLower, piUpper), scale), true
 		}
-		t0, t1 := floatRat(seg.TStart), floatRat(seg.TEnd)
+		t0, t1 := proofarith.FloatRat(seg.TStart), proofarith.FloatRat(seg.TEnd)
 		if t0 == nil || t1 == nil {
 			return ratInterval{}, false
 		}
 		s0, c0 := turnSinCosInterval(t0)
 		s1, c1 := turnSinCosInterval(t1)
-		centerU := new(big.Rat).Sub(floatRat(seg.Center.U), anchorU)
-		centerV := new(big.Rat).Sub(floatRat(seg.Center.V), anchorV)
+		centerU := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.U), anchorU)
+		centerV := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.V), anchorV)
 		piIv := interval(piLower, piUpper)
 		dtheta := intervalScale(piIv, new(big.Rat).Mul(big.NewRat(2, 1), dt))
 		sector := intervalScale(dtheta, new(big.Rat).Mul(r, r))
@@ -147,8 +148,8 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
 		sector := intervalScale(sweep, new(big.Rat).Mul(sign, r2))
 		// Only the centre carries the anchor: every radial term above is a
 		// difference the shift cancels out of.
-		centerU := new(big.Rat).Sub(floatRat(seg.Center.U), anchorU)
-		centerV := new(big.Rat).Sub(floatRat(seg.Center.V), anchorV)
+		centerU := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.U), anchorU)
+		centerV := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.V), anchorV)
 		centerTerm := new(big.Rat).Sub(
 			new(big.Rat).Mul(centerU, dy),
 			new(big.Rat).Mul(centerV, dx),
@@ -185,7 +186,7 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
 					heldEnd.V-heldCenter.V,
 				)),
 			)
-			correction = floatRat(correctionFloat)
+			correction = proofarith.FloatRat(correctionFloat)
 			areaProof = intervalAdd(
 				areaProof,
 				intervalScale(interval(big.NewRat(-1, 1), big.NewRat(1, 1)), correction),
@@ -230,7 +231,7 @@ func circularWalkEnclosures(seg CurveSegment) (ratInterval, ratInterval, bool) {
 		if err != nil {
 			return ratInterval{}, ratInterval{}, false
 		}
-		r := floatRat(radius)
+		r := proofarith.FloatRat(radius)
 		if r == nil {
 			return ratInterval{}, ratInterval{}, false
 		}
@@ -244,7 +245,7 @@ func circularWalkEnclosures(seg CurveSegment) (ratInterval, ratInterval, bool) {
 		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
 		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
 		r2 := new(big.Rat).Add(new(big.Rat).Mul(dx0, dx0), new(big.Rat).Mul(dy0, dy0))
-		rLo, rHi := floatRat(ratSqrtDown(r2)), floatRat(ratSqrtUp(r2))
+		rLo, rHi := proofarith.FloatRat(ratSqrtDown(r2)), proofarith.FloatRat(ratSqrtUp(r2))
 		if rLo == nil || rHi == nil {
 			return ratInterval{}, ratInterval{}, false
 		}
@@ -329,8 +330,8 @@ func circularOffsetEndpointInterval(seg CurveSegment, rt, radiusOffset *big.Rat)
 		if err != nil {
 			return ratInterval{}, ratInterval{}, false
 		}
-		r := floatRat(radius)
-		cu, cv := floatRat(seg.Center.U), floatRat(seg.Center.V)
+		r := proofarith.FloatRat(radius)
+		cu, cv := proofarith.FloatRat(seg.Center.U), proofarith.FloatRat(seg.Center.V)
 		if r == nil || cu == nil || cv == nil {
 			return ratInterval{}, ratInterval{}, false
 		}
@@ -342,7 +343,7 @@ func circularOffsetEndpointInterval(seg CurveSegment, rt, radiusOffset *big.Rat)
 		return intervalAdd(pointInterval(cu), intervalScale(cos, r)),
 			intervalAdd(pointInterval(cv), intervalScale(sin, r)), true
 	case ArcSeg:
-		cu, cv := floatRat(seg.Center.U), floatRat(seg.Center.V)
+		cu, cv := proofarith.FloatRat(seg.Center.U), proofarith.FloatRat(seg.Center.V)
 		if cu == nil || cv == nil {
 			return ratInterval{}, ratInterval{}, false
 		}
@@ -351,7 +352,7 @@ func circularOffsetEndpointInterval(seg CurveSegment, rt, radiusOffset *big.Rat)
 		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
 		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
 		r2 := new(big.Rat).Add(new(big.Rat).Mul(dx0, dx0), new(big.Rat).Mul(dy0, dy0))
-		rLo, rHi := floatRat(ratSqrtDown(r2)), floatRat(ratSqrtUp(r2))
+		rLo, rHi := proofarith.FloatRat(ratSqrtDown(r2)), proofarith.FloatRat(ratSqrtUp(r2))
 		if rLo == nil || rHi == nil {
 			return ratInterval{}, ratInterval{}, false
 		}
@@ -415,7 +416,7 @@ func quarterTurnSinCos(t *big.Rat) (ratInterval, ratInterval) {
 // direction does not yet carry — answers ok == false, and
 // circularAxisMomentInterval refuses with it.
 func axisComponentInterval(value, bound float64) (ratInterval, bool) {
-	v, b := floatRat(value), floatRat(math.Abs(bound))
+	v, b := proofarith.FloatRat(value), proofarith.FloatRat(math.Abs(bound))
 	if v == nil || b == nil {
 		return ratInterval{}, false
 	}
@@ -466,8 +467,8 @@ func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (ratInterval, bo
 	var sinDiff, cosDiff ratInterval // sin(hi)-sin(lo), cos(lo)-cos(hi)
 	switch seg := seg.(type) {
 	case CircleSeg:
-		cU, cV = floatRat(seg.Center.U), floatRat(seg.Center.V)
-		t0, t1 := floatRat(seg.TStart), floatRat(seg.TEnd)
+		cU, cV = proofarith.FloatRat(seg.Center.U), proofarith.FloatRat(seg.Center.V)
+		t0, t1 := proofarith.FloatRat(seg.TStart), proofarith.FloatRat(seg.TEnd)
 		if cU == nil || cV == nil || t0 == nil || t1 == nil {
 			return ratInterval{}, false
 		}
@@ -492,7 +493,7 @@ func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (ratInterval, bo
 		if !forward && !reverse {
 			return ratInterval{}, false
 		}
-		cU, cV = floatRat(seg.Center.U), floatRat(seg.Center.V)
+		cU, cV = proofarith.FloatRat(seg.Center.U), proofarith.FloatRat(seg.Center.V)
 		if cU == nil || cV == nil {
 			return ratInterval{}, false
 		}
@@ -573,7 +574,7 @@ func circularAxisMomentInterval(seg CurveSegment, ax axisFrame) (ratInterval, bo
 // so every term is a rational point and the expression is one rational point
 // plus one scaled interval; unequal radii carry ρ's width into the enclosure.
 func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, ratInterval, bool) {
-	anchorU, anchorV := floatRat(anchor.U), floatRat(anchor.V)
+	anchorU, anchorV := proofarith.FloatRat(anchor.U), proofarith.FloatRat(anchor.V)
 	if anchorU == nil || anchorV == nil {
 		return ratInterval{}, ratInterval{}, false
 	}
@@ -584,18 +585,18 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, 
 		if err != nil {
 			return ratInterval{}, ratInterval{}, false
 		}
-		r := floatRat(radius)
+		r := proofarith.FloatRat(radius)
 		if r == nil {
 			return ratInterval{}, ratInterval{}, false
 		}
-		centerU := new(big.Rat).Sub(floatRat(seg.Center.U), anchorU)
-		centerV := new(big.Rat).Sub(floatRat(seg.Center.V), anchorV)
+		centerU := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.U), anchorU)
+		centerV := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.V), anchorV)
 		piIv := interval(piLower, piUpper)
 		if dt.IsInt() {
 			r2dt := ratMul(r, r, dt)
 			return intervalScale(piIv, ratMul(centerU, r2dt)), intervalScale(piIv, ratMul(centerV, r2dt)), true
 		}
-		t0, t1 := floatRat(seg.TStart), floatRat(seg.TEnd)
+		t0, t1 := proofarith.FloatRat(seg.TStart), proofarith.FloatRat(seg.TEnd)
 		if t0 == nil || t1 == nil {
 			return ratInterval{}, ratInterval{}, false
 		}
@@ -679,8 +680,8 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, 
 			p0x, p0y, p1x, p1y = e1x, e1y, s0x, s0y
 			dth = intervalNeg(sweep)
 		}
-		centerU := new(big.Rat).Sub(floatRat(seg.Center.U), anchorU)
-		centerV := new(big.Rat).Sub(floatRat(seg.Center.V), anchorV)
+		centerU := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.U), anchorU)
+		centerV := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.V), anchorV)
 		dy := intervalSub(p1y, p0y)
 		dx := intervalSub(p1x, p0x)
 		cross := intervalSub(intervalMul(p1y, p1x), intervalMul(p0y, p0x))
@@ -751,7 +752,7 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, 
 // pinned radii are equal (ρ = 1), and an enclosure carrying ρ's width when
 // they differ.
 func circularSecondMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, ratInterval, ratInterval, bool) {
-	anchorU, anchorV := floatRat(anchor.U), floatRat(anchor.V)
+	anchorU, anchorV := proofarith.FloatRat(anchor.U), proofarith.FloatRat(anchor.V)
 	if anchorU == nil || anchorV == nil {
 		return ratInterval{}, ratInterval{}, ratInterval{}, false
 	}
@@ -762,12 +763,12 @@ func circularSecondMomentInterval(seg CurveSegment, anchor Point2) (ratInterval,
 		if err != nil {
 			return ratInterval{}, ratInterval{}, ratInterval{}, false
 		}
-		r := floatRat(radius)
+		r := proofarith.FloatRat(radius)
 		if r == nil {
 			return ratInterval{}, ratInterval{}, ratInterval{}, false
 		}
-		centerU := new(big.Rat).Sub(floatRat(seg.Center.U), anchorU)
-		centerV := new(big.Rat).Sub(floatRat(seg.Center.V), anchorV)
+		centerU := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.U), anchorU)
+		centerV := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.V), anchorV)
 		piIv := interval(piLower, piUpper)
 		r2 := ratMul(r, r)
 		r3 := ratMul(r2, r)
@@ -781,7 +782,7 @@ func circularSecondMomentInterval(seg CurveSegment, anchor Point2) (ratInterval,
 			muvVal := ratMul(centerU, centerV, r2, dt)
 			return intervalScale(piIv, muuVal), intervalScale(piIv, muvVal), intervalScale(piIv, mvvVal), true
 		}
-		t0, t1 := floatRat(seg.TStart), floatRat(seg.TEnd)
+		t0, t1 := proofarith.FloatRat(seg.TStart), proofarith.FloatRat(seg.TEnd)
 		if t0 == nil || t1 == nil {
 			return ratInterval{}, ratInterval{}, ratInterval{}, false
 		}
@@ -910,8 +911,8 @@ func circularSecondMomentInterval(seg CurveSegment, anchor Point2) (ratInterval,
 			p0x, p0y, p1x, p1y = e1x, e1y, s0x, s0y
 			dth = intervalNeg(sweep)
 		}
-		centerU := new(big.Rat).Sub(floatRat(seg.Center.U), anchorU)
-		centerV := new(big.Rat).Sub(floatRat(seg.Center.V), anchorV)
+		centerU := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.U), anchorU)
+		centerV := new(big.Rat).Sub(proofarith.FloatRat(seg.Center.V), anchorV)
 
 		dx := intervalSub(p1x, p0x)
 		dy := intervalSub(p1y, p0y)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/sketch"
 )
 
@@ -67,7 +68,7 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 	if !ok {
 		return stackedPrismPayload{}, false, nil
 	}
-	a0, a1 := floatRat(target.z0), floatRat(target.z1)
+	a0, a1 := proofarith.FloatRat(target.z0), proofarith.FloatRat(target.z1)
 	if a0 == nil || a1 == nil {
 		return stackedPrismPayload{}, false, nil
 	}
@@ -111,7 +112,7 @@ func tryBlindStackedCut(ctx context.Context, a, b *Body) (stackedPrismPayload, b
 		inner, innerDelta = z1, tool.z1Delta
 	}
 	innerHeld, _ := inner.Float64()
-	shiftRound := rationalFloatError(inner, innerHeld)
+	shiftRound := proofarith.RationalFloatError(inner, innerHeld)
 	if innerDelta == 0 {
 		innerDelta = shiftRound
 	} else {

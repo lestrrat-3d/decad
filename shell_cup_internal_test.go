@@ -3,6 +3,7 @@ package decad
 import (
 	"testing"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,7 +23,7 @@ func TestCupPayloadForTracksEachSourceEndDisplacement(t *testing.T) {
 	}
 	floorDelta := func(from, sourceDelta, by float64) float64 {
 		to := from + by
-		return absSumUpper(sourceDelta, thicknessDelta, addRoundError(from, by, to))
+		return absSumUpper(sourceDelta, thicknessDelta, proofarith.AddRoundError(from, by, to))
 	}
 	topFloorDelta := floorDelta(pp.z0, pp.z0Delta, thickness)
 	bottomInFloorDelta := floorDelta(pp.z1, pp.z1Delta, -thickness)

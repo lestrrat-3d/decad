@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -141,7 +142,7 @@ func (ig regionIntegrals) exactCentroid() (VecMeasurement, bool) {
 		// publish; the bounded path answers, or refuses, on its own terms.
 		return VecMeasurement{}, false
 	}
-	bound := radius2D(rationalFloatError(u, uHeld), rationalFloatError(v, vHeld))
+	bound := radius2D(proofarith.RationalFloatError(u, uHeld), proofarith.RationalFloatError(v, vHeld))
 	return VecMeasurement{
 		Value:     r3.NewVec(uHeld, vHeld, 0),
 		Exactness: exactnessOf(bound),
@@ -222,7 +223,7 @@ type regionIntegrals struct {
 
 func accumulateMoment(value, bound *float64, term, termBound float64) {
 	next := *value + term
-	*bound = absSumUpper(*bound, termBound, addRoundError(*value, term, next))
+	*bound = absSumUpper(*bound, termBound, proofarith.AddRoundError(*value, term, next))
 	*value = next
 }
 
@@ -604,9 +605,9 @@ func (ig *regionIntegrals) addLine(seg LineSeg, anchor Point2, order momentInteg
 	mu := (v1 - v0) * (u0*u0 + u0*u1 + u1*u1) / 6
 	mv := -(u1 - u0) * (v0*v0 + v0*v1 + v1*v1) / 6
 
-	accumulateMoment(&ig.area, &ig.areaBound, area, rationalFloatError(exact.area, area))
-	accumulateMoment(&ig.mu, &ig.muBound, mu, rationalFloatError(exact.mu, mu))
-	accumulateMoment(&ig.mv, &ig.mvBound, mv, rationalFloatError(exact.mv, mv))
+	accumulateMoment(&ig.area, &ig.areaBound, area, proofarith.RationalFloatError(exact.area, area))
+	accumulateMoment(&ig.mu, &ig.muBound, mu, proofarith.RationalFloatError(exact.mu, mu))
+	accumulateMoment(&ig.mv, &ig.mvBound, mv, proofarith.RationalFloatError(exact.mv, mv))
 	if order != momentSecondOrder {
 		ig.addExact(exact)
 		return
@@ -621,9 +622,9 @@ func (ig *regionIntegrals) addLine(seg LineSeg, anchor Point2, order momentInteg
 	intU2V := v0*(u0*u0+u0*du+du*du/3) + dv*(u0*u0/2+2*u0*du/3+du*du/4)
 	muv := 0.5 * dv * intU2V
 
-	accumulateMoment(&ig.muu, &ig.muuBound, muu, rationalFloatError(exact.muu, muu))
-	accumulateMoment(&ig.muv, &ig.muvBound, muv, rationalFloatError(exact.muv, muv))
-	accumulateMoment(&ig.mvv, &ig.mvvBound, mvv, rationalFloatError(exact.mvv, mvv))
+	accumulateMoment(&ig.muu, &ig.muuBound, muu, proofarith.RationalFloatError(exact.muu, muu))
+	accumulateMoment(&ig.muv, &ig.muvBound, muv, proofarith.RationalFloatError(exact.muv, muv))
+	accumulateMoment(&ig.mvv, &ig.mvvBound, mvv, proofarith.RationalFloatError(exact.mvv, mvv))
 	ig.addExact(exact)
 }
 
@@ -731,7 +732,7 @@ func (ig *regionIntegrals) publishExact() {
 			continue
 		}
 		*field.value = held
-		*field.bound = rationalFloatError(exact[i], held)
+		*field.bound = proofarith.RationalFloatError(exact[i], held)
 	}
 }
 
@@ -743,7 +744,7 @@ func translateExactMoments(exact exactMoments, anchor Point2, order momentIntegr
 	if order == momentAreaOrder || !exact.complete() {
 		return exact
 	}
-	anchorU, anchorV := floatRat(anchor.U), floatRat(anchor.V)
+	anchorU, anchorV := proofarith.FloatRat(anchor.U), proofarith.FloatRat(anchor.V)
 	if anchorU == nil || anchorV == nil {
 		return exactMoments{}
 	}
@@ -809,9 +810,9 @@ func ratLerp(start, end, t float64) *big.Rat {
 		if math.IsNaN(far) || math.IsInf(far, 0) {
 			return nil
 		}
-		return floatRat(near)
+		return proofarith.FloatRat(near)
 	}
-	rs, re, rt := floatRat(start), floatRat(end), floatRat(t)
+	rs, re, rt := proofarith.FloatRat(start), proofarith.FloatRat(end), proofarith.FloatRat(t)
 	if rs == nil || re == nil || rt == nil {
 		return nil
 	}
@@ -833,7 +834,7 @@ func exactLineMoments(seg LineSeg, anchor Point2, order momentIntegralOrder) exa
 	v0 := ratLerp(seg.Start.V, seg.End.V, seg.TStart)
 	u1 := ratLerp(seg.Start.U, seg.End.U, seg.TEnd)
 	v1 := ratLerp(seg.Start.V, seg.End.V, seg.TEnd)
-	anchorU, anchorV := floatRat(anchor.U), floatRat(anchor.V)
+	anchorU, anchorV := proofarith.FloatRat(anchor.U), proofarith.FloatRat(anchor.V)
 	if u0 == nil || v0 == nil || u1 == nil || v1 == nil || anchorU == nil || anchorV == nil {
 		return exactMoments{}
 	}

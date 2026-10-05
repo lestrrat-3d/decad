@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -430,7 +431,7 @@ type capDirectrix struct {
 // tag's: the enclosure of a circle's axial coordinate as a constant is that
 // parallelism, and nothing else here would notice its loss.
 func capDirectrixEnclose(ref capDirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, origin ivVec3) (capDirectrix, bool) {
-	radius := floatRat(ref.radius)
+	radius := proofarith.FloatRat(ref.radius)
 	if ref.straight || radius == nil || radius.Sign() < 0 {
 		return capDirectrix{}, false
 	}
@@ -578,7 +579,7 @@ func coneTagRadius(f *Face) (*big.Rat, bool) {
 	if err != nil {
 		return nil, false
 	}
-	r := floatRat(mm)
+	r := proofarith.FloatRat(mm)
 	if r == nil {
 		return nil, false
 	}

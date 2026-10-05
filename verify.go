@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/lestrrat-go/option/v3"
@@ -1254,9 +1255,9 @@ func inflatedBoxEndsDisjoint(maxCoord, maxBound, minCoord, minBound float64) boo
 	if upper != lower {
 		return upper < lower
 	}
-	exactUpper := dyAdd(mustDyOf(maxCoord), mustDyOf(maxBound))
-	exactLower := dySubScalar(mustDyOf(minCoord), mustDyOf(minBound))
-	return dyCmp(exactUpper, exactLower) <= 0
+	exactUpper := proofarith.DyAdd(proofarith.MustDyOf(maxCoord), proofarith.MustDyOf(maxBound))
+	exactLower := proofarith.DySubScalar(proofarith.MustDyOf(minCoord), proofarith.MustDyOf(minBound))
+	return proofarith.DyCmp(exactUpper, exactLower) <= 0
 }
 
 // aggregateStatus is the worst-wins precedence of verification §6.

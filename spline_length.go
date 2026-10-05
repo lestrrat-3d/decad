@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/lestrrat-3d/decad/internal/proof"
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 // This file is docs/spline-design.md §6.1: the arc length of a free-form curve
@@ -506,7 +507,7 @@ func (s dyadicSpan) squaredDistance(a, b dyadicPoint) *big.Rat {
 // reduction. A finite float is an integer mantissa times a power of two, so
 // multiplying by the shared denSq and shifting preserves the exact ordering.
 func spanSquareCmp(f float64, d spanSquaredDistance) int {
-	square, ok := dyOf(f)
+	square, ok := proofarith.DyOf(f)
 	if !ok {
 		return 1
 	}
@@ -529,7 +530,7 @@ func spanSquareCmpScratch(f float64, d spanSquaredDistance, scratch *lengthDista
 	if f == 0 {
 		return -d.num.Sign()
 	}
-	square := dyOfFiniteInto(f, &scratch.squareMant)
+	square := proofarith.DyOfFiniteInto(f, &scratch.squareMant)
 	scratch.lhs.Mul(square.Mant(), square.Mant())
 	scratch.lhs.Mul(&scratch.lhs, d.denSq)
 	shift := 2 * (square.Exp() + int(d.exp))
@@ -716,7 +717,7 @@ func ratSqrtUp(q *big.Rat) float64 {
 const sqrtAdjustLimit = proof.SqrtAdjustLimit
 
 func ratSquareAtMost(f float64, q *big.Rat) bool {
-	square := floatRat(f)
+	square := proofarith.FloatRat(f)
 	if square == nil {
 		return false
 	}
@@ -725,7 +726,7 @@ func ratSquareAtMost(f float64, q *big.Rat) bool {
 }
 
 func ratSquareEquals(f float64, q *big.Rat) bool {
-	square := floatRat(f)
+	square := proofarith.FloatRat(f)
 	if square == nil {
 		return false
 	}

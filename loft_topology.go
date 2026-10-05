@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -274,13 +275,13 @@ func wrapLoftTriangulationError(err error) error {
 // docs/tessellation-design.md §4's signed-volume audit runs on it too, for
 // every payload class that assembles its own triangle set.
 func meshOrientationSign(verts []r3.Vec, tris [][3]int, anchor r3.Vec) int {
-	xa := dyVec(anchor)
-	sum := dyZero()
+	xa := proofarith.DyVec(anchor)
+	sum := proofarith.DyZero()
 	for _, t := range tris {
-		a := dvSub(dyVec(verts[t[0]]), xa)
-		b := dvSub(dyVec(verts[t[1]]), xa)
-		c := dvSub(dyVec(verts[t[2]]), xa)
-		sum = dyAdd(sum, dvDot(a, dvCross(b, c)))
+		a := proofarith.DvSub(proofarith.DyVec(verts[t[0]]), xa)
+		b := proofarith.DvSub(proofarith.DyVec(verts[t[1]]), xa)
+		c := proofarith.DvSub(proofarith.DyVec(verts[t[2]]), xa)
+		sum = proofarith.DyAdd(sum, proofarith.DvDot(a, proofarith.DvCross(b, c)))
 	}
 	return sum.Sign()
 }
@@ -522,8 +523,8 @@ func buildLoftTopology(ctx context.Context, body *Body, ref producerID, a loftAs
 	}
 	cap0Val, _ := cap0Rat.Float64()
 	cap1Val, _ := cap1Rat.Float64()
-	capStartBound := rationalFloatError(cap0Rat, cap0Val)
-	capEndBound := rationalFloatError(cap1Rat, cap1Val)
+	capStartBound := proofarith.RationalFloatError(cap0Rat, cap0Val)
+	capEndBound := proofarith.RationalFloatError(cap1Rat, cap1Val)
 	if a.delta > 0 {
 		capStartTris := a.tris[a.walls : a.walls+a.capStartCount]
 		capEndTris := a.tris[a.walls+a.capStartCount:]

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/big"
 	"slices"
+
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
 type thickenAxisDir struct{ u, v int }
@@ -105,8 +107,8 @@ func thickenAxisDirections(loop cornerLoop, budget *workBudget) ([]thickenAxisDi
 		default:
 			return nil, fmt.Errorf(`%w: the prism loop is not axis-parallel`, ErrUnsupported)
 		}
-		if floatRat(w.startU) == nil || floatRat(w.startV) == nil ||
-			floatRat(w.endU) == nil || floatRat(w.endV) == nil {
+		if proofarith.FloatRat(w.startU) == nil || proofarith.FloatRat(w.startV) == nil ||
+			proofarith.FloatRat(w.endU) == nil || proofarith.FloatRat(w.endV) == nil {
 			return nil, fmt.Errorf(`%w: a prism boundary coordinate is not finite`, ErrUnsupported)
 		}
 	}
@@ -137,7 +139,7 @@ func thickenAxisOffset(budget *workBudget, source ProfileRecord, loop cornerLoop
 func thickenCertifyAxisOffset(loop cornerLoop, dirs []thickenAxisDir, generated LoopRecord,
 	sense int, amount float64, budget *workBudget) error {
 	n := len(dirs)
-	t := floatRat(amount)
+	t := proofarith.FloatRat(amount)
 	joins := make([]thickenAxisJoin, n)
 	for i := range dirs {
 		if err := wallBudgetStep(budget); err != nil {
@@ -209,13 +211,13 @@ func thickenCertifyAxisOffset(loop cornerLoop, dirs []thickenAxisDir, generated 
 
 func thickenExactOffset(u, v float64, du, dv int, t *big.Rat) thickenExactPoint {
 	return thickenExactPoint{
-		u: new(big.Rat).Add(floatRat(u), new(big.Rat).Mul(big.NewRat(int64(du), 1), t)),
-		v: new(big.Rat).Add(floatRat(v), new(big.Rat).Mul(big.NewRat(int64(dv), 1), t)),
+		u: new(big.Rat).Add(proofarith.FloatRat(u), new(big.Rat).Mul(big.NewRat(int64(du), 1), t)),
+		v: new(big.Rat).Add(proofarith.FloatRat(v), new(big.Rat).Mul(big.NewRat(int64(dv), 1), t)),
 	}
 }
 
 func thickenPointIsExact(got Point2, want thickenExactPoint) bool {
-	return rationalFloatError(want.u, got.U) == 0 && rationalFloatError(want.v, got.V) == 0
+	return proofarith.RationalFloatError(want.u, got.U) == 0 && proofarith.RationalFloatError(want.v, got.V) == 0
 }
 
 // thickenAffine is an exact coordinate a+bτ. Every axis-line endpoint and
@@ -235,7 +237,7 @@ type thickenMovingPiece struct {
 type thickenExactBox struct{ minU, maxU, minV, maxV *big.Rat }
 
 func thickenAffineCoord(x float64, step int) thickenAffine {
-	return thickenAffine{a: floatRat(x), b: big.NewRat(int64(step), 1)}
+	return thickenAffine{a: proofarith.FloatRat(x), b: big.NewRat(int64(step), 1)}
 }
 
 func thickenMovingOffset(u, v float64, du, dv int) thickenMovingPoint {
@@ -351,11 +353,11 @@ func thickenAxisIntervalClear(ctx context.Context, loop cornerLoop, dirs []thick
 			v := loop.walks[(i+1)%n]
 			pieces = append(pieces, thickenMovingPiece{
 				start: joins[(i+1)%n].before, end: joins[(i+1)%n].after,
-				center: thickenExactPoint{u: floatRat(v.startU), v: floatRat(v.startV)},
+				center: thickenExactPoint{u: proofarith.FloatRat(v.startU), v: proofarith.FloatRat(v.startV)},
 			})
 		}
 	}
-	return thickenPiecesIntervalClear(ctx, pieces, floatRat(amount), budget, radial)
+	return thickenPiecesIntervalClear(ctx, pieces, proofarith.FloatRat(amount), budget, radial)
 }
 
 // thickenPiecesIntervalClear is the interval scan itself, over one CLOSED ring
@@ -605,8 +607,8 @@ func thickenOpenDirections(walks []sideWalk, budget *workBudget) ([]thickenAxisD
 		default:
 			return nil, fmt.Errorf(`%w: the open walk is not axis-parallel`, ErrUnsupported)
 		}
-		if floatRat(w.startU) == nil || floatRat(w.startV) == nil ||
-			floatRat(w.endU) == nil || floatRat(w.endV) == nil {
+		if proofarith.FloatRat(w.startU) == nil || proofarith.FloatRat(w.startV) == nil ||
+			proofarith.FloatRat(w.endU) == nil || proofarith.FloatRat(w.endV) == nil {
 			return nil, fmt.Errorf(`%w: an open walk coordinate is not finite`, ErrUnsupported)
 		}
 	}
@@ -678,7 +680,7 @@ func thickenRibbonCopyOf(walks []sideWalk, dirs []thickenAxisDir, c thickenRibbo
 			v := walks[i+1]
 			out.pieces = append(out.pieces, thickenMovingPiece{
 				start: joins[i+1].before, end: joins[i+1].after,
-				center: thickenExactPoint{u: floatRat(v.startU), v: floatRat(v.startV)},
+				center: thickenExactPoint{u: proofarith.FloatRat(v.startU), v: proofarith.FloatRat(v.startV)},
 			})
 		}
 	}
@@ -719,7 +721,7 @@ func thickenCapPiece(from, to thickenMovingPoint) thickenMovingPiece {
 func thickenExactPointAt(p thickenMovingPoint, at *big.Rat) (Point2, error) {
 	u, v := thickenAffineAt(p.u, at), thickenAffineAt(p.v, at)
 	held := Point2{U: ratToFloat(u), V: ratToFloat(v)}
-	if rationalFloatError(u, held.U) != 0 || rationalFloatError(v, held.V) != 0 {
+	if proofarith.RationalFloatError(u, held.U) != 0 || proofarith.RationalFloatError(v, held.V) != 0 {
 		return Point2{}, fmt.Errorf(`%w: a generated ribbon coordinate is rounded`, ErrUnsupported)
 	}
 	return held, nil
@@ -751,7 +753,7 @@ func thickenRibbonSection(pieces []thickenMovingPiece, at *big.Rat) (ProfileReco
 			continue
 		}
 		center := Point2{U: ratToFloat(p.center.u), V: ratToFloat(p.center.v)}
-		if rationalFloatError(p.center.u, center.U) != 0 || rationalFloatError(p.center.v, center.V) != 0 {
+		if proofarith.RationalFloatError(p.center.u, center.U) != 0 || proofarith.RationalFloatError(p.center.v, center.V) != 0 {
 			return ProfileRecord{}, fmt.Errorf(`%w: a generated ribbon corner centre is rounded`, ErrUnsupported)
 		}
 		segs = append(segs, arcSegment(center, start, end, thickenArcIsCCW(start, end, center)))
@@ -798,7 +800,7 @@ func thickenRibbon(ctx context.Context, chain ChainRecord, side ThickenSide, amo
 		thickenRibbonCopyOf(walks, dirs, rightSide),
 		thickenRibbonCopyOf(walks, dirs, leftSide),
 	)
-	limit := floatRat(amount)
+	limit := proofarith.FloatRat(amount)
 	if limit == nil {
 		return ProfileRecord{}, fmt.Errorf(`%w: the thicken offset is not finite`, ErrUnsupported)
 	}

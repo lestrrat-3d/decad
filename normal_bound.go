@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -73,7 +74,7 @@ type ivVec3 [3]ratInterval
 
 // ivVec3Of encloses a held vector exactly, one point interval per coordinate.
 func ivVec3Of(v r3.Vec) (ivVec3, bool) {
-	x, y, z := floatRat(v.X), floatRat(v.Y), floatRat(v.Z)
+	x, y, z := proofarith.FloatRat(v.X), proofarith.FloatRat(v.Y), proofarith.FloatRat(v.Z)
 	if x == nil || y == nil || z == nil {
 		return ivVec3{}, false
 	}
@@ -251,7 +252,7 @@ func coneNormalAllow(p r3.Vec, s Cone, half float64, held r3.Vec) (float64, norm
 	if st != normalProven {
 		return 0, normalUnproven
 	}
-	rHalf := floatRat(half)
+	rHalf := proofarith.FloatRat(half)
 	if rHalf == nil {
 		return 0, normalUnproven
 	}
@@ -274,7 +275,7 @@ func torusNormalAllow(p r3.Vec, s Torus, major float64, held r3.Vec) (float64, n
 	if st != normalProven {
 		return 0, st
 	}
-	rMajor := floatRat(major)
+	rMajor := proofarith.FloatRat(major)
 	pi, okP := ivVec3Of(p)
 	ci, okC := ivVec3Of(s.Center)
 	if rMajor == nil || !okP || !okC {
