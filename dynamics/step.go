@@ -1288,13 +1288,19 @@ func (w *World) sweepPoses(ctx context.Context, from, to State, duration units.V
 		w.sweepRequest(duration, policy))
 }
 
+// sweepRequest is the request of every SweepPair the step runs. RestSpeed is
+// VelocityResidual (docs/multibody-dynamics-design.md §10.8): §6.3 leaves a
+// resting point's normal speed within that residual of zero, so a lifted
+// vertex the solve just rested is held on both sides of the support plane on
+// the next slice, while one that arrives faster still ends its band track a
+// grid step before the plane.
 func (w *World) sweepRequest(duration units.Value, policy decad.SweepStartPolicy) decad.SweepRequest {
 	resolution := w.step.TimeResolution
 	if duration.Base() < resolution.Base() {
 		resolution = duration
 	}
 	return decad.SweepRequest{ContactRequest: w.step.Contact, TimeResolution: resolution,
-		MaxPoseEvaluations: w.step.MaxPoseEvaluations, StartPolicy: policy}
+		MaxPoseEvaluations: w.step.MaxPoseEvaluations, StartPolicy: policy, RestSpeed: w.step.VelocityResidual}
 }
 
 func reducedContact(manifold *decad.ContactManifold, req decad.ContactRequest) (r3.Vec, float64, float64, bool) {

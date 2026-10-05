@@ -2170,3 +2170,6 @@
 4	0.00	TestSweepPairCylinderDiskTrack
 4	0.00	TestSweepPairCylinderDiskDeparture
 4	0.00	TestSweepPairCylinderDiskTrackRefusals
+5	0.01	TestSweepPairRestSpeedValidation
+5	0.10	TestSweepPairRestedVertexHoldsTwoSided
+5	0.02	TestSweepPairPerVertexCurvature

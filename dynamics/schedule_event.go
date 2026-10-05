@@ -30,30 +30,13 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 		sweep, pair := sweeps.swept[key], w.pairs[key]
 		item := islandPair{key: key, a: pair.a, b: pair.b, at: plan.instant}
 		if _, band := plan.bands[key]; band {
-			// §10.3: the band track ends the slice here. Its manifold at the
-			// cut enters the island, the rounded poses show the penetration
-			// the correction removes, and the band's depth widens that
-			// correction's allowance (§6.6).
-			manifold, err := sweep.ContactTrack.ManifoldAt(units.Scalar(fraction))
-			depth, okDepth := bandDepth(sweep.ContactTrack, fraction)
-			if err != nil || !okDepth || !w.manifoldWithin(manifold) {
-				//nolint:nilerr // a refused manifold is the step's refusal, not a failure
-				return nil, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(pair),
-					"band track has no manifold within the contact request at its end")}, nil
+			contact, err := r.roundedContact(ctx, key, pre)
+			if err != nil {
+				return nil, nil, err
 			}
-			item.manifold, item.band, item.bandEnd = cloneManifold(*manifold), depth, true
-			rounded, relation, diagnostics, err := r.roundedDepth(ctx, key, pre)
-			if err != nil || len(diagnostics) != 0 {
-				return nil, diagnostics, err
-			}
-			item.depth, item.rounded = rounded, relation
-			if rounded != nil && w.step.Contact.SupportBand.Base() > 0 {
-				// §10.5: a track ends before a vertex reaches the plane, so at
-				// its end that vertex lies within a grid step of the plane. The
-				// support set ContactPair publishes at the rounded event poses
-				// holds it beside the track's own set; the solve takes that
-				// manifold, certified at the poses the step publishes.
-				item.manifold = cloneManifold(*rounded)
+			item, diagnostics := r.bandEndPair(item, sweep.ContactTrack, fraction, contact)
+			if len(diagnostics) != 0 {
+				return nil, diagnostics, nil
 			}
 			gathered = append(gathered, item)
 			continue
@@ -101,19 +84,42 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 				d.Limit = w.step.PenetrationResidual
 				return nil, []StepDiagnostic{d}, nil
 			}
+			if event != nil && event.Relation == decad.ContactOverlapping && !w.manifoldWithin(event.Manifold) {
+				// §10.8: a rested vertex may stand below the plane when the
+				// slice starts, and the rotating source-box path transfers no
+				// manifold for an overlapping start. The slice-start poses are
+				// the poses at fraction zero, which deviate from the ideal path
+				// by nothing, so the manifold ContactPair publishes there
+				// carries the solve, and the correction removes the penetration
+				// it shows (§6.6).
+				rounded, relation, diagnostics, err := r.roundedDepth(ctx, key, pre)
+				if err != nil || len(diagnostics) != 0 {
+					return nil, diagnostics, err
+				}
+				if rounded == nil {
+					return nil, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(pair),
+						"overlapping initial contact has no manifold within the contact request")}, nil
+				}
+				item.manifold, item.at = cloneManifold(*rounded), event.At
+				item.depth, item.rounded = rounded, relation
+				item.band = r.carriedPenetration(key, pre)
+				gathered = append(gathered, item)
+				continue
+			}
 			if event == nil || !w.manifoldWithin(event.Manifold) {
 				return nil, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(pair),
 					"initial contact has no manifold within the contact request")}, nil
 			}
 			item.manifold, item.at = cloneManifold(*event.Manifold), event.At
 			item.depth = &item.manifold
+			item.band = r.carriedPenetration(key, pre)
 		}
 		gathered = append(gathered, item)
 	}
 	if len(gathered) != 0 {
-		tracks, diagnostics := r.trackPairs(sweeps, plan, fraction)
-		if len(diagnostics) != 0 {
-			return nil, diagnostics, nil
+		tracks, diagnostics, err := r.trackPairs(ctx, sweeps, plan, fraction, pre)
+		if err != nil || len(diagnostics) != 0 {
+			return nil, diagnostics, err
 		}
 		gathered = append(gathered, tracks...)
 	}
@@ -142,6 +148,66 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 	return event, nil, nil
 }
 
+// carriedPenetration widens an initial contact's correction allowance
+// (§6.6) by PenetrationResidual when the pair ended the previous step in its
+// contact set and both bodies still stand at the poses that step published:
+// §5 step 5 admitted the pair there with a penetration within the residual,
+// which a rested vertex held below the plane by its band track leaves
+// (§10.8). Any other initial contact carries nothing.
+func (r *scheduleRun) carriedPenetration(key int, pre State) float64 {
+	pair := r.w.pairs[key]
+	if !slices.Contains(r.from.contacts, key) || pre.entries[pair.a].Pose != r.from.entries[pair.a].Pose ||
+		pre.entries[pair.b].Pose != r.from.entries[pair.b].Pose {
+		return 0
+	}
+	return r.w.step.PenetrationResidual.Base()
+}
+
+// bandEndPair completes a pair gathered at a band end (§10.3): the band
+// track ends the slice at the cut, or another pair's event cuts a band track
+// whose rounded poses read Overlapping there (§10.8). Its manifold at the cut
+// enters the island, the rounded poses, read as contact, show the penetration
+// the correction removes, and the band's depth widens that correction's
+// allowance (§6.6).
+func (r *scheduleRun) bandEndPair(item islandPair, track *decad.SweepContactTrack, fraction float64,
+	contact *decad.ContactReport) (islandPair, []StepDiagnostic) {
+	w := r.w
+	pair := w.pairs[item.key]
+	manifold, err := track.ManifoldAt(units.Scalar(fraction))
+	depth, okDepth := bandDepth(track, fraction)
+	if err != nil || !okDepth || !w.manifoldWithin(manifold) {
+		return islandPair{}, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(pair),
+			"band track has no manifold within the contact request at its end")}
+	}
+	item.manifold, item.band, item.bandEnd, item.track = cloneManifold(*manifold), depth, true, false
+	rounded, relation, diagnostics := r.roundedDepthOf(item.key, contact)
+	if len(diagnostics) != 0 {
+		return islandPair{}, diagnostics
+	}
+	item.depth, item.rounded = rounded, relation
+	if rounded != nil && w.step.Contact.SupportBand.Base() > 0 {
+		// §10.5: a track ends before a vertex reaches the plane, so at its
+		// end that vertex lies within a grid step of the plane. The support
+		// set ContactPair publishes at the rounded event poses holds it
+		// beside the track's own set; the solve takes that manifold,
+		// certified at the poses the step publishes.
+		item.manifold = cloneManifold(*rounded)
+	}
+	return item, nil
+}
+
+// roundedContact runs ContactPair on a gathered pair at the rounded event
+// poses, the poses the step publishes.
+func (r *scheduleRun) roundedContact(ctx context.Context, key int, pre State) (*decad.ContactReport, error) {
+	w := r.w
+	pair := w.pairs[key]
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return w.doc.ContactPair(ctx, w.bodies[pair.a].definition.Body,
+		w.bodies[pair.b].definition.Body, pre.entries[pair.a].Pose, pre.entries[pair.b].Pose, w.step.Contact)
+}
+
 // roundedDepth reads a gathered pair at the rounded event poses, the poses
 // the step publishes: §6.6 removes the penetration they show, and §5.2 reads
 // the relation for the pair's continuation policy. A separated pair returns
@@ -150,31 +216,35 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 // relation stops the step.
 func (r *scheduleRun) roundedDepth(ctx context.Context, key int, pre State) (*decad.ContactManifold,
 	decad.ContactRelation, []StepDiagnostic, error) {
-	w := r.w
-	pair := w.pairs[key]
-	if err := ctx.Err(); err != nil {
-		return nil, decad.ContactUndecided, nil, err
-	}
-	contact, err := w.doc.ContactPair(ctx, w.bodies[pair.a].definition.Body,
-		w.bodies[pair.b].definition.Body, pre.entries[pair.a].Pose, pre.entries[pair.b].Pose, w.step.Contact)
+	contact, err := r.roundedContact(ctx, key, pre)
 	if err != nil {
 		return nil, decad.ContactUndecided, nil, err
 	}
+	rounded, relation, diagnostics := r.roundedDepthOf(key, contact)
+	return rounded, relation, diagnostics, nil
+}
+
+// roundedDepthOf is roundedDepth's reading of the contact report at the
+// rounded event poses.
+func (r *scheduleRun) roundedDepthOf(key int, contact *decad.ContactReport) (*decad.ContactManifold,
+	decad.ContactRelation, []StepDiagnostic) {
+	w := r.w
+	pair := w.pairs[key]
 	switch {
 	case contact.Relation == decad.ContactSeparated:
-		return nil, contact.Relation, nil, nil
+		return nil, contact.Relation, nil
 	case contact.Relation == decad.ContactBand && !w.contactBandWithin(contact.Gap):
 		d := scheduleDiagnostic(StepPairUndecided, w.bodyPair(pair),
 			"rounded event poses show a contact band beyond the penetration residual")
 		d.Limit = w.step.PenetrationResidual
-		return nil, decad.ContactUndecided, []StepDiagnostic{d}, nil
+		return nil, decad.ContactUndecided, []StepDiagnostic{d}
 	case (contact.Relation == decad.ContactTouching || contact.Relation == decad.ContactOverlapping ||
 		contact.Relation == decad.ContactBand) && w.manifoldWithin(contact.Manifold):
 		depth := cloneManifold(*contact.Manifold)
-		return &depth, contact.Relation, nil, nil
+		return &depth, contact.Relation, nil
 	default:
 		return nil, decad.ContactUndecided, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(pair),
-			fmt.Sprintf("rounded event poses have relation %v without a bounded manifold", contact.Relation))}, nil
+			fmt.Sprintf("rounded event poses have relation %v without a bounded manifold", contact.Relation))}
 	}
 }
 
@@ -220,7 +290,15 @@ func (r *scheduleRun) keepContactSet(sweeps sliceSweeps, plan slicePlan) {
 // gathered pairs with the track's manifold there. The island solve keeps only
 // the islands an event pair reaches, so a resting stack elsewhere is left to
 // drift.
-func (r *scheduleRun) trackPairs(sweeps sliceSweeps, plan slicePlan, fraction float64) ([]islandPair, []StepDiagnostic) {
+//
+// A band track with a positive Band() may hold a rested vertex (§10.8) below
+// the plane at the cut, and a sweep from poses that read Overlapping
+// continues under neither policy. Such a pair is read at the rounded event
+// poses, and when they read Overlapping it is gathered as a band end at the
+// cut instead (bandEndPair): it enters the solve whether or not a point
+// closes, and its island's correction removes the penetration.
+func (r *scheduleRun) trackPairs(ctx context.Context, sweeps sliceSweeps, plan slicePlan, fraction float64,
+	pre State) ([]islandPair, []StepDiagnostic, error) {
 	w := r.w
 	keys := make([]int, 0, len(r.policies))
 	for key, policy := range r.policies {
@@ -240,16 +318,32 @@ func (r *scheduleRun) trackPairs(sweeps sliceSweeps, plan slicePlan, fraction fl
 		if start == nil || end == nil || start.Cmp(plan.cut) > 0 || end.Cmp(plan.cut) < 0 {
 			continue
 		}
+		item := islandPair{key: key, a: pair.a, b: pair.b, at: plan.instant}
+		if band := track.Band(); band != nil && band.Value.Base() > 0 {
+			contact, err := r.roundedContact(ctx, key, pre)
+			if err != nil {
+				return nil, nil, err
+			}
+			if contact.Relation == decad.ContactOverlapping {
+				cut, diagnostics := r.bandEndPair(item, track, fraction, contact)
+				if len(diagnostics) != 0 {
+					return nil, diagnostics, nil
+				}
+				out = append(out, cut)
+				continue
+			}
+		}
 		manifold, err := track.ManifoldAt(units.Scalar(fraction))
 		if err != nil || !w.manifoldWithin(manifold) {
+			//nolint:nilerr // a refused manifold is the step's refusal, not a failure
 			return nil, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(pair),
-				"persistent track has no manifold within the contact request at the event")}
+				"persistent track has no manifold within the contact request at the event")}, nil
 		}
 		held := cloneManifold(*manifold)
-		out = append(out, islandPair{key: key, a: pair.a, b: pair.b, manifold: held, at: plan.instant,
-			depth: &held, track: true})
+		item.manifold, item.depth, item.track = held, &held, true
+		out = append(out, item)
 	}
-	return out, nil
+	return out, nil, nil
 }
 
 // driverVelocities reads the exact translation velocity of every kinematic

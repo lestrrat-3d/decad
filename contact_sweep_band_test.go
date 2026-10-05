@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -17,23 +18,24 @@ import (
 // ideal path by about an ULP of 2^20 mm.
 //
 // Each expected horizon below is recomputed here in float64 from the closed
-// forms of §10.2 and compared within two grid steps; each leg changes it by
-// far more than that.
+// forms of §10.2, with §10.8's per-vertex curvature, and compared within two
+// grid steps; each leg changes it by far more than that.
 //
 // Legs shown to fail (each deleted or zeroed in turn, fixture red, then
 // restored):
 //   - the contact rate c of §10.2: TestSweepPairPlanarDepartureFromEdge loses
 //     its departure;
-//   - |ω_M|²·ρ_M: TestSweepPairPlanarDepartureFromEdge departs over the whole
-//     second, and TestSweepPairPlanarBandTrack's spinning box reads as an
-//     exact touch;
+//   - the p'' term of M, |ω_M|·|ω_M×(p − c_M)| per vertex (§10.8), zeroed:
+//     TestSweepPairPlanarDepartureFromEdge, TestSweepPairPlanarDepartureRotatingSupport
+//     and TestSweepPairPlanarBandTrack's one-second track move their
+//     horizons;
 //   - |ω_S|²·ρ_S, 2·|ω_S|·(|Δv| + |ω_M|·ρ_M + |ω_S|·ρ_S) term by term, and
 //     |ω_S|²·D with each of D's terms: TestSweepPairPlanarDepartureRotatingSupport
 //     moves its horizon;
 //   - the band's contact-rate term: TestSweepPairPlanarBandTrack's closing
-//     case publishes K·h² alone, in Band() and in BandAt();
-//   - BandAt's curvature term: TestSweepPairPlanarBandTrack's prefix band
-//     reads |c|·u alone;
+//     case publishes an exact touch;
+//   - the band's contact curvature term, in Band() and BandAt():
+//     TestSweepPairPerVertexCurvature's off-axis edge publishes no band;
 //   - the band's clearance of the other vertices: TestSweepPairPlanarBandTrack's
 //     one-second track reaches the duration;
 //   - the band's face containment: TestSweepPairPlanarBandLeavesFace reaches
@@ -87,27 +89,21 @@ func edgeBoxVertices() []r3.Vec {
 	return out
 }
 
-// edgeBoxCurvature is §10.2's K for a stationary support: |ω|²·ρ/2 with ρ the
-// largest vertex distance from the pivot, 12 mm here.
-func edgeBoxCurvature() float64 {
-	rho := 0.0
-	for _, v := range edgeBoxVertices() {
-		rho = math.Max(rho, v.Len())
-	}
-	return rho / 2
-}
+// edgeBoxCurvature is §10.8's per-vertex K_p for a stationary support at a
+// box vertex v relative to the pivot: |ω|·|ω×v|/2, with ω = 1 rad/s about Y.
+// The resting edge lies on the spin axis, so its K_p is zero.
+func edgeBoxCurvature(v r3.Vec) float64 { return math.Hypot(v.X, v.Z) / 2 }
 
 // edgeBoxClearRoot is the earliest time a vertex off the edge can reach the
-// floor under the §10.2 bound h0 + (vz − x)·u − K·u², the spin about +Y
+// floor under its §10.2 bound h0 + (vz − x)·u − K_p·u², the spin about +Y
 // lowering each vertex at x mm/s.
 func edgeBoxClearRoot(vz float64) float64 {
-	k := edgeBoxCurvature()
 	root := math.Inf(1)
 	for _, v := range edgeBoxVertices() {
 		if v.Z == 0 {
 			continue
 		}
-		d := vz - v.X
+		k, d := edgeBoxCurvature(v), vz-v.X
 		root = math.Min(root, (d+math.Sqrt(d*d+4*k*v.Z))/(2*k))
 	}
 	return root
@@ -127,26 +123,28 @@ func TestSweepPairPlanarBandTrack(t *testing.T) {
 	const step = 1.0 / (1 << 20)
 	// The closed forms run in float64 over values below 20.
 	const slack = 1e-12
-	k := edgeBoxCurvature()
 	for _, tc := range []struct {
 		name    string
 		vz      float64
 		seconds float64
 		end     float64 // track end, as a fraction
 	}{
-		// A quarter second keeps every other vertex clear: the track covers
-		// the whole sweep and its depth is K·h².
+		// A quarter second keeps every other vertex clear, and the edge rides
+		// the spin axis with a zero rate and a zero K_p: the track is an exact
+		// touch over the whole sweep.
 		{name: "quarter", seconds: .25, end: 1},
-		// Over a second the bound lets the lowering vertex reach the floor at
-		// 0.608 s, so the track ends on the grid below that time.
+		// Over a second the bound lets a lowering vertex reach the floor at
+		// 0.676 s, so the track ends on the grid below that time, with a zero
+		// band.
 		{name: "second", seconds: 1, end: gridFloor(edgeBoxClearRoot(0), step)},
-		// A slow closing speed adds its rate to the depth: |c|·h + K·h².
+		// A slow closing speed adds its rate to the depth: |c|·h.
 		{name: "closing", vz: -.25, seconds: .25, end: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := decad.New()
 			floor, box, floorPath, boxPath := edgeBoxScene(t, doc, r3.Vec{Z: tc.vz}, tc.seconds)
 			before := doc.Bodies()
+			exact := tc.vz == 0 && tc.end == 1
 			for order := range 2 {
 				a, b := floor, box
 				pathA, pathB := decad.PairPath(floorPath), decad.PairPath(boxPath)
@@ -155,26 +153,33 @@ func TestSweepPairPlanarBandTrack(t *testing.T) {
 				}
 				report, err := doc.SweepPair(t.Context(), a, b, pathA, pathB, bandRequest())
 				require.NoError(t, err)
-				require.Equal(t, decad.SweepPersistentBand, report.Outcome, "order %d cause=%v", order, report.Cause)
 				track := report.ContactTrack
-				require.NotNil(t, track)
+				require.NotNil(t, track, "order %d outcome=%v cause=%v", order, report.Outcome, report.Cause)
 				require.Zero(t, track.Start().Fraction.Base())
 				require.InDelta(t, tc.end, track.End().Fraction.Base(), 2*step)
 				h := track.End().Elapsed.Value.Base()
-				band := track.Band()
-				require.NotNil(t, band)
-				require.Equal(t, units.Length, band.Value.Kind())
-				require.InDelta(t, math.Abs(tc.vz)*h+k*h*h, band.Value.Base(), band.Bound.Base()+slack)
-				// BandAt bounds the band over a prefix of the track: the same
-				// closed form at half its length, and Band() at its end.
 				half := track.End().Fraction.Base() / 2
-				prefix, err := track.BandAt(units.Scalar(half))
-				require.NoError(t, err)
-				u := half * tc.seconds
-				require.InDelta(t, math.Abs(tc.vz)*u+k*u*u, prefix.Value.Base(), prefix.Bound.Base()+slack)
-				whole, err := track.BandAt(track.End().Fraction)
-				require.NoError(t, err)
-				require.Equal(t, band.Value, whole.Value)
+				if exact {
+					require.Equal(t, decad.SweepPersistentTouch, report.Outcome, "order %d", order)
+					require.Nil(t, track.Band())
+					prefix, err := track.BandAt(units.Scalar(half))
+					require.NoError(t, err)
+					require.Nil(t, prefix)
+				} else {
+					require.Equal(t, decad.SweepPersistentBand, report.Outcome, "order %d cause=%v", order, report.Cause)
+					band := track.Band()
+					require.NotNil(t, band)
+					require.Equal(t, units.Length, band.Value.Kind())
+					require.InDelta(t, math.Abs(tc.vz)*h, band.Value.Base(), band.Bound.Base()+slack)
+					// BandAt bounds the band over a prefix of the track: the same
+					// closed form at half its length, and Band() at its end.
+					prefix, err := track.BandAt(units.Scalar(half))
+					require.NoError(t, err)
+					require.InDelta(t, math.Abs(tc.vz)*half*tc.seconds, prefix.Value.Base(), prefix.Bound.Base()+slack)
+					whole, err := track.BandAt(track.End().Fraction)
+					require.NoError(t, err)
+					require.Equal(t, band.Value, whole.Value)
+				}
 				if tc.end < 1 {
 					_, err = track.BandAt(units.Scalar(1))
 					require.ErrorIs(t, err, decad.ErrDegenerate)
@@ -185,7 +190,7 @@ func TestSweepPairPlanarBandTrack(t *testing.T) {
 					normal = -1
 				}
 				require.Equal(t, r3.Vec{Z: normal}, track.Normal().Value)
-				for _, fraction := range []float64{0, track.End().Fraction.Base() / 2, track.End().Fraction.Base()} {
+				for _, fraction := range []float64{0, half, track.End().Fraction.Base()} {
 					manifold, err := track.ManifoldAt(units.Scalar(fraction))
 					require.NoError(t, err, "fraction %v", fraction)
 					require.Len(t, manifold.Points, 2)
@@ -205,7 +210,9 @@ func TestSweepPairPlanarBandTrack(t *testing.T) {
 						require.InDelta(t, 0, onFloor.Value.Z, onFloor.Bound.Base()+slack)
 						require.Equal(t, r3.Vec{Z: normal}, point.Normal.Value)
 						require.Zero(t, point.Separation.Value.Base())
-						require.GreaterOrEqual(t, point.Separation.Bound.Base(), band.Value.Base())
+						if band := track.Band(); band != nil {
+							require.GreaterOrEqual(t, point.Separation.Bound.Base(), band.Value.Base())
+						}
 					}
 					require.Zero(t, sides, "both ends of the edge")
 				}
@@ -221,7 +228,7 @@ func TestSweepPairPlanarBandTrack(t *testing.T) {
 			}
 			require.Equal(t, before, doc.Bodies())
 
-			// A departure policy never publishes a band.
+			// A departure policy never publishes a track.
 			req := bandRequest()
 			req.StartPolicy = decad.ContinueSeparatingTouch
 			separating, err := doc.SweepPair(t.Context(), floor, box, floorPath, boxPath, req)
@@ -235,24 +242,23 @@ func TestSweepPairPlanarBandTrack(t *testing.T) {
 func TestSweepPairPlanarBandLeavesFace(t *testing.T) {
 	// The grid step of a quarter-second sweep at the 2^-20 s resolution.
 	const step = 1.0 / (1 << 18)
-	const slack = 1e-12
 	// The box starts with its edge 10 mm inside the floor's x = 100 rim and
-	// slides toward it at 64 mm/s. The edge's foot, grown by the band depth
-	// K·u², must stay strictly inside the face: 64·u + K·u² < 10.
+	// slides toward it at 64 mm/s. The edge rides the spin axis, so its band
+	// is zero and its foot must stay strictly inside the face: 64·u < 10. The
+	// track ends on the grid below u = 10/64 s, a fraction of 0.625.
 	doc := decad.New()
 	floor, box, floorPath, boxPath := edgeBoxScene(t, doc, r3.Vec{X: 64}, .25)
 	boxPath.From = edgeBoxPose(t, r3.Vec{X: tumbleOffset + 90})
 	boxPath.Center.X += 90
-	k := edgeBoxCurvature()
-	root := (-64 + math.Sqrt(64*64+40*k)) / (2 * k)
 	report, err := doc.SweepPair(t.Context(), floor, box, floorPath, boxPath, bandRequest())
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepPersistentBand, report.Outcome, "cause=%v", report.Cause)
 	end := report.ContactTrack.End()
-	require.InDelta(t, gridFloor(root/.25, step), end.Fraction.Base(), 2*step)
+	require.InDelta(t, gridFloor(10.0/64/.25, step), end.Fraction.Base(), 2*step)
+	require.Less(t, end.Fraction.Base(), .625)
 	h := end.Elapsed.Value.Base()
-	require.InDelta(t, k*h*h, report.ContactTrack.Band().Value.Base(), report.ContactTrack.Band().Bound.Base()+slack)
-	require.Less(t, 90+64*h+k*h*h, 100.0)
+	require.Zero(t, report.ContactTrack.Band().Value.Base())
+	require.Less(t, 90+64*h, 100.0)
 }
 
 func TestSweepPairPlanarExactTouchTrack(t *testing.T) {
@@ -298,16 +304,16 @@ func TestSweepPairPlanarExactTouchTrack(t *testing.T) {
 func TestSweepPairPlanarDepartureFromEdge(t *testing.T) {
 	const step = 1.0 / (1 << 20)
 	// The box rises at 2.5 mm/s while spinning about its resting edge. The
-	// edge's rate is 2.5 mm/s, so §10.2 departs while 2.5 − K·u stays
-	// positive, before 2.5/K s; the other vertices allow longer.
+	// edge rides the spin axis, so its rate stays 2.5 mm/s with a zero K_p,
+	// and the departure ends where a vertex off the edge could reach the
+	// floor under its own K_p.
 	doc := decad.New()
 	floor, box, floorPath, boxPath := edgeBoxScene(t, doc, r3.Vec{Z: 2.5}, 1)
 	// The floor slides along its own face, which leaves every height alone
 	// but rounds its far placement: at 2^-36 s it has moved 2^-34 mm, a
 	// quarter ULP of 2^20, so its rounded pose stays put.
 	floorPath.LinearVelocity.X = units.MillimetersPerSecond(4)
-	k := edgeBoxCurvature()
-	horizon := gridFloor(math.Min(2.5/k, edgeBoxClearRoot(2.5)), step)
+	horizon := gridFloor(edgeBoxClearRoot(2.5), step)
 	req := tumbleRequest()
 	req.StartPolicy = decad.ContinueSeparatingTouch
 	for order := range 2 {
@@ -377,9 +383,13 @@ func TestSweepPairPlanarDepartureRotatingSupport(t *testing.T) {
 	}
 	rhoM, rhoS := rho(cubePath.Center, 2, 2, 0, 4), rho(slabPath.Center, 8, 8, -4, 0)
 	const omegaM, omegaS, speed, centers = .5, 1.0, 3.0, 4.0
+	// Every cube corner lies 2·√2 mm from the cube's spin axis, so each has the
+	// p'' term |ω_M|·|ω_M×(p − c_M)| = ω_M²·2·√2 (§10.8); the slab's terms
+	// stay global.
+	arm := 2 * math.Sqrt2
 	curvature := func(u float64) float64 {
 		reach := rhoM + rhoS + centers + speed*u
-		bound := omegaM*omegaM*rhoM + omegaS*omegaS*rhoS +
+		bound := omegaM*omegaM*arm + omegaS*omegaS*rhoS +
 			2*omegaS*(speed+omegaM*rhoM+omegaS*rhoS) + omegaS*omegaS*reach
 		return bound / 2
 	}
@@ -453,9 +463,10 @@ func TestSweepPairPlanarClearReplay(t *testing.T) {
 const (
 	supportSweepSeconds = 1.0 / (1 << 22)
 	supportSweepStep    = 1.0 / (1 << 10)
-	// supportSweepCurvature is §10.2's K for the cube turning about its near
-	// edge at 1 rad/s: |ω|²·ρ/2 with ρ = 12 mm, its farthest vertex.
-	supportSweepCurvature = 6.0
+	// supportSweepCurvature is §10.8's K_p of the far bottom edge for the cube
+	// turning about its near edge at 1 rad/s: |ω|·|ω×p|/2 with p 8 mm from
+	// the axis.
+	supportSweepCurvature = 4.0
 )
 
 // supportSweepScene is the floor and the tilted cube, the cube turning at
@@ -482,7 +493,7 @@ func supportSweepRequest(policy decad.SweepStartPolicy) decad.SweepRequest {
 }
 
 // supportSweepArrival is the time at which the far edge's §10.2 lower bound
-// 2⁻²¹ − 8·cos θ·u − K·u² reaches zero.
+// 2⁻²¹ − 8·cos θ·u − K_p·u² reaches zero.
 func supportSweepArrival() float64 {
 	rate := 8 * supportCosine
 	k := supportSweepCurvature
@@ -591,6 +602,166 @@ func TestSweepPairSupportSetArrivalEndsTrack(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
+// The sweep fixtures of docs/multibody-dynamics-design.md §13 PR 14f: §10.8's
+// rested vertex, held on both sides of the support plane, and the per-vertex
+// curvature K_p.
+//
+// Legs shown to fail (each deleted or changed in turn, fixture red, then
+// restored):
+//   - the rested skip in the band's clearAt:
+//     TestSweepPairRestedVertexHoldsTwoSided's track ends at the far edge's
+//     arrival;
+//   - the rested vertex's |h'(0)|·t term in the band's depth:
+//     TestSweepPairRestedVertexHoldsTwoSided's BandAt no longer encloses the
+//     sunk far edge;
+//   - the rested skip copied into the departure's clearAt:
+//     TestSweepPairRestedVertexHoldsTwoSided's departure reaches the duration
+//     with a far corner below the floor;
+//   - the per-vertex p'' term replaced by §10.2's |ω_M|²·ρ_M:
+//     TestSweepPairPerVertexCurvature's edge box publishes a band instead of
+//     the exact touch.
+
+// stagedHeight is the exact height above z = 0 of the body point p staged
+// through pose.
+func stagedHeight(pose r3.Transform, p r3.Vec) *big.Rat {
+	basis, at := pose.Basis(), pose.Translation()
+	height := new(big.Rat).SetFloat64(at.Z)
+	for _, term := range [3][2]float64{{basis.EX.Z, p.X}, {basis.EY.Z, p.Y}, {basis.EZ.Z, p.Z}} {
+		height.Add(height, new(big.Rat).Mul(new(big.Rat).SetFloat64(term[0]), new(big.Rat).SetFloat64(term[1])))
+	}
+	return height
+}
+
+func TestSweepPairRestedVertexHoldsTwoSided(t *testing.T) {
+	// The tilted cube's far edge stands 2⁻²¹ mm up and descends at 8·cos θ
+	// mm/s, under a RestSpeed of 10 mm/s: a rested vertex. The band track
+	// holds it on both sides of the floor, so the track reaches the duration
+	// while the far edge sinks about 1.4e-6 mm below the floor.
+	theta := math.Asin(supportSine)
+	far := []r3.Vec{{X: 8, Y: -4}, {X: 8, Y: 4}}
+	doc := decad.New()
+	floor, cube, floorPath, cubePath := supportSweepScene(t, doc, 0, 1, r3.Vec{})
+	req := supportSweepRequest(decad.ContinueCertifiedTouch)
+	req.RestSpeed = units.MillimetersPerSecond(10)
+	report, err := doc.SweepPair(t.Context(), floor, cube, floorPath, cubePath, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepPersistentBand, report.Outcome, "cause=%v", report.Cause)
+	track := report.ContactTrack
+	require.Equal(t, 1.0, track.End().Fraction.Base())
+	_, poseCube, err := report.CertifiedPosesAt(track.End().Elapsed.Value)
+	require.NoError(t, err)
+	for _, corner := range far {
+		require.Negative(t, stagedHeight(poseCube, corner).Sign(), "corner %v", corner)
+	}
+	for _, f := range []float64{1.0 / 4, 1.0 / 2, 1} {
+		band, err := track.BandAt(units.Scalar(f))
+		require.NoError(t, err)
+		upper := band.Value.Base() + band.Bound.Base()
+		for _, u := range []float64{0, f * supportSweepSeconds / 2, f * supportSweepSeconds} {
+			// The far edge's exact height, 8·sin(θ − u), evaluated in float64;
+			// 1e-15 mm covers that rounding and nothing the depth's terms
+			// decide.
+			height := 8 * math.Sin(theta-u)
+			require.LessOrEqual(t, height, upper+1e-15, "fraction %v time %v", f, u)
+			require.GreaterOrEqual(t, height, -upper-1e-15, "fraction %v time %v", f, u)
+		}
+	}
+	require.Less(t, 8*math.Sin(theta-supportSweepSeconds), 0.0)
+	for _, f := range []float64{0, 1.0 / 4, 1.0 / 2, 3.0 / 4, 1} {
+		_, _, err := report.CertifiedPosesAt(units.Seconds(f * supportSweepSeconds))
+		require.NoError(t, err, "fraction %v", f)
+	}
+
+	// A rest speed below the far edge's closing speed, and the zero Value,
+	// rest nothing: the track ends at the arrival.
+	for _, speed := range []units.Value{units.MillimetersPerSecond(1), {}} {
+		req.RestSpeed = speed
+		report, err := doc.SweepPair(t.Context(), floor, cube, floorPath, cubePath, req)
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepPersistentBand, report.Outcome, "rest speed %v", speed)
+		end := report.ContactTrack.End()
+		require.Less(t, end.Fraction.Base(), .5, "rest speed %v", speed)
+		require.Less(t, end.Elapsed.Value.Base(), supportSweepArrival(), "rest speed %v", speed)
+	}
+
+	// The departure rests nothing. Over 2⁻⁹ s the cube rises at
+	// 8 + 2⁻⁸ mm/s while it turns, so its near edge departs and its far edge
+	// rises at 2⁻⁸ + 2⁻⁴⁶ mm/s: rested under any positive RestSpeed. The
+	// departure still ends where the far edge's lower bound
+	// 2⁻²¹ + rate·u − K_p·u² reaches zero, near 1.09 ms, though the edge
+	// never comes down; by then it stands far above the band, so the clear
+	// search finishes the sweep.
+	const seconds = 1.0 / (1 << 9)
+	const step = 1.0 / (1 << 23)
+	floorPath = sweepDrift(r3.Vec{}, seconds)
+	cubePath = sweepDrift(r3.Vec{Z: 8 + 1.0/(1<<8)}, seconds)
+	cubePath.From = tiltedCubePose(t, r3.Vec{})
+	cubePath.AngularVelocity.Y = units.RadiansPerSecond(1)
+	// A slow spin about Z, 2⁻¹⁶ rad/s, leaves every height rate alone and
+	// routes the pair past the source-box departure, which reads no support
+	// set, to the planar one; it moves K_p by about 2⁻³³ of itself.
+	cubePath.AngularVelocity.Z = units.RadiansPerSecond(1.0 / (1 << 16))
+	req = supportSweepRequest(decad.ContinueSeparatingTouch)
+	req.RestSpeed = units.MillimetersPerSecond(10)
+	departing, err := doc.SweepPair(t.Context(), floor, cube, floorPath, cubePath, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepDepartedClear, departing.Outcome, "cause=%v", departing.Cause)
+	require.NotNil(t, departing.Departure)
+	rate, k := 8+1.0/(1<<8)-8*supportCosine, supportSweepCurvature
+	root := (rate + math.Sqrt(rate*rate+4*k*supportLift)) / (2 * k)
+	until := departing.Departure.Until.Fraction.Base()
+	require.InDelta(t, gridFloor(root/seconds, step), until, step)
+	require.Less(t, until*seconds, root)
+}
+
+func TestSweepPairPerVertexCurvature(t *testing.T) {
+	const seconds = .25
+	// The closed forms run in float64 over values below 20.
+	const slack = 1e-12
+	// The edge box turns about its resting edge, which lies on the spin axis:
+	// its K_p is zero, so the track is an exact touch in both orders.
+	doc := decad.New()
+	floor, box, floorPath, boxPath := edgeBoxScene(t, doc, r3.Vec{}, seconds)
+	for order := range 2 {
+		a, b := floor, box
+		pathA, pathB := decad.PairPath(floorPath), decad.PairPath(boxPath)
+		if order == 1 {
+			a, b, pathA, pathB = box, floor, pathB, pathA
+		}
+		report, err := doc.SweepPair(t.Context(), a, b, pathA, pathB, bandRequest())
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepPersistentTouch, report.Outcome, "order %d cause=%v", order, report.Cause)
+		require.Nil(t, report.ContactTrack.Band())
+		require.Equal(t, 1.0, report.ContactTrack.End().Fraction.Base())
+	}
+
+	// With the pivot moved 4 mm above the edge, each edge vertex p lies at
+	// p − c = (0, ±4, −4): |ω×(p − c)| = 4 and K_p = 2, while its rate stays
+	// zero. The band is K_p·h², and the edge's true height 4·(1 − cos u) stays
+	// inside it.
+	boxPath.Center.Z = 4
+	for order := range 2 {
+		a, b := floor, box
+		pathA, pathB := decad.PairPath(floorPath), decad.PairPath(boxPath)
+		if order == 1 {
+			a, b, pathA, pathB = box, floor, pathB, pathA
+		}
+		report, err := doc.SweepPair(t.Context(), a, b, pathA, pathB, bandRequest())
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepPersistentBand, report.Outcome, "order %d cause=%v", order, report.Cause)
+		track := report.ContactTrack
+		require.Equal(t, 1.0, track.End().Fraction.Base())
+		h := track.End().Elapsed.Value.Base()
+		band := track.Band()
+		require.NotNil(t, band)
+		require.InDelta(t, 2*h*h, band.Value.Base(), band.Bound.Base()+slack)
+		require.LessOrEqual(t, 4*(1-math.Cos(h)), band.Value.Base())
+		prefix, err := track.BandAt(units.Scalar(.5))
+		require.NoError(t, err)
+		require.InDelta(t, 2*(h/2)*(h/2), prefix.Value.Base(), prefix.Bound.Base()+slack)
+	}
+}
+
 // The sweep fixtures of docs/multibody-dynamics-design.md §13 PR 14c: §10.6's
 // face-local support plane. The §2 tray's walls rise above its floor, so no
 // face of the tray holds the whole tray behind it; its floor carries the
@@ -688,17 +859,14 @@ func TestSweepPairDepartsFromTrayFloor(t *testing.T) {
 func TestSweepPairBandTrackOnTrayFloor(t *testing.T) {
 	// The edge box of TestSweepPairPlanarBandTrack, turning about its resting
 	// edge on the tray's floor instead of a plain floor, both moved
-	// tumbleOffset along X: the quarter-second track covers the sweep with
-	// the same K·h² depth.
+	// tumbleOffset along X: the edge rides the spin axis, so the quarter-second
+	// track is the same exact touch over the whole sweep.
 	const seconds = .25
-	// The closed form runs in float64 over values below 20.
-	const slack = 1e-12
 	doc := decad.New()
 	_, box, _, boxPath := edgeBoxScene(t, doc, r3.Vec{}, seconds)
 	tray := sceneTrayBody(t, doc)
 	trayPath := sweepDrift(r3.Vec{}, seconds)
 	trayPath.From = contactPose(t, r3.Vec{X: tumbleOffset})
-	k := edgeBoxCurvature()
 	for order := range 2 {
 		a, b := tray, box
 		pathA, pathB := decad.PairPath(trayPath), decad.PairPath(boxPath)
@@ -707,17 +875,14 @@ func TestSweepPairBandTrackOnTrayFloor(t *testing.T) {
 		}
 		report, err := doc.SweepPair(t.Context(), a, b, pathA, pathB, bandRequest())
 		require.NoError(t, err)
-		require.Equal(t, decad.SweepPersistentBand, report.Outcome, "order %d cause=%v", order, report.Cause)
+		require.Equal(t, decad.SweepPersistentTouch, report.Outcome, "order %d cause=%v", order, report.Cause)
 		track := report.ContactTrack
 		require.Equal(t, 1.0, track.End().Fraction.Base())
 		h := track.End().Elapsed.Value.Base()
-		band := track.Band()
-		require.NotNil(t, band)
-		require.InDelta(t, k*h*h, band.Value.Base(), band.Bound.Base()+slack)
+		require.Nil(t, track.Band())
 		prefix, err := track.BandAt(units.Scalar(.5))
 		require.NoError(t, err)
-		u := h / 2
-		require.InDelta(t, k*u*u, prefix.Value.Base(), prefix.Bound.Base()+slack)
+		require.Nil(t, prefix)
 		normal := 1.0
 		if order == 1 {
 			normal = -1

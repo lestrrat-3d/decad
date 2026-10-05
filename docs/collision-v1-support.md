@@ -200,7 +200,11 @@ plane, with its foot strictly inside the face and its exact height as its
 `Gap = [0 ± g]`, g the gap's upper end, and those corners as its manifold.
 `SweepPair` carries such a start, or a touch, on a band track over the whole
 support set. The track ends before any corner of the set reaches the face,
-and an exact pair whose corners all rise departs from a band start.
+unless the corner closes no faster than the request's `RestSpeed`: that
+corner is held on both sides of the face within the track's depth. Each
+corner's curvature term reads its own distance from the spin axis, so an
+edge turning about itself is an exact touch. An exact pair whose corners all
+rise departs from a band start.
 [Support set tests](../contact_support_band_test.go) check the published
 heights, the rim, and a tray's floor and wall, and
 [band and departure tests](../contact_sweep_band_test.go) check the track's
@@ -209,11 +213,16 @@ impact and rim refusal on a tray's floor.
 
 In a scheduled world, a pair that an event leaves inside such a band
 continues on its band track. It leaves the contact set once its event poses
-read separated. The [tumble rest test](../dynamics/tumble_rest_test.go) drops
-a hexagonal prism on a vertex and checks that it rests flat on its cap. A body
-that the solve leaves resting on corners above the face while it still turns
-can stop with `StepEventBudget`. Each band end then comes sooner than the last
-and never reaches the step's end.
+read separated. The step's `RestSpeed` is `VelocityResidual`, so a corner the
+solve left resting stays on the track. A corner held below the face is
+corrected at the next event, and a slice that starts there solves on the
+contact at its start poses, correcting up to the penetration the previous
+step admitted. The [tumble rest tests](../dynamics/tumble_rest_test.go)
+drop a hexagonal prism and a wedge on a vertex and check that each rests flat
+on its cap, spin a box on its corner inside the band, and rest a box on its
+face at a `5 µm` band. At a `0.5 nm` band a tumbling box does not rest: it
+rocks between its edges, landing on one edge at each step's kick and lifting
+the other.
 
 ## Bodies and response
 

@@ -36,6 +36,35 @@ func sweepRequest() decad.SweepRequest {
 	}
 }
 
+func TestSweepPairRestSpeedValidation(t *testing.T) {
+	// SweepRequest.RestSpeed (docs/multibody-dynamics-design.md §10.8) is the
+	// zero Value or a finite, nonnegative Velocity, checked as SupportBand is.
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	b := boxBody(t, doc, 20, 0, 30, 10, 10)
+	for _, tc := range []struct {
+		speed units.Value
+		err   error
+	}{
+		{units.MillimetersPerSecond(-1), decad.ErrDegenerate},
+		{units.MillimetersPerSecond(math.Inf(1)), decad.ErrNotFinite},
+		{units.MillimetersPerSecond(math.NaN()), decad.ErrNotFinite},
+		{units.Millimeters(1), decad.ErrUnitKind},
+	} {
+		req := sweepRequest()
+		req.RestSpeed = tc.speed
+		_, err := doc.SweepPair(t.Context(), a, b, sweepDrift(r3.Vec{}, 1), sweepDrift(r3.Vec{}, 1), req)
+		require.ErrorIs(t, err, tc.err, "rest speed %v", tc.speed)
+	}
+	for _, speed := range []units.Value{{}, units.MillimetersPerSecond(0), units.MillimetersPerSecond(10)} {
+		req := sweepRequest()
+		req.RestSpeed = speed
+		report, err := doc.SweepPair(t.Context(), a, b, sweepDrift(r3.Vec{}, 1), sweepDrift(r3.Vec{}, 1), req)
+		require.NoError(t, err, "rest speed %v", speed)
+		require.Equal(t, decad.SweepClear, report.Outcome)
+	}
+}
+
 func TestSweepPairTranslatedBoxesImpact(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)

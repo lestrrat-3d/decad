@@ -403,7 +403,11 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 			return nil, []StepDiagnostic{scheduleDiagnostic(StepManifoldMissing, w.bodyPair(w.pairs[pair.key]),
 				"event manifold cannot be read as exact intervals")}, nil
 		}
-		if !ok {
+		// §5 step 7: a gathered pair whose rounded poses read Overlapping
+		// enters the solve whether or not a point closes, so its island's
+		// correction removes the penetration (§10.8); when nothing closes the
+		// impulses are zero and the island publishes only the correction.
+		if !ok && pair.rounded != decad.ContactOverlapping {
 			out.policies[pair.key] = decad.ContinueSeparatingTouch
 			quiet = append(quiet, pair)
 			continue
