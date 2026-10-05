@@ -44,11 +44,11 @@ func Example_export_formats() {
 		fmt.Printf("failed to write STL: %s\n", err)
 		return
 	}
-	fmt.Printf("AP214: %v, planar facets: %d\n",
+	fmt.Printf("AP214: %v, analytic faces: %d\n",
 		strings.Contains(out.String(), "FILE_SCHEMA(('AUTOMOTIVE_DESIGN'))"),
 		strings.Count(out.String(), "=ADVANCED_FACE("))
 	fmt.Printf("STL facets: %d\n", strings.Count(stl.String(), "facet normal"))
 	// Output:
-	// AP214: true, planar facets: 12
+	// AP214: true, analytic faces: 6
 	// STL facets: 12
 }
