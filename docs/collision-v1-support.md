@@ -141,17 +141,20 @@ disjoint. An initial contact, an impact or a transition cuts the step at its
 exact fraction, and every body advances there on its certified path. Pairs
 that touch or shallowly overlap there with a bounded manifold, and the pairs
 they rest on, form islands of dynamic bodies with their fixed and kinematic
-supports. Each island is solved for frictionless normal impulses and
-certified in exact interval arithmetic. Shallow overlaps within `ContactSlop`
-and the impact bracket's travel are corrected, and bodies resting on one
-another move together. Co-moving bodies leave with one exact common
-velocity, so a stack can bounce and land as one. A transition or a graze
-publishes a zero-impulse event, and the step then continues from the event.
+supports. Each island is solved for normal impulses and, where the pair's
+friction is positive, Coulomb friction impulses, and certified in exact
+interval arithmetic: every friction impulse lies in its cone, a sticking
+point stops sliding, and a slipping point's friction opposes its slide.
+Shallow overlaps within `ContactSlop` and the impact bracket's travel are
+corrected, and bodies resting on one another move together. Co-moving bodies
+leave with one exact common velocity, so a stack can bounce and land as one.
+A transition or a graze publishes a zero-impulse event, and the step then
+continues from the event; a graze of a positive-friction pair returns
+`dynamics.Undecided` with `StepUnsupported`.
 A bounce sequence ends when an incoming speed falls to `ImpactSpeed`; one
 that would exceed `MaxEvents` stops the step. Kinematic bodies take
 `PoseSegment` drivers, and an island admits one only while its driver
-translates. A positive-friction island pair returns `dynamics.Undecided` with
-`StepUnsupported`. An `Undecided` report names its time interval, the
+translates. An `Undecided` report names its time interval, the
 island's bodies and the exceeded limit, and its `Trace` replays the certified
 prefix. `dynamics.Timeline` chains steps from one state, stops at the first
 `Undecided` step, and samples any time up to its certified end, from many
@@ -162,6 +165,8 @@ bounce a sphere five times in one step, bounce a box stack, lift a sphere on
 a kinematic platform, and graze and slide off an edge.
 [Island tests](../dynamics/island_test.go) rest a 3-2-1 box pyramid under
 gravity and rerun the two-sphere impact through the island solver.
+[Island friction tests](../dynamics/island_friction_test.go) rerun the
+four-corner Coulomb slide and slide a box across a box the floor holds.
 [Timeline tests](../dynamics/timeline_test.go) bounce a sphere over three
 steps against the closed-form bounce times.
 

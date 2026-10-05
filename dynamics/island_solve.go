@@ -4,16 +4,18 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"slices"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the frictionless proposal of docs/multibody-dynamics-design.md
-// §6.2: projected Gauss–Seidel in float64, in the fixed order pairs
-// (canonical) then manifold points (manifold order), for at most
-// MaxIterations sweeps. The proposal proves nothing; island_certify.go
-// certifies what it publishes.
+// This file is the proposal of docs/multibody-dynamics-design.md §6.2:
+// projected Gauss–Seidel in float64, in the fixed order pairs (canonical) then
+// manifold points (manifold order), for at most MaxIterations sweeps. Each
+// point takes its normal row and then, for a positive-friction pair, its
+// tangent row projected onto the Coulomb disk. The proposal proves nothing;
+// island_certify.go certifies what it publishes.
 
 // nominalBody is one island participant's float64 response data. A Fixed
 // participant has zero inverse mass and inertia and zero velocity.
@@ -27,20 +29,28 @@ type nominalBody struct {
 
 // nominalPoint is one constraint's float64 data: levers from each world
 // mass center, the A-to-B normal, the effective mass K_nn and the target
-// post-solve normal speed.
+// post-solve normal speed. A positive-friction point also carries the
+// deterministic tangent basis, the pair's nominal coefficient and the
+// tangent row's step bound: max(K_t1t1, K_t2t2) + |K_t1t2|, which is at
+// least the largest eigenvalue of the 2×2 K_tt.
 type nominalPoint struct {
 	a, b   int
 	rA, rB r3.Vec
 	n      r3.Vec
 	k      float64
 	target float64
+	mu     float64
+	t1, t2 r3.Vec
+	kt     float64
 }
 
 // islandSolution is a certified proposal: each island body's published post
-// velocities, each point's normal impulse, and the solver report.
+// velocities, each point's normal impulse and world tangent impulse, and the
+// solver report.
 type islandSolution struct {
 	linear, angular []QuantityVec // island body slot order
 	lambda          []float64     // island point order
+	tangent         []r3.Vec      // island point order, on B; A receives its negation
 	separating      []bool        // island pair order: every point leaves faster than VelocityResidual
 	report          ContactSolverReport
 }
@@ -117,12 +127,42 @@ func (b nominalBody) angularMass(r, n r3.Vec) float64 {
 	return arm.Dot(b.invInertia.Apply(arm))
 }
 
-// nominalPoints builds each constraint's levers, K_nn and target.
+// tangentBasis is rigid-dynamics "Response"'s deterministic tangent basis:
+// the world axis least aligned with n (the lowest index on a tie) crossed
+// with n gives t1, and n×t1 gives t2.
+func tangentBasis(n r3.Vec) (r3.Vec, r3.Vec, bool) {
+	axes := [3]r3.Vec{{X: 1}, {Y: 1}, {Z: 1}}
+	components := [3]float64{math.Abs(n.X), math.Abs(n.Y), math.Abs(n.Z)}
+	least := 0
+	for axis := 1; axis < 3; axis++ {
+		if components[axis] < components[least] {
+			least = axis
+		}
+	}
+	t1, ok := n.Cross(axes[least]).Normalize()
+	if !ok {
+		return r3.Vec{}, r3.Vec{}, false
+	}
+	t2, ok := n.Cross(t1).Normalize()
+	return t1, t2, ok
+}
+
+// tangentMass is (r×s)·I⁻¹(r×t) for a dynamic body and zero otherwise.
+func (b nominalBody) tangentMass(r, s, t r3.Vec) float64 {
+	if !b.dynamic {
+		return 0
+	}
+	return r.Cross(s).Dot(b.invInertia.Apply(r.Cross(t)))
+}
+
+// nominalPoints builds each constraint's levers, K_nn and target, and for a
+// positive-friction pair its tangent basis and tangent step bound.
 func (w *World) nominalPoints(isl island, slots map[int]int, bodies []nominalBody) ([]nominalPoint, *islandFailure) {
 	var out []nominalPoint
 	impact := w.step.ImpactSpeed.Base()
 	for _, pair := range isl.pairs {
 		restitution := w.pairs[pair.key].restitution.Base()
+		mu := w.pairs[pair.key].friction.nominal.Base()
 		a, b := slots[pair.a], slots[pair.b]
 		for _, point := range pair.manifold.Points {
 			p := nominalPoint{a: a, b: b, n: point.Normal.Value}
@@ -140,6 +180,22 @@ func (w *World) nominalPoints(isl island, slots map[int]int, bodies []nominalBod
 			}
 			if !finite(p.k, p.target, speed) || p.k <= 0 {
 				return nil, &islandFailure{code: StepIslandDegenerate, reason: "constraint effective mass is not finite and positive"}
+			}
+			if mu > 0 {
+				t1, t2, ok := tangentBasis(p.n)
+				if !ok {
+					return nil, &islandFailure{code: StepIslandDegenerate, reason: "constraint normal has no tangent basis"}
+				}
+				p.mu, p.t1, p.t2 = mu, t1, t2
+				inverse := bodies[a].invMass + bodies[b].invMass
+				mass := func(s, t r3.Vec) float64 {
+					return bodies[a].tangentMass(p.rA, s, t) + bodies[b].tangentMass(p.rB, s, t)
+				}
+				k11, k22, k12 := inverse+mass(t1, t1), inverse+mass(t2, t2), mass(t1, t2)
+				p.kt = math.Max(k11, k22) + math.Abs(k12)
+				if !finite(mu, p.kt) || p.kt <= 0 {
+					return nil, &islandFailure{code: StepIslandDegenerate, reason: "constraint tangent mass is not finite and positive"}
+				}
 			}
 			out = append(out, p)
 		}
@@ -168,6 +224,14 @@ func (w *World) solveIsland(isl island, pre State, drive map[int][3]*big.Rat) (i
 	}
 	current := append([]nominalBody(nil), bodies...)
 	lambda := make([]float64, len(points))
+	tangent := make([][2]float64, len(points))
+	// The tangent rows join once a sweep of the normal rows alone changes no
+	// impulse: friction then starts from the frictionless contact state, whose
+	// patch neither spins nor slides where the slide was stopped, so a
+	// sticking patch never turns the transient spin of the first normal
+	// sweeps into self-cancelling corner friction. An island with no
+	// positive-friction point has no tangent rows to hold back.
+	tangentRows := !slices.ContainsFunc(points, func(p nominalPoint) bool { return p.mu > 0 })
 	for sweep := 1; sweep <= w.step.MaxIterations; sweep++ {
 		largest := 0.0
 		for k, p := range points {
@@ -179,14 +243,23 @@ func (w *World) solveIsland(isl island, pre State, drive map[int][3]*big.Rat) (i
 			current[p.a].apply(j.Scale(-1), p.rA)
 			current[p.b].apply(j, p.rB)
 			largest = math.Max(largest, math.Abs(delta))
+			if p.mu == 0 || !tangentRows {
+				continue
+			}
+			change := tangentRow(p, current, lambda[k], &tangent[k])
+			largest = math.Max(largest, math.Max(math.Abs(change[0]), math.Abs(change[1])))
 		}
 		if !finite(largest) {
 			return islandSolution{}, &islandFailure{code: StepIslandDegenerate, reason: "island proposal is not finite"}
 		}
+		if largest == 0 && !tangentRows && sweep < w.step.MaxIterations {
+			tangentRows = true
+			continue
+		}
 		if largest != 0 && sweep < w.step.MaxIterations {
 			continue
 		}
-		solution, cert, failure := w.publishIsland(isl, pre, bodies, points, lambda, drive)
+		solution, cert, failure := w.publishIsland(isl, pre, bodies, points, lambda, tangent, drive)
 		if failure != nil {
 			return islandSolution{}, failure
 		}
@@ -209,23 +282,44 @@ func (w *World) solveIsland(isl island, pre State, drive map[int][3]*big.Rat) (i
 	return islandSolution{}, &islandFailure{code: StepIslandResidual, reason: "island solver ran no sweep"}
 }
 
-// publishIsland rounds a proposal to its published values and certifies it.
-// Post velocities are recomputed from the pre-solve velocities and the
-// final impulses in the fixed point order. A post component within 1/16 of
-// its residual of zero is published as exactly zero, so a body the solve
-// brings to rest drifts as a rest or a pure translation, and co-moving
-// dynamic bodies publish one common velocity (commonVelocities); the
-// certificate then judges the published values, never the unrounded ones.
-func (w *World) publishIsland(isl island, pre State, bodies []nominalBody, points []nominalPoint,
-	lambda []float64, drive map[int][3]*big.Rat) (islandSolution, islandCertificate, *islandFailure) {
-	post := append([]nominalBody(nil), bodies...)
-	for k, p := range points {
-		j := p.n.Scale(lambda[k])
-		post[p.a].apply(j.Scale(-1), p.rA)
-		post[p.b].apply(j, p.rB)
+// tangentRow is one point's friction row: the tangent impulse steps against
+// the relative tangent velocity by the step bound, λt −= w_t / kt, and is
+// projected onto the disk of radius μ·λn. The scalar step keeps a slipping
+// point's impulse opposite its slip at the fixed point, as the slip gate
+// requires; a step by K_tt⁻¹ would leave it opposite K_tt⁻¹·w_t instead.
+// It applies the change to both bodies and returns it.
+func tangentRow(p nominalPoint, current []nominalBody, normal float64, held *[2]float64) [2]float64 {
+	w := current[p.b].pointVelocity(p.rB).Sub(current[p.a].pointVelocity(p.rA))
+	next := [2]float64{held[0] - w.Dot(p.t1)/p.kt, held[1] - w.Dot(p.t2)/p.kt}
+	radius := p.mu * normal
+	if length := math.Hypot(next[0], next[1]); length > radius {
+		if radius <= 0 {
+			next = [2]float64{}
+		} else {
+			next = [2]float64{next[0] * radius / length, next[1] * radius / length}
+		}
 	}
-	linearSnap := w.step.VelocityResidual.Base() / 16
-	angularSnap := w.step.AngularVelocityResidual.Base() / 16
+	change := [2]float64{next[0] - held[0], next[1] - held[1]}
+	*held = next
+	j := p.t1.Scale(change[0]).Add(p.t2.Scale(change[1]))
+	current[p.a].apply(j.Scale(-1), p.rA)
+	current[p.b].apply(j, p.rB)
+	return change
+}
+
+// publishIsland rounds a proposal to its published values and certifies it.
+// Each point's world tangent impulse is t1·λt1 + t2·λt2, rounded once, with a
+// component within 1/16 of ImpulseResidual of zero published as exactly zero,
+// so a sticking patch whose corners exchange float-rounding friction
+// publishes none. Post velocities are recomputed from the pre-solve
+// velocities and the final normal and published tangent impulses in the
+// fixed point order. A post component within 1/16 of its residual of zero is
+// published as exactly zero, so a body the solve brings to rest drifts as a
+// rest or a pure translation, and co-moving dynamic bodies publish one common
+// velocity (commonVelocities); the certificate then judges the published
+// values, never the unrounded ones.
+func (w *World) publishIsland(isl island, pre State, bodies []nominalBody, points []nominalPoint,
+	lambda []float64, tangent [][2]float64, drive map[int][3]*big.Rat) (islandSolution, islandCertificate, *islandFailure) {
 	snap := func(v r3.Vec, limit float64) r3.Vec {
 		for _, c := range []*float64{&v.X, &v.Y, &v.Z} {
 			if math.Abs(*c) <= limit {
@@ -234,8 +328,21 @@ func (w *World) publishIsland(isl island, pre State, bodies []nominalBody, point
 		}
 		return v
 	}
+	post := append([]nominalBody(nil), bodies...)
+	tangents := make([]r3.Vec, len(points))
+	for k, p := range points {
+		j := p.n.Scale(lambda[k])
+		if p.mu > 0 {
+			tangents[k] = snap(p.t1.Scale(tangent[k][0]).Add(p.t2.Scale(tangent[k][1])), w.step.ImpulseResidual.Base()/16)
+			j = j.Add(tangents[k])
+		}
+		post[p.a].apply(j.Scale(-1), p.rA)
+		post[p.b].apply(j, p.rB)
+	}
+	linearSnap := w.step.VelocityResidual.Base() / 16
+	angularSnap := w.step.AngularVelocityResidual.Base() / 16
 	solution := islandSolution{linear: make([]QuantityVec, len(bodies)), angular: make([]QuantityVec, len(bodies)),
-		lambda: append([]float64(nil), lambda...)}
+		lambda: append([]float64(nil), lambda...), tangent: tangents}
 	for slot, index := range isl.bodies {
 		entry := pre.entries[index]
 		solution.linear[slot], solution.angular[slot] = entry.LinearVelocity, entry.AngularVelocity
@@ -373,15 +480,18 @@ func (w *World) certifyProposal(isl island, pre State, points []nominalPoint,
 	k := 0
 	for pairIndex, pair := range isl.pairs {
 		restitution := exactBase(w.pairs[pair.key].restitution)
+		mu := w.pairs[pair.key].friction.lower
 		for _, point := range pair.manifold.Points {
 			p, ok := newCertPoint(pairIndex, points[k].a, points[k].b, point, certBodies, restitution)
-			if !ok || restitution == nil {
+			if !ok || restitution == nil || mu == nil {
 				return islandCertificate{}, &islandFailure{code: StepIslandDegenerate, reason: "manifold point cannot be read as exact intervals"}
 			}
-			p.lambda = ratFloat(solution.lambda[k])
-			if p.lambda == nil {
+			p.lambda, p.mu = ratFloat(solution.lambda[k]), mu
+			tangent, okTangent := ratVec(solution.tangent[k])
+			if p.lambda == nil || !okTangent {
 				return islandCertificate{}, &islandFailure{code: StepIslandDegenerate, reason: "island impulse is not finite"}
 			}
+			p.tangent = tangent
 			certPoints = append(certPoints, p)
 			k++
 		}

@@ -280,7 +280,7 @@ func pairCorrectionWithin(before, after State, axis int, allowance float64) bool
 // A world of four or more bodies drifts every body from event to event on
 // paths whose candidate pairs the broad phase selects and SweepPair certifies;
 // at each event time it solves the touching and impacting pairs as certified
-// frictionless islands and continues (docs/multibody-dynamics-design.md §5,
+// Coulomb islands and continues (docs/multibody-dynamics-design.md §5,
 // §6). Its Undecided report carries typed diagnostics and the certified prefix
 // in its Trace.
 func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.Value) (*StepReport, error) {

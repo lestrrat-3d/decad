@@ -12,7 +12,7 @@ import (
 )
 
 // This file certifies an island proposal in exact rational interval
-// arithmetic (docs/multibody-dynamics-design.md §6.3, frictionless rows).
+// arithmetic (docs/multibody-dynamics-design.md §6.3).
 // Every comparison runs over the whole interval: mass, inertia, mass-center,
 // contact-point and normal uncertainty all enter as intervals, and the
 // published velocities and impulses enter as the exact rationals their
@@ -53,6 +53,8 @@ type certPoint struct {
 	onA, onB    ivec
 	rA, rB      ivec
 	lambda      *big.Rat
+	tangent     [3]*big.Rat // published world tangent impulse on B; zero without friction
+	mu          *big.Rat    // the pair's lower friction coefficient μ_lo
 	restitution *big.Rat
 }
 
@@ -66,6 +68,9 @@ const (
 	gateRestitutionTarget
 	gateNonPenetration
 	gateComplementarity
+	gateCone
+	gateStick
+	gateSlip
 	gateEnergy
 	gateLinearMomentum
 	gateAngularMomentum
@@ -86,9 +91,9 @@ func (g islandGate) limitValue(limit *big.Rat) units.Value {
 		return units.KilogramMillimetersPerSecond(f)
 	case gateAngularLaw, gateAngularMomentum:
 		return units.New(f, units.KilogramSquareMillimeterPerSecond)
-	case gateEnergy:
+	case gateEnergy, gateSlip:
 		return units.New(f, units.KilogramSquareMillimeterPerSecondSquared)
-	case gateNormalSign:
+	case gateNormalSign, gateCone:
 		return units.KilogramMillimetersPerSecond(f)
 	default:
 		return units.MillimetersPerSecond(f)
@@ -109,6 +114,12 @@ func (g islandGate) String() string {
 		return "non-penetration"
 	case gateComplementarity:
 		return "complementarity"
+	case gateCone:
+		return "cone"
+	case gateStick:
+		return "stick"
+	case gateSlip:
+		return "slip"
 	case gateEnergy:
 		return "energy"
 	case gateLinearMomentum:
@@ -121,10 +132,12 @@ func (g islandGate) String() string {
 }
 
 // islandCertificate holds the largest attained value of each gate (the
-// signed upper end of the kinetic-energy change), every refused gate, and
-// the first refused gate in evaluation order.
+// signed upper end of the kinetic-energy change; the cone's excess over
+// μ_lo·λn; a sticking point's tangent speed), every refused gate, and the
+// first refused gate in evaluation order.
 type islandCertificate struct {
 	linear, angular, normal, energy, momentum, angularMomentum *big.Rat
+	cone, tangent                                              *big.Rat
 	failed                                                     islandGate
 	value, limit                                               *big.Rat
 	refused                                                    map[islandGate]struct{}
@@ -434,10 +447,11 @@ func restitutionTarget(c proof.RatInterval, e, impactSpeed *big.Rat) (*big.Rat, 
 	}
 }
 
-// certifyIsland runs §6.3's frictionless rows over one island.
+// certifyIsland runs §6.3's rows over one island.
 func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCertificate {
 	cert := islandCertificate{linear: new(big.Rat), angular: new(big.Rat), normal: new(big.Rat),
-		energy: new(big.Rat), momentum: new(big.Rat), angularMomentum: new(big.Rat)}
+		energy: new(big.Rat), momentum: new(big.Rat), angularMomentum: new(big.Rat),
+		cone: new(big.Rat), tangent: new(big.Rat)}
 	impulseLimit, velocityLimit := exactBase(w.step.ImpulseResidual), exactBase(w.step.VelocityResidual)
 	angularLimit, impactSpeed := exactBase(w.step.AngularVelocityResidual), exactBase(w.step.ImpactSpeed)
 	// The island's largest lever bound ρ.
@@ -450,10 +464,10 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 			raise(&rho, euclideanUpper(p.rB))
 		}
 	}
-	// Each point's impulse on B, λ·n; A receives its negation.
+	// Each point's impulse on B, λ·n + λt; A receives its negation.
 	impulses := make([]ivec, len(points))
 	for k, p := range points {
-		impulses[k] = scaleIVec(p.normal, p.lambda)
+		impulses[k] = addIVec(scaleIVec(p.normal, p.lambda), pointIVec(p.tangent))
 	}
 	linearMomentum, angularMomentum := zeroIVec(), zeroIVec()
 	linearMomentumLimit, angularMomentumLimit := new(big.Rat), new(big.Rat)
@@ -579,13 +593,15 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 		} else if q.Lo.Sign() < 0 {
 			raise(&cert.normal, new(big.Rat).Neg(q.Lo))
 		}
-		// Kinematic work: a driver on side A delivers λ·(n·V) to the island,
-		// one on side B −λ·(n·V); the energy gate admits its upper end.
+		w.certifyFriction(&cert, p, bodies, impulseLimit, velocityLimit)
+		// Kinematic work: a driver on side A delivers J·V to the island, one
+		// on side B −J·V, with J = λ·n + λt the impulse on B; the energy gate
+		// admits its upper end.
 		for side, slot := range [2]int{p.a, p.b} {
 			if !bodies[slot].kinematic {
 				continue
 			}
-			work := proof.ScaleInterval(proof.DotInterval3(p.normal, pointIVec(bodies[slot].v)), p.lambda)
+			work := proof.DotInterval3(impulses[k], pointIVec(bodies[slot].v))
 			if side == 1 {
 				work = proof.NegInterval(work)
 			}
@@ -633,6 +649,108 @@ func (w *World) certifyIsland(bodies []certBody, points []certPoint) islandCerti
 		}
 	}
 	return cert
+}
+
+// certifyFriction runs the cone, stick and slip rows at one point. With
+// s = ‖λt‖² exact: the cone requires ‖λt‖ ≤ μ_lo·λn + ImpulseResidual,
+// compared squared; a point strictly inside the cone by more than
+// ImpulseResidual sticks, and its post-solve tangent speed ‖w'_t‖ may not
+// exceed VelocityResidual; every other point slips, and its impulse must
+// oppose its tangent velocity: λt·w'_t + ‖λt‖·‖w'_t‖ at its upper end is at
+// most ImpulseResidual·‖w'_t‖ + VelocityResidual·‖λt‖ at their lower ends.
+// w'_t = w' − (w'·n)·n is enclosed over the normal ball and the levers.
+func (w *World) certifyFriction(cert *islandCertificate, p certPoint, bodies []certBody,
+	impulseLimit, velocityLimit *big.Rat) {
+	square := new(big.Rat)
+	for _, component := range p.tangent {
+		square.Add(square, new(big.Rat).Mul(component, component))
+	}
+	coneLower := new(big.Rat).Mul(p.mu, p.lambda)
+	allowed := new(big.Rat).Add(coneLower, impulseLimit)
+	norm := ratSqrtUpper(square)
+	if excess := new(big.Rat).Sub(norm, coneLower); excess.Sign() > 0 {
+		raise(&cert.cone, excess)
+	}
+	if allowed.Sign() < 0 || square.Cmp(new(big.Rat).Mul(allowed, allowed)) > 0 {
+		cert.fail(gateCone, new(big.Rat).Sub(norm, coneLower), impulseLimit)
+	}
+	relative := subIVec(pointVelocity(bodies[p.b], bodies[p.b].vPost, bodies[p.b].wPost, p.rB),
+		pointVelocity(bodies[p.a], bodies[p.a].vPost, bodies[p.a].wPost, p.rA))
+	normalSpeed := proof.DotInterval3(relative, p.normal)
+	var slide ivec
+	for axis := range slide {
+		slide[axis] = proof.SubInterval(relative[axis], proof.MulInterval(normalSpeed, p.normal[axis]))
+	}
+	speedUpper := euclideanUpper(slide)
+	threshold := new(big.Rat).Sub(coneLower, impulseLimit)
+	if threshold.Sign() > 0 && square.Cmp(new(big.Rat).Mul(threshold, threshold)) < 0 {
+		raise(&cert.tangent, speedUpper)
+		if speedUpper.Cmp(velocityLimit) > 0 {
+			cert.fail(gateStick, speedUpper, velocityLimit)
+		}
+		return
+	}
+	opposed := proof.DotInterval3(pointIVec(p.tangent), slide).Hi
+	opposed = new(big.Rat).Add(opposed, new(big.Rat).Mul(norm, speedUpper))
+	limit := new(big.Rat).Mul(impulseLimit, euclideanLower(slide))
+	limit.Add(limit, new(big.Rat).Mul(velocityLimit, ratSqrtLower(square)))
+	if opposed.Cmp(limit) > 0 {
+		cert.fail(gateSlip, opposed, limit)
+	}
+}
+
+// ratSqrtUpper and ratSqrtLower bound the square root of a nonnegative
+// rational from above and below by floats whose exact squares bracket it.
+func ratSqrtUpper(square *big.Rat) *big.Rat {
+	if square.Sign() <= 0 {
+		return new(big.Rat)
+	}
+	approx, _ := square.Float64()
+	root := math.Sqrt(approx)
+	switch {
+	case !finite(root):
+		// sqrt(s) ≤ s + 1 for every s ≥ 0.
+		return new(big.Rat).Add(square, big.NewRat(1, 1))
+	case approx == 0:
+		// s rounds to zero only below 2^-1074, whose root lies below 2^-537.
+		return ratFloat(0x1p-537)
+	}
+	for new(big.Rat).Mul(ratFloat(root), ratFloat(root)).Cmp(square) < 0 {
+		root = math.Nextafter(root, math.Inf(1))
+	}
+	return ratFloat(root)
+}
+
+func ratSqrtLower(square *big.Rat) *big.Rat {
+	if square.Sign() <= 0 {
+		return new(big.Rat)
+	}
+	approx, _ := square.Float64()
+	root := math.Sqrt(approx)
+	for root > 0 && new(big.Rat).Mul(ratFloat(root), ratFloat(root)).Cmp(square) > 0 {
+		root = math.Nextafter(root, 0)
+	}
+	return ratFloat(root)
+}
+
+// euclideanLower bounds the Euclidean length of every vector in an interval
+// box from below: each component contributes its smallest magnitude, zero
+// when its interval straddles zero.
+func euclideanLower(v ivec) *big.Rat {
+	sum := new(big.Rat)
+	for axis := range v {
+		var least *big.Rat
+		switch {
+		case v[axis].Lo.Sign() > 0:
+			least = v[axis].Lo
+		case v[axis].Hi.Sign() < 0:
+			least = new(big.Rat).Neg(v[axis].Hi)
+		default:
+			continue
+		}
+		sum.Add(sum, new(big.Rat).Mul(least, least))
+	}
+	return ratSqrtLower(sum)
 }
 
 // ratQuantity wraps exact angular velocity components for spinEnergyChange,
@@ -686,8 +804,16 @@ func solverReport(cert islandCertificate, penetration *big.Rat, iterations int) 
 		}
 		reading.set(f)
 	}
-	out.TangentResidual = units.MillimetersPerSecond(0)
-	out.ConeResidual = units.KilogramMillimetersPerSecond(0)
+	tangent, tangentErr := up(cert.tangent)
+	cone, coneErr := up(cert.cone)
+	if tangentErr != nil {
+		err = tangentErr
+	}
+	if coneErr != nil {
+		err = coneErr
+	}
+	out.TangentResidual = units.MillimetersPerSecond(tangent)
+	out.ConeResidual = units.KilogramMillimetersPerSecond(cone)
 	out.AngularUpper = units.RadiansPerSecond(0)
 	out.Iterations = iterations
 	return out, err
