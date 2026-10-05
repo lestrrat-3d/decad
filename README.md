@@ -79,7 +79,9 @@ commands, which the script runs to write `out/decad-landing.mp4` and
 The `stack-and-drop` dynamics scene drops spheres and a cylinder beside a
 resting box pyramid, every frame a certified pose of a `dynamics.Timeline`.
 Render it with `cd _gallery && go run . dynamics -scene stack-and-drop`; the
-frames go under `_gallery/out/`.
+frames go under `_gallery/out/`. The `tumble` scene drops spinning boxes, a
+hexagonal prism, a wedge and a stitched tetrahedron into a tray, where each
+lands on a corner and comes to rest face down; `-scene tumble` renders it.
 
 ## Layering
 

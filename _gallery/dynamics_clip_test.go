@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"math/big"
 	"sync"
 	"testing"
@@ -308,4 +309,128 @@ func decadBodyOutsideWorld(t *testing.T) *decad.Body {
 	body, err := extrudedBox(t.Context(), decad.New(), 0, 0, 1, 1, 0, 1)
 	require.NoError(t, err)
 	return body
+}
+
+// These tests run the tumble exit scene of docs/multibody-dynamics-design.md
+// §2 through the real producers and the real viewer (§11.3): the scene's
+// dynamics.Timeline, the timelineTrack bridge and kinetograph's driven nodes.
+// dynamics' scene_test.go asserts every exit criterion inside the decad
+// module, on four of the bodies in CI and on the whole scene when
+// DECAD_TUMBLE_FULL is set; CI runs the whole scene here, and these check
+// its end, its events and its clip.
+
+// tumbleRun is the scene and its timeline advanced to the clip length,
+// computed once for every test here.
+var tumbleRun struct {
+	once     sync.Once
+	scene    *dynamicsScene
+	timeline *dynamics.Timeline
+	err      error
+}
+
+func tumble(t *testing.T) (*dynamicsScene, *dynamics.Timeline) {
+	t.Helper()
+	run := &tumbleRun
+	run.once.Do(func() {
+		run.scene, run.err = tumbleScene(t.Context())
+		if run.err == nil {
+			run.timeline, run.err = run.scene.advance(t.Context())
+		}
+	})
+	require.NoError(t, run.err)
+	require.NoError(t, run.scene.stopError(run.timeline))
+	return run.scene, run.timeline
+}
+
+// TestTumbleTimeline checks the gallery's scene reaches its 3 s with every
+// event a body on the tray's floor, a one-, a two- and a four-or-more-point
+// impact among them, and every dynamic body at rest face down on the tray:
+// both velocities within VelocityResidual of zero and at least three
+// vertices within PenetrationResidual of the floor's top face z = 0, none
+// below it by more.
+func TestTumbleTimeline(t *testing.T) {
+	scene, timeline := tumble(t)
+	require.Nil(t, timeline.Stopped())
+	require.Equal(t, units.Seconds(3), timeline.End())
+	require.Len(t, timeline.Steps(), 768)
+	tray := scene.parts[0].body
+	impacts := map[int]int{}
+	for k, report := range timeline.Steps() {
+		for _, event := range report.Events {
+			require.Equal(t, tray, event.Pair.A, "step %d", k)
+			for _, point := range event.Manifold.Points {
+				require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value, "step %d", k)
+			}
+			if event.Kind == dynamics.ContactImpact {
+				impacts[min(len(event.Manifold.Points), 4)]++
+			}
+		}
+	}
+	for _, points := range []int{1, 2, 4} {
+		require.Positive(t, impacts[points], "a %d-point impact", points)
+	}
+	end, err := timeline.Sample(timeline.End())
+	require.NoError(t, err)
+	config := scene.config.Step
+	residual := new(big.Rat).SetFloat64(config.PenetrationResidual.Base())
+	floor := new(big.Rat).Neg(residual)
+	for _, part := range scene.parts[1:] {
+		entry, ok := end.Body(part.body)
+		require.True(t, ok)
+		for _, v := range []dynamics.QuantityVec{entry.LinearVelocity, entry.AngularVelocity} {
+			for _, c := range []units.Value{v.X, v.Y, v.Z} {
+				require.LessOrEqual(t, math.Abs(c.Base()), config.VelocityResidual.Base(), part.name)
+			}
+		}
+		face := 0
+		for _, height := range stagedHeights(part.body, entry) {
+			require.GreaterOrEqual(t, height.Cmp(floor), 0, part.name)
+			if height.Cmp(residual) <= 0 {
+				face++
+			}
+		}
+		require.GreaterOrEqual(t, face, 3, "%s rests on a face", part.name)
+	}
+}
+
+// stagedHeights stages every vertex of body through entry's pose exactly
+// and returns its height above z = 0.
+func stagedHeights(body *decad.Body, entry dynamics.BodyState) []*big.Rat {
+	basis, at := entry.Pose.Basis(), entry.Pose.Translation()
+	exact := func(v float64) *big.Rat { return new(big.Rat).SetFloat64(v) }
+	out := make([]*big.Rat, 0, len(body.Vertices()))
+	for _, vertex := range body.Vertices() {
+		p := vertex.Position().Value
+		z := exact(at.Z)
+		z.Add(z, new(big.Rat).Mul(exact(basis.EX.Z), exact(p.X)))
+		z.Add(z, new(big.Rat).Mul(exact(basis.EY.Z), exact(p.Y)))
+		z.Add(z, new(big.Rat).Mul(exact(basis.EZ.Z), exact(p.Z)))
+		out = append(out, z)
+	}
+	return out
+}
+
+// TestTumbleClip films the timeline: the 60 fps clip holds 180 frames, and
+// every frame's part transforms are exactly the timeline's certified poses
+// at the frame time.
+func TestTumbleClip(t *testing.T) {
+	scene, timeline := tumble(t)
+	clipScene, err := scene.clipScene(timeline)
+	require.NoError(t, err)
+	clip, err := kinetograph.NewClip(clipScene, 60, scene.length)
+	require.NoError(t, err)
+	require.Equal(t, 180, clip.FrameCount())
+	for i := range clip.FrameCount() {
+		frame, err := clip.Frame(t.Context(), i)
+		require.NoError(t, err, "frame %d", i)
+		state, err := timeline.Sample(units.Seconds(float64(clip.FrameTime(i)) / 1e9))
+		require.NoError(t, err, "frame %d", i)
+		require.Len(t, frame.Poses, len(scene.parts))
+		for k, part := range scene.parts {
+			entry, ok := state.Body(part.body)
+			require.True(t, ok)
+			require.Equal(t, part.name, frame.Poses[k].Name)
+			require.Equal(t, entry.Pose, frame.Poses[k].Transform, "frame %d part %s", i, part.name)
+		}
+	}
 }

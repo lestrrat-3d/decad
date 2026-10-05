@@ -14,8 +14,8 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19 and 20 have
-shipped. `dynamics.World` holds any number of bodies, the canonical pair table and
+Current state: §13 PRs 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14a, 14b, 14c, 14d, 14e, 14f, 15, 16,
+17, 18, 19 and 20 have shipped. `dynamics.World` holds any number of bodies, the canonical pair table and
 per-pair material of §3.1, and the slice-backed `State` of §3.2. Every world, whatever its body count,
 takes the scheduled step of §4.3 and §5: one kick, then slices of drift from event to event. Initial
 contacts, impact brackets and transition brackets cut a slice at their exact fraction; every body advances
@@ -34,15 +34,17 @@ point (§6.2); `MaxPairSweeps` bounds the rest. The multi-event
 (§4.2) is public; the cylinder and bounded-faceted clear sweeps certify with it, and the scheduled step's
 broad phase reads it. A source cylinder that lands on its end disk rests on contact-sweep §4.6's persistent
 disk track. The gallery bridge of §11 films a `Timeline` through kinetograph's driven node, and §2's Phase 1
-scene, `stack-and-drop`, runs its full `2 s` in `dynamics/scene_test.go` and `_gallery`.
+scene, `stack-and-drop`, runs its full `2 s` in `dynamics/scene_test.go` and `_gallery`; the Phase 2 scene,
+`tumble`, runs its full `3 s` with every body resting face down (§13 PR 15).
 `docs/collision-v1-support.md` is the inventory of the shape pairs, responses and refusals that ship, and
 this document does not restate it. No closed-form responder remains in `dynamics` (§6.5). The exact
 arithmetic every certificate below
 is stated in already exists as one package: `internal/proof` (`Dyadic`, `DyV3`, `RatInterval` and the float
 rounding bounds), which the root package imports today and which `dynamics` can import as well, since an
 `internal/` package is visible to every package of this module. §3.1, §3.2, §4 and §8.1–§8.8 describe
-shipped code. §5, §6.1–§6.6, §7, §3.3, §3.4 and §12 ship as well, for every world. §9.1–§9.4 ship for prisms over whole `LineSeg` sections and for zero-bound
-Booleans, directly or through a translation-only placement; stitched solids and lofts are not admitted yet.
+shipped code. §5, §6.1–§6.6, §7, §3.3, §3.4 and §12 ship as well, for every world. §9.1–§9.4 ship for prisms over whole `LineSeg` sections, for zero-bound
+Booleans, directly or through a translation-only placement, and for closed all-planar stitched solids; lofts
+are not admitted yet.
 §10.1, §10.2 and §10.3 ship for the same bodies, and §10.4 for positive-bound faceted Booleans and
 all-planar cap-loop chamfers. §10.5 ships for the same exact bodies: under a positive `SupportBand` a box
 tipped over from its edge comes to rest flat. §10.4's rolling band track ships for a full source cylinder
@@ -137,8 +139,9 @@ step, then drift) and at most `TimeResolution` after it; the cylinder ends at re
 ends rolling on the floor with its contact-point speed within `VelocityResidual` of zero; the clip
 renders `120` frames, each showing the certified poses at its time.
 
-**Phase 2 — `tumble`.** The floor plus a fixed tray built as a zero-bound Boolean `Cut`: an outer source
-box minus an inner source box that opens its top, leaving a floor and four walls inside `160×160 mm`. A
+**Phase 2 — `tumble`.** A fixed tray built as a zero-bound Boolean `Cut`: an outer source box minus an
+inner source box that opens its top, leaving a floor and four walls inside `160×160 mm`. The tray's own
+floor is the support and the tray is the scene's one fixed body, so no second fixed body touches it. A
 mesh `Union` of overlapping boxes is not used, because its triangle diagonals generally cross the other
 operand's planes off the dyadic grid, which leaves a positive mesh bound that §9 does not admit. Dynamic: four `20 mm` source boxes released with
 proper rotations about `(1, 1, 0)` by `30°`, `45°`, `60°`, `75°` and spin `(2, 1, 0) rad/s`; one
@@ -2590,6 +2593,22 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   wall within `3 s` and no body's swept box reaches a wall's projection (§10.5, §10.6). The exploration run
   with the tray at those residuals goes 256 steps `Advanced` with every body resting (§10.8).
 - Depends on: PRs 9, 13, 14, 14a, 14b, 14c, 14d, 14e, 14f.
+- Shipped. The tray, `[−90, 90]²×[−10, 40]` minus `[−80, 80]²×[0, 50]`, is the only fixed body. The boxes
+  start with their centers `40 mm` up at `(±45, ±45)`, the prism tipped `37°` about `−Y` on a vertex `20 mm`
+  up at `(−55, 0)`, the wedge (a `16/12 mm` triangle, `8 mm` thick) turned `50°` about `(1, 2, 3)` at
+  `(40, 0, 25)`, and the tetrahedron (PR 14's, twice the size) turned `40°` about `(3, −1, 2)` at
+  `(0, 0, 25)`. Every step of the `3 s` is `Advanced`, every event is a body on the tray's floor, and from
+  step `77` every body rests: seven face events a step, the boxes on four points, the prism on six, the
+  wedge and the tetrahedron on three. `dynamics/scene_test.go`'s `requireTumbleExit` asserts §2's criteria:
+  the linear momentum balance of every step, a one-, a two- and a four-or-more-point impact, each box's first
+  impact within `TimeResolution` after the band entry of its lowest corner's drift (a zero band in its place
+  is red, the exact touch lying `7 µs` later), and every body at rest face down inside the walls with a
+  track or a box exclusion in its last slice. The whole scene takes about six minutes on an amd64
+  workstation, nearly all of it in its first `80` steps in the rotating sweeps' exact interval arithmetic,
+  beyond the `dynamics` package's ten-minute budget on the CI runners: `TestTumbleScene` runs it under
+  `DECAD_TUMBLE_FULL`, `TestTumbleSceneSubset` runs the `30°` box, the prism, the wedge and the tetrahedron
+  for `0.5 s` through the same assertions on the legs without the race detector, and the `_gallery` job
+  runs the whole scene in its tests and its smoke render.
 
 ### PR 16 (Phase 3) — third-order section moments and the general revolve
 
