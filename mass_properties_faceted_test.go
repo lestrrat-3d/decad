@@ -14,8 +14,8 @@ import (
 func TestFacetedMassPropertiesUnionAndRefusals(t *testing.T) {
 	doc := decad.New()
 	base := boxBodyAtZ(t, doc, -5, -5, 5, 5, 0, 10)
-	cap := boxBodyAtZ(t, doc, -2, -2, 2, 2, 8, 4)
-	union, err := decad.Union(t.Context(), base, cap)
+	upper := boxBodyAtZ(t, doc, -2, -2, 2, 2, 8, 4)
+	union, err := decad.Union(t.Context(), base, upper)
 	require.NoError(t, err)
 	mesh, err := union.Tessellate(t.Context(), units.Millimeters(1),
 		decad.WithVerification(decad.VerifyAll))
