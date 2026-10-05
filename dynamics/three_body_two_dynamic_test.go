@@ -159,6 +159,142 @@ func TestThreeBodyTwoDynamicSphereImpact(t *testing.T) {
 	require.Nil(t, limitedResult.Next)
 }
 
+func TestThreeBodyTwoDynamicSphereZeroRestitutionImpact(t *testing.T) {
+	doc := decad.New()
+	a, b := makeBall(t, doc), makeBall(t, doc)
+	remote := makeBox(t, doc, -100, -100, 100, 100, -100, 10)
+	pa, err := r3.Translation(r3.Vec{X: -20})
+	require.NoError(t, err)
+	pb, err := r3.Translation(r3.Vec{X: 20})
+	require.NoError(t, err)
+	va := sphereRestVelocity(r3.Vec{X: 100})
+	vb := zeroVelocity()
+	zeroSpin := zeroAngular(t)
+	request := decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+		NormalResolution: units.Radians(1e-6)}
+	touchA, err := r3.Translation(r3.Vec{X: -5})
+	require.NoError(t, err)
+	touchB, err := r3.Translation(r3.Vec{X: 5})
+	require.NoError(t, err)
+	contact, err := doc.ContactPair(t.Context(), a, b, touchA, touchB, request)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, contact.Relation)
+	step := sphereRestConfig()
+	material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
+	mass := exactSphereMass()
+	world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{Bodies: []dynamics.RigidBody{
+		{Body: a, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+		{Body: b, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+		{Body: remote, Role: dynamics.Fixed, Material: material},
+	}, Step: step})
+	require.NoError(t, err)
+	start, err := world.NewState([]dynamics.BodyState{
+		{Body: a, Pose: pa, LinearVelocity: va, AngularVelocity: zeroSpin},
+		{Body: b, Pose: pb, LinearVelocity: vb, AngularVelocity: zeroSpin},
+		{Body: remote, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroSpin},
+	})
+	require.NoError(t, err)
+	report, err := world.Step(t.Context(), start,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.4))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.InDelta(t, .3, report.Events[0].Time.Base(), 1e-9)
+	require.InDelta(t, 50, report.Events[0].NormalImpulse.Base(), 1e-6)
+	for _, body := range []*decad.Body{a, b} {
+		state, ok := report.Next.Body(body)
+		require.True(t, ok)
+		require.InDelta(t, 50, state.LinearVelocity.X.Base(), 1e-6)
+	}
+	for _, elapsed := range []float64{.1, .35, .4} {
+		sample, sampleErr := report.Trace.Sample(units.Seconds(elapsed))
+		require.NoError(t, sampleErr)
+		require.Len(t, sample.Entries(), 3)
+		sa, _ := sample.Body(a)
+		sb, _ := sample.Body(b)
+		pairContact, contactErr := doc.ContactPair(t.Context(), a, b, sa.Pose, sb.Pose, step.Contact)
+		require.NoError(t, contactErr)
+		if elapsed < .3 {
+			require.Equal(t, decad.ContactSeparated, pairContact.Relation)
+		} else {
+			require.Equal(t, decad.ContactTouching, pairContact.Relation)
+		}
+		fixed, ok := sample.Body(remote)
+		require.True(t, ok)
+		require.Equal(t, r3.Identity(), fixed.Pose)
+		for _, sphere := range []dynamics.BodyState{sa, sb} {
+			fixedContact, clearErr := doc.ContactPair(t.Context(), sphere.Body, remote,
+				sphere.Pose, fixed.Pose, step.Contact)
+			require.NoError(t, clearErr)
+			require.Equal(t, decad.ContactSeparated, fixedContact.Relation)
+		}
+	}
+	require.NotNil(t, report.Conservation)
+	require.InDelta(t, 0, report.Conservation.ContactImpulse.Value.X.Base(), 1e-9)
+	step.MaxEvents = 1
+	limited, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{Bodies: []dynamics.RigidBody{
+		{Body: a, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+		{Body: b, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+		{Body: remote, Role: dynamics.Fixed, Material: material},
+	}, Step: step})
+	require.NoError(t, err)
+	limitedStart, err := limited.NewState(start.Entries())
+	require.NoError(t, err)
+	refused, err := limited.Step(t.Context(), limitedStart,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.4))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, refused.Status)
+	require.Nil(t, refused.Next)
+}
+
+func TestThreeBodyTwoDynamicOffAxisSphereZeroRestitutionImpact(t *testing.T) {
+	doc := decad.New()
+	a, b := makeBall(t, doc), makeBall(t, doc)
+	remote := makeBox(t, doc, -100, -100, 100, 100, -100, 10)
+	pa, err := r3.Translation(r3.Vec{X: -6, Y: -8})
+	require.NoError(t, err)
+	pb, err := r3.Translation(r3.Vec{X: 6, Y: 8})
+	require.NoError(t, err)
+	va, vb := sphereRestVelocity(r3.Vec{X: 30, Y: 40}),
+		sphereRestVelocity(r3.Vec{X: -30, Y: -40})
+	mass := exactSphereMass()
+	material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
+	world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{Bodies: []dynamics.RigidBody{
+		{Body: remote, Role: dynamics.Fixed, Material: material},
+		{Body: b, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+		{Body: a, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+	}, Step: sphereRestConfig()})
+	require.NoError(t, err)
+	start, err := world.NewState([]dynamics.BodyState{
+		{Body: a, Pose: pa, LinearVelocity: va, AngularVelocity: zeroAngular(t)},
+		{Body: b, Pose: pb, LinearVelocity: vb, AngularVelocity: zeroAngular(t)},
+		{Body: remote, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := world.Step(t.Context(), start,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.2))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.Equal(t, dynamics.BodyPair{A: b, B: a}, report.Events[0].Pair)
+	require.InDelta(t, .1, report.Events[0].Time.Base(), 1e-8)
+	require.InDelta(t, 50, report.Events[0].NormalImpulse.Base(), 1e-6)
+	for _, elapsed := range []float64{.05, .15, .2} {
+		state, sampleErr := report.Trace.Sample(units.Seconds(elapsed))
+		require.NoError(t, sampleErr)
+		sa, _ := state.Body(a)
+		sb, _ := state.Body(b)
+		if elapsed > .1 {
+			require.InDelta(t, -3, sa.Pose.Translation().X, 2e-6)
+			require.InDelta(t, 3, sb.Pose.Translation().X, 2e-6)
+		}
+		fixed, _ := state.Body(remote)
+		require.Equal(t, r3.Identity(), fixed.Pose)
+	}
+	require.NotNil(t, report.Conservation)
+	require.InDelta(t, 0, report.Conservation.ContactImpulse.Value.X.Base(), 1e-9)
+}
+
 func TestThreeBodyTwoDynamicLoadsKickBothBodiesOnce(t *testing.T) {
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)
