@@ -118,9 +118,16 @@ brackets or simultaneous initial contacts return `Undecided` with no `Next`.
 The trace replays non-excluded pairs from rounded certificates and any body
 outside those pairs by independent drift. The conservation report sums both
 dynamic bodies. An excluded pair is not queried and
-does not mix material.
-This first two-dynamic path returns `Undecided` for initial contact,
-zero-restitution impact, and nonzero angular velocity.
+does not mix material. An isolated zero-restitution impact between two dynamic
+source spheres also advances when both pairs against the fixed body stay clear.
+The pair response must certify its impact, correction, and continuation. A
+persistent sphere-pair touch needs matching ideal and rounded full-span contact
+tracks. If global event-time rounding changes the remaining drift endpoint,
+the child response's endpoint is used only within `PointResolution`, and all
+remaining pair paths are certified again over the global time slice. A second
+possible contact during that resting continuation returns `Undecided`.
+This first two-dynamic path returns `Undecided` for initial contact and nonzero
+angular velocity.
 With one dynamic body, it sweeps each non-excluded dynamic/fixed pair. One active pair advances only
 when every other pair has a certified clear path through the response. Two
 strictly ordered, frictionless positive-restitution source-box face impacts can advance within one

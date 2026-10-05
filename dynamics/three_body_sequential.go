@@ -120,6 +120,45 @@ func (w *World) sequentialCandidate(sweep *decad.SweepReport) bool {
 		sweep.Event.Manifold != nil && len(sweep.Event.Manifold.Points) != 0
 }
 
+func (w *World) sequentialSphereRestCandidate(key int, sweep *decad.SweepReport) bool {
+	if w.three.dynamicCount != 2 || !w.sequentialCandidate(sweep) ||
+		len(sweep.Event.Manifold.Points) != 1 {
+		return false
+	}
+	pair := w.three.pairs[key]
+	if pair == nil || pair.parts[0].definition.Role != Dynamic ||
+		pair.parts[1].definition.Role != Dynamic || pair.restitution.Base() != 0 ||
+		pair.friction.upper.Sign() != 0 {
+		return false
+	}
+	point := sweep.Event.Manifold.Points[0]
+	if point.FaceA == nil || point.FaceB == nil {
+		return false
+	}
+	_, sphereA := point.FaceA.Surface().(decad.Sphere)
+	_, sphereB := point.FaceB.Surface().(decad.Sphere)
+	return sphereA && sphereB
+}
+
+func (w *World) sequentialNoEventProof(key int, sweep *decad.SweepReport,
+	policy decad.SweepStartPolicy, persistent *decad.ContactPoint) bool {
+	if sweep == nil {
+		return false
+	}
+	switch sweep.Outcome {
+	case decad.SweepClear:
+		return true
+	case decad.SweepDepartedClear:
+		return policy == decad.ContinueSeparatingTouch || policy == decad.ContinueCertifiedTouch
+	case decad.SweepPersistentTouch:
+		return policy == decad.ContinueCertifiedTouch && persistent != nil &&
+			w.three.pairs[key].friction.upper.Sign() == 0 &&
+			spherePairContinuationWithin(sweep, decad.SweepPersistentTouch, *persistent, w.step)
+	default:
+		return false
+	}
+}
+
 // stepThreeSequential uses the existing pair response for each event but
 // commits only its certified prefix. Every new event restarts all active pairs.
 // The second result says whether this path owned the input.
@@ -199,6 +238,8 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 	var slices []threeTraceSlice
 	var boundaries []threeTraceEvent
 	var policy [3]decad.SweepStartPolicy
+	var persistent [3]*decad.ContactPoint
+	var restEnd *State
 	for exactBase(at).Cmp(exactBase(dt)) < 0 {
 		// MaxEvents is the full-step proof budget. The design refuses any
 		// remaining time once the recorded event count reaches that limit.
@@ -226,15 +267,21 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 		var selectedRight *big.Rat
 		for _, key := range keys {
 			sweep := reports[key]
-			if sweep.Outcome == decad.SweepClear || sweep.Outcome == decad.SweepDepartedClear {
+			if w.sequentialNoEventProof(key, sweep, policy[key], persistent[key]) {
 				continue
 			}
 			if sweep.Outcome == decad.SweepUndecided {
 				continue
 			}
 			if !w.sequentialCandidate(sweep) ||
-				w.three.dynamicCount == 2 && w.three.pairs[key].restitution.Base() <= 0 {
+				w.three.dynamicCount == 2 && w.three.pairs[key].restitution.Base() <= 0 &&
+					!w.sequentialSphereRestCandidate(key, sweep) {
 				return w.threeUndecided(key, "sequential pair has no supported first impact"), true, nil
+			}
+			for prior := range persistent {
+				if persistent[prior] != nil {
+					return w.threeUndecided(key, "a resting sphere pair has another possible event"), true, nil
+				}
 			}
 			right := new(big.Rat).Mul(exactBase(sweep.Bracket.To.Fraction), exactBase(remaining))
 			if selected < 0 || right.Cmp(selectedRight) < 0 {
@@ -262,7 +309,15 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 					return w.threeUndecided(-1, "final three-body drift pose is not finite"), true, nil
 				}
 			}
-			proofs, ok, err := w.threeSequentialProofs(ctx, keys, current, end, remaining, policy, -1, nil)
+			if restEnd != nil {
+				candidate := withPairState(end, *restEnd)
+				if !threeRestEndWithin(end, candidate, w.step.Contact.PointResolution.Base()) {
+					return w.threeUndecided(-1, "sphere rest endpoint exceeds the rounded path bound"), true, nil
+				}
+				end = candidate
+			}
+			proofs, ok, err := w.threeSequentialProofs(ctx, keys, current, end, remaining,
+				policy, persistent, -1, nil)
 			if err != nil {
 				return nil, true, err
 			}
@@ -363,7 +418,7 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 		}
 		post := withPairState(pre, child.Trace.post)
 		proofs, ok, err := w.threeSequentialProofs(ctx, keys, current, pre,
-			localAt, policy, selected, child.Trace.preSweep)
+			localAt, policy, persistent, selected, child.Trace.preSweep)
 		if err != nil {
 			return nil, true, err
 		}
@@ -398,6 +453,28 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 		boundaries = append(boundaries, threeTraceEvent{at: globalAt, pre: pre, post: post})
 		current, at = post, globalAt
 		policy[selected] = decad.ContinueSeparatingTouch
+		if w.sequentialSphereRestCandidate(selected, reports[selected]) {
+			if child.Trace.postSweep == nil || !child.Trace.postSweep.HasAffineReplayProof() {
+				return w.threeUndecided(selected, "sphere rest lacks a rounded remainder"), true, nil
+			}
+			switch child.Trace.postSweep.Outcome {
+			case decad.SweepClear:
+				policy[selected] = decad.StopAtInitialContact
+			case decad.SweepPersistentTouch:
+				point := event.Manifold.Points[0]
+				if !spherePairContinuationWithin(child.Trace.postSweep,
+					decad.SweepPersistentTouch, point, w.step) {
+					return w.threeUndecided(selected, "sphere rest track exceeds its bounds"), true, nil
+				}
+				persistent[selected] = &point
+				policy[selected] = decad.ContinueCertifiedTouch
+				childEnd := child.Trace.end
+				restEnd = &childEnd
+			case decad.SweepDepartedClear:
+			default:
+				return w.threeUndecided(selected, "sphere rest has no certified continuation"), true, nil
+			}
+		}
 		for _, key := range keys {
 			if key != selected {
 				policy[key] = decad.StopAtInitialContact
@@ -427,6 +504,7 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 
 func (w *World) threeSequentialProofs(ctx context.Context, keys []int,
 	start, end State, duration units.Value, policy [3]decad.SweepStartPolicy,
+	persistent [3]*decad.ContactPoint,
 	impact int, impactPrefix *decad.SweepReport) ([3]*decad.SweepReport, bool, error) {
 	var proofs [3]*decad.SweepReport
 	for _, key := range keys {
@@ -442,7 +520,7 @@ func (w *World) threeSequentialProofs(ctx context.Context, keys []int,
 		if err != nil {
 			return proofs, false, err
 		}
-		if ideal.Outcome != decad.SweepClear && ideal.Outcome != decad.SweepDepartedClear {
+		if !w.sequentialNoEventProof(key, ideal, policy[key], persistent[key]) {
 			return proofs, false, nil
 		}
 		rounded, err := pair.sweepPoses(ctx, pairState(start, pair), pairState(end, pair),
@@ -450,12 +528,37 @@ func (w *World) threeSequentialProofs(ctx context.Context, keys []int,
 		if err != nil {
 			return proofs, false, err
 		}
-		if rounded.Outcome != ideal.Outcome || !rounded.HasAffineReplayProof() {
+		if rounded.Outcome != ideal.Outcome || !rounded.HasAffineReplayProof() ||
+			!w.sequentialNoEventProof(key, rounded, policy[key], persistent[key]) {
 			return proofs, false, nil
 		}
 		proofs[key] = rounded
 	}
 	return proofs, true, nil
+}
+
+// The global event time may move by one float step while it is mapped back
+// into the selected bracket. Admit the child endpoint only within the same
+// point budget, then prove the complete retimed path again for every pair.
+func threeRestEndWithin(drift, child State, pointLimit float64) bool {
+	if !finite(pointLimit) || pointLimit < 0 {
+		return false
+	}
+	for _, before := range drift.Entries() {
+		after, ok := child.Body(before.Body)
+		if !ok || before.LinearVelocity != after.LinearVelocity ||
+			before.AngularVelocity != after.AngularVelocity ||
+			before.Pose.ApplyDir(r3.Vec{X: 1}) != after.Pose.ApplyDir(r3.Vec{X: 1}) ||
+			before.Pose.ApplyDir(r3.Vec{Y: 1}) != after.Pose.ApplyDir(r3.Vec{Y: 1}) ||
+			before.Pose.ApplyDir(r3.Vec{Z: 1}) != after.Pose.ApplyDir(r3.Vec{Z: 1}) {
+			return false
+		}
+		distance, bounded := sphereNormUpper(before.Pose.Translation().Sub(after.Pose.Translation()))
+		if !bounded || distance > pointLimit {
+			return false
+		}
+	}
+	return true
 }
 
 func (w *World) threeSequentialConservation(reference *World,
