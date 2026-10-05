@@ -349,14 +349,16 @@ An outer-box intersection enters the axial impact path only when relative
 translation has zero components across the face, the initial axial support
 gap is nonnegative, and the complete disk stays inside the same box face.
 The signed axial support gap is affine. A decreasing positive gap supplies
-its exact first-contact root. Use a dyadic bracket with a separated left
+its exact first-contact root, including equality at the final endpoint. Use a
+dyadic bracket with a separated left
 sample and a touching or shallow-overlapping right sample whose original
 face identities and signed normal match the posed `ContactPair` query.
 Transfer that query's bounded witness to the ideal path by charging the
 rounded pose difference. An initial touch with increasing support gap proves
 immediate departure. A stationary touch, near gap without a clear margin,
 lateral translation during impact, or a path leaving the face corridor returns
-`SweepUndecided`.
+`SweepUndecided`. Exhausting the pose budget at the bracket's right sample
+returns `SweepUndecided` with `SweepPoseBudget` and the unresolved bracket.
 
 Replay translates the cached source outer boxes with the held affine paths.
 At each requested fraction, the rounded cylinder projection must remain

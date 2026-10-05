@@ -297,20 +297,26 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 		return r.report, nil
 	}
 	if r.gap.sign() <= 0 || r.slope.sign() >= 0 ||
-		dyAdd(r.gap, r.slope).sign() >= 0 {
+		dyAdd(r.gap, r.slope).sign() > 0 {
 		return cylinderSweepUndecided(r.report, r.pa.duration), nil
 	}
 	root := new(big.Rat).Quo(dyNeg(r.gap).rat(), r.slope.rat())
 	resolution, _ := exactBaseValue(r.req.TimeResolution)
-	leftF, rightF, ok := sphereImpactBracket(root, r.pa.duration, resolution)
+	leftF, rightF, ok := spherePairImpactBracket(root, r.pa.duration, resolution)
 	if !ok || leftF.Sign() <= 0 || rightF.Cmp(one) > 0 {
 		return cylinderSweepUndecided(r.report, r.pa.duration), nil
 	}
 	left, err := r.sample(ctx, leftF)
+	if errors.Is(err, errSweepPoseBudget) {
+		return cylinderSweepBudget(r.report, r.pa.duration, zero, leftF), nil
+	}
 	if err != nil {
 		return nil, err
 	}
 	right, err := r.sample(ctx, rightF)
+	if errors.Is(err, errSweepPoseBudget) {
+		return cylinderSweepBudget(r.report, r.pa.duration, leftF, rightF), nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -330,6 +336,12 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 	r.report.replay.setBracket(leftF, rightF)
 	r.report.replay.snapshot(r.report)
 	return r.report, nil
+}
+
+func cylinderSweepBudget(report *SweepReport, duration, from, to *big.Rat) *SweepReport {
+	report.Outcome, report.Cause = SweepUndecided, SweepPoseBudget
+	report.Unresolved = &SweepInterval{From: sweepInstant(from, duration), To: sweepInstant(to, duration)}
+	return report
 }
 
 func cylinderSweepUndecided(report *SweepReport, duration *big.Rat) *SweepReport {

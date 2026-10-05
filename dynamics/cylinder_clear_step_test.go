@@ -280,16 +280,59 @@ func TestCylinderAxialFaceContact(t *testing.T) {
 	}
 }
 
+func TestCylinderImpactPoseBudgetIsUndecided(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	cylinder := makeCylinder(t, doc)
+	pose, err := r3.Translation(r3.Vec{Z: 1})
+	require.NoError(t, err)
+	zero := decad.QuantityVec{X: units.RadiansPerSecond(0),
+		Y: units.RadiansPerSecond(0), Z: units.RadiansPerSecond(0)}
+	down := decad.QuantityVec{X: units.MillimetersPerSecond(0),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(-10)}
+	fixed := decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(.2)}
+	moving := decad.RigidDriftSegment{From: pose, LinearVelocity: down,
+		AngularVelocity: zero, Duration: units.Seconds(.2)}
+	request := decad.SweepRequest{ContactRequest: decad.ContactRequest{
+		PointResolution: units.Millimeters(1e-6), NormalResolution: units.Radians(1e-6)},
+		TimeResolution: units.Seconds(1e-9), MaxPoseEvaluations: 2}
+	for _, reverse := range []bool{false, true} {
+		a, b := floor, cylinder
+		pa, pb := decad.PairPath(fixed), decad.PairPath(moving)
+		if reverse {
+			a, b, pa, pb = b, a, pb, pa
+		}
+		sweep, err := doc.SweepPair(t.Context(), a, b, pa, pb, request)
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepUndecided, sweep.Outcome)
+		require.Equal(t, decad.SweepPoseBudget, sweep.Cause)
+		require.EqualValues(t, 2, sweep.PoseEvaluations)
+		require.NotNil(t, sweep.Unresolved)
+		require.Less(t, sweep.Unresolved.From.Elapsed.Value.Base(), .1)
+		require.Greater(t, sweep.Unresolved.To.Elapsed.Value.Base(), .1)
+		require.False(t, sweep.HasAffineReplayProof())
+	}
+}
+
 func TestCylinderAxialFloorImpact(t *testing.T) {
 	for _, reverse := range []bool{false, true} {
 		t.Run(map[bool]string{false: "floor first", true: "cylinder first"}[reverse], func(t *testing.T) {
-			cylinderAxialFloorImpact(t, reverse)
+			cylinderAxialFloorImpact(t, reverse, .2, 10)
 		})
 	}
 }
 
-func cylinderAxialFloorImpact(t *testing.T, reverse bool) {
+func TestCylinderAxialEndpointImpact(t *testing.T) {
+	for _, reverse := range []bool{false, true} {
+		t.Run(map[bool]string{false: "floor first", true: "cylinder first"}[reverse], func(t *testing.T) {
+			cylinderAxialFloorImpact(t, reverse, .125, 8)
+		})
+	}
+}
+
+func cylinderAxialFloorImpact(t *testing.T, reverse bool, duration, speed float64) {
 	t.Helper()
+	impactAt := 1 / speed
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	cylinder := makeCylinder(t, doc)
@@ -308,10 +351,10 @@ func cylinderAxialFloorImpact(t *testing.T, reverse bool) {
 	zeroAngular := decad.QuantityVec{X: units.RadiansPerSecond(0),
 		Y: units.RadiansPerSecond(0), Z: units.RadiansPerSecond(0)}
 	down := decad.QuantityVec{X: units.MillimetersPerSecond(0),
-		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(-10)}
-	stationary := decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(.2)}
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(-speed)}
+	stationary := decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(duration)}
 	moving := decad.RigidDriftSegment{From: pose, LinearVelocity: down,
-		AngularVelocity: zeroAngular, Duration: units.Seconds(.2)}
+		AngularVelocity: zeroAngular, Duration: units.Seconds(duration)}
 	pathA, pathB := decad.PairPath(stationary), decad.PairPath(moving)
 	if reverse {
 		pathA, pathB = pathB, pathA
@@ -319,10 +362,15 @@ func cylinderAxialFloorImpact(t *testing.T, reverse bool) {
 	sweep, err := doc.SweepPair(t.Context(), a, b, pathA, pathB, decad.SweepRequest{
 		ContactRequest: request, TimeResolution: units.Seconds(1e-9), MaxPoseEvaluations: 128})
 	require.NoError(t, err)
-	require.Equal(t, decad.SweepImpactBracket, sweep.Outcome)
+	require.Equal(t, decad.SweepImpactBracket, sweep.Outcome, "cause=%v samples=%+v", sweep.Cause, sweep.Samples)
 	require.NotNil(t, sweep.Event.Manifold)
-	require.Less(t, sweep.Bracket.From.Elapsed.Value.Base(), .1)
-	require.Greater(t, sweep.Bracket.To.Elapsed.Value.Base(), .1)
+	require.Less(t, sweep.Bracket.From.Elapsed.Value.Base(), impactAt)
+	if duration == impactAt {
+		require.True(t, sweep.BracketEndsAtDuration())
+		require.Equal(t, duration, sweep.Bracket.To.Elapsed.Value.Base())
+	} else {
+		require.Greater(t, sweep.Bracket.To.Elapsed.Value.Base(), impactAt)
+	}
 	require.LessOrEqual(t, sweep.Bracket.To.Elapsed.Value.Base()-sweep.Bracket.From.Elapsed.Value.Base(), 1e-9)
 	normal := r3.Vec{Z: 1}
 	if reverse {
@@ -330,15 +378,17 @@ func cylinderAxialFloorImpact(t *testing.T, reverse bool) {
 	}
 	require.Equal(t, normal, sweep.Event.Manifold.Points[0].Normal.Value)
 	require.True(t, sweep.HasAffineReplayProof())
-	replayA, replayB, err := sweep.CertifiedPosesAt(units.Seconds(.05))
+	replayA, replayB, err := sweep.CertifiedPosesAt(units.Seconds(impactAt / 2))
 	require.NoError(t, err)
 	replayCylinder := replayB
 	if reverse {
 		replayCylinder = replayA
 	}
 	require.InDelta(t, .5, replayCylinder.Translation().Z, 1e-9)
-	_, _, err = sweep.CertifiedPosesAt(units.Seconds(.15))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	if duration > impactAt {
+		_, _, err = sweep.CertifiedPosesAt(units.Seconds((impactAt + duration) / 2))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+	}
 	mass := cylinderMass()
 	material := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}
 	defs := []dynamics.RigidBody{
@@ -361,22 +411,29 @@ func cylinderAxialFloorImpact(t *testing.T, reverse bool) {
 	require.NoError(t, err)
 	start, err := world.NewState(states)
 	require.NoError(t, err)
-	step, err := world.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.2))
+	step, err := world.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(duration))
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Advanced, step.Status, "%+v", step.Diagnostics)
 	require.Len(t, step.Events, 1)
-	require.InDelta(t, 15, step.Events[0].NormalImpulse.Base(), 1e-6)
+	require.InDelta(t, 1.5*speed, step.Events[0].NormalImpulse.Base(), 1e-6)
 	require.NotNil(t, step.Conservation)
-	require.InDelta(t, 50, step.Conservation.Input.KineticEnergy.Value.Base(), 1e-8)
-	require.InDelta(t, 12.5, step.Conservation.Completion.KineticEnergy.Value.Base(), 1e-6)
-	require.InDelta(t, -10, step.Conservation.Input.LinearMomentum.Value.Z.Base(), 1e-8)
-	require.InDelta(t, 5, step.Conservation.Completion.LinearMomentum.Value.Z.Base(), 1e-6)
-	require.InDelta(t, 15, step.Conservation.ContactImpulse.Value.Z.Base(), 1e-6)
+	require.InDelta(t, .5*speed*speed, step.Conservation.Input.KineticEnergy.Value.Base(), 1e-8)
+	require.InDelta(t, .125*speed*speed, step.Conservation.Completion.KineticEnergy.Value.Base(), 1e-6)
+	require.InDelta(t, -speed, step.Conservation.Input.LinearMomentum.Value.Z.Base(), 1e-8)
+	require.InDelta(t, .5*speed, step.Conservation.Completion.LinearMomentum.Value.Z.Base(), 1e-6)
+	require.InDelta(t, 1.5*speed, step.Conservation.ContactImpulse.Value.Z.Base(), 1e-6)
 	final, ok := step.Next.Body(cylinder)
 	require.True(t, ok)
-	require.InDelta(t, .5, final.Pose.Translation().Z, 1e-6)
-	require.InDelta(t, 5, final.LinearVelocity.Z.Base(), 1e-6)
-	for _, sample := range []struct{ at, z float64 }{{.05, .5}, {.15, .25}, {.2, .5}} {
+	finalZ := .5 * speed * (duration - impactAt)
+	require.InDelta(t, finalZ, final.Pose.Translation().Z, 1e-6)
+	require.InDelta(t, .5*speed, final.LinearVelocity.Z.Base(), 1e-6)
+	samples := []struct{ at, z float64 }{{impactAt / 2, .5}}
+	if duration > impactAt {
+		samples = append(samples, struct{ at, z float64 }{
+			(impactAt + duration) / 2, finalZ / 2})
+	}
+	samples = append(samples, struct{ at, z float64 }{duration, finalZ})
+	for _, sample := range samples {
 		state, err := step.Trace.Sample(units.Seconds(sample.at))
 		require.NoError(t, err)
 		entry, ok := state.Body(cylinder)
@@ -385,14 +442,17 @@ func cylinderAxialFloorImpact(t *testing.T, reverse bool) {
 	}
 }
 
-func TestCylinderOffCenterImpactUndecided(t *testing.T) {
+func TestCylinderSlowOffCenterSpinUndecided(t *testing.T) {
 	doc := decad.New()
 	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
 	cylinder := makeCylinder(t, doc)
 	pose, err := r3.Translation(r3.Vec{Z: 1})
 	require.NoError(t, err)
 	mass := cylinderMass()
-	mass.Center.Value.X = 1
+	mass.Center.Value.X = 5
+	mass.Inertia.XX.Value = units.KilogramSquareMillimeters(1e8)
+	mass.Inertia.YY.Value = units.KilogramSquareMillimeters(1e8)
+	mass.Inertia.ZZ.Value = units.KilogramSquareMillimeters(1e8)
 	material := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}
 	zeroAngular := decad.QuantityVec{X: units.RadiansPerSecond(0),
 		Y: units.RadiansPerSecond(0), Z: units.RadiansPerSecond(0)}
@@ -418,5 +478,5 @@ func TestCylinderOffCenterImpactUndecided(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Undecided, step.Status)
 	require.Nil(t, step.Next)
-	require.Contains(t, step.Diagnostics[0].Reason, "off-center impulse")
+	require.Contains(t, step.Diagnostics[0].Reason, "omitted cylinder point motion")
 }
