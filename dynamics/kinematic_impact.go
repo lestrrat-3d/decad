@@ -76,7 +76,7 @@ func (w *World) stepKinematicImpact(ctx context.Context, from, kicked State, dt 
 		velocityComponent(kicked.entries[1].LinearVelocity, axis),
 	}
 	preSpeed[motion.index] = velocityComponent(motion.effective, axis)
-	relative := (preSpeed[1].Base() - preSpeed[0].Base()) * sign
+	relative := float64((preSpeed[1].Base() - preSpeed[0].Base()) * sign)
 	if !finite(relative) || relative >= -w.step.VelocityResidual.Base() {
 		return undecided(w, "kinematic bracket is not certified closing"), nil
 	}

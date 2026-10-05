@@ -2681,12 +2681,11 @@ hand-written manifold, event or pose (CLAUDE.md "Correctness must be observable"
   and arm64 does where amd64 does not, so an unrounded product can move a published float by an ulp and
   turn a touching outcome into a separating one. Every float product `dynamics` writes that feeds an add
   or a subtract on a published or certified path is rounded explicitly with `float64(...)`, which the
-  spec says forbids the fusion. The products inside `r3`'s `Vec.Dot`, `Vec.Add` of a `Vec.Scale`,
-  `SymmetricTensor.MulVec` and `Transform.Apply` still fuse where they inline into `dynamics`, so their
-  last bits can still differ between CPUs: on arm64 the fused `Vec.Dot` in the island solve's sweep
-  turns `TestSpherePairInitialZeroRestitutionTangentialDeparture`'s departure into an unproved touch
-  track. `GOAMD64=v3` builds fuse on amd64, and `GOARCH=arm64 go build
-  -gcflags='github.com/lestrrat-3d/decad/dynamics=-d=fmahash=vy'` lists every fused site arm64 keeps.
+  spec says forbids the fusion. `r3` follows the same rule in every vector, tensor, frame and transform
+  product, so the general step publishes the same bits on amd64, `GOAMD64=v3` builds and arm64. The
+  closed-form responder files §6.5 lists keep their fused products until §13 PR 5 deletes them.
+  `GOARCH=arm64 go build -gcflags='github.com/lestrrat-3d/decad/dynamics=-d=fmahash=vy'` lists every
+  fused site that remains.
 - **No pinned bound literals.** Bounds are asserted negligible against a slack figure with a comment
   saying why; values are `InDelta` at a stated slack. FMA contraction differs between hosts.
 - **Dyadic inputs.** Fixture coordinates, velocities and times are dyadic so exact comparisons (event

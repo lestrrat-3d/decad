@@ -507,7 +507,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		velocityComponent(kicked.entries[0].LinearVelocity, axis),
 		velocityComponent(kicked.entries[1].LinearVelocity, axis),
 	}
-	relativeSpeed := (preSpeed[1].Base() - preSpeed[0].Base()) * normalSign
+	relativeSpeed := float64((preSpeed[1].Base() - preSpeed[0].Base()) * normalSign)
 	if relativeSpeed >= -w.step.VelocityResidual.Base() {
 		return undecided(w, "impact is not closing"), nil
 	}
