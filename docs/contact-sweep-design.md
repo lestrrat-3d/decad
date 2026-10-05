@@ -9,7 +9,8 @@ inside one box face. A sphere against an exactly orthogonal rotated source
 box also certifies a strict single-face affine clear span, first impact, or
 separating departure. A full source cylinder certifies a clear path,
 first face impact, and separating departure inside a source-box face, including
-transverse translation that stays inside the face. A full circular vertical
+transverse translation that stays inside the face, and a persistent track for
+an end disk resting or sliding on that face. A full circular vertical
 source prism also certifies the same outcomes at its sidewall when its complete
 axial contact line stays inside a broad source-box face.
 One zero-bound faceted Boolean solid with a certified rectangular lower face
@@ -83,7 +84,8 @@ rectangular half-profile can certify a strictly separated axial affine path
 against a containing source-box face. The sweep uses the source-derived outer
 disk box at both endpoints and over the full translation, and replay charges
 the rounded pose deviation before returning a clear sample. Both sources
-can also certify a first face impact and separating departure. Near contact,
+can also certify a first face impact, separating departure, and an end-disk
+persistent track. Near contact,
 lateral motion outside the containing face, partial revolutions, and other
 revolved profiles return `Undecided` on this path.
 `docs/collision-dynamics-design.md` owns the package
@@ -490,19 +492,34 @@ dyadic bracket with a separated left
 sample and a touching or shallow-overlapping right sample whose original
 face identities and signed normal match the posed `ContactPair` query.
 Transfer that query's bounded witness to the ideal path by charging the
-rounded pose difference. An initial touch with increasing support gap proves
-immediate departure. A stationary touch, near gap without a clear margin,
-or a path leaving the face corridor returns
-`SweepUndecided`. Exhausting the pose budget at the bracket's right sample
-returns `SweepUndecided` with `SweepPoseBudget` and the unresolved bracket.
+rounded pose difference. Under either continuation policy, an initial touch
+with increasing support gap proves immediate departure. Under
+`ContinueCertifiedTouch`, an initial end-disk touch whose support gap has
+zero slope (equal axial displacement, any transverse translation inside the
+corridor) is a full-span persistent track: the gap is zero at every fraction,
+and strict endpoint containment keeps the complete disk inside the same face,
+so the same two original faces and exact normal hold throughout. Every
+coordinate of the disk-center witness lies within the endpoint envelope of
+both outer boxes. One outward ULP at its largest magnitude, as a point-ball
+radius, must fit `PointResolution`, so `ManifoldAt` can read a bounded point
+at any fraction. The final real sample must also touch with the same faces.
+`ManifoldAt` translates both cached sources by the exact fraction, reclassifies
+them, and returns the single disk-center point. A closing touch, a stationary
+touch under `ContinueSeparatingTouch` (`SweepDepartureUnproved`), a sidewall
+line touch, a near gap without a clear margin, or a path leaving the face
+corridor returns `SweepUndecided`. Exhausting the pose budget at the bracket's
+right sample returns `SweepUndecided` with `SweepPoseBudget` and the
+unresolved bracket.
 
 Replay translates the cached source outer boxes with the held affine paths.
 At each requested fraction, the rounded cylinder projection must remain
 inside the rounded box face and the pose difference must fit
 `PointResolution`. A clear path keeps a support gap above that difference.
 Departure requires exact touch at the start and positive ideal and rounded
-gaps afterward. Before an impact bracket, replay requires a positive gap;
-inside the bracket, the ideal support gap must fit `PointResolution`.
+gaps afterward. A persistent track's rounded gap must lie within the pose
+difference of its zero ideal gap. Before an impact bracket, replay requires a
+positive gap; inside the bracket, the ideal support gap must fit
+`PointResolution`.
 
 For one full circular source prism with a vertical cylinder axis, the same
 affine proof may select a horizontal axis instead of the cylinder axis. Its
@@ -885,6 +902,7 @@ Assert computed locations, brackets, and bounds, not only enum values.
 | A graze with an event fraction or elapsed time that `units.Value` cannot represent exactly, a rounded event pose that loses exact touch, or a two-pose budget | Return `SweepUndecided` with the earliest interval and specific cause; never publish `SweepClear` or a false graze. |
 | A 10 mm box touches a fixed floor, then moves upward at `50 mm/s` for `0.1 s` | Default mode returns `InitiallyTouching`. `ContinueSeparatingTouch` returns `DepartedClear`, with a positive final gap enclosing `5 mm`. |
 | The same touching boxes slide tangentially while their face patches overlap | `ContinueSeparatingTouch` returns `Undecided`; `ContinueCertifiedTouch` returns `PersistentTouch` until the first patch-feature change. |
+| A radius-5 source cylinder rests on its end disk on a fixed floor, still or sliding `(8,-4,0) mm/s` for `1 s` | `ContinueCertifiedTouch` returns `PersistentTouch`; `ManifoldAt` puts the disk-center point at the slid center on the floor plane in both body orders. A closing path or a disk leaving the face is `Undecided`. |
 | A top box starts at `x=[0,10]` on an equal fixed box, then slides `+5 mm/s` for `3 s` | The right-sided initial patch is admitted. `ContactTransitionBracket` encloses the edge exit at `2 s`; no earlier transition occurs. |
 | A rotating body starts in touch without a one-sided contact-set proof | Both continuation policies return `Undecided`; positive velocity at one witness cannot certify the complete contact set. |
 | Equal stationary segments and two same-handed reflected segments | Stationary paths are valid; reflected paths are accepted by geometry when the kernel can prove their relation. A mixed-handedness screw path returns `ErrDegenerate`. |

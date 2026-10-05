@@ -124,6 +124,8 @@ type SweepContactTrack struct {
 	sphere        *sourceSphereContactProof
 	spherePair    *[2]sourceSphereContactProof
 	sphereFirst   bool
+	cylinder      *sourceCylinderContactProof // disk-on-face track (contact_cylinder_sweep.go)
+	cylinderFirst bool
 	start, end    *big.Rat
 	duration      *big.Rat
 	request       ContactRequest
@@ -173,6 +175,9 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 	}
 	if t.planar != nil {
 		return t.planar.planarManifoldAt(f, t.request)
+	}
+	if t.cylinder != nil {
+		return t.cylinderTrackManifold(f)
 	}
 	if t.orientedA != nil && t.orientedB != nil {
 		a, okA := translatedOrientedBox(*t.orientedA, t.orientedDelta, f)

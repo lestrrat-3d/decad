@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
@@ -289,9 +290,11 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 		boxA: firstBox, boxB: secondBox, clearAxis: r.axis,
 		cylinderSide: r.side, cylinderGap: r.gap, cylinderSlope: r.slope}
 	if first.Ideal.Relation == ContactTouching {
-		if r.slope.Sign() <= 0 || r.req.StartPolicy != ContinueSeparatingTouch ||
-			first.Ideal.Manifold == nil {
+		if first.Ideal.Manifold == nil {
 			return cylinderSweepUndecided(r.report, r.pa.duration), nil
+		}
+		if r.slope.Sign() <= 0 {
+			return r.persistentTrack(ctx, first)
 		}
 		last, err := r.sample(ctx, one)
 		if err != nil {
@@ -345,6 +348,82 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 	r.report.replay.setBracket(leftF, rightF)
 	r.report.replay.snapshot(r.report)
 	return r.report, nil
+}
+
+// persistentTrack certifies an end disk resting on the selected box face for
+// the whole path. The axial support gap is zero at the start and its affine
+// slope is zero, so it is zero at every fraction; the caller's strict
+// endpoint containment keeps the complete disk inside the same face
+// throughout. The two source faces and the exact normal therefore hold over
+// the closed span, and ManifoldAt reduces the exact pair at any fraction.
+func (r *sourceCylinderImpactRun) persistentTrack(ctx context.Context, first *SweepSample) (*SweepReport, error) {
+	zero, one := new(big.Rat), big.NewRat(1, 1)
+	if r.req.StartPolicy != ContinueCertifiedTouch {
+		return cylinderSweepCause(r.report, r.pa.duration, SweepDepartureUnproved), nil
+	}
+	firstBox, secondBox := r.box, r.cylinder.box
+	if r.cylinderFirst {
+		firstBox, secondBox = r.cylinder.box, r.box
+	}
+	if !r.slope.IsZero() || r.axis != r.cylinder.axis || len(first.Ideal.Manifold.Points) != 1 ||
+		!sourceTrackPointsWithin(firstBox, secondBox, r.pa.delta, r.pb.delta, r.req.PointResolution.Base()) {
+		return cylinderSweepCause(r.report, r.pa.duration, SweepContactTrackUnproved), nil
+	}
+	last, err := r.sample(ctx, one)
+	if errors.Is(err, errSweepPoseBudget) {
+		return cylinderSweepBudget(r.report, r.pa.duration, zero, one), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	point := first.Ideal.Manifold.Points[0]
+	if last.Ideal.Relation != ContactTouching || last.Ideal.Manifold == nil ||
+		len(last.Ideal.Manifold.Points) != 1 || last.Ideal.Manifold.Points[0].FeatureA != point.FeatureA ||
+		last.Ideal.Manifold.Points[0].FeatureB != point.FeatureB {
+		return cylinderSweepCause(r.report, r.pa.duration, SweepContactTrackUnproved), nil
+	}
+	cylinder := r.cylinder
+	track := &SweepContactTrack{a: firstBox, b: secondBox, deltaA: r.pa.delta, deltaB: r.pb.delta,
+		cylinder: &cylinder, cylinderFirst: r.cylinderFirst,
+		start: new(big.Rat), end: big.NewRat(1, 1), duration: new(big.Rat).Set(r.pa.duration),
+		request: r.req.ContactRequest, features: [2]ContactFeature{point.FeatureA, point.FeatureB},
+		normal: point.Normal, pointCount: 1}
+	r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, track
+	r.report.replay.track = track
+	r.report.replay.snapshot(r.report)
+	return r.report, nil
+}
+
+// cylinderTrackManifold reduces the track's exact cylinder and box at one
+// fraction and requires the track's single disk-face point.
+func (t *SweepContactTrack) cylinderTrackManifold(f *big.Rat) (*ContactManifold, error) {
+	cylinderBox, box := t.b, t.a
+	cylinderDelta, boxDelta := t.deltaB, t.deltaA
+	if t.cylinderFirst {
+		cylinderBox, box = t.a, t.b
+		cylinderDelta, boxDelta = t.deltaA, t.deltaB
+	}
+	movedCylinder, okCylinder := translatedContactBox(cylinderBox, cylinderDelta, f)
+	movedBox, okBox := translatedContactBox(box, boxDelta, f)
+	if !okCylinder || !okBox {
+		return nil, fmt.Errorf("%w: cylinder contact-track fraction cannot be represented", ErrUnsupported)
+	}
+	cylinder := *t.cylinder
+	cylinder.box = movedCylinder
+	report := &ContactReport{Request: t.request}
+	classifySourceCylinderBox(report, cylinder, movedBox, t.cylinderFirst)
+	if report.Relation != ContactTouching || report.Manifold == nil || len(report.Manifold.Points) != 1 ||
+		report.Manifold.Points[0].FeatureA != t.features[0] ||
+		report.Manifold.Points[0].FeatureB != t.features[1] {
+		return nil, fmt.Errorf("%w: cylinder contact track lost its disk point", ErrUnsupported)
+	}
+	return report.Manifold, nil
+}
+
+func cylinderSweepCause(report *SweepReport, duration *big.Rat, cause SweepCause) *SweepReport {
+	cylinderSweepUndecided(report, duration)
+	report.Cause = cause
+	return report
 }
 
 func cylinderSweepBudget(report *SweepReport, duration, from, to *big.Rat) *SweepReport {

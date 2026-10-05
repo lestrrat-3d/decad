@@ -240,6 +240,12 @@ func (r *SweepReport) certifiedCylinderPosesAtFraction(f *big.Rat, poseA, poseB 
 		} else if idealGap.Sign() <= 0 || actualGap.Cmp(deviation) <= 0 {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder departure loses its gap", ErrUnsupported)
 		}
+	case SweepPersistentTouch:
+		// The rounded gap lies within the deviation, itself within
+		// PointResolution, of the track's identically zero ideal gap.
+		if p.track == nil || p.track.cylinder == nil || idealGap.Sign() != 0 {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder replay loses its disk track", ErrUnsupported)
+		}
 	case SweepImpactBracket:
 		if p.bracketLo == nil || p.bracketHi == nil {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder impact has no bracket", ErrUnsupported)

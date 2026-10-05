@@ -30,7 +30,8 @@ solve, reuses every certificate whose inputs repeat (§5.3), and restarts a repe
 point (§6.2); `MaxPairSweeps` bounds the rest. The multi-event
 `Trace` of §3.4 and §7.1, the `Timeline` of §7.2 and §12's typed diagnostics ship. `Document.SweptBox`
 (§4.2) is public; the cylinder and bounded-faceted clear sweeps certify with it, and the scheduled step's
-broad phase reads it.
+broad phase reads it. A source cylinder that lands on its end disk rests on contact-sweep §4.6's persistent
+disk track.
 `docs/collision-v1-support.md` is the inventory of the shape pairs, responses and refusals that ship, and
 this document does not restate it. The two- and three-body steps query their pairs one by one with no broad
 phase, and their `Trace` holds fixed two- and three-body slots. The exact arithmetic every certificate below
