@@ -509,7 +509,10 @@ func exactnessFromBound(bound float64) Exactness {
 // positive-bound faceted Boolean or all-planar cap-loop chamfer takes the
 // same run through its held mesh under §10.4: a first impact brackets onto a
 // ContactBand sample, and a band start never departs but may carry a band
-// track widened by twice the displacement. A full source cylinder whose
+// track widened by twice the displacement. Under a positive SupportBand the
+// band track runs over §10.5's support set and ends before any of its
+// vertices reaches the plane, and an exact pair that starts inside the band
+// may depart. A full source cylinder whose
 // ruling touches a face of an exact planar body that only translates may,
 // under a spinning drift, carry §10.4's rolling touch or band track.
 // Unsupported paths return SweepUndecided.
@@ -555,6 +558,9 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	}
 	if req.PointResolution.Base() <= 0 || req.NormalResolution.Base() <= 0 {
 		return nil, fmt.Errorf("%w: contact resolutions must be positive", ErrDegenerate)
+	}
+	if err := validateSupportBand(req.SupportBand); err != nil {
+		return nil, err
 	}
 	report := &SweepReport{A: a, B: b, PathA: pathA, PathB: pathB, Request: req}
 	if !pa.supported || !pb.supported {

@@ -20,7 +20,7 @@ shows a box impact and computed rebound.
 | Full source cylinder and source box | Axial disk in a wide face, including a disk resting or sliding on it; vertical extruded sidewall against a broad face | Centered frictionless rebound; rest on an end disk |
 | Verified faceted Boolean and source-box floor | One exact rectangular lower face, vertical affine path, contained footprint | Frictionless rebound or rest |
 | Full source cylinder sidewall, against a planar face or a parallel full source cylinder | Two-end ruling line at identity query poses; against a signed-axis face of an exact planar solid, a touch, gap or `ContactBand` at any pose, and a rolling touch or band track from such a start | Rolling on a fixed floor in a scheduled world, with and without gravity |
-| Two exact planar solids | Gap, touch, or overlap at any pose with a positive-determinant basis; a manifold when one is convex; a clear path, first impact, departure from touch, or persistent touch or band track under rotating or affine paths | None yet |
+| Two exact planar solids | Gap, touch, or overlap at any pose with a positive-determinant basis; a manifold when one is convex, with the support set under a positive `SupportBand`; a clear path, first impact, departure from touch, or persistent touch or band track under rotating or affine paths | None yet |
 | A planar solid and a positive-bound faceted Boolean or flat-faced cap-loop chamfer | Gap, overlap, or `ContactBand` with the held mesh's displacement charged; a manifold against a face of a body with no displacement; a clear path, first impact onto the band, or band track | None yet |
 
 The source-box path starts from rectangular source prisms. Signed-axis
@@ -179,6 +179,20 @@ band track whose `Band()` adds twice the summed δ.
 [Band tests](../contact_band_test.go) check the band, the charges, and
 each refusal.
 
+A positive `ContactRequest.SupportBand` adds the support set to two exact
+planar solids. A touch, or a shallow overlap through a face, also publishes
+every corner of the resting body that lies within the band above that face
+plane, with its foot strictly inside the face and its exact height as its
+`Separation`. A pair apart by at most the band is `ContactBand` with
+`Gap = [0 ± g]`, g the gap's upper end, and those corners as its manifold.
+`SweepPair` carries such a start, or a touch, on a band track over the whole
+support set. The track ends before any corner of the set reaches the face,
+and an exact pair whose corners all rise departs from a band start.
+[Support set tests](../contact_support_band_test.go) check the published
+heights, the rim, and a tray's floor and wall, and
+[band and departure tests](../contact_sweep_band_test.go) check the track's
+end and depth over the support set.
+
 ## Bodies and response
 
 `NewWorld` admits two or more sound solids and lists every body pair in
@@ -231,8 +245,10 @@ continues while the track's depth stays within `PenetrationResidual`, and
 the slice ends at the last grid time it does, where the pair enters an
 island again. A rotating pair's impact advances to its bracket's right end,
 and its island takes the manifold the rounded poses there show. A
-`ContactBand` is a touch whose band must lie within `PenetrationResidual`;
-a wider one leaves the step `dynamics.Undecided`, and so does a fixed pair
+`ContactBand` is a touch whose band must lie within `PenetrationResidual`,
+and `NewWorld` admits a `SupportBand` only within it. A band track's end
+solves on the support set the rounded poses there show, which holds the
+corner whose arrival ended the track. A wider band leaves the step `dynamics.Undecided`, and so does a fixed pair
 in such a band, with `StepFixedPairRelation`. A bounce sequence ends when an incoming speed falls to
 `ImpactSpeed`; one whose events reach `MaxEvents` with time remaining stops
 the step after the event that reached it. Kinematic bodies take
@@ -260,10 +276,12 @@ four-corner Coulomb slide and slide a box across a box the floor holds.
 [Timeline tests](../dynamics/timeline_test.go) bounce a sphere over three
 steps against the closed-form bounce times.
 [Tip tests](../dynamics/tip_test.go) tip a box from its edge through band
-slices and rotating impacts until it lands on its far edge; there it rocks
-between its two bottom edges, and the step stops `Undecided` once a far edge
-closes within one grid step of the near edge's touch. A box therefore does
-not yet come to rest flat after tipping over.
+slices and rotating impacts until it lands on its far edge. Under a zero
+`SupportBand` it then rocks between its two bottom edges, and the step stops
+`Undecided` once a far edge closes within one grid step of the near edge's
+touch. Under `SupportBand = PenetrationResidual/2` it comes to rest flat: a
+four-corner solve stops it with exactly zero velocities, and every later
+step absorbs its kick on all four corners.
 [Band rest tests](../dynamics/contact_band_test.go) rest a body on a
 displaced one within `PenetrationResidual` and stop below its band.
 The [stack-and-drop scene test](../dynamics/scene_test.go) runs 2 s of a

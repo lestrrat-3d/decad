@@ -428,3 +428,161 @@ func TestSweepPairPlanarClearReplay(t *testing.T) {
 	_, _, err = report.CertifiedPosesAt(report.Bracket.To.Elapsed.Value)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
+
+// The sweep fixtures of docs/multibody-dynamics-design.md §13 PR 14a: §10.5's
+// band track over the support set. The tilted cube of
+// contact_support_band_test.go rests on its near edge, which lies on the Y
+// axis, and turns about that axis at 1 rad/s, lowering its far edge from
+// 2⁻²¹ mm at 8·cos θ mm/s. The sweep lasts 2⁻²² s at a 2⁻³² s resolution, so
+// its grid step is 2⁻¹⁰ of the duration, and the far edge would reach the
+// floor near a quarter of it. The floor stays at the identity, so the rounded
+// poses read the ideal ones up to the cube's own rotation rounding.
+//
+// Legs shown to fail (each deleted in turn, fixture red, then restored):
+//   - the lifted term of the band's depth (planarSupport.depthAt):
+//     TestSweepPairSupportSetBand's BandAt no longer encloses the far edge's
+//     height;
+//   - the lifted vertices' lower height bound (clearAt over the lifted set):
+//     TestSweepPairSupportSetArrivalEndsTrack's track runs to the duration,
+//     past the far edge's arrival.
+
+const (
+	supportSweepSeconds = 1.0 / (1 << 22)
+	supportSweepStep    = 1.0 / (1 << 10)
+	// supportSweepCurvature is §10.2's K for the cube turning about its near
+	// edge at 1 rad/s: |ω|²·ρ/2 with ρ = 12 mm, its farthest vertex.
+	supportSweepCurvature = 6.0
+)
+
+// supportSweepScene is the floor and the tilted cube, the cube turning at
+// spin rad/s about +Y through its near edge and moving at v.
+func supportSweepScene(t *testing.T, doc *decad.Document, lift, spin float64, v r3.Vec) (*decad.Body, *decad.Body,
+	decad.RigidDriftSegment, decad.RigidDriftSegment) {
+	t.Helper()
+	floor, cube := supportCubeScene(t, doc, 100)
+	floorPath := sweepDrift(r3.Vec{}, supportSweepSeconds)
+	cubePath := sweepDrift(v, supportSweepSeconds)
+	cubePath.From = tiltedCubePose(t, r3.Vec{Z: lift})
+	cubePath.Center = r3.Vec{Z: lift}
+	cubePath.AngularVelocity.Y = units.RadiansPerSecond(spin)
+	return floor, cube, floorPath, cubePath
+}
+
+func supportSweepRequest(policy decad.SweepStartPolicy) decad.SweepRequest {
+	req := sweepRequest()
+	req.SupportBand = units.Millimeters(2 * supportLift)
+	req.TimeResolution = units.Seconds(1.0 / (1 << 32))
+	req.MaxPoseEvaluations = 512
+	req.StartPolicy = policy
+	return req
+}
+
+// supportSweepArrival is the time at which the far edge's §10.2 lower bound
+// 2⁻²¹ − 8·cos θ·u − K·u² reaches zero.
+func supportSweepArrival() float64 {
+	rate := 8 * supportCosine
+	k := supportSweepCurvature
+	return (-rate + math.Sqrt(rate*rate+4*k*supportLift)) / (2 * k)
+}
+
+func TestSweepPairSupportSetBand(t *testing.T) {
+	doc := decad.New()
+	floor, cube, floorPath, cubePath := supportSweepScene(t, doc, 0, 1, r3.Vec{})
+	theta := math.Asin(supportSine)
+	for order := range 2 {
+		a, b := floor, cube
+		pathA, pathB := decad.PairPath(floorPath), decad.PairPath(cubePath)
+		if order == 1 {
+			a, b, pathA, pathB = cube, floor, pathB, pathA
+		}
+		report, err := doc.SweepPair(t.Context(), a, b, pathA, pathB, supportSweepRequest(decad.ContinueCertifiedTouch))
+		require.NoError(t, err)
+		require.Equal(t, decad.SweepPersistentBand, report.Outcome, "order %d cause=%v", order, report.Cause)
+		require.Equal(t, decad.ContactTouching, report.InitialEvent.Relation)
+		require.Len(t, report.InitialEvent.Manifold.Points, 4)
+		track := report.ContactTrack
+		end := track.End().Fraction.Base()
+		// The track ends on the last grid fraction before the far edge's
+		// lower bound reaches zero.
+		require.InDelta(t, gridFloor(supportSweepArrival()/supportSweepSeconds, supportSweepStep), end, supportSweepStep)
+		require.Less(t, end*supportSweepSeconds, supportSweepArrival())
+		// The band encloses every support-set vertex's height through each
+		// sampled fraction: the near edge on the axis stays at zero, and the
+		// far edge's exact height, 8·sin(θ − u), is largest at the start.
+		for _, f := range []float64{end / 4, end / 2, end} {
+			band, err := track.BandAt(units.Scalar(f))
+			require.NoError(t, err)
+			upper := band.Value.Base() + band.Bound.Base()
+			for _, u := range []float64{0, f * supportSweepSeconds / 2, f * supportSweepSeconds} {
+				height := 8 * math.Sin(theta-u)
+				// The heights are evaluated in float64; 1e-15 mm covers that
+				// rounding and nothing the depth's terms decide.
+				require.LessOrEqual(t, height, upper+1e-15, "fraction %v time %v", f, u)
+				require.GreaterOrEqual(t, height, -upper)
+			}
+			manifold, err := track.ManifoldAt(units.Scalar(f))
+			require.NoError(t, err)
+			require.Len(t, manifold.Points, 4)
+			for _, point := range manifold.Points {
+				require.Zero(t, point.Separation.Value.Base())
+				require.GreaterOrEqual(t, point.Separation.Bound.Base(), band.Value.Base())
+			}
+		}
+		band := track.Band()
+		require.NotNil(t, band)
+		require.InDelta(t, supportLift, band.Value.Base(), supportLift/1e6)
+	}
+}
+
+func TestSweepPairSupportSetDeparts(t *testing.T) {
+	// The cube 2⁻³⁰ mm above the floor rises at 1 mm/s: its start is a
+	// ContactBand, and every vertex of its lifted set rises, so the exact
+	// pair departs over the whole sweep.
+	const lift = 1.0 / (1 << 30)
+	doc := decad.New()
+	floor, cube, floorPath, cubePath := supportSweepScene(t, doc, lift, 0, r3.Vec{Z: 1})
+	report, err := doc.SweepPair(t.Context(), floor, cube, floorPath, cubePath,
+		supportSweepRequest(decad.ContinueSeparatingTouch))
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepDepartedClear, report.Outcome, "cause=%v", report.Cause)
+	require.Equal(t, decad.ContactBand, report.InitialEvent.Relation)
+	require.NotNil(t, report.Departure)
+	gap := report.Departure.GapAtUntil
+	require.Greater(t, gap.Value.Base()-gap.Bound.Base(), lift)
+
+	// A stop policy reports the band start as an initial contact.
+	stopped, err := doc.SweepPair(t.Context(), floor, cube, floorPath, cubePath,
+		supportSweepRequest(decad.StopAtInitialContact))
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepInitiallyTouching, stopped.Outcome)
+	require.Equal(t, decad.ContactBand, stopped.InitialEvent.Relation)
+	require.Len(t, stopped.InitialEvent.Manifold.Points, 4)
+}
+
+func TestSweepPairSupportSetArrivalEndsTrack(t *testing.T) {
+	// The far edge would reach the floor near a quarter of the sweep. The
+	// track over the support set ends before it does, the rounded pair at the
+	// track's end still rests on its near edge with the far edge above the
+	// floor, and the sweep's replay refuses every instant past the end.
+	doc := decad.New()
+	floor, cube, floorPath, cubePath := supportSweepScene(t, doc, 0, 1, r3.Vec{})
+	report, err := doc.SweepPair(t.Context(), floor, cube, floorPath, cubePath,
+		supportSweepRequest(decad.ContinueCertifiedTouch))
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepPersistentBand, report.Outcome, "cause=%v", report.Cause)
+	end := report.ContactTrack.End()
+	require.Less(t, end.Fraction.Base(), .5)
+	require.Less(t, end.Elapsed.Value.Base(), supportSweepArrival())
+	poseA, poseB, err := report.CertifiedPosesAt(end.Elapsed.Value)
+	require.NoError(t, err)
+	contact, err := doc.ContactPair(t.Context(), floor, cube, poseA, poseB, supportBandRequest(2*supportLift))
+	require.NoError(t, err)
+	require.Contains(t, []decad.ContactRelation{decad.ContactTouching, decad.ContactBand}, contact.Relation)
+	require.NotNil(t, contact.Manifold)
+	require.Len(t, contact.Manifold.Points, 4)
+	for _, point := range contact.Manifold.Points {
+		require.GreaterOrEqual(t, point.Separation.Value.Base()+point.Separation.Bound.Base(), 0.0)
+	}
+	_, _, err = report.CertifiedPosesAt(units.Seconds(supportSweepSeconds / 2))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+}

@@ -1117,6 +1117,12 @@
 4	0.00	TestContactPairSignedAxisPose
 4	0.00	TestContactPairSourceBoxes
 4	0.00	TestContactPairSourceSphereAndBox
+4	0.01	TestContactPairSupportBandValidation
+4	0.01	TestContactPairSupportSetGap
+4	0.01	TestContactPairSupportSetOverlap
+4	0.01	TestContactPairSupportSetPastRim
+4	0.01	TestContactPairSupportSetTouch
+4	0.01	TestContactPairSupportSetTray
 4	0.00	TestContextOperationsRejectNilBeforeOperands
 4	0.00	TestConvexityCertificateChargesTheRecordWorkCounter
 4	0.00	TestConvexityCertificateSpendIncreases
@@ -1749,6 +1755,9 @@
 4	0.00	TestSweepPairSourceSphereAndBox
 4	0.00	TestSweepPairSourceSphereInitialEdgeTouch
 4	0.00	TestSweepPairSourceSphereTouchContinuation
+4	0.01	TestSweepPairSupportSetArrivalEndsTrack
+4	0.01	TestSweepPairSupportSetBand
+4	0.01	TestSweepPairSupportSetDeparts
 4	0.00	TestSweepPairTranslatedBoxesImpact
 4	0.00	TestDocumentSweptBoxContainsThePath
 4	0.00	TestSweptBoxStrictlyDisjoint

@@ -47,6 +47,14 @@ func (r *scheduleRun) solveEvent(ctx context.Context, sweeps sliceSweeps, plan s
 				return nil, diagnostics, err
 			}
 			item.depth = rounded
+			if rounded != nil && w.step.Contact.SupportBand.Base() > 0 {
+				// §10.5: a track ends before a vertex reaches the plane, so at
+				// its end that vertex lies within a grid step of the plane. The
+				// support set ContactPair publishes at the rounded event poses
+				// holds it beside the track's own set; the solve takes that
+				// manifold, certified at the poses the step publishes.
+				item.manifold = cloneManifold(*rounded)
+			}
 			gathered = append(gathered, item)
 			continue
 		}

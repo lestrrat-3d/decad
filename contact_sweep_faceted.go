@@ -58,13 +58,14 @@ func (d *Document) sweepPlanarPair(ctx context.Context, a, b *Body,
 }
 
 // planarContinuation reruns a source-box pair whose box continuation proofs
-// could not settle an initial touch as two exact planar bodies, whose §10.2
-// and §10.3 proofs read every vertex. It reports false, and the box report
-// stands, when the planar run is not admitted or settles nothing either.
+// could not settle an initial touch, or a §10.5 ContactBand start, as two
+// exact planar bodies, whose §10.2 and §10.3 proofs read every vertex. It
+// reports false, and the box report stands, when the planar run is not
+// admitted or settles nothing either.
 func (d *Document) planarContinuation(ctx context.Context, boxes *SweepReport,
 	pa, pb affinePairPath, resolution *big.Rat) (*SweepReport, bool, error) {
 	if boxes.Outcome != SweepUndecided || boxes.InitialEvent == nil ||
-		boxes.InitialEvent.Relation != ContactTouching ||
+		boxes.InitialEvent.Relation != ContactTouching && boxes.InitialEvent.Relation != ContactBand ||
 		boxes.Cause != SweepDepartureUnproved && boxes.Cause != SweepContactTrackUnproved {
 		return nil, false, nil
 	}
@@ -286,18 +287,25 @@ func (r *rotationalPairSweep) planarIdealEvent(ctx context.Context, f *big.Rat, 
 			event.Relation = ContactOverlapping
 		}
 	case ContactBand:
-		if contact.Gap == nil {
-			return event, nil
+		if gap, ok := widenedBand(contact, etaA, etaB); ok {
+			event.Relation, event.Gap, event.Reason = ContactBand, gap, ContactNoNormalProof
 		}
-		width := new(big.Rat).Add(proofarith.FloatRat(contact.Gap.Bound.Base()),
-			new(big.Rat).Add(proofarith.FloatRat(etaA), proofarith.FloatRat(etaB)))
-		published := ratFloatUp(width)
-		if !finiteMeasurementValues(published) {
-			return event, nil
-		}
-		event.Relation, event.Reason = ContactBand, ContactNoNormalProof
-		event.Gap = &Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(published),
-			Exactness: exactnessFromBound(published)}
 	}
 	return event, nil
+}
+
+// widenedBand transfers a ContactBand gap to the ideal path: its width grows
+// by both pose deviations.
+func widenedBand(contact *ContactReport, etaA, etaB float64) (*Measurement, bool) {
+	if contact.Gap == nil {
+		return nil, false
+	}
+	width := new(big.Rat).Add(proofarith.FloatRat(contact.Gap.Bound.Base()),
+		new(big.Rat).Add(proofarith.FloatRat(etaA), proofarith.FloatRat(etaB)))
+	published := ratFloatUp(width)
+	if !finiteMeasurementValues(published) {
+		return nil, false
+	}
+	return &Measurement{Value: units.Millimeters(0), Bound: units.Millimeters(published),
+		Exactness: exactnessFromBound(published)}, true
 }

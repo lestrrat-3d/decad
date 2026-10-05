@@ -45,11 +45,10 @@ shipped code. For worlds of four or more bodies, §5, §6.1–§6.4, §6.6, §7,
 well. §9.1–§9.4 ship for prisms over whole `LineSeg` sections and for zero-bound
 Booleans, directly or through a translation-only placement; stitched solids and lofts are not admitted yet.
 §10.1, §10.2 and §10.3 ship for the same bodies, and §10.4 for positive-bound faceted Booleans and
-all-planar cap-loop chamfers. A box tipped over from its edge does not yet come to rest flat; §10.5
-designs that rest and §13 PR 14a delivers it. §10.4's rolling band track ships for a full source cylinder
+all-planar cap-loop chamfers. §10.5 ships for the same exact bodies: under a positive `SupportBand` a box
+tipped over from its edge comes to rest flat. §10.4's rolling band track ships for a full source cylinder
 on an exact planar body from any start pose, and the scheduled step rolls such a cylinder (§13 PR 20).
-Everything else is design-only until the PR table in §13 says
-otherwise.
+Everything else is design-only until the PR table in §13 says otherwise.
 
 Navigation only; the named sections own the rules:
 
@@ -402,7 +401,8 @@ full-step kick, then event-driven drift — and generalizes the body count. In o
    to its end whose `Band()` lies within the residual cuts nothing; otherwise the BAND END is the last
    fraction of the sweep's own dyadic grid, no later than the track's end, through which `BandAt` lies
    within the residual, and a track with no positive such fraction is `StepTrackUnproved`. A track over a
-   support set (§10.5) ends before a lifted vertex reaches the plane, so that vertex's arrival is a band end.
+   support set (§10.5) ends before any vertex outside its contact set reaches the plane, so that vertex's
+   arrival is a band end.
    The CUTTING events are an initial contact (only under `StopAtInitialContact`) at fraction zero, an `ImpactBracket`
    or `ContactTransitionBracket` at its bracket's exact right fraction, and a band end at its fraction; a
    touch that ends inside a slice reaches the step as a transition bracket. Choose the
@@ -1442,12 +1442,12 @@ an exact touch track; every later step starts at a turned pose and rolls on a ba
 
 A body that lands on a face never lands exactly flat: its pose is a float rotation, so §9.1's exact relation
 sees one edge or vertex on the support plane and the rest of the face a little above it. Under the one-kick
-step three things then follow for a §9 body. An edge support turns each kick into a rotation: the `8 mm` cube
-of `dynamics/tip_test.go`, resting on one edge, takes about `5.7 rad/s` from its `38 mm/s` kick, which brings
-its other edge down at about `46 mm/s`. §10.3's band track over the exact contact set cannot carry that edge's
-arrival: the track ends where the arriving vertex's lower height bound reaches zero, which lies inside the
-first grid step once the edge is within `46 mm/s × TimeResolution` of the plane, and a sweep that starts in
-touch has no bracket for a second feature's impact. And a correction cannot in general land a second feature
+step three things then follow for a §9 body. A support on one edge turns into a rotation onto the other: the
+`8 mm` cube of `dynamics/tip_test.go` lands its far edge at `34 rad/s`, and the frictionless two-point impact
+turns it back at about `6.5 rad/s`, which brings its near edge down at about `52 mm/s`. §10.3's band track over
+the exact contact set cannot carry that edge's arrival: the track ends where the arriving vertex's lower height
+bound reaches zero, which lies inside the first grid step once the edge is within `52 mm/s × TimeResolution`
+of the plane, and a sweep that starts in touch has no bracket for a second feature's impact. And a correction cannot in general land a second feature
 in exact touch: a vertex's height at a pose is a sum of products of float entries, and a float translation
 cancels it exactly only when that sum is itself a float, which a rotation about `Y` with dyadic levers gives
 and a rotation about `(1, 1, 0)` does not. A face whose unit normal is irrational in its body's own frame (a
@@ -1472,16 +1472,17 @@ non-finite or non-`Length` value is an input error at both entry points. `valida
 residual. The field is not derived from the residual: a positive band changes which relation and manifold a
 pair publishes, and the caller chooses that. Every shipped fixture keeps a zero band and its published numbers.
 
-**The support set.** For a support plane of §10.2 — a face plane of `S` with every `S` vertex on or behind it
-and every `M` vertex on or in front of it, read with its exact unnormalized normal `n` through an `S` vertex
-`q` — the support set of convex `M` (§9.2) is every `M` vertex `p` whose exact height `h_p = n·(p − q)`
-satisfies `h_p <= SupportBand·|n|_lo`, `|n|_lo` the certified lower bound on `|n|`, and whose exact foot on the
-plane lies strictly inside `S`'s face there (the `locate` test of §9.3's support row, holes included). A foot on
-the rim or outside is not published, so a face overhanging `S` publishes only the vertices over `S`. Its
-CONTACT SET is the subset at zero height, which is §10.2's contact set; its LIFTED SET is the rest. The
-comparison is exact and admits a vertex only when its true height is proven at most the band. `M` lies in its
-vertices' hull, so the lowest vertex height still bounds the pair's separation below, whatever the support set
-holds.
+**The support set.** For a face plane of `S` with every `M` vertex on or in front of it, read with its exact
+unnormalized normal `n` through an `S` vertex `q`, the support set of convex `M` (§9.2) is every `M` vertex `p`
+whose exact height `h_p = n·(p − q)` lies within the band, `h_p² <= SupportBand²·(n·n)`, and whose exact foot on
+the plane lies strictly inside `S`'s face there (the `locate` test of §9.3's support row, holes included). A
+foot on the rim or outside is not published, so a face overhanging `S` publishes only the vertices over `S`.
+Its CONTACT SET is the subset at zero height, which is §10.2's contact set; its LIFTED SET is the rest. The
+comparison is exact, through squares, and admits a vertex only when its true height is proven at most the
+band. `ContactPair` reads any such face plane, so a tray's floor and wall each publish theirs even though
+neither holds the whole tray behind it. The sweep reads only a support plane of §10.2, which also has every
+`S` vertex on or behind it: `M` lies in its vertices' hull, so the lowest vertex height then bounds the pair's
+separation below, whatever the support set holds.
 
 **`ContactPair`.** With a positive `SupportBand` the exact planar path (§9.1, `contact_faceted_pair.go`)
 publishes:
@@ -1512,9 +1513,12 @@ both policies over the support set (`contact_sweep_band.go`; `planarContinuation
 - `planarSupports` admits a plane whose support set is nonempty and records each lifted vertex's exact start
   height `h0` and start rate `h'(0)`.
 - §10.2's departure needs every CONTACT rate positive; a lifted vertex is a clear vertex there, positive at the
-  start and bounded by §10.2's quadratic. A `ContactBand` start of an exact pair can therefore depart (its
-  contact set is empty and every vertex is positive), unlike a displaced pair's band start, which never does
-  (§10.4); the two are told apart by the pair's zero `δ`.
+  start and bounded by §10.2's quadratic. A `ContactBand` start of an exact pair can therefore depart under
+  `ContinueSeparatingTouch` (its contact set is empty and every vertex is positive), unlike a displaced pair's
+  band start, which never does (§10.4); the two are told apart by the pair's zero `δ`. The departure's last
+  sample may itself read `ContactBand`, the pair still apart by at most the band; its `GapAtUntil` is then
+  `ContactPair`'s gap at the same rounded poses under a zero band, transferred to the ideal path as a
+  separated sample's is.
 - §10.3's band track runs over the support set. Its horizon is the largest grid fraction through which the
   curvature is bounded, every clear vertex keeps a positive lower height bound, every LIFTED vertex keeps a
   positive lower height bound `h0 + h'(0)·t − K·t²` as well, and every support-set foot stays inside `S`'s face
@@ -1535,28 +1539,35 @@ both policies over the support set (`contact_sweep_band.go`; `planarContinuation
 **Dynamics.**
 
 - A band end at an arrival is §5 step 4's band end: the track's end lies within the residual, so the slice cuts
-  there and the island solves on `ManifoldAt(end)`, the contact set and the lifted set together. For the cube
-  that island is the two edges' four corners with one edge closing. Its frictionless island solution is unique
-  (the two edges' effective-mass matrix is positive definite): a positive impulse on each edge and zero linear
-  and angular velocity afterwards, which §6.2 publishes as exact zeros. No rotation remains to lift an edge, and
-  the rounded event poses show no penetration: `roundedDepth` reads `Separated` within the band, hence
-  `ContactBand` with the support-set manifold, and the correction moves nothing.
-- A resting pair continues from a `ContactBand` start: its support set carries the next slice's band track with
-  `r = 0` and `K = 0`, so `Depth` is the largest lifted height, within the band and the residual, and the track
-  reaches the duration. The next step's kick brings the pair in as an initial contact whose `InitialEvent` is
-  the `ContactBand` with four points; the solve absorbs the kick on the whole face with zero rotation, as the
-  pyramid's faces do, and the pair reuses its reports from then on (§5.3).
+  there. The arriving vertex is in general a CLEAR vertex of the track, not a lifted one: it stood far above
+  the band at the slice's start and enters it only in the track's last grid step, so `ManifoldAt(end)` does
+  not hold it. Under a positive `SupportBand` the island therefore solves on the manifold `roundedDepth` reads
+  at the rounded event poses, the poses the step publishes: `ContactPair`'s support set there, which holds the
+  arriving vertex beside the track's own set (`dynamics/schedule_event.go`). For the cube that island is the
+  two edges' four corners with the near edge closing. The solve returns a positive impulse on each edge and
+  zero linear and angular velocity afterwards, which §6.2 publishes as exact zeros. No rotation remains to
+  lift an edge, and the rounded event poses show no penetration: `roundedDepth` reads `Separated` within the
+  band, hence `ContactBand` with the support-set manifold, and the correction moves nothing.
+- A resting pair continues from a `ContactBand` start. When its swept boxes stay strictly apart, as the
+  cube's do while it hovers inside the band with zero velocity, §4.3's broad phase excludes it and no sweep
+  runs. Otherwise its support set carries the next slice's band track with `r = 0` and `K = 0`, so `Depth` is
+  the largest lifted height, within the band and the residual, and the track reaches the duration. The next
+  step's kick brings the pair in as an initial contact whose `InitialEvent` is the `ContactBand` with four
+  points; the solve absorbs the kick on the whole face with zero rotation, as the pyramid's faces do.
 - §6.6: an island pair the solve leaves resting may end `Touching` or in a `ContactBand` within the band, as
-  §10.4 already admits. With a positive `SupportBand` a resting pair whose corrected poses still overlap is
-  nudged along the pair normal as the separating push is (the overlap's depth plus its bound, doubled until the
-  rounded pose moves, within `pushLimit` passes) until `ContactPair` proves it `Touching` or in the band, its
-  whole translation within the correction allowance. A resting pair under a zero band is refused as today.
+  §10.4 already admits. §6.6's settle search places a resting pair whose corrected poses still overlap back in
+  touch or in the band; under a positive `SupportBand` that band includes an exact pair apart by at most it.
 - §5 step 5 and the contact-set rules read a `ContactBand` as a touch within the residual, as §10.4 states.
 
-The numbers the design rests on, in `dynamics/tip_test.go`'s configuration and stated as an illustration
-rather than a bound: `TimeResolution = 1e-9 s` puts the sweep's grid at `2⁻²²·dt ≈ 9.3e-10 s` for
-`dt = 1/256 s`, so an edge arriving at `46 mm/s` is caught within about `4.3e-8 mm` of the plane, and the pivot
-edge has lifted by about `K·t² ≈ 1e-11 mm` at the cut, both far inside a `5e-7 mm` band. A vertex that arrives
+The numbers of `dynamics/tip_test.go`'s run, stated as a record of that run rather than a bound: the cube
+lands its far edge in its eighth step, `1.28 ms` into it, about `3.8e-7 mm` above the floor, inside the
+`5e-7 mm` band, with its near edge `3.8e-4 mm` up. The two-point impact turns it back at `6.5 rad/s`, and the
+far edge's band track ends `7.4 µs` later where the near edge, arriving at about `52 mm/s`, would reach the
+floor within a grid step: the remaining `2.6 ms` slice at `TimeResolution = 1e-9 s` has a `2⁻²²` grid of about
+`6.3e-10 s`, so the near edge is caught `3.2e-8 mm` above the floor, while the far edge has risen to
+`3.83e-7 mm`. The four-point solve delivers `5.57 kg·mm/s` at each near corner and `1.11 kg·mm/s` at each far
+one and leaves both velocities exactly zero; every later step absorbs its `19.62 kg·mm/s` kick on the four
+corners. A vertex that arrives
 faster than the band per grid step enters no support set in time and leaves the pair `StepPairUndecided` as
 today; the band and the time resolution are the caller's.
 
@@ -1937,9 +1948,9 @@ lines below do not repeat it.
   closes within one grid step of the near edge's touch, no certificate covers the pair: the band track
   ends before the first grid fraction, and a sweep that starts in touch cannot bracket another vertex's
   impact. `dynamics/tip_test.go` asserts that stop, `StepPairUndecided` in the landing step, with its
-  certified prefix through the landing. §10.5 designs the flat rest and PR 14a delivers it. Tip times also
-  differ from the design's `0.5 s`: the one-kick step with the edge's support solved at the start of each
-  step tips a near-balanced cube within about `16` steps of `1/256 s`.
+  certified prefix through the landing; under a positive `SupportBand` the cube rests flat (§10.5, PR 14a).
+  Tip times also differ from the design's `0.5 s`: the one-kick step with the edge's support solved at the
+  start of each step tips a near-balanced cube within about `16` steps of `1/256 s`.
 
 ### PR 14 (Phase 2) — loft, stitched and fallback mass
 
@@ -1955,11 +1966,10 @@ lines below do not repeat it.
 ### PR 14a (Phase 2) — support set and flat rest
 
 - Delivers §10.5: `ContactRequest.SupportBand`, the support-set manifold of `ContactPair`, the band track over
-  the support set, the exact pair's band start and departure, §6.6's resting nudge, and the flat rest of a
-  tipped box.
+  the support set, the exact pair's band start and departure, and the flat rest of a tipped box.
 - Files: `contact_pair.go`, `contact_faceted_pair.go`, `contact_faceted_manifold.go`,
   `internal/pair/planar_manifold.go`, `contact_sweep.go`, `contact_sweep_band.go`, `contact_sweep_faceted.go`,
-  `contact_sweep_rotation.go`, `dynamics/world.go`, `dynamics/island.go`, `dynamics/schedule_band.go`.
+  `contact_sweep_rotation.go`, `dynamics/world.go`, `dynamics/schedule_event.go`.
 - Test (root): new `contact_support_band_test.go`, over the `8 mm` cube on a floor turned about `Y` by
   `sin θ = 2⁻²⁴`, so its far edge stands exactly `2⁻²¹ mm` up and every height below is a float: at
   `SupportBand = 2⁻²⁰ mm` the touch publishes four points, the far edge's two with `Separation` exactly `2⁻²¹`
@@ -1967,27 +1977,35 @@ lines below do not repeat it.
   `ContactBand` with `Gap.Bound` at least `2⁻³⁰` and four points at heights `2⁻³⁰` and `2⁻³⁰ + 2⁻²¹`, and
   `Separated` at a band below `2⁻³⁰`; the cube sunk by `2⁻³⁰ mm` is `Overlapping` with four points, two at
   `−2⁻³⁰` and two at `2⁻²¹ − 2⁻³⁰`; the cube with its far edge past the floor's rim publishes two points (the
-  foot test deleted, four: shown to fail); the cube against a tray floor and wall publishes per-plane entries
-  with their own normals. `contact_sweep_band_test.go` gains three tests: `TestSweepPairSupportSetBand`, the
-  tilted cube with `ω = (0, −1, 0) rad/s`, whose band track ends at the last grid fraction before the far edge's
-  lower bound `2⁻²¹ − |h'(0)|·t − K·t²` reaches zero, within one grid step of that root, and whose `BandAt`
-  encloses the staged exact height of every support-set vertex at each sampled fraction (the lifted term deleted
-  from `Depth`: shown to fail); `TestSweepPairSupportSetDeparts`, the lifted cube moving up, `DepartedClear`;
-  `TestSweepPairSupportSetArrivalEndsTrack`, the lifted lower-bound leg deleted, where the track runs past the
-  arrival and `replayHeights` refuses a fraction beyond it (shown to fail). `.github/test-shards.txt` lists them.
-- Test (`dynamics`): `dynamics/tip_test.go` with `SupportBand = PenetrationResidual/2`: the cube tips as today
-  and lands its far edge; the landing step's last event carries four points with a positive impulse on each
-  edge and `PostVelocityB` and `PostAngularVelocityB` exactly zero; every later step publishes one
-  initial-contact event with four points whose impulses sum to the kick's momentum `m·g·dt` within the
-  certificate's linear slack and ends on a `SweepPersistentBand` that reaches the duration; after `32` steps
-  every corner's exact height, staged through the published pose, lies in `[0, PenetrationResidual]`, both
-  velocities are zero and `Band()` is at most the residual. Legs shown to fail: a zero band stops the landing
-  step `StepPairUndecided` (today's assertion); the lifted lower-bound leg deleted, the far edge sinks to the
-  residual before the band ends, the correction lifts the near edge to the band's rim and the cube publishes
-  more than one event per step; the `SupportBand` validation deleted, a band above the residual passes
-  `NewWorld` and the first resting step is `StepTrackUnproved`. `dynamics/world_test.go`: a band above the
-  residual is `ErrInvalidInput`.
+  foot test deleted, four: shown to fail); the cube against an L-shaped tray's floor and wall publishes the
+  floor's two points and the wall's two exact and two lifted points, each with its own normal.
+  `contact_sweep_band_test.go` gains three tests over the tilted cube turning at `1 rad/s` about its near edge,
+  which lowers the far edge, in a `2⁻²² s` sweep at a `2⁻³² s` resolution: `TestSweepPairSupportSetBand`,
+  whose band track ends at the last grid fraction before the far edge's lower bound `2⁻²¹ − |h'(0)|·t − K·t²`
+  reaches zero, within one grid step of that root, and whose `BandAt` encloses the far edge's exact height at
+  each sampled time (the lifted term deleted from `Depth`: shown to fail); `TestSweepPairSupportSetDeparts`,
+  the lifted cube moving up, `DepartedClear` from a `ContactBand` start; and
+  `TestSweepPairSupportSetArrivalEndsTrack`, whose track ends before the arrival and whose replay refuses
+  every instant past its end (the lifted lower-bound leg deleted, the track runs to the duration: shown to
+  fail). `.github/test-shards.txt` lists them.
+- Test (`dynamics`): `dynamics/tip_test.go`'s `TestBoxTipsOverAndRestsFlat` with
+  `SupportBand = PenetrationResidual/2`: the cube tips as under a zero band and lands its far edge; the
+  landing step's last event carries four points with a positive impulse on each edge and `PostVelocityB` and
+  `PostAngularVelocityB` exactly zero; every later step publishes one initial-contact event with four points
+  whose impulses sum to the kick's momentum `m·g·dt` within the certificate's linear slack, and ends with the
+  pair excluded by swept boxes strictly apart or on a `SweepPersistentBand` that reaches the duration; after
+  `32` steps every corner's exact height, staged through the published pose, lies in
+  `[0, PenetrationResidual]` and both velocities are zero. Legs shown to fail: a zero band
+  stops the landing step `StepPairUndecided` (`TestBoxTipsOverOnBandTracks`); the support set read at a band
+  end's rounded event poses deleted, the solve at the landing's band end reads the far edge alone and the next
+  slice's departure is unproved, `StepPairUndecided`; the `SupportBand` validation deleted, `dynamics/world_test.go`'s band above the residual passes `NewWorld`,
+  and the tip scene at twice the residual stops its second step `StepPairUndecided` on a rounded `ContactBand`
+  beyond the residual. The lifted lower-bound leg changes nothing in the tip run, whose arriving edge is a
+  clear vertex at its track's start; the root fixtures show it.
 - Depends on: PRs 13, 18.
+- Shipped. The band end solves on the support set read at the rounded event poses, since the arriving vertex
+  enters the band only in the track's last grid step, and the resting cube hovers inside the band with its
+  swept boxes strictly apart, so no band track runs while it rests.
 
 ### PR 15 (Phase 2) — `tumble`
 
