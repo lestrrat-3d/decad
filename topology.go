@@ -703,6 +703,10 @@ type Body struct {
 	payload featurePayload
 
 	tessellationCache atomic.Pointer[tessellationCacheEntry]
+	// planarConvexity caches the exact planar convexity certificate
+	// (contact_faceted_pair.go); like the tessellation cache it never changes
+	// the body's logical geometry.
+	planarConvexity atomic.Pointer[planarConvexityEntry]
 }
 
 // Document returns the document that owns (or owned) this body.

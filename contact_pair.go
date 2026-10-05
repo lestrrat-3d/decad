@@ -35,6 +35,9 @@ const (
 	ContactNoNormalProof
 	ContactAmbiguousFeature
 	ContactPointTooCoarse
+	// ContactNonConvex withholds a manifold because neither body carries the
+	// convexity certificate of docs/multibody-dynamics-design.md §9.2.
+	ContactNonConvex
 )
 
 // ContactFeature names an original topological feature. The first contact
@@ -96,6 +99,10 @@ type ContactReport struct {
 // boundary displacement charged, but publish no contact manifold.
 // An exactly orthogonal rotated source box can give a sphere a bounded point
 // on one interior face.
+// Two exact planar solids — prisms over whole LineSeg sections and
+// zero-bound faceted Booleans — receive an exact relation proof at any pose
+// with a positive determinant, without a contact manifold. A touching or
+// overlapping pair names ContactNonConvex when neither body is convex.
 // At identity query poses, the analytic clearance kernel can prove relations
 // for other solids. Only its ruling touches publish a manifold: the two ends
 // of a full source cylinder's ruling on a planar face or another cylinder.
@@ -145,6 +152,9 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 			if err := classifyFacetedFloorBox(ctx, report, b, poseB, boxA, false); err != nil {
 				return nil, err
 			}
+			if err := classifyPlanarFallback(ctx, report); err != nil {
+				return nil, err
+			}
 			return report, nil
 		}
 		if sphere, ok := sourceSphereAtPose(b, poseB); ok {
@@ -165,6 +175,9 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	if okB && !okA {
 		if _, faceted := a.payload.(facetedPayload); faceted {
 			if err := classifyFacetedFloorBox(ctx, report, a, poseA, boxB, true); err != nil {
+				return nil, err
+			}
+			if err := classifyPlanarFallback(ctx, report); err != nil {
 				return nil, err
 			}
 			return report, nil
@@ -203,13 +216,23 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 			classifyOrientedSourceBoxes(report, orientedA, orientedB)
 			return report, nil
 		}
+		planar, err := classifyExactPlanarPair(ctx, report)
+		if err != nil {
+			return nil, err
+		}
+		if planar && report.Relation != ContactUndecided {
+			return report, nil
+		}
 		if poseA == r3.Identity() && poseB == r3.Identity() {
+			report.Reason = ContactNoReason
 			if err := classifyAnalyticContact(ctx, report); err != nil {
 				return nil, err
 			}
 			return report, nil
 		}
-		report.Reason = ContactPayloadUnsupported
+		if !planar {
+			report.Reason = ContactPayloadUnsupported
+		}
 		return report, nil
 	}
 	if err := ctx.Err(); err != nil {
@@ -217,6 +240,24 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	}
 	classifySourceBoxes(report, boxA, boxB)
 	return report, nil
+}
+
+// classifyPlanarFallback replaces an undecided source-box/faceted report with
+// the exact planar relation when both bodies are admitted and it decides one.
+func classifyPlanarFallback(ctx context.Context, report *ContactReport) error {
+	if report.Relation != ContactUndecided {
+		return nil
+	}
+	trial := ContactReport{A: report.A, B: report.B, PoseA: report.PoseA, PoseB: report.PoseB,
+		Request: report.Request}
+	planar, err := classifyExactPlanarPair(ctx, &trial)
+	if err != nil {
+		return err
+	}
+	if planar && trial.Relation != ContactUndecided {
+		*report = trial
+	}
+	return nil
 }
 
 // classifyAnalyticContact consumes the clearance kernel's complete-pair

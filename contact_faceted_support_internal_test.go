@@ -241,14 +241,30 @@ func TestContactPairFacetedFloorRefusesUnprovedPatches(t *testing.T) {
 	floor := internalOffsetBox(t, doc, -20, -20, 20, 20, -10,
 		Distance{D: units.Millimeters(10), Dir: Along})
 	req := ContactRequest{PointResolution: units.Millimeters(1e-6), NormalResolution: units.Degrees(1)}
-	for _, pose := range []r3.Vec{{X: 10}, {X: 25}, {Z: -1}} {
-		placed, err := r3.Translation(pose)
+	// The support path proves none of these patches. The exact planar
+	// relation (contact_faceted_pair.go) still decides each one, with no
+	// manifold: an overhanging footprint touches, a footprint beyond the
+	// floor's edge clears it by 5 mm, and a sunken one overlaps.
+	for _, tc := range []struct {
+		pose     r3.Vec
+		relation ContactRelation
+		gap      float64
+	}{
+		{r3.Vec{X: 10}, ContactTouching, 0},
+		{r3.Vec{X: 25}, ContactSeparated, 5},
+		{r3.Vec{Z: -1}, ContactOverlapping, 0},
+	} {
+		placed, err := r3.Translation(tc.pose)
 		require.NoError(t, err)
 		report, err := doc.ContactPair(t.Context(), floor, union, r3.Identity(), placed, req)
 		require.NoError(t, err)
-		require.Equal(t, ContactUndecided, report.Relation, "pose=%v", pose)
+		require.Equal(t, tc.relation, report.Relation, "pose=%v reason=%v", tc.pose, report.Reason)
 		require.Nil(t, report.Manifold)
-		require.Nil(t, report.Gap)
+		if tc.relation == ContactOverlapping {
+			require.Nil(t, report.Gap)
+			continue
+		}
+		require.Equal(t, tc.gap, report.Gap.Value.Base())
 	}
 	shifted, err := r3.Translation(r3.Vec{X: 0.1})
 	require.NoError(t, err)
@@ -296,7 +312,9 @@ func TestContactPairFacetedFloorRefusesMultipleSupportFaces(t *testing.T) {
 	req := ContactRequest{PointResolution: units.Millimeters(1e-6), NormalResolution: units.Degrees(1)}
 	report, err := doc.ContactPair(t.Context(), floor, union, r3.Identity(), r3.Identity(), req)
 	require.NoError(t, err)
-	require.Equal(t, ContactUndecided, report.Relation)
+	// Two support faces defeat the single-patch support proof; the exact
+	// planar relation still proves the touch, without a manifold.
+	require.Equal(t, ContactTouching, report.Relation, "reason=%v", report.Reason)
+	require.Equal(t, ContactNoNormalProof, report.Reason)
 	require.Nil(t, report.Manifold)
-	require.Nil(t, report.Gap)
 }

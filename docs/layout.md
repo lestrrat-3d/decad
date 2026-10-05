@@ -114,7 +114,7 @@ to the byte budget.
 | `thicken_prism.go` | Builds the certified wall of a prism sheet. See surface §16.2. |
 | `thicken_axis.go` | Certifies exact axis-parallel offsets and interval separation. See surface §16.2. |
 | `offset.go` | `Body.Offset` builds a second sheet at a stated normal distance, leaving the receiver live. See surface §17. |
-| `patch_body.go` | `Body.Patch`: partitions a free-edge selection into closed chains, proves each planar via `internal/proof/dyadic.go` or a shared level token, and fills each with its own face. See `docs/surface-design.md` §5.2. |
+| `patch_body.go` | `Body.Patch`: splits a free-edge selection into closed chains, proves each planar and fills it with a face. See `docs/surface-design.md` §5.2. |
 | `denotation.go` | The shared-denotation certificate's two halves: a minted plane identity (LEVEL) and a minted curve/point identity (CURVE). See `docs/surface-design.md` §5.2, §6.2. |
 | `stitch_weld.go` | Table J's admission: the shared vertex table and which free edge pairs weld. See `docs/surface-design.md` §6.2. |
 | `stitch.go` | `Stitch`: rebuilds fresh topology over the weld plan, derives orientation, and decides Table C's outcome and measurements. See `docs/surface-design.md` §6. |
@@ -135,7 +135,7 @@ to the byte budget.
 | `revolve_axis.go` | Resolves the axis into the sketch plane and decides what the profile may do around it: `axisLine2`, `axisFrame`, `wallKind`, and the contact gates. See `docs/evaluator-design.md` §6. |
 | `revolve_build.go` | Builds a revolve's body, solid or (`WithSurfaceResult`) sheet, and its measurements. See evaluator §6, `docs/surface-design.md` §4. |
 | `revolve_extent.go` | A finished revolve's extent readings: each extreme is a swept extreme, bracketed by `sweepExtremeBounds` rather than read off a boundary vertex. See `docs/evaluator-design.md` §6. |
-| `revolve_denotation.go` | `angleDenotation`/`sweepDenotation`: exact stated angles or certified derived-angle intervals, their endpoint displacement and the sweep/trig bounds on them. See `docs/evaluator-design.md` §6, `docs/sweep-design.md` §3. |
+| `revolve_denotation.go` | `angleDenotation`/`sweepDenotation`: exact or certified-interval angles and their sweep/trig bounds. See `docs/evaluator-design.md` §6, `docs/sweep-design.md` §3. |
 | `stops.go` | Body-relative stop resolution for `ToFace`/`ToFaceAngular`/`ThroughAll`/`ThroughAllSide`. See evaluator §5/§6/§11 and the file's doc comments. |
 | `loft.go` | `Document.Loft` and `LoftChain`: the entry points over `loft_build.go`'s evaluator, the chain ribbon build, and `WithSurfaceResult` parsing. See `docs/loft-design.md` §2/§4/§10/§16. |
 | `loft_build.go` | Loft payload, evaluation, placement, and the `tessellateLoft` adapter. See `docs/loft-design.md` §5, §8, §12 and `docs/surface-design.md` §4. |
@@ -184,6 +184,7 @@ to the byte budget.
 | `clearance_box.go` | Certifies unplaced axis-aligned rectangular prisms and bounds their gap directly from exact box planes before the general pair kernel. |
 | `contact_pair.go` | Pair gates and public reports. Box classification lives in `internal/pair/`. See `docs/contact-geometry-design.md`. |
 | `contact_box.go` | Source-box admission and public face/measurement mapping. See `docs/contact-geometry-design.md` §4. |
+| `contact_faceted_pair.go` | Exact planar solid admission, snapshots and cached convexity. See `docs/multibody-dynamics-design.md` §9. |
 | `contact_faceted_support.go` | Exact faceted support-face proof and bounded strict separation. See `docs/contact-geometry-design.md` §4. |
 | `contact_faceted_sweep.go` | Faceted floor sweeps: affine exact support face, and bounded clearance by swept boxes. See `docs/contact-sweep-design.md`. |
 | `contact_oriented_box.go` | Rotated boxes. See `docs/contact-geometry-design.md` §4. |
@@ -199,7 +200,7 @@ to the byte budget.
 | `clearance_cells.go` | Face-interior candidates. See `docs/clearance-design.md` §3/§4. |
 | `clearance_tiers.go` | The §3 curve and vertex tiers and the §6 ruling certificates. See `docs/clearance-design.md` §3/§4/§6. |
 | `clearance_geom.go` | Boundary carriers and nesting rays for clearance. See `docs/clearance-design.md` §2–§3. |
-| `clearance_poly.go` | Certified brackets: Sturm isolation of stationarity polynomials over exact rationals, then a Lipschitz bracket per critical value. See `docs/clearance-design.md` §4/§5. |
+| `clearance_poly.go` | Certified brackets: Sturm isolation of stationarity polynomials and Lipschitz brackets of critical values. See `docs/clearance-design.md` §4/§5. |
 | `survey.go` | The analytic wall, undercut, and min-radius surveys on prism, revolve, and cup payloads. An undecided answer reads `Suspect`, never a silent pass. See `docs/verification-design.md` §6. |
 | `survey_undercut.go` | The exact three-valued receiver-face undercut reader `prismUndercuts`/`cupUndercuts`/`capBlendUndercuts` share, decided over the rationals, no float allowance. See the file's doc comment. |
 | `survey2d.go` | The 2D closed-form inscribed-disk kernel behind the wall survey, shared with the modify section audit via `elemOf`; exact candidates for line/arc boundaries. See `docs/verification-design.md` §6. |
@@ -221,7 +222,7 @@ to the byte budget.
 | `prism_boolean_nesting.go` | Cut/Intersect's clean-nesting structural match (§4.2): the whole-loop tag-map search resolving a clean bore/nested pair. See the file's doc comment and `docs/prism-boolean-design.md`. |
 | `prism_boolean_blind.go` | Admits blind and spanning Cuts through sketch's whole-loop match. See `docs/prism-boolean-design.md` §3.2. |
 | `stacked_prism.go` | Builds and audits stacked slabs, walls and measurements. See `docs/stacked-prism-design.md`. |
-| `prism_boolean_crossing.go` | Cut/Intersect's crossing sub-case (§4.2): edge-orientation propagation classifies each cell per operand; `mergePrismCells` assembles the selection. See the file's doc comment and `docs/prism-boolean-design.md`. |
+| `prism_boolean_crossing.go` | Cut/Intersect's crossing sub-case: per-operand cell classification and `mergePrismCells`. See `docs/prism-boolean-design.md` §4.2. |
 | `prism_overlap.go` | `docs/prism-boolean-design.md` §4.5's overlap-area reading, read-only for `Verify`'s interference path alone. See the file's doc comment. |
 | `surface_trim.go` | `Trim`/`Extend`/`Split` gates. See surface-intersection §2–§3. |
 | `boolean_mesh.go` | The exact-predicate mesh-boolean pipeline: contact classification, subdivision, stitching, and the closed-mesh audit. See the file's doc comment and `docs/evaluator-design.md` §9. |
@@ -256,7 +257,7 @@ to the byte budget.
 | `dynamics/` | Rigid-body state and response, including fixed-box edge impulses in `fixed_offcenter.go`. See `docs/rigid-dynamics-design.md`. |
 | `decadtest/` | The public test kit: comparison helpers over decad's three bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. Standard `testing` only, never testify. See `decadtest/doc.go`. |
 | `internal/proof/` | Exact dyadic arithmetic, rational interval operations, float rounding bounds, and their arithmetic tests. |
-| `internal/pair/` | Source-box relation, gap, and face-patch calculation over exact intervals. |
+| `internal/pair/` | Exact source-box and planar solid relations, gaps, face patches and convexity. |
 | `internal/tessellation/` | Mesh audits and the loft exact restatement over neutral triangle data. |
 | `_gallery/` | Own nested module for README stills, animated hero and landing clip; keeps SolidLens out of the library. See `main.go`. |
 | `_shardgen/` | Own nested module, keeping tooling out of the library's: packs the root package's tests into cost-balanced race shards. The `_` prefix hides it from root-module tools. See its `main.go` doc comment. |

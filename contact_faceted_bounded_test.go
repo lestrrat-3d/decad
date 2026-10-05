@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -50,7 +51,13 @@ func TestContactPairBoundedFacetedFloorStrictClear(t *testing.T) {
 	outside, err := doc.ContactPair(t.Context(), floor, placed,
 		r3.Identity(), shifted, req)
 	require.NoError(t, err)
-	require.Equal(t, ContactUndecided, outside.Relation)
+	// The floor-support path refuses a footprint off the floor; the exact
+	// planar relation reads the translated source mesh instead: the floor's
+	// top edge to the union's lower edge, 5.1 mm across and 90 mm down.
+	require.Equal(t, ContactSeparated, outside.Relation, "reason=%v", outside.Reason)
+	// 1e-9 mm is slack for the float reference value, not a bound figure.
+	require.InDelta(t, math.Hypot(5.1, 90), outside.Gap.Value.Base(), 1e-9)
+	require.Nil(t, outside.Manifold)
 }
 
 func TestContactPairPlacedFacetedFloorExactTouch(t *testing.T) {

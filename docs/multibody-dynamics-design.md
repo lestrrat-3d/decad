@@ -14,7 +14,7 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 3, 7, 14, 16 and 19 have shipped. `dynamics.World` holds any number of bodies, the
+Current state: §13 PRs 1, 2, 3, 7, 10, 14, 16 and 19 have shipped. `dynamics.World` holds any number of bodies, the
 canonical pair table and per-pair material of §3.1, and the slice-backed `State` of §3.2. Its step resolves
 two bodies, or three bodies with one, two or three dynamic bodies and every other body fixed, through the
 closed-form responses `docs/rigid-dynamics-design.md` lists. A world of four or more bodies takes the
@@ -30,7 +30,9 @@ rounding bounds), which the root package imports today and which `dynamics` can 
 `internal/` package is visible to every package of this module. §3.1, §3.2, §4 and §8.1–§8.6 describe
 shipped code, except `State.cache` and the `MaxPairSweeps` charge (§13 PR 8). For worlds of four or more
 bodies, §5 without islands, §7.1, §3.4's `traceSlice` and `pairProof`, and §12's `StepReason` with
-`StepDiagnostic.Code` ship as well. Everything else is design-only until the PR table in §13 says otherwise.
+`StepDiagnostic.Code` ship as well. §9.1 and §9.2 ship for prisms over whole `LineSeg` sections and for
+zero-bound Booleans, directly or through a translation-only placement; stitched solids and lofts are not
+admitted yet. Everything else is design-only until the PR table in §13 says otherwise.
 
 Navigation only; the named sections own the rules:
 
@@ -107,8 +109,10 @@ bridging boxes' two half-face patches each carry their share of the support impu
 first floor impact occurs at the free-fall time `sqrt(2·(60−8)/9810) s` within `TimeResolution`; the clip
 renders `120` frames.
 
-**Phase 2 — `tumble`.** The floor plus a fixed tray built as a zero-bound Boolean union of five source
-boxes (floor and four walls, inside `160×160 mm`). Dynamic: four `20 mm` source boxes released with
+**Phase 2 — `tumble`.** The floor plus a fixed tray built as a zero-bound Boolean `Cut`: an outer source
+box minus an inner source box that opens its top, leaving a floor and four walls inside `160×160 mm`. A
+mesh `Union` of overlapping boxes is not used, because its triangle diagonals generally cross the other
+operand's planes off the dyadic grid, which leaves a positive mesh bound that §9 does not admit. Dynamic: four `20 mm` source boxes released with
 proper rotations about `(1, 1, 0)` by `30°`, `45°`, `60°`, `75°` and spin `(2, 1, 0) rad/s`; one
 hexagonal prism (`20 mm` across flats, `12 mm` tall) released on a vertex; one triangular wedge; one
 stitched tetrahedron. Material as above, `3 s`. Exit criterion: the timeline reaches `3 s`; each body's
@@ -679,15 +683,30 @@ with `ctx` polled every `workPollInterval` operations. The split follows the one
 `internal/pair/axis_box.go` already make: `internal/pair/planar.go` takes the two exact vertex and
 triangle snapshots and returns the relation, gap and feature pairs over `proof.Dyadic`; the root
 `contact_faceted_pair.go` admits the bodies, builds the snapshots at the query poses, maps feature
-indices back to live `*Face` values and publishes the typed report. The tests are:
+indices back to live `*Face` values and publishes the typed report. A prism's caps reuse the
+tessellator's cap triangulation of its recorded section, accepted only after an exact check that every
+cap triangle is counterclockwise; with the closed-mesh audit, that proves the triangles tile the section
+exactly. The tests are:
 
 - a certified transversal crossing of two facets (`boolean_exact.go`'s predicates) proves `Overlapping`;
 - with no crossing, one nesting cast per shell (`docs/clearance-design.md` §2's ray ladder, closed-form
   for planes) proves containment, hence `Overlapping`, or mutual outsideness;
 - with no crossing and no nesting, the exact minimum over facet pairs of the squared distance
   (vertex-face and edge-edge candidates, rational) is either positive, proving `Separated` with the gap
-  enclosed by `proof.DySqrtDown`/`proof.DySqrtUp`, or zero, proving `Touching` when every zero-distance feature pair
-  has opposed material sides.
+  enclosed between two floats whose squares are compared exactly against it, or zero, proving `Touching`
+  when every zero-distance feature pair has opposed material sides.
+
+Two coplanar facets with matching outward normals and a positive-area overlap also prove `Overlapping`.
+A shell whose every vertex lies on the other body's boundary needs no cast: it meets the contact set.
+"Opposed material sides" is a local proof at each zero-distance site (a vertex on a facet, two crossing
+edges, a collinear edge overlap, a coplanar edge chord through a facet), taken over every triangle of
+each body that holds the site. It holds when either a plane through the site has one body's triangles
+on or behind it and the other's on or in front, with a triangle of each body whose own plane bounds that
+body's triangles there, or one body's triangles lie in front of every plane of the other's there (a box
+in a tray corner). A site where neither holds leaves the relation `Undecided` with
+`ContactAmbiguousFeature`. Known limit: two flush bodies meeting at a saddle point (side by side on one
+base plane, one filling the other's notch) are such a site, so their touch stays `Undecided`; proving it
+needs a complete local-cone decision, which this design does not include.
 
 A convex body's relation against a convex body may shortcut through separating axes (face normals and
 edge cross products) exactly as `classifyOrientedSourceBoxes` does; the triangle path is the general one.
@@ -696,9 +715,11 @@ edge cross products) exactly as `classifyOrientedSourceBoxes` does; the triangle
 
 A body is CONVEX when every held vertex lies on or behind every facet plane, tested as exact rational
 signed volumes, and its mesh passes the solid audits of `docs/tessellation-design.md` §1. The certificate
-is computed once per body at its placement and cached on the payload (it is pose-invariant under a
-proper rigid transform). A dynamic body without it publishes relations only, with the appended reason
-`ContactNonConvex` on an absent manifold. A Fixed or Kinematic body needs no certificate.
+is computed once per body at its placement and cached on the body (it is invariant under any affine
+pose with a positive determinant, which is every pose §9 admits). A dynamic body without it publishes
+relations only, with the appended reason `ContactNonConvex` on an absent manifold. A Fixed or Kinematic
+body needs no certificate. `ContactPair` does not know motion types: it names `ContactNonConvex` on a
+touching or overlapping pair when neither body carries the certificate, since §9.3 needs one convex side.
 
 ### 9.3 Manifold
 
@@ -1149,8 +1170,9 @@ lines below do not repeat it.
 - Files: new `internal/pair/planar.go` and `contact_faceted_pair.go`; `contact_pair.go`.
 - Test (root): `contact_faceted_pair_test.go`, with the snapshot-level cases in
   `internal/pair/planar_test.go`: a hexagonal prism at a `37°` pose against a tray reads a
-  `3 mm` gap enclosed, a vertex touch and a shallow crossing; a small box nested in a hollow union is
-  `Overlapping`; the non-convex union reports `ContactNonConvex`.
+  `3 mm` gap enclosed, a vertex touch and a shallow crossing; a small box nested in a hollow Boolean's
+  wall is `Overlapping` and one in its cavity is `Separated`; the non-convex Booleans report
+  `ContactNonConvex`.
 - Depends on: nothing.
 
 ### PR 11 (Phase 2) — faceted manifolds and the exact-clipped patch
