@@ -180,7 +180,10 @@ func (b *analyticSTEPBuilder) addEdge(edge *decad.Edge) (step.Reference, error) 
 func planarSTEPPlacement(loop *decad.Loop) (r3.Vec, r3.Vec, r3.Vec, error) {
 	coedges := loop.CoEdges()
 	if supportsAnalyticCircleLoop(loop) {
-		circle := coedges[0].Edge().Curve().(decad.Circle3)
+		circle, ok := coedges[0].Edge().Curve().(decad.Circle3)
+		if !ok {
+			return r3.Vec{}, r3.Vec{}, r3.Vec{}, fmt.Errorf("%w: planar circle has no curve", decad.ErrDegenerate)
+		}
 		reference, ok := coedges[0].Start().Position().Value.Sub(circle.Center).Normalize()
 		if !ok {
 			return r3.Vec{}, r3.Vec{}, r3.Vec{}, fmt.Errorf("%w: circle has no radial direction", decad.ErrDegenerate)
