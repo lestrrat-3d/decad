@@ -213,7 +213,7 @@ func TestSourceSpherePairDiagonalRefusals(t *testing.T) {
 	require.NoError(t, err)
 	zeroV := decad.QuantityVec{X: units.MillimetersPerSecond(0), Y: units.MillimetersPerSecond(0),
 		Z: units.MillimetersPerSecond(0)}
-	moveV := decad.QuantityVec{X: units.MillimetersPerSecond(0), Y: units.MillimetersPerSecond(2),
+	moveV := decad.QuantityVec{X: units.MillimetersPerSecond(0), Y: units.MillimetersPerSecond(3),
 		Z: units.MillimetersPerSecond(0)}
 	zeroA := decad.QuantityVec{X: units.RadiansPerSecond(0), Y: units.RadiansPerSecond(0),
 		Z: units.RadiansPerSecond(0)}
@@ -225,4 +225,7 @@ func TestSourceSpherePairDiagonalRefusals(t *testing.T) {
 		decad.SweepRequest{ContactRequest: req, TimeResolution: units.Seconds(1e-9), MaxPoseEvaluations: 128})
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepUndecided, sweep.Outcome)
+	require.Equal(t, decad.SweepEventUnrepresentable, sweep.Cause)
+	require.NotNil(t, sweep.Unresolved)
+	require.Nil(t, sweep.Event)
 }
