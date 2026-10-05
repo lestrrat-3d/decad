@@ -20,6 +20,7 @@ shows a box impact and computed rebound.
 | Full source cylinder and source box | Axial disk in a wide face; vertical extruded sidewall against a broad face | Centered frictionless rebound |
 | Verified faceted Boolean and source-box floor | One exact rectangular lower face, vertical affine path, contained footprint | Frictionless rebound or rest |
 | Full source cylinder sidewall, against a planar face or a parallel full source cylinder | Two-end ruling line at identity query poses only | None yet |
+| Two exact planar solids | Gap, touch, or overlap at any pose with a positive-determinant basis; no manifold | None yet |
 
 The source-box path starts from rectangular source prisms. Signed-axis
 face patches cover affine approach, persistent contact, and the first edge
@@ -83,6 +84,16 @@ the other operand's certified lower extent stays strictly above it. The
 footprint stays inside a wide source-box floor; both paths translate equally
 in X and Y, with zero spin. [Faceted floor tests](../dynamics/faceted_floor_step_test.go)
 exercise density-backed impact, rest, and trace replay.
+
+Two exact planar solids are prisms over straight-edged sections with no
+recorded displacement, or zero-bound faceted Booleans, directly or after a
+translation-only `Placed`. `ContactPair` proves their relation under any
+rotation: an enclosed gap, a touch at a vertex, edge or face, or an overlap,
+including one body nested in the other's material. It publishes no manifold
+yet, so no step response uses it. The report names `ContactNonConvex` when
+neither body is convex. A touch it cannot resolve locally, such as two
+flush bodies meeting at a saddle point, stays `ContactUndecided`.
+[Planar pair tests](../contact_faceted_pair_test.go) check each relation.
 
 ## Bodies and response
 

@@ -97,6 +97,16 @@ recorded centers and radii. A nonzero center offset with crossing sphere
 surfaces publishes one bounded point manifold along the center line. Coincident
 centers keep the relation and withhold the manifold.
 
+Two exact planar solids receive an exact relation at any query pose whose
+basis has a positive determinant. A solid is admitted as a prism over whole
+`LineSeg` edges with zero deltas, or as a zero-bound faceted Boolean, directly
+or through a translation-only placement. The relation is separation with an
+enclosed gap, touch, or overlap, decided by the exact facet tests of
+`docs/multibody-dynamics-design.md` §9.1. This path publishes no manifold. Its
+reason is `ContactNonConvex` when neither body carries §9.2's convexity
+certificate there, and `ContactNoNormalProof` otherwise. When the faceted
+floor-support proof leaves a pair undecided, this relation decides it.
+
 ## 1. Claims and entry point
 
 ```go
@@ -546,7 +556,7 @@ faces and reverses the normal; the ends keep their order.
 | Strict full containment of a solid in material | `Overlapping`; no contact manifold from containment alone. |
 | Coplanar positive-area patch with opposed material normals | `Touching` after all other crossings are excluded; publish the full trimmed patch reduction if its bounds meet the request. |
 | Coplanar patch with matching material sides | `Overlapping` only when shared interior is proven; no touch manifold from the patch alone. |
-| Edge-only or vertex-only meeting | `Touching` on the new exact source-box path; `Undecided` under today's other clearance paths. A manifold requires a resolved normal cone. |
+| Edge-only or vertex-only meeting | `Touching` on the exact source-box and exact planar paths; `Undecided` under today's other clearance paths. A manifold requires a resolved normal cone. |
 | Smooth tangency or ruling contact | `Touching` only for a complete certified family in clearance §6; the manifold may still be unavailable if point or normal bounds fail. |
 | Transversal boundary crossing | `Overlapping` if the proof transfers to both exact query poses; the unique shallow source-box penetration path above may yield a manifold. Other crossings require a separate proof. |
 | Near miss inside displacement bounds | `Undecided`; never promote a held-mesh gap or sample to `Separated`. |

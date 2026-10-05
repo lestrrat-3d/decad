@@ -1086,6 +1086,10 @@
 4	0.01	TestContactPairBoundedFacetedFloorStrictClear
 4	0.00	TestContactPairCylinderPairRuling
 4	0.00	TestContactPairCylinderRulingOnFloor
+4	0.05	TestContactPairExactPlanarCancels
+4	0.05	TestContactPairExactPlanarHexagonOnTray
+4	0.05	TestContactPairExactPlanarNesting
+4	0.05	TestContactPairExactPlanarNonConvex
 4	0.01	TestContactPairFacetedFloorRefusesMultipleSupportFaces
 4	0.01	TestContactPairFacetedFloorRefusesUnprovedPatches
 4	0.00	TestContactPairOrientedAxisFaceWitness
