@@ -676,6 +676,18 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		preSpeed[0].Base() - impulse*normalSign*inverseMass[0],
 		preSpeed[1].Base() + impulse*normalSign*inverseMass[1],
 	}
+	// At zero restitution against a fixed body, the dynamic body's exact
+	// normal velocity equals the fixed body's velocity for every admitted
+	// mass. Publish that value directly so float cancellation cannot turn a
+	// persistent face contact into an artificial separating sweep.
+	if effectiveCoefficient.Base() == 0 {
+		switch {
+		case w.parts[0].definition.Role == Fixed && w.parts[1].definition.Role == Dynamic:
+			postSpeed[1] = preSpeed[0].Base()
+		case w.parts[1].definition.Role == Fixed && w.parts[0].definition.Role == Dynamic:
+			postSpeed[0] = preSpeed[1].Base()
+		}
+	}
 	if !responsePairResidualsWithin(preSpeed, normalSign, effectiveCoefficient,
 		w.parts, target, impulse, postSpeed, w.step.VelocityResidual, w.step.ImpulseResidual) {
 		return undecided(w, "exact response bounds exceed velocity or impulse residual"), nil

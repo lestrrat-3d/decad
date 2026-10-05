@@ -79,6 +79,9 @@ requires ideal and rounded separating sweeps; zero restitution requires ideal
 and rounded persistent-contact tracks. The trace replays both impact sides
 from those certificates. A mass-center bound that permits an omitted spin
 above `AngularVelocityResidual` stops the step.
+At zero restitution against one fixed body, the dynamic body's published
+normal velocity equals the fixed body's exactly after the bounded response
+check, so floating-point cancellation cannot turn rest into departure.
 A translation-only placed copy of that zero-bound union may carry positive
 held-mesh and occupied-volume bounds while preserving the exact lower face.
 With density-derived bounded mass and center readings, zero spin, zero friction,

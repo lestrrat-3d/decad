@@ -99,8 +99,20 @@ func TestPositiveBoundFacetedFloorDensityImpactAndTrace(t *testing.T) {
 }
 
 func TestPositiveBoundFacetedFloorDensityRestAndTrace(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		density float64
+	}{{"original density", .001}, {"alternate density", .0015612}} {
+		t.Run(tc.name, func(t *testing.T) {
+			positiveBoundFacetedFloorDensityRestAndTrace(t, tc.density)
+		})
+	}
+}
+
+func positiveBoundFacetedFloorDensityRestAndTrace(t *testing.T, densityValue float64) {
+	t.Helper()
 	doc, floor, body := positiveBoundFacetedFloorFixture(t)
-	density := units.KilogramsPerCubicMillimeter(.001)
+	density := units.KilogramsPerCubicMillimeter(densityValue)
 	material := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
 	world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{Bodies: []dynamics.RigidBody{
 		{Body: floor, Role: dynamics.Fixed, Material: material},
