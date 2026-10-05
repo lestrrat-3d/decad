@@ -1303,7 +1303,13 @@ the fraction replays when `(f − lo)·T − g` plus the summed deviation fits `
 rounded pair lies within that resolution of a separated one, the claim the affine source-box replay makes
 inside its bracket. The rotating source-box replay does the same with its left sample's lower gap, so a
 rotating pair's impact advances to the bracket's right end (§5 step 6). Beyond a bracket's right edge or
-a track's end, replay refuses.
+a track's end, replay refuses. `T` charges every point's full travel, so a bracket `TimeResolution` wide
+can exceed `g + PointResolution`: the `tumble` tetrahedron's second impact on the tray floor, with `T`
+about `2200 mm/s` and `TimeResolution = 1 ns`, carries `2.0·10⁻⁶ mm` against `g ≈ 1.0·10⁻⁶ mm`. The
+search narrows such a bracket below `TimeResolution`, while its right edge would refuse, by halving: a
+meeting midpoint becomes the right edge, a separated midpoint the clear certificate joins to the left
+edge becomes the left edge (contact-sweep §6). The float floor, the pose budget and a midpoint that
+settles neither leave the bracket found, so narrowing never turns a bracket into `SweepUndecided`.
 
 ### 10.2 Departure from touch under rotation
 

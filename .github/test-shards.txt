@@ -1735,6 +1735,7 @@
 4	0.04	TestSweepPairPlanarDepartureFromEdge
 4	0.06	TestSweepPairPlanarDepartureRotatingSupport
 4	0.01	TestSweepPairPlanarExactTouchTrack
+4	0.30	TestSweepPairPlanarTumblingTetrahedronReplaysImpact
 4	0.11	TestSweepPairPlanarTumblingWedge
 4	0.01	TestSweepPairPlanarWedgeStops
 4	0.01	TestSweepPairRealFacetedUnionClearAndImpact

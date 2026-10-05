@@ -282,6 +282,19 @@ func (p rotationalSweepPath) roundedAt(pose r3.Transform, f *big.Rat) (orientedS
 
 func noSweepPoll() error { return nil }
 
+// replayDeviation is what replay charges one rounded pose at f: the staged
+// points' distance bound from the ideal path (pointDeviation), and for a
+// positive-displacement planar body (§10.4) the displacement (s + 1)·δ, s the
+// rounded pose's stretch (planarPoseScale). A source-box path holds δ zero.
+func (p rotationalSweepPath) replayDeviation(pose r3.Transform, f *big.Rat) (*big.Rat, *big.Rat, bool) {
+	_, bound, ok, _ := p.pointDeviation(pose, f, noSweepPoll)
+	if !ok {
+		return nil, nil, false
+	}
+	stretch := proofarith.DyAdd(planarPoseScale(pose), proofarith.DyInt(1))
+	return proofarith.FloatRat(bound), proofarith.DyMul(p.delta, stretch).Rat(), true
+}
+
 // pointDeviation maps the exact source points through the read query pose,
 // staged exactly as ContactPair stages them, and bounds their distance from
 // their ideal path positions (contact-sweep §3). The rounded and ideal bodies
@@ -1170,8 +1183,11 @@ func (r *rotationalPairSweep) refine(ctx context.Context, left, right *SweepSamp
 	}
 	width := new(big.Rat).Mul(new(big.Rat).Sub(rf, lf), r.a.path.duration)
 	if width.Cmp(r.resolution) <= 0 {
-		if left.Ideal.Relation == ContactSeparated && (right.Ideal.Relation == ContactTouching ||
-			right.Ideal.Relation == ContactOverlapping || right.Ideal.Relation == ContactBand) {
+		if left.Ideal.Relation == ContactSeparated && meetingRelation(right.Ideal.Relation) {
+			left, right, err := r.narrowBracket(ctx, left, right)
+			if err != nil {
+				return false, err
+			}
 			r.report.Outcome, r.report.Event = SweepImpactBracket, &right.Ideal
 			r.report.Bracket = &SweepInterval{From: left.At, To: right.At}
 			r.report.bracketRight = new(big.Rat).Set(right.exactFraction)
@@ -1203,6 +1219,82 @@ func (r *rotationalPairSweep) refine(ctx context.Context, left, right *SweepSamp
 		return done, err
 	}
 	return r.refine(ctx, sample, right, depth+1)
+}
+
+// meetingRelation reports whether a sample's ideal relation closes an impact
+// bracket on its right.
+func meetingRelation(relation ContactRelation) bool {
+	return relation == ContactTouching || relation == ContactOverlapping || relation == ContactBand
+}
+
+// narrowBracket halves an impact bracket already within TimeResolution while
+// its right edge would not replay (bracketRightReplays). Replay inside a
+// rotating bracket charges every point's travel from the left edge against
+// that edge's lower gap, so a fast body's bracket can need a width below
+// TimeResolution before its right edge, where a step cuts the impact, fits
+// PointResolution. A separated midpoint the clear certificate joins to the
+// left edge becomes the left edge, and a meeting midpoint the right edge. The
+// current bracket stands at the float floor, at the pose budget, and at a
+// midpoint that settles neither, so narrowing never turns a bracket into an
+// undecided report.
+func (r *rotationalPairSweep) narrowBracket(ctx context.Context, left, right *SweepSample) (
+	*SweepSample, *SweepSample, error) {
+	for !r.bracketRightReplays(left, right) {
+		lf, rf := proofarith.FloatRat(left.At.Fraction.Base()), proofarith.FloatRat(right.At.Fraction.Base())
+		middle := new(big.Rat).Quo(new(big.Rat).Add(lf, rf), big.NewRat(2, 1))
+		if ratFloatNearest(middle) == left.At.Fraction.Base() ||
+			ratFloatNearest(middle) == right.At.Fraction.Base() {
+			return left, right, nil
+		}
+		sample, err := r.sample(ctx, middle)
+		if errors.Is(err, errSweepPoseBudget) {
+			return left, right, nil
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		switch {
+		case meetingRelation(sample.Ideal.Relation):
+			right = sample
+		case sample.Ideal.Relation == ContactSeparated && r.intervalClear(left, sample, lf, middle):
+			left = sample
+		default:
+			return left, right, nil
+		}
+	}
+	return left, right, nil
+}
+
+// bracketRightReplays reports whether replay accepts the bracket's right
+// edge: (hi − lo)·T − g plus the rounded poses' deviation there fits
+// PointResolution (sweepReplayProof.bracketDepthWithin), with g the left
+// sample's proven lower gap and T both travel bounds per unit fraction. The
+// deviation is the one replay charges, read at the same rounded poses. A left
+// sample without a positive gap, or a right edge whose deviation has no finite
+// bound, has nothing narrowing can settle and reports true.
+func (r *rotationalPairSweep) bracketRightReplays(left, right *SweepSample) bool {
+	gap := sampleLowerGap(left)
+	resolution, ok := exactBaseValue(r.req.PointResolution)
+	if gap == nil || !ok {
+		return true
+	}
+	lo, hi := proofarith.FloatRat(left.At.Fraction.Base()), proofarith.FloatRat(right.At.Fraction.Base())
+	charge := new(big.Rat)
+	for _, path := range [2]rotationalSweepPath{r.a, r.b} {
+		pose, err := path.poseAt(hi)
+		if err != nil {
+			return true
+		}
+		deviation, displacement, ok := path.replayDeviation(pose, hi)
+		if !ok {
+			return true
+		}
+		charge.Add(charge, deviation)
+		charge.Add(charge, displacement)
+	}
+	bracket := sweepReplayProof{bracketLo: lo, bracketHi: hi, bracketGap: gap,
+		bracketTravel: new(big.Rat).Add(r.a.fullTravel, r.b.fullTravel)}
+	return bracket.bracketDepthWithin(hi, charge, resolution)
 }
 
 func (r *rotationalPairSweep) intervalClear(left, right *SweepSample, lf, rf *big.Rat) bool {

@@ -409,8 +409,9 @@ func TestSweepPairPlanarDepartureRotatingSupport(t *testing.T) {
 
 func TestSweepPairPlanarClearReplay(t *testing.T) {
 	// The tumbling wedge's impact report replays its certified clear prefix,
-	// where the rounded pair stays separated, and refuses past the bracket's
-	// left edge.
+	// where the rounded pair stays separated, then its bracket through the
+	// right edge, which the sweep narrowed until it replays, and refuses past
+	// that edge.
 	doc := decad.New()
 	floor, wedge, floorPath, wedgePath := tumbleScene(t, doc)
 	report, err := doc.SweepPair(t.Context(), floor, wedge, floorPath, wedgePath, tumbleRequest())
@@ -425,7 +426,10 @@ func TestSweepPairPlanarClearReplay(t *testing.T) {
 		require.Equal(t, decad.ContactSeparated, contact.Relation, "time %v", elapsed)
 		require.InDelta(t, tumbleGap(elapsed), contact.Gap.Value.Base(), contact.Gap.Bound.Base()+1e-9)
 	}
-	_, _, err = report.CertifiedPosesAt(report.Bracket.To.Elapsed.Value)
+	right := report.Bracket.To.Elapsed.Value.Base()
+	_, _, err = report.CertifiedPosesAt(units.Seconds(right))
+	require.NoError(t, err)
+	_, _, err = report.CertifiedPosesAt(units.Seconds(right + tumbleRequest().TimeResolution.Base()))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
