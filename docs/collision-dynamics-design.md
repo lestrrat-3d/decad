@@ -8,9 +8,10 @@ source boxes, admitted untapered prisms, and full source spheres. It steps one
 frictionless pair with a fixed and dynamic body or two centered dynamic bodies.
 A three-body world with one dynamic and two fixed bodies steps one active pair
 when every other
-pair has a certified clear path. A full circular source prism can advance
-along a strictly separated axial path above or below a source-box face and
-replay that clear path. Cylinder contact and impact remain unsupported.
+pair has a certified clear path. A full circular source prism or a full
+revolve of a rectangular half-profile can advance along a strictly separated
+axial path above or below a source-box face and replay that clear path.
+Cylinder contact and impact remain unsupported.
 It also steps two orthogonal, frictionless
 initial face contacts and their repeated resting response after real manifolds
 and full-span tracks certify both pairs. A source box can hit
