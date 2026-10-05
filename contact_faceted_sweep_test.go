@@ -181,12 +181,12 @@ func TestSweepPairFacetedFloorRefusesUnprovedPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, SweepUndecided, unproved.Outcome)
 	require.False(t, unproved.HasAffineReplayProof())
-	clear, err := doc.SweepPair(t.Context(), floor, reflected, still,
+	clearReport, err := doc.SweepPair(t.Context(), floor, reflected, still,
 		facetedSweepPath(start, facetedSweepPose(t, r3.Vec{Z: 5})),
 		facetedSweepRequest(StopAtInitialContact))
 	require.NoError(t, err)
-	require.Equal(t, SweepClear, clear.Outcome)
-	require.True(t, clear.HasAffineReplayProof())
-	_, _, err = clear.CertifiedPosesAt(units.Seconds(.5))
+	require.Equal(t, SweepClear, clearReport.Outcome)
+	require.True(t, clearReport.HasAffineReplayProof())
+	_, _, err = clearReport.CertifiedPosesAt(units.Seconds(.5))
 	require.NoError(t, err)
 }
