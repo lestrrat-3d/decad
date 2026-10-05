@@ -1,7 +1,9 @@
 package dynamics_test
 
 import (
+	"math"
 	"math/big"
+	"os"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -333,4 +335,463 @@ func discreteFreeFall(drop float64) *big.Rat {
 		}
 		fallen = next
 	}
+}
+
+// The Phase 2 exit scene of docs/multibody-dynamics-design.md §2, tumble,
+// end to end through the same producers: a fixed zero-bound Cut tray, four
+// spinning boxes turned about (1, 1, 0), a hexagonal prism, a wedge and a
+// stitched tetrahedron, each released on a corner or a vertex, all landing
+// on the tray's floor and coming to rest face down inside the band (§10.8).
+// The _gallery module renders the same scene.
+//
+// The whole scene's 768 steps take about six minutes on an amd64
+// workstation, nearly all of it in the first 80 steps, where the rotating
+// sweeps' exact interval arithmetic dominates, and longer on the CI runners
+// than the dynamics package's ten-minute test budget allows. CI therefore
+// runs it in the _gallery module (TestTumbleTimeline there, and the
+// smoke render), and TestTumbleScene here runs it only when
+// DECAD_TUMBLE_FULL is set. TestTumbleSceneSubset runs four of its bodies,
+// one of each shape family, through the same assertions in 128 steps, about
+// forty seconds, on the legs without the race detector, which would take it
+// several times past the package budget the rest of the package already
+// fills.
+
+// tumbleScene is a tumble world: the tray as its one fixed body, so no
+// other fixed body touches it, and the dynamic bodies in release order.
+type tumbleScene struct {
+	doc     *decad.Document
+	tray    *decad.Body
+	names   []string
+	bodies  []*decad.Body
+	boxes   []*decad.Body
+	masses  map[*decad.Body]float64
+	density units.Value
+	config  dynamics.StepConfig
+	world   *dynamics.World
+	state   dynamics.State
+}
+
+// tumbleBodyRelease is one dynamic body of the scene at its release: its
+// builder, its pose, its spin and whether it is one of the four boxes.
+type tumbleBodyRelease struct {
+	name  string
+	build func(t *testing.T, doc *decad.Document) *decad.Body
+	pose  func(t *testing.T) r3.Transform
+	box   bool
+}
+
+// tumbleReleases are §2's seven bodies. The boxes are centered on their own
+// origin, turned about (1, 1, 0) by 30°, 45°, 60° and 75° and released with
+// their centers 40 mm above the floor, 45 mm from the tray's center along
+// each diagonal, so each starts at least 20 mm inside the walls (§10.6). The
+// prism turns 37° about −Y about its corner at the origin, which every other
+// corner then stands above; the wedge and the tetrahedron turn about generic
+// axes; each lands on one vertex.
+var tumbleReleases = []tumbleBodyRelease{
+	tumbleBoxRelease("box0", 30, r3.Vec{X: -45, Y: -45, Z: 40}),
+	tumbleBoxRelease("box1", 45, r3.Vec{X: 45, Y: -45, Z: 40}),
+	tumbleBoxRelease("box2", 60, r3.Vec{X: -45, Y: 45, Z: 40}),
+	tumbleBoxRelease("box3", 75, r3.Vec{X: 45, Y: 45, Z: 40}),
+	{name: "hexagon",
+		build: func(t *testing.T, doc *decad.Document) *decad.Body { return tumbleHexBody(t)(doc) },
+		pose:  func(t *testing.T) r3.Transform { return tumbleRelease(t, r3.Vec{Y: -1}, 37, r3.Vec{X: -55, Z: 20}) }},
+	{name: "wedge",
+		build: func(t *testing.T, doc *decad.Document) *decad.Body { return tumbleWedgeBody(t)(doc) },
+		pose: func(t *testing.T) r3.Transform {
+			return tumbleRelease(t, r3.Vec{X: 1, Y: 2, Z: 3}, 50, r3.Vec{X: 40, Z: 25})
+		}},
+	{name: "tetrahedron", build: tumbleTetrahedron,
+		pose: func(t *testing.T) r3.Transform { return tumbleRelease(t, r3.Vec{X: 3, Y: -1, Z: 2}, 40, r3.Vec{Z: 25}) }},
+}
+
+func tumbleBoxRelease(name string, degrees float64, center r3.Vec) tumbleBodyRelease {
+	return tumbleBodyRelease{name: name, box: true,
+		build: func(t *testing.T, doc *decad.Document) *decad.Body { return tumbleBoxBody(t)(doc) },
+		pose:  func(t *testing.T) r3.Transform { return tumbleRelease(t, r3.Vec{X: 1, Y: 1}, degrees, center) }}
+}
+
+// tumbleStepConfig is the stack-and-drop step at §2's tumble residuals:
+// PenetrationResidual 10 µm and SupportBand 5 µm, so a kick that lands a
+// box on all four corners leaves it at rest (§10.8).
+func tumbleStepConfig() dynamics.StepConfig {
+	config := stackAndDropConfig()
+	config.MaxPoseEvaluations = 512
+	config.PenetrationResidual = units.Millimeters(.01)
+	config.Contact.SupportBand = units.Millimeters(.005)
+	return config
+}
+
+// tumbleTrayBox is a source box over [x0, x1]×[y0, y1]×[z0, z0+h], extruded
+// from the XY plane and translated, which keeps the Cut exact.
+func tumbleTrayBox(t *testing.T, doc *decad.Document, x0, y0, x1, y1, z0, h float64) *decad.Body {
+	t.Helper()
+	body := makeBox(t, doc, x0, y0, x1, y1, 0, h)
+	shift, err := r3.Translation(r3.Vec{Z: z0})
+	require.NoError(t, err)
+	placed, err := body.Placed(t.Context(), shift)
+	require.NoError(t, err)
+	return placed
+}
+
+// tumbleTray is §2's tray: [−90, 90]²×[−10, 40] minus [−80, 80]²×[0, 50],
+// a 10 mm floor with its top face at z = 0 and four walls around the
+// 160×160 mm inside. Every crossing of the operands' facets is dyadic, so
+// the Cut is a zero-bound Boolean (§9).
+func tumbleTray(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	tray, err := decad.Cut(t.Context(), tumbleTrayBox(t, doc, -90, -90, 90, 90, -10, 50),
+		tumbleTrayBox(t, doc, -80, -80, 80, 80, 0, 50))
+	require.NoError(t, err)
+	return tray
+}
+
+// tumbleTriangle patches the triangle with the given plane-local corners.
+func tumbleTriangle(t *testing.T, doc *decad.Document, w *sketch.World, plane *sketch.Plane,
+	local [3][2]float64) *decad.Body {
+	t.Helper()
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	var corners [3]*sketch.Point
+	for i, p := range local {
+		corners[i] = s.CreatePoint(p[0], p[1])
+		s.Fix(corners[i])
+	}
+	for i := range corners {
+		s.CreateLine(corners[i], corners[(i+1)%3])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	patch, err := doc.Patch(t.Context(), s, s.Profiles()[0])
+	require.NoError(t, err)
+	return patch
+}
+
+// tumbleTetrahedron stitches the tetrahedron with corners a·(1, 0, 0), the
+// origin, a·(0, 1, 0) and a·(1, 0, 1), a = 16·s with s = 1/√2 as r3 holds
+// it: the faces on the planes x + y = a and z = x take frames holding one
+// cardinal axis and the diagonal (±s, ±s), and their diagonal corners sit at
+// plane-local 16, so every corner lands exactly (mass_properties_mesh_test.go
+// stitches the same solid at half the size).
+func tumbleTetrahedron(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	probe, err := r3.NewFrame(r3.Vec{}, r3.NewVec(0, 0, 1), r3.NewVec(-1, 1, 0))
+	require.NoError(t, err)
+	a := 16 * probe.V().Y
+	slanted, err := r3.NewFrame(r3.NewVec(a, 0, 0), r3.NewVec(0, 0, 1), r3.NewVec(-1, 1, 0))
+	require.NoError(t, err)
+	diagonal, err := r3.NewFrame(r3.Vec{}, r3.NewVec(0, 1, 0), r3.NewVec(1, 0, 1))
+	require.NoError(t, err)
+	slantedPlane, err := w.CreatePlaneFromFrame(slanted)
+	require.NoError(t, err)
+	diagonalPlane, err := w.CreatePlaneFromFrame(diagonal)
+	require.NoError(t, err)
+	// XY's frame is (+X, +Y) and XZ's (+X, +Z).
+	tetrahedron, err := decad.Stitch(t.Context(),
+		tumbleTriangle(t, doc, w, w.XY(), [3][2]float64{{a, 0}, {0, 0}, {0, a}}),
+		tumbleTriangle(t, doc, w, w.XZ(), [3][2]float64{{a, 0}, {0, 0}, {a, a}}),
+		tumbleTriangle(t, doc, w, slantedPlane, [3][2]float64{{0, 0}, {0, 16}, {a, 0}}),
+		tumbleTriangle(t, doc, w, diagonalPlane, [3][2]float64{{0, 0}, {a, 0}, {0, 16}}))
+	require.NoError(t, err)
+	require.Equal(t, decad.BodySolid, tetrahedron.Kind())
+	want := map[r3.Vec]struct{}{{X: a}: {}, {}: {}, {Y: a}: {}, {X: a, Z: a}: {}}
+	for _, v := range tetrahedron.Vertices() {
+		require.Contains(t, want, v.Position().Value, "premise: every corner lands exactly")
+	}
+	return tetrahedron
+}
+
+// newTumble builds the tray and the named bodies of tumbleReleases, every
+// one released at rest but for the boxes' (2, 1, 0) rad/s spin, with
+// restitution 0.3 and friction 0.4 at density 0.001 kg/mm³.
+func newTumble(t *testing.T, names ...string) tumbleScene {
+	t.Helper()
+	scene := tumbleScene{doc: decad.New(), density: units.KilogramsPerCubicMillimeter(0.001),
+		config: tumbleStepConfig(), masses: map[*decad.Body]float64{}}
+	scene.tray = tumbleTray(t, scene.doc)
+	material := dynamics.Material{Restitution: units.Scalar(0.3), Friction: units.Scalar(0.4)}
+	bodies := []dynamics.RigidBody{{Body: scene.tray, Role: dynamics.Fixed, Material: material}}
+	entries := []dynamics.BodyState{{Body: scene.tray, Pose: r3.Identity(), LinearVelocity: zeroVelocity(),
+		AngularVelocity: zeroAngular(t)}}
+	for _, name := range names {
+		var release tumbleBodyRelease
+		for _, candidate := range tumbleReleases {
+			if candidate.name == name {
+				release = candidate
+			}
+		}
+		require.NotNil(t, release.build, name)
+		body := release.build(t, scene.doc)
+		properties, err := body.MassProperties(t.Context(), scene.density)
+		require.NoError(t, err, name)
+		scene.masses[body] = properties.Mass.Value.Base()
+		scene.names = append(scene.names, name)
+		scene.bodies = append(scene.bodies, body)
+		spin := zeroAngular(t)
+		if release.box {
+			scene.boxes = append(scene.boxes, body)
+			spin = tumbleBoxSpin()
+		}
+		bodies = append(bodies, dynamics.RigidBody{Body: body, Role: dynamics.Dynamic, Density: &scene.density,
+			Material: material})
+		entries = append(entries, dynamics.BodyState{Body: body, Pose: release.pose(t), LinearVelocity: zeroVelocity(),
+			AngularVelocity: spin})
+	}
+	var err error
+	scene.world, err = dynamics.NewWorld(t.Context(), scene.doc, dynamics.WorldConfig{Bodies: bodies, Step: scene.config})
+	require.NoError(t, err)
+	scene.state, err = scene.world.NewState(entries)
+	require.NoError(t, err)
+	return scene
+}
+
+// tumbleTimeline advances the scene's timeline through the given number of
+// steps of 1/256 s, failing at the first Undecided step with its
+// diagnostics.
+func tumbleTimeline(t *testing.T, scene tumbleScene, steps int) *dynamics.Timeline {
+	t.Helper()
+	timeline, err := dynamics.NewTimeline(scene.world, scene.state)
+	require.NoError(t, err)
+	for k := range steps {
+		report, err := timeline.Advance(t.Context(), dynamics.StepInput{Gravity: gravityZ(-9810)}, pyramidDt())
+		require.NoError(t, err)
+		require.Equal(t, dynamics.Advanced, report.Status, "step %d: %+v", k, report.Diagnostics)
+	}
+	return timeline
+}
+
+// tumbleBandEntry is the time into a step of 1/256 s at which the lowest
+// vertex of body, starting the step at entry, first stands band above the
+// tray floor z = 0 on the step's drift: one exact gravity kick of
+// −9810/256 mm/s, then a constant angular velocity about the mass center,
+// given in body coordinates, and a constant translation, the path dynamics'
+// drift follows. It brackets the first sign change of the lowest
+// vertex's height less band on a 4096-sample grid, then bisects it to a
+// float. ok is false when the body does not enter the band in the step.
+func tumbleBandEntry(t *testing.T, body *decad.Body, center r3.Vec, entry dynamics.BodyState,
+	band float64) (float64, bool) {
+	t.Helper()
+	dt := 1.0 / 256
+	fall := entry.LinearVelocity.Z.Base() - 9810.0/256
+	omega := r3.Vec{X: entry.AngularVelocity.X.Base(), Y: entry.AngularVelocity.Y.Base(),
+		Z: entry.AngularVelocity.Z.Base()}
+	rate := math.Hypot(omega.X, math.Hypot(omega.Y, omega.Z))
+	pivot := entry.Pose.Apply(center)
+	above := func(u float64) float64 {
+		pose := entry.Pose
+		if rate != 0 {
+			turn, err := r3.RotationAround(pivot, omega, units.Radians(rate*u))
+			require.NoError(t, err)
+			pose, err = pose.Then(turn)
+			require.NoError(t, err)
+		}
+		lowest := math.Inf(1)
+		for _, v := range body.Vertices() {
+			lowest = math.Min(lowest, pose.Apply(v.Position().Value).Z+fall*u)
+		}
+		return lowest - band
+	}
+	const samples = 4096
+	if above(0) <= 0 {
+		return 0, false
+	}
+	for i := 1; i <= samples; i++ {
+		right := dt * float64(i) / samples
+		if above(right) > 0 {
+			continue
+		}
+		left := dt * float64(i-1) / samples
+		for {
+			mid := (left + right) / 2
+			if mid <= left || mid >= right {
+				return right, true
+			}
+			if above(mid) > 0 {
+				left = mid
+			} else {
+				right = mid
+			}
+		}
+	}
+	return 0, false
+}
+
+// tumbleFirstImpact is the step index and event of the first ContactImpact
+// between tray and body.
+func tumbleFirstImpact(t *testing.T, steps []*dynamics.StepReport, tray, body *decad.Body) (int, dynamics.ContactEvent) {
+	t.Helper()
+	for k, report := range steps {
+		for _, event := range report.Events {
+			if event.Kind == dynamics.ContactImpact && event.Pair == (dynamics.BodyPair{A: tray, B: body}) {
+				return k, event
+			}
+		}
+	}
+	require.Fail(t, "no tray impact")
+	return 0, dynamics.ContactEvent{}
+}
+
+// requireTumbleExit asserts §2's Phase 2 exit criteria on a tumble timeline
+// advanced steps steps.
+func requireTumbleExit(t *testing.T, scene tumbleScene, timeline *dynamics.Timeline, steps int) {
+	t.Helper()
+	require.Nil(t, timeline.Stopped())
+	require.Equal(t, units.Seconds(float64(steps)/256), timeline.End())
+	reports := timeline.Steps()
+	require.Len(t, reports, steps)
+	config := scene.config
+	residual := config.PenetrationResidual.Base()
+
+	impacts := map[int]int{}
+	for k, report := range reports {
+		// Every step's linear momentum balances: the dynamic bodies' change
+		// equals the gravity and contact impulses, within the readings' own
+		// bounds plus, for every island, each dynamic body's certified
+		// linear-law limit ImpulseResidual + m·VelocityResidual.
+		c := report.Conservation
+		require.NotNil(t, c, "step %d", k)
+		limit := 0.0
+		for _, island := range report.Islands {
+			for _, body := range island.Bodies {
+				if mass, ok := scene.masses[body]; ok {
+					limit += config.ImpulseResidual.Base() + mass*config.VelocityResidual.Base()
+				}
+			}
+		}
+		for axis, get := range []func(dynamics.QuantityVec) units.Value{
+			func(v dynamics.QuantityVec) units.Value { return v.X },
+			func(v dynamics.QuantityVec) units.Value { return v.Y },
+			func(v dynamics.QuantityVec) units.Value { return v.Z },
+		} {
+			change := get(c.Completion.LinearMomentum.Value).Base() - get(c.Input.LinearMomentum.Value).Base()
+			applied := get(c.GravityImpulse.Value).Base() + get(c.ContactImpulse.Value).Base()
+			slack := get(c.Completion.LinearMomentum.Bound).Base() + get(c.Input.LinearMomentum.Bound).Base() +
+				get(c.GravityImpulse.Bound).Base() + get(c.ContactImpulse.Bound).Base() + limit
+			require.InDelta(t, applied, change, slack, "step %d axis %d", k, axis)
+		}
+		// Every event joins a body and the tray's floor, whose normal is +Z:
+		// no body reaches another one or a wall.
+		for _, event := range report.Events {
+			require.Equal(t, scene.tray, event.Pair.A, "step %d", k)
+			for _, point := range event.Manifold.Points {
+				require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value, "step %d", k)
+			}
+			if event.Kind == dynamics.ContactImpact {
+				impacts[len(event.Manifold.Points)]++
+			}
+		}
+	}
+
+	// The trace carries a vertex impact, an edge impact and a face impact.
+	require.Positive(t, impacts[1], "a one-point (vertex) impact")
+	require.Positive(t, impacts[2], "a two-point (edge) impact")
+	faces := 0
+	for points, count := range impacts {
+		if points >= 4 {
+			faces += count
+		}
+	}
+	require.Positive(t, faces, "a face impact of four or more points")
+
+	// Each box's first impact lies where the drift of its lowest corner
+	// first enters the SupportBand, which is where the falling pair's first
+	// ContactBand sample lies (§2, §10.5): the impact is its bracket's right
+	// end, at most TimeResolution after that entry. The entry is bisected to
+	// a float from float drift poses, whose height errors are ulps of the
+	// box's 40 mm coordinates, under 1e-13 mm, and the corner falls at more
+	// than 100 mm/s, so 1e-12 s covers the entry's own error.
+	band := config.Contact.SupportBand.Base()
+	for i, box := range scene.boxes {
+		k, event := tumbleFirstImpact(t, reports, scene.tray, box)
+		start := scene.state
+		if k > 0 {
+			start = *reports[k-1].Next
+		}
+		entry, ok := start.Body(box)
+		require.True(t, ok)
+		at, ok := tumbleBandEntry(t, box, r3.Vec{}, entry, band)
+		require.True(t, ok, "box %d enters the band in step %d", i, k)
+		got := event.Time.Base()
+		require.GreaterOrEqual(t, got, at-1e-12, "box %d", i)
+		require.LessOrEqual(t, got-at, config.TimeResolution.Base()+1e-12, "box %d", i)
+	}
+
+	// Every body ends at rest face down: both velocities within
+	// VelocityResidual of zero, every vertex's exact height, staged through
+	// the published pose, at least −PenetrationResidual, three or more (a
+	// face) within PenetrationResidual of the floor, and every vertex inside
+	// the walls. The last step's last slice certifies each floor pair by
+	// swept boxes strictly apart, the body hovering inside the band, or by a
+	// band or persistent track through the step's end.
+	last := reports[len(reports)-1]
+	floor := rat(-residual)
+	for i, body := range scene.bodies {
+		name := scene.names[i]
+		entry, ok := last.Next.Body(body)
+		require.True(t, ok)
+		for _, v := range []dynamics.QuantityVec{entry.LinearVelocity, entry.AngularVelocity} {
+			require.InDelta(t, 0, v.X.Base(), config.VelocityResidual.Base(), name)
+			require.InDelta(t, 0, v.Y.Base(), config.VelocityResidual.Base(), name)
+			require.InDelta(t, 0, v.Z.Base(), config.VelocityResidual.Base(), name)
+		}
+		face := 0
+		for _, height := range vertexHeights(body, entry.Pose) {
+			require.GreaterOrEqual(t, height.Cmp(floor), 0, name)
+			if height.Cmp(rat(residual)) <= 0 {
+				face++
+			}
+		}
+		require.GreaterOrEqual(t, face, 3, "%s rests on a face", name)
+		for _, v := range body.Vertices() {
+			p := entry.Pose.Apply(v.Position().Value)
+			require.Less(t, math.Max(math.Abs(p.X), math.Abs(p.Y)), 80.0, name)
+		}
+	}
+	slices := dynamics.TraceSliceProofs(last.Trace)
+	require.NotEmpty(t, slices)
+	for _, proof := range slices[len(slices)-1] {
+		if proof.BoxClear || proof.Pair.A != scene.tray {
+			continue
+		}
+		require.Contains(t, []decad.SweepOutcome{decad.SweepPersistentBand, decad.SweepPersistentTouch},
+			proof.Sweep.Outcome)
+		require.Equal(t, 1.0, proof.Sweep.ContactTrack.End().Fraction.Base())
+		require.LessOrEqual(t, proof.Sweep.ContactTrack.Band().Value.Base(), residual)
+	}
+
+	// Every frame time of a 60 fps clip replays a certified state.
+	for frame := range steps * 60 / 256 {
+		_, err := timeline.Sample(units.Seconds(float64(frame) / 60))
+		require.NoError(t, err, "frame %d", frame)
+	}
+}
+
+// tumbleSteps is the scene's 3 s in steps of 1/256 s.
+const tumbleSteps = 768
+
+// TestTumbleScene runs the whole scene for its 3 s and asserts §2's Phase 2
+// exit criteria. It runs when DECAD_TUMBLE_FULL is set; see the comment at
+// the top of this section.
+func TestTumbleScene(t *testing.T) {
+	if os.Getenv("DECAD_TUMBLE_FULL") == "" {
+		t.Skip("set DECAD_TUMBLE_FULL to run the whole tumble scene (about six minutes)")
+	}
+	names := make([]string, len(tumbleReleases))
+	for i, release := range tumbleReleases {
+		names[i] = release.name
+	}
+	scene := newTumble(t, names...)
+	requireTumbleExit(t, scene, tumbleTimeline(t, scene, tumbleSteps), tumbleSteps)
+}
+
+// TestTumbleSceneSubset runs the 30° box, the prism, the wedge and the
+// tetrahedron at their §2 releases in the §2 tray for 0.5 s, by which each
+// rests (the run records the box at rest from its step 45 and the others
+// from steps 29 to 32), and asserts the same criteria.
+func TestTumbleSceneSubset(t *testing.T) {
+	if raceDetector {
+		t.Skip("the race detector takes this run past the package's test budget")
+	}
+	scene := newTumble(t, "box0", "hexagon", "wedge", "tetrahedron")
+	requireTumbleExit(t, scene, tumbleTimeline(t, scene, 128), 128)
 }

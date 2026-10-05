@@ -323,7 +323,13 @@ displaced one within `PenetrationResidual` and stop below its band.
 The [stack-and-drop scene test](../dynamics/scene_test.go) runs 2 s of a
 box pyramid resting under friction while three spheres land on the floor and
 on each other and roll away, and a cylinder lands on its end disk; the `_gallery` module
-renders the same timeline frame by frame.
+renders the same timeline frame by frame. The same file's tumble scene
+test drops four spinning boxes, a hexagonal prism, a wedge and a stitched
+tetrahedron, each on a corner, into a `Cut` tray: every body bounces on
+corners and edges and comes to rest face down on the tray's floor within a
+third of a second. The whole 3 s scene takes minutes, so `dynamics` runs
+it when `DECAD_TUMBLE_FULL` is set and runs four of its bodies otherwise;
+the `_gallery` module runs and renders all of it.
 
 Two- and three-body worlds take the same step as larger ones.
 [Kinematic impact tests](../dynamics/kinematic_impact_test.go)

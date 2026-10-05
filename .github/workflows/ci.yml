@@ -243,20 +243,23 @@ jobs:
 
       # These commands run in _gallery, not over the root suite the shard jobs
       # own.
+      # The tumble scene's 768 steps take several minutes, past go test's
+      # default ten-minute budget on a slow runner.
       - name: Vet and test
         run: |
           go vet ./...
-          go test ./...
+          go test -timeout 30m ./...
 
       # -smoke renders the first frame of every shot. -probe builds and
       # tessellates the bodies of every frame, so it also catches decad
       # refusing a value partway through a parameter ramp.
-      - name: Smoke-render hero and dynamics scene and probe the landing clip
+      - name: Smoke-render hero and dynamics scenes and probe the landing clip
         run: |
           go run . hero -smoke -out "$RUNNER_TEMP/hero"
           go run . clip -smoke -out "$RUNNER_TEMP/frames"
           go run . clip -probe
           go run . dynamics -scene stack-and-drop -smoke -out "$RUNNER_TEMP/dynamics"
+          go run . dynamics -scene tumble -smoke -out "$RUNNER_TEMP/dynamics"
 
   # Scan the module and its dependencies for known vulnerabilities.
   govulncheck:

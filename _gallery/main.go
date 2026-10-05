@@ -36,7 +36,7 @@
 // not apply to it.
 //
 // The dynamics subcommand films one exit scene of the multibody dynamics
-// program: `go run . dynamics -scene stack-and-drop` advances the scene's
+// program: `go run . dynamics -scene stack-and-drop` (or `-scene tumble`) advances the scene's
 // certified dynamics.Timeline to the clip length and renders it with one
 // kinetograph driven node per body under out/. Its flags (-scene, -out, -fps,
 // -width, -height, -workers, -smoke) follow the subcommand; runDynamics

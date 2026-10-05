@@ -49,6 +49,7 @@ type dynamicsPart struct {
 // dynamicsScenes are the scenes `go run . dynamics -scene <name>` renders.
 var dynamicsScenes = map[string]func(context.Context) (*dynamicsScene, error){
 	"stack-and-drop": stackAndDropScene,
+	"tumble":         tumbleScene,
 }
 
 // stackAndDropSpheres are the three spheres' release centers: over x = 120,
@@ -149,7 +150,24 @@ func stackAndDropScene(ctx context.Context) (*dynamicsScene, error) {
 		return nil, err
 	}
 
-	scene.config.Step = dynamics.StepConfig{
+	scene.config.Step = sceneStepConfig()
+	scene.world, err = dynamics.NewWorld(ctx, scene.doc, scene.config)
+	if err != nil {
+		return nil, fmt.Errorf("world: %w", err)
+	}
+	scene.start, err = scene.world.NewState(entries)
+	if err != nil {
+		return nil, fmt.Errorf("start state: %w", err)
+	}
+	return scene, nil
+}
+
+// sceneStepConfig is the step configuration both exit scenes share:
+// 1e-6 resolutions and residuals, ImpactSpeed 64 mm/s above the 9810/256 mm/s
+// kick so a resting body targets zero speed, and budgets the scenes' busiest
+// steps stay within.
+func sceneStepConfig() dynamics.StepConfig {
+	return dynamics.StepConfig{
 		Contact: decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
 			NormalResolution: units.Radians(1e-6)},
 		TimeResolution:          units.Seconds(1e-9),
@@ -164,15 +182,6 @@ func stackAndDropScene(ctx context.Context) (*dynamicsScene, error) {
 		MaxEvents:               64,
 		MaxPairSweeps:           1 << 16,
 	}
-	scene.world, err = dynamics.NewWorld(ctx, scene.doc, scene.config)
-	if err != nil {
-		return nil, fmt.Errorf("world: %w", err)
-	}
-	scene.start, err = scene.world.NewState(entries)
-	if err != nil {
-		return nil, fmt.Errorf("start state: %w", err)
-	}
-	return scene, nil
 }
 
 // steps is how many steps of dt make the clip length. The length must be a
@@ -307,7 +316,7 @@ type dynamicsOptions struct {
 //
 // Flags:
 //
-//   - -scene <name> picks the scene (required; stack-and-drop).
+//   - -scene <name> picks the scene (required; stack-and-drop or tumble).
 //   - -out <dir> is where the frames go (default "out").
 //   - -fps sets the frame rate (default 60).
 //   - -width and -height set the frame size (default 1280x720).
@@ -461,4 +470,268 @@ func extrudedCylinder(ctx context.Context, doc *decad.Document, radius, height f
 		return nil, err
 	}
 	return doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+}
+
+// tumbleRelease is one tumble body's release: a proper rotation by degrees
+// about axis, applied in the body's own frame, then a translation to at.
+type tumbleRelease struct {
+	axis    r3.Vec
+	degrees float64
+	at      r3.Vec
+}
+
+// tumbleBoxReleases are the four 20 mm boxes, centered on their own origin,
+// turned about (1, 1, 0) by 30°, 45°, 60° and 75° and released with their
+// centers 40 mm above the tray floor, 45 mm from the tray's center along
+// each diagonal, so every box stays at least 20 mm inside the walls.
+var tumbleBoxReleases = [4]tumbleRelease{
+	{axis: r3.Vec{X: 1, Y: 1}, degrees: 30, at: r3.Vec{X: -45, Y: -45, Z: 40}},
+	{axis: r3.Vec{X: 1, Y: 1}, degrees: 45, at: r3.Vec{X: 45, Y: -45, Z: 40}},
+	{axis: r3.Vec{X: 1, Y: 1}, degrees: 60, at: r3.Vec{X: -45, Y: 45, Z: 40}},
+	{axis: r3.Vec{X: 1, Y: 1}, degrees: 75, at: r3.Vec{X: 45, Y: 45, Z: 40}},
+}
+
+// tumbleHexRelease tips the hexagonal prism 37° about −Y about its corner at
+// the origin, which every other corner then stands above, and puts that
+// corner 20 mm above the tray floor: the prism lands on one vertex.
+var tumbleHexRelease = tumbleRelease{axis: r3.Vec{Y: -1}, degrees: 37, at: r3.Vec{X: -55, Z: 20}}
+
+// tumbleWedgeRelease and tumbleTetrahedronRelease turn the wedge and the
+// tetrahedron about generic axes, so each lands on one vertex.
+var (
+	tumbleWedgeRelease       = tumbleRelease{axis: r3.Vec{X: 1, Y: 2, Z: 3}, degrees: 50, at: r3.Vec{X: 40, Z: 25}}
+	tumbleTetrahedronRelease = tumbleRelease{axis: r3.Vec{X: 3, Y: -1, Z: 2}, degrees: 40, at: r3.Vec{Z: 25}}
+)
+
+// tumbleHexagon is the hexagonal prism's section, 20 mm across its flats with
+// dyadic corners, one corner at the origin.
+var tumbleHexagon = [][2]float64{{0, 0}, {5.75, -10}, {17.25, -10}, {23, 0}, {17.25, 10}, {5.75, 10}}
+
+// tumbleWedge is the triangular wedge's section; the wedge is 8 mm thick.
+var tumbleWedge = [][2]float64{{0, 0}, {16, 0}, {4, 12}}
+
+// tumbleScene is §2's Phase 2 scene. The fixed support is a tray built as a
+// zero-bound Boolean Cut: the source box [−90, 90]²×[−10, 40] minus the
+// source box [−80, 80]²×[0, 50], which opens its top and leaves a 10 mm floor
+// with its top face at z = 0 and four 10 mm walls around the 160×160 mm
+// inside. The tray is the scene's only fixed body, so no other fixed body
+// touches it. Dynamic: the four boxes of tumbleBoxReleases spinning at
+// (2, 1, 0) rad/s, and the hexagonal prism, the wedge and the stitched
+// tetrahedron, each released on a vertex at rest. Every body takes
+// restitution 0.3 and friction 0.4 at density 0.001 kg/mm³, under the step
+// of stack-and-drop with PenetrationResidual 10 µm and SupportBand 5 µm
+// (§2, §10.8). The clip is 3 s.
+func tumbleScene(ctx context.Context) (*dynamicsScene, error) {
+	scene := &dynamicsScene{
+		name:   "tumble",
+		doc:    decad.New(),
+		input:  dynamics.StepInput{Gravity: millimetersPerSecondSquared(0, 0, -9810)},
+		dt:     units.Seconds(1.0 / 256),
+		length: 3 * time.Second,
+		camera: kinetograph.Camera{
+			Position: r3.Vec{X: -150, Y: -260, Z: 230},
+			Target:   r3.Vec{Z: 5},
+			Up:       r3.Vec{Z: 1},
+			FOV:      kinetograph.Constant(units.Degrees(45)),
+		},
+	}
+	density := units.KilogramsPerCubicMillimeter(0.001)
+	material := dynamics.Material{Restitution: units.Scalar(0.3), Friction: units.Scalar(0.4)}
+	var entries []dynamics.BodyState
+	add := func(name string, body *decad.Body, role dynamics.BodyRole, pose r3.Transform,
+		spin dynamics.QuantityVec, color solidlens.Color) {
+		definition := dynamics.RigidBody{Body: body, Role: role, Material: material}
+		if role == dynamics.Dynamic {
+			definition.Density = &density
+		}
+		scene.config.Bodies = append(scene.config.Bodies, definition)
+		entries = append(entries, dynamics.BodyState{Body: body, Pose: pose,
+			LinearVelocity: millimetersPerSecond(0, 0, 0), AngularVelocity: spin})
+		scene.parts = append(scene.parts, dynamicsPart{name: name, body: body, color: color})
+	}
+	still := radiansPerSecond(0, 0, 0)
+
+	tray, err := tumbleTray(ctx, scene.doc)
+	if err != nil {
+		return nil, fmt.Errorf("tray: %w", err)
+	}
+	add("tray", tray, dynamics.Fixed, r3.Identity(), still, navy)
+	for i, release := range tumbleBoxReleases {
+		body, err := extrudedBox(ctx, scene.doc, -10, -10, 10, 10, -10, 20)
+		if err != nil {
+			return nil, fmt.Errorf("box %d: %w", i, err)
+		}
+		pose, err := release.pose()
+		if err != nil {
+			return nil, fmt.Errorf("box %d: %w", i, err)
+		}
+		add(fmt.Sprintf("box%d", i), body, dynamics.Dynamic, pose, radiansPerSecond(2, 1, 0), violet)
+	}
+	for _, shape := range []struct {
+		name    string
+		build   func() (*decad.Body, error)
+		release tumbleRelease
+		color   solidlens.Color
+	}{
+		{"hexagon", func() (*decad.Body, error) { return extrudedPolygon(ctx, scene.doc, tumbleHexagon, 12) },
+			tumbleHexRelease, coral},
+		{"wedge", func() (*decad.Body, error) { return extrudedPolygon(ctx, scene.doc, tumbleWedge, 8) },
+			tumbleWedgeRelease, gold},
+		{"tetrahedron", func() (*decad.Body, error) { return stitchedTetrahedron(ctx, scene.doc) },
+			tumbleTetrahedronRelease, sky},
+	} {
+		body, err := shape.build()
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", shape.name, err)
+		}
+		pose, err := shape.release.pose()
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", shape.name, err)
+		}
+		add(shape.name, body, dynamics.Dynamic, pose, still, shape.color)
+	}
+
+	scene.config.Step = sceneStepConfig()
+	scene.config.Step.PenetrationResidual = units.Millimeters(0.01)
+	scene.config.Step.Contact.SupportBand = units.Millimeters(0.005)
+	scene.config.Step.MaxPoseEvaluations = 512
+	scene.world, err = dynamics.NewWorld(ctx, scene.doc, scene.config)
+	if err != nil {
+		return nil, fmt.Errorf("world: %w", err)
+	}
+	scene.start, err = scene.world.NewState(entries)
+	if err != nil {
+		return nil, fmt.Errorf("start state: %w", err)
+	}
+	return scene, nil
+}
+
+// pose is the release as a transform.
+func (r tumbleRelease) pose() (r3.Transform, error) {
+	turn, err := r3.Rotation(r.axis, units.Degrees(r.degrees))
+	if err != nil {
+		return r3.Transform{}, err
+	}
+	return r3.FromBasis(turn.Basis(), r.at)
+}
+
+// tumbleTray is §2's tray: the zero-bound Cut of two source boxes, each
+// extruded from the XY plane and then translated, so every crossing of their
+// facets lands on a dyadic point.
+func tumbleTray(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
+	outer, err := translatedBox(ctx, doc, -90, -90, 90, 90, -10, 50)
+	if err != nil {
+		return nil, err
+	}
+	inner, err := translatedBox(ctx, doc, -80, -80, 80, 80, 0, 50)
+	if err != nil {
+		return nil, err
+	}
+	return decad.Cut(ctx, outer, inner)
+}
+
+// translatedBox is the source box [x0, x1]×[y0, y1]×[z0, z0+height],
+// extruded from the XY plane and placed by a translation along z.
+func translatedBox(ctx context.Context, doc *decad.Document, x0, y0, x1, y1, z0, height float64) (*decad.Body, error) {
+	body, err := extrudedBox(ctx, doc, x0, y0, x1, y1, 0, height)
+	if err != nil || z0 == 0 {
+		return body, err
+	}
+	shift, err := r3.Translation(r3.Vec{Z: z0})
+	if err != nil {
+		return nil, err
+	}
+	return body.Placed(ctx, shift)
+}
+
+// extrudedPolygon is the prism over the closed polygon corners, sketched on
+// the XY plane and extruded height along +z.
+func extrudedPolygon(ctx context.Context, doc *decad.Document, corners [][2]float64, height float64) (*decad.Body, error) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	if err != nil {
+		return nil, err
+	}
+	points := make([]*sketch.Point, len(corners))
+	for i, c := range corners {
+		points[i] = s.CreatePoint(c[0], c[1])
+	}
+	s.Fix(points[0])
+	for i := range points {
+		s.CreateLine(points[i], points[(i+1)%len(points)])
+	}
+	if _, err := s.Solve(ctx); err != nil {
+		return nil, err
+	}
+	return doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+}
+
+// stitchedTetrahedron stitches the tetrahedron with corners a·(1, 0, 0),
+// the origin, a·(0, 1, 0) and a·(1, 0, 1), a = 16·s with s = 1/√2 as r3 holds
+// it. Two faces lie on the XY and XZ datum planes and two on the planes
+// x + y = a and z = x, whose frames each hold one cardinal axis and the
+// diagonal (±s, ±s); the diagonal corners sit at plane-local 16 along it, so
+// every corner lands exactly and the stitched solid is exact.
+func stitchedTetrahedron(ctx context.Context, doc *decad.Document) (*decad.Body, error) {
+	w := sketch.NewWorld()
+	probe, err := r3.NewFrame(r3.Vec{}, r3.NewVec(0, 0, 1), r3.NewVec(-1, 1, 0))
+	if err != nil {
+		return nil, err
+	}
+	a := 16 * probe.V().Y
+	slanted, err := r3.NewFrame(r3.NewVec(a, 0, 0), r3.NewVec(0, 0, 1), r3.NewVec(-1, 1, 0))
+	if err != nil {
+		return nil, err
+	}
+	diagonal, err := r3.NewFrame(r3.Vec{}, r3.NewVec(0, 1, 0), r3.NewVec(1, 0, 1))
+	if err != nil {
+		return nil, err
+	}
+	slantedPlane, err := w.CreatePlaneFromFrame(slanted)
+	if err != nil {
+		return nil, err
+	}
+	diagonalPlane, err := w.CreatePlaneFromFrame(diagonal)
+	if err != nil {
+		return nil, err
+	}
+	faces := make([]*decad.Body, 0, 4)
+	for _, face := range []struct {
+		plane  *sketch.Plane
+		corner [3][2]float64
+	}{
+		{w.XY(), [3][2]float64{{a, 0}, {0, 0}, {0, a}}},
+		{w.XZ(), [3][2]float64{{a, 0}, {0, 0}, {a, a}}},
+		{slantedPlane, [3][2]float64{{0, 0}, {0, 16}, {a, 0}}},
+		{diagonalPlane, [3][2]float64{{0, 0}, {a, 0}, {0, 16}}},
+	} {
+		patch, err := trianglePatch(ctx, doc, w, face.plane, face.corner)
+		if err != nil {
+			return nil, err
+		}
+		faces = append(faces, patch)
+	}
+	return decad.Stitch(ctx, faces...)
+}
+
+// trianglePatch is the triangle with the given plane-local corners, drawn on
+// plane and patched.
+func trianglePatch(ctx context.Context, doc *decad.Document, w *sketch.World, plane *sketch.Plane,
+	local [3][2]float64) (*decad.Body, error) {
+	s, err := w.CreateSketch(plane)
+	if err != nil {
+		return nil, err
+	}
+	var corners [3]*sketch.Point
+	for i, p := range local {
+		corners[i] = s.CreatePoint(p[0], p[1])
+		s.Fix(corners[i])
+	}
+	for i := range corners {
+		s.CreateLine(corners[i], corners[(i+1)%3])
+	}
+	if _, err := s.Solve(ctx); err != nil {
+		return nil, err
+	}
+	return doc.Patch(ctx, s, s.Profiles()[0])
 }
