@@ -50,9 +50,12 @@ const (
 )
 
 type ContactEvent struct {
-	Kind                                       ContactEventKind
-	Pair                                       BodyPair
-	Bracket                                    decad.SweepInterval
+	Kind ContactEventKind
+	Pair BodyPair
+	// Bracket is local to the sweep starting at SliceStart for SliceDuration.
+	Bracket                   decad.SweepInterval
+	SliceStart, SliceDuration units.Value
+	// Time is measured from the start of the complete step.
 	Time                                       units.Value
 	Manifold                                   decad.ContactManifold
 	NormalImpulse                              units.Value
@@ -113,6 +116,8 @@ type Trace struct {
 	rotationalPrefix    *decad.SweepReport
 	rotationalRemainder *decad.SweepReport
 	threeSweeps         [3]*decad.SweepReport
+	threeSlices         []threeTraceSlice
+	threeEvents         []threeTraceEvent
 	duration            units.Value
 	eventAt             units.Value
 	hasEvent            bool
@@ -126,6 +131,9 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 	if t.Kind() != units.Time || !finite(t.Base()) || timeValue == nil || durationValue == nil ||
 		timeValue.Sign() < 0 || timeValue.Cmp(durationValue) > 0 {
 		return State{}, fmt.Errorf("%w: trace time outside step", ErrInvalidInput)
+	}
+	if len(tr.threeSlices) != 0 {
+		return tr.sampleThreeSlices(t, timeValue)
 	}
 	var eventValue *big.Rat
 	if tr.hasEvent {
@@ -364,7 +372,9 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		return nil, fmt.Errorf("%w: invalid context, world, state, or duration", ErrInvalidInput)
 	}
 	if w.three != nil {
-		return w.stepThreeBodies(ctx, from, input, dt)
+		report, err := w.stepThreeBodies(ctx, from, input, dt)
+		setDefaultEventSlices(report, dt)
+		return report, err
 	}
 	if err := validateQuantityVec(input.Gravity, units.Acceleration); err != nil {
 		return nil, err
@@ -393,6 +403,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	report, err := w.stepKicked(ctx, from, kicked, dt, driver)
 	if report != nil {
 		report.Excluded = w.Excluded()
+		setDefaultEventSlices(report, dt)
 	}
 	if err != nil || report == nil || report.Status != Advanced {
 		return report, err
@@ -412,6 +423,18 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	}
 	report.Conservation = &conservation
 	return report, nil
+}
+
+func setDefaultEventSlices(report *StepReport, dt units.Value) {
+	if report == nil {
+		return
+	}
+	for i := range report.Events {
+		if report.Events[i].SliceDuration.Kind() != units.Time {
+			report.Events[i].SliceStart = units.Seconds(0)
+			report.Events[i].SliceDuration = dt
+		}
+	}
 }
 
 func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Value,

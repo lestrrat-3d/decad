@@ -228,6 +228,9 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 		return w.threeUndecided(referenceKey, "force kick exceeds the velocity residual"), nil
 	}
 	kicked := withPairState(from, kickPair)
+	if report, handled, err := w.stepThreeSequential(ctx, from, kicked, input, loads, dt, reference); handled || err != nil {
+		return report, err
+	}
 	active := -1
 	var simultaneous [3]*decad.SweepReport
 	activeCount := 0

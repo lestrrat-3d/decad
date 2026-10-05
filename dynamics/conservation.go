@@ -397,6 +397,10 @@ func (w *World) driftConservationChange(kicked State, trace Trace) (Conservation
 	if trace.hasEvent {
 		slices = [][2]State{{kicked, trace.pre}, {trace.post, trace.end}}
 	}
+	return w.driftConservationSlices(slices)
+}
+
+func (w *World) driftConservationSlices(slices [][2]State) (ConservationState, bool) {
 	for _, slice := range slices {
 		for i, part := range w.parts {
 			if part.definition.Role == Dynamic && !sameOrientation(
