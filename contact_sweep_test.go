@@ -331,10 +331,12 @@ func TestSweepPairSourceSpherePair(t *testing.T) {
 		movingA, movingB := stillA, stillB
 		movingA.LinearVelocity.X = units.MillimetersPerSecond(1)
 		movingB.LinearVelocity.X = units.MillimetersPerSecond(1)
-		unproved, err := doc.SweepPair(t.Context(), a, b, movingA, movingB, req)
+		moving, err := doc.SweepPair(t.Context(), a, b, movingA, movingB, req)
 		require.NoError(t, err)
-		require.Equal(t, decad.SweepUndecided, unproved.Outcome)
-		require.Equal(t, decad.SweepContactTrackUnproved, unproved.Cause)
+		require.Equal(t, decad.SweepPersistentTouch, moving.Outcome, "cause=%v", moving.Cause)
+		movingPoint, err := moving.ContactTrack.ManifoldAt(units.Scalar(.5))
+		require.NoError(t, err)
+		require.InDelta(t, 5.05, movingPoint.Points[0].OnA.Value.X, 1e-12)
 	})
 	t.Run("stationary oblique touch", func(t *testing.T) {
 		stillA := sweepDrift(r3.Vec{}, 0.1)

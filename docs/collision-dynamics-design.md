@@ -68,8 +68,9 @@ motion, and a centered dynamic-pair rebound at cardinal or off-axis contact
 with a certified clear remainder. An exact isolated sphere-pair graze records
 one zero-impulse event and replays the separated path on both sides.
 An initially touching off-axis pair of dynamic source spheres rebounds under
-positive restitution when its bounded point and full-span departure sweeps
-certify the response and trace.
+positive restitution or resolves zero restitution to persistent touch or
+tangential departure when its bounded point and full-span sweeps certify the
+response and trace.
 An exactly orthogonal source box at a 45-degree Y pose also gives the sphere a
 bounded oblique point, an affine first-impact sweep, and a centered
 positive-restitution rebound with interior trace replay.

@@ -490,6 +490,14 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 			return undecided(w, "rotating initial contact needs a certified response track"), nil
 		}
 		if first.Event != nil && isObliqueSpherePairEvent(first.Event.Manifold) {
+			if spherePairVelocity(kicked.entries[0].LinearVelocity) ==
+				spherePairVelocity(kicked.entries[1].LinearVelocity) {
+				continuation, continuationErr := w.sweep(ctx, kicked, dt, decad.ContinueCertifiedTouch)
+				if continuationErr != nil {
+					return nil, continuationErr
+				}
+				return w.stepNoImpulse(ctx, from, kicked, dt, continuation)
+			}
 			return w.stepObliqueSpherePair(ctx, from, kicked, kicked, dt,
 				units.Seconds(0), 0, first, nil)
 		}

@@ -38,6 +38,72 @@ func spherePairQuantityVelocity(v r3.Vec) QuantityVec {
 		Y: units.MillimetersPerSecond(v.Y), Z: units.MillimetersPerSecond(v.Z)}
 }
 
+// A zero-restitution response may use one exactly shared drift when the
+// impulse result already puts both centers within the configured residual.
+func spherePairCommonVelocity(beforeA, beforeB, afterA, afterB r3.Vec,
+	massA, massB decad.MassProperties, limit float64) (r3.Vec, bool) {
+	a, b := massA.Mass.Value.Base(), massB.Mass.Value.Base()
+	total := a + b
+	if !finite(a, b, total, limit) || a <= 0 || b <= 0 || total <= 0 || limit < 0 {
+		return r3.Vec{}, false
+	}
+	common := beforeA.Scale(a / total).Add(beforeB.Scale(b / total))
+	if !finite(common.X, common.Y, common.Z) {
+		return r3.Vec{}, false
+	}
+	gapA, okA := sphereNormUpper(afterA.Sub(common))
+	gapB, okB := sphereNormUpper(afterB.Sub(common))
+	return common, okA && okB && gapA <= limit && gapB <= limit
+}
+
+func spherePairContinuationWithin(sweep *decad.SweepReport, expected decad.SweepOutcome,
+	initial decad.ContactPoint, step StepConfig) bool {
+	if sweep == nil || !sweep.HasAffineReplayProof() || sweep.Outcome != expected {
+		return false
+	}
+	switch expected {
+	case decad.SweepClear:
+		return true
+	case decad.SweepDepartedClear:
+		return sweep.Departure != nil &&
+			sweep.Departure.GapAtUntil.Value.Base()-sweep.Departure.GapAtUntil.Bound.Base() > 0
+	case decad.SweepPersistentTouch:
+		if sweep.ContactTrack == nil || sweep.ContactTrack.Start().Fraction.Base() != 0 ||
+			sweep.ContactTrack.End().Fraction.Base() != 1 {
+			return false
+		}
+		for _, fraction := range []units.Value{units.Scalar(0), units.Scalar(.5), units.Scalar(1)} {
+			manifold, err := sweep.ContactTrack.ManifoldAt(fraction)
+			if err != nil || manifold == nil || len(manifold.Points) != 1 {
+				return false
+			}
+			point := manifold.Points[0]
+			normal, separation, bound, ok := boundedObliqueSphereContact(point, step.Contact)
+			if !ok || point.FeatureA != initial.FeatureA || point.FeatureB != initial.FeatureB ||
+				normal != initial.Normal.Value ||
+				outwardSum(math.Abs(separation), bound) > step.PenetrationResidual.Base() {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
+}
+
+func spherePairEndpointWithin(contact *decad.ContactReport, initial decad.ContactPoint,
+	step StepConfig) bool {
+	if contact == nil || contact.Relation != decad.ContactTouching || contact.Manifold == nil ||
+		len(contact.Manifold.Points) != 1 {
+		return false
+	}
+	point := contact.Manifold.Points[0]
+	normal, separation, bound, ok := boundedObliqueSphereContact(point, step.Contact)
+	return ok && point.FeatureA == initial.FeatureA && point.FeatureB == initial.FeatureB &&
+		normal == initial.Normal.Value &&
+		outwardSum(math.Abs(separation), bound) <= step.PenetrationResidual.Base()
+}
+
 // stepObliqueSpherePair consumes the sphere sweep's bounded center-line
 // witness. A bounded offset between the source and mass centers is admitted
 // only when its omitted angular response fits the configured residual.
@@ -123,9 +189,6 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 	} else if approachHigh.Cmp(exactBase(w.step.ImpactSpeed)) > 0 {
 		return undecided(w, "sphere impact speed crosses the restitution threshold"), nil
 	}
-	if initial && e <= 0 {
-		return undecided(w, "sphere initial impact needs positive restitution"), nil
-	}
 	impulse := -(1 + e) * closing / (inverse[0] + inverse[1])
 	if !finite(impulse) || impulse <= 0 {
 		return undecided(w, "sphere normal impulse is not finite and positive"), nil
@@ -147,6 +210,13 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 	post := pre
 	postA := vA.Sub(n.Scale(impulse * inverse[0]))
 	postB := vB.Add(n.Scale(impulse * inverse[1]))
+	if initial && e == 0 {
+		common, commonOK := spherePairCommonVelocity(vA, vB, postA, postB,
+			w.parts[0].mass, w.parts[1].mass, w.step.VelocityResidual.Base())
+		if commonOK {
+			postA, postB = common, common
+		}
+	}
 	if !finite(postA.X, postA.Y, postA.Z, postB.X, postB.Y, postB.Z) {
 		return undecided(w, "sphere response velocity is not finite"), nil
 	}
@@ -154,7 +224,8 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 	post.entries[1].LinearVelocity = spherePairQuantityVelocity(postB)
 	if !spherePairResponseWithin([2]r3.Vec{vA, vB}, [2]r3.Vec{postA, postB},
 		[2]decad.MassProperties{w.parts[0].mass, w.parts[1].mass},
-		n, point.Normal.Bound.Base(), impulse, e, w.step, omittedSpeed, omittedEnergy) {
+		n, point.Normal.Bound.Base(), impulse, e, initial && e == 0,
+		w.step, omittedSpeed, omittedEnergy) {
 		return undecided(w, "sphere response normal residual or departure exceeds limit"), nil
 	}
 	if !initial {
@@ -190,6 +261,9 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 	policy, outcome := decad.StopAtInitialContact, decad.SweepClear
 	if initial {
 		policy, outcome = decad.ContinueSeparatingTouch, decad.SweepDepartedClear
+		if e == 0 {
+			policy = decad.ContinueCertifiedTouch
+		}
 	}
 	var actual *decad.SweepReport
 	if remaining > 0 {
@@ -197,8 +271,11 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 		if err != nil {
 			return nil, err
 		}
-		if certified.Outcome != outcome {
-			return undecided(w, fmt.Sprintf("sphere separating remainder returned %v", certified.Outcome)), nil
+		if initial && e == 0 {
+			outcome = certified.Outcome
+		}
+		if !spherePairContinuationWithin(certified, outcome, point, w.step) {
+			return undecided(w, fmt.Sprintf("sphere remainder returned %v", certified.Outcome)), nil
 		}
 	}
 	end, err := driftState(post, remaining)
@@ -210,7 +287,7 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 		if err != nil {
 			return nil, err
 		}
-		if actual.Outcome != outcome {
+		if !spherePairContinuationWithin(actual, outcome, point, w.step) {
 			return undecided(w, fmt.Sprintf("rounded sphere remainder returned %v", actual.Outcome)), nil
 		}
 	}
@@ -219,7 +296,11 @@ func (w *World) stepObliqueSpherePair(ctx context.Context, from, kicked, pre Sta
 	if err != nil {
 		return nil, err
 	}
-	if last.Relation != decad.ContactSeparated {
+	if outcome == decad.SweepPersistentTouch {
+		if !spherePairEndpointWithin(last, point, w.step) {
+			return undecided(w, "sphere response endpoint lacks a bounded touch"), nil
+		}
+	} else if last.Relation != decad.ContactSeparated {
 		return undecided(w, "sphere response endpoint is not proven separated"), nil
 	}
 	changeA := post.entries[0].Pose.Translation().Sub(pre.entries[0].Pose.Translation())
@@ -279,7 +360,7 @@ func sphereNormUpper(v r3.Vec) (float64, bool) {
 }
 
 func spherePairResponseWithin(pre, post [2]r3.Vec, mass [2]decad.MassProperties,
-	n r3.Vec, normalBound, impulse, restitution float64, step StepConfig,
+	n r3.Vec, normalBound, impulse, restitution float64, allowRest bool, step StepConfig,
 	omittedSpeed, omittedTwiceEnergy *big.Rat) bool {
 	preRelative, postRelative := pre[1].Sub(pre[0]), post[1].Sub(post[0])
 	postNorm, ok := sphereNormUpper(postRelative)
@@ -305,9 +386,15 @@ func spherePairResponseWithin(pre, post [2]r3.Vec, mass [2]decad.MassProperties,
 		return false
 	}
 	remainingVelocity := new(big.Rat).Sub(velocityLimit, responseError)
-	if omittedSpeed.Cmp(remainingVelocity) > 0 ||
-		new(big.Rat).Sub(new(big.Rat).Sub(postDot, postUncertainty),
-			omittedSpeed).Cmp(velocityLimit) <= 0 {
+	if omittedSpeed.Cmp(remainingVelocity) > 0 {
+		return false
+	}
+	departureLower := new(big.Rat).Sub(new(big.Rat).Sub(postDot, postUncertainty), omittedSpeed)
+	if allowRest {
+		if departureLower.Cmp(new(big.Rat).Neg(velocityLimit)) < 0 {
+			return false
+		}
+	} else if departureLower.Cmp(velocityLimit) <= 0 {
 		return false
 	}
 	impulseLimit := exactBase(step.ImpulseResidual)

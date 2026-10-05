@@ -393,7 +393,22 @@ func TestSourceSpherePairInitialDiagonalImpact(t *testing.T) {
 	withoutReboundStep, err := withoutRebound.Step(t.Context(), withoutReboundStart,
 		dynamics.StepInput{Gravity: zeroAcceleration()}, dt)
 	require.NoError(t, err)
-	require.Equal(t, dynamics.Undecided, withoutReboundStep.Status)
-	require.Nil(t, withoutReboundStep.Next)
-	require.Empty(t, withoutReboundStep.Events)
+	require.Equal(t, dynamics.Advanced, withoutReboundStep.Status, "%+v", withoutReboundStep.Diagnostics)
+	require.Len(t, withoutReboundStep.Events, 1)
+	require.InDelta(t, 25, withoutReboundStep.Events[0].NormalImpulse.Base(), 1e-6)
+	for _, body := range []*decad.Body{a, b} {
+		end, ok := withoutReboundStep.Next.Body(body)
+		require.True(t, ok)
+		require.InDelta(t, -15, end.LinearVelocity.X.Base(), 1e-9)
+		require.InDelta(t, -20, end.LinearVelocity.Y.Base(), 1e-9)
+	}
+	withoutReboundMid, err := withoutReboundStep.Trace.Sample(units.Seconds(.05))
+	require.NoError(t, err)
+	midA, ok := withoutReboundMid.Body(a)
+	require.True(t, ok)
+	midB, ok := withoutReboundMid.Body(b)
+	require.True(t, ok)
+	midContact, err := doc.ContactPair(t.Context(), a, b, midA.Pose, midB.Pose, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, midContact.Relation)
 }

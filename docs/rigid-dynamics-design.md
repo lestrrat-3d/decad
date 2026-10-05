@@ -88,13 +88,18 @@ bracket and contact slop is allowed when a full clear remainder sweep proves
 the pair cannot meet again. Unresolved tangency or a noncentral mass stops the
 step when its angular response exceeds that residual.
 When two dynamic source spheres start at one certified off-axis point touch,
-have zero spin and friction, and have bounded closing normal speed, positive
-restitution uses the same bounded two-body impulse. The event has time zero
-and a zero-width bracket at the initial `SweepInstant`. No position correction
-is made. Both the ideal drift and the rounded endpoint path must return
-`SweepDepartedClear` over the complete step, and the final pair must be
-certified separated. A missing initial float witness, a failed response
-bound, or an unproved departure returns `Undecided` with no event or `Next`.
+have zero spin and friction, and have bounded closing normal speed, the
+bounded two-body impulse admits positive or zero restitution. The event has
+time zero and a zero-width bracket at the initial `SweepInstant`. No position
+correction is made. A positive-restitution response needs ideal and rounded
+`SweepDepartedClear` paths and a separated endpoint. At zero restitution,
+the response may certify the same departure through tangential relative
+motion or a full-span `SweepPersistentTouch` with a touching endpoint. A
+resting response may set both post velocities to one exactly equal value only
+when their bounded impulse, momentum, energy, and contact-point residuals
+admit that value. Both paths use the real ideal drift and rounded endpoint
+sweep. A missing initial float witness, a failed response bound, or an
+unproved continuation returns `Undecided` with no event or `Next`.
 A two-body world's pair may be excluded; its bodies drift independently even
 through overlap, and no pair material is mixed.
 The current three-body step admits one dynamic body and two fixed bodies.
@@ -637,7 +642,8 @@ island. `VelocityResidual`, `ImpulseResidual`, and
 `MaxIterations` is reached, return `Undecided`. Use no random ordering or
 solver tolerance hidden from `StepConfig`. Resting contact uses zero
 restitution, persists in the state cache, and passes the same gate every
-step. The initial off-axis sphere-pair impact above uses positive restitution.
+step. The initial off-axis sphere-pair impact above also admits zero
+restitution when its full continuation is certified.
 A closing contact with no dynamic participant is undecided because
 its prescribed trajectory cannot receive an impulse.
 Evaluate each residual over the admitted mass/inertia, contact-point, and
@@ -859,8 +865,8 @@ and separation within `PenetrationResidual`. Interior trace samples before
 and after the event use the corresponding sphere-pair sweep certificates.
 For an off-axis sphere-pair impact at time zero, no prefix is needed.
 `Trace.Sample(0)` returns the post-impact state; each positive interior time
-uses the certified rounded `SweepDepartedClear` path, and `Trace.Sample(dt)`
-returns `Next`.
+uses the certified rounded departure or persistent-contact path, and
+`Trace.Sample(dt)` returns `Next`.
 It compares the exact held time values when selecting an event or endpoint.
 An event at a proved final sweep fraction retains the input `dt` value;
 interior event times must lie strictly inside the exact held duration.

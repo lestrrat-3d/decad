@@ -49,13 +49,25 @@ func (w *World) stepNoImpulse(ctx context.Context, from, kicked State, dt units.
 		}
 		normal, separation, bound, ok := reducedContact(ideal.InitialEvent.Manifold, w.step.Contact)
 		oblique := false
+		spherePair := false
 		if !ok {
-			normal, separation, bound, ok = boundedObliqueContact(ideal.InitialEvent.Manifold, w.step.Contact)
-			oblique = ok
+			if isObliqueSpherePairEvent(ideal.InitialEvent.Manifold) {
+				normal, separation, bound, ok = boundedObliqueSphereContact(
+					ideal.InitialEvent.Manifold.Points[0], w.step.Contact)
+				spherePair = ok
+			} else {
+				normal, separation, bound, ok = boundedObliqueContact(ideal.InitialEvent.Manifold, w.step.Contact)
+				oblique = ok
+			}
 		}
 		tracksWithin := w.persistentTrackWithin(ideal, normal) && w.persistentTrackWithin(actual, normal)
 		if oblique {
 			tracksWithin = w.obliqueTrackWithin(ideal, normal) && w.obliqueTrackWithin(actual, normal)
+		}
+		if spherePair {
+			point := ideal.InitialEvent.Manifold.Points[0]
+			tracksWithin = spherePairContinuationWithin(ideal, decad.SweepPersistentTouch, point, w.step) &&
+				spherePairContinuationWithin(actual, decad.SweepPersistentTouch, point, w.step)
 		}
 		if !ok || !finite(separation, bound) ||
 			math.Abs(separation)+bound > w.step.PenetrationResidual.Base() ||
@@ -66,6 +78,10 @@ func (w *World) stepNoImpulse(ctx context.Context, from, kicked State, dt units.
 		finalNormal, finalSeparation, finalBound, valid := reducedContact(finalContact.Manifold, w.step.Contact)
 		if oblique {
 			finalNormal, finalSeparation, finalBound, valid = boundedObliqueContact(finalContact.Manifold, w.step.Contact)
+		}
+		if spherePair && len(finalContact.Manifold.Points) == 1 {
+			finalNormal, finalSeparation, finalBound, valid = boundedObliqueSphereContact(
+				finalContact.Manifold.Points[0], w.step.Contact)
 		}
 		if !valid || finalNormal != normal ||
 			math.Abs(finalSeparation)+finalBound > w.step.PenetrationResidual.Base() {
