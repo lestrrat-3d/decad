@@ -411,6 +411,12 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 		if diagnostic != nil {
 			return nil, []StepDiagnostic{*diagnostic}, nil
 		}
+		if len(corrections) == 0 && w.silentIsland(isl, solution, in) {
+			for _, pair := range isl.pairs {
+				out.policies[pair.key] = decad.ContinueCertifiedTouch
+			}
+			continue
+		}
 		for slot, index := range isl.bodies {
 			if w.bodies[index].definition.Role != Dynamic {
 				continue
@@ -457,6 +463,39 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 		return nil, diagnostics, err
 	}
 	return out, nil, nil
+}
+
+// silentIsland reports whether a solved island changes nothing and so
+// publishes nothing (docs/multibody-dynamics-design.md §6.1): every point's
+// enclosed pre-solve normal speed lies within VelocityResidual of zero, every
+// normal and tangent impulse is exactly zero, and every dynamic body keeps
+// its exact pre-solve velocities. Its pairs join the contact set under
+// ContinueCertifiedTouch without an event, as a stationary or sliding touch
+// does in the two-body step.
+func (w *World) silentIsland(isl island, solution islandSolution, in eventIslands) bool {
+	for _, lambda := range solution.lambda {
+		if lambda != 0 {
+			return false
+		}
+	}
+	for _, tangent := range solution.tangent {
+		if tangent != (r3.Vec{}) {
+			return false
+		}
+	}
+	for slot, index := range isl.bodies {
+		entry := in.pre.entries[index]
+		if w.bodies[index].definition.Role == Dynamic &&
+			(solution.linear[slot] != entry.LinearVelocity || solution.angular[slot] != entry.AngularVelocity) {
+			return false
+		}
+	}
+	for _, pair := range isl.pairs {
+		if !w.grazeSpeedWithin(pair, in.pre, in.drive) {
+			return false
+		}
+	}
+	return true
 }
 
 // drivenWithin reports whether every kinematic body of a pair has the exact

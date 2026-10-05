@@ -132,7 +132,8 @@ type ContactSolverReport struct {
 	// the largest attained value of each certificate gate
 	// (docs/multibody-dynamics-design.md §6.3): the linear and angular law
 	// residuals, the kinetic-energy change's upper end, and the island's
-	// linear and angular momentum residuals about the world origin.
+	// linear and angular momentum residuals about the world origin. Its
+	// AngularUpper bounds the largest published post-solve angular speed.
 	LinearResidual          units.Value
 	AngularResidual         units.Value
 	EnergyResidual          units.Value

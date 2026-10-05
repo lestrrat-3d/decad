@@ -203,8 +203,9 @@ func (w *World) nominalPoints(isl island, slots map[int]int, bodies []nominalBod
 	return out, nil
 }
 
-// solveIsland proposes impulses by projected Gauss–Seidel until a sweep
-// changes no impulse in float64, or MaxIterations sweeps have run, and then
+// solveIsland proposes impulses by projected Gauss–Seidel, started from the
+// direct frictionless solution when the island is small enough, until a
+// sweep changes no impulse in float64, or MaxIterations sweeps have run, and then
 // certifies the published proposal once. Running to that fixed point lets a
 // resting island publish exactly zero velocities, which its continuation
 // sweeps need to prove persistent touch. A certificate that fails refuses
@@ -232,6 +233,18 @@ func (w *World) solveIsland(isl island, pre State, drive map[int][3]*big.Rat) (i
 	// sweeps into self-cancelling corner friction. An island with no
 	// positive-friction point has no tangent rows to hold back.
 	tangentRows := !slices.ContainsFunc(points, func(p nominalPoint) bool { return p.mu > 0 })
+	// A small island starts from its direct solution (island_direct.go):
+	// the sticking solution when one exists, which the tangent rows refine,
+	// or else the frictionless state the delay would reach.
+	if start, held, ok := w.directStart(points, bodies); ok {
+		for k, p := range points {
+			lambda[k], tangent[k] = start[k], held[k]
+			j := p.n.Scale(start[k]).Add(p.t1.Scale(held[k][0])).Add(p.t2.Scale(held[k][1]))
+			current[p.a].apply(j.Scale(-1), p.rA)
+			current[p.b].apply(j, p.rB)
+		}
+		tangentRows = true
+	}
 	for sweep := 1; sweep <= w.step.MaxIterations; sweep++ {
 		largest := 0.0
 		for k, p := range points {
@@ -314,7 +327,8 @@ func tangentRow(p nominalPoint, current []nominalBody, normal float64, held *[2]
 // publishes none. Post velocities are recomputed from the pre-solve
 // velocities and the final normal and published tangent impulses in the
 // fixed point order. A post component within 1/16 of its residual of zero is
-// published as exactly zero, so a body the solve brings to rest drifts as a
+// published as exactly zero (a spin component also only within 1/16 of
+// VelocityResidual over the body's longest lever), so a body the solve brings to rest drifts as a
 // rest or a pure translation, and co-moving dynamic bodies publish one common
 // velocity (commonVelocities); the certificate then judges the published
 // values, never the unrounded ones.
@@ -340,7 +354,23 @@ func (w *World) publishIsland(isl island, pre State, bodies []nominalBody, point
 		post[p.b].apply(j, p.rB)
 	}
 	linearSnap := w.step.VelocityResidual.Base() / 16
-	angularSnap := w.step.AngularVelocityResidual.Base() / 16
+	// A spin component snaps only while the change it makes at the body's
+	// longest island lever stays within the linear snap, so a rolling body
+	// under a coarse AngularVelocityResidual keeps the spin its contacts need.
+	angularSnap := make([]float64, len(bodies))
+	for slot := range angularSnap {
+		angularSnap[slot] = w.step.AngularVelocityResidual.Base() / 16
+	}
+	for _, p := range points {
+		for _, end := range [2]struct {
+			slot  int
+			lever r3.Vec
+		}{{p.a, p.rA}, {p.b, p.rB}} {
+			if length := end.lever.Len(); length > 0 {
+				angularSnap[end.slot] = math.Min(angularSnap[end.slot], linearSnap/length)
+			}
+		}
+	}
 	solution := islandSolution{linear: make([]QuantityVec, len(bodies)), angular: make([]QuantityVec, len(bodies)),
 		lambda: append([]float64(nil), lambda...), tangent: tangents}
 	for slot, index := range isl.bodies {
@@ -349,7 +379,7 @@ func (w *World) publishIsland(isl island, pre State, bodies []nominalBody, point
 		if !post[slot].dynamic {
 			continue
 		}
-		v, omega := snap(post[slot].v, linearSnap), snap(post[slot].w, angularSnap)
+		v, omega := snap(post[slot].v, linearSnap), snap(post[slot].w, angularSnap[slot])
 		if !finite(v.X, v.Y, v.Z, omega.X, omega.Y, omega.Z) {
 			return islandSolution{}, islandCertificate{}, &islandFailure{code: StepIslandDegenerate, reason: "island proposal velocity is not finite"}
 		}

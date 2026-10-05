@@ -231,10 +231,10 @@ func TestScheduledStepBounces(t *testing.T) {
 	}
 }
 
-// TestScheduledStepEventBudget stops the bounce when its fourth event would
-// exceed MaxEvents 3 (§5.1, §12). The report is Undecided, keeps the three
-// published events and islands, and its Trace replays the certified prefix
-// up to the fourth impact.
+// TestScheduledStepEventBudget stops the bounce when its third event reaches
+// MaxEvents 3 with time remaining (§5.1, §12). The report is Undecided,
+// keeps the three published events and islands, and its Trace replays the
+// certified prefix up to the third impact.
 func TestScheduledStepEventBudget(t *testing.T) {
 	config := bounceStepConfig()
 	config.MaxEvents = 3
@@ -250,14 +250,14 @@ func TestScheduledStepEventBudget(t *testing.T) {
 	diagnostic := report.Diagnostics[0]
 	require.Equal(t, dynamics.StepEventBudget, diagnostic.Code)
 	require.Equal(t, units.Scalar(3), diagnostic.Limit)
-	require.InDelta(t, 29.0/256, diagnostic.From.Base(), 4*config.TimeResolution.Base())
+	require.InDelta(t, 13.0/256, diagnostic.From.Base(), 4*config.TimeResolution.Base())
 	require.Equal(t, dt, diagnostic.To)
 	require.Len(t, report.Events, 3)
 	require.Len(t, report.Islands, 3)
 	require.Equal(t, bodies, scene.doc.Bodies())
-	// The prefix replays every certified time up to the fourth impact, and
+	// The prefix replays every certified time up to the third impact, and
 	// nothing after it.
-	for _, at := range []float64{0, 0.5, 3, 9, 21, 28} {
+	for _, at := range []float64{0, 0.5, 3, 9, 12} {
 		state, err := report.Trace.Sample(units.Seconds(at / 256))
 		require.NoError(t, err, "sample at %g/256 s", at)
 		z, _ := scene.ballZ(t, state)
@@ -266,8 +266,8 @@ func TestScheduledStepEventBudget(t *testing.T) {
 	state, err := report.Trace.Sample(diagnostic.From)
 	require.NoError(t, err)
 	z, _ := scene.ballZ(t, state)
-	require.InDelta(t, 7, z, 2e-6)
-	_, err = report.Trace.Sample(units.Seconds(30.0 / 256))
+	require.InDelta(t, 5, z, 2e-6)
+	_, err = report.Trace.Sample(units.Seconds(14.0 / 256))
 	require.ErrorIs(t, err, dynamics.ErrInvalidInput)
 }
 
@@ -310,13 +310,11 @@ func TestScheduledStepBouncesAStack(t *testing.T) {
 		units.Seconds(1.0/64))
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
-	// The touching pair's zero-impulse solve at the step start, then the
-	// floor impact and the pair it lifts, solved as one island.
-	require.Len(t, report.Events, 3)
-	require.Equal(t, dynamics.BodyPair{A: lower, B: upper}, report.Events[0].Pair)
-	require.Equal(t, units.Seconds(0), report.Events[0].Time)
-	require.Zero(t, report.Events[0].NormalImpulse.Base())
-	floorEvent, stackEvent := report.Events[1], report.Events[2]
+	// The touching pair joins the contact set silently at the step start
+	// (§6.1: zero speed, zero impulse); the floor impact and the pair it
+	// lifts are solved as one island.
+	require.Len(t, report.Events, 2)
+	floorEvent, stackEvent := report.Events[0], report.Events[1]
 	require.Equal(t, dynamics.BodyPair{A: floor, B: lower}, floorEvent.Pair)
 	require.Equal(t, dynamics.BodyPair{A: lower, B: upper}, stackEvent.Pair)
 	require.Equal(t, floorEvent.Island, stackEvent.Island)
@@ -475,8 +473,8 @@ func TestScheduledStepGraze(t *testing.T) {
 
 // TestScheduledStepEdgeTransition slides a 10 mm box at 5 mm/s off the
 // 10 mm top of a fixed box, with no gravity. The touching pair joins the
-// contact set at the step start with a zero-impulse solve, continues on a
-// persistent track, and its transition bracket at 2 s publishes a
+// contact set silently at the step start (§6.1: zero speed, zero impulse),
+// continues on a persistent track, and its transition bracket at 2 s publishes a
 // zero-impulse ContactTransition; the box then drifts clear to x = 15.
 func TestScheduledStepEdgeTransition(t *testing.T) {
 	doc := decad.New()
@@ -505,11 +503,9 @@ func TestScheduledStepEdgeTransition(t *testing.T) {
 	report, err := world.Step(t.Context(), state, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(3))
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
-	require.Len(t, report.Events, 2)
-	require.Equal(t, dynamics.ContactImpact, report.Events[0].Kind)
-	require.Equal(t, units.Seconds(0), report.Events[0].Time)
-	require.Zero(t, report.Events[0].NormalImpulse.Base())
-	transition := report.Events[1]
+	require.Len(t, report.Events, 1)
+	require.Empty(t, report.Islands)
+	transition := report.Events[0]
 	require.Equal(t, dynamics.ContactTransition, transition.Kind)
 	require.Equal(t, dynamics.BodyPair{A: base, B: box}, transition.Pair)
 	require.Equal(t, -1, transition.Island)

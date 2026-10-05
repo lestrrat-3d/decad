@@ -165,8 +165,10 @@ leave with one exact common velocity, so a stack can bounce and land as one.
 A transition or a graze publishes a zero-impulse event, and the step then
 continues from the event; a graze of a positive-friction pair returns
 `dynamics.Undecided` with `StepUnsupported`.
-A bounce sequence ends when an incoming speed falls to `ImpactSpeed`; one
-that would exceed `MaxEvents` stops the step. Kinematic bodies take
+A pair that touches at zero speed and needs no impulse joins the contact set
+without an event. A bounce sequence ends when an incoming speed falls to
+`ImpactSpeed`; one whose events reach `MaxEvents` with time remaining stops
+the step after the event that reached it. Kinematic bodies take
 `PoseSegment` drivers, and an island admits one only while its driver
 translates. An `Undecided` report names its time interval, the
 island's bodies and the exceeded limit, and its `Trace` replays the certified
@@ -225,7 +227,7 @@ sliding impulses, and unproved pair paths return `dynamics.Undecided`.
 | `SweptBox` | `decad.ErrUnsupported` when the body's bounds or the path's travel bound are not finite |
 | `Body.MassProperties` | `decad.ErrUnsupported` when density-derived bounded mass or inertia is unavailable |
 | `NewWorld` | `dynamics.ErrUnsupported` for fewer than two bodies, a two- or three-body world with no dynamic body, or a three-body kinematic world |
-| `World.Step` | `dynamics.Undecided` with `Next == nil` when contact, response, or replay lacks proof, and for an island gate beyond its limit, an uncorrectable overlap, events beyond `MaxEvents`, or a rounded pose a box exclusion no longer covers in a world of four or more bodies |
+| `World.Step` | `dynamics.Undecided` with `Next == nil` when contact, response, or replay lacks proof, and for an island gate beyond its limit, an uncorrectable overlap, events reaching `MaxEvents` with time remaining, or a rounded pose a box exclusion no longer covers in a world of four or more bodies |
 | `Trace.Sample` | `dynamics.ErrUnsupported` if a rounded pose loses its cached proof or a box exclusion; `dynamics.ErrInvalidInput` for time outside the step or its certified prefix |
 | `Timeline.Advance` | `dynamics.ErrTimelineStopped` after an `Undecided` step stopped the timeline |
 | `Timeline.Sample` | `dynamics.ErrUnsupported` for a time below zero or beyond `End()` |
