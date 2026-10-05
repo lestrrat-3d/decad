@@ -534,7 +534,10 @@ Write `P` for the section. The inward offset (the erosion) `P ⊖ t` is bounded 
 Every piece is a line or an arc, so `P ⊖ t` is a `ProfileRecord`. The outward
 offset `P ⊕ t` is the same table with the two corner rules exchanged (a convex
 corner rounds, a reflex one miters) and the radii moved the other way; a G1
-join is the same point either way, `v + s·t·n̂`. Both are exact.
+join is the same point either way, `v + s·t·n̂`. Both are exact as shapes.
+The section the build records is their float evaluation at the thickness
+held in millimetres, so a cup carries a proven bound on how far that record
+sits from the offset the caller's thickness denotes (§9).
 
 **Which row a corner takes is decided on the held unit tangents, with one dead
 zone.** Write `a` for the arriving walk's unit leaving tangent and `b` for the
@@ -677,6 +680,34 @@ reads (§10). Every edge of B1–B3, B5 and B6 bounds exactly two faces, so each
 manifold and watertight by the same structural argument the prism enjoys
 (evaluator §10), on regions the §5 audit has already proven simple.
 
+**A cup records its offset region within a proven displacement of the one it
+denotes.** The denoted offset is `P ⊖ t*` (inward) or `P ⊕ t*` (outward), `t*`
+the caller's thickness in exact millimetres. The recorded region is that
+offset's float evaluation at the held thickness, so its corners can land a
+few units in the last place off the denoted ones (a `0.1 in` wall puts one
+cavity corner at `2.539999999999999`). `cupPayload.offsetDelta` is the proven
+upper bound on how far any recorded boundary point of the offset region — the
+cavity inward, the outer region outward — sits from the denoted boundary; the
+receiver's own region carries none. It is derived once, at the shell, as an
+enclosure (the method §8.4 of `docs/modify-reach-design.md` states for a cap
+contour): §7's closed forms are re-evaluated over rational intervals across
+the whole thickness interval `magnitudeInBounded` proves, with the receiver's
+walk endpoints, centres and bracketed radii taken exactly and outward-rounded
+square roots, and each recorded join is charged its enclosure's greatest reach
+from the held point. A recorded line stays within the larger of its two end
+reaches of the denoted line, and a recorded arc within three times the larger,
+so the recorded figure is three times the largest reach. A corner the evaluator cannot enclose is `ErrUnsupported`. The
+displacement plays `prismPayload.sectionDelta`'s role for that one region
+(`docs/prism-boolean-design.md` §7): the offset region's prism carries it as its
+section displacement, so its walls, `Bounds`, the mass path, the through-all
+extent and the verification gate's witness all charge it; the cup charges it
+itself into the region's area and first moments and into the rim bands; the
+mesh charges it on every face the region bounds, in its area slack and in its
+occupied-volume proof; the concave-radius survey widens by it; and two equal
+records carrying it are not a set-equality certificate. The shell-wall reading
+needs none: it reads `t*`, which the thickness's own conversion bound already
+covers.
+
 ## 10. Mass properties, and how their bounds compose
 
 **A modify op carries the analytic engine's bounds.** Its result is one prism, or two, over
@@ -705,10 +736,11 @@ are not the same height:
 
 Each is a difference or a sum of bounded quantities the engine already produces;
 none is sampled, and none is fitted. The modify op propagates both source and
-arithmetic bounds through those formulas.
+arithmetic bounds through those formulas; a cup's offset region adds its
+offset displacement (§9) as one more source bound.
 
-**The rewritten section is the body's truth, in exactly the sense a recorded one
-is.** A tangent foot is the root of a closed-form equation, computed once, in
+**A fillet's or chamfer's rewritten section is the body's truth, in exactly the
+sense a recorded one is.** A tangent foot is the root of a closed-form equation, computed once, in
 floating point — as is every coordinate the seam records and every vertex an
 extrude places. The represented *shape* remains analytic. Measurement `Exact`
 means the reported binary number is proved exactly representable; otherwise its

@@ -267,7 +267,19 @@ func (b *Body) Shell(ctx context.Context, sel FaceSelector, t units.Value, opts 
 		// evalCup wraps a wall around each post, all hanging off the one floor slab
 		// (one lump). The holed BOTH-caps case keeps no floor and is 1 + k lumps
 		// (B4, S12), refused above.
-		body, err = evalCupContext(ctx, d, ref, cupPayloadFor(pp, offset, s, tmm, tDelta, removedEnd))
+		// The offset section is a float evaluation of P ⊖ t*; the cup records
+		// how far it may sit from that denoted offset beside it (§9).
+		offsetDelta, derr := offsetSectionDelta(offsetBudget, pp.profile, s, tmm, tDelta)
+		if derr != nil {
+			if errors.Is(derr, context.Canceled) {
+				return nil, context.Canceled
+			}
+			if errors.Is(derr, context.DeadlineExceeded) {
+				return nil, context.DeadlineExceeded
+			}
+			return nil, derr
+		}
+		body, err = evalCupContext(ctx, d, ref, cupPayloadFor(pp, offset, s, tmm, tDelta, offsetDelta, removedEnd))
 	}
 	if err != nil {
 		return nil, err

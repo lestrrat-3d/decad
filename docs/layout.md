@@ -154,7 +154,7 @@ to the byte budget.
 | `chamfer.go` | `Body.Chamfer` bevels a straight prism's lateral corners with a chord between setback feet, sharing `cornerBlend` with `fillet.go`; a cap-loop selection routes to `capblend.go`. See `docs/modify-design.md` §7. |
 | `fillet_audit.go` | Fillet, Chamfer and Shell section audits. See `docs/modify-design.md` §5. |
 | `shell.go` | `Body.Shell` offsets a prism into a tube or cup. See modify §8. |
-| `shell_offset.go` | The exact per-feature section offset (`P ⊖ t` / `P ⊕ t`) behind `Shell`, plus the §5 audit wrapper run on the offset section. See `docs/modify-design.md` §7-§8. |
+| `shell_offset.go` | The exact per-feature section offset (`P ⊖ t` / `P ⊕ t`) behind `Shell`, the §5 audit wrapper run on it, and a cup's offset displacement proof. See `docs/modify-design.md` §7-§9. |
 | `shell_cup.go` | `cupPayload` and `evalCup`: the two-co-directional-prism body a one-cap `Shell` builds, with Exact mass properties and roles. See `docs/modify-design.md` §9; clearance stays staged (§12 D6). |
 
 ### Cap-loop chamfer

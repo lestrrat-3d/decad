@@ -43,6 +43,12 @@ func analyticBodiesEqual(budget *workBudget, a, b *Body) (bool, error) {
 			pa.zCav != pb.zCav || pa.xform != pb.xform {
 			return false, nil
 		}
+		if pa.offsetDelta != 0 || pb.offsetDelta != 0 {
+			// The prism arm's rule for a displaced section: an offset region
+			// recorded only within offsetDelta of the one it denotes makes two
+			// equal records say nothing about the two sets. Undecided.
+			return false, nil
+		}
 		same, err := profileRecordsEqual(budget, pa.outer, pb.outer)
 		if err != nil || !same {
 			return false, err

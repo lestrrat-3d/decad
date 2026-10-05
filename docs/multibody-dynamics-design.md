@@ -697,9 +697,10 @@ sweep to 8.5.
 Analytic, in `mass_properties_cup.go`. Outer prism minus cavity prism (both 8.1/8.2), subtracted at the
 `V, P, Q` level with each contribution's own outward interval (dynamic-mass §2, §3), the cavity re-anchored
 exactly onto the outer prism's mid level first. `cupPayload` holds both sections and the three levels with
-their deltas; each level delta is charged on its prism, and the thickness's own conversion displacement is
-charged as the offset section's `sectionDelta`, on the cavity for an inward cup and on the outer region for
-an outward one. The difference reaches world axes by 8.1's rotation and positivity is proved as in 8.6. A
+their deltas; each level delta is charged on its prism, and the offset section's displacement
+(`offsetDelta`, `docs/modify-design.md` §9: the thickness conversion and the offset solve's rounding together)
+is charged as that region's `sectionDelta`, on the cavity for an inward cup and on the outer region for an
+outward one. The difference reaches world axes by 8.1's rotation and positivity is proved as in 8.6. A
 cup either prism refuses leaves the cup to 8.5.
 
 A dynamic body whose payload matches no item returns `ErrUnsupported` from `Body.MassProperties`, and

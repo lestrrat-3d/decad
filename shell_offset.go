@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 
+	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -109,7 +111,60 @@ func offsetLoopBudget(budget *workBudget, loop cornerLoop, s, t float64) ([]Curv
 		return []CurveSegment{circleSegConcentric(w.cU, w.cV, rr, w.th1 > w.th0)}, nil
 	}
 
-	// Per-corner joins: corner i sits at walk i's start (== walk i−1's end).
+	joins, err := offsetJoinsBudget(budget, walks, s, t)
+	if err != nil {
+		return nil, err
+	}
+
+	// Emit each walk's offset segment trimmed to the joins at its two ends, then
+	// the arc that closes the following corner.
+	var segs []CurveSegment
+	for i := range n {
+		if err := wallBudgetStep(budget); err != nil {
+			return nil, err
+		}
+		w := walks[i]
+		start := joins[i].m
+		if joins[i].arc {
+			start = joins[i].pB
+		}
+		j1 := joins[(i+1)%n]
+		end := j1.m
+		if j1.arc {
+			end = j1.pA
+		}
+		// S11a: a walk the offset has consumed. When a loop's erosion is empty —
+		// a hole narrower than 2t offset outward, a slot the offset over-eats —
+		// the neighbouring corner joins overshoot the walk and its trimmed offset
+		// segment no longer runs along the walk's own direction. offsetRadius
+		// catches a circular segment collapsing to zero radius; this catches a
+		// polygonal loop the joins turn inside out, which keeps its signed-area
+		// sign (so S8 cannot see it) yet bounds no material. Caught here as the
+		// offset is built — antecedent to the §5 audit (§4).
+		if walkOffsetConsumed(w, start, end) {
+			return nil, errOffsetDrop
+		}
+		seg, err := offsetWalkSegment(w, s, t, start, end)
+		if err != nil {
+			return nil, err
+		}
+		segs = append(segs, seg)
+		if j1.arc {
+			// The arc walks CCW outward (s < 0) and CW inward (s > 0): its tangent
+			// continues the walk's travel direction at both feet (§7).
+			segs = append(segs, arcSegment(Point2{U: j1.vU, V: j1.vV}, j1.pA, j1.pB, s < 0))
+		}
+	}
+	return segs, nil
+}
+
+// offsetJoinsBudget resolves every corner join of one coalesced loop of two or
+// more walks, in walk order: corner i sits at walk i's start (== walk i−1's
+// end). It is the one place the corner rule of docs/modify-design.md §7 is
+// decided, so the offset build (offsetLoopBudget) and its displacement proof
+// (offsetSectionDelta) always read the same joins.
+func offsetJoinsBudget(budget *workBudget, walks []sideWalk, s, t float64) ([]cornerJoin, error) {
+	n := len(walks)
 	joins := make([]cornerJoin, n)
 	for i := range n {
 		if err := wallBudgetStep(budget); err != nil {
@@ -153,46 +208,7 @@ func offsetLoopBudget(budget *workBudget, loop cornerLoop, s, t float64) ([]Curv
 		joins[i] = cornerJoin{vU: vU, vV: vV, m: Point2{U: mx, V: my}}
 	}
 
-	// Emit each walk's offset segment trimmed to the joins at its two ends, then
-	// the arc that closes the following corner.
-	var segs []CurveSegment
-	for i := range n {
-		if err := wallBudgetStep(budget); err != nil {
-			return nil, err
-		}
-		w := walks[i]
-		start := joins[i].m
-		if joins[i].arc {
-			start = joins[i].pB
-		}
-		j1 := joins[(i+1)%n]
-		end := j1.m
-		if j1.arc {
-			end = j1.pA
-		}
-		// S11a: a walk the offset has consumed. When a loop's erosion is empty —
-		// a hole narrower than 2t offset outward, a slot the offset over-eats —
-		// the neighbouring corner joins overshoot the walk and its trimmed offset
-		// segment no longer runs along the walk's own direction. offsetRadius
-		// catches a circular segment collapsing to zero radius; this catches a
-		// polygonal loop the joins turn inside out, which keeps its signed-area
-		// sign (so S8 cannot see it) yet bounds no material. Caught here as the
-		// offset is built — antecedent to the §5 audit (§4).
-		if walkOffsetConsumed(w, start, end) {
-			return nil, errOffsetDrop
-		}
-		seg, err := offsetWalkSegment(w, s, t, start, end)
-		if err != nil {
-			return nil, err
-		}
-		segs = append(segs, seg)
-		if j1.arc {
-			// The arc walks CCW outward (s < 0) and CW inward (s > 0): its tangent
-			// continues the walk's travel direction at both feet (§7).
-			segs = append(segs, arcSegment(Point2{U: j1.vU, V: j1.vV}, j1.pA, j1.pB, s < 0))
-		}
-	}
-	return segs, nil
+	return joins, nil
 }
 
 // cornerJoin is one corner's resolved offset join: a miter point m, or an arc
@@ -385,4 +401,308 @@ func auditOffsetSectionBudget(budget *workBudget, orig, offset ProfileRecord) er
 		empty[i] = map[int]*cornerBlend{}
 	}
 	return auditRewriteBudget(budget, orig, offset, loops, empty)
+}
+
+// errOffsetUnbounded is the refusal for a cup whose offset section this
+// evaluator cannot place within a proven distance of the offset it denotes: a
+// walk kind with no closed-form carrier here, an endpoint with no stated
+// bound, or carriers whose interval intersection is unbounded. The cup exists
+// and only this evaluator cannot bound its readings, which is the
+// ErrUnsupported side of docs/modify-design.md §1's existence test.
+var errOffsetUnbounded = fmt.Errorf(`%w: this evaluator cannot prove how far the shell's offset section sits from the offset it denotes, so the cup's readings would carry no bound`, ErrUnsupported)
+
+// offsetSectionDelta is the cup's offset displacement (docs/modify-design.md
+// §9): a proven upper bound on how far any boundary point of the offset
+// section offsetProfile records for (profile, s, t) sits from the boundary of
+// the offset the shell DENOTES — P ⊖ t* inward, P ⊕ t* outward — where t* is
+// the caller's thickness in exact millimetres, anywhere within tDelta of the
+// held t (magnitudeInBounded's conversion bound).
+//
+// The denoted offset is §7's closed forms over the receiver's own walks taken
+// exactly: a line walk is the segment between its recorded endpoints, a
+// circular walk the circle about its recorded centre whose radius its walk
+// brackets, each endpoint widened by the bound its walk states, and the
+// corner rule (miter, arc, G1) is the construction's own (offsetJoinsBudget).
+// The proof is an enclosure, the method capContourDelta
+// (capblend_contour.go) states: the same closed forms are re-evaluated over
+// rational intervals with outward-rounded square roots, over the whole
+// thickness interval at once, and each recorded join point is charged its
+// enclosure's greatest reach from the held float. A G1 join is enclosed by the
+// hull of its two shared-normal feet, so a join the dead zone classified G1
+// with a residual turn is charged that spread too.
+//
+// The figure is three times the largest reach. A recorded line segment and
+// the denoted one are within the larger of their two endpoint reaches at
+// every matching parameter. A recorded arc shares its centre with the denoted
+// one, and its radius is within one reach of the denoted radius; a point the
+// recorded arc sweeps past the denoted end lies on a chord no longer than two
+// reaches from the recorded end, so it is within three reaches of the denoted
+// end. Every recorded boundary point is therefore within the figure of the
+// denoted boundary, and every denoted point within it of the record, which is
+// the reading prismPayload.sectionDelta states for a whole section.
+func offsetSectionDelta(budget *workBudget, profile ProfileRecord, s, t, tDelta float64) (float64, error) {
+	if err := wallBudgetErr(budget); err != nil {
+		return 0, err
+	}
+	rt, rd := proofarith.FloatRat(t), proofarith.FloatRat(tDelta)
+	if rt == nil || rd == nil || rd.Sign() < 0 {
+		return 0, errOffsetUnbounded
+	}
+	// amount is s·t* over every denoted thickness, the signed offset the
+	// float build spells s*t.
+	amount := interval(new(big.Rat).Sub(rt, rd), new(big.Rat).Add(rt, rd))
+	if s < 0 {
+		amount = intervalNeg(amount)
+	}
+	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
+	if err != nil {
+		return 0, err
+	}
+	reach := 0.0
+	for _, loop := range loops {
+		if err := wallBudgetStep(budget); err != nil {
+			return 0, err
+		}
+		r, err := offsetLoopReach(budget, loop.walks, s, t, amount)
+		if err != nil {
+			return 0, err
+		}
+		reach = math.Max(reach, r)
+	}
+	delta := productUpper(3, reach)
+	if isNonFinite(delta) {
+		return 0, errOffsetUnbounded
+	}
+	return delta, nil
+}
+
+// offsetLoopReach is the largest reach of one loop's recorded offset points
+// from their enclosures (offsetSectionDelta).
+func offsetLoopReach(budget *workBudget, walks []sideWalk, s, t float64, amount ratInterval) (float64, error) {
+	n := len(walks)
+	if n == 0 {
+		return 0, fmt.Errorf(`%w: an offset loop holds no walks`, ErrDegenerate)
+	}
+	if n == 1 && walks[0].closed {
+		// A concentric circle: every recorded point sits at the held radius
+		// about the exact centre, so the radial gap is the whole displacement.
+		w := walks[0]
+		held, ok := offsetRadius(w, s, t)
+		if !ok {
+			return 0, errOffsetDrop
+		}
+		r, ok := offsetCircleRadius(w, amount)
+		if !ok {
+			return 0, errOffsetUnbounded
+		}
+		gap, ok := ivAxisSpread(r, held)
+		if !ok {
+			return 0, errOffsetUnbounded
+		}
+		return ratFloatUp(gap), nil
+	}
+	joins, err := offsetJoinsBudget(budget, walks, s, t)
+	if err != nil {
+		return 0, err
+	}
+	reach := 0.0
+	for _, w := range walks {
+		// A recorded arc's end is pinned to its record and may sit off the
+		// circle its start fixes; that radial gap moves the denoted foot off
+		// the denoted carrier, so it joins the reach the arc argument reads.
+		if !w.isCircular() {
+			continue
+		}
+		gap, ok := circularWalkEndGap(w)
+		if !ok {
+			return 0, errOffsetUnbounded
+		}
+		reach = math.Max(reach, gap)
+	}
+	for i, j := range joins {
+		if err := wallBudgetStep(budget); err != nil {
+			return 0, err
+		}
+		prev, cur := walks[(i+n-1)%n], walks[i]
+		end, okE := walkPointEnclosure(prev.endU, prev.endV, prev.endBound)
+		start, okS := walkPointEnclosure(cur.startU, cur.startV, cur.startBound)
+		if !okE || !okS {
+			return 0, errOffsetUnbounded
+		}
+		corner := ivUnion(end, start)
+		a, okA := offsetFootEnclosure(corner, prev, true, amount)
+		b, okB := offsetFootEnclosure(corner, cur, false, amount)
+		if !okA || !okB {
+			return 0, errOffsetUnbounded
+		}
+		switch {
+		case j.arc:
+			reach = math.Max(reach, math.Max(a.reach(j.pA), b.reach(j.pB)))
+		case j.g1:
+			reach = math.Max(reach, ivUnion(a, b).reach(j.m))
+		default:
+			ca, okA := offsetCarrierEnclosure(prev, amount)
+			cb, okB := offsetCarrierEnclosure(cur, amount)
+			if !okA || !okB {
+				return 0, errOffsetUnbounded
+			}
+			cands, ok := ivIntersect(ca, cb)
+			if !ok {
+				return 0, errOffsetUnbounded
+			}
+			m, ok := ivNearestTo(cands, corner)
+			if !ok {
+				return 0, errOffsetUnbounded
+			}
+			reach = math.Max(reach, m.reach(j.m))
+		}
+	}
+	return reach, nil
+}
+
+// walkPointEnclosure lifts a walk endpoint to the box its own stated bound
+// allows. A recorded endpoint states zero and lifts to its exact point.
+func walkPointEnclosure(u, v float64, bound walkEndBound) (ivPoint, bool) {
+	p, ok := ivExactPoint(u, v)
+	allow := walkEndBoundAllow(bound)
+	if !ok || isNonFinite(allow) {
+		return ivPoint{}, false
+	}
+	if allow == 0 {
+		return p, true
+	}
+	ra := proofarith.FloatRat(allow)
+	widen := func(c ratInterval) ratInterval {
+		return interval(new(big.Rat).Sub(c.lo, ra), new(big.Rat).Add(c.hi, ra))
+	}
+	return ivPoint{u: widen(p.u), v: widen(p.v)}, true
+}
+
+// ivUnitOf encloses the unit vector of every vector its argument encloses.
+func ivUnitOf(p ivPoint) (ivPoint, bool) {
+	l, ok := intervalSqrt(intervalAdd(intervalSquare(p.u), intervalSquare(p.v)))
+	if !ok || l.lo.Sign() <= 0 {
+		return ivPoint{}, false
+	}
+	u, okU := intervalQuo(p.u, l)
+	v, okV := intervalQuo(p.v, l)
+	return ivPoint{u: u, v: v}, okU && okV
+}
+
+// walkTangentEnclosure encloses a walk's unit travel tangent at one end: a
+// line's chord direction, or a circle's radius at that end turned a quarter in
+// the walk's sense.
+func walkTangentEnclosure(w sideWalk, atEnd bool) (ivPoint, bool) {
+	start, okS := walkPointEnclosure(w.startU, w.startV, w.startBound)
+	end, okE := walkPointEnclosure(w.endU, w.endV, w.endBound)
+	if !okS || !okE {
+		return ivPoint{}, false
+	}
+	switch {
+	case w.isLine():
+		return ivUnitOf(ivPoint{u: intervalSub(end.u, start.u), v: intervalSub(end.v, start.v)})
+	case w.isCircular():
+		c, ok := ivExactPoint(w.cU, w.cV)
+		if !ok {
+			return ivPoint{}, false
+		}
+		p := start
+		if atEnd {
+			p = end
+		}
+		ru, rv := intervalSub(p.u, c.u), intervalSub(p.v, c.v)
+		if w.th1 > w.th0 {
+			return ivUnitOf(ivPoint{u: intervalNeg(rv), v: ru})
+		}
+		return ivUnitOf(ivPoint{u: rv, v: intervalNeg(ru)})
+	default:
+		return ivPoint{}, false
+	}
+}
+
+// offsetFootEnclosure encloses corner + amount·n̂, n̂ the walk's left unit
+// normal at that end — the point the float build spells v + s·t·(−ty, tx).
+func offsetFootEnclosure(corner ivPoint, w sideWalk, atEnd bool, amount ratInterval) (ivPoint, bool) {
+	tan, ok := walkTangentEnclosure(w, atEnd)
+	if !ok {
+		return ivPoint{}, false
+	}
+	return ivPoint{
+		u: intervalAdd(corner.u, intervalMul(amount, intervalNeg(tan.v))),
+		v: intervalAdd(corner.v, intervalMul(amount, tan.u)),
+	}, true
+}
+
+// offsetCarrierEnclosure encloses a walk's offset carrier over every signed
+// offset in amount: the line through the start moved along the left normal,
+// or the concentric circle (offsetCarrier's two shapes).
+func offsetCarrierEnclosure(w sideWalk, amount ratInterval) (ivCarrier, bool) {
+	if w.isCircular() {
+		r, ok := offsetCircleRadius(w, amount)
+		c, okC := ivExactPoint(w.cU, w.cV)
+		return ivCarrier{c: c, r: r}, ok && okC
+	}
+	if !w.isLine() {
+		return ivCarrier{}, false
+	}
+	start, okS := walkPointEnclosure(w.startU, w.startV, w.startBound)
+	dir, okD := walkTangentEnclosure(w, false)
+	if !okS || !okD {
+		return ivCarrier{}, false
+	}
+	p := ivPoint{
+		u: intervalAdd(start.u, intervalMul(amount, intervalNeg(dir.v))),
+		v: intervalAdd(start.v, intervalMul(amount, dir.u)),
+	}
+	return ivCarrier{isLine: true, p: p, dir: dir}, true
+}
+
+// offsetCircleRadius encloses offsetRadius's R − insideSign·(s·t) over every
+// signed offset in amount, R the walk's radius widened by its own bracket.
+func offsetCircleRadius(w sideWalk, amount ratInterval) (ratInterval, bool) {
+	rr, rb := proofarith.FloatRat(w.radius), proofarith.FloatRat(w.radiusBound)
+	if rr == nil || rb == nil || rb.Sign() < 0 {
+		return ratInterval{}, false
+	}
+	inside := big.NewRat(1, 1)
+	if w.th1 < w.th0 { // a clockwise walk has its material outside the circle
+		inside = big.NewRat(-1, 1)
+	}
+	base := interval(new(big.Rat).Sub(rr, rb), new(big.Rat).Add(rr, rb))
+	r := intervalSub(base, intervalScale(amount, inside))
+	if r.lo.Sign() <= 0 {
+		return ratInterval{}, false
+	}
+	return r, true
+}
+
+// circularWalkEndGap bounds how far either end of a circular walk sits off
+// the circle its walk radius brackets, measured radially.
+func circularWalkEndGap(w sideWalk) (float64, bool) {
+	c, okC := ivExactPoint(w.cU, w.cV)
+	r, okR := offsetCircleRadius(w, pointInterval(new(big.Rat)))
+	if !okC || !okR {
+		return 0, false
+	}
+	gap := new(big.Rat)
+	reach := func(u, v float64, bound walkEndBound) bool {
+		p, ok := walkPointEnclosure(u, v, bound)
+		if !ok {
+			return false
+		}
+		d, ok := intervalSqrt(intervalAdd(intervalSquare(intervalSub(p.u, c.u)), intervalSquare(intervalSub(p.v, c.v))))
+		if !ok {
+			return false
+		}
+		for _, x := range []*big.Rat{new(big.Rat).Sub(d.hi, r.lo), new(big.Rat).Sub(r.hi, d.lo)} {
+			if x.Cmp(gap) > 0 {
+				gap = x
+			}
+		}
+		return true
+	}
+	if !reach(w.startU, w.startV, w.startBound) || !reach(w.endU, w.endV, w.endBound) {
+		return 0, false
+	}
+	return ratFloatUp(gap), true
 }

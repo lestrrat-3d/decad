@@ -12,18 +12,18 @@ import (
 // The displacement fixture gives a recorded cup — a 16×8 outer section on
 // z ∈ [0, 10] around a 12×4 cavity on z ∈ [2, 10], both centered on the
 // frame origin — a displacement of 1/1024 mm on each of its three levels and
-// on its thickness, so the occupied-volume legs dominate rounding. Every cup
-// the record can denote within those displacements must lie inside the
-// readings: the open level moves both prisms' tops together, and the inward
-// offset section (the cavity) moves by half the thickness displacement per
-// side, so no corner moves farther than it.
+// on its offset section, so the occupied-volume legs dominate rounding. Every
+// cup the record can denote within those displacements must lie inside the
+// readings: the open level moves both prisms' tops together, and each wall of
+// the inward offset section (the cavity) moves by half the offset
+// displacement, so no corner moves farther than it.
 //
 // Legs shown to fail (each deleted, the fixture watched go red, then
 // restored):
 //   - prismVolumeMoments' occupied-volume error E zeroed: the mass of a grown
 //     or shrunk cup escapes.
-//   - The thickness displacement charged as the offset section's
-//     sectionDelta (mass_properties_cup.go): with it dropped, a cup whose
+//   - The offset displacement charged as the offset region's sectionDelta
+//     (cupPayload.cavityPrism in shell_cup.go): with it dropped, a cup whose
 //     cavity walls moved escapes.
 
 func TestCupMassChargesDisplacement(t *testing.T) {
@@ -36,7 +36,7 @@ func TestCupMassChargesDisplacement(t *testing.T) {
 		frame:  frame,
 		zOpen:  10, zOuter: 0, zCav: 2,
 		zOpenDelta: delta, zOuterDelta: delta, zCavDelta: delta,
-		thickness: 2, thicknessDelta: delta,
+		thickness: 2, thicknessDelta: delta, offsetDelta: delta,
 		sense: Inward,
 		xform: r3.Identity(),
 	}
@@ -46,6 +46,7 @@ func TestCupMassChargesDisplacement(t *testing.T) {
 
 	whole := new(big.Rat).SetFloat64(delta)
 	half := new(big.Rat).SetFloat64(delta / 2)
+
 	moves := func(step *big.Rat) []*big.Rat {
 		return []*big.Rat{new(big.Rat).Neg(step), new(big.Rat), step}
 	}

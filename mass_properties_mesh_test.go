@@ -13,7 +13,8 @@ import (
 
 // This file is docs/multibody-dynamics-design.md §13 PR 14's public half:
 // a stitched tetrahedron against its closed form, a loft between two exact
-// octagons against independent integrals, and a cup against its closed form.
+// octagons against independent integrals, and a cap-chamfered box against its
+// closed form.
 // The tolerance ladder's own steps, on revolves read off their meshes, are
 // asserted in mass_properties_mesh_internal_test.go.
 
@@ -326,70 +327,97 @@ func divergenceMoments(mesh *decad.Mesh) (*big.Rat, [3]*big.Rat, [3][3]*big.Rat)
 	return volume, first, second
 }
 
-// TestMassPropertiesCupFallback reads a shelled box — the 100×60×20 plate
-// with a 5 mm wall and its top open — off its verified mesh and checks it
-// against the outer box minus the cavity box, integrated exactly.
-func TestMassPropertiesCupFallback(t *testing.T) {
-	_, box := shellBox(t)
-	cup, err := box.Shell(t.Context(), topCap(box), units.Millimeters(5))
+// TestMassPropertiesCapChamferFallback reads a cap-chamfered box — the 16×8×10
+// plate with a 2 mm chamfer around its top loop — off its verified mesh. A
+// cap blend has no analytic mass path, so it is the payload that reaches the
+// tolerance ladder (docs/multibody-dynamics-design.md §8.5). The solid is the
+// plate below the chamfer level plus the frustum above it, whose slice at
+// height s into the chamfer is the rectangle [s, 16 − s] × [s, 8 − s]; both
+// are integrated exactly here.
+func TestMassPropertiesCapChamferFallback(t *testing.T) {
+	const a, b, h, c = 16, 8, 10, 2
+	box := boxBody(t, decad.New(), 0, 0, a, b, h)
+	chamfered, err := box.Chamfer(t.Context(), capLoopEdges(box), units.Millimeters(c))
 	require.NoError(t, err)
-	got, err := cup.MassProperties(t.Context(), meshMassDensity)
+	got, err := chamfered.MassProperties(t.Context(), meshMassDensity)
 	require.NoError(t, err)
 
-	outerV, outerP, outerQ := boxMoments(0, 100, 0, 60, 0, 20)
-	innerV, innerP, innerQ := boxMoments(5, 95, 5, 55, 5, 20)
-	volume := new(big.Rat).Sub(outerV, innerV)
-	rho := meshMassRho()
-	requireReadingCovers(t, got.Mass, new(big.Rat).Mul(rho, volume))
-	var center [3]*big.Rat
-	for i := range center {
-		center[i] = new(big.Rat).Quo(new(big.Rat).Sub(outerP[i], innerP[i]), volume)
-		held := []float64{got.Center.Value.X, got.Center.Value.Y, got.Center.Value.Z}[i]
-		deviation := new(big.Rat).Sub(center[i], new(big.Rat).SetFloat64(held))
-		require.LessOrEqual(t, deviation.Abs(deviation).Cmp(new(big.Rat).SetFloat64(got.Center.Bound.Base())), 0)
-	}
-	var central [3][3]*big.Rat
-	for i := range 3 {
-		for j := range 3 {
-			second := new(big.Rat).Sub(outerQ[i][j], innerQ[i][j])
-			central[i][j] = second.Sub(second, new(big.Rat).Mul(volume, new(big.Rat).Mul(center[i], center[j])))
-		}
-	}
-	trace := new(big.Rat).Add(new(big.Rat).Add(central[0][0], central[1][1]), central[2][2])
-	for i, reading := range []decad.Measurement{got.Inertia.XX, got.Inertia.YY, got.Inertia.ZZ} {
-		requireReadingCovers(t, reading, new(big.Rat).Mul(rho, new(big.Rat).Sub(trace, central[i][i])))
-	}
-	for _, mixed := range []decad.Measurement{got.Inertia.XY, got.Inertia.XZ, got.Inertia.YZ} {
-		requireReadingCovers(t, mixed, new(big.Rat))
-	}
+	want := exactBoxMoments(ratVec(0, 0, 0), ratVec(a, b, h-c)).plus(chamferFrustumMoments(a, b, h, c), 1)
+	requireMomentsReadings(t, got, want, meshMassRho(), r3.Identity(), nil)
 }
 
-// boxMoments is V, ∫x dV and ∫x_i x_j dV of an axis-aligned box about the
-// origin.
-func boxMoments(x0, x1, y0, y1, z0, z1 int64) (*big.Rat, [3]*big.Rat, [3][3]*big.Rat) {
-	lo, hi := [3]int64{x0, y0, z0}, [3]int64{x1, y1, z1}
-	// Per axis: length, ∫x and ∫x² over [lo, hi].
-	var length, linear, square [3]*big.Rat
-	for i := range 3 {
-		a, b := big.NewRat(lo[i], 1), big.NewRat(hi[i], 1)
-		length[i] = new(big.Rat).Sub(b, a)
-		linear[i] = new(big.Rat).Quo(new(big.Rat).Sub(new(big.Rat).Mul(b, b), new(big.Rat).Mul(a, a)), big.NewRat(2, 1))
-		cube := func(v *big.Rat) *big.Rat { return new(big.Rat).Mul(v, new(big.Rat).Mul(v, v)) }
-		square[i] = new(big.Rat).Quo(new(big.Rat).Sub(cube(b), cube(a)), big.NewRat(3, 1))
+// chamferFrustumMoments is V, ∫x dV and ∫x_i x_j dV about the origin of the
+// frustum z ∈ [h − c, h] whose slice at z = h − c + s is [s, a − s] × [s, b − s].
+// Every slice integral is a polynomial in s, integrated exactly over [0, c].
+func chamferFrustumMoments(a, b, h, c int64) massMoments {
+	ra, rb := big.NewRat(a, 1), big.NewRat(b, 1)
+	s := ratPoly{new(big.Rat), big.NewRat(1, 1)}
+	width := ratPoly{ra, big.NewRat(-2, 1)}
+	depth := ratPoly{rb, big.NewRat(-2, 1)}
+	z := ratPoly{big.NewRat(h-c, 1), big.NewRat(1, 1)}
+	third := ratPoly{big.NewRat(1, 3)}
+	half := ratPoly{big.NewRat(1, 2)}
+	cube := func(p ratPoly) ratPoly { return p.mul(p).mul(p) }
+	area := width.mul(depth)
+	// ∫x dA = area·a/2, ∫y dA = area·b/2, ∫x² dA = depth·((a − s)³ − s³)/3,
+	// ∫y² dA = width·((b − s)³ − s³)/3, ∫xy dA = area·a·b/4.
+	mx := area.mul(ratPoly{ra}).mul(half)
+	my := area.mul(ratPoly{rb}).mul(half)
+	mxx := depth.mul(cube(ratPoly{ra, big.NewRat(-1, 1)}).add(cube(s).mul(ratPoly{big.NewRat(-1, 1)}))).mul(third)
+	myy := width.mul(cube(ratPoly{rb, big.NewRat(-1, 1)}).add(cube(s).mul(ratPoly{big.NewRat(-1, 1)}))).mul(third)
+	mxy := mx.mul(ratPoly{rb}).mul(half)
+	rc := big.NewRat(c, 1)
+	m := massMoments{volume: area.integral(rc)}
+	m.first = [3]*big.Rat{mx.integral(rc), my.integral(rc), area.mul(z).integral(rc)}
+	xz, yz := mx.mul(z).integral(rc), my.mul(z).integral(rc)
+	xy := mxy.integral(rc)
+	m.second = [3][3]*big.Rat{
+		{mxx.integral(rc), xy, xz},
+		{xy, myy.integral(rc), yz},
+		{xz, yz, area.mul(z).mul(z).integral(rc)},
 	}
-	volume := new(big.Rat).Mul(length[0], new(big.Rat).Mul(length[1], length[2]))
-	var first [3]*big.Rat
-	var second [3][3]*big.Rat
-	for i := range 3 {
-		first[i] = new(big.Rat).Quo(new(big.Rat).Mul(volume, linear[i]), length[i])
-		for j := range 3 {
-			if i == j {
-				second[i][j] = new(big.Rat).Quo(new(big.Rat).Mul(volume, square[i]), length[i])
-				continue
-			}
-			pair := new(big.Rat).Mul(linear[i], linear[j])
-			second[i][j] = pair.Quo(new(big.Rat).Mul(pair, volume), new(big.Rat).Mul(length[i], length[j]))
+	return m
+}
+
+// ratPoly is a polynomial in one variable with exact coefficients, lowest
+// degree first.
+type ratPoly []*big.Rat
+
+func (p ratPoly) add(q ratPoly) ratPoly {
+	out := make(ratPoly, max(len(p), len(q)))
+	for i := range out {
+		out[i] = new(big.Rat)
+		if i < len(p) {
+			out[i].Add(out[i], p[i])
+		}
+		if i < len(q) {
+			out[i].Add(out[i], q[i])
 		}
 	}
-	return volume, first, second
+	return out
+}
+
+func (p ratPoly) mul(q ratPoly) ratPoly {
+	out := make(ratPoly, len(p)+len(q)-1)
+	for i := range out {
+		out[i] = new(big.Rat)
+	}
+	for i, x := range p {
+		for j, y := range q {
+			out[i+j].Add(out[i+j], new(big.Rat).Mul(x, y))
+		}
+	}
+	return out
+}
+
+// integral is the polynomial's exact integral over [0, upper].
+func (p ratPoly) integral(upper *big.Rat) *big.Rat {
+	out := new(big.Rat)
+	power := new(big.Rat).Set(upper)
+	for k, coefficient := range p {
+		term := new(big.Rat).Mul(coefficient, power)
+		out.Add(out, term.Quo(term, big.NewRat(int64(k+1), 1)))
+		power.Mul(power, upper)
+	}
+	return out
 }

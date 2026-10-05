@@ -213,9 +213,10 @@ prove identical represented sets.
 
 The certificate additionally requires each operand's record to BE the set it
 denotes. A `prismPayload` carrying a nonzero section displacement
-(`docs/prism-boolean-design.md` §7) denotes a set its record is only within
-that displacement of, so two equal such records say nothing about the two
-sets: the certificate withholds and the pair stays undecided. That document's
+(`docs/prism-boolean-design.md` §7), or a `cupPayload` carrying a nonzero
+offset displacement (`docs/modify-design.md` §9), denotes a set its record is
+only within that displacement of, so two equal such records say nothing about
+the two sets: the certificate withholds and the pair stays undecided. That document's
 Implementation notes own the per-consumer list this rule belongs to, and this
 section does not restate its derivation.
 

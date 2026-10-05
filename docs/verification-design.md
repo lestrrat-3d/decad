@@ -648,10 +648,13 @@ A `cupPayload` or `capBlendPayload` reduces to a modify op applied to a
 straight-prism receiver section, and `fallbackGateDiameter`/`gateWitnessPrism`
 read their diameter off a containing prism envelope rather than off the
 kernel's exact model, which does not cover them — the two arms read different
-geometry and contain the body for different reasons. Both read a section that
-is its own denotation, because every modify op refuses a receiver carrying a
-section displacement (`fillet.go`'s `requireExactSection`), so the axial
-displacement below is the only one their witnesses carry.
+geometry and contain the body for different reasons. The receiver's own
+section is its own denotation, because every modify op refuses a receiver
+carrying a section displacement (`fillet.go`'s `requireExactSection`), so a
+cap blend's and an inward cup's witnesses carry only the axial displacement
+below. An outward cup's outer region is the offset one, recorded within the
+cup's offset displacement of the region it denotes (`docs/modify-design.md`
+§9), so its witnesses carry that displacement beside the axial one.
 `capBlendPayload` reads
 the receiver's own unrewritten section on its unchanged interval: a cap-loop
 chamfer only ever cuts along a chord whose feet sit on the receiver's own
@@ -671,9 +674,10 @@ understate it — the reduction itself is sound.
 
 When either envelope end has nonzero axial displacement, its witnesses sit on
 the held levels rather than the levels the payload denotes. Each witness can
-move by the envelope's `axialDelta`, so their maximum pair distance can
-overstate the denoted body's diameter by `2*axialDelta`. The fallback subtracts
-that amount, rounded toward zero, before publishing the reference. It then
+move by the envelope's `axialDelta`, plus an outward cup's offset displacement
+in the plane, so their maximum pair distance can overstate the denoted body's
+diameter by twice that sum. The fallback subtracts that amount, rounded toward
+zero, before publishing the reference. It then
 reports a conservative lower bound even when the envelope's held shape is
 larger than the body it contains.
 

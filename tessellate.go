@@ -1233,6 +1233,8 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, v
 		hiV     []int
 		faces   []*Face
 		sag     float64
+		walks   int
+		perim   float64
 	}
 	chordRing := func(loop LoopRecord, h, lo, hi, loDelta, hiDelta float64, role string, area *float64) (ring, error) {
 		// A cup chords the DERIVED region loops — an offset cavity, an outer
@@ -1251,7 +1253,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, v
 		// combined areaSlack used to carry before it split.
 		mesh.areaSlack = absSumUpper(mesh.areaSlack, cl.wallSlack, cl.capSlack, cl.capSlack)
 		*area = absSumUpper(*area, cl.segmentArea)
-		r := ring{samples: samples, faces: cl.faceOf, sag: cl.maxSag}
+		r := ring{samples: samples, faces: cl.faceOf, sag: cl.maxSag, walks: cl.walks, perim: cl.perimeterUpper}
 		r.loV = make([]int, len(samples))
 		r.hiV = make([]int, len(samples))
 		// A wall spans both of its region's levels, so it cannot attribute its
@@ -1503,9 +1505,39 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, v
 	if err := liftTessellationError(tessellation.RequireClosedMesh(mesh.triangles)); err != nil {
 		return nil, err
 	}
-	// A cup records its own section verbatim — no analytic reduction re-expresses
-	// it — so it carries no section displacement, and each face's bound is its own
-	// trim, store and level terms alone (docs/tessellation-design.md §6).
+	// The offset region — the cavity inward, the outer region outward — is
+	// recorded within offsetDelta of the region the cup denotes, so every face
+	// it bounds carries that displacement beside its own trim, store and level
+	// terms: its walls, its own planar cap and every rim. The receiver's own
+	// region carries none (docs/tessellation-design.md §6).
+	displacedRings, displacedCap, displacedHeight := cRings, shellCap, cHi-cLo
+	if cp.sense == Outward {
+		displacedRings, displacedCap, displacedHeight = oRings, capStart, oHi-oLo
+	}
+	var displacedWalks int
+	var displacedPerim float64
+	for _, r := range displacedRings {
+		displacedWalks += r.walks
+		displacedPerim = absSumUpper(displacedPerim, r.perim)
+	}
+	if cp.offsetDelta > 0 {
+		displacedFaces := map[*Face]struct{}{displacedCap: {}}
+		for _, r := range displacedRings {
+			for _, f := range r.faces {
+				displacedFaces[f] = struct{}{}
+			}
+		}
+		for i := range oLoops {
+			rim, err := faceOfRole(fmt.Sprintf("rim(%d)", i))
+			if err != nil {
+				return nil, err
+			}
+			displacedFaces[rim] = struct{}{}
+		}
+		for f := range displacedFaces {
+			faceTrim[f] = absSumUpper(faceTrim[f], cp.offsetDelta)
+		}
+	}
 	if err := composeFaceBounds(&mesh, faceTrim, faceAxial, vertexStore, 0); err != nil {
 		return nil, err
 	}
@@ -1516,11 +1548,20 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, v
 		return &mesh, nil
 	}
 	mesh.areaSlack = absSumUpper(mesh.areaSlack, meshStoreAreaAllow(&mesh, vertexStore))
+	// The displaced region's own area moves by its displacement area once in
+	// its cap and once in the rims it bounds, and its walls' length by the
+	// displacement length over their height — evalPrism's composition for a
+	// section displacement, one region at a time.
+	displacedArea := sectionDisplacementArea(cp.offsetDelta, displacedWalks, displacedPerim)
+	if cp.offsetDelta > 0 {
+		wallMove := productUpper(sectionDisplacementLength(cp.offsetDelta, displacedWalks), displacedHeight)
+		mesh.areaSlack = absSumUpper(mesh.areaSlack, displacedArea, displacedArea, wallMove)
+	}
 
 	// Occupied volume (docs/tessellation-reach-design.md §3): each region's own
-	// chorded-section deficit over its own sweep height, each planar level's
-	// displacement over the patch it caps, and the computed coordinates' swept
-	// volume.
+	// chorded-section deficit over its own sweep height, the displaced region's
+	// section displacement over its height, each planar level's displacement
+	// over the patch it caps, and the computed coordinates' swept volume.
 	areaUpper := meshFaceAreaUpper(&mesh, vertexStore)
 	rimArea := 0.0
 	for i := range oLoops {
@@ -1533,6 +1574,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64, v
 	terms := []float64{
 		productUpper(oHi-oLo, oSegmentArea),
 		productUpper(cHi-cLo, cSegmentArea),
+		productUpper(displacedHeight, displacedArea),
 		productUpper(cp.zOuterDelta, areaUpper[capStart]),
 		productUpper(cp.zCavDelta, areaUpper[shellCap]),
 		productUpper(cp.zOpenDelta, rimArea),
