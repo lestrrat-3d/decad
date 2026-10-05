@@ -441,8 +441,17 @@ change a world. It rejects an unknown exactness value and an `Exact` reading
 with a nonzero bound. World construction requires
 mass's lower bound to be positive and a certified positive lower eigenvalue of
 the complete inertia interval tensor. A nominal positive determinant is
-insufficient. Reject inconsistent bounds, a tensor lacking that proof, or a
-non-finite inverse as `ErrInvalidMassProperties`. The mass design owns the
+insufficient. Each of the six components enters as the exact rational
+interval `value ± bound`. Either of two sound proofs certifies the tensor:
+row dominance, whose floor is the smallest diagonal lower end less that row's
+largest product magnitudes; or Sylvester's criterion, where each leading
+principal minor evaluated in rational interval arithmetic has a strictly
+positive lower end and the floor is `4·det_lo/trace_hi²`, since
+`λ_min = det/(λ_mid·λ_max)` and `λ_mid·λ_max ≤ (trace/2)²`. The larger floor
+is the certified eigenvalue. The minors admit an elongated body at an oblique
+placement, whose products of inertia defeat row dominance. Reject
+inconsistent bounds, a tensor neither proof establishes, or a floor whose
+reciprocal is not a finite `float64` as `ErrInvalidMassProperties`. The mass design owns the
 integrals and their bounds; `r3` owns symmetric-tensor rotation and inversion.
 At a state pose, transform the certified center and tensor from the committed
 placement into world coordinates. Recompute world inverse inertia after every
