@@ -7,9 +7,9 @@ persistent face contact and its first edge transition, and mass properties for
 source boxes, admitted untapered prisms, full source spheres, and full
 source cylinders revolved from axis-incident rectangles. It steps one
 frictionless pair with a fixed and dynamic body or two centered dynamic bodies.
-A three-body world with one dynamic and two fixed bodies steps one active pair
+A three-body world with one or two dynamic bodies steps one active pair
 when every other pair has a certified clear path. It also orders separated
-frictionless positive-restitution source-box face impacts, re-sweeps both pairs after each response,
+frictionless positive-restitution source-box face impacts, re-sweeps active pairs after each response,
 and replays the rounded path between events. A full circular source prism or a full
 revolve of a rectangular half-profile can advance along a strictly separated
 axial path above or below a source-box face and replay that clear path. The

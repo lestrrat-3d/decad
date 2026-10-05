@@ -102,8 +102,19 @@ sweep. A missing initial float witness, a failed response bound, or an
 unproved continuation returns `Undecided` with no event or `Next`.
 A two-body world's pair may be excluded; its bodies drift independently even
 through overlap, and no pair material is mixed.
-The current three-body step admits one dynamic body and two fixed bodies.
-It sweeps each non-excluded dynamic/fixed pair. One active pair advances only
+The current three-body step admits one dynamic body and two fixed bodies, or
+two dynamic bodies and one fixed body. With two dynamic bodies, it kicks both
+once, sweeps every non-excluded pair, and advances one certified impact at a
+time. Every other pair needs a certified clear ideal and rounded path through
+the event prefix, any correction, and each remainder. Overlapping candidate
+brackets or simultaneous initial contacts return `Undecided` with no `Next`.
+The trace replays non-excluded pairs from rounded certificates and any body
+outside those pairs by independent drift. The conservation report sums both
+dynamic bodies. An excluded pair is not queried and
+does not mix material.
+This first two-dynamic path returns `Undecided` for initial contact,
+zero-restitution impact, and nonzero angular velocity.
+With one dynamic body, it sweeps each non-excluded dynamic/fixed pair. One active pair advances only
 when every other pair has a certified clear path through the response. Two
 strictly ordered, frictionless positive-restitution source-box face impacts can advance within one
 step. The full-duration force kick occurs once. Each impact restarts both pair
@@ -309,7 +320,7 @@ dynamic can still be checked when a kinematic driver moves; it cannot be
 resolved by an impulse if closing contact occurs.
 
 The current world accepts two bodies with at least one dynamic body, or three
-bodies with exactly one dynamic and two fixed bodies. Every pair in a
+bodies with one or two dynamic bodies and every other body fixed. Every pair in a
 three-body world can be excluded or given one material override. `NewWorld`
 rejects a pair naming a body outside the world, including nil or repeated
 bodies, with `ErrInvalidInput`. It also rejects a second override or exclusion
@@ -494,15 +505,23 @@ when its source solids overlap or cross. Publish no contact event and typed
 zero contact impulse and kinematic work. The trace and conservation readings
 still describe the completed step.
 
-In a three-body world, sweep both non-excluded dynamic/fixed pairs before
-choosing a response. The first simultaneous increment consumes both real
+In a three-body world, sweep every non-excluded pair with a dynamic body before
+choosing a response. With one dynamic body, the first simultaneous increment consumes both real
 initial manifolds for orthogonal frictionless face contacts. A simultaneous
 case outside that increment returns `Undecided` with no `Next`. For one active
 response, certify the other pair's ideal and rounded paths before and after
 the event; sweep any position correction against it. Query the fixed/fixed
 pair at its constant pose unless it is excluded. The conservation report
-includes the world's sole dynamic body. More than one dynamic body or a
-kinematic body returns `ErrUnsupported` at three-body world construction.
+includes every dynamic body in the world. A kinematic body returns
+`ErrUnsupported` at three-body world construction. With two dynamic bodies,
+select a single earliest event only when every other pair's bracket or
+unresolved interval starts strictly later. Kick each dynamic body once for
+the full step, then restart all pair sweeps after each response. Count events
+against one world `MaxEvents` limit. If one dynamic body is outside the
+responding pair, drift and replay it through every slice and include its mass,
+loads, energy, and momentum in the world report. A dynamic/dynamic impulse
+contributes zero to total external contact impulse; a fixed/dynamic impulse
+contributes its signed value.
 
 A `SweepPair` `Undecided` that could precede the next event makes the step
 `Undecided`; a later undecided interval can be revisited after an earlier
