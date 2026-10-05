@@ -144,13 +144,24 @@ zero-restitution pair uses the existing response. The event records equal
 and opposite linear impulses and both spin responses. The
 rotating `SweepDepartedClear` report must prove ideal and rounded separation
 at its endpoint and certify trace replay.
-A separated source-sphere pair can enter that response at an interior impact
+A planar off-axis source-sphere pair can use the same positive-restitution
+Coulomb law when its exact center offset has nonzero X and Y components, Z is
+zero, and its squared length equals the squared sum of its source radii.
+The exact offset divided by that radius sum selects the normal; the bounded
+ideal and rounded witnesses must enclose the exact point and normal. Both
+source sphere centers and supplied mass centers coincide, both exact inertia
+tensors are isotropic, and both incoming spins and Z velocities are zero.
+The tangent is the in-plane perpendicular to the normal. Solve rational normal
+and tangent impulses, update both linear velocities and Z spins, then check
+restitution, Coulomb cone, stick or slide, and rounding residuals before
+publishing the rotating separating sweep, event, and trace.
+A separated source-sphere pair can enter either response at an interior impact
 when its real `SweepImpactBracket` contains a dyadic fraction with at most 53
 fractional bits.
 The solver selects the coarsest such interior fraction. A rounded prefix sweep
 must end at the same source faces within `PenetrationResidual`, and a real
-`ContactPair` and second `SweepPair` must prove an exact cardinal touching
-point there. Both bodies must have exact centered isotropic supplied mass,
+`ContactPair` and second `SweepPair` must prove the exact touching point there.
+Both bodies must have exact centered isotropic supplied mass,
 zero initial spin, positive restitution, and an exact effective friction
 coefficient. The contact response uses the remaining duration and its rotating
 departure sweep. The event retains the original bracket and exact touch time;
@@ -454,7 +465,7 @@ reported event pairs use world order. `World.Excluded()` and
 
 The current positive-friction slice accepts a fixed floor and dynamic box or
 source sphere in either world order, two dynamic source boxes at an initial
-opposed face touch, or the initial and interior cardinal sphere pairs above. Without an
+opposed face touch, or the initial and interior sphere pairs above. Without an
 override, the pair coefficient is the geometric
 mean of the held body coefficients. The solver proposes impulses with a nominal
 rounded mean, then checks the friction cone and slip law against rational
