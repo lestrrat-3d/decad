@@ -6,7 +6,7 @@ contact manifold. `Document.SweepPair` checks their paths over time.
 prove the contact and its continuation. An advanced step includes a state,
 events, conservation readings, and a trace that `Trace.Sample` can replay.
 [The box collision example](../examples/dynamics_box_collision_example_test.go)
-shows the complete path.
+shows a box impact and computed rebound.
 
 ## Certified shape pairs
 
