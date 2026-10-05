@@ -514,9 +514,23 @@ typed zero normal, tangent, and point impulses; leave `Solver` nil. Its
 pre/post velocities and poses are identical, and every position-change
 component is zero. This is an observable contact event, but it is not an
 impact or persistent constraint. It counts once against `MaxEvents`.
-The event's zero impulse must pass the existing per-body momentum and energy
-checks. Its conservation report has zero contact impulse and no event energy
-change; the full-step force kick and drift are still accounted for normally.
+In `eventConservationFailure`, check `ContactGraze` in a separate branch
+before the `ContactImpact` positive-impulse gate. Require exactly one bounded
+manifold point and one typed point-impulse record. Require exact zero in the
+aggregate normal and all tangent components, the point normal and all point
+tangent components, and every position-change component. Require valid,
+unchanged linear and angular velocities for both bodies, plus valid proper
+event poses. Before invoking this branch, `Step` compares each event pose with
+both trace states' poses at the event; pre-event and post-event poses must be
+identical. Reject a missing or invalid event pose, a non-nil solver report,
+or a change in any of these values. Only after these checks
+may the branch return success without the impact energy-gain calculation:
+the event's exact velocity and pose differences then give zero event energy,
+linear momentum, and angular momentum change for every admitted mass and
+inertia interval. `eventAppliedImpulse` must accept the graze's bounded
+manifold and return exact zero. The conservation report publishes typed zero
+contact impulse and no event energy change; the full-step force kick and drift
+are still accounted for normally.
 
 Keep the full-span rounded grazing sweep as a private trace certificate.
 `Trace.Sample` uses its `CertifiedPosesAtInterval` for every interior time on
@@ -763,9 +777,12 @@ checks every dynamic body's published velocity change
 against its signed aggregate normal and tangent impulse. It checks both ends
 of the body's held mass interval against `ImpulseResidual + massHigh ×
 VelocityResidual` on each component. A zero-impulse transition must preserve
-the published velocities exactly. Impacts also check kinetic
-energy at the event. For each body, the code first subtracts squared pre-event
-speed from squared post-event speed, then multiplies this one difference by
+the published velocities exactly. A `ContactGraze` separately requires zero
+aggregate and per-point impulses, identical pre/post velocities and poses,
+and zero position change before its event conservation check succeeds.
+Impacts also check kinetic energy at the event. For each body, the code first
+subtracts squared pre-event speed from squared post-event speed, then
+multiplies this one difference by
 the mass endpoint that gives the largest energy change. The allowed numerical
 gain is the sum, over each dynamic body and Cartesian component, of
 `(massHigh × VelocityResidual + ImpulseResidual) ×
@@ -874,6 +891,13 @@ exactly, `Step` returns `Undecided` and `Next == nil`. A trace replay query
 whose rounded pose loses strict separation or exact event touch returns
 `ErrUnsupported`. The tests use the real source-body producer, sweep, world,
 and trace; they do not supply a hand-written event.
+Start from that real event and change one conservation field at a time: the
+aggregate normal or tangent impulse, the point normal or tangent impulse,
+one pre/post linear or angular velocity, one event or trace pose, and one
+position-change component. The `ContactGraze` conservation branch must reject
+each change. It must also reject a missing point-impulse record or a non-nil
+solver report. The unchanged real event must pass and publish zero event
+energy, momentum, and contact impulse.
 
 First use a real `decad` box with top `z=0 mm` and a dynamic `10×10×10 mm`
 box initially spanning `z=[10,20] mm`. Give the dynamic box density
