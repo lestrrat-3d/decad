@@ -35,7 +35,30 @@ const (
 	Undecided
 )
 
+// StepReason classifies why a step stopped (docs/multibody-dynamics-design.md
+// §12). The step of a world of four or more bodies sets it; the two- and
+// three-body steps leave it StepNoReason.
+type StepReason int
+
+const (
+	StepNoReason           StepReason = iota
+	StepPairUndecided                 // a candidate sweep is Undecided before the next event
+	StepManifoldMissing               // an event pair has no manifold within StepConfig.Contact
+	StepIslandDegenerate              // a closing constraint with no dynamic body, or K <= 0, or a non-finite proposal
+	StepIslandResidual                // a solver gate exceeds its limit at MaxIterations
+	StepCorrectionFailed              // a position correction exceeds its allowance or loses a relation
+	StepTrackUnproved                 // a contact-set pair has neither a persistent nor a band track
+	StepKickUnbounded                 // the force kick cannot be bounded within the velocity residuals
+	StepConservationFailed            // an island or step conservation gate fails
+	StepEventBudget                   // MaxEvents reached with time remaining
+	StepPairBudget                    // MaxPairSweeps reached
+	StepTravelUnbounded               // SweptBox returned ErrUnsupported for a body
+	StepFixedPairRelation             // a non-excluded Fixed/Fixed pair is Overlapping or Undecided
+	StepUnsupported                   // the current phase has no solver for this event family
+)
+
 type StepDiagnostic struct {
+	Code   StepReason
 	Pair   BodyPair
 	Reason string
 }
@@ -118,6 +141,7 @@ type Trace struct {
 	threeSweeps         [3]*decad.SweepReport
 	threeSlices         []threeTraceSlice
 	threeEvents         []threeTraceEvent
+	slices              []traceSlice // a world of four or more bodies, docs/multibody-dynamics-design.md §3.4
 	duration            units.Value
 	eventAt             units.Value
 	hasEvent            bool
@@ -131,6 +155,9 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 	if t.Kind() != units.Time || !finite(t.Base()) || timeValue == nil || durationValue == nil ||
 		timeValue.Sign() < 0 || timeValue.Cmp(durationValue) > 0 {
 		return State{}, fmt.Errorf("%w: trace time outside step", ErrInvalidInput)
+	}
+	if len(tr.slices) != 0 {
+		return tr.sampleSlices(t, timeValue, durationValue)
 	}
 	if len(tr.threeSlices) != 0 {
 		return tr.sampleThreeSlices(t, timeValue)
@@ -369,6 +396,9 @@ func pairCorrectionWithin(before, after State, axis int, allowance float64) bool
 }
 
 // Step advances the admitted pair through certified clear, contact, or edge-transition paths.
+// A world of four or more bodies publishes one event-free drift whose candidate
+// pairs the broad phase selects and SweepPair proves clear; any contact event
+// leaves it Undecided with StepUnsupported (docs/multibody-dynamics-design.md §5).
 func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.Value) (*StepReport, error) {
 	if w == nil || ctx == nil || from.world != w || !validQuantity(dt, units.Time, true) {
 		return nil, fmt.Errorf("%w: invalid context, world, state, or duration", ErrInvalidInput)
@@ -379,7 +409,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		return report, err
 	}
 	if len(w.bodies) != 2 {
-		return w.stepWithoutSolver(ctx, input)
+		return w.stepScheduled(ctx, from, input, dt)
 	}
 	if err := validateQuantityVec(input.Gravity, units.Acceleration); err != nil {
 		return nil, err
@@ -401,7 +431,7 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	kicked, ok := w.kickByLoads(from, input.Gravity, loads, dt)
+	kicked, ok := w.kickByLoads(from, input.Gravity, loads[:], dt)
 	if !ok {
 		return undecided(w, "force kick or torque kick exceeds its velocity residual"), nil
 	}
@@ -422,70 +452,12 @@ func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.
 		}
 	}
 	conservation, ok := w.conservationReadings(from, kicked, *report.Next, report.Trace, report.Events,
-		input.Gravity, loads, dt)
+		input.Gravity, loads[:], dt)
 	if !ok {
 		return undecided(w, "conservation readings cannot be represented with finite bounds"), nil
 	}
 	report.Conservation = &conservation
 	return report, nil
-}
-
-// stepWithoutSolver validates the input of a step on a world of four or more
-// bodies and reports Undecided: the current step resolves two- and three-body
-// worlds only (docs/multibody-dynamics-design.md §13).
-func (w *World) stepWithoutSolver(ctx context.Context, input StepInput) (*StepReport, error) {
-	if err := validateQuantityVec(input.Gravity, units.Acceleration); err != nil {
-		return nil, err
-	}
-	loaded := make(map[*decad.Body]struct{}, len(input.Loads))
-	for _, load := range input.Loads {
-		i, ok := w.index[load.Body]
-		if !ok || w.bodies[i].definition.Role != Dynamic {
-			return nil, fmt.Errorf("%w: load body is not a dynamic member of this world", ErrInvalidInput)
-		}
-		if _, duplicate := loaded[load.Body]; duplicate {
-			return nil, fmt.Errorf("%w: duplicate load body", ErrInvalidInput)
-		}
-		loaded[load.Body] = struct{}{}
-		if err := validateQuantityVec(load.Force, units.Force); err != nil {
-			return nil, err
-		}
-		if err := validateQuantityVec(load.Torque, units.Torque); err != nil {
-			return nil, err
-		}
-	}
-	driven := make(map[*decad.Body]struct{}, len(input.Drivers))
-	for _, driver := range input.Drivers {
-		i, ok := w.index[driver.Body]
-		if !ok || w.bodies[i].definition.Role != Kinematic {
-			return nil, fmt.Errorf("%w: driver body is not kinematic", ErrInvalidInput)
-		}
-		if _, duplicate := driven[driver.Body]; duplicate {
-			return nil, fmt.Errorf("%w: duplicate driver body", ErrInvalidInput)
-		}
-		if driver.Path == nil {
-			return nil, fmt.Errorf("%w: nil kinematic path", ErrInvalidInput)
-		}
-		driven[driver.Body] = struct{}{}
-	}
-	live := w.doc.Bodies()
-	for _, body := range w.bodies {
-		if body.definition.Role == Kinematic {
-			if _, ok := driven[body.definition.Body]; !ok {
-				return nil, fmt.Errorf("%w: exactly one driver is required for each kinematic body", ErrInvalidInput)
-			}
-		}
-		if !containsBody(live, body.definition.Body) {
-			return nil, fmt.Errorf("%w: world body was retired", ErrInvalidInput)
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	return &StepReport{Status: Undecided, Excluded: w.Excluded(), Diagnostics: []StepDiagnostic{{
-		Reason: fmt.Sprintf("unsupported: the current step resolves two- and three-body worlds; this world has %d bodies",
-			len(w.bodies)),
-	}}}, nil
 }
 
 func setDefaultEventSlices(report *StepReport, dt units.Value) {

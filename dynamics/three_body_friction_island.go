@@ -232,7 +232,7 @@ func (w *World) stepThreeFrictionIsland(ctx context.Context, from, kicked State,
 		post: pairState(post, reference), end: pairState(end, reference),
 		duration: dt, eventAt: units.Seconds(0), hasEvent: true}
 	conservation, valid := reference.conservationReadings(childTrace.start, childTrace.pre,
-		childTrace.end, childTrace, nil, gravity, loads, dt)
+		childTrace.end, childTrace, nil, gravity, loads[:], dt)
 	if !valid {
 		return w.threeUndecided(-1, "friction island conservation is not finite"), nil
 	}

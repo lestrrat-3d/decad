@@ -40,7 +40,7 @@ type StepConservation struct {
 }
 
 func (w *World) conservationReadings(from, kicked, end State, trace Trace, events []ContactEvent,
-	gravity QuantityVec, loads [2]*BodyLoad, dt units.Value) (StepConservation, bool) {
+	gravity QuantityVec, loads []*BodyLoad, dt units.Value) (StepConservation, bool) {
 	input, ok := w.conservationState(from)
 	if !ok {
 		return StepConservation{}, false
@@ -78,7 +78,7 @@ func (w *World) conservationReadings(from, kicked, end State, trace Trace, event
 		TorqueImpulse: torqueImpulse, KinematicWork: kinematicWork, DriftChange: driftChange}, true
 }
 
-func (w *World) torqueImpulse(loads [2]*BodyLoad, dt units.Value) (MomentumReading, bool) {
+func (w *World) torqueImpulse(loads []*BodyLoad, dt units.Value) (MomentumReading, bool) {
 	var value [3]*big.Rat
 	for axis := range value {
 		value[axis] = new(big.Rat)
@@ -552,7 +552,7 @@ func addReadingDifference(value, low, high *big.Rat, before, after decad.Measure
 		new(big.Rat).Sub(beforeValue, beforeBound)))
 }
 
-func (w *World) forceImpulses(gravity QuantityVec, loads [2]*BodyLoad,
+func (w *World) forceImpulses(gravity QuantityVec, loads []*BodyLoad,
 	dt units.Value) (MomentumReading, MomentumReading, bool) {
 	var gValue, gLow, gHigh, fValue [3]*big.Rat
 	for axis := range gValue {

@@ -100,7 +100,7 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	kickPair, ok := reference.kickByLoads(pairState(from, reference), input.Gravity, loads, dt)
+	kickPair, ok := reference.kickByLoads(pairState(from, reference), input.Gravity, loads[:], dt)
 	if !ok {
 		return w.threeUndecided(referenceKey, "force kick exceeds the velocity residual"), nil
 	}

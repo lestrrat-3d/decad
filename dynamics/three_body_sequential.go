@@ -582,11 +582,11 @@ func (w *World) threeSequentialConservation(reference *World,
 	if !ok {
 		return StepConservation{}, false
 	}
-	gravityImpulse, loadImpulse, ok := reference.forceImpulses(gravity, loads, dt)
+	gravityImpulse, loadImpulse, ok := reference.forceImpulses(gravity, loads[:], dt)
 	if !ok {
 		return StepConservation{}, false
 	}
-	torqueImpulse, ok := reference.torqueImpulse(loads, dt)
+	torqueImpulse, ok := reference.torqueImpulse(loads[:], dt)
 	if !ok {
 		return StepConservation{}, false
 	}

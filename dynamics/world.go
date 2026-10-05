@@ -1,6 +1,8 @@
 // Package dynamics advances rigid bodies using decad's certified geometry queries.
-// A world holds any number of bodies and their canonical pair table; the
-// current step resolves two- and three-body worlds.
+// A world holds any number of bodies and their canonical pair table. Two- and
+// three-body worlds step through their closed-form responses; a world of four
+// or more bodies steps through the certified broad phase and publishes an
+// event-free drift, stopping as Undecided at its first contact event.
 package dynamics
 
 import (
@@ -91,8 +93,7 @@ type World struct {
 
 // NewWorld admits two or more bodies and builds the canonical pair table.
 // A two-body world needs a dynamic body; a three-body world needs a dynamic
-// body and no kinematic body. A larger world is admitted for inspection, and
-// its Step reports Undecided until the N-body step ships.
+// body and no kinematic body. A larger world carries no role limit.
 func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World, error) {
 	if doc == nil || ctx == nil {
 		return nil, fmt.Errorf("%w: nil document or context", ErrInvalidInput)

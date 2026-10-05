@@ -41,7 +41,7 @@ func (w *World) validateLoads(entries []BodyLoad) ([2]*BodyLoad, error) {
 }
 
 // kickByLoads applies one bounded force, gravity, and torque kick before any sweep.
-func (w *World) kickByLoads(from State, gravity QuantityVec, loads [2]*BodyLoad, dt units.Value) (State, bool) {
+func (w *World) kickByLoads(from State, gravity QuantityVec, loads []*BodyLoad, dt units.Value) (State, bool) {
 	out := from.clone()
 	limit, duration := exactBase(w.step.VelocityResidual), exactBase(dt)
 	if limit == nil || duration == nil {

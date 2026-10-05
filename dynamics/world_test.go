@@ -207,19 +207,22 @@ func TestFiveBodyWorldPairTable(t *testing.T) {
 		})
 	}
 
-	// The N-body step is not in this build: a valid input is Undecided.
+	// Every body is still and 30 mm from its neighbors along X, so the broad
+	// phase excludes every scheduled pair and the step advances in place.
 	dt := units.Seconds(.125)
 	drivers := []dynamics.KinematicDriver{{Body: b[4],
 		Path: decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: dt}}}
 	report, err := w.Step(t.Context(), state, dynamics.StepInput{Gravity: zeroAcceleration(),
 		Drivers: drivers}, dt)
 	require.NoError(t, err)
-	require.Equal(t, dynamics.Undecided, report.Status)
-	require.Nil(t, report.Next)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.NotNil(t, report.Next)
 	require.Empty(t, report.Events)
+	require.Empty(t, report.Diagnostics)
 	require.Equal(t, []dynamics.BodyPair{{A: b[0], B: b[3]}, {A: b[2], B: b[4]}}, report.Excluded)
-	require.Len(t, report.Diagnostics, 1)
-	require.Contains(t, report.Diagnostics[0].Reason, "two- and three-body worlds")
+	for i, entry := range report.Next.Entries() {
+		require.Equal(t, stored[i].Pose, entry.Pose)
+	}
 	for name, input := range map[string]dynamics.StepInput{
 		"missing driver": {Gravity: zeroAcceleration()},
 		"fixed load": {Gravity: zeroAcceleration(), Drivers: drivers, Loads: []dynamics.BodyLoad{{

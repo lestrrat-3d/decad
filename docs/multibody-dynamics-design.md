@@ -14,19 +14,23 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 7 and 16 have shipped. `dynamics.World` holds any number of bodies, the canonical
-pair table and per-pair material of §3.1, and the slice-backed `State` of §3.2. Its step resolves two bodies, or three
-bodies with one, two or three dynamic bodies and every other body fixed, through the closed-form responses
-`docs/rigid-dynamics-design.md` lists, and returns `Undecided` for a world of four or more bodies.
-`Document.SweptBox` (§4.2) is public, and the cylinder and bounded-faceted clear sweeps certify with it;
-`dynamics` does not call it yet.
+Current state: §13 PRs 1, 2, 3, 7, 16 and 19 have shipped. `dynamics.World` holds any number of bodies, the
+canonical pair table and per-pair material of §3.1, and the slice-backed `State` of §3.2. Its step resolves
+two bodies, or three bodies with one, two or three dynamic bodies and every other body fixed, through the
+closed-form responses `docs/rigid-dynamics-design.md` lists. A world of four or more bodies takes the
+scheduled step of §4.3 and §5 without islands: one kick, one drift slice over the whole step whose candidate
+pairs must all sweep `Clear` or `DepartedClear`, and `Undecided` with `StepUnsupported` at any contact
+event. `Document.SweptBox` (§4.2) is public; the cylinder and bounded-faceted clear sweeps certify with it,
+and the scheduled step's broad phase reads it.
 `docs/collision-v1-support.md` is the inventory of the shape pairs, responses and refusals that ship, and
-this document does not restate it. Every pair query is pairwise, no broad phase exists, and `Trace` holds
-fixed two- and three-body slots. The exact arithmetic every certificate below is stated in already exists
-as one package: `internal/proof` (`Dyadic`, `DyV3`, `RatInterval` and the float rounding bounds), which the
-root package imports today and which `dynamics` can import as well, since an `internal/` package is visible
-to every package of this module. §3.1, §3.2, §4.2, §8.1, §8.2 and §8.6 describe shipped code, except `State.cache`
-(§13 PR 8); everything else is design-only until the PR table in §13 says otherwise.
+this document does not restate it. The two- and three-body steps query their pairs one by one with no broad
+phase, and their `Trace` holds fixed two- and three-body slots. The exact arithmetic every certificate below
+is stated in already exists as one package: `internal/proof` (`Dyadic`, `DyV3`, `RatInterval` and the float
+rounding bounds), which the root package imports today and which `dynamics` can import as well, since an
+`internal/` package is visible to every package of this module. §3.1, §3.2, §4, §8.1, §8.2 and §8.6 describe
+shipped code, except `State.cache` and the `MaxPairSweeps` charge (§13 PR 8). For worlds of four or more
+bodies, §5 without islands, §7.1, §3.4's `traceSlice` and `pairProof`, and §12's `StepReason` with
+`StepDiagnostic.Code` ship as well. Everything else is design-only until the PR table in §13 says otherwise.
 
 Navigation only; the named sections own the rules:
 
@@ -129,8 +133,9 @@ the rolling cylinder's trace carries a rotating band track with its contact-poin
 `WorldConfig` is unchanged. `NewWorld` admits `len(cfg.Bodies) >= 2`. Until §13 PR 5 it keeps refusing the
 two- and three-body role mixes the shipped step cannot take, and a three-body world keeps its
 `threeBodyWorld` container, whose per-pair response worlds are built from this table's entries; both go away
-in PR 5. Until §13 PR 3, `Step` on a world of four or more bodies validates its input and returns
-`Undecided`. Internally:
+in PR 5. Until then the two- and three-body worlds keep their shipped steps, so their published results
+stay unchanged, and only a world of four or more bodies takes the scheduled step of §4.3 and §5; PR 5 moves
+every world onto it. Internally:
 
 ```go
 type worldBody struct {
@@ -214,13 +219,13 @@ type Trace struct {
 }
 
 // traceSlice is one event-free interval of the step. Every body drifts on
-// paths[i]; every candidate pair carries the rounded certificate that proves
+// paths[i]; every scheduled pair carries the rounded certificate that proves
 // those paths, or the swept-box exclusion that made no sweep necessary.
 type traceSlice struct {
-    start, end *big.Rat          // exact, from the step's held time values
+    start, end units.Value       // held times from the step start, compared exactly
     from, to   State
-    paths      []bodyPath        // world order: fixed, kinematic or RigidDriftSegment
-    proofs     []pairProof       // candidate pairs only, canonical order
+    paths      []decad.PairPath  // world order: Fixed or Kinematic PoseSegment, Dynamic RigidDriftSegment
+    proofs     []pairProof       // scheduled pairs, canonical order
 }
 
 type pairProof struct {
@@ -283,16 +288,26 @@ proves its clear outcome from the face-axis gap between the two `SweptBox` value
 ### 4.3 Sort-and-sweep in dynamics
 
 Per slice, `dynamics` computes one `SweptBox` per body on its slice path (a Fixed body's box is computed
-once per step and reused). It sorts bodies by exact `lo.x`, ties by world index, and walks the sorted
+once per step and reused). It sorts bodies by `Box().Min.X`, ties by world index, and walks the sorted
 list keeping an active set: a pair whose `x` intervals overlap is then tested with `StrictlyDisjoint` on
-all three axes. A scheduled pair is a candidate when it is not strictly disjoint. The candidate list is
+all three axes. A scheduled pair is a candidate when it is not strictly disjoint. The walk reads the
+outward float `Box()`, the only extent `SweptBox` publishes: an active body leaves the set only when its
+`Box().Max.X` lies strictly below the next body's `Box().Min.X`, and since the float extents enclose the
+exact ones, that body's exact `x` interval is then strictly apart from the next body's and from every
+later one. That is `StrictlyDisjoint`'s own certificate on the `x` axis, so the float walk discards no pair
+the exact test would keep; boxes that merely meet stay in the set and reach `StrictlyDisjoint`. The candidate list is
 sorted into canonical pair order before use, so no sort tie or walk order reaches a published result;
 `docs/contact-sweep-design.md` §4.2 already permits a sweep-and-prune that discards only by the strict
 box certificate and changes no order. A pair the boxes exclude is recorded in the slice as
 `pairProof{boxClear: true}` and is never swept.
 
 Cost per slice is `O(N log N)` box work plus one `SweepPair` per candidate that §5.3 cannot reuse. The
-step charges each `SweptBox` call and each `SweepPair` call against `MaxPairSweeps` (§12).
+step charges each `SweptBox` call and each `SweepPair` call against `MaxPairSweeps` (§12, §13 PR 8).
+
+The step sweeps every candidate and reports one diagnostic per candidate that does not prove clear, in
+canonical pair order, so the set of diagnostics does not depend on world insertion order. A swept body's published end pose is the pose its every pair
+certificate replays at the slice end through `CertifiedPosesAtInterval`; a refused or different pose
+makes the step `Undecided` with `StepPairUndecided`.
 
 ## 5. Event schedule
 
@@ -1015,6 +1030,10 @@ type StepDiagnostic struct {
 
 A report with `Undecided` carries every diagnostic that applied at the stopping time, in canonical pair
 then island order, and `Next == nil`; its `Trace` holds the certified prefix for inspection.
+
+`StepReason` and `StepDiagnostic.Code` ship with §13 PR 3: the scheduled step of a world of four or more
+bodies sets `Code`, and the two- and three-body steps leave it `StepNoReason`. `Bodies`, `From`, `To`,
+`Limit` and the certified prefix `Trace` of an `Undecided` report land with PR 6.
 
 ## 13. Delivery order
 
