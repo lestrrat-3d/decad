@@ -12,6 +12,8 @@ type sourceCylinderContactProof struct {
 	box   sourceBoxContactProof
 	axis  int
 	faces [2]*Face
+	// A source revolve has contact faces but its impact sweep remains staged.
+	impactSweep bool
 }
 
 func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProof, bool) {
@@ -86,7 +88,7 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 			box.hi[i] = dyAdd(box.hi[i], radius)
 		}
 	}
-	return sourceCylinderContactProof{box: box, axis: axis, faces: endFaces}, true
+	return sourceCylinderContactProof{box: box, axis: axis, faces: endFaces, impactSweep: true}, true
 }
 
 // sourceRevolvedCylinderAtPose reads the full recorded meridian, not the
@@ -129,27 +131,6 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 	if !rhoLo.isZero() || rhoHi.sign() <= 0 || dyCmp(zlo, zhi) >= 0 {
 		return sourceCylinderContactProof{}, false
 	}
-	faces := b.Faces()
-	if len(faces) != 3 || len(b.Edges()) != 2 {
-		return sourceCylinderContactProof{}, false
-	}
-	planes, walls := 0, 0
-	for _, face := range faces {
-		if face.normalBound != 0 {
-			return sourceCylinderContactProof{}, false
-		}
-		switch face.surface.(type) {
-		case Plane:
-			planes++
-		case Cylinder:
-			walls++
-		default:
-			return sourceCylinderContactProof{}, false
-		}
-	}
-	if planes != 2 || walls != 1 {
-		return sourceCylinderContactProof{}, false
-	}
 	anchor := dvAdd(dyVec(rp.frame.Origin()), dvAdd(
 		dyScaleVec(dyVec(rp.frame.U()), mustDyOf(rp.ax.aU)),
 		dyScaleVec(dyVec(rp.frame.V()), mustDyOf(rp.ax.aV))))
@@ -169,12 +150,43 @@ func sourceRevolvedCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderCon
 			box.hi[i] = dyAdd(box.hi[i], rhoHi)
 		}
 	}
-	return sourceCylinderContactProof{box: box, axis: axis}, true
+	faces := b.Faces()
+	if len(faces) != 3 || len(b.Edges()) != 2 {
+		return sourceCylinderContactProof{}, false
+	}
+	planes, walls := 0, 0
+	var endFaces [2]*Face
+	for _, face := range faces {
+		if face.normalBound != 0 {
+			return sourceCylinderContactProof{}, false
+		}
+		switch surface := face.surface.(type) {
+		case Plane:
+			planes++
+			normal := surface.Frame.N()
+			if face.reversed {
+				normal = normal.Scale(-1)
+			}
+			faceAxis, side, valid := signedAxis(pose.ApplyDir(normal))
+			if !valid || faceAxis != axis || endFaces[side] != nil {
+				return sourceCylinderContactProof{}, false
+			}
+			endFaces[side] = face
+		case Cylinder:
+			walls++
+		default:
+			return sourceCylinderContactProof{}, false
+		}
+	}
+	if planes != 2 || walls != 1 || endFaces[0] == nil || endFaces[1] == nil {
+		return sourceCylinderContactProof{}, false
+	}
+	return sourceCylinderContactProof{box: box, axis: axis, faces: endFaces}, true
 }
 
 // The disk-inside-face corridor makes axial support comparisons exact for
-// separation. The extruded source's original end faces also certify planar
-// touch and shallow crossing of the opposed faces.
+// separation. Both sources' original end faces certify planar touch and
+// shallow crossing of the opposed faces.
 func classifySourceCylinderBox(report *ContactReport, cylinder sourceCylinderContactProof,
 	box sourceBoxContactProof, cylinderFirst bool) {
 	if !cylinderInsideBoxFace(cylinder.box, box, cylinder.axis) {

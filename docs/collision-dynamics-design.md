@@ -15,8 +15,9 @@ axial path above or below a source-box face and replay that clear path. The
 extruded cylinder can also contact a wide source-box face along its axis,
 bracket its first impact, and rebound from that fixed face using supplied
 mass. The sweep and step replay the clear path before and after the impact.
-The revolved cylinder can use its density-derived mass in the certified clear
-axial step and interior trace replay.
+The revolved cylinder publishes an axial disk-face manifold at a contained
+source-box floor touch or shallow crossing. It can use its density-derived
+mass in the certified clear axial step and interior trace replay.
 A zero-bound faceted Boolean union with one certified rectangular lower face
 can sweep vertically toward a wide source-box floor, depart from initial
 touch, or retain a persistent face track. Its sweep can certify the first
