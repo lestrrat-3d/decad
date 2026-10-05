@@ -14,11 +14,16 @@ import (
 
 // This file continues the general rotating sweep from an initial touch
 // (docs/multibody-dynamics-design.md §10.2 and §10.3). Both proofs read one
-// SUPPORT PLANE: a face plane of one body S that every vertex of S lies on or
-// behind, and that every vertex of the other body M lies on or in front of,
-// touching it at the contact set. S lies in its vertices' hull and moves
+// SUPPORT PLANE: a face plane of one body S that every vertex of the other
+// body M lies on or in front of, touching it at the contact set. When every
+// vertex of S lies on or behind it, S lies in its vertices' hull and moves
 // rigidly with its plane, and M lies in its vertices' hull, so the lowest
 // M vertex height above the moving plane bounds the pair's separation below.
+// A FACE-LOCAL plane (§10.6), whose owner has material in front of it, the
+// floor of a tray, adds the column test: every S triangle with a vertex in
+// front of the plane projects strictly apart from M's ideal path box, so that
+// material lies at least the lateral clearance away from M, and the vertex
+// heights bound the distance to the rest of S.
 //
 // Each M vertex height h(u) has an exact start value and start rate, and a
 // second derivative bounded by the §10.2 curvature; Taylor's theorem then
@@ -93,6 +98,7 @@ type planarSupport struct {
 	rates    []*big.Rat      // exact n·(dp/du − dq/du) at u = 0 for every M vertex
 	contact  []int           // the M vertices with zero height, ascending
 	lifted   []int           // the M vertices with a positive height within the support band (§10.5), ascending
+	local    bool            // S has a vertex strictly in front of the plane: a face-local plane (§10.6)
 	nLow     *big.Rat        // lower bound on |n|
 	nHigh    *big.Rat        // upper bound on |n|
 	motionM  planarMotion
@@ -170,23 +176,33 @@ func planarPlaneTried(tried []planarSupport, n, a proofarith.DyV3) bool {
 	return false
 }
 
-// planarSupportOf checks one plane: every S vertex on or behind it, every M
-// vertex on or in front of it, and a nonempty support set (§10.5): at least
-// one M vertex on it, or, under a positive SupportBand, within the band above
-// it, h² <= band²·n·n compared exactly.
+// planarSupportOf checks one plane: every M vertex on or in front of it, and
+// a nonempty support set (§10.5): at least one M vertex on it, or, under a
+// positive SupportBand, within the band above it, h² <= band²·n·n compared
+// exactly. A plane with an S vertex strictly in front of it is face-local
+// (§10.6): S must only translate, so the column test can read S's start
+// triangles less its translation, and the plane must be one flat face of S
+// (planarSupportFace). The column test itself depends on the horizon and runs
+// in the departure's and the band's grid searches.
 func planarSupportOf(S, M *rotationalSweepPath, n, a proofarith.DyV3, req ContactRequest,
 	poll func() error) (planarSupport, bool, error) {
 	band := supportBandOf(req)
 	limit := proofarith.DyMul(proofarith.DyMul(band, band), proofarith.DvDot(n, n))
+	local := false
 	for _, v := range S.startPoints {
 		if err := poll(); err != nil {
 			return planarSupport{}, false, err
 		}
 		if proofarith.DvDot(n, proofarith.DvSub(v, a)).Sign() > 0 {
-			return planarSupport{}, false, nil
+			local = true
+			break
 		}
 	}
-	support := planarSupport{normal: n, origin: a, heights: make([]*big.Rat, len(M.startPoints))}
+	if local && (S.path.drift != nil || S.path.screw != nil) {
+		return planarSupport{}, false, nil
+	}
+	support := planarSupport{normal: n, origin: a, local: local, pathS: S,
+		heights: make([]*big.Rat, len(M.startPoints))}
 	for i, v := range M.startPoints {
 		if err := poll(); err != nil {
 			return planarSupport{}, false, err
@@ -206,6 +222,11 @@ func planarSupportOf(S, M *rotationalSweepPath, n, a proofarith.DyV3, req Contac
 	}
 	if len(support.contact) == 0 && len(support.lifted) == 0 {
 		return planarSupport{}, false, nil
+	}
+	if local {
+		if _, ok := planarSupportFace(&support); !ok {
+			return planarSupport{}, false, nil
+		}
 	}
 	squared := proofarith.DvDot(n, n).Rat()
 	low, high := ratSqrtDown(squared), ratSqrtUp(squared)
@@ -262,6 +283,32 @@ func (s *planarSupport) clearAt(t, k *big.Rat) bool {
 		}
 	}
 	return true
+}
+
+// column is §10.6's column test through fraction f. The box spans every M
+// vertex's ideal path over [0, f], less S's own translation over that span,
+// so it holds M in S's start frame at every instant; S only translates on a
+// face-local plane. clear is false when an S triangle in front of the plane
+// meets the column; clearance is then the lateral clearance m(f), nil for a
+// plane with nothing of S in front of it (m = +∞). The box grows with f, so
+// the test and m(f) are monotone.
+func (s *planarSupport) column(f *big.Rat, poll func() error) (*big.Rat, bool, error) {
+	if !s.local {
+		return nil, true, nil
+	}
+	spans := s.pathM.cornerSpan(new(big.Rat), f)
+	var lo, hi [3]*big.Rat
+	for axis := range 3 {
+		lo[axis], hi[axis] = spans[0][axis].lo, spans[0][axis].hi
+		for _, span := range spans[1:] {
+			lo[axis], hi[axis] = ratMin(lo[axis], span[axis].lo), ratMax(hi[axis], span[axis].hi)
+		}
+		shift := new(big.Rat).Mul(s.pathS.path.delta[axis].Rat(), f)
+		lo[axis] = new(big.Rat).Sub(lo[axis], ratMax(shift, new(big.Rat)))
+		hi[axis] = new(big.Rat).Sub(hi[axis], ratMin(shift, new(big.Rat)))
+	}
+	solid := pair.PlanarSolid{Verts: s.pathS.startPoints, Tris: s.pathS.solid.Tris}
+	return pair.PlanarColumnClear(&solid, s.normal, s.origin, lo, hi, poll)
 }
 
 // depthAt is the band's unnormalized depth at elapsed time t under the
@@ -333,7 +380,11 @@ type planarDepartureProof struct {
 }
 
 // lowerGap is a lower bound, in millimetres, on the pair's separation at a
-// fraction in (0, until]: the least vertex height bound divided by |n|.
+// fraction in (0, until]: the least vertex height bound divided by |n|, and
+// on a face-local plane (§10.6) at most the lateral clearance m(f). Material
+// of S behind the plane lies at least that height bound away, and material
+// in front of it at least m(f). It returns nil when the column test fails at
+// f, which no fraction of a proven departure does.
 func (p *planarDepartureProof) lowerGap(f *big.Rat) *big.Rat {
 	t := new(big.Rat).Mul(f, p.support.duration)
 	var least *big.Rat
@@ -347,7 +398,15 @@ func (p *planarDepartureProof) lowerGap(f *big.Rat) *big.Rat {
 	if least.Sign() <= 0 {
 		return least
 	}
-	return least.Quo(least, p.support.nHigh)
+	least.Quo(least, p.support.nHigh)
+	clearance, open, err := p.support.column(f, noSweepPoll)
+	if err != nil || !open {
+		return nil
+	}
+	if clearance != nil && clearance.Cmp(least) < 0 {
+		return clearance
+	}
+	return least
 }
 
 // planarDepartureFraction proves §10.2's departure on the first support plane
@@ -385,7 +444,11 @@ func (r *rotationalPairSweep) planarDepartureFraction(ctx context.Context) (*big
 					return false, nil
 				}
 			}
-			return support.clearAt(t, k), nil
+			if !support.clearAt(t, k) {
+				return false, nil
+			}
+			_, open, err := support.column(f, budget.step)
+			return open, err
 		}
 		until, ok, err := r.gridHorizon(holds)
 		if err != nil {
@@ -486,6 +549,11 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 			k, ok := support.curvature(t)
 			if !ok || !support.clearAt(t, k) {
 				return false, nil
+			}
+			// §10.6: material of S in front of the plane meets no part of M,
+			// so M ∩ S lies behind the plane and within the band's depth.
+			if _, open, err := support.column(f, budget.step); err != nil || !open {
+				return false, err
 			}
 			return face.contains(support, f, new(big.Rat).Add(depthAt(t, k), support.pathM.delta.Rat()), budget.step)
 		}
