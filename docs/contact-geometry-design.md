@@ -22,10 +22,13 @@ a four-point manifold. At isolated touch, a partly overhanging horizontal
 face publishes every vertex of its exact clipped polygon. Two opposed
 axis-normal faces can publish
 one bounded interior witness when one projected face center lies strictly
-inside the other face. Other rotated contacts publish no
+inside the other face. Other rotated box-box contacts publish no
 manifold. A full source semicircle sphere against a source box also receives
 an exact rational relation proof and a point manifold at one isolated face
-support. At identity query poses, the analytic clearance kernel can certify
+support. When a query rotates the source box into an exactly orthogonal
+parallelotope, the source sphere also gets an exact complete-box distance
+proof and a bounded point manifold inside one rotated face. At identity query
+poses, the analytic clearance kernel can certify
 a relation for other admitted solids without a contact manifold. Other curved
 and faceted witness and normal proofs remain design contracts.
 
@@ -333,6 +336,8 @@ The arc's center and endpoints must lie exactly on an axis with exact cardinal
 direction; the two axial radii must match as rationals. Require zero section
 displacement and signed-permutation frame, placement, and query pose. A sphere
 surface tag without this occupied-set record cannot enter this path.
+The exactly orthogonal rotated-box extension keeps the sphere pose gate and
+allows the source box's query pose through its exact read-corner proof.
 
 Map the recorded center and radius to exact rational world coordinates. Clamp
 the center to the exact box intervals and compare squared distance to squared
@@ -344,6 +349,21 @@ the opposed box face and spherical point. Shallow penetration also requires
 the sphere not to reach the opposite box face. An edge, corner, internal
 center, or wider patch keeps the proven relation but withholds the manifold.
 Reversing body order reverses the exact axis normal and witness fields.
+
+For an exactly orthogonal rotated source box, minimize squared distance from
+the source sphere center to its exact read-pose parallelotope. Enumerate each
+box coordinate as free, fixed at zero, or fixed at one; solve the twenty-seven
+resulting rational stationary systems and keep the least feasible squared
+distance. Compare it with the exact squared radius to classify the complete
+occupied sets. Bound a positive gap with outward square-root conversion.
+An isolated face manifold requires the center outside one face, an orthogonal
+projection strictly inside that face, and the projected sphere disk strictly
+inside both face intervals. The opposite support must remain farther than one
+radius during penetration. Convert the plane foot and spherical point with
+outward position bounds; normalize the exact face cross product with a bounded
+normal and angle. A skew exact read box returns `Undecided`; an edge/corner
+projection, internal center, or coarse manifold request keeps any relation
+proved by the exact closest-point calculation without inventing a point.
 
 ### 4.3 Two source semicircle spheres
 

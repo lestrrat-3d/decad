@@ -84,6 +84,8 @@ type ContactReport struct {
 // and point-manifold proofs at signed-axis poses. Sphere-pair center lines
 // may be off-axis when their normal and witnesses meet the requested bounds.
 // A full source cylinder can prove an axial gap from a containing box face.
+// An exactly orthogonal rotated source box can give a sphere a bounded point
+// on one interior face.
 // At identity query poses, the analytic clearance kernel can prove relations
 // for other solids without a contact manifold.
 // Both bodies must be non-nil, distinct, live members of d.
@@ -162,6 +164,18 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	if !okA || !okB {
 		orientedA, orientedOKA := sourceOrientedBoxAtPose(a, poseA)
 		orientedB, orientedOKB := sourceOrientedBoxAtPose(b, poseB)
+		if orientedOKA && !orientedOKB {
+			if sphere, ok := sourceSphereAtPose(b, poseB); ok {
+				classifySourceSphereOrientedBox(report, sphere, orientedA, false)
+				return report, nil
+			}
+		}
+		if orientedOKB && !orientedOKA {
+			if sphere, ok := sourceSphereAtPose(a, poseA); ok {
+				classifySourceSphereOrientedBox(report, sphere, orientedB, true)
+				return report, nil
+			}
+		}
 		if orientedOKA && orientedOKB {
 			classifyOrientedSourceBoxes(report, orientedA, orientedB)
 			return report, nil

@@ -32,6 +32,15 @@ resolution and keep its bounded face track; otherwise replay returns
 A source semicircle sphere with supplied or density-derived mass can rebound
 from a fixed source box on an isolated face-point contact when its affine sweep
 stays within that face corridor.
+A centered sphere can also hit a fixed source box rotated 45 degrees about Y.
+Its one-point manifold, exact affine first-impact bracket, mass and inertia
+bounds, and frictionless positive-restitution response must all pass. The
+solver limits incoming tangent momentum and omitted spin by its configured
+residuals, corrects the shallow overlap to a bounded positive gap, then
+requires ideal and rounded clear sweeps for the full rebound remainder.
+`Trace.Sample` replays both sides from those cached rounded sweeps. Zero
+restitution, edge/corner approach, skew read rotation, incoming spin, and
+unresolved tangent motion return `Undecided` in this path.
 Two source semicircle spheres with supplied or density-derived mass can
 rebound as a centered dynamic pair when the impact has a cardinal manifold.
 Their approach may

@@ -20,6 +20,8 @@ type sweepReplayProof struct {
 	cylinderFirst          bool
 	clearAxis, clearSign   int
 	clearGap               *big.Rat
+	orientedSphere         *sourceSphereContactProof
+	orientedSphereBox      *orientedSourceBox
 	sphereFirst            bool
 	sphereAxis, sphereSide int
 	sphereGap, sphereSlope dyadic
@@ -125,6 +127,9 @@ func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Tra
 	}
 	if r.replay.spherePair != nil {
 		return r.certifiedSpherePairPosesAtFraction(f, poseA, poseB)
+	}
+	if r.replay.orientedSphere != nil {
+		return r.certifiedOrientedSpherePosesAtFraction(f, poseA, poseB)
 	}
 	actualA, ok := translatedReplayBox(r.replay.boxA, r.replay.pa.from, poseA)
 	if !ok {
@@ -244,6 +249,59 @@ func (r *SweepReport) certifiedSpherePairPosesAtFraction(f *big.Rat, poseA, pose
 	return poseA, poseB, nil
 }
 
+// The producer's face corridor makes one support distance affine. Replay
+// compares the rounded cached source sets with that ideal support at any
+// fraction, without asking the document to classify a new pair.
+func (r *SweepReport) certifiedOrientedSpherePosesAtFraction(f *big.Rat,
+	poseA, poseB r3.Transform) (r3.Transform, r3.Transform, error) {
+	p := r.replay
+	spherePath, boxPath := p.pb, p.pa
+	spherePose, boxPose := poseB, poseA
+	if p.sphereFirst {
+		spherePath, boxPath = p.pa, p.pb
+		spherePose, boxPose = poseA, poseB
+	}
+	sphere, okSphere := translatedReplaySphere(*p.orientedSphere, spherePath.from, spherePose)
+	box, okBox := translatedReplayOrientedBox(*p.orientedSphereBox, boxPath.from, boxPose)
+	if !okSphere || !okBox {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rotated sphere replay is not affine", ErrUnsupported)
+	}
+	deviation := orientedBoxPoseDeviation(*p.orientedSphereBox, box, boxPath.delta, f)
+	for k := range 3 {
+		expected := new(big.Rat).Add(p.orientedSphere.center[k].rat(),
+			new(big.Rat).Mul(spherePath.delta[k].rat(), f))
+		difference := new(big.Rat).Sub(sphere.center[k].rat(), expected)
+		deviation.Add(deviation, difference.Abs(difference))
+	}
+	resolution, ok := exactBaseValue(p.request.PointResolution)
+	if !ok || deviation.Cmp(resolution) > 0 {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotated sphere pose exceeds point resolution", ErrUnsupported)
+	}
+	axis, side, outward, _, observed2, faceOK := orientedSphereFace(sphere, box)
+	if !faceOK || axis != p.sphereAxis || side != p.sphereSide || observed2 == nil {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotated sphere leaves the face corridor", ErrUnsupported)
+	}
+	startOutward := orientedDual(*p.orientedSphereBox, p.sphereAxis)
+	if p.sphereSide == 0 {
+		for k := range 3 {
+			startOutward[k] = dyNeg(startOutward[k])
+		}
+	}
+	if !sameDyV3(outward, startOutward) {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rotated sphere face normal changed", ErrUnsupported)
+	}
+	ideal := new(big.Rat).Add(p.sphereGap.rat(), new(big.Rat).Mul(p.sphereSlope.rat(), f))
+	ideal2 := new(big.Rat).Mul(ideal, ideal)
+	radius2 := dyMul(p.orientedSphere.radius, p.orientedSphere.radius).rat()
+	threshold := new(big.Rat).Mul(radius2, dvDot(outward, outward).rat())
+	idealSign := ideal2.Cmp(threshold)
+	observedSign := observed2.Cmp(radius2)
+	if ideal.Sign() <= 0 || !p.orientedSphereRelationCovered(f, idealSign, observedSign) {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded rotated sphere changes the certified relation", ErrUnsupported)
+	}
+	return poseA, poseB, nil
+}
+
 func spherePairIdealCenter(s sourceSphereContactProof, delta [3]dyadic, f *big.Rat) [3]*big.Rat {
 	center := spherePairHeldCenter(s)
 	for axis := range 3 {
@@ -267,6 +325,31 @@ func spherePairCenterDistance2(a, b [3]*big.Rat) *big.Rat {
 		squared.Add(squared, new(big.Rat).Mul(delta, delta))
 	}
 	return squared
+}
+
+func (p *sweepReplayProof) orientedSphereRelationCovered(f *big.Rat, ideal, observed int) bool {
+	switch p.outcome {
+	case SweepClear:
+		return ideal > 0 && observed > 0
+	case SweepDepartedClear:
+		if f.Sign() == 0 {
+			return ideal == 0 && observed == 0
+		}
+		return ideal > 0 && observed > 0
+	case SweepImpactBracket:
+		if p.bracketLo == nil || p.bracketHi == nil {
+			return false
+		}
+		if f.Cmp(p.bracketLo) < 0 && (ideal <= 0 || observed <= 0) {
+			return false
+		}
+		if f.Cmp(p.bracketHi) == 0 && ideal > 0 {
+			return false
+		}
+		return true
+	default:
+		return false
+	}
 }
 
 // A clear rotating sweep certifies the ideal source boxes over every fraction.

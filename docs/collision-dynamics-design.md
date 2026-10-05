@@ -46,6 +46,9 @@ supplied or density-derived sphere mass. Two source spheres also have a bounded
 center-line point manifold, an affine first-impact sweep including transverse
 motion, and a centered dynamic-pair rebound at cardinal or off-axis contact
 with a certified clear remainder.
+An exactly orthogonal source box at a 45-degree Y pose also gives the sphere a
+bounded oblique point, an affine first-impact sweep, and a centered
+positive-restitution rebound with interior trace replay.
 Other curved contact families still lack source
 witnesses and continuous proofs.
 The first separated edge exit records a zero-impulse contact transition and

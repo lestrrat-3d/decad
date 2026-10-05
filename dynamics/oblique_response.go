@@ -37,6 +37,9 @@ func (w *World) stepObliqueSupport(ctx context.Context, from, kicked State,
 		return &StepReport{Status: Advanced, Next: &end, Trace: Trace{
 			start: from, pre: kicked, end: end, duration: dt, preSweep: rounded}}, nil
 	}
+	if first.Outcome == decad.SweepImpactBracket {
+		return w.stepObliqueSphereImpact(ctx, from, kicked, dt, first)
+	}
 	if first.Outcome != decad.SweepInitiallyTouching || first.Event == nil || first.Event.Manifold == nil {
 		return undecided(w, fmt.Sprintf("tilted initial contact returned %v", first.Outcome)), nil
 	}
