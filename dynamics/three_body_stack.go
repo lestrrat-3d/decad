@@ -18,7 +18,7 @@ func (w *World) stepThreeBoxStack(ctx context.Context, from, kicked State,
 		return nil, false, nil
 	}
 	var first [3]*decad.SweepReport
-	var touching, clear []int
+	var touching, clearPairs []int
 	for key, pair := range w.three.pairs {
 		if pair == nil {
 			return nil, false, nil
@@ -32,12 +32,12 @@ func (w *World) stepThreeBoxStack(ctx context.Context, from, kicked State,
 		case decad.SweepInitiallyTouching:
 			touching = append(touching, key)
 		case decad.SweepClear:
-			clear = append(clear, key)
+			clearPairs = append(clearPairs, key)
 		default:
 			return nil, false, nil
 		}
 	}
-	if len(touching) != 2 || len(clear) != 1 {
+	if len(touching) != 2 || len(clearPairs) != 1 {
 		return nil, false, nil
 	}
 	fixed := -1
@@ -68,7 +68,7 @@ func (w *World) stepThreeBoxStack(ctx context.Context, from, kicked State,
 			upper = i
 		}
 	}
-	if upper < 0 || clear[0] != stackPairKey(fixed, upper) {
+	if upper < 0 || clearPairs[0] != stackPairKey(fixed, upper) {
 		return nil, false, nil
 	}
 	floorKey, pairKey := stackPairKey(fixed, lower), stackPairKey(lower, upper)
@@ -175,7 +175,7 @@ func (w *World) stepThreeBoxStack(ctx context.Context, from, kicked State,
 		if !actual.HasAffineReplayProof() || ideal.Outcome != actual.Outcome {
 			return w.threeUndecided(key, "stack rounded path lacks replay proof"), true, nil
 		}
-		if key == clear[0] {
+		if key == clearPairs[0] {
 			if ideal.Outcome != decad.SweepClear || actual.Outcome != decad.SweepClear {
 				return w.threeUndecided(key, "stack floor-to-upper path is not clear"), true, nil
 			}
@@ -196,11 +196,11 @@ func (w *World) stepThreeBoxStack(ctx context.Context, from, kicked State,
 		if contactErr != nil {
 			return nil, true, contactErr
 		}
-		if key == clear[0] && endpoint.Relation != decad.ContactSeparated ||
-			key != clear[0] && (endpoint.Relation != decad.ContactTouching || endpoint.Manifold == nil) {
+		if key == clearPairs[0] && endpoint.Relation != decad.ContactSeparated ||
+			key != clearPairs[0] && (endpoint.Relation != decad.ContactTouching || endpoint.Manifold == nil) {
 			return w.threeUndecided(key, "stack endpoint loses its pair relation"), true, nil
 		}
-		if key != clear[0] {
+		if key != clearPairs[0] {
 			contact := floor
 			if key == pairKey {
 				contact = between
