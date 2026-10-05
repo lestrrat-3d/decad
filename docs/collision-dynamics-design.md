@@ -81,6 +81,9 @@ impulse. The response changes both linear velocities and both Z spins, then
 the rotating sphere-pair sweep certifies separation and trace replay. Zero
 friction retains the tangent velocities and zero spin on the same path.
 A zero-friction, zero-restitution pair uses the existing response.
+A separated pair can also resolve an interior positive-friction impact when its
+certified bracket contains an exact cardinal source-sphere touch at a dyadic
+time. Separate rounded prefix and rotating remainder sweeps certify replay.
 An exactly orthogonal source box at a 45-degree Y pose also gives the sphere a
 bounded oblique point, an affine first-impact sweep, and a centered
 positive-restitution rebound with interior trace replay.

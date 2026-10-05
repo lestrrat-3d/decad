@@ -251,3 +251,80 @@ func TestSpherePairInitialFrictionRefusesUnsupportedResponse(t *testing.T) {
 		})
 	}
 }
+
+func TestSpherePairInteriorFrictionImpactReplaysBothSides(t *testing.T) {
+	doc := decad.New()
+	a, b := makeBall(t, doc), makeBall(t, doc)
+	poseA, err := r3.Translation(r3.Vec{X: -10})
+	require.NoError(t, err)
+	poseB, err := r3.Translation(r3.Vec{X: 10, Y: 4})
+	require.NoError(t, err)
+	velocityA := sphereRestVelocity(r3.Vec{X: 40})
+	velocityB := sphereRestVelocity(r3.Vec{X: -40, Y: -32})
+	config := sphereRestConfig()
+	duration := units.Seconds(.25)
+	contact, err := doc.ContactPair(t.Context(), a, b, poseA, poseB, config.Contact)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, contact.Relation)
+	path := func(pose r3.Transform, velocity dynamics.QuantityVec) decad.RigidDriftSegment {
+		return decad.RigidDriftSegment{From: pose, LinearVelocity: velocity,
+			AngularVelocity: zeroAngular(t), Duration: duration}
+	}
+	sweep, err := doc.SweepPair(t.Context(), a, b, path(poseA, velocityA), path(poseB, velocityB),
+		decad.SweepRequest{ContactRequest: config.Contact, TimeResolution: config.TimeResolution,
+			MaxPoseEvaluations: config.MaxPoseEvaluations})
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, sweep.Outcome, "cause=%v", sweep.Cause)
+	require.Len(t, sweep.Event.Manifold.Points, 1)
+	require.InDelta(t, 1, sweep.Event.Manifold.Points[0].Normal.Value.X, 1e-9)
+	require.InDelta(t, 0, sweep.Event.Manifold.Points[0].Normal.Value.Y, 1e-9)
+	mass := exactSphereMass()
+	material := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(.25)}
+	world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{Bodies: []dynamics.RigidBody{
+		{Body: a, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+		{Body: b, Role: dynamics.Dynamic, Supplied: &mass, Material: material},
+	}, Step: config})
+	require.NoError(t, err)
+	start, err := world.NewState([]dynamics.BodyState{
+		{Body: a, Pose: poseA, LinearVelocity: velocityA, AngularVelocity: zeroAngular(t)},
+		{Body: b, Pose: poseB, LinearVelocity: velocityB, AngularVelocity: zeroAngular(t)},
+	})
+	require.NoError(t, err)
+	report, err := world.Step(t.Context(), start,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	event := report.Events[0]
+	require.Equal(t, .125, event.Time.Base())
+	require.InDelta(t, 60, event.NormalImpulse.Base(), 1e-12)
+	require.InDelta(t, 32.0/7, event.TangentImpulse.Y.Base(), 1e-12)
+	require.Len(t, event.PointImpulses, 1)
+	require.NotNil(t, event.Solver)
+	for _, elapsed := range []units.Value{units.Seconds(.05), units.Seconds(.125), units.Seconds(.2)} {
+		sample, sampleErr := report.Trace.Sample(elapsed)
+		require.NoError(t, sampleErr)
+		sa, ok := sample.Body(a)
+		require.True(t, ok)
+		sb, ok := sample.Body(b)
+		require.True(t, ok)
+		pair, pairErr := doc.ContactPair(t.Context(), a, b, sa.Pose, sb.Pose, config.Contact)
+		require.NoError(t, pairErr)
+		if elapsed.Base() == .125 {
+			require.Equal(t, decad.ContactTouching, pair.Relation)
+		} else {
+			require.Equal(t, decad.ContactSeparated, pair.Relation)
+		}
+	}
+	endA, ok := report.Next.Body(a)
+	require.True(t, ok)
+	endB, ok := report.Next.Body(b)
+	require.True(t, ok)
+	require.InDelta(t, -20, endA.LinearVelocity.X.Base(), 1e-12)
+	require.InDelta(t, 20, endB.LinearVelocity.X.Base(), 1e-12)
+	require.InDelta(t, -32.0/7, endA.LinearVelocity.Y.Base(), 1e-12)
+	require.InDelta(t, -192.0/7, endB.LinearVelocity.Y.Base(), 1e-12)
+	require.InDelta(t, -16.0/7, endA.AngularVelocity.Z.Base(), 1e-12)
+	require.InDelta(t, -16.0/7, endB.AngularVelocity.Z.Base(), 1e-12)
+	require.NotNil(t, report.Conservation)
+}

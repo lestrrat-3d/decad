@@ -126,8 +126,20 @@ Zero friction leaves the tangent velocities and spin unchanged. A zero-friction,
 zero-restitution pair uses the existing response. The event records equal
 and opposite linear impulses and both spin responses. The
 rotating `SweepDepartedClear` report must prove ideal and rounded separation
-at its endpoint and certify trace replay. Other positive-friction sphere-pair
-inputs return `Undecided`.
+at its endpoint and certify trace replay.
+A separated source-sphere pair can enter that response at an interior impact
+when its real `SweepImpactBracket` contains a dyadic fraction with at most 53
+fractional bits.
+The solver selects the coarsest such interior fraction. A rounded prefix sweep
+must end at the same source faces within `PenetrationResidual`, and a real
+`ContactPair` and second `SweepPair` must prove an exact cardinal touching
+point there. Both bodies must have exact centered isotropic supplied mass,
+zero initial spin, positive restitution, and an exact effective friction
+coefficient. The contact response uses the remaining duration and its rotating
+departure sweep. The event retains the original bracket and exact touch time;
+the trace replays the prefix and remainder from separate cached proofs. A
+candidate without exact touch returns `Undecided` without an event or state.
+Other positive-friction sphere-pair inputs return `Undecided`.
 A two-body world's pair may be excluded; its bodies drift independently even
 through overlap, and no pair material is mixed.
 The current three-body step admits one dynamic body and two fixed bodies, or
@@ -392,7 +404,7 @@ reported event pairs use world order. `World.Excluded()` and
 
 The current positive-friction slice accepts a fixed floor and dynamic box or
 source sphere in either world order, two dynamic source boxes at an initial
-opposed face touch, or the initial cardinal sphere pair above. Without an
+opposed face touch, or the initial and interior cardinal sphere pairs above. Without an
 override, the pair coefficient is the geometric
 mean of the held body coefficients. The solver proposes impulses with a nominal
 rounded mean, then checks the friction cone and slip law against rational
