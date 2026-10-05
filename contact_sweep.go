@@ -116,6 +116,7 @@ type SweepContactTrack struct {
 	request       ContactRequest
 	features      [2]ContactFeature
 	normal        VecMeasurement
+	pointCount    int
 	orientedA     *orientedSourceBox
 	orientedB     *orientedSourceBox
 	orientedDelta [3]dyadic
@@ -154,8 +155,12 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 		report.Relation, _, _ = orientedBoxRelation(a, b)
 		if report.Relation == ContactTouching {
 			publishOrientedBoxPatch(report, a, b)
+			if report.Manifold == nil {
+				publishClippedHorizontalPatch(report, a, b)
+			}
 		}
-		if report.Relation != ContactTouching || report.Manifold == nil {
+		if report.Relation != ContactTouching || report.Manifold == nil ||
+			len(report.Manifold.Points) != t.pointCount {
 			return nil, fmt.Errorf("%w: oriented contact track lost its face patch", ErrUnsupported)
 		}
 		return report.Manifold, nil

@@ -50,10 +50,11 @@ func TestContactPairRotatedBoxContainedHorizontalFace(t *testing.T) {
 	require.Equal(t, r3.Vec{Z: -1}, reverseOverlap.Manifold.Points[0].Normal.Value)
 
 	narrow := boxBodyAtZ(t, doc, -5, -5, 5, 5, -10, 10)
-	unresolved, err := doc.ContactPair(t.Context(), narrow, box, r3.Identity(), turn, contactRequest())
+	clipped, err := doc.ContactPair(t.Context(), narrow, box, r3.Identity(), turn, contactRequest())
 	require.NoError(t, err)
-	require.Equal(t, decad.ContactTouching, unresolved.Relation)
-	require.Nil(t, unresolved.Manifold)
+	require.Equal(t, decad.ContactTouching, clipped.Relation)
+	require.NotNil(t, clipped.Manifold)
+	require.Len(t, clipped.Manifold.Points, 8)
 }
 
 func TestContactPairOrientedSourceBoxes(t *testing.T) {

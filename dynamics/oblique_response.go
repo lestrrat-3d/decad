@@ -40,6 +40,12 @@ func (w *World) stepObliqueSupport(ctx context.Context, from, kicked State,
 	if first.Outcome != decad.SweepInitiallyTouching || first.Event == nil || first.Event.Manifold == nil {
 		return undecided(w, fmt.Sprintf("tilted initial contact returned %v", first.Outcome)), nil
 	}
+	if normal, _, _, ok := reducedContact(first.Event.Manifold, w.step.Contact); ok {
+		if _, _, axis := axisNormal(normal); axis && w.restitution.Base() == 0 &&
+			w.friction.upper.Sign() == 0 {
+			return w.stepInitialTouch(ctx, from, kicked, dt, first)
+		}
+	}
 	normal, separation, uncertainty, ok := boundedObliqueContact(first.Event.Manifold, w.step.Contact)
 	if !ok || math.Abs(separation)+uncertainty > w.step.PenetrationResidual.Base() {
 		return undecided(w, "tilted initial contact exceeds its geometry residual"), nil

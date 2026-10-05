@@ -26,6 +26,10 @@ Two co-oriented boxes at a 45-degree pose can resolve a centered frictionless
 initial impulse from their four-point manifold. Zero restitution requires
 full-span persistent tracks; positive restitution requires ideal and rounded
 one-sided departure proofs. Tilted off-center impacts remain `Undecided`.
+A horizontal source-box face rotated 45 degrees against an axis-aligned face
+can publish all eight vertices of their clipped touching patch. A centered
+zero-restitution fixed/dynamic impact stops after its persistent track proves
+the complete step; an off-center patch requiring spin remains `Undecided`.
 Two equal-mass source boxes with a half-width offset face patch can rebound
 as a frictionless dynamic pair with equal nonzero Y spin when the rotating
 sweep proves departure.

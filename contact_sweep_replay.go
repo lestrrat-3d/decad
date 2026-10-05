@@ -295,8 +295,12 @@ func (r *SweepReport) certifiedOrientedTouchAtFraction(f *big.Rat, a, b oriented
 	report.Relation, _, _ = orientedBoxRelation(a, b)
 	if report.Relation == ContactTouching {
 		publishOrientedBoxPatch(report, a, b)
+		if report.Manifold == nil {
+			publishClippedHorizontalPatch(report, a, b)
+		}
 	}
-	if report.Relation != ContactTouching || report.Manifold == nil || len(report.Manifold.Points) != 4 {
+	if report.Relation != ContactTouching || report.Manifold == nil ||
+		len(report.Manifold.Points) != track.pointCount {
 		return false
 	}
 	for _, point := range report.Manifold.Points {
