@@ -35,15 +35,23 @@ An internal reader can certify one complete rectangular axis support face of a
 zero-bound faceted Boolean result. It requires zero boundary displacement,
 zero occupied-volume difference, one outward-oriented planar source Face at
 the extremum, and exact triangle area equal to the footprint rectangle. A
-second support patch, nonrectangular footprint, or nonzero bound is refused.
+second support patch or nonrectangular footprint is refused. A zero-bound
+Boolean may carry the same exact source mesh through translation-only `Placed`.
+The rebuilt body has a positive held-mesh bound, but its saved source mesh and
+exact accumulated translation still prove the true support plane and rectangle.
+The reader checks that every rebuilt vertex lies within the published bound of
+its exact source position and maps the support triangles to one placed Face.
+An inherited positive bound, non-translation placement, or mismatched mesh
+provenance cannot use this proof.
 `ContactPair` uses the lower Z support against the upper face of a source-box
 floor when the support rectangle lies strictly inside the floor face. Exact
 support-plane equality proves `Touching` and publishes all four footprint
 corners with the original faceted Face and an exact vertical normal. Positive
 axial separation publishes the exact gap. A crossing support plane, floor
 edge, lateral approach, or missing support proof remains `Undecided`.
-When a faceted Boolean carries a positive finite boundary displacement, a
-signed-axis pose can still prove strict separation above a source-box floor.
+When a faceted Boolean carries a positive finite boundary displacement without
+that exact source proof, a signed-axis pose can still prove strict separation
+above a source-box floor.
 The held vertex extrema bound the whole held solid, and the certified two-sided
 boundary displacement widens each extent. The widened X and Y extents must lie
 strictly inside the floor face. The held lower Z extent minus the displacement
@@ -274,6 +282,13 @@ The strict footprint containment gate makes the shared support rectangle the
 whole contact set and supplies both original Face identities. Witness rounding
 must fit `PointResolution`; failure keeps the proven `Touching` relation but
 omits the manifold with `ContactPointTooCoarse`.
+For a translation-only placed copy of a zero-bound Boolean, run the same exact
+face proof on its saved pre-placement mesh after applying its exact accumulated
+translation. Confirm that each current held vertex lies within the payload's
+published boundary bound, that the triangle indices still match the source,
+and that one rebuilt Face owns the whole support patch. This admits an exact
+touch despite positive placement rounding and occupied-volume bounds. It does
+not admit an arbitrary positive-bound Boolean or any rotated placement.
 
 For two admitted rational boxes, compare all three axis intervals exactly.
 A positive gap on any axis excludes contact, but a global minimum distance

@@ -78,9 +78,9 @@ func boundedFacetedFloorGap(extent boundedFacetedExtent,
 	return reading, true
 }
 
-// facetedAxisSupport is one complete rectangular extremal face of an exact
-// faceted solid. The coordinates and footprint are exact dyadics; face is the
-// original body's Face, not a face of a transient placed body.
+// facetedAxisSupport is one complete rectangular extremal face of a faceted
+// solid whose true support geometry is exact. The coordinates and footprint
+// are exact dyadics; face belongs to the caller's body.
 type facetedAxisSupport struct {
 	face             *Face
 	axis, side       int
@@ -93,11 +93,10 @@ type facetedAxisSupport struct {
 
 // sourceFacetedAxisSupport proves that every point of b lies on the material
 // side of one axis plane and that its complete contact set on that plane is
-// one rectangular, outward-facing source Face. It accepts only a faceted
-// payload whose held boundary and occupied volume equal the denoted solid.
-// A zero displacement without zero occupied-volume difference is insufficient.
-// The boolean evaluator has already audited closure, embedding, and material
-// orientation; this reader checks the exact held triangles and their Face map.
+// one rectangular, outward-facing source Face. A zero-bound Boolean is read
+// directly. A translation-only placement may instead read its saved exact
+// source mesh, after checking that the rebuilt mesh stays within its bound.
+// Other positive-bound meshes cannot identify a true support plane.
 func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 	axis, side int) (facetedAxisSupport, bool, error) {
 	if b == nil || axis < 0 || axis > 2 || (side != 0 && side != 1) ||
@@ -105,9 +104,25 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 		return facetedAxisSupport{}, false, nil
 	}
 	pp, ok := b.payload.(facetedPayload)
-	if !ok || pp.meshBound != 0 || pp.volSymDiff != 0 ||
+	if !ok || !finiteMeasurementValues(pp.meshBound, pp.volSymDiff) ||
+		pp.meshBound < 0 || pp.volSymDiff < 0 ||
 		len(pp.verts) == 0 || len(pp.tris) == 0 || len(pp.faceOf) != len(pp.tris) {
 		return facetedAxisSupport{}, false, nil
+	}
+	sourceVerts := pp.verts
+	placedFromSource := false
+	if pp.meshBound != 0 || pp.volSymDiff != 0 {
+		if !facetedTranslationOnly(pp.xform) ||
+			len(pp.exactSourceVerts) != len(pp.verts) ||
+			len(pp.exactSourceTris) != len(pp.tris) {
+			return facetedAxisSupport{}, false, nil
+		}
+		for i, tri := range pp.tris {
+			if tri != pp.exactSourceTris[i] {
+				return facetedAxisSupport{}, false, nil
+			}
+		}
+		sourceVerts, placedFromSource = pp.exactSourceVerts, true
 	}
 	budget := newWorkBudget(ctx)
 	if err := budget.err(); err != nil {
@@ -116,14 +131,26 @@ func sourceFacetedAxisSupport(ctx context.Context, b *Body, pose r3.Transform,
 	placed := make([]dyV3, len(pp.verts))
 	var proof facetedAxisSupport
 	proof.axis, proof.side = axis, side
-	for i, v := range pp.verts {
+	for i, v := range sourceVerts {
 		if err := budget.step(); err != nil {
 			return facetedAxisSupport{}, false, err
 		}
 		if !finiteVec(v) {
 			return facetedAxisSupport{}, false, nil
 		}
-		placed[i] = exactContactTransform(pose, dyVec(v))
+		source := dyVec(v)
+		if placedFromSource {
+			if !finiteVec(pp.verts[i]) {
+				return facetedAxisSupport{}, false, nil
+			}
+			source = exactContactTransform(pp.xform, source)
+			difference := dvSub(source, dyVec(pp.verts[i]))
+			bound := mustDyOf(pp.meshBound)
+			if dyCmp(dvDot(difference, difference), dyMul(bound, bound)) > 0 {
+				return facetedAxisSupport{}, false, nil
+			}
+		}
+		placed[i] = exactContactTransform(pose, source)
 		for j := range 3 {
 			if i == 0 || dyCmp(placed[i][j], proof.outerLo[j]) < 0 {
 				proof.outerLo[j] = placed[i][j]

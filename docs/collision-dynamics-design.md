@@ -26,6 +26,10 @@ exact touch. With supplied or density-derived mass and centered
 frictionless motion, the rigid
 solver consumes that first-impact bracket, rebounds or rests on the floor, and
 replays the rounded path on either side of impact.
+The same zero-bound Boolean can retain its exact lower-face proof after
+translation-only `Placed` widens its held mesh. `ContactPair` recognizes that
+placed face at floor touch; its positive-bound sweep currently certifies only
+strict clear motion.
 It also steps two orthogonal, frictionless
 initial face contacts and their repeated resting response after real manifolds
 and full-span tracks certify both pairs. A dynamic source sphere can touch

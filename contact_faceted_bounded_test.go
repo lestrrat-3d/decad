@@ -33,22 +33,55 @@ func TestContactPairBoundedFacetedFloorStrictClear(t *testing.T) {
 		require.Equal(t, ContactSeparated, contact.Relation, "reason=%v", contact.Reason)
 		require.NotNil(t, contact.Gap)
 		require.InDelta(t, 90, contact.Gap.Value.Base(), 1e-12)
-		require.GreaterOrEqual(t, contact.Gap.Bound.Base(), boundaryBound)
-		require.Equal(t, Approximate, contact.Gap.Exactness)
+		require.Zero(t, contact.Gap.Bound.Base())
+		require.Equal(t, Exact, contact.Gap.Exactness)
 		require.Greater(t, contact.Gap.Value.Base()-contact.Gap.Bound.Base(), 89.9)
 		require.Nil(t, contact.Manifold)
 	}
+	require.Positive(t, boundaryBound)
 	nearFloor := internalOffsetBox(t, doc, -20, -20, 20, 20, -10,
 		Distance{D: units.Millimeters(10), Dir: Along})
 	near, err := doc.ContactPair(t.Context(), nearFloor, placed,
 		r3.Identity(), r3.Identity(), req)
 	require.NoError(t, err)
-	require.Equal(t, ContactUndecided, near.Relation)
+	require.Equal(t, ContactTouching, near.Relation)
+	require.Len(t, near.Manifold.Points, 4)
 	shifted := facetedSweepPose(t, r3.Vec{X: 25})
 	outside, err := doc.ContactPair(t.Context(), floor, placed,
 		r3.Identity(), shifted, req)
 	require.NoError(t, err)
 	require.Equal(t, ContactUndecided, outside.Relation)
+}
+
+func TestContactPairPlacedFacetedFloorExactTouch(t *testing.T) {
+	doc, _, placed := boundedFacetedFloorFixture(t)
+	pp := placed.payload.(facetedPayload)
+	require.Positive(t, pp.meshBound)
+	require.Positive(t, pp.volSymDiff)
+	floor := internalOffsetBox(t, doc, -20, -20, 20, 20, -10,
+		Distance{D: units.Millimeters(10), Dir: Along})
+	req := facetedSweepRequest(StopAtInitialContact).ContactRequest
+	for _, reversed := range []bool{false, true} {
+		a, b := floor, placed
+		if reversed {
+			a, b = placed, floor
+		}
+		contact, err := doc.ContactPair(t.Context(), a, b, r3.Identity(), r3.Identity(), req)
+		require.NoError(t, err)
+		require.Equal(t, ContactTouching, contact.Relation, "reason=%v", contact.Reason)
+		require.NotNil(t, contact.Manifold)
+		require.Len(t, contact.Manifold.Points, 4)
+		for _, point := range contact.Manifold.Points {
+			facetedFace := point.FaceB
+			if reversed {
+				facetedFace = point.FaceA
+			}
+			require.Contains(t, placed.Faces(), facetedFace)
+			require.Zero(t, point.Separation.Value.Base())
+			require.LessOrEqual(t, point.OnA.Bound.Base(), req.PointResolution.Base())
+			require.LessOrEqual(t, point.OnB.Bound.Base(), req.PointResolution.Base())
+		}
+	}
 }
 
 func TestSweepPairBoundedFacetedFloorStrictClearReplay(t *testing.T) {
