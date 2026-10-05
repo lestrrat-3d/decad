@@ -97,7 +97,8 @@ type ContactReport struct {
 // An exactly orthogonal rotated source box can give a sphere a bounded point
 // on one interior face.
 // At identity query poses, the analytic clearance kernel can prove relations
-// for other solids without a contact manifold.
+// for other solids. Only its ruling touches publish a manifold: the two ends
+// of a full source cylinder's ruling on a planar face or another cylinder.
 // Both bodies must be non-nil, distinct, live members of d.
 func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.Transform,
 	req ContactRequest) (*ContactReport, error) {
@@ -218,9 +219,9 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	return report, nil
 }
 
-// classifyAnalyticContact consumes only the clearance kernel's complete-pair
-// verdict. Its candidate intervals do not retain admitted source witnesses or
-// normals, so even a proved touch or overlap cannot publish a manifold here.
+// classifyAnalyticContact consumes the clearance kernel's complete-pair
+// verdict. Only a touch the kernel proved by a ruling certificate keeps its
+// faces and feet, so only that touch can publish a manifold here.
 func classifyAnalyticContact(ctx context.Context, report *ContactReport) error {
 	res, err := clearancePair(ctx, report.A, report.B, false)
 	if err != nil {
@@ -241,6 +242,9 @@ func classifyAnalyticContact(ctx context.Context, report *ContactReport) error {
 		gap := Measurement{Value: units.Millimeters(0), Exactness: Exact, Bound: units.Millimeters(0)}
 		report.Gap = &gap
 		report.Reason = ContactNoNormalProof
+		if res.ruling != nil {
+			publishRulingManifold(report, res.ruling)
+		}
 	case pairOverlapping:
 		report.Relation = ContactOverlapping
 		report.Reason = ContactNoNormalProof

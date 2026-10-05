@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"math"
 	"math/big"
 
@@ -774,4 +775,262 @@ func (k *pairKernel) vertexEdge(v r3.Vec, e *cEdge, sink *cellSink) {
 		d := c.fa.Sub(c.fb).Len()
 		sink.candidate(k, circleAngleAdmit(e, th, k.tol), d, d, true, c.fb, v)
 	}
+}
+
+// rulingContact is one §6 tangential line contact the kernel certified:
+// Plane × Cylinder along the tangent ruling, or parallel external
+// Cylinder × Cylinder along the common ruling. The plane at offset along
+// normal separates the two bodies, and the ruling segment between ends lies
+// on both trimmed faces. The kernel keeps the faces and the exact
+// feet so the contact layer can publish the manifold of
+// docs/contact-geometry-design.md §4.5; Verify reads only the verdict.
+type rulingContact struct {
+	faceA, faceB *cFace
+	// normal is the exact unit A-to-B normal of the separating plane. An
+	// exactly unit vector with dyadic components is a signed coordinate
+	// axis, so this is one.
+	normal proofarith.DyV3
+	offset proofarith.Dyadic
+	// ends are the exact ruling ends in lexicographic coordinate order.
+	ends [2]proofarith.DyV3
+}
+
+// rulingContactCertified scans the plane-cylinder and cylinder-cylinder
+// face pairs for a §6 ruling certificate. The caller runs it only when both
+// bodies' bodyGeom.delta are exactly zero, so every carrier value is the
+// boundary it names and every comparison below is exact.
+func (k *pairKernel) rulingContactCertified(ctx context.Context) (*rulingContact, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	budget := newWorkBudget(ctx)
+	for _, fa := range k.a.faces {
+		for _, fb := range k.b.faces {
+			if err := budget.step(); err != nil {
+				return nil, err
+			}
+			var ruling *rulingContact
+			switch {
+			case fa.kind == ckPlane && fb.kind == ckCylinder:
+				ruling = k.planeCylinderRuling(ctx, fa, fb, k.a.body, k.b.body, false)
+			case fa.kind == ckCylinder && fb.kind == ckPlane:
+				ruling = k.planeCylinderRuling(ctx, fb, fa, k.b.body, k.a.body, true)
+			case fa.kind == ckCylinder && fb.kind == ckCylinder:
+				ruling = k.cylinderPairRuling(ctx, fa, fb)
+			}
+			if ruling != nil {
+				return ruling, nil
+			}
+		}
+	}
+	return nil, ctx.Err()
+}
+
+// planeCylinderRuling certifies the cylinder's complete tangent ruling on the
+// plane face. The cylinder axis must parallel the plane at exactly its radius
+// on the outward side, the tangent azimuth and the whole axial window must be
+// on the cylinder face, and the whole ruling must lie inside the plane trim.
+// The plane must separate the bodies' complete extents. cylinderFirst names
+// the cylinder's body as A.
+func (k *pairKernel) planeCylinderRuling(ctx context.Context, plane, cyl *cFace,
+	planeBody, cylBody *Body, cylinderFirst bool) *rulingContact {
+	n, okN := exactSignedAxis(plane.n)
+	axis, okAxis := exactSignedAxis(cyl.axis)
+	o, okO := dyVecOf(plane.o)
+	anchor, okAnchor := dyVecOf(cyl.anchor)
+	radius, okR := proofarith.DyOf(cyl.radius)
+	lo, okLo := proofarith.DyOf(cyl.zWin.lo)
+	hi, okHi := proofarith.DyOf(cyl.zWin.hi)
+	if !okN || !okAxis || !okO || !okAnchor || !okR || !okLo || !okHi ||
+		radius.Sign() <= 0 || proofarith.DyCmp(lo, hi) >= 0 ||
+		!proofarith.DvDot(n, axis).IsZero() {
+		return nil
+	}
+	offset := proofarith.DvDot(n, o)
+	if proofarith.DyCmp(proofarith.DySubScalar(proofarith.DvDot(n, anchor), offset), radius) != 0 {
+		return nil
+	}
+	if !k.tangentAzimuthAdmitted(cyl, plane.n.Scale(-1)) {
+		return nil
+	}
+	base := proofarith.DvSub(anchor, dyScaleVec(n, radius))
+	ends := [2]proofarith.DyV3{
+		proofarith.DvAdd(base, dyScaleVec(axis, lo)),
+		proofarith.DvAdd(base, dyScaleVec(axis, hi)),
+	}
+	if !k.rulingInsidePlaneTrim(plane, ends) {
+		return nil
+	}
+	_, planeHi, okPlane := payloadExtent(ctx, planeBody, plane.n)
+	cylLo, _, okCyl := payloadExtent(ctx, cylBody, plane.n)
+	if !okPlane || !okCyl {
+		return nil
+	}
+	planeHiDy, okPlaneHi := proofarith.DyOf(planeHi)
+	cylLoDy, okCylLo := proofarith.DyOf(cylLo)
+	if !okPlaneHi || !okCylLo || proofarith.DyCmp(planeHiDy, offset) > 0 ||
+		proofarith.DyCmp(cylLoDy, offset) < 0 {
+		return nil
+	}
+	ruling := &rulingContact{faceA: plane, faceB: cyl, normal: n, offset: offset, ends: orderedRulingEnds(ends)}
+	if cylinderFirst {
+		ruling.faceA, ruling.faceB = cyl, plane
+		ruling.normal = proofarith.DvSub(proofarith.DyV3{}, n)
+		ruling.offset = proofarith.DyNeg(offset)
+	}
+	return ruling
+}
+
+// cylinderPairRuling certifies the common ruling of two parallel external
+// cylinders. Their axes must be exactly parallel, their center offset must be
+// the radius sum along one signed coordinate axis, both tangent azimuths must
+// be on their faces, and the axial windows must overlap with positive
+// length. The tangent plane between them must separate the complete extents.
+func (k *pairKernel) cylinderPairRuling(ctx context.Context, ca, cb *cFace) *rulingContact {
+	axisA, okAxisA := exactSignedAxis(ca.axis)
+	axisB, okAxisB := exactSignedAxis(cb.axis)
+	anchorA, okAnchorA := dyVecOf(ca.anchor)
+	anchorB, okAnchorB := dyVecOf(cb.anchor)
+	rA, okRA := proofarith.DyOf(ca.radius)
+	rB, okRB := proofarith.DyOf(cb.radius)
+	loA, okLoA := proofarith.DyOf(ca.zWin.lo)
+	hiA, okHiA := proofarith.DyOf(ca.zWin.hi)
+	loB, okLoB := proofarith.DyOf(cb.zWin.lo)
+	hiB, okHiB := proofarith.DyOf(cb.zWin.hi)
+	if !okAxisA || !okAxisB || !okAnchorA || !okAnchorB || !okRA || !okRB ||
+		!okLoA || !okHiA || !okLoB || !okHiB || rA.Sign() <= 0 || rB.Sign() <= 0 ||
+		!proofarith.DvIsZero(proofarith.DvCross(axisA, axisB)) {
+		return nil
+	}
+	delta := proofarith.DvSub(anchorB, anchorA)
+	along := proofarith.DvDot(delta, axisA)
+	perp := proofarith.DvSub(delta, dyScaleVec(axisA, along))
+	normal, ok := axisOfLength(perp, proofarith.DyAdd(rA, rB))
+	if !ok {
+		return nil
+	}
+	normalVec := dyAxisVec(normal)
+	if !k.tangentAzimuthAdmitted(ca, normalVec) || !k.tangentAzimuthAdmitted(cb, normalVec.Scale(-1)) {
+		return nil
+	}
+	// Map B's axial window into A's axis parameter.
+	bLo, bHi := proofarith.DyAdd(along, loB), proofarith.DyAdd(along, hiB)
+	if proofarith.DvDot(axisA, axisB).Sign() < 0 {
+		bLo, bHi = proofarith.DySubScalar(along, hiB), proofarith.DySubScalar(along, loB)
+	}
+	lo, hi := dyMax(loA, bLo), dyMin(hiA, bHi)
+	if proofarith.DyCmp(lo, hi) >= 0 {
+		return nil
+	}
+	offset := proofarith.DyAdd(proofarith.DvDot(normal, anchorA), rA)
+	_, aHi, okA := payloadExtent(ctx, k.a.body, normalVec)
+	bLoExtent, _, okB := payloadExtent(ctx, k.b.body, normalVec)
+	if !okA || !okB {
+		return nil
+	}
+	aHiDy, okAHi := proofarith.DyOf(aHi)
+	bLoDy, okBLo := proofarith.DyOf(bLoExtent)
+	if !okAHi || !okBLo || proofarith.DyCmp(aHiDy, offset) > 0 || proofarith.DyCmp(bLoDy, offset) < 0 {
+		return nil
+	}
+	base := proofarith.DvAdd(anchorA, dyScaleVec(normal, rA))
+	ends := [2]proofarith.DyV3{
+		proofarith.DvAdd(base, dyScaleVec(axisA, lo)),
+		proofarith.DvAdd(base, dyScaleVec(axisA, hi)),
+	}
+	return &rulingContact{faceA: ca, faceB: cb, normal: normal, offset: offset, ends: orderedRulingEnds(ends)}
+}
+
+// tangentAzimuthAdmitted reports whether the cylinder face's angular trim
+// holds the ruling whose outward radial direction is dir, with margin.
+func (k *pairKernel) tangentAzimuthAdmitted(f *cFace, dir r3.Vec) bool {
+	phi := math.Atan2(dir.Dot(f.refV), dir.Dot(f.refU))
+	return f.sweep.classify(phi, k.tol/math.Max(f.radius, 1e-30)) == 1
+}
+
+// rulingInsidePlaneTrim admits the whole segment into the plane face's trim:
+// one end strictly inside with margin and the segment clear of every trim
+// boundary element by more than the margin, so it never leaves the region.
+func (k *pairKernel) rulingInsidePlaneTrim(plane *cFace, ends [2]proofarith.DyV3) bool {
+	var coords [2][2]float64
+	for i, end := range ends {
+		// The nearest float of each end is within an ulp; the trim margin
+		// below is many orders wider.
+		p := dyAxisVec(end)
+		if !finiteVec(p) {
+			return false
+		}
+		coords[i][0], coords[i][1] = plane.planeCoords(p)
+	}
+	if plane.region.classify(coords[0][0], coords[0][1], k.tol) != 1 {
+		return false
+	}
+	for _, e := range plane.region.elems {
+		if segElemDistLB(e, coords[0][0], coords[0][1], coords[1][0], coords[1][1]) <= k.tol {
+			return false
+		}
+	}
+	return true
+}
+
+// exactSignedAxis lifts a carrier direction that is exactly a signed
+// coordinate axis.
+func exactSignedAxis(v r3.Vec) (proofarith.DyV3, bool) {
+	if _, _, ok := signedAxis(v); !ok {
+		return proofarith.DyV3{}, false
+	}
+	return proofarith.DyVec(v), true
+}
+
+// axisOfLength returns v/length when v is exactly ±length along one
+// coordinate axis and zero on the other two.
+func axisOfLength(v proofarith.DyV3, length proofarith.Dyadic) (proofarith.DyV3, bool) {
+	var unit proofarith.DyV3
+	found := false
+	for i := range 3 {
+		switch {
+		case v[i].IsZero():
+			continue
+		case found:
+			return proofarith.DyV3{}, false
+		case proofarith.DyCmp(v[i], length) == 0:
+			unit[i] = proofarith.DyInt(1)
+		case proofarith.DyCmp(v[i], proofarith.DyNeg(length)) == 0:
+			unit[i] = proofarith.DyInt(-1)
+		default:
+			return proofarith.DyV3{}, false
+		}
+		found = true
+	}
+	return unit, found
+}
+
+// dyVecOf lifts a finite carrier vector exactly.
+func dyVecOf(v r3.Vec) (proofarith.DyV3, bool) {
+	if !finiteVec(v) {
+		return proofarith.DyV3{}, false
+	}
+	return proofarith.DyVec(v), true
+}
+
+// dyAxisVec converts an exact vector to its nearest float vector; a signed
+// coordinate axis converts exactly.
+func dyAxisVec(v proofarith.DyV3) r3.Vec {
+	var out r3.Vec
+	out.X, _ = v[0].Float64()
+	out.Y, _ = v[1].Float64()
+	out.Z, _ = v[2].Float64()
+	return out
+}
+
+func orderedRulingEnds(ends [2]proofarith.DyV3) [2]proofarith.DyV3 {
+	for i := range 3 {
+		switch proofarith.DyCmp(ends[0][i], ends[1][i]) {
+		case -1:
+			return ends
+		case 1:
+			return [2]proofarith.DyV3{ends[1], ends[0]}
+		}
+	}
+	return ends
 }

@@ -29,7 +29,10 @@ support. When a query rotates the source box into an exactly orthogonal
 parallelotope, the source sphere also gets an exact complete-box distance
 proof and a bounded point manifold inside one rotated face. At identity query
 poses, the analytic clearance kernel can certify
-a relation for other admitted solids without a contact manifold. Other curved
+a relation for other admitted solids without a contact manifold. When it
+proves a touch with a ruling certificate, a full source cylinder against a
+planar face, or two parallel full source cylinders, publish the two ends of
+the contact ruling (§4.5). Other curved
 and broader faceted witness and normal proofs remain design contracts.
 An internal reader can certify one complete rectangular axis support face of a
 zero-bound faceted Boolean result. It requires zero boundary displacement,
@@ -497,6 +500,43 @@ outside the same box face and the near support outside the opposite face.
 Lateral edge contact, tilted axes, revolved sidewalls, and an embedded
 cylinder return `Undecided`; the identity-pose analytic fallback may prove a
 relation without a manifold.
+
+### 4.5 Analytic ruling contact
+
+At identity query poses, `ContactPair` reads the clearance kernel's verdict.
+A touch the kernel proves with a ruling certificate (`docs/clearance-design.md`
+§6) keeps the two carriers, the exact separating plane and the exact ends of
+the ruling segment on it: a plane face against a cylinder face along the
+tangent ruling, or two parallel external cylinder faces along their common
+ruling. The kernel admits the relation for any body pair it models. The
+manifold needs the complete contact set as well.
+
+Each cylinder side must be a full source cylinder, read through §4.4's source
+record: the exact disk-by-interval box gives its axis, radius and axial
+interval. Its occupied set then meets the separating plane in exactly its
+tangent ruling, between the two cap rims. A plane side holds that whole ruling
+inside its own trimmed face, which the certificate proved, so the contact set
+of a plane and a cylinder is the cylinder's ruling. Two cylinders touch on the
+overlap of their two rulings, which must have positive length. The exact ends
+recomputed from the source records must equal the kernel's ends; any
+difference withholds the manifold. A plane side maps to the one original
+planar Face whose outward normal and plane offset equal the certificate's
+exactly; a cylinder side maps to its one cylindrical Face.
+
+The manifold publishes the two ends in exact coordinate order, each one
+point on both bodies with an outward rational-to-float position bound. Each
+entry's normal is the tighter of the two sides' `Face.NormalAt` balls at the
+witness, oriented from A toward B. A cylinder reading taken at a rounded
+witness also charges the radial tilt to the true end: radial vectors at most
+`e` apart, the true one of length `r`, have unit directions at most `2e/r`
+apart. Both balls must contain the exact separating normal, or the entry is
+refused. The angular radius is four times the ball radius, as for the
+oriented-box normal. `Separation` is an `Exact` zero, since both witnesses
+are the same true point. A body that is not a full source cylinder keeps the
+proven touch with `ContactPayloadUnsupported`; an unmatched face or end gives
+`ContactAmbiguousFeature`; a point or normal bound beyond the request gives
+`ContactPointTooCoarse` or `ContactNoNormalProof`. Reversing body order swaps
+faces and reverses the normal; the ends keep their order.
 
 ## 5. Contact cases and ordering
 

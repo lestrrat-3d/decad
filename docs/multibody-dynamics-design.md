@@ -867,7 +867,8 @@ caller sets; a tighter residual leaves the pair `Undecided`, never silently touc
 Curved source families with their own exact occupied sets (sphere, axial cylinder) keep their exact
 paths; curved families without one (a cylinder rolling on its side, cone, torus) enter contact-geometry
 §7 stage C2 through the clearance kernel's face-pair table for the relation, with manifolds from the
-certified stationary feet of `docs/clearance-design.md` §3 and normals from `Face.NormalAt`; a rolling
+certified ruling feet of `docs/clearance-design.md` §6 (contact-geometry §4.5) and normals from
+`Face.NormalAt`; a rolling
 cylinder's band track takes §10.3 with the ruling's two endpoints as the contact set and the cylinder's
 `Face.NormalAt` ball charged into the band. Their delivery is §13's last three PRs.
 
@@ -1187,6 +1188,9 @@ lines below do not repeat it.
 - Test (root): `contact_analytic_manifold_test.go`: a cylinder on its side against a floor publishes
   the ruling's two endpoints with the computed normal ball.
 - Depends on: nothing.
+- Shipped, at identity query poses. The gate the ruling certificates read is
+  `docs/clearance-design.md` §6's carrier displacement, so a full revolve's end-angle term does not refuse
+  them.
 
 ### PR 20 (Phase 3) — rolling band tracks
 

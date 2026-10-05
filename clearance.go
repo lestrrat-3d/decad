@@ -29,7 +29,8 @@ const (
 	// pairDisjoint: boundary clearance proven positive and nesting excluded.
 	pairDisjoint
 	// pairTouching: every zero-distance contact certified (the coplanar
-	// plane-pair certificate) — the gap is a measured Exact zero (§6).
+	// plane-pair certificate or a ruling certificate) — the gap is a
+	// measured Exact zero (§6).
 	pairTouching
 	// pairOverlapping: shared interior is proven by nesting or another
 	// admitted certificate. A row still requires a complete bounded overlap
@@ -50,6 +51,9 @@ type pairResult struct {
 	// per shell of the other — voids included — proven outside this one prove
 	// this whole body lies in the other.
 	contained *Body
+	// ruling is non-nil only on a pairTouching verdict proved by a §6
+	// ruling certificate; it keeps the certified faces and feet.
+	ruling *rulingContact
 }
 
 // pairKernel is one pair's working state.
@@ -122,9 +126,10 @@ func clearanceDeltaWiden(lo, hi float64, exact bool, deltaA, deltaB float64) (fl
 // (a box-proven pair needs the kernel only for its gap — §7).
 //
 // Check order is load-bearing: the coplanar Plane×Plane contact certificate
-// runs first and short-circuits every later check when it certifies a touch,
-// because a separating plane already certifies the whole contact set — but
-// ONLY when both bodies' bodyGeom.delta are exactly zero, since the
+// and then the ruling certificates run first and short-circuit every later
+// check when one certifies a touch, because a separating plane already
+// certifies the whole contact set — but ONLY when both bodies' carriers are
+// exact (bodyGeom.delta zero; carrierDelta for the rulings), since the
 // certificate is an exact material-side claim (payload-verification §7.2's
 // rule for the faceted case, applied here to every analytic arm) that a
 // carrier built from rounded coordinates cannot honestly make. Past that, an
@@ -189,6 +194,18 @@ func clearancePairCached(ctx context.Context, a, b *Body, nestingExcluded bool, 
 	}
 	if certified {
 		return pairResult{verdict: pairTouching, exact: true, diam: diam}, nil
+	}
+	// The ruling certificates (§6) make the same exact separating-plane
+	// claim along a tangent ruling. They read only carriers and exact
+	// payload extents, so their gate is the carrier part of each delta.
+	if ga.carrierDelta == 0 && gb.carrierDelta == 0 {
+		ruling, err := k.rulingContactCertified(ctx)
+		if err != nil {
+			return pairResult{}, err
+		}
+		if ruling != nil {
+			return pairResult{verdict: pairTouching, exact: true, diam: diam, ruling: ruling}, nil
+		}
 	}
 
 	sink, err := k.enumerate()
