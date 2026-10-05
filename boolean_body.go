@@ -148,6 +148,27 @@ func meshAreaUpper(verts []r3.Vec, tris [][3]int) float64 {
 	return total + sumSlop(len(tris), total) + 1e-300
 }
 
+// facetedFacePerimeterUpper includes each edge's length error and rounds each
+// addition outward before the perimeter enters an area bound.
+func facetedFacePerimeterUpper(f *Face, budget *workBudget) (float64, error) {
+	perimeter := 0.0
+	for _, l := range f.loops {
+		for _, ce := range l.coedges {
+			if err := budget.step(); err != nil {
+				return 0, err
+			}
+			perimeter = absSumUpper(perimeter, ce.edge.length, ce.edge.lengthBound)
+		}
+	}
+	return perimeter, nil
+}
+
+// facetedAreaBound composes nonnegative area allowances without losing a
+// positive product to underflow or rounding a sum below its exact value.
+func facetedAreaBound(meshBound, perimeterUpper, areaSlack, roundSlop float64) float64 {
+	return absSumUpper(productUpper(meshBound, perimeterUpper), areaSlack, roundSlop)
+}
+
 // facetedMeshAudit is the shared, geometry-only component and shell proof.
 // It allocates no topology objects and holds no document reference, so the
 // read-only evaluator can run the same invariant checks as body construction.
@@ -469,17 +490,12 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 			if err := budget.step(); err != nil {
 				return nil, err
 			}
-			loopLen := 0.0
-			for _, l := range f.loops {
-				for _, ce := range l.coedges {
-					if err := budget.step(); err != nil {
-						return nil, err
-					}
-					loopLen += ce.edge.length + ce.edge.lengthBound
-				}
+			loopLen, err := facetedFacePerimeterUpper(f, budget)
+			if err != nil {
+				return nil, err
 			}
-			facePerimTotal += loopLen
-			f.areaBound = upRound(pp.meshBound*loopLen + pp.areaSlack + sumSlop(facetsOf[f], f.area))
+			facePerimTotal = absSumUpper(facePerimTotal, loopLen)
+			f.areaBound = facetedAreaBound(pp.meshBound, loopLen, pp.areaSlack, sumSlop(facetsOf[f], f.area))
 		}
 	}
 
@@ -571,7 +587,7 @@ func buildFacetedBodyWithProof(ctx context.Context, d *Document, ref producerID,
 	// (bounds.go, sumSlop). It is ulp-scale in the total, so a genuinely
 	// tiny-bound planar boolean stays tiny — and never zero, which would claim
 	// an exactness a float sum of square roots does not have.
-	areaBound := upRound(pp.meshBound*facePerimTotal + pp.areaSlack + sumSlop(len(tris), areaF))
+	areaBound := facetedAreaBound(pp.meshBound, facePerimTotal, pp.areaSlack, sumSlop(len(tris), areaF))
 	body.area = Measurement{
 		Value:     units.SquareMillimeters(areaF),
 		Exactness: exactnessOf(areaBound),

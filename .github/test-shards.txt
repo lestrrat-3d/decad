@@ -80,6 +80,7 @@
 0	0.01	TestExtrudeToFaceComputedLevelIsBounded
 0	0.04	TestExtrudeToFaceGates
 0	0.05	TestExtrudeToFaceInheritsCapBlendComputedLevelBound
+0	0.00	TestFacetedAreaBoundCompositionRoundsOutward
 0	0.03	TestFacetedPlacedFarFromOriginBoundHolds
 0	0.01	TestFilletConcaveEdgeReadsMinRadius
 0	0.02	TestFilletLineArcCorner
