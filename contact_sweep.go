@@ -396,10 +396,10 @@ func exactnessFromBound(bound float64) Exactness {
 
 // SweepPair certifies the first encounter of two live solids under one shared
 // duration. Continuous proofs cover affine source-box paths, co-translating
-// oblique source boxes, a source sphere in a box face corridor, an affine pair
-// of source spheres, separated axial source-cylinder paths, rotating source-box
-// rigid drifts, and admitted rotating PoseSegments. Unsupported paths return
-// SweepUndecided.
+// oblique source boxes, a source sphere in an axis or orthogonal rotated box
+// face corridor, an affine pair of source spheres, separated axial
+// source-cylinder paths, rotating source-box rigid drifts, and admitted
+// rotating PoseSegments. Unsupported paths return SweepUndecided.
 // Both body pointers, both paths, and ctx must be non-nil.
 func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairPath,
 	req SweepRequest) (*SweepReport, error) {
@@ -483,6 +483,18 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			}
 			if cylinder, ok := sourceCylinderAtPose(a, pa.from); ok {
 				return d.sourceCylinderClearSweep(ctx, a, b, pa, pb, req, report, cylinder, boxB, true)
+			}
+		}
+		if sphere, sphereOK := sourceSphereAtPose(a, pa.from); sphereOK {
+			if box, boxOK := sourceOrientedBoxAtPose(b, pb.from); boxOK {
+				return (&orientedSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
+					req: req, report: report, sphere: sphere, box: box, sphereFirst: true}).execute(ctx, resolution)
+			}
+		}
+		if sphere, sphereOK := sourceSphereAtPose(b, pb.from); sphereOK {
+			if box, boxOK := sourceOrientedBoxAtPose(a, pa.from); boxOK {
+				return (&orientedSphereSweepRun{doc: d, a: a, b: b, pa: pa, pb: pb,
+					req: req, report: report, sphere: sphere, box: box}).execute(ctx, resolution)
 			}
 		}
 		if _, orientedA := sourceOrientedBoxAtPose(a, pa.from); orientedA {

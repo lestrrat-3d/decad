@@ -5,7 +5,9 @@ source-box sweeps certify first impact, immediate departure, persistent face
 contact, and the first edge transition of a sliding patch. A source semicircle
 sphere against a source box certifies affine first impact and face-point
 departure or persistent touch while its projected radius remains strictly
-inside one box face. Two source semicircle spheres certify affine first impact
+inside one box face. A sphere against an exactly orthogonal rotated source
+box also certifies a strict single-face affine clear span, first impact, or
+separating departure. Two source semicircle spheres certify affine first impact
 through exact squared-distance motion, including transverse crossing, and
 separating departure. Rotating source-box rigid drifts
 can also certify a clear path or bracket an impact after exact oriented-box
@@ -284,6 +286,19 @@ bound by the exact pose difference. An initial touch with an increasing normal
 gap proves immediate departure. A zero normal gap and the same face corridor
 prove a full-span point track. A path leaving the corridor returns
 `SweepUndecided`; a center sample alone cannot certify the missing span.
+
+For an exactly orthogonal rotated box, require the same exterior source face,
+strict projected disk margins, and opposite-face clearance at both affine
+endpoints. Those inequalities are affine, so both endpoint proofs cover the
+whole span. Compare the squared exact center-to-face support with squared
+radius times squared face normal; this decides clear, touch, and overlap
+without rounding the normal length. Binary search dyadic fractions for the
+first sign change, then leave a right-side overlap margin within
+`TimeResolution`. The real right sample must retain the same bounded point
+manifold. Replay compares rounded source corners and sphere center against
+the cached ideal affine path, then rechecks the same face corridor and support
+relation. A skew box, edge/corner corridor, non-affine pose, or lost rounded
+manifold returns `SweepUndecided` or `ErrUnsupported` as appropriate.
 
 ### 4.5 Affine source-sphere pair
 

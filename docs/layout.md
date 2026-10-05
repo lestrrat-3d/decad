@@ -177,10 +177,11 @@ to the byte budget.
 | `contact_oriented_box.go` | Rotated boxes. See `docs/contact-geometry-design.md` §4. |
 | `contact_oriented_patch.go` | Exact co-oriented oblique face patch, source faces, and bounded witnesses. See `docs/contact-geometry-design.md` §4. |
 | `contact_clipped_patch.go` | Exact horizontal clipping of one rotated source-box face against an axis-aligned face. See `docs/contact-geometry-design.md` §4. |
-| `contact_sphere.go` / `contact_sphere_sweep.go` | Sphere-box paths. See `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md`. |
+| `contact_sphere.go` / `contact_sphere_sweep.go` | Axis sphere-box path. See the contact designs. |
 | `contact_cylinder.go` / `contact_cylinder_sweep.go` | Source-cylinder axial clearance. See the contact designs. |
+| `contact_sphere_oriented.go` / `contact_sphere_oriented_sweep.go` | Rotated sphere-box path. See the contact designs. |
 | `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See the contact designs. |
-| `contact_sweep_replay.go` | Replays affine and clear rotating sweeps against their cached exact source geometry. See `docs/contact-sweep-design.md` §6. |
+| `contact_sweep_replay.go` | Cached affine and rotating sweep replay. See `docs/contact-sweep-design.md` §6. |
 | `clearance_degen.go` | Degeneracy tests. See `docs/clearance-design.md` §4/§5. |
 | `clearance_cells.go` | Face-interior candidates. See `docs/clearance-design.md` §3/§4. |
 | `clearance_tiers.go` | The curve and vertex tiers of §3: face-edge, edge-edge and vertex cells over §4's curve-tier table; constant-distance families emit only on the oracle's `degYes`. See `docs/clearance-design.md` §3/§4. |
