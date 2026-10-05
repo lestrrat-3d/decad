@@ -317,7 +317,7 @@ func spherePairResponseWithin(pre, post [2]r3.Vec, mass [2]decad.MassProperties,
 }
 
 type sphereOmittedBounds struct {
-	pointSpeed, twiceEnergy, travel *big.Rat
+	angularSpeed, pointSpeed, twiceEnergy, travel *big.Rat
 }
 
 // sphereOmittedSpinBounds encloses the torque from the bounded witness and
@@ -395,7 +395,8 @@ func sphereOmittedSpinBounds(witnessPoint, impulsePoint decad.ContactPoint, side
 	armUpper.Add(armUpper, new(big.Rat).Mul(big.NewRat(2, 1), exactBase(radius)))
 	travel := new(big.Rat).Mul(spin, exactBase(duration))
 	travel.Mul(travel, armUpper)
-	return sphereOmittedBounds{pointSpeed: pointSpeed, twiceEnergy: twiceEnergy, travel: travel}, true
+	return sphereOmittedBounds{angularSpeed: spin, pointSpeed: pointSpeed,
+		twiceEnergy: twiceEnergy, travel: travel}, true
 }
 
 func sphereCorrectionWithin(before, after State, allowance float64) bool {

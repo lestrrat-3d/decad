@@ -89,9 +89,26 @@ combined omitted spin and whole-step point travel, and certifies both ideal
 and rounded persistent tracks through the endpoint. Resting constraints may
 receive zero impulse. Each impulse produces an ordered event; the step reports
 their summed contact impulse and the dynamic body's conservation readings.
-Later simultaneous impacts, coupled normals, separating initial contacts,
-and simultaneous friction return `Undecided`. An excluded pair may overlap or
-cross without a contact event or material mixing.
+An initial source sphere touching a fixed source-box face and a fixed source
+sphere also advances when the face normal is cardinal, the sphere-pair normal
+is oblique, and both pairs have one bounded point. Both effective pair
+coefficients are zero. The two-normal solve checks all four active sets; a
+positive impulse requires zero post-contact normal speed within the velocity
+and normal bounds, while a zero impulse requires nonclosing speed. The shared
+mass interval, both normal bounds, and both omitted-spin bounds must fit the
+response residuals. Both torque bounds act on one body: add their angular
+speed bounds before squaring against its common inertia ceiling. Each active
+pair needs ideal and rounded full-span
+persistent-contact tracks. A separating pair needs ideal and rounded
+one-sided departure, and each endpoint must retain its certified relation.
+The trace checks both rounded pair certificates at every interior sample and
+retains the after-kick velocity when no contact impulse occurs.
+The two ordered events describe arithmetic stages of one simultaneous solve.
+The combined momentum and kinetic-energy checks cover both impulses together;
+an intermediate stage can gain energy while the completed island loses it.
+Later simultaneous impacts, other coupled normals, and simultaneous friction
+return `Undecided`. An excluded pair may overlap or cross without a contact
+event or material mixing.
 At an initial face touch, a fixed floor and dynamic source box can receive a
 full-step kick from gravity and any center force, then a zero-restitution
 support impulse. A zero-restitution impact can continue as certified
