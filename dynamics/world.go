@@ -89,7 +89,7 @@ type World struct {
 }
 
 // NewWorld admits a dynamic pair, a dynamic body with a fixed or kinematic
-// body, or one dynamic body with two fixed bodies.
+// body, or three bodies with one to three dynamic bodies and all others fixed.
 func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World, error) {
 	if doc == nil || ctx == nil {
 		return nil, fmt.Errorf("%w: nil document or context", ErrInvalidInput)

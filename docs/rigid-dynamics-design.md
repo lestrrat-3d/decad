@@ -159,8 +159,9 @@ candidate without exact touch returns `Undecided` without an event or state.
 Other positive-friction sphere-pair inputs return `Undecided`.
 A two-body world's pair may be excluded; its bodies drift independently even
 through overlap, and no pair material is mixed.
-The current three-body step admits one dynamic body and two fixed bodies, or
-two dynamic bodies and one fixed body. With two dynamic bodies, it kicks both
+The current three-body step admits one dynamic body and two fixed bodies, two
+dynamic bodies and one fixed body, or three dynamic bodies. With two dynamic
+bodies, it kicks both
 once, sweeps every non-excluded pair, and advances one certified impact at a
 time. Every other pair needs a certified clear ideal and rounded path through
 the event prefix, any correction, and each remainder. Overlapping candidate
@@ -171,6 +172,14 @@ outside those pairs by independent drift. The conservation report sums both
 dynamic bodies. An excluded pair is not queried and
 does not mix material. An isolated zero-restitution impact between two dynamic
 source spheres also advances when both pairs against the fixed body stay clear.
+With three dynamic bodies, the isolated pair path kicks each body once, sweeps
+all three non-excluded pairs, and accepts one earliest impact while the other
+two pair paths remain certified clear. Every body moves through the impact
+prefix and remainder. The third body's mass, gravity, load, kinetic energy,
+linear momentum, angular momentum, and drift change enter the world report
+once. Every rounded pair path supplies trace replay. An overlapping event
+bracket, an undecided pair path that may precede the chosen event, or an
+unproved correction against the third body returns `Undecided` with no `Next`.
 The pair response must certify its impact, correction, and continuation. A
 persistent sphere-pair touch needs matching ideal and rounded full-span contact
 tracks. If global event-time rounding changes the remaining drift endpoint,
@@ -200,7 +209,7 @@ the floor-to-upper path must remain clear. Endpoint `ContactPair` calls must
 confirm both touches and the gap. `Trace.Sample` replays all three rounded
 pair sweeps. A second gravity step repeats the same response from the resting
 state. Other source-box stacks, lateral motion, spin, positive friction or
-restitution, and three dynamic bodies remain unsupported.
+restitution remain unsupported.
 With one dynamic body, it sweeps each non-excluded dynamic/fixed pair. One active pair advances only
 when every other pair has a certified clear path through the response. Two
 strictly ordered, frictionless positive-restitution source-box face impacts can advance within one
@@ -432,7 +441,8 @@ dynamic can still be checked when a kinematic driver moves; it cannot be
 resolved by an impulse if closing contact occurs.
 
 The current world accepts two bodies with at least one dynamic body, or three
-bodies with one or two dynamic bodies and every other body fixed. Every pair in a
+bodies with one, two, or three dynamic bodies and every other body fixed.
+Every pair in a
 three-body world can be excluded or given one material override. `NewWorld`
 rejects a pair naming a body outside the world, including nil or repeated
 bodies, with `ErrInvalidInput`. It also rejects a second override or exclusion
@@ -1054,6 +1064,22 @@ These numeric checks apply to this discrete integrator; they are not
 certified bounds on real continuous-force motion.
 
 ## Verification
+
+The isolated three-dynamic fixture uses three real radius-5 mm source
+spheres with exact supplied mass `1 kg` each. A and B start at
+`(-6,-8,0)` and `(6,8,0) mm`, moving at `(30,40,0)` and
+`(-30,-40,0) mm/s`; C starts at `(0,0,100) mm` and moves at
+`(1,0,0) mm/s`. With restitution `0.5`, zero friction, and `dt=0.2 s`,
+the real A/B sweep brackets one impact near `0.1 s` while both C pair
+sweeps stay clear. `Step` publishes one A/B event with normal impulse
+`75 kg·mm/s`; C ends at `x=0.2 mm` and its trace samples at `0.05`,
+`0.1`, and `0.15 s` have `x=0.05`, `0.1`, and `0.15 mm`. Total input
+and completion kinetic energies are `2500.5` and `625.5 kg·mm²/s²`,
+and total linear X momentum is `1 kg·mm/s` at both ends. A force of
+`10 kg·mm/s²` applied only to C makes its full-step kick `2 mm/s`;
+C ends at `x=0.6 mm` with `3 mm/s` velocity, while the A/B event
+remains unchanged. With `MaxEvents=1`, the step returns `Undecided`
+and no `Next` because time remains after the impact.
 
 Two real radius-5 mm source spheres start with centers at `(0,0,0)` and
 `(6,8,0)` mm. Both have supplied mass `1 kg` and zero spin. B approaches at
