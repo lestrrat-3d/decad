@@ -201,8 +201,9 @@ func (w *World) islandBodies(isl island) []*decad.Body {
 // correctIsland is §6.6: each dynamic body receives one translation, the sum
 // over the island's pairs of its inverse-mass share of the pair's deepest
 // penetration along the pair normal; a Fixed or Kinematic body takes no
-// share. Bodies joined by pairs the contact set continued on persistent
-// tracks move as one: their touch is exact and their velocities equal, so
+// share, and neither does a group resting on one through a persistent track
+// (it is anchored). Bodies joined by pairs the contact set continued on
+// persistent tracks move as one: their touch is exact and their velocities equal, so
 // they take one translation with their summed mass, which keeps that touch.
 // The penetration is the one the pair's rounded event poses show. It may not
 // exceed its allowance: ContactSlop, plus the point's certified geometry
@@ -210,7 +211,8 @@ func (w *World) islandBodies(isl island) []*decad.Body {
 // impact, the travel its bracket allows at the pair's closing speed. Each
 // translation's length is bounded by the summed allowances of the pairs that
 // moved the body. The translations, and each moved body's summed allowance,
-// are returned by world index.
+// which also bounds a later push (correctedRelation), are returned by world
+// index.
 func (w *World) correctIsland(isl island, pre State, drive map[int][3]*big.Rat) (map[int]r3.Vec, map[int]float64,
 	*StepDiagnostic) {
 	group := make(map[int]int, len(isl.dynamic))
@@ -233,6 +235,19 @@ func (w *World) correctIsland(isl island, pre State, drive map[int][3]*big.Rat) 
 	groupMass := map[int]float64{}
 	for _, index := range isl.dynamic {
 		groupMass[find(index)] += w.bodies[index].mass.Mass.Value.Base()
+	}
+	// A group resting on a Fixed or Kinematic body through a persistent
+	// track is anchored: moving it would break that exact touch, so another
+	// pair's penetration is removed by moving its other side alone.
+	anchored := map[int]struct{}{}
+	for _, pair := range isl.pairs {
+		if pair.track && dynamic(pair.a) != dynamic(pair.b) {
+			index := pair.a
+			if !dynamic(index) {
+				index = pair.b
+			}
+			anchored[find(index)] = struct{}{}
+		}
 	}
 	moves := map[int]r3.Vec{}
 	allowances := map[int]float64{}
@@ -272,11 +287,16 @@ func (w *World) correctIsland(isl island, pre State, drive map[int][3]*big.Rat) 
 		}
 		var inverse [2]float64
 		for side, index := range [2]int{pair.a, pair.b} {
-			if dynamic(index) {
+			if _, ok := anchored[find(index)]; dynamic(index) && !ok {
 				inverse[side] = 1 / groupMass[find(index)]
 			}
 		}
 		total := inverse[0] + inverse[1]
+		if total <= 0 {
+			d := scheduleDiagnostic(StepCorrectionFailed, w.bodyPair(w.pairs[pair.key]),
+				"a penetrating pair has no body free to move")
+			return nil, nil, &d
+		}
 		for side, index := range [2]int{pair.a, pair.b} {
 			if inverse[side] == 0 {
 				continue
@@ -387,7 +407,7 @@ func (w *World) solveIslands(ctx context.Context, in eventIslands,
 	}
 	var solved []island
 	moves := map[int]r3.Vec{}
-	push := correctionPush{allowance: map[int]float64{}, separating: map[int]struct{}{}}
+	push := correctionPush{allowance: map[int]float64{}, separating: map[int]struct{}{}, policies: out.policies}
 	for _, isl := range islands {
 		if !slices.ContainsFunc(isl.pairs, func(p islandPair) bool { return !p.track }) {
 			for _, pair := range isl.pairs {
@@ -629,7 +649,7 @@ func (w *World) checkCorrections(ctx context.Context, work *stepWork, pre, post 
 				if err := ctx.Err(); err != nil {
 					return nil, err
 				}
-				done, diagnostic, err := w.correctedRelation(ctx, pre, post, moves, pair.key, push, pass < pushLimit)
+				done, diagnostic, err := w.correctedRelation(ctx, pre, post, moves, pair, push, pass < pushLimit)
 				if err != nil {
 					return nil, err
 				}
@@ -687,46 +707,61 @@ func (w *World) checkCorrections(ctx context.Context, work *stepWork, pre, post 
 const pushLimit = 4
 
 // correctionPush is what correctedRelation needs to push a pair apart: each
-// corrected body's correction allowance and the island pairs whose every
-// point the solve separates.
+// corrected body's correction allowance, the island pairs whose every point the
+// solve separates, and the contact-set policies, which a separated pair
+// leaves.
 type correctionPush struct {
 	allowance  map[int]float64
 	separating map[int]struct{}
+	policies   map[int]decad.SweepStartPolicy
 }
 
 // correctedRelation checks one island pair at the corrected poses. A
 // touching pair passes. A translation along a float normal rarely lands two
-// curved bodies in exact touch, so a pair the solve separates that still
-// overlaps is pushed just apart (rigid-dynamics "Response": a separated
-// corrected pose within the correction allowance): its dynamic bodies move
-// along the deepest point's normal by that point's depth plus its separation
-// bound, split by inverse mass and doubled until it moves the rounded pose,
-// and the pair must then be separated or touching; its next slice sweeps it
-// under ContinueSeparatingTouch from the pushed poses. A pair the solve does
-// not separate is never pushed and may not end separated: its continuation
-// needs exact touch. Every pushed body's whole translation from its
-// pre-event pose, measured as the correction's is, must stay within its
-// correction allowance. It reports false when it pushed, so the caller
-// checks the island again; allowed is false on the last pass, where a pair
-// that still overlaps is refused.
-func (w *World) correctedRelation(ctx context.Context, pre, post State, moves map[int]r3.Vec, key int,
+// curved bodies in exact touch, so a pair the solve separates is pushed just
+// apart (rigid-dynamics "Response": a separated corrected pose within the
+// correction allowance) when it reads either of two ways:
+//   - it still overlaps: its dynamic bodies move along the deepest point's
+//     normal by that point's depth plus its separation bound, split by
+//     inverse mass and doubled until it moves the rounded pose, and the
+//     caller checks the island again;
+//   - it is apart by less than ContactPair can prove (Undecided with
+//     ContactNoGapProof): its dynamic bodies move apart along the event
+//     manifold's normal, split by inverse mass, by one ulp of their largest
+//     coordinate and then twice as far each time, until ContactPair proves
+//     the pair separated or touching.
+//
+// A pushed pair that ends touching continues under ContinueSeparatingTouch;
+// one that ends separated leaves the contact set, so its next slice starts
+// under StopAtInitialContact. A pair the solve does not separate is never pushed and may not end
+// separated: its continuation needs exact touch. Every pushed body's whole
+// translation from its pre-event pose, measured as the correction's is, must
+// stay within its correction allowance. It reports false when it pushed, so the
+// caller checks the island again; allowed is false on the last pass, where a
+// pair that still needs a push is refused.
+func (w *World) correctedRelation(ctx context.Context, pre, post State, moves map[int]r3.Vec, pair islandPair,
 	push correctionPush, allowed bool) (bool, *StepDiagnostic, error) {
-	pair := w.pairs[key]
 	fail := func(reason string) (bool, *StepDiagnostic, error) {
-		d := scheduleDiagnostic(StepCorrectionFailed, w.bodyPair(pair), reason)
+		d := scheduleDiagnostic(StepCorrectionFailed, w.bodyPair(w.pairs[pair.key]), reason)
 		return true, &d, nil
 	}
-	contact, err := w.doc.ContactPair(ctx, w.bodies[pair.a].definition.Body, w.bodies[pair.b].definition.Body,
-		post.entries[pair.a].Pose, post.entries[pair.b].Pose, w.step.Contact)
+	contact, err := w.contactAt(ctx, pair, post)
 	if err != nil {
 		return true, nil, err
 	}
-	_, separating := push.separating[key]
+	_, separating := push.separating[pair.key]
 	switch {
 	case contact.Relation == decad.ContactTouching:
 		return true, nil, nil
 	case contact.Relation == decad.ContactSeparated && separating:
+		// A separated pair leaves the contact set: its next slice starts
+		// clear, under StopAtInitialContact, where ContinueSeparatingTouch
+		// needs a touching start.
+		delete(push.policies, pair.key)
 		return true, nil, nil
+	case contact.Relation == decad.ContactUndecided && contact.Reason == decad.ContactNoGapProof &&
+		separating && allowed && len(pair.manifold.Points) != 0:
+		return w.pushProvablyApart(ctx, pre, post, moves, pair, push)
 	case contact.Relation != decad.ContactOverlapping || !separating || !allowed ||
 		!w.manifoldWithin(contact.Manifold):
 		return fail(fmt.Sprintf("corrected pair relation is %v, not touching", contact.Relation))
@@ -737,6 +772,88 @@ func (w *World) correctedRelation(ctx context.Context, pre, post State, moves ma
 			depth, normal = d, p.Normal.Value
 		}
 	}
+	if !finite(depth) || depth <= 0 {
+		return fail("an overlapping separating pair has no push")
+	}
+	poses, diagnostic := w.pushPoses(pre, post, pair, normal, depth, push, true)
+	if diagnostic != nil {
+		return true, diagnostic, nil
+	}
+	for index, pose := range poses {
+		post.entries[index].Pose = pose
+		moves[index] = pose.Translation().Sub(pre.entries[index].Pose.Translation())
+	}
+	return false, nil, nil
+}
+
+// pushProvablyApart moves a pair that is apart by less than ContactPair can
+// prove along its event manifold's normal, by one ulp of the larger body
+// coordinate and then twice as far each time, until ContactPair proves it
+// separated or touching. It reports false when it pushed.
+func (w *World) pushProvablyApart(ctx context.Context, pre, post State, moves map[int]r3.Vec, pair islandPair,
+	push correctionPush) (bool, *StepDiagnostic, error) {
+	normal := pair.manifold.Points[0].Normal.Value
+	largest := 0.0
+	for _, index := range [2]int{pair.a, pair.b} {
+		t := post.entries[index].Pose.Translation()
+		largest = math.Max(largest, math.Max(math.Abs(t.X), math.Max(math.Abs(t.Y), math.Abs(t.Z))))
+	}
+	amount := math.Nextafter(largest, math.Inf(1)) - largest
+	trial := post.clone()
+	for range 64 {
+		poses, diagnostic := w.pushPoses(pre, post, pair, normal, amount, push, false)
+		if diagnostic != nil {
+			return true, diagnostic, nil
+		}
+		for index, pose := range poses {
+			trial.entries[index].Pose = pose
+		}
+		if err := ctx.Err(); err != nil {
+			return true, nil, err
+		}
+		contact, err := w.contactAt(ctx, pair, trial)
+		if err != nil {
+			return true, nil, err
+		}
+		switch contact.Relation {
+		case decad.ContactSeparated, decad.ContactTouching:
+			for index, pose := range poses {
+				post.entries[index].Pose = pose
+				moves[index] = pose.Translation().Sub(pre.entries[index].Pose.Translation())
+			}
+			return false, nil, nil
+		case decad.ContactUndecided:
+			amount *= 2
+		default:
+			d := scheduleDiagnostic(StepCorrectionFailed, w.bodyPair(w.pairs[pair.key]),
+				fmt.Sprintf("pushed pair relation is %v", contact.Relation))
+			return true, &d, nil
+		}
+	}
+	d := scheduleDiagnostic(StepCorrectionFailed, w.bodyPair(w.pairs[pair.key]),
+		"push finds no provable separation")
+	return true, &d, nil
+}
+
+// contactAt queries ContactPair for an island pair at a state's poses.
+func (w *World) contactAt(ctx context.Context, pair islandPair, state State) (*decad.ContactReport, error) {
+	return w.doc.ContactPair(ctx, w.bodies[pair.a].definition.Body, w.bodies[pair.b].definition.Body,
+		state.entries[pair.a].Pose, state.entries[pair.b].Pose, w.step.Contact)
+}
+
+// pushPoses moves a pair's dynamic bodies apart along normal by amount,
+// split by inverse mass (A against the normal, B along it). With grow set a
+// share too small to move a rounded pose doubles until it does. Every moved
+// body's whole translation from its pre-event pose, measured as the
+// correction's is, must stay within its correction allowance. It returns the new
+// pose of each moved body by world index.
+func (w *World) pushPoses(pre, post State, pair islandPair, normal r3.Vec, amount float64, push correctionPush,
+	grow bool) (map[int]r3.Transform, *StepDiagnostic) {
+	fail := func(reason string, limit units.Value) (map[int]r3.Transform, *StepDiagnostic) {
+		d := scheduleDiagnostic(StepCorrectionFailed, w.bodyPair(w.pairs[pair.key]), reason)
+		d.Limit = limit
+		return nil, &d
+	}
 	var inverse [2]float64
 	for side, index := range [2]int{pair.a, pair.b} {
 		if w.bodies[index].definition.Role == Dynamic {
@@ -744,40 +861,40 @@ func (w *World) correctedRelation(ctx context.Context, pre, post State, moves ma
 		}
 	}
 	total := inverse[0] + inverse[1]
-	if !finite(depth, total) || depth <= 0 || total <= 0 {
-		return fail("an overlapping separating pair has no push")
+	if !finite(amount, total) || amount <= 0 || total <= 0 {
+		return fail("a separating pair has no push", units.Value{})
 	}
+	out := map[int]r3.Transform{}
 	for side, index := range [2]int{pair.a, pair.b} {
 		if inverse[side] == 0 {
 			continue
 		}
-		share := depth * inverse[side] / total
+		share := amount * inverse[side] / total
 		if side == 0 {
 			share = -share
 		}
-		// A depth below the ulp of the body's coordinates rounds to no move;
-		// the share doubles until the translation changes, and the
-		// allowance below bounds it.
 		start := post.entries[index].Pose
-		pose := start
-		for doubling := 0; pose.Translation() == start.Translation() && doubling < 64; doubling++ {
-			pose, err = translatePose(start, normal.Scale(share))
-			if err != nil {
-				return fail(fmt.Sprintf("pushed pose of body %d is not finite: %v", index, err))
-			}
+		pose, err := translatePose(start, normal.Scale(share))
+		// A share below the ulp of the body's coordinates rounds to no move;
+		// it doubles until the translation changes, and the allowance below
+		// bounds it.
+		for doubling := 0; grow && err == nil && pose.Translation() == start.Translation() && doubling < 64; doubling++ {
 			share *= 2
+			pose, err = translatePose(start, normal.Scale(share))
+		}
+		if err != nil {
+			return fail(fmt.Sprintf("pushed pose of body %d is not finite: %v", index, err), units.Value{})
 		}
 		move := pose.Translation().Sub(pre.entries[index].Pose.Translation())
 		length := math.Nextafter(math.Abs(move.X)+math.Abs(move.Y)+math.Abs(move.Z), math.Inf(1))
 		allowance, ok := push.allowance[index]
 		if !ok || !finite(length) || length > allowance {
-			done, d, err := fail(fmt.Sprintf("push of body %d exceeds its correction allowance", index))
-			d.Limit = units.Millimeters(allowance)
-			return done, d, err
+			return fail(fmt.Sprintf("push of body %d exceeds its correction allowance", index),
+				units.Millimeters(allowance))
 		}
-		post.entries[index].Pose, moves[index] = pose, move
+		out[index] = pose
 	}
-	return false, nil, nil
+	return out, nil
 }
 
 // islandContactImpulse sums the impulses island events deliver from Fixed

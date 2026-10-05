@@ -177,9 +177,12 @@ interval arithmetic: every friction impulse lies in its cone, a sticking
 point stops sliding, and a slipping point's friction opposes its slide.
 Shallow overlaps within `ContactSlop` and the impact bracket's travel are
 corrected, and bodies resting on one another move together. A curved pair
-that bounces apart and still overlaps by an ulp after the correction is
-pushed just clear within the same allowance; a resting curved pair the
-correction cannot place in exact touch returns `dynamics.Undecided`. Co-moving bodies
+that bounces apart and still overlaps by an ulp after the correction, or
+ends apart by less than can be proved, is pushed provably clear within the
+same allowance; a resting curved pair the correction cannot place in exact
+touch returns `dynamics.Undecided`. A body landing on a body that rests on a
+fixed support is corrected alone. Two spheres spinning after a glancing
+frictional impact stop the step at their next impact. Co-moving bodies
 leave with one exact common velocity, so a stack can bounce and land as one.
 A transition or a graze publishes a zero-impulse event, and the step then
 continues from the event; a graze of a positive-friction pair returns
