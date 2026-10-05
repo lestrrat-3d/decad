@@ -5,7 +5,6 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/lestrrat-3d/decad/internal/proof"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 )
 
@@ -714,7 +713,7 @@ func ratSqrtUp(q *big.Rat) float64 {
 }
 
 // The exact arithmetic package owns the shared directed-rounding walk limit.
-const sqrtAdjustLimit = proof.SqrtAdjustLimit
+const sqrtAdjustLimit = proofarith.SqrtAdjustLimit
 
 func ratSquareAtMost(f float64, q *big.Rat) bool {
 	square := proofarith.FloatRat(f)
