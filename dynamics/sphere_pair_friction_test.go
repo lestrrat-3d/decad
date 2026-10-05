@@ -245,6 +245,28 @@ func TestSpherePairInitialFrictionRefusesUnsupportedResponse(t *testing.T) {
 				require.Zero(t, endA.AngularVelocity.Z.Base())
 				return
 			}
+			if tc.name == "anisotropic inertia" {
+				// The island solves A's I_zz of 11 like any other inertia.
+				// The normal impulse is (1 + 0.5)·100/2 = 75 on 1 kg spheres.
+				// The contact sticks: 20 − Jt − 25·Jt/11 = Jt + 25·Jt/10, so
+				// Jt = 220/74.5, well inside the cone 0.5·75. A turns by
+				// −5·Jt/11 and B by −5·Jt/10 about z, and y momentum stays 20.
+				require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+				require.Len(t, report.Events, 1)
+				event := report.Events[0]
+				tangent := 220 / 74.5
+				require.InDelta(t, 75, event.NormalImpulse.Base(), 1e-9)
+				require.InDelta(t, tangent, event.TangentImpulse.Y.Base(), 1e-9)
+				endA, ok := report.Next.Body(a)
+				require.True(t, ok)
+				require.InDelta(t, -25, endA.LinearVelocity.X.Base(), 1e-9)
+				require.InDelta(t, 20-tangent, endA.LinearVelocity.Y.Base(), 1e-9)
+				require.InDelta(t, -5*tangent/11, endA.AngularVelocity.Z.Base(), 1e-9)
+				require.InDelta(t, -5*tangent/10, event.PostAngularVelocityB.Z.Base(), 1e-9)
+				require.InDelta(t, 25, event.PostVelocityB.X.Base(), 1e-9)
+				require.InDelta(t, tangent, event.PostVelocityB.Y.Base(), 1e-9)
+				return
+			}
 			require.Equal(t, dynamics.Undecided, report.Status, "%+v", report.Diagnostics)
 			require.Nil(t, report.Next)
 			if tc.name != "offset center" {

@@ -71,8 +71,8 @@ density-derived mass. [Cylinder impact tests](../dynamics/cylinder_sidewall_impa
 pass real contact and sweep reports through the step and trace.
 An end disk touching a box face also continues on a persistent track while
 the disk stays inside the face and neither body moves along the face normal
-relative to the other. A world of four or more bodies uses it to land a
-cylinder on its end and keep it resting. The [disk track tests](../contact_cylinder_sweep_test.go)
+relative to the other. A world uses it to land a cylinder on its end and
+keep it resting. The [disk track tests](../contact_cylinder_sweep_test.go)
 and the [cylinder rest test](../dynamics/cylinder_rest_test.go) check the
 track's point and the resting trace.
 
@@ -243,8 +243,9 @@ carries no such proof, returns `decad.ErrUnsupported`. Those payloads may need
 supplied properties, but those properties cannot replace a missing contact
 proof.
 
-A world of four or more bodies, in any role mix, kicks every dynamic body
-once and moves every body from event to event along its drift or driver. Its
+Every world, whatever its body count and in any role mix `NewWorld`
+admits, kicks every dynamic body once and moves every body from event to
+event along its drift or driver. Its
 broad phase sweeps only the pairs whose `SweptBox` values are not strictly
 disjoint. An initial contact, an impact or a transition cuts the step at its
 exact fraction, and every body advances there on its certified path. Pairs
@@ -254,6 +255,9 @@ supports. Each island is solved for normal impulses and, where the pair's
 friction is positive, Coulomb friction impulses, and certified in exact
 interval arithmetic: every friction impulse lies in its cone, a sticking
 point stops sliding, and a slipping point's friction opposes its slide.
+All of an island's impulses act at once, so friction at one contact can
+drive a body into another: a sphere striking a floor and a wall together
+can take about twice its frictionless normal impulse at each.
 Shallow overlaps within `ContactSlop` and the impact bracket's travel are
 corrected, and bodies resting on one another move together. A curved pair
 that bounces apart and still overlaps by an ulp after the correction, or
@@ -283,8 +287,10 @@ corner whose arrival ended the track. A wider band leaves the step `dynamics.Und
 in such a band, with `StepFixedPairRelation`. A bounce sequence ends when an incoming speed falls to
 `ImpactSpeed`; one whose events reach `MaxEvents` with time remaining stops
 the step after the event that reached it. Kinematic bodies take
-`PoseSegment` drivers, and an island admits one only while its driver
-translates. An `Undecided` report names its time interval, the
+`PoseSegment` drivers, translating or rotating, and an island reads each
+contact point's driver velocity, and the driver's work there, from the
+driver's exact velocity field. A graze with a rotating driver returns
+`dynamics.Undecided` with `StepUnsupported`. An `Undecided` report names its time interval, the
 island's bodies and the exceeded limit, and its `Trace` replays the certified
 prefix. `dynamics.Timeline` chains steps from one state, stops at the first
 `Undecided` step, and samples any time up to its certified end, from many
@@ -320,37 +326,24 @@ box pyramid resting under friction while three spheres land on the floor and
 on each other and roll away, and a cylinder lands on its end disk; the `_gallery` module
 renders the same timeline frame by frame.
 
-Two-body worlds admit a fixed or kinematic body against a dynamic body, or
-two dynamic bodies. An affine kinematic box driver and selected cardinal
-screws can push, depart from, or impact a dynamic source box when their
-pair paths pass. [Kinematic impact tests](../dynamics/kinematic_impact_test.go)
-check driver work and replay.
-
-Three-body worlds can order isolated events when every other pair has a
-certified clear path. Current simultaneous paths include two orthogonal
-frictionless box-face contacts on one dynamic box, a frictionless sphere
-touching a fixed box and sphere, and a zero-friction two-dynamic box stack
-on a fixed floor. One dynamic source sphere can also stick with positive
-friction to two fixed orthogonal source-box faces at initial touch: it needs
-exact centered isotropic mass, no incoming spin, closing X and Z speeds,
-Y slip, zero restitution, exact positive friction, and two certified
-rotating persistent tracks. [Three-body friction tests](../dynamics/three_body_friction_island_test.go)
-check both impulses and trace replay.
-
-Three dynamic source spheres also admit one symmetric simultaneous
-positive-friction impact at initial touch. Body zero touches the equal-radius
-outer spheres along positive X and Y, while the outer pair stays clear.
-All three need equal exact centered isotropic supplied mass, no initial spin
-or Z motion, and exact point witnesses. After the force kick, body zero has
-equal positive X and Y speeds, and both outer spheres are still. The two
-pairs need equal exact positive friction and equal restitution strictly
-between zero and one. A joint sticking solution must fit both Coulomb cones;
-`MaxEvents` must exceed two. Both active pairs must certify rotating
-departure, and the outer pair must certify a rotating clear path. The
+Two- and three-body worlds take the same step. `NewWorld` still refuses a
+two- or three-body world with no dynamic body and a three-body world with a
+kinematic body. [Kinematic impact tests](../dynamics/kinematic_impact_test.go)
+check driver work and replay, and the
+[rotating driver tests](../dynamics/kinematic_rotation_test.go) strike a box
+with a turning driver and check the impulse its velocity field gives.
+[Three-body friction tests](../dynamics/three_body_friction_island_test.go)
+strike a sphere into a fixed floor and wall at once, sticking, sliding at
+the cone, and bouncing. The
 [three-dynamic friction test](../dynamics/three_body_dynamic_friction_test.go)
-checks both impulses, all three rounded pair paths, trace samples, and a
-second event-free spinning step. Asymmetric speeds, unequal masses or radii,
-sliding impulses, and unproved pair paths return `dynamics.Undecided`.
+solves symmetric, unequal-mass and asymmetric-speed three-sphere islands.
+
+Two dynamic spheres that move on together in persistent touch after a
+zero-restitution impact stop the step at that impact with
+`StepPairUndecided`: the persistent sphere-pair replay needs the corrected
+centers exactly one radius sum apart at every rounded pose. The
+[two-dynamic test](../dynamics/three_body_two_dynamic_test.go) checks the
+impact and the refusal.
 
 ## When a proof stops
 
@@ -361,7 +354,7 @@ sliding impulses, and unproved pair paths return `dynamics.Undecided`.
 | `SweptBox` | `decad.ErrUnsupported` when the body's bounds or the path's travel bound are not finite |
 | `Body.MassProperties` | `decad.ErrUnsupported` when density-derived bounded mass or inertia is unavailable |
 | `NewWorld` | `dynamics.ErrUnsupported` for fewer than two bodies, a two- or three-body world with no dynamic body, or a three-body kinematic world |
-| `World.Step` | `dynamics.Undecided` with `Next == nil` when contact, response, or replay lacks proof, and for an island gate beyond its limit, an uncorrectable overlap, events reaching `MaxEvents` with time remaining, calls beyond `MaxPairSweeps`, or a rounded pose a box exclusion no longer covers in a world of four or more bodies |
+| `World.Step` | `dynamics.Undecided` with `Next == nil` when contact, response, or replay lacks proof, and for an island gate beyond its limit, an uncorrectable overlap, events reaching `MaxEvents` with time remaining, calls beyond `MaxPairSweeps`, or a rounded pose a box exclusion no longer covers |
 | `Trace.Sample` | `dynamics.ErrUnsupported` if a rounded pose loses its cached proof or a box exclusion; `dynamics.ErrInvalidInput` for time outside the step or its certified prefix |
 | `Timeline.Advance` | `dynamics.ErrTimelineStopped` after an `Undecided` step stopped the timeline |
 | `Timeline.Sample` | `dynamics.ErrUnsupported` for a time below zero or beyond `End()` |
