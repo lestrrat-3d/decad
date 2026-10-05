@@ -28,8 +28,9 @@ type InertiaReading struct {
 
 // MassProperties computes the properties of b for a stated positive, uniform
 // density. The density must have kind units.Density. The current evaluator
-// admits source prisms under axis-preserving rigid placements and full source
-// spheres under rigid placements. It returns ErrUnsupported for other solids
+// admits source prisms under axis-preserving rigid placements, full source
+// spheres under rigid placements, and cardinal full source cylinders made by
+// revolving an axis-incident rectangle. It returns ErrUnsupported for other solids
 // rather than estimating their inertia.
 // The receiver and context must not be nil.
 func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassProperties, error) {
@@ -59,6 +60,12 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 			return MassProperties{}, err
 		}
 		return sourceSphereMassProperties(ctx, b, sphere, density)
+	}
+	if cylinder, ok := sourceRevolvedCylinderAtPose(b, r3.Identity()); ok {
+		if err := ctx.Err(); err != nil {
+			return MassProperties{}, err
+		}
+		return sourceRevolvedCylinderMassProperties(ctx, b, cylinder, density)
 	}
 	pp, ok := b.payload.(prismPayload)
 	if !ok || pp.sectionDelta != 0 || pp.z0Delta != 0 || pp.z1Delta != 0 ||

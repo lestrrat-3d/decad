@@ -1,7 +1,6 @@
 package dynamics_test
 
 import (
-	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -94,26 +93,12 @@ func runRevolvedCylinderClearStep(t *testing.T, reverse bool) {
 		replay = replayA
 	}
 	require.InDelta(t, 1.5, replay.Translation().X, 1e-9)
-	// The cylinder's volume is 250π mm³. Supply its uniform-density
-	// properties with an outward bound on the float evaluation of π.
-	m := .25 * math.Pi
-	zeroInertia := decad.Measurement{Value: units.KilogramSquareMillimeters(0),
-		Exactness: decad.Exact, Bound: units.KilogramSquareMillimeters(0)}
-	ixx := decad.Measurement{Value: units.KilogramSquareMillimeters(m * 25 / 2),
-		Exactness: decad.Approximate, Bound: units.KilogramSquareMillimeters(1e-12)}
-	iyy := decad.Measurement{Value: units.KilogramSquareMillimeters(m * 175 / 12),
-		Exactness: decad.Approximate, Bound: units.KilogramSquareMillimeters(1e-12)}
-	mass := decad.MassProperties{
-		Mass: decad.Measurement{Value: units.Kilograms(m), Exactness: decad.Approximate,
-			Bound: units.Kilograms(1e-12)},
-		Center: decad.VecMeasurement{Value: r3.Vec{X: 5}, Exactness: decad.Exact,
-			Bound: units.Millimeters(0)},
-		Inertia: decad.InertiaReading{XX: ixx, YY: iyy, ZZ: iyy,
-			XY: zeroInertia, XZ: zeroInertia, YZ: zeroInertia},
-	}
+	density := units.KilogramsPerCubicMillimeter(.001)
+	mass, err := cylinder.MassProperties(t.Context(), density)
+	require.NoError(t, err)
 	mat := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
 	defs := []dynamics.RigidBody{{Body: floor, Role: dynamics.Fixed, Material: mat},
-		{Body: cylinder, Role: dynamics.Dynamic, Supplied: &mass, Material: mat}}
+		{Body: cylinder, Role: dynamics.Dynamic, Density: &density, Material: mat}}
 	states := []dynamics.BodyState{
 		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zero},
 		{Body: cylinder, Pose: pose, LinearVelocity: up, AngularVelocity: zero}}
@@ -136,6 +121,16 @@ func runRevolvedCylinderClearStep(t *testing.T, reverse bool) {
 	require.NoError(t, err)
 	require.Equal(t, dynamics.Advanced, step.Status, "%+v", step.Diagnostics)
 	require.Empty(t, step.Events)
+	require.NotNil(t, step.Conservation)
+	require.InDelta(t, mass.Mass.Value.Base(),
+		step.Conservation.Input.LinearMomentum.Value.X.Base(), 1e-12)
+	require.InDelta(t, mass.Mass.Value.Base()/2,
+		step.Conservation.Input.KineticEnergy.Value.Base(), 1e-12)
+	require.InDelta(t, mass.Mass.Value.Base(),
+		step.Conservation.Completion.LinearMomentum.Value.X.Base(), 1e-12)
+	require.InDelta(t, mass.Mass.Value.Base()/2,
+		step.Conservation.Completion.KineticEnergy.Value.Base(), 1e-12)
+	require.Zero(t, step.Conservation.ContactImpulse.Value.X.Base())
 	final, ok := step.Next.Body(cylinder)
 	require.True(t, ok)
 	require.InDelta(t, 2, final.Pose.Translation().X, 1e-9)
