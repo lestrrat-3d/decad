@@ -9,9 +9,9 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// The axial source-cylinder manifold has one disk-center witness. Before a
-// zero-spin response, bound the point speed, energy, and full-step travel that
-// an omitted off-axis torque could cause over the entire source body.
+// Source-cylinder face manifolds have one representative witness. Before a zero-spin
+// response, bound the point speed, energy, and full-step travel that an omitted
+// off-axis torque could cause over the entire source body.
 func (w *World) omittedCylinderMotionWithin(manifold *decad.ContactManifold, pose r3.Transform,
 	dynamic, axis int, impulse float64, duration units.Value) bool {
 	body := w.parts[dynamic].definition.Body
@@ -23,7 +23,7 @@ func (w *World) omittedCylinderMotionWithin(manifold *decad.ContactManifold, pos
 	if dynamic == 1 {
 		face, witness = point.FaceB, point.OnB
 	}
-	if !cylinderEndFaceOnBody(body, face) {
+	if !cylinderSourceFaceOnBody(body, face) {
 		return true
 	}
 	if len(manifold.Points) != 1 {
@@ -85,11 +85,13 @@ func (w *World) omittedCylinderMotionWithin(manifold *decad.ContactManifold, pos
 		travel.Cmp(penetrationLimit) <= 0
 }
 
-func cylinderEndFaceOnBody(body *decad.Body, face *decad.Face) bool {
+func cylinderSourceFaceOnBody(body *decad.Body, face *decad.Face) bool {
 	if face == nil {
 		return false
 	}
-	if _, ok := face.Surface().(decad.Plane); !ok {
+	switch face.Surface().(type) {
+	case decad.Plane, decad.Cylinder:
+	default:
 		return false
 	}
 	faces := body.Faces()

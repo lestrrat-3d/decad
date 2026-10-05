@@ -19,6 +19,11 @@ density-derived mass. The sweep and step replay the clear path before and after
 impact. The revolved
 cylinder publishes an axial disk-face manifold at a contained source-box
 floor touch or shallow crossing.
+A vertical full circular source prism also proves its sidewall's axial line
+contact against a broad source-box wall. Its exact transverse support gap
+brackets a horizontal first impact and certifies separating departure. A
+density-backed, centered, frictionless cylinder rebounds from the fixed wall
+with positive restitution; the trace replays the rounded approach and rebound.
 A fixed source-box floor can hold two centered dynamic source boxes stacked
 vertically. With zero friction and restitution, one gravity kick is followed
 by a coupled two-contact response; all three pair paths receive continuous
