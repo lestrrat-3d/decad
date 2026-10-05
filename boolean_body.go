@@ -120,12 +120,12 @@ func (fp facetedPayload) placed(ctx context.Context, d *Document, ref producerID
 	tr := delta.Translation()
 	maxTrans := math.Max(math.Abs(tr.X), math.Max(math.Abs(tr.Y), math.Abs(tr.Z)))
 	allow := rigidRoundAllow(maxIn, maxTrans)
-	next.meshBound += allow
+	next.meshBound = absSumUpper(next.meshBound, allow)
 	areaUpper, err := perturbedAreaUpperContext(ctx, next.verts, next.tris, allow)
 	if err != nil {
 		return nil, err
 	}
-	next.volSymDiff += sweptVolumeAllow(allow, areaUpper)
+	next.volSymDiff = absSumUpper(next.volSymDiff, sweptVolumeAllow(allow, areaUpper))
 	return buildFacetedBody(ctx, d, ref, next)
 }
 

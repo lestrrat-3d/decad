@@ -959,6 +959,68 @@ func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 	require.Equal(t, want, after.diameter)
 }
 
+func TestBooleanProofBoundsEncloseExactTermSums(t *testing.T) {
+	// Each small term is a valid positive bound, even when adding it to one
+	// rounds back to one. The certificate must enclose the exact sum.
+	const tiny = math.SmallestNonzeroFloat64
+	boundary, volume, area := booleanProofBounds(1, tiny, 1, tiny, tiny, 1, tiny, tiny)
+	for _, tc := range []struct {
+		got       float64
+		tinyTerms int64
+	}{
+		{boundary, 1},
+		{volume, 2},
+		{area, 2},
+	} {
+		want := new(big.Rat).Add(big.NewRat(1, 1),
+			new(big.Rat).Mul(big.NewRat(tc.tinyTerms, 1), new(big.Rat).SetFloat64(tiny)))
+		require.GreaterOrEqual(t, floatRat(tc.got).Cmp(want), 0)
+	}
+}
+
+func TestFacetedPlacementEnclosesExactPriorAndMotionBounds(t *testing.T) {
+	// The Boolean producer supplies an exact held box union. Giving its
+	// certificate a tiny extra allowance remains sound, and makes a lost
+	// low-order term in the placement's two sums observable.
+	doc := New()
+	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
+	b := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
+	shift, err := r3.Translation(r3.NewVec(5, 5, 5))
+	require.NoError(t, err)
+	b, err = b.Placed(t.Context(), shift)
+	require.NoError(t, err)
+	union, err := Union(t.Context(), a, b)
+	require.NoError(t, err)
+	before, ok := union.payload.(facetedPayload)
+	require.True(t, ok)
+	require.Zero(t, before.meshBound)
+	require.Zero(t, before.volSymDiff)
+	const tiny = math.SmallestNonzeroFloat64
+	before.meshBound, before.volSymDiff = tiny, tiny
+
+	move, err := r3.Translation(r3.NewVec(1, 0, 0))
+	require.NoError(t, err)
+	placed, err := before.placed(t.Context(), doc, producerID(0), move)
+	require.NoError(t, err)
+	after := placed.payload.(facetedPayload)
+	maxInput := 0.0
+	for _, v := range before.verts {
+		maxInput = math.Max(maxInput, math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))))
+	}
+	allow := rigidRoundAllow(maxInput, 1)
+	areaUpper, err := perturbedAreaUpperContext(t.Context(), after.verts, after.tris, allow)
+	require.NoError(t, err)
+	roundVol := sweptVolumeAllow(allow, areaUpper)
+	for _, tc := range []struct{ got, increment float64 }{
+		{after.meshBound, allow},
+		{after.volSymDiff, roundVol},
+	} {
+		require.Positive(t, tc.increment)
+		want := new(big.Rat).Add(new(big.Rat).SetFloat64(tiny), new(big.Rat).SetFloat64(tc.increment))
+		require.GreaterOrEqual(t, floatRat(tc.got).Cmp(want), 0)
+	}
+}
+
 // TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs is
 // docs/tessellation-reach-design.md §3's boolean half: the result's
 // occupied-volume bound is composed from each operand mesh's OWN volSymDiff
