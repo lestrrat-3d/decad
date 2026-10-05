@@ -19,6 +19,7 @@ func TestExportOperationsRejectNilContextBeforeOperands(t *testing.T) {
 	}{
 		{"STL", func(ctx context.Context) error { return export.STL(ctx, nil, nil, units.Value{}) }},
 		{"OBJ", func(ctx context.Context) error { return export.OBJ(ctx, nil, nil, units.Value{}) }},
+		{"ThreeMF", func(ctx context.Context) error { return export.ThreeMF(ctx, nil, nil, units.Value{}) }},
 		{"STEP", func(ctx context.Context) error { return export.STEP(ctx, nil, nil, units.Value{}) }},
 		{"NewSTEPFile", func(ctx context.Context) error {
 			_, err := export.NewSTEPFile(ctx, nil, units.Value{}, step.Header{})

@@ -1592,6 +1592,7 @@ func (b *Body) Tessellate(ctx context.Context, tol units.Value, opts ...Tessella
 // package export:
 func STL(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...decad.TessellateOption) error
 func OBJ(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...decad.TessellateOption) error
+func ThreeMF(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...decad.TessellateOption) error
 func STEP(ctx context.Context, w io.Writer, body *decad.Body, tol units.Value, opts ...STEPOption) error
 func WithSTEPName(name string) STEPOption
 func WithSTEPTimestamp(timestamp time.Time) STEPOption
@@ -1608,12 +1609,14 @@ per-payload staging. A payload with no complete boundary proof is never
 exported. A mesh without the separate occupied-volume proof is never admitted
 to a boolean by an unproved generic bound.
 
-**`Tessellate` defaults to `VerifyAll`; `export.STL` and `export.OBJ` default to
-`VerifyNone`.** The caller supplies a positive length chord tolerance to every
-writer. STL and OBJ consume vertices and indices but no proof term. Both accept
-`WithVerification` to demand a stronger proof and accept its refusals. An STL
-file from a sheet is not a solid; at `VerifyNone`, a solid mesh is closed but
-not proven free of self-intersection.
+**`Tessellate` defaults to `VerifyAll`; `export.STL`, `export.OBJ`, and
+`export.ThreeMF` default to `VerifyNone`.** The caller supplies a positive length
+chord tolerance to every writer. These three writers consume vertices and
+indices but no proof term. All accept `WithVerification` to demand a stronger
+proof and accept its refusals. An STL file from a sheet is not a solid; at
+`VerifyNone`, a solid mesh is closed but not proven free of self-intersection.
+`ThreeMF` writes a sheet as a 3MF `surface` object and a solid as a `model`
+object. See `docs/3mf-export-design.md`.
 
 `Tessellate` and every writer pass `ctx` through chording, loop-clearance
 scans, cap triangulation, mesh audits, and faceted restatement. Cancellation

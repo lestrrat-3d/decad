@@ -1,10 +1,11 @@
 # STEP export design
 
-`export` groups STL, OBJ, and STEP writers in one package. Every writer takes
+`export` groups STL, OBJ, 3MF, and STEP writers in one package. Every writer takes
 `ctx`, `w`, `body`, and a positive length chord tolerance in that order.
-`STL` and `OBJ` accept `decad.TessellateOption` values and default to
+`STL`, `OBJ`, and `ThreeMF` accept `decad.TessellateOption` values and default to
 `decad.VerifyNone`. They write the mesh returned by `Body.Tessellate` at the
-requested verification level. `export` imports decad and
+requested verification level. The 3MF package contract is in
+`docs/3mf-export-design.md`. `export` imports decad and
 `github.com/lestrrat-3d/step/ap214`; decad's root package does not import
 STEP. `NewSTEPFile(ctx, body, tol, header)` returns a `step.File`. The
 `STEP(ctx, w, body, tol, opts...)` writer requires options for a nonempty file

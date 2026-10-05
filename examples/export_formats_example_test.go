@@ -1,9 +1,11 @@
 package examples_test
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/lestrrat-3d/decad"
@@ -44,11 +46,34 @@ func Example_export_formats() {
 		fmt.Printf("failed to write STL: %s\n", err)
 		return
 	}
+	var threeMF bytes.Buffer
+	if err := export.ThreeMF(context.Background(), &threeMF, body, tol); err != nil {
+		fmt.Printf("failed to write 3MF: %s\n", err)
+		return
+	}
+	archive, err := zip.NewReader(bytes.NewReader(threeMF.Bytes()), int64(threeMF.Len()))
+	if err != nil {
+		fmt.Printf("failed to read 3MF: %s\n", err)
+		return
+	}
+	modelFile, err := archive.File[2].Open()
+	if err != nil {
+		fmt.Printf("failed to open 3MF model: %s\n", err)
+		return
+	}
+	model, err := io.ReadAll(modelFile)
+	modelFile.Close()
+	if err != nil {
+		fmt.Printf("failed to read 3MF model: %s\n", err)
+		return
+	}
 	fmt.Printf("AP214: %v, analytic faces: %d\n",
 		strings.Contains(out.String(), "FILE_SCHEMA(('AUTOMOTIVE_DESIGN'))"),
 		strings.Count(out.String(), "=ADVANCED_FACE("))
 	fmt.Printf("STL facets: %d\n", strings.Count(stl.String(), "facet normal"))
+	fmt.Printf("3MF parts: %d, triangles: %d\n", len(archive.File), strings.Count(string(model), "<triangle "))
 	// Output:
 	// AP214: true, analytic faces: 6
 	// STL facets: 12
+	// 3MF parts: 3, triangles: 12
 }
