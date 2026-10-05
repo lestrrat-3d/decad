@@ -203,9 +203,12 @@ Shallow overlaps within `ContactSlop` and the impact bracket's travel are
 corrected, and bodies resting on one another move together. A curved pair
 that bounces apart and still overlaps by an ulp after the correction, or
 ends apart by less than can be proved, is pushed provably clear within the
-same allowance; a resting curved pair the correction cannot place in exact
-touch returns `dynamics.Undecided`. A body landing on a body that rests on a
-fixed support is corrected alone. Two spheres spinning after a glancing
+same allowance. A resting pair the correction leaves an ulp off is moved
+back into exact touch where a touching pose exists, as for a disk on a face;
+otherwise, as for two spheres resting off center, it is pushed apart by half
+of `ContactSlop` and lands again at the next step, and on a persistent track
+it returns `dynamics.Undecided`. A body landing on a body that rests on a
+fixed support is corrected and pushed alone. Two spheres spinning after a glancing
 frictional impact meet again through the rotating sphere-pair impact
 bracket. Co-moving bodies leave with one exact common velocity, so a stack
 can bounce and land as one.

@@ -17,12 +17,6 @@ import (
 //     "corrected pair relation is 3, not touching";
 //   - the doubling that makes a sub-ulp push move the rounded pose: the same
 //     refusal;
-//   - the separating requirement, which keeps a pair the solve does not
-//     separate both from the push and from ending separated: deleting the
-//     two conditions together lets TestIslandPushLeavesARestingPairAlone
-//     advance with the resting sphere an ulp off the face. Each condition
-//     alone is the other's backstop: an unpushed resting pair is still
-//     overlapping, and a pushed one is refused as separated;
 //   - the correction allowance: TestCorrectedRelationPushRespectsAllowance
 //     (island_push_internal_test.go) pushes a sphere past an allowance it
 //     does not fit. The bounce fixtures cannot reach that leg: their
@@ -175,18 +169,31 @@ func TestCorrectedRelationPushRespectsAllowance(t *testing.T) {
 	require.Contains(t, reason, "exceeds its correction allowance")
 }
 
-// TestIslandPushLeavesARestingPairAlone runs the bounce with no restitution:
+// TestIslandPushRestsACurvedPairApart runs the bounce with no restitution:
 // the sphere stops on the tilted face, so the solve does not separate the
-// pair, and the correction's ulp of overlap cannot be pushed away without
-// breaking the exact touch its continuation needs. The step refuses with
-// StepCorrectionFailed.
-func TestIslandPushLeavesARestingPairAlone(t *testing.T) {
+// pair, and no translation along the tilted normal lands the sphere in
+// exact touch. The correction's ulp of overlap is pushed out to a gap of at
+// least half of ContactSlop, within the correction allowance, and the pair
+// leaves the contact set: the step advances with the sphere at rest just
+// off the face, where it stays.
+func TestIslandPushRestsACurvedPairApart(t *testing.T) {
 	scene := newPushScene(t, 0, pairMaterialStepConfig())
 	report := scene.step(t)
-	require.Equal(t, dynamics.Undecided, report.Status)
-	require.Nil(t, report.Next)
-	t.Logf("%+v", report.Diagnostics)
-	require.Len(t, report.Diagnostics, 1)
-	require.Equal(t, dynamics.StepCorrectionFailed, report.Diagnostics[0].Code, "%+v", report.Diagnostics)
-	require.Contains(t, report.Diagnostics[0].Reason, "not touching")
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	final, ok := report.Next.Body(scene.ball)
+	require.True(t, ok)
+	require.InDelta(t, 0, final.LinearVelocity.X.Base(), 1e-6)
+	require.InDelta(t, 0, final.LinearVelocity.Z.Base(), 1e-6)
+	face, ok := report.Next.Body(scene.face)
+	require.True(t, ok)
+	contact, err := scene.doc.ContactPair(t.Context(), scene.face, scene.ball, face.Pose, final.Pose,
+		scene.config.Contact)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, contact.Relation)
+	slop := scene.config.ContactSlop.Base()
+	// The margin is half of ContactSlop; its last push may round a hair
+	// short of it, so the proved gap is held to a quarter.
+	require.GreaterOrEqual(t, contact.Gap.Value.Base()-contact.Gap.Bound.Base(), slop/4)
+	require.Less(t, contact.Gap.Value.Base(), slop)
 }
