@@ -46,6 +46,7 @@ type ContactEventKind int
 const (
 	ContactImpact ContactEventKind = iota + 1
 	ContactTransition
+	ContactGraze
 )
 
 type ContactEvent struct {
@@ -108,6 +109,7 @@ type Trace struct {
 	end                 State
 	preSweep            *decad.SweepReport
 	postSweep           *decad.SweepReport
+	grazingSweep        *decad.SweepReport
 	rotationalPrefix    *decad.SweepReport
 	rotationalRemainder *decad.SweepReport
 	threeSweeps         [3]*decad.SweepReport
@@ -140,6 +142,15 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 	}
 	if timeValue.Cmp(durationValue) == 0 {
 		return tr.end, nil
+	}
+	if tr.grazingSweep != nil {
+		state := tr.post
+		a, b, err := tr.grazingSweep.CertifiedPosesAtInterval(t, units.Seconds(0), tr.duration)
+		if err != nil {
+			return State{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
+		}
+		state.entries[0].Pose, state.entries[1].Pose = a, b
+		return state, nil
 	}
 	if tr.start.hasThird && tr.threeSweeps != ([3]*decad.SweepReport{}) {
 		if tr.start.world == nil || tr.start.world.three == nil {
@@ -430,12 +441,14 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	if !moving && !rotating {
 		return w.stepStill(ctx, from, kicked, dt)
 	}
+	oblique := false
 	if !rotating {
 		for _, entry := range kicked.entries {
 			if entry.Pose.ApplyDir(r3.Vec{X: 1}) != (r3.Vec{X: 1}) ||
 				entry.Pose.ApplyDir(r3.Vec{Y: 1}) != (r3.Vec{Y: 1}) ||
 				entry.Pose.ApplyDir(r3.Vec{Z: 1}) != (r3.Vec{Z: 1}) {
-				return w.stepObliqueSupport(ctx, from, kicked, dt)
+				oblique = true
+				break
 			}
 		}
 	}
@@ -443,6 +456,9 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 	first, err := w.sweep(ctx, kicked, dt, decad.StopAtInitialContact)
 	if err != nil {
 		return nil, err
+	}
+	if oblique && first.Outcome != decad.SweepGrazingTouch {
+		return w.stepObliqueSupport(ctx, from, kicked, dt)
 	}
 	report := &StepReport{Trace: Trace{start: from, duration: dt}}
 	switch first.Outcome {
@@ -464,6 +480,11 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		report.Status, report.Next, report.Trace.end = Advanced, &end, end
 		report.Trace.preSweep = actual
 		return report, nil
+	case decad.SweepGrazingTouch:
+		if rotating {
+			return undecided(w, "rotating grazing contact is not certified"), nil
+		}
+		return w.stepGrazingTouch(ctx, from, kicked, dt, first)
 	case decad.SweepInitiallyTouching:
 		if rotating {
 			return undecided(w, "rotating initial contact needs a certified response track"), nil

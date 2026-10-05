@@ -58,7 +58,8 @@ through an affine first-impact sweep and a centered fixed-floor rebound with
 supplied or density-derived sphere mass. Two source spheres also have a bounded
 center-line point manifold, an affine first-impact sweep including transverse
 motion, and a centered dynamic-pair rebound at cardinal or off-axis contact
-with a certified clear remainder.
+with a certified clear remainder. An exact isolated sphere-pair graze records
+one zero-impulse event and replays the separated path on both sides.
 An exactly orthogonal source box at a 45-degree Y pose also gives the sphere a
 bounded oblique point, an affine first-impact sweep, and a centered
 positive-restitution rebound with interior trace replay.

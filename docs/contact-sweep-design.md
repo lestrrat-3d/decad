@@ -11,10 +11,11 @@ separating departure. A full source cylinder certifies a clear axial path,
 first circular-face impact, and separating departure inside a source-box face.
 Two source semicircle spheres certify affine first impact
 through exact squared-distance motion, including transverse crossing, and
-separating departure. A stationary touching source-sphere pair certifies a
-full-span point track. Rotating source-box rigid drifts
-can also certify a clear path or bracket an impact after exact oriented-box
-pose relations, a bounded float-to-ideal pose difference, and whole-body
+separating departure. Their exact isolated interior tangent publishes a
+bounded point with strict separation on both sides. A stationary touching
+source-sphere pair certifies a full-span point track. Rotating source-box
+rigid drifts can also certify a clear path or bracket an impact after exact
+oriented-box pose relations, a bounded float-to-ideal pose difference, and whole-body
 travel bounds. An initial source-box face touch also certifies immediate
 departure when both bodies have the same angular velocity and the bounded
 normal separation rate is positive. Fixed oblique poses of co-oriented source

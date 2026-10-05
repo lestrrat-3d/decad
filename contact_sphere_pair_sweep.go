@@ -267,6 +267,52 @@ func spherePairQuadraticAt(a, b, c dyadic, f *big.Rat) *big.Rat {
 	return out.Add(out, c.rat())
 }
 
+// grazingTouch accepts only an exactly representable interior double root.
+// The positive leading coefficient proves strict separation on both sides.
+func (r *sourceSpherePairSweepRun) grazingTouch(ctx context.Context, first *SweepSample,
+	vertex *big.Rat) (*SweepReport, error) {
+	zero, one := new(big.Rat), big.NewRat(1, 1)
+	if vertex.Sign() <= 0 || vertex.Cmp(one) >= 0 {
+		return r.undecided(zero, one, SweepTimeFloor), nil
+	}
+	if floatRat(ratFloatNearest(vertex)).Cmp(vertex) != 0 {
+		return r.undecided(zero, one, SweepEventUnrepresentable), nil
+	}
+	eventTime := new(big.Rat).Mul(vertex, r.pa.duration)
+	if floatRat(ratFloatNearest(eventTime)).Cmp(eventTime) != 0 {
+		return r.undecided(zero, one, SweepEventUnrepresentable), nil
+	}
+	touch, err := r.sample(ctx, vertex)
+	if errors.Is(err, errSweepPoseBudget) {
+		return r.undecided(zero, vertex, SweepPoseBudget), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if first.Ideal.Relation != ContactSeparated ||
+		touch.Ideal.Relation != ContactTouching || touch.FloatContact.Relation != ContactTouching {
+		return r.undecided(zero, vertex, SweepPoseRelation), nil
+	}
+	if touch.Ideal.Manifold == nil || touch.FloatContact.Manifold == nil ||
+		len(touch.Ideal.Manifold.Points) != 1 || len(touch.FloatContact.Manifold.Points) != 1 {
+		return r.undecided(zero, vertex, SweepContactUnsupported), nil
+	}
+	last, err := r.sample(ctx, one)
+	if errors.Is(err, errSweepPoseBudget) {
+		return r.undecided(vertex, one, SweepPoseBudget), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if last.Ideal.Relation != ContactSeparated || last.FloatContact.Relation != ContactSeparated {
+		return r.undecided(vertex, one, SweepPoseRelation), nil
+	}
+	r.report.Outcome, r.report.Event = SweepGrazingTouch, &touch.Ideal
+	r.report.replay.grazingAt = new(big.Rat).Set(vertex)
+	r.sortSamples()
+	return r.report, nil
+}
+
 // quadraticBracket searches only the decreasing side of the exact squared
 // distance. The right seed is already at or inside first contact, so a later
 // exit cannot be mistaken for the first encounter.
@@ -368,8 +414,13 @@ func (r *sourceSpherePairSweepRun) transverse(ctx context.Context, first *SweepS
 		r.report.Outcome = SweepClear
 		return r.report, nil
 	}
-	if spherePairQuadraticAt(a, b, c, vertex).Sign() == 0 && vertex.Cmp(one) < 0 {
+	if a.sign() > 0 && vertex.Cmp(one) == 0 &&
+		spherePairQuadraticAt(a, b, c, one).Sign() == 0 {
 		return r.undecided(zero, one, SweepTimeFloor), nil
+	}
+	if a.sign() > 0 && vertex.Sign() > 0 && vertex.Cmp(one) < 0 &&
+		spherePairQuadraticAt(a, b, c, vertex).Sign() == 0 {
+		return r.grazingTouch(ctx, first, vertex)
 	}
 	leftF, rightF, ok := spherePairQuadraticBracket(a, b, c, vertex, r.pa.duration, resolution)
 	if !ok {

@@ -7,7 +7,9 @@ geometry results. A two-body world steps one pair with at least one dynamic
 body using density-derived or supplied mass. An axis-aligned
 certified contact normal determines the response component; tangent velocity
 continues through an oblique impact. Centered impacts of two dynamic bodies
-apply equal and opposite impulses.
+apply equal and opposite impulses. An affine source-sphere pair with one
+exact interior tangent advances with unchanged velocity, one zero-impulse
+contact event, and full-span trace replay.
 An initial frictionless, half-width offset face impact between two dynamic
 source boxes can produce equal Y spin. Four equal normal point impulses pass
 the bounded velocity, angular, energy, and momentum checks before a rotating
