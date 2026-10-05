@@ -147,9 +147,10 @@ func (w *World) stepThreeSphereIsland(ctx context.Context, from, kicked State,
 	preDynamic.LinearVelocity = spherePairQuantityVelocity(after)
 	post = withBodyState(post, preDynamic)
 	var events []ContactEvent
-	var totalImpulse [3]*big.Rat
+	var totalImpulse, impulseLow, impulseHigh [3]*big.Rat
 	for axis := range totalImpulse {
-		totalImpulse[axis] = new(big.Rat)
+		totalImpulse[axis], impulseLow[axis], impulseHigh[axis] =
+			new(big.Rat), new(big.Rat), new(big.Rat)
 	}
 	lastActive := -1
 	for i, contact := range contacts {
@@ -192,9 +193,16 @@ func (w *World) stepThreeSphereIsland(ctx context.Context, from, kicked State,
 				PenetrationResidual: w.step.PenetrationResidual,
 				AngularUpper:        angularBudget, Iterations: 1},
 		})
+		bound, angle := exactBase(contact.point.Normal.Bound), exactBase(contact.point.NormalAngle)
+		if bound == nil || angle == nil || bound.Sign() < 0 || angle.Sign() < 0 {
+			return w.threeUndecided(contact.key, "sphere island normal bound is invalid"), nil
+		}
+		normalError := new(big.Rat).Mul(exactBase(impulseValue), new(big.Rat).Add(bound, angle))
 		for axis, value := range []float64{contact.outward.X, contact.outward.Y, contact.outward.Z} {
-			totalImpulse[axis].Add(totalImpulse[axis], new(big.Rat).Mul(
-				exactBase(impulseValue), ratFloat(value)))
+			applied := new(big.Rat).Mul(exactBase(impulseValue), ratFloat(value))
+			totalImpulse[axis].Add(totalImpulse[axis], applied)
+			impulseLow[axis].Add(impulseLow[axis], new(big.Rat).Sub(applied, normalError))
+			impulseHigh[axis].Add(impulseHigh[axis], new(big.Rat).Add(applied, normalError))
 		}
 	}
 	if len(events) >= w.step.MaxEvents {
@@ -272,7 +280,7 @@ func (w *World) stepThreeSphereIsland(ctx context.Context, from, kicked State,
 	if !ok {
 		return w.threeUndecided(contacts[0].key, "sphere island conservation is not finite"), nil
 	}
-	contactImpulse, ok := boundedMomentum(totalImpulse, totalImpulse, totalImpulse)
+	contactImpulse, ok := boundedMomentum(totalImpulse, impulseLow, impulseHigh)
 	if !ok {
 		return w.threeUndecided(contacts[0].key, "sphere island contact impulse is not finite"), nil
 	}

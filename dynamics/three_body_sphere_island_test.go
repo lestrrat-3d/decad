@@ -92,6 +92,13 @@ func TestThreeBodySphereFloorSphereCoupledInitialResponse(t *testing.T) {
 	require.NotNil(t, report.Conservation)
 	require.InDelta(t, -200, report.Conservation.ContactImpulse.Value.X.Base(), 1e-6)
 	require.InDelta(t, 100, report.Conservation.ContactImpulse.Value.Z.Base(), 1e-6)
+	oblique := report.Events[1]
+	normalAllowance := oblique.NormalImpulse.Base() *
+		(oblique.Manifold.Points[0].Normal.Bound.Base() + oblique.Manifold.Points[0].NormalAngle.Base())
+	require.Positive(t, normalAllowance)
+	require.Greater(t, report.Conservation.ContactImpulse.Bound.X.Base(), normalAllowance*0.99)
+	require.Greater(t, report.Conservation.ContactImpulse.Bound.Y.Base(), normalAllowance*0.99)
+	require.Greater(t, report.Conservation.ContactImpulse.Bound.Z.Base(), normalAllowance*0.99)
 	require.InDelta(t, 0, report.Conservation.Completion.KineticEnergy.Value.Base(), 1e-9)
 	for _, at := range []units.Value{units.Seconds(0), units.Seconds(.05), units.Seconds(.1)} {
 		replayed, sampleErr := report.Trace.Sample(at)
