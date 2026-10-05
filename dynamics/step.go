@@ -94,6 +94,9 @@ type ContactEvent struct {
 	PostAngularVelocityA, PostAngularVelocityB QuantityVec
 	PoseA, PoseB                               r3.Transform
 	PositionChangeA, PositionChangeB           r3.Vec
+	// Island is the index into StepReport.Islands of the island that
+	// published this event, in a world of four or more bodies.
+	Island int
 }
 
 // ContactPointImpulse follows the matching point in ContactEvent.Manifold.
@@ -110,6 +113,16 @@ type ContactSolverReport struct {
 	PenetrationResidual units.Value
 	AngularUpper        units.Value
 	Iterations          int
+	// The island solver of a world of four or more bodies also publishes
+	// the largest attained value of each certificate gate
+	// (docs/multibody-dynamics-design.md §6.3): the linear and angular law
+	// residuals, the kinetic-energy change's upper end, and the island's
+	// linear and angular momentum residuals about the world origin.
+	LinearResidual          units.Value
+	AngularResidual         units.Value
+	EnergyResidual          units.Value
+	MomentumResidual        units.Value
+	AngularMomentumResidual units.Value
 }
 
 func zeroImpulseVec() QuantityVec {
@@ -125,6 +138,9 @@ type StepReport struct {
 	Trace        Trace
 	Diagnostics  []StepDiagnostic
 	Conservation *StepConservation
+	// Islands lists the simultaneous solves of a world of four or more
+	// bodies, in solve order.
+	Islands []IslandReport
 }
 
 // Trace keeps the rounded sweep certificates and the event states for replay.
@@ -142,6 +158,7 @@ type Trace struct {
 	threeSlices         []threeTraceSlice
 	threeEvents         []threeTraceEvent
 	slices              []traceSlice // a world of four or more bodies, docs/multibody-dynamics-design.md §3.4
+	events              []traceEvent // the events between those slices
 	duration            units.Value
 	eventAt             units.Value
 	hasEvent            bool
@@ -396,9 +413,11 @@ func pairCorrectionWithin(before, after State, axis int, allowance float64) bool
 }
 
 // Step advances the admitted pair through certified clear, contact, or edge-transition paths.
-// A world of four or more bodies publishes one event-free drift whose candidate
-// pairs the broad phase selects and SweepPair proves clear; any contact event
-// leaves it Undecided with StepUnsupported (docs/multibody-dynamics-design.md §5).
+// A world of four or more bodies solves the pairs touching at the step start as
+// certified frictionless islands, then drifts every body over the step on paths
+// whose candidate pairs the broad phase selects and SweepPair proves clear,
+// departed or in persistent touch; a contact event inside the step leaves it
+// Undecided with StepUnsupported (docs/multibody-dynamics-design.md §5, §6).
 func (w *World) Step(ctx context.Context, from State, input StepInput, dt units.Value) (*StepReport, error) {
 	if w == nil || ctx == nil || from.world != w || !validQuantity(dt, units.Time, true) {
 		return nil, fmt.Errorf("%w: invalid context, world, state, or duration", ErrInvalidInput)

@@ -196,7 +196,7 @@ func (w *World) eventConservationFailure(event ContactEvent) string {
 			energyUpper.Add(energyUpper, new(big.Rat).Mul(low, squaredChange))
 		}
 		if hasAngular {
-			_, spinUpper, ok := spinEnergyChange(part.mass.Inertia, eventPoses[i],
+			spinUpper, ok := spinEnergyChange(part.mass.Inertia, eventPoses[i],
 				angularPre[i], angularPost[i])
 			if !ok {
 				return "contact event rotational energy cannot be enclosed"

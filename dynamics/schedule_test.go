@@ -23,7 +23,7 @@ import (
 // walk's strict "upper X below lower X" test that retires an active body. The
 // meeting-boxes fixture below was shown to fail with that test relaxed to
 // "upper X at or below lower X": the meeting pair was dropped as box-clear and
-// the step advanced instead of stopping at the touch.
+// the step advanced with no island instead of solving the touch.
 
 // sixBoxMotion places one 10 mm source box at x0 (y and z from 0 to 10) and
 // gives it a velocity in mm/s and a spin in rad/s about its mass center.
@@ -311,50 +311,68 @@ func TestScheduledStepIgnoresInsertionOrder(t *testing.T) {
 
 func TestScheduledStepStopsAtAnEvent(t *testing.T) {
 	// Body 0 closes the 0.5 mm gap at 8 mm/s and strikes a still body 1 at
-	// 1/16 s; two still boxes that merely meet touch from the start. Both are
-	// events, and the N-body step has no island solver yet.
+	// 1/16 s: an event inside the slice, which needs the multi-event trace.
 	closing := sixBoxMotions
 	closing[1].velocity = r3.Vec{}
+	scene := newSixBoxScene(t, closing, [6]int{0, 1, 2, 3, 4, 5}, pairMaterialStepConfig())
+	report, err := scene.step(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Undecided, report.Status)
+	require.Nil(t, report.Next)
+	require.Empty(t, report.Events)
+	require.Len(t, report.Diagnostics, 1, "%+v", report.Diagnostics)
+	diagnostic := report.Diagnostics[0]
+	require.Equal(t, dynamics.StepUnsupported, diagnostic.Code)
+	require.Equal(t, dynamics.BodyPair{A: scene.bodies[0], B: scene.bodies[1]}, diagnostic.Pair)
+
+	// The pair's own sweep along the same drifts reports the event.
+	var paths [2]decad.PairPath
+	for side := range paths {
+		mass, err := scene.bodies[side].MassProperties(t.Context(), scene.density)
+		require.NoError(t, err)
+		entry, _ := scene.state.Body(scene.bodies[side])
+		paths[side] = decad.RigidDriftSegment{From: r3.Identity(), Center: mass.Center.Value,
+			LinearVelocity: entry.LinearVelocity, AngularVelocity: entry.AngularVelocity,
+			Duration: sixBoxDt()}
+	}
+	config := pairMaterialStepConfig()
+	sweep, err := scene.doc.SweepPair(t.Context(), scene.bodies[0], scene.bodies[1], paths[0], paths[1],
+		decad.SweepRequest{ContactRequest: config.Contact, TimeResolution: config.TimeResolution,
+			MaxPoseEvaluations: config.MaxPoseEvaluations, StartPolicy: decad.StopAtInitialContact})
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, sweep.Outcome)
+}
+
+func TestScheduledStepSolvesMeetingBoxes(t *testing.T) {
+	// Two still boxes that merely meet touch from the start with zero
+	// relative normal speed. The pair forms one island whose four
+	// certified impulses are zero, and it rests on a persistent track.
 	meeting := sixBoxMotions
 	meeting[0].velocity, meeting[1].velocity = r3.Vec{}, r3.Vec{}
 	meeting[1].x0 = 10
-	for _, tc := range []struct {
-		name    string
-		motions [6]sixBoxMotion
-		outcome decad.SweepOutcome
-	}{
-		{"closing pair", closing, decad.SweepImpactBracket},
-		{"meeting boxes", meeting, decad.SweepInitiallyTouching},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			scene := newSixBoxScene(t, tc.motions, [6]int{0, 1, 2, 3, 4, 5}, pairMaterialStepConfig())
-			report, err := scene.step(t.Context())
-			require.NoError(t, err)
-			require.Equal(t, dynamics.Undecided, report.Status)
-			require.Nil(t, report.Next)
-			require.Empty(t, report.Events)
-			require.Len(t, report.Diagnostics, 1, "%+v", report.Diagnostics)
-			diagnostic := report.Diagnostics[0]
-			require.Equal(t, dynamics.StepUnsupported, diagnostic.Code)
-			require.Equal(t, dynamics.BodyPair{A: scene.bodies[0], B: scene.bodies[1]}, diagnostic.Pair)
-
-			// The pair's own sweep along the same drifts reports the event.
-			var paths [2]decad.PairPath
-			for side := range paths {
-				mass, err := scene.bodies[side].MassProperties(t.Context(), scene.density)
-				require.NoError(t, err)
-				entry, _ := scene.state.Body(scene.bodies[side])
-				paths[side] = decad.RigidDriftSegment{From: r3.Identity(), Center: mass.Center.Value,
-					LinearVelocity: entry.LinearVelocity, AngularVelocity: entry.AngularVelocity,
-					Duration: sixBoxDt()}
-			}
-			config := pairMaterialStepConfig()
-			sweep, err := scene.doc.SweepPair(t.Context(), scene.bodies[0], scene.bodies[1], paths[0], paths[1],
-				decad.SweepRequest{ContactRequest: config.Contact, TimeResolution: config.TimeResolution,
-					MaxPoseEvaluations: config.MaxPoseEvaluations, StartPolicy: decad.StopAtInitialContact})
-			require.NoError(t, err)
-			require.Equal(t, tc.outcome, sweep.Outcome)
-		})
+	scene := newSixBoxScene(t, meeting, [6]int{0, 1, 2, 3, 4, 5}, pairMaterialStepConfig())
+	report, err := scene.step(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Islands, 1)
+	require.Equal(t, []*decad.Body{scene.bodies[0], scene.bodies[1]}, report.Islands[0].Bodies)
+	require.Len(t, report.Events, 1)
+	event := report.Events[0]
+	require.Equal(t, dynamics.BodyPair{A: scene.bodies[0], B: scene.bodies[1]}, event.Pair)
+	require.Len(t, event.PointImpulses, 4)
+	for _, point := range event.PointImpulses {
+		require.Zero(t, point.Normal.Base())
+	}
+	for _, i := range []int{0, 1} {
+		entry, ok := report.Next.Body(scene.bodies[i])
+		require.True(t, ok)
+		require.Equal(t, r3.Identity(), entry.Pose)
+	}
+	for _, proof := range dynamics.TraceSliceProofs(report.Trace)[0] {
+		if scene.pairOf(proof.Pair) == [2]int{0, 1} {
+			require.NotNil(t, proof.Sweep)
+			require.Equal(t, decad.SweepPersistentTouch, proof.Sweep.Outcome)
+		}
 	}
 }
 

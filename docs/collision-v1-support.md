@@ -117,11 +117,19 @@ proof.
 A world of four or more bodies, in any role mix, kicks every dynamic body
 once and moves every body along its drift or driver over the step. Its broad
 phase sweeps only the pairs whose `SweptBox` values are not strictly
-disjoint, and the step advances only when every swept pair is proved clear;
-a contact event returns `dynamics.Undecided` with `StepUnsupported`. Its
-kinematic bodies take `PoseSegment` drivers.
-[Schedule tests](../dynamics/schedule_test.go) check the swept pairs, the
-drift poses and trace samples.
+disjoint. Pairs that touch or shallowly overlap at the step start, with a
+bounded manifold, form islands of dynamic bodies with their fixed supports.
+Each island is solved for frictionless normal impulses and certified in
+exact interval arithmetic, and shallow overlaps within `ContactSlop` are
+corrected. Every report lists its islands, and each solved pair publishes one
+event. The step then advances only when every swept pair is proved clear,
+departed, or in persistent touch over the whole step. A contact event inside
+the step, an island with a kinematic body, and a positive-friction island
+pair return `dynamics.Undecided` with `StepUnsupported`. Its kinematic bodies
+take `PoseSegment` drivers. [Schedule tests](../dynamics/schedule_test.go)
+check the swept pairs, the drift poses and trace samples.
+[Island tests](../dynamics/island_test.go) rest a 3-2-1 box pyramid under
+gravity and rerun the two-sphere impact through the island solver.
 
 Two-body worlds admit a fixed or kinematic body against a dynamic body, or
 two dynamic bodies. An affine kinematic box driver and selected cardinal
@@ -164,7 +172,7 @@ sliding impulses, and unproved pair paths return `dynamics.Undecided`.
 | `SweptBox` | `decad.ErrUnsupported` when the body's bounds or the path's travel bound are not finite |
 | `Body.MassProperties` | `decad.ErrUnsupported` when density-derived bounded mass or inertia is unavailable |
 | `NewWorld` | `dynamics.ErrUnsupported` for fewer than two bodies, a two- or three-body world with no dynamic body, or a three-body kinematic world |
-| `World.Step` | `dynamics.Undecided` with `Next == nil` when contact, response, or replay lacks proof, and for any contact event in a world of four or more bodies |
+| `World.Step` | `dynamics.Undecided` with `Next == nil` when contact, response, or replay lacks proof, and for a contact event inside the step, an island gate beyond its limit, or an uncorrectable overlap in a world of four or more bodies |
 | `Trace.Sample` | `dynamics.ErrUnsupported` if a rounded pose loses its cached proof; `dynamics.ErrInvalidInput` for time outside the step |
 
 A generic positive-bound faceted body can prove strict clearance above a

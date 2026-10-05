@@ -269,22 +269,23 @@ func inertiaComponents(inertia decad.InertiaReading) [6]inertiaComponent {
 }
 
 // spinEnergyChange keeps each source inertia interval shared across the
-// before/after squared-speed difference of one impulse.
+// before/after squared-speed difference of one impulse. It returns the upper
+// end of ωᵀIω's change, twice the rotational energy change.
 func spinEnergyChange(inertia decad.InertiaReading, pose r3.Transform,
-	before, after QuantityVec) (*big.Rat, *big.Rat, bool) {
+	before, after QuantityVec) (*big.Rat, bool) {
 	_, initial, ok := spinBasis(pose, before)
 	if !ok {
-		return nil, nil, false
+		return nil, false
 	}
 	_, final, ok := spinBasis(pose, after)
 	if !ok {
-		return nil, nil, false
+		return nil, false
 	}
-	value, upper := new(big.Rat), new(big.Rat)
+	upper := new(big.Rat)
 	for _, component := range inertiaComponents(inertia) {
 		quantity, bound := exactBase(component.reading.Value), exactBase(component.reading.Bound)
 		if quantity == nil || bound == nil || bound.Sign() < 0 {
-			return nil, nil, false
+			return nil, false
 		}
 		coefficient := new(big.Rat).Sub(
 			new(big.Rat).Mul(final[component.i], final[component.j]),
@@ -293,11 +294,10 @@ func spinEnergyChange(inertia decad.InertiaReading, pose r3.Transform,
 			coefficient.Mul(coefficient, big.NewRat(2, 1))
 		}
 		contribution := new(big.Rat).Mul(quantity, coefficient)
-		value.Add(value, contribution)
 		upper.Add(upper, new(big.Rat).Add(contribution,
 			new(big.Rat).Mul(bound, absRat(coefficient))))
 	}
-	return value, upper, true
+	return upper, true
 }
 
 func spinBasis(pose r3.Transform, omega QuantityVec) ([3][3]*big.Rat, [3]*big.Rat, bool) {
