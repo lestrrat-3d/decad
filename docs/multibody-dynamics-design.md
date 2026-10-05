@@ -14,16 +14,18 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1 and 7 have shipped. `dynamics.World` holds any number of bodies, the canonical pair table
-and per-pair material of §3.1, and the slice-backed `State` of §3.2. Its step resolves two bodies, or three
+Current state: §13 PRs 1, 2 and 7 have shipped. `dynamics.World` holds any number of bodies, the canonical
+pair table and per-pair material of §3.1, and the slice-backed `State` of §3.2. Its step resolves two bodies, or three
 bodies with one, two or three dynamic bodies and every other body fixed, through the closed-form responses
 `docs/rigid-dynamics-design.md` lists, and returns `Undecided` for a world of four or more bodies.
+`Document.SweptBox` (§4.2) is public, and the cylinder and bounded-faceted clear sweeps certify with it;
+`dynamics` does not call it yet.
 `docs/collision-v1-support.md` is the inventory of the shape pairs, responses and refusals that ship, and
 this document does not restate it. Every pair query is pairwise, no broad phase exists, and `Trace` holds
 fixed two- and three-body slots. The exact arithmetic every certificate below is stated in already exists
 as one package: `internal/proof` (`Dyadic`, `DyV3`, `RatInterval` and the float rounding bounds), which the
 root package imports today and which `dynamics` can import as well, since an `internal/` package is visible
-to every package of this module. §3.1, §3.2, §8.1 and §8.2 describe shipped code, except `State.cache`
+to every package of this module. §3.1, §3.2, §4.2, §8.1 and §8.2 describe shipped code, except `State.cache`
 (§13 PR 8); everything else is design-only until the PR table in §13 says otherwise.
 
 Navigation only; the named sections own the rules:
@@ -254,7 +256,8 @@ implementation owns the certificate and `dynamics` consumes it:
 // SweptBox encloses every point a body occupies at any time of its path: the
 // body's bounded Bounds() at its placement, mapped through the path's From,
 // expanded on every axis by the path's whole-duration travel bound
-// (contact-sweep §4.1). Its extremes are exact dyadic rationals.
+// (contact-sweep §4.1), or for a translating path the exact hull of its start
+// and end boxes. Its extremes are exact dyadic rationals.
 type SweptBox struct { /* lo, hi [3]proof.Dyadic (internal/proof); body *Body */ }
 
 func (d *Document) SweptBox(ctx context.Context, b *Body, path PairPath) (SweptBox, error)
@@ -265,11 +268,17 @@ func (s SweptBox) StrictlyDisjoint(o SweptBox) bool
 func (s SweptBox) Box() Box // outward float conversion of the exact extremes
 ```
 
-`SweptBox` validates the body and path as `SweepPair` does and returns `ErrUnsupported` when the travel
-bound is not finite (contact-sweep §4.1: an unbounded radius or velocity). A `PoseSegment` path and a
-`RigidDriftSegment` path both take the §4.1 formula; a stationary path has zero travel. The existing
-private `sweptAffineBox` (`contact_cylinder_sweep.go`) and the swept box inside `sweepBoundedFacetedFloorClear`
-move onto this one implementation.
+`SweptBox` validates the body and path as `SweepPair` does and returns `ErrUnsupported` when the body's
+bounds or the travel bound are not finite (contact-sweep §4.1: an unbounded radius or velocity). A rotating
+`PoseSegment` takes the §4.1 screw formula over its read screw, whether or not `SweepPair` admits that
+screw, and a rotating `RigidDriftSegment` takes the drift formula; both measure `ρ` from the rotation line.
+A path that only translates — a `PoseSegment` whose endpoints share a basis, or a drift with zero `ω` —
+takes the exact hull of its start box and that box moved by the exact displacement instead: every
+intermediate translate lies in the hull, and the hull lies inside the travel expansion, so a stationary
+path has zero travel. The zero `SweptBox` is never `StrictlyDisjoint` from any box. `sourceCylinderFaceSweep`
+proves its clear outcome from the face-axis gap between the two `SweptBox` values, and
+`sweepBoundedFacetedFloorClear` from their strict disjointness; both read the private `sweptBoxOf` that
+`Document.SweptBox` wraps.
 
 ### 4.3 Sort-and-sweep in dynamics
 

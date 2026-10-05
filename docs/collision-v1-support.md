@@ -2,6 +2,8 @@
 
 `Document.ContactPair` checks two posed solids and can return a certified
 contact manifold. `Document.SweepPair` checks their paths over time.
+`Document.SweptBox` encloses one body's whole path in an exact box, and
+`SweptBox.StrictlyDisjoint` proves two such paths clear without a sweep.
 `dynamics.World.Step` changes velocities only when those geometry queries
 prove the contact and its continuation. An advanced step includes a state,
 events, conservation readings, and a trace that `Trace.Sample` can replay.
@@ -124,6 +126,7 @@ sliding impulses, and unproved pair paths return `dynamics.Undecided`.
 |---|---|
 | `ContactPair` | `ContactUndecided`, or a proved relation with no manifold and a reason such as `ContactNoNormalProof` |
 | `SweepPair` | `SweepUndecided` with a cause and unresolved interval |
+| `SweptBox` | `decad.ErrUnsupported` when the body's bounds or the path's travel bound are not finite |
 | `Body.MassProperties` | `decad.ErrUnsupported` when density-derived bounded mass or inertia is unavailable |
 | `NewWorld` | `dynamics.ErrUnsupported` for fewer than two bodies, a two- or three-body world with no dynamic body, or a three-body kinematic world |
 | `World.Step` | `dynamics.Undecided` with `Next == nil` when contact, response, or replay lacks proof, and for a world of four or more bodies |

@@ -19,13 +19,19 @@ func (d *Document) sourceCylinderFaceSweep(ctx context.Context, a, b *Body,
 	if cylinderFirst {
 		firstBox, secondBox = cylinder.box, box
 	}
-	fullA, fullB := sweptAffineBox(firstBox, pa.delta), sweptAffineBox(secondBox, pb.delta)
+	fullA, okA := sweptBoxOf(a, pa)
+	fullB, okB := sweptBoxOf(b, pb)
+	if !okA || !okB {
+		return cylinderSweepUndecided(report, pa.duration), nil
+	}
 	resolution, _ := exactBaseValue(req.PointResolution)
 	axis, _, signedGap, selected := sourceCylinderBoxFace(cylinder, box)
 	if !selected || signedGap.Sign() < 0 {
 		return cylinderSweepUndecided(report, pa.duration), nil
 	}
-	axisGap := func(a, b sourceBoxContactProof) (int, *big.Rat, bool) {
+	// The swept boxes enclose both bodies over the whole path, so a gap
+	// between them on the face axis proves the pair clear throughout.
+	axisGap := func(a, b SweptBox) (int, *big.Rat, bool) {
 		if gap := new(big.Rat).Sub(b.lo[axis].Rat(), a.hi[axis].Rat()); gap.Cmp(resolution) > 0 {
 			return 1, gap, true
 		}
@@ -352,16 +358,6 @@ func cylinderSweepUndecided(report *SweepReport, duration *big.Rat) *SweepReport
 	report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), duration),
 		To: sweepInstant(big.NewRat(1, 1), duration)}
 	return report
-}
-
-func sweptAffineBox(start sourceBoxContactProof, delta [3]proofarith.Dyadic) sourceBoxContactProof {
-	for axis := range 3 {
-		endLo := proofarith.DyAdd(start.lo[axis], delta[axis])
-		endHi := proofarith.DyAdd(start.hi[axis], delta[axis])
-		start.lo[axis] = dyMin(start.lo[axis], endLo)
-		start.hi[axis] = dyMax(start.hi[axis], endHi)
-	}
-	return start
 }
 
 func translatedAffineBox(start sourceBoxContactProof, delta [3]proofarith.Dyadic) sourceBoxContactProof {

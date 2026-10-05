@@ -130,22 +130,9 @@ func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSwee
 
 func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 	axis ratVec) (*big.Rat, bool) {
-	box, err := body.Bounds()
-	if err != nil || box.Bound.Kind() != units.Length ||
-		!finiteMeasurementValues(box.Bound.Base(), box.Min.X, box.Min.Y, box.Min.Z,
-			box.Max.X, box.Max.Y, box.Max.Z) || box.Bound.Base() < 0 {
+	corners, ok := inflatedBoundsCorners(body)
+	if !ok {
 		return nil, false
-	}
-	minimum := [3]float64{box.Min.X, box.Min.Y, box.Min.Z}
-	maximum := [3]float64{box.Max.X, box.Max.Y, box.Max.Z}
-	var extremes [3][2]proofarith.Dyadic
-	bound := proofarith.MustDyOf(box.Bound.Base())
-	for axis := range 3 {
-		if minimum[axis] > maximum[axis] {
-			return nil, false
-		}
-		extremes[axis] = [2]proofarith.Dyadic{proofarith.DySubScalar(proofarith.MustDyOf(minimum[axis]), bound),
-			proofarith.DyAdd(proofarith.MustDyOf(maximum[axis]), bound)}
 	}
 	pivot := proofarith.DyVec(center)
 	axisSquared := new(big.Rat)
@@ -156,11 +143,7 @@ func rotationalSweepRadius(body *Body, from r3.Transform, center r3.Vec,
 		return nil, false
 	}
 	best := new(big.Rat)
-	for index := range 8 {
-		var corner proofarith.DyV3
-		for axis := range 3 {
-			corner[axis] = extremes[axis][(index>>axis)&1]
-		}
+	for _, corner := range corners {
 		mapped := exactContactTransform(from, corner)
 		delta := proofarith.DvSub(mapped, pivot)
 		cross := [3]*big.Rat{
