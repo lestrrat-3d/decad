@@ -14,10 +14,10 @@ import (
 
 var errSweepPoseBudget = errors.New("decad: sweep pose budget exhausted")
 
-// PairPath names one body's motion during a two-body sweep. Affine source-box
-// and source-sphere paths, co-translating oblique source boxes, and rotating
-// source-box rigid drifts can receive continuous certificates; other valid
-// paths report an undecided sweep.
+// PairPath names one body's motion during a two-body sweep. Affine source-box,
+// source-sphere, and certified faceted-floor paths, co-translating oblique
+// source boxes, and rotating source-box rigid drifts can receive continuous
+// certificates; other valid paths report an undecided sweep.
 type PairPath interface{ pairPath() }
 
 // PoseSegment joins two placements relative to the body's current placement.
@@ -409,10 +409,11 @@ func exactnessFromBound(bound float64) Exactness {
 }
 
 // SweepPair certifies the first encounter of two live solids under one shared
-// duration. Continuous proofs cover affine source-box paths, co-translating
-// oblique source boxes, a source sphere in an axis or orthogonal rotated box
-// face corridor, an affine pair of source spheres, axial source-cylinder face
-// paths, rotating source-box rigid drifts, and admitted rotating PoseSegments.
+// duration. Continuous proofs cover affine source-box paths, one verified
+// faceted floor path, co-translating oblique source boxes, a source sphere in
+// an axis or orthogonal rotated box face corridor, an affine pair of source
+// spheres, axial source-cylinder face paths, rotating source-box rigid drifts,
+// and admitted rotating PoseSegments.
 // Unsupported paths return SweepUndecided.
 // Both body pointers, both paths, and ctx must be non-nil.
 func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairPath,
@@ -470,6 +471,16 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 	boxA, okA := sourceBoxAtPose(a, pa.from)
 	boxB, okB := sourceBoxAtPose(b, pb.from)
 	if !okA || !okB {
+		if okA {
+			if _, faceted := b.payload.(facetedPayload); faceted {
+				return d.sweepFacetedFloor(ctx, a, b, pa, pb, req, report, boxA, false)
+			}
+		}
+		if okB {
+			if _, faceted := a.payload.(facetedPayload); faceted {
+				return d.sweepFacetedFloor(ctx, a, b, pa, pb, req, report, boxB, true)
+			}
+		}
 		if !okA && !okB {
 			sphereA, sphereOKA := sourceSphereAtPose(a, pa.from)
 			sphereB, sphereOKB := sourceSphereAtPose(b, pb.from)
@@ -534,12 +545,13 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 }
 
 type pairSweepRun struct {
-	doc        *Document
-	a, b       *Body
-	pa, pb     affinePairPath
-	req        SweepRequest
-	report     *SweepReport
-	boxA, boxB sourceBoxContactProof
+	doc          *Document
+	a, b         *Body
+	pa, pb       affinePairPath
+	req          SweepRequest
+	report       *SweepReport
+	boxA, boxB   sourceBoxContactProof
+	facetedFloor bool // box for faceted body is its exact lower support patch
 }
 
 func (r *pairSweepRun) sample(ctx context.Context, f *big.Rat) (*SweepSample, error) {
@@ -586,6 +598,15 @@ func (r *pairSweepRun) idealContact(f *big.Rat, at SweepInstant) SweepEvent {
 		b.lo[i], b.hi[i] = dyAdd(b.lo[i], moveB), dyAdd(b.hi[i], moveB)
 	}
 	report := &ContactReport{A: r.a, B: r.b, Request: r.req.ContactRequest}
+	if r.facetedFloor {
+		floor, faceted := a, b
+		if _, ok := r.a.payload.(facetedPayload); ok {
+			floor, faceted = b, a
+		}
+		if dyCmp(faceted.lo[2], floor.hi[2]) < 0 {
+			return SweepEvent{At: at, Relation: ContactUndecided, Reason: ContactPayloadUnsupported}
+		}
+	}
 	classifySourceBoxes(report, a, b)
 	return SweepEvent{At: at, Relation: report.Relation, Gap: report.Gap,
 		Overlap: report.Overlap, Manifold: report.Manifold, Reason: report.Reason}
@@ -973,6 +994,12 @@ func (r *pairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*Sweep
 	if exactEntry {
 		leftIdx.Sub(leftIdx, big.NewInt(1))
 		rightIdx.Sub(rightIdx, big.NewInt(1))
+	}
+	if r.facetedFloor {
+		if !exactEntry {
+			return r.undecided(zero, one, SweepContactUnsupported), nil
+		}
+		rightIdx.Set(floorIdx)
 	}
 	leftF := new(big.Rat).SetFrac(leftIdx, grid)
 	rightF := new(big.Rat).SetFrac(rightIdx, grid)

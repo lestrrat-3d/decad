@@ -17,6 +17,10 @@ bracket its first impact, and rebound from that fixed face using supplied
 mass. The sweep and step replay the clear path before and after the impact.
 The revolved cylinder can use its density-derived mass in the certified clear
 axial step and interior trace replay.
+A zero-bound faceted Boolean union with one certified rectangular lower face
+can sweep vertically toward a wide source-box floor, depart from initial
+touch, or retain a persistent face track. Its sweep can certify the first
+exact touch, but the rigid solver does not yet step this payload.
 It also steps two orthogonal, frictionless
 initial face contacts and their repeated resting response after real manifolds
 and full-span tracks certify both pairs. A dynamic source sphere can touch

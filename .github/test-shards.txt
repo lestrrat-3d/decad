@@ -1681,8 +1681,11 @@
 4	0.00	TestSweepLineStagesTessellation
 4	0.00	TestSweepLineTiltedFrameCarriesEndpointGap
 4	0.00	TestSweepPairEqualSpinDepartsFromSourceFace
+4	0.01	TestSweepPairFacetedFloorRefusesUnprovedPath
 4	0.00	TestSweepPairFixedFloorTangentialSpinDeparts
 4	0.00	TestSweepPairOffCenterBoxImpactAtEndpoint
+4	0.01	TestSweepPairRealFacetedUnionClearAndImpact
+4	0.01	TestSweepPairRealFacetedUnionTouchContinuations
 4	0.00	TestSweepPairRotatingBoxFindsHiddenImpact
 4	0.00	TestSweepPairRotatingPathClear
 4	0.00	TestSweepPairRotatingPoseSegmentBracketsAxisFaceImpact

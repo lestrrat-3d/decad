@@ -9,6 +9,17 @@ inside one box face. A sphere against an exactly orthogonal rotated source
 box also certifies a strict single-face affine clear span, first impact, or
 separating departure. A full source cylinder certifies a clear axial path,
 first circular-face impact, and separating departure inside a source-box face.
+One zero-bound faceted Boolean solid with a certified rectangular lower face
+can certify an affine vertical clear path, first exact face touch, separating
+departure, or persistent face contact against a containing source-box floor.
+Both bodies must translate equally in X and Y, so the complete support patch
+stays strictly inside the floor face. The lower support plane must start at or
+above the floor's upper plane. A first-impact bracket ends at exact touch;
+if its rational contact fraction is not a representable dyadic grid point,
+the sweep returns `Undecided`. A bracket ending after support-plane crossing,
+a lateral path, an unproved support face, and a footprint reaching the floor
+edge also return `Undecided`. The contact track retains the original faceted
+Face. Rounded replay checks the exact support-plane path and footprint proof.
 Two source semicircle spheres certify affine first impact
 through exact squared-distance motion, including transverse crossing, and
 separating departure. Their exact isolated interior tangent publishes a
