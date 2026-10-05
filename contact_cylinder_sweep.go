@@ -44,9 +44,6 @@ func (d *Document) sourceCylinderAxialSweep(ctx context.Context, a, b *Body,
 		return cylinderSweepUndecided(report, pa.duration), nil
 	}
 	if !ok {
-		if !cylinder.impactSweep {
-			return cylinderSweepUndecided(report, pa.duration), nil
-		}
 		return (&sourceCylinderImpactRun{doc: d, a: a, b: b, pa: pa, pb: pb,
 			req: req, report: report, cylinder: cylinder, box: box,
 			cylinderFirst: cylinderFirst}).execute(ctx)

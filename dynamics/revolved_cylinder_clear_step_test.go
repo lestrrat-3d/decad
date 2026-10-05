@@ -141,6 +141,133 @@ func runRevolvedCylinderClearStep(t *testing.T, reverse bool) {
 	require.InDelta(t, 1.5, middle.Pose.Translation().X, 1e-9)
 }
 
+func TestRevolvedCylinderAxialFloorImpact(t *testing.T) {
+	for _, reverse := range []bool{false, true} {
+		t.Run(map[bool]string{false: "floor first", true: "cylinder first"}[reverse], func(t *testing.T) {
+			revolvedCylinderAxialFloorImpact(t, reverse, .2, 10)
+		})
+	}
+}
+
+func TestRevolvedCylinderAxialEndpointImpact(t *testing.T) {
+	for _, reverse := range []bool{false, true} {
+		t.Run(map[bool]string{false: "floor first", true: "cylinder first"}[reverse], func(t *testing.T) {
+			revolvedCylinderAxialFloorImpact(t, reverse, .125, 8)
+		})
+	}
+}
+
+func revolvedCylinderAxialFloorImpact(t *testing.T, reverse bool, duration, speed float64) {
+	t.Helper()
+	impactAt := 1 / speed
+	doc := decad.New()
+	floor := makeBox(t, doc, -10, -20, 0, 20, -20, 40)
+	cylinder := makeRevolvedCylinder(t, doc, decad.FullRevolution{}, 0)
+	pose, err := r3.Translation(r3.Vec{X: 1})
+	require.NoError(t, err)
+	density := units.KilogramsPerCubicMillimeter(.001)
+	mass, err := cylinder.MassProperties(t.Context(), density)
+	require.NoError(t, err)
+	request := decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+		NormalResolution: units.Radians(1e-6)}
+	a, b := floor, cylinder
+	poseA, poseB := r3.Identity(), pose
+	if reverse {
+		a, b, poseA, poseB = b, a, poseB, poseA
+	}
+	initial, err := doc.ContactPair(t.Context(), a, b, poseA, poseB, request)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactSeparated, initial.Relation)
+	zero := zeroAngular(t)
+	incoming := decad.QuantityVec{X: units.MillimetersPerSecond(-speed),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
+	stationary := decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(duration)}
+	moving := decad.RigidDriftSegment{From: pose, LinearVelocity: incoming,
+		AngularVelocity: zero, Duration: units.Seconds(duration)}
+	pathA, pathB := decad.PairPath(stationary), decad.PairPath(moving)
+	if reverse {
+		pathA, pathB = pathB, pathA
+	}
+	sweep, err := doc.SweepPair(t.Context(), a, b, pathA, pathB, decad.SweepRequest{
+		ContactRequest: request, TimeResolution: units.Seconds(1e-9), MaxPoseEvaluations: 128})
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepImpactBracket, sweep.Outcome, "cause=%v", sweep.Cause)
+	require.NotNil(t, sweep.Event.Manifold)
+	require.Less(t, sweep.Bracket.From.Elapsed.Value.Base(), impactAt)
+	require.GreaterOrEqual(t, sweep.Bracket.To.Elapsed.Value.Base(), impactAt)
+	if duration == impactAt {
+		require.True(t, sweep.BracketEndsAtDuration())
+	}
+	require.LessOrEqual(t,
+		sweep.Bracket.To.Elapsed.Value.Base()-sweep.Bracket.From.Elapsed.Value.Base(), 1e-9)
+	point := sweep.Event.Manifold.Points[0]
+	wantNormal := r3.Vec{X: 1}
+	if reverse {
+		wantNormal.X = -1
+	}
+	require.Equal(t, wantNormal, point.Normal.Value)
+	cylinderFace := point.FaceB
+	if reverse {
+		cylinderFace = point.FaceA
+	}
+	require.Contains(t, cylinder.Faces(), cylinderFace)
+	require.True(t, sweep.HasAffineReplayProof())
+	replayA, replayB, err := sweep.CertifiedPosesAt(units.Seconds(impactAt / 2))
+	require.NoError(t, err)
+	replay := replayB
+	if reverse {
+		replay = replayA
+	}
+	require.InDelta(t, .5, replay.Translation().X, 1e-9)
+	if duration > impactAt {
+		_, _, err = sweep.CertifiedPosesAt(units.Seconds((impactAt + duration) / 2))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+	}
+	mat := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}
+	defs := []dynamics.RigidBody{{Body: floor, Role: dynamics.Fixed, Material: mat},
+		{Body: cylinder, Role: dynamics.Dynamic, Density: &density, Material: mat}}
+	states := []dynamics.BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zero},
+		{Body: cylinder, Pose: pose, LinearVelocity: incoming, AngularVelocity: zero}}
+	if reverse {
+		defs[0], defs[1] = defs[1], defs[0]
+		states[0], states[1] = states[1], states[0]
+	}
+	world, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{Bodies: defs,
+		Step: dynamics.StepConfig{Contact: request, TimeResolution: units.Seconds(1e-9),
+			ContactSlop: units.Millimeters(1e-6), VelocityResidual: units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-5),
+			PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
+			MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2}})
+	require.NoError(t, err)
+	start, err := world.NewState(states)
+	require.NoError(t, err)
+	step, err := world.Step(t.Context(), start, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(duration))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, step.Status, "%+v", step.Diagnostics)
+	require.Len(t, step.Events, 1)
+	require.InDelta(t, mass.Mass.Value.Base()*1.5*speed, step.Events[0].NormalImpulse.Base(), 1e-4)
+	final, ok := step.Next.Body(cylinder)
+	require.True(t, ok)
+	finalX := .5 * speed * (duration - impactAt)
+	require.InDelta(t, finalX, final.Pose.Translation().X, 1e-6)
+	require.InDelta(t, .5*speed, final.LinearVelocity.X.Base(), 1e-6)
+	samples := []struct{ at, x float64 }{{impactAt / 2, .5}}
+	if duration > impactAt {
+		samples = append(samples, struct{ at, x float64 }{
+			(impactAt + duration) / 2, finalX / 2})
+	}
+	samples = append(samples, struct{ at, x float64 }{duration, finalX})
+	for _, tc := range samples {
+		sample, err := step.Trace.Sample(units.Seconds(tc.at))
+		require.NoError(t, err)
+		entry, ok := sample.Body(cylinder)
+		require.True(t, ok)
+		require.InDelta(t, tc.x, entry.Pose.Translation().X, 1e-6)
+	}
+}
+
 func TestRevolvedCylinderClearSweepReverseAndRefusals(t *testing.T) {
 	doc := decad.New()
 	floor := makeBox(t, doc, -10, -20, 0, 20, -20, 40)
@@ -157,13 +284,14 @@ func TestRevolvedCylinderClearSweepReverseAndRefusals(t *testing.T) {
 		NormalResolution: units.Radians(1e-6)}
 	still := decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(1)}
 	for _, tc := range []struct {
-		name     string
-		body     *decad.Body
-		y        float64
-		start    float64
-		velocity float64
-		relation decad.ContactRelation
-		outcome  decad.SweepOutcome
+		name            string
+		body            *decad.Body
+		y               float64
+		start           float64
+		velocity        float64
+		lateralVelocity float64
+		relation        decad.ContactRelation
+		outcome         decad.SweepOutcome
 	}{
 		{name: "clear full turn", body: full, start: 1, velocity: 1,
 			relation: decad.ContactSeparated, outcome: decad.SweepClear},
@@ -172,7 +300,11 @@ func TestRevolvedCylinderClearSweepReverseAndRefusals(t *testing.T) {
 		{name: "near contact", body: full, start: 1e-7, velocity: 1,
 			relation: decad.ContactSeparated, outcome: decad.SweepUndecided},
 		{name: "crossing", body: full, start: 1, velocity: -2,
+			relation: decad.ContactSeparated, outcome: decad.SweepImpactBracket},
+		{name: "lateral crossing", body: full, start: 1, velocity: -2, lateralVelocity: .25,
 			relation: decad.ContactSeparated, outcome: decad.SweepUndecided},
+		{name: "floor edge", body: full, y: 15, start: 1, velocity: -2,
+			relation: decad.ContactUndecided, outcome: decad.SweepUndecided},
 		{name: "lateral outside floor face", body: full, y: 30, start: 1, velocity: 1,
 			relation: decad.ContactUndecided, outcome: decad.SweepUndecided},
 		{name: "partial turn", body: partial, start: 1, velocity: 1,
@@ -186,7 +318,7 @@ func TestRevolvedCylinderClearSweepReverseAndRefusals(t *testing.T) {
 			pose, err := r3.Translation(r3.Vec{X: tc.start, Y: tc.y})
 			require.NoError(t, err)
 			velocity := decad.QuantityVec{X: units.MillimetersPerSecond(tc.velocity),
-				Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
+				Y: units.MillimetersPerSecond(tc.lateralVelocity), Z: units.MillimetersPerSecond(0)}
 			moving := decad.RigidDriftSegment{From: pose, LinearVelocity: velocity,
 				AngularVelocity: zeroAngular(t), Duration: units.Seconds(1)}
 			for _, reverse := range []bool{false, true} {
@@ -205,7 +337,8 @@ func TestRevolvedCylinderClearSweepReverseAndRefusals(t *testing.T) {
 						MaxPoseEvaluations: 128})
 				require.NoError(t, err)
 				require.Equal(t, tc.outcome, sweep.Outcome)
-				require.Equal(t, tc.outcome == decad.SweepClear, sweep.HasAffineReplayProof())
+				require.Equal(t, tc.outcome == decad.SweepClear || tc.outcome == decad.SweepImpactBracket,
+					sweep.HasAffineReplayProof())
 			}
 		})
 	}

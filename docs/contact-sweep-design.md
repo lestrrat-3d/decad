@@ -7,9 +7,8 @@ sphere against a source box certifies affine first impact and face-point
 departure or persistent touch while its projected radius remains strictly
 inside one box face. A sphere against an exactly orthogonal rotated source
 box also certifies a strict single-face affine clear span, first impact, or
-separating departure. A full source cylinder certifies a clear axial path.
-The extruded circular source cylinder also certifies first face impact and
-separating departure inside a source-box face.
+separating departure. A full source cylinder certifies a clear axial path,
+first face impact, and separating departure inside a source-box face.
 One zero-bound faceted Boolean solid with a certified rectangular lower face
 can certify an affine vertical clear path, first exact face touch, separating
 departure, or persistent face contact against a containing source-box floor.
@@ -49,10 +48,10 @@ An extruded circular source prism or a full revolve of an axis-incident
 rectangular half-profile can certify a strictly separated axial affine path
 against a containing source-box face. The sweep uses the source-derived outer
 disk box at both endpoints and over the full translation, and replay charges
-the rounded pose deviation before returning a clear sample. Near contact,
-crossing for a revolved source cylinder, lateral motion outside the containing
-face, partial revolutions, and other revolved profiles return `Undecided` on
-this path.
+the rounded pose deviation before returning a clear sample. Both sources
+can also certify an axial first impact and separating departure. Near contact,
+lateral motion outside the containing face, partial revolutions, and other
+revolved profiles return `Undecided` on this path.
 `docs/collision-dynamics-design.md` owns the package
 boundary and `docs/contact-geometry-design.md` owns relation and manifold
 proofs at one pose. This document owns the paths, continuous clear certificate,
@@ -408,9 +407,8 @@ face at both path endpoints. Check that
 one axial gap between the complete swept outer boxes exceeds
 `PointResolution`. The two endpoint `ContactPair` queries must also prove
 separation, and their rounded pose differences must fit `PointResolution`.
-Only a full circular source prism enters the axial impact path after an
-outer-box intersection. A revolved source cylinder returns `SweepUndecided`
-there. The prism's impact path requires relative translation to have zero
+Both admitted source cylinders enter the axial impact path after an
+outer-box intersection. The impact path requires relative translation to have zero
 components across the face, the initial axial support
 gap is nonnegative, and the complete disk stays inside the same box face.
 The signed axial support gap is affine. A decreasing positive gap supplies

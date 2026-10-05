@@ -12,8 +12,6 @@ type sourceCylinderContactProof struct {
 	box   sourceBoxContactProof
 	axis  int
 	faces [2]*Face
-	// A source revolve has contact faces but its impact sweep remains staged.
-	impactSweep bool
 }
 
 func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProof, bool) {
@@ -88,7 +86,7 @@ func sourceCylinderAtPose(b *Body, pose r3.Transform) (sourceCylinderContactProo
 			box.hi[i] = dyAdd(box.hi[i], radius)
 		}
 	}
-	return sourceCylinderContactProof{box: box, axis: axis, faces: endFaces, impactSweep: true}, true
+	return sourceCylinderContactProof{box: box, axis: axis, faces: endFaces}, true
 }
 
 // sourceRevolvedCylinderAtPose reads the full recorded meridian, not the
