@@ -57,6 +57,12 @@ to the byte budget.
 | `docs/step-export-design.md` | Export package entry points and the AP214 faceted writer contract. |
 | `docs/3mf-export-design.md` | The 3MF writer's package parts, mesh mapping, and error contract. |
 
+### User guides
+
+| Path | Responsibility |
+|---|---|
+| `docs/collision-v1-support.md` | Certified collision paths, response limits, and refusal outcomes. |
+
 ### Seam and records
 
 | Path | Responsibility |
