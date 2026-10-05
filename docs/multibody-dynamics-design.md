@@ -14,7 +14,7 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2 and 7 have shipped. `dynamics.World` holds any number of bodies, the canonical
+Current state: §13 PRs 1, 2, 7 and 16 have shipped. `dynamics.World` holds any number of bodies, the canonical
 pair table and per-pair material of §3.1, and the slice-backed `State` of §3.2. Its step resolves two bodies, or three
 bodies with one, two or three dynamic bodies and every other body fixed, through the closed-form responses
 `docs/rigid-dynamics-design.md` lists, and returns `Undecided` for a world of four or more bodies.
@@ -25,7 +25,7 @@ this document does not restate it. Every pair query is pairwise, no broad phase 
 fixed two- and three-body slots. The exact arithmetic every certificate below is stated in already exists
 as one package: `internal/proof` (`Dyadic`, `DyV3`, `RatInterval` and the float rounding bounds), which the
 root package imports today and which `dynamics` can import as well, since an `internal/` package is visible
-to every package of this module. §3.1, §3.2, §4.2, §8.1 and §8.2 describe shipped code, except `State.cache`
+to every package of this module. §3.1, §3.2, §4.2, §8.1, §8.2 and §8.6 describe shipped code, except `State.cache`
 (§13 PR 8); everything else is design-only until the PR table in §13 says otherwise.
 
 Navigation only; the named sections own the rules:
@@ -603,11 +603,18 @@ refuses.
 
 ### 8.6 General revolve, full or partial, any admitted section
 
-`moments.go` gains `momentThirdOrder` (`∫u³`, `∫u²v`, `∫uv²`, `∫v³` over lines, with the arc terms in
-`moments_circular.go` and the span terms in `spline_moments.go`), then the angular factors `∫cos²θ`,
-`∫sinθcosθ`, `∫cosθ` over `[φ0, φ1]` enclosed through `radianSinCos`/`turnSinCosInterval`, with full
-turns taking the `π` enclosures. Dynamic-mass §2.1 names exactly these terms; partial turns keep their
-mixed components.
+Analytic, in `mass_properties_revolve.go`. `moments.go`'s `momentThirdOrder` adds `∫u³`, `∫u²v`, `∫uv²`,
+`∫v³` as rational intervals about the plane origin, every segment kind in the one boundary form
+`∮u^(p+1)·v^q dv/(p+1)`: lines there, arcs and circles in `moments_circular.go` through the trig-power
+reduction `circularMonomials`, Tier A spans in `spline_moments.go`. The plane moments are re-expressed as
+`∫z^a·ρ^b` in the exact axis frame and multiplied by the angular factors `∫dφ`, `∫cos φ`, `∫sin φ`,
+`∫cos² φ`, `∫sin φ cos φ`, `∫sin² φ` over `[φ0, φ1]`, built from the payload's own sweep denotation
+(`sweepDenotation.widthInterval`, `angleDenotation.sinCosFor`); a full turn's endpoints have exact sine
+and cosine, so its odd factors vanish exactly and `π` enters through the width alone. Dynamic-mass §2.1
+names exactly these terms; partial turns keep their mixed components. The local tensor reaches world axes
+through §8.1's rotation and defect widening, and positivity is proved by the leading principal minors of
+the published tensor. The path refuses an inexact axis, a nonzero axis-snap or admitted-band allowance, an
+undenoted sweep end and a section displacement, none of which it charges.
 
 ### 8.7 Sweep
 
@@ -1160,8 +1167,9 @@ lines below do not repeat it.
 - Delivers §8.6.
 - Files: `moments.go`, `moments_circular.go`, `spline_moments.go`, new `mass_properties_revolve.go`.
 - Test (root): `mass_properties_revolve_test.go`: a quarter revolve of an off-axis rectangle encloses
-  the independently integrated `r³`, `r²z` and `rz²` terms in its mixed components; a full torus
-  against the closed form.
+  the independently integrated `r³`, `r²z` and `rz²` terms in its mixed components, and an off-axis
+  triangle makes the `r²z` products nonzero; a full torus against the closed form; a rotated placement
+  encloses `Q I Qᵀ`, with the orthonormality-defect leg shown to fail.
 - Depends on: nothing.
 
 ### PR 17 (Phase 3) — sweep and cup mass

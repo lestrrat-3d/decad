@@ -219,6 +219,47 @@ type regionIntegrals struct {
 	// sum is not exact and the per-segment float accumulation with its own
 	// proven bounds is what gets published.
 	exactDead bool
+
+	// third is the momentThirdOrder sum (∫u³, ∫u²v, ∫uv², ∫v³ dA, in that
+	// order) as rational enclosures about the PLANE ORIGIN rather than the walk
+	// anchor. It has no float twin: its only consumer is the revolve mass path,
+	// which composes rational intervals, so no float conditioning needs the
+	// anchor and no re-referencing step follows the walk. A line or Tier A
+	// span contributes a point interval, a circular walk its enclosure.
+	// thirdDead records a contribution with no enclosure — a trimmed ArcSeg
+	// fragment — after which the region has no third-order moments at all.
+	third     [4]ratInterval
+	thirdDead bool
+}
+
+// addThird folds one segment's third-order contribution into the region's
+// sum, or retires the sum for good when the segment has none.
+func (ig *regionIntegrals) addThird(terms [4]ratInterval, ok bool) {
+	if ig.thirdDead {
+		return
+	}
+	if !ok {
+		ig.thirdDead = true
+		ig.third = [4]ratInterval{}
+		return
+	}
+	if ig.third[0].lo == nil {
+		ig.third = terms
+		return
+	}
+	for i := range ig.third {
+		ig.third[i] = intervalAdd(ig.third[i], terms[i])
+	}
+}
+
+// thirdMoments returns the region's third-order sum and whether every
+// boundary contribution had an enclosure. It is only populated by an
+// integration run at momentThirdOrder.
+func (ig regionIntegrals) thirdMoments() ([4]ratInterval, bool) {
+	if ig.thirdDead || ig.third[0].lo == nil {
+		return [4]ratInterval{}, false
+	}
+	return ig.third, true
 }
 
 func accumulateMoment(value, bound *float64, term, termBound float64) {
@@ -229,10 +270,16 @@ func accumulateMoment(value, bound *float64, term, termBound float64) {
 
 type momentIntegralOrder uint8
 
+// The orders are cumulative: each integrates everything the lower ones do.
+// momentThirdOrder adds regionIntegrals.third, the section moments a revolve's
+// volume second moments need (docs/dynamic-mass-design.md §2.1): the
+// cylindrical Jacobian contributes one radius and a transverse second moment
+// two more.
 const (
 	momentAreaOrder momentIntegralOrder = iota
 	momentFirstOrder
 	momentSecondOrder
+	momentThirdOrder
 )
 
 func finiteMomentValues(values ...float64) bool {
@@ -413,7 +460,7 @@ func translateMomentIntegrals(ig regionIntegrals, anchor Point2, order momentInt
 	area := measuredScalar(ig.area, ig.areaBound)
 	mu := measuredScalar(ig.mu, ig.muBound)
 	mv := measuredScalar(ig.mv, ig.mvBound)
-	if order == momentSecondOrder {
+	if order >= momentSecondOrder {
 		two := exactScalar(2)
 		anchorU := exactScalar(anchor.U)
 		anchorV := exactScalar(anchor.V)
@@ -475,6 +522,11 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 	if err != nil {
 		return err
 	}
+	if order == momentThirdOrder {
+		// Before the switch: the free-form arm below shifts its spans to the
+		// anchor in place, and the third-order sum is kept about the origin.
+		ig.addThird(segmentThirdMoments(segment, plan))
+	}
 	switch segment := segment.(type) {
 	case LineSeg:
 		ig.addLine(segment, anchor, order)
@@ -494,7 +546,7 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 		muProof, mvProof, haveMomentProof := circularFirstMomentInterval(segment, anchor)
 		var muuProof, muvProof, mvvProof ratInterval
 		var haveSecondMomentProof bool
-		if order == momentSecondOrder {
+		if order >= momentSecondOrder {
 			muuProof, muvProof, mvvProof, haveSecondMomentProof = circularSecondMomentInterval(segment, anchor)
 		}
 		segment.Center = shiftPoint(segment.Center, anchor)
@@ -524,7 +576,7 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 		muProof, mvProof, haveMomentProof := circularFirstMomentInterval(segment, anchor)
 		var muuProof, muvProof, mvvProof ratInterval
 		var haveSecondMomentProof bool
-		if order == momentSecondOrder {
+		if order >= momentSecondOrder {
 			muuProof, muvProof, mvvProof, haveSecondMomentProof = circularSecondMomentInterval(segment, anchor)
 		}
 		segment.Center = shiftPoint(segment.Center, anchor)
@@ -573,6 +625,41 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 	}
 }
 
+// segmentThirdMoments encloses one normalized segment's third-order
+// contribution about the plane origin: a line and a converted Tier A chain
+// exactly, from their recorded coordinates, and a circular walk through
+// circularThirdMomentInterval. Any other segment, and a circular walk that
+// enclosure does not admit, answers false.
+func segmentThirdMoments(segment CurveSegment, plan freeformPlan) ([4]ratInterval, bool) {
+	var exact [4]*big.Rat
+	switch segment := segment.(type) {
+	case LineSeg:
+		u0 := ratLerp(segment.Start.U, segment.End.U, segment.TStart)
+		v0 := ratLerp(segment.Start.V, segment.End.V, segment.TStart)
+		u1 := ratLerp(segment.Start.U, segment.End.U, segment.TEnd)
+		v1 := ratLerp(segment.Start.V, segment.End.V, segment.TEnd)
+		if u0 == nil || v0 == nil || u1 == nil || v1 == nil {
+			return [4]ratInterval{}, false
+		}
+		exact = polyThirdMoments(
+			ratPoly{u0, new(big.Rat).Sub(u1, u0)},
+			ratPoly{v0, new(big.Rat).Sub(v1, v0)},
+		)
+	case CircleSeg, ArcSeg:
+		return circularThirdMomentInterval(segment)
+	default:
+		if !isFreeformSegment(segment) || len(plan.spans) == 0 {
+			return [4]ratInterval{}, false
+		}
+		exact = freeformThirdMoments(plan.spans, plan.reversed)
+	}
+	var out [4]ratInterval
+	for i, value := range exact {
+		out[i] = pointInterval(value)
+	}
+	return out, true
+}
+
 // addAnalytic accumulates one line, circle or arc segment about the given
 // anchor. It is how the section audits take a loop's own signed area: their
 // loops are proven walkable before any area is asked for — walkOf refuses every
@@ -608,7 +695,7 @@ func (ig *regionIntegrals) addLine(seg LineSeg, anchor Point2, order momentInteg
 	accumulateMoment(&ig.area, &ig.areaBound, area, proofarith.RationalFloatError(exact.area, area))
 	accumulateMoment(&ig.mu, &ig.muBound, mu, proofarith.RationalFloatError(exact.mu, mu))
 	accumulateMoment(&ig.mv, &ig.mvBound, mv, proofarith.RationalFloatError(exact.mv, mv))
-	if order != momentSecondOrder {
+	if order < momentSecondOrder {
 		ig.addExact(exact)
 		return
 	}
@@ -748,7 +835,7 @@ func translateExactMoments(exact exactMoments, anchor Point2, order momentIntegr
 	if anchorU == nil || anchorV == nil {
 		return exactMoments{}
 	}
-	if order == momentSecondOrder {
+	if order >= momentSecondOrder {
 		// Second-order terms read the PRE-shift first moments, so they are
 		// re-referenced before mu and mv are.
 		exact.muu = ratAdd(
@@ -850,7 +937,7 @@ func exactLineMoments(seg LineSeg, anchor Point2, order momentIntegralOrder) exa
 	area := ratScale(new(big.Rat).Sub(ratMul(u0, v1), ratMul(u1, v0)), 1, 2)
 	mu := ratScale(ratMul(dv, ratAdd(u0sq, ratMul(u0, u1), u1sq)), 1, 6)
 	mv := ratScale(ratMul(du, ratAdd(v0sq, ratMul(v0, v1), v1sq)), -1, 6)
-	if order != momentSecondOrder {
+	if order < momentSecondOrder {
 		// The accumulator still requires six non-nil fields. These zero
 		// placeholders are never read by an area- or first-order caller; they
 		// let the region publish its exact area and centroid without cubic work.
@@ -944,7 +1031,7 @@ func (ig *regionIntegrals) addCircular(
 	accumulateMoment(&ig.area, &ig.areaBound, area, areaBound)
 	accumulateMoment(&ig.mu, &ig.muBound, mu, muBound)
 	accumulateMoment(&ig.mv, &ig.mvBound, mv, mvBound)
-	if order != momentSecondOrder {
+	if order < momentSecondOrder {
 		return
 	}
 

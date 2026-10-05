@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math/big"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func literalBernsteinMonomial(values []*big.Rat) ratPoly {
@@ -111,4 +113,39 @@ func benchmarkMomentSpans(degree, count int) []bezierSpan {
 		spans[spanIndex] = span
 	}
 	return spans
+}
+
+// TestFreeformThirdMomentsParabolicRegion integrates the region between the
+// parabola v = u² and the chord v = 2u over u ∈ [0, 2]: the parabola is the
+// quadratic Bézier (0,0), (1,0), (2,4) walked forward, the chord a line
+// walked back. The expected ∫u^p·v^q dA = ∫₀² u^p·((2u)^(q+1) − u^(2q+2))/(q+1) du
+// is integrated here column by column. A reversed span negates every term.
+//
+// Shown-to-fail: dropping the ¼ of ∫u³ dA, or integrating ∫v³ dA against du
+// instead of dv, separates that term from its value.
+func TestFreeformThirdMomentsParabolicRegion(t *testing.T) {
+	point := func(u, v int64) ratPoint { return ratPoint{u: big.NewRat(u, 1), v: big.NewRat(v, 1)} }
+	parabola := []bezierSpan{{point(0, 0), point(1, 0), point(2, 4)}}
+	curve := freeformThirdMoments(parabola, false)
+	chord := polyThirdMoments(
+		ratPoly{big.NewRat(2, 1), big.NewRat(-2, 1)},
+		ratPoly{big.NewRat(4, 1), big.NewRat(-4, 1)},
+	)
+	for i, pq := range [4][2]int{{3, 0}, {2, 1}, {1, 2}, {0, 3}} {
+		p, q := pq[0], pq[1]
+		// ∫₀² u^p·(2^(q+1)·u^(q+1) − u^(2q+2)) du / (q+1)
+		upper := new(big.Rat).SetInt64(1 << (q + 1))
+		upper.Mul(upper, new(big.Rat).SetInt64(1<<(p+q+2)))
+		upper.Quo(upper, big.NewRat(int64(p+q+2), 1))
+		lower := new(big.Rat).SetInt64(1 << (p + 2*q + 3))
+		lower.Quo(lower, big.NewRat(int64(p+2*q+3), 1))
+		want := new(big.Rat).Sub(upper, lower)
+		want.Quo(want, big.NewRat(int64(q+1), 1))
+		got := new(big.Rat).Add(curve[i], chord[i])
+		require.Zero(t, got.Cmp(want), "∫u^%d·v^%d dA: got %s, want %s", p, q, got, want)
+	}
+	reversed := freeformThirdMoments(parabola, true)
+	for i := range curve {
+		require.Zero(t, new(big.Rat).Neg(curve[i]).Cmp(reversed[i]), "term %d: a reversed span must negate", i)
+	}
 }

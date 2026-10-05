@@ -32,8 +32,9 @@ type InertiaReading struct {
 // admits untapered solid prisms under any frame and rigid placement, including
 // those whose recorded section or levels carry a proven displacement, full
 // source spheres under rigid placements, cardinal full source cylinders made
-// by revolving an axis-incident rectangle, and faceted Boolean solids with a
-// certified occupied-volume bound.
+// by revolving an axis-incident rectangle, full and partial revolves of any
+// integrated section about an exact in-plane axis under any frame and rigid
+// placement, and faceted Boolean solids with a certified occupied-volume bound.
 // It returns ErrUnsupported for other solids rather than estimating their inertia.
 // The receiver and context must not be nil.
 func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassProperties, error) {
@@ -69,6 +70,9 @@ func (b *Body) MassProperties(ctx context.Context, density units.Value) (MassPro
 			return MassProperties{}, err
 		}
 		return sourceRevolvedCylinderMassProperties(ctx, b, cylinder, density)
+	}
+	if revolve, ok := b.payload.(revolvePayload); ok {
+		return revolveMassProperties(ctx, b, revolve, density)
 	}
 	if faceted, ok := b.payload.(facetedPayload); ok {
 		return facetedMassProperties(ctx, b, faceted, density)

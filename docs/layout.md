@@ -87,16 +87,17 @@ to the byte budget.
 | `moments.go` / `moments_validate.go` | The mass-property engine (evaluator §4): closed-form Green's-theorem boundary integrals for `Area`, `Centroid`, `SecondMoments`, per region. See `docs/spline-design.md` §5.2. |
 | `mass_properties.go` / `mass_properties_rotated.go` | Prism mass and inertia. See `docs/dynamic-mass-design.md`. |
 | `mass_properties_sphere.go` / `mass_properties_revolved_cylinder.go` | Source sphere and revolved cylinder mass and inertia. See `docs/dynamic-mass-design.md`. |
+| `mass_properties_revolve.go` | General revolve mass and inertia. See `docs/multibody-dynamics-design.md` §8.6. |
 | `mass_properties_faceted.go` | Mass and inertia for verified faceted Booleans. See `docs/dynamic-mass-design.md`. |
 | `moments_trig.go` | `moments.go`'s certified sine/cosine primitive: `turnSinCosInterval` proves an enclosure of sin/cos of an exact rational turn without ever comparing against π. See this file's own doc comment. |
 | `bounded.go` | The bounded-scalar vocabulary and three-valued admission readers. Its rounding arithmetic lives in `internal/proof/`. See the file's doc comment. |
 | `rat_interval.go` | The `atan`/`atan2` and π enclosures, with adapters for the exact interval arithmetic in `internal/proof/`. See the file's doc comment. |
-| `moments_circular.go` | Exact rational arc/circle integration for `moments.go`'s boundary sums and `revolve_build.go`'s axis moment. See the file's doc comment. |
+| `moments_circular.go` | Exact rational arc/circle enclosures for `moments.go` and `revolve_build.go`. See the file's doc comment. |
 | `spline_bezier.go` | The exact reduction of `docs/spline-design.md` §5.1: a recorded free-form curve to piecewise polynomial Bézier control points over `big.Rat`, with no rounding. Owns the §5.2 work-budget charges. |
 | `spline_length.go` | Bounded free-form arc length. See `docs/spline-design.md` §6.1. |
 | `spline_extreme.go` | `docs/spline-design.md` §6.2's Tier A directional-extreme bracket, reducing to `clearance_poly.go`'s root engine. See the file's doc comment. |
 | `spline_fit.go` | `docs/spline-design.md` §5.1.2's fit-spline reduction: converts a recorded `FitSplineSeg` into the same `bezierSpan` chain the other Tier A kinds produce. See the file's doc comment. |
-| `spline_moments.go` | The exact integration of `docs/spline-design.md` §5.1 over Bézier spans, reusing `clearance_poly.go`'s `ratPoly`. `addFreeform` feeds `moments.go`'s region-level rational accumulator. |
+| `spline_moments.go` | The exact integration of `docs/spline-design.md` §5.1 over Bézier spans, reusing `clearance_poly.go`'s `ratPoly`. |
 | `spline_sagitta.go` | `docs/spline-design.md` §6.2.1's chord-sagitta bounds and the shared dyadic station generator built on them. See the file's doc comments. |
 | `spline_convexity.go` | `docs/spline-design.md` §6.5: proves a free-form wall edge's single curvature sign from its Bernstein certificate, or refuses. Owns Table R row R19's refusal. See the file's doc comment. |
 

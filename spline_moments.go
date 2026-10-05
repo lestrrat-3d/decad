@@ -32,7 +32,10 @@ const freeformSpanCeiling = 1 << 12
 // p(p+1)(2p+1)/3 products per coordinate. The difference table performs fewer
 // products, while the six Green's-theorem products (none above degree 4p, so
 // under 24(p+1)² together) and their ∫₀¹ terms remain quadratic in p. The
-// unchanged 64(p+1)² term covers those quadratic operations.
+// unchanged 64(p+1)² term covers those quadratic operations, and it still
+// covers them when momentThirdOrder adds freeformThirdMoments: its second
+// coefficient conversion and its four boundary forms (none above degree 5p)
+// bring the total to under 63(p+1)² coefficient products.
 func freeformSpanCost(controls int) uint64 {
 	if controls <= 0 {
 		return 0
@@ -134,7 +137,7 @@ func spanCoordinatePolys(span bezierSpan) (ratPoly, ratPoly) {
 func exactFreeformMoments(spans []bezierSpan, reversed bool, order momentIntegralOrder) exactMoments {
 	half := big.NewRat(1, 2)
 	var third *big.Rat
-	if order == momentSecondOrder {
+	if order >= momentSecondOrder {
 		third = big.NewRat(1, 3)
 	}
 	out := exactMoments{
@@ -154,7 +157,7 @@ func exactFreeformMoments(spans []bezierSpan, reversed bool, order momentIntegra
 		out.area.Add(out.area, new(big.Rat).Mul(half, rpIntegral01(rpSub(rpMul(u, dv), rpMul(v, du)))))
 		out.mu.Add(out.mu, new(big.Rat).Mul(half, rpIntegral01(rpMul(uu, dv))))
 		out.mv.Sub(out.mv, new(big.Rat).Mul(half, rpIntegral01(rpMul(vv, du))))
-		if order == momentSecondOrder {
+		if order >= momentSecondOrder {
 			out.muu.Add(out.muu, new(big.Rat).Mul(third, rpIntegral01(rpMul(rpMul(uu, u), dv))))
 			out.mvv.Sub(out.mvv, new(big.Rat).Mul(third, rpIntegral01(rpMul(rpMul(vv, v), du))))
 			out.muv.Add(out.muv, new(big.Rat).Mul(half, rpIntegral01(rpMul(rpMul(uu, v), dv))))
@@ -197,7 +200,7 @@ func (ig *regionIntegrals) addFreeformTo(spans []bezierSpan, reversed bool, orde
 		{&ig.muv, &ig.muvBound, exact.muv},
 		{&ig.mvv, &ig.mvvBound, exact.mvv},
 	}
-	if order != momentSecondOrder {
+	if order < momentSecondOrder {
 		moments = moments[:3]
 	}
 	for _, moment := range moments {
@@ -205,4 +208,48 @@ func (ig *regionIntegrals) addFreeformTo(spans []bezierSpan, reversed bool, orde
 		accumulateMoment(moment.value, moment.bound, held, proofarith.RationalFloatError(moment.exact, held))
 	}
 	ig.addExact(exact)
+}
+
+// polyThirdMoments integrates one polynomial boundary path's third-order
+// contributions exactly, through the dv form every third-order contribution
+// takes (moments.go's momentThirdOrder):
+//
+//	∫u³ dA  = ¼∮u⁴ dv
+//	∫u²v dA = ⅓∮u³v dv
+//	∫uv² dA = ½∮u²v² dv
+//	∫v³ dA  = ∮uv³ dv
+//
+// A line is the degree-1 path, so moments.go's line arm and this file's span
+// arm share it.
+func polyThirdMoments(u, v ratPoly) [4]*big.Rat {
+	dv := rpDeriv(v)
+	uu, vv := rpMul(u, u), rpMul(v, v)
+	uuu := rpMul(uu, u)
+	return [4]*big.Rat{
+		new(big.Rat).Mul(big.NewRat(1, 4), rpIntegral01(rpMul(rpMul(uu, uu), dv))),
+		new(big.Rat).Mul(big.NewRat(1, 3), rpIntegral01(rpMul(rpMul(uuu, v), dv))),
+		new(big.Rat).Mul(big.NewRat(1, 2), rpIntegral01(rpMul(rpMul(uu, vv), dv))),
+		rpIntegral01(rpMul(rpMul(u, rpMul(vv, v)), dv)),
+	}
+}
+
+// freeformThirdMoments integrates one converted free-form curve's third-order
+// contributions about the plane origin. The spans must be the RECORDED
+// control points, before regionIntegrals.add shifts them to the walk anchor,
+// because the third-order sum is kept about the origin. reversed negates
+// every term, as it does in exactFreeformMoments.
+func freeformThirdMoments(spans []bezierSpan, reversed bool) [4]*big.Rat {
+	out := [4]*big.Rat{new(big.Rat), new(big.Rat), new(big.Rat), new(big.Rat)}
+	for _, span := range spans {
+		u, v := spanCoordinatePolys(span)
+		for i, term := range polyThirdMoments(u, v) {
+			out[i].Add(out[i], term)
+		}
+	}
+	if reversed {
+		for _, value := range out {
+			value.Neg(value)
+		}
+	}
+	return out
 }

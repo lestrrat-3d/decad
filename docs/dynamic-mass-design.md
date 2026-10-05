@@ -5,7 +5,9 @@ dynamics. It supplies the mass gate in `docs/collision-dynamics-design.md` §2.
 The source-box query, bounded section-moment integration for admitted
 untapered prisms under any frame and rigid placement, including displaced
 section and level records, full source-sphere integration, and full source-cylinder
-integration for a revolved axis-incident rectangle are implemented. Faceted
+integration for a revolved axis-incident rectangle are implemented, as is
+third-order section-moment integration for a full or partial revolve about
+an exact in-plane axis under any frame and rigid placement. Faceted
 Boolean solids with verified occupied-volume bounds publish density-derived
 mass and inertia when their resulting volume and tensor intervals pass the
 positive admission gates.
@@ -118,13 +120,25 @@ cylinder, cone, or torus may use an equivalent closed-form primitive integral
 only when it represents that payload's exact denotation, including its cuts,
 holes, and placement.
 
+The implemented general revolve path (`mass_properties_revolve.go`) keeps the
+third-order sum as rational intervals about the plane origin, every segment
+kind in the boundary form `∮u^(p+1)·v^q dv/(p+1)`. It re-expresses the plane
+moments in the exact axis frame and multiplies them by the sweep's own
+denoted angular factors. It forms `S` from one common `V`, `P`, `Q` enclosure
+and proves the interval tensor positive definite by its leading principal
+minors. It refuses a payload whose readings carry a term it does not charge:
+an axis with a nonzero anchor or direction bound, a nonzero axis-snap or
+admitted-band allowance, a sweep end without a denotation, or a section
+displacement. The local tensor reaches world axes through the exact rational
+product of the placement basis and the local axis, radial, and sweep
+directions, widened by its orthonormality defect as the rotated prism is.
+
 The full source-sphere path accepts a full revolution of one exact
 semicircle and its on-axis diameter when its source and closed spherical face
 prove the occupied ball. It integrates `V = 4πr³/3` and the isotropic tensor
 `I = 2Mr²/5` with the in-tree rational π enclosure. It uses the evaluator's
 bounded world centroid. Any rigid placement leaves its centroidal tensor
-unchanged; a partial revolution, cavity, or other curved source still needs
-its own certified moment path.
+unchanged; a partial revolution takes the general revolve path.
 
 The full source-cylinder path accepts a full revolution of an axis-incident
 rectangular half-profile when its source, cardinal axis, and closed faces
@@ -132,8 +146,8 @@ prove the occupied cylinder. Its exact axial and radial extrema give `r` and
 `h`; the in-tree π enclosure bounds `M = ρπr²h`, axial inertia `Mr²/2`, and
 transverse inertia `M(3r²+h²)/12`. The evaluator's bounded centroid supplies
 the world center. Cardinal rigid placements reorder the tensor entries.
-Partial, annular, toroidal, and obliquely placed revolves still need their
-own certified moment path.
+Partial, annular, toroidal, and obliquely placed revolves take the general
+revolve path above.
 
 Other analytic payloads may provide certified `V`, `P`, and `Q` directly.
 Otherwise they use §2.2 if they have a suitable occupied-volume proof. A

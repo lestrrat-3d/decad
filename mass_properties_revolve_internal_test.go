@@ -1,0 +1,49 @@
+package decad
+
+import (
+	"testing"
+
+	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
+	"github.com/stretchr/testify/require"
+)
+
+// TestRevolveMassPropertiesRefusesUnchargedTerms checks each reject-only gate
+// of revolveMassProperties on an otherwise admitted quarter revolve: every
+// payload field whose effect the mass path does not charge must refuse with
+// ErrUnsupported rather than publish a tensor missing that term.
+func TestRevolveMassPropertiesRefusesUnchargedTerms(t *testing.T) {
+	w := sketch.NewWorld()
+	sk, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := sk.CreateRectangle(0, 5, 10, 15)
+	sk.Fix(rect.A)
+	_, err = sk.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := New().Revolve(sk, sk.Profiles()[0],
+		SketchLine{Start: Point2{}, End: Point2{U: 1}},
+		AngleExtent{A: units.Degrees(90), Dir: Along})
+	require.NoError(t, err)
+	base, ok := body.payload.(revolvePayload)
+	require.True(t, ok)
+	density := units.KilogramsPerCubicMillimeter(1.0 / 1024)
+	_, err = revolveMassProperties(t.Context(), body, base, density)
+	require.NoError(t, err, `the unmodified payload is admitted`)
+
+	for name, edit := range map[string]func(*revolvePayload){
+		"section displacement": func(rp *revolvePayload) { rp.sectionDelta = 1e-9 },
+		"anchor bound":         func(rp *revolvePayload) { rp.ax.aUBound = 1e-15 },
+		"direction bound":      func(rp *revolvePayload) { rp.ax.dVBound = 1e-16 },
+		"admitted band":        func(rp *revolvePayload) { rp.ax.radialAdmitAllow = 1e-12 },
+		"axis snap":            func(rp *revolvePayload) { rp.ax.snap.second = 1e-12 },
+		"undenoted sweep end":  func(rp *revolvePayload) { rp.den.phi1 = angleDenotation{} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			rp := base
+			edit(&rp)
+			got, err := revolveMassProperties(t.Context(), body, rp, density)
+			require.ErrorIs(t, err, ErrUnsupported)
+			require.Equal(t, MassProperties{}, got)
+		})
+	}
+}
