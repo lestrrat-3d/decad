@@ -585,14 +585,18 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 	// weld dropped is likewise missing from every area the result reports, so
 	// it joins the operands' own chord deficit in areaSlack.
 	roundVol := sweptVolumeAllow(stitched.round, stitched.preArea)
+	meshBound, volSymDiff, areaSlack := booleanProofBounds(
+		rim, stitched.round, symA, symB, roundVol,
+		ma.areaSlack, mb.areaSlack, stitched.dropArea,
+	)
 	payload := facetedPayload{
 		verts:      stitched.verts,
 		tris:       stitched.tris,
 		src:        stitched.src,
 		groups:     groups,
-		meshBound:  rim + stitched.round,
-		volSymDiff: symA + symB + roundVol,
-		areaSlack:  ma.areaSlack + mb.areaSlack + stitched.dropArea,
+		meshBound:  meshBound,
+		volSymDiff: volSymDiff,
+		areaSlack:  areaSlack,
 		dPair:      dPair,
 		xform:      r3.Identity(),
 	}
@@ -611,6 +615,16 @@ func evaluateBoolean(ctx context.Context, op operationKind, a, b *Body) (boolean
 		return booleanEvaluation{}, err
 	}
 	return booleanEvaluation{payload: payload, volume: volume, volumeRat: volumeRat, audit: audit}, nil
+}
+
+// booleanProofBounds composes the independent, non-negative proof terms that
+// survive the mesh boolean into its faceted result.
+func booleanProofBounds(rim, weldDelta, symA, symB, roundVol, slackA, slackB, dropArea float64) (
+	meshBound, volSymDiff, areaSlack float64,
+) {
+	return absSumUpper(rim, weldDelta),
+		absSumUpper(symA, symB, roundVol),
+		absSumUpper(slackA, slackB, dropArea)
 }
 
 // sourceIDs maps a tessellation's per-facet source faces to the global

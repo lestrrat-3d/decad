@@ -939,6 +939,7 @@
 4	0.03	TestBooleanContextCancellationLeavesDocumentUnchanged
 4	5.20	TestBooleanCutWasherThroughDiscKeepsStandingPost
 4	14.88	TestBooleanDegenerateClusterSoundness
+4	0.00	TestBooleanProofBoundsEncloseExactTermSums
 4	0.06	TestBooleanRejections
 4	0.01	TestBooleanRoundingUnderflowKeepsProofPositive
 4	0.00	TestBoundaryExtremesBoundedContextCancellation
@@ -1194,6 +1195,7 @@
 4	0.01	TestFacetedMassPropertiesUnionAndRefusals
 4	0.00	TestFacetedMeasurementSumsEncloseSmallAllowances
 4	0.85	TestFacetedPlaced
+4	0.00	TestFacetedPlacementEnclosesExactPriorAndMotionBounds
 4	0.00	TestFacetedPlacementRebuildsCachedDiameter
 4	0.01	TestFilletBoundaryContactRefused
 4	0.00	TestFilletContextCancellationAtCommitLeavesReceiverLive
