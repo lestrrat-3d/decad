@@ -56,13 +56,13 @@ func TestSweepPairRealFacetedUnionClearAndImpact(t *testing.T) {
 	require.Equal(t, units.Millimeters(10), contact.Gap.Value)
 
 	clearEnd := facetedSweepPose(t, r3.Vec{Z: 5})
-	clear, err := doc.SweepPair(t.Context(), floor, union, still,
+	clearSweep, err := doc.SweepPair(t.Context(), floor, union, still,
 		facetedSweepPath(start, clearEnd), facetedSweepRequest(StopAtInitialContact))
 	require.NoError(t, err)
-	require.Equal(t, SweepClear, clear.Outcome, "cause=%v", clear.Cause)
-	require.True(t, clear.HasAffineReplayProof())
+	require.Equal(t, SweepClear, clearSweep.Outcome, "cause=%v", clearSweep.Cause)
+	require.True(t, clearSweep.HasAffineReplayProof())
 	for _, elapsed := range []float64{0, 0.25, 0.5, 1} {
-		poseA, poseB, err := clear.CertifiedPosesAt(units.Seconds(elapsed))
+		poseA, poseB, err := clearSweep.CertifiedPosesAt(units.Seconds(elapsed))
 		require.NoError(t, err)
 		at, err := doc.ContactPair(t.Context(), floor, union, poseA, poseB,
 			facetedSweepRequest(StopAtInitialContact).ContactRequest)
