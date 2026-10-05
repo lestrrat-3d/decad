@@ -14,7 +14,7 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 3, 4, 7, 10, 14, 16, 17 and 19 have shipped. `dynamics.World` holds any
+Current state: §13 PRs 1, 2, 3, 4, 7, 10, 11, 14, 16, 17 and 19 have shipped. `dynamics.World` holds any
 number of bodies, the canonical pair table and per-pair material of §3.1, and the slice-backed `State` of
 §3.2. Its step resolves two bodies, or three bodies with one, two or three dynamic bodies and every other
 body fixed, through the closed-form responses `docs/rigid-dynamics-design.md` lists. A world of four or more
@@ -36,7 +36,7 @@ rounding bounds), which the root package imports today and which `dynamics` can 
 shipped code, except `State.cache` and the `MaxPairSweeps` charge (§13 PR 8). For worlds of four or more
 bodies, §5 with that one event time, §6.1–§6.3 without the cone, stick and slip rows, §6.6, §7.1, §3.3's
 `IslandReport`, `StepReport.Islands` and `ContactEvent.Island`, §3.4's `traceSlice`, `pairProof` and
-`traceEvent`, and §12's `StepReason` with `StepDiagnostic.Code` ship as well. §9.1 and §9.2 ship for prisms
+`traceEvent`, and §12's `StepReason` with `StepDiagnostic.Code` ship as well. §9.1–§9.4 ship for prisms
 over whole `LineSeg` sections and for zero-bound Booleans, directly or through a translation-only placement;
 stitched solids and lofts are not admitted yet. Everything else is design-only until the PR table in §13
 says otherwise.
@@ -781,22 +781,45 @@ face normal is the one direction the solver may use and is published as a unique
 crossing have one normal up to sign. Vertex-on-vertex, vertex-on-edge and parallel edge-on-edge contacts
 leave the manifold absent with `ContactAmbiguousFeature`. Every published point carries its two original
 `Face`s (or the edge's faces through `ContactFeature`), a point ball from the exact-to-float conversion,
-`NormalAngle` zero for an exact face normal, and a `Separation` interval containing zero.
+a normal ball from normalizing the exact direction (zero when the unit normal is a float, so
+`NormalAngle` is zero there), and a `Separation` interval containing zero.
+
+The kernel (`internal/pair/planar_manifold.go`) builds the manifold from the zero-distance feature pairs
+§9.1 records, which cover the whole contact set. With `X` a convex body and `Y` the other, each pair must
+be covered by one accepted piece holding one of its faces, tried in this order; any uncovered pair
+withholds the manifold with `ContactAmbiguousFeature`:
+
+- a face of `X` coplanar with and opposed to a face of `Y`: their clip (§9.4), or, when the clip has zero
+  area, the ends and isolated points of the degenerate intersection, published with the face normal;
+- a face of `Y` whose plane `X` lies wholly in front of and touches along one edge or at one vertex: that
+  edge's clipped pieces or that vertex, each piece reaching the face's interior; a piece that only meets
+  the face's rim is a vertex-on-edge or parallel edge-on-edge contact and covers nothing;
+- the same with the roles swapped, only when `Y` is convex too: a face of `A` on an edge of a
+  non-convex `B` is not admitted and withholds the manifold;
+- a crease edge of `X` crossing a crease edge of `Y` at an interior point.
+
+Duplicate points are merged only under exact equality of point and features. The normal is normalized
+from the exact direction after scaling it by its largest component, so the two query orders publish
+exactly opposed normals.
 
 Shallow penetration, which a bracket's right sample may show: for convex `A` against convex `B`, the six
 directed translations of the box path generalize to the minimum-translation axis among `A`'s and `B`'s
 face normals and the edge cross products; a unique strictly smallest positive translation whose selected
-faces cross publishes the patch at depth, exactly as contact-geometry §4's box penetration path does. A
-tied minimum, or a non-convex `B` whose penetrated face is not unique, keeps `Overlapping` and withholds
-the manifold.
+faces cross publishes the patch at depth, exactly as contact-geometry §4's box penetration path does.
+The selected faces are `A`'s face with outward normal along the translation and `B`'s face against it;
+`B`'s face moves by the translation onto `A`'s plane and is clipped there (§9.4), each corner pairing its
+point on `A`'s face with its translate on `B`'s face, and `Separation` is minus the translation length.
+A tied minimum, an edge-cross axis, faces that do not cross (one body holding the other along that
+axis), or a non-convex body keeps `Overlapping` and withholds the manifold.
 
 ### 9.4 The planar patch by exact rational clipping
 
 The patch of a coplanar face pair is computed inside decad, in exact rational arithmetic: the clip
-itself in `internal/pair/planar_patch.go` over the two exact loops, the lifting and witness publication
-in the root `contact_faceted_patch.go`, the same split §9.1 makes. This is a decad-side 2D answer under CLAUDE.md's "Ask `sketch` for 2D answers
-by default" rule, which admits one where it clearly wins on performance or correctness and asks the
-owning design to state the reason. Both reasons apply here. Performance: a manifold is asked at every
+itself in `internal/pair/planar_patch.go` over the two exact loops, the face map and witness publication
+in the root `contact_faceted_manifold.go` and `contact_faceted_patch.go`, the same split §9.1 makes.
+This is a decad-side 2D answer under CLAUDE.md's "Ask `sketch` for 2D answers by default" rule,
+which admits one where it clearly wins on performance or correctness and asks the owning design to
+state the reason. Both reasons apply here. Performance: a manifold is asked at every
 bracket sample, track end and replay check of every touching pair, and building, arranging and reading
 back a private scene per request costs far more than clipping two polygons. Correctness: both loops are
 polygons over exact rational vertices, so the clip samples no cut parameter, curve crossing or region
@@ -827,11 +850,13 @@ points are the union of the components' vertices. The clip takes a poll function
 `integrateMomentRecordWithPoll` does, that the root adapter builds from the shared `workBudget`; every
 rational operation is charged through it, and the loop polls `ctx` every `workPollInterval` operations.
 
-**Published points.** Each output vertex is lifted to 3D exactly, then converted once to a float
-witness with an outward ball through `orientedBoxPoint`, exactly as the shipped clips do. The ball is
-the single source of inexactness: a witness whose ball exceeds `PointResolution` withholds the manifold
-with `ContactPointTooCoarse`, and no other refusal exists on this path. The normal is `B`'s exact face
-normal oriented `A` toward `B`, `NormalAngle` is zero and `Separation` is an exact zero interval.
+**Published points.** Each output vertex that is a corner of the patch (a vertex the polygon passes
+straight through is not) is lifted to 3D exactly, then converted once to a float witness with an
+outward ball through `orientedBoxPoint`, exactly as the shipped clips do. A witness whose ball exceeds
+`PointResolution` withholds the manifold with `ContactPointTooCoarse`. The normal is `B`'s exact face
+normal oriented `A` toward `B`, normalized with the ball §9.3 describes; an angle above
+`NormalResolution` withholds the manifold with `ContactNoNormalProof`, and an axis-aligned face has a
+zero ball and a zero `NormalAngle`. `Separation` is an exact zero interval.
 
 **The shipped clips as special cases.** `contact_clipped_patch.go`'s `clipHorizontalPolygon` is this
 algorithm with the clip polygon an axis-aligned rectangle (four axis-parallel half-planes) in the world
@@ -852,9 +877,9 @@ zero. The clip itself is unchanged; only the published bounds differ.
   equal to the hand-computed rational.
 - Parity: the rotated-box-on-floor fixture that publishes eight clipped points today produces the same
   eight points, bit for bit, through the general clip.
-- A box spanning the notch of an L-shaped zero-bound union floor publishes the union of both components'
-  vertices; a box covering a through-hole of a plate is withheld with `ContactAmbiguousFeature`, and the
-  same box beside the hole publishes its four corners.
+- A plank spanning the notch of an L-shaped zero-bound Boolean floor publishes the union of both
+  components' vertices; a box covering a through-hole of a plate is withheld with
+  `ContactAmbiguousFeature`, and a box beside the hole publishes its four corners.
 - Two vertical wall faces touching (normal along `x`) publish the clipped patch; fixing the dropped axis
   to `z` is shown to fail (zero area).
 - A `B` face recorded with reversed loop order publishes the same patch; skipping the orientation step
@@ -1225,7 +1250,8 @@ lines below do not repeat it.
 ### PR 11 (Phase 2) — faceted manifolds and the exact-clipped patch
 
 - Delivers §9.3, §9.4 and the shallow-penetration patch.
-- Files: new `internal/pair/planar_patch.go`, `contact_faceted_manifold.go`, `contact_faceted_patch.go`.
+- Files: new `internal/pair/planar_patch.go`, `internal/pair/planar_manifold.go`,
+  `contact_faceted_manifold.go`, `contact_faceted_patch.go`; `contact_faceted_pair.go`.
 - Test (root): `contact_faceted_manifold_test.go`: a rotated box on a face publishes one point at a
   vertex touch, two at an edge touch, and the clipped hexagon's seven extremal vertices at a face
   touch, each at its exact coordinate; §9.4's parity, wall, reversed-loop, hole and

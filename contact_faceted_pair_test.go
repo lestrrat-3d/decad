@@ -85,19 +85,15 @@ func hexPose(t *testing.T, at r3.Vec) r3.Transform {
 }
 
 // contactBothOrders runs ContactPair in both orders and requires the same
-// relation, gap and reason, as §9.5 and contact-geometry §5 state.
+// relation, gap and reason, and a manifold mirrored between them, as §9.5 and
+// contact-geometry §5 state.
 func contactBothOrders(t *testing.T, doc *decad.Document, a, b *decad.Body,
 	poseA, poseB r3.Transform) *decad.ContactReport {
 	t.Helper()
-	forward, err := doc.ContactPair(t.Context(), a, b, poseA, poseB, contactRequest())
-	require.NoError(t, err)
+	forward := contactBothWays(t, doc, a, b, poseA, poseB, contactRequest())
 	reversed, err := doc.ContactPair(t.Context(), b, a, poseB, poseA, contactRequest())
 	require.NoError(t, err)
-	require.Equal(t, forward.Relation, reversed.Relation, "reason=%v/%v", forward.Reason, reversed.Reason)
-	require.Equal(t, forward.Reason, reversed.Reason)
 	require.Equal(t, forward.Gap, reversed.Gap)
-	require.Nil(t, forward.Manifold)
-	require.Nil(t, reversed.Manifold)
 	return forward
 }
 
@@ -120,17 +116,25 @@ func TestContactPairExactPlanarHexagonOnTray(t *testing.T) {
 	require.Less(t, gap.Gap.Bound.Base(), 1e-12)
 
 	// The same corner on the floor: an exact vertex touch. The prism is
-	// convex, so the missing manifold is a missing normal proof (§9.3).
+	// convex, so the floor's normal is the one admissible normal there
+	// (§9.3), and the corner is the whole manifold.
 	touch := contactBothOrders(t, doc, tray, hex, id, hexPose(t, r3.Vec{X: -10}))
 	require.Equal(t, decad.ContactTouching, touch.Relation, "reason=%v", touch.Reason)
 	require.Equal(t, decad.Exact, touch.Gap.Exactness)
 	require.Zero(t, touch.Gap.Value.Base())
-	require.Equal(t, decad.ContactNoNormalProof, touch.Reason)
+	require.Equal(t, decad.ContactNoReason, touch.Reason)
+	require.NotNil(t, touch.Manifold)
+	require.Len(t, touch.Manifold.Points, 1)
+	require.Equal(t, r3.Vec{X: -10}, touch.Manifold.Points[0].OnA.Value)
+	require.Equal(t, r3.Vec{Z: 1}, touch.Manifold.Points[0].Normal.Value)
+	require.NotNil(t, touch.Manifold.Points[0].FeatureB.Vertex)
 
 	// Half a millimetre lower, the corner's edges cross the floor's face.
+	// The tray is not convex, so there is no penetration patch.
 	crossing := contactBothOrders(t, doc, tray, hex, id, hexPose(t, r3.Vec{X: -10, Z: -0.5}))
 	require.Equal(t, decad.ContactOverlapping, crossing.Relation, "reason=%v", crossing.Reason)
 	require.Nil(t, crossing.Gap)
+	require.Nil(t, crossing.Manifold)
 	require.Equal(t, decad.ContactNoNormalProof, crossing.Reason)
 
 	require.Equal(t, before, doc.Bodies(), "a contact query changes no document state")

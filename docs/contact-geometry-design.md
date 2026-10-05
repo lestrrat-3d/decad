@@ -102,10 +102,15 @@ basis has a positive determinant. A solid is admitted as a prism over whole
 `LineSeg` edges with zero deltas, or as a zero-bound faceted Boolean, directly
 or through a translation-only placement. The relation is separation with an
 enclosed gap, touch, or overlap, decided by the exact facet tests of
-`docs/multibody-dynamics-design.md` §9.1. This path publishes no manifold. Its
-reason is `ContactNonConvex` when neither body carries §9.2's convexity
-certificate there, and `ContactNoNormalProof` otherwise. When the faceted
-floor-support proof leaves a pair undecided, this relation decides it.
+`docs/multibody-dynamics-design.md` §9.1. With neither body carrying §9.2's
+convexity certificate, a touch or overlap has no manifold and the reason
+`ContactNonConvex`. Otherwise a touch publishes §9.3's manifold: clipped
+face patches, edge ends and vertices inside a face with that face's normal,
+and crease crossings, or `ContactAmbiguousFeature` when a contact falls
+outside that table. An overlap of two convex bodies publishes the patch at
+depth through one unique shallowest pair of crossing faces; any other overlap
+keeps `ContactNoNormalProof`. When the faceted floor-support proof leaves a
+pair undecided, this relation decides it.
 
 ## 1. Claims and entry point
 

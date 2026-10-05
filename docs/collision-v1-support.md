@@ -20,7 +20,7 @@ shows a box impact and computed rebound.
 | Full source cylinder and source box | Axial disk in a wide face; vertical extruded sidewall against a broad face | Centered frictionless rebound |
 | Verified faceted Boolean and source-box floor | One exact rectangular lower face, vertical affine path, contained footprint | Frictionless rebound or rest |
 | Full source cylinder sidewall, against a planar face or a parallel full source cylinder | Two-end ruling line at identity query poses only | None yet |
-| Two exact planar solids | Gap, touch, or overlap at any pose with a positive-determinant basis; no manifold | None yet |
+| Two exact planar solids | Gap, touch, or overlap at any pose with a positive-determinant basis; a manifold when one is convex | None yet |
 
 The source-box path starts from rectangular source prisms. Signed-axis
 face patches cover affine approach, persistent contact, and the first edge
@@ -89,11 +89,23 @@ Two exact planar solids are prisms over straight-edged sections with no
 recorded displacement, or zero-bound faceted Booleans, directly or after a
 translation-only `Placed`. `ContactPair` proves their relation under any
 rotation: an enclosed gap, a touch at a vertex, edge or face, or an overlap,
-including one body nested in the other's material. It publishes no manifold
-yet, so no step response uses it. The report names `ContactNonConvex` when
-neither body is convex. A touch it cannot resolve locally, such as two
-flush bodies meeting at a saddle point, stays `ContactUndecided`.
-[Planar pair tests](../contact_faceted_pair_test.go) check each relation.
+including one body nested in the other's material. The report names
+`ContactNonConvex` when neither body is convex. A touch it cannot resolve
+locally, such as two flush bodies meeting at a saddle point, stays
+`ContactUndecided`. [Planar pair tests](../contact_faceted_pair_test.go)
+check each relation.
+
+When one body is convex, a touch also publishes a manifold of exact points.
+A face flat against a face publishes every corner of their exact clipped
+patch. An edge or a corner inside a face publishes the edge's clipped ends
+or the corner, with that face's normal. Two edges crossing publish their
+crossing point. A box in a tray corner publishes each face's part with its
+own normal. Two convex bodies that overlap slightly publish the patch at
+depth when one shallowest push separates them through two opposed faces.
+The manifold is withheld with `ContactAmbiguousFeature` when a corner or edge
+meets only a face's rim, when a hole cuts into the patch, or when a convex
+face rests on an edge of a non-convex body. No step response uses it yet.
+[Planar manifold tests](../contact_faceted_manifold_test.go) check each case.
 
 ## Bodies and response
 

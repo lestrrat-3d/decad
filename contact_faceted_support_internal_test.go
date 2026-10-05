@@ -242,24 +242,37 @@ func TestContactPairFacetedFloorRefusesUnprovedPatches(t *testing.T) {
 		Distance{D: units.Millimeters(10), Dir: Along})
 	req := ContactRequest{PointResolution: units.Millimeters(1e-6), NormalResolution: units.Degrees(1)}
 	// The support path proves none of these patches. The exact planar
-	// relation (contact_faceted_pair.go) still decides each one, with no
-	// manifold: an overhanging footprint touches, a footprint beyond the
-	// floor's edge clears it by 5 mm, and a sunken one overlaps.
+	// relation (contact_faceted_pair.go) still decides each one: a footprint
+	// reaching the floor's edge touches, and its face patch is the planar
+	// manifold (contact_faceted_manifold.go); a footprint beyond the floor's
+	// edge clears it by 5 mm; a sunken one overlaps the convex floor, but the
+	// non-convex Union has no penetration patch.
 	for _, tc := range []struct {
 		pose     r3.Vec
 		relation ContactRelation
 		gap      float64
+		corners  []r3.Vec
 	}{
-		{r3.Vec{X: 10}, ContactTouching, 0},
-		{r3.Vec{X: 25}, ContactSeparated, 5},
-		{r3.Vec{Z: -1}, ContactOverlapping, 0},
+		{r3.Vec{X: 10}, ContactTouching, 0, []r3.Vec{{X: 10}, {X: 10, Y: 10}, {X: 20}, {X: 20, Y: 10}}},
+		{r3.Vec{X: 25}, ContactSeparated, 5, nil},
+		{r3.Vec{Z: -1}, ContactOverlapping, 0, nil},
 	} {
 		placed, err := r3.Translation(tc.pose)
 		require.NoError(t, err)
 		report, err := doc.ContactPair(t.Context(), floor, union, r3.Identity(), placed, req)
 		require.NoError(t, err)
 		require.Equal(t, tc.relation, report.Relation, "pose=%v reason=%v", tc.pose, report.Reason)
-		require.Nil(t, report.Manifold)
+		if tc.corners == nil {
+			require.Nil(t, report.Manifold)
+		} else {
+			require.NotNil(t, report.Manifold, "reason=%v", report.Reason)
+			require.Len(t, report.Manifold.Points, len(tc.corners))
+			for i, want := range tc.corners {
+				require.Equal(t, want, report.Manifold.Points[i].OnA.Value)
+				require.Zero(t, report.Manifold.Points[i].OnA.Bound.Base())
+				require.Equal(t, r3.Vec{Z: 1}, report.Manifold.Points[i].Normal.Value)
+			}
+		}
 		if tc.relation == ContactOverlapping {
 			require.Nil(t, report.Gap)
 			continue
@@ -313,8 +326,16 @@ func TestContactPairFacetedFloorRefusesMultipleSupportFaces(t *testing.T) {
 	report, err := doc.ContactPair(t.Context(), floor, union, r3.Identity(), r3.Identity(), req)
 	require.NoError(t, err)
 	// Two support faces defeat the single-patch support proof; the exact
-	// planar relation still proves the touch, without a manifold.
+	// planar relation still proves the touch, and the planar manifold
+	// publishes both footprints against the convex floor.
 	require.Equal(t, ContactTouching, report.Relation, "reason=%v", report.Reason)
-	require.Equal(t, ContactNoNormalProof, report.Reason)
-	require.Nil(t, report.Manifold)
+	require.Equal(t, ContactNoReason, report.Reason)
+	require.NotNil(t, report.Manifold)
+	var corners []r3.Vec
+	for _, point := range report.Manifold.Points {
+		corners = append(corners, point.OnA.Value)
+		require.Equal(t, r3.Vec{Z: 1}, point.Normal.Value)
+	}
+	require.ElementsMatch(t, []r3.Vec{{}, {X: 10}, {X: 10, Y: 10}, {Y: 10},
+		{X: 20}, {X: 30}, {X: 30, Y: 10}, {X: 20, Y: 10}}, corners)
 }

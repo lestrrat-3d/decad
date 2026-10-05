@@ -101,8 +101,11 @@ type ContactReport struct {
 // on one interior face.
 // Two exact planar solids — prisms over whole LineSeg sections and
 // zero-bound faceted Booleans — receive an exact relation proof at any pose
-// with a positive determinant, without a contact manifold. A touching or
-// overlapping pair names ContactNonConvex when neither body is convex.
+// with a positive determinant. When one is convex, a touch publishes its
+// clipped face patches, edges and vertices inside a face, and edge
+// crossings, and two convex bodies that overlap slightly publish the patch
+// at depth. A touching or overlapping pair names ContactNonConvex when
+// neither body is convex.
 // At identity query poses, the analytic clearance kernel can prove relations
 // for other solids. Only its ruling touches publish a manifold: the two ends
 // of a full source cylinder's ruling on a planar face or another cylinder.

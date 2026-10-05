@@ -1096,6 +1096,16 @@
 4	0.00	TestContactPairOrientedSourceBoxes
 4	0.00	TestContactPairPlacedBodyAndInputGates
 4	0.01	TestContactPairPlacedFacetedFloorExactTouch
+4	0.05	TestContactPairPlanarManifoldCancels
+4	0.05	TestContactPairPlanarManifoldEdgeCrossing
+4	0.05	TestContactPairPlanarManifoldHexagonOverhang
+4	0.05	TestContactPairPlanarManifoldNotch
+4	0.05	TestContactPairPlanarManifoldPenetration
+4	0.05	TestContactPairPlanarManifoldPlateHole
+4	0.05	TestContactPairPlanarManifoldRotatedBox
+4	0.05	TestContactPairPlanarManifoldSlopedNormal
+4	0.05	TestContactPairPlanarManifoldThirdCrossing
+4	0.05	TestContactPairPlanarManifoldWalls
 4	0.01	TestContactPairRealFacetedUnionOnFloor
 4	0.00	TestContactPairRevolvedCylinderAxialDiskFace
 4	0.00	TestContactPairRevolvedCylinderRefusesUnprovedDiskCorridor
@@ -1413,6 +1423,7 @@
 4	0.01	TestPlacedCopy
 4	0.02	TestPlacedCopyPreservesFilletRoles
 4	0.03	TestPlacedPrismChargesEveryFaceItsPlacementRounding
+4	0.05	TestPlanarManifoldMatchesClippedBoxPatch
 4	0.00	TestPointInBodyCancellationReachesTorusRootPath
 4	0.00	TestPositiveAreaGateConsultsExactRational
 4	0.20	TestPositiveBoundFacetedUnionRefusesToolBelowLowerFace
