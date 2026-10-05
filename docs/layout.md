@@ -85,10 +85,11 @@ to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `moments.go` / `moments_validate.go` | The mass-property engine (evaluator §4): closed-form Green's-theorem boundary integrals for `Area`, `Centroid`, `SecondMoments`, per region. See `docs/spline-design.md` §5.2. |
-| `mass_properties.go` / `mass_properties_rotated.go` | Prism mass and inertia. See `docs/dynamic-mass-design.md`. |
-| `mass_properties_sphere.go` / `mass_properties_revolved_cylinder.go` | Source sphere and revolved cylinder mass and inertia. See `docs/dynamic-mass-design.md`. |
-| `mass_properties_revolve.go` | General revolve mass and inertia. See `docs/multibody-dynamics-design.md` §8.6. |
-| `mass_properties_faceted.go` / `mass_properties_mesh.go` | Mass and inertia read off verified meshes. See `docs/dynamic-mass-design.md`. |
+| `mass_properties.go` / `mass_properties_rotated.go` | Prism mass. See `docs/dynamic-mass-design.md`. |
+| `mass_properties_sphere.go` / `mass_properties_revolved_cylinder.go` | Sphere and cylinder mass. See `docs/dynamic-mass-design.md`. |
+| `mass_properties_revolve.go` | Revolve mass. See `docs/multibody-dynamics-design.md` §8.6. |
+| `mass_properties_sweep.go` / `mass_properties_cup.go` | Sweep and cup mass. See `docs/multibody-dynamics-design.md` §8. |
+| `mass_properties_faceted.go` / `mass_properties_mesh.go` | Mass read off verified meshes. See `docs/dynamic-mass-design.md`. |
 | `moments_trig.go` | `moments.go`'s certified sine/cosine primitive: `turnSinCosInterval` proves an enclosure of sin/cos of an exact rational turn without ever comparing against π. See this file's own doc comment. |
 | `bounded.go` | The bounded-scalar vocabulary and three-valued admission readers. Its rounding arithmetic lives in `internal/proof/`. See the file's doc comment. |
 | `rat_interval.go` | The `atan`/`atan2` and π enclosures, with adapters for the exact interval arithmetic in `internal/proof/`. See the file's doc comment. |
@@ -143,7 +144,7 @@ to the byte budget.
 | `loft_stations.go` | Places the stations a loft's wall chords run between and proves each chain's departure from its curve, under one shared chord target and a station cap. See `docs/loft-design.md` §5.2. |
 | `loft_topology.go` | Assembles the paired stations into the flat-triangle solid the payload holds, and builds the `Body` topology over it. See `docs/loft-design.md` §5.1, §7 and the file's doc comment. |
 | `loft_audit.go` | `loftCrossingAudit` proves the assembled triangles manifold and watertight. See `docs/loft-design.md` §6. |
-| `loft_moments.go` | `docs/loft-design.md` §8's mass-property engine: `loftMassAccumulator`, an exact-rational tetrahedron sum over the assembled triangle set, publishing Volume/Centroid/Bounds/Area. See §8, §12. |
+| `loft_moments.go` | `docs/loft-design.md` §8's mass-property engine: `loftMassAccumulator`, an exact-rational tetrahedron sum publishing Volume/Centroid/Bounds/Area. See §8, §12. |
 
 ### Modify
 
