@@ -135,21 +135,35 @@ supplied properties, but those properties cannot replace a missing contact
 proof.
 
 A world of four or more bodies, in any role mix, kicks every dynamic body
-once and moves every body along its drift or driver over the step. Its broad
-phase sweeps only the pairs whose `SweptBox` values are not strictly
-disjoint. Pairs that touch or shallowly overlap at the step start, with a
-bounded manifold, form islands of dynamic bodies with their fixed supports.
-Each island is solved for frictionless normal impulses and certified in
-exact interval arithmetic, and shallow overlaps within `ContactSlop` are
-corrected. Every report lists its islands, and each solved pair publishes one
-event. The step then advances only when every swept pair is proved clear,
-departed, or in persistent touch over the whole step. A contact event inside
-the step, an island with a kinematic body, and a positive-friction island
-pair return `dynamics.Undecided` with `StepUnsupported`. Its kinematic bodies
-take `PoseSegment` drivers. [Schedule tests](../dynamics/schedule_test.go)
-check the swept pairs, the drift poses and trace samples.
+once and moves every body from event to event along its drift or driver. Its
+broad phase sweeps only the pairs whose `SweptBox` values are not strictly
+disjoint. An initial contact, an impact or a transition cuts the step at its
+exact fraction, and every body advances there on its certified path. Pairs
+that touch or shallowly overlap there with a bounded manifold, and the pairs
+they rest on, form islands of dynamic bodies with their fixed and kinematic
+supports. Each island is solved for frictionless normal impulses and
+certified in exact interval arithmetic. Shallow overlaps within `ContactSlop`
+and the impact bracket's travel are corrected, and bodies resting on one
+another move together. Co-moving bodies leave with one exact common
+velocity, so a stack can bounce and land as one. A transition or a graze
+publishes a zero-impulse event, and the step then continues from the event.
+A bounce sequence ends when an incoming speed falls to `ImpactSpeed`; one
+that would exceed `MaxEvents` stops the step. Kinematic bodies take
+`PoseSegment` drivers, and an island admits one only while its driver
+translates. A positive-friction island pair returns `dynamics.Undecided` with
+`StepUnsupported`. An `Undecided` report names its time interval, the
+island's bodies and the exceeded limit, and its `Trace` replays the certified
+prefix. `dynamics.Timeline` chains steps from one state, stops at the first
+`Undecided` step, and samples any time up to its certified end, from many
+goroutines at once.
+[Schedule tests](../dynamics/schedule_test.go) check the swept pairs, the
+drift poses and trace samples. [Event tests](../dynamics/schedule_event_test.go)
+bounce a sphere five times in one step, bounce a box stack, lift a sphere on
+a kinematic platform, and graze and slide off an edge.
 [Island tests](../dynamics/island_test.go) rest a 3-2-1 box pyramid under
 gravity and rerun the two-sphere impact through the island solver.
+[Timeline tests](../dynamics/timeline_test.go) bounce a sphere over three
+steps against the closed-form bounce times.
 
 Two-body worlds admit a fixed or kinematic body against a dynamic body, or
 two dynamic bodies. An affine kinematic box driver and selected cardinal
@@ -192,8 +206,10 @@ sliding impulses, and unproved pair paths return `dynamics.Undecided`.
 | `SweptBox` | `decad.ErrUnsupported` when the body's bounds or the path's travel bound are not finite |
 | `Body.MassProperties` | `decad.ErrUnsupported` when density-derived bounded mass or inertia is unavailable |
 | `NewWorld` | `dynamics.ErrUnsupported` for fewer than two bodies, a two- or three-body world with no dynamic body, or a three-body kinematic world |
-| `World.Step` | `dynamics.Undecided` with `Next == nil` when contact, response, or replay lacks proof, and for a contact event inside the step, an island gate beyond its limit, or an uncorrectable overlap in a world of four or more bodies |
-| `Trace.Sample` | `dynamics.ErrUnsupported` if a rounded pose loses its cached proof; `dynamics.ErrInvalidInput` for time outside the step |
+| `World.Step` | `dynamics.Undecided` with `Next == nil` when contact, response, or replay lacks proof, and for an island gate beyond its limit, an uncorrectable overlap, events beyond `MaxEvents`, or a rounded pose a box exclusion no longer covers in a world of four or more bodies |
+| `Trace.Sample` | `dynamics.ErrUnsupported` if a rounded pose loses its cached proof or a box exclusion; `dynamics.ErrInvalidInput` for time outside the step or its certified prefix |
+| `Timeline.Advance` | `dynamics.ErrTimelineStopped` after an `Undecided` step stopped the timeline |
+| `Timeline.Sample` | `dynamics.ErrUnsupported` for a time below zero or beyond `End()` |
 
 A generic positive-bound faceted body can prove strict clearance above a
 floor without proving a touching support face. Sphere contacts at box edges,

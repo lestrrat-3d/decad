@@ -522,10 +522,9 @@ exclusion and effective material, in a canonical pair table
 bodies with at least one dynamic body, or three bodies with one, two, or three
 dynamic bodies and every other body fixed; `NewWorld` refuses other two- and
 three-body role mixes. A larger world takes the scheduled step of
-`docs/multibody-dynamics-design.md` §5, which solves contacts at the step
-start as certified frictionless islands (§6) and returns `Undecided` at a
-contact event inside the step. The typed `StepDiagnostic` fields are
-`docs/multibody-dynamics-design.md` §12.
+`docs/multibody-dynamics-design.md` §5, which drifts from event to event and
+solves the contacts at each event time as certified frictionless islands (§6).
+The typed `StepDiagnostic` fields are `docs/multibody-dynamics-design.md` §12.
 Every pair of a world can be excluded or given one material override. `NewWorld`
 rejects a pair naming a body outside the world, including nil or repeated
 bodies, with `ErrInvalidInput`. It also rejects a second override or exclusion

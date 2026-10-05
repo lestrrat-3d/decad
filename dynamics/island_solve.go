@@ -45,10 +45,12 @@ type islandSolution struct {
 	report          ContactSolverReport
 }
 
-// islandFailure is a refusal raised while solving an island.
+// islandFailure is a refusal raised while solving an island, with the
+// limit the failing gate exceeded when one did.
 type islandFailure struct {
 	code   StepReason
 	reason string
+	limit  units.Value
 }
 
 func vecOf(q QuantityVec) r3.Vec {
@@ -56,10 +58,15 @@ func vecOf(q QuantityVec) r3.Vec {
 }
 
 // nominalBodies reads each island participant's float64 inverse mass, world
-// inverse inertia through r3, world mass center and pre-solve velocities.
-func (w *World) nominalBodies(isl island, pre State) ([]nominalBody, *islandFailure) {
+// inverse inertia through r3, world mass center and pre-solve velocities. A
+// translating kinematic participant moves at its driver velocity.
+func (w *World) nominalBodies(isl island, pre State, drive map[int][3]*big.Rat) ([]nominalBody, *islandFailure) {
 	out := make([]nominalBody, len(isl.bodies))
 	for slot, index := range isl.bodies {
+		if v, ok := drive[index]; ok {
+			out[slot].v = vecOf(ratVelocity(v))
+			continue
+		}
 		if w.bodies[index].definition.Role != Dynamic {
 			continue
 		}
@@ -75,7 +82,7 @@ func (w *World) nominalBodies(isl island, pre State) ([]nominalBody, *islandFail
 		}
 		invMass := 1 / mass.Mass.Value.Base()
 		if err != nil || !finite(invMass) || invMass <= 0 {
-			return nil, &islandFailure{StepIslandDegenerate, fmt.Sprintf("body %d has no finite inverse mass or inertia", index)}
+			return nil, &islandFailure{code: StepIslandDegenerate, reason: fmt.Sprintf("body %d has no finite inverse mass or inertia", index)}
 		}
 		out[slot] = nominalBody{dynamic: true, invMass: invMass, invInertia: local,
 			center: entry.Pose.Apply(mass.Center.Value),
@@ -84,9 +91,11 @@ func (w *World) nominalBodies(isl island, pre State) ([]nominalBody, *islandFail
 	return out, nil
 }
 
+// pointVelocity is v + ω×r for a dynamic body, the driver velocity of a
+// kinematic one and zero for a fixed one.
 func (b nominalBody) pointVelocity(r r3.Vec) r3.Vec {
 	if !b.dynamic {
-		return r3.Vec{}
+		return b.v
 	}
 	return b.v.Add(b.w.Cross(r))
 }
@@ -130,7 +139,7 @@ func (w *World) nominalPoints(isl island, slots map[int]int, bodies []nominalBod
 				p.target = -restitution * speed
 			}
 			if !finite(p.k, p.target, speed) || p.k <= 0 {
-				return nil, &islandFailure{StepIslandDegenerate, "constraint effective mass is not finite and positive"}
+				return nil, &islandFailure{code: StepIslandDegenerate, reason: "constraint effective mass is not finite and positive"}
 			}
 			out = append(out, p)
 		}
@@ -144,12 +153,12 @@ func (w *World) nominalPoints(isl island, slots map[int]int, bodies []nominalBod
 // resting island publish exactly zero velocities, which its continuation
 // sweeps need to prove persistent touch. A certificate that fails refuses
 // the island with the failing gate and its limit.
-func (w *World) solveIsland(isl island, pre State) (islandSolution, *islandFailure) {
+func (w *World) solveIsland(isl island, pre State, drive map[int][3]*big.Rat) (islandSolution, *islandFailure) {
 	slots := make(map[int]int, len(isl.bodies))
 	for slot, index := range isl.bodies {
 		slots[index] = slot
 	}
-	bodies, failure := w.nominalBodies(isl, pre)
+	bodies, failure := w.nominalBodies(isl, pre, drive)
 	if failure != nil {
 		return islandSolution{}, failure
 	}
@@ -172,19 +181,19 @@ func (w *World) solveIsland(isl island, pre State) (islandSolution, *islandFailu
 			largest = math.Max(largest, math.Abs(delta))
 		}
 		if !finite(largest) {
-			return islandSolution{}, &islandFailure{StepIslandDegenerate, "island proposal is not finite"}
+			return islandSolution{}, &islandFailure{code: StepIslandDegenerate, reason: "island proposal is not finite"}
 		}
 		if largest != 0 && sweep < w.step.MaxIterations {
 			continue
 		}
-		solution, cert, failure := w.publishIsland(isl, pre, bodies, points, lambda)
+		solution, cert, failure := w.publishIsland(isl, pre, bodies, points, lambda, drive)
 		if failure != nil {
 			return islandSolution{}, failure
 		}
 		if cert.failed == 0 {
 			report, err := solverReport(cert, islandPenetration(isl), sweep)
 			if err != nil {
-				return islandSolution{}, &islandFailure{StepIslandResidual, err.Error()}
+				return islandSolution{}, &islandFailure{code: StepIslandResidual, reason: err.Error()}
 			}
 			solution.report = report
 			return solution, nil
@@ -192,22 +201,23 @@ func (w *World) solveIsland(isl island, pre State) (islandSolution, *islandFailu
 		if sweep == w.step.MaxIterations {
 			value, _ := cert.value.Float64()
 			limit, _ := cert.limit.Float64()
-			return islandSolution{}, &islandFailure{StepIslandResidual,
-				fmt.Sprintf("%v gate reaches %g, beyond its limit %g, after %d sweeps",
-					cert.failed, value, limit, sweep)}
+			return islandSolution{}, &islandFailure{code: StepIslandResidual,
+				reason: fmt.Sprintf("%v gate reaches %g, beyond its limit %g, after %d sweeps",
+					cert.failed, value, limit, sweep), limit: cert.failed.limitValue(cert.limit)}
 		}
 	}
-	return islandSolution{}, &islandFailure{StepIslandResidual, "island solver ran no sweep"}
+	return islandSolution{}, &islandFailure{code: StepIslandResidual, reason: "island solver ran no sweep"}
 }
 
 // publishIsland rounds a proposal to its published values and certifies it.
 // Post velocities are recomputed from the pre-solve velocities and the
 // final impulses in the fixed point order. A post component within 1/16 of
 // its residual of zero is published as exactly zero, so a body the solve
-// brings to rest drifts as a rest or a pure translation; the certificate
-// then judges the published values, never the unrounded ones.
+// brings to rest drifts as a rest or a pure translation, and co-moving
+// dynamic bodies publish one common velocity (commonVelocities); the
+// certificate then judges the published values, never the unrounded ones.
 func (w *World) publishIsland(isl island, pre State, bodies []nominalBody, points []nominalPoint,
-	lambda []float64) (islandSolution, islandCertificate, *islandFailure) {
+	lambda []float64, drive map[int][3]*big.Rat) (islandSolution, islandCertificate, *islandFailure) {
 	post := append([]nominalBody(nil), bodies...)
 	for k, p := range points {
 		j := p.n.Scale(lambda[k])
@@ -234,14 +244,14 @@ func (w *World) publishIsland(isl island, pre State, bodies []nominalBody, point
 		}
 		v, omega := snap(post[slot].v, linearSnap), snap(post[slot].w, angularSnap)
 		if !finite(v.X, v.Y, v.Z, omega.X, omega.Y, omega.Z) {
-			return islandSolution{}, islandCertificate{}, &islandFailure{StepIslandDegenerate,
-				"island proposal velocity is not finite"}
+			return islandSolution{}, islandCertificate{}, &islandFailure{code: StepIslandDegenerate, reason: "island proposal velocity is not finite"}
 		}
 		solution.linear[slot] = QuantityVec{X: units.MillimetersPerSecond(v.X),
 			Y: units.MillimetersPerSecond(v.Y), Z: units.MillimetersPerSecond(v.Z)}
 		solution.angular[slot] = QuantityVec{X: units.RadiansPerSecond(omega.X),
 			Y: units.RadiansPerSecond(omega.Y), Z: units.RadiansPerSecond(omega.Z)}
 	}
+	w.commonVelocities(isl, solution)
 	solution.separating = make([]bool, len(isl.pairs))
 	k := 0
 	for pairIndex, pair := range isl.pairs {
@@ -249,7 +259,7 @@ func (w *World) publishIsland(isl island, pre State, bodies []nominalBody, point
 		for range pair.manifold.Points {
 			published := func(slot int, r r3.Vec) r3.Vec {
 				if !post[slot].dynamic {
-					return r3.Vec{}
+					return post[slot].v
 				}
 				return vecOf(solution.linear[slot]).Add(vecOf(solution.angular[slot]).Cross(r))
 			}
@@ -260,22 +270,102 @@ func (w *World) publishIsland(isl island, pre State, bodies []nominalBody, point
 			k++
 		}
 	}
-	cert, failure := w.certifyProposal(isl, pre, points, solution)
+	cert, failure := w.certifyProposal(isl, pre, points, solution, drive)
 	return solution, cert, failure
+}
+
+// commonVelocities publishes one velocity for each group of co-moving dynamic
+// bodies of an island. Two dynamic bodies of an island pair are co-moving
+// when their published spins are equal and every component of their
+// published linear velocities differs by at most VelocityResidual/8; the
+// groups are the connected components of that relation. A group whose every
+// member lies within VelocityResidual/16 of the group's mass-weighted mean
+// velocity, per component, publishes that mean for each member. Float
+// rounding of the solve leaves a resting or bouncing stack's bodies about
+// 1e-7 mm/s apart, and only exactly equal velocities let SweepPair prove the
+// persistent touch that continues the stack. The rule is a published
+// proposal, not a claim: the certificate judges the common velocities like
+// any other, so each member's change, at most VelocityResidual/16 per
+// component, must still pass the linear law within ImpulseResidual +
+// m_hi·VelocityResidual.
+func (w *World) commonVelocities(isl island, solution islandSolution) {
+	limit := w.step.VelocityResidual.Base()
+	slots := make(map[int]int, len(isl.bodies))
+	parent := make([]int, len(isl.bodies))
+	for slot, index := range isl.bodies {
+		slots[index], parent[slot] = slot, slot
+	}
+	find := func(i int) int {
+		for parent[i] != i {
+			parent[i] = parent[parent[i]]
+			i = parent[i]
+		}
+		return i
+	}
+	for _, pair := range isl.pairs {
+		if w.bodies[pair.a].definition.Role != Dynamic || w.bodies[pair.b].definition.Role != Dynamic {
+			continue
+		}
+		sa, sb := slots[pair.a], slots[pair.b]
+		if solution.angular[sa] != solution.angular[sb] {
+			continue
+		}
+		va, vb := vecOf(solution.linear[sa]), vecOf(solution.linear[sb])
+		if math.Abs(va.X-vb.X) > limit/8 || math.Abs(va.Y-vb.Y) > limit/8 || math.Abs(va.Z-vb.Z) > limit/8 {
+			continue
+		}
+		parent[find(sa)] = find(sb)
+	}
+	groups := map[int][]int{}
+	for slot := range isl.bodies {
+		if w.bodies[isl.bodies[slot]].definition.Role == Dynamic {
+			root := find(slot)
+			groups[root] = append(groups[root], slot)
+		}
+	}
+	for _, members := range groups {
+		if len(members) < 2 {
+			continue
+		}
+		var momentum r3.Vec
+		total := 0.0
+		for _, slot := range members {
+			m := w.bodies[isl.bodies[slot]].mass.Mass.Value.Base()
+			momentum = momentum.Add(vecOf(solution.linear[slot]).Scale(m))
+			total += m
+		}
+		mean := momentum.Scale(1 / total)
+		if !finite(mean.X, mean.Y, mean.Z) {
+			continue
+		}
+		within := true
+		for _, slot := range members {
+			v := vecOf(solution.linear[slot])
+			if math.Abs(v.X-mean.X) > limit/16 || math.Abs(v.Y-mean.Y) > limit/16 || math.Abs(v.Z-mean.Z) > limit/16 {
+				within = false
+			}
+		}
+		if !within {
+			continue
+		}
+		for _, slot := range members {
+			solution.linear[slot] = QuantityVec{X: units.MillimetersPerSecond(mean.X),
+				Y: units.MillimetersPerSecond(mean.Y), Z: units.MillimetersPerSecond(mean.Z)}
+		}
+	}
 }
 
 // certifyProposal reads a published proposal and its inputs as exact
 // intervals and runs the certificate over them.
 func (w *World) certifyProposal(isl island, pre State, points []nominalPoint,
-	solution islandSolution) (islandCertificate, *islandFailure) {
+	solution islandSolution, drive map[int][3]*big.Rat) (islandCertificate, *islandFailure) {
 	certBodies := make([]certBody, len(isl.bodies))
 	for slot, index := range isl.bodies {
 		after := pre.entries[index]
 		after.LinearVelocity, after.AngularVelocity = solution.linear[slot], solution.angular[slot]
-		body, ok := w.newCertBody(index, pre.entries[index], after)
+		body, ok := w.newCertBody(index, pre.entries[index], after, drive)
 		if !ok {
-			return islandCertificate{}, &islandFailure{StepIslandDegenerate,
-				fmt.Sprintf("body %d cannot be read as exact intervals", index)}
+			return islandCertificate{}, &islandFailure{code: StepIslandDegenerate, reason: fmt.Sprintf("body %d cannot be read as exact intervals", index)}
 		}
 		certBodies[slot] = body
 	}
@@ -286,12 +376,11 @@ func (w *World) certifyProposal(isl island, pre State, points []nominalPoint,
 		for _, point := range pair.manifold.Points {
 			p, ok := newCertPoint(pairIndex, points[k].a, points[k].b, point, certBodies, restitution)
 			if !ok || restitution == nil {
-				return islandCertificate{}, &islandFailure{StepIslandDegenerate,
-					"manifold point cannot be read as exact intervals"}
+				return islandCertificate{}, &islandFailure{code: StepIslandDegenerate, reason: "manifold point cannot be read as exact intervals"}
 			}
 			p.lambda = ratFloat(solution.lambda[k])
 			if p.lambda == nil {
-				return islandCertificate{}, &islandFailure{StepIslandDegenerate, "island impulse is not finite"}
+				return islandCertificate{}, &islandFailure{code: StepIslandDegenerate, reason: "island impulse is not finite"}
 			}
 			certPoints = append(certPoints, p)
 			k++

@@ -309,23 +309,66 @@ func TestScheduledStepIgnoresInsertionOrder(t *testing.T) {
 	}
 }
 
-func TestScheduledStepStopsAtAnEvent(t *testing.T) {
+func TestScheduledStepSolvesAnInteriorImpact(t *testing.T) {
 	// Body 0 closes the 0.5 mm gap at 8 mm/s and strikes a still body 1 at
-	// 1/16 s: an event inside the slice, which needs the multi-event trace.
+	// 1/16 s, inside the 0.1 s slice. The step advances both boxes to the
+	// impact, solves the pair as an island with restitution zero (both leave
+	// at the common 4 mm/s, an impulse of 4 kg·mm/s on 1 kg boxes), and
+	// continues them in persistent touch to the end of the step.
 	closing := sixBoxMotions
 	closing[1].velocity = r3.Vec{}
 	scene := newSixBoxScene(t, closing, [6]int{0, 1, 2, 3, 4, 5}, pairMaterialStepConfig())
 	report, err := scene.step(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, dynamics.Undecided, report.Status)
-	require.Nil(t, report.Next)
-	require.Empty(t, report.Events)
-	require.Len(t, report.Diagnostics, 1, "%+v", report.Diagnostics)
-	diagnostic := report.Diagnostics[0]
-	require.Equal(t, dynamics.StepUnsupported, diagnostic.Code)
-	require.Equal(t, dynamics.BodyPair{A: scene.bodies[0], B: scene.bodies[1]}, diagnostic.Pair)
+	require.Equal(t, dynamics.Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	event := report.Events[0]
+	require.Equal(t, dynamics.ContactImpact, event.Kind)
+	require.Equal(t, dynamics.BodyPair{A: scene.bodies[0], B: scene.bodies[1]}, event.Pair)
+	// The event lies at the sweep's bracket right sample, within one
+	// TimeResolution after the exact 1/16 s and never before it.
+	require.GreaterOrEqual(t, event.Time.Base(), 1.0/16)
+	require.InDelta(t, 1.0/16, event.Time.Base(), pairMaterialStepConfig().TimeResolution.Base())
+	require.Equal(t, units.Seconds(0), event.SliceStart)
+	require.Equal(t, sixBoxDt(), event.SliceDuration)
+	require.InDelta(t, 4, event.NormalImpulse.Base(), 1e-6)
+	require.InDelta(t, 4, event.PostVelocityA.X.Base(), 1e-6)
+	require.InDelta(t, 4, event.PostVelocityB.X.Base(), 1e-6)
+	require.Len(t, report.Islands, 1)
+	require.Equal(t, []*decad.Body{scene.bodies[0], scene.bodies[1]}, report.Islands[0].Bodies)
+	require.Equal(t, event.Time, report.Islands[0].Time)
 
-	// The pair's own sweep along the same drifts reports the event.
+	// Two slices meet at the event: the approach and the shared drift.
+	proofs := dynamics.TraceSliceProofs(report.Trace)
+	require.Len(t, proofs, 2)
+	for _, proof := range proofs[1] {
+		if scene.pairOf(proof.Pair) == [2]int{0, 1} {
+			require.NotNil(t, proof.Sweep)
+			require.Equal(t, decad.SweepPersistentTouch, proof.Sweep.Outcome)
+		}
+	}
+	// Positions: body 0 travels 0.5 mm in 1/16 s, then both drift at
+	// 4 mm/s. The slack covers the event's bracket delay (below 1e-9 s at
+	// 8 mm/s) and its correction (below 1e-8 mm).
+	for _, sample := range []struct {
+		at   float64
+		x0   float64
+		x1   float64
+		next bool
+	}{{1.0 / 32, 0.25, 10.5, false}, {3.0 / 32, 0.625, 10.625, false}, {0.1, 0.65, 10.65, true}} {
+		state, err := report.Trace.Sample(units.Seconds(sample.at))
+		require.NoError(t, err, "sample at %g s", sample.at)
+		if sample.next {
+			state = *report.Next
+		}
+		for i, want := range [2]float64{sample.x0, sample.x1 - 10.5} {
+			entry, ok := state.Body(scene.bodies[i])
+			require.True(t, ok)
+			require.InDelta(t, want, entry.Pose.Translation().X, 1e-8, "body %d at %g s", i, sample.at)
+		}
+	}
+
+	// The pair's own sweep along the full-step drifts reports the event.
 	var paths [2]decad.PairPath
 	for side := range paths {
 		mass, err := scene.bodies[side].MassProperties(t.Context(), scene.density)
@@ -341,6 +384,7 @@ func TestScheduledStepStopsAtAnEvent(t *testing.T) {
 			MaxPoseEvaluations: config.MaxPoseEvaluations, StartPolicy: decad.StopAtInitialContact})
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepImpactBracket, sweep.Outcome)
+	require.InDelta(t, event.Time.Base(), sweep.Bracket.To.Elapsed.Value.Base(), 1e-15)
 }
 
 func TestScheduledStepSolvesMeetingBoxes(t *testing.T) {
