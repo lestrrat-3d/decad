@@ -83,8 +83,8 @@ type ContactReport struct {
 // Source semicircle spheres against boxes or each other also have relation
 // and point-manifold proofs at signed-axis poses. Sphere-pair center lines
 // may be off-axis when their normal and witnesses meet the requested bounds.
-// A full source cylinder, extruded or revolved, can prove an axial gap from a
-// containing box face. An extruded cylinder can also prove face contact.
+// A full source cylinder, extruded or revolved, can prove an axial gap and
+// disk-face contact against a containing box face.
 // A zero-bound faceted solid can prove a lower support face contact or axial
 // gap against a source-box floor that strictly contains its support footprint.
 // An exactly orthogonal rotated source box can give a sphere a bounded point
