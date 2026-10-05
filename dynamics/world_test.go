@@ -558,3 +558,41 @@ func TestNewWorldInertiaPositivityProof(t *testing.T) {
 		})
 	}
 }
+
+// TestNewWorldRejectsSupportBand is docs/multibody-dynamics-design.md §10.5's
+// admission: a SupportBand must be a nonnegative Length within
+// PenetrationResidual, since every band it publishes must pass the residual.
+func TestNewWorldRejectsSupportBand(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -20, -20, 20, 20, -10, 10)
+	box := makeBox(t, doc, -5, -5, 5, 5, 0, 10)
+	density := units.KilogramsPerCubicMillimeter(.001)
+	bodies := []dynamics.RigidBody{
+		{Body: floor, Role: dynamics.Fixed},
+		{Body: box, Role: dynamics.Dynamic, Density: &density},
+		{Body: farBox(t, doc, 1000), Role: dynamics.Fixed},
+		{Body: farBox(t, doc, 2000), Role: dynamics.Fixed},
+	}
+	residual := pairMaterialStepConfig().PenetrationResidual.Base()
+	for name, tc := range map[string]struct {
+		band units.Value
+		ok   bool
+	}{
+		"zero value":         {band: units.Value{}, ok: true},
+		"at the residual":    {band: units.Millimeters(residual), ok: true},
+		"above the residual": {band: units.Millimeters(2 * residual)},
+		"negative":           {band: units.Millimeters(-residual)},
+		"not a length":       {band: units.Radians(residual)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			config := pairMaterialStepConfig()
+			config.Contact.SupportBand = tc.band
+			_, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{Bodies: bodies, Step: config})
+			if tc.ok {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, dynamics.ErrInvalidInput)
+		})
+	}
+}

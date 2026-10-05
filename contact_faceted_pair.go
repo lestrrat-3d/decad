@@ -61,11 +61,15 @@ func classifyExactPlanarPair(ctx context.Context, report *ContactReport) (bool, 
 		}
 		return true, budget.err()
 	}
+	band := supportBandOf(report.Request)
 	switch result.Relation {
 	case pair.Separated:
 		report.Relation = ContactSeparated
 		gap := sourceBoxScalar(*result.Gap)
 		report.Gap = &gap
+		if err := planarSupportBand(ctx, budget, report, &a, &b, result, band); err != nil {
+			return false, err
+		}
 	case pair.Touching, pair.Overlapping:
 		report.Relation = ContactOverlapping
 		if result.Relation == pair.Touching {
@@ -88,7 +92,7 @@ func classifyExactPlanarPair(ctx context.Context, report *ContactReport) (bool, 
 			break
 		}
 		report.Reason = ContactNoNormalProof
-		if err := publishPlanarManifold(budget, report, &a, &b, result, convexA, convexB); err != nil {
+		if err := publishPlanarManifold(budget, report, &a, &b, result, convexA, convexB, band); err != nil {
 			return false, err
 		}
 	default:

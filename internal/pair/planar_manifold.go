@@ -56,9 +56,21 @@ type PatchPoint struct {
 }
 
 // PlanarManifold is a published manifold, or a Reason when it is withheld.
+// Supports names the host face plane of every accepted face-face and support
+// piece, in the order the pieces were accepted, each once: the planes whose
+// support set (PlanarSupportSet) a positive band adds to the manifold.
 type PlanarManifold struct {
-	Points []PatchPoint
-	Reason Reason
+	Points   []PatchPoint
+	Reason   Reason
+	Supports []SupportPlane
+}
+
+// SupportPlane names a face of one solid of a pair, the HOST, whose plane may
+// support the other solid, the GUEST (docs/multibody-dynamics-design.md
+// §10.5).
+type SupportPlane struct {
+	HostIsA bool
+	Face    int
 }
 
 // patchSide is one solid with the adjacency the manifold reads.
@@ -251,10 +263,18 @@ const (
 )
 
 type patchKernel struct {
-	x, y   *patchSide
-	poll   func() error
-	pieces map[pieceKey]piece
-	points []PatchPoint
+	x, y     *patchSide
+	poll     func() error
+	pieces   map[pieceKey]piece
+	points   []PatchPoint
+	supports []SupportPlane
+}
+
+// addSupport records a host plane of an accepted piece once.
+func (k *patchKernel) addSupport(plane SupportPlane) {
+	if !slices.Contains(k.supports, plane) {
+		k.supports = append(k.supports, plane)
+	}
 }
 
 // PlanarTouchManifold builds the manifold of a Touching pair from the
@@ -286,7 +306,7 @@ func PlanarTouchManifold(a, b *PlanarSolid, contacts []PlanarContact, convexA, c
 			return PlanarManifold{Reason: AmbiguousFeature}, nil
 		}
 	}
-	return PlanarManifold{Points: k.points}, nil
+	return PlanarManifold{Points: k.points, Supports: k.supports}, nil
 }
 
 // cover finds an accepted piece holding the contact, computing candidates in
@@ -361,6 +381,18 @@ func (k *patchKernel) compute(key pieceKey, fx, fy PlanarFeature) (piece, error)
 	}
 	if result.ok {
 		k.points = append(k.points, points...)
+		switch key.kind {
+		case pieceFaceFace:
+			// Both coplanar faces are planes the other solid may rest on.
+			k.addSupport(SupportPlane{HostIsA: k.y.isA, Face: key.host})
+			k.addSupport(SupportPlane{HostIsA: k.x.isA, Face: key.guest})
+		case pieceSupport:
+			host := k.y
+			if key.hostIsX {
+				host = k.x
+			}
+			k.addSupport(SupportPlane{HostIsA: host.isA, Face: key.host})
+		}
 	}
 	return result, nil
 }
@@ -597,8 +629,16 @@ func (k *patchKernel) crossing(ex, ey [2]int) ([]PatchPoint, piece) {
 // is minus the translation length. A nil result withholds the manifold. poll
 // is charged once per axis and inside the clip.
 func PlanarPenetrationManifold(a, b *PlanarSolid, poll func() error) ([]PatchPoint, error) {
+	points, _, err := PlanarPenetrationSupport(a, b, poll)
+	return points, err
+}
+
+// PlanarPenetrationSupport is PlanarPenetrationManifold that also names the
+// host face a shallow edge or vertex pokes through (shallowSupport), or nil
+// when the patch is a face pair or is withheld.
+func PlanarPenetrationSupport(a, b *PlanarSolid, poll func() error) ([]PatchPoint, *SupportPlane, error) {
 	if len(a.Faces) != len(a.Tris) || len(b.Faces) != len(b.Tris) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	sa, sb := newPatchSide(a, true, true), newPatchSide(b, true, false)
 	axes := make([]proof.DyV3, 0, len(a.Tris)+len(b.Tris)+len(sa.prep.edges)*len(sb.prep.edges))
@@ -616,7 +656,7 @@ func PlanarPenetrationManifold(a, b *PlanarSolid, poll func() error) ([]PatchPoi
 	found, tied := false, false
 	for _, u := range axes {
 		if err := poll(); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if proof.DvIsZero(u) {
 			continue
@@ -629,7 +669,7 @@ func PlanarPenetrationManifold(a, b *PlanarSolid, poll func() error) ([]PatchPoi
 			dir proof.DyV3
 		}{{proof.DySubScalar(maxA, minB), u}, {proof.DySubScalar(maxB, minA), dvNeg(u)}} {
 			if candidate.t.Sign() <= 0 {
-				return nil, nil
+				return nil, nil, nil
 			}
 			value := frac{num: proof.DyMul(candidate.t, candidate.t), den: norm}
 			switch c := fracCmp(value, best); {
@@ -641,28 +681,30 @@ func PlanarPenetrationManifold(a, b *PlanarSolid, poll func() error) ([]PatchPoi
 		}
 	}
 	if !found || tied {
-		return nil, nil
+		return nil, nil, nil
 	}
 	faceA, okA := supportFace(sa, bestDir)
 	faceB, okB := supportFace(sb, dvNeg(bestDir))
 	minA, maxA := projectSpan(a.Verts, bestDir)
 	minB, maxB := projectSpan(b.Verts, bestDir)
 	if proof.DyCmp(maxB, maxA) <= 0 || proof.DyCmp(minA, minB) >= 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if okA != okB {
 		depth, ok := canonicalSqrt(best)
 		if !ok {
-			return nil, nil
+			return nil, nil, nil
 		}
 		separation := ScalarReading{ValueMM: -depth.ValueMM, BoundMM: depth.BoundMM}
 		if okA {
-			return shallowSupport(sa, faceA, sb, bestDir, minB, maxA, separation, poll)
+			points, err := shallowSupport(sa, faceA, sb, bestDir, minB, maxA, separation, poll)
+			return points, &SupportPlane{HostIsA: true, Face: faceA}, err
 		}
-		return shallowSupport(sb, faceB, sa, dvNeg(bestDir), dvNeg1(maxA), dvNeg1(minB), separation, poll)
+		points, err := shallowSupport(sb, faceB, sa, dvNeg(bestDir), dvNeg1(maxA), dvNeg1(minB), separation, poll)
+		return points, &SupportPlane{Face: faceB}, err
 	}
 	if !okA || !sa.isFlat(faceA) || !sb.isFlat(faceB) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	// B moves by shift = t·d/(d·d) onto A's face plane.
 	norm := proof.DvDot(bestDir, bestDir).Rat()
@@ -675,22 +717,22 @@ func PlanarPenetrationManifold(a, b *PlanarSolid, poll func() error) ([]PatchPoi
 	clipOuter, clipHoles, okClip := sa.frameLoops(faceA, frame, Point3{})
 	outer, holes, okSubject := sb.frameLoops(faceB, frame, shift)
 	if !okClip || !okSubject || len(clipHoles) > 0 || len(holes) > 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	clip := clipOuter
 	if !IsConvex(clip) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	polygon, err := ClipConvex(outer, clip, poll)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(polygon) < 3 || DoubleArea(polygon).Sign() == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	depth, ok := canonicalSqrt(best)
 	if !ok {
-		return nil, nil
+		return nil, nil, nil
 	}
 	separation := ScalarReading{ValueMM: -depth.ValueMM, BoundMM: depth.BoundMM}
 	featureA := PatchFeature{Kind: FeatureFacet, Faces: []int{faceA}}
@@ -705,7 +747,7 @@ func PlanarPenetrationManifold(a, b *PlanarSolid, poll func() error) ([]PatchPoi
 		points = append(points, PatchPoint{OnA: onA, OnB: onB, A: featureA, B: featureB,
 			Normal: bestDir, Separation: separation})
 	}
-	return points, nil
+	return points, nil, nil
 }
 
 // shallowSupport publishes a convex guest poking through face h of the host
@@ -864,4 +906,96 @@ func canonicalSqrt(x frac) (ScalarReading, bool) {
 		return ScalarReading{}, false
 	}
 	return fracSqrtReading(frac{num: num, den: den})
+}
+
+// PlanarSupportSet returns the lifted points of one support plane
+// (docs/multibody-dynamics-design.md §10.5): every guest vertex whose exact
+// height h = n·(p − q) over the host face's plane is at most band (in
+// millimetres, h² <= band²·n·n, compared exactly) and whose exact foot on the
+// plane lies strictly inside the face, holes excluded. Without overlap every guest vertex must
+// lie on or in front of it, and the vertices at zero height, the contact set,
+// are left out; with overlap the guest must poke through it, and its deepest
+// vertices, which the penetration patch publishes, are left out instead.
+// Each point pairs the foot on the host with the vertex on the guest, carries
+// the host face's outward normal oriented A to B, and the vertex's exact
+// signed height enclosed once as its Separation. A nil result means the
+// plane is not a support plane or its set is empty. poll is charged once per
+// vertex.
+func PlanarSupportSet(a, b *PlanarSolid, plane SupportPlane, band proof.Dyadic, overlap bool,
+	poll func() error) ([]PatchPoint, error) {
+	if len(a.Faces) != len(a.Tris) || len(b.Faces) != len(b.Tris) || band.Sign() <= 0 {
+		return nil, nil
+	}
+	hostSolid, guestSolid := b, a
+	if plane.HostIsA {
+		hostSolid, guestSolid = a, b
+	}
+	host := newPatchSide(hostSolid, false, plane.HostIsA)
+	guest := newPatchSide(guestSolid, false, !plane.HostIsA)
+	if _, ok := host.faceTris[plane.Face]; !ok || !host.isFlat(plane.Face) {
+		return nil, nil
+	}
+	n, o := host.faceNormal(plane.Face), host.faceOrigin(plane.Face)
+	heights := make([]proof.Dyadic, len(guestSolid.Verts))
+	lowest := proof.DyZero()
+	for v, at := range guestSolid.Verts {
+		if err := poll(); err != nil {
+			return nil, err
+		}
+		heights[v] = proof.DvDot(n, proof.DvSub(at, o))
+		if v == 0 || proof.DyCmp(heights[v], lowest) < 0 {
+			lowest = heights[v]
+		}
+	}
+	if (lowest.Sign() < 0) != overlap {
+		return nil, nil
+	}
+	frame := NewPlaneFrame(n, o)
+	outer, holes, ok := host.frameLoops(plane.Face, frame, Point3{})
+	if !ok {
+		return nil, nil
+	}
+	region := append([][]Point2{outer}, holes...)
+	norm := proof.DvDot(n, n)
+	limit := proof.DyMul(proof.DyMul(band, band), norm)
+	hostFeature := PatchFeature{Kind: FeatureFacet, Faces: []int{plane.Face}}
+	var points []PatchPoint
+	for v, h := range heights {
+		if err := poll(); err != nil {
+			return nil, err
+		}
+		if lowest.Sign() <= 0 && proof.DyCmp(h, lowest) == 0 {
+			continue
+		}
+		if h.Sign() > 0 && proof.DyCmp(proof.DyMul(h, h), limit) > 0 {
+			continue
+		}
+		vertex := ratPoint3(guestSolid.Verts[v])
+		lift := new(big.Rat).Quo(h.Rat(), norm.Rat())
+		var foot Point3
+		for axis := range 3 {
+			foot[axis] = new(big.Rat).Sub(vertex[axis], new(big.Rat).Mul(lift, n[axis].Rat()))
+		}
+		if locate(frame.Project(foot), region) <= 0 {
+			continue
+		}
+		var separation ScalarReading
+		if h.Sign() != 0 {
+			reading, ok := canonicalSqrt(frac{num: proof.DyMul(h, h), den: norm})
+			if !ok {
+				return nil, nil
+			}
+			separation = reading
+			if h.Sign() < 0 {
+				separation.ValueMM = -separation.ValueMM
+			}
+		}
+		feature := PatchFeature{Kind: FeatureVertex, Faces: guest.faceIDs(guest.vertTris[v])}
+		point := PatchPoint{OnA: foot, OnB: vertex, A: hostFeature, B: feature, Normal: n, Separation: separation}
+		if !plane.HostIsA {
+			point.OnA, point.OnB, point.A, point.B, point.Normal = vertex, foot, feature, hostFeature, dvNeg(n)
+		}
+		points = append(points, point)
+	}
+	return points, nil
 }

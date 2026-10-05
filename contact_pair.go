@@ -9,10 +9,33 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// ContactRequest states the maximum position and normal error a manifold may publish.
+// ContactRequest states the maximum position and normal error a manifold may
+// publish. SupportBand is a nonnegative Length; when positive, an exact planar
+// pair also publishes every vertex of the resting body that lies within it
+// above a support plane, and an exact planar pair apart by at most it is
+// ContactBand (docs/multibody-dynamics-design.md §10.5). The zero Value is a
+// zero band, which publishes the exact contact set alone.
 type ContactRequest struct {
 	PointResolution  units.Value
 	NormalResolution units.Value
+	SupportBand      units.Value
+}
+
+// validateSupportBand admits the zero Value or a finite nonnegative Length.
+func validateSupportBand(v units.Value) error {
+	if v == (units.Value{}) {
+		return nil
+	}
+	if v.Kind() != units.Length {
+		return fmt.Errorf("%w: support band must be a Length", ErrUnitKind)
+	}
+	if !finiteMeasurementValues(v.Base()) {
+		return fmt.Errorf("%w: support band is non-finite", ErrNotFinite)
+	}
+	if v.Base() < 0 {
+		return fmt.Errorf("%w: support band must be nonnegative", ErrDegenerate)
+	}
+	return nil
 }
 
 // ContactRelation is the proven relation of the two complete occupied sets.
@@ -24,10 +47,12 @@ const (
 	ContactTouching
 	ContactOverlapping
 	// ContactBand is published for a body whose held boundary carries a
-	// positive displacement (docs/multibody-dynamics-design.md §10.4): the
-	// interiors are disjoint except possibly within a band of width
-	// Gap.Bound around Gap.Value, which is zero. A manifold's Separation
-	// intervals carry the same band.
+	// positive displacement (docs/multibody-dynamics-design.md §10.4), or for
+	// an exact planar pair apart by at most the request's SupportBand
+	// (§10.5): the interiors are disjoint except possibly within a band of
+	// width Gap.Bound around Gap.Value, which is zero. A displaced pair's
+	// manifold Separation intervals carry the same band; an exact pair's
+	// manifold is its support set, each point at its exact height.
 	ContactBand
 )
 
@@ -114,7 +139,13 @@ type ContactReport struct {
 // neither body is convex. A positive-bound faceted Boolean and an all-planar
 // cap-loop chamfer are admitted through their held meshes with the mesh's
 // boundary displacement δ charged: a held touch, or a held gap or depth
-// within the summed δ, is ContactBand with Gap [−2δ, 2δ].
+// within the summed δ, is ContactBand with Gap [−2δ, 2δ]. Under a positive
+// SupportBand an exact planar touch or shallow face overlap also publishes the
+// support set: every vertex of the resting body within the band above a face
+// plane of the other, its foot strictly inside that face, at its exact
+// height; and an exact planar pair apart by at most the band is ContactBand
+// with Gap [0 ± g], g its gap's upper end, publishing that set
+// (docs/multibody-dynamics-design.md §10.5).
 // At identity query poses, the analytic clearance kernel can prove relations
 // for other solids. Only its ruling touches publish a manifold: the two ends
 // of a full source cylinder's ruling on a planar face or another cylinder.
@@ -148,6 +179,9 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 	}
 	if req.PointResolution.Base() <= 0 || req.NormalResolution.Base() <= 0 {
 		return nil, fmt.Errorf("%w: contact resolutions must be positive", ErrDegenerate)
+	}
+	if err := validateSupportBand(req.SupportBand); err != nil {
+		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -225,6 +259,9 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body, poseA, poseB r3.
 		if orientedOKA && orientedOKB {
 			classifyOrientedSourceBoxes(report, orientedA, orientedB)
 			if err := classifyPlanarManifold(ctx, report); err != nil {
+				return nil, err
+			}
+			if err := classifyPlanarSupportBand(ctx, report); err != nil {
 				return nil, err
 			}
 			return report, nil
@@ -326,6 +363,27 @@ func classifyUndecidedCylinder(ctx context.Context, report *ContactReport) error
 	}
 	_, err := classifyPlacedRuling(ctx, report)
 	return err
+}
+
+// classifyPlanarSupportBand completes an oriented source-box report that may
+// be separated by at most the request's positive SupportBand: the box patches
+// know no band, so the exact planar path decides whether the pair is §10.5's
+// ContactBand, and its report replaces this one when it is.
+func classifyPlanarSupportBand(ctx context.Context, report *ContactReport) error {
+	if supportBandOf(report.Request).Sign() <= 0 || report.Relation != ContactSeparated || report.Gap == nil ||
+		report.Gap.Value.Base()-report.Gap.Bound.Base() > report.Request.SupportBand.Base() {
+		return nil
+	}
+	trial := ContactReport{A: report.A, B: report.B, PoseA: report.PoseA, PoseB: report.PoseB,
+		Request: report.Request}
+	planar, err := classifyExactPlanarPair(ctx, &trial)
+	if err != nil {
+		return err
+	}
+	if planar && trial.Relation == ContactBand {
+		*report = trial
+	}
+	return nil
 }
 
 // classifyAnalyticContact consumes the clearance kernel's complete-pair

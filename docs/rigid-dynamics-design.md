@@ -962,8 +962,9 @@ reject a new contact or undecided interval. Active contacts may remain
 touching while their penetration decreases. A post-correction `ContactPair`
 bounds residual penetration. At a separating impact at the final step time,
 a separated corrected pose is accepted only when the contact report's upper gap is within
-the same correction allowance. A nonzero remainder still requires a touching
-corrected pose and a certified continuation. A correction does not alter
+the same correction allowance. A nonzero remainder still requires a corrected
+pose that touches, or lies within the request's `SupportBand`
+(`docs/multibody-dynamics-design.md` §10.5), and a certified continuation. A correction does not alter
 velocity and cannot claim to conserve mechanical energy. A failed correction
 or new uncertain pair returns `Undecided`.
 

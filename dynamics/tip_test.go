@@ -12,17 +12,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The dynamics fixture of docs/multibody-dynamics-design.md §13 PR 13: an
-// 8 mm source cube stands on one edge on a fixed floor, turned 30° about Y,
-// with its center of mass beyond the edge, so gravity tips it over. Every
-// step kicks it, solves the edge's impact, carries the touch on a §10.3 band
-// track until the band reaches PenetrationResidual, and lets the edge lift
-// clear; the next step's kick brings it down again as a rotating impact,
-// which the step advances through at the bracket's right end. The cube lands
-// on its far edge. With restitution zero it then rocks between its two
-// bottom edges with a shrinking tilt, until the far edge closes within one
-// grid step of a touch on the near one, which no certificate covers: the
-// step stops there, Undecided.
+// The dynamics fixtures of docs/multibody-dynamics-design.md §13 PR 13 and
+// PR 14a: an 8 mm source cube stands on one edge on a fixed floor, turned
+// 30° about Y, with its center of mass beyond the edge, so gravity tips it
+// over. Every step kicks it, solves the edge's impact, carries the touch on a
+// §10.3 band track until the band reaches PenetrationResidual, and lets the
+// edge lift clear; the next step's kick brings it down again as a rotating
+// impact, which the step advances through at the bracket's right end. The
+// cube lands on its far edge.
+//
+// Under a zero SupportBand it then rocks between its two bottom edges with a
+// shrinking tilt, until the far edge closes within one grid step of a touch
+// on the near one, which no certificate covers: the step stops there,
+// Undecided (TestBoxTipsOverOnBandTracks). Under SupportBand =
+// PenetrationResidual/2 (§10.5) it comes to rest flat
+// (TestBoxTipsOverAndRestsFlat): the landing's band track ends where the
+// other edge's lower height bound would reach the floor, the solve at that
+// band end reads all four bottom corners at the rounded event poses, and
+// stops the cube with exactly zero velocities; every later step absorbs its
+// kick on all four corners.
 //
 // Legs shown to fail (each deleted in turn, fixture red, then restored):
 //   - the band cut (bandEnd's search for the last grid fraction within the
@@ -41,7 +49,16 @@ import (
 //     TestObliqueBoxGeometryIntegration;
 //   - the shallow edge penetration of §9.3 (internal/pair's shallowSupport):
 //     the first rotating impact's rounded poses overlap without a manifold,
-//     StepManifoldMissing.
+//     StepManifoldMissing;
+//   - a zero SupportBand: the landing step stops StepPairUndecided
+//     (TestBoxTipsOverOnBandTracks);
+//   - the support set read at a band end's rounded event poses
+//     (schedule_event.go's solveEvent): the solve at the landing's band end
+//     reads the far edge alone, leaves the near edge closing within a grid
+//     step of the floor, and the next slice's departure is unproved,
+//     StepPairUndecided;
+//   - the SupportBand validation of NewWorld: TestNewWorldRejectsSupportBand
+//     builds a world whose band exceeds the residual.
 //
 // The band's own depth legs are shown in contact_sweep_band_test.go.
 
@@ -59,9 +76,11 @@ type tipScene struct {
 const (
 	tipMass    = .512
 	tipInertia = tipMass * 128 / 12
+	// newTipResidual is the scene's PenetrationResidual, pairMaterialStepConfig's.
+	newTipResidual = 1e-6
 )
 
-func newTipScene(t *testing.T) tipScene {
+func newTipScene(t *testing.T, band units.Value) tipScene {
 	t.Helper()
 	scene := tipScene{doc: decad.New()}
 	scene.floor = makeBox(t, scene.doc, -100, -100, 100, 100, -10, 10)
@@ -74,6 +93,7 @@ func newTipScene(t *testing.T) tipScene {
 	scene.config.MaxIterations = 256
 	scene.config.MaxEvents = 64
 	scene.config.MaxPoseEvaluations = 512
+	scene.config.Contact.SupportBand = band
 	var err error
 	scene.world, err = dynamics.NewWorld(t.Context(), scene.doc, dynamics.WorldConfig{Bodies: []dynamics.RigidBody{
 		{Body: scene.floor, Role: dynamics.Fixed, Material: material},
@@ -175,7 +195,7 @@ func requireBandCuts(t *testing.T, trace dynamics.Trace, residual float64) int {
 func rat(v float64) *big.Rat { return new(big.Rat).SetFloat64(v) }
 
 func TestBoxTipsOverOnBandTracks(t *testing.T) {
-	scene := newTipScene(t)
+	scene := newTipScene(t, units.Value{})
 	timeline, err := dynamics.NewTimeline(scene.world, scene.state)
 	require.NoError(t, err)
 	dt := units.Seconds(1.0 / 256)
@@ -257,4 +277,111 @@ func TestBoxTipsOverOnBandTracks(t *testing.T) {
 	require.NoError(t, err)
 	_, err = timeline.Advance(t.Context(), dynamics.StepInput{Gravity: gravityZ(-9810)}, dt)
 	require.ErrorIs(t, err, dynamics.ErrTimelineStopped)
+}
+
+// tipCornerHeights stages the cube's four bottom corners through pose exactly
+// and returns their heights above the floor's top face z = 0.
+func tipCornerHeights(pose r3.Transform) []*big.Rat {
+	basis, at := pose.Basis(), pose.Translation()
+	var out []*big.Rat
+	for _, x := range []float64{0, 8} {
+		for _, y := range []float64{-4, 4} {
+			z := new(big.Rat).Add(rat(at.Z), new(big.Rat).Mul(rat(basis.EX.Z), rat(x)))
+			z.Add(z, new(big.Rat).Mul(rat(basis.EY.Z), rat(y)))
+			out = append(out, z)
+		}
+	}
+	return out
+}
+
+func TestBoxTipsOverAndRestsFlat(t *testing.T) {
+	scene := newTipScene(t, units.Millimeters(newTipResidual/2))
+	timeline, err := dynamics.NewTimeline(scene.world, scene.state)
+	require.NoError(t, err)
+	dt := units.Seconds(1.0 / 256)
+	residual := scene.config.PenetrationResidual.Base()
+	kick := tipMass * 9810 / 256
+	landing := -1
+	var last *dynamics.StepReport
+	for step := range 32 {
+		report, err := timeline.Advance(t.Context(), dynamics.StepInput{Gravity: gravityZ(-9810)}, dt)
+		require.NoError(t, err)
+		require.Equal(t, dynamics.Advanced, report.Status, "step %d: %+v", step, report.Diagnostics)
+		require.NotEmpty(t, report.Events, "step %d", step)
+		requireBandCuts(t, report.Trace, residual)
+		for _, event := range report.Events {
+			requireTipEventLaws(t, event)
+		}
+		last = report
+		final := report.Events[len(report.Events)-1]
+		if landing < 0 {
+			if len(final.Manifold.Points) != 4 {
+				continue
+			}
+			// The landing: the far edge lands as a two-point impact, then the
+			// band end at the near edge's arrival solves all four corners,
+			// with a positive impulse on each edge and exactly zero velocities.
+			landing = step
+			farEdge := false
+			for _, event := range report.Events[:len(report.Events)-1] {
+				if len(event.Manifold.Points) == 2 &&
+					math.Abs(localPoint(t, event.PoseB, event.Manifold.Points[0].OnB.Value).X-8) < 1e-6 {
+					farEdge = true
+				}
+			}
+			require.True(t, farEdge, "the far edge lands in step %d", step)
+			edges := map[float64]float64{}
+			for i, point := range final.Manifold.Points {
+				edges[math.Round(localPoint(t, final.PoseB, point.OnB.Value).X)] += final.PointImpulses[i].Normal.Base()
+			}
+			require.Len(t, edges, 2)
+			require.Positive(t, edges[0])
+			require.Positive(t, edges[8])
+		} else {
+			// Every later step absorbs its kick at the step start on all four
+			// corners. The certificate's linear gate is ImpulseResidual +
+			// m·VelocityResidual.
+			require.Len(t, report.Events, 1, "step %d", step)
+			require.Zero(t, final.Time.Base())
+			require.Len(t, final.Manifold.Points, 4)
+			require.InDelta(t, kick, final.NormalImpulse.Base(), 2e-6)
+		}
+		for _, v := range []dynamics.QuantityVec{final.PostVelocityB, final.PostAngularVelocityB} {
+			require.Zero(t, v.X.Base(), "step %d", step)
+			require.Zero(t, v.Y.Base(), "step %d", step)
+			require.Zero(t, v.Z.Base(), "step %d", step)
+		}
+		// The rest of the step certifies the pair by swept boxes strictly
+		// apart, the cube hovering inside the band, or by a band track
+		// through the step's end.
+		slices := dynamics.TraceSliceProofs(report.Trace)
+		require.NotEmpty(t, slices)
+		for _, proof := range slices[len(slices)-1] {
+			if proof.Pair.A != scene.floor || proof.Pair.B != scene.box {
+				continue
+			}
+			if proof.BoxClear {
+				continue
+			}
+			require.Equal(t, decad.SweepPersistentBand, proof.Sweep.Outcome)
+			require.Equal(t, 1.0, proof.Sweep.ContactTrack.End().Fraction.Base())
+			require.LessOrEqual(t, proof.Sweep.ContactTrack.Band().Value.Base(), residual)
+		}
+	}
+	require.GreaterOrEqual(t, landing, 4, "the cube tips over several steps before it lands")
+	require.Less(t, landing, 31, "the cube rests before the last step")
+
+	// After 32 steps every bottom corner's exact height lies in [0, residual]
+	// and the cube is still.
+	box, ok := last.Next.Body(scene.box)
+	require.True(t, ok)
+	for _, height := range tipCornerHeights(box.Pose) {
+		require.GreaterOrEqual(t, height.Sign(), 0)
+		require.LessOrEqual(t, height.Cmp(rat(residual)), 0)
+	}
+	for _, v := range []dynamics.QuantityVec{box.LinearVelocity, box.AngularVelocity} {
+		require.Zero(t, v.X.Base())
+		require.Zero(t, v.Y.Base())
+		require.Zero(t, v.Z.Base())
+	}
 }

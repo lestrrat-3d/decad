@@ -269,6 +269,13 @@ func validateStepConfig(cfg StepConfig) error {
 			return fmt.Errorf("%w: invalid %s", ErrInvalidInput, check.name)
 		}
 	}
+	// docs/multibody-dynamics-design.md §10.5: every band the SupportBand
+	// publishes must pass the penetration residual.
+	if cfg.Contact.SupportBand != (units.Value{}) && (!validQuantity(cfg.Contact.SupportBand, units.Length, false) ||
+		cfg.Contact.SupportBand.Base() > cfg.PenetrationResidual.Base()) {
+		return fmt.Errorf("%w: support band must be a nonnegative Length within the penetration residual",
+			ErrInvalidInput)
+	}
 	if cfg.MaxPoseEvaluations < 2 || cfg.MaxIterations <= 0 || cfg.MaxEvents <= 0 || cfg.MaxPairSweeps == 0 {
 		return fmt.Errorf("%w: work limits must be positive", ErrInvalidInput)
 	}

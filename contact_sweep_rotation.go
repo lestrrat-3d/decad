@@ -461,6 +461,17 @@ func (r *rotationalPairSweep) orientedIdealEvent(f *big.Rat, at SweepInstant,
 				proofarith.FloatRat(etaA), proofarith.FloatRat(etaB)); ok {
 				event = proof
 			}
+		case ContactBand:
+			// §10.5: the exact planar path's band of two boxes apart within the
+			// SupportBand transfers whole at zero deviation, and otherwise, as
+			// planarIdealEvent's does, with both deviations added to its width
+			// and its manifold dropped.
+			if etaA == 0 && etaB == 0 {
+				event.Relation, event.Gap, event.Manifold = ContactBand, contact.Gap, contact.Manifold
+				event.Reason = contact.Reason
+			} else if gap, ok := widenedBand(contact, etaA, etaB); ok {
+				event.Relation, event.Gap, event.Reason = ContactBand, gap, ContactNoNormalProof
+			}
 		}
 	}
 	return event
@@ -629,38 +640,7 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 			departure, departs = r.rotationalDepartureFraction(first)
 		}
 		if departs {
-			left, sampleErr := r.sample(ctx, departure)
-			if errors.Is(sampleErr, errSweepPoseBudget) {
-				return r.undecided(zero, departure, SweepPoseBudget), nil
-			}
-			if sampleErr != nil {
-				return nil, sampleErr
-			}
-			if left.Ideal.Relation != ContactSeparated || left.Ideal.Gap == nil {
-				return r.undecided(zero, departure, SweepDepartureUnproved), nil
-			}
-			r.report.Departure = &SweepDeparture{Until: left.At, GapAtUntil: *left.Ideal.Gap}
-			if departure.Cmp(one) == 0 {
-				r.report.Outcome = SweepDepartedClear
-				r.sortSamples()
-				return r.report, nil
-			}
-			last, sampleErr := r.sample(ctx, one)
-			if errors.Is(sampleErr, errSweepPoseBudget) {
-				return r.undecided(departure, one, SweepPoseBudget), nil
-			}
-			if sampleErr != nil {
-				return nil, sampleErr
-			}
-			done, refineErr := r.refine(ctx, left, last, 0)
-			if refineErr != nil {
-				return nil, refineErr
-			}
-			if !done {
-				r.report.Outcome = SweepDepartedClear
-			}
-			r.sortSamples()
-			return r.report, nil
+			return r.depart(ctx, departure)
 		}
 		if r.planar && r.req.StartPolicy == ContinueCertifiedTouch {
 			track, ok, bandErr := r.planarBand(ctx)
@@ -686,6 +666,17 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 		if r.req.StartPolicy == StopAtInitialContact {
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
+		}
+		// §10.5: an exact pair apart within its SupportBand has every vertex
+		// above the support plane, so it departs when §10.2's proof holds.
+		if r.planar && r.req.StartPolicy == ContinueSeparatingTouch && r.a.delta.Sign() == 0 && r.b.delta.Sign() == 0 {
+			departure, departs, err := r.planarDepartureFraction(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if departs {
+				return r.depart(ctx, departure)
+			}
 		}
 		if r.planar && r.req.StartPolicy == ContinueCertifiedTouch {
 			track, ok, bandErr := r.planarBand(ctx)
@@ -721,6 +712,82 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 	return r.report, nil
 }
 
+// depart publishes a proven departure through the given fraction, then
+// continues the clear search from there to the end of the sweep.
+func (r *rotationalPairSweep) depart(ctx context.Context, departure *big.Rat) (*SweepReport, error) {
+	zero, one := new(big.Rat), big.NewRat(1, 1)
+	left, err := r.sample(ctx, departure)
+	if errors.Is(err, errSweepPoseBudget) {
+		return r.undecided(zero, departure, SweepPoseBudget), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	gap, ok, err := r.departureGap(ctx, departure, left)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return r.undecided(zero, departure, SweepDepartureUnproved), nil
+	}
+	r.report.Departure = &SweepDeparture{Until: left.At, GapAtUntil: *gap}
+	if departure.Cmp(one) == 0 {
+		r.report.Outcome = SweepDepartedClear
+		r.sortSamples()
+		return r.report, nil
+	}
+	last, err := r.sample(ctx, one)
+	if errors.Is(err, errSweepPoseBudget) {
+		return r.undecided(departure, one, SweepPoseBudget), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	done, err := r.refine(ctx, left, last, 0)
+	if err != nil {
+		return nil, err
+	}
+	if !done {
+		r.report.Outcome = SweepDepartedClear
+	}
+	r.sortSamples()
+	return r.report, nil
+}
+
+// departureGap is the proven gap of the sample that ends a departure. Under
+// a positive SupportBand (§10.5) a pair apart by at most the band samples as
+// ContactBand; its gap is then read again at the same rounded poses with a
+// zero band, which publishes the exact relation's gap, and transferred to
+// the ideal path as a separated sample's is. ok is false when no positive
+// gap is proven.
+func (r *rotationalPairSweep) departureGap(ctx context.Context, f *big.Rat, sample *SweepSample) (*Measurement, bool, error) {
+	switch {
+	case sample.Ideal.Relation == ContactSeparated && sample.Ideal.Gap != nil:
+		return sample.Ideal.Gap, true, nil
+	case sample.Ideal.Relation != ContactBand:
+		return nil, false, nil
+	}
+	req := r.req.ContactRequest
+	req.SupportBand = units.Value{}
+	contact, err := r.doc.ContactPair(ctx, r.a.body, r.b.body, sample.PoseA, sample.PoseB, req)
+	if err != nil {
+		return nil, false, err
+	}
+	var event SweepEvent
+	if r.planar {
+		event, err = r.planarIdealEvent(ctx, f, sample.At, sample.PoseA, sample.PoseB, contact)
+		if err != nil {
+			return nil, false, err
+		}
+	} else {
+		event = r.orientedIdealEvent(f, sample.At, sample.PoseA, sample.PoseB, contact)
+	}
+	if event.Relation != ContactSeparated || event.Gap == nil {
+		return nil, false, nil
+	}
+	return event.Gap, true, nil
+}
+
 // continuationCause names the missing proof after an initial touch.
 func (r *rotationalPairSweep) continuationCause() SweepCause {
 	if r.req.StartPolicy == ContinueCertifiedTouch {
@@ -729,9 +796,18 @@ func (r *rotationalPairSweep) continuationCause() SweepCause {
 	return SweepDepartureUnproved
 }
 
+// coMovingOrientedTouch admits a touch of two co-translating source boxes
+// whose manifold is a box face patch. A manifold the exact planar path
+// completed (an edge or vertex on a face, or a support set) is left to the
+// planar continuation, since the oriented track rereads face patches only.
 func (r *rotationalPairSweep) coMovingOrientedTouch(first *SweepSample) bool {
 	if r.a.path.drift != nil || r.b.path.drift != nil || first.Ideal.Manifold == nil {
 		return false
+	}
+	for _, point := range first.Ideal.Manifold.Points {
+		if point.FeatureA.Face == nil || point.FeatureB.Face == nil {
+			return false
+		}
 	}
 	for axis := range 3 {
 		if proofarith.DyCmp(r.a.path.delta[axis], r.b.path.delta[axis]) != 0 {

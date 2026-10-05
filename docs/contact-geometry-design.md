@@ -134,6 +134,7 @@ func (d *Document) ContactPair(ctx context.Context, a, b *Body,
 type ContactRequest struct {
     PointResolution  units.Value // positive Length
     NormalResolution units.Value // positive Angle
+    SupportBand      units.Value // nonnegative Length; zero publishes the exact contact set alone (multibody §10.5)
 }
 
 type ContactRelation int // Separated, Touching, Overlapping, Undecided,
@@ -179,8 +180,10 @@ that code, not its message. Do not reuse `Diagnostic` or `Verify.Status` as
 the pair verdict. `ContactBand` is the one relation that is neither of the
 three exact relations nor `Undecided`: it states a published band around zero
 that the pair's separation lies in, for a body whose held boundary carries a
-positive displacement. `docs/multibody-dynamics-design.md` §10.4 owns when it
-is published and what `Gap` and the manifold carry.
+positive displacement, or for an exact pair apart by at most the request's
+`SupportBand`. `docs/multibody-dynamics-design.md` §10.4 owns when a displaced
+pair publishes it and §10.5 when an exact pair does, and what `Gap` and the
+manifold carry in each case.
 
 `ContactPair` always asks the analytic distance kernel for a gap on a
 separated pair; box separation alone does not supply a minimum. If the
@@ -260,7 +263,8 @@ to that entry; the angular radius is at most the requested
 `Separation` encloses the signed normal projection of the two true witness
 points, including their point and normal errors; positive means apart,
 negative means penetration. For a certified touch its interval contains
-zero. A report may omit `FaceA` or `FaceB` only when the contact feature has no
+zero, except at a lifted vertex of a support set (multibody §10.5), whose
+interval encloses that vertex's positive exact height. A report may omit `FaceA` or `FaceB` only when the contact feature has no
 single certified owning face; it must still carry stable source identity.
 Neither a mesh triangle index nor a transient face pointer crosses the API.
 

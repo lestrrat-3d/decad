@@ -92,6 +92,7 @@ type planarSupport struct {
 	heights  []*big.Rat      // n·(p − origin) for every M start vertex, all >= 0
 	rates    []*big.Rat      // exact n·(dp/du − dq/du) at u = 0 for every M vertex
 	contact  []int           // the M vertices with zero height, ascending
+	lifted   []int           // the M vertices with a positive height within the support band (§10.5), ascending
 	nLow     *big.Rat        // lower bound on |n|
 	nHigh    *big.Rat        // upper bound on |n|
 	motionM  planarMotion
@@ -130,7 +131,7 @@ func (r *rotationalPairSweep) planarSupports(poll func() error) ([]planarSupport
 				continue
 			}
 			tried = append(tried, planarSupport{normal: n, origin: a})
-			support, ok, err := planarSupportOf(S, M, n, a, poll)
+			support, ok, err := planarSupportOf(S, M, n, a, r.req.ContactRequest, poll)
 			if err != nil {
 				return nil, err
 			}
@@ -170,9 +171,13 @@ func planarPlaneTried(tried []planarSupport, n, a proofarith.DyV3) bool {
 }
 
 // planarSupportOf checks one plane: every S vertex on or behind it, every M
-// vertex on or in front of it, and at least one M vertex on it.
-func planarSupportOf(S, M *rotationalSweepPath, n, a proofarith.DyV3,
+// vertex on or in front of it, and a nonempty support set (§10.5): at least
+// one M vertex on it, or, under a positive SupportBand, within the band above
+// it, h² <= band²·n·n compared exactly.
+func planarSupportOf(S, M *rotationalSweepPath, n, a proofarith.DyV3, req ContactRequest,
 	poll func() error) (planarSupport, bool, error) {
+	band := supportBandOf(req)
+	limit := proofarith.DyMul(proofarith.DyMul(band, band), proofarith.DvDot(n, n))
 	for _, v := range S.startPoints {
 		if err := poll(); err != nil {
 			return planarSupport{}, false, err
@@ -192,10 +197,14 @@ func planarSupportOf(S, M *rotationalSweepPath, n, a proofarith.DyV3,
 			return planarSupport{}, false, nil
 		case 0:
 			support.contact = append(support.contact, i)
+		default:
+			if band.Sign() > 0 && proofarith.DyCmp(proofarith.DyMul(height, height), limit) <= 0 {
+				support.lifted = append(support.lifted, i)
+			}
 		}
 		support.heights[i] = height.Rat()
 	}
-	if len(support.contact) == 0 {
+	if len(support.contact) == 0 && len(support.lifted) == 0 {
 		return planarSupport{}, false, nil
 	}
 	squared := proofarith.DvDot(n, n).Rat()
@@ -234,9 +243,11 @@ func (s *planarSupport) curvature(t *big.Rat) (*big.Rat, bool) {
 	return ratMul(bound, s.nHigh, big.NewRat(1, 2)), true
 }
 
-// clearAt reports whether every vertex outside the contact set keeps a
-// positive height through [0, t]: h(0) + h'(0)·u − K·u² is concave and
-// positive at u = 0, so its value at t decides the whole span.
+// clearAt reports whether every vertex outside the contact set, the lifted
+// set's included (§10.5), keeps a positive height through [0, t]:
+// h(0) + h'(0)·u − K·u² is concave and positive at u = 0, so its value at t
+// decides the whole span. A lifted vertex that would reach the plane inside
+// the slice therefore ends a band track before it does.
 func (s *planarSupport) clearAt(t, k *big.Rat) bool {
 	contact := 0
 	for i, height := range s.heights {
@@ -251,6 +262,27 @@ func (s *planarSupport) clearAt(t, k *big.Rat) bool {
 		}
 	}
 	return true
+}
+
+// depthAt is the band's unnormalized depth at elapsed time t under the
+// curvature k, read over [0, t]: r·t + k·t² over the contact set, r the
+// largest contact rate magnitude, and h0 + max(0, h'(0))·t + k·t² over the
+// lifted set (§10.5), whichever is larger. A contact vertex's height lies in
+// [−(r·t + k·t²), r·t + k·t²]; a lifted vertex, which clearAt keeps above the
+// plane, in (0, h0 + max(0, h'(0))·t + k·t²].
+func (s *planarSupport) depthAt(t, k, rate *big.Rat) *big.Rat {
+	curve := ratMul(k, t, t)
+	depth := ratAdd(ratMul(rate, t), curve)
+	for _, index := range s.lifted {
+		lifted := ratAdd(s.heights[index], curve)
+		if s.rates[index].Sign() > 0 {
+			lifted.Add(lifted, ratMul(s.rates[index], t))
+		}
+		if lifted.Cmp(depth) > 0 {
+			depth = lifted
+		}
+	}
+	return depth
 }
 
 // gridHorizon returns the largest fraction m/2^depth in (0, 1] at which holds
@@ -404,7 +436,7 @@ func (p *planarTrackProof) depthThrough(f *big.Rat) (*big.Rat, bool) {
 	if !ok {
 		return nil, false
 	}
-	depth := ratAdd(ratMul(p.rate, t), ratMul(k, t, t))
+	depth := p.support.depthAt(t, k, p.rate)
 	depth.Quo(depth, p.support.nLow)
 	return depth.Add(depth, p.widening), true
 }
@@ -443,7 +475,7 @@ func (r *rotationalPairSweep) planarBand(ctx context.Context) (*SweepContactTrac
 			}
 		}
 		depthAt := func(t, k *big.Rat) *big.Rat {
-			depth := ratAdd(ratMul(rate, t), ratMul(k, t, t))
+			depth := support.depthAt(t, k, rate)
 			return depth.Quo(depth, support.nLow)
 		}
 		holds := func(f *big.Rat) (bool, error) {
@@ -500,16 +532,22 @@ func (r *rotationalPairSweep) planarTrack(support *planarSupport, face planarFac
 		feature ContactFeature
 		key     [2]int
 	}
-	entries := make([]entry, 0, len(support.contact))
-	for _, index := range support.contact {
-		feature, ok := features.feature(support.m, pair.PatchFeature{Kind: pair.FeatureVertex,
-			Faces: vertexFaceIDs(solids[support.m], index)})
-		if !ok {
-			return nil, false, nil
+	// The contact set comes first and the lifted set after it (§10.5), each
+	// in the body's feature order.
+	var entries []entry
+	for _, set := range [2][]int{support.contact, support.lifted} {
+		from := len(entries)
+		for _, index := range set {
+			feature, ok := features.feature(support.m, pair.PatchFeature{Kind: pair.FeatureVertex,
+				Faces: vertexFaceIDs(solids[support.m], index)})
+			if !ok {
+				return nil, false, nil
+			}
+			entries = append(entries, entry{index: index, feature: feature, key: features.order(support.m, feature)})
 		}
-		entries = append(entries, entry{index: index, feature: feature, key: features.order(support.m, feature)})
+		part := entries[from:]
+		sort.SliceStable(part, func(i, j int) bool { return compareKey(part[i].key, part[j].key) < 0 })
 	}
-	sort.SliceStable(entries, func(i, j int) bool { return compareKey(entries[i].key, entries[j].key) < 0 })
 	direction := support.normal
 	if support.m == 0 {
 		direction = proofarith.DyV3{proofarith.DyNeg(direction[0]), proofarith.DyNeg(direction[1]),
@@ -659,7 +697,7 @@ func planarSupportFace(s *planarSupport) (planarFace, bool) {
 func (face *planarFace) contains(s *planarSupport, f, depth *big.Rat, poll func() error) (bool, error) {
 	spans := s.pathM.cornerSpan(new(big.Rat), f)
 	i, j := (face.drop+1)%3, (face.drop+2)%3
-	for _, index := range s.contact {
+	for _, index := range slices.Concat(s.contact, s.lifted) {
 		if err := poll(); err != nil {
 			return false, err
 		}
