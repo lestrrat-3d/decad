@@ -11,13 +11,15 @@ import (
 var threePairs = [3][2]int{{0, 1}, {0, 2}, {1, 2}}
 
 // threeBodyWorld keeps each possible response pair in world order. The current
-// three-body step admits one dynamic body and two fixed bodies; every other
-// pair must have a certified clear path before a result is published.
+// three-body step admits one or two dynamic bodies; every other active pair
+// must have a certified clear path before a result is published.
 type threeBodyWorld struct {
-	parts    [3]RigidBody
-	pairs    [3]*World
-	excluded []BodyPair
-	dynamic  int
+	parts        [3]RigidBody
+	mass         [3]decad.MassProperties
+	pairs        [3]*World
+	excluded     []BodyPair
+	dynamic      int
+	dynamicCount int
 }
 
 func newThreeBodyWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World, error) {
@@ -43,16 +45,41 @@ func newThreeBodyWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig
 			return nil, err
 		}
 		if part.Role == Dynamic {
-			if three.dynamic >= 0 {
-				return nil, fmt.Errorf("%w: three-body response with two dynamic bodies", ErrUnsupported)
+			if (part.Density == nil) == (part.Supplied == nil) {
+				return nil, fmt.Errorf("%w: dynamic body needs exactly one mass source", ErrInvalidInput)
 			}
-			three.dynamic = i
+			if part.Density != nil {
+				density := *part.Density
+				part.Density = &density
+				mass, err := part.Body.MassProperties(ctx, density)
+				if err != nil {
+					return nil, err
+				}
+				three.mass[i] = mass
+			} else {
+				supplied := *part.Supplied
+				part.Supplied = &supplied
+				three.mass[i] = supplied
+			}
+			if err := validateMass(three.mass[i]); err != nil {
+				return nil, err
+			}
+			three.parts[i] = part
+			if three.dynamic < 0 {
+				three.dynamic = i
+			}
+			three.dynamicCount++
 		} else if part.Role != Fixed {
 			return nil, fmt.Errorf("%w: three-body kinematic response", ErrUnsupported)
+		} else if part.Density != nil || part.Supplied != nil {
+			return nil, fmt.Errorf("%w: fixed body has mass input", ErrInvalidInput)
 		}
 	}
-	if three.dynamic < 0 {
+	if three.dynamicCount == 0 {
 		return nil, fmt.Errorf("%w: three-body world needs a dynamic body", ErrUnsupported)
+	}
+	if three.dynamicCount > 2 {
+		return nil, fmt.Errorf("%w: three-body world needs a fixed body", ErrUnsupported)
 	}
 	excluded := make(map[int]struct{}, len(cfg.Excluded))
 	for _, pair := range cfg.Excluded {
@@ -88,10 +115,17 @@ func newThreeBodyWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig
 		if _, skip := excluded[key]; skip {
 			three.excluded = append(three.excluded, canonical)
 		}
-		if pair[0] != three.dynamic && pair[1] != three.dynamic {
+		if a.Role != Dynamic && b.Role != Dynamic {
 			continue
 		}
 		pairCfg := WorldConfig{Bodies: []RigidBody{a, b}, Step: cfg.Step}
+		for side, worldIndex := range pair {
+			if pairCfg.Bodies[side].Role == Dynamic {
+				mass := three.mass[worldIndex]
+				pairCfg.Bodies[side].Density = nil
+				pairCfg.Bodies[side].Supplied = &mass
+			}
+		}
 		if _, skip := excluded[key]; skip {
 			pairCfg.Excluded = []BodyPair{canonical}
 		}
@@ -216,6 +250,9 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 	if reference == nil {
 		return nil, fmt.Errorf("%w: three-body world has no response pair", ErrUnsupported)
 	}
+	if w.three.dynamicCount == 2 {
+		return w.stepThreeTwoDynamic(ctx, from, input, dt, reference)
+	}
 	loads, err := reference.validateLoads(input.Loads)
 	if err != nil {
 		return nil, err
@@ -228,8 +265,10 @@ func (w *World) stepThreeBodies(ctx context.Context, from State, input StepInput
 		return w.threeUndecided(referenceKey, "force kick exceeds the velocity residual"), nil
 	}
 	kicked := withPairState(from, kickPair)
-	if report, handled, err := w.stepThreeSequential(ctx, from, kicked, input, loads, dt, reference); handled || err != nil {
-		return report, err
+	if w.three.dynamicCount == 1 {
+		if report, handled, err := w.stepThreeSequential(ctx, from, kicked, input, loads, dt, reference); handled || err != nil {
+			return report, err
+		}
 	}
 	active := -1
 	var simultaneous [3]*decad.SweepReport

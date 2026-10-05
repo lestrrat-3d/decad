@@ -12,7 +12,7 @@ import (
 )
 
 // A threeTraceSlice is a drift between two consecutive event boundaries.
-// Both rounded pair reports must certify the same pose of the shared body.
+// Rounded pair reports must agree on the pose of each shared body.
 type threeTraceSlice struct {
 	start, end units.Value
 	from, to   State
@@ -64,8 +64,28 @@ func (tr Trace) sampleThreeSlices(t units.Value, timeValue *big.Rat) (State, err
 			if pose, seen := poses[entry.Body]; seen {
 				entry.Pose = pose
 				state = withBodyState(state, entry)
-			} else if entry.Body == tr.start.world.three.parts[tr.start.world.three.dynamic].Body {
+				continue
+			}
+			if tr.start.world.three.dynamicCount == 1 &&
+				entry.Body == tr.start.world.three.parts[tr.start.world.three.dynamic].Body {
 				return State{}, fmt.Errorf("%w: moving body has no replay proof", ErrUnsupported)
+			}
+			if tr.start.world.three.dynamicCount == 2 {
+				for key, indices := range threePairs {
+					inPair := tr.start.world.three.parts[indices[0]].Body == entry.Body ||
+						tr.start.world.three.parts[indices[1]].Body == entry.Body
+					if inPair && slice.proofs[key] == nil &&
+						!threePairExcluded(tr.start.world.three.excluded,
+							tr.start.world.three.parts, indices) {
+						return State{}, fmt.Errorf("%w: moving pair has no replay proof", ErrUnsupported)
+					}
+				}
+				advanced, err := tr.start.world.threeDriftState(slice.from, t.Base()-slice.start.Base())
+				if err != nil {
+					return State{}, fmt.Errorf("%w: excluded replay pose is not finite: %v", ErrUnsupported, err)
+				}
+				replayed, _ := advanced.Body(entry.Body)
+				state = withBodyState(state, replayed)
 			}
 		}
 		return state, nil
@@ -91,30 +111,42 @@ func (w *World) sequentialBoxCandidate(sweep *decad.SweepReport) bool {
 	return true
 }
 
+func (w *World) sequentialCandidate(sweep *decad.SweepReport) bool {
+	if w.three.dynamicCount == 1 {
+		return w.sequentialBoxCandidate(sweep)
+	}
+	return sweep != nil && sweep.Outcome == decad.SweepImpactBracket &&
+		sweep.Bracket != nil && sweep.Event != nil &&
+		sweep.Event.Manifold != nil && len(sweep.Event.Manifold.Points) != 0
+}
+
 // stepThreeSequential uses the existing pair response for each event but
-// commits only its certified prefix. Every new event restarts both world pairs.
-// The second result says whether this narrow box path owned the input.
+// commits only its certified prefix. Every new event restarts all active pairs.
+// The second result says whether this path owned the input.
 func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 	input StepInput, loads [2]*BodyLoad, dt units.Value, reference *World) (*StepReport, bool, error) {
-	var keys [2]int
-	n := 0
+	keys := make([]int, 0, 3)
 	for key, pair := range w.three.pairs {
 		if pair == nil {
 			continue
 		}
 		if threePairExcluded(w.three.excluded, w.three.parts, threePairs[key]) {
+			if w.three.dynamicCount == 1 {
+				return nil, false, nil
+			}
+			continue
+		}
+		if w.three.dynamicCount == 1 &&
+			(pair.friction.lower.Sign() != 0 || pair.friction.upper.Sign() != 0) {
 			return nil, false, nil
 		}
-		if pair.friction.lower.Sign() != 0 || pair.friction.upper.Sign() != 0 {
+		if w.three.dynamicCount == 1 &&
+			(pair.restitution.Base() <= 0 || w.step.ImpactSpeed.Base() != 0) {
 			return nil, false, nil
 		}
-		if pair.restitution.Base() <= 0 || w.step.ImpactSpeed.Base() != 0 {
-			return nil, false, nil
-		}
-		keys[n] = key
-		n++
+		keys = append(keys, key)
 	}
-	if n != 2 {
+	if w.three.dynamicCount == 1 && len(keys) != 2 {
 		return nil, false, nil
 	}
 	for _, entry := range kicked.Entries() {
@@ -135,7 +167,7 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 		case decad.SweepClear:
 		case decad.SweepUndecided:
 		case decad.SweepImpactBracket:
-			if !w.sequentialBoxCandidate(sweep) {
+			if !w.sequentialCandidate(sweep) {
 				return nil, false, nil
 			}
 			anyImpact = true
@@ -143,7 +175,7 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 			return nil, false, nil
 		}
 	}
-	if !anyImpact {
+	if !anyImpact && w.three.dynamicCount == 1 {
 		return nil, false, nil
 	}
 	for key, indices := range threePairs {
@@ -198,7 +230,8 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 			if sweep.Outcome == decad.SweepUndecided {
 				continue
 			}
-			if !w.sequentialBoxCandidate(sweep) {
+			if !w.sequentialCandidate(sweep) ||
+				w.three.dynamicCount == 2 && w.three.pairs[key].restitution.Base() <= 0 {
 				return w.threeUndecided(key, "sequential pair has no supported first impact"), true, nil
 			}
 			right := new(big.Rat).Mul(exactBase(sweep.Bracket.To.Fraction), exactBase(remaining))
@@ -219,6 +252,12 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 				return report, true, stepErr
 			}
 			end := withPairState(current, endPair)
+			if w.three.dynamicCount == 2 {
+				end, err = w.threeDriftState(current, remaining.Base())
+				if err != nil {
+					return w.threeUndecided(-1, "final three-body drift pose is not finite"), true, nil
+				}
+			}
 			proofs, ok, err := w.threeSequentialProofs(ctx, keys, current, end, remaining, policy, -1, nil)
 			if err != nil {
 				return nil, true, err
@@ -229,9 +268,16 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 			slices = append(slices, threeTraceSlice{start: at, end: dt, from: current, to: end, proofs: proofs})
 			trace := Trace{start: from, end: end, duration: dt,
 				threeSlices: slices, threeEvents: boundaries}
-			conservation, ok := w.threeSequentialConservation(reference, from, kicked, end,
-				trace, events, input.Gravity, loads, dt)
-			if !ok {
+			var conservation StepConservation
+			var valid bool
+			if w.three.dynamicCount == 2 {
+				conservation, valid = w.threeTwoDynamicConservation(from, kicked, end, trace,
+					events, input, dt)
+			} else {
+				conservation, valid = w.threeSequentialConservation(reference, from, kicked, end,
+					trace, events, input.Gravity, loads, dt)
+			}
+			if !valid {
 				return w.threeUndecided(-1, "sequential conservation cannot be bounded"), true, nil
 			}
 			return &StepReport{Status: Advanced, Next: &end, Events: events,
@@ -302,7 +348,14 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 			return w.threeUndecided(selected, "adjusted event time is outside the step"), true, nil
 		}
 		pre := withPairState(current, child.Trace.pre)
-		post := withPairState(current, child.Trace.post)
+		if w.three.dynamicCount == 2 {
+			pre, err = w.threeDriftState(current, localAt.Base())
+			if err != nil {
+				return w.threeUndecided(selected, "event three-body drift pose is not finite"), true, nil
+			}
+			pre = withPairState(pre, child.Trace.pre)
+		}
+		post := withPairState(pre, child.Trace.post)
 		proofs, ok, err := w.threeSequentialProofs(ctx, keys, current, pre,
 			localAt, policy, selected, child.Trace.preSweep)
 		if err != nil {
@@ -350,8 +403,15 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 	}
 	trace := Trace{start: from, end: current, duration: dt,
 		threeSlices: slices, threeEvents: boundaries}
-	conservation, ok := w.threeSequentialConservation(reference, from, kicked, current,
-		trace, events, input.Gravity, loads, dt)
+	var conservation StepConservation
+	var ok bool
+	if w.three.dynamicCount == 2 {
+		conservation, ok = w.threeTwoDynamicConservation(from, kicked, current, trace,
+			events, input, dt)
+	} else {
+		conservation, ok = w.threeSequentialConservation(reference, from, kicked, current,
+			trace, events, input.Gravity, loads, dt)
+	}
 	if !ok {
 		return w.threeUndecided(-1, "sequential conservation cannot be bounded"), true, nil
 	}
@@ -359,7 +419,7 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 		Excluded: w.Excluded(), Trace: trace, Conservation: &conservation}, true, nil
 }
 
-func (w *World) threeSequentialProofs(ctx context.Context, keys [2]int,
+func (w *World) threeSequentialProofs(ctx context.Context, keys []int,
 	start, end State, duration units.Value, policy [3]decad.SweepStartPolicy,
 	impact int, impactPrefix *decad.SweepReport) ([3]*decad.SweepReport, bool, error) {
 	var proofs [3]*decad.SweepReport
