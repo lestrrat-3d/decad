@@ -23,11 +23,11 @@ Face. Rounded replay checks the exact support-plane path and footprint proof.
 Two source semicircle spheres certify affine first impact
 through exact squared-distance motion, including transverse crossing, and
 separating departure. Their exact isolated interior tangent publishes a
-bounded point with strict separation on both sides. A stationary touching
-source-sphere pair certifies a full-span point track. Rotating source-box
-rigid drifts can also certify a clear path or bracket an impact after exact
-oriented-box pose relations, a bounded float-to-ideal pose difference, and whole-body
-travel bounds. An initial source-box face touch also certifies immediate
+bounded point with strict separation on both sides. A touching source-sphere
+pair with equal exact affine displacement certifies a full-span point track.
+Rotating source-box rigid drifts can also certify a clear path or bracket an
+impact after exact oriented-box pose relations, a bounded float-to-ideal pose
+difference, and whole-body travel bounds. An initial source-box face touch also certifies immediate
 departure when both bodies have the same angular velocity and the bounded
 normal separation rate is positive. Fixed oblique poses of co-oriented source
 boxes also certify initial face touch and a persistent face patch when both
@@ -351,13 +351,14 @@ touching or overlapping right endpoint, and width at most `TimeResolution`.
 Find a hidden pass-through before reporting clear. An unrepresentable shallow
 overlap returns `SweepUndecided`. An exact isolated tangent can use §4.5.1;
 other tangent paths remain undecided. The bounded
-center-line source manifold gate applies at the right sample. A stationary
-zero-gap touch with both exact affine displacements zero and one bounded
-source point publishes a full-span track. Its exact center-distance
-polynomial is identically zero. Both endpoint samples must retain the same
-source faces. An interior track query reduces the cached sphere pair to its
-bounded point manifold. Replay requires exact touch of the rounded pair.
-Any nonzero displacement remains undecided for persistent continuation.
+center-line source manifold gate applies at the right sample. A zero-gap touch
+with equal exact affine displacements and one bounded source point publishes a
+full-span track. Its exact center-distance polynomial is identically zero.
+Both endpoint samples must retain the same source faces. An interior track
+query translates both cached spheres by their common exact displacement and
+reduces them to a bounded point manifold. Replay requires exact touch of the
+rounded pair. Unequal displacements remain undecided for persistent
+continuation.
 
 ### 4.5.1 Isolated sphere-pair graze
 

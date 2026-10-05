@@ -452,16 +452,15 @@ func (r *sourceSpherePairSweepRun) transverse(ctx context.Context, first *SweepS
 	return r.report, nil
 }
 
-// A stationary source pair has a constant exact center-distance polynomial.
-// The initial certified point and its source faces therefore describe the
-// complete touching set at every fraction of the requested span.
-func (r *sourceSpherePairSweepRun) stationaryTrack(first *SweepSample) *SweepContactTrack {
+// Equal source-sphere displacements keep the exact center-distance polynomial
+// constant. The initial point and source faces then describe every fraction.
+func (r *sourceSpherePairSweepRun) persistentTrack(first *SweepSample) *SweepContactTrack {
 	if first.Ideal.Relation != ContactTouching || first.Ideal.Manifold == nil ||
 		len(first.Ideal.Manifold.Points) != 1 {
 		return nil
 	}
 	for i := range 3 {
-		if !r.pa.delta[i].isZero() || !r.pb.delta[i].isZero() {
+		if dyCmp(r.pa.delta[i], r.pb.delta[i]) != 0 {
 			return nil
 		}
 	}
@@ -474,6 +473,7 @@ func (r *sourceSpherePairSweepRun) stationaryTrack(first *SweepSample) *SweepCon
 	return &SweepContactTrack{
 		start: new(big.Rat), end: big.NewRat(1, 1), duration: new(big.Rat).Set(r.pa.duration),
 		request: r.req.ContactRequest, spherePair: &pair,
+		deltaA: r.pa.delta, deltaB: r.pb.delta,
 		features: [2]ContactFeature{point.FeatureA, point.FeatureB}, normal: point.Normal,
 		pointCount: 1,
 	}
@@ -504,7 +504,7 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 			return r.report, nil
 		}
 		if r.req.StartPolicy == ContinueCertifiedTouch {
-			if track := r.stationaryTrack(first); track != nil {
+			if track := r.persistentTrack(first); track != nil {
 				last, err := r.sample(ctx, one)
 				if errors.Is(err, errSweepPoseBudget) {
 					return r.undecided(zero, one, SweepPoseBudget), nil

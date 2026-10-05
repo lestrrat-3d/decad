@@ -187,8 +187,13 @@ func (t *SweepContactTrack) ManifoldAt(fraction units.Value) (*ContactManifold, 
 		return report.Manifold, nil
 	}
 	if t.spherePair != nil {
+		a, okA := translatedSphere(t.spherePair[0], t.deltaA, f)
+		b, okB := translatedSphere(t.spherePair[1], t.deltaB, f)
+		if !okA || !okB {
+			return nil, fmt.Errorf("%w: sphere-pair contact-track fraction cannot be represented", ErrUnsupported)
+		}
 		report := &ContactReport{Request: t.request}
-		classifySourceSpherePair(report, t.spherePair[0], t.spherePair[1])
+		classifySourceSpherePair(report, a, b)
 		if report.Relation != ContactTouching || report.Manifold == nil ||
 			len(report.Manifold.Points) != 1 ||
 			report.Manifold.Points[0].FeatureA != t.features[0] ||

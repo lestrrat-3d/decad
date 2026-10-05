@@ -279,8 +279,15 @@ func (r *SweepReport) certifiedSpherePairPosesAtFraction(f *big.Rat, poseA, pose
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded sphere-pair departure loses its gap", ErrUnsupported)
 		}
 	case SweepPersistentTouch:
-		if p.track == nil || idealRelation != 0 || actualRelation != 0 || deviation.Sign() != 0 {
+		if p.track == nil || idealRelation != 0 || actualRelation != 0 {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair replay loses its exact touch", ErrUnsupported)
+		}
+		contact := &ContactReport{Request: p.request}
+		classifySourceSpherePair(contact, actualA, actualB)
+		if contact.Manifold == nil || len(contact.Manifold.Points) != 1 ||
+			contact.Manifold.Points[0].FeatureA != p.track.features[0] ||
+			contact.Manifold.Points[0].FeatureB != p.track.features[1] {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded sphere-pair point is unproved", ErrUnsupported)
 		}
 	case SweepImpactBracket:
 		if p.bracketLo == nil || p.bracketHi == nil {
