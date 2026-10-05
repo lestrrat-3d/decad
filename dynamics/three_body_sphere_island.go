@@ -114,7 +114,8 @@ func (w *World) stepThreeSphereIsland(ctx context.Context, from, kicked State,
 	}
 	spinStep := w.step
 	spinStep.AngularVelocityResidual = angularBudget
-	totalTravel, totalPointSpeed, totalTwiceEnergy := new(big.Rat), new(big.Rat), new(big.Rat)
+	totalTravel, totalPointSpeed := new(big.Rat), new(big.Rat)
+	spins := make([]sphereOmittedBounds, 0, len(contacts))
 	for i := range contacts {
 		contacts[i].impulse = impulse[i]
 		if impulse[i] == 0 {
@@ -132,9 +133,11 @@ func (w *World) stepThreeSphereIsland(ctx context.Context, from, kicked State,
 		}
 		totalTravel.Add(totalTravel, spin.travel)
 		totalPointSpeed.Add(totalPointSpeed, spin.pointSpeed)
-		totalTwiceEnergy.Add(totalTwiceEnergy, spin.twiceEnergy)
+		spins = append(spins, spin)
 	}
-	if totalTravel.Cmp(exactBase(w.step.Contact.PointResolution)) > 0 ||
+	totalAngularSpeed, totalTwiceEnergy, spinOK := sphereIslandCombinedSpin(mass, spins)
+	if !spinOK || totalAngularSpeed.Cmp(exactBase(w.step.AngularVelocityResidual)) > 0 ||
+		totalTravel.Cmp(exactBase(w.step.Contact.PointResolution)) > 0 ||
 		totalTravel.Cmp(exactBase(w.step.PenetrationResidual)) > 0 ||
 		!sphereIslandSpinWithin(after, contacts, impulse, totalPointSpeed,
 			totalTwiceEnergy, w.step) {
@@ -415,6 +418,25 @@ func sphereIslandEnergyWithin(before, after r3.Vec, mass, massBound,
 	gain := new(big.Rat).Mul(upperMass, difference)
 	gain.Quo(gain, big.NewRat(2, 1))
 	return gain.Cmp(allowance) <= 0
+}
+
+// The two torque bounds act on the same body. Their angular speeds add before
+// the inertia ceiling is applied; summing separate energies loses the cross term.
+func sphereIslandCombinedSpin(mass decad.MassProperties,
+	spins []sphereOmittedBounds) (*big.Rat, *big.Rat, bool) {
+	upper := inertiaRowCeiling(mass.Inertia)
+	if upper == nil {
+		return nil, nil, false
+	}
+	angular := new(big.Rat)
+	for _, spin := range spins {
+		if spin.angularSpeed == nil || spin.angularSpeed.Sign() < 0 {
+			return nil, nil, false
+		}
+		angular.Add(angular, spin.angularSpeed)
+	}
+	twiceEnergy := new(big.Rat).Mul(upper, new(big.Rat).Mul(angular, angular))
+	return angular, twiceEnergy, true
 }
 
 func sphereIslandSpinWithin(after r3.Vec, contacts []sphereIslandContact,

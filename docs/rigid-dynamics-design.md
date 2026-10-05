@@ -96,10 +96,13 @@ coefficients are zero. The two-normal solve checks all four active sets; a
 positive impulse requires zero post-contact normal speed within the velocity
 and normal bounds, while a zero impulse requires nonclosing speed. The shared
 mass interval, both normal bounds, and both omitted-spin bounds must fit the
-response residuals. Each active pair needs ideal and rounded full-span
+response residuals. Both torque bounds act on one body: add their angular
+speed bounds before squaring against its common inertia ceiling. Each active
+pair needs ideal and rounded full-span
 persistent-contact tracks. A separating pair needs ideal and rounded
 one-sided departure, and each endpoint must retain its certified relation.
-The trace checks both rounded pair certificates at every interior sample.
+The trace checks both rounded pair certificates at every interior sample and
+retains the after-kick velocity when no contact impulse occurs.
 The two ordered events describe arithmetic stages of one simultaneous solve.
 The combined momentum and kinetic-energy checks cover both impulses together;
 an intermediate stage can gain energy while the completed island loses it.

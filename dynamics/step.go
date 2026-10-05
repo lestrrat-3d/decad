@@ -146,9 +146,6 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 			return State{}, fmt.Errorf("%w: three-body trace has no world", ErrUnsupported)
 		}
 		state := tr.post
-		if !tr.hasEvent {
-			state = tr.start
-		}
 		poses := make(map[*decad.Body]r3.Transform, 3)
 		for key, sweep := range tr.threeSweeps {
 			if sweep == nil {

@@ -239,4 +239,21 @@ func TestThreeBodySphereFloorSphereCoupledInitialResponse(t *testing.T) {
 	midBall, ok = replayed.Body(ball)
 	require.True(t, ok)
 	require.InDelta(t, 5, midBall.Pose.Translation().Y, 1e-12)
+
+	gravity := zeroAcceleration()
+	gravity.Y = units.MillimetersPerSecondSquared(100)
+	noImpact, err := w.Step(t.Context(), *report.Next,
+		dynamics.StepInput{Gravity: gravity}, units.Seconds(.1))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, noImpact.Status, "%+v", noImpact.Diagnostics)
+	require.Empty(t, noImpact.Events)
+	noImpactBall, ok := noImpact.Next.Body(ball)
+	require.True(t, ok)
+	require.InDelta(t, 10, noImpactBall.LinearVelocity.Y.Base(), 1e-12)
+	replayed, err = noImpact.Trace.Sample(units.Seconds(.05))
+	require.NoError(t, err)
+	midBall, ok = replayed.Body(ball)
+	require.True(t, ok)
+	require.InDelta(t, 10, midBall.LinearVelocity.Y.Base(), 1e-12)
+	require.InDelta(t, .5, midBall.Pose.Translation().Y, 1e-12)
 }
