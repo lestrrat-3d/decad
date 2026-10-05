@@ -359,3 +359,23 @@ func TestThreeBodyStepReadsPairOverride(t *testing.T) {
 	require.InDelta(t, 25, endBox.LinearVelocity.Z.Base(), 1e-6)
 	require.InDelta(t, 2.5, endBox.Pose.Translation().Z, 2e-6)
 }
+
+// TestNewWorldAdmitsRotatedDensityBox feeds a box placed 30° about (1,1,1)
+// through density-derived mass into NewWorld, whose own validation re-proves
+// the published tensor positive (docs/multibody-dynamics-design.md §8.1).
+func TestNewWorldAdmitsRotatedDensityBox(t *testing.T) {
+	doc := decad.New()
+	floor := makeBox(t, doc, -50, -50, 50, 50, -10, 10)
+	box := makeBox(t, doc, 0, 0, 20, 10, 40, 30)
+	pose, err := r3.RotationAround(r3.NewVec(10, 5, 55), r3.NewVec(1, 1, 1), units.Degrees(30))
+	require.NoError(t, err)
+	turned, err := box.Placed(t.Context(), pose)
+	require.NoError(t, err)
+	mass, err := turned.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(0.001))
+	require.NoError(t, err)
+	// The rotation mixes the axes, so the consumer receives nonzero products.
+	require.Greater(t, math.Abs(mass.Inertia.XY.Value.Base()), mass.Inertia.XY.Bound.Base())
+	w := fixedBoxContactWorld(t, doc, floor, turned, 0)
+	require.Len(t, w.Bodies(), 2)
+	require.Equal(t, dynamics.Dynamic, w.Bodies()[1].Role)
+}

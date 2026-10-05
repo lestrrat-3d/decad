@@ -80,8 +80,9 @@ least one dynamic body; a world of four or more bodies builds its pair table
 and validates its step input, and `World.Step` returns `dynamics.Undecided`
 for it. Each dynamic body uses either density-derived mass and inertia or a complete
 caller-supplied bounded record. Density-derived properties currently cover
-source boxes, admitted untapered prisms, full source spheres, qualifying
-revolved cylinders, and verified faceted Booleans. Other payloads may need
+source boxes, admitted untapered prisms under any frame or rigid placement,
+full source spheres, qualifying revolved cylinders, and verified faceted
+Booleans. Other payloads may need
 supplied properties, but those properties cannot replace a missing contact
 proof.
 

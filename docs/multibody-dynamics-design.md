@@ -14,7 +14,7 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PR 1 has shipped. `dynamics.World` holds any number of bodies, the canonical pair table
+Current state: §13 PRs 1 and 7 have shipped. `dynamics.World` holds any number of bodies, the canonical pair table
 and per-pair material of §3.1, and the slice-backed `State` of §3.2. Its step resolves two bodies, or three
 bodies with one, two or three dynamic bodies and every other body fixed, through the closed-form responses
 `docs/rigid-dynamics-design.md` lists, and returns `Undecided` for a world of four or more bodies.
@@ -23,8 +23,8 @@ this document does not restate it. Every pair query is pairwise, no broad phase 
 fixed two- and three-body slots. The exact arithmetic every certificate below is stated in already exists
 as one package: `internal/proof` (`Dyadic`, `DyV3`, `RatInterval` and the float rounding bounds), which the
 root package imports today and which `dynamics` can import as well, since an `internal/` package is visible
-to every package of this module. §3.1 and §3.2 describe shipped code, except `State.cache` (§13 PR 8);
-everything else is design-only until the PR table in §13 says otherwise.
+to every package of this module. §3.1, §3.2, §8.1 and §8.2 describe shipped code, except `State.cache`
+(§13 PR 8); everything else is design-only until the PR table in §13 says otherwise.
 
 Navigation only; the named sections own the rules:
 
@@ -553,16 +553,24 @@ dynamic-mass §6 for that shape.
 
 ### 8.1 Prism with a non-cardinal frame or placement basis
 
-Analytic: frame-local `V, P, Q` from `momentSecondOrder` section moments as today, then `R S Rᵀ` with `R`
-the product of the placement and frame bases read as exact rationals. Widen each world component by the
-orthonormality defect `‖RᵀR − I‖_F` times the tensor's largest magnitude, outward. This lifts the
-`rotated box inertia is not yet certified` refusal in `mass_properties.go`.
+Analytic, in `mass_properties_rotated.go`: frame-local `V, P, Q` about `(0, 0, zm)`, `zm` the recorded mid
+level, from `momentSecondOrder` section moments; then `M I Mᵀ` with `M` the product of the placement and
+frame bases read as exact rationals. The reading is about the rigid rotation `Q` nearest `M` (its polar
+factor). With `d` the entrywise absolute sum of `MᵀM − I`, an upper bound on its Frobenius norm,
+`‖M − Q‖_F ≤ d`, so each world component widens outward by `3·d·(2+d)·m`, `m` the local tensor's
+largest magnitude. Tensor positivity is proved before rotation: the local Gershgorin lower bound must
+exceed the summed full widths of all nine published world entries, since a rotation keeps eigenvalues.
+Cardinal, undisplaced prisms keep the signed-permutation path in `mass_properties.go`.
 
 ### 8.2 Prism with positive `z0Delta`, `z1Delta` or `sectionDelta`
 
-Analytic plus an occupied-volume error `E = A_upper·sectionDelta + Area_cap_upper·(z0Delta + z1Delta)`,
-charged as `E`, `R·E`, `R²·E` per dynamic-mass §2.2. Phase 3's cap-blend and chamfer bodies need it;
-Phase 1 bodies have zero deltas.
+Analytic plus an occupied-volume error
+`E = SDA·(h + z0Delta + z1Delta) + A_upper·(z0Delta + z1Delta)`, `SDA` the section's
+`sectionDisplacementArea` over its walk count and proven perimeter, `h` the recorded height and
+`A_upper` the recorded area's upper end. It is charged as `E`, `R·E`, `R²·E` on `V`, each `P_i` and each
+`Q_ij` per dynamic-mass §2.2, `R` the larger of the section envelope plus `sectionDelta` and
+`h/2 + max(z0Delta, z1Delta)`. Phase 3's cap-blend and chamfer bodies need it; Phase 1 bodies have zero
+deltas.
 
 ### 8.3 Loft
 

@@ -3,7 +3,8 @@
 This document owns mass, center-of-mass, and inertia readings used by rigid
 dynamics. It supplies the mass gate in `docs/collision-dynamics-design.md` §2.
 The source-box query, bounded section-moment integration for admitted
-untapered prisms, full source-sphere integration, and full source-cylinder
+untapered prisms under any frame and rigid placement, including displaced
+section and level records, full source-sphere integration, and full source-cylinder
 integration for a revolved axis-incident rectangle are implemented. Faceted
 Boolean solids with verified occupied-volume bounds publish density-derived
 mass and inertia when their resulting volume and tensor intervals pass the
@@ -102,6 +103,9 @@ coordinate `z`, `∫u²dV = (z1-z0)∫u²dA`, `∫uzdV =
 axes. The corresponding `v` and `uv` terms follow the same rule. Holes use
 their recorded winding. `moments.go` already owns section moments through
 second order; this path must reuse that validated record and its bounds.
+`docs/multibody-dynamics-design.md` §8.1 owns the rotation of the local
+tensor through a non-cardinal frame or placement basis, and §8.2 the
+occupied-volume charge of a displaced section or level.
 
 A revolve requires section integrals through third polynomial order because
 the cylindrical Jacobian contributes one radius and a transverse second
