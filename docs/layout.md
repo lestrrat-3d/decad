@@ -178,6 +178,7 @@ to the byte budget.
 | `contact_oriented_patch.go` | Exact co-oriented oblique face patch, source faces, and bounded witnesses. See `docs/contact-geometry-design.md` §4. |
 | `contact_clipped_patch.go` | Exact horizontal clipping of one rotated source-box face against an axis-aligned face. See `docs/contact-geometry-design.md` §4. |
 | `contact_sphere.go` / `contact_sphere_sweep.go` | Sphere-box paths. See `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md`. |
+| `contact_cylinder.go` / `contact_cylinder_sweep.go` | Source-cylinder axial clear relation and affine sweep. See the contact designs. |
 | `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See the contact designs. |
 | `contact_sweep_replay.go` | Replays affine and clear rotating sweeps against their cached exact source geometry. See `docs/contact-sweep-design.md` §6. |
 | `clearance_degen.go` | Degeneracy tests. See `docs/clearance-design.md` §4/§5. |
