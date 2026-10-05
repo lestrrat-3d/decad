@@ -1,6 +1,7 @@
 package dynamics
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/lestrrat-3d/decad"
@@ -47,6 +48,68 @@ func (w *World) eventConservationFailure(event ContactEvent) string {
 			if hasAngular && angularPre[i] != angularPost[i] {
 				return "contact transition changes angular velocity"
 			}
+		}
+		return ""
+	}
+	if event.Kind == ContactGraze {
+		if normalImpulse.Sign() != 0 || len(event.Manifold.Points) != 1 ||
+			len(event.PointImpulses) != 1 || event.Solver != nil || !hasAngular ||
+			event.PositionChange != (r3.Vec{}) || event.PositionChangeA != (r3.Vec{}) ||
+			event.PositionChangeB != (r3.Vec{}) ||
+			event.Bracket.From.Fraction != event.Bracket.To.Fraction ||
+			event.Bracket.From.Elapsed != event.Bracket.To.Elapsed ||
+			event.Time.Kind() != units.Time || !finite(event.Time.Base()) || event.Time.Base() <= 0 {
+			return "grazing event has invalid zero-impulse state"
+		}
+		point := event.Manifold.Points[0]
+		if !finite(point.OnA.Value.X, point.OnA.Value.Y, point.OnA.Value.Z,
+			point.OnB.Value.X, point.OnB.Value.Y, point.OnB.Value.Z,
+			point.Normal.Value.X, point.Normal.Value.Y, point.Normal.Value.Z,
+			point.OnA.Bound.Base(), point.OnB.Bound.Base(), point.Normal.Bound.Base(),
+			point.NormalAngle.Base(), point.Separation.Value.Base(), point.Separation.Bound.Base()) ||
+			point.OnA.Bound.Base() < 0 || point.OnB.Bound.Base() < 0 ||
+			point.Normal.Bound.Base() < 0 || point.NormalAngle.Base() < 0 ||
+			point.Separation.Bound.Base() < 0 ||
+			point.OnA.Bound.Base() > w.step.Contact.PointResolution.Base() ||
+			point.OnB.Bound.Base() > w.step.Contact.PointResolution.Base() ||
+			point.Normal.Bound.Base()+point.NormalAngle.Base() > w.step.Contact.NormalResolution.Base() ||
+			math.Abs(point.Separation.Value.Base())+point.Separation.Bound.Base() >
+				w.step.PenetrationResidual.Base() {
+			return "grazing event manifold exceeds its bounds"
+		}
+		for _, component := range applied {
+			if component.Sign() != 0 {
+				return "grazing event has a tangent impulse"
+			}
+		}
+		pointImpulse := event.PointImpulses[0]
+		if pointImpulse.Normal.Kind() != units.Impulse ||
+			validateQuantityVec(pointImpulse.Tangent, units.Impulse) != nil ||
+			exactBase(pointImpulse.Normal) == nil || exactBase(pointImpulse.Normal).Sign() != 0 {
+			return "grazing event has a point impulse"
+		}
+		for axis := range 3 {
+			if exactBase(velocityComponent(pointImpulse.Tangent, axis)).Sign() != 0 {
+				return "grazing event has a point tangent impulse"
+			}
+		}
+		for i := range w.parts {
+			pre, post := eventBodyVelocities(event, i)
+			if validateQuantityVec(pre, units.Velocity) != nil ||
+				validateQuantityVec(post, units.Velocity) != nil || pre != post ||
+				angularPre[i] != angularPost[i] || !eventPoses[i].IsValid() ||
+				eventPoses[i].IsReflection() {
+				return "grazing event changes a body state"
+			}
+		}
+		reportBody := 1
+		if w.parts[1].definition.Role == Fixed {
+			reportBody = 0
+		}
+		selected, _ := eventBodyVelocities(event, reportBody)
+		if event.PreVelocity != event.PostVelocity || event.PreVelocity != selected ||
+			validateQuantityVec(event.PreVelocity, units.Velocity) != nil {
+			return "grazing event changes its reported velocity"
 		}
 		return ""
 	}

@@ -71,6 +71,7 @@ const (
 	SweepInitiallyTouching
 	SweepInitiallyOverlapping
 	SweepUndecided
+	SweepGrazingTouch
 )
 
 // SweepCause explains why a continuous claim was not proved.
@@ -86,6 +87,7 @@ const (
 	SweepContactUnsupported
 	SweepDepartureUnproved
 	SweepContactTrackUnproved
+	SweepEventUnrepresentable
 )
 
 // SweepInstant identifies a dyadic fraction of the requested duration.

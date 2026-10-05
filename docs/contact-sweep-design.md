@@ -11,10 +11,11 @@ separating departure. A full source cylinder certifies a clear axial path,
 first circular-face impact, and separating departure inside a source-box face.
 Two source semicircle spheres certify affine first impact
 through exact squared-distance motion, including transverse crossing, and
-separating departure. A stationary touching source-sphere pair certifies a
-full-span point track. Rotating source-box rigid drifts
-can also certify a clear path or bracket an impact after exact oriented-box
-pose relations, a bounded float-to-ideal pose difference, and whole-body
+separating departure. Their exact isolated interior tangent publishes a
+bounded point with strict separation on both sides. A stationary touching
+source-sphere pair certifies a full-span point track. Rotating source-box
+rigid drifts can also certify a clear path or bracket an impact after exact
+oriented-box pose relations, a bounded float-to-ideal pose difference, and whole-body
 travel bounds. An initial source-box face touch also certifies immediate
 departure when both bodies have the same angular velocity and the bounded
 normal separation rate is positive. Fixed oblique poses of co-oriented source
@@ -61,6 +62,7 @@ nor document. It returns the earliest **certifiable** outcome:
 | `SweepPersistentTouch` | The pair stays in certified touch throughout the step, with a stable source feature set and a bounded manifold track. |
 | `SweepContactTransitionBracket` | The pair starts touching and a bracket encloses the first change in contact features, patch structure, or departure from touch. The preceding contact track is certified. |
 | `SweepImpactBracket` | The clear prefix may follow a certified departure from initial touch. The left pose is separated and the right pose certifies touch or overlap. Width is at most `TimeResolution`. |
+| `SweepGrazingTouch` | One exact interior instant has certified touch. Both open sides of the closed step are strictly separated; no overlap or other touch occurs. |
 | `SweepInitiallyTouching` | Contact is certified at time zero. It says nothing about closing velocity or a later impact. |
 | `SweepInitiallyOverlapping` | Interior overlap is certified at time zero. |
 | `SweepUndecided` | The available proof cannot establish one of the above. The earliest unresolved interval and a structured reason are returned. |
@@ -334,8 +336,9 @@ center distance minus squared radius sum over the held affine path. Its minimum
 proves a full clear span or locates the earliest possible impact. Search the
 decreasing side with dyadic fractions; require a separated left endpoint, a
 touching or overlapping right endpoint, and width at most `TimeResolution`.
-Find a hidden pass-through before reporting clear. A tangent and an
-unrepresentable shallow overlap return `SweepUndecided`. The bounded
+Find a hidden pass-through before reporting clear. An unrepresentable shallow
+overlap returns `SweepUndecided`. An exact isolated tangent can use §4.5.1;
+other tangent paths remain undecided. The bounded
 center-line source manifold gate applies at the right sample. A stationary
 zero-gap touch with both exact affine displacements zero and one bounded
 source point publishes a full-span track. Its exact center-distance
@@ -343,6 +346,44 @@ polynomial is identically zero. Both endpoint samples must retain the same
 source faces. An interior track query reduces the cached sphere pair to its
 bounded point manifold. Replay requires exact touch of the rounded pair.
 Any nonzero displacement remains undecided for persistent continuation.
+
+### 4.5.1 Isolated sphere-pair graze
+
+For a separated affine source-sphere pair, form the exact rational polynomial
+`q(s) = |(centerB−centerA) + s(deltaB−deltaA)|² − (radiusA+radiusB)²`
+from the held source centers, radii, and translations. Publish
+`SweepGrazingTouch` only when its quadratic coefficient is positive, its
+discriminant is exactly zero, and its sole minimum `s*` is strictly inside
+`(0,1)`. Prove `q(0)>0` and `q(1)>0`. These facts prove `q(s)>0` on both open
+sides of `s*` and `q(s*)=0`; separated endpoint samples alone do not prove it.
+The same source-sphere pair proof must classify the exact minimum as touching
+with one bounded point manifold. The manifold's normal, source faces, and
+witness bounds pass §4.5's float-to-ideal transfer at the minimum.
+
+Require `s*` to have an exact finite `units.Scalar` representation and an
+exactly representable positive event time `Duration × s*` before publishing
+the outcome. The report keeps the private rational fraction even though its
+public `SweepInstant` uses `units.Value`. Evaluate the real `ContactPair` at
+`0`, `s*`, and `1`; require separated endpoints and a touching float pose at
+`s*` with the same source faces. A float overlap, missing manifold, or
+insufficient point or normal resolution makes the sweep `Undecided` with its
+earliest unresolved interval. `MaxPoseEvaluations` must fund all three poses;
+the request's existing minimum of two remains valid, but two poses cannot
+certify this outcome.
+Use `SweepEventUnrepresentable` when the exact fraction or event time cannot
+be published, `SweepPoseBudget` when a required pose cannot be evaluated,
+`SweepPoseRelation` when the float relation disagrees, and
+`SweepContactUnsupported` when the event manifold cannot be transferred.
+The unresolved interval contains `s*` and no later event is published.
+
+This outcome applies to affine `PoseSegment` and zero-angular-velocity
+`RigidDriftSegment` paths admitted by §4.5. It does not infer a graze for a
+rotating path, source-box pair, sphere-box pair, nonrepresentable minimum,
+initial touch, or final-instant touch. A positive quadratic minimum is
+`SweepClear`; a negative minimum enters the existing earliest-impact search.
+An initial touch follows §5.1, regardless of later motion. If a different
+pair kernel cannot prove the full two-sided relation, it returns
+`SweepUndecided` rather than this outcome.
 
 ### 4.6 Source-cylinder axial face path
 
@@ -400,8 +441,9 @@ clear prefix. For the first interval not certified clear:
 Continue only when an interval has become certified clear. If every interval
 becomes clear, return `SweepClear`, or `SweepDepartedClear` after a certified
 departure from initial touch. A tangential graze may have no overlap
-sample. It either receives a certified touching sample or leaves an undecided
-floor interval; separated samples alone cannot turn it into `Clear`.
+sample. The exact sphere-pair proof in §4.5.1 can publish
+`SweepGrazingTouch`; otherwise it leaves an undecided floor interval.
+Separated samples alone cannot turn it into `Clear`.
 If midpoint arithmetic cannot produce a distinct dyadic fraction, return
 `SweepUndecided` with `SweepFractionFloor`. The search never skips an earlier
 uncertified interval to publish a later collision as the first event.
@@ -524,12 +566,13 @@ state residual gates cover the bracket; otherwise the step is undecided.
 ```go
 type SweepOutcome int // Clear, DepartedClear, PersistentTouch,
                       // ContactTransitionBracket, ImpactBracket,
-                      // InitiallyTouching, InitiallyOverlapping, Undecided;
-                      // zero is invalid
+                      // InitiallyTouching, InitiallyOverlapping, Undecided,
+                      // GrazingTouch; zero is invalid
 
 type SweepCause int // None, PoseRelation, MissingBound, TimeFloor,
                     // FractionFloor, PoseBudget, ContactUnsupported,
-                    // DepartureUnproved, ContactTrackUnproved
+                    // DepartureUnproved, ContactTrackUnproved,
+                    // EventUnrepresentable
 
 type SweepInstant struct {
     Fraction units.Value // Dimensionless dyadic fraction, canonical time
@@ -580,7 +623,7 @@ type SweepReport struct {
     Bracket         *SweepInterval // ImpactBracket or ContactTransitionBracket
     Unresolved      *SweepInterval // only for Undecided
     InitialEvent    *SweepEvent // certified touch/overlap at time zero
-    Event           *SweepEvent // later impact, initial event, or transition right sample
+    Event           *SweepEvent // later impact, graze, initial event, or transition right sample
     Departure       *SweepDeparture // only after one-sided proof
     ContactTrack    *SweepContactTrack // complete certified touching prefix
     Cause           SweepCause     // only for Undecided
@@ -597,6 +640,16 @@ func (r *SweepReport) CertifiedPosesAtInterval(time, start, end units.Value) (r3
 
 `BracketEndsAtDuration` compares the producer's private exact bracket right
 fraction with one. The public `Fraction` may be rounded.
+
+For `SweepGrazingTouch`, `Event` is the exact interior touching sample.
+`Bracket`, `Unresolved`, `InitialEvent`, `Departure`, and `ContactTrack` are
+nil; `Cause` is `SweepNoCause`. `Samples` includes the separated start and end
+and the touching event in increasing fraction order. The outcome is not an
+impact bracket: it supplies no closing velocity and authorizes no impulse.
+Append its public enum value after `SweepUndecided` to preserve existing
+numeric values. Append `SweepEventUnrepresentable` after the existing cause
+values for the same reason. Reversing A and B keeps the same event fraction
+and reverses the bounded contact normal.
 
 `CertifiedPosesAt` evaluates the same float path used by the sweep at
 the requested elapsed time. For affine paths it checks the read float poses
@@ -617,6 +670,16 @@ event prefix. `CertifiedPosesAtInterval` maps exact held time values in a
 specified interval onto the certified spatial path. A dynamics trace uses
 its recorded event and step endpoints for that interval, avoiding a gap
 when the rounded sweep duration differs from their exact difference.
+For a grazing outcome, replay compares the exact squared center distance
+with the squared radius sum on the whole interval. At `s*`, both ideal and
+rounded squared center distances must equal the squared radius sum, and the
+rounded source faces must match the event. At every other fraction, both
+squared distances must be strictly greater than the squared radius sum, and
+the rounded center deviation must fit `PointResolution`. The cached
+quadratic establishes the ideal sign between queried times. If floating pose
+construction moves the rounded pair across or away from touch at `s*`, replay
+returns `ErrUnsupported`. The proof never turns a near graze into an exact
+event.
 For a clear rotating source-box drift, the report retains the sweep's exact
 source corners and ideal-path bounds. Replay checks the rounded oriented boxes
 with the exact separating-axis test. Their positive gap must exceed the total
@@ -704,7 +767,10 @@ Assert computed locations, brackets, and bounds, not only enum values.
 | A box starts under `From=Translation(100,0,0)` and moves 30 mm toward a wall at `x=125` | Swept boxes cannot exclude the wall. A slab beside the original rest box at `x=[20,30]` is excluded. |
 | A thin blade rotates while a small pin moves across its path | Coarse separated samples yield `SweepUndecided`; a finer resolution finds a bracket. Neither path may be replaced by endpoint relative interpolation. |
 | A drift has `v=(10,0,0) mm/s`, `ω=(0,0,π) rad/s`, and center at the origin | At `0.5 s`, its center is `(5,0,0)` and an initial point `(1,0,0)` reaches `(5,1,0)`. Endpoint screw interpolation disagrees. |
-| Initial cap touch, initial positive overlap, and a tangent graze | Touch and overlap return their distinct initial outcomes; the graze returns certified touch or `Undecided`, never `Clear` from samples. |
+| Initial cap touch, initial positive overlap, and an unsupported tangent graze | Touch and overlap return their distinct initial outcomes; the graze returns `Undecided`, never `Clear` from samples. |
+| Two radius-5 mm source spheres: A stays at `(0,0,0)`, B starts at `(20,10,0)` and moves `(-40,0,0)` mm in 1 s | The exact polynomial is `1600(s−1/2)²`; `SweepGrazingTouch` reports a bounded point at `s=1/2`, separated endpoints, no bracket, and full-span interior replay. Reverse pair order and compare event time and reversed normal. |
+| The same pair with B starting at `y=11`, `y=9`, or `y=10` and `x=20` moving to `x=0` at the final instant | The first path is `SweepClear`; the second enters impact search; the endpoint tangent remains `Undecided` in this increment. |
+| A graze with an event fraction or elapsed time that `units.Value` cannot represent exactly, a rounded event pose that loses exact touch, or a two-pose budget | Return `SweepUndecided` with the earliest interval and specific cause; never publish `SweepClear` or a false graze. |
 | A 10 mm box touches a fixed floor, then moves upward at `50 mm/s` for `0.1 s` | Default mode returns `InitiallyTouching`. `ContinueSeparatingTouch` returns `DepartedClear`, with a positive final gap enclosing `5 mm`. |
 | The same touching boxes slide tangentially while their face patches overlap | `ContinueSeparatingTouch` returns `Undecided`; `ContinueCertifiedTouch` returns `PersistentTouch` until the first patch-feature change. |
 | A top box starts at `x=[0,10]` on an equal fixed box, then slides `+5 mm/s` for `3 s` | The right-sided initial patch is admitted. `ContactTransitionBracket` encloses the edge exit at `2 s`; no earlier transition occurs. |

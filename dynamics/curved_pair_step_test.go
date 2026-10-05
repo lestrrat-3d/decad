@@ -51,6 +51,128 @@ func TestSourceSpherePairStationaryTouchStep(t *testing.T) {
 	require.Equal(t, decad.ContactTouching, contact.Relation)
 }
 
+func TestSourceSpherePairGrazingStep(t *testing.T) {
+	doc := decad.New()
+	fixed, moving := makeBall(t, doc), makeBall(t, doc)
+	startPose, err := r3.Translation(r3.Vec{X: 20, Y: 10})
+	require.NoError(t, err)
+	touchPose, err := r3.Translation(r3.Vec{Y: 10})
+	require.NoError(t, err)
+	velocity := dynamics.QuantityVec{X: units.MillimetersPerSecond(-40),
+		Y: units.MillimetersPerSecond(0), Z: units.MillimetersPerSecond(0)}
+	zero := zeroAngular(t)
+	duration := units.Seconds(1)
+	req := decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+		NormalResolution: units.Radians(1e-6)}
+	contact, err := doc.ContactPair(t.Context(), fixed, moving, r3.Identity(), touchPose, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, contact.Relation)
+	require.Len(t, contact.Manifold.Points, 1)
+	stationary := decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: duration}
+	path := decad.RigidDriftSegment{From: startPose, Center: startPose.Translation(),
+		LinearVelocity: velocity, AngularVelocity: zero, Duration: duration}
+	sweep, err := doc.SweepPair(t.Context(), fixed, moving, stationary, path,
+		decad.SweepRequest{ContactRequest: req, TimeResolution: units.Seconds(1e-9),
+			MaxPoseEvaluations: 128})
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepGrazingTouch, sweep.Outcome, "cause=%v", sweep.Cause)
+	require.Equal(t, units.Scalar(.5), sweep.Event.At.Fraction)
+	require.Nil(t, sweep.Bracket)
+
+	mass := exactSphereMass()
+	material := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}
+	config := dynamics.StepConfig{Contact: req, TimeResolution: units.Seconds(1e-9),
+		ContactSlop: units.Millimeters(1e-6), VelocityResidual: units.MillimetersPerSecond(1e-6),
+		AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+		ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+		PenetrationResidual:     units.Millimeters(1e-6), ImpactSpeed: units.MillimetersPerSecond(0),
+		MaxPoseEvaluations: 128, MaxIterations: 8, MaxEvents: 2}
+	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{{Body: fixed, Role: dynamics.Fixed, Material: material},
+			{Body: moving, Role: dynamics.Dynamic, Supplied: &mass, Material: material}},
+		Step: config,
+	})
+	require.NoError(t, err)
+	initial, err := w.NewState([]dynamics.BodyState{
+		{Body: fixed, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zero},
+		{Body: moving, Pose: startPose, LinearVelocity: velocity, AngularVelocity: zero},
+	})
+	require.NoError(t, err)
+	step, err := w.Step(t.Context(), initial, dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, step.Status, "%+v", step.Diagnostics)
+	require.Len(t, step.Events, 1)
+	require.Equal(t, dynamics.ContactGraze, step.Events[0].Kind)
+	require.Equal(t, units.Seconds(.5), step.Events[0].Time)
+	require.Equal(t, units.KilogramMillimetersPerSecond(0), step.Events[0].NormalImpulse)
+	final, ok := step.Next.Body(moving)
+	require.True(t, ok)
+	require.Equal(t, velocity, final.LinearVelocity)
+	require.Equal(t, r3.Vec{X: -20, Y: 10}, final.Pose.Translation())
+	for _, query := range []struct {
+		time units.Value
+		want r3.Vec
+	}{{units.Seconds(.25), r3.Vec{X: 10, Y: 10}},
+		{units.Seconds(.5), r3.Vec{Y: 10}},
+		{units.Seconds(.75), r3.Vec{X: -10, Y: 10}}} {
+		sampled, err := step.Trace.Sample(query.time)
+		require.NoError(t, err)
+		body, ok := sampled.Body(moving)
+		require.True(t, ok)
+		require.Equal(t, query.want, body.Pose.Translation())
+		require.Equal(t, velocity, body.LinearVelocity)
+	}
+	reversed, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{{Body: moving, Role: dynamics.Dynamic,
+			Supplied: &mass, Material: material},
+			{Body: fixed, Role: dynamics.Dynamic, Supplied: &mass, Material: material}},
+		Step: config,
+	})
+	require.NoError(t, err)
+	reversedInitial, err := reversed.NewState([]dynamics.BodyState{
+		{Body: moving, Pose: startPose, LinearVelocity: velocity, AngularVelocity: zero},
+		{Body: fixed, Pose: r3.Identity(), LinearVelocity: zeroVelocity(), AngularVelocity: zero},
+	})
+	require.NoError(t, err)
+	reversedStep, err := reversed.Step(t.Context(), reversedInitial,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, reversedStep.Status, "%+v", reversedStep.Diagnostics)
+	require.Len(t, reversedStep.Events, 1)
+	require.Equal(t, dynamics.ContactGraze, reversedStep.Events[0].Kind)
+	require.Equal(t, r3.Vec{Y: -1}, reversedStep.Events[0].Manifold.Points[0].Normal.Value)
+	reversedMoving, ok := reversedStep.Next.Body(moving)
+	require.True(t, ok)
+	require.Equal(t, velocity, reversedMoving.LinearVelocity)
+	rotatedFixed, err := r3.FromBasis(r3.Basis{EX: r3.Vec{X: -1},
+		EY: r3.Vec{Y: -1}, EZ: r3.Vec{Z: 1}}, r3.Vec{})
+	require.NoError(t, err)
+	rotatedMoving, err := r3.FromBasis(rotatedFixed.Basis(), r3.Vec{X: 20, Y: 10})
+	require.NoError(t, err)
+	rotatedWorld, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{{Body: fixed, Role: dynamics.Fixed, Material: material},
+			{Body: moving, Role: dynamics.Dynamic, Supplied: &mass, Material: material}},
+		Step: config,
+	})
+	require.NoError(t, err)
+	rotatedState, err := rotatedWorld.NewState([]dynamics.BodyState{
+		{Body: fixed, Pose: rotatedFixed, LinearVelocity: zeroVelocity(), AngularVelocity: zero},
+		{Body: moving, Pose: rotatedMoving, LinearVelocity: velocity, AngularVelocity: zero},
+	})
+	require.NoError(t, err)
+	rotatedStep, err := rotatedWorld.Step(t.Context(), rotatedState,
+		dynamics.StepInput{Gravity: zeroAcceleration()}, duration)
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, rotatedStep.Status, "%+v", rotatedStep.Diagnostics)
+	require.Len(t, rotatedStep.Events, 1)
+	require.Equal(t, dynamics.ContactGraze, rotatedStep.Events[0].Kind)
+	rotatedSample, err := rotatedStep.Trace.Sample(units.Seconds(.75))
+	require.NoError(t, err)
+	rotatedBody, ok := rotatedSample.Body(moving)
+	require.True(t, ok)
+	require.Equal(t, r3.Vec{X: -10, Y: 10}, rotatedBody.Pose.Translation())
+}
+
 func TestSourceSpherePairTransverseEndpointImpact(t *testing.T) {
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)

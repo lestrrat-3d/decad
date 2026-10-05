@@ -7,7 +7,9 @@ geometry results. A two-body world steps one pair with at least one dynamic
 body using density-derived or supplied mass. An axis-aligned
 certified contact normal determines the response component; tangent velocity
 continues through an oblique impact. Centered impacts of two dynamic bodies
-apply equal and opposite impulses.
+apply equal and opposite impulses. An affine source-sphere pair with one
+exact interior tangent advances with unchanged velocity, one zero-impulse
+contact event, and full-span trace replay.
 An initial frictionless, half-width offset face impact between two dynamic
 source boxes can produce equal Y spin. Four equal normal point impulses pass
 the bounded velocity, angular, energy, and momentum checks before a rotating
@@ -480,7 +482,73 @@ if the sweep transfers its bounds to the ideal path. If any gathered pair
 still has no adequate manifold, stop undecided. Recheck any pair whose bracket
 starts before the chosen time but whose upper time lies later; do not advance
 past a possible earlier contact. `MaxEvents` counts impacts and contact
-transitions. Reaching it with remaining time returns `Undecided` and no `Next`.
+transitions and grazing touches. Reaching it with remaining time returns
+`Undecided` and no `Next`.
+
+### Isolated grazing touch
+
+For exactly two non-excluded source-sphere bodies, with at least one dynamic
+body, no kinematic driver, zero effective friction, and zero angular velocity
+after the full-step kick, consume a `SweepGrazingTouch` only through its real
+`SweepPair` report. Require an interior `Event` with one bounded point
+manifold, exact representable event time, and a second full-step sweep of the
+rounded endpoint poses that also reports `SweepGrazingTouch` at the same
+exact published fraction. Both events must name the same source faces; their
+normal, witness, and separation readings must agree within the configured
+contact and residual bounds. The rounded event pose must equal the state's
+drift pose at that exact time. The full-step rounded certificate must replay
+that event pose and the final pose. A mismatch or a nonzero angular response
+returns `Undecided` with no `Next`.
+
+The relative contact-point normal speed must be certified as zero within
+`VelocityResidual` from the exact affine center paths and bounded event
+normal. Require its entire bounded interval to lie inside the residual;
+a nominal zero alone cannot pass. This gate prevents a shallow crossing or
+closing impact from using the zero-impulse path. Apply no impulse or position
+correction, and keep every body's pre-event linear and angular velocity
+unchanged. Restitution and `ImpactSpeed` do not select a response for this
+event because the exact two-sided path proves no penetration.
+
+Publish one `ContactEvent` with appended kind `ContactGraze`, the original
+world-order pair, the bounded rounded manifold, exact event time, and a
+zero-width `Bracket` whose two ends equal `SweepReport.Event.At`. Populate
+typed zero normal, tangent, and point impulses; leave `Solver` nil. Its
+pre/post velocities and poses are identical, and every position-change
+component is zero. This is an observable contact event, but it is not an
+impact or persistent constraint. It counts once against `MaxEvents`.
+In `eventConservationFailure`, check `ContactGraze` in a separate branch
+before the `ContactImpact` positive-impulse gate. Require exactly one bounded
+manifold point and one typed point-impulse record. Require exact zero in the
+aggregate normal and all tangent components, the point normal and all point
+tangent components, and every position-change component. Require valid,
+unchanged linear and angular velocities for both bodies, plus valid proper
+event poses. Before invoking this branch, `Step` compares each event pose with
+both trace states' poses at the event; pre-event and post-event poses must be
+identical. Reject a missing or invalid event pose, a non-nil solver report,
+or a change in any of these values. Only after these checks
+may the branch return success without the impact energy-gain calculation:
+the event's exact velocity and pose differences then give zero event energy,
+linear momentum, and angular momentum change for every admitted mass and
+inertia interval. `eventAppliedImpulse` must accept the graze's bounded
+manifold and return exact zero. The conservation report publishes typed zero
+contact impulse and no event energy change; the full-step force kick and drift
+are still accounted for normally.
+
+Keep the full-span rounded grazing sweep as a private trace certificate.
+`Trace.Sample` uses its `CertifiedPosesAtInterval` for every interior time on
+both sides of the event and returns the identical post-event state at the
+event time. At any other sampled time it requires strict rounded separation;
+at the event time it requires exact rounded touch. This path does not split
+the full-span quadratic into two independently classified slices. If a
+sample's float pose loses the certified relation, `Trace.Sample` returns
+`ErrUnsupported`. The completed `Next` state remains separated at `dt`.
+The next step starts from that state and performs a fresh sweep.
+
+Initial touch, endpoint touch, more than two bodies, a kinematic participant,
+spin, positive friction, a nonrepresentable event time, insufficient pose
+budget, or a rounded path without the same exact minimum remains
+`Undecided` on this path. Existing initial-contact, impact, exclusion, and
+clear-step paths keep their own outcomes.
 
 Advance poses along the same certified paths to the chosen upper time. That
 time is the numerical event time; the report retains the original bracket.
@@ -628,7 +696,8 @@ or new uncertain pair returns `Undecided`.
 
 ## Completion, conservation, and trace
 
-`ContactEvent.Kind` distinguishes `ContactImpact` from `ContactTransition`.
+`ContactEvent.Kind` distinguishes `ContactImpact`, `ContactTransition`, and
+`ContactGraze`.
 An impact carries a bounded manifold and a normal impulse. A separated
 contact transition carries its original bracket, the chosen right time,
 unchanged velocities, and zero impulse; its `Manifold` is empty because the
@@ -638,6 +707,8 @@ one typed impulse per cloned manifold point, and bounded solver residuals with
 the iteration count. A frictionless event and the centered static support
 event carry a typed zero tangent impulse; the static support has no joint
 solver report.
+An isolated graze carries its bounded touching point and exact event time,
+with zero-width bracket, typed zero impulses, and unchanged pre/post state.
 
 ```go
 type StepStatus int // Advanced, Undecided
@@ -708,9 +779,12 @@ checks every dynamic body's published velocity change
 against its signed aggregate normal and tangent impulse. It checks both ends
 of the body's held mass interval against `ImpulseResidual + massHigh ×
 VelocityResidual` on each component. A zero-impulse transition must preserve
-the published velocities exactly. Impacts also check kinetic
-energy at the event. For each body, the code first subtracts squared pre-event
-speed from squared post-event speed, then multiplies this one difference by
+the published velocities exactly. A `ContactGraze` separately requires zero
+aggregate and per-point impulses, identical pre/post velocities and poses,
+and zero position change before its event conservation check succeeds.
+Impacts also check kinetic energy at the event. For each body, the code first
+subtracts squared pre-event speed from squared post-event speed, then
+multiplies this one difference by
 the mass endpoint that gives the largest energy change. The allowed numerical
 gain is the sum, over each dynamic body and Cartesian component, of
 `(massHigh × VelocityResidual + ImpulseResidual) ×
@@ -746,6 +820,8 @@ claim that an independently interpolated `PoseSegment` is clear.
 `Trace.Sample` evaluates clear, departed, persistent-contact, and transition
 slices against each stored rounded sweep's cached source-box or source-sphere
 certificate.
+An isolated graze uses one full-span rounded sphere-pair certificate across
+both open sides and checks exact touch at its event time.
 For an off-axis sphere-pair impact, the rounded impact prefix must reach its
 own certified bracket endpoint with the same source faces, bounded normal,
 and separation within `PenetrationResidual`. Interior trace samples before
@@ -794,6 +870,36 @@ These numeric checks apply to this discrete integrator; they are not
 certified bounds on real continuous-force motion.
 
 ## Verification
+
+The isolated-graze fixture uses two real radius-5 mm source spheres. A stays
+at `(0,0,0)` and B starts at `(20,10,0)` with velocity `(-40,0,0) mm/s`
+for `1 s`. Give B positive admitted mass and A either positive admitted mass
+or the fixed role. The real `ContactPair` at `0.5 s` must report touch with
+one bounded point; the real ideal and rounded `SweepPair` reports must both
+return `SweepGrazingTouch` at exact fraction `1/2`. `World.Step` must advance
+to B at `(-20,10,0)` with its velocity unchanged and one `ContactGraze`
+event at `0.5 s`. All event impulses and contact conservation impulses are
+typed zero. `Trace.Sample` before, at, and after `0.5 s` must return the
+certified poses and the same velocities; the event sample is touching and
+the other samples are separated. Repeat with A/B world order reversed and
+with two dynamic bodies to check the normal and momentum signs.
+
+A `y=11 mm` near miss must advance without an event after `SweepClear`; a
+`y=9 mm` crossing must enter impact response or return `Undecided`, never
+`ContactGraze`. Refuse a tangent at `t=0` or `t=dt` on this path, as well as
+any rounded endpoint path whose exact minimum differs from the ideal one.
+With a two-pose sweep budget or an event time that cannot be represented
+exactly, `Step` returns `Undecided` and `Next == nil`. A trace replay query
+whose rounded pose loses strict separation or exact event touch returns
+`ErrUnsupported`. The tests use the real source-body producer, sweep, world,
+and trace; they do not supply a hand-written event.
+Start from that real event and change one conservation field at a time: the
+aggregate normal or tangent impulse, the point normal or tangent impulse,
+one pre/post linear or angular velocity, one event or trace pose, and one
+position-change component. The `ContactGraze` conservation branch must reject
+each change. It must also reject a missing point-impulse record or a non-nil
+solver report. The unchanged real event must pass and publish zero event
+energy, momentum, and contact impulse.
 
 First use a real `decad` box with top `z=0 mm` and a dynamic `10×10×10 mm`
 box initially spanning `z=[10,20] mm`. Give the dynamic box density

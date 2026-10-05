@@ -33,6 +33,7 @@ type sweepReplayProof struct {
 	outcome                    SweepOutcome
 	bracketLo                  *big.Rat
 	bracketHi                  *big.Rat
+	grazingAt                  *big.Rat
 }
 
 func (p *sweepReplayProof) snapshot(r *SweepReport) {
@@ -53,7 +54,7 @@ func (r *SweepReport) HasAffineReplayProof() bool {
 	}
 	if r.replay.rotation == nil {
 		switch r.replay.outcome {
-		case SweepClear, SweepDepartedClear, SweepPersistentTouch,
+		case SweepClear, SweepDepartedClear, SweepPersistentTouch, SweepGrazingTouch,
 			SweepImpactBracket, SweepContactTransitionBracket:
 			return true
 		default:
@@ -290,6 +291,17 @@ func (r *SweepReport) certifiedSpherePairPosesAtFraction(f *big.Rat, poseA, pose
 		}
 		if f.Cmp(p.bracketHi) == 0 && (idealRelation > 0 || actualDistance2.Cmp(clearMargin) > 0) {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair impact right pose is not near contact", ErrUnsupported)
+		}
+	case SweepGrazingTouch:
+		if p.grazingAt == nil {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair graze lacks exact time", ErrUnsupported)
+		}
+		if f.Cmp(p.grazingAt) == 0 {
+			if idealRelation != 0 || actualRelation != 0 {
+				return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded sphere-pair graze loses exact touch", ErrUnsupported)
+			}
+		} else if idealRelation <= 0 || actualRelation <= 0 {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded sphere-pair graze loses separation", ErrUnsupported)
 		}
 	default:
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair outcome has no replay proof", ErrUnsupported)
@@ -606,7 +618,7 @@ func (r *SweepReport) replayFractionCovered(f *big.Rat) bool {
 		return r.replay.bracketLo != nil && f.Cmp(r.replay.bracketLo) <= 0
 	}
 	switch r.replay.outcome {
-	case SweepClear, SweepDepartedClear, SweepPersistentTouch:
+	case SweepClear, SweepDepartedClear, SweepPersistentTouch, SweepGrazingTouch:
 		return true
 	case SweepImpactBracket, SweepContactTransitionBracket:
 		return r.replay.bracketHi != nil && f.Cmp(r.replay.bracketHi) <= 0
