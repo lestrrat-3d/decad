@@ -16,6 +16,10 @@ type sweepReplayProof struct {
 	boxA, boxB             sourceBoxContactProof
 	sphere                 *sourceSphereContactProof
 	spherePair             *[2]sourceSphereContactProof
+	cylinder               *sourceCylinderContactProof
+	cylinderFirst          bool
+	clearAxis, clearSign   int
+	clearGap               *big.Rat
 	sphereFirst            bool
 	sphereAxis, sphereSide int
 	sphereGap, sphereSlope dyadic
@@ -37,7 +41,8 @@ func (p *sweepReplayProof) setBracket(left, right *big.Rat) {
 }
 
 // HasAffineReplayProof reports whether this sweep can certify rounded poses
-// along an affine source-box, source-sphere, or oriented face-track path.
+// along an affine source-box, source-sphere, source-cylinder clear, or oriented
+// face-track path.
 func (r *SweepReport) HasAffineReplayProof() bool {
 	if r == nil || r.replay == nil {
 		return false
@@ -115,6 +120,9 @@ func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Tra
 	if r.replay.sphere != nil {
 		return r.certifiedSpherePosesAtFraction(f, poseA, poseB)
 	}
+	if r.replay.cylinder != nil {
+		return r.certifiedCylinderPosesAtFraction(f, poseA, poseB)
+	}
 	if r.replay.spherePair != nil {
 		return r.certifiedSpherePairPosesAtFraction(f, poseA, poseB)
 	}
@@ -136,6 +144,32 @@ func (r *SweepReport) certifiedPosesAtFraction(f *big.Rat) (r3.Transform, r3.Tra
 	classifySourceBoxes(contact, actualA, actualB)
 	if !r.replayRelationCovered(f, contact.Relation, actualA, actualB, resolution) {
 		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded replay pose changes the certified relation", ErrUnsupported)
+	}
+	return poseA, poseB, nil
+}
+
+func (r *SweepReport) certifiedCylinderPosesAtFraction(f *big.Rat, poseA, poseB r3.Transform) (
+	r3.Transform, r3.Transform, error) {
+	p := r.replay
+	actualA, okA := translatedReplayBox(p.boxA, p.pa.from, poseA)
+	actualB, okB := translatedReplayBox(p.boxB, p.pb.from, poseB)
+	if !okA || !okB {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder replay pose is not affine", ErrUnsupported)
+	}
+	resolution, ok := exactBaseValue(p.request.PointResolution)
+	if !ok || p.clearGap == nil || p.clearGap.Cmp(resolution) <= 0 {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder replay has no clear margin", ErrUnsupported)
+	}
+	deviation := boxPoseDeviation(p.boxA, actualA, p.pa.delta, f)
+	deviation.Add(deviation, boxPoseDeviation(p.boxB, actualB, p.pb.delta, f))
+	actualCylinder, actualBox := actualB, actualA
+	if p.cylinderFirst {
+		actualCylinder, actualBox = actualA, actualB
+	}
+	if deviation.Cmp(resolution) > 0 ||
+		!cylinderInsideBoxFace(actualCylinder, actualBox, p.clearAxis) ||
+		!outerBoxGapExceeds(actualA, actualB, p.clearAxis, p.clearSign, deviation) {
+		return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: cylinder replay loses its separated outer boxes", ErrUnsupported)
 	}
 	return poseA, poseB, nil
 }

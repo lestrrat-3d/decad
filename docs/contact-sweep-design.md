@@ -312,6 +312,23 @@ unrepresentable shallow overlap return `SweepUndecided`. The bounded
 center-line source manifold gate applies at the right sample. A zero-gap
 stationary touch has no continuous proof for continuation.
 
+### 4.6 Separated source-cylinder axial path
+
+For a full circular source prism and one source box at signed-axis poses,
+construct exact outer boxes from the source circle, axial limits, and recorded
+placements. Admit an affine clear sweep only when the cylinder's projected
+disk stays strictly inside the box face at both path endpoints. Check that
+one axial gap between the complete swept outer boxes exceeds
+`PointResolution`. The two endpoint `ContactPair` queries must also prove
+separation, and their rounded pose differences must fit `PointResolution`.
+An outer-box intersection, near gap, or lateral edge approach returns
+`SweepUndecided`; this path does not bracket a cylinder impact.
+
+Replay translates the cached source outer boxes with the held affine paths.
+At each requested fraction, the rounded cylinder projection must remain
+inside the rounded box face, the axial gap must exceed the rounded pose
+difference, and that difference must fit `PointResolution`.
+
 ## 5. Earliest-event search
 
 Evaluate time zero first unless swept-box exclusion has already proven the
@@ -521,7 +538,8 @@ fraction with one. The public `Fraction` may be rounded.
 
 `CertifiedPosesAt` evaluates the same float path used by the sweep at
 the requested elapsed time. For affine paths it checks the read float poses
-against the cached exact source boxes or spheres. The sphere-pair path keeps
+against the cached exact source boxes, spheres, or cylinder outer box.
+The sphere-pair path keeps
 both source centers, radii, exact translations, and impact bracket. At an
 arbitrary interior fraction it compares both rounded centers with their ideal
 rational centers, then checks the exact squared center distance against the

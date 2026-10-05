@@ -45,9 +45,9 @@ to the byte budget.
 | `docs/sweep-design.md` | `Path`/`Sweep` transport, refusals, topology, measurements, 3D-sketch boundary, `SweepChain` pairing, and reach. |
 | `docs/prism-boolean-design.md` | The analytic `Union`/`Cut`/`Intersect` reduction over co-directional coplanar or offset-plane prisms: reject-only entry gate, private `sketch` scene, displacement bounds. |
 | `docs/stacked-prism-design.md` | Stacked slabs, walls, measurements, mesh and consumers. |
-| `docs/tessellation-reach-design.md` | The tessellation reach plan: the loft restatement, free-form prism chording, revolve T2–T4 and the cap-loop chamfer tessellator, each with cells, proof terms, refusals and tests. |
+| `docs/tessellation-reach-design.md` | Tessellation reach for lofts, free-form prisms, revolves and cap-loop chamfers. |
 | `docs/surface-intersection-design.md` | `Trim`/`Extend`/`Split` over shared-generator sweeps: entry gate, private `sketch` scene, and cut bounds. |
-| `docs/surface-design.md` | The sheet body and its operations: `BodyKind`, `WithSurfaceResult`, `Patch`, `Stitch`/`Unstitch`, `ExtrudeChain`/`RevolveChain`, `Offset`, and what `Verify`/export say. |
+| `docs/surface-design.md` | Sheet bodies, surface operations, verification and export. |
 | `docs/motion-check-design.md` | `Document.VerifyMotion`: the `Motion` set, the per-pose pair proof, the interval certificate, and `MotionReport`. |
 | `docs/collision-dynamics-design.md` | Pair contact/sweep in decad and rigid response in `dynamics`. |
 | `docs/contact-geometry-design.md` | Pair relation and contact manifold proofs. |
@@ -64,8 +64,8 @@ to the byte budget.
 | `errors.go` | The core §12 sentinel errors, plus the H2 typed `BooleanError`, whose `Code` classifies failures wrapping `ErrBooleanFailed` or `ErrUnsupported`. See `docs/api-design.md` §12, §8. |
 | `measurement.go` | The bounded-result shapes: `Exactness`, `Measurement`, `VecMeasurement`, `Box`. See `docs/api-design.md` §5.3, §6. |
 | `identity.go` | Private document-local producer identities, the boolean evaluator's operation kind, and the shared zero-vector predicate. |
-| `record.go` | The profile-analysis records: `PlaneRecord`, `ProfileRecord`, `ChainRecord`, `LoopRecord` and the ten sealed `CurveSegment` variants; NURBS validation on its own functions. See `docs/sketch-seam-design.md` §2. |
-| `seam.go` | `RecordProfile`/`RecordChain`, `TExact` admission, and reject-only range and closure checks. See `docs/sketch-seam-design.md` §1, §7. |
+| `record.go` | Sketch profile, chain, loop and curve records; NURBS validation. See `docs/sketch-seam-design.md` §2. |
+| `seam.go` | `RecordProfile`/`RecordChain`, `TExact` admission and record checks. See `docs/sketch-seam-design.md` §1, §7. |
 | `path.go` | The immutable spatial `Path` and its sealed `LineTo` / `ArcThrough` segment vocabulary. See `docs/sweep-design.md` §2–§3. |
 | `extent.go` | Linear and angular extent types; `ToFace`/`ToFaceAngular` references. See `docs/api-design.md` §8.1. |
 | `selector.go` | Selectors: `EdgeQuery`/`FaceQuery`, predicate conjunction and `Exactly`/`AtLeast` cardinality, resolved by filtering live topology; a failure returns a `SelectionError`. See `docs/api-design.md` §9. |
@@ -84,7 +84,7 @@ to the byte budget.
 | `rat_interval.go` | The exact rational interval arithmetic every certified reading is proven in, plus the `atan`/`atan2` and π enclosures no single rational can state. See the file's doc comment. |
 | `moments_circular.go` | Exact rational arc/circle integration for `moments.go`'s boundary sums and `revolve_build.go`'s axis moment. See the file's doc comment. |
 | `spline_bezier.go` | The exact reduction of `docs/spline-design.md` §5.1: a recorded free-form curve to piecewise polynomial Bézier control points over `big.Rat`, with no rounding. Owns the §5.2 work-budget charges. |
-| `spline_length.go` | `docs/spline-design.md` §6.1: brackets a free-form curve's arc length between its chord and control polygon, narrowed by exact dyadic de Casteljau bisection to a fixed depth. |
+| `spline_length.go` | Bounded free-form arc length. See `docs/spline-design.md` §6.1. |
 | `spline_extreme.go` | `docs/spline-design.md` §6.2's Tier A directional-extreme bracket, reducing to `clearance_poly.go`'s root engine. See the file's doc comment. |
 | `spline_fit.go` | `docs/spline-design.md` §5.1.2's fit-spline reduction: converts a recorded `FitSplineSeg` into the same `bezierSpan` chain the other Tier A kinds produce. See the file's doc comment. |
 | `spline_moments.go` | The exact integration of `docs/spline-design.md` §5.1 over Bézier spans, reusing `clearance_poly.go`'s `ratPoly`. `addFreeform` feeds `moments.go`'s region-level rational accumulator. |
@@ -157,7 +157,7 @@ to the byte budget.
 | `capblend_moments.go` | `evalCapBlendContext` builds the cap-blend body and its bounded area/volume/centroid by closed-form per-patch integrals. See `docs/modify-reach-design.md` §8.4. |
 | `capblend_survey.go` | The cap-blend payload's undercut and minimum-radius surveys, per patch and over the receiver's unchanged profile. See `docs/modify-reach-design.md` §12 Table DX (DX7/DX8). |
 | `capblend_normal.go` | The certified half of DX7's circular-patch reading: a band patch's own exact normal-component model, enclosed over rational intervals. See the file's doc comment. |
-| `capblend_departure.go` | The proven bound on how far a band patch's BUILT ruled surface points away from the surface it publishes, measured in world space from the published corners, curves and tag. See the file's doc comment. |
+| `capblend_departure.go` | Bounds built band-patch departure from its published surface. See its doc comment. |
 | `capblend_admit.go` | Decides by exact rational tests whether `docs/tessellation-reach-design.md` §7's occupied-volume proof covers a cap-blend payload. |
 
 ### Verification and surveys
@@ -178,6 +178,7 @@ to the byte budget.
 | `contact_oriented_patch.go` | Exact co-oriented oblique face patch, source faces, and bounded witnesses. See `docs/contact-geometry-design.md` §4. |
 | `contact_clipped_patch.go` | Exact horizontal clipping of one rotated source-box face against an axis-aligned face. See `docs/contact-geometry-design.md` §4. |
 | `contact_sphere.go` / `contact_sphere_sweep.go` | Sphere-box paths. See `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md`. |
+| `contact_cylinder.go` / `contact_cylinder_sweep.go` | Source-cylinder axial clearance. See the contact designs. |
 | `contact_sphere_pair.go` / `contact_sphere_pair_sweep.go` | Sphere-pair contact and sweep. See the contact designs. |
 | `contact_sweep_replay.go` | Replays affine and clear rotating sweeps against their cached exact source geometry. See `docs/contact-sweep-design.md` §6. |
 | `clearance_degen.go` | Degeneracy tests. See `docs/clearance-design.md` §4/§5. |

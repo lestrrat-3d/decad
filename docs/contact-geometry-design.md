@@ -29,6 +29,13 @@ support. At identity query poses, the analytic clearance kernel can certify
 a relation for other admitted solids without a contact manifold. Other curved
 and faceted witness and normal proofs remain design contracts.
 
+A full circular source prism at a signed-axis pose can certify separation
+from a source box across one axial face. Its complete projected disk must lie
+strictly inside that box face. The source circle, prism extent, and placement
+produce an exact outer box, and the axial support gap is the true pair gap.
+An overlapping outer box, side approach, or projected disk reaching a face
+edge returns `Undecided`; this path publishes no cylinder manifold.
+
 Two full source semicircle spheres receive the exact relation proof from their
 recorded centers and radii. A nonzero center offset with crossing sphere
 surfaces publishes one bounded point manifold along the center line. Coincident
