@@ -10,7 +10,8 @@ import (
 )
 
 // sourceCylinderAxialSweep first tries full-span separation. Otherwise it
-// brackets a strictly axial face impact or proves one-sided departure.
+// brackets an axis-aligned face impact with contained lateral drift or proves
+// one-sided departure.
 func (d *Document) sourceCylinderAxialSweep(ctx context.Context, a, b *Body,
 	pa, pb affinePairPath, req SweepRequest, report *SweepReport,
 	cylinder sourceCylinderContactProof, box sourceBoxContactProof, cylinderFirst bool) (*SweepReport, error) {
@@ -39,6 +40,8 @@ func (d *Document) sourceCylinderAxialSweep(ctx context.Context, a, b *Body,
 	}
 	endCylinder := translatedAffineBox(startCylinder, cylinderDelta)
 	endBox := translatedAffineBox(startBox, boxDelta)
+	// Every transverse edge difference is affine. Strict containment at both
+	// endpoints therefore keeps the disk inside the same face for the full path.
 	if !cylinderInsideBoxFace(startCylinder, startBox, axis) ||
 		!cylinderInsideBoxFace(endCylinder, endBox, axis) {
 		return cylinderSweepUndecided(report, pa.duration), nil
@@ -236,11 +239,6 @@ func (r *sourceCylinderImpactRun) execute(ctx context.Context) (*SweepReport, er
 	cylinderDelta, boxDelta := r.pb.delta, r.pa.delta
 	if r.cylinderFirst {
 		cylinderDelta, boxDelta = r.pa.delta, r.pb.delta
-	}
-	for i := range 3 {
-		if i != r.axis && dyCmp(cylinderDelta[i], boxDelta[i]) != 0 {
-			return cylinderSweepUndecided(r.report, r.pa.duration), nil
-		}
 	}
 	switch {
 	case dyCmp(r.cylinder.box.lo[r.axis], r.box.hi[r.axis]) >= 0:

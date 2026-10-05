@@ -156,7 +156,7 @@ func TestCylinderSweepRefusesUnprovedCorridors(t *testing.T) {
 		lateral  float64
 	}{
 		{name: "below point resolution", start: 1e-7, velocity: 1},
-		{name: "lateral crossing", start: 1, velocity: -2, lateral: 1},
+		{name: "lateral edge exit", start: 1, velocity: -2, lateral: 16},
 		{name: "outside floor face", x: 30, start: 1, velocity: 1},
 		{name: "disk reaches face edge", x: 15, start: 1, velocity: -2},
 	} {
