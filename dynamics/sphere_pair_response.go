@@ -12,6 +12,14 @@ import (
 )
 
 func isObliqueSpherePairEvent(manifold *decad.ContactManifold) bool {
+	if !isSourceSpherePairEvent(manifold) {
+		return false
+	}
+	_, _, cardinal := axisNormal(manifold.Points[0].Normal.Value)
+	return !cardinal
+}
+
+func isSourceSpherePairEvent(manifold *decad.ContactManifold) bool {
 	if manifold == nil || len(manifold.Points) != 1 {
 		return false
 	}
@@ -25,8 +33,7 @@ func isObliqueSpherePairEvent(manifold *decad.ContactManifold) bool {
 	if _, ok := point.FaceB.Surface().(decad.Sphere); !ok {
 		return false
 	}
-	_, _, cardinal := axisNormal(point.Normal.Value)
-	return !cardinal
+	return true
 }
 
 func spherePairVelocity(v QuantityVec) r3.Vec {
