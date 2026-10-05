@@ -100,6 +100,12 @@ A zero-friction, zero-restitution pair uses the existing response.
 A separated pair can also resolve an interior positive-friction impact when its
 certified bracket contains an exact cardinal source-sphere touch at a dyadic
 time. Separate rounded prefix and rotating remainder sweeps certify replay.
+An off-axis XY source-sphere pair with exact centered isotropic supplied mass
+can also resolve an initial or exactly timed interior positive-friction impact.
+Its exact center offset and source radii determine the normal; the bounded
+contact and rounded witnesses must enclose that exact point and direction.
+The planar Coulomb response changes both linear velocities and Z spins.
+The rotating departure sweep certifies the remaining path and trace replay.
 An exactly orthogonal source box at a 45-degree Y pose also gives the sphere a
 bounded oblique point, an affine first-impact sweep, and a centered
 positive-restitution rebound with interior trace replay.

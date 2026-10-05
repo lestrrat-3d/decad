@@ -333,7 +333,13 @@ func (w *World) stepInteriorSpherePairFriction(ctx context.Context, from, kicked
 		initial.Event.Manifold.Points[0].FaceB != contact.Manifold.Points[0].FaceB {
 		return undecided(w, "sphere-pair friction impact changes its source point"), nil
 	}
-	report, err := w.stepInitialSpherePairFriction(ctx, contactState, contactState, remaining, initial)
+	var report *StepReport
+	if isObliqueSpherePairEvent(initial.Event.Manifold) {
+		report, err = w.stepInitialOffAxisSpherePairFriction(ctx,
+			contactState, contactState, remaining, initial)
+	} else {
+		report, err = w.stepInitialSpherePairFriction(ctx, contactState, contactState, remaining, initial)
+	}
 	if err != nil || report == nil || report.Status != Advanced {
 		return report, err
 	}
