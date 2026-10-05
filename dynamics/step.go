@@ -108,6 +108,7 @@ type Trace struct {
 	end                 State
 	preSweep            *decad.SweepReport
 	postSweep           *decad.SweepReport
+	rotationalPrefix    *decad.SweepReport
 	rotationalRemainder *decad.SweepReport
 	duration            units.Value
 	eventAt             units.Value
@@ -149,10 +150,17 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 		if timeValue.Cmp(eventValue) < 0 {
 			state = tr.pre
 			sliceEnd = tr.eventAt
+			if sweep == nil {
+				// The impact prefix is the original full-step rotating sweep.
+				sweep, sliceEnd = tr.rotationalPrefix, tr.duration
+			}
 		} else {
 			state = tr.post
 			sweep = tr.postSweep
 			sliceStart = tr.eventAt
+			if sweep == nil {
+				sweep = tr.rotationalRemainder
+			}
 		}
 	}
 	if tr.excluded {
@@ -736,6 +744,7 @@ func (w *World) stepKicked(ctx context.Context, from, kicked State, dt units.Val
 		eventAt: eventAt, hasEvent: true,
 		preSweep: roundedPrefix, postSweep: roundedContinuation}
 	if rotating {
+		report.Trace.rotationalPrefix = first
 		report.Trace.rotationalRemainder = continuation
 	}
 	return report, nil

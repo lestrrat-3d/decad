@@ -432,6 +432,10 @@ func (p *sweepReplayProof) sphereRelationCovered(f, ideal, observed, resolution 
 }
 
 func (r *SweepReport) replayFractionCovered(f *big.Rat) bool {
+	if r.replay.rotation != nil && r.replay.outcome == SweepImpactBracket {
+		// The producer proves clear intervals only through the left bracket edge.
+		return r.replay.bracketLo != nil && f.Cmp(r.replay.bracketLo) <= 0
+	}
 	switch r.replay.outcome {
 	case SweepClear, SweepDepartedClear, SweepPersistentTouch:
 		return true
