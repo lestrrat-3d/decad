@@ -10,6 +10,47 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSourceSpherePairStationaryTouchStep(t *testing.T) {
+	doc := decad.New()
+	fixed, moving := makeBall(t, doc), makeBall(t, doc)
+	pose, err := r3.Translation(r3.Vec{X: 10})
+	require.NoError(t, err)
+	mass := exactSphereMass()
+	mat := dynamics.Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
+	req := decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
+		NormalResolution: units.Radians(1e-6)}
+	w, err := dynamics.NewWorld(t.Context(), doc, dynamics.WorldConfig{
+		Bodies: []dynamics.RigidBody{{Body: fixed, Role: dynamics.Fixed, Material: mat},
+			{Body: moving, Role: dynamics.Dynamic, Supplied: &mass, Material: mat}},
+		Step: dynamics.StepConfig{Contact: req, TimeResolution: units.Seconds(1e-9),
+			ContactSlop: units.Millimeters(1e-6), VelocityResidual: units.MillimetersPerSecond(1e-6),
+			AngularVelocityResidual: units.RadiansPerSecond(1e-6),
+			ImpulseResidual:         units.KilogramMillimetersPerSecond(1e-6),
+			PenetrationResidual:     units.Millimeters(1e-6),
+			ImpactSpeed:             units.MillimetersPerSecond(0), MaxPoseEvaluations: 128,
+			MaxIterations: 8, MaxEvents: 2},
+	})
+	require.NoError(t, err)
+	initial, err := w.NewState([]dynamics.BodyState{{Body: fixed, Pose: r3.Identity(),
+		LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)},
+		{Body: moving, Pose: pose, LinearVelocity: zeroVelocity(), AngularVelocity: zeroAngular(t)}})
+	require.NoError(t, err)
+	step, err := w.Step(t.Context(), initial, dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.1))
+	require.NoError(t, err)
+	require.Equal(t, dynamics.Advanced, step.Status, "%+v", step.Diagnostics)
+	require.Empty(t, step.Events)
+	require.Equal(t, pose, step.Next.Entries()[1].Pose)
+	interior, err := step.Trace.Sample(units.Seconds(.05))
+	require.NoError(t, err)
+	interiorBody, ok := interior.Body(moving)
+	require.True(t, ok)
+	require.Equal(t, pose, interiorBody.Pose)
+	contact, err := doc.ContactPair(t.Context(), fixed, moving, r3.Identity(),
+		interiorBody.Pose, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, contact.Relation)
+}
+
 func TestSourceSpherePairTransverseEndpointImpact(t *testing.T) {
 	doc := decad.New()
 	a, b := makeBall(t, doc), makeBall(t, doc)

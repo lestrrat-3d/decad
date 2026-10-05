@@ -401,6 +401,33 @@ func (r *sourceSpherePairSweepRun) transverse(ctx context.Context, first *SweepS
 	return r.report, nil
 }
 
+// A stationary source pair has a constant exact center-distance polynomial.
+// The initial certified point and its source faces therefore describe the
+// complete touching set at every fraction of the requested span.
+func (r *sourceSpherePairSweepRun) stationaryTrack(first *SweepSample) *SweepContactTrack {
+	if first.Ideal.Relation != ContactTouching || first.Ideal.Manifold == nil ||
+		len(first.Ideal.Manifold.Points) != 1 {
+		return nil
+	}
+	for i := range 3 {
+		if !r.pa.delta[i].isZero() || !r.pb.delta[i].isZero() {
+			return nil
+		}
+	}
+	a, b, c := r.squaredGap()
+	if !a.isZero() || !b.isZero() || !c.isZero() {
+		return nil
+	}
+	point := first.Ideal.Manifold.Points[0]
+	pair := [2]sourceSphereContactProof{r.sphereA, r.sphereB}
+	return &SweepContactTrack{
+		start: new(big.Rat), end: big.NewRat(1, 1), duration: new(big.Rat).Set(r.pa.duration),
+		request: r.req.ContactRequest, spherePair: &pair,
+		features: [2]ContactFeature{point.FeatureA, point.FeatureB}, normal: point.Normal,
+		pointCount: 1,
+	}
+}
+
 func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.Rat) (*SweepReport, error) {
 	defer r.report.replay.snapshot(r.report)
 	zero, one := new(big.Rat), big.NewRat(1, 1)
@@ -424,6 +451,25 @@ func (r *sourceSpherePairSweepRun) execute(ctx context.Context, resolution *big.
 		if r.req.StartPolicy == StopAtInitialContact {
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
+		}
+		if r.req.StartPolicy == ContinueCertifiedTouch {
+			if track := r.stationaryTrack(first); track != nil {
+				last, err := r.sample(ctx, one)
+				if errors.Is(err, errSweepPoseBudget) {
+					return r.undecided(zero, one, SweepPoseBudget), nil
+				}
+				if err != nil {
+					return nil, err
+				}
+				if last.Ideal.Relation == ContactTouching && last.Ideal.Manifold != nil &&
+					len(last.Ideal.Manifold.Points) == 1 &&
+					last.Ideal.Manifold.Points[0].FeatureA == track.features[0] &&
+					last.Ideal.Manifold.Points[0].FeatureB == track.features[1] {
+					r.report.Outcome, r.report.ContactTrack = SweepPersistentTouch, track
+					r.report.replay.track = track
+					return r.report, nil
+				}
+			}
 		}
 	}
 	gap, slope, ok := r.axialGap()

@@ -9,7 +9,8 @@ inside one box face. A sphere against an exactly orthogonal rotated source
 box also certifies a strict single-face affine clear span, first impact, or
 separating departure. Two source semicircle spheres certify affine first impact
 through exact squared-distance motion, including transverse crossing, and
-separating departure. Rotating source-box rigid drifts
+separating departure. A stationary touching source-sphere pair certifies a
+full-span point track. Rotating source-box rigid drifts
 can also certify a clear path or bracket an impact after exact oriented-box
 pose relations, a bounded float-to-ideal pose difference, and whole-body
 travel bounds. An initial source-box face touch also certifies immediate
@@ -331,8 +332,13 @@ decreasing side with dyadic fractions; require a separated left endpoint, a
 touching or overlapping right endpoint, and width at most `TimeResolution`.
 Find a hidden pass-through before reporting clear. A tangent and an
 unrepresentable shallow overlap return `SweepUndecided`. The bounded
-center-line source manifold gate applies at the right sample. A zero-gap
-stationary touch has no continuous proof for continuation.
+center-line source manifold gate applies at the right sample. A stationary
+zero-gap touch with both exact affine displacements zero and one bounded
+source point publishes a full-span track. Its exact center-distance
+polynomial is identically zero. Both endpoint samples must retain the same
+source faces. An interior track query reduces the cached sphere pair to its
+bounded point manifold. Replay requires exact touch of the rounded pair.
+Any nonzero displacement remains undecided for persistent continuation.
 
 ### 4.6 Separated source-cylinder axial path
 

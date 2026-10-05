@@ -233,6 +233,10 @@ func (r *SweepReport) certifiedSpherePairPosesAtFraction(f *big.Rat, poseA, pose
 		} else if idealRelation <= 0 || !strictClear {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: rounded sphere-pair departure loses its gap", ErrUnsupported)
 		}
+	case SweepPersistentTouch:
+		if p.track == nil || idealRelation != 0 || actualRelation != 0 || deviation.Sign() != 0 {
+			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair replay loses its exact touch", ErrUnsupported)
+		}
 	case SweepImpactBracket:
 		if p.bracketLo == nil || p.bracketHi == nil {
 			return r3.Transform{}, r3.Transform{}, fmt.Errorf("%w: sphere-pair impact lacks its exact bracket", ErrUnsupported)
