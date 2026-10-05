@@ -89,10 +89,8 @@ func (w *World) stepObliqueSphereImpact(ctx context.Context, from, kicked State,
 	}
 	mass := w.parts[dynamic].mass.Mass
 	stopImpulse := -closing * mass.Value.Base()
-	if !finite(stopImpulse) || stopImpulse <= 0 ||
-		!obliqueStopMomentumWithin(velocity, normal, first.Event.Manifold, mass,
-			stopImpulse, dynamic, w.step) {
-		return undecided(w, "tilted sphere impact has unresolved tangent momentum"), nil
+	if !finite(stopImpulse) || stopImpulse <= 0 {
+		return undecided(w, "tilted sphere stopping impulse is not finite"), nil
 	}
 	approach := new(big.Rat).Neg(exactClosing)
 	approachLow := new(big.Rat).Sub(approach, approachError)
@@ -116,18 +114,20 @@ func (w *World) stepObliqueSphereImpact(ctx context.Context, from, kicked State,
 		dynamic, normal, impulse, dt) {
 		return undecided(w, "tilted sphere omitted rotation exceeds response residuals"), nil
 	}
-	postVelocity := QuantityVec{X: units.MillimetersPerSecond(-restitution * velocity.X.Base()),
-		Y: units.MillimetersPerSecond(-restitution * velocity.Y.Base()),
-		Z: units.MillimetersPerSecond(-restitution * velocity.Z.Base())}
-	for axis := range 3 {
-		component := velocityComponent(postVelocity, axis).Base()
-		if !finite(component) {
-			return undecided(w, "tilted sphere response velocity is not finite"), nil
-		}
+	delta := sign * impulse / mass.Value.Base()
+	postVec := preVec.Add(normal.Scale(delta))
+	if !finite(delta, postVec.X, postVec.Y, postVec.Z) {
+		return undecided(w, "tilted sphere response velocity is not finite"), nil
 	}
+	postVelocity := QuantityVec{X: units.MillimetersPerSecond(postVec.X),
+		Y: units.MillimetersPerSecond(postVec.Y), Z: units.MillimetersPerSecond(postVec.Z)}
 	if !obliqueSphereImpulseResidual(velocity, postVelocity, normal, impulse,
 		mass, point, dynamic, w.step.ImpulseResidual) {
 		return undecided(w, "tilted sphere impulse exceeds momentum residual"), nil
+	}
+	if !obliqueSphereNormalResponseWithin(preVec, postVec, normal, delta,
+		sign, point, w.restitution, w.step.VelocityResidual) {
+		return undecided(w, "tilted sphere normal or tangent response exceeds velocity residual"), nil
 	}
 	bracketTravel, ok := boundBracketTravel(*first.Bracket, math.Abs(closing))
 	if !ok || separation > bound {
@@ -372,4 +372,46 @@ func obliqueSphereImpulseResidual(pre, post QuantityVec, normal r3.Vec, impulse 
 		}
 	}
 	return true
+}
+
+// obliqueSphereNormalResponseWithin bounds restitution and the tangent change
+// against every contact normal enclosed by the source point's certificate.
+func obliqueSphereNormalResponseWithin(pre, post, normal r3.Vec, delta, sign float64,
+	point decad.ContactPoint, restitution, velocityLimit units.Value) bool {
+	angle := exactBase(point.NormalAngle)
+	vector := exactBase(point.Normal.Bound)
+	e := exactBase(restitution)
+	limit := exactBase(velocityLimit)
+	if angle == nil || vector == nil || e == nil || limit == nil {
+		return false
+	}
+	normalError := new(big.Rat).Add(angle, vector)
+	preSpeed, preOK := sphereNormUpper(pre)
+	postSpeed, postOK := sphereNormUpper(post)
+	if !preOK || !postOK {
+		return false
+	}
+	preNormal := sphereDotExact(pre, normal)
+	postNormal := sphereDotExact(post, normal)
+	if sign < 0 {
+		preNormal.Neg(preNormal)
+		postNormal.Neg(postNormal)
+	}
+	restitutionError := absRat(new(big.Rat).Add(postNormal, new(big.Rat).Mul(e, preNormal)))
+	uncertainSpeed := new(big.Rat).Add(ratFloat(postSpeed),
+		new(big.Rat).Mul(e, ratFloat(preSpeed)))
+	restitutionError.Add(restitutionError, new(big.Rat).Mul(uncertainSpeed, normalError))
+	if restitutionError.Cmp(limit) > 0 {
+		return false
+	}
+	tangentError := new(big.Rat)
+	for _, components := range [][3]float64{
+		{pre.X, post.X, normal.X}, {pre.Y, post.Y, normal.Y}, {pre.Z, post.Z, normal.Z},
+	} {
+		change := new(big.Rat).Sub(ratFloat(components[1]), ratFloat(components[0]))
+		tangentError.Add(tangentError, absRat(new(big.Rat).Sub(change,
+			new(big.Rat).Mul(ratFloat(delta), ratFloat(components[2])))))
+	}
+	tangentError.Add(tangentError, new(big.Rat).Mul(absRat(ratFloat(delta)), normalError))
+	return tangentError.Cmp(limit) <= 0
 }

@@ -161,7 +161,11 @@ func TestSourceSphereRotatedBoxFace(t *testing.T) {
 	tangentStep, err := w.Step(t.Context(), tangentStart,
 		dynamics.StepInput{Gravity: zeroAcceleration()}, units.Seconds(.06))
 	require.NoError(t, err)
-	require.Equal(t, dynamics.Undecided, tangentStep.Status)
+	require.Equal(t, dynamics.Advanced, tangentStep.Status, "%+v", tangentStep.Diagnostics)
+	require.Len(t, tangentStep.Events, 1)
+	tangentFinal, found := tangentStep.Next.Body(ball)
+	require.True(t, found)
+	require.Equal(t, 10.0, tangentFinal.LinearVelocity.Y.Base())
 	cfg.Bodies[0], cfg.Bodies[1] = cfg.Bodies[1], cfg.Bodies[0]
 	reverseWorld, err := dynamics.NewWorld(t.Context(), doc, cfg)
 	require.NoError(t, err)

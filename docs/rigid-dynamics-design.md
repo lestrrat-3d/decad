@@ -46,13 +46,16 @@ squared `VelocityResidual`; full-step displacement must fit
 `PointResolution`, `ContactSlop`, and `PenetrationResidual`. A supplied mass
 center 2 mm off the source center with inertia 5e8 kg·mm² is refused because
 its omitted point speed exceeds `VelocityResidual`, even though the omitted
-angular speed fits `AngularVelocityResidual`. The solver limits incoming
-tangent momentum by `VelocityResidual`, corrects the shallow overlap to a
-bounded positive gap, then
-requires ideal and rounded clear sweeps for the full rebound remainder.
+angular speed fits `AngularVelocityResidual`. With zero friction, the impulse
+changes only the bounded contact-normal component of velocity. The incoming
+tangent component continues through the impact. The response bounds normal
+restitution error, tangent change from normal uncertainty, mass-interval
+momentum error, and omitted spin against the configured residuals. It records
+zero tangent impulse and corrects the shallow overlap to a bounded positive
+gap. Ideal and rounded clear sweeps must certify the full rebound remainder.
 `Trace.Sample` replays both sides from those cached rounded sweeps. Zero
 restitution, edge/corner approach, skew read rotation, incoming spin, and
-unresolved tangent motion return `Undecided` in this path.
+an unproved tangent corridor return `Undecided` in this path.
 A full circular source prism or a full rectangular-profile source revolve can
 rebound from a fixed source-box face with supplied or density-derived mass when
 its affine sweep proves the first axial face impact and separating remainder.
