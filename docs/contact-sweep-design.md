@@ -314,7 +314,8 @@ prove a full-span point track. A path leaving the corridor returns
 `SweepUndecided`; a center sample alone cannot certify the missing span.
 
 A `RigidDriftSegment` may rotate the sphere when its pivot equals the source
-sphere center and the other path is affine. Its angular velocity changes the
+sphere center, that center equals the query pose translation, and the other
+path is affine. Its angular velocity changes the
 sampled pose, but the occupied ball follows the exact affine center path from
 its linear velocity. Form the sampled proper rotation through `r3`, then set
 the center translation from that affine path so rotation rounding cannot turn

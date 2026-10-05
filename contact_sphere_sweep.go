@@ -43,6 +43,18 @@ func (d *Document) sweepRotatingSphereBox(ctx context.Context, a, b *Body,
 	if !sphereOK || !boxOK {
 		return nil, false, nil
 	}
+	// sourceSpherePathPoseAt sets the query translation to the center drift.
+	// That represents the requested rigid pose only when the source center is
+	// exactly at the query origin before rotation.
+	from := spherePath.from.Translation()
+	for axis, value := range [3]float64{from.X, from.Y, from.Z} {
+		if dyCmp(sphere.center[axis], mustDyOf(value)) != 0 {
+			report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
+			report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.duration),
+				To: sweepInstant(big.NewRat(1, 1), pa.duration)}
+			return report, true, nil
+		}
+	}
 	center := spherePath.drift.Center
 	for axis, value := range [3]float64{center.X, center.Y, center.Z} {
 		if dyCmp(sphere.center[axis], mustDyOf(value)) != 0 {

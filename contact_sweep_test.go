@@ -495,6 +495,21 @@ func TestSweepPairSourceSphereTouchContinuation(t *testing.T) {
 	refused, err := doc.SweepPair(t.Context(), floor, ball, still, badPivot, req)
 	require.NoError(t, err)
 	require.Equal(t, decad.SweepUndecided, refused.Outcome)
+	offOrigin := ballBody(t, doc, 5)
+	offOrigin, err = offOrigin.Placed(t.Context(), contactPose(t, r3.Vec{X: 2}))
+	require.NoError(t, err)
+	initial, err := doc.ContactPair(t.Context(), floor, offOrigin, r3.Identity(), rotating.From,
+		contactRequest())
+	require.NoError(t, err)
+	require.Equal(t, decad.ContactTouching, initial.Relation)
+	require.Len(t, initial.Manifold.Points, 1)
+	offOriginPath := rotating
+	offOriginPath.Center.X = 2
+	refused, err = doc.SweepPair(t.Context(), floor, offOrigin, still, offOriginPath, req)
+	require.NoError(t, err)
+	require.Equal(t, decad.SweepUndecided, refused.Outcome)
+	require.Equal(t, decad.SweepContactUnsupported, refused.Cause)
+	require.False(t, refused.HasAffineReplayProof())
 	departing := touching
 	departing.LinearVelocity.Z = units.MillimetersPerSecond(50)
 	req.StartPolicy = decad.ContinueSeparatingTouch
