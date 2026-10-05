@@ -144,13 +144,16 @@ mesh `Union` of overlapping boxes is not used, because its triangle diagonals ge
 operand's planes off the dyadic grid, which leaves a positive mesh bound that §9 does not admit. Dynamic: four `20 mm` source boxes released with
 proper rotations about `(1, 1, 0)` by `30°`, `45°`, `60°`, `75°` and spin `(2, 1, 0) rad/s`; one
 hexagonal prism (`20 mm` across flats, `12 mm` tall) released on a vertex; one triangular wedge; one
-stitched tetrahedron. Material as above, `3 s`. Exit criterion: the timeline reaches `3 s`; each body's
+stitched tetrahedron. Material as above, with `PenetrationResidual = 10 µm` and `SupportBand = 5 µm`: a box
+that lands on a face with a slide ends that step with one edge up to `5 µm` above the floor, and only a kick
+that lands on all four corners leaves it at rest (§10.8). `3 s`. Exit criterion: the timeline reaches `3 s`; each body's
 final pose is a face-down rest (every dynamic body's velocity within `VelocityResidual` of zero, and in
 the last step each body's floor pair either rides a band or persistent track or is excluded by swept
 boxes strictly apart while the body hovers inside the `SupportBand`, §10.5); the trace carries at least one
 `ContactImpact` whose manifold has a single point (vertex impact), one with two points (edge impact) and
-one with four or more (face impact); each box's first impact time matches the exact drift of its lowest
-corner within `TimeResolution`.
+one with four or more (face impact); each box's first impact time matches, within `TimeResolution`, the time
+at which the exact drift of its lowest corner enters the `SupportBand`, which is where a falling pair's
+first `ContactBand` sample lies (§10.5).
 
 **Phase 3 — `parts-bin`.** The tray plus: a shelled box (`cupPayload`), a `12 mm` cap-loop chamfered
 block (positive displacement), a square-to-octagon loft, a straight sweep of a hexagon, a revolved
@@ -442,7 +445,11 @@ full-step kick, then event-driven drift — and generalizes the body count. In o
    `ContactPair` publishes at the rounded event poses, which are the poses the step publishes. A band end
    solves on its track's manifold at `f_e`. Each impact and band end reads `ContactPair` at the rounded
    event poses for §6.6; a `ContactBand` there must lie within `PenetrationResidual`, else
-   `StepPairUndecided`, as must an initial contact's band. Correct positions per island
+   `StepPairUndecided`, as must an initial contact's band. An initial contact whose `InitialEvent` reads
+   `Overlapping` with no manifold within the request solves on the manifold `ContactPair` publishes at the
+   slice-start poses, and a contact-set pair on a band track with positive `Band()` covering `f_e` whose
+   rounded poses there read `Overlapping` is gathered as a band end at `f_e` (§10.8); a gathered pair whose
+   rounded poses read `Overlapping` enters the solve whether or not a point closes. Correct positions per island
    (§6.6), solve and certify each island in world order (§6.2–§6.4), publish one `IslandReport` and the
    island's events.
 8. Update the contact set: pairs the solve left touching with a nonpositive relative normal speed stay
@@ -1381,7 +1388,8 @@ The new outcome states what IS exact:
 `|h_p'(0)|` over the contact set (the solver leaves those speeds within `VelocityResidual` of zero, so
 `r` is small) and `K` as in §10.2, every contact-set vertex satisfies `|h_p(u)| <= r·u + K·u²` for
 `0 <= u <= h`, and `Depth` is that bound at `h`, its exact value enclosed by the published Value and
-Bound. Every non-contact vertex keeps `h_p(u) > 0` by §10.2's bound from its positive `h_p(0)`, and
+Bound. Every non-contact vertex keeps `h_p(u) > 0` by §10.2's bound from its positive `h_p(0)` (a rested
+lifted vertex, §10.8, is held two-sided instead), and
 `A` in front of the plane with `B` behind it bounds the overlap. Every contact vertex's foot must stay
 inside `B`'s face: the vertex's ideal path box over `[0, h]`, less `B`'s translation and grown by `Depth`,
 is projected along the axis of the normal's largest component, and must meet no bounding edge of the face
@@ -1609,14 +1617,16 @@ both policies over the support set (`contact_sweep_band.go`; `planarContinuation
   separated sample's is.
 - §10.3's band track runs over the support set. Its horizon is the largest grid fraction through which the
   curvature is bounded, every clear vertex keeps a positive lower height bound, every LIFTED vertex keeps a
-  positive lower height bound `h0 + h'(0)·t − K·t²` as well, and every support-set foot stays inside `S`'s face
+  positive lower height bound `h0 + h'(0)·t − K·t²` as well, unless §10.8 rests it, and every support-set foot
+  stays inside `S`'s face
   (the `contains` box test, grown by the depth). A lifted vertex that would reach the plane inside the slice
   therefore ends the track before it does: an arrival is a band end, at most one grid step before the arriving
   vertex's exact height reaches zero. Nothing penetrates inside a track that a contact vertex's own band does
   not already allow.
 - `Depth` at elapsed time `t` is `max(r·t + K·t², max over the lifted set of h0 + max(0, h'(0))·t + K·t²)`
   over `|n|_lo`, widened by §10.4's `2δ`. A contact vertex lies in `[−(r·t + K·t²), r·t + K·t²]` as today. A
-  lifted vertex lies in `(0, h0 + max(0, h'(0))·t + K·t²]`: it never crosses the plane inside the track, and
+  lifted vertex lies in `(0, h0 + max(0, h'(0))·t + K·t²]`: it never crosses the plane inside the track (a
+  rested one may, within §10.8's two-sided bound), and
   its height rises by at most its start rate when that rate is positive. `Band()` and `BandAt` publish the same
   bound; a track with zero depth through the duration is still an exact `SweepPersistentTouch`, which a lifted
   vertex rules out. `SweepPersistentBand`'s claim covers every published point.
@@ -1748,7 +1758,7 @@ the body; a box in a tray corner touches two faces and has no single plane (§10
 Three ways a `tumble` body stops on a plain convex floor share one cause, which the policy table of §5.2
 closes. Each is a record of the exploration run in `dynamics/tumble_explore_test.go` (§13 PR 15's
 fixture) with the §2 material (`e = 0.3`, `μ = 0.4`), `dt = 1/256 s`, `TimeResolution = 1 ns`,
-`PenetrationResidual = 1 µm` and `SupportBand = 0.5 µm`:
+`PenetrationResidual = 1 nm` and `SupportBand = 0.5 nm`:
 
 - The spinning `20 mm` box lands on an edge, the solve leaves both edge corners rising at about
   `3·10⁻³ mm/s` (the edge is the instantaneous axis of the tip that follows), and the pair rides a band
@@ -1781,7 +1791,7 @@ track that enters no solve keeps `ContinueCertifiedTouch` while its rounded even
 such a band, and leaves the contact set when they read `Separated`; its next slice then starts
 `Separated` by more than the band, which exceeds the travel per grid step whenever
 `SupportBand >= (|v| + ρ·|ω|)·TimeResolution` for the pair's faster body, a relation the scene's
-`0.5 µm` band and `1 ns` resolution satisfy up to about `500 mm/s`. A pair that leaves the band slower
+`0.5 nm` band and `1 ns` resolution satisfy up to about `500 mm/s`. A pair that leaves the band slower
 than that stops at the time floor, as a pair starting apart by less than its travel per grid step does
 today; the band and the resolution are the caller's.
 
@@ -1796,17 +1806,18 @@ continues on its band track as well. Dropping a `Separated` pair from the contac
 certified outcome of an exact planar pair: a planar sweep that starts `Separated` runs the same clear
 search under every start policy, so the drop only keeps the §5.3 reuse key and the contact set honest.
 
-The box and the wedge rest is an open limit of the band track. Each reaches a state in which the solve
+The box and the wedge rest is a limit of the band track that §10.8 closes. Each reaches a state in which the solve
 leaves it resting on one or two lifted vertices, so the pair reads `ContactBand` and continues on a band
 track that ends where a lifted vertex's lower height bound `h0 − K·t²` reaches zero. Under the body's
 rotation the true descent of that vertex is only `7`–`14 %` of what `K` allows, so at each band end the
 vertex stands at about `0.86`–`0.93` of its previous height; the solve removes a closing speed of a few
 `µm/s` or less, and the vertex arrives again sooner. The band ends shrink geometrically and never reach
 the step's end, and the step stops with `StepEventBudget` (MaxEvents `64`): the `30°` box in its step
-`39`, the wedge in its step `29`, the `45°` and `60°` boxes in steps `80` and `48`. No `dynamics` rule
-closes the cycle, since no correction lands a rotated vertex in exact touch and a sweep that starts
-`Overlapping` is `SweepInitiallyOverlapping`; it needs a change to the band track itself
-(`contact_sweep_band.go`).
+`39`, the wedge in its step `29`, the `45°` and `60°` boxes in steps `80` and `48`, while the `75°` box runs
+256 steps still sliding at about `5 mm/s` with seven events per step. No `dynamics` rule alone closes the
+cycle, since no correction lands a rotated vertex in exact touch and a sweep that starts `Overlapping` is
+`SweepInitiallyOverlapping`; §10.8 changes the band track itself (`contact_sweep_band.go`) and adds the two
+step rules the changed track needs.
 
 Rejected alternatives:
 
@@ -1823,6 +1834,132 @@ Rejected alternatives:
 - A band track returned under `ContinueSeparatingTouch` when the departure's search fails. It moves a
   policy decision into the sweep, which would then publish a track under a policy whose contract
   (`docs/contact-sweep-design.md` §5.1) asks for a departure.
+
+### 10.8 Rest inside the band
+
+§10.7 records the band-end chain that stops the boxes and the wedge. Two bounds of the band track make the
+chain, and one law of the step limits what a rest can be; this section closes the chain and states the
+limit, each from the exploration runs of `dynamics/tumble_explore_test.go` (`TUMBLE_NOTRAY`, a plain `240 mm`
+floor, 256 steps) with the §2 material and `dt`.
+
+**The chain.** After a vertex impact the solve leaves the body on one or two LIFTED vertices (§10.5): inside
+the band, above the plane, their normal speeds within `VelocityResidual` of zero, the body still turning. The
+band track holds a lifted vertex one-sided and ends where its lower bound `h0 + h'(0)·t − K·t²` reaches zero
+(§10.5). `K` is §10.2's global bound `½·|n|·|ω|²·ρ`, `ρ` the farthest vertex from the pivot. The true second
+derivative of a height is `n·R(ωu)·(ω×(ω×(p0 − c)))`, whose magnitude `|ω|·|ω×(p0 − c)|` is constant in `u`
+and is zero for a vertex on the spin axis through the mass center. The `60°` box spinning on a corner at
+`|ω| ≈ 5.5 rad/s` about a nearly vertical axis therefore descends by about `3 %` of what `K·t²` allows, and
+the `30°` box by `7`–`14 %`. At each band end the vertex stands at a fraction of its previous height, the
+solve removes the closing speed the true curvature built (impulses of `10⁻³` to `5·10⁻⁶ kg·mm/s`), and the
+next track ends at the smaller root. No correction lands a rotated vertex in exact touch (§10.5), so the chain has no last
+event. Its two causes are the one-sided hold and the global `K`.
+
+**Rested vertices.** `SweepRequest` gains one field:
+
+```go
+RestSpeed units.Value // nonnegative Velocity; the zero Value rests no vertex
+```
+
+A lifted vertex is RESTED when `RestSpeed` is positive and its exact start rate satisfies
+`h'(0) >= −RestSpeed·|n|_lo`: it closes no faster than `RestSpeed`, or rises. The band track holds a rested
+vertex as it holds a contact vertex, on both sides of the plane: `|h(t)| <= h0 + |h'(0)|·t + K_p·t²` by
+Taylor's theorem with the per-vertex curvature `K_p` below, and `Depth` is the largest of that bound over the
+rested set, `r·t + K_p·t²` over the contact set and §10.5's one-sided bound over the remaining lifted set. The
+horizon test (`clearAt`) skips a rested vertex, so the track no longer ends where its lower bound reaches
+zero; it ends where `Depth` leaves the residual (§5 step 4), where a clear or unrested lifted vertex would
+reach the plane, or where a foot leaves the face. §10.2's departure is unchanged and keeps every vertex
+outside the contact set positive, rested or not: a departure claims strict separation. `ManifoldAt` publishes
+a rested vertex as before, with `Separation = [0 ± Depth]`, and `replayHeights` reads the held depth as
+before. A `RestSpeed` that is not a `Velocity`, is negative or is not finite is `ErrInvalidInput` at
+`SweepPair`; the field is part of the request, so §5.3's reuse key carries it. `dynamics` fills `RestSpeed`
+with `VelocityResidual` in `sweepRequest` (`dynamics/step.go`): §6.3 leaves a resting point's normal speed
+within that residual of zero, so a vertex the solve just rested is rested on the next slice, a vertex that
+arrives faster is not, and an arriving lifted vertex still ends its track one grid step before the plane
+(§10.5's last rejected alternative stays rejected). A rested vertex that rises out of the band leaves the
+support set at the next band end or event, where `ContactPair` reads the rounded poses, as a lifted one
+does today.
+
+**Per-vertex curvature.** For every `M` vertex `p` the `p''` term of §10.2's bound, `|ω_M|²·ρ_M`, is replaced
+by `|ω_M|·|ω_M×(p − c_M)|`, each factor rounded up by `ratSqrtUp`; the terms of a rotating owner `S` stay
+global. `|p''(u)| = |R(ωu)·(ω×(ω×(p0 − c)))| = |ω|·|ω×(p0 − c)|` for every `u`, so
+`K_p = ½·|n|_hi·(|ω_M|·|ω_M×(p − c_M)| + the S terms)` bounds `|h_p''|` on the whole horizon as `K` did, and
+`K_p <= K` because `|ω×(p − c)| <= |ω|·ρ`. `clearAt`, `depthAt`, the departure's horizon and
+`planarDepartureProof.lowerGap` read `K_p` in place of `K`; the replay still reads the held depth. A body
+whose contact vertices lie on its spin axis with `r = 0` now publishes an exact `SweepPersistentTouch` where
+the global bound published a band of depth `K·h²`: the edge box of `contact_sweep_band_test.go`, turning
+about its resting edge, is one. The `60°` box, which the global bound ends every `46`–`62 µs` under the rested
+hold (`StepEventBudget` in its step `48`), spins on its corner through 256 steps under `K_p`.
+
+**An overlapping start and a cut track.** A rested vertex may stand below the plane, within `Depth`, when a
+step ends or when another pair's event cuts the slice, and a sweep from those poses starts `Overlapping`,
+which neither policy continues. Two rules of §5 step 7 cover both: an initial contact whose `InitialEvent`
+reads `Overlapping` with no manifold within the request solves on the manifold `ContactPair` publishes at the
+slice-start poses, which are those poses themselves (fraction zero has zero deviation) and whose penetration
+the correction removes; the rotating source-box path transfers no manifold for an overlapping start
+(`orientedIdealEvent`), while the planar path transfers it whole, and the rule reads the same poses either
+way. And a contact-set pair on a band track with positive `Band()` covering `f_e` whose rounded poses at `f_e`
+read `Overlapping` is gathered as a band end there, not as a track pair, which §6.1 would leave to drift: it
+enters the solve whether or not a point closes, its island corrects the penetration (§6.6), and when nothing
+closes the impulses are zero and the island publishes only the correction. Without the first rule the `60°`
+box at the shipped residuals stops in step `49`, `StepManifoldMissing`, "initial contact has no manifold
+within the contact request"; without the second the wedge, resting beside the prism, stops in step `29`,
+`701.7 µs` in, `StepTrackUnproved`, "a pair continued in contact starts SweepInitiallyOverlapping", at the
+prism's impact.
+
+**What rests, and at which band.** Under the three changes, at the shipped residuals (`PenetrationResidual =
+1 nm`, `SupportBand = 0.5 nm`) the prism (six points, from step `32`) and the wedge (its triangular cap, three
+points, from step `30`) rest with exactly zero velocities through 256 steps in one world. Every box runs 256
+steps `Advanced` without resting: each settles into a step-periodic rocking cycle of five or six events per
+step (vertex impacts, then two edge impacts) and ends every step with its lowest corner `2.3 µm` up, its
+mass center rising at `1.26 mm/s` and yawing at `0.49 rad/s`. The cycle's mechanism, read at a `1 µm`
+residual with a `0.5 µm` band, where it has two events per step: the kick lands the `30°` box on one edge
+inside the band (two points, `J = 161 kg·mm/s`, friction at the Coulomb limit `0.4·J`, the box turning at
+`1.73 rad/s` about the edge and sliding at `7.4 mm/s`); the far edge arrives `131 µs` later, and the
+four-point solve puts `72.6 kg·mm/s` on each far corner and nothing on the near ones, because the far
+corners' friction impulses (`27 kg·mm/s` each) stop the slide and their torque about the mass center lifts
+the near edge at `1.2 mm/s`, the mass center at `0.61 mm/s`. §5's step has one kick, so the box drifts up for
+the remaining `3.77 ms` and ends the step with its near edge `4.5 µm` up; the next kick lands it on the far
+edge alone, and the end state repeats to the published digits: the kick's `306 kg·mm/s` is what the two
+solves absorb. Under continuous gravity the lifted edge would return in `0.24 ms` and its re-landing's
+four-point solve would zero both velocities, as the tip fixture's does (§10.5); the one-kick law does not
+model that return, and no correction may stand in for it (§6.6 moves a body only to remove penetration or to
+place a resting pair in touch).
+
+A box therefore rests only when a step's kick lands on all four corners, that is when the band covers the
+hover. The `tumble` scene runs at `PenetrationResidual = 10 µm` and `SupportBand = 5 µm` (§2), and there
+every body rests with exactly zero velocities (the wedge within `10⁻⁷ mm/s`): the boxes from steps `45`
+(`30°`), `77` (`45°`), `54` (`60°`) and `72` (`75°`), the prism from `32`, the wedge from `30`, the
+tetrahedron from `29`, each later step one face event, the `30°` box's four lower corners ending between
+`0.002` and `3.8 µm` above the floor. The first impact of a falling box is then the band's entry, `SupportBand`
+before the exact touch; §2 states its criterion against that entry. At this band the rested hold and `K_p`
+change no outcome of the box and wedge runs (each rests without them); they stay for the chain, which the
+wedge at the shipped residuals shows and §13 PR 14f pins. The `1 nm` residual of §13 PR 14e's prism fixture
+and of every earlier fixture is unchanged.
+
+With the tray (the §2 scene itself) the `10 µm` run stops in step `41`: the `30°` box's rounded event poses
+read `Overlapping` against the tray with `ContactNoNormalProof` and no manifold, while the plain floor
+publishes one at the same pose. That is §9.6's shallow penetration through the tray's floor, PR 15's
+concern, not the band track's.
+
+Rejected alternatives:
+
+- Ending the chain with an inelastic-collapse rule on the response, analogous to `ImpactSpeed`: a closing
+  speed below a threshold absorbed without an event. The chain is in the certificate, not the response: the
+  track still ends at the bound's root, the slice still cuts there, and a chain of slices without events
+  reaches `MaxPairSweeps` instead of `MaxEvents`.
+- Holding every lifted vertex two-sided. An arriving lifted vertex then penetrates to the residual before
+  the band ends, and §10.5's last rejected alternative follows: the correction lifts the pivot out of the
+  band and the rest alternates between the edges. `RestSpeed = VelocityResidual` tells the vertex the solve
+  rested from the one that arrives.
+- Admitting a vertex below the plane into the support set, so a sweep could continue from an `Overlapping`
+  start. It changes the contract of both continuation policies (`docs/contact-sweep-design.md` §5.1) for a
+  case two rules of the step cover at the poses the step publishes.
+- Transferring the overlapping manifold on the rotating source-box path at zero deviation instead of
+  reading the rounded poses in `dynamics`. Sound, and it may land later; the step's rule covers every
+  family, including the planar path, through one site that already reads rounded poses for impacts and band
+  ends.
+- A shorter `dt` for the hover. At `dt = 1/1024 s` the lifted edge ends its step about `1.1 µm` up, still
+  thousands of `0.5 nm` bands; the hover is the one-kick law's, and the band is the caller's.
 
 ## 11. Kinetograph interface and gallery
 
@@ -2336,15 +2473,68 @@ lines below do not repeat it.
   records as an open limit.
 
 PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d follows 14c, whose
-`PlanarColumnClear` it calls.
+`PlanarColumnClear` it calls; PR 14f follows 14e.
+
+### PR 14f (Phase 2) — rest inside the band
+
+- Delivers §10.8: `SweepRequest.RestSpeed` and the two-sided hold of a rested vertex, the per-vertex
+  curvature `K_p`, the overlapping initial contact and the cut band track of §5 step 7, and the §2 residuals
+  of the `tumble` scene.
+- Files: `contact_sweep.go` (the field and its validation), `contact_sweep_band.go`, `dynamics/step.go`
+  (`sweepRequest`), `dynamics/schedule_event.go` (`solveEvent`, `trackPairs`), `dynamics/island.go`
+  (`solveIslands`), `.github/test-shards.txt`.
+- Test (root): `contact_sweep_test.go` rejects a negative, non-finite or non-`Velocity` `RestSpeed` with
+  `ErrInvalidInput`. `contact_sweep_band_test.go` gains `TestSweepPairRestedVertexHoldsTwoSided`: the §13
+  PR 14a tilted cube, its far edge `2⁻²¹ mm` up, turning about its near edge so the far edge descends at
+  `8·cos θ mm/s`, swept under `ContinueCertifiedTouch` with `RestSpeed = 10 mm/s`: the track reaches the
+  duration, the far corners' exact staged heights at its end are negative, `BandAt` encloses each far
+  corner's exact height at every sampled fraction, and replay accepts every fraction through the end; with
+  `RestSpeed = 1 mm/s` or the zero Value the track ends at the arrival as `TestSweepPairSupportSetArrivalEndsTrack`'s
+  does; under `ContinueSeparatingTouch` with `RestSpeed = 10 mm/s` the departure's horizon is the one-sided
+  root (the departure rests nothing). Legs shown to fail: the rested skip deleted from `clearAt`, the track
+  ends at the arrival; the rested skip copied into the departure, the horizon reaches the duration with a
+  corner below the plane. `TestSweepPairPerVertexCurvature`: the edge box of `edgeBoxScene` turning about
+  its resting edge publishes `SweepPersistentTouch` with a nil `Band()` in both orders, and the same box
+  with its pivot moved `(0, 0, 4) mm` off the edge publishes a band whose `Band()` is
+  `½·|ω|·|ω×(p − c)|·h²` for its contact vertices within the published bound (the per-vertex term replaced
+  by `|ω|²·ρ`: shown to fail on the exact touch). Fixtures whose closed form pins the global `K` and go red
+  under `K_p`, re-pinned to the per-vertex form: `TestSweepPairPlanarBandTrack` and
+  `TestSweepPairBandTrackOnTrayFloor` (both now an exact touch), `TestSweepPairPlanarBandLeavesFace`,
+  `TestSweepPairPlanarDepartureFromEdge` and `TestSweepPairPlanarDepartureRotatingSupport` (horizons). Every
+  other root fixture is unchanged.
+- Test (`dynamics`, `dynamics/tumble_rest_test.go`, the PR 14e fixture's world and material):
+  `TestWedgeRestsFromVertex`, the §2 wedge at its release beside the §2 prism, two dynamic bodies, at the
+  shipped residuals (`1 nm`, band `0.5 nm`), 256 steps every one `Advanced`; the trace carries a one-point and
+  a three-point `ContactImpact` for the wedge; the last step's events are the prism's six points and the
+  wedge's three; both bodies end with exactly zero velocities, the wedge's three cap vertices within
+  `PenetrationResidual` and every other vertex above the floor; every impact meets the discrete linear law.
+  Legs shown to fail: `RestSpeed` left the zero Value in `sweepRequest`, the wedge stops `StepEventBudget`
+  in its step `29` on the chain of §10.7; the cut rule deleted (`trackPairs` gathers every covering band
+  track as a track pair), the wedge stops `StepTrackUnproved` in step `29`, `701.7 µs` in, at the prism's
+  impact. `TestBoxSpinsOnCornerInsideBand`, the `60°` box at its §2 release and spin, shipped residuals, 256
+  steps every one `Advanced`, with some step's published pose holding a lower corner at a negative exact
+  height within `PenetrationResidual`. Legs shown to fail: the overlapping initial contact deleted, step `49`
+  `StepManifoldMissing`; `K_p` replaced by the global `K`, step `48` `StepEventBudget` with band ends `46` to
+  `62 µs` apart. `TestBoxBouncesOnEdgeAndRestsFlat`, the `30°` box at its §2 release and spin with
+  `PenetrationResidual = 10 µm` and `SupportBand = 5 µm`, 256 steps every one `Advanced`; the trace carries a
+  one-point, a two-point and a four-point `ContactImpact`; at least one slice follows a band end with
+  `Request.StartPolicy == ContinueCertifiedTouch` and a `ContactBand` start sample; every step from the
+  `46th` publishes one four-point event; the final velocities are exactly zero and each lower corner's exact
+  staged height lies in `[0, PenetrationResidual]`. Leg shown to fail: `SupportBand = 0.5 nm` with
+  `PenetrationResidual = 1 nm`, 256 steps `Advanced` with five or six events each and a final vertical
+  velocity of `1.26 mm/s` (§10.8). Every shipped `dynamics` fixture, the prism's included, is unchanged.
+- Depends on: PRs 14a, 14e.
 
 ### PR 15 (Phase 2) — `tumble`
 
 - Delivers the Phase 2 exit scene of §2.
 - Files: `_gallery/dynamics_clip.go`, `dynamics/scene_test.go`.
-- Test: the Phase 2 exit criteria; every release is placed so that no body reaches a tray wall within `3 s`
-  and no body's swept box reaches a wall's projection (§10.5, §10.6).
-- Depends on: PRs 9, 13, 14, 14a, 14b, 14c, 14d, 14e.
+- Test: the Phase 2 exit criteria at §2's residuals; every release is placed so that no body reaches a tray
+  wall within `3 s` and no body's swept box reaches a wall's projection (§10.5, §10.6). The exploration run
+  with the tray at those residuals stops in step `41` on the `30°` box, `StepManifoldMissing`, its rounded
+  event poses `Overlapping` against the tray with `ContactNoNormalProof` (§10.8): §9.6's shallow
+  penetration through the tray's floor must publish that manifold before the scene runs.
+- Depends on: PRs 9, 13, 14, 14a, 14b, 14c, 14d, 14e, 14f.
 
 ### PR 16 (Phase 3) — third-order section moments and the general revolve
 
