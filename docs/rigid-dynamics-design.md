@@ -86,6 +86,12 @@ and positive restitution, the same fixed-floor response consumes its exact
 axial impact bracket. Ideal and rounded departure sweeps certify the rebound;
 the trace replays the approach, touch, and separating remainder. A placed
 Boolean without the exact source-face proof returns `Undecided` at impact.
+A mesh `Union` with positive boundary and occupied-volume bounds can also
+rebound or rest on the fixed floor when its exact source-box lower face survives
+an operand certified strictly above that face. Its four-point live faceted
+manifold and vertical sweep enter the same response with density-derived mass.
+The configured impulse and angular residuals must contain the mass and center
+bounds; otherwise the step returns `Undecided`.
 Two source semicircle spheres with supplied or density-derived mass can
 rebound as a centered dynamic pair when the impact has a cardinal manifold.
 Their approach may

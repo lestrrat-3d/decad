@@ -40,8 +40,14 @@ translation-only `Placed` widens its held mesh. `ContactPair` recognizes that
 placed face at floor touch. Its exact-source sweep brackets first axial impact
 and certifies separating departure. A density-backed dynamic placed union
 with centered frictionless motion and positive restitution rebounds from a
-fixed floor; its trace replays the rounded approach and departure. Other
-positive-bound faceted bodies can certify only strict clear motion here.
+fixed floor; its trace replays the rounded approach and departure.
+A positive-bound mesh `Union` can also keep an exact source-box lower face
+when the other operand's certified lower extent lies strictly above it. Its
+density-backed dynamic body rebounds or rests on the fixed floor after the
+four-point contact and vertical first-impact sweep pass their proofs; the
+trace replays both sides of the event.
+Positive-bound faceted bodies without an exact lower-face certificate can
+certify only strict clear motion here.
 It also steps two orthogonal, frictionless
 initial face contacts and their repeated resting response after real manifolds
 and full-span tracks certify both pairs. A dynamic source sphere can touch

@@ -88,10 +88,12 @@ type ContactReport struct {
 // A full source cylinder, extruded or revolved, can prove an axial gap and
 // disk-face contact against a containing box face. A vertical full circular
 // source prism can also prove a horizontal sidewall gap and line contact.
-// A zero-bound faceted solid, or its translation-only placed copy with an
-// exact source mesh, can prove lower support face contact or an axial gap
+// A faceted solid with an exact lower support certificate can prove lower
+// support face contact or an axial gap
 // against a source-box floor that strictly contains its support footprint.
-// Other positive-bound faceted solids can prove a strict axial gap with their
+// An exact source box's lower face survives a positive-bound Union when the
+// other operand's certified lower bound is strictly above it. Other
+// positive-bound faceted solids can prove a strict axial gap with their
 // boundary displacement charged, but publish no contact manifold.
 // An exactly orthogonal rotated source box can give a sphere a bounded point
 // on one interior face.
