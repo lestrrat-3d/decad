@@ -6,8 +6,8 @@ boundary; `docs/contact-geometry-design.md` and `docs/contact-sweep-design.md` o
 geometry results. `docs/multibody-dynamics-design.md` owns the N-body world,
 pair schedule, island formation, the certification of the projected solver
 this document's "Response" section specifies, the multi-event trace and
-`Timeline`; the shipped slices below are the fixtures that solver must
-reproduce. A two-body world steps one pair with at least one dynamic
+`Timeline`. Every world steps through that document's §5 and §6; the slices
+below are fixtures that step reproduces, not separate code paths. A two-body world steps one pair with at least one dynamic
 body using density-derived or supplied mass. An axis-aligned
 certified contact normal determines the response component; tangent velocity
 continues through an oblique impact. Centered impacts of two dynamic bodies
@@ -186,33 +186,11 @@ including when effective friction is positive. Other positive-friction
 sphere-pair inputs outside these paths return `Undecided`.
 A two-body world's pair may be excluded; its bodies drift independently even
 through overlap, and no pair material is mixed.
-The current three-body step admits one dynamic body and two fixed bodies, two
-dynamic bodies and one fixed body, or three dynamic bodies. With two dynamic
-bodies, it kicks both
-once, sweeps every non-excluded pair, and advances one certified impact at a
-time. Every other pair needs a certified clear ideal and rounded path through
-the event prefix, any correction, and each remainder. Overlapping candidate
-brackets and simultaneous initial contacts outside the centered stack below
-return `Undecided` with no `Next`.
-The trace replays non-excluded pairs from rounded certificates and any body
-outside those pairs by independent drift. The conservation report sums both
-dynamic bodies. An excluded pair is not queried and
-does not mix material. An isolated zero-restitution impact between two dynamic
-source spheres also advances when both pairs against the fixed body stay clear.
-With three dynamic bodies, the isolated pair path kicks each body once, sweeps
-all three non-excluded pairs, and accepts one earliest impact while the other
-two pair paths remain certified clear. Every body moves through the impact
-prefix and remainder. The third body's mass, gravity, load, kinetic energy,
-linear momentum, angular momentum, and drift change enter the world report
-once. Every rounded pair path supplies trace replay. An overlapping event
-bracket, an undecided pair path that may precede the chosen event, or an
-unproved correction against the third body returns `Undecided` with no `Next`.
-The pair response must certify its impact, correction, and continuation. A
-persistent sphere-pair touch needs matching ideal and rounded full-span contact
-tracks. If global event-time rounding changes the remaining drift endpoint,
-the child response's endpoint is used only within `PointResolution`, and all
-remaining pair paths are certified again over the global time slice. A second
-possible contact during that resting continuation returns `Undecided`.
+Three-body fixtures cover one dynamic body and two fixed bodies, two dynamic
+bodies and one fixed body, and three dynamic bodies: sequential impacts, a
+centered stack, an isolated zero-restitution sphere impact and simultaneous
+sphere islands, each resolved by the general step. An excluded pair is not
+queried and does not mix material.
 This first two-dynamic path returns `Undecided` for other initial contacts and
 nonzero angular velocity.
 Three dynamic source spheres also resolve one symmetric simultaneous
@@ -518,12 +496,10 @@ resolved by an impulse if closing contact occurs.
 
 `NewWorld` accepts two or more bodies and holds every body pair, with its
 exclusion and effective material, in a canonical pair table
-(`docs/multibody-dynamics-design.md` §3.1). The shipped step resolves two
-bodies with at least one dynamic body, or three bodies with one, two, or three
-dynamic bodies and every other body fixed; `NewWorld` refuses other two- and
-three-body role mixes. A larger world takes the scheduled step of
-`docs/multibody-dynamics-design.md` §5, which drifts from event to event and
-solves the contacts at each event time as certified Coulomb islands (§6).
+(`docs/multibody-dynamics-design.md` §3.1), in any role mix. Every world takes
+the scheduled step of `docs/multibody-dynamics-design.md` §5, which drifts from
+event to event and solves the contacts at each event time as certified Coulomb
+islands (§6).
 The typed `StepDiagnostic` fields are `docs/multibody-dynamics-design.md` §12.
 Every pair of a world can be excluded or given one material override. `NewWorld`
 rejects a pair naming a body outside the world, including nil or repeated
@@ -713,23 +689,12 @@ when its source solids overlap or cross. Publish no contact event and typed
 zero contact impulse and kinematic work. The trace and conservation readings
 still describe the completed step.
 
-In a three-body world, sweep every non-excluded pair with a dynamic body before
-choosing a response. With one dynamic body, the first simultaneous increment consumes both real
-initial manifolds for orthogonal frictionless face contacts. A simultaneous
-case outside that increment returns `Undecided` with no `Next`. For one active
-response, certify the other pair's ideal and rounded paths before and after
-the event; sweep any position correction against it. Query the fixed/fixed
-pair at its constant pose unless it is excluded. The conservation report
-includes every dynamic body in the world. A kinematic body returns
-`ErrUnsupported` at three-body world construction. With two dynamic bodies,
-select a single earliest event only when every other pair's bracket or
-unresolved interval starts strictly later. Kick each dynamic body once for
-the full step, then restart all pair sweeps after each response. Count events
-against one world `MaxEvents` limit. If one dynamic body is outside the
-responding pair, drift and replay it through every slice and include its mass,
-loads, energy, and momentum in the world report. A dynamic/dynamic impulse
-contributes zero to total external contact impulse; a fixed/dynamic impulse
-contributes its signed value.
+Every world sweeps its candidate pairs through the broad phase of
+`docs/multibody-dynamics-design.md` §4.3 and counts every event against one
+`MaxEvents` limit. A dynamic body outside a responding pair drifts and replays
+through every slice, and its mass, loads, energy and momentum enter the world
+report. A dynamic/dynamic impulse contributes zero to total external contact
+impulse; a fixed/dynamic impulse contributes its signed value.
 
 A `SweepPair` `Undecided` that could precede the next event makes the step
 `Undecided`; a later undecided interval can be revisited after an earlier
@@ -751,70 +716,24 @@ past a possible earlier contact. `MaxEvents` counts impacts and contact
 transitions and grazing touches. Reaching it with remaining time returns
 `Undecided` and no `Next`.
 
-### Isolated grazing touch
+### Grazing touch
 
-For exactly two non-excluded source-sphere bodies, with at least one dynamic
-body, no kinematic driver, zero effective friction, and zero angular velocity
-after the full-step kick, consume a `SweepGrazingTouch` only through its real
-`SweepPair` report. Require an interior `Event` with one bounded point
-manifold, exact representable event time, and a second full-step sweep of the
-rounded endpoint poses that also reports `SweepGrazingTouch` at the same
-exact published fraction. Both events must name the same source faces; their
-normal, witness, and separation readings must agree within the configured
-contact and residual bounds. The rounded event pose must equal the state's
-drift pose at that exact time. The full-step rounded certificate must replay
-that event pose and the final pose. A mismatch or a nonzero angular response
-returns `Undecided` with no `Next`.
+A pair whose sweep reports `SweepGrazingTouch` inside a slice publishes a
+`ContactGraze` event without cutting the slice
+(`docs/multibody-dynamics-design.md` §5): its sweep replays the whole slice,
+through the touch and the separation after it. The pair must be frictionless,
+its manifold must lie within `StepConfig.Contact`, its poses at the graze are
+the ones its sweep replays, and its relative contact-point normal speed,
+enclosed over the bounded event normal, must lie within `VelocityResidual` of
+zero; a nominal zero alone cannot pass. A kinematic participant must
+translate. Any other graze is `Undecided` with `StepUnsupported`.
 
-The relative contact-point normal speed must be certified as zero within
-`VelocityResidual` from the exact affine center paths and bounded event
-normal. Require its entire bounded interval to lie inside the residual;
-a nominal zero alone cannot pass. This gate prevents a shallow crossing or
-closing impact from using the zero-impulse path. Apply no impulse or position
-correction, and keep every body's pre-event linear and angular velocity
-unchanged. Restitution and `ImpactSpeed` do not select a response for this
-event because the exact two-sided path proves no penetration.
-
-Publish one `ContactEvent` with appended kind `ContactGraze`, the original
-world-order pair, the bounded rounded manifold, exact event time, and a
-zero-width `Bracket` whose two ends equal `SweepReport.Event.At`. Populate
-typed zero normal, tangent, and point impulses; leave `Solver` nil. Its
-pre/post velocities and poses are identical, and every position-change
-component is zero. This is an observable contact event, but it is not an
-impact or persistent constraint. It counts once against `MaxEvents`.
-In `eventConservationFailure`, check `ContactGraze` in a separate branch
-before the `ContactImpact` positive-impulse gate. Require exactly one bounded
-manifold point and one typed point-impulse record. Require exact zero in the
-aggregate normal and all tangent components, the point normal and all point
-tangent components, and every position-change component. Require valid,
-unchanged linear and angular velocities for both bodies, plus valid proper
-event poses. Before invoking this branch, `Step` compares each event pose with
-both trace states' poses at the event; pre-event and post-event poses must be
-identical. Reject a missing or invalid event pose, a non-nil solver report,
-or a change in any of these values. Only after these checks
-may the branch return success without the impact energy-gain calculation:
-the event's exact velocity and pose differences then give zero event energy,
-linear momentum, and angular momentum change for every admitted mass and
-inertia interval. `eventAppliedImpulse` must accept the graze's bounded
-manifold and return exact zero. The conservation report publishes typed zero
-contact impulse and no event energy change; the full-step force kick and drift
-are still accounted for normally.
-
-Keep the full-span rounded grazing sweep as a private trace certificate.
-`Trace.Sample` uses its `CertifiedPosesAtInterval` for every interior time on
-both sides of the event and returns the identical post-event state at the
-event time. At any other sampled time it requires strict rounded separation;
-at the event time it requires exact rounded touch. This path does not split
-the full-span quadratic into two independently classified slices. If a
-sample's float pose loses the certified relation, `Trace.Sample` returns
-`ErrUnsupported`. The completed `Next` state remains separated at `dt`.
-The next step starts from that state and performs a fresh sweep.
-
-Initial touch, endpoint touch, more than two bodies, a kinematic participant,
-spin, positive friction, a nonrepresentable event time, insufficient pose
-budget, or a rounded path without the same exact minimum remains
-`Undecided` on this path. Existing initial-contact, impact, exclusion, and
-clear-step paths keep their own outcomes.
+The event carries the bounded manifold, the exact event time, a zero-width
+`Bracket` at `SweepReport.Event.At`, typed zero normal, tangent and point
+impulses, and a nil `Solver`. Its pre and post velocities and poses are
+identical and its position changes are zero. It applies no impulse or
+correction, counts once against `MaxEvents`, and adds nothing to the
+conservation report's contact impulse.
 
 Advance poses along the same certified paths to the chosen upper time. That
 time is the numerical event time; the report retains the original bracket.

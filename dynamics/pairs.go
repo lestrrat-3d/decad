@@ -179,52 +179,6 @@ func (w *World) Excluded() []BodyPair {
 	return out
 }
 
-// bodyIndex returns the world index of body, or -1 when it is not a member.
-func (w *World) bodyIndex(body *decad.Body) int {
-	i, ok := w.index[body]
-	if !ok {
-		return -1
-	}
-	return i
-}
-
-// hasExcluded reports whether any pair of the world is excluded.
-func (w *World) hasExcluded() bool {
-	for _, pair := range w.pairs {
-		if pair.excluded {
-			return true
-		}
-	}
-	return false
-}
-
 func (w *World) bodyPair(pair worldPair) BodyPair {
 	return BodyPair{A: w.bodies[pair.a].definition.Body, B: w.bodies[pair.b].definition.Body}
-}
-
-// pairWorld builds the two-body world one table entry describes. The
-// three-body step resolves each pair through such a world; it shares the
-// parent's admitted mass and the pair's effective material, so no input is
-// validated or mixed twice. A dynamic body enters as supplied mass, as every
-// two-body response gate reads it.
-func (w *World) pairWorld(key int) *World {
-	pair := w.pairs[key]
-	bodies := make([]worldBody, 0, 2)
-	for _, i := range [2]int{pair.a, pair.b} {
-		body := w.bodies[i]
-		if body.definition.Role == Dynamic {
-			mass := body.mass
-			body.definition.Density = nil
-			body.definition.Supplied = &mass
-		}
-		bodies = append(bodies, body)
-	}
-	pair.a, pair.b = 0, 1
-	return &World{
-		doc:    w.doc,
-		bodies: bodies,
-		pairs:  []worldPair{pair},
-		index:  map[*decad.Body]int{bodies[0].definition.Body: 0, bodies[1].definition.Body: 1},
-		step:   w.step,
-	}
 }

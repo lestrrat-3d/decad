@@ -257,7 +257,7 @@ to the byte budget.
 | Path | Responsibility |
 |---|---|
 | `examples/` | Executable Go examples (`Example_decad_…`, `go test`-verified `// Output:` blocks) that double as living documentation. Never `package main`. |
-| `dynamics/` | Rigid-body state and response, including fixed-box edge impulses in `fixed_offcenter.go`. See `docs/rigid-dynamics-design.md`. |
+| `dynamics/` | Rigid-body worlds and their scheduled step. See `docs/multibody-dynamics-design.md`. |
 | `decadtest/` | The public test kit: comparison helpers over decad's three bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. Standard `testing` only, never testify. See `decadtest/doc.go`. |
 | `internal/proof/` | Exact dyadic arithmetic, rational interval operations, float rounding bounds, and their arithmetic tests. |
 | `internal/pair/` | Exact source-box and planar solid relations, gaps, face patches and convexity. |

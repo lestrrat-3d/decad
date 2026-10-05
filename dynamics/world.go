@@ -1,8 +1,7 @@
 // Package dynamics advances rigid bodies using decad's certified geometry queries.
-// A world holds any number of bodies and their canonical pair table. Two- and
-// three-body worlds step through their closed-form responses; a world of four
-// or more bodies drifts from event to event through the certified broad phase
-// and solves the contacts at each event time as certified Coulomb islands.
+// A world holds any number of bodies and their canonical pair table. Its step
+// drifts from event to event through the certified broad phase and solves the
+// contacts at each event time as certified Coulomb islands.
 package dynamics
 
 import (
@@ -67,8 +66,7 @@ type StepConfig struct {
 	MaxPoseEvaluations      uint64
 	MaxIterations           int
 	MaxEvents               int
-	// MaxPairSweeps bounds the SweptBox and SweepPair calls one step of a
-	// world of four or more bodies makes, across every slice
+	// MaxPairSweeps bounds the SweptBox and SweepPair calls one step makes, across every slice
 	// (docs/multibody-dynamics-design.md §3.3, §12). A certificate the step
 	// reuses costs nothing. It must be positive.
 	MaxPairSweeps uint64
@@ -94,12 +92,10 @@ type World struct {
 	pairs  []worldPair // canonical order: (0,1), (0,2), …, (1,2), …
 	index  map[*decad.Body]int
 	step   StepConfig
-	three  *threeBodyWorld
 }
 
-// NewWorld admits two or more bodies and builds the canonical pair table.
-// A two-body world needs a dynamic body; a three-body world needs a dynamic
-// body and no kinematic body. A larger world carries no role limit.
+// NewWorld admits two or more bodies, in any role mix, and builds the
+// canonical pair table.
 func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World, error) {
 	if doc == nil || ctx == nil {
 		return nil, fmt.Errorf("%w: nil document or context", ErrInvalidInput)
@@ -114,17 +110,11 @@ func NewWorld(ctx context.Context, doc *decad.Document, cfg WorldConfig) (*World
 	if err := w.admitBodies(ctx, cfg.Bodies); err != nil {
 		return nil, err
 	}
-	if err := w.admitShape(); err != nil {
-		return nil, err
-	}
 	pairs, err := buildPairTable(w.bodies, w.index, cfg.Excluded, cfg.Overrides)
 	if err != nil {
 		return nil, err
 	}
 	w.pairs = pairs
-	if len(w.bodies) == 3 {
-		w.three = newThreeBodyWorld(w)
-	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -188,34 +178,6 @@ func (w *World) admitBodies(ctx context.Context, entries []RigidBody) error {
 			w.bodies[i].mass = mass
 		default:
 			return fmt.Errorf("%w: unknown body role", ErrInvalidInput)
-		}
-	}
-	return nil
-}
-
-// admitShape refuses the two- and three-body role mixes the shipped steps
-// cannot take. Larger worlds carry no role limit here.
-func (w *World) admitShape() error {
-	kinematic, dynamic := 0, 0
-	for _, body := range w.bodies {
-		switch body.definition.Role {
-		case Kinematic:
-			kinematic++
-		case Dynamic:
-			dynamic++
-		}
-	}
-	switch len(w.bodies) {
-	case 2:
-		if dynamic == 0 {
-			return fmt.Errorf("%w: one or two dynamic bodies required", ErrUnsupported)
-		}
-	case 3:
-		if kinematic != 0 {
-			return fmt.Errorf("%w: three-body kinematic response", ErrUnsupported)
-		}
-		if dynamic == 0 {
-			return fmt.Errorf("%w: three-body world needs a dynamic body", ErrUnsupported)
 		}
 	}
 	return nil
@@ -423,8 +385,7 @@ type BodyState struct {
 // never shared between two States that may diverge: code that derives a new
 // State by changing an entry starts from clone.
 //
-// A State that a step of a world of four or more bodies published also
-// carries that step's contact set and its reuse cache
+// A State that a step published also carries that step's contact set and its reuse cache
 // (docs/multibody-dynamics-design.md §3.2). Both are immutable and describe
 // exactly these entries; a State derived from it by clone drops them.
 type State struct {

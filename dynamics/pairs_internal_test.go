@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -53,7 +54,6 @@ func TestPairTableMixesMaterialPerPair(t *testing.T) {
 		Step: pairMaterialTestStep(),
 	})
 	require.NoError(t, err)
-	require.Nil(t, w.three, "a five-body world has no three-body container")
 	require.Len(t, w.pairs, 10)
 
 	type want struct {
@@ -101,9 +101,11 @@ func TestPairTableMixesMaterialPerPair(t *testing.T) {
 	}
 }
 
-// A three-body world's response pairs are two-body worlds built from the
-// parent table: they share its admitted mass and its pair material.
-func TestThreeBodyResponsePairsReadTheTable(t *testing.T) {
+// A three-body world's step reads its pairs straight from the table: the
+// override sets the box/floor restitution, the other pair keeps the mixed
+// one, and the box's mass is read once from its density. The box falls onto
+// the floor at 100 mm/s and leaves at 25 mm/s, the override's restitution.
+func TestThreeBodyStepReadsTheTable(t *testing.T) {
 	doc := decad.New()
 	floor := pairTableTestBox(t, doc, 0)
 	box := pairTableTestBox(t, doc, 40)
@@ -121,27 +123,32 @@ func TestThreeBodyResponsePairsReadTheTable(t *testing.T) {
 		Step: pairMaterialTestStep(),
 	})
 	require.NoError(t, err)
-	require.NotNil(t, w.three)
-	require.Equal(t, 1, w.three.dynamic)
-	require.Equal(t, 1, w.three.dynamicCount)
-	require.Nil(t, w.three.pairs[1], "the fixed/fixed pair has no response world")
-	for _, key := range []int{0, 2} {
-		child := w.three.pairs[key]
-		require.NotNil(t, child)
-		require.Len(t, child.bodies, 2)
-		require.Equal(t, w.bodyPair(w.pairs[key]), child.bodyPair(child.pairs[0]))
-		require.Equal(t, 0, child.pairs[0].a)
-		require.Equal(t, 1, child.pairs[0].b)
-		require.Equal(t, w.pairs[key].restitution, child.pairs[0].restitution)
-		dynamicSide := 1 - key/2 // the box is b in pair (0,1) and a in pair (1,2)
-		require.Nil(t, child.bodies[dynamicSide].definition.Density)
-		require.NotNil(t, child.bodies[dynamicSide].definition.Supplied)
-		require.Equal(t, w.bodies[1].mass, *child.bodies[dynamicSide].definition.Supplied)
-		require.Equal(t, w.bodies[1].mass, child.bodies[dynamicSide].mass)
-	}
-	require.Equal(t, units.Scalar(.25), w.three.pairs[0].pairs[0].restitution)
-	require.Equal(t, units.Scalar(.5), w.three.pairs[2].pairs[0].restitution)
-	require.NotNil(t, w.bodies[1].definition.Density, "the parent keeps the caller's mass source")
+	require.Len(t, w.pairs, 3)
+	require.Equal(t, units.Scalar(.25), w.pairs[0].restitution)
+	require.Equal(t, units.Scalar(.5), w.pairs[2].restitution)
+	require.NotNil(t, w.bodies[1].definition.Density, "the world keeps the caller's mass source")
+	require.InDelta(t, 1, w.bodies[1].mass.Mass.Value.Base(), 1e-12)
+	zeroW := QuantityVec{X: units.RadiansPerSecond(0), Y: units.RadiansPerSecond(0),
+		Z: units.RadiansPerSecond(0)}
+	still := QuantityVec{X: units.MillimetersPerSecond(0), Y: units.MillimetersPerSecond(0),
+		Z: units.MillimetersPerSecond(0)}
+	toward := still
+	toward.X = units.MillimetersPerSecond(-100)
+	start, err := w.NewState([]BodyState{
+		{Body: floor, Pose: r3.Identity(), LinearVelocity: still, AngularVelocity: zeroW},
+		{Body: box, Pose: r3.Identity(), LinearVelocity: toward, AngularVelocity: zeroW},
+		{Body: remote, Pose: r3.Identity(), LinearVelocity: still, AngularVelocity: zeroW},
+	})
+	require.NoError(t, err)
+	gravity := QuantityVec{X: units.MillimetersPerSecondSquared(0),
+		Y: units.MillimetersPerSecondSquared(0), Z: units.MillimetersPerSecondSquared(0)}
+	report, err := w.Step(t.Context(), start, StepInput{Gravity: gravity}, units.Seconds(.5))
+	require.NoError(t, err)
+	require.Equal(t, Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	require.Equal(t, BodyPair{A: floor, B: box}, report.Events[0].Pair)
+	require.InDelta(t, 25, report.Events[0].PostVelocityB.X.Base(), 1e-9)
+	require.InDelta(t, 125, report.Events[0].NormalImpulse.Base(), 1e-9)
 }
 
 func pairMaterialTestStep() StepConfig {

@@ -39,45 +39,6 @@ type StepConservation struct {
 	DriftChange ConservationState
 }
 
-func (w *World) conservationReadings(from, kicked, end State, trace Trace, events []ContactEvent,
-	gravity QuantityVec, loads []*BodyLoad, dt units.Value) (StepConservation, bool) {
-	input, ok := w.conservationState(from)
-	if !ok {
-		return StepConservation{}, false
-	}
-	afterKick, ok := w.conservationState(kicked)
-	if !ok {
-		return StepConservation{}, false
-	}
-	completion, ok := w.conservationState(end)
-	if !ok {
-		return StepConservation{}, false
-	}
-	gravityImpulse, loadImpulse, ok := w.forceImpulses(gravity, loads, dt)
-	if !ok {
-		return StepConservation{}, false
-	}
-	torqueImpulse, ok := w.torqueImpulse(loads, dt)
-	if !ok {
-		return StepConservation{}, false
-	}
-	contactImpulse, ok := w.externalContactImpulse(events)
-	if !ok {
-		return StepConservation{}, false
-	}
-	kinematicWork, ok := w.kinematicWork(events)
-	if !ok {
-		return StepConservation{}, false
-	}
-	driftChange, ok := w.driftConservationChange(kicked, trace)
-	if !ok {
-		return StepConservation{}, false
-	}
-	return StepConservation{Input: input, AfterKick: afterKick, Completion: completion,
-		GravityImpulse: gravityImpulse, LoadImpulse: loadImpulse, ContactImpulse: contactImpulse,
-		TorqueImpulse: torqueImpulse, KinematicWork: kinematicWork, DriftChange: driftChange}, true
-}
-
 func (w *World) torqueImpulse(loads []*BodyLoad, dt units.Value) (MomentumReading, bool) {
 	var value [3]*big.Rat
 	for axis := range value {
@@ -100,26 +61,6 @@ func (w *World) torqueImpulse(loads []*BodyLoad, dt units.Value) (MomentumReadin
 		}
 	}
 	return boundedVector(value, value, value, units.KilogramSquareMillimeterPerSecond)
-}
-
-func (w *World) kinematicWork(events []ContactEvent) (decad.Measurement, bool) {
-	total := new(big.Rat)
-	impulseLimit := exactBase(w.step.ImpulseResidual)
-	if impulseLimit == nil {
-		return decad.Measurement{}, false
-	}
-	for _, event := range events {
-		applied, ok := eventAppliedImpulse(event)
-		if !ok {
-			return decad.Measurement{}, false
-		}
-		work, _, ok := w.kinematicEventWork(event, applied, impulseLimit)
-		if !ok {
-			return decad.Measurement{}, false
-		}
-		total.Add(total, work)
-	}
-	return boundedReading(total, total, total, units.KilogramSquareMillimeterPerSecondSquared)
 }
 
 func (w *World) conservationState(state State) (ConservationState, bool) {
@@ -390,16 +331,6 @@ func addMassProduct(sum, low, high, mass, massLow, massHigh, coefficient, coeffi
 	high.Add(high, maximum)
 }
 
-// driftConservationChange adds each body's drift coefficients before applying
-// its one held mass interval. The source center cancels on a translation slice.
-func (w *World) driftConservationChange(kicked State, trace Trace) (ConservationState, bool) {
-	slices := [][2]State{{kicked, trace.end}}
-	if trace.hasEvent {
-		slices = [][2]State{{kicked, trace.pre}, {trace.post, trace.end}}
-	}
-	return w.driftConservationSlices(slices)
-}
-
 func (w *World) driftConservationSlices(slices [][2]State) (ConservationState, bool) {
 	for _, slice := range slices {
 		for i, part := range w.bodies {
@@ -604,67 +535,6 @@ func (w *World) forceImpulses(gravity QuantityVec, loads []*BodyLoad,
 	return gravityReading, loadReading, ok
 }
 
-func (w *World) externalContactImpulse(events []ContactEvent) (MomentumReading, bool) {
-	var components, low, high [3]*big.Rat
-	for axis := range components {
-		components[axis] = new(big.Rat)
-		low[axis], high[axis] = new(big.Rat), new(big.Rat)
-	}
-	if w.bodies[0].definition.Role == Dynamic && w.bodies[1].definition.Role == Dynamic {
-		return boundedMomentum(components, components, components)
-	}
-	// A contact impulse acts along A-to-B on B and oppositely on A.
-	sign := int64(1)
-	if w.bodies[0].definition.Role == Dynamic {
-		sign = -1
-	}
-	for _, event := range events {
-		if event.NormalImpulse.Kind() != units.Impulse ||
-			validateQuantityVec(event.TangentImpulse, units.Impulse) != nil {
-			return MomentumReading{}, false
-		}
-		normalImpulse := exactBase(event.NormalImpulse)
-		if normalImpulse == nil {
-			return MomentumReading{}, false
-		}
-		if event.Kind == ContactTransition && normalImpulse.Sign() == 0 &&
-			event.TangentImpulse.X.Mag() == 0 && event.TangentImpulse.Y.Mag() == 0 &&
-			event.TangentImpulse.Z.Mag() == 0 {
-			continue
-		}
-		if len(event.Manifold.Points) == 0 {
-			return MomentumReading{}, false
-		}
-		point := event.Manifold.Points[0]
-		normalError := new(big.Rat)
-		for _, witness := range event.Manifold.Points {
-			bound, angle := exactBase(witness.Normal.Bound), exactBase(witness.NormalAngle)
-			if bound == nil || angle == nil || bound.Sign() < 0 || angle.Sign() < 0 {
-				return MomentumReading{}, false
-			}
-			uncertainty := new(big.Rat).Add(bound, angle)
-			if uncertainty.Cmp(normalError) > 0 {
-				normalError = uncertainty
-			}
-		}
-		normalError.Mul(normalError, normalImpulse)
-		axis := [3]float64{point.Normal.Value.X, point.Normal.Value.Y, point.Normal.Value.Z}
-		for i, value := range axis {
-			normal := new(big.Rat).SetFloat64(value)
-			tangent := exactBase(velocityComponent(event.TangentImpulse, i))
-			if normal == nil || tangent == nil {
-				return MomentumReading{}, false
-			}
-			applied := new(big.Rat).Add(new(big.Rat).Mul(normalImpulse, normal), tangent)
-			applied.Mul(applied, big.NewRat(sign, 1))
-			components[i].Add(components[i], applied)
-			low[i].Add(low[i], new(big.Rat).Sub(applied, normalError))
-			high[i].Add(high[i], new(big.Rat).Add(applied, normalError))
-		}
-	}
-	return boundedMomentum(components, low, high)
-}
-
 func boundedMomentum(value, low, high [3]*big.Rat) (MomentumReading, bool) {
 	return boundedVector(value, low, high, units.KilogramMillimeterPerSecond)
 }
@@ -708,4 +578,29 @@ func boundedReading(nominal, low, high *big.Rat, unit units.Unit) (decad.Measure
 	}
 	return decad.Measurement{Value: units.New(value, unit), Bound: units.New(bound, unit),
 		Exactness: exactness}, true
+}
+
+// inertiaRowCeiling is the largest row sum of the inertia tensor's
+// component magnitudes plus their bounds: a ceiling on its largest
+// eigenvalue.
+func inertiaRowCeiling(inertia decad.InertiaReading) *big.Rat {
+	components := [3][3]decad.Measurement{
+		{inertia.XX, inertia.XY, inertia.XZ},
+		{inertia.XY, inertia.YY, inertia.YZ},
+		{inertia.XZ, inertia.YZ, inertia.ZZ}}
+	maximum := new(big.Rat)
+	for _, row := range components {
+		sum := new(big.Rat)
+		for _, entry := range row {
+			value, bound := exactBase(entry.Value), exactBase(entry.Bound)
+			if value == nil || bound == nil || bound.Sign() < 0 {
+				return nil
+			}
+			sum.Add(sum, absRat(value)).Add(sum, bound)
+		}
+		if sum.Cmp(maximum) > 0 {
+			maximum = sum
+		}
+	}
+	return maximum
 }

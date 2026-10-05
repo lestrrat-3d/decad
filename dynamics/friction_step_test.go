@@ -312,33 +312,33 @@ func TestFixedFloorFrictionRepeatsAtTranslatedPose(t *testing.T) {
 	}
 }
 
+// A 1 kg box translated 6.25 mm along X falls onto the floor at 50 mm/s
+// with zero restitution. The floor stops it with 50 kg·mm/s spread over its
+// four patch corners, and the island certifies that the corners' witness
+// uncertainty leaves its spin within AngularVelocityResidual.
 func TestTranslatedStaticSupportBoundsCornerUncertainty(t *testing.T) {
 	doc := decad.New()
 	floor := sourceBoxForFriction(t, doc, -100, -100, 100, 100, -10)
 	box := sourceBoxForFriction(t, doc, -5, -5, 5, 5, 0)
 	pose, err := r3.Translation(r3.Vec{X: 6.25})
 	require.NoError(t, err)
-	request := decad.ContactRequest{PointResolution: units.Millimeters(1e-6),
-		NormalResolution: units.Radians(1e-6)}
-	contact, err := doc.ContactPair(t.Context(), floor, box, r3.Identity(), pose, request)
+	cfg := frictionPatchConfig()
+	contact, err := doc.ContactPair(t.Context(), floor, box, r3.Identity(), pose, cfg.Contact)
 	require.NoError(t, err)
 	require.Equal(t, decad.ContactTouching, contact.Relation)
 	require.Len(t, contact.Manifold.Points, 4)
-	mass, err := box.MassProperties(t.Context(), units.KilogramsPerCubicMillimeter(.001))
-	require.NoError(t, err)
-	for i := range contact.Manifold.Points {
-		contact.Manifold.Points[i].OnB.Bound = units.Millimeters(1e-12)
-	}
-	limit := units.RadiansPerSecond(1e-6)
-	angular, ok := staticSupportAngularUpper(contact.Manifold, mass, pose,
-		units.KilogramMillimetersPerSecond(50), units.KilogramMillimetersPerSecond(1e-6))
-	require.True(t, ok)
-	require.LessOrEqual(t, angular.Cmp(exactBase(limit)), 0)
-	contact.Manifold.Points[0].OnB.Bound = units.Millimeters(1e-4)
-	angular, ok = staticSupportAngularUpper(contact.Manifold, mass, pose,
-		units.KilogramMillimetersPerSecond(50), units.KilogramMillimetersPerSecond(1e-6))
-	require.True(t, ok)
-	require.Greater(t, angular.Cmp(exactBase(limit)), 0)
+	density := units.KilogramsPerCubicMillimeter(.001)
+	material := Material{Restitution: units.Scalar(0), Friction: units.Scalar(0)}
+	_, report := stepPatch(t, doc, RigidBody{Body: floor, Role: Fixed, Material: material},
+		RigidBody{Body: box, Role: Dynamic, Density: &density, Material: material},
+		r3.Identity(), pose, r3.Vec{Z: -50})
+	require.Equal(t, Advanced, report.Status, "%+v", report.Diagnostics)
+	require.Len(t, report.Events, 1)
+	event := report.Events[0]
+	require.Len(t, event.PointImpulses, 4)
+	require.InDelta(t, 50, event.NormalImpulse.Base(), 1e-6)
+	require.InDelta(t, 0, event.PostVelocityB.Z.Base(), 1e-6)
+	require.LessOrEqual(t, event.Solver.AngularUpper.Base(), cfg.AngularVelocityResidual.Base())
 }
 
 func TestFixedFloorFrictionRejectsUnsupportedMaterialsAndPatch(t *testing.T) {

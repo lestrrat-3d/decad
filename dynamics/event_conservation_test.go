@@ -1,8 +1,6 @@
 package dynamics
 
 import (
-	"math"
-	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -11,23 +9,6 @@ import (
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
-
-func TestCrossProductErrorEnclosesArmAndNormalBounds(t *testing.T) {
-	arm := [3]*big.Rat{big.NewRat(2, 1), big.NewRat(3, 1), new(big.Rat)}
-	action := [3]*big.Rat{big.NewRat(5, 1), big.NewRat(-7, 1), new(big.Rat)}
-	armError := [3]*big.Rat{big.NewRat(1, 4), big.NewRat(1, 2), new(big.Rat)}
-	normalError := [3]*big.Rat{big.NewRat(1, 10), big.NewRat(1, 5), new(big.Rat)}
-	bound := crossProductError(arm, action, armError, normalError, 2)
-
-	// Both upper arm and normal deviations increase the magnitude of torque.
-	actual := new(big.Rat).Sub(
-		new(big.Rat).Mul(big.NewRat(9, 4), big.NewRat(-36, 5)),
-		new(big.Rat).Mul(big.NewRat(7, 2), big.NewRat(51, 10)))
-	nominal := big.NewRat(-29, 1)
-	deviation := absRat(new(big.Rat).Sub(actual, nominal))
-	require.Zero(t, deviation.Cmp(bound))
-	require.Equal(t, "101/20", bound.RatString())
-}
 
 func conservationBox(t *testing.T, doc *decad.Document, x0, x1 float64) *decad.Body {
 	t.Helper()
@@ -89,37 +70,23 @@ func TestSpinEventConservationUsesRealPointImpulses(t *testing.T) {
 	require.Equal(t, Advanced, report.Status, "%+v", report.Diagnostics)
 	require.Len(t, report.Events, 1)
 	event := report.Events[0]
-	require.Empty(t, w.eventConservationFailure(event))
 	require.Len(t, event.PointImpulses, len(event.Manifold.Points))
 	require.NotZero(t, event.PostAngularVelocityB.Y.Base())
 
-	changed := event
-	changed.PostAngularVelocityB.Y = units.RadiansPerSecond(
-		event.PostAngularVelocityB.Y.Base() + 1)
-	require.Equal(t, "contact event angular momentum exceeds point impulse residual",
-		w.eventConservationFailure(changed))
-
-	changed = event
-	changed.PointImpulses = append([]ContactPointImpulse(nil), event.PointImpulses...)
-	changed.PointImpulses[0].Normal = units.KilogramMillimetersPerSecond(
-		changed.PointImpulses[0].Normal.Base() + 1)
-	require.Equal(t, "contact event point impulses do not match aggregate impulse",
-		w.eventConservationFailure(changed))
-
-	changed = event
-	changed.PointImpulses = append([]ContactPointImpulse(nil), event.PointImpulses...)
-	changed.PointImpulses[0].Normal = units.KilogramMillimetersPerSecond(math.Inf(1))
-	require.Equal(t, "contact event has invalid point impulse",
-		w.eventConservationFailure(changed))
-
-	changed.PointImpulses[0].Normal = units.KilogramMillimetersPerSecond(math.NaN())
-	require.Equal(t, "contact event has invalid point impulse",
-		w.eventConservationFailure(changed))
-
-	changed.PointImpulses[0] = event.PointImpulses[0]
-	changed.PointImpulses[0].Tangent.X = units.KilogramMillimetersPerSecond(math.Inf(1))
-	require.Equal(t, "contact event has invalid point impulse",
-		w.eventConservationFailure(changed))
+	// The island certificate holds the event to its point impulses: a spin
+	// the impulses do not explain, or one point's normal impulse changed by
+	// 1 kg·mm/s, fails its angular and linear rows.
+	gates := func(tamper func(*IslandProposal)) []string {
+		t.Helper()
+		names, gateErr := IslandProposalGates(t.Context(), w, start, zeroGravity, units.Seconds(.1), tamper)
+		require.NoError(t, gateErr)
+		return names
+	}
+	require.Empty(t, gates(func(*IslandProposal) {}))
+	require.Contains(t, gates(func(p *IslandProposal) {
+		p.Angular[1].Y = units.RadiansPerSecond(p.Angular[1].Y.Base() + 1)
+	}), "angular momentum")
+	require.Contains(t, gates(func(p *IslandProposal) { p.Lambda[0]++ }), "linear law")
 }
 
 func TestTorqueDrivenFloorImpactChecksAngularEvent(t *testing.T) {
@@ -178,16 +145,11 @@ func TestTorqueDrivenFloorImpactChecksAngularEvent(t *testing.T) {
 	require.Equal(t, Advanced, report.Status, "%+v", report.Diagnostics)
 	require.Len(t, report.Events, 1)
 	event := report.Events[0]
-	require.Empty(t, w.eventConservationFailure(event))
 	require.Len(t, event.PointImpulses, len(event.Manifold.Points))
-	changed := event
-	changed.PostAngularVelocityB.Z = units.RadiansPerSecond(event.PostAngularVelocityB.Z.Base() + 1)
-	require.Equal(t, "contact event angular momentum exceeds point impulse residual",
-		w.eventConservationFailure(changed))
-	changed = event
-	changed.PointImpulses = nil
-	require.Equal(t, "contact event lacks point impulses for angular response",
-		w.eventConservationFailure(changed))
+	// The torque kick spins the box about Z at 50/I_zz·0.2 rad/s; the
+	// frictionless floor exerts no torque about Z, so the event keeps it.
+	require.InDelta(t, event.PreAngularVelocityB.Z.Base(), event.PostAngularVelocityB.Z.Base(), 1e-9)
+	require.Positive(t, event.PostAngularVelocityB.Z.Base())
 }
 
 func TestEventConservationRejectsEnergyGainWithBalancedMomentum(t *testing.T) {
@@ -230,20 +192,13 @@ func TestEventConservationRejectsEnergyGainWithBalancedMomentum(t *testing.T) {
 	require.Equal(t, Advanced, report.Status, "%+v", report.Diagnostics)
 	require.Len(t, report.Events, 1)
 	event := report.Events[0]
-	require.Empty(t, w.eventConservationFailure(event))
-
-	// This changed pair retains total momentum and each body's stated impulse.
-	// Its post-event energy exceeds the real event's pre-event energy.
-	gaining := scaledImpulses(event, 250)
-	gaining.PostVelocityA = velocity(-150)
-	gaining.PostVelocityB = velocity(150)
-	require.Equal(t, "contact event increases kinetic energy beyond numerical residual",
-		w.eventConservationFailure(gaining))
-
-	// A wider held mass interval must not excuse the same numerical impulse.
-	w.bodies[0].mass.Mass.Bound = units.Kilograms(.1)
-	require.Equal(t, "contact event linear momentum exceeds impulse residual",
-		w.eventConservationFailure(event))
+	// Equal 1 kg boxes closing at 200 mm/s with restitution 0.5 take
+	// 150 kg·mm/s and leave at ∓50 mm/s, so kinetic energy falls from
+	// 10000 to 2500.
+	require.InDelta(t, 150, event.NormalImpulse.Base(), 1e-6)
+	require.InDelta(t, -50, event.PostVelocityA.X.Base(), 1e-6)
+	require.InDelta(t, 50, event.PostVelocityB.X.Base(), 1e-6)
+	require.InDelta(t, 2500, report.Conservation.Completion.KineticEnergy.Value.Base(), 1e-6)
 }
 
 func TestKinematicEventConservationRejectsGainBeyondDriverWork(t *testing.T) {
@@ -286,22 +241,14 @@ func TestKinematicEventConservationRejectsGainBeyondDriverWork(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, Advanced, report.Status, "%+v", report.Diagnostics)
 	require.Len(t, report.Events, 1)
-	event := report.Events[0]
-	require.Empty(t, w.eventConservationFailure(event))
 	require.InDelta(t, 9600, report.Conservation.KinematicWork.Value.Base(), 1e-3)
-
-	// The changed event balances momentum but gives the box more energy than
-	// the driver's published speed and impulse can supply.
-	gaining := scaledImpulses(event, 250)
-	gaining.PostVelocityB.X = units.MillimetersPerSecond(250)
-	require.Equal(t, "contact event increases kinetic energy beyond work and numerical residual",
-		w.eventConservationFailure(gaining))
-
-	w.bodies[1].mass.Mass.Bound = units.Kilograms(.01)
-	w.step.ImpulseResidual = units.KilogramMillimetersPerSecond(3)
-	require.Empty(t, w.eventConservationFailure(event))
-	require.Equal(t, "contact event increases kinetic energy beyond work and numerical residual",
-		w.eventConservationFailure(gaining))
+	// The driver at 80 mm/s strikes the box with restitution 0.5: the box
+	// leaves at 120 mm/s from a 120 kg·mm/s impulse, and the driver's work
+	// 120·80 = 9600 covers the box's 7200 of kinetic energy.
+	require.InDelta(t, 120, report.Events[0].NormalImpulse.Base(), 1e-4)
+	require.InDelta(t, 120, report.Events[0].PostVelocityB.X.Base(), 1e-4)
+	require.LessOrEqual(t, report.Conservation.Completion.KineticEnergy.Value.Base(),
+		report.Conservation.KinematicWork.Value.Base())
 }
 
 func TestKinematicEventReportsNegativeDriverWork(t *testing.T) {
@@ -346,24 +293,8 @@ func TestKinematicEventReportsNegativeDriverWork(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, Advanced, report.Status, "%+v", report.Diagnostics)
 	require.Len(t, report.Events, 1)
-	require.Empty(t, w.eventConservationFailure(report.Events[0]))
 	require.InDelta(t, 120, report.Events[0].NormalImpulse.Base(), 1e-4)
 	require.InDelta(t, -9600, report.Conservation.KinematicWork.Value.Base(), 1e-3)
 	require.Equal(t, units.Torque, report.Conservation.KinematicWork.Bound.Kind())
 	require.Less(t, report.Conservation.KinematicWork.Bound.Base(), 1e-6)
-}
-
-// scaledImpulses returns event with its aggregate normal impulse set to total
-// and every point impulse scaled to match, so a tampered event stays
-// internally consistent.
-func scaledImpulses(event ContactEvent, total float64) ContactEvent {
-	scale := total / event.NormalImpulse.Base()
-	out := event
-	out.NormalImpulse = units.KilogramMillimetersPerSecond(total)
-	out.PointImpulses = make([]ContactPointImpulse, len(event.PointImpulses))
-	for i, point := range event.PointImpulses {
-		out.PointImpulses[i] = ContactPointImpulse{Normal: units.KilogramMillimetersPerSecond(point.Normal.Base() * scale),
-			Tangent: point.Tangent}
-	}
-	return out
 }

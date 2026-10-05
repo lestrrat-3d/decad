@@ -27,7 +27,7 @@ func grazingSphere(t *testing.T, doc *decad.Document) *decad.Body {
 	return body
 }
 
-func TestGrazingEventConservationRejectsChangedState(t *testing.T) {
+func TestGrazingSpherePassesWithZeroImpulse(t *testing.T) {
 	doc := decad.New()
 	fixed, moving := grazingSphere(t, doc), grazingSphere(t, doc)
 	density := units.KilogramsPerCubicMillimeter(.001)
@@ -63,60 +63,15 @@ func TestGrazingEventConservationRejectsChangedState(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, Advanced, report.Status, "%+v", report.Diagnostics)
 	require.Len(t, report.Events, 1)
-	valid := report.Events[0]
-	require.Empty(t, w.eventConservationFailure(valid))
-	mutations := []struct {
-		name   string
-		change func(*ContactEvent)
-	}{
-		{"aggregate normal impulse", func(e *ContactEvent) {
-			e.NormalImpulse = units.KilogramMillimetersPerSecond(1)
-		}},
-		{"aggregate tangent impulse", func(e *ContactEvent) {
-			e.TangentImpulse.X = units.KilogramMillimetersPerSecond(1)
-		}},
-		{"point normal impulse", func(e *ContactEvent) {
-			e.PointImpulses[0].Normal = units.KilogramMillimetersPerSecond(1)
-		}},
-		{"point tangent impulse", func(e *ContactEvent) {
-			e.PointImpulses[0].Tangent.X = units.KilogramMillimetersPerSecond(1)
-		}},
-		{"linear velocity", func(e *ContactEvent) {
-			e.PostVelocityB.X = units.MillimetersPerSecond(-39)
-		}},
-		{"reported velocity", func(e *ContactEvent) {
-			e.PreVelocity.X = units.MillimetersPerSecond(-39)
-			e.PostVelocity.X = units.MillimetersPerSecond(-39)
-		}},
-		{"angular velocity", func(e *ContactEvent) {
-			e.PostAngularVelocityB.Z = units.RadiansPerSecond(1)
-		}},
-		{"position change", func(e *ContactEvent) {
-			e.PositionChangeB.X = 1
-		}},
-		{"elapsed bracket endpoint", func(e *ContactEvent) {
-			e.Bracket.To.Elapsed.Bound = units.Seconds(1)
-		}},
-		{"invalid pose", func(e *ContactEvent) {
-			e.PoseB = r3.Transform{}
-		}},
-		{"unbounded point", func(e *ContactEvent) {
-			e.Manifold.Points[0].OnA.Bound = units.Millimeters(1)
-		}},
-		{"missing point impulse", func(e *ContactEvent) {
-			e.PointImpulses = nil
-		}},
-		{"solver report", func(e *ContactEvent) {
-			e.Solver = &ContactSolverReport{}
-		}},
-	}
-	for _, tc := range mutations {
-		t.Run(tc.name, func(t *testing.T) {
-			changed := valid
-			changed.PointImpulses = append([]ContactPointImpulse(nil), valid.PointImpulses...)
-			changed.Manifold = cloneManifold(valid.Manifold)
-			tc.change(&changed)
-			require.NotEmpty(t, w.eventConservationFailure(changed))
-		})
-	}
+	// The sphere passes the fixed sphere's equator tangentially: a graze
+	// with no impulse, after which it keeps moving at −40 mm/s.
+	graze := report.Events[0]
+	require.Equal(t, ContactGraze, graze.Kind)
+	require.Zero(t, graze.NormalImpulse.Base())
+	require.Len(t, graze.Manifold.Points, 1)
+	end, ok := report.Next.Body(moving)
+	require.True(t, ok)
+	require.Equal(t, motion, end.LinearVelocity)
+	require.InDelta(t, -20, end.Pose.Translation().X, 1e-9)
+	require.InDelta(t, 10, end.Pose.Translation().Y, 1e-9)
 }

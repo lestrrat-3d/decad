@@ -10,35 +10,20 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Trace keeps the rounded sweep certificates and the event states for replay.
-// A world of four or more bodies records its step as event-free slices and
-// the events between them (docs/multibody-dynamics-design.md §3.4); the two-
-// and three-body steps keep their fixed slots.
+// Trace keeps a step's record for replay: the event-free slices of §3.4 with
+// their rounded pair certificates, and the events between them
+// (docs/multibody-dynamics-design.md §3.4).
 type Trace struct {
-	start               State
-	pre                 State
-	post                State
-	end                 State
-	preSweep            *decad.SweepReport
-	postSweep           *decad.SweepReport
-	grazingSweep        *decad.SweepReport
-	rotationalPrefix    *decad.SweepReport
-	rotationalRemainder *decad.SweepReport
-	threeSweeps         [3]*decad.SweepReport
-	threeSlices         []threeTraceSlice
-	threeEvents         []threeTraceEvent
-	slices              []traceSlice // a world of four or more bodies, docs/multibody-dynamics-design.md §3.4
-	events              []traceEvent // the events between those slices
-	scheduled           bool         // slices and events hold the whole record, even when both are empty
-	pairCalls           uint64       // SweptBox and SweepPair calls the step made, reused ones excluded
-	duration            units.Value
-	eventAt             units.Value
-	hasEvent            bool
-	excluded            bool
+	start     State
+	end       State
+	slices    []traceSlice // the step's event-free intervals
+	events    []traceEvent // the events between those slices
+	scheduled bool         // slices and events hold the whole record, even when both are empty
+	pairCalls uint64       // SweptBox and SweepPair calls the step made, reused ones excluded
+	duration  units.Value
 }
 
-// traceSlice is one event-free interval [start, end] of a step of a world of
-// four or more bodies (docs/multibody-dynamics-design.md §3.4). Every body
+// traceSlice is one event-free interval [start, end] of a step (docs/multibody-dynamics-design.md §3.4). Every body
 // moves on paths[i], which runs over the held span [start, span] to the end
 // of the step; every scheduled pair carries the rounded certificate that
 // proves those paths over the same span, or the swept-box exclusion that
@@ -61,8 +46,7 @@ type pairProof struct {
 	boxClear bool
 }
 
-// traceEvent is one event time of a step of a world of four or more bodies:
-// its held time from the step start, the states on both sides of it, and the
+// traceEvent is one event time of a step: its held time from the step start, the states on both sides of it, and the
 // islands solved there (docs/multibody-dynamics-design.md §3.4).
 type traceEvent struct {
 	at        *big.Rat
@@ -71,8 +55,7 @@ type traceEvent struct {
 }
 
 // Sample evaluates a recorded rounded path and its cached geometry proof.
-// It performs no response solve. A world of four or more bodies also reads
-// the bodies' bounds through Document.SweptBox to check its swept-box
+// It performs no response solve. It also reads the bodies' bounds through Document.SweptBox to check its swept-box
 // exclusions at the sampled poses (docs/multibody-dynamics-design.md §7.1).
 // Sample writes nothing, so concurrent calls on one Trace are safe.
 func (tr Trace) Sample(t units.Value) (State, error) {
@@ -81,136 +64,10 @@ func (tr Trace) Sample(t units.Value) (State, error) {
 		timeValue.Sign() < 0 || timeValue.Cmp(durationValue) > 0 {
 		return State{}, fmt.Errorf("%w: trace time outside step", ErrInvalidInput)
 	}
-	if tr.scheduled {
-		return tr.sampleSlices(t, timeValue, durationValue)
+	if !tr.scheduled {
+		return State{}, fmt.Errorf("%w: trace holds no step", ErrUnsupported)
 	}
-	if len(tr.threeSlices) != 0 {
-		return tr.sampleThreeSlices(t, timeValue)
-	}
-	var eventValue *big.Rat
-	if tr.hasEvent {
-		eventValue = exactBase(tr.eventAt)
-		if eventValue == nil {
-			return State{}, fmt.Errorf("%w: trace event time is invalid", ErrUnsupported)
-		}
-	}
-	if tr.hasEvent && timeValue.Cmp(eventValue) == 0 {
-		return tr.post, nil
-	}
-	if timeValue.Sign() == 0 {
-		return tr.start, nil
-	}
-	if timeValue.Cmp(durationValue) == 0 {
-		return tr.end, nil
-	}
-	if tr.grazingSweep != nil {
-		state := tr.post.clone()
-		a, b, err := tr.grazingSweep.CertifiedPosesAtInterval(t, units.Seconds(0), tr.duration)
-		if err != nil {
-			return State{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
-		}
-		state.entries[0].Pose, state.entries[1].Pose = a, b
-		return state, nil
-	}
-	if len(tr.start.entries) == 3 && tr.threeSweeps != ([3]*decad.SweepReport{}) {
-		return tr.sampleThreeSweeps(t)
-	}
-	state := tr.end
-	sweep := tr.preSweep
-	if !tr.hasEvent && sweep == nil {
-		sweep = tr.rotationalRemainder
-	}
-	sliceStart, sliceEnd := units.Seconds(0), tr.duration
-	if tr.hasEvent {
-		if timeValue.Cmp(eventValue) < 0 {
-			state = tr.pre
-			sliceEnd = tr.eventAt
-			if sweep == nil {
-				// The impact prefix is the original full-step rotating sweep.
-				sweep, sliceEnd = tr.rotationalPrefix, tr.duration
-			}
-		} else {
-			state = tr.post
-			sweep = tr.postSweep
-			sliceStart = tr.eventAt
-			if sweep == nil {
-				sweep = tr.rotationalRemainder
-			}
-		}
-	}
-	if tr.excluded {
-		return tr.sampleExcluded(timeValue, durationValue)
-	}
-	if sweep == nil {
-		return State{}, fmt.Errorf("%w: interior trace sample has no rounded path certificate", ErrUnsupported)
-	}
-	a, b, err := sweep.CertifiedPosesAtInterval(t, sliceStart, sliceEnd)
-	if err != nil {
-		return State{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
-	}
-	state = state.clone()
-	state.entries[0].Pose, state.entries[1].Pose = a, b
-	return state, nil
-}
-
-// sampleThreeSweeps replays a three-body step whose three pair sweeps cover
-// the whole step.
-func (tr Trace) sampleThreeSweeps(t units.Value) (State, error) {
-	if tr.start.world == nil || tr.start.world.three == nil {
-		return State{}, fmt.Errorf("%w: three-body trace has no world", ErrUnsupported)
-	}
-	state := tr.post
-	poses := make(map[*decad.Body]r3.Transform, 3)
-	for key, sweep := range tr.threeSweeps {
-		if sweep == nil {
-			continue
-		}
-		a, b, err := sweep.CertifiedPosesAtInterval(t, units.Seconds(0), tr.duration)
-		if err != nil {
-			return State{}, fmt.Errorf("%w: %w", ErrUnsupported, err)
-		}
-		pair := tr.start.world.three.pairs[key]
-		for side, pose := range [2]r3.Transform{a, b} {
-			body := pair.bodies[side].definition.Body
-			if held, seen := poses[body]; seen && held != pose {
-				return State{}, fmt.Errorf("%w: three-body sweeps disagree on a shared pose", ErrUnsupported)
-			}
-			poses[body] = pose
-		}
-	}
-	if len(poses) != 3 {
-		return State{}, fmt.Errorf("%w: three-body trace lacks a pair certificate", ErrUnsupported)
-	}
-	for body, pose := range poses {
-		entry, ok := state.Body(body)
-		if !ok {
-			return State{}, fmt.Errorf("%w: three-body trace names an unknown body", ErrUnsupported)
-		}
-		entry.Pose = pose
-		state = withBodyState(state, entry)
-	}
-	return state, nil
-}
-
-// sampleExcluded replays an excluded two-body pair by interpolating each
-// body's translation.
-func (tr Trace) sampleExcluded(timeValue, durationValue *big.Rat) (State, error) {
-	if tr.hasEvent {
-		return State{}, fmt.Errorf("%w: excluded trace has an event", ErrUnsupported)
-	}
-	from, to := tr.start, tr.end
-	fraction, _ := new(big.Rat).Quo(timeValue, durationValue).Float64()
-	state := tr.end.clone()
-	for i := range state.entries {
-		start, end := from.entries[i].Pose.Translation(), to.entries[i].Pose.Translation()
-		delta := end.Sub(start).Scale(fraction)
-		pose, err := translatePose(from.entries[i].Pose, delta)
-		if err != nil {
-			return State{}, fmt.Errorf("%w: excluded replay pose is not finite: %v", ErrUnsupported, err)
-		}
-		state.entries[i].Pose = pose
-	}
-	return state, nil
+	return tr.sampleSlices(t, timeValue, durationValue)
 }
 
 // sampleSlices is §7.1 for a trace of slices: an event's post state at its

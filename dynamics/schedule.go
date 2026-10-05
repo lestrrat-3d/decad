@@ -13,7 +13,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the event schedule of a world of four or more bodies
+// This file is the event schedule of the step
 // (docs/multibody-dynamics-design.md §5): one full-step kick, then slices of
 // drift from event to event. Each slice sweeps the broad phase's candidate
 // pairs from its start to the end of the step; the earliest event cuts it,
@@ -59,7 +59,7 @@ type scheduleRun struct {
 	prefixEnd State
 }
 
-// stepScheduled is the step of a world of four or more bodies
+// stepScheduled is the step of every world
 // (docs/multibody-dynamics-design.md §5).
 func (w *World) stepScheduled(ctx context.Context, from State, input StepInput,
 	dt units.Value) (*StepReport, error) {

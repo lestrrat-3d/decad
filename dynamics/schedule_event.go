@@ -462,7 +462,7 @@ func translationVelocity(path decad.PairPath) ([3]*big.Rat, bool) {
 // slice, through the touch and the separation after it. The pair must be
 // frictionless, its poses at the graze are the ones its sweep replays, and
 // its enclosed relative normal speed there must lie within
-// VelocityResidual of zero, as the two-body graze requires.
+// VelocityResidual of zero.
 func (r *scheduleRun) publishGrazes(sweeps sliceSweeps, plan slicePlan) []StepDiagnostic {
 	w := r.w
 	for _, key := range plan.grazes {

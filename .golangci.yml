@@ -78,12 +78,6 @@ linters:
       - linters:
           - errcheck
         path: /main.go
-      # Every world takes the scheduled step (docs/multibody-dynamics-design.md
-      # §6.5), so the closed-form two- and three-body steps are reached only by
-      # their internal tests until §13 PR 5 deletes them.
-      - linters:
-          - unused
-        path: dynamics/(three_body.*|friction_.*|sphere_.*|oblique_.*|fixed_offcenter|cylinder_impact|step|resting|grazing_step|kinematic.*|load|conservation|pairs)\.go
       - linters:
           - errcheck
           - errchkjson
