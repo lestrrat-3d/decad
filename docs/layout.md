@@ -83,8 +83,7 @@ to the byte budget.
 | `mass_properties_faceted.go` | Bounded mass and inertia for verified faceted Boolean solids. See `docs/dynamic-mass-design.md`. |
 | `moments_trig.go` | `moments.go`'s certified sine/cosine primitive: `turnSinCosInterval` proves an enclosure of sin/cos of an exact rational turn without ever comparing against π. See this file's own doc comment. |
 | `bounded.go` | The bounded-scalar vocabulary and three-valued admission readers. Its rounding arithmetic lives in `internal/proof/`. See the file's doc comment. |
-| `proof_bridge.go` | Root-package names and interval adapters for callers of `internal/proof/`. See the file's doc comment. |
-| `rat_interval.go` | The `atan`/`atan2` and π enclosures; basic rational interval arithmetic lives in `internal/proof/`. See the file's doc comment. |
+| `rat_interval.go` | The `atan`/`atan2` and π enclosures, with adapters for the exact interval arithmetic in `internal/proof/`. See the file's doc comment. |
 | `moments_circular.go` | Exact rational arc/circle integration for `moments.go`'s boundary sums and `revolve_build.go`'s axis moment. See the file's doc comment. |
 | `spline_bezier.go` | The exact reduction of `docs/spline-design.md` §5.1: a recorded free-form curve to piecewise polynomial Bézier control points over `big.Rat`, with no rounding. Owns the §5.2 work-budget charges. |
 | `spline_length.go` | Bounded free-form arc length. See `docs/spline-design.md` §6.1. |
@@ -248,7 +247,7 @@ to the byte budget.
 | `examples/` | Executable Go examples (`Example_decad_…`, `go test`-verified `// Output:` blocks) that double as living documentation. Never `package main`. |
 | `dynamics/` | Rigid-body state and response, including fixed-box edge impulses in `fixed_offcenter.go`. See `docs/rigid-dynamics-design.md`. |
 | `decadtest/` | The public test kit: comparison helpers over decad's three bounded readings, bodies, reports and surveys, plus sketch-to-body fixtures. Standard `testing` only, never testify. See `decadtest/doc.go`. |
-| `internal/proof/` | Exact dyadic arithmetic, rational interval operations, and float rounding bounds. Root callers use `proof_bridge.go`. |
+| `internal/proof/` | Exact dyadic arithmetic, rational interval operations, float rounding bounds, and their arithmetic tests. |
 | `_gallery/` | Own nested module for README stills, animated hero and landing clip; keeps SolidLens out of the library. See `main.go`. |
 | `_shardgen/` | Own nested module, keeping tooling out of the library's: packs the root package's tests into cost-balanced race shards. The `_` prefix hides it from root-module tools. See its `main.go` doc comment. |
 | `.github/workflows/` | `ci.yml` runs lint, tests, tidy and vulnerability checks; root race shards depend on `race-binary`. `codeql.yml`. `test-shards.txt` beside it records which shard runs each root test. |
