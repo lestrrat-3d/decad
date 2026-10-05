@@ -60,6 +60,14 @@ point speed over the complete source body, rotational energy, and travel over
 the full step. A supplied center 5 mm off the source axis with inertia
 1e8 kg·mm² fails the point-motion bound even when its angular speed meets
 `AngularVelocityResidual`.
+A verified faceted Boolean union with one complete rectangular lower support
+face can hit a fixed source-box floor vertically with supplied mass and zero
+spin. Its four-point source-face manifold and exact affine first-impact
+bracket enter the same centered frictionless response. Positive restitution
+requires ideal and rounded separating sweeps; zero restitution requires ideal
+and rounded persistent-contact tracks. The trace replays both impact sides
+from those certificates. A mass-center bound that permits an omitted spin
+above `AngularVelocityResidual` stops the step.
 Two source semicircle spheres with supplied or density-derived mass can
 rebound as a centered dynamic pair when the impact has a cardinal manifold.
 Their approach may
@@ -818,8 +826,8 @@ The rotational response uses the certified `RigidDriftSegment` as its stored
 path and returns that sweep's certified fraction-one float pose. It does not
 claim that an independently interpolated `PoseSegment` is clear.
 `Trace.Sample` evaluates clear, departed, persistent-contact, and transition
-slices against each stored rounded sweep's cached source-box or source-sphere
-certificate.
+slices against each stored rounded sweep's cached source-box, source-sphere,
+or certified faceted support-face certificate.
 An isolated graze uses one full-span rounded sphere-pair certificate across
 both open sides and checks exact touch at its event time.
 For an off-axis sphere-pair impact, the rounded impact prefix must reach its
