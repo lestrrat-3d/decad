@@ -49,14 +49,14 @@ func TestThreeBodyTwoDynamicSphereImpact(t *testing.T) {
 		pose     r3.Transform
 		velocity dynamics.QuantityVec
 	}{{a, pa, velocityA}, {b, pb, velocityB}} {
-		clear, clearErr := doc.SweepPair(t.Context(), moving.body, remote,
+		clearSweep, clearErr := doc.SweepPair(t.Context(), moving.body, remote,
 			decad.RigidDriftSegment{From: moving.pose, LinearVelocity: moving.velocity,
 				AngularVelocity: zeroSpin, Duration: units.Seconds(.2)},
 			decad.PoseSegment{From: r3.Identity(), To: r3.Identity(), Duration: units.Seconds(.2)},
 			decad.SweepRequest{ContactRequest: request, TimeResolution: units.Seconds(1e-9),
 				MaxPoseEvaluations: 128})
 		require.NoError(t, clearErr)
-		require.Equal(t, decad.SweepClear, clear.Outcome, "cause=%v", clear.Cause)
+		require.Equal(t, decad.SweepClear, clearSweep.Outcome, "cause=%v", clearSweep.Cause)
 	}
 	mass := exactSphereMass()
 	material := dynamics.Material{Restitution: units.Scalar(.5), Friction: units.Scalar(0)}

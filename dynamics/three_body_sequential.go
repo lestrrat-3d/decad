@@ -257,6 +257,8 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 			if w.three.dynamicCount == 2 {
 				end, err = w.threeDriftState(current, remaining.Base())
 				if err != nil {
+					// The report carries the unsupported arithmetic outcome.
+					//nolint:nilerr
 					return w.threeUndecided(-1, "final three-body drift pose is not finite"), true, nil
 				}
 			}
@@ -353,6 +355,8 @@ func (w *World) stepThreeSequential(ctx context.Context, from, kicked State,
 		if w.three.dynamicCount == 2 {
 			pre, err = w.threeDriftState(current, localAt.Base())
 			if err != nil {
+				// The report carries the unsupported arithmetic outcome.
+				//nolint:nilerr
 				return w.threeUndecided(selected, "event three-body drift pose is not finite"), true, nil
 			}
 			pre = withPairState(pre, child.Trace.pre)
