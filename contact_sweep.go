@@ -17,8 +17,9 @@ var errSweepPoseBudget = errors.New("decad: sweep pose budget exhausted")
 
 // PairPath names one body's motion during a two-body sweep. Affine source-box,
 // source-sphere, and certified faceted-floor paths, co-translating oblique
-// source boxes, and rotating source-box or centered-sphere rigid drifts can receive continuous
-// certificates; other valid paths report an undecided sweep.
+// source boxes, rotating source-box or centered-sphere rigid drifts, and any
+// path of two exact planar solids can receive continuous certificates; other
+// valid paths report an undecided sweep.
 type PairPath interface{ pairPath() }
 
 // PoseSegment joins two placements relative to the body's current placement.
@@ -422,7 +423,10 @@ func exactnessFromBound(bound float64) Exactness {
 // source boxes, a source sphere in
 // an axis or orthogonal rotated box face corridor, an affine pair of source
 // spheres, source-cylinder face paths, rotating source-box and centered-sphere rigid drifts,
-// and admitted rotating PoseSegments.
+// and admitted rotating PoseSegments. Two exact planar solids — prisms over
+// whole LineSeg sections and zero-bound faceted Booleans — that no narrower
+// path admits receive a clear path or a first-impact bracket under any rotating
+// or affine path, with no replay proof.
 // Unsupported paths return SweepUndecided.
 // Both body pointers, both paths, and ctx must be non-nil.
 func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairPath,
@@ -543,6 +547,9 @@ func (d *Document) SweepPair(ctx context.Context, a, b *Body, pathA, pathB PairP
 			if _, orientedB := sourceOrientedBoxAtPose(b, pb.from); orientedB {
 				return d.sweepRotatingPair(ctx, a, b, pa, pb, req, resolution, report)
 			}
+		}
+		if result, admitted, err := d.sweepPlanarPair(ctx, a, b, pa, pb, req, resolution, report); admitted {
+			return result, err
 		}
 		report.Outcome, report.Cause = SweepUndecided, SweepContactUnsupported
 		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.duration),

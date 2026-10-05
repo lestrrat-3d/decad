@@ -14,7 +14,7 @@ readings stay with `docs/rigid-dynamics-design.md`; the claims `ContactPair` and
 document adds an outcome, a relation value, a reason or a field to one of those contracts, that document
 carries the addition and points here for the algorithm.
 
-Current state: §13 PRs 1, 2, 3, 4, 7, 10, 11, 14, 16, 17 and 19 have shipped. `dynamics.World` holds any
+Current state: §13 PRs 1, 2, 3, 4, 7, 10, 11, 12, 14, 16, 17 and 19 have shipped. `dynamics.World` holds any
 number of bodies, the canonical pair table and per-pair material of §3.1, and the slice-backed `State` of
 §3.2. Its step resolves two bodies, or three bodies with one, two or three dynamic bodies and every other
 body fixed, through the closed-form responses `docs/rigid-dynamics-design.md` lists. A world of four or more
@@ -38,8 +38,8 @@ bodies, §5 with that one event time, §6.1–§6.3 without the cone, stick and 
 `IslandReport`, `StepReport.Islands` and `ContactEvent.Island`, §3.4's `traceSlice`, `pairProof` and
 `traceEvent`, and §12's `StepReason` with `StepDiagnostic.Code` ship as well. §9.1–§9.4 ship for prisms
 over whole `LineSeg` sections and for zero-bound Booleans, directly or through a translation-only placement;
-stitched solids and lofts are not admitted yet. Everything else is design-only until the PR table in §13
-says otherwise.
+stitched solids and lofts are not admitted yet. §10.1 ships for the same bodies. Everything else is
+design-only until the PR table in §13 says otherwise.
 
 Navigation only; the named sections own the rules:
 
@@ -910,6 +910,17 @@ either path rotates and both bodies are §9 bodies; affine paths of §9 bodies t
 zero angular term. The `Clear`, `ImpactBracket`, `InitiallyTouching`, `InitiallyOverlapping` and
 `Undecided` outcomes follow unchanged.
 
+Each sample transfers the rounded-pose relation to the ideal path by contact-sweep §3. With zero deviation
+on both bodies the rounded pose is the ideal pose, and the report transfers whole. Otherwise a gap
+transfers with both deviations added to its bound. An overlap transfers through a vertex of one body that
+lies inside the other farther than the summed deviations from its boundary (`internal/pair`'s
+`PlanarDeepVertex`): the ball of that radius stays inside the moved body, so the moved vertex does too. A
+touch cannot survive a nonzero deviation and stays `Undecided`, so a first impact brackets onto an
+overlapping right sample. The clear certificate is §4.3's `g_l + g_r > T` or the strict separation of the
+coordinate hulls of every vertex's ideal path over the interval. An initial touch under either
+continuation policy stays `Undecided` until §10.2 ships. The run keeps no replay proof, so
+`CertifiedPosesAt` refuses its report.
+
 ### 10.2 Departure from touch under rotation
 
 Contact-sweep §5.1 asks a departure proof for a lower-gap function `L(u) >= c·u − K·u²` with proven
@@ -1265,6 +1276,8 @@ lines below do not repeat it.
 - Test (root): `contact_sweep_faceted_test.go`: a wedge tumbling toward a floor brackets its first
   vertex impact at the exact drift time within `TimeResolution`; the deviation leg is shown to fail.
 - Depends on: PRs 10, 11.
+- Shipped, with the deep-vertex overlap witness in new `internal/pair/planar_depth.go` and no replay
+  proof (§10.1).
 
 ### PR 13 (Phase 2) — generalized departure and band tracks
 

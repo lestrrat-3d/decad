@@ -7,26 +7,56 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/lestrrat-3d/decad/internal/pair"
 	proofarith "github.com/lestrrat-3d/decad/internal/proof"
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
+// rotationalSweepPath is one body's prepared path: its ideal motion and travel
+// bound, and the exact source points whose images bound the float-to-ideal
+// pose deviation. A source box carries its eight corners; an exact planar body
+// (contact_sweep_faceted.go) carries every vertex of its snapshot.
 type rotationalSweepPath struct {
-	body       *Body
-	path       affinePairPath
-	fullTravel *big.Rat
-	startBox   orientedSourceBox
-	sourceBox  orientedSourceBox
-	frame      motionFrame
-	fromRot    ivMat
-	fromT      ratVec
-	velocity   ratVec
-	omegaLow   *big.Rat
-	omegaHigh  *big.Rat
+	body         *Body
+	path         affinePairPath
+	fullTravel   *big.Rat
+	startBox     orientedSourceBox
+	sourceBox    orientedSourceBox
+	startPoints  []proofarith.DyV3 // exact source points under the path's From
+	sourcePoints []proofarith.DyV3 // exact source points at the identity query pose
+	solid        *pair.PlanarSolid // the identity-pose planar snapshot, planar paths only
+	frame        motionFrame
+	fromRot      ivMat
+	fromT        ratVec
+	velocity     ratVec
+	omegaLow     *big.Rat
+	omegaHigh    *big.Rat
 }
 
 func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSweepPath, bool) {
+	startBox, ok := sourceOrientedBoxAtPose(body, path.from)
+	if !ok {
+		return rotationalSweepPath{}, false
+	}
+	sourceBox, ok := sourceOrientedBoxAtPose(body, r3.Identity())
+	if !ok {
+		return rotationalSweepPath{}, false
+	}
+	prepared, ok := prepareSweepMotion(body, path)
+	if !ok {
+		return rotationalSweepPath{}, false
+	}
+	prepared.startBox, prepared.sourceBox = startBox, sourceBox
+	prepared.startPoints = append([]proofarith.DyV3(nil), startBox.corner[:]...)
+	prepared.sourcePoints = append([]proofarith.DyV3(nil), sourceBox.corner[:]...)
+	return prepared, true
+}
+
+// prepareSweepMotion builds the ideal path and the §4.1 travel bound of one
+// body. The travel radius reads the body's inflated bounds, so it holds for
+// any body; the caller supplies the source points.
+func prepareSweepMotion(body *Body, path affinePairPath) (rotationalSweepPath, bool) {
 	if path.screw != nil {
 		axis := path.screw.Axis
 		angle, ok := exactBaseValue(path.screw.Angle)
@@ -48,20 +78,11 @@ func prepareRotationalSweepPath(body *Body, path affinePairPath) (rotationalSwee
 				Z: units.RadiansPerSecond(axis.Z * omega)},
 			Duration: units.Seconds(ratFloatNearest(path.duration))}
 	}
-	startBox, ok := sourceOrientedBoxAtPose(body, path.from)
-	if !ok {
-		return rotationalSweepPath{}, false
-	}
-	sourceBox, ok := sourceOrientedBoxAtPose(body, r3.Identity())
-	if !ok {
-		return rotationalSweepPath{}, false
-	}
 	fromRot, fromT, ok := exactTransform(path.from)
 	if !ok {
 		return rotationalSweepPath{}, false
 	}
-	prepared := rotationalSweepPath{body: body, path: path, fromRot: fromRot, fromT: fromT,
-		startBox: startBox, sourceBox: sourceBox}
+	prepared := rotationalSweepPath{body: body, path: path, fromRot: fromRot, fromT: fromT}
 	if path.drift == nil {
 		travelSquared := new(big.Rat)
 		for _, component := range path.delta {
@@ -239,28 +260,14 @@ func (p rotationalSweepPath) idealAt(f *big.Rat) idealPose {
 }
 
 // roundedAt compares the exact staged source corners used by ContactPair with
-// their ideal path positions. The distance between two affine images over a
-// box is bounded by the largest corner distance, including placement and
-// pose-composition rounding without relying on a rounded composed transform.
+// their ideal path positions and returns the rounded pose's source box.
 func (p rotationalSweepPath) roundedAt(pose r3.Transform, f *big.Rat) (orientedSourceBox, float64, bool) {
-	if !pose.IsValid() {
+	points, bound, ok, _ := p.pointDeviation(pose, f, noSweepPoll)
+	if !ok {
 		return orientedSourceBox{}, 0, false
 	}
-	ideal := p.idealAt(f)
 	var box orientedSourceBox
-	maxSquared := new(big.Rat)
-	for i, corner := range p.sourceBox.corner {
-		actual := exactContactTransform(pose, corner)
-		box.corner[i] = actual
-		point := pointVec(ratVec{corner[0].Rat(), corner[1].Rat(), corner[2].Rat()})
-		idealPoint := ivVecAdd(ivVecAdd(ideal.rot.apply(ivVecSub(point, ideal.pivot)), ideal.pivot), ideal.shift)
-		observed := pointVec(ratVec{actual[0].Rat(), actual[1].Rat(), actual[2].Rat()})
-		difference := ivVecSub(observed, idealPoint)
-		squared := magnitudeSquaredUpper(difference[:]...)
-		if squared.Cmp(maxSquared) > 0 {
-			maxSquared = squared
-		}
-	}
+	copy(box.corner[:], points)
 	box.faces = p.startBox.faces
 	box.edge = [3]proofarith.DyV3{proofarith.DvSub(box.corner[1], box.corner[0]),
 		proofarith.DvSub(box.corner[2], box.corner[0]), proofarith.DvSub(box.corner[4], box.corner[0])}
@@ -269,8 +276,42 @@ func (p rotationalSweepPath) roundedAt(pose r3.Transform, f *big.Rat) (orientedS
 			return orientedSourceBox{}, 0, false
 		}
 	}
+	return box, bound, true
+}
+
+func noSweepPoll() error { return nil }
+
+// pointDeviation maps the exact source points through the read query pose,
+// staged exactly as ContactPair stages them, and bounds their distance from
+// their ideal path positions (contact-sweep §3). The rounded and ideal bodies
+// are two affine images of one source, so their difference is affine and the
+// largest point distance bounds every point of the points' hull. This charges
+// placement and pose-composition rounding without trusting a rounded composed
+// transform. poll is charged once per point.
+func (p rotationalSweepPath) pointDeviation(pose r3.Transform, f *big.Rat,
+	poll func() error) ([]proofarith.DyV3, float64, bool, error) {
+	if !pose.IsValid() {
+		return nil, 0, false, nil
+	}
+	ideal := p.idealAt(f)
+	actual := make([]proofarith.DyV3, len(p.sourcePoints))
+	maxSquared := new(big.Rat)
+	for i, source := range p.sourcePoints {
+		if err := poll(); err != nil {
+			return nil, 0, false, err
+		}
+		actual[i] = exactContactTransform(pose, source)
+		point := pointVec(ratVec{source[0].Rat(), source[1].Rat(), source[2].Rat()})
+		idealPoint := ivVecAdd(ivVecAdd(ideal.rot.apply(ivVecSub(point, ideal.pivot)), ideal.pivot), ideal.shift)
+		observed := pointVec(ratVec{actual[i][0].Rat(), actual[i][1].Rat(), actual[i][2].Rat()})
+		difference := ivVecSub(observed, idealPoint)
+		squared := magnitudeSquaredUpper(difference[:]...)
+		if squared.Cmp(maxSquared) > 0 {
+			maxSquared = squared
+		}
+	}
 	bound := ratSqrtUp(maxSquared)
-	return box, bound, finiteMeasurementValues(bound)
+	return actual, bound, finiteMeasurementValues(bound), nil
 }
 
 type rotationalPairSweep struct {
@@ -279,6 +320,7 @@ type rotationalPairSweep struct {
 	req        SweepRequest
 	resolution *big.Rat
 	report     *SweepReport
+	planar     bool // both paths carry exact planar vertex sets (contact_sweep_faceted.go)
 }
 
 func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
@@ -287,6 +329,9 @@ func (d *Document) sweepRotatingPair(ctx context.Context, a, b *Body,
 	aPath, okA := prepareRotationalSweepPath(a, pa)
 	bPath, okB := prepareRotationalSweepPath(b, pb)
 	if !okA || !okB {
+		if result, admitted, err := d.sweepPlanarPair(ctx, a, b, pa, pb, req, resolution, report); admitted {
+			return result, err
+		}
 		report.Outcome, report.Cause = SweepUndecided, SweepMissingBound
 		report.Unresolved = &SweepInterval{From: sweepInstant(new(big.Rat), pa.duration),
 			To: sweepInstant(big.NewRat(1, 1), pa.duration)}
@@ -338,27 +383,61 @@ func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSam
 	if err != nil {
 		return nil, err
 	}
+	at := sweepInstant(f, r.a.path.duration)
+	var event SweepEvent
+	if r.planar {
+		event, err = r.planarIdealEvent(ctx, f, at, poseA, poseB, contact)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		event = r.orientedIdealEvent(f, at, poseA, poseB, contact)
+	}
+	sample := &SweepSample{At: at, PoseA: poseA, PoseB: poseB,
+		FloatContact: contact, Ideal: event, exactFraction: new(big.Rat).Set(f)}
+	r.report.Samples = append(r.report.Samples, *sample)
+	r.report.PoseEvaluations++
+	return sample, nil
+}
+
+// separatedIdealGap transfers a float-pose gap to the ideal path: its bound
+// grows by both pose deviations, and the result must stay strictly positive.
+func separatedIdealGap(contact *ContactReport, etaA, etaB float64) (*Measurement, bool) {
+	if contact.Gap == nil {
+		return nil, false
+	}
+	value, okValue := exactBaseValue(contact.Gap.Value)
+	bound, okBound := exactBaseValue(contact.Gap.Bound)
+	if !okValue || !okBound {
+		return nil, false
+	}
+	charge := new(big.Rat).Add(proofarith.FloatRat(etaA), proofarith.FloatRat(etaB))
+	newBound := new(big.Rat).Add(bound, charge)
+	if new(big.Rat).Sub(value, newBound).Sign() <= 0 {
+		return nil, false
+	}
+	published := ratFloatUp(newBound)
+	if !finiteMeasurementValues(published) || value.Cmp(proofarith.FloatRat(published)) <= 0 {
+		return nil, false
+	}
+	gap := *contact.Gap
+	gap.Bound = units.Millimeters(published)
+	gap.Exactness = exactnessFromBound(published)
+	return &gap, true
+}
+
+// orientedIdealEvent transfers a source-box pair's float-pose relation to the
+// ideal path through the rounded source boxes.
+func (r *rotationalPairSweep) orientedIdealEvent(f *big.Rat, at SweepInstant,
+	poseA, poseB r3.Transform, contact *ContactReport) SweepEvent {
 	boxA, etaA, okA := r.a.roundedAt(poseA, f)
 	boxB, etaB, okB := r.b.roundedAt(poseB, f)
-	at := sweepInstant(f, r.a.path.duration)
 	event := SweepEvent{At: at, Relation: ContactUndecided, Reason: contact.Reason}
 	if okA && okB {
 		switch contact.Relation {
 		case ContactSeparated:
-			if contact.Gap != nil {
-				value, _ := exactBaseValue(contact.Gap.Value)
-				bound, _ := exactBaseValue(contact.Gap.Bound)
-				charge := new(big.Rat).Add(proofarith.FloatRat(etaA), proofarith.FloatRat(etaB))
-				newBound := new(big.Rat).Add(bound, charge)
-				if new(big.Rat).Sub(value, newBound).Sign() > 0 {
-					published := ratFloatUp(newBound)
-					if finiteMeasurementValues(published) && value.Cmp(proofarith.FloatRat(published)) > 0 {
-						gap := *contact.Gap
-						gap.Bound = units.Millimeters(published)
-						gap.Exactness = exactnessFromBound(published)
-						event.Relation, event.Gap, event.Reason = ContactSeparated, &gap, ContactNoReason
-					}
-				}
+			if gap, ok := separatedIdealGap(contact, etaA, etaB); ok {
+				event.Relation, event.Gap, event.Reason = ContactSeparated, gap, ContactNoReason
 			}
 		case ContactOverlapping:
 			if orientedInteriorWitness(boxA, boxB, proofarith.FloatRat(etaA), proofarith.FloatRat(etaB)) {
@@ -378,11 +457,7 @@ func (r *rotationalPairSweep) sample(ctx context.Context, f *big.Rat) (*SweepSam
 			}
 		}
 	}
-	sample := &SweepSample{At: at, PoseA: poseA, PoseB: poseB,
-		FloatContact: contact, Ideal: event, exactFraction: new(big.Rat).Set(f)}
-	r.report.Samples = append(r.report.Samples, *sample)
-	r.report.PoseEvaluations++
-	return sample, nil
+	return event
 }
 
 // horizontalSpinContact uses the invariant support height of a Z-axis spin.
@@ -514,6 +589,11 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 			r.report.Outcome, r.report.Event = SweepInitiallyTouching, &first.Ideal
 			return r.report, nil
 		}
+		if r.planar {
+			// The departure and track proofs below read source boxes; a planar
+			// pair has neither yet (docs/multibody-dynamics-design.md §10.2).
+			return r.undecided(zero, one, r.continuationCause()), nil
+		}
 		if r.req.StartPolicy == ContinueCertifiedTouch && r.coMovingOrientedTouch(first) {
 			last, sampleErr := r.sample(ctx, one)
 			if errors.Is(sampleErr, errSweepPoseBudget) {
@@ -571,11 +651,7 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 			r.sortSamples()
 			return r.report, nil
 		}
-		cause := SweepDepartureUnproved
-		if r.req.StartPolicy == ContinueCertifiedTouch {
-			cause = SweepContactTrackUnproved
-		}
-		return r.undecided(zero, one, cause), nil
+		return r.undecided(zero, one, r.continuationCause()), nil
 	case ContactSeparated:
 	default:
 		return r.undecided(zero, zero, SweepPoseRelation), nil
@@ -596,6 +672,14 @@ func (r *rotationalPairSweep) execute(ctx context.Context) (*SweepReport, error)
 	}
 	r.sortSamples()
 	return r.report, nil
+}
+
+// continuationCause names the missing proof after an initial touch.
+func (r *rotationalPairSweep) continuationCause() SweepCause {
+	if r.req.StartPolicy == ContinueCertifiedTouch {
+		return SweepContactTrackUnproved
+	}
+	return SweepDepartureUnproved
 }
 
 func (r *rotationalPairSweep) coMovingOrientedTouch(first *SweepSample) bool {
@@ -999,7 +1083,7 @@ func (r *rotationalPairSweep) refine(ctx context.Context, left, right *SweepSamp
 }
 
 func (r *rotationalPairSweep) intervalClear(left, right *SweepSample, lf, rf *big.Rat) bool {
-	if r.obliqueAffineIntervalClear(lf, rf) {
+	if !r.planar && r.obliqueAffineIntervalClear(lf, rf) {
 		return true
 	}
 	if r.intervalAxisSeparated(lf, rf) {
@@ -1057,28 +1141,18 @@ func (r *rotationalPairSweep) obliqueAffineIntervalClear(from, to *big.Rat) bool
 	return false
 }
 
-// intervalAxisSeparated encloses all eight ideal corner paths over the whole
-// fraction span. Strict separation of their coordinate hulls proves clear.
+// intervalAxisSeparated encloses every ideal source-point path over the whole
+// fraction span. Each body lies in the hull of its source points, so strict
+// separation of the two coordinate hulls proves clear.
 func (r *rotationalPairSweep) intervalAxisSeparated(from, to *big.Rat) bool {
 	a := r.a.cornerSpan(from, to)
 	b := r.b.cornerSpan(from, to)
+	if len(a) == 0 || len(b) == 0 {
+		return false
+	}
 	for axis := range 3 {
-		aLow, aHigh := a[0][axis].lo, a[0][axis].hi
-		bLow, bHigh := b[0][axis].lo, b[0][axis].hi
-		for corner := 1; corner < 8; corner++ {
-			if a[corner][axis].lo.Cmp(aLow) < 0 {
-				aLow = a[corner][axis].lo
-			}
-			if a[corner][axis].hi.Cmp(aHigh) > 0 {
-				aHigh = a[corner][axis].hi
-			}
-			if b[corner][axis].lo.Cmp(bLow) < 0 {
-				bLow = b[corner][axis].lo
-			}
-			if b[corner][axis].hi.Cmp(bHigh) > 0 {
-				bHigh = b[corner][axis].hi
-			}
-		}
+		aLow, aHigh := spanHull(a, axis)
+		bLow, bHigh := spanHull(b, axis)
 		if aHigh.Cmp(bLow) < 0 || bHigh.Cmp(aLow) < 0 {
 			return true
 		}
@@ -1086,10 +1160,23 @@ func (r *rotationalPairSweep) intervalAxisSeparated(from, to *big.Rat) bool {
 	return false
 }
 
-func (p rotationalSweepPath) cornerSpan(from, to *big.Rat) [8]ivVec {
-	var output [8]ivVec
+func spanHull(spans []ivVec, axis int) (*big.Rat, *big.Rat) {
+	low, high := spans[0][axis].lo, spans[0][axis].hi
+	for _, span := range spans[1:] {
+		if span[axis].lo.Cmp(low) < 0 {
+			low = span[axis].lo
+		}
+		if span[axis].hi.Cmp(high) > 0 {
+			high = span[axis].hi
+		}
+	}
+	return low, high
+}
+
+func (p rotationalSweepPath) cornerSpan(from, to *big.Rat) []ivVec {
+	output := make([]ivVec, len(p.startPoints))
 	if p.path.drift == nil {
-		for index, corner := range p.startBox.corner {
+		for index, corner := range p.startPoints {
 			for axis := range 3 {
 				start := corner[axis].Rat()
 				lo := new(big.Rat).Mul(p.path.delta[axis].Rat(), from)
@@ -1115,7 +1202,7 @@ func (p rotationalSweepPath) cornerSpan(from, to *big.Rat) [8]ivVec {
 	rotationMid := p.frame.rotation(midSin, midCos)
 	halfDuration := new(big.Rat).Quo(new(big.Rat).Sub(highTime, lowTime), big.NewRat(2, 1))
 	pivot := pointVec(p.frame.center)
-	for index, corner := range p.startBox.corner {
+	for index, corner := range p.startPoints {
 		start := ratVec{corner[0].Rat(), corner[1].Rat(), corner[2].Rat()}
 		relative := ivVecSub(pointVec(start), pivot)
 		spanRelative := rotationSpan.apply(relative)

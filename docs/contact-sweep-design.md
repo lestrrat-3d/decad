@@ -38,7 +38,8 @@ both endpoints must exceed the displacement, including conversion error.
 Both real endpoint contact queries must report separation. Replay charges the
 rounded pose deviation and requires the widened actual extents to stay inside
 the floor face with a positive gap. A path reaching the boundary allowance,
-moving transversely, or rotating returns `SweepUndecided`.
+moving transversely, or rotating returns `SweepUndecided`, unless both bodies
+are exact planar solids, which take the general sweep below.
 Two source semicircle spheres certify affine first impact
 through exact squared-distance motion, including transverse crossing, and
 separating departure. Their exact isolated interior tangent publishes a
@@ -64,8 +65,14 @@ cardinal can certify a clear path or first impact. An axis-normal source face
 can also certify departure when its support-plane gap increases throughout
 the step. A source box spinning about Y can depart from a stationary horizontal
 source-box face when every source corner has a positive bounded outward height
-through the certified interval. Other unequal spins, rotating paths, and
-payloads remain design contracts.
+through the certified interval. Two exact planar solids
+(`docs/multibody-dynamics-design.md` §9) that no path above admits run the
+same search over every vertex under any rotating or affine path: a clear
+path, a first impact bracketed onto an overlapping sample, or an initial
+touch or overlap; the general rotating sweep, §10.1 there, owns it. Its
+report has no replay proof, and a continuation from initial touch returns
+`SweepUndecided`. Other unequal spins, rotating paths, and payloads remain
+design contracts.
 An extruded circular source prism or a full revolve of an axis-incident
 rectangular half-profile can certify a strictly separated axial affine path
 against a containing source-box face. The sweep uses the source-derived outer
@@ -204,7 +211,10 @@ For a rotating source box, compare all eight exact staged source corners under
 the read query pose with their ideal-path intervals. The largest outward-rounded
 corner distance bounds every point of the box. This uses the same staged
 placement and pose operations as `ContactPair`; a float-composed transform can
-round away an error that remains in those source corners.
+round away an error that remains in those source corners. An exact planar
+body compares every vertex of its snapshot the same way; the body lies in
+their hull, where the affine difference of the two images is largest at a
+vertex.
 The stated screw `To` gets the motion-check §5.1 endpoint allowance against
 both the ideal end and exact `To`; a drift has no separate `To` promise.
 

@@ -131,10 +131,17 @@ func TestSweepPairBoundedFacetedFloorStrictClearReplay(t *testing.T) {
 		AngularVelocity: QuantityVec{X: units.RadiansPerSecond(0),
 			Y: units.RadiansPerSecond(0), Z: units.RadiansPerSecond(1)},
 		Duration: units.Seconds(1)}
+	// The placed union is also an exact planar solid, so the spin takes the
+	// general rotating sweep (docs/multibody-dynamics-design.md §10.1), which
+	// certifies the clear path but keeps no replay proof.
 	rotating, err := doc.SweepPair(t.Context(), floor, placed, still, rotation, req)
 	require.NoError(t, err)
-	require.Equal(t, SweepUndecided, rotating.Outcome)
+	require.Equal(t, SweepClear, rotating.Outcome, "cause=%v", rotating.Cause)
 	require.False(t, rotating.HasAffineReplayProof())
+	for _, sample := range rotating.Samples {
+		require.Equal(t, ContactSeparated, sample.Ideal.Relation)
+		require.Greater(t, sample.Ideal.Gap.Value.Base()-sample.Ideal.Gap.Bound.Base(), 0.0)
+	}
 }
 
 func TestSweepPairPlacedFacetedFloorImpactAndDeparture(t *testing.T) {
