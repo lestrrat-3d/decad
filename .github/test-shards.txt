@@ -1080,9 +1080,12 @@
 4	0.00	TestContactPairAnalyticPrismGap
 4	0.00	TestContactPairAnalyticPrismOverlap
 4	0.00	TestContactPairAnalyticPrismTouch
+4	0.01	TestContactPairFacetedFloorRefusesMultipleSupportFaces
+4	0.01	TestContactPairFacetedFloorRefusesUnprovedPatches
 4	0.00	TestContactPairOrientedAxisFaceWitness
 4	0.00	TestContactPairOrientedSourceBoxes
 4	0.00	TestContactPairPlacedBodyAndInputGates
+4	0.01	TestContactPairRealFacetedUnionOnFloor
 4	0.00	TestContactPairRotatedBoxContainedHorizontalFace
 4	0.00	TestContactPairShallowOverlapAndRefusals
 4	0.00	TestContactPairSignedAxisPose
