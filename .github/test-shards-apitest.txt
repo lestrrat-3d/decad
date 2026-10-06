@@ -1319,3 +1319,4 @@
 5	0.01	TestVertexPlacedRevolveBoundEnclosesDisplacement
 5	0.01	TestWallDraftAllowanceBoundary
 5	0.01	TestWallSectorTooTightForItsFlats
+1	5.55	TestVerifyLinkageReadingFloor

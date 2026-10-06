@@ -722,9 +722,10 @@ func (r *motionRun) refine() ([]*motionPose, []motionSpan, error) {
 // Step 6
 // follows: the interval holding the smallest certified clearance (ties in
 // traversal order), while the whole-path reading would fail the tolerance gate
-// or a requested margin is neither proven nor disproven by that interval, and
-// only while it is wider than the resolution. Every interval narrower than the
-// floor stops, so the loop ends.
+// and the interval is wider than the reading's floor, or while a requested
+// margin is neither proven nor disproven by that interval and it is wider than
+// the resolution. Every interval narrower than both floors stops, so the loop
+// ends.
 func (r *motionRun) nextRefinement(poses []*motionPose, spans []motionSpan) int {
 	allClear := true
 	smallest := -1
@@ -741,18 +742,29 @@ func (r *motionRun) nextRefinement(poses []*motionPose, spans []motionSpan) int 
 			smallest = k
 		}
 	}
-	if smallest < 0 || !r.wide(poses[smallest], poses[smallest+1]) {
+	if smallest < 0 {
 		return -1
 	}
-	if allClear {
+	a, b := poses[smallest], poses[smallest+1]
+	if allClear && r.wideForReading(a, b) {
 		if reading, _ := r.pathClearance(poses, spans[smallest].clearance); reading != nil && reading.Tolerance.State != ToleranceSatisfied {
 			return smallest
 		}
 	}
-	if r.cfg.minimumMM != nil && !anyViolated(poses) && !r.meetsMinimum(spans[smallest].clearance) {
+	if r.cfg.minimumMM != nil && r.wide(a, b) && !anyViolated(poses) && !r.meetsMinimum(spans[smallest].clearance) {
 		return smallest
 	}
 	return -1
+}
+
+// wideForReading reports whether the interval between two poses is wider
+// than the reading's own floor: cfg.readingP when the check sets one, and
+// the resolution otherwise.
+func (r *motionRun) wideForReading(a, b *motionPose) bool {
+	if r.cfg.readingP == nil {
+		return r.wide(a, b)
+	}
+	return motionbound.ExceedsResolution(a.param, b.param, *r.cfg.readingP)
 }
 
 // wide reports whether the interval between two poses is wider than the

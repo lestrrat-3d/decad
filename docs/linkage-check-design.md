@@ -211,6 +211,21 @@ a `Dimensionless` value as for a `Between`, default `units.Scalar(1.0/1024)`; `W
 over every evaluated pair and decides `Assessment`. One `Go` option type serves both entry points because
 the three settings mean the same thing on either path.
 
+**Two floors.** `VerifyLinkage` refines to two floors. The **verdict floor** bounds §6 step 5's bisection
+for the verdict and motion §6 step 6's refinement for a `WithMinClearance` margin. The **reading floor**
+bounds step 6's refinement for the whole-drive `Clearance` reading's tolerance gate, which goes only to the
+interval holding the smallest certified bound.
+
+- `WithResolution` stated: both floors are the stated value, and every step refines to it exactly as
+  motion §3 states for `VerifyMotion`. `WithResolution(Scalar(1))` evaluates the endpoints alone.
+- `WithResolution` not stated: the verdict floor is `units.Scalar(1.0/1024)` and the reading floor
+  `units.Scalar(1.0/16384)`, so a clear drive's reading meets the default gate at logarithmic cost around
+  an isolated minimum (§10).
+
+No option sets the reading floor alone: one stated resolution fixes both. `Request.Resolution` reports the
+verdict floor and `LinkageReport.ReadingResolution` the reading floor. `VerifyMotion` keeps one floor for
+the verdict and the reading alike (motion §3); nothing here changes it.
+
 Every body of every link MUST be a live body of `d`: a retired body is `ErrRetiredBody`, another
 document's `ErrForeignBody`, a body this evaluator did not build `ErrUnsupported`. A linkage with no link
 is `ErrDegenerate`. The static set is every other live body of `d`, with no option to narrow it (motion
@@ -222,6 +237,7 @@ is `ErrDegenerate`. The static set is every other live body of `d`, with no opti
 ```go
 type LinkageReport struct {
     Request       MotionRequest        // the validated effective settings, including defaults
+    ReadingResolution units.Value      // the reading floor (§3): Request.Resolution, or Scalar(1.0/16384) by default
     Linkage       *Linkage
     Drive         Drive                // as stated
     Links         []*Link              // Linkage.Links() order
@@ -407,6 +423,12 @@ between the smallest interval lower bound and the smallest evaluated upper bound
 that interval's midpoint and half-width, judged against the pair diameter of the pair that attained the
 upper end. Declared pairs do not enter the reading.
 
+A margin is decided on motion §5.2's terms, and an excluded pair — by swept box or by layer (§5.7) —
+contributes its proven lower bound and nothing else. A `WithMinClearance` above that bound therefore reads
+`AssessmentUndecided`, with a `DiagMotionUndecidedClearance` on each interval it holds back, and the report
+reads `Suspect`: the bound cannot meet the margin, and no pose measures the pair to disprove it. It never
+reads `AssessmentViolated`. This is motion §6 step 3's outcome for a swept-box-excluded pair.
+
 ### 5.6 What is never claimed
 
 - Nothing about `s` outside `[0, 1]`, nothing about a configuration the drive does not visit (§9.2).
@@ -489,7 +511,8 @@ several moving groups (§12 PR 1). The steps that differ:
    A pair the swept boxes leave is then tried by the layer exclusion (§5.7). A declared pair is excluded
    on the same terms: a pair proven apart over the whole drive is proven free of overlap too.
 5. **Evaluate, bisect and publish** as motion §6 steps 4–7, with `τ` per pair from §5.2 and the declared
-   pairs handled as §5.4 says. The onset bisection halves a colliding interval that still has a
+   pairs handled as §5.4 says. Step 6's refinement for the reading's tolerance gate stops at the reading
+   floor and its refinement for a margin at the verdict floor (§3). The onset bisection halves a colliding interval that still has a
    collision-free end whether the collision sits on a declared pair or an undeclared one.
 
 `ctx` is checked before every pose and inside every kernel call; a cancelled call returns `ctx.Err()` and
@@ -577,19 +600,24 @@ for a clear sweep, and `10`–`20` onset poses per contact found.
 Measured on `BenchmarkVerifyLinkageThreeJointArm` (three stacked `50` mm links each turning `0° → 90°`,
 the two elbows declared, a post `10` mm past the wrist and a far post): the declared elbows touch and
 publish nothing, the shoulder-wrist pair is settled by the layer exclusion (§5.7), and four pairs are
-evaluated per pose. At `WithResolution(Scalar(1.0/64))` the verdict settles in `10` poses, about `40` ms;
-at the default floor `50` poses, about `180` ms, both every interval `IntervalClear`.
+evaluated per pose. At `WithResolution(Scalar(1.0/64))` the verdict settles in `10` poses, about `30` ms,
+every interval `IntervalClear` and the reading beyond tolerance. At the defaults the verdict settles by the
+verdict floor in `50` poses, and the reading refines around its one minimum to the reading floor: `251`
+poses, about `0.7` s, `Sound`.
 
 **The whole-drive reading at the default floor.** The verdict is cheap; the reading need not be. A certified
 interval's lower bound sits up to `τ/2` below the true gap, so the reading's half-width near the minimum
 is about `τ_rate·Δs/4`, and the gate (verification §2) admits `rel·gap`. A chain's `τ_rate` is the sum of
 its `ρ_{ik}·|To_i − From_i|` — hundreds of millimetres per unit `s` for an arm of a few links — so at
-`rel = 1e-3` and a `10` mm gap the reading needs `Δs ≈ 7e-5`, well under the default floor `1/1024`. A clear
-drive at the defaults therefore reads `Suspect` with a `DiagMeasurementBeyondTolerance` on the reading
-(the three-joint arm above), and a finer `WithResolution` buys the reading at logarithmic cost around an
-isolated minimum (the same arm at `1/16384`: `251` poses, about `1` s, `Sound`). A minimum that holds along
-the drive — a pair whose gap does not change — makes every interval tie for the smallest bound, step 6
-refines all of them, and the cost is linear in `1/Δs`: about `16000` poses at `1/16384`. The layer
+`rel = 1e-3` and a `10` mm gap the reading needs `Δs ≈ 7e-5`, under the verdict floor `1/1024`. That is
+why the reading has its own floor (§3): refinement past the verdict floor goes only to the interval holding
+the smallest bound, so around an isolated minimum it costs about `log₂(16)` halvings per tie broken (the
+three-joint arm above: `50` poses for the verdict, `251` with the reading). A caller who states
+`WithResolution` stops the reading there too, and a clear drive whose reading the stated floor leaves
+coarse reads `Suspect` with a `DiagMeasurementBeyondTolerance` on it. A minimum that holds along the drive —
+a pair whose gap does not change — makes every interval tie for the smallest bound, step 6 refines all of
+them, and the cost is linear in `1/Δs`: at most `16385` poses at the default reading floor, and fewer where
+the gate is met sooner (a disc of radius `5` spinning a quarter turn `7` mm from a wall: `513` poses). The layer
 exclusion (§5.7) settles the common case of that shape, a stacked planar mechanism, before any pose:
 scene 1 without the wall, and the same arms over a table, each evaluate the two endpoints and read
 `Sound` at every resolution. A constant gap the rule cannot settle — a link turning about an axis that
@@ -725,6 +753,14 @@ beside a wall, forms neither pair and reads `Sound`, red when its pairs are form
 wall row is the same at every pose, and an internal test shows its one transient placement reused and kept
 cached across poses.
 
+**The reading floor.** At the defaults the three-joint arm of §10 reads `Sound`, its reading inside the
+gate, with `ReadingResolution` `1/16384` and some interval narrower than `1/1024`; red when the reading
+floor is dropped. At `WithResolution(Scalar(1.0/64))` it reads `Suspect` with no interval narrower than
+`1/64`; red when a stated resolution leaves the reading floor at its default. Scene 1's arms against a
+`3` mm margin read `AssessmentUndecided` with no interval narrower than `1/1024`; red when the margin
+refines to the reading floor. The quarter-turn disc beside a wall evaluates exactly `513` poses and reads
+`Sound`, its reading enclosing the true `7` mm.
+
 **Standing tests.** Errors, one subtest per row of §8 and per constructor refusal of §2; non-mutation and
 determinism as motion §9 test 7; cancellation; pose deviation charged (a joint centre at `(1e6, 0, 0)`
 widens a row's `Bound` as motion §9 test 8 shows, carried through a child link's composition); swept-box
@@ -749,6 +785,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 | 1 (`linkage.go`, `linkage_verify.go`, `linkage_bound.go`; `motion_verify.go` generalised to several moving groups with per-group poses, ideal frames and group-group pairs, `VerifyMotion` bit-identical as the one-group case, every motion test unchanged) | §2's vocabulary, `PoseAt`, §5's bounds and certificate, `VerifyLinkage` with every option, both bisection steps, swept-box exclusion against statics, scene 1 and its example, the agreement tests, the errors, non-mutation and cancellation tests | every pair that touches at a joint: declarations are PR 2 |
 | 2 | `DeclareJointContact`, `JointContacts`, §5.4's asymmetric outcome; `WithJointLimits` with `JointOption`, `JointLimits` and the joints' `Limits` fields; scenes 2, 3 and 4; the three-joint benchmark of §10 | a clear drive's whole-drive reading at the default floor (§10) |
 | 3 | §6 step 2's held links — a link holding `0` stands where it is and forms no pair with a static body, a link held elsewhere is one constant placement; link-link swept-box exclusion; the layer exclusion (§5.7); their tests | a clear drive's whole-drive reading at the default floor where its minimum is reached at one parameter (§10) |
+| 4 | the reading floor (§3): `ReadingResolution`, the reading's refinement past the verdict floor at the defaults, the margin held to the verdict floor; its tests | a stated `WithResolution` too coarse for the reading, and a constant gap the layer exclusion cannot settle whose gate needs a step under `1/16384` |
 
 PR 1 is the end-to-end instance: two real links, a real fixture, the real kernel, the chain certificate,
 one report, with the closed-form answer of scene 1 as its acceptance. This design document ships in PR 1.
