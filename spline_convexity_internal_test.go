@@ -30,7 +30,7 @@ import (
 // subdivision creates, and a reversed recorded range over an unreversed chain.
 //
 // The certificate is wired into the build by extrude.go's buildLoopSidesAs
-// (§10 P4b); extrude_freeform_test.go's TestExtrudeFreeformR19RefusesTheBuild
+// (§10 P4b); apitest/extrude_freeform_test.go's TestExtrudeFreeformR19RefusesTheBuild
 // pins two of these same nets as BUILD refusals through the public Extrude.
 // What these tests pin is the exact-rational geometry underneath it, computed
 // through the shipped conversion and the shipped ratPoly engine.
@@ -907,7 +907,7 @@ func TestInvoluteFitSplineJointNoiseNeverRefusesUnanimousSpans(t *testing.T) {
 	t.Parallel()
 	fit := involuteFitPoints()
 	// TStart > TEnd: the measured real record's own reversed=true, reproduced
-	// directly rather than guessed (spline_fit_test.go:551 builds a reversed
+	// directly rather than guessed (apitest/spline_fit_test.go:551 builds a reversed
 	// FitSplineSeg the identical way).
 	seg := FitSplineSeg{Fit: fit, TStart: 1, TEnd: 0}
 	require.NoError(t, validateSegment(seg))

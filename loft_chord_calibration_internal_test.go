@@ -116,7 +116,7 @@ func wedgeSplinePoints(fs *sketch.FitSpline, m int) [][2]float64 {
 // wedgePlanes builds the two parallel planes both wedge fixtures loft between: z=0
 // and its CreateOffsetPlane at wedgeHeight, sharing one U/V basis so a chord vertex
 // at the same (u,v) on each plane is the natural (offset-0) correspondence
-// loft_test.go's loftSquaresAt idiom also relies on.
+// apitest/loft_test.go's loftSquaresAt idiom also relies on.
 func wedgePlanes(t testing.TB) (*sketch.World, *sketch.Plane, *sketch.Plane) {
 	t.Helper()
 	w := sketch.NewWorld()

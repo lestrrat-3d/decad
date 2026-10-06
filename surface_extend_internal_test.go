@@ -26,7 +26,7 @@ import (
 // arm stays because a receiver's non-extended segments may be circles and a
 // future producer may reach it; it is proven here rather than left unexercised.
 // The LineSeg and ArcSeg arms have public fixtures of their own in
-// surface_extend_test.go, and this file checks both recorded senses of all
+// apitest/surface_extend_test.go, and this file checks both recorded senses of all
 // three in one place.
 
 // extendTestSquare is the far-away tool operand the scene needs as its second

@@ -56,7 +56,7 @@ func TestFreeEdgeAndOpenShellReadTheirOwnState(t *testing.T) {
 // the (u, v) of a given point on a NURBSSurface is a root-find, not a closed
 // form, so NormalAt has no bound to publish and refuses. A public Extrude of a
 // free-form section now reaches a NURBSSurface-tagged Face
-// (extrude_freeform_test.go's TestExtrudeFreeformNormalAtRefuses covers that
+// (apitest/extrude_freeform_test.go's TestExtrudeFreeformNormalAtRefuses covers that
 // path); this test builds the face directly, the way the package's own
 // internal tests build a bare *Face elsewhere, to isolate the refusal from any
 // build machinery.

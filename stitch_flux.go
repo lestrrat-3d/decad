@@ -143,7 +143,7 @@ import (
 // itself a rounded re-expression of a recorded point, and every use of it
 // here goes through proofbound.BoundedMul against that proven bound rather than
 // assuming the bare units.Value is exact. Every PUBLIC fixture this PR
-// tests (stitch_flux_test.go) revolves about a coordinate-aligned axis
+// tests (apitest/stitch_flux_test.go) revolves about a coordinate-aligned axis
 // through the origin, where that bound is proven exactly zero, so the
 // nonzero case is pinned directly instead, on a hand-built face carrying a
 // synthetic rim lengthBound far above ulp noise

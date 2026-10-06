@@ -354,7 +354,7 @@ func TestNearMissKeepsACrossingTheDistanceRoutineMisreads(t *testing.T) {
 }
 
 // internalAxisFrame is the rigid motion taking local +Z to dir and the origin
-// to a, built the way boolean_proximity_test.go's axisFrame builds it.
+// to a, built the way apitest/boolean_proximity_test.go's axisFrame builds it.
 func internalAxisFrame(t *testing.T, a, dir r3.Vec) r3.Transform {
 	t.Helper()
 	d, ok := dir.Normalize()
@@ -371,7 +371,7 @@ func internalAxisFrame(t *testing.T, a, dir r3.Vec) r3.Transform {
 }
 
 // internalOctagonPrism is the internal-package twin of
-// boolean_proximity_test.go's placed prism: a regular octagon of circumradius r,
+// apitest/boolean_proximity_test.go's placed prism: a regular octagon of circumradius r,
 // turned by phase, extruded l along local +Z and placed by frame.
 func internalOctagonPrism(t *testing.T, doc *Document, frame r3.Transform, l, r, phase float64) *Body {
 	t.Helper()
@@ -874,7 +874,7 @@ func internalDiscBody(t testing.TB, doc *Document, r, h float64) *Body {
 // internalWasherBodySymmetric extrudes a circular annulus (outer radius
 // outer, inner hole radius inner, centered on the origin) symmetrically about
 // its own sketch plane, spanning [-half, +half] — the internal-package twin
-// of boolean_test.go's washerBodySymmetric.
+// of apitest/boolean_test.go's washerBodySymmetric.
 func internalWasherBodySymmetric(t testing.TB, doc *Document, outer, inner, half float64) *Body {
 	t.Helper()
 	w := sketch.NewWorld()

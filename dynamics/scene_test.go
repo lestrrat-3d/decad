@@ -470,7 +470,7 @@ func tumbleTriangle(t *testing.T, doc *decad.Document, w *sketch.World, plane *s
 // origin, a·(0, 1, 0) and a·(1, 0, 1), a = 16·s with s = 1/√2 as r3 holds
 // it: the faces on the planes x + y = a and z = x take frames holding one
 // cardinal axis and the diagonal (±s, ±s), and their diagonal corners sit at
-// plane-local 16, so every corner lands exactly (mass_properties_mesh_test.go
+// plane-local 16, so every corner lands exactly (apitest/mass_properties_mesh_test.go
 // stitches the same solid at half the size).
 func tumbleTetrahedron(t *testing.T, doc *decad.Document) *decad.Body {
 	t.Helper()

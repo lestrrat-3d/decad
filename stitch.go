@@ -704,7 +704,7 @@ func reverseFaceOrientation(f *Face) {
 // single coedge) whenever its component's arbitrary root choice disagrees
 // with it. A face reached twice with contradicting flips proves the
 // component non-orientable — [ErrDegenerate] (Table R row R7); the
-// three-triangle Möbius fixture in stitch_test.go exercises exactly this
+// three-triangle Möbius fixture in apitest/stitch_test.go exercises exactly this
 // path directly, on a hand-built face set, because Stitch's own public
 // gates admit no way to reach a non-orientable assembly through the seam.
 func deriveStitchOrientation(faces []*Face) error {

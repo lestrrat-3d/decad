@@ -13,7 +13,7 @@ import (
 // This file covers the record-level half of docs/tessellation-reach-design.md
 // §4: the loftMeshProof evalLoft composes, and the restatement tessellateLoft
 // publishes from it. The public half — mesh shape, boolean admission, export
-// determinism — stays in tessellate_loft_test.go.
+// determinism — stays in apitest/tessellate_loft_test.go.
 
 // TestLoftSheetAuditRejectsCapInPlaceOfWall checks the recorded free-edge
 // attribution after one cap triangle is kept where a wall triangle belongs.

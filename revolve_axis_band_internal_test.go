@@ -232,7 +232,7 @@ func TestRevolveAxisBandChargesTheOffsetSubtraction(t *testing.T) {
 // geometry rather than a hand-set axisFrame, so the containment T90/T91
 // assert in isolation is also established at least once on a body this
 // evaluator actually built end to end. tiltedAxis mirrors
-// revolve_bounds_test.go's own fixture (anchor (0, -20), direction (3, 4)/5,
+// apitest/revolve_bounds_test.go's own fixture (anchor (0, -20), direction (3, 4)/5,
 // not exactly representable): a shaft profile whose near edge sits AT that
 // axis (rather than dipped below it) resolves with a genuinely nonzero
 // radialAdmitAllow — confirmed below rather than assumed — because

@@ -1,0 +1,812 @@
+package apitest_test
+
+import (
+	"context"
+	"math"
+	"os"
+	"testing"
+
+	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
+	"github.com/stretchr/testify/require"
+)
+
+// This file is docs/loft-design.md PR 1b: the public-surface tests over
+// loft_build_internal_test.go's already-covered evaluator (S1-S8, Table P,
+// Table B, §8's mass kernel). Every test here needs a live sketch, the
+// public entry point, or the recorded step — nothing PR 1a's internal tests
+// already assert is repeated.
+
+// loftSquaresAt builds two sketches on parallel planes at the given world
+// origin, each with a centred square rectangle: bottomHalf on the plane
+// through origin (normal +Z), topHalf on the plane offset by height along
+// that normal. CreateOffsetPlane keeps the same U/V basis, so the natural
+// (offset-0) correspondence pairs corresponding corners directly.
+func loftSquaresAt(t testing.TB, origin r3.Vec, bottomHalf, topHalf, height float64) (*sketch.Sketch, *sketch.Profile, *sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	frame, err := r3.NewFrame(origin, r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	base, err := w.CreatePlaneFromFrame(frame)
+	require.NoError(t, err)
+	top, err := w.CreateOffsetPlane(base, height)
+	require.NoError(t, err)
+
+	s0, err := w.CreateSketch(base)
+	require.NoError(t, err)
+	r0 := s0.CreateRectangle(-bottomHalf, -bottomHalf, bottomHalf, bottomHalf)
+	s0.Fix(r0.A)
+	_, err = s0.Solve(t.Context())
+	require.NoError(t, err)
+
+	s1, err := w.CreateSketch(top)
+	require.NoError(t, err)
+	r1 := s1.CreateRectangle(-topHalf, -topHalf, topHalf, topHalf)
+	s1.Fix(r1.A)
+	_, err = s1.Solve(t.Context())
+	require.NoError(t, err)
+
+	return s0, s0.Profiles()[0], s1, s1.Profiles()[0]
+}
+
+// loftSquares is loftSquaresAt at the world origin.
+func loftSquares(t testing.TB, bottomHalf, topHalf float64) (*sketch.Sketch, *sketch.Profile, *sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	return loftSquaresAt(t, r3.NewVec(0, 0, 0), bottomHalf, topHalf, 10)
+}
+
+// loftCircleProfile builds a solved circle sketch of radius r on plane, owned by
+// w, and returns its single profile.
+func loftCircleProfile(t *testing.T, w *sketch.World, plane *sketch.Plane, r float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	c := s.CreatePoint(0, 0)
+	s.Fix(c)
+	s.CreateCircle(c, r)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	return s, s.Profiles()[0]
+}
+
+// --- Mass properties (§8) ---
+
+func TestLoftBuildsCongruentSquares(t *testing.T) {
+	t.Parallel()
+	s0, p0, s1, p1 := loftSquares(t, 20, 20)
+	doc := decad.New()
+	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	require.NoError(t, err)
+
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, vol.Exactness)
+	require.True(t, vol.Value.Equal(units.CubicMillimeters(16000), 1e-9), "40x40x10 box = 16000 mm^3, got %s", vol.Value)
+
+	bounds, err := body.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, bounds.Exactness)
+	require.InDelta(t, -20, bounds.Min.X, 1e-9)
+	require.InDelta(t, -20, bounds.Min.Y, 1e-9)
+	require.InDelta(t, 0, bounds.Min.Z, 1e-9)
+	require.InDelta(t, 20, bounds.Max.X, 1e-9)
+	require.InDelta(t, 20, bounds.Max.Y, 1e-9)
+	require.InDelta(t, 10, bounds.Max.Z, 1e-9)
+
+	c, err := body.Centroid()
+	require.NoError(t, err)
+	require.InDelta(t, 0, c.Value.X, 1e-9)
+	require.InDelta(t, 0, c.Value.Y, 1e-9)
+	require.InDelta(t, 5, c.Value.Z, 1e-9)
+
+	faces := body.Faces()
+	require.Len(t, faces, 10, "8 wall triangles + capStart + capEnd")
+	edges := body.Edges()
+	require.Len(t, edges, 16, "4 bottom rim + 4 top rim + 4 diagonal + 4 rung")
+	requireManifold(t, body)
+	require.Len(t, body.Vertices(), 8)
+}
+
+func TestLoftHoledProfilesMakePassage(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	top, err := w.CreateOffsetPlane(w.XY(), 10)
+	require.NoError(t, err)
+	var sketches [2]*sketch.Sketch
+	var profiles [2]*sketch.Profile
+	for i, plane := range []*sketch.Plane{w.XY(), top} {
+		s, err := w.CreateSketch(plane)
+		require.NoError(t, err)
+		outer := s.CreateRectangle(0, 0, 10, 10)
+		inner := s.CreateRectangle(3, 3, 7, 7)
+		s.Fix(outer.A)
+		s.Fix(inner.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		for _, p := range s.Profiles() {
+			if len(p.Holes) == 1 {
+				profiles[i] = p
+				break
+			}
+		}
+		require.NotNil(t, profiles[i])
+		sketches[i] = s
+	}
+
+	body, err := decad.New().Loft(t.Context(), sketches[0], profiles[0], sketches[1], profiles[1])
+	require.NoError(t, err)
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	require.True(t, vol.Value.Equal(units.CubicMillimeters(840), 1e-9))
+	requireManifold(t, body)
+	require.Len(t, body.Shells(), 1)
+	require.False(t, body.Shells()[0].IsVoid(), `the hole opens through both caps`)
+}
+
+func TestLoftFrustumVolumeMatchesClosedForm(t *testing.T) {
+	t.Parallel()
+	// bottom side 40 (half 20), top side 20 (half 10), height 10: the
+	// pyramidal frustum V = (h/3)(A0 + A1 + sqrt(A0*A1)) = 28000/3 mm^3, not
+	// representable in binary, so Volume must be Approximate with a positive
+	// proven bound that encloses the closed-form value.
+	s0, p0, s1, p1 := loftSquares(t, 20, 10)
+	doc := decad.New()
+	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	require.NoError(t, err)
+
+	const a0, a1, h = 1600.0, 400.0, 10.0
+	wantVol := h / 3 * (a0 + a1 + math.Sqrt(a0*a1))
+
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	gotVol, err := vol.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	boundVol, err := vol.Bound.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.Greater(t, boundVol, 0.0)
+	require.LessOrEqual(t, math.Abs(gotVol-wantVol), boundVol, "the proven bound must enclose the closed-form frustum volume")
+
+	wantCZ := h * (a0 + 2*math.Sqrt(a0*a1) + 3*a1) / (4 * (a0 + a1 + math.Sqrt(a0*a1)))
+	c, err := body.Centroid()
+	require.NoError(t, err)
+	boundC, err := c.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(c.Value.Z-wantCZ), boundC, "the proven bound must enclose the closed-form frustum centroid")
+
+	area, err := body.Area()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, area.Exactness)
+	boundArea, err := area.Bound.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.Greater(t, boundArea, 0.0)
+}
+
+// TestLoftAlignmentSelectsTheCorrespondence uses an asymmetric (scalene)
+// pentagon so no offset other than the true one can coincidentally reproduce
+// the closed-form untwisted volume through a rotational or reflective
+// symmetry of the shape itself. p0 records its five corners a,b,c,d,e in that
+// order; p1 is the identical footprint (CreateOffsetPlane keeps the same U/V
+// basis, so no plane rotation is involved), but its own points are created
+// starting from b — b,c,d,e,a — so p1's own recorded segment 0 starts at
+// world position b, one step ahead of p0's own segment 0 (at a). Vertex k of
+// p0 sits at the SAME world position as p1's vertex (k+4) mod 5 (verified by
+// hand and pinned by this test's own offset-4 assertions below), so
+// WithLoftAlignment(4) is the one offset that undoes the shift and recovers
+// the plain (untwisted) pentagonal prism.
+func TestLoftAlignmentSelectsTheCorrespondence(t *testing.T) {
+	t.Parallel()
+	const height = 10.0
+	pts := [5][2]float64{{0, 0}, {10, 0}, {14, 5}, {9, 11}, {1, 8}}
+	// Shoelace area of the pentagon above, positive (CCW): 110 mm^2.
+	const wantArea = 110.0
+	const wantVol = wantArea * height
+
+	w := sketch.NewWorld()
+	s0, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	p0pts := make([]*sketch.Point, 5)
+	for i, p := range pts {
+		p0pts[i] = s0.CreatePoint(p[0], p[1])
+	}
+	for i := range 5 {
+		s0.CreateLine(p0pts[i], p0pts[(i+1)%5])
+	}
+	for _, p := range p0pts {
+		s0.Fix(p)
+	}
+	_, err = s0.Solve(t.Context())
+	require.NoError(t, err)
+	p0 := s0.Profiles()[0]
+
+	top, err := w.CreateOffsetPlane(w.XY(), height)
+	require.NoError(t, err)
+	s1, err := w.CreateSketch(top)
+	require.NoError(t, err)
+	shifted := [5][2]float64{pts[1], pts[2], pts[3], pts[4], pts[0]}
+	p1pts := make([]*sketch.Point, 5)
+	for i, p := range shifted {
+		p1pts[i] = s1.CreatePoint(p[0], p[1])
+	}
+	for i := range 5 {
+		s1.CreateLine(p1pts[i], p1pts[(i+1)%5])
+	}
+	for _, p := range p1pts {
+		s1.Fix(p)
+	}
+	_, err = s1.Solve(t.Context())
+	require.NoError(t, err)
+	p1 := s1.Profiles()[0]
+
+	// countRungs reports how many edges of body run z-parallel (identical
+	// x, y, differing z) and asserts every one of them spans the full sweep
+	// height — the "vertical rung" signature of an untwisted correspondence.
+	countRungs := func(t *testing.T, body *decad.Body) int {
+		t.Helper()
+		rungs := 0
+		for _, e := range body.Edges() {
+			a := e.Start().Position().Value
+			b := e.End().Position().Value
+			if math.Abs(a.X-b.X) > 1e-9 || math.Abs(a.Y-b.Y) > 1e-9 {
+				continue
+			}
+			require.InDelta(t, height, math.Abs(a.Z-b.Z), 1e-9, "a z-parallel edge must span the full sweep height")
+			rungs++
+		}
+		return rungs
+	}
+
+	t.Run("DefaultOffsetIsTheWrongCorrespondence", func(t *testing.T) {
+		// Omitting WithLoftAlignment (every offset 0) does not undo the
+		// one-step shift, so it builds a twisted, non-vertical-rung pentagon
+		// loft whose volume is strictly less than the untwisted one.
+		doc := decad.New()
+		body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+		require.NoError(t, err)
+		vol, err := body.Volume()
+		require.NoError(t, err)
+		gotVol, err := vol.Value.In(units.CubicMillimeter)
+		require.NoError(t, err)
+		require.Less(t, gotVol, wantVol)
+		require.Equal(t, 0, countRungs(t, body), "the default (unaligned) correspondence has no vertical rung")
+	})
+
+	t.Run("OffsetFourReachesTheUntwistedCorrespondence", func(t *testing.T) {
+		doc := decad.New()
+		body, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithLoftAlignment(4))
+		require.NoError(t, err)
+		vol, err := body.Volume()
+		require.NoError(t, err)
+		require.Equal(t, decad.Exact, vol.Exactness)
+		gotVol, err := vol.Value.In(units.CubicMillimeter)
+		require.NoError(t, err)
+		require.InDelta(t, wantVol, gotVol, 1e-6)
+		require.Equal(t, 5, countRungs(t, body), "every vertex must have exactly one z-parallel rung")
+	})
+
+	t.Run("EveryOffsetEitherBuildsAtOrBelowTheUntwistedVolumeOrRefuses", func(t *testing.T) {
+		for off := range 5 {
+			doc := decad.New()
+			body, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithLoftAlignment(off))
+			if err != nil {
+				require.ErrorIsf(t, err, decad.ErrDegenerate, "offset %d must either build or refuse with S7's ErrDegenerate", off)
+				continue
+			}
+			vol, err := body.Volume()
+			require.NoError(t, err)
+			gotVol, err := vol.Value.In(units.CubicMillimeter)
+			require.NoError(t, err)
+			require.LessOrEqualf(t, gotVol, wantVol+1e-6, "offset %d: no correspondence may exceed the untwisted volume", off)
+		}
+	})
+}
+
+// --- Seam gates (S9) ---
+
+func TestLoftSeamGates(t *testing.T) {
+	t.Parallel()
+	t.Run("ForeignProfileAtP0", func(t *testing.T) {
+		s0, _, s1, p1 := loftSquares(t, 20, 20)
+		w := sketch.NewWorld()
+		foreign, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		fr := foreign.CreateRectangle(-20, -20, 20, 20)
+		foreign.Fix(fr.A)
+		_, err = foreign.Solve(t.Context())
+		require.NoError(t, err)
+
+		doc := decad.New()
+		body, err := doc.Loft(t.Context(), s0, foreign.Profiles()[0], s1, p1)
+		require.Nil(t, body)
+		require.ErrorIs(t, err, decad.ErrForeignProfile)
+		require.Empty(t, doc.Bodies())
+		require.Empty(t, doc.Bodies())
+	})
+
+	t.Run("ForeignProfileAtP1", func(t *testing.T) {
+		s0, p0, s1, _ := loftSquares(t, 20, 20)
+		w := sketch.NewWorld()
+		foreign, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		fr := foreign.CreateRectangle(-20, -20, 20, 20)
+		foreign.Fix(fr.A)
+		_, err = foreign.Solve(t.Context())
+		require.NoError(t, err)
+
+		doc := decad.New()
+		body, err := doc.Loft(t.Context(), s0, p0, s1, foreign.Profiles()[0])
+		require.Nil(t, body)
+		require.ErrorIs(t, err, decad.ErrForeignProfile)
+		require.Empty(t, doc.Bodies())
+		require.Empty(t, doc.Bodies())
+	})
+
+	t.Run("StaleProfileAtP0", func(t *testing.T) {
+		s0, p0, s1, p1 := loftSquares(t, 20, 20)
+		s0.AddConstraint(sketch.NewDistance(s0.Points()[0], s0.Points()[1], 55))
+		_, err := s0.Solve(t.Context())
+		require.NoError(t, err)
+		require.True(t, p0.IsStale())
+
+		doc := decad.New()
+		body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+		require.Nil(t, body)
+		require.ErrorIs(t, err, decad.ErrStaleProfile)
+		require.Empty(t, doc.Bodies())
+		require.Empty(t, doc.Bodies())
+	})
+
+	t.Run("StaleProfileAtP1", func(t *testing.T) {
+		s0, p0, s1, p1 := loftSquares(t, 20, 20)
+		s1.AddConstraint(sketch.NewDistance(s1.Points()[0], s1.Points()[1], 55))
+		_, err := s1.Solve(t.Context())
+		require.NoError(t, err)
+		require.True(t, p1.IsStale())
+
+		doc := decad.New()
+		body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+		require.Nil(t, body)
+		require.ErrorIs(t, err, decad.ErrStaleProfile)
+		require.Empty(t, doc.Bodies())
+		require.Empty(t, doc.Bodies())
+	})
+
+	t.Run("InvalidProfileAtP0", func(t *testing.T) {
+		w := sketch.NewWorld()
+		s0, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		first := s0.CreateRectangle(0, 0, 10, 10)
+		second := s0.CreateRectangle(20, 0, 30, 10)
+		s0.Fix(first.A)
+		s0.Fix(second.A)
+		_, err = s0.Solve(t.Context())
+		require.NoError(t, err)
+		profiles := s0.Profiles()
+		require.Len(t, profiles, 2)
+		profiles[0].Outer = profiles[1].Outer // a caller-altered snapshot
+
+		top, err := w.CreateOffsetPlane(w.XY(), 10)
+		require.NoError(t, err)
+		s1, err := w.CreateSketch(top)
+		require.NoError(t, err)
+		r1 := s1.CreateRectangle(-5, -5, 5, 5)
+		s1.Fix(r1.A)
+		_, err = s1.Solve(t.Context())
+		require.NoError(t, err)
+
+		doc := decad.New()
+		body, err := doc.Loft(t.Context(), s0, profiles[0], s1, s1.Profiles()[0])
+		require.Nil(t, body)
+		require.ErrorIs(t, err, decad.ErrInvalidProfile)
+		require.Empty(t, doc.Bodies())
+		require.Empty(t, doc.Bodies())
+	})
+
+	t.Run("InvalidProfileAtP1", func(t *testing.T) {
+		w := sketch.NewWorld()
+		base, err := w.CreateOffsetPlane(w.XY(), 10)
+		require.NoError(t, err)
+		s1, err := w.CreateSketch(base)
+		require.NoError(t, err)
+		first := s1.CreateRectangle(0, 0, 10, 10)
+		second := s1.CreateRectangle(20, 0, 30, 10)
+		s1.Fix(first.A)
+		s1.Fix(second.A)
+		_, err = s1.Solve(t.Context())
+		require.NoError(t, err)
+		profiles := s1.Profiles()
+		require.Len(t, profiles, 2)
+		profiles[0].Outer = profiles[1].Outer
+
+		s0, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		r0 := s0.CreateRectangle(-5, -5, 5, 5)
+		s0.Fix(r0.A)
+		_, err = s0.Solve(t.Context())
+		require.NoError(t, err)
+
+		doc := decad.New()
+		body, err := doc.Loft(t.Context(), s0, s0.Profiles()[0], s1, profiles[0])
+		require.Nil(t, body)
+		require.ErrorIs(t, err, decad.ErrInvalidProfile)
+		require.Empty(t, doc.Bodies())
+		require.Empty(t, doc.Bodies())
+	})
+}
+
+// --- Pre-gates: nil arguments (S10), options (S11, S4 arity) ---
+
+func TestLoftNilArguments(t *testing.T) {
+	t.Parallel()
+	s0, p0, s1, p1 := loftSquares(t, 20, 20)
+	cases := []struct {
+		name string
+		s0   *sketch.Sketch
+		p0   *sketch.Profile
+		s1   *sketch.Sketch
+		p1   *sketch.Profile
+	}{
+		{"s0", nil, p0, s1, p1},
+		{"p0", s0, nil, s1, p1},
+		{"s1", s0, p0, nil, p1},
+		{"p1", s0, p0, s1, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := decad.New()
+			body, err := doc.Loft(t.Context(), tc.s0, tc.p0, tc.s1, tc.p1)
+			require.Nil(t, body)
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			require.Empty(t, doc.Bodies())
+			require.Empty(t, doc.Bodies())
+		})
+	}
+}
+
+// unknownLoftOption is a foreign LoftOption implementation: it embeds the
+// interface to promote its sealed marker, then overrides Ident() with a
+// counter so a test can prove Loft never invokes it on a rejected option.
+type unknownLoftOption struct {
+	decad.LoftOption
+	calls *int
+}
+
+type unknownLoftOptionIdent struct{}
+
+func (o unknownLoftOption) Ident() any {
+	(*o.calls)++
+	return unknownLoftOptionIdent{}
+}
+
+func TestLoftForeignOption(t *testing.T) {
+	t.Parallel()
+	s0, p0, s1, p1 := loftSquares(t, 20, 20)
+
+	t.Run("ForeignImplementation", func(t *testing.T) {
+		doc := decad.New()
+		calls := 0
+		opt := unknownLoftOption{
+			LoftOption: decad.WithLoftAlignment(0),
+			calls:      &calls,
+		}
+		body, err := doc.Loft(t.Context(), s0, p0, s1, p1, opt)
+		require.Nil(t, body)
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.ErrorContains(t, err, "not a decad loft option")
+		require.Zero(t, calls, "Loft rejects a foreign option before invoking its callback")
+		require.Empty(t, doc.Bodies())
+		require.Empty(t, doc.Bodies())
+	})
+
+	t.Run("NilElement", func(t *testing.T) {
+		doc := decad.New()
+		body, err := doc.Loft(t.Context(), s0, p0, s1, p1, nil)
+		require.Nil(t, body)
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.Empty(t, doc.Bodies())
+		require.Empty(t, doc.Bodies())
+	})
+}
+
+func TestLoftDuplicateAlignmentOption(t *testing.T) {
+	t.Parallel()
+	s0, p0, s1, p1 := loftSquares(t, 20, 20)
+	doc := decad.New()
+	body, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithLoftAlignment(0), decad.WithLoftAlignment(0))
+	require.Nil(t, body)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.Empty(t, doc.Bodies())
+	require.Empty(t, doc.Bodies())
+}
+
+func TestLoftEmptyAlignmentPayload(t *testing.T) {
+	t.Parallel()
+	// A one-loop pair needs exactly one offset; WithLoftAlignment() with no
+	// arguments must reach validateLoftRecords as a non-nil, length-0 slice
+	// so it refuses as S4 (wrong length) rather than silently defaulting.
+	s0, p0, s1, p1 := loftSquares(t, 20, 20)
+	doc := decad.New()
+	body, err := doc.Loft(t.Context(), s0, p0, s1, p1, decad.WithLoftAlignment())
+	require.Nil(t, body)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.Empty(t, doc.Bodies())
+	require.Empty(t, doc.Bodies())
+}
+
+// --- Shape gates (S3, S5) ---
+
+func TestLoftCoplanarSectionsRefuse(t *testing.T) {
+	t.Parallel()
+	t.Run("SameSketch", func(t *testing.T) {
+		s0, p0, _, _ := loftSquares(t, 20, 20)
+		doc := decad.New()
+		body, err := doc.Loft(t.Context(), s0, p0, s0, p0)
+		require.Nil(t, body)
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.Empty(t, doc.Bodies())
+		require.Empty(t, doc.Bodies())
+	})
+
+	t.Run("RotatedBasisSamePlane", func(t *testing.T) {
+		w := sketch.NewWorld()
+		s0, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		r0 := s0.CreateRectangle(-20, -20, 20, 20)
+		s0.Fix(r0.A)
+		_, err = s0.Solve(t.Context())
+		require.NoError(t, err)
+
+		frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(-1, 0, 0))
+		require.NoError(t, err)
+		rotPlane, err := w.CreatePlaneFromFrame(frame)
+		require.NoError(t, err)
+		s1, err := w.CreateSketch(rotPlane)
+		require.NoError(t, err)
+		r1 := s1.CreateRectangle(-20, -20, 20, 20)
+		s1.Fix(r1.A)
+		_, err = s1.Solve(t.Context())
+		require.NoError(t, err)
+
+		doc := decad.New()
+		body, err := doc.Loft(t.Context(), s0, s0.Profiles()[0], s1, s1.Profiles()[0])
+		require.Nil(t, body)
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.Empty(t, doc.Bodies())
+		require.Empty(t, doc.Bodies())
+	})
+}
+
+func TestLoftCurvedPairRefuses(t *testing.T) {
+	t.Parallel()
+	// A mismatched segment count refuses at S2, before S3's own same-kind
+	// test ever runs (already pinned exactly by loft_build_internal_test.go's
+	// own S1-S8 tests) — unaffected by S3's arc form (a10-plan.md Part 3
+	// PR 6), since a circle (one segment) against a square (four segments)
+	// never reaches a per-segment kind comparison at all.
+	t.Run("CircleAgainstSquare", func(t *testing.T) {
+		w := sketch.NewWorld()
+		s0, p0 := loftCircleProfile(t, w, w.XY(), 10)
+		top, err := w.CreateOffsetPlane(w.XY(), 10)
+		require.NoError(t, err)
+		s1, err := w.CreateSketch(top)
+		require.NoError(t, err)
+		r1 := s1.CreateRectangle(-10, -10, 10, 10)
+		s1.Fix(r1.A)
+		_, err = s1.Solve(t.Context())
+		require.NoError(t, err)
+
+		doc := decad.New()
+		body, err := doc.Loft(t.Context(), s0, p0, s1, s1.Profiles()[0])
+		require.Nil(t, body)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.Empty(t, doc.Bodies())
+		require.Empty(t, doc.Bodies())
+	})
+}
+
+// TestLoftSameKindCircleAgainstCircleAdmitted is the same-kind circular
+// pairing S3's arc form now admits (a10-plan.md Part 3 PR 6), superseding
+// the old refusal TestLoftCurvedPairRefuses's own "CircleAgainstCircle"
+// subtest asserted: matching segment counts (one CircleSeg each) pair
+// one-to-one and BUILD. A whole CircleSeg loop is always the FULL circle
+// (record.go: "the full period for a whole edge"), and station count scales
+// with sweep independent of radius, so a full circle needs roughly 256
+// stations per side and several seconds to build — too expensive for the
+// default suite (a10-plan.md's own Fixture sizing note: at most three ~2s
+// fixtures ship in go test ./...), so the actual build is opt-in behind an
+// env var, the same shape loft_chord_calibration_internal_test.go's own
+// DECAD_LOFT_CALIBRATION gate uses.
+func TestLoftSameKindCircleAgainstCircleAdmitted(t *testing.T) {
+	t.Parallel()
+	if os.Getenv("DECAD_LOFT_FULL_CIRCLE") == "" {
+		t.Skip("set DECAD_LOFT_FULL_CIRCLE=1 to build a full circle-to-circle loft (several seconds, roughly 256 stations per side)")
+	}
+	w := sketch.NewWorld()
+	s0, p0 := loftCircleProfile(t, w, w.XY(), 10)
+	top, err := w.CreateOffsetPlane(w.XY(), 10)
+	require.NoError(t, err)
+	s1, p1 := loftCircleProfile(t, w, top, 5)
+
+	doc := decad.New()
+	body, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	require.NoError(t, err)
+	require.NotNil(t, body)
+}
+
+// --- Verify wiring (D6) ---
+
+func TestLoftVerifySound(t *testing.T) {
+	t.Parallel()
+	s0, p0, s1, p1 := loftSquares(t, 20, 10)
+	doc := decad.New()
+	_, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	require.True(t, report.Passed())
+	require.Empty(t, report.Diagnostics)
+	require.Len(t, report.Bodies, 1)
+
+	br := report.Bodies[0]
+	require.Equal(t, decad.ValidityValid, br.Validity.Outcome)
+	require.Equal(t, 1, br.Topology.Lumps)
+	require.Equal(t, 0, br.Topology.Voids)
+	require.NotNil(t, br.Region)
+}
+
+// TestLoftVerifySurveysStaySuspect proves loft is a payload class the wall,
+// undercut, and concave-radius type switches in survey.go do not name at
+// all (task-list §4 item 3): every asked survey reports the explicit
+// DiagUnsupportedSurveyPayload refusal, still Suspect, distinguished by its
+// structured Survey identity rather than by its DiagnosticCode alone.
+func TestLoftVerifySurveysStaySuspect(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		opt    decad.VerifyOption
+		survey decad.SurveyKind
+	}{
+		{"wall", decad.WithMinWallThickness(units.Millimeters(1)), decad.SurveyWall},
+		{"pull", decad.WithPullDirection(r3.NewVec(0, 0, 1)), decad.SurveyUndercut},
+		{"radius", decad.WithConcaveRadius(), decad.SurveyConcaveRadius},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s0, p0, s1, p1 := loftSquares(t, 20, 10)
+			doc := decad.New()
+			_, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+			require.NoError(t, err)
+
+			report, err := doc.Verify(t.Context(), tc.opt)
+			require.NoError(t, err)
+			require.Equal(t, decad.Suspect, report.Status)
+			diag, ok := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedSurveyPayload)
+			require.True(t, ok, "expected diagnostic %s", decad.DiagUnsupportedSurveyPayload)
+			require.Equal(t, decad.Suspect, diag.Status)
+			require.Equal(t, tc.survey, diag.Survey)
+		})
+	}
+}
+
+func TestLoftVerifyBoxDisjointPairIsSound(t *testing.T) {
+	t.Parallel()
+	s0, p0, s1, p1 := loftSquares(t, 10, 10)
+	doc := decad.New()
+	_, err := doc.Loft(t.Context(), s0, p0, s1, p1)
+	require.NoError(t, err)
+
+	t0, tp0, t1, tp1 := loftSquaresAt(t, r3.NewVec(1000, 0, 0), 10, 10, 10)
+	_, err = doc.Loft(t.Context(), t0, tp0, t1, tp1)
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	require.Empty(t, report.Interferences)
+
+	report, err = doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, report.Status)
+	require.Empty(t, report.Clearances, "the analytic clearance kernel has no loft case yet (D4)")
+	diag, ok := findDiagnostic(report.Diagnostics, decad.DiagUndecidedClearance)
+	require.True(t, ok)
+	require.Equal(t, decad.Suspect, diag.Status)
+}
+
+// --- Cancellation ---
+
+func TestLoftContextCancellation(t *testing.T) {
+	t.Parallel()
+	s0, p0, s1, p1 := loftSquares(t, 20, 20)
+	doc := decad.New()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	body, err := doc.Loft(ctx, s0, p0, s1, p1)
+	require.Nil(t, body)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Empty(t, doc.Bodies())
+	require.Empty(t, doc.Bodies())
+}
+
+const (
+	helicalToothModule    = 1.0
+	helicalToothCount     = 17.0
+	helicalToothThickness = 5.0
+)
+
+// buildHelicalToothProfile builds the four-edge m1 z17 tooth outline used by
+// fusion360-gear-generator's loft proof: two radial flanks, a tip arc and a
+// root arc. rot is the section's rotation about the gear axis.
+func buildHelicalToothProfile(s *sketch.Sketch, rot float64) {
+	pitchRadius := helicalToothModule * helicalToothCount / 2
+	tipRadius := pitchRadius + helicalToothModule
+	rootRadius := pitchRadius - 1.25*helicalToothModule
+	pitch := 2 * math.Pi / helicalToothCount
+
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	pointAt := func(radius, angle float64) *sketch.Point {
+		p := s.CreatePoint(radius*math.Cos(angle), radius*math.Sin(angle))
+		s.Fix(p)
+		return p
+	}
+	tipA := pointAt(tipRadius, rot-0.25*pitch)
+	tipB := pointAt(tipRadius, rot+0.25*pitch)
+	rootB := pointAt(rootRadius, rot+0.5*pitch)
+	rootA := pointAt(rootRadius, rot-0.5*pitch)
+	s.CreateArc(center, tipA, tipB)
+	s.CreateLine(tipB, rootB)
+	s.CreateArc(center, rootB, rootA)
+	s.CreateLine(rootA, tipA)
+}
+
+// TestLoftHelicalToothClearsDefaultTolerance is A11's acceptance fixture. The
+// generator applies its default 14.5-degree helix angle directly as the
+// section's end-to-end twist. Its Volume bound is the binding reading at the
+// default relative tolerance.
+func TestLoftHelicalToothClearsDefaultTolerance(t *testing.T) {
+	t.Parallel()
+	if testing.Short() {
+		t.Skip("the production chord count makes the crossing audit exceed the two-second fixture budget")
+	}
+	ctx := t.Context()
+	w := sketch.NewWorld()
+	s0, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	buildHelicalToothProfile(s0, 0)
+	_, err = s0.Solve(ctx)
+	require.NoError(t, err)
+
+	plane, err := w.CreateOffsetPlane(w.XY(), helicalToothThickness)
+	require.NoError(t, err)
+	s1, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	twist := 14.5 * math.Pi / 180
+	buildHelicalToothProfile(s1, twist)
+	_, err = s1.Solve(ctx)
+	require.NoError(t, err)
+
+	doc := decad.New()
+	body, err := doc.Loft(t.Context(), s0, s0.Profiles()[0], s1, s1.Profiles()[0])
+	require.NoError(t, err)
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	centroid, err := body.Centroid()
+	require.NoError(t, err)
+	area, err := body.Area()
+	require.NoError(t, err)
+	areaRelativeBound := area.Bound.Mag() / area.Value.Mag()
+	t.Logf("area relative bound %.6g; volume relative bound %.6g; centroid bound %.6g mm",
+		areaRelativeBound, volume.Bound.Mag()/volume.Value.Mag(), centroid.Bound.Mag())
+	require.LessOrEqual(t, areaRelativeBound, 1e-3,
+		"the m1 z17 tooth's Area reading must clear the default relative tolerance")
+
+	report, err := doc.Verify(ctx)
+	require.NoError(t, err)
+	require.True(t, report.Passed(), "the m1 z17 tooth loft must be trustworthy: %v", report.Diagnostics)
+}

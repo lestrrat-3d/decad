@@ -17,13 +17,13 @@ import (
 
 // Regression guard for the race-detector shards in .github/workflows/ci.yml.
 //
-// The shards exist to bound the race job's wall time, and they split the ROOT
-// package's test names between runners. The hazard the split creates is
-// silent: a `-run` regex built from one package's names matches NOTHING in
-// any other package, so a shard handed `./...` runs the root package's half
-// and zero tests everywhere else, then reports success. No `go test` exit
-// status and no non-empty-variable guard can see that, because the root
-// package's own name list is never empty.
+// The shards exist to bound the race job's wall time, and they split the test
+// names of two binaries between runners: the ROOT package's and apitest's.
+// The hazard the split creates is silent: a `-run` regex built from one
+// package's names matches NOTHING in any other package, so a shard handed
+// `./...` runs that package's share and zero tests everywhere else, then
+// reports success. No `go test` exit status and no non-empty-variable guard
+// can see that, because the package's own name list is never empty.
 //
 // This test is the mechanical check that class of loss cannot come back. It
 // reads the workflow as text — the repository has no YAML parser among its
@@ -32,16 +32,20 @@ import (
 //
 //   - no shard command combines a `-run` filter with `./...`;
 //   - every Go package directory on disk outside the root is named by some
-//     shard's own `packages:` operand, so adding a package fails this test
-//     until the workflow covers it;
+//     runner's own `packages:` operand or by a `run_shard` call in the shard
+//     step, so adding a package fails this test until the workflow covers it;
+//   - the shard step runs the root package's binary against
+//     .github/test-shards.txt, each sharded package once, from its own
+//     directory;
 //   - the shard enumeration selects Examples and Fuzz targets, not Test
 //     functions alone, since `-run` gates all three;
-//   - every test on disk is named by exactly one shard in
+//   - every root-package test is named by exactly one shard in
 //     .github/test-shards.txt, and that file names no test that has gone away,
-//     so a test can be neither dropped nor run twice;
-//   - the file uses exactly the shards the matrix declares, so adding a shard
-//     entry without regenerating the file cannot leave a runner with nothing,
-//     nor a bucket with no runner;
+//     so a test can be neither dropped nor run twice (apitest/ci_shards_test.go
+//     checks apitest's own file the same way, from apitest's binary);
+//   - every assignment file uses exactly the shards the matrix declares, so
+//     adding a shard entry without regenerating the files cannot leave a
+//     runner with nothing, nor a bucket with no runner;
 //   - the unfiltered whole-suite step is gated on a runner having neither a
 //     shard nor a package operand, so the runner that owns the non-root
 //     packages cannot also re-run everything.
@@ -70,10 +74,33 @@ var (
 	// which names a shard can ever run.
 	ciListPatternRe   = regexp.MustCompile(`-test\.list '([^']*)'`)
 	ciSelectPatternRe = regexp.MustCompile(`(?m)^\s*/([^/]+)/\s*\{\s*$`)
+	// ciRunShardRe reads each `run_shard <binary> <assignment file> <package
+	// directory>` call in the shard step.
+	ciRunShardRe = regexp.MustCompile(`(?m)^\s*run_shard (\S+) (\S+) (\S+)\s*$`)
 )
 
 // ciShardFilePath records which shard runs each root-package test.
 const ciShardFilePath = ".github/test-shards.txt"
+
+// ciShardRun is one `run_shard` call: a test binary, the file assigning its
+// tests to shards, and the package directory it runs from.
+type ciShardRun struct {
+	binary string
+	file   string
+	dir    string
+}
+
+// ciShardRuns reads every `run_shard` call in the workflow. It refuses an empty
+// result, since every check built on it would then pass vacuously.
+func ciShardRuns(t *testing.T, workflow string) []ciShardRun {
+	t.Helper()
+	var runs []ciShardRun
+	for _, m := range ciRunShardRe.FindAllStringSubmatch(workflow, -1) {
+		runs = append(runs, ciShardRun{binary: m[1], file: m[2], dir: m[3]})
+	}
+	require.NotEmptyf(t, runs, "no `run_shard` call was found in %s, so no sharded binary is checked", ciWorkflowPath)
+	return runs
+}
 
 func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 	t.Parallel()
@@ -86,9 +113,6 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 		for line := range strings.SplitSeq(workflow, "\n") {
 			line = strings.TrimSpace(line)
 			if strings.HasPrefix(line, "#") {
-				continue
-			}
-			if !strings.Contains(line, "go test ") && !strings.Contains(line, "./decad.race.test ") {
 				continue
 			}
 			if !strings.Contains(line, "-run ") && !strings.Contains(line, "-test.run ") {
@@ -108,6 +132,9 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 			"no Go package directory outside the root was found, so this check asserted nothing — the packages moved or this test no longer runs from the repository root")
 
 		covered := make(map[string]struct{})
+		for _, run := range ciShardRuns(t, workflow) {
+			covered[run.dir] = struct{}{}
+		}
 		for _, m := range ciMatrixPackagesRe.FindAllStringSubmatch(workflow, -1) {
 			for operand := range strings.FieldsSeq(m[1]) {
 				require.NotContainsf(t, operand, "...",
@@ -120,9 +147,32 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 			t.Run(dir, func(t *testing.T) {
 				_, ok := covered[dir]
 				require.Truef(t, ok,
-					"%s runs in no race shard: add ./%s/ to a shard's `packages:` operand in %s", dir, dir, ciWorkflowPath)
+					"%s runs in no race shard: add ./%s/ to a runner's `packages:` operand in %s", dir, dir, ciWorkflowPath)
 			})
 		}
+	})
+
+	t.Run("each sharded binary runs once from its own package", func(t *testing.T) {
+		dirs := make(map[string]struct{})
+		files := make(map[string]struct{})
+		var root bool
+		for _, run := range ciShardRuns(t, workflow) {
+			_, seen := dirs[run.dir]
+			require.Falsef(t, seen, "the shard step runs package %s twice, so its tests would run twice", run.dir)
+			dirs[run.dir] = struct{}{}
+			_, seen = files[run.file]
+			require.Falsef(t, seen, "two sharded binaries read %s, but each package needs its own assignment", run.file)
+			files[run.file] = struct{}{}
+			if run.dir == "." {
+				root = true
+				require.Equalf(t, "decad.test", run.binary, "the root package's binary is decad.test")
+				require.Equalf(t, ciShardFilePath, run.file, "the root package's assignment is %s", ciShardFilePath)
+				continue
+			}
+			require.Equalf(t, filepath.Base(run.dir)+".test", run.binary,
+				"package %s builds to %s.test, not %s", run.dir, filepath.Base(run.dir), run.binary)
+		}
+		require.True(t, root, "the shard step never runs the root package's binary")
 	})
 
 	t.Run("the shard enumeration selects Examples and Fuzz targets", func(t *testing.T) {
@@ -180,7 +230,7 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 	})
 
 	t.Run("every test is named by exactly one shard", func(t *testing.T) {
-		assigned := shardAssignment(t)
+		assigned := shardAssignment(t, ciShardFilePath)
 		listed := listedTestNames(t)
 
 		// The two directions are reported as whole lists rather than one
@@ -211,7 +261,7 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 	})
 
 	t.Run("the chord sweep fixture is built by one shard", func(t *testing.T) {
-		assigned := shardAssignment(t)
+		assigned := shardAssignment(t, ciShardFilePath)
 		const enclosure = "TestChordedBoundaryVolumeAllowEnclosesTheMeasuredGap"
 		shard, ok := assigned[enclosure]
 		require.Truef(t, ok, "%s must have a shard assignment", enclosure)
@@ -223,7 +273,7 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 		}
 	})
 
-	t.Run("the file uses exactly the shards the matrix declares", func(t *testing.T) {
+	t.Run("every file uses exactly the shards the matrix declares", func(t *testing.T) {
 		declared := make(map[string]struct{})
 		for _, m := range ciMatrixShardRe.FindAllStringSubmatch(workflow, -1) {
 			if m[1] != "" {
@@ -232,22 +282,24 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 		}
 		require.NotEmpty(t, declared, "no non-empty `shard:` entry was found in %s", ciWorkflowPath)
 
-		used := make(map[string]struct{})
-		for _, shard := range shardAssignment(t) {
-			used[shard] = struct{}{}
-		}
+		for _, run := range ciShardRuns(t, workflow) {
+			used := make(map[string]struct{})
+			for _, shard := range shardAssignment(t, run.file) {
+				used[shard] = struct{}{}
+			}
 
-		for shard := range declared {
-			_, ok := used[shard]
-			require.Truef(t, ok,
-				"the matrix declares shard %s but %s assigns it no test, so that runner would run nothing",
-				shard, ciShardFilePath)
-		}
-		for shard := range used {
-			_, ok := declared[shard]
-			require.Truef(t, ok,
-				"%s assigns tests to shard %s, which the matrix in %s declares no runner for, so those tests never run",
-				ciShardFilePath, shard, ciWorkflowPath)
+			for shard := range declared {
+				_, ok := used[shard]
+				require.Truef(t, ok,
+					"the matrix declares shard %s but %s assigns it no test, so that runner would run nothing of %s",
+					shard, run.file, run.dir)
+			}
+			for shard := range used {
+				_, ok := declared[shard]
+				require.Truef(t, ok,
+					"%s assigns tests to shard %s, which the matrix in %s declares no runner for, so those tests never run",
+					run.file, shard, ciWorkflowPath)
+			}
 		}
 	})
 }
@@ -255,10 +307,10 @@ func TestCIWorkflowRaceShardsCoverEveryPackage(t *testing.T) {
 // shardAssignment reads the recorded test-to-shard mapping. It refuses an empty
 // or malformed file rather than returning a partial map, since every check
 // above would then pass vacuously.
-func shardAssignment(t *testing.T) map[string]string {
+func shardAssignment(t *testing.T, path string) map[string]string {
 	t.Helper()
-	raw, err := os.ReadFile(ciShardFilePath)
-	require.NoErrorf(t, err, "%s must be readable from the package directory", ciShardFilePath)
+	raw, err := os.ReadFile(path)
+	require.NoErrorf(t, err, "%s must be readable from the package directory", path)
 
 	assigned := make(map[string]string)
 	for line := range strings.SplitSeq(string(raw), "\n") {
@@ -266,14 +318,14 @@ func shardAssignment(t *testing.T) map[string]string {
 			continue
 		}
 		fields := strings.Split(line, "\t")
-		require.Lenf(t, fields, 3, "malformed line in %s: %q", ciShardFilePath, line)
+		require.Lenf(t, fields, 3, "malformed line in %s: %q", path, line)
 		_, err := strconv.Atoi(fields[0])
-		require.NoErrorf(t, err, "shard column is not a number in %s: %q", ciShardFilePath, line)
+		require.NoErrorf(t, err, "shard column is not a number in %s: %q", path, line)
 		_, seen := assigned[fields[2]]
-		require.Falsef(t, seen, "%s assigns %s to more than one shard, so it would run twice", ciShardFilePath, fields[2])
+		require.Falsef(t, seen, "%s assigns %s to more than one shard, so it would run twice", path, fields[2])
 		assigned[fields[2]] = fields[0]
 	}
-	require.NotEmptyf(t, assigned, "%s assigns no test, so the shards would run nothing", ciShardFilePath)
+	require.NotEmptyf(t, assigned, "%s assigns no test, so the shards would run nothing", path)
 	return assigned
 }
 

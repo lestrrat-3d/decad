@@ -56,7 +56,7 @@ func TestSameCurveDeclinesTheZeroToken(t *testing.T) {
 // TestMintCurveNeverRepeats is denotation.go's own soundness argument for
 // two independently built bodies driven directly: two mints from the SAME
 // document counter never collide, exactly as two separate Extrude calls
-// never share a curveID (stitch_test.go's own
+// never share a curveID (apitest/stitch_test.go's own
 // TestStitchRefusesIdenticalBoundedRimsWithNoSharedDenotation).
 func TestMintCurveNeverRepeats(t *testing.T) {
 	t.Parallel()

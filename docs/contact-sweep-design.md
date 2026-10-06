@@ -949,4 +949,5 @@ dynamics solver, then assert the computed post-impact position and velocity
 from `docs/rigid-dynamics-design.md`'s Verification section. A hand-written
 event fixture does not prove that
 boundary. Later tests cover angular drift, graze, reflected geometry, and
-kernel staging. Root-package test names update `.github/test-shards.txt`.
+kernel staging. Root-package test names update `.github/test-shards.txt`, and `apitest/` test names
+update `.github/test-shards-apitest.txt`.

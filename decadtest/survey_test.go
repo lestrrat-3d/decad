@@ -28,9 +28,9 @@ func soundPlateWithSurveysReport(t *testing.T) (*decad.Report, *decad.Body) {
 // centred at (70, 30), verified with decad.WithConcaveRadius(). The hole
 // wall is the plate's one concave face: the survey reads a measured 10 mm
 // radius, the ConcaveRadius fixture no supported straight prism produces
-// (TestMinRadiusHolePlate, survey_test.go:580, is the same shape built in
-// the root package's own tests; this rebuilds it here rather than importing
-// an unexported test helper from that package).
+// (TestMinRadiusHolePlate, apitest/survey_test.go:580, is the same shape built
+// in apitest's tests; this rebuilds it here rather than importing a test
+// helper from that package).
 func holePlateReport(t *testing.T) (*decad.Report, *decad.Body) {
 	t.Helper()
 

@@ -117,7 +117,8 @@ each owns.
 ## Conventions
 
 - Go style, testing and file-layout rules: `~/.claude/docs/go.md`. Tests use
-  `testify/require` (never `assert`), external `_test` package, `t.Context()`.
+  `testify/require` (never `assert`), `t.Context()`. Exported-API-only test →
+  `apitest/`.
 - User-facing usage → executable Go examples in `examples/` with verified
   `// Output:` blocks. NEVER README-only snippets.
 - Docs state **current state only** — no changelogs, no "was X, now Y".
@@ -126,11 +127,11 @@ each owns.
 
 ## Verification
 
-- **ALWAYS update `.github/test-shards.txt` after adding, renaming, or removing a
-  root-package test, fuzz target, or example.**
-- **ALWAYS run
-  `go test . -run '^TestCIWorkflowRaceShardsCoverEveryPackage$'` before pushing
-  any root-package test-name change.**
+- **ALWAYS update `.github/test-shards.txt` or
+  `.github/test-shards-apitest.txt` after adding, renaming, or removing a
+  test, fuzz target, or example.**
+- **ALWAYS run `go test . ./apitest/ -run '^TestCI'` before pushing any
+  test-name change.**
 
 ```
 go test ./...      # must pass

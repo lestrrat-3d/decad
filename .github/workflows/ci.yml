@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  # Lint and test jobs run independently. The root race shards share one test
-  # binary built by race-binary.
+  # Lint and test jobs run independently. The race shards share the two test
+  # binaries race-binary builds: the root package's and apitest's.
   #
   # Each Linux job that compiles keeps its own Go build cache through
   # .github/actions/go-build-cache-restore and go-build-cache-save, so it
@@ -54,8 +54,11 @@ jobs:
       - name: Save Go build cache
         uses: ./.github/actions/go-build-cache-save
 
+  # apitest holds the root package's tests that use only the exported API. Its
+  # test binary compiles against the root package alone, so go builds it beside
+  # the root test binary instead of after it.
   race-binary:
-    name: Build root race test binary
+    name: Build race test binaries
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -67,9 +70,10 @@ jobs:
           go-version-file: go.mod
           cache: false
 
-      # The sources are every package the root test binary compiles: the root
-      # package and everything outside dynamics/ and examples/. A pull request
-      # that changes none of them restores the whole binary, link included.
+      # The sources are every package the two test binaries compile: the root
+      # package, apitest/, and everything outside dynamics/ and examples/. A
+      # pull request that changes none of them restores both binaries, links
+      # included.
       - name: Restore Go build cache
         uses: ./.github/actions/go-build-cache-restore
         with:
@@ -84,21 +88,23 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Build root race test binary
-        run: go test -c -race -o decad.race.test .
+      # With an -o directory and two packages, go test -c writes
+      # race-bin/decad.test and race-bin/apitest.test.
+      - name: Build race test binaries
+        run: go test -c -race -o race-bin/ . ./apitest/
 
-      - name: Upload root race test binary
+      - name: Upload race test binaries
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: decad-race-test
-          path: decad.race.test
+          name: race-tests
+          path: race-bin/
           if-no-files-found: error
           retention-days: 1
 
       - name: Save Go build cache
         uses: ./.github/actions/go-build-cache-save
 
-  # The root package uses one compiled race binary across its shards.
+  # Every shard runner runs its shard of both race binaries.
   test-root-race:
     name: test (${{ matrix.os }}, ${{ matrix.race }}, ${{ matrix.shard }})
     needs: [race-binary]
@@ -135,46 +141,58 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Download root race test binary
+      - name: Download race test binaries
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: decad-race-test
-          path: .
+          name: race-tests
+          path: race-bin
 
-      # The shard regex is derived from the ROOT package's own names, so it is
-      # applied to the ROOT package alone. A -run filter built from one
-      # package's names matches nothing in another, so handing it ./... would
-      # run zero tests in every other package while still reporting success.
-      # -run gates Examples and Fuzz seed corpora as well as Test functions,
-      # so the enumeration takes all three.
+      # Each shard regex is derived from ONE binary's own names, so it is
+      # applied to that binary alone. A -run filter built from one package's
+      # names matches nothing in another, so handing it ./... would run zero
+      # tests in every other package while still reporting success. -run gates
+      # Examples and Fuzz seed corpora as well as Test functions, so the
+      # enumeration takes all three.
       #
-      # Which shard a test belongs to is READ from .github/test-shards.txt, not
-      # computed from its position in the enumeration. A positional split moves
-      # half the suite between shards whenever a test is added, so a balance that
-      # held yesterday is re-rolled by the next commit; the recorded assignment
-      # is packed by measured cost and moves nothing when the suite grows.
-      # ci_workflow_test.go fails when a test on disk is in no shard.
-      - name: Run root-package tests (Ubuntu shard)
+      # Which shard a test belongs to is READ from its binary's assignment file
+      # (.github/test-shards.txt for the root package,
+      # .github/test-shards-apitest.txt for apitest), not computed from its
+      # position in the enumeration. A positional split moves half the suite
+      # between shards whenever a test is added, so a balance that held
+      # yesterday is re-rolled by the next commit; the recorded assignment is
+      # packed by measured cost and moves nothing when the suite grows.
+      # ci_workflow_test.go and apitest/ci_shards_test.go fail when a test on
+      # disk is in no shard.
+      #
+      # run_shard runs a binary from its package directory, as go test does,
+      # so a test reading a path relative to its package finds it.
+      - name: Run race tests (Ubuntu shard)
         shell: bash
         run: |
-          chmod +x decad.race.test
-          tests="$(./decad.race.test -test.list '.*' | awk -v shard='${{ matrix.shard }}' '
-            NR == FNR {
-              if ($0 !~ /^#/ && NF == 3) {
-                pin[$3] = $1
+          run_shard() {
+            local bin="$GITHUB_WORKSPACE/race-bin/$1" shards="$2" dir="$3"
+            chmod +x "$bin"
+            local tests
+            tests="$("$bin" -test.list '.*' | awk -v shard='${{ matrix.shard }}' '
+              NR == FNR {
+                if ($0 !~ /^#/ && NF == 3) {
+                  pin[$3] = $1
+                }
+                next
               }
-              next
-            }
-            /^(Test|Fuzz|Example)/ {
-              if ($0 in pin && pin[$0] == shard) {
-                printf "%s|", $0
+              /^(Test|Fuzz|Example)/ {
+                if ($0 in pin && pin[$0] == shard) {
+                  printf "%s|", $0
+                }
               }
-            }
-          ' .github/test-shards.txt -)"
-          tests="${tests%|}"
-          test -n "$tests"
+            ' "$shards" -)"
+            tests="${tests%|}"
+            test -n "$tests"
+            (cd "$dir" && "$bin" -test.timeout 10m -test.run "^(${tests})$")
+          }
           start=$SECONDS
-          ./decad.race.test -test.timeout 10m -test.run "^(${tests})$"
+          run_shard decad.test .github/test-shards.txt .
+          run_shard apitest.test .github/test-shards-apitest.txt apitest
           elapsed=$(( SECONDS - start ))
           echo "shard ${{ matrix.shard }} finished in ${elapsed}s"
           # A soft budget, far below the -timeout above. The suite runs its tests
@@ -184,7 +202,7 @@ jobs:
           # fails as if a test had hung. Re-measure and regenerate the assignment;
           # _shardgen/main.go carries the command.
           if [ "$elapsed" -gt 300 ]; then
-            echo "::error::shard ${{ matrix.shard }} took ${elapsed}s, over the 300s budget; re-measure and regenerate .github/test-shards.txt (see _shardgen/main.go)"
+            echo "::error::shard ${{ matrix.shard }} took ${elapsed}s, over the 300s budget; re-measure and regenerate .github/test-shards.txt and .github/test-shards-apitest.txt (see _shardgen/main.go)"
             exit 1
           fi
 
@@ -255,9 +273,10 @@ jobs:
           nproc
           lscpu
 
-      # Every package outside the root runs UNFILTERED on one shard, so the
-      # shards together cover what an unsharded `go test ./...` covers.
-      # ci_workflow_test.go fails when a package on disk is named by no shard.
+      # Every package outside the root, apart from apitest/, runs UNFILTERED on
+      # one runner, so these runners and the race shards together cover what an
+      # unsharded `go test ./...` covers. ci_workflow_test.go fails when a
+      # package on disk is named by no runner.
       # -v prints each test's duration, so a slow run shows which tests grew.
       # A runner with a `budget:` fails once the run takes longer than that
       # many seconds, far below its -timeout; see the comment above the matrix.

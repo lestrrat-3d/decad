@@ -117,7 +117,7 @@ func TestFitSplineEndpointsAreFitZeroAndActiveLast(t *testing.T) {
 // allocatedByFit reports how many bytes a call allocates in total — the only
 // way to tell a charge levied BEFORE geom.NewFitInterpolant allocates from
 // one levied after it: both refuse, and only the measurement distinguishes
-// them (mirrors spline_moments_test.go's external allocatedBy).
+// them (mirrors apitest/spline_moments_test.go's external allocatedBy).
 func allocatedByFit(call func()) uint64 {
 	runtime.GC()
 	var before, after runtime.MemStats

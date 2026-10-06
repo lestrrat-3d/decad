@@ -1,0 +1,1877 @@
+package apitest_test
+
+import (
+	"fmt"
+	"math"
+	"math/big"
+	"testing"
+
+	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/decad/decadtest"
+	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
+	"github.com/stretchr/testify/require"
+)
+
+// uAxis is the sketch plane's own u axis: the revolve axis every hand
+// computation below is checked against.
+var uAxis = decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
+
+// annularSketch builds a solved rectangle u∈[0,10], v∈[5,15] on the XY
+// plane: revolved about the u axis it is an annular cylinder (Pappus by
+// hand: A = 100, ρ̄ = 10, so a full turn's volume is 2π·10·100 = 2000π).
+func annularSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 5, 10, 15)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	return s, s.Profiles()[0]
+}
+
+// solidSketch builds a solved rectangle u∈[0,10], v∈[0,8] on the XY plane:
+// one edge lies ON the revolve axis, so a full turn is a solid cylinder.
+func solidSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 10, 8)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	return s, s.Profiles()[0]
+}
+
+// semicircleSketch builds a solved half-disk: the diameter on the u axis,
+// the arc bulging to +v — a sphere generator.
+func semicircleSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	o := s.CreatePoint(0, 0)
+	s.Fix(o)
+	end := s.CreatePoint(10, 0)
+	c := s.CreatePoint(5, 0)
+	s.CreateLine(o, end)
+	s.CreateArc(c, end, o)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	return s, s.Profiles()[0]
+}
+
+// surfaceKinds tallies a body's faces by surface kind.
+func surfaceKinds(b *decad.Body) map[decad.SurfaceKind]int {
+	out := map[decad.SurfaceKind]int{}
+	for _, f := range b.Faces() {
+		out[f.Surface().Kind()]++
+	}
+	return out
+}
+
+// faceByRole finds the face carrying the given provenance role.
+func faceByRole(t *testing.T, b *decad.Body, role string) *decad.Face {
+	t.Helper()
+	for _, f := range b.Faces() {
+		for _, o := range f.Origins() {
+			if o.Role == role {
+				return f
+			}
+		}
+	}
+	t.Fatalf(`no face with role %q`, role)
+	return nil
+}
+
+func TestRevolveFullAnnularCylinder(t *testing.T) {
+	t.Parallel()
+	s, p := annularSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	require.True(t, body.IsSolid())
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(2000*math.Pi))
+
+	area, err := body.Area()
+	require.NoError(t, err)
+	// Outer wall 2π·15·10, inner wall 2π·5·10, two annuli 2·π·(15²−5²).
+	require.True(t, area.Value.Equal(units.SquareMillimeters(800*math.Pi), 1e-9), `got %s`, area.Value)
+
+	c, err := body.Centroid()
+	require.NoError(t, err)
+	require.InDelta(t, 5.0, c.Value.X, 1e-9)
+	require.InDelta(t, 0.0, c.Value.Y, 1e-9)
+	require.InDelta(t, 0.0, c.Value.Z, 1e-9)
+
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, -15, -15), r3.NewVec(10, 15, 15), decadtest.Exactly())
+
+	// Topology: two cylinder walls + two planar annuli, no caps and no seam
+	// edges — every junction sweeps to a whole latitude circle with a seam
+	// vertex.
+	require.Len(t, body.Faces(), 4)
+	kinds := surfaceKinds(body)
+	require.Equal(t, 2, kinds[decad.KindCylinder])
+	require.Equal(t, 2, kinds[decad.KindPlane])
+	requireManifold(t, body)
+	edges := body.Edges()
+	require.Len(t, edges, 4)
+	for _, e := range edges {
+		_, ok := e.Curve().(decad.Circle3)
+		require.True(t, ok, `a full revolution's junction edges are whole circles`)
+		require.Same(t, e.Start(), e.End(), `a whole circle closes on its seam vertex`)
+		require.True(t, e.IsConvex(), `every junction of a convex section is convex`)
+	}
+
+	// The planar annulus faces carry the inner circle as a hole loop.
+	for _, f := range body.Faces() {
+		if f.Surface().Kind() != decad.KindPlane {
+			continue
+		}
+		loops := f.Loops()
+		require.Len(t, loops, 2)
+		require.True(t, loops[0].IsOuter())
+		require.False(t, loops[1].IsOuter())
+	}
+}
+
+func TestRevolveSolidCylinderHasNoInnerFace(t *testing.T) {
+	t.Parallel()
+	s, p := solidSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(640*math.Pi)) // π·8²·10
+
+	area, err := body.Area()
+	require.NoError(t, err)
+	require.True(t, area.Value.Equal(units.SquareMillimeters(288*math.Pi), 1e-9), `wall 160π + two disks 128π, got %s`, area.Value)
+
+	// The on-axis edge sweeps nothing: one cylinder wall + two disks, and
+	// each disk has a single boundary loop.
+	require.Len(t, body.Faces(), 3)
+	kinds := surfaceKinds(body)
+	require.Equal(t, 1, kinds[decad.KindCylinder])
+	require.Equal(t, 2, kinds[decad.KindPlane])
+	requireManifold(t, body)
+	require.Len(t, body.Edges(), 2)
+	for _, f := range body.Faces() {
+		if f.Surface().Kind() == decad.KindPlane {
+			require.Len(t, f.Loops(), 1, `a disk reaching the axis has no inner loop`)
+		}
+	}
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, -8, -8), r3.NewVec(10, 8, 8), decadtest.Exactly())
+}
+
+func TestRevolvePartialSweeps(t *testing.T) {
+	t.Parallel()
+	// Pappus by hand for the quarter turn: V = Δφ·∫ρ dA = (π/2)·1000.
+	s, p := annularSketch(t)
+	doc := decad.New()
+	quarter, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+
+	decadtest.MeasuresVolume(t, quarter, units.CubicMillimeters(500*math.Pi))
+	require.Len(t, quarter.Faces(), 6, `four side faces and two caps`)
+	requireManifold(t, quarter)
+	decadtest.MeasuresBounds(t, quarter, r3.NewVec(0, 0, 0), r3.NewVec(10, 15, 15))
+
+	area, err := quarter.Area()
+	require.NoError(t, err)
+	// A quarter of the full 800π side area, plus two 100 mm² caps.
+	require.True(t, area.Value.Equal(units.SquareMillimeters(200*math.Pi+200), 1e-9), `got %s`, area.Value)
+
+	// The solid centroid is closed form in the sweep angle: the axial part
+	// from ∫zρ dA, the in-plane part from ∫ρ² dA (evaluator-design §6).
+	c, err := quarter.Centroid()
+	require.NoError(t, err)
+	inPlane := (32500.0 / 3) / ((math.Pi / 2) * 1000)
+	require.InDelta(t, 5.0, c.Value.X, 1e-9)
+	require.InDelta(t, inPlane, c.Value.Y, 1e-9)
+	require.InDelta(t, inPlane, c.Value.Z, 1e-9)
+
+	// Caps face outward: the start cap against the sweep, the end cap
+	// along it.
+	capStart := faceByRole(t, quarter, roleCapStart)
+	n, err := capStart.NormalAt(r3.NewVec(5, 10, 0))
+	require.NoError(t, err)
+	require.InDelta(t, 0.0, n.Value.X, 1e-9)
+	require.InDelta(t, 0.0, n.Value.Y, 1e-9)
+	require.InDelta(t, -1.0, n.Value.Z, 1e-9)
+	capEnd := faceByRole(t, quarter, roleCapEnd)
+	n, err = capEnd.NormalAt(r3.NewVec(5, 0, 10))
+	require.NoError(t, err)
+	require.InDelta(t, 0.0, n.Value.X, 1e-9)
+	require.InDelta(t, -1.0, n.Value.Y, 1e-9)
+	require.InDelta(t, 0.0, n.Value.Z, 1e-9)
+
+	// Volume scales linearly with the sweep angle, and a half turn's
+	// centroid sits on the symmetry plane.
+	s2, p2 := annularSketch(t)
+	half, err := decad.New().Revolve(s2, p2, uAxis, decad.AngleExtent{A: units.Degrees(180), Dir: decad.Along})
+	require.NoError(t, err)
+	decadtest.MeasuresVolume(t, half, units.CubicMillimeters(1000*math.Pi))
+	c, err = half.Centroid()
+	require.NoError(t, err)
+	require.InDelta(t, 5.0, c.Value.X, 1e-9)
+	require.InDelta(t, 0.0, c.Value.Y, 1e-9)
+	require.InDelta(t, 2*(32500.0/3)/(math.Pi*1000), c.Value.Z, 1e-9)
+	requireManifold(t, half)
+}
+
+func TestRevolveWedgeSharesAxisEdgeBetweenCaps(t *testing.T) {
+	t.Parallel()
+	// A solid section swept a quarter turn: the on-axis line emits no side
+	// face, and its single edge is shared by the two caps.
+	s, p := solidSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(160*math.Pi))
+	require.Len(t, body.Faces(), 5, `wall, two pie sectors, two caps`)
+	requireManifold(t, body)
+
+	capStart := faceByRole(t, body, roleCapStart)
+	capEnd := faceByRole(t, body, roleCapEnd)
+	shared := 0
+	for _, e := range body.Edges() {
+		faces := e.Faces()
+		if len(faces) != 2 {
+			continue
+		}
+		if (faces[0] == capStart && faces[1] == capEnd) || (faces[0] == capEnd && faces[1] == capStart) {
+			_, ok := e.Curve().(decad.Line3)
+			require.True(t, ok, `the caps meet along the axis line`)
+			shared++
+		}
+	}
+	require.Equal(t, 1, shared, `exactly one shared axis edge between the caps`)
+}
+
+func TestRevolveSphere(t *testing.T) {
+	t.Parallel()
+	s, p := semicircleSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(4.0/3*math.Pi*125)) // (4/3)πr³, r = 5
+
+	area, err := body.Area()
+	require.NoError(t, err)
+	require.True(t, area.Value.Equal(units.SquareMillimeters(100*math.Pi), 1e-9), `4πr², got %s`, area.Value)
+
+	// One spherical face and nothing else: the poles bound no edge, and
+	// the on-axis diameter sweeps nothing.
+	require.Len(t, body.Faces(), 1)
+	sphere, ok := body.Faces()[0].Surface().(decad.Sphere)
+	require.True(t, ok)
+	require.InDelta(t, 5.0, sphere.Center.X, 1e-9)
+	require.InDelta(t, 0.0, sphere.Center.Y, 1e-9)
+	require.True(t, sphere.Radius.Equal(units.Millimeters(5), 1e-9))
+	require.Empty(t, body.Edges())
+	require.Empty(t, body.Faces()[0].Loops())
+
+	c, err := body.Centroid()
+	require.NoError(t, err)
+	require.InDelta(t, 5.0, c.Value.X, 1e-9)
+	require.InDelta(t, 0.0, c.Value.Y, 1e-9)
+	require.InDelta(t, 0.0, c.Value.Z, 1e-9)
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, -5, -5), r3.NewVec(10, 5, 5), decadtest.Exactly())
+
+	n, err := body.Faces()[0].NormalAt(r3.NewVec(5, 5, 0))
+	require.NoError(t, err)
+	require.InDelta(t, 0.0, n.Value.X, 1e-9)
+	require.InDelta(t, 1.0, n.Value.Y, 1e-9)
+	require.InDelta(t, 0.0, n.Value.Z, 1e-9)
+	_, err = body.Faces()[0].NormalAt(r3.NewVec(5, 0, 0))
+	require.ErrorIs(t, err, decad.ErrDegenerate, `the sphere center has no normal`)
+
+	// A loop-less closed face is valid by construction. Its rounded centroid
+	// has no support-point diameter for the tolerance gate, so Verify refuses
+	// to call the bounded reading Sound.
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, report.Status)
+	require.False(t, report.Passed())
+}
+
+// TestRevolveSemicircleFullTurnCentroidBoundTightens is design §15's T110:
+// the diagnosed symptom directly. semicircleSketch's half-disc, radius 5,
+// centred at u=5, published a centroid bound of exactly 460.625 mm before
+// this fix — wide enough to admit any centroid inside the 10 mm body.
+// moments_circular.go's circularSecondMomentInterval now brackets the arc's
+// own second moments exactly, so the bound shrinks to a tiny fraction of the
+// body's own diameter.
+//
+// Shown-to-fail: forcing circularSecondMomentInterval to answer ok == false
+// (moments_circular.go) reproduces the old envelope and turns the tightness
+// assertion below red — verified by hand, since the toggle lives in
+// unexported production code no external test can reach.
+func TestRevolveSemicircleFullTurnCentroidBoundTightens(t *testing.T) {
+	t.Parallel()
+	s, p := semicircleSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	c, err := body.Centroid()
+	require.NoError(t, err)
+	const diameter = 10.0
+	bound := c.Bound.Base()
+	require.Positive(t, bound)
+	require.LessOrEqual(t, bound, 1e-6*diameter,
+		"the centroid bound %g mm is not tight against the body's own %g mm diameter", bound, diameter)
+
+	want := r3.NewVec(5, 0, 0)
+	require.LessOrEqual(t, c.Value.Sub(want).Len(), bound,
+		"the centroid bound does not enclose the true (5, 0, 0) centroid")
+}
+
+// TestRevolveSemicircleVolumeBoundUnaffected is design §15's T113: Volume is
+// Pappus's first theorem over the region's first moments alone
+// (axisMoments's q), which circularSecondMomentInterval never touches, so
+// the ball's own volume bound must be unmoved by the second-moment fix.
+//
+// Verified by hand: forcing circularSecondMomentInterval to answer
+// ok == false leaves this reading's value and bound bit-for-bit unchanged
+// while TestRevolveSemicircleFullTurnCentroidBoundTightens's own assertion
+// goes red — the toggle lives in unexported production code no external
+// test can reach, so this is not automated here.
+func TestRevolveSemicircleVolumeBoundUnaffected(t *testing.T) {
+	t.Parallel()
+	s, p := semicircleSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	value, bound := vol.Value.Base(), vol.Bound.Base()
+	require.InDelta(t, 4.0/3*math.Pi*125, value, 1e-9) // (4/3)pi r^3, r = 5
+	require.LessOrEqual(t, bound, 1e-9*value,
+		"the volume bound %g mm^3 is not tight against the value %g mm^3", bound, value)
+}
+
+func TestRevolveTorus(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 10)
+	s.Fix(center)
+	s.CreateCircle(center, 3)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	doc := decad.New()
+	body, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	// Pappus: 2π·R·(πr²).
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(2*math.Pi*10*math.Pi*9))
+	area, err := body.Area()
+	require.NoError(t, err)
+	require.True(t, area.Value.Equal(units.SquareMillimeters(2*math.Pi*10*2*math.Pi*3), 1e-9), `got %s`, area.Value)
+
+	// One toroidal face bounding the whole solid: no edges, no loops.
+	require.Len(t, body.Faces(), 1)
+	torus, ok := body.Faces()[0].Surface().(decad.Torus)
+	require.True(t, ok)
+	require.True(t, torus.Major.Equal(units.Millimeters(10), 1e-9))
+	require.True(t, torus.Minor.Equal(units.Millimeters(3), 1e-9))
+	require.Empty(t, body.Edges())
+
+	c, err := body.Centroid()
+	require.NoError(t, err)
+	require.InDelta(t, 0.0, c.Value.X, 1e-9)
+	require.InDelta(t, 0.0, c.Value.Y, 1e-9)
+	require.InDelta(t, 0.0, c.Value.Z, 1e-9)
+	decadtest.MeasuresBounds(t, body, r3.NewVec(-3, -13, -13), r3.NewVec(3, 13, 13), decadtest.Exactly())
+
+	// Outward normals on the outer and inner equators.
+	f := body.Faces()[0]
+	n, err := f.NormalAt(r3.NewVec(0, 13, 0))
+	require.NoError(t, err)
+	require.InDelta(t, 1.0, n.Value.Y, 1e-9)
+	n, err = f.NormalAt(r3.NewVec(0, 7, 0))
+	require.NoError(t, err)
+	require.InDelta(t, -1.0, n.Value.Y, 1e-9)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, report.Status)
+
+	// A quarter of the same torus: the patch keeps both cap circles as
+	// separate loops with seam vertices, mirroring the whole-circle prism
+	// discipline, and each disk cap carries the circle as its boundary.
+	s2, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	c2 := s2.CreatePoint(0, 10)
+	s2.Fix(c2)
+	s2.CreateCircle(c2, 3)
+	_, err = s2.Solve(t.Context())
+	require.NoError(t, err)
+	part, err := decad.New().Revolve(s2, s2.Profiles()[0], uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+	decadtest.MeasuresVolume(t, part, units.CubicMillimeters(math.Pi/2*10*math.Pi*9))
+	require.Len(t, part.Faces(), 3)
+	requireManifold(t, part)
+	for _, f := range part.Faces() {
+		if f.Surface().Kind() != decad.KindTorus {
+			require.Len(t, f.Loops(), 1)
+			continue
+		}
+		require.Len(t, f.Loops(), 2, `a partial torus patch is bounded by its two cap circles`)
+		for _, l := range f.Loops() {
+			edges := l.Edges()
+			require.Len(t, edges, 1)
+			require.Same(t, edges[0].Start(), edges[0].End(), `a cap circle closes on its seam vertex`)
+		}
+	}
+}
+
+func TestRevolveCone(t *testing.T) {
+	t.Parallel()
+	// A right triangle: the base on the axis, the hypotenuse sweeping a
+	// cone with its apex on the axis at (10, 0).
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	o := s.CreatePoint(0, 0)
+	s.Fix(o)
+	apex := s.CreatePoint(10, 0)
+	top := s.CreatePoint(0, 5)
+	s.CreateLine(o, apex)
+	s.CreateLine(apex, top)
+	s.CreateLine(top, o)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	doc := decad.New()
+	body, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(math.Pi*25*10/3)) // (1/3)πr²h
+
+	area, err := body.Area()
+	require.NoError(t, err)
+	// Lateral π·r·slant + base disk π·r².
+	require.True(t, area.Value.Equal(units.SquareMillimeters(math.Pi*5*math.Sqrt(125)+math.Pi*25), 1e-9), `got %s`, area.Value)
+
+	require.Len(t, body.Faces(), 2)
+	kinds := surfaceKinds(body)
+	require.Equal(t, 1, kinds[decad.KindCone])
+	require.Equal(t, 1, kinds[decad.KindPlane])
+	requireManifold(t, body)
+	require.Len(t, body.Edges(), 1)
+
+	var cone decad.Cone
+	for _, f := range body.Faces() {
+		if c, ok := f.Surface().(decad.Cone); ok {
+			cone = c
+		}
+	}
+	require.InDelta(t, 10.0, cone.Origin.X, 1e-9, `the apex is the cone origin`)
+	require.True(t, cone.Radius.Equal(units.Millimeters(0), 1e-9))
+	require.InDelta(t, -1.0, cone.Axis.X, 1e-9, `the radius grows toward the base`)
+	require.True(t, cone.HalfAngle.Equal(units.Radians(math.Atan2(5, 10)), 1e-9))
+
+	// The wall normal at the slant midpoint: (1, 2, 0)/√5 by hand.
+	var wall *decad.Face
+	for _, f := range body.Faces() {
+		if f.Surface().Kind() == decad.KindCone {
+			wall = f
+		}
+	}
+	n, err := wall.NormalAt(r3.NewVec(5, 2.5, 0))
+	require.NoError(t, err)
+	require.InDelta(t, 1/math.Sqrt(5), n.Value.X, 1e-9)
+	require.InDelta(t, 2/math.Sqrt(5), n.Value.Y, 1e-9)
+	require.InDelta(t, 0.0, n.Value.Z, 1e-9)
+	_, err = wall.NormalAt(r3.NewVec(10, 0, 0))
+	require.ErrorIs(t, err, decad.ErrDegenerate, `the apex has no normal`)
+
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, -5, -5), r3.NewVec(10, 5, 5), decadtest.Exactly())
+}
+
+func TestRevolveNegativeSideRegion(t *testing.T) {
+	t.Parallel()
+	// The region lies on the NEGATIVE side of the axis: the evaluator
+	// flips its internal frame, and the sweep senses must follow — Along a
+	// quarter turn still rotates right-handed about the axis as given, so
+	// the solid spans the −y/−z quadrant.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, -15, 10, -5)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	doc := decad.New()
+	full, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	decadtest.MeasuresVolume(t, full, units.CubicMillimeters(2000*math.Pi))
+	decadtest.MeasuresBounds(t, full, r3.NewVec(0, -15, -15), r3.NewVec(10, 15, 15), decadtest.Exactly())
+	requireManifold(t, full)
+
+	s2, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect2 := s2.CreateRectangle(0, -15, 10, -5)
+	s2.Fix(rect2.A)
+	_, err = s2.Solve(t.Context())
+	require.NoError(t, err)
+	quarter, err := decad.New().Revolve(s2, s2.Profiles()[0], uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+	decadtest.MeasuresVolume(t, quarter, units.CubicMillimeters(500*math.Pi))
+	decadtest.MeasuresBounds(t, quarter, r3.NewVec(0, -15, -15), r3.NewVec(10, 0, 0))
+	requireManifold(t, quarter)
+}
+
+func TestRevolveExtents(t *testing.T) {
+	t.Parallel()
+	revolve := func(t *testing.T, a decad.AngularExtent) (*decad.Body, error) {
+		t.Helper()
+		s, p := annularSketch(t)
+		return decad.New().Revolve(s, p, uAxis, a)
+	}
+
+	t.Run("Against", func(t *testing.T) {
+		body, err := revolve(t, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Against})
+		require.NoError(t, err)
+		decadtest.MeasuresVolume(t, body, units.CubicMillimeters(500*math.Pi))
+		decadtest.MeasuresBounds(t, body, r3.NewVec(0, 0, -15), r3.NewVec(10, 15, 0))
+	})
+	t.Run("Symmetric", func(t *testing.T) {
+		body, err := revolve(t, decad.SymmetricAngle{A: units.Degrees(90)})
+		require.NoError(t, err)
+		decadtest.MeasuresVolume(t, body, units.CubicMillimeters(1000*math.Pi))
+		decadtest.MeasuresBounds(t, body, r3.NewVec(0, 0, -15), r3.NewVec(10, 15, 15))
+	})
+	t.Run("SymmetricFullLength", func(t *testing.T) {
+		body, err := revolve(t, decad.SymmetricAngle{A: units.Degrees(90), FullLength: true})
+		require.NoError(t, err)
+		decadtest.MeasuresVolume(t, body, units.CubicMillimeters(500*math.Pi))
+	})
+	t.Run("TwoSided", func(t *testing.T) {
+		body, err := revolve(t, decad.TwoSidedAngle{One: decad.AngleSide{A: units.Degrees(30)}, Two: decad.AngleSide{A: units.Degrees(60)}})
+		require.NoError(t, err)
+		decadtest.MeasuresVolume(t, body, units.CubicMillimeters(500*math.Pi))
+		// The sweep spans φ ∈ [−60°, +30°]: the y minimum is the INNER
+		// wall at the −60° cap (cos never reaches zero on the interval),
+		// the z extremes the outer wall at each cap.
+		decadtest.MeasuresBounds(t, body, r3.NewVec(0, 5*math.Cos(math.Pi/3), -15*math.Sin(math.Pi/3)),
+			r3.NewVec(10, 15, 15*math.Sin(math.Pi/6)))
+	})
+	t.Run("FullTurnAsAngle", func(t *testing.T) {
+		// 360° stated as an angle IS a full revolution: the caps would
+		// coincide, so none are built.
+		body, err := revolve(t, decad.AngleExtent{A: units.Degrees(360), Dir: decad.Along})
+		require.NoError(t, err)
+		decadtest.MeasuresVolume(t, body, units.CubicMillimeters(2000*math.Pi))
+		require.Len(t, body.Faces(), 4, `a full turn has no caps`)
+		requireManifold(t, body)
+	})
+	t.Run("ZeroSweep", func(t *testing.T) {
+		_, err := revolve(t, decad.AngleExtent{A: units.Radians(0), Dir: decad.Along})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		_, err = revolve(t, decad.SymmetricAngle{A: units.Radians(0)})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		_, err = revolve(t, decad.TwoSidedAngle{One: decad.AngleSide{A: units.Radians(0)}, Two: decad.AngleSide{A: units.Radians(0)}})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+	t.Run("PastFullTurn", func(t *testing.T) {
+		_, err := revolve(t, decad.AngleExtent{A: units.Radians(7), Dir: decad.Along})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		_, err = revolve(t, decad.SymmetricAngle{A: units.Degrees(200)})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+	t.Run("NegativeMagnitude", func(t *testing.T) {
+		_, err := revolve(t, decad.AngleExtent{A: units.Radians(-1), Dir: decad.Along})
+		require.ErrorIs(t, err, decad.ErrNegativeMagnitude)
+	})
+	t.Run("WrongKind", func(t *testing.T) {
+		_, err := revolve(t, decad.AngleExtent{A: units.Millimeters(90), Dir: decad.Along})
+		require.ErrorIs(t, err, decad.ErrUnitKind)
+	})
+	t.Run("NilExtent", func(t *testing.T) {
+		_, err := revolve(t, nil)
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+	t.Run("NilSide", func(t *testing.T) {
+		_, err := revolve(t, decad.TwoSidedAngle{One: decad.AngleSide{A: units.Degrees(30)}})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+	t.Run("UnknownDirection", func(t *testing.T) {
+		_, err := revolve(t, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Direction(7)})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+}
+
+func TestRevolveAxisContactRejections(t *testing.T) {
+	t.Parallel()
+	t.Run("AxisThroughInterior", func(t *testing.T) {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		rect := s.CreateRectangle(0, -5, 10, 15)
+		s.Fix(rect.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		_, err = decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate, `a region straddling the axis is rejected`)
+	})
+	t.Run("HornTorusTangency", func(t *testing.T) {
+		// A circle kissing the axis would sweep a self-touching horn torus.
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		c := s.CreatePoint(0, 10)
+		s.Fix(c)
+		s.CreateCircle(c, 10)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		_, err = decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+	t.Run("InteriorArcTangency", func(t *testing.T) {
+		// An open arc grazing the axis at an interior point — neither an
+		// endpoint contact nor an on-axis line.
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		left := s.CreatePoint(0, 5)
+		s.Fix(left)
+		right := s.CreatePoint(10, 5)
+		c := s.CreatePoint(5, 5)
+		s.CreateLine(right, left)
+		s.CreateArc(c, left, right) // CCW from (0,5) through (5,0) to (10,5)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		_, err = decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+	t.Run("EndpointContactIsAllowed", func(t *testing.T) {
+		// The same arc split at its tangency point: both halves end ON the
+		// axis, which is the allowed pole/apex contact.
+		s, p := semicircleSketch(t)
+		_, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
+		require.NoError(t, err)
+	})
+}
+
+func TestRevolveAxisValidation(t *testing.T) {
+	t.Parallel()
+	s, p := annularSketch(t)
+	doc := decad.New()
+
+	t.Run("NilAxis", func(t *testing.T) {
+		_, err := doc.Revolve(s, p, nil, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+	t.Run("NilAxisPointer", func(t *testing.T) {
+		_, err := doc.Revolve(s, p, (*decad.SketchLine)(nil), decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+	t.Run("ZeroLengthSketchLine", func(t *testing.T) {
+		_, err := doc.Revolve(s, p, decad.SketchLine{Start: decad.Point2{U: 1, V: 2}, End: decad.Point2{U: 1, V: 2}}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+	t.Run("NonFiniteSketchLine", func(t *testing.T) {
+		_, err := doc.Revolve(s, p, decad.SketchLine{Start: decad.Point2{U: math.NaN()}, End: decad.Point2{U: 1}}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrNotFinite)
+	})
+	t.Run("ConstructionAxisWorks", func(t *testing.T) {
+		s2, p2 := annularSketch(t)
+		axis := decad.ConstructionAxis{Origin: r3.NewVec(0, 0, 0), Dir: r3.NewVec(1, 0, 0)}
+		body, err := decad.New().Revolve(s2, p2, axis, decad.FullRevolution{})
+		require.NoError(t, err)
+		decadtest.MeasuresVolume(t, body, units.CubicMillimeters(2000*math.Pi))
+	})
+	t.Run("ConstructionAxisZeroDir", func(t *testing.T) {
+		_, err := doc.Revolve(s, p, decad.ConstructionAxis{Origin: r3.NewVec(0, 0, 0)}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+	t.Run("ConstructionAxisOffPlane", func(t *testing.T) {
+		_, err := doc.Revolve(s, p, decad.ConstructionAxis{Origin: r3.NewVec(0, 0, 5), Dir: r3.NewVec(1, 0, 0)}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate, `an origin off the plane is rejected`)
+		_, err = doc.Revolve(s, p, decad.ConstructionAxis{Origin: r3.NewVec(0, 0, 0), Dir: r3.NewVec(0, 0, 1)}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate, `a direction out of the plane is rejected`)
+	})
+	t.Run("NonFiniteConstructionAxis", func(t *testing.T) {
+		_, err := doc.Revolve(s, p, decad.ConstructionAxis{Origin: r3.NewVec(math.Inf(1), 0, 0), Dir: r3.NewVec(1, 0, 0)}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrNotFinite)
+	})
+	t.Run("NilOption", func(t *testing.T) {
+		_, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{}, nil)
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+	t.Run("NilDocument", func(t *testing.T) {
+		var nilDoc *decad.Document
+		_, err := nilDoc.Revolve(s, p, uAxis, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+	t.Run("StaleProfile", func(t *testing.T) {
+		w := sketch.NewWorld()
+		s2, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		rect := s2.CreateRectangle(0, 5, 10, 15)
+		s2.Fix(rect.A)
+		_, err = s2.Solve(t.Context())
+		require.NoError(t, err)
+		p2 := s2.Profiles()[0]
+		s2.CreatePoint(100, 100) // the sketch moves on; the profile is stale
+		_, err = decad.New().Revolve(s2, p2, uAxis, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrStaleProfile)
+	})
+}
+
+func TestRevolveAxisDerivedOverflow(t *testing.T) {
+	t.Parallel()
+	t.Run("SketchLineDelta", func(t *testing.T) {
+		s, p := annularSketch(t)
+		doc := decad.New()
+		axis := decad.SketchLine{
+			Start: decad.Point2{U: -math.MaxFloat64},
+			End:   decad.Point2{U: math.MaxFloat64},
+		}
+
+		_, err := doc.Revolve(s, p, axis, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrNotFinite)
+		require.Empty(t, doc.Bodies())
+	})
+
+	t.Run("SketchLineFiniteOverflowingMagnitude", func(t *testing.T) {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		rect := s.CreateRectangle(0, 20, 10, 30)
+		s.Fix(rect.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		p := s.Profiles()[0]
+		doc := decad.New()
+		axis := decad.SketchLine{
+			Start: decad.Point2{},
+			End:   decad.Point2{U: math.MaxFloat64, V: math.MaxFloat64},
+		}
+
+		body, err := doc.Revolve(s, p, axis, decad.FullRevolution{})
+		require.NoError(t, err)
+		require.True(t, body.IsSolid())
+		decadtest.MeasuresVolume(t, body, units.CubicMillimeters(2000*math.Pi*math.Sqrt2))
+		require.Len(t, doc.Bodies(), 1)
+	})
+
+	t.Run("ConstructionAxisFrameConversion", func(t *testing.T) {
+		w := sketch.NewWorld()
+		frame, err := r3.NewFrame(
+			r3.NewVec(-math.MaxFloat64, 0, 0),
+			r3.NewVec(1, 0, 0),
+			r3.NewVec(0, 1, 0),
+		)
+		require.NoError(t, err)
+		plane, err := w.CreatePlaneFromFrame(frame)
+		require.NoError(t, err)
+		s, err := w.CreateSketch(plane)
+		require.NoError(t, err)
+		rect := s.CreateRectangle(0, 5, 10, 15)
+		s.Fix(rect.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		p := s.Profiles()[0]
+		doc := decad.New()
+		axis := decad.ConstructionAxis{
+			Origin: r3.NewVec(math.MaxFloat64, 0, 0),
+			Dir:    r3.NewVec(1, 0, 0),
+		}
+
+		_, err = doc.Revolve(s, p, axis, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrNotFinite)
+		require.Empty(t, doc.Bodies())
+	})
+
+	t.Run("ConstructionAxisLocalLength", func(t *testing.T) {
+		s, p := annularSketch(t)
+		doc := decad.New()
+		axis := decad.ConstructionAxis{
+			Origin: r3.NewVec(math.MaxFloat64, math.MaxFloat64, 0),
+			Dir:    r3.NewVec(1, 0, 0),
+		}
+
+		_, err := doc.Revolve(s, p, axis, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrNotFinite)
+		require.Empty(t, doc.Bodies())
+	})
+}
+
+func TestRevolveEdgeAxisGates(t *testing.T) {
+	t.Parallel()
+	s, p := annularSketch(t)
+	doc := decad.New()
+	es, ep := plateSketch(t)
+	host, err := doc.Extrude(es, ep, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+
+	t.Run("CountMissIsErrCardinality", func(t *testing.T) {
+		// The implicit exactly-one of an EdgeAxis (core §12): more than one
+		// match fails it, whatever the selector's own assertion says.
+		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges()}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrCardinality)
+	})
+	t.Run("ZeroMatchesIsErrCardinality", func(t *testing.T) {
+		// ErrCardinality takes precedence at zero matches, even for a
+		// selector asserting no cardinality of its own (core §12).
+		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges(decad.Circular())}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrCardinality)
+		require.NotErrorIs(t, err, decad.ErrNoMatch)
+	})
+	t.Run("CircularEdgeIsErrDegenerate", func(t *testing.T) {
+		// A non-linear edge named as a revolve axis spins about no line.
+		holed := holePlateBody(t)
+		ref := decad.CapStart(holed)
+		axis := decad.EdgeAxis{Body: holed, Edge: decad.Edges(decad.Circular(), decad.CreatedBy(ref)).Exactly(1)}
+		_, err := holed.Document().Revolve(s, p, axis, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+	t.Run("RejectionLeavesDocumentUntouched", func(t *testing.T) {
+		bodies := len(doc.Bodies())
+		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges()}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrCardinality)
+		require.Len(t, doc.Bodies(), bodies)
+	})
+	t.Run("NilBody", func(t *testing.T) {
+		_, err := doc.Revolve(s, p, decad.EdgeAxis{Edge: decad.Edges().Exactly(1)}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+	t.Run("TypedNilEdge", func(t *testing.T) {
+		var q *decad.EdgeQuery
+		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host, Edge: q}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.NotErrorIs(t, err, decad.ErrUnsupported, `malformed input must not read as staged resolution`)
+	})
+	t.Run("NilEdge", func(t *testing.T) {
+		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+	t.Run("ForeignBody", func(t *testing.T) {
+		other := decad.New()
+		_, err := other.Revolve(s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges().Exactly(1)}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrForeignBody)
+	})
+	t.Run("RetiredBody", func(t *testing.T) {
+		es2, ep2 := plateSketch(t)
+		doc2 := decad.New()
+		old, err := doc2.Extrude(es2, ep2, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		require.NoError(t, err)
+		move, err := r3.Translation(r3.NewVec(1, 0, 0))
+		require.NoError(t, err)
+		_, err = old.Placed(t.Context(), move)
+		require.NoError(t, err)
+		_, err = doc2.Revolve(s, p, decad.EdgeAxis{Body: old, Edge: decad.Edges().Exactly(1)}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrRetiredBody)
+	})
+}
+
+// trianglePrismHost extrudes a right triangle (0,0)-(100,0)-(0,60) by 10 mm
+// into doc: its bottom cap holds exactly one edge parallel to x — the world
+// x axis segment from (0,0,0) to (100,0,0).
+func trianglePrismHost(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a := s.CreatePoint(0, 0)
+	s.Fix(a)
+	b := s.CreatePoint(100, 0)
+	c := s.CreatePoint(0, 60)
+	s.CreateLine(a, b)
+	s.CreateLine(b, c)
+	s.CreateLine(c, a)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	host, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	return host
+}
+
+func TestRevolveAboutEdgeAxis(t *testing.T) {
+	t.Parallel()
+	// End to end: select the host prism's bottom x-axis edge by provenance +
+	// direction, revolve the annular rectangle about it, and check the
+	// closed-form volume — the axis is the world x axis, so a full turn is
+	// the same annular cylinder the SketchLine axis builds (Pappus:
+	// 2π·10·100 = 2000π).
+	s, p := annularSketch(t)
+	doc := decad.New()
+	host := trianglePrismHost(t, doc)
+	capStart := decad.CapStart(host)
+	axis := decad.EdgeAxis{
+		Body: host,
+		Edge: decad.Edges(decad.CreatedBy(capStart), decad.ParallelTo(r3.NewVec(1, 0, 0))).Exactly(1),
+	}
+
+	body, err := doc.Revolve(s, p, axis, decad.FullRevolution{})
+	require.NoError(t, err)
+	require.True(t, body.IsSolid())
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(2000*math.Pi))
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, -15, -15), r3.NewVec(10, 15, 15), decadtest.Exactly())
+
+	// The host is a dependency, not an operand: it stays live.
+	require.Contains(t, doc.Bodies(), host)
+}
+
+func TestRevolveEdgeAxisDirectionSense(t *testing.T) {
+	t.Parallel()
+	// The axis runs from the resolved edge's start vertex toward its end
+	// vertex, and Along is right-handed about it: a 90° Along sweep of the
+	// +y-side region about the +x axis carries it toward +z, never −z.
+	s, p := annularSketch(t)
+	doc := decad.New()
+	host := trianglePrismHost(t, doc)
+	capStart := decad.CapStart(host)
+	axis := decad.EdgeAxis{
+		Body: host,
+		Edge: decad.Edges(decad.CreatedBy(capStart), decad.ParallelTo(r3.NewVec(1, 0, 0))).Exactly(1),
+	}
+
+	body, err := doc.Revolve(s, p, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(500*math.Pi))
+	bounds, err := body.Bounds()
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, bounds.Min.Z, -1e-9, `an Along sweep about start→end never reaches −z`)
+	require.InDelta(t, 15, bounds.Max.Z, 1e-9)
+}
+
+func TestRevolveEdgeAxisMustBeCoplanar(t *testing.T) {
+	t.Parallel()
+	// The resolved edge is a real axis candidate, so the coplanarity gate
+	// still applies: a top-cap edge lies at z = 10, off the profile plane.
+	s, p := annularSketch(t)
+	doc := decad.New()
+	host := trianglePrismHost(t, doc)
+	capEnd := decad.CapEnd(host)
+	axis := decad.EdgeAxis{
+		Body: host,
+		Edge: decad.Edges(decad.CreatedBy(capEnd), decad.ParallelTo(r3.NewVec(1, 0, 0))).Exactly(1),
+	}
+	_, err := doc.Revolve(s, p, axis, decad.FullRevolution{})
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+}
+
+func TestRevolvePlacedRigidMotion(t *testing.T) {
+	t.Parallel()
+	s, p := annularSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+	c0, err := body.Centroid()
+	require.NoError(t, err)
+
+	rot, err := r3.RotationAround(r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1), units.Degrees(90))
+	require.NoError(t, err)
+	move, err := r3.Translation(r3.NewVec(1, 2, 3))
+	require.NoError(t, err)
+	xf, err := rot.Then(move)
+	require.NoError(t, err)
+
+	placed, err := body.Placed(t.Context(), xf)
+	require.NoError(t, err)
+	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(500*math.Pi))
+	require.Len(t, placed.Faces(), 6)
+	requireManifold(t, placed)
+
+	c1, err := placed.Centroid()
+	require.NoError(t, err)
+	want := xf.Apply(c0.Value)
+	require.InDelta(t, want.X, c1.Value.X, 1e-9)
+	require.InDelta(t, want.Y, c1.Value.Y, 1e-9)
+	require.InDelta(t, want.Z, c1.Value.Z, 1e-9)
+
+	area0, err := body.Area()
+	require.NoError(t, err)
+	area1, err := placed.Area()
+	require.NoError(t, err)
+	require.True(t, area1.Value.Equal(area0.Value, 1e-9), `a rigid motion preserves area`)
+
+	require.Contains(t, doc.Bodies(), placed, `the placed body is live`)
+	require.NotContains(t, doc.Bodies(), body, `the receiver is retired`)
+}
+
+func TestRevolveReflectedPlacementKeepsOutwardNormals(t *testing.T) {
+	t.Parallel()
+	s, p := annularSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+
+	mirror, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1))
+	require.NoError(t, err)
+	refl, err := r3.Reflection(mirror)
+	require.NoError(t, err)
+	require.True(t, refl.IsReflection())
+
+	placed, err := body.Placed(t.Context(), refl)
+	require.NoError(t, err)
+	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(500*math.Pi))
+	requireManifold(t, placed)
+
+	c, err := placed.Centroid()
+	require.NoError(t, err)
+	inPlane := (32500.0 / 3) / ((math.Pi / 2) * 1000)
+	require.InDelta(t, 5.0, c.Value.X, 1e-9)
+	require.InDelta(t, -inPlane, c.Value.Y, 1e-9, `the mirror flips y`)
+	require.InDelta(t, inPlane, c.Value.Z, 1e-9)
+
+	// Outwardness on every face of the reflected wedge: probes mapped
+	// through the mirror, normals checked against the mapped centroid —
+	// the annular quarter is star-shaped from its centroid, so every
+	// outward normal points away from it.
+	cos45 := math.Cos(math.Pi / 4)
+	probes := map[decad.SurfaceKind][]r3.Vec{
+		decad.KindCylinder: {
+			refl.Apply(r3.NewVec(5, 15*cos45, 15*cos45)),
+			refl.Apply(r3.NewVec(5, 5*cos45, 5*cos45)),
+		},
+	}
+	checked := 0
+	for _, f := range placed.Faces() {
+		switch surf := f.Surface().(type) {
+		case decad.Plane:
+			n, err := f.NormalAt(surf.Frame.Origin())
+			require.NoError(t, err)
+			away := surf.Frame.Origin().Sub(c.Value)
+			require.Positive(t, n.Value.Dot(away), `plane face normal points away from the centroid`)
+			checked++
+		case decad.Cylinder:
+			r, err := surf.Radius.In(units.Millimeter)
+			require.NoError(t, err)
+			idx := 0
+			if math.Abs(r-5) < 1e-6 {
+				idx = 1
+			}
+			at := probes[decad.KindCylinder][idx]
+			n, err := f.NormalAt(at)
+			require.NoError(t, err)
+			away := at.Sub(c.Value)
+			require.Positive(t, n.Value.Dot(away), `cylinder wall normal points away from the centroid`)
+			checked++
+		}
+	}
+	require.Equal(t, 6, checked, `every face of the wedge was probed`)
+}
+
+func TestRevolveReflectedSphereAndConeNormals(t *testing.T) {
+	t.Parallel()
+	// The curved-surface outwardness under a reflection, on the two kinds
+	// the wedge test does not cover.
+	s, p := semicircleSketch(t)
+	doc := decad.New()
+	sphere, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	mirror, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1))
+	require.NoError(t, err)
+	refl, err := r3.Reflection(mirror)
+	require.NoError(t, err)
+	placed, err := sphere.Placed(t.Context(), refl)
+	require.NoError(t, err)
+	decadtest.MeasuresVolume(t, placed, units.CubicMillimeters(4.0/3*math.Pi*125))
+	c, err := placed.Centroid()
+	require.NoError(t, err)
+	require.InDelta(t, -5.0, c.Value.X, 1e-9)
+	at := refl.Apply(r3.NewVec(5, 5, 0))
+	n, err := placed.Faces()[0].NormalAt(at)
+	require.NoError(t, err)
+	require.Positive(t, n.Value.Dot(at.Sub(c.Value)), `the reflected sphere is still outward`)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, report.Status)
+}
+
+// holedSketch builds the annular rectangle with a circular hole at (5, 10),
+// radius 2: revolved it is a section with a toroidal void (full turn) or a
+// toroidal groove through the caps (partial sweep). Q = ∫ρ dA = 1000 − 40π.
+func holedSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 5, 10, 15)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(5, 10), 2)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			return s, p
+		}
+	}
+	t.Fatal(`no holed profile`)
+	return nil, nil
+}
+
+func TestRevolveFullTurnHoleIsVoidShell(t *testing.T) {
+	t.Parallel()
+	s, p := holedSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(2*math.Pi*(1000-40*math.Pi)))
+	require.Len(t, body.Faces(), 5, `four outer walls and the void torus`)
+	requireManifold(t, body)
+
+	// The enclosed toroidal void is its own shell, and a void one; its one
+	// face is a whole torus with no boundary at all, its material OUTSIDE
+	// the tube.
+	shells := body.Shells()
+	require.Len(t, shells, 2)
+	require.False(t, shells[0].IsVoid())
+	require.True(t, shells[1].IsVoid())
+	require.Len(t, shells[1].Faces(), 1)
+	torus, ok := shells[1].Faces()[0].Surface().(decad.Torus)
+	require.True(t, ok)
+	require.True(t, torus.Major.Equal(units.Millimeters(10), 1e-9))
+	require.True(t, torus.Minor.Equal(units.Millimeters(2), 1e-9))
+	require.Empty(t, shells[1].Faces()[0].Loops())
+
+	// The void wall's outward normal leaves the material, so it points
+	// INTO the tube: at the tube's nearest-to-axis point, toward the tube
+	// center.
+	n, err := shells[1].Faces()[0].NormalAt(r3.NewVec(5, 8, 0))
+	require.NoError(t, err)
+	require.InDelta(t, 0.0, n.Value.X, 1e-9)
+	require.InDelta(t, 1.0, n.Value.Y, 1e-9)
+	require.InDelta(t, 0.0, n.Value.Z, 1e-9)
+
+	// The hole's circular second moments carry a certified rational bracket
+	// (moments_circular.go's circularSecondMomentInterval), so the centroid's
+	// own bound stays inside tolerance and the report is Sound even though a
+	// void is present.
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	require.Equal(t, 1, report.Bodies[0].Topology.Voids)
+}
+
+func TestVoidRevolveModifyOpsRefuseReceiver(t *testing.T) {
+	t.Parallel()
+	s, p := holedSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	require.Len(t, body.Shells(), 2)
+	require.True(t, body.Shells()[1].IsVoid())
+	before, err := body.Volume()
+	require.NoError(t, err)
+
+	_, err = body.Fillet(t.Context(), decad.Edges(decad.Circular()), units.Millimeters(1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	_, err = body.Chamfer(t.Context(), decad.Edges(decad.Circular()), units.Millimeters(1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	_, err = body.Shell(t.Context(), decad.Faces(), units.Millimeters(1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+
+	after, err := body.Volume()
+	require.NoError(t, err)
+	require.Equal(t, before, after)
+	require.True(t, body.Shells()[1].IsVoid())
+	require.Equal(t, []*decad.Body{body}, doc.Bodies())
+}
+
+func TestRevolvePartialSweepWithHole(t *testing.T) {
+	t.Parallel()
+	s, p := holedSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+
+	decadtest.MeasuresVolume(t, body, units.CubicMillimeters(math.Pi/2*(1000-40*math.Pi)))
+	require.Len(t, body.Faces(), 7, `four outer walls, the hole's torus wall, two caps`)
+	requireManifold(t, body)
+	require.Len(t, body.Shells(), 1, `the caps connect the hole wall to the outer boundary`)
+	require.False(t, body.Shells()[0].IsVoid(), `the groove opens through both angular caps`)
+
+	// Each cap carries the hole as a second, non-outer loop.
+	for _, role := range []string{roleCapStart, roleCapEnd} {
+		capFace := faceByRole(t, body, role)
+		loops := capFace.Loops()
+		require.Len(t, loops, 2)
+		require.True(t, loops[0].IsOuter())
+		require.False(t, loops[1].IsOuter())
+	}
+
+	// The groove wall's outward normal at mid-sweep points toward the tube
+	// center — the material is outside the tube.
+	cos45 := math.Cos(math.Pi / 4)
+	at := r3.NewVec(5, 8*cos45, 8*cos45)
+	var wall *decad.Face
+	for _, f := range body.Faces() {
+		if f.Surface().Kind() == decad.KindTorus {
+			wall = f
+		}
+	}
+	require.NotNil(t, wall)
+	require.Len(t, wall.Loops(), 2, `the hole's cap circles bound the torus patch`)
+	n, err := wall.NormalAt(at)
+	require.NoError(t, err)
+	require.InDelta(t, 0.0, n.Value.X, 1e-9)
+	require.InDelta(t, cos45, n.Value.Y, 1e-9)
+	require.InDelta(t, cos45, n.Value.Z, 1e-9)
+}
+
+func TestRevolveVerifySound(t *testing.T) {
+	t.Parallel()
+	s, p := annularSketch(t)
+	doc := decad.New()
+	_, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(120), Dir: decad.Along})
+	require.NoError(t, err)
+
+	report := decadtest.IsSound(t, doc)
+	require.Len(t, report.Bodies, 1)
+	require.Equal(t, decad.ValidityValid, report.Bodies[0].Validity.Outcome)
+	require.Equal(t, decad.Approximate, report.Bodies[0].Area.Exactness)
+}
+
+func TestRevolveRejectsSpindleTorusArc(t *testing.T) {
+	t.Parallel()
+	// A boundary arc lying above the axis whose circle center sits BELOW it
+	// sweeps a spindle-branch torus: a valid solid the shipped Torus
+	// (non-negative Major) cannot represent, so the intent is refused as
+	// staged — never a face with a negative major radius.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	c := s.CreatePoint(15, -3)
+	s.Fix(c)
+	start := s.CreatePoint(20, 5)
+	end := s.CreatePoint(10, 5)
+	s.CreateArc(c, start, end) // CCW over the top: every arc point stays above v=0
+	s.CreateLine(end, start)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.NotEmpty(t, s.Profiles())
+
+	doc := decad.New()
+	_, err = doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Empty(t, doc.Bodies(), `a refused revolve leaves the document untouched`)
+}
+
+// grooveSketch builds a meridian rectangle u∈[0,20], v∈[5,15] with a
+// semicircular GROOVE of radius 3 centred at (10, 15) bitten out of its outer
+// edge (the arc dips to (10, 12)). The outer loop walks counter-clockwise,
+// but that arc is walked CLOCKWISE about its own centre, so the swept torus
+// wall keeps the material OUTSIDE its tube — a hole's wall in every way but
+// its loop's role.
+func grooveSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	corners := [][2]float64{{0, 5}, {20, 5}, {20, 15}, {13, 15}, {7, 15}, {0, 15}}
+	pts := make([]*sketch.Point, len(corners))
+	for i, c := range corners {
+		pts[i] = s.CreatePoint(c[0], c[1])
+		s.Fix(pts[i])
+	}
+	centre := s.CreatePoint(10, 15)
+	s.Fix(centre)
+	s.CreateLine(pts[0], pts[1])
+	s.CreateLine(pts[1], pts[2])
+	s.CreateLine(pts[2], pts[3])
+	s.CreateArc(centre, pts[4], pts[3]) // CCW from (7,15) to (13,15): dips to (10,12)
+	s.CreateLine(pts[4], pts[5])
+	s.CreateLine(pts[5], pts[0])
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	return s, s.Profiles()[0]
+}
+
+func TestRevolveConcaveGrooveCapEdges(t *testing.T) {
+	t.Parallel()
+	// Its cap edges must be concave, exactly as a hole's would be.
+	s, p := grooveSketch(t)
+
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Radians(math.Pi / 2), Dir: decad.Along})
+	require.NoError(t, err)
+
+	// Pappus by hand: the section is the rectangle minus the half disc, and
+	// the removed disc's centroid sits 4r/3π below the groove's centre.
+	half := math.Pi * 9 / 2
+	moment := 2000 - half*(15-4/math.Pi) // ∫ρ dA over the section
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	gotVol, err := vol.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, math.Pi/2*moment, gotVol, 1e-9)
+
+	// The groove's wall is the body's one torus; its CAP edges are the arcs
+	// lying in a cap plane, whose normal is perpendicular to the revolve axis
+	// — the latitude arcs run about that axis (±X) instead.
+	tori, caps := 0, 0
+	for _, f := range body.Faces() {
+		if _, ok := f.Surface().(decad.Torus); !ok {
+			continue
+		}
+		tori++
+		for _, e := range f.Edges() {
+			arc, ok := e.Curve().(decad.Arc3)
+			require.True(t, ok, `a groove wall of a partial sweep is bounded by arcs`)
+			if math.Abs(arc.Axis.Dot(r3.NewVec(1, 0, 0))) > 0.5 {
+				continue // a latitude arc about the revolve axis, not a cap edge
+			}
+			caps++
+			require.False(t, e.IsConvex(), `a clockwise-walked groove's cap edges are concave`)
+		}
+	}
+	require.Equal(t, 1, tori)
+	require.Equal(t, 2, caps, `one cap edge in each cap plane`)
+}
+
+func TestRevolveBoundsBoundEnclosesSweptExtreme(t *testing.T) {
+	t.Parallel()
+	// The 10×8 rectangle (one edge on the axis) revolved 1 radian about the
+	// sketch u axis: the extreme normal to the plane is 8·sin(1), which no
+	// float64 holds exactly — the box carries the proven bound its own
+	// certified sine bracket derives, never math.Sin's own
+	// undocumented accuracy.
+	s, p := solidSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
+	require.NoError(t, err)
+	bounds, err := body.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, bounds.Exactness)
+	boundMM, err := bounds.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Greater(t, boundMM, 0.0)
+	require.LessOrEqual(t, boundMM, 1e-9)
+	const truth = 6.7317678784631720532
+	require.GreaterOrEqual(t, bounds.Max.Z+boundMM, truth)
+	require.LessOrEqual(t, bounds.Max.Z-boundMM, truth)
+}
+
+// sinOneDigits is sin(1) to 60 significant digits. The offset-axis extreme
+// below is (8+offset)·sin(1), which no float64 holds, so the reference is
+// carried through big.Float rather than through a second rounded literal
+// whose own representation error would eat the margin being measured.
+const sinOneDigits = "0.841470984807896506652502321630298999622563060798371065672749"
+
+func TestRevolveBoundsBoundEnclosesOffsetAxisExtreme(t *testing.T) {
+	t.Parallel()
+	// The same 10×8 rectangle swept 1 radian, but about an axis PARALLEL to
+	// the sketch u axis and offset below the region. The swept radial
+	// coefficient multiplies the radial distance from the RESOLVED AXIS, so
+	// the box's proven bound has to be charged against the axis's own radial
+	// envelope: the profile's plane-local envelope about the frame origin
+	// omits the offset entirely, and an interval built on it stops containing
+	// the truth as soon as the axis moves away from that origin.
+	//
+	// The far wall sits at radius 8+offset, so the z extreme is exactly
+	// (8+offset)·sin(1) and the published interval must cover it at every
+	// offset — and the bound must grow with the offset, since that is the
+	// term the envelope contributes.
+	const prec = 200
+	sinOne, _, err := big.ParseFloat(sinOneDigits, 10, prec, big.ToNearestEven)
+	require.NoError(t, err)
+
+	prev := 0.0
+	for _, offset := range []float64{1, 1e3, 1e6, 1e9} {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		rect := s.CreateRectangle(0, 0, 10, 8)
+		s.Fix(rect.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+
+		axis := decad.ConstructionAxis{
+			Origin: r3.NewVec(0, -offset, 0),
+			Dir:    r3.NewVec(1, 0, 0),
+		}
+		body, err := decad.New().Revolve(s, s.Profiles()[0], axis,
+			decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
+		require.NoError(t, err)
+		bounds, err := body.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, bounds.Exactness)
+		boundMM, err := bounds.Bound.In(units.Millimeter)
+		require.NoError(t, err)
+
+		truth := new(big.Float).SetPrec(prec).Mul(
+			new(big.Float).SetPrec(prec).SetFloat64(8+offset),
+			sinOne,
+		)
+		residual := new(big.Float).SetPrec(prec).Sub(
+			new(big.Float).SetPrec(prec).SetFloat64(bounds.Max.Z),
+			truth,
+		)
+		residual.Abs(residual)
+		require.LessOrEqual(t,
+			residual.Cmp(new(big.Float).SetPrec(prec).SetFloat64(boundMM)), 0,
+			`the box's published interval must contain the true swept extreme at axis offset %g (residual %s, bound %g)`,
+			offset, residual.Text('g', 6), boundMM,
+		)
+		require.Greater(t, boundMM, prev,
+			`the proven bound must grow with the axis offset it is charged against`)
+		prev = boundMM
+	}
+}
+
+func TestRevolveBoundsExactFullTurn(t *testing.T) {
+	t.Parallel()
+	// The same rectangle under a full revolution: every world axis's swept
+	// extreme is the exact ±8 amplitude of an axis-aligned frame, so the box
+	// is Exact — the test that stops a blanket Approximate. The section is all
+	// straight segments, so no arc-radius term enters either.
+	s, p := solidSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	decadtest.MeasuresBounds(t, body, r3.NewVec(0, -8, -8), r3.NewVec(10, 8, 8), decadtest.Exactly())
+}
+
+// arcApexSketch builds a solved circular-segment region: the arc is centred on
+// the sketch origin and runs from (u, v) to (−u, v), closed by the chord
+// between them. Its apex therefore sits on the +v axis at radius √(u²+v²),
+// which the record never states — an ArcSeg carries Start and Center only, so
+// every consumer's radius is the math.Hypot of the two, a rounded float that
+// can land on either side of the truth.
+func arcApexSketch(t *testing.T, u, v float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	c := s.CreatePoint(0, 0)
+	s.Fix(c)
+	start := s.CreatePoint(u, v)
+	end := s.CreatePoint(-u, v)
+	s.CreateLine(end, start)
+	s.CreateArc(c, start, end)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	return s, s.Profiles()[0]
+}
+
+// requireEnclosesApex asserts that the box's own published interval about
+// Max.Y covers the exact apex radius √(u²+v²), carried through big.Float
+// rather than a rounded literal — the whole error being measured is smaller
+// than a decimal literal's own representation error.
+func requireEnclosesApex(t *testing.T, box decad.Box, u, v float64) {
+	t.Helper()
+	const prec = 200
+	boundMM, err := box.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	sq := new(big.Float).SetPrec(prec).SetFloat64(u * u)
+	sq.Add(sq, new(big.Float).SetPrec(prec).SetFloat64(v*v))
+	truth := new(big.Float).SetPrec(prec).Sqrt(sq)
+	residual := new(big.Float).SetPrec(prec).Sub(
+		new(big.Float).SetPrec(prec).SetFloat64(box.Max.Y),
+		truth,
+	)
+	residual.Abs(residual)
+	require.LessOrEqual(t,
+		residual.Cmp(new(big.Float).SetPrec(prec).SetFloat64(boundMM)), 0,
+		`the box's published interval must contain the swept arc's apex (residual %s, bound %g)`,
+		residual.Text('g', 6), boundMM,
+	)
+}
+
+func TestRevolveBoundsBoundEnclosesArcRadius(t *testing.T) {
+	t.Parallel()
+	// A circular-segment section revolved about the sketch u axis. The swept
+	// solid reaches the arc's apex at radius √37, which math.Hypot(1, 6) rounds
+	// BELOW: a box that reads the walk's radius as an exact leaf publishes a
+	// Max.Y short of the surface it bounds. The published interval has to cover
+	// the apex under every extent — a full turn, whose swept coefficient is
+	// exactly ±1 and contributes nothing, and a partial sweep, whose own
+	// trig-derived term is far smaller than the radius error it must not stand
+	// in for.
+	const u, v = 1.0, 6.0
+	for _, tc := range []struct {
+		name   string
+		extent decad.AngularExtent
+	}{
+		{name: "full turn", extent: decad.FullRevolution{}},
+		{name: "quarter turn", extent: decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, p := arcApexSketch(t, u, v)
+			body, err := decad.New().Revolve(s, p, uAxis, tc.extent)
+			require.NoError(t, err)
+			box, err := body.Bounds()
+			require.NoError(t, err)
+			require.Equal(t, decad.Approximate, box.Exactness,
+				`a box whose extreme rides a computed arc radius is never Exact`)
+			boundMM, err := box.Bound.In(units.Millimeter)
+			require.NoError(t, err)
+			require.Greater(t, boundMM, 0.0)
+			require.LessOrEqual(t, boundMM, 1e-12, `the bound must stay tight enough to be useful`)
+			requireEnclosesApex(t, box, u, v)
+		})
+	}
+}
+
+// TestRevolveBoundsSweepEnclosesArcApex is the revolve half of the acceptance
+// sweep: 144 ordinary circular-segment sections, each revolved a full turn and
+// each asked whether the box's own published interval contains the apex radius
+// the swept surface truly reaches. One hand-picked fixture proves nothing here —
+// the hypot rounding changes sign and size with the coordinates, so a bound that
+// covers one section can miss the next — which is why the grid, not a case, is
+// the test.
+func TestRevolveBoundsSweepEnclosesArcApex(t *testing.T) {
+	t.Parallel()
+	for i := 1; i <= 12; i++ {
+		for j := 1; j <= 12; j++ {
+			u, v := 0.7*float64(i), 1.3*float64(j)
+			t.Run(fmt.Sprintf("u=%g/v=%g", u, v), func(t *testing.T) {
+				s, p := arcApexSketch(t, u, v)
+				body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
+				require.NoError(t, err)
+				box, err := body.Bounds()
+				require.NoError(t, err)
+				requireEnclosesApex(t, box, u, v)
+			})
+		}
+	}
+}
+
+// The partial sweep below turns through this angle, whose sine is carried to
+// 60 significant digits for the same reason sinOneDigits is: the whole error
+// under test is smaller than a rounded literal's own representation error.
+const (
+	mixedSweepAngle  = 0.82914845766024614
+	mixedSweepSine   = "0.737356418349652412501490864607254313074191178423597186716131"
+	mixedTorusCentre = 21281011.537541769
+	mixedTorusRadius = 14734.036267944795
+)
+
+// requireEnclosesSweptApex asserts that the box's published interval about
+// Max.Z covers apex·sin, the exact extreme a section whose farthest point sits
+// at radius apex reaches when it is swept through the angle whose sine is sin.
+// Both factors are carried through big.Float: the apex radius is a sum this
+// test states exactly and the sine a 60-digit reference, so the comparison is
+// against the truth rather than against a second rounded evaluation of it.
+func requireEnclosesSweptApex(t *testing.T, box decad.Box, apex, sin *big.Float) {
+	t.Helper()
+	const prec = 200
+	boundMM, err := box.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	truth := new(big.Float).SetPrec(prec).Mul(apex, sin)
+	residual := new(big.Float).SetPrec(prec).Sub(
+		new(big.Float).SetPrec(prec).SetFloat64(box.Max.Z),
+		truth,
+	)
+	residual.Abs(residual)
+	require.LessOrEqual(t,
+		residual.Cmp(new(big.Float).SetPrec(prec).SetFloat64(boundMM)), 0,
+		`the box's published interval must contain the swept extreme (Max.Z %.17g, truth %s, residual %s, bound %g)`,
+		box.Max.Z, truth.Text('g', 25), residual.Text('g', 6), boundMM,
+	)
+}
+
+// TestRevolveBoundsComposesBoundaryAndSweepDisplacement is the containment
+// proof for a section whose extreme rides a computed circular radius AND a
+// partial sweep whose own amplitude no float64 holds. The two displacements
+// are of DIFFERENT quantities at the SAME endpoint — how far the computed
+// extreme sits from the true extreme at the held sweep coefficient, and how far
+// that held coefficient sits from the true one — so nothing keeps their signs
+// apart and the published half-width has to cover their sum. The larger of the
+// two is not that cover: both cases below carry two nonzero terms, and the
+// first is a worked case where they genuinely add, its residual against the
+// truth exceeding either term on its own.
+func TestRevolveBoundsComposesBoundaryAndSweepDisplacement(t *testing.T) {
+	t.Parallel()
+	const prec = 200
+	t.Run("circle section", func(t *testing.T) {
+		// A thin torus section far from the axis, swept through a partial
+		// angle: the swept solid's z maximum is exactly (centre + radius)·sin,
+		// reached by the section's own farthest point at the far cap.
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		c := s.CreatePoint(0, mixedTorusCentre)
+		s.Fix(c)
+		s.CreateCircle(c, mixedTorusRadius)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		require.Len(t, s.Profiles(), 1)
+
+		body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis,
+			decad.AngleExtent{A: units.Radians(mixedSweepAngle), Dir: decad.Along})
+		require.NoError(t, err)
+		box, err := body.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, box.Exactness)
+
+		sin, _, err := big.ParseFloat(mixedSweepSine, 10, prec, big.ToNearestEven)
+		require.NoError(t, err)
+		apex := new(big.Float).SetPrec(prec).Add(
+			new(big.Float).SetPrec(prec).SetFloat64(mixedTorusCentre),
+			new(big.Float).SetPrec(prec).SetFloat64(mixedTorusRadius),
+		)
+		requireEnclosesSweptApex(t, box, apex, sin)
+	})
+
+	t.Run("arc and chord section", func(t *testing.T) {
+		// The same composition over a MIXED section — an arc closed by its own
+		// chord — swept 1 radian. The arc's apex sits at radius √(u²+v²), which
+		// the record never states, so the boundary term is live alongside the
+		// sweep's.
+		const u, v = 1.0, 6.0
+		s, p := arcApexSketch(t, u, v)
+		body, err := decad.New().Revolve(s, p, uAxis,
+			decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
+		require.NoError(t, err)
+		box, err := body.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, box.Exactness)
+
+		sin, _, err := big.ParseFloat(sinOneDigits, 10, prec, big.ToNearestEven)
+		require.NoError(t, err)
+		sq := new(big.Float).SetPrec(prec).SetFloat64(u * u)
+		sq.Add(sq, new(big.Float).SetPrec(prec).SetFloat64(v*v))
+		requireEnclosesSweptApex(t, box, new(big.Float).SetPrec(prec).Sqrt(sq), sin)
+		// The apex is still reached at the sweep's own start, so the same box
+		// has to enclose the undisplaced radius too.
+		requireEnclosesApex(t, box, u, v)
+	})
+}
+
+// TestRevolveBoundsEnclosesTiltedAxisFullTurn pins fu203: a full-turn revolve
+// about ConstructionAxis{Dir: (1, 2, 0)} — a direction 1/sqrt(5), 2/sqrt(5)
+// no float64 holds exactly — over an all-straight rectangle u in [0, 10], v
+// in [100, 108] published Exact with a zero bound while missing the true
+// Ymax by one ulp of 108, because the box read the axis frame's own
+// direction and anchor (axisInPlane's dUBound/dVBound/aUBound/aVBound,
+// already folded into the region's moments by axisMoments) as an exact leaf.
+// The section is entirely straight, so the boundary-extreme scan's own
+// bracket contributes nothing; the whole displacement is the axis frame's.
+func TestRevolveBoundsEnclosesTiltedAxisFullTurn(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 100, 10, 108)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	axis := decad.ConstructionAxis{Origin: r3.NewVec(0, 0, 0), Dir: r3.NewVec(1, 2, 0)}
+	body, err := decad.New().Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	bounds, err := body.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, bounds.Exactness)
+	boundMM, err := bounds.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Greater(t, boundMM, 0.0)
+
+	const truth = 108.0
+	require.LessOrEqual(t, math.Abs(bounds.Max.Y-truth), boundMM,
+		`the box's published interval must contain the true Ymax %g (got %g +/- %g)`,
+		truth, bounds.Max.Y, boundMM)
+}
+
+// TestRevolveBoundsEnclosesTranslatedExtreme is the revolve half of the
+// recombination proof extrude_bounds_test.go's translated box states: an
+// axis-aligned full turn of u in [0, 10], v in [2, 6] about the sketch u axis,
+// moved by Translation(0.1, 0, 0). The axis frame is untouched and the
+// placement rounds none of base/wg/c0/c1, so frameRoundAllow answers zero —
+// and the box's own base + hi summation that produces Max.X still rounds,
+// missing the true 0.1 + 10 by 3.6e-16.
+func TestRevolveBoundsEnclosesTranslatedExtreme(t *testing.T) {
+	t.Parallel()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 2, 10, 6)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	shift, err := r3.Translation(r3.NewVec(0.1, 0, 0))
+	require.NoError(t, err)
+	placed, err := body.Placed(t.Context(), shift)
+	require.NoError(t, err)
+
+	bounds, err := placed.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, bounds.Exactness)
+	boundMM, err := bounds.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Greater(t, boundMM, 0.0)
+
+	requireEnclosesExactSum(t, bounds.Max.X, boundMM, 10, 0.1)
+}
+
+// TestRevolveBoundsExactOffsetAnchor pins the anchor half of the axis frame's
+// own uncertainty: a full turn of u in [0, 10], v in [5, 10] about an axis
+// along +x through (3, 0, 0) is unplaced and axis-aligned, and its anchor's
+// plane-local projection is exactly representable, so nothing in the reading
+// rounds and the box is Exact with a zero bound. The anchor's DISTANCE from
+// the frame origin is not an error term: charging it as one publishes a 9 mm
+// bound on this proven-exact box and grows without limit as the axis moves
+// away. The two controls carry no anchor projection at all — a sketch-line
+// axis states its plane-local anchor directly, and a construction axis at the
+// frame origin projects to zero — so they hold the same reading either way.
+func TestRevolveBoundsExactOffsetAnchor(t *testing.T) {
+	t.Parallel()
+	revolved := func(t *testing.T, axis decad.Axis) *decad.Body {
+		t.Helper()
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		rect := s.CreateRectangle(0, 5, 10, 10)
+		s.Fix(rect.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		body, err := decad.New().Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{})
+		require.NoError(t, err)
+		return body
+	}
+
+	for _, tc := range []struct {
+		name string
+		axis decad.Axis
+	}{
+		{
+			name: "offset construction axis",
+			axis: decad.ConstructionAxis{Origin: r3.NewVec(3, 0, 0), Dir: r3.NewVec(1, 0, 0)},
+		},
+		{
+			name: "sketch line",
+			axis: uAxis,
+		},
+		{
+			name: "construction axis at the frame origin",
+			axis: decad.ConstructionAxis{Origin: r3.NewVec(0, 0, 0), Dir: r3.NewVec(1, 0, 0)},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := revolved(t, tc.axis)
+			bounds, err := body.Bounds()
+			require.NoError(t, err)
+			require.Equal(t, decad.Exact, bounds.Exactness)
+			boundMM, err := bounds.Bound.In(units.Millimeter)
+			require.NoError(t, err)
+			require.Equal(t, 0.0, boundMM)
+			decadtest.MeasuresBounds(t, body, r3.NewVec(0, -10, -10), r3.NewVec(10, 10, 10), decadtest.Exactly())
+		})
+	}
+}
+
+// requireEnclosesExactDot asserts that a published box coordinate's own proven
+// interval contains the EXACT value of a dot product the placement's own held
+// floats denote: Σ coefficient·coordinate, summed over the rationals from end
+// to end. The rational comparison is the whole point at this scale — the miss
+// this pins is a quarter of an ulp of the coordinate, so rounding the truth to
+// a float64 first lands it straight back on the held coordinate and the
+// assertion could never fail. It is an independent check: it never calls
+// decad's own bound helpers, so a test built on it cannot pass merely because
+// the production code agrees with itself.
+func requireEnclosesExactDot(t *testing.T, coord, bound float64, terms ...[2]float64) {
+	t.Helper()
+	toRat := func(x float64) *big.Rat {
+		r := new(big.Rat)
+		require.NotNil(t, r.SetFloat64(x), "float64 %v must be finite to convert exactly", x)
+		return r
+	}
+	truth := new(big.Rat)
+	for _, term := range terms {
+		truth.Add(truth, new(big.Rat).Mul(toRat(term[0]), toRat(term[1])))
+	}
+	gap := new(big.Rat).Abs(new(big.Rat).Sub(truth, toRat(coord)))
+	require.LessOrEqualf(t, gap.Cmp(toRat(bound)), 0,
+		"the published coordinate %v misses the exact dot product %s by %s, which its own bound %v mm does not cover",
+		coord, truth.FloatString(20), gap.FloatString(20), bound)
+}
+
+// TestRevolveBoundsEnclosesPlacedScanArithmetic pins the boundary scan's own
+// arithmetic: the scan holds each candidate as the float gu·u + gv·v, and that
+// multiply-and-sum rounds at the SECTION's coordinate magnitude even where the
+// candidate itself is a value the record states verbatim and every other term
+// the reading composes is proven zero or tiny.
+//
+// The section is the rectangle u∈[0, 1e6], v∈[0, 1] revolved a full turn about
+// the sketch line v = -1, so every candidate is a stated line endpoint with a
+// zero positional displacement. Placed by Rotation(Z, 30°) the reading's
+// direction becomes (gu, gv) ≈ (0.866, 0.5), and the held Max.X misses the
+// exact rational image of the extreme material point (1e6, -3, 0) under the
+// placement's OWN held basis by 2.7e-11 — six times what the axis-frame,
+// anchor-shift and endpoint-summation terms together publish. The extreme is
+// that point because the placement's Z row is exactly zero and its Y column
+// entry is negative, so the box's X extreme sits at the far end of the section
+// on the outer sweep circle.
+//
+// The unplaced case is the control, and it is the same section: every
+// coefficient is 0 or ±1 there, so nothing in the reading rounds and the box
+// stays Exact with a zero bound however far the section reaches.
+func TestRevolveBoundsEnclosesPlacedScanArithmetic(t *testing.T) {
+	t.Parallel()
+	revolved := func(t *testing.T) *decad.Body {
+		t.Helper()
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		rect := s.CreateRectangle(0, 0, 1e6, 1)
+		s.Fix(rect.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		axis := decad.SketchLine{Start: decad.Point2{U: 0, V: -1}, End: decad.Point2{U: 1, V: -1}}
+		body, err := decad.New().Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{})
+		require.NoError(t, err)
+		return body
+	}
+
+	t.Run("placed rotation", func(t *testing.T) {
+		rot, err := r3.Rotation(r3.NewVec(0, 0, 1), units.Degrees(30))
+		require.NoError(t, err)
+		basis := rot.Basis()
+		require.Equal(t, 0.0, basis.EZ.X, "the extreme material point below assumes a rotation about Z")
+		require.Equal(t, r3.NewVec(0, 0, 0), rot.Translation())
+
+		placed, err := revolved(t).Placed(t.Context(), rot)
+		require.NoError(t, err)
+		bounds, err := placed.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, bounds.Exactness)
+		boundMM, err := bounds.Bound.In(units.Millimeter)
+		require.NoError(t, err)
+		require.Greater(t, boundMM, 0.0)
+
+		requireEnclosesExactDot(t, bounds.Max.X, boundMM,
+			[2]float64{basis.EX.X, 1e6},
+			[2]float64{basis.EY.X, -3},
+		)
+	})
+
+	t.Run("unplaced", func(t *testing.T) {
+		body := revolved(t)
+		bounds, err := body.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, decad.Exact, bounds.Exactness)
+		boundMM, err := bounds.Bound.In(units.Millimeter)
+		require.NoError(t, err)
+		require.Equal(t, 0.0, boundMM)
+		decadtest.MeasuresBounds(t, body, r3.NewVec(0, -3, -2), r3.NewVec(1e6, 1, 2), decadtest.Exactly())
+	})
+}
