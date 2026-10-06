@@ -159,13 +159,20 @@ func TestVerifyLinkageDeclaredJointContact(t *testing.T) {
 	})
 	t.Run("a declared pair's measured gap is a row and nothing else", func(t *testing.T) {
 		t.Parallel()
-		// Scene 1's arms, 2 mm apart at every s, declared: each pose
-		// publishes their gap row, but the gap enters no interval, no
-		// whole-drive reading and no margin, so a 3 mm minimum the gap
+		// The motion arm swings 0° → 90° away from a block in its own
+		// layer, 12 mm past its tip at rest. Declared, the pair publishes its
+		// gap row at each pose, but the gap enters no interval, no
+		// whole-drive reading and no margin, so a 15 mm minimum the gap
 		// falls short of raises nothing and the endpoints settle the drive.
-		a := buildFoldingArm(t, false)
-		require.NoError(t, a.linkage.DeclareJointContact(a.upper, a.forearm))
-		report := verifyLinkage(t, a.doc, a.linkage, a.drive(), decad.WithMinClearance(units.Millimeters(3)))
+		doc := decad.New()
+		arm := motionArm(t, doc)
+		block := boxBody(t, doc, 60, -5, 70, 5, 10)
+		l := decad.NewLinkage()
+		swing, err := l.Ground().Revolute(r3.Vec{}, zAxis, []*decad.Body{arm})
+		require.NoError(t, err)
+		require.NoError(t, l.DeclareJointContact(arm, block))
+		report := verifyLinkage(t, doc, l, decad.Drive{{Link: swing, From: units.Degrees(0), To: units.Degrees(90)}},
+			decad.WithMinClearance(units.Millimeters(15)))
 		require.Equal(t, decad.Sound, report.Status)
 		require.Empty(t, report.Diagnostics)
 		require.Equal(t, decad.AssessmentMet, report.Assessment)
@@ -173,8 +180,8 @@ func TestVerifyLinkageDeclaredJointContact(t *testing.T) {
 		require.Len(t, report.Poses, 2)
 		for _, p := range report.Poses {
 			require.Len(t, p.Clearances, 1)
-			require.InDelta(t, 2, p.Clearances[0].Gap.Value.Mag(), 1e-6)
 		}
+		require.Equal(t, 12.0, report.Poses[0].Clearances[0].Gap.Value.Mag())
 	})
 	t.Run("a declared pair's touching or undecided outcome publishes nothing", func(t *testing.T) {
 		t.Parallel()
@@ -261,9 +268,9 @@ func TestVerifyLinkageDeclaredJointContact(t *testing.T) {
 // corner (60 + 30s, 5) in the mast's frame, turned by θ = 90°·s, stands at
 // y = (60 + 30s)·sin θ + 5·cos θ, increasing in s, and reaches the wall's
 // face y = 60 at s*, its one root in [0, 1], bracketed here to 1e-12 by
-// bisection of the closed form. The mast's top edge (5, z = 38) and the
-// boom's lower edge (10 + 30s, z = 40) run parallel, so the pair's gap is
-// √((5 + 30s)² + 2²) at every s.
+// bisection of the closed form. The boom slides along X, perpendicular to Z,
+// so the mast's z-extent [0, 38] and the boom's [40, 50] hold at every s and
+// the layer exclusion (§5.7) settles the pair.
 //
 // The prismatic term is pinned with the mast unlisted: a block on the boom's
 // joint passes straight through a 2 mm pin, 4 mm ahead of it at rest and
@@ -310,18 +317,11 @@ func TestVerifyLinkageCrane(t *testing.T) {
 		depth := height(first.At.Mag())
 		th := first.At.Mag() * math.Pi / 2
 		require.InDelta(t, 10*depth*depth/(2*math.Sin(th)*math.Cos(th)), first.Volume.Value.Mag(), 1e-6)
-		rows := 0
 		for _, p := range report.Poses {
 			for _, row := range p.Clearances {
-				if row.A != mast || row.B != boom {
-					continue
-				}
-				rows++
-				s := p.Pose.At.Mag()
-				require.InDelta(t, math.Hypot(5+30*s, 2), row.Gap.Value.Mag(), 1e-6)
+				require.False(t, row.A == mast && row.B == boom, `the layer exclusion settles the mast and boom`)
 			}
 		}
-		require.Equal(t, len(report.Poses), rows, `the mast and boom gap is measured at every pose`)
 	})
 	t.Run("a pin between samples is never certified clear from the endpoints", func(t *testing.T) {
 		t.Parallel()

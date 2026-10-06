@@ -309,3 +309,190 @@ func idealPosesAt(spec *linkageSpec, frames []motionbound.MotionFrame, s *big.Ra
 func linkageBoundsError() error {
 	return fmt.Errorf(`%w: a link's bounds or a joint's axis cannot be read exactly`, ErrNotFinite)
 }
+
+// linkStanding is a link's standing over a drive
+// (docs/linkage-check-design.md §6 step 2).
+type linkStanding int
+
+const (
+	// linkMoving: some joint on the link's path moves.
+	linkMoving linkStanding = iota
+	// linkFixed: every joint on the link's path holds 0, so its ideal pose is
+	// the identity at every s and its bodies stand where they are.
+	linkFixed
+	// linkConstant: every joint on the link's path holds, one at a nonzero
+	// value, so its pose is the same at every s.
+	linkConstant
+)
+
+// heldAtZeroJoint reports whether a joint's value is exactly 0 at every s.
+func heldAtZeroJoint(jt linkJoint) bool {
+	return jt.dom.fromP.Turn.Sign() == 0 && jt.dom.fromP.Base.Sign() == 0 &&
+		jt.dom.toP.Turn.Sign() == 0 && jt.dom.toP.Base.Sign() == 0
+}
+
+// linkStandings reads every link's standing from the joints on its path.
+func linkStandings(spec *linkageSpec, bounds []linkBound) []linkStanding {
+	out := make([]linkStanding, len(spec.joints))
+	for k, b := range bounds {
+		zero, held := true, true
+		for _, i := range b.path {
+			jt := spec.joints[i]
+			if !heldAtZeroJoint(jt) {
+				zero = false
+			}
+			if jt.listed && !sameMotionValue(jt.dom.from, jt.dom.to) {
+				held = false
+			}
+		}
+		switch {
+		case zero:
+			out[k] = linkFixed
+		case held:
+			out[k] = linkConstant
+		}
+	}
+	return out
+}
+
+func ratDot(a, b motionbound.RatVec) *big.Rat {
+	return proofbound.RatAdd(proofbound.RatMul(a[0], b[0]), proofbound.RatMul(a[1], b[1]), proofbound.RatMul(a[2], b[2]))
+}
+
+func ratCross(a, b motionbound.RatVec) motionbound.RatVec {
+	return motionbound.RatVec{
+		new(big.Rat).Sub(proofbound.RatMul(a[1], b[2]), proofbound.RatMul(a[2], b[1])),
+		new(big.Rat).Sub(proofbound.RatMul(a[2], b[0]), proofbound.RatMul(a[0], b[2])),
+		new(big.Rat).Sub(proofbound.RatMul(a[0], b[1]), proofbound.RatMul(a[1], b[0])),
+	}
+}
+
+func ratZero(v motionbound.RatVec) bool {
+	return v[0].Sign() == 0 && v[1].Sign() == 0 && v[2].Sign() == 0
+}
+
+// layerKeeps reports whether joint jt, at any value, preserves a·x for every
+// point x (docs/linkage-check-design.md §5.7): a revolute whose axis is
+// exactly parallel to a, or a prismatic whose direction is exactly
+// perpendicular to it.
+func layerKeeps(jt linkJoint, f motionbound.MotionFrame, a motionbound.RatVec) bool {
+	if jt.revolute {
+		return ratZero(ratCross(a, f.Axis))
+	}
+	return ratDot(a, f.Axis).Sign() == 0
+}
+
+// layerAxes is §5.7's candidate directions for a relative path: the axis of
+// its first moving revolute when it has one, and otherwise the coordinate
+// axes and the cross product of its first two non-parallel slides. Each is
+// admitted only when every joint on the path keeps it. A joint holding 0 is
+// passed over; a path of such joints admits every coordinate axis.
+func layerAxes(spec *linkageSpec, frames []motionbound.MotionFrame, path []int) []motionbound.RatVec {
+	var moving []int
+	for _, i := range path {
+		if !heldAtZeroJoint(spec.joints[i]) {
+			moving = append(moving, i)
+		}
+	}
+	var candidates []motionbound.RatVec
+	for _, i := range moving {
+		if spec.joints[i].revolute {
+			candidates = []motionbound.RatVec{frames[i].Axis}
+			break
+		}
+	}
+	if candidates == nil {
+		one, zero := big.NewRat(1, 1), new(big.Rat)
+		candidates = []motionbound.RatVec{{one, zero, zero}, {zero, one, zero}, {zero, zero, one}}
+		for n, i := range moving {
+			for _, j := range moving[n+1:] {
+				if c := ratCross(frames[i].Axis, frames[j].Axis); !ratZero(c) {
+					candidates = append(candidates, c)
+					break
+				}
+			}
+		}
+	}
+	var out []motionbound.RatVec
+	for _, a := range candidates {
+		keeps := true
+		for _, i := range moving {
+			if !layerKeeps(spec.joints[i], frames[i], a) {
+				keeps = false
+				break
+			}
+		}
+		if keeps {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// layerExtent is a body's a-extent at the zero pose: the least and greatest
+// exact a·x over the eight corners of its Bounds box inflated by its Bound.
+func layerExtent(b *Body, a motionbound.RatVec) (lo, hi *big.Rat, ok bool) {
+	boxLo, boxHi, ok := boxCornersExact(b.bounds, new(big.Rat))
+	if !ok {
+		return nil, nil, false
+	}
+	for n, x := range boxCorners(boxLo, boxHi) {
+		v := ratDot(a, x)
+		if n == 0 || v.Cmp(lo) < 0 {
+			lo = v
+		}
+		if n == 0 || v.Cmp(hi) > 0 {
+			hi = v
+		}
+	}
+	return lo, hi, true
+}
+
+// layerLower is §5.7's exclusion for a pair whose relative path is path: the
+// largest proven lower bound w/|a| over the admitted directions a whose
+// extents separate the two bodies by w > 0, rounded down; ok is false when no
+// direction separates them.
+func layerLower(spec *linkageSpec, frames []motionbound.MotionFrame, path []int, x, y *Body) (float64, bool) {
+	best := 0.0
+	for _, a := range layerAxes(spec, frames, path) {
+		xLo, xHi, okX := layerExtent(x, a)
+		yLo, yHi, okY := layerExtent(y, a)
+		if !okX || !okY {
+			continue
+		}
+		w := new(big.Rat).Sub(yLo, xHi)
+		if alt := new(big.Rat).Sub(xLo, yHi); alt.Cmp(w) > 0 {
+			w = alt
+		}
+		if w.Sign() <= 0 {
+			continue
+		}
+		norm := sqrtUpRat(axisSq(a))
+		if norm == nil {
+			continue
+		}
+		if lower := proofbound.RatFloatDown(w.Quo(w, norm)); lower > best {
+			best = lower
+		}
+	}
+	return best, best > 0
+}
+
+// sweptBoxesLower is the swept-box exclusion between two exact boxes: the
+// largest strictly positive per-axis gap, rounded down; ok is false when the
+// boxes do not separate.
+func sweptBoxesLower(aLo, aHi, bLo, bHi motionbound.RatVec) (float64, bool) {
+	var best *big.Rat
+	for i := range 3 {
+		for _, gap := range []*big.Rat{new(big.Rat).Sub(bLo[i], aHi[i]), new(big.Rat).Sub(aLo[i], bHi[i])} {
+			if gap.Sign() > 0 && (best == nil || gap.Cmp(best) > 0) {
+				best = gap
+			}
+		}
+	}
+	if best == nil {
+		return 0, false
+	}
+	lower := proofbound.RatFloatDown(best)
+	return lower, lower > 0
+}

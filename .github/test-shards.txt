@@ -984,3 +984,4 @@
 2	0.02	TestLinkagePairGapCarriesBothDeviations
 3	0.01	TestVerifyLinkageKeepsTheNextProducerIdentity
 3	0.00	TestVerifyLinkageRefusesABodyItDidNotBuild
+4	0.01	TestLinkageConstantPlacementIsReused

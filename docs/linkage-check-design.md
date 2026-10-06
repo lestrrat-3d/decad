@@ -418,6 +418,49 @@ upper end. Declared pairs do not enter the reading.
 - An `IntervalUndecided` claims nothing; a `LinkCollision` claims overlap at that `s` and nothing about the
   interval around it; no tolerance decides admission (motion §5.4).
 
+### 5.7 The layer exclusion
+
+A pair whose relative motion never changes either body's height along one direction cannot close a gap
+that height separates. That is the common shape of a planar mechanism — arms stacked along their parallel
+joint axes, an arm swinging over a table — and its pairs keep a constant gap the interval certificate
+pays for at every step (§10).
+
+**The rule.** A pair's relative path is the joints strictly below the two links' lowest common ancestor on
+each branch, and every joint on the body's path for a (link body, static) pair (§5.2). A joint that holds
+`0` — unlisted, or `From == To == 0` — moves nothing and is passed over. The pair is **layer-separated
+along `a`** when every other joint on its relative path is a revolute whose `Axis` is parallel to `a` or a
+prismatic whose `Dir` is perpendicular to `a`, and the two bodies' `a`-extents are separated by `w > 0`.
+It is then settled for the whole drive as a swept-box exclusion is (motion §6 step 3): never evaluated at
+any pose, and contributing the lower bound `w/|a|`, rounded down, to every interval.
+
+**Why it holds.** A rotation about any line parallel to `a` maps `x` to `R·(x − c) + c` with `Rᵀa = a`,
+so `a·x` is unchanged; a slide along `d ⊥ a` adds nothing along `a`. Every joint of the relative path,
+at any value, therefore preserves `a·x` for every point of either body, and so does their composition:
+relative to the common ancestor, each body's `a`-extent at every `s` is its extent at the zero pose. The
+common ancestor's own motion carries both bodies rigidly and changes their distance by nothing (§5.2). For
+`x` in one body and `y` in the other, `|a·(x − y)| ≥ w`, so `|x − y| ≥ w/|a|` at every `s`. The claim is
+about the ideal poses, as every interval claim is (§5.1).
+
+**Exactness.** Every test is an exact rational comparison, with no tolerance:
+
+- `a` is the `Axis` of the first joint on the relative path that is a revolute and does not hold `0`, read
+  exactly; parallel means the exact cross product `a × Axis_i` is the zero vector, and perpendicular means
+  the exact dot product `a·Dir_i` is zero. A path with no such revolute tries, in order, the coordinate
+  axes `X`, `Y`, `Z` and the exact cross product of its first two non-parallel slide directions, each
+  admitted only when every slide is perpendicular to it.
+- A body's `a`-extent is the least and greatest exact `a·x` over the eight corners of its zero-pose
+  `Bounds()` box inflated by its own `Bound` (`boxCornersExact`); `a·x` is linear, so the extremes over the
+  box sit at corners.
+- `w` is compared strictly with zero: touching extents (`w = 0`) never exclude, so a link resting on its
+  pivot's cap or on a table is evaluated, and a declared contact still reads as §5.4 says.
+- `|a|` is rooted upward (`proofbound.RatSqrtUp`), so `w/up(|a|)` is a lower bound on `w/|a|`, and it is
+  rounded down to the float the interval publishes.
+
+A joint whose axis leans off `a` by any amount, or a slide with any component along `a`, fails the rule
+and leaves the pair to the interval certificate. A pair the rule settles carries no gap row at any pose and
+no upper bound, so a drive whose every pair is settled reads `Sound` with no whole-drive `Clearance`,
+exactly as motion §5.3 states for swept-box exclusion.
+
 ## 6. The procedure
 
 Motion §6's deterministic dyadic bisection is reused as it stands — endpoints first, then bisection for
@@ -429,8 +472,10 @@ several moving groups (§12 PR 1). The steps that differ:
 2. **Resolve each link's standing.** A link whose path joints all hold `0` — every sweep on its path
    absent or `From == To == 0` — moves nothing: its bodies are evaluated as static bodies, with no
    transient placement and no `η`, and its pairs against the ground's statics are not formed (they are
-   `Verify`'s). A link whose path joints all hold a nonzero value is a constant placement: it is evaluated
-   once, at `s = 0`, and every pose reuses that evaluation, with `τ = 0` on every pair it forms.
+   `Verify`'s); its pairs against a moving link are evaluated with its bodies as they stand. A link whose
+   path joints all hold, at least one at a nonzero value, is a constant placement: each body's transient
+   placement is built once, at `s = 0`, and every pose reuses it, with `τ = 0` on every pair it forms. A
+   held link stays in `Links()` and its poses stay in each `LinkagePose`; pair order (§4) is unchanged.
 3. **Read the bounds** (§5.2): per link, `R0`, area and `σ` per body as motion §6 step 2 reads them, and
    `ρ_{ik}` for every joint `i` on its path.
 4. **Swept-box exclusion.** Each body of link `k` has its rest box, inflated by its own `Bound` plus its
@@ -438,9 +483,11 @@ several moving groups (§12 PR 1). The steps that differ:
    terms `m_i`), compared with each static body's inflated box as exact rational extremes (motion §6 step
    3); a strictly positive axis gap settles the pair for the whole drive. The body's own box serves, not
    the link's: `ρ_{ik}` is read over the link's whole rest box, so it bounds the travel of every one of its
-   bodies. A link-link pair is settled the same way when the two
-   swept boxes separate. The travel is measured from the zero pose, not from `s = 0`, for the reason motion
-   §6 step 3 gives: a joint whose `From` is `80°` has moved before the drive begins.
+   bodies. A link-link pair is settled the same way when the two bodies' swept boxes, each grown by its own
+   link's travel from the zero pose, separate. The travel is measured from the zero pose, not from `s = 0`,
+   for the reason motion §6 step 3 gives: a joint whose `From` is `80°` has moved before the drive begins.
+   A pair the swept boxes leave is then tried by the layer exclusion (§5.7). A declared pair is excluded
+   on the same terms: a pair proven apart over the whole drive is proven free of overlap too.
 5. **Evaluate, bisect and publish** as motion §6 steps 4–7, with `τ` per pair from §5.2 and the declared
    pairs handled as §5.4 says. The onset bisection halves a colliding interval that still has a
    collision-free end whether the collision sits on a declared pair or an undeclared one.
@@ -504,6 +551,12 @@ box bisected per axis to a resolution floor certifies cell by cell with the same
 `2^n` corners. The cost is exponential in `n` and the report needs a cell vocabulary; it is a later
 increment that adds a second entry point and changes nothing here.
 
+### 9.3 A tighter `ρ` for parallel axes
+
+§5.2's balls are loose where a link is long along a joint's axis; a cylinder enclosure about parallel
+axes would tighten `ρ_{ik}`. It changes no soundness argument, only how early an interval certifies, and it
+waits on a measured drive whose pose count the ball's slack decides.
+
 ## 10. Cost
 
 Each pose runs the pair procedure once per evaluated pair; a declared pair costs the same as an evaluated
@@ -523,21 +576,24 @@ for a clear sweep, and `10`–`20` onset poses per contact found.
 
 Measured on `BenchmarkVerifyLinkageThreeJointArm` (three stacked `50` mm links each turning `0° → 90°`,
 the two elbows declared, a post `10` mm past the wrist and a far post): the declared elbows touch and
-publish nothing, and five pairs are evaluated per pose. At `WithResolution(Scalar(1.0/64))` the verdict
-settles in `12` poses, about `35` ms; at the default floor `53` poses, about `160` ms, both every interval
-`IntervalClear`.
+publish nothing, the shoulder-wrist pair is settled by the layer exclusion (§5.7), and four pairs are
+evaluated per pose. At `WithResolution(Scalar(1.0/64))` the verdict settles in `10` poses, about `40` ms;
+at the default floor `50` poses, about `180` ms, both every interval `IntervalClear`.
 
-**The whole-drive reading at the default floor.** The verdict is cheap; the reading is not. A certified
+**The whole-drive reading at the default floor.** The verdict is cheap; the reading need not be. A certified
 interval's lower bound sits up to `τ/2` below the true gap, so the reading's half-width near the minimum
 is about `τ_rate·Δs/4`, and the gate (verification §2) admits `rel·gap`. A chain's `τ_rate` is the sum of
 its `ρ_{ik}·|To_i − From_i|` — hundreds of millimetres per unit `s` for an arm of a few links — so at
 `rel = 1e-3` and a `10` mm gap the reading needs `Δs ≈ 7e-5`, well under the default floor `1/1024`. A clear
 drive at the defaults therefore reads `Suspect` with a `DiagMeasurementBeyondTolerance` on the reading
 (the three-joint arm above), and a finer `WithResolution` buys the reading at logarithmic cost around an
-isolated minimum (the same arm at `1/16384`: `254` poses, `Sound`). A minimum that holds along the drive —
-a pair whose gap does not change, as scene 1's arms at `2` mm — is the exception: every interval ties for
-the smallest bound, step 6 refines all of them, and the cost is linear in `1/Δs` (scene 1 without the wall:
-`1025` poses and `Suspect` at the default floor, `16385` poses and `Sound` at `1/16384`).
+isolated minimum (the same arm at `1/16384`: `251` poses, about `1` s, `Sound`). A minimum that holds along
+the drive — a pair whose gap does not change — makes every interval tie for the smallest bound, step 6
+refines all of them, and the cost is linear in `1/Δs`: about `16000` poses at `1/16384`. The layer
+exclusion (§5.7) settles the common case of that shape, a stacked planar mechanism, before any pose:
+scene 1 without the wall, and the same arms over a table, each evaluate the two endpoints and read
+`Sound` at every resolution. A constant gap the rule cannot settle — a link turning about an axis that
+leans off its partner's layer, or a pair whose extents along the axis overlap — still pays the linear cost.
 
 ## 11. Required tests
 
@@ -556,26 +612,25 @@ circle of radius `48` about the origin, so its top face is the plane `y = 48·si
 - `B`'s top face reaches `y = 38` when `sin θ = 1/2`: `θ* = 30°`, `s* = 1/3`, in closed form. `A`'s far
   corner `(48, 14)`, at radius `50`, reaches `y = 38` at `θ = asin(38/50) − atan(7/24) ≈ 33.2°`,
   `s ≈ 0.369`, later. Past `s*`, `B`'s overlap with the wall is the slab `48 × (48·sin θ − 24) × 10` mm³.
-- `A` and `B` never meet: their caps are the parallel planes `z = 10` and `z = 12`, `2` mm apart at every
-  `s`. The pair's relative motion is joint 2 alone (§5.2's lowest-common-ancestor rule), `ρ_{22} = 50`, so
-  `τ = 50·(π/2)·Δs` and `2 + 2 > τ` holds at `Δs = 1/32`.
+- `A` and `B` never meet: their relative motion is joint 2 alone, about `Z`, so their `z`-extents
+  `[0, 10]` and `[12, 22]` hold at every `s`, and the layer exclusion (§5.7) settles the pair with the
+  lower bound `2` mm before any pose.
 - At `WithResolution(units.Scalar(1.0/256))` assert: `Status` is `Interfering`; the first `LinkCollision`
   has `A` the forearm and `B` the wall, `At` strictly above `1/3` and within `2/256` of it — the grid
   point `86/256`, where the overlap is `480·(48·sin(30.234°) − 24) ≈ 81.5` mm³, asserted within `1e-3`
   mm³ with `Bound` below `Value`; every `IntervalClear` interval ends at or below `1/3`; the interval
-  containing `1/3` is not `IntervalClear`; every `(A, wall)` collision has `At > 0.369`; every `(A, B)`
-  row is a `Clearance` within `1e-6` of `2` mm; fewer than `32` poses were evaluated. The check evaluates
-  `21`: the `(A, B)` pair certifies at `Δs = 1/32` over `[0, 1/3]`, and past the first collision every
-  interval collides at both ends and is not split.
-- The same linkage with the wall removed, at the default resolution and `WithMotionTolerance(Scalar(0.05))`:
-  `Sound`, every interval `IntervalClear`, `Clearance.Value` within `0.1` mm of `2` with
-  `ToleranceSatisfied`. The `(A, B)` interval lower bound is `2 − 25·(π/2)·Δs`, so the whole-drive
-  reading's half-width is about `19.6·Δs` mm: the default `rel = 1e-3` admits `0.002` mm on a `2` mm gap,
-  which takes `Δs ≈ 1e-4`, while `0.05` admits `0.1` mm, which the default floor reaches at `257` poses.
-- The pose-count assertion is the leg that goes red when the common-ancestor joint is left in `τ_{AB}`:
-  the `(A, B)` certificate then needs `Δs ≤ 1/128` over `[0, 1/3]` and the count rises to `50`. The
-  travel terms themselves are not detectable here — `B` translates on a circle at `75` mm per unit `s`,
-  under every partial sum of its bound — and are pinned by the internal travel test below and by scene 4.
+  containing `1/3` is not `IntervalClear`; every `(A, wall)` collision has `At > 0.369`; no pose carries an
+  `(A, B)` row. The check evaluates `16` poses.
+- The same linkage with the wall removed, at the defaults: `Sound`, the two endpoints alone, one
+  `IntervalClear` interval whose `Clearance` is exactly `2`, and no whole-drive `Clearance`. A `1` mm
+  `WithMinClearance` is `AssessmentMet`; a `3` mm one is `AssessmentUndecided` with
+  `DiagMotionUndecidedClearance`, since the layer's proven `2` mm cannot meet it and no pose measures the
+  arms to disprove it.
+- A post rigidly on `A`, `x ∈ [20, 30], y ∈ [26, 36], z ∈ [0, 30]`, shares `B`'s layer, so its pair is
+  evaluated; its relative motion is joint 2 alone and its gap, `21`–`31` mm, certifies every interval at
+  `WithResolution(Scalar(1.0/4))`. This is the leg that goes red when the common-ancestor joint is left in
+  the pair's `τ`: every interval is then undecided at that floor. The travel terms themselves are pinned by
+  the internal travel test below and by scene 4.
 - `examples/` gains `Example_decad_linkageCheck` on this scene, printing `Status`, the first collision's
   bodies and its fraction to three decimals — `0.336` on every platform, since the grid is dyadic.
 
@@ -594,8 +649,9 @@ grid point `176/256`, where `B`'s leading corner pokes depth `d` past `x = 10` a
 triangular prism `9.5·d²/(2·(−cos φ)·sin φ)` mm³, asserted within `1e-6`; some interval `IntervalClear`;
 `JointContacts` lists `(A, B)`; no diagnostic names `(A, B)`. The same scene without the declaration holds
 no interval clear and raises a finding naming `(A, B)`. A declared pair's other outcomes are pinned on
-their own fixtures: scene 1's arms declared publish their `2` mm gap row at every pose and nothing else, so
-a `3` mm `WithMinClearance` raises no finding and reads `AssessmentMet`; a block resting on a slab, and a
+their own fixtures: the motion arm swinging away from a block `12` mm past its tip in its own layer,
+declared, publishes its gap row at every pose and nothing else, so a `15` mm `WithMinClearance` raises no
+finding and reads `AssessmentMet`; a block resting on a slab, and a
 block sunk `1` mm into one across a shared face plane, each sliding along that plane, publish no row and
 no finding; a block sliding inside a declared sheet raises no `DiagUnsupportedPairSheet`, which the
 undeclared pair raises at every pose. The leg that a declared pair is still proven for overlap is pinned
@@ -614,9 +670,9 @@ turned by `θ = 90°·s`, so the `+5` corner's height is `y = (60 + 30s)·sin θ
 which the test brackets to `1e-12` by bisection of the closed form (`s* ≈ 0.535155`); the `−5` corner
 follows later. Assert `Interfering` with the first collision on `(boom, wall)` within `2/256` above `s*` —
 the grid point `137/256` — with the overlap the triangular prism `10·d²/(2·sin θ·cos θ)` mm³ for the
-corner's depth `d` past `y = 60`, within `1e-6`. The mast's top edge `(5, z = 38)` and the boom's lower
-edge `(10 + 30s, z = 40)` run parallel, so the `(mast, boom)` pair's rows read `√((5 + 30s)² + 2²)` within
-`1e-6`. The prismatic term is pinned with the mast unlisted and a `10` mm block `x ∈ [10, 20]` in the
+corner's depth `d` past `y = 60`, within `1e-6`. The boom slides along `X`, perpendicular to `Z`, so the
+mast's `z`-extent `[0, 38]` and the boom's `[40, 50]` hold at every `s` and the layer exclusion settles
+the `(mast, boom)` pair: no pose carries its row. The prismatic term is pinned with the mast unlisted and a `10` mm block `x ∈ [10, 20]` in the
 boom's place (the `50` mm boom covers any pin it passes at the end): a `2 × 2 × 2` mm pin at
 `x ∈ [24, 26]`, `4` mm ahead of the block at rest and `14` mm behind it at the end, with the endpoints
 alone (`WithResolution(Scalar(1))`): no `Collision`, `IntervalUndecided`, `Suspect` — exactly motion §9
@@ -654,6 +710,21 @@ equivalent `Revolute`: equal `Status`, equal interval outcomes in order, each `C
 fixtures 1, 2 and 4. The one-link `τ` is `ρ_{11}·|Δq_1|`, which is `MoverTravel`'s value, and the ideal
 pose is one `MotionFrame.At`, so the two paths read the same bounds.
 
+**Exclusions and held links.** Each exclusion admits a pair without evaluating it, so each is pinned by a
+fixture whose answer goes wrong when the rule lets through a pair it must not. The layer exclusion: the
+motion arm turning `0° → 30°` about `Z` over a table `10` mm below is settled with the exact lower bound
+`10`; a block under the arm turning `0° → 180°` about the `X` axis through `(0, 0, 10)`, and the same block
+sliding `0 → 40` mm along `(1, 0, −1)`, each come down into a table and their collisions are found, red
+when the axis or the perpendicularity test is skipped; the arm resting on a table's top face reads
+`Suspect` with an `Exact` zero row, red when touching extents exclude; and a block on two slides along
+`(1, 0, 1)` and `(0, 1, 1)` is settled against a box `140` mm away along their cross product, red when that
+candidate is dropped. The link-link swept box: a far sibling block is settled, and a sibling block sliding
+`30` mm toward the arm's swing, its rest box `46` mm from the arm's, collides — red when the boxes are not
+grown by each link's travel. Held links: a base on a joint the drive never moves, resting on a table and
+beside a wall, forms neither pair and reads `Sound`, red when its pairs are formed; held at `30°` its
+wall row is the same at every pose, and an internal test shows its one transient placement reused and kept
+cached across poses.
+
 **Standing tests.** Errors, one subtest per row of §8 and per constructor refusal of §2; non-mutation and
 determinism as motion §9 test 7; cancellation; pose deviation charged (a joint centre at `(1e6, 0, 0)`
 widens a row's `Bound` as motion §9 test 8 shows, carried through a child link's composition); swept-box
@@ -677,7 +748,7 @@ and `go test . ./apitest/ -run '^TestCI'` is run before the push.
 |---|---|---|
 | 1 (`linkage.go`, `linkage_verify.go`, `linkage_bound.go`; `motion_verify.go` generalised to several moving groups with per-group poses, ideal frames and group-group pairs, `VerifyMotion` bit-identical as the one-group case, every motion test unchanged) | §2's vocabulary, `PoseAt`, §5's bounds and certificate, `VerifyLinkage` with every option, both bisection steps, swept-box exclusion against statics, scene 1 and its example, the agreement tests, the errors, non-mutation and cancellation tests | every pair that touches at a joint: declarations are PR 2 |
 | 2 | `DeclareJointContact`, `JointContacts`, §5.4's asymmetric outcome; `WithJointLimits` with `JointOption`, `JointLimits` and the joints' `Limits` fields; scenes 2, 3 and 4; the three-joint benchmark of §10 | a clear drive's whole-drive reading at the default floor (§10) |
-| 3 | §6 step 2's held-link promotion to static and constant placement; link-link swept-box exclusion; the cylinder enclosure for parallel axes where measured cost justifies it | — |
+| 3 | §6 step 2's held links — a link holding `0` stands where it is and forms no pair with a static body, a link held elsewhere is one constant placement; link-link swept-box exclusion; the layer exclusion (§5.7); their tests | a clear drive's whole-drive reading at the default floor where its minimum is reached at one parameter (§10) |
 
 PR 1 is the end-to-end instance: two real links, a real fixture, the real kernel, the chain certificate,
 one report, with the closed-form answer of scene 1 as its acceptance. This design document ships in PR 1.
@@ -694,5 +765,7 @@ drive is one dimensionless fraction with a linear schedule per joint; a box swee
 (§9.1). Joint contacts are declared by the caller per pair, listed in the report, and still checked for
 overlap at every pose (§2.2, §5.4). The travel bound is the telescoping joint-by-joint sum with ball
 enclosures read down the chain, over exact rationals (§5.2); a pair's bound sums only the joints below the
-two links' lowest common ancestor (§5.2). The options and the report vocabulary are `VerifyMotion`'s (§3,
+two links' lowest common ancestor (§5.2). A pair whose relative path turns about axes parallel to one
+direction and slides perpendicular to it, with the two bodies' extents along that direction strictly
+separated, is settled before any pose by an exact layer exclusion (§5.7). The options and the report vocabulary are `VerifyMotion`'s (§3,
 §4).

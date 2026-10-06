@@ -116,7 +116,8 @@ func (d *Document) VerifyLinkage(ctx context.Context, l *Linkage, drive Drive, o
 // static, and each link body's swept box for the exclusion against them.
 func newLinkageRun(ctx context.Context, d *Document, spec *linkageSpec, frames []motionbound.MotionFrame, bounds []linkBound, cfg motionConfig) *motionRun {
 	run := &motionRun{ctx: ctx, d: d, dom: fractionDomain(), cfg: cfg, cache: &bodyGeomCache{}}
-	run.drive = &linkageDriver{run: run, spec: spec, frames: frames, bounds: bounds}
+	dr := &linkageDriver{run: run, spec: spec, frames: frames, bounds: bounds, standing: linkStandings(spec, bounds)}
+	run.drive = dr
 	run.declared = make(map[[2]*Body]struct{}, 2*len(spec.linkage.contacts))
 	for _, c := range spec.linkage.contacts {
 		run.declared[[2]*Body{c.A, c.B}] = struct{}{}
@@ -137,15 +138,65 @@ func newLinkageRun(ctx context.Context, d *Document, spec *linkageSpec, frames [
 		swept[i] = motionSweptBox{lo: lo, hi: hi, ok: ok}
 	}
 	run.formPairs(swept)
+	dr.settlePairs(swept)
 	return run
+}
+
+// settlePairs applies the linkage's own pair standings on top of the
+// engine's (docs/linkage-check-design.md §6 steps 2 and 4): a held link's
+// pair against a static body, or two held links' pair, is not formed; a
+// link-link pair whose swept boxes separate is excluded; and any pair the
+// layer exclusion (§5.7) settles is excluded. A pair an operand's validity
+// already decided is left as it stands.
+func (dr *linkageDriver) settlePairs(swept []motionSweptBox) {
+	r := dr.run
+	for i, mv := range r.movers {
+		for k := range r.pairs[i] {
+			pair := &r.pairs[i][k]
+			other := pair.other
+			fixedHere := dr.standing[mv.group] == linkFixed
+			if fixedHere && (other < 0 || dr.standing[r.movers[other].group] == linkFixed) {
+				*pair = motionPair{other: other, unformed: true, declared: pair.declared}
+				continue
+			}
+			if pair.invalid || pair.excluded {
+				continue
+			}
+			lower, ok := dr.settled(i, other, k, swept)
+			if !ok {
+				continue
+			}
+			pair.excluded, pair.lower, pair.sheet = true, lower, false
+		}
+	}
+}
+
+// settled tries the link-link swept-box exclusion, then the layer exclusion,
+// on pair k of mover i.
+func (dr *linkageDriver) settled(i, other, k int, swept []motionSweptBox) (float64, bool) {
+	r := dr.run
+	mine := dr.bounds[r.movers[i].group]
+	if other < 0 {
+		return layerLower(dr.spec, dr.frames, mine.path, r.movers[i].body, r.statics[k].body)
+	}
+	if swept[i].ok && swept[other].ok {
+		if lower, ok := sweptBoxesLower(swept[i].lo, swept[i].hi, swept[other].lo, swept[other].hi); ok {
+			return lower, true
+		}
+	}
+	theirs := dr.bounds[r.movers[other].group]
+	below := commonDepth(mine.path, theirs.path)
+	path := append(slices.Clone(mine.path[below:]), theirs.path[below:]...)
+	return layerLower(dr.spec, dr.frames, path, r.movers[i].body, r.movers[other].body)
 }
 
 // linkageDriver drives the engine's groups, one per link, along a drive.
 type linkageDriver struct {
-	run    *motionRun
-	spec   *linkageSpec
-	frames []motionbound.MotionFrame
-	bounds []linkBound
+	run      *motionRun
+	spec     *linkageSpec
+	standing []linkStanding // per link, §6 step 2
+	frames   []motionbound.MotionFrame
+	bounds   []linkBound
 }
 
 // posesAt builds every link's float pose by linkageSpec.posesAt — the
@@ -160,7 +211,10 @@ func (dr *linkageDriver) posesAt(f *big.Rat, _ units.Value, param motionbound.Mo
 	ideals := idealPosesAt(dr.spec, dr.frames, param.Base)
 	out := make([]motionGroupPose, len(poses))
 	for k := range poses {
-		out[k] = motionGroupPose{pose: poses[k], ideals: []motionbound.IdealPose{ideals[k]}, stretch: 1, value: values[k]}
+		out[k] = motionGroupPose{
+			pose: poses[k], ideals: []motionbound.IdealPose{ideals[k]}, stretch: 1, value: values[k],
+			fixed: dr.standing[k] == linkFixed, constant: dr.standing[k] == linkConstant,
+		}
 	}
 	return out, nil
 }
