@@ -58,10 +58,10 @@ func TestDyadicLiftsEveryFloatExactly(t *testing.T) {
 		d, ok := proof.DyOf(f)
 		require.True(t, ok, "%v is finite and must lift", f)
 		if f != 0 {
-			reused := proof.DyOfFiniteInto(f, &reusedMant)
-			require.Equal(t, d.Exp(), reused.Exp(), "reused exponent for %v", f)
-			require.Equal(t, d.Mant(), reused.Mant(), "reused mantissa for %v", f)
-			require.Same(t, &reusedMant, reused.Mant(), "the lift writes into caller storage for %v", f)
+			finite := proof.DyOfFinite(f)
+			require.Equal(t, d, finite, "the finite lift of %v matches DyOf", f)
+			require.Same(t, &reusedMant, finite.MantInto(&reusedMant), "MantInto writes into caller storage for %v", f)
+			require.Zero(t, d.Mant().Cmp(&reusedMant), "MantInto mantissa for %v", f)
 		}
 		require.Zero(t, ratOfDyadic(t, d).Cmp(proof.FloatRat(f)), "the lift of %v must equal its exact rational", f)
 		require.Zero(t, d.Rat().Cmp(proof.FloatRat(f)), "rat must return the same number the lift holds, for %v", f)

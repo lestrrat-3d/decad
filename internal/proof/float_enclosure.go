@@ -98,7 +98,8 @@ func DvPrimitive(v DyV3) DyV3 {
 		if c.IsZero() {
 			continue
 		}
-		ints[i] = new(big.Int).Lsh(c.mant, uint(c.exp-exp))
+		ints[i] = c.MantInto(new(big.Int))
+		ints[i].Lsh(ints[i], uint(c.exp-exp))
 		if gcd.Sign() == 0 {
 			gcd.Abs(ints[i])
 			continue
@@ -113,31 +114,36 @@ func DvPrimitive(v DyV3) DyV3 {
 		if gcd.BitLen() > 1 {
 			k.Quo(k, gcd)
 		}
-		out[i] = Dyadic{mant: k}.norm()
+		out[i] = fromBig(k, 0)
 	}
 	return out
 }
 
 // AppendKey appends a byte encoding of d to b. Two encodings are equal exactly
-// when the values are: the encoding reads the reduced form (norm), whose
+// when the values are: the encoding reads the reduced, canonical form, whose
 // fields are equal exactly when the values are, and it prefixes the
-// mantissa's length so no two encodings run together.
+// mantissa's length so no two encodings run together. The magnitude is
+// written big-endian without leading zero bytes, the form big.Int.Bytes
+// gives, wherever the mantissa is held.
 func (d Dyadic) AppendKey(b []byte) []byte {
 	if d.IsZero() {
 		return append(b, 0)
 	}
-	mant, exp := d.mant, d.exp
-	if shift := mant.TrailingZeroBits(); shift > 0 {
-		mant = new(big.Int).Rsh(mant, shift)
-		exp += int(shift)
-	}
 	sign := byte(1)
-	if mant.Sign() < 0 {
+	if d.Sign() < 0 {
 		sign = 2
 	}
 	b = append(b, sign)
-	b = binary.AppendVarint(b, int64(exp))
-	words := mant.Bytes()
-	b = binary.AppendUvarint(b, uint64(len(words)))
-	return append(b, words...)
+	b = binary.AppendVarint(b, int64(d.exp))
+	if d.big != nil {
+		words := d.big.Bytes()
+		b = binary.AppendUvarint(b, uint64(len(words)))
+		return append(b, words...)
+	}
+	n := (d.mag.bitLen() + 7) / 8
+	b = binary.AppendUvarint(b, uint64(n))
+	for i := n - 1; i >= 0; i-- {
+		b = append(b, byte(d.mag[i/8]>>(8*(i%8))))
+	}
+	return b
 }

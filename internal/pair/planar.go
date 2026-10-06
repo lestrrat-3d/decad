@@ -992,7 +992,7 @@ func (h hpoint) inBox(lo, hi [3]proof.Dyadic) bool {
 	if sign == 0 {
 		return true
 	}
-	unit := h.w.Exp() == 0 && h.w.Mant().IsInt64() && h.w.Mant().Int64() == 1
+	unit := proof.DyCmp(h.w, proof.DyInt(1)) == 0
 	for axis := range 3 {
 		low, high := lo[axis], hi[axis]
 		if !unit {

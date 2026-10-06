@@ -221,7 +221,8 @@ func xhpOf(v r3.Vec) xhp {
 		if d.IsZero() {
 			return new(big.Int)
 		}
-		return new(big.Int).Lsh(d.Mant(), uint(d.Exp()-base))
+		mant := d.MantInto(new(big.Int))
+		return mant.Lsh(mant, uint(d.Exp()-base))
 	}
 	return xhp{
 		x: coord(dx),
