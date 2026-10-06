@@ -153,10 +153,12 @@ jobs:
   # The packages outside the root run on two Ubuntu runners. macOS and Windows
   # run the whole suite without the race detector.
   #
-  # ./dynamics/ has a runner of its own. Its scenes run one after another and
-  # take about 6 minutes under -race on a fast runner and about 10 on a slow
-  # one, so the hardware a job lands on decides whether a 10m budget holds.
-  # The 30m budget covers the slow runner with room for more scenes.
+  # ./dynamics/ has a runner of its own. Its scenes run one after another, and
+  # their time under -race depends on the hardware the job lands on: the same
+  # tests take about twice as long on the slowest ubuntu-latest runners as on
+  # the fastest. The 30m -timeout covers the slowest runner with room for more
+  # scenes. The 600s soft budget (`budget:`) sits far below it, so growth in
+  # the scenes is reported long before the timeout would fail the job.
   test:
     strategy:
       fail-fast: false
@@ -172,6 +174,7 @@ jobs:
             shard: ""
             packages: "./dynamics/"
             timeout: "30m"
+            budget: "600"
           - os: macos-latest
             race: ""
             shard: ""
@@ -193,14 +196,33 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      # The CPU model and count tell which speed group of ubuntu-latest runner
+      # the dynamics job landed on, which its wall time depends on.
+      - name: Describe the runner CPU
+        if: matrix.packages == './dynamics/'
+        run: |
+          nproc
+          lscpu
+
       # Every package outside the root runs UNFILTERED on one shard, so the
       # shards together cover what an unsharded `go test ./...` covers.
       # ci_workflow_test.go fails when a package on disk is named by no shard.
       # -v prints each test's duration, so a slow run shows which tests grew.
+      # A runner with a `budget:` fails once the run takes longer than that
+      # many seconds, far below its -timeout; see the comment above the matrix.
       - name: Run tests outside the root package (Ubuntu shard)
         if: matrix.packages != ''
         shell: bash
-        run: go test ${{ matrix.race }} -v -timeout ${{ matrix.timeout }} ${{ matrix.packages }}
+        run: |
+          start=$SECONDS
+          go test ${{ matrix.race }} -v -timeout ${{ matrix.timeout }} ${{ matrix.packages }}
+          elapsed=$(( SECONDS - start ))
+          echo "${{ matrix.packages }} finished in ${elapsed}s"
+          budget='${{ matrix.budget }}'
+          if [ -n "$budget" ] && [ "$elapsed" -gt "$budget" ]; then
+            echo "::error::${{ matrix.packages }} took ${elapsed}s, over the ${budget}s budget; find the tests that grew in the -v durations above"
+            exit 1
+          fi
 
       # The whole-suite run is the non-Linux leg: no shard, and no package
       # operand of its own. The examples runner has a `packages:` operand, so
