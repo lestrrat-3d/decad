@@ -39,11 +39,11 @@ the resulting rigid-body motion. The [current support guide](docs/collision-v1-s
 names those paths, and the [box collision example](examples/dynamics_box_collision_example_test.go)
 runs an impact and reports the rebound.
 
-That Go program can be the CAD workflow in its own right. decad's modeling
-performance is still developing, so an Autodesk Fusion add-in or another CAD
-app may be more practical for performance-sensitive work. An agent can check
-the construction in decad before writing that add-in. The app may interpret
-the steps differently, so the agent checks the part it builds there.
+That Go program can be the CAD workflow in its own right. Matching the
+performance of Autodesk Fusion and other CAD apps is not decad's primary goal.
+For performance-sensitive work, an agent can check the construction in decad
+before implementing it as an add-in for one of those apps. The app may
+interpret the steps differently, so the agent checks the part it builds there.
 
 ## What it builds
 
