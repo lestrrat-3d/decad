@@ -64,10 +64,12 @@ const boolChordFactor = 2e-5
 // consume — a cap-loop chamfer body whose band has a corner this evaluator
 // cannot prove a line-line miter or an exactly tangent join, or a reflex
 // corner, so its mesh carries no proof of the volume it and the body it stands
-// for differ by (docs/tessellation-reach-design.md §7), or a Faceted operand whose own held
-// Bound is coarser than that pair tolerance (it cannot be re-tessellated finer
-// than its bound) — surfaces a plain ErrUnsupported before any contact is
-// examined: a capability limit, not a BooleanError. A cap-loop chamfer whose
+// for differ by (docs/tessellation-reach-design.md §7) — surfaces a plain
+// ErrUnsupported before any contact is examined: a capability limit, not a
+// BooleanError. So does an operand restating a held mesh (a Faceted boolean
+// result or a mitred sweep) whose facets where the pair meets carry bounds
+// coarser than that pair tolerance, refused after the contacts are classified
+// and before any facet is cut. A cap-loop chamfer whose
 // every band is a whole turn or joins only line-line miters and exactly tangent
 // corners — a filleted plate with drilled holes among them — is an ordinary
 // operand. A valid operand whose
@@ -76,19 +78,21 @@ const boolChordFactor = 2e-5
 // coarse-chording ErrDegenerate on that operand — a finer chord tolerance may
 // clear it — not a BooleanError.
 //
-// The Faceted-operand half of that limit is what bounds how far booleans CHAIN,
-// and it binds CONDITIONALLY: a result's held Bound is composed from the
-// operation that made it, and feeding that result straight back in as an
-// operand refuses exactly when the held Bound exceeds the chord tolerance the
-// next pair derives from its own diameter. A result whose held Bound stays
-// under that tolerance is an ordinary operand and chains, so what limits a
-// chain is the comparison at each step, not the fact that an operand came out
-// of a boolean. There is no caller-side tolerance to raise — §9 keeps the
-// booleans free of a tolerance parameter on purpose — so where the comparison
-// does refuse, it is geometry rather than an argument the caller got wrong. The
-// number itself is readable, not only printed in that refusal:
-// [Body.Tessellate] at any tolerance the faceted body already meets returns a
-// [Mesh] whose Bound is exactly the held bound the refusal names.
+// The held-mesh half of that limit is what bounds how far booleans CHAIN, and
+// it binds LOCALLY (docs/api-design.md §8 "The chain depth"): a result's bound
+// is composed per vertex from the operation that made it, and feeding that
+// result back in as an operand refuses exactly when a facet the new pair
+// meets, or comes within the tangency gate's slack of, carries a bound above
+// the chord tolerance that pair derives from its own diameter. Geometry the
+// pair does not touch never causes the refusal, so a result whose Bound
+// exceeds that tolerance in untouched regions is an ordinary operand and
+// chains. There is no caller-side tolerance to raise — §9 keeps the booleans
+// free of a tolerance parameter on purpose — so where the comparison does
+// refuse, it is geometry rather than an argument the caller got wrong. The
+// bounds are readable, not only printed in that refusal: each [Vertex], edge
+// and face of a Faceted body reports its own, and [Body.Tessellate] at any
+// tolerance the faceted body already meets returns a [Mesh] whose Bound is the
+// largest of them.
 //
 // It returns ctx.Err() unchanged when ctx is canceled before the document
 // commit.
@@ -113,20 +117,47 @@ func Intersect(ctx context.Context, a, b *Body) (*Body, error) {
 	return performBoolean(ctx, meshbool.OpIntersect, a, b)
 }
 
-// booleanOperandStaging restates a Faceted operand's held-bound refusal
-// (facetedBoundError) in the boolean's own terms (docs/api-design.md §8,
-// "The chain depth"): it names the operand, quotes the held bound and the
-// pair's chord tolerance, and says that a boolean takes no tolerance, since
-// the Tessellate wording's "retry with a tolerance" names an argument this
-// caller does not have. Every other tessellation refusal passes through
-// unchanged.
-func booleanOperandStaging(op meshbool.OperationKind, operand int, err error) error {
-	var held *facetedBoundError
+// booleanOperandStaging restates the local chain-depth gate's refusal
+// (meshbool.CoarseHeldContactError; docs/faceted-vertex-bounds-design.md §5)
+// in the boolean's own terms (docs/api-design.md §8, "The chain depth"): it
+// names the operand, quotes the bound of the held facets the pair touches and
+// the pair's chord tolerance, and says that a boolean takes no tolerance.
+// Every other error passes through unchanged.
+func booleanOperandStaging(op meshbool.OperationKind, err error) error {
+	var held *meshbool.CoarseHeldContactError
 	if !errors.As(err, &held) {
 		return err
 	}
-	return fmt.Errorf(`%w: %s's %s is a boolean result whose held mesh bound %s is coarser than this pair's chord tolerance %s; a boolean takes no tolerance, so the chain cannot continue from this operand: reshape the construction with fewer booleans over it, or draw the pair so the analytic prism path admits it (docs/api-design.md §8, "The chain depth")`,
-		ErrUnsupported, op, booleanOperandRole(op, operand), units.Millimeters(held.held), units.Millimeters(held.requested))
+	return meshbool.ExpectedBooleanForOperand(meshbool.BooleanExpectedStaging, held.Operand,
+		fmt.Errorf(`%w: %s's %s holds its mesh, where this pair meets it, only within a bound of %s, coarser than this pair's chord tolerance %s; a boolean takes no tolerance, so the chain cannot continue through that geometry: place the new contact away from the earlier booleans' rims, reshape the construction with fewer booleans over that region, or draw the pair so the analytic prism path admits it (docs/api-design.md §8, "The chain depth")`,
+			ErrUnsupported, op, booleanOperandRole(op, held.Operand), units.Millimeters(held.Bound), units.Millimeters(held.Tol)))
+}
+
+// heldFloorOf is the bound below which a RESTATING operand cannot give a mesh
+// (docs/faceted-vertex-bounds-design.md §5): a boolean result's meshBound or a
+// mitred sweep's delta. Its restatement returns the same vertices at any
+// tolerance at or above the floor. restating is false for every other
+// payload, whose request stays the pair tolerance and whose facets the local
+// gate does not read.
+func heldFloorOf(b *Body) (floor float64, restating bool) {
+	switch p := b.payload.(type) {
+	case facetedPayload:
+		return p.meshBound, true
+	case mitredSweepPayload:
+		return p.delta, true
+	default:
+		return 0, false
+	}
+}
+
+// tessellateBooleanOperand meshes one boolean operand at its own request
+// tolerance: the pair tolerance, raised to a restating operand's held floor
+// so that the restatement never refuses (docs/faceted-vertex-bounds-design.md
+// §5). It reports whether the operand restates, which arms the local gate.
+func tessellateBooleanOperand(ctx context.Context, b *Body, tolMM float64) (*Mesh, bool, error) {
+	floor, restating := heldFloorOf(b)
+	m, err := tessellateContext(ctx, b, units.Millimeters(max(tolMM, floor)), VerifyAll)
+	return m, restating, err
 }
 
 // booleanOperandRole names an operand the way the public signatures do: Cut's
@@ -320,11 +351,12 @@ func evaluateAnalyticIntersect(ctx context.Context, a, b *Body) (*Body, bool, er
 // welded-away facet, a trim amplification past the pair diameter), are
 // BooleanUnsupportedContact — the model is real and the refusal is the
 // evaluator's contact reach, so the wrapped sentinel is ErrUnsupported, never
-// ErrDegenerate. A capability/staging limit reached BEFORE any contact is
-// examined — an operand no boolean may consume (a cap-loop chamfer body whose
+// ErrDegenerate. A capability/staging limit of one operand — an operand no
+// boolean may consume (a cap-loop chamfer body whose
 // band has a mitered circular wall or a reflex corner, so its mesh proves no
-// occupied volume, or a Faceted operand coarser than the pair tolerance) — is NOT a contact refusal and passes through unwrapped as a plain
-// ErrUnsupported, not a BooleanError. A
+// occupied volume), or a held-mesh operand whose facets where the pair meets
+// are coarser than the pair tolerance — is NOT a contact refusal and passes
+// through unwrapped as a plain ErrUnsupported, not a BooleanError. A
 // coarse-chording tessellation refusal is a retryable ErrDegenerate on a valid
 // operand and likewise passes through unwrapped. An ordinary ErrBooleanFailed
 // with no expected-outcome tag is an internal invariant break:
@@ -390,7 +422,7 @@ func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 	// every proof a mesh can carry, and the one-entry cache keys on the level,
 	// so a caller's own earlier unverified mesh at this same internal tolerance
 	// is a different entry and is never handed back here.
-	ma, err := tessellateContext(ctx, a, units.Millimeters(tolMM), VerifyAll)
+	ma, restatingA, err := tessellateBooleanOperand(ctx, a, tolMM)
 	if err != nil {
 		var coarse *tessellationExpectedError
 		if errors.As(err, &coarse) {
@@ -399,14 +431,14 @@ func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 			// A tessellation ErrUnsupported is a capability/staging limit on the
 			// operand itself, reached before any contact is examined — never a
 			// contact refusal (see meshbool.BooleanExpectedStaging).
-			err = meshbool.ExpectedBooleanForOperand(meshbool.BooleanExpectedStaging, 0, booleanOperandStaging(op, 0, err))
+			err = meshbool.ExpectedBooleanForOperand(meshbool.BooleanExpectedStaging, 0, err)
 		}
 		return booleanEvaluation{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
-	mb, err := tessellateContext(ctx, b, units.Millimeters(tolMM), VerifyAll)
+	mb, restatingB, err := tessellateBooleanOperand(ctx, b, tolMM)
 	if err != nil {
 		var coarse *tessellationExpectedError
 		if errors.As(err, &coarse) {
@@ -415,7 +447,7 @@ func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 			// A tessellation ErrUnsupported is a capability/staging limit on the
 			// operand itself, reached before any contact is examined — never a
 			// contact refusal (see meshbool.BooleanExpectedStaging).
-			err = meshbool.ExpectedBooleanForOperand(meshbool.BooleanExpectedStaging, 1, booleanOperandStaging(op, 1, err))
+			err = meshbool.ExpectedBooleanForOperand(meshbool.BooleanExpectedStaging, 1, err)
 		}
 		return booleanEvaluation{}, err
 	}
@@ -465,6 +497,15 @@ func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 		}
 		return booleanEvaluation{}, err
 	}
+	// A restating operand's facets where the pair meets must hold within the
+	// pair tolerance; the gate reads them on the contact classification below
+	// (docs/faceted-vertex-bounds-design.md §5). Any other operand is ungated.
+	if restatingA {
+		bmA.Gate = tolMM
+	}
+	if restatingB {
+		bmB.Gate = tolMM
+	}
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -473,6 +514,7 @@ func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 	// returns (boolean_mesh.go, meshbool.ContactMemo).
 	memo := meshbool.NewContactMemo(bmA, bmB)
 	if err := refuseUndecidableProximity(ctx, ma, mb, bmA, bmB, memo); err != nil {
+		err = booleanOperandStaging(op, err)
 		if errors.Is(err, ErrUnsupported) {
 			err = meshbool.ExpectedBoolean(meshbool.BooleanExpectedContact, err)
 		}
@@ -483,7 +525,7 @@ func evaluateBoolean(ctx context.Context, op meshbool.OperationKind, a, b *Body)
 	}
 	kept, maxRim, err := meshbool.MeshBoolean(ctx, op, bmA, bmB, memo)
 	if err != nil {
-		return booleanEvaluation{}, err
+		return booleanEvaluation{}, booleanOperandStaging(op, err)
 	}
 	if len(kept) == 0 {
 		return booleanEvaluation{}, meshbool.ExpectedBoolean(meshbool.BooleanExpectedEmpty,
@@ -799,6 +841,15 @@ func facesNearMiss(ctx context.Context, bmA *meshbool.BoolMesh, fis []int, bmB *
 	}
 	if len(nc.CloseA) == 0 {
 		return false, nil // the facets stay clear of each other: nothing hides
+	}
+	// A restating operand's facets within the slack are where the pair meets
+	// it, so the local chain-depth gate reads them before any depth question
+	// is asked (docs/faceted-vertex-bounds-design.md §5).
+	if err := meshbool.RefuseCoarseHeldContact(bmA, 0, nc.CloseA); err != nil {
+		return false, err
+	}
+	if err := meshbool.RefuseCoarseHeldContact(bmB, 1, nc.CloseB); err != nil {
+		return false, err
 	}
 	deep, err := provenDepthExceeds(ctx, bmA, nc.CloseA, bmB, nc.CloseB, nc.Spans, slack)
 	if err != nil {

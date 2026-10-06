@@ -35,6 +35,12 @@ type BoolMesh struct {
 	// (§3).
 	VertexBound []float64
 	FacetBound  []float64
+	// Gate is the pair's chord tolerance when this operand restates a held
+	// mesh (a boolean result or a mitred sweep), and zero for every other
+	// operand. A gated operand's facets that meet the other operand, or come
+	// within the pre-pass slack of it, must carry a FacetBound no larger than
+	// Gate (docs/faceted-vertex-bounds-design.md §5, RefuseCoarseHeldContact).
+	Gate float64
 	// owner maps each directed mesh edge to the facet that walks it, so the
 	// twin across a facet edge is one lookup. The graze-or-crossing call
 	// needs it: whether an in-plane edge grazes the other operand or crosses
@@ -835,6 +841,9 @@ func MeshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 	// to the largest RimBound over the facet pairs whose segment ends there.
 	rims := map[string]float64{}
 	maxRim := 0.0
+	// touchedA and touchedB are the facets of each operand that meet the
+	// other, which the held-mesh gate reads once classification is done.
+	var touchedA, touchedB []int
 	work := 0
 	contacts := NewContactBatchExecutor(ctx, ma, mb, memo, ContactWorkers(ctx), func(pair ContactPair, c TriContact) error {
 		i, j := pair.I, pair.J
@@ -846,6 +855,8 @@ func MeshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 		if c.Kind == ContactNone {
 			return nil
 		}
+		touchedA = append(touchedA, i)
+		touchedB = append(touchedB, j)
 		if c.Kind == ContactPoint {
 			pointTouches = append(pointTouches, c.P0)
 			return nil
@@ -894,6 +905,14 @@ func MeshBoolean(ctx context.Context, op OperationKind, ma, mb *BoolMesh, memo *
 		}
 	}
 	if err := contacts.Done(); err != nil {
+		return nil, 0, err
+	}
+	// The held-mesh gate runs on the classification's own answer and before
+	// any facet is cut (docs/faceted-vertex-bounds-design.md §5).
+	if err := RefuseCoarseHeldContact(ma, 0, touchedA); err != nil {
+		return nil, 0, err
+	}
+	if err := RefuseCoarseHeldContact(mb, 1, touchedB); err != nil {
 		return nil, 0, err
 	}
 

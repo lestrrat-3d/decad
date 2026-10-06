@@ -659,7 +659,12 @@ its held vertices and polygons; it NEVER fits or refines them.
 - First populate every face's `sourceBound` from the complete inherited
   certificate, using global `Delta` for each missing or incompletely composed
   face, then set `facetedBound = max(sourceBound(face))`.
-- Requested `tol < facetedBound` → `ErrUnsupported`.
+- Requested `tol < facetedBound` → `ErrUnsupported`. The boolean never
+  reaches this refusal: it asks a restating operand for its mesh at the
+  pair's chord tolerance raised to the payload's held floor (`meshBound`, or
+  a mitred sweep's `delta`), and compares the bounds of the facets the pair
+  touches after classification instead (§11 step 5,
+  `docs/faceted-vertex-bounds-design.md` §5).
 - Otherwise return the held connectivity and `facetedBound`. Retain the
   certificate's global `Delta` privately for fallback and later composition;
   it is not a second public `Bound` rule.
@@ -1091,8 +1096,12 @@ the same composition.
 
 Boolean composition then stays evaluator §9's:
 
-1. Tessellate both operands at the evaluator's internal tolerance and at
-   `VerifyAll`, passed explicitly rather than taken from the default.
+1. Tessellate both operands at the evaluator's internal tolerance `tol` and
+   at `VerifyAll`, passed explicitly rather than taken from the default. An
+   operand that restates a held mesh (a boolean result or a mitred sweep) is
+   asked at `max(tol, heldFloor)`, `heldFloor` its payload's `meshBound` or
+   `delta`, which its restatement always meets (§7); a chorded analytic
+   operand is asked at `tol`.
 2. Require a complete `volSymDiff` proof from each mesh.
 3. Use `sourceBound(face)` for the hidden-tangency pre-pass. For a faceted
    operand this is its inherited certified face displacement, or its global
@@ -1110,14 +1119,22 @@ Boolean composition then stays evaluator §9's:
    one. A tangency without crossing has no positive-bound certificate and stays
    refused. Only a zero-bound pair may pass directly to held-facet predicates as
    exact geometry.
-5. Run the exact-predicate mesh boolean.
+5. Run the exact-predicate mesh boolean. After its contact classification
+   and before any facet is cut, refuse with `ErrUnsupported` when a facet of
+   a restating operand that meets the other operand, or that step 4 finds
+   within its slack, carries `δ(t) > tol`; the refusal names the operand, the
+   touched bound and `tol` (`docs/faceted-vertex-bounds-design.md` §5, core §8
+   "The chain depth"). The gate compares two proven numbers and admits
+   nothing. A chorded analytic operand is not gated.
 6. Bound the result volume by `volSymDiffA + volSymDiffB` plus final weld
    rounding.
 7. Bound each new rim vertex by `(δ(t_A) + δ(t_B))/sin θ` of the facet pair
    whose contact segment ends there, `δ(t)` the largest per-vertex bound over
    that facet's corners and `θ` that pair's own crossing angle
    (`docs/faceted-vertex-bounds-design.md` §3.2); this remains separate from
-   volume error. A rim bound that is not finite, or reaches the pair diameter,
+   volume error. Step 5's gate holds a restating operand's `δ(t)` at most
+   `tol`, so a rim between two facets within `tol` carries at most
+   `2·tol/sin θ` before its weld. A rim bound that is not finite, or reaches the pair diameter,
    refuses the operation.
 8. Measure the final weld displacement from every exact stitched result vertex
    to its stored binary64 vertex and upward-round its addition to that
@@ -1142,9 +1159,11 @@ step 7's bound, and a vertex the cutter or the conforming pass places on an
 operand facet takes that facet's bound. Add each vertex's own weld (step 8);
 zero is allowed only when its coordinates are exact. The payload records the
 result per vertex, and its global `meshBound` is the largest facet bound, the
-largest of each facet's corners. Thus every faceted operand's per-vertex
-bound or `sourceBound`, and every final weld displacement, flows into the next
-result's bounds. This makes the next boolean's hidden-tangency
+largest of each facet's corners. `meshBound` may exceed the next pair's
+chord tolerance: the result is still an operand, and only step 5's gate on
+the facets that pair touches can refuse it. Thus every faceted operand's
+per-vertex bound or `sourceBound`, and every final weld displacement, flows
+into the next result's bounds. This makes the next boolean's hidden-tangency
 pre-pass sound without reconstructing analytic identity.
 
 ## 12. Refusals

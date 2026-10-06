@@ -153,6 +153,7 @@
 1	0.07	TestBlindBoreThenCircularThroughHoles
 1	0.01	TestBlindPocketPlacedAndVerified
 1	1.24	TestBooleanBoundComposition
+1	4.26	TestBooleanChainOfConesContinuesPastEachJoint
 1	1.08	TestBooleanRefusalConcaveHoleSpuriousContact
 1	0.06	TestCapBlendBooleanChargesTheMiterDisplacement
 1	0.01	TestCapBlendBooleanReceiverRefusedSX9
@@ -302,7 +303,6 @@
 2	0.00	TestBodyPatchTableR
 2	0.41	TestBooleanAreaBoundsCoverShallowCrossing
 2	2.74	TestBooleanBoundSoundnessAxisAligned
-2	1.91	TestBooleanChainDepthRefusalNamesOperandAndTakesNoTolerance
 2	0.40	TestBooleanVerifyUsesProvenToleranceBound
 2	0.00	TestBox
 2	0.00	TestBrokenNURBSKnotVectorRefuses
@@ -1160,6 +1160,7 @@
 5	0.01	TestBodyPatchReproducesThroughPlacement
 5	1.84	TestBooleanAlgebraicIdentities
 5	4.43	TestBooleanBoundSoundnessRotated
+5	9.79	TestBooleanChainDepthGateReadsOnlyTheTouchedRims
 5	2.70	TestBooleanCutWasherThroughDiscKeepsStandingPost
 5	4.49	TestBooleanRefusalSoundnessTangentCylinder
 5	0.08	TestBooleanRejections

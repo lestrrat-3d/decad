@@ -409,7 +409,7 @@ func TestVerifyUnsupportedOverlapStaysSuspectAndReadOnly(t *testing.T) {
 	require.Nil(t, d.Body)
 	require.NotNil(t, d.Pair, `an unsupported pair names its pair`)
 	require.Contains(t, d.Message, `first operand`, `the message names the operand that failed tessellation`)
-	require.Contains(t, d.Message, "tessellation refused at the chord tolerance", "the message names the real cause")
+	require.Contains(t, d.Message, "its tessellation refused that tolerance", "the message names the real cause")
 
 	_, undecided := findDiagnostic(report.Diagnostics, decad.DiagUndecidedPair)
 	require.False(t, undecided, `a staged revolve operand is not an undecided partition`)

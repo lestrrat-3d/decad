@@ -71,9 +71,10 @@ func TestFacetedAreaBoundCompositionRoundsOutward(t *testing.T) {
 // first n branches unioned in: a 16-gon mitred trunk of circumradius 5 mm
 // along (0,0,0)→(0,0,30)→(3,0,60), scaled 1 then 0.9, and tapering 16-gon
 // mitred branches tilted 40° off the trunk axis, each root 2.6 mm out and
-// 1.1 mm above the last, turned by the golden angle. It returns the trunk's
-// own tessellation beside the result.
-func vertexBoundTree(t *testing.T, n int) (*Mesh, *Body) {
+// 1.1 mm above the last, turned by the golden angle. each, when not nil, sees
+// every union's operands before the union consumes them. It returns the
+// trunk's own tessellation beside the result.
+func vertexBoundTree(t *testing.T, n int, each func(tree, branch *Body)) (*Mesh, *Body) {
 	t.Helper()
 	path := func(pts ...r3.Vec) *Path {
 		segs := make([]PathSegment, 0, len(pts)-1)
@@ -111,6 +112,9 @@ func vertexBoundTree(t *testing.T, n int) (*Mesh, *Body) {
 		require.NoError(t, err)
 		branch, err := unit.Placed(t.Context(), xf)
 		require.NoError(t, err)
+		if each != nil {
+			each(tree, branch)
+		}
 		tree, err = Union(t.Context(), tree, branch)
 		require.NoError(t, err)
 	}
@@ -126,7 +130,7 @@ func vertexBoundTree(t *testing.T, n int) (*Mesh, *Body) {
 // mesh's own vertices and record.
 func TestFacetedReadingsReportEachVertexsOwnBound(t *testing.T) {
 	t.Parallel()
-	trunk, body := vertexBoundTree(t, 3)
+	trunk, body := vertexBoundTree(t, 3, nil)
 	fp, ok := body.payload.(facetedPayload)
 	require.True(t, ok)
 	trunkBeta, err := trunk.vertexBounds()

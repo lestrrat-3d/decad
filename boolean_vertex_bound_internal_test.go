@@ -312,3 +312,119 @@ func TestBooleanVertexBoundsChargeEachRimItsWeld(t *testing.T) {
 	require.Positive(t, inexact, `some rim vertex rounds inexactly`)
 	require.Positive(t, f.result.meshBound)
 }
+
+// TestHeldGateReadsFacetsWithinThePrePassSlack is docs/faceted-vertex-bounds-
+// design.md §5's gate on the pre-pass's half: two tetrahedra face each other
+// across a 1e-3 mm gap, so no facet meets the other operand, and every vertex
+// of the first carries a 1e-2 mm bound. Within the 1.5e-2 mm slack a gated
+// first operand whose tolerance is finer than that bound is refused by the
+// gate, quoting the bound and the tolerance; a tolerance above it, or an
+// ungated operand, leaves the near-miss to the pre-pass's own refusal.
+// Shown to fail: with facesNearMiss's gate calls removed, the gated case
+// returned the near-miss verdict and no CoarseHeldContactError.
+func TestHeldGateReadsFacetsWithinThePrePassSlack(t *testing.T) {
+	t.Parallel()
+	const gap, beta, slack = 1e-3, 1e-2, 1.5e-2
+	tetra := func(mirror, bound float64) *meshbool.BoolMesh {
+		verts := []r3.Vec{
+			r3.NewVec(0, 0, 0), r3.NewVec(mirror, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1),
+		}
+		tris := [][3]int{{0, 2, 1}, {0, 1, 3}, {0, 3, 2}, {1, 2, 3}}
+		if mirror < 0 {
+			for i := range verts {
+				verts[i].X -= gap
+			}
+			for i, tr := range tris {
+				tris[i] = [3]int{tr[0], tr[2], tr[1]}
+			}
+		}
+		m := &Mesh{vertices: verts, triangles: tris, source: make([]*Face, len(tris))}
+		m.setVertexBounds([]float64{bound, bound, bound, bound})
+		bm, err := prepBoolMeshContext(t.Context(), m, make([]int, len(tris)))
+		require.NoError(t, err)
+		return bm
+	}
+	all := []int{0, 1, 2, 3}
+	testcases := []struct {
+		name string
+		gate float64
+	}{
+		{name: "a tolerance finer than the bound refuses", gate: 5e-3},
+		{name: "a tolerance above the bound passes the gate", gate: 2e-2},
+		{name: "an ungated operand passes the gate", gate: 0},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			bmA, bmB := tetra(1, beta), tetra(-1, 0)
+			bmA.Gate = tc.gate
+			near, err := facesNearMiss(t.Context(), bmA, all, bmB, all, slack, meshbool.NewContactMemo(bmA, bmB))
+			if tc.gate > 0 && tc.gate < beta {
+				var coarse *meshbool.CoarseHeldContactError
+				require.ErrorAs(t, err, &coarse)
+				require.Equal(t, meshbool.CoarseHeldContactError{Operand: 0, Bound: beta, Tol: tc.gate}, *coarse)
+				return
+			}
+			require.NoError(t, err)
+			require.True(t, near, "the facets come within the slack without meeting, which the pre-pass refuses")
+		})
+	}
+}
+
+// TestHeldGateCertifiesEachUnionsRimCeiling is docs/faceted-vertex-bounds-
+// design.md §5's certificate over twenty unions of §6's tree: before each
+// union it prepares both operands the way evaluateBoolean does, at their own
+// request tolerances, and walks every facet pair the classification reports
+// as meeting. Each meeting facet holds a bound within the pair's chord
+// tolerance, and every contact segment's rim bound is at most 2·tol/sin θ of
+// its own facet pair, the ceiling a rim of two freshly chorded operands has.
+// Every union then succeeds.
+func TestHeldGateCertifiesEachUnionsRimCeiling(t *testing.T) {
+	t.Parallel()
+	unions := 0
+	_, body := vertexBoundTree(t, 20, func(tree, branch *Body) {
+		ctx := t.Context()
+		tol, _, err := pairChordTolerance(ctx, tree, branch)
+		require.NoError(t, err)
+		ma, restatingA, err := tessellateBooleanOperand(ctx, tree, tol)
+		require.NoError(t, err)
+		mb, restatingB, err := tessellateBooleanOperand(ctx, branch, tol)
+		require.NoError(t, err)
+		require.True(t, restatingA && restatingB, `the tree and its mitred branch both restate held meshes`)
+		bmA, err := prepBoolMeshContext(ctx, ma, make([]int, len(ma.triangles)))
+		require.NoError(t, err)
+		bmB, err := prepBoolMeshContext(ctx, mb, make([]int, len(mb.triangles)))
+		require.NoError(t, err)
+		segments := 0
+		contacts := meshbool.NewContactBatchExecutor(ctx, bmA, bmB, meshbool.NewContactMemo(bmA, bmB), meshbool.ContactWorkers(ctx),
+			func(pair meshbool.ContactPair, c meshbool.TriContact) error {
+				if c.Kind == meshbool.ContactNone {
+					return nil
+				}
+				i, j := pair.I, pair.J
+				require.LessOrEqual(t, bmA.FacetBound[i], tol, `union %d: a meeting tree facet holds within the pair tolerance`, unions+1)
+				require.LessOrEqual(t, bmB.FacetBound[j], tol, `union %d: a meeting branch facet holds within the pair tolerance`, unions+1)
+				if c.Kind != meshbool.ContactSegment {
+					return nil
+				}
+				segments++
+				ceiling := proofbound.DivUpper(proofbound.ProductUpper(2, tol), meshbool.SinLowerBound(c.Sin2))
+				require.LessOrEqual(t, meshbool.RimBound(bmA.FacetBound[i], bmB.FacetBound[j], c.Sin2), ceiling,
+					`union %d: a rim stays under 2·tol/sin θ of its own pair`, unions+1)
+				return nil
+			})
+		for i := range bmA.Tris {
+			for j := range bmB.Tris {
+				if meshbool.BoxesOverlap(bmA.Boxes[i], bmB.Boxes[j]) {
+					require.NoError(t, contacts.Add(i, j))
+				}
+			}
+		}
+		require.NoError(t, contacts.Done())
+		require.Positive(t, segments, `union %d makes rims`, unions+1)
+		unions++
+	})
+	require.Equal(t, 20, unions)
+	_, ok := body.payload.(facetedPayload)
+	require.True(t, ok)
+}

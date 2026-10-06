@@ -247,14 +247,14 @@ func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
 			expected:    &meshbool.BooleanExpectedError{Kind: meshbool.BooleanExpectedStaging, Operand: 0},
 			wantOutcome: interferenceUnsupportedPayloadFirst,
 			wantCode:    DiagUnsupportedPairPayload,
-			wantMessage: []string{"first operand", "tessellation refused at the chord tolerance"},
+			wantMessage: []string{"first operand", "its tessellation refused that tolerance", "held facets where the pair meets are coarser"},
 		},
 		{
 			name:        "second payload",
 			expected:    &meshbool.BooleanExpectedError{Kind: meshbool.BooleanExpectedStaging, Operand: 1},
 			wantOutcome: interferenceUnsupportedPayloadSecond,
 			wantCode:    DiagUnsupportedPairPayload,
-			wantMessage: []string{"second operand", "tessellation refused at the chord tolerance"},
+			wantMessage: []string{"second operand", "its tessellation refused that tolerance", "held facets where the pair meets are coarser"},
 		},
 		{
 			name:        "first operand volume proof",

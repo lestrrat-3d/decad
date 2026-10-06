@@ -3,6 +3,7 @@ package meshbool
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 
@@ -10,6 +11,7 @@ import (
 
 	"github.com/lestrrat-3d/decad/internal/proofbound"
 
+	"github.com/lestrrat-3d/decad/internal/decaderr"
 	"github.com/lestrrat-3d/r3"
 )
 
@@ -28,14 +30,14 @@ const (
 	// diameter (RimBound, refused by the root). Like a contact refusal the model is real and the limit
 	// is the evaluator's reach, so it too maps to BooleanUnsupportedContact.
 	BooleanExpectedUnsupported
-	// BooleanExpectedStaging is a capability/staging limit reached BEFORE any
-	// contact is examined: an operand whose mesh carries no occupied-volume proof
-	// (a cap-loop chamfer body whose band capBlendOccupiedVolumeAdmission does
-	// not admit), or a Faceted operand whose held bound is coarser
-	// than the pair tolerance. No contact was ever inspected, so it is NOT a
-	// contact refusal —
-	// it passes through the public boundary as a plain ErrUnsupported, never a
-	// BooleanError.
+	// BooleanExpectedStaging is a capability/staging limit of one operand: a
+	// mesh the operand cannot give (a tessellation ErrUnsupported reached
+	// before any contact is examined), or a restating operand whose facets
+	// where the pair meets hold bounds coarser than the pair tolerance
+	// (RefuseCoarseHeldContact, which runs on the contact classification but
+	// before any facet is cut). The limit is the operand's held geometry, not
+	// the contact's shape, so it is NOT a contact refusal — it passes through
+	// the public boundary as a plain ErrUnsupported, never a BooleanError.
 	BooleanExpectedStaging
 	BooleanExpectedCoarseTessellation
 	// BooleanExpectedVolumeProof is BooleanExpectedStaging's sibling for the one
@@ -73,6 +75,43 @@ func ExpectedBooleanForOperand(kind BooleanExpectedKind, operand int, err error)
 		return err
 	}
 	return &BooleanExpectedError{Kind: kind, Operand: operand, Err: err}
+}
+
+// CoarseHeldContactError is RefuseCoarseHeldContact's refusal: operand
+// Operand's facets where the pair meets carry a bound of Bound, coarser than
+// the pair's chord tolerance Tol. The root restates it in the boolean's own
+// terms (boolean.go, booleanOperandStaging).
+type CoarseHeldContactError struct {
+	Operand    int
+	Bound, Tol float64
+}
+
+func (e *CoarseHeldContactError) Error() string {
+	return fmt.Sprintf(`%v: operand %d's held facets where the pair meets carry a bound of %g mm, coarser than the pair's chord tolerance %g mm`,
+		decaderr.ErrUnsupported, e.Operand, e.Bound, e.Tol)
+}
+
+func (e *CoarseHeldContactError) Unwrap() error { return decaderr.ErrUnsupported }
+
+// RefuseCoarseHeldContact is docs/faceted-vertex-bounds-design.md §5's local
+// chain-depth gate: it refuses when any of the listed facets of a gated
+// operand (m.Gate > 0) carries a facet bound above m.Gate, the pair's chord
+// tolerance, and quotes the largest such bound. An ungated operand passes.
+// Reject-only: it compares two proven numbers and admits nothing; a facet it
+// passes enters the composition with its own bound.
+func RefuseCoarseHeldContact(m *BoolMesh, operand int, facets []int) error {
+	if m.Gate <= 0 {
+		return nil
+	}
+	worst := 0.0
+	for _, f := range facets {
+		worst = max(worst, m.FacetBound[f])
+	}
+	if worst <= m.Gate {
+		return nil
+	}
+	return ExpectedBooleanForOperand(BooleanExpectedStaging, operand,
+		&CoarseHeldContactError{Operand: operand, Bound: worst, Tol: m.Gate})
 }
 
 // NearContacts is what GatherNearContacts collects for one face pair: the

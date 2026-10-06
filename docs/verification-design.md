@@ -372,8 +372,9 @@ const (
     DiagUndecidedInterference
     // DiagUnsupportedPairPayload — one named operand could not enter the
     // read-only intersection: either its mesh carries no occupied-volume
-    // proof, or its own tessellation refused at the chord tolerance the
-    // check derives from the pair. The message names which. Reading
+    // proof, or at the chord tolerance the check derives from the pair its
+    // own tessellation refused or its held facets where the pair meets are
+    // coarser than that tolerance. The message names which. Reading
     // ReadingNone. Suspect.
     DiagUnsupportedPairPayload
     // DiagUnsupportedPairContact — the pair reaches a contact or near-contact
