@@ -1720,7 +1720,7 @@
 4	0.07	TestSweepCompositePlacedCopyKeepsSourceReplay
 4	0.00	TestSweepContextCancellationLeavesDocumentUnchanged
 4	0.00	TestSweepDenotationHalfTurnExcess
-4	0.00	TestSweepLineStagesTessellation
+4	0.00	TestSweepLineStagesModify
 4	0.00	TestSweepLineTiltedFrameCarriesEndpointGap
 4	0.00	TestSweepPairEqualSpinDepartsFromSourceFace
 4	0.01	TestSweepPairBoundedFacetedFloorStrictClearReplay
@@ -2173,3 +2173,6 @@
 5	0.01	TestSweepPairRestSpeedValidation
 5	0.10	TestSweepPairRestedVertexHoldsTwoSided
 5	0.02	TestSweepPairPerVertexCurvature
+4	0.01	TestSweepStraightTessellatesAsItsPrism
+4	0.00	TestSweepTessellationStagesEveryOtherReduction
+4	0.01	TestSweepStraightIsABooleanOperand

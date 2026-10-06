@@ -121,7 +121,10 @@ func TestSweepLineBuildsVerifiesAndReevaluatesPlacement(t *testing.T) {
 	require.Equal(t, decad.ValidityValid, placedBodyReport.Validity.Outcome)
 }
 
-func TestSweepLineStagesTessellation(t *testing.T) {
+// TestSweepLineStagesModify is docs/sweep-design.md Table D row D8: a modify
+// operation has no sweepPayload receiver, so it refuses and leaves the
+// document unchanged.
+func TestSweepLineStagesModify(t *testing.T) {
 	t.Parallel()
 
 	s, profile := plateSketch(t)
@@ -134,8 +137,6 @@ func TestSweepLineStagesTessellation(t *testing.T) {
 	body, err := doc.Sweep(t.Context(), s, profile, path)
 	require.NoError(t, err)
 
-	_, err = body.Tessellate(t.Context(), units.Millimeters(0.1))
-	require.ErrorIs(t, err, decad.ErrUnsupported)
 	_, err = body.Fillet(t.Context(), decad.Edges().AtLeast(1), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Equal(t, []*decad.Body{body}, doc.Bodies())

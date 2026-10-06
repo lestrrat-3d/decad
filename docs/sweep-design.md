@@ -397,9 +397,9 @@ withholds the reference and prevents a false `Sound` report.
 | D | Consumer | Status |
 |---|---|---|
 | **D1** | structural `Verify` + tolerance gate | lands with Sweep. For a solid, the construction and global audit prove validity and all four readings are judged. For a `WithSurfaceResult()` sheet, only the one-span straight reduction carries an equivalent construction proof (it IS a prismPayload build, docs/surface-design.md §9.1); the arc reduction and every composite sheet read `Suspect` — the arc build runs no crossing audit of its own, and the composite build's own boundary/vertex-link audit proves assembled topology, not geometric non-self-intersection |
-| **D2** | `Tessellate` / STL / OBJ | staged until the shared-span tessellator publishes complete source, area, and boundary proofs |
-| **D3** | mesh booleans | staged until D2 also publishes `volSymDiff` with `symDiffOK == true` |
-| **D4** | interference | bounds-disjoint pairs work immediately. Other pairs stay `Suspect` until D3 or a sweep analytic adapter lands |
+| **D2** | `Tessellate` / STL / OBJ | a one-span straight solid sweep (no spans, no arc, no surface result) tessellates as the prism it reduced to: its payload's `prism` is the `prismPayload` `evalPrismContext` built, so the prism path chords it and its mesh, `Bound` and every proof are that prism's, with each wall read under the span-prefixed role `side(0,i,j)` that `prefixSweepSpanZeroRole` minted (`tessellate.go`). The arc reduction, every composite path and every surface result stay staged until the shared-span tessellator publishes complete source, area, and boundary proofs |
+| **D3** | mesh booleans | the one-span straight solid sweep is an operand: its D2 mesh carries the prism's `volSymDiff` with `symDiffOK == true`. Every other sweep stays staged until D2 also publishes that proof for it |
+| **D4** | interference | bounds-disjoint pairs work immediately, and the one-span straight solid sweep reaches the mesh intersection D3 admits. Other pairs stay `Suspect` until D3 or a sweep analytic adapter lands |
 | **D5** | clearance | box separation may settle the partition, but `WithClearances` stays `Suspect` until a sweep boundary adapter lands |
 | **D6** | `Wall`, `Undercut`, `ConcaveRadius` | `Unavailable` with `DiagUnsupportedSurveyPayload` until non-constant-section proofs land |
 | **D7** | `Placed`, `Duplicate`, `PlacedCopy` | re-evaluates the payload under the composed rigid motion and reruns the global audit; every displacement and measurement is recomputed |
