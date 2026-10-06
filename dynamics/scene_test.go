@@ -349,7 +349,8 @@ func discreteFreeFall(drop float64) *big.Rat {
 // 80 steps, where the rotating sweeps dominate, and take longer on the CI
 // runners than the dynamics package's ten-minute test budget allows. CI
 // therefore runs it in the _gallery module (TestTumbleTimeline there, and
-// the smoke render), and TestTumbleScene here runs it only when
+// TestTumbleClip, which also renders its first frame), and TestTumbleScene
+// here runs it only when
 // DECAD_TUMBLE_FULL is set. TestTumbleSceneSubset runs four of its bodies,
 // one of each shape family, through the same assertions in 128 steps, about
 // fifteen seconds on an amd64 workstation, on the legs without the race
@@ -810,8 +811,8 @@ func TestTumbleSceneSubset(t *testing.T) {
 // three impact steps take about five seconds each, and every resting step
 // about 0.2 s for its 49 lifted base vertices. TestPartsBinScene therefore
 // runs it only when DECAD_PARTSBIN_FULL is set, and CI runs it in the
-// _gallery module (TestPartsBinTimeline there, and the smoke render), as
-// tumble's whole scene runs. TestPartsBinSceneSubset runs every body but the
+// _gallery module (TestPartsBinTimeline there, and TestPartsBinClip, which
+// also renders its first frame), as tumble's whole scene runs. TestPartsBinSceneSubset runs every body but the
 // bottle through the same assertions for 0.125 s, by which each dropped body
 // rests: about three seconds, and ten under the race detector. The bottle's
 // drop onto the same tray at the same residuals is

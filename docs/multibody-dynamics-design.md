@@ -2237,8 +2237,11 @@ frame alone at `160×90`. The gallery module stays the only module that imports 
 
 ### 11.3 Scene tests
 
-`_gallery/dynamics_clip_test.go` runs each exit scene's timeline (without rendering) and asserts the
-§2 exit criteria on the trace: certified end time, final poses, event kinds and times, conservation.
+`_gallery/dynamics_clip_test.go` runs each exit scene's timeline, built through the `dynamics` subcommand's
+scene map, and asserts the §2 exit criteria on the trace: certified end time, final poses, event kinds and
+times, conservation. It films each timeline and renders its first frame at the `-smoke` size. The scenes'
+tests run in parallel, so CI's gallery job waits on the slowest scene alone, and the job smoke-renders only
+stack-and-drop through the subcommand, whose path is the same for every scene.
 `dynamics/scene_test.go` asserts the same scene from inside the module so CI runs it without the
 gallery's toolchain. Both use the real producers end to end.
 
@@ -2750,7 +2753,7 @@ PRs 14b, 14c and 14e touch disjoint files and may land in any order; PR 14d foll
   runners: `TestTumbleScene` runs it under
   `DECAD_TUMBLE_FULL`, `TestTumbleSceneSubset` runs the `30°` box, the prism, the wedge and the tetrahedron
   for `0.5 s` through the same assertions on the legs without the race detector, and the `_gallery` job
-  runs the whole scene in its tests and its smoke render.
+  runs the whole scene in its tests, which also render its first frame.
 
 ### PR 16 (Phase 3) — third-order section moments and the general revolve
 
@@ -3056,8 +3059,8 @@ scene's sweep; PRs 20c and 20d follow 20b; PR 20g follows 20c.
   takes about four minutes on an amd64 workstation, nearly all of it in the bottle (each of its three impact
   steps about `5 s`, each resting step about `0.2 s`): `TestPartsBinScene` runs it under
   `DECAD_PARTSBIN_FULL`, `TestPartsBinSceneSubset` runs every body but the bottle for `0.125 s` (about `3 s`,
-  `10 s` under the race detector), and the `_gallery` job runs the whole scene in its tests and its smoke
-  render.
+  `10 s` under the race detector), and the `_gallery` job runs the whole scene in its tests, which also
+  render its first frame.
 
 ## 14. Test and fixture strategy
 
